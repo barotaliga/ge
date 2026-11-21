@@ -12,12 +12,14 @@
 #include "ai/memory.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
-#include "shooter/intercept.hpp"
 #include "shooter/trace.hpp"
+#include "shooterbots/intercept.hpp"
 
 namespace shooters_edge::bots {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace ai = ge::ai;
 
 namespace {
@@ -36,9 +38,9 @@ sh::Vec3f at_of(const ai::Memory& m) {
 // its up, the server's gravity).
 constexpr double kLobStep_s = 0.05;
 constexpr int kLobSteps = 50;  // the fuse's 2.5 s in steps
-sh::Vec3f lob_impact(const ge::shooter::BotView& s, int me, sh::Vec3f from, sh::Vec3f angles) {
+sh::Vec3f lob_impact(const ge::shooterbots::BotView& s, int me, sh::Vec3f from, sh::Vec3f angles) {
   const sh::ViewAxes ax = sh::angle_vectors(angles);
-  const sh::Shot shot{600, true, 200, sh::kServerGravity};
+  const sb::Shot shot{600, true, 200, sb::kServerGravity};
   const sh::Vec3f v = ax.forward * shot.speed + ax.up * shot.up;
   sh::Vec3f at = from;
   for (int k = 1; k <= kLobSteps; k++) {
@@ -54,7 +56,7 @@ sh::Vec3f lob_impact(const ge::shooter::BotView& s, int me, sh::Vec3f from, sh::
 
 // Whether a throw under `angles` from `from` bursts by `spot` and safely: its first impact within
 // kLobReach of it, no nearer the shooter than the blast's reach, no mate by it.
-bool lob_lands(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f from,
+bool lob_lands(const Fighter& f, const ge::shooterbots::BotView& s, int me, sh::Vec3f from,
                sh::Vec3f angles, sh::Vec3f spot) {
   const sh::Vec3f hit = lob_impact(s, me, from, angles);
   return dist(hit, spot) <= kLobReach && dist(hit, from) >= kBlastNear &&
@@ -67,13 +69,13 @@ bool lob_lands(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3
 // aim holding where he is carried, the launcher up and its refire over: fired once the
 // crosshair's burst lands within kAfterReach of where he is now believed, the burst no nearer the
 // shooter than kBlastNear (`blastsafe`'s rule) and no mate by it; kAfterShots a loss.
-void after_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st,
+void after_fire(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st,
                 const BotWeapon* held, double t, sh::MoveCmd& cmd) {
   if (held == nullptr || held->bit != f.arsenal->launcher || !f.bot.aiming || f.after_left <= 0 ||
       t < f.ready_at || launcher_rounds(st) < 1)
     return;
-  const sh::Contact* k = nullptr;
-  for (const sh::Contact& q : f.bot.senses.contacts)
+  const sb::Contact* k = nullptr;
+  for (const sb::Contact& q : f.bot.senses.contacts)
     if (q.ent == f.bot.target && !q.visible && ai::known(q.seen)) k = &q;
   if (k == nullptr) return;
   const double age = ai::age(k->seen, t);
@@ -99,7 +101,7 @@ void after_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& 
 // THE ROCKET AT A SOUND (`earfire`): an enemy heard within kEar_s and not in sight, the launcher
 // up and its refire over: fired once the crosshair's burst lands within kEarReach of where he was
 // heard with a clear line to it, no nearer the shooter than kBlastNear nor by a mate; one a sound.
-void ear_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st,
+void ear_fire(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st,
               const BotWeapon* held, double t, sh::MoveCmd& cmd) {
   if (held == nullptr || held->bit != f.arsenal->launcher || t < f.ready_at ||
       launcher_rounds(st) < 1)
@@ -109,7 +111,7 @@ void ear_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st
   const sh::Vec3f fwd = sh::angle_vectors(cmd.angles).forward;
   bool traced = false;
   sh::Vec3f burst{}, back{};
-  for (const sh::Contact& k : f.bot.senses.contacts) {
+  for (const sb::Contact& k : f.bot.senses.contacts) {
     if (k.visible || !ai::known(k.heard) || ai::age(k.heard, t) > kEar_s ||
         k.heard.at <= f.ear_fired)
       continue;
@@ -135,7 +137,7 @@ void ear_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st
 
 // 18b's ledger by range: with the one aimed at in sight, the finger pressing (or between its
 // clicks), held for the burst, or another weapon up, in the band of his range (kFingerBands).
-void finger_band(Fighter& f, const ge::shooter::BotView& s, int me, const sh::Contact* c,
+void finger_band(Fighter& f, const ge::shooterbots::BotView& s, int me, const sb::Contact* c,
                  FingerWhy why) {
   if (c == nullptr) return;
   const int k = why == FingerWhy::down || why == FingerWhy::rhythm ? 0
@@ -148,21 +150,21 @@ void finger_band(Fighter& f, const ge::shooter::BotView& s, int me, const sh::Co
   f.stats.finger_band[d < kFingerBands[0] ? 0 : d < kFingerBands[1] ? 1 : 2][k]++;
 }
 
-void lob_look(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t) {
+void lob_look(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st, double t) {
   const BotArsenal& a = *f.arsenal;
   const BotWeapon* gl = a.lob != 0 ? weapon_row(a, a.lob) : nullptr;
   const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   if (f.lob_on && (t > f.lob_until || f.bot.aiming || gl == nullptr || !loaded(st, *gl) ||
                    self.health <= 0 || self.waterlevel >= 2))
     f.lob_on = false;
-  if (!f.features[sh::Feature::earlob] || gl == nullptr) return;
+  if (!f.features[sb::Feature::earlob] || gl == nullptr) return;
   if (!f.lob_on) {
     if (t < f.lob_next || f.bot.aiming || f.news_on || !loaded(st, *gl) || self.health <= 0 ||
         self.waterlevel >= 2)
       return;
     f.lob_next = t + kThink_s;
     const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
-    for (const sh::Contact& k : f.bot.senses.contacts) {
+    for (const sb::Contact& k : f.bot.senses.contacts) {
       if (k.visible) continue;
       // The newer of where he was heard and where he was last seen.
       const bool by_ear = ai::known(k.heard) && (!ai::known(k.seen) || k.heard.at > k.seen.at);
@@ -175,7 +177,7 @@ void lob_look(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st
       if (sh::trace_move(s.sv, eye, {}, {}, spot, sh::kTraceNoMonsters, -1).fraction >= 1) continue;
       float pitch = 0;
       double flight = 0;
-      if (!sh::lob_pitch(self.origin, spot, sh::Shot{600, true, 200, sh::kServerGravity}, pitch,
+      if (!sb::lob_pitch(self.origin, spot, sb::Shot{600, true, 200, sb::kServerGravity}, pitch,
                          flight))
         continue;
       const float yaw =
@@ -204,7 +206,7 @@ void lob_look(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st
   }
 }
 
-void lob_fire(Fighter& f, const ge::shooter::BotView& s, int me, const Stats& st, double t,
+void lob_fire(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st, double t,
               ge::shooter::MoveCmd& cmd) {
   const BotArsenal& a = *f.arsenal;
   if (!f.lob_on || a.lob == 0 || st.weapon != a.lob || t < f.ready_at) return;

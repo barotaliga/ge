@@ -22,9 +22,9 @@
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
-#include "shooter/aim.hpp"
 #include "shooter/aim_help.hpp"
 #include "shooter/aim_turn.hpp"
+#include "shooterbots/aim.hpp"
 
 namespace {
 

@@ -14,6 +14,8 @@
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/net/protocol.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::net {
 
 namespace {
@@ -127,7 +129,7 @@ std::string bot_feed_status(const BotTeam& t, double t_s) {
     const QwClientEnd& sc = s.c;
     if (k > 0) j += ",";
     j += "{\"bot\":" + std::to_string(k + 1) + ",\"name\":" + str(s.name) +
-         ",\"skill\":" + str(sh::aim_skill_name(s.skill)) +
+         ",\"skill\":" + str(sb::aim_skill_name(s.skill)) +
          ",\"ping\":" + to_fixed(sc.latency_avg * 1000, 0);
     if (s.set_up && s.fighter && s.mirror && sc.playernum >= 0) {
       const bt::Fighter& f = *s.fighter;

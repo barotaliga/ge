@@ -9,12 +9,12 @@ split is the maintainer's (`docs/porting-games.md` § Bots); this page places th
 | Layer | File | What it gives |
 | --- | --- | --- |
 | Engine | `engine/ai/` | The decision record `ge why` reads, the keyboard and mouse hands, thinking on a schedule, sight, memory, paths, steering, choosing (`bots` skill) |
-| Shooter kit | `plugins/shooter/bot.hpp`, `cmd_source.hpp` | The bot as a server slot's command source |
-| Shooter kit | `plugins/shooter/nav.hpp`, `nav_gaps.hpp`, `nav_script.hpp`, `swim.hpp` | Navigation proven by the move: floor nodes off the hulls, links proven by `player_move`, gap tricks, scripted ways, the way out of water |
-| Shooter kit | `plugins/shooter/pilot*.hpp`, `look_ahead.hpp`, `recipes.hpp`, `hops.hpp`, `rocket_jumps.hpp`, `gap_jumps.hpp`, `jump_finder.hpp` | The pilot playing a route command by command; movement read off people's recordings |
-| Shooter kit | `plugins/shooter/senses.hpp`, `hearing.hpp`, `aim.hpp`, `aim_path.hpp`, `intercept.hpp`, `dodge.hpp`, `escape.hpp`, `brink.hpp`, `idle.hpp` | Senses, ears, aim through skill hands, leading a shot, dodging, escaping a pit, the brink, idling |
-| Shooter kit | `plugins/shooter/traits.hpp`, `temper.hpp`, `features.hpp` | Personality, temperament, behaviours switched by name |
-| Shooter kit | `plugins/shooter/team_talk.hpp`, `bot_view.hpp`, `intent_draft.hpp`, `view_book.hpp` | What a team message MEANS; what a bot sees of a match; a map's intent drafted; people's view yaw by spot |
+| Shooter kit | `plugins/shooterbots/bot.hpp`, `cmd_source.hpp` | The bot as a server slot's command source |
+| Shooter kit | `plugins/shooterbots/nav.hpp`, `nav_gaps.hpp`, `nav_script.hpp`, `swim.hpp` | Navigation proven by the move: floor nodes off the hulls, links proven by `player_move`, gap tricks, scripted ways, the way out of water |
+| Shooter bots | `plugins/shooterbots/pilot*.hpp`, `look_ahead.hpp`, `recipes.hpp`, `hops.hpp`, `rocket_jumps.hpp`, `gap_jumps.hpp`, `jump_finder.hpp` | The pilot playing a route command by command; movement read off people's recordings |
+| Shooter kit | `plugins/shooterbots/senses.hpp`, `hearing.hpp`, `aim.hpp`, `aim_path.hpp`, `intercept.hpp`, `dodge.hpp`, `escape.hpp`, `brink.hpp`, `idle.hpp` | Senses, ears, aim through skill hands, leading a shot, dodging, escaping a pit, the brink, idling |
+| Shooter kit | `plugins/shooterbots/traits.hpp`, `temper.hpp`, `features.hpp` | Personality, temperament, behaviours switched by name |
+| Shooter kit | `plugins/shooterbots/team_talk.hpp`, `bot_view.hpp`, `intent_draft.hpp`, `view_book.hpp` | What a team message MEANS; what a bot sees of a match; a map's intent drafted; people's view yaw by spot |
 | Classic plugin | `plugins/classic/item_tables.hpp`, `item_roles.hpp`, `locs.hpp` | The items' shapes and roles, place names |
 | Shell | `games/shooters_edge/bots/` | The fighter (mode, goal, weapon, trigger), knowledge, ears, packs, mind, team, map plan, footwork, water, companion, coop and unit runs, handles |
 | Shell | `games/shooters_edge/net/qw_bot_team.hpp`, `qw_team*.hpp`, `qw_bot_feed.hpp` | A team of bots on any classic server over UDP clients; the team's shared map and beliefs; a live feed |
@@ -41,7 +41,7 @@ split is the maintainer's (`docs/porting-games.md` § Bots); this page places th
 
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
-| Bots that learn moves from people's recordings | ours, on Quake's community demos | `plugins/shooter` (recipes, hops, rocket and gap jumps) |
+| Bots that learn moves from people's recordings | ours, on Quake's community demos | `plugins/shooterbots` (recipes, hops, rocket and gap jumps) |
 | Team talk understood both ways, bots and people alike | Quake's teamplay culture | `team_talk.hpp`, each game's words |
 | Human hands: reaction, aim spread, keyboard taps | ours | `engine/ai` |
 | Co-op companions | ours | `bots/companion.hpp`, both campaigns |

@@ -14,6 +14,8 @@
 #include "core/num_text.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::bots {
 
 namespace {
@@ -48,7 +50,7 @@ bool is_power(const ItemSpot& it) { return it.kind == ItemKind::quad || it.kind 
 
 // The quickest run from `from` to every node over the proven links (seconds; kFar: no way): no
 // rocket jump, and with `dry` no swim either (on foot).
-void runs_from(const sh::NavGraph& g, int32_t from, std::vector<double>& out, bool dry = false) {
+void runs_from(const sb::NavGraph& g, int32_t from, std::vector<double>& out, bool dry = false) {
   out.assign(g.nodes.size(), kFar);
   if (from < 0) return;
   using Entry = std::pair<double, int32_t>;
@@ -59,11 +61,11 @@ void runs_from(const sh::NavGraph& g, int32_t from, std::vector<double>& out, bo
     const auto [d, n] = open.top();
     open.pop();
     if (d > out[static_cast<size_t>(n)]) continue;
-    const sh::NavNode& node = g.nodes[static_cast<size_t>(n)];
+    const sb::NavNode& node = g.nodes[static_cast<size_t>(n)];
     for (int32_t k = 0; k < node.links; k++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
-      if (sh::nav_blast(l.kind) ||
-          (dry && (l.kind == sh::NavKind::swim || g.nodes[static_cast<size_t>(l.to)].wet)))
+      const sb::NavLink& l = g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
+      if (sb::nav_blast(l.kind) ||
+          (dry && (l.kind == sb::NavKind::swim || g.nodes[static_cast<size_t>(l.to)].wet)))
         continue;
       const double nd = d + l.time_s;
       if (nd < out[static_cast<size_t>(l.to)]) {
@@ -100,7 +102,7 @@ double plan_worth(const ItemSpot& it) {
   }
 }
 
-MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
+MapPlan make_map_plan(const sb::NavGraph& g, const std::vector<ItemSpot>& items,
                       const std::vector<sh::Vec3f>& spawns, const ge::classic::Locs* locs,
                       const PlanSettings& set) {
   MapPlan plan;
@@ -140,7 +142,7 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
   // The map's median floor (its dry floor: the water's cells are no floor).
   std::vector<float> zs;
   zs.reserve(g.nodes.size());
-  for (const sh::NavNode& n : g.nodes)
+  for (const sb::NavNode& n : g.nodes)
     if (!n.wet) zs.push_back(n.origin.z);
   if (zs.empty()) zs.push_back(0);
   std::nth_element(zs.begin(), zs.begin() + static_cast<std::ptrdiff_t>(zs.size() / 2), zs.end());
@@ -148,7 +150,7 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
   // The spawn points' runs, on foot (an area only the water leads to is visited, not held).
   std::vector<std::vector<double>> spawn_run(spawns.size());
   for (size_t s = 0; s < spawns.size(); s++)
-    runs_from(g, sh::nav_nearest(g, spawns[s]), spawn_run[s], true);
+    runs_from(g, sb::nav_nearest(g, spawns[s]), spawn_run[s], true);
 
   for (int32_t a = 0; a < groups; a++) {
     PlanArea area;
@@ -171,12 +173,12 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
     std::vector<sh::Vec3f> entries;
     for (size_t n = 0; n < g.nodes.size(); n++) {
       if (area.region[n] || g.nodes[n].wet) continue;
-      const sh::NavNode& node = g.nodes[n];
+      const sb::NavNode& node = g.nodes[n];
       for (int32_t k = 0; k < node.links; k++) {
-        const sh::NavLink& l =
+        const sb::NavLink& l =
             g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
-        if (!area.region[static_cast<size_t>(l.to)] || l.kind == sh::NavKind::swim ||
-            sh::nav_blast(l.kind))
+        if (!area.region[static_cast<size_t>(l.to)] || l.kind == sb::NavKind::swim ||
+            sb::nav_blast(l.kind))
           continue;
         bool known = false;
         for (const sh::Vec3f& e : entries) known = known || dist(e, node.origin) < kEntrySpot;

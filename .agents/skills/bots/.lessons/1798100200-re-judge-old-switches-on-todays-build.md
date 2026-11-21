@@ -1,7 +1,7 @@
 ---
 title: Re-judge an old switch on today's build; split a loss by who holds the view before building
 date: 2026-11-19
-scope: plugins/shooter/features.cpp, plugins/shooter/bot.cpp, plugins/shooter/pilot.cpp
+scope: plugins/shooterbots/features.cpp, plugins/shooterbots/bot.cpp, plugins/shooterbots/pilot.cpp
 concepts: [features, judging, re-judge, aimhop, circleview, aimground, verdict, head-to-head, flights-by-takeoff, view-writer]
 ---
 

@@ -95,7 +95,7 @@ void usage() {
       "sebots --server=<host:port> [--bots=4] [--team=bots] [--colour=4]\n"
       "  [--basedir=<folder holding id1>] [--skills=expert,average,...] [--traits=<a,b,...>]\n"
       "  [--features=<-name,+name,...: every bot's; ';' between bots' own> "
-      "(shooter/features.hpp)]\n"
+      "(shooterbots/features.hpp)]\n"
       "  [--name=<prefix: name1, name2 ...> | --names=<a,b,c,d>: else made-up handles]\n"
       "  [--feed=<file: the match as JSON lines>] [--feed-every=5] [--control=<file: lines\n"
       "  appended to it are console lines>] [--out=<match folder>] [--seconds=<n>] [--until-end]\n"
@@ -142,7 +142,7 @@ int run(int argc, char** argv) {
     } else if (flag(a, "traits", v)) {
       cfg.traits = split(v);
     } else if (flag(a, "features", v)) {
-      // One set for every bot, or each bot's apart by ';' (shooter/features.hpp).
+      // One set for every bot, or each bot's apart by ';' (shooterbots/features.hpp).
       cfg.features.clear();
       for (size_t at = 0; at <= v.size();) {
         const size_t end = std::min(v.find(';', at), v.size());

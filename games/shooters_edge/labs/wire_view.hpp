@@ -15,7 +15,7 @@
 // ge:summary The movement labs' wireframe: a map's face outlines from above or at an angle, paths
 // ge:keywords lab wireframe wire map edges orthographic oblique top-view path speed-colour fit
 // ge:skill shooter labs
-// ge:test tests/shooter_hops_test.cpp
+// ge:test tests/shooterbots_hops_test.cpp
 #pragma once
 
 #include <algorithm>

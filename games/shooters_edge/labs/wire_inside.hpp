@@ -13,7 +13,7 @@
 // ge:summary The movement labs' view from inside a map: faces in a depth buffer, outlines, paths
 // ge:keywords lab wireframe perspective inside camera depth-buffer zbuffer hidden-line path chase
 // ge:skill shooter labs
-// ge:test tests/shooter_hops_test.cpp
+// ge:test tests/shooterbots_hops_test.cpp
 #pragma once
 
 #include <algorithm>

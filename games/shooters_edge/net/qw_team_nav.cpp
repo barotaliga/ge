@@ -6,11 +6,13 @@
 #include "shooters_edge/net/qw_team_nav.hpp"
 
 #include "ai/path.hpp"
-#include "shooter/features.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/features.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/floor_trap.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::net {
 
@@ -29,15 +31,15 @@ void locs_from_items(const std::vector<bt::ItemSpot>& items, ge::classic::Locs& 
 
 }  // namespace
 
-void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sh::BotView& seen, int slot,
-                        const char* entities, sh::AimSkill skill, const sh::Traits& traits,
+void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sb::BotView& seen, int slot,
+                        const char* entities, sb::AimSkill skill, const sb::Traits& traits,
                         double hz, uint32_t seed, const std::string& name) {
   bt::MapNav& nav = tn.nav;
-  const sh::NavGraph& graph = nav.graph;
+  const sb::NavGraph& graph = nav.graph;
   sh::MoveWorld& world = nav.world;
-  const sh::SwimField& sw = nav.swim;
+  const sb::SwimField& sw = nav.swim;
   const std::vector<uint8_t>& wet = nav.wet;
-  const std::vector<sh::NavExtraLink>& entries = nav.entries;
+  const std::vector<sb::NavExtraLink>& entries = nav.entries;
   bt::fighter_init(f, graph, seen, slot, entities, skill, traits, hz, seed);
   f.bot.yaw = seen.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
   f.bot.pilot.world = &world;  // the hop looks ahead through the map
@@ -46,8 +48,8 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sh::BotView& seen, in
   for (const bt::NavBridge& br : nav.bridges)
     f.bridges.push_back(
         {br.ent, br.spawn,
-         f.features[ge::shooter::Feature::bridgeseen] && !br.floor ? br.own : br.nodes, !br.floor,
-         br.floor, br.wait, -1});
+         f.features[ge::shooterbots::Feature::bridgeseen] && !br.floor ? br.own : br.nodes,
+         !br.floor, br.floor, br.wait, -1});
   bt::floor_traps_init(f, graph, seen);  // after the buttons and the bridges
   f.name = name;
   if (tn.locs.points.empty()) {
@@ -68,18 +70,18 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sh::BotView& seen, in
     tn.goals = bt::map_goals(tn.plan, f.items, map);
     tn.plan_made = true;
   }
-  f.plan = f.features[sh::Feature::plan] ? &tn.plan : nullptr;  // the plan a switch (features)
+  f.plan = f.features[sb::Feature::plan] ? &tn.plan : nullptr;  // the plan a switch (features)
   f.trap = &tn.nav.trap;
   // The ways to every item (`fields`): the map's buttons as errands, set up with the first, one
   // for each of its button spots in their order (an errand's index is its button's; a button no
   // node presses from keeps its doors shut).
   if (!tn.fields_made) {
-    const std::vector<sh::NavErrand> errands = bt::field_errands(f, graph, seen);
-    sh::nav_fields_init(tn.fields, graph, errands);
+    const std::vector<sb::NavErrand> errands = bt::field_errands(f, graph, seen);
+    sb::nav_fields_init(tn.fields, graph, errands);
     tn.fields_made = true;
   }
   f.fields = &tn.fields;
-  if (f.features[sh::Feature::fields] && f.features[sh::Feature::fieldway])
+  if (f.features[sb::Feature::fields] && f.features[sb::Feature::fieldway])
     f.bot.pilot.pilot.set.fields = &tn.fields;
   if (!tn.dives_made && sw.leading > 0 && nav.main_n > 0) {
     tn.dives_made = true;
@@ -94,7 +96,7 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sh::BotView& seen, in
       if (tn.item_dive[i] >= 0) continue;
       auto dv = std::make_unique<TeamDive>();
       ge::ai::Search pr;
-      sh::nav_reach(graph, node, pr);
+      sb::nav_reach(graph, node, pr);
       dv->pocket.assign(graph.nodes.size(), 0);
       for (size_t m = 0; m < graph.nodes.size(); m++)
         dv->pocket[m] = pr.reached(static_cast<int32_t>(m)) && !wet[m] &&
@@ -102,17 +104,17 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sh::BotView& seen, in
                             ? 1
                             : 0;
       dv->pocket[static_cast<size_t>(node)] = 1;
-      sh::build_swim(world, graph, dv->pocket, sh::SwimSettings{}, dv->field, &nav.swim);
+      sb::build_swim(world, graph, dv->pocket, sb::SwimSettings{}, dv->field, &nav.swim);
       // Entered by a way into the water the graph closed, from a node of the main part that
       // reaches most of it again (not a pit dropped into), the one nearest the pocket by water.
       int32_t steps = -1;
       ge::ai::Search back;
-      for (const sh::NavExtraLink& e : entries) {
+      for (const sb::NavExtraLink& e : entries) {
         if (!nav.main.reached(e.from)) continue;
         const int32_t way =
-            sh::swim_steps(dv->field, graph.nodes[static_cast<size_t>(e.to)].origin);
+            sb::swim_steps(dv->field, graph.nodes[static_cast<size_t>(e.to)].origin);
         if (way < 0 || (steps >= 0 && way >= steps)) continue;
-        if (sh::nav_reach(graph, e.from, back) * 10 < nav.main_n * 9) continue;
+        if (sb::nav_reach(graph, e.from, back) * 10 < nav.main_n * 9) continue;
         steps = way;
         dv->node = e.from;
         dv->entry = e.to;

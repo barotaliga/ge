@@ -1,7 +1,7 @@
 ---
 title: Count the deaths by cause and place, and against people's, before building a fix for each
 date: 2026-11-19
-scope: plugins/shooter/brink.cpp, games/shooters_edge/bots/keyboard.cpp, plugins/shooter/nav.cpp, plugins/shooter/pilot_gaps.cpp, games/shooters_edge/labs/team_set.cpp
+scope: plugins/shooterbots/brink.cpp, games/shooters_edge/bots/keyboard.cpp, plugins/shooterbots/nav.cpp, plugins/shooterbots/pilot_gaps.cpp, games/shooters_edge/labs/team_set.cpp
 concepts: [lava-deaths, brink, lip, gap-tricks, deaths-tsv, yardstick, obituaries, features-all, judging]
 ---
 

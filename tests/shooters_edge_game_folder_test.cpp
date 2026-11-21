@@ -222,7 +222,7 @@ TEST(a_game_whose_rules_keep_the_campaign_has_new_game_and_coopgame) {
   listen.opt.new_game = false;
   con.execute("coopgame 2 expert demo2");
   CHECK(next_map == "demo2" && listen.opt.new_game && listen.opt.companions == 2);
-  CHECK(listen.opt.companion_skill == ge::shooter::AimSkill::expert);
+  CHECK(listen.opt.companion_skill == ge::shooterbots::AimSkill::expert);
   CHECK(listen.opt.console.back() == "coop 1");
   next_map.clear();
   con.execute("coopgame");  // one companion by default, from the first map

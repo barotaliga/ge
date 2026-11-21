@@ -1,7 +1,7 @@
 ---
 title: Find a map's likely rocket jumps by calculating their arcs, not by flying the move
 date: 2026-11-15
-scope: plugins/shooter/jump_finder.cpp, games/shooters_edge/labs/gpu_map_overview_lab.cpp
+scope: plugins/shooterbots/jump_finder.cpp, games/shooters_edge/labs/gpu_map_overview_lab.cpp
 concepts: [jump-finder, rocket-jump, arc, calculated, ride, teleporter, walk-filter, dm3]
 ---
 

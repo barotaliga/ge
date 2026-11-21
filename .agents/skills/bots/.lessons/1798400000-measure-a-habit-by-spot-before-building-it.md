@@ -1,7 +1,7 @@
 ---
 title: A habit asked for is measured off people's recordings by spot before it is built, and the gap built for
 date: 2026-11-20
-scope: games/shooters_edge/labs/glance_read.hpp, games/shooters_edge/labs/se_people_lab.cpp, games/shooters_edge/bots/knowledge.cpp, plugins/shooter/bot.cpp
+scope: games/shooters_edge/labs/glance_read.hpp, games/shooters_edge/labs/se_people_lab.cpp, games/shooters_edge/bots/knowledge.cpp, plugins/shooterbots/bot.cpp
 concepts: [glance, itemglance, key-spot, people-first, by-spot, gap, maintainer-figures, look-aside, on-screen, crosshair]
 ---
 

@@ -1,5 +1,5 @@
-// THE PILOT'S RUNS: Shooter's Edge's pilot (plugins/shooter/pilot.hpp) played on its two maps, for
-// the pilot's test and the `se-pilot` lab.
+// THE PILOT'S RUNS: Shooter's Edge's pilot (plugins/shooterbots/pilot.hpp) played on its two maps,
+// for the pilot's test and the `se-pilot` lab.
 // - The NAV COURSE (sim/nav_course.hpp), with no server: a player standing on a route's first node
 //   is moved by `run_command` with each command the pilot gives, its commands on the protocol's
 //   grid, until it stands on the goal or runs out of time. Every command's origin and velocity
@@ -14,16 +14,16 @@
 // ge:keywords pilot pilot-run course arena route trail goals run_course run_arena make_course
 // ge:keywords make_arena strafe ride door barred
 // ge:skill shooter bots
-// ge:test tests/shooter_pilot_test.cpp
+// ge:test tests/shooterbots_pilot_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <memory>
 #include <vector>
 
-#include "shooter/features.hpp"
-#include "shooter/pilot.hpp"
-#include "shooter/rocket_jumps.hpp"
+#include "shooterbots/features.hpp"
+#include "shooterbots/pilot.hpp"
+#include "shooterbots/rocket_jumps.hpp"
 #include "shooters_edge/server/host.hpp"
 #include "shooters_edge/sim/nav_course.hpp"
 
@@ -31,12 +31,14 @@ namespace shooters_edge::bots {
 
 namespace sh = ge::shooter;
 
+namespace sb = ge::shooterbots;
+
 constexpr int kPilotMsec = 13;  // the commands' length: the server's 77 a second
 
 struct Course {
   sim::NavCourse map;
   sh::MoveWorld world;
-  sh::NavGraph graph;
+  sb::NavGraph graph;
 };
 std::unique_ptr<Course> make_course();
 
@@ -49,7 +51,7 @@ std::vector<CourseRoute> course_routes(const Course& c);
 // The east floor's straight from wall to wall, and the settings that strafe it (a shorter stretch
 // than the default's: the course is 1024 across).
 CourseRoute course_long_straight(const Course& c);
-sh::PilotSettings course_strafe_settings();
+sb::PilotSettings course_strafe_settings();
 
 struct RunResult {
   bool arrived = false;
@@ -58,9 +60,9 @@ struct RunResult {
   uint64_t hash = 0;                    // every command's origin and velocity
   int32_t shots = 0;                    // rockets fired (run_route: the pilot's rocket jumps)
   float blast = 0;                      // and the points their blasts took
-  std::vector<sh::RocketShot> rockets;  // each fired (on the trail's clock: command i ends at
+  std::vector<sb::RocketShot> rockets;  // each fired (on the trail's clock: command i ends at
                                         // (i + 1) * kPilotMsec ms) and where it burst
-  sh::PilotStats stats;
+  sb::PilotStats stats;
   std::vector<sh::Vec3f> trail;             // the origin after each command
   std::vector<uint8_t> modes;               // the pilot's mode at each command (PilotMode)
   std::vector<int32_t> links;               // the route index of the link it was on at each command
@@ -72,39 +74,39 @@ struct RunResult {
   std::vector<sh::Vec3f> velocity;   // the velocity after each command
   std::vector<const char*> because;  // the pilot's reason for each command
 };
-RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHands hands,
-                     uint32_t seed, const sh::PilotSettings& set = sh::PilotSettings{},
+RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sb::PilotHands hands,
+                     uint32_t seed, const sb::PilotSettings& set = sb::PilotSettings{},
                      float limit_s = 20);
 // The same on any map: a player on the node nearest `from` piloted to the node nearest `to`
 // over `g` (built on `world`), moved by `run_command` with no server, already moving at
 // `start_velocity` (a run that starts where a recorded player was, at his speed). A shot the
 // pilot fires (a rocket jump, with `set.jumper.rockets`) flies and bursts as the nav's proof has it
-// (shooter/nav.hpp `rocket_burst`, `rocket_blast`).
+// (shooterbots/nav.hpp `rocket_burst`, `rocket_blast`).
 // `keys`: the commands pressed through a hand on a keyboard with these features (keyboard.hpp
 // `press_keys`, the hand's times by the `moves` trait), as a fighter's are under `keys`.
 // `view_lag_s` (> 0): the view is not the pilot's heading but trails it, eased toward it with
 // this time constant, the keys turned under it (a fighter's calm view lags the run's turns).
-RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
-                    sh::PilotHands hands, uint32_t seed,
-                    const sh::PilotSettings& set = sh::PilotSettings{}, float limit_s = 20,
-                    sh::Vec3f start_velocity = {}, const sh::Features* keys = nullptr,
+RunResult run_route(const sh::MoveWorld& world, const sb::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
+                    sb::PilotHands hands, uint32_t seed,
+                    const sb::PilotSettings& set = sb::PilotSettings{}, float limit_s = 20,
+                    sh::Vec3f start_velocity = {}, const sb::Features* keys = nullptr,
                     uint8_t moves = 0, float view_lag_s = 0);
 
 struct Arena {
   server::Host host;
-  sh::NavGraph graph;
-  sh::PilotBot bot;
+  sb::NavGraph graph;
+  sb::PilotBot bot;
   int slot = -1;
 };
 std::vector<sh::Vec3f> arena_goals();
 // The host, the graph with the door and the plat, the pilot in slot 0 with `hands`.
-bool make_arena(Arena& a, sh::PilotHands hands = sh::PilotHands::none, uint32_t seed = 1);
+bool make_arena(Arena& a, sb::PilotHands hands = sb::PilotHands::none, uint32_t seed = 1);
 
 struct ArenaResult {
   bool through_door = false;  // stood east of the dividing wall after standing west of it
   bool on_ledge = false;      // stood on the ledge beside the plat
   int32_t arrivals = 0;
-  sh::PilotStats stats;
+  sb::PilotStats stats;
   std::vector<sh::Vec3f> trail;  // the player's origin after each server frame
   std::vector<uint8_t> modes;
   std::vector<float> door_z, plat_z;  // the movers' bottoms after each frame

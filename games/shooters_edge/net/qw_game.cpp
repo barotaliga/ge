@@ -66,6 +66,7 @@ namespace {
 namespace gs = ge::server;
 namespace cl = shooters_edge::client;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace srv = shooters_edge::server;
 
 struct Game {
@@ -513,7 +514,7 @@ bool open_room(Game& g, std::string& error) {
   if (bots < c.bots)
     g.rules->console.push_back("The bots do not play this kind of map yet, so the match has none.");
   for (int i = 0; i < bots; i++)
-    if (cl::room_add_bot(r, g.rules, g.map->spec, sh::AimSkill::average, error) < 0) {
+    if (cl::room_add_bot(r, g.rules, g.map->spec, sb::AimSkill::average, error) < 0) {
       std::string why = "sv_bots " + std::to_string(c.bots) + ": ";
       why.append(error).append(" (keep sv_bots under sv_maxclients)");
       error = std::move(why);
@@ -1327,7 +1328,7 @@ bool mate_words(Game& g, int slot, const std::string& line) {
     }
     return true;
   }
-  sh::AimSkill skill = sh::AimSkill::average;
+  sb::AimSkill skill = sb::AimSkill::average;
   const std::string named = space == std::string::npos ? "" : line.substr(space + 1);
   if (!named.empty() && !cl::skill_named(named, skill)) {
     client_print(cs, slot, 2,
@@ -1355,7 +1356,7 @@ bool mate_words(Game& g, int slot, const std::string& line) {
     client_print(cs, slot, 2, "The game is cooperative while you have company.\n");
   }
   const cl::Q2Mate& m = *p.mates[static_cast<size_t>(at)];
-  client_print(cs, slot, 2, m.name + " (" + sh::aim_skill_name(skill) + ") joins the game\n");
+  client_print(cs, slot, 2, m.name + " (" + sb::aim_skill_name(skill) + ") joins the game\n");
   return true;
 }
 
@@ -1397,7 +1398,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
       sync_seats(g);
       return true;
     }
-    sh::AimSkill skill = sh::AimSkill::average;
+    sb::AimSkill skill = sb::AimSkill::average;
     const std::string named = space == std::string::npos ? "" : line.substr(space + 1);
     if (!named.empty() && !cl::skill_named(named, skill)) {
       client_print(cs, slot, 2,

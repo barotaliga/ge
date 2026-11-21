@@ -13,8 +13,8 @@
 
 #include "ai/choose.hpp"
 #include "ai/memory.hpp"
-#include "shooter/nav_field.hpp"
-#include "shooter/senses.hpp"
+#include "shooterbots/nav_field.hpp"
+#include "shooterbots/senses.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/fighter_parts.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
@@ -22,6 +22,8 @@
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/bots/water.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots::fighter_parts {
 
@@ -173,7 +175,7 @@ Stats after_taking(Stats st, const ItemSpot& it) {
 // What an item is worth to it now, as it rates the map.
 double item_value(const ItemSpot& it, const Stats& st) { return raw_value(it, st) * it.weight; }
 
-bool door_shut(const ge::shooter::BotView& s, const ItemSpot& it) {
+bool door_shut(const ge::shooterbots::BotView& s, const ItemSpot& it) {
   if (it.door_ent < 0) return false;
   const sh::Vec3f d = s.world.entities[static_cast<size_t>(it.door_ent)].origin - it.door_rest;
   return d.x * d.x + d.y * d.y + d.z * d.z < 1;
@@ -181,8 +183,9 @@ bool door_shut(const ge::shooter::BotView& s, const ItemSpot& it) {
 
 // The best item for the player at `me` with `st`: worth over time to have it, `away` from a known
 // enemy (when `heal`, health and armour alone, and never nearer the enemy than this player is).
-int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
-                  double t, bool heal, const sh::Vec3f* enemy, ai::Why* why, int32_t skip) {
+int32_t best_item(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
+                  sh::Vec3f me, double t, bool heal, const sh::Vec3f* enemy, ai::Why* why,
+                  int32_t skip) {
   const auto score = [&](int32_t i) {
     const ItemSpot& it = f.items[static_cast<size_t>(i)];
     if (i == skip || it.node < 0 || (heal && !heals(it)) || route_lost(f, i, t)) return 0.0;
@@ -203,7 +206,7 @@ int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
     if (!fields && door_shut(s, it) &&
         (it.button_node < 0 || (f.reach_at >= 0 && !f.reach.reached(it.button_node))))
       return 0.0;  // shut, and its button out of reach
-    if (it.after >= 0 && f.features[sh::Feature::routes] && item_in_mind(f, it.after)) {
+    if (it.after >= 0 && f.features[sb::Feature::routes] && item_in_mind(f, it.after)) {
       // An item rule: not while the one to be had first is believed up or due.
       const ItemSpot& first = f.items[static_cast<size_t>(it.after)];
       if (first.present || first.back_at - t < it.after_due_s) return 0.0;
@@ -213,7 +216,7 @@ int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
     double v = heal || !f.team ? raw_value(it, st) : item_value(it, st);
     // (`lobtake`) The lob, the launcher's second (people carry it 29 % of the time they carry the
     // launcher, 4 % without): worth kLobWorth to one with the launcher and not the lob.
-    if (f.features[sh::Feature::lobtake] && !heal && it.kind == ItemKind::weapon &&
+    if (f.features[sb::Feature::lobtake] && !heal && it.kind == ItemKind::weapon &&
         it.weapon == f.arsenal->lob && f.arsenal->lob != 0 && (st.items & it.weapon) == 0 &&
         (st.items & f.arsenal->launcher) != 0)
       v = std::fmax(v, kLobWorth);
@@ -233,7 +236,7 @@ int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
     // (`routetime`, M18r.md 3) The run by the route's time (the reach's, worked out each second),
     // not the straight line: e1m2's YA is near in a line from below and 13 s by its stairs, and
     // as the route went round other items came nearer in a line: 6 of 371 trips took it.
-    const bool by_route = f.features[sh::Feature::routetime] && f.reach_at >= 0 && it.node >= 0 &&
+    const bool by_route = f.features[sb::Feature::routetime] && f.reach_at >= 0 && it.node >= 0 &&
                           f.reach.reached(it.node);
     const double run = (fields && !by_dive ? field_run
                         : by_route         ? f.reach.cost(it.node)
@@ -260,7 +263,7 @@ int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
     if (heal) {
       for (const auto& [where, when] : f.danger)
         if (t - when < kDangerMemory_s && dist(where, it.at) < kDangerReach) sc *= kDangerScale;
-      for (const sh::Contact& k : f.bot.senses.contacts) {
+      for (const sb::Contact& k : f.bot.senses.contacts) {
         if (k.ent < 0) continue;
         const bool seen = ai::known(k.seen) && ai::age(k.seen, t) <= kEnemyKnown_s;
         const bool heard = ai::known(k.heard) && ai::age(k.heard, t) <= kEnemyKnown_s;
@@ -281,9 +284,9 @@ int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
 // THE GOAL AFTER (`chains`): the item the player would go for once it has item `i`, chosen as
 // it would choose then (from where `i` stands, holding what `i` gives); -1 with none, or `i` not
 // there to take now (it waits for it there).
-int32_t chain_after(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, int32_t i,
+int32_t chain_after(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st, int32_t i,
                     double t, bool heal, const sh::Vec3f* enemy) {
-  if (!f.features[sh::Feature::chains] || i < 0) return -1;
+  if (!f.features[sb::Feature::chains] || i < 0) return -1;
   const ItemSpot& it = f.items[static_cast<size_t>(i)];
   if (!it.present) return -1;
   return best_item(f, s, after_taking(st, it), it.at, t, heal, enemy, nullptr, i);
@@ -293,8 +296,8 @@ int32_t chain_after(const Fighter& f, const ge::shooter::BotView& s, const Stats
 // kOnTheWay and ahead of where it runs (or beside it), that a way reaches, nobody of its side said
 // he takes, and not the goal itself; the nearest, or -1. Taken before the long goal, as a person
 // picks up what lies by his way: the goal is chosen again once it has it (a pickup is news).
-int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
-                   sh::Vec3f velocity, double t) {
+int32_t on_the_way(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
+                   sh::Vec3f me, sh::Vec3f velocity, double t) {
   const float speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
   int32_t best = -1;
   float best_d = kOnTheWay;
@@ -331,21 +334,21 @@ int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats&
 // A backpack within `reach` worth going for (ammunition short or a weapon lacking), or -1: one
 // in sight on its screen (no wall, door or water's surface between), or the one already gone for
 // while it lies there.
-int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
-                  float reach) {
+int32_t pack_near(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
+                  sh::Vec3f me, float reach) {
   const BotArsenal& arsenal = *f.arsenal;
   bool short_of = false;
   for (int k = 0; k < arsenal.ammo_count; k++) short_of |= st.ammo[k] < arsenal.short_of[k];
   short_of |= (st.items & (arsenal.launcher | arsenal.lob)) == 0;
   // A novice wants every pack he sees (`packinfer`), whatever he carries.
-  short_of |= f.sense == MapSense::novice && f.features[sh::Feature::packinfer];
+  short_of |= f.sense == MapSense::novice && f.features[sb::Feature::packinfer];
   if (!short_of) return -1;
-  sh::SenseSettings look = f.bot.senses.set;
+  sb::SenseSettings look = f.bot.senses.set;
   look.range = reach;
   const sh::Vec3f eye{me.x, me.y, me.z + look.view_height};
   int32_t best = -1;
   float best_d = reach;
-  for (const sh::ViewEntity& v : f.bot.view.entities) {
+  for (const sb::ViewEntity& v : f.bot.view.entities) {
     if (v.modelindex <= 0 || static_cast<size_t>(v.modelindex) >= s.models.size() ||
         s.models[static_cast<size_t>(v.modelindex)] != "progs/backpack.mdl")
       continue;
@@ -353,7 +356,7 @@ int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
     if (d >= best_d) continue;
     // A pack lies on the floor: seen at a few units over it (as a player's origin less his eye).
     if (v.ent != f.pack_ent &&
-        !sh::sees_player(s.sv, look, f.slot + 1, eye, {f.bot.pitch, f.bot.yaw, 0},
+        !sb::sees_player(s.sv, look, f.slot + 1, eye, {f.bot.pitch, f.bot.yaw, 0},
                          {v.origin.x, v.origin.y, v.origin.z + 8 - look.view_height}))
       continue;
     best_d = d;
@@ -367,7 +370,7 @@ int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& 
 namespace shooters_edge::bots {
 
 bool fields_on(const Fighter& f) {
-  return f.features[sh::Feature::fields] && f.fields != nullptr && f.field_node >= 0;
+  return f.features[sb::Feature::fields] && f.fields != nullptr && f.field_node >= 0;
 }
 
 bool node_reached(const Fighter& f, int32_t node) {
@@ -379,8 +382,8 @@ bool node_reached(const Fighter& f, int32_t node) {
 double node_run_s(const Fighter& f, int32_t node) {
   if (node < 0) return ge::ai::kUnreached;
   if (fields_on(f)) {
-    const sh::NavField& fl = sh::nav_field(*f.fields, node, f.bot.pilot.pilot.set.jumper);
-    const float s = sh::nav_field_time(*f.fields, fl, f.field_node);
+    const sb::NavField& fl = sb::nav_field(*f.fields, node, f.bot.pilot.pilot.set.jumper);
+    const float s = sb::nav_field_time(*f.fields, fl, f.field_node);
     return s < std::numeric_limits<float>::infinity() ? static_cast<double>(s) : ge::ai::kUnreached;
   }
   return f.reach_at >= 0 && f.reach.reached(node) ? f.reach.cost(node) : ge::ai::kUnreached;

@@ -8,6 +8,8 @@
 
 #include "shooter/frame.hpp"
 
+namespace sb = ge::shooterbots;
+
 namespace shooters_edge::server {
 
 namespace {
@@ -111,7 +113,7 @@ int host_add_remote(Host& h, bool spectator) {
   return slot;
 }
 
-int host_add_bot(Host& h, sh::CmdSource source) {
+int host_add_bot(Host& h, sb::CmdSource source) {
   const int slot = free_slot(h);
   if (slot < 0 || source.next == nullptr) return -1;
   BotSlot& b = h.bots[static_cast<size_t>(slot)];

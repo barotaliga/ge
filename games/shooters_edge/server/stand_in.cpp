@@ -15,6 +15,8 @@ namespace shooters_edge::server {
 namespace {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace libm = ge::core::libm;
 
 constexpr double kDegPerRad = 57.29577951308232;
@@ -97,6 +99,6 @@ StandIn make_stand_in(uint32_t seed, int slot) {
   return s;
 }
 
-sh::CmdSource stand_in_source(StandIn& s) { return {&s, next}; }
+sb::CmdSource stand_in_source(StandIn& s) { return {&s, next}; }
 
 }  // namespace shooters_edge::server

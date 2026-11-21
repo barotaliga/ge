@@ -29,6 +29,8 @@
 
 namespace shooters_edge::bots {
 
+namespace sb = ge::shooterbots;
+
 constexpr int32_t kLearnSightings = 3;  // a novice recalls an item seen this many separate times
 constexpr double kSightingGap_s = 15;   // sightings this far apart count separately
 constexpr float kItemSight = 1500;      // an item's spot is made out within this, units
@@ -37,7 +39,7 @@ constexpr double kMegaGuess_s = 90;     // a mega someone else took is guessed b
 constexpr float kCallNear = 600;        // an enemy is called by an item this near it, units
 
 // How well a player of aim `skill` knows the map: the expert's aim is the expert's map.
-MapSense map_sense_of(sh::AimSkill skill);
+MapSense map_sense_of(sb::AimSkill skill);
 const char* map_sense_name(MapSense s);
 
 // The items a game turns on: the best armours, the mega health, the rocket launcher, the powers.
@@ -93,7 +95,7 @@ struct ItemNews {
 // cap, an armour, a weapon's bit) is the nearest such item believed there within `kOwnReach` (or
 // believed gone and underfoot), taken now; an item gone between two thinks at a run is past the
 // sight's own-pickup radius by the next, and the view still sends it a frame or two after.
-ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f eye,
+ItemNews knowledge_update(Fighter& f, const ge::shooterbots::BotView& s, int me, sh::Vec3f eye,
                           const Stats& st, double t);
 
 // THE GLANCE AT A KEY ITEM'S SPOT (`itemglance`): a PASS by a key item's spot starts when it comes
@@ -108,8 +110,8 @@ ItemNews knowledge_update(Fighter& f, const ge::shooter::BotView& s, int me, sh:
 constexpr float kItemGlanceNear = 600, kItemGlanceFar = 700;
 constexpr double kItemGlanceGap_s = 0.5, kItemGlanceFresh_s = 3;
 constexpr double kItemGlanceOdds[3] = {0.2, 0.6, 1.0};  // novice, average, expert
-void item_glance_offer(Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f eye, double t,
-                       ge::ai::Why* why);
+void item_glance_offer(Fighter& f, const ge::shooterbots::BotView& s, int me, sh::Vec3f eye,
+                       double t, ge::ai::Why* why);
 
 // Whether item `i` may be a goal: known, or in sight now.
 bool item_in_mind(const Fighter& f, int32_t i);

@@ -1,4 +1,4 @@
-// THE FIGHTER: a bot (plugins/shooter/bot.hpp) that plays the baseline deathmatch mod
+// THE FIGHTER: a bot (plugins/shooterbots/bot.hpp) that plays the baseline deathmatch mod
 // (games/shooters_edge/rules): it chooses where to go, what to hold and when to shoot, on
 // `ai/choose`, from what a player's client has and nothing else.
 //
@@ -48,15 +48,15 @@
 #include "ai/keys.hpp"
 #include "ai/path.hpp"
 #include "core/prng.hpp"
-#include "shooter/bot.hpp"
-#include "shooter/bot_view.hpp"
-#include "shooter/dodge.hpp"
-#include "shooter/features.hpp"
-#include "shooter/hearing.hpp"
-#include "shooter/nav_field.hpp"
-#include "shooter/swim.hpp"
-#include "shooter/temper.hpp"
-#include "shooter/traits.hpp"
+#include "shooterbots/bot.hpp"
+#include "shooterbots/bot_view.hpp"
+#include "shooterbots/dodge.hpp"
+#include "shooterbots/features.hpp"
+#include "shooterbots/hearing.hpp"
+#include "shooterbots/nav_field.hpp"
+#include "shooterbots/swim.hpp"
+#include "shooterbots/temper.hpp"
+#include "shooterbots/traits.hpp"
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/companion.hpp"
 #include "shooters_edge/bots/mind.hpp"
@@ -65,10 +65,12 @@ namespace shooters_edge::bots {
 
 namespace sh = ge::shooter;
 
+namespace sb = ge::shooterbots;
+
 constexpr double kThink_s = 0.1;  // how often the mode, the goal and the weapon are chosen
 
 // What a client is sent of its own player (`Stats`, bot_arsenal.hpp), read by the game's arsenal.
-Stats read_stats(const ge::shooter::BotView& s, int ent, const BotArsenal& arsenal);
+Stats read_stats(const ge::shooterbots::BotView& s, int ent, const BotArsenal& arsenal);
 
 // What an item is, the shooter's vocabulary (classic/item_tables.hpp).
 using ItemKind = ge::classic::ItemKind;
@@ -81,7 +83,7 @@ struct ItemSpot {
   std::string label;  // its name and spot ("item_armorInv@2480,-1992"): one option in a record
   // In a pocket only the water reaches (no route leads in): dived for from `dive_node` on the
   // field that leads through the water to the pocket (`dive`); none when no route is needed.
-  const ge::shooter::SwimField* dive = nullptr;
+  const ge::shooterbots::SwimField* dive = nullptr;
   // What this player believes of it (knowledge.hpp), not what the server holds.
   double back_at = 0;       // when it is expected back (while believed gone)
   double last_seen = -1e9;  // when it was last seen there
@@ -148,9 +150,9 @@ struct FloorTrap {
   sh::Vec3f blo, bhi;  // the button's box
   // The teleporters landing on its floor: shut while the floor is away (dm2's two into the big
   // room drop whoever takes them into the lava then).
-  std::vector<sh::NavExtraLink> teleports;
+  std::vector<sb::NavExtraLink> teleports;
   // (`trapbutton`) The links whose way passes through its button: shut unless it presses it.
-  std::vector<sh::NavExtraLink> touches;
+  std::vector<sb::NavExtraLink> touches;
   bool away = false;  // its floor away when last looked (the opens counted on the change)
 };
 
@@ -281,7 +283,7 @@ struct FighterStats {
   int64_t outmatched = 0;         // commands spent turned from a fight it believed it loses
   int64_t sound_chases = 0;       // commands spent going at an enemy it only heard
   int64_t dodging = 0;            // commands spent stepping across an enemy's line (dodge.hpp)
-  int64_t brink = 0;              // commands whose keys the brink changed (shooter/brink.hpp)
+  int64_t brink = 0;              // commands whose keys the brink changed (shooterbots/brink.hpp)
   int64_t dodge_turns = 0;        // and the times it turned the step back
   // The press (`press`, footwork.hpp): commands it was weighed in a fight, those pressed on at him
   // and back, and those held off by his nearness or a step not clear.
@@ -289,8 +291,8 @@ struct FighterStats {
   int64_t watching = 0;  // commands standing with the view on a way in (watch.hpp)
   int64_t landings = 0;  // commands walking onto an exit node just climbed out to
   double speed_sum = 0;  // its speed across the floor summed over its commands alive
-  double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode at the command
-  int64_t mode_n[sh::kPilotModes + 1] = {};
+  double mode_speed[sb::kPilotModes + 1] = {};  // and by the pilot's mode at the command
+  int64_t mode_n[sb::kPilotModes + 1] = {};
 };
 
 // What one player was heard fire (by entity; packs.hpp): when each weapon (by its number 1..8)
@@ -354,7 +356,7 @@ struct KeyHand {
 
 struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a match, read by name
   // Ordered by size, largest first, so the struct packs tight.
-  sh::Bot bot;
+  sb::Bot bot;
   // The game's weapons as it reads them (bot_arsenal.hpp): Quake's unless its caller
   // sets another (Quake II's) before `fighter_init`.
   const BotArsenal* arsenal = &first_arsenal();
@@ -366,7 +368,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   std::vector<KnownPack> known_packs;  // the packs it believes lie on the map (packs.hpp)
   std::vector<double> last_seen_t = std::vector<double>(33, -1e9);   // and when last in sight
   std::vector<sh::Vec3f> last_seen_at = std::vector<sh::Vec3f>(33);  // and where (packs.hpp)
-  std::vector<sh::HeardSound> heard;                                 // this frame's sounds taken in
+  std::vector<sb::HeardSound> heard;                                 // this frame's sounds taken in
   std::vector<sh::Vec3f> spam_spots;     // where enemies come in by (spam.hpp)
   std::vector<int32_t> spam_from;        // per spot, the node near its area it is fired from
   std::vector<FoeRead> foes;             // each enemy as believed, by entity (temper.hpp)
@@ -412,8 +414,8 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   ge::ai::Search reach;               // every node it can get to from where it stood at `reach_at`
   ge::ai::Search rush_search;         // (`rushrun`) a mate's route to the quad
   FighterStats stats;
-  sh::HearStats hear_stats;
-  sh::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
+  sb::HearStats hear_stats;
+  sb::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
   // Its team messages (team.hpp's `team_say`), sent as `say_team` by whoever drives its client.
   std::vector<std::string> outbox;
   double held = 0;             // in the mode this long (worked out when it changes)
@@ -453,10 +455,11 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // The map's wet nodes (map_nav.hpp `wet`): a fight's place to stand or a foe's spot in the water
   // is no goal while he stands dry (a person does not wade in to fight); null none.
   const std::vector<uint8_t>* wet = nullptr;
-  const ge::shooter::SwimField* swim = nullptr;  // the map's way out of its water (none: no water)
-  int64_t buttons = 0;                           // buttons gone to
-  int64_t dives = 0;                             // dives begun
-  int64_t lost = 0;                              // thinks spent off the graph
+  const ge::shooterbots::SwimField* swim =
+      nullptr;          // the map's way out of its water (none: no water)
+  int64_t buttons = 0;  // buttons gone to
+  int64_t dives = 0;    // dives begun
+  int64_t lost = 0;     // thinks spent off the graph
   int32_t goal_item = -1;
   int32_t goal_was = -1;    // the goal item held since `goal_since`
   int32_t tired_item = -1;  // an item gone for too long in vain, worth less until `tired_until`
@@ -504,15 +507,15 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   int32_t lost_to = -1;  // off the graph or in a pool it cannot leave by its links: the node
                          // walked (or swum) straight at to get back (-1: none)
   int32_t reach_n = 0;   // how many nodes `reach` holds
-  // (`fields`) The ways to every item from everywhere, the match's (shooter/nav_field.hpp; null:
-  // none), and the node it stood nearest at its last think (-1: none yet).
-  ge::shooter::NavFields* fields = nullptr;
+  // (`fields`) The ways to every item from everywhere, the match's (shooterbots/nav_field.hpp;
+  // null: none), and the node it stood nearest at its last think (-1: none yet).
+  ge::shooterbots::NavFields* fields = nullptr;
   int32_t field_node = -1;
   int32_t diving = -1;        // the item it dives for (in the water on `dive`), -1 none
   int32_t last_dive = -1;     // the item the last think dived for
   int32_t explore_node = -1;  // a novice with nothing known walks the map to learn it
   int32_t dive_off = -1;      // the item whose dive it last gave up (-1: none)
-  int32_t swim_exit = -1;     // the exit node it is climbing out onto (shooter/swim.hpp), -1 none
+  int32_t swim_exit = -1;  // the exit node it is climbing out onto (shooterbots/swim.hpp), -1 none
   double swim_exit_until = 0;
   int32_t short_item = -1;  // a short goal on the way (fighter_items.cpp on_the_way), -1 none
   int32_t door_avoid = -1;  // the door a button's errand cannot reach round (above), -1 none
@@ -520,8 +523,8 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   bool swim_view_on = false;  // the swimmer's view turned at a hand's pace (fighter.cpp)
   float view_sent[2] = {};    // the view (pitch, yaw) its last command carried
   int32_t landing = -1;       // the exit node it climbed out to, walked onto first (-1: none)
-  // Which behaviours it has (shooter/features.hpp): set before `fighter_init`, which reads it.
-  sh::Features features = sh::features_all();
+  // Which behaviours it has (shooterbots/features.hpp): set before `fighter_init`, which reads it.
+  sb::Features features = sb::features_all();
   double landing_until = 0;
   // THE COMMITMENT (fighter.cpp `think`): its item goal is chosen again only on news (a new
   // sighting, an item seen or heard taken, a spawn heard, a team line read, a blow taken, a
@@ -539,7 +542,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // into the water landed).
   sh::Vec3f shot_from, shot_dir, blast_at;
   int32_t shot_number = 0;  // and its weapon
-  sh::Dodge dodge;          // its side steps in a fight (shooter/dodge.hpp)
+  sb::Dodge dodge;          // its side steps in a fight (shooterbots/dodge.hpp)
   // The forward key in a fight (`press`, footwork.hpp): +1 on at him, -1 back, 0 the route's own,
   // held until `press_until`, drawn off its own stream; and for the trace alone what the feet did
   // with the aim this command ("on", "back", "route") or what kept the press out ("errand", "wet",
@@ -571,23 +574,23 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   ge::ai::Search watch_search;
   int32_t watch_node = -1, watch_pick = -1;
   double watch_until = 0, watch_at = -1e9;
-  sh::DodgeSkill dodge_k;
+  sb::DodgeSkill dodge_k;
   FightMode mode = FightMode::roam;
   Role role = Role::free;
-  sh::Temper temper = sh::Temper::balanced;  // when it takes a fight (shooter/temper.hpp)
-  sh::AimSkill skill = sh::AimSkill::expert;
+  sb::Temper temper = sb::Temper::balanced;  // when it takes a fight (shooterbots/temper.hpp)
+  sb::AimSkill skill = sb::AimSkill::expert;
   bool outmatched = false;  // turned from the fight in sight: armour, a weapon or the team first
   bool item_first =
       false;  // (`itemfirst`) a key item of its own due: the fight's feet keep the route
-  sh::Traits traits = sh::traits_of(sh::AimSkill::expert, sh::Temper::balanced);  // traits.hpp
-  // Its traits read in steps (shooter/traits.hpp `tier_of`):
+  sb::Traits traits = sb::traits_of(sb::AimSkill::expert, sb::Temper::balanced);  // traits.hpp
+  // Its traits read in steps (shooterbots/traits.hpp `tier_of`):
   MapSense sense = MapSense::expert;     // what it knows of the map: items, buttons, their worth
   MapSense timing = MapSense::expert;    // which items it times, and how well
   MapSense comms = MapSense::expert;     // what it says, and reads of its team's lines
   MapSense teamwork = MapSense::expert;  // what it does for the team: areas, help, the quad's rush
   MapSense hearing = MapSense::expert;   // what the sounds it hears tell it
   MapSense camp = MapSense::expert;      // the spots an enemy comes in weak, worked
-  float edge = 1;                        // its aim's worth in a fight (shooter/temper.hpp)
+  float edge = 1;                        // its aim's worth in a fight (shooterbots/temper.hpp)
   bool rash = false;                     // goes after every sound (a novice's discipline)
   int aim_slot = -1;                     // the aim trait its hands hold now (0 the scattergun)
   // A sound is gone after this long after it was heard (s): its reaction to a sighting and the
@@ -609,11 +612,11 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
 constexpr float kGapBuild_s = 0.3f;
 
 // `sidebrink`: a walk or drop along a lip over lava or slime costs a route this share of its time
-// more (shooter/nav.hpp `NavJumper::lip_share`): up a ramp over a pit the route keeps to its
+// more (shooterbots/nav.hpp `NavJumper::lip_share`): up a ramp over a pit the route keeps to its
 // middle.
 constexpr float kLipShare = 1.0f;
 // `midroute`: a walk into a node at its floor's edge costs a route this share of its time more
-// (shooter/nav.hpp `NavJumper::wall_share`; half that a grid step in).
+// (shooterbots/nav.hpp `NavJumper::wall_share`; half that a grid step in).
 constexpr float kWallShare = 0.8f;
 // (`quadseen`) The quad holder's glow among the effects the rules show everyone (its blue).
 constexpr int kGlowQuad = 64;
@@ -621,13 +624,13 @@ constexpr int kGlowQuad = 64;
 // The pilot's settings and hands for a fighter with these behaviours and moves (`traits`' moves
 // tier: an expert hops on practised hands, an average player the simple hop on steady ones, a
 // novice walks on a person's); `fighter_init` uses them, and a lab flies a route with the same.
-sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& traits,
-                                sh::AimSkill skill, sh::PilotHands& hands);
+sb::PilotSettings fighter_pilot(const sb::Features& features, const sb::Traits& traits,
+                                sb::AimSkill skill, sb::PilotHands& hands);
 
 // The fighter's strength: health and armour's protection, a launcher counted on top.
 float fighter_strength(const Stats& st);
 
-// (`fields`) WHERE IT CAN GET TO, read off the match's fields (shooter/nav_field.hpp) for its
+// (`fields`) WHERE IT CAN GET TO, read off the match's fields (shooterbots/nav_field.hpp) for its
 // jumper from the node it last stood at, when the switch is on and the match has fields; else off
 // its reach. `node_reached`: a way there (no reach worked out yet: taken as one, as before);
 // `node_run_s`: the run there, s (infinity: none).
@@ -635,12 +638,12 @@ bool fields_on(const Fighter& f);
 bool node_reached(const Fighter& f, int32_t node);
 double node_run_s(const Fighter& f, int32_t node);
 
-// A fighter on graph `g` with the personality `traits` (shooter/traits.hpp; `skill` perfect
+// A fighter on graph `g` with the personality `traits` (shooterbots/traits.hpp; `skill` perfect
 // passes its aim's hands untouched, the measuring stick) and the behaviours `f.features`
-// (shooter/features.hpp), the map's items off `entities` (the map's text) matched to what the
+// (shooterbots/features.hpp), the map's items off `entities` (the map's text) matched to what the
 // server `s` sends client `slot`'s player now. Call after the slot connects.
-void fighter_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s, int slot,
-                  const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
+void fighter_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotView& s, int slot,
+                  const char* entities, sb::AimSkill skill, const sb::Traits& traits, double hz,
                   uint32_t seed);
 
 // Sends the fighter to nav node `node` (kept when it is on its way there or standing on it; none
@@ -657,10 +660,11 @@ constexpr float kBlastNear = 160;
 // lately (`FoeRead`).
 bool foe_has_key(const Fighter& f, int ent, double t);
 // A living teammate within `reach` of `at` (a blast's aim: its splash would hurt him).
-bool mate_near(const Fighter& f, const ge::shooter::BotView& s, ge::shooter::Vec3f at, float reach);
+bool mate_near(const Fighter& f, const ge::shooterbots::BotView& s, ge::shooter::Vec3f at,
+               float reach);
 constexpr float kBlastClear = 140;  // a rocket or grenade is held with a mate this near its aim
-bool blast_bursts_near(const Fighter& f, const ge::shooter::BotView& s, int me, sh::Vec3f angles,
-                       float reach);
-sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot, int msec);
+bool blast_bursts_near(const Fighter& f, const ge::shooterbots::BotView& s, int me,
+                       sh::Vec3f angles, float reach);
+sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int slot, int msec);
 
 }  // namespace shooters_edge::bots

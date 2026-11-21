@@ -29,6 +29,7 @@ namespace {
 
 namespace br = ge::brush;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
 namespace bt = shooters_edge::bots;
 
@@ -90,21 +91,21 @@ TEST(the_nav_builds_on_a_version_38_map) {
   CHECK(nav->tracer != nullptr);
   CHECK(nav->graph.nodes.size() > 100);
   // The doorway joins the halves: both spawns are in the one main part.
-  const int32_t west = sh::nav_nearest(nav->graph, {-300, 0, 24});
-  const int32_t east = sh::nav_nearest(nav->graph, {200, 0, 24});
+  const int32_t west = sb::nav_nearest(nav->graph, {-300, 0, 24});
+  const int32_t east = sb::nav_nearest(nav->graph, {200, 0, 24});
   CHECK(west >= 0 && east >= 0);
   CHECK(nav->main.reached(west) && nav->main.reached(east));
   // The pad links to its destination.
   CHECK(nav->teleport_links > 0);
   // The plat: a ridden mover on the nav's tracer, and the ledge reached by riding it.
   bool plat = false;
-  for (const sh::NavMover& m : nav->movers)
+  for (const sb::NavMover& m : nav->movers)
     if (m.tracer == nav->tracer.get() && m.brush_model == 1) plat = true;
   CHECK(plat);
   int rides = 0;
-  for (const sh::NavNode& n : nav->graph.nodes) rides += n.ride >= 0 ? 1 : 0;
+  for (const sb::NavNode& n : nav->graph.nodes) rides += n.ride >= 0 ? 1 : 0;
   CHECK(rides > 0);
-  const int32_t ledge = sh::nav_nearest(nav->graph, {448, 0, 96 + 24});
+  const int32_t ledge = sb::nav_nearest(nav->graph, {448, 0, 96 + 24});
   CHECK(ledge >= 0);
   CHECK(nav->graph.nodes[static_cast<size_t>(ledge)].origin.z > 96);
   CHECK(nav->main.reached(ledge));

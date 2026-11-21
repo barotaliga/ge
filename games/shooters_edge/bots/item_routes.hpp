@@ -3,8 +3,8 @@
 // flow; the grid misses a 16-unit tread and the nav's standing jumps cost a second a step). Each
 // route is a run of points (a player's feet), the first its ENTRY (joined to the nav's nearest
 // node), each after it walked or hopped onto; the last is the item's own node. The nav proves
-// each one with the move (shooter/nav_script.hpp `prove_script`) and adds it as one `script` link
-// (bots/map_nav.cpp), so a route to the item leads to the entry and the script finishes it. A
+// each one with the move (shooterbots/nav_script.hpp `prove_script`) and adds it as one `script`
+// link (bots/map_nav.cpp), so a route to the item leads to the entry and the script finishes it. A
 // door over the way (e1m2's YA stairs, shut until a button is shot) bars the link while shut, and
 // the fighter's button logic opens it as for any item behind a door.
 //

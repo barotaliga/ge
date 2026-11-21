@@ -10,7 +10,6 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
-#include "shooter/aim.hpp"
 
 namespace ge::shooter {
 

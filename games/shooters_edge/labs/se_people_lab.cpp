@@ -97,7 +97,7 @@ namespace cn = shooters_edge::net;
 namespace la = shooters_edge::labs;
 using ge::core::num::to_fixed;
 
-constexpr float kSight = 4096;       // the bots' sight range (shooter/senses.hpp)
+constexpr float kSight = 4096;       // the bots' sight range (shooterbots/senses.hpp)
 constexpr double kFightAfter = 0.5;  // a key read this long past the last enemy seen is a fight's
 constexpr float kEye = 22;           // the eye over the origin
 constexpr float kFastest = 1000;
@@ -456,7 +456,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   cl::Demo d;
   if (!cl::open_demo(std::move(bytes), d, out.error)) return;
   const sh::Hull& world = m.bsp.models[0].hulls[0];
-  // The bots' screen (shooter/senses.hpp `sees_player`): each half angle as a cosine and sine.
+  // The bots' screen (shooterbots/senses.hpp `sees_player`): each half angle as a cosine and sine.
   const sh::Vec3f wide = sh::angle_vectors({0, kFov * 0.5f, 0}).forward;
   const sh::Vec3f high = sh::angle_vectors({0, kFovY * 0.5f, 0}).forward;
   std::vector<Player> by(32);

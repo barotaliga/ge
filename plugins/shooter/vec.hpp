@@ -9,7 +9,7 @@
 //
 // ge:summary The classic move's float vectors: dot, length, normalize, the view's axes
 // ge:keywords vec3f float32 vector dot cross length normalize angle-vectors forward right up
-// ge:keywords view-angles pitch yaw roll
+// ge:keywords view-angles pitch yaw roll aim_angles
 // ge:skill shooter determinism
 // ge:test tests/shooter_vec_test.cpp
 #pragma once
@@ -66,5 +66,9 @@ struct ViewAxes {
   Vec3f forward, right, up;
 };
 ViewAxes angle_vectors(Vec3f angles_deg);
+
+// The yaw and pitch (degrees; pitch down positive, the protocol's) from `eye` to `at`: where a
+// view looks to face a point, for the aim help and for a bot alike.
+void aim_angles(Vec3f eye, Vec3f at, float& yaw, float& pitch);
 
 }  // namespace ge::shooter

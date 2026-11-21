@@ -1,11 +1,11 @@
 // LAB `se-hop`: DO THE BOTS GET ROUND A REAL MAP AS FAST AS A PRO, and where does the pro know a
 // way the bots do not? A map (`--map=<a .bsp>`, or `--basedir` and `--mapname`, or the fixture
-// halls) gets the bots' nav graph (shooter/nav.hpp), and a set of TRIPS is run on it by the pilot
-// (games/shooters_edge/bots/pilot_run.hpp `run_route`, no server) five ways: walking (no strafe,
-// no hop) and strafing (today's straight strafe jumps) with a person's hands, and hopping as an
-// expert (shooter/pilot.hpp `hop`) with practised hands, with a person's late hands and with none.
-// Every run is read by the same hop reader as a recorded player (shooter/hops.hpp), so a bot's hops
-// and a pro's sit in one table.
+// halls) gets the bots' nav graph (shooterbots/nav.hpp), and a set of TRIPS is run on it by the
+// pilot (games/shooters_edge/bots/pilot_run.hpp `run_route`, no server) five ways: walking (no
+// strafe, no hop) and strafing (today's straight strafe jumps) with a person's hands, and hopping
+// as an expert (shooterbots/pilot.hpp `hop`) with practised hands, with a person's late hands and
+// with none. Every run is read by the same hop reader as a recorded player (shooterbots/hops.hpp),
+// so a bot's hops and a pro's sit in one table.
 //
 // THE TRIPS come off a recorded player when `--file` (a demo) is given: `--player`'s track cut
 // into stretches of up to `--trip-s` seconds over which he crossed at least `--trip-min` units
@@ -31,7 +31,7 @@
 // ge:keywords lab se-hop bunny-hop expert pilot trips pro compare tricks shortcuts nav wireframe
 // ge:keywords hop-mode chained speed time real-map
 // ge:skill shooter labs
-// ge:test tests/shooter_pilot_test.cpp
+// ge:test tests/shooterbots_pilot_test.cpp
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -44,9 +44,9 @@
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
-#include "shooter/hops.hpp"
-#include "shooter/nav.hpp"
-#include "shooter/pilot.hpp"
+#include "shooterbots/hops.hpp"
+#include "shooterbots/nav.hpp"
+#include "shooterbots/pilot.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/labs/wire_inside.hpp"
@@ -56,6 +56,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace la = shooters_edge::labs;
 namespace bo = shooters_edge::bots;
 using ge::core::num::to_fixed;
@@ -67,17 +68,17 @@ constexpr double kHz = 1000.0 / bo::kPilotMsec;
 struct Way {
   const char* name;
   gl::Rgba colour;
-  sh::PilotHands hands;
+  sb::PilotHands hands;
   bool strafe, hop;
   bool simple = false;
 };
 constexpr Way kWays[] = {
-    {"walk", {150, 150, 150, 255}, sh::PilotHands::human, false, false},
-    {"strafe", {40, 90, 220, 255}, sh::PilotHands::human, true, false},
-    {"hop", {240, 120, 20, 255}, sh::PilotHands::practised, true, true},
-    {"hop-simple", {0, 170, 190, 255}, sh::PilotHands::steady, true, true, true},
-    {"hop-late", {200, 60, 60, 255}, sh::PilotHands::human, true, true},
-    {"hop-sharp", {20, 160, 90, 255}, sh::PilotHands::none, true, true},
+    {"walk", {150, 150, 150, 255}, sb::PilotHands::human, false, false},
+    {"strafe", {40, 90, 220, 255}, sb::PilotHands::human, true, false},
+    {"hop", {240, 120, 20, 255}, sb::PilotHands::practised, true, true},
+    {"hop-simple", {0, 170, 190, 255}, sb::PilotHands::steady, true, true, true},
+    {"hop-late", {200, 60, 60, 255}, sb::PilotHands::human, true, true},
+    {"hop-sharp", {20, 160, 90, 255}, sb::PilotHands::none, true, true},
 };
 constexpr size_t kWayCount = std::size(kWays);
 constexpr gl::Rgba kPro{170, 30, 170, 255};
@@ -92,7 +93,7 @@ struct Trip {
   float route_length = 0;  // the bots' first planned route, across
   bo::RunResult runs[kWayCount];
   float pass_s[kWayCount] = {};  // each way's time to first pass within kPass of the end (-1 never)
-  sh::HopReading reads[kWayCount];
+  sb::HopReading reads[kWayCount];
   std::string trick;  // why it is a trick candidate ("" none)
 };
 
@@ -105,8 +106,8 @@ std::string lower(std::string s) {
   return s;
 }
 
-std::vector<sh::TrackPoint> run_track(const bo::RunResult& r) {
-  std::vector<sh::TrackPoint> t;
+std::vector<sb::TrackPoint> run_track(const bo::RunResult& r) {
+  std::vector<sb::TrackPoint> t;
   for (size_t i = 0; i < r.trail.size(); i++)
     t.push_back({static_cast<double>(i) / kHz, r.trail[i], static_cast<float>(r.yaw[i]), 0, false});
   return t;
@@ -121,8 +122,8 @@ void run(gl::Lab& lab) {
     return;
   }
   const auto t0 = std::chrono::steady_clock::now();
-  sh::NavGraph graph;
-  sh::build_nav(*m.world, {}, sh::MoveSettings{}, sh::NavSettings{}, graph);
+  sb::NavGraph graph;
+  sb::build_nav(*m.world, {}, sh::MoveSettings{}, sb::NavSettings{}, graph);
   lab.metric("nav.build-wall",
              std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(), "s",
              gl::Det::measured);
@@ -135,10 +136,10 @@ void run(gl::Lab& lab) {
 
   // The trips.
   std::vector<Trip> trips;
-  sh::HopReading pro;
+  sb::HopReading pro;
   std::string who;
   const std::string file = lab.arg("file");
-  sh::HopSettings hs;
+  sb::HopSettings hs;
   if (!file.empty()) {
     la::DemoTracks dt;
     if (!la::read_demo_tracks(la::read_whole(file), dt, error)) {
@@ -160,7 +161,7 @@ void run(gl::Lab& lab) {
       return;
     }
     who = dt.names[static_cast<size_t>(me)];
-    sh::read_hops(dt.tracks[static_cast<size_t>(me)], *m.world, hs, pro);
+    sb::read_hops(dt.tracks[static_cast<size_t>(me)], *m.world, hs, pro);
     const double span = lab.arg_num("trip-s");
     const float least = static_cast<float>(lab.arg_num("trip-min"));
     struct Cand {
@@ -170,15 +171,15 @@ void run(gl::Lab& lab) {
     std::vector<Cand> cands;
     const auto& fr = pro.frames;
     for (size_t i = 0; i < fr.size();) {
-      if (fr[i].phase == sh::HopPhase::cut || fr[i].phase != sh::HopPhase::ground) {
+      if (fr[i].phase == sb::HopPhase::cut || fr[i].phase != sb::HopPhase::ground) {
         i++;
         continue;
       }
       size_t j = i, best = i;
-      while (j + 1 < fr.size() && fr[j + 1].phase != sh::HopPhase::cut &&
+      while (j + 1 < fr.size() && fr[j + 1].phase != sb::HopPhase::cut &&
              fr[j + 1].t - fr[i].t <= span) {
         j++;
-        if (fr[j].phase == sh::HopPhase::ground &&
+        if (fr[j].phase == sb::HopPhase::ground &&
             across(fr[i].origin, fr[j].origin) >= across(fr[i].origin, fr[best].origin))
           best = j;
       }
@@ -211,7 +212,7 @@ void run(gl::Lab& lab) {
   } else {
     // The far corners: the nodes nearest the graph's bounds' corners, crossed both ways.
     sh::Vec3f lo = graph.nodes[0].origin, hi = lo;
-    for (const sh::NavNode& n : graph.nodes) {
+    for (const sb::NavNode& n : graph.nodes) {
       lo = {std::min(lo.x, n.origin.x), std::min(lo.y, n.origin.y), std::min(lo.z, n.origin.z)};
       hi = {std::max(hi.x, n.origin.x), std::max(hi.y, n.origin.y), std::max(hi.z, n.origin.z)};
     }
@@ -244,14 +245,14 @@ void run(gl::Lab& lab) {
   const float trick = static_cast<float>(lab.arg_num("trick"));
   for (Trip& t : trips) {
     for (size_t w = 0; w < kWayCount; w++) {
-      sh::PilotSettings ps;
+      sb::PilotSettings ps;
       ps.strafe = kWays[w].strafe;
       ps.hop = kWays[w].hop;
       ps.hop_simple = kWays[w].simple;
       t.runs[w] =
           bo::run_route(*m.world, graph, t.from, t.to, kWays[w].hands, seed, ps, limit, t.velocity);
-      const std::vector<sh::TrackPoint> tr = run_track(t.runs[w]);
-      sh::read_hops(tr, *m.world, hs, t.reads[w]);
+      const std::vector<sb::TrackPoint> tr = run_track(t.runs[w]);
+      sb::read_hops(tr, *m.world, hs, t.reads[w]);
       t.pass_s[w] = -1;
       for (size_t i = 0; i < tr.size(); i++)
         if (across(tr[i].origin, t.to) <= kPass && std::fabs(tr[i].origin.z - t.to.z) <= 40) {
@@ -264,9 +265,9 @@ void run(gl::Lab& lab) {
             "t\tmode\tx\ty\tz\tspeed\tphase\tyaw\theading\tside\tforward\tyaw_wanted\n";
         const bo::RunResult& r = t.runs[w];
         for (size_t i = 0; i < r.trail.size(); i++) {
-          const sh::HopFrame& f = t.reads[w].frames[i];
+          const sb::HopFrame& f = t.reads[w].frames[i];
           tsv += to_fixed(f.t, 3) + "\t" +
-                 sh::pilot_mode_name(static_cast<sh::PilotMode>(r.modes[i])) + "\t" +
+                 sb::pilot_mode_name(static_cast<sb::PilotMode>(r.modes[i])) + "\t" +
                  to_fixed(r.trail[i].x, 1) + "\t" + to_fixed(r.trail[i].y, 1) + "\t" +
                  to_fixed(r.trail[i].z, 1) + "\t" + to_fixed(f.speed, 0) + "\t" +
                  std::to_string(static_cast<int>(f.phase)) + "\t" + to_fixed(r.yaw[i], 1) + "\t" +
@@ -346,7 +347,7 @@ void run(gl::Lab& lab) {
                   {"who", "jumps", "chained %", "longest chain", "air %", "speed p50", "p90", "top",
                    "turn share", "lag deg", "gain u/s/s"},
                   {}};
-  auto srow = [&](const std::string& name, const sh::HopSummary& s) {
+  auto srow = [&](const std::string& name, const sb::HopSummary& s) {
     st.rows.push_back(
         {name, std::to_string(s.jumps), to_fixed(s.jumps > 0 ? 100.0 * s.chained / s.jumps : 0, 1),
          std::to_string(s.longest_chain), to_fixed(100.0 * s.air_share, 1),
@@ -356,16 +357,16 @@ void run(gl::Lab& lab) {
   if (!who.empty()) srow(who, pro.summary);
   for (size_t w = 0; w < kWayCount; w++) {
     // All trips' runs end to end, cut between trips.
-    std::vector<sh::TrackPoint> all_t;
+    std::vector<sb::TrackPoint> all_t;
     double t_off = 0;
     for (const Trip& t : trips) {
-      std::vector<sh::TrackPoint> tr = run_track(t.runs[w]);
-      for (sh::TrackPoint& p : tr) p.t += t_off;
+      std::vector<sb::TrackPoint> tr = run_track(t.runs[w]);
+      for (sb::TrackPoint& p : tr) p.t += t_off;
       if (!tr.empty()) t_off = tr.back().t + 1;
       all_t.insert(all_t.end(), tr.begin(), tr.end());
     }
-    sh::HopReading r;
-    sh::read_hops(all_t, *m.world, hs, r);
+    sb::HopReading r;
+    sb::read_hops(all_t, *m.world, hs, r);
     srow(std::string("bot ") + kWays[w].name, r.summary);
     lab.metric(std::string("way.") + kWays[w].name + ".chained", r.summary.chained, "count");
     lab.metric(std::string("way.") + kWays[w].name + ".speed-p90", r.summary.speed_p90, "u/s");
@@ -518,7 +519,7 @@ void run(gl::Lab& lab) {
                 "speed (u/s)",
                 960,
                 420};
-    auto add = [&](const std::string& name, const std::vector<sh::HopFrame>& fr, size_t a,
+    auto add = [&](const std::string& name, const std::vector<sb::HopFrame>& fr, size_t a,
                    size_t b) {
       gl::Trace tr{name, {}, {}};
       double d = 0;
@@ -547,9 +548,9 @@ const gl::LabSpec kSpec{
     "se-hop",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "plugins/shooter/pilot.hpp's hop (an expert's bunny hop) against walking and strafing on a "
+    "plugins/shooterbots/pilot.hpp's hop (an expert's bunny hop) against walking and strafing on a "
     "real map's trips (games/shooters_edge/bots/pilot_run.hpp run_route), read by "
-    "plugins/shooter/hops.hpp beside a recorded pro",
+    "plugins/shooterbots/hops.hpp beside a recorded pro",
     "bots",
     "Do the bots get round a real map as fast as a pro when they hop, and where does the pro know "
     "a way the bots do not?",

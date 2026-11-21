@@ -48,8 +48,8 @@
 #include "lab/raster.hpp"
 #include "progs/entity_text.hpp"
 #include "shooter/hull.hpp"
-#include "shooter/nav.hpp"
 #include "shooter/world.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -64,6 +64,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace pg = ge::progs;
 namespace cl = shooters_edge::client;
 namespace sv = shooters_edge::server;
@@ -91,23 +92,23 @@ struct Item {
   std::string call;
 };
 
-gl::Rgba kind_colour(sh::NavKind k) {
+gl::Rgba kind_colour(sb::NavKind k) {
   switch (k) {
-    case sh::NavKind::walk:
+    case sb::NavKind::walk:
       return {120, 124, 130, 255};
-    case sh::NavKind::drop:
+    case sb::NavKind::drop:
       return {60, 120, 220, 255};
-    case sh::NavKind::jump:
+    case sb::NavKind::jump:
       return {240, 140, 30, 255};
-    case sh::NavKind::ride:
+    case sb::NavKind::ride:
       return {150, 80, 200, 255};
-    case sh::NavKind::swim:
+    case sb::NavKind::swim:
       return {40, 180, 200, 255};
-    case sh::NavKind::rocket:
+    case sb::NavKind::rocket:
       return {220, 40, 40, 255};
-    case sh::NavKind::grenade:
+    case sb::NavKind::grenade:
       return {40, 160, 60, 255};
-    case sh::NavKind::script:
+    case sb::NavKind::script:
       return {230, 0, 140, 255};
   }
   return kInk;
@@ -299,13 +300,13 @@ void box_edges(sh::Vec3f lo, sh::Vec3f hi, F&& f) {
 // The nav's links with both ends in the box (feet at the nodes).
 template <class F>
 void each_link(const Scene& s, F&& f) {
-  const sh::NavGraph& g = s.nav.graph;
+  const sb::NavGraph& g = s.nav.graph;
   for (size_t a = 0; a < g.nodes.size(); a++) {
-    const sh::NavNode& n = g.nodes[a];
+    const sb::NavNode& n = g.nodes[a];
     const sh::Vec3f fa{n.origin.x, n.origin.y, n.origin.z - 24};
     if (!inside_box(s, fa)) continue;
     for (int32_t k = 0; k < n.links; k++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      const sb::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
       const sh::Vec3f o = g.nodes[static_cast<size_t>(l.to)].origin;
       const sh::Vec3f fb{o.x, o.y, o.z - 24};
       if (!inside_box(s, fb)) continue;
@@ -414,27 +415,27 @@ gl::Picture top_picture(const Scene& s, int px_size) {
     }
   }
   // The nav: links by kind, then the nodes.
-  each_link(s, [&](sh::Vec3f a, sh::Vec3f b, const sh::NavLink& l, bool swim) {
+  each_link(s, [&](sh::Vec3f a, sh::Vec3f b, const sb::NavLink& l, bool swim) {
     if (swim && !s.swim) return;
     gl::Rgba c = kind_colour(l.kind);
     if (swim) c = {175, 215, 225, 255};
     gl::draw_line(p, sx(a.x), sy(a.y), sx(b.x), sy(b.y), c, 1);
   });
-  for (const sh::NavNode& n : s.nav.graph.nodes) {
+  for (const sb::NavNode& n : s.nav.graph.nodes) {
     const sh::Vec3f f{n.origin.x, n.origin.y, n.origin.z - 24};
     if (!inside_box(s, f) || (n.swim && !s.swim)) continue;
     gl::fill_disc(p, sx(f.x), sy(f.y), n.swim ? 1.5 : 2.5,
                   n.swim ? gl::Rgba{40, 180, 200, 255} : kInk);
   }
   // The scripted ways: each step, numbered.
-  for (const sh::NavScript& sc : s.nav.graph.scripts)
+  for (const sb::NavScript& sc : s.nav.graph.scripts)
     for (size_t k = 0; k < sc.steps.size(); k++) {
       const sh::Vec3f f = sc.steps[k].at - sh::Vec3f{0, 0, 24};
       if (k > 0) {
         const sh::Vec3f e = sc.steps[k - 1].at - sh::Vec3f{0, 0, 24};
-        gl::draw_line(p, sx(e.x), sy(e.y), sx(f.x), sy(f.y), kind_colour(sh::NavKind::script), 3);
+        gl::draw_line(p, sx(e.x), sy(e.y), sx(f.x), sy(f.y), kind_colour(sb::NavKind::script), 3);
       }
-      gl::fill_disc(p, sx(f.x), sy(f.y), 4, kind_colour(sh::NavKind::script));
+      gl::fill_disc(p, sx(f.x), sy(f.y), 4, kind_colour(sb::NavKind::script));
       gl::draw_text(p, sx(f.x) - 14, sy(f.y) + 4, (sc.steps[k].hop ? "H" : "W") + std::to_string(k),
                     {230, 0, 140, 255});
     }
@@ -468,11 +469,11 @@ gl::Picture top_picture(const Scene& s, int px_size) {
   gl::draw_line(p, m, m + px_size + 8, m + bar, m + px_size + 8, kInk, 2);
   gl::draw_text(p, m + bar + 6, m + px_size + 4, "64 UNITS", kInk);
   int lx = m + static_cast<int>(bar) + 80;
-  for (int k = 0; k < sh::kNavKinds; k++) {
-    const auto kind = static_cast<sh::NavKind>(k);
+  for (int k = 0; k < sb::kNavKinds; k++) {
+    const auto kind = static_cast<sb::NavKind>(k);
     gl::draw_line(p, lx, m + px_size + 8, lx + 16, m + px_size + 8, kind_colour(kind), 3);
-    gl::draw_text(p, lx + 20, m + px_size + 4, sh::nav_kind_name(kind), kInk);
-    lx += 30 + gl::text_width(sh::nav_kind_name(kind));
+    gl::draw_text(p, lx + 20, m + px_size + 4, sb::nav_kind_name(kind), kInk);
+    lx += 30 + gl::text_width(sb::nav_kind_name(kind));
   }
   gl::draw_text(p, m, 8,
                 "X EAST, Y NORTH UP. FLOOR " + to_fixed(zlo, 0) + " BLUE .. " + to_fixed(ztop, 0) +
@@ -509,8 +510,8 @@ gl::Picture wire_corner(const Scene& s, std::span<const la::WireEdge> all, doubl
   for (const Thing& t : s.things)
     if (inside_box(s, (t.lo + t.hi) * 0.5f, 64))
       box_edges(t.lo, t.hi, [&](sh::Vec3f a, sh::Vec3f b) { line(a, b, mark_colour(t.kind), 2); });
-  each_link(s, [&](sh::Vec3f a, sh::Vec3f b, const sh::NavLink& l, bool) {
-    if (l.kind != sh::NavKind::walk && l.kind != sh::NavKind::swim)
+  each_link(s, [&](sh::Vec3f a, sh::Vec3f b, const sb::NavLink& l, bool) {
+    if (l.kind != sb::NavKind::walk && l.kind != sb::NavKind::swim)
       line(a, b, kind_colour(l.kind), 2);
   });
   const std::vector<sh::Vec3f> rt = route_feet(s);
@@ -554,12 +555,12 @@ la::InsideCamera eye_toward(const Scene& s, double yaw, float back, float up) {
 }
 
 void draw_scene_overlays(const Scene& s, la::InsideView& iv) {
-  each_link(s, [&](sh::Vec3f a, sh::Vec3f b, const sh::NavLink& l, bool swim) {
+  each_link(s, [&](sh::Vec3f a, sh::Vec3f b, const sb::NavLink& l, bool swim) {
     if (swim && !s.swim) return;
     const sh::Vec3f lift{0, 0, 2};
     iv.line(a + lift, b + lift, kind_colour(l.kind), 1, false);
   });
-  for (const sh::NavNode& n : s.nav.graph.nodes) {
+  for (const sb::NavNode& n : s.nav.graph.nodes) {
     const sh::Vec3f f{n.origin.x, n.origin.y, n.origin.z - 24};
     if (!inside_box(s, f) || n.swim) continue;
     iv.line(f, {f.x, f.y, f.z + 6}, kInk, 3, false);
@@ -702,12 +703,12 @@ gl::Picture cut_picture(const Scene& s, bool along_x, int px_size) {
     const float d = along_x ? f.y - s.at.y : f.x - s.at.x;
     return d <= 16 && d >= -16;
   };
-  each_link(s, [&](sh::Vec3f a, sh::Vec3f b, const sh::NavLink& l, bool) {
+  each_link(s, [&](sh::Vec3f a, sh::Vec3f b, const sb::NavLink& l, bool) {
     if (!near_cut(a) || !near_cut(b)) return;
     gl::draw_line(p, su(along_x ? a.x : a.y), sz(a.z), su(along_x ? b.x : b.y), sz(b.z),
                   kind_colour(l.kind), 2);
   });
-  for (const sh::NavNode& n : s.nav.graph.nodes) {
+  for (const sb::NavNode& n : s.nav.graph.nodes) {
     const sh::Vec3f f{n.origin.x, n.origin.y, n.origin.z - 24};
     if (!inside_box(s, f) || !near_cut(f)) continue;
     gl::fill_disc(p, su(along_x ? f.x : f.y), sz(f.z), 3, kInk);
@@ -802,10 +803,10 @@ void run(gl::Lab& lab) {
     sh::Vec3f a, b;
     char sep = 0;
     if (r >> a.x >> a.y >> a.z >> sep >> b.x >> b.y >> b.z) {
-      const int32_t na = sh::nav_nearest(s.nav.graph, {a.x, a.y, a.z + 24});
-      const int32_t nb = sh::nav_nearest(s.nav.graph, {b.x, b.y, b.z + 24});
+      const int32_t na = sb::nav_nearest(s.nav.graph, {a.x, a.y, a.z + 24});
+      const int32_t nb = sb::nav_nearest(s.nav.graph, {b.x, b.y, b.z + 24});
       ge::ai::Search search;
-      if (na >= 0 && nb >= 0) s.route = sh::nav_route(s.nav.graph, na, nb, search).nodes;
+      if (na >= 0 && nb >= 0) s.route = sb::nav_route(s.nav.graph, na, nb, search).nodes;
       if (s.route.empty()) lab.note("se-spot: --route found no way between the two points");
     }
   }
@@ -955,7 +956,7 @@ void run(gl::Lab& lab) {
     if (inside_box(s, it.at, 32)) tt.rows.push_back({"item", it.call, v3(it.at), "", ""});
   lab.table(tt);
   int nodes = 0;
-  for (const sh::NavNode& n : s.nav.graph.nodes)
+  for (const sb::NavNode& n : s.nav.graph.nodes)
     nodes += inside_box(s, {n.origin.x, n.origin.y, n.origin.z - 24});
   lab.metric("spot.nodes", nodes, "count");
   lab.metric("spot.route-nodes", static_cast<double>(s.route.size()), "count");

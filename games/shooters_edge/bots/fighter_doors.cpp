@@ -13,12 +13,14 @@
 #include <cstdint>
 #include <vector>
 
-#include "shooter/brink.hpp"
-#include "shooter/nav.hpp"
 #include "shooter/trace.hpp"
+#include "shooterbots/brink.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/fighter_parts.hpp"
 #include "shooters_edge/bots/floor_trap.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots::fighter_parts {
 
@@ -39,8 +41,8 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 // client keeps a mover it is no longer sent where it last saw it: dm2's red armour's bridge, seen
 // out and gone back into its wall out of view, stood out in the bot's mind, and the route walked
 // off the lip into the pit (22 of 25 lava deaths there in 8 matches).
-bool bridge_seen_gone(const Fighter::Bridge& b, const ge::shooter::BotView& s, int me,
-                      sh::Vec3f eye, const sh::NavGraph& g) {
+bool bridge_seen_gone(const Fighter::Bridge& b, const ge::shooterbots::BotView& s, int me,
+                      sh::Vec3f eye, const sb::NavGraph& g) {
   if (!s.world.entities[static_cast<size_t>(b.ent)].free) return false;  // sent: its place stands
   for (const int32_t n : b.nodes) {
     const sh::Vec3f o = g.nodes[static_cast<size_t>(n)].origin;
@@ -50,7 +52,7 @@ bool bridge_seen_gone(const Fighter::Bridge& b, const ge::shooter::BotView& s, i
     const sh::HullTrace down =
         sh::trace_move(s.sv, o, sh::kPlayerMins, sh::kPlayerMaxs, {o.x, o.y, o.z - kGoneDrop},
                        sh::kTraceNoMonsters, me);
-    if (down.fraction >= 1 || sh::over_harm(s.sv, o, o, me)) return true;
+    if (down.fraction >= 1 || sb::over_harm(s.sv, o, o, me)) return true;
   }
   return false;
 }
@@ -62,7 +64,7 @@ bool bridge_seen_gone(const Fighter::Bridge& b, const ge::shooter::BotView& s, i
 // touch button's doors). A button no way reaches but through its own door (pressed from the far
 // side) leaves that door off the routes a while. A door no known button opens (a trigger walked
 // into opens it, or nothing does) is waited at as before (the pilot bars it after `wait_s`).
-bool door_resting(const Fighter& f, const ge::shooter::BotView& s, int ent) {
+bool door_resting(const Fighter& f, const ge::shooterbots::BotView& s, int ent) {
   for (size_t k = 0; k < f.locked.size(); k++)
     if (f.locked[k] == ent)
       return dist(s.world.entities[static_cast<size_t>(ent)].origin, f.locked_rest[k]) < 1;
@@ -78,7 +80,7 @@ int32_t bridge_button_of(Fighter& f, size_t k) {
   if (br.button != -2) return br.button;
   br.button = -1;
   if (br.floor) return br.button;
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   const auto runs = [&](int ent) {
     for (size_t b = 0; b < f.button_spots.size(); b++)
       for (const int d : f.button_spots[b].doors)
@@ -102,12 +104,12 @@ int32_t bridge_button_of(Fighter& f, size_t k) {
 
 // The bridges as seen now (fighter.hpp `Bridge`): on a change, the links onto those still in are
 // shut and the way planned again.
-void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me) {
+void watch_bridges(Fighter& f, const ge::shooterbots::BotView& s, int me) {
   if (f.bridges.empty()) return;
   bool changed = !f.bridges_seen;
   f.bridges_seen = true;
   // (`trapbutton`) the links through a trap's button shut but for the one it means to press
-  if (f.features[sh::Feature::trapbutton] && f.trap_press != f.trap_shut_for) {
+  if (f.features[sb::Feature::trapbutton] && f.trap_press != f.trap_shut_for) {
     f.trap_shut_for = f.trap_press;
     changed = true;
   }
@@ -119,14 +121,14 @@ void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me) {
       in = dist(o, b.spawn) >= 1;  // a floor door: there only at rest
       // (`bridgeseen`) Out of sight (not sent), seen away: back once its time out is over (a
       // client keeps it where it last saw it; one stood away in a bot's mind for 48 s).
-      if (f.features[sh::Feature::bridgeseen]) {
+      if (f.features[sb::Feature::bridgeseen]) {
         if (in && !s.world.entities[static_cast<size_t>(b.ent)].free) b.out_since = s.sv.time;
         if (in && s.world.entities[static_cast<size_t>(b.ent)].free && b.out_since >= 0 &&
             s.sv.time - b.out_since > kFloorBack_s)
           in = false;
       }
       // (`floortrap`) or a mate just called it gone (`trap`), unseen yet
-      if (f.features[sh::Feature::floortrap] && s.sv.time - f.trap_told < kTrapTold_s) in = true;
+      if (f.features[sb::Feature::floortrap] && s.sv.time - f.trap_told < kTrapTold_s) in = true;
     } else {
       // A bridge: a floor only all the way out where the map drew it, and not in the last
       // moments of its wait (it goes back from under whoever is on it: dm2's red armour's).
@@ -140,7 +142,7 @@ void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me) {
       const double spare = std::min(kBridgeSpare_s, static_cast<double>(b.wait) / 3);
       in = !out || (b.wait > 0 && s.sv.time - b.out_since > b.wait - spare);
     }
-    if (!in && f.features[sh::Feature::bridgeseen]) {
+    if (!in && f.features[sb::Feature::bridgeseen]) {
       const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
       const sh::Vec3f eye{self.origin.x, self.origin.y,
                           self.origin.z + f.bot.senses.set.view_height};
@@ -153,11 +155,11 @@ void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me) {
     b.in = in;
   }
   if (!changed) return;
-  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sb::NavGraph& g = *f.bot.pilot.pilot.g;
   std::vector<uint8_t> on(g.nodes.size(), 0);
   // (`bridgebutton`) A bridge a button runs out is a way still, unless its button is being gone
   // to (the way there kept off it): bridge_errand presses it when a route crosses it in.
-  const bool buttons = f.features[sh::Feature::bridgebutton];
+  const bool buttons = f.features[sb::Feature::bridgebutton];
   for (size_t k = 0; k < f.bridges.size(); k++) {
     const Fighter::Bridge& b = f.bridges[k];
     if (!b.in) continue;
@@ -165,29 +167,29 @@ void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me) {
     if (buttons && f.bridge_button < 0 && b.down && bridge_button_of(f, k) >= 0) continue;
     for (const int32_t n : b.nodes) on[static_cast<size_t>(n)] = 1;
   }
-  std::vector<sh::NavExtraLink>& shut = f.bot.pilot.pilot.shut_links;
+  std::vector<sb::NavExtraLink>& shut = f.bot.pilot.pilot.shut_links;
   shut.clear();
   for (size_t a = 0; a < g.nodes.size(); a++) {
-    const sh::NavNode& n = g.nodes[a];
+    const sb::NavNode& n = g.nodes[a];
     for (int32_t k = 0; k < n.links; k++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      const sb::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
       if (on[static_cast<size_t>(l.to)] && !on[a])
         shut.push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
     }
   }
   floor_trap_shut(f, shut);  // the teleporters onto a floor trap's floor while it is away
   f.goal_node = -1;          // planned again
-  if (f.features[sh::Feature::bridgeseen]) f.reach_at = -1;  // and where it can get to
+  if (f.features[sb::Feature::bridgeseen]) f.reach_at = -1;  // and where it can get to
 }
 
 // Whether this fighter runs the doors' errands: `locked`, and its own player (a companion and
 // the campaign's leader keep their own doors: companion.cpp, way_through.cpp).
 bool locked_errands(const Fighter& f) {
-  return f.features[sh::Feature::locked] && f.escort.leader < 0;
+  return f.features[sb::Feature::locked] && f.escort.leader < 0;
 }
 
-void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Why* why) {
-  sh::Pilot& p = f.bot.pilot.pilot;
+void door_errand(Fighter& f, const ge::shooterbots::BotView& s, double t, ge::ai::Why* why) {
+  sb::Pilot& p = f.bot.pilot.pilot;
   p.shut.clear();
   const auto note = [&](const char* chosen, const char* because, int32_t button, int door) {
     if (!why) return;
@@ -205,7 +207,7 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Wh
   if (f.door_button >= 0) {
     const bool open = !door_resting(f, s, f.door_ent);
     // No way to the button but through its door: that door off the routes a while.
-    const bool no_way = p.mode == sh::PilotMode::idle &&
+    const bool no_way = p.mode == sb::PilotMode::idle &&
                         f.goal_node == f.button_spots[static_cast<size_t>(f.door_button)].node &&
                         p.route.empty();
     if (!open && !no_way && t < f.door_until) {
@@ -230,12 +232,12 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Wh
   if (f.door_avoid >= 0 && t < f.door_avoid_until && door_resting(f, s, f.door_avoid))
     p.shut.push_back(f.door_avoid);
   // A shut one on the route planned: its button first.
-  const sh::NavGraph& g = *p.g;
+  const sb::NavGraph& g = *p.g;
   for (size_t i = p.k; i + 1 < p.route.size(); i++) {
-    const sh::NavNode& n = g.nodes[static_cast<size_t>(p.route[i])];
+    const sb::NavNode& n = g.nodes[static_cast<size_t>(p.route[i])];
     int32_t mover = -1;
     for (int32_t j = 0; j < n.links; j++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(j)];
+      const sb::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(j)];
       if (l.to == p.route[i + 1]) mover = l.mover;
     }
     if (mover < 0 || !door_resting(f, s, mover)) continue;
@@ -257,13 +259,13 @@ void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Wh
   }
 }
 
-void field_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Why* why) {
+void field_errand(Fighter& f, const ge::shooterbots::BotView& s, double t, ge::ai::Why* why) {
   if (!fields_on(f) || f.door_button >= 0 || f.goal_item < 0) return;
   const int32_t goal = f.items[static_cast<size_t>(f.goal_item)].node;
   if (goal < 0) return;
-  const sh::NavField& fl = sh::nav_field(*f.fields, goal, f.bot.pilot.pilot.set.jumper);
-  sh::NavFieldWay way;
-  if (!sh::nav_field_way(*f.fields, fl, f.field_node, way) || way.errand < 0 ||
+  const sb::NavField& fl = sb::nav_field(*f.fields, goal, f.bot.pilot.pilot.set.jumper);
+  sb::NavFieldWay way;
+  if (!sb::nav_field_way(*f.fields, fl, f.field_node, way) || way.errand < 0 ||
       static_cast<size_t>(way.errand) >= f.button_spots.size())
     return;
   const ButtonSpot& bs = f.button_spots[static_cast<size_t>(way.errand)];
@@ -298,7 +300,7 @@ void field_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::W
 void bridge_errand(Fighter& f, double t) {  // NOLINT(readability-function-cognitive-complexity)
   constexpr double kBridgeErrandMost_s = 10;
   constexpr double kButtonRunMost_s = 8;  // a bridge's button this far off (its run) is gone to
-  if (!f.features[sh::Feature::bridgebutton]) return;
+  if (!f.features[sb::Feature::bridgebutton]) return;
   if (f.bridge_button >= 0) {
     const bool out = f.bridge_k >= 0 && !f.bridges[static_cast<size_t>(f.bridge_k)].in;
     if (!out && t < f.bridge_until) return;
@@ -309,7 +311,7 @@ void bridge_errand(Fighter& f, double t) {  // NOLINT(readability-function-cogni
     f.bridges_seen = false;  // its links open again (watch_bridges)
     return;
   }
-  const sh::Pilot& p = f.bot.pilot.pilot;
+  const sb::Pilot& p = f.bot.pilot.pilot;
   for (size_t i = p.k; i + 1 < p.route.size(); i++)
     for (size_t k = 0; k < f.bridges.size(); k++) {
       const Fighter::Bridge& br = f.bridges[k];
@@ -328,7 +330,7 @@ void bridge_errand(Fighter& f, double t) {  // NOLINT(readability-function-cogni
       // near end is reached from it before the bridge goes back (dm2's red armour's bridge: its
       // button is where the bridge is not reached from).
       if (!f.reach.reached(bn) || f.reach.cost(bn) > kButtonRunMost_s) continue;
-      const sh::NavRoute back = sh::nav_route(*p.g, bn, p.route[i], f.bot.pilot.pilot.search, 1);
+      const sb::NavRoute back = sb::nav_route(*p.g, bn, p.route[i], f.bot.pilot.pilot.search, 1);
       if (back.nodes.empty() || back.time_s > std::max(0.5f, br.wait - 0.5f)) continue;
       f.bridge_button = b;
       f.bridge_k = static_cast<int32_t>(k);
@@ -352,7 +354,7 @@ void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int3
                    ge::ai::Why* why) {
   constexpr double kNoRouteRest_s = 10;  // the item set aside this long
   constexpr double kBridgeErrand_s = 8;  // a bridge's button gone for at most this long
-  sh::Pilot& p = f.bot.pilot.pilot;
+  sb::Pilot& p = f.bot.pilot.pilot;
   if (f.bridge_button >= 0) {
     const bool out = f.bridge_k >= 0 && !f.bridges[static_cast<size_t>(f.bridge_k)].in;
     if (!out && t < f.bridge_until) return;
@@ -363,8 +365,8 @@ void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int3
   }
   if (item < 0 || no_route_to < 0) return;
   f.stats.noroute++;
-  const sh::NavGraph& g = *p.g;
-  const int32_t from = sh::nav_nearest(g, me);
+  const sb::NavGraph& g = *p.g;
+  const int32_t from = sb::nav_nearest(g, me);
   int bridges_on = 0, buttons = 0;
   size_t way_n = 0;
   const auto note = [&](const char* chosen, const char* because) {
@@ -385,11 +387,11 @@ void noroute_watch(Fighter& f, sh::Vec3f me, double t, int32_t no_route_to, int3
       if (b >= 0) barred.push_back(b);
     for (const int32_t b : p.shut)
       if (b >= 0) barred.push_back(b);
-    std::vector<sh::NavExtraLink> cut = p.cut;
+    std::vector<sb::NavExtraLink> cut = p.cut;
     for (size_t q = 0; q < p.gaps_off.size(); q++)
       if (p.gaps_off_s[q] > p.clock_s) cut.push_back(p.gaps_off[q]);
-    const sh::NavRoute way =
-        sh::nav_route(g, from, no_route_to, p.search, 1, barred, cut, p.set.jumper);
+    const sb::NavRoute way =
+        sb::nav_route(g, from, no_route_to, p.search, 1, barred, cut, p.set.jumper);
     way_n = way.nodes.size();
     for (size_t k = 0; k < f.bridges.size() && !way.nodes.empty(); k++) {
       const Fighter::Bridge& br = f.bridges[k];

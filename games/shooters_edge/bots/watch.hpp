@@ -1,7 +1,7 @@
 // WATCHING THE WAYS IN: a player standing in an area (holding it, or waiting on an item's
 // return) does not stare at the wall his route last pointed him at. He watches the doorways an
 // enemy comes in by, one, then another, and the one a sound came from first, so whoever comes in
-// is already under his crosshair (the bot's pre-aim: half the reaction, shooter/bot.hpp).
+// is already under his crosshair (the bot's pre-aim: half the reaction, shooterbots/bot.hpp).
 //
 // THE SPOTS: for each way into the area he stands in (bots/map_plan.hpp's `entries`), the quickest
 // route from it to where he stands, walked back from him to the last node he still sees from his
@@ -27,7 +27,8 @@ namespace shooters_edge::bots {
 
 // The spots `f` watches from node `node` (its eye at `eye`) on server `s` as player `me`: kept in
 // `f.watch` (none when its plan gives no area there, or none is seen).
-void watch_spots(Fighter& f, const ge::shooter::BotView& s, int me, int32_t node, sh::Vec3f eye);
+void watch_spots(Fighter& f, const ge::shooterbots::BotView& s, int me, int32_t node,
+                 sh::Vec3f eye);
 
 // The spot to watch at time `t` (into `f.watch`; -1 none), a sound heard from `heard` (null: none)
 // turning it to the nearest.
@@ -36,7 +37,7 @@ int32_t watch_choose(Fighter& f, sh::Vec3f eye, double t, const sh::Vec3f* heard
 // The watch at a command (server time `t`): standing (arrived or idle), or a holder walking or
 // hopping in its claimed area, with nobody about (roam, no button errand, not a companion, not
 // swimming), the view set on the spot chosen (`f.bot.look`), else let go.
-void watch_look(Fighter& f, const ge::shooter::BotView& s, int me, bool dead, double t,
+void watch_look(Fighter& f, const ge::shooterbots::BotView& s, int me, bool dead, double t,
                 ge::ai::Why* why);
 
 }  // namespace shooters_edge::bots

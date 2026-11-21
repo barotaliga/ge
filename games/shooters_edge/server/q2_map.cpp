@@ -308,6 +308,19 @@ void step_move(Q2Server& s, Q2Entity& e) {
 
 // ---- The push ----
 
+// Whether a box at `at` is inside mover `e`'s own brushes where it now stands (its box alone is far
+// larger than a turned or an L-shaped mover: a thing beside a fan is not in the fan).
+bool in_mover(const Q2Server& s, const Q2Entity& e, sh::Vec3f at, sh::Vec3f mins, sh::Vec3f maxs) {
+  if (!brush(e) || e.modelindex <= 0) return true;  // a model's box is all it has
+  sh::Vec3f p = at - e.origin;
+  if (e.angles.x != 0 || e.angles.y != 0 || e.angles.z != 0) p = to_local(p, e.angles);
+  const float a[3] = {p.x, p.y, p.z};
+  const float lo[3] = {mins.x, mins.y, mins.z}, hi[3] = {maxs.x, maxs.y, maxs.z};
+  const ge::brush::Trace t =
+      s.tracer->trace(a, a, lo, hi, sh::kSqSolid | sh::kSqWindow, uint32_t(e.modelindex));
+  return t.start_solid || t.all_solid;
+}
+
 // What is not alive in mover `e`'s way after its push by `move` (from `from`, `from_angles`): the
 // items, the dropped items, the bodies and the pieces lying on its top ride it, and those its box
 // now holds are pushed along; one with no room there is crushed and blows apart.
@@ -321,7 +334,7 @@ void push_things(Q2Server& s, const Q2Entity& e, sh::Vec3f move, sh::Vec3f from,
     const sh::Vec3f blo = at + mins, bhi = at + maxs;
     const bool rider =
         std::abs(blo.z - top) <= 1 && blo.x < hi.x && bhi.x > lo.x && blo.y < hi.y && bhi.y > lo.y;
-    if (!rider && !overlap(blo, bhi, lo, hi)) return true;
+    if (!rider && (!overlap(blo, bhi, lo, hi) || !in_mover(s, e, at, mins, maxs))) return true;
     const sh::Vec3f to =
         turning ? e.origin + to_world(to_local(at - from, from_angles), e.angles) : at + move;
     const sh::Vec3f probe = to + sh::Vec3f{0, 0, 0.25f};  // a rider rests on the top it touches

@@ -90,6 +90,8 @@ const sv::Q2Entity* named(const sv::Q2Server& s, const char* classname) {
 TEST(items_drop_to_the_floor_and_the_ones_in_a_solid_or_left_out_are_not_there) {
   sv::RulesRunner r = start("1");
   const sv::Q2Server& s = *sv::q2_of(r);
+  uint32_t sequence = 0;
+  run(r, sequence, 30, 0);  // the items drop 0.2 s in, once the movers stand where they start
   const sv::Q2Entity* rockets = named(s, "ammo_rockets");
   CHECK(rockets != nullptr && !rockets->gone);
   if (rockets) CHECK(rockets->origin.z > 15 && rockets->origin.z < 15.2f);  // resting on z 0
