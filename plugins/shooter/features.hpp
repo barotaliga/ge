@@ -661,6 +661,12 @@ namespace ge::shooter {
 //   21.2 -> 19.3 s, speed 593 -> 649, walls 1.2 -> 0.3; 12 2on2 dm2 seeds, speed off the recordings
 //   271 -> 273, wall bumps 4.4 -> 4.1 a minute, the starts' reversals 0.42 -> 0.40 (people 0.115:
 //   the snap is not all of it), head to head +1.9 (red +1.2, blue +2.5).
+// - `archeight`: THE HOP'S LOOK AHEAD FOLLOWS THE JUMP'S HEIGHT (M18r.md P2): `wallplan`'s arcs on
+//   the ground (a jump at 270 up) and in the air, and `startclear`'s first flight of a copied start,
+//   traced rising and falling under gravity from the feet (arc_clear's `gravity`), not flat a step
+//   up: a lintel, a beam or a stair's riser the jump's top meets is a wall. dm2's pit lintel (an
+//   origin above 64 barred over y -1456..-1400) took 22 of 34 copied starts' flights north there,
+//   the flat arc clear under it. Judging, in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -851,9 +857,10 @@ enum class Feature : uint8_t {
   swapground,
   wallplan,
   startease,
+  archeight,
   trial,
 };
-constexpr size_t kFeatures = 189;
+constexpr size_t kFeatures = 190;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

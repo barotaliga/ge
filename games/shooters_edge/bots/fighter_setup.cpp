@@ -114,6 +114,7 @@ sh::PilotSettings fighter_pilot(const sh::Features& features, const sh::Traits& 
   ps.aim_land_s = features[sh::Feature::aimland] ? 0.3f : 0.f;
   ps.recipe_heading = features[sh::Feature::starthead];
   ps.recipe_clear = features[sh::Feature::startclear];
+  ps.arc_height = features[sh::Feature::archeight];
   if (features[sh::Feature::startease]) ps.recipe_ease_s = 0.25f;  // eased in from its own view
   ps.gap_hold = features[sh::Feature::gaphold];
   ps.lift_brake = features[sh::Feature::liftbrake];

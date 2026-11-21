@@ -10,11 +10,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <fstream>
 #include <string_view>
 
 #include "core/num_text.hpp"
 #include "shooter/hops.hpp"
 #include "shooter/trace.hpp"
+#include "shooter/world.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 
@@ -405,7 +407,7 @@ void hop_metrics(gl::Lab& lab, const Watch& w) {
 // speed there (gain -1 to +5 on dm2); the mode says which of the bots' ways loses it.
 void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
                      const std::string& basedir, const std::string& game, const std::string& map,
-                     bool packed) {
+                     bool packed, const std::string& flights) {
   if (basedir.empty() || r.mvd.empty() || packed) return;
   namespace la = shooters_edge::labs;
   std::string error;
@@ -421,6 +423,15 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
   lab.note("flights by mode: the recording's clock + " + to_fixed(offset, 2) + " s = the server's");
   std::map<std::string, std::vector<float>> gain, by_view;
   const sh::HopSettings hs;
+  std::ofstream rows;
+  if (!flights.empty()) {
+    rows.open(flights);
+    if (!rows)
+      lab.note("flights: cannot write --flights=" + flights + "; next: a folder that exists");
+    else
+      rows << "bot\tt\tx\ty\tz\tspeed\theading\tyaw\tair_s\tgain\tturned\tcrash\tcrash_x"
+              "\tcrash_y\tcrash_s\thigh\tcrash_z\tmode\tview\tlink\tbecause\tgoal\tpress\ttight\n";
+  }
   for (size_t slot = 0; slot < dt.tracks.size(); slot++) {
     size_t k = r.players.size();
     for (size_t j = 0; j < r.players.size(); j++)
@@ -444,6 +455,43 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
         view = name;
       }
       if (std::string_view(mode) == "hop") by_view[view].push_back(h.speed_land - h.speed_off);
+      if (!rows) continue;
+      Watch::Doing d;
+      for (const Watch::Doing& x : w.doing[k]) {
+        if (x.t > t) break;
+        d = x;
+      }
+      int32_t at = -1;
+      const int cause = la::crash_cause(hr, h, &at);
+      const sh::HopFrame& f0 = hr.frames[static_cast<size_t>(h.takeoff)];
+      const sh::HopFrame& fc = hr.frames[static_cast<size_t>(at >= 0 ? at : h.land)];
+      // `high`: a mid-air hit the flat look-ahead cannot see (arc_clear traces at the takeoff's
+      // height and a step): from the frame before the hit, 24 units on along its velocity at that
+      // height meets no wall, so only the arc's height met it (a lintel, a beam, a riser up, a
+      // ledge's lip). The map's world alone: a door, a button or a plat hit reads high too.
+      int high = -1;
+      if (cause == 0 && at > h.takeoff + 1) {
+        const sh::HopFrame& fb = hr.frames[static_cast<size_t>(at - 1)];
+        const float vx = fb.velocity.x, vy = fb.velocity.y;
+        const float len = std::sqrt(vx * vx + vy * vy);
+        if (len > 1) {
+          const float z = f0.origin.z + 18;  // arc_clear's step up
+          const sh::Vec3f a{fb.origin.x, fb.origin.y, z};
+          const sh::HullTrace tr =
+              sh::player_trace(*m.world, a, {a.x + vx / len * 24, a.y + vy / len * 24, z});
+          high = tr.startsolid || (tr.fraction < 1 && tr.plane.normal.z < 0.7f) ? 0 : 1;
+        }
+      }
+      rows << r.players[k].name << '\t' << to_fixed(t, 2) << '\t' << to_fixed(f0.origin.x, 0)
+           << '\t' << to_fixed(f0.origin.y, 0) << '\t' << to_fixed(f0.origin.z - 24, 0) << '\t'
+           << to_fixed(h.speed_off, 0) << '\t' << to_fixed(f0.heading, 0) << '\t'
+           << to_fixed(f0.yaw, 0) << '\t' << to_fixed(h.air_s, 2) << '\t'
+           << to_fixed(h.speed_land - h.speed_off, 0) << '\t' << to_fixed(h.turned, 0) << '\t'
+           << (cause >= 0 ? la::kCrashCauses[cause] : "-") << '\t' << to_fixed(fc.origin.x, 0)
+           << '\t' << to_fixed(fc.origin.y, 0) << '\t' << to_fixed(fc.t - f0.t, 2) << '\t'
+           << (high < 0 ? "-" : high ? "1" : "0") << '\t' << to_fixed(fc.origin.z - 24, 0) << '\t'
+           << mode << '\t' << view << '\t' << d.link << '\t' << d.because << '\t' << d.goal
+           << '\t' << d.press << '\t' << d.tight << '\n';
     }
   }
   gl::LabTable at{"flights taking off at 380-460 u/s (0.3-1 s up), by the pilot's mode then",

@@ -142,7 +142,7 @@ struct HopCell {
   // the keys or the turn), by kCrashCauses.
   std::array<int32_t, 3> crash_by{};
 };
-constexpr const char* kCrashCauses[3] = {"air", "land", "slow"};
+using la::kCrashCauses;
 
 struct Fast {
   std::string name;
@@ -178,17 +178,7 @@ void hop_cells(const sh::HopReading& r, const std::vector<uint8_t>& blast,
     int b = 0;
     while (b + 1 < kSpeedBins && h.speed_off >= kSpeedEdge[b + 1]) b++;
     const float turned = hhi - hlo;
-    int cause = -1;
-    if (h.speed_land - h.speed_off < -80) {
-      float drop = 0;
-      int32_t at = -1;
-      for (int32_t i = h.takeoff + 1; i <= h.land; i++) {
-        const float d =
-            r.frames[static_cast<size_t>(i - 1)].speed - r.frames[static_cast<size_t>(i)].speed;
-        if (d > drop) drop = d, at = i;
-      }
-      cause = drop < 40 ? 2 : at >= h.land - 1 ? 1 : 0;
-    }
+    const int cause = la::crash_cause(r, h);
     for (HopCell* c : {&by_speed[static_cast<size_t>(b)],
                        &by_k[static_cast<size_t>(std::min(k, kChainBins - 1))]}) {
       c->turned.push_back(turned);

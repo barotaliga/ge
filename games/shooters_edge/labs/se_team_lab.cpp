@@ -328,6 +328,8 @@ void run(gl::Lab& lab) {
   // Both this run's own: a set (--seeds) runs several matches at once.
   std::ofstream trace;
   Watch watch;
+  watch.doing_on = !lab.arg("flights").empty();
+  if (watch.doing_on) make_folder_for(lab.arg("flights"));
   if (!lab.arg("trace").empty()) {
     make_folder_for(lab.arg("trace"));
     trace.open(lab.arg("trace"));
@@ -526,6 +528,18 @@ void run(gl::Lab& lab) {
     auto& ml = tr.modes[static_cast<size_t>(k)];
     const char* mode = sh::pilot_mode_name(p.mode);
     if (ml.empty() || ml.back().second != mode) ml.push_back({w.sv.time, mode});
+    if (tr.doing_on) {
+      auto& dl = tr.doing[static_cast<size_t>(k)];
+      const Watch::Doing d{
+          w.sv.time, link_of(p), p.because,
+          f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
+              ? shooters_edge::bots::item_call(f.items[static_cast<size_t>(f.goal_item)])
+              : "-",
+          f.press_note, p.hop_tight <= 0 ? "-" : p.hop_tight > 1 ? "tight" : "ok"};
+      if (dl.empty() || dl.back().link != d.link || dl.back().because != d.because ||
+          dl.back().goal != d.goal || dl.back().press != d.press || dl.back().tight != d.tight)
+        dl.push_back(d);
+    }
     tr.t_last = std::max(tr.t_last, w.sv.time);
     if (tr.out == nullptr || (tr.count[static_cast<size_t>(k)]++ % tr.every) != 0) return;
     std::ofstream& out = *tr.out;
@@ -719,7 +733,7 @@ void run(gl::Lab& lab) {
   hop_metrics(lab, watch);
   still_view_metrics(lab, watch);
   facing_metrics(lab, watch);
-  flights_by_mode(lab, watch, r, basedir, lab.arg("game"), name, o.packed);
+  flights_by_mode(lab, watch, r, basedir, lab.arg("game"), name, o.packed, lab.arg("flights"));
   if (watch.log != nullptr) write_why(lab, why_log, r);
 
   // The table.
@@ -2036,6 +2050,10 @@ const gl::LabSpec kSpec{
          "a TSV of every bot's state each --trace-every commands (the bot plan's scripts)"},
         {"why", "",
          "write the bots' decision log here (labs/why_log.hpp; read it with the se-why lab)"},
+        {"flights", "",
+         "write every flight off the match's recording taking off at 380-460 u/s here (TSV: the "
+         "bot, the takeoff's spot, heading and view, the gain, the crash's cause and spot, the "
+         "pilot's mode, the view's writer, link, reason, goal and press note at the takeoff)"},
         {"trace-every", "4", "--trace's row every this many commands of a bot (77 a second)"},
         {"sides", "0",
          "1: each side's fight apart (damage, accuracy, sightings, what it did not see), as when "

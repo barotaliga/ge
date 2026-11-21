@@ -112,6 +112,19 @@ struct Watch {
   // And who wrote its view, a row a change (watch_view's writer, a look by who set it): the
   // flights put down to the view's writer at their takeoff too (`team.air.s380.view.*`).
   std::array<std::vector<std::pair<double, const char*>>, 64> views;
+  // What each bot was doing, a row a change (the pilot's link, its reason, the goal item, the
+  // press note), kept only with `--flights` (`doing_on`): each flight of the match's recording is
+  // written as a row with what was doing at its takeoff (flights_by_mode).
+  struct Doing {
+    double t = 0;
+    const char* link = "-";
+    const char* because = "-";
+    const char* goal = "-";
+    const char* press = "-";
+    const char* tight = "-";  // the hop's way ahead against the air's tightest turn: ok, tight
+  };
+  bool doing_on = false;
+  std::array<std::vector<Doing>, 64> doing;
   // The bumps (`team.bumps.*`): a speed lost in one command, 120 u/s or more (a wall, a corner,
   // a player met; the move brakes at most ~40 a command), hard when it ends under 100 u/s.
   // Each is put down to what took the speed (bump_by: a wall, a stair's step, a mover, a player,
@@ -159,9 +172,13 @@ void still_view_metrics(ge::lab::Lab& lab, const Watch& w);
 // The hop's metrics by skill (`team.hop.<skill>.*`).
 void hop_metrics(ge::lab::Lab& lab, const Watch& w);
 // Every flight of the match's recording by the pilot's mode at its takeoff (`team.air.s380.*`).
+// `flights` (a path, or empty): every flight taking off at 380-460 as a TSV row (the bot, the
+// takeoff's place, heading and view, the gain, the crash's cause and spot, the pilot's mode, the
+// view's writer, link, reason, goal and press note then): the crash spots read by what flew them.
 void flights_by_mode(ge::lab::Lab& lab, const Watch& w,
                      const shooters_edge::net::TeamMatchReport& r, const std::string& basedir,
-                     const std::string& game, const std::string& map, bool packed);
+                     const std::string& game, const std::string& map, bool packed,
+                     const std::string& flights = "");
 
 // THE PILOT'S LINK as the trace writes it: the kind of the link toward the route's next node
 // (`link_of`), whether it runs along a lip (`link_brink`), the kind of the link after it
