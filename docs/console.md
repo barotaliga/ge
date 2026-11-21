@@ -146,7 +146,8 @@ The other flags:
 
 A server's stuffed text may run only the commands marked as safe to stuff (`echo`, `set`,
 `wait`, `say`, `say_team`, `say_near`) and set only the server's cvars. It never touches a player's files,
-binds or archived cvars.
+binds or archived cvars. Over a network the session carries the server info, the user info and
+the stuffed text (`docs/networking.md` § Configs over the session).
 
 `cvarlist` prints the flags as letters: `A` archive, `U` user info, `S` server info, `V` server,
 `C` cheat, `L` latch, `R` read only, `*` created by a cfg (no code reads it).

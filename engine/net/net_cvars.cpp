@@ -248,4 +248,46 @@ void net_cvars_apply(NetCvars& n) {
   k.interp_ticks = std::max(0, static_cast<int>(std::lround(n.interp_s * k.tick_hz)));
 }
 
+void add_fake_link_cvars(con::Cvars& v, FakeLinkCvars& f) {
+  v.bind({.name = "net_fakeloss",
+          .fallback = "0",
+          .flags = con::kCheat,
+          .help = "a share of the packets this end sends dropped, to try a game on a bad line (a "
+                  "cheat: needs sv_cheats 1), %",
+          .min = 0,
+          .max = 100},
+         &f.loss_pct);
+  v.bind({.name = "net_fakelag",
+          .fallback = "0",
+          .flags = con::kCheat,
+          .help = "a delay added to every packet this end sends, to try a game far from its server "
+                  "(a cheat: needs sv_cheats 1), ms",
+          .min = 0,
+          .max = 2000},
+         &f.lag_ms);
+  v.bind({.name = "net_fakejitter",
+          .fallback = "0",
+          .flags = con::kCheat,
+          .help = "a further delay drawn for each packet this end sends, up to this, to try a game "
+                  "on a jittery line (a cheat: needs sv_cheats 1), ms",
+          .min = 0,
+          .max = 1000},
+         &f.jitter_ms);
+}
+
+bool fake_link_follow(Transport& t, FakeLink& link, const FakeLinkCvars& want,
+                      FakeLinkCvars& applied, uint64_t seed) {
+  if (want.loss_pct == applied.loss_pct && want.lag_ms == applied.lag_ms &&
+      want.jitter_ms == applied.jitter_ms)
+    return false;
+  applied = want;
+  LinkConditions c;
+  c.latency_ms = want.lag_ms;
+  c.jitter_ms = want.jitter_ms;
+  c.loss = want.loss_pct / 100;
+  const bool none = want.loss_pct <= 0 && want.lag_ms <= 0 && want.jitter_ms <= 0;
+  transport_fake(t, none ? nullptr : &link, c, seed);
+  return true;
+}
+
 }  // namespace ge::net
