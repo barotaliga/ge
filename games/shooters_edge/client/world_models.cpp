@@ -608,6 +608,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
         p.pulse = look.pulse;
         p.shell = look.shell;
         p.bleeds = look.bleeds;
+        p.green_blood = look.green_blood;
         p.flies = look.flies;
         p.q2_anim = row.effects & 0x3c00;
         for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];

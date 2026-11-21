@@ -5,6 +5,8 @@
 // ge:skill audio shooter
 #include "shooters_edge/client/room_ear.hpp"
 
+#include <algorithm>
+
 #include "brush/survey.hpp"
 #include "core/libm/libm.hpp"
 
@@ -96,6 +98,32 @@ void hear_room(RoomEar& ear, ge::audio::Synth& synth, const ge::brush::Map* map,
   const double right[3] = {ge::core::libm::cos(heading), 0, -ge::core::libm::sin(heading)};
   synth.room(bsp_room(*map, eye, right), static_cast<float>(ear.wet ? kRoomGlideS : 0));
   ear.wet = true;
+}
+
+void add_under_cvars(ge::console::Console& c, UnderEar& s) {
+  const ge::console::CvarLayer classic(c.cvars(), "classic");
+  c.cvars().bind({.name = "s_underwater",
+                  .fallback = "0",
+                  .flags = ge::console::kArchive,
+                  .help = "Whether the world sounds muffled while your head is under water.",
+                  .kind = ge::console::CvarKind::boolean,
+                  .values = "0: as in the air (the default, Quake's); 1: muffled (Quake II's)"},
+                 &s.on);
+  c.cvars().bind({.name = "s_underwater_gain_hf",
+                  .fallback = "0.25",
+                  .flags = ge::console::kArchive,
+                  .help = "How much of the high notes you hear under water, s_underwater on.",
+                  .min = 0.001,
+                  .max = 1,
+                  .values = "0.001..1: 0.25 the default; 1 not muffled"},
+                 &s.treble);
+}
+
+void hear_under(RoomEar& ear, ge::audio::Synth& synth, const UnderEar& s, bool under) {
+  const float treble = under && s.on ? static_cast<float>(std::clamp(s.treble, 0.001, 1.0)) : 1;
+  if (treble == ear.muffled) return;
+  synth.muffle(treble, kUnderCornerHz, 0);  // at once, as the head goes in or comes out
+  ear.muffled = treble;
 }
 
 }  // namespace shooters_edge::client

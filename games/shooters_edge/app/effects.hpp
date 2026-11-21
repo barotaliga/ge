@@ -115,8 +115,32 @@ void q2_item_back(const double at[3], uint32_t seed, Palette palette, Particles*
 // `normal` (map units' axes, x/y the plan; zero: none), each 0..`reach`-1 units out along it and
 // -4..3 across, drifting at up to 20 units/s and falling, living 0.5..0.8 s: a laser's sparks
 // (reach 8, one colour), a splash (reach 32, varied).
+// `fall`: the specks' pull down in the trails' units (80 the usual; negative rises: a tunnel's
+// sparks).
 void q2_specks(const double at[3], const double normal[3], int count, int colour, int reach,
-               bool vary, uint32_t seed, Palette palette, Particles* out);
+               bool vary, uint32_t seed, Palette palette, Particles* out, double fall = 80);
+// QUAKE II'S OTHER EFFECTS OFF THE WIRE (map units, its own numbers):
+// - BUBBLES along a line, the first at its start: grey (4..11), within 2 units, rising at 6
+//   units/s and drifting at up to 5, a bubble every 32 units, living 1..1.2 s; the second kind
+//   a bubble every 8 units, 4 lower, rising at 20 and drifting at up to 10, living 1..1.1 s.
+// - A FORCE WALL: along its line every 4 units, seven steps in ten, a speck of its colour within
+//   3 units, falling at 30..50 units/s, living 3..3.5 s.
+// - STEAM (and the chain fist's smoke): `count` specks of `colour` + 0..7 within a tenth of the
+//   jet's speed, along the jet (`jet`: its way times its speed) and spread a third of its speed
+//   across it, pulled down by `fall` (40 steam, 0 smoke), living 0.5..0.8 s.
+// - A BLUE BOLT'S HIT: 40 yellow-to-orange specks (224..231) 0..15 units out along `way`, flying
+//   at 30 units/s along it and up to 40 any way, falling, living 0.5..0.8 s.
+// - THE WIDOW'S SPLASH: 256 specks on a sphere of 45 units flying out at 40 units/s, of four
+//   colours (16, 104, 168, 144), living 0.625..1 s.
+void q2_bubbles(const double from[3], const double to[3], bool second, uint32_t seed,
+                Palette palette, Particles* out);
+void q2_force_wall(const double from[3], const double to[3], int colour, uint32_t seed,
+                   Palette palette, Particles* out);
+void q2_steam(const double at[3], const double jet[3], int count, int colour, double fall,
+              uint32_t seed, Palette palette, Particles* out);
+void q2_blue_hit(const double at[3], const double way[3], uint32_t seed, Palette palette,
+                 Particles* out);
+void q2_widow_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
 void q2_player_flash(const double at[3], Q2Arrival kind, uint32_t seed, Palette palette,
                      Particles* out);
 void q2_fountain(const double at[3], uint32_t seed, Palette palette, Particles* out);
@@ -132,7 +156,17 @@ void q2_fountain(const double at[3], uint32_t seed, Palette palette, Particles* 
 //   within 5 units, drifting at up to 20 units/s and falling, living 1..1.2 s.
 // - A blaster's bolt: an orange speck (224) every 5 units, within 1, drifting at up to 5 units/s,
 //   living 0.3..0.5 s.
-enum class Q2Trail : uint8_t { blood, smoke };
+// - A green gib's blood: the thinning trail in greens (219..226), as a gib's.
+// - A FLAG's (and the tag token's) column: a speck of its colour (a red flag 242, a blue 115, the
+//   tag 220) every 5 units within 16 of the line, drifting at up to 5 units/s, living 0.8..1 s.
+// - An ION RIPPER's bolt: a speck every 5 units on the line (228..231), thrown 10 units/s one way
+//   then the other along the world's x (`side` carries the swing from frame to frame), living
+//   0.15..0.25 s.
+enum class Q2Trail : uint8_t { blood, smoke, green_blood };
+void q2_column_trail(const double from[3], const double to[3], int colour, uint32_t seed,
+                     Palette palette, Particles* out);
+void q2_ion_trail(const double from[3], const double to[3], int& side, uint32_t seed,
+                  Palette palette, Particles* out);
 inline constexpr int kSqTrailStart = 1024, kSqTrailFloor = 100, kSqTrailFade = 5;
 inline constexpr double kSqTrailAttemptUnits = 0.5;
 void q2_trail(const double from[3], const double to[3], Q2Trail kind, int& count, uint32_t seed,
@@ -155,6 +189,9 @@ void q2_flies(const double at[3], double t, double since_s, double life, Palette
 // The light a player's entry (green), exit (red) or respawn (yellow) flash gives for the one
 // frame it is drawn in: 200 to 231 units, by `seed`.
 Light q2_arrival_light(const double at[3], Q2Arrival kind, uint32_t seed);
+// A light of `radius_u` map units and colour (fractions 0..1) at `at`, as bright as its size (a
+// welding spark's, a flashlight's).
+Light q2_point_light(const double at[3], double radius_u, double red, double green, double blue);
 // Lava thrown up at `at` (its surface): glowing specks over a 6 m square that arc and fall.
 void lava_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
 

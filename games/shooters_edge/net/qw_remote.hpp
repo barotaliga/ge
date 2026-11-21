@@ -302,6 +302,11 @@ const char* remote_stage_words(ClientStage s);
 // file coming, its share and size ("maps/dm2.bsp 40% (88 KB)", `progress` 0.4), or "Loading
 // dm2..." while signing on; "" (and `progress` -1) once playing, watching or not joined.
 std::string remote_foot(const Remote& r, double& progress);
+// The joined server's packets as they came (the net graph and Quake II's lag graph), whichever
+// protocol it speaks; null when nothing is joined or a broadcast is watched.
+const ge::hud::NetHistory* remote_net(const Remote& r);
+// The moves sent to a joined Quake II server it has not answered yet (0: none, or not Quake II).
+int remote_unanswered(const Remote& r);
 // A line for the server joined (`say hello`, `vote map dm2`), whichever protocol it speaks.
 void remote_command(Remote& r, const std::string& line);
 // A line the console does not know, sent to a server of Quake II joined (its game's own words:

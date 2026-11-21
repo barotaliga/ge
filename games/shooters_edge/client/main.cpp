@@ -399,6 +399,9 @@ int run_main(int argc, char** argv) {
   // The loaded game's own settings in its layer (client/cvar_layers.hpp), meaning a shared name.
   cl::GameCvarValues game_cvars;
   cl::SearchPath files;
+  cl::Q2Screen q2_screen;  // Quake II's view and 2D settings (client/q2_view.hpp)
+  cl::UnderEar under_ear;  // the muffle under water (s_underwater, client/room_ear.hpp)
+  cl::add_under_cvars(console, under_ear);
   const cl::GameBindings bindings{.files = &files,
                                   .crosshair = &hud.crosshair,
                                   .mouse = &controls.mouse,
@@ -412,7 +415,8 @@ int run_main(int argc, char** argv) {
                                   .light_modulate = &picture.light_modulate,
                                   .light_lift = &picture.light_lift,
                                   .chat = &remote.ignore.chat,
-                                  .auto_chat = &con_view.game_chat};
+                                  .auto_chat = &con_view.game_chat,
+                                  .screen = &q2_screen};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
@@ -434,7 +438,9 @@ int run_main(int argc, char** argv) {
     return g != nullptr ? *g : shooters_edge::profiles::q1_game();
   };
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
-  cl::Q2Bar q2_bar{.files = &files, .binds = &console.binds().table(ge::console::BindMode::game)};
+  cl::Q2Bar q2_bar{.files = &files,
+                   .binds = &console.binds().table(ge::console::BindMode::game),
+                   .screen = &q2_screen};
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
@@ -759,6 +765,7 @@ int run_main(int argc, char** argv) {
   // Quake II's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
   cl::WornHud worn_hud;
   worn_hud.bar.files = &remix.files;
+  worn_hud.bar.screen = &q2_screen;
   cl::HeldState in_hand;
   in_hand.hand.at_eye = weapons_at_eye;
   // `cr_items` (remix.hpp's `worn_arsenal`): from the next map the played game's rules wear the
@@ -812,8 +819,8 @@ int run_main(int argc, char** argv) {
   cl::DemoHearing hearing(synth, &picture.ce.sounds);       // a demo's sounds, voices, lines
   cl::ListenHearing heard_here(synth, &picture.ce.sounds);  // the window's own game's sounds
   cl::Cinematic cine;                                       // Quake II's movies (cinematic.hpp)
-  cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp)
-  cl::hear_worlds_on(&synth);         // each world's room on it (ce_acoustics)
+  cl::MenuSounds menu_sounds(synth);       // the main menu's clicks (menu_sound.hpp)
+  cl::hear_worlds_on(&synth, &under_ear);  // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
   out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
@@ -960,7 +967,8 @@ int run_main(int argc, char** argv) {
   bool text_on = false;
   ge::platform::InputSnapshot input;
   cl::ViewState shown;
-  cl::DemoEyes demo_eyes{.gun_kick = &remote.gunkick};  // a demo's or a joined server's eye
+  shown.q2 = &q2_screen;  // Quake II's cl_adjustfov and cl_kickangles
+  cl::DemoEyes demo_eyes{.gun_kick = &remote.gunkick, .view_kick = &q2_screen.kick_angles};
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state;
   cl::FxFrame fx;
@@ -1685,12 +1693,13 @@ int run_main(int argc, char** argv) {
           cl::third_person_units(playback, !drawn_remote || remote.end.cfg.spectator);
       bench_demo_fx.draw_own = demo_eyes.behind > 0;  // his figure seen from behind
       demo_eyes.lock_pos = playback.lock_pos != 0;
-      ge::render::FrameView view = cl::demo_eyes_view(ds, ds_read, demo_eyes, shown.row, ground,
-                                                      body, ge::camera::FirstPersonRow{}.fov_y,
-                                                      drawn_remote      ? t
-                                                      : bench.clock < 0 ? ds.time
-                                                                        : bench.clock,
-                                                      t);
+      ge::render::FrameView view = cl::demo_eyes_view(
+          ds, ds_read, demo_eyes, shown.row, ground, body,
+          cl::q2_demo_fov_y(ds, camera_cvars.fov, !drawn_remote, q2_screen, w, h),
+          drawn_remote      ? t
+          : bench.clock < 0 ? ds.time
+                            : bench.clock,
+          t);
       view.frame = static_cast<uint64_t>(presented);
       cl::from_above(*world, !drawn_remote &&
                                  slm::watch_fly_view(live_map, view, w, h, playback.bar_bottom_px));
@@ -1701,7 +1710,9 @@ int run_main(int argc, char** argv) {
       se::Status hud_status = cl::demo_status(ds, t);
       if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map, ds.bonuses);  // f_ events
       if (drawn_remote) cl::group_status(controls.groups, hud_status, t);  // the weapon group
-      if (!cl::draw_recorded_q2_bar(overlay, q2_bar, ds_read, w, h)) {     // its own bar
+      cl::q2_bar_net(q2_bar, drawn_remote ? sn::remote_net(remote) : nullptr,
+                     sn::remote_unanswered(remote), t);                 // scr_lag_draw's packets
+      if (!cl::draw_recorded_q2_bar(overlay, q2_bar, ds_read, w, h)) {  // its own bar
         se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
         playback.bar_bottom_px = cl::hud_inset(
             hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look()), h);
@@ -1710,7 +1721,7 @@ int run_main(int argc, char** argv) {
       if (bench.paced && !attract && !game_menu.open())
         cl::playback_draw(overlay, playback, bench, w, h, t);
       cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t),
-                       drawn_remote && !remote.watch ? &remote.end.net : nullptr);
+                       drawn_remote ? sn::remote_net(remote) : nullptr);
       if (paced) {  // a demo watched or a game joined: the menu and the console over it
         game_menu.draw(overlay, w, h, t);
         con_view.frame(wall);
@@ -1871,6 +1882,7 @@ int run_main(int argc, char** argv) {
     }
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
     shown.lerp = picture.lerp_move;  // r_lerpmove: the eye between the server's frames too
+    shown.aspect = h > 0 ? static_cast<double>(w) / h : shown.aspect;  // cl_adjustfov 0's
     cl::apply_view_cvars(camera_cvars, shown);
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);

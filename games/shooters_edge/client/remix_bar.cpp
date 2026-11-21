@@ -229,7 +229,7 @@ void run_worn_bar(Q2Bar& bar, const hud::Status& st, bool match, int64_t frame, 
   static const std::string kProgram[2] = {server::sq_bar_program(false),
                                           server::sq_bar_program(true)};
   const std::array<int16_t, hud::kLayoutStats> stats = worn_stats(st, match);
-  const int scale = q2_bar_scale(height);
+  const int scale = q2_bar_scale(bar, width, height);
   hud::LayoutInput in;
   in.program = kProgram[match ? 1 : 0];
   in.stats = std::span<const int16_t>(stats);
@@ -251,7 +251,7 @@ bool draw_worn_bar(ge::ui::DrawList& dl, Q2Bar& bar, const profiles::RemixArsena
                    const hud::Status& st, bool match, int width, int height) {
   if (worn == nullptr || worn->items != "q2") return false;
   run_worn_bar(bar, st, match, static_cast<int64_t>(st.t * 10), width, height);
-  draw_q2_bar(dl, bar, q2_bar_scale(height));
+  draw_q2_bar(dl, bar, q2_bar_scale(bar, width, height));
   return true;
 }
 
@@ -289,7 +289,7 @@ bool draw_q2_bars(ge::ui::DrawList& dl, Q2Bar& own, Q2Bar& worn, const server::R
   run_q2_bar(own, *world, 0, frame, width, height);
   if (crosshair != nullptr) draw_q2_crosshair(dl, own, *crosshair, width, height, st.health);
   add_q2_screen(own, 0, centre, width, height);
-  draw_q2_bar(dl, own, q2_bar_scale(height));
+  draw_q2_bar(dl, own, q2_bar_scale(own, width, height));
   return true;
 }
 

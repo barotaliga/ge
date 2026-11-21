@@ -229,6 +229,31 @@ TEST(a_bus_at_zero_is_silent_and_a_bus_fades) {
   CHECK(peak_of(after, after.size() / 2) < 0.0005f);
 }
 
+TEST(the_muffle_cuts_the_treble_and_leaves_the_bass) {
+  // A held sine heard dry and muffled to a quarter over 5 kHz: 12 kHz falls to near a quarter,
+  // 200 Hz is untouched; set back to 1, the mix is dry again.
+  const auto held = [](float hz, float treble) {
+    Synth s;
+    if (treble < 1) s.muffle(treble, 5000, 0);
+    s.tone({.wave = Wave::sine, .from_hz = hz, .duration_ms = 400, .hold_ms = 400});
+    render(s, 0.1);  // past the onset
+    return peak_of(render(s, 0.2));
+  };
+  const float high = held(12000, 0.25f) / held(12000, 1);
+  const float low = held(200, 0.25f) / held(200, 1);
+  CHECK_MSG(high > 0.2f && high < 0.4f, "12 kHz muffled to " + std::to_string(high));
+  CHECK_MSG(low > 0.97f && low < 1.03f, "200 Hz muffled to " + std::to_string(low));
+  Synth back, dry;
+  back.muffle(0.25f, 5000, 0);
+  render(back, 0.05);
+  back.muffle(1, 5000, 0);
+  render(back, 0.05);
+  render(dry, 0.1);
+  back.tone({.wave = Wave::sine, .from_hz = 12000, .duration_ms = 100});
+  dry.tone({.wave = Wave::sine, .from_hz = 12000, .duration_ms = 100});
+  CHECK(peak_of(render(back, 0.2)) == peak_of(render(dry, 0.2)));  // the dry mix's own bits
+}
+
 TEST(the_echo_answers_after_its_delay) {
   Synth s(1, EchoRoom{.delay_s = 0.2f, .feedback = 0.3f, .damp_hz = 3000});
   s.noise({.duration_ms = 20, .volume = 0.1f, .echo = 1});

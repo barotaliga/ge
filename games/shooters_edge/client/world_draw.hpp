@@ -36,6 +36,7 @@
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/room_ear.hpp"
 
 namespace ge::audio {
 class Synth;
@@ -100,7 +101,7 @@ std::vector<ge::render::Particle> world_particles(ge::gpu::Device& device, const
 void own_sky(WorldDraw& w, bool own);
 // The synth every world drawn gives its listener's room to (ce_acoustics; client/room_ear.hpp);
 // null (the default) hears none.
-void hear_worlds_on(ge::audio::Synth* synth);
+void hear_worlds_on(ge::audio::Synth* synth, const UnderEar* under = nullptr);
 // With `on` the level is seen from above (the live map's fly-down, engine/overview/fly.hpp): the
 // ceilings and the sky faces over the rooms left out so the floors show, every leaf drawn.
 void from_above(WorldDraw& w, bool on);
