@@ -79,10 +79,24 @@ The liquids (lava and slime's ticks and clock, the sounds going in and out, the 
 gasp, drowning that grows, the liquid slowing a swimmer) are held to Quake's own program by
 `se-dive`; the ticks are the harm rows of `plugins/shooter/liquid_harm.hpp`.
 
+Quake and QuakeWorld as a whole: `porting/shooters-edge/q1-qw-ledger.md` lists every command,
+setting, builtin, message, menu page, entity, item, weapon and deathmatch rule of the stock
+releases, marked done, missing or not taken, and is THE gap list (its missing count only goes
+down). Quake's deathmatch without a mod of its own plays the arena's rules in C++ with Quake's
+own on top (`rules/common_quake.cpp`), switched on by the local info `rules q1` that the game's
+profile writes (`GameProfile::arena_rules`): the body's pain, firing and death frames, the cries,
+gibs and the four corpses kept, the spawn drawn at random with its flash, the kill command, the
+damage order and the teamplay modes, each mode's respawn times and weapon stay, the weapons'
+numbers and sounds, the liquids' sounds and drowning, the keys and key doors, the secrets,
+relays and counters, the exits, the intermission and the next map, and the kit carried to it.
+The arena's own rules, its digests and its pins are unchanged without the switch; `se-quake-dm`
+plays both from one seed.
+
 ## Labs and tests
 
-`se-baseline`, `se-campaign`, `se-coop`, `se-coop-episode`, `se-coop-sweep`, `se-dive`, `se-q2-fight`, `se-q2-coop`,
-`se-q2-save`, `se-q2-unit`, `se-mod`, `se-qvm`, `qc`, `mod`; `tests/shooters_edge_rules_runner_test.cpp`.
+`se-baseline`, `se-quake-dm`, `se-campaign`, `se-coop`, `se-coop-episode`, `se-coop-sweep`, `se-dive`, `se-q2-fight`, `se-q2-coop`,
+`se-q2-save`, `se-q2-unit`, `se-mod`, `se-qvm`, `qc`, `mod`; `tests/shooters_edge_rules_runner_test.cpp`,
+`tests/shooters_edge_quake_rules_test.cpp`.
 
 ## Lessons
 
@@ -91,3 +105,5 @@ gasp, drowning that grows, the liquid slowing a swimmer) are held to Quake's own
   silently zero.
 - The window asks the rules' world or a runner's trait, never which runner it is.
 - A monster swapped whole is the other game's numbers as data in the played rules' own shape.
+- A game's own rules on shared rules go behind one switch the game's profile writes, read once a
+  frame; every branch tests it, so the shared rules' digests stay put without it.

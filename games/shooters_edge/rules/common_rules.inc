@@ -69,6 +69,38 @@ void dmm4_octa_taken(A& q);
 void dmm4_octa_off(A& q);
 void dmm4_pack_take(A& q);
 void dmm4_precache(A& q);
+// common_quake: Quake's own deathmatch rules, on while `quake_rules`.
+bool quake_rules(A& q);
+void quake_read(A& q);
+void quake_act(A& q, float first, float last, bool hold, bool fire);
+bool quake_acting(A& q);
+void quake_fire_frames(A& q, float w);
+void quake_pain(A& q);
+void quake_die(A& q);
+void quake_dead_frame(A& q);
+void quake_corpses_make(A& q);
+void quake_corpse(A& q);
+void quake_land(A& q);
+int32_t quake_spawn_spot(A& q);
+void quake_flash(A& q, Vec3 at);
+void quake_kill(A& q);
+// The seconds until an item of `kind` comes back in the mode played, or -1 for never.
+float quake_respawn(A& q, float kind);
+// The item `self`'s respawn time by its kind, `keep` for one of no kind (-1: never).
+float quake_item_respawn(A& q, float keep);
+int32_t quake_key_name(A& q, float key);
+void quake_key_start(A& q, float key);
+void quake_change_parms(A& q);
+bool quake_carried_kit(A& q);
+bool quake_weapons_stay(A& q);
+// Whether the splash from `inflictor` reaches `targ` past the walls.
+bool quake_sees(A& q, int32_t inflictor, int32_t targ);
+float quake_best_weapon(A& q);
+// Whether a weapon picked up (`pack` from a backpack) goes into the hand.
+bool quake_takes_in_hand(A& q, float w, bool pack);
+void quake_power_frame(A& q);
+void quake_quad_heard(A& q);
+void quake_precache(A& q);
 // common_player
 void player_pain(A& q);
 void player_die(A& q);

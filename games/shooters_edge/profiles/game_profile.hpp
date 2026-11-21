@@ -109,6 +109,9 @@ struct GameProfile {
   // The recordings played in turn behind its main menu (client/main.cpp's `menu_attract` auto),
   // by name as `playdemo` takes them; "" none (the title's night stays).
   std::string_view attract;
+  // Its own deathmatch rules on our arena (rules/common_quake.cpp), named to the arena by the
+  // local info `rules` (`rules_line`) when the baseline mod plays its packs; "" the arena's own.
+  std::string_view arena_rules;
   // How far a place name reaches by default, units (client/place_names.hpp's `loc_dist`): a point
   // farther from the player than this is no place they are in (500 in every classic game); 0, no
   // limit.
@@ -176,7 +179,8 @@ inline constexpr GameProfile kGameProfiles[] = {
      .episode_maps = kQ1Episodes,
      .weapon_groups = kQ1Groups,
      .rules_campaign = false,
-     .attract = "demo1 demo2 demo3"},
+     .attract = "demo1 demo2 demo3",
+     .arena_rules = "q1"},
     // Quake II: the demo's packs have no start map of the full game, so its first map.
     {.id = "q2",
      .multiplayer_programs = kQ2Programs,
@@ -192,6 +196,7 @@ inline constexpr GameProfile kGameProfiles[] = {
      .weapon_groups = kQ2Groups,
      .rules_campaign = true,
      .attract = "q2demo1",
+     .arena_rules = "",
      .place_macros = true,
      .palette_look = false,
      .conspeed = "3",
