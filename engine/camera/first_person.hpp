@@ -74,7 +74,12 @@ struct FirstPersonRow {
   double fov_y = 1.287;  // vertical, rad (90 deg horizontal at 4:3)
   double zoom_fov_y = 0.55;
   double zoom_halflife_s = 0.06;
-  double idle = 0.0;            // rad of sway at 1 (0: off)
+  double idle = 0.0;  // rad of sway at 1 (0: off)
+  // The sway's shape: each axis's share of `idle` (its sign the way it turns) and its period, s
+  // (0: that axis still). The rig's own: yaw and pitch whole every 2 s and 1 s, roll 0.3 every
+  // 0.5 s; a game sets its own (Shooter's Edge's v_i* settings).
+  double idle_yaw_share = 1, idle_pitch_share = 1, idle_roll_share = 0.3;
+  double idle_yaw_period_s = 2, idle_pitch_period_s = 1, idle_roll_period_s = 0.5;
   bool bob_hold_air = false;    // in the air: the stride's clock stopped, the last bob held
   bool kick_to_source = false;  // a hit tips the view toward where it came from, not away
 };

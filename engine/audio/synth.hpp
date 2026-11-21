@@ -56,6 +56,7 @@
 // ge:keywords limiter compressor ring spsc command producer consumer render-thread device
 // ge:keywords voice-pool steal stats offline-render room reverb stream feed queued starved pcm
 // ge:keywords reads pcm-lifetime use-after-free free-recording muffle high-shelf underwater-sound
+// ge:keywords swap_stereo s_swapstereo
 // ge:skill audio
 // ge:test tests/audio_synth_test.cpp
 #pragma once
@@ -158,6 +159,9 @@ class Synth {
   // at `treble` of itself (0.001..1; 1 the dry mix, as a synth starts), reached on `glide_s` (0:
   // at once). A listener under water hears the world through it (Quake II's 0.25 at 5 kHz).
   void muffle(float treble, float corner_hz = 5000, float glide_s = 0.05f);
+  // The left and right channels swapped at the output (speakers wired the other way round), or
+  // back. A synth starts unswapped.
+  void swap_stereo(bool on);
   // The listener's room, glided to over `glide_s` (0: at once). A synth starts with none.
   void room(const RoomSound& room, float glide_s = 0.3f);
   // Play a recording. `pcm` is read in place and must outlive the synth. Invalid when the ring

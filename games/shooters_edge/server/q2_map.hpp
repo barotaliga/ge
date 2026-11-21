@@ -42,6 +42,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "classic/q2_move.hpp"
 
@@ -122,6 +123,10 @@ void map_rows(Q2Server& s);
 // areas joined.
 bool map_areas_connected(const Q2Server& s, sh::Vec3f a, sh::Vec3f b);
 bool map_hears(const Q2Server& s, sh::Vec3f from, sh::Vec3f to);
+// The areas an eye at `eye` sees into, one bit an area (area n bit n % 8 of byte n / 8): those
+// joined to its own; every area when it stands in none (outside or in solid); empty when the map
+// has no areas (every area shown).
+void map_area_bits(const Q2Server& s, sh::Vec3f eye, std::vector<uint8_t>& out);
 
 // A kept level read back (q2_save.hpp): every cross-level target not yet fired checks again
 // its `delay` from now.

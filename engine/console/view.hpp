@@ -36,7 +36,7 @@
 // is drawn on: con_bgtop and con_bgbottom (a gradient's colours, "rrggbb"), con_bgalpha and
 // con_bgimage (a picture over the gradient); and con_font, the charset its text is written in
 // (docs/charsets.md: terminal, mono, ...; "" the 2D layer's own UI font); con_clock (1: the
-// local time in the panel's lower right corner).
+// local time in the panel's lower right corner); con_history (the typed lines kept, 128).
 //
 // `clearnotify` lets the notify lines so far go. `remotemode [address [password]]` sends each line
 // typed without a slash to the game's `rcon` command, the prompt `#` (the address and password set
@@ -53,6 +53,7 @@
 // ge:keywords completion tab con_height con_chat con_speed con_lines slash-command loading full
 // ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage con_font
 // ge:keywords autocomplete suggestion suggestions hint con_suggest condump con_clock game_chat
+// ge:keywords con_history
 // ge:keywords clearnotify remotemode rcon con_scale foot loading download-bar
 // ge:skill console
 // ge:test tests/console_view_test.cpp
@@ -317,6 +318,7 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   double notify_time_ = 4;
   int chat_default_ = 0;   // con_chat
   bool clock_on_ = false;  // con_clock
+  int history_max_ = 128;  // con_history: the typed lines kept, the oldest dropped first
   bool remote_ = false;    // remotemode
   double scale_ = 0;       // con_scale
   std::string foot_;

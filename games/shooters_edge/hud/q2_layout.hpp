@@ -19,7 +19,12 @@
 //   out of range draws nothing); `picn name` the named one.
 // - **Text** in the console's letters, 8 px each: `string "t"` and `string2` (coloured) one line at
 //   the cursor; `cstring` and `cstring2` each line centred in 320 px from the cursor's x, 8 px
-//   apart; `stat_string s` the server string stat s names.
+//   apart; `rstring` and `rstring2` one line ending at the cursor (the second with each letter's
+//   top bit flipped); `stat_string s` the server string stat s names, and `stat_string2`,
+//   `stat_cstring`, `stat_cstring2`, `stat_rstring`, `stat_rstring2` the same in each form.
+// - **Colour**: `color c` tints everything drawn after it in that program: `#rgb`, `#rrggbb`,
+//   `#rrggbbaa`, a name (black, red, green, yellow, blue, cyan, magenta, white) or its index 0..7;
+//   anything else leaves the colour as it was. Each program starts white.
 // - **Conditions**: `if s` .. `endif`: when stat s is 0 every word up to the first `endif` is
 //   skipped (no nesting).
 // - **Score blocks**: `client x y c score ping time` (the icon, the name, score, ping and minutes,
@@ -31,6 +36,7 @@
 //
 // ge:summary Quake II's status bar language run into pictures and text at screen positions
 // ge:keywords q2 layout status-bar statusbar layout-language hnum anum rnum stat_string cstring
+// ge:keywords rstring rstring2 color stat_cstring stat_rstring
 // ge:keywords scoreboard client-block stats field_3 num_minus conchars picn q2-hud
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_q2_layout_test.cpp
@@ -59,6 +65,8 @@ struct LayoutOp {
   std::string name, fallback;
   std::string text;  // a line of text, each byte a letter of the console's sheet
   bool alt = false;  // the text's coloured set (each letter + 128)
+  // The colour it is drawn in, multiplied over its pixels (`color`; white: as it is), RGBA.
+  uint8_t rgba[4] = {255, 255, 255, 255};
 };
 
 struct LayoutInput {
@@ -74,6 +82,9 @@ struct LayoutInput {
 
 // Runs `in.program` into `out` (cleared first), in drawing order.
 void run_layout(const LayoutInput& in, std::vector<LayoutOp>& out);
+
+// A `color` word's colour into `rgba`; false (left as it was) for anything it does not name.
+bool layout_colour(std::string_view c, uint8_t rgba[4]);
 
 // The file a picture name means: `pics/<name>.pcx`, or the path after a leading slash.
 std::string layout_picture_path(std::string_view name);

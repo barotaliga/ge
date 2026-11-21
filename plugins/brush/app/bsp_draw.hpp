@@ -416,7 +416,8 @@ struct BspDraw {
   std::vector<GpuMover> mover_rows;
   bool movers_dirty = false;
   BspCull cull;
-  std::vector<DynamicLight> dynamic;       // this frame's (set_dynamic_lights)
+  std::vector<DynamicLight> dynamic;  // this frame's (set_dynamic_lights)
+  std::vector<uint8_t> areas;  // the areas shown, one bit each (set_areas); empty: every area
   std::vector<PointLight> dynamic_points;  // the same as v2's point lights
   uint64_t culled_frames = 0;  // frames culled since the targets were made (0: no pyramid yet)
   // The scene's lava lights and teleporters' lights (made once).
@@ -434,6 +435,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& draw, const render::FrameView& vi
 // This frame's dynamic lights (before `prepare_bsp`); the classic draws at most kMaxDynamic.
 inline constexpr int kMaxDynamic = 32;
 void set_dynamic_lights(BspDraw& draw, std::span<const DynamicLight> lights);
+// The areas this frame shows (a version 38 map's, one bit an area: brush/map.hpp's
+// `potentially_visible`); empty, every area. A leaf in an unshown area draws none of its faces.
+void set_areas(BspDraw& draw, std::span<const uint8_t> areas);
 // This frame's moving casters (before `prepare_bsp`): their triangles, world m, nine floats a
 // triangle (kMaxCasterVerts vertices at most; past them, the rest cast nothing), and each one's box
 // (the lights that light one of them most get the cubes).

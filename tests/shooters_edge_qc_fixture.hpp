@@ -54,9 +54,11 @@ struct Fixture {
   std::unique_ptr<sv::QcServer> s;
   std::string error;
 
-  // The test mod (or `mod`, when given) on the arena with `entities`, the console lines run first.
+  // The test mod (or `mod`, when given) on the arena with `entities`, the console lines run first;
+  // `movers` adds the arena's door (*1) and plat (*2) models.
   explicit Fixture(const char* entities = sv::kArenaEntities,
-                   const std::vector<std::string>& console = {}, const pg::Progs* mod = nullptr) {
+                   const std::vector<std::string>& console = {}, const pg::Progs* mod = nullptr,
+                   bool movers = false) {
     if (mod != nullptr)
       progs = *mod;
     else
@@ -68,7 +70,7 @@ struct Fixture {
     if (!s) return;
     for (const std::string& l : console) sv::server_command(*s, l);
     sv::MapSpec map;
-    map.models = sv::arena_models();
+    map.models = sv::arena_models(movers);
     map.entities = entities;
     loaded = sv::load_map(*s, map, error);
   }

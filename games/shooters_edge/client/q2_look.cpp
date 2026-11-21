@@ -18,21 +18,16 @@ namespace {
 // cyan (blue with double), gold (double alone); then half damage (0.56, 0.59, 0.45) with green
 // lifting its green channel to 1 (green alone: pure green).
 void shell_colour(uint32_t rf, float rgb[3]) {
-  const bool r = (rf & kRfShellRed) != 0, g = (rf & kRfShellGreen) != 0;
-  const bool b = (rf & kRfShellBlue) != 0, dd = (rf & kRfShellDouble) != 0;
+  // The bits mix in turn from black: the light green, then half damage, then double damage's red
+  // and green, then red, green and blue each forced to full.
   const auto set = [&](float x, float y, float z) { rgb[0] = x, rgb[1] = y, rgb[2] = z; };
-  if (r && g && b) return set(1, 1, 1);
-  if (r || b || dd) {
-    if (r) return (b || dd) ? set(1, 0, 1) : set(1, 0, 0);
-    if (b) return dd ? set(0, 1, 1) : set(0, 0, 1);
-    return set(0.9f, 0.7f, 0);
-  }
-  const bool half = (rf & kRfShellHalf) != 0;
-  if (half)
-    set(0.56f, 0.59f, 0.45f);
-  else
-    set(0, 0, 0);
-  if (g) rgb[1] = 1;
+  set(0, 0, 0);
+  if ((rf & kRfShellLiteGreen) != 0) set(0.56f, 0.93f, 0.56f);
+  if ((rf & kRfShellHalf) != 0) set(0.56f, 0.59f, 0.45f);
+  if ((rf & kRfShellDouble) != 0) rgb[0] = 0.9f, rgb[1] = 0.7f;
+  if ((rf & kRfShellRed) != 0) rgb[0] = 1;
+  if ((rf & kRfShellGreen) != 0) rgb[1] = 1;
+  if ((rf & kRfShellBlue) != 0) rgb[2] = 1;
 }
 
 }  // namespace
@@ -46,6 +41,8 @@ int q2_texture_frame(uint32_t effects, int frame, double t) {
   if ((effects & 0x2000u) != 0) return static_cast<int>(ms / 100);
   return frame;
 }
+
+double q2_bob_units(double t) { return 5 * std::sin(t * 1000 / 400); }
 
 Q2Look q2_look(uint32_t effects, uint32_t render_fx) {
   Q2Look look;
@@ -65,11 +62,15 @@ Q2Look q2_look(uint32_t effects, uint32_t render_fx) {
   if ((effects & kSqInvulnerable) != 0) rf |= kRfShellRed;
   if ((effects & kSqDoubleDamage) != 0) rf |= kRfShellDouble;
   if ((effects & kSqHalfDamage) != 0) rf |= kRfShellHalf;
-  const uint32_t shells =
-      kRfShellRed | kRfShellGreen | kRfShellBlue | kRfShellDouble | kRfShellHalf;
+  const uint32_t shells = kRfShellRed | kRfShellGreen | kRfShellBlue | kRfShellDouble |
+                          kRfShellHalf | kRfShellLiteGreen;
   const bool powered =
       (effects & (kSqQuad | kSqInvulnerable | kSqDoubleDamage | kSqHalfDamage)) != 0;
   look.turns = (effects & kSqRotate) != 0;
+  look.bobs = (effects & kSqBob) != 0;
+  look.full_bright = (render_fx & kRfFullBright) != 0;
+  look.min_light = (render_fx & kRfMinLight) != 0;
+  look.spinning = !look.turns && (effects & kSqSpinningLights) != 0;
   if (((effects & kSqColourShell) != 0 || powered) && (rf & shells) != 0) {
     look.shell = true;
     shell_colour(rf, look.shell_rgb);
@@ -93,15 +94,22 @@ Q2Look q2_look(uint32_t effects, uint32_t render_fx) {
     look.missile = Q2Look::Missile::grenade;
   else if ((effects & kSqBfg) != 0)
     look.missile = Q2Look::Missile::bfg;
-  else if ((effects & (kSqGib | kSqFlies | kSqTrap)) != 0) {
+  else if ((effects & (kSqGib | kSqFlies)) != 0) {
     // their own branches: no trail of these
-  } else if ((effects & kSqFlag1) != 0)
+  } else if ((effects & kSqTrap) != 0)
+    look.missile = Q2Look::Missile::trap;
+  else if ((effects & kSqFlag1) != 0)
     look.missile = Q2Look::Missile::flag1;
   else if ((effects & kSqFlag2) != 0)
     look.missile = Q2Look::Missile::flag2;
   else if ((effects & kSqTagTrail) != 0)
     look.missile = Q2Look::Missile::tag;
-  else if ((effects & (kSqTrackerTrail | kSqTracker | kSqGreenGib)) == 0) {
+  else if ((effects & kSqTrackerTrail) != 0)
+    look.missile = (effects & kSqTracker) != 0 ? Q2Look::Missile::tracker_dark
+                                               : Q2Look::Missile::tracker_shell;
+  else if ((effects & kSqTracker) != 0)
+    look.missile = Q2Look::Missile::tracker;
+  else if ((effects & kSqGreenGib) == 0) {
     if ((effects & kSqIonRipper) != 0)
       look.missile = Q2Look::Missile::ion;
     else if ((effects & kSqBlueHyperblaster) != 0)

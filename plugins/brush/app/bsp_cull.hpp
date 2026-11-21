@@ -80,8 +80,9 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
 void create_bsp_cull_targets(gpu::Device& device, BspCull& cull,
                              const render::FrameTargets& targets);
 // This frame's set from the eye (engine metres; `pvs` false: every face), the arguments reset.
+// `areas`: the areas shown (brush/map.hpp's `potentially_visible`); empty, every area.
 void prepare_bsp_cull(gpu::Device& device, BspCull& cull, const Scene& scene, const double eye[3],
-                      bool pyramid, bool pvs = true);
+                      bool pyramid, bool pvs = true, std::span<const uint8_t> areas = {});
 // A phase's three dispatches (0 early, 1 late).
 void encode_bsp_cull(const BspCull& cull, const gpu::PipelineSet& pipelines,
                      render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,

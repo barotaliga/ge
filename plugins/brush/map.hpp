@@ -52,6 +52,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -255,8 +256,11 @@ bool cluster_sees(const Map& map, int32_t from, int32_t to);
 // surfaces) set to 1 for every surface marked in a leaf whose cluster `leaf`'s cluster sees, 0
 // elsewhere; the number set. A leaf with no cluster (the eye in solid, outside the map) sees every
 // surface, as does a map with no visibility. Only the world's own leaves mark surfaces: a brush
-// model's (a door, a lift) are the caller's to draw.
-uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen);
+// model's (a door, a lift) are the caller's to draw. With `areas` (one bit an area, area n bit
+// n % 8 of byte n / 8; an area past its end counts as unset), a leaf in solid or in an area whose
+// bit is unset marks nothing, with or without visibility: a room behind a shut door is not drawn.
+uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen,
+                             std::span<const uint8_t> areas = {});
 // THE LEAVES A BOX TOUCHES in the world's tree (`lo`..`hi`, file coordinates): their indices into
 // `out`, at most `most`; the number found, which is more than `most` when some did not fit (then
 // `out` holds the first `most`). A leaf whose box the planes reach on both sides counts.

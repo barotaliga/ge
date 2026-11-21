@@ -81,6 +81,8 @@ struct ViewState {
   // off.
   const Q2Screen* q2 = nullptr;
   double aspect = 4.0 / 3.0;
+  // The idle sway's shape (v_ipitch_*, v_iyaw_*, v_iroll_*): pitch, yaw, roll; rad/s, degrees.
+  double idle_cycle[3] = {1, 2, 0.5}, idle_level[3] = {0.3, 0.3, 0.1};
   int64_t rules_frame = -1;   // Quake II's rules frame the kick and offset were last taken at
   double rules_frame_s = -1;  // the server's time it was taken at
 };

@@ -2,14 +2,20 @@
 // effects (`sq_*`: arrivals, an item's return, sparks off a weld or a tunnel, steam and smoke, the
 // blue hyperblaster's hit, the widow's splash, the flashlight), the trails along a line (bubbles,
 // a force wall) and the marks a flying entity's effect bits leave (a flag's or the tag's column,
-// the ion ripper's specks, each one's light), thrown by world_fx.cpp's effect loop.
+// the ion ripper's specks, the trap's glow, the tracker's strands and dark light, the spinning
+// lights, each one's light), thrown by world_fx.cpp's effect loop.
 //
 // ge:summary Quake II's named effects, line trails and effect-bit marks thrown into the world
 // ge:keywords q2-effects temp-entity te_bubbletrail te_forcewall te_welding_sparks te_steam
-// ge:keywords te_flashlight ef_flag1 ef_flag2 ef_ionripper ef_tagtrail ef_plasma q2_mark
+// ge:keywords te_flashlight ef_trap ef_tracker ef_trackertrail ef_spinninglights
+// ge:keywords ef_flag1 ef_flag2 ef_ionripper ef_tagtrail ef_plasma q2_mark
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
+#include <algorithm>
+#include <cmath>
 #include <string_view>
+
+#include "brush/map.hpp"
 
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/client/q2_look.hpp"
@@ -19,8 +25,27 @@ namespace shooters_edge::client {
 
 namespace fx = shooters_edge::effects;
 
-void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, FxFrame& out) {
+namespace {
+constexpr double kSqBeamOutS = 2.1;  // a widow beam-out's life
+}  // namespace
+
+void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, double t,
+                 FxFrame& out) {
   const std::string_view n = e.name;
+  if (n == "sq_widow_beam") {  // kept for 2.1 s, one per id (a later one takes its place)
+    std::erase_if(s.beam_outs, [&](const FxState::BeamOut& b) { return b.id == e.entity; });
+    if (e.entity == 0 || s.beam_outs.size() >= 32) return;
+    FxState::BeamOut b;
+    b.id = e.entity;
+    for (int k = 0; k < 3; ++k) b.at[k] = p[k];
+    b.born = t;
+    s.beam_outs.push_back(b);
+    return;
+  }
+  if (n == "sq_power_splash") {
+    fx::q2_power_splash(p, e.way.x, s.seed++, s.palette, &out.births);
+    return;
+  }
   if (n == "sq_teleport" && !dust)
     fx::q2_teleport_burst(p, s.seed++, s.palette, &out.births);
   else if (n == "sq_item_back")
@@ -65,6 +90,13 @@ void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, FxFr
   }
 }
 
+void q2_sustains(FxState& s, double t, FxFrame& out) {
+  std::erase_if(s.beam_outs, [&](const FxState::BeamOut& b) { return t - b.born > kSqBeamOutS; });
+  for (const FxState::BeamOut& b : s.beam_outs)
+    fx::q2_beam_out(b.at, std::clamp((t - b.born) / kSqBeamOutS, 0.0, 1.0), s.seed++, s.palette,
+                    &out.births);
+}
+
 bool q2_named_trail(FxState& s, const Effect& e, const double from[3], const double to[3],
                     FxFrame& out) {
   if (e.name == "sq_bubbles" || e.name == "sq_bubbles2") {
@@ -78,10 +110,39 @@ bool q2_named_trail(FxState& s, const Effect& e, const double from[3], const dou
   return false;
 }
 
-void q2_mark_fx(FxState& s, int mark, bool moved, const double from[3], const double to[3],
-                FxFrame& out) {
+void q2_mark_fx(FxState& s, const Missile& m, bool moved, const double from[3], const double to[3],
+                double t, FxFrame& out) {
   using K = Q2Look::Missile;
-  const auto k = static_cast<K>(mark);
+  const auto k = static_cast<K>(m.q2_mark);
+  // Spinning lights: a red light 64 units ahead along the spin, whatever else it carries.
+  if (m.q2_spin) {
+    const double yaw = (t * kSqSpinDegPerS + m.yaw) * 3.14159265358979323846 / 180;
+    const double ahead[3] = {to[0] + 64 * ge::brush::kUnitM * std::cos(yaw), to[1],
+                             to[2] + 64 * ge::brush::kUnitM * std::sin(yaw)};
+    out.lights.push_back(fx::q2_point_light(ahead, 100, 1, 0, 0));
+  }
+  if (k == K::none) return;
+  if (k == K::trap) {  // its glow 32 units over it, a light flickering each frame
+    const double up[3] = {to[0], to[1] + 32 * ge::brush::kUnitM, to[2]};
+    fx::q2_trap(up, s.seed++, s.palette, &out.births);
+    out.lights.push_back(fx::q2_point_light(up, 100 + double(s.seed++ % 100), 1, 0.8, 0.1));
+    return;
+  }
+  if (k == K::tracker_dark) {  // no specks; a darkening light whose reach pulses
+    const double reach = 50 + 500 * (std::sin(t * 1000 / 500) + 1);
+    out.lights.push_back(fx::q2_point_light(to, reach, -1, -1, -1));
+    return;
+  }
+  if (k == K::tracker_shell) {  // a black shell round it, a darkening light
+    fx::q2_tracker_shell(to, 40, s.seed++, s.palette, &out.births);
+    out.lights.push_back(fx::q2_point_light(to, 155, -1, -1, -1));
+    return;
+  }
+  if (k == K::tracker) {  // two black strands and a darkening light
+    if (moved) fx::q2_tracker_trail(from, to, s.seed++, s.palette, &out.births);
+    out.lights.push_back(fx::q2_point_light(to, 200, -1, -1, -1));
+    return;
+  }
   if (moved) {
     if (k == K::flag1 || k == K::flag2 || k == K::tag)
       fx::q2_column_trail(from, to,

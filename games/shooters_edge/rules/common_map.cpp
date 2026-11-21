@@ -153,6 +153,7 @@ void door_go_up(A& q) {
     return;
   }
   door_sound(q, q.i(me, q.L.f.noise1));
+  q.set_i(me, q.L.f.goalentity, q.ge(g_activator));  // who opened it: Quake's crush credit
   q.set_f(q.self(), f_state, kStateUp);
   calc_move(q, q.v(q.self(), f_pos2), q.f(q.self(), f_speed), q.fn(fn_door_hit_top));
   use_targets(q);
@@ -306,8 +307,55 @@ void info_teleport_destination(A& q) {
 }
 
 // Lights are the map compiler's; the torches and flames the clients draw where they stand.
-void light(A& q) { q.remove(q.self()); }
-void light_fluoro(A& q) { q.remove(q.self()); }
+// Under Quake's rules a named light whose style is 32 or more switches on each use ("m" on, "a"
+// off; spawnflag 1 starts it off), and the fluorescent ones hum (`light_fluorospark` buzzes).
+namespace {
+
+void light_switch_start(A& q) {
+  const int32_t me = q.self();
+  if (q.is(q.i(me, q.L.f.targetname), "") | (q.f(me, f_style) < 32)) return;
+  q.set_i(me, q.L.f.use, q.fn(fn_light_use));
+  const bool off = band(q.f(me, q.L.f.spawnflags), 1) != 0;
+  q.lightstyle(q.f(me, f_style), q.s(off ? s_style_off : s_style0));
+}
+
+}  // namespace
+
+void light_use(A& q) {
+  const int32_t me = q.self();
+  const float flags = q.f(me, q.L.f.spawnflags);
+  const bool off = band(flags, 1) != 0;
+  q.lightstyle(q.f(me, f_style), q.s(off ? s_style0 : s_style_off));
+  q.set_f(me, q.L.f.spawnflags, off ? flags - 1 : flags + 1);
+}
+
+void light(A& q) {
+  if (!quake_rules(q) || q.is(q.i(q.self(), q.L.f.targetname), "")) {
+    q.remove(q.self());
+    return;
+  }
+  light_switch_start(q);
+}
+
+void light_fluoro(A& q) {
+  if (!quake_rules(q)) {
+    q.remove(q.self());
+    return;
+  }
+  light_switch_start(q);
+  q.precache_sound(q.s(s_ambience_fl_hum1_wav));
+  q.ambientsound(q.v(q.self(), q.L.f.origin), q.s(s_ambience_fl_hum1_wav), 0.5f, kAttnStatic);
+}
+
+void light_fluorospark(A& q) {
+  if (!quake_rules(q)) {
+    q.remove(q.self());
+    return;
+  }
+  if (q.f(q.self(), f_style) == 0) q.set_f(q.self(), f_style, 10);
+  q.precache_sound(q.s(s_ambience_buzz1_wav));
+  q.ambientsound(q.v(q.self(), q.L.f.origin), q.s(s_ambience_buzz1_wav), 0.5f, kAttnStatic);
+}
 void light_torch_small_walltorch(A& q) { flame_start(q, q.s(s_flame_mdl), 0); }
 void light_flame_large_yellow(A& q) { flame_start(q, q.s(s_flame2_mdl), 1); }
 void light_flame_small_yellow(A& q) { flame_start(q, q.s(s_flame2_mdl), 0); }
@@ -353,7 +401,11 @@ void door_go_down(A& q) {
 // Something stands in the way: it takes the door's damage and the group goes back.
 void door_blocked(A& q) {
   q.set_i(q.other(), f_deathtype, q.s(s_squished));
-  damage(q, q.other(), q.self(), q.self(), q.f(q.self(), f_dmg));
+  // Quake's rules credit the crush to whoever opened the door (a player: "K squishes V").
+  int32_t by = q.self();
+  if (quake_rules(q) && q.is(q.i(q.i(by, q.L.f.goalentity), q.L.f.classname), "player"))
+    by = q.i(by, q.L.f.goalentity);
+  damage(q, q.other(), q.self(), by, q.f(q.self(), f_dmg));
   if (q.f(q.self(), f_wait) >= 0) {
     if (q.f(q.self(), f_state) == kStateDown) {
       door_group_up(q);
@@ -744,14 +796,54 @@ void func_button(A& q) {
   }
 }
 
-void trigger_ready(A& q) { q.set_f(q.self(), q.L.f.solid, kSolidTrigger); }
+// Ready again after its wait; a shootable one (Quake's rules) takes blows again at full health.
+void trigger_ready(A& q) {
+  const int32_t me = q.self();
+  if (quake_rules(q) && (q.f(me, q.L.f.max_health) > 0)) {
+    q.set_f(me, q.L.f.health, q.f(me, q.L.f.max_health));
+    q.set_f(me, q.L.f.takedamage, kDamageYes);
+    q.set_f(me, q.L.f.solid, kSolidBbox);
+    return;
+  }
+  q.set_f(me, q.L.f.solid, kSolidTrigger);
+}
 
 void trigger_touch(A& q) {
   const int32_t o = q.other();
   if (!q.is(q.i(o, q.L.f.classname), "player") | (q.f(o, q.L.f.health) <= 0)) return;
+  // Quake's rules: a trigger with an angle fires only for a player facing within 90 degrees of it.
+  const Vec3 dir = q.v(q.self(), q.L.f.movedir);
+  if (quake_rules(q) && !same_vec(dir, {0, 0, 0})) {
+    q.makevectors(q.v(o, q.L.f.angles));
+    if (dot(q.v_forward(), dir) < 0) return;
+  }
   q.set_ge(g_activator, q.other());
   trigger_fire(q);
 }
+
+// A shootable trigger (Quake's rules) fires on the blow that takes its health; the one who struck
+// it is the activator.
+void trigger_killed(A& q) {
+  q.set_ge(g_activator, q.ge(g_damage_attacker));
+  q.set_f(q.self(), q.L.f.takedamage, kDamageNo);
+  trigger_fire(q);
+}
+
+namespace {
+
+// Quake's rules: a trigger the map gives health is solid and fired only by blows.
+void trigger_shootable(A& q) {
+  const int32_t me = q.self();
+  if (!quake_rules(q) || (q.f(me, q.L.f.health) <= 0)) return;
+  q.set_f(me, q.L.f.max_health, q.f(me, q.L.f.health));
+  q.set_i(me, f_th_die, q.fn(fn_trigger_killed));
+  q.set_f(me, q.L.f.takedamage, kDamageYes);
+  q.set_f(me, q.L.f.solid, kSolidBbox);
+  q.set_i(me, q.L.f.touch, q.fn(fn_noop));  // only a blow fires it
+  q.setorigin(me, q.v(me, q.L.f.origin));
+}
+
+}  // namespace
 
 void trigger_use(A& q) {
   q.set_ge(g_activator, q.other());
@@ -763,6 +855,7 @@ void trigger_multiple(A& q) {
   trigger_start(q);
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_trigger_touch));
   q.set_i(q.self(), q.L.f.use, q.fn(fn_trigger_use));
+  trigger_shootable(q);
 }
 
 void trigger_once(A& q) {
@@ -770,6 +863,7 @@ void trigger_once(A& q) {
   trigger_start(q);
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_trigger_touch));
   q.set_i(q.self(), q.L.f.use, q.fn(fn_trigger_use));
+  trigger_shootable(q);
 }
 
 // Sends what the variant lets it to the destination named by .target, even a moving one.

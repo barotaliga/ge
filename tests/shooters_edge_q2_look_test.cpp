@@ -32,13 +32,14 @@ TEST(the_powers_wear_their_shells_in_their_order) {
   CHECK(rgb_is(cl::q2_look(cl::kSqQuad | cl::kSqInvulnerable, 0), 1, 0, 1));
   // A power shield's hit: green, with the colour-shell effect bit the server sends with it.
   CHECK(rgb_is(cl::q2_look(cl::kSqColourShell, cl::kRfShellGreen), 0, 1, 0));
-  // Quad with a shield's hit: blue (green yields to red, blue and double damage).
-  CHECK(rgb_is(cl::q2_look(cl::kSqQuad | cl::kSqColourShell, cl::kRfShellGreen), 0, 0, 1));
+  // The bits mix: quad with a shield's hit is cyan.
+  CHECK(rgb_is(cl::q2_look(cl::kSqQuad | cl::kSqColourShell, cl::kRfShellGreen), 0, 1, 1));
   // God mode: all three, white.
   const uint32_t god = cl::kRfShellRed | cl::kRfShellGreen | cl::kRfShellBlue;
   CHECK(rgb_is(cl::q2_look(cl::kSqColourShell, god), 1, 1, 1));
   CHECK(rgb_is(cl::q2_look(cl::kSqDoubleDamage, 0), 0.9f, 0.7f, 0));
-  CHECK(rgb_is(cl::q2_look(cl::kSqDoubleDamage | cl::kSqQuad, 0), 0, 1, 1));
+  CHECK(rgb_is(cl::q2_look(cl::kSqDoubleDamage | cl::kSqQuad, 0), 0.9f, 0.7f, 1));
+  CHECK(rgb_is(cl::q2_look(cl::kSqColourShell, cl::kRfShellLiteGreen), 0.56f, 0.93f, 0.56f));
   CHECK(rgb_is(cl::q2_look(cl::kSqHalfDamage, 0), 0.56f, 0.59f, 0.45f));
   // Shell bits without the colour-shell effect bit draw none.
   CHECK(!cl::q2_look(0, cl::kRfShellRed).shell);
@@ -129,11 +130,11 @@ TEST(flies_and_a_power_screens_plate_by_their_bits) {
   CHECK(cl::q2_look(cl::kSqFlies, 0).flies && !cl::q2_look(0, 0).flies);
   const cl::Q2Look screen = cl::q2_look(cl::kSqPowerScreen, 0);
   CHECK(screen.power_screen && !screen.shell);
-  // A shield's hit: green; with quad's blue the blue wins, with all three white.
+  // A shield's hit: green; with quad's blue the two mix to cyan.
   const cl::Q2Look shield = cl::q2_look(cl::kSqColourShell, cl::kRfShellGreen);
   CHECK(shield.shell && shield.shell_rgb[0] == 0 && shield.shell_rgb[1] == 1);
   const cl::Q2Look both = cl::q2_look(cl::kSqColourShell | cl::kSqQuad, cl::kRfShellGreen);
-  CHECK(both.shell_rgb[1] == 0 && both.shell_rgb[2] == 1);
+  CHECK(both.shell_rgb[1] == 1 && both.shell_rgb[2] == 1);
 }
 
 TEST(the_animation_bits_cycle_frames_on_the_shared_clock) {
@@ -170,6 +171,30 @@ TEST(flags_tags_ion_and_plasma_bolts_carry_their_own_trail_and_light) {
   CHECK(cl::q2_look(cl::kSqPlasma, 0).alpha == 0.6f);
   CHECK(cl::q2_look(cl::kSqSphereTrans, 0).alpha == 0.3f);
   CHECK(cl::q2_look(cl::kSqSphereTrans | cl::kSqTrackerTrail, 0).alpha == 0.6f);
+}
+
+TEST(the_trap_and_the_trackers_marks_and_spinning_lights_by_their_bits) {
+  using M = cl::Q2Look::Missile;
+  CHECK(cl::q2_look(cl::kSqTrap, 0).missile == M::trap);
+  CHECK(cl::q2_look(cl::kSqTracker, 0).missile == M::tracker);
+  CHECK(cl::q2_look(cl::kSqTrackerTrail, 0).missile == M::tracker_shell);
+  CHECK(cl::q2_look(cl::kSqTrackerTrail | cl::kSqTracker, 0).missile == M::tracker_dark);
+  CHECK(cl::q2_look(cl::kSqGib | cl::kSqTrap, 0).missile == M::none);    // the gib's branch
+  CHECK(cl::q2_look(cl::kSqFlag1 | cl::kSqTrap, 0).missile == M::trap);  // the trap's first
+  CHECK(cl::q2_look(cl::kSqTracker | cl::kSqIonRipper, 0).missile == M::tracker);
+  // Spinning lights spin unless the rotate bit turns it its own way.
+  CHECK(cl::q2_look(cl::kSqSpinningLights, 0).spinning);
+  CHECK(!cl::q2_look(cl::kSqSpinningLights | cl::kSqRotate, 0).spinning);
+  cl::Missile m;
+  CHECK(cl::q2_missile(int(cl::kSqSpinningLights), m) && m.q2_spin && m.q2_mark == 0);
+}
+
+TEST(full_bright_min_light_and_bob_by_their_bits) {
+  CHECK(cl::q2_look(0, cl::kRfFullBright).full_bright && !cl::q2_look(0, 0).full_bright);
+  CHECK(cl::q2_look(0, cl::kRfMinLight).min_light);
+  CHECK(cl::q2_look(cl::kSqBob, 0).bobs);
+  CHECK(cl::q2_bob_units(0) == 0 &&
+        std::abs(cl::q2_bob_units(0.4 * 3.14159265358979 / 2) - 5) < 1e-6);
 }
 
 }  // namespace
