@@ -142,6 +142,21 @@ void watch_view(Watch& w, int k, double t, float yaw, const char* by) {
   wr.first += dt;
   if (std::fabs(rate) > 60 && std::fabs(v.rate) > 60 && rate * v.rate < 0) wr.second++;
   v = {t, yaw, rate};
+  // se-people's rule: a 40 Hz read (kHandEvery), the rate over the read's step.
+  Watch::View& u = w.view40[static_cast<size_t>(k)];
+  if (u.t < 0 || t - u.t > 0.1) {
+    u = {t, yaw, 0};
+    return;
+  }
+  if (t - u.t < 0.025) return;
+  float d40 = yaw - u.yaw;
+  while (d40 > 180) d40 -= 360;
+  while (d40 < -180) d40 += 360;
+  const auto rate40 = static_cast<float>(-d40 / (t - u.t));
+  auto& wr40 = w.writers40[by != nullptr ? by : "-"];
+  wr40.first += t - u.t;
+  if (std::fabs(rate40) > 60 && std::fabs(u.rate) > 60 && rate40 * u.rate < 0) wr40.second++;
+  u = {t, yaw, rate40};
 }
 
 void facing_metrics(gl::Lab& lab, const Watch& w) {
@@ -278,6 +293,18 @@ void still_view_metrics(gl::Lab& lab, const Watch& w) {
   lab.table(vt);
   lab.metric("team.view.reversals-per-s", all_t > 0 ? static_cast<double>(all_r) / all_t : 0,
              "per-s");
+  double t40 = 0;
+  int64_t r40 = 0;
+  for (const auto& [by, tr] : w.writers40) {
+    t40 += tr.first;
+    r40 += tr.second;
+  }
+  for (const auto& [by, tr] : w.writers40) {
+    lab.metric("team.view40." + by + ".share", t40 > 0 ? tr.first / t40 : 0, "share");
+    lab.metric("team.view40." + by + ".reversals-per-s",
+               tr.first > 0 ? static_cast<double>(tr.second) / tr.first : 0, "per-s");
+  }
+  lab.metric("team.view40.reversals-per-s", t40 > 0 ? static_cast<double>(r40) / t40 : 0, "per-s");
 }
 
 void hop_metrics(gl::Lab& lab, const Watch& w) {
