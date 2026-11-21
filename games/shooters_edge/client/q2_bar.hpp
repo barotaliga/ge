@@ -85,6 +85,10 @@ int q2_bar_scale(int width, int height, int setting = 0);
 // The bar's own: by its `screen`'s scr_scale.
 int q2_bar_scale(const Q2Bar& bar, int width, int height);
 
+// Hands `bar` a joined server's packets (`lag`; null: no graph), the moves it has not answered
+// and the real time `now`, s, for the lag graph and the blinking net picture.
+void q2_bar_net(Q2Bar& bar, const ge::hud::NetHistory* lag, int unanswered, double now);
+
 // Runs the world's bar for client `slot` (its stats, the world's strings) on a `width` x `height`
 // window into `bar.ops`, in screen pixels of the smaller screen (`q2_bar_scale`); then, while
 // its stat 13 has bit 1, the layout program the rules last sent it (a scoreboard, the help

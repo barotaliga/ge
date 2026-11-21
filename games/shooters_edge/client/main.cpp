@@ -968,8 +968,7 @@ int run_main(int argc, char** argv) {
   ge::platform::InputSnapshot input;
   cl::ViewState shown;
   shown.q2 = &q2_screen;  // Quake II's cl_adjustfov and cl_kickangles
-  cl::DemoEyes demo_eyes{.gun_kick = &remote.gunkick,
-                         .view_kick = &q2_screen.kick_angles};  // a demo's or a joined server's eye
+  cl::DemoEyes demo_eyes{.gun_kick = &remote.gunkick, .view_kick = &q2_screen.kick_angles};
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state;
   cl::FxFrame fx;
@@ -1711,9 +1710,8 @@ int run_main(int argc, char** argv) {
       se::Status hud_status = cl::demo_status(ds, t);
       if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map, ds.bonuses);  // f_ events
       if (drawn_remote) cl::group_status(controls.groups, hud_status, t);  // the weapon group
-      q2_bar.lag = drawn_remote ? sn::remote_net(remote) : nullptr;        // scr_lag_draw's
-      q2_bar.unanswered = sn::remote_unanswered(remote);
-      q2_bar.now = t;
+      cl::q2_bar_net(q2_bar, drawn_remote ? sn::remote_net(remote) : nullptr,
+                     sn::remote_unanswered(remote), t);                 // scr_lag_draw's packets
       if (!cl::draw_recorded_q2_bar(overlay, q2_bar, ds_read, w, h)) {  // its own bar
         se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
         playback.bar_bottom_px = cl::hud_inset(

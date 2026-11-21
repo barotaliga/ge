@@ -223,6 +223,12 @@ int q2_bar_scale(int width, int height, int setting) {
   return side >= 2 * step ? 4 : side >= step ? 2 : 1;
 }
 
+void q2_bar_net(Q2Bar& bar, const ge::hud::NetHistory* lag, int unanswered, double now) {
+  bar.lag = lag;
+  bar.unanswered = unanswered;
+  bar.now = now;
+}
+
 int q2_bar_scale(const Q2Bar& bar, int width, int height) {
   return q2_bar_scale(width, height, bar.screen != nullptr ? bar.screen->scale : 0);
 }
