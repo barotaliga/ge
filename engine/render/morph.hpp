@@ -45,20 +45,17 @@
 //   model's rest frame (frame 0), darkening as they dry. No wound: the shader skips it.
 // - THE PASS draws after the opaque world (depth tested and written, reversed z, back faces
 //   culled), one draw a model instance, at most `kMaxMorphDraws` a frame.
-//
-// The CPU twins (`pose_morph`, `morph_texel`, `pack_morph_atlas`, `warp_vertex`, `warp_cut`) are
-// what the shader does, for the tests and the CPU pictures.
-//
+// - THE CPU TWINS (`pose_morph`, `morph_texel`, `pack_morph_atlas`, `warp_vertex`, `warp_cut`,
+//   `wound_cover`) do what the shader does, for the tests and the CPU pictures.
 // ge:summary Morph meshes drawn: vertex-animated models, frames blended on the GPU, tinted skins
-// ge:keywords burn charred embers etched morph_burn scorch-skin
-// ge:keywords blood morph_blood morph_wound wound_cover wound-stain blood-run soaked bloodied
-// ge:keywords render morph morph-mesh vertex-animation frames blend interpolation skin atlas
-// ge:keywords tint team-colours player-colours ramp glow fullbright sharp smooth nearest
-// ge:keywords hole cut-out alpha see-through mark-hole
-// ge:keywords warp morph-warp dissolve materialize dematerialize spawn teleport fade-in fade-out
-// ge:keywords warp_vertex warp_field warp_cut pack_warp ash dust crumble burning-edge shimmer pinch
-// ge:keywords create_morph prepare_morph encode_morph pose_morph morph_texel pack_morph_atlas
-// ge:keywords skin-slots set_morph_slot slot_texels worn-skin lazy-skin
+// ge:keywords burn charred embers etched morph_burn scorch-skin blood morph_blood morph_wound
+// ge:keywords wound_cover wound-stain blood-run soaked bloodied hole cut-out alpha see-through
+// ge:keywords render morph morph-mesh vertex-animation frames blend interpolation skin atlas tint
+// ge:keywords team-colours player-colours ramp glow fullbright sharp smooth nearest mark-hole warp
+// ge:keywords morph-warp dissolve materialize dematerialize spawn teleport fade-in fade-out
+// ge:keywords warp_vertex warp_field warp_cut pack_warp ash dust crumble burning-edge shimmer
+// ge:keywords pinch create_morph prepare_morph encode_morph pose_morph morph_texel
+// ge:keywords pack_morph_atlas skin-slots set_morph_slot slot_texels worn-skin lazy-skin
 // ge:skill render
 // ge:test tests/render_morph_test.cpp
 #pragma once

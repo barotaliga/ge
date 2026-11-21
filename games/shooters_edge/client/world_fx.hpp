@@ -450,14 +450,22 @@ void bleed_fx(const FxScene& l, FxState& s, const Effect& e, const double p[3],
 // A blast at `boom` (map units): every living player within reach of it bleeds away from it.
 void blast_blood(const FxScene& l, FxState& s, const sh::Vec3f& boom, double t, FxFrame& out);
 // A wound where a round struck `at` (map units; `p` the same in the world) on the body nearest
-// it, along the line from `from` (world_fx.cpp); a blow `cut` through it wounds it again where
+// it, along the line from `from`; a blow `cut` through it wounds it again where
 // the line comes out, into `exit_at` (world, m), and says so.
 bool wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, const double p[3],
            const ge::camera::Vec3& from, int drops, double t, const WoundCut& cut = {},
            double exit_at[3] = nullptr);
 // The blood on every wounded body's skin this frame (ce_blood) into `out.bloodied`, the drops its
-// fresh wounds let fall, and the prints of the bodies that stepped in wet blood (world_fx.cpp).
+// fresh wounds let fall, and the prints of the bodies that stepped in wet blood.
 void body_blood(const FxScene& l, FxState& s, double t, double dt, FxFrame& out);
+// A body come back to life (a respawn) is whole: its wounds healed (world_fx_wounds.cpp, as the
+// two below and the three above).
+void heal_wounds(const FxScene& sc, FxState& s);
+// Every wound of a body drawn this frame on its skin as it stands (ce_decals) into `out`.
+void draw_wounds(FxState& s, const std::vector<Placed>& placed, const ge::camera::Vec3& eye,
+                 double t, double dt, effects::Particles& out);
+// Two unit ways square to `n` and to each other.
+void tangents(const double n[3], double a[3], double b[3]);
 // A drop let go at `at` (world m): thrown, and its mark on the floor when it gets there
 // (world_fx_blood.cpp, as the rest below).
 void let_drop(FxState& s, const double at[3], double t, FxFrame& out);
