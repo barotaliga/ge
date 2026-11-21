@@ -1527,7 +1527,8 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooter::BotView& s, int slot,
   // Or one an enemy comes by, a rocket ready (spam.hpp).
   if (f.features[sh::Feature::spam]) spam_news_look(f, s, me, st, t);
   if (!dead) lob_look(f, s, me, st, t);  // (`earlob`) a throw round a corner
-  foes_seen(f, t);                       // (`ledgerforget`) the enemies in sight noted
+  if (!dead && f.features[sh::Feature::pokelook]) button_poke_look(f, s, me, t);
+  foes_seen(f, t);  // (`ledgerforget`) the enemies in sight noted
   // The weapon's rhythm as its holder knows it: a shot is its ammunition going down, the next
   // ready the weapon's refire after it; the hand times its stroke to that (bot.hpp THE MOUSE
   // HAND), and only the arc's beam is traced.
