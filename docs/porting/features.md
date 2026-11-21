@@ -48,7 +48,7 @@ one game had and another did not is on in its own game and off in the others
 | --- | --- | --- | --- | --- |
 | Place names (`loc_dist`) | `plugins/classic/locs.hpp`, `client/place_names.hpp` | its loc files, else named off its items | both | the game row's reach |
 | Team chat's codes and canned lines (`%w`, `%b`, `tp_name_*`, `f_` triggers) | `client/team_chat.hpp`, `team_point.hpp` | its weapon names by its keys | both | on |
-| What team messages mean, for bots and people | `plugins/shooter/team_talk.hpp` | its wording (`say_text`, `parse_say`) | both | on |
+| What team messages mean, for bots and people | `plugins/shooterbots/team_talk.hpp` | its wording (`say_text`, `parse_say`) | both | on |
 | Chat ignore lists | `engine/console/chat_ignore.hpp`, `client/chat_ignore.hpp` | its chat lines, hooked into its remote path | both | empty |
 | Voice chat and `say_near` (`sv_voip`) | `engine/net/voice.hpp`, `net/qw_talk.hpp` | its protocol ids, what a team is | both on our servers | off |
 

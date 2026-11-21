@@ -349,7 +349,7 @@ const gl::LabSpec kSpec{
         {"span", "1024", "the window across, units (a pixel a unit)"},
         {"at", "", "the window's centre, x,y units (empty: the path's middle)"},
         {"every", "0.25", "the arrows every this many seconds"},
-        {"features", "", "the bots' features over each skill's preset (shooter/features.hpp)"},
+        {"features", "", "the bots' features over each skill's preset (shooterbots/features.hpp)"},
     },
     "--from=2 --seconds=8 --span=768",
     run,

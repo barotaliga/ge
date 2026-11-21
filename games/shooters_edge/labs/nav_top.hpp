@@ -8,7 +8,7 @@
 // ge:keywords lab nav top-view floor height-shade point-hull view margin clip-top roof cut-away
 // ge:keywords floor_below see-under-the-roof
 // ge:skill shooter labs
-// ge:test tests/shooter_nav_test.cpp
+// ge:test tests/shooterbots_nav_test.cpp
 #pragma once
 
 #include <algorithm>

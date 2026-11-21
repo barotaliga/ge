@@ -12,8 +12,10 @@
 #include "ai/keys.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
-#include "shooter/traits.hpp"
 #include "shooter/usercmd.hpp"
+#include "shooterbots/traits.hpp"
+
+namespace sb = ge::shooterbots;
 
 namespace shooters_edge::bots {
 
@@ -50,7 +52,7 @@ constexpr float kBrinkRunMin = 60;
 
 uint32_t bit(int a) { return 1u << static_cast<uint32_t>(a); }
 
-ai::KeyLayout layout_of(sh::AimSkill tier) {
+ai::KeyLayout layout_of(sb::AimSkill tier) {
   ai::KeyLayout l;
   l.bind[kFwd] = ai::Key::w;
   l.bind[kBack] = ai::Key::s;
@@ -61,13 +63,13 @@ ai::KeyLayout layout_of(sh::AimSkill tier) {
   constexpr ai::Key kRow[8] = {ai::Key::n1, ai::Key::n2, ai::Key::n3, ai::Key::n4,
                                ai::Key::n5, ai::Key::n6, ai::Key::n7, ai::Key::n8};
   for (size_t w = 0; w < 8; w++) l.bind[kWeapon1 + w] = kRow[w];
-  if (tier == sh::AimSkill::novice) return l;
+  if (tier == sb::AimSkill::novice) return l;
   // The nailguns, the launchers and the arc on the keys round the hand: 5 F, 6 R, 7 Q, 8 E.
   l.bind[kWeapon1 + 4] = ai::Key::f;
   l.bind[kWeapon1 + 5] = ai::Key::r;
   l.bind[kWeapon1 + 6] = ai::Key::q;
   l.bind[kWeapon1 + 7] = ai::Key::e;
-  if (tier == sh::AimSkill::average) return l;
+  if (tier == sb::AimSkill::average) return l;
   l.bind[kJump] = ai::Key::mouse2;
   l.bind[kWeapon1 + 2] = ai::Key::space;
   return l;
@@ -75,14 +77,14 @@ ai::KeyLayout layout_of(sh::AimSkill tier) {
 
 ai::KeyTiming timing_of(double moves) {
   ai::KeyTiming t;
-  t.press_lo = sh::scale(moves, {0.025, 0.015, 0.01, 0.008});
-  t.press_hi = sh::scale(moves, {0.07, 0.045, 0.03, 0.025});
-  t.release_lo = sh::scale(moves, {0.02, 0.012, 0.01, 0.008});
-  t.release_hi = sh::scale(moves, {0.06, 0.04, 0.03, 0.025});
-  t.long_p = sh::scale(moves, {0.05, 0.03, 0.02, 0.015});
-  t.travel_s = sh::scale(moves, {0.08, 0.06, 0.05, 0.045});
-  t.tap_s = sh::scale(moves, {0.09, 0.07, 0.06, 0.055});
-  t.shift_s = sh::scale(moves, {0.25, 0.18, 0.15, 0.13});
+  t.press_lo = sb::scale(moves, {0.025, 0.015, 0.01, 0.008});
+  t.press_hi = sb::scale(moves, {0.07, 0.045, 0.03, 0.025});
+  t.release_lo = sb::scale(moves, {0.02, 0.012, 0.01, 0.008});
+  t.release_hi = sb::scale(moves, {0.06, 0.04, 0.03, 0.025});
+  t.long_p = sb::scale(moves, {0.05, 0.03, 0.02, 0.015});
+  t.travel_s = sb::scale(moves, {0.08, 0.06, 0.05, 0.045});
+  t.tap_s = sb::scale(moves, {0.09, 0.07, 0.06, 0.055});
+  t.shift_s = sb::scale(moves, {0.25, 0.18, 0.15, 0.13});
   return t;
 }
 
@@ -97,14 +99,14 @@ double wrap(double deg) {
 // answered with the keys against the run (the set nearest its back).
 uint32_t keys_off_brink(const KeysNear& n, const sh::MoveCmd& cmd, sh::Vec3f velocity,
                         uint32_t want) {
-  if (n.world == nullptr || n.g == nullptr || !sh::nav_harm_near(*n.g, n.origin, kBrinkNear))
+  if (n.world == nullptr || n.g == nullptr || !sb::nav_harm_near(*n.g, n.origin, kBrinkNear))
     return want;
   const double yaw = cmd.angles.y * (ge::core::kPi / 180.0);
   const float fx = static_cast<float>(ge::core::libm::cos(yaw)),
               fy = static_cast<float>(ge::core::libm::sin(yaw));
   const sh::Vec3f o = n.origin;
   const auto falls = [&](float dx, float dy, float d) {
-    return sh::nav_falls_in_harm(*n.world, o, {o.x + dx * d, o.y + dy * d, o.z});
+    return sb::nav_falls_in_harm(*n.world, o, {o.x + dx * d, o.y + dy * d, o.z});
   };
   // Each key's step: forward along the view, right a quarter turn clockwise of it.
   const struct {
@@ -137,7 +139,7 @@ uint32_t keys_off_brink(const KeysNear& n, const sh::MoveCmd& cmd, sh::Vec3f vel
 
 void key_hand_init(KeyHand& k, uint8_t moves, uint32_t seed) {
   k.board =
-      ai::Keyboard(layout_of(sh::tier_of(moves)), timing_of(moves), seed * 2654435789u + 4242u);
+      ai::Keyboard(layout_of(sb::tier_of(moves)), timing_of(moves), seed * 2654435789u + 4242u);
   k.set = -1;
 }
 
@@ -147,17 +149,17 @@ void fighter_keyboard_init(Fighter& f, uint8_t moves, uint32_t seed) {
 
 void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool onground, bool brinked,
                       sh::Vec3f origin) {
-  const sh::Pilot& p = f.bot.pilot.pilot;
-  int8_t curve = sh::kNoCurveKeys;
+  const sb::Pilot& p = f.bot.pilot.pilot;
+  int8_t curve = sb::kNoCurveKeys;
   // The pilot's curve, while the command is still the pilot's: a hop's (no aim takes the view in
   // one), its view the pilot's heading followed within a hand's lag, the brink guard not in it.
-  if (p.curve_keys != sh::kNoCurveKeys && p.mode == sh::PilotMode::hop && !brinked &&
+  if (p.curve_keys != sb::kNoCurveKeys && p.mode == sb::PilotMode::hop && !brinked &&
       std::fabs(wrap(static_cast<double>(cmd.angles.y) - p.yaw)) < kCurveView)
     curve = p.curve_keys;
   // (`walkmash`) A walk's mashed strafe key, with W, while the view lies along the run: whatever
   // writes the view (a look, an aim), W and a side key speed only a run the view follows.
   const double run = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-  if (p.curve_keys != sh::kNoCurveKeys && p.set.walk_mash && p.mode == sh::PilotMode::walk &&
+  if (p.curve_keys != sb::kNoCurveKeys && p.set.walk_mash && p.mode == sb::PilotMode::walk &&
       !brinked && onground && run > kMashFrom &&
       std::fabs(wrap(static_cast<double>(cmd.angles.y) -
                      ge::core::libm::atan2(velocity.y, velocity.x) * (180 / ge::core::kPi))) <
@@ -167,7 +169,7 @@ void fighter_keyboard(Fighter& f, sh::MoveCmd& cmd, sh::Vec3f velocity, bool ong
   press_keys(f.keys, f.features, cmd, velocity, onground, curve, &near);
 }
 
-void press_keys(KeyHand& keys, const sh::Features& features, sh::MoveCmd& cmd, sh::Vec3f velocity,
+void press_keys(KeyHand& keys, const sb::Features& features, sh::MoveCmd& cmd, sh::Vec3f velocity,
                 bool onground, int8_t curve, const KeysNear* near) {
   // The wish's key set: 0 forward, clockwise by 45 degrees (side positive is right).
   const double fw = cmd.forward, sd = cmd.side;
@@ -175,14 +177,14 @@ void press_keys(KeyHand& keys, const sh::Features& features, sh::MoveCmd& cmd, s
   keys.wish_side = cmd.side;
   const double m = std::sqrt(fw * fw + sd * sd) / 320.0;
   int set = -1;
-  const bool held_curve = features[sh::Feature::curvekeys] && curve != sh::kNoCurveKeys;
+  const bool held_curve = features[sb::Feature::curvekeys] && curve != sb::kNoCurveKeys;
   if (held_curve) {
     set = curve > 0 ? 1 : curve < 0 ? 7 : 0;  // W+D, W+A, W
     keys.steer = 0;
   } else if (m >= (onground ? kCreep : kPressMin)) {
     double ang = ge::core::libm::atan2(sd, fw) * (180.0 / ge::core::kPi);
     if (ang < 0) ang += 360;
-    if (features[sh::Feature::keysteer]) {
+    if (features[sb::Feature::keysteer]) {
       // STEERED BY TAPS: the two sets either side of the wish, the further one tapped in for its
       // share of the time (a tally of the way wished less the way pressed: past `kSteer` the other
       // set), so the way pressed over a few taps is the wish's, as a person nudges W with D.
@@ -216,7 +218,7 @@ void press_keys(KeyHand& keys, const sh::Features& features, sh::MoveCmd& cmd, s
     // it) the speed along it stays low while the body runs on, past the point it slows into.
     const double flat = std::sqrt(static_cast<double>(velocity.x) * velocity.x +
                                   static_cast<double>(velocity.y) * velocity.y);
-    if (features[sh::Feature::counter]) {
+    if (features[sb::Feature::counter]) {
       // COUNTERED: the keys toward the velocity wished while the body is off it by `kCounterOn`,
       // let go within `kCounterOff`: under the speed along the wish, the set along it; sliding
       // across it, the set back against the slide, as a person taps the keys against a slide to
@@ -251,7 +253,7 @@ void press_keys(KeyHand& keys, const sh::Features& features, sh::MoveCmd& cmd, s
   if (set >= 1 && set <= 3) want |= bit(kRight);
   if (set >= 3 && set <= 5) want |= bit(kBack);
   if (set >= 5 && set <= 7) want |= bit(kLeft);
-  if (near != nullptr && features[sh::Feature::brinkkeys])
+  if (near != nullptr && features[sb::Feature::brinkkeys])
     want = keys_off_brink(*near, cmd, velocity, want);
   // A JUMP ASKED FOR is pressed (`jumpkey`): wanted until its key goes down (`kJumpLatch_s` at
   // most), not only on the commands that ask (a pilot lets go between two asks, and a press
@@ -259,7 +261,7 @@ void press_keys(KeyHand& keys, const sh::Features& features, sh::MoveCmd& cmd, s
   keys.clock += cmd.msec / 1000.0;
   const bool jump_asked = (cmd.buttons & sh::kButtonJump) != 0;
   if (jump_asked) keys.jump_until = keys.clock + kJumpLatch_s;
-  if (jump_asked || (features[sh::Feature::jumpkey] && keys.clock < keys.jump_until))
+  if (jump_asked || (features[sb::Feature::jumpkey] && keys.clock < keys.jump_until))
     want |= bit(kJump);
   uint32_t tap = 0;
   if (cmd.impulse >= 1 && cmd.impulse <= 8) tap = bit(kWeapon1 + cmd.impulse - 1);

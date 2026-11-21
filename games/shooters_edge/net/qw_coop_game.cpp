@@ -25,6 +25,7 @@ namespace {
 namespace gs = ge::server;
 namespace cl = shooters_edge::client;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
 
 // A companion's move length: the campaign's frame, ms.
@@ -126,7 +127,7 @@ std::unique_ptr<CoopGame> coop_open(const gs::ServerConfig& c, std::string& erro
   if (g->map && g->map->from_file) sv::use_map_sets(*g->campaign.server, g->map->bsp);
   g->party.seed = c.seed;
   for (int i = 0; i < g->bots; i++)
-    if (cl::party_add(g->party, g->campaign, g->campaign.map, sh::AimSkill::average, error) < 0)
+    if (cl::party_add(g->party, g->campaign, g->campaign.map, sb::AimSkill::average, error) < 0)
       return nullptr;
   return g;
 }

@@ -14,8 +14,8 @@
 
 #include "progs/entity_text.hpp"
 #include "shooter/map_spec.hpp"
-#include "shooter/nav_script.hpp"
 #include "shooter/world.hpp"
+#include "shooterbots/nav_script.hpp"
 #include "shooters_edge/bots/gap_tricks.hpp"
 #include "shooters_edge/bots/item_routes.hpp"
 #include "shooters_edge/bots/rocket_tricks.hpp"
@@ -25,6 +25,8 @@ namespace shooters_edge::bots {
 namespace {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace pg = ge::progs;
 
 constexpr float kOwnDrop = 24;  // a bridge's own node: no floor of the map's within this under it
@@ -96,7 +98,7 @@ bool start_open(const pg::EntityBlock& b) {
 }
 
 // The edict the mod made of inline model `model`, or -1.
-int edict_of(const ge::shooter::BotView& s, const char* model) {
+int edict_of(const ge::shooterbots::BotView& s, const char* model) {
   for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
     if (d.free || d.modelindex <= 0 || static_cast<size_t>(d.modelindex) >= s.models.size())
@@ -112,7 +114,7 @@ struct AbsBox {
   sh::Vec3f min, max;
 };
 
-AbsBox abs_box(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec, int e,
+AbsBox abs_box(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec, int e,
                const char* model) {
   const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
   if (d.absmax.x > d.absmin.x || d.absmax.y > d.absmin.y || d.absmax.z > d.absmin.z || !model ||
@@ -134,7 +136,8 @@ bool plate(const ModelBox& bm) {
 // The doors (not starting open) whose chain a name or a shot moves: a door with no name of its own
 // moves with every door its box touches (unless one of them keeps apart, spawnflags 4), and the
 // chain opens only by its name when any door in it has one. Edicts, by edict number.
-std::vector<uint8_t> named_doors(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
+std::vector<uint8_t> named_doors(const ge::shooterbots::BotView& s,
+                                 const ge::shooter::MapSpec& spec,
                                  const std::vector<pg::EntityBlock>& blocks) {
   struct D {
     int e;
@@ -183,7 +186,7 @@ bool floor_door(const pg::EntityBlock& b, const ModelBox& bm, const std::vector<
          static_cast<size_t>(e) < named.size() && named[static_cast<size_t>(e)];
 }
 
-void open_doors_as_floor(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
+void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
                          ge::brush::BrushTracer* tracer, const std::vector<pg::EntityBlock>& blocks,
                          sh::MoveWorld& world, std::vector<NavBridge>& bridges) {
   const std::vector<uint8_t> named = named_doors(s, spec, blocks);
@@ -257,10 +260,11 @@ void open_doors_as_floor(const ge::shooter::BotView& s, const ge::shooter::MapSp
 
 sh::Vec3f origin_of(const char* org);  // below
 
-std::vector<sh::NavMover> movers_of(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
+std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
+                                    const ge::shooter::MapSpec& spec,
                                     ge::brush::BrushTracer* tracer,
                                     const std::vector<pg::EntityBlock>& blocks) {
-  std::vector<sh::NavMover> out;
+  std::vector<sb::NavMover> out;
   const std::vector<uint8_t> named = named_doors(s, spec, blocks);
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
@@ -277,7 +281,7 @@ std::vector<sh::NavMover> movers_of(const ge::shooter::BotView& s, const ge::sho
     const ModelBox bm = model_box(spec, m);
     if (door && floor_door(b, bm, named, ent)) continue;  // too
     if (ent < 0) continue;
-    sh::NavMover mv;
+    sb::NavMover mv;
     mv.ent = ent;
     const AbsBox ab = abs_box(s, spec, ent, model);
     mv.absmin = ab.min;
@@ -369,10 +373,10 @@ bool teleport_dest(const std::vector<pg::EntityBlock>& blocks, const char* targe
   return false;
 }
 
-std::vector<sh::NavExtraLink> teleport_links(const sh::NavGraph& g,
+std::vector<sb::NavExtraLink> teleport_links(const sb::NavGraph& g,
                                              const ge::shooter::MapSpec& spec,
                                              const std::vector<pg::EntityBlock>& blocks) {
-  std::vector<sh::NavExtraLink> out;
+  std::vector<sb::NavExtraLink> out;
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
     const char* target = pg::block_value(b, "target");
@@ -396,14 +400,14 @@ std::vector<sh::NavExtraLink> teleport_links(const sh::NavGraph& g,
     }
     sh::Vec3f dest;
     if (!teleport_dest(blocks, target, dest)) continue;
-    const int32_t to = sh::nav_nearest(g, dest);
+    const int32_t to = sb::nav_nearest(g, dest);
     if (to < 0) continue;
     for (size_t a = 0; a < g.nodes.size(); a++) {
       const sh::Vec3f o = g.nodes[a].origin;
       if (o.x + 16 < box.mins.x || o.x - 16 > box.maxs.x || o.y + 16 < box.mins.y ||
           o.y - 16 > box.maxs.y || o.z + 32 < box.mins.z || o.z - 24 > box.maxs.z)
         continue;
-      sh::NavExtraLink e{static_cast<int32_t>(a), to, sh::NavKind::walk, 0.1f};
+      sb::NavExtraLink e{static_cast<int32_t>(a), to, sb::NavKind::walk, 0.1f};
       e.teleport = true;
       out.push_back(e);
     }
@@ -430,15 +434,15 @@ std::vector<pg::EntityBlock> entity_blocks(const ge::shooter::MapSpec& spec) {
 
 }  // namespace
 
-std::vector<sh::NavMover> map_movers(const ge::shooter::BotView& s,
+std::vector<sb::NavMover> map_movers(const ge::shooterbots::BotView& s,
                                      const ge::shooter::MapSpec& spec,
                                      ge::brush::BrushTracer* tracer) {
   return movers_of(s, spec, tracer, entity_blocks(spec));
 }
 
-bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
+bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
                    const char* start_class, MapNav& out, std::string& error,
-                   const sh::NavSettings& set) {
+                   const sb::NavSettings& set) {
   if (model_count(spec) == 0) {
     error = "the map " + spec.name + " has no world for bots to walk on";
     return false;
@@ -453,14 +457,14 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
     out.world.count = 1;
     out.world.solids[0] = sh::brushes_solid(*out.tracer, 0, {}, world.mins, world.maxs);
   } else {
-    sh::map_world(spec.models[0], out.world);
+    sb::map_world(spec.models[0], out.world);
   }
   out.bridges.clear();
   open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
-  sh::build_nav(out.world, out.movers, out.move, set, out.graph);
-  const std::vector<sh::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
-  sh::nav_add_links(out.graph, teleports);
+  sb::build_nav(out.world, out.movers, out.move, set, out.graph);
+  const std::vector<sb::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
+  sb::nav_add_links(out.graph, teleports);
   for (NavBridge& br : out.bridges) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(br.ent)];
     const int mi = d.modelindex;
@@ -499,33 +503,33 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
       base = base.substr(slash + 1);
     if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
     out.scripts_made.clear();
-    std::vector<sh::NavExtraLink> scripted;
+    std::vector<sb::NavExtraLink> scripted;
     for (const ItemRoute& r : item_routes(base)) {
       MapNav::ScriptMade made;
       made.name = r.name;
       if (r.n < 2) continue;
       const ItemRouteStep& first = r.steps[0];
       const ItemRouteStep& last = r.steps[r.n - 1];
-      made.from = sh::nav_nearest(out.graph, {first.x, first.y, first.z + 24});
-      made.to = sh::nav_nearest(out.graph, {last.x, last.y, last.z + 24});
+      made.from = sb::nav_nearest(out.graph, {first.x, first.y, first.z + 24});
+      made.to = sb::nav_nearest(out.graph, {last.x, last.y, last.z + 24});
       if (made.from >= 0 && made.to >= 0 && made.from != made.to) {
-        sh::NavScript sc;
+        sb::NavScript sc;
         for (size_t k = 0; k < r.n; k++)
           sc.steps.push_back({{r.steps[k].x, r.steps[k].y, r.steps[k].z + 24}, r.steps[k].hop});
         sc.steps.back().at = out.graph.nodes[static_cast<size_t>(made.to)].origin;
-        const sh::NavProof pr = sh::prove_script(
+        const sb::NavProof pr = sb::prove_script(
             out.world, out.move, out.graph.nodes[static_cast<size_t>(made.from)].origin, sc,
             out.graph.set);
         if (pr.reached) {
           made.held = true;
           made.time_s = pr.time_s;
-          for (const sh::NavMover& m : out.movers)
+          for (const sb::NavMover& m : out.movers)
             if (pr.lo.x <= m.absmax.x && pr.lo.y <= m.absmax.y && pr.lo.z <= m.absmax.z &&
                 m.absmin.x <= pr.hi.x && m.absmin.y <= pr.hi.y && m.absmin.z <= pr.hi.z) {
               made.mover = m.ent;
               break;
             }
-          sh::NavExtraLink e{made.from, made.to, sh::NavKind::script, pr.time_s};
+          sb::NavExtraLink e{made.from, made.to, sb::NavKind::script, pr.time_s};
           e.mover = made.mover;
           e.script = static_cast<int32_t>(out.graph.scripts.size());
           out.graph.scripts.push_back(std::move(sc));
@@ -534,13 +538,13 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
       }
       out.scripts_made.push_back(made);
     }
-    sh::nav_add_links(out.graph, scripted);
+    sb::nav_add_links(out.graph, scripted);
   }
   // LAVA AND SLIME: a floor node standing in either (a shallow pool at the feet too: it burns
   // there as well) harms whoever goes there; no way leads into one (the links out are kept: a
   // player knocked in walks out).
   {
-    sh::NavGraph& g = out.graph;
+    sb::NavGraph& g = out.graph;
     out.harm.assign(g.nodes.size(), 0);
     for (size_t n = 0; n < g.nodes.size(); n++) {
       const sh::Vec3f o = g.nodes[n].origin;
@@ -554,20 +558,20 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
     for (const NavBridge& br : out.bridges)
       if (br.touch)
         for (const int32_t n : br.nodes) out.harm[static_cast<size_t>(n)] = 1;
-    out.harm_links = sh::nav_close_entries(g, out.harm);
+    out.harm_links = sb::nav_close_entries(g, out.harm);
   }
-  // Water: part of the graph (shooter/swim.hpp `nav_add_swim`): its cells are swim nodes, a pool's
-  // floor joined to the water over it, a dry edge to the water under it by the climb out the
+  // Water: part of the graph (shooterbots/swim.hpp `nav_add_swim`): its cells are swim nodes, a
+  // pool's floor joined to the water over it, a dry edge to the water under it by the climb out the
   // move proves. One route search goes through it as through any room.
-  sh::NavGraph& graph = out.graph;
+  sb::NavGraph& graph = out.graph;
   out.wet.assign(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++) {
     const sh::Vec3f o = graph.nodes[n].origin;
     out.wet[n] = sh::water_contents(out.world, {o.x, o.y, o.z - 10}) == sh::kContentsWater ? 1 : 0;
   }
-  sh::SwimNavSettings swim_set;
+  sb::SwimNavSettings swim_set;
   swim_set.move = out.move;  // climbs out proven on the game's own water jump
-  out.swim_nav = sh::nav_add_swim(out.world, graph, out.wet, swim_set);
+  out.swim_nav = sb::nav_add_swim(out.world, graph, out.wet, swim_set);
   out.wet.resize(graph.nodes.size(), 1);   // every swim node is wet
   out.harm.resize(graph.nodes.size(), 0);  // and none harms
   // The map's main part: the most a start spot reaches.
@@ -578,7 +582,7 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
       const char* cn = pg::block_value(b, "classname");
       const char* org = pg::block_value(b, "origin");
       if (!cn || !org || std::strcmp(cn, start_class) != 0) continue;
-      const int32_t k = sh::nav_reach(graph, sh::nav_nearest(graph, origin_of(org)), sr);
+      const int32_t k = sb::nav_reach(graph, sb::nav_nearest(graph, origin_of(org)), sr);
       if (k > out.main_n) {
         out.main_n = k;
         std::swap(out.main, sr);
@@ -587,7 +591,7 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
   };
   find_main();
   // The pockets it does not reach, and those that reach none of it back, bridged by the links the
-  // build never tries (shooter/nav.hpp `nav_bridge_pockets`); the main part found again.
+  // build never tries (shooterbots/nav.hpp `nav_bridge_pockets`); the main part found again.
   if (out.main_n > 0) {
     std::vector<uint8_t> main(graph.nodes.size());
     for (size_t n = 0; n < main.size(); n++)
@@ -600,13 +604,13 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
       if (!cn || !org || (std::strncmp(cn, "item_", 5) != 0 && std::strncmp(cn, "weapon_", 7) != 0))
         continue;
       const sh::Vec3f at = origin_of(org);
-      const int32_t n = sh::nav_nearest(graph, {at.x, at.y, at.z + 24});
+      const int32_t n = sb::nav_nearest(graph, {at.x, at.y, at.z + 24});
       if (n >= 0) wanted[static_cast<size_t>(n)] = 1;
     }
-    sh::NavBridgeSettings bs;
+    sb::NavBridgeSettings bs;
     bs.wanted = wanted;
     bs.avoid = out.harm;
-    out.bridges_made = sh::nav_bridge_pockets(out.world, out.move, graph, main, bs);
+    out.bridges_made = sb::nav_bridge_pockets(out.world, out.move, graph, main, bs);
     find_main();
   }
   // The map's tricks: rocket links people's jumps prove, landing where a way back on foot leads
@@ -616,32 +620,32 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
     if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
       base = base.substr(slash + 1);
     if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
-    const std::vector<sh::NavTrick> tricks = nav_tricks(rocket_tricks(base));
+    const std::vector<sb::NavTrick> tricks = nav_tricks(rocket_tricks(base));
     if (!tricks.empty() && out.main_n > 0) {
       std::vector<uint8_t> main(graph.nodes.size());
       for (size_t n = 0; n < main.size(); n++)
         main[n] = out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
-      std::vector<uint8_t> back = sh::nav_back(graph, main);
+      std::vector<uint8_t> back = sb::nav_back(graph, main);
       for (size_t n = 0; n < back.size(); n++) back[n] = back[n] && !out.harm[n] ? 1 : 0;
       // The tricks as rocket jumps and as grenade jumps; then a grenade jump for each rocket
       // jump the pockets were bridged by (the way into a pocket for a player with no launcher).
-      std::vector<sh::NavTrick> bridged;
-      for (const sh::NavNode& n : graph.nodes)
+      std::vector<sb::NavTrick> bridged;
+      for (const sb::NavNode& n : graph.nodes)
         for (int32_t k = 0; k < n.links; k++) {
-          const sh::NavLink& l =
+          const sb::NavLink& l =
               graph.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
-          if (l.kind != sh::NavKind::rocket) continue;
-          sh::NavTrick t;
+          if (l.kind != sb::NavKind::rocket) continue;
+          sb::NavTrick t;
           t.from = n.origin;
           t.to = graph.nodes[static_cast<size_t>(l.to)].origin;
           bridged.push_back(t);
         }
-      sh::NavTrickSettings ts;
+      sb::NavTrickSettings ts;
       ts.grenades = true;
-      out.tricks_made = sh::nav_add_tricks(out.world, out.move, graph, tricks, back, ts);
+      out.tricks_made = sb::nav_add_tricks(out.world, out.move, graph, tricks, back, ts);
       ts.rockets = false;
       ts.near = 8;  // from the bridge's own takeoff
-      out.bridged_grenades = sh::nav_add_tricks(out.world, out.move, graph, bridged, back, ts);
+      out.bridged_grenades = sb::nav_add_tricks(out.world, out.move, graph, bridged, back, ts);
     }
   }
   // The traps: nodes no way on foot leads back from to the main part's core (a room a rocket jump
@@ -653,7 +657,7 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
     const bool found = out.main.nodes() == graph.nodes.size();
     for (size_t n = 0; n < main.size(); n++)
       main[n] = found && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
-    const std::vector<uint8_t> back = sh::nav_back(graph, sh::nav_core(graph, main));
+    const std::vector<uint8_t> back = sb::nav_back(graph, sb::nav_core(graph, main));
     out.trap.assign(graph.nodes.size(), 0);
     for (size_t n = 0; n < back.size() && found; n++) out.trap[n] = back[n] && !out.harm[n] ? 0 : 1;
   }
@@ -667,7 +671,7 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
     for (size_t n = 0; n < risk.size(); n++)
       risk[n] =
           (n < out.harm.size() && out.harm[n]) || (n < out.trap.size() && out.trap[n]) ? 1 : 0;
-    out.hardened = sh::nav_harden_jumps(out.world, out.move, graph, risk);
+    out.hardened = sb::nav_harden_jumps(out.world, out.move, graph, risk);
   }
   // THE GAP TRICKS (gap_tricks.hpp): people's speed jumps over a pit as jump links at a hopper's
   // speed, landing where a way back on foot leads to the main part; after the hardening, which
@@ -677,7 +681,7 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
     if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
       base = base.substr(slash + 1);
     if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
-    const std::vector<sh::NavGapTrick> gaps = nav_gap_tricks(gap_tricks(base));
+    const std::vector<sb::NavGapTrick> gaps = nav_gap_tricks(gap_tricks(base));
     if (!gaps.empty() && out.main_n > 0) {
       std::vector<uint8_t> back(graph.nodes.size());
       for (size_t n = 0; n < back.size(); n++)
@@ -685,12 +689,13 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
             out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] && !out.harm[n] && !out.trap[n]
                 ? 1
                 : 0;
-      out.gaps_made = sh::nav_add_gap_tricks(out.world, out.move, graph, gaps, back);
+      out.gaps_made = sb::nav_add_gap_tricks(out.world, out.move, graph, gaps, back);
     }
   }
-  // OUT OF A PIT BY ROCKET (shooter/escape.hpp): from every liquid at least waist deep, a rocket
-  // fired down at the surface throws a swimmer backed against the wall onto the ledge behind him
-  // (dm2's lava under the red armour has no other way out); landing on the main part's dry floor.
+  // OUT OF A PIT BY ROCKET (shooterbots/escape.hpp): from every liquid at least waist deep, a
+  // rocket fired down at the surface throws a swimmer backed against the wall onto the ledge behind
+  // him (dm2's lava under the red armour has no other way out); landing on the main part's dry
+  // floor.
   {
     std::vector<uint8_t> land(graph.nodes.size(), 0);
     for (size_t n = 0; n < land.size(); n++)
@@ -702,18 +707,18 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
     for (const NavBridge& br : out.bridges)
       for (const int32_t n : br.nodes)
         if (n >= 0 && static_cast<size_t>(n) < land.size()) land[static_cast<size_t>(n)] = 0;
-    out.escapes_made = sh::nav_add_escapes(out.world, out.move, graph, land);
+    out.escapes_made = sb::nav_add_escapes(out.world, out.move, graph, land);
   }
   std::vector<uint8_t> exits(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++)
     exits[n] = out.main_n > 0 && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
-  sh::SwimSettings field_set;
+  sb::SwimSettings field_set;
   field_set.move = out.move;
-  sh::build_swim(out.world, graph, exits, field_set, out.swim);
-  // THE BRINK (shooter/brink.hpp): the harm kept on the graph, the walks along its lips marked.
-  out.brink_links = sh::nav_mark_harm(graph, out.harm);
-  out.side_brink_links = sh::nav_mark_side_harm(graph, out.world);
-  sh::nav_room(graph);  // the room either side a walker strays into (pilot.hpp's lane)
+  sb::build_swim(out.world, graph, exits, field_set, out.swim);
+  // THE BRINK (shooterbots/brink.hpp): the harm kept on the graph, the walks along its lips marked.
+  out.brink_links = sb::nav_mark_harm(graph, out.harm);
+  out.side_brink_links = sb::nav_mark_side_harm(graph, out.world);
+  sb::nav_room(graph);  // the room either side a walker strays into (pilot.hpp's lane)
   out.build_ms =
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
   if (graph.nodes.empty()) {

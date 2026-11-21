@@ -40,7 +40,7 @@ Dependencies run down only: shell → game module → plugins → engine.
 | Layer | Home | What it holds | Its settings |
 | --- | --- | --- | --- |
 | **Engine** | `engine/` | Any genre: the picture, sound, input, the window, files and packs (`vfs`), the network, the dedicated server and lobby, the console, saves, replays, mods, labs, `ge`. The sky, clouds, weather and wind. The live map's drawing (`engine/overview`; a game brings only an adapter, `docs/shooters-edge.md` § the checklist, step 13) | `r_`, `s_`, `vid_`, `in_`, `m_`, `net_`, `con_`, `scr_`, the sky's and weather's cvars |
-| **Shooter plugin** | `plugins/shooter/` (with the readers `plugins/brush`, `plugins/morph`, the VMs `plugins/progs`) | What every shooter shares: the move, the loop, the protocol family, the content layer (search path, open calls), weapons and projectiles as mechanisms, the HUD's parts, demos and recording, the scoreboard, match state, movers (doors, lifts, trains), bots, item roles | The move and loop (`sv_`, `pm_`, `plugins/shooter/settings.hpp`), the shared HUD, demo and view settings |
+| **Shooter plugin** | `plugins/shooter/` (with the readers `plugins/brush`, `plugins/morph`, the VMs `plugins/progs`) | What every shooter shares: the move, the loop, the protocol family, the content layer (search path, open calls), weapons and projectiles as mechanisms, the HUD's parts, demos and recording, the scoreboard, match state, movers (doors, lifts, trains), item roles; the bots any shooter links are `plugins/shooterbots` beside it | The move and loop (`sv_`, `pm_`, `plugins/shooter/settings.hpp`), the shared HUD, demo and view settings |
 | **Classic enhance** | `plugins/classicenhance/` | Better looks and sound for the player's own packs | One `ce_` switch per effect (`switches.hpp`); every effect can be turned off |
 | **Game module** | Each classic game's own files: its profile row, adapter, rules, poses, bar, demo and net files (Quake II's are the `q2_*` files under `games/shooters_edge/`) | That game's rules, items, weapons' numbers, monsters, file formats as the game reads them, protocol version, demo format, menus' art | Settings only that game has, registered by its module |
 | **Shell** | `games/shooters_edge/` | The menus, the game picker and pack loading, the server browser, remix | The shell's own (`hud_style`, the menus) |
@@ -158,13 +158,14 @@ turns out different, both stay each game's `own`.
 
 ## Bots: what is shared and what is each game's
 
-- **Shared:** what a team message means (`plugins/shooter/team_talk.hpp`: `SayKind`, `Strategy`,
-  `Said`), what a bot sees of a match (`bot_view.hpp`), the item tables' shape
+- **Shared:** the bots' plugin, `plugins/shooterbots` (the pilot, the nav, senses, aim, dodge,
+  temperament); what a team message means (`plugins/shooterbots/team_talk.hpp`: `SayKind`,
+  `Strategy`, `Said`), what a bot sees of a match (`bot_view.hpp`), the item tables' shape
   (`item_tables.hpp`), the rules' world, and the engine's `engine/ai`: the decision record, the
   keyboard and mouse hands, thinking on a schedule, sight, memory, choosing. The decision frame
   (goals as scored options, claims, giving up), a bot's memory and its model of the other players
-  are shared by the classic games' bots today and lift to the plugin when a game outside this
-  shell needs them unchanged.
+  are shared by the classic games' bots today and move to `plugins/shooterbots` next (M60e,
+  step 5 of the split the maintainer chose on 2026-11-20).
 - **Each game's:** movement (how it drives the hands: the hop, gap and blast-jump tricks, the
   footwork, swimming), item worths, map plans and routes, weapon choice, and how its team talk is
   worded and its places named (the say lines, the macros, the loc file). A game words the shared

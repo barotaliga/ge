@@ -30,6 +30,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace se = shooters_edge::server;
 namespace sim = shooters_edge::sim;
 using ge::core::num::to_fixed;
@@ -45,7 +46,7 @@ std::string hex64(uint64_t v) {
 // A stand-in whose commands holding attack are counted on the way through.
 struct Counted {
   se::StandIn bot;
-  sh::CmdSource inner;
+  sb::CmdSource inner;
   int attacks = 0;
 };
 

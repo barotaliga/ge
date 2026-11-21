@@ -1,7 +1,7 @@
 ---
 title: The hop's air turns only as fast as the hand strokes, and a want on the velocity never asks it to
 date: 2026-11-15
-scope: plugins/shooter/bot.cpp, plugins/shooter/pilot_recipes.cpp, plugins/shooter/pilot_hop.cpp, games/shooters_edge/bots/fighter_setup.cpp
+scope: plugins/shooterbots/bot.cpp, plugins/shooterbots/pilot_recipes.cpp, plugins/shooterbots/pilot_hop.cpp, games/shooters_edge/bots/fighter_setup.cpp
 concepts: [hop, airview, airturn, mouse, hand, tolerance, turn-rate, wall, starthead, startclear, trace, git]
 ---
 

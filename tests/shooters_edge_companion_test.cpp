@@ -19,12 +19,14 @@
 
 #include "check.hpp"
 #include "golden.hpp"
-#include "shooter/idle.hpp"
+#include "shooterbots/idle.hpp"
 #include "shooters_edge/bots/coop_episode.hpp"
 #include "shooters_edge/bots/coop_run.hpp"
 #include "shooters_edge_campaign_fixture.hpp"
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace fb = shooters_edge::bots;
 
 namespace {
@@ -154,8 +156,8 @@ TEST(the_companion_idles_like_a_person_while_he_waits) {
   if (!r.ok) return;
   const fb::CoopMate& m = r.mates[0];
   int kinds = 0;
-  for (int k = 1; k < sh::kIdleActs; k++) {
-    std::printf("  %s %lld\n", sh::idle_act_name(static_cast<sh::IdleAct>(k)),
+  for (int k = 1; k < sb::kIdleActs; k++) {
+    std::printf("  %s %lld\n", sb::idle_act_name(static_cast<sb::IdleAct>(k)),
                 static_cast<long long>(m.idle.acts[k]));
     kinds += m.idle.acts[k] > 0 ? 1 : 0;
   }

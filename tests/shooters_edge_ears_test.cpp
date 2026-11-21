@@ -9,6 +9,7 @@
 
 namespace bt = shooters_edge::bots;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 
 TEST(every_item_kind_is_heard_by_a_word_in_the_table) {
   const bt::ItemKind kinds[] = {bt::ItemKind::health, bt::ItemKind::mega,    bt::ItemKind::armor1,
@@ -21,9 +22,9 @@ TEST(every_item_kind_is_heard_by_a_word_in_the_table) {
     CHECK(w != nullptr);
     const std::string_view word = w != nullptr ? w->heard : std::string_view();
     bool found = false;
-    for (const sh::SoundMeaning& m : bt::sound_table(a))
+    for (const sb::SoundMeaning& m : bt::sound_table(a))
       found |=
-          m.word == word && (m.cls == sh::SoundClass::pickup || m.cls == sh::SoundClass::power);
+          m.word == word && (m.cls == sb::SoundClass::pickup || m.cls == sb::SoundClass::power);
     CHECK_MSG(found, std::string("no pickup sample is read as ") + std::string(word));
   }
 }
@@ -31,9 +32,9 @@ TEST(every_item_kind_is_heard_by_a_word_in_the_table) {
 TEST(the_spawn_and_the_key_pickups_are_unique) {
   for (const char* sample : {"items/armor1.wav", "items/r_item2.wav", "items/damage.wav",
                              "misc/r_tele1.wav", "weapons/pkup.wav"}) {
-    const sh::SoundMeaning* m = sh::sound_meaning(bt::sound_table(bt::first_arsenal()), sample);
+    const sb::SoundMeaning* m = sb::sound_meaning(bt::sound_table(bt::first_arsenal()), sample);
     CHECK_MSG(m && m->unique, sample);
   }
-  CHECK(sh::sound_meaning(bt::sound_table(bt::first_arsenal()), "weapons/rocket1i.wav")->cls ==
-        sh::SoundClass::fire);
+  CHECK(sb::sound_meaning(bt::sound_table(bt::first_arsenal()), "weapons/rocket1i.wav")->cls ==
+        sb::SoundClass::fire);
 }

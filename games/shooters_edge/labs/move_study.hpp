@@ -8,7 +8,7 @@
 // ge:keywords lab map-load bsp basedir fixture demo tracks players names frags move-world
 // ge:keywords is_recording ged replay-v2 recording-scan
 // ge:skill shooter labs
-// ge:test tests/shooter_hops_test.cpp
+// ge:test tests/shooterbots_hops_test.cpp
 #pragma once
 
 #include <array>
@@ -23,14 +23,16 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "shooter/bsp_world.hpp"
-#include "shooter/hops.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/hops.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 
 namespace shooters_edge::labs {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace cl = shooters_edge::client;
 
 // A file a folder's scan takes for a recording: a multiview recording (`.mvd`) or the replay file
@@ -90,7 +92,7 @@ inline bool load_study_map(const std::string& path, const std::string& basedir,
   }
   if (!ge::brush::read_bsp(bytes, &out.map, &error)) return false;
   if (!sh::bsp_world(out.map, &out.bsp, &error)) return false;
-  sh::map_world(out.bsp.models[0], *out.world);
+  sb::map_world(out.bsp.models[0], *out.world);
   return true;
 }
 
@@ -98,7 +100,7 @@ struct DemoTracks {
   std::string map;
   double seconds = 0;
   int64_t frames = 0;
-  std::array<std::vector<sh::TrackPoint>, 32> tracks;
+  std::array<std::vector<sb::TrackPoint>, 32> tracks;
   std::array<std::string, 32> names;
   std::array<std::string, 32> teams;  // "" none
   std::array<int32_t, 32> frags{};

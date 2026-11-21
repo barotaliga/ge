@@ -19,14 +19,16 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "progs/entity_text.hpp"
-#include "shooter/aim.hpp"
 #include "shooter/trace.hpp"
+#include "shooterbots/aim.hpp"
 
 namespace shooters_edge::bots {
 
 namespace {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace pg = ge::progs;
 
 constexpr double kPokeEvery_s = 12;  // a novice's whim comes this often
@@ -47,14 +49,14 @@ sh::Vec3f middle(const ge::shooter::WorldEntity& e) {
 }
 
 // The line from `eye` meets nothing before the button.
-bool sees(const ge::shooter::BotView& s, sh::Vec3f eye, const ButtonSpot& b) {
+bool sees(const ge::shooterbots::BotView& s, sh::Vec3f eye, const ButtonSpot& b) {
   const sh::HullTrace tr = sh::trace_move(s.sv, eye, {}, {}, b.at, sh::kTraceNoMonsters, -1);
   return tr.fraction >= 1 || tr.ent == b.ent;
 }
 
 // The node a button is pressed (or shot) from: the nearest within reach whose line meets the
 // button itself, so a node behind the wall the button is set in is never chosen.
-int32_t button_node(const sh::NavGraph& g, const ge::shooter::BotView& s, const ButtonSpot& b,
+int32_t button_node(const sb::NavGraph& g, const ge::shooterbots::BotView& s, const ButtonSpot& b,
                     float reach) {
   int32_t best = -1;
   float best_d = reach;
@@ -65,7 +67,7 @@ int32_t button_node(const sh::NavGraph& g, const ge::shooter::BotView& s, const 
     best = static_cast<int32_t>(n);
     best_d = d;
   }
-  return best >= 0 ? best : sh::nav_nearest(g, b.at);
+  return best >= 0 ? best : sb::nav_nearest(g, b.at);
 }
 
 // Within `r` of the box from `lo` to `hi`.
@@ -111,7 +113,7 @@ bool fired_nearer(const pg::EntityBlock& d, sh::Vec3f p, sh::Vec3f lo, sh::Vec3f
 
 // (`doorway`) The nodes the nav's links reach from `from`, leaving out every node and link that
 // crosses one of the movers `shut` (a button's doors, which open together).
-std::vector<uint8_t> reach_without(const sh::NavGraph& g, const std::vector<int32_t>& from,
+std::vector<uint8_t> reach_without(const sb::NavGraph& g, const std::vector<int32_t>& from,
                                    const std::vector<int>& shut) {
   const auto is_shut = [&](int32_t m) {
     for (int d : shut)
@@ -127,10 +129,10 @@ std::vector<uint8_t> reach_without(const sh::NavGraph& g, const std::vector<int3
       open.push_back(n);
     }
   while (!open.empty()) {
-    const sh::NavNode& a = g.nodes[static_cast<size_t>(open.back())];
+    const sb::NavNode& a = g.nodes[static_cast<size_t>(open.back())];
     open.pop_back();
     for (int32_t q = 0; q < a.links; q++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+      const sb::NavLink& l = g.links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
       const auto to = static_cast<size_t>(l.to);
       if (seen[to] || is_shut(l.mover) || is_shut(g.nodes[to].mover)) continue;
       seen[to] = 1;
@@ -166,11 +168,11 @@ std::vector<std::string> button_fires(const std::vector<pg::EntityBlock>& blocks
   return names;
 }
 
-std::vector<ge::shooter::NavErrand> field_errands(const Fighter& f, const sh::NavGraph& g,
-                                                  const ge::shooter::BotView& s) {
-  std::vector<ge::shooter::NavErrand> errands;
+std::vector<ge::shooterbots::NavErrand> field_errands(const Fighter& f, const sb::NavGraph& g,
+                                                      const ge::shooterbots::BotView& s) {
+  std::vector<ge::shooterbots::NavErrand> errands;
   for (const ButtonSpot& b : f.button_spots) {
-    ge::shooter::NavErrand e;
+    ge::shooterbots::NavErrand e;
     e.button = b.node;
     // A shot button from every node that sees it within kShotFrom, as a person shoots it from
     // wherever he stands.
@@ -190,7 +192,7 @@ std::vector<ge::shooter::NavErrand> field_errands(const Fighter& f, const sh::Na
   return errands;
 }
 
-void buttons_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s,
+void buttons_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotView& s,
                   const char* entities) {
   f.button_spots.clear();
   f.poke = -1;
@@ -209,7 +211,7 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
   // (`doorway`) What the spawns reach with every door open: an item reached so and not with a
   // door left shut is behind that door; one reached either way is not (dm2's red armour by the
   // gate a shot button far off opens: the bots ran to the button first on 63 % of their trips).
-  const bool doorway = f.features[sh::Feature::doorway];
+  const bool doorway = f.features[sb::Feature::doorway];
   std::vector<int32_t> spawns;
   std::vector<uint8_t> open_reach;
   if (doorway) {
@@ -219,7 +221,7 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
                   std::strcmp(cn, "info_player_start") != 0))
         continue;
       sh::Vec3f o;
-      if (parse_vec(pg::block_value(b, "origin"), o)) spawns.push_back(sh::nav_nearest(g, o));
+      if (parse_vec(pg::block_value(b, "origin"), o)) spawns.push_back(sb::nav_nearest(g, o));
     }
     open_reach = reach_without(g, spawns, {});
   }
@@ -316,7 +318,7 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView&
   }
 }
 
-void exits_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s,
+void exits_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotView& s,
                 const char* entities) {
   f.exits.clear();
   f.locked.clear();
@@ -377,7 +379,7 @@ void exits_init(Fighter& f, const sh::NavGraph& g, const ge::shooter::BotView& s
   }
 }
 
-bool button_poke(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
+bool button_poke(Fighter& f, const ge::shooterbots::BotView& s, int me, double t) {
   if (f.sense != MapSense::novice || f.button_spots.empty()) return false;
   if (f.poke >= 0 && t < f.poke_until) return true;
   f.poke = -1;
@@ -401,7 +403,7 @@ bool button_poke(Fighter& f, const ge::shooter::BotView& s, int me, double t) {
   return true;
 }
 
-void button_poke_cmd(Fighter& f, const ge::shooter::BotView& s, int me, double t,
+void button_poke_cmd(Fighter& f, const ge::shooterbots::BotView& s, int me, double t,
                      sh::MoveCmd& cmd) {
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
   const ButtonSpot& b = f.button_spots[static_cast<size_t>(f.poke)];
@@ -416,9 +418,9 @@ void button_poke_cmd(Fighter& f, const ge::shooter::BotView& s, int me, double t
   cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(d.z, flat) * (180.0 / ge::core::kPi));
   // The route's wish kept on its way under the view turned to the button (the hand reads a game's
   // view's wish as meant under that view: unturned, a hop's side key braked in the air).
-  sh::turn_axes(cmd.forward, cmd.side, was_yaw, cmd.angles.y);
+  sb::turn_axes(cmd.forward, cmd.side, was_yaw, cmd.angles.y);
   f.bot.set_by = "poke";
-  if (b.shoot && f.features[sh::Feature::pokestand]) {
+  if (b.shoot && f.features[sb::Feature::pokestand]) {
     // (`pokestand`) A button a shot opens is never touched: near it the keys let go, so the view
     // settles on it and the shot goes off (the hand holds the trigger until the view is there; run
     // round under dm2's RA button at 300 units/s it seldom was: 12 s of pokes, no shot).

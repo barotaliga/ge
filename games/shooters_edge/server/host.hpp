@@ -36,13 +36,15 @@
 #include <string>
 #include <vector>
 
-#include "shooter/cmd_source.hpp"
 #include "shooter/usercmd.hpp"
+#include "shooterbots/cmd_source.hpp"
 #include "shooters_edge/server/input_log.hpp"
 #include "shooters_edge/sim/arena.hpp"
 #include "shooters_edge/sim/rules.hpp"
 
 namespace shooters_edge::server {
+
+namespace sb = ge::shooterbots;
 
 enum class SlotKind : uint8_t { empty, remote, bot };
 
@@ -56,7 +58,7 @@ struct HostSettings {
 };
 
 struct BotSlot {
-  sh::CmdSource source;
+  sb::CmdSource source;
   sh::CmdClock clock;
   sh::MoveCmd recent[3];  // the three newest commands, oldest first
   uint32_t sequence = 0;
@@ -85,7 +87,7 @@ bool host_create(Host& h, const HostSettings& settings, std::string& error);
 // A slot for a client's packets (the lowest free one); -1 when the server is full.
 int host_add_remote(Host& h, bool spectator = false);
 // A slot a command source fills; -1 when the server is full.
-int host_add_bot(Host& h, sh::CmdSource source);
+int host_add_bot(Host& h, sb::CmdSource source);
 // Frees a slot (its player leaves the server).
 void host_drop(Host& h, int slot);
 

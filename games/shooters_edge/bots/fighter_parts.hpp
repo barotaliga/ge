@@ -26,26 +26,29 @@ inline float strength(const Stats& st) { return st.health + protection(st.armort
 
 // WHAT AN ITEM IS WORTH AND WHICH ONE IS GONE FOR (fighter_items.cpp).
 double item_value(const ItemSpot& it, const Stats& st);
-bool door_shut(const ge::shooter::BotView& s, const ItemSpot& it);
-int32_t best_item(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
-                  double t, bool heal, const sh::Vec3f* enemy, ge::ai::Why* why, int32_t skip = -1);
-int32_t chain_after(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, int32_t i,
+bool door_shut(const ge::shooterbots::BotView& s, const ItemSpot& it);
+int32_t best_item(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
+                  sh::Vec3f me, double t, bool heal, const sh::Vec3f* enemy, ge::ai::Why* why,
+                  int32_t skip = -1);
+int32_t chain_after(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st, int32_t i,
                     double t, bool heal, const sh::Vec3f* enemy);
-int32_t on_the_way(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
-                   sh::Vec3f velocity, double t);
-int32_t pack_near(const Fighter& f, const ge::shooter::BotView& s, const Stats& st, sh::Vec3f me,
-                  float reach);
+int32_t on_the_way(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
+                   sh::Vec3f me, sh::Vec3f velocity, double t);
+int32_t pack_near(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
+                  sh::Vec3f me, float reach);
 
 // THE BRIDGES AND DOORS ON THE WAY (fighter_doors.cpp).
-void watch_bridges(Fighter& f, const ge::shooter::BotView& s, int me);
+void watch_bridges(Fighter& f, const ge::shooterbots::BotView& s, int me);
 bool locked_errands(const Fighter& f);
 // Records the errand's start and end on `why` (the decision `door_errand`: the door, its button,
 // shot or touched, and why it ended: open, no way but through it, its time up).
-void door_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Why* why = nullptr);
+void door_errand(Fighter& f, const ge::shooterbots::BotView& s, double t,
+                 ge::ai::Why* why = nullptr);
 // (`fields`) THE ERRAND KNOWN BEFORE THE DOOR: the way to the goal item read off its field starts
 // with a button whose door rests shut: that door's errand begun now, from wherever the fighter
 // stands (door_errand runs it on), not when the route meets the door.
-void field_errand(Fighter& f, const ge::shooter::BotView& s, double t, ge::ai::Why* why = nullptr);
+void field_errand(Fighter& f, const ge::shooterbots::BotView& s, double t,
+                  ge::ai::Why* why = nullptr);
 // (`bridgebutton`) The button that runs bridge `k` out (-1 none), and the errand to it when the
 // route planned crosses that bridge while it is in.
 int32_t bridge_button_of(Fighter& f, size_t k);

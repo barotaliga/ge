@@ -12,8 +12,8 @@
 #include <string_view>
 
 #include "core/num_text.hpp"
-#include "shooter/hops.hpp"
 #include "shooter/trace.hpp"
+#include "shooterbots/hops.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 
@@ -23,6 +23,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace cn = shooters_edge::net;
 using ge::core::num::to_fixed;
 
@@ -64,7 +65,7 @@ const char* bump_by(const sh::Server& sv, int ent, sh::Vec3f origin, sh::Vec3f v
   return "mover";
 }
 
-void watch_hop(Watch& w, int k, sh::AimSkill skill, bool alive, bool hop, const char* because,
+void watch_hop(Watch& w, int k, sb::AimSkill skill, bool alive, bool hop, const char* because,
                float speed) {
   HopSkill& s = w.skill[static_cast<size_t>(skill)];
   if (alive) {
@@ -103,7 +104,7 @@ float median(std::vector<float> v) {
   return v[v.size() / 2];
 }
 
-void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const sh::Pilot& p, float speed,
+void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const sb::Pilot& p, float speed,
                  float x, float y, float z) {
   w.commands++;
   const std::string_view why = p.because != nullptr ? p.because : "";
@@ -112,7 +113,7 @@ void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const sh::Pilo
     kind = 0;
   else if (why == "no route")
     kind = 1;
-  else if (p.mode == sh::PilotMode::walk && speed < 20)
+  else if (p.mode == sb::PilotMode::walk && speed < 20)
     kind = 2;
   if (kind < 0) return;
   w.still[static_cast<size_t>(kind)]++;
@@ -280,11 +281,11 @@ void still_view_metrics(gl::Lab& lab, const Watch& w) {
 }
 
 void hop_metrics(gl::Lab& lab, const Watch& w) {
-  for (const sh::AimSkill k :
-       {sh::AimSkill::expert, sh::AimSkill::average, sh::AimSkill::novice, sh::AimSkill::perfect}) {
+  for (const sb::AimSkill k :
+       {sb::AimSkill::expert, sb::AimSkill::average, sb::AimSkill::novice, sb::AimSkill::perfect}) {
     const HopSkill& s = w.skill[static_cast<size_t>(k)];
     if (s.alive == 0) continue;
-    const std::string key = std::string("team.hop.") + sh::aim_skill_name(k) + ".";
+    const std::string key = std::string("team.hop.") + sb::aim_skill_name(k) + ".";
     const auto share = [](int64_t n, int64_t of) {
       return of > 0 ? static_cast<double>(n) / static_cast<double>(of) : 0.0;
     };
@@ -300,9 +301,9 @@ void hop_metrics(gl::Lab& lab, const Watch& w) {
 }
 
 // EVERY FLIGHT BY WHAT FLEW IT (`team.air.s380.<mode>.*`, a real map's match only): the match's
-// own recording read as se-moves reads people's (move_study.hpp, shooter/hops.hpp: each player's
-// track off the server's frames, its hops traced on the map's hulls), each flight of 0.3-1 s
-// taking off at 380-460 u/s put down to its bot's pilot mode at the takeoff: how many, the air's
+// own recording read as se-moves reads people's (move_study.hpp, shooterbots/hops.hpp: each
+// player's track off the server's frames, its hops traced on the map's hulls), each flight of 0.3-1
+// s taking off at 380-460 u/s put down to its bot's pilot mode at the takeoff: how many, the air's
 // gain (landing less takeoff speed) and the crashes (80 u/s or more lost). People hold their
 // speed there (gain -1 to +5 on dm2); the mode says which of the bots' ways loses it.
 void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
@@ -322,16 +323,16 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
   const double offset = w.t_last - dt.seconds;
   lab.note("flights by mode: the recording's clock + " + to_fixed(offset, 2) + " s = the server's");
   std::map<std::string, std::vector<float>> gain;
-  const sh::HopSettings hs;
+  const sb::HopSettings hs;
   for (size_t slot = 0; slot < dt.tracks.size(); slot++) {
     size_t k = r.players.size();
     for (size_t j = 0; j < r.players.size(); j++)
       if (r.players[j].name == dt.names[slot]) k = j;
     if (k >= r.players.size() || k >= w.modes.size() || dt.tracks[slot].size() < 3) continue;
-    sh::HopReading hr;
-    sh::read_hops(dt.tracks[slot], *m.world, hs, hr);
+    sb::HopReading hr;
+    sb::read_hops(dt.tracks[slot], *m.world, hs, hr);
     const auto& ml = w.modes[k];
-    for (const sh::Hop& h : hr.hops) {
+    for (const sb::Hop& h : hr.hops) {
       if (h.air_s < 0.3f || h.air_s > 1.0f || h.speed_off < 380 || h.speed_off >= 460) continue;
       const double t = hr.frames[static_cast<size_t>(h.takeoff)].t + offset;
       const char* mode = "-";
@@ -359,35 +360,35 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
 }
 
 // The pilot's link toward its route's next node, by kind ("walk", "jump"...), or "-".
-const char* link_of(const sh::Pilot& p) {
+const char* link_of(const sb::Pilot& p) {
   if (p.g == nullptr || p.k + 1 >= p.route.size()) return "-";
-  const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
+  const sb::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
   for (int32_t q = 0; q < a.links; q++) {
-    const sh::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
-    if (l.to == p.route[p.k + 1]) return sh::nav_kind_name(l.kind);
+    const sb::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+    if (l.to == p.route[p.k + 1]) return sb::nav_kind_name(l.kind);
   }
   return "-";
 }
 
 // The link walked: '!' along a lip (`brink`), '?' a side step off into the harm (`brink_side`).
-char link_brink(const sh::Pilot& p) {
+char link_brink(const sb::Pilot& p) {
   if (p.g == nullptr || p.k + 1 >= p.route.size()) return 0;
-  const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
+  const sb::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
   for (int32_t q = 0; q < a.links; q++) {
-    const sh::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+    const sb::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
     if (l.to == p.route[p.k + 1]) return l.brink ? '!' : l.brink_side ? '?' : 0;
   }
   return 0;
 }
 
 // The kind of the link after the current one (`end`: the next node is the route's last).
-const char* link2_of(const sh::Pilot& p) {
+const char* link2_of(const sb::Pilot& p) {
   if (p.g == nullptr || p.k + 1 >= p.route.size()) return "-";
   if (p.k + 2 >= p.route.size()) return "end";
-  const sh::NavNode& b = p.g->nodes[static_cast<size_t>(p.route[p.k + 1])];
+  const sb::NavNode& b = p.g->nodes[static_cast<size_t>(p.route[p.k + 1])];
   for (int32_t q = 0; q < b.links; q++) {
-    const sh::NavLink& l = p.g->links[static_cast<size_t>(b.first_link) + static_cast<size_t>(q)];
-    if (l.to == p.route[p.k + 2]) return sh::nav_kind_name(l.kind);
+    const sb::NavLink& l = p.g->links[static_cast<size_t>(b.first_link) + static_cast<size_t>(q)];
+    if (l.to == p.route[p.k + 2]) return sb::nav_kind_name(l.kind);
   }
   return "-";
 }

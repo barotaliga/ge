@@ -26,11 +26,11 @@
 #include <string_view>
 #include <vector>
 
-#include "shooter/hearing.hpp"
+#include "shooterbots/hearing.hpp"
 
 namespace ge::classic {
 
-using ge::shooter::SoundMeaning;
+using ge::shooterbots::SoundMeaning;
 
 enum class ItemKind : uint8_t {
   health,
@@ -76,10 +76,10 @@ struct ItemName {
 
 // A game's tables, which its profile row carries.
 struct ItemTables {
-  std::span<const ItemRow> items;                     // the map's items by class name
-  std::span<const ItemWords> words;                   // their call and heard words
-  std::span<const ge::shooter::SoundMeaning> sounds;  // the samples a listener reads
-  std::span<const ItemName> names;                    // what a pickup calls them
+  std::span<const ItemRow> items;                         // the map's items by class name
+  std::span<const ItemWords> words;                       // their call and heard words
+  std::span<const ge::shooterbots::SoundMeaning> sounds;  // the samples a listener reads
+  std::span<const ItemName> names;                        // what a pickup calls them
 };
 // The server's console lines that give the mod `names`: `localinfo <class name> "<name>"` each.
 inline std::vector<std::string> item_name_lines(std::span<const ItemName> names) {

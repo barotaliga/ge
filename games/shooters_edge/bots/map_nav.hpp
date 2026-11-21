@@ -2,13 +2,13 @@
 // what its entity text says of the rest, one way for every caller (the team game, the co-op party,
 // the campaign's run-through) and either map family (clip hulls, or a version 38 map's brushes
 // traced through one tracer the nav keeps), off what every rules runner keeps alike (the edicts,
-// the model list: `shooter/bot_view.hpp`), so Quake's rules and Quake II's build it the
+// the model list: `shooterbots/bot_view.hpp`), so Quake's rules and Quake II's build it the
 // same:
 // - a door that starts open (spawnflags 1) is a solid of the nav's world where it stands (a wall
 //   drawn aside, a trap's bars); one that is a plate (thin, wide: a BRIDGE that a button slides
 //   out) stands where the map drew it, out, and the nodes on it are kept so a caller can shut them
 //   while the bridge is still in; every other door (a secret one too) and every plat is a MOVER
-//   (shooter/nav.hpp), a plat ridden from its foot to its top;
+//   (shooterbots/nav.hpp), a plat ridden from its foot to its top;
 // - a teleporter is a link from every node its trigger holds to the node at its destination (one
 //   another entity switches on, by its name, is left out: nothing says when it works); a trigger
 //   brush and its destination lifted 27 units, or Quake II's pad (its touch box 16 units square
@@ -18,21 +18,22 @@
 //   made in them and no bridge or trick lands there; a jump over them or landing at an edge
 //   over them is flown again past its target and from a slower run, kept only when both hold,
 //   and costs more (`nav_harden_jumps`);
-// - water: part of the graph (shooter/swim.hpp `nav_add_swim`): its cells swim nodes, joined to a
+// - water: part of the graph (shooterbots/swim.hpp `nav_add_swim`): its cells swim nodes, joined to
+// a
 //   pool's floor and, by the climb out the move proves, to the dry edges round it; the SWIM FIELD
 //   still leads a swimmer off the graph out to the map's main part (the most nodes a start spot
 //   reaches; `start_class` names the starts);
-// - OUT OF A PIT BY ROCKET (shooter/escape.hpp `nav_add_escapes`): from every liquid at least
+// - OUT OF A PIT BY ROCKET (shooterbots/escape.hpp `nav_add_escapes`): from every liquid at least
 //   waist deep, rockets fired down at the surface proven onto the ledges round it (the main part's
 //   dry floor, never a bridge), and a link from each liquid node to the cheapest; dm2's lava pits
 //   have no other way out;
 // - the map's ROCKET-JUMP TRICKS (rocket_tricks.hpp: the jumps people make there again and
-//   again), each proven by the move into a rocket link at its level (shooter/nav.hpp
+//   again), each proven by the move into a rocket link at its level (shooterbots/nav.hpp
 //   `nav_add_tricks`), after the pockets are bridged, landing only where a way back leads out;
 //   each trick, and each rocket jump a pocket was bridged by, as a grenade jump too where the
 //   move flies one (a player with the grenade launcher and no rocket launcher);
 // - the map's GAP TRICKS (gap_tricks.hpp: people's speed jumps over a pit, the strafe jump over
-//   dm2's lava), each proven into a jump link at a hopper's speed (shooter/nav_gaps.hpp
+//   dm2's lava), each proven into a jump link at a hopper's speed (shooterbots/nav_gaps.hpp
 //   `nav_add_gap_tricks`) after the risky jumps are hardened, landing where a way back leads.
 //
 // ge:summary A real map's nav for the bots: movers, teleporters, water closed, the swim field
@@ -52,12 +53,12 @@
 #include "ai/path.hpp"
 #include "brush/map.hpp"
 #include "brush/trace.hpp"
-#include "shooter/bot_view.hpp"
-#include "shooter/escape.hpp"
 #include "shooter/map_spec.hpp"
-#include "shooter/nav.hpp"
-#include "shooter/nav_gaps.hpp"
-#include "shooter/swim.hpp"
+#include "shooterbots/bot_view.hpp"
+#include "shooterbots/escape.hpp"
+#include "shooterbots/nav.hpp"
+#include "shooterbots/nav_gaps.hpp"
+#include "shooterbots/swim.hpp"
 
 namespace shooters_edge::bots {
 
@@ -85,20 +86,21 @@ struct MapNav {
   ge::shooter::MoveSettings move;
   std::unique_ptr<ge::brush::BrushTracer> tracer;
   ge::shooter::MoveWorld world;
-  ge::shooter::NavGraph graph;
-  ge::shooter::SwimField swim;
-  std::vector<ge::shooter::NavMover> movers;
-  std::vector<uint8_t> wet;             // the nodes standing in water (swim nodes too)
-  std::vector<uint8_t> harm;            // the floor nodes in lava or slime: no way leads into them
-  ge::shooter::SwimNavCounts swim_nav;  // the water in the graph
-  ge::shooter::NavBridgeCounts bridges_made;     // the pockets bridged
-  ge::shooter::NavTrickCounts tricks_made;       // the map's tricks proven into blast jumps
-  ge::shooter::NavTrickCounts bridged_grenades;  // grenade jumps beside the bridges' rocket jumps
-  ge::shooter::NavHardenCounts hardened;         // the jumps over lava or slime
-  ge::shooter::NavEscapeCounts escapes_made;     // the rockets out of a pit's liquid
-  ge::shooter::NavGapCounts gaps_made;           // the map's gap tricks proven into jump links
+  ge::shooterbots::NavGraph graph;
+  ge::shooterbots::SwimField swim;
+  std::vector<ge::shooterbots::NavMover> movers;
+  std::vector<uint8_t> wet;   // the nodes standing in water (swim nodes too)
+  std::vector<uint8_t> harm;  // the floor nodes in lava or slime: no way leads into them
+  ge::shooterbots::SwimNavCounts swim_nav;        // the water in the graph
+  ge::shooterbots::NavBridgeCounts bridges_made;  // the pockets bridged
+  ge::shooterbots::NavTrickCounts tricks_made;    // the map's tricks proven into blast jumps
+  ge::shooterbots::NavTrickCounts
+      bridged_grenades;                           // grenade jumps beside the bridges' rocket jumps
+  ge::shooterbots::NavHardenCounts hardened;      // the jumps over lava or slime
+  ge::shooterbots::NavEscapeCounts escapes_made;  // the rockets out of a pit's liquid
+  ge::shooterbots::NavGapCounts gaps_made;        // the map's gap tricks proven into jump links
   std::vector<uint8_t> trap;  // the nodes no way on foot leads back from to the main part
-  std::vector<ge::shooter::NavExtraLink> entries;  // the links into the water the graph closed
+  std::vector<ge::shooterbots::NavExtraLink> entries;  // the links into the water the graph closed
   std::vector<NavBridge> bridges;
   // The map's scripted routes to key items (item_routes.hpp), each proven or refused.
   struct ScriptMade {
@@ -118,16 +120,16 @@ struct MapNav {
 
 // The doors and plats of `spec` as movers, off its entity text and the edicts `s` made of them.
 // A version 38 map's plats ride on `tracer` (the nav's own; null: none ridden).
-std::vector<ge::shooter::NavMover> map_movers(const ge::shooter::BotView& s,
-                                              const ge::shooter::MapSpec& spec,
-                                              ge::brush::BrushTracer* tracer = nullptr);
+std::vector<ge::shooterbots::NavMover> map_movers(const ge::shooterbots::BotView& s,
+                                                  const ge::shooter::MapSpec& spec,
+                                                  ge::brush::BrushTracer* tracer = nullptr);
 // The map's nav built into `out` (whose world and graph the movers point into: keep it where it
 // is), on either map family: the clip hulls of `spec.models` or the brushes of `spec.brushes`.
 // False with `error` when no floor holds a node. `set`: the grid's (a trick map's narrow
 // platforms need a finer one than the default 32 units: the `se-trick` lab's --spacing).
-bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& spec,
+bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
                    const char* start_class, MapNav& out, std::string& error,
-                   const ge::shooter::NavSettings& set = ge::shooter::NavSettings{});
+                   const ge::shooterbots::NavSettings& set = ge::shooterbots::NavSettings{});
 // Quake II's move as the nav and the pilot read it: its top speed (300) and friction (6) (its
 // stop speed, acceleration and gravity are Quake's already), and its air: with the
 // server's air acceleration `air_accelerate` 0 (`q2_air_accelerate`, its default) a plain

@@ -50,8 +50,8 @@
 #include <string>
 #include <vector>
 
-#include "shooter/hops.hpp"
 #include "shooter/vec.hpp"
+#include "shooterbots/hops.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/hud/status.hpp"
 
@@ -115,8 +115,8 @@ struct DemoScan {
   std::string map;                    // the last level's map name
   std::array<int32_t, 32> frags{};    // each slot's frags at the end
   // With `tracks` asked for: every player's track on the scan's own clock (the flights'), one
-  // point a frame he is present (the movement readers', shooter/hops.hpp).
-  std::array<std::vector<ge::shooter::TrackPoint>, 32> tracks;
+  // point a frame he is present (the movement readers', shooterbots/hops.hpp).
+  std::array<std::vector<ge::shooterbots::TrackPoint>, 32> tracks;
 };
 
 // `opened` (a demo as `open_demo` left it, at its first frame) read to its end, every player's

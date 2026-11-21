@@ -11,7 +11,7 @@
 // - when the countdown runs out the listen restarts the map with every seat on it, the limits as
 //   the settings set them: the match. Whatever warmup scored is gone with the old server.
 //
-// The bots' NAV GRAPH is built once a map (shooter/nav.hpp, off the map's world model; on the
+// The bots' NAV GRAPH is built once a map (shooterbots/nav.hpp, off the map's world model; on the
 // built-in arena its door and plat are its movers, as the `se-bots` lab's) the first time a bot
 // is seated, and kept for the restart.
 //
@@ -30,8 +30,8 @@
 #include <string>
 #include <vector>
 
-#include "shooter/aim.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/aim.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/server/announce.hpp"
@@ -41,11 +41,13 @@
 namespace shooters_edge::client {
 
 namespace sh = ge::shooter;
+
+namespace sb = ge::shooterbots;
 namespace sv = shooters_edge::server;
 
 struct RoomBot {
   bots::Fighter fighter;
-  sh::AimSkill skill = sh::AimSkill::average;
+  sb::AimSkill skill = sb::AimSkill::average;
   std::string name;     // its player's name on the server
   sh::MoveCmd cmds[3];  // the three newest, oldest first
   uint32_t sequence = 0;
@@ -55,7 +57,7 @@ struct Room {
   sv::Lobby lobby;
   sv::Announcer announcer;  // the lobby's words as the server's events (server/announce.hpp)
   std::array<std::unique_ptr<RoomBot>, sv::kLobbySeats> bots;  // by slot (null: no bot)
-  std::unique_ptr<sh::NavGraph> graph;                         // the bots' map's
+  std::unique_ptr<sb::NavGraph> graph;                         // the bots' map's
   std::unique_ptr<sh::MoveWorld> world;                        // its solids (the hop's look)
   std::string graph_of;                                        // the map it was built for
   uint32_t seed = 1;
@@ -67,7 +69,7 @@ struct Room {
 // A fighter of `skill` seated in the lowest free slot of `s` (playing `map`) and the lobby, under
 // the server's player limit and outside `held`; its slot, or -1 with `error` (the server full, or
 // no way to walk on the map).
-int room_add_bot(Room& r, const sv::RulesRunner& s, const sv::MapSpec& map, sh::AimSkill skill,
+int room_add_bot(Room& r, const sv::RulesRunner& s, const sv::MapSpec& map, sb::AimSkill skill,
                  std::string& error);
 // The highest bot seat freed; false when there is none.
 bool room_remove_bot(Room& r, const sv::RulesRunner& s);
@@ -80,6 +82,6 @@ void room_packets(Room& r, const sv::RulesCommon& s, int msec, std::vector<sh::P
 // player's (the frags left 0: listen.hpp's `listen_lobby_view` reads them off the server).
 hud::LobbyView lobby_view(const Room& r, double now, int me);
 // A skill named `novice`, `average` or `expert`; false for anything else.
-bool skill_named(const std::string& word, sh::AimSkill& out);
+bool skill_named(const std::string& word, sb::AimSkill& out);
 
 }  // namespace shooters_edge::client

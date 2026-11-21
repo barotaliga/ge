@@ -1,16 +1,16 @@
 // LAB `se-nav`: where can a player go on a map, by the player move's own proof? The navigation
-// graph (plugins/shooter/nav.hpp) is built on the nav course (stairs, a crate, a pit, two ramps:
-// games/shooters_edge/sim/nav_course.hpp) and on the test arena (its door left out and tagged),
-// and pictured from above to scale: the floor shaded by height off the map's own point hull, every
-// node, every link coloured by its kind, and the quickest routes drawn as the proofs actually
-// moved a player along them; each route again from the side. Tables of the graph's counts and the
-// routes; the build's time is measured.
+// graph (plugins/shooterbots/nav.hpp) is built on the nav course (stairs, a crate, a pit, two
+// ramps: games/shooters_edge/sim/nav_course.hpp) and on the test arena (its door left out and
+// tagged), and pictured from above to scale: the floor shaded by height off the map's own point
+// hull, every node, every link coloured by its kind, and the quickest routes drawn as the proofs
+// actually moved a player along them; each route again from the side. Tables of the graph's counts
+// and the routes; the build's time is measured.
 //
 // ge:summary Lab: the nav graph proven by the move, on the nav course and the arena, from above
 // ge:keywords lab se-nav nav nav-graph links walk drop jump run route reach proof top-view
 // ge:keywords side-view nav-course arena door
 // ge:skill shooter bots labs
-// ge:test tests/shooter_nav_test.cpp
+// ge:test tests/shooterbots_nav_test.cpp
 #include <chrono>
 #include <cstdio>
 #include <string>
@@ -21,7 +21,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "nav_top.hpp"
-#include "shooter/nav.hpp"
+#include "shooterbots/nav.hpp"
 #include "shooters_edge/sim/arena.hpp"
 #include "shooters_edge/sim/nav_course.hpp"
 
@@ -29,6 +29,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
+namespace sb = ge::shooterbots;
 namespace se = shooters_edge::sim;
 using ge::core::num::to_fixed;
 using shooters_edge::labs::floor_picture;
@@ -60,7 +61,7 @@ const gl::Rgba kRouteColour{20, 20, 20, 255};
 struct Map {
   std::string name;
   sh::MoveWorld world;
-  std::vector<sh::NavMover> movers;
+  std::vector<sb::NavMover> movers;
   struct Route {
     std::string name;
     sh::Vec3f from, to;
@@ -81,36 +82,36 @@ void legend(gl::Picture& p) {
   gl::draw_text(p, x + 18, 7, "ROUTE AS PROVEN", {30, 30, 30, 255});
 }
 
-const sh::NavLink* link_between(const sh::NavGraph& g, int32_t a, int32_t b) {
-  const sh::NavNode& n = g.nodes[static_cast<size_t>(a)];
+const sb::NavLink* link_between(const sb::NavGraph& g, int32_t a, int32_t b) {
+  const sb::NavNode& n = g.nodes[static_cast<size_t>(a)];
   for (int32_t k = 0; k < n.links; k++)
     if (g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)].to == b)
       return &g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
   return nullptr;
 }
 
-void run_map(gl::Lab& lab, const Map& m, const sh::NavSettings& set, const In& in_base) {
+void run_map(gl::Lab& lab, const Map& m, const sb::NavSettings& set, const In& in_base) {
   In in = in_base;
   in.push_back({"map", m.name});
-  sh::NavGraph g;
+  sb::NavGraph g;
   const auto t0 = std::chrono::steady_clock::now();
-  sh::build_nav(m.world, m.movers, sh::MoveSettings{}, set, g);
+  sb::build_nav(m.world, m.movers, sh::MoveSettings{}, set, g);
   const double build_ms =
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
   // What a player can get to from the first route's start.
   ge::ai::Search reach;
   const int32_t reached =
-      m.routes.empty() ? 0 : sh::nav_reach(g, sh::nav_nearest(g, m.routes[0].from), reach);
+      m.routes.empty() ? 0 : sb::nav_reach(g, sb::nav_nearest(g, m.routes[0].from), reach);
   const int32_t unreached = static_cast<int32_t>(g.nodes.size()) - reached;
   const std::string k = "nav." + m.name;
 
   lab.metric(k + ".nodes", static_cast<double>(g.nodes.size()), "count");
   lab.metric(k + ".links", static_cast<double>(g.links.size()), "count");
   for (int q = 0; q < 3; q++)
-    lab.metric(k + ".links-" + sh::nav_kind_name(static_cast<sh::NavKind>(q)),
+    lab.metric(k + ".links-" + sb::nav_kind_name(static_cast<sb::NavKind>(q)),
                static_cast<double>(g.counts.by_kind[q]), "count");
   int64_t through_mover = 0;
-  for (const sh::NavLink& l : g.links)
+  for (const sb::NavLink& l : g.links)
     if (l.mover >= 0) through_mover++;
   lab.metric(k + ".links-through-mover", static_cast<double>(through_mover), "count");
   lab.metric(k + ".proofs", static_cast<double>(g.counts.proofs), "count");
@@ -132,26 +133,26 @@ void run_map(gl::Lab& lab, const Map& m, const sh::NavSettings& set, const In& i
                  {"jumps without room to run up", std::to_string(g.counts.no_run_up)},
                  {"player moves run", std::to_string(g.counts.commands)},
                  {"nodes no way reaches from the first start", std::to_string(unreached)},
-                 {"nav hash", hex64(sh::nav_hash(g))}};
+                 {"nav hash", hex64(sb::nav_hash(g))}};
   lab.table(counts);
 
   // The picture from above.
   const View v{g.lo, g.hi};
   gl::Picture p = floor_picture(m.world, v);
   for (size_t a = 0; a < g.nodes.size(); a++) {
-    const sh::NavNode& na = g.nodes[a];
+    const sb::NavNode& na = g.nodes[a];
     for (int32_t q = 0; q < na.links; q++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(na.first_link) + static_cast<size_t>(q)];
-      const sh::NavNode& nb = g.nodes[static_cast<size_t>(l.to)];
-      if (l.kind == sh::NavKind::walk && l.mover < 0 && static_cast<size_t>(l.to) < a)
+      const sb::NavLink& l = g.links[static_cast<size_t>(na.first_link) + static_cast<size_t>(q)];
+      const sb::NavNode& nb = g.nodes[static_cast<size_t>(l.to)];
+      if (l.kind == sb::NavKind::walk && l.mover < 0 && static_cast<size_t>(l.to) < a)
         continue;  // a walk both ways is drawn once
       const gl::Rgba c = l.mover >= 0 ? kMoverColour : kKindColour[static_cast<int>(l.kind)];
       gl::draw_line(p, v.px(na.origin.x), v.py(na.origin.y), v.px(nb.origin.x), v.py(nb.origin.y),
-                    c, l.kind == sh::NavKind::walk ? 1 : 1.5);
+                    c, l.kind == sb::NavKind::walk ? 1 : 1.5);
     }
   }
   for (size_t a = 0; a < g.nodes.size(); a++) {
-    const sh::NavNode& n = g.nodes[a];
+    const sb::NavNode& n = g.nodes[a];
     const bool got = reach.reached(static_cast<int32_t>(a));
     const gl::Rgba c = got ? gl::Rgba{40, 90, 60, 255} : gl::Rgba{200, 30, 120, 255};
     gl::fill_disc(p, v.px(n.origin.x), v.py(n.origin.y), got ? 1.6 : 3, c);
@@ -164,18 +165,18 @@ void run_map(gl::Lab& lab, const Map& m, const sh::NavSettings& set, const In& i
   ge::ai::Search search;
   std::vector<gl::Trace> side;
   for (const Map::Route& rt : m.routes) {
-    const sh::NavRoute r =
-        sh::nav_route(g, sh::nav_nearest(g, rt.from), sh::nav_nearest(g, rt.to), search);
+    const sb::NavRoute r =
+        sb::nav_route(g, sb::nav_nearest(g, rt.from), sb::nav_nearest(g, rt.to), search);
     int by[4] = {};
     gl::Trace t{rt.name, {}, {}};
     std::vector<sh::Vec3f> moved;
     for (size_t i = 0; i + 1 < r.nodes.size(); i++) {
-      const sh::NavLink* l = link_between(g, r.nodes[i], r.nodes[i + 1]);
+      const sb::NavLink* l = link_between(g, r.nodes[i], r.nodes[i + 1]);
       if (!l) continue;
       by[static_cast<int>(l->kind)]++;
       if (l->mover >= 0) by[3]++;
       moved.clear();
-      sh::prove_link(m.world, sh::MoveSettings{}, g.nodes[static_cast<size_t>(r.nodes[i])].origin,
+      sb::prove_link(m.world, sh::MoveSettings{}, g.nodes[static_cast<size_t>(r.nodes[i])].origin,
                      g.nodes[static_cast<size_t>(l->to)].origin, l->kind, l->speed, set, &moved);
       for (size_t j = 0; j + 1 < moved.size(); j++)
         gl::draw_line(p, v.px(moved[j].x), v.py(moved[j].y), v.px(moved[j + 1].x),
@@ -241,13 +242,13 @@ void run_map(gl::Lab& lab, const Map& m, const sh::NavSettings& set, const In& i
            gl::to_picture(gl::line_chart(c).plot));
 
   if (g.nodes.empty())
-    lab.fail(
-        "se-nav: the " + m.name + " has no nodes",
-        "next: run tests/shooter_nav_test.cpp and read column_floors in plugins/shooter/nav.cpp");
+    lab.fail("se-nav: the " + m.name + " has no nodes",
+             "next: run tests/shooterbots_nav_test.cpp and read column_floors in "
+             "plugins/shooterbots/nav.cpp");
 }
 
 void run(gl::Lab& lab) {
-  sh::NavSettings set;
+  sb::NavSettings set;
   set.spacing = static_cast<float>(lab.arg_num("spacing"));
   set.reach = static_cast<float>(lab.arg_num("reach"));
   if (set.spacing < 8 || set.reach < set.spacing) {
@@ -263,7 +264,7 @@ void run(gl::Lab& lab) {
     se::build_nav_course(c);
     Map m;
     m.name = "course";
-    sh::map_world(c.world.model(), m.world);
+    sb::map_world(c.world.model(), m.world);
     m.routes = {{"platform to east ledge", c.platform, c.east_ledge},
                 {"pit to crate", c.pit_floor, c.crate_top},
                 {"east floor to platform", c.east_floor, c.platform}};
@@ -274,7 +275,7 @@ void run(gl::Lab& lab) {
     se::build_arena(a);
     Map m;
     m.name = "arena";
-    sh::map_world(a.world.model(), m.world);
+    sb::map_world(a.world.model(), m.world);
     // The door's and the plat's entity numbers as the arena spawns them are the program's; the
     // lab tags them by model index, which is what it draws.
     // Tagged only, not ridden: the pilot's lab (`se-pilot`) rides the plat on the server.
@@ -296,7 +297,7 @@ const gl::LabSpec kSpec{
     "se-nav",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "plugins/shooter/nav.hpp (build_nav, prove_link, nav_route) on "
+    "plugins/shooterbots/nav.hpp (build_nav, prove_link, nav_route) on "
     "games/shooters_edge/sim/nav_course.hpp and arena.hpp",
     "shooter",
     "Where can a player go on a map, by the player move's own proof: which floors are nodes, "
