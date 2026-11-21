@@ -41,6 +41,7 @@ constexpr double kWayGiveUp_s = 25;  // a step not done in this long past twice 
 constexpr double kWayRetry_s = 60;   // and tried again after this
 constexpr double kWayNoRoute_s = 5;  // an exit his pilot finds no route to this long is left
 constexpr double kWayIdle_s = 5;     // nothing to do this long: back into the water
+constexpr float kKeyCovered = 96;    // a locked door this near a key's height covers it, units
 constexpr float kWaySeen = 192;      // a node this near where he has stood is explored, units
 
 enum class WayKind : uint8_t { exit, button, key, trigger, explore };
@@ -57,12 +58,13 @@ struct WayStep {
   double left_until = -1;
   WayKind kind = WayKind::exit;
   bool done = false;
-  bool opens = false;      // it opens a door that only something else opens (or counts toward one)
-  bool keyed = false;      // a trigger that opens only for a key held: done once its doors open
-  bool revisit = false;    // an exit to a map he has played: taken last
-  bool leaves = false;     // a button that leads to a level change (base2's lift down to bunk1)
-  bool drains = false;     // a button that moves water (it strands him in the pool): pressed last
-  std::vector<int> doors;  // those doors' entities
+  bool opens = false;       // it opens a door that only something else opens (or counts toward one)
+  bool keyed = false;       // a trigger that opens only for a key held: done once its doors open
+  bool revisit = false;     // an exit to a map he has played: taken last
+  bool leaves = false;      // a button that leads to a level change (base2's lift down to bunk1)
+  bool drains = false;      // a button that moves water (it strands him in the pool): pressed last
+  std::vector<int> doors;   // those doors' entities
+  std::vector<int> covers;  // a key's: the locked doors (WayThrough::locked) lying over it
 };
 
 // An exit: a trigger walked through, or a button pressed, that changes the level.

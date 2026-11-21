@@ -898,7 +898,11 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       gr::build_beam(*look, b.shot, view.time_s, shape);
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
-    gr::prepare_beams(d, f.beams, f.beam_draws, fx.burns, view, gr::kHotEmberCd);
+    // Wet blood on a floor mirrors the room with the faces (ce_reflections, ce_blood_reflect).
+    const float paint_mirror = o.reflections > 0 && f.picture != nullptr
+                                   ? static_cast<float>(f.picture->blood_reflect)
+                                   : 0.0f;
+    gr::prepare_beams(d, f.beams, f.beam_draws, fx.burns, view, gr::kHotEmberCd, paint_mirror);
     gr::prepare_haze(d, f.haze, fx.haze, view);
   }
   if (f.has_map) {
@@ -926,7 +930,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // ce_smooth: the models shaded smooth across their facets where the textures are filtered.
     prepare_models(d, f.models, f.scene.map, drawn, view, o.brightness, o.minlight,
                    !o.crisp && f.picture->ce.smooth, in_place, lights, o.dynamic_strength,
-                   &f.burning);
+                   &f.burning, fx.bloodied);
   }
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
   const bool round = f.extras && liquid_round_eye(*f.extras);

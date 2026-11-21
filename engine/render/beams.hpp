@@ -67,8 +67,14 @@ struct BurnVertex {
   // scorch's dull glow by its luminance, under the pass's kEmberKeys.
   float glow_keys = 0;
   // PAINT (1: blood): the mark lays its own colour over what is under it, `light` already the
-  // light on it times that colour, `soot` its opacity; 0 a scorch's or a hole's darkening.
+  // light on it times that colour, `soot` its opacity; 0 a scorch's or a hole's darkening. Paint
+  // shows only where it has spread to (`spread` against the atlas's blue, the blood's `arrive`),
+  // its rim (the atlas's relief over the middle) darker, and on a floor it mirrors the room by its
+  // `gloss` (the scene kept a frame, render/mirror.hpp) at the pass's `paint_mirror` strength.
   float paint = 0;
+  float spread = 1;
+  float gloss = 0;
+  float normal[3] = {0, 1, 0};  // the surface's, out of it
 };
 
 // wgsl's BeamLookGpu, BeamSeg and BurnVert.
@@ -110,11 +116,14 @@ void bind_beam_targets(gpu::Device& device, Beams& beams, const FrameTargets& ta
 
 // CPU (no GPU): this frame's beams and burns staged in `beams`' reserve, camera-relative to
 // `view`'s eye. Allocates nothing.
+// `paint_mirror`: how strongly wet paint on a floor mirrors the room (0 none; the frame group
+// must bind the kept scene for any).
 void stage_beams(Beams& beams, std::span<const BeamDraw> draws, std::span<const BurnVertex> burns,
-                 const FrameView& view, float hot_ember_cd);
+                 const FrameView& view, float hot_ember_cd, float paint_mirror = 0);
 // stage_beams, then the staging uploaded.
 void prepare_beams(gpu::Device& device, Beams& beams, std::span<const BeamDraw> draws,
-                   std::span<const BurnVertex> burns, const FrameView& view, float hot_ember_cd);
+                   std::span<const BurnVertex> burns, const FrameView& view, float hot_ember_cd,
+                   float paint_mirror = 0);
 
 void encode_beams(const Beams& beams, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                   wgpu::CommandEncoder& encoder, const FrameTargets& targets,

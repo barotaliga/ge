@@ -27,6 +27,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `q2-ledger-server.md` | The ledger's server half, against the upstream server reference at a pinned commit: console commands, settings with defaults, server messages, what clients may send, the game library's interface, messages, features |
 | `q2-ledger-client.md` | The ledger's client half, against the same reference: commands, settings, menus, server messages, effects, muzzle flashes, the HUD, messages, demos, keys, sound and picture |
 | `q2-flashes.md` | Muzzle flashes on the wire: a player's and a monster's flash values, their lights, sounds, models, who sends them and when, the guns' places rounded (read) |
+| `q2-sp-fixes.md` | Single player's built-in map repairs (fact1, fact2, command, the eight maps' unnamed starts), item teams, the item and cheat commands' exact lines, `cycleweap` and `prefweap` (read) |
 | `client-gaps.md` | Which of those the window has, and the ranked rounds still to build, gameplay first (M18k4) |
 | `chat-ignore.md` | The ignore lists and chat filters: how a chat line's speaker is found, what each setting drops (clean-room answers, M18k4) |
 | `client-mouse-and-q2-player.md` | The mouse (filter, acceleration, raw input), Quake II's player settings (hand, gender, visible weapons, skins, prediction, autosens), its chat filters and command spellings (clean-room answers, M18k4) |
