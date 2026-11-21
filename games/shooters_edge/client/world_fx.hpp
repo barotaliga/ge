@@ -74,6 +74,7 @@
 
 #include "brush/light_probe.hpp"
 #include "camera/subject.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "detail/decals.hpp"
 #include "particles/effect.hpp"
 #include "render/beam.hpp"
@@ -124,6 +125,8 @@ struct FxSwitches {
   int muzzle_flash = 1;
   // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
   ModelLerpSwitches lerp;
+  // Quake II's own (either look): specks, explosions' balls, lights and guns' fire left out.
+  ge::classic::Q2FxSwitches q2;
 };
 // The switches `picture` asks for: each ce_ switch, in the modern look only.
 // The explosion is the engine's where classic-enhance's replacement table names `explosion` for the
@@ -420,6 +423,9 @@ struct FxScene {
   ge::camera::Pose pose;                  // the eye this frame
   std::span<const Missile> missiles;      // in flight now
   std::span<const sh::Vec3f> explosions;  // every one this map so far, in order
+  // Each one's kind where it is known (classic/q2_fx_switches.hpp's kQ2Grenade, kQ2Rocket; 0 any
+  // other), by index; shorter than `explosions` (or empty) where it is not.
+  std::span<const uint8_t> explosion_kinds;
   std::span<const Effect> effects;        // every temporary entity this map so far, in order
   std::span<const Blow> blows;            // a campaign's blows to the player this map so far
   int64_t bonuses = 0;                    // the items the viewed player took, so far (bf)

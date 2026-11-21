@@ -355,6 +355,7 @@ int run_main(int argc, char** argv) {
                                   .light_lift = &picture.light_lift,
                                   .gibs = &picture.gibs,
                                   .no_glow = &picture.no_glow,
+                                  .q2fx = &picture.q2fx,
                                   .chat = &remote.ignore.chat,
                                   .auto_chat = &con_view.game_chat};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
@@ -1645,7 +1646,6 @@ int run_main(int argc, char** argv) {
           bench_map && !bench_map->spec.models.empty() ? &bench_map->spec.models[0] : nullptr;
       demo_eyes.behind =
           cl::third_person_units(playback, !drawn_remote || remote.end.cfg.spectator);
-      bench_demo_fx.draw_own = demo_eyes.behind > 0;  // his figure seen from behind
       demo_eyes.lock_pos = playback.lock_pos != 0;
       ge::render::FrameView view = cl::demo_eyes_view(
           ds, ds_read, demo_eyes, shown.row, ground, body,
@@ -1654,6 +1654,9 @@ int run_main(int argc, char** argv) {
           : bench.clock < 0 ? ds.time
                             : bench.clock,
           t);
+      const double own_behind =  // cl_thirdperson: the player's own view from behind him
+          demo_eyes.behind > 0 ? 0 : cl::q2_third_person(game_cvars.q2, view, ground);
+      bench_demo_fx.draw_own = demo_eyes.behind > 0 || own_behind > cl::kOwnFigureUnits;
       view.frame = static_cast<uint64_t>(presented);
       cl::from_above(*world, !drawn_remote &&
                                  slm::watch_fly_view(live_map, view, w, h, playback.bar_bottom_px));
@@ -1716,7 +1719,9 @@ int run_main(int argc, char** argv) {
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
       view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
-      auto* gun = (!drawn_remote && live_map.fly.p < 1) || demo_eyes.behind > 0 ? nullptr : &hand;
+      auto* gun = (!drawn_remote && live_map.fly.p < 1) || demo_eyes.behind > 0 || own_behind > 0
+                      ? nullptr
+                      : &hand;
       cl::draw_world(*device, *world, view, bench_fx, gun, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
@@ -1850,6 +1855,9 @@ int run_main(int argc, char** argv) {
     shown.aspect = h > 0 ? static_cast<double>(w) / h : shown.aspect;  // cl_adjustfov 0's
     cl::apply_view_cvars(camera_cvars, shown);
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
+    const double behind = cl::q2_third_person(  // cl_thirdperson
+        game_cvars.q2, view,
+        listen.map && !listen.map->spec.models.empty() ? &listen.map->spec.models[0] : nullptr);
     view.frame = static_cast<uint64_t>(presented);
     fx_state.models = world ? &cl::world_models(*world) : nullptr;
     if (!fx_palette_read) {
@@ -1860,6 +1868,7 @@ int run_main(int argc, char** argv) {
     fx_state.book = &fx_book;
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
+    if (behind > cl::kOwnFigureUnits && fx.has_self) fx.models.push_back(fx.self);
     // See-through liquids where the server allows them (its `watervis`).
     fx.see_through = listen.server == nullptr ||
                      shooters_edge::look::watervis_allowed(listen.server->serverinfo);
@@ -1923,7 +1932,7 @@ int run_main(int argc, char** argv) {
     if (!target) continue;
     cl::apply_view_from(view_from, view,
                         std::string(adapter.game->id) + " " + (listen.map ? listen.map->name : ""));
-    cl::draw_world(*device, *world, view, fx, &hand, wall, overlay, target);
+    cl::draw_world(*device, *world, view, fx, behind > 0 ? nullptr : &hand, wall, overlay, target);
     cl::gpu_watch_frame(gpu_watch, *world, wall, console);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
     present_frame();

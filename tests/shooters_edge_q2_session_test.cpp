@@ -1,16 +1,20 @@
 // Quake II's session settings (client/q2_session.hpp): the map commands run on a change, the game's
 // clock and the read-only state cvars.
 //
-// ge:summary Tests Quake II's cl_beginmapcmd, cl_changemapcmd, cl_disconnectcmd, timescale, state
+// ge:summary Tests Quake II's map commands, timescale, the state cvars and cl_thirdperson
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd timescale fixedtime cl_paused
 // ge:skill console shooter
 #include "shooters_edge/client/q2_session.hpp"
 
+#include <cmath>
 #include <string>
 #include <vector>
 
+#include "brush/map.hpp"
 #include "check.hpp"
 #include "console/console.hpp"
+#include "shooter/brush_hull.hpp"
+#include "shooter_loop_bench.hpp"
 
 namespace cl = shooters_edge::client;
 namespace con = ge::console;
@@ -91,4 +95,31 @@ TEST(cl_autopause_is_on_by_default) {
   CHECK(r.s.autopause);
   r.c.execute("cl_autopause 0");
   CHECK(!r.s.autopause);
+}
+
+TEST(cl_thirdperson_is_a_cheat_and_moves_the_view_back) {
+  Rig r;
+  r.c.execute("cl_thirdperson 1");  // refused while sv_cheats is 0
+  CHECK(!r.s.third_person && r.s.third_range == 60 && r.s.third_angle == 0);
+  ge::render::FrameView view;
+  view.eye[0] = 1;
+  view.heading = 0;  // looking down +z
+  CHECK(cl::q2_third_person(r.s, view, nullptr) == 0 && view.eye[2] == 0);
+  r.s.third_person = true;
+  CHECK(cl::q2_third_person(r.s, view, nullptr) == 60);  // no world: the whole range
+  CHECK(std::abs(view.eye[2] + 60 * ge::brush::kUnitM) < 1e-9 && view.eye[0] == 1);
+  ge::render::FrameView front;
+  CHECK(cl::view_behind(front, 40, 180, nullptr) == 40);  // in front, looking back
+  CHECK(std::abs(front.eye[2] - 40 * ge::brush::kUnitM) < 1e-9);
+  CHECK(std::abs(std::abs(front.heading) - 3.14159265358979) < 1e-9);
+}
+
+TEST(cl_thirdperson_stops_short_of_a_wall) {
+  // A wall 30 units behind the eye: the camera stops 4 units off it.
+  const ge::shooter::ModelData data =
+      ge::shooter::build_brush_model({ge::test::loop::box({-100, -100, -100}, {100, -30, 100})});
+  const ge::shooter::BrushModel world = data.model();
+  ge::render::FrameView view;  // map +y is the engine's +z: looking down map +y
+  const double went = cl::view_behind(view, 60, 0, &world);
+  CHECK(std::abs(went - 26) < 0.1);  // the trace stops a hair short
 }

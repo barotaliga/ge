@@ -553,17 +553,32 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("cl_blend", "0", con::Source::local);      // our gl_polyblend
   CHECK(!w.picture.draw_entities && !w.picture.particles && !w.picture.dynamic);
   CHECK(!w.picture.poly_blend);
-  const cl::GameBindings gibs{.gibs = &w.picture.gibs, .no_glow = &w.picture.no_glow};
+  const cl::GameBindings gibs{
+      .gibs = &w.picture.gibs, .no_glow = &w.picture.no_glow, .q2fx = &w.picture.q2fx};
   cl::switch_game_cvars(w.console, w.game, *q2, gibs);
   v.set("cl_gibs", "0", con::Source::local);  // our cl_gibfilter the other way round
   v.set("cl_noglow", "1", con::Source::local);
   CHECK(!w.picture.gibs && w.picture.no_glow);
+  v.set("cl_disable_particles", "24", con::Source::local);  // a rocket's trail, blood
+  v.set("cl_disable_explosions", "2", con::Source::local);
+  v.set("cl_dlight_hacks", "6", con::Source::local);
+  v.set("cl_muzzlelight_time", "32", con::Source::local);
+  v.set("cl_muzzleflashes", "0", con::Source::local);
+  const ge::classic::Q2FxSwitches& fx = w.picture.q2fx;
+  CHECK(fx.no_particles == 24 && fx.no_explosions == 2 && fx.light_hacks == 6);
+  CHECK(fx.muzzle_light_ms == 32 && !fx.muzzle_models);
+  CHECK(ge::classic::q2_no_blast_ball(fx, ge::classic::kQ2Rocket));
+  CHECK(!ge::classic::q2_no_blast_ball(fx, ge::classic::kQ2Grenade));
+  CHECK(!ge::classic::q2_no_blast_specks(fx, ge::classic::kQ2Rocket));  // 4 is not in 24
+  CHECK(ge::classic::q2_muzzle_age(fx, 0.02) == 0.01);  // twice as long: half as old
   v.set("cl_beginmapcmd", "record", con::Source::local);
   v.set("cl_autopause", "0", con::Source::local);
   CHECK(w.game.q2.begin_cmd == "record" && !w.game.q2.autopause);
   CHECK(v.find("sv_running") != nullptr && v.find("cl_running")->value == "1");
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], gibs);
   CHECK(w.picture.gibs && !w.picture.no_glow);
+  CHECK(w.picture.q2fx.no_particles == 0 && w.picture.q2fx.muzzle_models);  // set aside
+  CHECK(v.find("cl_disable_particles") == nullptr);
   CHECK(w.game.q2.begin_cmd.empty() && w.game.q2.autopause && w.game.q2.timescale == 1);
   CHECK(v.find("cl_beginmapcmd") == nullptr && v.find("sv_running") == nullptr);
   CHECK(v.clashes().empty());

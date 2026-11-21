@@ -32,6 +32,7 @@
 #include <string>
 #include <string_view>
 
+#include "classic/q2_fx_switches.hpp"
 #include "console/console.hpp"
 #include "hud/crosshair.hpp"
 #include "shooter/mouse_feel.hpp"
@@ -79,6 +80,8 @@ struct GameBindings {
   double* light_lift = nullptr;
   bool* gibs = nullptr;     // Quake II's `cl_gibs` (the picture's gibs); true in Quake
   bool* no_glow = nullptr;  // Quake II's `cl_noglow` (the picture's no_glow); false in Quake
+  // Quake II's effect switches (the picture's q2fx: classic/q2_fx_switches.hpp); off in Quake.
+  ge::classic::Q2FxSwitches* q2fx = nullptr;
   // The chat's extras: Quake II's own `cl_chat_sound` (chat_lines.hpp), "" in every other game.
   ChatExtras* chat = nullptr;
   // The console's typed line: Quake II's `con_auto_chat` (console/view.hpp's game_chat), -1 in
