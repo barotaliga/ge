@@ -1691,6 +1691,9 @@ int run_main(int argc, char** argv) {
       const cl::DemoState& ds_read = drawn_remote ? remote.demo.state : bench.demo.state;
       const ge::shooter::BrushModel* ground =
           bench_map && !bench_map->spec.models.empty() ? &bench_map->spec.models[0] : nullptr;
+      demo_eyes.behind =
+          cl::third_person_units(playback, !drawn_remote || remote.end.cfg.spectator);
+      bench_demo_fx.draw_own = demo_eyes.behind > 0;  // his figure seen from behind
       ge::render::FrameView view = cl::demo_eyes_view(ds, ds_read, demo_eyes, shown.row, ground,
                                                       body, ge::camera::FirstPersonRow{}.fov_y,
                                                       drawn_remote      ? t
@@ -1757,7 +1760,7 @@ int run_main(int argc, char** argv) {
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
       view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
-      auto* gun = !drawn_remote && live_map.fly.p < 1 ? nullptr : &hand;  // none over the map
+      auto* gun = (!drawn_remote && live_map.fly.p < 1) || demo_eyes.behind > 0 ? nullptr : &hand;
       cl::draw_world(*device, *world, view, bench_fx, gun, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
