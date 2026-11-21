@@ -32,6 +32,7 @@
 #include "shooters_edge/net/q2_game.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
+#include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -677,6 +678,56 @@ TEST(the_window_joins_a_server_of_q2_and_plays) {
   CHECK(!remote.active && remote.q2 == nullptr);
   steps(10);
   CHECK(cn::q2_net_clients(r->server) == 0);
+}
+
+TEST(a_recording_of_a_q2_server_joined_late_plays_from_its_server_data) {
+  // Recording begun well into the level still opens with the level's server data (the client
+  // keeps the level from its start), and the file ends with Quake II's end block (length -1).
+  auto r = rig({});
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27902));
+  cn::Remote remote;
+  remote.q2_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortQ2), cfg);
+  std::vector<std::string> said;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      cn::remote_step(remote, 0.0131, said);
+      cn::q2_net_frame(r->server, r->now);
+    }
+  };
+  steps(150);
+  CHECK_MSG(remote.q2->stage == cn::ClientStage::active, remote.q2->refused);
+  const std::filesystem::path file =
+      std::filesystem::temp_directory_path() / "ge_q2_joined_record.dm2";
+  std::string error;
+  CHECK_MSG(cn::remote_record_open(remote, file, error), error);
+  steps(60);
+  ge::console::Console con{false};
+  const std::string line = cn::remote_record_close(remote, con, 0);
+  CHECK_MSG(line.starts_with("Recorded "), line);
+  std::ifstream in(file, std::ios::binary);
+  std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), {});
+  in.close();
+  std::filesystem::remove(file);
+  CHECK(bytes.size() > 8);
+  CHECK(bytes.size() > 4 && bytes[bytes.size() - 1] == 0xff && bytes[bytes.size() - 4] == 0xff);
+  cl::Demo d;
+  CHECK_MSG(cl::open_demo(bytes, d, error), error);
+  int frames = 0;
+  for (cl::DemoRead got = cl::DemoRead::frame; got == cl::DemoRead::frame && frames < 1000;) {
+    got = cl::next_frame(d, error);
+    frames += got == cl::DemoRead::frame ? 1 : 0;
+    CHECK_MSG(got != cl::DemoRead::error, error);
+  }
+  CHECK(d.state.map == "hall");
+  CHECK_MSG(frames > 20, std::to_string(frames));
+  cn::remote_disconnect(remote);
 }
 
 TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {

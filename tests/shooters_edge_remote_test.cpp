@@ -14,7 +14,8 @@
 // Not joined, rcon goes to rcon_address and the answers are said until it falls quiet;
 // showpackets, showdrop and cl_solid_players are bound to the window. `record` begun late keeps the
 // level from its server data, so the file plays from the signon; a match records itself from the
-// status leaving standby to 4 s into the intermission, and one cut short waits for match_save.
+// status leaving standby to 4 s into the intermission, and one cut short waits for match_save;
+// the match's console log beside it.
 //
 // ge:summary Tests: the remote client signs on, draws the server's state, walks, and leaves
 // ge:keywords test remote-client connect disconnect classic-server live-demo setangle walk
@@ -701,12 +702,14 @@ TEST(record_while_joined_keeps_the_level_from_its_start_and_a_match_records_itse
   CHECK_MSG(frames > 60 && d.state.map == "arena", error + " map " + d.state.map);
   // The match on its own: begun when the status leaves standby, saved 4 s into the intermission.
   con.cvars().set("match_auto_record", "2", ge::console::Source::local);
+  con.cvars().set("match_auto_logconsole", "2", ge::console::Source::local);
   cn::info_set(r.end.serverinfo, "status", "Standby");
   cn::remote_match_frame(r, con, 1);
   CHECK(!r.match.running);
   cn::info_set(r.end.serverinfo, "status", "Countdown");
   cn::remote_match_frame(r, con, 2);
   CHECK(r.match.running && !r.file.path.empty());
+  con.print("window was telefragged");  // a line of the match, kept in its log
   for (int f = 0; f < 30; f++) rig.frame();
   r.demo.state.intermission = true;
   cn::remote_match_frame(r, con, 3);
@@ -714,6 +717,13 @@ TEST(record_while_joined_keeps_the_level_from_its_start_and_a_match_records_itse
   cn::remote_match_frame(r, con, 7.5);
   CHECK(!r.match.running && r.file.path.empty());
   CHECK(fs::exists(dir / "solo" / "window - [arena]_000.qwd"));
+  {  // the console's lines of the match beside it, from its start to its end
+    std::ifstream log(dir / "solo" / "window - [arena]_000.log");
+    const std::string text((std::istreambuf_iterator<char>(log)), {});
+    CHECK_MSG(text.find("window was telefragged\n") != std::string::npos, text);
+    CHECK_MSG(text.find("Logging the match") == std::string::npos, text);  // said before
+  }
+  con.cvars().set("match_auto_logconsole", "1", ge::console::Source::local);
   // Cut short under the shortest length: not saved, kept for match_save.
   r.demo.state.intermission = false;
   cn::info_set(r.end.serverinfo, "status", "Standby");
@@ -725,7 +735,9 @@ TEST(record_while_joined_keeps_the_level_from_its_start_and_a_match_records_itse
   cn::remote_match_frame(r, con, 12);
   CHECK(!r.match.running && r.match.waiting);
   CHECK(!fs::exists(dir / "solo" / "window - [arena]_001.qwd"));
+  CHECK(!fs::exists(dir / "solo" / "window - [arena]_001.log"));
   con.run_now("match_save");
   CHECK(fs::exists(dir / "solo" / "window - [arena]_001.qwd"));
+  CHECK(fs::exists(dir / "solo" / "window - [arena]_001.log"));  // with 1, kept for match_save
   fs::remove_all(dir);
 }

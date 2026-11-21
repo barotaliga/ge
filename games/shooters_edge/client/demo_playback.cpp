@@ -13,6 +13,7 @@
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
+#include "shooters_edge/hud/layout.hpp"
 
 namespace shooters_edge::client {
 
@@ -76,7 +77,49 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
     bind_record_cvars(console, p.record);
   }
   add_video_cvars(console, &p.video);  // the engine's demo video (video.cfg)
+  {
+    ge::console::CvarLayer classic(console.cvars(), kLayerClassic);
+    console.cvars().bind({.name = "cl_democlock",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "A clock over a demo you watch.",
+                          .kind = ge::console::CvarKind::integer,
+                          .min = 0,
+                          .max = 2,
+                          .values = "0: none (the default); 1: the time since the demo began; 2: "
+                                    "the recording's own clock"},
+                         &p.clock);
+    console.cvars().bind({.name = "cl_democlock_x",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "Where the demo clock sits across the screen, in characters.",
+                          .kind = ge::console::CvarKind::integer,
+                          .min = -100,
+                          .max = 100,
+                          .values = "0: at the left edge (the default); a number: that many "
+                                    "characters in from the left, or from the right when below 0"},
+                         &p.clock_x);
+    console.cvars().bind({.name = "cl_democlock_y",
+                          .fallback = "-2",
+                          .flags = ge::console::kArchive,
+                          .help = "Where the demo clock sits up and down, in lines.",
+                          .kind = ge::console::CvarKind::integer,
+                          .min = -100,
+                          .max = 100,
+                          .values = "-2: two lines above the status bar (the default); a number: "
+                                    "that many lines down from the top, or up from the status bar "
+                                    "when below 0"},
+                         &p.clock_y);
+  }
   ge::console::CvarLayer shooter(console.cvars(), kLayerShooter);
+  console.cvars().bind({.name = "cl_demowait",
+                        .fallback = "0",
+                        .flags = ge::console::kArchive,
+                        .help = "Whether a demo you watch holds on its last frame when it ends.",
+                        .kind = ge::console::CvarKind::boolean,
+                        .values = "0: the demo ends (the default); 1: it holds, paused, on its "
+                                  "last frame until you seek back or leave"},
+                       &p.hold_end);
   ge::shooter::add_demo_transport(
       console, p,
       {.tracked = [&bench](int track) { bench.demo.track = track; },
@@ -159,11 +202,39 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
     p.shown_until = now_s + kBarShowS;
     return demo_seek(t, to, error);
   }
-  return playdemo_step(t, wall_dt_s, p.paused ? 0.0 : p.speed * p.rate, error);
+  const TimedemoStep step = playdemo_step(t, wall_dt_s, p.paused ? 0.0 : p.speed * p.rate, error);
+  if (step != TimedemoStep::end || p.hold_end == 0) return step;
+  if (!p.paused) p.shown_until = now_s + kBarShowS;  // held: the bar shows the way back
+  p.paused = true;
+  return TimedemoStep::frame;
+}
+
+std::string demo_clock_text(double s) {
+  const long long whole = s > 0 ? static_cast<long long>(s) : 0;
+  const auto two = [](long long n) {
+    return std::string(1, static_cast<char>('0' + n / 10)) + static_cast<char>('0' + n % 10);
+  };
+  return two(whole / 3600 % 100) + ":" + two(whole / 60 % 60) + ":" + two(whole % 60);
 }
 
 void playback_draw(gu::DrawList& overlay, const DemoPlayback& p, const Timedemo& t, int w, int h,
                    double now_s) {
+  if (p.clock != 0) {
+    const ge::hud::Style style = hud::hud_style();
+    const ge::hud::Frame frame = ge::hud::frame_for(w, h, style);
+    const float size = frame.px(style.caption_size);
+    const float cell = size * 1.3f;
+    const std::string words = demo_clock_text(p.clock == 2 ? t.demo.state.time : t.timeline.t);
+    const float right = static_cast<float>(w) - frame.safe.x;
+    const float x = p.clock_x >= 0 ? frame.safe.x + static_cast<float>(p.clock_x) * cell
+                                   : right + static_cast<float>(p.clock_x) * cell;
+    const float hud_top = static_cast<float>(h) - p.bar_bottom_px;
+    const float top = p.clock_y >= 0 ? frame.safe.y + static_cast<float>(p.clock_y) * cell
+                                     : hud_top + static_cast<float>(p.clock_y) * cell;
+    ge::hud::draw_shadowed(overlay, style.caption_face, size, x, top + size, words, style.ink,
+                           style.shadow, frame.px(style.shadow_drop) * 0.5f,
+                           p.clock_x >= 0 ? gu::Align::left : gu::Align::right, 1);
+  }
   if (p.bar == 0) return;
   if (p.bar == 1 && now_s > p.shown_until && !p.paused && !p.pointer.dragging) return;
   gu::PlayBarView v;

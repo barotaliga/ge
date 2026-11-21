@@ -6,6 +6,7 @@
 // ge:keywords test console dispatch buffer wait alias exec problem stuff button complete suggest
 // ge:skill console testing
 #include <map>
+#include <string>
 
 #include "check.hpp"
 #include "console/cfg.hpp"
@@ -229,4 +230,17 @@ TEST(cfg_save_keeps_the_players_value_under_a_meta) {
   c.execute("cl_comp 1");
   CHECK(c.cvars().find("cl_fov")->value == "120");
   CHECK_MSG(c.save_text().find("seta cl_fov \"90\"\n") != std::string::npos, c.save_text());
+}
+
+TEST(a_tap_sees_every_line_printed_and_the_sink_still_gets_it) {
+  ge::console::Console c{false};
+  std::string seen;
+  c.set_tap([&seen](std::string_view line) { seen.append(line).push_back('|'); });
+  c.print("one");
+  c.print("two");
+  CHECK(seen == "one|two|");
+  CHECK(c.output().size() == 2);
+  c.set_tap(nullptr);
+  c.print("three");
+  CHECK(seen == "one|two|");
 }

@@ -242,3 +242,41 @@ TEST(demo_jump_goes_to_a_time_or_on_and_back_by_one) {
   con.run_now("demo_jump x");
   CHECK(t.seek_ask < 0 && t.skip_ask == 10);
 }
+
+TEST(the_demo_clock_says_hours_minutes_and_seconds) {
+  CHECK(cl::demo_clock_text(0) == "00:00:00");
+  CHECK(cl::demo_clock_text(-3) == "00:00:00");
+  CHECK(cl::demo_clock_text(59.99) == "00:00:59");
+  CHECK(cl::demo_clock_text(3725.5) == "01:02:05");
+  CHECK(cl::demo_clock_text(100 * 3600 + 61) == "00:01:01");  // the hours start again past 99
+}
+
+TEST(cl_demowait_holds_the_last_frame_paused_and_a_seek_back_plays_again) {
+  cl::DemoPlayback p;
+  cl::Timedemo t = opened();
+  std::string error;
+  CHECK(cl::playback_begin(p, t, error));
+  std::vector<std::string> said;
+  const auto step = [&](double dt) {
+    return cl::playback_step(p, t, {{}, -1, -1, false}, 1280, 720, dt, 0, said, error);
+  };
+  step(0);
+  p.seek_ask = p.scan.length_s;  // a moment before the end
+  step(0);
+  cl::TimedemoStep got = cl::TimedemoStep::frame;
+  for (int i = 0; i < 400 && got != cl::TimedemoStep::end; i++) got = step(0.05);
+  CHECK(got == cl::TimedemoStep::end);  // 0: the demo ends
+  cl::Timedemo held = opened();
+  CHECK(cl::playback_begin(p, held, error));
+  p.hold_end = 1;
+  cl::playback_step(p, held, {{}, -1, -1, false}, 1280, 720, 0, 0, said, error);
+  p.seek_ask = p.scan.length_s;
+  for (int i = 0; i < 400; i++) {
+    got = cl::playback_step(p, held, {{}, -1, -1, false}, 1280, 720, 0.05, 0, said, error);
+    CHECK(got != cl::TimedemoStep::end);
+  }
+  CHECK(p.paused);  // held on the last frame
+  p.seek_ask = 5;
+  got = cl::playback_step(p, held, {{}, -1, -1, false}, 1280, 720, 0, 0, said, error);
+  CHECK(got != cl::TimedemoStep::end && near(held.timeline.t, 5, 0.051));
+}

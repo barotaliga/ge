@@ -66,14 +66,7 @@ void start(Remote& r, const ClientConfig& cfg) {
   record_start(r.recording, false);
   r.recording.live = true;  // read at once by the view (never written to a file)
   r.end.record = &r.recording;
-  if (!r.file.path.empty()) {  // a recording of the last server ends with it
-    r.file.out.close();
-    r.file.path.clear();
-  }
-  r.file.level = ClientRecorder{};  // the level kept for `record` (qw_match_record.hpp)
-  record_start(r.file.level, false);
-  r.file.written = 0;
-  r.end.level_record = &r.file.level;
+  remote_record_restart(r);  // the level kept for `record` (qw_match_record.hpp)
   open_live(r.demo);
   r.active = true;
   r.now_us = 0;
@@ -726,7 +719,8 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   if (r.watch) return watch_step(r, said);
   if (r.q2) {
     const RemoteStep step = q2_remote_step(r, wall_s, said);
-    login_step(r, said);  // logged in by the account file, and seen by friends, as below
+    remote_record_flush(r);  // `record`'s file (qw_match_record.hpp)
+    login_step(r, said);     // logged in by the account file, and seen by friends, as below
     presence_step(r, said);
     return step;
   }

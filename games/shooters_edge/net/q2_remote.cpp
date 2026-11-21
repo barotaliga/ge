@@ -114,6 +114,7 @@ int lerp_list(std::vector<client::DemoEntity>& drawn, const std::vector<client::
 void q2_remote_start(Remote& r, const ClientConfig& cfg) {
   r.q2 = std::make_unique<Q2ClientEnd>();
   q2_client_start(*r.q2, *r.transport, r.server, q2_config(r, cfg), 0);
+  remote_record_restart(r);  // the level kept for `record` (qw_match_record.hpp)
   r.active = true;
   r.now_us = 0;
   r.owed_s = 0;
