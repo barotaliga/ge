@@ -128,6 +128,11 @@ void watch_still(Watch& w, const shooters_edge::bots::Fighter& f, const sh::Pilo
 }
 
 void watch_view(Watch& w, int k, double t, float yaw, const char* by, float vx, float vy) {
+  {
+    auto& vl = w.views[static_cast<size_t>(k)];
+    const char* name = by != nullptr ? by : "-";
+    if (vl.empty() || std::strcmp(vl.back().second, name) != 0) vl.push_back({t, name});
+  }
   Watch::View& v = w.view[static_cast<size_t>(k)];
   const double dt = t - v.t;
   if (v.t < 0 || dt <= 0 || dt > 0.05) {
@@ -414,7 +419,7 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
   // The recording's clock against the fighters' (the server's): both end with the match.
   const double offset = w.t_last - dt.seconds;
   lab.note("flights by mode: the recording's clock + " + to_fixed(offset, 2) + " s = the server's");
-  std::map<std::string, std::vector<float>> gain;
+  std::map<std::string, std::vector<float>> gain, by_view;
   const sh::HopSettings hs;
   for (size_t slot = 0; slot < dt.tracks.size(); slot++) {
     size_t k = r.players.size();
@@ -433,6 +438,12 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
         mode = name;
       }
       gain[mode].push_back(h.speed_land - h.speed_off);
+      const char* view = "-";
+      for (const auto& [at, name] : w.views[k]) {
+        if (at > t) break;
+        view = name;
+      }
+      if (std::string_view(mode) == "hop") by_view[view].push_back(h.speed_land - h.speed_off);
     }
   }
   gl::LabTable at{"flights taking off at 380-460 u/s (0.3-1 s up), by the pilot's mode then",
@@ -449,6 +460,21 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
     lab.metric("team.air.s380." + mode + ".crash-share", crash, "share");
   }
   lab.table(at);
+  // The hop's flights by who wrote the view as it took off: a look or an aim holds the view, and
+  // the hop's air cannot turn the flight away from a wall under it.
+  gl::LabTable vt{"the hop's flights at 380-460 u/s by the view's writer at the takeoff",
+                  {"view", "flights", "gain p50", "crash %"},
+                  {}};
+  for (const auto& [view, g] : by_view) {
+    int crashes = 0;
+    for (const float x : g) crashes += x < -80 ? 1 : 0;
+    const double crash = static_cast<double>(crashes) / static_cast<double>(g.size());
+    vt.rows.push_back(
+        {view, std::to_string(g.size()), to_fixed(median(g), 1), to_fixed(100 * crash, 1)});
+    lab.metric("team.air.s380.view." + view + ".flights", static_cast<double>(g.size()), "count");
+    lab.metric("team.air.s380.view." + view + ".crash-share", crash, "share");
+  }
+  lab.table(vt);
 }
 
 // The pilot's link toward its route's next node, by kind ("walk", "jump"...), or "-".

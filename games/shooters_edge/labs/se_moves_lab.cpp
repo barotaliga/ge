@@ -34,6 +34,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -136,7 +137,12 @@ float pct(std::vector<float>& v, double p) {
 
 struct HopCell {
   std::vector<float> turned, sweep, gain, off;
+  // A crash's cause (80 u/s or more lost): its largest one-frame drop of 40 or more in the air
+  // (a wall, a player), at the landing (a step, a slope, a wall at the feet), or none (lost slowly:
+  // the keys or the turn), by kCrashCauses.
+  std::array<int32_t, 3> crash_by{};
 };
+constexpr const char* kCrashCauses[3] = {"air", "land", "slow"};
 
 struct Fast {
   std::string name;
@@ -172,13 +178,50 @@ void hop_cells(const sh::HopReading& r, const std::vector<uint8_t>& blast,
     int b = 0;
     while (b + 1 < kSpeedBins && h.speed_off >= kSpeedEdge[b + 1]) b++;
     const float turned = hhi - hlo;
+    int cause = -1;
+    if (h.speed_land - h.speed_off < -80) {
+      float drop = 0;
+      int32_t at = -1;
+      for (int32_t i = h.takeoff + 1; i <= h.land; i++) {
+        const float d =
+            r.frames[static_cast<size_t>(i - 1)].speed - r.frames[static_cast<size_t>(i)].speed;
+        if (d > drop) drop = d, at = i;
+      }
+      cause = drop < 40 ? 2 : at >= h.land - 1 ? 1 : 0;
+    }
     for (HopCell* c : {&by_speed[static_cast<size_t>(b)],
                        &by_k[static_cast<size_t>(std::min(k, kChainBins - 1))]}) {
       c->turned.push_back(turned);
       c->sweep.push_back(hi - lo);
       c->gain.push_back(h.speed_land - h.speed_off);
       c->off.push_back(h.speed_off);
+      if (cause >= 0) c->crash_by[static_cast<size_t>(cause)]++;
     }
+  }
+}
+
+// WHERE THE FAST FLIGHTS CRASH (`--crash-cells`): each flight of 0.3-1 s taking off at 380-460
+// u/s out of a blast, by its takeoff's 128-unit cell: the flights and the crashes mid-air (80 u/s
+// or more lost, the largest one-frame drop of 40 or more before the landing: a wall, a player).
+constexpr float kCrashCell = 128;
+using CrashCells = std::map<std::pair<int, int>, std::array<int32_t, 2>>;
+void crash_cells(const sh::HopReading& r, const std::vector<uint8_t>& blast, CrashCells& cells) {
+  for (const sh::Hop& h : r.hops) {
+    if (h.air_s < 0.3f || h.air_s > 1.0f || h.speed_off < 380 || h.speed_off >= 460) continue;
+    if (blast[static_cast<size_t>(h.takeoff)] || blast[static_cast<size_t>(h.land)]) continue;
+    const sh::Vec3f at = r.frames[static_cast<size_t>(h.takeoff)].origin;
+    auto& c = cells[{static_cast<int>(std::floor(at.x / kCrashCell)),
+                     static_cast<int>(std::floor(at.y / kCrashCell))}];
+    c[0]++;
+    if (h.speed_land - h.speed_off >= -80) continue;
+    float drop = 0;
+    int32_t when = -1;
+    for (int32_t i = h.takeoff + 1; i <= h.land; i++) {
+      const float d =
+          r.frames[static_cast<size_t>(i - 1)].speed - r.frames[static_cast<size_t>(i)].speed;
+      if (d > drop) drop = d, when = i;
+    }
+    if (drop >= 40 && when < h.land - 1) c[1]++;
   }
 }
 
@@ -308,6 +351,7 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
     std::vector<uint8_t> blast;
   };
   std::vector<Kept> kept;
+  CrashCells crashes;
   int32_t read = 0;
   // THE TRACK (`--track=<tsv>`): every player's every frame of the first `--track-demos`
   // recordings as a row, for the questions the tables do not answer (the bot plan's scripts).
@@ -379,6 +423,7 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
       }
       p.hops += static_cast<int32_t>(r.hops.size());
       hop_cells(r, blast, all_speed, all_k);
+      crash_cells(r, blast, crashes);
       ground_cells(r, blast, ground);
       la::swap_read(r, swaps);
       hop_cells(r, blast, p.by_speed, p.by_k);
@@ -389,6 +434,55 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
     lab.fail("se-moves: no recording in " + dir + " is on " + m.name,
              "next: pass --mapname=<the recordings' map> with --basedir");
     return;
+  }
+  {
+    // Where the fast flights crash mid-air, the busiest cells (crash_cells).
+    std::vector<std::pair<std::pair<int, int>, std::array<int32_t, 2>>> cells(crashes.begin(),
+                                                                              crashes.end());
+    std::sort(cells.begin(), cells.end(), [](const auto& a, const auto& b) {
+      return a.second[1] != b.second[1] ? a.second[1] > b.second[1] : a.first < b.first;
+    });
+    int64_t flights = 0, hit = 0;
+    for (const auto& [at, n] : crashes) flights += n[0], hit += n[1];
+    gl::LabTable ct{
+        "where the fast flights (380-460 u/s) crash mid-air, by the takeoff's 128-unit "
+        "cell (its middle): " +
+            std::to_string(hit) + " of " + std::to_string(flights),
+        {"x", "y", "flights", "crashed", "crash %", "% of all crashes", "against: flights",
+         "against: crash %"},
+        {}};
+    // (`--crash-against`) another set's cells (a --crash-cells file) beside each: people's.
+    CrashCells against;
+    if (!lab.arg("crash-against").empty()) {
+      std::ifstream in(lab.arg("crash-against"));
+      std::string head;
+      std::getline(in, head);
+      float x = 0, y = 0;
+      int32_t f = 0, c = 0;
+      while (in >> x >> y >> f >> c)
+        against[{static_cast<int>(std::floor(x / kCrashCell)),
+                 static_cast<int>(std::floor(y / kCrashCell))}] = {f, c};
+    }
+    for (size_t i = 0; i < cells.size() && i < 15; i++) {
+      const auto& [at, n] = cells[i];
+      const auto o = against.find(at);
+      const int32_t of = o == against.end() ? 0 : o->second[0];
+      const int32_t oc = o == against.end() ? 0 : o->second[1];
+      ct.rows.push_back({to_fixed((at.first + 0.5) * kCrashCell, 0),
+                         to_fixed((at.second + 0.5) * kCrashCell, 0), std::to_string(n[0]),
+                         std::to_string(n[1]), to_fixed(100.0 * n[1] / std::max(1, n[0]), 0),
+                         to_fixed(hit > 0 ? 100.0 * n[1] / static_cast<double>(hit) : 0, 1),
+                         against.empty() ? "-" : std::to_string(of),
+                         against.empty() || of == 0 ? "-" : to_fixed(100.0 * oc / of, 0)});
+    }
+    lab.table(ct);
+    if (!lab.arg("crash-cells").empty()) {
+      std::ofstream out(lab.arg("crash-cells"));
+      out << "x\ty\tflights\tcrashes\n";
+      for (const auto& [at, n] : crashes)
+        out << to_fixed((at.first + 0.5) * kCrashCell, 0) << '\t'
+            << to_fixed((at.second + 0.5) * kCrashCell, 0) << '\t' << n[0] << '\t' << n[1] << '\n';
+    }
   }
   // Ranked by the 95th percentile of the fast speed, players with a minute alive or more.
   struct Row {
@@ -471,6 +565,25 @@ void fastest(gl::Lab& lab, const la::StudyMap& m) {
       const std::string bin = "s" + to_fixed(kSpeedEdge[b], 0);
       lab.metric(key + bin + ".weave", pct(c.turned, 0.5), "deg");
       lab.metric(key + bin + ".gain", pct(c.gain, 0.5), "u/s");
+      // The clean flights' own (no crash): the weave and gain a flight keeps when nothing stops it.
+      std::vector<float> cw, cg;
+      for (size_t i = 0; i < c.gain.size() && i < c.turned.size(); i++)
+        if (c.gain[i] >= -80) cw.push_back(c.turned[i]), cg.push_back(c.gain[i]);
+      lab.metric(key + bin + ".clean-weave", pct(cw, 0.5), "deg");
+      lab.metric(key + bin + ".clean-gain", pct(cg, 0.5), "u/s");
+      for (size_t k = 0; k < 3; k++)
+        lab.metric(key + bin + ".crash." + kCrashCauses[k] + "-share",
+                   c.gain.empty()
+                       ? 0
+                       : static_cast<double>(c.crash_by[k]) / static_cast<double>(c.gain.size()),
+                   "share");
+      // The crashes: 80 u/s or more lost in the flight (se-team's `team.air.s380.*` rule).
+      int crashed = 0;
+      for (const float g : c.gain) crashed += g < -80 ? 1 : 0;
+      lab.metric(
+          key + bin + ".crash-share",
+          c.gain.empty() ? 0 : static_cast<double>(crashed) / static_cast<double>(c.gain.size()),
+          "share");
     }
   }
   double alive = 0, fast = 0;
@@ -900,6 +1013,13 @@ const gl::LabSpec kSpec{
          "with --dir: every player's every frame as a TSV row (place, view, speed, the velocity's "
          "heading, ground or air, takeoffs, blasts)"},
         {"track-demos", "8", "--track's recordings: the first this many"},
+        {"crash-cells", "",
+         "with --dir: the fast flights (380-460 u/s, 0.3-1 s) and their mid-air crashes by the "
+         "takeoff's 128-unit cell, a TSV row a cell (x y flights crashes): join people's and "
+         "bots' by the cell"},
+        {"crash-against", "",
+         "a --crash-cells file of another set (people's): its flights and crash share beside each "
+         "cell of the crash table"},
     },
     "",
     run,
