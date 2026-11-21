@@ -575,6 +575,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   s.angles = {angle16(v.angles[0]), angle16(v.angles[1]), angle16(v.angles[2])};
   s.kick = {static_cast<float>(v.kick[0]) * 0.25f, static_cast<float>(v.kick[1]) * 0.25f,
             static_cast<float>(v.kick[2]) * 0.25f};
+  s.fov = static_cast<float>(v.fov);
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;

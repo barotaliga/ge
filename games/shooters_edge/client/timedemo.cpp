@@ -424,16 +424,17 @@ void timedemo_mark(Timedemo& t, uint64_t now_ns) {
   t.last_ns = now_ns;
 }
 
-ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s) {
+ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s, bool kick) {
   ge::render::FrameView v;
+  const sh::Vec3f k = kick ? s.kick : sh::Vec3f{};
   const ge::camera::Vec3 eye = engine_point(s.eye);
   v.eye[0] = eye.x;
   v.eye[1] = eye.y;
   v.eye[2] = eye.z;
   // The server's kick angles on the view (Quake II's bob, tilts and kicks; 0 in Quake).
-  v.heading = engine_heading(s.angles.y + s.kick.y);
-  v.pitch = engine_pitch(s.angles.x + s.kick.x);
-  v.roll = s.kick.z * 3.14159265358979323846 / 180;
+  v.heading = engine_heading(s.angles.y + k.y);
+  v.pitch = engine_pitch(s.angles.x + k.x);
+  v.roll = k.z * 3.14159265358979323846 / 180;
   v.fov_y = fov_y;
   v.time_s = time_s;
   return v;

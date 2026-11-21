@@ -425,6 +425,9 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
     if (c.stage == ClientStage::active && c.moves > 0)
       c.latency = c.now - c.sent_at[c.ch.incoming_acknowledged & 63];
     read_payload(c, buf + at, size - at);
+    ge::hud::net_lost(c.net, c.ch.last_drop);  // the lag graph's (scr_lag_draw) and r_netgraph's
+    ge::hud::net_arrived(c.net,
+                         c.stage == ClientStage::active && c.moves > 0 ? c.latency * 1e3 : -1);
   }
   if (!c.sent_on.empty()) {  // a server sent it elsewhere: the handshake again, there
     gn::Address to;

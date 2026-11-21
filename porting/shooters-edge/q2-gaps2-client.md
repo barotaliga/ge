@@ -110,7 +110,7 @@ recorded field of 90 or more, so a recorded zoom (under 90) still shows; the use
 always uses the player's own, `uf` 32 always the recorded one. [R] Ours: our window draws its own
 `cl_fov` (with `fov` a synonym); the player state's field is read off the wire and from recordings
 but was not found to drive the view, so a mod's zoom, a server's fixed field of view and a recorded
-zoom are not shown. [D ours]
+zoom are not shown. [D ours] **Done (M18k4 round 34)**: the field of view sent is drawn (joined, recorded with `uf` 4 and 32, hosted with our `cl_fov` sent as `fov`), between two frames, `cl_adjustfov` (`client/q2_view.cpp`). The user info is still sent only at the connect (C30).
 
 **C4. Rank 2, HUD: the scale of the status bar and every 2D element.** The original draws all 2D
 (status bar, layouts, inventory, centre print, chat lines, crosshair, lag graph) on a virtual screen
@@ -120,7 +120,7 @@ window's height when it is wider than tall: 4 from 2160 pixels, 2 from 1080, els
 other value is used as given, held within 1 to 10. The console has its own `con_scale`, the menus
 `ui_scale`, both with the same 0 meaning auto. [R] Ours: the Quake II bar's scale is the window's
 height divided by 400, at least 1 (`q2_bar_scale`), with no setting: at 1440 pixels ours is 3 and the
-original 2, at 2160 ours 5 and the original 4, at 800 to 1079 ours 2 and the original 1. [R both]
+original 2, at 2160 ours 5 and the original 4, at 800 to 1079 ours 2 and the original 1. [R both] **Done (M18k4 round 34)**: `scr_scale` and the original's choice by the window for the bar, layouts, inventory, crosshair, centre print and lag graph; the desktop's DPI floor is not read; the console's `con_scale` landed in round 33, `ui_scale` not.
 
 **C5. Rank 2, menus: Quake II's own pages and rows.** The original's menu is a data file in the base
 game folder; its pages and rows, as a player sees them: [R]
@@ -228,7 +228,7 @@ milliseconds; a packet lost is a column in the "critical" colour, a frame the se
 the rate in the "warning" colour. `scr_lag_draw_scale` (1, the fork's) draws it larger. Whenever 128
 or more moves are unanswered (about 2 s at 62 moves a second), the pack's `net` picture is drawn in
 the graph's box, blinking: shown for 768 of every 1024 ms. [R] Ours: not found (no `net` picture, no
-lag graph for Quake II). [D ours]
+lag graph for Quake II). [D ours] **Done (M18k4 round 34)**: `scr_lag_*` (`engine/hud/net_graph.cpp`'s `draw_lag_graph`, `client/q2_bar.cpp`) and the blinking `net` picture; a frame the server held back for the rate is not told apart from one that came.
 
 **C12. Rank 3, HUD: the network trouble words ("turtle").** `scr_showturtle` (1) writes, in the
 alternate colour, from 11 lines above the bottom at the left edge, one word a line for each trouble
@@ -252,7 +252,7 @@ clock, a frame rate, the speed (`draw cl_ups -60 -40`). [R] Ours: not found. [D 
 layouts unless F1 is held. `scr_alpha` (1): the opacity of every 2D element but the crosshair. While
 a demo plays, holding F1 shows the recorded layout (the scoreboard) whether or not the recording had
 it up; holding SHIFT turns the view by the player's own mouse instead of the recorded angles. [R]
-Ours: not found by these names; our HUD's own switches differ. [D ours]
+Ours: not found by these names; our HUD's own switches differ. [D ours] **Done (M18k4 round 34)**: `scr_draw2d` and `scr_alpha` over Quake II's bar, layouts, inventory, centre print and crosshair; F1 held at `scr_draw2d 3` and in a demo, and SHIFT's own look in a demo, are open.
 
 **C16. Rank 3, effects and entities: the client's switches.** Each of these is in the original and
 not found in ours by name (ours has neighbours by the first game's names: `cl_gibfilter`,
@@ -276,7 +276,7 @@ an `own` row): [R]
 - `cl_footsteps` 1: 0 no footsteps, also telling the server not to send them; 2 only the classic
   four steps and the one classic landing (C34).
 Ours: the shells, the glow pulse, gibs and trails are landed (`q2-render-fx.md`,
-`q2-client-effects.md`); the switches are not. [R ours]
+`q2-client-effects.md`); the switches are not. [R ours] **Done (M18k4 round 34)**: `cl_kickangles` (a cheat), on a joined server, in a recording and hosted (`client/q2_view.cpp`).
 
 **C17. Rank 3, effects: the railgun's trail settings.** `cl_railtrail_type` 0 (the classic spiral and
 core of particles), 1 a solid beam core only, 2 the core and a spiral; `cl_railtrail_time` 1.0 s; `cl_railcore_color` red, `cl_railcore_width` 2; `cl_railspiral_color` blue, `cl_railspiral_radius`
@@ -374,7 +374,7 @@ full at 66, blue from 0 at 66 to full at 99, black when dead. [R] Ours draws `ch
 state's underwater flag) and `s_underwater` is 1 (default), every sound the client mixes passes a
 high-shelf filter at 5000 Hz with the treble's gain `s_underwater_gain_hf` (0.25, held to 0.001 to 1),
 the same under the software mixer and OpenAL. [R] Ours: no underwater filter on the sound was
-found. [D ours]
+found. [D ours] **Done (M18k4 round 34)**: `s_underwater` and `s_underwater_gain_hf`, one setting of both classic games (on in Quake II, off in Quake), a high shelf at 5 kHz on the synth's whole mix while the eye is in a liquid (`client/room_ear.cpp`, `engine/audio/synth.hpp`'s `muffle`).
 
 **C29. Rank 2, music: the level's track on a joined server and in a recording.** The original plays
 the track the level's configstring 1 names whenever a level is loaded and whenever that string

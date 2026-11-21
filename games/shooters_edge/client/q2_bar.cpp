@@ -18,6 +18,8 @@ namespace shooters_edge::client {
 
 namespace {
 
+constexpr int kNetTroubleMoves = 128;  // moves unanswered before the `net` picture shows
+
 constexpr int kClear = 255;  // the pictures' see-through colour
 
 const BarPicture* picture(Q2Bar& bar, const std::string& path) {
@@ -128,6 +130,46 @@ struct Strings {
   mutable std::string scratch;
 };
 
+// The lag graph (scr_lag_draw) at its corner of the bar's screen, or, while 128 or more moves are
+// unanswered, the pack's `net` picture there, shown 768 ms of every 1024.
+bool draw_lag(ge::ui::DrawList& dl, Q2Bar& bar, float f, float alpha) {
+  const Q2Screen* s = bar.screen;
+  if (s == nullptr || s->draw2d == 0 || bar.lag == nullptr || f <= 0) return false;
+  const int k = static_cast<int>(f);
+  const int whole_w = bar.width / k, whole_h = bar.height / k;  // the smaller screen's, whole px
+  const auto w = static_cast<float>(whole_w), h = static_cast<float>(whole_h);
+  constexpr auto kSide = static_cast<float>(ge::hud::kLagColumns);
+  const float x =
+      s->lag_x < 0 ? w + static_cast<float>(s->lag_x) - kSide + 1 : static_cast<float>(s->lag_x);
+  const float y =
+      s->lag_y < 0 ? h + static_cast<float>(s->lag_y) - kSide + 1 : static_cast<float>(s->lag_y);
+  bool drew = false;
+  if (s->lag_draw > 0) {
+    ge::hud::LagGraphLook look;
+    look.min_ms = static_cast<float>(s->lag_min);
+    look.max_ms = static_cast<float>(s->lag_max);
+    look.box = s->lag_draw > 1;
+    look.alpha = alpha;
+    ge::hud::draw_lag_graph(dl, *bar.lag, {x * f, y * f, kSide * f, kSide * f}, look);
+    drew = true;
+  }
+  const auto ms = static_cast<int64_t>(bar.now * 1000);
+  if (bar.unanswered >= kNetTroubleMoves && (ms & 1023) < 768) {
+    if (const BarPicture* img = picture(bar, "pics/net.pcx")) {
+      ge::ui::Box b;
+      b.rect = {x * f, y * f, img->width() * f, img->height() * f};
+      b.image = &img->image;
+      b.uv = {0, 0, static_cast<float>(img->image.width), static_cast<float>(img->image.height)};
+      b.nearest = img->k == 1;
+      b.feather = 0;
+      b.opacity = alpha;
+      dl.box(b);
+      drew = true;
+    }
+  }
+  return drew;
+}
+
 }  // namespace
 
 std::string_view q2_world_string(const server::RulesWorld& w, int index, std::string& scratch) {
@@ -170,17 +212,31 @@ bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds,
   if (!bar.recorded) bar.recorded = std::make_shared<server::RulesWorld>();
   if (!q2_world_of(ds, *bar.recorded)) return false;
   run_q2_bar(bar, *bar.recorded, ds.player, ds.frames, width, height);
-  draw_q2_bar(dl, bar, q2_bar_scale(height));
+  draw_q2_bar(dl, bar, q2_bar_scale(bar, width, height));
   return true;
 }
 
-int q2_bar_scale(int height) { return std::max(1, height / 400); }
+int q2_bar_scale(int width, int height, int setting) {
+  if (setting > 0) return std::min(setting, 10);
+  const int side = width >= height ? height : width;
+  const int step = width >= height ? 1080 : 1920;  // a scale of 2 from here, 4 from twice it
+  return side >= 2 * step ? 4 : side >= step ? 2 : 1;
+}
+
+int q2_bar_scale(const Q2Bar& bar, int width, int height) {
+  return q2_bar_scale(width, height, bar.screen != nullptr ? bar.screen->scale : 0);
+}
 
 void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t frame, int width,
                 int height) {
   bar.ops.clear();
+  bar.width = width;
+  bar.height = height;
   if (world.status_bar.empty() || slot < 0 || slot >= ge::shooter::kMaxClients) return;
-  const int scale = q2_bar_scale(height);
+  // scr_draw2d: 0 none of it; 1 no status bar; 3 no layouts (the scoreboard, the help computer).
+  const int draw2d = bar.screen != nullptr ? bar.screen->draw2d : 2;
+  if (draw2d == 0) return;
+  const int scale = q2_bar_scale(bar, width, height);
   Strings strings{world, {}};
   hud::LayoutInput in;
   in.program = world.status_bar;
@@ -194,9 +250,9 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
     const auto& s = *static_cast<const Strings*>(ctx);
     return q2_world_string(s.world, index, s.scratch);
   };
-  hud::run_layout(in, bar.ops);  // its text copied out of the strings as they are read
+  if (draw2d != 1) hud::run_layout(in, bar.ops);  // its text copied out of the strings as read
   const server::WorldClient& me = world.clients[slot];
-  if ((in.stats[13] & 1) != 0 && !me.layout.empty()) {
+  if ((in.stats[13] & 1) != 0 && !me.layout.empty() && draw2d != 3) {
     std::vector<hud::LayoutOp> over;  // the screen the rules sent him, over the bar
     in.program = me.layout;
     hud::run_layout(in, over);
@@ -207,7 +263,8 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
 }
 
 void add_q2_screen(Q2Bar& bar, int crosshair, std::string_view centre, int width, int height) {
-  const int scale = q2_bar_scale(height);
+  if (bar.screen != nullptr && bar.screen->draw2d == 0) return;
+  const int scale = q2_bar_scale(bar, width, height);
   const int w = width / scale, h = height / scale;
   if (crosshair >= 1 && crosshair <= 3) {
     hud::LayoutOp op;
@@ -249,8 +306,8 @@ void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::Crosshai
       s, own != nullptr ? own->image : kNone, own != nullptr ? static_cast<float>(own->k) : 1,
       own != nullptr ? std::span<const uint8_t>(own->palette) : std::span<const uint8_t>(), &shown,
       health);
-  if (!shown) return;
-  const auto u = static_cast<float>(q2_bar_scale(height));
+  if (!shown || (bar.screen != nullptr && bar.screen->draw2d == 0)) return;
+  const auto u = static_cast<float>(q2_bar_scale(bar, width, height));
   const ge::hud::Size z = ge::hud::measure(p, u);
   const float x = (static_cast<float>(width) - z.w) / 2 + static_cast<float>(s.offset[0]) * u;
   const float y = (static_cast<float>(height) - z.h) / 2 + static_cast<float>(s.offset[1]) * u;
@@ -259,7 +316,9 @@ void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::Crosshai
 
 bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
   const auto f = static_cast<float>(scale);
-  bool drew = false;
+  const float alpha =
+      bar.screen != nullptr ? static_cast<float>(std::clamp(bar.screen->alpha, 0.0, 1.0)) : 1;
+  bool drew = draw_lag(dl, bar, f, alpha);
   const auto box = [&](const BarPicture* img, float x, float y, float w, float h, ge::ui::Rect uv) {
     ge::ui::Box b;
     b.rect = {x * f, y * f, w * f, h * f};
@@ -267,6 +326,7 @@ bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
     b.uv = uv;
     b.nearest = img->k == 1;
     b.feather = 0;
+    b.opacity = alpha;
     dl.box(b);
     drew = true;
   };

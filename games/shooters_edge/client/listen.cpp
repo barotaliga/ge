@@ -1279,6 +1279,7 @@ PlayerState player_state(const Listen& l) {
     p.rules_view = true;
     p.view_ofs = {n.view_offset[0], n.view_offset[1], n.view_offset[2]};
     p.kick = {n.kick[0], n.kick[1], n.kick[2]};
+    p.fov = n.fov;
   }
   if (const sv::Q2Server* sq = l.rules != nullptr ? sv::q2_of(*l.rules) : nullptr) {
     p.rules_frame = sq->frame_number;

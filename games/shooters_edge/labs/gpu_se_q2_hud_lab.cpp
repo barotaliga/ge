@@ -19,7 +19,7 @@
 //
 // ge:keywords cr_charset
 // ge:keywords lab se-q2-hud q2 status-bar stats layout pickup timer flash deathmatch
-// ge:keywords power-shield q2-hud screenshot scoreboard help-computer inventory
+// ge:keywords power-shield q2-hud screenshot scoreboard help-computer inventory scr_lag_draw
 // ge:skill ui labs
 // ge:test tests/shooters_edge_q2_bar_test.cpp
 #include <map>
@@ -326,8 +326,17 @@ void run(gl::Lab& lab) {
   ge::console::Console crosshair_con;
   ge::hud::add_crosshair_cvars(crosshair_con.cvars(), crosshair);
   cl::GameCvarValues game_cvars;
-  cl::add_game_cvars(crosshair_con, game_cvars, game, {.files = &files, .crosshair = &crosshair});
+  cl::Q2Screen screen;  // its view and 2D settings (--hudcvars: scr_scale, scr_lag_draw...)
+  cl::add_game_cvars(crosshair_con, game_cvars, game,
+                     {.files = &files, .crosshair = &crosshair, .screen = &screen});
   crosshair_con.execute(lab.arg("hudcvars"));
+  // A joined server's last packets for the lag graph: round trips rising and falling about 60 ms,
+  // one lost in every twelve; with --trouble, its moves unanswered past the `net` picture's 128.
+  ge::hud::NetHistory lag;
+  for (int i = 0; i < 60; i++) {
+    if (i % 12 == 7) ge::hud::net_lost(lag, 1);
+    ge::hud::net_arrived(lag, 40 + 30 * ((i * 7) % 11) / 10.0);
+  }
   for (int m = 0; m < int(std::size(kMoments)); m++) {
     cl::ListenOptions opt = shooters_edge::net::listen_options();
     opt.console = {"deathmatch 0"};
@@ -372,12 +381,15 @@ void run(gl::Lab& lab) {
     bar.files = &files;
     bar.binds = &kBinds;
     bar.now = 0.15;  // the cursor's on half
+    bar.screen = &screen;
+    bar.lag = &lag;
+    bar.unanswered = lab.arg("trouble") == "1" ? 200 : 0;
     cl::run_q2_bar(bar, s.world, 0, s.frame_number, w, h);
     cl::add_q2_screen(bar, 0, kMoments[m].centre, w, h);  // a centre print
     ge::ui::DrawList dl;
     dl.begin(w, h);
     cl::draw_q2_crosshair(dl, bar, crosshair, w, h);  // as --hudcvars sets it, under the bar
-    const bool drew = cl::draw_q2_bar(dl, bar, cl::q2_bar_scale(h));
+    const bool drew = cl::draw_q2_bar(dl, bar, cl::q2_bar_scale(bar, w, h));
     ge::ui::render(dl, canvas);
     lab.metric(std::string(kMoments[m].id) + ".drawn", double(bar.ops.size()), "count",
                gl::Det::measured);
@@ -414,7 +426,9 @@ const gl::LabSpec kSpec{
       "with --game: the folder holding Quake's base folder, its letters "
       "writing the bar's words (cr_charset q1)"},
      {"hudcvars", "",
-      "the crosshair's cvars (crosshair, crosshaircolor, crosshairsize, crosshairalpha)"}},
+      "the crosshair's cvars (crosshair, crosshaircolor, crosshairsize, crosshairalpha) and "
+      "the screen's (scr_scale, scr_draw2d, scr_alpha, scr_lag_draw...)"},
+     {"trouble", "0", "with --game, 1: the server's answers stopped (the `net` picture)"}},
     "",
     run,
 };
