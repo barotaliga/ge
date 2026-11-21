@@ -116,6 +116,10 @@ constexpr float kSwimPitch = 70;  // a swimmer's view pitched at most this far, 
 constexpr float kSwimRise = 16;   // the next node this much higher: jump held to rise, units
 // A script's keys are pressed in full only with the view within ~14 degrees of the way (the cos).
 constexpr double kScriptFacing = 0.97;
+// A ladder is climbed looking this far up (the move climbs at 15 or more), degrees, and left for
+// its top node once the feet are within this of the top node's height, units.
+constexpr float kLadderPitch = 45;
+constexpr float kLadderOver = 8;
 constexpr float kScriptFell = 40;  // standing this far under a script's lowest step: fallen off
 constexpr float kOffFloor = 12;    // a pool's floor swum over this far above its standing height
 constexpr double kLipLiftOff_s = 0.05;  // a lip's jump is off the ground within this      //
@@ -437,7 +441,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     if (mash_building) p.stats.mash_starts++;
     if (p.set.hop && p.mode == PilotMode::walk && (s.onground || rejoin) && !mash_building &&
         (l.kind == NavKind::walk || l.kind == NavKind::drop || (l.gap && hops_gaps(p))) &&
-        l.mover < 0 &&
+        l.mover < 0 && !l.ladder &&
         (speed >= kStrafeSpeed * s.maxspeed || near_gap || (chain && speed >= kChainSpeed) ||
          rejoin) &&
         !(l2 && leaps(l2->kind) && !(l2->gap && hops_gaps(p)))) {
@@ -531,7 +535,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
 
     // The strafe stretch, entered on a level walk moving near full speed.
     if (!p.set.hop && p.set.strafe && p.mode == PilotMode::walk && s.onground &&
-        l.kind == NavKind::walk && l.mover < 0 && speed >= kStrafeSpeed * s.maxspeed) {
+        l.kind == NavKind::walk && l.mover < 0 && !l.ladder && speed >= kStrafeSpeed * s.maxspeed) {
       const int32_t j = strafe_stretch(p, s.origin);
       if (j >= 0) {
         p.mode = PilotMode::strafe;
@@ -862,6 +866,44 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.side = static_cast<float>(p.strafe_side);
         w.jump = !p.jump_pressed;  // pressed afresh every other command: a landing catches one
         because = "in the air: the wish across the velocity";
+      }
+    } else if (l.ladder) {
+      // A LADDER (NavLink::ladder): faced into its face with the view up and forward held, which
+      // climbs it (the jump held too, which climbs it as well and rises out of water at its
+      // foot); once the feet are over its top, walked over to the top node.
+      const Vec3f me = s.origin;
+      const bool over = me.z >= B.z - kLadderOver;
+      w.yaw = unwrap(over ? yaw_at(me, B) : l.face, p.yaw);
+      w.pitch = over ? 0.f : -kLadderPitch;
+      w.forward = 1;
+      w.jump = !over;
+      p.mode = s.onground ? PilotMode::walk : PilotMode::air;
+      because = over ? "a ladder: over its top" : "a ladder: climbing";
+      const float d3 = length(me - B);
+      if (p.ladder_from != a || p.ladder_to != b) {
+        p.ladder_from = a;
+        p.ladder_to = b;
+        p.best = 1e30f;
+        p.best_s = t;
+      }
+      if (d3 < p.best - 0.5f) {
+        p.best = d3;
+        p.best_s = t;
+      } else if (t - p.best_s > 2 * p.set.stuck_s) {
+        // No higher for long: missed (twice: not taken again).
+        int times = 0;
+        for (const NavExtraLink& e : p.short_jumps) times += e.from == a && e.to == b ? 1 : 0;
+        const NavExtraLink e{a, b, l.kind, l.time_s};
+        missed_jump(p, e);
+        if (times >= 1) {
+          p.failed.push_back(e);
+          p.cut.push_back(e);
+        }
+        p.stats.stuck++;
+        p.ladder_from = -1;
+        replanned = true;
+        replan(p, s);
+        because = "a ladder: no higher, plan again";
       }
     } else if (l.escape >= 0 && static_cast<size_t>(l.escape) < g.escapes.size() && p.airborne &&
                s.onground) {

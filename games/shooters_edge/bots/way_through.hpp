@@ -70,8 +70,11 @@ struct WayThrough {
   std::vector<WayStep> steps;
   std::vector<int> locked;           // doors something else opens: their entities
   std::vector<sh::Vec3f> locked_at;  // and where each stands shut
-  std::string back;       // the map he came from: an exit to it is no way on (set before way_init)
-  std::vector<int> cars;  // doors a button moves that bar no one (a lift's car)
+  std::string back;  // the map he came from: an exit to it is no way on (set before way_init)
+  std::vector<int> turners;  // turning doors a step opens (`func_door_rotating`): their entities
+  std::vector<sh::Vec3f> turners_at;  // and the angles each rests shut at
+  std::vector<int> hatches;  // turners lying over an exit (base2's floor hatch over its shaft)
+  std::vector<int> cars;     // doors a button moves that bar no one (a lift's car)
   std::vector<sh::Vec3f> cars_at;   // and where each rests
   std::vector<int32_t> barred;      // those shut now (the plan's)
   std::vector<int32_t> barred_was;  // and at the last plan

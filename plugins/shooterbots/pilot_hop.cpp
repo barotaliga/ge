@@ -70,7 +70,7 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
       continue;
     }
     if (l == nullptr || (l->kind != NavKind::walk && l->kind != NavKind::drop) || l->mover >= 0 ||
-        l->teleport || (p.set.brink && lip(p, *l) && !p.set.hop_lips) ||
+        l->teleport || l->ladder || (p.set.brink && lip(p, *l) && !p.set.hop_lips) ||
         (p.set.hop_side_off && l->brink_side))
       break;
     const NavLink* l2 = j + 1 < p.route.size() ? link_of(g, p.route[j], p.route[j + 1]) : nullptr;
