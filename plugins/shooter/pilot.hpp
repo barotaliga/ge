@@ -349,6 +349,10 @@ struct PilotSettings {
   // `recipe_heading` (`starthead`): the proven start taking off closest to the hop's aim from its
   // takeoff, among `kRecipeTriesHeading` flown; off, the nearest proven one.
   bool recipe_heading = false;
+  // (`startease`) The start's recorded view offset to begin at the pilot's own and the offset eased
+  // to none over `recipe_ease_s`, the proof flown on the eased view (its keys under it): the
+  // recording's entry view, set at once, snapped the view in and out of every start.
+  float recipe_ease_s = 0;
   // and charged for a flight after the takeoff that meets a wall within 0.4 s (`startclear`)
   bool recipe_clear = false;
   // THE FIGHT'S LANDING (`aimland`): with the view on a fight (`PilotSense::aimed`) the hop's air

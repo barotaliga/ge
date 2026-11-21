@@ -262,11 +262,41 @@ struct Maps {
 };
 
 // The numbers of a set of starts.
+// The view's reversals in a start's frames by se-people's rule (a 25 ms read, both turns past 60
+// degrees a second, opposite ways), and the seconds read: people's own mouse through a hop start,
+// the yardstick for the bots' copied starts (se-team's `view40.recipe`).
+void start_reversals(const sh::HopStart& s, int64_t& reversals, double& secs) {
+  if (s.frames.size() < 2) return;
+  double next = s.frames.front().t, last_t = -1, rate = 0;
+  float last_yaw = 0;
+  size_t j = 0;
+  for (; next <= s.frames.back().t; next += 0.025) {
+    while (j + 1 < s.frames.size() && s.frames[j + 1].t <= next) j++;
+    const float yaw = s.frames[j].yaw;
+    if (last_t >= 0) {
+      float d = yaw - last_yaw;
+      while (d > 180) d -= 360;
+      while (d < -180) d += 360;
+      const double r = -d / 0.025;
+      if (std::fabs(r) < 3000) {
+        if (std::fabs(r) > 60 && std::fabs(rate) > 60 && r * rate < 0) reversals++;
+        secs += 0.025;
+      }
+      rate = r;
+    }
+    last_t = next;
+    last_yaw = yaw;
+  }
+}
+
 struct Tally {
   int starts = 0, made = 0, stood = 0;
   std::array<int, 4> keys{};
   std::vector<float> t_target, low_target, speed_in, run_s, speed_off, lag, top;
+  int64_t reversals = 0;  // the view's in the starts' frames (start_reversals)
+  double view_s = 0;
   void add(const sh::HopStart& s) {
+    start_reversals(s, reversals, view_s);
     starts++;
     made += s.made ? 1 : 0;
     stood += s.stood ? 1 : 0;
@@ -430,6 +460,8 @@ void run(gl::Lab& lab) {
     lab.metric(key + "run-s-p50", quantile(t.run_s, 0.5f), "s");
     lab.metric(key + "takeoff-p50", quantile(t.speed_off, 0.5f), "u/s");
     lab.metric(key + "lag-p50", quantile(t.lag, 0.5f), "deg");
+    lab.metric(key + "reversals-per-s",
+               t.view_s > 0 ? static_cast<double>(t.reversals) / t.view_s : 0, "per-s");
     for (int c = 0; c < 4; c++)
       lab.metric(key + "keys." + kKeysClass[c] + "-share",
                  share(t.keys[static_cast<size_t>(c)], t.starts), "share");
