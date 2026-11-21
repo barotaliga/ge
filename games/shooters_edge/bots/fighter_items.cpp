@@ -38,6 +38,7 @@ constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit
 constexpr int32_t kItPent = 1048576;  // the shield's
 constexpr double kTired = 0.2;        // its worth meanwhile, as a share
 constexpr double kWait_s = 20;        // an item back within this is worth going to wait for
+constexpr double kArriveSpare_s = 3;  // (`arrive`) a timed key item met this early
 constexpr double kHealWait_s = 3;     // but a retreat goes for health that is there
 constexpr double kKeepGoal = 1.5;     // the goal's score is held up by this against the others
 constexpr float kRun = 320;           // units/s, the run to an item
@@ -246,7 +247,11 @@ int32_t best_item(const Fighter& f, const ge::shooterbots::BotView& s, const Sta
     // Only the items a game turns on are waited for; the rest are taken when they are there.
     const bool key = key_item(it);
     if (wait > (heal || (!key && f.team) ? kHealWait_s : kWait_s)) return 0.0;
-    double sc = v / (1 + std::fmax(run, wait));
+    // (`arrive`) A key item timed to the second is gone for to be there as it shows: its wait
+    // counted kArriveSpare_s short, so the bot leaves while the wait is still over the run.
+    const double early =
+        f.features[sh::Feature::arrive] && key && !heal && it.timed ? kArriveSpare_s : 0;
+    double sc = v / (1 + std::fmax(run, wait - early));
     if (i == f.goal_item) sc *= kKeepGoal;  // the goal held unless another is clearly better
     if (i == f.tired_item && t < f.tired_until) sc *= kTired;  // gone for in vain lately
     if (enemy && (heal || f.outmatched) && dist(*enemy, it.at) < dist(me, it.at)) sc *= 0.2;
