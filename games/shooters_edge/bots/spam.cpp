@@ -244,6 +244,7 @@ void spam_news_look(Fighter& f, const ge::shooter::BotView& s, int me, const Sta
     f.news_spot = spot;
     f.bot.look = true;
     f.bot.look_at = spot;
+    f.bot.look_by = "spamshow";
   };
   if (news.empty() || !up) {
     show();
@@ -304,6 +305,7 @@ void spam_news_look(Fighter& f, const ge::shooter::BotView& s, int me, const Sta
   f.news_spot = spot;
   f.bot.look = true;
   f.bot.look_at = spot;
+  f.bot.look_by = "spam";
 }
 
 bool spam_news_fire(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& st,

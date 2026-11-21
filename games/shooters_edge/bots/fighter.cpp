@@ -1562,6 +1562,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
     if (armour && hi.present && dist(hi.at, me_at) < kHoldLook) {
       f.bot.look = true;
       f.bot.look_at = {hi.at.x, hi.at.y, hi.at.z + 16};
+      f.bot.look_by = "held";
       f.stats.held_looks++;
     }
   }
@@ -1585,6 +1586,7 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
       if (t - f.unlock_seen_t <= kUnlockLookHold_s) {
         f.bot.look = true;
         f.bot.look_at = it.button_at;
+        f.bot.look_by = "unlock";
         f.unlock_looked = true;
       }
     }
