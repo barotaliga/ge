@@ -462,6 +462,7 @@ binding; every row inside the engine is in metres, seconds and radians.
 | `cl_rollangle`, `cl_rollspeed` | deg, world units/s | the strafe roll and the sideways speed that reaches it |
 | `v_kicktime`, `v_kickpitch`, `v_kickroll` | s, deg, deg | the view punch |
 | `v_idlescale` | deg | the idle sway at its most (0 off) |
+| `v_ipitch_cycle`, `v_iyaw_cycle`, `v_iroll_cycle`; `v_ipitch_level`, `v_iyaw_level`, `v_iroll_level` | 1/s (per 2π), deg per deg | each axis's speed and size under `v_idlescale` (a classic game's: Shooter's Edge binds them onto `FirstPersonRow`'s idle shares and periods) |
 | `cl_landdip` | share | the landing dip |
 | `cl_camera` | name | the rung (`chase`, `helmet`, `eyes`, …: the game's ladder), registered only when a game asks for it |
 | `cl_chasedist`, `cl_chaseheight` | world units | the arm of every boom named `chase` (0: the rig's own) |

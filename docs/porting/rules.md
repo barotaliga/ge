@@ -92,6 +92,12 @@ gibs and the four corpses kept, the spawn drawn at random with its flash, the ki
 damage order and the teamplay modes, each mode's respawn times and weapon stay, the weapons'
 numbers and sounds, the liquids' sounds and drowning, the keys and key doors, the secrets,
 relays and counters, the exits, the intermission and the next map, and the kit carried to it.
+The third fill adds the rest of the rules a deathmatch player meets: a door's crush credited to
+whoever opened it, the pentagram against a telefrag ("Satan's power"), the quad and ring dropped
+by the info keys `dq` and `dr` with everyone told who lost and who recovered them, the switch to
+the best weapon after ammunition, the OctaPower's own warning, a spectator's impulse 1 through the
+spots, named lights that switch and the fluorescent ones that hum, triggers with an angle or with
+health, and a body that slows on the ground (`tests/shooters_edge_arena_quake_test.cpp`).
 The arena's own rules, its digests and its pins are unchanged without the switch; `se-quake-dm`
 plays both from one seed.
 

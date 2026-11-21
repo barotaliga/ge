@@ -201,6 +201,7 @@ TEST(leaving_and_kill) {
   Hooks h;
   h.fx.join(0, "ann");
   h.fx.join(1, "bob", true);
+  h.fx.s->sv.edicts[1].health = 100;  // the test mod sets none: the dead may not kill
   size_t m = h.mark();
   CHECK(h.cmd(0, "kill") == sv::CommandResult::server);
   CHECK(h.since(m) == (Lines{"UserCmd kill", "ClientKill ann"}));
@@ -306,7 +307,8 @@ TEST(pausing_asks_the_mod_and_ticks_while_paused) {
   CHECK(!sv::request_pause(*h.fx.s, 1, true));  // a spectator cannot
   size_t m = h.mark();
   CHECK(h.cmd(0, "pause") == sv::CommandResult::server);
-  CHECK(h.since(m) == (Lines{"UserCmd pause", "GE_ShouldPause 1"}));
+  // QuakeWorld's words, by the state before the pause, echoed on the console.
+  CHECK(h.since(m) == (Lines{"UserCmd pause", "GE_ShouldPause 1", "ann unpaused the game"}));
   CHECK(h.fx.s->paused);
   m = h.mark();
   sv::qc_frame(*h.fx.s, nullptr, 0);
@@ -322,7 +324,8 @@ TEST(pausing_asks_the_mod_and_ticks_while_paused) {
   m = h.mark();
   sv::disconnect(*h.fx.s, 0);
   CHECK(!h.fx.s->paused);
-  CHECK(h.since(m) == (Lines{"ClientDisconnect ann", "GE_ShouldPause 0"}));
+  CHECK(h.since(m) == (Lines{"ClientDisconnect ann", "GE_ShouldPause 0",
+                             "Pause released since no players are left."}));
 }
 
 TEST(cheats_are_refused_unless_the_server_allows_them) {

@@ -76,5 +76,7 @@ constexpr int kPauseByServer = -2;
 
 // True when the pause changed.
 bool request_pause(QcServer& s, int slot, bool pause);
+// A player entering a paused multiplayer game: the pause sent and "Server is paused." told.
+void tell_paused(QcServer& s, int slot);
 
 }  // namespace shooters_edge::server
