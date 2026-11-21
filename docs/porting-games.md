@@ -231,6 +231,14 @@ copy is what plays (`plugins/classic/content/import.hpp`; the window's side,
     data/<profile id>/<multiplayer folder>/...        when the source has one
     data/<profile id>/music/track02.flac ...          the soundtrack, one layout for every source
     data/<profile id>/music/tracks.txt                its manifest: one line a track
+    data/<profile id>/taken.txt                       the source's fingerprint and the files put in place
+
+The data folder is the player's own, outside the game's program, so it outlives a rebuild, a new
+version and a moved app: `~/Library/Application Support/gameengine2/shooters_edge/data/` on a Mac,
+`~/.local/share/gameengine2/shooters_edge/data/` on Linux, `%APPDATA%\gameengine2\shooters_edge\data\`
+on Windows (beside the game only when that cannot be written). A game is taken in once: a second
+launch pointed at the same source finds its fingerprint (every file's path, size and time; a disc
+image's own) unchanged in `taken.txt` and opens the copy without reading the source.
 
 What a new game brings, and where:
 

@@ -23,11 +23,14 @@
 // - Not drawn by the rig: Quake II's recordings (their server worked the view out, `kick`), the
 //   intermission, a frame with no player to ride: `demo_view` as read.
 // A seek (the demo's clock going back), a new level or another player tracked starts the rig over.
+// - THE THIRD PERSON (`cam_thirdperson`, `cam_dist`): the view taken `DemoEyes::behind` units back
+//   along the way the player looks, stopped short of a wall, his own figure drawn and no held
+//   weapon (`demo_placed`'s `draw_own`).
 //
 // ge:summary The classic bob, strafe roll and damage kick on a demo's or a joined server's eye
 // ge:keywords demo-eyes demo_eyes_view classic-view view-bob strafe-roll damage-kick demo
 // ge:keywords joined-server multiview client-recording velocity on-ground ground-trace blows
-// ge:keywords v_gunkick gun-kick smallkick bigkick
+// ge:keywords v_gunkick gun-kick smallkick bigkick cam_thirdperson cam_dist third-person
 // ge:skill camera shooter
 // ge:test tests/shooters_edge_demo_eyes_test.cpp
 #pragma once
@@ -67,7 +70,17 @@ struct DemoEyes {
   int64_t kicks_seen = 0;          // of DemoState::kicks_taken
   float kick = 0, kick_to = 0;     // the gun kick and where it ramps to, units (negative: back)
   const bool* gun_kick = nullptr;  // v_gunkick: the kick drawn when on (kept across a cut)
+  float behind = 0;  // cam_thirdperson's distance behind the player, units (0: his own eyes)
 };
+
+inline constexpr float kBehindWallGap =
+    8;  // units: a third-person camera stops this short of a wall
+
+// The third person (`cam_thirdperson`): `view` moved `units` back from the eye of `s` along the
+// way it looks (its pitch too), stopped `kBehindWallGap` short of the level's wall (`world`'s point
+// hull; none: no stop). Nothing when `units` is 0 or there is no player to ride.
+void demo_view_behind(const DemoState& s, float units, const sh::BrushModel* world,
+                      ge::render::FrameView& view);
 
 inline constexpr float kKickOutSmall = 20, kKickOutBig = 40, kKickBack = 20;  // units a second
 // The gun kick `e` moved on by `dt` s after the kicks `read` took since the last look.

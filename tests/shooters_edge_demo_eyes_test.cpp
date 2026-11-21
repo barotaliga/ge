@@ -16,8 +16,10 @@
 #include "check.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_eyes.hpp"
+#include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/timedemo.hpp"
+#include "shooters_edge/client/view.hpp"
 
 namespace cl = shooters_edge::client;
 namespace sh = ge::shooter;
@@ -210,4 +212,42 @@ TEST(a_servers_kick_ramps_out_and_back_and_is_drawn_only_with_v_gunkick) {
     CHECK_MSG(on ? std::fabs(up - 1 * kDeg) < 1e-6 : std::fabs(up) < 1e-12,
               "pitched by " + std::to_string(up / kDeg) + " degrees");
   }
+}
+
+TEST(cam_thirdperson_sits_behind_the_watched_player_and_draws_him) {
+  // Looking along +x: 100 units back is 100 units down x; looking 45 degrees down, back and up.
+  cl::DemoState s = client_state({0, 0, 24}, 0, 1);
+  s.players[0].model = 1;
+  s.models = {"", "progs/player.mdl"};
+  s.format = cl::DemoFormat::q2;  // drawn as read, so the eye is the recorded one
+  ge::render::FrameView own = cl::demo_view(s, kFov, 0);
+  cl::DemoEyes e;
+  e.behind = 100;
+  ge::render::FrameView back = cl::demo_eyes_view(s, s, e, classic(), nullptr, {}, kFov, 0, 0);
+  {  // the rig's own start (a cut) keeps the distance
+    cl::DemoState c = client_state({0, 0, 24}, 0, 1);
+    cl::DemoEyes r;
+    r.behind = 100;
+    ge::render::FrameView near = cl::demo_eyes_view(c, c, r, classic(), nullptr, {}, kFov, 0, 0);
+    r.behind = 0;
+    r.clock = -1;
+    ge::render::FrameView eyes = cl::demo_eyes_view(c, c, r, classic(), nullptr, {}, kFov, 0, 0);
+    CHECK(std::abs(near.eye[0] - eyes.eye[0]) + std::abs(near.eye[2] - eyes.eye[2]) > 2);
+  }
+  const cam::Vec3 d0 = cl::engine_point({-100, 0, 0}), o = cl::engine_point({0, 0, 0});
+  CHECK(std::abs((back.eye[0] - own.eye[0]) - (d0.x - o.x)) < 1e-4);
+  CHECK(std::abs((back.eye[2] - own.eye[2]) - (d0.z - o.z)) < 1e-4);
+  CHECK(std::abs(back.eye[1] - own.eye[1]) < 1e-6);
+  s.angles.x = 45;  // looking down: the camera rises behind him
+  back = cl::demo_eyes_view(s, s, e, classic(), nullptr, {}, kFov, 0, 0);
+  CHECK(back.eye[1] > own.eye[1] + 0.5);
+  // Off, or no one ridden (the intermission): his own eyes.
+  e.behind = 0;
+  back = cl::demo_eyes_view(s, s, e, classic(), nullptr, {}, kFov, 0, 0);
+  CHECK(back.eye[0] == own.eye[0] && back.eye[1] == own.eye[1]);
+  // Only while watching.
+  cl::DemoPlayback p;
+  CHECK(cl::third_person_units(p, true) == 0);
+  p.third_person = 1;
+  CHECK(cl::third_person_units(p, true) == 100 && cl::third_person_units(p, false) == 0);
 }

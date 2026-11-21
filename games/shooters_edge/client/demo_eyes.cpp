@@ -7,6 +7,7 @@
 #include "shooters_edge/client/demo_eyes.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include "core/math.hpp"
 
@@ -77,15 +78,19 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
                                      double fov_y, double clock_s, double time_s) {
   if (!demo_eyes_drawn(drawn)) {
     e.clock = -1;  // the next one drawn starts over
-    return demo_view(drawn, fov_y, time_s);
+    ge::render::FrameView v = demo_view(drawn, fov_y, time_s);
+    demo_view_behind(drawn, e.behind, world, v);
+    return v;
   }
   // A seek back, a new level or another player: the rig and the estimate start over.
   const bool cut = e.clock < 0 || clock_s < e.clock || drawn.levels != e.levels ||
                    drawn.player != e.player || read.frames < e.frames_seen;
   if (cut) {
     const bool* gun_kick = e.gun_kick;
+    const float behind = e.behind;
     e = DemoEyes{};
     e.gun_kick = gun_kick;
+    e.behind = behind;
     e.kicks_seen = read.kicks_taken;
     e.levels = drawn.levels;
     e.player = drawn.player;
@@ -170,7 +175,37 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
   ge::camera::to_frame_view(pose, view);
   view.fov_y = fov_y;
   view.time_s = time_s;
+  demo_view_behind(drawn, e.behind, world, view);
   return view;
+}
+
+void demo_view_behind(const DemoState& s, float units, const sh::BrushModel* world,
+                      ge::render::FrameView& view) {
+  if (!(units > 0) || s.intermission || s.format == DemoFormat::single || s.player < 0 ||
+      static_cast<size_t>(s.player) >= s.players.size() ||
+      !s.players[static_cast<size_t>(s.player)].present)
+    return;
+  // The way the player looks, in map units (yaw counter-clockwise from +x, pitch down positive).
+  const double yaw = s.angles.y * kDeg, pitch = s.angles.x * kDeg;
+  const sh::Vec3f back{static_cast<float>(-std::cos(pitch) * std::cos(yaw)),
+                       static_cast<float>(-std::cos(pitch) * std::sin(yaw)),
+                       static_cast<float>(std::sin(pitch))};
+  const sh::Vec3f from = s.eye;
+  float reach = units;
+  if (world != nullptr) {
+    const sh::Hull& hull = world->hulls[0];
+    if (hull.nodes != nullptr && hull.planes != nullptr) {
+      const sh::HullTrace tr = sh::trace_hull(hull, from, from + back * (units + kBehindWallGap));
+      if (!tr.startsolid && tr.fraction < 1)
+        reach = std::max(0.0f, tr.fraction * (units + kBehindWallGap) - kBehindWallGap);
+    }
+  }
+  const ge::camera::Vec3 at = engine_point(from + back * reach);
+  const ge::camera::Vec3 eye = engine_point(from);
+  // The rig's bob and roll ride along: the camera keeps its offset from the eye it was given.
+  view.eye[0] += at.x - eye.x;
+  view.eye[1] += at.y - eye.y;
+  view.eye[2] += at.z - eye.z;
 }
 
 }  // namespace shooters_edge::client

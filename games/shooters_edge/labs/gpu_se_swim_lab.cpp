@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <memory>
@@ -45,12 +46,14 @@
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/profiles/game_profile.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -86,17 +89,28 @@ bool fixture_files(cl::SearchPath& files, std::string& error) {
   return cl::add_archive(files, "pak0.pak", std::move(pak), error);
 }
 
+// The family's contents at `p` read as water or solid (29: -3 water, -2 solid; 38: the water bit
+// 32, the solid bit 1).
+bool water_at(const br::Map& m, const float p[3]) {
+  const int32_t c = br::hull_contents(m, p, 0, 0);
+  return m.family == br::Family::v38 ? (c & 32) != 0 : c == -3;
+}
+bool solid_at(const br::Map& m, const float p[3]) {
+  const int32_t c = br::hull_contents(m, p, 0, 0);
+  return m.family == br::Family::v38 ? (c & 1) != 0 : c == -2;
+}
+
 // The point of the map's water with the most water round it: on a 16-unit lattice through every
 // water leaf, a point with water at it, 24 below and 40 above (the player's box under water),
 // counted by the water within 128 units each way across. False when the map has none.
 bool deep_water(const br::Map& m, float at[3]) {
   const auto wet = [&](float x, float y, float z) {
     const float q[3] = {x, y, z};
-    return br::hull_contents(m, q, 0, 0) == -3;  // water
+    return water_at(m, q);
   };
   int best = -1;
   for (const br::Leaf& leaf : m.leaves) {
-    if (leaf.contents != -3) continue;
+    if (m.family == br::Family::v38 ? (leaf.contents & 32) == 0 : leaf.contents != -3) continue;
     const int nx = static_cast<int>((leaf.maxs[0] - leaf.mins[0]) / 16);
     const int ny = static_cast<int>((leaf.maxs[1] - leaf.mins[1]) / 16);
     const int nz = static_cast<int>((leaf.maxs[2] - leaf.mins[2]) / 16);
@@ -133,7 +147,7 @@ float open_yaw(const br::Map& m, const float at[3]) {
     for (int step = 1; step <= 32; step++, n++) {
       const float s = 16.f * static_cast<float>(step);
       const float q[3] = {at[0] + dx * s, at[1] + dy * s, at[2]};
-      if (br::hull_contents(m, q, 0, 0) != -3) break;
+      if (!water_at(m, q)) break;
     }
     if (n > best) {
       best = n;
@@ -155,7 +169,7 @@ sh::Vec3f eye_beside(const cl::Listen& l, sh::Vec3f at, float yaw, float side) {
     for (int step = 1; 8.f * static_cast<float>(step) <= side && clear; step++) {
       const float s = 8.f * static_cast<float>(step);
       const float q[3] = {at.x + dx * s, at.y + dy * s, at.z + 8};
-      clear = br::hull_contents(m, q, 0, 0) != -2;  // solid
+      clear = !solid_at(m, q);
     }
     if (clear) return {at.x + dx * side, at.y + dy * side, at.z + 8};
   }
@@ -205,7 +219,7 @@ void run_demo(gl::Lab& lab, const cl::SearchPath& files) {
         continue;
       }
       const float mid[3] = {p.origin.x, p.origin.y, p.origin.z};
-      const bool wet = br::hull_contents(map->bsp.map, mid, 0, 0) == -3;
+      const bool wet = water_at(map->bsp.map, mid);
       if (last_frame[k] >= 0) {
         Tally& all_ = wet ? all : dry;
         const float dx = p.origin.x - last[k].origin.x, dy = p.origin.y - last[k].origin.y;
@@ -413,7 +427,11 @@ void run(gl::Lab& lab) {
   con.execute(lab.cvars());
   cl::WorldDrawPtr world =
       cl::create_world_draw(*device, files, *l.map, kW, kH, wgpu::TextureFormat::RGBA8Unorm, look,
-                            {}, error, {l.server->models, {}, {}});
+                            {}, error, {l.server->models, {}, {}},
+                            // A map of the 38 family is Quake II's: its own adapter (its palette).
+                            l.map->bsp.map.family == br::Family::v38
+                                ? cl::adapter_of(*shooters_edge::profiles::find_game("q2"))
+                                : cl::qw_adapter());
   if (!world) {
     lab.fail("se-swim: " + error, "Read the gpu: lines above. Skill: render.");
     return;
@@ -467,6 +485,58 @@ void run(gl::Lab& lab) {
                      : in_stand(r.frame) ? " (stand)"
                                          : ""));
   }
+  // THE EYE AT THE SURFACE (`--surface`): the window's own view from where he swims, its eye at
+  // each height over the water's level, looking across the pool level and a little down, as a
+  // player swimming at the surface sees it: the water's edge on the screen (the lens split, the
+  // surface seen from just over it) across the whole width.
+  float level = at[2];
+  for (int k = 0; k < 512; k++) {  // the water's level over where he swims, to a unit
+    const float q[3] = {at[0], at[1], level + 1};
+    if (!water_at(l.map->bsp.map, q)) break;
+    level += 1;
+  }
+  std::vector<std::string> heights;
+  for (size_t from = 0; from < lab.arg("surface").size();) {
+    const size_t comma = lab.arg("surface").find(',', from);
+    const size_t to = comma == std::string::npos ? lab.arg("surface").size() : comma;
+    if (to > from) heights.push_back(lab.arg("surface").substr(from, to - from));
+    from = to + 1;
+  }
+  for (const std::string& part : heights) {
+    const double over_m = std::strtod(part.c_str(), nullptr);
+    for (const float pitch : {0.f, 12.f}) {
+      const double t = 4.0;
+      cl::FxFrame calm;
+      cl::frame_view(l, shown, 0, t, 0);
+      const ge::camera::Vec3 e =
+          cl::engine_point({at[0], at[1], level + static_cast<float>(over_m / br::kUnitM)});
+      ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
+      view.eye[0] = e.x, view.eye[1] = e.y, view.eye[2] = e.z;
+      view.heading = cl::engine_heading(yaw);
+      view.pitch = cl::engine_pitch(pitch);
+      for (int f = 0; f < 8; f++) {
+        ge::render::FrameView run_in = view;
+        run_in.time_s = t - (8 - f) / 30.0;
+        cl::draw_world(*device, *world, run_in, calm, nullptr, 1.0 / 30, {}, out.view);
+      }
+      view.time_s = t;
+      cl::draw_world(*device, *world, view, calm, nullptr, 1.0 / 30, {}, out.view);
+      const ge::gpu::Image img = ge::gpu::read_now(*device, out);
+      const std::string id = "surface-" + part + "-" + std::to_string(static_cast<int>(pitch));
+      const std::string title = "The eye " + part + " m from the water's level, pitched " +
+                                std::to_string(static_cast<int>(pitch)) + " degrees down";
+      lab.shot(
+          {id,
+           title,
+           title + ", where he swims, as the window draws a swimmer's own view (the water, the "
+                   "lens split at the waterline).",
+           "the waterline across the whole width; no bright band or blob at the left or right "
+           "edge",
+           {{"map", map_name}}},
+          gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+          gl::Det::measured);
+    }
+  }
   for (size_t k = 0; k < pics.size(); k++)
     lab.shot({"swim-" + std::to_string(k),
               names[k],
@@ -495,6 +565,9 @@ const gl::LabSpec kSpec{
         {"swim", "1.2", "seconds he swims forward (then as long with nothing pressed)"},
         {"moments", "6", "with --game: pictures through the run"},
         {"side", "96", "with --game: units from him the eye stands"},
+        {"surface", "0.05,0.02,-0.02",
+         "with --game: m over the water's level of the swimmer's own eye, a picture each (empty: "
+         "none)"},
         {"cvars", "", "with --game: picture cvars (r_look ...)"},
         {"demo", "", "with --game: a recording's swimmers tallied instead (its maps from --game)"},
     },

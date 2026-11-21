@@ -350,6 +350,7 @@ int run_main(int argc, char** argv) {
         });
   // A game pointed at is copied into the data folder and played from there (client/take_in.hpp).
   const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs);
+  cl::adopt_placed_settings(cl::placed_folder(ge::platform::app_dir()), data_root);
   if (!cl::take_in_basedir(&args.basedir, data_root)) return 2;
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
@@ -391,7 +392,10 @@ int run_main(int argc, char** argv) {
                                   .noskins = &picture.stock_figures,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,
-                                  .frame_cap = &pacing.settings.max_fps};
+                                  .frame_cap = &pacing.settings.max_fps,
+                                  .light_intensity = &picture.light_intensity,
+                                  .light_modulate = &picture.light_modulate,
+                                  .light_lift = &picture.light_lift};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
@@ -870,9 +874,10 @@ int run_main(int argc, char** argv) {
   uint64_t bench_shown_ns = 0;     // when the benchmark last showed a frame
   wgpu::Future bench_in_flight{};  // the frame before this one, waited before the next
   if (!args.timedemo.empty()) bench_ask = args.timedemo;
-  if (!args.playdemo.empty()) {
-    bench_ask = args.playdemo;
+  if (!args.playdemo.empty() || (on_title && !playback.startup.empty())) {  // or cl_startupdemo
+    bench_ask = args.playdemo.empty() ? playback.startup : args.playdemo;
     play_ask = true;
+    attract_at_start = false;
   }
   cl::TvWatch tv_watch{args.tv};  // `-tv <node>`: a live broadcast watched (client/tv_live.hpp)
   // The world drawn again for `map`, with the models on `load` standing in it, through `from`
@@ -1690,6 +1695,9 @@ int run_main(int argc, char** argv) {
       const cl::DemoState& ds_read = drawn_remote ? remote.demo.state : bench.demo.state;
       const ge::shooter::BrushModel* ground =
           bench_map && !bench_map->spec.models.empty() ? &bench_map->spec.models[0] : nullptr;
+      demo_eyes.behind =
+          cl::third_person_units(playback, !drawn_remote || remote.end.cfg.spectator);
+      bench_demo_fx.draw_own = demo_eyes.behind > 0;  // his figure seen from behind
       ge::render::FrameView view = cl::demo_eyes_view(ds, ds_read, demo_eyes, shown.row, ground,
                                                       body, ge::camera::FirstPersonRow{}.fov_y,
                                                       drawn_remote      ? t
@@ -1756,7 +1764,7 @@ int run_main(int argc, char** argv) {
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
       view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
-      auto* gun = !drawn_remote && live_map.fly.p < 1 ? nullptr : &hand;  // none over the map
+      auto* gun = (!drawn_remote && live_map.fly.p < 1) || demo_eyes.behind > 0 ? nullptr : &hand;
       cl::draw_world(*device, *world, view, bench_fx, gun, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {

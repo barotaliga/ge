@@ -243,3 +243,25 @@ TEST(scrollback_notify_and_triggers_on_game_lines) {
   v.frame(5);
   CHECK(v.notify().empty());
 }
+
+TEST(con_notify_hides_the_notify_lines_and_toggling_lets_them_go) {
+  Console c;
+  ConsoleView v(c);
+  v.add(LineKind::server, "one");
+  v.add(LineKind::server, "two");
+  CHECK(v.notify().size() == 2);
+  c.execute("con_notify 0");
+  c.run();
+  CHECK(v.notify().empty());
+  c.execute("con_notify 1");
+  c.run();
+  v.toggle();  // opened: the lines so far go from the notify area, not from the scrollback
+  v.toggle();
+  CHECK(v.notify().empty() && v.lines().size() >= 2);
+  v.add(LineKind::server, "three");
+  CHECK(v.notify().size() == 1 && v.notify()[0]->text == "three");
+  c.execute("con_clearnotify 0");
+  c.run();
+  v.toggle();
+  CHECK(v.notify().size() == 1);  // kept
+}

@@ -375,6 +375,8 @@ Its cvars:
 | `con_height` | 0.5 | the share of the screen it covers when down |
 | `con_speed` | 3 | how fast it slides, screens a second (0: at once) |
 | `con_lines` | 1024 | the lines of scrollback kept |
+| `con_notify` | 1 | 0: no notify lines at all |
+| `con_clearnotify` | 1 | 1: opening or closing the console lets the notify lines so far go (the scrollback keeps them) |
 | `con_notifylines` | 4 | the newest lines shown at the top while it is closed (0: none) |
 | `con_notifytime` | 4 | how long a notify line stays, s |
 | `con_chat` | 0 | a line typed without a `/`: 0 a command, 1 said to everyone, 2 a command when its first word is known, else said |

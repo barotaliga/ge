@@ -3,6 +3,7 @@
 // ge:summary The window's cvar layers: each game's own settings, the switch, the clashes printed
 // ge:keywords cvar-layer game-cvars per-game-cvar same own clash game-switch crosshair
 // ge:keywords vid_gamma s_volume gl_dynamic gl_lightmap cl_gun scr_centertime
+// ge:keywords intensity gl_modulate gl_brightness
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -37,6 +38,9 @@ void add_first(con::Console& c, const GameBindings& b) {
   }
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
+  if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
+  if (b.light_modulate != nullptr) *b.light_modulate = 1;
+  if (b.light_lift != nullptr) *b.light_lift = 0;
   if (b.view != nullptr) {  // Quake's weapon is always drawn, at its own place and lens
     b.view->hand = 0;
     b.view->gun = 1;
@@ -132,7 +136,8 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   (across at 4:3; our `r_viewmodel_fov` wins when set); its own `cl_gun`, the weapon drawn and
 //   its side (`hand` 1 or `cl_gun` 3 draw it mirrored on the left);
 // - its own `cl_maxfps`, the moves a second (ours, the frame cap, set aside while it is loaded),
-//   and `r_maxfps`, the frame cap, kept with its own settings.
+//   and `r_maxfps`, the frame cap, kept with its own settings;
+// - the maps' light: `intensity`, `gl_modulate` and `gl_brightness` (Quake's stay 2, 1 and 0).
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
@@ -150,6 +155,36 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .overlap = con::Overlap::own},
            &b.crosshair->mark);
   }
+  // The maps' light, as its own renderer works it out: a wall shows its painted colour times its
+  // light / 255 plus gl_brightness, times gl_modulate, times intensity (2: a light of 128 shows the
+  // colour as painted).
+  if (b.light_intensity != nullptr)
+    v.bind({.name = "intensity",
+            .fallback = "2",
+            .flags = con::kArchive,
+            .help = "How bright the walls are lit: their light times this.",
+            .min = 1,
+            .max = 5,
+            .values = "1..5: 2 the default, as the maps were lit; 3 a third brighter again"},
+           b.light_intensity);
+  if (b.light_modulate != nullptr)
+    v.bind({.name = "gl_modulate",
+            .fallback = "1",
+            .flags = con::kArchive,
+            .help = "How strongly the maps' light shows: their light times this.",
+            .min = 0,
+            .max = 1000000,
+            .values = "0 and up: 1 the default, as the maps were lit; 2 twice as bright"},
+           b.light_modulate);
+  if (b.light_lift != nullptr)
+    v.bind({.name = "gl_brightness",
+            .fallback = "0",
+            .flags = con::kArchive,
+            .help = "Light added to every wall, so the darkest corners show.",
+            .min = -1,
+            .max = 1,
+            .values = "-1..1: 0 the default; 0.1 to 0.3 lifts the dark corners"},
+           b.light_lift);
   v.add({.name = "cl_timeout",  // Quake II's servers are waited for longer
          .fallback = "120",
          .flags = con::kArchive,

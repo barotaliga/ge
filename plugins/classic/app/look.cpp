@@ -775,6 +775,8 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   }
   if (look == Look::classic) {
     base.mode = ba::Mode::classic;
+    base.classic_light = light_scale(picture);                      // intensity, gl_modulate
+    base.classic_lift = std::clamp(picture.light_lift, -1.0, 1.0);  // gl_brightness
     if (!picture.dynamic) base.dynamic_strength = 0;  // r_dynamic 0: no moment's light
     base.lighting = ba::Lighting::lightmaps;
     base.crisp = crisp_textures(picture, look);  // gl_texturemode, else crisp
@@ -783,6 +785,8 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   } else {
     base.mode = ba::Mode::v2;
     base.lighting = ba::Lighting::lights;
+    base.brightness *= light_scale(picture);  // intensity, gl_modulate: the map's light
+    base.strength *= light_scale(picture);
     base.crisp = crisp_textures(picture, look);  // gl_texturemode, else filtered
     base.dynamic_strength = picture.dynamic ? picture.fx_lights : 0;
     base.lava_glow = picture.lava_glow;
@@ -820,7 +824,19 @@ double effects_glow(Look look, const Picture& picture) {
 gr::PostSettings post_settings(Look look, const Picture& picture) {
   gr::PostSettings s;
   s.bloom = look == Look::classic ? 0 : picture.bloom;
+  // The classic look is the painted colours times their light, worked out as the games did: shown
+  // as it is, at the scale the world's passes write (a white face's luminance times the lightmaps'
+  // brightness), never exposed or through the tone curve's toe, which sank the dark textures
+  // toward black and took the blue out of their greys.
+  if (look == Look::classic) s.display = ba::Options{}.brightness;
+  // The modern look keeps the tone curve's shoulder but not its toe: the classic textures are
+  // painted dark, and the toe took their blues and greys to brown.
+  s.toe = false;
   return s;
+}
+
+double light_scale(const Picture& picture) {
+  return std::clamp(picture.light_intensity, 1.0, 5.0) * std::max(picture.light_modulate, 0.0) / 2;
 }
 
 std::vector<float> palette_grade(std::span<const uint8_t> palette) {
