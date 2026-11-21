@@ -656,6 +656,15 @@ namespace ge::shooterbots {
 //   course's expert lap 21.9 -> 21.2 s, speed 576 -> 593, walls 1.5 -> 1.2; 12 2on2 dm2 seeds,
 //   speed off the recordings 267.6 -> 271.1 (people 290.7), the hand and the air's swaps even
 //   (the swaps it was meant for did not fall), head to head +0.4 (red -0.2, blue +1.0).
+// - `startease`: A COPIED HOP START EASED IN FROM ITS OWN VIEW (M18r.md P2): the start's recorded
+// view
+//   offset to begin at the bot's view and eased to the recording's over 0.25 s, the proof flown on
+//   it. People's own starts reverse the view 0.115 times a second, the bots' 0.42 (se-recipes), and
+//   2.6 while a copied start writes the view (se-team `view40.recipe`): its entry view set at once
+//   snapped the view in and out of every start. ON: the hop course's expert lap
+//   21.2 -> 19.3 s, speed 593 -> 649, walls 1.2 -> 0.3; 12 2on2 dm2 seeds, speed off the recordings
+//   271 -> 273, wall bumps 4.4 -> 4.1 a minute, the starts' reversals 0.42 -> 0.40 (people 0.115:
+//   the snap is not all of it), head to head +1.9 (red +1.2, blue +2.5).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -845,9 +854,10 @@ enum class Feature : uint8_t {
   unlocklook,
   swapground,
   wallplan,
+  startease,
   trial,
 };
-constexpr size_t kFeatures = 188;
+constexpr size_t kFeatures = 189;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
