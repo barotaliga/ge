@@ -8,6 +8,9 @@
 // ge:skill console shooter testing
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -99,6 +102,8 @@ struct Window {
                         .light_intensity = &picture.light_intensity,
                         .light_modulate = &picture.light_modulate,
                         .light_lift = &picture.light_lift,
+                        .gibs = &picture.gibs,
+                        .no_glow = &picture.no_glow,
                         .chat = &chat,
                         .auto_chat = &auto_chat});
   }
@@ -532,4 +537,57 @@ TEST(q2_chat_sound_and_auto_chat_are_its_own_and_go_with_it) {
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], b);
   CHECK(w.chat.named_sound.empty() && w.auto_chat == -1);
   CHECK(v.clashes().empty());
+}
+
+TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("cl_entities") == nullptr && v.find("cl_beginmapcmd") == nullptr);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2, {});
+  v.set("cl_entities", "0", con::Source::local);   // our r_drawentities
+  v.set("cl_particles", "0", con::Source::local);  // our r_particles
+  v.set("cl_lights", "0", con::Source::local);     // our r_dynamic
+  v.set("cl_blend", "0", con::Source::local);      // our gl_polyblend
+  CHECK(!w.picture.draw_entities && !w.picture.particles && !w.picture.dynamic);
+  CHECK(!w.picture.poly_blend);
+  const cl::GameBindings gibs{.gibs = &w.picture.gibs, .no_glow = &w.picture.no_glow};
+  cl::switch_game_cvars(w.console, w.game, *q2, gibs);
+  v.set("cl_gibs", "0", con::Source::local);  // our cl_gibfilter the other way round
+  v.set("cl_noglow", "1", con::Source::local);
+  CHECK(!w.picture.gibs && w.picture.no_glow);
+  v.set("cl_beginmapcmd", "record", con::Source::local);
+  v.set("cl_autopause", "0", con::Source::local);
+  CHECK(w.game.q2.begin_cmd == "record" && !w.game.q2.autopause);
+  CHECK(v.find("sv_running") != nullptr && v.find("cl_running")->value == "1");
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], gibs);
+  CHECK(w.picture.gibs && !w.picture.no_glow);
+  CHECK(w.game.q2.begin_cmd.empty() && w.game.q2.autopause && w.game.q2.timescale == 1);
+  CHECK(v.find("cl_beginmapcmd") == nullptr && v.find("sv_running") == nullptr);
+  CHECK(v.clashes().empty());
+}
+
+TEST(q2s_logfile_keeps_what_the_console_prints) {
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "se_layers_logfile";
+  std::filesystem::remove_all(dir);
+  con::Console c;
+  std::vector<std::string> shown;
+  c.set_sink([&shown](std::string_view l) { shown.emplace_back(l); });
+  c.set_search_path({dir});
+  cl::GameCvarValues v;
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::add_game_cvars(c, v, *q2, {});
+  c.execute("logfile 2; logfile_prefix \"\"");
+  c.print("kept");
+  CHECK(shown.size() == 1 && shown[0] == "kept");  // the console's own sink still sees it
+  c.execute("logfile 0");
+  c.print("not kept");
+  std::ifstream in(dir / "logs" / "console.log");
+  std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  CHECK(text == "kept\n");
+  std::filesystem::remove_all(dir);
 }

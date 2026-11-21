@@ -63,6 +63,8 @@ enum class Cmd : uint8_t {
   layer_stop,
   bus,
   room,
+  muffle,
+  swap,
   sample_new,
   sample_set,
   sample_stop,
@@ -203,6 +205,11 @@ struct Synth::Impl {
   // the room
   Reverb reverb;
   std::array<float, kBlock> room_l{}, room_r{};
+  // the muffle: a high shelf on the mix (`Synth::muffle`), off (and skipped) while its gain is 1
+  bool muffling = false;
+  bool swapped = false;  // the channels swapped at the output (`Synth::swap_stereo`)
+  float muffle_gain = 1, muffle_target = 1, muffle_coeff = 1;
+  Svf shelf_l, shelf_r;
   // the limiter
   float limit_g = 0, limit_attack = 1, limit_release = 1, limit_below = 0;
   // the sampled voices' ids, for `sample_live`: the producer's next, the render side's
@@ -293,6 +300,23 @@ struct Synth::Impl {
       }
       case Cmd::room:
         reverb.set(c.room, c.glide);
+        break;
+      case Cmd::muffle: {
+        muffle_target = c.gain < 0.001f ? 0.001f : c.gain > 1 ? 1 : c.gain;
+        muffle_coeff = glide_coeff(c.glide);
+        if (!muffling && muffle_target < 1) {  // from the dry mix: the filters start at rest
+          svf_init(shelf_l, FilterType::highpass, 0);
+          svf_init(shelf_r, FilterType::highpass, 0);
+          muffle_gain = 1;
+          muffling = true;
+        }
+        svf_tune(shelf_l, c.pan);
+        svf_tune(shelf_r, c.pan);
+        if (c.glide <= 0) muffle_gain = muffle_target;
+        break;
+      }
+      case Cmd::swap:
+        swapped = c.gain != 0;
         break;
       case Cmd::sample_new:
         start_sample(c);
@@ -735,6 +759,12 @@ struct Synth::Impl {
         l += room_l[i];
         r += room_r[i];
       }
+      if (muffling) {  // the treble over the corner cut to the muffle's gain
+        muffle_gain += (muffle_target - muffle_gain) * muffle_coeff;
+        const float cut = 1 - muffle_gain;
+        l -= cut * svf_tick(shelf_l, l);
+        r -= cut * svf_tick(shelf_r, r);
+      }
       // The limiter: a soft-knee gain computer on the louder channel, smoothed in dB.
       const float a = l < 0 ? -l : l, b = r < 0 ? -r : r;
       const float peak = a > b ? a : b;
@@ -759,10 +789,13 @@ struct Synth::Impl {
         l *= g;
         r *= g;
       }
+      if (swapped) std::swap(l, r);  // the speakers wired the other way round
       const size_t at = 2 * static_cast<size_t>(i);
       out[at] = l < -1 ? -1 : l > 1 ? 1 : l;
       out[at + 1] = r < -1 ? -1 : r > 1 ? 1 : r;
     }
+    // Back at the dry mix: the shelf is left out again, so a synth never muffled keeps its bits.
+    if (muffling && muffle_target >= 1 && muffle_gain > 0.9999f) muffling = false;
     frame += count;
     frames.store(static_cast<uint64_t>(frame), std::memory_order_release);
     voices_live.store(live, std::memory_order_relaxed);
@@ -848,6 +881,22 @@ void Synth::bus_gain(int bus, float gain, float glide_s) {
   c.bus = bus_of(bus);
   c.gain = gain;
   c.glide = glide_s;
+  impl_->push(c);
+}
+
+void Synth::muffle(float treble, float corner_hz, float glide_s) {
+  Command c;
+  c.kind = Cmd::muffle;
+  c.gain = treble;
+  c.pan = corner_hz;
+  c.glide = glide_s;
+  impl_->push(c);
+}
+
+void Synth::swap_stereo(bool on) {
+  Command c;
+  c.kind = Cmd::swap;
+  c.gain = on ? 1.0f : 0.0f;
   impl_->push(c);
 }
 

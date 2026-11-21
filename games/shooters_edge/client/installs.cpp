@@ -81,7 +81,8 @@ std::string_view edition_words(Edition e, const ge::classicenhance::Profile& con
 
 std::vector<shooters_edge::menu::GameRow> game_rows(const std::string& prefs,
                                                     std::string_view playing,
-                                                    const std::string& playing_install) {
+                                                    const std::string& playing_install,
+                                                    std::string_view remixed) {
   std::vector<shooters_edge::menu::GameRow> rows;
   const auto kept = remembered_installs(prefs);
   for (const ge::classicenhance::Profile& p : ge::classicenhance::kProfiles) {
@@ -92,12 +93,14 @@ std::vector<shooters_edge::menu::GameRow> game_rows(const std::string& prefs,
       g.playing = true;
       g.install = playing_install;
     }
-    if (std::string basedir, why; !g.install.empty()) {
-      if (check_game_folder(g.install, &basedir, &why, p))
-        g.edition = std::string(edition_words(edition_of(basedir, p), p));
-      else
-        g.missing = true;
-    }
+    // Only a game added here (ADD GAME, -basedir, a folder loaded) whose folder still holds it.
+    if (g.install.empty()) continue;
+    std::string basedir, why;
+    if (check_game_folder(g.install, &basedir, &why, p))
+      g.edition = std::string(edition_words(edition_of(basedir, p), p));
+    else if (!g.playing)
+      continue;
+    g.remixed = !g.playing && remixed == p.id;
     rows.push_back(std::move(g));
   }
   return rows;

@@ -36,7 +36,7 @@
 // is drawn on: con_bgtop and con_bgbottom (a gradient's colours, "rrggbb"), con_bgalpha and
 // con_bgimage (a picture over the gradient); and con_font, the charset its text is written in
 // (docs/charsets.md: terminal, mono, ...; "" the 2D layer's own UI font); con_clock (1: the
-// local time in the panel's lower right corner).
+// local time in the panel's lower right corner); con_history (the typed lines kept, 128).
 //
 // `clearnotify` lets the notify lines so far go. `remotemode [address [password]]` sends each line
 // typed without a slash to the game's `rcon` command, the prompt `#` (the address and password set
@@ -53,6 +53,7 @@
 // ge:keywords completion tab con_height con_chat con_speed con_lines slash-command loading full
 // ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage con_font
 // ge:keywords autocomplete suggestion suggestions hint con_suggest condump con_clock game_chat
+// ge:keywords con_history
 // ge:keywords clearnotify remotemode rcon con_scale foot loading download-bar
 // ge:skill console
 // ge:test tests/console_view_test.cpp
@@ -89,6 +90,15 @@ struct ViewLine {
   std::string text;
   double time_s = 0;  // the view's clock when it came
   uint64_t n = 0;     // its number, counted from the view's first line
+};
+
+// A place in the scrollback: a line by its number (ViewLine::n) and a byte in its text.
+struct TextSpot {
+  uint64_t line = 0;
+  size_t column = 0;
+  bool operator<(const TextSpot& o) const {
+    return line != o.line ? line < o.line : column < o.column;
+  }
 };
 
 // Where a chat line goes.
@@ -175,7 +185,37 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   // Lets the notify lines so far go (a demo's jump), the scrollback keeping them.
   void clear_notify() { notify_from_ = added_; }
   // The newest lines younger than con_notifytime, at most con_notifylines: shown while closed.
+  // None when the host draws its own feed (`set_host_notify`).
   std::vector<const ViewLine*> notify() const;
+  // A HOST'S OWN NOTIFY FEED (a game's HUD showing every printed line): the console's notify lines
+  // are not drawn as well, and the host's feed reads con_notify, con_notifylines and
+  // con_notifytime from `notify_settings`.
+  struct NotifySettings {
+    bool on = true;
+    int lines = 4;
+    double time_s = 4;
+  };
+  void set_host_notify(bool own) { host_notify_ = own; }
+  NotifySettings notify_settings() const { return {notify_on_, notify_lines_, notify_time_}; }
+
+  // A LINE REWRITTEN IN PLACE (a load's "Loading base1... 3.6s" ticking): the newest line's
+  // number, and its text replaced by `n`; false when line `n` has scrolled out (print it again).
+  uint64_t newest() const { return lines_.empty() ? 0 : lines_.back().n; }
+  bool rewrite(uint64_t n, std::string_view text);
+
+  // SELECTING the scrollback's text (the mouse dragged over it, ui/console.hpp's `console_spot`):
+  // from where it went down to where it is, either way round; the text copied is the lines' text
+  // between them, a line break between lines. A line that scrolled out of the scrollback ends it.
+  void select_begin(TextSpot at) { select_from_ = select_to_ = at, selecting_ = true; }
+  void select_to(TextSpot at) {
+    if (selecting_) select_to_ = at;
+  }
+  void select_clear() { selecting_ = false; }
+  bool has_selection() const;
+  // The selection's ends, the first first (meaningful when has_selection()).
+  TextSpot selection_first() const { return select_to_ < select_from_ ? select_to_ : select_from_; }
+  TextSpot selection_last() const { return select_to_ < select_from_ ? select_from_ : select_to_; }
+  std::string selected_text() const;
 
   // TYPING: into the chat line while it is open, else into the console's input line.
   void type(std::string_view text);
@@ -254,6 +294,8 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   void chat_key(EditKey k);
   Console& c_;
   std::deque<ViewLine> lines_;
+  TextSpot select_from_, select_to_;  // select_begin's and select_to's
+  bool selecting_ = false;
   std::vector<std::string> history_;
   std::string input_;
   size_t cursor_ = 0;
@@ -270,11 +312,13 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   double height_ = 0.5, speed_ = 3;
   int32_t keep_ = 1024, notify_lines_ = 4;
   bool notify_on_ = true, clear_notify_ = true;  // con_notify, con_clearnotify
+  bool host_notify_ = false;                     // set_host_notify
   uint64_t added_ = 0;                           // the lines added so far
   uint64_t notify_from_ = 0;                     // the first line the notify area may show
   double notify_time_ = 4;
   int chat_default_ = 0;   // con_chat
   bool clock_on_ = false;  // con_clock
+  int history_max_ = 128;  // con_history: the typed lines kept, the oldest dropped first
   bool remote_ = false;    // remotemode
   double scale_ = 0;       // con_scale
   std::string foot_;

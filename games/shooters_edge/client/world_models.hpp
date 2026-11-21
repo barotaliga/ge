@@ -88,17 +88,22 @@ struct Placed {
   // Quake II's look (q2_look.hpp): its light pulsing (an item's glow) and a coloured shell
   // over it (quad damage, invulnerability, a power shield's hit), `shell_rgb` its flat colour.
   bool pulse = false, shell = false;
-  bool bleeds = false;      // a body's piece by its bits (Quake II's gib bit), not its model file
-  bool flies = false;       // Quake II's corpse with flies round it (its flies bit)
-  bool shell_only = false;  // its shell alone, no plain draw under it (a power screen's plate)
+  bool bleeds = false;       // a body's piece by its bits (Quake II's gib bit), not its model file
+  bool green_blood = false;  // its blood green (Quake II's green gib bit)
+  bool flies = false;        // Quake II's corpse with flies round it (its flies bit)
+  bool shell_only = false;   // its shell alone, no plain draw under it (a power screen's plate)
   // A Quake II entity's animation bits (its effects' ANIM01, ANIM23, ANIM_ALL, ANIM_ALLFAST;
   // q2_look.hpp's q2_texture_frame): a brush model's texture frame, a model's or a sprite's own
   // frame, cycled on the picture's clock; -1 elsewhere, its textures on the map's clock.
   int q2_anim = -1;
   float shell_rgb[3] = {0, 0, 0};
   bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)
-  float alpha = 1;     // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
-  float scale = 1;     // its size about the origin (a mod's `scale`)
+  bool spinning = false;  // Quake II's spinning lights: upside down, 500 degrees a second
+  bool bobs = false;      // Quake II's bob bit: rising and sinking 5 units
+  // Quake II's render bits: lit full whatever the room, or never darker than a tenth.
+  bool full_bright = false, min_light = false;
+  float alpha = 1;  // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
+  float scale = 1;  // its size about the origin (a mod's `scale`)
   float colormod[3] = {1, 1, 1};  // its light tinted, glowing texels kept (a mod's `colormod`)
   // An item coming back as a hologram (ce_respawns, classicenhance/hologram.hpp): the share of its
   // light that is the hologram's blue, and the blue shell over it (0: none).

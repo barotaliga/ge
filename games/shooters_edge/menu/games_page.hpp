@@ -1,23 +1,23 @@
-// SHOOTER'S EDGE'S SELECT GAME PAGE (the main menu's first row, `menu_games`): the classic games
-// the shell plays, each named by a picture of its name (`menu/art/<profile id>.png`, compiled in;
-// the names are drawn, never written), with the install of it last loaded on this computer and
-// which edition that is (client/installs.hpp), the game playing now marked.
+// SHOOTER'S EDGE'S SELECT GAME PAGE (the main menu's first row, `menu_games`): the games added on
+// this computer (client/installs.hpp: ADD GAME, -basedir, any folder loaded), each named by a
+// picture of its name (`menu/art/<profile id>.png`, compiled in; the names are drawn, never
+// written) with its edition under it. The game playing is in colour, one classic remix plays with
+// half in colour, the rest grey. A game never added is not listed.
 //
-// - ENTER on a game: the game playing now goes back to the main menu; one whose install was loaded
-//   before opens it at once (`GamesAction::open`, `chosen().install`); one never loaded asks the
-//   window for the desktop's folder chooser (`GamesAction::browse`) to find the folder holding its
-//   base folder and first pack. Whichever game that folder turns out to be is the one loaded.
-// - FIND ANOTHER INSTALL (the last row) asks for the folder chooser for any game, or another copy
-//   of one already found.
+// - ENTER on a game: the game playing now goes back to the main menu; another opens its install at
+//   once (`GamesAction::open`, `chosen().install`).
+// - ADD GAME (the last row) asks the window for the desktop's folder chooser
+//   (`GamesAction::browse`): a folder holding a game the shell plays (Quake, Quake II) is added and
+//   loaded, whichever it turns out to be.
 // - A folder that held no game the shell knows comes back as a note (`set_note`) in the footer.
 // - UP and DOWN choose, ENTER (or a click) picks, ESCAPE goes back to the main menu.
 //
 // Drawn in the modern menu's look (cards, the name's picture large) or, once a classic game is
 // loaded, in its classic look (classic_pages.hpp: its plaque, its glyph sheet).
 //
-// ge:summary The SELECT GAME page: each classic game by its name's picture, its install, edition
-// ge:keywords menu select-game games-page game-names name-picture install edition shareware
-// ge:keywords registered browse find-install menu_games
+// ge:summary The SELECT GAME page: each game added by its name's picture, then ADD GAME
+// ge:keywords menu select-game games-page game-names name-picture install add-game browse
+// ge:keywords menu_games
 // ge:skill ui
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -38,11 +38,11 @@ namespace shooters_edge::menu {
 
 // One game the page offers.
 struct GameRow {
-  std::string id;        // its content profile's id (classicenhance/profile.hpp)
-  std::string install;   // the folder of it loaded last on this computer, "" none
-  std::string edition;   // that install's edition in the game's words, "" unknown
-  bool playing = false;  // the game loaded now
-  bool missing = false;  // `install` was kept but no longer opens
+  std::string id = {};       // its content profile's id (classicenhance/profile.hpp)
+  std::string install = {};  // the folder of it loaded last on this computer
+  std::string edition = {};  // that install's edition in the game's words ("Shareware"), "" unknown
+  bool playing = false;      // the game loaded now: its name in colour
+  bool remixed = false;      // classic remix plays the loaded game with it: its name half in colour
 };
 
 enum class GamesAction : uint8_t { none, leave, open, browse };

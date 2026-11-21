@@ -606,8 +606,13 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
         const Q2Look look =
             q2_look(static_cast<uint32_t>(row.effects), static_cast<uint32_t>(row.render_fx));
         p.pulse = look.pulse;
+        p.spinning = look.spinning;
+        p.bobs = look.bobs;
+        p.full_bright = look.full_bright;
+        p.min_light = look.min_light;
         p.shell = look.shell;
         p.bleeds = look.bleeds;
+        p.green_blood = look.green_blood;
         p.flies = look.flies;
         p.q2_anim = row.effects & 0x3c00;
         for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
@@ -1303,9 +1308,15 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       frames_of(k, p, at, frame_a, frame_b, blend);
     }
     for (int c = 0; c < 3; c++) g.now.position[c] = w[c];
+    if (p.bobs) g.now.position[1] += float(q2_bob_units(t) * br::kUnitM);
     float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
     if (k.spin || p.turns) ang[1] = float(std::fmod(t * kSpinDegPerS, 360.0));
     if (p.turns) ang[0] = ang[2] = 0;  // yaw only
+    if (p.spinning && !p.turns) {      // upside down, its own yaw turned on 500 degrees a second
+      ang[0] = 0;
+      ang[2] = 180;
+      ang[1] = float(std::fmod(t * kSqSpinDegPerS + p.angles.y, 360.0));
+    }
     models::rotation_of(ang, k.is == ModelKind::Is::alias, g.now.rotation);
     g.now.frame_a = frame_a;
     g.now.frame_b = frame_b;
@@ -1348,10 +1359,22 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     const bool a_player = (k.player || k.figure) && p.entity > 0 && p.entity <= sh::kMaxClients;
     const double fullbright = a_player ? std::clamp(m.fullbright, 0.0, 1.0) : 0;
     double floor_lum = 0, dyn_lum = 0;
+    // Quake II's render bits: full light, its dynamic lights left out; or a tenth at least.
+    double raw_rgb[3] = {lit.rgb[0], lit.rgb[1], lit.rgb[2]};
+    if (p.full_bright) {
+      raw_rgb[0] = raw_rgb[1] = raw_rgb[2] = 1;
+      dyn[0] = dyn[1] = dyn[2] = 0;
+    } else if (p.min_light) {
+      const double r = raw_rgb[0] + dyn[0], g2 = raw_rgb[1] + dyn[1], b = raw_rgb[2] + dyn[2];
+      const double len = std::sqrt(r * r + g2 * g2 + b * b);
+      if (len < 0.1)
+        for (int c = 0; c < 3; c++)
+          raw_rgb[c] = len <= 0 ? 0.1 : (raw_rgb[c] + dyn[c]) * 0.1 / len - dyn[c];
+    }
     for (int c = 0; c < 3; c++) {
       // The world's own soft floor (bsp_draw's r_minlight), so a thing in a dark corner reads
       // as the walls round it do.
-      const double raw = lit.rgb[c];
+      const double raw = raw_rgb[c];
       const double floor = std::sqrt(raw * raw + minlight * minlight);
       const float l = float((floor + dyn[c]) * brightness);
       // The tint on its light, not its glow.

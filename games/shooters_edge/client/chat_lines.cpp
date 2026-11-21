@@ -296,12 +296,14 @@ void run_triggers(ChatExtras& x, std::string_view text) {
 }
 
 void tell_feeds(ChatExtras& x, ge::hud::Feed& notify, std::string_view line, bool chat,
-                ge::ui::Color ink, double at) {
+                ge::ui::Color ink, double at, const ge::console::ConsoleView::NotifySettings* ns) {
   if (chat && x.hud != 0) {
     x.feed.configure(static_cast<size_t>(std::clamp(x.hud_lines, 1, kMostHudLines)),
                      x.hud_time > 0 ? std::max(0.0, x.hud_time - 1) : -1);
     x.feed.push(line, x.hud == 2 ? ge::ui::Color{0.45f, 1, 0.45f, 1} : ink, at);
   }
+  if (ns != nullptr && (!ns->on || ns->lines <= 0)) return;
+  if (ns != nullptr) notify.configure(static_cast<size_t>(ns->lines), ns->time_s);
   if (!chat || x.notify != 0) notify.push(line, ink, at);
 }
 

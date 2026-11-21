@@ -57,6 +57,7 @@ struct Args {
   std::string playdemo;  // a demo to play at its own pace ("": none)
   std::string tv;        // a live broadcast to watch, its TV node's host:port ("": none)
   long frames = 0;       // 0: until quit
+  bool hidden = false;   // -hidden: the window never shown (a run that takes screenshots)
   int width = 1280, height = 720;
   // Whether --fps, --codec and --size (--resolution) were given: -demovideo takes video.cfg's
   // demovideo_fps, demovideo_codec and demovideo_size for those that were not (video_cfg.hpp).

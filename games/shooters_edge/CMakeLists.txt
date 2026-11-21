@@ -73,11 +73,11 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 # The QuakeWorld protocol (net/qw_*, and the single-player netgame's net/q1_*): the codec, the net channel, the classic server over the
 # QC server on engine/net's sockets, the scripted client and the measured trial (skill: net); and
 # Quake II's live protocol beside it (net/q2_*: its client and server). Only the classic_ and
-# q2_ files, and the window console's game words (net/game_commands): net/host_* belong to the
-# host's own library.
+# q2_ files, and the window console's game words (net/game_commands, net/window_words): net/host_*
+# belong to the host's own library.
 file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
      ${CMAKE_CURRENT_SOURCE_DIR}/net/qw_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/q2_*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/q1_*.cpp
-     ${CMAKE_CURRENT_SOURCE_DIR}/net/game_commands.cpp)
+     ${CMAKE_CURRENT_SOURCE_DIR}/net/game_commands.cpp ${CMAKE_CURRENT_SOURCE_DIR}/net/window_words.cpp)
 add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
 target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net ge_play
                       ge_forward ge_tv)
@@ -203,7 +203,7 @@ target_compile_definitions(shooters_edge_rules_campaign_package PRIVATE SE_RULES
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
-     "/client/(main|window_cvars|install_ask|bot_view|world_draw|world_extras|world_fx|world_fx_book|world_fx_blood|world_fx_screen|world_fx_wounds|world_lasers|world_models|burning|demo_video|title|map_load)\.cpp$")
+     "/client/(main|window_cvars|install_ask|bot_view|world_draw|world_extras|world_fx|world_fx_book|world_fx_blood|world_fx_q2|world_fx_screen|world_fx_wounds|world_lasers|world_models|burning|demo_video|title|map_load)\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
@@ -230,7 +230,7 @@ if(TARGET ge_brush_app)
 endif()
 if(GE_GPU AND TARGET ge_brush_app)
   add_library(shooters_edge_client_gpu STATIC client/world_draw.cpp client/world_extras.cpp
-                                              client/world_fx.cpp client/world_fx_book.cpp client/world_fx_blood.cpp
+                                              client/world_fx.cpp client/world_fx_book.cpp client/world_fx_blood.cpp client/world_fx_q2.cpp
                                               client/world_fx_screen.cpp client/world_fx_wounds.cpp
                                               client/world_lasers.cpp
                                               client/world_models.cpp client/burning.cpp

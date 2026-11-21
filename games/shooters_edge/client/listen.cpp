@@ -5,6 +5,8 @@
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/q2_look.hpp"
+#include "shooters_edge/server/q2_map.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -1306,6 +1308,7 @@ PlayerState player_state(const Listen& l) {
     p.rules_view = true;
     p.view_ofs = {n.view_offset[0], n.view_offset[1], n.view_offset[2]};
     p.kick = {n.kick[0], n.kick[1], n.kick[2]};
+    p.fov = n.fov;
   }
   if (const sv::Q2Server* sq = l.rules != nullptr ? sv::q2_of(*l.rules) : nullptr) {
     p.rules_frame = sq->frame_number;
@@ -1336,6 +1339,15 @@ bool aim_turn_points(const Listen& l, int target, sh::Vec3f& eye, sh::Vec3f& mid
   return true;
 }
 
+void listen_area_bits(const Listen& l, std::vector<uint8_t>& out) {
+  out.clear();
+  const sv::Q2Server* sq = l.rules != nullptr ? sv::q2_of(*l.rules) : nullptr;
+  if (sq == nullptr || l.server == nullptr || l.server->world.entities.size() < 2) return;
+  const sv::RulesWorld& w = l.server->world;
+  const float view_z = w.clients[0].numbers.view_z;
+  sv::map_area_bits(*sq, w.entities[1].origin + sh::Vec3f{0, 0, view_z != 0 ? view_z : 22}, out);
+}
+
 void missiles_of(const Listen& l, std::vector<Missile>& out) {
   out.clear();
   // The shots in flight as the rules' world names them, whatever runs the rules (a player's or a
@@ -1344,8 +1356,21 @@ void missiles_of(const Listen& l, std::vector<Missile>& out) {
   const std::vector<sv::WorldEntity>& rows = (*l.rules)->world.entities;
   for (size_t e = 0; e < rows.size(); e++) {
     const sv::WorldEntity& r = rows[e];
-    if (r.free || r.shot == sv::WorldShot::none) continue;
+    if (r.free) continue;
     Missile o;
+    if (r.shot == sv::WorldShot::none) {  // Quake II's marks by their bits (a game library's)
+      if (!listen_is_q2(l)) continue;
+      const Q2Look look = q2_look(static_cast<uint32_t>(r.effects), 0);
+      const Q2Look::Missile k = look.missile;
+      if (k < Q2Look::Missile::flag1 && !look.spinning) continue;
+      o.entity = static_cast<int>(e);
+      o.origin = r.origin;
+      if (k >= Q2Look::Missile::flag1) o.q2_mark = static_cast<uint8_t>(k);
+      o.q2_spin = look.spinning;
+      o.yaw = r.angles.y;
+      out.push_back(o);
+      continue;
+    }
     o.entity = static_cast<int>(e);
     o.origin = r.origin;
     o.rocket = r.shot == sv::WorldShot::rocket || r.shot == sv::WorldShot::grenade;

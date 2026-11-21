@@ -3,7 +3,8 @@
 // ge:summary The window's cvar layers: each game's own settings, the switch, the clashes printed
 // ge:keywords cvar-layer game-cvars per-game-cvar same own clash game-switch crosshair
 // ge:keywords vid_gamma s_volume gl_dynamic gl_lightmap cl_gun scr_centertime
-// ge:keywords intensity gl_modulate gl_brightness
+// ge:keywords intensity gl_modulate gl_brightness cl_blend cl_entities cl_particles cl_lights
+// ge:keywords cl_gibs cl_noglow logfile
 // ge:keywords sshot_format sshot_dir image_jpeg_quality_level
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
@@ -13,6 +14,7 @@
 #include "core/num_text.hpp"
 #include "shooters_edge/client/picture_files.hpp"
 
+#include <ctime>
 #include <utility>
 #include <vector>
 
@@ -42,6 +44,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
   if (b.light_modulate != nullptr) *b.light_modulate = 1;
   if (b.light_lift != nullptr) *b.light_lift = 0;
+  if (b.gibs != nullptr) *b.gibs = true;
+  if (b.no_glow != nullptr) *b.no_glow = false;
   if (b.view != nullptr) {  // Quake's weapon is always drawn, at its own place and lens
     b.view->hand = 0;
     b.view->gun = 1;
@@ -91,7 +95,8 @@ void add_first(con::Console& c, const GameBindings& b) {
     c.cvars().add(offset);
     c.cvars().add(last_fired);
   }
-  if (b.noskins != nullptr) *b.noskins = 0;  // its figures are its own (choose_figure)
+  if (b.noskins != nullptr) *b.noskins = 0;         // its figures are its own (choose_figure)
+  if (b.screen != nullptr) *b.screen = Q2Screen{};  // Quake II's view and 2D settings set aside
   c.cvars().add_synonym("fov", "cl_fov");
   c.cvars().add_synonym("ignore_qtv", "ignore_tv");     // its spelling of the TV viewers' chat
   c.cvars().add_synonym("cl_chatmode", "con_chat");     // what a typed line is: command or chat
@@ -143,7 +148,10 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   and `r_maxfps`, the frame cap, kept with its own settings;
 // - the maps' light: `intensity`, `gl_modulate` and `gl_brightness` (Quake's stay 2, 1 and 0);
 // - its chat: its own `cl_chat_sound` (one sound by number or name) and `con_auto_chat` (2 says a
-//   typed line to the team, where our `con_chat` 2 tells a command by its first word).
+//   typed line to the team, where our `con_chat` 2 tells a command by its first word);
+// - its view and 2D (q2_view.hpp): `scr_scale`, `scr_draw2d`, `scr_alpha`, the lag graph's
+//   `scr_lag_*`, `cl_adjustfov`, `uf`, `cl_kickangles`; and `s_underwater` the same setting as
+//   Quake's (room_ear.hpp), on by default where Quake's is off.
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
@@ -209,6 +217,30 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .max = 86400,
          .values = "0: never; 1..86400: that many seconds (120 the default)",
          .overlap = con::Overlap::same});
+  v.add({.name = "s_underwater",  // its own client muffles the world under water; Quake's never
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "Whether the world sounds muffled while your head is under water.",
+         .kind = con::CvarKind::boolean,
+         .values = "1: muffled (the default); 0: as in the air",
+         .overlap = con::Overlap::same});
+  if (b.screen != nullptr) add_q2_screen_cvars(v, *b.screen);
+  if (b.gibs != nullptr)  // our cl_gibfilter, the other way round
+    v.bind({.name = "cl_gibs",
+            .fallback = "1",
+            .flags = con::kArchive,
+            .help = "Whether the pieces a body bursts into are drawn.",
+            .kind = con::CvarKind::boolean,
+            .values = "1: they fly and lie about (the default); 0: none is drawn"},
+           b.gibs);
+  if (b.no_glow != nullptr)  // over r_itempulse
+    v.bind({.name = "cl_noglow",
+            .fallback = "0",
+            .flags = con::kArchive,
+            .help = "Whether the items lying about never pulse with light.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: they pulse as r_itempulse says (the default); 1: never"},
+           b.no_glow);
   c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
   v.add({.name = "scr_centertime",
          .fallback = "2.5",
@@ -223,7 +255,9 @@ void add_q2(con::Console& c, const GameBindings& b) {
         std::pair{"gl_dynamic", "r_dynamic"}, std::pair{"gl_lightmap", "r_lightmap"},
         std::pair{"fov", "cl_fov"}, std::pair{"ch_x", "cl_crossx"}, std::pair{"ch_y", "cl_crossy"},
         std::pair{"ch_scale", "crosshairsize"}, std::pair{"ch_alpha", "crosshairalpha"},
-        std::pair{"cl_vwep", "r_drawvweps"}, std::pair{"con_alpha", "con_bgalpha"}})
+        std::pair{"cl_vwep", "r_drawvweps"}, std::pair{"con_alpha", "con_bgalpha"},
+        std::pair{"cl_entities", "r_drawentities"}, std::pair{"cl_particles", "r_particles"},
+        std::pair{"cl_lights", "r_dynamic"}, std::pair{"cl_blend", "gl_polyblend"}})
     v.add_synonym(name, ours);
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.
@@ -482,8 +516,30 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
   con::CvarLayer layer(c.cvars(), v.layer);
   if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it
   if (b.auto_chat != nullptr) *b.auto_chat = -1;       // only Quake II's con_auto_chat sets it
+  {  // only Quake II's cvars set them; what the frames saw is kept
+    Q2Session fresh;
+    fresh.joined = v.q2.joined;
+    fresh.map = v.q2.map;
+    v.q2 = fresh;
+  }
+  if (game.id == "q2") add_q2_session_cvars(c.cvars(), v.q2);
+  if (!v.log) v.log = std::make_shared<ConsoleLog>();
+  v.log->mode = 0;  // Quake II's logfile and the rest; its file closed by the next line printed
+  v.log->flush = false;
+  if (game.id == "q2") add_console_log_cvars(c.cvars(), *v.log);
+  if (!v.log_hooked && c.sink()) {
+    v.log_hooked = true;
+    c.set_sink([&c, log = v.log, before = c.sink()](std::string_view line) {
+      before(line);
+      if (log->mode > 0 || log->file)
+        console_log_line(*log, c.search_path().empty() ? "." : c.search_path().front(), line,
+                         std::time(nullptr));
+    });
+  }
+  GameBindings bound = b;
+  if (bound.screen == nullptr) bound.screen = &v.screen;
   for (const GameRows& row : kGameCvars)
-    if (row.game == game.id) row.add(c, b);
+    if (row.game == game.id) row.add(c, bound);
   if (b.crosshair != nullptr) {  // crosshairimage's picture read again from this game's files
     if (b.files != nullptr) add_crosshair_reader(*b.crosshair, *b.files);
     b.crosshair->picture_of.clear();

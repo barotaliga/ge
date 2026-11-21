@@ -229,8 +229,9 @@ constexpr PageShot kPages[] = {
      "The root: SELECT GAME first, then SINGLE PLAYER, MULTIPLAYER, DEMOS, OPTIONS, HELP and "
      "QUIT, the focus on MULTIPLAYER."},
     {"games", "",
-     "SELECT GAME: each classic game by the picture of its name, the one loaded marked with its "
-     "edition and install, the other not found yet; ENTER on it finds its folder."},
+     "SELECT GAME: each game added by the picture of its name and its edition, the game playing "
+     "in colour, the one remix plays it with half, then ADD GAME, which asks for a game's "
+     "folder."},
     {"single", "",
      "SINGLE PLAYER: NEW GAME runs `newgame` (the packs' single-player program from the map "
      "start); LOAD and SAVE open the save slots."},
@@ -403,12 +404,8 @@ void run(ge::lab::Lab& lab) {
         if (std::string_view(ps.page) == "games")
           g.menu.games().set_lister([] {
             return std::vector<sm::GameRow>{
-                {.id = "q1",
-                 .install = "/games/classic",
-                 .edition = "Shareware",
-                 .playing = true,
-                 .missing = false},
-                {.id = "q2", .install = "", .edition = "", .playing = false, .missing = false}};
+                {.id = "q1", .install = "/games/classic", .edition = "Registered", .playing = true},
+                {.id = "q2", .install = "/games/q2", .edition = "Full game", .remixed = true}};
           });
         // NEW GAME's question is opened from the single-player page, so its NO goes back there.
         const bool asked = std::string_view(ps.page) == "newgame";

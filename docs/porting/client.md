@@ -32,11 +32,13 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | --- | --- | --- | --- | --- |
 | Adapter | `client/qw_adapter.cpp` | `client/q2_adapter.cpp` | a file of its own | a file of its own |
 | Layer | `add_first` in `client/cvar_layers.cpp` | `add_q2` | `add_<game>` | `add_<game>` |
-| Status bar | its pictures in fixed places | a layout program from the server (`hud/q2_layout.hpp`, `client/q2_bar.hpp`, `server/q2_bar.hpp`) | its client half's HUD (bytecode or native) | its own bar |
+| Status bar | its pictures in fixed places | a layout program from the server (`hud/q2_layout.hpp`, `client/q2_bar.hpp`, `server/q2_bar.hpp`), its scale, switches and lag graph (`client/q2_view.hpp`) | its client half's HUD (bytecode or native) | its own bar |
 | Menu letters | carved letters cut from its strips (`menu/carved_letters.hpp`) | plate letters cut as ink (`menu/plate_letters.hpp`) | its own font pictures | its own font lumps |
 | Menu pages | `menu::classic_menu()` | its own pages | its own (multiplayer only) | its own |
 | Save slots' word | "--- UNUSED SLOT ---" (`kUnusedSlot`) | `kEmptySlot` (`menu::q2_menu()`) | its own | its own |
+| Field of view | the player's own `fov` | the server's, drawn between frames (`client/q2_view.hpp`: `cl_adjustfov`, `uf`) | its own | its own |
 | Plaques | the pack's pause and loading pictures (`menu::draw_plaque`, `showpause`) | its own | its own | its own |
+| Map commands, game clock, console log | none | `client/q2_session.hpp` (`cl_beginmapcmd`, `timescale`, `cl_autopause`, the read-only state), `client/console_log.hpp` (`logfile`) | its own | its own |
 
 ## Adding a game
 
@@ -61,6 +63,10 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Raw mouse, mouse filter and acceleration | both games' later clients | `mouse_feel.hpp` |
 | HUD layout as data the player moves | ours | `engine/hud` |
 | One config for the series | ours | `client/settings.hpp` |
+| The lag graph and the lost-connection picture | Quake II's client | `engine/hud/net_graph.hpp` (`draw_lag_graph`), both games' packets |
+| Sound muffled under water (`s_underwater`, off in Quake) | Quake II's client | `engine/audio/synth.hpp`'s muffle, `client/room_ear.hpp` |
+| Speakers swapped (`s_swapstereo`) | both games' later clients | `engine/audio/synth.hpp`'s `swap_stereo`, `client/room_ear.hpp` |
+| Typed history kept to a length (`con_history`) | Quake II's client | `engine/console/view.hpp` |
 
 | Drawback left behind | How |
 | --- | --- |

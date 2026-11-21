@@ -42,6 +42,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "classic/q2_move.hpp"
 
@@ -57,6 +58,10 @@ void map_precache(Q2Server& s);
 // Sets up every map entity the runner keeps (movers, triggers, targets): their keys read, their
 // places and fields made. After the items; adds the door fields and plat triggers as entities.
 void map_spawn(Q2Server& s);
+
+// A player put at `origin` (10 units up), stopped and held 160 ms, facing `angles`; whoever
+// stands there is telefragged. A teleporter's pad adds its flashes and sounds round it.
+void map_place_player(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f angles);
 
 // One rules frame of the map: the delayed uses, the timers, every mover's push and step.
 void map_frame(Q2Server& s);
@@ -118,6 +123,10 @@ void map_rows(Q2Server& s);
 // areas joined.
 bool map_areas_connected(const Q2Server& s, sh::Vec3f a, sh::Vec3f b);
 bool map_hears(const Q2Server& s, sh::Vec3f from, sh::Vec3f to);
+// The areas an eye at `eye` sees into, one bit an area (area n bit n % 8 of byte n / 8): those
+// joined to its own; every area when it stands in none (outside or in solid); empty when the map
+// has no areas (every area shown).
+void map_area_bits(const Q2Server& s, sh::Vec3f eye, std::vector<uint8_t>& out);
 
 // A kept level read back (q2_save.hpp): every cross-level target not yet fired checks again
 // its `delay` from now.

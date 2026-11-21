@@ -65,10 +65,19 @@ struct Words {
   }
 };
 
+// The word's text form ("string", "cstring2", ...) without its `stat_`, or empty when it is none.
+std::string_view text_form(std::string_view k) {
+  if (k.starts_with("stat_")) k.remove_prefix(5);
+  for (std::string_view f : {"string", "string2", "cstring", "cstring2", "rstring", "rstring2"})
+    if (k == f) return k;
+  return {};
+}
+
 struct Run {
   const LayoutInput& in;
   std::vector<LayoutOp>& out;
   int x = 0, y = 0;
+  uint8_t rgba[4] = {255, 255, 255, 255};
 
   int stat(int s) const {
     if (s < 0 || s >= kLayoutStats || static_cast<size_t>(s) >= in.stats.size()) return 0;
@@ -86,6 +95,7 @@ struct Run {
     op.y = py;
     op.name = std::move(name);
     op.fallback = std::move(fallback);
+    std::copy(rgba, rgba + 4, op.rgba);
     out.push_back(std::move(op));
   }
   void text(int px, int py, std::string_view t, bool alt) {
@@ -96,7 +106,38 @@ struct Run {
     op.y = py;
     op.text = std::string(t);
     op.alt = alt;
+    std::copy(rgba, rgba + 4, op.rgba);
     out.push_back(std::move(op));
+  }
+  // Each line of `t` centred in 320 px from the cursor's x, 8 px apart.
+  void centred(std::string_view t, bool alt) {
+    int line_y = y;
+    for (;;) {
+      const size_t nl = t.find('\n');
+      const std::string_view line = t.substr(0, nl);
+      const int len = static_cast<int>(line.size());
+      text(x + (320 - kLetter * len) / 2, line_y, line, alt);
+      if (nl == std::string_view::npos) break;
+      t.remove_prefix(nl + 1);
+      line_y += kLetter;
+    }
+  }
+  // One line ending at the cursor; `flip`: each letter's top bit flipped (the other set).
+  void right(std::string_view t, bool flip) {
+    std::string line(t);
+    if (flip)
+      for (char& c : line) c = static_cast<char>(static_cast<uint8_t>(c) ^ 0x80);
+    text(x - kLetter * static_cast<int>(line.size()), y, line, false);
+  }
+  // Text in one of the six forms by its word's tail: "", "2", "c", "c2", "r", "r2".
+  void form(std::string_view kind, std::string_view t) {
+    const bool alt = kind.ends_with('2');
+    if (kind.starts_with('c'))
+      centred(t, alt);
+    else if (kind.starts_with('r'))
+      right(t, alt);
+    else
+      text(x, y, t, alt);
   }
   // `value` in a field of `width` digits at the cursor, in the plain or coloured digits.
   void number(int width, int value, bool coloured) {
@@ -125,6 +166,45 @@ struct Run {
 };
 
 }  // namespace
+
+bool layout_colour(std::string_view c, uint8_t rgba[4]) {
+  static constexpr std::string_view kNames[8] = {"black", "red",  "green",   "yellow",
+                                                 "blue",  "cyan", "magenta", "white"};
+  int index = -1;
+  if (c.size() == 1 && c[0] >= '0' && c[0] <= '7') index = c[0] - '0';
+  for (int i = 0; i < 8; i++)
+    if (c == kNames[i]) index = i;
+  if (index >= 0) {  // bit 0 red, bit 1 green, bit 2 blue
+    rgba[0] = (index & 1) != 0 ? 255 : 0;
+    rgba[1] = (index & 2) != 0 ? 255 : 0;
+    rgba[2] = (index & 4) != 0 ? 255 : 0;
+    rgba[3] = 255;
+    return true;
+  }
+  if (c.empty() || c[0] != '#') return false;
+  c.remove_prefix(1);
+  if (c.size() != 3 && c.size() != 6 && c.size() != 8) return false;
+  uint8_t d[8];
+  for (size_t i = 0; i < c.size(); i++) {
+    const char h = c[i];
+    if (h >= '0' && h <= '9')
+      d[i] = static_cast<uint8_t>(h - '0');
+    else if (h >= 'a' && h <= 'f')
+      d[i] = static_cast<uint8_t>(h - 'a' + 10);
+    else if (h >= 'A' && h <= 'F')
+      d[i] = static_cast<uint8_t>(h - 'A' + 10);
+    else
+      return false;
+  }
+  if (c.size() == 3) {
+    for (int k = 0; k < 3; k++) rgba[k] = static_cast<uint8_t>(d[k] * 17);
+    rgba[3] = 255;
+  } else {
+    for (size_t k = 0; k < 4; k++)
+      rgba[k] = k < c.size() / 2 ? static_cast<uint8_t>(d[2 * k] * 16 + d[2 * k + 1]) : 255;
+  }
+  return true;
+}
 
 std::string layout_picture_path(std::string_view name) {
   if (!name.empty() && (name[0] == '/' || name[0] == '\\')) return std::string(name.substr(1));
@@ -177,28 +257,21 @@ void run_layout(const LayoutInput& in, std::vector<LayoutOp>& out) {
       if (v < 1) continue;
       if ((r.stat(15) & 2) != 0) r.picture(r.x, r.y, "field_3");
       r.number(3, v, false);
-    } else if (k == "stat_string") {
-      const int s = w.number();
-      if (s < 0 || s >= kLayoutStrings) continue;
-      r.text(r.x, r.y, r.string(r.stat(s)), false);
-    } else if (k == "string" || k == "string2") {
-      const bool alt = k == "string2";
-      w.next();
-      r.text(r.x, r.y, w.word, alt);
-    } else if (k == "cstring" || k == "cstring2") {
-      const bool alt = k == "cstring2";
-      w.next();
-      std::string_view t = w.word;
-      int line_y = r.y;
-      for (;;) {
-        const size_t nl = t.find('\n');
-        const std::string_view line = t.substr(0, nl);
-        const int len = static_cast<int>(line.size());
-        r.text(r.x + (320 - kLetter * len) / 2, line_y, line, alt);
-        if (nl == std::string_view::npos) break;
-        t.remove_prefix(nl + 1);
-        line_y += kLetter;
+    } else if (const std::string_view tail = text_form(k); !tail.empty()) {
+      // string, string2, cstring, cstring2, rstring, rstring2 and the stat_ form of each.
+      std::string form(tail.substr(0, tail.find("string")));
+      if (tail.ends_with('2')) form += '2';
+      if (k.starts_with("stat_")) {
+        const int s = w.number();
+        if (s < 0 || s >= kLayoutStrings) continue;
+        r.form(form, r.string(r.stat(s)));
+      } else {
+        w.next();
+        r.form(form, w.word);
       }
+    } else if (k == "color") {
+      w.next();
+      layout_colour(w.word, r.rgba);
     } else if (k == "if") {
       if (r.stat(w.number()) != 0) continue;
       while (w.next() && w.word != "endif") {

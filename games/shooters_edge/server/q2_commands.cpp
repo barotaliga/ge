@@ -22,6 +22,7 @@
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_poses.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -269,6 +270,54 @@ void weapon_list(Q2Server& s, int slot, const std::vector<std::string>& w, bool 
   }
 }
 
+// `teleport x y z`: the player put there (10 units up), stopped, his view angles cleared.
+void teleport(Q2Server& s, int slot, const std::vector<std::string>& w) {
+  if (w.size() != 4) {
+    fight_print(s, slot, "Usage: teleport x y z\n");
+    return;
+  }
+  const sh::Vec3f at{std::strtof(w[1].c_str(), nullptr), std::strtof(w[2].c_str(), nullptr),
+                     std::strtof(w[3].c_str(), nullptr)};
+  map_place_player(s, slot, at, {});
+}
+
+// `listentities <all|ammo|items|keys|monsters|weapons> ...`: every entity of the asked kinds,
+// `<classname>: x y z`, on the server's console; an unknown word prints the usage, the rest apply.
+void list_entities(Q2Server& s, int slot, const std::vector<std::string>& w) {
+  const char* usage = "Usage: listentities <all|ammo|items|keys|monsters|weapons>\n";
+  if (w.size() < 2) {
+    fight_print(s, slot, usage);
+    return;
+  }
+  static constexpr std::pair<const char*, const char*> kKinds[] = {{"ammo", "ammo_"},
+                                                                   {"items", "item_"},
+                                                                   {"keys", "key_"},
+                                                                   {"monsters", "monster_"},
+                                                                   {"weapons", "weapon_"}};
+  std::vector<std::string_view> starts;
+  bool all = false;
+  for (size_t i = 1; i < w.size(); i++) {
+    bool known = q2_same_name(w[i], "all");
+    all = all || known;
+    for (const auto& [word, start] : kKinds)
+      if (q2_same_name(w[i], word)) {
+        starts.push_back(start);
+        known = true;
+      }
+    if (!known) fight_print(s, slot, usage);
+  }
+  for (const Q2Entity& e : s.entities) {
+    if (e.gone || e.classname.empty()) continue;
+    bool shown = all;
+    for (const std::string_view start : starts) shown = shown || e.classname.rfind(start, 0) == 0;
+    if (!shown) continue;
+    char line[160];
+    std::snprintf(line, sizeof line, "%s: %f %f %f", e.classname.c_str(), double(e.origin.x),
+                  double(e.origin.y), double(e.origin.z));
+    s.console.push_back(line);
+  }
+}
+
 const char* const kGestureWords[5] = {"flipoff", "salute", "taunt", "wave", "point"};
 
 void wave(Q2Server& s, int slot, const std::string& arg) {
@@ -497,6 +546,10 @@ bool commands_run(Q2Server& s, int slot, const std::string& line) {
     if (cheats_allowed(s, slot)) toggle(s, slot, p.notarget, "notarget");
   } else if (cmd == "noclip") {
     if (cheats_allowed(s, slot)) toggle(s, slot, p.noclip, "noclip");
+  } else if (cmd == "teleport") {
+    if (cheats_allowed(s, slot)) teleport(s, slot, w);
+  } else if (cmd == "listentities") {
+    if (cheats_allowed(s, slot)) list_entities(s, slot, w);
   } else if (cmd == "cycleweap" || cmd == "prefweap") {
     weapon_list(s, slot, w, cmd == "cycleweap");
   } else if (cmd == "weaplast") {

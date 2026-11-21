@@ -26,6 +26,7 @@ void classic_console(const ClassicArt& art, ClassicConsole& out) {
   st.input = ui::hex(0xffffff);
   st.hint = ui::hex(0x8c7c64);
   st.cursor = ui::hex(0xe8d8b0);
+  st.cursor_glyph = 11;         // the sheet's own cursor: its box cell
   st.edge = ui::hex(0x8c5c2c);  // the scroll marks; the panel has no edge line
   st.edge_px = 0;               // the game's console background ends in its own border
   st.list_fill = ui::hex(0x1c140c, 0.94f);

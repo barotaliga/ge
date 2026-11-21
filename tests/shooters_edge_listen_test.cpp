@@ -398,6 +398,23 @@ TEST(keys_and_the_mouse_make_the_command_and_turn_the_view) {
   CHECK(std::fabs(view.x + 3.3f) < 1e-3f);         // up is a negative pitch
 }
 
+TEST(bind_defaults_brings_back_every_key_a_saved_unbindall_took) {
+  ge::console::Console con;
+  cl::ControlSettings c;
+  cl::add_cvars(con, c);
+  cl::default_binds(con);
+  // A saved config that starts from no binds and keeps few (the player's binds gone).
+  con.execute("unbindall; bind ` toggleconsole; bind w +back; bind k +jump");
+  con.run();
+  CHECK(con.binds().get(ge::console::BindMode::game, "mouse1").empty());
+  con.execute("bind_defaults");
+  con.run();
+  CHECK(con.binds().get(ge::console::BindMode::game, "w") == "+forward");
+  CHECK(con.binds().get(ge::console::BindMode::game, "mouse1") == "+attack");
+  CHECK(con.binds().get(ge::console::BindMode::game, "k").empty());
+  CHECK(con.binds().get(ge::console::BindMode::game, "`") == "toggleconsole");
+}
+
 TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   ge::console::Console con;
   cl::ControlSettings c;
