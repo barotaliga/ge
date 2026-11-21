@@ -497,6 +497,17 @@ TEST(a_rocket_on_a_monster_hurts_it_once_and_its_blast_leaves_it_out) {
   CHECK_MSG(lost >= 100 && lost <= 120, std::to_string(lost));  // 100 to 120 direct, no blast
 }
 
+TEST(a_bolt_fired_into_a_monster_pressed_against_him_hurts_it) {
+  // The gunner's box against Ana's: the bolt's start lies past its near face, so the bolt meets
+  // it at once (before, it died there and the gunner took nothing).
+  auto h = open_hall({monster("monster_gunner", "-568 0 24", "180")});
+  run(*h, 2);
+  h->m().enemy = 0;  // it has seen her: no first blow's double
+  const int full = h->e().health;
+  run(*h, kSecond, sh::kButtonAttack);
+  CHECK_MSG(full - h->e().health >= 10, std::to_string(full - h->e().health));
+}
+
 TEST(a_monsters_death_fires_its_deathtarget_in_place_of_its_target) {
   Pairs g = guard("0 0 24", "0");
   g.push_back({"deathtarget", "won"});
