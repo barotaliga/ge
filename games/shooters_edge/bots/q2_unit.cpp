@@ -233,6 +233,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
         m.leader.bot.yaw = m.cmds[2].angles.y;  // he turned to it: his keys follow his view
       } else {
         unwedge(m.wedge, s, 1, t, m.cmds[2]);
+        if (way_edge(*m.nav, m.leader, s, 1, m.cmds[2])) um.edges++;
       }
       // The intermission: a button now and then leaves for the next map.
       if (q->intermission_at > 0) m.cmds[2].buttons = (frame & 8) ? sh::kButtonAttack : 0;
