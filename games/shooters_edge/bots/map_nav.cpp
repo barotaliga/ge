@@ -628,14 +628,16 @@ bool build_map_nav(const ge::shooter::BotView& s, const ge::shooter::MapSpec& sp
       out.bridged_grenades = sh::nav_add_tricks(out.world, out.move, graph, bridged, back, ts);
     }
   }
-  // The traps: nodes no way on foot leads back from to the main part (a room a rocket jump or a
-  // drop leads into and nothing out of): no goal of a bot's.
+  // The traps: nodes no way on foot leads back from to the main part's core (a room a rocket jump
+  // or a drop leads into and nothing out of): no goal of a bot's. The core, not the main part
+  // itself: a pocket a drop leads into is reached from a start too (base1's east pool, where his
+  // exploring dropped him and nothing reached the exit's button again).
   {
     std::vector<uint8_t> main(graph.nodes.size());
     const bool found = out.main.nodes() == graph.nodes.size();
     for (size_t n = 0; n < main.size(); n++)
       main[n] = found && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
-    const std::vector<uint8_t> back = sh::nav_back(graph, main);
+    const std::vector<uint8_t> back = sh::nav_back(graph, sh::nav_core(graph, main));
     out.trap.assign(graph.nodes.size(), 0);
     for (size_t n = 0; n < back.size() && found; n++) out.trap[n] = back[n] && !out.harm[n] ? 0 : 1;
   }

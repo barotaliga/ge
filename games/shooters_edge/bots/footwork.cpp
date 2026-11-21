@@ -191,10 +191,18 @@ bool fighter_landing(Fighter& f, const ge::shooter::BotView& s, int me, double t
     return false;
   // Just climbed out: straight onto the exit node, the edge of the water behind it, before the
   // route from the nearest node (which may stand in the water) takes over.
-  const sh::Vec3f to = f.bot.pilot.pilot.g->nodes[static_cast<size_t>(f.landing)].origin;
+  // Done as soon as the route's own leg starts dry, on the ground: he is up already, and the
+  // exit node may lie behind him down the bank (base1's river: walked back onto it, he slid off
+  // the slope into the water again).
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sh::Pilot& p = f.bot.pilot.pilot;
+  const bool route_dry = p.k < p.route.size() && p.route[p.k] >= 0 &&
+                         !g.nodes[static_cast<size_t>(p.route[p.k])].wet &&
+                         (s.world.entities[static_cast<size_t>(me)].flags & sh::kFlagOnGround) != 0;
+  const sh::Vec3f to = g.nodes[static_cast<size_t>(f.landing)].origin;
   const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
   const double dx = to.x - me_at.x, dy = to.y - me_at.y;
-  if (dx * dx + dy * dy < kLandingNear * kLandingNear) {
+  if (route_dry || dx * dx + dy * dy < kLandingNear * kLandingNear) {
     f.landing = -1;
   } else {
     const double rel = ge::core::libm::atan2(dy, dx) - cmd.angles.y * (ge::core::kPi / 180.0);

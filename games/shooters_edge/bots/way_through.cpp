@@ -463,6 +463,13 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooter::B
     }
   }
   const int32_t from = sh::nav_nearest(g, self);
+  // A place to look at is dry ground he can walk back from: the water is seen from its banks
+  // (exploring it cell by cell took him down a flooded tunnel in base1 until he stopped at its end
+  // under water), and a trap (map_nav.hpp) only from above (base1's east pool, dropped into at 94
+  // s, held him to the end). `no_place`: a node that is neither.
+  const auto no_place = [&](size_t n) {
+    return (n < nav.wet.size() && nav.wet[n] != 0) || (n < nav.trap.size() && nav.trap[n] != 0);
+  };
   // What each shut door would open up: the places not yet seen, or an exit, that only its opening
   // reaches (worked out with it open and the rest as they are).
   w.gain.assign(w.locked.size(), 0);
@@ -484,7 +491,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooter::B
       reach_past(g, from, others, w.node_door, w.search);
       int64_t more = 0;
       for (size_t n = 0; n < g.nodes.size(); n++)
-        if (!now[n] && !w.seen[n] && w.search.reached(static_cast<int32_t>(n))) more++;
+        if (!now[n] && !w.seen[n] && w.search.reached(static_cast<int32_t>(n)) && !no_place(n))
+          more++;
       for (const WayStep& st : w.steps)
         if (st.kind == WayKind::exit && st.node >= 0 && !now[static_cast<size_t>(st.node)] &&
             w.search.reached(st.node))
@@ -516,7 +524,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooter::B
   // What opens a door worth opening first; the rest only once nothing is left to explore.
   bool unseen = false;
   for (size_t n = 0; n < g.nodes.size() && !unseen; n++)
-    unseen = !w.seen[n] && w.search.reached(static_cast<int32_t>(n));
+    unseen = !w.seen[n] && w.search.reached(static_cast<int32_t>(n)) && !no_place(n);
   for (int pass = 0; pass < 2 && pick < 0; pass++)
     for (size_t k = 0; k < w.steps.size(); k++) {
       const WayStep& st = w.steps[k];
@@ -567,11 +575,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooter::B
     // again at every swap so that neither was ever given up.
     int32_t far = -1;
     double far_c = 0;
-    const bool keep =
-        w.explore >= 0 && !w.seen[static_cast<size_t>(w.explore)] && w.search.reached(w.explore);
+    const bool keep = w.explore >= 0 && !w.seen[static_cast<size_t>(w.explore)] &&
+                      w.search.reached(w.explore) && !no_place(static_cast<size_t>(w.explore));
     if (keep) far = w.explore;
     for (size_t n = 0; !keep && n < g.nodes.size(); n++) {
       if (w.seen[n] || !w.search.reached(static_cast<int32_t>(n))) continue;
+      if (no_place(n)) continue;
       const double c = w.search.cost(static_cast<int32_t>(n));
       if (far < 0 || c < far_c) {
         far = static_cast<int32_t>(n);
