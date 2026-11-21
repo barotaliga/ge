@@ -90,8 +90,9 @@ struct Placed {
   bool bleeds = false;      // a body's piece by its bits (Quake II's gib bit), not its model file
   bool flies = false;       // Quake II's corpse with flies round it (its flies bit)
   bool shell_only = false;  // its shell alone, no plain draw under it (a power screen's plate)
-  // A Quake II brush model's animation bits (its effects' ANIM01, ANIM23, ANIM_ALL, ANIM_ALLFAST;
-  // q2_look.hpp's q2_texture_frame); -1 elsewhere, its textures on the map's clock.
+  // A Quake II entity's animation bits (its effects' ANIM01, ANIM23, ANIM_ALL, ANIM_ALLFAST;
+  // q2_look.hpp's q2_texture_frame): a brush model's texture frame, a model's or a sprite's own
+  // frame, cycled on the picture's clock; -1 elsewhere, its textures on the map's clock.
   int q2_anim = -1;
   float shell_rgb[3] = {0, 0, 0};
   bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)

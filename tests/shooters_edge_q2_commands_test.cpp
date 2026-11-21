@@ -108,6 +108,48 @@ bool printed(const Game& g, int slot, const std::string& part, int level = -1) {
   return false;
 }
 
+TEST(cycleweap_and_prefweap_walk_a_binds_list_of_weapons) {
+  auto g = game("0", 1, "cheats 1");
+  run(*g, 10);
+  sv::Q2Player& p = g->p(0);
+  g->r.client_command(0, "cycleweap");
+  CHECK(printed(*g, 0, "Usage: cycleweap classname1 classname2 .. classnameN\n"));
+  g->r.client_command(0, "prefweap");
+  CHECK(printed(*g, 0, "Usage: prefweap classname1 classname2 .. classnameN\n"));
+  // None held: the first not held is named.
+  g->r.client_command(0, "prefweap weapon_railgun weapon_bfg");
+  CHECK(printed(*g, 0, "Out of item: Railgun\n"));
+  g->r.client_command(0, "give Shotgun");
+  g->r.client_command(0, "give Railgun");
+  g->r.client_command(0, "give Slugs");
+  run(*g, 60);
+  // prefweap: the first listed held with ammo; names ignore case, unknown ones skipped.
+  g->r.client_command(0, "prefweap banana WEAPON_RAILGUN weapon_shotgun");
+  run(*g, 60);
+  CHECK(p.hand.weapon == int(sv::SqWeapon::railgun));
+  // cycleweap: the next listed after the one in hand, wrapping.
+  g->r.client_command(0, "cycleweap weapon_shotgun weapon_railgun");
+  run(*g, 60);
+  CHECK(p.hand.weapon == int(sv::SqWeapon::shotgun));
+  g->r.client_command(0, "cycleweap weapon_shotgun weapon_railgun");
+  run(*g, 200);
+  CHECK_MSG(p.hand.weapon == int(sv::SqWeapon::railgun),
+            std::to_string(p.hand.weapon) + " pending " + std::to_string(p.hand.pending));
+}
+
+TEST(a_weapon_short_of_a_shot_says_not_enough) {
+  auto g = game("0", 1, "cheats 1");
+  run(*g, 10);
+  sv::Q2Player& p = g->p(0);
+  g->r.client_command(0, "give Super Shotgun");
+  p.body.ammo[int(sv::SqAmmo::shells)] = 1;
+  g->r.client_command(0, "use Super Shotgun");
+  CHECK(printed(*g, 0, "Not enough Shells for Super Shotgun.\n"));
+  p.body.ammo[int(sv::SqAmmo::shells)] = 0;
+  g->r.client_command(0, "use Super Shotgun");
+  CHECK(printed(*g, 0, "No Shells for Super Shotgun.\n"));
+}
+
 }  // namespace
 
 TEST(say_reaches_everyone_and_an_unknown_word_is_said) {
@@ -169,12 +211,12 @@ TEST(the_cheats_are_refused_in_deathmatch_without_cheats) {
   run(*g, 10);
   g->r.client_command(0, "god");
   CHECK(!g->p(0).god);
-  CHECK(printed(*g, 0, "Cheats are off"));
+  CHECK(printed(*g, 0, "You must run the server with '+set cheats 1' to enable this command.\n"));
   auto on = game("1", 2, "cheats 1");
   run(*on, 10);
   on->r.client_command(0, "god");
   CHECK(on->p(0).god);
-  CHECK(printed(*on, 0, "God mode on"));
+  CHECK(printed(*on, 0, "godmode ON\n"));
   auto single = game("0", 1);
   run(*single, 10);
   single->r.client_command(0, "notarget");
@@ -217,7 +259,7 @@ TEST(give_all_and_its_forms) {
   g->r.client_command(0, "give Rockets");
   CHECK(p.body.ammo[int(sv::SqAmmo::rockets)] == 8);
   g->r.client_command(0, "give nothing at all");
-  CHECK(printed(*g, 0, "There is no item called nothing at all."));
+  CHECK(printed(*g, 0, "unknown item\n"));
 }
 
 TEST(noclip_flies_through_walls_until_a_respawn) {
@@ -267,11 +309,11 @@ TEST(the_lists_and_the_refusals) {
   g->r.client_command(0, "playerlist");
   CHECK(printed(*g, 0, " Ben\n"));
   g->r.client_command(0, "use Railgun");
-  CHECK(printed(*g, 0, "You have no Railgun."));
+  CHECK(printed(*g, 0, "Out of item: Railgun\n"));
   g->r.client_command(0, "use Body Armor");
-  CHECK(printed(*g, 0, "Body Armor can't be used."));
+  CHECK(printed(*g, 0, "Item is not usable.\n"));
   g->r.client_command(0, "drop Banana");
-  CHECK(printed(*g, 0, "There is no item called Banana."));
+  CHECK(printed(*g, 0, "unknown item: Banana\n"));
 }
 
 TEST(the_intermission_takes_only_the_scores_and_the_chat) {

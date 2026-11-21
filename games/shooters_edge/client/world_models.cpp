@@ -104,6 +104,16 @@ void frames_of(const ModelKind& k, const Placed& p, double at, uint32_t& a, uint
   f = 0;
 }
 
+// A Quake II entity's frame cycled by its animation bits (`q2_texture_frame`) on the picture's
+// clock `t`, shared so every such entity steps together; its own flow between frames set aside.
+Placed q2_cycled(const Placed& p, double t) {
+  Placed c = p;
+  c.frame = q2_texture_frame(uint32_t(p.q2_anim), p.frame, t);
+  c.frame_from = -1;
+  c.lerp = false;
+  return c;
+}
+
 void to_world(const sh::Vec3f& p, double out[3]) {
   const float f[3] = {p.x, p.y, p.z};
   br::to_engine(f, out);
@@ -965,8 +975,10 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed, double 
   }
 }
 
-bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out) {
+bool body_triangles(const WorldModels& m, const Placed& placed, double time_s,
+                    std::vector<float>& out) {
   out.clear();
+  const Placed p = placed.q2_anim > 0 ? q2_cycled(placed, time_s) : placed;
   if (p.modelindex <= 0 || size_t(p.modelindex) >= m.kinds.size()) return false;
   Worn worn_skin;
   const ModelKind& k = drawn_kind(m, p, &worn_skin);
@@ -1196,8 +1208,9 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
   // The nearest first, so a crowded map drops the far ones.
   std::sort(m.near.begin(), m.near.end());
   const double t = view.time_s;
+  Placed cycled;
   for (const auto& [dist, i] : m.near) {
-    const Placed& p = placed[i];
+    const Placed& p = placed[i].q2_anim > 0 ? (cycled = q2_cycled(placed[i], t)) : placed[i];
     Worn worn;
     const ModelKind& k = drawn_kind(m, p, &worn);
     double w[3];

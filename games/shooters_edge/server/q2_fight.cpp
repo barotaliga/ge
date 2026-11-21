@@ -1450,13 +1450,13 @@ bool fight_command(Q2Server& s, int slot, const std::string& cmd, const std::str
   Q2Player& p = s.players[slot];
   if (cmd == "use") {
     const int w = sq_weapon_named(arg);
-    // g_select_empty 0: a held weapon with no ammunition is refused and the player told.
-    if (w >= 0 && fightable(s, slot) && sq_holds(p.body, w) && !sq_can_fire(p.body, w) &&
-        !dmflag(s, 8192) && !s.cvars.find("g_select_empty")->on()) {
-      const char* ammo = "ammo";
+    // g_select_empty 0: a held weapon short of a shot's ammunition is refused and the player told.
+    if (w >= 0 && w != int(SqWeapon::hand_grenade) && fightable(s, slot) && sq_holds(p.body, w) &&
+        !sq_can_fire(p.body, w) && !dmflag(s, 8192) && !s.cvars.find("g_select_empty")->on()) {
+      std::string say = p.body.ammo[int(kSqWeapons[w].ammo)] > 0 ? "Not enough " : "No ";
       for (const SqItem& it : kSqItems)
-        if (it.kind == SqKind::ammo && it.ammo == kSqWeapons[w].ammo) ammo = it.pickup;
-      print_to(s, slot, std::string("No ") + ammo + " for " + kSqWeapons[w].name + ".\n");
+        if (it.kind == SqKind::ammo && it.ammo == kSqWeapons[w].ammo) say += it.pickup;
+      print_to(s, slot, say + " for " + kSqWeapons[w].name + ".\n");
       return true;
     }
     if (w >= 0)
@@ -1634,12 +1634,11 @@ bool fight_drop(Q2Server& s, int slot, int item) {
   switch (it.kind) {
     case SqKind::weapon: {
       if (dmflag(s, 4)) {
-        print_to(s, slot, "Weapons stay in this match, so none can be dropped.\n");
-        return false;
+        return false;  // weapons stay: nothing said
       }
       if (p.body.counts[item] <= 0) return false;
       if (sq_weapon_of_item(item) == p.hand.weapon && p.body.counts[item] == 1) {
-        print_to(s, slot, "You can't drop the weapon in your hand.\n");
+        print_to(s, slot, "Can't drop current weapon\n");
         return false;
       }
       if (toss(s, slot, item, 0) == nullptr) return false;
@@ -1652,7 +1651,7 @@ bool fight_drop(Q2Server& s, int slot, int item) {
       if (n <= 0) return false;
       if (p.hand.weapon == int(SqWeapon::hand_grenade) && it.ammo == SqAmmo::grenades &&
           held - n <= 0) {
-        print_to(s, slot, "You can't drop the weapon in your hand.\n");
+        print_to(s, slot, "Can't drop current weapon\n");
         return false;
       }
       Q2Drop* d = toss(s, slot, item, 0);
