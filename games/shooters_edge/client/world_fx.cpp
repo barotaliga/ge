@@ -1109,9 +1109,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         const double from[3] = {a.x, a.y, a.z}, to[3] = {now.at.x, now.at.y, now.at.z};
         const double far = ge::core::hypot3(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
         now.carry = was->second.carry;
-        if (far < kBleedJumpM && m.bleeds)  // Quake II's piece: its own reds
-          now.carry = fx::q2_blood_trail(from, to, fx::kBloodStep, now.carry, s.seed++, s.palette,
-                                         &out.births);
+        now.count = was->second.count;
+        if (far < kBleedJumpM && m.bleeds)  // Quake II's piece: its own reds, thinning as it flies
+          fx::q2_trail(from, to, fx::Q2Trail::blood, now.count, s.seed++, s.palette, &out.births);
         else if (far < kBleedJumpM)
           now.carry = fx::blood_trail(
               from, to, (flags & fx::kTrailGib) != 0 ? fx::kBloodStep : fx::kThinBloodStep,
@@ -1121,6 +1121,15 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     }
   }
   s.bleeding.swap(s.bleeding_next);
+  // Quake II's flies round a corpse, a cycle from when they are first seen; thrown every frame.
+  for (const Placed& m : l.models) {
+    if (!m.flies) continue;
+    auto [it, fresh] = s.flies_from.try_emplace(m.entity, t);
+    if (t >= it->second + fx::kSqFliesCycleS) it->second = t;  // a cycle ended: another starts
+    double at[3];
+    put(engine_point(m.origin), at);
+    fx::q2_flies(at, t, t - it->second, std::clamp(dt, 1.0 / 240, 0.1), s.palette, &out.births);
+  }
 
   // The missiles: a trail over the stretch each flew since the last frame, a rocket's glow.
   s.next.clear();
@@ -1229,6 +1238,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           fx::glow_trail(from, to, rgb, m.bfg ? 0.12 : 0.035, m.bfg ? 0.05 : 0.04, s.seed++,
                          &out.births);
         }
+      } else if (l.q2 && m.streak && was != s.last.end()) {  // Quake II's blaster: orange specks
+        double from[3];
+        put(was->second, from);
+        fx::q2_bolt_trail(from, to, s.seed++, s.palette, &out.births);
       }
       out.lights.push_back(fx::shot_glow(to, rgb, m.bfg ? fx::kBfgGlowM : fx::kBoltGlowM,
                                          m.bfg ? fx::kBfgGlowLevel : fx::kBoltGlowLevel, m.entity));
@@ -1238,7 +1251,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     if (was != s.last.end()) {
       double from[3];
       put(was->second, from);
-      if (!s.on.trails) {
+      if (!s.on.trails && l.q2) {  // Quake II's own: thinning smoke, a rocket's fire beside it
+        auto [it, fresh] = s.q2_trails.try_emplace(m.entity, fx::kSqTrailStart);
+        fx::q2_trail(from, to, fx::Q2Trail::smoke, it->second, s.seed++, s.palette, &out.births);
+        if (!m.grenade) fx::q2_rocket_fire(from, to, s.seed++, s.palette, &out.births);
+      } else if (!s.on.trails) {
         if (trail_scripted(s, m.grenade ? "grenade_trail" : "rocket_trail", from, to, out)) {
         } else if (m.grenade) {
           fx::grenade_trail(from, to, s.seed++, s.palette, &out.births);
@@ -1286,6 +1303,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   }
   std::swap(s.last, s.next);
   std::erase_if(s.launched, [&](const auto& kv) { return !s.last.contains(kv.first); });
+  std::erase_if(s.q2_trails, [&](const auto& kv) { return !s.last.contains(kv.first); });
   std::erase_if(s.haze,
                 [&](const ge::render::HazeTrail& h) { return ge::render::haze_cold(h, t); });
   if (!s.on.trails) s.haze.clear();

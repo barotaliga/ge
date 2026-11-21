@@ -598,6 +598,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
         p.pulse = look.pulse;
         p.shell = look.shell;
         p.bleeds = look.bleeds;
+        p.flies = look.flies;
         p.q2_anim = row.effects & 0x3c00;
         for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
       }
@@ -615,6 +616,23 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.side = models::side_of(teamplay, mine, sv::info_value(c.userinfo, "team"));
     }
     out.push_back(p);
+    if (q2 && size_t(e) < s.world.entities.size() &&
+        (s.world.entities[size_t(e)].effects & int(kSqPowerScreen)) != 0) {
+      // A power screen that took a blow: its plate, frame 0, where its bearer stands, green.
+      const auto plate = std::find(s.models.begin(), s.models.end(), kSqPowerScreenModel);
+      if (plate != s.models.end()) {
+        Placed w = p;
+        w.entity = e + kPlateEntity;
+        w.modelindex = int(plate - s.models.begin());
+        w.frame = w.skin = w.carried = 0;
+        w.frame_from = -1;
+        w.shell = w.shell_only = true;
+        w.shell_rgb[0] = w.shell_rgb[2] = 0;
+        w.shell_rgb[1] = 1;
+        w.pulse = false;
+        out.push_back(w);
+      }
+    }
     if (p.carried > 0) {  // the weapon it carries: the same place and frame, its own model
       Placed w = p;
       w.entity = e + kCarriedEntity;
@@ -1337,7 +1355,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     const PowerLook power = power_look(power_in, in_place.power_shells, in_place.item_pulse);
     if (power.pulse && !power.shell) q2_pulse(g.ambient, t);  // an item's glow
     if (p.holo_blue > 0) hologram_light(g, p.holo_blue);
-    m.morph_draws.push_back(g);
+    if (!p.shell_only) m.morph_draws.push_back(g);
     if (power.shell) add_shell(m, p, power, g, t);
     if (p.holo_shell > 0) add_hologram_shell(m, p, g);
     // The weapon in a copied-in figure's hand: the same place, light and frame, its own picture.

@@ -92,7 +92,7 @@ constexpr const char* kBodySounds[] = {
     "player/step1.wav",   "player/step2.wav",   "player/step3.wav",     "player/step4.wav",
     "items/damage2.wav",  "items/protect2.wav", "items/airout.wav",     "items/damage.wav",
     "items/protect.wav",  "items/protect4.wav", "items/damage3.wav",    "misc/power1.wav",
-    "misc/power2.wav",    "player/lava1.wav",   "player/lava2.wav"};
+    "misc/power2.wav",    "player/lava1.wav",   "player/lava2.wav",     "weapons/lashit.wav"};
 // The channels a player's sounds take: one sound a channel, a new one replacing it (0 stacks).
 constexpr int kAutoChannel = 0, kVoiceChannel = 2, kItemChannel = 3, kBodyChannel = 4;
 constexpr double kPainEvery = 0.75;  // a pain cry at most once in this long, s
@@ -297,27 +297,6 @@ bool can_damage(Q2Server& s, sh::Vec3f at, int i) {
 
 // A blow on player `target` from `attacker` (a slot; -1 the world) along `dir`: pushed, shared
 // with the armour, the rest off his health; at 0 he dies.
-// Power armour's part of a blow along `dir` (a screen's from within ~73° of his front), cells
-// taken.
-int power_save(Q2Player& p, sh::Vec3f dir, int damage) {
-  const int screen = p.body.counts[sq_item("item_power_screen")];
-  const int shield = p.body.counts[sq_item("item_power_shield")];
-  int& cells = p.body.ammo[static_cast<int>(SqAmmo::cells)];
-  if (!p.power_on || (screen == 0 && shield == 0) || cells <= 0) return 0;
-  int part = damage / 3, per_cell = 1;  // the screen's third, from in front
-  if (shield > 0) {
-    part = damage * 2 / 3;
-    per_cell = 2;
-  } else {
-    const sh::ViewAxes ax = sh::angle_vectors({0, p.view_angles.y, 0});
-    if (sh::dot(ax.forward, dir * -1.0f) <= 0.3f) return 0;  // a hit from the side or behind
-  }
-  const int saved = std::min(part, cells * per_cell);
-  cells -= saved / per_cell;
-  p.blow_parts[2] += saved;  // the screen's green flash (q2_blend.hpp)
-  return saved;
-}
-
 // Midair's level (`k_midair_minheight`, 0..4).
 int midair_level(const Q2Server& s) {
   const auto* c = s.cvars.find("k_midair_minheight");
@@ -416,7 +395,7 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
   ge::classic::q2_view_blow(p.view, damage, along ? knockback : 0, dir * -1.0f);
   int saved = 0;
   if (!no_armour) {
-    if (along) saved += power_save(p, dir, damage);
+    if (along) saved += fight_power_save(s, target, dir, damage);
     const int armour = sq_armour_save(p.body, damage - saved, energy);
     saved += armour;
     if (armour > 0) mark_hit(s, p, 2, armour);
@@ -729,10 +708,13 @@ void launch(Q2Server& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f star
   m->damage = damage;
   m->fired_z = origin.z;
   switch (kind) {
-    case SqShot::bolt:
+    case SqShot::bolt: {  // a hyperblaster's glows on its 7th and 10th frames, else plain
       m->velocity = ax.forward * 1000;
       m->dies_at = s.level_time + 2;
+      const int f = s.players[slot].hand.frame;
+      if (weapon == int(SqWeapon::hyperblaster)) m->effects = f == 6 || f == 9 ? 64 : 0;
       break;
+    }
     case SqShot::grenade:
     case SqShot::hand_grenade: {
       const float up = 200 + crandom(s) * 10;  // the draws in a fixed order (above)
@@ -1000,6 +982,7 @@ void fight_spawn(Q2Server& s, int slot) {
   p.quad_until = p.invulnerable_until = p.breather_until = p.suit_until = 0;
   p.silencer_shots = 0;
   p.power_on = false;
+  p.power_flash = 0;
   p.air_until = s.level_time + 12;
   p.drown_at = 0;
   p.drown_damage = 2;
@@ -1798,6 +1781,7 @@ void fight_rows(Q2Server& s) {
                 0};
     e.modelindex = s.missile_models[static_cast<int>(m.kind)];
     e.shot = shot_kind(m.kind);
+    e.effects = m.effects >= 0 ? m.effects : kSqShotEffects[static_cast<int>(m.kind)];
     e.loop = shot_loop(s, m);
   }
 }
@@ -1949,7 +1933,9 @@ void fight_kick(Q2Server& s, int slot, sh::Vec3f push) {
   pack(p.move.velocity, unpack(p.move.velocity) + push);
 }
 
-void fight_effect(Q2Server& s, const char* name, sh::Vec3f at) { effect(s, name, at); }
+void fight_effect(Q2Server& s, const char* name, sh::Vec3f at, sh::Vec3f way) {
+  effect(s, name, at, way);
+}
 
 void fight_monster_line(Q2Server& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b) {
   line_effect(s, name, a, b, map_row(from));

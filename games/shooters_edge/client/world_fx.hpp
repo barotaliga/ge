@@ -245,8 +245,13 @@ struct FxState {
     ge::camera::Vec3 at;
     int modelindex = 0;
     double carry = 0;
+    int count = effects::kSqTrailStart;  // Quake II's piece: its thinning trail's count
   };
   std::unordered_map<int, Bleeding> bleeding, bleeding_next;
+  // Quake II's thinning trails on its rockets and grenades (effects::q2_trail), by entity; and
+  // when the flies round each corpse began their cycle (the picture's clock, s).
+  std::unordered_map<int, int> q2_trails;
+  std::unordered_map<int, double> flies_from;
   // THE MONSTERS' MISSILES (app/monster_fx.hpp: a model the replacement table or its trail flags
   // name): each in flight as it was a frame ago (m, and map units), the way it flew, its kind and
   // its classic trail's side; those gone this frame (where their spit lands); the splashes whose

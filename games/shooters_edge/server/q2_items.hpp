@@ -168,6 +168,12 @@ inline constexpr int kSqFliesEffect = 16384;
 inline constexpr int kSqRocketEffect = 16;
 // God mode's white shell: the colour-shell effect bit with the red, green and blue render bits.
 inline constexpr int kSqColourShellEffect = 256, kSqGodShellRender = 1024 | 2048 | 4096;
+// Power armour that has just taken a blow (for 0.2 s): a screen's green plate before its bearer
+// (the effect bit), a shield's green shell (the colour shell with the green render bit).
+inline constexpr int kSqPowerScreenEffect = 512, kSqShieldShellRender = 2048;
+inline constexpr double kSqPowerFlashS = 0.2;
+// The plate a power screen shows (the client draws it as a green shell).
+inline constexpr const char* kSqPowerScreenModel = "models/items/armor/effect/tris.md2";
 // Whether a power with `left` seconds still to run shows this server frame (10 a second): always
 // while more than 3 s are left, then 4 frames on and 4 off.
 inline bool sq_power_shown(double left) {
