@@ -105,6 +105,16 @@ TEST(held_from_morph_marks_the_fullbright_texels_as_glow) {
   CHECK(glowing > 0);
 }
 
+TEST(skin_shine_lets_metal_shine_and_wood_only_take_the_light) {
+  CHECK(ce::skin_shine(128, 128, 128) == 255);              // a grey barrel
+  CHECK(ce::skin_shine(100, 115, 140) == 255);              // a steel blue
+  CHECK(ce::skin_shine(115, 75, 35) == 0);                  // a stock's brown
+  CHECK(ce::skin_shine(200, 160, 40) == 0);                 // a brass yellow-brown, saturated
+  CHECK(ce::skin_shine(0, 0, 0) == 255);                    // black: nothing to judge
+  const uint8_t warm_grey = ce::skin_shine(120, 110, 100);  // a little warm: still metal
+  CHECK(warm_grey == 255);
+}
+
 TEST(classic_weapon_row_holds_the_weapon_at_the_eye) {
   const vm::PlaceRow row = ce::classic_weapon_row();
   CHECK(row.offset_m[0] == 0 && row.offset_m[1] == 0 && row.offset_m[2] == 0);

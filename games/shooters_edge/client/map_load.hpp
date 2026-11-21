@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "console/console.hpp"
+#include "console/view.hpp"
 #include "gpu/device.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -83,6 +84,22 @@ bool busy(const MapLoad& load);
 // The spinner's caption: LOADING and the map's name in capitals ("LOADING" before it has one);
 // "" when nothing is in flight.
 std::string load_caption(const MapLoad& load);
+
+// A CLASSIC GAME LOADS A MAP IN ITS CONSOLE, as the classic games did: the console held down over
+// the screen and its last line "Loading base1... 3.6s", rewritten as the time goes (the spinner
+// and the title's night are Shooter's Edge's own).
+struct LoadLine {
+  std::string what;   // the map the line is for
+  uint64_t n = 0;     // the line's number in the scrollback
+  bool held = false;  // the console is held down for it
+};
+// While `load` is busy at `now_s`: the line printed or rewritten on `con`/`view` and the console
+// held. False when nothing loads.
+bool console_load_line(const MapLoad& load, LoadLine& line, ge::console::Console& con,
+                       ge::console::ConsoleView& view, double now_s);
+// Once `load` is done: the console it held let go, unless `keep` (a game's start still holds it).
+void release_load_line(const MapLoad& load, LoadLine& line, ge::console::ConsoleView& view,
+                       bool keep);
 // What a load in flight shows over the frame: a single-player game in its pack's pictures the
 // loading plaque (gfx/loading), as the original does; anything else the spinner and its caption.
 void draw_loading(ge::ui::DrawList& dl, const MapLoad& load, const Listen& l,

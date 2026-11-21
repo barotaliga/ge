@@ -263,6 +263,28 @@ TEST(ce_skies_picks_our_sky_or_the_packs_in_the_modern_look) {
   CHECK(!lk::world_options(lk::Look::classic, {}, pic).pack_sky);  // the classic's own already
 }
 
+TEST(ce_enabled_0_turns_every_switch_off_and_1_gives_each_its_own_back) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  con.execute("ce_decals 0");
+  con.run();
+  con.execute("ce_enabled 0");
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(!pic.ce.skies && !pic.ce.textures && !pic.ce.flames && !pic.ce.decals);
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).pack_sky);  // the pack's sky
+  CHECK(con.cvars().find("ce_skies")->on());                     // the player's switch kept as set
+  con.execute("ce_flames 0");  // set while it is off: kept for when it is on again
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(!pic.ce.skies);
+  con.execute("ce_enabled 1");
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(pic.ce.skies && pic.ce.textures && !pic.ce.decals && !pic.ce.flames);
+}
+
 TEST(ce_relief_and_ce_parallax_light_the_enhanced_textures_in_the_modern_look) {
   ge::console::Console con;
   lk::Picture pic;

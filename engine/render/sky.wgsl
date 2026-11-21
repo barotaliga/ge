@@ -491,11 +491,11 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     // Other worlds' moons as the moon is: the stars behind them hidden (`cover`), the air's light
     // in front of them kept.
     colour = mix(colour, rods(colour), cover) +
-             (moon_disc(d, r, px) + other_moons(d, r, px).rgb) * clear;
+             (moon_disc(d, r, px) + other_moons(d, r, px).rgb) * clear / sky_lift();
   } else {
     let r = kGroundRadius + max(frame.eye.w, 0.0);
     if (frame.moon_light.z > 0.0) {
-      colour += moon_disc(d, r, px) * (1.0 - frame.weather.y);
+      colour += moon_disc(d, r, px) * (1.0 - frame.weather.y) / sky_lift();
     }
     // Other worlds' moons by day, pale in the blue as the moon is.
     colour += other_moons(d, r, px).rgb * (1.0 - frame.weather.y);

@@ -8,6 +8,7 @@
 #include "capture/screenshot.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <system_error>
 #include <utility>
@@ -85,10 +86,11 @@ void add_screenshot_cvars(console::Cvars& cvars, ScreenshotSettings& s) {
   cvars.bind({.name = "scr_folder",
               .fallback = "",
               .flags = console::kArchive,
-              .help = "The folder screenshots are kept in, beside the game's own.",
+              .help = "The folder screenshots are kept in: beside the game's own, or anywhere.",
               .kind = console::CvarKind::text,
-              .values = "\"\": the game's screenshots folder (the default); TEXT: a folder of that "
-                        "name in the game's folder"},
+              .values = "\"\": the game's screenshots folder (the default); NAME: a folder of "
+                        "that name in the game's folder; PATH: a whole path (~/Desktop/quake, "
+                        "/Volumes/shots)"},
              &s.folder);
 }
 
@@ -149,10 +151,20 @@ bool Screenshots::request(std::string name, std::string* why) {
 
 std::string Screenshots::folder() const {
   if (settings_ == nullptr || settings_->folder.empty()) return dir_;
-  const fs::path f(settings_->folder);
-  bool bad = f.is_absolute();
+  const std::string& asked = settings_->folder;
+  // A whole path (`/...`, `~/...`, a drive's) is the player's own folder, taken as it is: only
+  // this machine's console and cfgs set scr_folder (a server's stuffed `set` is refused, cvar.hpp).
+  if (asked == "~" || asked.starts_with("~/")) {
+    const char* home = std::getenv("HOME");
+    if (home == nullptr || *home == 0) home = std::getenv("USERPROFILE");
+    if (home == nullptr || *home == 0) return dir_;  // no home to put it under
+    return (fs::path(home) / asked.substr(std::min<size_t>(asked.size(), 2))).string();
+  }
+  const fs::path f(asked);
+  if (f.is_absolute()) return f.string();
+  bool bad = false;
   for (const fs::path& part : f) bad = bad || part == "..";
-  if (bad) return dir_;  // a folder outside the game's is not taken
+  if (bad) return dir_;  // a name that climbs out of the game's folder is not taken
   return (fs::path(dir_).parent_path() / f).string();
 }
 

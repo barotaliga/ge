@@ -55,7 +55,7 @@ enum : uint8_t {
   kClientData = 15,
   kStopSound = 16,
   kUpdateColors = 17,
-  kParticle = 18,
+  kParticle = 18,  // a program's burst: a point, a way, a count and a colour
   kDamage = 19,
   kSpawnStatic = 20,
   kSpawnBinary = 21,
@@ -329,6 +329,9 @@ void sound(DemoState& s, DemoMsg& m) {
   if (!m.bad) s.started.push_back(e);
 }
 
+// The palette's blood colours a program's burst is thrown in: a body's, and the beam's.
+constexpr int kBloodColour = 73, kBeamBloodColour = 225;
+
 bool temp_entity(DemoMsg& m, DemoState& s, std::string& error) {
   DemoEffect e;
   e.code = m.u8();
@@ -460,12 +463,25 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           }
           break;
         }
-        case kParticle:
-          coord(m);
-          coord(m);
-          coord(m);
-          m.skip(3 + 2);
+        case kParticle: {
+          // A program's burst: blood's colour (73) is a body's blood, its drops thrown along its
+          // way (sixteenths a byte); the beam's blood (225) is a burst of its own. Other colours
+          // are drawn by nothing.
+          const float x = coord(m), y = coord(m), z = coord(m);
+          float way[3];
+          for (float& v : way) v = static_cast<float>(static_cast<int8_t>(m.u8())) / 16;
+          const int count = m.u8(), colour = m.u8();
+          if (!m.bad && (colour == kBloodColour || colour == kBeamBloodColour)) {
+            DemoEffect e;
+            e.kind = DemoEffectKind::blood;
+            e.code = colour == kBeamBloodColour ? 13 : -1;  // -1: a program's burst
+            e.count = count;
+            e.at = e.end = {x, y, z};
+            e.way = {way[0], way[1], way[2]};
+            s.effects.push_back(e);
+          }
           break;
+        }
         case kDamage: {  // the armour, the blood, where it came from
           DemoBlow b;
           b.armor = m.u8();

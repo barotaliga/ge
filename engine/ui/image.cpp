@@ -8,6 +8,7 @@
 #include "ui/image.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 
@@ -28,6 +29,11 @@ uint8_t to_byte(float v) {
 }
 
 }  // namespace
+
+uint64_t next_ui_serial() {
+  static std::atomic<uint64_t> next{1};
+  return next.fetch_add(1, std::memory_order_relaxed);
+}
 
 Image make_image(int width, int height, Color fill) {
   Image img;

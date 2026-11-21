@@ -87,5 +87,8 @@ bool team_scores_held(const ControlSettings& c);
 void add_cvars(ge::console::Console& con, ControlSettings& c);
 // Every move's default key bound where the key runs nothing yet (call before the configs run).
 void default_binds(ge::console::Console& con);
+// Every bind dropped but the console's own keys, then `default_binds`: the command
+// `bind_defaults`, which OPTIONS ▸ RESET TO DEFAULTS runs too.
+void reset_binds(ge::console::Console& con);
 
 }  // namespace shooters_edge::client
