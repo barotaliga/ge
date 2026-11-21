@@ -599,18 +599,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         // (`wallplan`) a flight ahead on the ground: the side set with the jump
         const float see =
             s.onground && p.set.hop_see_ground_s > 0 ? p.set.hop_see_ground_s : p.set.hop_see_s;
-        // (`archeight`) the arcs rise and fall: on the ground as the jump's (270 up), in the air
-        // from the climb it has
-        const float fall = p.set.arc_height && p.g != nullptr ? p.g->move.gravity : 0;
-        Vec3f av = s.velocity;
-        if (fall > 0 && s.onground) av.z = kHopJumpSpeed;
-        const float mine = arc_clear(*s.world, s.origin, av, p.strafe_side, dt, see, fall);
+        const float mine = arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, see);
         p.arc_mine = mine;  // (recorded: a trace's `arcm`, `arco`)
         if (mine < see) {
-          const float other = arc_clear(*s.world, s.origin, av, -p.strafe_side, dt, see, fall);
+          const float other = arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, see);
           p.arc_other = other;
           const float straight =
-              p.set.hop_straight ? arc_clear(*s.world, s.origin, av, 0, dt, see, fall) : 0;
+              p.set.hop_straight ? arc_clear(*s.world, s.origin, s.velocity, 0, dt, see) : 0;
           if (straight > (mine > other ? mine : other)) {
             // Straight on is the clearest: the side held, the view set where the side key's wish
             // adds nothing across (bot.cpp's lead, `-asin(30 / v)` into the turn).
