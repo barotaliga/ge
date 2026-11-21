@@ -575,6 +575,9 @@ namespace ge::shooterbots {
 //   match, head to head +0.35 (red -0.6, blue +1.3), spells 47 -> 46 s; 12 4on4 seeds, head to
 //   head -3.7 (red -8.0, blue +0.6) and the spells from the spot LONGER (29 -> 32 s). Going for
 //   him one by one is not overwhelming him: the 2-3 must arrive together (M18r.md P1(e)).
+//   Again with `rlknown` (the carrier known 55 % of the time, not 10): 258 hunting thinks a 4on4
+//   match, head to head +1.3 over 24 seeds (1-12 +5.8, 13-24 -3.2), spells from the spot 34 ->
+//   31 s but from a pack 19 -> 26: noise and mixed, still off.
 // - `rlgang`: THE LAUNCHER HOLDER OVERWHELMED TOGETHER (M18r.md P1(e)): a strong fighter with an
 //   enemy believed to carry the launcher placed lately in an area of the map plan calls the
 //   team's push on that area ("attack", mind.hpp): those strong enough gather outside it and go
