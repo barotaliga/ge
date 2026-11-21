@@ -1188,6 +1188,7 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
     why->decide("role");
     why->fact("quad_due_in", q >= 0 && due_of(f, q, t) < 1e29 ? due_of(f, q, t) - t : -1);
     why->fact("rush_lead", q >= 0 ? rush_lead_s(f, q) : -1);
+    why->fact("quad_run", q >= 0 ? own_run_s(f, q) : -1);
     why->fact("quad_reachable", reachable(f, q) ? 1 : 0);
     why->fact("reach_age", f.reach_at >= 0 ? t - f.reach_at : -1);
     why->fact("reach_n", f.reach_at >= 0 ? f.reach_n : -1);
