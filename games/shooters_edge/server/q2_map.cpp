@@ -1688,6 +1688,7 @@ void map_spawn(Q2Server& s) {
   s.world.lightstyles[63] = "a";                                          // testing
   s.secrets = s.secrets_found = s.goals = s.goals_found = 0;
   campaign_coop_spots(s);
+  campaign_unnamed_starts(s);
   const size_t count = s.entities.size();
   for (size_t i = 0; i < count; i++) {
     Q2Entity& e = s.entities[i];

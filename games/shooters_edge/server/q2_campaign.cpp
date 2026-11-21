@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <string_view>
+#include <utility>
 
 #include "brush/map.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
@@ -25,16 +26,6 @@ constexpr uint32_t kEveryone = 0xffffffffu;
 
 bool deathmatch(const Q2Server& s) { return s.cvars.find("deathmatch")->on(); }
 bool coop(const Q2Server& s) { return !deathmatch(s) && s.cvars.find("coop")->on(); }
-
-bool same_name(std::string_view a, std::string_view b) {
-  if (a.size() != b.size()) return false;
-  for (size_t i = 0; i < a.size(); i++) {
-    const char x = a[i] >= 'A' && a[i] <= 'Z' ? char(a[i] - 'A' + 'a') : a[i];
-    const char y = b[i] >= 'A' && b[i] <= 'Z' ? char(b[i] - 'A' + 'a') : b[i];
-    if (x != y) return false;
-  }
-  return true;
-}
 
 // The body a level is left with: health cut to its maximum.
 SqBody leaving(const SqBody& b) {
@@ -159,11 +150,21 @@ bool coop_names_wrong(std::string_view map) {
       "jail2", "jail4", "mintro", "mine1",  "mine2", "mine3",   "mine4",  "lab",    "boss1",
       "fact1", "fact3", "waste1", "biggun", "space", "command", "power2", "strike", "city2"};
   for (const std::string_view m : kMaps)
-    if (same_name(map, m)) return true;
+    if (q2_same_name(map, m)) return true;
   return false;
 }
 
 }  // namespace
+
+bool q2_same_name(std::string_view a, std::string_view b) {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); i++) {
+    const char x = a[i] >= 'A' && a[i] <= 'Z' ? char(a[i] - 'A' + 'a') : a[i];
+    const char y = b[i] >= 'A' && b[i] <= 'Z' ? char(b[i] - 'A' + 'a') : b[i];
+    if (x != y) return false;
+  }
+  return true;
+}
 
 void campaign_coop_spots(Q2Server& s) {
   if (!coop(s)) return;
@@ -180,7 +181,7 @@ void campaign_coop_spots(Q2Server& s) {
         }
     }
   // The security level has no co-op spots where the way in from the jail arrives: three are added.
-  if (same_name(s.map_name, "security"))
+  if (q2_same_name(s.map_name, "security"))
     for (const float x : {124.0f, 252.0f, 316.0f}) {
       Q2Entity e;
       e.classname = "info_player_coop";
@@ -191,12 +192,34 @@ void campaign_coop_spots(Q2Server& s) {
     }
 }
 
+void campaign_unnamed_starts(Q2Server& s) {
+  // A map whose starts all have names gets an unnamed copy of the one a console `map` should use.
+  static constexpr std::pair<const char*, const char*> kFrom[] = {
+      {"mine1", "mintro"},  {"mine2", "mine1"},   {"mine3", "mine2a"},  {"mine4", "mine3"},
+      {"power2", "power1"}, {"waste1", "power2"}, {"waste2", "waste1"}, {"city2", "city2NL"}};
+  for (const auto& [map, from] : kFrom) {
+    if (!q2_same_name(s.map_name, map)) continue;
+    const size_t count = s.entities.size();
+    for (size_t i = 0; i < count; i++) {
+      const Q2Entity& named = s.entities[i];
+      if (named.gone || named.classname != "info_player_start" ||
+          !q2_same_name(named.targetname, from))
+        continue;
+      Q2Entity e;
+      e.classname = "info_player_start";
+      e.origin = named.origin;
+      e.angles = {0, named.angles.y, 0};
+      s.entities.push_back(std::move(e));
+    }
+  }
+}
+
 const Q2Entity* campaign_spot(const Q2Server& s, int slot) {
   const std::string& name = s.spawn_name;
   if (coop(s) && slot > 0) {  // the slot-th co-op spot of the name
     int n = 0;
     for (const Q2Entity& e : s.entities)
-      if (e.classname == "info_player_coop" && same_name(e.targetname, name) && ++n == slot)
+      if (e.classname == "info_player_coop" && q2_same_name(e.targetname, name) && ++n == slot)
         return &e;
   }
   const Q2Entity* first = nullptr;
@@ -205,7 +228,7 @@ const Q2Entity* campaign_spot(const Q2Server& s, int slot) {
   for (const Q2Entity& e : s.entities) {
     if (e.classname != "info_player_start") continue;
     if (first == nullptr) first = &e;
-    if (!name.empty() && same_name(e.targetname, name)) {
+    if (!name.empty() && q2_same_name(e.targetname, name)) {
       start = &e;
       break;
     }

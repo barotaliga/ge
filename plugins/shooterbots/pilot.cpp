@@ -120,6 +120,8 @@ constexpr double kScriptFacing = 0.97;
 // its top node once the feet are within this of the top node's height, units.
 constexpr float kLadderPitch = 45;
 constexpr float kLadderOver = 8;
+// A climber this far across the ladder from its foot node steps back in front of it, units.
+constexpr float kLadderCentre = 4;
 constexpr float kScriptFell = 40;  // standing this far under a script's lowest step: fallen off
 constexpr float kOffFloor = 12;    // a pool's floor swum over this far above its standing height
 constexpr double kLipLiftOff_s = 0.05;  // a lip's jump is off the ground within this      //
@@ -300,6 +302,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   p.stats.time_s += static_cast<double>(dt);
   p.clock_s += static_cast<double>(dt);
   p.circling_now = false;
+  p.climbing = false;
   // A hop's landing this command (`hop_chain`): the hop was in the air on the last one.
   const bool chain =
       p.set.hop_chain && s.onground && p.hop_air_s >= 0 && p.clock_s - p.hop_air_s <= kChainLand_s;
@@ -877,8 +880,18 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       w.pitch = over ? 0.f : -kLadderPitch;
       w.forward = 1;
       w.jump = !over;
+      // Kept in front of the ladder's foot node (across its face): a shove aside left him against
+      // its edge, where a step forward meets the wall beside it and he never climbs.
+      if (!over) {
+        const float rx = l.face == 90.f ? 1.f : l.face == 270.f ? -1.f : 0.f;
+        const float ry = l.face == 0.f ? -1.f : l.face == 180.f ? 1.f : 0.f;
+        const float across = (A.x - me.x) * rx + (A.y - me.y) * ry;  // to the right, units
+        if (across > kLadderCentre || across < -kLadderCentre)
+          w.side = std::clamp(across / (2 * kLadderCentre), -1.f, 1.f);
+      }
       p.mode = s.onground ? PilotMode::walk : PilotMode::air;
       because = over ? "a ladder: over its top" : "a ladder: climbing";
+      p.climbing = !over;
       const float d3 = length(me - B);
       if (p.ladder_from != a || p.ladder_to != b) {
         p.ladder_from = a;

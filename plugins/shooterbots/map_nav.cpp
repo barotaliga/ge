@@ -124,6 +124,9 @@ AbsBox abs_box(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& sp
   return {d.origin + m.mins, d.origin + m.maxs};
 }
 
+// A turning plate this thick or less is a bridge (base2's is 40 units), units.
+constexpr float kTurnPlate = 48;
+
 // Those doors as solids of the nav's world, where they stand (the rest of the movers are left
 // out of it and tagged on the links they close).
 // A plate: no thicker than a step's height, wider than a player both ways.
@@ -204,6 +207,31 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
     br.ent = e;
     br.spawn = so.origin;
     br.floor = true;
+    bridges.push_back(br);
+  }
+  // The turning doors that start open and are plates where the map drew them: a floor there,
+  // turned up out of it until used.
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_door_rotating") != 0 ||
+        !start_open(b) || !sb::block_value(b, "targetname"))
+      continue;
+    const int m = std::atoi(model + 1);
+    if (m <= 0 || static_cast<size_t>(m) >= model_count(spec) || world.count >= sh::kMaxSolids)
+      continue;
+    const int e = edict_of(s, model);
+    if (e < 0) continue;
+    const ModelBox bm = model_box(spec, m);
+    const sh::Vec3f d = bm.maxs - bm.mins;
+    if (d.z > kTurnPlate || d.x < 48 || d.y < 48) continue;
+    const sh::Edict& de = s.sv.edicts[static_cast<size_t>(e)];
+    world.solids[world.count++] = model_solid(spec, tracer, m, de.origin);  // as drawn
+    NavBridge br;
+    br.ent = e;
+    br.spawn = de.origin;
+    br.turns = true;
+    br.spawn_angles = de.angles;
     bridges.push_back(br);
   }
   // The doors that start open, by where the map drew them: a name spreads along touching boxes
@@ -546,10 +574,52 @@ struct LadderBox {
   sh::Vec3f mins, maxs;
 };
 
-std::vector<LadderBox> ladder_boxes(const ge::brush::Map& m) {
+// The brushes in the game: the world's, and those of each brush model an edict of `s` wears (a
+// ladder of a model the mode never spawns, base2's trench ladder for deathmatch only, is none).
+std::vector<uint8_t> brushes_in_game(const ge::shooterbots::BotView& s, const ge::brush::Map& m) {
+  std::vector<uint8_t> in(m.brushes.size(), 0);
+  std::vector<uint8_t> models(m.models.size(), 0);
+  if (!models.empty()) models[0] = 1;
+  for (int e = 1; e < s.sv.num_edicts; e++) {
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    if (d.free || d.modelindex <= 0 || static_cast<size_t>(d.modelindex) >= s.models.size())
+      continue;
+    const std::string& name = s.models[static_cast<size_t>(d.modelindex)];
+    if (name.size() < 2 || name[0] != '*') continue;
+    const size_t k = static_cast<size_t>(std::atoi(name.c_str() + 1));
+    if (k < models.size()) models[k] = 1;
+  }
+  std::vector<int32_t> stack;
+  for (size_t k = 0; k < models.size(); k++) {
+    if (!models[k]) continue;
+    stack.assign(1, m.models[k].head_node);
+    while (!stack.empty()) {
+      const int32_t at = stack.back();
+      stack.pop_back();
+      if (at >= 0) {
+        if (static_cast<size_t>(at) >= m.nodes.size()) continue;
+        stack.push_back(m.nodes[static_cast<size_t>(at)].child[0]);
+        stack.push_back(m.nodes[static_cast<size_t>(at)].child[1]);
+        continue;
+      }
+      const size_t li = static_cast<size_t>(-(at + 1));
+      if (li >= m.leaves.size()) continue;
+      const ge::brush::Leaf& lf = m.leaves[li];
+      for (uint32_t j = 0; j < lf.brushes; j++) {
+        const size_t bi = static_cast<size_t>(lf.first_brush) + j;
+        if (bi < m.leaf_brushes.size() && m.leaf_brushes[bi] < in.size())
+          in[m.leaf_brushes[bi]] = 1;
+      }
+    }
+  }
+  return in;
+}
+
+std::vector<LadderBox> ladder_boxes(const ge::brush::Map& m, const std::vector<uint8_t>& in) {
   std::vector<LadderBox> boxes;
-  for (const ge::brush::Brush& b : m.brushes) {
-    if (!(b.contents & kLadderContents)) continue;
+  for (size_t bi = 0; bi < m.brushes.size(); bi++) {
+    const ge::brush::Brush& b = m.brushes[bi];
+    if (!(b.contents & kLadderContents) || !in[bi]) continue;
     LadderBox box{{-1e9f, -1e9f, -1e9f}, {1e9f, 1e9f, 1e9f}};
     for (uint32_t k = 0; k < b.sides; k++) {
       const size_t si = static_cast<size_t>(b.first_side) + k;
@@ -588,9 +658,10 @@ std::vector<LadderBox> ladder_boxes(const ge::brush::Map& m) {
   return boxes;
 }
 
-std::vector<sb::NavExtraLink> ladder_links(const sb::NavGraph& g, const ge::brush::Map& m) {
+std::vector<sb::NavExtraLink> ladder_links(const ge::shooterbots::BotView& s, const sb::NavGraph& g,
+                                           const ge::brush::Map& m) {
   std::vector<sb::NavExtraLink> out;
-  for (const LadderBox& L : ladder_boxes(m)) {
+  for (const LadderBox& L : ladder_boxes(m, brushes_in_game(s, m))) {
     if (L.maxs.z - L.mins.z < kLadderMin) continue;
     for (size_t a = 0; a < g.nodes.size(); a++) {
       const sh::Vec3f o = g.nodes[a].origin;
@@ -679,7 +750,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   teleports.insert(teleports.end(), pushes.begin(), pushes.end());
   sb::nav_add_links(out.graph, teleports);
   if (spec.brushes) {
-    const std::vector<sb::NavExtraLink> ladders = ladder_links(out.graph, *spec.brushes);
+    const std::vector<sb::NavExtraLink> ladders = ladder_links(s, out.graph, *spec.brushes);
     sb::nav_add_links(out.graph, ladders);
     out.ladder_links = static_cast<int64_t>(ladders.size());
   }
@@ -689,10 +760,15 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     const char* model = mi > 0 && static_cast<size_t>(mi) < s.models.size()
                             ? s.models[static_cast<size_t>(mi)].c_str()
                             : nullptr;
-    const AbsBox ab = abs_box(s, spec, br.ent, model);
+    AbsBox ab = abs_box(s, spec, br.ent, model);
+    if (br.turns && model != nullptr) {  // turned up now: where the map drew it instead
+      const ModelBox mb = model_box(spec, std::atoi(model + 1));
+      ab = {br.spawn + mb.mins, br.spawn + mb.maxs};
+    }
     // Out, and a player's half-width beyond its edge (a node there stands on it too).
-    // A floor door's nodes stand on it where it rests; a bridge's where the map drew it.
-    const sh::Vec3f shift = br.floor ? sh::Vec3f{} : br.spawn;
+    // A floor door's nodes stand on it where it rests (a turning one's too); a bridge's where the
+    // map drew it.
+    const sh::Vec3f shift = br.floor || br.turns ? sh::Vec3f{} : br.spawn;
     const sh::Vec3f lo = ab.min - shift - sh::Vec3f{16, 16, 0},
                     hi = ab.max - shift + sh::Vec3f{16, 16, 0};
     for (size_t n = 0; n < out.graph.nodes.size(); n++) {

@@ -108,3 +108,23 @@ TEST(q2_first_round_waits_5_s) {
   cp::masters_frame(m, 105, 0, "s", true, out, said);
   CHECK(out.size() == 1);
 }
+
+// `listmasters`: none, then a row a master with its name as given, the time since it last
+// acknowledged a heartbeat (never, a number, down when the server is not running) and its address.
+TEST(q2_listmasters_names_each_master_and_when_it_last_answered) {
+  cp::Masters m;
+  cp::masters_start(m, cp::MasterFamily::q2, 0);
+  CHECK(cp::masters_list_text(m, 0, true) == "There are no masters.\n");
+  std::vector<cp::MasterSend> out;
+  std::vector<std::string> said;
+  cp::set_masters(m, {"sim:5", "sim:6"}, resolve, said, out);
+  cp::masters_heard(m, m.list[1], 10.0);
+  const std::string t = cp::masters_list_text(m, 12.5, true);
+  CHECK_MSG(t.rfind("num hostname              lastmsg address\n"
+                    "--- --------------------- ------- ---------------------\n"
+                    "  1 sim:5                   never sim:5:27900",
+                    0) == 0,
+            t);
+  CHECK_MSG(t.find("  2 sim:6                    2500 sim:6:27900") != std::string::npos, t);
+  CHECK(cp::masters_list_text(m, 12.5, false).find("down") != std::string::npos);
+}

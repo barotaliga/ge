@@ -534,10 +534,11 @@ struct Pilot {
   NavKind try_kind = NavKind::walk;          // and its kind (`giveup`)
   int32_t script_from = -1, script_to = -1;  // the scripted way being flown (nav_script.hpp)
   int32_t ladder_from = -1, ladder_to = -1;  // the ladder being climbed (NavLink::ladder)
-  size_t script_step = 0, script_seen = 0;   // its step aimed at, and the furthest yet
-  double script_at = -1e9;                   // the clock it was last flown at (`script_fresh`)
-  bool script_done = false;                  // its last step reached
-  const char* because = "";                  // the last command's reason, for a trace
+  bool climbing = false;  // on a ladder this command, facing it: the view is the pilot's alone
+  size_t script_step = 0, script_seen = 0;  // its step aimed at, and the furthest yet
+  double script_at = -1e9;                  // the clock it was last flown at (`script_fresh`)
+  bool script_done = false;                 // its last step reached
+  const char* because = "";                 // the last command's reason, for a trace
   // A rocket jump's shot ahead (this command's, read by the view's hand): the view it fires with
   // (pitch 0: none ahead), the time until it, s (0: this command), and whether this command fires
   // it. Under a hand that flies the view itself (`shot_hand`, set by its owner), the shot waits

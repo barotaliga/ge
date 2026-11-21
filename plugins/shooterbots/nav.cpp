@@ -563,6 +563,17 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
         prove_in(there, static_cast<size_t>(ti), b, tries, n, out[static_cast<size_t>(ti)]);
       });
     }
+    // Across the top: from each top node to its neighbours there, so one in a wide top's middle
+    // (a cage's floor, base3's, its every neighbour on the mover too) walks to an edge and off.
+    for (size_t a = rest; a < g.nodes.size(); a++)
+      for (size_t b = rest; b < g.nodes.size(); b++) {
+        const NavNode &na = g.nodes[a], &nb = g.nodes[b];
+        if (a == b || na.col - nb.col > 1 || nb.col - na.col > 1 || na.row - nb.row > 1 ||
+            nb.row - na.row > 1)
+          continue;
+        Try tries[1] = {walk};
+        prove_in(there, a, static_cast<int32_t>(b), tries, 1, out[a]);
+      }
   }
 
   // MOVING PLATFORMS: each placed at every stop in turn; the columns over its top there traced

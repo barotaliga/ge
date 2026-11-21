@@ -77,6 +77,12 @@ struct NavBridge {
   // big room). Its nodes stand on it at rest (`spawn`) and are shut while it is away from there.
   bool floor = false;
   float wait = 0;  // a bridge's: how long it stays out once moved out, s (<= 0: for good)
+  // A TURNING BRIDGE: a plate on a hinge that starts turned up (`func_door_rotating`, starting
+  // open) and turns down into the floor the map drew when it is used (base2's over the south
+  // pool, swung down by the lever that opens the way on). Its nodes stand where the map drew it,
+  // shut while its angles are still `spawn_angles`.
+  bool turns = false;
+  ge::shooter::Vec3f spawn_angles;
 };
 
 struct MapNav {

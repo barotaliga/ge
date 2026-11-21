@@ -45,9 +45,10 @@ void mark_burns(const detail::DecalPool& pool, double now_s,
   for (uint32_t i = 0; i < pool.capacity; ++i) {
     const detail::Decal& d = pool.decals[i];
     if (!d.live) continue;
-    const detail::DecalLook look = detail::look_at(d.kind, now_s - d.born_s, d.ember_s);
-    // Blood is PAINT: its own colour laid over the wall at its opacity, lit as the wall is.
-    const bool paint = d.kind == detail::DecalKind::blood;
+    const detail::DecalLook look = detail::look_of(d, now_s);
+    // Blood is PAINT: its own colour laid over the wall at its opacity, lit as the wall is, as far
+    // as it has spread, glossy while wet.
+    const bool paint = detail::is_blood(d.kind);
     const float soot =
         paint ? static_cast<float>(look.opacity)
               : static_cast<float>(look.opacity * (1 - (look.r + look.g + look.b) / 3));
@@ -74,6 +75,12 @@ void mark_burns(const detail::DecalPool& pool, double now_s,
       // Into the atlas's cell (its uv is the mark's over the variants and the kinds).
       gu /= kMarkVariants;
       gv /= detail::kDecalKinds;
+      // The triangle's own normal, out of the surface (paint's mirror).
+      detail::Vec3 tn =
+          detail::cross(detail::sub(verts[k + 1].pos, a.pos), detail::sub(verts[k + 2].pos, a.pos));
+      if (detail::dot(tn, d.normal) < 0) tn = detail::mul(tn, -1);
+      const double tl = detail::length(tn);
+      tn = tl > 1e-12 ? detail::mul(tn, 1 / tl) : d.normal;
       for (size_t j = k; j < k + 3; ++j) {
         const detail::DecalVertex& v = verts[j];
         BurnVertex b;
@@ -90,6 +97,13 @@ void mark_burns(const detail::DecalPool& pool, double now_s,
         for (int c = 0; c < 3; ++c)
           b.light[c] = lit[static_cast<size_t>(c)] * (paint ? rgb[c] : 1.0f);
         b.paint = paint ? 1.0f : 0.0f;
+        if (paint) {
+          b.spread = static_cast<float>(look.spread);
+          b.gloss = static_cast<float>(look.gloss);
+          b.normal[0] = static_cast<float>(tn.x);
+          b.normal[1] = static_cast<float>(tn.y);
+          b.normal[2] = static_cast<float>(tn.z);
+        }
         out.push_back(b);
       }
     }
@@ -133,7 +147,7 @@ int mark_glows(const detail::DecalPool& pool, double now_s, MarkGlow* out, int m
   for (uint32_t i = 0; i < pool.capacity; ++i) {
     const detail::Decal& d = pool.decals[i];
     if (!d.live) continue;
-    const detail::DecalLook look = detail::look_at(d.kind, now_s - d.born_s, d.ember_s);
+    const detail::DecalLook look = detail::look_of(d, now_s);
     const float heat = static_cast<float>(look.er / 2.6);
     if (heat <= 0.01f) continue;
     const double area = d.size_m * (d.length_m > 0 ? d.length_m : d.size_m) * 0.75;
