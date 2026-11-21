@@ -819,6 +819,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (f.has_map) {
     GE_ZONE("world.bsp");
     ba::set_dynamic_lights(f.bsp, lights);
+    ba::set_areas(f.bsp,
+                  f.from_above ? std::span<const uint8_t>() : std::span<const uint8_t>(fx.areas));
     // The moving models' shadows (M54): every model near the eye and the player himself.
     const bool self = fx.has_self && (!f.picture || f.picture->draw_entities);
     shadow_casters(f.models, drawn, self ? &fx.self : nullptr, view, f.casters, f.caster_boxes);

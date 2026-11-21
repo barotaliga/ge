@@ -106,6 +106,10 @@ void q2_placed(const DemoEntity& e, Placed& p) {
   const Q2Look look = q2_look(static_cast<uint32_t>(e.effects), static_cast<uint32_t>(e.render_fx));
   p.effects = 0;
   p.turns = look.turns;
+  p.spinning = look.spinning;
+  p.bobs = look.bobs;
+  p.full_bright = look.full_bright;
+  p.min_light = look.min_light;
   p.alpha *= look.alpha;
   p.pulse = look.pulse;
   p.shell = look.shell;
@@ -182,6 +186,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own) {
 void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
                    const ge::render::FrameView& view, FxScene& out) {
   out.map = map;
+  out.areas = s.areas;
   out.server = nullptr;
   out.pose.eye = {view.eye[0], view.eye[1], view.eye[2]};
   out.pose.yaw = view.heading;
