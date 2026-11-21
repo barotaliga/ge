@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "brush/areas.hpp"
+#include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_native_host.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -30,27 +31,6 @@ using native::NativeEntityHead;
 constexpr double kFrameSeconds = 0.1;
 constexpr int kCsName = 0, kCsAirAccel = 29, kCsMaxClients = 30, kCsChecksum = 31, kCsModels = 32;
 constexpr int kCsStatusBar = 5, kCsSounds = 288, kCsImages = 544, kCsItems = 1056;
-
-// Runs `call` into the library with `h` current; false when the library called `error` (the map
-// stops, the text in `stop_reason`). Nothing is called once it has.
-template <typename F>
-bool guarded(NativeHost& h, F&& call) {
-  if (h.dead || h.game == nullptr) return false;
-  native_make_current(&h);
-  std::jmp_buf here;
-  std::jmp_buf* outer = h.jump;
-  h.jump = &here;
-  if (setjmp(here) == 0) {  // NOLINT(cert-err52-cpp): the interface leaves `error` by a long jump
-    call();
-    h.jump = outer;
-    return true;
-  }
-  h.jump = outer;
-  h.s->map_stopped = true;
-  h.s->stop_reason = "the game stopped: " + h.error_text;
-  h.s->console.push_back(h.s->stop_reason);
-  return false;
-}
 
 int16_t coord(float v) { return static_cast<int16_t>(static_cast<int32_t>(v * 8.0f)); }
 uint8_t angle8(float deg) {
@@ -315,12 +295,23 @@ void take_baselines(NativeQ2& s) {
   }
 }
 
-std::string unquote(std::string w) {
+std::string quotes_off(std::string w) {
   if (w.size() >= 2 && w.front() == '"' && w.back() == '"') w = w.substr(1, w.size() - 2);
-  const size_t dollar = w.find('$');
-  if (dollar != std::string::npos) w.resize(dollar);  // a spawn point, which a deathmatch ignores
-  if (!w.empty() && w[0] == '*') w.erase(0, 1);
   return w;
+}
+
+// The map a level string names (`eou1_.cin+*base2$start`: base2), or the text itself when it
+// names none.
+std::string bare_map(const std::string& level) {
+  const LevelString ls = level_string(level);
+  return ls.map.empty() ? level : ls.map;
+}
+
+// A level change asked for by `level` (its quotes off): the map to load and the whole string.
+void ask_level(NativeQ2& s, const std::string& word, MapChange change) {
+  s.host->level = quotes_off(word);
+  s.pending_map = bare_map(s.host->level);
+  s.pending_change = change;
 }
 
 // The text the library queued: a level change asked for, else a setting or a line kept.
@@ -342,8 +333,15 @@ void run_commands(NativeQ2& s) {
     if (h.argv.empty()) continue;
     const std::string& w = h.argv[0];
     if ((w == "gamemap" || w == "map") && h.argv.size() > 1) {
-      s.pending_map = unquote(h.argv[1]);
-      s.pending_change = MapChange::change_level;
+      ask_level(s, h.argv[1], w == "map" ? MapChange::new_game : MapChange::change_level);
+    } else if (w == "menu_loadgame") {  // the dead of single player: the server's own player's menu
+      NetEvent& ev = s.out.events.emplace_back();
+      ev.kind = EventKind::stuffcmd;
+      ev.to = 1u;
+      ev.reliable = true;
+      ev.time = h.clock;
+      ev.text = "menu_loadgame\n";
+      s.out.events_total++;
     } else if (h.argv.size() > 1 && h.find_setting(w) != nullptr) {
       native_set(h, *h.find_setting(w), h.argv[1], false);
     } else {
@@ -387,6 +385,11 @@ std::string userinfo_text(const NativeQ2& s, int slot, const std::string& name) 
   return out;
 }
 
+// A frame with nobody in the level (a level entered again runs on alone first).
+void frame_alone(NativeQ2& s) {
+  if (guarded(*s.host, [&] { s.host->game->run_frame(); })) s.frame_number++;
+}
+
 // --- the runner's calls ---
 
 bool nv_start(void* r, const MapSpec& spec, std::string& error) {
@@ -400,6 +403,16 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
     error = "maps/" + spec.name + ".bsp is not a map the game library can run (no world model)";
     return false;
   }
+  // The level left kept or forgotten, a new game's settings, or a load's game read, before the
+  // old level goes (q2_native_save.cpp).
+  if (!h.load.empty()) {
+    if (!native_load_begin(s, error)) return false;
+  } else {
+    if (bare_map(h.level) != spec.name) h.level = spec.name;  // a change the host made itself
+    native_leave(s, s.pending_change);
+    if (s.pending_change == MapChange::new_game && !native_new_game(s, error)) return false;
+  }
+  const LevelString level = level_string(h.level);
   h.tracer.reset();
   h.map.reset();
   h.portals.clear();
@@ -449,9 +462,9 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
   h.loading = true;
   std::string text = spec.brushes ? spec.brushes->entity_text : spec.entities;
   const std::string name = spec.name;
-  const bool spawned = guarded(h, [&] { h.game->spawn_entities(name.c_str(), text.data(), ""); }) &&
-                       guarded(h, [&] { h.game->run_frame(); }) &&
-                       guarded(h, [&] { h.game->run_frame(); });
+  const bool spawned =
+      guarded(h, [&] { h.game->spawn_entities(name.c_str(), text.data(), level.spawn.c_str()); }) &&
+      guarded(h, [&] { h.game->run_frame(); }) && guarded(h, [&] { h.game->run_frame(); });
   h.loading = false;
   if (!spawned) {
     error = s.stop_reason;
@@ -467,6 +480,10 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
   take_baselines(s);
   take_view(s);
   native_set(h, native_setting(h, "mapname", "", native::kCvarNoSet), spec.name, true);
+  // A level kept or loaded read back over the fresh one, then the autosave.
+  if (!native_enter(s, error, &frame_alone)) return false;
+  take_view(s);
+  s.pending_change = MapChange::new_game;
   return true;
 }
 
@@ -569,8 +586,7 @@ bool nv_console(void* r, const std::string& line) {
     return true;
   }
   if ((w == "map" || w == "gamemap" || w == "changelevel") && h.argv.size() > 1) {
-    s.pending_map = unquote(h.argv[1]);
-    s.pending_change = MapChange::change_level;
+    ask_level(s, h.argv[1], w == "map" ? MapChange::new_game : MapChange::change_level);
     return true;
   }
   if (w == "restart") {
@@ -579,7 +595,7 @@ bool nv_console(void* r, const std::string& line) {
     return true;
   }
   if (w == "set" && h.argv.size() > 2) {  // `set <name> <value>`: made when the game has none
-    const std::string name = h.argv[1], value = unquote(h.argv[2]);
+    const std::string name = h.argv[1], value = quotes_off(h.argv[2]);
     native_set(h, native_setting(h, name, value, 0), value, false);
     return true;
   }
@@ -619,9 +635,45 @@ void nv_carry(void* r) {
 
 void nv_destroy(void* r) { delete static_cast<NativeQ2*>(r); }
 
-constexpr RunnerCalls kNativeCalls = {"native",  &nv_start,          &nv_connect, &nv_drop,
-                                      &nv_frame, &nv_client_command, &nv_console, &nv_user_info,
-                                      &nv_pause, &nv_carry,          &nv_destroy};
+std::string nv_save_problem(const void* r) {
+  return native_save_problem(*static_cast<const NativeQ2*>(r));
+}
+
+bool nv_save(const void* r, std::vector<uint8_t>& out, std::string& error, int64_t saved_unix) {
+  // The game writes its files as it saves: the runner's state is the game's, not ours.
+  return native_save(*const_cast<NativeQ2*>(static_cast<const NativeQ2*>(r)), out, error,
+                     saved_unix);
+}
+
+std::vector<uint8_t> nv_take_autosave(void* r) {
+  return std::exchange(static_cast<NativeQ2*>(r)->host->autosave, std::vector<uint8_t>());
+}
+
+uint32_t nv_last_sequence(const void* r, int slot) {
+  const NativeHost& h = *static_cast<const NativeQ2*>(r)->host;
+  return slot >= 0 && slot < 32 ? h.last_sequence[slot] : 0;
+}
+
+constexpr RunnerCalls kNativeCalls = {"native",
+                                      &nv_start,
+                                      &nv_connect,
+                                      &nv_drop,
+                                      &nv_frame,
+                                      &nv_client_command,
+                                      &nv_console,
+                                      &nv_user_info,
+                                      &nv_pause,
+                                      &nv_carry,
+                                      &nv_destroy,
+                                      false,
+                                      nullptr,
+                                      false,
+                                      false,
+                                      nullptr,
+                                      &nv_save_problem,
+                                      &nv_save,
+                                      &nv_take_autosave,
+                                      &nv_last_sequence};
 
 }  // namespace
 
@@ -632,6 +684,7 @@ NativeQ2::~NativeQ2() {
   NativeHost& h = *host;
   if (!h.dead) guarded(h, [&] { h.game->shutdown(); });
   native_make_current(nullptr);
+  native_forget(h);
   for (auto& [p, tag] : h.blocks) std::free(p);
   h.blocks.clear();
   h.library.close();
@@ -692,7 +745,8 @@ std::unique_ptr<NativeQ2> load_native_q2(const NativeQ2Options& opt, std::string
       {"protocol", "34"},      {"timeout", "125"},
       {"zombietime", "2"},     {"sv_airaccelerate", "0"},
       {"sv_enforcetime", "0"}, {"paused", "0"},
-      {"gamedir", ""},         {"mapname", ""}};
+      {"gamedir", ""},         {"mapname", ""},
+      {"sv_noreload", "0"}};
   for (const auto& [name, value] : own) native_setting(h, name, value, 0);
   native_setting(h, "maxclients", std::to_string(h.max_clients), native::kCvarServerInfo);
   native_setting(h, "game", opt.game, native::kCvarServerInfo | native::kCvarLatch);

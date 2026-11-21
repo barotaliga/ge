@@ -2,7 +2,9 @@
 // a library of our own built as a mod's is (q2_native_fixture_game.cpp): found, loaded and
 // started, its lists and links, a player connected, moved and blocked by an entity, its messages,
 // a refusal, its commands, a level change asked for, an `error` that stops the map, a spark's way
-// by the table of directions, and a turned brush entity traced in its own frame.
+// by the table of directions, a turned brush entity traced in its own frame, and single player:
+// the spawn point, levels kept within a unit, the autosave, a save and its load, the refusals,
+// a new game's held settings.
 //
 // ge:summary Tests for hosting Quake II's game library: load, spawn, move, messages, error
 // ge:keywords game-library native-host fixture m18v10
@@ -85,6 +87,43 @@ sv::RulesRunner start() {
   map.brushes = hall();
   CHECK_MSG(r.start(map, error), error);
   return r;
+}
+
+// The game started for single player: `deathmatch 0` from the console, held by the game for the
+// next game, which the first start is.
+sv::RulesRunner start_single(const std::string& level = "hall") {
+  std::filesystem::path lib;
+  CHECK(sv::find_native_library(kRoot, "fixturemod", "base", lib));
+  sv::NativeQ2Options o;
+  o.library = lib;
+  o.max_clients = 1;
+  o.game = "fixturemod";
+  std::string error;
+  std::unique_ptr<sv::NativeQ2> s = sv::load_native_q2(o, error);
+  CHECK_MSG(s != nullptr, error);
+  if (!s) return {};
+  s->map_checksum = 1234;
+  sv::RulesRunner r = sv::native_q2_runner(std::move(s));
+  r.console("deathmatch 0");
+  r.console("map \"" + level + "\"");
+  sv::MapSpec map;
+  map.name = sv::native_q2_of(r)->pending_map;
+  map.brushes = hall();
+  CHECK_MSG(r.start(map, error), error);
+  return r;
+}
+
+// The level the game asked for started, the player carried into it.
+void follow(sv::RulesRunner& r) {
+  sv::NativeQ2& s = *sv::native_q2_of(r);
+  CHECK(!s.pending_map.empty());
+  sv::MapSpec map;
+  map.name = s.pending_map;
+  map.brushes = hall();
+  r.carry();
+  std::string error;
+  CHECK_MSG(r.start(map, error), error);
+  r.connect(0, "tester", false, false, nullptr);
 }
 
 sh::MoveCmd cmd(int16_t forward, uint8_t buttons = 0) {
@@ -277,6 +316,100 @@ TEST(the_games_error_stops_the_map_and_nothing_more_is_called) {
   const int64_t frame = s->frame_number;
   ticks(r, 20, 0);
   CHECK(s->frame_number == frame);
+}
+
+// What the game says of the level: the spawn point, the box's health, deathmatch, how the player
+// came in, and whether its game file said autosave.
+std::string where(sv::RulesRunner& r) {
+  sv::NativeQ2& s = *sv::native_q2_of(r);
+  s.raw.reliable[0].clear();
+  r.client_command(0, "where");
+  const std::vector<uint8_t>& b = s.raw.reliable[0];
+  const std::string w = "where";
+  const auto at = std::search(b.begin(), b.end(), w.begin(), w.end());
+  return at == b.end() ? std::string() : std::string(at, std::find(at, b.end(), uint8_t{0}));
+}
+
+TEST(a_new_game_puts_in_the_settings_the_game_holds_for_it) {
+  sv::RulesRunner r = start_single();
+  if (!r) return;
+  r.connect(0, "tester", false, false, nullptr);
+  CHECK(where(r) == "where '' box 50 dm 0 came spot autosaved 0\n");
+}
+
+TEST(the_spawn_point_reaches_the_game_and_a_level_left_in_the_unit_is_kept) {
+  sv::RulesRunner r = start_single();
+  if (!r) return;
+  sv::NativeQ2& s = *sv::native_q2_of(r);
+  r.connect(0, "tester", false, false, nullptr);
+  r.client_command(0, "hit");
+  r.client_command(0, "go eou1_.cin+hall2$east");
+  CHECK(s.pending_map == "hall2");
+  follow(r);
+  CHECK_MSG(where(r) == "where 'east' box 50 dm 0 came spot autosaved 0\n", where(r));
+  std::vector<uint8_t> autosave = r.calls->take_autosave(r.rules);
+  CHECK(!autosave.empty());
+  std::string error;
+  CHECK(sv::native_q2_save_map(autosave, "save0", error) == "hall2");
+  // Back to the first level: the box still hurt, the player at a spot, ten seconds run alone.
+  const int64_t frame = s.frame_number;
+  r.client_command(0, "go hall$west");
+  follow(r);
+  CHECK(where(r) == "where 'west' box 40 dm 0 came spot autosaved 0\n");
+  CHECK(s.frame_number - frame >= 100);
+  // A new unit forgets the levels kept.
+  r.client_command(0, "go *hall2");
+  follow(r);
+  r.client_command(0, "go hall");
+  follow(r);
+  CHECK(where(r) == "where '' box 50 dm 0 came spot autosaved 0\n");
+}
+
+TEST(a_save_loads_into_the_saved_body_and_level) {
+  sv::RulesRunner r = start_single();
+  if (!r) return;
+  sv::NativeQ2& s = *sv::native_q2_of(r);
+  r.connect(0, "tester", false, false, nullptr);
+  ticks(r, 77, 0);
+  ticks(r, 40, 400);  // walked off the spot
+  const float x = x_of(s);
+  r.client_command(0, "hit");
+  CHECK(r.calls->save_problem(r.rules).empty());
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(r.calls->save(r.rules, bytes, error, 0), error);
+  r.client_command(0, "hit");
+  r.client_command(0, "hit");
+  CHECK(sv::native_q2_load_ask(s, bytes, "s1", error) == "hall");
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = hall();
+  CHECK_MSG(r.start(map, error), error);
+  r.connect(0, "tester", false, false, nullptr);
+  CHECK(where(r) == "where '' box 40 dm 0 came body autosaved 0\n");
+  CHECK_MSG(x_of(s) > x - 1 && x_of(s) < x + 1,
+            "in his saved body at x " + std::to_string(x) + ": " + std::to_string(x_of(s)));
+  // A damaged save is refused by name.
+  bytes.resize(bytes.size() / 2);
+  CHECK(sv::native_q2_load_ask(s, bytes, "s1", error).empty());
+  CHECK(error.find("s1") != std::string::npos);
+}
+
+TEST(a_save_is_refused_in_deathmatch_and_while_dead) {
+  sv::RulesRunner dm = start();
+  if (!dm) return;
+  CHECK(dm.calls->save_problem(dm.rules) == "Can't savegame in a deathmatch");
+  sv::RulesRunner r = start_single();
+  if (!r) return;
+  sv::NativeQ2& s = *sv::native_q2_of(r);
+  r.connect(0, "tester", false, false, nullptr);
+  r.client_command(0, "die");
+  bool menu = false;  // the game asked for the load menu
+  for (const sv::NetEvent& ev : s.out.events)
+    menu = menu || (ev.kind == sv::EventKind::stuffcmd && ev.text == "menu_loadgame\n");
+  CHECK(menu);
+  ticks(r, 20, 0);
+  CHECK(r.calls->save_problem(r.rules) == "Can't savegame while dead!");
 }
 
 }  // namespace

@@ -33,7 +33,7 @@ companions, and saves.
 | Our rules | `rules/arena.hpp`, `rules/campaign.hpp` (C++ native programs) | `server/q2_server.hpp` and its `q2_*` files (items, combat, fight, map, targets, monsters, poses, campaign, screens, gibs, save) | its arena rules in C++ on a runner | its rules in C++ |
 | Community mods | QC bytecode on the VM (`qc_server.hpp`); compiled modules (`qvm_server.hpp`) | its native game library hosted unchanged (`server/q2_native.hpp`) | its compiled modules on the module VM; native libraries | none (its mods are data) |
 | C++ mods | the program seam (`sim/mod_host.hpp`) | laid over its own entities (`server/q2_mods.hpp`) | the seam | the seam |
-| Saves | `campaign_save.hpp`, the classic text save | `server/q2_save.hpp` | | |
+| Saves | `campaign_save.hpp`, the classic text save | `server/q2_save.hpp`; a game library's own by its files (`server/q2_native_save.cpp`) | | |
 
 ## Adding a game
 
@@ -68,7 +68,9 @@ companions, and saves.
 
 ## Gaps
 
-Quake II's single-player playthrough stuck at breakable glass; the third game's module VM
+A game library's single player (a mission pack's) keeps its levels in the unit and saves by the
+library's own files packed into the engine's save; its rotating brush models' hulls and a frame
+cut to what a client sees are open. Quake II's single-player playthrough stuck at breakable glass; the third game's module VM
 server for its mods' client half and menus. Quake's single player against the original: the
 ranked list in `porting/shooters-edge/q1-sp-gaps.md`, every row landed but the two kept by
 choice (the fixed 1/72 s step and co-op switched on during a map).

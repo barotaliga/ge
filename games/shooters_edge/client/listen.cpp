@@ -28,6 +28,7 @@
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/q1_save.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_native.hpp"
 #include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -813,8 +814,13 @@ bool listen_save(const Listen& l, std::vector<uint8_t>& out, std::string& error,
 
 bool listen_load_q2(Listen& l, const ListenOptions& opt, std::span<const uint8_t> bytes,
                     std::string_view name, std::string& error) {
-  const std::string map_name = sv::q2_save_map(bytes, name, error);
-  if (map_name.empty()) return false;
+  std::string map_name = sv::q2_save_map(bytes, name, error);
+  if (map_name.empty()) {  // a save of a mod's game library's game
+    std::string why;
+    map_name = sv::native_q2_save_map(bytes, name, why);
+    if (map_name.empty()) return false;
+    error.clear();
+  }
   if (opt.files == nullptr) {
     error = "the game is built wrong: it has no files to read maps/" + map_name + ".bsp from";
     return false;

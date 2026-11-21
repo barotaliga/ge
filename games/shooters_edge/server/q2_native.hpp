@@ -40,12 +40,16 @@
 // - **`error`** never returns into the library: the call that reached it is left by a long jump,
 //   the map stops (`map_stopped`, `stop_reason` the game's text).
 //
-// Not yet: saving and loading (a deathmatch writes nothing), rotating brush models' hulls, a
-// client's frame cut to what he can see (every entity is sent, within the frame's room).
+// - **Single player and co-op** (q2_native_save.cpp): the spawn point, levels kept in a unit,
+//   the autosave, `save` and its load, a new game's held settings (q2_native_host.hpp says how).
+//
+// Not yet: rotating brush models' hulls, a client's frame cut to what he can see (every entity is
+// sent, within the frame's room).
 //
 // ge:summary An existing game library of Quake II hosted unchanged: loaded, its calls answered
 // ge:keywords game-library native-game-library gamelib mod-library dlopen client-think run-frame
 // ge:keywords pmove multicast unicast configstring linkentity box-edicts cvar m18v10 q2-mods
+// ge:keywords native-save spawn-point kept-level
 // ge:skill shooter mod
 // ge:test tests/shooters_edge_q2_native_test.cpp
 #pragma once
@@ -53,7 +57,9 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -97,6 +103,14 @@ RulesRunner native_q2_runner(std::unique_ptr<NativeQ2> s);
 // A digest of what the game shows (its frame, every entity's and player's wire state): the
 // server's status line and its checks. The game's own state is its library's and is not read.
 uint64_t native_q2_hash(const NativeQ2& s);
+// The map a save of a game library's game was made on ("" with `error` when it is no such save).
+std::string native_q2_save_map(std::span<const uint8_t> bytes, std::string_view name,
+                               std::string& error);
+// The save `bytes` (named `name` in a refusal) asked of the hosted game: checked, and kept until
+// the next start (on the save's map, the one returned), which loads it. "" with `error` when the
+// file is damaged, of another game or newer than this build.
+std::string native_q2_load_ask(NativeQ2& s, std::span<const uint8_t> bytes, std::string_view name,
+                               std::string& error);
 // The native runner's state, or null when `r` is another runner.
 NativeQ2* native_q2_of(const RulesRunner& r);
 
