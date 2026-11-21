@@ -501,6 +501,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<int32_t> was_armour(32, 0);     // by slot: the armour worn at the last sample
   std::vector<int32_t> was_frags(32, 0);      // by slot: the frags at the last sample
   la::FightLog flog;                          // the fight at a showing, joined at the end
+  std::vector<la::SpotTakes> spot_takes;      // by area: its takes by slot (show_read.hpp)
   std::vector<uint8_t> area_alive(32, 0);     // by slot: alive at the last sample
   std::vector<la::AreaPlayer> area_last(32);  // and where, of which team
   double area_at = -1;
@@ -838,6 +839,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         for (const la::ShowPlayer& sp2 : splayers)
           if (sp2.slot == taker) {
             la::fight_taken(flog, a, s.time, sp2.team);
+            if (spot_takes.size() <= static_cast<size_t>(a)) spot_takes.resize(areas.size());
+            la::spot_take(spot_takes[static_cast<size_t>(a)], sp2);
             const bool rl = had_rl[tk] != 0;
             la::show_taken_spot(ss, out.show_spots[show_key(sp.kind, sp.at)], s.time, sp2, full,
                                 rl);
@@ -1212,6 +1215,12 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   la::areas_end(areas, out.areas);
   out.area_spots = std::move(areas);
   la::fight_join(flog, out.fight);
+  for (size_t a = 0; a < spot_takes.size() && a < out.area_spots.size(); a++) {
+    const la::AreaSpot& sp = out.area_spots[a];
+    if (sp.kind < 0 || sp.kind >= kItemKinds) continue;
+    la::spot_owners(spot_takes[a], out.show[static_cast<size_t>(sp.kind)]);
+    la::spot_owners(spot_takes[a], out.show_spots[show_key(sp.kind, sp.at)]);
+  }
   out.ok = true;
 }
 

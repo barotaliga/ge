@@ -49,6 +49,7 @@ void report_show(ge::lab::Lab& lab, std::array<ShowRead, N>& show,
       lab.metric(key + ".taker-waited", sshare(r.taker_waited, r.taken), "share");
       lab.metric(key + ".taken-full", sshare(r.taker_full, r.taken), "share");
       lab.metric(key + ".taker-rl", sshare(r.taker_rl, r.taken), "share");
+      lab.metric(key + ".owner-share", sshare(r.owner_takes, r.team_takes), "share");
       lab.metric(key + ".wait-p50", keys_quantile(r.waits, 0.5), "s");
       lab.metric(key + ".wait-p75", keys_quantile(r.waits, 0.75), "s");
       int64_t quick = 0;
@@ -60,7 +61,7 @@ void report_show(ge::lab::Lab& lab, std::array<ShowRead, N>& show,
         "200 and 600, the wait to its going (p50, p75), taken within 1 s, the taker there waiting, "
         "taken by an enemy",
         {"spot", "shown", "mate on", "mate near", "wait p50", "wait p75", "within 1 s", "waited",
-         "by enemy"},
+         "by enemy", "owner"},
         {}};
     for (auto& [at, r] : show_spots) {
       int64_t quick = 0;
@@ -69,7 +70,8 @@ void report_show(ge::lab::Lab& lab, std::array<ShowRead, N>& show,
           {at, std::to_string(r.shown), to_fixed(sshare(r.mate_on, r.shown), 2),
            to_fixed(sshare(r.mate_near, r.shown), 2), to_fixed(keys_quantile(r.waits, 0.5), 1),
            to_fixed(keys_quantile(r.waits, 0.75), 1), to_fixed(sshare(quick, r.taken), 2),
-           to_fixed(sshare(r.taker_waited, r.taken), 2), to_fixed(sshare(r.by_enemy, r.taken), 2)});
+           to_fixed(sshare(r.taker_waited, r.taken), 2), to_fixed(sshare(r.by_enemy, r.taken), 2),
+           to_fixed(sshare(r.owner_takes, r.team_takes), 2)});
     }
     lab.table(by_spot);
     int64_t worn = 0;

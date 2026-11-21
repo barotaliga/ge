@@ -32,6 +32,7 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -57,6 +58,9 @@ struct ShowRead {
   int64_t taker_waited = 0;  // the taker within kShowNear at the showing
   int64_t taker_full = 0;    // taken full (over 100 armour worn, a launcher held)
   int64_t taker_rl = 0;      // the taker carrying the launcher
+  // its OWNER (a recording's takes of the spot by each team: its top taker's against the team's):
+  // summed, so owner / team_takes reads as how much one player of a team keeps the spot his own
+  int64_t owner_takes = 0, team_takes = 0;
   std::vector<float> waits;  // the showing to the going, s
 };
 
@@ -74,6 +78,8 @@ inline void add(ShowRead& a, const ShowRead& b) {
   a.taker_waited += b.taker_waited;
   a.taker_full += b.taker_full;
   a.taker_rl += b.taker_rl;
+  a.owner_takes += b.owner_takes;
+  a.team_takes += b.team_takes;
   a.waits.insert(a.waits.end(), b.waits.begin(), b.waits.end());
 }
 
@@ -142,6 +148,36 @@ inline void show_taken(ShowSpot& sp, ShowRead& r, double t, const ShowPlayer& ta
   sp.slot = taker.slot;
   sp.team = taker.team;
   sp.shown = -1;
+}
+
+// A spot's takes by slot in one recording (any take, the first included), its team by slot.
+struct SpotTakes {
+  std::array<int64_t, 32> by{};
+  std::array<std::string, 32> team;
+};
+
+inline void spot_take(SpotTakes& st, const ShowPlayer& taker) {
+  if (taker.slot < 0 || taker.slot >= 32) return;
+  st.by[static_cast<size_t>(taker.slot)]++;
+  st.team[static_cast<size_t>(taker.slot)] = taker.team;
+}
+
+// A recording's takes of a spot into `r`: for each team, its top taker's takes and the team's.
+inline void spot_owners(const SpotTakes& st, ShowRead& r) {
+  std::vector<std::string> teams;
+  for (size_t k = 0; k < 32; k++)
+    if (st.by[k] > 0 && std::find(teams.begin(), teams.end(), st.team[k]) == teams.end())
+      teams.push_back(st.team[k]);
+  for (const std::string& tm : teams) {
+    int64_t top = 0, all = 0;
+    for (size_t k = 0; k < 32; k++)
+      if (st.by[k] > 0 && st.team[k] == tm) {
+        all += st.by[k];
+        top = std::max(top, st.by[k]);
+      }
+    r.owner_takes += top;
+    r.team_takes += all;
+  }
 }
 
 // The same going counted into a second read (a spot's own) without moving the spot on: its taker
