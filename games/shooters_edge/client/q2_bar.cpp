@@ -136,7 +136,8 @@ bool draw_lag(ge::ui::DrawList& dl, Q2Bar& bar, float f, float alpha) {
   const Q2Screen* s = bar.screen;
   if (s == nullptr || s->draw2d == 0 || bar.lag == nullptr || f <= 0) return false;
   const int k = static_cast<int>(f);
-  const auto w = static_cast<float>(bar.width / k), h = static_cast<float>(bar.height / k);
+  const int whole_w = bar.width / k, whole_h = bar.height / k;  // the smaller screen's, whole px
+  const auto w = static_cast<float>(whole_w), h = static_cast<float>(whole_h);
   constexpr auto kSide = static_cast<float>(ge::hud::kLagColumns);
   const float x =
       s->lag_x < 0 ? w + static_cast<float>(s->lag_x) - kSide + 1 : static_cast<float>(s->lag_x);
