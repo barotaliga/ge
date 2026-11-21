@@ -43,6 +43,7 @@ Only a game's own tuning (Shooter's Edge's ticks, M30g) lives in its plugin.
 | The swimmer in a liquid (both regimes) | `engine/water/swim.hpp` | `swim`, `liquids` | `tests/water_liquids_test.cpp` |
 | Lava and slime drawn, the looks, the eye's key, the air over them (shimmer, fumes, stirs) | `engine/render/liquid.hpp`, `liquid.wgsl` | `gpu-lava`, `gpu-slime`, `se-burn` | `tests/render_liquid_test.cpp` |
 | A body burned by lava or eaten by slime: its levels, what it throws, its skin, its stir | `engine/render/body_burn.hpp` | `se-burn` | `tests/render_body_burn_test.cpp` |
+| The classic games' lava and slime ticks and clock as harm rows (M30g) | `plugins/shooter/liquid_harm.hpp` | `se-dive` | `tests/shooter_liquid_harm_test.cpp` |
 
 ## A liquid (`engine/water/liquid.hpp`, M30a)
 
@@ -111,8 +112,10 @@ than the numbers.
 
 - **Ticks** (`HarmKind::chemical`): `tick[level − 1]` health every `interval` s, at immersion
   levels 1 (feet), 2 (waist) and 3 (all in). The clock keeps running out of the liquid, so leaving
-  and re-entering does not reset it. This is the classic shooter model, and a game sets its own
-  numbers.
+  and re-entering does not reset it, unless the row sets `restart`: then the clock starts again on
+  going in, the step after going in deals a second tick at once, and a dip in and out deals early
+  (the classic games' rule, `plugins/shooter/liquid_harm.hpp`, M30g). A game sets its own numbers.
+
 - **Burns** (`HarmKind::heat`): the skin is wetted on a share of the body by level (0.15, 0.5,
   1). The heat flux into it is `h (T − 35 °C)`, plus any `outside` flux. Damage follows the
   **thermal dose** D = Σ q^(4/3) dt, with q in kW/m² (Eisenberg's probit for thermal radiation).
@@ -432,5 +435,8 @@ The numbers above come from:
 These are open rows in `docs/goals.md` § M30:
 
 - viscous flow and lava that cools (M30d);
-- the sound (M30f);
-- Shooter's Edge's own liquids (M30g).
+- the sound (M30f).
+
+Shooter's Edge's own liquids (M30g) are the classic harm rows in `plugins/shooter/liquid_harm.hpp`
+(the ticks by level, the clock that starts again on going in, `Harm::restart`), held to Quake's
+own program by the `se-dive` lab.

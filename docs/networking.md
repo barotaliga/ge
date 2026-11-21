@@ -370,7 +370,8 @@ Which of them a kind of game uses: a shooter all four; a racer its own vehicle p
 M17o), rivals extrapolated a little so they are drawn where they are, contacts on the server
 (M17p); a fighting game rollback (M17g) with M17n's sync; a strategy game lockstep; a persistent
 world M17n and M17o for its own movement only. Character movement (M28d) reconciles an
-`engine/move` body on top of them.
+`engine/move` body on top of them: the body as a row and the command as bytes
+(`engine/move/wire.hpp`), the `move-predict` lab (`docs/movement.md` § Prediction).
 
 ## Rates and live tools (M17f2)
 

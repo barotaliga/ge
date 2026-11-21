@@ -347,6 +347,8 @@ bool ask_load(const Game& g, const sv::RulesRunner& rules, std::string& error) {
   sv::Q2Server* sq = sv::q2_of(rules);
   const std::vector<uint8_t> bytes = std::move(g.host->load);
   g.host->load.clear();
+  if (sv::NativeQ2* nq = sv::native_q2_of(rules); nq != nullptr)  // a mod's game library's game
+    return !sv::native_q2_load_ask(*nq, bytes, g.host->load_name, error).empty();
   if (sq == nullptr) {
     error = g.host->load_name + ": only Quake II's maps load its saves";
     return false;

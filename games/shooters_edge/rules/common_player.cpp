@@ -9,6 +9,7 @@
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
 
+#include "shooter/liquid_harm.hpp"
 #include "shooters_edge/rules/variant.hpp"
 
 namespace shooters_edge::server::rules::SE_RULES_NS {
@@ -31,16 +32,40 @@ void player_dead_frame(A& q) {
   }
 }
 
-// Drowning, and lava and slime.
+#if defined(SE_RULES_CAMPAIGN)
+constexpr bool kCampaignWater = true;
+#else
+constexpr bool kCampaignWater = false;
+#endif
+
+// Drowning, and lava and slime. The campaign's player also hears the liquid (going in by its
+// kind, coming out, the gasp when the eyes come up after more than 3 s under, or after drowning),
+// is slowed by it, 0.8 of the speed a second for each level, has the damage clock start again on
+// going in (so a second tick follows the first at once), and drowns harder each second, 4, 6 and
+// so on to 14, then 10 again. The arena's player keeps the plain rules.
 void player_water(A& q) {
   const int32_t me = q.self();
   if (q.f(me, q.L.f.waterlevel) == 3) {
     if ((q.f(me, f_air_finished) < q.time()) & (q.f(me, f_pain_finished) < q.time())) {
       q.set_i(me, f_deathtype, q.s(s_drowned));
-      damage(q, me, q.world(), q.world(), 4);
+      float amount = 4;
+      if (kCampaignWater) {
+        amount = q.f(me, f_dmg) + 2;
+        if (amount > 15) amount = 10;
+        q.set_f(me, f_dmg, amount);
+      }
+      damage(q, me, q.world(), q.world(), amount);
       q.set_f(q.self(), f_pain_finished, q.time() + 1);
     }
   } else {
+    if (kCampaignWater) {
+      if (q.f(me, f_air_finished) < q.time()) {
+        q.sound(me, kChanVoice, q.s(s_gasp2_wav), 1, kAttnNorm);
+      } else if (q.f(me, f_air_finished) < q.time() + 9) {
+        q.sound(me, kChanVoice, q.s(s_gasp1_wav), 1, kAttnNorm);
+      }
+      q.set_f(me, f_dmg, 2);
+    }
     q.set_f(me, f_air_finished, q.time() + 12);
   }
   const int32_t s = q.self();
@@ -48,15 +73,36 @@ void player_water(A& q) {
   const float type = q.f(s, q.L.f.watertype);
   const bool due = q.f(s, f_hazard_finished) < q.time();
   const bool suit = q.f(s, f_suit_finished) > q.time();  // lava once a second, slime not at all
-  if ((level != 0) & (type == kContentLava) & due) {
-    q.set_f(s, f_hazard_finished, q.time() + (suit ? 1 : 0.2f));
-    q.set_i(s, f_deathtype, q.s(s_burned));
-    damage(q, s, q.world(), q.world(), 10 * q.f(s, q.L.f.waterlevel));
-  } else if ((level != 0) & (type == kContentSlime) & due & !suit) {
-    q.set_f(s, f_hazard_finished, q.time() + 1);
-    q.set_i(s, f_deathtype, q.s(s_dissolved));
-    damage(q, s, q.world(), q.world(), 4 * q.f(s, q.L.f.waterlevel));
+  // The liquid's ticks by the level (shooter/liquid_harm.hpp), on the hazard's clock.
+  const ge::water::Harm harm = ge::shooter::classic_harm(static_cast<int>(type), suit);
+  if ((level >= 1) & (level <= 3) & due & (harm.kind != ge::water::HarmKind::none)) {
+    q.set_f(s, f_hazard_finished, q.time() + static_cast<float>(harm.interval));
+    q.set_i(s, f_deathtype, q.s(type == kContentLava ? s_burned : s_dissolved));
+    damage(q, s, q.world(), q.world(), static_cast<float>(harm.tick[static_cast<int>(level) - 1]));
   }
+  if (!kCampaignWater) return;
+  const int32_t w = q.self();
+  const float flags = q.f(w, q.L.f.flags);
+  const bool in = band(flags, kFlInWater) != 0;
+  if (q.f(w, q.L.f.waterlevel) == 0) {
+    if (in) {
+      q.sound(w, kChanBody, q.s(s_outwater_wav), 1, kAttnNorm);
+      q.set_f(w, q.L.f.flags, flags - kFlInWater);
+    }
+    return;
+  }
+  if (!in) {
+    const float kind = q.f(w, q.L.f.watertype);
+    const St heard = kind == kContentLava    ? s_inlava_wav
+                     : kind == kContentSlime ? s_slimbrn2_wav
+                                             : s_inh2o_wav;
+    q.sound(w, kChanBody, q.s(heard), 1, kAttnNorm);
+    q.set_f(w, q.L.f.flags, flags + kFlInWater);
+    q.set_f(w, f_hazard_finished, 0);  // the clock starts again: a second tick at once
+  }
+  const float keep = 1 - 0.8f * q.f(w, q.L.f.waterlevel) * q.gf(q.L.g.frametime);
+  const Vec3 v = q.v(w, q.L.f.velocity);
+  q.set_v(w, q.L.f.velocity, {v.x * keep, v.y * keep, v.z * keep});
 }
 
 // The player model's cycles, a frame every 0.1 s: running (0-5 with the blade, 6-11 with any
@@ -144,6 +190,12 @@ void PutClientInServer(A& q) {
 
 void player_pain(A& q) {
   const int32_t me = q.self();
+  // The campaign's player burns aloud in lava and slime at every hurt, the pain's clock aside.
+  if (kCampaignWater &&
+      ((q.f(me, q.L.f.watertype) == kContentLava) | (q.f(me, q.L.f.watertype) == kContentSlime))) {
+    q.sound(me, kChanVoice, q.s(q.random() < 0.5f ? s_lburn1_wav : s_lburn2_wav), 1, kAttnNorm);
+    return;
+  }
   if (q.time() < q.f(me, f_pain_finished)) return;
   q.set_f(me, f_pain_finished, q.time() + 0.5f);
   if (q.is(q.i(me, f_deathtype), "drowned")) {
@@ -288,6 +340,10 @@ void player_precache(A& q) {
   for (St s : {s_pain1_wav, s_drown1_wav, s_death1_wav, s_udeath_wav, s_tornoff2_wav,
                s_plyrjmp8_wav, s_water1_wav, s_water2_wav, s_r_item1_wav})
     q.precache_sound(q.s(s));
+  if (kCampaignWater)
+    for (St s : {s_gasp1_wav, s_gasp2_wav, s_inh2o_wav, s_inlava_wav, s_lburn1_wav, s_lburn2_wav,
+                 s_outwater_wav, s_slimbrn2_wav})
+      q.precache_sound(q.s(s));
   if (q.cvar(q.s(s_sv_falldamage)) != 0) q.precache_sound(q.s(s_land2_wav));  // player_fall
 }
 

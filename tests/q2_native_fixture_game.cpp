@@ -14,6 +14,11 @@
 //   `next` asks for map `hall2`, `turn <yaw>` turns the brush entity, `probe <x> <y>` prints where
 //   a point traced down there stops and the contents it ends in; its own bar (configstring 5) shows
 //   the health number; the server's `sv hello` prints to the console.
+// - single player: the spawn point it was given, `hit` takes 10 from the box, `go <level>` asks for
+//   a level string, `die` drops the player's health to 0 and asks for the load menu, `where`
+//   prints the spawn point, the box's health, `deathmatch` and how the player came in; its level
+//   file keeps the box's health and each player's body (used or not, and where), its game file
+//   whether it was an autosave.
 //
 // ge:summary A game library of Quake II's interface for the native host's test
 // ge:keywords game-library fixture native-host test-library m18v10
@@ -38,6 +43,7 @@ using namespace shooters_edge::server::native;  // NOLINT(google-build-using-nam
 struct Client {
   NativeClientHead head;
   int score;
+  int health;
 };
 
 struct Entity {
@@ -58,6 +64,10 @@ float spot[3] = {0, 0, 24};
 int frames = 0;
 int spark_sound = 0;
 NativeEntityHead* mover = nullptr;  // the player whose move is running
+char spawn_point[64] = "";
+const char* came_in = "none";  // how the last player came in: "spot" or "body"
+int autosaved = 0;             // the game file read said so
+NativeCvar* deathmatch = nullptr;
 
 NativeTrace trace_cb(const float* a, const float* lo, const float* hi, const float* b) {
   return gi.trace(a, lo, hi, b, mover, kMaskPlayer);
@@ -67,6 +77,7 @@ int contents_cb(const float* p) { return gi.pointcontents(p); }
 
 void init() {
   max_clients = static_cast<int>(gi.cvar("maxclients", "4", 0)->value);
+  deathmatch = gi.cvar("deathmatch", "0", 16);  // latched: for the next game
   entities = static_cast<Entity*>(gi.tag_malloc(int(sizeof(Entity)) * kMostEntities, kTagGame));
   clients = static_cast<Client*>(gi.tag_malloc(int(sizeof(Client)) * max_clients, kTagGame));
   game.edicts = reinterpret_cast<uint8_t*>(entities);
@@ -89,9 +100,12 @@ void read_spot(const char* text) {
   std::sscanf(origin + 8, " \"%f %f %f\"", &spot[0], &spot[1], &spot[2]);
 }
 
-void spawn_entities(const char*, char* text, const char*) {
+void spawn_entities(const char*, char* text, const char* point) {
+  std::snprintf(spawn_point, sizeof spawn_point, "%s", point != nullptr ? point : "");
   for (int i = max_clients + 1; i < kMostEntities; i++)
     std::memset(&entities[i], 0, sizeof(Entity));
+  for (int i = 1; i <= max_clients; i++)
+    entities[i].head.inuse = 0;  // every body put back at a spot
   entities[0].head.inuse = 1;
   read_spot(text);
   gi.configstring(2, "sky1");
@@ -138,6 +152,12 @@ void client_userinfo_changed(NativeEntityHead* ent, char* userinfo) {
 }
 
 void client_begin(NativeEntityHead* ent) {
+  came_in = ent->inuse != 0 ? "body" : "spot";
+  reinterpret_cast<Client*>(ent->client)->health = 100;
+  if (ent->inuse != 0) {  // his body from a loaded level, where he left it
+    gi.linkentity(ent);
+    return;
+  }
   ent->inuse = 1;
   ent->solid = kSolidBox;
   ent->s.model[0] = 255;
@@ -215,6 +235,19 @@ void client_command(NativeEntityHead* ent) {
                static_cast<int>(t.plane.normal[2] * 100), gi.pointcontents(in));
   } else if (std::strcmp(w, "next") == 0) {
     gi.add_command_string("gamemap \"hall2\"\n");
+  } else if (std::strcmp(w, "go") == 0) {
+    char line[128];
+    std::snprintf(line, sizeof line, "gamemap \"%s\"\n", gi.argv(1));
+    gi.add_command_string(line);
+  } else if (std::strcmp(w, "hit") == 0) {
+    entities[max_clients + 2].health -= 10;
+  } else if (std::strcmp(w, "die") == 0) {
+    reinterpret_cast<Client*>(ent->client)->health = 0;
+    gi.add_command_string("menu_loadgame\n");
+  } else if (std::strcmp(w, "where") == 0) {
+    gi.cprintf(ent, 2, "where '%s' box %d dm %d came %s autosaved %d\n", spawn_point,
+               entities[max_clients + 2].health, static_cast<int>(deathmatch->value), came_in,
+               autosaved);
   }
 }
 
@@ -223,7 +256,8 @@ void run_frame() {
   for (int i = 0; i < max_clients; i++) {
     Entity& e = entities[i + 1];
     if (e.head.inuse == 0) continue;
-    e.head.client->ps.stats[1] = 100;
+    e.head.client->ps.stats[1] =
+        static_cast<int16_t>(reinterpret_cast<Client*>(e.head.client)->health);
     e.head.client->ps.stats[14] = static_cast<int16_t>(frames);
   }
   for (int n = 0; n < game.num_edicts; n++)
@@ -234,8 +268,61 @@ void server_command() {
   if (std::strcmp(gi.argv(1), "hello") == 0) gi.dprintf("hello from the game (%d)\n", gi.argc());
 }
 
-void unused_file(const char*) {}
-void unused_save(const char*, int) {}
+// The game file: whether it was an autosave.
+void write_game(const char* file, int autosave) {
+  FILE* f = std::fopen(file, "w");
+  if (f == nullptr) {
+    gi.error("cannot write %s", file);
+    return;
+  }
+  std::fprintf(f, "%d\n", autosave);
+  std::fclose(f);
+}
+
+void read_game(const char* file) {
+  FILE* f = std::fopen(file, "r");
+  if (f == nullptr) {
+    gi.error("cannot read %s", file);
+    return;
+  }
+  if (std::fscanf(f, "%d", &autosaved) != 1) autosaved = -1;
+  std::fclose(f);
+}
+
+// The level file: the box's health, then each player's body (used or not, and where).
+void write_level(const char* file) {
+  FILE* f = std::fopen(file, "w");
+  if (f == nullptr) {
+    gi.error("cannot write %s", file);
+    return;
+  }
+  std::fprintf(f, "%d\n", entities[max_clients + 2].health);
+  for (int i = 1; i <= max_clients; i++) {
+    const NativeEntityHead& e = entities[i].head;
+    std::fprintf(f, "%d %g %g %g\n", e.inuse, e.s.origin[0], e.s.origin[1], e.s.origin[2]);
+  }
+  std::fclose(f);
+}
+
+void read_level(const char* file) {
+  FILE* f = std::fopen(file, "r");
+  if (f == nullptr) {
+    gi.error("cannot read %s", file);
+    return;
+  }
+  if (std::fscanf(f, "%d", &entities[max_clients + 2].health) != 1) gi.error("bad level file");
+  for (int i = 1; i <= max_clients; i++) {
+    NativeEntityHead& e = entities[i].head;
+    float o[3] = {0, 0, 0};
+    if (std::fscanf(f, "%d %f %f %f", &e.inuse, &o[0], &o[1], &o[2]) != 4)
+      gi.error("bad level file");
+    if (e.inuse == 0) continue;
+    std::memcpy(e.s.origin, o, sizeof o);
+    for (int k = 0; k < 3; k++) e.client->ps.move.origin[k] = static_cast<int16_t>(o[k] * 8);
+  }
+  std::fclose(f);
+  gi.linkentity(&entities[max_clients + 2].head);
+}
 
 }  // namespace
 
@@ -246,10 +333,10 @@ FIXTURE_EXPORT NativeExports* GetGameAPI(NativeImports* imports) {
   game.init = init;
   game.shutdown = shutdown;
   game.spawn_entities = spawn_entities;
-  game.write_game = unused_save;
-  game.read_game = unused_file;
-  game.write_level = unused_file;
-  game.read_level = unused_file;
+  game.write_game = write_game;
+  game.read_game = read_game;
+  game.write_level = write_level;
+  game.read_level = read_level;
   game.client_connect = client_connect;
   game.client_begin = client_begin;
   game.client_userinfo_changed = client_userinfo_changed;
