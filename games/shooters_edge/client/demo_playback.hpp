@@ -24,6 +24,17 @@
 // | | `cl_startupdemo <demo>` | played once at start-up, in place of the title's recordings, when
 // no map, demo or server was asked for |
 // | | `cam_thirdperson 0|1`, `cam_dist <units>` | the player watched seen from `cam_dist` behind |
+// | | `demo_jump <time>`, `demo_jump_end` | to a time (or on or back), two seconds before the end |
+// | | `demo_jump_skip_messages 0|1` | the messages a jump passes over left unshown (1) or printed |
+// | | `mvd_autotrack 0|1`, `autotrack` | a multiview demo's view follows the hottest player |
+// | | `cl_hightrack 0|1` | it follows the player with the most frags |
+//
+// AUTOTRACK (`mvd_autotrack 1`; `autotrack` turns it on or off): the view cuts to the hottest
+// player by armour, weapons, powerups, frags and his kill streak (demo_autotrack.hpp), the plan
+// worked out over the whole demo the first time it is asked for. `cl_hightrack 1` follows the top
+// fragger instead: the view moves only to someone with strictly more frags than the player it
+// rides. Picking a player with `demo_track` turns both off; neither works on a demo of one
+// player's view.
 //
 // While a demo plays the pointer is free (no raw mouse), so the bar can be pointed at. A seek
 // stops where the timeline reaches its time (timedemo.hpp's `demo_seek`); the step after it loads
@@ -35,7 +46,8 @@
 // ge:keywords demo_skip demo_skip_forward demo_skip_back demo_next demo_prev demo_seek
 // ge:keywords demo_pause demo_highlights demo_bar demo_track highlights markers video-player
 // ge:keywords add_demo_commands timedemo playdemo demo_lerp cl_democlock demo-clock cl_demowait
-// ge:keywords cl_startupdemo startup-demo cam_thirdperson cam_dist
+// ge:keywords cl_startupdemo startup-demo cam_thirdperson cam_dist demo_jump_end mvd_autotrack
+// ge:keywords autotrack cl_hightrack top-fragger demo_jump_skip_messages
 // ge:skill shooter replay ui
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #pragma once
@@ -49,6 +61,7 @@
 #include "hud/hud.hpp"
 #include "replay/highlights.hpp"
 #include "shooter/demo_transport.hpp"
+#include "shooters_edge/client/demo_autotrack.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/client/timedemo.hpp"
@@ -86,7 +99,16 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   std::string startup;   // `cl_startupdemo`: played once at start-up when nothing else is asked
   int third_person = 0;  // `cam_thirdperson`: the watched player seen from behind
   float behind = 100;    // `cam_dist`: how far behind, units
+  int autotrack = 0;     // `mvd_autotrack`: the view follows the hottest player
+  int hightrack = 0;     // `cl_hightrack`: the view follows the top fragger
+  AutotrackPlan plan;    // autotrack's, worked out the first time it is on
+  int plan_state = 0;    // 0 not tried, 1 made, -1 refused (the reason said once)
+  bool jumped = false;   // a jump was made this step: the window clears the notify lines
 };
+
+// The slot `cl_hightrack` rides in `s`: the playing player (no spectator) with the most frags, kept
+// while no one has strictly more than the one ridden (`riding`); -1 with no one playing.
+int high_track_slot(const DemoState& s, int riding);
 
 // A demo clock's words: whole seconds as hh:mm:ss, the hours past 99 starting again at 0.
 std::string demo_clock_text(double s);

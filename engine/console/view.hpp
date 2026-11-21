@@ -161,6 +161,8 @@ class ConsoleView {
   // The `rows` lines a page shows, oldest first, ending `scroll` lines above the newest.
   std::vector<const ViewLine*> page(int rows) const;
   int scroll() const { return scroll_; }
+  // Lets the notify lines so far go (a demo's jump), the scrollback keeping them.
+  void clear_notify() { notify_from_ = added_; }
   // The newest lines younger than con_notifytime, at most con_notifylines: shown while closed.
   std::vector<const ViewLine*> notify() const;
 

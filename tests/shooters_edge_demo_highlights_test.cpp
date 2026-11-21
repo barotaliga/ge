@@ -13,6 +13,7 @@
 // ge:keywords demo_jump
 // ge:skill shooter replay testing
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -20,6 +21,7 @@
 #include "check.hpp"
 #include "console/console.hpp"
 #include "shooter/demo_transport.hpp"
+#include "shooters_edge/client/demo_autotrack.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_write.hpp"
@@ -279,4 +281,138 @@ TEST(cl_demowait_holds_the_last_frame_paused_and_a_seek_back_plays_again) {
   p.seek_ask = 5;
   got = cl::playback_step(p, held, {{}, -1, -1, false}, 1280, 720, 0, 0, said, error);
   CHECK(got != cl::TimedemoStep::end && near(held.timeline.t, 5, 0.051));
+}
+
+TEST(quake_ii_s_seek_takes_tenths_of_a_second_and_shares_of_the_demo) {
+  CHECK(ge::shooter::parse_tenths_clock("12") == 12);
+  CHECK(ge::shooter::parse_tenths_clock("1.25") == 3.5);  // 1 s and 25 tenths
+  CHECK(ge::shooter::parse_tenths_clock("1:05.3") == 65.3);
+  CHECK(ge::shooter::parse_tenths_clock("1:2:3") < 0 && ge::shooter::parse_tenths_clock("") < 0);
+  CHECK(ge::shooter::parse_tenths_clock("1.2.3") < 0 && ge::shooter::parse_tenths_clock("a") < 0);
+  CHECK(ge::shooter::parse_tenths_clock("1.") < 0 && ge::shooter::parse_tenths_clock(".5") < 0);
+  ge::console::Console con{false};
+  std::vector<std::string> printed;
+  con.set_sink([&printed](std::string_view l) { printed.emplace_back(l); });
+  ge::shooter::DemoTransport t;
+  ge::shooter::add_demo_transport(con, t, {});
+  con.add_command_synonym("seek", "demo_jump");
+  con.run_now("seek 1.25");
+  CHECK(t.seek_ask == 3.5);
+  con.run_now("seek -1:00");
+  CHECK(t.skip_ask == -60);
+  con.run_now("seek 50%");
+  CHECK(t.share_ask == 0.5);
+  con.run_now("seek +10%");
+  CHECK(near(t.share_skip_ask, 0.1, 1e-12));
+  con.run_now("demo_jump 1.25");  // our own spelling: seconds
+  CHECK(t.seek_ask == 1.25);
+  printed.clear();
+  con.run_now("seek x%");
+  con.run_now("seek 1:x");
+  con.run_now("seek +1:x");
+  con.run_now("seek");
+  CHECK(printed.size() == 4 && printed[0] == "Invalid percentage." &&
+        printed[1] == "Invalid absolute timespec." && printed[2] == "Invalid relative timespec." &&
+        printed[3] == "Usage: seek [+-]<timespec|percent>[%]");
+}
+
+TEST(demo_jump_end_lands_two_seconds_before_the_end_and_shares_seek) {
+  cl::DemoPlayback p;
+  cl::Timedemo t = opened();
+  std::string error;
+  CHECK(cl::playback_begin(p, t, error));
+  std::vector<std::string> said;
+  const auto step = [&] {
+    return cl::playback_step(p, t, {{}, -1, -1, false}, 1280, 720, 0, 0, said, error);
+  };
+  step();
+  const double length = std::max(p.scan.length_s, t.timeline.t);
+  p.end_ask = true;
+  step();
+  CHECK_MSG(near(t.timeline.t, std::ceil(length) - 2, 0.051), std::to_string(t.timeline.t));
+  CHECK(p.jumped);
+  said.clear();
+  p.end_ask = true;  // already there
+  step();
+  CHECK(said.size() == 1 && said[0] == "Too close to the end of the demo.");
+  p.share_ask = 0.5;
+  step();
+  CHECK_MSG(near(t.timeline.t, length / 2, 0.051), std::to_string(t.timeline.t));
+}
+
+TEST(demo_jump_skip_messages_keeps_or_drops_the_lines_a_jump_passes) {
+  // The single-player recording prints "halfway" at its middle frame.
+  const std::vector<uint8_t> bytes =
+      cl::write_single_demo(cl::loop_script("halls", {0, 0, 0}, 100, 60));
+  std::string error;
+  for (const bool keep : {false, true}) {
+    cl::Timedemo t;
+    CHECK(cl::open_demo(bytes, t.demo, error));
+    t.start = t.demo;
+    t.hear = true;
+    t.seek_prints = keep;
+    cl::demo_seek(t, 1e9, error);
+    CHECK_MSG(t.heard.prints.size() == (keep ? 1u : 0u), std::to_string(t.heard.prints.size()));
+  }
+}
+
+TEST(demo_jump_end_stops_paused_at_an_intermission_on_the_way) {
+  cl::MatchScript m = cl::highlight_match();
+  m.intermission = 400;  // 20 s
+  cl::Timedemo t;
+  std::string error;
+  CHECK(cl::open_demo(cl::write_multiview_match(m), t.demo, error));
+  t.start = t.demo;
+  t.active = true;
+  cl::DemoPlayback p;
+  CHECK(cl::playback_begin(p, t, error));
+  std::vector<std::string> said;
+  cl::playback_step(p, t, {{}, -1, -1, false}, 1280, 720, 0, 0, said, error);
+  p.end_ask = true;
+  cl::playback_step(p, t, {{}, -1, -1, false}, 1280, 720, 0, 0, said, error);
+  CHECK(t.demo.state.intermission && p.paused);
+  CHECK_MSG(near(t.timeline.t, 20, 0.06), std::to_string(t.timeline.t));
+}
+
+TEST(cl_hightrack_rides_the_top_fragger_and_changes_only_for_more) {
+  cl::DemoState s;
+  s.players.resize(32);
+  s.names[0] = "a";
+  s.names[1] = "b";
+  s.names[2] = "watcher";
+  s.spectator[2] = true;
+  s.frags[0] = 3;
+  s.frags[1] = 5;
+  s.frags[2] = 99;  // a spectator is never ridden
+  CHECK(cl::high_track_slot(s, 0) == 1);
+  s.frags[0] = 5;
+  CHECK(cl::high_track_slot(s, 1) == 1 && cl::high_track_slot(s, 0) == 0);  // a tie keeps him
+  s.frags[0] = 6;
+  CHECK(cl::high_track_slot(s, 1) == 0);
+  CHECK(cl::high_track_slot(s, 2) == 0 && cl::high_track_slot(s, -1) == 0);
+  CHECK(cl::high_track_slot(cl::DemoState{}, 0) == -1);
+}
+
+TEST(mvd_autotrack_follows_the_plan_and_your_own_pick_turns_it_off) {
+  ge::console::Console con{false};
+  cl::DemoPlayback p;
+  cl::Timedemo t = opened();
+  cl::add_playback_commands(con, p, t);
+  std::string error;
+  CHECK(cl::playback_begin(p, t, error));
+  con.run_now("autotrack");
+  CHECK(p.autotrack == 1);
+  std::vector<std::string> said;
+  bool followed = false;
+  for (int i = 0; i < 200; i++) {
+    cl::playback_step(p, t, {{}, -1, -1, false}, 1280, 720, 0.05, 0, said, error);
+    const int slot = cl::autotrack_at(p.plan, t.timeline.t);
+    if (slot >= 0) {
+      CHECK(t.demo.track == slot);
+      followed = true;
+    }
+  }
+  CHECK(p.plan_state == 1 && followed);
+  con.run_now("demo_track 1");
+  CHECK(p.autotrack == 0 && t.demo.track == 1);
 }

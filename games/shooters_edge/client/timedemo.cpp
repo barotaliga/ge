@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <utility>
 
 #include "classicenhance/profile.hpp"
 #include "shooters_edge/client/view.hpp"
@@ -385,7 +386,9 @@ TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error) {
     t.levels = 0;
   }
   TimedemoStep out = TimedemoStep::frame;
+  const bool stop_at_intermission = std::exchange(t.seek_stops_at_intermission, false);
   while (t.timeline.t < timeline_s || t.demo.state.map.empty()) {
+    if (stop_at_intermission && t.demo.state.intermission && !t.demo.state.map.empty()) break;
     const TimedemoStep s = timedemo_step(t, error);
     if (s == TimedemoStep::error) return s;
     if (s == TimedemoStep::end) {
@@ -396,8 +399,11 @@ TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error) {
   t.clock = t.demo.state.time;
   t.skip = 0;
   if (t.smooth) lerp_frame(t.lerp, t.demo.state, true);  // not drawn from before the seek
-  t.heard.clear();                                       // what the seek read past is not played
-  t.demo.state.effects.clear();                          // nor thrown
+  std::vector<DemoPrint> prints =
+      t.seek_prints ? std::move(t.heard.prints) : std::vector<DemoPrint>{};
+  t.heard.clear();                     // what the seek read past is not played
+  t.heard.prints = std::move(prints);  // nor shown, unless asked for
+  t.demo.state.effects.clear();        // nor thrown
   if (out == TimedemoStep::end) return out;
   return t.levels != level_before || t.demo.state.map != map_before ? TimedemoStep::new_level
                                                                     : TimedemoStep::frame;

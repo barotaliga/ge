@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <utility>
 
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -61,7 +62,43 @@ double step_speed(double now, int dir) {
   return kDemoSpeeds.front();
 }
 
+// Autotrack and the top fragger: the slot the view rides now, into `t`.
+void follow(DemoPlayback& p, Timedemo& t, std::vector<std::string>& say) {
+  const DemoState& s = t.demo.state;
+  if ((p.autotrack == 0 && p.hightrack == 0) || s.format == DemoFormat::single) return;
+  if (p.autotrack != 0) {
+    if (p.plan_state == 0) {
+      std::string why;
+      p.plan_state = autotrack_plan(t.start, p.scan, {}, p.plan, why) ? 1 : -1;
+      if (p.plan_state < 0) say.push_back("autotrack: " + why);
+    }
+    const int slot = p.plan_state > 0 ? autotrack_at(p.plan, t.timeline.t) : -1;
+    if (slot >= 0) t.demo.track = slot;
+    if (p.plan_state > 0) return;
+  }
+  if (p.hightrack == 0) return;
+  const int slot = high_track_slot(s, s.player);
+  if (slot >= 0) t.demo.track = slot;
+}
+
 }  // namespace
+
+int high_track_slot(const DemoState& s, int riding) {
+  const auto playing = [&s](int i) {
+    const size_t k = static_cast<size_t>(i);
+    return i >= 0 && k < s.players.size() && k < s.frags.size() && !s.names[k].empty() &&
+           !s.spectator[k];
+  };
+  int best = -1;
+  for (int i = 0; i < static_cast<int>(std::min(s.players.size(), s.frags.size())); i++)
+    if (playing(i) &&
+        (best < 0 || s.frags[static_cast<size_t>(i)] > s.frags[static_cast<size_t>(best)]))
+      best = i;
+  if (best < 0) return -1;
+  if (playing(riding) && s.frags[static_cast<size_t>(riding)] >= s.frags[static_cast<size_t>(best)])
+    return riding;
+  return best;
+}
 
 float hud_inset(std::span<const ge::hud::Placed> placed, int height) {
   const float h = static_cast<float>(height);
@@ -145,9 +182,41 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
                         .values = "0: the demo ends (the default); 1: it holds, paused, on its "
                                   "last frame until you seek back or leave"},
                        &p.hold_end);
+  console.cvars().bind({.name = "mvd_autotrack",
+                        .fallback = "0",
+                        .flags = ge::console::kArchive,
+                        .help = "Whether a multiview demo's view follows the hottest player on its "
+                                "own.",
+                        .kind = ge::console::CvarKind::boolean,
+                        .values = "0: the player you pick (the default); 1: the hottest by armour, "
+                                  "weapons, powerups, frags and kill streak"},
+                       &p.autotrack);
+  console.cvars().bind({.name = "cl_hightrack",
+                        .fallback = "0",
+                        .flags = ge::console::kArchive,
+                        .help = "Whether the view follows the player with the most frags.",
+                        .kind = ge::console::CvarKind::boolean,
+                        .values = "0: the player you pick (the default); 1: the top fragger, "
+                                  "changing only when someone has more"},
+                       &p.hightrack);
+  console.add_command("autotrack",
+                      "autotrack: a multiview demo's view follows the hottest player, "
+                      "or no longer",
+                      [&p](ge::console::Console& c, const ge::console::Args&) {
+                        c.cvars().set("mvd_autotrack", p.autotrack != 0 ? "0" : "1",
+                                      ge::console::Source::code);
+                        c.print(p.autotrack != 0 ? "Autotrack on." : "Autotrack off.");
+                      });
   ge::shooter::add_demo_transport(
       console, p,
-      {.tracked = [&bench](int track) { bench.demo.track = track; },
+      {.tracked =
+           [&bench, &console, &p](int track) {
+             bench.demo.track = track;
+             if (p.autotrack != 0)
+               console.cvars().set("mvd_autotrack", "0", ge::console::Source::code);
+             if (p.hightrack != 0)
+               console.cvars().set("cl_hightrack", "0", ge::console::Source::code);
+           },
        .highlights = [&p](bool all) { return highlight_lines(p, all); }});
 }
 
@@ -160,6 +229,11 @@ bool playback_begin(DemoPlayback& p, const Timedemo& t, std::string& error) {
   p.marked_for = -2;
   p.highlights = {};
   p.markers.clear();
+  p.end_ask = false;
+  p.share_ask = -1;
+  p.share_skip_ask = 0;
+  p.plan = {};
+  p.plan_state = 0;
   const bool ok = scan_demo(t.start, p.scan, error);
   if (!ok) p.scan = DemoScan{};
   return ok;
@@ -201,9 +275,24 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
   if (tap(kKeyEnd)) p.seek_ask = std::max(0.0, length - 1);
   if (key) p.shown_until = now_s + kBarShowS;
 
+  follow(p, t, say);
   mark(p, t);
   // A skip and a jump become a seek from where the playhead stands.
   const double here = t.timeline.t;
+  if (p.share_ask >= 0) p.seek_ask = std::clamp(p.share_ask, 0.0, 1.0) * length;
+  if (p.share_skip_ask != 0) p.skip_ask += p.share_skip_ask * length;
+  p.share_ask = -1;
+  p.share_skip_ask = 0;
+  if (std::exchange(p.end_ask, false)) {  // two seconds before the end, rounded up
+    const bool in_intermission = t.demo.state.intermission;
+    const double to = std::ceil(length) - 2;
+    if (to - here < (in_intermission ? 10 : 2)) {
+      say.push_back("Too close to the end of the demo.");
+    } else {
+      p.seek_ask = to;
+      t.seek_stops_at_intermission = !in_intermission;
+    }
+  }
   if (p.skip_ask != 0) {
     p.seek_ask = std::max(0.0, (p.seek_ask >= 0 ? p.seek_ask : here) + p.skip_ask);
     p.skip_ask = 0;
@@ -225,7 +314,11 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
     const double to = std::clamp(p.seek_ask, 0.0, std::max(0.0, length - 0.5));
     p.seek_ask = -1;
     p.shown_until = now_s + kBarShowS;
-    return demo_seek(t, to, error);
+    p.jumped = true;
+    t.seek_prints = p.skip_messages == 0;
+    const TimedemoStep step = demo_seek(t, to, error);
+    if (t.demo.state.intermission && to > t.timeline.t + 0.5) p.paused = true;  // stopped at one
+    return step;
   }
   const TimedemoStep step = playdemo_step(t, wall_dt_s, p.paused ? 0.0 : p.speed * p.rate, error);
   if (step != TimedemoStep::end || p.hold_end == 0) return step;

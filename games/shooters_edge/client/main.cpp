@@ -113,11 +113,11 @@
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
-#include "shooters_edge/client/map_line.hpp"
 #include "shooters_edge/client/map_load.hpp"
 #include "shooters_edge/client/menu_sound.hpp"
 #include "shooters_edge/client/own_sounds.hpp"
 #include "shooters_edge/client/place_names.hpp"
+#include "shooters_edge/client/place_seen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/q2_bar.hpp"
 #include "shooters_edge/client/remix.hpp"
@@ -578,58 +578,10 @@ int run_main(int argc, char** argv) {
   // The map's place names, read as it starts and made in the game (client/place_names.hpp).
   cl::PlaceNames places;
   places.game_dir = std::filesystem::path(args.basedir) / args.game;
-  // Where the player is: the view of a server joined or a demo played (its eye less its height),
-  // else the window's own game.
-  struct Watched {
-    bool on = false;
-    ge::shooter::Vec3f at{0, 0, 0};
-    ge::shooter::Vec3f angles{0, 0, 0};                  // the view's, degrees
-    const shooters_edge::server::BspMap* map = nullptr;  // its map's world (null: none read)
-    int kept_level = -1;    // the recording's level whose kept place names are in use
-    size_t kept_count = 0;  // how many of them
-  } place_seen;
+  // Where the player is: the view watched, else the window's own (client/place_seen.hpp).
+  cl::PlaceSeen place_seen;
   recorder.places = &places.locs;  // a recording keeps the place names it is played with
-  // Whether nothing solid stands between two points in the played or watched map (`loc_trace`).
-  places.clear_line = [&listen, &place_seen](ge::shooter::Vec3f from, ge::shooter::Vec3f to) {
-    const shooters_edge::server::BspMap* map =
-        place_seen.on ? place_seen.map : (listen.map ? &listen.map->bsp : nullptr);
-    if (map == nullptr) return true;
-    const ge::shooter::Vec3f end = cl::line_end(*map, from, to);
-    return end.x == to.x && end.y == to.y && end.z == to.z;
-  };
-  // Where the view looks: 8,192 units along it from where the player stands, or the first solid.
-  places.looked_at = [&listen, &place_seen](ge::shooter::Vec3f& at) {
-    ge::shooter::Vec3f from, angles;
-    const shooters_edge::server::BspMap* map = nullptr;
-    if (place_seen.on) {
-      from = place_seen.at;
-      angles = place_seen.angles;
-      map = place_seen.map;
-    } else if (listen.server != nullptr && listen.map && listen.server->world.entities.size() > 1) {
-      from = listen.server->world.entities[1].origin;
-      angles = listen.server->world.entities[1].view_angles;
-      map = &listen.map->bsp;
-    } else {
-      return false;
-    }
-    const ge::shooter::Vec3f f = ge::shooter::angle_vectors(angles).forward;
-    constexpr float kReach = 8192;
-    const ge::shooter::Vec3f to = {from.x + f.x * kReach, from.y + f.y * kReach,
-                                   from.z + f.z * kReach};
-    at = map != nullptr ? cl::line_end(*map, from, to) : to;
-    return true;
-  };
-  cl::add_place_commands(
-      console, places, adapter, files, [&listen, &place_seen](ge::shooter::Vec3f& at) {
-        if (place_seen.on) {
-          at = place_seen.at;
-          return true;
-        }
-        if (listen.server == nullptr || !listen.map || listen.server->world.entities.size() < 2)
-          return false;
-        at = listen.server->world.entities[1].origin;
-        return true;
-      });
+  cl::add_place_queries(console, places, listen, place_seen, adapter, files);
   // CHAT: the player's line to everyone or to the team, its codes and glyphs filled in first,
   // and the f_ aliases the game's events run (client/team_chat.hpp).
   cl::TeamChat chat;
@@ -1622,6 +1574,7 @@ int run_main(int argc, char** argv) {
                     w, h, wall, t, said, error)
               : cl::timedemo_step(bench, error);
       for (const std::string& line : said) console.print(line);
+      if (std::exchange(playback.jumped, false)) con_view.clear_notify();  // as a jump does
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
       place_seen.on = !ds.map.empty();
