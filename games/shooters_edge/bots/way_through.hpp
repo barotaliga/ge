@@ -108,6 +108,9 @@ struct WayThrough {
   };
   std::vector<KeyDoor> key_doors;
   std::vector<uint8_t> on_top;     // each node: standing on its mover's top (a lift's floor)
+  std::vector<int> lifts;          // the shut doors whose button is pressed from their top
+  double ride_since = -1;          // riding a mover since (the plan held meanwhile)
+  std::vector<int> plats;          // plats that wait for a trigger: shut until they first move
   std::vector<uint8_t> link_shut;  // scratch: each link, shut now
   std::vector<int64_t> gain;       // each locked door: the places not yet seen its opening reaches
   std::vector<int64_t> gain_back;  // and the places at all (seen or not)

@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooters_edge/bots/way_through.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -13,6 +14,7 @@
 #include <string_view>
 #include <utility>
 
+#include "brush/map.hpp"
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "progs/entity_text.hpp"
@@ -32,9 +34,10 @@ namespace pg = ge::progs;
 constexpr int kKeySilver = 131072, kKeyGold = 262144;  // the keys' item bits
 constexpr float kButtonClose = 320;  // at a button's spot this near, he presses it, units
 constexpr double kPressFor_s = 4;    // and gives the press this long
-constexpr float kWayShotFrom = 600;
-constexpr float kWayDryShot = 700;  // (`complete`) a monster in the water is shot from this near //
-                                    // (`complete`) a secret wall is shot from this near, units
+constexpr float kWayShotFrom = 600;  // (`complete`) a secret wall is shot from this near, units
+constexpr float kWayDryShot = 700;   // (`complete`) a monster in the water is shot from this near
+constexpr double kWayRide_s = 12;    // the longest ride a plan holds through, s
+constexpr float kWayAfloat = 768;    // how far the plan looks for a node to start from in the air
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
@@ -60,6 +63,56 @@ int edict_of(const ge::shooterbots::BotView& s, const char* model) {
   return -1;
 }
 
+// Quake's doors that touch move as one, and a group with a name opens only to what fires it: an
+// unnamed leaf of a named group is as shut as its named mate (e4m1's flood gate, opened by the
+// button that fires its partner, kept him pressing on it for the whole map). Each unnamed leaf
+// takes its group's name. Quake II pairs doors by an explicit team instead.
+void name_linked_doors(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
+                       std::vector<pg::EntityBlock>& blocks) {
+  if (spec.brushes && spec.brushes->family != ge::brush::Family::v29 &&
+      spec.brushes->family != ge::brush::Family::bsp2)
+    return;
+  std::vector<size_t> door_block;
+  std::vector<int> door_ent;
+  for (size_t i = 0; i < blocks.size(); i++) {
+    const char* dc = pg::block_value(blocks[i], "classname");
+    const char* dm = pg::block_value(blocks[i], "model");
+    const char* sf = pg::block_value(blocks[i], "spawnflags");
+    if (!dc || !dm || std::strcmp(dc, "func_door") != 0) continue;
+    if (sf && (std::atoi(sf) & 4) != 0) continue;  // marked never to link
+    const int e = edict_of(s, dm);
+    if (e <= 0 || static_cast<size_t>(e) >= s.sv.edicts.size()) continue;
+    door_block.push_back(i);
+    door_ent.push_back(e);
+  }
+  std::vector<size_t> group(door_block.size());
+  for (size_t i = 0; i < group.size(); i++) group[i] = i;
+  const auto root = [&](size_t i) {
+    while (group[i] != i) i = group[i] = group[group[i]];
+    return i;
+  };
+  constexpr float kTouch = 2;  // boxes this near count as touching
+  for (size_t i = 0; i < door_ent.size(); i++)
+    for (size_t j = i + 1; j < door_ent.size(); j++) {
+      const sh::Edict& a = s.sv.edicts[static_cast<size_t>(door_ent[i])];
+      const sh::Edict& b = s.sv.edicts[static_cast<size_t>(door_ent[j])];
+      if (a.absmin.x <= b.absmax.x + kTouch && b.absmin.x <= a.absmax.x + kTouch &&
+          a.absmin.y <= b.absmax.y + kTouch && b.absmin.y <= a.absmax.y + kTouch &&
+          a.absmin.z <= b.absmax.z + kTouch && b.absmin.z <= a.absmax.z + kTouch)
+        group[root(i)] = root(j);
+    }
+  std::vector<std::string> group_name(door_block.size());
+  for (size_t i = 0; i < door_block.size(); i++) {
+    const char* dn = pg::block_value(blocks[door_block[i]], "targetname");
+    if (dn && group_name[root(i)].empty()) group_name[root(i)] = dn;
+  }
+  for (size_t i = 0; i < door_block.size(); i++) {
+    pg::EntityBlock& b = blocks[door_block[i]];
+    if (!pg::block_value(b, "targetname") && !group_name[root(i)].empty())
+      b.pairs.emplace_back("targetname", group_name[root(i)]);
+  }
+}
+
 // A player's box (origin at its middle, 16 across, 24 down and 32 up) touches the box.
 bool touches(sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi) {
   return p.x + 16 >= lo.x && p.x - 16 <= hi.x && p.y + 16 >= lo.y && p.y - 16 <= hi.y &&
@@ -70,12 +123,15 @@ bool touches(sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi) {
 // beyond it; else none.
 int32_t node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
   const sh::Vec3f mid = (lo + hi) * 0.5f;
+  constexpr float kOnMover = 1e6f;
   int32_t best = -1;
   float best_d = 0;
   for (size_t n = 0; n < g.nodes.size(); n++) {
     const sh::Vec3f o = g.nodes[n].origin;
     if (!touches(o, lo, hi)) continue;
-    const float d = dist(o, mid);
+    // A node off any mover first: one on a door the trigger opens is shut until it is touched
+    // (e1m2's exit trigger right before its doors took a node on them and was never reached).
+    const float d = dist(o, mid) + (g.nodes[n].mover >= 0 ? kOnMover : 0.0f);
     if (best < 0 || d < best_d) {
       best = static_cast<int32_t>(n);
       best_d = d;
@@ -88,7 +144,9 @@ int32_t node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
   for (size_t n = 0; n < g.nodes.size(); n++) {
     const sh::Vec3f o = g.nodes[n].origin;
     if (!touches(o, lo - grow, hi + grow)) continue;
-    const float d = dist(o, mid);
+    // A node off any mover first: one on a door the trigger opens is shut until it is touched
+    // (e1m2's exit trigger right before its doors took a node on them and was never reached).
+    const float d = dist(o, mid) + (g.nodes[n].mover >= 0 ? kOnMover : 0.0f);
     if (best < 0 || d < best_d) {
       best = static_cast<int32_t>(n);
       best_d = d;
@@ -178,7 +236,13 @@ void reach_past(const sb::NavGraph& g, int32_t from, const std::vector<int32_t>&
       const bool on_top = w && !w->on_top.empty() && w->on_top[static_cast<size_t>(l.to)];
       for (const int32_t b : barred) {
         if (w && is_wall(*w, b)) continue;  // a secret wall: its crossings alone (shut_crossings)
-        shut |= (l.mover == b && !on_top) || (in == b && !on_top);
+        // Its top is a way only for a lift called from on it: a plat that waits for a trigger up
+        // top took him down into e1m3's pit by a ride that never came.
+        bool lift = false;
+        if (w)
+          for (const int x : w->lifts) lift = lift || x == b;
+        const bool top = on_top && lift;
+        shut |= (l.mover == b && !top) || (in == b && !top);
       }
       if (shut) continue;
       const double cost = search.cost(a) + l.time_s;
@@ -262,6 +326,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
               const ge::shooter::MapSpec& spec) {
   w.steps.clear();
   w.locked.clear();
+  w.plats.clear();
   w.locked_at.clear();
   w.cars.clear();
   w.cars_at.clear();
@@ -300,6 +365,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   std::vector<pg::EntityBlock> blocks;
   std::string error;
   if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
+  name_linked_doors(s, spec, blocks);
   // What opens a door only something else opens: a name a shut door answers to, or a counter's
   // or a relay's whose own target does (two hops).
   const auto names_door = [&](const std::string& t, std::vector<int>& out) {
@@ -376,6 +442,20 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     quake_keys = quake_keys || (cn && std::strncmp(cn, "item_key", 8) == 0);
   }
   w.key_doors.clear();
+  std::vector<int> gates;  // the shut doors barred by the links through their shut boxes
+  // The links that pass through secret wall `e` (shut while it is barred).
+  const auto add_crossings = [&](int e) {
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    for (size_t a = 0; a < g.nodes.size(); a++) {
+      const sb::NavNode& n = g.nodes[a];
+      for (int32_t k = 0; k < n.links; k++) {
+        const int32_t li = n.first_link + k;
+        const sb::NavLink& l = g.links[static_cast<size_t>(li)];
+        if (crosses(n.origin, g.nodes[static_cast<size_t>(l.to)].origin, d.absmin, d.absmax))
+          w.crossings.push_back({li, static_cast<int32_t>(a), e});
+      }
+    }
+  };
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
     const char* model = pg::block_value(b, "model");
@@ -455,6 +535,16 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       st.name = cn;
       w.steps.push_back(st);
       continue;
+    } else if (std::strcmp(cn, "func_plat") == 0 && name && brush) {
+      // A plat with a name waits up top for what fires it, and only then runs: shut to a ride
+      // till then (e1m3's took him down into a pit by a ride that never came back up).
+      const int e = edict_of(s, model);
+      if (e >= 0) {
+        w.locked.push_back(e);
+        w.locked_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
+        w.plats.push_back(e);
+      }
+      continue;
     } else if (std::strcmp(cn, "func_door_secret") == 0 && brush) {
       // A secret wall stays shut to a walk: its trigger, its button or a shot opens it (the nav's
       // links through it waited there for ever: e1m1's wall by the slime pit stood him still for
@@ -465,29 +555,24 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         w.walls.push_back(e);
         const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
         w.locked_at.push_back(d.origin);
-        for (size_t a = 0; a < g.nodes.size(); a++) {
-          const sb::NavNode& n = g.nodes[a];
-          for (int32_t k = 0; k < n.links; k++) {
-            const int32_t li = n.first_link + k;
-            const sb::NavLink& l = g.links[static_cast<size_t>(li)];
-            if (crosses(n.origin, g.nodes[static_cast<size_t>(l.to)].origin, d.absmin, d.absmax))
-              w.crossings.push_back({li, static_cast<int32_t>(a), e});
-          }
-        }
+        add_crossings(e);
       }
       continue;
     } else if (std::strcmp(cn, "func_door") == 0 && !name && brush && quake_keys &&
                ((std::atoi(pg::block_value(b, "spawnflags") ? pg::block_value(b, "spawnflags")
                                                             : "0") &
                  24) != 0)) {
-      // Quake's key door (spawnflag 8 silver, 16 gold): shut to him until he holds its key (a
-      // route through e1m2's silver doors before the key stood him at them for minutes).
+      // Quake's key door (spawnflag 8 gold, 16 silver: each map's doors pair so with the key it
+      // lays, e1m2's silver key with doors of 16, e1m3's gold with doors of 8): shut to him until
+      // he holds its key (a route through e1m2's silver doors before the key stood him at them for
+      // minutes).
       const int e = edict_of(s, model);
       if (e >= 0) {
         const int sf = std::atoi(pg::block_value(b, "spawnflags"));
         w.locked.push_back(e);
         w.locked_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
-        w.key_doors.push_back({e, (sf & 8) != 0 ? kKeySilver : kKeyGold});
+        w.key_doors.push_back({e, (sf & 16) != 0 ? kKeySilver : kKeyGold});
+        gates.push_back(e);
       }
       continue;
     } else if (std::strcmp(cn, "func_door") == 0 && name && brush) {
@@ -529,6 +614,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       }
       w.locked.push_back(e);
       w.locked_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
+      gates.push_back(e);
       continue;
     } else {
       continue;
@@ -582,6 +668,42 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     if (!car_back) w.steps.push_back(st);
   }
+  // A shut door bars the links that pass through its shut box, not every node of its sweep: the
+  // nav gives a sliding door's whole travel as its mover, and that barred the floor in front of
+  // e1m2's exit doors where the trigger that opens them stands; a swim link through e4m1's shut
+  // flood gates passed on no node of theirs. A lift keeps its mover's rule (its top is where its
+  // button is pressed from).
+  w.lifts.clear();
+  for (const int e : w.locked)
+    if (is_lift(w, f, e)) w.lifts.push_back(e);
+  for (const int e : gates) {
+    if (is_lift(w, f, e)) continue;
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    // A player's box (feet 24 below his origin, head 32 above) overlapping the door's, a hair
+    // inside.
+    const sh::Vec3f lo = d.absmin + sh::Vec3f{-15, -15, -31}, hi = d.absmax + sh::Vec3f{15, 15, 23};
+    const auto hits = [&](sh::Vec3f a, sh::Vec3f b) {
+      const float len = dist(a, b);
+      const int steps = 1 + static_cast<int>(len / 8);
+      for (int i = 0; i <= steps; i++) {
+        const float u = static_cast<float>(i) / static_cast<float>(steps);
+        const sh::Vec3f p = a + (b - a) * u;
+        if (p.x > lo.x && p.x < hi.x && p.y > lo.y && p.y < hi.y && p.z > lo.z && p.z < hi.z)
+          return true;
+      }
+      return false;
+    };
+    for (size_t a = 0; a < g.nodes.size(); a++) {
+      const sb::NavNode& n = g.nodes[a];
+      for (int32_t k = 0; k < n.links; k++) {
+        const int32_t li = n.first_link + k;
+        const sb::NavLink& l = g.links[static_cast<size_t>(li)];
+        if (hits(n.origin, g.nodes[static_cast<size_t>(l.to)].origin))
+          w.crossings.push_back({li, static_cast<int32_t>(a), e});
+      }
+    }
+    w.walls.push_back(e);
+  }
 }
 
 void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
@@ -589,6 +711,7 @@ void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::Bot
   std::vector<pg::EntityBlock> blocks;
   std::string error;
   if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
+  name_linked_doors(s, spec, blocks);
   const sb::NavGraph& g = nav.graph;
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
@@ -645,6 +768,16 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     }
   }
   if (w.plan_at >= 0 && t - w.plan_at < kWayPlan_s) return;
+  // Riding a mover the plan holds (on its way up, the nearest node is the plat's own, whose links
+  // reach nothing: e1m3's plat, planned away from at every half second, walked him off mid-ride
+  // for minutes), at most kWayRide_s.
+  const sh::Edict& me_e = s.sv.edicts[static_cast<size_t>(me)];
+  const bool riding = f.bot.pilot.pilot.mode == sb::PilotMode::ride &&
+                      (me_e.flags & sh::kFlagOnGround) != 0 && me_e.groundentity > 0 &&
+                      f.objective >= 0;
+  if (!riding) w.ride_since = -1;
+  if (riding && w.ride_since < 0) w.ride_since = t;
+  if (riding && t - w.ride_since < kWayRide_s) return;
   w.plan_at = t;
   w.stats.plans++;
   // Where he stands now is explored.
@@ -706,6 +839,20 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     }
     if (st.done && !was_done) w.stats.steps_done++;
   }
+  // A waiting plat once moved runs for good: no longer locked.
+  for (size_t k = 0; k < w.locked.size();) {
+    bool plat = false;
+    for (const int p : w.plats) plat = plat || p == w.locked[k];
+    if (plat && dist(s.sv.edicts[static_cast<size_t>(w.locked[k])].origin, w.locked_at[k]) >= 1) {
+      w.locked.erase(w.locked.begin() + static_cast<std::ptrdiff_t>(k));
+      w.locked_at.erase(w.locked_at.begin() + static_cast<std::ptrdiff_t>(k));
+      if (k < w.gain.size()) w.gain.erase(w.gain.begin() + static_cast<std::ptrdiff_t>(k));
+      if (k < w.gain_back.size())
+        w.gain_back.erase(w.gain_back.begin() + static_cast<std::ptrdiff_t>(k));
+    } else {
+      k++;
+    }
+  }
   // The doors shut now that only something else opens.
   w.barred.clear();
   for (size_t k = 0; k < w.locked.size(); k++) {
@@ -742,7 +889,20 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
           sl.push_back({c.from, l.to, l.kind, l.time_s});
         }
   }
-  const int32_t from = sb::nav_nearest(g, self);
+  int32_t from = sb::nav_nearest(g, self);
+  // None near (in the air, falling: `end` starts him high over its water): the nearest node at all
+  // within kWayAfloat, the one below him first, so the plan has somewhere to start.
+  if (from < 0) {
+    float best = kWayAfloat;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      const float d = dist(o, self) + (o.z > self.z ? kWayAfloat * 0.5f : 0.0f);
+      if (d < best) {
+        best = d;
+        from = static_cast<int32_t>(n);
+      }
+    }
+  }
   // A place to look at is dry ground he can walk back from: the water is seen from its banks
   // (exploring it cell by cell took him down a flooded tunnel in base1 until he stopped at its end
   // under water), and a trap (map_nav.hpp) only from above (base1's east pool, dropped into at 94

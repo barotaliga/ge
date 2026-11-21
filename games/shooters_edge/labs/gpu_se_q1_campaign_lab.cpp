@@ -85,9 +85,11 @@ struct Leg {
 };
 
 // The legs of `--episodes` (a comma list of 1..4 and `end`): an episode's normal way, then its
-// secret level on its own.
-bool legs_of(const std::string& list, std::vector<Leg>& out, std::string& bad) {
+// secret level on its own; with `each`, every map of the episode on its own (one map that fails
+// no longer ends the rest of its episode's run).
+bool legs_of(const std::string& list, bool each, std::vector<Leg>& out, std::string& bad) {
   static const char* const kSecret[4] = {"e1m8", "e2m7", "e3m7", "e4m8"};
+  static const int kMaps[4] = {8, 7, 7, 8};  // each episode's maps, its secret level among them
   std::stringstream in(list);
   std::string w;
   while (std::getline(in, w, ',')) {
@@ -95,6 +97,17 @@ bool legs_of(const std::string& list, std::vector<Leg>& out, std::string& bad) {
       out.push_back({"end", {}, 1});
     } else if (w.size() == 1 && w[0] >= '1' && w[0] <= '4') {
       const int k = w[0] - '1';
+      if (each) {
+        for (int m = 1; m <= kMaps[k]; m++) {
+          const std::string name = "e" + w + "m" + std::to_string(m);
+          if (name == kSecret[k]) {
+            out.push_back({name, {}, 1});
+          } else {
+            out.push_back({name, {kSecret[k]}, 1});
+          }
+        }
+        continue;
+      }
       out.push_back({"e" + w + "m1", {kSecret[k]}, 8});
       out.push_back({kSecret[k], {}, 1});
     } else if (!w.empty()) {
@@ -232,7 +245,7 @@ void run(gl::Lab& lab) {
     }
     o.progs = &packs.progs;
     std::string bad;
-    if (!legs_of(lab.arg("episodes"), legs, bad)) {
+    if (!legs_of(lab.arg("episodes"), lab.arg("each") == "1", legs, bad)) {
       lab.fail("se-q1-campaign: no episode " + bad, "next: --episodes=1,2,3,4,end or map names");
       return;
     }
@@ -350,6 +363,7 @@ const gl::LabSpec kSpec{
         {"map-seconds", "900",
          "a map's time limit (its last quarter for the way out alone): one not "
          "left by then is a failure, s"},
+        {"each", "0", "1: every map of the episodes on its own, from a fresh start"},
         {"skill", "1", "the campaign's skill (0..3)"},
         {"seed", "1", "the campaign's and the bot's seed"},
         {"god", "1", "0: the bot can die"},
