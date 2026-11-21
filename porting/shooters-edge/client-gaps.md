@@ -144,5 +144,5 @@ Gameplay and the configs players carry first; each row is a round or part of one
     `match_save`, `match_forcestart` and `demo_jump` (Quake II's `seek`) done (round 22); Quake II
     recorded while joined, `match_auto_logconsole`, `cl_democlock`, `cl_demowait` (round 23); the
     demo watcher's settings (rounds 26 to 29); the server browser's and the screenshots' (round
-    30, proxies, caches and the remote screenshot left); the rest of the broadcast and
+    30); proxy routes, the browser's caches and the remote screenshot (round 31); the rest of the broadcast and
     match-tool settings, the console's own looks.

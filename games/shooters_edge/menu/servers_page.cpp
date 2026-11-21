@@ -1,6 +1,18 @@
 // The server browser page: the list's config from the cvars, the keys, the table drawn
 // (servers_page.hpp).
 //
+// - THE COLUMNS (`sb_show<column>` 0 or 1): the name always, then the address (`sb_showaddress`,
+//   0), the mode, the game folder (`sb_showgamedir`, 0), the map (`sb_showmap`, 1), the players
+//   (`sb_showplayers`, 1), the frag and time limits (`sb_showfraglimit`, `sb_showtimelimit`, 0),
+//   the ping (`sb_showping`, 1) and the skill; the optional ones left out first when the name
+//   would be squeezed. `sb_status` 0 drops the footer's two lines about the selected server.
+// - THE SORT (`sb_sortservers`, "32"): column codes read left to right, the first that tells two
+//   servers apart deciding: 1 name, 2 address, 3 ping, 4 game folder, 5 map, 6 players, 7 frag
+//   limit, 8 time limit, and our own m mode and s skill; a `-` sorts the codes after it high to
+//   low;
+//   "" sorts the playing and not full first, then the full, then the empty. LEFT and RIGHT put a
+//   column's code in front of the rest, the one already in front turned round.
+//
 // ge:summary The server browser page's refresh, keys, table, footer and empty states
 // ge:keywords server-browser servers page table rows footer sort refresh join draw filter
 // ge:skill ui net
@@ -9,6 +21,9 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string_view>
 
 #include "console/console.hpp"
@@ -92,7 +107,10 @@ std::string printable(const std::string& s) {
 
 }  // namespace
 
-ServersPage::~ServersPage() { gn::close_transport(own_); }
+ServersPage::~ServersPage() {
+  gn::close_transport(own_);
+  gn::close_transport(route_own_);
+}
 
 void ServersPage::add_cvars(ge::console::Console& con) {
   con.cvars().bind({.name = "sb_lan",
@@ -252,6 +270,48 @@ void ServersPage::add_cvars(ge::console::Console& con) {
       &live_update_);
   number("sb_autohide", "1", "Whether joining a server from JOIN A GAME closes the menu.",
          "0: the menu stays open; 1: it closes (the default); 2: it closes too", 0, 2, &autohide_);
+  flag("sb_findroutes", "0",
+       "Whether JOIN A GAME looks for faster routes to the servers through forwarders.",
+       "0: no (the default); 1: yes, and joining goes the fastest way", &find_routes_);
+  number("sb_showproxies", "1", "Whether JOIN A GAME lists the forwarders among the servers.",
+         "0: hidden; 1: listed (the default); 2: only the forwarders", 0, 2, &show_proxies_);
+  con.cvars().bind({.name = "sb_ignore_proxy",
+                    .fallback = "",
+                    .flags = ge::console::kArchive,
+                    .help = "Forwarders JOIN A GAME leaves out of its routes.",
+                    .kind = CvarKind::text,
+                    .values = "\"\": none (the default); TEXT: addresses, or parts of them, with "
+                              "spaces between"},
+                   &ignore_proxy_);
+  number("sb_proxinfopersec", "10", "How many forwarders JOIN A GAME asks a second.",
+         "10: the default; 1-100: that many a second", 1, 100, &prox_per_s_);
+  number("sb_proxretries", "3", "How many times JOIN A GAME asks a forwarder for its servers.",
+         "3: the default; 1-10: that many asks", 1, 10, &prox_retries_);
+  number("sb_proxtimeout", "1000",
+         "How long JOIN A GAME waits for a forwarder before asking again.",
+         "1000: the default; 100-10000: that many milliseconds", 100, 10000, &prox_timeout_);
+  con.add_command("connectbr",
+                  "connectbr <host>[:port]: join a server by the fastest route JOIN A GAME found",
+                  [this](ge::console::Console& c, const ge::console::Args& a) {
+                    if (a.size() < 2)
+                      c.print("connectbr: name a server (connectbr 192.168.1.20)");
+                    else
+                      connect_by_route(c, a[1], false);
+                  });
+  con.add_command("observebr",
+                  "observebr <host>[:port]: watch a server by the fastest route JOIN A GAME found",
+                  [this](ge::console::Console& c, const ge::console::Args& a) {
+                    if (a.size() < 2)
+                      c.print("observebr: name a server (observebr 192.168.1.20)");
+                    else
+                      connect_by_route(c, a[1], true);
+                  });
+  flag("sb_listcache", "0",
+       "Whether JOIN A GAME keeps its list between sessions, shown at once the next time.",
+       "0: no (the default); 1: yes, in sb/servers.txt in the game's folder", &list_cache_);
+  flag("sb_mastercache", "1",
+       "Whether each master's last list is kept, asked when the master is silent.",
+       "0: no; 1: yes (the default), in sb/cache in the game's folder", &master_cache_);
   flag("sb_autoupdate", "1", "Whether JOIN A GAME looks for servers again each time it opens.",
        "0: the last list stays until you press R; 1: yes (the default)", &autoupdate_);
   con_ = &con;
@@ -450,15 +510,94 @@ bool ServersPage::open(std::string* why) {
   list_.config = config_;
   inited_ = true;
   read_settings();
-  if (first || autoupdate_)
+  // sb_listcache: the first open of a session shows the kept list, asked again only when
+  // sb_autoupdate says so.
+  const bool from_cache = first && list_cache_ && read_list_cache();
+  if ((first && !from_cache) || autoupdate_)
     refresh();
   else
     build_rows();
   return true;
 }
 
+std::filesystem::path ServersPage::master_cache_path(const gn::Address& master) const {
+  std::string name = gn::to_string(master);
+  for (char& c : name)
+    if (c == '.' || c == ':') c = '_';
+  return cache_dir_ / "sb" / "cache" / (name + ".txt");
+}
+
+namespace {
+
+bool read_text(const std::filesystem::path& path, std::string& out) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in) return false;
+  std::ostringstream all;
+  all << in.rdbuf();
+  out = all.str();
+  return true;
+}
+
+bool write_text(const std::filesystem::path& path, const std::string& text) {
+  std::error_code ec;
+  std::filesystem::create_directories(path.parent_path(), ec);
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  out << text;
+  return static_cast<bool>(out);
+}
+
+}  // namespace
+
+bool ServersPage::read_list_cache() {
+  if (cache_dir_.empty()) return false;
+  const std::filesystem::path path = cache_dir_ / "sb" / "servers.txt";
+  std::string text;
+  if (!read_text(path, text)) return false;
+  int bad = 0;
+  const int n = gn::server_list_read_cache(list_, text, &bad);
+  if (con_ != nullptr)
+    con_->print(n > 0     ? "Successfully read " + std::to_string(n) + " servers"
+                : bad > 0 ? "Corrupted data"
+                          : "No servers read");
+  if (n <= 0) return false;
+  cache_written_ = true;  // the list is the file's: nothing new to write back
+  return true;
+}
+
+void ServersPage::add_cached() {
+  // A master's list kept from its last answer is asked beside it, so a silent master still
+  // lists its servers (read whatever sb_mastercache is, as only its writing is switched).
+  if (cache_dir_.empty()) return;
+  for (const gn::Address& m : list_.config.masters) {
+    std::string text;
+    if (!read_text(master_cache_path(m), text)) continue;
+    for (const gn::Address& a : gn::parse_address_lines(text))
+      gn::server_list_add(list_, a, gn::kServerFromCache, now_us_);
+  }
+}
+
+void ServersPage::write_caches() {
+  if (cache_written_ || cache_dir_.empty() || !gn::server_list_done(list_, now_us_)) return;
+  cache_written_ = true;
+  if (master_cache_)
+    for (size_t m = 0; m < list_.masters.size() && m < list_.config.masters.size(); m++)
+      if (!list_.masters[m].got.empty())
+        write_text(master_cache_path(list_.config.masters[m]),
+                   gn::address_lines(list_.masters[m].got));
+  if (!list_cache_) return;
+  const std::filesystem::path path = cache_dir_ / "sb" / "servers.txt";
+  const bool ok = write_text(path, gn::server_list_cache_text(list_));
+  if (con_ != nullptr)
+    con_->print(ok ? std::string("Wrote server list contents to disk")
+                   : "Couldn't write " + path.string() + ".");
+}
+
 void ServersPage::refresh() {
   gn::server_list_refresh(list_, now_us_);
+  add_cached();
+  cache_written_ = false;
+  routing_ = routes_ready_ = false;
+  table_ = {};
   selected_ = 0;
   first_ = 0;
   build_rows();
@@ -479,6 +618,8 @@ void ServersPage::frame(double dt) {
     live_s_ = 0;
   }
   gn::server_list_update(list_, now_us_);
+  write_caches();
+  route_frame();
   // The selection stays on its server as the rows sort themselves around it.
   const int was = selected_ >= 0 && selected_ < static_cast<int>(rows_.size())
                       ? rows_[static_cast<size_t>(selected_)]
@@ -501,6 +642,13 @@ void ServersPage::build_rows() {
   filter_.max_ping_ms = effective_ping();
   filter_.info = info_rules_;
   gn::server_list_view(list_, filter_, sort_keys_, rows_);
+  if (show_proxies_ != 1)  // sb_showproxies: the forwarders hidden (0) or alone (2)
+    rows_.erase(std::remove_if(rows_.begin(), rows_.end(),
+                               [&](int i) {
+                                 return proxy_row(list_.entries[static_cast<size_t>(i)].info) !=
+                                        (show_proxies_ == 2);
+                               }),
+                rows_.end());
   // The answered servers the filters leave out, for the title row.
   std::vector<int> all;
   gn::ServerFilter none;
@@ -661,6 +809,8 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
       facts += std::string(kSep) + std::to_string(e->info.spectators) + "/" +
                std::to_string(e->info.max_spectators) + " WATCHING";
     if (e->from & gn::kServerFromLan) facts += std::string(kSep) + "LAN";
+    if (const std::string r = route_words(rows_[static_cast<size_t>(selected_)]); !r.empty())
+      facts += std::string(kSep) + r;
     list.text(small, word, margin, facts_base, fit(small, facts, word, inner), style.text_dim);
   }
   if (e != nullptr && status_) {
@@ -730,7 +880,7 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
         std::to_string(in.players) + " / " + std::to_string(in.max_players),
         key("fraglimit"),
         key("timelimit"),
-        se.ping_ms < 0 ? "-" : std::to_string(se.ping_ms),
+        ping_words(rows_[static_cast<size_t>(r)], se.ping_ms),
         in.skill < 0 ? "-" : std::to_string(in.skill)};
     for (size_t c = 0; c < kCols; c++) {
       if (ws[c] <= 0) continue;
@@ -752,6 +902,104 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
   if (small.advance(kHelp, word) > inner)
     problems_.push_back("the keys are wider than the screen at " + std::to_string(width) + "x" +
                         std::to_string(height));
+}
+
+bool ServersPage::proxy_row(const gn::ServerInfo& info) const {
+  if (info.game == "qizmo") return true;
+  return route_query_.is_forwarder != nullptr && route_query_.is_forwarder(info);
+}
+
+void ServersPage::route_frame() {
+  if (!find_routes_ || route_query_.ask == nullptr || !inited_) return;
+  if (!routing_) {
+    if (!gn::server_list_done(list_, now_us_)) return;
+    gn::Transport* t = route_borrowed_;
+    if (t == nullptr && borrowed_ == nullptr) {
+      if (route_own_.kind == gn::TransportKind::none &&
+          !gn::open_udp_transport(route_own_, gn::ipv4(0, 0, 0, 0, 0), nullptr))
+        return;
+      t = &route_own_;
+    }
+    if (t == nullptr) return;  // a lab's list with no transport for the forwarders
+    finder_.tries = prox_retries_;
+    finder_.timeout_us = int64_t{prox_timeout_} * 1000;
+    finder_.gap_us = 1000000 / std::max(1, prox_per_s_);
+    ge::forward::route_finder_start(finder_, route_query_, *t, list_, now_us_);
+    // sb_ignore_proxy: forwarders whose address holds one of its words are not asked.
+    const std::vector<std::string> ignore = split_words(ignore_proxy_);
+    std::erase_if(finder_.asked, [&](const ge::forward::RouteFinder::Asked& a) {
+      const std::string at = gn::to_string(a.forwarder);
+      for (const std::string& w : ignore)
+        if (at.find(w) != std::string::npos) return true;
+      return false;
+    });
+    routing_ = true;
+  }
+  if (routes_ready_) return;
+  ge::forward::route_finder_update(finder_, now_us_);
+  if (ge::forward::route_finder_done(finder_, now_us_)) {
+    table_ = ge::forward::route_finder_table(finder_, list_);
+    routes_ready_ = true;
+  }
+}
+
+std::string ServersPage::ping_words(int index, int ping_ms) const {
+  // sb_findroutes: a server faster through forwarders shows that ping, marked with a star.
+  const ge::forward::Route r = route_to(index);
+  if (r.found && !r.forwarders.empty()) return "*" + std::to_string(r.ping_ms);
+  return ping_ms < 0 ? "-" : std::to_string(ping_ms);
+}
+
+ge::forward::Route ServersPage::route_to(int index) const {
+  if (!routes_ready_ || index < 0 || static_cast<size_t>(index) >= list_.entries.size()) return {};
+  return ge::forward::best_route(table_, list_.entries[static_cast<size_t>(index)].address);
+}
+
+std::string ServersPage::route_words(int index) const {
+  if (!find_routes_) return {};
+  if (!routes_ready_) return "FINDING ROUTES";
+  const ge::forward::Route r = route_to(index);
+  if (!r.found) return "NO ROUTE FOUND";
+  if (r.forwarders.empty()) return "DIRECT IS BEST";
+  const size_t n = r.forwarders.size();
+  return "ROUTE " + std::to_string(n) + (n == 1 ? " HOP " : " HOPS ") + std::to_string(r.ping_ms) +
+         " MS";
+}
+
+void ServersPage::connect_by_route(ge::console::Console& c, const std::string& address,
+                                   bool observe) {
+  gn::Address to;
+  std::string text = address;
+  if (text.find(':') == std::string::npos) text += ":27500";
+  int index = -1;
+  const bool parsed = gn::parse_address(text, to);
+  for (size_t i = 0; i < list_.entries.size(); i++)
+    if ((parsed && list_.entries[i].address == to) ||
+        gn::to_string(list_.entries[i].address) == address)
+      index = static_cast<int>(i);
+  const ge::forward::Route r = route_to(index);
+  std::string chain;
+  if (!r.found) {
+    c.print("No route found, trying to connect directly...");
+  } else if (r.forwarders.empty()) {
+    c.print("Direct route is the best route, connecting directly...");
+  } else {
+    c.print("Shortest path length: " + std::to_string(r.ping_ms) + " ms");
+    for (const gn::Address& hop : r.forwarders) {
+      if (!chain.empty()) chain += "@";
+      chain += gn::to_string(hop);
+      c.print("  " + gn::to_string(hop));
+    }
+    c.print("  " + text);
+    c.print("Connecting using " + std::to_string(r.forwarders.size()) +
+            (r.forwarders.size() == 1 ? " proxy" : " proxies") + " with best ping " +
+            std::to_string(r.ping_ms) + " ms");
+  }
+  if (c.cvars().find("cl_proxyaddr") != nullptr)
+    c.cvars().set("cl_proxyaddr", chain, ge::console::Source::local);
+  if (observe && c.cvars().find("spectator") != nullptr)
+    c.cvars().set("spectator", "1", ge::console::Source::local);
+  c.execute("connect " + address);
 }
 
 }  // namespace shooters_edge::menu

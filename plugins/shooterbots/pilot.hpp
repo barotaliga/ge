@@ -625,7 +625,10 @@ struct Pilot {
   double via_left_at = -1e9;
   std::vector<int32_t> shut;             // doors the caller knows are shut: never planned through
   std::vector<NavExtraLink> shut_links;  // and links it knows are (onto a bridge still in)
-  std::vector<NavExtraLink> cut_all;     // cut and shut_links together, for the route
+  // Hollow doors the caller knows (a lift's car: its nodes on the car's floor, found clear with it
+  // at rest): a link between two of its nodes is walked while it rests, never waited out.
+  std::vector<int32_t> hollow;
+  std::vector<NavExtraLink> cut_all;                   // cut and shut_links together, for the route
   NavExtraLink near_cut{-1, -1, NavKind::jump, 0, 0};  // (`gapnear`) a gap left out of one plan
   double wanted[3] = {}, pressed[3] = {};              // the last command's yaw, forward, side
   float lane = 0, lane_want = 0, lane_until = 0;       // the lane now, wanted, and until when (s)

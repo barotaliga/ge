@@ -27,17 +27,13 @@
 //   their name, `-*gamedir=fortress` hides one game; net/server_list.hpp's `parse_info_filter`),
 //   a word it cannot read said in the footer. The title row says which are on and how many
 //   servers they hide; a list they empty says so, not "no servers found".
-// - THE COLUMNS (`sb_show<column>` 0 or 1): the name always, then the address (`sb_showaddress`,
-//   0), the mode, the game folder (`sb_showgamedir`, 0), the map (`sb_showmap`, 1), the players
-//   (`sb_showplayers`, 1), the frag and time limits (`sb_showfraglimit`, `sb_showtimelimit`, 0),
-//   the ping (`sb_showping`, 1) and the skill; the optional ones left out first when the name
-//   would be squeezed. `sb_status` 0 drops the footer's two lines about the selected server.
-// - THE SORT (`sb_sortservers`, "32"): column codes read left to right, the first that tells two
-//   servers apart deciding: 1 name, 2 address, 3 ping, 4 game folder, 5 map, 6 players, 7 frag
-//   limit, 8 time limit, and our own m mode and s skill; a `-` sorts the codes after it high to
-//   low;
-//   "" sorts the playing and not full first, then the full, then the empty. LEFT and RIGHT put a
-//   column's code in front of the rest, the one already in front turned round.
+// - THE COLUMNS (`sb_show*`, `sb_status`) and THE SORT (`sb_sortservers`): servers_page.cpp.
+// - ROUTES (`sb_findroutes` 1): once the refresh is done, each forwarder listed is asked for the
+//   servers it reaches (engine/forward/routes.hpp, `sb_proxinfopersec` 10, `sb_proxretries` 3,
+//   `sb_proxtimeout` 1000 ms; `sb_ignore_proxy` words leave forwarders out), and the PING column
+//   shows the best summed route; the foot says the route, a join goes through it (`cl_proxyaddr`
+//   set to the forwarders, cleared for a straight one), as `connectbr` and `observebr` do on the
+//   console. `sb_showproxies` 0 hides the forwarders from the list, 1 shows them, 2 only them.
 // - THE QUERIES: `sb_inforetries` (3), `sb_infotimeout` (1000 ms), `sb_infospersec` (100),
 //   `sb_masterretries` (3), `sb_mastertimeout` (1000 ms); `sb_liveupdate` (2 s; 0 off) asks the
 //   selected server again once the refresh is done; `sb_autoupdate` 0 keeps the last list when the
@@ -55,15 +51,18 @@
 // ge:keywords sb_showaddress sb_showping sb_showgamedir sb_showmap sb_showplayers sb_showfraglimit
 // ge:keywords sb_showtimelimit sb_sortservers sb_inforetries sb_infotimeout sb_infospersec
 // ge:keywords sb_masterretries sb_mastertimeout sb_liveupdate sb_autohide sb_autoupdate columns
+// ge:keywords sb_findroutes sb_showproxies sb_ignore_proxy connectbr observebr cl_proxyaddr routes
 // ge:skill ui net
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "forward/routes.hpp"
 #include "net/server_list.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
@@ -79,7 +78,7 @@ namespace shooters_edge::menu {
 
 enum class ServersAction : uint8_t { none, leave, join };
 
-class ServersPage {
+class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by subject
  public:
   ServersPage() = default;
   ServersPage(const ServersPage&) = delete;
@@ -91,6 +90,21 @@ class ServersPage {
   void add_cvars(ge::console::Console& con);
   void set_query(const ge::net::ServerQuery& q) { query_ = q; }
   bool has_query() const { return query_.status != nullptr; }
+  // The game's forwarders' protocol (forward/routes.hpp), for `sb_findroutes`.
+  void set_routes(const ge::forward::RouteQuery& q) { route_query_ = q; }
+  // A transport of the caller's for the forwarders' asks (a lab's), in place of a socket of its
+  // own.
+  void use_route_transport(ge::net::Transport* t) { route_borrowed_ = t; }
+  // The best route found to the list's entry `index` (found false: none, or routes off).
+  ge::forward::Route route_to(int index) const;
+  bool routes_ready() const { return routes_ready_; }
+  bool finds_routes() const { return find_routes_; }
+  // `connectbr` and `observebr`, and a join from the page with `sb_findroutes`: through the best
+  // route to `address` (cl_proxyaddr set to its forwarders), said on the console.
+  void connect_by_route(ge::console::Console& c, const std::string& address, bool observe);
+  // The player's folder for the game: `sb_listcache` and `sb_mastercache` keep their files in
+  // its sb/ ("" none kept).
+  void set_cache_dir(std::filesystem::path dir) { cache_dir_ = std::move(dir); }
   // The masters the loaded install lists (host:port), asked beside `sb_masters`.
   void set_masters(std::vector<std::string> masters) { install_masters_ = std::move(masters); }
   // A transport of the caller's (a lab's, on the simulated network) in place of the page's socket.
@@ -138,6 +152,14 @@ class ServersPage {
   bool sorted_by(ge::net::ServerColumn c) const;
   int effective_ping() const;  // sb_maxping, or sb_pinglimit when sb_hidehighping is lower
   void read_settings();  // the sort's codes and the info filter's words, when their text changed
+  void route_frame();
+  bool read_list_cache();  // sb_listcache's file into the list; false: none read
+  void add_cached();       // the masters' kept lists, asked beside them
+  void write_caches();     // once a refresh is done: sb_listcache's file, sb_mastercache's
+  std::filesystem::path master_cache_path(const ge::net::Address& master) const;
+  bool proxy_row(const ge::net::ServerInfo& info) const;
+  std::string route_words(int index) const;
+  std::string ping_words(int index, int ping_ms) const;
   void set_cvar(std::string_view name, const std::string& value);
   int hit(float x, float y) const;
 
@@ -145,6 +167,12 @@ class ServersPage {
   std::vector<std::string> install_masters_;
   ge::net::Transport own_;
   ge::net::Transport* borrowed_ = nullptr;
+  ge::forward::RouteQuery route_query_;
+  ge::net::Transport route_own_;
+  ge::net::Transport* route_borrowed_ = nullptr;
+  ge::forward::RouteFinder finder_;
+  ge::forward::RouteTable table_;
+  bool routing_ = false, routes_ready_ = false;
   ge::net::ServerList list_;
   ge::net::ServerListConfig config_;
   bool inited_ = false;
@@ -184,6 +212,13 @@ class ServersPage {
   float live_update_ = 2;                                               // sb_liveupdate, s
   int32_t autohide_ = 1;                                                // sb_autohide
   bool autoupdate_ = true;                                              // sb_autoupdate
+  bool find_routes_ = false;                                            // sb_findroutes
+  std::filesystem::path cache_dir_;
+  bool list_cache_ = false, master_cache_ = true;  // sb_listcache, sb_mastercache
+  bool cache_written_ = false;                     // this refresh's caches written
+  int32_t show_proxies_ = 1;                       // sb_showproxies
+  std::string ignore_proxy_;                       // sb_ignore_proxy
+  int32_t prox_per_s_ = 10, prox_retries_ = 3, prox_timeout_ = 1000;  // sb_prox*
   ge::console::Console* con_ = nullptr;  // the filter keys set the cvars through it
   ge::net::ServerFilter filter_;
   int hidden_ = 0;

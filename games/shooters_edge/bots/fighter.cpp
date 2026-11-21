@@ -762,7 +762,8 @@ void think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& s
           escaping = true;
         }
       }
-      if (!escaping && !was_diving && (pool || sb::nav_nearest(g, self.origin) < 0)) {
+      if (!escaping && !was_diving &&
+          ((pool && (f.dry_pockets || swim)) || sb::nav_nearest(g, self.origin) < 0)) {
         f.lost++;
         // The nearest few by distance; the first of them in a clear line is walked or swum at (out
         // of a pocket with water: the nearest nodes over water).

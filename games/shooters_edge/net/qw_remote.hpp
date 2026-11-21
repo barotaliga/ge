@@ -211,6 +211,13 @@ struct Remote {
                      const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
   bool kept = false;
+  // A screenshot the server asked for (qw_client.hpp `ClientUpload`): the window's frame grabbed
+  // in memory, scaled and packed (`snap_grab(width, height, quality)`, false when it can't) and
+  // handed back later (`snap_take`). Unset: the server is told no, as with scr_allowsnap 0.
+  std::function<bool(int width, int height, int quality)> snap_grab;
+  std::function<bool(std::vector<uint8_t>& out)> snap_take;
+  bool snap_grabbing = false;
+  bool allow_snap = true;  // scr_allowsnap
   gn::Address server;
   bool active = false;
   bool left = false;  // a server was left (dropped or let go) since the window last took this

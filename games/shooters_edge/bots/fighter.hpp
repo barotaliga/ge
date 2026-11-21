@@ -512,6 +512,10 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // The map's wet nodes (map_nav.hpp `wet`): a fight's place to stand or a foe's spot in the water
   // is no goal while he stands dry (a person does not wade in to fight); null none.
   const std::vector<uint8_t>* wet = nullptr;
+  // A dry pocket (a trap he stands in with no way out under water) is walked out of straight at
+  // the nearest node outside it; false: a map's plan leaves it by its doors and buttons
+  // (way_through.hpp: base2's start is such a pocket until its door opens).
+  bool dry_pockets = true;
   const ge::shooterbots::SwimField* swim =
       nullptr;          // the map's way out of its water (none: no water)
   int64_t buttons = 0;  // buttons gone to

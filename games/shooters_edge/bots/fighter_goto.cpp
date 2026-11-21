@@ -37,8 +37,9 @@ void go_to(Fighter& f, int32_t node, int32_t then, sh::Vec3f at) {
   if (node < 0) return;
   if (f.reach_at >= 0 && !f.reach.reached(node)) return;  // no way there from here
   // Never into a trap (a pit no way on foot leads back out of) from outside it: a fight's place
-  // to stand or a foe's last spot down there would drop him in for good.
-  if (f.trap && static_cast<size_t>(node) < f.trap->size() &&
+  // to stand or a foe's last spot down there would drop him in for good. The way through the map
+  // keeps its goal: an exit is often one (base1's, down a lift's shaft).
+  if (f.trap && node != f.objective && static_cast<size_t>(node) < f.trap->size() &&
       (*f.trap)[static_cast<size_t>(node)]) {
     const int32_t here = f.reach_from;  // the node his reach was worked out from: where he stands
     if (here < 0 || static_cast<size_t>(here) >= f.trap->size() ||

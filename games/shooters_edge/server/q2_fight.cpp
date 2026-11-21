@@ -748,10 +748,22 @@ void launch(Q2Server& s, int slot, SqShot kind, sh::Vec3f origin, sh::Vec3f star
       const RocketBlow blow(s, *m);
       hurt(s, reach.player, slot, ax.forward, m->damage, 1, false, weapon);
     }
+    // A monster closer than the muzzle (pressed against the player) takes the blow as one a
+    // flying shot meets: a blaster fired into a soldier at arm's length hurt it not at all; a
+    // pane or a button the bolt meets there takes its blow too (base2's pane under water, shot
+    // from against it for a minute).
+    const bool monster = reach.player < 0 && reach.mover >= 0 && monster_index(s, reach.mover) >= 0;
+    if (monster && !grenade(kind)) {
+      monster_damage(s, reach.mover, monster_hurt_by(slot, m->from), m->damage, m->velocity, false,
+                     &reach.end);
+      monster_noise(s, slot, reach.end, true);
+    } else if (kind == SqShot::bolt && reach.player < 0 && reach.mover >= 0) {
+      map_damage(s, reach.mover, slot, m->damage);  // a pane or a button he stands against
+    }
     if (kind == SqShot::bolt)
       m->live = false;
     else if (!grenade(kind))
-      explode(s, *m, m->origin, reach.player);
+      explode(s, *m, m->origin, reach.player, monster ? reach.mover : -1);
     return;
   }
   if (!grenade(kind)) offer_dodge(s, slot, start, ax.forward, sh::length(m->velocity));
