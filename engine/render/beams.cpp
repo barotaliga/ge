@@ -143,7 +143,7 @@ void bind_beam_targets(gpu::Device& device, Beams& beams, const FrameTargets& ta
 }
 
 void stage_beams(Beams& beams, std::span<const BeamDraw> draws, std::span<const BurnVertex> burns,
-                 const FrameView& view, float hot_ember_cd) {
+                 const FrameView& view, float hot_ember_cd, float paint_mirror) {
   GpuBeamParams& p = beams.staged;
   p = GpuBeamParams{};
   beams.dropped = 0;
@@ -209,6 +209,11 @@ void stage_beams(Beams& beams, std::span<const BeamDraw> draws, std::span<const 
     o.more[1] = b.up[0];
     o.more[2] = b.up[1];
     o.more[3] = b.glow_keys;
+    if (b.paint > 0) {  // paint has no ember, relief, up nor keys: its spread, normal and gloss
+      o.uv[3] = b.spread;
+      for (int k = 0; k < 3; ++k) o.more[k] = b.normal[k];
+      o.more[3] = b.gloss;
+    }
     for (int k = 0; k < 3; ++k) o.lit[k] = b.light[k];
     o.lit[3] = b.paint;
   }
@@ -221,11 +226,13 @@ void stage_beams(Beams& beams, std::span<const BeamDraw> draws, std::span<const 
   p.info[3] = static_cast<float>(std::fmod(view.time_s, 1000.0));
   p.more[0] = static_cast<float>(view.near_m);
   p.more[1] = hot_ember_cd;
+  p.more[2] = std::max(paint_mirror, 0.0f);
 }
 
 void prepare_beams(gpu::Device& device, Beams& beams, std::span<const BeamDraw> draws,
-                   std::span<const BurnVertex> burns, const FrameView& view, float hot_ember_cd) {
-  stage_beams(beams, draws, burns, view, hot_ember_cd);
+                   std::span<const BurnVertex> burns, const FrameView& view, float hot_ember_cd,
+                   float paint_mirror) {
+  stage_beams(beams, draws, burns, view, hot_ember_cd, paint_mirror);
   device.queue.WriteBuffer(beams.params, 0, &beams.staged, sizeof beams.staged);
   if (beams.seg_count > 0) {
     device.queue.WriteBuffer(beams.segs, 0, beams.seg_staging.data(),

@@ -676,6 +676,14 @@ frame a list of `MorphDraw`s.
   the same warp along an axis of the held frame, so a spawn assembles the gun in the hands.
   Shooter's Edge times it at 0.7 s arriving and 0.8 s leaving
   (`games/shooters_edge/client/warps.hpp`).
+- **The blood** (`MorphBlood`): up to `kMorphWounds` (6) wounds a draw, each a soaked patch round
+  where it struck and blood run down from it: a main stream and a thinner one beside it, wandering,
+  narrowing and ending in a bead at `run`. A wound sits in the model's REST frame (its frame 0,
+  times the draw's scale), which the vertex stage passes beside the posed point, so the stain stays
+  on the same cloth however the frames move the limbs; down is the rest frame's -y. The stain's
+  colour goes from a wet near-black red to a dried brown-black by `wet`. The CPU twin is
+  `wound_cover`. A game moves the patch out, the run down and the wet toward dry over time
+  (Shooter's Edge: `client/world_fx.cpp`'s `body_blood`). No wound: the shader skips it.
 - The draws go into the HDR and motion targets after the opaque world. Depth is tested and
   written (reversed z) and back faces are culled.
 
@@ -1894,6 +1902,12 @@ colour along its reflected ray and the share that colour counts for.
   only within a step and a half behind what the last frame drew, so a beam in front of a wall is
   not mirrored as the wall. Walls do not reflect: at a graze they mirrored the corridor beside them
   as a ghost copy.
+- **Wet blood on a floor** (`ce_blood`, the beams pass's paint, `render/marks.hpp`): a pool or a
+  splash on a face turned up past 0.7 mirrors the kept scene by its gloss (0.95 wet in a pool,
+  down to a faint sheen once dried), Fresnel (25 % head on, a wet film's sheen, so a pool seen from
+  where a player stands reads as wet) and `ce_blood_reflect` (1 the default),
+  blurred a little as it dries; only where the faces' reflections are on (`ce_reflections`), since
+  only then is the scene kept.
 
 Not yet: metal and slime in other games' materials (the helper is theirs to call), and a mirror for
 what the picture does not hold (a probe).
