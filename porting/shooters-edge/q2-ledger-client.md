@@ -18,7 +18,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Temporary entities (svc_temp_entity) | 2 | 49 | 14 | 0 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 18 | 0 | 2 | 0 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 1 | 0 | 0 | 33 |
-| Entity effect bits (EF_) | 15 | 1 | 17 | 0 | 33 |
+| Entity effect bits (EF_) | 19 | 1 | 13 | 0 | 33 |
 | Entity render bits (RF_) and view bits (RDF_) | 8 | 5 | 19 | 0 | 32 |
 | Configstrings | 7 | 5 | 4 | 0 | 16 |
 | The layout language (status bar and layouts) | 20 | 2 | 5 | 0 | 27 |
@@ -948,7 +948,7 @@ A monster fired: the client places a light at the gun (the monster's per-flash o
 
 ## Entity effect bits (EF_)
 
-done 15, partial 1, missing 17, not-taken 0
+done 19, partial 1, missing 13, not-taken 0
 
 Bits of an entity's effects field a server sends; the client draws trails, lights, shells and frame cycles from them. Ours: `games/shooters_edge/client/q2_look.hpp` reads them for Quake II's entities.
 
@@ -964,10 +964,10 @@ Bits of an entity's effects field a server sends; the client draws trails, light
 | ef.bfg | `EF_BFG` (128) | the BFG ball: green light and particles, drawn at 0.3 | done | `games/shooters_edge/client/q2_look.hpp` |
 | ef.color_shell | `EF_COLOR_SHELL` (256) | a colour shell by the render bits | done | `games/shooters_edge/client/q2_look.hpp` |
 | ef.powerscreen | `EF_POWERSCREEN` (512) | the power screen's plate drawn as a green shell before the bearer | done | `games/shooters_edge/client/q2_look.hpp` |
-| ef.anim01 | `EF_ANIM01` (1024) | cycles frames 0 and 1 at 2 a second | missing | the client cycles no frames from these bits (not found) |
-| ef.anim23 | `EF_ANIM23` (2048) | cycles frames 2 and 3 at 2 a second | missing | not found |
-| ef.anim_all | `EF_ANIM_ALL` (4096) | cycles every frame at 2 a second | missing | not found |
-| ef.anim_allfast | `EF_ANIM_ALLFAST` (8192) | cycles every frame at 10 a second | missing | not found |
+| ef.anim01 | `EF_ANIM01` (1024) | cycles frames 0 and 1 at 2 a second | done | `games/shooters_edge/client/q2_look.cpp` (`q2_texture_frame`), `client/world_models.cpp` (brush textures, models and sprites), `client/demo_video.cpp` |
+| ef.anim23 | `EF_ANIM23` (2048) | cycles frames 2 and 3 at 2 a second | done | `games/shooters_edge/client/q2_look.cpp` (`q2_texture_frame`), `client/world_models.cpp` (brush textures, models and sprites), `client/demo_video.cpp` |
+| ef.anim_all | `EF_ANIM_ALL` (4096) | cycles every frame at 2 a second | done | `games/shooters_edge/client/q2_look.cpp` (`q2_texture_frame`), `client/world_models.cpp` (brush textures, models and sprites), `client/demo_video.cpp` |
+| ef.anim_allfast | `EF_ANIM_ALLFAST` (8192) | cycles every frame at 10 a second | done | `games/shooters_edge/client/q2_look.cpp` (`q2_texture_frame`), `client/world_models.cpp` (brush textures, models and sprites), `client/demo_video.cpp` |
 | ef.flies | `EF_FLIES` (16384) | flies swarm round it (a corpse) | done | `games/shooters_edge/client/q2_look.hpp` |
 | ef.quad | `EF_QUAD` (32768) | blue shell and blue light | done | `games/shooters_edge/client/q2_look.hpp` |
 | ef.pent | `EF_PENT` (65536) | red shell and red light | done | `games/shooters_edge/client/q2_look.hpp` |

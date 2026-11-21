@@ -77,6 +77,7 @@ using sp::info_pairs;
 using sp::info_public;
 using sp::info_remove;
 using sp::info_set;
+using sp::info_strict;
 using sp::info_valid;
 using sp::kInfoKeyBytes;
 using sp::kInfoMaxKeys;

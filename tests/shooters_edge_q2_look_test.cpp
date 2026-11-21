@@ -136,4 +136,19 @@ TEST(flies_and_a_power_screens_plate_by_their_bits) {
   CHECK(both.shell_rgb[1] == 0 && both.shell_rgb[2] == 1);
 }
 
+TEST(the_animation_bits_cycle_frames_on_the_shared_clock) {
+  // ANIM01: frames 0 and 1 by the half second; ANIM23: 2 and 3; ANIM_ALL: one more each half
+  // second; ANIM_ALLFAST: ten a second; none: the entity's own frame.
+  CHECK(cl::q2_texture_frame(0x400, 7, 0.0) == 0);
+  CHECK(cl::q2_texture_frame(0x400, 7, 0.5) == 1);
+  CHECK(cl::q2_texture_frame(0x400, 7, 1.0) == 0);
+  CHECK(cl::q2_texture_frame(0x800, 7, 0.25) == 2);
+  CHECK(cl::q2_texture_frame(0x800, 7, 0.75) == 3);
+  CHECK(cl::q2_texture_frame(0x1000, 7, 1.6) == 3);
+  CHECK(cl::q2_texture_frame(0x2000, 7, 1.25) == 12);
+  CHECK(cl::q2_texture_frame(0, 7, 1.25) == 7);
+  // The first bit wins: ANIM01 over ANIM_ALLFAST.
+  CHECK(cl::q2_texture_frame(0x2400, 7, 1.25) == 0);
+}
+
 }  // namespace

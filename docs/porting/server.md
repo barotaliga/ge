@@ -15,6 +15,8 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 | Engine | `engine/server/admission.hpp` | `sv_iplimit` and VIP slots (`sv_vipslots`, `sv_vippassword`) |
 | Engine | `engine/server/idle.hpp`, `names.hpp`, `skew.hpp` | Idle seats dropped (`sv_idletime`), renames limited (`sv_namelimit`, `sv_shownames`), clocks running fast (`sv_speedwarn`, `sv_speedkick`) |
 | Engine | `engine/server/admin.hpp`, `bans.hpp`, `guards.hpp`, `chat.hpp`, `feature.hpp` | Status, kick, bans in a file, rcon, the log; the chat flood rule; the chat route with spectators; the feature seam |
+| Engine | `engine/server/operator.hpp` | The operator's words any endpoint mounts: a player picked by slot, name or a part of it (`sv_partialnames`), a line's raw rest (`stuff`, `stuffall`, `printall`), the connect and begin stuff lists |
+| Classic | `plugins/classic/protocol/info.hpp`, `masters.hpp` | The strict user info rule (`info_strict`); the masters and `listmasters` |
 | Engine | `engine/server/match.hpp`, `overtime.hpp`, `timeout.hpp`, `vote.hpp`, `aids.hpp`, `homemap.hpp` | The lobby and the match's phases, overtime, timeouts, votes, player aids granted, the home map |
 | Engine | `engine/server/record.hpp`, `autorecord.hpp`, `playback.hpp`, `spectators.hpp` | Every match recorded, played back, watched on the server's own TV node |
 | Engine | `engine/server/login.hpp`, `accounts.hpp` | Logins against the server's own service or its master (`online.md`) |
@@ -31,7 +33,9 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 | --- | --- | --- | --- |
 | The `ServerGame` | `net/qw_game.hpp` | `net/q2_game.hpp` | `net/<game>_game.hpp` |
 | The endpoint | `net/qw_server.hpp`, its own settings `net/qw_endpoint_cfg.hpp` | `net/q2_net_server.hpp` | its own |
-| Admin words | `net/qw_admin.hpp` | `net/q2_admin.hpp` | its own |
+| Admin words | `net/qw_admin.hpp` | `net/q2_admin.hpp`: the modern server's `status` and its letters, kick, kickban, dumpuser, stuff, stuffcvar, printall, killserver, pickclient; `dumpents` and `listmasters` in `net/q2_game.cpp` | its own, over `engine/server/operator.hpp` |
+| A player's queries | (the mod's) | `info`, `sinfo`, `lag`, `packetdup`, `stopdl`, `nogamedata` in `net/q2_net_server.cpp` | its own |
+| Connect checks | the endpoint's | the strict user info, a name to show, the name cut to 15, the version probe, the forced reconnect (`sv_forcereconnect`) | its own |
 | Logins | `net/qw_login.hpp` | `net/q2_login.hpp` | its own |
 | Match rules | `net/qw_match_rules.hpp` (overtime over the mod's clock, prewar, the lock) | the engine's rules over its runner | the engine's |
 | Its own server settings | the endpoint's table | its move feel (`sv_landjump`, `sv_waterjump`), powerup drops, the biosuit | its own |
@@ -74,10 +78,17 @@ spectator slots and team locks in Quake. The classic masters (`setmaster`, `hear
 shutdown) are one model for both games in `plugins/classic/protocol/masters.hpp`, each game's
 server sending its own form; Quake II's `public` setting is still to come (its ledger).
 
+Quake II's ledger (`porting/shooters-edge/q2-ledger-server.md`) is the checklist; the facts of the
+operator's words, the player's queries and the connect checks are in
+`porting/shooters-edge/q2-operator.md`. Still to come there: `quit` and `recycle` with the lines
+players read (over the dedicated process's `quit`), the extended protocols 35 and 36, the game
+library's extended interface, the multi-view recorder's words and its relay protocol.
+
 ## Labs and tests
 
 `se-server`, `se-dedicated`, `se-dedicated-lobby`, `se-admin`, `se-cheats`, `se-login`,
-`match-report`, `server-core`; `tests/shooters_edge_q2_server_test.cpp`.
+`match-report`, `server-core`; `tests/shooters_edge_q2_server_test.cpp`,
+`tests/shooters_edge_q2_admin_test.cpp`, `tests/server_operator_test.cpp`.
 
 ## Lessons
 
@@ -97,6 +108,10 @@ server sending its own form; Quake II's `public` setting is still to come (its l
 - A map's entities live twice once it is read: as text and parsed. Our Quake II rules spawn from
   the parsed list, a hosted game library from the text; an override replaces both, and a test
   that seats a player (not a frame's hash with nobody in it) is what shows the rules took it.
+- A version probe stuffed before the first `new`'s server data makes a recording of that client
+  open with a stuffed line, and the demo readers refuse it: send probes after the server data.
+- A client's string command waits for the acknowledgement of its last one; while the server
+  sends only reliable data (`nogamedata`), that is up to a second away.
 - A game that answers its own clients (`ServerGame::serve`) gets none of the session's features, so
   wire `ServerGame::console` and `console_lines` from the start: without them the dedicated
   server's terminal can neither run the game's admin words nor show what the game printed.

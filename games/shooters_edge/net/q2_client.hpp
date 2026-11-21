@@ -144,6 +144,8 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   // A server that sent it elsewhere (a stuffed `connect <address>`, the server's `sv_redirect`):
   // the address it connects to next tick, and how many times it was sent on (at most 3).
   std::string sent_on;
+  // Settings the server stuffed with `set` (a forced reconnect's), read before the client's own.
+  std::map<std::string, std::string> stuffed_set;
   int redirects = 0;
   int32_t challenge = 0;
   Channel ch;

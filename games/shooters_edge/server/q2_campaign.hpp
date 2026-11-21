@@ -26,6 +26,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 namespace shooters_edge::server {
 
@@ -46,8 +47,17 @@ LevelString level_string(const std::string& text);
 void campaign_start(Q2Server& s);
 // Co-op's spots repaired as the map starts: renamed after their start on the maps that misname
 // them, and the three the security level lacks added.
+// Whether two names are the same, ignoring case (maps, starts, classnames).
+bool q2_same_name(std::string_view a, std::string_view b);
+
 void campaign_coop_spots(Q2Server& s);
 // The spot player `slot` comes in at outside deathmatch; null when the map has none.
+// Eight maps whose starts all carry names get an unnamed copy (its place and yaw) of the start a
+// game entering the map from the console should use: mine1 of `mintro`, mine2 of `mine1`, mine3
+// of `mine2a`, mine4 of `mine3`, power2 of `power1`, waste1 of `power2`, waste2 of `waste1`,
+// city2 of `city2NL`; in every mode.
+void campaign_unnamed_starts(Q2Server& s);
+
 const Q2Entity* campaign_spot(const Q2Server& s, int slot);
 // Player `slot` was just put in the world (`respawn` after a death): the body he carries.
 void campaign_body(Q2Server& s, int slot, bool respawn);

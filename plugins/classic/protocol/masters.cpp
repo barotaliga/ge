@@ -6,6 +6,8 @@
 // ge:test tests/classic_masters_test.cpp
 #include "classic/protocol/masters.hpp"
 
+#include <cstdio>
+
 #include "net/udp_socket.hpp"
 
 namespace ge::classic::protocol {
@@ -48,6 +50,8 @@ void masters_start(Masters& m, MasterFamily family, double now_s) {
 void set_masters(Masters& m, const std::vector<std::string>& args, const MasterResolve& resolve,
                  std::vector<std::string>& said, std::vector<MasterSend>& out) {
   m.list.clear();
+  m.names.clear();
+  m.heard_s.clear();
   if (m.family == MasterFamily::qw) {
     for (const std::string& a : args) {
       net::Address to;
@@ -75,6 +79,8 @@ void set_masters(Masters& m, const std::vector<std::string>& args, const MasterR
       continue;
     }
     m.list.push_back(to);
+    m.names.push_back(a);
+    m.heard_s.push_back(-1);
     said.push_back("Master server at " + net::to_string(to) + ".");
   }
   m.is_public = true;
@@ -82,6 +88,30 @@ void set_masters(Masters& m, const std::vector<std::string>& args, const MasterR
 }
 
 void force_heartbeat(Masters& m) { m.now = true; }
+
+void masters_heard(Masters& m, const net::Address& from, double now_s) {
+  for (size_t i = 0; i < m.list.size() && i < m.heard_s.size(); i++)
+    if (m.list[i] == from) m.heard_s[i] = now_s;
+}
+
+std::string masters_list_text(const Masters& m, double now_s, bool running) {
+  if (m.list.empty()) return "There are no masters.\n";
+  std::string t = "num hostname              lastmsg address\n";
+  t += "--- --------------------- ------- ---------------------\n";
+  char row[160];
+  for (size_t i = 0; i < m.list.size(); i++) {
+    const double heard = i < m.heard_s.size() ? m.heard_s[i] : -1;
+    const std::string last = !running ? "down"
+                             : heard < 0
+                                 ? "never"
+                                 : std::to_string(static_cast<int64_t>((now_s - heard) * 1000));
+    const std::string name = i < m.names.size() ? m.names[i] : net::to_string(m.list[i]);
+    std::snprintf(row, sizeof row, "%3d %-21.21s %7s %-21s\n", static_cast<int>(i + 1),
+                  name.c_str(), last.c_str(), net::to_string(m.list[i]).c_str());
+    t += row;
+  }
+  return t;
+}
 
 void masters_frame(Masters& m, double now_s, int clients, const std::string& status, bool dedicated,
                    std::vector<MasterSend>& out, std::vector<std::string>& said) {

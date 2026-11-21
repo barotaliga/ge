@@ -20,7 +20,7 @@
 //
 // ge:summary Classic master lists and heartbeats: setmaster, heartbeat, shutdown, for qw and q2
 // ge:keywords setmaster heartbeat master-server masters shutdown public classic-master
-// ge:keywords qw-heartbeat q2-heartbeat nomaster
+// ge:keywords qw-heartbeat q2-heartbeat nomaster listmasters masters_list_text
 // ge:skill classic net
 // ge:test tests/classic_masters_test.cpp
 #pragma once
@@ -51,6 +51,8 @@ struct MasterSend {
 struct Masters {
   MasterFamily family = MasterFamily::qw;
   std::vector<net::Address> list;  // at most kMostMasters
+  std::vector<std::string> names;  // each as `setmaster` was given it (Quake II's)
+  std::vector<double> heard_s;     // when each last acknowledged a heartbeat (-1: never)
   int64_t sequence = 0;            // Quake's heartbeats so far (its number in the next is + 1)
   double last_s = -1e9;            // when the last heartbeat (round) started
   bool now = false;                // a heartbeat (round) asked for at the next frame
@@ -58,6 +60,13 @@ struct Masters {
   size_t round_next = 0;           // Quake II: the next master of the round under way
   bool in_round = false;
 };
+
+// A master's acknowledgement (`ack`) from `from`: its time kept for `listmasters`.
+void masters_heard(Masters& m, const net::Address& from, double now_s);
+// `listmasters` (Quake II): `There are no masters.`, or a row a master: its number from 1, the
+// name as given (21 columns), the milliseconds since its last acknowledgement (`never`, or `down`
+// when the server is not running) and its address.
+std::string masters_list_text(const Masters& m, double now_s, bool running);
 
 // "host[:port]" resolved, the port `port` when it names none; false when it does not resolve.
 using MasterResolve = std::function<bool(std::string_view text, uint16_t port, net::Address& out)>;

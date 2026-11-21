@@ -4,7 +4,10 @@
 // life while a scorch keeps; masks are empty outside their circle; an overfull decal keeps its
 // nearest triangles within the slot; and placements keep their bits in
 // tests/golden/detail_decals.txt. A burn line runs the length of its long box, thinned at its
-// ends; a melt pressed again grows in its own slot; both glow and cool to black.
+// ends; a melt pressed again grows in its own slot; both glow and cool to black. Blood is dark
+// and darkens as it dries; a life of its own (a game's setting) shortens its drying and fading or
+// keeps it; a pool spreads from its middle out and a drip runs down from its blot, a pool pressed
+// again larger spreading on from its old edge.
 //
 // ge:summary Test: decals clipped across surfaces, the pool, ageing, masks; golden
 // ge:keywords test detail decal clip pool age blood scorch mask golden
@@ -119,6 +122,119 @@ TEST(blood_dries_fades_and_is_freed) {
   CHECK(gd::live_count(pool) == 1 && pool.decals[1].live);
 }
 
+TEST(a_boot_print_has_a_ball_and_a_heel_mirrored_for_the_other_foot_and_fades_by_strength) {
+  CHECK(gd::is_blood(gd::DecalKind::blood_print));
+  // Blood under the ball and the heel, little at the arch between them, none off the sole.
+  double ball = 0, heel = 0, arch = 0, side = 0;
+  for (int i = 0; i < 16; ++i) {
+    const double x = 0.47 + i / 300.0;
+    ball += gd::mask_at(gd::DecalKind::blood_print, 0, x, 0.37).cover;
+    heel += gd::mask_at(gd::DecalKind::blood_print, 0, x, 0.79).cover;
+    arch += gd::mask_at(gd::DecalKind::blood_print, 0, x, 0.635).cover;
+    side += gd::mask_at(gd::DecalKind::blood_print, 0, 0.1 + i / 300.0, 0.4).cover;
+  }
+  CHECK(ball > 4 && heel > 4 && arch < ball / 4 && side == 0);
+  // The right foot is the left one mirrored: its ball's blood leans the other way.
+  const auto lean = [](uint32_t var) {
+    double sum = 0, at = 0;
+    for (int i = 0; i < 64; ++i)
+      for (int j = 0; j < 32; ++j) {
+        const double u = i / 64.0, v = 0.15 + j / 80.0;
+        const double c = gd::mask_at(gd::DecalKind::blood_print, var, u, v).cover;
+        sum += c;
+        at += c * (u - 0.5);
+      }
+    return at / sum;
+  };
+  CHECK(lean(0) * lean(1) < 0);
+  // A print a few steps out of the pool: as dark, fainter.
+  gd::Decal d;
+  d.kind = gd::DecalKind::blood_print;
+  d.strength = 0.5;
+  const gd::DecalLook whole = gd::look_at(gd::DecalKind::blood_print, 1);
+  const gd::DecalLook faint = gd::look_of(d, 1);
+  CHECK(faint.r == whole.r && faint.opacity == 0.5 * whole.opacity);
+}
+
+TEST(blood_is_dark_darkens_and_lives_as_long_as_it_is_told) {
+  for (const gd::DecalKind k : {gd::DecalKind::blood, gd::DecalKind::blood_pool,
+                                gd::DecalKind::blood_drip, gd::DecalKind::blood_print}) {
+    CHECK(gd::is_blood(k));
+    const gd::DecalLook fresh = gd::look_at(k, 0), later = gd::look_at(k, 10),
+                        dried = gd::look_at(k, gd::decal_spec(k).dry_s);
+    // A dark red when wet, near black once dried; darker and duller as it goes.
+    CHECK(fresh.r < 0.2 && fresh.r > 10 * fresh.g);
+    CHECK(dried.r < 0.05 && dried.r < later.r && later.r < fresh.r);
+    CHECK(dried.gloss < later.gloss && later.gloss < fresh.gloss);
+    // Its own life: 20 s dries it by 12 s and fades it out at 20; < 0 keeps it.
+    CHECK(gd::look_at(k, 12, 0, 20).r == dried.r);
+    CHECK(gd::look_at(k, 15, 0, 20).opacity < fresh.opacity);
+    CHECK(gd::look_at(k, 20, 0, 20).opacity == 0);
+    CHECK(gd::look_at(k, 1e5, 0, -1).opacity == fresh.opacity);
+  }
+  CHECK(!gd::is_blood(gd::DecalKind::scorch) && !gd::is_blood(gd::DecalKind::melt));
+  // A pool is darker and glossier than a splash.
+  CHECK(gd::look_at(gd::DecalKind::blood_pool, 0).r < gd::look_at(gd::DecalKind::blood, 0).r);
+  CHECK(gd::look_at(gd::DecalKind::blood_pool, 0).gloss >
+        gd::look_at(gd::DecalKind::blood, 0).gloss);
+  // A pool spreads and a drip runs, slowing, then stay; a splash is all there at once.
+  for (const gd::DecalKind k : {gd::DecalKind::blood_pool, gd::DecalKind::blood_drip}) {
+    const double a = gd::look_at(k, 0.5).spread, b = gd::look_at(k, 1.0).spread;
+    CHECK(gd::look_at(k, 0).spread == 0 && a > 0 && b > a && b - a < a);
+    CHECK(gd::look_at(k, 30).spread == 1);
+    CHECK(gd::look_at(k, 0, 0, 0, 0.6).spread == 0.6);  // pressed again: on from where it was
+  }
+  CHECK(gd::look_at(gd::DecalKind::blood, 0).spread == 1);
+  // The pool's blood reaches its middle first and its edge last; the drip's blot at once, its runs
+  // later the further down.
+  const gd::MaskSample mid = gd::mask_at(gd::DecalKind::blood_pool, 0, 0.5, 0.5);
+  CHECK(mid.cover == 1 && mid.arrive < 0.05);
+  double edge_arrive = 0;
+  for (int i = 0; i < 64; ++i) {
+    const gd::MaskSample s = gd::mask_at(gd::DecalKind::blood_pool, 0, 0.5 + i / 160.0, 0.5);
+    if (s.cover > 0.5) edge_arrive = std::max(edge_arrive, s.arrive);
+  }
+  CHECK(edge_arrive > 0.6);
+  CHECK(gd::mask_at(gd::DecalKind::blood_drip, 1, gd::kDripBlotU, 0.5).cover == 1);
+  CHECK(gd::mask_at(gd::DecalKind::blood_drip, 1, gd::kDripBlotU, 0.5).arrive == 0);
+  double low_arrive = 0, low_cover = 0;
+  for (int i = 0; i < 64; ++i)
+    for (int j = 0; j < 64; ++j) {
+      const gd::MaskSample s =
+          gd::mask_at(gd::DecalKind::blood_drip, 1, 0.4 + 0.6 * i / 64.0, j / 64.0);
+      low_cover += s.cover;
+      if (s.cover > 0.5) low_arrive = std::max(low_arrive, s.arrive);
+    }
+  CHECK(low_cover > 10 && low_arrive > 0.3);
+  // A decal's own life frees it then; < 0 never.
+  const gd::TriMesh m = hall_mesh();
+  const gd::Receivers r = gd::bin_receivers(m);
+  gd::DecalPool pool = gd::make_pool(4);
+  gd::DecalAt d;
+  d.at = {1, 0, 3};
+  d.size_m = 0.6;
+  d.kind = gd::DecalKind::blood_pool;
+  d.life_s = 5;
+  const int a = gd::place_decal(pool, r, d);
+  d.at = {-1, 0, 3};
+  d.life_s = -1;
+  gd::place_decal(pool, r, d);
+  gd::expire(pool, 4.9);
+  CHECK(gd::live_count(pool) == 2);
+  gd::expire(pool, 1e6);
+  CHECK(gd::live_count(pool) == 1 && !pool.decals[static_cast<size_t>(a)].live);
+  // Pressed again larger in its own slot, it keeps its turn and spreads on from its old edge.
+  gd::DecalAt again = d;
+  again.size_m = 0.9;
+  again.slot = 1;
+  again.serial = pool.decals[1].serial;
+  again.spread_from = 0.6 / 0.9;
+  again.spin_rad = 0.4;
+  CHECK(gd::place_decal(pool, r, again) == 1);
+  CHECK(pool.decals[1].size_m == 0.9 && pool.decals[1].spread_from == again.spread_from);
+  CHECK(gd::look_of(pool.decals[1], pool.decals[1].born_s).spread == again.spread_from);
+}
+
 TEST(masks_cover_inside_their_circle_only) {
   for (int k = 0; k < gd::kDecalKinds; ++k) {
     const auto kind = static_cast<gd::DecalKind>(k);
@@ -128,8 +244,8 @@ TEST(masks_cover_inside_their_circle_only) {
         const double u = (i + 0.5) / 64, v = (j + 0.5) / 64;
         const gd::MaskSample s = gd::mask_at(kind, 2, u, v);
         CHECK(s.cover >= 0 && s.cover <= 1 && s.shade >= -1 && s.shade <= 1);
-        // A burn line runs the length of its box; the rest are round.
-        if (kind != gd::DecalKind::burn_line &&
+        // A burn line and a drip run the length of their boxes; the rest are round.
+        if (kind != gd::DecalKind::burn_line && kind != gd::DecalKind::blood_drip &&
             (u - 0.5) * (u - 0.5) + (v - 0.5) * (v - 0.5) >= 0.25)
           CHECK(s.cover == 0);
         inside += s.cover;

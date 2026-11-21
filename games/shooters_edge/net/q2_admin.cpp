@@ -7,6 +7,7 @@
 #include "shooters_edge/net/q2_admin.hpp"
 
 #include <algorithm>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -17,6 +18,7 @@
 #include "server/admission.hpp"
 #include "server/bans.hpp"
 #include "server/lrcon.hpp"
+#include "server/operator.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 
 namespace shooters_edge::net {
@@ -44,43 +46,112 @@ void drop_refused(Q2NetServer& s) {
 
 }  // namespace
 
-std::string q2_status_table(const Q2NetServer& s) {
-  std::string t = "map              : " + (*s.rules)->map_name + "\n";
-  t += "num score ping name            lastmsg address               qport \n";
-  t += "--- ----- ---- --------------- ------- --------------------- ------\n";
-  char row[160];
+namespace {
+
+std::string row(const char* format, ...) __attribute__((format(printf, 1, 2)));
+std::string row(const char* format, ...) {
+  char b[256];
+  va_list args;
+  va_start(args, format);
+  std::vsnprintf(b, sizeof b, format, args);  // NOLINT(clang-analyzer-valist.Uninitialized)
+  va_end(args);
+  return b;
+}
+
+// A client's ping word: ZMBI dropped, ASGN before its first `new`, DNLD sending it a file, HTTP
+// fetching from the web, CNCT signing on, else its ping (at most 9999).
+std::string ping_word(const Q2NetClient& c) {
+  if (c.stage == Q2Slot::zombie) return "ZMBI";
+  if (c.stage == Q2Slot::signon) {
+    if (!c.newed) return "ASGN";
+    if (c.downloading) return "DNLD";
+    if (c.http_download) return "HTTP";
+    return "CNCT";
+  }
+  return std::to_string(std::min(c.ping_ms, 9999));
+}
+
+std::vector<gs::PickSlot> pick_slots(const Q2NetServer& s) {
+  std::vector<gs::PickSlot> slots;
+  slots.reserve(static_cast<size_t>(q2_net_slots(s)));
+  for (int i = 0; i < q2_net_slots(s); i++)
+    slots.push_back({s.clients[i].name, q2_held(s.clients[i])});
+  return slots;
+}
+
+}  // namespace
+
+std::string q2_status_table(const Q2NetServer& s, char letter) {
+  std::string t = "Current map: " + (*s.rules)->map_name + "\n\n";
+  bool any = false;
+  for (int i = 0; i < q2_net_slots(s); i++) any = any || s.clients[i].stage != Q2Slot::free;
+  if (!any) return t + "No UDP clients.\n\n";
+  static const char* const kHead[][2] = {
+      {"num score ping name            lastmsg address                rate pr fps",
+       "--- ----- ---- --------------- ------- --------------------- ----- -- ---"},
+      {"num name            download                                 size    done",
+       "--- --------------- ---------------------------------------- ------- ----"},
+      {"num name            PLs2c PLc2s Rmin Ravg Rmax dup scale",
+       "--- --------------- ----- ----- ---- ---- ---- --- -----"},
+      {"num name            major minor msglen zlib chan",
+       "--- --------------- ----- ----- ------ ---- ----"},
+      {"num name            proto options upd fps", "--- --------------- ----- ------- --- ---"},
+      {"num name            idle time", "--- --------------- ---- --------"},
+      {"num name            version",
+       "--- --------------- -----------------------------------------"}};
+  static const char kLetters[] = " dlpstv";
+  int kind = 0;
+  for (int k = 1; k < 7; k++)
+    if (letter == kLetters[k]) kind = k;
+  t += std::string(kHead[kind][0]) + "\n" + kHead[kind][1] + "\n";
   for (int i = 0; i < q2_net_slots(s); i++) {
     const Q2NetClient& c = s.clients[i];
     if (c.stage == Q2Slot::free) continue;
-    const int frags = static_cast<int>((*s.rules)->world.clients[i].numbers.frags);
-    const std::string ping = c.stage == Q2Slot::signon   ? "CNCT"
-                             : c.stage == Q2Slot::zombie ? "ZMBI"
-                                                         : std::to_string(c.ping_ms);
-    const int last = static_cast<int>((s.now - c.heard) * 1000.0);
-    std::snprintf(row, sizeof row, "%3d %5d %4s %-15s %7d %-21s %5d\n", i, frags, ping.c_str(),
-                  c.name.c_str(), last, gn::to_string(c.address).c_str(), int(c.qport));
-    t += row;
+    const char* name = c.name.c_str();
+    switch (kind) {
+      case 0: {
+        const int frags = static_cast<int>((*s.rules)->world.clients[i].numbers.frags);
+        const int last = static_cast<int>((s.now - c.heard) * 1000.0);
+        t += row("%3d %5d %4s %-15.15s %7d %-21s %5d %2d %3d\n", i, frags, ping_word(c).c_str(),
+                 name, last, gn::to_string(c.address).c_str(), c.rate, kQ2NetProtocol, c.move_fps);
+        break;
+      }
+      case 1:
+        if (c.downloading)
+          t += row(
+              "%3d %-15.15s %-40.40s %-7d %3d%%\n", i, name, c.download_name.c_str(),
+              static_cast<int>(c.download.size()),
+              c.download.empty() ? 0 : static_cast<int>(c.download_at * 100 / c.download.size()));
+        else if (c.http_download)
+          t += row("%3d %-15.15s %-40.40s %-7d %3d%%\n", i, name, "<HTTP download>", 0, 0);
+        break;
+      case 2:
+        t += row("%3d %-15.15s %5.2f %5.2f %4d %4d %4d %3d %5.3f\n", i, name, q2_loss_down(c),
+                 q2_loss_up(c), c.rtt_min, q2_rtt_avg(c), c.rtt_max, c.packet_dup, c.scale);
+        break;
+      case 3:
+        t += row("%3d %-15.15s %5d %5d %6d  no   old\n", i, name, kQ2NetProtocol, 0, 1390);
+        break;
+      case 4:
+        t += row("%3d %-15.15s %5d %7s %3d %3d\n", i, name, kQ2NetProtocol, "", 0, 0);
+        break;
+      case 5: {
+        const int idle = std::min(
+            9999, static_cast<int>(c.stage == Q2Slot::active ? s.now - c.idle.active_at : 0));
+        t += row("%3d %-15.15s %4d %s\n", i, name, idle,
+                 q2_span_text(c.new_at < 0 ? s.now : s.now - c.new_at).c_str());
+        break;
+      }
+      default:
+        t += row("%3d %-15.15s %s\n", i, name,
+                 c.version_heard ? c.version.substr(0, 52).c_str() : "-");
+    }
   }
-  return t;
+  return t + "\n";
 }
 
 int q2_find_slot(const Q2NetServer& s, const std::string& word, std::string& error) {
-  if (!word.empty() && word[0] >= '0' && word[0] <= '9') {
-    const int n = std::atoi(word.c_str());
-    if (n < 0 || n >= q2_net_slots(s)) {
-      error = "Bad client slot: " + std::to_string(n) + "\n";
-      return -1;
-    }
-    if (!q2_held(s.clients[n])) {
-      error = "Client " + std::to_string(n) + " is not active\n";
-      return -1;
-    }
-    return n;
-  }
-  for (int i = 0; i < q2_net_slots(s); i++)
-    if (q2_held(s.clients[i]) && s.clients[i].name == word) return i;
-  error = "Userid " + word + " is not on the server\n";
-  return -1;
+  return gs::pick_player(pick_slots(s), word, s.cfg.enhanced_setplayer, error);
 }
 
 bool q2_admin(Q2NetServer& s, const std::string& line, std::string& out) {
@@ -91,13 +162,39 @@ bool q2_admin(Q2NetServer& s, const std::string& line, std::string& out) {
   // The helpers' list, in our words or the modern server's.
   static const char* const kLrconWords[3] = {"addlrconcmd", "dellrconcmd", "listlrconcmds"};
   if (gs::lrcon_command(s.cfg.lrcon, line, out, &kLrconWords)) return true;
+  if (gs::stuff_list_command(s.stuff_lists, line, out)) return true;
   if (cmd == "status") {
-    out = q2_status_table(s);
+    const char letter = w.size() > 1 && !w[1].empty() ? w[1][0] : ' ';
+    static const std::string kKnown = "dlpstv";
+    out = letter != ' ' && kKnown.find(letter) == std::string::npos
+              ? "Usage: status [d|l|p|s|t|v]\n" + q2_status_table(s, ' ')
+              : q2_status_table(s, letter);
     return true;
   }
-  if (cmd == "kick" || cmd == "dumpuser") {
+  if (cmd == "stuffall" || cmd == "printall") {
     if (w.size() < 2) {
-      out = "Usage: " + cmd + " <userid>\n";
+      out = "Usage: " + cmd + " <raw text>\n";
+      return true;
+    }
+    const std::string text = gs::line_rest(line, 1);
+    for (int i = 0; i < q2_net_slots(s); i++) {
+      if (!q2_held(s.clients[i])) continue;
+      if (cmd == "stuffall")
+        q2_net_stuff(s, i, text);
+      else
+        q2_net_print(s, i, text + "\n");
+    }
+    if (cmd == "printall") out = text + "\n";
+    return true;
+  }
+  if (cmd == "kick" || cmd == "kickban" || cmd == "dumpuser" || cmd == "stuff" ||
+      cmd == "stuffcvar") {
+    const bool more = cmd == "stuff" || cmd == "stuffcvar";
+    if (more ? w.size() < 3 : w.size() != 2) {
+      out = "Usage: " + cmd +
+            (cmd == "stuff"       ? " <userid> <raw text>\n"
+             : cmd == "stuffcvar" ? " <userid> <variable> [...]\n"
+                                  : " <userid>\n");
       return true;
     }
     std::string error;
@@ -107,24 +204,58 @@ bool q2_admin(Q2NetServer& s, const std::string& line, std::string& out) {
       return true;
     }
     Q2NetClient& c = s.clients[slot];
-    if (cmd == "dumpuser") {
-      out = "userinfo\n--------\n";
-      std::vector<std::pair<std::string, std::string>> kv;
-      ge::classic::protocol::info_pairs(c.userinfo, kv);
-      for (auto& [key, value] : kv) {
-        std::string k = key;
-        k.resize(std::max<size_t>(k.size(), 20), ' ');
-        out += k + value + "\n";
-      }
+    if (cmd == "stuff") {
+      q2_net_stuff(s, slot, gs::line_rest(line, 2));
       return true;
     }
-    const std::string name = c.name;
-    if (c.stage == Q2Slot::active)
-      for (int i = 0; i < q2_net_slots(s); i++)
-        if (i != slot && q2_held(s.clients[i])) q2_net_print(s, i, name + " was kicked\n");
-    q2_net_print(s, slot, "You were kicked from the game\n");
-    q2_net_drop(s, slot, "kicked");
-    out = name + " was kicked\n";
+    if (cmd == "stuffcvar") {
+      for (size_t i = 2; i < w.size(); i++) q2_net_ask_setting(s, slot, w[i]);
+      return true;
+    }
+    if (cmd == "dumpuser") {
+      out = "\nuserinfo\n--------\n";
+      std::vector<std::pair<std::string, std::string>> kv;
+      ge::classic::protocol::info_pairs(c.userinfo, kv);
+      for (auto& [key, value] : kv)
+        out += row("%-20s %s\n", key.empty() ? "<MISSING KEY>" : key.c_str(),
+                   value.empty() ? "<MISSING VALUE>" : value.c_str());
+      out += "\nmiscinfo\n--------\n" + q2_misc_lines(s, slot);
+      return true;
+    }
+    if (cmd == "kickban" && (c.address.family == gn::Family::ipv4 ||
+                             c.address.family == gn::Family::sim)) {  // banned until it stops
+      uint8_t ip[4] = {};
+      if (c.address.family == gn::Family::sim)
+        gn::sim_to_ipv4(c.address, ip);
+      else
+        std::copy(c.address.bytes, c.address.bytes + 4, ip);
+      std::string said;
+      gs::ban_command(s.bans, row("addip %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]), unix_now(s),
+                      said);
+    }
+    out = c.name + "[" + gn::to_string(c.address) + "] was kicked\n";
+    q2_net_kick(s, slot, false);
+    return true;
+  }
+  if (cmd == "killserver") {
+    q2_net_shutdown(s, "Server was killed.\n", false);
+    s.killed = true;
+    return true;
+  }
+  if (cmd == "pickclient") {
+    if (s.cfg.max_clients == 1) {
+      out = "Single player server running.\n";
+    } else if (w.size() < 2) {
+      out = "Usage: pickclient <address>\n";
+    } else {
+      gn::Address to;
+      if (!gn::parse_address(w[1], to))
+        out = "Bad client address: " + w[1] + "\n";
+      else if (w[1].find(':') == std::string::npos)
+        out = "Please specify client port explicitly.\n";
+      else
+        q2_net_oob(s, to, "passive_connect\n");
+    }
     return true;
   }
   static const char* const kFilterWords[3] = {"addfiltercmd", "delfiltercmd", "listfiltercmds"};

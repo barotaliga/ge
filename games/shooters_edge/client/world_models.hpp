@@ -45,6 +45,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "brush/app/bsp_draw.hpp"
@@ -90,8 +91,9 @@ struct Placed {
   bool bleeds = false;      // a body's piece by its bits (Quake II's gib bit), not its model file
   bool flies = false;       // Quake II's corpse with flies round it (its flies bit)
   bool shell_only = false;  // its shell alone, no plain draw under it (a power screen's plate)
-  // A Quake II brush model's animation bits (its effects' ANIM01, ANIM23, ANIM_ALL, ANIM_ALLFAST;
-  // q2_look.hpp's q2_texture_frame); -1 elsewhere, its textures on the map's clock.
+  // A Quake II entity's animation bits (its effects' ANIM01, ANIM23, ANIM_ALL, ANIM_ALLFAST;
+  // q2_look.hpp's q2_texture_frame): a brush model's texture frame, a model's or a sprite's own
+  // frame, cycled on the picture's clock; -1 elsewhere, its textures on the map's clock.
   int q2_anim = -1;
   float shell_rgb[3] = {0, 0, 0};
   bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)
@@ -351,11 +353,17 @@ void prepare_models(ge::gpu::Device& device, WorldModels& m, const ge::brush::Ma
                     std::span<const Placed> placed, const ge::render::FrameView& view,
                     double brightness, double minlight, bool smooth, const InPlace& in_place,
                     std::span<const ge::brush::app::DynamicLight> dynamic = {},
-                    double dynamic_strength = 1, const Burning* burning = nullptr);
+                    double dynamic_strength = 1, const Burning* burning = nullptr,
+                    std::span<const std::pair<int, ge::render::MorphBlood>> bloodied = {});
 
 // The triangles of `p`'s model as `prepare_models` draws it at `time_s` (its frame and skin
 // group): nine floats a triangle, its model's own frame (m). False for a sprite, a brush or none.
 bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out);
+// The point `a`, `b` (barycentric from its first corner) of triangle `tri` of `p`'s model as it
+// stands in its REST frame (frame 0), times its scale (m): where render/morph.hpp's MorphWound
+// sits.
+bool body_rest(const WorldModels& m, const Placed& p, double time_s, uint32_t tri, float a, float b,
+               float out[3]);
 // The tip of what `p` holds out at `time_s`: of its model's points as drawn, the one furthest along
 // `forward` (world, unit), into `tip` (world, m). A monster's gun barrel, as its frame moves it.
 // False for a sprite, a brush or none.
