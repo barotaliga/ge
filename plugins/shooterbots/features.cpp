@@ -43,7 +43,7 @@ constexpr const char* kNames[kFeatures] = {
     "lobtake",     "aimclear",   "presspair",   "ledgerforget", "ledgerhits",  "ledgerheal",
     "ledgerobits", "spawnkept",  "rushsize",    "holdra",       "errandworth", "nearwait",
     "rushdetour",  "spamshow",   "rlhunt",      "rlgang",       "rlknown",     "arrive",
-    "shareclock",  "trial"};
+    "shareclock",  "rushstrong", "trial"};
 // A name for every feature: one missing leaves the last null (and `feature_name` crashing).
 static_assert(kNames[kFeatures - 1] != nullptr, "a feature has no name in kNames");
 

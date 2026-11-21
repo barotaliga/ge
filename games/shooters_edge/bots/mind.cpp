@@ -1015,21 +1015,41 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
     const double mine = by_run ? own_run_s(f, q) : dist(at, qa);
     // (`shareclock`) A mate who said he goes for another key item is busy: not a rusher.
     const bool share = f.features[sh::Feature::shareclock];
+    // (`rushstrong`) the quad goes to the strong (the launcher and armour), as people bring
+    // theirs: a strong mate a little further off is ahead of a weak one nearer, and a strong
+    // rusher ahead of weak mates a little nearer (both by the run, kRushStrongRun_s), their
+    // "coming quad" said or not; a weak rusher's held rush yields to a strong mate's said one.
+    const bool by_strength = f.features[sh::Feature::rushstrong];
+    const bool me_strong =
+        (st.items & f.arsenal->launcher) != 0 && st.armortype * st.armor >= kRushStrongArmour;
     int ahead = 0;
+    bool strong_coming = false;  // a strong mate said he is coming for it
     for (const Mate& m : mn.mates) {
       const bool fresh = t - m.at_t < mate_fresh_s(f);
       const bool busy = share && m.going >= 0 && m.going != q && t - m.going_t < kGoingFresh_s &&
                         key_item(f.items[static_cast<size_t>(m.going)]);
-      if ((fresh && !busy && (by_run ? route_s(f, m.at, q) : dist(m.at, qa)) < mine) ||
-          (m.going == q && t - m.going_t < kGoingFresh_s))
-        ahead++;
+      const double theirs = by_run ? route_s(f, m.at, q) : dist(m.at, qa);
+      double edge = 0;  // what his strength against mine is worth on the way there
+      const bool coming = m.going == q && t - m.going_t < kGoingFresh_s;
+      bool outrank = false;  // I am strong, he is not, and he is not far nearer
+      if (by_strength && by_run) {
+        const bool his =
+            t - m.strength_t < kMateFresh_s && m.has_rl && m.armour >= kRushStrongArmour;
+        edge = his == me_strong ? 0 : his ? kRushStrongRun_s : -kRushStrongRun_s;
+        outrank = me_strong && !his && theirs + kRushStrongRun_s >= mine;
+        strong_coming = strong_coming || (coming && his && !me_strong);
+      }
+      const bool by_place = fresh && !busy && theirs - edge < mine;
+      if (f.team && ((fresh && !busy && (theirs < mine) != by_place) || (coming && outrank)))
+        f.team->stats.rush_strength_flips++;
+      if (by_place || (coming && !outrank)) ahead++;
     }
     // (`rushhold`) A rush begun is held while the quad is due, up to kRushMost_s: counted again
     // each think, a rusher's place among the two nearest wobbled with its mates' believed places
     // (1217 rushes in 12 five-minute matches, each over in a median 1.5 s, the goal flipping
     // between the quad and the rest, 10 of 703 trips to it taking it).
-    const bool held =
-        f.features[sh::Feature::rushhold] && was == Role::rush && t - mn.rush_since < kRushMost_s;
+    const bool held = f.features[sh::Feature::rushhold] && was == Role::rush &&
+                      t - mn.rush_since < kRushMost_s && !strong_coming;
     // (`rushsize`) half the team rushes, one at least: in a 2on2 "the two nearest" were the whole
     // team, and every key item lay while both waited on the quad.
     const int rushers = f.features[sh::Feature::rushsize] && f.team
@@ -1151,7 +1171,11 @@ void mind_plan(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stat
     }
   }
   if (r != Role::free && r != Role::hold && r != Role::push) f.stats.gang_gate[12]++;
-  if (r == Role::rush && was != Role::rush) f.team->stats.rushes++;
+  if (r == Role::rush && was != Role::rush) {
+    f.team->stats.rushes++;
+    f.team->stats.rushes_strong +=
+        (st.items & f.arsenal->launcher) != 0 && st.armortype * st.armor >= kRushStrongArmour;
+  }
   if (r == Role::carry && was != Role::carry) {
     f.team->stats.quads++;
     Said h;

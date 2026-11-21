@@ -610,6 +610,17 @@ namespace ge::shooterbots {
 //   preset: 12 2on2 dm2 seeds with `fetch`, head to head -3.8 (red -3.1, blue -4.4) and the quad
 //   lying 28 -> 73 s after it shows (both members on armours, nobody rushes); with `rlfetch` too
 //   -2.8. The taker's trips end in its death (36 of 76), not the rush, once the rush yields.
+// - `rushstrong`: THE QUAD TO THE STRONG (M18r.md P1, the fight at a showing): the quad's rush
+//   ranks a mate who said he carries the launcher with 60 protection or more (100 yellow armour)
+//   kRushStrongRun_s of run nearer than he is, and a strong rusher as far ahead of weak mates.
+//   People bring their strong to the quad (dm2: a strong player within 600 at 56 % of its showings,
+//   twice the 28 % of the time a player is strong; the bots' 19 %), and at a showing the strong win
+//   (the launcher's fights 90 %, the better armour's 92 %). A mate's "coming quad" counts ahead of
+//   a strong bot only past that edge, and a weak rusher's held rush yields to a strong mate's
+//   said one. ON: 12 2on2 dm2 seeds, rushes begun strong 17.6 -> 20.9 %, a strong player near at
+//   the quad's showing 19 -> 25 % (people 56), deaths there 0.55 -> 0.81 a showing (2.36), head to
+//   head +6.0 (red +9.6, blue +2.4); 12 4on4 seeds +2.6 (red +4.1, blue +1.0). Its cost: the south
+//   mega taken within 5 s 18 -> 8 of ~50 showings (its strong holder leaves the room to rush).
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -793,9 +804,10 @@ enum class Feature : uint8_t {
   rlknown,
   arrive,
   shareclock,
+  rushstrong,
   trial,
 };
-constexpr size_t kFeatures = 182;
+constexpr size_t kFeatures = 183;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

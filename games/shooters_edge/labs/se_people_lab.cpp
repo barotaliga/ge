@@ -86,6 +86,7 @@
 #include "shooters_edge/labs/launcher_use_report.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/labs/show_read.hpp"
+#include "shooters_edge/labs/show_report.hpp"
 #include "shooters_edge/net/qw_team.hpp"
 
 namespace {
@@ -309,6 +310,7 @@ struct Read {
   la::BlastRead blast;        // the launcher fight: bursts, knock-ups, last blows (blast_read.hpp)
   std::array<la::ShowRead, kItemKinds> show{};     // each key item as it shows (show_read.hpp)
   std::map<std::string, la::ShowRead> show_spots;  // and by its spot ("x,y,z"), its kind first
+  std::array<la::FightRead, kItemKinds> fight{};   // the fight at each showing (show_read.hpp)
   la::ArmourWear wear;                             // the armour worn by type (show_read.hpp)
   // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
   // until taken summed, and those taken within 10 s.
@@ -497,6 +499,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<la::ShowPlayer> splayers;       // the live players this sample
   std::vector<int> shown_key;                 // the areas whose key item showed again
   std::vector<int32_t> was_armour(32, 0);     // by slot: the armour worn at the last sample
+  std::vector<int32_t> was_frags(32, 0);      // by slot: the frags at the last sample
+  la::FightLog flog;                          // the fight at a showing, joined at the end
   std::vector<uint8_t> area_alive(32, 0);     // by slot: alive at the last sample
   std::vector<la::AreaPlayer> area_last(32);  // and where, of which team
   double area_at = -1;
@@ -792,9 +796,14 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       } else if (area_alive[k] && p.present && p.dead) {
         la::areas_death(areas, out.areas, area_last[k].team, area_last[k].at);
         out.deaths++;
+        flog.deaths.push_back(
+            {s.time, area_last[k].at, {i, area_last[k].team, had_rl[k] != 0, was_armour[k]}});
         if (keep_events) out.events.push_back({s.time - t0, 'd', i, -1, 0, area_last[k].at});
       }
       area_alive[k] = live ? 1 : 0;
+      if (p.present && !s.names[k].empty() && s.frags[k] > was_frags[k])
+        flog.frags.push_back({s.time, {i, team_of(s, i), had_rl[k] != 0, was_armour[k]}});
+      was_frags[k] = s.frags[k];
     }
     if (lspots.size() < areas.size()) lspots.resize(areas.size());
     if (sspots.size() < areas.size()) sspots.resize(areas.size());
@@ -828,6 +837,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         const bool full = sp.kind <= 2 ? was_armour[tk] > 100 : sp.kind == 6 && had_rl[tk] != 0;
         for (const la::ShowPlayer& sp2 : splayers)
           if (sp2.slot == taker) {
+            la::fight_taken(flog, a, s.time, sp2.team);
             la::show_taken_spot(ss, out.show_spots[show_key(sp.kind, sp.at)], s.time, sp2, full);
             la::show_taken(ss, out.show[static_cast<size_t>(sp.kind)], s.time, sp2, full);
           }
@@ -843,6 +853,18 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       if (ss.kind >= 0) {
         // The spot's own read takes the showing too: show_shown sets the spot's state once.
         la::ShowSpot copy = ss;
+        if (ss.slot >= 0 && ss.shown < 0) {
+          la::FightShow fs{a, ss.kind, ss.at, s.time, ss.team, -1, {}};
+          for (const la::LauncherPlayer& lp : lplayers) {
+            const auto k = static_cast<size_t>(lp.slot);
+            const bool strong = lp.has && k < d.player_stats.size() &&
+                                d.player_stats[k][cl::kStatArmour] >= la::kStrongArmour;
+            if (!strong || la::show_dist(lp.at, ss.at) > la::kShowNear) continue;
+            fs.strong = true;
+            fs.strong_holder = fs.strong_holder || lp.team == ss.team;
+          }
+          flog.shows.push_back(fs);
+        }
         la::show_shown(ss, out.show[static_cast<size_t>(ss.kind)], s.time, splayers);
         la::show_shown(copy, out.show_spots[show_key(ss.kind, ss.at)], s.time, splayers);
       }
@@ -1062,6 +1084,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
             static_cast<size_t>(la::armour_type(st[cl::kStatItems], st[cl::kStatArmour]));
         out.wear.n[wt]++;
         out.wear.points[wt] += st[cl::kStatArmour];
+        out.wear.strong +=
+            (st[cl::kStatItems] & kLauncher) != 0 && st[cl::kStatArmour] >= la::kStrongArmour;
       }
       pl.near += close;
       Sample sm;
@@ -1185,6 +1209,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   }
   la::areas_end(areas, out.areas);
   out.area_spots = std::move(areas);
+  la::fight_join(flog, out.fight);
   out.ok = true;
 }
 
@@ -1335,6 +1360,7 @@ void run(gl::Lab& lab) {
   la::BlastRead blast;
   std::array<la::ShowRead, kItemKinds> show{};
   std::map<std::string, la::ShowRead> show_spots;
+  std::array<la::FightRead, kItemKinds> fight{};
   la::ArmourWear wear;
   int used = 0, skipped = 0;
   double seconds = 0;
@@ -1384,6 +1410,7 @@ void run(gl::Lab& lab) {
     la::add(blast, r.blast);
     for (size_t k = 0; k < kItemKinds; k++) la::add(show[k], r.show[k]);
     for (const auto& [key, sr] : r.show_spots) la::add(show_spots[key], sr);
+    for (size_t k = 0; k < kItemKinds; k++) la::add(fight[k], r.fight[k]);
     la::add(wear, r.wear);
     Player sum;
     for (const Player& p : r.players) {
@@ -1836,59 +1863,8 @@ void run(gl::Lab& lab) {
                b.fight_s > 0 ? static_cast<double>(b.fight_jumps) * 60 / b.fight_s : 0,
                "per-fight-min");
   }
-  // Each key item as it shows, and the armour worn by type (show_read.hpp).
-  {
-    const auto sshare = [](int64_t part, int64_t whole) {
-      return whole > 0 ? static_cast<double>(part) / static_cast<double>(whole) : 0;
-    };
-    for (int k = 1; k < kItemKinds; k++) {
-      la::ShowRead& r = show[static_cast<size_t>(k)];
-      if (r.shown == 0) continue;
-      const std::string key = std::string("people.show.") + kItemNames[k];
-      lab.metric(key + ".shown", static_cast<double>(r.shown), "count");
-      lab.metric(key + ".mate-on", sshare(r.mate_on, r.shown), "share");
-      lab.metric(key + ".enemy-on", sshare(r.enemy_on, r.shown), "share");
-      lab.metric(key + ".mate-near", sshare(r.mate_near, r.shown), "share");
-      lab.metric(key + ".enemy-near", sshare(r.enemy_near, r.shown), "share");
-      lab.metric(key + ".nobody-near", sshare(r.nobody_near, r.shown), "share");
-      lab.metric(key + ".by-self", sshare(r.by_self, r.taken), "share");
-      lab.metric(key + ".by-mate", sshare(r.by_mate, r.taken), "share");
-      lab.metric(key + ".by-enemy", sshare(r.by_enemy, r.taken), "share");
-      lab.metric(key + ".taker-waited", sshare(r.taker_waited, r.taken), "share");
-      lab.metric(key + ".taken-full", sshare(r.taker_full, r.taken), "share");
-      lab.metric(key + ".wait-p50", la::keys_quantile(r.waits, 0.5), "s");
-      lab.metric(key + ".wait-p75", la::keys_quantile(r.waits, 0.75), "s");
-      int64_t quick = 0;
-      for (const float w : r.waits) quick += w <= 1;
-      lab.metric(key + ".within-1s", sshare(quick, r.taken), "share");
-    }
-    gl::LabTable by_spot{
-        "each key spot as its item shows (show_read.hpp): showings, the last taker's mate within "
-        "200 and 600, the wait to its going (p50, p75), taken within 1 s, the taker there waiting, "
-        "taken by an enemy",
-        {"spot", "shown", "mate on", "mate near", "wait p50", "wait p75", "within 1 s", "waited",
-         "by enemy"},
-        {}};
-    for (auto& [at, r] : show_spots) {
-      int64_t quick = 0;
-      for (const float w : r.waits) quick += w <= 1;
-      by_spot.rows.push_back(
-          {at, std::to_string(r.shown), to_fixed(sshare(r.mate_on, r.shown), 2),
-           to_fixed(sshare(r.mate_near, r.shown), 2), to_fixed(la::keys_quantile(r.waits, 0.5), 1),
-           to_fixed(la::keys_quantile(r.waits, 0.75), 1), to_fixed(sshare(quick, r.taken), 2),
-           to_fixed(sshare(r.taker_waited, r.taken), 2), to_fixed(sshare(r.by_enemy, r.taken), 2)});
-    }
-    lab.table(by_spot);
-    int64_t worn = 0;
-    for (const int64_t wn : wear.n) worn += wn;
-    const char* const wname[4] = {"none", "ga", "ya", "ra"};
-    for (size_t k = 0; k < 4; k++) {
-      lab.metric(std::string("people.armour.wear.") + wname[k], sshare(wear.n[k], worn), "share");
-      if (k > 0)
-        lab.metric(std::string("people.armour.wear.") + wname[k] + "-points",
-                   wear.n[k] > 0 ? wear.points[k] / static_cast<double>(wear.n[k]) : 0, "points");
-    }
-  }
+  // Each key item as it shows, the fight there, and the armour worn by type (show_report.hpp).
+  la::report_show(lab, show, show_spots, fight, wear, kItemNames);
   // The glances at key item spots passed (glance_read.hpp).
   {
     const auto share = [](int64_t part, int64_t whole) {

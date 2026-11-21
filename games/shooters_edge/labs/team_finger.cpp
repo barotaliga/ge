@@ -18,6 +18,21 @@ namespace bt = shooters_edge::bots;
 namespace cn = shooters_edge::net;
 
 void report_finger(ge::lab::Lab& lab, const cn::TeamMatchReport& r, int64_t rockets, double secs) {
+  // The quad's rushes begun strong (the launcher and armour), and (`rushstrong`) the thinks whose
+  // ranking strength changed.
+  {
+    const int64_t rushes = r.teams[0].rushes + r.teams[1].rushes;
+    lab.metric("team.rush.strong-share",
+               rushes > 0
+                   ? static_cast<double>(r.teams[0].rushes_strong + r.teams[1].rushes_strong) /
+                         static_cast<double>(rushes)
+                   : 0,
+               "share");
+    lab.metric("team.rush.strength-flips",
+               static_cast<double>(r.teams[0].rush_strength_flips + r.teams[1].rush_strength_flips),
+               "count");
+  }
+
   // (18b) THE FINGER WITH THE LAUNCHER CARRIED: rockets fired a minute carrying it (se-people's
   // `rockets-per-owned-min`: people's dm2 17.8) and a minute holding it up, and the commands
   // carrying it by what the finger did: pressed (`down`: by the trigger; `other`: a spam shot, a
