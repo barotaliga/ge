@@ -317,6 +317,10 @@ struct FrameView {
   // brightness.
   double sun_size = 1;
   double moon_size = 1;
+  // THE SKY'S LIFT through a map's sky faces (brush/app/bsp_draw.hpp's veil: a night lifted to
+  // read against lit rooms), multiplied into the sky after it is drawn: the moon's disc, already
+  // worked out as the eye sees it, is drawn over it so as to come out as it was. 1: no lift.
+  double sky_lift = 1;
   // THE REACH, m: how far the picture draws. Past half of it a mist closes every surface into
   // the sky behind it, all of it by the reach, and nothing farther is drawn; 0: no reach, no mist.
   double reach_m = 0;

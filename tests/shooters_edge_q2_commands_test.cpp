@@ -386,3 +386,24 @@ TEST(g_swap_speed_lowers_and_raises_faster) {
   CHECK_MSG(frames[1] < frames[0] && frames[1] >= 2,
             std::to_string(frames[0]) + " frames, then " + std::to_string(frames[1]));
 }
+
+TEST(teleport_and_listentities_are_cheats_for_finding_things) {
+  auto g = game("0", 1, "cheats 1");
+  run(*g, 10);
+  sv::Q2Player& p = g->p(0);
+  g->r.client_command(0, "teleport 1 2");
+  CHECK(printed(*g, 0, "Usage: teleport x y z\n"));
+  g->r.client_command(0, "teleport 16 32 48");
+  CHECK(p.move.origin[0] == 16 * 8 && p.move.origin[1] == 32 * 8 && p.move.origin[2] == 58 * 8);
+  CHECK(p.move.velocity[0] == 0 && p.move.velocity[2] == 0);
+  g->r.client_command(0, "listentities");
+  CHECK(printed(*g, 0, "Usage: listentities <all|ammo|items|keys|monsters|weapons>\n"));
+  const size_t before = g->s().console.size();
+  g->r.client_command(0, "listentities banana all");
+  CHECK(printed(*g, 0, "Usage: listentities"));
+  CHECK(g->s().console.size() > before);
+  bool named = false;
+  for (size_t i = before; i < g->s().console.size(); i++)
+    named = named || g->s().console[i].find(": ") != std::string::npos;
+  CHECK(named);
+}

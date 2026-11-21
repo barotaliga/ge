@@ -481,6 +481,7 @@ struct PlayerState {
   // their eye with its bob, `kick` the angles they add (degrees), `v_angle` the dead view's.
   bool rules_view = false;
   sh::Vec3f kick;
+  float fov = 0;  // the field of view the rules hold the view to, degrees (0: the player's own)
   // Quake II's rules run a frame every tenth: the frame's number, the seconds since it (-1: no
   // such rules) and how far its movers carried the player in it.
   int64_t rules_frame = -1;
@@ -503,6 +504,9 @@ struct Missile {
   // (a player or a monster): a blaster's bolt, or the BFG's ball.
   bool bolt = false, bfg = false;
   bool streak = false;  // Quake II's blaster bolt (its blaster bit): specks behind it
+  // Quake II's other marks by its effect bits (q2_look.hpp's Q2Look::Missile as a number: a
+  // flag, the tag token, an ion ripper's, a blue or a plasma bolt); 0 none of these.
+  uint8_t q2_mark = 0;
 };
 void missiles_of(const Listen& l, std::vector<Missile>& out);
 

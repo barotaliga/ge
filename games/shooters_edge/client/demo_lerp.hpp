@@ -59,6 +59,7 @@ struct DemoPose {
   bool intermission = false;
   uint32_t set_angles = 0;
   sh::Vec3f eye, angles;
+  float fov = 0;  // Quake II's field of view sent (drawn between, as a zoom eases in)
   std::vector<DemoEntity> entities, players;
 };
 

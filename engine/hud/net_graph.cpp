@@ -115,4 +115,27 @@ float draw_net_graph(ui::DrawList& dl, const Frame& frame, const Style& style, c
   return h_box;
 }
 
+void draw_lag_graph(ui::DrawList& dl, const NetHistory& h, ui::Rect at, const LagGraphLook& look) {
+  const auto faded = [&look](ui::Color c) {
+    c.a *= look.alpha;
+    return c;
+  };
+  if (look.box) dl.rect(at, faded(look.back));
+  const float col = at.w / kLagColumns;
+  const float span = std::max(1.0f, look.max_ms - look.min_ms);
+  for (int i = 0; i < kLagColumns; i++) {
+    const PacketMark m = net_mark(h, i);
+    if (m == PacketMark::none) break;
+    const float x = at.right() - col * static_cast<float>(i + 1);
+    const float ms = net_round_trip(h, i);
+    const float share =
+        m == PacketMark::lost ? 1 : std::clamp((ms - look.min_ms) / span, 0.0f, 1.0f);
+    const float tall = std::max(col, share * at.h);  // a column at least a pixel of the graph
+    const ui::Color c = m == PacketMark::lost    ? look.lost
+                        : m == PacketMark::stale ? look.warn
+                                                 : look.ok;
+    dl.rect({x, at.bottom() - tall, col, tall}, faded(c));
+  }
+}
+
 }  // namespace ge::hud

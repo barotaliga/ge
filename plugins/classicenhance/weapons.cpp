@@ -170,6 +170,10 @@ viewmodel::HeldModel held_from_morph(const morph::Model& model, const Palette& p
   if (!model.skins.empty()) {
     const morph::Skin& s = model.skins[size_t(std::clamp(skin, 0, int(model.skins.size()) - 1))];
     out.skin.image = to_rgba(s.indices, s.width, s.height, palette);
+    const std::vector<uint8_t>& rgba = out.skin.image.rgba;
+    out.skin.shine.resize(rgba.size() / 4);
+    for (size_t i = 0; i < out.skin.shine.size(); i++)
+      out.skin.shine[i] = skin_shine(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]);
     out.skin.glow.resize(s.indices.size());
     bool any = false;
     for (size_t i = 0; i < s.indices.size(); i++) {
@@ -184,6 +188,18 @@ viewmodel::HeldModel held_from_morph(const morph::Model& model, const Palette& p
   viewmodel::find_muzzle(out);
   find_barrels(out);
   return out;
+}
+
+uint8_t skin_shine(uint8_t r, uint8_t g, uint8_t b) {
+  // Warm: blue the least and red at least most of green (red, orange, brown, yellow), never a
+  // violet or a steel blue.
+  const int most = std::max({r, g, b}), least = std::min({r, g, b});
+  if (most == 0 || b != least || r * 5 < g * 4) return 255;
+  const double sat = double(most - least) / double(most);
+  // Matte from a saturation of 0.18 (a warm grey still reads as metal) to 0.38 (a stock's brown).
+  const double t = std::clamp((sat - 0.18) / 0.20, 0.0, 1.0);
+  const double matte = t * t * (3 - 2 * t);
+  return static_cast<uint8_t>(std::lround(255.0 * (1 - matte)));
 }
 
 viewmodel::PlaceRow classic_weapon_row() {

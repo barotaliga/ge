@@ -78,7 +78,8 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
                                      double fov_y, double clock_s, double time_s) {
   if (!demo_eyes_drawn(drawn)) {
     e.clock = -1;  // the next one drawn starts over
-    ge::render::FrameView v = demo_view(drawn, fov_y, time_s);
+    ge::render::FrameView v =
+        demo_view(drawn, fov_y, time_s, e.view_kick == nullptr || *e.view_kick);
     demo_view_behind(drawn, e.behind, world, v);
     demo_view_locked(drawn, e, v);
     return v;
@@ -88,10 +89,12 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
                    drawn.player != e.player || read.frames < e.frames_seen;
   if (cut) {
     const bool* gun_kick = e.gun_kick;
+    const bool* view_kick = e.view_kick;
     const float behind = e.behind;
     const bool lock_pos = e.lock_pos;
     e = DemoEyes{};
     e.gun_kick = gun_kick;
+    e.view_kick = view_kick;
     e.behind = behind;
     e.lock_pos = lock_pos;
     e.kicks_seen = read.kicks_taken;

@@ -216,6 +216,8 @@ std::vector<PointLight> portal_lights(const Scene& scene) {
     l.colour[1] = 0.82;
     l.colour[2] = 1.0;
     l.flicker = Flicker::pulse;
+    // Its source is the panel glowing in plain sight: a figure in its way throws a shadow.
+    l.seen = true;
     l.seed = seed;
     seed = seed * 1664525u + 1013904223u;
     out.push_back(l);

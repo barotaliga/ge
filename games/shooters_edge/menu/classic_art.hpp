@@ -84,6 +84,15 @@ struct ClassicArt {
   ge::ui::Color colour(int index) const;
 };
 
+// HOW MUCH COLOUR A CARVED WORD KEEPS: all of it, half (its grey mixed in), or none (grey).
+// SELECT GAME's names: the game playing in colour, one classic remix plays with half, the rest
+// grey.
+enum class Tone : uint8_t { full, half, grey };
+
+// `set`'s letters at `tone`: `set` itself when full, else copies made the first time and kept
+// (made again when the letters are cut again).
+const std::map<char, ge::ui::Image>& toned(const std::map<char, ge::ui::Image>& set, Tone tone);
+
 // A picture's enhanced copy by classic-enhance's name for it (`conchars`, `num_0`, `gfx/qplaque`):
 // the HUD's hook (hud/classic_art.hpp).
 using PictureUpgrade = hud::PictureUpgrade;

@@ -71,6 +71,7 @@ std::unique_ptr<Window> open_window(const WindowDesc& desc) {
   }
   SDL_WindowFlags flags = SDL_WINDOW_HIGH_PIXEL_DENSITY;
   if (desc.resizable) flags |= SDL_WINDOW_RESIZABLE;
+  if (desc.hidden) flags |= SDL_WINDOW_HIDDEN;
 #if defined(__APPLE__)
   flags |= SDL_WINDOW_METAL;
 #endif
@@ -86,8 +87,23 @@ std::unique_ptr<Window> open_window(const WindowDesc& desc) {
 #if defined(__APPLE__)
   impl->metal_view = SDL_Metal_CreateView(impl->window);
 #endif
-  // In front with the keyboard: a game started from a terminal otherwise leaves the keys there.
-  SDL_RaiseWindow(impl->window);
+  // In front with the keyboard: a game started from a terminal otherwise leaves the keys there. On
+  // macOS a process started from a terminal is not the active app, and a window raised in an app
+  // that is not active stays behind without the keys (its title greyed until clicked away and
+  // back): the app is made the active one first.
+#if defined(__APPLE__)
+  if (!desc.hidden) {
+    using SharedApp = id (*)(id, SEL);
+    using Activate = void (*)(id, SEL, BOOL);
+    const id app = reinterpret_cast<SharedApp>(objc_msgSend)(
+        reinterpret_cast<id>(objc_getClass("NSApplication")),
+        sel_registerName("sharedApplication"));
+    if (app != nullptr)
+      reinterpret_cast<Activate>(objc_msgSend)(app, sel_registerName("activateIgnoringOtherApps:"),
+                                               YES);
+  }
+#endif
+  if (!desc.hidden) SDL_RaiseWindow(impl->window);
   return std::unique_ptr<Window>(new Window(std::move(impl)));
 }
 
@@ -192,6 +208,9 @@ void poll_input(Window& window, InputSnapshot& in, Devices& devices, input::Queu
 
 void set_relative_mouse(Window& window, bool on, bool raw) {
   SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, raw ? "0" : "1");
+  // Grabbed too: the pointer kept inside the window, so even while the OS holds relative mode back
+  // (the window not yet given the keys) it never reaches a screen corner (macOS's hot corners).
+  SDL_SetWindowMouseGrab(window.impl_->window, on);
   SDL_SetWindowRelativeMouseMode(window.impl_->window, on);
 }
 
@@ -201,6 +220,19 @@ bool has_focus(const Window& window) {
 
 bool relative_mouse(const Window& window) {
   return SDL_GetWindowRelativeMouseMode(window.impl_->window);
+}
+
+std::string clipboard_text() {
+  char* text = SDL_GetClipboardText();  // "" (never null) when it holds no text
+  std::string out = text != nullptr ? text : "";
+  SDL_free(text);
+  return out;
+}
+
+void set_clipboard_text(const std::string& text) {
+  if (!SDL_SetClipboardText(text.c_str()))
+    out::warn(std::string("platform: the text was not put on the clipboard (") + SDL_GetError() +
+              "); skill: platform.");
 }
 
 void set_text_input(Window& window, bool on) {

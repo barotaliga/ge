@@ -50,6 +50,7 @@
 
 #include "console/chat_ignore.hpp"
 #include "console/console.hpp"
+#include "console/view.hpp"
 #include "hud/feed.hpp"
 #include "shooters_edge/client/demo.hpp"
 
@@ -98,8 +99,11 @@ void run_triggers(ChatExtras& x, std::string_view text);
 
 // A line told the player (the console has it already) into the HUD's feeds: a chat line into
 // the chat HUD while it is on and into `notify` unless cl_chat_notify is 0; another into `notify`.
+// With `ns` (the console's con_notify, con_notifylines and con_notifytime: the HUD's feed is the
+// window's one notify area), `notify` sized and timed by them, and none of it under con_notify 0.
 void tell_feeds(ChatExtras& x, ge::hud::Feed& notify, std::string_view line, bool chat,
-                ge::ui::Color ink, double at);
+                ge::ui::Color ink, double at,
+                const ge::console::ConsoleView::NotifySettings* ns = nullptr);
 
 // The settings, bound to `x` (which must outlive `con`), in the classic layer; `cl_chatsound` and
 // the `con_sound_*` spellings as synonyms.

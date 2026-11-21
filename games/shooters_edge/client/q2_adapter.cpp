@@ -63,14 +63,31 @@ ge::ui::Image pcx_picture(const SearchPath& files, std::string_view name, int cl
 }
 
 // The menu's pictures by name: the main menu's plates (each with its lit copy, `_sel`), the plaque
-// and the logo down the left, the spinning cursor's fifteen frames and each page's banner.
-constexpr std::string_view kMenuPictures[] = {
-    "m_main_game",           "m_main_multiplayer",   "m_main_options",         "m_main_quit",
-    "m_main_video",          "m_main_game_sel",      "m_main_multiplayer_sel", "m_main_options_sel",
-    "m_main_quit_sel",       "m_main_video_sel",     "m_main_plaque",          "m_main_logo",
-    "m_banner_game",         "m_banner_multiplayer", "m_banner_options",       "m_banner_video",
-    "m_banner_start_server", "m_banner_join_server", "m_banner_plauer_setup",  "m_banner_load_game",
-    "m_banner_save_game",    "m_banner_customize"};
+// and the logo down the left, the spinning cursor's fifteen frames, each page's banner and the
+// quit question (`quit`, drawn on QUIT in place of a box).
+constexpr std::string_view kMenuPictures[] = {"m_main_game",
+                                              "m_main_multiplayer",
+                                              "m_main_options",
+                                              "m_main_quit",
+                                              "m_main_video",
+                                              "m_main_game_sel",
+                                              "m_main_multiplayer_sel",
+                                              "m_main_options_sel",
+                                              "m_main_quit_sel",
+                                              "m_main_video_sel",
+                                              "m_main_plaque",
+                                              "m_main_logo",
+                                              "m_banner_game",
+                                              "m_banner_multiplayer",
+                                              "m_banner_options",
+                                              "m_banner_video",
+                                              "m_banner_start_server",
+                                              "m_banner_join_server",
+                                              "m_banner_plauer_setup",
+                                              "m_banner_load_game",
+                                              "m_banner_save_game",
+                                              "m_banner_customize",
+                                              "quit"};
 constexpr int kCursorFrames = 15;
 // The plates the menu's missing words are cut from (classic_view.cpp), in the print's order.
 constexpr int kPrinted = 5;

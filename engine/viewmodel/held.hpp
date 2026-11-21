@@ -65,6 +65,9 @@ struct HeldFrame {
 struct Skin {
   assets::Image image;        // sRGB, rows from the top (empty: no skin)
   std::vector<uint8_t> glow;  // 1 a texel that lights itself (empty: none do)
+  // How far a texel SHINES (0..255): the Blinn highlight's share on it. Metal 255; wood, cloth and
+  // skin 0, which take the light by their colour alone (empty: every texel shines).
+  std::vector<uint8_t> shine = {};
 };
 
 // A clip baked into a held model's frames: `count` frames from `first`, `fps` apart, the first at

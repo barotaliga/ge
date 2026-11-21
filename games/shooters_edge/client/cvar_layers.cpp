@@ -92,7 +92,8 @@ void add_first(con::Console& c, const GameBindings& b) {
     c.cvars().add(offset);
     c.cvars().add(last_fired);
   }
-  if (b.noskins != nullptr) *b.noskins = 0;  // its figures are its own (choose_figure)
+  if (b.noskins != nullptr) *b.noskins = 0;         // its figures are its own (choose_figure)
+  if (b.screen != nullptr) *b.screen = Q2Screen{};  // Quake II's view and 2D settings set aside
   c.cvars().add_synonym("fov", "cl_fov");
   c.cvars().add_synonym("ignore_qtv", "ignore_tv");     // its spelling of the TV viewers' chat
   c.cvars().add_synonym("cl_chatmode", "con_chat");     // what a typed line is: command or chat
@@ -144,7 +145,10 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   and `r_maxfps`, the frame cap, kept with its own settings;
 // - the maps' light: `intensity`, `gl_modulate` and `gl_brightness` (Quake's stay 2, 1 and 0);
 // - its chat: its own `cl_chat_sound` (one sound by number or name) and `con_auto_chat` (2 says a
-//   typed line to the team, where our `con_chat` 2 tells a command by its first word).
+//   typed line to the team, where our `con_chat` 2 tells a command by its first word);
+// - its view and 2D (q2_view.hpp): `scr_scale`, `scr_draw2d`, `scr_alpha`, the lag graph's
+//   `scr_lag_*`, `cl_adjustfov`, `uf`, `cl_kickangles`; and `s_underwater` the same setting as
+//   Quake's (room_ear.hpp), on by default where Quake's is off.
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
@@ -210,6 +214,14 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .max = 86400,
          .values = "0: never; 1..86400: that many seconds (120 the default)",
          .overlap = con::Overlap::same});
+  v.add({.name = "s_underwater",  // its own client muffles the world under water; Quake's never
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "Whether the world sounds muffled while your head is under water.",
+         .kind = con::CvarKind::boolean,
+         .values = "1: muffled (the default); 0: as in the air",
+         .overlap = con::Overlap::same});
+  if (b.screen != nullptr) add_q2_screen_cvars(v, *b.screen);
   c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
   v.add({.name = "scr_centertime",
          .fallback = "2.5",

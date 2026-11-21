@@ -151,4 +151,25 @@ TEST(the_animation_bits_cycle_frames_on_the_shared_clock) {
   CHECK(cl::q2_texture_frame(0x2400, 7, 1.25) == 0);
 }
 
+TEST(flags_tags_ion_and_plasma_bolts_carry_their_own_trail_and_light) {
+  using M = cl::Q2Look::Missile;
+  CHECK(cl::q2_look(cl::kSqFlag1, 0).missile == M::flag1);
+  CHECK(cl::q2_look(cl::kSqFlag2, 0).missile == M::flag2);
+  CHECK(cl::q2_look(cl::kSqTagTrail, 0).missile == M::tag);
+  CHECK(cl::q2_look(cl::kSqIonRipper, 0).missile == M::ion);
+  CHECK(cl::q2_look(cl::kSqBlueHyperblaster, 0).missile == M::blue);
+  CHECK(cl::q2_look(cl::kSqPlasma, 0).missile == M::plasma);
+  // The branch order: a rocket's wins over a flag, a gib's over a flag (no trail of these).
+  CHECK(cl::q2_look(cl::kSqRocket | cl::kSqFlag1, 0).missile == M::rocket);
+  CHECK(cl::q2_look(cl::kSqGib | cl::kSqFlag1, 0).missile == M::none);
+  CHECK(cl::q2_look(cl::kSqGreenGib | cl::kSqIonRipper, 0).missile == M::none);
+  // A green gib bleeds green unless an earlier branch takes it.
+  CHECK(cl::q2_look(cl::kSqGreenGib, 0).green_blood && cl::q2_look(cl::kSqGreenGib, 0).bleeds);
+  CHECK(!cl::q2_look(cl::kSqGreenGib | cl::kSqFlag2, 0).green_blood);
+  // See-through: a plasma bolt at 0.6, a sphere at 0.3 (0.6 with the tracker's trail).
+  CHECK(cl::q2_look(cl::kSqPlasma, 0).alpha == 0.6f);
+  CHECK(cl::q2_look(cl::kSqSphereTrans, 0).alpha == 0.3f);
+  CHECK(cl::q2_look(cl::kSqSphereTrans | cl::kSqTrackerTrail, 0).alpha == 0.6f);
+}
+
 }  // namespace

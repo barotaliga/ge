@@ -33,6 +33,11 @@ Rect intersect(Rect a, Rect b);
 // `r` grown by `d` on every side (shrunk for d < 0).
 Rect inset(Rect r, float d);
 
+// A number no image or glyph mask made before it in this process has. A GPU pass keeps an upload
+// by the image's address, and an image made after another was freed may get its address: the
+// serial tells them apart, so the new one is uploaded and never drawn with the old one's pixels.
+uint64_t next_ui_serial();
+
 struct Image {
   int width = 0;
   int height = 0;
@@ -40,6 +45,9 @@ struct Image {
   // Bumped by whoever changes the pixels of an image a GPU pass may already hold, so the pass
   // uploads it again (render/ui_pass.hpp keys its textures by the image's address).
   uint64_t revision = 0;
+  // Which image this is (`next_ui_serial`, a copy its source's): the pass's check against an old
+  // image's upload at the same address.
+  uint64_t serial = next_ui_serial();
 
   bool empty() const { return width <= 0 || height <= 0; }
 };

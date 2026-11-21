@@ -24,10 +24,10 @@ constexpr int kFlagGodmode = 64, kFlagNotarget = 128;  // the program's `flags` 
 constexpr const char* kFixed[] = {
     "new",     "modellist",  "soundlist", "prespawn", "spawn",  "begin", "drop",         "pings",
     "setinfo", "serverinfo", "download",  "nextdl",   "ptrack", "snap",  "stopdownload", "upload"};
-constexpr const char* kOverridable[] = {"rate",    "kill",    "pause",   "say",      "say_team",
-                                        "minping", "airstep", "maps",    "ban",      "banip",
-                                        "banrem",  "join",    "observe", "qtvusers", "god",
-                                        "give",    "noclip",  "fly",     "notarget"};
+constexpr const char* kOverridable[] = {"setpos",   "rate",    "kill",    "pause",   "say",
+                                        "say_team", "minping", "airstep", "maps",    "ban",
+                                        "banip",    "banrem",  "join",    "observe", "qtvusers",
+                                        "god",      "give",    "noclip",  "fly",     "notarget"};
 
 template <size_t N>
 bool listed(const char* const (&list)[N], const char* w) {
@@ -147,6 +147,24 @@ void run_server_command(QcServer& s, int slot, const pg::Words& w) {
     c.drop = true;
   } else if (s.sv.set.single_player_clock && single_player_cheat(s, slot, w)) {
     // done: a single-player program's cheats (no sv_cheats; refused in deathmatch)
+  } else if (std::strcmp(cmd, "setpos") == 0) {
+    // setpos X Y Z: the player stood with his eye there, in the metres (y up) `viewfrom` prints;
+    // a cheat (sv_cheats 1), for a picture taken where a player stood.
+    if (!s.cvars.cheats()) {
+      print_to(s, me, 2, "Cheats are not enabled on this server\n");
+      return;
+    }
+    if (w.count < 4) {
+      print_to(s, me, 2, "setpos X Y Z: metres, as viewfrom prints them\n");
+      return;
+    }
+    constexpr float kUnitM = 0.025f;   // a map unit in metres (brush/map.hpp)
+    constexpr float kEyeOver = 22.0f;  // units from a player's origin up to his eye
+    sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
+    const auto metres = [&](int i) { return static_cast<float>(std::atof(pg::word(w, i))); };
+    ed.origin = {metres(1) / kUnitM, metres(3) / kUnitM, metres(2) / kUnitM - kEyeOver};
+    ed.velocity = {0, 0, 0};
+    sh::link_edict(s.sv, e, false);
   } else if (std::strcmp(cmd, "god") == 0 || std::strcmp(cmd, "give") == 0 ||
              std::strcmp(cmd, "noclip") == 0 || std::strcmp(cmd, "fly") == 0) {
     if (!s.cvars.cheats()) {

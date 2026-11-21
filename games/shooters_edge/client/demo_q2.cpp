@@ -588,6 +588,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   s.angles = {angle16(v.angles[0]), angle16(v.angles[1]), angle16(v.angles[2])};
   s.kick = {static_cast<float>(v.kick[0]) * 0.25f, static_cast<float>(v.kick[1]) * 0.25f,
             static_cast<float>(v.kick[2]) * 0.25f};
+  s.fov = static_cast<float>(v.fov);
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;
@@ -723,11 +724,17 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       point(DemoEffectKind::named);
       e.name = "sq_teleport";
       break;
-    case 45:
-    case 49:
+    case 45:  // the chain fist's smoke: straight up
+      point(DemoEffectKind::named);
+      e.name = "sq_smoke";
+      break;
+    case 49:  // a goal's burst: the teleport's
+      point(DemoEffectKind::named);
+      e.name = "sq_teleport";
+      break;
     case 52:
-      point(DemoEffectKind::spike);
-      keep = false;
+      point(DemoEffectKind::named);
+      e.name = "sq_widow_splash";
       break;
     case 3:
     case 23:
@@ -735,10 +742,22 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       line(DemoEffectKind::beam);
       break;
     case 11:
-    case 41:  // bubbles
-    case 27:  // a point and a direction sent as a point
-      line(DemoEffectKind::beam);
-      keep = false;
+    case 41:  // bubbles along a line; the second kind with its sound at the start
+      line(DemoEffectKind::named_trail);
+      e.name = kind == 11 ? "sq_bubbles" : "sq_bubbles2";
+      if (kind == 41) {
+        DemoSound o;
+        o.entity = -1;
+        o.name = "weapons/lashit.wav";
+        o.origin = e.at;
+        s.started.push_back(o);
+      }
+      break;
+    case 27:  // a blue bolt's hit, its way sent as a second point (taken as it is)
+      line(DemoEffectKind::named);
+      e.name = "sq_blue_hit";
+      e.way = e.end;
+      e.end = e.at;
       break;
     case 10:    // a splash: count, point, direction, its kind (sparks, water, mud, ...)
     case 15: {  // a laser's sparks: count, point, direction, a palette colour
@@ -752,12 +771,14 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       break;
     }
     case 25:
-    case 29:  // count, point, direction, colour
-      m.u8();
-      if (!point_dir(DemoEffectKind::spike)) return false;
-      m.u8();
-      keep = false;
+    case 29: {  // welding or tunnel sparks: count, point, direction, colour
+      const int count = m.u8();
+      if (!point_dir(DemoEffectKind::named)) return false;
+      e.colour = m.u8();
+      e.count = count;
+      e.name = kind == 25 ? "sq_welding" : "sq_tunnel_sparks";
       break;
+    }
     case 16:
     case 19:
     case 38:
@@ -776,23 +797,25 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       line(DemoEffectKind::beam);
       break;
     case 36:  // a flashlight: point, entity
-      point(DemoEffectKind::spike);
-      m.i16();
-      keep = false;
+      point(DemoEffectKind::named);
+      e.name = "sq_flashlight";
+      e.entity = m.i16();
       break;
     case 37:  // a force wall: start, end, colour
-      line(DemoEffectKind::beam);
-      m.u8();
-      keep = false;
+      line(DemoEffectKind::named_trail);
+      e.name = "sq_force_wall";
+      e.colour = m.u8();
       break;
     case 40: {  // steam: id, count, point, direction, colour, magnitude, and a time with an id
       const int id = m.i16();
-      m.u8();
-      if (!point_dir(DemoEffectKind::spike)) return false;
-      m.u8();
-      m.i16();
-      if (id != -1) m.i32();
-      keep = false;
+      const int count = m.u8();
+      if (!point_dir(DemoEffectKind::named)) return false;
+      e.colour = m.u8();
+      const int magnitude = m.i16();
+      if (id != -1) m.i32();  // a lasting jet: its first puff drawn, the rest not (yet)
+      e.name = "sq_steam";
+      e.count = count;
+      e.way = e.way * static_cast<float>(magnitude);  // the jet: its way times its speed
       break;
     }
     case 50:  // an id and a point
@@ -805,7 +828,10 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
     case 57:  // a bolt's zap
       line(DemoEffectKind::beam);
       break;
-    case 56:  // a blue bolt's hit
+    case 56:  // a blue bolt's hit: point, direction
+      if (!point_dir(DemoEffectKind::named)) return false;
+      e.name = "sq_blue_hit";
+      break;
     case 58:  // a slam on the ground
       if (!point_dir(DemoEffectKind::spike)) return false;
       break;

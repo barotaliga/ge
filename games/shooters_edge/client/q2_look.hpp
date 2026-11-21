@@ -34,8 +34,12 @@ namespace shooters_edge::client {
 inline constexpr uint32_t kSqRotate = 1u, kSqGib = 2u, kSqBlaster = 8u, kSqRocket = 16u,
                           kSqGrenade = 32u, kSqHyperblaster = 64u, kSqBfg = 128u,
                           kSqColourShell = 256u, kSqPowerScreen = 512u, kSqFlies = 16384u,
-                          kSqQuad = 32768u, kSqInvulnerable = 65536u, kSqDoubleDamage = 1u << 27,
-                          kSqHalfDamage = 1u << 30;
+                          kSqQuad = 32768u, kSqInvulnerable = 65536u, kSqFlag1 = 1u << 18,
+                          kSqFlag2 = 1u << 19, kSqIonRipper = 1u << 20, kSqGreenGib = 1u << 21,
+                          kSqBlueHyperblaster = 1u << 22, kSqPlasma = 1u << 24, kSqTrap = 1u << 25,
+                          kSqTracker = 1u << 26, kSqDoubleDamage = 1u << 27,
+                          kSqSphereTrans = 1u << 28, kSqTagTrail = 1u << 29,
+                          kSqHalfDamage = 1u << 30, kSqTrackerTrail = 1u << 31;
 // The render bits (the entity's `renderfx`).
 inline constexpr uint32_t kRfTranslucent = 32u, kRfBeam = 128u, kRfGlow = 512u, kRfShellRed = 1024u,
                           kRfShellGreen = 2048u, kRfShellBlue = 4096u, kRfShellDouble = 65536u,
@@ -51,12 +55,28 @@ struct Q2Look {
   bool pulse = false;              // its light pulses (`q2_pulse`)
   bool shell = false;              // a shell copy over it
   bool bleeds = false;             // a body's piece: a blood trail behind it (the gib bit)
+  bool green_blood = false;        // that trail green (the green gib bit alone)
   bool flies = false;              // a corpse: flies swarm round it (effects::q2_flies)
   bool power_screen = false;       // a power screen's plate before it, a green shell (it was hit)
   float shell_rgb[3] = {0, 0, 0};  // the shell's flat colour, 0..1
   // Its trail and light: a rocket (smoke and fire), a grenade (smoke), a bolt (a blaster's or a
-  // hyperblaster's), the BFG's ball; none: a plain entity.
-  enum class Missile : uint8_t { none, rocket, grenade, bolt, bfg } missile = Missile::none;
+  // hyperblaster's), the BFG's ball; a flag carried (red or blue: a fuzzy column of specks and a
+  // light), a tag token (the same in yellow), an ion ripper's bolt (red specks shaken across,
+  // a pink light), a blue bolt (a blue light), a plasma bolt (a pink light, see-through at 0.6);
+  // none: a plain entity.
+  enum class Missile : uint8_t {
+    none,
+    rocket,
+    grenade,
+    bolt,
+    bfg,
+    flag1,
+    flag2,
+    tag,
+    ion,
+    blue,
+    plasma
+  } missile = Missile::none;
 };
 
 // THE POWERS' SHELLS AND THE ITEMS' PULSE IN EITHER GAME (r_powershells, r_itempulse). Quake II

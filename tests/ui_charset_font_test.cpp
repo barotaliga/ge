@@ -103,4 +103,21 @@ TEST(a_glyph_sheet_is_a_square_pixel_font_shaded_by_its_brightness) {
   Font none;
   std::string why;
   CHECK(!sheet_font(make_image(100, 64, {0, 0, 0, 0}), none, &why) && !why.empty());
+
+  // An upscaled sheet (32 px cells): ink run over a text cell's edge (a space's top, from the
+  // row above) is cleared; a bar piece's cell, which tiles edge to edge, keeps its edges.
+  Image big = make_image(512, 512, {0, 0, 0, 0});
+  const auto ink = [&](int code, int x, int y) {
+    uint8_t* px = &big.rgba[(static_cast<size_t>((code >> 4) * 32 + y) * 512 +
+                             static_cast<size_t>((code & 15) * 32 + x)) *
+                            4];
+    px[0] = px[1] = px[2] = px[3] = 255;
+  };
+  for (int x = 0; x < 32; ++x) ink(' ', x, 0), ink(129, x, 0);  // a dash on the top rows
+  ink('A', 16, 16);                                             // a letter's middle
+  Font up;
+  CHECK(sheet_font(big, up));
+  CHECK(lit(up.mask(up.glyph_index(' '), 32, 0)) == 0);
+  CHECK(lit(up.mask(up.glyph_index('A'), 32, 0)) > 0);
+  CHECK(lit(up.mask(129, 32, 0)) > 0);
 }

@@ -16,8 +16,8 @@
 //   (the default: opens everywhere, a tenth of a PNG), avif or heic (jpeg is jpg; tga and pcx,
 //   formats no longer written, are png); `scr_quality` 1..100 (90) for the lossy ones;
 //   `scr_chroma` 444 (the default: a JPEG's colour at full size, so a HUD's coloured letters stay
-//   sharp) or 420 (halved each way, about a quarter smaller); `scr_folder` another folder beside
-//   the game's screenshot folder ("" that one).
+//   sharp) or 420 (halved each way, about a quarter smaller); `scr_folder` another folder: a name
+//   beside the game's screenshot folder ("" that one) or a whole path (`~/Desktop/quake`).
 // - A NAMED ONE (`screenshot <name>`, `request(name)`): `<name>.<ext>` in the folder instead of the
 //   time's name, never written over another.
 // - THE NAME: `<prefix>-YYYY-MM-DD-HHMMSS.<ext>` in local time (`screenshot_stem`), then `-2`, `-3`
@@ -60,7 +60,7 @@ struct ScreenshotSettings {
   std::string format = "jpg";  // scr_format: png, jpg, avif, heic (jpeg is jpg; tga, pcx png)
   int32_t quality = 90;        // scr_quality: 1..100
   int32_t chroma = 444;        // scr_chroma: 444 full, 420 halved (JPEG)
-  std::string folder;          // scr_folder: "" the writer's own; else one beside it, in the game's
+  std::string folder;          // scr_folder: "" the writer's own; a name beside it; a whole path
 };
 
 // scr_format, scr_quality and scr_chroma bound to `s`, archived (the player's to keep).

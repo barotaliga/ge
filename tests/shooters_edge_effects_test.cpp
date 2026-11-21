@@ -263,6 +263,28 @@ TEST(ce_skies_picks_our_sky_or_the_packs_in_the_modern_look) {
   CHECK(!lk::world_options(lk::Look::classic, {}, pic).pack_sky);  // the classic's own already
 }
 
+TEST(ce_enabled_0_turns_every_switch_off_and_1_gives_each_its_own_back) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  con.execute("ce_decals 0");
+  con.run();
+  con.execute("ce_enabled 0");
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(!pic.ce.skies && !pic.ce.textures && !pic.ce.flames && !pic.ce.decals);
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).pack_sky);  // the pack's sky
+  CHECK(con.cvars().find("ce_skies")->on());                     // the player's switch kept as set
+  con.execute("ce_flames 0");  // set while it is off: kept for when it is on again
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(!pic.ce.skies);
+  con.execute("ce_enabled 1");
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(pic.ce.skies && pic.ce.textures && !pic.ce.decals && !pic.ce.flames);
+}
+
 TEST(ce_relief_and_ce_parallax_light_the_enhanced_textures_in_the_modern_look) {
   ge::console::Console con;
   lk::Picture pic;
@@ -646,6 +668,43 @@ TEST(a_quake2_trail_thins_as_its_piece_flies) {
   fx::Particles bolt;
   fx::q2_bolt_trail(a, b, 6, {}, &bolt);
   CHECK(bolt.size() == 20);
+}
+
+// Quake II's line effects over 100 units: bubbles (a speck every 32 units, the second kind's every
+// 8), a force wall (about seven in ten of a speck every 4 units, falling), a flag's column (every 5
+// units) and the ion ripper's specks shaken from side to side.
+TEST(quake2_line_effects_space_their_specks_along_the_line) {
+  const double a[3] = {0, 0, 0}, b[3] = {100 * 0.025, 0, 0};
+  fx::Particles one, two, wall, column, ion;
+  fx::q2_bubbles(a, b, false, 3, {}, &one);
+  fx::q2_bubbles(a, b, true, 3, {}, &two);
+  fx::q2_force_wall(a, b, 208, 3, {}, &wall);
+  fx::q2_column_trail(a, b, 242, 3, {}, &column);
+  int side = 1;
+  fx::q2_ion_trail(a, b, side, 3, {}, &ion);
+  CHECK_MSG(one.size() == 4 && two.size() == 13, std::to_string(one.size()));
+  CHECK_MSG(wall.size() > 10 && wall.size() < 25, std::to_string(wall.size()));
+  CHECK(column.size() == 20 && ion.size() == 20);
+  for (const auto& p : one) CHECK(p.v[1] > 0);   // bubbles rise
+  for (const auto& p : wall) CHECK(p.v[1] < 0);  // a force wall's specks drift down
+  CHECK(ion[0].v[0] == -ion[1].v[0]);            // side to side
+}
+
+// Quake II's bursts: steam's count along its jet, the blue hyperblaster's 40 blue specks, the
+// widow's 256 round it, and a plain light whose level is its reach over 128 units.
+TEST(quake2_bursts_throw_their_counts_and_lights) {
+  const double at[3] = {1, 2, 3}, jet[3] = {0, 0, 50}, up[3] = {0, 0, 1};
+  fx::Particles steam, blue, widow;
+  fx::q2_steam(at, jet, 10, 8, 40, 5, {}, &steam);
+  fx::q2_blue_hit(at, up, 5, {}, &blue);
+  fx::q2_widow_splash(at, 5, {}, &widow);
+  CHECK(steam.size() == 10 && blue.size() == 40 && widow.size() == 256);
+  const fx::Light l = fx::q2_point_light(at, 400, 1, 1, 1);
+  CHECK(l.colour[0] > 3.1f && l.colour[0] < 3.2f && l.pos[1] == 2);
+  fx::Particles none;
+  const double still[3] = {0, 0, 0};
+  fx::q2_steam(at, still, 10, 8, 40, 5, {}, &none);
+  CHECK(none.empty());
 }
 
 TEST(quake2_flies_swarm_up_hold_and_thin_over_a_minute) {

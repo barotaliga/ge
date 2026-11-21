@@ -184,6 +184,7 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   sh::MoveCmd sent[64] = {};
   double sent_at[64] = {};  // the network's time each was sent, s
   double latency = 0;       // the newest acknowledged move's round trip, s
+  ge::hud::NetHistory net;  // each packet as it came, or not (scr_lag_draw, r_netgraph)
   double moves_at = -1;     // the network's time the newest other players' moves came (-1: none)
   int64_t moves_read = 0;   // the other players' moves read so far
   int64_t frames = 0, moves = 0, datagrams_in = 0, bytes_in = 0, bytes_out = 0;

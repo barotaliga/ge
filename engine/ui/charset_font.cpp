@@ -61,6 +61,23 @@ bool sheet_font(const Image& sheet, Font& out, std::string* why) {
     top = std::max(top, v);
   }
   for (uint8_t& c : coverage) c = static_cast<uint8_t>((c * 255 + top / 2) / top);
+  // An upscaled sheet (cells over 8 px) was enhanced as one picture, its ink run across the cells'
+  // edges: the next cell's edge shows as a stray dash beside a letter (a space's top). Half a
+  // classic pixel round each text cell (32..126, and the lit 160..254) is cleared; the classic
+  // letters leave their cells' edges clear, and the bars and box pieces, which tile edge to edge,
+  // keep theirs.
+  const int cell = size / kCells;
+  if (cell > 8) {
+    const int rim = cell / 16;
+    for (int y = 0; y < size; ++y)
+      for (int x = 0; x < size; ++x) {
+        const int code = (y / cell) * kCells + x / cell;
+        if ((code & 127) < 32 || (code & 127) == 127) continue;
+        const int cx = x % cell, cy = y % cell;
+        if (cx < rim || cy < rim || cx >= cell - rim || cy >= cell - rim)
+          coverage[static_cast<size_t>(y) * static_cast<size_t>(size) + static_cast<size_t>(x)] = 0;
+      }
+  }
   std::vector<GridFace> faces;
   faces.push_back({.size = size,
                    .columns = kCells,
