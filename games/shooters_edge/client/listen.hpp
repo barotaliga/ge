@@ -324,6 +324,7 @@ struct Listen {
   std::vector<sh::Vec3f> explosions;
   std::vector<Blow> blows;  // the blows the player took on this map, in order
   int64_t bonuses = 0;      // the items he took (the server's `bf`), since the window opened
+  double cshift[4] = {130, 80, 50, 0};  // v_cshift: the tint in open air (red, green, blue, of 255)
   // The sounds the server started for the player (the protocol's sound message to slot 0) since
   // the window last played them (listen_sound.hpp empties it), and the map's looping sounds.
   std::vector<DemoSound> sounds;
