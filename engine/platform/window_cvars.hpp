@@ -6,12 +6,13 @@
 //
 // ge:summary The window's console settings for any game: vid_fullscreen, vid_display, volume
 // ge:keywords vid_fullscreen vid_display vid_displays fullscreen display window cvars volume
-// ge:keywords window-cvars add_window_cvars
+// ge:keywords window-cvars add_window_cvars alt-enter alt_enter
 // ge:skill platform console
 // ge:test tests/platform_window_cvars_test.cpp
 #pragma once
 
 #include "console/console.hpp"
+#include "platform/window.hpp"
 
 namespace ge::platform {
 
@@ -23,5 +24,9 @@ struct WindowCvars {
 
 // The cvars over `w` (it must outlive `con`), and `vid_displays`.
 void add_window_cvars(console::Console& con, WindowCvars& w);
+
+// ALT+ENTER: the window in and out of full screen, whatever the binds say (`vid_fullscreen`
+// flipped as typed). True when this frame's keys asked for it.
+bool alt_enter(const InputSnapshot& in, console::Console& con);
 
 }  // namespace ge::platform

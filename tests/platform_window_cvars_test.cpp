@@ -20,3 +20,15 @@ TEST(the_window_cvars_write_the_settings) {
   CHECK(w.volume == 1);  // clamped
   CHECK(con.has_command("vid_displays"));
 }
+
+TEST(alt_enter_flips_full_screen) {
+  ge::console::Console con;
+  ge::platform::WindowCvars w;
+  ge::platform::add_window_cvars(con, w);
+  ge::platform::InputSnapshot in;
+  in.pressed[static_cast<size_t>(ge::platform::Key::enter)] = true;
+  CHECK(!ge::platform::alt_enter(in, con));  // ENTER alone
+  in.held[226] = true;
+  CHECK(ge::platform::alt_enter(in, con) && w.fullscreen);
+  CHECK(ge::platform::alt_enter(in, con) && !w.fullscreen);
+}

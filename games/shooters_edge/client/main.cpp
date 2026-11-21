@@ -1223,6 +1223,8 @@ int run_main(int argc, char** argv) {
     }
     queue.clear();
     ge::platform::poll_input(*window, input, *devices, queue);
+    if (ge::platform::alt_enter(input, console))  // not the menu's ENTER too
+      input.pressed[static_cast<size_t>(ge::platform::Key::enter)] = false;
     const uint64_t now = ge::platform::now_ns();
     const double frame_s = static_cast<double>(now - last) * 1e-9;
     // The game's time: at vsync whole refreshes (vid_steady), so the motion is even whenever the

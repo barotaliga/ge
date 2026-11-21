@@ -46,4 +46,12 @@ void add_window_cvars(console::Console& con, WindowCvars& w) {
                   });
 }
 
+bool alt_enter(const InputSnapshot& in, console::Console& con) {
+  constexpr size_t kLeftAlt = 226, kRightAlt = 230;  // the keys' HID usages
+  if (!in.tapped(Key::enter) || !(in.held[kLeftAlt] || in.held[kRightAlt])) return false;
+  const console::Cvar* v = con.cvars().find("vid_fullscreen");
+  con.execute(std::string("vid_fullscreen ") + (v != nullptr && v->value != "0" ? "0" : "1"));
+  return true;
+}
+
 }  // namespace ge::platform
