@@ -115,8 +115,12 @@ namespace ge::shooterbots {
 // - `airwall`: the air's keys under a view not the pilot's (`airkeys`, `aimhop`) charged for a
 //   wall or a body their velocity runs into within 0.4 s (bot.cpp); on.
 // - `landwall`: a hop's landing whose jump would fly into a wall on every curve the air gives runs
-//   on along the route and jumps once clear (pilot.cpp `land_walled`); dropped (even head to head,
-//   no faster), in no preset.
+//   on along the route and jumps once clear (pilot.cpp `land_walled`, 0.35 s ahead). At 0.15 s it
+//   was dropped (even head to head, no faster). ON at 0.35 s (2026-11-21, M18r.md P2: dm2's
+//   corridor ends, where chained landings flew into the end wall): 12 2on2 dm2 seeds, speed off
+//   the recordings 270.9 -> 275.1 (people 291), the hop's fast flights crashing 40.2 -> 39.3 % and
+//   keeping -22.7 -> -17.9 of their speed, mid-air crashes 803 -> 729, wall bumps 4.10 -> 4.21 a
+//   minute (people 2.9), head to head +1.8 (red without -2.8, blue without +6.5).
 // - `circlekeys`: a circle jump's curve on the ground under a view not the pilot's (the aim's, a
 //   spot watched, the hand's) pressed with the key set the ground move carries furthest on round
 //   the way (bot.cpp), not the curve's wish turned under that view; not kept, in no preset.
