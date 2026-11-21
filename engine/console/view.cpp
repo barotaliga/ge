@@ -297,7 +297,10 @@ void ConsoleView::frame(double dt_s) {
 }
 
 void ConsoleView::add(LineKind kind, std::string_view text) {
-  // A long line arrives as one; a line with newlines as several.
+  // A long line arrives as one; a line with newlines as several. A game's print ends in its
+  // newline ("You got the shells\n"): that newline ends the line, it opens no empty one after it
+  // (so a print of "\n" alone is one empty line).
+  if (!text.empty() && text.back() == '\n') text.remove_suffix(1);
   size_t at = 0;
   while (at <= text.size()) {
     const size_t nl = text.find('\n', at);
@@ -309,6 +312,31 @@ void ConsoleView::add(LineKind kind, std::string_view text) {
     at = nl + 1;
   }
   while (static_cast<int32_t>(lines_.size()) > keep_) lines_.pop_front();
+}
+
+bool ConsoleView::rewrite(uint64_t n, std::string_view text) {
+  if (lines_.empty() || n < lines_.front().n || n > lines_.back().n) return false;
+  lines_[static_cast<size_t>(n - lines_.front().n)].text = std::string(text);
+  return true;
+}
+
+bool ConsoleView::has_selection() const {
+  return selecting_ &&
+         (select_from_.line != select_to_.line || select_from_.column != select_to_.column);
+}
+
+std::string ConsoleView::selected_text() const {
+  std::string out;
+  if (!has_selection() || lines_.empty()) return out;
+  const TextSpot a = selection_first(), b = selection_last();
+  for (const ViewLine& l : lines_) {
+    if (l.n < a.line || l.n > b.line) continue;
+    const size_t from = l.n == a.line ? std::min(a.column, l.text.size()) : 0;
+    const size_t to = l.n == b.line ? std::min(b.column, l.text.size()) : l.text.size();
+    if (l.n != a.line) out += '\n';
+    if (to > from) out.append(l.text, from, to - from);
+  }
+  return out;
 }
 
 std::vector<const ViewLine*> ConsoleView::page(int rows) const {
@@ -327,7 +355,7 @@ void ConsoleView::set_open(bool open) {
 
 std::vector<const ViewLine*> ConsoleView::notify() const {
   std::vector<const ViewLine*> out;
-  if (!notify_on_) return out;
+  if (!notify_on_ || host_notify_) return out;
   for (auto it = lines_.rbegin(); it != lines_.rend(); ++it) {
     if (static_cast<int32_t>(out.size()) >= notify_lines_) break;
     if (clock_ - it->time_s > notify_time_ || it->n < notify_from_) break;
@@ -424,7 +452,16 @@ void ConsoleView::key(EditKey k) {
       scroll_ = std::max(0, scroll_ - 8);
       break;
     case EditKey::escape:
-      set_open(false);
+      // Text typed: Escape clears it first, and closes the console the next time (the console's
+      // own key closes it and keeps the text).
+      if (!input_.empty()) {
+        input_.clear();
+        cursor_ = 0;
+        history_at_ = -1;
+        selected_ = -1;
+      } else {
+        set_open(false);
+      }
       break;
   }
 }

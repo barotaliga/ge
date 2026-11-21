@@ -176,14 +176,16 @@ fn held_colour(in: VertexOut) -> vec3f {
   let d = draws[in.draw];
   let m = models[d.info.z];
   var base = in.attr;
+  var shine = 1.0;
   if (m.rect.z > 0u) {
     let at = fract(in.attr.xy) * vec2f(m.rect.zw);
     let t = clamp(vec2u(at), vec2u(0u), m.rect.zw - 1u);
     let c = textureLoad(atlas, vec2i(m.rect.xy + t), 0);
     base = srgb_decode(c.rgb);
-    if (c.a > 0.5) {
+    if (c.a > 0.75) {
       return base;
     }
+    shine = clamp(c.a * (255.0 / 127.0), 0.0, 1.0);  // metal shines, wood only takes the light
   }
   let n = normalize(in.normal);
   let p = in.view;
@@ -225,7 +227,7 @@ fn held_colour(in: VertexOut) -> vec3f {
     }
   }
   s.diffuse = max(s.diffuse, vec3f(d.mix.w));
-  return base * s.diffuse + s.specular;
+  return base * s.diffuse + s.specular * shine;
 }
 
 struct FragmentOut {

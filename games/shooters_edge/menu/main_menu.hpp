@@ -169,7 +169,8 @@ enum class Outcome : uint8_t {
 // map, an action's line run. Returns whether the menu closes or opens something it owns.
 Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host);
 
-// Each client setting the menu shows put back to its default (OPTIONS ▸ RESET TO DEFAULTS).
+// Each client setting the menu shows put back to its default, and every key to the game's layout
+// where the console has `bind_defaults` (OPTIONS ▸ RESET TO DEFAULTS).
 void reset_defaults(Host& host);
 
 }  // namespace shooters_edge::menu

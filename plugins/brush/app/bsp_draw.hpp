@@ -102,7 +102,8 @@ struct Options {
   // Which lights throw a figure's shadow: false those whose source the player can see alone
   // (draw_data.hpp's PointLight::seen: a flame, a globe, a lamp at its glowing fitting; and the
   // dynamic lights), so no shadow falls from a fill light hanging unseen in the air, nor from a
-  // pool's or a teleporter's glow, and the light bounced round the room is never shadowed by him.
+  // pool's glow, and the light bounced round the room is never shadowed by him; a teleporter's
+  // light is seen (its panel glows), so he throws a shadow standing before one.
   // True: every light's, and the bounce dimmed by the share of their light he hides (the look
   // before). The walls' own shadows are every shadowed light's either way: they keep its light in
   // its room, as the map's own lightmaps do.
@@ -481,8 +482,9 @@ render::PrecipShelter bsp_shelter(const BspDraw& draw);
 std::vector<PointLight> lava_lights(const Scene& scene, double core_c = 1150, double cover = 0.75);
 // The lights the scene's slime gives off: the same grid, a faint green of `luminance` cd/m^2.
 std::vector<PointLight> slime_lights(const Scene& scene, double luminance = 3);
-// The lights the teleporters give off: one half a metre before each panel, a cool grey-white,
-// breathing slowly, its brightness by the panel's area.
+// The lights the teleporters give off: one 0.8 m before each panel, a cool grey-white, breathing
+// slowly, its brightness by the panel's area; `seen` (its panel glows), so it throws a figure's
+// shadow.
 std::vector<PointLight> portal_lights(const Scene& scene);
 
 }  // namespace ge::brush::app

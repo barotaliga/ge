@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <sstream>
@@ -793,6 +794,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (f.from_above) o.pvs = false;
   f.rec.begin_frame(d);
   // The last frame's camera for the reflections' march (none with them off: nothing reads it).
+  // The night lifted through the sky faces (the veil): the moon's disc drawn so as to come out as
+  // the eye sees it, not lifted with the dark sky round it (a red moon clipped to flat pink).
+  if (o.mode == ba::Mode::v2 && !o.pack_sky)
+    view.sky_lift = std::max(o.sky_light * o.sky_seen, 1e-6);
   gr::fill_uniforms(f.staged, view, f.w, f.h, o.reflections > 0 ? &f.history : nullptr);
   d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
   gr::prepare_sky(f.skypass, view);
@@ -1007,6 +1012,44 @@ gr::MorphBurn world_burn(const WorldDraw& f, int entity) { return burn_skin_of(f
 
 void set_air_draws(WorldDraw& f, int n) {
   if (f.extras) set_extras_air_draws(*f.extras, n);
+}
+
+void add_gpustats(ge::console::Console& con, GpuWatch& watch) {
+  con.add_command(
+      "gpustats",
+      "gpustats [frames]: what the next frames cost on the GPU (60 by default), the "
+      "dearest passes first",
+      [&watch](ge::console::Console& c, const ge::console::Args& a) {
+        watch = {};
+        watch.left = a.size() > 1 ? std::clamp(std::atoi(a[1].c_str()), 1, 6000) : 60;
+        c.print("gpustats: reading the next " + std::to_string(watch.left) + " frames...");
+      });
+}
+
+void gpu_watch_frame(GpuWatch& watch, const WorldDraw& w, double frame_s,
+                     ge::console::Console& con) {
+  if (watch.left <= 0) return;
+  record_span(w, watch.times);
+  watch.frame_ms.push_back(frame_s * 1000);
+  double world_cpu = w.rec.stats.prepare_ms;  // the frame's decisions, then each pass's encoding
+  for (int i = 0; i < w.rec.stats.count; ++i) world_cpu += w.rec.stats.passes[size_t(i)].cpu_ms;
+  watch.world_cpu_ms.push_back(world_cpu);
+  ++watch.read;
+  if (--watch.left > 0) return;
+  const auto median = [](std::vector<double> v) {
+    std::sort(v.begin(), v.end());
+    return v.empty() ? 0.0 : v[v.size() / 2];
+  };
+  const double frame = median(watch.frame_ms), cpu = median(watch.world_cpu_ms);
+  char line[200];
+  std::snprintf(line, sizeof line,
+                "gpustats: frame %.2f ms (%.0f fps) median; the world's CPU %.2f ms; the rest "
+                "(game, effects, HUD, waiting for the display) %.2f ms",
+                frame, frame > 0 ? 1000 / frame : 0.0, cpu, std::max(0.0, frame - cpu));
+  con.print(line);
+  con.print("gpustats: " + span_report(watch.times));
+  const std::vector<std::string> lines = pass_report(watch.times, watch.read);
+  for (size_t i = 0; i < lines.size() && i < 12; ++i) con.print("  " + lines[i]);
 }
 
 void record_span(const WorldDraw& f, PassTimes& p) {

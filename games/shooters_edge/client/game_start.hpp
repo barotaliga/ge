@@ -33,7 +33,7 @@
 namespace shooters_edge::client {
 
 inline constexpr double kStartHold = 0.75;  // seconds the loading lines show at least
-inline constexpr double kStartMost = 8;     // seconds before the console is let go regardless
+inline constexpr double kStartMost = 20;    // seconds before the console is let go regardless
 
 struct GameStart {
   double conspeed = 300;    // scr_conspeed, bound: in the game's unit (`per_screen` a screen)

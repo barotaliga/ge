@@ -260,7 +260,7 @@ constexpr Entry kEntries[] = {
     {.page = "options",
      .id = "reset",
      .text = "RESET TO DEFAULTS",
-     .hint = "Every setting on these pages back to its default."},
+     .hint = "Every setting on these pages and every key back to its default."},
     {.page = "options",
      .id = "viewsize",
      .text = "SCREEN SIZE",
@@ -1206,6 +1206,11 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
 
 void reset_defaults(Host& host) {
   if (host.console == nullptr) return;
+  // The keys too, where the game has its layout (client/controls.hpp's `bind_defaults`).
+  if (host.console->has_command("bind_defaults")) {
+    host.console->execute("bind_defaults");
+    host.console->run();
+  }
   for (const Entry& e : table_of(host).entries) {
     if (e.target != Target::client) continue;
     if (ge::console::Cvar* c = host.console->cvars().find(e.id))

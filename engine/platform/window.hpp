@@ -103,6 +103,9 @@ struct WindowDesc {
   int width = 1280;  // logical size; the pixel size may be larger on a high-density display
   int height = 720;
   bool resizable = true;
+  // Never shown, raised or given the keys: a run that only draws and takes screenshots (the
+  // drawing goes on as usual; what a screenshot copies is the frame drawn, not the screen).
+  bool hidden = false;
 };
 
 // Whether this process can open a window (a display server, a desktop session). False in a

@@ -100,8 +100,12 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // ce_blood_amount: how much a body bleeds under ce_blood, 1 as drawn: the drops thrown, the
   // splashes and pools, the wounds' stains and runs and their drips; 0 none.
   double blood_amount = 1;
-  // The ce_ switches: each enhancement the modern look draws over the pack, on or off.
+  // The ce_ switches: each enhancement the modern look draws over the pack, on or off; with
+  // ce_enabled 0 every one reads off (`apply_ce_enabled`), the ce_ cvars keeping the player's.
   ge::classicenhance::Switches ce;
+  // ce_enabled: classic enhance as a whole, 0 the pack as it is whatever each ce_ switch says.
+  bool ce_enabled = true;
+  bool ce_applied = true;  // ce_enabled as `apply_ce_enabled` last applied it
   // ce_shadows_quality, ce_water_quality, ce_skies_quality: low, medium or high, each its
   // switch's level when on (Stops).
   std::string shadows_quality = "high", water_quality = "high", skies_quality = "high";
@@ -242,6 +246,10 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
 // over `picture` (it must outlive `con`), and the `fog` and `allskins` commands. Each cvar's
 // default is the value `picture` holds now (a game's own; above).
 void add_cvars(ge::console::Console& con, Picture& picture);
+// CE_ENABLED, once a frame: off, every ce_ switch in `picture.ce` reads off; turned on again,
+// each reads its ce_ cvar in `cvars` again (what the player set meanwhile too). The ce_ cvars
+// themselves never change, so a saved config keeps every switch as the player set it.
+void apply_ce_enabled(Picture& picture, const ge::console::Cvars& cvars);
 // The models a frame draws: `placed` itself, or none with r_drawentities 0.
 template <class T>
 std::span<const T> drawn_models(const Picture& picture, std::span<const T> placed) {

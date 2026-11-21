@@ -197,6 +197,12 @@ TEST(a_named_screenshot_keeps_its_name_and_never_overwrites) {
   CHECK(shots.request("y", &why) && shots.due() && shots.write(8, 8, rgba));
   shots.flush();
   CHECK(fs::exists(dir.parent_path() / "shots" / "x.png") && fs::exists(dir / "y.png"));
+  // A whole path is the player's own folder, taken as it is.
+  const fs::path own = dir.parent_path() / "elsewhere";
+  set.folder = own.string();
+  CHECK(shots.request("z", &why) && shots.due() && shots.write(8, 8, rgba));
+  shots.flush();
+  CHECK(fs::exists(own / "z.png"));
   // The old formats' words: tga and pcx are png, jpeg is jpg.
   std::string note;
   set.format = "tga";

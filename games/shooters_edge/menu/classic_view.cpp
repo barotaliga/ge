@@ -106,13 +106,15 @@ std::string_view tag_word(const ClassicArt& art, std::string_view id) {
 }
 
 // `text` in the art's cut letters, its line's top left at (x, y), classic px.
-void set_letters(const ClassicPen& pen, std::string_view text, float x, float y) {
+void set_letters(const ClassicPen& pen, std::string_view text, float x, float y,
+                 Tone tone = Tone::full) {
   const ClassicArt& art = pen.art;
+  const std::map<char, ui::Image>& set = toned(art.letters, tone);
   std::vector<float> xs;
   carved_layout(art, text, &xs);
   for (size_t i = 0; i < text.size(); i++) {
     if (text[i] == ' ') continue;
-    const ui::Image& img = art.letters.at(text[i]);
+    const ui::Image& img = set.at(text[i]);
     ui::Box b;
     b.rect = pen.at(x + xs[i], y, art.width_of(img), kCarvedLine);
     b.image = &img;
@@ -141,19 +143,21 @@ void draw_pieces(const ClassicPen& pen, const std::vector<TagPiece>& pieces, flo
 
 // `text` on a tag, its top left at (x, y), classic px; from the lit tags' letters when `lit` and
 // they have them.
-void set_tag(const ClassicPen& pen, std::string_view text, float x, float y, bool lit) {
-  draw_pieces(pen, tag_pieces(pen.art, text, lit, nullptr), x, y);
+void set_tag(const ClassicPen& pen, std::string_view text, float x, float y, bool lit,
+             Tone tone = Tone::full) {
+  draw_pieces(pen, tag_pieces(pen.art, text, lit, nullptr, tone), x, y);
 }
 
 // Row `id`'s word at (x, y), classic px: in the strips' cut letters, or on Quake II's tags; false
 // when the art has neither for it (the caller draws the glyphs instead). `lit`: the tag lit.
-bool carve(const ClassicPen& pen, std::string_view id, float x, float y, bool lit = false) {
+bool carve(const ClassicPen& pen, std::string_view id, float x, float y, bool lit = false,
+           Tone tone = Tone::full) {
   if (const std::string_view text = letter_word(pen.art, id); !text.empty()) {
-    set_letters(pen, text, x, y);
+    set_letters(pen, text, x, y, tone);
     return true;
   }
   if (const std::string_view text = tag_word(pen.art, id); !text.empty()) {
-    set_tag(pen, text, x, y, lit);
+    set_tag(pen, text, x, y, lit, tone);
     return true;
   }
   return false;
@@ -161,8 +165,8 @@ bool carve(const ClassicPen& pen, std::string_view id, float x, float y, bool li
 
 }  // namespace
 
-bool carve_word(const ClassicPen& pen, std::string_view id, float x, float y, bool lit) {
-  return carve(pen, id, x, y, lit);
+bool carve_word(const ClassicPen& pen, std::string_view id, float x, float y, bool lit, Tone tone) {
+  return carve(pen, id, x, y, lit, tone);
 }
 
 float carved_width(const ClassicArt& art, std::string_view id) {
@@ -506,7 +510,30 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
     return;
   }
 
-  if (page.id == "quit" || page.id == "newgame") pen.box(56, 68, 24, 5);
+  // Quake II asks whether to quit on a tag in its quit picture (the rest of the picture its
+  // credits): the tag alone cut from it, over the answers, in place of the box and the question
+  // written in the glyphs (whose sheet has no box pieces).
+  const ui::Image* asked = page.id == "quit" && art.plates() ? art.find("quit") : nullptr;
+  if (asked != nullptr) {
+    constexpr ui::Rect kQuitTag{86, 50, 144, 30};  // classic px of the 320 x 240 picture
+    float first = -1;
+    for (size_t i = 0; i < page.items.size(); i++)
+      if (l.items[i].w > 0 && page.items[i].kind != ui::ItemKind::label) {
+        first = local_y(l.items[i]);
+        break;
+      }
+    const float py = first >= 0 ? std::max(0.0f, first - kQuitTag.h - 6) : 90;
+    const float d = static_cast<float>(asked->width) / art.width_of(*asked);  // px a classic px
+    ui::Box b;
+    b.rect = pen.at(std::floor((kScreenW - kQuitTag.w) / 2), py, kQuitTag.w, kQuitTag.h);
+    b.image = asked;
+    b.uv = {kQuitTag.x * d, kQuitTag.y * d, kQuitTag.w * d, kQuitTag.h * d};
+    b.nearest = art.density <= 1;
+    b.feather = 0;
+    pen.dl.box(b);
+  } else if (page.id == "quit" || page.id == "newgame") {
+    pen.box(56, 68, 24, 5);
+  }
   for (size_t i = 0; i < page.items.size(); i++) {
     const ui::Item& it = page.items[i];
     const ui::Rect& r = l.items[i];
@@ -514,6 +541,7 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
     const float y = local_y(r);
     const float alpha = it.disabled ? 0.3f : 1.0f;
     if (it.kind == ui::ItemKind::label) {
+      if (asked != nullptr) continue;  // the picture asks it
       const std::string s = sentence(it.text);
       pen.text(s, std::floor((kScreenW - 8 * static_cast<float>(s.size())) / 2), y, false);
       continue;
