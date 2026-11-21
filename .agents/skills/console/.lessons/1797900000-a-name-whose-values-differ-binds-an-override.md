@@ -2,7 +2,7 @@
 title: A game's setting whose values mean other things binds an override field, not a synonym
 date: 2026-11-21
 scope: engine/console/view.cpp, games/shooters_edge/client/cvar_layers.cpp
-concepts: [synonym, override, game_chat, con_auto_chat, bindings-reset, layer-switch]
+concepts: [synonym, override, game-chat, con-auto-chat, bindings-reset, layer-switch]
 ---
 
 Quake II's `con_auto_chat` 2 means "said to the team" where our `con_chat` 2 means "a command when

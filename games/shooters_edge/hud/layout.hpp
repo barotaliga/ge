@@ -42,8 +42,8 @@
 // message.
 //
 // Every look shows the crosshair, the notify feed (top left), scr_chathud's `chat` (lower left)
-// and the centre message, and with cl_weapongroups 1 the WEAPON GROUP (`hud_wgroup_*`): a column on the
-// right edge that opens on a number key to the group's weapons and folds down into the one in
+// and the centre message, and with cl_weapongroups 1 the WEAPON GROUP (`hud_wgroup_*`): a column on
+// the right edge that opens on a number key to the group's weapons and folds down into the one in
 // hand, a gold `+` on it while its group holds another. A look draws with the HUD's ART (art.hpp):
 // the free set, or the player's own classic pictures (its digits, icons, portrait and guns), only
 // placed and sized anew.
