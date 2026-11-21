@@ -248,7 +248,15 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
     const ModelBox bm = model_box(spec, m);
     sh::Solid& so = world.solids[world.count++];
     so = model_solid(spec, tracer, m, s.sv.edicts[static_cast<size_t>(e)].origin);
-    if (plate(bm)) {
+    // A pillar that sinks to open and rises to shut, with room to stand on its top where the map
+    // drew it: a bridge raised out of a pit (e2m6's, raised by the trigger round the start room's
+    // pillar), as a plate slid out is.
+    const char* angle = pg::block_value(b, "angle");
+    const sh::Vec3f size = bm.maxs - bm.mins;
+    const bool pillar = angle && std::atof(angle) == -2 && size.x >= 48 && size.y >= 48 &&
+                        sh::box_free(world, {(bm.mins.x + bm.maxs.x) * 0.5f,
+                                             (bm.mins.y + bm.maxs.y) * 0.5f, bm.maxs.z + 25});
+    if (plate(bm) || pillar) {
       NavBridge br;
       br.ent = e;
       br.spawn = so.origin;
@@ -379,8 +387,7 @@ bool teleport_dest(const std::vector<pg::EntityBlock>& blocks, const char* targe
   return false;
 }
 
-std::vector<sb::NavExtraLink> teleport_links(sb::NavGraph& g,
-                                             const ge::shooter::MapSpec& spec,
+std::vector<sb::NavExtraLink> teleport_links(sb::NavGraph& g, const ge::shooter::MapSpec& spec,
                                              const std::vector<pg::EntityBlock>& blocks) {
   std::vector<sb::NavExtraLink> out;
   for (const pg::EntityBlock& b : blocks) {
@@ -461,7 +468,8 @@ std::vector<sb::NavExtraLink> teleport_links(sb::NavGraph& g,
 std::vector<sb::NavExtraLink> push_links(const sb::NavGraph& g, const ge::shooter::MapSpec& spec,
                                          const std::vector<pg::EntityBlock>& blocks) {
   constexpr float kPushLand = 256;
-  constexpr float kPushJump = 44;  // a standing jump's rise (its apex near 45), near enough
+  constexpr float kPushOver = 160;  // its landing at most this far over its top, units
+  constexpr float kPushJump = 44;   // a standing jump's rise (its apex near 45), near enough
   std::vector<sb::NavExtraLink> out;
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
@@ -479,21 +487,21 @@ std::vector<sb::NavExtraLink> push_links(const sb::NavGraph& g, const ge::shoote
     const float dy = up ? 0.0f : static_cast<float>(ge::core::libm::sin(a));
     const sh::Vec3f mid = (box.mins + box.maxs) * 0.5f;
     // Where he leaves it.
-    const sh::Vec3f exit =
-        up ? sh::Vec3f{mid.x, mid.y, box.maxs.z}
-           : sh::Vec3f{mid.x + dx * (box.maxs.x - box.mins.x) * 0.5f,
-                       mid.y + dy * (box.maxs.y - box.mins.y) * 0.5f, mid.z};
+    const sh::Vec3f exit = up ? sh::Vec3f{mid.x, mid.y, box.maxs.z}
+                              : sh::Vec3f{mid.x + dx * (box.maxs.x - box.mins.x) * 0.5f,
+                                          mid.y + dy * (box.maxs.y - box.mins.y) * 0.5f, mid.z};
     int32_t land = -1;
     float land_d = kPushLand;
     for (size_t n = 0; n < g.nodes.size(); n++) {
       const sh::Vec3f o = g.nodes[n].origin;
       if (g.nodes[n].swim) continue;
-      const bool inside = o.x + 16 > box.mins.x && o.x - 16 < box.maxs.x &&
-                          o.y + 16 > box.mins.y && o.y - 16 < box.maxs.y &&
-                          o.z + 32 > box.mins.z && o.z - 24 < box.maxs.z;
+      const bool inside = o.x + 16 > box.mins.x && o.x - 16 < box.maxs.x && o.y + 16 > box.mins.y &&
+                          o.y - 16 < box.maxs.y && o.z + 32 > box.mins.z && o.z - 24 < box.maxs.z;
       if (inside) continue;
-      if (up && o.z < box.maxs.z - 64) continue;  // a floor up at its top, not one beside it below
-      const float ex = o.x - exit.x, ey = o.y - exit.y, ez = up ? 0.0f : o.z - exit.z;
+      // A floor up at its top: not one beside it below, nor one far over it (e3m5's air tube's
+      // landing is the ledge at its top, not the roof a floor above).
+      if (up && (o.z < box.maxs.z - 64 || o.z > box.maxs.z + kPushOver)) continue;
+      const float ex = o.x - exit.x, ey = o.y - exit.y, ez = o.z - exit.z;
       const float d = std::sqrt(ex * ex + ey * ey + ez * ez);
       if (!up && ex * dx + ey * dy < 0) continue;  // ahead of its face only
       if (d < land_d) {

@@ -72,13 +72,16 @@ ge::ui::Image draw_route(const Plate& plate, const RouteMarks& m) {
     line(img, px(a), py(a), px(b), py(b), w, c);
   }
   for (const std::array<float, 3>& e : m.exits) {
-    for (float r = 4 * w; r <= 5.5f * w; r += 0.5f)
+    const int rings = static_cast<int>(1.5f * w / 0.5f);
+    for (int ri = 0; ri <= rings; ri++) {
+      const float r = 4 * w + 0.5f * static_cast<float>(ri);
       for (int k = 0; k < 96; k++) {
         const double a = k * (6.283185307179586 / 96);
         put(img, static_cast<int>(px(e) + r * static_cast<float>(ge::core::libm::cos(a))),
             static_cast<int>(py(e) + r * static_cast<float>(ge::core::libm::sin(a))),
             {255, 190, 30});
       }
+    }
   }
   for (const std::array<float, 3>& k : m.kills) {
     const float x = px(k), y = py(k), s = 2.5f * w;
@@ -87,15 +90,20 @@ ge::ui::Image draw_route(const Plate& plate, const RouteMarks& m) {
   }
   for (const std::array<float, 3>& k : m.secrets) {
     const float x = px(k), y = py(k), s = 4 * w;
-    for (float d = -s; d <= s; d += 0.5f) {
+    const int rows = static_cast<int>(2 * s / 0.5f);
+    for (int di = 0; di <= rows; di++) {
+      const float d = -s + 0.5f * static_cast<float>(di);
       const float half = s - std::fabs(d);
       line(img, x - half, y + d, x + half, y + d, 0.6f, {255, 215, 0});
     }
   }
   if (n > 0) {
     const float x = px(m.track[0]), y = py(m.track[0]), s = 3.5f * w;
-    for (float yy = y - s; yy <= y + s; yy += 1)
+    const int rows = static_cast<int>(2 * s);
+    for (int yi = 0; yi <= rows; yi++) {
+      const float yy = y - s + static_cast<float>(yi);
       line(img, x - s, yy, x + s, yy, 0.6f, {40, 50, 230});
+    }
   }
   img.revision++;
   return img;

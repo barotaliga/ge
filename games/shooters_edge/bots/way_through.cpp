@@ -143,9 +143,10 @@ int32_t node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
       best_d = d;
     }
   }
-  if (best >= 0) return best;
-  // None inside (a thin trigger up in a doorway, one over a pit): the nearest in the box grown by
-  // a player's size; none there, no node at all (a step no route leads to).
+  if (best >= 0 && best_d < kOnMover) return best;
+  // None inside (a thin trigger up in a doorway, one over a pit) or only on a mover (e2m6's trigger
+  // round the pillar it lowers): the nearest in the box grown by a player's size, a step away
+  // (`way_touch` walks him in); none there, no node at all (a step no route leads to).
   const sh::Vec3f grow{32, 32, 56};
   for (size_t n = 0; n < g.nodes.size(); n++) {
     const sh::Vec3f o = g.nodes[n].origin;
@@ -278,8 +279,7 @@ void reach_past(const sb::NavGraph& g, int32_t from, const std::vector<int32_t>&
 // The nodes he gets back to `to` from, on the open links (the reverse of reach_past, the crossings
 // as reach_past last left them): `w.returns`.
 void reach_back(const sb::NavGraph& g, int32_t to, const std::vector<int32_t>& barred,
-                const std::vector<int32_t>& node_door, const sb::NavJumper& jumper,
-                WayThrough& w) {
+                const std::vector<int32_t>& node_door, const sb::NavJumper& jumper, WayThrough& w) {
   const size_t nn = g.nodes.size();
   if (w.rev_first.size() != nn + 1) {  // the incoming links of each node, built once
     w.rev_first.assign(nn + 1, 0);
@@ -291,14 +291,16 @@ void reach_back(const sb::NavGraph& g, int32_t to, const std::vector<int32_t>& b
       const sb::NavNode& n = g.nodes[a];
       for (int32_t k = 0; k < n.links; k++) {
         const int32_t li = n.first_link + k;
-        w.rev_link[static_cast<size_t>(fill[static_cast<size_t>(g.links[static_cast<size_t>(li)].to)]++)] = li;
+        w.rev_link[static_cast<size_t>(
+            fill[static_cast<size_t>(g.links[static_cast<size_t>(li)].to)]++)] = li;
       }
     }
     w.rev_from.assign(g.links.size(), 0);
     for (size_t a = 0; a < nn; a++) {
       const sb::NavNode& n = g.nodes[a];
       for (int32_t k = 0; k < n.links; k++)
-        w.rev_from[static_cast<size_t>(n.first_link + k)] = static_cast<int32_t>(a);
+        w.rev_from[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)] =
+            static_cast<int32_t>(a);
     }
   }
   w.returns.assign(nn, 0);
@@ -309,8 +311,8 @@ void reach_back(const sb::NavGraph& g, int32_t to, const std::vector<int32_t>& b
   while (!w.back_stack.empty()) {
     const int32_t b = w.back_stack.back();
     w.back_stack.pop_back();
-    for (int32_t r = w.rev_first[static_cast<size_t>(b)]; r < w.rev_first[static_cast<size_t>(b) + 1];
-         r++) {
+    for (int32_t r = w.rev_first[static_cast<size_t>(b)];
+         r < w.rev_first[static_cast<size_t>(b) + 1]; r++) {
       const int32_t li = w.rev_link[static_cast<size_t>(r)];
       const int32_t a = w.rev_from[static_cast<size_t>(li)];
       if (w.returns[static_cast<size_t>(a)]) continue;
@@ -1098,7 +1100,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     return n >= 0 && (w.back_here[static_cast<size_t>(n)] || w.back_exit[static_cast<size_t>(n)]);
   };
   bool strict_work = false;
-  for (size_t n = 0; n < g.nodes.size() && !strict_work; n++)
+  for (size_t n = 0; n < g.nodes.size() && !strict_work && !w.complete; n++)
     strict_work = !w.seen[n] && w.search.reached(static_cast<int32_t>(n)) && !no_place(n) &&
                   round_trip(static_cast<int32_t>(n));
   for (const WayStep& st : w.steps)
@@ -1118,8 +1120,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   bool unseen = false;
   for (size_t n = 0; n < g.nodes.size() && !unseen; n++)
     unseen = !w.seen[n] && reach(static_cast<int32_t>(n)) && !no_place(n);
+  // (`complete`) He knows the map as a player who has learned it does: where every monster, secret
+  // and button is, so no place has to be seen before the work or the exit (Niclas, 2026-11-21:
+  // "it's learnable"). Places unseen are walked to only when nothing he knows of is left.
+  const bool roam = unseen && !w.complete;
   // (`complete`) A step is open while not done once, not left and reached; the nearest monster
-  // alive whose place is reached; the exit waits for all of them and for every place unseen.
+  // alive whose place is reached; the exit waits for all of them.
   for (WayStep& st : w.steps) st.ever = st.ever || st.done;
   const auto open_step = [&](const WayStep& st) {
     return st.kind != WayKind::exit && !st.ever && t >= st.left_until && st.node >= 0 &&
@@ -1130,7 +1136,6 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   double prey_c = 0;
   bool left_to_do = false;
   if (w.complete && t < w.complete_until) {
-    left_to_do = unseen;
     for (const WayStep& st : w.steps) left_to_do = left_to_do || open_step(st);
     for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
       const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
@@ -1167,8 +1172,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   double best = 0;
   for (size_t k = 0; k < w.steps.size(); k++) {
     const WayStep& st = w.steps[k];
-    if (left_to_do || car_first || st.kind != WayKind::exit || st.node < 0 ||
-        !reach(st.node) || t < st.left_until)
+    if (left_to_do || car_first || st.kind != WayKind::exit || st.node < 0 || !reach(st.node) ||
+        t < st.left_until)
       continue;
     const double c = w.search.cost(st.node);
     if (pick < 0 || c < best) {
@@ -1200,11 +1205,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         continue;
       const bool last = !me_trapped && trapped_in(st.node);
       if (pass == 3) {
-        if (unseen || prey >= 0 || !way_back(st)) continue;
-      } else if (pass < 2 ? last : !last || unseen) {
+        if (roam || prey >= 0 || !way_back(st)) continue;
+      } else if (pass < 2 ? last : !last || roam) {
         continue;
       }
-      if (pass == 0 ? !worth(st) : pass == 1 && unseen) continue;
+      if (pass == 0 ? !worth(st) : pass == 1 && roam) continue;
       if (pass == 1 && w.complete && st.ever) continue;  // a lift's button: pressed once is enough
       if (st.kind == WayKind::secret && !w.complete) continue;
       const double c = w.search.cost(st.node);
@@ -1213,9 +1218,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         best = c;
       }
     }
-  // (`complete`) Once nothing is unseen, the nearest monster alive when it is nearer than the step.
+  // (`complete`) The nearest monster alive when it is nearer than the step.
   const bool chase =
-      w.complete && !unseen && prey >= 0 &&
+      w.complete && prey >= 0 &&
       (pick < 0 || w.steps[static_cast<size_t>(pick)].kind == WayKind::exit || prey_c < best);
   if (chase) pick = -1;
   if (!chase || prey != w.prey) {
@@ -1410,6 +1415,29 @@ void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooterbots::Bot
   cmd.forward = sh::quantize_axis(320);
   cmd.side = 0;
   if (self_e.waterlevel > 0 && dz > 8) cmd.buttons |= sh::kButtonJump;
+}
+
+void way_touch(const WayThrough& w, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd) {
+  constexpr float kTouchNear = 96;  // his box this near the step's, across, units
+  if (w.step < 0 || w.out >= 0) return;
+  const WayStep& st = w.steps[static_cast<size_t>(w.step)];
+  if (st.done || st.node < 0 ||
+      !(st.kind == WayKind::trigger || st.kind == WayKind::secret || st.kind == WayKind::exit))
+    return;
+  const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
+  if (touches(self, st.lo, st.hi) || self.z + 32 < st.lo.z || self.z - 24 > st.hi.z) return;
+  const auto clamp = [](float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; };
+  const sh::Vec3f near{clamp(self.x, st.lo.x, st.hi.x), clamp(self.y, st.lo.y, st.hi.y),
+                       clamp(self.z, st.lo.z, st.hi.z)};
+  const double dx = near.x - self.x, dy = near.y - self.y;
+  const double d2 = dx * dx + dy * dy;
+  if (d2 < 1 || d2 > kTouchNear * kTouchNear) return;
+  // Only straight at it over open floor: a wall between leaves it to the route.
+  const sh::HullTrace tr = sh::trace_move(s.sv, self, {}, {}, near, sh::kTraceNoMonsters, me);
+  if (tr.fraction < 1) return;
+  cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
+  cmd.forward = sh::quantize_axis(320);
+  cmd.side = 0;
 }
 
 namespace {

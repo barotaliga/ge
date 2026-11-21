@@ -233,7 +233,10 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         rc.cmds[0] = rc.cmds[1];
         rc.cmds[1] = rc.cmds[2];
         rc.cmds[2] = fighter_command(m.players[static_cast<size_t>(k)], now, k, kMsec);
-        if (k == 0) way_dive(m.way, *m.nav, now, 1, rc.cmds[2]);
+        if (k == 0) {
+          way_dive(m.way, *m.nav, now, 1, rc.cmds[2]);
+          way_touch(m.way, now, 1, rc.cmds[2]);
+        }
         unwedge(m.wedges[static_cast<size_t>(k)], now, k + 1, t, rc.cmds[2]);
         if (ending) rc.cmds[2].buttons = (frame & 1) ? sh::kButtonAttack : 0;
         sh::Packet& p = packets[static_cast<size_t>(k)];
@@ -334,7 +337,9 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
     if (!changed || died) break;
     bool stop = false;
     for (const std::string& x : opt.stop) stop = stop || x == next;
-    for (const EpisodeMap& done : r.maps) stop = stop || done.name == next;  // a map played
+    // The 100% run: an exit back to a map played ends it (the coop hall's tour loops on itself).
+    if (opt.complete)
+      for (const EpisodeMap& done : r.maps) stop = stop || done.name == next;
     if (stop) break;
   }
   r.digest = h;

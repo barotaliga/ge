@@ -110,8 +110,8 @@ struct WayThrough {
     int door = -1, bit = 0;  // a Quake key door among `locked`, and its key's item bit
   };
   std::vector<KeyDoor> key_doors;
-  std::vector<uint8_t> on_top;     // each node: standing on its mover's top (a lift's floor)
-  std::vector<int> lifts;          // the shut doors whose button is pressed from their top
+  std::vector<uint8_t> on_top;  // each node: standing on its mover's top (a lift's floor)
+  std::vector<int> lifts;       // the shut doors whose button is pressed from their top
   // The way back (`reach_back`): each node's incoming links, and the nodes he returns from.
   std::vector<int32_t> rev_first, rev_link, rev_from, back_stack;
   std::vector<uint8_t> returns, back_here, back_exit;  // and from here, and to an exit
@@ -161,6 +161,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
 // edge, then across to the far side's entry (`out`) and up onto its land.
 void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
               sh::MoveCmd& cmd);
+// The leader's command after his own, near a trigger, a secret or an exit he is after but not in
+// its box (its node a step outside it, or the pilot waiting on a mover beside it: e2m6's trigger
+// round the pillar it lowers): straight on at the nearest point of its box over open floor.
+void way_touch(const WayThrough& w, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd);
 
 constexpr float kWayStuck = 24;
 constexpr double kWayStuck_s = 1.5;
