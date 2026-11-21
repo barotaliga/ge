@@ -19,10 +19,14 @@ namespace ge::detail {
 namespace {
 
 constexpr DecalKindSpec kSpecs[kDecalKinds] = {
-    {"scorch", 0, 0, 0, 0.55, 80, 0.6}, {"bullet_hole", 0, 0, 0, 0.5, 60, 0},
-    {"blood", 120, 60, 45, 0.4, 85, 0}, {"burn_line", 0, 0, 0, 0.55, 80, 3.0},
-    {"melt", 0, 0, 0, 0.4, 80, 3.0},
+    {"scorch", 0, 0, 0, 0.55, 80, 0.6},      {"bullet_hole", 0, 0, 0, 0.5, 60, 0},
+    {"blood", 120, 60, 40, 0.4, 85, 0},      {"burn_line", 0, 0, 0, 0.55, 80, 3.0},
+    {"melt", 0, 0, 0, 0.4, 80, 3.0},         {"blood_pool", 120, 60, 75, 0.15, 30, 0},
+    {"blood_drip", 120, 60, 40, 0.4, 50, 0}, {"blood_print", 120, 60, 30, 0.25, 30, 0},
 };
+
+// How long a pool takes to spread out and a drip to run its length, s.
+constexpr double kPoolSpreadS = 2.5, kDripRunS = 6;
 
 // The lift off the surface that keeps a decal in front of it, m.
 constexpr double kLift = 0.001;
@@ -117,6 +121,101 @@ MaskSample blood(uint32_t var, double x, double y, double r, double a) {
   return {cover, -0.15 + 0.6 * rim};
 }
 
+// Blood gathered on a floor: a puddle with a lobed edge (a few lobes and a finer waver), a few
+// drops fallen beside it, and a rim a little raised (darker as it dries). It spreads from the
+// middle out: `arrive` its distance over the edge's.
+MaskSample blood_pool(uint32_t var, double x, double y, double r, double a) {
+  const double seed = 601 + var * 17;
+  const double edge = 0.36 + 0.09 * (round_noise(a, 1.0, seed) - 0.5) * 2 +
+                      0.03 * (round_noise(a, 0.4, seed + 1) - 0.5) * 2;
+  double cover = ramp(edge, edge - 0.02, r);
+  double rim = cover > 0 ? ramp(edge - 0.07, edge - 0.01, r) : 0;
+  double arrive = core::clamp(r / edge, 0, 1) * 0.95;
+  core::Rng rng = core::make_rng(var * 2654435761u + 11);
+  const int drops = core::int_in(rng, 2, 5);
+  for (int i = 0; i < drops; ++i) {
+    const double da = core::range(rng, 0, core::kTau);
+    const double dr = core::range(rng, 0.4, 0.46);
+    const double size = core::range(rng, 0.012, 0.03);
+    const double dx = x - core::libm::cos(da) * dr, dy = y - core::libm::sin(da) * dr;
+    const double c = ramp(size, size * 0.6, std::sqrt(dx * dx + dy * dy));
+    if (c > cover) {
+      cover = c;
+      rim = 0.6;
+      arrive = 0.5;
+    }
+  }
+  return {cover, -0.1 + 0.7 * rim, 0, arrive};
+}
+
+// Blood running down a wall from a splash: u down the box (kDripAspect times its width), v across.
+// A blot where it struck and two to four runs from its lower edge, each wandering a little and
+// ending in a bead; the runs reach as far as they get by `arrive` (their length over the longest
+// a run may be), the blot at once.
+MaskSample blood_drip(uint32_t var, double u, double v) {
+  const double seed = 701 + var * 19;
+  const double x = v - 0.5, y = u * kDripAspect;  // in widths: x across, y down from the top
+  const double by = kDripBlotU * kDripAspect;     // the blot's middle
+  const double bx = x, bdy = y - by;
+  const double br = std::sqrt(bx * bx + bdy * bdy);
+  const double ba = core::libm::atan2(bdy, bx);
+  const double edge = 0.2 + 0.04 * (round_noise(ba, 1.2, seed) - 0.5) * 2;
+  double cover = ramp(edge, edge - 0.03, br);
+  double shade = cover > 0 ? -0.15 + 0.6 * ramp(edge - 0.07, edge - 0.02, br) : 0;
+  double arrive = 0;
+  constexpr double kLongest = 2.4;  // the longest run, widths
+  core::Rng rng = core::make_rng(var * 2246822519u + 29);
+  const int runs = core::int_in(rng, 2, 4);
+  for (int i = 0; i < runs; ++i) {
+    const double x0 = core::range(rng, -0.14, 0.14);
+    const double y0 = by + std::sqrt(std::max(0.0, edge * edge - x0 * x0)) * 0.7;
+    const double len = core::range(rng, 0.5, kLongest);
+    const double y1 = std::min(y0 + len, kDripAspect - 0.15);
+    const double w = core::range(rng, 0.022, 0.04);
+    if (y < y0 - 0.05 || y > y1 + w * 2.2) continue;
+    const double along = std::max(0.0, y - y0);
+    const auto x_at = [&](double yy) {
+      return x0 + 0.06 * (fbm(yy * 1.5, i * 3.1, 1, seed + i) - 0.5) * 2 * (yy - y0);
+    };
+    // The run, thinning a little as it goes; the bead at its end, fatter.
+    const double yy = std::min(y, y1);
+    const double width = w * (1 - 0.25 * along / std::max(len, 1e-3));
+    double c = y <= y1 ? ramp(width, width * 0.45, std::fabs(x - x_at(yy))) : 0;
+    const double bead_r = w * 1.7;
+    const double ex = x - x_at(y1), ey = y - (y1 - bead_r * 0.3);
+    const double bead = ramp(bead_r, bead_r * 0.6, std::sqrt(ex * ex + ey * ey));
+    c = std::max(c, bead);
+    if (c > cover) {
+      cover = c;
+      shade = bead > 0.5 ? 0.35 : 0.05;
+      arrive = 0.05 + 0.95 * core::clamp(along / kLongest, 0, 1);
+    }
+  }
+  return {core::clamp(cover, 0, 1), shade, 0, arrive};
+}
+
+// A boot's print in blood: x across, y along (the toe toward -y), both -0.5..0.5 of the box. The
+// sole's ball and its heel, a gap at the arch, lugs across both and blood taken patchily as a sole
+// lifting off a floor leaves it; odd variants the right foot (mirrored).
+MaskSample blood_print(uint32_t var, double x, double y) {
+  const double seed = 811 + var * 23;
+  const double mx = (var & 1u) != 0 ? -x : x;
+  // The ball: an egg wider toward the toe, its inner side straighter (toward +x, the left foot's).
+  const double bx = (mx + 0.015) / (0.16 + 0.025 * ramp(0.1, -0.3, y)), by = (y + 0.13) / 0.25;
+  const double ball = std::sqrt(bx * bx + by * by);
+  const double hx = mx / 0.13, hy = (y - 0.29) / 0.14;
+  const double heel = std::sqrt(hx * hx + hy * hy);
+  double cover = std::max(ramp(1.0, 0.85, ball), ramp(1.0, 0.85, heel));
+  if (cover <= 0) return {0, 0};
+  // The lugs: bars across the sole, a little blood between them.
+  const double lug = 0.5 + 0.5 * core::libm::sin(y * 120 + 1.3 * core::libm::sin(mx * 30));
+  cover *= 0.8 + 0.2 * ramp(0.3, 0.7, lug);
+  // Patchy: blood taken where the sole pressed, more at its edge.
+  const double patch = fbm(x * 6, y * 6, 1, seed);
+  cover *= ramp(0.2, 0.45, patch + 0.15 * std::max(ball < 1 ? ball : heel, 0.0));
+  return {core::clamp(cover, 0, 1), 0.1 * (lug - 0.5)};
+}
+
 // A beam's burnt line: u along it, v across. A ragged black core that wanders a little off the
 // middle (never at the ends, so pieces laid end to end meet), a thin soot halo either side, both
 // thinned over each end's last stretch so the overlap with the next piece does not show.
@@ -190,7 +289,7 @@ bool piece_buried(const Receivers& rec, const std::vector<Vec3>& poly, const Vec
 
 const DecalKindSpec& decal_spec(DecalKind kind) { return kSpecs[static_cast<int>(kind)]; }
 
-DecalLook look_at(DecalKind kind, double age_s, double ember_s) {
+DecalLook look_at(DecalKind kind, double age_s, double ember_s, double life_s, double spread_from) {
   DecalKindSpec s = decal_spec(kind);
   if (ember_s > 0) s.ember_s = ember_s;
   switch (kind) {
@@ -212,11 +311,40 @@ DecalLook look_at(DecalKind kind, double age_s, double ember_s) {
       const double k = hot * hot;
       return {0.03, 0.026, 0.022, 0.95, 0, 2.6 * k, 0.9 * k * hot, 0.2 * k * hot * hot};
     }
-    case DecalKind::blood: {
-      const double dry = ramp(0, s.dry_s, age_s);
-      const double fade = core::clamp((s.life_s - age_s) / s.fade_s, 0, 1);
-      return {core::lerp(0.32, 0.12, dry), core::lerp(0.012, 0.03, dry),
-              core::lerp(0.012, 0.02, dry), 0.95 * fade, core::lerp(0.85, 0.08, dry)};
+    case DecalKind::blood:
+    case DecalKind::blood_pool:
+    case DecalKind::blood_drip:
+    case DecalKind::blood_print: {
+      // A life of its own: the drying and the fading shortened to fit it; < 0 never fades.
+      double life = s.life_s, dry_s = s.dry_s, fade_s = s.fade_s;
+      if (life_s > 0) {
+        life = life_s;
+        dry_s = std::min(dry_s, 0.6 * life);
+        fade_s = std::min(fade_s, 0.5 * life);
+      }
+      // Darkening fast at first as it thickens, then slowly; the gloss going sooner.
+      const double u = core::clamp(age_s / dry_s, 0, 1);
+      const double dry = 1 - (1 - u) * (1 - u);
+      const double g = core::clamp(age_s / (0.7 * dry_s), 0, 1);
+      const double dull = 1 - (1 - g) * (1 - g);
+      const double fade = life_s < 0 ? 1 : core::clamp((life - age_s) / fade_s, 0, 1);
+      // A pool is thicker: darker, glossier and slower to dry than a splash's film.
+      const bool pool = kind == DecalKind::blood_pool;
+      const double wet[3] = {pool ? 0.11 : 0.17, pool ? 0.0035 : 0.006, pool ? 0.0035 : 0.0055};
+      const double dried[3] = {pool ? 0.026 : 0.038, pool ? 0.0045 : 0.007, pool ? 0.0035 : 0.005};
+      const double gloss = pool ? core::lerp(0.95, 0.14, dull)
+                                : core::lerp(kind == DecalKind::blood_drip ? 0.7 : 0.6, 0.05, dull);
+      DecalLook l{core::lerp(wet[0], dried[0], dry), core::lerp(wet[1], dried[1], dry),
+                  core::lerp(wet[2], dried[2], dry), (pool ? 0.97 : 0.95) * fade, gloss};
+      // A pool spreads out and a drip runs on from where it was pressed, slowing as it goes.
+      const double run = kind == DecalKind::blood_pool   ? kPoolSpreadS
+                         : kind == DecalKind::blood_drip ? kDripRunS
+                                                         : 0;
+      if (run > 0) {
+        const double k = core::clamp(age_s / run, 0, 1);
+        l.spread = spread_from + (1 - spread_from) * (1 - (1 - k) * (1 - k));
+      }
+      return l;
     }
   }
   return {0, 0, 0, 0, 0};
@@ -225,6 +353,8 @@ DecalLook look_at(DecalKind kind, double age_s, double ember_s) {
 MaskSample mask_at(DecalKind kind, uint32_t variant, double u, double v) {
   if (u < 0 || u > 1 || v < 0 || v > 1) return {0, 0};
   if (kind == DecalKind::burn_line) return burn_line(variant, u, v);
+  if (kind == DecalKind::blood_drip) return blood_drip(variant, u, v);
+  if (kind == DecalKind::blood_print) return blood_print(variant, u - 0.5, v - 0.5);
   const double x = u - 0.5, y = v - 0.5;
   const double r = std::sqrt(x * x + y * y);
   if (r >= 0.5) return {0, 0};
@@ -238,7 +368,11 @@ MaskSample mask_at(DecalKind kind, uint32_t variant, double u, double v) {
       return blood(variant, x, y, r, a);
     case DecalKind::melt:
       return melt(variant, x, y, r, a);
+    case DecalKind::blood_pool:
+      return blood_pool(variant, x, y, r, a);
     case DecalKind::burn_line:
+    case DecalKind::blood_drip:
+    case DecalKind::blood_print:
       break;
   }
   return {0, 0};
@@ -258,7 +392,8 @@ std::vector<uint8_t> bake_atlas(int size, int variants) {
           const auto c = static_cast<uint8_t>(std::lround(m.cover * 255));
           px[o] = c;
           px[o + 1] = static_cast<uint8_t>(std::lround((m.shade * 0.5 + 0.5) * 255));
-          px[o + 2] = static_cast<uint8_t>(std::lround(m.ember * 255));
+          const double b = is_blood(static_cast<DecalKind>(k)) ? m.arrive : m.ember;
+          px[o + 2] = static_cast<uint8_t>(std::lround(b * 255));
           px[o + 3] = c;
         }
       }
@@ -365,17 +500,14 @@ int place_decal(DecalPool& pool, const Receivers& rec, const DecalAt& d) {
     }
   }
   Decal& dc = pool.decals[slot];
-  dc = {true,
-        d.kind,
-        d.variant,
-        pool.next_serial++,
-        d.now_s,
-        d.at,
-        n,
-        d.size_m,
-        d.length_m,
-        d.ember_s,
-        static_cast<uint32_t>(pool.staged.size())};
+  dc = {true,       d.kind,
+        d.variant,  pool.next_serial++,
+        d.now_s,    d.at,
+        n,          d.size_m,
+        d.length_m, d.ember_s,
+        d.life_s,   d.spread_from,
+        d.spin_rad, static_cast<uint32_t>(pool.staged.size()),
+        d.strength};
   std::copy(pool.staged.begin(), pool.staged.end(),
             pool.verts.begin() + static_cast<std::ptrdiff_t>(slot) * pool.verts_per_decal);
   return static_cast<int>(slot);
@@ -383,9 +515,15 @@ int place_decal(DecalPool& pool, const Receivers& rec, const DecalAt& d) {
 
 void expire(DecalPool& pool, double now_s) {
   for (Decal& d : pool.decals) {
-    const double life = decal_spec(d.kind).life_s;
+    const double life = d.life_s != 0 ? d.life_s : decal_spec(d.kind).life_s;
     if (d.live && life > 0 && now_s - d.born_s >= life) d.live = false;
   }
+}
+
+DecalLook look_of(const Decal& d, double now_s) {
+  DecalLook l = look_at(d.kind, now_s - d.born_s, d.ember_s, d.life_s, d.spread_from);
+  l.opacity *= d.strength;
+  return l;
 }
 
 uint32_t live_count(const DecalPool& pool) {

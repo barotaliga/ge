@@ -528,6 +528,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.bubbles = picture.ce.bubbles;
   s.monsters = picture.ce.monsters;
   s.blood = picture.ce.blood;
+  s.blood_life_s = picture.blood_time > 0 ? picture.blood_time : -1;
   s.respawns = picture.ce.respawns;
   return s;
 }
@@ -559,11 +560,16 @@ void nearest_on(const double c[3][3], const double p[3], float* a, float* b, dou
   *d2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2];
 }
 
+}  // namespace
+
 // A wound where a round struck `at` (map units; `p` the same in the world), on the body standing
-// nearest it: the triangle of its skin nearest the point.
-void wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, const double p[3],
-           const ge::camera::Vec3& from, int drops, double t) {
-  if (s.models == nullptr) return;
+// nearest it: where the round's line from `from` first crosses its skin, else the triangle of its
+// skin nearest the point. A blow `cut` through the body wounds it again where the line last
+// crosses the skin (the exit), into `exit_at` (world, m); true when it did.
+bool wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, const double p[3],
+           const ge::camera::Vec3& from, int drops, double t, const WoundCut& cut,
+           double exit_at[3]) {
+  if (s.models == nullptr) return false;
   const Placed* body = nullptr;
   float nearest = kWoundReachU * kWoundReachU;
   for (const Placed& m : placed) {
@@ -575,7 +581,8 @@ void wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, c
       body = &m;
     }
   }
-  if (body == nullptr || !body_triangles(*s.models, *body, t, s.skin) || s.skin.empty()) return;
+  if (body == nullptr || !body_triangles(*s.models, *body, t, s.skin) || s.skin.empty())
+    return false;
   double origin[3];
   put(engine_point(body->origin), origin);
   float q[4];
@@ -585,13 +592,22 @@ void wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, c
   w.entity = body->entity;
   w.seed = s.seed++;
   w.size = 1 + 0.15f * static_cast<float>(drops - 1);
+  w.stain = cut.stain;
+  w.run = cut.run;
+  w.born = t;
+  Wound out = w;  // the exit
+  out.seed = s.seed++;
+  out.exit = true;
+  out.stain = cut.stain * 1.6f;
+  out.run = cut.run * 1.4f;
   // The round's own line, from the shooter through where it struck the body's box, onto the
-  // skin: the first triangle it crosses; else the triangle nearest the point.
+  // skin: the first triangle it crosses (and the last, its way out); else the triangle nearest
+  // the point.
   double dir[3] = {p[0] - from.x, p[1] - from.y, p[2] - from.z};
   const double dl = std::max(ge::core::hypot3(dir[0], dir[1], dir[2]), 1e-9);
   for (double& k : dir) k /= dl;
   const double start[3] = {from.x, from.y, from.z};
-  double first = 1e18, best = 1e18;
+  double first = 1e18, last = -1, best = 1e18;
   bool crossed = false;
   for (size_t k = 0; k < s.skin.size() / 9; ++k) {
     double c[3][3];
@@ -611,12 +627,20 @@ void wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, c
                             tv[0] * e1[1] - tv[1] * e1[0]};
       const double v = (dir[0] * qv[0] + dir[1] * qv[1] + dir[2] * qv[2]) / det;
       const double d = (e2[0] * qv[0] + e2[1] * qv[1] + e2[2] * qv[2]) / det;
-      if (u >= 0 && v >= 0 && u + v <= 1 && d > 0 && d < first) {
-        first = d;
+      if (u >= 0 && v >= 0 && u + v <= 1 && d > 0) {
+        if (d < first) {
+          first = d;
+          w.tri = static_cast<uint32_t>(k);
+          w.a = static_cast<float>(u);
+          w.b = static_cast<float>(v);
+        }
+        if (d > last) {
+          last = d;
+          out.tri = static_cast<uint32_t>(k);
+          out.a = static_cast<float>(u);
+          out.b = static_cast<float>(v);
+        }
         crossed = true;
-        w.tri = static_cast<uint32_t>(k);
-        w.a = static_cast<float>(u);
-        w.b = static_cast<float>(v);
       }
     }
     if (crossed) continue;
@@ -630,17 +654,29 @@ void wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, c
       w.b = b;
     }
   }
-  s.wounds.push_back(w);
-  // At most kWoundsEach a body and kWoundsAll in all, the oldest let go.
-  size_t on_body = 0;
-  for (const Wound& o : s.wounds) on_body += o.entity == w.entity ? 1 : 0;
-  if (on_body > kWoundsEach) {
-    const auto oldest = std::find_if(s.wounds.begin(), s.wounds.end(),
-                                     [&](const Wound& o) { return o.entity == w.entity; });
-    s.wounds.erase(oldest);
-  }
-  if (s.wounds.size() > kWoundsAll) s.wounds.erase(s.wounds.begin());
+  const bool exits = cut.through && crossed && last - first > kExitMinM;
+  const auto keep = [&](Wound& k) {
+    k.has_rest = body_rest(*s.models, *body, t, k.tri, k.a, k.b, k.rest);
+    s.wounds.push_back(k);
+    // At most kWoundsEach a body and kWoundsAll in all, the oldest let go.
+    size_t on_body = 0;
+    for (const Wound& o : s.wounds) on_body += o.entity == k.entity ? 1 : 0;
+    if (on_body > kWoundsEach) {
+      const auto oldest = std::find_if(s.wounds.begin(), s.wounds.end(),
+                                       [&](const Wound& o) { return o.entity == k.entity; });
+      s.wounds.erase(oldest);
+    }
+    if (s.wounds.size() > kWoundsAll) s.wounds.erase(s.wounds.begin());
+  };
+  keep(w);
+  if (!exits) return false;
+  keep(out);
+  if (exit_at != nullptr)
+    for (int k = 0; k < 3; ++k) exit_at[k] = start[k] + dir[k] * last;
+  return true;
 }
+
+namespace {
 
 constexpr double kWoundLift = 0.07;  // m toward the eye: past the particles' soft band
 
@@ -660,11 +696,9 @@ ge::render::Particle wound_speck(const double at[3], double size, float albedo, 
   return q;
 }
 
-// Every wound of a body drawn this frame on its skin as it stands: a dark hole, drops round it.
-void draw_wounds(const FxScene& sc, FxState& s, const std::vector<Placed>& placed,
-                 const ge::camera::Vec3& eye, double t, double dt, effects::Particles& out) {
+// A body come back to life (its health above nothing again, a respawn) is whole.
+void heal_wounds(const FxScene& sc, FxState& s) {
   if (s.wounds.empty()) return;
-  // A body come back to life (its health above nothing again, a respawn) is whole.
   for (auto it = s.wound_health.begin(); it != s.wound_health.end();) {
     const float h = sc.health_of ? sc.health_of(it->first) : 0;
     if (it->second <= 0 && h > 0) {
@@ -678,7 +712,12 @@ void draw_wounds(const FxScene& sc, FxState& s, const std::vector<Placed>& place
   for (const Wound& w : s.wounds)
     if (!s.wound_health.contains(w.entity))
       s.wound_health[w.entity] = sc.health_of ? sc.health_of(w.entity) : 0;
-  if (s.models == nullptr) return;
+}
+
+// Every wound of a body drawn this frame on its skin as it stands: a dark hole, drops round it.
+void draw_wounds(FxState& s, const std::vector<Placed>& placed, const ge::camera::Vec3& eye,
+                 double t, double dt, effects::Particles& out) {
+  if (s.wounds.empty() || s.models == nullptr) return;
   int skinned = -1;  // the body whose skin s.skin holds
   for (const Placed& m : placed) {
     if (m.entity < 1) continue;
@@ -732,6 +771,76 @@ void draw_wounds(const FxScene& sc, FxState& s, const std::vector<Placed>& place
     }
   }
 }
+
+constexpr double kSoakS = 1.2;    // a wound's patch soaks out to its size, s
+constexpr double kWickS = 20;     // and on by half again into the cloth round it, s
+constexpr double kBodyRunS = 6;   // its blood runs down to its length, s
+constexpr double kBodyDryS = 40;  // and dries dark, s (shortened by a short ce_blood_time)
+constexpr double kBodyDripS = 8;  // a fresh wound lets drops fall this long, s
+constexpr double kEntryDrops = 1.6, kExitDrops = 3.0;  // drops a second, fresh, from each
+
+}  // namespace
+
+void body_blood(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
+  out.bloodied.clear();
+  if (!s.on.blood) {
+    s.dropping.clear();
+    s.treads.clear();
+    return;
+  }
+  land_drops(s, t);
+  tread_blood(l, s, out.models, t);
+  if (s.wounds.empty() || s.models == nullptr) return;
+  const double life = s.on.blood_life_s > 0 ? s.on.blood_life_s : 1e9;
+  const double dry_s = std::min(kBodyDryS, 0.6 * life);
+  ge::core::Rng r = ge::core::make_rng(s.seed++ * 2654435761u + 0xb0d1u);
+  for (const Placed& m : out.models) {
+    if (m.entity < 1) continue;
+    ge::render::MorphBlood blood;
+    uint32_t n = 0;
+    bool skinned = false, posed = false;
+    double origin[3];
+    float q[4];
+    // The newest wounds of the body first, up to what a draw carries.
+    for (auto it = s.wounds.rbegin(); it != s.wounds.rend() && n < ge::render::kMorphWounds; ++it) {
+      const Wound& w = *it;
+      if (w.entity != m.entity || !w.has_rest) continue;
+      const double age = std::max(0.0, t - w.born);
+      ge::render::MorphWound& o = blood.wounds[n++];
+      for (int k = 0; k < 3; ++k) o.at[k] = w.rest[k];
+      const double soak = std::min(age / kSoakS, 1.0), run = std::min(age / kBodyRunS, 1.0);
+      // Soaking out fast, then on slowly into the cloth round it.
+      const double wick = std::min(age / kWickS, 1.0);
+      o.size = static_cast<float>(w.stain * (0.45 + 0.55 * (1 - (1 - soak) * (1 - soak))) *
+                                  (1 + 0.5 * wick));
+      o.run = static_cast<float>(w.run * (1 - (1 - run) * (1 - run)));
+      o.wet = static_cast<float>(1 - std::min(age / dry_s, 1.0));
+      o.seed = static_cast<float>(w.seed % 1000u) / 1000.0f;
+      // A fresh wound bleeds: drops let go where its run has got to, fewer as it closes.
+      if (age >= kBodyDripS || dt <= 0) continue;
+      const double rate = (w.exit ? kExitDrops : kEntryDrops) * (1 - age / kBodyDripS);
+      if (ge::core::next(r) >= rate * dt) continue;
+      if (!posed) {
+        posed = true;
+        skinned = body_triangles(*s.models, m, t, s.skin);
+        put(engine_point(m.origin), origin);
+        const float ang[3] = {m.angles.x, m.angles.y, m.angles.z};
+        models::rotation_of(ang, true, q);
+      }
+      if (!skinned || size_t(w.tri) * 9 + 9 > s.skin.size()) continue;
+      double c[3][3];
+      skin_corners(s.skin, w.tri, origin, q, c);
+      double at[3];
+      for (int k = 0; k < 3; ++k)
+        at[k] = c[0][k] + w.a * (c[1][k] - c[0][k]) + w.b * (c[2][k] - c[0][k]);
+      at[1] -= o.run;
+      let_drop(s, at, t, out);
+    }
+    if (n > 0) out.bloodied.push_back({m.entity, blood});
+  }
+}
+
+namespace {
 
 // THE MONSTERS' MISSILES (app/monster_fx.hpp): every drawn model the replacement table or its
 // trail flags name a monster's shot lays its trail over the stretch it flew since the last frame
@@ -1072,6 +1181,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     s.marked = nullptr;
     s.receivers.reset();
   }
+  ge::detail::expire(s.marks, t);  // blood past ce_blood_time gives its slot back
 
   monster_missiles(l, s, t, dt, out, missiles);
 
@@ -1323,6 +1433,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     s.wall_colours.clear();
     s.wounds.clear();
     s.wound_health.clear();
+    s.dropping.clear();
+    s.treads.clear();
     s.marked = nullptr;
     s.beams.clear();
   }
@@ -1587,7 +1699,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                             : 20 * e.count,
                     arc, s.seed++, s.palette, &out.births, burst ? v : nullptr);
         }
-        if (s.on.decals && !arc) wound(s, out.models, e.at, p, eye, std::clamp(e.count, 1, 8), t);
+        // Under ce_blood the blow's own wound (bleed_fx, along the striker's line).
+        if (s.on.decals && !arc && !s.on.blood)
+          wound(s, out.models, e.at, p, eye, std::clamp(e.count, 1, 8), t);
         break;
       }
       case EffectKind::teleport:
@@ -1870,10 +1984,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       out.lights.push_back(g);
     }
   }
-  if (s.on.decals)
-    draw_wounds(l, s, out.models, l.pose.eye, t, dt, out.births);
-  else
-    s.wounds.clear();
+  heal_wounds(l, s);
+  if (s.on.decals) draw_wounds(s, out.models, l.pose.eye, t, dt, out.births);
+  body_blood(l, s, t, dt, out);
+  if (!s.on.decals && !s.on.blood) s.wounds.clear();
   std::erase_if(s.sparked, [&](const Blast& b) { return t - b.t >= fx::kSparkLightS; });
   for (const Blast& b : s.sparked) {
     double p[3];
