@@ -258,7 +258,10 @@ void GameMenu::update_servers(const ui::MenuInput& in, Host& host) {
       refresh_main(host);
       return;
     case ServersAction::join:
-      if (host.console != nullptr) host.console->execute("connect " + servers_.chosen());
+      if (host.console != nullptr && servers_.finds_routes())  // sb_findroutes
+        servers_.connect_by_route(*host.console, servers_.chosen(), false);
+      else if (host.console != nullptr)
+        host.console->execute("connect " + servers_.chosen());
       if (servers_.hide_on_join()) hide();  // sb_autohide
       return;
     case ServersAction::none:

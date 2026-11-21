@@ -161,6 +161,8 @@ struct ServerConfig {
   std::string password, spectator_password;
   std::string rcon_password;  // the remote console's (qw_admin.hpp; empty: none offered)
   std::string ban_file;
+  // Where `snap` keeps the screenshots players send, as <userid>-<nn>.<ext> ("": none asked).
+  std::string snap_dir;
   std::vector<std::string> vip_passwords;  // sv_vippassword's words
   std::vector<int> vip_values;             // sv_vipvalues' numbers
   std::string vip_file;
@@ -223,6 +225,14 @@ struct ServerFrame {
   std::vector<EntityState> ents;
 };
 
+// A REMOTE SCREENSHOT the server asked a client for (`snap`, qw_admin.hpp): its blocks as they
+// come (clc::upload), each next one asked for with "nextul", kept in `ServerConfig::snap_dir`.
+struct ServerUpload {
+  bool wanted = false;
+  std::vector<uint8_t> data;
+};
+constexpr size_t kMaxSnapBytes = 4u << 20;  // a picture past this is stopped ("stopul")
+
 struct ServerDownload {
   bool active = false, chunked = false;
   int file = -1;
@@ -279,6 +289,7 @@ struct QwClient {  // NOLINT(clang-analyzer-optin.performance.Padding): fields b
   int loss_pct = 0;
   uint64_t last_accepted = 0, last_dropped = 0;  // the loss window's start
   ServerDownload dl;
+  ServerUpload up;                // a screenshot asked of him (`snap`)
   std::vector<uint8_t> datagram;  // this frame's unreliable messages
   uint64_t moves = 0, moves_unchecked = 0, moves_bad_checksum = 0;
   int statics_sent = 0;  // static entities the client has (signon and later)

@@ -26,6 +26,7 @@
 #include "check.hpp"
 #include "console/console.hpp"
 #include "console/view.hpp"
+#include "forward/routes.hpp"
 #include "lab/png.hpp"
 #include "net/sim_network.hpp"
 #include "net/transport.hpp"
@@ -1109,6 +1110,100 @@ TEST(join_a_game_s_filters_hide_full_and_empty_servers_a_mode_and_a_ping_kept_as
     menu.draw(dl, w, h, 0);
     for (const std::string& p : menu.problems()) CHECK_MSG(false, p);
   }
+}
+
+namespace {
+
+// The routes test's world: "far" (60 ms each way) and "hop", a forwarder that reaches far in 15.
+bool route_reply(const uint8_t* data, size_t size, ge::net::ServerInfo& out) {
+  if (!toy_reply(data, size, out)) return false;
+  if (out.name == "hop") out.mode = "forward";
+  return true;
+}
+bool route_is_forwarder(const ge::net::ServerInfo& info) { return info.mode == "forward"; }
+size_t route_ask(uint8_t* out, size_t cap) {
+  if (cap < 1) return 0;
+  out[0] = 'A';
+  return 1;
+}
+bool route_read(const uint8_t* data, size_t size, ge::forward::Reach& out) {
+  if (size != 1 || data[0] != 'R') return false;
+  out.emplace_back(ge::net::sim_address(7, 27500), 15);
+  return true;
+}
+
+}  // namespace
+
+TEST(join_a_game_finds_a_route_through_a_forwarder_and_joins_by_it) {
+  namespace gn = ge::net;
+  gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
+  gn::Transport far, hop, browser, routes;
+  gn::open_sim_transport(far, net, gn::sim_address(7, 27500));
+  gn::open_sim_transport(hop, net, gn::sim_address(6, 27500));
+  gn::open_sim_transport(browser, net, gn::sim_address(1, 27001));
+  gn::open_sim_transport(routes, net, gn::sim_address(1, 27002));
+  gn::LinkConditions slow;
+  slow.latency_ms = 60;
+  gn::sim_set_path(net, 1, 7, slow);
+  ge::console::Console con;
+  std::string joined, chain;
+  con.add_command("connect", "", [&](ge::console::Console&, const ge::console::Args& a) {
+    joined = a.size() > 1 ? a[1] : "";
+  });
+  con.cvars().bind({.name = "cl_proxyaddr", .fallback = "", .kind = ge::console::CvarKind::text},
+                   &chain);
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  con.execute("sb_findroutes 1");
+  sm::Host host{.console = &con};
+  menu.servers().set_query({toy_status, route_reply, nullptr, nullptr});
+  menu.servers().set_routes({route_is_forwarder, route_ask, route_read});
+  menu.servers().use_transport(&browser);
+  menu.servers().use_route_transport(&routes);
+  menu.servers().set_lan_ports(27500, 27500);
+  con.execute("menu_servers");
+  int64_t now = 0;
+  uint8_t buf[64];
+  gn::Address from;
+  const auto run = [&](const ge::ui::MenuInput& in) {
+    now += 16000;
+    gn::sim_advance(net, now);
+    while (gn::transport_receive(far, buf, sizeof buf, from, now) >= 0)
+      gn::transport_send(far, from, reinterpret_cast<const uint8_t*>("!far"), 4, now);
+    while (gn::transport_receive(hop, buf, sizeof buf, from, now) >= 0) {
+      if (buf[0] == '?')
+        gn::transport_send(hop, from, reinterpret_cast<const uint8_t*>("!hop"), 4, now);
+      else if (buf[0] == 'A')
+        gn::transport_send(hop, from, reinterpret_cast<const uint8_t*>("R"), 1, now);
+    }
+    menu.update(in, false, host, 0.016);
+  };
+  for (int i = 0; i < 400 && !menu.servers().routes_ready(); i++) run({});
+  const sm::ServersPage& page = menu.servers();
+  CHECK(page.routes_ready());
+  int far_index = -1, far_row = -1;
+  for (size_t i = 0; i < page.list().entries.size(); i++)
+    if (page.list().entries[i].info.name == "far") far_index = static_cast<int>(i);
+  for (size_t r = 0; r < page.rows().size(); r++)
+    if (page.rows()[r] == far_index) far_row = static_cast<int>(r);
+  CHECK(far_index >= 0 && far_row >= 0 && page.rows().size() == 2);
+  const ge::forward::Route r = page.route_to(far_index);
+  CHECK(r.found && r.forwarders.size() == 1 && r.forwarders[0] == gn::sim_address(6, 27500));
+  CHECK(r.ping_ms < r.direct_ms);
+  // A join from the page goes through the forwarder: cl_proxyaddr names it, connect the server.
+  ge::ui::MenuInput down;
+  down.down = true;
+  while (page.selected() != far_row) run(down);
+  ge::ui::MenuInput accept;
+  accept.accept = true;
+  run(accept);
+  CHECK(joined == "sim:7:27500");
+  CHECK(chain == "sim:6:27500");
+  // sb_showproxies 0 hides the forwarder; 2 lists it alone.
+  con.execute("sb_showproxies 0");
+  con.execute("menu_servers");
+  for (int i = 0; i < 60; i++) run({});
+  CHECK(menu.servers().rows().size() == 1);
 }
 
 TEST(join_a_game_without_a_protocol_says_so) {

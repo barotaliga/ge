@@ -714,6 +714,30 @@ bool remote_watch(Remote& r, const std::string& address, const std::string& name
   return true;
 }
 
+namespace {
+
+// A screenshot the server asked for: the window's frame grabbed (800 by 600, JPEG at 70), then
+// sent; the upload's lines said.
+void snap_step(Remote& r, std::vector<std::string>& said) {
+  ClientUpload& u = r.end.up;
+  for (std::string& line : u.said) said.push_back(std::move(line));
+  u.said.clear();
+  if (!u.asked) return;
+  if (!r.snap_grabbing) {
+    if (!r.snap_grab || !r.snap_take || !r.snap_grab(800, 600, 70)) {
+      client_upload_start(r.end, {});  // no frame to grab: the server told no
+      return;
+    }
+    r.snap_grabbing = true;
+  }
+  std::vector<uint8_t> picture;
+  if (!r.snap_take(picture)) return;
+  r.snap_grabbing = false;
+  client_upload_start(r.end, std::move(picture));
+}
+
+}  // namespace
+
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
   if (r.watch) return watch_step(r, said);
@@ -741,6 +765,8 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   r.end.cfg.physfps_spectator = r.physfps_spectator;
   r.end.cfg.c2spps = r.c2spps;  // cl_c2spps, live
   r.end.cfg.c2s_impulse_backup = r.c2s_impulse_backup;
+  r.end.cfg.allow_snap = r.allow_snap;  // scr_allowsnap, live
+  snap_step(r, said);
   for (;;) {
     const double tick_s = 1 / client_move_rate(r.end);
     if (r.owed_s < tick_s) break;
@@ -951,11 +977,22 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.timeout = std::atof(cvar("cl_timeout", "60").c_str());  // 0: never
     cfg.trace = &r.trace;                                       // showpackets, showdrop
     cfg.read_file = r.read_file;
+    // Through forwarders (cl_proxyaddr, "fwd1:port@fwd2:port"): the packets to the first, the
+    // rest and the server in `prx`, each hop taking its own off the front.
+    const std::string chain = cvar("cl_proxyaddr", "");
+    std::string first = address;
+    if (!chain.empty() && !(r.q2_game && r.q2_game())) {
+      const size_t at = chain.find('@');
+      first = chain.substr(0, at);
+      cfg.prx = (at == std::string::npos ? std::string() : chain.substr(at + 1) + "@") + address;
+    }
     std::string error;
-    if (!remote_connect(r, address, cfg, error))
+    if (!remote_connect(r, first, cfg, error)) {
       c.print("connect: " + error);
-    else
-      c.print(remote_status(r));
+      return;
+    }
+    if (!cfg.prx.empty()) r.server_name = address;  // reconnect: the server, through the chain
+    c.print(remote_status(r));
   };
   con.add_command(
       "connect",
@@ -1050,6 +1087,21 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                      .help = "The password rcon sends the server joined.",
                      .kind = ge::console::CvarKind::text,
                      .values = "\"\": none, rcon takes it first on its line; TEXT: the password"});
+    con.cvars().bind({.name = "scr_allowsnap",
+                      .fallback = "1",
+                      .flags = ge::console::kArchive,
+                      .help = "Whether a server that asks for a picture of your screen gets one.",
+                      .kind = ge::console::CvarKind::boolean,
+                      .values = "0: it is told no; 1: yes (the default)"},
+                     &r.allow_snap);
+    con.cvars().add({.name = "cl_proxyaddr",
+                     .flags = ge::console::kArchive,
+                     .help = "The forwarders connect goes through on the way to a server, the "
+                             "nearest first.",
+                     .kind = ge::console::CvarKind::text,
+                     .values =
+                         "\"\": straight to the server (the default); HOST:PORT[@HOST:PORT...]: "
+                         "through those forwarders"});
     con.cvars().add({.name = "rcon_address",
                      .flags = ge::console::kArchive,
                      .help = "The server rcon goes to while you are not joined to one.",

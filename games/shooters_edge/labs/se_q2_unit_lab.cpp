@@ -14,7 +14,8 @@
 // blue key lying in the west; the second's door opens from a button and an objective lies past it;
 // the third has a secret and the exit out of the unit. With `--game=<folder>` (the folder holding
 // Quake II's base folder) the unit comes from its packs (`--first`, the full game's first map by
-// default), for PRIVATE pictures only.
+// default; `--first=base2$base1` starts on base2 as if arrived from base1), for PRIVATE pictures
+// only. Built on the release preset a map's run takes seconds, not the debug build's minutes.
 //
 // ge:summary Lab: a unit of Quake II played start to end by a script: exits, keys, objectives
 // ge:keywords lab se-q2-unit q2 unit play-through scripted-playthrough run_q2_unit
