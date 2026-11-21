@@ -73,10 +73,13 @@ server for its mods' client half and menus. Quake's single player against the or
 ranked list in `porting/shooters-edge/q1-sp-gaps.md`, every row landed but the two kept by
 choice (the fixed 1/72 s step and co-op switched on during a map). Co-op on every campaign map
 (joins, a death, a leave and rejoin, the keys, the exit, the ending) is held by `se-coop-sweep`.
+The liquids (lava and slime's ticks and clock, the sounds going in and out, the burns' cries, the
+gasp, drowning that grows, the liquid slowing a swimmer) are held to Quake's own program by
+`se-dive`; the ticks are the harm rows of `plugins/shooter/liquid_harm.hpp`.
 
 ## Labs and tests
 
-`se-baseline`, `se-campaign`, `se-coop`, `se-coop-episode`, `se-coop-sweep`, `se-q2-fight`, `se-q2-coop`,
+`se-baseline`, `se-campaign`, `se-coop`, `se-coop-episode`, `se-coop-sweep`, `se-dive`, `se-q2-fight`, `se-q2-coop`,
 `se-q2-save`, `se-q2-unit`, `se-mod`, `se-qvm`, `qc`, `mod`; `tests/shooters_edge_rules_runner_test.cpp`.
 
 ## Lessons

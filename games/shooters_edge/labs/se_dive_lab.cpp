@@ -259,9 +259,13 @@ void run(gl::Lab& lab) {
   if (!lab.arg("game").empty()) {
     ce::Source src;
     ge::vfs::Pak pak;
-    if (!ce::open_source(lab.arg("game"), &src, &error) ||
-        !ge::vfs::read_pak(content = src.content(), &pak, &error)) {
+    if (!ce::open_source(lab.arg("game"), &src, &error)) {
       lab.fail("se-dive: " + error, "next: pass --game=<a release zip, a pack or a folder>");
+      return;
+    }
+    content = src.content();
+    if (!ge::vfs::read_pak(content, &pak, &error)) {
+      lab.fail("se-dive: the pack does not read: " + error, "next: check the --game path");
       return;
     }
     const ge::vfs::PakEntry* e = ge::vfs::pak_find(pak, "progs.dat");

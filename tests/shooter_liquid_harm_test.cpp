@@ -83,6 +83,7 @@ TEST(the_engines_step_deals_what_the_classic_clock_deals_through_a_dive) {
       gw::HarmState st;
       const std::vector<int> levels = dive();
       std::vector<double> got;
+      got.reserve(levels.size());
       for (int level : levels) got.push_back(gw::step_harm(h, 20, level, st, kDt));
       CHECK(got.size() == want.size());
       int same = 0;
