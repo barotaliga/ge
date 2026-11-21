@@ -58,6 +58,7 @@
 #include "shooterbots/traits.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/hop_course.hpp"
 #include "shooters_edge/net/qw_team_nav.hpp"
@@ -160,7 +161,8 @@ Run run_course(std::span<const uint8_t> bsp, const la::HopCourse& course, sb::Ai
   sv::server_command(s, "deathmatch 1");
   if (!sv::load_map(s, map->spec, r.error)) return r;
   cn::TeamNav tn;
-  if (!bt::build_map_nav(s, map->spec, "info_player_deathmatch", tn.nav, r.error)) return r;
+  if (!bt::build_map_nav(s, map->spec, bt::quake_maps(), "info_player_deathmatch", tn.nav, r.error))
+    return r;
   const sb::NavGraph& g = tn.nav.graph;
   const sh::Vec3f end{course.mx.back(), course.my.back(), 24};
   const int32_t goal = sb::nav_nearest(g, end);

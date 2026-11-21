@@ -18,9 +18,9 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
-#include "progs/entity_text.hpp"
 #include "shooter/trace.hpp"
 #include "shooterbots/aim.hpp"
+#include "shooterbots/entities.hpp"
 
 namespace shooters_edge::bots {
 
@@ -29,7 +29,6 @@ namespace {
 namespace sh = ge::shooter;
 
 namespace sb = ge::shooterbots;
-namespace pg = ge::progs;
 
 constexpr double kPokeEvery_s = 12;      // a novice's whim comes this often
 constexpr float kPokeChance = 0.4f;      // and takes him this often
@@ -90,10 +89,10 @@ float box_dist(sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi) {
 // fired: it moves along its angle (-1 up, -2 down, else a heading) by its size less its lip (8),
 // the other way when it starts open (spawnflag 1: it rests at its open place). Such a door shuts
 // over the item when fired (a crushing wall), so it keeps nothing at rest.
-bool fired_nearer(const pg::EntityBlock& d, sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi) {
-  const char* av = pg::block_value(d, "angle");
-  const char* lv = pg::block_value(d, "lip");
-  const char* sv = pg::block_value(d, "spawnflags");
+bool fired_nearer(const sb::EntityBlock& d, sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi) {
+  const char* av = sb::block_value(d, "angle");
+  const char* lv = sb::block_value(d, "lip");
+  const char* sv = sb::block_value(d, "spawnflags");
   const double angle = av ? std::atof(av) : 0;
   sh::Vec3f dir{0, 0, 0};
   if (angle == -1) {
@@ -146,7 +145,7 @@ std::vector<uint8_t> reach_without(const sb::NavGraph& g, const std::vector<int3
 
 }  // namespace
 
-std::vector<std::string> button_fires(const std::vector<pg::EntityBlock>& blocks,
+std::vector<std::string> button_fires(const std::vector<sb::EntityBlock>& blocks,
                                       const char* target) {
   std::vector<std::string> names;
   if (!target || !target[0]) return names;
@@ -154,10 +153,10 @@ std::vector<std::string> button_fires(const std::vector<pg::EntityBlock>& blocks
   for (size_t from = 0, depth = 0; from < names.size() && depth < kRelayDepth; depth++) {
     const size_t to = names.size();
     for (; from < to; from++)
-      for (const pg::EntityBlock& b : blocks) {
-        const char* cn = pg::block_value(b, "classname");
-        const char* tn = pg::block_value(b, "targetname");
-        const char* next = pg::block_value(b, "target");
+      for (const sb::EntityBlock& b : blocks) {
+        const char* cn = sb::block_value(b, "classname");
+        const char* tn = sb::block_value(b, "targetname");
+        const char* next = sb::block_value(b, "target");
         if (!cn || !tn || !next || !next[0] || names[from] != tn) continue;
         if (std::strcmp(cn, "trigger_relay") != 0 && std::strcmp(cn, "trigger_once") != 0 &&
             std::strcmp(cn, "trigger_multiple") != 0)
@@ -198,9 +197,9 @@ void buttons_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
                   const char* entities) {
   f.button_spots.clear();
   f.poke = -1;
-  std::vector<pg::EntityBlock> blocks;
+  std::vector<sb::EntityBlock> blocks;
   std::string error;
-  if (!entities || !pg::parse_entity_text(entities, blocks, error)) return;
+  if (!entities || !sb::parse_entity_text(entities, blocks, error)) return;
   const auto entity_on = [&](const char* model) {
     for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
       const ge::shooter::WorldEntity& d = s.world.entities[static_cast<size_t>(e)];
@@ -217,33 +216,33 @@ void buttons_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
   std::vector<int32_t> spawns;
   std::vector<uint8_t> open_reach;
   if (doorway) {
-    for (const pg::EntityBlock& b : blocks) {
-      const char* cn = pg::block_value(b, "classname");
+    for (const sb::EntityBlock& b : blocks) {
+      const char* cn = sb::block_value(b, "classname");
       if (!cn || (std::strcmp(cn, "info_player_deathmatch") != 0 &&
                   std::strcmp(cn, "info_player_start") != 0))
         continue;
       sh::Vec3f o;
-      if (parse_vec(pg::block_value(b, "origin"), o)) spawns.push_back(sb::nav_nearest(g, o));
+      if (parse_vec(sb::block_value(b, "origin"), o)) spawns.push_back(sb::nav_nearest(g, o));
     }
     open_reach = reach_without(g, spawns, {});
   }
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* target = pg::block_value(b, "target");
-    const char* model = pg::block_value(b, "model");
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* target = sb::block_value(b, "target");
+    const char* model = sb::block_value(b, "model");
     if (!cn || std::strcmp(cn, "func_button") != 0 || !model) continue;
     ButtonSpot bs;
     bs.ent = entity_on(model);
     if (bs.ent < 0) continue;
     bs.at = middle(s.world.entities[static_cast<size_t>(bs.ent)]);
-    const char* health = pg::block_value(b, "health");
+    const char* health = sb::block_value(b, "health");
     bs.shoot = health && std::atof(health) > 0;
     bs.node = button_node(g, s, bs, bs.shoot ? 900.f : 256.f);
     const std::vector<std::string> fired = button_fires(blocks, target);
-    const auto fires = [&](const pg::EntityBlock& d) {
-      const char* dc = pg::block_value(d, "classname");
-      const char* dn = pg::block_value(d, "targetname");
-      const char* dm = pg::block_value(d, "model");
+    const auto fires = [&](const sb::EntityBlock& d) {
+      const char* dc = sb::block_value(d, "classname");
+      const char* dn = sb::block_value(d, "targetname");
+      const char* dm = sb::block_value(d, "model");
       if (!dc || std::strcmp(dc, "func_door") != 0 || !dn || !dm) return -1;
       for (const std::string& n : fired)
         if (n == dn) return entity_on(dm);
@@ -253,11 +252,11 @@ void buttons_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
     std::vector<uint8_t> shut_reach;
     if (doorway) {
       std::vector<int> mine;
-      for (const pg::EntityBlock& d : blocks)
+      for (const sb::EntityBlock& d : blocks)
         if (const int door = fires(d); door >= 0) mine.push_back(door);
       shut_reach = reach_without(g, spawns, mine);
     }
-    for (const pg::EntityBlock& d : blocks) {
+    for (const sb::EntityBlock& d : blocks) {
       const int door = fires(d);
       if (door < 0) continue;
       bs.doors.push_back(door);
@@ -266,13 +265,13 @@ void buttons_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
       // and its travel each way (its speed, 100 unless it says, over its size along the way it
       // moves less its lip, 8 unless it says): passable from soon after it starts to soon after
       // it starts back.
-      const char* wait = pg::block_value(d, "wait");
+      const char* wait = sb::block_value(d, "wait");
       const float w = wait ? static_cast<float>(std::atof(wait)) : 3.f;
       {
         const ge::shooter::WorldEntity& de = s.world.entities[static_cast<size_t>(door)];
-        const char* angle = pg::block_value(d, "angle");
-        const char* speed = pg::block_value(d, "speed");
-        const char* lip = pg::block_value(d, "lip");
+        const char* angle = sb::block_value(d, "angle");
+        const char* speed = sb::block_value(d, "speed");
+        const char* lip = sb::block_value(d, "lip");
         const float a = angle ? static_cast<float>(std::atof(angle)) : 0.f;
         const sh::Vec3f size = de.absmax - de.absmin;
         float along = 0;
@@ -292,8 +291,8 @@ void buttons_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
       }
       // (`fields`) A WAY when fired: not one that starts open (a bridge's) nor one that hurts more
       // than a door's push (dm2's crusher walls by the pillar armours: a trap, not a way).
-      const char* sf = pg::block_value(d, "spawnflags");
-      const char* dmg = pg::block_value(d, "dmg");
+      const char* sf = sb::block_value(d, "spawnflags");
+      const char* dmg = sb::block_value(d, "dmg");
       if (!(sf && (std::atoi(sf) & 1) != 0) && !(dmg && std::atof(dmg) > kDoorPushDmg))
         bs.way_doors.push_back(door);
       const ge::shooter::WorldEntity& de = s.world.entities[static_cast<size_t>(door)];
@@ -325,17 +324,17 @@ void exits_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotVie
   f.exits.clear();
   f.locked.clear();
   f.locked_rest.clear();
-  std::vector<pg::EntityBlock> blocks;
+  std::vector<sb::EntityBlock> blocks;
   std::string error;
-  if (!entities || !pg::parse_entity_text(entities, blocks, error)) return;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
+  if (!entities || !sb::parse_entity_text(entities, blocks, error)) return;
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
     // A door that only something else opens: one with a name (not one that starts open), or a
     // secret door. A touch does not open it, so a route through it waits there for ever.
     if (cn && model && model[0] == '*') {
-      const char* name = pg::block_value(b, "targetname");
-      const char* sf = pg::block_value(b, "spawnflags");
+      const char* name = sb::block_value(b, "targetname");
+      const char* sf = sb::block_value(b, "spawnflags");
       const bool start_open = sf && (std::atoi(sf) & 1) != 0;
       if ((std::strcmp(cn, "func_door") == 0 && name && !start_open) ||
           std::strcmp(cn, "func_door_secret") == 0) {

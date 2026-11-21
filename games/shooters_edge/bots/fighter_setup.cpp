@@ -14,12 +14,11 @@
 #include <string>
 #include <vector>
 
-#include "progs/entity_text.hpp"
+#include "shooterbots/entities.hpp"
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/ears.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/hop_start_book.hpp"
-#include "shooters_edge/bots/item_routes.hpp"
 #include "shooters_edge/bots/keyboard.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/spam.hpp"
@@ -29,8 +28,6 @@ namespace sb = ge::shooterbots;
 namespace shooters_edge::bots {
 
 namespace {
-
-namespace pg = ge::progs;
 
 constexpr float bt_gap_past = 160;  // `gappast`: a gap's jump lands this far on past its node
 // What a fighter sees: a player's screen, 120 degrees across and as high as a 16:9 monitor shows
@@ -154,7 +151,8 @@ sb::PilotSettings fighter_pilot(const sb::Features& features, const sb::Traits& 
 
 void fighter_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotView& s, int slot,
                   const char* entities, sb::AimSkill skill, const sb::Traits& traits, double hz,
-                  uint32_t seed) {
+                  uint32_t seed, const BotArsenal& arsenal) {
+  f.arsenal = &arsenal;
   sb::PilotHands hands = sb::PilotHands::none;
   const sb::PilotSettings ps = fighter_pilot(f.features, traits, skill, hands);
   // The aim: the scattergun's to start with, another weapon's taken up as it is
@@ -192,18 +190,18 @@ void fighter_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
   f.dodge_k = sb::dodge_skill(traits[sb::Trait::dodge]);
   const int me = slot + 1;
   sb::client_view(s.sv, me, f.bot.view);
-  std::vector<pg::EntityBlock> blocks;
+  std::vector<sb::EntityBlock> blocks;
   std::string error;
   f.items.clear();
-  if (!pg::parse_entity_text(entities, blocks, error)) return;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
+  if (!sb::parse_entity_text(entities, blocks, error)) return;
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
     if (!cn) continue;
-    const char* flags = pg::block_value(b, "spawnflags");
+    const char* flags = sb::block_value(b, "spawnflags");
     ItemSpot it;
     if (!item_of(cn, flags ? std::atoi(flags) : 0, it, *f.arsenal)) continue;
     sh::Vec3f origin;
-    parse_vec(pg::block_value(b, "origin"), origin);
+    parse_vec(sb::block_value(b, "origin"), origin);
     // The entity sent nearest the map's place, across the floor (`itemz`: within 48 across, the
     // nearest in height too: dm2 stacks the lob's ledge over a yellow armour, and across alone
     // gave both spots one entity).
@@ -233,8 +231,10 @@ void fighter_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotV
                std::to_string(static_cast<int>(origin.y));
     f.items.push_back(it);
   }
-  // The map's item rules (item_routes.hpp): an item no goal while another is to be had first.
-  for (const ItemRule& r : item_rules(s.map_name))
+  // The map's item rules (the game's book, shooterbots/map_book.hpp): an item no goal while
+  // another is to be had first.
+  for (const sb::ItemRule& r : f.arsenal->maps ? sb::item_rules(*f.arsenal->maps, s.map_name)
+                                               : std::span<const sb::ItemRule>{})
     for (ItemSpot& it : f.items) {
       const float dx = it.at.x - r.x, dy = it.at.y - r.y, dz = it.at.z - r.z;
       if (std::strcmp(item_call(it), r.item) != 0 || dx * dx + dy * dy + dz * dz > 48 * 48)

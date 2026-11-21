@@ -11,6 +11,7 @@
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/floor_trap.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 
 namespace sb = ge::shooterbots;
 
@@ -40,7 +41,7 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sb::BotView& seen, in
   const sb::SwimField& sw = nav.swim;
   const std::vector<uint8_t>& wet = nav.wet;
   const std::vector<sb::NavExtraLink>& entries = nav.entries;
-  bt::fighter_init(f, graph, seen, slot, entities, skill, traits, hz, seed);
+  bt::fighter_init(f, graph, seen, slot, entities, skill, traits, hz, seed, bt::first_arsenal());
   f.bot.yaw = seen.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
   f.bot.pilot.world = &world;  // the hop looks ahead through the map
   f.bot.view_book = tn.view_book;
@@ -67,7 +68,7 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const sb::BotView& seen, in
     std::string map = seen.map_name;
     if (map.rfind("maps/", 0) == 0) map.erase(0, 5);
     if (map.size() > 4 && map.ends_with(".bsp")) map.resize(map.size() - 4);
-    tn.goals = bt::map_goals(tn.plan, f.items, map);
+    tn.goals = bt::map_goals(tn.plan, f.items, map, bt::quake_maps());
     tn.plan_made = true;
   }
   f.plan = f.features[sb::Feature::plan] ? &tn.plan : nullptr;  // the plan a switch (features)

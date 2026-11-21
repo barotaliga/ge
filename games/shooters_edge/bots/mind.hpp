@@ -44,7 +44,7 @@
 #include <vector>
 
 #include "ai/why.hpp"
-#include "classic/locs.hpp"
+#include "shooter/places.hpp"
 #include "shooter/vec.hpp"
 #include "shooterbots/bot_view.hpp"
 #include "shooters_edge/bots/talk.hpp"

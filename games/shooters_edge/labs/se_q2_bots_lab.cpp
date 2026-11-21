@@ -28,6 +28,7 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -180,7 +181,7 @@ void run(gl::Lab& lab) {
   }
   auto nav = std::make_unique<bt::MapNav>();
   nav->move = bt::q2_nav_move(sv::q2_air_accelerate(*sv::q2_of(r)));
-  if (!bt::build_map_nav(*r, spec, "info_player_deathmatch", *nav, error)) {
+  if (!bt::build_map_nav(*r, spec, bt::quake_maps(), "info_player_deathmatch", *nav, error)) {
     lab.fail("the bots' nav did not build on " + name + ": " + error,
              "Read bots/map_nav.cpp's build_map_nav. Skill: bots.");
     return;
@@ -193,11 +194,10 @@ void run(gl::Lab& lab) {
     auto seat = std::make_unique<Seat>();
     bt::Fighter& f = seat->fighter;
     const sb::AimSkill skill = i % 2 == 0 ? sb::AimSkill::expert : sb::AimSkill::average;
-    f.arsenal = &arsenal;
     f.features = sb::features_of(skill);
     bt::fighter_init(f, nav->graph, *r, i, text.c_str(), skill,
                      sb::traits_of(skill, sb::Temper::balanced), kBotHz,
-                     static_cast<uint32_t>(1000 + i));
+                     static_cast<uint32_t>(1000 + i), arsenal);
     f.bot.yaw = r->sv.edicts[static_cast<size_t>(i) + 1].v_angle.y;
     f.bot.pilot.world = &nav->world;
     seat->path.label = kNames[i];

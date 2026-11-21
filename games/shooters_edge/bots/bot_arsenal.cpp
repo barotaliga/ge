@@ -5,6 +5,8 @@
 // ge:skill bots shooter
 // ge:test tests/shooters_edge_q2_nav_test.cpp
 #include "shooters_edge/bots/bot_arsenal.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
+#include "shooters_edge/bots/talk.hpp"
 
 #include <array>
 #include <string_view>
@@ -151,6 +153,8 @@ BotArsenal make_first() {
   a.read = first_read;
   a.heard = &shooters_edge::profiles::kQ1Tables;
   a.fire_sounds = first_fire_sounds();
+  a.maps = &quake_maps();
+  a.talk = &team_words();
   return a;
 }
 
@@ -295,6 +299,8 @@ Q2Arsenal make_q2() {
   a.monster = q2_monster;
   a.heard = &shooters_edge::profiles::kQ1Tables;  // as before the seam; its own words next
   a.fire_sounds = first_fire_sounds();
+  a.maps = &quake_maps();  // Quake's maps' rows, by name: none on Quake II's own
+  a.talk = &team_words();
   return out;
 }
 

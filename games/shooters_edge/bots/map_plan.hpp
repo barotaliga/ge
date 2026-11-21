@@ -45,7 +45,7 @@
 #include <string>
 #include <vector>
 
-#include "classic/locs.hpp"
+#include "shooter/places.hpp"
 #include "shooterbots/nav.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 
@@ -104,7 +104,7 @@ double plan_worth(const ItemSpot& it);
 // The plan for `g` and the map's `items` (a fighter's, after `fighter_init`), from the map's spawn
 // points `spawns`, its areas named off `locs` when it has them.
 MapPlan make_map_plan(const sb::NavGraph& g, const std::vector<ItemSpot>& items,
-                      const std::vector<sh::Vec3f>& spawns, const ge::classic::Locs* locs,
+                      const std::vector<sh::Vec3f>& spawns, const ge::shooter::Locs* locs,
                       const PlanSettings& set = {});
 
 // The opening order of a map with a written strategy (its name as "dm3" or "maps/dm3.bsp");

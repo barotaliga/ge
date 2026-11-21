@@ -26,8 +26,8 @@
 #include <string>
 #include <vector>
 
-#include "progs/entity_text.hpp"
 #include "shooter/usercmd.hpp"
+#include "shooterbots/entities.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 
 namespace shooters_edge::bots {
@@ -50,7 +50,7 @@ constexpr double kDoorAvoid_s = 20;   // and a door whose button only it leads t
 // `trigger_relay`, `trigger_once` or `trigger_multiple` with a `targetname` fires its own `target`
 // on, `kRelayDepth` deep. e1m2's floor plate fires a delayed trigger_once that opens the doors to
 // the mega's teleporters.
-std::vector<std::string> button_fires(const std::vector<ge::progs::EntityBlock>& blocks,
+std::vector<std::string> button_fires(const std::vector<ge::shooterbots::EntityBlock>& blocks,
                                       const char* target);
 
 // (`fields`) The map's buttons as the fields' errands (shooterbots/nav_field.hpp), one for each of

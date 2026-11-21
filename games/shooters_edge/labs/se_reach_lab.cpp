@@ -51,11 +51,10 @@
 #include "shooterbots/nav_field.hpp"
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/gap_tricks.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
-#include "shooters_edge/bots/rocket_tricks.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/nav_top.hpp"
@@ -233,7 +232,7 @@ void walk_runs(const bt::MapNav& nav, const Probe& pr, const std::string& name,
 }
 
 // --rockets=fly: each rocket trick (a link of `NavKind::rocket`: the maps' tricks people fly,
-// bots/rocket_tricks.hpp) run up to by an expert fighter's pilot with the launcher in hand, from
+// bots/quake_maps.hpp) run up to by an expert fighter's pilot with the launcher in hand, from
 // the floor's node nearest each point `kGapBack` behind its takeoff, walking in at 180, through an
 // expert's keyboard under `keys`: planned through the link, fired, the speed at the shot, landed
 // on its node, or SHORT (the run after the shot sank 48 under both ends: into a pit). A trick
@@ -344,6 +343,7 @@ void field_probe(const bt::MapNav& nav, const ge::shooterbots::BotView& s,
                  const std::string& entities, const Probe& pr, MapReach& out) {
   const sb::NavGraph& g = nav.graph;
   bt::Fighter f;
+  f.arsenal = &bt::first_arsenal();
   bt::buttons_init(f, g, s, entities.c_str());
   const std::vector<sb::NavErrand> errands = bt::field_errands(f, g, s);
   auto at = [&](int32_t n) {
@@ -403,6 +403,7 @@ void field_map(const bt::MapNav& nav, const ge::shooterbots::BotView& s,
   constexpr int kFieldMapPx = 1600;
   const sb::NavGraph& g = nav.graph;
   bt::Fighter f;
+  f.arsenal = &bt::first_arsenal();
   bt::buttons_init(f, g, s, entities.c_str());
   sb::NavFields fs;
   sb::nav_fields_init(fs, g, bt::field_errands(f, g, s));
@@ -640,7 +641,8 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
   if (!rules.start(map->spec, out.error)) return;
   sv::use_map_sets(q, map->bsp);
   bt::MapNav nav;
-  if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, out.error)) return;
+  if (!bt::build_map_nav(q, map->spec, bt::quake_maps(), "info_player_deathmatch", nav, out.error))
+    return;
   const sb::NavGraph& g = nav.graph;
   if (probe != nullptr) probe_map(nav, *probe, out);
   if (probe != nullptr && probe->field) field_probe(nav, q, map->spec.entities, *probe, out);
@@ -1052,7 +1054,7 @@ void run(gl::Lab& lab) {
                     {"map", "item", "at (x y z)", "node off", "why"},
                     {}};
   gl::LabTable tk{
-      "each map's rocket-jump tricks (people's, rocket_tricks.hpp) as the nav proved "
+      "each map's rocket-jump tricks (people's, bots/quake_maps.hpp) as the nav proved "
       "them: the link's landing, its flight and the way there on foot, s",
       {"map", "#", "people's from", "people's to", "kind", "level", "jumps", "proof",
        "lands (x y z)", "jump s", "on foot s", "grenade jump s"},
@@ -1103,7 +1105,8 @@ void run(gl::Lab& lab) {
   lab.table(gaps);
   if (!tk.rows.empty()) lab.table(tk);
   gl::LabTable gt{
-      "each map's gap tricks (people's speed jumps over a pit, gap_tricks.hpp) as the nav proved "
+      "each map's gap tricks (people's speed jumps over a pit, bots/quake_maps.hpp) as the nav "
+      "proved "
       "them: the link's landing and speed, its flight and the way there on foot, s; why none was "
       "kept (the nearest a proof came down to people's landing, across, and where)",
       {"map", "#", "people's from", "people's to", "speed", "level", "jumps", "harm", "proof",
@@ -1121,7 +1124,7 @@ void run(gl::Lab& lab) {
   if (!gt.rows.empty()) lab.table(gt);
   lab.table(mv);
   gl::LabTable st{
-      "each map's scripted routes to key items (bots/item_routes.hpp) as the move "
+      "each map's scripted routes to key items (bots/quake_maps.hpp) as the move "
       "proved them: from the entry's node to the end's (feet), the time, the mover "
       "crossed",
       {"map", "route", "proof", "from", "to", "s", "mover"},

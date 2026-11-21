@@ -73,7 +73,7 @@ constexpr double kThink_s = 0.1;  // how often the mode, the goal and the weapon
 Stats read_stats(const ge::shooterbots::BotView& s, int ent, const BotArsenal& arsenal);
 
 // What an item is, the shooter's vocabulary (classic/item_tables.hpp).
-using ItemKind = ge::classic::ItemKind;
+using ItemKind = ge::shooterbots::ItemKind;
 
 // How well a player knows the map (knowledge.hpp): where its items are and when they come back.
 enum class MapSense : uint8_t { novice, average, expert };
@@ -106,9 +106,10 @@ struct ItemSpot {
   int32_t node = -1;  // the nav node nearest it
   int door_ent = -1;  // the door's entity (-1: none)
   int32_t button_node = -1;
-  int button_ent = -1;    // the button's entity
-  int32_t after = -1;     // an item rule (item_routes.hpp): no goal while item `after` is up or due
-  float after_due_s = 0;  // within this
+  int button_ent = -1;  // the button's entity
+  int32_t after =
+      -1;  // an item rule (shooterbots/map_book.hpp): no goal while item `after` is up or due
+  float after_due_s = 0;                    // within this
   int32_t dive_node = -1, dive_entry = -1;  // and the node in the water it drops or steps to
   float dive_s = 0;                         // the swim's time, s (its steps at a swimmer's pace)
   int32_t sightings = 0;                    // separate times it was seen (kSightingGap_s apart)
@@ -277,8 +278,8 @@ struct FighterStats {
   int64_t stood = 0;         // (`fightway`) a fight's back key let go: stood and dodged
   int64_t chained = 0;       // item goals planned on to the next one (`chains`)
   int64_t turned_round = 0;  // commands a turn back was pressed across the run (`uturn`)
-  int64_t took[ge::classic::kItemKinds] = {};  // its own pickups by the item's kind (ItemKind)
-  int64_t swim_fights = 0;                     // commands swum under the aim, an enemy in sight
+  int64_t took[ge::shooterbots::kItemKinds] = {};  // its own pickups by the item's kind (ItemKind)
+  int64_t swim_fights = 0;                         // commands swum under the aim, an enemy in sight
   int64_t wet = 0;  // commands alive with the waist in water (swimming or wading)
   // And the wet commands by what it was doing (`kWetWhy`): its mode, aiming, its goal in the
   // water, standing still, the pilot swimming or walking a pool's floor, the head under.
@@ -410,9 +411,8 @@ struct KeyHand {
 struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a match, read by name
   // Ordered by size, largest first, so the struct packs tight.
   sb::Bot bot;
-  // The game's weapons as it reads them (bot_arsenal.hpp): Quake's unless its caller
-  // sets another (Quake II's) before `fighter_init`.
-  const BotArsenal* arsenal = &first_arsenal();
+  // The game's weapons as it reads them (bot_arsenal.hpp), set by `fighter_init`.
+  const BotArsenal* arsenal = nullptr;
   std::vector<ItemSpot> items;
   std::vector<sh::Vec3f> spawns;                                // the map's spawn points (ears.hpp)
   std::vector<ShotsHeard> fired = std::vector<ShotsHeard>(33);  // by entity: weapons heard fired
@@ -505,7 +505,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   double door_until = -1e9, door_avoid_until = -1e9;  // a door's errand and avoidance (below)
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                     // its side (team.hpp); null in a free-for-all
-  const ge::classic::Locs* locs = nullptr;  // the map's place names (none: no names)
+  const ge::shooter::Locs* locs = nullptr;  // the map's place names (none: no names)
   const MapPlan* plan = nullptr;  // the map's team plan (map_plan.hpp; none: the items alone)
   // The map's traps (map_nav.hpp: nodes no way on foot leads back from), never a goal; null none.
   const std::vector<uint8_t>* trap = nullptr;
@@ -714,10 +714,11 @@ double node_run_s(const Fighter& f, int32_t node);
 // A fighter on graph `g` with the personality `traits` (shooterbots/traits.hpp; `skill` perfect
 // passes its aim's hands untouched, the measuring stick) and the behaviours `f.features`
 // (shooterbots/features.hpp), the map's items off `entities` (the map's text) matched to what the
-// server `s` sends client `slot`'s player now. Call after the slot connects.
+// server `s` sends client `slot`'s player now, read by the game's `arsenal` (bot_arsenal.hpp).
+// Call after the slot connects.
 void fighter_init(Fighter& f, const sb::NavGraph& g, const ge::shooterbots::BotView& s, int slot,
                   const char* entities, sb::AimSkill skill, const sb::Traits& traits, double hz,
-                  uint32_t seed);
+                  uint32_t seed, const BotArsenal& arsenal);
 
 // Sends the fighter to nav node `node` (kept when it is on its way there or standing on it; none
 // when no way leads there from where it stands).

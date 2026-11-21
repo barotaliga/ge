@@ -14,8 +14,8 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
-#include "progs/entity_text.hpp"
 #include "shooter/trace.hpp"
+#include "shooterbots/entities.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/bots/team.hpp"
@@ -27,7 +27,6 @@ namespace {
 namespace sh = ge::shooter;
 
 namespace sb = ge::shooterbots;
-namespace pg = ge::progs;
 
 constexpr float kMateClear = 300;  // never a spot a teammate is believed this near, units
 constexpr float kNewsOn = 0.995f;  // the view this near the way in (the cosine: about 6 degrees)
@@ -71,14 +70,14 @@ void spam_init(Fighter& f, const char* entities) {
   f.spam_spots.clear();
   f.spam_from.clear();
   f.spam_for = f.spam_node = f.spam_spot = -1;
-  std::vector<pg::EntityBlock> blocks;
+  std::vector<sb::EntityBlock> blocks;
   std::string error;
-  if (entities && pg::parse_entity_text(entities, blocks, error)) {
-    for (const pg::EntityBlock& b : blocks) {
-      const char* cn = pg::block_value(b, "classname");
+  if (entities && sb::parse_entity_text(entities, blocks, error)) {
+    for (const sb::EntityBlock& b : blocks) {
+      const char* cn = sb::block_value(b, "classname");
       sh::Vec3f at;
       if (cn && std::strcmp(cn, "info_teleport_destination") == 0 &&
-          parse_vec(pg::block_value(b, "origin"), at))
+          parse_vec(sb::block_value(b, "origin"), at))
         f.spam_spots.push_back({at.x, at.y, at.z - 8});  // the floor under where one comes out
     }
   }

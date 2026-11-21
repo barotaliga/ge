@@ -23,6 +23,7 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace {
@@ -86,7 +87,8 @@ TEST(the_nav_builds_on_a_version_38_map) {
   std::string error;
   CHECK_MSG(r.start(spec, error), error);
   auto nav = std::make_unique<bt::MapNav>();
-  CHECK_MSG(bt::build_map_nav(*r, spec, "info_player_deathmatch", *nav, error), error);
+  CHECK_MSG(bt::build_map_nav(*r, spec, bt::quake_maps(), "info_player_deathmatch", *nav, error),
+            error);
   CHECK(nav->world.solids[0].kind == sh::SolidKind::brushes);
   CHECK(nav->tracer != nullptr);
   CHECK(nav->graph.nodes.size() > 100);

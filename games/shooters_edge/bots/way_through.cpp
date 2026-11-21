@@ -14,10 +14,10 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
-#include "progs/entity_text.hpp"
 #include "shooter/map_spec.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
+#include "shooterbots/entities.hpp"
 #include "shooters_edge/bots/buttons.hpp"
 
 namespace sb = ge::shooterbots;
@@ -25,8 +25,6 @@ namespace sb = ge::shooterbots;
 namespace shooters_edge::bots {
 
 namespace {
-
-namespace pg = ge::progs;
 
 constexpr int kKeySilver = 131072, kKeyGold = 262144;  // the keys' item bits
 constexpr float kButtonClose = 320;  // at a button's spot this near, he presses it, units
@@ -230,18 +228,18 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.seen.assign(g.nodes.size(), 0);
   w.node_door.assign(g.nodes.size(), -1);
   w.barred_was.clear();
-  std::vector<pg::EntityBlock> blocks;
+  std::vector<sb::EntityBlock> blocks;
   std::string error;
-  if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
+  if (!sb::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
   // What opens a door only something else opens: a name a shut door answers to, or a counter's,
   // a relay's or a door's whose own target does (two hops).
   const auto names_door = [&](const std::string& t, std::vector<int>& out) {
     bool any = false;
-    for (const pg::EntityBlock& d : blocks) {
-      const char* dc = pg::block_value(d, "classname");
-      const char* dn = pg::block_value(d, "targetname");
-      const char* dm = pg::block_value(d, "model");
-      const char* sf = pg::block_value(d, "spawnflags");
+    for (const sb::EntityBlock& d : blocks) {
+      const char* dc = sb::block_value(d, "classname");
+      const char* dn = sb::block_value(d, "targetname");
+      const char* dm = sb::block_value(d, "model");
+      const char* sf = sb::block_value(d, "spawnflags");
       if (!dc || !dn || t != dn) continue;
       if ((std::strcmp(dc, "func_door") == 0 && !(sf && (std::atoi(sf) & 1) != 0)) ||
           std::strcmp(dc, "func_door_secret") == 0 || std::strcmp(dc, "func_plat") == 0) {
@@ -265,10 +263,10 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   const auto opens = [&](const char* t, std::vector<int>& out) {
     if (!t) return false;
     bool any = names_door(t, out);
-    for (const pg::EntityBlock& d : blocks) {
-      const char* dc = pg::block_value(d, "classname");
-      const char* dn = pg::block_value(d, "targetname");
-      const char* dt = pg::block_value(d, "target");
+    for (const sb::EntityBlock& d : blocks) {
+      const char* dc = sb::block_value(d, "classname");
+      const char* dn = sb::block_value(d, "targetname");
+      const char* dt = sb::block_value(d, "target");
       if (!dc || !dn || !dt || std::strcmp(dn, t) != 0) continue;
       // (A door that fires its own target as it opens passes it on too: base2's lever is a
       // `func_door_rotating` whose target is the exit's door.)
@@ -282,30 +280,30 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   // A name answered by a key's lock (Quake II's `trigger_key`), and the map a name's level
   // change leads to (Quake II's exits: a trigger whose target is a `target_changelevel`).
   const auto keyed = [&](const char* t) {
-    for (const pg::EntityBlock& d : blocks) {
-      const char* dc = pg::block_value(d, "classname");
-      const char* dn = pg::block_value(d, "targetname");
+    for (const sb::EntityBlock& d : blocks) {
+      const char* dc = sb::block_value(d, "classname");
+      const char* dn = sb::block_value(d, "targetname");
       if (t && dc && dn && std::strcmp(dn, t) == 0 && std::strcmp(dc, "trigger_key") == 0)
         return true;
     }
     return false;
   };
   const auto level_change = [&](const char* t) -> const char* {
-    for (const pg::EntityBlock& d : blocks) {
-      const char* dc = pg::block_value(d, "classname");
-      const char* dn = pg::block_value(d, "targetname");
+    for (const sb::EntityBlock& d : blocks) {
+      const char* dc = sb::block_value(d, "classname");
+      const char* dn = sb::block_value(d, "targetname");
       if (t && dc && dn && std::strcmp(dn, t) == 0 && std::strcmp(dc, "target_changelevel") == 0) {
-        const char* map = pg::block_value(d, "map");
+        const char* map = sb::block_value(d, "map");
         return map ? map : "";
       }
     }
     return nullptr;
   };
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
-    const char* target = pg::block_value(b, "target");
-    const char* name = pg::block_value(b, "targetname");
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    const char* target = sb::block_value(b, "target");
+    const char* name = sb::block_value(b, "targetname");
     if (!cn) continue;
     const int m = model && model[0] == '*' ? std::atoi(model + 1) : -1;
     // The brush models' boxes: the spec's hulls, or (Quake II's runner keeps none) the map's.
@@ -318,7 +316,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         std::strcmp(cn, "trigger_once") == 0 || std::strcmp(cn, "trigger_multiple") == 0;
     if (std::strcmp(cn, "trigger_changelevel") == 0 && brush) {
       st.kind = WayKind::exit;
-      const char* map = pg::block_value(b, "map");
+      const char* map = sb::block_value(b, "map");
       st.name = map ? map : "";
     } else if (const char* to = trigger && brush && target ? level_change(target) : nullptr) {
       st.kind = WayKind::exit;  // Quake II's: walked through, it fires the level change
@@ -336,7 +334,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       st.opens = opens(target, st.doors);
       st.keyed = keyed(target);
     } else if (std::strcmp(cn, "item_key1") == 0 || std::strcmp(cn, "item_key2") == 0) {
-      const char* org = pg::block_value(b, "origin");
+      const char* org = sb::block_value(b, "origin");
       if (!org) continue;
       st.kind = WayKind::key;
       st.opens = true;
@@ -350,7 +348,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       continue;
     } else if (std::strncmp(cn, "key_", 4) == 0) {
       // Quake II's keys: taken when the thing lying there is gone.
-      const char* org = pg::block_value(b, "origin");
+      const char* org = sb::block_value(b, "origin");
       if (!org) continue;
       st.kind = WayKind::key;
       st.opens = true;
@@ -373,7 +371,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       w.steps.push_back(st);
       continue;
     } else if (std::strcmp(cn, "func_door") == 0 && name && brush) {
-      const char* sf = pg::block_value(b, "spawnflags");
+      const char* sf = sb::block_value(b, "spawnflags");
       if (std::strcmp(cn, "func_door") == 0 && sf && (std::atoi(sf) & 1) != 0) {
         // Starts open: a bridge still in is shut to him (its nodes are where it slides out to);
         // any other is open.
@@ -436,11 +434,11 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     st.node = bs.node;
     st.name = bs.shoot ? "shot button" : "button";
     const sh::Edict& be = s.sv.edicts[static_cast<size_t>(bs.ent)];
-    for (const pg::EntityBlock& b : blocks) {
-      const char* model = pg::block_value(b, "model");
+    for (const sb::EntityBlock& b : blocks) {
+      const char* model = sb::block_value(b, "model");
       if (model && be.modelindex > 0 && static_cast<size_t>(be.modelindex) < s.models.size() &&
           s.models[static_cast<size_t>(be.modelindex)] == model)
-        st.opens = opens(pg::block_value(b, "target"), st.doors);
+        st.opens = opens(sb::block_value(b, "target"), st.doors);
     }
     // Arrived from another map in a car (base2's start: the lift down from base1), the car's
     // button sends him back up to the way back: no step of his.

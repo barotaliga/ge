@@ -33,6 +33,7 @@
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/packs.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/bots/temper.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -155,7 +156,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   tn.given = opt.locs;
   if (!opt.view_book.entries.empty()) tn.view_book = &opt.view_book;
   bt::MapNav& nav = tn.nav;
-  if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, r.error)) {
+  if (!bt::build_map_nav(q, map->spec, bt::quake_maps(), "info_player_deathmatch", nav, r.error)) {
     r.error = "run_team_match: " + r.error;
     return r;
   }

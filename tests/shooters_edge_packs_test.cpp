@@ -80,6 +80,7 @@ TEST(its_own_rocket_into_the_water_places_the_pack_where_it_burst) {
   s.world.clients[0].name = "me";
   s.world.clients[1].name = "foe";
   bt::Fighter f;
+  f.arsenal = &bt::first_arsenal();
   f.name = "me";
   f.slot = 0;
   f.view_sent[0] = 0;  // level
@@ -98,6 +99,7 @@ TEST(its_own_rocket_into_the_water_places_the_pack_where_it_burst) {
   CHECK(p.victim == 2);
   // A blast far off its line is not its rocket's.
   bt::Fighter g;
+  g.arsenal = &bt::first_arsenal();
   g.name = "me";
   g.bot.view.sounds = {{1, {0, 0, 0}, 1, "weapons/sgun1.wav"}};
   bt::packs_hear(g, s, 1, 20.0);
@@ -114,6 +116,7 @@ TEST(the_kill_command_drops_nothing) {
   s.world.clients[0].name = "me";
   s.world.clients[1].name = "foe";
   bt::Fighter f;
+  f.arsenal = &bt::first_arsenal();
   f.name = "me";
   f.last_seen_t[2] = 5.0;
   bt::packs_obituary(f, s, "foe suicides", 5.5);
@@ -138,6 +141,7 @@ TEST(a_bare_coming_after_a_pack_call_claims_the_pack) {
   ge::classic::Locs locs;
   locs.points = {{"ya", {1340, -544, 376}, {}}, {"ga", {784, 56, 304}, {}}};
   bt::Fighter f;
+  f.arsenal = &bt::first_arsenal();
   f.name = "me";
   f.locs = &locs;
   bt::mind_hear(f, "anna", "rl pack [ya]", 30.0);
@@ -145,6 +149,7 @@ TEST(a_bare_coming_after_a_pack_call_claims_the_pack) {
   bt::mind_hear(f, "bert", "coming [ga]", 31.0);
   CHECK(f.mind.pack_claim_t == 31.0);
   bt::Fighter g;
+  g.arsenal = &bt::first_arsenal();
   g.name = "me";
   g.locs = &locs;
   bt::mind_hear(g, "anna", "rl pack [ya]", 30.0);
@@ -165,6 +170,7 @@ TEST(a_place_name_a_loc_file_repeats_is_heard_as_the_room_round_the_speaker) {
                  {"big", {3100, 900, 0}, {}}};
   const auto heard = [&](bool on, bool armour) {
     bt::Fighter f;
+    f.arsenal = &bt::first_arsenal();
     f.name = "me";
     f.locs = &locs;
     f.features.set(sb::Feature::placeheard, on);
@@ -192,6 +198,7 @@ TEST(the_kill_feed_names_the_launchers_carrier) {
   s.world.clients[2].name = "pal";
   s.world.clients[3].name = "foe2";
   bt::Fighter f;
+  f.arsenal = &bt::first_arsenal();
   f.name = "me";
   f.features.set(sb::Feature::rlknown, true);
   f.mind.mates.push_back(bt::Mate{});
@@ -205,6 +212,7 @@ TEST(the_kill_feed_names_the_launchers_carrier) {
   bt::key_obituary(f, s, "foe2 rips pal a new one\n", 12.0);  // the killer named first
   CHECK(bt::foe_has_key(f, 4, 12.0));
   bt::Fighter g;
+  g.arsenal = &bt::first_arsenal();
   g.name = "me";
   g.features.set(sb::Feature::rlknown, true);
   bt::key_obituary(g, s, "pal eats foe's pineapple\n", 10.0);  // a grenade's: not the launcher

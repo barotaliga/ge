@@ -10,7 +10,6 @@
 
 #include "core/num_text.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
-#include "shooters_edge/bots/rocket_tricks.hpp"
 
 namespace shooters_edge::bots {
 
@@ -91,7 +90,7 @@ std::string needs_text(uint32_t needs) {
 }
 
 std::vector<Goal> map_goals(const MapPlan& plan, const std::vector<ItemSpot>& items,
-                            const std::string& map) {
+                            const std::string& map, const ge::shooterbots::MapBook& book) {
   std::vector<Goal> out;
   const auto add = [&](Goal g) { out.push_back(std::move(g)); };
   // The items' own: take, time, arm.
@@ -142,7 +141,7 @@ std::vector<Goal> map_goals(const MapPlan& plan, const std::vector<ItemSpot>& it
            "spam " + area_name(plan, plan.base) + " #" + std::to_string(e + 1)});
   }
   // The map's tricks, as means a route may ask for.
-  const auto tricks = rocket_tricks(map);
+  const auto tricks = ge::shooterbots::rocket_tricks(book, map);
   for (size_t k = 0; k < tricks.size(); k++)
     add({GoalKind::trick, -1, -1, -1, static_cast<int32_t>(k), Horizon::seconds, 3, kNeedLauncher,
          0, "trick " + std::to_string(k + 1) + (tricks[k].flip ? " (flip)" : " (rocket jump)")});

@@ -55,6 +55,7 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/nav_top.hpp"
@@ -451,7 +452,9 @@ void run_course_map(gl::Lab& lab, std::span<const uint8_t> bytes, const std::str
   bt::MapNav nav;
   sb::NavSettings nset;
   nset.spacing = static_cast<float>(lab.arg_num("spacing"));
-  if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, out.error, nset)) return;
+  if (!bt::build_map_nav(q, map->spec, bt::quake_maps(), "info_player_deathmatch", nav, out.error,
+                         nset))
+    return;
   sb::NavGraph& g = nav.graph;
   // The pictures from above: the map over `--clip-top` cut away, every roof under it stepped
   // through (nav_top.hpp `floor_below`); empty: from the top, the roofs stepped through.

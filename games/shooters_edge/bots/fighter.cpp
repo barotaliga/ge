@@ -23,7 +23,6 @@
 #include "shooters_edge/bots/fighter_parts.hpp"
 #include "shooters_edge/bots/footwork.hpp"
 #include "shooters_edge/bots/hop_start_book.hpp"
-#include "shooters_edge/bots/item_routes.hpp"
 #include "shooters_edge/bots/keyboard.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/launcher_fire.hpp"

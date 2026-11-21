@@ -11,6 +11,7 @@
 #include "shooters_edge/bots/bot_arsenal.hpp"
 #include "shooters_edge/bots/companion.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace sb = ge::shooterbots;
@@ -29,7 +30,7 @@ bool build_nav(Q2Party& p, const sv::RulesCommon& s, const sv::MapSpec& map, std
   auto nav = std::make_unique<bots::MapNav>();
   // Quake II's move, its air with no air acceleration (a single-player or co-op game's).
   nav->move = bots::q2_nav_move(0);
-  if (!bots::build_map_nav(s, map, "info_player_start", *nav, error)) {
+  if (!bots::build_map_nav(s, map, bots::quake_maps(), "info_player_start", *nav, error)) {
     error = "Companions can't find their way on " + map.name + ".";
     return false;
   }
@@ -44,11 +45,10 @@ void make(Q2Party& p, const sv::RulesCommon& s, int slot) {
   m.sequence = 0;
   for (sh::MoveCmd& cmd : m.cmds) cmd = {};
   bots::Fighter& f = m.fighter;
-  f.arsenal = &bots::q2_arsenal();
   f.features = sb::features_of(m.skill);
   bots::fighter_init(f, p.nav->graph, s, slot, p.entities.c_str(), m.skill,
                      sb::traits_of(m.skill, sb::Temper::balanced), kBotHz,
-                     p.seed + 31u * static_cast<uint32_t>(slot));
+                     p.seed + 31u * static_cast<uint32_t>(slot), bots::q2_arsenal());
   f.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
   f.bot.pilot.world = &p.nav->world;
   if (p.nav->swim.leading > 0) f.swim = &p.nav->swim;

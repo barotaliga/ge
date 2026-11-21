@@ -21,6 +21,7 @@
 #include "shooters_edge/bots/companion.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -80,7 +81,7 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   const sv::RulesCommon& s = *r;
   m.nav = std::make_unique<MapNav>();
   m.nav->move = q2_nav_move(0);
-  if (!build_map_nav(s, map, "info_player_start", *m.nav, error)) return false;
+  if (!build_map_nav(s, map, quake_maps(), "info_player_start", *m.nav, error)) return false;
   MapNav& nav = *m.nav;
   um.name = map.name;
   um.lo = nav.graph.lo;
@@ -89,11 +90,10 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   const std::string entities = map.entities.empty() ? map.brushes->entity_text : map.entities;
   Fighter& f = m.leader;
   f = Fighter();
-  f.arsenal = &q2_arsenal();
   f.features = sb::features_of(opt.skill);
   fighter_init(f, nav.graph, s, 0, entities.c_str(), opt.skill,
                sb::traits_of(opt.skill, sb::Temper::balanced), kHz,
-               opt.seed + 31u * static_cast<uint32_t>(entered));
+               opt.seed + 31u * static_cast<uint32_t>(entered), q2_arsenal());
   f.bot.yaw = s.world.entities[1].view_angles.y;
   f.bot.pilot.world = &nav.world;
   if (nav.swim.leading > 0) f.swim = &nav.swim;

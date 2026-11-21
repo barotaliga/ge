@@ -20,6 +20,7 @@
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/packs.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/bots/talk.hpp"
 #include "shooters_edge/bots/temper.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -175,7 +176,8 @@ bool load_map(BotTeam& t, const QwClientEnd& c, const std::string& file) {
     const cl::GameAdapter& game = cl::qw_adapter();
     game.open_locations(game, m.files, name, nav->given);
   }
-  if (!bt::build_map_nav(q, t.loaded->spec, "info_player_deathmatch", nav->nav, error)) {
+  if (!bt::build_map_nav(q, t.loaded->spec, bt::quake_maps(), "info_player_deathmatch", nav->nav,
+                         error)) {
     t.map_error = file + "'s nav: " + error;
     say(t, "bots: " + t.map_error);
     return false;

@@ -131,7 +131,7 @@ FightReport run_fight(const FightOptions& opt) {
     if (!sb::apply_features(opt.features, f.features, r.error)) return r;
     fighter_init(f, graph, s, k, server::kBaselineArenaEntities, opt.skills[static_cast<size_t>(k)],
                  r.players[static_cast<size_t>(k)].traits, kHz,
-                 opt.seed + 31u * static_cast<uint32_t>(k));
+                 opt.seed + 31u * static_cast<uint32_t>(k), first_arsenal());
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &world;  // the hop looks ahead through the map
     if (k == 0) f.bot.pilot.why = opt.why;

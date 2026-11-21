@@ -27,12 +27,13 @@
 //   waist deep, rockets fired down at the surface proven onto the ledges round it (the main part's
 //   dry floor, never a bridge), and a link from each liquid node to the cheapest; dm2's lava pits
 //   have no other way out;
-// - the map's ROCKET-JUMP TRICKS (rocket_tricks.hpp: the jumps people make there again and
+// - the map's ROCKET-JUMP TRICKS (the game's book, shooterbots/map_book.hpp: the jumps people make
+// there again and
 //   again), each proven by the move into a rocket link at its level (shooterbots/nav.hpp
 //   `nav_add_tricks`), after the pockets are bridged, landing only where a way back leads out;
 //   each trick, and each rocket jump a pocket was bridged by, as a grenade jump too where the
 //   move flies one (a player with the grenade launcher and no rocket launcher);
-// - the map's GAP TRICKS (gap_tricks.hpp: people's speed jumps over a pit, the strafe jump over
+// - the map's GAP TRICKS (the book's: people's speed jumps over a pit, the strafe jump over
 //   dm2's lava), each proven into a jump link at a hopper's speed (shooterbots/nav_gaps.hpp
 //   `nav_add_gap_tricks`) after the risky jumps are hardened, landing where a way back leads.
 //
@@ -56,6 +57,7 @@
 #include "shooter/map_spec.hpp"
 #include "shooterbots/bot_view.hpp"
 #include "shooterbots/escape.hpp"
+#include "shooterbots/map_book.hpp"
 #include "shooterbots/nav.hpp"
 #include "shooterbots/nav_gaps.hpp"
 #include "shooterbots/swim.hpp"
@@ -102,7 +104,7 @@ struct MapNav {
   std::vector<uint8_t> trap;  // the nodes no way on foot leads back from to the main part
   std::vector<ge::shooterbots::NavExtraLink> entries;  // the links into the water the graph closed
   std::vector<NavBridge> bridges;
-  // The map's scripted routes to key items (item_routes.hpp), each proven or refused.
+  // The map's scripted routes to key items (the book's), each proven or refused.
   struct ScriptMade {
     std::string name;
     bool held = false;
@@ -126,10 +128,12 @@ std::vector<ge::shooterbots::NavMover> map_movers(const ge::shooterbots::BotView
                                                   ge::brush::BrushTracer* tracer = nullptr);
 // The map's nav built into `out` (whose world and graph the movers point into: keep it where it
 // is), on either map family: the clip hulls of `spec.models` or the brushes of `spec.brushes`.
-// False with `error` when no floor holds a node. `set`: the grid's (a trick map's narrow
+// `book`: the game's people's tricks and routes by map (shooterbots/map_book.hpp), each proven by
+// the move. False with `error` when no floor holds a node. `set`: the grid's (a trick map's narrow
 // platforms need a finer one than the default 32 units: the `se-trick` lab's --spacing).
 bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
-                   const char* start_class, MapNav& out, std::string& error,
+                   const ge::shooterbots::MapBook& book, const char* start_class, MapNav& out,
+                   std::string& error,
                    const ge::shooterbots::NavSettings& set = ge::shooterbots::NavSettings{});
 // Quake II's move as the nav and the pilot read it: its top speed (300) and friction (6) (its
 // stop speed, acceleration and gravity are Quake's already), and its air: with the

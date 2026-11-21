@@ -12,13 +12,10 @@
 #include <cstring>
 #include <utility>
 
-#include "progs/entity_text.hpp"
 #include "shooter/map_spec.hpp"
 #include "shooter/world.hpp"
+#include "shooterbots/entities.hpp"
 #include "shooterbots/nav_script.hpp"
-#include "shooters_edge/bots/gap_tricks.hpp"
-#include "shooters_edge/bots/item_routes.hpp"
-#include "shooters_edge/bots/rocket_tricks.hpp"
 
 namespace shooters_edge::bots {
 
@@ -27,7 +24,6 @@ namespace {
 namespace sh = ge::shooter;
 
 namespace sb = ge::shooterbots;
-namespace pg = ge::progs;
 
 constexpr float kOwnDrop = 24;  // a bridge's own node: no floor of the map's within this under it
 
@@ -92,8 +88,8 @@ sh::Solid model_solid(const ge::shooter::MapSpec& spec, ge::brush::BrushTracer* 
 
 // A door that starts open (spawnflags 1) stays where it spawned until a button moves it: a plate
 // over a pit, a wall drawn aside.
-bool start_open(const pg::EntityBlock& b) {
-  const char* sf = pg::block_value(b, "spawnflags");
+bool start_open(const sb::EntityBlock& b) {
+  const char* sf = sb::block_value(b, "spawnflags");
   return sf && (std::atoi(sf) & 1) != 0;
 }
 
@@ -138,22 +134,22 @@ bool plate(const ModelBox& bm) {
 // chain opens only by its name when any door in it has one. Edicts, by edict number.
 std::vector<uint8_t> named_doors(const ge::shooterbots::BotView& s,
                                  const ge::shooter::MapSpec& spec,
-                                 const std::vector<pg::EntityBlock>& blocks) {
+                                 const std::vector<sb::EntityBlock>& blocks) {
   struct D {
     int e;
     bool named, apart;
     AbsBox box;
   };
   std::vector<D> ds;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
     if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_door") != 0 || start_open(b))
       continue;
     const int e = edict_of(s, model);
     if (e < 0) continue;
-    const char* sf = pg::block_value(b, "spawnflags");
-    ds.push_back({e, pg::block_value(b, "targetname") != nullptr || pg::block_value(b, "health"),
+    const char* sf = sb::block_value(b, "spawnflags");
+    ds.push_back({e, sb::block_value(b, "targetname") != nullptr || sb::block_value(b, "health"),
                   sf && (std::atoi(sf) & 4) != 0, abs_box(s, spec, e, model)});
   }
   std::vector<uint8_t> out(static_cast<size_t>(s.sv.num_edicts), 0);
@@ -179,19 +175,19 @@ std::vector<uint8_t> named_doors(const ge::shooterbots::BotView& s,
 
 // A FLOOR DOOR: a plate resting shut that only a button (or a shot) moves: a floor to the nav at
 // rest, its nodes shut while it is away (dm2's big room and its entries, slid out by t1).
-bool floor_door(const pg::EntityBlock& b, const ModelBox& bm, const std::vector<uint8_t>& named,
+bool floor_door(const sb::EntityBlock& b, const ModelBox& bm, const std::vector<uint8_t>& named,
                 int e) {
-  const char* cn = pg::block_value(b, "classname");
+  const char* cn = sb::block_value(b, "classname");
   return cn && std::strcmp(cn, "func_door") == 0 && !start_open(b) && plate(bm) && e >= 0 &&
          static_cast<size_t>(e) < named.size() && named[static_cast<size_t>(e)];
 }
 
 void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
-                         ge::brush::BrushTracer* tracer, const std::vector<pg::EntityBlock>& blocks,
+                         ge::brush::BrushTracer* tracer, const std::vector<sb::EntityBlock>& blocks,
                          sh::MoveWorld& world, std::vector<NavBridge>& bridges) {
   const std::vector<uint8_t> named = named_doors(s, spec, blocks);
-  for (const pg::EntityBlock& b : blocks) {
-    const char* model = pg::block_value(b, "model");
+  for (const sb::EntityBlock& b : blocks) {
+    const char* model = sb::block_value(b, "model");
     if (!model || model[0] != '*') continue;
     const int m = std::atoi(model + 1);
     if (m <= 0 || static_cast<size_t>(m) >= model_count(spec) || world.count >= sh::kMaxSolids)
@@ -210,14 +206,14 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
   // The doors that start open, by where the map drew them: a name spreads along touching boxes
   // (doors link as drawn: dm2's two plates over the lava move together off one button).
   std::vector<std::pair<ModelBox, bool>> open_doors;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
     if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_door") != 0 || !start_open(b))
       continue;
     const int m = std::atoi(model + 1);
     if (m <= 0 || static_cast<size_t>(m) >= model_count(spec)) continue;
-    open_doors.push_back({model_box(spec, m), pg::block_value(b, "targetname") != nullptr});
+    open_doors.push_back({model_box(spec, m), sb::block_value(b, "targetname") != nullptr});
   }
   for (bool grew = true; grew;) {
     grew = false;
@@ -231,9 +227,9 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
         }
   }
   size_t open_k = 0;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
     if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_door") != 0 || !start_open(b))
       continue;
     const int m = std::atoi(model + 1);
@@ -250,7 +246,7 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
       br.ent = e;
       br.spawn = so.origin;
       br.touch = !open_doors[open_k - 1].second;  // no name of its own nor its group's
-      const char* wait = pg::block_value(b, "wait");
+      const char* wait = sb::block_value(b, "wait");
       br.wait = wait ? static_cast<float>(std::atof(wait)) : 3;  // a door's default
       bridges.push_back(br);
       so.origin = {};  // out, where the map drew it
@@ -263,12 +259,12 @@ sh::Vec3f origin_of(const char* org);  // below
 std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
                                     const ge::shooter::MapSpec& spec,
                                     ge::brush::BrushTracer* tracer,
-                                    const std::vector<pg::EntityBlock>& blocks) {
+                                    const std::vector<sb::EntityBlock>& blocks) {
   std::vector<sb::NavMover> out;
   const std::vector<uint8_t> named = named_doors(s, spec, blocks);
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
     if (!cn || !model || model[0] != '*') continue;
     const bool door = std::strcmp(cn, "func_door") == 0 || std::strcmp(cn, "func_door_secret") == 0;
     const bool plat = std::strcmp(cn, "func_plat") == 0;
@@ -290,9 +286,9 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
       // Drawn raised and lowered by its height (else its own height less its lip, 8 units unless
       // it says: base2's lift sets 132, and taken as 8 its top went past the floor above, so no
       // ride up was found); Quake II's default speed is 200 units/s, Quake's 150.
-      const char* h = pg::block_value(b, "height");
-      const char* sp = pg::block_value(b, "speed");
-      const char* lp = pg::block_value(b, "lip");
+      const char* h = sb::block_value(b, "height");
+      const char* sp = sb::block_value(b, "speed");
+      const char* lp = sb::block_value(b, "lip");
       const float lip = lp ? static_cast<float>(std::atof(lp)) : 8.f;
       const float rise = h ? static_cast<float>(std::atof(h)) : (bm.maxs.z - bm.mins.z) - lip;
       const float fallback = spec.brushes ? 200.f : 150.f;
@@ -312,21 +308,21 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
       // corner set on each (as the rules place a train); 100 units/s unless it says, each
       // corner's wait.
       sh::Vec3f bmins = bm.mins;
-      const char* tg = pg::block_value(b, "target");
+      const char* tg = sb::block_value(b, "target");
       for (int guard = 0; tg != nullptr && guard < 32; guard++) {
-        const pg::EntityBlock* corner = nullptr;
-        for (const pg::EntityBlock& c : blocks) {
-          const char* tn = pg::block_value(c, "targetname");
+        const sb::EntityBlock* corner = nullptr;
+        for (const sb::EntityBlock& c : blocks) {
+          const char* tn = sb::block_value(c, "targetname");
           if (tn != nullptr && std::strcmp(tn, tg) == 0) corner = &c;
         }
-        if (corner == nullptr || pg::block_value(*corner, "origin") == nullptr) break;
-        const sh::Vec3f at = origin_of(pg::block_value(*corner, "origin"));
-        if (!mv.stops.empty() && guard > 0 && std::strcmp(tg, pg::block_value(b, "target")) == 0)
+        if (corner == nullptr || sb::block_value(*corner, "origin") == nullptr) break;
+        const sh::Vec3f at = origin_of(sb::block_value(*corner, "origin"));
+        if (!mv.stops.empty() && guard > 0 && std::strcmp(tg, sb::block_value(b, "target")) == 0)
           break;  // round the chain
         mv.stops.push_back(at - bmins);
-        const char* w = pg::block_value(*corner, "wait");
+        const char* w = sb::block_value(*corner, "wait");
         mv.stop_wait_s.push_back(w ? std::max(0.f, static_cast<float>(std::atof(w))) : 0.f);
-        tg = pg::block_value(*corner, "target");
+        tg = sb::block_value(*corner, "target");
       }
       if (mv.stops.size() >= 2) {
         if (spec.brushes) {
@@ -336,7 +332,7 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
           mv.model = &spec.models[static_cast<size_t>(m)];
         }
         mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;
-        const char* sp = pg::block_value(b, "speed");
+        const char* sp = sb::block_value(b, "speed");
         mv.speed = sp ? static_cast<float>(std::atof(sp)) : 100.f;
       } else {
         mv.stops.clear();
@@ -359,12 +355,12 @@ sh::Vec3f origin_of(const char* org) {
 
 // A teleporter's destination: the first block named `target` of a destination's class, lifted as
 // its rules lift it (Quake's 27 units, Quake II's pad 10).
-bool teleport_dest(const std::vector<pg::EntityBlock>& blocks, const char* target,
+bool teleport_dest(const std::vector<sb::EntityBlock>& blocks, const char* target,
                    sh::Vec3f& dest) {
-  for (const pg::EntityBlock& d : blocks) {
-    const char* dn = pg::block_value(d, "targetname");
-    const char* dc = pg::block_value(d, "classname");
-    const char* org = pg::block_value(d, "origin");
+  for (const sb::EntityBlock& d : blocks) {
+    const char* dn = sb::block_value(d, "targetname");
+    const char* dc = sb::block_value(d, "classname");
+    const char* org = sb::block_value(d, "origin");
     if (!dn || !dc || !org || std::strcmp(dn, target) != 0) continue;
     const bool first = std::strcmp(dc, "info_teleport_destination") == 0;
     const bool pad = std::strcmp(dc, "misc_teleporter_dest") == 0;
@@ -378,21 +374,21 @@ bool teleport_dest(const std::vector<pg::EntityBlock>& blocks, const char* targe
 
 std::vector<sb::NavExtraLink> teleport_links(const sb::NavGraph& g,
                                              const ge::shooter::MapSpec& spec,
-                                             const std::vector<pg::EntityBlock>& blocks) {
+                                             const std::vector<sb::EntityBlock>& blocks) {
   std::vector<sb::NavExtraLink> out;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* target = pg::block_value(b, "target");
-    if (!cn || !target || pg::block_value(b, "targetname")) continue;
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* target = sb::block_value(b, "target");
+    if (!cn || !target || sb::block_value(b, "targetname")) continue;
     // Where it is touched: a trigger brush's box, or the box over a pad's centre.
     ModelBox box;
     if (std::strcmp(cn, "trigger_teleport") == 0) {
-      const char* model = pg::block_value(b, "model");
+      const char* model = sb::block_value(b, "model");
       if (!model || model[0] != '*' || std::atoi(model + 1) <= 0) continue;
       box = model_box(spec, std::atoi(model + 1));
       if (!box.ok) continue;
     } else if (std::strcmp(cn, "misc_teleporter") == 0) {
-      const char* org = pg::block_value(b, "origin");
+      const char* org = sb::block_value(b, "origin");
       if (!org) continue;
       const sh::Vec3f o = origin_of(org);
       box.ok = true;
@@ -515,16 +511,16 @@ std::vector<sb::NavExtraLink> ladder_links(const sb::NavGraph& g, const ge::brus
 }
 
 // The map's entity blocks: its text (the first family), else the version 38 map's own entities.
-std::vector<pg::EntityBlock> entity_blocks(const ge::shooter::MapSpec& spec) {
-  std::vector<pg::EntityBlock> blocks;
+std::vector<sb::EntityBlock> entity_blocks(const ge::shooter::MapSpec& spec) {
+  std::vector<sb::EntityBlock> blocks;
   if (!spec.entities.empty() || !spec.brushes) {
     std::string error;
-    if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) blocks.clear();
+    if (!sb::parse_entity_text(spec.entities.c_str(), blocks, error)) blocks.clear();
     return blocks;
   }
   blocks.reserve(spec.brushes->entities.size());
   for (const ge::brush::Entity& e : spec.brushes->entities) {
-    pg::EntityBlock b;
+    sb::EntityBlock b;
     b.pairs = e.pairs;
     blocks.push_back(std::move(b));
   }
@@ -540,13 +536,13 @@ std::vector<sb::NavMover> map_movers(const ge::shooterbots::BotView& s,
 }
 
 bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
-                   const char* start_class, MapNav& out, std::string& error,
-                   const sb::NavSettings& set) {
+                   const sb::MapBook& book, const char* start_class, MapNav& out,
+                   std::string& error, const sb::NavSettings& set) {
   if (model_count(spec) == 0) {
     error = "the map " + spec.name + " has no world for bots to walk on";
     return false;
   }
-  const std::vector<pg::EntityBlock> blocks = entity_blocks(spec);
+  const std::vector<sb::EntityBlock> blocks = entity_blocks(spec);
   const auto t0 = std::chrono::steady_clock::now();
   out.tracer.reset();
   out.brushes = spec.brushes;
@@ -599,8 +595,9 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     out.world.count = count;
   }
   out.teleport_links = static_cast<int64_t>(teleports.size());
-  // SCRIPTED ROUTES to key items (item_routes.hpp): each proven by the move from the node at its
-  // entry to the node at its end and added as one link; one that does not hold is left out.
+  // SCRIPTED ROUTES to key items (the book's, shooterbots/map_book.hpp): each proven by the move
+  // from the node at its entry to the node at its end and added as one link; one that does not hold
+  // is left out.
   {
     std::string base = spec.name;
     if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
@@ -608,12 +605,12 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
     out.scripts_made.clear();
     std::vector<sb::NavExtraLink> scripted;
-    for (const ItemRoute& r : item_routes(base)) {
+    for (const sb::ItemRoute& r : sb::item_routes(book, base)) {
       MapNav::ScriptMade made;
       made.name = r.name;
       if (r.n < 2) continue;
-      const ItemRouteStep& first = r.steps[0];
-      const ItemRouteStep& last = r.steps[r.n - 1];
+      const sb::ItemRouteStep& first = r.steps[0];
+      const sb::ItemRouteStep& last = r.steps[r.n - 1];
       made.from = sb::nav_nearest(out.graph, {first.x, first.y, first.z + 24});
       made.to = sb::nav_nearest(out.graph, {last.x, last.y, last.z + 24});
       if (made.from >= 0 && made.to >= 0 && made.from != made.to) {
@@ -682,9 +679,9 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   const auto find_main = [&] {
     out.main_n = 0;
     ge::ai::Search sr;
-    for (const pg::EntityBlock& b : blocks) {
-      const char* cn = pg::block_value(b, "classname");
-      const char* org = pg::block_value(b, "origin");
+    for (const sb::EntityBlock& b : blocks) {
+      const char* cn = sb::block_value(b, "classname");
+      const char* org = sb::block_value(b, "origin");
       if (!cn || !org || std::strcmp(cn, start_class) != 0) continue;
       const int32_t k = sb::nav_reach(graph, sb::nav_nearest(graph, origin_of(org)), sr);
       if (k > out.main_n) {
@@ -702,9 +699,9 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
       main[n] = out.main.reached(static_cast<int32_t>(n)) ? 1 : 0;
     // A rocket jump only into a pocket that holds an item.
     std::vector<uint8_t> wanted(graph.nodes.size(), 0);
-    for (const pg::EntityBlock& b : blocks) {
-      const char* cn = pg::block_value(b, "classname");
-      const char* org = pg::block_value(b, "origin");
+    for (const sb::EntityBlock& b : blocks) {
+      const char* cn = sb::block_value(b, "classname");
+      const char* org = sb::block_value(b, "origin");
       if (!cn || !org || (std::strncmp(cn, "item_", 5) != 0 && std::strncmp(cn, "weapon_", 7) != 0))
         continue;
       const sh::Vec3f at = origin_of(org);
@@ -724,7 +721,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
       base = base.substr(slash + 1);
     if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
-    const std::vector<sb::NavTrick> tricks = nav_tricks(rocket_tricks(base));
+    const std::vector<sb::NavTrick> tricks = sb::nav_tricks(sb::rocket_tricks(book, base));
     if (!tricks.empty() && out.main_n > 0) {
       std::vector<uint8_t> main(graph.nodes.size());
       for (size_t n = 0; n < main.size(); n++)
@@ -777,7 +774,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
           (n < out.harm.size() && out.harm[n]) || (n < out.trap.size() && out.trap[n]) ? 1 : 0;
     out.hardened = sb::nav_harden_jumps(out.world, out.move, graph, risk);
   }
-  // THE GAP TRICKS (gap_tricks.hpp): people's speed jumps over a pit as jump links at a hopper's
+  // THE GAP TRICKS (the book's): people's speed jumps over a pit as jump links at a hopper's
   // speed, landing where a way back on foot leads to the main part; after the hardening, which
   // would price a jump over lava as a run's miss.
   {
@@ -785,7 +782,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
       base = base.substr(slash + 1);
     if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
-    const std::vector<sb::NavGapTrick> gaps = nav_gap_tricks(gap_tricks(base));
+    const std::vector<sb::NavGapTrick> gaps = sb::nav_gap_tricks(sb::gap_tricks(book, base));
     if (!gaps.empty() && out.main_n > 0) {
       std::vector<uint8_t> back(graph.nodes.size());
       for (size_t n = 0; n < back.size(); n++)

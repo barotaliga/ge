@@ -1,6 +1,7 @@
 // A MAP'S GOALS: every goal a team game on a map offers a player, generated from the map itself
-// (its items, the plan's areas and ways in, map_plan.hpp, and its tricks, rocket_tricks.hpp), so
-// any map has them and a goal its map cannot have is never made (no pent goal on dm2: no pent).
+// (its items, the plan's areas and ways in, map_plan.hpp, and its tricks,
+// shooterbots/map_book.hpp), so any map has them and a goal its map cannot have is never made (no
+// pent goal on dm2: no pent).
 //
 // A GOAL is what a player sets out to do and holds to until it is done, fails, runs out, or an
 // event in the game makes another clearly better (the decision engine, mind.hpp). Each has:
@@ -41,6 +42,7 @@
 #include <string>
 #include <vector>
 
+#include "shooterbots/map_book.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 
@@ -104,10 +106,10 @@ struct Goal {
   std::string name;  // "take ra", "clear ya [ya-hi]", "spam ya #2"
 };
 
-// Every goal `plan` and `items` make on the map `map` ("dm3"; its tricks by name), in the kinds'
-// order, each kind's by worth.
+// Every goal `plan` and `items` make on the map `map` ("dm3"; its tricks by name in the game's
+// `book`), in the kinds' order, each kind's by worth.
 std::vector<Goal> map_goals(const MapPlan& plan, const std::vector<ItemSpot>& items,
-                            const std::string& map);
+                            const std::string& map, const ge::shooterbots::MapBook& book);
 
 // The goals as a few lines a kind, for a log or a lab.
 std::string goals_text(const std::vector<Goal>& goals);

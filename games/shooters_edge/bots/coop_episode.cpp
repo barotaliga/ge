@@ -15,6 +15,7 @@
 #include <memory>
 
 #include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
@@ -86,7 +87,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   }
   const sv::RulesCommon& s = *c.server;
   m.nav = std::make_unique<MapNav>();
-  if (!build_map_nav(*q, c.map, "info_player_start", *m.nav, error)) return false;
+  if (!build_map_nav(*q, c.map, quake_maps(), "info_player_start", *m.nav, error)) return false;
   MapNav& nav = *m.nav;
   em.name = c.map.name;
   em.nav_nodes = static_cast<int64_t>(nav.graph.nodes.size());
@@ -106,7 +107,8 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
     fighter_init(
         f, nav.graph, s, k, c.map.entities.c_str(), skill,
         sb::traits_of(skill, sb::Temper::balanced), kHz,
-        opt.seed + 31u * static_cast<uint32_t>(k) + static_cast<uint32_t>(c.history.size()));
+        opt.seed + 31u * static_cast<uint32_t>(k) + static_cast<uint32_t>(c.history.size()),
+        first_arsenal());
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &nav.world;
     if (nav.swim.leading > 0) f.swim = &nav.swim;

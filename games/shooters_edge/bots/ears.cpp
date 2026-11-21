@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "progs/entity_text.hpp"
+#include "shooterbots/entities.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/temper.hpp"
 
@@ -23,7 +23,6 @@ namespace {
 namespace sh = ge::shooter;
 
 namespace sb = ge::shooterbots;
-namespace pg = ge::progs;
 using sb::SoundClass;
 
 constexpr float kSnapMin = 200;     // a guess is put on a spot this near it at the least, units
@@ -44,14 +43,14 @@ void ears_init(Fighter& f, sb::AimSkill skill, const char* entities) {
   f.ears = sb::hear_skill_of(skill);
   f.bot.senses.set.hear_players = false;  // its own ears decide what it hears
   f.spawns.clear();
-  std::vector<pg::EntityBlock> blocks;
+  std::vector<sb::EntityBlock> blocks;
   std::string error;
-  if (!entities || !pg::parse_entity_text(entities, blocks, error)) return;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
+  if (!entities || !sb::parse_entity_text(entities, blocks, error)) return;
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
     if (!cn || std::strcmp(cn, "info_player_deathmatch") != 0) continue;
     sh::Vec3f at;
-    if (parse_vec(pg::block_value(b, "origin"), at)) f.spawns.push_back(at);
+    if (parse_vec(sb::block_value(b, "origin"), at)) f.spawns.push_back(at);
   }
 }
 
