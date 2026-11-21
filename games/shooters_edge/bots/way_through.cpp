@@ -112,6 +112,13 @@ int32_t node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
   return best;
 }
 
+// Whether locked door `k` has moved off where it stood shut (a turning bridge: turned).
+bool locked_moved(const WayThrough& w, const ge::shooterbots::BotView& s, size_t k) {
+  const sh::Edict& d = s.sv.edicts[static_cast<size_t>(w.locked[k])];
+  const bool turns = k < w.locked_turns.size() && w.locked_turns[k] != 0;
+  return dist(turns ? d.angles : d.origin, w.locked_at[k]) >= 1;
+}
+
 // Every node a player at `from` gets to past no door in `barred` (nav_reach with the doors), on
 // the links his `jumper` takes (no rocket jump without a launcher: base1's exit, reached by one
 // down the lift's shaft, stood him still at the start with no route the pilot would take).
@@ -209,6 +216,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.steps.clear();
   w.locked.clear();
   w.locked_at.clear();
+  w.locked_turns.clear();
   w.cars.clear();
   w.cars_at.clear();
   w.turners.clear();
@@ -249,6 +257,14 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         any = true;
         const int e = dm ? edict_of(s, dm) : -1;
         if (e >= 0) out.push_back(e);
+      } else if (std::strcmp(dc, "func_door_rotating") == 0 && sf && (std::atoi(sf) & 1) != 0) {
+        // A turning bridge (map_nav.hpp: turned up until used, then a floor).
+        const int e = dm ? edict_of(s, dm) : -1;
+        for (const NavBridge& br : nav.bridges)
+          if (br.turns && br.ent == e) {
+            any = true;
+            out.push_back(e);
+          }
       } else if (std::strcmp(dc, "func_door_rotating") == 0 && !(sf && (std::atoi(sf) & 1) != 0)) {
         // A turning door (a hatch, a lever): open once it has turned off its rest.
         const int e = dm ? edict_of(s, dm) : -1;
@@ -383,6 +399,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
           if (br.ent == e && name) {
             w.locked.push_back(e);
             w.locked_at.push_back(br.spawn);
+            w.locked_turns.push_back(0);
             for (const int32_t n : br.nodes) w.node_door[static_cast<size_t>(n)] = e;
           }
         continue;
@@ -412,6 +429,18 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       }
       w.locked.push_back(e);
       w.locked_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
+      w.locked_turns.push_back(0);
+      continue;
+    } else if (std::strcmp(cn, "func_door_rotating") == 0 && name && brush) {
+      // A turning bridge still turned up is shut to him (its nodes are where it turns down to).
+      const int e = edict_of(s, model);
+      for (const NavBridge& br : nav.bridges)
+        if (br.turns && br.ent == e) {
+          w.locked.push_back(e);
+          w.locked_at.push_back(br.spawn_angles);
+          w.locked_turns.push_back(1);
+          for (const int32_t n : br.nodes) w.node_door[static_cast<size_t>(n)] = e;
+        }
       continue;
     } else {
       continue;
@@ -504,9 +533,9 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     for (const pg::EntityBlock& b : blocks) {
       const char* name = pg::block_value(b, "targetname");
       const char* cls = pg::block_value(b, "classname");
-      st.drains = st.drains || (target != nullptr && name != nullptr && cls != nullptr &&
-                                std::strcmp(name, target) == 0 &&
-                                std::strcmp(cls, "func_water") == 0);
+      st.drains =
+          st.drains || (target != nullptr && name != nullptr && cls != nullptr &&
+                        std::strcmp(name, target) == 0 && std::strcmp(cls, "func_water") == 0);
     }
     // Arrived from another map in a car (base2's start: the lift down from base1), the car's
     // button sends him back up to the way back: no step of his.
@@ -558,8 +587,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   const int items = read_stats(s, me, *f.arsenal).items;
   const auto door_open = [&](int ent) {
     for (size_t k = 0; k < w.locked.size(); k++)
-      if (w.locked[k] == ent)
-        return dist(s.sv.edicts[static_cast<size_t>(ent)].origin, w.locked_at[k]) >= 1;
+      if (w.locked[k] == ent) return locked_moved(w, s, k);
     for (size_t k = 0; k < w.cars.size(); k++)
       if (w.cars[k] == ent)
         return dist(s.sv.edicts[static_cast<size_t>(ent)].origin, w.cars_at[k]) >= 1;
@@ -610,8 +638,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // The doors shut now that only something else opens.
   w.barred.clear();
   for (size_t k = 0; k < w.locked.size(); k++)
-    if (dist(s.sv.edicts[static_cast<size_t>(w.locked[k])].origin, w.locked_at[k]) < 1)
-      w.barred.push_back(w.locked[k]);
+    if (!locked_moved(w, s, k)) w.barred.push_back(w.locked[k]);
   f.bot.pilot.pilot.shut = w.barred;  // his own routes never through them either
   f.bot.pilot.pilot.hollow = w.cars;  // and a car at rest is walked through
   if (w.barred != w.barred_was) {     // nor onto a bridge still in
@@ -718,8 +745,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   double best = 0;
   for (size_t k = 0; k < w.steps.size(); k++) {
     const WayStep& st = w.steps[k];
-    if (car_first || !way_exit(st) || st.revisit || st.node < 0 ||
-        !w.search.reached(st.node) || t < st.left_until)
+    if (car_first || !way_exit(st) || st.revisit || st.node < 0 || !w.search.reached(st.node) ||
+        t < st.left_until)
       continue;
     const double c = w.search.cost(st.node);
     if (pick < 0 || c < best) {

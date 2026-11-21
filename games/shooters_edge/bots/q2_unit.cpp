@@ -125,11 +125,11 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
 // GLASS IN HIS WAY: a pane that breaks (a `func_explosive` that takes blows) stops him as a wall
 // does, though his nav, built of the world's brushes, runs through it. The nearest live one within
 // `kBreakReach` that his eye sees is shot: the view on its nearest point, fire held. Barrels are
-// left alone (their blast hurts him), and a crate a trigger blows up. A body lying as scenery (`misc_deadsoldier`) is solid to
-// him too, and his nav runs over it: one within `kBodyReach` that his box, carried `kBodyAhead`
-// along the move he means, would meet is shot to pieces (base2's by the south pool held him
-// against it for good; base3's behind a wall beside his way, shot at from where he stood, held him
-// there for good). True while he shoots.
+// left alone (their blast hurts him), and a crate a trigger blows up. A body lying as scenery
+// (`misc_deadsoldier`) is solid to him too, and his nav runs over it: one within `kBodyReach` that
+// his box, carried `kBodyAhead` along the move he means, would meet is shot to pieces (base2's by
+// the south pool held him against it for good; base3's behind a wall beside his way, shot at from
+// where he stood, held him there for good). True while he shoots.
 constexpr float kBreakReach = 192;
 constexpr float kBodyReach = 80;
 constexpr float kBodyAhead = 32;
@@ -282,7 +282,8 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
         um.touches++;
         m.leader.bot.yaw = m.cmds[2].angles.y;  // he turned to it: his keys follow his view
       } else {
-        unwedge(m.wedge, s, 1, t, m.cmds[2]);
+        // A climber is held to the ladder by his pilot: a shove aside takes him off it.
+        if (!m.leader.bot.pilot.pilot.climbing) unwedge(m.wedge, s, 1, t, m.cmds[2]);
         if (way_edge(*m.nav, m.leader, s, 1, m.cmds[2])) um.edges++;
       }
       // The intermission: a button now and then leaves for the next map.

@@ -201,7 +201,8 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         rc.cmds[1] = rc.cmds[2];
         rc.cmds[2] = fighter_command(m.players[static_cast<size_t>(k)], now, k, kMsec);
         if (k == 0) way_dive(m.way, *m.nav, now, 1, rc.cmds[2]);
-        unwedge(m.wedges[static_cast<size_t>(k)], now, k + 1, t, rc.cmds[2]);
+        if (!m.players[static_cast<size_t>(k)].bot.pilot.pilot.climbing)  // held to his ladder
+          unwedge(m.wedges[static_cast<size_t>(k)], now, k + 1, t, rc.cmds[2]);
         if (ending) rc.cmds[2].buttons = (frame & 1) ? sh::kButtonAttack : 0;
         sh::Packet& p = packets[static_cast<size_t>(k)];
         p.client = k;

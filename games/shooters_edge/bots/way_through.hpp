@@ -74,8 +74,9 @@ struct WayStats {
 
 struct WayThrough {
   std::vector<WayStep> steps;
-  std::vector<int> locked;           // doors something else opens: their entities
-  std::vector<sh::Vec3f> locked_at;  // and where each stands shut
+  std::vector<int> locked;            // doors something else opens: their entities
+  std::vector<sh::Vec3f> locked_at;   // and where each stands shut (a turning bridge: its angles)
+  std::vector<uint8_t> locked_turns;  // and whether each is a turning bridge (map_nav.hpp)
   // The maps he has played (set before way_init): an exit to one is taken last, once nothing else
   // is left (base3's way on is back through base2, by another exit than the one he came in by).
   std::vector<std::string> been;
@@ -94,9 +95,9 @@ struct WayThrough {
   std::vector<std::string>* log = nullptr;  // each change of plan said, when given
   double plan_at = -1, step_since = 0;
   double step_for = kWayGiveUp_s;  // how long the step he is on is given (its walk's worth more)
-  int step = -1;                 // the step he is on, -1 none (exploring)
-  double idle_since = -1;        // nothing to do since then, -1 something
-  double no_route_since = -1;    // the exit chosen and his pilot with no route to it since then
+  int step = -1;                   // the step he is on, -1 none (exploring)
+  double idle_since = -1;          // nothing to do since then, -1 something
+  double no_route_since = -1;      // the exit chosen and his pilot with no route to it since then
   int dive = -1;                 // the water's entry (MapNav::entries) he goes back in by, -1 none
   int out = -1;                  // and the one on the far side he swims to and climbs out by
   std::vector<uint8_t> trapped;  // the nodes he could walk to when he went back in
