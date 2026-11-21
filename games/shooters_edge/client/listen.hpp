@@ -503,6 +503,9 @@ struct Missile {
   // (a player or a monster): a blaster's bolt, or the BFG's ball.
   bool bolt = false, bfg = false;
   bool streak = false;  // Quake II's blaster bolt (its blaster bit): specks behind it
+  // Quake II's other marks by its effect bits (q2_look.hpp's Q2Look::Missile as a number: a
+  // flag, the tag token, an ion ripper's, a blue or a plasma bolt); 0 none of these.
+  uint8_t q2_mark = 0;
 };
 void missiles_of(const Listen& l, std::vector<Missile>& out);
 

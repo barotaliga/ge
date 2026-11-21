@@ -88,9 +88,10 @@ struct Placed {
   // Quake II's look (q2_look.hpp): its light pulsing (an item's glow) and a coloured shell
   // over it (quad damage, invulnerability, a power shield's hit), `shell_rgb` its flat colour.
   bool pulse = false, shell = false;
-  bool bleeds = false;      // a body's piece by its bits (Quake II's gib bit), not its model file
-  bool flies = false;       // Quake II's corpse with flies round it (its flies bit)
-  bool shell_only = false;  // its shell alone, no plain draw under it (a power screen's plate)
+  bool bleeds = false;       // a body's piece by its bits (Quake II's gib bit), not its model file
+  bool green_blood = false;  // its blood green (Quake II's green gib bit)
+  bool flies = false;        // Quake II's corpse with flies round it (its flies bit)
+  bool shell_only = false;   // its shell alone, no plain draw under it (a power screen's plate)
   // A Quake II entity's animation bits (its effects' ANIM01, ANIM23, ANIM_ALL, ANIM_ALLFAST;
   // q2_look.hpp's q2_texture_frame): a brush model's texture frame, a model's or a sprite's own
   // frame, cycled on the picture's clock; -1 elsewhere, its textures on the map's clock.

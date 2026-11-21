@@ -12,7 +12,7 @@ q2-sp-gaps.md).
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client commands (what a player types; the game library answers them) | 23 | 9 | 5 | 0 | 37 |
+| Client commands (what a player types; the game library answers them) | 25 | 9 | 3 | 0 | 37 |
 | Server commands (`sv <word>` typed at the server console) | 0 | 4 | 2 | 0 | 6 |
 | Cvars the game library registers or reads | 29 | 10 | 7 | 0 | 46 |
 | User info keys the game reads | 4 | 5 | 0 | 0 | 9 |
@@ -20,8 +20,8 @@ q2-sp-gaps.md).
 | Items (the item list, in its order; each is also a spawnable classname) | 17 | 25 | 0 | 0 | 42 |
 | Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 77 | 3 | 1 | 0 | 81 |
 | Monsters | 26 | 0 | 0 | 0 | 26 |
-| Player messages (printed, broadcast and centre-printed) | 64 | 5 | 12 | 0 | 81 |
-| Server console lines (what an admin reads; `dprintf`) | 1 | 1 | 34 | 0 | 36 |
+| Player messages (printed, broadcast and centre-printed) | 66 | 5 | 10 | 0 | 81 |
+| Server console lines (what an admin reads; `dprintf`) | 2 | 1 | 33 | 0 | 36 |
 | Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 9 | 7 | 1 | 0 | 17 |
 | Rules a player sees (behaviour not in a row above) | 22 | 15 | 7 | 0 | 44 |
 | **all** | 252 | 111 | 78 | 0 | 441 |
@@ -64,10 +64,10 @@ count: done 17, partial 13, missing 7, not-taken 0
 | cmd.putaway | `putaway` | closes score, help and inventory | done | q2_screens.cpp |
 | cmd.wave | `wave <0-4>` | gesture: 0 flipoff, 1 salute, 2 taunt, 3 wave, other point; not while crouched or during a higher animation; prints the gesture's word to the player | done | q2_commands.cpp |
 | cmd.playerlist | `playerlist` | per player `mm:ss ping score name` plus ` (spectator)`, `And more...` past the buffer | done | q2_commands.cpp |
-| cmd.teleport | `teleport x y z` | cheat: moves the player to (x, y, z+10), stopped, held, view cleared, telefrags; `Usage: teleport x y z` | missing | R28 |
+| cmd.teleport | `teleport x y z` | cheat: moves the player to (x, y, z+10), stopped, held, view cleared, telefrags; `Usage: teleport x y z` | done | `games/shooters_edge/server/q2_commands.cpp`, `q2_map.cpp` (`map_place_player`) |
 | cmd.spawnentity | `spawnentity classname x y z [pitch yaw roll [flags]]` | cheat: spawns any entity there; usage line on bad arity | missing | R28 |
 | cmd.spawnonstart | `spawnonstart classname` | cheat: spawns one at every start/deathmatch/co-op spot, `Spawned entity at x y z` to the console | missing | R28 |
-| cmd.listentities | `listentities <all/ammo/items/keys/monsters/weapons>` | cheat: lists matching entities `classname: x y z` to the server console | missing | R28 |
+| cmd.listentities | `listentities <all/ammo/items/keys/monsters/weapons>` | cheat: lists matching entities `classname: x y z` to the server console | done | `games/shooters_edge/server/q2_commands.cpp` |
 | cmd.cycleweap | `cycleweap <classname...>` | switches through a listed set of weapons; usage line with no names | done | `games/shooters_edge/server/q2_commands.cpp` (`weapon_list`) |
 | cmd.prefweap | `prefweap <classname...>` | switches to the first listed weapon held with ammo; usage line | done | `games/shooters_edge/server/q2_commands.cpp` (`weapon_list`) |
 | cmd.chat-fallback | any other word | the whole line said as chat (not during the intermission) | done | q2_commands.cpp |
@@ -451,10 +451,10 @@ count: done 50, partial 16, missing 15, not-taken 0
 | msg.notarget | `notarget ON` / `notarget OFF` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.noclip | `noclip ON` / `noclip OFF` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.cheats | `You must run the server with '+set cheats 1' to enable this command.` | the cheat refusal | done | `games/shooters_edge/server/q2_commands.cpp` |
-| msg.usage-teleport | `Usage: teleport x y z` | | missing | R28 |
+| msg.usage-teleport | `Usage: teleport x y z` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.usage-spawnentity | `Usage: spawnentity classname x y z <angle_x angle_y angle_z> <flags>` | | missing | R28 |
 | msg.usage-spawnonstart | `Usage: spawnonstart classname` | | missing | R28 |
-| msg.usage-listentities | `Usage: listentities <all\|ammo\|items\|keys\|monsters\|weapons>` | | missing | R28 |
+| msg.usage-listentities | `Usage: listentities <all\|ammo\|items\|keys\|monsters\|weapons>` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.usage-cycleweap | `Usage: cycleweap classname1 classname2 .. classnameN` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.usage-prefweap | `Usage: prefweap classname1 classname2 .. classnameN` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.flood-wait | `You can't talk for <n> more seconds` | talking while muted | partial | q2_commands.cpp adds a full stop; also applies in single player (R40) |
@@ -503,7 +503,7 @@ count: done 1, partial 1, missing 34, not-taken 0
 | con.untargeted | `untargeted <class> at <pos>` | target_earthquake etc. | missing | |
 | con.flood-clamp | `flood_msgs lowered to max: 10` | | missing | R40 |
 | con.spawned | `Spawned entity at <x> <y> <z>` | spawnonstart | missing | R28 |
-| con.listentities | `<class>: <x> <y> <z>` | listentities | missing | R28 |
+| con.listentities | `<class>: <x> <y> <z>` | listentities | done | `games/shooters_edge/server/q2_commands.cpp` |
 | con.bad-movetype | `<class>:<n> has bad movetype: <n>` | | missing | |
 | con.connected | `<name> connected` | a client connects | partial | net/q2_net_server.cpp logs its own line |
 | con.fixed-triggered | `fixed TRIGGERED flag on <class> at <pos>` | g_fix_triggered | missing | |
