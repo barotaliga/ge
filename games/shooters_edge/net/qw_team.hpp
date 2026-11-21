@@ -179,7 +179,8 @@ struct TeamPlayer {
           off_graph = 0;       // dives begun into a pocket; thinks spent off the graph or in a pool
   int64_t dives_given_up = 0;  // dives turned back, late or short of air
   double dive_wet_s = 0;       // time in the water on a dive
-  int64_t mode_commands[4] = {}, role_commands[5] = {};       // by bots::Role
+  int64_t mode_commands[4] = {}, role_commands[5] = {};  // by bots::Role
+  int64_t claim_role_commands[5] = {};  // the same with a claim held (an area its own)
   int64_t weapon_commands[bots::kMostWeaponNumber + 1] = {};  // by the weapon's number
   int64_t pilot_modes[sh::kPilotModes] =
       {};  // live commands in each pilot mode (shooter/pilot.hpp)
