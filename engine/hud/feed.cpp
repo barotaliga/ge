@@ -20,6 +20,13 @@ void Feed::push(std::string_view text, ui::Color color, double t) {
   lines_.push_back({std::string(text), color, t});
 }
 
+void Feed::configure(size_t capacity, double hold_s) {
+  capacity_ = std::max<size_t>(capacity, 1);
+  hold_s_ = hold_s;
+  if (lines_.size() > capacity_)
+    lines_.erase(lines_.begin(), lines_.end() - static_cast<std::ptrdiff_t>(capacity_));
+}
+
 void Feed::expire(double t) {
   std::erase_if(lines_, [&](const FeedLine& l) { return strength(l.born, t) <= 0; });
 }
@@ -27,7 +34,7 @@ void Feed::expire(double t) {
 double Feed::strength(double born, double t) const {
   const double age = t - born;
   if (age < 0) return 0;
-  if (age <= hold_s_) return 1;
+  if (hold_s_ < 0 || age <= hold_s_) return 1;
   return fade_s_ > 0 ? std::clamp(1 - (age - hold_s_) / fade_s_, 0.0, 1.0) : 0;
 }
 

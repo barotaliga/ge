@@ -122,6 +122,8 @@ void open_installers(Tree* t) {
       std::string name = e.name;
       std::replace(name.begin(), name.end(), '\\', '/');
       added.push_back({at.empty() ? name : std::string(at).append("/").append(name), e.size, 0,
+                       // A reader that throws (out of memory) ends the import.
+                       // NOLINTNEXTLINE(bugprone-exception-escape)
                        [bytes, e](std::vector<uint8_t>* out, std::string* err) {
                          return vfs::lha_unpack(*bytes, e, out, err);
                        }});
@@ -209,13 +211,17 @@ bool open_tree(const std::string& path, Tree* out, std::string* error) {
     auto disc = std::make_shared<vfs::Disc>();
     if (!vfs::open_disc(path, disc.get(), error)) return false;
     for (const vfs::DiscFile& f : disc->files) {
+      // A reader that throws (out of memory) ends the import.
+      // NOLINTNEXTLINE(bugprone-exception-escape)
       out->files.push_back({f.path, f.size, 0, [disc, f](std::vector<uint8_t>* b, std::string* e) {
                               return disc->read_file(f, b, e);
                             }});
     }
     out->disc = disc;
-    out->image_stamp = std::to_string(fs::file_size(path, ec)) + " " +
-                       std::to_string(fs::last_write_time(path, ec).time_since_epoch().count());
+    out->image_stamp =
+        std::to_string(static_cast<unsigned long long>(fs::file_size(path, ec))) + " " +
+        std::to_string(
+            static_cast<long long>(fs::last_write_time(path, ec).time_since_epoch().count()));
   } else if (fs::is_directory(path, ec)) {
     const fs::path top(path);
     for (auto it = fs::recursive_directory_iterator(
@@ -228,6 +234,8 @@ bool open_tree(const std::string& path, Tree* out, std::string* error) {
       out->files.push_back(
           {p.lexically_relative(top).generic_string(), it->file_size(ec),
            static_cast<int64_t>(it->last_write_time(ec).time_since_epoch().count()),
+           // A reader that throws (out of memory) ends the import.
+           // NOLINTNEXTLINE(bugprone-exception-escape)
            [p](std::vector<uint8_t>* b, std::string* e) { return read_whole(p, b, e); }});
     }
   } else {

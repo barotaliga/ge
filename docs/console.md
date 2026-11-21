@@ -366,8 +366,19 @@ Enter submits the line:
   `/say hi`;
 - a line starting with `//` is a note: shown in the scrollback, never run or said;
 - any other line is a chat message to everyone while `con_chat` is 1 (a multiplayer game sets
-  it), a command while it is 0 (single player has nobody to chat to), and with 2 a command when
-  its first word names a command, alias or cvar (in any case), else a chat message.
+  it), a command while it is 0 (single player has nobody to chat to), with 2 a command when
+  its first word names a command, alias or cvar (in any case), else a chat message, and with 3
+  a message to the team. A game with its own setting for this (`ConsoleView::game_chat`, in its
+  order: 0 command, 1 everyone, 2 the team; Quake II's `con_auto_chat`) rules over `con_chat`.
+
+`clearnotify` lets the notify lines so far go. `remotemode [address [password]]` sends every line
+typed without a slash to the game's `rcon` command (setting `rcon_address` and `rcon_password`
+when given and the game has them), the prompt `#` in place of `]`; `remotemode` again ends it. A
+game joining a server shows what is coming on the console's FOOT (`set_foot`): a bar and the file's
+share and size, or "Loading <map>...".
+
+`condump [name]` writes the scrollback to `<folder>/<name>.txt` (`condump.txt` with no name), the
+folder being the game's (`set_dump_folder`); a name with a folder in it is refused.
 
 Its cvars:
 
@@ -380,7 +391,9 @@ Its cvars:
 | `con_clearnotify` | 1 | 1: opening or closing the console lets the notify lines so far go (the scrollback keeps them) |
 | `con_notifylines` | 4 | the newest lines shown at the top while it is closed (0: none) |
 | `con_notifytime` | 4 | how long a notify line stays, s |
-| `con_chat` | 0 | a line typed without a `/`: 0 a command, 1 said to everyone, 2 a command when its first word is known, else said |
+| `con_chat` | 0 | a line typed without a `/`: 0 a command, 1 said to everyone, 2 a command when its first word is known, else said, 3 said to the team |
+| `con_clock` | 0 | 1: the local time in the panel's lower right corner |
+| `con_scale` | 0 | the text's size against the console's own (0: 1) |
 | `con_suggest` | 8 | the suggestions listed under the input line (0: none) |
 | `con_bgtop` | 10141c | the panel's colour at its top, `rrggbb` |
 | `con_bgbottom` | 10141c | the panel's colour at its bottom (the same as the top: a flat fill) |

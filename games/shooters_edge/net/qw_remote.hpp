@@ -298,6 +298,10 @@ void remote_rcon_step(Remote& r, double now_s, std::vector<std::string>& said);
 std::string remote_status(const Remote& r);
 // The words before the server's name for a stage ("playing on ").
 const char* remote_stage_words(ClientStage s);
+// The console's foot while a game is joined but not yet played (console/view.hpp's set_foot): the
+// file coming, its share and size ("maps/dm2.bsp 40% (88 KB)", `progress` 0.4), or "Loading
+// dm2..." while signing on; "" (and `progress` -1) once playing, watching or not joined.
+std::string remote_foot(const Remote& r, double& progress);
 // A line for the server joined (`say hello`, `vote map dm2`), whichever protocol it speaks.
 void remote_command(Remote& r, const std::string& line);
 // A line the console does not know, sent to a server of Quake II joined (its game's own words:

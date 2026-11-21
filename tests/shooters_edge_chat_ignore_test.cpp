@@ -5,6 +5,9 @@
 // ge:summary Tests: the classic chat lines read for the ignore lists
 // ge:keywords test chat-ignore classic-chat drop_ignored chat_line_of
 // ge:skill net testing
+#include <string>
+#include <vector>
+
 #include "check.hpp"
 #include "console/console.hpp"
 #include "shooters_edge/client/chat_ignore.hpp"
@@ -127,4 +130,75 @@ TEST(a_kept_chat_line_sounds_is_filtered_stamped_and_marked) {
   got = frame({{3, "bob: hi me\n"}, {3, "me: hi\n"}, {1, "bob rides me's rocket\n"}});
   CHECK(got[0].text == ">> bob: hi me\n" && got[1].text == "me: hi\n");
   CHECK(got[2].text == ">> bob rides me's rocket\n");
+}
+
+// Quake II's chat settings: the line cleaned, the addresses kept for followip, the message
+// triggers on lines that are not chat (never through a relay), its one chat sound, and the feeds:
+// cl_chat_notify and the chat lines on screen.
+TEST(quake2s_chat_settings_clean_follow_trigger_and_feed) {
+  con::Console c;
+  cl::QwIgnore g;
+  cl::DemoState s = room();
+  cl::add_qw_ignore(c, g, s);
+  std::vector<std::string> ran;
+  c.add_command("connect", "", [&](con::Console&, const con::Args& a) { ran.push_back(a.raw); });
+  c.add_command("say_team", "", [&](con::Console&, const con::Args& a) { ran.push_back(a.raw); });
+  const auto frame = [&](std::vector<cl::DemoPrint> prints, std::string centre = {}) {
+    s.started.clear();
+    cl::drop_ignored(g, s, prints, 0, &centre);
+    c.run();
+    return prints;
+  };
+  c.execute("cl_chat_filter 1");
+  c.run();
+  std::vector<cl::DemoPrint> got = frame({{3, "bob: hi\x01 there\nmore\n"}, {2, "a\x01b\n"}});
+  CHECK(got[0].text == "bob: hi there\n" && got[1].text == "a\x01b\n");  // chat alone
+  // followip: the newest address first, the n-th last by number.
+  frame({{3, "bob: play at 10.0.0.1:27910 or 192.168.1.20\n"}, {3, "bob: 300.1.1.1 no\n"}});
+  CHECK(cl::addresses_in("x 1.2.3.4:5 1.2.3 1.2.3.4.5").size() == 1);
+  c.execute("followip; followip 2; followip 3");
+  c.run();
+  CHECK(ran.size() == 2 && ran[0] == "connect 192.168.1.20" && ran[1] == "connect 10.0.0.1:27910");
+  ran.clear();
+  // trigger: on a server line or the centre message that matches, not on chat; untrigger.
+  c.execute("trigger \"say_team quad up\" \"*quad*\"");
+  c.run();
+  CHECK(g.chat.triggers.size() == 1);
+  frame({{3, "bob: quad\n"}, {2, "The quad is back\n"}}, "the quad is yours");
+  CHECK(ran.size() == 2 && ran[0] == "say_team quad up");
+  ran.clear();
+  g.chat.relay = true;  // through a relay: never
+  frame({{2, "The quad is back\n"}});
+  CHECK(ran.empty());
+  g.chat.relay = false;
+  c.execute("untrigger \"say_team quad up\" \"*quad*\"");
+  c.run();
+  CHECK(g.chat.triggers.empty());
+  // Quake II's own cl_chat_sound rules while it is set: by number or by name, 0 none.
+  g.chat.named_sound = "2";
+  frame({{3, "bob: hi\n"}});
+  CHECK(s.started.size() == 1 && std::string(s.started[0].name) == "misc/talk1.wav");
+  g.chat.named_sound = "misc/beep.wav";
+  frame({{3, "bob: hi\n"}});
+  CHECK(std::string(s.started[0].name) == "misc/beep.wav");
+  g.chat.named_sound = "0";
+  frame({{3, "bob: hi\n"}});
+  CHECK(s.started.empty());
+  // The feeds: chat in the notify lines unless cl_chat_notify is 0; on screen with scr_chathud.
+  ge::hud::Feed notify{4, 4.0, 0.8, 0.15};
+  const ge::ui::Color ink{1, 1, 1, 1};
+  cl::tell_feeds(g.chat, notify, "bob: hi", true, ink, 0);
+  CHECK(notify.lines().size() == 1 && g.chat.feed.lines().empty());
+  c.execute("cl_chat_notify 0; scr_chathud 2; scr_chathud_lines 2; scr_chathud_time 3");
+  c.run();
+  for (const char* line : {"bob: a", "bob: b", "bob: c"})
+    cl::tell_feeds(g.chat, notify, line, true, ink, 0);
+  cl::tell_feeds(g.chat, notify, "bob died", false, ink, 0);
+  CHECK(notify.lines().size() == 2 && notify.lines().back().text == "bob died");
+  CHECK(g.chat.feed.lines().size() == 2 && g.chat.feed.lines()[0].text == "bob: b");
+  CHECK(g.chat.feed.lines()[0].color.r < 1);  // the alternate colour
+  CHECK(g.chat.feed.strength(0, 2) == 1 && g.chat.feed.strength(0, 2.5) < 1);  // the last second
+  c.execute("clearchathud");
+  c.run();
+  CHECK(g.chat.feed.lines().empty());
 }

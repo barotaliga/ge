@@ -355,6 +355,48 @@ const char* remote_stage_words(ClientStage s) {
   return "";
 }
 
+namespace {
+
+std::string size_words(size_t bytes) {
+  constexpr size_t kKb = 1024, kMb = kKb * kKb;
+  if (bytes < 10 * kKb) return std::to_string(bytes) + " bytes";
+  if (bytes < 10 * kMb) return std::to_string(bytes / kKb) + " KB";
+  return std::to_string(bytes / kMb) + " MB";
+}
+
+std::string coming(const std::string& name, int percent, size_t bytes, double& progress) {
+  percent = std::clamp(percent, 0, 100);
+  progress = percent / 100.0;
+  return name + " " + std::to_string(percent) + "% (" + size_words(bytes) + ")";
+}
+
+}  // namespace
+
+std::string remote_foot(const Remote& r, double& progress) {
+  progress = -1;
+  if (!r.active || r.watch) return {};
+  const std::string& map = r.demo.state.map;
+  const std::string loading = map.empty() ? "Loading..." : "Loading " + map + "...";
+  if (r.q2) {
+    const Q2ClientEnd& c = *r.q2;
+    if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
+    if (!c.fetching.empty())
+      return coming(c.fetching, c.fetched_percent, c.fetched_bytes.size(), progress);
+    return c.stage == ClientStage::signon ? loading : std::string();
+  }
+  const QwClientEnd& c = r.end;
+  if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
+  if (c.dl.active) {
+    int percent = c.dl.percent;
+    if (c.dl.chunked && !c.dl.have.empty())
+      percent = static_cast<int>(std::count(c.dl.have.begin(), c.dl.have.end(), true) * 100 /
+                                 static_cast<std::ptrdiff_t>(c.dl.have.size()));
+    return coming(c.dl.name, percent,
+                  c.dl.size > 0 ? static_cast<size_t>(c.dl.size) : c.dl.bytes.size(), progress);
+  }
+  return c.stage == ClientStage::signon ? loading : std::string();
+}
+
 bool remote_connect(Remote& r, const std::string& address, const ClientConfig& cfg,
                     std::string& error) {
   remote_disconnect(r);
@@ -670,6 +712,7 @@ RemoteStep watch_step(Remote& r, std::vector<std::string>& said) {
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
+  r.ignore.chat.relay = true;  // a broadcast: Quake II's message triggers wait
   client::drop_ignored(r.ignore, d.state, prints, d.state.time, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
@@ -891,6 +934,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
+  r.ignore.chat.relay = false;
   client::drop_ignored(r.ignore, d.state, prints, wall_s, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);

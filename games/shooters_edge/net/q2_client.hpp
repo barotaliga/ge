@@ -169,6 +169,7 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<std::string> fetch_queue;
   std::string fetching;
   std::vector<uint8_t> fetched_bytes;
+  int fetched_percent = 0;  // the server's share of it sent so far
   bool fetched_origin = false;
   ge::vfs::ArchiveOrigin fetching_origin;
   std::string held_begin;

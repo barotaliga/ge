@@ -69,6 +69,7 @@ struct Args {
   bool near = false, deepest = false, no_light = false;
   float at[3] = {};
   double radius = 256, step = 0, plane = 0;
+  int hull = 0;  // slice: 0 the drawn leaves, 1..3 a clip hull
   int axis = -1;
 };
 
@@ -115,6 +116,13 @@ bool parse(int argc, const char* const* argv, Args* a, std::string* bad) {
         *bad = "--radius takes a distance in map units, as " + s + " does not";
         return false;
       }
+    } else if (s.rfind("--hull=", 0) == 0) {
+      double h = 0;
+      if (!number(s.substr(7), &h) || (h != 0 && h != 1 && h != 2 && h != 3)) {
+        *bad = "--hull takes 0 (the drawn leaves), 1, 2 or 3 (a clip hull), as " + s + " does not";
+        return false;
+      }
+      a->hull = int(h);
     } else if (s.rfind("--step=", 0) == 0) {
       if (!number(s.substr(7), &a->step) || a->step <= 0) {
         *bad = "--step takes a cell size in map units above 0, as " + s + " does not";
@@ -335,11 +343,13 @@ int slice(const Args& a, std::ostream& out) {
   if (!open_map(a, "slice", &m, out, &code)) return code;
   Slice s;
   std::string error;
-  if (!slice_map(m, a.axis, a.plane, a.step, &s, &error)) return fail(out, 1, error);
+  if (!slice_map(m, a.axis, a.plane, a.step, &s, &error, 400, a.near ? a.at : nullptr, a.radius,
+                 a.hull))
+    return fail(out, 1, error);
   const char* axes = "xyz";
   out << "{\"ok\":true,\"map\":" << esc(a.words[0]) << ",\"plane\":\"" << axes[s.axis] << "="
-      << num(s.at) << "\",\"step\":" << num(s.step) << ",\"columns\":\"" << axes[s.u_axis]
-      << "\",\"rows\":\"" << axes[s.v_axis] << "\",\"first_column\":" << num(s.u0)
+      << num(s.at) << "\",\"hull\":" << a.hull << ",\"step\":" << num(s.step) << ",\"columns\":\""
+      << axes[s.u_axis] << "\",\"rows\":\"" << axes[s.v_axis] << "\",\"first_column\":" << num(s.u0)
       << ",\"first_row\":" << num(s.v0)
       << ",\"legend\":{\".\":\"empty\",\"#\":\"solid\",\"~\":\"water\",\"%\":\"slime\","
          "\"!\":\"lava\",\"^\":\"sky\"},\"grid\":[";
@@ -463,7 +473,8 @@ int bsp_main(int argc, const char* const* argv, std::ostream& out) {
   if (a.command == "help") {
     out << "{\"ok\":true,\"commands\":[\"info <map>\","
            "\"ents <map> [--class=<glob>] [--near=x,y,z [--radius=<units>]]\","
-           "\"liquids <map> [--deepest]\",\"slice <map> --x=|--y=|--z=<units> [--step=<units>]\","
+           "\"liquids <map> [--deepest]\",\"slice <map> --x=|--y=|--z=<units> [--step=<units>] "
+           "[--near=x,y,z --radius=<units>] [--hull=1]\","
            "\"check\",\"import <map> [--out=<file.map>]\","
            "\"export <file.map|file.plan> [--out=<file.bsp>] [--version=29] [--textures=<dir>] "
            "[--no-light]\"],\"flags\":[\"--root=<dir>\",\"--game=<name>[,<mod>...]\"]}\n";

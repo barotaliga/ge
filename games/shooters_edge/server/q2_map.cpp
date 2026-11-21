@@ -1198,6 +1198,15 @@ void fire_targets(Q2Server& s, int ent, int activator, int depth, bool late) {
 }
 
 // Sets up one entity of class `c` from its keys.
+// The disc a teleporter's pad, every exit and a deathmatch spawn spot show, in the model list.
+int disc_model(Q2Server& s) {
+  const char* disc = "models/objects/dmspot/tris.md2";
+  const auto found = std::find(s.models.begin(), s.models.end(), disc);
+  const int index = static_cast<int>(found - s.models.begin());
+  if (found == s.models.end()) s.models.emplace_back(disc);
+  return index;
+}
+
 void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
   e.message = map_text(key(s, e, "message"));
   e.killtarget = key(s, e, "killtarget");
@@ -1459,19 +1468,9 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
       e.trigger = true;
       e.mins = {-8, -8, 8};
       e.maxs = {8, 8, 24};
-      // The pad and its exit are drawn as the disc a player sees and walks to: the pad with its
-      // specks rising, the exit plain.
-      const char* disc = "models/objects/dmspot/tris.md2";
-      const auto found = std::find(s.models.begin(), s.models.end(), disc);
-      const int model = static_cast<int>(found - s.models.begin());
-      if (found == s.models.end()) s.models.emplace_back(disc);
+      // The pad is drawn as the disc a player sees and walks to, with its specks rising.
       e.pad = 1;
-      e.modelindex = model;
-      for (Q2Entity& d : s.entities)
-        if (d.classname == "misc_teleporter_dest" && d.targetname == e.target && !d.gone) {
-          d.pad = 2;
-          d.modelindex = model;
-        }
+      e.modelindex = disc_model(s);
       return;
     }
     case kChangeLevel:
@@ -1658,6 +1657,16 @@ int loop_now(const Q2Entity& e, int i) {
 
 }  // namespace
 
+void map_precache(Q2Server& s) {
+  for (const Q2Entity& e : s.entities)
+    if ((e.classname == "misc_teleporter" && !e.target.empty()) ||
+        e.classname == "misc_teleporter_dest" ||
+        (deathmatch(s) && e.classname == "info_player_deathmatch")) {
+      disc_model(s);
+      return;
+    }
+}
+
 void map_spawn(Q2Server& s) {
   s.delayed.clear();
   s.portals.clear();
@@ -1678,6 +1687,7 @@ void map_spawn(Q2Server& s) {
   s.world.lightstyles[11] = "abcdefghijklmnopqrrqponmlkjihgfedcba";       // slow pulse, never black
   s.world.lightstyles[63] = "a";                                          // testing
   s.secrets = s.secrets_found = s.goals = s.goals_found = 0;
+  campaign_coop_spots(s);
   const size_t count = s.entities.size();
   for (size_t i = 0; i < count; i++) {
     Q2Entity& e = s.entities[i];
@@ -1689,6 +1699,15 @@ void map_spawn(Q2Server& s) {
     else
       targets_spawn(s, static_cast<int>(i));
   }
+  // Every teleporter exit, and in deathmatch every spawn spot, is a plain disc a player stands
+  // on and a shot strikes, whether or not a teleporter leads there.
+  for (Q2Entity& e : s.entities)
+    if (!e.gone && e.pad == 0 &&
+        (e.classname == "misc_teleporter_dest" ||
+         (deathmatch(s) && e.classname == "info_player_deathmatch"))) {
+      e.pad = 2;
+      e.modelindex = disc_model(s);
+    }
   link_doors(s);
   map_loops(s);
 }

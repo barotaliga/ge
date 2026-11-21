@@ -8,6 +8,8 @@
 #include "console/view.hpp"
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 
 #include "console/lex.hpp"
 
@@ -89,13 +91,13 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
          &notify_time_);
   v.bind({.name = "con_chat",
           .fallback = "0",
-          .help = "what a line typed without a / is: a command, or said to everyone",
+          .help = "what a line typed without a / is: a command, or said",
           .kind = CvarKind::integer,
           .min = 0,
-          .max = 2,
+          .max = 3,
           .values = "0: a command (the default); 1: said to everyone (a multiplayer game sets "
                     "it); 2: a command when its first word is a command, alias or setting, else "
-                    "said"},
+                    "said; 3: said to the team"},
          &chat_default_);
   v.bind({.name = "con_suggest",
           .fallback = "8",
@@ -137,6 +139,21 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
                   "square, stencil, gothic, rounded or marker (\"\": the UI font)",
           .kind = CvarKind::text},
          &font_);
+  v.bind({.name = "con_scale",
+          .fallback = "0",
+          .flags = kArchive,
+          .help = "how large the console's text is",
+          .min = 0,
+          .max = 4,
+          .values = "0: its own size (the default); 0.5..4: that many times it"},
+         &scale_);
+  v.bind({.name = "con_clock",
+          .fallback = "0",
+          .flags = kArchive,
+          .help = "whether the console shows the time of day in its corner",
+          .kind = CvarKind::boolean,
+          .values = "0: no clock (the default); 1: the local hours and minutes"},
+         &clock_on_);
   if (v.find("name") == nullptr) {
     v.add({.name = "name",
            .fallback = "player",
@@ -157,6 +174,69 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
                 [this](Console&, const Args&) { toggle(); });
   c.add_command("clear", "clear: empty the console's scrollback",
                 [this](Console&, const Args&) { clear(); });
+  c.add_command("clearnotify", "clearnotify: the lines at the top of the screen taken away",
+                [this](Console&, const Args&) { clear_notify(); });
+  c.add_command(
+      "remotemode",
+      "remotemode [address [password]]: lines typed go to a server's console (rcon); again to "
+      "stop",
+      [this](Console& con, const Args& a) {
+        if (remote_ && a.size() < 2) {
+          remote_ = false;
+          con.print("Remote mode off.");
+          return;
+        }
+        if (!con.has_command("rcon")) {
+          con.print("There is no remote console in this game.");
+          return;
+        }
+        if (a.size() > 1 && con.cvars().find("rcon_address") != nullptr)
+          con.cvars().set("rcon_address", a[1], Source::local);
+        if (a.size() > 2 && con.cvars().find("rcon_password") != nullptr)
+          con.cvars().set("rcon_password", a[2], Source::local);
+        remote_ = true;
+        con.print("Remote mode on: what you type goes to the server. Type remotemode to stop.");
+      });
+  c.add_command("condump", "condump [name]: the console's lines written to a text file",
+                [this](Console& con, const Args& a) {
+                  const std::string name = a.size() > 1 ? a[1] : "condump";
+                  std::string why;
+                  if (dump(name, why))
+                    con.print("Dumped console text to " + why + ".");
+                  else
+                    con.print(why);
+                });
+}
+
+int ConsoleView::chat_mode() const {
+  if (game_chat < 0) return chat_default_;
+  return game_chat == 2 ? 3 : std::min(game_chat, 1);
+}
+
+bool ConsoleView::dump(std::string_view name, std::string& why) const {
+  if (dump_folder_.empty()) {
+    why = "The console can't be written to a file here.";
+    return false;
+  }
+  if (name.empty() || name.find_first_of("/\\:") != std::string_view::npos ||
+      name.find("..") != std::string_view::npos) {
+    why = "Give the file a plain name, without a folder.";
+    return false;
+  }
+  std::string file(name);
+  if (!file.ends_with(".txt")) file += ".txt";
+  const std::filesystem::path path = std::filesystem::path(dump_folder_) / file;
+  std::error_code ec;
+  std::filesystem::create_directories(path.parent_path(), ec);
+  std::ofstream out(path, std::ios::binary);
+  for (const ViewLine& l : lines_) out << l.text << '\n';
+  out.close();
+  if (!out) {
+    why = "Couldn't write " + path.string() + ".";
+    return false;
+  }
+  why = path.string();
+  return true;
 }
 
 bool parse_rgb(std::string_view text, Rgb& out) {
@@ -354,7 +434,13 @@ void ConsoleView::submit() {
     return;
   }
   const bool slash = line[0] == '/' || line[0] == '\\';
-  if (slash || chat_default_ == 0 || (chat_default_ == 2 && names_something(line))) {
+  if (remote_ && !slash) {  // remotemode: the server's console
+    add(LineKind::command, "# " + line);
+    c_.append("rcon " + line, Source::local, {"console", 0});
+    return;
+  }
+  const int mode = chat_mode();
+  if (slash || mode == 0 || (mode == 2 && names_something(line))) {
     const std::string cmd = slash ? line.substr(1) : line;
     const std::vector<std::string> words = tokenize(cmd);
     if (!words.empty()) ++uses_[lower(words[0])];
@@ -362,7 +448,7 @@ void ConsoleView::submit() {
     c_.append(cmd, Source::local, {"console", 0});
     return;
   }
-  say(ChatTo::all, "", line);
+  say(mode == 3 ? ChatTo::team : ChatTo::all, "", line);
 }
 
 bool ConsoleView::names_something(std::string_view line) const {
@@ -376,7 +462,7 @@ std::string ConsoleView::head() const {
   // Suggestions follow the command word: after a `/` or `\`, or bare when typed text may be a
   // command.
   const bool slash = !input_.empty() && (input_[0] == '/' || input_[0] == '\\');
-  if (!slash && chat_default_ == 1) return "";
+  if (!slash && (remote_ || chat_mode() == 1 || chat_mode() == 3)) return "";
   std::string h = input_.substr(slash ? 1 : 0);
   if (h.empty() || h.find_first_of(" \t;") != std::string::npos) return "";
   return h;

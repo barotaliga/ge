@@ -208,6 +208,40 @@ inline constexpr const char* kFingerWhyNames[kFingerWhys] = {
     "down", "other", "none",   "unseen",  "not-aiming",   "reacting", "far",  "off",
     "mate", "burst", "rhythm", "turning", "weapon-fight", "weapon",   "empty"};
 
+// The key items `FighterStats::passed` counts, and why one there near was not taken on the way.
+inline constexpr const char* kShowGates[11] = {
+    "not roaming", "aiming",   "launcher not up", "rockets short", "no plan area",    "news",
+    "too soon",    "in sight", "no spot ahead",   "dead or wet",   "turned to a spot"};
+// (`rlgang`) a free or holding fighter's thinks by the first thing that kept it from calling the
+// team onto an enemy launcher's holder (the last two: called, then said; another role apart)
+inline constexpr int kGangGates = 13;
+inline constexpr const char* kGangGateNames[kGangGates] = {
+    "push under way", "novice",  "not strong",  "too soon",       "none believed",
+    "not placed",     "no area", "no way",      "no gather spot", "switch off",
+    "not said",       "called",  "another role"};
+inline constexpr const char* kPassItems[5] = {"ra", "ya", "mh", "quad", "rl"};
+inline constexpr const char* kPassReasons[21] = {"not known there",
+                                                 "its goal near",
+                                                 "a scripted way held",
+                                                 "escaping",
+                                                 "diving",
+                                                 "the map's way",
+                                                 "retreating",
+                                                 "fetching",
+                                                 "off",
+                                                 "the goal",
+                                                 "its route lost",
+                                                 "not reached",
+                                                 "another floor",
+                                                 "its door shut",
+                                                 "not wanted",
+                                                 "worth nothing now",
+                                                 "a mate's",
+                                                 "given up",
+                                                 "behind its run",
+                                                 "farther than another",
+                                                 "taken on the way"};
+
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
   int64_t goal_changes = 0;  // its item goal changed (the commitment's measure)
@@ -232,6 +266,7 @@ struct FighterStats {
   int64_t ear_shots = 0;    // (`earfire`) rockets at one heard and not seen
   int64_t lob_shots = 0;    // (`earlob`) grenades thrown round a corner
   int64_t aim_cleared = 0;  // (`aimclear`) commands the height aimed at was raised off a burst
+  int64_t held_looks = 0;   // (`holdra`) commands a holder kept its view on its armour
   // The burst held past the near band by what the crosshair met: the world with his line blocked
   // too, a player, the world with his line clear and the view still off the aim's point (the hand
   // on its way), the same with the view on the point (the point itself runs into the world).
@@ -265,9 +300,24 @@ struct FighterStats {
   int64_t pokes = 0;          // buttons a novice tried on a whim
   int64_t door_errands = 0;   // buttons pressed for a shut door on the way (`locked`)
   int64_t field_errands = 0;  // of those, begun off the goal's field before the door (`fields`)
-  int64_t noroute = 0;        // goals the pilot found no route to (`noroute`)
-  int64_t item_first = 0;     // thinks a key item of its own came before a fight (`itemfirst`)
-  int64_t chase_held = 0;     // thinks one lost from sight was not followed (`chasekill`)
+  // how the door errands ended: the door open, its time up with the door still shut, no way to the
+  // button but through the door; and shut doors on the route gone round instead (`errandworth`)
+  int64_t errand_open = 0, errand_timeup = 0, errand_noway = 0, errand_round = 0;
+  // the same by button (an index into `button_spots`, the first kErrandButtons): begun, open, time
+  // up, no way, gone round
+  static constexpr size_t kErrandButtons = 16;
+  int64_t errand_by[kErrandButtons][5] = {};
+  // (the decision log's `item_passed`) thinks with a key item there within kOnTheWay, by the item
+  // (kPassItems) and what kept it from being taken on the way (kPassReasons; the last: taken)
+  int64_t passed[5][21] = {};
+  // (`spamshow`) commands carrying the launcher, by the first thing that kept a show-up rocket off
+  // (kShowGates; the last: turned to a spot)
+  int64_t show_gate[11] = {};
+  int64_t rl_hunts = 0;                // (`rlhunt`) thinks going for an enemy launcher's holder
+  int64_t gang_gate[kGangGates] = {};  // (`rlgang`) thinks by what held the call off
+  int64_t noroute = 0;                 // goals the pilot found no route to (`noroute`)
+  int64_t item_first = 0;  // thinks a key item of its own came before a fight (`itemfirst`)
+  int64_t chase_held = 0;  // thinks one lost from sight was not followed (`chasekill`)
   // (`goalfeet`) fight commands whose feet kept the route: across the line, toward him, and
   // those with the goal behind the line (the fight's feet kept)
   int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0;
@@ -325,6 +375,9 @@ struct FoeRead {
   double quad_until = -1e9;  // his quad heard taken, believed held until then
   double seen_t = -1e9;      // (`ledgerforget`) when he was last in its sight
   double hit_t = -1e9;       // (`ledgerhits`) when its own rocket was last counted on him
+  // (`rlknown`) when he was last known to carry the launcher (heard firing it, named a rocket's
+  // killer in the kill feed); kept through the fade, cleared by his death
+  double key_t = -1e9;
   // What it last learned of him (`FoeNews`, for the ledger's read by kind; decides nothing).
   uint8_t news = 0;
 };
@@ -418,24 +471,28 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   sb::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
   // Its team messages (team.hpp's `team_say`), sent as `say_team` by whoever drives its client.
   std::vector<std::string> outbox;
-  double held = 0;             // in the mode this long (worked out when it changes)
-  double mode_at = 0;          // server time it entered the mode
-  double heard_t = -1;         // the server time whose sounds were last taken in
-  double quad_glow_t = -1e9;   // (`quadseen`) when the quad's glow was last seen or called
-  double spam_fired = -1e9;    // its last rocket at a spot
-  double poke_until = -1e9;    // a novice on a button until then (buttons.hpp)
-  double next_poke = 0;        // and his next whim
-  double next_think = 0;       // server time of the next choice
-  double ready_at = 0;         // the held weapon ready again (fighter_command: its rhythm)
-  double impulse_at = -1;      // when the last impulse went
-  double reach_at = -1;        // when `reach` was worked out (-1: never)
-  int32_t reach_from = -1;     // and the node it was worked out from (where it stood)
-  double said_at = -1e9;       // its last team message
-  double called_at = -1e9;     // its last enemy callout
-  double under_since = -1;     // when its head last went under the water (-1: not under)
-  double dive_wet_since = -1;  // when the dive under way went into the water (-1: none)
-  double breathe_until = -1;   // up for air (water.hpp): at the surface until then (-1: rising)
-  double bore_until = -1e9;    // its own rocket at its feet for the quad's carrier (packs.hpp)
+  double held = 0;              // in the mode this long (worked out when it changes)
+  double mode_at = 0;           // server time it entered the mode
+  double heard_t = -1;          // the server time whose sounds were last taken in
+  double quad_glow_t = -1e9;    // (`quadseen`) when the quad's glow was last seen or called
+  double spam_fired = -1e9;     // its last rocket at a spot
+  double poke_until = -1e9;     // a novice on a button until then (buttons.hpp)
+  double poke_seen_t = -1e9;    // (`pokelook`) the button last in sight
+  bool poke_looked = false;     // and the poke's look set this command
+  double unlock_seen_t = -1e9;  // (`unlocklook`) the goal item's shot button last in sight
+  bool unlock_looked = false;   // and its look set this command
+  double next_poke = 0;         // and his next whim
+  double next_think = 0;        // server time of the next choice
+  double ready_at = 0;          // the held weapon ready again (fighter_command: its rhythm)
+  double impulse_at = -1;       // when the last impulse went
+  double reach_at = -1;         // when `reach` was worked out (-1: never)
+  int32_t reach_from = -1;      // and the node it was worked out from (where it stood)
+  double said_at = -1e9;        // its last team message
+  double called_at = -1e9;      // its last enemy callout
+  double under_since = -1;      // when its head last went under the water (-1: not under)
+  double dive_wet_since = -1;   // when the dive under way went into the water (-1: none)
+  double breathe_until = -1;    // up for air (water.hpp): at the surface until then (-1: rising)
+  double bore_until = -1e9;     // its own rocket at its feet for the quad's carrier (packs.hpp)
   double bored_at = -1e9;
   double pack_call_until = -1e9;  // a pack's call pending until then (packs.hpp)
   // Its own last shot (packs.hpp): when, and when the blast was heard nearest its line after it
@@ -473,10 +530,16 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   sh::Vec3f news_spot;    // spam at news (spam.hpp): the way in fired at
   double news_t = -1e9;   // the news it is fired at for (when it came), and the rockets spent
   int32_t news_shots = 0;
-  bool news_on = false;    // a way in turned to this command
-  int32_t spam_node = -1;  // where it fires at a spot from now (-1: not out)
-  int32_t spam_spot = -1;  // and at which
-  int32_t poke = -1;       // the button a novice is on (or a door's errand's, below)
+  bool news_on = false;  // a way in turned to this command
+  // (`spamshow`) a show-up spot turned to with no news (spam.hpp), and the last one fired at
+  bool show_on = false;
+  sh::Vec3f show_last;
+  double show_last_t = -1e9;
+  double show_raise_t = -1e9;  // when the launcher was raised for one
+  int64_t show_shots = 0;      // rockets at show-up spots
+  int32_t spam_node = -1;      // where it fires at a spot from now (-1: not out)
+  int32_t spam_spot = -1;      // and at which
+  int32_t poke = -1;           // the button a novice is on (or a door's errand's, below)
   // A door on the way that only a button opens, resting shut (`locked`): its button (an index into
   // `button_spots`) gone to and pressed or shot first, and the door (until `door_until`); a door
   // whose button no way reaches but through it (dm2's t11, pressed from the far side): no route
@@ -503,7 +566,8 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   ge::shooter::Vec3f lob_spot, lob_view;
   double lob_until = 0, lob_heard = -1, lob_next = 0;
   int slot = -1;
-  int32_t pack_ent = -1;  // a backpack gone for
+  int32_t pack_ent = -1;    // a backpack gone for
+  double pack_seen_t = -1;  // a backpack in the view within reach of a pickup last (knowledge.cpp)
   // The weapon's rhythm (fighter_command): the weapon and its ammunition last command (`ready_at`
   // with the doubles: when the weapon is ready again after the last shot seen leave it).
   int32_t shot_weapon = 0;
@@ -523,6 +587,11 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   double swim_exit_until = 0;
   int32_t short_item = -1;  // a short goal on the way (fighter_items.cpp on_the_way), -1 none
   int32_t door_avoid = -1;  // the door a button's errand cannot reach round (above), -1 none
+  // (`errandworth`) a shut door gone round to the goal node `door_round_goal`: kept off the routes
+  // while that goal holds, until `door_round_until`
+  int door_round = -1;
+  int32_t door_round_goal = -1;
+  double door_round_until = -1e9;
   double short_until = 0;
   bool swim_view_on = false;  // the swimmer's view turned at a hand's pace (fighter.cpp)
   float view_sent[2] = {};    // the view (pitch, yaw) its last command carried
