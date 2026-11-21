@@ -45,7 +45,7 @@
 // ge:keywords glow-mark slug-mark energy-ball-mark
 // ge:keywords beam arc-gun impact hit
 // ge:keywords pellet nail surface classic-soul blast_light debris chunks dirt no-smoke
-// ge:keywords blood blood_spray ce_blood gore spray mist by-weapon
+// ge:keywords blood blood_spray ce_blood gore spray mist by-weapon exit-wound back-spatter pour
 // ge:skill render shooter
 // ge:test tests/shooters_edge_weapon_fx_test.cpp
 #pragma once
@@ -165,20 +165,28 @@ void hit(const WallHit& h, uint32_t seed, Particles* births);
 // THE BLOOD (ce_blood): a body struck sprays blood shaped by what struck it. Drops (a few
 // millimetres to three centimetres, falling and lying where they land) and a fine mist that hangs a
 // moment, a dark arterial red that shines in the room's light where it is known.
-// - a PELLET: a puff out of the entry, mostly back toward the shooter, and a spray out the far
-// side;
-//   a shotgun's count of pellets throws each its own.
-// - a NAIL: a narrow jet driven on along the nail's flight, a little back out of the entry.
-// - a BLADE: a sweep flung sideways across the cut.
+// The blood goes as a wound bleeds: out of an ENTRY wound only a fine mist and a few small drops
+// come back toward the shooter, slow and short (under a metre); a round that goes THROUGH throws
+// most of the blood out of the EXIT wound (`exit`), heavier drops driven on along its line for
+// metres; and an entry POURS: drops let go with almost no speed that fall down the body.
+// - a PELLET: back-mist and a few drops out of the entry, a pour; through (point blank) a spray out
+//   of the exit; a shotgun's count of pellets throws each its own.
+// - a NAIL: through the body: a narrow jet out of the exit along the nail's flight, the most blood;
+//   back-mist out of the entry and a pour. Lodged (no exit): back-mist and a heavier pour.
+// - a BLADE: a sweep flung sideways across the cut, and a gash that pours.
 // - the ARC: a sizzle: few, small, dark drops boiled off, and more mist.
 // - a BLAST: a big burst thrown out away from where it went off, with heavy drops.
 // The client only knows the hit's place and count, so the weapon is the one the viewer holds when
 // the hit is his own; `any` (someone else's shot) throws the pellet's look.
-enum class BloodBy : uint8_t { any, pellet, nail, blade, arc, blast };
+// `drip`: one drop let go from a wound that is still bleeding, falling.
+enum class BloodBy : uint8_t { any, pellet, nail, blade, arc, blast, drip };
 struct BloodHit {
   double at[3] = {0, 0, 0};
-  double dir[3] = {0, 0, 1};  // the blow's way through the body (unit): the round's, the blast's
-  int count = 1;              // the message's count (a shotgun's pellets)
+  double dir[3] = {0, 0, 1};   // the blow's way through the body (unit): the round's, the blast's
+  double exit[3] = {0, 0, 0};  // where a round came out of the body (world m), when `through`
+  bool through = false;
+  double amount = 1;  // how much blood (ce_blood_amount): the drops' counts times this, 0 none
+  int count = 1;      // the message's count (a shotgun's pellets)
   BloodBy by = BloodBy::any;
   double floor_y = -1e9;          // world y the drops come down on
   float light[3] = {-1, -1, -1};  // the map's light there (1 as painted); below 0 not known

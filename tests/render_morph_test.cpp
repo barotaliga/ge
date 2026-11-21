@@ -11,6 +11,7 @@
 // ge:keywords test morph pose_morph morph_texel tint ramp ramp_from atlas pack_morph_atlas glow
 // ge:keywords warp warp_vertex warp_cut dissolve
 // ge:skill render testing
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -196,4 +197,29 @@ TEST(the_near_end_of_the_axis_goes_first_and_without_pinch_the_points_stay) {
   float o[3];
   warp_vertex(w, 1.25f, v, o);
   for (int k = 0; k < 3; ++k) CHECK_BITS(o[k], v[k]);
+}
+
+TEST(a_wound_soaks_round_itself_and_its_blood_runs_down_as_far_as_it_has_got) {
+  MorphWound w;
+  w.at[0] = 0, w.at[1] = 1.2f, w.at[2] = 0;
+  w.size = 0.08f;
+  w.run = 0;
+  const float at[3] = {0, 1.2f, 0}, near[3] = {0.02f, 1.21f, 0}, far[3] = {0.3f, 1.2f, 0};
+  const float below[3] = {0, 1.0f, 0}, above[3] = {0, 1.45f, 0};
+  CHECK(wound_cover(w, at) == 1 && wound_cover(w, near) == 1);
+  CHECK(wound_cover(w, far) == 0 && wound_cover(w, above) == 0);
+  CHECK(wound_cover(w, below) == 0);  // nothing has run yet
+  // Run 0.3 m down: blood somewhere across its line 0.2 m below, none past its bead, none above.
+  w.run = 0.3f;
+  float across = 0;
+  for (int i = -20; i <= 20; ++i) {
+    const float p[3] = {static_cast<float>(i) * 0.004f, 1.0f, 0};
+    across = std::max(across, wound_cover(w, p));
+  }
+  CHECK(across > 0.9f);
+  const float past[3] = {0, 1.2f - 0.3f - 0.08f, 0};
+  CHECK(wound_cover(w, past) == 0 && wound_cover(w, above) == 0);
+  // No wound: no blood.
+  MorphWound none;
+  CHECK(wound_cover(none, at) == 0);
 }

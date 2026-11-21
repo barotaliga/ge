@@ -37,6 +37,7 @@ struct Draw {
   // x: the model whose skin it wears (MorphDraw::skin); y: its slot + 1 (0: none); z: a shell's
   // colour, a byte a channel from bit 0, bit 24 set (0: not a shell); w: its push's bits, m
   skin: vec4u,
+  blood: array<vec4f, 12>,  // MorphBlood: a wound two: at (rest frame, m), size; run, wet, seed
 }
 
 fn is_shell(d: Draw) -> bool {
@@ -101,6 +102,7 @@ struct VertexOut {
   @location(3) uv: vec2f,
   @location(4) @interpolate(flat) draw: u32,
   @location(5) local: vec4f,  // the point in the model's frame times its scale; along the axis, m
+  @location(6) rest: vec3f,   // the point in the model's frame 0 times its scale (the blood's), m
 }
 
 @vertex
@@ -121,6 +123,7 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> 
   out.rel = d.now_place.xyz + warp_vertex(d.warp, frame.time.x, off);
   out.last_rel = d.last_place.xyz + warp_vertex(d.warp, frame.time.x, last_off);
   out.local = vec4f(now.position * d.now_place.w, dot(off, d.warp.b.xyz));
+  out.rest = vertices[2u * (m.first_vertex + idx)].xyz * d.now_place.w;
   out.position = frame.view_proj * vec4f(out.rel, 1.0);
   out.normal = rotate(d.now_rotation, now.normal);
   out.uv = uvs[m.first_uv + idx];
@@ -222,6 +225,58 @@ fn morph_burn(b: vec4f, a: vec3f, p: vec3f, t: f32) -> vec4f {
   return vec4f(c, glow);
 }
 
+// THE BLOOD (MorphBlood; render/morph.cpp's `wound_cover` is the CPU twin): how much of the skin at
+// the rest-frame point `p` wound `k` covers: its soaked patch and the runs down from it.
+fn wound_cover(d: Draw, k: u32, p: vec3f) -> f32 {
+  let a = d.blood[2u * k];
+  let b = d.blood[2u * k + 1u];
+  let size = a.w;
+  let run = b.x;
+  let seed = b.z;
+  let dv = p - a.xyz;
+  let n = warp_noise(vec3f(p.x * 14.0 + seed * 41.0, p.y * 14.0, p.z * 14.0));
+  let r = length(dv) / size;
+  var cover = 1.0 - smoothstep(0.7, 1.0, r + (n - 0.5) * 0.5);
+  let below = -dv.y;
+  if (run > 0.0 && below > 0.0 && below < run + size * 0.3) {
+    for (var j = 0; j < 2; j++) {
+      let fj = f32(j);
+      let share = select(0.55, 1.0, j == 0);
+      let reach = run * select(0.7, 1.0, j == 0);
+      let side = select(size * 0.55, 0.0, j == 0) * select(-1.0, 1.0, seed - 0.5 > 0.0);
+      let wx = (warp_noise(vec3f(below * 7.0, seed * 13.0 + fj * 5.0, 1.0)) - 0.5) * size * 0.7 + side;
+      let wz = (warp_noise(vec3f(below * 7.0, seed * 13.0 + fj * 5.0, 7.0)) - 0.5) * size * 0.7;
+      let lat = length(vec2f(dv.x - wx, dv.z - wz));
+      let width = size * 0.5 * share * (1.0 - 0.5 * clamp(below / reach, 0.0, 1.0)) + 0.004;
+      var stream = 1.0 - smoothstep(width * 0.6, width, lat);
+      let past = below - reach;
+      let bead = width * 1.3;
+      if (past > 0.0) {
+        stream = 1.0 - smoothstep(bead * 0.6, bead, length(vec2f(lat, past)));
+      }
+      cover = max(cover, stream);
+    }
+  }
+  return cover;
+}
+
+// The blood over a texel's albedo `a`: fresh a deep wet red, dried a near black brown.
+const kWoundWet = vec3f(0.04, 0.0016, 0.0013);
+const kWoundDry = vec3f(0.013, 0.0035, 0.0025);
+fn morph_blood(d: Draw, a: vec3f, p: vec3f) -> vec3f {
+  var c = a;
+  for (var k = 0u; k < 6u; k++) {
+    if (d.blood[2u * k].w <= 0.0) {
+      continue;
+    }
+    let cover = wound_cover(d, k, p);
+    if (cover > 0.0) {
+      c = mix(c, mix(kWoundDry, kWoundWet, d.blood[2u * k + 1u].y), cover * 0.94);
+    }
+  }
+  return c;
+}
+
 struct FragmentOut {
   @location(0) colour: vec4f,
   @location(1) motion: vec4f,  // rg: the screen motion (uv), b: reactive (0: a solid surface)
@@ -258,6 +313,9 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
     let burnt = morph_burn(d.burn, s.rgb, in.local.xyz, frame.time.x);
     s = vec4f(burnt.rgb, s.w);
     ember = burnt.w;
+  }
+  if (d.blood[0].w > 0.0) {
+    s = vec4f(morph_blood(d, s.rgb, in.rest), s.w);
   }
   let y = in.rel.y + frame.eye.y;
   let outdoor = d.blends.w;

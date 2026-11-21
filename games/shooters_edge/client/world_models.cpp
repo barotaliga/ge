@@ -993,6 +993,27 @@ bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::v
   return !out.empty();
 }
 
+bool body_rest(const WorldModels& m, const Placed& p, double time_s, uint32_t tri, float a, float b,
+               float out[3]) {
+  if (p.modelindex <= 0 || size_t(p.modelindex) >= m.kinds.size()) return false;
+  Worn worn_skin;
+  const ModelKind& k = drawn_kind(m, p, &worn_skin);
+  if (k.is != ModelKind::Is::alias) return false;
+  const double at =
+      k.synced ? time_s : time_s + double(uint32_t(p.entity) * 2654435761u % 1000) * 1e-3;
+  const uint32_t model = k.first + models::frame_in(k.skins, p.skin, at);
+  if (model >= m.shapes.size()) return false;
+  const gr::MorphModel& shape = m.shapes[model];
+  if (shape.positions.empty() || size_t(tri) * 3 + 2 >= shape.indices.size()) return false;
+  const std::vector<float>& rest = shape.positions[0];
+  float c[3][3];
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j) c[i][j] = rest[size_t(shape.indices[size_t(tri) * 3 + i]) * 3 + j];
+  for (int j = 0; j < 3; ++j)
+    out[j] = (c[0][j] + a * (c[1][j] - c[0][j]) + b * (c[2][j] - c[0][j])) * p.scale;
+  return true;
+}
+
 bool held_tip(const WorldModels& m, const Placed& p, double time_s, const double forward[3],
               double tip[3]) {
   thread_local std::vector<float> body;
@@ -1145,6 +1166,7 @@ void add_shell(WorldModels& m, const Placed& p, const PowerLook& look, const gr:
   if (look.pulse) q2_pulse(shell.shell, t);
   shell.alpha = kSqShellAlpha;
   shell.burn = {};
+  shell.blood = {};
   m.morph_draws.push_back(shell);
 }
 
@@ -1168,6 +1190,7 @@ void add_hologram_shell(WorldModels& m, const Placed& p, const gr::MorphDraw& pl
   for (int c = 0; c < 3; c++) shell.shell[c] = ge::classicenhance::kHologramBlue[c];
   shell.alpha = p.holo_shell;
   shell.burn = {};
+  shell.blood = {};
   m.morph_draws.push_back(shell);
 }
 
@@ -1177,7 +1200,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const Placed> placed, const gr::FrameView& view, double brightness,
                     double minlight, bool smooth, const InPlace& in_place,
                     std::span<const ge::brush::app::DynamicLight> dynamic, double dynamic_strength,
-                    const Burning* burning) {
+                    const Burning* burning,
+                    std::span<const std::pair<int, gr::MorphBlood>> bloodied) {
   const bool bare_flames = in_place.flames;
   const bool q2 = map.family == br::Family::v38;
   m.morph_draws.clear();
@@ -1279,6 +1303,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     g.warp = p.warp;
     g.alpha = p.alpha;
     if (burning != nullptr) g.burn = burn_skin_of(*burning, p.entity);
+    for (const auto& [entity, blood] : bloodied)
+      if (entity == p.entity) g.blood = blood;
     m.last_pose[p.entity] = g.now;
     g.tint[0] = p.top;
     g.tint[1] = p.bottom;
