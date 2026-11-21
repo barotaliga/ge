@@ -18,9 +18,10 @@
 // - `turn_view`: raw mouse counts turn the view (`sensitivity` degrees a count, `m_invert` flips
 //   the pitch), the pitch held within `pitch_limit`; +left and +right turn at `cl_yawspeed`; with
 //   +strafe held (or `lookstrafe` on) the mouse's sideways counts sidestep instead of turning.
-// - `lookspring`: while it is on, a player who moves on the ground without pitching the mouse has
-//   his pitch drift to the program's ideal pitch (`spring_view`: level ground centres it, a slope
-//   tilts it down or up the way he goes, at `kSpringSpeed` degrees a second).
+// - `lookspring`: while it is on, a player who looks by keys (`freelook` off, +mlook not held)
+//   and moves on the ground has his pitch drift to the program's ideal pitch (`spring_view`: level
+//   ground centres it, a slope tilts it down or up the way he goes, at `kSpringSpeed` degrees a
+//   second); a mouse-look player's pitch never drifts.
 // - `aim_turn_view`: a player the server's aim help helps sees his view turn toward the player a
 //   shot was bent onto while he fires, and back to his own aim after (`cl_aimhelp_turn`, on by
 //   default; shooter/aim_turn.hpp), so his recording looks like his own aim.

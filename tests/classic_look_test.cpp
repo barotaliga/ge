@@ -126,3 +126,18 @@ TEST(the_last_classic_enhance_switches_reach_the_modern_looks_options) {
   c.execute("ce_reflections 1");
   CHECK(lk::world_options(lk::Look::classic, {}, p).reflections == 0);
 }
+
+// The classic look is shown as worked out (no exposure, no tone curve), and neither look's tone
+// curve has its toe, which turned the classic games' dark greys and blues brown.
+TEST(the_classic_look_is_shown_as_worked_out_and_neither_has_the_toe) {
+  namespace look = ge::classic::look;
+  const ge::render::PostSettings c = look::post_settings(look::Look::classic);
+  const ge::render::PostSettings m = look::post_settings(look::Look::modern);
+  CHECK(c.display == ge::brush::app::Options{}.brightness && m.display == 0);
+  CHECK(!c.toe && !m.toe);
+  CHECK(ge::render::PostSettings{}.toe && ge::render::PostSettings{}.display == 0);  // the engine's
+  const look::Picture p;
+  CHECK(look::light_scale(p) == 1);  // intensity 2, gl_modulate 1
+  const ge::brush::app::Options o = look::world_options(look::Look::classic, {}, p);
+  CHECK(o.classic_light == 1 && o.classic_lift == 0);
+}

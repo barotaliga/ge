@@ -109,6 +109,12 @@ int map_entity_of_row(const Q2Server& s, int row);
 
 // The movers' world rows: their places and whether they are shown.
 void map_rows(Q2Server& s);
+// AREAS (q2_areas.cpp): whether the areas of points `a` and `b` are joined through the open area
+// portals (a shut door between them cuts them apart; a map with no areas joins everything); and
+// whether a noise at `to` is heard at `from`: `to`'s cluster in `from`'s hearable set, then their
+// areas joined.
+bool map_areas_connected(const Q2Server& s, sh::Vec3f a, sh::Vec3f b);
+bool map_hears(const Q2Server& s, sh::Vec3f from, sh::Vec3f to);
 
 // A kept level read back (q2_save.hpp): every cross-level target not yet fired checks again
 // its `delay` from now.

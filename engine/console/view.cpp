@@ -59,6 +59,19 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           .min = 64,
           .max = 65536},
          &keep_);
+  v.bind(
+      {.name = "con_notify",
+       .fallback = "1",
+       .flags = kArchive,
+       .help = "whether the newest lines show at the top of the screen while the console is closed",
+       .kind = CvarKind::boolean},
+      &notify_on_);
+  v.bind({.name = "con_clearnotify",
+          .fallback = "1",
+          .flags = kArchive,
+          .help = "whether opening or closing the console lets the notify lines so far go",
+          .kind = CvarKind::boolean},
+         &clear_notify_);
   v.bind({.name = "con_notifylines",
           .fallback = "4",
           .flags = kArchive,
@@ -76,8 +89,13 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
          &notify_time_);
   v.bind({.name = "con_chat",
           .fallback = "0",
-          .help = "1: a line typed without a / is said to everyone (a multiplayer game sets it)",
-          .kind = CvarKind::boolean},
+          .help = "what a line typed without a / is: a command, or said to everyone",
+          .kind = CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "0: a command (the default); 1: said to everyone (a multiplayer game sets "
+                    "it); 2: a command when its first word is a command, alias or setting, else "
+                    "said"},
          &chat_default_);
   v.bind({.name = "con_suggest",
           .fallback = "8",
@@ -196,7 +214,7 @@ void ConsoleView::add(LineKind kind, std::string_view text) {
     const size_t nl = text.find('\n', at);
     const std::string_view part =
         text.substr(at, nl == std::string_view::npos ? text.npos : nl - at);
-    lines_.push_back({kind, std::string(part), clock_});
+    lines_.push_back({kind, std::string(part), clock_, added_++});
     if (kind != LineKind::output && kind != LineKind::command) c_.fire_triggers(part);
     if (nl == std::string_view::npos) break;
     at = nl + 1;
@@ -213,11 +231,17 @@ std::vector<const ViewLine*> ConsoleView::page(int rows) const {
   return out;
 }
 
+void ConsoleView::set_open(bool open) {
+  if (open != open_ && clear_notify_) notify_from_ = added_;
+  open_ = open;
+}
+
 std::vector<const ViewLine*> ConsoleView::notify() const {
   std::vector<const ViewLine*> out;
+  if (!notify_on_) return out;
   for (auto it = lines_.rbegin(); it != lines_.rend(); ++it) {
     if (static_cast<int32_t>(out.size()) >= notify_lines_) break;
-    if (clock_ - it->time_s > notify_time_) break;
+    if (clock_ - it->time_s > notify_time_ || it->n < notify_from_) break;
     if (it->kind == LineKind::command) continue;
     out.push_back(&*it);
   }
@@ -311,7 +335,7 @@ void ConsoleView::key(EditKey k) {
       scroll_ = std::max(0, scroll_ - 8);
       break;
     case EditKey::escape:
-      open_ = false;
+      set_open(false);
       break;
   }
 }
@@ -325,8 +349,12 @@ void ConsoleView::submit() {
   scroll_ = 0;
   if (line.find_first_not_of(" \t") == std::string::npos) return;
   if (history_.empty() || history_.back() != line) history_.push_back(line);
-  const bool slash = line[0] == '/';
-  if (slash || !chat_default_) {
+  if (line.starts_with("//")) {  // a note to oneself: shown, never run or said
+    add(LineKind::command, line);
+    return;
+  }
+  const bool slash = line[0] == '/' || line[0] == '\\';
+  if (slash || chat_default_ == 0 || (chat_default_ == 2 && names_something(line))) {
     const std::string cmd = slash ? line.substr(1) : line;
     const std::vector<std::string> words = tokenize(cmd);
     if (!words.empty()) ++uses_[lower(words[0])];
@@ -337,10 +365,18 @@ void ConsoleView::submit() {
   say(ChatTo::all, "", line);
 }
 
+bool ConsoleView::names_something(std::string_view line) const {
+  const std::vector<std::string> words = tokenize(line);
+  if (words.empty()) return false;
+  const std::string w = lower(words[0]);
+  return c_.has_command(w) || c_.aliases().count(w) != 0 || c_.cvars().find(w) != nullptr;
+}
+
 std::string ConsoleView::head() const {
-  // Suggestions follow the command word: after a `/`, or bare when typed text is a command.
-  const bool slash = !input_.empty() && input_[0] == '/';
-  if (!slash && chat_default_) return "";
+  // Suggestions follow the command word: after a `/` or `\`, or bare when typed text may be a
+  // command.
+  const bool slash = !input_.empty() && (input_[0] == '/' || input_[0] == '\\');
+  if (!slash && chat_default_ == 1) return "";
   std::string h = input_.substr(slash ? 1 : 0);
   if (h.empty() || h.find_first_of(" \t;") != std::string::npos) return "";
   return h;

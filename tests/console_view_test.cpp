@@ -68,6 +68,34 @@ TEST(slash_is_a_command_and_plain_text_is_chat_when_con_chat_is_on) {
   CHECK(chat && command);
 }
 
+TEST(con_chat_2_runs_a_line_whose_first_word_is_known_and_says_the_rest) {
+  Console c;
+  ConsoleView v(c);
+  c.cvars().add({.name = "r_bloom", .fallback = "0.04"});
+  c.execute("con_chat 2; name Ada; alias hop \"r_bloom 0.2\"");
+  c.run();
+  const auto enter = [&](const char* line) {
+    v.type(line);
+    v.key(EditKey::enter);
+    c.run();
+  };
+  enter("R_BLOOM 0.3");  // a setting, any case: run
+  CHECK(c.cvars().find("r_bloom")->number == 0.3);
+  enter("hop");  // an alias: run
+  CHECK(c.cvars().find("r_bloom")->number == 0.2);
+  enter("gg all");         // nothing known: said
+  enter("\\r_bloom 0.6");  // a backslash runs it too
+  CHECK(c.cvars().find("r_bloom")->number == 0.6);
+  enter("// r_bloom 0.9 later");  // a note: shown, not run
+  CHECK(c.cvars().find("r_bloom")->number == 0.6);
+  bool said = false, note = false;
+  for (const ViewLine& l : v.lines()) {
+    if (l.kind == LineKind::chat && l.text == "Ada: gg all") said = true;
+    if (l.kind == LineKind::command && l.text == "// r_bloom 0.9 later") note = true;
+  }
+  CHECK(said && note);
+}
+
 // A game's held key: `+duck` crouches while the key is down.
 TEST(a_held_key_is_a_button) {
   Console c;
@@ -214,4 +242,26 @@ TEST(scrollback_notify_and_triggers_on_game_lines) {
   CHECK(n.size() == 2 && n[0]->kind == LineKind::server && n[1]->text == "player: gg");
   v.frame(5);
   CHECK(v.notify().empty());
+}
+
+TEST(con_notify_hides_the_notify_lines_and_toggling_lets_them_go) {
+  Console c;
+  ConsoleView v(c);
+  v.add(LineKind::server, "one");
+  v.add(LineKind::server, "two");
+  CHECK(v.notify().size() == 2);
+  c.execute("con_notify 0");
+  c.run();
+  CHECK(v.notify().empty());
+  c.execute("con_notify 1");
+  c.run();
+  v.toggle();  // opened: the lines so far go from the notify area, not from the scrollback
+  v.toggle();
+  CHECK(v.notify().empty() && v.lines().size() >= 2);
+  v.add(LineKind::server, "three");
+  CHECK(v.notify().size() == 1 && v.notify()[0]->text == "three");
+  c.execute("con_clearnotify 0");
+  c.run();
+  v.toggle();
+  CHECK(v.notify().size() == 1);  // kept
 }

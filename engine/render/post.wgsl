@@ -15,6 +15,14 @@ override kEncodeSrgb: bool = true;
 // The share of the bloom mixed in (render/bloom.hpp); 0 reads none.
 override kBloom: f32 = 0.0;
 
+// A picture in the display's values (PostSettings::display, above 0): no exposure and no tone
+// curve, the colour divided by a white face's luminance times this, clipped at white.
+override kDisplay: f32 = 0.0;
+
+// The tone curve's toe (PostSettings::toe): the darkest colours pulled toward black, the least of
+// the three channels most; off, the curve is straight up to its shoulder.
+override kToe: bool = true;
+
 @group(1) @binding(0) var hdr: texture_2d<f32>;
 @group(1) @binding(1) var bloom: texture_2d<f32>;  // rgb summed over `a` levels
 @group(1) @binding(2) var lin: sampler;
@@ -72,7 +80,7 @@ fn tone(c: vec3f) -> vec3f {
   let start = 0.8 - 0.04;
   let desat = 0.15;
   let x = min(c.r, min(c.g, c.b));
-  let offset = select(0.04, x - 6.25 * x * x, x < 0.08);
+  let offset = select(select(0.04, x - 6.25 * x * x, x < 0.08), 0.0, !kToe);
   var col = c - offset;
   let peak = max(col.r, max(col.g, col.b));
   if (peak < start) {
@@ -322,7 +330,10 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   if (kVignette) {
     c *= vignette(uv, size);
   }
-  let t = clamp(tone(c * e), vec3f(0.0), vec3f(1.0));
+  var t = clamp(tone(c * e), vec3f(0.0), vec3f(1.0));
+  if (kDisplay > 0.0) {
+    t = clamp(c / (white_luminance() * kDisplay), vec3f(0.0), vec3f(1.0));
+  }
   var o = graded(linear_to_srgb(t));
   o = mix(o, look.d.rgb, look.d.a);
   if (kGrain) {

@@ -1,5 +1,6 @@
-// A MAP DRAWN WITH ITS OWN PICTURES for the `bsp` lab: every surface of a 29 or BSP2 map
-// textured from the palette-indexed pictures the map carries (`Texture::indexed`), through a
+// A MAP DRAWN WITH ITS OWN PICTURES for the `bsp` lab: every surface of a 29 or BSP2 map (or a 38
+// map whose `Texture::indexed` the caller filled from its wall texture files, with the textures'
+// sizes) textured from the palette-indexed pictures the map carries, through a
 // 256-colour palette the caller hands in (a game's files hold it), and lit by its lightmap the
 // way the family's light was meant: a luxel of 128 is the picture as painted, brighter up to
 // twice, and the palette's last 32 colours glow at full brightness whatever the light. Sky is
@@ -30,6 +31,14 @@ struct TexturedEye {
   double yaw_deg = 0;    // 0 along +x, counter-clockwise from above (the entity's `angle`)
   double pitch_deg = 0;  // up positive
   double fov_deg = 90;   // across the panel's width
+  // The palette's last 32 colours glow at full brightness (Quake's rule); false: every texel is lit
+  // by its lightmap (Quake II's).
+  bool palette_glows = true;
+  // Each channel lit by its own luxel channel (Quake II's coloured light); false: by their mean.
+  bool coloured_light = false;
+  // The display's gamma lift on the result: 0.7 brightens as the family's own drawing did; 1 is
+  // the colours as worked out (a formula checked pixel by pixel).
+  double gamma = 0.7;
 };
 
 // Draws `map` into the panel at (x0, y0), w × h px of `p`, seen from `eye`; `palette` is 768

@@ -8,9 +8,11 @@
 // THE INPUT LINE. Typed text is edited in place (left, right, home, end, backspace, delete), Tab
 // completes a command, alias or cvar name (twice: lists every match), Up and Down walk the
 // history, Page Up and Page Down scroll the lines. Enter submits it:
-//   - a line starting with `/` is a command (the `/` dropped): `/r_bloom 0`, `/say hi`;
+//   - a line starting with `/` or `\` is a command (that character dropped): `/r_bloom 0`;
+//   - a line starting with `//` is a note: shown in the scrollback, never run or said;
 //   - any other line is a CHAT message (`say <line>`) while `con_chat` is 1 (a multiplayer game
-//     sets it), and a command while it is 0 (single player: there is nobody to chat to).
+//     sets it), a command while it is 0 (single player: there is nobody to chat to), and with 2
+//     a command when its first word names a command, alias or setting (any case), else chat.
 //
 // CHAT goes out through the game's `Chat` sender (net/session.hpp's chat in a multiplayer game);
 // with none set, a line is shown locally as said. The chat COMMANDS (`say`, `say_team`,
@@ -26,7 +28,9 @@
 // THE VIEW HOLDS NO PIXELS: it is the model a renderer draws (the 2D layer's text pass in the
 // app, the CPU raster in the `console` lab), so it is tested and pictured headless. Its cvars:
 // con_height (the share of the screen it covers), con_speed (screens a second it slides),
-// con_lines (the scrollback kept), con_notifylines, con_notifytime, con_chat, con_suggest (how
+// con_lines (the scrollback kept), con_notify (0: no notify lines), con_notifylines,
+// con_notifytime, con_clearnotify (1: opening or closing the console lets the notify lines so
+// far go), con_chat, con_suggest (how
 // many suggestions the list under the input line holds), and what the panel
 // is drawn on: con_bgtop and con_bgbottom (a gradient's colours, "rrggbb"), con_bgalpha and
 // con_bgimage (a picture over the gradient); and con_font, the charset its text is written in
@@ -73,6 +77,7 @@ struct ViewLine {
   LineKind kind = LineKind::output;
   std::string text;
   double time_s = 0;  // the view's clock when it came
+  uint64_t n = 0;     // its number, counted from the view's first line
 };
 
 // Where a chat line goes.
@@ -134,8 +139,9 @@ class ConsoleView {
   explicit ConsoleView(Console& c);
 
   // SLIDING. `frame` moves the drop toward open or closed at con_speed and advances the clock.
-  void toggle() { open_ = !open_; }
-  void set_open(bool open) { open_ = open; }
+  // Opening or closing it lets the notify lines so far go while `con_clearnotify` is 1.
+  void toggle() { set_open(!open_); }
+  void set_open(bool open);
   bool open() const { return open_; }
   void frame(double dt_s);
   // LOADING: the whole screen covered at once (a game loading, as the classic games start); let go,
@@ -200,6 +206,8 @@ class ConsoleView {
 
  private:
   void submit();
+  // Whether `line`'s first word names a command, alias or setting (con_chat 2).
+  bool names_something(std::string_view line) const;
   bool accept();             // the selected or top suggestion into the input line; false: none
   std::string head() const;  // the first word being typed, or "" when no suggestion applies
   void chat_key(EditKey k);
@@ -220,8 +228,11 @@ class ConsoleView {
   double over_ = 0;  // the share of the screen held past the drop: 1 while full, then sliding up
   double height_ = 0.5, speed_ = 3;
   int32_t keep_ = 1024, notify_lines_ = 4;
+  bool notify_on_ = true, clear_notify_ = true;  // con_notify, con_clearnotify
+  uint64_t added_ = 0;                           // the lines added so far
+  uint64_t notify_from_ = 0;                     // the first line the notify area may show
   double notify_time_ = 4;
-  bool chat_default_ = false;
+  int chat_default_ = 0;  // con_chat
   std::string bg_top_ = "10141c", bg_bottom_ = "10141c", bg_image_;
   std::string font_ = "mono";
   double bg_alpha_ = 0.85;

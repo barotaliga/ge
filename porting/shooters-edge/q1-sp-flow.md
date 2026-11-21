@@ -299,9 +299,10 @@ down by keys, or holding `+mlook`, stops it; it starts again when `+mlook` is re
 (0.15 s). Not in noclip, not in the air, not in a demo.
 
 Ours [read]: `plugins/shooter/controls.cpp`'s `spring_view` drifts only with `lookspring` on,
-while moving and not pitching the mouse, at a constant 90° a second; there are no
-`v_centermove`, `v_centerspeed` or `centerview`. A mouse-look player sees no difference; a
-keyboard player does.
+while moving, looking by keys (`freelook` off, `+mlook` not held) and not pitching the mouse, at a
+constant 90° a second; letting `+mlook` go with `lookspring` on and `freelook` off levels the view;
+there are no `v_centermove` or `v_centerspeed`. A mouse-look player sees no difference; a keyboard
+player does.
 
 ## 21. Loading and the console's lines (rank 3)
 

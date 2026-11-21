@@ -92,8 +92,8 @@ void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
   const PostLook& look = settings.look;
   // One pipeline for a bloom share `bloom` (0: compiled out); the rest of the switches the same.
   const auto build = [&](double bloom, const char* label) {
-    wgpu::ConstantEntry constants[10] = {};
-    const std::pair<const char*, double> values[10] = {
+    wgpu::ConstantEntry constants[12] = {};
+    const std::pair<const char*, double> values[12] = {
         {"kEncodeSrgb", srgb_target ? 0.0 : 1.0},
         {"kBloom", bloom},
         {"kSharpen", look.sharpen > 0 ? 1.0 : 0.0},
@@ -104,6 +104,8 @@ void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
         {"kLens", settings.lens ? 1.0 : 0.0},
         {"kMotionBlur", look.motion_blur > 0 ? 1.0 : 0.0},
         {"kDof", settings.dof ? 1.0 : 0.0},
+        {"kDisplay", settings.display},
+        {"kToe", settings.toe ? 1.0 : 0.0},
     };
     for (size_t k = 0; k < std::size(values); ++k) {
       constants[k].key = values[k].first;
