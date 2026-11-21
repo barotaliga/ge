@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -436,6 +437,64 @@ ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s)
   v.fov_y = fov_y;
   v.time_s = time_s;
   return v;
+}
+
+std::string bench_dump_record(const std::string& demo, const std::string& setup,
+                              const BenchStats& s, const std::string& date) {
+  const auto attr =
+      [](const std::string& v) {  // an attribute's text, its markup characters escaped
+        std::string out;
+        for (char c : v) {
+          if (c == '&')
+            out += "&amp;";
+          else if (c == '<')
+            out += "&lt;";
+          else if (c == '>')
+            out += "&gt;";
+          else if (c == '"')
+            out += "&quot;";
+          else
+            out += c;
+        }
+        return out;
+      };
+  const auto six = [](double v) {
+    char buf[64];
+    std::snprintf(buf, sizeof buf, "%.6f", v);
+    return std::string(buf);
+  };
+#if defined(_WIN32)
+  const char* os = "Windows";
+#elif defined(__APPLE__)
+  const char* os = "macOS";
+#else
+  const char* os = "Linux";
+#endif
+  return "<timedemo date=\"" + attr(date) + "\">\n  <system os=\"" + os + "\" hardware=\"" +
+         attr(setup) + "\"/>\n  <client name=\"Shooter's Edge\"/>\n  <demo name=\"" + attr(demo) +
+         "\"/>\n  <result frames=\"" + std::to_string(s.frames) + "\" time=\"PT" + six(s.seconds) +
+         "S\" fps=\"" + six(s.avg_fps) + "\"/>\n</timedemo>\n";
+}
+
+bool bench_dump(const std::filesystem::path& path, const std::string& record, std::string& error) {
+  std::ofstream f(path, std::ios::binary | std::ios::app);
+  if (f) f << record;
+  if (f) return true;
+  error = "Could not write the timedemo result to " + path.string() + ".";
+  return false;
+}
+
+std::string local_date_now() {
+  const std::time_t now = std::time(nullptr);
+  std::tm local{};
+#if defined(_WIN32)
+  localtime_s(&local, &now);
+#else
+  localtime_r(&now, &local);
+#endif
+  char buf[32];
+  std::strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%S", &local);
+  return buf;
 }
 
 hud::Status demo_status(const DemoState& s, double t) {

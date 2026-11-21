@@ -580,6 +580,7 @@ int run_main(int argc, char** argv) {
   places.game_dir = std::filesystem::path(args.basedir) / args.game;
   // Where the player is: the view watched, else the window's own (client/place_seen.hpp).
   cl::PlaceSeen place_seen;
+  playback.places = &places;       // the demo's players' table names their places
   recorder.places = &places.locs;  // a recording keeps the place names it is played with
   cl::add_place_queries(console, places, listen, place_seen, adapter, files);
   // CHAT: the player's line to everyone or to the team, its codes and glyphs filled in first,
@@ -891,10 +892,16 @@ int run_main(int argc, char** argv) {
     if (bench.paced) {
       console.print("playdemo: " + bench.name + (why.empty() ? " ended" : " stopped: " + why));
       if (!by_player && !why.empty()) bench_failed = 1;
-    } else if (why.empty() || !bench.frame_s.empty())
-      for (const std::string& line :
-           cl::bench_report(bench.name, setup, cl::bench_stats(bench.frame_s)))
-        tell(line, now_s);
+    } else if (why.empty() || !bench.frame_s.empty()) {
+      const cl::BenchStats stats = cl::bench_stats(bench.frame_s);
+      for (const std::string& line : cl::bench_report(bench.name, setup, stats)) tell(line, now_s);
+      std::string dump_error;  // demo_benchmarkdumps: the result kept in the game's timedemo.log
+      if (playback.bench_dumps != 0 &&
+          !cl::bench_dump(cl::settings_dir(args.basedir, args.game).parent_path() / "timedemo.log",
+                          cl::bench_dump_record(bench.name, setup, stats, cl::local_date_now()),
+                          dump_error))
+        console.print(dump_error);
+    }
     if (!bench.paced && (why.empty() || !bench.frame_s.empty()))
       console.print(cl::span_report(bench.passes));
     if (!why.empty() && !bench.paced) {
@@ -1569,7 +1576,8 @@ int run_main(int argc, char** argv) {
                     keys_free
                         ? cl::PlaybackInput{input.pressed, input.pointer_x * px_per_unit,
                                             input.pointer_y * px_per_unit,
-                                            (input.pointer_buttons & 1u) != 0}
+                                            (input.pointer_buttons & 1u) != 0,
+                                            cl::zoom_of(cl::button_moves(controls))}
                         : cl::PlaybackInput{{}, playback.pointer_x, playback.pointer_y, false},
                     w, h, wall, t, said, error)
               : cl::timedemo_step(bench, error);
@@ -1651,6 +1659,7 @@ int run_main(int argc, char** argv) {
       demo_eyes.behind =
           cl::third_person_units(playback, !drawn_remote || remote.end.cfg.spectator);
       bench_demo_fx.draw_own = demo_eyes.behind > 0;  // his figure seen from behind
+      demo_eyes.lock_pos = playback.lock_pos != 0;
       ge::render::FrameView view = cl::demo_eyes_view(ds, ds_read, demo_eyes, shown.row, ground,
                                                       body, ge::camera::FirstPersonRow{}.fov_y,
                                                       drawn_remote      ? t
