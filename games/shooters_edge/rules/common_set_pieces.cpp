@@ -194,7 +194,8 @@ void explobox_die(A& q) {
   q.set_i(me, q.L.f.classname, q.s(s_explo_box));
   radius_damage(q, me, me, 160, q.world(), q.s(s_blew_up));
   q.set_v(q.self(), q.L.f.origin, q.v(q.self(), q.L.f.origin) + Vec3{0, 0, 32});
-  q.sound(q.self(), kChanVoice, q.s(s_weapons_r_exp3_wav), 1, kAttnNorm);
+  // Quake's clients sound the explosion themselves with its effect: no second one from here.
+  if (!quake_rules(q)) q.sound(q.self(), kChanVoice, q.s(s_weapons_r_exp3_wav), 1, kAttnNorm);
   effect_explosion(q, q.v(q.self(), q.L.f.origin));
   q.remove(q.self());
 }

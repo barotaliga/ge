@@ -249,6 +249,12 @@ void quake_die(A& q) {
 // then any pressed, he comes back.
 void quake_dead_frame(A& q) {
   const int32_t me = q.self();
+  // A body on the ground loses 20 u/s of its speed each command, down to a stop.
+  if (band(q.f(me, q.L.f.flags), kFlOnground) != 0) {
+    const Vec3 vel = q.v(me, q.L.f.velocity);
+    const float speed = q.vlen(vel) - 20;
+    q.set_v(me, q.L.f.velocity, speed <= 0 ? Vec3{0, 0, 0} : fv(speed, q.normalize(vel)));
+  }
   quake_acting(q);
   if (q.time() < q.f(me, f_dead_until)) return;
   if (!any_button(q, me)) {

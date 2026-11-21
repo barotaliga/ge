@@ -20,10 +20,7 @@ namespace shooters_edge::client {
 
 namespace {
 constexpr double kDeg = 3.14159265358979323846 / 180;
-// The intermission camera's idle sway: degrees, and radians a second of the game's clock.
-constexpr double kIdlePitchDeg = 0.3, kIdlePitchRate = 1;
-constexpr double kIdleYawDeg = 0.3, kIdleYawRate = 2;
-constexpr double kIdleRollDeg = 0.1, kIdleRollRate = 0.5;
+constexpr double kTau = 2 * 3.14159265358979323846;
 }  // namespace
 
 void add_view_camera_cvars(ge::console::Cvars& c, ge::camera::CameraCvars& out) {
@@ -48,6 +45,39 @@ void add_view_camera_cvars(ge::console::Cvars& c, ge::camera::CameraCvars& out) 
           .values = "0: the game's own eye and bob (the default); -7..4: units up or down"},
          &out.viewlift);
   const ge::console::CvarLayer quake(c, "classic");
+  // The idle sway's shape (both Quakes): v_idlescale times the level, in degrees, at the cycle's
+  // rate in radians a second; the intermission sways by it at a scale of 1. Not archived.
+  struct Axis {
+    const char* cycle;
+    const char* level;
+    const char* cycle_fallback;
+    const char* level_fallback;
+    const char* what;
+  };
+  static constexpr Axis kAxes[3] = {
+      {"v_ipitch_cycle", "v_ipitch_level", "1", "0.3", "pitch"},
+      {"v_iyaw_cycle", "v_iyaw_level", "2", "0.3", "yaw"},
+      {"v_iroll_cycle", "v_iroll_level", "0.5", "0.1", "roll"},
+  };
+  for (int k = 0; k < 3; k++) {
+    const Axis& a = kAxes[k];
+    c.bind({.name = a.cycle,
+            .fallback = a.cycle_fallback,
+            .help = std::string("How fast the idle sway turns the view's ") + a.what +
+                    ", in radians a second.",
+            .min = 0,
+            .max = 100,
+            .values = "0: that way still; 0..100: that many radians a second"},
+           &out.idle_cycle[k]);
+    c.bind({.name = a.level,
+            .fallback = a.level_fallback,
+            .help = std::string("How far the idle sway turns the view's ") + a.what +
+                    ", in degrees at a v_idlescale of 1.",
+            .min = 0,
+            .max = 30,
+            .values = "0: that way still; 0..30: that many degrees"},
+           &out.idle_level[k]);
+  }
   c.bind({.name = "cl_bobhead",
           .fallback = "0",
           .flags = ge::console::kArchive,
@@ -60,6 +90,18 @@ void apply_view_cvars(const ge::camera::CameraCvars& c, ViewState& v) {
   static const ge::camera::FirstPersonRow kClassic =
       ge::camera::classic_first_person(ge::brush::kUnitM);
   ge::camera::apply_first_person_cvars(c, kClassic, v.row);
+  // The sway's shape: the map's pitch and yaw turn the other way from the rig's.
+  for (int k = 0; k < 3; k++) {
+    v.idle_cycle[k] = c.idle_cycle[k];
+    v.idle_level[k] = c.idle_level[k];
+  }
+  auto period = [](double cycle) { return cycle > 0 ? kTau / cycle : 0.0; };
+  v.row.idle_pitch_share = -c.idle_level[0];
+  v.row.idle_yaw_share = -c.idle_level[1];
+  v.row.idle_roll_share = c.idle_level[2];
+  v.row.idle_pitch_period_s = period(c.idle_cycle[0]);
+  v.row.idle_yaw_period_s = period(c.idle_cycle[1]);
+  v.row.idle_roll_period_s = period(c.idle_cycle[2]);
   v.viewheight_m = c.viewheight * c.unit_m;
   // v_viewheight: the eye raised or dropped by a few units, its own bob given up for it (the
   // weapon keeps its bob); cl_bobhead: the weapon's bob carried by the eye as well.
@@ -91,8 +133,8 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
     if (me.pushed.z != 0) row.step_max_m = 0;
   }
   // A single-player program's intermission: the view stands where the program put the player,
-  // with no bob or roll, swaying idly as the original's camera does (pitch and yaw 0.3 degrees,
-  // roll 0.1, at 1, 2 and 0.5 radians a second of the game's clock).
+  // with no bob or roll, swaying idly at a scale of 1 by the v_i* settings (pitch and yaw 0.3
+  // degrees, roll 0.1, at 1, 2 and 0.5 radians a second of the game's clock by default).
   const bool intermission = l.campaign_host != nullptr && l.campaign.end != LevelEnd::none;
   if (intermission) row.bob = row.roll_angle = row.kick_pitch = row.kick_roll = 0;
   ge::camera::Subject s = subject_of(l, row);
@@ -212,9 +254,9 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
   }
   if (intermission) {
     const double clock = l.server != nullptr ? l.server->sv.time : t;
-    v.pose.pitch -= kIdlePitchDeg * std::sin(clock * kIdlePitchRate) * kDeg;
-    v.pose.yaw -= kIdleYawDeg * std::sin(clock * kIdleYawRate) * kDeg;
-    v.pose.roll += kIdleRollDeg * std::sin(clock * kIdleRollRate) * kDeg;
+    v.pose.pitch -= v.idle_level[0] * std::sin(clock * v.idle_cycle[0]) * kDeg;
+    v.pose.yaw -= v.idle_level[1] * std::sin(clock * v.idle_cycle[1]) * kDeg;
+    v.pose.roll += v.idle_level[2] * std::sin(clock * v.idle_cycle[2]) * kDeg;
   }
   ge::camera::to_frame_view(v.pose, view);
   return view;

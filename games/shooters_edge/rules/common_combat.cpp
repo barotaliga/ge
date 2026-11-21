@@ -21,7 +21,9 @@ void score_death(A& q, int32_t targ, int32_t attacker) {
   if (game_quiet(q)) return;
   int32_t how = q.i(targ, f_deathtype);
   const int32_t told = death_words(q, targ, attacker);
-  if (attacker == targ) {
+  // Quake's telefrags against the pentagram: the one who dies loses a frag; the holder gains none.
+  const bool shielded = q.is(how, "deflected") | q.is(how, "satans power");
+  if ((attacker == targ) | (quake_rules(q) & shielded)) {
     q.set_f(targ, q.L.f.frags, q.f(targ, q.L.f.frags) - 1);
     if (!q.is(told, "")) {
       say_all(q, kPrintMedium, {told});
@@ -221,6 +223,26 @@ void telefrag(A& q, int32_t who) {
     const int32_t next = q.i(p, q.L.f.chain);  // a death may search the world again
     if ((p != who) & q.is(q.i(p, q.L.f.classname), "player") & (q.f(p, q.L.f.health) > 0)) {
       q.set_g(g_telefragging, 1);
+      if (quake_rules(q) & (q.f(p, f_invincible_finished) > q.time())) {
+        // Quake's pentagram: it deflects the telefrag onto the one arriving; when both hold
+        // one, both lose it and both die, each by the other's.
+        if (q.f(who, f_invincible_finished) > q.time()) {
+          for (const int32_t e : {p, who}) {
+            q.set_f(e, f_invincible_finished, 0);
+            const float items = q.f(e, q.L.f.items);
+            q.set_f(e, q.L.f.items, items - band(items, kItInvulnerability));
+          }
+          q.set_i(p, f_deathtype, q.s(s_satans_power));
+          damage(q, p, who, who, 50000);
+          q.set_i(who, f_deathtype, q.s(s_satans_power));
+          damage(q, who, p, p, 50000);
+        } else {
+          q.set_i(who, f_deathtype, q.s(s_deflected));
+          damage(q, who, p, p, 50000);
+        }
+        q.set_g(g_telefragging, 0);
+        return;
+      }
       if ((q.deathmatch() == 4) & (q.f(p, f_shield_finished) > q.time())) {
         // Deathmatch 4 onto a protected player: both protected, both die; else `who` does.
         if (q.f(who, f_shield_finished) > q.time()) {
