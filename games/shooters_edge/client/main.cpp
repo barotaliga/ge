@@ -870,9 +870,10 @@ int run_main(int argc, char** argv) {
   uint64_t bench_shown_ns = 0;     // when the benchmark last showed a frame
   wgpu::Future bench_in_flight{};  // the frame before this one, waited before the next
   if (!args.timedemo.empty()) bench_ask = args.timedemo;
-  if (!args.playdemo.empty()) {
-    bench_ask = args.playdemo;
+  if (!args.playdemo.empty() || (on_title && !playback.startup.empty())) {  // or cl_startupdemo
+    bench_ask = args.playdemo.empty() ? playback.startup : args.playdemo;
     play_ask = true;
+    attract_at_start = false;
   }
   cl::TvWatch tv_watch{args.tv};  // `-tv <node>`: a live broadcast watched (client/tv_live.hpp)
   // The world drawn again for `map`, with the models on `load` standing in it, through `from`

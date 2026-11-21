@@ -21,6 +21,8 @@
 // | | `cl_democlock 0|1|2` | a clock: none, the time since the demo began, the recording's own
 // clock (`cl_democlock_x`, `cl_democlock_y` place it) |
 // | | `cl_demowait 0|1` | at the end the demo ends, or holds paused on its last frame |
+// | | `cl_startupdemo <demo>` | played once at start-up, in place of the title's recordings, when
+// no map, demo or server was asked for |
 //
 // While a demo plays the pointer is free (no raw mouse), so the bar can be pointed at. A seek
 // stops where the timeline reaches its time (timedemo.hpp's `demo_seek`); the step after it loads
@@ -32,6 +34,7 @@
 // ge:keywords demo_skip demo_skip_forward demo_skip_back demo_next demo_prev demo_seek
 // ge:keywords demo_pause demo_highlights demo_bar demo_track highlights markers video-player
 // ge:keywords add_demo_commands timedemo playdemo demo_lerp cl_democlock demo-clock cl_demowait
+// ge:keywords cl_startupdemo startup-demo
 // ge:skill shooter replay ui
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #pragma once
@@ -78,7 +81,8 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   // own clock; at `cl_democlock_x` cells from the left (from the right when negative) and
   // `cl_democlock_y` from the top (up from the HUD's top when negative), a cell a line's height.
   int clock = 0, clock_x = 0, clock_y = -2;
-  int hold_end = 0;  // `cl_demowait`: at the end, paused on the last frame rather than ended
+  int hold_end = 0;     // `cl_demowait`: at the end, paused on the last frame rather than ended
+  std::string startup;  // `cl_startupdemo`: played once at start-up when nothing else is asked
 };
 
 // A demo clock's words: whole seconds as hh:mm:ss, the hours past 99 starting again at 0.

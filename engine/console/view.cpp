@@ -59,6 +59,19 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           .min = 64,
           .max = 65536},
          &keep_);
+  v.bind(
+      {.name = "con_notify",
+       .fallback = "1",
+       .flags = kArchive,
+       .help = "whether the newest lines show at the top of the screen while the console is closed",
+       .kind = CvarKind::boolean},
+      &notify_on_);
+  v.bind({.name = "con_clearnotify",
+          .fallback = "1",
+          .flags = kArchive,
+          .help = "whether opening or closing the console lets the notify lines so far go",
+          .kind = CvarKind::boolean},
+         &clear_notify_);
   v.bind({.name = "con_notifylines",
           .fallback = "4",
           .flags = kArchive,
@@ -201,7 +214,7 @@ void ConsoleView::add(LineKind kind, std::string_view text) {
     const size_t nl = text.find('\n', at);
     const std::string_view part =
         text.substr(at, nl == std::string_view::npos ? text.npos : nl - at);
-    lines_.push_back({kind, std::string(part), clock_});
+    lines_.push_back({kind, std::string(part), clock_, added_++});
     if (kind != LineKind::output && kind != LineKind::command) c_.fire_triggers(part);
     if (nl == std::string_view::npos) break;
     at = nl + 1;
@@ -218,11 +231,17 @@ std::vector<const ViewLine*> ConsoleView::page(int rows) const {
   return out;
 }
 
+void ConsoleView::set_open(bool open) {
+  if (open != open_ && clear_notify_) notify_from_ = added_;
+  open_ = open;
+}
+
 std::vector<const ViewLine*> ConsoleView::notify() const {
   std::vector<const ViewLine*> out;
+  if (!notify_on_) return out;
   for (auto it = lines_.rbegin(); it != lines_.rend(); ++it) {
     if (static_cast<int32_t>(out.size()) >= notify_lines_) break;
-    if (clock_ - it->time_s > notify_time_) break;
+    if (clock_ - it->time_s > notify_time_ || it->n < notify_from_) break;
     if (it->kind == LineKind::command) continue;
     out.push_back(&*it);
   }
@@ -316,7 +335,7 @@ void ConsoleView::key(EditKey k) {
       scroll_ = std::max(0, scroll_ - 8);
       break;
     case EditKey::escape:
-      open_ = false;
+      set_open(false);
       break;
   }
 }

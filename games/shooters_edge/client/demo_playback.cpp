@@ -110,6 +110,15 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
                                     "that many lines down from the top, or up from the status bar "
                                     "when below 0"},
                          &p.clock_y);
+    console.cvars().bind({.name = "cl_startupdemo",
+                          .fallback = "",
+                          .flags = ge::console::kArchive,
+                          .help = "A demo played once when the game starts, when you asked for no "
+                                  "map, demo or server.",
+                          .kind = ge::console::CvarKind::text,
+                          .values = "a demo: its name, as playdemo takes it; empty: none (the "
+                                    "default)"},
+                         &p.startup);
   }
   ge::console::CvarLayer shooter(console.cvars(), kLayerShooter);
   console.cvars().bind({.name = "cl_demowait",
