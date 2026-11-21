@@ -1,7 +1,7 @@
 ---
 title: A share read off positions has a floor that chance scores; read the cause, and the bot's mind a beat late
 date: 2026-11-20
-scope: games/shooters_edge/labs/chase_read.hpp, games/shooters_edge/net/qw_team.cpp, games/shooters_edge/bots/fighter.cpp, games/shooters_edge/bots/footwork.cpp
+scope: games/shooters_edge/labs/chase_read.hpp, games/shooters_edge/net/qw_team.cpp, plugins/shooterbots/fighter.cpp, plugins/shooterbots/footwork.cpp
 concepts: [chase, follow, floor, base-rate, cause, beat, goalfeet, chasekill, breakoff, fight-end]
 ---
 

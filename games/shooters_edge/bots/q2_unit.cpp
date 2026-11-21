@@ -15,11 +15,12 @@
 #include <memory>
 
 #include "shooterbots/aim.hpp"
+#include "shooterbots/bot_arsenal.hpp"
+#include "shooterbots/companion.hpp"
 #include "shooterbots/features.hpp"
+#include "shooterbots/map_nav.hpp"
 #include "shooterbots/traits.hpp"
-#include "shooters_edge/bots/bot_arsenal.hpp"
-#include "shooters_edge/bots/companion.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/messages.hpp"

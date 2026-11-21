@@ -2,8 +2,8 @@
 // it? The hop course (labs/hop_course.hpp: a run-up, a long straight, S-bends, corners of three
 // radii, a U-turn, a corridor that narrows) is compiled from its plan in the run, played on our
 // own server with the baseline mod, and ONE BOT of each skill (`--skills`) runs it from the spawn
-// to the end as in a match: the whole fighter (bots/fighter.hpp: the pilot, the mouse hand, the
-// keyboard hand, every switch of its skill's preset and `--features` over it), sent to the
+// to the end as in a match: the whole fighter (shooterbots/fighter.hpp: the pilot, the mouse hand,
+// the keyboard hand, every switch of its skill's preset and `--features` over it), sent to the
 // course's end as an objective set from outside (`Fighter::objective`). Nothing else is on the
 // map: no item, no enemy, so the hop is all there is to watch. Every seed (`--seeds`) is another
 // run of each skill (the hands' draws).
@@ -52,11 +52,12 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "shooterbots/features.hpp"
+#include "shooterbots/fighter.hpp"
 #include "shooterbots/hops.hpp"
 #include "shooterbots/nav.hpp"
 #include "shooterbots/pilot.hpp"
 #include "shooterbots/traits.hpp"
-#include "shooters_edge/bots/fighter.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -725,7 +726,7 @@ const gl::LabSpec kSpec{
     "game:shooters_edge",
     "plugins/shooterbots/pilot.cpp's hop and plugins/shooterbots/bot.cpp's air view under the "
     "fighter's "
-    "hands (games/shooters_edge/bots/fighter.hpp) on the hop course "
+    "hands (plugins/shooterbots/fighter.hpp) on the hop course "
     "(games/shooters_edge/labs/hop_course.hpp), read by plugins/shooterbots/hops.hpp",
     "bots",
     "How well does each bot bunny hop a practice course, section by section, against people?",

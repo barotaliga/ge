@@ -1,7 +1,7 @@
 ---
 title: Follow each goal or role episode to its end before tuning scores; flips hide there
 date: 2026-11-19
-scope: games/shooters_edge/bots/mind.cpp, games/shooters_edge/bots/fighter.cpp, games/shooters_edge/labs/se_team_lab.cpp
+scope: plugins/shooterbots/mind.cpp, plugins/shooterbots/fighter.cpp, games/shooters_edge/labs/se_team_lab.cpp
 concepts: [item-control, rush, role-flip, goal-flip, episodes, trace, glabel, item-lying, quad]
 ---
 

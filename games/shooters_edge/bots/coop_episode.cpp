@@ -14,7 +14,8 @@
 #include <filesystem>
 #include <memory>
 
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooterbots/map_nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"

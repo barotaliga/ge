@@ -6,11 +6,12 @@
 #include "shooters_edge/net/qw_team_nav.hpp"
 
 #include "ai/path.hpp"
+#include "shooterbots/buttons.hpp"
 #include "shooterbots/features.hpp"
+#include "shooterbots/floor_trap.hpp"
+#include "shooterbots/knowledge.hpp"
 #include "shooterbots/nav.hpp"
-#include "shooters_edge/bots/buttons.hpp"
-#include "shooters_edge/bots/floor_trap.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/quake_maps.hpp"
 
 namespace sb = ge::shooterbots;

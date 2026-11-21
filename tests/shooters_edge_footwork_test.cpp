@@ -1,4 +1,4 @@
-// A FIGHTER'S KEYS AND BUTTONS (games/shooters_edge/bots/footwork.hpp `fighter_keys`,
+// A FIGHTER'S KEYS AND BUTTONS (plugins/shooterbots/footwork.hpp `fighter_keys`,
 // buttons.hpp `button_fires`): a side key turned round passes through 1 to 3 commands with no side
 // key unless the change is a clean one, never on a proven jump; and a button's doors are found
 // through the relays it fires (e1m2's plate: a delayed trigger_once opens the teleporters' doors);
@@ -15,11 +15,12 @@
 
 #include "check.hpp"
 #include "shooter/brush_hull.hpp"
+#include "shooterbots/buttons.hpp"
 #include "shooterbots/entities.hpp"
+#include "shooterbots/footwork.hpp"
+#include "shooterbots/keyboard.hpp"
 #include "shooterbots/nav.hpp"
-#include "shooters_edge/bots/buttons.hpp"
-#include "shooters_edge/bots/footwork.hpp"
-#include "shooters_edge/bots/keyboard.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 
 namespace sh = ge::shooter;
 

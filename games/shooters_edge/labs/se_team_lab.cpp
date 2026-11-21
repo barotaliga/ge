@@ -1,5 +1,5 @@
 // LAB `se-team`: does a team game of bots play like a team game? Two teams of four fighters
-// (qw_team.hpp: a client each over our server, the team's plan bots/team.hpp) play the
+// (qw_team.hpp: a client each over our server, the team's plan shooterbots/team.hpp) play the
 // baseline mod with `teamplay 1` for `--minutes`, recorded as a multiview demo. By default on the
 // fixture halls (plugins/brush, a map written in code); `--basedir` with `--map` plays a map of a
 // game folder's instead (the classic small team map is `e1m2` of the shareware pack).
@@ -50,11 +50,12 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "shooter/trace.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/knowledge.hpp"
 #include "shooterbots/nav.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
+#include "shooterbots/team.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
-#include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -1065,8 +1066,8 @@ void run(gl::Lab& lab) {
     lab.metric("team.wet", alive > 0 ? static_cast<double>(wet) / static_cast<double>(alive) : 0,
                "share");
     shooters_edge::labs::report_hits(lab, r);
-    // The wet time by cause (bots/fighter.hpp kWetWhy), as shares of it: what keeps the bots in
-    // the water; and wet aiming, swimming and walking, each's share, speed and time still.
+    // The wet time by cause (shooterbots/fighter.hpp kWetWhy), as shares of it: what keeps the bots
+    // in the water; and wet aiming, swimming and walking, each's share, speed and time still.
     for (size_t w = 0; w < 12; w++) {
       int64_t why = 0;
       for (const cn::TeamPlayer& p : r.players) why += p.wet_why[w];
@@ -1246,7 +1247,7 @@ void run(gl::Lab& lab) {
       lab.metric("team.gap-landed", static_cast<double>(gl), "count");
       lab.metric("team.gap-refused", static_cast<double>(gr), "count");
       lab.metric("team.gap-near", static_cast<double>(gn), "count");  // `gapnear`: planned round
-      // The floor traps (bots/floor_trap.hpp): the floor's openings (as the first player saw
+      // The floor traps (shooterbots/floor_trap.hpp): the floor's openings (as the first player saw
       // them, a fighter's bridges read alike), the presses on purpose, and those that fired.
       int64_t tp = 0, tf = 0, to = 0, tk = 0, tl = 0;
       for (const cn::TeamPlayer& p : r.players) {
@@ -1258,7 +1259,7 @@ void run(gl::Lab& lab) {
       lab.metric("team.trap.presses", static_cast<double>(tp), "count");
       lab.metric("team.trap.fired", static_cast<double>(tf), "count");
       lab.metric("team.trap.flees", static_cast<double>(tl), "count");  // `trapflee`
-      // The bores (bots/packs.hpp): a carrier's launcher left in his pack for a mate.
+      // The bores (shooterbots/packs.hpp): a carrier's launcher left in his pack for a mate.
       int64_t bores = 0;
       for (const cn::TeamPlayer& p : r.players) bores += p.bores;
       lab.metric("team.bores", static_cast<double>(bores), "count");
@@ -1672,8 +1673,8 @@ void run(gl::Lab& lab) {
   lab.metric("team.faults", static_cast<double>(r.faults), "count");
   lab.metric("team.place-names", static_cast<double>(r.locs), "count");
   lab.note("place names: " + std::to_string(r.locs) + " from " + r.locs_from);
-  lab.note("the map's team plan (bots/map_plan.hpp):\n" + r.plan);
-  lab.note("the map's goals (bots/goals.hpp):\n" + r.goals);
+  lab.note("the map's team plan (shooterbots/map_plan.hpp):\n" + r.plan);
+  lab.note("the map's goals (shooterbots/goals.hpp):\n" + r.goals);
   lab.metric("team.plan-areas", r.plan_areas, "count");
   lab.metric("team.lines-read", static_cast<double>(r.lines_read), "count");
   lab.metric("team.lines-missed", static_cast<double>(r.lines_missed), "count");
@@ -1903,7 +1904,7 @@ const gl::LabSpec kSpec{
     "se-team",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "games/shooters_edge/bots/team.hpp (the roles, the key areas, the quad's timer) through "
+    "plugins/shooterbots/team.hpp (the roles, the key areas, the quad's timer) through "
     "net/qw_team.hpp: fighters on clients of our server, teamplay on the baseline mod",
     "bots",
     "Does a team game of bots play like a team game: does each team hold its key area, take the "

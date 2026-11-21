@@ -31,7 +31,8 @@
 #include <vector>
 
 #include "shooterbots/aim.hpp"
-#include "shooters_edge/bots/way_through.hpp"
+#include "shooterbots/way_through.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {

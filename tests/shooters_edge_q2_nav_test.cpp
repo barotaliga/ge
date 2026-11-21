@@ -1,4 +1,4 @@
-// Tests: the bots' map nav (games/shooters_edge/bots/map_nav.hpp) built on a version 38 map run by
+// Tests: the bots' map nav (plugins/shooterbots/map_nav.hpp) built on a version 38 map run by
 // Quake II's rules. A hall split by a wall with a doorway, a plat up to a ledge, and a teleporter
 // pad with its destination: the world is the brushes kind, the doorway joins both halves, the pad
 // links to its destination, and the plat is a ridden mover traced through the nav's own tracer.
@@ -19,10 +19,11 @@
 #include "check.hpp"
 #include "classic/q2_move.hpp"
 #include "shooter/trace.hpp"
-#include "shooters_edge/bots/bot_arsenal.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooterbots/bot_arsenal.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooterbots/map_nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 

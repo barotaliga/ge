@@ -310,7 +310,7 @@ const gl::LabSpec kSpec{
     "se-coop",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "games/shooters_edge/bots/companion.hpp (escort_think, escort_command) and "
+    "plugins/shooterbots/companion.hpp (escort_think, escort_command) and "
     "plugins/shooterbots/idle.hpp through coop_run.hpp: our campaign in coop on the coop hall",
     "bots",
     "Does a co-op companion keep close to the person it plays with, clear only what comes for "

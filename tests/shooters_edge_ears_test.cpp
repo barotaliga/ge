@@ -5,7 +5,8 @@
 // ge:keywords test ears sound_table hears_as pickup-sound
 // ge:skill shooter testing
 #include "check.hpp"
-#include "shooters_edge/bots/ears.hpp"
+#include "shooterbots/ears.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 
 namespace bt = shooters_edge::bots;
 namespace sh = ge::shooter;

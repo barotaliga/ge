@@ -12,11 +12,12 @@
 // ge:skill bots testing
 #include "check.hpp"
 #include "classic/locs.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/mind.hpp"
-#include "shooters_edge/bots/packs.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/foe_ledger.hpp"
+#include "shooterbots/mind.hpp"
+#include "shooterbots/packs.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/talk.hpp"
-#include "shooters_edge/bots/temper.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace bt = shooters_edge::bots;

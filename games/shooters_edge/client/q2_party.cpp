@@ -6,10 +6,11 @@
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/q2_party.hpp"
 
+#include "shooterbots/bot_arsenal.hpp"
+#include "shooterbots/companion.hpp"
 #include "shooterbots/features.hpp"
 #include "shooterbots/traits.hpp"
-#include "shooters_edge/bots/bot_arsenal.hpp"
-#include "shooters_edge/bots/companion.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/q2_server.hpp"

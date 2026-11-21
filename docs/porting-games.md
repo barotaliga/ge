@@ -158,18 +158,20 @@ turns out different, both stay each game's `own`.
 
 ## Bots: what is shared and what is each game's
 
-- **Shared:** the bots' plugin, `plugins/shooterbots` (the pilot, the nav, senses, aim, dodge,
-  temperament); what a team message means (`plugins/shooterbots/team_talk.hpp`: `SayKind`,
-  `Strategy`, `Said`), what a bot sees of a match (`bot_view.hpp`), the item tables' shape
-  (`item_tables.hpp`), the rules' world, and the engine's `engine/ai`: the decision record, the
-  keyboard and mouse hands, thinking on a schedule, sight, memory, choosing. The decision frame
-  (goals as scored options, claims, giving up), a bot's memory and its model of the other players
-  are shared by the classic games' bots today and move to `plugins/shooterbots` next (M60e,
-  step 5 of the split the maintainer chose on 2026-11-20).
-- **Each game's:** movement (how it drives the hands: the hop, gap and blast-jump tricks, the
-  footwork, swimming), item worths, map plans and routes, weapon choice, and how its team talk is
-  worded and its places named (the say lines, the macros, the loc file). A game words the shared
-  meanings its own way: its `say_text` and `parse_say` over `SayKind`.
+- **Shared:** the bots' plugin, `plugins/shooterbots`: the pilot, the nav, senses, aim, dodge,
+  temperament, and the whole decision layer (M60l step 5): the fighter (mode, goal, weapon,
+  trigger, item worths read off the game's rows), its mind and team roles, what it knows of the
+  items, its ears, the packs, the ledger of each enemy, the map's plan and goals, the map's nav
+  with its movers, the footwork, the water, the co-op companion and the way through a campaign
+  map; what a team message means (`team_talk.hpp`), what a bot sees of a match (`bot_view.hpp`),
+  the item tables' shape (`item_tables.hpp`), a map's entities (`entities.hpp`), and the
+  engine's `engine/ai`. Place names' points are the kit's (`plugins/shooter/places.hpp`).
+- **Each game's:** what it hands its bots in its `BotArsenal` (`shooterbots/bot_arsenal.hpp`): its
+  weapons and item rows, the words and sounds they hear, its maps' book (people's rocket and gap
+  tricks, scripted routes and item rules by map: `map_book.hpp`), and how its team talk is
+  worded (`TeamWords`: its `say_text` and `parse_say` over `SayKind`; the say lines, the macros,
+  the loc file); and its runs over its own server (Shooter's Edge's `games/shooters_edge/bots/`:
+  the arsenals, the words, Quake's maps' book, the fight, duel, co-op and unit runs).
 
 ## Do not over-generalize
 

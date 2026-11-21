@@ -12,8 +12,9 @@
 
 #include "check.hpp"
 #include "classicenhance/profile.hpp"
-#include "shooters_edge/bots/ears.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
+#include "shooterbots/ears.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/rules/campaign.hpp"
 #include "shooters_edge/server/dedicated.hpp"

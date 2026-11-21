@@ -30,9 +30,9 @@
 // route is a run of points (a player's feet), the first its ENTRY (joined to the nav's nearest
 // node), each after it walked or hopped onto; the last is the item's own node. The nav proves
 // each one with the move (shooterbots/nav_script.hpp `prove_script`) and adds it as one `script`
-// link (bots/map_nav.cpp), so a route to the item leads to the entry and the script finishes it. A
-// door over the way (e1m2's YA stairs, shut until a button is shot) bars the link while shut, and
-// the fighter's button logic opens it as for any item behind a door.
+// link (shooterbots/map_nav.cpp), so a route to the item leads to the entry and the script finishes
+// it. A door over the way (e1m2's YA stairs, shut until a button is shot) bars the link while shut,
+// and the fighter's button logic opens it as for any item behind a door.
 //
 // Read off the `se-spot` lab's pictures and se-reach's `--floors` (the treads' heights and
 // depths), and people's own way up (se-rj `--spot`). A route that does not hold is tabled by
