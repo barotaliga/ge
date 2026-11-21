@@ -41,11 +41,6 @@
 //   `command_max` bytes, it reaches the host's process as a `command` event, and whatever the
 //   server answers goes back to that player alone as PRINT lines (`session_host_print`). The
 //   session reads no command itself: the server's features do (engine/server/feature.hpp).
-// - CONFIGS (M21c). The host sends its SERVER INFO (the `sv_` settings every client follows, an
-//   info string) to each player as it is welcomed and to every player when it changes, and may
-//   STUFF console text into a client, which runs it under the client's rules; a client sends its
-//   USER INFO (its name and rates) whenever it changes. `session_config.hpp` ties them to a
-//   console's cvars.
 // - THE SERVER'S OWN WORD. `admit` may refuse an address before a seat is given (a ban list), a
 //   chat line may be held by `chat_filter` before it is relayed (it was answered instead), and
 //   `session_host_remove` takes a player off without the leader's say (an administrator's kick).

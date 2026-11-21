@@ -32,7 +32,8 @@
 // ge:summary The network's cvars: sv_fps, the rates, time sync and smoothing, bound to the config
 // ge:keywords net cvars sv_fps tick-rate tick-hz sv_maxupdaterate sv_maxrate cl_updaterate
 // ge:keywords cl_cmdrate rate cl_interp cl_timesync cl_smooth cl_extrapolate console
-// ge:keywords sv_modern meta-cvar net_fakeloss net_fakelag net_fakejitter fake-link cheat fake_link_follow transport_fake
+// ge:keywords sv_modern meta-cvar net_fakeloss net_fakelag net_fakejitter fake-link cheat
+// ge:keywords fake_link_follow transport_fake
 // ge:keywords cl_cmdbackup cl_predictworld cl_predictmax redundancy predicted-world sv_rewindmax
 // ge:keywords voice_mode voice_threshold voice_hangover voice_bitrate voice_fec voice_volume
 // ge:keywords voice_jitter sv_voiceflood push-to-talk

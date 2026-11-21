@@ -285,7 +285,7 @@ void run(gl::Lab& lab) {
                    " ms, past its round trip of " + fmt(o.follow_rtt_ms, 0) + " ms",
                "Read session_host_follow_cvars and the welcome in engine/net/session_host.cpp; "
                "skill: net.");
-    if (o.quits != 0 || o.hellos != kClients || o.refused != 2 * kClients)
+    if (o.quits != 0 || o.hellos != kClients || o.refused != uint64_t{2} * kClients)
       lab.fail(name + ": stuffed text ran " + std::to_string(o.quits) + " quits and " +
                    std::to_string(o.hellos) + " hellos with " + std::to_string(o.refused) +
                    " refused (want 0, " + std::to_string(kClients) + ", " +
