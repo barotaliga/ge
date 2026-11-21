@@ -44,9 +44,10 @@ constexpr uint8_t kSvcGeVoice = 121;       // the game's own: a voice (qw_voice_
 constexpr size_t kVoiceTickBytes = 1200;   // the voices one client is sent a tick, at most
 constexpr size_t kMovesBlockMost = 1200;   // the frame with the moves, at most (under a datagram)
 constexpr size_t kLogKept = 512;
-// Quake II's reading of a client's `rate`: none 5000, 0 the least, and 100 up to the engine's
-// most (sv_minrate and sv_maxrate, 15000 and 60000 by default, hold it nearer).
-constexpr ge::server::RateBounds kRateBounds{.none = 5000, .zero = 100, .low = 100};
+// Quake II's reading of a client's `rate`: none 5000 (held to no limit), 0 the least, and 100 up
+// to the engine's most (sv_minrate and sv_maxrate, 15000 and 60000 by default, hold it nearer).
+constexpr ge::server::RateBounds kRateBounds{
+    .none = 5000, .zero = 100, .low = 100, .none_held = false};
 constexpr int kRateFrames = 10;  // the frames whose sizes are summed (a second at 10 Hz)
 constexpr int kRateSlots = 60;   // the most: a second at `sv_fps` 60
 

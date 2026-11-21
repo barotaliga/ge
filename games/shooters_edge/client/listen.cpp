@@ -21,6 +21,7 @@
 #include "progs/layout.hpp"
 #include "progs/vm.hpp"
 #include "shooter/client.hpp"
+#include "shooters_edge/client/q2_flash_fx.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
@@ -115,6 +116,32 @@ bool arena_effect(std::span<const uint8_t> b, Effect& e) {
 // are; an explosion into `explosions`), any other by its name, for the files' effect of it.
 void take_named(Listen& l, const sv::NetEvent& ev) {
   if ((ev.to & 1u) == 0) return;
+  // Quake II's gun flashes (q2_flash_fx.hpp): a player's shot is its sounds and the flash at his
+  // gun (his own: the sounds alone); a monster's flash line plays its gun's sound beside the look.
+  const bool player_flash = ev.text == "q2_flash";
+  const bool monster_flash = ev.kind == sv::EventKind::trail_effect && ev.values[3] > 0 &&
+                             ev.text.starts_with("te_monster_flash.");
+  if ((player_flash || monster_flash) && l.sounds.size() < kMostListenSounds) {
+    const int value = static_cast<int>(player_flash ? ev.values[0] : ev.values[3]);
+    const bool own = player_flash && ev.ent == 1;
+    std::vector<DemoEffect> drawn;
+    const auto pick = static_cast<uint32_t>(ev.ent * 7919 + static_cast<int>(ev.time * 10) * 31);
+    q2_flash_fx(value, monster_flash, ev.ent, ev.origin, own ? l.view : sh::Vec3f{}, own, pick,
+                l.sounds, drawn);
+    if (player_flash) {
+      for (const DemoEffect& d : drawn) {
+        Effect e;
+        e.kind = EffectKind::named_trail;
+        e.code = -1;
+        e.name = d.name;
+        e.entity = d.entity;
+        e.at = d.at;
+        e.end = d.end;
+        l.effects.push_back(std::move(e));
+      }
+      return;
+    }
+  }
   Effect e;
   e.code = -1;
   e.name = ev.text;

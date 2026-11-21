@@ -66,8 +66,8 @@ done 17, partial 16, missing 32, not-taken 11
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| cmd.heartbeat | `heartbeat` | Sends a heartbeat to every master at the next frame. | partial | Our own listing beats on its own (`sv_rendezvous`, `sv_visibility`, engine); no classic master heartbeat and no word (S28) |
-| cmd.setmaster | `setmaster <addr>...` | Up to 8 masters (port 27900 by default), sets `public` 1, forces a heartbeat; names re-resolved at map changes. Refused off a dedicated server: `Only dedicated servers use masters.` | partial | The engine's `sv_master` names our listing's master; no classic masters (S28) |
+| cmd.heartbeat | `heartbeat` | Sends a heartbeat to every master at the next frame. | done | `plugins/classic/protocol/masters.cpp` |
+| cmd.setmaster | `setmaster <addr>...` | Up to 8 masters (port 27900 by default), sets `public` 1, forces a heartbeat; names re-resolved at map changes. Refused off a dedicated server: `Only dedicated servers use masters.` | done | `plugins/classic/protocol/masters.cpp` |
 | cmd.listmasters | `listmasters` | Table `num hostname lastmsg address`; `There are no masters.` | missing | S28 |
 | cmd.kick | `kick <id>` | Drops a client by slot or exact name (part of a name with `sv_enhanced_setplayer`); everyone in the game and the client read `<name> was kicked`. | partial | `games/shooters_edge/net/q2_admin.cpp`: stock lookup answers, not the modern ones (log.slot-errors); the kicked client reads `You were kicked from the game`, not `<name> was kicked`; no partial-name match |
 | cmd.kickban | `kickban <id>` | Kick plus a ban of the address (a /32 for IPv4, a /64 for IPv6, no comment). | missing | S31; the engine's `ban <seat> [minutes]` exists for other games but is not mounted on Quake II's server |
@@ -215,7 +215,7 @@ done 14, partial 6, missing 37, not-taken 0
 Defaults are upstream's; flags as registered. Our Quake II spellings that are synonyms are listed in
 `games/shooters_edge/net/q2_game.cpp` (`kSettingNames`).
 
-done 41, partial 28, missing 74, not-taken 27
+done 42, partial 27, missing 74, not-taken 27
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -233,7 +233,7 @@ done 41, partial 28, missing 74, not-taken 27
 | cvar.timeout | `timeout` = `90` | Seconds of silence before a drop. | done | The endpoint's `timeout`, 90 (`games/shooters_edge/net/q2_net_server.hpp`) |
 | cvar.zombietime | `zombietime` = `2` | Seconds a dropped slot stays a zombie. | done | `sv_zombietime` (synonym) |
 | cvar.sv_ghostime | `sv_ghostime` = `6` | Seconds a challenged slot may stay silent; also the unreachable-notice drop delay. | partial | `sv_ghosttime` (synonym); the unreachable drop not taken (`q2-server-gaps.md` row 17) |
-| cvar.sv_idlekick | `sv_idlekick` = `0` | Seconds of no activity before a drop with reason `idling`. | partial | Ours is `sv_idletime` (`engine/server/idle.hpp`); `sv_idlekick` is the engine's lobby not-ready kick, another meaning, not declared as Quake II's `own` (a clash by CLAUDE.md "One name") |
+| cvar.sv_idlekick | `sv_idlekick` = `0` | Seconds of no activity before a drop with reason `idling`. | done | Quake II's own name for `sv_idletime` (`own`: the lobby's unready kick set aside, `engine/server/server.hpp` SettingName); `shooters_edge_q2_net_test` |
 | cvar.sv_enforcetime | `sv_enforcetime` = `1` | Move-time budget, 1800 ms per 16 frames. | partial | `sv_speedcheck` (synonym), our rules only; a hosted library runs unchecked (S12) |
 | cvar.sv_timescale_time | `sv_timescale_time` = `16` | Window of the time-skew check. | done | `sv_speedwindow` (synonym; `engine/server/skew.hpp`) |
 | cvar.sv_timescale_warn | `sv_timescale_warn` = `0` | Logs a skew over the ratio. | done | `sv_speedwarn` (synonym) |
@@ -392,12 +392,12 @@ done 41, partial 28, missing 74, not-taken 27
 
 ## 4. Server-to-client messages (svc) and protocol extensions the server writes
 
-done 15, partial 16, missing 22, not-taken 0
+done 17, partial 14, missing 22, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| svc.muzzleflash | message 1 | A player's weapon flash (light and sound) or login/logout flash, by entity and kind. | partial | Our rules send only the login (9) and logout (10) flashes (`games/shooters_edge/server/q2_wire.cpp` `write_flash`); weapon-fire flashes as this message: verify. A hosted library's own writes pass through |
-| svc.muzzleflash2 | message 2 | A monster's muzzle flash by entity and flash number. | partial | Hosted library: passed through; our rules' monsters: no such message in `q2_wire.cpp` (verify what a stock client sees) |
+| svc.muzzleflash | message 1 | A player's weapon flash (light and sound) or login/logout flash, by entity and kind. | done | Our rules send every gun's flash (`q2_fight.cpp` muzzle_flash, `q2_monsters.cpp`), written by `q2_wire.cpp`; the shot's sound is in the flash, never sent twice |
+| svc.muzzleflash2 | message 2 | A monster's muzzle flash by entity and flash number. | done | Our rules send every gun's flash (`q2_fight.cpp` muzzle_flash, `q2_monsters.cpp`), written by `q2_wire.cpp`; the shot's sound is in the flash, never sent twice |
 | svc.temp_entity | message 3 | Temporary effects (explosions, trails, sparks, beams). | done | `games/shooters_edge/server/q2_wire.cpp` (`write_temp_entity`, `kTeNames`); our names without a protocol code are dropped |
 | svc.layout | message 4 | The scoreboard or help layout text. | done | `games/shooters_edge/server/q2_wire.cpp` |
 | svc.inventory | message 5 | The 256 inventory counts. | done | `games/shooters_edge/server/q2_wire.cpp` |
@@ -519,7 +519,7 @@ done 13, partial 11, missing 31, not-taken 2
 Ours: the native host (`games/shooters_edge/server/q2_native.hpp`, `q2_native_calls.cpp`,
 `q2_native_abi.hpp`, `q2_native_save.cpp`).
 
-done 40, partial 24, missing 24, not-taken 0
+done 41, partial 24, missing 23, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -581,7 +581,7 @@ done 40, partial 24, missing 24, not-taken 0
 | api.export.RunFrame | `RunFrame` | | done | |
 | api.export.ServerCommand | `ServerCommand` | The `sv` word. | done | (cmd.sv) |
 | api.export.edicts | entity array, size, count, max | Checked: `Game library returned bad size of edict_t`, `Game library returned bad number of max_edicts`, `Game library corrupted maxclients value`. | partial | Checked by our host; the words: verify |
-| api.ping | each client's ping given to the library | Before each frame, by `sv_calcpings_method`. | missing | S7: `run_frame` (`games/shooters_edge/server/q2_native.cpp`) sets every client's ping to 0 though the endpoint measures it (`take_trip`) |
+| api.ping | each client's ping given to the library | Before each frame, by `sv_calcpings_method`. | done | `run_frame` (`server/q2_native.cpp`) gives the measured ping; `shooters_edge_q2_native_test` |
 | api.apiversion | version 3 or 3302 | `Game library is version <n>, expected 3 or 3302`. | partial | `q2_native.cpp` accepts 3 only (`kNativeVersion`) |
 | api.newgame | the second interface (version 3302) | A library built on the newer client and move records (and the newer move), the same calls otherwise. | missing | Added (upstream) |
 | api.loadlib | the library from `<dir>/<game>/game<cpu>.<ext>` | `sys_forcegamelib` first, then the home and the library folders for the game folder, then for the base folder; `Loaded game library from <path>`, `Failed to load game library: <error>`. | partial | Our host loads a library path it is given; the path rule and words: verify |
@@ -645,7 +645,7 @@ done 12, partial 20, missing 38, not-taken 2
 | msg.oob.bad-rcon | `Bad rcon_password.` | | done | `games/shooters_edge/net/q2_admin.cpp` |
 | msg.oob.lrcon-refused | `This command is not permitted.` | | done | `engine/server/lrcon.hpp` |
 | msg.oob.passive | `passive_connect` | | missing | S31 |
-| msg.oob.shutdown | `shutdown` to masters | | missing | S28 |
+| msg.oob.shutdown | `shutdown` to masters | done | `plugins/classic/protocol/masters.cpp` |
 | msg.drop.announce | `<name> was dropped: <reason>` to everyone (when the client was in the game) and to the client; `?` reasons read `<name> <reason>`; `!` not announced | The drop line. | partial | Ours announces only skew and idle drops, in other words; others reach only our log (S33) |
 | msg.drop.kicked | `<name> was kicked` | To everyone and to the kicked client. | partial | `games/shooters_edge/net/q2_admin.cpp`: others read it; the kicked client reads `You were kicked from the game` |
 | msg.drop.timed-out | `<name> timed out` | | missing | S33 (ours logs `<name> dropped: timed out`) |
@@ -741,7 +741,7 @@ done 2, partial 23, missing 10, not-taken 1
 
 ## 9. Server features beyond single words: downloads, rates, floods, bans, filters, recording, status
 
-done 20, partial 19, missing 14, not-taken 2
+done 21, partial 18, missing 14, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -753,7 +753,7 @@ done 20, partial 19, missing 14, not-taken 2
 | feat.dl.kinds | what may be downloaded | A path with a folder, no `..`, by folder: players, models and sprites, sounds, maps, textures and env, pics, others; empty files and files past the size limit refused. | partial | Players, models, sounds, maps only; no size limit (S37) |
 | feat.dl.refused | refused download | The empty download answer (size -1). | done | `start_download` sends the refusal piece |
 | feat.rate.clamp | rate clamped to the bounds | `rate` held to `sv_min_rate`..`sv_max_rate`; LAN unlimited by setting; loopback unlimited. | done | `engine/server/rate.hpp`; loopback: verify |
-| feat.rate.no-key | no `rate` key: 5000, not clamped | | partial | Ours reads 5000 then holds it to `sv_minrate` (15000) |
+| feat.rate.no-key | no `rate` key: 5000, not clamped | | done | 5000, held to no limit (`RateBounds::none_held`); `server_rate_test` |
 | feat.rate.hold | frames held over the rate | | done | `games/shooters_edge/net/q2_net_server.cpp` |
 | feat.flood.players | players' chat flood | The library's (stock: `flood_msgs`, `flood_persecond`, `flood_waitdelay`). | done | Our rules (`games/shooters_edge/server/q2_commands.cpp`); a hosted library its own |
 | feat.flood.relay | relay spectators' chat flood | `[MVD] You can't talk for <n> seconds.` | missing | No relay chat |
@@ -799,4 +799,4 @@ done 20, partial 19, missing 14, not-taken 2
 | feat.save.autosave | level-start autosave into `save0` at each level change in a unit (not in deathmatch) | | partial | Ours autosaves as a level is entered (`q2_native_save.cpp`) into our own file |
 | feat.spectator-fly | extended clients' spectators fly faster, with the fly fix | | missing | S18 (extended clients only) |
 | feat.recycle | quit telling clients to reconnect | | not-taken | `q2-server-gaps.md` row 15 |
-| feat.master | classic heartbeat (status text) every 300 s, first 5 s after a game starts; `shutdown` on quit | | missing | S28 |
+| feat.master | classic heartbeat (status text) every 300 s, first 5 s after a game starts; `shutdown` on quit | done | `plugins/classic/protocol/masters.cpp` (only while public and dedicated) |

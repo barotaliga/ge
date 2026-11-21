@@ -197,6 +197,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_changemapcmd", "sv_mapcmd"},
     {"sv_enforcetime", "sv_speedcheck"},
     {"sv_ghostime", "sv_ghosttime"},
+    {"sv_idlekick", "sv_idletime", -1, true},  // the idle drop here, not the lobby's unready kick
     {"sv_lan_force_rate", "sv_lanrate"},
     {"sv_max_packet_entities", "sv_maxents"},
     {"sv_max_rate", "sv_maxrate"},

@@ -18,6 +18,7 @@
 #include "core/libm/libm.hpp"
 #include "core/prng.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_flash.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monster_kinds.hpp"
 #include "shooters_edge/server/q2_monster_pain.hpp"
@@ -562,7 +563,9 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
     const sh::Vec3f to = foe_at(s, m.enemy);
     sh::Vec3f d = to - from;
     sh::normalize(d);
-    fight_monster_line(s, flash, m.entity, from, from + d * 16.0f);
+    fight_monster_line(
+        s, flash, m.entity, from, from + d * 16.0f,
+        q2_monster_flash_value(kind(m).classname, std::string_view(flash).substr(17)));
   }
   switch (a.fire) {
     case Fire::bolt:
@@ -1065,8 +1068,9 @@ void dying_shot(Q2Server& s, Q2Monster& m) {
   const sh::Vec3f from = eye(e, k);
   const sh::Vec3f fwd = forward_of(e.angles.y);
   const sh::Vec3f to = from + fwd * 8192;
+  const char* look = a.fire == Fire::bolt ? "blaster" : "gun";
   fight_monster_line(s, a.fire == Fire::bolt ? "te_monster_flash.blaster" : "te_monster_flash.gun",
-                     m.entity, from, from + fwd * 16.0f);
+                     m.entity, from, from + fwd * 16.0f, q2_monster_flash_value(k.classname, look));
   if (a.fire == Fire::bolt) {
     fight_monster_launch(s, m.entity, SqShot::bolt, from, fwd, a.damage, a.speed, cause_of(m));
     return;
@@ -1984,17 +1988,6 @@ bool monster_bring_spare(Q2Server& s, int block, sh::Vec3f at, sh::Vec3f angles,
     return true;
   }
   return false;
-}
-
-void monster_noise(Q2Server& s, int slot) {
-  monster_noise(s, slot, unpack(s.players[slot].move.origin), false);
-}
-
-void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact) {
-  if (slot < 0 || slot >= sh::kMaxClients || deathmatch(s) || s.players[slot].notarget) return;
-  Q2Player& p = s.players[slot];
-  (impact ? p.impact_frame : p.noise_frame) = s.frame_number;
-  (impact ? p.impact_at : p.noise_at) = at;
 }
 
 }  // namespace shooters_edge::server

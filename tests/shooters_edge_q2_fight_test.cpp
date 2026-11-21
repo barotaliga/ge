@@ -176,6 +176,33 @@ int count(const std::vector<Heard>& h, int ent, const std::string& prefix) {
 
 }  // namespace
 
+// A gun's shot goes out as its muzzle flash (the value a client plays the sound and the tails
+// by), never as a sound of its own besides; the silencer's shots carry the silenced bit.
+TEST(a_shot_is_its_muzzle_flash_and_a_silenced_one_says_so) {
+  auto a = facing(300);
+  give(*a, sv::SqWeapon::shotgun, 10);
+  const auto flashes = [&](int ticks, std::vector<int>& values) {
+    for (int i = 0; i < ticks; i++) {
+      const int64_t before = a->s().out.events_total;
+      run(*a, 1, sh::kButtonAttack);
+      const std::vector<sv::NetEvent>& ev = a->s().out.events;
+      const int64_t first = a->s().out.events_total - static_cast<int64_t>(ev.size());
+      for (size_t k = static_cast<size_t>(std::max<int64_t>(0, before - first)); k < ev.size();
+           k++) {
+        if (ev[k].text == "q2_flash") values.push_back(static_cast<int>(ev[k].values[0]));
+        CHECK(ev[k].text != "weapons/shotgf1b.wav");
+      }
+    }
+  };
+  std::vector<int> values;
+  flashes(8, values);
+  CHECK(values.size() == 1 && values[0] == 2);
+  a->p(0).silencer_shots = 30;
+  values.clear();
+  flashes(16 * 8, values);
+  CHECK(!values.empty() && values[0] == (2 | 128));
+}
+
 TEST(the_rail_kills_through_armour_and_the_obituary_scores) {
   auto a = facing(300);
   a->p(1).body.armour = sv::SqArmour::jacket;
