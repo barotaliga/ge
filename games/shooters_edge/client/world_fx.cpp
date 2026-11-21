@@ -529,6 +529,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.monsters = picture.ce.monsters;
   s.blood = picture.ce.blood;
   s.blood_life_s = picture.blood_time > 0 ? picture.blood_time : -1;
+  s.blood_amount = std::clamp(picture.blood_amount, 0.0, 3.0);
   s.respawns = picture.ce.respawns;
   return s;
 }
@@ -818,7 +819,8 @@ void body_blood(const FxScene& l, FxState& s, double t, double dt, FxFrame& out)
       o.seed = static_cast<float>(w.seed % 1000u) / 1000.0f;
       // A fresh wound bleeds: drops let go where its run has got to, fewer as it closes.
       if (age >= kBodyDripS || dt <= 0) continue;
-      const double rate = (w.exit ? kExitDrops : kEntryDrops) * (1 - age / kBodyDripS);
+      const double rate =
+          (w.exit ? kExitDrops : kEntryDrops) * (1 - age / kBodyDripS) * s.on.blood_amount;
       if (ge::core::next(r) >= rate * dt) continue;
       if (!posed) {
         posed = true;

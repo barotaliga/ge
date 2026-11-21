@@ -623,9 +623,14 @@ void blood_spray(const BloodHit& h, uint32_t seed, Particles* births) {
   };
   // `n` drops along `axis` (unit) spread by `cone`, at `lo`..`hi` m/s, `size` m across at most.
   const double* from = h.at;  // where the drops being thrown leave the body
+  // How many of `n` drops this much blood throws (none at 0, at least one of any above it).
+  const auto many = [&](int n) {
+    if (h.amount <= 0 || n <= 0) return 0;
+    return std::max(1, static_cast<int>(std::lround(n * h.amount)));
+  };
   const auto throw_drops = [&](const double axis[3], int n, double cone, double lo, double hi,
                                double size, float dark) {
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0, m = many(n); i < m; ++i) {
       double d[3];
       unit(r, d);
       for (int k = 0; k < 3; ++k) d[k] = axis[k] + cone * d[k];
@@ -646,7 +651,7 @@ void blood_spray(const BloodHit& h, uint32_t seed, Particles* births) {
   };
   // The mist: fine drops that hang a moment where the blow went in.
   const auto mist = [&](const double axis[3], int n, double speed, float dark) {
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0, m = many(n); i < m; ++i) {
       double d[3];
       unit(r, d);
       for (int k = 0; k < 3; ++k) d[k] = 0.6 * axis[k] + d[k];
@@ -665,7 +670,7 @@ void blood_spray(const BloodHit& h, uint32_t seed, Particles* births) {
   // The pour: drops let go at the wound with almost no speed, a little out from the body, that
   // run down it and fall.
   const auto pour = [&](int n, float dark) {
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0, m = many(n); i < m; ++i) {
       Particle q = at(from);
       const double d[3] = {-dir[0] * rnd(r, 0.05, 0.25) + rnd(r, -0.08, 0.08), -rnd(r, 0.1, 0.5),
                            -dir[2] * rnd(r, 0.05, 0.25) + rnd(r, -0.08, 0.08)};

@@ -2,7 +2,7 @@
 title: Stain a vertex-animated figure in its rest frame, not its posed one
 date: 2026-11-21
 scope: engine/render/morph.wgsl
-concepts: [morph, blood, wound, rest-frame, frame-0, stain, vertex-animation, local]
+concepts: [morph, blood, wound, rest-frame, frame-zero, stain, vertex-animation, local]
 ---
 
 A mark on a morph figure (blood soaked into its clothes) placed by the posed point (`in.local`)

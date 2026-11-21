@@ -2,7 +2,7 @@
 title: A lab that moves a body in a staged FxScene turns off the model lerp
 date: 2026-11-21
 scope: games/shooters_edge/labs/gpu_se_blood_lab.cpp
-concepts: [lab, fx-scene, step_fx, lerp, model-lerp, staged, walk, placed, origin]
+concepts: [lab, fx-scene, step-fx, lerp, model-lerp, staged, walk, placed, origin]
 ---
 
 `step_fx` draws every placed model between the listen server's states (`lerp_models` on

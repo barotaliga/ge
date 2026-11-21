@@ -185,7 +185,8 @@ struct BloodHit {
   double dir[3] = {0, 0, 1};   // the blow's way through the body (unit): the round's, the blast's
   double exit[3] = {0, 0, 0};  // where a round came out of the body (world m), when `through`
   bool through = false;
-  int count = 1;  // the message's count (a shotgun's pellets)
+  double amount = 1;  // how much blood (ce_blood_amount): the drops' counts times this, 0 none
+  int count = 1;      // the message's count (a shotgun's pellets)
   BloodBy by = BloodBy::any;
   double floor_y = -1e9;          // world y the drops come down on
   float light[3] = {-1, -1, -1};  // the map's light there (1 as painted); below 0 not known

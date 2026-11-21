@@ -97,6 +97,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // ce_blood_reflect: how strongly a wet pool of blood mirrors the room under ce_blood and
   // ce_reflections, 1 the whole of what its gloss and the angle give; 0 none.
   double blood_reflect = 1;
+  // ce_blood_amount: how much a body bleeds under ce_blood, 1 as drawn: the drops thrown, the
+  // splashes and pools, the wounds' stains and runs and their drips; 0 none.
+  double blood_amount = 1;
   // The ce_ switches: each enhancement the modern look draws over the pack, on or off.
   ge::classicenhance::Switches ce;
   // ce_shadows_quality, ce_water_quality, ce_skies_quality: low, medium or high, each its

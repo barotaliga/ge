@@ -204,6 +204,9 @@ Splash splash_of(fx::BloodBy by) {
   return {1, 0.5, 3.0, 0.24, 0.18};
 }
 
+// How much bigger a splash, a pool or a stain is for this much blood (ce_blood_amount).
+double amount_grow(double amount) { return 0.6 + 0.4 * amount; }
+
 // Blood falling on the floor at `at` (normal `n`): into the pool there is one near, pressed
 // again larger in its slot and spreading on from its edge, else a new pool `size` m across.
 void pool_at(FxState& s, const ge::detail::Vec3& at, const ge::detail::Vec3& n, double size,
@@ -295,10 +298,14 @@ double drip_share(fx::BloodBy by) {
 // The blood of blow `by` at `p` (engine m) along `dir` (unit) painted onto the faces near.
 void splatter(FxState& s, fx::BloodBy by, const double p[3], const double dir[3], int count,
               double t) {
-  if (!s.receivers) return;
+  if (!s.receivers || s.on.blood_amount <= 0) return;
   const ge::detail::Receivers& rec = s.receivers->receivers;
   ge::core::Rng r = ge::core::make_rng(s.seed++ * 2246822519u + 0xb100du);
-  const Splash k = splash_of(by);
+  Splash k = splash_of(by);
+  // More blood (ce_blood_amount): more splashes, and each and the pool bigger.
+  const double grow = amount_grow(s.on.blood_amount);
+  k.size_m *= grow;
+  k.pool_m *= grow;
   // A blade's spatter flies sideways across the cut.
   double axis[3] = {dir[0], dir[1], dir[2]};
   if (by == fx::BloodBy::blade) axis[0] = -dir[2], axis[1] = 0.2, axis[2] = dir[0];
@@ -328,7 +335,10 @@ void splatter(FxState& s, fx::BloodBy by, const double p[3], const double dir[3]
       drip_at(s, hit.at, n, m.size_m, t, r);
   };
   const ge::detail::Vec3 from{p[0], p[1], p[2]};
-  const int spatters = std::min(k.spatters * std::clamp(count, 1, 4), 10);
+  const int spatters =
+      std::clamp(static_cast<int>(std::lround(std::min(k.spatters * std::clamp(count, 1, 4), 10) *
+                                              s.on.blood_amount)),
+                 1, 30);
   for (int i = 0; i < spatters; ++i) {
     double d[3];
     for (int j = 0; j < 3; ++j) d[j] = axis[j] + k.cone * ge::core::range(r, -1, 1);
@@ -367,8 +377,10 @@ WoundCut cut_of(fx::BloodBy by, int count) {
 
 void bleed_fx(const FxScene& l, FxState& s, const Effect& e, const double p[3],
               const sh::Vec3f& eye_map, double floor_y, double t, FxFrame& out) {
+  if (s.on.blood_amount <= 0) return;  // ce_blood_amount 0: no blood
   const BloodBlow b = blow_of(l, s, e, eye_map);
   fx::BloodHit h;
+  h.amount = s.on.blood_amount;
   for (int k = 0; k < 3; ++k) {
     h.at[k] = p[k];
     h.dir[k] = b.dir[k];
@@ -380,8 +392,10 @@ void bleed_fx(const FxScene& l, FxState& s, const Effect& e, const double p[3],
   // The wound on the body along the blow's line (not the arc's sizzle), and its way out.
   if (b.by != fx::BloodBy::arc) {
     const ge::camera::Vec3 from{p[0] - b.dir[0] * 3, p[1] - b.dir[1] * 3, p[2] - b.dir[2] * 3};
-    h.through = wound(s, out.models, e.at, p, from, std::clamp(h.count, 1, 8), t,
-                      cut_of(b.by, h.count), h.exit);
+    WoundCut cut = cut_of(b.by, h.count);
+    cut.stain *= static_cast<float>(amount_grow(h.amount));
+    cut.run *= static_cast<float>(amount_grow(h.amount));
+    h.through = wound(s, out.models, e.at, p, from, std::clamp(h.count, 1, 8), t, cut, h.exit);
   }
   light_at(s, p, h.light);
   fx::blood_spray(h, s.seed++, &out.births);
@@ -390,6 +404,7 @@ void bleed_fx(const FxScene& l, FxState& s, const Effect& e, const double p[3],
 }
 
 void blast_blood(const FxScene& l, FxState& s, const sh::Vec3f& boom, double t, FxFrame& out) {
+  if (s.on.blood_amount <= 0) return;  // ce_blood_amount 0: no blood
   for (const Body& body : l.bodies) {
     if (!body.alive || body.entity == l.own) continue;  // the eye's own: not in its face
     const sh::Vec3f mid = {body.origin.x, body.origin.y, body.origin.z + kChestU};
@@ -405,7 +420,11 @@ void blast_blood(const FxScene& l, FxState& s, const sh::Vec3f& boom, double t, 
     if (l.map) h.floor_y = map_floor_under(*l.map, mid, mid);
     // The side toward the blast torn: a wound along the line from it.
     const ge::camera::Vec3 from = engine_point(boom);
-    wound(s, out.models, mid, h.at, from, 4, t, cut_of(fx::BloodBy::blast, h.count));
+    h.amount = s.on.blood_amount;
+    WoundCut cut = cut_of(fx::BloodBy::blast, h.count);
+    cut.stain *= static_cast<float>(amount_grow(h.amount));
+    cut.run *= static_cast<float>(amount_grow(h.amount));
+    wound(s, out.models, mid, h.at, from, 4, t, cut);
     light_at(s, h.at, h.light);
     for (int i = 0; i < h.count; ++i) fx::blood_spray(h, s.seed++, &out.births);
     splatter(s, fx::BloodBy::blast, h.at, h.dir, h.count, t);

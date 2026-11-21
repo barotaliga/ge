@@ -113,6 +113,8 @@ struct FxSwitches {
   bool blood = false;
   // ce_blood_time: how long its marks stay, s (< 0: until their place is needed).
   double blood_life_s = 120;
+  // ce_blood_amount: how much a body bleeds, 1 as drawn (0: none).
+  double blood_amount = 1;
   // ce_respawns: an item about to come back drawn as a blue hologram filling in to solid
   // (classicenhance/hologram.hpp); off, it appears at once.
   bool respawns = false;

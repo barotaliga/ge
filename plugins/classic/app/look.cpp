@@ -149,6 +149,16 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
                   "angle give, a dried pool mirroring nothing at any strength (1 the default)"},
        &picture.blood_reflect);
   bind(cv,
+       {.name = "ce_blood_amount",
+        .flags = gc::kArchive,
+        .help = "How much bodies bleed with ce_blood on: the spray, the splashes and pools, the "
+                "stains on the body and its drips.",
+        .min = 0,
+        .max = 3,
+        .values = "0: no blood; 0..3: that much of it, more drops, bigger splashes, pools and "
+                  "stains (1 the default)"},
+       &picture.blood_amount);
+  bind(cv,
        {.name = "ce_water_specks",
         .flags = gc::kArchive,
         .help = "How many specks float in the water round you while you swim under it in the "
