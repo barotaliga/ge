@@ -412,6 +412,7 @@ struct FxScene {
   std::span<const Effect> effects;        // every temporary entity this map so far, in order
   std::span<const Blow> blows;            // a campaign's blows to the player this map so far
   int64_t bonuses = 0;                    // the items the viewed player took, so far (bf)
+  double air_tint[4] = {130, 80, 50, 0};  // v_cshift: red, green, blue, strength (0..255)
   bool campaign = false;                  // a campaign's program (its own fog and blows)
   bool flash_bit = true;  // the effects' bit 2 is a gun's flash (Quake II's means another thing)
   bool q2 = false;        // Quake II's game: its own arrivals, never the warp's fog

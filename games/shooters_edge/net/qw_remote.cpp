@@ -355,6 +355,48 @@ const char* remote_stage_words(ClientStage s) {
   return "";
 }
 
+namespace {
+
+std::string size_words(size_t bytes) {
+  constexpr size_t kKb = 1024, kMb = kKb * kKb;
+  if (bytes < 10 * kKb) return std::to_string(bytes) + " bytes";
+  if (bytes < 10 * kMb) return std::to_string(bytes / kKb) + " KB";
+  return std::to_string(bytes / kMb) + " MB";
+}
+
+std::string coming(const std::string& name, int percent, size_t bytes, double& progress) {
+  percent = std::clamp(percent, 0, 100);
+  progress = percent / 100.0;
+  return name + " " + std::to_string(percent) + "% (" + size_words(bytes) + ")";
+}
+
+}  // namespace
+
+std::string remote_foot(const Remote& r, double& progress) {
+  progress = -1;
+  if (!r.active || r.watch) return {};
+  const std::string& map = r.demo.state.map;
+  const std::string loading = map.empty() ? "Loading..." : "Loading " + map + "...";
+  if (r.q2) {
+    const Q2ClientEnd& c = *r.q2;
+    if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
+    if (!c.fetching.empty())
+      return coming(c.fetching, c.fetched_percent, c.fetched_bytes.size(), progress);
+    return c.stage == ClientStage::signon ? loading : std::string();
+  }
+  const QwClientEnd& c = r.end;
+  if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
+  if (c.dl.active) {
+    int percent = c.dl.percent;
+    if (c.dl.chunked && !c.dl.have.empty())
+      percent = static_cast<int>(std::count(c.dl.have.begin(), c.dl.have.end(), true) * 100 /
+                                 static_cast<std::ptrdiff_t>(c.dl.have.size()));
+    return coming(c.dl.name, percent,
+                  c.dl.size > 0 ? static_cast<size_t>(c.dl.size) : c.dl.bytes.size(), progress);
+  }
+  return c.stage == ClientStage::signon ? loading : std::string();
+}
+
 bool remote_connect(Remote& r, const std::string& address, const ClientConfig& cfg,
                     std::string& error) {
   remote_disconnect(r);
@@ -612,8 +654,12 @@ bool remote_lobby(Remote& r, const std::string& line) {
 }
 
 bool remote_rules_word(Remote& r, const std::string& line) {
-  if (!r.active || !r.q2) return false;
-  q2_client_command(*r.q2, line);
+  if (!r.active || r.watch) return false;
+  if (!r.q2) {  // Quake's client sends on only its server's own words, never any unknown one
+    const std::string word = line.substr(0, line.find_first_of(" \t"));
+    if (word != "kill" && word != "pause" && word != "serverinfo") return false;
+  }
+  remote_command(r, line);  // Quake II's: every word the window does not know (`use Railgun`)
   return true;
 }
 
@@ -666,6 +712,7 @@ RemoteStep watch_step(Remote& r, std::vector<std::string>& said) {
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
+  r.ignore.chat.relay = true;  // a broadcast: Quake II's message triggers wait
   client::drop_ignored(r.ignore, d.state, prints, d.state.time, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
@@ -714,9 +761,71 @@ bool remote_watch(Remote& r, const std::string& address, const std::string& name
   return true;
 }
 
+namespace {
+
+// A screenshot the server asked for: the window's frame grabbed (800 by 600, JPEG at 70), then
+// sent; the upload's lines said.
+void snap_step(Remote& r, std::vector<std::string>& said) {
+  ClientUpload& u = r.end.up;
+  for (std::string& line : u.said) said.push_back(std::move(line));
+  u.said.clear();
+  if (!u.asked) return;
+  if (!r.snap_grabbing) {
+    if (!r.snap_grab || !r.snap_take || !r.snap_grab(800, 600, 70)) {
+      client_upload_start(r.end, {});  // no frame to grab: the server told no
+      return;
+    }
+    r.snap_grabbing = true;
+  }
+  std::vector<uint8_t> picture;
+  if (!r.snap_take(picture)) return;
+  r.snap_grabbing = false;
+  client_upload_start(r.end, std::move(picture));
+}
+
+// `rate` and `password` as the window's settings now have them, told to the server joined when
+// they moved since the join (Quake's `setinfo`, Quake II's whole user info again).
+void user_info_step(Remote& r) {
+  if (!r.setting) return;
+  const std::string rate_text = r.setting("rate");
+  const int rate = rate_text.empty() ? 0 : std::atoi(rate_text.c_str());
+  const std::string password = r.setting("password");
+  if (r.q2) {
+    Q2ClientConfig& q = r.q2->cfg;
+    if ((rate <= 0 || rate == q.rate) && password == q.password) return;
+    if (rate > 0) q.rate = rate;
+    q.password = password;
+    q2_client_userinfo(*r.q2);
+    return;
+  }
+  ClientConfig& c = r.end.cfg;
+  const bool rate_moved = rate > 0 && rate != c.rate;
+  const bool password_moved = password != c.password;
+  if (rate_moved) c.rate = rate;
+  if (password_moved) c.password = password;
+  if (rate_moved) client_command(r.end, "setinfo rate " + std::to_string(rate));
+  // The colours (`color`, `topcolor`, `bottomcolor`): Quake's server shows them to everyone.
+  // Only a change of the setting itself: a team colour the server set is left alone.
+  for (const auto& [key, seen, held] :
+       {std::tuple{"topcolor", &r.seen_top, &c.topcolor},
+        std::tuple{"bottomcolor", &r.seen_bottom, &c.bottomcolor}}) {
+    const std::string now = r.setting(key);
+    if (now == *seen) continue;
+    const bool first = seen->empty();
+    *seen = now;
+    if (first || now.empty()) continue;
+    *held = std::atoi(now.c_str());
+    client_command(r.end, std::string("setinfo ") + key + " " + std::to_string(*held));
+  }
+  if (password_moved) client_command(r.end, "setinfo password \"" + password + "\"");
+}
+
+}  // namespace
+
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
   if (r.watch) return watch_step(r, said);
+  user_info_step(r);
   if (r.q2) {
     const RemoteStep step = q2_remote_step(r, wall_s, said);
     remote_record_flush(r);  // `record`'s file (qw_match_record.hpp)
@@ -741,6 +850,8 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   r.end.cfg.physfps_spectator = r.physfps_spectator;
   r.end.cfg.c2spps = r.c2spps;  // cl_c2spps, live
   r.end.cfg.c2s_impulse_backup = r.c2s_impulse_backup;
+  r.end.cfg.allow_snap = r.allow_snap;  // scr_allowsnap, live
+  snap_step(r, said);
   for (;;) {
     const double tick_s = 1 / client_move_rate(r.end);
     if (r.owed_s < tick_s) break;
@@ -823,6 +934,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
+  r.ignore.chat.relay = false;
   client::drop_ignored(r.ignore, d.state, prints, wall_s, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
@@ -933,8 +1045,10 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.topcolor = std::atoi(cvar("topcolor", "0").c_str());
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
     cfg.speedjump = cvar("cl_speedjump", "0") == "1";
-    cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
-    cfg.w_switch = cvar("w_switch", "");            // Quake's switch rules on a pickup
+    cfg.rate = std::atoi(cvar("rate", "25000").c_str());  // the loaded game's default (classic)
+    cfg.password = cvar("password", "");                  // a closed server's password
+    cfg.spectator = cvar("spectator", "0") == "1";        // `set spectator 1`: join to watch
+    cfg.w_switch = cvar("w_switch", "");                  // Quake's switch rules on a pickup
     cfg.b_switch = cvar("b_switch", "");
     // cl_novweps 1: the visible weapons not asked for, so the server sends neither list nor index.
     if (cvar("cl_novweps", "0") != "0") cfg.ask[ExtFamily::z] &= ~kZVwep;
@@ -951,11 +1065,22 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.timeout = std::atof(cvar("cl_timeout", "60").c_str());  // 0: never
     cfg.trace = &r.trace;                                       // showpackets, showdrop
     cfg.read_file = r.read_file;
+    // Through forwarders (cl_proxyaddr, "fwd1:port@fwd2:port"): the packets to the first, the
+    // rest and the server in `prx`, each hop taking its own off the front.
+    const std::string chain = cvar("cl_proxyaddr", "");
+    std::string first = address;
+    if (!chain.empty() && !(r.q2_game && r.q2_game())) {
+      const size_t at = chain.find('@');
+      first = chain.substr(0, at);
+      cfg.prx = (at == std::string::npos ? std::string() : chain.substr(at + 1) + "@") + address;
+    }
     std::string error;
-    if (!remote_connect(r, address, cfg, error))
+    if (!remote_connect(r, first, cfg, error)) {
       c.print("connect: " + error);
-    else
-      c.print(remote_status(r));
+      return;
+    }
+    if (!cfg.prx.empty()) r.server_name = address;  // reconnect: the server, through the chain
+    c.print(remote_status(r));
   };
   con.add_command(
       "connect",
@@ -1050,6 +1175,21 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                      .help = "The password rcon sends the server joined.",
                      .kind = ge::console::CvarKind::text,
                      .values = "\"\": none, rcon takes it first on its line; TEXT: the password"});
+    con.cvars().bind({.name = "scr_allowsnap",
+                      .fallback = "1",
+                      .flags = ge::console::kArchive,
+                      .help = "Whether a server that asks for a picture of your screen gets one.",
+                      .kind = ge::console::CvarKind::boolean,
+                      .values = "0: it is told no; 1: yes (the default)"},
+                     &r.allow_snap);
+    con.cvars().add({.name = "cl_proxyaddr",
+                     .flags = ge::console::kArchive,
+                     .help = "The forwarders connect goes through on the way to a server, the "
+                             "nearest first.",
+                     .kind = ge::console::CvarKind::text,
+                     .values =
+                         "\"\": straight to the server (the default); HOST:PORT[@HOST:PORT...]: "
+                         "through those forwarders"});
     con.cvars().add({.name = "rcon_address",
                      .flags = ge::console::kArchive,
                      .help = "The server rcon goes to while you are not joined to one.",

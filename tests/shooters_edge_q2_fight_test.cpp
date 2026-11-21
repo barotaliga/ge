@@ -189,7 +189,7 @@ TEST(the_rail_kills_through_armour_and_the_obituary_scores) {
   CHECK(a->p(1).body.armour_count == 50 - 31);
   run(*a, 16 * 8, sh::kButtonAttack);  // the next slug, a period later
   CHECK(!a->p(1).alive && a->p(0).frags == 1);
-  CHECK(!a->s().obituaries.empty() && a->s().obituaries.back() == "Ben was pierced by Ana's rail.");
+  CHECK(!a->s().obituaries.empty() && a->s().obituaries.back() == "Ben was railed by Ana");
 }
 
 // Lag compensation (the network server's `lag_place`): a player's rail meets the others where
@@ -406,7 +406,7 @@ TEST(kill_scores_minus_one_and_the_dead_respawn_by_attack) {
   run(*a, 8 * 60);  // past the 5 s `kill` waits
   CHECK(a->r.client_command(0, "kill") == sv::CommandResult::mod);
   CHECK(!a->p(0).alive && a->p(0).frags == -1);
-  CHECK(a->s().obituaries.back() == "Ana gave up.");
+  CHECK(a->s().obituaries.back() == "Ana suicides.");
   run(*a, 8 * 12);
   run(*a, 8, sh::kButtonAttack);
   CHECK(a->p(0).alive && a->p(0).health == 100);
@@ -502,7 +502,8 @@ TEST(a_long_fall_hurts_and_lava_burns_each_frame) {
   CHECK(a->p(1).health < 100 && a->p(1).water_level > 0);
   run(*a, 8 * 40);
   CHECK(!a->p(1).alive);
-  CHECK(!a->s().obituaries.empty() && a->s().obituaries.back() == "Ben sank into the lava.");
+  CHECK(!a->s().obituaries.empty() &&
+        a->s().obituaries.back() == "Ben does a back flip into the lava.");
   CHECK(a->p(1).frags == -1);
 }
 
@@ -623,7 +624,7 @@ TEST(a_hand_grenade_held_longer_flies_faster_and_held_to_the_end_explodes_in_the
   run(*a, 8 * 45, sh::kButtonAttack);  // 1.1 s to light it, 3.2 s to its end
   CHECK(!a->p(0).alive && a->p(0).frags == -1);
   CHECK(!a->s().obituaries.empty() &&
-        a->s().obituaries.back() == "Ana held on to a grenade too long.");
+        a->s().obituaries.back() == "Ana tried to put the pin back in.");
 }
 
 // Quake's `sv_dropquad` drops the quad too, without the dmflags bit; neither: kept.
@@ -963,4 +964,73 @@ TEST(using_quad_says_so_and_power_armour_with_no_cells_says_why) {
   a->p(0).body.ammo[static_cast<int>(sv::SqAmmo::cells)] = 50;
   run(*a, 8);
   CHECK(!a->p(0).power_on);
+}
+
+// The obituaries' words: a direct hit and a blast apart, the BFG's three, the victim's gender in
+// his own deaths, the world's causes whoever struck, and a killer's line with no full stop.
+TEST(the_obituaries_word_each_way_to_die) {
+  const int rl = int(sv::SqWeapon::rocket_launcher), bfg = int(sv::SqWeapon::bfg);
+  bool by = false;
+  CHECK(sv::sq_obituary("Ben", "Ana", false, rl, sv::kSqHowDirect, "", &by) ==
+            "Ben ate Ana's rocket" &&
+        by);
+  CHECK(sv::sq_obituary("Ben", "Ana", false, rl, sv::kSqHowBlast, "") ==
+        "Ben almost dodged Ana's rocket");
+  CHECK(sv::sq_obituary("Ben", "Ana", false, bfg, sv::kSqHowLaser, "") ==
+        "Ben saw the pretty lights from Ana's BFG");
+  CHECK(sv::sq_obituary("Ben", "Ana", false, bfg, sv::kSqHowBurst, "") ==
+        "Ben couldn't hide from Ana's BFG");
+  CHECK(sv::sq_obituary("Ben", "Ana", false, sv::kSqByTelefrag, 0, "") ==
+        "Ben tried to invade Ana's personal space");
+  CHECK(sv::sq_obituary("Ana", "", true, rl, sv::kSqHowBlast, "female") == "Ana blew herself up.");
+  CHECK(sv::sq_obituary("Ana", "", true, int(sv::SqWeapon::grenade_launcher), sv::kSqHowBlast,
+                        "male") == "Ana tripped on his own grenade.");
+  CHECK(sv::sq_obituary("Ana", "", true, int(sv::SqWeapon::railgun), 0, "cyborg") ==
+        "Ana killed itself.");
+  CHECK(sv::sq_obituary("Ben", "Ana", false, sv::kSqByFall, 0, "", &by) == "Ben cratered." && !by);
+  CHECK(sv::sq_obituary("Ben", "", false, sv::kSqByMonster + 3, 0, "") == "Ben died.");
+}
+
+// Single player says only that he died.
+TEST(in_single_player_a_death_says_only_died) {
+  auto a = facing(300, "0");
+  run(*a, 8 * 60);  // past the 5 s `kill` waits
+  a->r.client_command(0, "kill");
+  CHECK(!a->p(0).alive);
+  CHECK_MSG(a->s().obituaries.back() == "Ana died.", a->s().obituaries.back());
+}
+
+namespace {
+
+// Whether a print of `text` to everyone at the high level is in the events not yet sent.
+bool said_to_all(const sv::Q2Server& s, const std::string& text) {
+  for (const sv::NetEvent& e : s.out.events)
+    if (e.kind == sv::EventKind::print && e.text == text && e.level == 2 && e.to == 0xffffffffu)
+      return true;
+  return false;
+}
+
+}  // namespace
+
+// In deathmatch each player placed (on joining and on every new map) is said to everyone, and so is
+// one leaving; outside deathmatch only a server with room for more than one says it.
+TEST(entering_and_leaving_are_said_to_everyone) {
+  auto a = arena("1");
+  CHECK(said_to_all(a->s(), "Ana entered the game\n"));
+  CHECK(said_to_all(a->s(), "Ben entered the game\n"));
+  a->r.drop(1);
+  CHECK(said_to_all(a->s(), "Ben disconnected\n"));
+  for (const int most : {1, 4}) {
+    auto g = std::make_unique<Arena>();
+    g->r = sv::q2_runner(sv::make_q2_server({}));
+    g->r.console("deathmatch 0");
+    g->s().sv.set.maxclients = most;
+    sv::MapSpec map;
+    map.name = "hall";
+    map.brushes = hall();
+    std::string error;
+    CHECK_MSG(g->r.start(map, error), error);
+    g->r.connect(0, "Ana", false, false);
+    CHECK(said_to_all(g->s(), "Ana entered the game\n") == (most > 1));
+  }
 }

@@ -106,7 +106,10 @@ struct ServerListConfig {
 };
 
 // ServerEntry::from.
-constexpr uint8_t kServerFromLan = 1, kServerFromMaster = 2, kServerFromNamed = 4;
+// kServerFromCache: an address the player's cache remembered (`server_list_read_cache`, a master's
+// list kept from an earlier answer), asked like a named one.
+constexpr uint8_t kServerFromLan = 1, kServerFromMaster = 2, kServerFromNamed = 4,
+                  kServerFromCache = 8;
 
 struct ServerEntry {
   Address address;
@@ -137,6 +140,7 @@ struct ServerList {
     int tries = 0;
     int64_t asked_us = -1;
     bool answered = false;
+    std::vector<Address> got;  // the servers its answer listed (a cache keeps them)
   };
   std::vector<Master> masters;  // per config.masters
   MasterQuery own;              // config.own_masters' pages
@@ -159,6 +163,18 @@ int server_list_add(ServerList& l, const Address& address, uint8_t from, int64_t
 bool server_list_done(const ServerList& l, int64_t now_us);
 // Servers answered so far, and servers known (answered or not).
 int server_list_answered(const ServerList& l);
+
+// THE CACHE: a list kept as text between sessions. `server_list_cache_text` writes the answered
+// servers one a line (address, ping, players, slots, then name, map, game and mode, tabs
+// between); `server_list_read_cache` reads that back as answered entries (no roster, no keys)
+// and returns how many it read, a line of another shape left out and counted in `bad`. A list
+// of addresses alone (one a line) reads too, as servers not yet answered.
+std::string server_list_cache_text(const ServerList& l);
+int server_list_read_cache(ServerList& l, std::string_view text, int* bad);
+// A master's list as its cache file holds it: one address a line; `parse_address_lines` reads
+// it back, a line that is no address left out.
+std::string address_lines(const std::vector<Address>& addresses);
+std::vector<Address> parse_address_lines(std::string_view text);
 
 struct InfoPattern;  // a compiled pattern (server_list.cpp)
 
@@ -191,7 +207,7 @@ struct ServerFilter {
   std::string name_has;        // a part of the name, the map or the mode (ASCII case folded)
   std::string mode;            // "": every mode
   std::vector<InfoRule> info;  // the info filter's words (`parse_info_filter`); none: every one
-  uint8_t from = kServerFromLan | kServerFromMaster | kServerFromNamed;
+  uint8_t from = kServerFromLan | kServerFromMaster | kServerFromNamed | kServerFromCache;
 };
 enum class ServerSort : uint8_t { ping, players, name, map, mode };
 const char* server_sort_name(ServerSort s);

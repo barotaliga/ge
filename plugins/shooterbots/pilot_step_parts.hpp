@@ -128,6 +128,13 @@ const char* hop_stretch_why(const Pilot& p, Vec3f at);
 // What the hop's stretch ends at (the link after `strafe_end_node`): "goal" (the route's end),
 // "climb", "leap" (a jump next), "mover", "teleport", "lip", "side" (a brink's side), "link".
 const char* hop_stretch_end(const Pilot& p);
+// (`airend`) Whether a stretch's end is flown by the hop to the landing when met in the air: a
+// climb, the goal or a plain link (a leap's, a mover's, a teleport's, a lip's or a side's
+// approach is the walk's to make).
+bool hop_end_flown(const Pilot& p);
+// The node the hop follows and aims to: the stretch's end, or with its end met in the air
+// (`hop_out`) two nodes past it, so the flight's aim runs on round the turn there.
+int32_t hop_end_node(const Pilot& p);
 float hop_follow(Pilot& p, Vec3f at, int32_t end);
 Vec3f hop_aim(const Pilot& p, Vec3f at, float look, int32_t end);
 bool jump_blocked(const Pilot& p, const MoveWorld& world, Vec3f o, float speed, float horizon);
@@ -151,7 +158,8 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
 
 // THE PLAN MADE, RESTARTED AND ADVANCED (pilot_plan.cpp).
 bool landed_out(const Pilot& p, const PilotSense& s);
-void restart(Pilot& p, const PilotSense& s);
+// `why` counts a copied hop start under way that it ends (PilotStats::recipe_ends).
+void restart(Pilot& p, const PilotSense& s, RecipeEnd why = RecipeEnd::other);
 void advance(Pilot& p, const PilotSense& s);
 bool replan(Pilot& p, const PilotSense& s);
 

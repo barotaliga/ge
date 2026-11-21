@@ -290,6 +290,15 @@ int run_main(int argc, char** argv) {
     return false;
   });
   sn::add_server_commands(console, listen, remote);  // users, status, rcon, cmd, score, inven
+  // A mod's own tint over the view in open air (it stuffs it; a player may type it too).
+  console.add_command("v_cshift",
+                      "v_cshift <red> <green> <blue> <strength>: a tint over the view in open air, "
+                      "each 0 to 255; v_cshift 0 0 0 0 clears it",
+                      [&](Con&, const CArgs& a) {
+                        for (size_t k = 0; k < 4; k++)
+                          listen.cshift[k] = std::clamp(
+                              a.size() > k + 1 ? std::atof(a[k + 1].c_str()) : 0.0, 0.0, 255.0);
+                      });
   // Any other line the window does not know goes to Quake II's rules (`use Railgun`, `drop`).
   console.set_unknown([&](const CArgs& a) {
     return sn::remote_rules_word(remote, a.raw) || cl::listen_rules_word(listen, a.raw) ||
@@ -316,10 +325,12 @@ int run_main(int argc, char** argv) {
   ge::audio::MusicConsole music;  // the kept soundtrack (`cd`, `bgmvolume`): outlives the synth
   ge::audio::Synth synth;         // outlives the device that pulls it (opened with the window)
   se::Hud hud = se::make_hud();
-  const auto tell = [&](const std::string& line, double at) {  // the console and the HUD's feed
+  const auto tell = [&](const std::string& line, double at, bool chat = false) {  // and the HUD
     console.print(line);
-    if (!line.starts_with('\n')) hud.notify.push(line, se::hud_style().ink, at);  // not a banner
+    if (!line.starts_with('\n'))  // not a banner: the feeds by cl_chat_notify and scr_chathud
+      cl::tell_feeds(remote.ignore.chat, hud.notify, line, chat, se::hud_style().ink, at);
   };
+  hud.chat = &remote.ignore.chat.feed;  // the chat lines on screen (scr_chathud)
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   console.cvars().set_layer(cl::kLayerShell);  // the menus and the attract loop (menu_attract)
@@ -372,7 +383,11 @@ int run_main(int argc, char** argv) {
   ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
   ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
   game_menu.set_screenshots(shots.dir());  // OPTIONS > SCREENSHOTS looks through them
-  game_menu.servers().set_query(shooters_edge::net::qw_query());  // JOIN A GAME
+  game_menu.servers().set_query(shooters_edge::net::qw_query());         // JOIN A GAME
+  game_menu.servers().set_routes(shooters_edge::net::qw_route_query());  // sb_findroutes
+  game_menu.servers().set_cache_dir(
+      std::filesystem::path(shots.dir()).parent_path());  // sb_listcache
+  con_view.set_dump_folder(std::filesystem::path(shots.dir()).parent_path().string());  // condump
   // SELECT GAME: every classic game, its install kept on this computer and its edition.
   game_menu.games().set_lister(
       [&] { return cl::game_rows(prefs, args.profile, game_menu.game()); });
@@ -395,7 +410,9 @@ int run_main(int argc, char** argv) {
                                   .frame_cap = &pacing.settings.max_fps,
                                   .light_intensity = &picture.light_intensity,
                                   .light_modulate = &picture.light_modulate,
-                                  .light_lift = &picture.light_lift};
+                                  .light_lift = &picture.light_lift,
+                                  .chat = &remote.ignore.chat,
+                                  .auto_chat = &con_view.game_chat};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
@@ -425,6 +442,8 @@ int run_main(int argc, char** argv) {
   remote.joined_record.screenshot = [&shots](const std::string& n, std::string& why) {
     return shots.request(n, &why);
   };
+  remote.snap_grab = [&shots](int w, int h, int q) { return shots.grab(w, h, q); };  // snap
+  remote.snap_take = [&shots](std::vector<uint8_t>& out) { return shots.take_grab(out); };
   std::string error;
   // No packs and no `+map`: the built-in arena (the start map below falls back to it).
   const bool opened =
@@ -1543,6 +1562,8 @@ int run_main(int argc, char** argv) {
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
+    double foot_share = -1;  // the console's foot while joining: the file coming, the loading
+    con_view.set_foot(sn::remote_foot(remote, foot_share), foot_share);
     if (std::exchange(remote.left, false) && !remote.active && !listen.map && !bench.active &&
         next_map.empty()) {
       if (!start_attract()) next_map = game_content.first_map;
@@ -1640,12 +1661,13 @@ int run_main(int argc, char** argv) {
       if (paced) {  // what the frames read carried: heard, and its lines shown
         synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
         std::vector<std::string> lines;
-        cl::DemoHeard joined_heard;  // a game joined: what its frames read carried (remote_step)
+        std::vector<bool> chat_lines;  // which are chat (cl_chat_notify, scr_chathud)
+        cl::DemoHeard joined_heard;    // a game joined: what its frames read carried (remote_step)
         if (drawn_remote) joined_heard = {ds.started, ds.stopped, ds.voice, ds.prints, ds.centre};
         if (hearing.frame(ds, drawn_remote ? joined_heard : bench.heard, static_cast<float>(wall),
-                          lines, hud.centre))
+                          lines, hud.centre, &chat_lines))
           hud.centre_until = t + picture.centre_time;  // scr_centertime
-        for (const std::string& line : lines) tell(line, t);
+        for (size_t i = 0; i < lines.size(); ++i) tell(lines[i], t, chat_lines[i]);
       }
       if (!world) continue;  // no level of the demo's yet
       // Bob, roll and kick rebuilt on the recorded eye; a game joined by its prediction.

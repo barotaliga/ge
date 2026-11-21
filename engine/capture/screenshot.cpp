@@ -16,6 +16,7 @@
 #include "console/cvar.hpp"
 #include "core/num_text.hpp"
 #include "lab/png.hpp"
+#include "lab/raster.hpp"
 
 namespace ge::capture {
 
@@ -141,7 +142,7 @@ bool Screenshots::request(std::string name, std::string* why) {
                           : "A screenshot's name can't leave its folder: " + name + ".";
     return false;
   }
-  asked_ = true;
+  asked_ = file_asked_ = true;
   asked_name_ = std::move(name);
   return true;
 }
@@ -153,6 +154,26 @@ std::string Screenshots::folder() const {
   for (const fs::path& part : f) bad = bad || part == "..";
   if (bad) return dir_;  // a folder outside the game's is not taken
   return (fs::path(dir_).parent_path() / f).string();
+}
+
+bool Screenshots::grab(int width, int height, int quality) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (grab_wanted_ || grab_out_ || width <= 0 || height <= 0) return false;
+  grab_wanted_ = grab_out_ = true;
+  grab_width_ = width;
+  grab_height_ = height;
+  grab_quality_ = std::clamp(quality, 1, 100);
+  asked_ = true;
+  return true;
+}
+
+bool Screenshots::take_grab(std::vector<uint8_t>& out) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!grab_ready_) return false;
+  out = std::move(grabbed_);
+  grabbed_.clear();
+  grab_ready_ = grab_out_ = false;
+  return true;
 }
 
 bool Screenshots::due() {
@@ -206,16 +227,33 @@ bool Screenshots::write(uint32_t width, uint32_t height, std::span<const uint8_t
                      " RGBA; this is a bug in the game's copy of its frame");
     return false;
   }
-  std::string note;
-  const StillOptions o = still_options(settings_ ? *settings_ : ScreenshotSettings{}, note);
-  std::string named;
-  named.swap(asked_name_);
-  jobs_.push_back({next_path(still_extension(still_writable(o.format)), named),
-                   width,
-                   height,
-                   {rgba.begin(), rgba.end()},
-                   o,
-                   std::move(note)});
+  const bool grab = grab_wanted_;
+  if (grab) {
+    grab_wanted_ = false;
+    Job g;
+    g.grab_width = grab_width_;
+    g.grab_height = grab_height_;
+    g.width = width;
+    g.height = height;
+    g.rgba.assign(rgba.begin(), rgba.end());
+    g.options = {StillFormat::kJpg, grab_quality_, false};
+    jobs_.push_back(std::move(g));
+  }
+  if (!grab || file_asked_) {
+    std::string note;
+    const StillOptions o = still_options(settings_ ? *settings_ : ScreenshotSettings{}, note);
+    std::string named;
+    named.swap(asked_name_);
+    jobs_.push_back({next_path(still_extension(still_writable(o.format)), named),
+                     0,
+                     0,
+                     width,
+                     height,
+                     {rgba.begin(), rgba.end()},
+                     o,
+                     std::move(note)});
+  }
+  file_asked_ = false;
   if (!worker_.joinable()) worker_ = std::thread([this] { work(); });
   wake_.notify_one();
   return true;
@@ -247,6 +285,18 @@ void Screenshots::work() {
     std::vector<uint8_t> bytes;
     StillFormat used = job.options.format;
     std::string why;
+    if (job.path.empty()) {  // a grab: scaled, packed, kept for `take_grab`
+      lab::Picture full{static_cast<int>(job.width), static_cast<int>(job.height),
+                        std::move(job.rgba)};
+      const lab::Picture small = lab::resized(full, job.grab_width, job.grab_height);
+      encode_still(job.options, small.width, small.height, small.rgba, bytes, used, why);
+      std::lock_guard<std::mutex> lock(mutex_);
+      grabbed_ = std::move(bytes);
+      grab_ready_ = true;
+      busy_ = false;
+      idle_.notify_all();
+      continue;
+    }
     encode_still(job.options, static_cast<int>(job.width), static_cast<int>(job.height), job.rgba,
                  bytes, used, why);
     if (!why.empty()) job.note += (job.note.empty() ? "" : "; ") + why;

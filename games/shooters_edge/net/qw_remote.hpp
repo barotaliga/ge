@@ -168,6 +168,8 @@ struct Remote {
   const std::vector<sh::BrushModel>* world = nullptr;  // prediction: the level's models ([0] world)
   std::string server_name;                             // as asked ("host:port")
   std::string why;                                     // why it dropped
+  // The window's `topcolor` and `bottomcolor` last seen: a change of them is told the server.
+  std::string seen_top, seen_bottom;
   sp::ChannelTrace trace;  // showpackets, showdrop: the channel's lines (add_remote_commands)
   // Lerp: the last two frames' entities as read (by number), before anything drawn moved them.
   std::vector<client::DemoEntity> ents_old, ents_new;
@@ -211,6 +213,13 @@ struct Remote {
                      const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
   bool kept = false;
+  // A screenshot the server asked for (qw_client.hpp `ClientUpload`): the window's frame grabbed
+  // in memory, scaled and packed (`snap_grab(width, height, quality)`, false when it can't) and
+  // handed back later (`snap_take`). Unset: the server is told no, as with scr_allowsnap 0.
+  std::function<bool(int width, int height, int quality)> snap_grab;
+  std::function<bool(std::vector<uint8_t>& out)> snap_take;
+  bool snap_grabbing = false;
+  bool allow_snap = true;  // scr_allowsnap
   gn::Address server;
   bool active = false;
   bool left = false;  // a server was left (dropped or let go) since the window last took this
@@ -289,6 +298,10 @@ void remote_rcon_step(Remote& r, double now_s, std::vector<std::string>& said);
 std::string remote_status(const Remote& r);
 // The words before the server's name for a stage ("playing on ").
 const char* remote_stage_words(ClientStage s);
+// The console's foot while a game is joined but not yet played (console/view.hpp's set_foot): the
+// file coming, its share and size ("maps/dm2.bsp 40% (88 KB)", `progress` 0.4), or "Loading
+// dm2..." while signing on; "" (and `progress` -1) once playing, watching or not joined.
+std::string remote_foot(const Remote& r, double& progress);
 // A line for the server joined (`say hello`, `vote map dm2`), whichever protocol it speaks.
 void remote_command(Remote& r, const std::string& line);
 // A line the console does not know, sent to a server of Quake II joined (its game's own words:

@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "classic/content/downloads.hpp"
+#include "classic/protocol/masters.hpp"
 #include "core/num.hpp"
 #include "mod/loader.hpp"
 #include "net/packet.hpp"
@@ -103,6 +104,10 @@ struct Game {
   // With a QuakeWorld game's packs in the folder: its item names and server words as local info
   // (profiles/items.hpp, profiles/words.hpp), set on every map before the rules start.
   std::vector<std::string> info_lines;
+  // The masters it reports to (`setmaster`, `heartbeat`; classic/protocol/masters.hpp), and
+  // what they said for the console.
+  ge::classic::protocol::Masters masters;
+  std::vector<std::string> masters_said;
   // A listen server (ServerConfig::host): the window's content and its view of the game; slot 0
   // its player, a local seat. Null on a dedicated server.
   cl::ListenHost* host = nullptr;
@@ -630,6 +635,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       const profiles::GameProfile& game = profiles::q1_game();
       g->info_lines = profiles::item_name_lines(game.tables.names);
       for (std::string& line : profiles::word_lines(game.words)) g->info_lines.push_back(line);
+      if (!game.arena_rules.empty())
+        g->info_lines.push_back("localinfo rules " + std::string(game.arena_rules));
     }
   }
   if (!open_map(*g, c.map, g->map, g->rules, error)) return nullptr;
@@ -656,6 +663,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   // The ban list beside the game's files, where a dedicated server keeps its own (writeip).
   if (g->host == nullptr && !g->files.folder.empty()) {
     g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
+    g->cfg.snap_dir = (std::filesystem::path(g->files.folder) / "snap").string();  // snap
     g->cfg.vip_file = (std::filesystem::path(g->files.folder) / "vip_ip.cfg").string();
   }
   g->cfg.seed = c.seed;
@@ -1417,7 +1425,24 @@ bool room_words(void* ctx, int slot, const std::string& line) {
   return gs::lobby_command(r.lobby, slot, line, g.rules->sv.time);
 }
 
-void destroy(void* g) { delete static_cast<Game*>(g); }
+namespace cp = ge::classic::protocol;
+
+void masters_send(Game& game, const std::vector<cp::MasterSend>& out) {
+  if (!game.qw || game.qw->transport == nullptr) return;
+  for (const cp::MasterSend& m : out)
+    ge::net::transport_send(*game.qw->transport, m.to, m.bytes.data(), m.bytes.size(),
+                            static_cast<int64_t>(game.qw->now * 1e6));
+}
+
+// The masters told the server is going (Quake's `C`), then the game freed.
+void destroy(void* g) {
+  Game* game = static_cast<Game*>(g);
+  std::vector<cp::MasterSend> out;
+  std::vector<std::string> said;
+  cp::masters_shutdown(game->masters, out, said);
+  masters_send(*game, out);
+  delete game;
+}
 
 double frame_seconds(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
@@ -1483,6 +1508,40 @@ bool game_words(void* ctx, int slot, const std::string& line) {
   return room_words(ctx, slot, line);
 }
 
+// The masters' heartbeat at the frame (the first frame starts the list).
+void masters_turn(Game& game, int64_t now_us) {
+  const double now_s = static_cast<double>(now_us) / 1e6;
+  if (!cp::masters_started(game.masters)) {
+    cp::masters_start(game.masters, cp::MasterFamily::qw, now_s);
+  }
+  std::vector<cp::MasterSend> out;
+  cp::masters_frame(game.masters, now_s, qw_count(*game.qw, ConnState::connected), "", true, out,
+                    game.masters_said);
+  masters_send(game, out);
+}
+
+// `setmaster` and `heartbeat` on the server's console; false for any other line.
+bool masters_line(Game& game, const std::string& line) {
+  std::vector<std::string> w;
+  for (size_t at = 0; at < line.size();) {
+    const size_t start = line.find_first_not_of(" \t", at);
+    if (start == std::string::npos) break;
+    const size_t end = std::min(line.find_first_of(" \t", start), line.size());
+    w.push_back(line.substr(start, end - start));
+    at = end;
+  }
+  if (w.empty() || (w[0] != "setmaster" && w[0] != "heartbeat")) return false;
+  if (w[0] == "heartbeat") {
+    cp::force_heartbeat(game.masters);
+    return true;
+  }
+  std::vector<cp::MasterSend> out;
+  cp::set_masters(game.masters, {w.begin() + 1, w.end()}, cp::resolve_master, game.masters_said,
+                  out);
+  masters_send(game, out);
+  return true;
+}
+
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   if (game.coop) return coop_serve(*game.coop, port, error);
@@ -1545,6 +1604,7 @@ void net_frame(void* g, int64_t now_us) {
   game.qw->match_on = game.settings.lobby != 0 &&
                       (phase == gs::LobbyPhase::countdown || phase == gs::LobbyPhase::match);
   qw_frame(*game.qw, now_us);
+  masters_turn(game, now_us);
   if (game.login) qw_login_frame(*game.login);
   tally(game);
   overtime_turn(game);
@@ -1573,11 +1633,14 @@ void console_lines(void* g, std::vector<std::string>& out) {
     game.told = 0;
   }
   for (; game.told < now.console.size(); game.told++) out.push_back(now.console[game.told]);
+  for (std::string& line : game.masters_said) out.push_back(std::move(line));
+  game.masters_said.clear();
 }
 
 // A server console line the core does not know: the rules' own (`map`, a mod's words).
 bool console_line(void* g, const std::string& line) {
   Game& game = *static_cast<Game*>(g);
+  if (!game.coop && masters_line(game, line)) return true;
   if (game.coop || !game.rules) return false;
   return game.rules.console(line);
 }

@@ -256,6 +256,28 @@ void run(ge::lab::Lab& lab) {
              "run tests/console_view_test.cpp; skill: console");
   }
 
+  // Joining a game in remote mode: the foot shows the file coming over the input line's `#`.
+  c.add_command("rcon", "rcon <line>: a line for the server's console",
+                [](con::Console&, const con::Args&) {});
+  c.execute("remotemode");
+  c.run();
+  for (v.key(con::EditKey::end); !v.input().empty();) v.key(con::EditKey::backspace);
+  v.type("status");
+  v.set_foot("maps/dm2.bsp 40% (90 KB)", 0.4);
+  Picture joining = backdrop(w, h);
+  draw(joining, v);
+  lab.shot({"joining",
+            "JOINING: THE FOOT AND REMOTE MODE",
+            "A game being joined shows the file coming on the console's foot, a bar and its "
+            "share; remotemode sends what is typed to the server's console, its prompt #.",
+            "a bar 40% full and maps/dm2.bsp 40% (90 KB) over the input line, which reads # status",
+            {{"remotemode", "on"}, {"foot", "maps/dm2.bsp 40% (90 KB)"}}},
+           joining);
+  v.set_foot("");
+  c.execute("remotemode");
+  c.run();
+  for (v.key(con::EditKey::end); !v.input().empty();) v.key(con::EditKey::backspace);
+
   // Only a button takes a `+`: a command typed bare, then with a `+` (dropped, so it runs the
   // same), a button pressed, and a `+` on a name nothing knows.
   {

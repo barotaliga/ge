@@ -490,6 +490,7 @@ void screen_blend(const Screen& s, double rgba[4], const BlendShares& k) {
         tint(255, 80, 0, 150, k.content);
         break;
       case Medium::air:
+        tint(s.air_rgb[0], s.air_rgb[1], s.air_rgb[2], s.air, k.content);
         break;
     }
     tint(s.hurt_rgb[0], s.hurt_rgb[1], s.hurt_rgb[2], s.hurt, k.damage);
@@ -524,6 +525,8 @@ void screen_blend(const Screen& s, double rgba[4], const BlendShares& k) {
       over(0.92, 0.36, 0.04, 0.65 * k.content);
       break;
     case Medium::air:
+      over(s.air_rgb[0] / 255, s.air_rgb[1] / 255, s.air_rgb[2] / 255,
+           std::clamp(s.air, 0.0, 255.0) / 255 * k.content);
       break;
   }
   if (s.suit) over(0.25, 0.55, 0.20, 0.18 * k.suit);

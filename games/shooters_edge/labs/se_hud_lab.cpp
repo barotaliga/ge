@@ -280,6 +280,11 @@ void run(ge::lab::Lab& lab) {
   se::add_cvars(console, hud);
   hud.notify.push("you got the nailgun", style.ink, 39.7);
   hud.notify.push("you got 25 health", style.good, 39.2);
+  // The chat lines on screen (scr_chathud 2: the alternate colour), lower left in every look.
+  ge::hud::Feed chat{4, -1, 1, 0.15};
+  chat.push("bob: quad in 10", ui::Color{0.45f, 1, 0.45f, 1}, 30);
+  chat.push("(eve): rl up, low", ui::Color{0.45f, 1, 0.45f, 1}, 35);
+  hud.chat = &chat;
   const std::vector<Viewport> viewports = parse_viewports(lab.arg("viewports"));
   const struct {
     const char* id;
@@ -332,7 +337,8 @@ void run(ge::lab::Lab& lab) {
                     kLookCaption[li],
                     moment == "fight"
                         ? "nothing off the screen or overlapping; the nailgun flashing; the damage "
-                          "boost's seconds; the frag board (classic) or FRAGS 17"
+                          "boost's seconds; the frag board (classic) or FRAGS 17; two chat lines "
+                          "in green at the lower left"
                         : "health 18, armour 9 and the 6 shells in the alarm colour; the portrait "
                           "wincing; the cloak's seconds; the centre message under the corners",
                     {{"look", look_word},
@@ -413,6 +419,7 @@ void run(ge::lab::Lab& lab) {
     }
     console.execute("hud_reset; hud_style modern; hud_scale 1");
     hud.centre.clear();
+    hud.chat = nullptr;  // the player's cfg puts the powerups where the chat lines stand
     const Viewport& v = shown;
     std::vector<gh::Placed> before_boxes;
     for (int pass = 0; pass < 2; ++pass) {

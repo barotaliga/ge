@@ -66,6 +66,7 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
     if (!r.ok) return;
     CHECK_MSG(r.faults == 0, "the baseline mod faulted under the fighters");
     float novices_seed = 0;
+    int64_t novices_better = 0;
     for (const fb::FightPlayer& p : r.players) {
       const std::string name = p.name + " seed " + std::to_string(seed);
       const fb::FighterStats& s = p.stats;
@@ -96,14 +97,21 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
                 name + " switched weapons " + std::to_string(s.switches) + " times");
       int64_t better = 0;
       for (int w = 3; w <= 8; w++) better += s.weapon_commands[w];
-      // Every seed he holds a better weapon than the scattergun; 200 commands a seed is held over
-      // the six (a novice with three pickups in one two-minute match held one 95 commands).
-      CHECK_MSG(better > 0, name + " never held a weapon better than the scattergun");
+      // Every seed an expert holds a better weapon than the scattergun, and the novices as a pair
+      // (one novice spawn-killed through a two-minute match is a coin toss: 4 pickups and 19
+      // deaths on one seed, the six's novice pickups 66 and 66); 200 commands a seed is held over
+      // the six for each (a novice with three pickups in one match held one 95 commands).
+      CHECK_MSG(better > 0 || p.skill == sb::AimSkill::novice,
+                name + " never held a weapon better than the scattergun");
+      if (p.skill == sb::AimSkill::novice) novices_better += better;
       better_held[p.name] += better;
       for (int m = 0; m < 4; m++) modes[p.name][static_cast<size_t>(m)] += s.mode_commands[m];
       (p.skill == sb::AimSkill::expert ? expert : novice) += p.frags;
     }
     CHECK_MSG(novices_seed >= 1, "the novices scored nothing on seed " + std::to_string(seed));
+    CHECK_MSG(novices_better > 0,
+              "the novices never held a weapon better than the scattergun on seed " +
+                  std::to_string(seed));
     std::printf("seed %u: experts %.0f novices %.0f so far\n", seed, expert, novice);
   }
   for (const auto& [name, n] : frags)

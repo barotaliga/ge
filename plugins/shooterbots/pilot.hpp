@@ -171,6 +171,13 @@ struct PilotSettings {
   // straight (`hop_straight`); the wall's check run on the landing too, so the side is set with
   // the jump (`hop_wall_ground`).
   float hop_air_keep_s = 0;
+  // THE AIM'S SWAP ON THE GROUND (`swapground`): the side the aim asks for taken at the landing,
+  // not in the air, unless the aim lies `hop_swing` off (a wall's swap stays in the air): people
+  // swap at the landing two times in three (dm2, 25 ms frames), the bots half the time.
+  bool hop_swap_ground = false;
+  // THE SIDE CLEAR OF A WALL SET WITH THE JUMP (`wallplan`): on the ground the arc is checked this
+  // long ahead (a flight), so the side clear of a wall is the one jumped with; 0: `hop_see_s`.
+  float hop_see_ground_s = 0;
   bool hop_straight = false;
   bool hop_wall_ground = false;
   // THE SWAP AT THE LANDING (`hopland`, the maintainer's hop): the side swapped only `hop_swap_s`
@@ -212,6 +219,11 @@ struct PilotSettings {
   // meets a wall lands at ~100 units/s and ends the hop, a run that meets one slides along it at
   // a run's speed. 0: off.
   float hop_land_wall_s = 0;
+  // THE STRETCH'S END FLOWN TO THE LANDING (`airend`): a hop's stretch that runs out at a climb,
+  // the goal or a plain link while the flight is up keeps the hop's air to the landing (aimed
+  // along the route past the end) and ends there, no jump held: the walk took a flight over at
+  // once, and a glance or a look its view, and it flew on straight into the wall at a turn.
+  bool hop_air_end = false;
   // THE JUMP HELD FOR THE LANDING (`hopjump`, M18r.md 0v): in a hop's air the jump is let go on the
   // way up and held on the way down, so it goes off on the landing frame, before any friction (a
   // press on the ground lands 2-3 commands late under a keyboard); not for a landing under
@@ -290,6 +302,10 @@ struct PilotSettings {
   // it, it was knocked or fell into the water under the way). Off: the floor's nodes are reached
   // standing on them, and a swimmer on a walk never plans again by itself.
   bool floor_swim = true;
+  // A ride's plat away from its rest with the player under it and not aboard is in his way: he
+  // waits clear of it (standing in its field holds a raised plat up for good, so it never came
+  // down for him: base2's lift). Off by default (the deathmatch sets were judged without it).
+  bool under_plat = false;
   float floor_swim_up = 96;
   float lost_under = 48;
   // `underway`: the same on the ground: a walker whose link's ends both lie over `lost_under`
@@ -344,6 +360,10 @@ struct PilotSettings {
   // `recipe_heading` (`starthead`): the proven start taking off closest to the hop's aim from its
   // takeoff, among `kRecipeTriesHeading` flown; off, the nearest proven one.
   bool recipe_heading = false;
+  // (`startease`) The start's recorded view offset to begin at the pilot's own and the offset eased
+  // to none over `recipe_ease_s`, the proof flown on the eased view (its keys under it): the
+  // recording's entry view, set at once, snapped the view in and out of every start.
+  float recipe_ease_s = 0;
   // and charged for a flight after the takeoff that meets a wall within 0.4 s (`startclear`)
   bool recipe_clear = false;
   // THE FIGHT'S LANDING (`aimland`): with the view on a fight (`PilotSense::aimed`) the hop's air
@@ -411,6 +431,14 @@ struct PilotSense {
   std::span<const OtherBox> others;
 };
 
+// Why a copied hop start under way ended on the ground (PilotStats::recipe_ends): a node passed
+// (`advance`), a new plan, the stretch read again on a new goal, the hop's stretch at its end (or
+// slow, or a roof), anything else; of the plans, a new goal the caller gave (`goal`) and the way
+// planned again by the pilot (`replan`: lost, stuck, a gap given up, a door ...).
+enum class RecipeEnd : uint8_t { advance, plan, retarget, hop_end, other, goal, replan, count };
+inline constexpr const char* kRecipeEndNames[] = {"advance", "plan", "retarget", "hop-end",
+                                                  "other",   "goal", "replan"};
+
 struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
   int32_t mashed = 0;          // `walkmash`: walk commands pressed forward and a swapped strafe key
@@ -440,13 +468,16 @@ struct PilotStats {
   int32_t recipe_commits = 0;       // and one proven and begun
   int32_t recipe_aborts = 0;        // of them, left off the proof's way before the takeoff
   int32_t recipe_takeoffs = 0;      // and those that left the ground
-  float recipe_speed = 0;           // their takeoff speeds across, summed, units/s
-  int32_t retargets = 0;            // new goals run on to from the node ahead (`pilot_retarget`)
-  int32_t vias = 0;                 // goals chained on past a pickup (`pilot_chain`)
-  int32_t via_touched = 0;          // and of them, the pickup's point run through
-  int32_t via_missed = 0;           // and those run past it, not through it
-  float via_speed = 0;              // the speed through the touched ones, summed, units/s
-  double time_s = 0;                // the commands' time since the last pilot_go
+  int32_t recipe_cuts = 0;          // ended on the ground by the hop left (a plan, a new goal)
+  int32_t recipe_ranouts = 0;       // ended on the ground with its frames played (no jump)
+  std::array<int32_t, static_cast<size_t>(RecipeEnd::count)> recipe_ends{};  // and by restart
+  float recipe_speed = 0;   // their takeoff speeds across, summed, units/s
+  int32_t retargets = 0;    // new goals run on to from the node ahead (`pilot_retarget`)
+  int32_t vias = 0;         // goals chained on past a pickup (`pilot_chain`)
+  int32_t via_touched = 0;  // and of them, the pickup's point run through
+  int32_t via_missed = 0;   // and those run past it, not through it
+  float via_speed = 0;      // the speed through the touched ones, summed, units/s
+  double time_s = 0;        // the commands' time since the last pilot_go
 };
 
 struct Pilot {
@@ -473,6 +504,8 @@ struct Pilot {
   // And, for "end" and "room", what the stretch ended at (`hop_stretch_end`): "goal", "climb",
   // "leap", "mover", "teleport", "lip", "side", "link", "" none.
   const char* hop_end_at = "";
+  bool hop_out =
+      false;  // (`airend`) the stretch has ended in the air: the hop flies to the landing
   bool hop_air_swapped = false;  // (`hoprhythm`) the side swapped in this flight already
   // (`hopland`) The floor's height at the last ground command, the heading's turn toward the side
   // (filtered, degrees a second), the heading the last command, how far past the aim the flight
@@ -500,6 +533,7 @@ struct Pilot {
   int tries = 0;                             // and the run-ups at it
   NavKind try_kind = NavKind::walk;          // and its kind (`giveup`)
   int32_t script_from = -1, script_to = -1;  // the scripted way being flown (nav_script.hpp)
+  int32_t ladder_from = -1, ladder_to = -1;  // the ladder being climbed (NavLink::ladder)
   size_t script_step = 0, script_seen = 0;   // its step aimed at, and the furthest yet
   double script_at = -1e9;                   // the clock it was last flown at (`script_fresh`)
   bool script_done = false;                  // its last step reached
@@ -592,7 +626,10 @@ struct Pilot {
   double via_left_at = -1e9;
   std::vector<int32_t> shut;             // doors the caller knows are shut: never planned through
   std::vector<NavExtraLink> shut_links;  // and links it knows are (onto a bridge still in)
-  std::vector<NavExtraLink> cut_all;     // cut and shut_links together, for the route
+  // Hollow doors the caller knows (a lift's car: its nodes on the car's floor, found clear with it
+  // at rest): a link between two of its nodes is walked while it rests, never waited out.
+  std::vector<int32_t> hollow;
+  std::vector<NavExtraLink> cut_all;                   // cut and shut_links together, for the route
   NavExtraLink near_cut{-1, -1, NavKind::jump, 0, 0};  // (`gapnear`) a gap left out of one plan
   double wanted[3] = {}, pressed[3] = {};              // the last command's yaw, forward, side
   float lane = 0, lane_want = 0, lane_until = 0;       // the lane now, wanted, and until when (s)
@@ -624,6 +661,10 @@ bool pilot_chain(Pilot& p, int32_t next, Vec3f at);
 // running; only a way that turns back stops them.
 bool pilot_retarget(Pilot& p, int32_t goal, const PilotSense& s);
 void pilot_unchain(Pilot& p);
+// The way the pilot would plan from node `from` to `goal` now: round the doors barred and shut,
+// off the links cut, missed, given up and onto a bridge still in; empty when there is none. A
+// caller weighing a choice of ways (a door's errand, `errandworth`) plans as the pilot would.
+NavRoute pilot_way(Pilot& p, int32_t from, int32_t goal);
 // The next command, `msec` long.
 MoveCmd pilot_step(Pilot& p, const PilotSense& sense, int msec, ai::Why* why = nullptr);
 

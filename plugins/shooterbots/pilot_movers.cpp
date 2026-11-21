@@ -87,7 +87,8 @@ bool aboard(const Pilot& p, const PilotSense& s, int32_t ent) {
 
 // Whether the link's mover keeps the pilot at its start now. A ride's plat away from its rest
 // with a swimmer under its top (`floor_swim`: on a pool's floor under a raised plat, which a plat
-// coming down onto him sends back up, so it would never come for him) is in his way too.
+// coming down onto him sends back up, so it would never come for him) is in his way too, and with
+// `under_plat` one he stands under on dry ground.
 bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t a, int32_t b) {
   if (l.mover < 0) return false;
   const NavMover* rest = mover_of(p.g->movers, l.mover);
@@ -108,6 +109,7 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
   }
   if (l.kind == NavKind::ride) {
     const float up = now->absmin.z - rest->absmin.z;
+    if (p.set.under_plat && !aboard(p, s, l.mover) && under_raised(p, s, l.mover)) return true;
     return p.set.floor_swim && s.waterlevel >= 2 && (up > kRideRest || up < -kRideRest) &&
            s.origin.z + kPlayerMins.z < now->absmax.z - kStandUp;
   }
@@ -132,10 +134,21 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
     // Already aboard (it starts up under him as he steps on): no longer in his way.
     if (aboard(p, s, l.mover)) return false;
     if (away || up > kBoardRest || up < -kBoardRest || !silent(p, l.mover)) return true;
+    // A cage (its floor inside its box: base2's lift, whose box reaches 132 over its floor) is
+    // boarded at its floor, where its node was found at rest.
+    if (nb.origin.z + kPlayerMins.z < rest->absmax.z - kStepHeight) return false;
     // Its top already more than a step over the feet (rising off its rest under another rider):
     // walked on, the player goes in under it, and standing in its field holds it up for good.
     return s.onground && now->absmax.z > s.origin.z + kPlayerMins.z + kStepHeight;
   }
+  // A link inside a hollow door at its rest (`Pilot::hollow`, a lift's car with its nodes on the
+  // car's floor: base1's exit, base2's start) was found clear with the car there: walked as
+  // found. Out of its rest it is in the way like any door; a shut door's doorway always is.
+  bool hollow = false;
+  for (const int32_t h : p.hollow) hollow = hollow || h == l.mover;
+  if (hollow && na.mover == l.mover && nb.mover == l.mover && now->absmin.x == rest->absmin.x &&
+      now->absmin.y == rest->absmin.y && now->absmin.z == rest->absmin.z)
+    return false;
   Vec3f lo = na.origin, hi = na.origin;
   for (int i = 0; i < 3; i++) {
     if (nb.origin[i] < lo[i]) lo[i] = nb.origin[i];

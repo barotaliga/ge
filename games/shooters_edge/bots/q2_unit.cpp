@@ -63,16 +63,20 @@ std::string bare(const std::string& asked) {
   return m;
 }
 
+// A pilot with no way to his goal this long forgets the links he gave up on, s.
+constexpr double kForgetFailed_s = 3;
+
 struct OnMap {
   std::unique_ptr<MapNav> nav;
   Fighter leader;
   WayThrough way;
   Wedge wedge;
   sh::MoveCmd cmds[3];
+  double no_route_since = -1;  // the pilot with a goal and no way to it since, s
 };
 
 bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const UnitOptions& opt,
-           int entered, UnitMap& um, std::string& error) {
+           int entered, const std::string& came, UnitMap& um, std::string& error) {
   const sv::RulesCommon& s = *r;
   m.nav = std::make_unique<MapNav>();
   m.nav->move = q2_nav_move(0);
@@ -95,15 +99,19 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   if (nav.swim.leading > 0) f.swim = &nav.swim;
   f.trap = &nav.trap;
   f.wet = &nav.wet;
+  f.dry_pockets = false;                    // the way through leaves a pocket by its doors
+  f.bot.pilot.pilot.set.under_plat = true;  // a raised lift is waited for out from under it
   // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
   f.features.set(sb::Feature::locked, false);
   hunt_init(f, s);
   sv::MapSpec spec = map;
   spec.entities = entities;
   m.way = WayThrough();
+  m.way.back = came;
   way_init(m.way, f, nav, s, spec);
   if (opt.plan) m.way.log = &um.plan;
   m.wedge = Wedge();
+  m.no_route_since = -1;
   for (const WayStep& st : m.way.steps) {
     if (st.kind == WayKind::exit) um.exits.push_back((st.lo + st.hi) * 0.5f);
     if (st.kind == WayKind::key) {
@@ -117,8 +125,11 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
 // GLASS IN HIS WAY: a pane that breaks (a `func_explosive` that takes blows) stops him as a wall
 // does, though his nav, built of the world's brushes, runs through it. The nearest live one within
 // `kBreakReach` that his eye sees is shot: the view on its nearest point, fire held. Barrels are
-// left alone (their blast hurts him). True while he shoots.
+// left alone (their blast hurts him). A body lying as scenery (`misc_deadsoldier`) is solid to
+// him too, and his nav runs over it: one within `kBodyReach` is shot to pieces (base2's by the
+// south pool held him against it for good). True while he shoots.
 constexpr float kBreakReach = 192;
+constexpr float kBodyReach = 80;
 
 bool way_break(const sv::Q2Server& q, const sv::RulesCommon& s, sh::MoveCmd& cmd) {
   const sh::Vec3f eye = s.world.entities[1].origin + sh::Vec3f{0, 0, 22};
@@ -127,7 +138,9 @@ bool way_break(const sv::Q2Server& q, const sv::RulesCommon& s, sh::MoveCmd& cmd
   sh::Vec3f aim;
   for (size_t i = 0; i < q.entities.size(); i++) {
     const sv::Q2Entity& e = q.entities[i];
-    if (e.classname != "func_explosive" || e.gone || e.hidden || !e.solid || e.health <= 0)
+    const bool body = e.classname == "misc_deadsoldier" && e.box && !e.gone;
+    if (!body &&
+        (e.classname != "func_explosive" || e.gone || e.hidden || !e.solid || e.health <= 0))
       continue;
     const sh::Vec3f lo = e.origin + e.mins, hi = e.origin + e.maxs;
     // Its nearest point to his eye, kept 4 units inside its edges so the line meets its face.
@@ -136,11 +149,12 @@ bool way_break(const sv::Q2Server& q, const sv::RulesCommon& s, sh::MoveCmd& cmd
     };
     const sh::Vec3f p{in(eye.x, lo.x, hi.x), in(eye.y, lo.y, hi.y), in(eye.z, lo.z, hi.z)};
     const float d = sh::length(p - eye);
-    if (d >= nearest) continue;
+    if (d >= nearest || (body && d >= kBodyReach)) continue;
     sh::Vec3f way = p - eye;
     sh::normalize(way);
     const ge::classic::Q2Trace t =
-        sv::map_trace(q, eye, {}, {}, p + way * 8, sh::kSqSolid | sh::kSqWindow, -1);
+        sv::map_trace(q, eye, {}, {}, p + way * 8,
+                      sh::kSqSolid | sh::kSqWindow | (body ? sh::kSqMonster : 0), -1);
     if (t.fraction >= 1 || t.entity != sv::map_row(static_cast<int>(i))) continue;  // not seen
     best = static_cast<int>(i);
     nearest = d;
@@ -183,7 +197,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
   rules.console("coop 0");
   rules.console("skill " + std::to_string(opt.game_skill));
   sv::MapSpec map;
-  if (!opt.load(opt.load_ctx, opt.first, map, r.error)) {
+  if (!opt.load(opt.load_ctx, bare(opt.first), map, r.error)) {
     r.error = "run_q2_unit: " + opt.first + ": " + r.error;
     return r;
   }
@@ -195,10 +209,14 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
   sv::Q2Server* q = sv::q2_of(rules);
   uint64_t h = 1469598103934665603ull;
   uint32_t sequence = 0;
+  // The map before this one: on the first, the one `first` names after its `$` (a start as if
+  // arrived from there, `base2$base1`), else none.
+  std::string came;
+  if (const size_t d = opt.first.find('$'); d != std::string::npos) came = opt.first.substr(d + 1);
   for (int mi = 0; mi < opt.maps; mi++) {
     OnMap m;
     UnitMap um;
-    if (!enter(m, rules, map, opt, mi, um, r.error)) {
+    if (!enter(m, rules, map, opt, mi, came, um, r.error)) {
       r.error = "run_q2_unit: " + map.name + ": " + r.error;
       return r;
     }
@@ -219,6 +237,23 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       // A view the rules turned (a spawn, a teleporter) is his to start from.
       const bool forced = q->players[0].forced;
       if (forced) m.leader.bot.yaw = s.sv.edicts[1].v_angle.y;
+      // A pilot with no way to the goal the way through found one to has given up on a link it
+      // needs (a jump missed twice, out of the water or under a monster): after a while those
+      // links are forgotten and tried again, as a person tries a jump once more.
+      {
+        sb::Pilot& pp = m.leader.bot.pilot.pilot;
+        if (pp.mode == sb::PilotMode::idle && pp.route.empty() && !pp.failed.empty()) {
+          if (m.no_route_since < 0) m.no_route_since = t;
+          if (t - m.no_route_since >= kForgetFailed_s) {
+            pp.failed.clear();
+            pp.cut.clear();
+            m.no_route_since = -1;
+            um.forgot++;
+          }
+        } else {
+          m.no_route_since = -1;
+        }
+      }
       m.cmds[2] = fighter_command(m.leader, s, 0, kPilotMsec);
       if (forced) m.cmds[2].angles = s.sv.edicts[1].v_angle;
       way_dive(m.way, *m.nav, s, 1, m.cmds[2]);
@@ -227,6 +262,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
         m.leader.bot.yaw = m.cmds[2].angles.y;  // he turned to it: his keys follow his view
       } else {
         unwedge(m.wedge, s, 1, t, m.cmds[2]);
+        if (way_edge(*m.nav, m.leader, s, 1, m.cmds[2])) um.edges++;
       }
       // The intermission: a button now and then leaves for the next map.
       if (q->intermission_at > 0) m.cmds[2].buttons = (frame & 8) ? sh::kButtonAttack : 0;
@@ -270,6 +306,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       r.out_to = bare(asked);
       break;
     }
+    came = map.name;
     if (!opt.load(opt.load_ctx, bare(asked), map, r.error)) {
       r.error = "run_q2_unit: " + asked + ": " + r.error;
       return r;

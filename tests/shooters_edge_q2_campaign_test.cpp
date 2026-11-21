@@ -285,3 +285,101 @@ TEST(an_item_on_a_movers_top_rests_on_it) {
   CHECK(!pass.gone);
   CHECK_MSG(pass.origin.z > 64 + 14 && pass.origin.z < 64 + 16, std::to_string(pass.origin.z));
 }
+
+namespace {
+
+std::unique_ptr<Game> coop_game(const char* name, const std::vector<Pairs>& extra) {
+  auto g = std::make_unique<Game>();
+  g->r = sv::q2_runner(sv::make_q2_server({}));
+  g->r.console("deathmatch 0");
+  g->r.console("coop 1");
+  g->map.name = name;
+  g->map.brushes = hall(extra);
+  std::string error;
+  CHECK_MSG(g->r.start(g->map, error), error);
+  return g;
+}
+
+Pairs coop_spot(const char* origin, const char* targetname) {
+  return {{"classname", "info_player_coop"}, {"origin", origin}, {"targetname", targetname}};
+}
+
+const sv::Q2Entity* spot_at(const sv::Q2Server& s, float x) {
+  for (const sv::Q2Entity& e : s.entities)
+    if (e.classname == "info_player_coop" && e.origin.x == x) return &e;
+  return nullptr;
+}
+
+}  // namespace
+
+// On a map whose co-op spots carry the wrong names, each takes the name of the first named start
+// within 550 units; elsewhere the names stand.
+TEST(in_coop_a_misnamed_maps_spots_take_the_name_of_their_start) {
+  const std::vector<Pairs> spots = {coop_spot("300 0 24", "wrong"), coop_spot("-300 0 24", "far")};
+  auto g = coop_game("mine1", spots);
+  CHECK(spot_at(g->s(), 300)->targetname == "east");  // 300 from the start named east
+  CHECK(spot_at(g->s(), -300)->targetname == "far");  // only the unnamed start is near
+  auto other = coop_game("hall", spots);
+  CHECK(spot_at(other->s(), 300)->targetname == "wrong");
+}
+
+TEST(in_coop_the_security_level_gets_three_spots_from_the_jail) {
+  auto g = coop_game("security", {});
+  int added = 0;
+  for (const sv::Q2Entity& e : g->s().entities)
+    if (e.classname == "info_player_coop" && e.targetname == "jail3" && e.origin.y == -164 &&
+        e.origin.z == 80 && e.angles.y == 90)
+      added++;
+  CHECK(added == 3);
+  CHECK(spot_at(g->s(), 124) && spot_at(g->s(), 252) && spot_at(g->s(), 316));
+}
+
+// A co-op player past the first with no spot of the level's name takes the n-th co-op spot within
+// 550 units of the start, and stands on the start only when there is none.
+TEST(in_coop_a_player_with_no_named_spot_takes_one_near_the_start) {
+  auto g = coop_game("hall", {coop_spot("-500 0 24", "x"), coop_spot("-400 0 24", "x"),
+                              coop_spot("400 0 24", "x")});
+  for (int i = 0; i < 4; i++) g->r.connect(i, "P" + std::to_string(i), false, false);
+  const auto x = [&](int i) { return float(g->s().players[i].move.origin[0]) / 8; };
+  CHECK(x(0) == -600);
+  CHECK(x(1) == -500);
+  CHECK(x(2) == -400);
+  CHECK(x(3) == -600);  // the third spot is past 550: the start
+}
+
+// The network server seats a player again after a level change by connecting him to the slot the
+// rules kept: he keeps what he carried and his score.
+TEST(a_player_seated_again_after_a_level_change_keeps_what_he_carried) {
+  auto g = coop_game("hall", {});
+  g->r.connect(0, "Ana", false, false);
+  run(*g, kSecond);
+  const int key = sv::sq_item("key_blue_key");
+  g->p().body.counts[key] = 1;
+  g->p().frags = 3;
+  g->r.connect(0, "Ana", false, false);
+  CHECK(g->p().body.counts[key] == 1);
+  CHECK(g->p().frags == 3);
+}
+
+// A deathmatch spot and every teleporter exit, led to or not, are discs a player stands on; outside
+// deathmatch a deathmatch spot is no disc.
+TEST(deathmatch_spots_and_every_teleporter_exit_are_discs) {
+  const std::vector<Pairs> points = {
+      {{"classname", "info_player_deathmatch"}, {"origin", "0 0 24"}},
+      {{"classname", "misc_teleporter_dest"}, {"origin", "200 0 24"}, {"targetname", "nowhere"}}};
+  for (const char* dm : {"1", "0"}) {
+    auto g = std::make_unique<Game>();
+    g->r = sv::q2_runner(sv::make_q2_server({}));
+    g->r.console(std::string("deathmatch ") + dm);
+    g->map.name = "hall";
+    g->map.brushes = hall(points);
+    std::string error;
+    CHECK_MSG(g->r.start(g->map, error), error);
+    const sv::Q2Entity& spot = g->s().entities[size_t(g->find("info_player_deathmatch"))];
+    const sv::Q2Entity& exit = g->s().entities[size_t(g->find("misc_teleporter_dest"))];
+    CHECK(exit.pad == 2);
+    CHECK((spot.pad == 2) == (dm[0] == '1'));
+    CHECK(g->r->world.models[size_t(exit.modelindex)] == "models/objects/dmspot/tris.md2");
+    CHECK(g->r->world.models.back() == sv::kQ2PlayerModel);
+  }
+}

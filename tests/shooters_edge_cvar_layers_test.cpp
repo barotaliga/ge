@@ -59,6 +59,8 @@ struct Window {
   int noskins = 0;       // the picture's stock_figures (Quake II's cl_noskins)
   int moves = 62;        // the remote's q2_maxfps (Quake II's cl_maxfps)
   double frame_cap = 0;  // the pacing's frame cap (our cl_maxfps, Quake II's r_maxfps)
+  cl::ChatExtras chat;   // the chat's extras (Quake II's cl_chat_sound)
+  int auto_chat = -1;    // the console view's game_chat (Quake II's con_auto_chat)
 
   explicit Window(const pr::GameProfile& g) {
     cl::add_coop_cvars(console, coop);
@@ -83,6 +85,7 @@ struct Window {
                           .min = 0,
                           .max = 10000},
                          &frame_cap);
+    cl::add_chat_extras(console, chat);
     cl::add_start_cvars(console, start, g);
     cl::add_game_cvars(console, game, g,
                        {.crosshair = &hud.crosshair,
@@ -95,7 +98,9 @@ struct Window {
                         .frame_cap = &frame_cap,
                         .light_intensity = &picture.light_intensity,
                         .light_modulate = &picture.light_modulate,
-                        .light_lift = &picture.light_lift});
+                        .light_lift = &picture.light_lift,
+                        .chat = &chat,
+                        .auto_chat = &auto_chat});
   }
 };
 
@@ -152,6 +157,8 @@ TEST(each_games_fov_and_move_speeds) {
   v.set("fov", "110", con::Source::local);  // Quake's spelling of the lens
   CHECK(v.find("cl_fov")->value == "110");
   CHECK(v.find("cl_forwardspeed")->value == "400");
+  CHECK(v.find("rate")->value == "2500" && (v.find("rate")->flags & con::kUserInfo) != 0);
+  CHECK(v.find("password")->value.empty());
   v.set("w_switch", "8", con::Source::local);  // Quake's servers' switch rule
   CHECK(v.find("w_switch")->value == "8" && (v.find("w_switch")->flags & con::kUserInfo) != 0);
   w.console.execute("cvar_reset w_switch; alias go \"echo go\"");
@@ -172,6 +179,7 @@ TEST(each_games_fov_and_move_speeds) {
                          .view = &w.view});
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
     CHECK_MSG(v.find(name)->value == "200", name);  // Quake II's walk
+  CHECK(v.find("rate")->value == "15000");          // its servers may send more
   CHECK(v.find("w_switch") == nullptr);             // Quake II's servers have no such rule
   CHECK(!w.console.has_command("viewalias"));       // Quake's spelling of `alias <name>`
   v.set("hand", "1", con::Source::local);           // Quake II's user info
@@ -205,6 +213,7 @@ TEST(each_games_fov_and_move_speeds) {
                          .noskins = &w.noskins,
                          .view = &w.view});
   CHECK(v.find("cl_forwardspeed")->value == "400");
+  CHECK(v.find("rate")->value == "2500");  // Quake's default again
   CHECK(!w.controls.mouse.per_frame && v.find("hand") == nullptr);
   CHECK(w.predict && v.find("cl_predict") == nullptr);       // Quake always predicts
   CHECK(v.find("cl_predict_crouch") == nullptr);             // and never ducks
@@ -490,4 +499,37 @@ TEST(quake_twos_intensity_and_gl_modulate_light_its_maps) {
                          .light_lift = &w.picture.light_lift});
   CHECK(v.find("intensity") == nullptr && v.find("gl_modulate") == nullptr);
   CHECK(shooters_edge::look::light_scale(w.picture) == 1 && w.picture.light_lift == 0);
+}
+
+TEST(color_sets_both_colours_as_quake_keeps_them) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  w.console.execute("color 4");
+  CHECK(v.find("topcolor")->value == "4" && v.find("bottomcolor")->value == "4");
+  w.console.execute("color 15 17");  // past 13: 13; 17 wraps to 1
+  CHECK(v.find("topcolor")->value == "13" && v.find("bottomcolor")->value == "1");
+  w.console.clear_output();
+  w.console.execute("color");
+  CHECK(!w.console.output().empty() && w.console.output()[0].find("13") != std::string::npos);
+}
+
+TEST(q2_chat_sound_and_auto_chat_are_its_own_and_go_with_it) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(w.chat.named_sound.empty() && w.auto_chat == -1);  // Quake: s_chat_custom, con_chat
+  CHECK(v.find("cl_chat_sound") == nullptr && v.find("con_auto_chat") == nullptr);
+  CHECK(v.find("cl_chat_notify") != nullptr && v.find("scr_chathud") != nullptr);  // both games
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  const cl::GameBindings b{.chat = &w.chat, .auto_chat = &w.auto_chat};
+  cl::switch_game_cvars(w.console, w.game, *q2, b);
+  CHECK(w.chat.named_sound == "1" && w.auto_chat == 0);
+  v.set("cl_chat_sound", "2", con::Source::local);
+  v.set("con_auto_chat", "2", con::Source::local);
+  CHECK(std::string(cl::q2_chat_sound(w.chat.named_sound)) == "misc/talk1.wav");
+  CHECK(w.auto_chat == 2);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], b);
+  CHECK(w.chat.named_sound.empty() && w.auto_chat == -1);
+  CHECK(v.clashes().empty());
 }

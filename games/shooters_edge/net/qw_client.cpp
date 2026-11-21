@@ -210,12 +210,35 @@ void on_download(QwClientEnd& c, const SvcMsg& m) {
     return;
   }
   c.dl.bytes.insert(c.dl.bytes.end(), m.data.begin(), m.data.end());
+  c.dl.percent = m.ints[1];
   if (m.ints[1] >= 100) {
     c.dl.size = static_cast<int>(c.dl.bytes.size());
     finish_download(c, true);
   } else {
     client_command(c, "nextdl");
   }
+}
+
+// The next block of the screenshot the server asked for, with the share done.
+void send_upload_block(QwClientEnd& c) {
+  ClientUpload& u = c.up;
+  if (!u.sending) return;
+  const size_t n = std::min(kUploadBlock, u.data.size() - u.at);
+  ClcMsg m;
+  m.id = clc::upload;
+  m.size = static_cast<int>(n);
+  m.data.assign(u.data.begin() + static_cast<std::ptrdiff_t>(u.at),
+                u.data.begin() + static_cast<std::ptrdiff_t>(u.at + n));
+  u.at += n;
+  m.percent = static_cast<int>(u.at * 100 / u.data.size());
+  uint8_t buf[kUploadBlock + 16];
+  gn::Writer w = gn::make_writer(buf, sizeof buf);
+  write_clc(w, m);
+  channel_reliable(c.ch, buf, w.size);
+  if (u.at < u.data.size()) return;
+  u.said.emplace_back("Upload completed");
+  u.sending = false;
+  u.data.clear();
 }
 
 void on_stufftext(QwClientEnd& c, const std::string& text) {
@@ -232,7 +255,15 @@ void on_stufftext(QwClientEnd& c, const std::string& text) {
     const std::string cmd = pg::word(w, 0);
     if (cmd == "cmd") {
       const std::string rest = line.substr(line.find("cmd") + 4);
-      if (rest == "pext") {
+      if (rest == "snap") {
+        // A screenshot asked for: nothing while one is on its way; scr_allowsnap 0 says no.
+        if (!c.up.asked && !c.up.sending) {
+          if (c.cfg.allow_snap)
+            c.up.asked = true;
+          else
+            client_command(c, "snap");
+        }
+      } else if (rest == "pext") {
         std::string ans = "pext";
         if (c.cfg.mode == ClientExtMode::pext)
           for (ExtFamily f : {ExtFamily::x, ExtFamily::x2, ExtFamily::mvd})
@@ -241,6 +272,11 @@ void on_stufftext(QwClientEnd& c, const std::string& text) {
       } else {
         client_command(c, rest);
       }
+    } else if (cmd == "nextul") {
+      send_upload_block(c);
+    } else if (cmd == "stopul") {
+      c.up.sending = false;
+      c.up.data.clear();
     } else if (cmd == "packet" && w.count >= 3) {
       // A connectionless line the server asks to have sent back (a check of the address it
       // reaches us from): sent to the address named, or to the server when the name does not read.
@@ -687,6 +723,19 @@ void client_command(QwClientEnd& c, const std::string& line) {
   write_byte(w, clc::stringcmd);
   write_string(w, line);
   channel_reliable(c.ch, buf, w.size);
+}
+
+void client_upload_start(QwClientEnd& c, std::vector<uint8_t> picture) {
+  c.up.asked = false;
+  if (picture.empty()) {
+    client_command(c, "snap");
+    return;
+  }
+  c.up.said.push_back("Upload starting of " + std::to_string(picture.size()) + "...");
+  c.up.data = std::move(picture);
+  c.up.at = 0;
+  c.up.sending = true;
+  send_upload_block(c);
 }
 
 sh::MoveSettings client_move_settings(const QwClientEnd& c) {

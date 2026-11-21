@@ -52,9 +52,10 @@ class DemoHearing {
   // One drawn frame: what `h` gathered played, its ended lines appended to `lines` (a line's
   // start printed without its newline waits for the rest, from later prints) and its centre
   // message (if any, its lines on one line) in `centre`; `h` emptied. `dt` moves the ambience, s.
-  // True when a centre message came (the caller shows it for a while).
+  // True when a centre message came (the caller shows it for a while). `chat`, when given, gets
+  // one flag a line: whether it was a chat print's (print level 3).
   bool frame(const DemoState& s, DemoHeard& h, float dt, std::vector<std::string>& lines,
-             std::string& centre);
+             std::string& centre, std::vector<bool>* chat = nullptr);
   // The demo over: everything it plays stopped (its recordings freed once their fades end, at a
   // later `frame` or `stop`).
   void stop();
@@ -68,7 +69,8 @@ class DemoHearing {
   std::unique_ptr<DemoSounds> sounds_;
   RetiredSounds retired_;  // the last folders' and demos' sounds, until their voices fade
   std::unique_ptr<DemoVoices> voices_;
-  std::string partial_;  // printed text not yet ended by a newline
+  std::string partial_;        // printed text not yet ended by a newline
+  bool partial_chat_ = false;  // partial_ began in a chat print
 };
 
 }  // namespace shooters_edge::client

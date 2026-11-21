@@ -23,7 +23,15 @@ namespace shooters_edge::server::rules::arena {
   X(team_a, kTypeString)    \
   X(team_b, kTypeString)    \
   X(frags_a, kTypeFloat)    \
-  X(frags_b, kTypeFloat)
+  X(frags_b, kTypeFloat)    \
+  X(next_map, kTypeString)  \
+  X(intermission_exit, kTypeFloat)
+
+// THE ARENA'S OWN FIELDS: a level exit's `map`, an intermission spot's `mangle`.
+#define SE_ARENA_FIELDS(X) \
+  X(map, kTypeString)      \
+  X(mangle, kTypeVector)   \
+  X(count, kTypeFloat)
 
 // THE ARENA'S OWN FUNCTIONS by name (the C++ `main_hook` is the program's `main`).
 #define SE_ARENA_FUNCTIONS(X)                         \
@@ -35,13 +43,25 @@ namespace shooters_edge::server::rules::arena {
   X(info_player_deathmatch, "info_player_deathmatch") \
   X(info_player_start, "info_player_start")           \
   X(info_intermission, "info_intermission")           \
-  X(path_corner, "path_corner")
+  X(path_corner, "path_corner")                       \
+  X(trigger_changelevel, "trigger_changelevel")       \
+  X(changelevel_touch, "changelevel_touch")           \
+  X(item_key1, "item_key1")                           \
+  X(item_key2, "item_key2")                           \
+  X(trigger_relay, "trigger_relay")                   \
+  X(use_targets, "use_targets")                       \
+  X(trigger_secret, "trigger_secret")                 \
+  X(secret_touch, "secret_touch")                     \
+  X(trigger_counter, "trigger_counter")               \
+  X(counter_use, "counter_use")                       \
+  X(SpectatorConnect, "SpectatorConnect")             \
+  X(SpectatorDisconnect, "SpectatorDisconnect")
 
 #define SE_X(name, ...) g_##name,
 enum Gl : uint8_t { SE_COMMON_GLOBALS(SE_X) SE_ARENA_GLOBALS(SE_X) kGlobalCount };
 #undef SE_X
 #define SE_X(name, ...) f_##name,
-enum Fd : uint8_t { SE_COMMON_FIELDS(SE_X) kFieldCount };
+enum Fd : uint8_t { SE_COMMON_FIELDS(SE_X) SE_ARENA_FIELDS(SE_X) kFieldCount };
 #undef SE_X
 #define SE_X(name, ...) s_##name,
 enum St : uint16_t { SE_RULES_STRINGS(SE_X) kStringCount };

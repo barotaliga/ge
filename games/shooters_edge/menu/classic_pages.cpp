@@ -214,8 +214,8 @@ void ServersPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int wi
     const bool full = in.max_players > 0 && in.players >= in.max_players;
     text_right(pen, std::to_string(in.players) + "/" + std::to_string(in.max_players), kPlayersEnd,
                y, !full);
-    text_right(pen, e.ping_ms < 0 ? "-" : std::to_string(std::min(e.ping_ms, 999)), kListRight, y,
-               false);
+    text_right(pen, ping_words(rows_[static_cast<size_t>(r)], std::min(e.ping_ms, 999)), kListRight,
+               y, false);
   }
   if (n == 0) {
     const float y = kRowsTop + 16;

@@ -702,6 +702,7 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.effects = l.effects;
   out.blows = l.blows;
   out.bonuses = l.bonuses;
+  for (int k = 0; k < 4; k++) out.air_tint[k] = l.cshift[k];
   out.campaign = l.campaign_host != nullptr;
   out.q2 = listen_is_q2(l);  // its own arrivals, never the warp's fog
   for (int k = 0; k < 4; k++)

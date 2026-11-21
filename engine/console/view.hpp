@@ -11,8 +11,9 @@
 //   - a line starting with `/` or `\` is a command (that character dropped): `/r_bloom 0`;
 //   - a line starting with `//` is a note: shown in the scrollback, never run or said;
 //   - any other line is a CHAT message (`say <line>`) while `con_chat` is 1 (a multiplayer game
-//     sets it), a command while it is 0 (single player: there is nobody to chat to), and with 2
-//     a command when its first word names a command, alias or setting (any case), else chat.
+//     sets it), a command while it is 0 (single player: there is nobody to chat to), with 2
+//     a command when its first word names a command, alias or setting (any case), else chat, and
+//     with 3 said to the team. A game with its own setting for it (`game_chat`) rules over it.
 //
 // CHAT goes out through the game's `Chat` sender (net/session.hpp's chat in a multiplayer game);
 // with none set, a line is shown locally as said. The chat COMMANDS (`say`, `say_team`,
@@ -34,7 +35,16 @@
 // many suggestions the list under the input line holds), and what the panel
 // is drawn on: con_bgtop and con_bgbottom (a gradient's colours, "rrggbb"), con_bgalpha and
 // con_bgimage (a picture over the gradient); and con_font, the charset its text is written in
-// (docs/charsets.md: terminal, mono, ...; "" the 2D layer's own UI font).
+// (docs/charsets.md: terminal, mono, ...; "" the 2D layer's own UI font); con_clock (1: the
+// local time in the panel's lower right corner).
+//
+// `clearnotify` lets the notify lines so far go. `remotemode [address [password]]` sends each line
+// typed without a slash to the game's `rcon` command, the prompt `#` (the address and password set
+// `rcon_address` and `rcon_password` when the game has them); again, it ends. con_scale sizes the
+// text (0: as drawn). A game shows what it is loading on the console's foot (`set_foot`).
+//
+// `condump [name]` writes the scrollback's text to `<folder>/<name>.txt` (`condump` the name when
+// none is given; the folder is the game's, `set_dump_folder`), a line a line.
 //
 // ge:summary The drop-down console: scrollback by kind, the input line, history, / commands, chat
 // ge:keywords console view drop-down tilde backquote toggleconsole scrollback history input-line
@@ -42,7 +52,8 @@
 // ge:keywords chat-line messagemode chat-prompt typing
 // ge:keywords completion tab con_height con_chat con_speed con_lines slash-command loading full
 // ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage con_font
-// ge:keywords autocomplete suggestion suggestions hint con_suggest
+// ge:keywords autocomplete suggestion suggestions hint con_suggest condump con_clock game_chat
+// ge:keywords clearnotify remotemode rcon con_scale foot loading download-bar
 // ge:skill console
 // ge:test tests/console_view_test.cpp
 #pragma once
@@ -132,7 +143,7 @@ enum class EditKey : uint8_t {
   escape
 };
 
-class ConsoleView {
+class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by subject
  public:
   // Registers the view's cvars and commands on `c` (toggleconsole, clear) and takes `c`'s printing
   // into the scrollback.
@@ -188,6 +199,34 @@ class ConsoleView {
   // con_font: the charset the text is written in ("": the 2D layer's UI font).
   const std::string& font() const { return font_; }
 
+  // A game's own setting for what a line typed without a slash is, in its order: 0 a command, 1
+  // said to everyone, 2 said to the team; -1 (none): con_chat rules.
+  int game_chat = -1;
+  // What a line typed without a slash is now, in con_chat's values (3: said to the team).
+  int chat_mode() const;
+  // Where `condump` writes ("": it refuses, saying so).
+  void set_dump_folder(std::string folder) { dump_folder_ = std::move(folder); }
+  // The scrollback written to `<folder>/<name>.txt`; false with the reason in `why`.
+  bool dump(std::string_view name, std::string& why) const;
+  // con_clock: the local time drawn in the panel's corner.
+  bool clock_shown() const { return clock_on_; }
+  // con_scale: the text's size against the console's own (0, the default: 1).
+  double text_scale() const { return scale_ > 0 ? scale_ : 1; }
+  // THE FOOT: a line the game shows under the scrollback while it joins a game (the file coming
+  // and its share, what is loading); `progress` 0..1 draws a bar before it, below 0 none; ""
+  // takes it away.
+  void set_foot(std::string text, double progress = -1) {
+    foot_ = std::move(text);
+    foot_progress_ = progress;
+  }
+  const std::string& foot() const { return foot_; }
+  double foot_progress() const { return foot_progress_; }
+  // REMOTE MODE (`remotemode`): a line typed without a slash runs as `rcon <line>`, a server's
+  // console from this one; the prompt is `#`.
+  bool remote() const { return remote_; }
+  // What the input line begins with: "] ", or "# " in remote mode.
+  std::string_view prompt() const { return remote_ ? "# " : "] "; }
+
   // The game's chat; none: a line is shown as said by `name`.
   void set_chat(ChatSender send) { chat_ = std::move(send); }
   // `text` said to `to` (`nick`: ChatTo::one's player) through the game's chat; a `"..."` round
@@ -234,7 +273,13 @@ class ConsoleView {
   uint64_t added_ = 0;                           // the lines added so far
   uint64_t notify_from_ = 0;                     // the first line the notify area may show
   double notify_time_ = 4;
-  int chat_default_ = 0;  // con_chat
+  int chat_default_ = 0;   // con_chat
+  bool clock_on_ = false;  // con_clock
+  bool remote_ = false;    // remotemode
+  double scale_ = 0;       // con_scale
+  std::string foot_;
+  double foot_progress_ = -1;
+  std::string dump_folder_;
   std::string bg_top_ = "10141c", bg_bottom_ = "10141c", bg_image_;
   std::string font_ = "mono";
   double bg_alpha_ = 0.85;

@@ -39,6 +39,7 @@ namespace shooters_edge::bots {
 constexpr double kWayPlan_s = 0.5;   // he plans again this often, s
 constexpr double kWayGiveUp_s = 25;  // a step not done in this long is left
 constexpr double kWayRetry_s = 60;   // and tried again after this
+constexpr double kWayNoRoute_s = 5;  // an exit his pilot finds no route to this long is left
 constexpr double kWayIdle_s = 5;     // nothing to do this long: back into the water
 constexpr float kWaySeen = 192;      // a node this near where he has stood is explored, units
 
@@ -69,17 +70,24 @@ struct WayThrough {
   std::vector<WayStep> steps;
   std::vector<int> locked;           // doors something else opens: their entities
   std::vector<sh::Vec3f> locked_at;  // and where each stands shut
-  std::vector<int32_t> barred;       // those shut now (the plan's)
-  std::vector<int32_t> barred_was;   // and at the last plan
-  std::vector<int32_t> node_door;    // each node: the bridge it stands on (map_nav.hpp), -1 none
-  std::vector<int64_t> gain;  // each locked door: the places not yet seen its opening reaches
-  std::vector<uint8_t> seen;  // nodes he has stood near
+  std::string back;  // the map he came from: an exit to it is no way on (set before way_init)
+  std::vector<int> turners;  // turning doors a step opens (`func_door_rotating`): their entities
+  std::vector<sh::Vec3f> turners_at;  // and the angles each rests shut at
+  std::vector<int> hatches;  // turners lying over an exit (base2's floor hatch over its shaft)
+  std::vector<int> cars;     // doors a button moves that bar no one (a lift's car)
+  std::vector<sh::Vec3f> cars_at;   // and where each rests
+  std::vector<int32_t> barred;      // those shut now (the plan's)
+  std::vector<int32_t> barred_was;  // and at the last plan
+  std::vector<int32_t> node_door;   // each node: the bridge it stands on (map_nav.hpp), -1 none
+  std::vector<int64_t> gain;        // each locked door: the places not yet seen its opening reaches
+  std::vector<uint8_t> seen;        // nodes he has stood near
   ge::ai::Search search;
   WayStats stats;
   std::vector<std::string>* log = nullptr;  // each change of plan said, when given
   double plan_at = -1, step_since = 0;
   int step = -1;                 // the step he is on, -1 none (exploring)
   double idle_since = -1;        // nothing to do since then, -1 something
+  double no_route_since = -1;    // the exit chosen and his pilot with no route to it since then
   int dive = -1;                 // the water's entry (MapNav::entries) he goes back in by, -1 none
   int out = -1;                  // and the one on the far side he swims to and climbs out by
   std::vector<uint8_t> trapped;  // the nodes he could walk to when he went back in
@@ -112,5 +120,15 @@ struct Wedge {
   int64_t shoves = 0;      // commands he jumped and stepped aside to come free
 };
 void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::MoveCmd& cmd);
+
+// THE PIT'S LIP: on dry ground outside a trap (map_nav.hpp: no way on foot back out), a wish
+// that would carry him over the lip of one (a stride ahead, no floor within kEdgeDrop, or only
+// the trap's) is turned back, whatever pressed it (a dodge, a U-turn): a fight's side step in
+// base2 dropped him into its south pool for good. A route of his own into the trap is let be.
+// True when it turned the keys.
+constexpr float kEdgeLook = 40;  // the stride looked along, units
+constexpr float kEdgeDrop = 64;  // a floor this far down is a step, units
+bool way_edge(const MapNav& nav, const Fighter& f, const ge::shooterbots::BotView& s, int me,
+              sh::MoveCmd& cmd);
 
 }  // namespace shooters_edge::bots

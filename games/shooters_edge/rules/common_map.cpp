@@ -29,6 +29,11 @@ constexpr int kDoorSilver = 16;
 constexpr int kDoorToggle = 32;  // opens on one use and stays, shuts on the next
 
 void flame_start(A& q, int32_t mdl, float fr) {
+  // Quake's rules: a flame (not the globe) crackles where it burns.
+  if (quake_rules(q) && (mdl != q.s(s_s_light_spr))) {
+    q.precache_sound(q.s(s_fire1_wav));
+    q.ambientsound(q.v(q.self(), q.L.f.origin), q.s(s_fire1_wav), 0.5f, kAttnStatic);
+  }
   q.precache_model(mdl);
   q.setmodel(q.self(), mdl);
   q.set_f(q.self(), q.L.f.frame, fr);
@@ -50,6 +55,18 @@ void brush_start(A& q) {
 void trigger_start(A& q) {
   if (!same_vec(q.v(q.self(), q.L.f.angles), {0, 0, 0})) set_movedir(q);
   const int32_t me = q.self();
+  // Quake's rules: the trigger's `sounds` 1 the secret's chime, 2 talk, 3 the trigger's click.
+  if (quake_rules(q)) {
+    const float sounds = q.f(me, q.L.f.sounds);
+    const St noise = sounds == 1   ? s_misc_secret_wav
+                     : sounds == 2 ? s_misc_talk_wav
+                     : sounds == 3 ? s_trigger1_wav
+                                   : s_empty;
+    if (noise != s_empty) {
+      q.precache_sound(q.s(noise));
+      q.set_i(me, q.L.f.noise, q.s(noise));
+    }
+  }
   q.set_f(me, q.L.f.solid, kSolidTrigger);
   q.set_f(me, q.L.f.movetype, kMovetypeNone);
   q.setmodel(me, q.i(me, q.L.f.model));
@@ -255,6 +272,8 @@ void plat_rise(A& q) { plat_go_up(q); }
 void trigger_fire(A& q) {
   const int32_t me = q.self();
   if (q.f(me, q.L.f.nextthink) > q.time()) return;  // still waiting since the last time
+  if (quake_rules(q) && !q.is(q.i(me, q.L.f.noise), ""))
+    q.sound(me, kChanVoice, q.i(me, q.L.f.noise), 1, kAttnNorm);
   use_targets(q);
   const int32_t s = q.self();
   if (q.f(s, f_wait) > 0) {
@@ -378,12 +397,22 @@ void door_trigger_touch(A& q) {
   if ((key != 0) & (band(q.f(q.other(), q.L.f.items), key) == 0)) {
     if (q.time() >= q.f(me, f_attack_finished))
       q.sound(field, kChanItem, q.i(me, q.L.f.noise3), 1, kAttnNorm);
-    if (key == kItKey1) {
+    if (quake_rules(q)) {
+      const int32_t owner = q.i(me, q.L.f.owner);  // every 2 s at most, as door_say
+      if (q.time() >= q.f(owner, f_attack_finished)) {
+        q.set_f(owner, f_attack_finished, q.time() + 2);
+        q.centerprint(q.other(), {q.s(s_you_need_the), quake_key_name(q, key)});
+      }
+    } else if (key == kItKey1) {
       door_say(q, q.other(), q.s(s_needs_silver_key));
     } else {
       door_say(q, q.other(), q.s(s_needs_gold_key));
     }
   } else {
+    // Quake's rules take the key from whoever opens the door with it.
+    if (quake_rules(q) & (key != 0)) {
+      q.set_f(o, q.L.f.items, q.f(o, q.L.f.items) - key);
+    }
     q.set_ge(g_activator, q.other());
     door_group_up(q);
   }
@@ -467,6 +496,9 @@ void func_door(A& q) {
   if (q.f(me, f_wait) == 0) q.set_f(me, f_wait, 3);
   if (q.f(me, f_lip) == 0) q.set_f(me, f_lip, 8);
   if (q.f(me, f_dmg) == 0) q.set_f(me, f_dmg, 2);
+  // Under Quake's rules a key door stays open for good once opened.
+  if (quake_rules(q) & (band(q.f(me, q.L.f.spawnflags), kDoorGold | kDoorSilver) != 0))
+    q.set_f(me, f_wait, -1);
   q.set_v(me, f_pos1, q.v(me, q.L.f.origin));
   q.set_v(me, f_pos2, far_end(q, me));
   if (on(band(q.f(me, q.L.f.spawnflags), 1))) {
@@ -750,6 +782,11 @@ void teleport_touch(A& q) {
   }
   q.makevectors(q.v(dest, q.L.f.angles));
   const int32_t o = q.other();
+  // Quake's rules: a flash where the player leaves and one 32 ahead of where they arrive.
+  if (quake_rules(q)) {
+    quake_flash(q, q.v(o, q.L.f.origin));
+    quake_flash(q, q.v(dest, q.L.f.origin) + q.v_forward() * 32);
+  }
   q.setorigin(o, q.v(dest, q.L.f.origin));
   q.set_v(o, q.L.f.angles, q.v(dest, q.L.f.angles));
   q.set_f(o, q.L.f.fixangle, 1);
@@ -757,12 +794,18 @@ void teleport_touch(A& q) {
   q.set_f(o, q.L.f.teleport_time, q.time() + 0.7f);
   const float flags = q.f(o, q.L.f.flags);
   q.set_f(o, q.L.f.flags, flags - band(flags, kFlOnground));
-  q.sound(o, kChanVoice, q.s(s_r_tele1_wav), 1, kAttnNorm);
+  if (!quake_rules(q)) q.sound(o, kChanVoice, q.s(s_r_tele1_wav), 1, kAttnNorm);
   teleport_arrived(q, q.other());
 }
 
 void trigger_teleport(A& q) {
   trigger_start(q);
+  // Quake's rules: a teleporter hums from its middle unless spawnflag 2 keeps it quiet.
+  if (quake_rules(q) && (band(q.f(q.self(), q.L.f.spawnflags), 2) == 0)) {
+    const Vec3 mid = (q.v(q.self(), q.L.f.mins) + q.v(q.self(), q.L.f.maxs)) * 0.5f;
+    q.precache_sound(q.s(s_hum1_wav));
+    q.ambientsound(mid, q.s(s_hum1_wav), 0.5f, kAttnStatic);
+  }
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_teleport_touch));
   if (q.is(q.i(q.self(), q.L.f.target), "")) q.objerror({q.s(s_teleporter_needs_target)});
 }
@@ -772,10 +815,18 @@ void push_touch(A& q) {
   const int32_t o = q.other();
   if ((q.f(o, q.L.f.health) <= 0) | (q.f(o, q.L.f.movetype) == kMovetypeNone)) return;
   q.set_v(o, q.L.f.velocity, q.v(q.self(), q.L.f.movedir) * q.f(q.self(), f_speed) * 10);
+  if (!quake_rules(q)) return;
+  // Quake's rules: a player hears the wind at most every 1.5 s; spawnflag 1 pushes once.
+  if (q.is(q.i(o, q.L.f.classname), "player") & (q.time() >= q.f(o, f_push_heard))) {
+    q.sound(o, kChanAuto, q.s(s_windfly_wav), 1, kAttnNorm);
+    q.set_f(o, f_push_heard, q.time() + 1.5f);
+  }
+  if (band(q.f(q.self(), q.L.f.spawnflags), 1) != 0) q.remove(q.self());
 }
 
 void trigger_push(A& q) {
   trigger_start(q);
+  if (quake_rules(q)) q.precache_sound(q.s(s_windfly_wav));
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_push_touch));
   if (q.f(q.self(), f_speed) == 0) q.set_f(q.self(), f_speed, 1000);
 }

@@ -44,6 +44,9 @@ LevelString level_string(const std::string& text);
 // A map starts: the game goes on (a level change), restarts the level, or begins anew, by the
 // change that started it; the players' bodies are set aside to be carried.
 void campaign_start(Q2Server& s);
+// Co-op's spots repaired as the map starts: renamed after their start on the maps that misname
+// them, and the three the security level lacks added.
+void campaign_coop_spots(Q2Server& s);
 // The spot player `slot` comes in at outside deathmatch; null when the map has none.
 const Q2Entity* campaign_spot(const Q2Server& s, int slot);
 // Player `slot` was just put in the world (`respawn` after a death): the body he carries.

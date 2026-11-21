@@ -567,7 +567,7 @@ void handle_packet(QwServer& s, int slot, const uint8_t* data, size_t size) {
           s.game->sv.edicts[static_cast<size_t>(slot) + 1].origin = m.origin;
         break;
       case clc::upload:
-        client_print(s, slot, 2, "Uploads are not taken.\n");
+        qw_upload_block(s, slot, m);
         break;
       case clc::voice:
         relay_voice(s, slot, m);

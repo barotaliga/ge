@@ -126,10 +126,83 @@ void clock_frame(A& q) {
   }
 }
 
+// QUAKE'S MAP CHANGE (`quake_rules`, porting/shooters-edge/qw-dm-rules.md § 20, 22 and round 2's
+// § 15): the next map by `samelevel`, the key named after the map, the first level exit, else
+// the same; the intermission's music and camera; held until a button after 5 s.
+int32_t quake_next_map(A& q) {
+  if (q.cvar(q.s(s_samelevel)) == 1) return q.mapname();
+  const int32_t keyed = q.infokey(q.world(), q.mapname());
+  if (!q.is(keyed, "")) return keyed;
+  if (!q.is(q.ge(g_next_map), "")) return q.ge(g_next_map);
+  return q.mapname();
+}
+
+// A random intermission spot, else the start (its angles sent as zeros).
+int32_t quake_intermission_spot(A& q) {
+  int32_t spot = q.find(q.world(), q.L.f.classname, q.s(s_info_intermission));
+  float n = 0;
+  int32_t pick = 0;
+  while (spot != 0) {
+    n = n + 1;
+    if (q.random() * n < 1) pick = spot;
+    spot = q.find(spot, q.L.f.classname, q.s(s_info_intermission));
+  }
+  if (pick == 0) pick = q.find(q.world(), q.L.f.classname, q.s(s_info_player_start));
+  return pick;
+}
+
+void quake_intermission(A& q, int32_t next) {
+  q.set_ge(g_next_map, q.strzone(next));
+  q.set_g(g_intermission_exit, q.time() + 5);
+  const int32_t spot = quake_intermission_spot(q);
+  q.WriteByte(kMsgAll, kSvcCdtrack);
+  q.WriteByte(kMsgAll, 3);
+  q.WriteByte(kMsgAll, kSvcIntermission);
+  const Vec3 at = q.v(spot, q.L.f.origin);
+  const Vec3 look = q.v(spot, f_mangle);
+  q.WriteCoord(kMsgAll, at.x);
+  q.WriteCoord(kMsgAll, at.y);
+  q.WriteCoord(kMsgAll, at.z);
+  q.WriteAngle(kMsgAll, look.x);
+  q.WriteAngle(kMsgAll, look.y);
+  q.WriteAngle(kMsgAll, look.z);
+  for (int32_t p = q.find(q.world(), q.L.f.classname, q.s(s_player)); p != 0;
+       p = q.find(p, q.L.f.classname, q.s(s_player))) {
+    q.set_f(p, q.L.f.takedamage, kDamageNo);
+    q.set_f(p, q.L.f.solid, kSolidNot);
+    q.set_f(p, q.L.f.movetype, kMovetypeNone);
+    q.set_v(p, q.L.f.velocity, {0, 0, 0});
+    q.set_f(p, q.L.f.modelindex, 0);
+  }
+}
+
+// After its 5 s, the first player to press fire, jump or use takes everyone on; with nobody on
+// the server, it goes on alone.
+void quake_intermission_frame(A& q) {
+  if (q.time() < q.g(g_intermission_exit)) return;
+  bool anyone = false;
+  bool pressed = false;
+  for (int32_t p = q.find(q.world(), q.L.f.classname, q.s(s_player)); p != 0;
+       p = q.find(p, q.L.f.classname, q.s(s_player))) {
+    anyone = true;
+    pressed = pressed | (q.f(p, q.L.f.button0) != 0) | (q.f(p, q.L.f.button1) != 0) |
+              (q.f(p, q.L.f.button2) != 0);
+  }
+  // An empty server has nobody to press: it goes on by itself, so it never stalls.
+  if (pressed | !anyone) {
+    q.set_g(g_intermission_exit, q.time() + 1000);  // asked once
+    q.changelevel(q.ge(g_next_map));
+  }
+}
+
 // Ends the match: everyone held where they stand, the scores printed, the map again in 5 s.
 void end_match(A& q, int32_t why) {
   q.set_g(g_match_over, 1);
   q.set_g(g_intermission_time, q.time());
+  if (quake_rules(q)) {
+    quake_intermission(q, quake_next_map(q));
+    return;
+  }
   const int32_t over = game_words(q, q.s(s_match_over), 0, 0, 0, 0);
   if (!q.is(over, "")) {
     say_all(q, kPrintHigh, {over});
@@ -158,9 +231,15 @@ void worldspawn(A& q) {
   q.set_ge(g_last_spawn, q.world());
   q.set_g(g_match_over, 0);
   q.set_g(g_intermission_time, 0);
+  q.set_ge(g_next_map, q.s(s_empty));
   // Read now too: the map's items spawn before the first frame, and deathmatch 4 keeps fewer.
   q.set_g(g_deathmatch, q.cvar(q.s(s_deathmatch)));
   midair_read(q);
+  quake_read(q);
+  if (quake_rules(q)) {
+    quake_corpses_make(q);
+    q.cvar_set(q.s(s_sv_gravity), q.s(q.is(q.mapname(), "e1m8") ? s_g100 : s_g800));
+  }
   player_precache(q);
   weapon_precache(q);
   item_precache(q);
@@ -189,7 +268,12 @@ void StartFrame(A& q) {
   q.set_g(g_fraglimit, q.cvar(q.s(s_fraglimit)));
   q.set_g(g_timelimit, q.cvar(q.s(s_timelimit)));
   midair_read(q);
+  quake_read(q);
   if (on(q.g(g_match_over))) {
+    if (quake_rules(q)) {
+      quake_intermission_frame(q);
+      return;
+    }
     if (q.time() > q.g(g_intermission_time) + 5) {
       q.changelevel(q.mapname());
       q.set_g(g_intermission_time, q.time() + 1000);  // asked once
@@ -218,6 +302,131 @@ void info_player_deathmatch(A&) {}
 void path_corner(A&) {}
 void info_player_start(A&) {}
 void info_intermission(A&) {}
+
+// A level exit: under Quake's rules the first one names the next map, and touching any in a
+// match says so and ends the map to its own; `samelevel` 2 (3: but on the map `start`) kills
+// whoever tries instead. The arena's own rules have no exits.
+void trigger_changelevel(A& q) {
+  const int32_t me = q.self();
+  if (!quake_rules(q)) {
+    q.remove(me);
+    return;
+  }
+  if (q.is(q.ge(g_next_map), "")) q.set_ge(g_next_map, q.i(me, f_map));
+  q.set_f(me, q.L.f.solid, kSolidTrigger);
+  q.set_f(me, q.L.f.movetype, kMovetypeNone);
+  q.setmodel(me, q.i(me, q.L.f.model));
+  q.set_f(me, q.L.f.modelindex, 0);
+  q.set_i(me, q.L.f.touch, q.fn(fn_changelevel_touch));
+}
+
+// The keys: Quake's under its rules; the arena's own rules have none.
+void item_key1(A& q) {
+  if (quake_rules(q)) {
+    quake_key_start(q, kItKey1);
+  } else {
+    q.remove(q.self());
+  }
+}
+void item_key2(A& q) {
+  if (quake_rules(q)) {
+    quake_key_start(q, kItKey2);
+  } else {
+    q.remove(q.self());
+  }
+}
+
+// A relay: fires its targets when used (with its delay, words and kill target).
+void trigger_relay(A& q) { q.set_i(q.self(), q.L.f.use, q.fn(fn_use_targets)); }
+
+// A secret (Quake's rules): a trigger_once for players, its chime by `sounds` (1 when unset), its
+// words "You found a secret area!" when it has none, the clients' secret counter told.
+void trigger_secret(A& q) {
+  const int32_t me = q.self();
+  if (!quake_rules(q)) {
+    q.remove(me);
+    return;
+  }
+  if (q.f(me, q.L.f.sounds) == 0) q.set_f(me, q.L.f.sounds, 1);
+  if (q.is(q.i(me, q.L.f.message), "")) q.set_i(me, q.L.f.message, q.s(s_found_secret_area));
+  q.set_f(me, f_wait, -1);
+  trigger_start(q);
+  q.set_i(me, q.L.f.touch, q.fn(fn_secret_touch));
+}
+
+void secret_touch(A& q) {
+  const int32_t o = q.other();
+  if (!q.is(q.i(o, q.L.f.classname), "player") | (q.f(o, q.L.f.health) <= 0)) return;
+  q.WriteByte(kMsgAll, kSvcFoundsecret);
+  q.set_ge(g_activator, o);
+  trigger_fire(q);
+}
+
+// A counter (Quake's rules): fires on its `count`th use (2 when unset), counting down out loud to
+// a player unless spawnflag 1 keeps it quiet.
+// void() SpectatorConnect and SpectatorDisconnect: under Quake's rules everyone is told when a
+// spectator comes and goes; the arena's own keep quiet.
+void SpectatorConnect(A& q) {
+  quake_read(q);
+  if (!quake_rules(q)) return;
+  say_all(q, kPrintMedium,
+          {q.s(s_spectator_word), q.i(q.self(), q.L.f.netname), q.s(s_entered_the_game)});
+}
+
+void SpectatorDisconnect(A& q) {
+  if (!quake_rules(q)) return;
+  say_all(q, kPrintMedium,
+          {q.s(s_spectator_word), q.i(q.self(), q.L.f.netname), q.s(s_left_the_game)});
+}
+
+void trigger_counter(A& q) {
+  const int32_t me = q.self();
+  if (!quake_rules(q)) {
+    q.remove(me);
+    return;
+  }
+  if (q.f(me, f_count) == 0) q.set_f(me, f_count, 2);
+  q.set_f(me, f_wait, -1);
+  q.set_i(me, q.L.f.use, q.fn(fn_counter_use));
+}
+
+void counter_use(A& q) {
+  const int32_t me = q.self();
+  q.set_f(me, f_count, q.f(me, f_count) - 1);
+  const float left = q.f(me, f_count);
+  if (left < 0) return;
+  const int32_t a = q.ge(g_activator);
+  const bool told =
+      q.is(q.i(a, q.L.f.classname), "player") & (band(q.f(me, q.L.f.spawnflags), 1) == 0);
+  if (left > 0) {
+    if (told) {
+      const St words = left >= 4   ? s_more_to_go_many
+                       : left == 3 ? s_only_3_more
+                       : left == 2 ? s_only_2_more
+                                   : s_only_1_more;
+      q.centerprint(a, {q.s(words)});
+    }
+    return;
+  }
+  if (told) q.centerprint(a, {q.s(s_sequence_completed)});
+  trigger_fire(q);
+}
+
+void changelevel_touch(A& q) {
+  const int32_t me = q.self();
+  const int32_t o = q.other();
+  if (!q.is(q.i(o, q.L.f.classname), "player") | on(q.g(g_match_over))) return;
+  const float same = q.cvar(q.s(s_samelevel));
+  if ((same == 2) | ((same == 3) & !q.is(q.mapname(), "start"))) {
+    q.set_i(o, f_deathtype, q.s(s_tried_to_leave));
+    damage(q, o, me, me, 50000);
+    return;
+  }
+  say_all(q, kPrintHigh, {q.i(o, q.L.f.netname), q.s(s_exited_the_level)});
+  q.set_g(g_match_over, 1);
+  q.set_g(g_intermission_time, q.time());
+  quake_intermission(q, q.i(me, f_map));
+}
 
 // A teleporter sends a living player, and arriving takes the spot: whoever stands there dies.
 bool teleport_takes(A& q, int32_t who) {

@@ -55,9 +55,17 @@ inline constexpr int kSqByLaser = 109, kSqByBarrel = 110;
 // A monster's attack: this plus its row in the roster (q2_monsters.cpp).
 inline constexpr int kSqByMonster = 200;
 
-// The obituary a player reads when another player kills him with `weapon` (a weapon or a
-// `kSqBy*`): the victim's name before it, the killer's name at `%`.
-const char* sq_obituary(int weapon);
+// How a blow landed (`Q2Server::blow_how`): straight on, a blast's splash, the BFG ball's laser
+// on its way, the BFG's burst when it went off.
+inline constexpr int kSqHowDirect = 0, kSqHowBlast = 1, kSqHowLaser = 2, kSqHowBurst = 3;
+
+// The obituary line for player `slot` killed by `killer` (a slot; his own for himself, -1 none)
+// with `weapon` (a weapon or a `kSqBy*`) landing as `how`: "<victim> <words>." for the world and
+// himself, "<victim> <words> <killer><tail>" for another player, "<victim> died." for the rest.
+// `gender` is the victim's `gender` setting (his, her or its); `by_killer` is set when the line
+// credits the killer.
+std::string sq_obituary(const std::string& victim, const std::string& killer, bool self, int weapon,
+                        int how, const std::string& gender, bool* by_killer = nullptr);
 
 // A blow to player `target` from `attacker` (a slot or -1) along `dir` (zero: no push), by
 // `weapon` (a weapon or a `kSqBy*`); `flags` 1 passes armour by, 2 passes invulnerability by.
@@ -168,6 +176,6 @@ void fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname);
 // A body thrown apart at `at`: entity row `ent`'s sound, the blood and the pieces `t` names.
 void fight_gib(Q2Server& s, int ent, sh::Vec3f at, const SqGibThrow& t);
 // A line printed to player `slot`, or to everyone with -1.
-void fight_print(Q2Server& s, int slot, const std::string& text);
+void fight_print(Q2Server& s, int slot, const std::string& text, int level = 1);
 
 }  // namespace shooters_edge::server

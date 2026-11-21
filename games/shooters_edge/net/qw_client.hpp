@@ -133,6 +133,9 @@ struct ClientConfig {
   // A player's own microphone in place of `talk` and `speech`: the samples the window hands in
   // (`QwClientEnd::mic_in`), sent while `mic_talking` (the push-to-talk key held).
   bool live_mic = false;
+  // scr_allowsnap: a screenshot the server asks for ("cmd snap") is sent (the window grabs it,
+  // `ClientUpload`); false: the server is told no.
+  bool allow_snap = true;
   // Who its voice goes to (`voicetarg`: all, team, near or a slot), told to the server at its
   // `begin`; "" leaves the server's own (team). `qw_voice_target` changes it later.
   std::string voice_to;
@@ -153,6 +156,18 @@ struct ClientConfig {
   // (`cl_c2sImpulseBackup`: 1 the new move, 2 the one before too, 3 the one before that; 0 none).
   int c2spps = 0;
   int c2s_impulse_backup = 3;
+};
+
+// A SCREENSHOT THE SERVER ASKED FOR (a stuffed "cmd snap"): `asked` until the window hands the
+// picture to `client_upload_start`; then sent in blocks of kUploadBlock bytes, each with the
+// share done, the next when the server stuffs "nextul"; "stopul" stops it. `said`: the lines the
+// player reads ("Upload starting of ...", "Upload completed").
+constexpr size_t kUploadBlock = 1350;
+struct ClientUpload {
+  bool asked = false, sending = false;
+  std::vector<uint8_t> data;
+  size_t at = 0;
+  std::vector<std::string> said;
 };
 
 // The server's rate when its info names none, moves a second.
@@ -184,6 +199,7 @@ struct ClientDownload {
   std::vector<bool> have;     // chunks held (chunked)
   std::vector<double> asked;  // when each chunk was last asked for (chunked)
   int number = 0;
+  int percent = 0;  // the server's share sent so far (not chunked)
   bool chunked = false, active = false;
   bool has_origin = false;          // the server told the archive it comes out of (svc::ge_origin)
   ge::vfs::ArchiveOrigin origin{};  // that archive
@@ -217,6 +233,7 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   bool begun = false;
   double connected_at = -1, active_at = -1;  // the network's times, s
   std::vector<std::string> wanted_skins;     // skins left to fetch before begin
+  ClientUpload up;                           // a screenshot the server asked for
 
   // Play.
   sh::MoveCmd cmds[3];
@@ -289,6 +306,9 @@ double client_move_rate(const QwClientEnd& c);
 bool client_hold_move(QwClientEnd& c, double move_s);
 // Queues a string command on the reliable stream (a client's console line to the server).
 void client_command(QwClientEnd& c, const std::string& line);
+// The picture the server asked for (`ClientUpload`): its first block sent; an empty one (the
+// frame could not be packed) is the server told no.
+void client_upload_start(QwClientEnd& c, std::vector<uint8_t> picture);
 // Its voice's target (`voicetarg <word>`: all, team, near, a slot) told to the server when it
 // differs from the last one told; the word is kept until the client has begun.
 void qw_voice_target(QwClientEnd& c, const std::string& word);

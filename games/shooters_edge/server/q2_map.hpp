@@ -51,6 +51,9 @@ namespace sh = ge::shooter;
 
 struct Q2Server;
 
+// The models the map's own points show (the disc of a teleporter, its exits and the deathmatch
+// spots), listed before the player's, which stays last.
+void map_precache(Q2Server& s);
 // Sets up every map entity the runner keeps (movers, triggers, targets): their keys read, their
 // places and fields made. After the items; adds the door fields and plat triggers as entities.
 void map_spawn(Q2Server& s);

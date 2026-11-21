@@ -65,7 +65,7 @@ void item_start(A& q, int32_t mdl, int32_t snd, Vec3 lo, Vec3 hi, float respawn)
   q.set_f(me, q.L.f.flags, kFlItem);
   q.set_f(me, q.L.f.solid, kSolidTrigger);
   q.set_f(me, q.L.f.movetype, kMovetypeToss);
-  q.set_f(me, f_respawn_time, respawn);
+  q.set_f(me, f_respawn_time, quake_rules(q) ? quake_item_respawn(q, respawn) : respawn);
   q.setsize(me, lo, hi);
   q.set_v(me, q.L.f.origin, q.v(me, q.L.f.origin) + Vec3{0, 0, 6});
   if (q.droptofloor() == 0) {
@@ -126,6 +126,7 @@ void take_in_hand(A& q, bool (*better)(A&, int32_t pickup, float had), float had
 
 // A weapon on the map: new to him and ranked above the one he holds.
 bool weapon_better(A& q, int32_t pickup, float had) {
+  if (quake_rules(q)) return quake_takes_in_hand(q, q.f(pickup, q.L.f.weapon), false);
   const bool fresh = had == 0;
   const bool ranked =
       weapon_rank(q.f(q.self(), q.L.f.weapon)) < weapon_rank(q.f(pickup, q.L.f.weapon));
@@ -134,6 +135,9 @@ bool weapon_better(A& q, int32_t pickup, float had) {
 
 // A pack: it holds a weapon new to him, ranked below the one he holds (as the rule reads).
 bool pack_better(A& q, int32_t pickup, float had) {
+  if (quake_rules(q))
+    return (q.f(pickup, q.L.f.weapon) != 0) &&
+           quake_takes_in_hand(q, q.f(pickup, q.L.f.weapon), true);
   const bool fresh = had == 0;
   const bool has = q.f(pickup, q.L.f.weapon) != 0;
   const bool ranked =
@@ -522,6 +526,11 @@ void backpack_touch(A& q) {
   const float had = band(q.f(o, q.L.f.items), q.f(me, q.L.f.weapon));
   ammo_give_own(q);
   q.set_f(o, q.L.f.items, bor(q.f(o, q.L.f.items), q.f(me, q.L.f.weapon)));
+  // Quake's modes 3 and 5: a pack with a launcher brings its taker up to 5 rockets.
+  const float pw = q.f(me, q.L.f.weapon);
+  if (quake_rules(q) & ((q.deathmatch() == 3) | (q.deathmatch() == 5)) &
+      ((pw == kWGrenades) | (pw == kWRockets)) & (q.f(o, q.L.f.ammo_rockets) < 5))
+    q.set_f(o, q.L.f.ammo_rockets, 5);
   backpack_say(q, had);
   q.sound(q.other(), kChanItem, q.s(s_lock4_wav), 1, kAttnNorm);
   q.stuffcmd(q.other(), q.s(s_bf));
@@ -552,7 +561,11 @@ void backpack_drop(A& q) {
     q.set_i(pack, q.L.f.netname, pack_weapon_name(q, w));
   }
   Vec3 vel = q.v(pack, q.L.f.velocity);
-  vel.z = 300;  // tossed straight up (no draw on the server's generator)
+  vel.z = 300;           // tossed straight up (no draw on the server's generator)
+  if (quake_rules(q)) {  // Quake's: up to 100 each way across
+    vel.x = -100 + q.random() * 200;
+    vel.y = -100 + q.random() * 200;
+  }
   q.set_v(pack, q.L.f.velocity, vel);
   q.set_f(pack, q.L.f.flags, kFlItem);
   q.set_f(pack, q.L.f.solid, kSolidTrigger);
