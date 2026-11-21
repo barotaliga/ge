@@ -54,6 +54,18 @@ float sweep_box(sh::Vec3f start, sh::Vec3f end, sh::Vec3f mins, sh::Vec3f maxs, 
   const float a[3] = {start.x, start.y, start.z}, b[3] = {end.x, end.y, end.z};
   const float l[3] = {lo.x - maxs.x, lo.y - maxs.y, lo.z - maxs.z};
   const float h[3] = {hi.x - mins.x, hi.y - mins.y, hi.z - mins.z};
+  // Started inside (a monster stepped into him, or his snap to the eighth-unit grid put him a
+  // fraction in): only a move that ends inside too is held; one out of it is free, else the two
+  // stay locked together for good (base1: the script frozen beside a soldier for minutes).
+  bool start_in = true, end_in = true;
+  for (int k = 0; k < 3; k++) {
+    start_in = start_in && a[k] > l[k] && a[k] < h[k];
+    end_in = end_in && b[k] > l[k] && b[k] < h[k];
+  }
+  if (start_in) {
+    normal = {};
+    return end_in ? 0 : -1;
+  }
   float t0 = 0, t1 = 1;
   int axis = -1;
   float side = 0;
