@@ -216,7 +216,7 @@ scoreboard and inventory still work. A followed player who leaves or turns spect
 camera on, or ends it when nobody is left. Ours [ours]: no chase camera; stats 16 and 17 are
 never set although our status bar program reads them (`q2_bar.cpp`).
 
-**R17 (2, DM) Item teams.** [read] Items that share a `team` key form a group: when they have
+**R17 (2, DM, landed) Item teams.** [read] Items that share a `team` key form a group: when they have
 dropped to the floor all of them are hidden, and 0.1 s later one member chosen at random shows
 (with the respawn event). In deathmatch, when the shown one is taken, after its respawn time one
 member chosen at random again shows (maybe another). Outside deathmatch only the first random
@@ -269,7 +269,7 @@ command.` at the high level. Single player always allows them. Our note `q2-rule
 always allows them; that is wrong for this release. Ours [ours]: co-op allows them, and the
 refusal reads `Cheats are off on this server (cheats 1 turns them on).`.
 
-**R25 (2, commands) The command answers are worded differently.** [read] Exactly, to the player
+**R25 (2, commands, landed) The command answers are worded differently.** [read] Exactly, to the player
 at the high print level unless said:
 
 - `use`, `drop` (the whole rest of the line is the item's pickup name, case ignored):
@@ -293,7 +293,7 @@ Ours [ours] (`q2_commands.cpp`, `q2_fight.cpp`): `There is no item called <name>
 so none can be dropped.`, `The Blaster is always in your hands.`, `God mode on`/`off`,
 `Notarget on`/`off`, `Noclip on`/`off`. `invuse` and `invdrop` match.
 
-**R26 (2, commands) `cycleweap` and `prefweap` are missing.** [read] Both take weapon class names
+**R26 (2, commands, landed) `cycleweap` and `prefweap` are missing.** [read] Both take weapon class names
 (`weapon_shotgun`, `ammo_grenades` for the hand grenade, case ignored) and are used in key binds.
 
 - `cycleweap <name> ...`: the search starts after the weapon being switched to (else the one in
@@ -310,7 +310,7 @@ so none can be dropped.`, `The Blaster is always in your hands.`, `God mode on`/
 
 Ours [ours]: neither exists, so the word is said as chat.
 
-**R27 (2, SP) The `command` map's trigger on hard.** [read] On the map `command` the
+**R27 (2, SP, landed) The `command` map's trigger on hard.** [read] On the map `command` the
 `trigger_once` whose model is `*27` loses its not-on-hard spawn flag before the flags are
 applied, so it exists at skills 2 and 3 too. What the trigger does in the map is map data the
 source does not hold (it is a repair, so without it a hard game likely misses an event). Ours
@@ -406,17 +406,17 @@ player's respawn time, and on a player's first placing on a map that time is 0 (
 start), so a player joining a match already 5 s old may `kill` at once; spectators are refused.
 Ours [ours]: 5 s after every placing.
 
-**R42 (3, SP) Unnamed starts made for eight maps.** [read] So that a map loaded from the console
+**R42 (3, SP, landed) Unnamed starts made for eight maps.** [read] So that a map loaded from the console
 starts in the right place, 0.1 s after the start a copy of a named `info_player_start` is added
 as an unnamed one (its origin and yaw): mine1 (from the start named `mintro`), mine2 (`mine1`),
 mine3 (`mine2a`), mine4 (`mine3`), power2 (`power1`), waste1 (`power2`), waste2 (`waste1`),
 city2 (`city2NL`). It is added only when an entity slot is free. Ours [ours]: none.
 
-**R43 (3, SP) Two more map fixes.** [read] On `fact2` the `target_spawner` at its known spot is
+**R43 (3, SP, landed) Two more map fixes.** [read] On `fact2` the `target_spawner` at its known spot is
 moved 8 units down. On `fact1` the intermission camera is placed at (1037, 1100, 222) whatever
 spot was chosen (an area portal there garbled the view). Ours [ours]: neither.
 
-**R44 (3, SP) The world's `music` key.** [read] The world's `music` key, when set, is the CD track
+**R44 (3, SP, landed) The world's `music` key.** [read] The world's `music` key, when set, is the CD track
 configstring as given (a name); otherwise `sounds` as a number. Ours [ours]: `sounds` only.
 
 **R45 (3, DM) Settings the game library adds that ours lacks.** [read] `gamename` (server info,

@@ -17,6 +17,8 @@
 #include "progs/text.hpp"
 #include "server/chat.hpp"
 #include "shooters_edge/server/chat_rules.hpp"
+#include "shooters_edge/server/q2_bar.hpp"
+#include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
@@ -67,8 +69,8 @@ bool deathmatch_on(const Q2Server& s) { return s.cvars.find("deathmatch")->on();
 
 // The cheats are the server's to allow in deathmatch; single player and co-op always have them.
 bool cheats_allowed(Q2Server& s, int slot) {
-  if (!deathmatch_on(s) || cvar_int(s, "cheats") != 0) return true;
-  fight_print(s, slot, "Cheats are off on this server (cheats 1 turns them on).\n");
+  if ((!deathmatch_on(s) && cvar_int(s, "coop") == 0) || cvar_int(s, "cheats") != 0) return true;
+  fight_print(s, slot, "You must run the server with '+set cheats 1' to enable this command.\n");
   return false;
 }
 
@@ -184,10 +186,9 @@ void give(Q2Server& s, int slot, const std::vector<std::string>& w, const std::s
   const bool whole = item >= 0;
   if (!whole) item = sq_item_named(first);
   if (item < 0) {
-    fight_print(s, slot,
-                sq_weapon_named(rest) == int(SqWeapon::blaster)
-                    ? std::string("The Blaster is always in your hands.\n")
-                    : "There is no item called " + rest + ".\n");
+    fight_print(
+        s, slot,
+        sq_weapon_named(rest) == int(SqWeapon::blaster) ? "non-pickup item\n" : "unknown item\n");
     return;
   }
   const SqItem& it = kSqItems[item];
@@ -204,7 +205,68 @@ void give(Q2Server& s, int slot, const std::vector<std::string>& w, const std::s
 
 void toggle(Q2Server& s, int slot, bool& flag, const char* name) {
   flag = !flag;
-  fight_print(s, slot, std::string(name) + (flag ? " on\n" : " off\n"));
+  fight_print(s, slot, std::string(name) + (flag ? " ON\n" : " OFF\n"));
+}
+
+// The weapon a bind's class name names (`weapon_shotgun`; the hand grenade `ammo_grenades`; the
+// Blaster `weapon_blaster`), ignoring case; -1 none.
+int weapon_of_class(const std::string& name) {
+  for (int w = 0; w < kSqWeaponCount; w++) {
+    const char* c = kSqWeapons[w].item != nullptr ? kSqWeapons[w].item : "weapon_blaster";
+    if (q2_same_name(c, name)) return w;
+  }
+  return -1;
+}
+
+// `cycleweap` and `prefweap` (a bind's list of weapons by class name): cycleweap takes the next
+// listed after the weapon chosen (else the one in hand), wrapping, never the one in hand; prefweap
+// the first listed. The first held with a shot's ammo; else the first held short of it (refused
+// with the ammo line); else the first not held (`Out of item:`). Names not of a weapon are
+// skipped. cycleweap from three names or more shows the new weapon's icon and name 0.7 s.
+void weapon_list(Q2Server& s, int slot, const std::vector<std::string>& w, bool cycle) {
+  if (w.size() < 2) {
+    fight_print(s, slot,
+                std::string("Usage: ") + (cycle ? "cycleweap" : "prefweap") +
+                    " classname1 classname2 .. classnameN\n");
+    return;
+  }
+  std::vector<int> list;
+  for (size_t i = 1; i < w.size(); i++)
+    if (const int n = weapon_of_class(w[i]); n >= 0) list.push_back(n);
+  if (list.empty()) return;
+  Q2Player& p = s.players[slot];
+  size_t start = 0;
+  if (cycle) {
+    const int now = p.hand.pending >= 0 ? p.hand.pending : p.hand.weapon;
+    for (size_t i = 0; i < list.size(); i++)
+      if (list[i] == now) {
+        start = i + 1;
+        break;
+      }
+  }
+  int ready = -1, short_of = -1, missing = -1;
+  for (size_t k = 0; k < list.size(); k++) {
+    const int n = list[(start + k) % list.size()];
+    if (cycle && n == p.hand.weapon) continue;
+    if (sq_can_fire(p.body, n)) {
+      ready = n;
+      break;
+    }
+    if (sq_holds(p.body, n) && short_of < 0) short_of = n;
+    if (!sq_holds(p.body, n) && missing < 0) missing = n;
+  }
+  const int n = ready >= 0 ? ready : short_of;
+  if (n < 0) {
+    if (missing >= 0)
+      fight_print(s, slot, std::string("Out of item: ") + kSqWeapons[missing].name + "\n");
+    return;
+  }
+  if (n == p.hand.weapon) return;  // prefweap: the one in hand already
+  fight_command(s, slot, "use", kSqWeapons[n].name);
+  if (cycle && list.size() > 2 && p.hand.pending == n && kSqWeapons[n].item != nullptr) {
+    p.picked = sq_item_number(sq_item(kSqWeapons[n].item));
+    p.picked_at = s.level_time - (3.0 - 0.7);  // the bar's pickup line shows 3 s
+  }
 }
 
 const char* const kGestureWords[5] = {"flipoff", "salute", "taunt", "wave", "point"};
@@ -388,7 +450,7 @@ bool commands_refuse_item(Q2Server& s, int slot, bool use, const std::string& na
   const int w = sq_weapon_named(name);
   const int item = sq_item_named(name);
   if (w < 0 && item < 0) {
-    fight_print(s, slot, "There is no item called " + name + ".\n");
+    fight_print(s, slot, "unknown item: " + name + "\n");
     return true;
   }
   const SqKind kind = w >= 0 ? SqKind::weapon : kSqItems[item].kind;
@@ -396,14 +458,14 @@ bool commands_refuse_item(Q2Server& s, int slot, bool use, const std::string& na
       use ? kind == SqKind::weapon || kind == SqKind::powerup || kind == SqKind::power_armour
           : kind == SqKind::weapon || kind == SqKind::ammo || kind == SqKind::powerup;
   if (!able) {
-    fight_print(s, slot, name + (use ? " can't be used.\n" : " can't be dropped.\n"));
+    fight_print(s, slot, use ? "Item is not usable.\n" : "Item is not dropable.\n");
     return true;
   }
   const bool held = w >= 0                 ? sq_holds(p.body, w)
                     : kind == SqKind::ammo ? p.body.ammo[int(kSqItems[item].ammo)] > 0
                                            : p.body.counts[item] > 0;
   if (!held || !p.alive) {
-    fight_print(s, slot, "You have no " + name + ".\n");
+    fight_print(s, slot, "Out of item: " + name + "\n");
     return true;
   }
   return false;
@@ -430,11 +492,13 @@ bool commands_run(Q2Server& s, int slot, const std::string& line) {
   } else if (cmd == "give") {
     if (cheats_allowed(s, slot) && !rest.empty()) give(s, slot, w, rest);
   } else if (cmd == "god") {
-    if (cheats_allowed(s, slot)) toggle(s, slot, p.god, "God mode");
+    if (cheats_allowed(s, slot)) toggle(s, slot, p.god, "godmode");
   } else if (cmd == "notarget") {
-    if (cheats_allowed(s, slot)) toggle(s, slot, p.notarget, "Notarget");
+    if (cheats_allowed(s, slot)) toggle(s, slot, p.notarget, "notarget");
   } else if (cmd == "noclip") {
-    if (cheats_allowed(s, slot)) toggle(s, slot, p.noclip, "Noclip");
+    if (cheats_allowed(s, slot)) toggle(s, slot, p.noclip, "noclip");
+  } else if (cmd == "cycleweap" || cmd == "prefweap") {
+    weapon_list(s, slot, w, cmd == "cycleweap");
   } else if (cmd == "weaplast") {
     weaplast(s, slot);
   } else if (cmd == "wave") {
