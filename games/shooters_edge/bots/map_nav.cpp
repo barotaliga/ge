@@ -418,6 +418,102 @@ std::vector<sb::NavExtraLink> teleport_links(const sb::NavGraph& g,
   return out;
 }
 
+// THE LADDERS (`ladder_links`): every brush of ladder contents, as the box its axial sides
+// bound, joined with the ladder brushes it touches into one ladder. A node standing or swimming
+// beside it (from `kLadderFoot` under its foot to `kLadderMin` under its top; a ladder often runs
+// on down past the floor it is climbed from), beside one face and within `kLadderBeside` of it,
+// gets a link up to the nearest node standing at its top (from a step under the top to
+// `kLadderAbove` over it, within `kLadderTop` across of the ladder): the climb the move makes
+// facing the ladder with the view up, unproven by the nav's move (which has no ladders), timed at
+// the climb's 200 units/s.
+constexpr float kLadderBeside = 40, kLadderTop = 64, kLadderAbove = 64, kLadderFoot = 64;
+constexpr float kLadderMin = 48;  // a ladder this tall or more is climbed (a lower one is a step)
+constexpr int32_t kLadderContents = 0x20000000;
+
+struct LadderBox {
+  sh::Vec3f mins, maxs;
+};
+
+std::vector<LadderBox> ladder_boxes(const ge::brush::Map& m) {
+  std::vector<LadderBox> boxes;
+  for (const ge::brush::Brush& b : m.brushes) {
+    if (!(b.contents & kLadderContents)) continue;
+    LadderBox box{{-1e9f, -1e9f, -1e9f}, {1e9f, 1e9f, 1e9f}};
+    for (uint32_t k = 0; k < b.sides; k++) {
+      const size_t si = static_cast<size_t>(b.first_side) + k;
+      if (si >= m.brush_sides.size()) break;
+      const size_t pi = m.brush_sides[si].plane;
+      if (pi >= m.planes.size()) continue;
+      const ge::brush::Plane& pl = m.planes[pi];
+      for (int i = 0; i < 3; i++) {
+        if (pl.n[i] == 1) box.maxs[i] = std::min(box.maxs[i], pl.d);
+        if (pl.n[i] == -1) box.mins[i] = std::max(box.mins[i], -pl.d);
+      }
+    }
+    bool ok = true;
+    for (int i = 0; i < 3; i++) ok = ok && box.mins[i] > -1e8f && box.maxs[i] < 1e8f;
+    if (ok && box.mins.x < box.maxs.x && box.mins.y < box.maxs.y && box.mins.z < box.maxs.z)
+      boxes.push_back(box);
+  }
+  // Brushes that touch are one ladder (a tall one is built of several).
+  for (bool joined = true; joined;) {
+    joined = false;
+    for (size_t i = 0; i < boxes.size() && !joined; i++)
+      for (size_t j = i + 1; j < boxes.size() && !joined; j++) {
+        bool meet = true;
+        for (int k = 0; k < 3; k++)
+          meet = meet && boxes[i].mins[k] <= boxes[j].maxs[k] + 1 &&
+                 boxes[j].mins[k] <= boxes[i].maxs[k] + 1;
+        if (!meet) continue;
+        for (int k = 0; k < 3; k++) {
+          boxes[i].mins[k] = std::min(boxes[i].mins[k], boxes[j].mins[k]);
+          boxes[i].maxs[k] = std::max(boxes[i].maxs[k], boxes[j].maxs[k]);
+        }
+        boxes.erase(boxes.begin() + static_cast<std::ptrdiff_t>(j));
+        joined = true;
+      }
+  }
+  return boxes;
+}
+
+std::vector<sb::NavExtraLink> ladder_links(const sb::NavGraph& g, const ge::brush::Map& m) {
+  std::vector<sb::NavExtraLink> out;
+  for (const LadderBox& L : ladder_boxes(m)) {
+    if (L.maxs.z - L.mins.z < kLadderMin) continue;
+    for (size_t a = 0; a < g.nodes.size(); a++) {
+      const sh::Vec3f o = g.nodes[a].origin;
+      if (o.z < L.mins.z - kLadderFoot || o.z > L.maxs.z - kLadderMin) continue;
+      // Beside one face, and which way it faces (the heading into the ladder).
+      const float ox = o.x < L.mins.x ? L.mins.x - o.x : o.x > L.maxs.x ? o.x - L.maxs.x : 0;
+      const float oy = o.y < L.mins.y ? L.mins.y - o.y : o.y > L.maxs.y ? o.y - L.maxs.y : 0;
+      if ((ox > 0) == (oy > 0) || ox + oy > kLadderBeside) continue;
+      const float face = ox > 0 ? (o.x < L.mins.x ? 0.f : 180.f) : (o.y < L.mins.y ? 90.f : 270.f);
+      int32_t best = -1;
+      float best_d = 1e30f;
+      for (size_t b = 0; b < g.nodes.size(); b++) {
+        const sb::NavNode& nb = g.nodes[b];
+        const sh::Vec3f t = nb.origin;
+        if (nb.swim || t.z < L.maxs.z - 18 || t.z > L.maxs.z + kLadderAbove) continue;
+        const float tx = t.x < L.mins.x ? L.mins.x - t.x : t.x > L.maxs.x ? t.x - L.maxs.x : 0;
+        const float ty = t.y < L.mins.y ? L.mins.y - t.y : t.y > L.maxs.y ? t.y - L.maxs.y : 0;
+        if (tx > kLadderTop || ty > kLadderTop) continue;
+        const float d = (t.x - o.x) * (t.x - o.x) + (t.y - o.y) * (t.y - o.y);
+        if (d < best_d) {
+          best_d = d;
+          best = static_cast<int32_t>(b);
+        }
+      }
+      if (best < 0) continue;
+      const float rise = g.nodes[static_cast<size_t>(best)].origin.z - o.z;
+      sb::NavExtraLink e{static_cast<int32_t>(a), best, sb::NavKind::walk, 0.5f + rise / 200.f};
+      e.ladder = true;
+      e.face = face;
+      out.push_back(e);
+    }
+  }
+  return out;
+}
+
 // The map's entity blocks: its text (the first family), else the version 38 map's own entities.
 std::vector<pg::EntityBlock> entity_blocks(const ge::shooter::MapSpec& spec) {
   std::vector<pg::EntityBlock> blocks;
@@ -468,6 +564,11 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   sb::build_nav(out.world, out.movers, out.move, set, out.graph);
   const std::vector<sb::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
   sb::nav_add_links(out.graph, teleports);
+  if (spec.brushes) {
+    const std::vector<sb::NavExtraLink> ladders = ladder_links(out.graph, *spec.brushes);
+    sb::nav_add_links(out.graph, ladders);
+    out.ladder_links = static_cast<int64_t>(ladders.size());
+  }
   for (NavBridge& br : out.bridges) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(br.ent)];
     const int mi = d.modelindex;
