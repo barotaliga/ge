@@ -8,7 +8,7 @@
 //   from where he sees it: `button_poke_cmd`), a key, a trigger that fires something (walked
 //   through) that OPENS a shut door (its target the door's name, or a counter's or relay's that
 //   names it) whose opening would let him reach places he has not seen, or the exit; one he spends
-//   `kWayGiveUp_s` on without doing is left for a while;
+//   `kWayGiveUp_s` past twice the walk there on without doing is left for a while;
 // - else the nearest place he has not been (exploring: a way may open where he has not looked);
 //   one he spends `kWayGiveUp_s` on without getting there counts as seen;
 // - else any step left (a trigger that only lights a lamp or says a word);
@@ -37,7 +37,7 @@
 namespace shooters_edge::bots {
 
 constexpr double kWayPlan_s = 0.5;   // he plans again this often, s
-constexpr double kWayGiveUp_s = 25;  // a step not done in this long is left
+constexpr double kWayGiveUp_s = 25;  // a step not done in this long past twice its walk is left
 constexpr double kWayRetry_s = 60;   // and tried again after this
 constexpr double kWayNoRoute_s = 5;  // an exit his pilot finds no route to this long is left
 constexpr double kWayIdle_s = 5;     // nothing to do this long: back into the water
@@ -59,8 +59,14 @@ struct WayStep {
   bool done = false;
   bool opens = false;      // it opens a door that only something else opens (or counts toward one)
   bool keyed = false;      // a trigger that opens only for a key held: done once its doors open
+  bool revisit = false;    // an exit to a map he has played: taken last
+  bool leaves = false;     // a button that leads to a level change (base2's lift down to bunk1)
+  bool drains = false;     // a button that moves water (it strands him in the pool): pressed last
   std::vector<int> doors;  // those doors' entities
 };
+
+// An exit: a trigger walked through, or a button pressed, that changes the level.
+inline bool way_exit(const WayStep& st) { return st.kind == WayKind::exit || st.leaves; }
 
 struct WayStats {
   int64_t plans = 0, by_kind[kWayKinds] = {}, steps_done = 0, left = 0;
@@ -70,7 +76,9 @@ struct WayThrough {
   std::vector<WayStep> steps;
   std::vector<int> locked;           // doors something else opens: their entities
   std::vector<sh::Vec3f> locked_at;  // and where each stands shut
-  std::string back;  // the map he came from: an exit to it is no way on (set before way_init)
+  // The maps he has played (set before way_init): an exit to one is taken last, once nothing else
+  // is left (base3's way on is back through base2, by another exit than the one he came in by).
+  std::vector<std::string> been;
   std::vector<int> turners;  // turning doors a step opens (`func_door_rotating`): their entities
   std::vector<sh::Vec3f> turners_at;  // and the angles each rests shut at
   std::vector<int> hatches;  // turners lying over an exit (base2's floor hatch over its shaft)
@@ -85,6 +93,7 @@ struct WayThrough {
   WayStats stats;
   std::vector<std::string>* log = nullptr;  // each change of plan said, when given
   double plan_at = -1, step_since = 0;
+  double step_for = kWayGiveUp_s;  // how long the step he is on is given (its walk's worth more)
   int step = -1;                 // the step he is on, -1 none (exploring)
   double idle_since = -1;        // nothing to do since then, -1 something
   double no_route_since = -1;    // the exit chosen and his pilot with no route to it since then
@@ -130,5 +139,11 @@ constexpr float kEdgeLook = 40;  // the stride looked along, units
 constexpr float kEdgeDrop = 64;  // a floor this far down is a step, units
 bool way_edge(const MapNav& nav, const Fighter& f, const ge::shooterbots::BotView& s, int me,
               sh::MoveCmd& cmd);
+
+// INTO THE TRIGGER: a step's trigger out of his box though he is within kTouchReach of it (a
+// thin one past its node at a corridor's end: base3's way back to base2, one that fires only for
+// a player facing into it) is walked into, facing it. True when it turned the keys.
+constexpr float kTouchReach = 64;
+bool way_touch(const WayThrough& w, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd);
 
 }  // namespace shooters_edge::bots
