@@ -422,43 +422,10 @@ int run_main(int argc, char** argv) {
     out::status("shooters_edge: " + std::to_string(cl::archive_paths(files).size()) +
                 " archives on the search path of " + files.folder);
   }
-  // A server's game folder for `connect`: the window's own search path when it is the same game
-  // (or the base), else that folder under the base folder, mounted once.
-  remote.read_file = [&files, &args, game_row,
-                      other = std::make_shared<std::pair<std::string, cl::SearchPath>>()](
-                         const std::string& gamedir, const std::string& path) {
-    std::vector<uint8_t> store;
-    const cl::SearchPath* from = &files;
-    if (!gamedir.empty() && gamedir != args.game &&
-        gamedir != shooters_edge::profiles::content_of(game_row(args.profile)).base_dir) {
-      if (other->first != gamedir) {
-        std::string why;
-        other->second = {};
-        if (!cl::open_game_dir(args.basedir, gamedir, other->second, why,
-                               shooters_edge::profiles::content_of(game_row(args.profile))))
-          return store;
-        other->first = gamedir;
-      }
-      from = &other->second;
-    }
-    const std::span<const uint8_t> got = cl::find_file(*from, path, store);
-    return std::vector<uint8_t>(got.begin(), got.end());
-  };
-  // A file fetched joining a server: back into the archive it came from (a partial until whole),
-  // else at its place in the game's folder; used at once (plugins/classic/content/downloads.hpp).
+  // A joined server's files read from the window's game folders and kept in them
+  // (net/window_words).
   bool locs_fetched = false;  // a map's place names fetched: read again when its level starts
-  remote.keep_file = [&files, &args, game_row, &locs_fetched](
-                         const std::string& gamedir, const std::string& path,
-                         const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin) {
-    if (path.starts_with("locs/")) locs_fetched = true;
-    const std::string base(shooters_edge::profiles::content_of(game_row(args.profile)).base_dir);
-    const bool ours = gamedir.empty() || gamedir == args.game || gamedir == base;
-    ge::classic::content::KeptDownload kept;
-    std::string why;
-    if (!ge::classic::content::keep_download(files, args.basedir, base, gamedir, ours, path, bytes,
-                                             origin, &kept, why))
-      out::status("shooters_edge: " + why);
-  };
+  sn::wire_remote_files(remote, files, args.basedir, args.game, args.profile, locs_fetched);
   if (!args.demovideo.empty()) return cl::demo_video_main(console, args, files, picture, playback);
   // The window first, the title's night in it at once (client/title.hpp); the rest of the start
   // (the pictures, the programs) and the first map (client/map_load.hpp) come in behind it.

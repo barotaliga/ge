@@ -17,6 +17,8 @@
 
 #include <string>
 
+#include "classic/content/files.hpp"
+
 namespace ge::console {
 class Console;
 class ConsoleView;
@@ -38,5 +40,14 @@ void add_window_words(ge::console::Console& con, ge::console::ConsoleView& view,
 // The team chat's lines (client/team_chat.hpp) to the server joined, else to the match hosted: its
 // sending, whether a teammate is in the game, and the scene its %-codes read.
 void wire_team_chat(client::TeamChat& chat, client::Listen& listen, Remote& remote);
+
+// THE FILES OF A SERVER JOINED: `remote`'s reads (a server's game folder: the window's own search
+// path `files` when it is the same game or the base, else that folder under `basedir`, mounted
+// once) and its downloads (back into the archive they came from, else at their place in the game's
+// folder; plugins/classic/content/downloads.hpp), `locs_fetched` set when a map's place names come.
+// `basedir`, `game` and `profile` (the window's, as they change) must outlive `remote`.
+void wire_remote_files(Remote& remote, ge::classic::content::SearchPath& files,
+                       const std::string& basedir, const std::string& game,
+                       const std::string& profile, bool& locs_fetched);
 
 }  // namespace shooters_edge::net

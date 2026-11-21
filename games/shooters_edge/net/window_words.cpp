@@ -8,16 +8,24 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <memory>
+#include <span>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
+#include "classic/content/downloads.hpp"
+#include "classic/content/files.hpp"
 #include "console/console.hpp"
 #include "console/view.hpp"
+#include "core/output.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/team_chat.hpp"
 #include "shooters_edge/client/team_point.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
+#include "shooters_edge/profiles/game_profile.hpp"
 
 namespace shooters_edge::net {
 
@@ -110,6 +118,47 @@ void wire_team_chat(client::TeamChat& chat, client::Listen& listen, Remote& remo
   };
   chat.scene = [&listen, &remote] {
     return remote.active ? client::point_scene(remote.demo.state) : client::point_scene(listen);
+  };
+}
+
+void wire_remote_files(Remote& remote, ge::classic::content::SearchPath& files,
+                       const std::string& basedir, const std::string& game,
+                       const std::string& profile, bool& locs_fetched) {
+  const auto content = [&profile]() -> const ge::classicenhance::Profile& {
+    const profiles::GameProfile* g = profiles::find_game(profile);
+    return profiles::content_of(g != nullptr ? *g : profiles::q1_game());
+  };
+  remote.read_file =
+      [&files, &basedir, &game, content,
+       other = std::make_shared<std::pair<std::string, ge::classic::content::SearchPath>>()](
+          const std::string& gamedir, const std::string& path) {
+        std::vector<uint8_t> store;
+        const ge::classic::content::SearchPath* from = &files;
+        if (!gamedir.empty() && gamedir != game && gamedir != content().base_dir) {
+          if (other->first != gamedir) {
+            std::string why;
+            other->second = {};
+            if (!ge::classic::content::open_game_dir(basedir, gamedir, other->second, why,
+                                                     content()))
+              return store;
+            other->first = gamedir;
+          }
+          from = &other->second;
+        }
+        const std::span<const uint8_t> got = ge::classic::content::find_file(*from, path, store);
+        return std::vector<uint8_t>(got.begin(), got.end());
+      };
+  remote.keep_file = [&files, &basedir, &game, content, &locs_fetched](
+                         const std::string& gamedir, const std::string& path,
+                         const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin) {
+    if (path.starts_with("locs/")) locs_fetched = true;
+    const std::string base(content().base_dir);
+    const bool ours = gamedir.empty() || gamedir == game || gamedir == base;
+    ge::classic::content::KeptDownload kept;
+    std::string why;
+    if (!ge::classic::content::keep_download(files, basedir, base, gamedir, ours, path, bytes,
+                                             origin, &kept, why))
+      ge::core::output::status("shooters_edge: " + why);
   };
 }
 
