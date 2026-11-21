@@ -38,6 +38,11 @@
 // (docs/charsets.md: terminal, mono, ...; "" the 2D layer's own UI font); con_clock (1: the
 // local time in the panel's lower right corner).
 //
+// `clearnotify` lets the notify lines so far go. `remotemode [address [password]]` sends each line
+// typed without a slash to the game's `rcon` command, the prompt `#` (the address and password set
+// `rcon_address` and `rcon_password` when the game has them); again, it ends. con_scale sizes the
+// text (0: as drawn). A game shows what it is loading on the console's foot (`set_foot`).
+//
 // `condump [name]` writes the scrollback's text to `<folder>/<name>.txt` (`condump` the name when
 // none is given; the folder is the game's, `set_dump_folder`), a line a line.
 //
@@ -48,6 +53,7 @@
 // ge:keywords completion tab con_height con_chat con_speed con_lines slash-command loading full
 // ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage con_font
 // ge:keywords autocomplete suggestion suggestions hint con_suggest condump con_clock game_chat
+// ge:keywords clearnotify remotemode rcon con_scale foot loading download-bar
 // ge:skill console
 // ge:test tests/console_view_test.cpp
 #pragma once
@@ -204,6 +210,22 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   bool dump(std::string_view name, std::string& why) const;
   // con_clock: the local time drawn in the panel's corner.
   bool clock_shown() const { return clock_on_; }
+  // con_scale: the text's size against the console's own (0, the default: 1).
+  double text_scale() const { return scale_ > 0 ? scale_ : 1; }
+  // THE FOOT: a line the game shows under the scrollback while it joins a game (the file coming
+  // and its share, what is loading); `progress` 0..1 draws a bar before it, below 0 none; ""
+  // takes it away.
+  void set_foot(std::string text, double progress = -1) {
+    foot_ = std::move(text);
+    foot_progress_ = progress;
+  }
+  const std::string& foot() const { return foot_; }
+  double foot_progress() const { return foot_progress_; }
+  // REMOTE MODE (`remotemode`): a line typed without a slash runs as `rcon <line>`, a server's
+  // console from this one; the prompt is `#`.
+  bool remote() const { return remote_; }
+  // What the input line begins with: "] ", or "# " in remote mode.
+  std::string_view prompt() const { return remote_ ? "# " : "] "; }
 
   // The game's chat; none: a line is shown as said by `name`.
   void set_chat(ChatSender send) { chat_ = std::move(send); }
@@ -253,6 +275,10 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   double notify_time_ = 4;
   int chat_default_ = 0;   // con_chat
   bool clock_on_ = false;  // con_clock
+  bool remote_ = false;    // remotemode
+  double scale_ = 0;       // con_scale
+  std::string foot_;
+  double foot_progress_ = -1;
   std::string dump_folder_;
   std::string bg_top_ = "10141c", bg_bottom_ = "10141c", bg_image_;
   std::string font_ = "mono";
