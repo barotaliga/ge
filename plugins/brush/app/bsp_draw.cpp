@@ -994,8 +994,8 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   }
   if (o.cull) {
     GE_ZONE("bsp.cull");
-    prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0,
-                     o.pvs && !see_through_any(o));
+    prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0, o.pvs && !see_through_any(o),
+                     d.areas);
     ++d.culled_frames;
   } else {
     d.culled_frames = 0;
@@ -1065,6 +1065,10 @@ void set_texture_rate(BspDraw& d, double frames_per_second) {
 
 void set_dynamic_lights(BspDraw& d, std::span<const DynamicLight> lights) {
   d.dynamic.assign(lights.begin(), lights.end());
+}
+
+void set_areas(BspDraw& d, std::span<const uint8_t> areas) {
+  d.areas.assign(areas.begin(), areas.end());
 }
 
 void set_shadow_casters(BspDraw& d, std::span<const float> triangles,

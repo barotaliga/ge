@@ -507,8 +507,14 @@ struct Missile {
   // Quake II's other marks by its effect bits (q2_look.hpp's Q2Look::Missile as a number: a
   // flag, the tag token, an ion ripper's, a blue or a plasma bolt); 0 none of these.
   uint8_t q2_mark = 0;
+  // Quake II's spinning lights: a red light 64 units ahead along its spin from its `yaw` (degrees).
+  bool q2_spin = false;
+  float yaw = 0;
 };
 void missiles_of(const Listen& l, std::vector<Missile>& out);
+// Quake II's areas the player's eye sees into, one bit an area (server/q2_map.hpp's
+// `map_area_bits`); empty when the game is not Quake II's or its map has no areas.
+void listen_area_bits(const Listen& l, std::vector<uint8_t>& out);
 
 // True when the entity is drawn: a model index and a model text (a program hides a taken item by
 // emptying its text; server::model_shown). Without a QC program: a model index alone.

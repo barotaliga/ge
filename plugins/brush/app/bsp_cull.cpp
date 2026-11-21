@@ -119,15 +119,15 @@ void create_bsp_cull_targets(gpu::Device& device, BspCull& c, const r::FrameTarg
 }
 
 void prepare_bsp_cull(gpu::Device& device, BspCull& c, const Scene& scene, const double eye[3],
-                      bool pyramid, bool pvs) {
+                      bool pyramid, bool pvs, std::span<const uint8_t> areas) {
   // The eye in the file's units (brush/map.hpp's `to_engine`, undone).
   const float p[3] = {float(eye[0] / kUnitM), float(eye[2] / kUnitM), float(eye[1] / kUnitM)};
   const Map& m = scene.map;
   c.eye_leaf = m.leaves.empty() ? 0 : leaf_at(m, p);
-  if (m.leaves.empty() || !pvs)
+  if (m.leaves.empty() || (!pvs && areas.empty()))
     c.seen.assign(m.surfaces.size(), 1);
   else
-    potentially_visible(m, c.eye_leaf, &c.seen);
+    potentially_visible(m, pvs ? c.eye_leaf : ~0u, &c.seen, areas);
   std::fill(c.bits.begin(), c.bits.end(), 0u);
   c.in_set = 0;
   for (uint32_t i = 0; i < c.chunks; ++i) {

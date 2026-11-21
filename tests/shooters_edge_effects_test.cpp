@@ -685,6 +685,42 @@ TEST(quake2_bursts_throw_their_counts_and_lights) {
   CHECK(none.empty());
 }
 
+// The trap's glow: 13 rising specks in a column and 8 thrown out that fall; the disruptor's
+// strands a speck every 3 units, black, rising; a tracker's dark shell of 300 black specks.
+TEST(quake2_trap_and_tracker_marks) {
+  const double at[3] = {1, 2, 3}, b[3] = {1 + 30 * 0.025, 2, 3};
+  fx::Particles trap, strands, shell;
+  fx::q2_trap(at, 4, {}, &trap);
+  fx::q2_tracker_trail(at, b, 4, {}, &strands);
+  fx::q2_tracker_shell(at, 40, 4, {}, &shell);
+  CHECK(trap.size() == 21);
+  for (size_t i = 0; i < 13; ++i) CHECK(trap[i].fall < 0);   // the column rises
+  for (size_t i = 13; i < 21; ++i) CHECK(trap[i].fall > 0);  // the thrown ones fall
+  CHECK_MSG(strands.size() == 10, std::to_string(strands.size()));
+  for (const auto& p : strands) CHECK(p.v[1] > 0 && p.tint[0] == 0);
+  CHECK((strands[0].p[1] > at[1]) != (strands[1].p[1] > at[1]));  // one strand each side
+  CHECK(shell.size() == 300);
+  for (const auto& p : shell)
+    CHECK(std::abs(std::sqrt((p.p[0] - at[0]) * (p.p[0] - at[0]) +
+                             (p.p[1] - at[1]) * (p.p[1] - at[1]) +
+                             (p.p[2] - at[2]) * (p.p[2] - at[2])) -
+                   1.0) < 1e-3);
+}
+
+// A power splash: 256 green specks round the box moving out; the widow's beam-out: 300 on a
+// sphere that grows to 45 units, still (none of them moving).
+TEST(quake2_power_splash_and_beam_out) {
+  const double at[3] = {0, 0, 0};
+  fx::Particles splash, half, none;
+  fx::q2_power_splash(at, 20, 3, {}, &splash);
+  fx::q2_beam_out(at, 0.5, 3, {}, &half);
+  CHECK(splash.size() == 256 && half.size() == 300);
+  for (const auto& p : half) {
+    const double r = std::sqrt(p.p[0] * p.p[0] + p.p[1] * p.p[1] + p.p[2] * p.p[2]);
+    CHECK(std::abs(r - 22.5 * 0.025) < 1e-3 && p.v[0] == 0 && p.v[1] == 0);
+  }
+}
+
 TEST(quake2_flies_swarm_up_hold_and_thin_over_a_minute) {
   CHECK(fx::q2_flies_count(0) == 0);
   CHECK(fx::q2_flies_count(10) == 81);
