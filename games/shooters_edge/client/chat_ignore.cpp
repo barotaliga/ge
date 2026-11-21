@@ -59,6 +59,7 @@ void add_qw_ignore(con::Console& c, QwIgnore& g, const DemoState& s) {
                   .values = "0: they never run; 1: they run"},
                  &g.triggers.on);
   g.con = &c;
+  g.chat.con = &c;
   g.levels = s.levels;
   const DemoState* st = &s;
   g.lists.roster = [st] { return roster_of(*st); };
@@ -123,6 +124,7 @@ void drop_ignored(QwIgnore& g, DemoState& s, std::vector<DemoPrint>& prints, dou
   if (centre != nullptr && !centre->empty() && g.con != nullptr &&
       con::re_trigger_line(*g.con, g.triggers, *centre, con::kReCentre, now_s).remove)
     centre->clear();
+  if (centre != nullptr && !centre->empty()) run_triggers(g.chat, *centre);  // Quake II's
   if (prints.empty()) return;
   const con::ChatRoster r = roster_of(s);
   std::vector<bool> gone(prints.size(), false);
@@ -147,6 +149,8 @@ void drop_ignored(QwIgnore& g, DemoState& s, std::vector<DemoPrint>& prints, dou
   for (size_t i = 0; i < prints.size(); ++i)
     if (!gone[i])
       gone[i] = !chat_line_extras(g.chat, s, chat_line_of(s, prints[i]), prints[i], clock);
+  for (size_t i = 0; i < prints.size(); ++i)  // Quake II's message triggers: not on chat
+    if (!gone[i] && prints[i].level < kChatLevel) run_triggers(g.chat, prints[i].text);
   size_t kept = 0;
   for (size_t i = 0; i < prints.size(); ++i)
     if (!gone[i]) {

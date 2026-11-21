@@ -141,7 +141,9 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   its side (`hand` 1 or `cl_gun` 3 draw it mirrored on the left);
 // - its own `cl_maxfps`, the moves a second (ours, the frame cap, set aside while it is loaded),
 //   and `r_maxfps`, the frame cap, kept with its own settings;
-// - the maps' light: `intensity`, `gl_modulate` and `gl_brightness` (Quake's stay 2, 1 and 0).
+// - the maps' light: `intensity`, `gl_modulate` and `gl_brightness` (Quake's stay 2, 1 and 0);
+// - its chat: its own `cl_chat_sound` (one sound by number or name) and `con_auto_chat` (2 says a
+//   typed line to the team, where our `con_chat` 2 tells a command by its first word).
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
@@ -213,6 +215,19 @@ void add_q2(con::Console& c, const GameBindings& b) {
         std::pair{"ch_scale", "crosshairsize"}, std::pair{"ch_alpha", "crosshairalpha"},
         std::pair{"cl_vwep", "r_drawvweps"}})
     v.add_synonym(name, ours);
+  // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
+  // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.
+  if (b.chat != nullptr) add_q2_chat_sound(c, *b.chat);
+  if (b.auto_chat != nullptr)
+    v.bind({.name = "con_auto_chat",
+            .fallback = "0",
+            .flags = con::kArchive,
+            .help = "What a line typed in the console without a slash is.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 2,
+            .values = "0: a command (the default); 1: said to everyone; 2: said to your team"},
+           b.auto_chat);
   // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
   if (b.predict != nullptr)
     v.bind({.name = "cl_predict",
@@ -455,6 +470,8 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
   v.layer = game_layer(game.id);
   c.cvars().set_scope(game_scope(game));  // its own values over the common ones (cvar.hpp)
   con::CvarLayer layer(c.cvars(), v.layer);
+  if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it
+  if (b.auto_chat != nullptr) *b.auto_chat = -1;       // only Quake II's con_auto_chat sets it
   for (const GameRows& row : kGameCvars)
     if (row.game == game.id) row.add(c, b);
   if (b.crosshair != nullptr) {  // crosshairimage's picture read again from this game's files
