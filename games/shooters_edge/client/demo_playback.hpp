@@ -51,7 +51,7 @@
 // ge:keywords cl_startupdemo startup-demo cam_thirdperson cam_dist demo_jump_end mvd_autotrack
 // ge:keywords autotrack cl_hightrack top-fragger demo_jump_skip_messages cam_lockpos
 // ge:keywords cam_zoomaccel cam_zoomspeed third-person-zoom mvd_info demo_playlist_track_name
-// ge:keywords demo_benchmarkdumps
+// ge:keywords demo_benchmarkdumps mvd_status
 // ge:skill shooter replay ui
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #pragma once
@@ -68,6 +68,7 @@
 #include "shooter/demo_transport.hpp"
 #include "shooters_edge/client/demo_autotrack.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
+#include "shooters_edge/client/mvd_status.hpp"
 #include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/client/timedemo.hpp"
@@ -114,6 +115,9 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   int info = 0, info_header = 0;
   std::string info_setup;
   float info_x = 0, info_y = 0;
+  int status = 0;  // `mvd_status`: the watched player's record (mvd_status.hpp)
+  float status_x = 0, status_y = 0;
+  MvdStatus watched;       // gathered as the demo plays
   std::string track_name;  // `demo_playlist_track_name`: picked at a multiview demo's start
   bool track_name_done = false;
   int bench_dumps = 1;  // `demo_benchmarkdumps`: each timedemo's result kept in timedemo.log

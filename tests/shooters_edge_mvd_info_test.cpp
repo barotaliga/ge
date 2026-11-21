@@ -9,6 +9,7 @@
 // ge:keywords demo_benchmarkdumps timedemo-log
 // ge:skill shooter replay testing
 #include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -18,6 +19,8 @@
 #include "console/console.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/mvd_info.hpp"
+#include "shooters_edge/client/mvd_status.hpp"
+#include "shooters_edge/client/team_chat.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 
 namespace cl = shooters_edge::client;
@@ -103,4 +106,42 @@ TEST(a_timedemo_s_result_is_kept_as_a_small_xml_record) {
   CHECK(std::filesystem::file_size(log) == 2 * r.size());
   CHECK(!cl::bench_dump(log / "no" / "such", r, error) && !error.empty());
   CHECK(cl::local_date_now().size() == 19);
+}
+
+TEST(mvd_status_counts_the_watched_player_s_lives_kills_and_deaths) {
+  ge::console::Console con{false};
+  cl::TeamChat chat;
+  cl::add_team_chat(con, chat);  // the weapon words
+  cl::Demo d;
+  std::string error;
+  CHECK(cl::open_demo(cl::write_multiview_match(cl::highlight_match()), d, error));
+  cl::MvdStatus m;
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) cl::mvd_status_frame(m, d);
+  // Slot 0 (watched): kills 2 at 5 s, then one at 10, 15, 20 and 22 s, dies to a rocket at 25 s
+  // holding the launcher, telefrags at 28 s. The fixture's guns never flash: every kill is SPAWN.
+  const cl::MvdPlayerRecord& p = m.players[0];
+  CHECK(p.deaths == 1 && p.lives.size() == 2 && p.lives[0].frags == 5 && p.lives[1].frags == 1);
+  CHECK(p.kills[cl::kStatusWeapons] == 7 && p.lost[0] == 1);
+  CHECK(m.players[1].deaths == 3 && m.players[3].deaths == 2);
+  const std::vector<cl::MvdStatusLine> lines = cl::mvd_status_lines(m, d, con);
+  CHECK(lines.size() == 23 && lines[0].text == d.state.names[0] && lines[1].title &&
+        lines[1].text == "Took");
+  CHECK(lines[4].text == "Deaths: 1" && lines[10].text == "  1    25.000     5   0");
+  CHECK(lines[17].text == "SPAWN: 7" && lines[14].text == "RL: 1 LG: 0 GL: 0 QUAD: 0");
+  // A flash with the launcher in hand: the next frags are the launcher's.
+  cl::Demo shot = d;
+  cl::MvdStatus n;
+  shot.state.time = 1;
+  cl::mvd_status_frame(n, shot);
+  shot.state.time = 1.1;
+  shot.player_stats[0][cl::kStatActiveWeapon] = 32;
+  shot.state.flashed[0] = 1.1;
+  cl::mvd_status_frame(n, shot);
+  shot.state.time = 1.2;
+  shot.state.frags[0] += 1;
+  cl::mvd_status_frame(n, shot);
+  CHECK(n.players[0].last_fired == 0 && n.players[0].kills[0] == 1);
+  shot.state.time = 0.5;  // back: started over
+  cl::mvd_status_frame(n, shot);
+  CHECK(n.players[0].kills[0] == 0);
 }

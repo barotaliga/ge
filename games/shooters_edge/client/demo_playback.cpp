@@ -217,6 +217,33 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
                           .max = 200,
                           .values = "0: at the top (the default); -200..200: that many cells"},
                          &p.info_y);
+    console.cvars().bind({.name = "mvd_status",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "Whether the record of the player you watch in a multiview demo "
+                                  "shows: what he took, lost and killed with, his lives and quad "
+                                  "runs.",
+                          .kind = ge::console::CvarKind::boolean,
+                          .values = "0: hidden (the default); 1: shown"},
+                         &p.status);
+    console.cvars().bind({.name = "mvd_status_x",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "Where the watched player's record sits across, in cells from "
+                                  "the left (from the right when negative).",
+                          .min = -200,
+                          .max = 200,
+                          .values = "0: at the left (the default); -200..200: that many cells"},
+                         &p.status_x);
+    console.cvars().bind({.name = "mvd_status_y",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "Where the watched player's record sits down, in cells from the "
+                                  "top (up from the status bar when negative).",
+                          .min = -200,
+                          .max = 200,
+                          .values = "0: at the top (the default); -200..200: that many cells"},
+                         &p.status_y);
     console.cvars().bind({.name = "demo_playlist_track_name",
                           .fallback = "",
                           .flags = ge::console::kArchive,
@@ -323,6 +350,7 @@ bool playback_begin(DemoPlayback& p, const Timedemo& t, std::string& error) {
   p.plan = {};
   p.plan_state = 0;
   p.track_name_done = false;
+  p.watched = MvdStatus{};
   const bool ok = scan_demo(t.start, p.scan, error);
   if (!ok) p.scan = DemoScan{};
   return ok;
@@ -414,10 +442,13 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
     p.jumped = true;
     t.seek_prints = p.skip_messages == 0;
     const TimedemoStep step = demo_seek(t, to, error);
+    p.watched = MvdStatus{};  // what a seek passed over is not known: gathered again from here
+    mvd_status_frame(p.watched, t.demo);
     if (t.demo.state.intermission && to > t.timeline.t + 0.5) p.paused = true;  // stopped at one
     return step;
   }
   const TimedemoStep step = playdemo_step(t, wall_dt_s, p.paused ? 0.0 : p.speed * p.rate, error);
+  mvd_status_frame(p.watched, t.demo);
   if (step != TimedemoStep::end || p.hold_end == 0) return step;
   if (!p.paused) p.shown_until = now_s + kBarShowS;  // held: the bar shows the way back
   p.paused = true;
@@ -480,6 +511,24 @@ void playback_draw(gu::DrawList& overlay, const DemoPlayback& p, const Timedemo&
       const float x = from_right ? right + p.info_x * cell : frame.safe.x + p.info_x * cell;
       ge::hud::draw_shadowed(overlay, style.caption_face, size, x, top + size, line.text,
                              line.header ? style.bad : style.ink, style.shadow,
+                             frame.px(style.shadow_drop) * 0.5f,
+                             from_right ? gu::Align::right : gu::Align::left, 1);
+      top += cell;
+    }
+  }
+  if (p.status != 0 && p.console != nullptr) {  // the watched player's record (mvd_status.hpp)
+    const ge::hud::Style style = hud::hud_style();
+    const ge::hud::Frame frame = ge::hud::frame_for(w, h, style);
+    const float size = frame.px(style.caption_size) * 0.8f;
+    const float cell = size * 1.3f;
+    const float right = static_cast<float>(w) - frame.safe.x;
+    const float hud_top = static_cast<float>(h) - p.bar_bottom_px;
+    float top = p.status_y >= 0 ? frame.safe.y + p.status_y * cell : hud_top + p.status_y * cell;
+    const bool from_right = p.status_x < 0;
+    const float x = from_right ? right + p.status_x * cell : frame.safe.x + p.status_x * cell;
+    for (const MvdStatusLine& line : mvd_status_lines(p.watched, t.demo, *p.console)) {
+      ge::hud::draw_shadowed(overlay, style.caption_face, size, x, top + size, line.text,
+                             line.title ? style.accent : style.caption, style.shadow,
                              frame.px(style.shadow_drop) * 0.5f,
                              from_right ? gu::Align::right : gu::Align::left, 1);
       top += cell;
