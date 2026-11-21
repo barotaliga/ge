@@ -37,6 +37,11 @@ void info_remove(std::string& info, const std::string& key);
 bool info_pairs(const std::string& info, std::vector<std::pair<std::string, std::string>>& out);
 // True when the string is a well-formed info string within `limit` and kInfoMaxKeys.
 bool info_valid(const std::string& info, size_t limit = kUserInfoBytes);
+// THE STRICT RULE a modern server holds a user info to (its `Malformed userinfo string.`): an
+// optional `\` first, then keys and values by turns; a key may be empty, a value may not; every
+// byte printable (32 to 126) but `"` and `;`; a key and a value under 64 bytes, the whole under
+// 512. A high bit anywhere (a coloured name) fails it.
+bool info_strict(const std::string& info);
 // The info without the keys a starting `_` marks private (what other clients are sent).
 std::string info_public(const std::string& info);
 
