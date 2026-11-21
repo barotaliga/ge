@@ -115,6 +115,10 @@ struct GameProfile {
   std::string_view place_range = "500";
   // Its client's place macros, `$loc_here` and `$loc_there` (client/place_names.hpp).
   bool place_macros = false;
+  // Its classic look picks every colour of the picture from its palette's 256, as its own drawing
+  // did (client/world_draw.cpp's grade); false, full colour (Quake II's renderer drew the
+  // textures' colours times their light with nothing picked).
+  bool palette_look = true;
   // How fast its console slides by default (`scr_conspeed`, client/game_start.hpp), and how much
   // of that is a whole screen: lines a second of a 200-line screen, or screens a second.
   std::string_view conspeed = "300";
@@ -189,6 +193,7 @@ inline constexpr GameProfile kGameProfiles[] = {
      .rules_campaign = true,
      .attract = "q2demo1",
      .place_macros = true,
+     .palette_look = false,
      .conspeed = "3",
      .conspeed_screen = 1},
 };

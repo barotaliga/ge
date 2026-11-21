@@ -75,8 +75,13 @@ bool parse_mode(std::string_view word, Mode* out);
 struct Options {
   Mode mode = Mode::v2;  // the renderer for BSP maps; classic stays selectable (r_bspmode)
   Lighting lighting = Lighting::lights;
-  double ambient = 0.015;       // the light every face gets, the lightmaps' units
-  double brightness = 2.0;      // a lightmap's 1 against a white face under the open day
+  double ambient = 0.015;   // the light every face gets, the lightmaps' units
+  double brightness = 2.0;  // a lightmap's 1 against a white face under the open day
+  // The classic look's light (Mode::classic): a face shows its painted colour times its luxel /
+  // 128 times `classic_light`, in the display's values, clipped at white; `classic_lift` is added
+  // to every luxel first (0 .. 1 of the lightmap's range). 1 and 0: the maps as lit.
+  double classic_light = 1;
+  double classic_lift = 0;
   double strength = 1;          // the point lights' strength against the classic's
   double dynamic_strength = 1;  // the dynamic lights' (set_dynamic_lights) against the classic's
   int shadowed = kMaxShadowedLights;  // the lights that cast shadows (in view first, nearest first)
@@ -337,6 +342,9 @@ struct GpuBsp {
   // The textures' detail: x the mip they are drawn from at the nearest (Options::picmip), y 1 for
   // the faces as painted (Options::fullbright), zw unused.
   float detail[4];
+  // The classic look's light: its scale (Options::classic_light), the light added to every luxel
+  // (Options::classic_lift), zw unused.
+  float classic[4];
 };
 
 struct BspDraw {

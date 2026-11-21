@@ -98,6 +98,10 @@ struct Bsp {
   // a face seen from behind left out), w 1 for the figures' shadows on the lightmaps
   // (Options::lightmap_shadows)
   detail: vec4f,
+  // the classic look's light: x its scale (Options::classic_light: 1 the lightmap's 128 shows a
+  // texel as painted, 255 twice as bright), y the light added to every luxel (Options::
+  // classic_lift, the lightmap's 0 .. 1 units)
+  classic: vec4f,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -1233,8 +1237,13 @@ fn shade(in: VsOut) -> FsOut {
   if (classic || (!kLitOnly && bsp.info.y < 0.5)) {
     var lit = lightmap(in.lm, in.styles) + dynamic_light(in.world);
     if (classic) {
+      // The classic games' own light: the painted colour times the light, in the display's
+      // values (their renderers multiplied the encoded colours), clipped per channel at white;
+      // the post pass shows it as worked out (post.hpp's PostSettings::display).
+      lit = (lit + vec3f(bsp.classic.y * (255.0 / 128.0))) * bsp.classic.x;
       lit = mix(lit, max(lit, vec3f(1.0)), glow);
-      out.colour = vec4f(albedo * lit * white, 1.0);
+      let shown = min(linear_to_srgb(albedo) * lit, vec3f(1.0));
+      out.colour = vec4f(srgb_to_linear(shown) * white, 1.0);
       return out;
     }
     if (bsp.detail.w > 0.5 && !second_view()) {
@@ -1403,4 +1412,9 @@ fn shade(in: VsOut) -> FsOut {
 
 fn srgb_to_linear(c: vec3f) -> vec3f {
   return select(pow((c + 0.055) / 1.055, vec3f(2.4)), c / 12.92, c <= vec3f(0.04045));
+}
+
+fn linear_to_srgb(c: vec3f) -> vec3f {
+  let k = max(c, vec3f(0.0));
+  return select(1.055 * pow(k, vec3f(1.0 / 2.4)) - 0.055, k * 12.92, k <= vec3f(0.0031308));
 }

@@ -31,7 +31,12 @@ player meets it in every frame, in the VIDEO and CLASSIC ENHANCE menus, and in `
 ## Adding a game
 
 1. Draw the map in the CLASSIC look first, matching the original's brightness rule (settled by a
-   clean-room reader, then measured on the game's own maps).
+   clean-room reader, then measured on the game's own maps). Measure it pixel by pixel: the
+   `se-q2` lab's `<map>-formula` shot draws the game's rule on the CPU from the same texels and
+   luxels between the two looks and gives each look's middle brightness over it (1 when equal).
+   The classic look is display-referred (`PostSettings::display`: no exposure, no tone curve), the
+   light multiplied into the encoded colour as the games did; a game whose renderer drew in full
+   colour says so in its profile (`palette_look` false) and keeps its texels unpicked.
 2. Read the game's render bits (its entities' effects, colours, shells) into what the picture
    draws, as `q2_look.hpp` does; never branch the renderer on the game.
 3. Turn every `ce_` switch on the game's maps and compare: each must change the picture or be
@@ -48,13 +53,15 @@ player meets it in every frame, in the VIDEO and CLASSIC ENHANCE menus, and in `
 | Benefit, now every game's | From | Layer |
 | --- | --- | --- |
 | Coloured light carried through the modern look | Quake II | `bsp_draw.hpp`; any family with RGB lightmaps |
+| The maps' light as a setting (`intensity`, `gl_modulate`, `gl_brightness`) | Quake II | `look.hpp`'s `light_intensity` and kin, both looks; Quake keeps 2, 1, 0 |
 | A power's coloured shell, an item's pulse (`r_powershells`, `r_itempulse`) | Quake II | `client/q2_look.hpp`'s `power_look`; on in Quake II, off in Quake |
 | A map's own fog, sky box and its turn | the later clients of both | `bsp_fog.hpp`, `sky_box.hpp`, `map_fog.hpp` |
 | Real-time lights and shadows, our sky, water, lava, slime, bloom, upscaled textures | ours | `ce_` switches, every family |
 
 | Drawback left behind | How |
 | --- | --- |
-| A fixed 8-bit picture | the modern look; the classic look keeps it by `palette_grade`, chosen, not forced |
+| A fixed 8-bit picture | the modern look; Quake's classic look keeps it by `palette_grade`, chosen, not forced; Quake II's classic look is full colour, as its renderer drew |
+| A tone curve's toe on painted-dark textures | neither look has it (`PostSettings::toe`): it sank the classic games' greys and blues to brown |
 | Liquids as flat warped faces | bodies of our water and liquids (`bsp_liquids.hpp`) |
 | A teleport drawn with another game's fog | each game's own arrival effect; `ce_warps` adds the dust |
 

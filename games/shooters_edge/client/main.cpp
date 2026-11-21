@@ -350,6 +350,7 @@ int run_main(int argc, char** argv) {
         });
   // A game pointed at is copied into the data folder and played from there (client/take_in.hpp).
   const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs);
+  cl::adopt_placed_settings(cl::placed_folder(ge::platform::app_dir()), data_root);
   if (!cl::take_in_basedir(&args.basedir, data_root)) return 2;
   std::vector<cl::FoundInstall> installs;  // the console's `games`
   cl::choose_folder(args, prefs, {cl::placed_folder(ge::platform::app_dir())}, &installs);
@@ -391,7 +392,10 @@ int run_main(int argc, char** argv) {
                                   .noskins = &picture.stock_figures,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,
-                                  .frame_cap = &pacing.settings.max_fps};
+                                  .frame_cap = &pacing.settings.max_fps,
+                                  .light_intensity = &picture.light_intensity,
+                                  .light_modulate = &picture.light_modulate,
+                                  .light_lift = &picture.light_lift};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);

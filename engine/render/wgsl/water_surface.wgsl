@@ -349,8 +349,8 @@ fn screen_at(p: vec3f) -> vec3f {
 // The planar mirror along the ray `r` from the surface at `rel` (`dist` m from the eye): where its
 // mirror image lands (the reflected leg's length read off the mirror's depth at the pixel's own
 // uv), its colour, and in a: 1 where the mirror shows the map, 0 where it shows a sky face, -1
-// where the image falls off the mirror's picture or on nothing drawn (the caller's room, never
-// the sky); `leg` the reflected leg's length, m.
+// where the image falls off the mirror's picture's top or bottom or on nothing drawn (the caller's
+// room, never the sky; off a side, the edge's column); `leg` the reflected leg's length, m.
 fn mirror_along(rel: vec3f, r: vec3f, uv: vec2f, dist: f32, leg: ptr<function, f32>) -> vec4f {
   let size = vec2f(textureDimensions(mirror_depth));
   let at = vec2i(clamp(uv * size, vec2f(0.0), size - 1.0));
@@ -363,15 +363,19 @@ fn mirror_along(rel: vec3f, r: vec3f, uv: vec2f, dist: f32, leg: ptr<function, f
   }
   *leg = clamp(far - dist, 0.05, 200.0);
   // The ray's mirror image: its height turned over about the level.
-  let s = screen_at(rel + vec3f(r.x, -r.y, r.z) * *leg);
-  if (s.z < 0.5 || any(s.xy < vec2f(0.0)) || any(s.xy > vec2f(1.0))) {
+  // Off a side the image is read on along the edge's column (what lies just past the edge is
+  // most like the edge): a wave near the screen's left or right edge bends many images just off
+  // it, and the room's flat grey there drew a bright, wavy band down each edge of the water.
+  let s0 = screen_at(rel + vec3f(r.x, -r.y, r.z) * *leg);
+  if (s0.z < 0.5 || s0.y < 0.0 || s0.y > 1.0) {
     return vec4f(0.0, 0.0, 0.0, -1.0);
   }
-  let there = vec2i(clamp(s.xy * size, vec2f(0.0), size - 1.0));
+  let s = vec2f(clamp(s0.x, 0.0, 1.0), s0.y);
+  let there = vec2i(clamp(s * size, vec2f(0.0), size - 1.0));
   if (textureLoad(mirror_depth, there, 0) <= 0.0) {
     return vec4f(0.0, 0.0, 0.0, -1.0);
   }
-  return textureSampleLevel(mirror, linear_clamp, s.xy, 0.0);
+  return textureSampleLevel(mirror, linear_clamp, s, 0.0);
 }
 
 @vertex

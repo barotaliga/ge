@@ -13,6 +13,7 @@
 #include "classic/content/soundtrack.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/client/args.hpp"
+#include "shooters_edge/client/settings.hpp"
 
 namespace shooters_edge::client {
 
@@ -35,11 +36,23 @@ bool writable(const fs::path& dir) {
 }  // namespace
 
 std::string data_root(const std::string& placed, const std::string& prefs) {
-  if (!placed.empty() && writable(fs::path(placed) / "data"))
-    return (fs::path(placed) / "data").string();
   if (!prefs.empty() && writable(fs::path(prefs) / "data"))
     return (fs::path(prefs) / "data").string();
+  if (!placed.empty() && writable(fs::path(placed) / "data"))
+    return (fs::path(placed) / "data").string();
   return "";
+}
+
+bool adopt_placed_settings(const std::string& placed, const std::string& root) {
+  if (placed.empty() || root.empty()) return false;
+  const fs::path old_root = fs::path(placed) / "data";
+  std::error_code ec;
+  if (fs::equivalent(old_root, root, ec)) return false;
+  const fs::path from = series_settings_file(old_root.string());
+  const fs::path to = series_settings_file(root);
+  if (!fs::is_regular_file(from, ec) || fs::exists(to, ec)) return false;
+  fs::create_directories(to.parent_path(), ec);
+  return fs::copy_file(from, to, ec) && !ec;
 }
 
 bool inside(const std::string& path, const std::string& root) {
@@ -72,6 +85,11 @@ bool take_in(const std::string& from, const std::string& root, std::string* base
     return false;
   }
   *basedir = r.game_dir;
+  if (r.unchanged) {
+    *summary = std::string(r.game->what) + " was taken in from " + from +
+               " before and nothing there has changed: it plays from " + r.game_dir + ".";
+    return true;
+  }
   int kept = 0;
   for (const content::StoredTrack& t : r.tracks) kept += t.kept ? 1 : 0;
   const auto count = [](size_t n, const char* one, const char* many) {

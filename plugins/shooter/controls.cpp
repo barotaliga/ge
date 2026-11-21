@@ -103,7 +103,8 @@ void add_control_cvars(console::Console& con, Controls& c) {
   con.cvars().bind({.name = "lookspring",
                     .fallback = "0",
                     .flags = console::kArchive,
-                    .help = "Whether the view's pitch centres, following the slope, as you move.",
+                    .help = "Whether the view's pitch centres when you let mouse look go, and "
+                            "follows the slope as you move while looking by keys.",
                     .kind = console::CvarKind::boolean,
                     .values = "0: it stays (the default); 1: it centres"},
                    &c.lookspring);
@@ -282,7 +283,8 @@ Moves button_moves(Controls& c) {
   m.lookdown = down(b.lookdown);
   m.klook = down(b.klook);
   m.mlook = down(b.mlook);
-  m.center = b.center;
+  m.center = b.center || (b.mlook_held && !m.mlook && c.lookspring && !c.freelook);
+  c.buttons.mlook_held = m.mlook;
   c.buttons.center = false;
   m.impulse = b.impulse;
   c.buttons.impulse = 0;
@@ -322,6 +324,9 @@ Moves key_moves(const input::InputState& in) {
 void spring_view(const input::InputState& in, const Controls& c, bool on_ground, const MoveCmd& cmd,
                  float ideal, double dt, Vec3f& view) {
   if (!c.lookspring || !on_ground || in.mouse.dy != 0) return;
+  // A player looking with the mouse (freelook, or +mlook held) aims where he points it: the
+  // drift is for those who look by keys alone, as in every classic game.
+  if (c.freelook || (c.buttons.mlook != nullptr && c.buttons.mlook->down())) return;
   if (cmd.forward == 0 && cmd.side == 0) return;
   const double most = kSpringSpeed * dt;
   const double gap = static_cast<double>(ideal) - view.x;

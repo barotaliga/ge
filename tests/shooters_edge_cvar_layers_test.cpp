@@ -92,7 +92,10 @@ struct Window {
                         .noskins = &noskins,
                         .view = &view,
                         .moves = &moves,
-                        .frame_cap = &frame_cap});
+                        .frame_cap = &frame_cap,
+                        .light_intensity = &picture.light_intensity,
+                        .light_modulate = &picture.light_modulate,
+                        .light_lift = &picture.light_lift});
   }
 };
 
@@ -458,4 +461,33 @@ TEST(quake_twos_cl_maxfps_is_its_move_rate_and_r_maxfps_its_frame_cap) {
   CHECK(v.find("r_maxfps") == nullptr || v.find("r_maxfps")->layer != cl::game_layer(q2->id));
   CHECK_MSG(v.find("cl_maxfps")->value == "144", v.find("cl_maxfps")->value);
   CHECK_MSG(w.frame_cap == 144, std::to_string(w.frame_cap));
+}
+
+// Quake II's light settings, with its defaults and limits, scale the maps' light in both looks;
+// Quake's light stays as it was.
+TEST(quake_twos_intensity_and_gl_modulate_light_its_maps) {
+  Window w(*pr::find_game("q2"));
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("intensity")->value == "2" && v.find("gl_modulate")->value == "1");
+  CHECK(v.find("gl_brightness")->value == "0");
+  v.set("intensity", "3", con::Source::local);
+  v.set("gl_modulate", "2", con::Source::local);
+  v.set("gl_brightness", "0.2", con::Source::local);
+  CHECK(w.picture.light_intensity == 3 && w.picture.light_modulate == 2);
+  CHECK(std::fabs(w.picture.light_lift - 0.2) < 1e-12);
+  CHECK(shooters_edge::look::light_scale(w.picture) == 3);  // 3 x 2 / 2
+  namespace look = shooters_edge::look;
+  const ge::brush::app::Options o = look::world_options(look::Look::classic, {}, w.picture);
+  CHECK(o.classic_light == 3 && std::fabs(o.classic_lift - 0.2) < 1e-12);
+  const ge::brush::app::Options m = look::world_options(look::Look::modern, {}, w.picture);
+  CHECK(m.brightness == 3 * ge::brush::app::Options{}.brightness);
+  v.set("intensity", "9", con::Source::local);  // held to 1..5
+  CHECK(w.picture.light_intensity <= 5);
+  // Quake loaded: its maps lit as they were.
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0],
+                        {.light_intensity = &w.picture.light_intensity,
+                         .light_modulate = &w.picture.light_modulate,
+                         .light_lift = &w.picture.light_lift});
+  CHECK(v.find("intensity") == nullptr && v.find("gl_modulate") == nullptr);
+  CHECK(shooters_edge::look::light_scale(w.picture) == 1 && w.picture.light_lift == 0);
 }

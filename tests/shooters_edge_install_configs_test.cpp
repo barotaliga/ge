@@ -138,7 +138,7 @@ TEST(q2_s_default_cfg_comes_from_its_pack_keeping_the_console_keys) {
 }
 
 // A pack's default.cfg that moves on the arrows (A looks up, the right button sidesteps) leaves
-// the window's move keys as they were; its other keys and its mouse speed stand.
+// the window's move keys and its lookspring as they were; its other keys and its mouse speed stand.
 TEST(q2_s_pack_defaults_keep_the_window_s_move_keys) {
   const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
   const std::string base(two.base_dir);
@@ -147,7 +147,8 @@ TEST(q2_s_pack_defaults_keep_the_window_s_move_keys) {
   std::vector<uint8_t> pack;
   std::string error;
   const std::string defaults =
-      "unbindall\nbind a +lookup\nbind mouse2 +strafe\nbind up +forward\nset sensitivity 3\n";
+      "unbindall\nbind a +lookup\nbind mouse2 +strafe\nbind up +forward\nset sensitivity 3\n"
+      "set lookspring 1\n";
   CHECK_MSG(
       ge::vfs::write_pak({{"default.cfg", {defaults.begin(), defaults.end()}}}, &pack, &error),
       error);
@@ -164,6 +165,7 @@ TEST(q2_s_pack_defaults_keep_the_window_s_move_keys) {
   CHECK(con.binds().get(ge::console::BindMode::game, "a") == "+moveleft");
   CHECK(con.binds().get(ge::console::BindMode::game, "mouse2") == "+jump");
   CHECK(con.binds().get(ge::console::BindMode::game, "up") == "+forward");
+  CHECK(!c.lookspring);  // the window's own default kept over the pack's lookspring 1
   // Its mouse speed is a classic config's number: 3 times 0.022 degrees a count.
   CHECK(std::fabs(ge::shooter::yaw_per_count(c) - 0.066) < 1e-9);
   ge::input::InputState in;
