@@ -160,6 +160,7 @@ struct Mind {  // NOLINT(clang-analyzer-optin.performance.Padding): one a bot, r
   double push_go_t = -1e9;       // when the gather was over and it went in (-1e9: not yet)
   double push_said_at = -1e9;    // its last call of a push
   int32_t push_item = -1;        // the key item the push is for (-1: none)
+  bool push_gang = false;        // (the labs' record) the push is on a launcher's holder (`rlgang`)
   int64_t read = 0, missed = 0;  // team lines read and missed
   int32_t told = -1;             // an item a mate pointed it at ("you take it")
   int32_t claim = -1;            // the key item whose area it claimed (-1: none)
@@ -230,6 +231,11 @@ bool mate_going(const Fighter& f, int32_t i, double t);
 // Whether item `i` is left to a teammate (no use to this player, or the quad's carrier's due).
 bool gives_up(const Fighter& f, const ge::shooterbots::BotView& s, int me, int32_t i,
               const Stats& st, double t);
+
+// (`rushdetour`) For a rusher waiting on quad item `quad`: the key item (a red or yellow armour,
+// a mega) of use to him that he reaches as it shows, or there now, and from which he is on the
+// quad before it is due, the most worth first; -1 none.
+int32_t rush_detour(Fighter& f, const Stats& st, double t, int32_t quad);
 
 // This player's status as a message carries it.
 SayStatus status_of(const Stats& st);

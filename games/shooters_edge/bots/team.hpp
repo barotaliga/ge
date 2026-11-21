@@ -29,9 +29,11 @@
 
 namespace shooters_edge::bots {
 
-constexpr double kPlan_s = 0.5;       // how often the team's roles are planned
-constexpr double kRushAhead_s = 12;   // the quad due within this: the rushers go to wait on it
-constexpr double kRushMost_s = 25;    // (`rushhold`) a rush begun held this long at most
+constexpr double kPlan_s = 0.5;          // how often the team's roles are planned
+constexpr double kRushAhead_s = 12;      // the quad due within this: the rushers go to wait on it
+constexpr double kRushMost_s = 25;       // (`rushhold`) a rush begun held this long at most
+constexpr double kRushStrongRun_s = 4;   // (`rushstrong`) the strong's edge to the quad, s of run
+constexpr float kRushStrongArmour = 60;  // strong: the launcher and this protection (100 yellow)
 constexpr double kQuadLead_s = 15;    // (`quadlead`) the quad's rush no earlier than this before it
 constexpr double kRushSpare_s = 2;    // (`rushrun`) a rusher goes its run and this before the quad
 constexpr double kRunFar_s = 1e6;     // (`rushrun`) a run the nav does not hold, s
@@ -57,9 +59,12 @@ struct TeamStats {
   // (`holdpoint`) holders' plans on their area's item there or due: left to a mate (stood off),
   // taken; and plans in the hold role at all
   int64_t hold_left = 0, hold_taken = 0, hold_plans = 0;
-  int64_t fetch_end[5] =
-      {};                  // how the others ended: a role, believed gone, the time, death, retreat
-  int64_t spam_shots = 0;  // rockets fired at a spot enemies come in by
+  int64_t fetch_end[5] = {};  // how the others ended: a role, believed gone, the time, death; and
+                              // thinks a taker backing off left it to a nearer enemy (not an end)
+  int64_t spam_shots = 0;     // rockets fired at a spot enemies come in by
+  // the quad's rushes begun strong (the launcher, kRushStrongArmour); (`rushstrong`) the thinks
+  // whose mate came ahead or fell behind by strength
+  int64_t rushes_strong = 0, rush_strength_flips = 0;
   int64_t role_commands[kRoles] = {};  // members' commands in each role
 };
 
@@ -79,6 +84,9 @@ struct Team {
   uint32_t friends = 0;    // the members' slots as bits
   int32_t hold_item = -1;  // the key areas for the labs' map: the best armour's
   int32_t quad_item = -1;  // and the quad's
+  // (the labs' record, decides nothing) when a member last called the push on an enemy
+  // launcher's holder (`rlgang`): a mate joining a push within a second of it joins that one
+  double gang_call_t = -1e9;
 };
 
 // Member `f` says `text` to its team (a `say_team` its client sends), unless it spoke within

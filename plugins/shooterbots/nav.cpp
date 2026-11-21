@@ -896,6 +896,8 @@ void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra) {
       l.teleport = e.teleport;
       l.escape = e.escape;
       l.gap = e.gap;
+      l.ladder = e.ladder;
+      l.face = e.face;
       links.push_back(l);
     }
     n.first_link = first;

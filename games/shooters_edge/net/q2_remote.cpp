@@ -183,6 +183,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   c.news = Q2News{};
   const double now_s = static_cast<double>(r.now_us) * 1e-6 + r.owed_s;
   // The ignore lists, the team tags and the regex triggers (chat_ignore.hpp).
+  r.ignore.chat.relay = false;  // a game joined: Quake II's message triggers run
   client::drop_ignored(r.ignore, d.state, d.state.prints, now_s, &d.state.centre);
   const bool fresh = c.frames != r.q2_frames;
   client::DemoState& st = d.state;

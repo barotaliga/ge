@@ -217,7 +217,8 @@ screen in the plain colour; 2 in the alternate colour), `scr_chathud_lines` (4, 
 `scr_chathud_x` 8 and `scr_chathud_y` -64 (pixels of the scaled screen; a negative x counts from the
 right edge and right-aligns, a negative y from the bottom, the newest line lowest), and the command
 `clearchathud`. Spectator chat from a multi-view server's relay is shown but not sounded. [R] Ours:
-the notify lines (`con_notify`) only; the names are not found. [D ours]
+the notify lines (`con_notify`) only; the names are not found. [D ours] **Done (M18k4 round 32)**:
+`scr_chathud`, `_lines`, `_time`, `clearchathud`; x and y not taken (the layout places it).
 
 **C11. Rank 3, HUD: the lag graph and the lost-connection picture.** `scr_lag_draw` (0 off, 1 the
 graph alone, 2 on a dark box) draws, at `scr_lag_x` and `scr_lag_y` (both -1: the lower right
@@ -330,7 +331,10 @@ the console's foot shows the file being downloaded with a bar and "nn% (size)", 
 "Loading models...", "images", "clients", "sounds" in turn. [R] Ours: the classic console's look and
 `con_notifytime`, `con_notifylines`, `con_height` are had; `con_alpha`, `con_scale`, `con_clock`,
 `condump`, `clearnotify` (ours `con_clearnotify`), `remotemode` and the loading lines are not found.
-[R ours]
+[R ours] **Done (M18k4 rounds 32 and 33)**: `con_clock`, `condump`, `con_auto_chat`, `clearnotify`,
+`remotemode`, `con_scale`, `con_alpha`, the download bar and "Loading <map>..."; not taken: the
+version corner, the later loading steps, `con_background`, `con_scroll`, `con_history`,
+`con_timestampsformat`, `con_timestampscolor`.
 
 **C24. Rank 3, the loading plaque and the pause picture.** Starting to load a level stops every sound
 and the music, then draws the pack's `loading` picture centred, unless the console or a menu is up,
@@ -406,7 +410,9 @@ instead of the number), `cl_chat_filter` 0 (1 strips unprintable characters and 
 `untrigger` (run a command when a server line that is not chat, or a centre print, matches; never in
 a demo or on a relay). [R] Ours: the chat sound (`misc/talk.wav`) and the ignore lists are landed; the
 Quake II spellings, `followip`, `trigger` and `untrigger` are not found (our regex triggers are the
-first game's). [R ours]
+first game's). [R ours] **Done (M18k4 round 32)**: all of them; `cl_chat_notify`, `cl_chat_filter`,
+`followip`, `trigger` and `untrigger` in the classic layer, `cl_chat_sound` and `con_auto_chat`
+Quake II's own.
 
 **C32. Rank 3, sound settings.** `s_enable` (1 software, 2 OpenAL, 0 none), `s_volume` 0.7,
 `s_khz` 44 (saved), `s_mixahead` 0.1 s (0 to 1), `s_swapstereo` 0, `s_ambient` 1 (0 no entity loop

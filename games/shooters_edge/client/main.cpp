@@ -316,10 +316,12 @@ int run_main(int argc, char** argv) {
   ge::audio::MusicConsole music;  // the kept soundtrack (`cd`, `bgmvolume`): outlives the synth
   ge::audio::Synth synth;         // outlives the device that pulls it (opened with the window)
   se::Hud hud = se::make_hud();
-  const auto tell = [&](const std::string& line, double at) {  // the console and the HUD's feed
+  const auto tell = [&](const std::string& line, double at, bool chat = false) {  // and the HUD
     console.print(line);
-    if (!line.starts_with('\n')) hud.notify.push(line, se::hud_style().ink, at);  // not a banner
+    if (!line.starts_with('\n'))  // not a banner: the feeds by cl_chat_notify and scr_chathud
+      cl::tell_feeds(remote.ignore.chat, hud.notify, line, chat, se::hud_style().ink, at);
   };
+  hud.chat = &remote.ignore.chat.feed;  // the chat lines on screen (scr_chathud)
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   console.cvars().set_layer(cl::kLayerShell);  // the menus and the attract loop (menu_attract)
@@ -376,6 +378,7 @@ int run_main(int argc, char** argv) {
   game_menu.servers().set_routes(shooters_edge::net::qw_route_query());  // sb_findroutes
   game_menu.servers().set_cache_dir(
       std::filesystem::path(shots.dir()).parent_path());  // sb_listcache
+  con_view.set_dump_folder(std::filesystem::path(shots.dir()).parent_path().string());  // condump
   // SELECT GAME: every classic game, its install kept on this computer and its edition.
   game_menu.games().set_lister(
       [&] { return cl::game_rows(prefs, args.profile, game_menu.game()); });
@@ -398,7 +401,9 @@ int run_main(int argc, char** argv) {
                                   .frame_cap = &pacing.settings.max_fps,
                                   .light_intensity = &picture.light_intensity,
                                   .light_modulate = &picture.light_modulate,
-                                  .light_lift = &picture.light_lift};
+                                  .light_lift = &picture.light_lift,
+                                  .chat = &remote.ignore.chat,
+                                  .auto_chat = &con_view.game_chat};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
@@ -1548,6 +1553,8 @@ int run_main(int argc, char** argv) {
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
+    double foot_share = -1;  // the console's foot while joining: the file coming, the loading
+    con_view.set_foot(sn::remote_foot(remote, foot_share), foot_share);
     if (std::exchange(remote.left, false) && !remote.active && !listen.map && !bench.active &&
         next_map.empty()) {
       if (!start_attract()) next_map = game_content.first_map;
@@ -1645,12 +1652,13 @@ int run_main(int argc, char** argv) {
       if (paced) {  // what the frames read carried: heard, and its lines shown
         synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
         std::vector<std::string> lines;
-        cl::DemoHeard joined_heard;  // a game joined: what its frames read carried (remote_step)
+        std::vector<bool> chat_lines;  // which are chat (cl_chat_notify, scr_chathud)
+        cl::DemoHeard joined_heard;    // a game joined: what its frames read carried (remote_step)
         if (drawn_remote) joined_heard = {ds.started, ds.stopped, ds.voice, ds.prints, ds.centre};
         if (hearing.frame(ds, drawn_remote ? joined_heard : bench.heard, static_cast<float>(wall),
-                          lines, hud.centre))
+                          lines, hud.centre, &chat_lines))
           hud.centre_until = t + picture.centre_time;  // scr_centertime
-        for (const std::string& line : lines) tell(line, t);
+        for (size_t i = 0; i < lines.size(); ++i) tell(lines[i], t, chat_lines[i]);
       }
       if (!world) continue;  // no level of the demo's yet
       // Bob, roll and kick rebuilt on the recorded eye; a game joined by its prediction.

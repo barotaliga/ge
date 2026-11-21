@@ -101,6 +101,7 @@ void read_oob(Q2ClientEnd& c, const uint8_t* data, size_t size) {
 void next_fetch(Q2ClientEnd& c) {
   c.fetching.clear();
   c.fetched_bytes.clear();
+  c.fetched_percent = 0;
   c.fetched_origin = false;
   if (!c.fetch_queue.empty()) {
     c.fetching = c.fetch_queue.front();
@@ -166,6 +167,7 @@ void take_downloads(Q2ClientEnd& c) {
       continue;
     }
     c.fetched_bytes.insert(c.fetched_bytes.end(), p.bytes.begin(), p.bytes.end());
+    c.fetched_percent = p.percent;
     if (p.percent < 100) {
       q2_client_command(c, "nextdl");
       continue;

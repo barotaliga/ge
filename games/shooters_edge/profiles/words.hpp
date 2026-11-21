@@ -104,6 +104,11 @@ inline constexpr WordRow kQ1ServerWords[] = {
     {"world_lava_2", "%1 visits the Volcano God%n"},
     {"world_lava_gib", "%1 burst into flames%n"},
     {"world_squish", "%1 was squished%n"},
+    {"world_blew_up", "%1 blew up%n"},
+    {"world_spiked", "%1 was spiked%n"},
+    {"world_zapped", "%1 was zapped%n"},
+    {"world_lavaball", "%1 ate a lavaball%n"},
+    {"world_left", "%1 tried to leave%n"},
     {"world_died", "%1 died%n"},
     // --- telefrags against the shield ---
     {"pent_deflect", "Satan's power deflects %1's telefrag%n"},

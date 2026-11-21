@@ -119,8 +119,14 @@ bool touches(sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi) {
          p.z + 32 >= lo.z && p.z - 24 <= hi.z;
 }
 
+// A turning door this far or less over an exit is its hatch, units.
+constexpr float kHatchOver = 256;
+
+// A trigger hung in a shaft is reached by a fall through it onto a node this far under it, units.
+constexpr float kUnderShaft = 512;
+
 // The node a player standing on touches the box from, nearest its middle; else the nearest a step
-// beyond it; else none.
+// beyond it; else one under it that a fall through it lands on; else none.
 int32_t node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
   const sh::Vec3f mid = (lo + hi) * 0.5f;
   constexpr float kOnMover = 1e6f;
@@ -155,6 +161,17 @@ int32_t node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
   if (best >= 0) return best;
   const int32_t n = sb::nav_nearest(g, mid);
   if (n >= 0 && dist(g.nodes[static_cast<size_t>(n)].origin, mid) < 256) return n;
+  // Hung in a shaft (base2's first exit, a trigger halfway down a pit under a hatch): fallen
+  // through, at the highest node standing under it.
+  for (size_t k = 0; k < g.nodes.size(); k++) {
+    const sh::Vec3f o = g.nodes[k].origin;
+    if (o.x < lo.x || o.x > hi.x || o.y < lo.y || o.y > hi.y || o.z > lo.z ||
+        o.z < lo.z - kUnderShaft)
+      continue;
+    if (best < 0 || o.z > g.nodes[static_cast<size_t>(best)].origin.z)
+      best = static_cast<int32_t>(k);
+  }
+  if (best >= 0) return best;
   // The nearest node at all within reach (a trigger in a lift's shaft, passed riding it: e1m1's
   // under its hidden plat opens the secret wall at the top; the nav's nearest looks for a floor).
   for (size_t k = 0; k < g.nodes.size(); k++) {
@@ -383,6 +400,9 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.locked_at.clear();
   w.cars.clear();
   w.cars_at.clear();
+  w.turners.clear();
+  w.turners_at.clear();
+  w.hatches.clear();
   w.barred.clear();
   w.stats = WayStats{};
   w.plan_at = -1;
@@ -419,8 +439,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   std::string error;
   if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
   name_linked_doors(s, spec, blocks);
-  // What opens a door only something else opens: a name a shut door answers to, or a counter's
-  // or a relay's whose own target does (two hops).
+  // What opens a door only something else opens: a name a shut door answers to, or a counter's,
+  // a relay's or a door's whose own target does (two hops).
   const auto names_door = [&](const std::string& t, std::vector<int>& out) {
     bool any = false;
     for (const pg::EntityBlock& d : blocks) {
@@ -434,6 +454,16 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         any = true;
         const int e = dm ? edict_of(s, dm) : -1;
         if (e >= 0) out.push_back(e);
+      } else if (std::strcmp(dc, "func_door_rotating") == 0 && !(sf && (std::atoi(sf) & 1) != 0)) {
+        // A turning door (a hatch, a lever): open once it has turned off its rest.
+        const int e = dm ? edict_of(s, dm) : -1;
+        if (e < 0) continue;
+        any = true;
+        out.push_back(e);
+        if (std::find(w.turners.begin(), w.turners.end(), e) == w.turners.end()) {
+          w.turners.push_back(e);
+          w.turners_at.push_back(s.sv.edicts[static_cast<size_t>(e)].angles);
+        }
       }
     }
     return any;
@@ -446,8 +476,11 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       const char* dn = pg::block_value(d, "targetname");
       const char* dt = pg::block_value(d, "target");
       if (!dc || !dn || !dt || std::strcmp(dn, t) != 0) continue;
+      // (A door that fires its own target as it opens passes it on too: base2's lever is a
+      // `func_door_rotating` whose target is the exit's door.)
       if (std::strcmp(dc, "trigger_counter") == 0 || std::strcmp(dc, "trigger_relay") == 0 ||
-          std::strcmp(dc, "trigger_key") == 0)
+          std::strcmp(dc, "trigger_key") == 0 || std::strcmp(dc, "func_door_rotating") == 0 ||
+          std::strcmp(dc, "func_door") == 0)
         any = names_door(dt, out) || any;
     }
     return any;
@@ -721,6 +754,16 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     if (!car_back) w.steps.push_back(st);
   }
+  // The turning doors a step opens that lie over an exit, within kHatchOver above it.
+  for (const int h : w.turners) {
+    const sh::Edict& he = s.sv.edicts[static_cast<size_t>(h)];
+    for (const WayStep& st : w.steps)
+      if (st.kind == WayKind::exit && he.absmin.x < st.hi.x && he.absmax.x > st.lo.x &&
+          he.absmin.y < st.hi.y && he.absmax.y > st.lo.y && he.absmin.z >= st.hi.z - 8 &&
+          he.absmin.z - st.hi.z < kHatchOver &&
+          std::find(w.hatches.begin(), w.hatches.end(), h) == w.hatches.end())
+        w.hatches.push_back(h);
+  }
   // A shut door bars the links that pass through its shut box, not every node of its sweep: the
   // nav gives a sliding door's whole travel as its mover, and that barred the floor in front of
   // e1m2's exit doors where the trigger that opens them stands; a swim link through e4m1's shut
@@ -846,6 +889,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (size_t k = 0; k < w.cars.size(); k++)
       if (w.cars[k] == ent)
         return dist(s.sv.edicts[static_cast<size_t>(ent)].origin, w.cars_at[k]) >= 1;
+    for (size_t k = 0; k < w.turners.size(); k++)
+      if (w.turners[k] == ent)
+        return dist(s.sv.edicts[static_cast<size_t>(ent)].angles, w.turners_at[k]) >= 1;
     return true;  // no door of the plan's
   };
   for (WayStep& st : w.steps) {
@@ -1016,6 +1062,13 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       for (const int32_t x : exits) any = any || w.search.reached(x);
       if (!any) needed.push_back(w.cars[k]);
     }
+    // A hatch shut over an exit (base2's first: a fall down a shaft under two turning leaves): its
+    // button first, then the exit.
+    for (const int h : w.hatches)
+      for (size_t k = 0; k < w.turners.size(); k++)
+        if (w.turners[k] == h &&
+            dist(s.sv.edicts[static_cast<size_t>(h)].angles, w.turners_at[k]) < 1)
+          needed.push_back(h);
   }
   const auto worth = [&](const WayStep& st) {
     if (st.kind == WayKind::key) return true;
@@ -1132,15 +1185,27 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         if (w.locked[k] == d && w.gain_back[k] > 0) return true;
     return false;
   };
-  for (int pass = 0; pass < (w.complete ? 3 : 2) && pick < 0; pass++)
+  // A step in a trap (map_nav.hpp: a pool dropped into with no way back) is taken last, once
+  // nothing else is left: base2's trigger in its south pool held him there for good, though the
+  // lever the exit needed lay on the ledge above.
+  const auto trapped_in = [&](int32_t n) {
+    return n >= 0 && static_cast<size_t>(n) < nav.trap.size() && nav.trap[static_cast<size_t>(n)];
+  };
+  const bool me_trapped = trapped_in(from);
+  for (int pass = 0; pass < (w.complete ? 4 : 3) && pick < 0; pass++)
     for (size_t k = 0; k < w.steps.size(); k++) {
       const WayStep& st = w.steps[k];
       if (st.kind == WayKind::exit || st.done || t < st.left_until || st.node < 0 ||
           !reach(st.node))
         continue;
-      if (pass == 0 ? !worth(st) : unseen) continue;
+      const bool last = !me_trapped && trapped_in(st.node);
+      if (pass == 3) {
+        if (unseen || prey >= 0 || !way_back(st)) continue;
+      } else if (pass < 2 ? last : !last || unseen) {
+        continue;
+      }
+      if (pass == 0 ? !worth(st) : pass == 1 && unseen) continue;
       if (pass == 1 && w.complete && st.ever) continue;  // a lift's button: pressed once is enough
-      if (pass == 2 && (prey >= 0 || !way_back(st))) continue;
       if (st.kind == WayKind::secret && !w.complete) continue;
       const double c = w.search.cost(st.node);
       if (pick < 0 || c < best) {

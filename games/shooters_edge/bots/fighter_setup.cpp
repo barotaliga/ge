@@ -77,6 +77,8 @@ sb::PilotSettings fighter_pilot(const sb::Features& features, const sb::Traits& 
     ps.hop_straight = true;
     ps.hop_wall_ground = true;
   }
+  ps.hop_swap_ground = features[sb::Feature::swapground];           // the aim's swap at the landing
+  if (features[sb::Feature::wallplan]) ps.hop_see_ground_s = 0.5f;  // a flight ahead, jumping
   ps.hop_stairs_walked = features[sb::Feature::stairs];
   ps.slopes = features[sb::Feature::slopes];
   ps.backstep = features[sb::Feature::backstep];
@@ -107,13 +109,15 @@ sb::PilotSettings fighter_pilot(const sb::Features& features, const sb::Traits& 
   // take off at 433, p50), an average player a shorter curve for less (people's p25: 377).
   ps.hop_circle = features[sb::Feature::circlejump];
   ps.hop_chain = features[sb::Feature::chainhop];
-  ps.hop_land_wall_s = features[sb::Feature::landwall] ? 0.15f : 0.f;
+  ps.hop_land_wall_s = features[sb::Feature::landwall] ? 0.35f : 0.f;
+  ps.hop_air_end = features[sb::Feature::airend];
   ps.hop_jump_held = features[sb::Feature::hopjump];
   ps.hop_side_only = features[sb::Feature::hopside];
   ps.hop_open = features[sb::Feature::hopopen];
   ps.aim_land_s = features[sb::Feature::aimland] ? 0.3f : 0.f;
   ps.recipe_heading = features[sb::Feature::starthead];
   ps.recipe_clear = features[sb::Feature::startclear];
+  if (features[sb::Feature::startease]) ps.recipe_ease_s = 0.25f;  // eased in from its own view
   ps.gap_hold = features[sb::Feature::gaphold];
   ps.lift_brake = features[sb::Feature::liftbrake];
   ps.walk_mash = features[sb::Feature::walkmash];

@@ -38,6 +38,9 @@ class Feed {
   // Forgets every line faded out by `t`.
   void expire(double t);
   void clear() { lines_.clear(); }
+  // A player's setting changed: at most `capacity` lines (the oldest let go), each held `hold_s`
+  // before it fades (a negative hold: never fades).
+  void configure(size_t capacity, double hold_s);
 
   // 0..1: how strongly a line pushed at `born` shows at `t`.
   double strength(double born, double t) const;

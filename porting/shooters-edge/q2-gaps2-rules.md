@@ -483,3 +483,4 @@ Rank 3: 22 (SP 9, DM 7, commands 5, coop 1).
 
 | Date | PR | Rows |
 | --- | --- | --- |
+| 2026-11-21 | the rank-1 PR | R1 (every obituary word for word, with the victim's gender), R2 (single player's `<name> died.`; co-op scores nothing), R3 (`entered the game` and `disconnected` to everyone, with the login flash), R4 (`Timelimit hit.`, `Fraglimit hit.`), R5 (every teleporter exit and, in deathmatch, every spawn spot a solid disc; the window's prediction clips against boxes), R6 (the 18 maps' co-op spots renamed, security's three added, the fallback: the n-th co-op spot within 550 units of the start), R7 (a player seated again after a level change keeps what he carried and his score; deathmatch scores start afresh each map), R13 (the next map's order) |

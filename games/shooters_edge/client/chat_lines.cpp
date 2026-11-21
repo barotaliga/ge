@@ -6,6 +6,8 @@
 // ge:test tests/shooters_edge_chat_ignore_test.cpp
 #include "shooters_edge/client/chat_lines.hpp"
 
+#include <algorithm>
+#include <cstdlib>
 #include <ctime>
 
 #include "console/cvar.hpp"
@@ -19,6 +21,9 @@ namespace {
 
 constexpr int kChatLevel = 3;
 constexpr const char* kTalk = "misc/talk.wav";
+constexpr const char* kTalk1 = "misc/talk1.wav";
+constexpr size_t kSeenKept = 16;  // the addresses followip remembers
+constexpr int kMostHudLines = 32;
 
 std::string info(const DemoState& s, const char* key) {
   for (const auto& [k, v] : s.serverinfo)
@@ -132,6 +137,172 @@ void add_chat_extras(con::Console& c, ChatExtras& x) {
           .kind = con::CvarKind::text,
           .values = "TEXT: the words; empty: none (the default)"},
          &x.mark);
+  v.bind({.name = "cl_chat_notify",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether chat lines also show in the messages at the top of the screen.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: they do (the default); 0: only the console and the chat lines on screen "
+                    "have them"},
+         &x.notify);
+  v.bind({.name = "cl_chat_filter",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Whether a chat line is cut at its first line break and cleaned of letters "
+                  "that do not print.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: shown as sent (the default); 1: cut and cleaned"},
+         &x.strip);
+  v.bind({.name = "scr_chathud",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Whether the last chat lines stay on screen at the lower left.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "0: off (the default); 1: in the plain colour; 2: in the alternate colour"},
+         &x.hud);
+  v.bind({.name = "scr_chathud_lines",
+          .fallback = "4",
+          .flags = con::kArchive,
+          .help = "How many chat lines stay on screen.",
+          .kind = con::CvarKind::integer,
+          .min = 1,
+          .max = kMostHudLines,
+          .values = "4: four (the default); 1..32: that many"},
+         &x.hud_lines);
+  v.bind({.name = "scr_chathud_time",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "How long a chat line stays on screen, in seconds, fading over its last one.",
+          .min = 0,
+          .max = 3600,
+          .values = "0: until newer lines push it off (the default); SECONDS: that long"},
+         &x.hud_time);
+  c.add_command("clearchathud", "clearchathud: the chat lines on screen taken away",
+                [&x](con::Console&, const con::Args&) { x.feed.clear(); });
+  c.add_command("followip",
+                "followip [n]: join the server whose address a chat line named last (or the "
+                "n-th last)",
+                [&x](con::Console& cc, const con::Args& a) {
+                  int n = 1;
+                  if (a.size() > 1) n = std::atoi(a[1].c_str());
+                  if (n < 1 || static_cast<size_t>(n) > x.seen.size()) {
+                    cc.print(x.seen.empty() ? "No address has been seen in chat yet."
+                                            : "Only " + std::to_string(x.seen.size()) +
+                                                  " addresses have been seen in chat.");
+                    return;
+                  }
+                  const std::string& to = x.seen[x.seen.size() - static_cast<size_t>(n)];
+                  cc.print("Following " + to + "...");
+                  cc.append("connect " + to);
+                });
+  c.add_command("trigger",
+                "trigger [<command> <match>]: run a command when a server message matches; "
+                "alone: the list",
+                [&x](con::Console& cc, const con::Args& a) {
+                  if (a.size() < 3) {
+                    if (x.triggers.empty()) cc.print("No message triggers are set.");
+                    for (const ChatExtras::Trigger& t : x.triggers)
+                      cc.print("\"" + t.command + "\" for \"" + t.match + "\"");
+                    return;
+                  }
+                  for (const ChatExtras::Trigger& t : x.triggers)
+                    if (t.command == a[1] && t.match == a[2]) return;  // set already
+                  x.triggers.push_back({a[1], a[2]});
+                });
+  c.add_command("untrigger",
+                "untrigger <command> <match>: a message trigger taken away; untrigger all: "
+                "every one",
+                [&x](con::Console& cc, const con::Args& a) {
+                  if (a[1] == "all") {
+                    x.triggers.clear();
+                    return;
+                  }
+                  if (a.size() < 3) {
+                    cc.print("Give the command and the match, or all.");
+                    return;
+                  }
+                  const auto n = std::erase_if(x.triggers, [&](const ChatExtras::Trigger& t) {
+                    return t.command == a[1] && t.match == a[2];
+                  });
+                  if (n == 0) cc.print("No such message trigger.");
+                });
+}
+
+void add_q2_chat_sound(con::Console& c, ChatExtras& x) {
+  c.cvars().bind({.name = "cl_chat_sound",
+                  .fallback = "1",
+                  .flags = con::kArchive,
+                  .help = "The sound a chat line plays.",
+                  .kind = con::CvarKind::text,
+                  .values = "0: none; 1: misc/talk.wav (the default); 2: misc/talk1.wav; a sound's "
+                            "name: that one"},
+                 &x.named_sound);
+}
+
+const char* q2_chat_sound(const std::string& named) {
+  if (named.empty() || named == "0") return nullptr;
+  if (named == "1") return kTalk;
+  if (named == "2") return kTalk1;
+  return named.find("..") == std::string::npos ? named.c_str() : kTalk;
+}
+
+std::vector<std::string> addresses_in(std::string_view text) {
+  std::vector<std::string> out;
+  const auto digit = [&](size_t i) { return i < text.size() && text[i] >= '0' && text[i] <= '9'; };
+  for (size_t i = 0; i < text.size(); ++i) {
+    if (!digit(i) || (i > 0 && (digit(i - 1) || text[i - 1] == '.'))) continue;
+    size_t at = i;
+    int parts = 0;
+    bool ok = true;
+    for (; parts < 4; ++parts) {
+      size_t n = 0;
+      int value = 0;
+      while (digit(at) && n < 4) value = value * 10 + (text[at++] - '0'), ++n;
+      if (n == 0 || n > 3 || value > 255) {
+        ok = false;
+        break;
+      }
+      if (parts < 3) {
+        if (at >= text.size() || text[at] != '.') {
+          ok = false;
+          break;
+        }
+        ++at;
+      }
+    }
+    if (!ok || digit(at) || (at + 1 < text.size() && text[at] == '.' && digit(at + 1))) continue;
+    if (at + 1 < text.size() && text[at] == ':' && digit(at + 1)) {
+      size_t n = 0;
+      ++at;
+      while (digit(at) && n < 6) ++at, ++n;
+    }
+    out.emplace_back(text.substr(i, at - i));
+    i = at;
+  }
+  return out;
+}
+
+void run_triggers(ChatExtras& x, std::string_view text) {
+  if (x.relay || x.con == nullptr || x.triggers.empty()) return;
+  std::string plain;
+  for (char ch : text) {
+    const auto c = static_cast<char>(static_cast<unsigned char>(ch) & 0x7f);
+    if (c != '\n' && c != '\r') plain += c;
+  }
+  for (const ChatExtras::Trigger& t : x.triggers)
+    if (con::chat_text_matches(t.match, plain)) x.con->append(t.command);
+}
+
+void tell_feeds(ChatExtras& x, ge::hud::Feed& notify, std::string_view line, bool chat,
+                ge::ui::Color ink, double at) {
+  if (chat && x.hud != 0) {
+    x.feed.configure(static_cast<size_t>(std::clamp(x.hud_lines, 1, kMostHudLines)),
+                     x.hud_time > 0 ? std::max(0.0, x.hud_time - 1) : -1);
+    x.feed.push(line, x.hud == 2 ? ge::ui::Color{0.45f, 1, 0.45f, 1} : ink, at);
+  }
+  if (!chat || x.notify != 0) notify.push(line, ink, at);
 }
 
 ChatClock chat_clock_now() {
@@ -145,7 +316,7 @@ ChatClock chat_clock_now() {
   return {local.tm_hour, local.tm_min, local.tm_sec};
 }
 
-bool chat_line_extras(const ChatExtras& x, DemoState& s, const con::ChatLine& line, DemoPrint& p,
+bool chat_line_extras(ChatExtras& x, DemoState& s, const con::ChatLine& line, DemoPrint& p,
                       const ChatClock& now) {
   const bool watching = s.player >= 0 && static_cast<size_t>(s.player) < s.spectator.size() &&
                         s.spectator[static_cast<size_t>(s.player)];
@@ -155,6 +326,20 @@ bool chat_line_extras(const ChatExtras& x, DemoState& s, const con::ChatLine& li
   if (!me.empty() && x.highlight >= 2 && p.text.find(me, 2) != std::string::npos)
     p.text = x.mark + p.text;
   if (p.level != kChatLevel) return true;
+  if (x.strip != 0) {  // cl_chat_filter: the first line alone, its unprintable letters gone
+    std::string kept;
+    for (char ch : p.text) {
+      if (ch == '\n') break;
+      const auto u = static_cast<unsigned char>(ch);
+      if ((u & 0x7f) >= 32 && (u & 0x7f) != 127) kept += ch;
+    }
+    p.text = kept + "\n";
+  }
+  for (std::string& a : addresses_in(p.text)) {  // followip's
+    std::erase(x.seen, a);
+    x.seen.push_back(std::move(a));
+    if (x.seen.size() > kSeenKept) x.seen.erase(x.seen.begin());
+  }
   const int kind = kind_of(line);
   if (((x.filter & 1) != 0 && (kind == kChatFirst || kind == kChatSpec)) ||
       ((x.filter & 2) != 0 && kind == kChatTeam))
@@ -163,6 +348,17 @@ bool chat_line_extras(const ChatExtras& x, DemoState& s, const con::ChatLine& li
     const bool seconds = x.timestamps == 2 && (watching || lower_is(info(s, "status"), "standby"));
     p.text = two(now.hour, ' ') + ":" + two(now.minute, '0') +
              (seconds ? ":" + two(now.second, '0') : std::string()) + " " + p.text;
+  }
+  if (!x.named_sound.empty()) {  // Quake II's cl_chat_sound rules while it is loaded
+    if (const char* name = q2_chat_sound(x.named_sound)) {
+      DemoSound d;
+      d.entity = s.player + 1;
+      d.name = name;
+      d.volume = 1;
+      d.attenuation = 0;
+      s.started.push_back(d);
+    }
+    return true;
   }
   if (x.sound == 0 || (x.sound == 2 && kind != kChatTeam)) return true;
   const float volume = x.volume[static_cast<size_t>(kind)];

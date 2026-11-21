@@ -155,6 +155,15 @@ bool recipe_choose(Pilot& p, const PilotSense& s, float way, int32_t end) {
         f.yaw = way - (f.yaw - way);
         f.keys = mirrored(f.keys);
       }
+    // (`startease`) begun at the pilot's own view, the recording's reached in recipe_ease_s
+    if (p.set.recipe_ease_s > 0 && !p.recipe_frames.empty()) {
+      const float off = wrap(p.yaw - p.recipe_frames.front().yaw);
+      const float t0 = p.recipe_frames.front().t;
+      for (RecipeFrame& f : p.recipe_frames) {
+        const float u = std::min(1.f, (f.t - t0) / p.set.recipe_ease_s);
+        f.yaw += off * (1 - u * u * (3 - 2 * u));  // eased out: smooth at both ends
+      }
+    }
     p.recipe_trail.clear();
     p.recipe_trail_t.clear();
     RecipePlay r;
@@ -234,6 +243,7 @@ bool recipe_play(Pilot& p, const PilotSense& s, float dt, RecipeWant& w) {
     // Ran out on the ground: its jump asked, the last frame held a few commands while the jump
     // key lands; never asked (or long past), the hop's from here.
     if (!p.recipe_jumped || p.recipe_s > f.back().t + kRecipeHold_s) {
+      p.stats.recipe_ranouts++;
       p.recipe = -1;
       return false;
     }

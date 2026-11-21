@@ -24,6 +24,7 @@ The pages do not repeat the rules they stand on; they link them:
 | [`docs/porting-games.md`](../porting-games.md) | THE LAYER RULES: the five layers, where a piece and a setting go, one name one meaning, the bot split, do not over-generalize, improvements offered to every game, remix, installs, downloads, Quake II's lessons |
 | [`docs/shooters-edge.md`](../shooters-edge.md) § A third classic game: the checklist | THE ORDER of a port's thirteen steps; § The game adapter: the adapter's calls game by game |
 | [`docs/porting-sprite-games.md`](../porting-sprite-games.md) | The sector family's research: the map converted to 3D, sprites, its risks |
+| `port-from-ledger` and `gap-analysis` skills | Building from the game's checklist ledger, writing one for a new game first, and the occasional audit of it |
 | `clean-room` skill | How the original's behaviour is learnt without reading code we may not copy |
 | `plugins` skill | The classification test for a new file's home |
 

@@ -139,7 +139,7 @@ Outcome play(const gn::LinkConditions& link, uint32_t seed, const std::string& c
   // The tester's stream, a packet a tick carrying the second it was sent in, counted by that.
   double sent_in[16] = {}, got_in[16] = {};
   const int64_t end = 15500000;  // the stream stops at 15 s; its last packets land
-  for (int64_t step = 0; now < end; step++) {
+  while (now < end) {
     now += kTick;
     const int64_t ms = now / 1000;
     for (int i = 0; i < kClients; i++) {

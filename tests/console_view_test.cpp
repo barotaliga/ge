@@ -3,8 +3,15 @@
 //
 // ge:summary Tests the drop-down console: slide, / commands, chat, editing, history, completion
 // ge:keywords test console view submit chat say whisper history completion scroll notify
-// ge:keywords autocomplete suggestion
+// ge:keywords autocomplete suggestion condump con_clock game_chat team
 // ge:skill console testing
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "check.hpp"
 #include "console/talk.hpp"
 #include "console/view.hpp"
@@ -94,6 +101,107 @@ TEST(con_chat_2_runs_a_line_whose_first_word_is_known_and_says_the_rest) {
     if (l.kind == LineKind::command && l.text == "// r_bloom 0.9 later") note = true;
   }
   CHECK(said && note);
+}
+
+// con_chat 3 says a plain line to the team; a game's own setting (game_chat, in its order: 2 the
+// team) rules over con_chat while it is set.
+TEST(con_chat_3_and_a_games_own_setting_say_to_the_team) {
+  Console c;
+  ConsoleView v(c);
+  std::vector<std::pair<ChatTo, std::string>> sent;
+  v.set_chat([&](ChatTo to, std::string_view, std::string_view text) {
+    sent.emplace_back(to, std::string(text));
+    return true;
+  });
+  const auto enter = [&](const char* line) {
+    v.type(line);
+    v.key(EditKey::enter);
+    c.run();
+  };
+  c.execute("con_chat 3");
+  c.run();
+  enter("go quad");
+  CHECK(sent.size() == 1 && sent[0].first == ChatTo::team && sent[0].second == "go quad");
+  CHECK(v.suggestions().empty());
+  c.execute("con_chat 0");
+  c.run();
+  v.game_chat = 2;  // the game's own: said to the team
+  CHECK(v.chat_mode() == 3);
+  enter("rl up");
+  v.game_chat = 1;
+  enter("gg");
+  v.game_chat = 0;
+  enter("con_chat 1");  // a command
+  CHECK(sent.size() == 3 && sent[1].first == ChatTo::team && sent[2].first == ChatTo::all);
+  CHECK(c.cvars().find("con_chat")->value == "1");
+  v.game_chat = -1;  // con_chat rules again
+  CHECK(v.chat_mode() == 1);
+}
+
+// condump writes the scrollback to a plain name in the game's folder, never elsewhere.
+TEST(condump_writes_the_lines_to_a_text_file) {
+  Console c;
+  ConsoleView v(c);
+  c.execute("condump");
+  c.run();
+  CHECK(v.lines().back().text == "The console can't be written to a file here.");
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge_condump_test";
+  std::filesystem::remove_all(dir);
+  v.set_dump_folder(dir.string());
+  c.print("first line");
+  c.execute("condump ../away");
+  c.run();
+  CHECK(v.lines().back().text == "Give the file a plain name, without a folder.");
+  c.execute("condump match1");
+  c.run();
+  std::ifstream in(dir / "match1.txt");
+  std::string all((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  CHECK(all.find("first line\n") != std::string::npos);
+  CHECK(v.lines().back().text.starts_with("Dumped console text to "));
+  CHECK(c.cvars().find("con_clock") != nullptr && !v.clock_shown());
+  c.execute("con_clock 1");
+  c.run();
+  CHECK(v.clock_shown());
+  std::filesystem::remove_all(dir);
+}
+
+// remotemode sends typed lines to the game's rcon, the prompt `#`, a slash still running a command
+// here; clearnotify lets the notify lines go; con_scale and the foot are the view's to report.
+TEST(remotemode_clearnotify_scale_and_the_foot) {
+  Console c;
+  ConsoleView v(c);
+  c.execute("remotemode");
+  c.run();
+  CHECK(!v.remote() && v.lines().back().text == "There is no remote console in this game.");
+  std::vector<std::string> sent;
+  c.add_command("rcon", "", [&](Console&, const Args& a) { sent.push_back(a.rest(0)); });
+  c.cvars().add({.name = "rcon_address", .fallback = "", .kind = CvarKind::text});
+  c.execute("remotemode 10.0.0.2:27910 secret");
+  c.run();
+  CHECK(v.remote() && v.prompt() == "# ");
+  CHECK(c.cvars().find("rcon_address")->value == "10.0.0.2:27910");
+  const auto enter = [&](const char* line) {
+    v.type(line);
+    v.key(EditKey::enter);
+    c.run();
+  };
+  enter("status");
+  enter("/con_chat 1");  // a slash: run here
+  CHECK(sent.size() == 1 && sent[0] == "status");
+  CHECK(c.cvars().find("con_chat")->value == "1");
+  enter("/remotemode");
+  CHECK(!v.remote() && v.prompt() == "] ");
+  c.print("a line");
+  CHECK(!v.notify().empty());
+  c.execute("clearnotify");
+  c.run();
+  CHECK(v.notify().empty());
+  CHECK(v.text_scale() == 1);
+  c.execute("con_scale 2");
+  c.run();
+  CHECK(v.text_scale() == 2);
+  v.set_foot("maps/dm2.bsp 40% (90 KB)", 0.4);
+  CHECK(v.foot() == "maps/dm2.bsp 40% (90 KB)" && v.foot_progress() == 0.4);
 }
 
 // A game's held key: `+duck` crouches while the key is down.

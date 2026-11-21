@@ -34,6 +34,7 @@ void classic_console(const ClassicArt& art, ClassicConsole& out) {
   st.list_detail = ui::hex(0x9c8c74);
   st.notify_band = ui::hex(0x000000, 0.0f);  // the game wrote its notices straight on the view
   st.image_focus_y = 1;                      // the picture slides down with the panel
+  st.bar_glyphs = true;  // the foot's download bar from the sheet's own bar pieces
   out.back = art.find("conback");
 }
 

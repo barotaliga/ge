@@ -190,6 +190,9 @@ struct Bot {
   // What turned the view this command ("aim", "look", "calm", "air", "swim", "pilot"): read by
   // se-team's trace.
   const char* view_by = "pilot";
+  // Since a copied hop start last wrote the view, s (for the trace alone: the hop's air view
+  // within kLiftName_s of it is named "lift", the hand-over from people's mouse to the hop's).
+  float since_recipe_s = 1e9f;
   // For the trace alone (nothing reads them): the heading the pilot's wish runs along and the
   // calm view's target this command, degrees.
   float walk_yaw = 0, look_yaw = 0;
@@ -273,7 +276,8 @@ struct Bot {
   bool look = false;
   bool looking = false;
   Vec3f look_at;
-  core::Rng react_rng{1};  // the reactions' draws, off the bot's seed
+  const char* look_by = nullptr;  // who set the look (the game's name, for the trace); null: none
+  core::Rng react_rng{1};         // the reactions' draws, off the bot's seed
   BotStats stats;
 };
 
