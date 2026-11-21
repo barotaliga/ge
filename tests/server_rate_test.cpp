@@ -22,6 +22,10 @@ TEST(the_rate_in_force_is_the_games_reading_held_to_the_bounds) {
   const RateBounds q2{5000, 5000, 100, 15000};         // another game's reading
   CHECK(rate_in_force("", {}, q2) == 5000 && rate_in_force("50000", {}, q2) == 15000);
   CHECK(rate_floor({9000, 8000}) == 8000 && rate_floor({3000, 0}) == 3000);
+  RateBounds unheld = q2;  // a game whose client with no rate keeps its own, under any limit
+  unheld.none_held = false;
+  CHECK(rate_in_force("", {15000, 60000}, unheld) == 5000);
+  CHECK(rate_in_force("4000", {15000, 60000}, unheld) == 15000);
 }
 
 TEST(a_rate_out_of_bounds_is_reported_and_set_back) {
