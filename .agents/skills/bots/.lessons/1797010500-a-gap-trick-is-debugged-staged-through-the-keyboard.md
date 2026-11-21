@@ -1,7 +1,7 @@
 ---
 title: A gap trick is debugged staged, through the matches' keyboard and a copy of the hands, never in matches
 date: 2026-11-10
-scope: plugins/shooterbots/pilot_gaps.cpp, plugins/shooterbots/nav_gaps.cpp, plugins/shooterbots/gap_jumps.cpp, games/shooters_edge/bots/gap_tricks.cpp, games/shooters_edge/bots/keyboard.cpp, games/shooters_edge/bots/pilot_run.cpp, games/shooters_edge/labs/se_reach_lab.cpp
+scope: plugins/shooterbots/pilot_gaps.cpp, plugins/shooterbots/nav_gaps.cpp, plugins/shooterbots/gap_jumps.cpp, games/shooters_edge/bots/gap_tricks.cpp, plugins/shooterbots/keyboard.cpp, games/shooters_edge/bots/pilot_run.cpp, games/shooters_edge/labs/se_reach_lab.cpp
 concepts: [gap-tricks, gapbuild, gap-run, gaps-fly, gap-trace, rollout, hands, keyboard, curvekeys, underway, speed-jump, harm, staged]
 ---
 

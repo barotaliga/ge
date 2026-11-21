@@ -1552,8 +1552,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           p.mash_at = p.clock_s;
         }
         // The keys, not the wish: a keyboard presses W and this side whole while the view lies
-        // along the run (bots/keyboard.cpp); turned under a view off it, the wish would be one
-        // strafe key alone.
+        // along the run (shooterbots/keyboard.cpp); turned under a view off it, the wish would be
+        // one strafe key alone.
         p.curve_keys = p.mash_side;
         if (p.curve_keys_last == kNoCurveKeys) p.mash_from = p.clock_s;  // (`mashstart`)
         p.stats.mashed++;

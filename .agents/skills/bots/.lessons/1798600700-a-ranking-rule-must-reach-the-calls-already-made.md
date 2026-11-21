@@ -1,7 +1,7 @@
 ---
 title: A new rule for who goes must also reach the calls already made and the roles already held
 date: 2026-11-21
-scope: games/shooters_edge/bots/mind.cpp, games/shooters_edge/bots/buttons.cpp, games/shooters_edge/labs/show_read.hpp, games/shooters_edge/labs/se_people_lab.cpp
+scope: plugins/shooterbots/mind.cpp, plugins/shooterbots/buttons.cpp, games/shooters_edge/labs/show_read.hpp, games/shooters_edge/labs/se_people_lab.cpp
 concepts: [pokelook, unlocklook, unlocking, shot-button, view-writer, poke, look, reversals, rushstrong, rush, rushhold, coming, quad, strong, showfight, fight-at-showing, ranking, team-totals]
 ---
 

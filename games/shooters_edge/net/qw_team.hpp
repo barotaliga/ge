@@ -1,6 +1,6 @@
-// A TEAM GAME OF BOTS OVER OUR SERVER, RECORDED: two teams of fighters (bots/fighter.hpp, the
-// team's plan bots/team.hpp) play the baseline mod with `teamplay 1` on a map file, each fighter at
-// the controls of a qw-protocol client (qw_client.hpp's `brain`) talking to our server
+// A TEAM GAME OF BOTS OVER OUR SERVER, RECORDED: two teams of fighters (shooterbots/fighter.hpp,
+// the team's plan shooterbots/team.hpp) play the baseline mod with `teamplay 1` on a map file, each
+// fighter at the controls of a qw-protocol client (qw_client.hpp's `brain`) talking to our server
 // (qw_server.hpp) over the simulated network, so every move goes through the protocol as a
 // person's would; the server keeps a multiview recording of the whole game (qw_record.hpp),
 // the file a demo player opens (`.mvd`).
@@ -33,17 +33,18 @@
 #include "progs/file.hpp"
 #include "shooter/vec.hpp"
 #include "shooterbots/aim.hpp"
+#include "shooterbots/bot_arsenal.hpp"
 #include "shooterbots/features.hpp"
 #include "shooterbots/pilot.hpp"
 #include "shooterbots/temper.hpp"
 #include "shooterbots/traits.hpp"
 #include "shooterbots/view_book.hpp"
-#include "shooters_edge/bots/bot_arsenal.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/labs/chase_read.hpp"
 #include "shooters_edge/net/qw_hits.hpp"
 #include "shooters_edge/profiles/items.hpp"
 
-namespace shooters_edge::bots {
+namespace ge::shooterbots {
 struct Fighter;
 }
 namespace shooters_edge::server {
@@ -157,10 +158,10 @@ struct TeamPlayer {
   // the rest): the samples, and those with the view over 45 degrees off the way it moves.
   int64_t moving_n[6] = {}, moving_off[6] = {};
   int64_t calm_route_off = 0;  // and of the calm walker's, the pilot's own yaw over 45 off
-  int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;  // bots/fighter.hpp's
+  int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;  // shooterbots/fighter.hpp's
   int64_t finger[15] = {};         // the launcher up, by the finger's reason (bots::FingerWhy)
   int64_t finger_view[15] = {};    // and of the samples with an enemy in plain view, loaded
-  int64_t finger_band[3][3] = {};  // bots/fighter.hpp's, by range
+  int64_t finger_band[3][3] = {};  // shooterbots/fighter.hpp's, by range
   int64_t after_shots = 0;         // (`afterfire`) rockets at one just lost from sight
   int64_t ear_shots = 0;           // (`earfire`) rockets at one heard
   int64_t lob_shots = 0;           // (`earlob`) grenades round a corner
@@ -175,7 +176,7 @@ struct TeamPlayer {
   // ledger's miss and the floor's, summed.
   int64_t ledger_by_n[6] = {};
   double ledger_by_abs[6] = {}, ledger_by_prior[6] = {};
-  int64_t burst_by[4] = {};  // bots/fighter.hpp's
+  int64_t burst_by[4] = {};  // shooterbots/fighter.hpp's
   // The launcher: taken (a pack's counted), and sampled with the view's: had, and had loaded.
   int64_t rl_pickups = 0, rl_samples = 0, rl_loaded = 0;
   int64_t dives = 0,
@@ -188,20 +189,20 @@ struct TeamPlayer {
   int64_t pilot_modes[sb::kPilotModes] =
       {};  // live commands in each pilot mode (shooterbots/pilot.hpp)
   int64_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0;
-  int64_t goal_changes = 0;  // its item goal changed (bots/fighter.hpp's commitment)
-  int64_t surfaced = 0, surface_failed = 0;  // up for air, rises given up (bots/water.hpp)
-  int64_t on_the_way = 0;                    // short goals taken up on the way (bots/fighter.hpp)
-  int64_t took[profiles::kItemKinds] = {};   // pickups by the item's kind (bots/fighter.hpp)
-  int64_t swim_fights = 0;                   // commands swum with the view on an enemy in sight
-  // Every death's pack it came to know of, by how its place was known (bots/packs.hpp
+  int64_t goal_changes = 0;  // its item goal changed (shooterbots/fighter.hpp's commitment)
+  int64_t surfaced = 0, surface_failed = 0;  // up for air, rises given up (shooterbots/water.hpp)
+  int64_t on_the_way = 0;  // short goals taken up on the way (shooterbots/fighter.hpp)
+  int64_t took[profiles::kItemKinds] = {};  // pickups by the item's kind (shooterbots/fighter.hpp)
+  int64_t swim_fights = 0;                  // commands swum with the view on an enemy in sight
+  // Every death's pack it came to know of, by how its place was known (shooterbots/packs.hpp
   // `PackFrom`); its guesses of the weapon in them, right, launchers guessed and truly in them;
   // its trips to one, packs reached and seen gone.
   int64_t packs_known[5] = {};
   int64_t pack_guesses = 0, pack_right = 0, pack_guess_rl = 0, pack_truth_rl = 0;
   int64_t pack_trips = 0, pack_reached = 0, pack_seen_gone = 0;
   int64_t wet = 0;           // commands alive waist deep in water
-  int64_t wet_why[12] = {};  // and by cause (bots/fighter.hpp kWetWhy)
-  double wet_speed[3] = {};  // wet and aiming, swimming, walking (bots/fighter.hpp)
+  int64_t wet_why[12] = {};  // and by cause (shooterbots/fighter.hpp kWetWhy)
+  double wet_speed[3] = {};  // wet and aiming, swimming, walking (shooterbots/fighter.hpp)
   int64_t wet_n[3] = {}, wet_still[3] = {};
   float travelled = 0;            // units along the path
   std::string last;               // where he stood at the end, and what he was going for
@@ -220,7 +221,7 @@ struct TeamPlayer {
   int64_t press_weighed = 0, press_on = 0, press_back = 0, press_near = 0, press_blocked = 0;
   int64_t rocket_jumps = 0, flips = 0;   // rocket jumps fired on the way, and flips of them
   int64_t escapes = 0, escapes_out = 0;  // rockets out of a pit's liquid, and those landed out
-  int64_t bores = 0;  // its launcher left in its pack for a mate (bots/packs.hpp)
+  int64_t bores = 0;  // its launcher left in its pack for a mate (shooterbots/packs.hpp)
   int64_t trap_presses = 0,
           trap_fired = 0;         // a floor trap's button gone for, and fired (`floortrap`)
   int64_t trap_opens = 0;         // the floor traps' floors seen going away (by whoever)
@@ -266,7 +267,7 @@ struct TeamPlayer {
   int32_t jumps_flown = 0;         // of the jumps, taken as flown from off the line (`jumpfly`)
   int32_t vias = 0, via_touched = 0, via_missed = 0;
   double via_speed = 0;
-  int64_t watching = 0;  // commands standing with the view on a way in (bots/watch.hpp)
+  int64_t watching = 0;  // commands standing with the view on a way in (shooterbots/watch.hpp)
   double speed_sum = 0;  // its speed across the floor, summed over its commands alive
   double mode_speed[sb::kPilotModes + 1] = {};  // and by the pilot's mode, with each mode's count
   int64_t mode_n[sb::kPilotModes + 1] = {};
@@ -285,15 +286,15 @@ struct TeamTotals {
   int64_t messages = 0;                    // team messages said
   int64_t fetches = 0, fetched = 0;        // the armour's taker's trips (`fetch`), and those taken
   int64_t rl_fetches = 0, rl_fetched = 0;  // a launcher's taker's trips (`rlfetch`), and had
-  int64_t rl_fetch_end[4] = {};            // and the others' ends (bots/team.hpp)
-  int64_t hold_left = 0, hold_taken = 0, hold_plans = 0;  // (`holdpoint`, bots/team.hpp)
+  int64_t rl_fetch_end[4] = {};            // and the others' ends (shooterbots/team.hpp)
+  int64_t hold_left = 0, hold_taken = 0, hold_plans = 0;  // (`holdpoint`, shooterbots/team.hpp)
   int64_t fetch_end[5] = {};  // the rest's ends: role, gone, time, death, retreat
   int64_t lost_seen = 0, retakes = 0, spam_shots = 0;  // areas worked out lost, retaken; spam
   int64_t pushes = 0, joins = 0;                       // pushes on the base called, and joined
-  int64_t rushes_strong = 0, rush_strength_flips = 0;  // the quad's rushes (bots/team.hpp)
+  int64_t rushes_strong = 0, rush_strength_flips = 0;  // the quad's rushes (shooterbots/team.hpp)
 };
 
-// A button on the map, as the fighters read it (bots/buttons.hpp).
+// A button on the map, as the fighters read it (shooterbots/buttons.hpp).
 struct TeamButton {
   sh::Vec3f at;
   bool shoot = false;              // opened by a shot, not a touch
@@ -379,8 +380,8 @@ struct TeamMatchReport {
   int64_t locs = 0;                          // how many points they name
   std::vector<ge::classic::Loc> places;      // each place once, at its points' middle
   int64_t lines_read = 0, lines_missed = 0;  // team lines the fighters read and missed
-  std::string plan;                          // the map's team plan as lines (bots/map_plan.hpp)
-  std::string goals;                         // and its goals, a line each (bots/goals.hpp)
+  std::string plan;   // the map's team plan as lines (shooterbots/map_plan.hpp)
+  std::string goals;  // and its goals, a line each (shooterbots/goals.hpp)
   int32_t plan_areas = 0, plan_base = -1;
   uint64_t digest = 0;
   int64_t faults = 0;

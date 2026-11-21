@@ -354,7 +354,7 @@ void run_frame(NativeQ2& s) {
   NativeHost& h = *s.host;
   for (int i = 0; i < h.max_clients; i++) {
     NativeEntityHead* e = h.entity(i + 1);
-    if (h.begun[i] && e->client != nullptr) e->client->ping = 0;
+    if (h.begun[i] && e->client != nullptr) e->client->ping = s.clients[i].ping_ms;  // measured
   }
   if (!guarded(h, [&] { h.game->run_frame(); })) return;
   run_commands(s);

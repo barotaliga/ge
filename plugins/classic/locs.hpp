@@ -31,49 +31,30 @@
 #include <string_view>
 #include <vector>
 
+#include "shooter/places.hpp"
 #include "shooter/vec.hpp"
 
 namespace ge::classic {
 
 using ge::shooter::Vec3f;
+// The points and the nearest named (shooter/places.hpp), by the names the format's readers use.
+using ge::shooter::Loc;
+using ge::shooter::loc_name_at;
+using ge::shooter::loc_places;
+using ge::shooter::Locs;
+using ge::shooter::LocSight;
+using ge::shooter::nearest_loc;
 
 // The macro keys a name may use, as `$loc_name_<key>`.
 inline constexpr std::array<std::string_view, 16> kLocKeys = {
     "separator", "quad", "pent", "ring", "suit", "ssg", "sng", "ng",
     "gl",        "rl",   "lg",   "ra",   "ya",   "ga",  "mh",  "rune"};
 
-struct Loc {
-  std::string name;
-  Vec3f at;
-  std::string raw;  // the name as the file writes it, macros kept ("": `name`)
-};
-
-struct Locs {
-  std::vector<Loc> points;
-  std::string from;  // where they came from: a file's path, or how the game made them
-};
-
 // A name with its macros expanded.
 std::string expand_loc_name(std::string_view raw);
 
 // The points of a `.loc` file's text, added to `out`; the number of lines read as points.
 int parse_locs(std::string_view text, Locs& out);
-
-// Each place once: its name at the middle of its points, in the order the names first appear (a map
-// pictured with its places named; a callout's place read as one spot).
-std::vector<Loc> loc_places(const Locs& locs);
-
-// Whether the straight line from `from` to a point is clear (no solid between them), for a
-// nearest point that must be in sight; empty: every point counts.
-using LocSight = std::function<bool(Vec3f from, Vec3f to)>;
-
-// The point nearest `p` (the first of equals), or nullptr with none; with `range` above 0, only a
-// point at most that far (units, straight line) counts, and with `seen`, only one it says is in
-// sight from `p`.
-const Loc* nearest_loc(const Locs& locs, Vec3f p, float range = 0, const LocSight& seen = {});
-
-// The name of the place `p` is in: its nearest point's (within `range`, as above), or "" with none.
-std::string loc_name_at(const Locs& locs, Vec3f p, float range = 0, const LocSight& seen = {});
 
 // EDITING, as a player names the places of a map standing in them: a point added at `at` named
 // `raw` (its macros kept for the file, expanded for `name`), always at the end, with no check for

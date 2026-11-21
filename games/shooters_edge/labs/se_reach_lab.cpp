@@ -1,9 +1,10 @@
 // LAB `se-reach`: CAN A BOT GET TO EVERY ITEM, on every map? For each map of `--maps` (from
 // `--basedir`'s game folder; without one, the fixture halls) the bots' own nav is built
-// (bots/map_nav.hpp: movers, teleporters, water closed) and every item the map places is asked two
-// things: does a route lead to it from the map's main part (the most any start spot reaches), and
-// does one lead from it back there (an item in a pocket a player cannot leave is a trap)? An item
-// fails either way is listed with its place, its nav node and how far that node stands from it.
+// (shooterbots/map_nav.hpp: movers, teleporters, water closed) and every item the map places is
+// asked two things: does a route lead to it from the map's main part (the most any start spot
+// reaches), and does one lead from it back there (an item in a pocket a player cannot leave is a
+// trap)? An item fails either way is listed with its place, its nav node and how far that node
+// stands from it.
 //
 // The yardstick for the nav: "any place to any item is a path". Deterministic: the digest holds
 // the counts.
@@ -47,15 +48,15 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "progs/entity_text.hpp"
+#include "shooterbots/buttons.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooterbots/map_nav.hpp"
 #include "shooterbots/nav.hpp"
 #include "shooterbots/nav_field.hpp"
-#include "shooters_edge/bots/buttons.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/gap_tricks.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
-#include "shooters_edge/bots/rocket_tricks.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/nav_top.hpp"
@@ -233,7 +234,7 @@ void walk_runs(const bt::MapNav& nav, const Probe& pr, const std::string& name,
 }
 
 // --rockets=fly: each rocket trick (a link of `NavKind::rocket`: the maps' tricks people fly,
-// bots/rocket_tricks.hpp) run up to by an expert fighter's pilot with the launcher in hand, from
+// bots/quake_maps.hpp) run up to by an expert fighter's pilot with the launcher in hand, from
 // the floor's node nearest each point `kGapBack` behind its takeoff, walking in at 180, through an
 // expert's keyboard under `keys`: planned through the link, fired, the speed at the shot, landed
 // on its node, or SHORT (the run after the shot sank 48 under both ends: into a pit). A trick
@@ -336,14 +337,15 @@ void rocket_runs(const bt::MapNav& nav, const Probe& pr, const std::string& name
   }
 }
 
-// --field: the map's buttons as errands (bots/buttons.hpp `field_errands`), the field to the node
-// nearest `field_to` for each jumper (on foot, with the gap tricks, with rocket jumps), its time
-// from the node nearest `field_from` and the errand its way starts with; the first way that has
-// one node by node, the press marked.
+// --field: the map's buttons as errands (shooterbots/buttons.hpp `field_errands`), the field to the
+// node nearest `field_to` for each jumper (on foot, with the gap tricks, with rocket jumps), its
+// time from the node nearest `field_from` and the errand its way starts with; the first way that
+// has one node by node, the press marked.
 void field_probe(const bt::MapNav& nav, const ge::shooterbots::BotView& s,
                  const std::string& entities, const Probe& pr, MapReach& out) {
   const sb::NavGraph& g = nav.graph;
   bt::Fighter f;
+  f.arsenal = &bt::first_arsenal();
   bt::buttons_init(f, g, s, entities.c_str());
   const std::vector<sb::NavErrand> errands = bt::field_errands(f, g, s);
   auto at = [&](int32_t n) {
@@ -403,6 +405,7 @@ void field_map(const bt::MapNav& nav, const ge::shooterbots::BotView& s,
   constexpr int kFieldMapPx = 1600;
   const sb::NavGraph& g = nav.graph;
   bt::Fighter f;
+  f.arsenal = &bt::first_arsenal();
   bt::buttons_init(f, g, s, entities.c_str());
   sb::NavFields fs;
   sb::nav_fields_init(fs, g, bt::field_errands(f, g, s));
@@ -640,7 +643,8 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
   if (!rules.start(map->spec, out.error)) return;
   sv::use_map_sets(q, map->bsp);
   bt::MapNav nav;
-  if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, out.error)) return;
+  if (!bt::build_map_nav(q, map->spec, bt::quake_maps(), "info_player_deathmatch", nav, out.error))
+    return;
   const sb::NavGraph& g = nav.graph;
   if (probe != nullptr) probe_map(nav, *probe, out);
   if (probe != nullptr && probe->field) field_probe(nav, q, map->spec.entities, *probe, out);
@@ -686,7 +690,7 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
                                landed ? "yes" : "no", to_fixed(r.time_s, 2), to_fixed(r.blast, 0)});
   }
 
-  // --gaps=fly: each gap trick run up to by an expert fighter's pilot (bots/fighter.hpp
+  // --gaps=fly: each gap trick run up to by an expert fighter's pilot (shooterbots/fighter.hpp
   // `fighter_pilot`, the features given; under `keys` on an expert's keyboard), from the floor's
   // node nearest each point `kGapBack` behind its takeoff, walking into it at people's 180:
   // planned through the gap, curved into it (the circle), jumped, landed or given up, the
@@ -1052,7 +1056,7 @@ void run(gl::Lab& lab) {
                     {"map", "item", "at (x y z)", "node off", "why"},
                     {}};
   gl::LabTable tk{
-      "each map's rocket-jump tricks (people's, rocket_tricks.hpp) as the nav proved "
+      "each map's rocket-jump tricks (people's, bots/quake_maps.hpp) as the nav proved "
       "them: the link's landing, its flight and the way there on foot, s",
       {"map", "#", "people's from", "people's to", "kind", "level", "jumps", "proof",
        "lands (x y z)", "jump s", "on foot s", "grenade jump s"},
@@ -1103,7 +1107,8 @@ void run(gl::Lab& lab) {
   lab.table(gaps);
   if (!tk.rows.empty()) lab.table(tk);
   gl::LabTable gt{
-      "each map's gap tricks (people's speed jumps over a pit, gap_tricks.hpp) as the nav proved "
+      "each map's gap tricks (people's speed jumps over a pit, bots/quake_maps.hpp) as the nav "
+      "proved "
       "them: the link's landing and speed, its flight and the way there on foot, s; why none was "
       "kept (the nearest a proof came down to people's landing, across, and where)",
       {"map", "#", "people's from", "people's to", "speed", "level", "jumps", "harm", "proof",
@@ -1121,7 +1126,7 @@ void run(gl::Lab& lab) {
   if (!gt.rows.empty()) lab.table(gt);
   lab.table(mv);
   gl::LabTable st{
-      "each map's scripted routes to key items (bots/item_routes.hpp) as the move "
+      "each map's scripted routes to key items (bots/quake_maps.hpp) as the move "
       "proved them: from the entry's node to the end's (feet), the time, the mover "
       "crossed",
       {"map", "route", "proof", "from", "to", "s", "mover"},
@@ -1249,7 +1254,7 @@ const gl::LabSpec kSpec{
     "se-reach",
     gl::LabKind::sim,
     "game:shooters_edge",
-    "the bots' nav over every item of a map (games/shooters_edge/bots/map_nav.hpp, "
+    "the bots' nav over every item of a map (plugins/shooterbots/map_nav.hpp, "
     "games/shooters_edge/labs/se_reach_lab.cpp)",
     "bots",
     "Can a bot get to every item of a map and back, by the routes its nav proves?",

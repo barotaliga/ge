@@ -170,7 +170,10 @@ LaserEnd fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, in
 void fight_effect(Q2Server& s, const char* name, sh::Vec3f at, sh::Vec3f way = {});
 // A line effect `name` from `a` to `b` that monster entity `from` makes (a cable it holds out, a
 // shot's flash from its gun along its aim): the window draws it, a QuakeWorld client ignores it.
-void fight_monster_line(Q2Server& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b);
+// `flash`: a monster's muzzle-flash value (server/q2_flash.hpp) the line carries, 0 for none; the
+// wire sends it as the protocol's monster flash, the window plays its gun's sound by it.
+void fight_monster_line(Q2Server& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b,
+                        int flash = 0);
 // An item (`classname`) thrown up from `at`, as a monster drops it at death.
 void fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname);
 // A body thrown apart at `at`: entity row `ent`'s sound, the blood and the pieces `t` names.

@@ -10,7 +10,8 @@
 
 #include "shooter/hull.hpp"
 #include "shooter/world.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/talk.hpp"
 #include "shooters_edge/net/protocol.hpp"
 

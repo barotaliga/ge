@@ -1,8 +1,8 @@
 // LAB `se-keymap`: WHICH KEYS A BOT PRESSES AS IT MOVES, drawn from above on the map. A 4on4 of
 // our bots on our server (net/qw_team.hpp), played twice from one seed: with the bots'
 // features as given (the pilot's wish pressed as analog axes), then with `+keys` (the wish pressed
-// by a hand on a keyboard, bots/keyboard.hpp). One bot's path over a stretch of each match is
-// drawn to scale on the floor (nav_top.hpp, shaded by height), every command's segment in the
+// by a hand on a keyboard, shooterbots/keyboard.hpp). One bot's path over a stretch of each match
+// is drawn to scale on the floor (nav_top.hpp, shaded by height), every command's segment in the
 // colour of the key set its command carried (forward and side turned to the nearest of the eight
 // sets; grey none), and every `--every` seconds three arrows from where it stood: the velocity
 // (black, its length the speed), the wish under the view (the key set's colour: the way the keys
@@ -37,7 +37,8 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "shooter/entity.hpp"
-#include "shooters_edge/bots/fighter.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"

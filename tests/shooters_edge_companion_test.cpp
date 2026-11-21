@@ -1,4 +1,4 @@
-// THE CO-OP COMPANION (games/shooters_edge/bots/companion.hpp, coop_run.hpp; plugins/shooter/
+// THE CO-OP COMPANION (plugins/shooterbots/companion.hpp, coop_run.hpp; plugins/shooter/
 // idle.hpp): our campaign in coop on the coop hall, a scripted leader walking his tour and an
 // expert companion beside him. The companion keeps to him (near him most of the run, never left
 // far behind), presses the button that opens the shut door he waits by (he never presses it), kills

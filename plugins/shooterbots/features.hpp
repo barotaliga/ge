@@ -65,10 +65,11 @@ namespace ge::shooterbots {
 // - `pools`: pool floors swum over (pilot.hpp); `routes`: a map's scripted ways (nav_script.hpp).
 // - `corner`: an enemy lost from sight followed a reaction's worth, then held where he went;
 //   `mouse`: the view a hand's strokes on a mouse, shots timed, fire clicked (bot.hpp).
-// - `packinfer`: every death's pack known, its weapon guessed by level (bots/packs.hpp).
+// - `packinfer`: every death's pack known, its weapon guessed by level (shooterbots/packs.hpp).
 // - `listen`: a calm bot swipes its view at an enemy heard where none was known (bot.hpp).
 // - `stairs`: a hop's stretch ends at a climb: stairs walked, the hop taken up at the top.
-// - `locked`: a door only a button or a trigger opens, resting shut, is no way (bots/buttons.hpp).
+// - `locked`: a door only a button or a trigger opens, resting shut, is no way
+// (shooterbots/buttons.hpp).
 // - `escape`: out of a pit's lava, slime or water by a rocket fired down (shooterbots/escape.hpp).
 // - `brink`: no lip of lava or slime walked, hopped or strafed over (shooterbots/brink.hpp).
 // - `gapjump`: a hopper takes people's speed jumps over a pit, out of a hop
@@ -80,8 +81,8 @@ namespace ge::shooterbots {
 // - `beat`: a fight mode held a person's beat (through a peek). `trial`: an A/B's, in no preset.
 // - `keys`: a keyboard's hand presses the keys; `keysteer`: taps between two sets; `jumpkey`: a
 //   jump held until its key lands; `curvekeys`: a hop's curve on the ground held on W and its side
-//   key (bots/keyboard.hpp; all on). `lookway`, `counter`: dropped, in no preset; `press` on with
-//   `presspair` (2026-11-20, the maintainer's call).
+//   key (shooterbots/keyboard.hpp; all on). `lookway`, `counter`: dropped, in no preset; `press` on
+//   with `presspair` (2026-11-20, the maintainer's call).
 // - `slopes`: a stair to 45 degrees level to the walk; `backstep`: a run-up stepped back facing
 //   the jump; `gapbuild`: a gap over water curved and run into (pilot.hpp; all on).
 // - `recipes`: people's hop starts copied out of a book of their recordings (pilot_recipes.hpp;
@@ -159,7 +160,7 @@ namespace ge::shooterbots {
 //   side whose arc stays clear (pilot.cpp, M18r.md 0v); not kept (slower, no fewer hits), in no
 //   preset.
 // - `fightway`: in a fight, an enemy in sight who is not chasing (coming on under 100 units/s):
-//   the route's back key let go, the dodge's side key alone (games/shooters_edge/bots/footwork.cpp,
+//   the route's back key let go, the dodge's side key alone (plugins/shooterbots/footwork.cpp,
 //   M18r.md 0w); not kept (-4.2 dm2, -4.6 e1m2 head to head), in no preset.
 // - `letgo`: the aim's hold on a player lost from sight let go once he lies more than 100
 //   degrees off the way walked (bot.cpp, M18r.md 0w); not kept (-7.8, -3.6), in no preset.
@@ -168,7 +169,7 @@ namespace ge::shooterbots {
 //   (-1.9, -0.7, slower), in no preset.
 // - `hide`: the launcher's owner (not a novice) holds the scattergun while no one is in sight, so
 //   a pack dropped holds no launcher, and takes the launcher up at a sighting
-//   (games/shooters_edge/bots/fighter.cpp, M18r.md 0k2), not until nobody has been seen 1.5 s; on.
+//   (plugins/shooterbots/fighter.cpp, M18r.md 0k2), not until nobody has been seen 1.5 s; on.
 // - `nogoal`: nothing worth taking, no item goal kept from before (a holder walking back to its
 //   claim stood on a full armour with it as its goal) (fighter.cpp, M18r.md 3); moved nothing.
 // - `tripkeep`: on a scripted way to its goal item, the goal held unless it backs off
@@ -177,12 +178,12 @@ namespace ge::shooterbots {
 //   (fighter.cpp best_item, M18r.md 3); the YA chosen less (lying 82 -> 88 %), in no preset.
 // - `fetch`: the team's taker for its armour: a player whose own armour is worse, who believes
 //   himself the nearest of his team that needs it as it comes up, says `coming` and holds the
-//   trip to it (games/shooters_edge/bots/mind.cpp, M18r.md 3); not kept (head to head e1m2 -4.5,
+//   trip to it (plugins/shooterbots/mind.cpp, M18r.md 3); not kept (head to head e1m2 -4.5,
 //   dm2 -1.5: the trips fail on the way, not for want of a taker), in no preset. Again with the
 //   door errands fixed (`errandworth`) and `arrive`, 12 2on2 dm2 seeds: -1.7 (red +1.0, blue
 //   -4.3); 88 trips a match, 11 taken, 35 ended by the quad's rush, 31 by death.
 // - `pokestand`: a button a shot opens is shot from a stand (the keys let go within 250 units),
-//   never run into (games/shooters_edge/bots/buttons.cpp, M18r.md 3); on (even head to head).
+//   never run into (plugins/shooterbots/buttons.cpp, M18r.md 3); on (even head to head).
 // - `liftbrake`: walking to a lift's edge with the lift not there, the keys let go within the
 //   run's stop, so the wait is at the edge and not in its shaft (shooterbots/pilot.cpp, M18r.md 3);
 //   not kept (dm2's waits 125 -> 178 bot-seconds a match: the wait is the lift's), in no preset.
@@ -214,7 +215,7 @@ namespace ge::shooterbots {
 //   names a room by many points (dm2's `tele` 16 over 585 units), so the name is read as the
 //   points of that name round where the speaker was last known, and as the item among them when
 //   one stands there (the place a map's items name); off, the middle of every point of the name
-//   (bots/mind.cpp `place_pos`, M18r.md 0c); on (head to head dm2 -1.25, e1m2 +0.5).
+//   (shooterbots/mind.cpp `place_pos`, M18r.md 0c); on (head to head dm2 -1.25, e1m2 +0.5).
 // - `gaplava`: with `gapbuild`, the curve into a gap trick and the run on the ground to its lip are
 //   taken over lava and slime too (before, only over water: dm2's gaps are all over lava, so the
 //   run reached the lip at a walk and the gap was given up, though a circle jump from there lands
@@ -240,41 +241,43 @@ namespace ge::shooterbots {
 //   M18r.md 0c); judging, in no preset.
 // - `brinkkeys`: near lava or slime the keyboard's hand does not want a key whose step under the
 //   view ends over it, and answers a run carried over it within a quarter second with the keys
-//   against the run (bots/keyboard.cpp `keys_off_brink`; the keyboard's 45-degree sets and taps
-//   weave a walk off a line 40 from the edge: se-reach --walk, M18r.md 0c); on (head to head dm2
-//   +6.2, lava deaths 12.75 -> 9.0 a match).
+//   against the run (shooterbots/keyboard.cpp `keys_off_brink`; the keyboard's 45-degree sets and
+//   taps weave a walk off a line 40 from the edge: se-reach --walk, M18r.md 0c); on (head to head
+//   dm2 +6.2, lava deaths 12.75 -> 9.0 a match).
 // - `floortrap`: a floor over lava a touch button slides away (dm2's big room) is never brushed by
 //   accident (the links into the nodes touching its button kept off routes), its button pressed
 //   only when an enemy stands on the floor and no mate does, the presser staying put till the
 //   floor returns, its teleporters shut and kept off while it is away, a `trap` call to the team
-//   (bots/floor_trap.hpp, M18r.md 0c); on (head to head dm2 +5.0, the enemy's lava deaths +3).
+//   (shooterbots/floor_trap.hpp, M18r.md 0c); on (head to head dm2 +5.0, the enemy's lava deaths
+//   +3).
 // - `trapflee`: a player standing on a floor trap's floor when it goes (as it sees it, or a mate's
 //   call) runs off it at once by the nav's shortest way to the ground round it, with the floor's
-//   slide and not against it, before any goal (bots/floor_trap.hpp; dm2: 47 of 82 trap deaths
-//   stood on the floor as it went and fell ~3 s later, M18r.md 0c); on (head to head dm2 -2.7,
-//   inside the noise; its side's lava deaths fewer).
+//   slide and not against it, before any goal (shooterbots/floor_trap.hpp; dm2: 47 of 82 trap
+//   deaths stood on the floor as it went and fell ~3 s later, M18r.md 0c); on (head to head dm2
+//   -2.7, inside the noise; its side's lava deaths fewer).
 // - `bridgeseen`: a bridge the player is no longer sent is believed gone once one of its nodes is
 //   in sight with no floor under it (a client keeps an unsent mover where it last saw it: dm2's red
 //   armour's bridge stood out in the bot's mind after it went back, and routes walked off the lip
 //   into the pit; and the links shut onto a bridge or a floor door still in honoured, which no
-//   route did: they carry no mover; bots/fighter.cpp `bridge_seen_gone`, M18r.md 0c); on (head to
-//   head dm2 +7.4, e1m2 -0.3).
+//   route did: they carry no mover; shooterbots/fighter.cpp `bridge_seen_gone`, M18r.md 0c); on
+//   (head to head dm2 +7.4, e1m2 -0.3).
 // - `sidehop`: a hop's stretch ends at a walk whose side step falls into lava or slime
 //   (`NavLink::brink_side`), walked, not hopped (dm2's yellow-armour stair: most of its falls came
 //   out of a hop or a copied hop start; shooterbots/pilot.cpp `hop_stretch`, M18r.md 0c); not kept
 //   (YA falls 24 -> 20 over 8 seeds, noise; the hop share 0.45 -> 0.39, people 0.46), in no preset.
 // - `lostdry`: off the graph on dry land, the walk back to the nearest node never takes one in
 //   lava or slime or on a mover (dm2's south pit: its trains' nodes over the lava were walked at;
-//   bots/fighter.cpp, M18r.md 0c); not kept (the pit's falls 16 -> 22 over 8 seeds), in no preset.
+//   shooterbots/fighter.cpp, M18r.md 0c); not kept (the pit's falls 16 -> 22 over 8 seeds), in no
+//   preset.
 // - `liftoff`: a jump asked for and not yet off the ground (the keyboard's jump key lands a few
 //   commands late) is waited for 0.15 s, the jump still asked (on: M18r.md 0c); off, the next
 //   command on the ground reads as the jump landed short and marks it missed
 //   (shooterbots/pilot.cpp, M18r.md 0c).
 // - `shotjump`: a rocket jump's shot held, the mouse still on it, until the jump key is down: a
 //   person presses the two as one move; off, the shot went with the ask and burst under a player
-//   still on the ground, a flat run into dm2's south pit (bots/fighter.cpp, M18r.md 0c).
+//   still on the ground, a flat run into dm2's south pit (shooterbots/fighter.cpp, M18r.md 0c).
 // - `rjready`: a rocket jump only with the launcher in hand and ready to fire; off, the shot went
-//   with whatever was in hand (shooterbots/pilot.cpp, bots/fighter.cpp; M18r.md 0c).
+//   with whatever was in hand (shooterbots/pilot.cpp, shooterbots/fighter.cpp; M18r.md 0c).
 // - `jumpcuts`: a jump the pilot missed twice is kept off its routes for the match
 // (shooterbots/nav.cpp
 //   `nav_route`); off, only a cut through a mover or a gap trick is honoured (M18r.md 0c).
@@ -492,7 +495,7 @@ namespace ge::shooterbots {
 //   people 18; a belief put right).
 // - `earlob`: THE LOB ROUND A CORNER (M18r.md 18b): an enemy heard or lost from sight a moment
 //   ago with no straight line to him, the lob carried: its arc flown through the world and thrown
-//   when its first impact lands by him (bots/launcher_fire.hpp): people fire 56 % of their
+//   when its first impact lands by him (shooterbots/launcher_fire.hpp): people fire 56 % of their
 //   grenades with no enemy in view, 20 % just after losing one. Judged too rare (0.005 a
 //   bot-minute: the lob is not carried): off.
 // - `lobtake`: THE LOB TAKEN BESIDE THE LAUNCHER (M18r.md 18b): to one carrying the launcher and
@@ -510,13 +513,14 @@ namespace ge::shooterbots {
 //   closing 26 -> 39 (people 59), deaths a minute 2.0 -> 2.2 (people 2.9). ON with `press`: the
 //   maintainer's call (2026-11-20), more human at that cost.
 // - `ledgerforget`: THE LEDGER FORGETS (M18r.md 0q): in a team game an enemy neither seen nor heard
-//   for 3 s is believed the typical live enemy again (bots/temper.hpp `foe_body`), not the last
-//   count, which only ever fell by his cries (out of sight 24 points under the truth). On (12 dm2
-//   seeds: the bias out of sight -24 -> -8, the miss 51 -> 49; head to head -0.4, even).
+//   for 3 s is believed the typical live enemy again (shooterbots/foe_ledger.hpp `foe_body`), not
+//   the last count, which only ever fell by his cries (out of sight 24 points under the truth). On
+//   (12 dm2 seeds: the bias out of sight -24 -> -8, the miss 51 -> 49; head to head -0.4, even).
 // - `ledgerhits`: ITS OWN ROCKETS COUNTED (M18r.md 0q): each of its rockets followed from its
 //   muzzle to its burst, and an enemy seen there lately takes the splash his believed place would
-//   (bots/temper.hpp `ledger_own_shots`); his cry right after not counted again. Judged (12 dm2
-//   seeds): the ledger's miss in sight 48 -> 50, its bias -7 -> -15, head to head -1.9: off.
+//   (shooterbots/foe_ledger.hpp `ledger_own_shots`); his cry right after not counted again. Judged
+//   (12 dm2 seeds): the ledger's miss in sight 48 -> 50, its bias -7 -> -15, head to head -1.9:
+//   off.
 // - `ledgerheal`: A HEALTH BOX HEARD TAKEN HEALS HIM (M18r.md 0q): +20 to his body in the ledger,
 //   to 150 at most (the ledger counted the armour and the mega heard, never a box). Judged (six
 //   dm2 seeds): the miss 48.7 -> 49.6, nothing: off.
@@ -526,9 +530,9 @@ namespace ge::shooterbots {
 //   37). On (12 dm2 seeds: the spawn's news 4 -> 16 % of the ledger's samples, the miss in sight
 //   48.3 -> 46.1, its bias -6.7 -> -1.3; head to head -1.1, even).
 // - `spawnkept`: A FRESH SPAWN REMEMBERED LONGER (M18r.md 0q): an enemy's line read off his death
-//   is forgotten after 10 s out of sight, not the fight's 3 (bots/temper.hpp `kSpawnKept_s`).
-//   On (12 dm2 seeds: the spawn's line 16 -> 36 % of the samples at a 25-point miss, the miss out
-//   of sight 48.8 -> 46.5; head to head +1.0).
+//   is forgotten after 10 s out of sight, not the fight's 3 (shooterbots/foe_ledger.hpp
+//   `kSpawnKept_s`). On (12 dm2 seeds: the spawn's line 16 -> 36 % of the samples at a 25-point
+//   miss, the miss out of sight 48.8 -> 46.5; head to head +1.0).
 // - `rushsize`: THE QUAD'S RUSH BY THE TEAM'S SIZE (M18r.md P1): half the team rushes the quad as
 // it
 //   comes due, one at least (two in a 4on4 as before, one in a 2on2, where "the two nearest" were

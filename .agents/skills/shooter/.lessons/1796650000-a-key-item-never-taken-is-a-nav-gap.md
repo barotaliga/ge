@@ -1,7 +1,7 @@
 ---
 title: An item people take every minute that bots never take is a gap in the nav: find the node, then the proof that refused its way in
 date: 2026-11-07
-scope: plugins/shooterbots/nav.cpp, plugins/shooterbots/pilot.cpp, games/shooters_edge/bots/fighter.cpp
+scope: plugins/shooterbots/nav.cpp, plugins/shooterbots/pilot.cpp, plugins/shooterbots/fighter.cpp
 concepts: [nav, prove-link, standing-jump, run-up, stairs, pocket, dive, swim-exit, reach, real-map]
 ---
 

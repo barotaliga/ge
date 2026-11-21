@@ -9,7 +9,8 @@
 #include <algorithm>
 #include <string>
 
-#include "shooters_edge/bots/fighter.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 
 namespace shooters_edge::labs {
@@ -80,7 +81,7 @@ void report_finger(ge::lab::Lab& lab, const cn::TeamMatchReport& r, int64_t rock
   const double carried_min = static_cast<double>(rl_cmds) * bt::kPilotMsec / 1000.0 / 60;
   lab.metric("team.finger.after-per-owned-min",
              carried_min > 0 ? static_cast<double>(after) / carried_min : 0, "per-min");
-  // The burst held past the near band, by what the crosshair met first (bots/fighter.hpp).
+  // The burst held past the near band, by what the crosshair met first (shooterbots/fighter.hpp).
   {
     int64_t by[4] = {}, n = 0;
     for (const cn::TeamPlayer& p : r.players)

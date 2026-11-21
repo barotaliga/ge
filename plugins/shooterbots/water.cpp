@@ -1,0 +1,133 @@
+// The fighter in the water (water.hpp): the air clock, the dive kept or given up, the swim's way.
+//
+// ge:summary The fighter in the water: the air clock, the dive's give-up, the way to swim at
+// ge:keywords water_way dive give-up air swim_steps swim_next dive_now
+// ge:skill shooterbots bots
+// ge:test tests/shooters_edge_team_test.cpp
+#include "shooterbots/water.hpp"
+
+#include "shooter/hull.hpp"
+#include "shooter/server.hpp"
+
+#include <cmath>
+
+#include "shooterbots/swim.hpp"
+
+namespace sb = ge::shooterbots;
+
+namespace ge::shooterbots {
+
+namespace {
+
+float dist(sh::Vec3f a, sh::Vec3f b) {
+  const sh::Vec3f d = a - b;
+  return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+}
+
+}  // namespace
+
+bool water_way(Fighter& f, const ge::shooterbots::BotView& s, int me, double t, int msec,
+               ge::ai::Why* why, sh::Vec3f& way) {
+  const ge::shooter::WorldEntity& body = s.world.entities[static_cast<size_t>(me)];
+  // Its air: the head under this long, it takes whichever way out of the water is shorter, the
+  // dive's on or the way back, so it never drowns on a swim.
+  if (body.waterlevel >= 3) {
+    if (f.under_since < 0) f.under_since = t;
+  } else {
+    f.under_since = -1;
+  }
+  // Up for air: under open water, rise straight to its top, a breath there, then on.
+  if (!f.surfacing && f.features[sb::Feature::surface] && body.waterlevel >= 3 &&
+      f.under_since >= 0 && t - f.under_since > kAir_s && t >= f.surface_retry) {
+    const sh::Vec3f head{body.origin.x, body.origin.y, body.origin.z + 22};
+    for (int step = 1; step * 8 <= static_cast<int>(kSurfaceLook); step++) {
+      const auto up = static_cast<float>(step * 8);
+      const sh::Vec3f p{head.x, head.y, head.z + up};
+      const int c = sh::world_contents(s.sv, p);
+      if (c == sh::kContentsSolid) break;  // a ceiling: no air straight up
+      if (c == sh::kContentsEmpty) {
+        f.surfacing = true;
+        f.surface_at = {p.x, p.y, p.z};
+        f.breathe_until = -1;
+        f.surface_by = t + up / kRise + kRiseSlack_s;  // out by then, or the rise is given up
+        f.stats.surfaced++;
+        break;
+      }
+    }
+  }
+  if (f.surfacing) {
+    if (body.waterlevel < 3 && f.breathe_until < 0) f.breathe_until = t + kBreathe_s;  // out
+    if (f.breathe_until < 0 && t > f.surface_by) {
+      f.surfacing = false;  // never broke the surface (a ledge, a grate): the shorter way out
+      f.surface_retry = t + kSurfaceRetry_s;
+      f.stats.surface_failed++;
+    } else if (f.breathe_until >= 0 && t >= f.breathe_until) {
+      f.surfacing = false;  // breathed: on as it was going
+    } else {
+      way = f.surface_at;
+      if (why) {
+        why->decide("air");
+        why->choose(f.breathe_until < 0 ? "rise" : "breathe",
+                    "short of air under open water: up for a breath, then on");
+      }
+      return true;
+    }
+  }
+  const bool short_of_air = f.under_since >= 0 && t - f.under_since > kAir_s;
+  const ItemSpot* dive_for = f.diving >= 0 ? &f.items[static_cast<size_t>(f.diving)] : nullptr;
+  bool on_dive = dive_for && dive_for->dive;
+  // The dive kept, or given up late or short of air (water.hpp).
+  if (on_dive && body.waterlevel >= 1) {
+    if (f.dive_wet_since < 0) f.dive_wet_since = t;
+    f.stats.dive_wet_s += msec / 1000.0;
+    const int32_t on = sb::swim_steps(*dive_for->dive, body.origin);
+    const int32_t back = f.swim ? sb::swim_steps(*f.swim, body.origin) : -1;
+    const bool late = t - f.dive_wet_since > dive_for->dive_s + kDiveLate_s;
+    const bool turn = short_of_air && back >= 0 && (on < 0 || back < on);
+    if (why) {
+      why->decide("dive");
+      why->fact("wet_s", t - f.dive_wet_since);
+      why->fact("planned_s", dive_for->dive_s);
+      why->fact("steps_on", on);
+      why->fact("steps_back", back);
+      why->choose(late || turn ? "give_up" : "swim_on",
+                  late   ? "in the water longer than its swim's time and the margin"
+                  : turn ? "short of air, and the way back is shorter than the way on"
+                         : "within its swim's time");
+    }
+    if (late || turn) {
+      f.stats.dives_given_up++;
+      f.dive_off = f.diving;
+      f.dive_off_until = t + kDiveRetry_s;
+      f.diving = f.last_dive = -1;
+      f.dive_wet_since = -1;
+      f.swimming = f.swim && back >= 0;
+      dive_for = nullptr;
+      on_dive = false;
+    }
+  } else {
+    f.dive_wet_since = -1;
+  }
+  // A walk along a pool's floor turns up and out by the field at kAir_s.
+  if (short_of_air && f.swim && !on_dive && sb::swim_steps(*f.swim, body.origin) >= 0)
+    f.swimming = true;
+  // Diving: in the water, or at the dive's node (arrived, or within a step of it).
+  const bool dive_now =
+      dive_for && dive_for->dive &&
+      (body.waterlevel >= 1 ||
+       (f.goal_node == dive_for->dive_node &&
+        (f.bot.pilot.pilot.mode == sb::PilotMode::arrived ||
+         dist(body.origin,
+              f.bot.pilot.pilot.g->nodes[static_cast<size_t>(dive_for->dive_node)].origin) <
+             48))) &&
+      (body.waterlevel >= 1
+           ? sb::swim_next(*dive_for->dive, *f.bot.pilot.pilot.g, body.origin, way)
+           : dive_for->dive_entry >= 0 &&
+                 (way =
+                      f.bot.pilot.pilot.g->nodes[static_cast<size_t>(dive_for->dive_entry)].origin,
+                  true));
+  return dive_now ||
+         (f.swimming && f.swim && sb::swim_next(*f.swim, *f.bot.pilot.pilot.g, body.origin, way));
+}
+
+}  // namespace ge::shooterbots

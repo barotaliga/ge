@@ -188,11 +188,14 @@ struct GameRule {
 // its admins and its mods use, such as a classic game's `maxclients` for `sv_maxclients`. It is a
 // synonym on the server's console (console/cvar.hpp): a server.cfg line, `+set`, rcon or a vote by
 // either name sets the one setting. `part` >= 0 names one word of a setting that holds several
-// (`sv_floodprot`'s "N S T").
+// (`sv_floodprot`'s "N S T"). `own`: the core has a setting of that name with another meaning
+// (Quake II's `sv_idlekick` is the idle drop, the core's the lobby's unready kick); the core's
+// is set aside while this game is the server's, and the name means the game's setting alone.
 struct SettingName {
   const char* name;
   const char* setting;
   int part = -1;
+  bool own = false;
 };
 
 // A game's server, as functions over its own state (`void*`, made by `create`). Called once a

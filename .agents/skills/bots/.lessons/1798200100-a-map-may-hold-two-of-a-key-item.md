@@ -1,7 +1,7 @@
 ---
 title: A map may hold two of a key item; read areas by spot, and check the nav can enter each
 date: 2026-11-19
-scope: games/shooters_edge/bots/mind.cpp, games/shooters_edge/bots/map_nav.cpp, games/shooters_edge/labs/areas_read.hpp
+scope: plugins/shooterbots/mind.cpp, plugins/shooterbots/map_nav.cpp, games/shooters_edge/labs/areas_read.hpp
 concepts: [item-control, key-areas, dm2, two-red-armours, first-of, south-complex, nav, touch-plate, start-open]
 ---
 
