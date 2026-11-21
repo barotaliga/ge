@@ -259,6 +259,18 @@ TEST(editing_and_history) {
   CHECK(v.input().empty());
 }
 
+// con_history: only the newest typed lines are walked back through.
+TEST(con_history_keeps_the_newest_lines) {
+  Console c;
+  ConsoleView v(c);
+  c.execute("con_history 2");
+  for (const char* line : {"echo a", "echo b", "echo c"}) {
+    v.type(line);
+    v.key(EditKey::enter);
+  }
+  CHECK(v.history().size() == 2 && v.history().front() == "echo b");
+}
+
 // The list under the input line: every name the typed word starts, the most submitted first.
 TEST(suggestions_rank_by_use_then_length) {
   Console c;

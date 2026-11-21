@@ -154,6 +154,15 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           .kind = CvarKind::boolean,
           .values = "0: no clock (the default); 1: the local hours and minutes"},
          &clock_on_);
+  v.bind({.name = "con_history",
+          .fallback = "128",
+          .flags = kArchive,
+          .help = "how many typed lines Up and Down walk back through",
+          .kind = CvarKind::integer,
+          .min = 1,
+          .max = 4096,
+          .values = "1..4096: that many, the oldest dropped first (128 the default)"},
+         &history_max_);
   if (v.find("name") == nullptr) {
     v.add({.name = "name",
            .fallback = "player",
@@ -429,6 +438,9 @@ void ConsoleView::submit() {
   scroll_ = 0;
   if (line.find_first_not_of(" \t") == std::string::npos) return;
   if (history_.empty() || history_.back() != line) history_.push_back(line);
+  if (history_.size() > static_cast<size_t>(std::max(1, history_max_)))  // con_history
+    history_.erase(history_.begin(),
+                   history_.end() - static_cast<std::ptrdiff_t>(std::max(1, history_max_)));
   if (line.starts_with("//")) {  // a note to oneself: shown, never run or said
     add(LineKind::command, line);
     return;

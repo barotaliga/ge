@@ -117,6 +117,13 @@ void add_under_cvars(ge::console::Console& c, UnderEar& s) {
                   .max = 1,
                   .values = "0.001..1: 0.25 the default; 1 not muffled"},
                  &s.treble);
+  c.cvars().bind({.name = "s_swapstereo",
+                  .fallback = "0",
+                  .flags = ge::console::kArchive,
+                  .help = "Whether the left and right speakers are swapped.",
+                  .kind = ge::console::CvarKind::boolean,
+                  .values = "0: as they are (the default); 1: swapped"},
+                 &s.swap);
 }
 
 void hear_under(RoomEar& ear, ge::audio::Synth& synth, const UnderEar& s, bool under) {
@@ -124,6 +131,12 @@ void hear_under(RoomEar& ear, ge::audio::Synth& synth, const UnderEar& s, bool u
   if (treble == ear.muffled) return;
   synth.muffle(treble, kUnderCornerHz, 0);  // at once, as the head goes in or comes out
   ear.muffled = treble;
+}
+
+void hear_swap(ge::audio::Synth& synth, UnderEar& s) {
+  if (static_cast<int>(s.swap) == s.swap_sent) return;
+  synth.swap_stereo(s.swap);
+  s.swap_sent = static_cast<int>(s.swap);
 }
 
 }  // namespace shooters_edge::client
