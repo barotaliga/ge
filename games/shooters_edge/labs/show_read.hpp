@@ -56,6 +56,7 @@ struct ShowRead {
   int64_t by_self = 0, by_mate = 0, by_enemy = 0;
   int64_t taker_waited = 0;  // the taker within kShowNear at the showing
   int64_t taker_full = 0;    // taken full (over 100 armour worn, a launcher held)
+  int64_t taker_rl = 0;      // the taker carrying the launcher
   std::vector<float> waits;  // the showing to the going, s
 };
 
@@ -72,6 +73,7 @@ inline void add(ShowRead& a, const ShowRead& b) {
   a.by_enemy += b.by_enemy;
   a.taker_waited += b.taker_waited;
   a.taker_full += b.taker_full;
+  a.taker_rl += b.taker_rl;
   a.waits.insert(a.waits.end(), b.waits.begin(), b.waits.end());
 }
 
@@ -120,8 +122,9 @@ inline void show_shown(ShowSpot& sp, ShowRead& r, double t, const std::vector<Sh
 }
 
 // The item on `sp` goes at `t`, taken by `taker` (`full`: over 100 armour worn for an armour, a
-// launcher held for the launcher).
-inline void show_taken(ShowSpot& sp, ShowRead& r, double t, const ShowPlayer& taker, bool full) {
+// launcher held for the launcher; `rl` the taker carrying the launcher).
+inline void show_taken(ShowSpot& sp, ShowRead& r, double t, const ShowPlayer& taker, bool full,
+                       bool rl = false) {
   if (sp.slot >= 0 && sp.shown >= 0) {
     r.taken++;
     if (taker.slot == sp.slot)
@@ -133,6 +136,7 @@ inline void show_taken(ShowSpot& sp, ShowRead& r, double t, const ShowPlayer& ta
     r.taker_waited += taker.slot >= 0 && taker.slot < 32 &&
                       (sp.near_at >> static_cast<unsigned>(taker.slot) & 1u) != 0;
     r.taker_full += full;
+    r.taker_rl += rl;
     r.waits.push_back(static_cast<float>(t - sp.shown));
   }
   sp.slot = taker.slot;
@@ -143,9 +147,9 @@ inline void show_taken(ShowSpot& sp, ShowRead& r, double t, const ShowPlayer& ta
 // The same going counted into a second read (a spot's own) without moving the spot on: its taker
 // is set by show_taken alone.
 inline void show_taken_spot(const ShowSpot& sp, ShowRead& r, double t, const ShowPlayer& taker,
-                            bool full) {
+                            bool full, bool rl = false) {
   ShowSpot copy = sp;
-  show_taken(copy, r, t, taker, full);
+  show_taken(copy, r, t, taker, full, rl);
 }
 
 // THE ARMOUR WORN: live samples by the armour type worn (0 none, 1 green, 2 yellow, 3 red) and

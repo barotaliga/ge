@@ -838,8 +838,10 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         for (const la::ShowPlayer& sp2 : splayers)
           if (sp2.slot == taker) {
             la::fight_taken(flog, a, s.time, sp2.team);
-            la::show_taken_spot(ss, out.show_spots[show_key(sp.kind, sp.at)], s.time, sp2, full);
-            la::show_taken(ss, out.show[static_cast<size_t>(sp.kind)], s.time, sp2, full);
+            const bool rl = had_rl[tk] != 0;
+            la::show_taken_spot(ss, out.show_spots[show_key(sp.kind, sp.at)], s.time, sp2, full,
+                                rl);
+            la::show_taken(ss, out.show[static_cast<size_t>(sp.kind)], s.time, sp2, full, rl);
           }
       }
       if (keep_events) out.events.push_back({s.time - t0, 'p', taker, sp.kind, 0, sp.at});

@@ -48,6 +48,7 @@ void report_show(ge::lab::Lab& lab, std::array<ShowRead, N>& show,
       lab.metric(key + ".by-enemy", sshare(r.by_enemy, r.taken), "share");
       lab.metric(key + ".taker-waited", sshare(r.taker_waited, r.taken), "share");
       lab.metric(key + ".taken-full", sshare(r.taker_full, r.taken), "share");
+      lab.metric(key + ".taker-rl", sshare(r.taker_rl, r.taken), "share");
       lab.metric(key + ".wait-p50", keys_quantile(r.waits, 0.5), "s");
       lab.metric(key + ".wait-p75", keys_quantile(r.waits, 0.75), "s");
       int64_t quick = 0;
