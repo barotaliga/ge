@@ -169,6 +169,10 @@ struct PilotSettings {
   // straight (`hop_straight`); the wall's check run on the landing too, so the side is set with
   // the jump (`hop_wall_ground`).
   float hop_air_keep_s = 0;
+  // THE AIM'S SWAP ON THE GROUND (`swapground`): the side the aim asks for taken at the landing,
+  // not in the air, unless the aim lies `hop_swing` off (a wall's swap stays in the air): people
+  // swap at the landing two times in three (dm2, 25 ms frames), the bots half the time.
+  bool hop_swap_ground = false;
   bool hop_straight = false;
   bool hop_wall_ground = false;
   // THE SWAP AT THE LANDING (`hopland`, the maintainer's hop): the side swapped only `hop_swap_s`
