@@ -2,7 +2,7 @@
 title: A door's errand whose button lies past the door is the way round already; weigh it against going round
 date: 2026-11-20
 scope: games/shooters_edge/bots/fighter_doors.cpp, plugins/shooter/pilot_plan.cpp, games/shooters_edge/labs/se_team_lab.cpp
-concepts: [door_errand, errandworth, button, locked, door, round, time-up, dm2, red-armour, pilot_way, se-team, buttons-table]
+concepts: [door-errand, errandworth, button, locked, door, round, time-up, dm2, red-armour, pilot-way, se-team, buttons-table]
 ---
 
 - dm2's south red armour's west door opens off a touch button INSIDE the armour's room (it lets a
