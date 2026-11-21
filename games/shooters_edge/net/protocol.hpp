@@ -60,6 +60,8 @@ using sp::write_string;
 using sp::Channel;
 using sp::channel_can_packet;
 using sp::channel_process;
+using sp::channel_read;
+using sp::channel_sending_pieces;
 using sp::channel_reliable;
 using sp::channel_reliable_backlog;
 using sp::channel_set_rate;
