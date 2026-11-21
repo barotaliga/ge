@@ -77,6 +77,8 @@ sb::PilotSettings fighter_pilot(const sb::Features& features, const sb::Traits& 
     ps.hop_straight = true;
     ps.hop_wall_ground = true;
   }
+  ps.hop_swap_ground = features[sb::Feature::swapground];           // the aim's swap at the landing
+  if (features[sb::Feature::wallplan]) ps.hop_see_ground_s = 0.5f;  // a flight ahead, jumping
   ps.hop_stairs_walked = features[sb::Feature::stairs];
   ps.slopes = features[sb::Feature::slopes];
   ps.backstep = features[sb::Feature::backstep];
@@ -114,6 +116,8 @@ sb::PilotSettings fighter_pilot(const sb::Features& features, const sb::Traits& 
   ps.aim_land_s = features[sb::Feature::aimland] ? 0.3f : 0.f;
   ps.recipe_heading = features[sb::Feature::starthead];
   ps.recipe_clear = features[sb::Feature::startclear];
+  ps.arc_height = features[sb::Feature::archeight];
+  if (features[sb::Feature::startease]) ps.recipe_ease_s = 0.25f;  // eased in from its own view
   ps.gap_hold = features[sb::Feature::gaphold];
   ps.lift_brake = features[sb::Feature::liftbrake];
   ps.walk_mash = features[sb::Feature::walkmash];

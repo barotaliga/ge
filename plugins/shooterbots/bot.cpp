@@ -140,6 +140,8 @@ constexpr double kAirBand = 15, kAirTurnCost = 0.5, kAirKeep = 0.3, kAirCurve = 
 // `airview`: the hop's view in the air this far toward the turn off the velocity, degrees, once
 // the flight is past this speed, units/s.
 constexpr float kAirViewLead = 2, kAirViewSpeed = 100;
+// The hop's air view this soon after a copied start named "lift" (bot.hpp since_recipe_s), s.
+constexpr float kLiftName_s = 0.2f;
 // `hopturn`: the lead, degrees: the hand strokes on and the air turns at people's rate.
 constexpr float kHopTurnLead = 6;
 // `hoppitch`: the hop's air view pitched this share of the velocity's own pitch, at most this far
@@ -684,6 +686,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   // People's hop start under way (pilot.hpp `recipes`): its view is the recording's, a person's
   // own mouse already, so it is played as it is, with no watch over it (an aim still comes first).
   const bool recipe_on = jp.recipe >= 0 && jp.mode == PilotMode::hop;
+  b.since_recipe_s = recipe_on ? 0.f : b.since_recipe_s + static_cast<float>(msec) / 1000.f;
   if ((b.aiming || (b.looking && !recipe_on)) && !blast_shot && !shot_due) {
     static constexpr const char* kNames[2] = {"aim_yaw", "aim_pitch"};
     ai::record_intent(why, kNames, want);
@@ -1062,7 +1065,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       }
       const float yaw_was = b.yaw;
       double out[2];
-      b.view_by = swim3d ? "swim" : "air";
+      b.view_by = swim3d ? "swim" : b.since_recipe_s < kLiftName_s ? "lift" : "air";
       if (shot_due) {  // the stroke onto the jump's view, timed to land with its shot
         want_view[0] = b.yaw + shot_dx;
         want_view[1] = jp.shot_pitch;

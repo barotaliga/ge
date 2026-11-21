@@ -171,6 +171,13 @@ struct PilotSettings {
   // straight (`hop_straight`); the wall's check run on the landing too, so the side is set with
   // the jump (`hop_wall_ground`).
   float hop_air_keep_s = 0;
+  // THE AIM'S SWAP ON THE GROUND (`swapground`): the side the aim asks for taken at the landing,
+  // not in the air, unless the aim lies `hop_swing` off (a wall's swap stays in the air): people
+  // swap at the landing two times in three (dm2, 25 ms frames), the bots half the time.
+  bool hop_swap_ground = false;
+  // THE SIDE CLEAR OF A WALL SET WITH THE JUMP (`wallplan`): on the ground the arc is checked this
+  // long ahead (a flight), so the side clear of a wall is the one jumped with; 0: `hop_see_s`.
+  float hop_see_ground_s = 0;
   bool hop_straight = false;
   bool hop_wall_ground = false;
   // THE SWAP AT THE LANDING (`hopland`, the maintainer's hop): the side swapped only `hop_swap_s`
@@ -344,8 +351,15 @@ struct PilotSettings {
   // `recipe_heading` (`starthead`): the proven start taking off closest to the hop's aim from its
   // takeoff, among `kRecipeTriesHeading` flown; off, the nearest proven one.
   bool recipe_heading = false;
+  // (`startease`) The start's recorded view offset to begin at the pilot's own and the offset eased
+  // to none over `recipe_ease_s`, the proof flown on the eased view (its keys under it): the
+  // recording's entry view, set at once, snapped the view in and out of every start.
+  float recipe_ease_s = 0;
   // and charged for a flight after the takeoff that meets a wall within 0.4 s (`startclear`)
   bool recipe_clear = false;
+  // (`archeight`) The hop's look ahead (`wallplan`'s arcs, `startclear`'s flight) follows the
+  // jump's height under the move's gravity, not flat a step up: a lintel its top meets is a wall.
+  bool arc_height = false;
   // THE FIGHT'S LANDING (`aimland`): with the view on a fight (`PilotSense::aimed`) the hop's air
   // can only let go or turn the way the mouse does, so a jump whose flight straight on meets a
   // wall within this long, s, is not held for the landing nor pressed on it: the landing runs on
@@ -411,6 +425,14 @@ struct PilotSense {
   std::span<const OtherBox> others;
 };
 
+// Why a copied hop start under way ended on the ground (PilotStats::recipe_ends): a node passed
+// (`advance`), a new plan, the stretch read again on a new goal, the hop's stretch at its end (or
+// slow, or a roof), anything else; of the plans, a new goal the caller gave (`goal`) and the way
+// planned again by the pilot (`replan`: lost, stuck, a gap given up, a door ...).
+enum class RecipeEnd : uint8_t { advance, plan, retarget, hop_end, other, goal, replan, count };
+inline constexpr const char* kRecipeEndNames[] = {"advance", "plan", "retarget", "hop-end",
+                                                  "other",   "goal", "replan"};
+
 struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
   int32_t mashed = 0;          // `walkmash`: walk commands pressed forward and a swapped strafe key
@@ -440,13 +462,16 @@ struct PilotStats {
   int32_t recipe_commits = 0;       // and one proven and begun
   int32_t recipe_aborts = 0;        // of them, left off the proof's way before the takeoff
   int32_t recipe_takeoffs = 0;      // and those that left the ground
-  float recipe_speed = 0;           // their takeoff speeds across, summed, units/s
-  int32_t retargets = 0;            // new goals run on to from the node ahead (`pilot_retarget`)
-  int32_t vias = 0;                 // goals chained on past a pickup (`pilot_chain`)
-  int32_t via_touched = 0;          // and of them, the pickup's point run through
-  int32_t via_missed = 0;           // and those run past it, not through it
-  float via_speed = 0;              // the speed through the touched ones, summed, units/s
-  double time_s = 0;                // the commands' time since the last pilot_go
+  int32_t recipe_cuts = 0;          // ended on the ground by the hop left (a plan, a new goal)
+  int32_t recipe_ranouts = 0;       // ended on the ground with its frames played (no jump)
+  std::array<int32_t, static_cast<size_t>(RecipeEnd::count)> recipe_ends{};  // and by restart
+  float recipe_speed = 0;   // their takeoff speeds across, summed, units/s
+  int32_t retargets = 0;    // new goals run on to from the node ahead (`pilot_retarget`)
+  int32_t vias = 0;         // goals chained on past a pickup (`pilot_chain`)
+  int32_t via_touched = 0;  // and of them, the pickup's point run through
+  int32_t via_missed = 0;   // and those run past it, not through it
+  float via_speed = 0;      // the speed through the touched ones, summed, units/s
+  double time_s = 0;        // the commands' time since the last pilot_go
 };
 
 struct Pilot {
@@ -624,6 +649,10 @@ bool pilot_chain(Pilot& p, int32_t next, Vec3f at);
 // running; only a way that turns back stops them.
 bool pilot_retarget(Pilot& p, int32_t goal, const PilotSense& s);
 void pilot_unchain(Pilot& p);
+// The way the pilot would plan from node `from` to `goal` now: round the doors barred and shut,
+// off the links cut, missed, given up and onto a bridge still in; empty when there is none. A
+// caller weighing a choice of ways (a door's errand, `errandworth`) plans as the pilot would.
+NavRoute pilot_way(Pilot& p, int32_t from, int32_t goal);
 // The next command, `msec` long.
 MoveCmd pilot_step(Pilot& p, const PilotSense& sense, int msec, ai::Why* why = nullptr);
 

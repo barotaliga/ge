@@ -200,6 +200,7 @@ void lob_look(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats
   const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
   f.bot.look = true;
   f.bot.look_at = eye + sh::angle_vectors(f.lob_view).forward * 256.f;
+  f.bot.look_by = "lob";
   if (st.weapon != gl->bit && !f.lob_asked && f.want_weapon == 0) {
     f.want_weapon = gl->number;
     f.lob_asked = true;

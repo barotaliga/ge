@@ -173,34 +173,37 @@ namespace ge::shooterbots {
 // - `fetch`: the team's taker for its armour: a player whose own armour is worse, who believes
 //   himself the nearest of his team that needs it as it comes up, says `coming` and holds the
 //   trip to it (games/shooters_edge/bots/mind.cpp, M18r.md 3); not kept (head to head e1m2 -4.5,
-//   dm2 -1.5: the trips fail on the way, not for want of a taker), in no preset.
+//   dm2 -1.5: the trips fail on the way, not for want of a taker), in no preset. Again with the
+//   door errands fixed (`errandworth`) and `arrive`, 12 2on2 dm2 seeds: -1.7 (red +1.0, blue
+//   -4.3); 88 trips a match, 11 taken, 35 ended by the quad's rush, 31 by death.
 // - `pokestand`: a button a shot opens is shot from a stand (the keys let go within 250 units),
 //   never run into (games/shooters_edge/bots/buttons.cpp, M18r.md 3); on (even head to head).
 // - `liftbrake`: walking to a lift's edge with the lift not there, the keys let go within the
-//   run's stop, so the wait is at the edge and not in its shaft (shooter/pilot.cpp, M18r.md 3);
+//   run's stop, so the wait is at the edge and not in its shaft (shooterbots/pilot.cpp, M18r.md 3);
 //   not kept (dm2's waits 125 -> 178 bot-seconds a match: the wait is the lift's), in no preset.
 // - `scriptfresh`: a scripted way left and come back to is flown from its first step (a bug: the
 //   step it was left at was kept, e1m2's YA climb aimed at the walkway from the floor)
-//   (shooter/pilot.cpp, M18r.md 3); on (head to head e1m2 -1.0, inside the noise; a bug fixed).
+//   (shooterbots/pilot.cpp, M18r.md 3); on (head to head e1m2 -1.0, inside the noise; a bug fixed).
 // - `scriptentry`: a scripted way's entry had anywhere within 64 units once lined up, the keys let
-//   go short of that (a run in from the side circled the entry's point) (shooter/nav_script.cpp,
-//   M18r.md 3); not kept (e1m2's YA lying 77 -> 80 %, slower: the stop costs more), in no preset.
+//   go short of that (a run in from the side circled the entry's point)
+//   (shooterbots/nav_script.cpp, M18r.md 3); not kept (e1m2's YA lying 77 -> 80 %, slower: the stop
+//   costs more), in no preset.
 // - `calmvel`: moving past 150 units/s, the calm view on the pilot's walk within 8 degrees, not
-//   on the route's point 320 units on (shooter/bot.cpp, M18r.md 6); not kept (enemies appearing
+//   on the route's point 320 units on (shooterbots/bot.cpp, M18r.md 6); not kept (enemies appearing
 //   faced 52 -> 51 %, the run turns faster than the view follows), in no preset.
 // - `lookturn`: the calm view's point on the route kept within 60 degrees of the pilot's walk
 //   (past a node overshot or a switchback the route's point 320 units on lay 90+ degrees off the
-//   walk in 58 % of the frames the view trailed the run's turn by 40+) (shooter/bot.cpp,
+//   walk in 58 % of the frames the view trailed the run's turn by 40+) (shooterbots/bot.cpp,
 //   M18r.md 6); judging, in no preset.
 // - `viewbook`: moving past 150 units/s, the calm view looks where people look at that spot moving
 //   that way, off the map's view book (shooterbots/view_book.hpp; se-team `--viewbook=<file>`)
-//   (shooter/bot.cpp, M18r.md 6); judging, in no preset.
+//   (shooterbots/bot.cpp, M18r.md 6); judging, in no preset.
 // - `gapturn`: a gap trick near its lip with the run heading away from its jump is turned to on
-//   the ground (1.5 s at most) before it is given up (shooter/pilot_gaps.cpp, M18r.md 0c);
+//   the ground (1.5 s at most) before it is given up (shooterbots/pilot_gaps.cpp, M18r.md 0c);
 //   judging, in no preset.
 // - `gapnear`: a route is not planned through a gap trick whose takeoff is near (`kGapCurveFrom`)
 //   unless the run already heads at it near its speed: it was planned and given up on the next
-//   landing, off every route for 10 s (shooter/pilot.cpp, M18r.md 0c); on (head to head dm2
+//   landing, off every route for 10 s (shooterbots/pilot.cpp, M18r.md 0c); on (head to head dm2
 //   +6.0, e1m2 -0.2).
 // - `placeheard`: a place a mate names is heard as a region, as a person hears it: a loc file
 //   names a room by many points (dm2's `tele` 16 over 585 units), so the name is read as the
@@ -211,23 +214,24 @@ namespace ge::shooterbots {
 //   taken over lava and slime too (before, only over water: dm2's gaps are all over lava, so the
 //   run reached the lip at a walk and the gap was given up, though a circle jump from there lands
 //   across); the jump is still taken only where the move says it lands across
-//   (shooter/pilot_gaps.cpp, M18r.md 0c); on since `brinkkeys` (even head to head on dm2, the
+//   (shooterbots/pilot_gaps.cpp, M18r.md 0c); on since `brinkkeys` (even head to head on dm2, the
 //   gaps over lava jumped ~0.8 a match a side; before it lava deaths rose 12.8 -> 18.3).
 // - `brinkline`: the walk's look point is not carried past a node where the route walks a lip over
 //   lava or slime (`NavLink::brink`): the walk turns at the route's corners there, not across
-//   them (dm2's YA ramp: a run at 300 cut its curve off the edge into the lava) (shooter/pilot.cpp
-//   `pursue`, M18r.md 0c); not kept (head to head dm2 -6.7, lava deaths no fewer), in no preset.
+//   them (dm2's YA ramp: a run at 300 cut its curve off the edge into the lava)
+//   (shooterbots/pilot.cpp `pursue`, M18r.md 0c); not kept (head to head dm2 -6.7, lava deaths no
+//   fewer), in no preset.
 // - `sidebrink`: a walk whose side step falls into lava or slime (`NavLink::brink_side`: a ramp
 //   or a walkway high over a pit, dm2's YA ramp) is a lip to the pilot and the brink guard as a
-//   `brink` link is (shooter/nav.cpp `nav_mark_side_harm`, M18r.md 0c); judging, in no preset.
+//   `brink` link is (shooterbots/nav.cpp `nav_mark_side_harm`, M18r.md 0c); judging, in no preset.
 // - `fallseen`: the walk foreseen (`ahead`) flies each way of pressing and puts one whose box
 // leaves
 //   the floor over lava or slime after every other (a run down dm2's YA stair at 320 overshot a
 //   corner 20 units from the lava's edge: the brink guard braked only at the edge, too late for
-//   the keys) (shooter/look_ahead.cpp, M18r.md 0c); not kept (over `brinkkeys` head to head dm2
+//   the keys) (shooterbots/look_ahead.cpp, M18r.md 0c); not kept (over `brinkkeys` head to head dm2
 //   +1.5, -2.8 / +5.7, lava deaths no fewer), in no preset.
 // - `liplook`: near lava or slime the walk's look point runs 0.3 s ahead at its speed (not 64
-//   units): a corner by the edge is turned early and inside, not overshot (shooter/pilot.cpp,
+//   units): a corner by the edge is turned early and inside, not overshot (shooterbots/pilot.cpp,
 //   M18r.md 0c); judging, in no preset.
 // - `brinkkeys`: near lava or slime the keyboard's hand does not want a key whose step under the
 //   view ends over it, and answers a run carried over it within a quarter second with the keys
@@ -252,36 +256,37 @@ namespace ge::shooterbots {
 //   head dm2 +7.4, e1m2 -0.3).
 // - `sidehop`: a hop's stretch ends at a walk whose side step falls into lava or slime
 //   (`NavLink::brink_side`), walked, not hopped (dm2's yellow-armour stair: most of its falls came
-//   out of a hop or a copied hop start; shooter/pilot.cpp `hop_stretch`, M18r.md 0c); not kept
+//   out of a hop or a copied hop start; shooterbots/pilot.cpp `hop_stretch`, M18r.md 0c); not kept
 //   (YA falls 24 -> 20 over 8 seeds, noise; the hop share 0.45 -> 0.39, people 0.46), in no preset.
 // - `lostdry`: off the graph on dry land, the walk back to the nearest node never takes one in
 //   lava or slime or on a mover (dm2's south pit: its trains' nodes over the lava were walked at;
 //   bots/fighter.cpp, M18r.md 0c); not kept (the pit's falls 16 -> 22 over 8 seeds), in no preset.
 // - `liftoff`: a jump asked for and not yet off the ground (the keyboard's jump key lands a few
 //   commands late) is waited for 0.15 s, the jump still asked (on: M18r.md 0c); off, the next
-//   command on the ground reads as the jump landed short and marks it missed (shooter/pilot.cpp,
-//   M18r.md 0c).
+//   command on the ground reads as the jump landed short and marks it missed
+//   (shooterbots/pilot.cpp, M18r.md 0c).
 // - `shotjump`: a rocket jump's shot held, the mouse still on it, until the jump key is down: a
 //   person presses the two as one move; off, the shot went with the ask and burst under a player
 //   still on the ground, a flat run into dm2's south pit (bots/fighter.cpp, M18r.md 0c).
 // - `rjready`: a rocket jump only with the launcher in hand and ready to fire; off, the shot went
-//   with whatever was in hand (shooter/pilot.cpp, bots/fighter.cpp; M18r.md 0c).
-// - `jumpcuts`: a jump the pilot missed twice is kept off its routes for the match (shooter/nav.cpp
+//   with whatever was in hand (shooterbots/pilot.cpp, bots/fighter.cpp; M18r.md 0c).
+// - `jumpcuts`: a jump the pilot missed twice is kept off its routes for the match
+// (shooterbots/nav.cpp
 //   `nav_route`); off, only a cut through a mover or a gap trick is honoured (M18r.md 0c).
 // - `brinkfall`: the brink guard flies the player's box along its run (gravity, walls, a stair's
 //   steps) and brakes in the air when the flight, or the run on after it lands, ends in lava or
 //   slime (dm2's YA stair: a run off its top step at 360 lands on the lip of a lower one, and the
-//   guard on the ground braked 10 units too late; shooter/brink.cpp `fall_into_harm`, M18r.md 0c);
-//   on (head to head dm2 +0.9, lava deaths 10.4 -> 6.75 a match, speed +3.6).
+//   guard on the ground braked 10 units too late; shooterbots/brink.cpp `fall_into_harm`, M18r.md
+//   0c); on (head to head dm2 +0.9, lava deaths 10.4 -> 6.75 a match, speed +3.6).
 // - `aimland`: with the view on a fight, a hop's jump whose flight straight on meets a wall within
 //   0.3 s is neither held for the landing nor pressed on it; the landing runs on and jumps once
-//   clear (shooter/pilot.cpp; the air under a fight's view turns only with the mouse, and 91 % of
-//   such flights taken off 30 degrees off the hop's aim met a wall on dm2; M18r.md 0c); on (head
+//   clear (shooterbots/pilot.cpp; the air under a fight's view turns only with the mouse, and 91 %
+//   of such flights taken off 30 degrees off the hop's aim met a wall on dm2; M18r.md 0c); on (head
 //   to head dm2 -3.6, e1m2 +1.2; dm2's fast flights meeting a wall 60.2 -> 57.0 %).
 // - `starthead`: a copied hop start (`recipes`) is chosen among the proven ones for where its
 //   takeoff heads: the nearest twelve to the pilot's state flown, the one taking off closest to
-//   the hop's aim from its takeoff kept (shooter/pilot_recipes.cpp; copied starts' fast flights met
-//   a wall 46-52 % against the hop's own 28 %, taken off past the way; M18r.md 0c); on (head to
+//   the hop's aim from its takeoff kept (shooterbots/pilot_recipes.cpp; copied starts' fast flights
+//   met a wall 46-52 % against the hop's own 28 %, taken off past the way; M18r.md 0c); on (head to
 //   head dm2 -2.3, e1m2 +0.4; dm2's expert fast flights +13 %, p95 407 -> 413).
 // - `startclear`: under `starthead`, a copied start's choice also charged 200 degrees a second its
 //   flight after the takeoff (straight on or turned either way at the air's most) meets a wall
@@ -291,13 +296,15 @@ namespace ge::shooterbots {
 // - `gaphold`: with a gap trick in a hop's stretch, the jump held in the air for the landing frame
 //   when the gap's takeoff from the forecast landing would jump (it was decided only on the ground,
 //   so the keyboard's late jump cost 1-3 frames of friction on 176 of 2,374 fast landings;
-//   shooter/pilot_gaps.cpp; M18r.md 0c); on (head to head dm2 +4.3, e1m2 +1.8; 320+ 25.8 -> 26.5
+//   shooterbots/pilot_gaps.cpp; M18r.md 0c); on (head to head dm2 +4.3, e1m2 +1.8; 320+ 25.8
+//   -> 26.5
 //   %).
 // - `airturn`: in a hop's air under `airview`, with the hop's aim 20+ degrees off the velocity on
 //   the side held, the view wanted further into the turn (half a degree a degree past 20, up to
 //   15 more): the air turned at a crawl before walls (the velocity turns only as the view
-//   does, and a want on the velocity left the hand inside its tolerance; shooter/bot.cpp; M18r.md
-//   0c); on (head to head dm2 +2.7, e1m2 +3.9; dm2's fast flights meeting a wall 59 -> 53 %).
+//   does, and a want on the velocity left the hand inside its tolerance; shooterbots/bot.cpp;
+//   M18r.md 0c); on (head to head dm2 +2.7, e1m2 +3.9; dm2's fast flights meeting a wall 59 -> 53
+//   %).
 // - `paceback`: under the mouse hand, an aim lost or a look let go goes back to the way by the
 //   hand's own stroke onto it (a want paced from the view gave one small stroke a look: the view
 //   hung where the enemy was lost); on.
@@ -517,6 +524,158 @@ namespace ge::shooterbots {
 //   is forgotten after 10 s out of sight, not the fight's 3 (bots/temper.hpp `kSpawnKept_s`).
 //   On (12 dm2 seeds: the spawn's line 16 -> 36 % of the samples at a 25-point miss, the miss out
 //   of sight 48.8 -> 46.5; head to head +1.0).
+// - `rushsize`: THE QUAD'S RUSH BY THE TEAM'S SIZE (M18r.md P1): half the team rushes the quad as
+// it
+//   comes due, one at least (two in a 4on4 as before, one in a 2on2, where "the two nearest" were
+//   the whole team and every armour lay while both waited on the quad). On (12 2on2 dm2 seeds: the
+//   mega lies 39 -> 28 s after it shows, the red armour 61 -> 52, the launcher 31 -> 25, the quad
+//   24 -> 30; the areas held up 3-8 points; deaths even; head to head +2.1).
+// - `holdra`: THE ARMOUR HELD WITH THE ARMOUR ON (M18r.md P1(c), the maintainer's rule): the holder
+//   of an armour's area stays by it while it lies there with its view on it, kills whoever comes,
+//   and takes it whenever the game lets him (his protection under what it gives). Judging (12
+//   2on2 seeds: contested 7 -> 15 %, deaths up, but held 45 -> 36 %, head to head -2.1: it hardly
+//   engages, few bots hold the armour's area in a 2on2; M18r.md P1(c)).
+// - `errandworth`: A DOOR'S ERRAND ONLY WHEN IT PAYS (M18r.md P1(c)): a shut door on the route is
+//   gone round to its button only when the button and back through the door beat the way round
+//   to the goal with the door shut; else the door is left off the routes a while and the goal
+//   gone round to. dm2's south red armour's west door opens off a button inside the armour's own
+//   room: reaching the button is reaching the armour, and the errand sent the bot over a bridge's
+//   button and a lava gap's jump to it, its 12 s out before it got there. The door is barred
+//   only while the goal it was weighed for is the goal (barred for every goal, the quad's only
+//   way shut and bots stood with no route). On (12 2on2 dm2 seeds: the errands run out 65 -> 23
+//   a match, button 4's 47 -> 4; the south armour's and mega's room contested 10 -> 26 % and 6
+//   -> 17 % (people 23); deaths a minute 1.46 -> 1.55 (people 2.9); the north armour held 34 ->
+//   47 %; but the south room held less and its mega lies 27 -> 60 s (people 8); head to head
+//   +1.8, red +0.1, blue +3.5).
+// - `nearwait`: A GOAL WAITED FOR LEAVES THE HANDS FREE (M18r.md P1): a short goal on the way is
+//   looked for while the goal is near too when the goal is not there (waited for): a bot on the
+//   red armour's spot waiting for it takes dm2's mega lying 96 units off (the decision log's
+//   `item_passed`: "its goal near" barred 30 % of the mega's passes). On (12 2on2 dm2 seeds: the
+//   south mega lies 60 -> 32 s after it shows (people 8), its area held 15 -> 25 % (58); the quad
+//   27 -> 20 s, the red armours' areas held 41 -> 44 % and contested 15 -> 17 % (67, 23); deaths
+//   even; head to head -1.1, red +7.4, blue -9.6: even).
+// - `rushdetour`: THE RUSH BY THE CLOCK (M18r.md P1(b)): a rusher waiting on the quad takes a
+//   red or yellow armour or a mega first when it is of use to him, he reaches it as it shows (or
+//   it is there) and he is on the quad before it is due from there, as a person plays the items
+//   by the clock (dm2: at the red armour's showings with a bot that timed it and could take it,
+//   the quad's rusher waiting on the quad was the commonest). Judging, in no preset: it runs
+//   rarely (21 detours to 248 waits in six matches: a red armour's round trip seldom fits the
+//   quad's window); 12 2on2 seeds, head to head +1.35 (red +4.0, blue -1.3), the south armour 56
+//   -> 52 s, the north 50 -> 82 s (noise at that rate).
+// - `spamshow`: ROCKETS WHERE ENEMIES SHOW UP (M18r.md P1(d), the maintainer's: "more proactive
+//   with shooting rockets at places where enemies often show up ... give away rocket launcher
+//   locations, triggering enemies to show up"): spam at news with no news: a launcher holder with
+//   rockets to spare, roaming, no one in sight, fires now and then at a show-up spot ahead of it
+//   (a way into its area, a teleporter's exit, a power's spawn, a key item's spot) in sight and
+//   in a rocket's range, no teammate near it (people's dm2: 11.6 rockets a minute loaded with no
+//   one in view, the bots 2.1; 68 % of people's blind ones burst at a key spot). The launcher is
+//   raised for the shot (`hide` had it down 64 % of the time carried) and `hide` waits
+//   kRaiseHold_s after. On (12 2on2 dm2 seeds: rockets at show-up spots 7 -> 60 a match; loaded
+//   with no one in view 2.1 -> 4.5 a minute (people 11.6); blind 8.5 -> 28 % of the rockets (23);
+//   blind ones 600+ long 8 -> 17 % (44); frags a minute 4.47 -> 4.62; deaths even; head to head
+//   +0.5, red -0.2, blue +1.2).
+// - `rlhunt`: THE LAUNCHER HOLDER OVERWHELMED (M18r.md P1(e), the maintainer's: "showing up with
+//   shotgun and armor, 2-3 people from different locations"): a fighter without the launcher,
+//   strong (armour on), with an enemy believed to carry one placed lately within reach and a mate
+//   near him too, goes for him; up close his rockets hurt him (people's launcher spells last 38 s
+//   from the spot, the bots' 47). Judging, in no preset: 12 2on2 dm2 seeds, 64 hunting thinks a
+//   match, head to head +0.35 (red -0.6, blue +1.3), spells 47 -> 46 s; 12 4on4 seeds, head to
+//   head -3.7 (red -8.0, blue +0.6) and the spells from the spot LONGER (29 -> 32 s). Going for
+//   him one by one is not overwhelming him: the 2-3 must arrive together (M18r.md P1(e)).
+//   Again with `rlknown` (the carrier known 55 % of the time, not 10): 258 hunting thinks a 4on4
+//   match, head to head +1.3 over 24 seeds (1-12 +5.8, 13-24 -3.2), spells from the spot 34 ->
+//   31 s but from a pack 19 -> 26: noise and mixed, still off.
+// - `rlgang`: THE LAUNCHER HOLDER OVERWHELMED TOGETHER (M18r.md P1(e)): a strong fighter with an
+//   enemy believed to carry the launcher placed lately in an area of the map plan calls the
+//   team's push on that area ("attack", mind.hpp): those strong enough gather outside it and go
+//   in together, as they take back a lost base. Judging, in no preset: 12 4on4 dm2 seeds, 2.75
+//   calls a match (the push often under way already), head to head -0.75 (red -6.0, blue +4.5):
+//   too rare to read. What held it off (se-team `team.rlgang.<gate>`): nobody believed to carry
+//   the launcher (bots knew a carrier 10 % of the time). With `rlknown` on both sides: 3.9 calls a
+//   match, head to head -4.9 (red -6.0, blue -3.8): it costs.
+// - `rlknown`: WHO CARRIES THE LAUNCHER, KNOWN AS A PERSON KNOWS IT (M18r.md P1(e)): an enemy heard
+//   firing the launcher, or named the killer in a rocket's line of the kill feed, is believed to
+//   carry it until the feed prints his death (at most kKeyKept_s), not only for the 10 s after the
+//   last sound of him; the item-first and chase choices read the same belief. ON: 12 4on4 dm2
+//   seeds, an enemy carrying a loaded launcher believed so 10 -> 55 % of the time and placed
+//   within 3 s 6 -> 16 % (false beliefs 0.3 -> 4.7 %); head to head +0.3 (red -3.0, blue +3.7);
+//   an enemy's launcher spell from the spot 29 -> 34 s, from a pack 23 -> 19, a carrier lost from
+//   sight followed 39 -> 42 %; deaths and fight speed even.
+// - `arrive`: A TIMED ITEM MET AS IT SHOWS (M18r.md P1(b)): a key item whose time back it knows to
+//   the second is scored as if it showed kArriveSpare_s sooner, so the bot leaves for it in time
+//   to be there when it shows (people take a showing red armour 3.6 s after it shows on dm2), not
+//   when its wait has fallen under the run and it arrives late. ON: 12 2on2 dm2 seeds, a showing
+//   mega lies 49 -> 22 s (people 8), the quad 32 -> 21 (1), the red armour 54 -> 47 (4), the
+//   launcher 26 -> 31 (2); head to head +1.6 in 2on2 (red -1.9, blue +5.1) and -3.2 in 4on4 (red
+//   -2.4, blue -4.0): within the sets' noise, the timing nearer people's.
+// - `shareclock`: THE TEAM SHARES THE ITEMS BY THE CLOCK (M18r.md P1(b)): a taker on its way to an
+//   armour or the launcher (`fetch`, `rlfetch`) does not take the quad's rush, and a mate who said
+//   he is going for another key item is not counted nearer the quad, so the rush falls to a mate
+//   with nothing on (in a 2on2 the rush took the armour's taker on 35 of 88 trips). Judging, in no
+//   preset: 12 2on2 dm2 seeds with `fetch`, head to head -3.8 (red -3.1, blue -4.4) and the quad
+//   lying 28 -> 73 s after it shows (both members on armours, nobody rushes); with `rlfetch` too
+//   -2.8. The taker's trips end in its death (36 of 76), not the rush, once the rush yields.
+// - `rushstrong`: THE QUAD TO THE STRONG (M18r.md P1, the fight at a showing): the quad's rush
+//   ranks a mate who said he carries the launcher with 60 protection or more (100 yellow armour)
+//   kRushStrongRun_s of run nearer than he is, and a strong rusher as far ahead of weak mates.
+//   People bring their strong to the quad (dm2: a strong player within 600 at 56 % of its showings,
+//   twice the 28 % of the time a player is strong; the bots' 19 %), and at a showing the strong win
+//   (the launcher's fights 90 %, the better armour's 92 %). A mate's "coming quad" counts ahead of
+//   a strong bot only past that edge, and a weak rusher's held rush yields to a strong mate's
+//   said one. ON: 12 2on2 dm2 seeds, rushes begun strong 17.6 -> 20.9 %, a strong player near at
+//   the quad's showing 19 -> 25 % (people 56), deaths there 0.55 -> 0.81 a showing (2.36), head to
+//   head +6.0 (red +9.6, blue +2.4); 12 4on4 seeds +2.6 (red +4.1, blue +1.0). Its cost: the south
+//   mega taken within 5 s 18 -> 8 of ~50 showings (its strong holder leaves the room to rush).
+// - `pokelook`: THE BUTTON'S VIEW AS THE BOT'S LOOK (M18r.md P2): a door's errand or a whim's
+//   button watched by the bot's own look, set before its step, so the step's hand is the one
+//   writer of the view, held 0.6 s out of sight, the shot only once the view is on it. Before, the
+//   poke set the view after the step, a second stroke on the same hand each command against the
+//   calm view's: standing under dm2's shot button the view swung 109 -> -166 degrees and back
+//   every 0.2-0.3 s (the poke's view reversed 1.54 times a second, a third of all). ON: 12 2on2
+//   dm2 seeds, the view's reversals 0.25 -> 0.15 a second (the trace), off the recordings 0.54 ->
+//   0.34 (people 0.12), sweeps 109 -> 99 a minute (62), lifts 13.9 -> 13.0 (6.6); the doors'
+//   errands as before; head to head 2on2 +0.3 (red +4.1, blue -3.6), 4on4 -3.0 (red -2.1, blue
+//   -3.8): within the noise, the hand nearer people's.
+// - `circuit`: A ROUND OF THE KEY ITEMS BY THE CLOCK (M18r.md P1, the free bots' rounds): a key
+//   item is scored with a share of the best key item it could have next from there, by the time
+//   to have this one, the run between them and the next one's time back, so the bot goes where two
+//   come due together, as people run their rounds (dm2: the red armour then the mega in its room
+//   582 of 4449 of people's next key pickups, the bots 40 of 411). Judging, in no preset.
+// - `unlocklook`: THE ITEM'S SHOT BUTTON AS THE BOT'S LOOK (M18r.md P2): the button that opens a
+//   goal item's door (`unlocking`) watched by the bot's own look, set before its step and held
+//   0.6 s out of sight, the shot only with the view on it (`pokelook`'s fix for the errands).
+//   Before, the view was set straight onto it after the step each command it was in sight, a
+//   second writer against the step's: the `button` writer reversed 3.3 times a second while it
+//   wrote (6 % of all the reversals on dm2). ON: 12 2on2 dm2 seeds, the view's reversals 0.378 ->
+//   0.336 a second (se-team `view40`), off the recordings 0.356 -> 0.325 (people 0.118); the north
+//   red armour's shot-button door opened 6.3 -> 8.5 a match; the pilot's stuck count 68 -> 75 (it
+//   stands while the hand turns onto the button); head to head 0.0 (red +0.5, blue -0.5).
+// - `swapground`: THE HOP'S AIM SWAP AT THE LANDING (M18r.md P2): the side the aim asks for is
+//   taken on the ground, not in the air, unless the aim lies `hop_swing` off; a wall's swap stays
+//   in the air. People swap the lean at the landing 66 % of the time, the bots 51 %, and a swap
+//   brings a reversal of the view 12 / 19 % (dm2, 25 ms frames). Judging.
+// - `wallplan`: THE SIDE CLEAR OF A WALL SET WITH THE JUMP (M18r.md P2): on the ground the hop's
+// arc
+//   is checked half a second ahead (a flight), so the side clear of a wall is jumped with and not
+//   flipped to in the air: 44 of the air view's 56 side swaps in a match were a wall's. ON: the hop
+//   course's expert lap 21.9 -> 21.2 s, speed 576 -> 593, walls 1.5 -> 1.2; 12 2on2 dm2 seeds,
+//   speed off the recordings 267.6 -> 271.1 (people 290.7), the hand and the air's swaps even
+//   (the swaps it was meant for did not fall), head to head +0.4 (red -0.2, blue +1.0).
+// - `startease`: A COPIED HOP START EASED IN FROM ITS OWN VIEW (M18r.md P2): the start's recorded
+// view
+//   offset to begin at the bot's view and eased to the recording's over 0.25 s, the proof flown on
+//   it. People's own starts reverse the view 0.115 times a second, the bots' 0.42 (se-recipes), and
+//   2.6 while a copied start writes the view (se-team `view40.recipe`): its entry view set at once
+//   snapped the view in and out of every start. ON: the hop course's expert lap
+//   21.2 -> 19.3 s, speed 593 -> 649, walls 1.2 -> 0.3; 12 2on2 dm2 seeds, speed off the recordings
+//   271 -> 273, wall bumps 4.4 -> 4.1 a minute, the starts' reversals 0.42 -> 0.40 (people 0.115:
+//   the snap is not all of it), head to head +1.9 (red +1.2, blue +2.5).
+// - `archeight`: THE HOP'S LOOK AHEAD FOLLOWS THE JUMP'S HEIGHT (M18r.md P2): `wallplan`'s arcs on
+//   the ground (a jump at 270 up) and in the air, and `startclear`'s first flight of a copied
+//   start, traced rising and falling under gravity from the feet (arc_clear's `gravity`), not flat
+//   a step up: a lintel, a beam or a stair's riser the jump's top meets is a wall. dm2's pit lintel
+//   (an origin above 64 barred over y -1456..-1400) took 22 of 34 copied starts' flights north
+//   there, the flat arc clear under it. Judging, in no preset.
 // - `runupkeys`, `underway`: judging, in no preset. The numbers: docs/goals/M18r.md.
 enum class Feature : uint8_t {
   calm,
@@ -689,9 +848,28 @@ enum class Feature : uint8_t {
   ledgerheal,
   ledgerobits,
   spawnkept,
+  rushsize,
+  holdra,
+  errandworth,
+  nearwait,
+  rushdetour,
+  spamshow,
+  rlhunt,
+  rlgang,
+  rlknown,
+  arrive,
+  shareclock,
+  rushstrong,
+  pokelook,
+  circuit,
+  unlocklook,
+  swapground,
+  wallplan,
+  startease,
+  archeight,
   trial,
 };
-constexpr size_t kFeatures = 171;
+constexpr size_t kFeatures = 190;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

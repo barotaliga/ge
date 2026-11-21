@@ -339,6 +339,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   }
   if (p.mode != PilotMode::hop) {
     p.gap_k = -1;
+    if (p.recipe >= 0) p.stats.recipe_cuts++;
     p.recipe = -1;  // a start under way belongs to a hop (planned again: off)
     p.safe_flight = false;
   } else if (!s.onground && p.safe_flight) {
@@ -486,7 +487,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
            hop_left <= speed * kLastJump_s)) {
         p.hop_end_why = at_end ? "end" : slow ? "slow" : "room";
         p.hop_end_at = at_end || !slow ? hop_stretch_end(p) : "";
-        restart(p, s);
+        restart(p, s, RecipeEnd::hop_end);
         p.mode = PilotMode::walk;
       } else if (off > p.set.lost && !(p.lip_pressed_s >= 0 && !s.onground)) {
         // (A lip's jump flies the crossing, off the route's line: planned again once down, not
@@ -572,11 +573,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // (`hoprhythm`) A swap in the air kept a moment before anything swaps it back.
       if (s.onground) p.hop_air_swapped = false;
       const bool held = p.hop_air_swapped && p.side_s < p.set.hop_air_keep_s;
+      // (`swapground`) the aim's swap waits for the landing, unless the aim is far off
+      const bool to_ground = p.set.hop_swap_ground && !s.onground && swing <= p.set.hop_swing;
       if (!p.set.hop_simple && p.set.hop_land) {
         hop_land_side(p, s, err, vh, speed, dt);
       } else if (!p.set.hop_simple &&
                  (p.strafe_side == 0 ||
-                  (want != 0 && want != p.strafe_side && !(held && !s.onground) &&
+                  (want != 0 && want != p.strafe_side && !(held && !s.onground) && !to_ground &&
                    (p.side_s >= p.set.hop_side_s || swing > p.set.hop_swing)))) {
         if (p.strafe_side != 0 && !s.onground) p.hop_air_swapped = true;
         if (p.strafe_side != 0) p.side_why = p.side_s >= p.set.hop_side_s ? "aim" : "swing";
@@ -593,16 +596,21 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // the side held and flown straight, when straight on is clearer than both).
       if ((!p.set.hop_simple || p.set.hop_open) && s.world != nullptr &&
           (!s.onground || p.set.hop_wall_ground)) {
-        const float mine =
-            arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, p.set.hop_see_s);
+        // (`wallplan`) a flight ahead on the ground: the side set with the jump
+        const float see =
+            s.onground && p.set.hop_see_ground_s > 0 ? p.set.hop_see_ground_s : p.set.hop_see_s;
+        // (`archeight`) the arcs rise and fall: on the ground as the jump's (270 up), in the air
+        // from the climb it has
+        const float fall = p.set.arc_height && p.g != nullptr ? p.g->move.gravity : 0;
+        Vec3f av = s.velocity;
+        if (fall > 0 && s.onground) av.z = kHopJumpSpeed;
+        const float mine = arc_clear(*s.world, s.origin, av, p.strafe_side, dt, see, fall);
         p.arc_mine = mine;  // (recorded: a trace's `arcm`, `arco`)
-        if (mine < p.set.hop_see_s) {
-          const float other =
-              arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, p.set.hop_see_s);
+        if (mine < see) {
+          const float other = arc_clear(*s.world, s.origin, av, -p.strafe_side, dt, see, fall);
           p.arc_other = other;
           const float straight =
-              p.set.hop_straight ? arc_clear(*s.world, s.origin, s.velocity, 0, dt, p.set.hop_see_s)
-                                 : 0;
+              p.set.hop_straight ? arc_clear(*s.world, s.origin, av, 0, dt, see, fall) : 0;
           if (straight > (mine > other ? mine : other)) {
             // Straight on is the clearest: the side held, the view set where the side key's wish
             // adds nothing across (bot.cpp's lead, `-asin(30 / v)` into the turn).
@@ -610,7 +618,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
             p.hop_lead =
                 -static_cast<float>(core::libm::asin(static_cast<double>(30 / v))) / kDegToRad;
             p.hop_lead_on = true;
-          } else if (other > mine && !(held && other < p.set.hop_see_s)) {
+          } else if (other > mine && !(held && other < see)) {
             p.hop_air_swapped = !s.onground;
             p.strafe_side = static_cast<int8_t>(-p.strafe_side);
             p.side_s = 0;
