@@ -461,7 +461,7 @@ TEST(an_item_and_a_body_on_the_plat_ride_it_up) {
 TEST(a_box_caught_inside_another_walks_out_of_it) {
   const sh::Vec3f mins{-16, -16, -24}, maxs{16, 16, 32};
   const sh::Vec3f lo{-723, 217, -48}, hi{-691, 249, 8};  // a soldier's box
-  const sh::Vec3f in{-738.875f, 230, -24};                // an eighth of a unit into it
+  const sh::Vec3f in{-738.875f, 230, -24};               // an eighth of a unit into it
   sh::Vec3f n;
   CHECK(sv::sweep_box(in, in + sh::Vec3f{-8, 0, 0}, mins, maxs, lo, hi, n) < 0);  // away: free
   CHECK(sv::sweep_box(in, in + sh::Vec3f{0, 8, 0}, mins, maxs, lo, hi, n) == 0);  // along: held
