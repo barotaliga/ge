@@ -243,6 +243,7 @@ bool recipe_play(Pilot& p, const PilotSense& s, float dt, RecipeWant& w) {
     // Ran out on the ground: its jump asked, the last frame held a few commands while the jump
     // key lands; never asked (or long past), the hop's from here.
     if (!p.recipe_jumped || p.recipe_s > f.back().t + kRecipeHold_s) {
+      p.stats.recipe_ranouts++;
       p.recipe = -1;
       return false;
     }

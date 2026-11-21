@@ -251,6 +251,8 @@ struct TeamPlayer {
   int64_t circles = 0;                    // hops started by a circle jump
   double circle_speed = 0;                // and their takeoff speeds, summed
   int32_t recipe_asks = 0, recipe_commits = 0, recipe_aborts = 0, recipe_takeoffs = 0;
+  int32_t recipe_cuts = 0, recipe_ranouts = 0;  // ended by a hop left, run out on the ground
+  std::array<int32_t, 7> recipe_ends{};         // and by the pilot's restart (sh::RecipeEnd)
   double recipe_speed = 0;  // people's hop starts played (`recipes`): their takeoffs' speeds
   // Goals chained on past a pickup (`chains`): asked by the fighter, planned by the pilot, the
   // pickups run through and run past, and the speed through them, summed.

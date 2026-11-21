@@ -76,6 +76,8 @@ MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
     if (p.mode == PilotMode::arrived) b.arrivals++;
     for (int32_t& d : p.barred) d = -1;
     p.cut = p.failed;
+    if (p.recipe >= 0) p.stats.recipe_ends[static_cast<size_t>(RecipeEnd::goal)]++;
+    p.recipe = -1;
     for (size_t tries = 0; tries < b.goals.size(); tries++) {
       const int32_t goal = b.goals[b.next_goal];
       b.next_goal = (b.next_goal + 1) % b.goals.size();

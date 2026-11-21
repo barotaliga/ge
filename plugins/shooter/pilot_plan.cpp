@@ -41,7 +41,8 @@ bool landed_out(const Pilot& p, const PilotSense& s) {
          s.origin.z < ledge.z + kEscapeLanded;
 }
 
-void restart(Pilot& p, const PilotSense& s) {
+void restart(Pilot& p, const PilotSense& s, RecipeEnd why) {
+  if (p.recipe >= 0) p.stats.recipe_ends[static_cast<size_t>(why)]++;
   p.recipe = -1;
   p.best = 1e30f;
   p.best_s = static_cast<float>(p.stats.time_s);
@@ -53,7 +54,7 @@ void restart(Pilot& p, const PilotSense& s) {
 
 void advance(Pilot& p, const PilotSense& s) {
   p.k++;
-  restart(p, s);
+  restart(p, s, RecipeEnd::advance);
   if (p.mode == PilotMode::wait || p.mode == PilotMode::ride || p.mode == PilotMode::air ||
       p.mode == PilotMode::jump || p.mode == PilotMode::run_up || p.mode == PilotMode::swim ||
       p.mode == PilotMode::grenade)
@@ -61,6 +62,8 @@ void advance(Pilot& p, const PilotSense& s) {
 }
 
 bool replan(Pilot& p, const PilotSense& s) {
+  if (p.recipe >= 0) p.stats.recipe_ends[static_cast<size_t>(RecipeEnd::replan)]++;
+  p.recipe = -1;
   const int32_t goal = p.goal;
   const PilotStats keep = p.stats;
   // A chain's pickup still ahead is planned through again.
@@ -204,7 +207,7 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
   p.strafe_end_node = -1;
   p.strafe_side = 0;
   p.stats.plans++;
-  restart(p, s);
+  restart(p, s, RecipeEnd::plan);
   p.via_k = -1;
   p.route = plan_way(p, plan_from(p, s), goal).nodes;
   if (p.set.gap_near && !p.route.empty()) {
@@ -278,7 +281,7 @@ bool pilot_retarget(Pilot& p, int32_t goal, const PilotSense& s) {
       if (s.onground) {
         p.hop_end_why = "restretch";
         p.hop_end_at = "";
-        restart(p, s);
+        restart(p, s, RecipeEnd::retarget);
         p.mode = PilotMode::walk;
       } else {
         p.strafe_end_node = static_cast<int32_t>(p.k) + 1;  // landed, it walks on from there

@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <string_view>
 
 #include "core/num_text.hpp"
@@ -143,8 +144,9 @@ void watch_view(Watch& w, int k, double t, float yaw, const char* by, float vx, 
   v = {t, yaw, rate};
   // se-people's rule: a 40 Hz read (kHandEvery), the rate over the read's step.
   Watch::View& u = w.view40[static_cast<size_t>(k)];
+  const char* by40 = by != nullptr ? by : "-";
   if (u.t < 0 || t - u.t > 0.1) {
-    u = {t, yaw, 0};
+    u = {t, yaw, 0, by40, by40};
     return;
   }
   if (t - u.t < 0.025) return;
@@ -152,9 +154,14 @@ void watch_view(Watch& w, int k, double t, float yaw, const char* by, float vx, 
   while (d40 > 180) d40 -= 360;
   while (d40 < -180) d40 += 360;
   const auto rate40 = static_cast<float>(-d40 / (t - u.t));
-  auto& wr40 = w.writers40[by != nullptr ? by : "-"];
+  auto& wr40 = w.writers40[by40];
   wr40.first += t - u.t;
-  if (std::fabs(rate40) > 60 && std::fabs(u.rate) > 60 && rate40 * u.rate < 0) wr40.second++;
+  if (std::fabs(rate40) > 60 && std::fabs(u.rate) > 60 && rate40 * u.rate < 0) {
+    wr40.second++;
+    const char* from = u.by2 != nullptr ? u.by2 : by40;
+    if (std::strcmp(from, by40) != 0 || std::strcmp(u.by != nullptr ? u.by : by40, by40) != 0)
+      w.seams40[{from, by40}]++;
+  }
   // The hop's swap (swap_read.hpp's rule): the ring's middle read the crossing.
   Watch::SwapRing& sr = w.swap40[static_cast<size_t>(k)];
   if (std::sqrt(vx * vx + vy * vy) <= 340) {
@@ -175,7 +182,7 @@ void watch_view(Watch& w, int k, double t, float yaw, const char* by, float vx, 
         std::fabs(sr.lean[6]) > 5 && sr.lean[0] * sr.lean[6] < 0)
       w.swaps40[sr.by[3] != nullptr ? sr.by[3] : "-"]++;
   }
-  u = {t, yaw, rate40};
+  u = {t, yaw, rate40, by40, u.by};
 }
 
 void facing_metrics(gl::Lab& lab, const Watch& w) {
@@ -324,6 +331,39 @@ void still_view_metrics(gl::Lab& lab, const Watch& w) {
                tr.first > 0 ? static_cast<double>(tr.second) / tr.first : 0, "per-s");
   }
   lab.metric("team.view40.reversals-per-s", t40 > 0 ? static_cast<double>(r40) / t40 : 0, "per-s");
+  {
+    // The reversals at a seam (the writer changed across the reads): a hand-over's, by pair.
+    int64_t seam = 0;
+    std::map<std::string, int64_t> into;
+    std::vector<std::pair<int64_t, std::string>> pairs;
+    for (const auto& [ft, c] : w.seams40) {
+      seam += c;
+      into[ft.second] += c;
+      pairs.push_back({c, ft.first + ">" + ft.second});
+    }
+    lab.metric("team.view40.seam-share",
+               r40 > 0 ? static_cast<double>(seam) / static_cast<double>(r40) : 0, "share");
+    for (const auto& [wb, wt] : w.writers40)
+      lab.metric("team.view40." + wb + ".seam-share",
+                 wt.second > 0 ? static_cast<double>(into[wb]) / static_cast<double>(wt.second) : 0,
+                 "share");
+    std::sort(pairs.begin(), pairs.end(), [](const auto& pa, const auto& pb) {
+      return pa.first != pb.first ? pa.first > pb.first : pa.second < pb.second;
+    });
+    gl::LabTable seams{
+        "the view's reversals at a seam (the writer changed across the 25 ms reads), "
+        "by the writer before > after",
+        {"seam", "reversals", "% of all", "a second of live time"},
+        {}};
+    for (size_t i = 0; i < pairs.size() && i < 12; i++)
+      seams.rows.push_back(
+          {pairs[i].second, std::to_string(pairs[i].first),
+           to_fixed(
+               r40 > 0 ? 100.0 * static_cast<double>(pairs[i].first) / static_cast<double>(r40) : 0,
+               1),
+           to_fixed(t40 > 0 ? static_cast<double>(pairs[i].first) / t40 : 0, 3)});
+    lab.table(seams);
+  }
   int64_t swaps = 0;
   for (const auto& [who, c] : w.swaps40) swaps += c;
   lab.metric("team.swap.per-s", w.hop40 > 0 ? static_cast<double>(swaps) / w.hop40 : 0, "per-s");

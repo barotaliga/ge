@@ -149,7 +149,8 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
 
 // THE PLAN MADE, RESTARTED AND ADVANCED (pilot_plan.cpp).
 bool landed_out(const Pilot& p, const PilotSense& s);
-void restart(Pilot& p, const PilotSense& s);
+// `why` counts a copied hop start under way that it ends (PilotStats::recipe_ends).
+void restart(Pilot& p, const PilotSense& s, RecipeEnd why = RecipeEnd::other);
 void advance(Pilot& p, const PilotSense& s);
 bool replan(Pilot& p, const PilotSense& s);
 
