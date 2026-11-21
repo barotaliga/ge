@@ -87,7 +87,9 @@ struct Placed {
   // Quake II's look (q2_look.hpp): its light pulsing (an item's glow) and a coloured shell
   // over it (quad damage, invulnerability, a power shield's hit), `shell_rgb` its flat colour.
   bool pulse = false, shell = false;
-  bool bleeds = false;  // a body's piece by its bits (Quake II's gib bit), not its model file
+  bool bleeds = false;      // a body's piece by its bits (Quake II's gib bit), not its model file
+  bool flies = false;       // Quake II's corpse with flies round it (its flies bit)
+  bool shell_only = false;  // its shell alone, no plain draw under it (a power screen's plate)
   // A Quake II brush model's animation bits (its effects' ANIM01, ANIM23, ANIM_ALL, ANIM_ALLFAST;
   // q2_look.hpp's q2_texture_frame); -1 elsewhere, its textures on the map's clock.
   int q2_anim = -1;
@@ -133,6 +135,7 @@ inline constexpr int kGlow = 8, kGlowBlue = 64, kGlowRed = 128;
 
 // A carried model's entity number: its holder's plus this, so its last pose is its own.
 inline constexpr int kCarriedEntity = 1 << 20;
+inline constexpr int kPlateEntity = 1 << 21;  // a power screen's plate: its bearer + this
 
 // Every entity to draw this frame (not the local player); a carried model right after its holder.
 void place_models(const Listen& l, std::vector<Placed>& out);

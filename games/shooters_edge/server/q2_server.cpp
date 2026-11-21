@@ -871,6 +871,14 @@ void fill_rows(Q2Server& s) {
         e.effects |= kSqColourShellEffect;
         e.render_fx |= kSqGodShellRender;
       }
+      if (s.level_time < p.power_flash) {  // power armour that took a blow: its plate or shell
+        if (p.body.counts[sq_item("item_power_shield")] > 0) {
+          e.effects |= kSqColourShellEffect;
+          e.render_fx |= kSqShieldShellRender;
+        } else {
+          e.effects |= kSqPowerScreenEffect;
+        }
+      }
     }
   }
   // The frame's sounds by the names the players were told (`sv_wear`).
@@ -1099,6 +1107,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   monster_precache(s);
   campaign_start(s);
   fight_clear(s);
+  s.models.emplace_back(kSqPowerScreenModel);  // the plate a power screen shows when struck
   s.models.push_back(kQ2PlayerModel);
   drop_items(s);
   s.frame_number = 0;

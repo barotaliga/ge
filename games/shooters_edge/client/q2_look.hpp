@@ -14,6 +14,9 @@
 //   room's light, at 0.3. The copy under it is drawn plain: no glow, no see-through.
 // - TRAILS: a rocket's smoke and fire, a grenade's smoke, a blaster's and a hyperblaster's
 //   bolt, the BFG's ball (`Q2Look::missile`).
+// - FLIES round a corpse (the flies bit); a POWER SCREEN's plate (the screen bit, while it takes
+//   a blow): its own model (`kSqPowerScreenModel`, frame 0) at the bearer's place and angles,
+//   drawn as a green shell alone.
 //
 // ge:summary Quake II's effect and render bits read into what the picture draws
 // ge:keywords q2 render-fx effects shell quad invulnerability translucent glow pulse rotate
@@ -30,13 +33,15 @@ namespace shooters_edge::client {
 // The effect bits (the entity's `effects`) this client reads.
 inline constexpr uint32_t kSqRotate = 1u, kSqGib = 2u, kSqBlaster = 8u, kSqRocket = 16u,
                           kSqGrenade = 32u, kSqHyperblaster = 64u, kSqBfg = 128u,
-                          kSqColourShell = 256u, kSqQuad = 32768u, kSqInvulnerable = 65536u,
-                          kSqDoubleDamage = 1u << 27, kSqHalfDamage = 1u << 30;
+                          kSqColourShell = 256u, kSqPowerScreen = 512u, kSqFlies = 16384u,
+                          kSqQuad = 32768u, kSqInvulnerable = 65536u, kSqDoubleDamage = 1u << 27,
+                          kSqHalfDamage = 1u << 30;
 // The render bits (the entity's `renderfx`).
 inline constexpr uint32_t kRfTranslucent = 32u, kRfBeam = 128u, kRfGlow = 512u, kRfShellRed = 1024u,
                           kRfShellGreen = 2048u, kRfShellBlue = 4096u, kRfShellDouble = 65536u,
                           kRfShellHalf = 131072u;
 
+inline constexpr const char* kSqPowerScreenModel = "models/items/armor/effect/tris.md2";
 inline constexpr float kSqShellPushUnits = 4;  // a shell's points out along their normals
 inline constexpr float kSqShellAlpha = 0.3f;
 
@@ -46,6 +51,8 @@ struct Q2Look {
   bool pulse = false;              // its light pulses (`q2_pulse`)
   bool shell = false;              // a shell copy over it
   bool bleeds = false;             // a body's piece: a blood trail behind it (the gib bit)
+  bool flies = false;              // a corpse: flies swarm round it (effects::q2_flies)
+  bool power_screen = false;       // a power screen's plate before it, a green shell (it was hit)
   float shell_rgb[3] = {0, 0, 0};  // the shell's flat colour, 0..1
   // Its trail and light: a rocket (smoke and fire), a grenade (smoke), a bolt (a blaster's or a
   // hyperblaster's), the BFG's ball; none: a plain entity.

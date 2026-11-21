@@ -1836,7 +1836,8 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
     const int saved = std::min(damage / 3, m.screen);
     m.screen -= saved;
     damage -= saved;
-    if (saved > 0) fight_effect(s, "te_screen_sparks", ent.origin + dir * -16.0f);
+    if (saved > 0)
+      m.screen_flash = fight_power_hit(s, ent.origin + dir * -16.0f, dir * -1.0f, false);
     if (damage <= 0) return true;
   }
   ent.health -= damage;

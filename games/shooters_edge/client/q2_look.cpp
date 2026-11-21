@@ -50,6 +50,8 @@ int q2_texture_frame(uint32_t effects, int frame, double t) {
 Q2Look q2_look(uint32_t effects, uint32_t render_fx) {
   Q2Look look;
   look.bleeds = (effects & kSqGib) != 0;
+  look.flies = (effects & kSqFlies) != 0;
+  look.power_screen = (effects & kSqPowerScreen) != 0;
   // The powers the client turns into shells.
   uint32_t rf = render_fx;
   if ((effects & kSqQuad) != 0) rf |= kRfShellBlue;

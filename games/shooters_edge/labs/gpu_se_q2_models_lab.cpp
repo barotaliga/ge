@@ -22,6 +22,7 @@
 // ge:keywords poses pose-strip turning-items animation-frames looks player-looks
 // ge:keywords respawn-hologram ce_respawns item-respawn
 // ge:skill morph shooter labs
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <string>
@@ -323,6 +324,7 @@ void run(gl::Lab& lab) {
     return;
   }
   shooters_edge::look::Picture look;
+  look.power_shells = look.item_pulse = true;  // Quake II's own look: its shells and glow on
   const cl::ModelLoad load{names, {}, {}};
   cl::WorldDrawPtr frame =
       cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, {},
@@ -614,11 +616,15 @@ void run(gl::Lab& lab) {
         const char* word;
         uint32_t effects, render;
       };
-      const Power powers[] = {{"none", 0, 0},
-                              {"quad damage", cl::kSqQuad, 0},
-                              {"invulnerability", cl::kSqInvulnerable, 0},
-                              {"both", cl::kSqQuad | cl::kSqInvulnerable, 0},
-                              {"a power shield's hit", cl::kSqColourShell, cl::kRfShellGreen}};
+      const Power powers[] = {
+          {"none", 0, 0},
+          {"quad damage", cl::kSqQuad, 0},
+          {"invulnerability", cl::kSqInvulnerable, 0},
+          {"both", cl::kSqQuad | cl::kSqInvulnerable, 0},
+          {"a power shield's hit", cl::kSqColourShell, cl::kRfShellGreen},
+          {"god mode", cl::kSqColourShell, cl::kRfShellRed | cl::kRfShellGreen | cl::kRfShellBlue},
+          {"a power screen's hit", cl::kSqPowerScreen, 0}};
+      const auto plate = std::find(names.begin(), names.end(), cl::kSqPowerScreenModel);
       std::vector<ge::gpu::Image> tiles;
       std::string words;
       for (const Power& pw : powers) {
@@ -626,8 +632,20 @@ void run(gl::Lab& lab) {
         me.shell = lk.shell;
         for (int c = 0; c < 3; c++) me.shell_rgb[c] = lk.shell_rgb[c];
         push_me();
+        const bool screen = lk.power_screen && plate != names.end();
+        if (screen) {  // its plate before him: a green shell alone (world_models.cpp)
+          cl::Placed pl = me;
+          pl.entity = me.entity + cl::kPlateEntity;
+          pl.modelindex = int(plate - names.begin());
+          pl.frame = pl.carried = 0;
+          pl.shell = pl.shell_only = true;
+          pl.shell_rgb[0] = pl.shell_rgb[2] = 0;
+          pl.shell_rgb[1] = 1;
+          fx.models.push_back(pl);
+        }
         cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
         tiles.push_back(ge::gpu::read_now(*device, out));
+        if (screen) fx.models.pop_back();
         pop_me();
         words.append(words.empty() ? "" : ", ").append(pw.word);
       }
@@ -636,8 +654,8 @@ void run(gl::Lab& lab) {
                 "THE PLAYER'S SHELLS",
                 "The player as another sees him under each power, left to right: " + words +
                     ". A shell is the model pushed 4 units out, one flat colour, see-through.",
-                "none bare; then blue, red, magenta and green shells over the figure and its gun, "
-                "the same colour lit or in shadow",
+                "none bare; then blue, red, magenta, green and white shells over the figure and "
+                "its gun, the same colour lit or in shadow; last a green plate before him",
                 {{"map", map_name}, {"look", "classic"}, {"size", lab.arg("size")}}},
                strip(tiles), gl::Det::measured);
       shots++;
