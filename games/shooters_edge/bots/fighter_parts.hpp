@@ -1,11 +1,13 @@
 // THE FIGHTER IN PARTS (fighter.hpp): what fighter.cpp shares with the files it is split over,
 // each defined in its own: what an item is worth and which one is gone for (fighter_items.cpp), and
-// the bridges and doors that change the way (fighter_doors.cpp). The fighter's own parts
+// the bridges and doors that change the way (fighter_doors.cpp), and the goal handed to the pilot
+// (fighter_goto.cpp). The fighter's own parts
 // (`fighter_parts`): only those and fighter.cpp include this.
 //
 // ge:summary The fighter in parts: item worth and choice, the bridges and doors on the way
 // ge:keywords fighter fighter-parts protection strength item_value door_shut best_item
 // ge:keywords chain_after on_the_way pack_near watch_bridges locked_errands door_errand
+// ge:keywords go_to go_item item_passed
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_fight_test.cpp
 #pragma once
@@ -40,6 +42,18 @@ const char* on_the_way_bar(const Fighter& f, const ge::shooterbots::BotView& s, 
                            sh::Vec3f me, sh::Vec3f velocity, double t, int32_t i);
 int32_t pack_near(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
                   sh::Vec3f me, float reach);
+
+// THE GOAL HANDED TO THE PILOT (fighter_goto.cpp).
+// Goes to node `node`; with `then` (a node, `chains`) on through it (the point `at`) to `then`.
+void go_to(Fighter& f, int32_t node, int32_t then = -1, sh::Vec3f at = {});
+// Goes for item `i`: through its button first while its door is shut. With `then` (an item,
+// `chains`) and `i` there to take, on through it to `then` without a stop.
+void go_item(Fighter& f, const ge::shooterbots::BotView& s, int32_t i, int32_t then = -1);
+// THE KEY ITEMS PASSED (the decision log's `item_passed`): each key item within kOnTheWay that is
+// not the short goal taken (`near`), and why: not known there, not looked for (`unasked`) or the
+// first thing that bars it (on_the_way_bar).
+void item_passed(Fighter& f, const ge::shooterbots::BotView& s, const Stats& st, sh::Vec3f me,
+                 sh::Vec3f velocity, double t, int32_t near, const char* unasked, ge::ai::Why* why);
 
 // THE BRIDGES AND DOORS ON THE WAY (fighter_doors.cpp).
 void watch_bridges(Fighter& f, const ge::shooterbots::BotView& s, int me);

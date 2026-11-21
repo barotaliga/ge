@@ -183,6 +183,22 @@ NavExtraLink gap_too_near(const Pilot& p, const PilotSense& s, std::span<const i
 
 }  // namespace
 
+// (`airplan`) The flight's speed from which a plan in the air is made from ahead, units/s, and how
+// far ahead, s.
+constexpr float kAirPlanSpeed = 300;
+constexpr float kAirPlanAhead_s = 0.3f;
+
+// The node nearest where a flight will be `kAirPlanAhead_s` on (its run along the ground, cut
+// short at a wall): the plan's start for a hop in the air.
+static int32_t plan_ahead(const Pilot& p, const PilotSense& s) {
+  const Vec3f to{s.origin.x + s.velocity.x * kAirPlanAhead_s,
+                 s.origin.y + s.velocity.y * kAirPlanAhead_s, s.origin.z};
+  const HullTrace tr = player_trace(*s.world, s.origin, to);
+  if (tr.startsolid) return plan_from(p, s);
+  const int32_t from = nav_nearest(*p.g, tr.endpos);
+  return from >= 0 ? from : plan_from(p, s);
+}
+
 NavRoute pilot_way(Pilot& p, int32_t from, int32_t goal) { return plan_way(p, from, goal); }
 
 bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
@@ -205,13 +221,17 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
     if (p.airborne && p.escape_on >= 0 && s.onground && landed_out(p, s)) p.stats.escapes_out++;
     p.escape_on = -1;
   }
+  // (`airplan`) A hop in the air planned from ahead, flown on to the landing.
+  const float speed = across({}, s.velocity);
+  const bool fly_on = p.set.hop_air_plan && p.mode == PilotMode::hop && !s.onground &&
+                      !p.gap_flight && s.world != nullptr && speed >= kAirPlanSpeed;
   p.k = 0;
   p.strafe_end_node = -1;
   p.strafe_side = 0;
   p.stats.plans++;
   restart(p, s, RecipeEnd::plan);
   p.via_k = -1;
-  p.route = plan_way(p, plan_from(p, s), goal).nodes;
+  p.route = plan_way(p, fly_on ? plan_ahead(p, s) : plan_from(p, s), goal).nodes;
   if (p.set.gap_near && !p.route.empty()) {
     p.near_cut = gap_too_near(p, s, p.route);
     if (p.near_cut.from >= 0) {
@@ -231,6 +251,14 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
     p.hop_end_why = "plan";
     p.hop_out = false;
     p.hop_end_at = "";
+  }
+  if (fly_on && p.route.size() >= 2) {
+    p.mode = PilotMode::hop;  // its air to the landing, aimed along the new route
+    p.hop_out = true;
+    p.strafe_end_node = 0;
+    p.gap_k = -1;
+    p.best = 1e30f;
+    return true;
   }
   p.mode = p.route.size() == 1 ? PilotMode::arrived : PilotMode::walk;
   return true;
