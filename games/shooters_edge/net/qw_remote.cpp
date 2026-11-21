@@ -372,6 +372,16 @@ std::string coming(const std::string& name, int percent, size_t bytes, double& p
 
 }  // namespace
 
+const ge::hud::NetHistory* remote_net(const Remote& r) {
+  if (!r.active || r.watch) return nullptr;
+  return r.q2 ? &r.q2->net : &r.end.net;
+}
+
+int remote_unanswered(const Remote& r) {
+  if (!r.active || r.watch || !r.q2 || r.q2->stage != ClientStage::active) return 0;
+  return static_cast<int>(r.q2->ch.outgoing_sequence - 1 - r.q2->ch.incoming_acknowledged);
+}
+
 std::string remote_foot(const Remote& r, double& progress) {
   progress = -1;
   if (!r.active || r.watch) return {};

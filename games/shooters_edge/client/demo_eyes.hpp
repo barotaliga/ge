@@ -69,10 +69,11 @@ struct DemoEyes {
   double feet_time = -1;  // its time, s
   sh::Vec3f velocity{};   // estimated from the frames read, units/s
   bool was_grounded = true;
-  float fall_speed = 0;            // the last look's vertical speed, units/s
-  int64_t kicks_seen = 0;          // of DemoState::kicks_taken
-  float kick = 0, kick_to = 0;     // the gun kick and where it ramps to, units (negative: back)
-  const bool* gun_kick = nullptr;  // v_gunkick: the kick drawn when on (kept across a cut)
+  float fall_speed = 0;             // the last look's vertical speed, units/s
+  int64_t kicks_seen = 0;           // of DemoState::kicks_taken
+  float kick = 0, kick_to = 0;      // the gun kick and where it ramps to, units (negative: back)
+  const bool* gun_kick = nullptr;   // v_gunkick: the kick drawn when on (kept across a cut)
+  const bool* view_kick = nullptr;  // Quake II's cl_kickangles: the server's kick angles drawn
   float behind = 0;       // cam_thirdperson's distance behind the player, units (0: his own eyes)
   bool lock_pos = false;  // cam_lockpos: the third-person camera stays, turned to the player
   bool locked = false;    // `locked_at` holds where it stays
