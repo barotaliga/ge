@@ -236,9 +236,9 @@ void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext, int* event 
   }
   if ((bits & kSolid) != 0) {
     if (ext > 0)
-      m.i32();
+      m.i32();  // the extension's wider box, not read: no box predicted against
     else
-      m.i16();
+      e.solid = m.i16() & 0xffff;
   }
   if (ext == 0) return;
   if ((bits & (kMoreFxLow | kMoreFxHigh)) != 0) sized64(m, bits, kMoreFxLow, kMoreFxHigh);

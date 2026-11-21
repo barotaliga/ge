@@ -123,6 +123,9 @@ struct DemoEntity {
   // Quake II's loop the entity carries: the sound list's index (0 none), and the extended
   // protocol's loop volume and attenuation bytes when sent (-1: the stock loop's).
   int loop = 0, loop_volume = -1, loop_attenuation = -1;
+  // Quake II's packed box a move collides with: its half width, depth and height over 32, in
+  // eighths of a unit's 8 (5, 5 and 6 bits); 31 a brush model; 0 not solid.
+  int solid = 0;
   bool present = false;  // updated this frame (single) or in the last entity list (client)
   bool dead = false, gib = false;  // a multiview player's state this frame (its dead and gib bits)
   // Client: a player's visible weapon, an index into DemoState::vweps (0 none): his command's

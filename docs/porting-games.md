@@ -310,6 +310,36 @@ server will send to a client that did not agree (Quake II's server never sends a
 archive to such a client). Quake (`net/qw_signon.cpp`, `net/qw_client.cpp`)
 and Quake II (`net/q2_net_server.cpp`, `net/q2_client.cpp`) are the two examples.
 
+## Port from a ledger, never audit after
+
+Quake and Quake II were each ported system by system and then audited for gaps, again and again,
+and every audit found dozens more: a reader answers what it is asked, so a comparison system by
+system finds only what its questions name. Both games ended by writing a **ledger**: one line for
+every thing the reference has (each command, setting with its default, entity, item, monster,
+message word for word, menu row, protocol message, flag, layout word), each marked `done`,
+`partial`, `missing` or `not-taken` against our tree, committed in `porting/` and worked down one
+big PR at a time by its missing count. The next game starts there: **the ledger is written before
+the first line of the port, and the port is built from its rows** (`port-from-ledger` skill).
+
+What the two ledgers taught:
+
+- **Pin the reference first, by repository and commit, with the owner.** One ledger pass was
+  read from a mod's fork of the chosen reference: a twentieth of its rows were the fork's own, and
+  its muzzle flashes were the mod's. The ledger's header names the repository and the commit.
+- **Write the whole ledger before any fill.** Rolling audits move the target; a complete list only
+  goes down, and its count is the progress report.
+- **Enumerate from the source's own tables**, not from the game as remembered: the command table,
+  the setting registrations with their defaults, the spawn table, the item list, every print.
+- **One reader per half** (the rules, the server, the client), each **saving its file table by
+  table**, so a reader stopped by a usage limit or a timeout loses nothing.
+- **A status found by a name is a guess.** A setting of the same name may mean another thing here
+  (§ One name, one meaning); a row is `done` when a test or a lab holds it as a player sees it.
+- **Know what a check checks.** A lab that puts players on each key and exit tests co-op's
+  plumbing, not that anyone can get through a map; a bot's playthrough is another lab. Say which
+  one a result comes from.
+- **A program the reference's release lacks** (Quake's single-player rules ship only as the pack's
+  compiled program) is run unchanged and its rows are held by playing it, not by reading it.
+
 ## Lessons from Quake II
 
 Each is a lesson in `.agents/skills/<skill>/.lessons/` (`make lessons ARGS="shooter"`); read
@@ -381,6 +411,9 @@ the skill's lessons before the first edit.
 
 ## Working rules
 
+- **The ledger first**: a port builds the rows of the game's ledger, and a game without one gets
+  one before its first line of code (`port-from-ledger` skill); an occasional audit corrects the
+  ledger itself (`gap-analysis` skill), never a fresh comparison system by system.
 - **The previous game is the template**: the next game's file sits beside Quake II's and has
   the same shape (§ the checklist above).
 - **Look first at how the earlier games solved it.** Before building any piece (downloads, demos,

@@ -265,6 +265,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
               bt::mind_obituary(sp->fighter, c->prints[sp->heard], w.sv.time);
             bt::packs_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
             bt::ledger_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
+            bt::key_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
           }
           bt::packs_truth(sp->fighter, s);  // the lab's score of its guesses, off the server
           // Its shots led on the network's round trip, as on any server across one (bot.hpp).
@@ -547,19 +548,56 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         }
         // (6f) its own weapon up and its press's stretch then (1 on at him, -1 back, 0 none).
         const bt::Fighter& df = seat.fighter;
-        char b[1500];
+        // (P1(e)) its role then, and its push (one it still believes in, its role pushing or not
+        // when hurt below the join): the kind (rl: on a launcher's holder) and phase
+        char push[64] = "-";
+        if (df.mind.push_item >= 0) {  // in a push it still believes in, whatever its role now
+          const bt::Mind& dm = df.mind;
+          const int kind = dm.push_gang ? 1 : 0, in = dm.push_go_t > 0 ? 1 : 0;
+          const int phase = df.role != bt::Role::push ? 2 : in;
+          p.push_deaths[kind][phase]++;
+          std::snprintf(push, sizeof push, "%s%s %.1f", kind ? "rl " : "",
+                        phase == 2 ? "lapsed"
+                        : in       ? "in"
+                                   : "gather",
+                        s.sv.time - (in ? dm.push_go_t : dm.push_t));
+        }
+        // its fight's mode, its item goal, and the item it was its team's taker for (`fetch`,
+        // `rlfetch`) with the seconds since it set out
+        const std::string goal =
+            df.goal_item >= 0 && static_cast<size_t>(df.goal_item) < df.items.size()
+                ? (df.items[static_cast<size_t>(df.goal_item)].label.empty()
+                       ? df.items[static_cast<size_t>(df.goal_item)].name
+                       : df.items[static_cast<size_t>(df.goal_item)].label)
+                : std::string("-");
+        char taker[64] = "-";
+        if (df.mind.fetch >= 0)
+          std::snprintf(taker, sizeof taker, "armour %.1f", s.sv.time - df.mind.fetch_t);
+        else if (df.mind.rl_fetch >= 0)
+          std::snprintf(taker, sizeof taker, "launcher %.1f", s.sv.time - df.mind.rl_fetch_t);
+        char b[1700];
         std::snprintf(b, sizeof b,
                       "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f "
                       "%.0f\t%s\t%s\t%d\t%d\t%.0f\t%.0f\t%d\t%d"
-                      "\t%d\t%d\t%s",
+                      "\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s",
                       s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
                       sb::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
                       sb::pilot_mode_name(static_cast<sb::PilotMode>(back.mode)), way.c_str(),
                       own ? 1 : 0, seat.had_rl ? 1 : 0, sec.health, enemy, df.held_number,
-                      foe_weapon, foe_rl, df.press, df.press_note);
+                      foe_weapon, foe_rl, df.press, df.press_note, bt::role_name(df.role), push,
+                      bt::fight_mode_name(df.mode), goal.c_str(), taker);
         r.deaths.push_back(b);
       }
       seat.alive = live;
+      // (P1(e)) frags taken in a push it believes in, by the push's kind and phase
+      if (live && p.slot >= 0 && seat.fighter.mind.push_item >= 0 &&
+          s.world.clients[p.slot].numbers.frags > seat.frags_was) {
+        const bt::Mind& pm = seat.fighter.mind;
+        p.push_frags[pm.push_gang ? 1 : 0][seat.fighter.role != bt::Role::push ? 2
+                                           : pm.push_go_t > 0                  ? 1
+                                                                               : 0] +=
+            static_cast<int64_t>(s.world.clients[p.slot].numbers.frags - seat.frags_was);
+      }
       if (live && p.slot >= 0) seat.frags_was = s.world.clients[p.slot].numbers.frags;
       const bt::Stats rst = bt::read_stats(s, p.slot + 1, bt::first_arsenal());
       const bool quad = (rst.items & kItQuad) != 0;
@@ -689,6 +727,17 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           const bt::Stats fst = bt::read_stats(s, fe, bt::first_arsenal());
           const float truth = fst.health + fst.armortype * fst.armor;
           const float belief = bt::foe_body(seat.fighter, fe, s.sv.time);
+          {  // (P1(e)) his launcher known?
+            const int carries = bt::has_launcher(fst) && bt::launcher_rounds(fst) >= 1 ? 1 : 0;
+            const int thinks = bt::foe_has_key(seat.fighter, fe, s.sv.time) ? 1 : 0;
+            p.rl_known[carries][thinks]++;
+            if (carries && thinks)
+              for (const sb::Contact& c : seat.fighter.bot.senses.contacts)
+                if (c.ent == fe &&
+                    ((ge::ai::known(c.seen) && ge::ai::age(c.seen, s.sv.time) <= 3) ||
+                     (ge::ai::known(c.heard) && ge::ai::age(c.heard, s.sv.time) <= 3)))
+                  p.rl_placed++;
+          }
           bool sighted = false;
           for (const sb::Contact& c : seat.fighter.bot.senses.contacts)
             sighted |= c.ent == fe && c.visible;
@@ -728,6 +777,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       if (live) {
         static_assert(std::size(TeamPlayer{}.role_commands) == bt::kRoles);
         p.role_commands[static_cast<int>(seat.fighter.role)]++;
+        if (seat.fighter.mind.claim >= 0)
+          p.claim_role_commands[static_cast<int>(seat.fighter.role)]++;
         p.pilot_modes[static_cast<int>(seat.fighter.bot.pilot.pilot.mode)]++;
       }
       h = fold_f(fold_f(fold_f(fold_f(h, d.origin.x), d.origin.y), d.origin.z), d.health);
@@ -800,6 +851,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
             std::string row;
             int going = 0;
             float nearest = -1;
+            double soonest = -1;  // the nearest by its route's time (its reach), s
             for (const Seat& b : seats) {
               const TeamPlayer& bp = r.players[static_cast<size_t>(&b - seats.data())];
               if (!b.ready || bp.slot < 0) continue;
@@ -810,17 +862,43 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
               const bool on = g == static_cast<int32_t>(i);
               going += on;
               if (nearest < 0 || dist < nearest) nearest = dist;
+              // its route's time there (the reach it worked out last; -1: not reached): a spot
+              // near in a line can be far by its way (dm2's north red armour, behind a door)
+              const bt::Fighter& bf = b.fighter;
+              const double route =
+                  e.health > 0 && bf.reach_at >= 0 && it.node >= 0 && bf.reach.reached(it.node)
+                      ? bf.reach.cost(it.node)
+                      : -1;
+              if (route >= 0 && (soonest < 0 || route < soonest)) soonest = route;
               char c[256];
-              std::snprintf(c, sizeof c, "\t%s:%s:%s:%.0f", bp.name.c_str(),
+              // its armour worn (the type's protection times the points: what a pickup must beat)
+              const bt::Stats bst = bt::read_stats(s, bp.slot + 1, bt::first_arsenal());
+              // what it believes of the item: there ("here"), or back in so many seconds, timed
+              // off a pickup seen or heard ("t"), or guessed ("g"); negative: overdue
+              char knew[32];
+              const bt::ItemSpot& mine = b.fighter.items[i];
+              if (mine.present)
+                std::snprintf(knew, sizeof knew, "here");
+              else
+                std::snprintf(knew, sizeof knew, "%c%.0f", mine.timed ? 't' : 'g',
+                              mine.back_at - s.sv.time);
+              const int32_t cl = bf.mind.claim;
+              std::snprintf(c, sizeof c, "\t%s:%s:%s:%.0f:%.0f:%s:%s:%s:%.1f", bp.name.c_str(),
                             on ? "GOING"
                             : g >= 0 && static_cast<size_t>(g) < b.fighter.items.size()
                                 ? b.fighter.items[static_cast<size_t>(g)].label.c_str()
                                 : "-",
-                            e.health > 0 ? bt::fight_mode_name(b.fighter.mode) : "dead", dist);
+                            e.health > 0 ? bt::fight_mode_name(b.fighter.mode) : "dead", dist,
+                            bst.armortype * bst.armor, knew, bt::role_name(b.fighter.role),
+                            cl == static_cast<int32_t>(i) ? "THIS"
+                            : cl >= 0 && static_cast<size_t>(cl) < bf.items.size()
+                                ? bf.items[static_cast<size_t>(cl)].label.c_str()
+                                : "-",
+                            route);
               row += c;
             }
             char tail[64];
-            std::snprintf(tail, sizeof tail, "\t%d\t%.0f", going, nearest);
+            std::snprintf(tail, sizeof tail, "\t%d\t%.0f\t%.1f", going, nearest, soonest);
             show_at[i] = s.sv.time;
             show_row[i] = std::string(tail) + row;
           } else if (show_was[i] == 1 && up == 0 && show_at[i] >= 0) {
@@ -976,6 +1054,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].pushes = ts.pushes;
     r.teams[t].joins = ts.joins;
     r.teams[t].spam_shots = ts.spam_shots;
+    r.teams[t].rushes_strong = ts.rushes_strong;
+    r.teams[t].rush_strength_flips = ts.rush_strength_flips;
   }
   if (tn.plan_made && !seats.empty()) {
     r.plan = bt::plan_text(tn.plan, seats[0].fighter.items);
@@ -1022,6 +1102,18 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].goal_ahead = fi.stats.goal_ahead;
     r.players[k].goal_behind = fi.stats.goal_behind;
     r.players[k].bridge_errands = fi.stats.bridge_errands;
+    r.players[k].door_errands = fi.stats.door_errands;
+    r.players[k].errand_open = fi.stats.errand_open;
+    r.players[k].errand_timeup = fi.stats.errand_timeup;
+    r.players[k].errand_noway = fi.stats.errand_noway;
+    r.players[k].errand_round = fi.stats.errand_round;
+    for (size_t a = 0; a < 5; a++)
+      for (size_t b = 0; b < 21; b++) r.players[k].passed[a][b] = fi.stats.passed[a][b];
+    for (size_t a = 0; a < 11; a++) r.players[k].show_gate[a] = fi.stats.show_gate[a];
+    for (size_t a = 0; a < 13; a++) r.players[k].gang_gate[a] = fi.stats.gang_gate[a];
+    r.players[k].rl_hunts = fi.stats.rl_hunts;
+    for (size_t b = 0; b < r.buttons.size() && b < bt::FighterStats::kErrandButtons; b++)
+      for (size_t j = 0; j < 5; j++) r.buttons[b].errands[j] += fi.stats.errand_by[b][j];
     r.players[k].gap_landed = fi.bot.pilot.pilot.stats.gap_landed;
     r.players[k].gap_refused = fi.bot.pilot.pilot.stats.gap_refused;
     r.players[k].gap_near = fi.bot.pilot.pilot.stats.gap_near;
@@ -1035,6 +1127,10 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       r.players[k].recipe_commits = ps.recipe_commits;
       r.players[k].recipe_aborts = ps.recipe_aborts;
       r.players[k].recipe_takeoffs = ps.recipe_takeoffs;
+      r.players[k].recipe_cuts = ps.recipe_cuts;
+      r.players[k].recipe_ranouts = ps.recipe_ranouts;
+      for (size_t e = 0; e < r.players[k].recipe_ends.size(); e++)
+        r.players[k].recipe_ends[e] = ps.recipe_ends[e];
       r.players[k].recipe_speed = ps.recipe_speed;
       r.players[k].chained = fi.stats.chained;
       r.players[k].vias = ps.vias;

@@ -182,7 +182,8 @@ struct TeamPlayer {
           off_graph = 0;       // dives begun into a pocket; thinks spent off the graph or in a pool
   int64_t dives_given_up = 0;  // dives turned back, late or short of air
   double dive_wet_s = 0;       // time in the water on a dive
-  int64_t mode_commands[4] = {}, role_commands[5] = {};       // by bots::Role
+  int64_t mode_commands[4] = {}, role_commands[5] = {};  // by bots::Role
+  int64_t claim_role_commands[5] = {};  // the same with a claim held (an area its own)
   int64_t weapon_commands[bots::kMostWeaponNumber + 1] = {};  // by the weapon's number
   int64_t pilot_modes[sb::kPilotModes] =
       {};  // live commands in each pilot mode (shooterbots/pilot.hpp)
@@ -230,7 +231,22 @@ struct TeamPlayer {
   int64_t item_first = 0;         // thinks a key item of its own came before a fight (`itemfirst`)
   int64_t chase_held = 0;         // thinks one lost from sight was not followed (`chasekill`)
   int64_t goal_across = 0, goal_ahead = 0, goal_behind = 0;  // `goalfeet`'s fight commands
-  int64_t bridge_errands = 0;             // and of those, a bridge's button gone to first
+  int64_t door_errands = 0;  // a shut door's button gone to first (`locked`)
+  // and how they ended: open, time up, no way; shut doors gone round instead (`errandworth`)
+  int64_t errand_open = 0, errand_timeup = 0, errand_noway = 0, errand_round = 0;
+  int64_t rl_hunts = 0;        // (`rlhunt`) thinks going for an enemy launcher's holder
+  int64_t show_gate[11] = {};  // (`spamshow`) the carrier's commands by gate (bots::kShowGates)
+  int64_t gang_gate[13] = {};  // (`rlgang`) thinks by what held the call off (bots::kGangGateNames)
+  // (P1(e)) WHO CARRIES THE LAUNCHER, KNOWN? Samples of a live enemy by [he carries a loaded
+  // launcher][it believes so (bots::foe_has_key)]; and of the carriers believed, placed lately
+  // (seen or heard within 3 s: what `rlgang` asks).
+  int64_t rl_known[2][2] = {};
+  int64_t rl_placed = 0;
+  // (P1(e)) its deaths and frags in a push it believes in (its role pushing or not), by the push's
+  // kind (0 a base's, 1 on an enemy launcher's holder, `rlgang`) and phase (0 gathering, 1 gone in)
+  int64_t push_deaths[2][3] = {}, push_frags[2][3] = {};
+  int64_t passed[5][21] = {};  // key items passed near, by item and reason (bots::kPassReasons)
+  int64_t bridge_errands = 0;  // and of those, a bridge's button gone to first
   int64_t gap_jumps = 0, gap_landed = 0;  // gap tricks jumped out of a hop, and landed across
   int64_t gap_refused = 0;                // gap tricks given up (no jump lands across)
   int64_t gap_near = 0;                   // (`gapnear`) routes planned round a gap too near
@@ -238,6 +254,8 @@ struct TeamPlayer {
   int64_t circles = 0;                    // hops started by a circle jump
   double circle_speed = 0;                // and their takeoff speeds, summed
   int32_t recipe_asks = 0, recipe_commits = 0, recipe_aborts = 0, recipe_takeoffs = 0;
+  int32_t recipe_cuts = 0, recipe_ranouts = 0;  // ended by a hop left, run out on the ground
+  std::array<int32_t, 7> recipe_ends{};         // and by the pilot's restart (sh::RecipeEnd)
   double recipe_speed = 0;  // people's hop starts played (`recipes`): their takeoffs' speeds
   // Goals chained on past a pickup (`chains`): asked by the fighter, planned by the pilot, the
   // pickups run through and run past, and the speed through them, summed.
@@ -272,6 +290,7 @@ struct TeamTotals {
   int64_t fetch_end[5] = {};  // the rest's ends: role, gone, time, death, retreat
   int64_t lost_seen = 0, retakes = 0, spam_shots = 0;  // areas worked out lost, retaken; spam
   int64_t pushes = 0, joins = 0;                       // pushes on the base called, and joined
+  int64_t rushes_strong = 0, rush_strength_flips = 0;  // the quad's rushes (bots/team.hpp)
 };
 
 // A button on the map, as the fighters read it (bots/buttons.hpp).
@@ -281,6 +300,8 @@ struct TeamButton {
   std::vector<sh::Vec3f> doors;    // the middles of the doors it opens
   std::vector<std::string> opens;  // the items behind them
   sh::Vec3f from;                  // where a player presses (or shoots) it from
+  // its door errands over the match, every player's: begun, open, time up, no way, gone round
+  int64_t errands[5] = {};
 };
 
 // The key items whose lying untaken is broken down (TeamMatchReport::lying), and the causes.

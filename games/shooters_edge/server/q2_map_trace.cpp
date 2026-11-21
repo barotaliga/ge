@@ -66,7 +66,10 @@ float sweep_box(sh::Vec3f start, sh::Vec3f end, sh::Vec3f mins, sh::Vec3f maxs, 
     normal = {};
     return end_in ? 0 : -1;
   }
-  float t0 = 0, t1 = 1;
+  // (From below any start: a box touching a face and moving into it meets that face at 0 with
+  // its normal; started at 0, the face was never taken, and a zero normal held him there for good,
+  // falling in place beside a corpse on base2.)
+  float t0 = -1e30f, t1 = 1;
   int axis = -1;
   float side = 0;
   for (int k = 0; k < 3; k++) {
@@ -89,6 +92,8 @@ float sweep_box(sh::Vec3f start, sh::Vec3f end, sh::Vec3f mins, sh::Vec3f maxs, 
     t1 = std::min(t1, far);
     if (t0 >= t1) return -1;
   }
+  if (!(t0 > 0)) t0 = 0;    // (and no -0 from a face touched)
+  if (t0 >= t1) return -1;  // touching and moving off it
   normal = {};
   if (axis == 0) normal.x = side;
   if (axis == 1) normal.y = side;
@@ -127,7 +132,10 @@ ge::classic::Q2Trace map_trace(const Q2Server& s, sh::Vec3f start, sh::Vec3f min
       sh::Vec3f n;
       const float f = sweep_box(start, end, mins, maxs, e.origin + e.mins, e.origin + e.maxs, n);
       if (f >= 0 && (f < r.fraction || (f == 0 && !r.start_solid))) {
-        if (f == 0) r.start_solid = true;
+        // Started inside it, not only touching its face (a box between two touching ones was
+        // held still by both as if buried: base2's bodies by the south pool).
+        if (f == 0 && overlap(start + mins, start + maxs, e.origin + e.mins, e.origin + e.maxs))
+          r.start_solid = true;
         r.fraction = f;
         r.end = start + (end - start) * f;
         r.normal = n;
@@ -142,7 +150,9 @@ ge::classic::Q2Trace map_trace(const Q2Server& s, sh::Vec3f start, sh::Vec3f min
       const float f =
           sweep_box(start, end, mins, maxs, e.origin + kDiscMins, e.origin + kDiscMaxs, n);
       if (f >= 0 && (f < r.fraction || (f == 0 && !r.start_solid))) {
-        if (f == 0) r.start_solid = true;
+        if (f == 0 &&
+            overlap(start + mins, start + maxs, e.origin + kDiscMins, e.origin + kDiscMaxs))
+          r.start_solid = true;
         r.fraction = f;
         r.end = start + (end - start) * f;
         r.normal = n;

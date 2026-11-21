@@ -34,14 +34,17 @@ namespace ai = ge::ai;
 // The baseline mod's weapon bits (games/shooters_edge/rules/common_decl.hpp) and ammunition maxima
 // (common_items.cpp).
 constexpr float kAmmoMax = 100;
-constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit
-constexpr int32_t kItPent = 1048576;  // the shield's
-constexpr double kTired = 0.2;        // its worth meanwhile, as a share
-constexpr double kWait_s = 20;        // an item back within this is worth going to wait for
-constexpr double kHealWait_s = 3;     // but a retreat goes for health that is there
-constexpr double kKeepGoal = 1.5;     // the goal's score is held up by this against the others
-constexpr float kRun = 320;           // units/s, the run to an item
-constexpr double kTold_s = 10;        // a point at an item is followed this long
+constexpr int32_t kItQuad = 4194304;   // the quad's IT_ bit
+constexpr int32_t kItPent = 1048576;   // the shield's
+constexpr double kTired = 0.2;         // its worth meanwhile, as a share
+constexpr double kWait_s = 20;         // an item back within this is worth going to wait for
+constexpr double kArriveSpare_s = 3;   // (`arrive`) a timed key item met this early
+constexpr double kCircuitShare = 0.5;  // (`circuit`) the next key item's score counted at this
+constexpr double kCircuitWait_s = 40;  // (`circuit`) and only one back within this
+constexpr double kHealWait_s = 3;      // but a retreat goes for health that is there
+constexpr double kKeepGoal = 1.5;      // the goal's score is held up by this against the others
+constexpr float kRun = 320;            // units/s, the run to an item
+constexpr double kTold_s = 10;         // a point at an item is followed this long
 // A hurt player does not walk back into a fight his side is losing: health within this of a danger
 // spot (where he died, where a mate died, an area called lost, a call for help: mind.hpp) is worth
 // this share while he heals, and health an enemy he knows of now stands nearer to than he does is
@@ -246,7 +249,33 @@ int32_t best_item(const Fighter& f, const ge::shooterbots::BotView& s, const Sta
     // Only the items a game turns on are waited for; the rest are taken when they are there.
     const bool key = key_item(it);
     if (wait > (heal || (!key && f.team) ? kHealWait_s : kWait_s)) return 0.0;
-    double sc = v / (1 + std::fmax(run, wait));
+    // (`arrive`) A key item timed to the second is gone for to be there as it shows: its wait
+    // counted kArriveSpare_s short, so the bot leaves while the wait is still over the run.
+    const double early =
+        f.features[sb::Feature::arrive] && key && !heal && it.timed ? kArriveSpare_s : 0;
+    const double had = std::fmax(run, wait - early);  // when it has it
+    double sc = v / (1 + had);
+    // (`circuit`) A ROUND BY THE CLOCK: a key item is worth a share of the best key item it could
+    // have next from there (its time back, the run between them), so two due together draw it.
+    if (f.features[sb::Feature::circuit] && key && !heal) {
+      const Stats then = after_taking(st, it);
+      double next = 0;
+      for (size_t j = 0; j < f.items.size(); j++) {
+        const auto k = static_cast<int32_t>(j);
+        const ItemSpot& nx = f.items[j];
+        if (k == i || k == skip || nx.node < 0 || !key_item(nx) || !item_in_mind(f, k) ||
+            route_lost(f, k, t))
+          continue;
+        const double vn = f.team ? item_value(nx, then) : raw_value(nx, then);
+        const double wn = nx.present ? 0 : nx.back_at - t;
+        if (vn <= 0 || wn > kCircuitWait_s) continue;
+        const double en = f.features[sb::Feature::arrive] && nx.timed ? kArriveSpare_s : 0;
+        double sn = vn / (1 + std::fmax(had + dist(it.at, nx.at) / kRun, wn - en));
+        if (mate_going(f, k, t)) sn *= 0.15;
+        next = std::fmax(next, sn);
+      }
+      sc += kCircuitShare * next;
+    }
     if (i == f.goal_item) sc *= kKeepGoal;  // the goal held unless another is clearly better
     if (i == f.tired_item && t < f.tired_until) sc *= kTired;  // gone for in vain lately
     if (enemy && (heal || f.outmatched) && dist(*enemy, it.at) < dist(me, it.at)) sc *= 0.2;
@@ -296,33 +325,43 @@ int32_t chain_after(const Fighter& f, const ge::shooterbots::BotView& s, const S
 // kOnTheWay and ahead of where it runs (or beside it), that a way reaches, nobody of its side said
 // he takes, and not the goal itself; the nearest, or -1. Taken before the long goal, as a person
 // picks up what lies by his way: the goal is chosen again once it has it (a pickup is news).
+const char* on_the_way_bar(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
+                           sh::Vec3f me, sh::Vec3f velocity, double t, int32_t i) {
+  const ItemSpot& it = f.items[static_cast<size_t>(i)];
+  if (i == f.goal_item) return "the goal";
+  if (!it.present || it.node < 0 || !item_in_mind(f, i)) return "not known there";
+  if (route_lost(f, i, t)) return "its route lost";
+  if (f.reach_at >= 0 && !f.reach.reached(it.node)) return "not reached";
+  if (std::fabs(it.at.z - (me.z - kFeet)) > kOnTheWayRise) return "another floor";
+  if (door_shut(s, it)) return "its door shut";
+  // What a person turns aside for: health it lacks, better armour, a weapon it has not got,
+  // rockets; shells and nails are taken as they lie on the way, not gone for.
+  const bool ammo =
+      it.kind == ItemKind::shells || it.kind == ItemKind::nails || it.kind == ItemKind::cells;
+  if (ammo || (it.kind == ItemKind::weapon && (st.items & it.weapon) != 0)) return "not wanted";
+  if (raw_value(it, st) <= 0) return "worth nothing now";
+  if (mate_going(f, i, t)) return "a mate's";
+  if (gives_up(f, s, f.slot + 1, i, st, t)) return "given up";
+  const float speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+  const float d = dist(me, it.at);
+  // Ahead of where it runs (within about 70 degrees of its motion), or beside it.
+  if (d > kBeside && speed > 100) {
+    const float dx = it.at.x - me.x, dy = it.at.y - me.y;
+    const float flat = std::sqrt(dx * dx + dy * dy);
+    if (flat > 1 && (dx * velocity.x + dy * velocity.y) / (flat * speed) < kAhead)
+      return "behind its run";
+  }
+  return nullptr;
+}
+
 int32_t on_the_way(const Fighter& f, const ge::shooterbots::BotView& s, const Stats& st,
                    sh::Vec3f me, sh::Vec3f velocity, double t) {
-  const float speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
   int32_t best = -1;
   float best_d = kOnTheWay;
   for (size_t k = 0; k < f.items.size(); k++) {
     const auto i = static_cast<int32_t>(k);
-    const ItemSpot& it = f.items[k];
-    if (i == f.goal_item || !it.present || it.node < 0 || !item_in_mind(f, i) ||
-        route_lost(f, i, t))
-      continue;
-    if (f.reach_at >= 0 && !f.reach.reached(it.node)) continue;
-    if (std::fabs(it.at.z - (me.z - kFeet)) > kOnTheWayRise || door_shut(s, it)) continue;
-    // What a person turns aside for: health it lacks, better armour, a weapon it has not got,
-    // rockets; shells and nails are taken as they lie on the way, not gone for.
-    const bool ammo =
-        it.kind == ItemKind::shells || it.kind == ItemKind::nails || it.kind == ItemKind::cells;
-    if (ammo || (it.kind == ItemKind::weapon && (st.items & it.weapon) != 0)) continue;
-    if (raw_value(it, st) <= 0 || mate_going(f, i, t) || gives_up(f, s, f.slot + 1, i, st, t))
-      continue;
-    const float d = dist(me, it.at);
-    // Ahead of where it runs (within about 70 degrees of its motion), or beside it.
-    if (d > kBeside && speed > 100) {
-      const float dx = it.at.x - me.x, dy = it.at.y - me.y;
-      const float flat = std::sqrt(dx * dx + dy * dy);
-      if (flat > 1 && (dx * velocity.x + dy * velocity.y) / (flat * speed) < kAhead) continue;
-    }
+    if (on_the_way_bar(f, s, st, me, velocity, t, i) != nullptr) continue;
+    const float d = dist(me, f.items[k].at);
     if (d < best_d) {
       best = i;
       best_d = d;

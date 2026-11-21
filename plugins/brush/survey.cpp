@@ -164,7 +164,7 @@ std::vector<LiquidBody> liquid_bodies(const Map& map) {
 }
 
 bool slice_map(const Map& map, int axis, double at, double step, Slice* out, std::string* error,
-               int max_cells) {
+               int max_cells, const float* near, double radius, int hull) {
   if (map.models.empty() || axis < 0 || axis > 2) {
     *error = "the map has no world model to slice";
     return false;
@@ -178,13 +178,33 @@ bool slice_map(const Map& map, int axis, double at, double step, Slice* out, std
     *error = buf;
     return false;
   }
+  if (hull != 0 &&
+      (hull < 1 || hull > 3 || (map.family != Family::v29 && map.family != Family::bsp2))) {
+    *error =
+        "--hull takes 1, 2 or 3 on a version 29 or BSP2 map (38 and 46 have no clip hulls); "
+        "next: --hull=1 on such a map, or no --hull";
+    return false;
+  }
   Slice s;
   s.axis = axis;
   s.at = at;
   s.u_axis = axis == 0 ? 1 : 0;
   s.v_axis = axis == 2 ? 1 : 2;
-  const double u_len = double(w.maxs[s.u_axis]) - w.mins[s.u_axis];
-  const double v_len = double(w.maxs[s.v_axis]) - w.mins[s.v_axis];
+  // The grid's box on the plane: the world's, or the window round `near` inside it.
+  double u_lo = w.mins[s.u_axis], u_hi = w.maxs[s.u_axis];
+  double v_lo = w.mins[s.v_axis], v_hi = w.maxs[s.v_axis];
+  if (near) {
+    u_lo = std::max(u_lo, double(near[s.u_axis]) - radius);
+    u_hi = std::min(u_hi, double(near[s.u_axis]) + radius);
+    v_lo = std::max(v_lo, double(near[s.v_axis]) - radius);
+    v_hi = std::min(v_hi, double(near[s.v_axis]) + radius);
+    if (u_hi <= u_lo || v_hi <= v_lo) {
+      *error = "the window round --near misses the world's box; next: a point inside the map";
+      return false;
+    }
+  }
+  const double u_len = u_hi - u_lo;
+  const double v_len = v_hi - v_lo;
   if (step <= 0) step = std::max(8.0, std::ceil(std::max(u_len, v_len) / 96.0 / 8.0) * 8.0);
   s.step = step;
   const int cols = std::max(1, int(std::ceil(u_len / step)));
@@ -197,8 +217,8 @@ bool slice_map(const Map& map, int axis, double at, double step, Slice* out, std
     *error = buf;
     return false;
   }
-  s.u0 = w.mins[s.u_axis] + step / 2;
-  s.v0 = w.maxs[s.v_axis] - step / 2;
+  s.u0 = u_lo + step / 2;
+  s.v0 = v_hi - step / 2;
   s.rows.assign(size_t(rows), std::string(size_t(cols), '.'));
   for (int r = 0; r < rows; ++r) {
     for (int c = 0; c < cols; ++c) {
@@ -206,7 +226,13 @@ bool slice_map(const Map& map, int axis, double at, double step, Slice* out, std
       p[axis] = float(at);
       p[s.u_axis] = float(s.u0 + c * step);
       p[s.v_axis] = float(s.v0 - r * step);
-      s.rows[size_t(r)][size_t(c)] = cell_char(leaf_cell(map, map.leaves[leaf_at(map, p)]));
+      if (hull != 0) {
+        Leaf leaf;  // the hull's contents read as a leaf's (29 and BSP2 share the numbers)
+        leaf.contents = hull_contents(map, p, 0, hull);
+        s.rows[size_t(r)][size_t(c)] = cell_char(leaf_cell(map, leaf));
+      } else {
+        s.rows[size_t(r)][size_t(c)] = cell_char(leaf_cell(map, map.leaves[leaf_at(map, p)]));
+      }
     }
   }
   *out = std::move(s);
