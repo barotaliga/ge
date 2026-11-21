@@ -156,9 +156,13 @@ void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& q
     } else {
       // The console keeps a held `+` bind by the name it went down with, whatever modifiers were
       // held then; a release under every spelling finds it (the others are not held: no-ops).
-      for (int m = 0; m < 8; ++m)
-        c.key(spelled(key, {.ctrl = (m & 1) != 0, .alt = (m & 2) != 0, .shift = (m & 4) != 0}),
-              false);
+      for (int m = 0; m < 8; ++m) {
+        ConsoleKeys held_as;  // the modifiers alone, set one by one (the hooks stay empty)
+        held_as.ctrl = (m & 1) != 0;
+        held_as.alt = (m & 2) != 0;
+        held_as.shift = (m & 4) != 0;
+        c.key(spelled(key, held_as), false);
+      }
     }
     c.run();  // a toggle takes effect before the next event
     keys.held = keys.held || view.typing();

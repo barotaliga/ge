@@ -38,11 +38,11 @@ namespace shooters_edge::menu {
 
 // One game the page offers.
 struct GameRow {
-  std::string id;        // its content profile's id (classicenhance/profile.hpp)
-  std::string install;   // the folder of it loaded last on this computer
-  std::string edition;   // that install's edition in the game's words ("Shareware"), "" unknown
-  bool playing = false;  // the game loaded now: its name in colour
-  bool remixed = false;  // classic remix plays the loaded game with it: its name half in colour
+  std::string id = {};       // its content profile's id (classicenhance/profile.hpp)
+  std::string install = {};  // the folder of it loaded last on this computer
+  std::string edition = {};  // that install's edition in the game's words ("Shareware"), "" unknown
+  bool playing = false;      // the game loaded now: its name in colour
+  bool remixed = false;      // classic remix plays the loaded game with it: its name half in colour
 };
 
 enum class GamesAction : uint8_t { none, leave, open, browse };

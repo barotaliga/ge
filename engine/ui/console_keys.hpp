@@ -39,10 +39,10 @@ struct ConsoleKeys {
   bool cmd = false;  // the Command (GUI) key: a Mac's paste is Command-V
   // The clipboard's text for a paste (Command-V or Ctrl-V while typing); null: no paste. The
   // platform's `clipboard_text` in a window, a fixed string in a test.
-  std::function<std::string()> paste;
+  std::function<std::string()> paste = {};
   // The selected scrollback text put on the clipboard (Command-C or Ctrl-C while the console has a
   // selection, ConsoleView::selected_text); null: no copy.
-  std::function<void(const std::string&)> copy;
+  std::function<void(const std::string&)> copy = {};
   bool held = false;  // the view was down at some point this frame: the game reads no keys
 };
 
