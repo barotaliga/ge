@@ -140,9 +140,13 @@ void WorldDrawDeleter::operator()(WorldDraw* w) const { delete w; }
 
 namespace {
 ge::audio::Synth* g_ear = nullptr;  // the synth every world's room is heard on (hear_worlds_on)
+const UnderEar* g_under = nullptr;  // its muffle under water's settings (null: never muffled)
 }  // namespace
 
-void hear_worlds_on(ge::audio::Synth* synth) { g_ear = synth; }
+void hear_worlds_on(ge::audio::Synth* synth, const UnderEar* under) {
+  g_ear = synth;
+  g_under = under;
+}
 
 namespace {
 
@@ -744,6 +748,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (g_ear != nullptr)
     hear_room(f.ear, *g_ear, f.has_map ? &f.scene.map : nullptr, f.picture->ce.acoustics, view.eye,
               view.heading, view.time_s);
+  if (g_ear != nullptr && g_under != nullptr)  // muffled under water (s_underwater)
+    hear_under(f.ear, *g_ear, *g_under, fx.screen.medium != effects::Medium::air);
   // The map's own sky (its pick), keeping the eye and the look the caller set.
   const ba::SkyPick sky = dress_world_sky(f, view);
   view.altitude_m = 100;
@@ -897,7 +903,11 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       gr::build_beam(*look, b.shot, view.time_s, shape);
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
-    gr::prepare_beams(d, f.beams, f.beam_draws, fx.burns, view, gr::kHotEmberCd);
+    // Wet blood on a floor mirrors the room with the faces (ce_reflections, ce_blood_reflect).
+    const float paint_mirror = o.reflections > 0 && f.picture != nullptr
+                                   ? static_cast<float>(f.picture->blood_reflect)
+                                   : 0.0f;
+    gr::prepare_beams(d, f.beams, f.beam_draws, fx.burns, view, gr::kHotEmberCd, paint_mirror);
     gr::prepare_haze(d, f.haze, fx.haze, view);
   }
   if (f.has_map) {
@@ -925,7 +935,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // ce_smooth: the models shaded smooth across their facets where the textures are filtered.
     prepare_models(d, f.models, f.scene.map, drawn, view, o.brightness, o.minlight,
                    !o.crisp && f.picture->ce.smooth, in_place, lights, o.dynamic_strength,
-                   &f.burning);
+                   &f.burning, fx.bloodied);
   }
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
   const bool round = f.extras && liquid_round_eye(*f.extras);

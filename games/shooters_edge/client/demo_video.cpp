@@ -110,6 +110,9 @@ void q2_placed(const DemoEntity& e, Placed& p) {
   p.pulse = look.pulse;
   p.shell = look.shell;
   p.bleeds = look.bleeds;
+  p.green_blood = look.green_blood;
+  p.flies = look.flies;
+  p.q2_anim = e.effects & 0x3c00;  // its frames cycled by the picture's clock (q2_texture_frame)
   for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
 }
 

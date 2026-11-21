@@ -5,8 +5,9 @@
 //
 // The language places in screen pixels and draws pictures at their own size; on a large window
 // that is a small bar, so the window runs it on a smaller screen, a whole number of times smaller
-// (one step for every 400 px of height, at least one), and draws every pixel that many times over,
-// sharp. The crosshair (under the bar) and the centre print (over it) are drawn the same way.
+// (scr_scale; by the window's size, `q2_bar_scale`), and draws every pixel that many times over,
+// sharp. The crosshair (under the bar), the centre print (over it) and the lag graph are drawn the
+// same way. scr_draw2d leaves out the bar, the layouts or all of it; scr_alpha fades it.
 //
 // ENHANCED (`ce_pictures`, `cache` set): a picture is classic-enhance's upscaled copy from the
 // packs' cache (`pics/<name>`) where it has one, drawn filtered at the picture's own size from its
@@ -15,6 +16,7 @@
 // ge:summary Quake II's status bar drawn in the window from its program and the game's pictures
 // ge:keywords q2 status-bar layout pictures conchars pcx draw scale q2-hud crosshair
 // ge:keywords centre-print ch1 layout-message scoreboard help-computer inventory hotkey
+// ge:keywords scr_scale scr_draw2d scr_alpha scr_lag_draw lag-graph net-picture hud-scale
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_q2_screen_test.cpp
 #pragma once
@@ -28,8 +30,10 @@
 #include <vector>
 
 #include "hud/crosshair.hpp"
+#include "hud/net_graph.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/q2_view.hpp"
 #include "shooters_edge/hud/q2_layout.hpp"
 #include "shooters_edge/server/rules_world.hpp"
 #include "ui/draw.hpp"
@@ -55,6 +59,12 @@ struct Q2Bar {
   const std::map<std::string, std::string>* binds = nullptr;
   double now = 0;  // the real time, s (the inventory's cursor blinks by it)
   std::shared_ptr<server::RulesWorld> recorded{};  // a recording's world (draw_recorded_q2_bar)
+  const Q2Screen* screen = nullptr;                // the 2D settings; null: their defaults
+  // A joined server's packets (the lag graph) and its moves not yet answered (128 and over: the
+  // pack's `net` picture blinks in the graph's place); null and 0 when nothing is joined.
+  const ge::hud::NetHistory* lag = nullptr;
+  int unanswered = 0;
+  int width = 0, height = 0;  // the window the last `run_q2_bar` drew for, px
 };
 
 // The world a Quake II recording or a joined Quake II server gives its bar (the bar's program, the
@@ -67,8 +77,17 @@ bool q2_world_of(const DemoState& ds, server::RulesWorld& out);
 bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds, int width,
                           int height);
 
-// The whole number the bar is drawn larger by on a window `height` px high.
-int q2_bar_scale(int height);
+// The whole number every 2D element is drawn larger by on a `width` x `height` window: `setting`
+// (scr_scale) 1..10 as given, past 10 held to it; 0 by the window, as Quake II picks it: by the
+// height on a wide window (4 from 2160 px, 2 from 1080, else 1), by the width on a tall one (3840
+// and 1920).
+int q2_bar_scale(int width, int height, int setting = 0);
+// The bar's own: by its `screen`'s scr_scale.
+int q2_bar_scale(const Q2Bar& bar, int width, int height);
+
+// Hands `bar` a joined server's packets (`lag`; null: no graph), the moves it has not answered
+// and the real time `now`, s, for the lag graph and the blinking net picture.
+void q2_bar_net(Q2Bar& bar, const ge::hud::NetHistory* lag, int unanswered, double now);
 
 // Runs the world's bar for client `slot` (its stats, the world's strings) on a `width` x `height`
 // window into `bar.ops`, in screen pixels of the smaller screen (`q2_bar_scale`); then, while
@@ -97,7 +116,8 @@ void add_q2_screen(Q2Bar& bar, int crosshair, std::string_view centre, int width
 void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::CrosshairSettings& s,
                        int width, int height, int health = 100);
 
-// Draws `bar.ops` on `dl`, `scale` px a bar pixel; true when the bar drew anything.
+// Draws `bar.ops` on `dl`, `scale` px a bar pixel, at the screen's scr_alpha, and then the lag
+// graph (scr_lag_draw) or the `net` picture over it; true when the bar drew anything.
 bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale);
 
 // The world's string `index` as a Quake II client holds it: image names at 544 + n, item names at

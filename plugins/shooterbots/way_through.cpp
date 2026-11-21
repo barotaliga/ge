@@ -110,6 +110,20 @@ int32_t node_in(const sb::NavGraph& g, sh::Vec3f lo, sh::Vec3f hi) {
   return best;
 }
 
+// Where a brush entity's model stood when the map spawned it (its `origin`, else the map's own):
+// a level entered again keeps its doors and buttons where they were left.
+sh::Vec3f spawned_at(const sb::EntityBlock& b) {
+  const char* o = sb::block_value(b, "origin");
+  return o ? origin_of(o) : sh::Vec3f{};
+}
+
+// Whether locked door `k` has moved off where it stood shut (a turning bridge: turned).
+bool locked_moved(const WayThrough& w, const ge::shooterbots::BotView& s, size_t k) {
+  const sh::Edict& d = s.sv.edicts[static_cast<size_t>(w.locked[k])];
+  const bool turns = k < w.locked_turns.size() && w.locked_turns[k] != 0;
+  return dist(turns ? d.angles : d.origin, w.locked_at[k]) >= 1;
+}
+
 // Every node a player at `from` gets to past no door in `barred` (nav_reach with the doors), on
 // the links his `jumper` takes (no rocket jump without a launcher: base1's exit, reached by one
 // down the lift's shaft, stood him still at the start with no route the pilot would take).
@@ -207,6 +221,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.steps.clear();
   w.locked.clear();
   w.locked_at.clear();
+  w.locked_turns.clear();
   w.cars.clear();
   w.cars_at.clear();
   w.turners.clear();
@@ -216,6 +231,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.stats = WayStats{};
   w.plan_at = -1;
   w.step_since = 0;
+  w.step_for = kWayGiveUp_s;
   w.step = -1;
   w.explore = -1;
   w.explore_since = 0;
@@ -246,6 +262,14 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         any = true;
         const int e = dm ? edict_of(s, dm) : -1;
         if (e >= 0) out.push_back(e);
+      } else if (std::strcmp(dc, "func_door_rotating") == 0 && sf && (std::atoi(sf) & 1) != 0) {
+        // A turning bridge (map_nav.hpp: turned up until used, then a floor).
+        const int e = dm ? edict_of(s, dm) : -1;
+        for (const NavBridge& br : nav.bridges)
+          if (br.turns && br.ent == e) {
+            any = true;
+            out.push_back(e);
+          }
       } else if (std::strcmp(dc, "func_door_rotating") == 0 && !(sf && (std::atoi(sf) & 1) != 0)) {
         // A turning door (a hatch, a lever): open once it has turned off its rest.
         const int e = dm ? edict_of(s, dm) : -1;
@@ -254,7 +278,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         out.push_back(e);
         if (std::find(w.turners.begin(), w.turners.end(), e) == w.turners.end()) {
           w.turners.push_back(e);
-          w.turners_at.push_back(s.sv.edicts[static_cast<size_t>(e)].angles);
+          w.turners_at.push_back(
+              {});  // its spawn angles (a level kept from before may have it turned)
         }
       }
     }
@@ -321,12 +346,12 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     } else if (const char* to = trigger && brush && target ? level_change(target) : nullptr) {
       st.kind = WayKind::exit;  // Quake II's: walked through, it fires the level change
       st.name = to;
-      // The way back to the map he came from (base2's start: the car up to base1) leads on to
-      // nothing: neither a goal nor a reason to press the button that reaches it.
+      // The way back to a map he has played (base2's start: the car up to base1) is taken only
+      // once nothing else is left (base3's way on is back to base2, by another way in).
       std::string_view goes(to);
       if (!goes.empty() && goes[0] == '*') goes.remove_prefix(1);
       goes = goes.substr(0, goes.find('$'));
-      if (!w.back.empty() && goes == w.back) continue;
+      for (const std::string& was : w.been) st.revisit = st.revisit || goes == was;
     } else if ((std::strcmp(cn, "trigger_once") == 0 || std::strcmp(cn, "trigger_multiple") == 0) &&
                brush && target && !name) {
       st.kind = WayKind::trigger;  // one fired by something else is not walked into
@@ -380,6 +405,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
           if (br.ent == e && name) {
             w.locked.push_back(e);
             w.locked_at.push_back(br.spawn);
+            w.locked_turns.push_back(0);
             for (const int32_t n : br.nodes) w.node_door[static_cast<size_t>(n)] = e;
           }
         continue;
@@ -404,11 +430,23 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       if (holds && !bars_one) {
         // Still watched: the button that sends it is pressed only once it has moved.
         w.cars.push_back(e);
-        w.cars_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
+        w.cars_at.push_back(spawned_at(b));
         continue;
       }
       w.locked.push_back(e);
-      w.locked_at.push_back(s.sv.edicts[static_cast<size_t>(e)].origin);
+      w.locked_at.push_back(spawned_at(b));
+      w.locked_turns.push_back(0);
+      continue;
+    } else if (std::strcmp(cn, "func_door_rotating") == 0 && name && brush) {
+      // A turning bridge still turned up is shut to him (its nodes are where it turns down to).
+      const int e = edict_of(s, model);
+      for (const NavBridge& br : nav.bridges)
+        if (br.turns && br.ent == e) {
+          w.locked.push_back(e);
+          w.locked_at.push_back(br.spawn_angles);
+          w.locked_turns.push_back(1);
+          for (const int32_t n : br.nodes) w.node_door[static_cast<size_t>(n)] = e;
+        }
       continue;
     } else {
       continue;
@@ -422,6 +460,35 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       st.hi = {bm.maxs[0], bm.maxs[1], bm.maxs[2]};
     }
     st.node = node_in(g, st.lo, st.hi);
+    // A trigger flush with the door it opens (base3's key lock, a strip before its door): its node
+    // stands where his box meets the shut door, so every way there is through it. The nearest
+    // node by the trigger clear of its doors instead.
+    if (st.node >= 0 && !st.doors.empty()) {
+      const auto meets_door = [&](sh::Vec3f o) {
+        for (const int d : st.doors) {
+          const sh::Edict& de = s.sv.edicts[static_cast<size_t>(d)];
+          if (o.x + 16 > de.absmin.x && o.x - 16 < de.absmax.x && o.y + 16 > de.absmin.y &&
+              o.y - 16 < de.absmax.y && o.z + 32 > de.absmin.z && o.z - 24 < de.absmax.z)
+            return true;
+        }
+        return false;
+      };
+      if (meets_door(g.nodes[static_cast<size_t>(st.node)].origin)) {
+        const sh::Vec3f mid = (st.lo + st.hi) * 0.5f, grow{48, 48, 56};
+        int32_t best = -1;
+        float best_d = 0;
+        for (size_t n = 0; n < g.nodes.size(); n++) {
+          const sh::Vec3f o = g.nodes[n].origin;
+          if (!touches(o, st.lo - grow, st.hi + grow) || meets_door(o)) continue;
+          const float d = dist(o, mid);
+          if (best < 0 || d < best_d) {
+            best = static_cast<int32_t>(n);
+            best_d = d;
+          }
+        }
+        if (best >= 0) st.node = best;
+      }
+    }
     if (st.name.empty()) st.name = cn;
     w.steps.push_back(st);
   }
@@ -434,16 +501,53 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     st.node = bs.node;
     st.name = bs.shoot ? "shot button" : "button";
     const sh::Edict& be = s.sv.edicts[static_cast<size_t>(bs.ent)];
+    const char* target = nullptr;
     for (const sb::EntityBlock& b : blocks) {
       const char* model = sb::block_value(b, "model");
       if (model && be.modelindex > 0 && static_cast<size_t>(be.modelindex) < s.models.size() &&
-          s.models[static_cast<size_t>(be.modelindex)] == model)
-        st.opens = opens(sb::block_value(b, "target"), st.doors);
+          s.models[static_cast<size_t>(be.modelindex)] == model) {
+        st.lo = st.hi = spawned_at(b);  // a level kept from before may have it pressed already
+        target = sb::block_value(b, "target");
+        st.opens = opens(target, st.doors);
+      }
+    }
+    // One whose target, or a relay's it fires, changes the level is an exit pressed (base2's
+    // lift down to bunk1: its button fires the level change through a relay).
+    {
+      const char* t = target;
+      for (int hop = 0; t != nullptr && hop < 4 && !st.leaves; hop++) {
+        if (const char* to = level_change(t)) {
+          st.leaves = true;
+          st.name = to;
+          std::string_view goes(to);
+          if (!goes.empty() && goes[0] == '*') goes.remove_prefix(1);
+          goes = goes.substr(0, goes.find('$'));
+          for (const std::string& was : w.been) st.revisit = st.revisit || goes == was;
+          break;
+        }
+        const char* next = nullptr;
+        for (const sb::EntityBlock& d : blocks) {
+          const char* dc = sb::block_value(d, "classname");
+          const char* dn = sb::block_value(d, "targetname");
+          if (dc && dn && std::strcmp(dn, t) == 0 && std::strcmp(dc, "trigger_relay") == 0)
+            next = sb::block_value(d, "target");
+        }
+        t = next;
+      }
+    }
+    // One that moves water (base3's at the bottom of its pool drains it for minutes, opening a
+    // door down there) leaves him at the bottom of a dry pit his swim out of was: pressed last.
+    for (const sb::EntityBlock& b : blocks) {
+      const char* name = sb::block_value(b, "targetname");
+      const char* cls = sb::block_value(b, "classname");
+      st.drains =
+          st.drains || (target != nullptr && name != nullptr && cls != nullptr &&
+                        std::strcmp(name, target) == 0 && std::strcmp(cls, "func_water") == 0);
     }
     // Arrived from another map in a car (base2's start: the lift down from base1), the car's
     // button sends him back up to the way back: no step of his.
     bool car_back = false;
-    if (!w.back.empty()) {
+    if (!w.been.empty()) {
       const sh::Vec3f at = s.sv.edicts[1].origin;
       for (const int d : st.doors) {
         const sh::Edict& de = s.sv.edicts[static_cast<size_t>(d)];
@@ -462,6 +566,18 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
           he.absmin.z - st.hi.z < kHatchOver &&
           std::find(w.hatches.begin(), w.hatches.end(), h) == w.hatches.end())
         w.hatches.push_back(h);
+  }
+  // A key lying under or inside a door something else opens (base3's blue key, on a lift under a
+  // floor plate that a button slides aside): out of reach until that door has moved.
+  for (WayStep& st : w.steps) {
+    if (st.kind != WayKind::key) continue;
+    const float x = (st.lo.x + st.hi.x) / 2, y = (st.lo.y + st.hi.y) / 2;
+    for (size_t k = 0; k < w.locked.size(); k++) {
+      const sh::Edict& de = s.sv.edicts[static_cast<size_t>(w.locked[k])];
+      if (x > de.absmin.x && x < de.absmax.x && y > de.absmin.y && y < de.absmax.y &&
+          de.absmax.z > st.lo.z - kKeyCovered && de.absmin.z < st.hi.z + kKeyCovered)
+        st.covers.push_back(static_cast<int>(k));
+    }
   }
 }
 
@@ -490,8 +606,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   const int items = read_stats(s, me, *f.arsenal).items;
   const auto door_open = [&](int ent) {
     for (size_t k = 0; k < w.locked.size(); k++)
-      if (w.locked[k] == ent)
-        return dist(s.sv.edicts[static_cast<size_t>(ent)].origin, w.locked_at[k]) >= 1;
+      if (w.locked[k] == ent) return locked_moved(w, s, k);
     for (size_t k = 0; k < w.cars.size(); k++)
       if (w.cars[k] == ent)
         return dist(s.sv.edicts[static_cast<size_t>(ent)].origin, w.cars_at[k]) >= 1;
@@ -517,8 +632,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     switch (st.kind) {
       case WayKind::key:
         if (st.ent >= 0) {
+          // Once gone, taken for good: its slot is free for the next thing spawned (a shot, a
+          // gib), which would bring the key back as one not taken.
           const sh::Edict& k = s.sv.edicts[static_cast<size_t>(st.ent)];
-          st.done = k.free || k.modelindex <= 0;
+          st.done = st.done || k.free || k.modelindex <= 0;
         } else {
           st.done = (items & st.key_bit) != 0;
         }
@@ -540,8 +657,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // The doors shut now that only something else opens.
   w.barred.clear();
   for (size_t k = 0; k < w.locked.size(); k++)
-    if (dist(s.sv.edicts[static_cast<size_t>(w.locked[k])].origin, w.locked_at[k]) < 1)
-      w.barred.push_back(w.locked[k]);
+    if (!locked_moved(w, s, k)) w.barred.push_back(w.locked[k]);
   f.bot.pilot.pilot.shut = w.barred;  // his own routes never through them either
   f.bot.pilot.pilot.hollow = w.cars;  // and a car at rest is walked through
   if (w.barred != w.barred_was) {     // nor onto a bridge still in
@@ -591,7 +707,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         if (!now[n] && !w.seen[n] && w.search.reached(static_cast<int32_t>(n)) && !no_place(n))
           more++;
       for (const WayStep& st : w.steps)
-        if (st.kind == WayKind::exit && st.node >= 0 && !now[static_cast<size_t>(st.node)] &&
+        if (way_exit(st) && !st.revisit && st.node >= 0 && !now[static_cast<size_t>(st.node)] &&
             w.search.reached(st.node))
           more += 1000000;  // the way out
       w.gain[k] = more;
@@ -604,7 +720,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     reach_past(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w.search);
     std::vector<int32_t> exits;
     for (const WayStep& st : w.steps)
-      if (st.kind == WayKind::exit && st.node >= 0 && w.search.reached(st.node))
+      if (way_exit(st) && !st.revisit && st.node >= 0 && w.search.reached(st.node))
         exits.push_back(st.node);
     std::vector<int32_t> with;
     for (size_t k = 0; k < w.cars.size() && !exits.empty(); k++) {
@@ -631,6 +747,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         if (w.locked[k] == d && w.gain[k] > 0) return true;
       for (const int c : needed)
         if (c == d) return true;
+      // Or it uncovers a key not yet taken.
+      for (const WayStep& kst : w.steps)
+        if (kst.kind == WayKind::key && !kst.done)
+          for (const int k : kst.covers)
+            if (w.locked[static_cast<size_t>(k)] == d) return true;
     }
     return false;
   };
@@ -648,7 +769,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   double best = 0;
   for (size_t k = 0; k < w.steps.size(); k++) {
     const WayStep& st = w.steps[k];
-    if (car_first || st.kind != WayKind::exit || st.node < 0 || !w.search.reached(st.node) ||
+    if (car_first || !way_exit(st) || st.revisit || st.node < 0 || !w.search.reached(st.node) ||
         t < st.left_until)
       continue;
     const double c = w.search.cost(st.node);
@@ -663,18 +784,37 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     unseen = !w.seen[n] && w.search.reached(static_cast<int32_t>(n)) && !no_place(n);
   // A step in a trap (map_nav.hpp: a pool dropped into with no way back) is taken last, once
   // nothing else is left: base2's trigger in its south pool held him there for good, though the
-  // lever the exit needed lay on the ledge above.
+  // lever the exit needed lay on the ledge above. So is a button that drains a pool.
   const auto trapped_in = [&](int32_t n) {
     return n >= 0 && static_cast<size_t>(n) < nav.trap.size() && nav.trap[static_cast<size_t>(n)];
   };
   const bool me_trapped = trapped_in(from);
-  for (int pass = 0; pass < 3 && pick < 0; pass++)
+  // A key's lock is walked to with a key in hand: none taken yet, it opens nothing.
+  bool key_held = false;
+  for (const WayStep& st : w.steps) key_held = key_held || (st.kind == WayKind::key && st.done);
+  for (int pass = 0; pass < 3 && pick < 0; pass++) {
+    // Nothing left but the steps taken last: a way back to a map he has played comes first, before
+    // any place not yet seen (he knows the map: the steps are all he needs to find).
+    for (size_t k = 0; pass == 2 && k < w.steps.size(); k++) {
+      const WayStep& st = w.steps[k];
+      if (!st.revisit || st.node < 0 || !w.search.reached(st.node) || t < st.left_until) continue;
+      const double c = w.search.cost(st.node);
+      if (pick < 0 || c < best) {
+        pick = static_cast<int>(k);
+        best = c;
+      }
+    }
+    if (pick >= 0) break;
     for (size_t k = 0; k < w.steps.size(); k++) {
       const WayStep& st = w.steps[k];
-      if (st.kind == WayKind::exit || st.done || t < st.left_until || st.node < 0 ||
-          !w.search.reached(st.node))
+      if (way_exit(st) || st.done || t < st.left_until || st.node < 0 ||
+          !w.search.reached(st.node) || (st.keyed && !key_held))
         continue;
-      const bool last = !me_trapped && trapped_in(st.node);
+      bool covered = false;
+      for (const int c : st.covers)
+        covered = covered || !locked_moved(w, s, static_cast<size_t>(c));
+      if (covered) continue;
+      const bool last = (!me_trapped && trapped_in(st.node)) || st.drains;
       if (pass < 2 ? last : !last || unseen) continue;
       if (pass == 0 ? !worth(st) : pass == 1 && unseen) continue;
       const double c = w.search.cost(st.node);
@@ -683,10 +823,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         best = c;
       }
     }
+  }
   // An exit the pilot finds no way to (one his way search takes that his routes do not) is left
   // like any other step, but after kWayNoRoute_s with no route rather than kWayGiveUp_s: the walk
   // to an exit is often longer than that.
-  if (pick >= 0 && pick == w.step && w.steps[static_cast<size_t>(pick)].kind == WayKind::exit) {
+  if (pick >= 0 && pick == w.step && way_exit(w.steps[static_cast<size_t>(pick)])) {
     const sb::Pilot& pp = f.bot.pilot.pilot;
     const bool no_route = pp.mode == sb::PilotMode::idle && pp.route.size() < 2;
     if (!no_route) {
@@ -704,11 +845,15 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   if (pick != w.step) {
     w.step = pick;
     w.step_since = t;
-  } else if (w.log && pick >= 0 && w.steps[static_cast<size_t>(pick)].kind == WayKind::exit &&
+    // A step is given kWayGiveUp_s past twice the walk to it: base3's key lock, 40 s across the
+    // map, was left 25 s into the walk a few seconds short of it.
+    const int32_t at = pick >= 0 ? w.steps[static_cast<size_t>(pick)].node : -1;
+    w.step_for = kWayGiveUp_s + (at >= 0 && w.search.reached(at) ? 2 * w.search.cost(at) : 0);
+  } else if (w.log && pick >= 0 && way_exit(w.steps[static_cast<size_t>(pick)]) &&
              t - w.step_since > kWayGiveUp_s && w.stats.plans % 40 == 0) {
     say_way(w, f, g, s, me, self, w.steps[static_cast<size_t>(pick)].node, "on the exit");
-  } else if (pick >= 0 && w.steps[static_cast<size_t>(pick)].kind != WayKind::exit &&
-             t - w.step_since > kWayGiveUp_s) {
+  } else if (pick >= 0 && !way_exit(w.steps[static_cast<size_t>(pick)]) &&
+             t - w.step_since > w.step_for) {
     w.steps[static_cast<size_t>(pick)].left_until = t + kWayRetry_s;  // left for a while
     if (w.log) say_way(w, f, g, s, me, self, w.steps[static_cast<size_t>(pick)].node, "left");
     w.stats.left++;
@@ -878,6 +1023,26 @@ void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::
   // there left him standing on a pack of soldiers' heads in base1, as no person would.
   if (!body_against(s, me) && static_cast<int>((t - w.still_since) * 4) % 4 == 0)
     cmd.buttons |= sh::kButtonJump;
+}
+
+bool way_touch(const WayThrough& w, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd) {
+  if (w.step < 0) return false;
+  const WayStep& st = w.steps[static_cast<size_t>(w.step)];
+  if (st.kind != WayKind::exit && st.kind != WayKind::trigger) return false;
+  const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
+  const sh::Vec3f self = e.origin;
+  if (e.health <= 0 || touches(self, st.lo, st.hi)) return false;
+  if (self.z - 24 > st.hi.z || self.z + 32 < st.lo.z) return false;  // above or under it
+  const sh::Vec3f p{std::clamp(self.x, st.lo.x, st.hi.x), std::clamp(self.y, st.lo.y, st.hi.y),
+                    self.z};
+  const float dx = p.x - self.x, dy = p.y - self.y;
+  if (dx * dx + dy * dy > kTouchReach * kTouchReach) return false;
+  float yaw = 0, pitch = 0;
+  sh::aim_angles(self, p, yaw, pitch);
+  cmd.angles = {0, yaw, 0};
+  cmd.forward = 400;
+  cmd.side = 0;
+  return true;
 }
 
 bool way_edge(const MapNav& nav, const Fighter& f, const ge::shooterbots::BotView& s, int me,

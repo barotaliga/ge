@@ -22,6 +22,7 @@
 // look's `core_keys`, `glow_keys`): that many times the white the eye is adapted to (the frame's
 // `exposure()` divided out), so the beam is as bright on the screen by day as at night.
 #include "render/wgsl/frame.wgsl"
+#include "render/wgsl/mirror.wgsl"
 
 struct BeamLookGpu {
   core: vec4f,   // rgb; the core's luminance at this frame's level (cd/m^2)
@@ -33,7 +34,7 @@ struct BeamLookGpu {
 
 struct BeamParams {
   info: vec4f,  // beams, segments, burn vertices, the frame's time (s)
-  more: vec4f,  // the near plane (m), a fresh ember's luminance (cd/m^2), 0, 0
+  more: vec4f,  // the near plane (m), a fresh ember's luminance (cd/m^2), wet paint's mirror, 0
   looks: array<BeamLookGpu, 8>,
 }
 
@@ -49,7 +50,8 @@ struct BurnVert {
   more: vec4f,  // the relief's share of its darkness (0: by its cover alone); the world's up in uv;
                 // a hot burn's glow when fresh, whites (0: a scorch's, by its luminance)
   lit: vec4f,   // the light on it, in whites (a lightmap's 1 a surface as painted); paint (1: its
-                // own colour, already in the light, laid over at the soot's opacity: blood)
+                // own colour, already in the light, laid over at the soot's opacity: blood; its
+                // uv.w then how far it has spread, and its more the surface's normal and gloss)
 }
 
 @group(1) @binding(0) var<uniform> bp: BeamParams;
@@ -188,6 +190,7 @@ struct BurnOut {
   @location(3) lit: vec3f,   // the light on it, whites
   @location(4) @interpolate(flat) keys: f32,  // a hot burn's glow when fresh, whites; 0 a scorch's
   @location(5) @interpolate(flat) paint: f32,  // 1: paint (blood), its colour in `lit`
+  @location(6) rel: vec3f,                     // camera-relative, m (paint's mirror)
 }
 
 @vertex
@@ -205,6 +208,7 @@ fn burn_vs(@builtin(vertex_index) vid: u32) -> BurnOut {
   out.keys = v.more.w;
   out.lit = v.lit.rgb;
   out.paint = v.lit.w;
+  out.rel = v.at.xyz;
   return out;
 }
 
@@ -215,6 +219,97 @@ fn burn_ember(heat: f32) -> vec3f {
   let white = vec3f(1.0, 0.78, 0.45);
   return select(mix(orange, white, (heat - 0.55) / 0.45), mix(red, orange, heat / 0.55),
                 heat < 0.55);
+}
+
+// PAINT (blood): where it has spread to (the look's spread against the mask's arrival in blue), its
+// own colour in the light it lies in, darker at its rim (the mask's relief over the middle); on a
+// floor, the room mirrored in it by its gloss (the scene kept a frame, `paint_mirror`),
+// by Fresnel (kPaintSheen head on, all of it at a graze) and the pass's strength (`bp.more.z`): a
+// wet pool shows the room and the lights in it, a dried one none. Its vertex's look.w and up carry the
+// surface's normal, its keys the gloss (paint has no relief, up nor glow of its own).
+const kPaintFloorUp = 0.7;
+// THE PAINT'S MARCH: what the last frame drew along the reflected ray `r` from `rel` (rgb, and
+// in a the share it counts for; 0 where it meets nothing it may take). A pool lies under the feet
+// of whoever stands in it, so the march starts in centimetre steps that lengthen with the square
+// of the way out to kPaintReach, and takes a hit only where the ray passes behind what was drawn
+// by less than kPaintThick: the shared helper's coarse first step (a fifth of a metre) passed over
+// the boots standing in it and took the wall between the legs, so a pool showed streaks of the
+// wall where the boots should stand.
+const kPaintReach = 30.0;
+const kPaintSteps = 48;
+// What was drawn is taken this deep, the share fading from kPaintSure on: a ray just behind a
+// boot standing in the pool mirrors the boot (its back, which the picture lacks, as its front), and
+// a ray far behind a nearer thing (the wall seen past the legs) mirrors nothing there, rather than
+// stretching the legs down the pool.
+const kPaintSure = 0.08;
+const kPaintThick = 0.3;
+fn paint_mirror(rel: vec3f, r: vec3f) -> vec4f {
+  let dims = vec2f(textureDimensions(mirror_last));
+  if (dims.x < 2.0) {
+    return vec4f(0.0);
+  }
+  var last = 0.01;
+  for (var i = 1; i <= kPaintSteps; i++) {
+    let f = f32(i) / f32(kPaintSteps);
+    let s = max(kPaintReach * f * f, last + 0.01);
+    let m = mirror_at(rel + r * s);
+    if (m.w == 0.0 || any(m.xy < vec2f(0.0)) || any(m.xy > vec2f(1.0))) {
+      return vec4f(0.0);
+    }
+    let seen = textureLoad(mirror_last, vec2i(m.xy * dims), 0).a;
+    if (seen > 0.0 && m.z > seen) {
+      let behind = m.z - seen;
+      if (behind > max(kPaintThick, 1.5 * (s - last))) {
+        return vec4f(0.0);  // behind something nearer: hidden, not mirrored
+      }
+      var a = last;
+      var b = s;
+      for (var h = 0; h < 6; h++) {
+        let mid = 0.5 * (a + b);
+        let mh = mirror_at(rel + r * mid);
+        let sh = textureLoad(mirror_last, vec2i(clamp(mh.xy, vec2f(0.0), vec2f(0.9999)) * dims),
+                             0).a;
+        if (sh > 0.0 && mh.z > sh) {
+          b = mid;
+        } else {
+          a = mid;
+        }
+      }
+      let uv = clamp(mirror_at(rel + r * b).xy, vec2f(0.0), vec2f(1.0));
+      let c = textureSampleLevel(mirror_last, linear_clamp, uv, 0.0).rgb;
+      let edge = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+      let share = smoothstep(0.0, 0.08, edge) * (1.0 - smoothstep(0.6, 1.0, b / kPaintReach)) *
+                  (1.0 - smoothstep(kPaintSure, kPaintThick, behind - (s - last)));
+      return vec4f(c, share);
+    }
+    last = s;
+  }
+  return vec4f(0.0);
+}
+// A wet pool's mirror head on: more than a still liquid's 2 %, the sheen of its film and its rim
+// catching the room, so a pool seen from where a player stands reads as wet.
+const kPaintSheen = 0.25;
+fn paint_fs(in: BurnOut, m: vec4f, cover_in: f32) -> vec4f {
+  let spread = in.look.z;
+  let reached = smoothstep(m.b, m.b + 0.04, spread * 1.04);
+  let a = in.look.y * cover_in * reached;
+  if (a <= 0.002) {
+    discard;
+  }
+  let rim = clamp(m.g * 2.0 - 1.0, 0.0, 1.0);
+  var col = in.lit * (1.0 - 0.45 * rim) * white_luminance();
+  let n = vec3f(in.look.w, in.up.x, in.up.y);
+  let gloss = in.keys;
+  if (bp.more.z > 0.0 && gloss > 0.01 && n.y > kPaintFloorUp) {
+    let eye_dir = normalize(in.rel);
+    let r = reflect(eye_dir, n);
+    let seen = paint_mirror(in.rel, r);
+    let cos_i = clamp(dot(n, -eye_dir), 0.0, 1.0);
+    let fresnel = kPaintSheen + (1.0 - kPaintSheen) * pow(1.0 - cos_i, 5.0);
+    let k = clamp(bp.more.z * gloss * fresnel * seen.a, 0.0, 1.0);
+    col = mix(col, seen.rgb, k);
+  }
+  return vec4f(min(col * a, vec3f(60000.0)), 1.0 - a);
 }
 
 @fragment
@@ -236,8 +331,7 @@ fn burn_fs(in: BurnOut) -> @location(0) vec4f {
     ember_l = in.keys * ember / max(bp.more.y, 1e-3) / max(exposure(), 1e-20);
   }
   if (in.paint > 0.0) {  // PAINT (blood): its colour in the wall's light over what is there
-    let a = in.look.y * cover;
-    return vec4f(min(in.lit * white_luminance() * a, vec3f(60000.0)), 1.0 - a);
+    return paint_fs(in, m, cover);
   }
   let glow = burn_ember(heat) * ember_l;
   if (in.look.w <= 0.0) {  // a scorch: its soot by its cover

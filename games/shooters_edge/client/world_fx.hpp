@@ -69,6 +69,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "brush/light_probe.hpp"
@@ -110,6 +111,10 @@ struct FxSwitches {
   // ce_blood: a body hit sprays blood by the weapon (app/weapon_fx.hpp's `blood_spray`) and paints
   // the walls and floor near (`splatter`); off, the classic specks.
   bool blood = false;
+  // ce_blood_time: how long its marks stay, s (< 0: until their place is needed).
+  double blood_life_s = 120;
+  // ce_blood_amount: how much a body bleeds, 1 as drawn (0: none).
+  double blood_amount = 1;
   // ce_respawns: an item about to come back drawn as a blue hologram filling in to solid
   // (classicenhance/hologram.hpp); off, it appears at once.
   bool respawns = false;
@@ -187,7 +192,23 @@ struct Wound {
   float a = 0, b = 0;  // its place on it (barycentric, from its first corner)
   uint32_t seed = 0;   // its splatter
   float size = 1;      // the splatter's spread: a burst of drops, a share more
-};  // boxes: the hole about half
+  // Its blood on the skin (ce_blood, render/morph.hpp's MorphWound): where it sits in the body's
+  // rest frame (body_rest), the soaked patch's radius and how far its blood runs down at most (m),
+  // when it was struck, and whether it is where a round came out (bigger, more blood).
+  float rest[3] = {0, 0, 0};
+  bool has_rest = false;
+  float stain = 0.06f, run = 0.3f;
+  double born = 0;
+  bool exit = false;
+};
+// How a blow wounds (`wound`): through the body (a nail: an exit wound where it came out), and
+// its wounds' soaked patch and run (m).
+struct WoundCut {
+  bool through = false;
+  float stain = 0.06f, run = 0.3f;
+};
+inline constexpr double kExitMinM =
+    0.08;  // a line through less body than this has no way out  // boxes: the hole about half
 // The faces the marks are pressed onto: the mesh and its receivers (which point into it), kept
 // together.
 struct MarkFaces {
@@ -287,17 +308,31 @@ struct FxState {
   std::unordered_map<uint32_t, std::array<float, 3>> wall_colours;  // each texture's, as hit
   std::vector<Wound> wounds;
   std::unordered_map<int, float> wound_health;  // each wounded body's health a frame ago
-  std::size_t explosions_seen = 0;              // of Listen::explosions
-  std::vector<Blast> lit;                       // the explosions whose light still fades
-  std::vector<Blast> sparked;                   // a nail's sparks off metal, their flick fading
-  double hurt = 0;                              // the hit's flash now (effects::Screen::hurt)
-  double armour = 0;                            // the armour's share of it (Screen::armour)
-  std::size_t blows_seen = 0;                   // of Listen::blows
-  double hurt_rgb[3] = {255, 0, 0};             // the classic damage tint's colour (Screen)
-  double bonus = 0;                             // the pickup's flash now (Screen::bonus)
-  int64_t bonuses_seen = 0;                     // of FxScene::bonuses
-  std::size_t effects_seen = 0;                 // of Listen::effects
-  float health = 0;                             // the last frame's
+  // THE BODY'S BLEEDING (ce_blood, body_blood): drops let fall from fresh wounds, each where it
+  // lands on the floor and when (a drop on the floor when it gets there); and each body that
+  // stepped in wet blood, the prints it has left to make and where it made the last.
+  struct Dropping {
+    ge::detail::Vec3 at{0, 0, 0}, n{0, 1, 0};
+    double land_s = 0;
+  };
+  std::vector<Dropping> dropping;
+  struct Tread {
+    int left = 0;                // prints still to make
+    double from[3] = {0, 0, 0};  // the last print's place (or the pool's edge), world m
+    bool right = false;          // the next print's foot
+  };
+  std::unordered_map<int, Tread> treads;
+  std::size_t explosions_seen = 0;   // of Listen::explosions
+  std::vector<Blast> lit;            // the explosions whose light still fades
+  std::vector<Blast> sparked;        // a nail's sparks off metal, their flick fading
+  double hurt = 0;                   // the hit's flash now (effects::Screen::hurt)
+  double armour = 0;                 // the armour's share of it (Screen::armour)
+  std::size_t blows_seen = 0;        // of Listen::blows
+  double hurt_rgb[3] = {255, 0, 0};  // the classic damage tint's colour (Screen)
+  double bonus = 0;                  // the pickup's flash now (Screen::bonus)
+  int64_t bonuses_seen = 0;          // of FxScene::bonuses
+  std::size_t effects_seen = 0;      // of Listen::effects
+  float health = 0;                  // the last frame's
   uint32_t seed = 1;
   WarpWatch warps;                       // the players' arrivals and departures (warps.hpp)
   std::unordered_map<int, Placed> seen;  // each player as drawn last frame, by entity
@@ -327,6 +362,9 @@ struct FxFrame {
   // (look::Picture's v_ cvars, world_draw.cpp).
   effects::Screen screen, screen_dry;
   std::vector<Placed> models;  // the entities with a model (world_models.hpp)
+  // The blood on each wounded body's skin this frame (ce_blood), by entity: its wounds' soaked
+  // patches and the runs down from them (render/morph.hpp's MorphBlood).
+  std::vector<std::pair<int, ge::render::MorphBlood>> bloodied;
   // The local player's own arrival (ce_warps): s into it (below 0: none), and the colour of its
   // flash, the pack's teleport fog's brightest (sRGB-encoded), for the post pass's warp of the
   // whole view (render/post.hpp's `arrival_warp`, at FxSwitches::arrival).
@@ -398,6 +436,10 @@ struct FxScene {
   // (0: not known; take the water level).
   int me_items = 0;
   int eye_contents = 0;
+  // A staged fight's blows (a lab): every blood message taken as `by` struck from `from` (map
+  // units), whatever the nails in flight and the aims say. `any`: worked out as a match's.
+  effects::BloodBy staged_by = effects::BloodBy::any;
+  sh::Vec3f staged_from{0, 0, 0};
 };
 
 // THE BLOOD (ce_blood; client/world_fx_blood.cpp): the blood message `e` at `p` (engine m) thrown
@@ -408,6 +450,40 @@ void bleed_fx(const FxScene& l, FxState& s, const Effect& e, const double p[3],
               const sh::Vec3f& eye_map, double floor_y, double t, FxFrame& out);
 // A blast at `boom` (map units): every living player within reach of it bleeds away from it.
 void blast_blood(const FxScene& l, FxState& s, const sh::Vec3f& boom, double t, FxFrame& out);
+// A wound where a round struck `at` (map units; `p` the same in the world) on the body nearest
+// it, along the line from `from`; a blow `cut` through it wounds it again where
+// the line comes out, into `exit_at` (world, m), and says so.
+bool wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, const double p[3],
+           const ge::camera::Vec3& from, int drops, double t, const WoundCut& cut = {},
+           double exit_at[3] = nullptr);
+// The blood on every wounded body's skin this frame (ce_blood) into `out.bloodied`, the drops its
+// fresh wounds let fall, and the prints of the bodies that stepped in wet blood.
+void body_blood(const FxScene& l, FxState& s, double t, double dt, FxFrame& out);
+// A body come back to life (a respawn) is whole: its wounds healed (world_fx_wounds.cpp, as the
+// two below and the three above).
+void heal_wounds(const FxScene& sc, FxState& s);
+// Every wound of a body drawn this frame on its skin as it stands (ce_decals) into `out`.
+void draw_wounds(FxState& s, const std::vector<Placed>& placed, const ge::camera::Vec3& eye,
+                 double t, double dt, effects::Particles& out);
+// Two unit ways square to `n` and to each other.
+void tangents(const double n[3], double a[3], double b[3]);
+// A drop let go at `at` (world m): thrown, and its mark on the floor when it gets there
+// (world_fx_blood.cpp, as the rest below).
+void let_drop(FxState& s, const double at[3], double t, FxFrame& out);
+// The drops that reached the floor by `t` run into the pool there, or make one.
+void land_drops(FxState& s, double t);
+// Each body of `placed` standing in a wet pool takes blood on its soles; walking on, it leaves
+// kPrints prints a stride apart, fainter each step.
+void tread_blood(const FxScene& l, FxState& s, std::span<const Placed> placed, double t);
+// QUAKE II'S OWN (client/world_fx_q2.cpp): a named `sq_*` effect `e` at `p` (engine m; `dust`:
+// a warp's dust already covers it), a trail `sq_bubbles`/`sq_force_wall` over `from`..`to` (false
+// for any other name), and a flying entity's effect-bit mark (`Q2Look::Missile`; `moved`: it has a
+// stretch from `from`) at `to`.
+void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, FxFrame& out);
+bool q2_named_trail(FxState& s, const Effect& e, const double from[3], const double to[3],
+                    FxFrame& out);
+void q2_mark_fx(FxState& s, int mark, bool moved, const double from[3], const double to[3],
+                FxFrame& out);
 // A decal pressed onto the marks' faces in the light where it lies; its slot, -1 when none took it.
 int press_mark(FxState& s, const ge::detail::DecalAt& d);
 // The floor under `at` (map units) seen from `from`, world y (m) (world_fx.cpp).

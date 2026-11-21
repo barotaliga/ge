@@ -194,7 +194,10 @@ std::string expand_settings(const Q2ClientEnd& c, const std::string& line) {
     size_t end = i + 1;
     while (end < line.size() && line[end] != ' ' && line[end] != '\t' && line[end] != '"') end++;
     const std::string name = line.substr(i + 1, end - i - 1);
-    out += c.cfg.setting ? c.cfg.setting(name) : std::string();
+    if (const auto it = c.stuffed_set.find(name); it != c.stuffed_set.end())
+      out += it->second;
+    else
+      out += c.cfg.setting ? c.cfg.setting(name) : std::string();
     i = end - 1;
   }
   return out;
@@ -207,14 +210,17 @@ void run_stuffed(Q2ClientEnd& c) {
     while (from < text.size()) {
       size_t end = text.find_first_of("\n;", from);
       if (end == std::string::npos) end = text.size();
-      const std::string line = text.substr(from, end - from);
+      const std::string raw = text.substr(from, end - from);
       from = end + 1;
-      if (line.empty()) continue;
-      if (c.stuffed.size() < kKept) c.stuffed.push_back(line);
+      if (raw.empty()) continue;
+      if (c.stuffed.size() < kKept) c.stuffed.push_back(raw);
+      const std::string line = expand_settings(c, raw);  // as a console runs it
       const std::vector<std::string> w = q2_words(line);
       if (w.empty()) continue;
-      if (w[0] == "cmd" && line.size() > 4) {
-        q2_client_command(c, expand_settings(c, line.substr(4)));
+      if (w[0] == "set" && w.size() > 1) {  // the server's own settings (the forced reconnect)
+        c.stuffed_set[w[1]] = w.size() > 2 ? w[2] : std::string();
+      } else if (w[0] == "cmd" && line.size() > 4) {
+        q2_client_command(c, line.substr(4));
         c.signon_steps++;
       } else if (w[0] == "precache") {
         const std::string begin = "begin" + (w.size() > 1 ? " " + w[1] : std::string());
@@ -433,6 +439,9 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
     if (c.stage == ClientStage::active && c.moves > 0)
       c.latency = c.now - c.sent_at[c.ch.incoming_acknowledged & 63];
     read_payload(c, buf + at, size - at);
+    ge::hud::net_lost(c.net, c.ch.last_drop);  // the lag graph's (scr_lag_draw) and r_netgraph's
+    ge::hud::net_arrived(c.net,
+                         c.stage == ClientStage::active && c.moves > 0 ? c.latency * 1e3 : -1);
   }
   if (!c.sent_on.empty()) {  // a server sent it elsewhere: the handshake again, there
     gn::Address to;

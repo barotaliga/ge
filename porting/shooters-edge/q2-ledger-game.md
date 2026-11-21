@@ -12,18 +12,18 @@ q2-sp-gaps.md).
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client commands (what a player types; the game library answers them) | 17 | 13 | 7 | 0 | 37 |
+| Client commands (what a player types; the game library answers them) | 25 | 9 | 3 | 0 | 37 |
 | Server commands (`sv <word>` typed at the server console) | 0 | 4 | 2 | 0 | 6 |
 | Cvars the game library registers or reads | 29 | 10 | 7 | 0 | 46 |
 | User info keys the game reads | 4 | 5 | 0 | 0 | 9 |
 | dmflags bits | 10 | 6 | 0 | 0 | 16 |
-| Items (the item list, in its order; each is also a spawnable classname) | 16 | 26 | 0 | 0 | 42 |
-| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 73 | 7 | 1 | 0 | 81 |
+| Items (the item list, in its order; each is also a spawnable classname) | 17 | 25 | 0 | 0 | 42 |
+| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 77 | 3 | 1 | 0 | 81 |
 | Monsters | 26 | 0 | 0 | 0 | 26 |
-| Player messages (printed, broadcast and centre-printed) | 50 | 16 | 15 | 0 | 81 |
-| Server console lines (what an admin reads; `dprintf`) | 1 | 1 | 34 | 0 | 36 |
-| Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 8 | 8 | 1 | 0 | 17 |
-| Rules a player sees (behaviour not in a row above) | 18 | 15 | 11 | 0 | 44 |
+| Player messages (printed, broadcast and centre-printed) | 66 | 5 | 10 | 0 | 81 |
+| Server console lines (what an admin reads; `dprintf`) | 2 | 1 | 33 | 0 | 36 |
+| Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 9 | 7 | 1 | 0 | 17 |
+| Rules a player sees (behaviour not in a row above) | 22 | 15 | 7 | 0 | 44 |
 | **all** | 252 | 111 | 78 | 0 | 441 |
 
 ## Client commands (what a player types; the game library answers them)
@@ -42,12 +42,12 @@ count: done 17, partial 13, missing 7, not-taken 0
 | cmd.say_team | `say_team <text>` | chat as `(Name): text` to teammates only when dmflags 64 or 128 is set, else to everyone | partial | q2_commands.cpp; co-op teams by dmflags not honoured (R23); flood (R40) |
 | cmd.score | `score` | toggles the deathmatch/co-op scoreboard layout; closes inventory and help; in single player shows nothing new | partial | q2_screens.cpp; scoreboard while dead differs (R34) |
 | cmd.help | `help` | single player/co-op: toggles the help computer (always closes when open); deathmatch: same as `score` | partial | q2_screens.cpp, q2_campaign.cpp; refresh and toggle rule differ (R35) |
-| cmd.use | `use <item name>` | uses an item by pickup name (case ignored, whole rest of line); `unknown item: <name>`, `Item is not usable.`, `Out of item: <name>` | partial | q2_fight.cpp, q2_server.cpp; our own wording (R25) |
-| cmd.drop | `drop <item name>` | drops one of an item; `unknown item: <name>`, `Item is not dropable.`, `Out of item: <name>` | partial | q2_fight.cpp; wording (R25), weapon carries ammo (R18), co-op stay items droppable (R21), keys/power armour not droppable (R31) |
-| cmd.give | `give <all/health/weapons/ammo/armor/Power Shield/<item>> [n]` | cheat: gives items; `give health n` sets health (at least 1); `unknown item`, `non-pickup item` | partial | q2_commands.cpp; co-op gate (R24), wording (R25), health floor and extra shield (R39) |
-| cmd.god | `god` | cheat: toggles god mode, `godmode ON` / `godmode OFF` | partial | q2_commands.cpp; prints `God mode on`/`off` (R25), co-op gate (R24) |
-| cmd.notarget | `notarget` | cheat: monsters ignore the player, `notarget ON` / `notarget OFF` | partial | q2_commands.cpp; wording (R25), co-op gate (R24) |
-| cmd.noclip | `noclip` | cheat: fly through walls, `noclip ON` / `noclip OFF` | partial | q2_commands.cpp; wording (R25), co-op gate (R24) |
+| cmd.use | `use <item name>` | uses an item by pickup name (case ignored, whole rest of line); `unknown item: <name>`, `Item is not usable.`, `Out of item: <name>` | done | `games/shooters_edge/server/q2_fight.cpp`, `games/shooters_edge/server/q2_commands.cpp` |
+| cmd.drop | `drop <item name>` | drops one of an item; `unknown item: <name>`, `Item is not dropable.`, `Out of item: <name>` | partial | `games/shooters_edge/server/q2_fight.cpp`; a dropped weapon carries ammo (R18), co-op stay items droppable (R21), keys/power armour not droppable (R31) |
+| cmd.give | `give <all/health/weapons/ammo/armor/Power Shield/<item>> [n]` | cheat: gives items; `give health n` sets health (at least 1); `unknown item`, `non-pickup item` | partial | `games/shooters_edge/server/q2_commands.cpp`; health floor and extra shield (R39) |
+| cmd.god | `god` | cheat: toggles god mode, `godmode ON` / `godmode OFF` | done | `games/shooters_edge/server/q2_commands.cpp` |
+| cmd.notarget | `notarget` | cheat: monsters ignore the player, `notarget ON` / `notarget OFF` | done | `games/shooters_edge/server/q2_commands.cpp` |
+| cmd.noclip | `noclip` | cheat: fly through walls, `noclip ON` / `noclip OFF` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | cmd.inven | `inven` | toggles the inventory screen (closes score and help); the server sends the item counts | partial | q2_screens.cpp; counts not refreshed every frame while open (R36) |
 | cmd.invnext | `invnext` | selects the next held item | done | q2_screens.cpp; also steps the chase camera for a spectator (missing, see rule.chase) |
 | cmd.invprev | `invprev` | selects the previous held item | done | q2_screens.cpp |
@@ -64,15 +64,15 @@ count: done 17, partial 13, missing 7, not-taken 0
 | cmd.putaway | `putaway` | closes score, help and inventory | done | q2_screens.cpp |
 | cmd.wave | `wave <0-4>` | gesture: 0 flipoff, 1 salute, 2 taunt, 3 wave, other point; not while crouched or during a higher animation; prints the gesture's word to the player | done | q2_commands.cpp |
 | cmd.playerlist | `playerlist` | per player `mm:ss ping score name` plus ` (spectator)`, `And more...` past the buffer | done | q2_commands.cpp |
-| cmd.teleport | `teleport x y z` | cheat: moves the player to (x, y, z+10), stopped, held, view cleared, telefrags; `Usage: teleport x y z` | missing | R28 |
+| cmd.teleport | `teleport x y z` | cheat: moves the player to (x, y, z+10), stopped, held, view cleared, telefrags; `Usage: teleport x y z` | done | `games/shooters_edge/server/q2_commands.cpp`, `q2_map.cpp` (`map_place_player`) |
 | cmd.spawnentity | `spawnentity classname x y z [pitch yaw roll [flags]]` | cheat: spawns any entity there; usage line on bad arity | missing | R28 |
 | cmd.spawnonstart | `spawnonstart classname` | cheat: spawns one at every start/deathmatch/co-op spot, `Spawned entity at x y z` to the console | missing | R28 |
-| cmd.listentities | `listentities <all/ammo/items/keys/monsters/weapons>` | cheat: lists matching entities `classname: x y z` to the server console | missing | R28 |
-| cmd.cycleweap | `cycleweap <classname...>` | switches through a listed set of weapons; usage line with no names | missing | R26 |
-| cmd.prefweap | `prefweap <classname...>` | switches to the first listed weapon held with ammo; usage line | missing | R26 |
+| cmd.listentities | `listentities <all/ammo/items/keys/monsters/weapons>` | cheat: lists matching entities `classname: x y z` to the server console | done | `games/shooters_edge/server/q2_commands.cpp` |
+| cmd.cycleweap | `cycleweap <classname...>` | switches through a listed set of weapons; usage line with no names | done | `games/shooters_edge/server/q2_commands.cpp` (`weapon_list`) |
+| cmd.prefweap | `prefweap <classname...>` | switches to the first listed weapon held with ammo; usage line | done | `games/shooters_edge/server/q2_commands.cpp` (`weapon_list`) |
 | cmd.chat-fallback | any other word | the whole line said as chat (not during the intermission) | done | q2_commands.cpp |
 | cmd.intermission-gate | the intermission's five | only players, say, say_team, score, help answered during the intermission | done | q2_commands.cpp `commands_in_intermission` |
-| cmd.cheat-gate | the cheat gate | give, god, notarget, noclip, teleport, spawnentity, spawnonstart, listentities refused in deathmatch AND co-op unless `cheats` | partial | q2_commands.cpp gates deathmatch only and prints its own line (R24) |
+| cmd.cheat-gate | the cheat gate | give, god, notarget, noclip, teleport, spawnentity, spawnonstart, listentities refused in deathmatch AND co-op unless `cheats` | partial | q2_commands.cpp gates deathmatch and co-op with the game's line; teleport, spawnentity, spawnonstart, listentities missing (R28) |
 | cmd.spectator-jump | jump / attack as a spectator | attack starts/stops chasing, jump steps the chase target | missing | R16 (see rule.chase) |
 
 ## Server commands (`sv <word>` typed at the server console)
@@ -105,7 +105,7 @@ count: done 29, partial 10, missing 7, not-taken 0
 | cvar.sv_maxvelocity | `sv_maxvelocity` 2000 | per-axis speed cap for thrown and falling things | done | q2_commands.cpp |
 | cvar.sv_gravity | `sv_gravity` 800 | gravity; reset to 800 or the world's `gravity` key at each map | done | q2_targets.cpp, q2_server.cpp (world 9) |
 | cvar.dedicated | `dedicated` 0 (N) | read to know whether the server has a local player | done | q2_native.cpp; our rules know it from the host |
-| cvar.cheats | `cheats` 0 (SI, L) | allows the cheat commands in deathmatch and co-op | partial | q2_commands.cpp: not latched, gates deathmatch only (R24) |
+| cvar.cheats | `cheats` 0 (SI, L) | allows the cheat commands in deathmatch and co-op | partial | q2_commands.cpp gates deathmatch and co-op; not latched |
 | cvar.gamename | `gamename` baseq2 (SI, L) | the game's name in the server info, for browsers | missing | R45, S27 |
 | cvar.gamedate | `gamedate` build date (SI, L) | the build date in the server info | missing | R45, S27 |
 | cvar.maxclients | `maxclients` 4 (SI, L) | player slots; forced to at least 1 | partial | net/q2_net_server.hpp default 8 (S35); q2_native.cpp passes it to a library |
@@ -171,7 +171,7 @@ count: done 10, partial 6, missing 0, not-taken 0
 | --- | --- | --- | --- | --- |
 | dmf.1 | no health | health items, adrenaline and the ancient head removed from the map | done | q2_server.cpp |
 | dmf.2 | no powerups | powerups removed from the map | done | q2_server.cpp |
-| dmf.4 | weapons stay | a taken weapon stays for others (a holder cannot take it again); `drop` of a weapon silently ignored; every mode | partial | q2_fight.cpp; deathmatch only in ours (R23); ours prints a line on drop (R25) |
+| dmf.4 | weapons stay | a taken weapon stays for others (a holder cannot take it again); `drop` of a weapon silently ignored; every mode | partial | `games/shooters_edge/server/q2_fight.cpp`; deathmatch only in ours (R23) |
 | dmf.8 | no falling damage | | done | q2_fight.cpp |
 | dmf.16 | instant powerups | powerups used on pickup | done | q2_server.cpp |
 | dmf.32 | same map | the level's end reloads the same map | done | q2_fight.cpp (R13) |
@@ -205,17 +205,17 @@ count: done 16, partial 26, missing 0, not-taken 0
 | item.item_armor_shard | Armor Shard | +2 armour on any armour (jacket when none); not droppable | done | q2_items.hpp |
 | item.item_power_screen | Power Screen | front screen, cells absorb damage; usable (toggle), droppable (switched off first if last and on) | partial | q2_use.cpp; cannot be dropped in ours (R31) |
 | item.item_power_shield | Power Shield | all-round shield, cells absorb damage; usable, droppable; `give` always adds one more | partial | q2_use.cpp; not droppable (R31); `give` gives only when none held (R39) |
-| item.weapon_blaster | Blaster | always held, never placed in a map (no world model, no pickup); `give` answers `non-pickup item` | partial | q2_combat.hpp; the `give` line differs (R25) |
+| item.weapon_blaster | Blaster | always held, never placed in a map (no world model, no pickup); `give` answers `non-pickup item` | done | `games/shooters_edge/server/q2_combat.hpp`, `games/shooters_edge/server/q2_commands.cpp` |
 | item.weapon_shotgun | Shotgun | uses 1 shell; pickup gives its ammo; stays in co-op | partial | q2_combat.hpp; a `drop`ped one gives ammo back (R18); droppable in co-op (R21) |
 | item.weapon_supershotgun | Super Shotgun | uses 2 shells | partial | as weapon_shotgun (R18, R21) |
 | item.weapon_machinegun | Machinegun | uses 1 bullet, climbs | partial | R18, R21 |
 | item.weapon_chaingun | Chaingun | spins up, 1-3 bullets a frame | partial | R18, R21 |
-| item.ammo_grenades | Grenades | ammo AND the hand grenade weapon; 5 a box; first grenades switch to the hand grenade | partial | q2_fight.cpp; the switch test differs with a `count` key (R48); last grenades in hand: `Can't drop current weapon` wording (R25) |
+| item.ammo_grenades | Grenades | ammo AND the hand grenade weapon; 5 a box; first grenades switch to the hand grenade | partial | `games/shooters_edge/server/q2_fight.cpp`; the switch test differs with a `count` key (R48) |
 | item.weapon_grenadelauncher | Grenade Launcher | uses 1 grenade | partial | R18, R21 |
 | item.weapon_rocketlauncher | Rocket Launcher | uses 1 rocket | partial | R18, R21 |
 | item.weapon_hyperblaster | HyperBlaster | uses 1 cell a shot | partial | R18, R21 |
 | item.weapon_railgun | Railgun | uses 1 slug | partial | R18, R21 |
-| item.weapon_bfg | BFG10K | uses 50 cells; removed from deathmatch maps under dmflags 8192 | partial | R18, R21; `Not enough Cells for BFG10K.` missing (R25) |
+| item.weapon_bfg | BFG10K | uses 50 cells; removed from deathmatch maps under dmflags 8192 | partial | `games/shooters_edge/server/q2_fight.cpp`; R18, R21 |
 | item.ammo_shells | Shells | 10 a box; droppable | done | q2_items.hpp |
 | item.ammo_bullets | Bullets | 50 a box | done | q2_items.hpp |
 | item.ammo_cells | Cells | 50 a box (also power armour's fuel) | done | q2_items.hpp |
@@ -258,10 +258,10 @@ count: done 73, partial 7, missing 1, not-taken 0
 | ent.item_health_small | item_health_small | 2 health, may pass max | done | q2_items.hpp |
 | ent.item_health_large | item_health_large | 25 health | done | q2_items.hpp |
 | ent.item_health_mega | item_health_mega | 100 health past max, drains back after 5 s, respawn 20 s after the drain | done | q2_items.hpp, q2_server.cpp |
-| ent.info_player_start | info_player_start | single-player start, named starts for level changes | partial | q2_server.cpp, q2_campaign.cpp; the eight maps' unnamed starts (R42) missing |
+| ent.info_player_start | info_player_start | single-player start, named starts for level changes | done | `games/shooters_edge/server/q2_server.cpp`, `games/shooters_edge/server/q2_campaign.cpp` (`campaign_unnamed_starts`) |
 | ent.info_player_deathmatch | info_player_deathmatch | deathmatch spawn: a solid pad with the dmspot model; removed outside deathmatch; random spot avoids the "two nearest" | partial | q2_map.cpp (R5 landed); the two-nearest quirk (R32); spawn does not telefrag (R8) |
 | ent.info_player_coop | info_player_coop | co-op spawn by slot order; renamed on 18 maps; three added on security | done | q2_campaign.cpp (R6 landed) |
-| ent.info_player_intermission | info_player_intermission | intermission camera spot (one of the first four, random); fact1's camera moved | partial | q2_server.cpp; fact1 camera fix missing (R43); fov 90 missing (R47) |
+| ent.info_player_intermission | info_player_intermission | intermission camera spot (one of the first four, random); fact1's camera moved | partial | `games/shooters_edge/server/q2_server.cpp`; fov 90 missing (R47) |
 | ent.func_plat | func_plat | platform with its trigger field; co-op waits coop_elevator_delay | done | q2_map.cpp |
 | ent.func_button | func_button | pressed by touch, use or damage; fires targets | done | q2_map.cpp |
 | ent.func_door | func_door | sliding door, teams, key-less message, trigger field, damage to open | done | q2_map.cpp |
@@ -279,7 +279,7 @@ count: done 73, partial 7, missing 1, not-taken 0
 | ent.func_explosive | func_explosive | breakable brush, debris, explosion; obituary `blew up` | done | q2_targets.cpp (world 6) |
 | ent.func_killbox | func_killbox | kills everything inside when used | done | q2_targets.cpp |
 | ent.trigger_always | trigger_always | fires its targets at map start | done | q2_map.cpp |
-| ent.trigger_once | trigger_once | fires once (touch or use), message centreprinted | partial | q2_map.cpp; the `command` map's `*27` kept on hard (R27) missing |
+| ent.trigger_once | trigger_once | fires once (touch or use), message centreprinted | done | `games/shooters_edge/server/q2_map.cpp`, `games/shooters_edge/server/q2_server.cpp` (the `command` map's `*27`) |
 | ent.trigger_multiple | trigger_multiple | fires on touch, waits | done | q2_map.cpp |
 | ent.trigger_relay | trigger_relay | passes a use on | done | q2_map.cpp |
 | ent.trigger_push | trigger_push | pushes (once flag), wind sound | done | q2_map.cpp |
@@ -296,7 +296,7 @@ count: done 73, partial 7, missing 1, not-taken 0
 | ent.target_secret | target_secret | counts a secret, sound; mine3's message fix | done | q2_map.cpp (world 19) |
 | ent.target_goal | target_goal | counts a goal; the last goal stops the music | done | q2_map.cpp (world 24) |
 | ent.target_splash | target_splash | sparks, water, blood etc.; may hurt | done | q2_targets.cpp (world 21) |
-| ent.target_spawner | target_spawner | spawns an entity on use (monster spawns); fact2's moved 8 units down | partial | q2_targets.cpp (world 13); fact2 fix missing (R43) |
+| ent.target_spawner | target_spawner | spawns an entity on use (monster spawns); fact2's moved 8 units down | done | `games/shooters_edge/server/q2_targets.cpp`, `games/shooters_edge/server/q2_server.cpp` (fact2's spot) |
 | ent.target_blaster | target_blaster | fires a blaster bolt on use | done | q2_targets.cpp |
 | ent.target_crosslevel_trigger | target_crosslevel_trigger | sets a unit-wide flag | done | q2_map.cpp |
 | ent.target_crosslevel_target | target_crosslevel_target | fires when the unit's flags match | done | q2_map.cpp |
@@ -306,7 +306,7 @@ count: done 73, partial 7, missing 1, not-taken 0
 | ent.target_earthquake | target_earthquake | shakes players, rumble sound | done | q2_targets.cpp |
 | ent.target_character | target_character | one digit of a target_string | done | q2_targets.cpp |
 | ent.target_string | target_string | shows text on target_characters | done | q2_targets.cpp |
-| ent.worldspawn | worldspawn | sky, skyaxis, skyrotate, sounds/music (CD track), gravity, message (level name), nextmap; the status bar; precaches | partial | q2_server.cpp; the `music` key (R44) missing |
+| ent.worldspawn | worldspawn | sky, skyaxis, skyrotate, sounds/music (CD track), gravity, message (level name), nextmap; the status bar; precaches | done | `games/shooters_edge/server/q2_server.cpp` |
 | ent.viewthing | viewthing | developer: an animating model, `viewthing spawned` on the console | missing | rank 3, a developer entity no stock map uses |
 | ent.light | light | toggled light styles (start off) | done | q2_targets.cpp (world 23) |
 | ent.light_mine1 | light_mine1 | mine lamp model | done | q2_targets.cpp (world 25) |
@@ -437,26 +437,26 @@ count: done 50, partial 16, missing 15, not-taken 0
 | msg.entity-message | `<message>` (centre, with talk1 sound) | an entity's `message` key when it fires its targets, a door's when touched while locked | done | q2_map.cpp (world 8, 18) |
 | msg.power-cells | `No cells for power armor.` | turning on power armour without cells | done | q2_use.cpp |
 | msg.no-ammo | `No <ammo> for <weapon>.` | choosing a weapon without ammo | done | q2_fight.cpp |
-| msg.not-enough-ammo | `Not enough <ammo> for <weapon>.` | under one shot's worth (super shotgun, BFG) | missing | R25: ours prints the `No` line |
-| msg.cant-drop | `Can't drop current weapon` | dropping the only weapon in hand, or the last grenades in hand | partial | q2_fight.cpp says `You can't drop the weapon in your hand.` (R25) |
-| msg.use-unknown | `unknown item: <name>` | use/drop of an unknown name | partial | q2_commands.cpp `There is no item called <name>.` (R25) |
-| msg.not-usable | `Item is not usable.` | | partial | `<name> can't be used.` (R25); invuse's matches |
-| msg.not-dropable | `Item is not dropable.` | | partial | `<name> can't be dropped.` (R25); invdrop's matches |
-| msg.out-of-item | `Out of item: <name>` | use/drop of an item not held; cycleweap/prefweap | partial | `You have no <name>.` (R25) |
+| msg.not-enough-ammo | `Not enough <ammo> for <weapon>.` | under one shot's worth (super shotgun, BFG) | done | `games/shooters_edge/server/q2_fight.cpp` |
+| msg.cant-drop | `Can't drop current weapon` | dropping the only weapon in hand, or the last grenades in hand | done | `games/shooters_edge/server/q2_fight.cpp` |
+| msg.use-unknown | `unknown item: <name>` | use/drop of an unknown name | done | `games/shooters_edge/server/q2_commands.cpp` |
+| msg.not-usable | `Item is not usable.` | done | `games/shooters_edge/server/q2_commands.cpp` |
+| msg.not-dropable | `Item is not dropable.` | done | `games/shooters_edge/server/q2_commands.cpp` |
+| msg.out-of-item | `Out of item: <name>` | use/drop of an item not held; cycleweap/prefweap | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.no-item-use | `No item to use.` | invuse with nothing selected | done | q2_screens.cpp |
 | msg.no-item-drop | `No item to drop.` | invdrop with nothing selected | done | q2_screens.cpp |
-| msg.give-unknown | `unknown item` | give of an unknown name | partial | `There is no item called <name>.` (R25) |
-| msg.give-nonpickup | `non-pickup item` | give Blaster | partial | `The Blaster is always in your hands.` (R25) |
-| msg.god | `godmode ON` / `godmode OFF` | | partial | `God mode on`/`off` (R25) |
-| msg.notarget | `notarget ON` / `notarget OFF` | | partial | `Notarget on`/`off` (R25) |
-| msg.noclip | `noclip ON` / `noclip OFF` | | partial | `Noclip on`/`off` (R25) |
-| msg.cheats | `You must run the server with '+set cheats 1' to enable this command.` | the cheat refusal | partial | `Cheats are off on this server (cheats 1 turns them on).` (R24) |
-| msg.usage-teleport | `Usage: teleport x y z` | | missing | R28 |
+| msg.give-unknown | `unknown item` | give of an unknown name | done | `games/shooters_edge/server/q2_commands.cpp` |
+| msg.give-nonpickup | `non-pickup item` | give Blaster | done | `games/shooters_edge/server/q2_commands.cpp` |
+| msg.god | `godmode ON` / `godmode OFF` | done | `games/shooters_edge/server/q2_commands.cpp` |
+| msg.notarget | `notarget ON` / `notarget OFF` | done | `games/shooters_edge/server/q2_commands.cpp` |
+| msg.noclip | `noclip ON` / `noclip OFF` | done | `games/shooters_edge/server/q2_commands.cpp` |
+| msg.cheats | `You must run the server with '+set cheats 1' to enable this command.` | the cheat refusal | done | `games/shooters_edge/server/q2_commands.cpp` |
+| msg.usage-teleport | `Usage: teleport x y z` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.usage-spawnentity | `Usage: spawnentity classname x y z <angle_x angle_y angle_z> <flags>` | | missing | R28 |
 | msg.usage-spawnonstart | `Usage: spawnonstart classname` | | missing | R28 |
-| msg.usage-listentities | `Usage: listentities <all\|ammo\|items\|keys\|monsters\|weapons>` | | missing | R28 |
-| msg.usage-cycleweap | `Usage: cycleweap classname1 classname2 .. classnameN` | | missing | R26 |
-| msg.usage-prefweap | `Usage: prefweap classname1 classname2 .. classnameN` | | missing | R26 |
+| msg.usage-listentities | `Usage: listentities <all\|ammo\|items\|keys\|monsters\|weapons>` | done | `games/shooters_edge/server/q2_commands.cpp` |
+| msg.usage-cycleweap | `Usage: cycleweap classname1 classname2 .. classnameN` | done | `games/shooters_edge/server/q2_commands.cpp` |
+| msg.usage-prefweap | `Usage: prefweap classname1 classname2 .. classnameN` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.flood-wait | `You can't talk for <n> more seconds` | talking while muted | partial | q2_commands.cpp adds a full stop; also applies in single player (R40) |
 | msg.flood-lock | `Flood protection: You can't talk for <n> seconds.` (chat level) | the mute starting | partial | q2_commands.cpp lower-case `you` (R40) |
 | msg.chat | `Name: text` / `(Name): text` | say / say_team | done | q2_commands.cpp |
@@ -503,7 +503,7 @@ count: done 1, partial 1, missing 34, not-taken 0
 | con.untargeted | `untargeted <class> at <pos>` | target_earthquake etc. | missing | |
 | con.flood-clamp | `flood_msgs lowered to max: 10` | | missing | R40 |
 | con.spawned | `Spawned entity at <x> <y> <z>` | spawnonstart | missing | R28 |
-| con.listentities | `<class>: <x> <y> <z>` | listentities | missing | R28 |
+| con.listentities | `<class>: <x> <y> <z>` | listentities | done | `games/shooters_edge/server/q2_commands.cpp` |
 | con.bad-movetype | `<class>:<n> has bad movetype: <n>` | | missing | |
 | con.connected | `<name> connected` | a client connects | partial | net/q2_net_server.cpp logs its own line |
 | con.fixed-triggered | `fixed TRIGGERED flag on <class> at <pos>` | g_fix_triggered | missing | |
@@ -522,7 +522,7 @@ count: done 8, partial 8, missing 1, not-taken 0
 | layout.stat-ammo | ammo stat | the weapon's ammo icon and count | done | q2_bar.cpp |
 | layout.stat-armor | armour stat | power armour's cells (flashing icon when on, off when out) else armour | done | q2_bar.cpp |
 | layout.stat-selected | selected item stat | the selected item's icon | done | q2_bar.cpp |
-| layout.stat-pickup | pickup stat | the last pickup's icon and name for 3 s (0.7 s for a cycleweap switch) | partial | q2_bar.cpp; the cycleweap flash missing (R26) |
+| layout.stat-pickup | pickup stat | the last pickup's icon and name for 3 s (0.7 s for a cycleweap switch) | done | `games/shooters_edge/server/q2_bar.cpp`, `games/shooters_edge/server/q2_commands.cpp` (0.7 s) |
 | layout.stat-timer | timer stat | quad, invulnerability, suit, rebreather in that order with seconds left | done | q2_bar.cpp |
 | layout.stat-help | help slot | the help icon blinking while unread; otherwise, with hand 2 or fov > 91 and the server's `cl_gun` not 2, the weapon icon | partial | q2_bar.cpp blinks; the weapon icon is missing (R38) |
 | layout.stat-layouts | layouts bits | bit 1 a layout shown (scoreboard/help, and always when dead or intermission in deathmatch), bit 2 inventory (alive only) | partial | q2_bar.cpp, q2_screens.cpp; the dead-in-deathmatch scoreboard (R34) |
@@ -552,7 +552,7 @@ count: done 18, partial 15, missing 11, not-taken 0
 | rule.spectator-change | spectating mid-match | the `spectator` setting applied 5 s after the last respawn, passwords and the limit checked, score reset, announced | missing | R15, S8 |
 | rule.spectator-sp | spectator outside deathmatch | ignored in co-op and single player | missing | R46 |
 | rule.chase | the chase camera | spectators follow players: attack starts/stops, jump and invnext/invprev step; the camera's place; the bar shows `Chasing <name>` | missing | R16 |
-| rule.item-teams | item teams | items sharing `team` show one random member at a time | missing | R17 |
+| rule.item-teams | item teams | items sharing `team` show one random member at a time | done | `games/shooters_edge/server/q2_server.cpp` (`show_item`) |
 | rule.drop-weapon-ammo | dropped weapons | a `drop`ped weapon gives no ammo; one dropped at death gives its usual | partial | q2_fight.cpp gives ammo for both (R18) |
 | rule.coop-score | co-op score | +1 a monster killed, carried across levels, kept over respawn; deaths change nothing | partial | R2 landed stops the negatives; monster kills still score nothing (R19) |
 | rule.coop-stay | co-op stays | weapons, keys, rebreather and suit stay when taken; one each | partial | rebreather and suit taken (R20) |
@@ -569,10 +569,10 @@ count: done 18, partial 15, missing 11, not-taken 0
 | rule.give-details | give's details | `give health n` at least 1; `give all` and `give Power Shield` always add one | partial | R39 |
 | rule.flood | flood protection | deathmatch and co-op only; lines and quote stripping | partial | R40 |
 | rule.kill-first-spawn | kill after a first placing | the 5 s counted from the map's start on a first placing | partial | R41 |
-| rule.unnamed-starts | eight maps' unnamed starts | mine1..city2 get an unnamed copy of a named start | missing | R42 |
-| rule.map-fixes | fact2 spawner, fact1 camera, command `*27` | three built-in map repairs | missing | R27, R43 |
+| rule.unnamed-starts | eight maps' unnamed starts | mine1..city2 get an unnamed copy of a named start | done | `games/shooters_edge/server/q2_campaign.cpp` |
+| rule.map-fixes | fact2 spawner, fact1 camera, command `*27` | three built-in map repairs | done | `games/shooters_edge/server/q2_server.cpp` |
 | rule.map-fixes-landed | mine3 secret, fact1 secret exit, jail5 flyers, the 18 co-op renames, security spots | built-in repairs | done | q2_map.cpp, q2_monsters.cpp, q2_campaign.cpp |
-| rule.music | the world's `music` key | the CD track configstring by name when set | missing | R44 |
+| rule.music | the world's `music` key | the CD track configstring by name when set | done | `games/shooters_edge/server/q2_server.cpp` |
 | rule.first-grenades | first grenades | taking grenades with none held switches to the hand grenade (deathmatch: from the blaster only) | partial | R48 |
 | rule.login-flash | login flash | deathmatch always, else only when maxclients > 1 | done | q2_server.cpp `announce_entry` (R49, landed with R3) |
 | rule.teams | teams | by skin (64) or model (128); friendly fire −1; say_team | partial | slashless skin (R33), co-op (R23) |

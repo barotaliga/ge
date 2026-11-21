@@ -405,6 +405,31 @@ bool left_out(const Q2Server& s, int flags) {
 constexpr float kItemHalf = 15;            // an item's box, ±15 each way
 constexpr int kItemTargetsUsed = 0x10000;  // spawnflags: its first touch has fired its targets
 
+// The first entity of the map (in its order) with this `team`, of any kind.
+size_t team_master(const Q2Server& s, const std::string& team) {
+  for (size_t i = 0; i < s.entities.size(); i++)
+    if (s.entities[i].team == team) return i;
+  return s.entities.size();
+}
+
+// An item shows again: alone, or for its team one member chosen at random (itself or another, a
+// member removed at the start counted and showing nothing), with the respawn event.
+void show_item(Q2Server& s, size_t i) {
+  s.entities[i].respawn_at = 0;
+  const std::string team = s.entities[i].team;
+  size_t shown = i;
+  if (!team.empty()) {
+    std::vector<size_t> members;
+    for (size_t k = 0; k < s.entities.size(); k++)
+      if (s.entities[k].item >= 0 && s.entities[k].team == team) members.push_back(k);
+    if (!members.empty()) shown = members[ge::core::pick_index(s.rng, members.size())];
+  }
+  Q2Entity& e = s.entities[shown];
+  if (e.gone) return;
+  e.hidden = false;
+  e.back_frame = s.frame_number;
+}
+
 // Each item dropped up to 128 units onto the floor, the map's or a solid mover's (a key resting on
 // a train or a wall's ledge), 0.2 s into the level, once the trains stand at their first corners;
 // one that starts in a solid is removed.
@@ -421,6 +446,15 @@ void drop_items(Q2Server& s) {
       continue;
     }
     e.origin = t.end;
+  }
+  // Item teams (items sharing a `team`): every member hidden as they land, and 0.1 s later the
+  // team's first entity (when it is an item) shows one of them at random.
+  for (size_t i = 0; i < s.entities.size(); i++) {
+    Q2Entity& e = s.entities[i];
+    if (e.item < 0 || e.team.empty()) continue;
+    e.hidden = true;
+    e.respawn_at = 0;
+    if (team_master(s, e.team) == i && !e.gone) e.respawn_at = s.level_time + 0.1;
   }
 }
 
@@ -491,12 +525,10 @@ void touch_items(Q2Server& s, int slot) {
 
 // The frame's items: those whose time came show again; a mega counts its taker down.
 void item_frame(Q2Server& s) {
-  for (Q2Entity& e : s.entities)
-    if (e.hidden && e.respawn_at > 0 && s.level_time + 0.001 >= e.respawn_at) {
-      e.hidden = false;
-      e.respawn_at = 0;
-      e.back_frame = s.frame_number;
-    }
+  for (size_t i = 0; i < s.entities.size(); i++) {
+    const Q2Entity& e = s.entities[i];
+    if (e.hidden && e.respawn_at > 0 && s.level_time + 0.001 >= e.respawn_at) show_item(s, i);
+  }
   for (Q2Player& p : s.players) {
     if (p.mega < 0) continue;
     Q2Entity& mega = s.entities[size_t(p.mega)];
@@ -619,7 +651,8 @@ void start_intermission(Q2Server& s) {
   }
   for (const Q2Entity& e : s.entities)
     if (spot == nullptr && e.classname == "info_player_start") spot = &e;
-  const sh::Vec3f at = spot != nullptr ? spot->origin : sh::Vec3f{};
+  sh::Vec3f at = spot != nullptr ? spot->origin : sh::Vec3f{};
+  if (q2_same_name(s.map_name, "fact1")) at = {1037, 1100, 222};  // a portal there garbled it
   const sh::Vec3f look = spot != nullptr ? spot->angles : sh::Vec3f{};
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (!s.clients[i].active) continue;
@@ -995,7 +1028,13 @@ void fill_lists(Q2Server& s) {
   w.map_name = s.map_name;
   w.map_title.clear();
   if (!s.map->entities.empty()) w.map_title = s.map->entities[0].get_any_case("message");
-  w.cd_track = s.map->entities.empty() ? std::string() : s.map->entities[0].get_any_case("sounds");
+  // The music: the world's `music` (a track's name) when set, else its `sounds` (a number).
+  if (!s.map->entities.empty()) {
+    w.cd_track = s.map->entities[0].get_any_case("music");
+    if (w.cd_track.empty()) w.cd_track = s.map->entities[0].get_any_case("sounds");
+  } else {
+    w.cd_track.clear();
+  }
   // The other game's things the rules wear (`sv_wear`): every name as the players are told it,
   // in the lists the window and the wire both read; the names were looked up as the map started.
   s.model_looks.assign(s.models.size(), nullptr);
@@ -1083,7 +1122,16 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
       e.angles.y = std::strtof(b.get_any_case("angle").c_str(), nullptr);
     if (e.model.size() > 1 && e.model[0] == '*') e.modelindex = std::atoi(e.model.c_str() + 1);
     e.spawnflags = std::atoi(b.get_any_case("spawnflags").c_str());
+    // The map `command`'s trigger *27 is there on hard too (the map left it out by mistake).
+    if (q2_same_name(s.map_name, "command") && q2_same_name(e.classname, "trigger_once") &&
+        q2_same_name(e.model, "*27"))
+      e.spawnflags &= ~0x400;
+    // fact2's spawner at (-1504, 512, 72) stood in the floor: 8 units down.
+    if (q2_same_name(s.map_name, "fact2") && e.classname == "target_spawner" &&
+        e.origin.x == -1504 && e.origin.y == 512 && e.origin.z == 72)
+      e.origin.z = 64;
     e.item = sq_item(e.classname);
+    if (e.item >= 0) e.team = b.get_any_case("team");
     e.gone = left_out(s, e.spawnflags) || dm_left_out(s, e.item);
     // An item keeps its own flags only as a power cube: TRIGGER_SPAWN (1) hides it until used,
     // NO_TOUCH (2) leaves it lying there, never taken. Any other item's are cleared, and said.

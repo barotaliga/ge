@@ -812,33 +812,24 @@ void trigger_fire(Q2Server& s, Q2Entity& e, int activator) {
   e.touched_at = s.level_time + e.wait;
 }
 
-void teleport(Q2Server& s, Q2Entity& pad, int slot) {
-  int dest = -1;
-  for (size_t i = 0; i < s.entities.size() && dest < 0; i++)
-    if (!pad.target.empty() && s.entities[i].targetname == pad.target) dest = static_cast<int>(i);
-  if (dest < 0) return;
-  const Q2Entity& d = s.entities[size_t(dest)];
+void place_player(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f angles) {
   Q2Player& p = s.players[slot];
-  pack(p.move.origin, d.origin + sh::Vec3f{0, 0, 10});
+  pack(p.move.origin, origin + sh::Vec3f{0, 0, 10});
   for (int16_t& v : p.move.velocity) v = 0;
   p.move.flags |= ge::classic::kSqTimeTeleport;
   p.move.time = 20;  // 160 ms
   const int16_t want[3] = {
-      static_cast<int16_t>(num::to_int32(double(d.angles.x) * (65536.0 / 360.0))),
-      static_cast<int16_t>(num::to_int32(double(d.angles.y) * (65536.0 / 360.0))), 0};
+      static_cast<int16_t>(num::to_int32(double(angles.x) * (65536.0 / 360.0))),
+      static_cast<int16_t>(num::to_int32(double(angles.y) * (65536.0 / 360.0))), 0};
   for (int k = 0; k < 3; k++) {
     p.move.delta_angles[k] = int16_t(want[k] - p.cmd_angles[k]);
     p.forced_angles[k] = want[k];
   }
   p.forced = true;
   p.changed = true;
-  p.view_angles = {d.angles.x, d.angles.y, 0};
+  p.view_angles = {angles.x, angles.y, 0};
   p.ground = -1;
-  effect(s, "te_teleport", pad.origin);
-  effect(s, "te_teleport", d.origin);
-  sound_at(s, map_row(index_of(s, pad)), pad.origin, kTeleSound, 1, 2, 1);  // idle, the weapon's
-  sound_at(s, slot + 1, unpack(p.move.origin), kTeleSound, 1, 2, 1);
-  // Whoever stands at the destination dies.
+  // Whoever stands there dies.
   const sh::Vec3f at = unpack(p.move.origin);
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (i == slot || !s.clients[i].active || !s.players[i].alive) continue;
@@ -847,6 +838,20 @@ void teleport(Q2Server& s, Q2Entity& pad, int slot) {
     if (overlap(at + p.mins, at + p.maxs, oa + o.mins, oa + o.maxs))
       fight_hurt(s, i, slot, {}, 100000, 0, kSqByTelefrag, 3);
   }
+}
+
+void teleport(Q2Server& s, Q2Entity& pad, int slot) {
+  int dest = -1;
+  for (size_t i = 0; i < s.entities.size() && dest < 0; i++)
+    if (!pad.target.empty() && s.entities[i].targetname == pad.target) dest = static_cast<int>(i);
+  if (dest < 0) return;
+  const Q2Entity& d = s.entities[size_t(dest)];
+  effect(s, "te_teleport", pad.origin);
+  effect(s, "te_teleport", d.origin);
+  sound_at(s, map_row(index_of(s, pad)), pad.origin, kTeleSound, 1, 2, 1);  // idle, the weapon's
+  place_player(s, slot, d.origin, d.angles);
+  const Q2Player& p = s.players[slot];
+  sound_at(s, slot + 1, unpack(p.move.origin), kTeleSound, 1, 2, 1);
 }
 
 void touch(Q2Server& s, Q2Entity& e, int slot) {
@@ -1688,6 +1693,7 @@ void map_spawn(Q2Server& s) {
   s.world.lightstyles[63] = "a";                                          // testing
   s.secrets = s.secrets_found = s.goals = s.goals_found = 0;
   campaign_coop_spots(s);
+  campaign_unnamed_starts(s);
   const size_t count = s.entities.size();
   for (size_t i = 0; i < count; i++) {
     Q2Entity& e = s.entities[i];
@@ -1985,6 +1991,10 @@ void map_rows(Q2Server& s) {
       }
     }
   }
+}
+
+void map_place_player(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f angles) {
+  place_player(s, slot, origin, angles);
 }
 
 }  // namespace shooters_edge::server

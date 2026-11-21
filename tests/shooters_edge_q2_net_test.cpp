@@ -684,8 +684,8 @@ TEST(the_window_joins_a_server_of_q2_and_plays) {
   const auto heard_line = [&](const std::string& line) {
     return std::find(heard.begin(), heard.end(), line) != heard.end();
   };
-  CHECK(heard_line("You have no Shotgun.\n"));
-  CHECK(heard_line("You have no Railgun.\n"));
+  CHECK(heard_line("Out of item: Shotgun\n"));
+  CHECK(heard_line("Out of item: Railgun\n"));
   // Leaving tells the server.
   cn::remote_disconnect(remote);
   CHECK(!remote.active && remote.q2 == nullptr);

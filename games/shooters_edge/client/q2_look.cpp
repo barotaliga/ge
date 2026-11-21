@@ -50,6 +50,13 @@ int q2_texture_frame(uint32_t effects, int frame, double t) {
 Q2Look q2_look(uint32_t effects, uint32_t render_fx) {
   Q2Look look;
   look.bleeds = (effects & kSqGib) != 0;
+  // A green gib's trail, when no branch before it (the missiles, the gib, the flies, the trap,
+  // the flags, the tag, the tracker's) takes the entity.
+  constexpr uint32_t kBefore = kSqRocket | kSqBlaster | kSqHyperblaster | kSqGib | kSqGrenade |
+                               kSqFlies | kSqBfg | kSqTrap | kSqFlag1 | kSqFlag2 | kSqTagTrail |
+                               kSqTrackerTrail | kSqTracker;
+  if ((effects & kSqGreenGib) != 0 && (effects & kBefore) == 0)
+    look.bleeds = look.green_blood = true;
   look.flies = (effects & kSqFlies) != 0;
   look.power_screen = (effects & kSqPowerScreen) != 0;
   // The powers the client turns into shells.
@@ -74,6 +81,8 @@ Q2Look q2_look(uint32_t effects, uint32_t render_fx) {
   else if (rf == kRfTranslucent)
     look.alpha = 0.7f;
   if ((effects & kSqBfg) != 0) look.alpha = 0.3f;
+  if ((effects & kSqPlasma) != 0) look.alpha = 0.6f;
+  if ((effects & kSqSphereTrans) != 0) look.alpha = (effects & kSqTrackerTrail) != 0 ? 0.6f : 0.3f;
   look.pulse = (rf & kRfGlow) != 0;
   // Its trail, the first of these it carries.
   if ((effects & kSqRocket) != 0)
@@ -84,6 +93,22 @@ Q2Look q2_look(uint32_t effects, uint32_t render_fx) {
     look.missile = Q2Look::Missile::grenade;
   else if ((effects & kSqBfg) != 0)
     look.missile = Q2Look::Missile::bfg;
+  else if ((effects & (kSqGib | kSqFlies | kSqTrap)) != 0) {
+    // their own branches: no trail of these
+  } else if ((effects & kSqFlag1) != 0)
+    look.missile = Q2Look::Missile::flag1;
+  else if ((effects & kSqFlag2) != 0)
+    look.missile = Q2Look::Missile::flag2;
+  else if ((effects & kSqTagTrail) != 0)
+    look.missile = Q2Look::Missile::tag;
+  else if ((effects & (kSqTrackerTrail | kSqTracker | kSqGreenGib)) == 0) {
+    if ((effects & kSqIonRipper) != 0)
+      look.missile = Q2Look::Missile::ion;
+    else if ((effects & kSqBlueHyperblaster) != 0)
+      look.missile = Q2Look::Missile::blue;
+    else if ((effects & kSqPlasma) != 0)
+      look.missile = Q2Look::Missile::plasma;
+  }
   return look;
 }
 

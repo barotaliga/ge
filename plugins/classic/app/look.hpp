@@ -91,6 +91,15 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_reflect: how strongly shiny floors mirror the room under ce_reflections, 1 the whole of what
   // the gloss and the angle give; 0.1 by default, a hint of the room (Niclas's pick, 2026-11-19)
   double reflect = 0.1;
+  // ce_blood_time: how long blood stays on the walls and floors under ce_blood, s; its drying and
+  // its fading shortened to fit a short one; 0 until its place is needed for a newer mark.
+  double blood_time = 120;
+  // ce_blood_reflect: how strongly a wet pool of blood mirrors the room under ce_blood and
+  // ce_reflections, 1 the whole of what its gloss and the angle give; 0 none.
+  double blood_reflect = 1;
+  // ce_blood_amount: how much a body bleeds under ce_blood, 1 as drawn: the drops thrown, the
+  // splashes and pools, the wounds' stains and runs and their drips; 0 none.
+  double blood_amount = 1;
   // The ce_ switches: each enhancement the modern look draws over the pack, on or off; with
   // ce_enabled 0 every one reads off (`apply_ce_enabled`), the ce_ cvars keeping the player's.
   ge::classicenhance::Switches ce;
