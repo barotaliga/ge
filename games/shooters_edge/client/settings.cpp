@@ -7,6 +7,8 @@
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
 
+#include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <system_error>
 
@@ -71,7 +73,46 @@ bool save_settings(ge::console::Console& con, const std::filesystem::path& serie
 }
 
 void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {
+  {
+    // Every classic game's, each with its own default (Quake's here; Quake II says its own).
+    ge::console::CvarLayer classic(con.cvars(), kLayerClassic);
+    con.cvars().bind({.name = "rate",
+                      .fallback = "2500",
+                      .flags = ge::console::kArchive | ge::console::kUserInfo,
+                      .help = "How many bytes a second a joined server may send you.",
+                      .kind = ge::console::CvarKind::integer,
+                      .min = 500,
+                      .max = 1000000,
+                      .values = "500..1000000: that many bytes a second, held to the server's "
+                                "own bounds (2500 the default)"},
+                     &info.rate);
+    con.cvars().bind({.name = "password",
+                      .fallback = "",
+                      .flags = ge::console::kUserInfo,
+                      .help = "The password a closed server asks of its players.",
+                      .kind = ge::console::CvarKind::text,
+                      .values = "\"\": none (the default); TEXT: sent when you join"},
+                     &info.password);
+  }
   ge::console::CvarLayer shell(con.cvars(), kLayerShell);  // client/cvar_layers.hpp
+  // Quake's one word for both colours: `color 4` dresses you all in one, `color 4 12` apart.
+  con.add_command(
+      "color", "color <shirt> [pants]: your colours, 0..13 each (one for both); color: shows them",
+      [&info](ge::console::Console& c, const ge::console::Args& a) {
+        if (a.size() < 2) {
+          c.print("Your shirt is colour " + std::to_string(info.top) + " and your pants colour " +
+                  std::to_string(info.bottom) + ".");
+          c.print("To change them: color <shirt> [pants], each 0 to 13.");
+          return;
+        }
+        // Each value as Quake keeps it: its low four bits, past 13 held at 13 (16 is 0, 15 is 13).
+        const auto colour = [](const std::string& text) {
+          return std::to_string(std::min(std::atoi(text.c_str()) & 15, 13));
+        };
+        c.cvars().set("topcolor", colour(a[1]), ge::console::Source::local);
+        c.cvars().set("bottomcolor", colour(a.size() >= 3 ? a[2] : a[1]),
+                      ge::console::Source::local);
+      });
   for (const auto& [name, field, what] :
        {std::tuple{"topcolor", &info.top,
                    "Your shirt's colour, which a team game sets to the team's."},
