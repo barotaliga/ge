@@ -59,14 +59,17 @@ namespace ai = ge::ai;
 
 using namespace fighter_parts;
 
-constexpr float kRetreatBelow = 50;   // health plus armour's protection: weak under this
-constexpr float kStrongAgain = 80;    // and strong again at this
-constexpr double kChase_s = 3;        // a contact lost this long ago is still chased
-constexpr double kModeBeat_s = 0.5;   // a person's beat: a mode held this long (`beat`)
-constexpr double kShotWait_s = 0.15;  // a rocket jump's shot waits this long for the jump key
-constexpr double kGoalTire_s = 30;    // one goal item held this long in vain is let go of
-constexpr double kHealTire_s = 8;     // and sooner by a weak player, who cannot wait for it
-constexpr double kTired_s = 20;       // for this long
+constexpr float kRetreatBelow = 50;        // health plus armour's protection: weak under this
+constexpr float kStrongAgain = 80;         // and strong again at this
+constexpr double kChase_s = 3;             // a contact lost this long ago is still chased
+constexpr double kModeBeat_s = 0.5;        // a person's beat: a mode held this long (`beat`)
+constexpr double kShotWait_s = 0.15;       // a rocket jump's shot waits this long for the jump key
+constexpr float kUnlockShot = 900;         // a goal item's shot button fired at from within this
+constexpr double kUnlockLookHold_s = 0.6;  // (`unlocklook`) its look held this long out of sight
+constexpr float kUnlockOn = 3;             // (`unlocklook`) the view this near it (degrees): a shot
+constexpr double kGoalTire_s = 30;         // one goal item held this long in vain is let go of
+constexpr double kHealTire_s = 8;          // and sooner by a weak player, who cannot wait for it
+constexpr double kTired_s = 20;            // for this long
 constexpr float kRetakeStrong = 120;  // strength (a launcher counted) to go and take an area back
 constexpr double kRetake_s = 20;      // a key area believed lost this long ago is still retaken
 constexpr double kHeardChase_s = 2;   // and one heard this long ago is gone after
@@ -1566,6 +1569,26 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
   if (f.features[sb::Feature::spam]) spam_news_look(f, s, me, st, t);
   if (!dead) lob_look(f, s, me, st, t);  // (`earlob`) a throw round a corner
   if (!dead && f.features[sh::Feature::pokelook]) button_poke_look(f, s, me, t);
+  // (`unlocklook`) The goal item's shot button: the bot's look, so the step's hand turns the view.
+  f.unlock_looked = false;
+  if (!dead && f.features[sh::Feature::unlocklook] && f.unlocking && f.goal_item >= 0 &&
+      !f.bot.aiming) {
+    const ItemSpot& it = f.items[static_cast<size_t>(f.goal_item)];
+    const sh::Vec3f o = s.world.entities[static_cast<size_t>(me)].origin;
+    const sh::Vec3f eye{o.x, o.y, o.z + 22};
+    const sh::Vec3f d = it.button_at - eye;
+    if (it.button_shoot &&
+        std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y) < kUnlockShot) {
+      const sh::HullTrace tr =
+          sh::trace_move(s.sv, eye, {}, {}, it.button_at, sh::kTraceNoMonsters, me);
+      if (tr.fraction >= 1 || tr.ent == it.button_ent) f.unlock_seen_t = t;
+      if (t - f.unlock_seen_t <= kUnlockLookHold_s) {
+        f.bot.look = true;
+        f.bot.look_at = it.button_at;
+        f.unlock_looked = true;
+      }
+    }
+  }
   foes_seen(f, t);  // (`ledgerforget`) the enemies in sight noted
   // The weapon's rhythm as its holder knows it: a shot is its ammunition going down, the next
   // ready the weapon's refire after it; the hand times its stroke to that (bot.hpp THE MOUSE
@@ -1621,7 +1644,23 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
     const sh::Vec3f eye{me_at.x, me_at.y, me_at.z + 22};
     const sh::Vec3f d = it.button_at - eye;
     const double flat = std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y);
-    if (it.button_shoot && flat < 900) {
+    if (f.features[sh::Feature::unlocklook]) {
+      // (`unlocklook`) The view is the step's, on the look: stood still, the shot once it is there.
+      if (f.unlock_looked && f.unlock_seen_t == t) {  // in sight: out of it, walked on
+        const float yaw =
+            static_cast<float>(ge::core::libm::atan2(d.y, d.x) * (180.0 / ge::core::kPi));
+        const float pitch =
+            static_cast<float>(-ge::core::libm::atan2(d.z, flat) * (180.0 / ge::core::kPi));
+        float dy = yaw - cmd.angles.y;
+        while (dy > 180) dy -= 360;
+        while (dy < -180) dy += 360;
+        const float dp = pitch - cmd.angles.x;
+        cmd.forward = 0;
+        cmd.side = 0;
+        if ((f.stats.commands & 1) && dy * dy + dp * dp <= kUnlockOn * kUnlockOn)
+          cmd.buttons |= sh::kButtonAttack;
+      }
+    } else if (it.button_shoot && flat < kUnlockShot) {
       const sh::HullTrace tr =
           sh::trace_move(s.sv, eye, {}, {}, it.button_at, sh::kTraceNoMonsters, me);
       if (tr.fraction >= 1 || tr.ent == it.button_ent) {
