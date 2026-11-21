@@ -87,7 +87,8 @@ bool aboard(const Pilot& p, const PilotSense& s, int32_t ent) {
 
 // Whether the link's mover keeps the pilot at its start now. A ride's plat away from its rest
 // with a swimmer under its top (`floor_swim`: on a pool's floor under a raised plat, which a plat
-// coming down onto him sends back up, so it would never come for him) is in his way too.
+// coming down onto him sends back up, so it would never come for him) is in his way too, and with
+// `under_plat` one he stands under on dry ground.
 bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t a, int32_t b) {
   if (l.mover < 0) return false;
   const NavMover* rest = mover_of(p.g->movers, l.mover);
@@ -108,6 +109,7 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
   }
   if (l.kind == NavKind::ride) {
     const float up = now->absmin.z - rest->absmin.z;
+    if (p.set.under_plat && !aboard(p, s, l.mover) && under_raised(p, s, l.mover)) return true;
     return p.set.floor_swim && s.waterlevel >= 2 && (up > kRideRest || up < -kRideRest) &&
            s.origin.z + kPlayerMins.z < now->absmax.z - kStandUp;
   }

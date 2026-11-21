@@ -1026,6 +1026,8 @@ bool lag_place(void* ctx, int shooter, int target, sh::Vec3f& at, sh::Vec3f& min
 
 }  // namespace
 
+std::string q2_status_text(const Q2NetServer& s) { return status_text(s); }
+
 int q2_net_slots(const Q2NetServer& s) {
   return std::min(sh::kMaxClients, s.cfg.max_clients + std::max(0, s.cfg.max_spectators));
 }

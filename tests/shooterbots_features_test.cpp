@@ -19,23 +19,25 @@ TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
     // A trial is never on by default, nor a feature not judged or dropped.
     bool off = false;
     for (sb::Feature o :
-         {sb::Feature::trial,     sb::Feature::lookway,     sb::Feature::counter,
-          sb::Feature::chains,    sb::Feature::retarget,    sb::Feature::runupkeys,
-          sb::Feature::underway,  sb::Feature::gappast,     sb::Feature::airgap,
-          sb::Feature::pilotcast, sb::Feature::landwall,    sb::Feature::circlekeys,
-          sb::Feature::circleaim, sb::Feature::leadmean,    sb::Feature::leadarc,
-          sb::Feature::airarc,    sb::Feature::hopopen,     sb::Feature::fightway,
-          sb::Feature::letgo,     sb::Feature::retreatrun,  sb::Feature::nogoal,
-          sb::Feature::tripkeep,  sb::Feature::routetime,   sb::Feature::fetch,
-          sb::Feature::liftbrake, sb::Feature::scriptentry, sb::Feature::calmvel,
-          sb::Feature::lookturn,  sb::Feature::viewbook,    sb::Feature::gapturn,
-          sb::Feature::brinkline, sb::Feature::sidebrink,   sb::Feature::fallseen,
-          sb::Feature::liplook,   sb::Feature::sidehop,     sb::Feature::lostdry,
-          sb::Feature::jumpcuts,  sb::Feature::hopland,     sb::Feature::hoppitch,
-          sb::Feature::aimhop,    sb::Feature::noroute,     sb::Feature::rlfetch,
-          sb::Feature::holdpoint, sb::Feature::errandreach, sb::Feature::fields,
-          sb::Feature::fieldway,  sb::Feature::earlob,      sb::Feature::lobtake,
-          sb::Feature::aimclear,  sb::Feature::ledgerhits,  sb::Feature::ledgerheal})
+         {sb::Feature::trial,       sb::Feature::lookway,    sb::Feature::counter,
+          sb::Feature::chains,      sb::Feature::retarget,   sb::Feature::runupkeys,
+          sb::Feature::underway,    sb::Feature::gappast,    sb::Feature::airgap,
+          sb::Feature::pilotcast,   sb::Feature::circlekeys, sb::Feature::circleaim,
+          sb::Feature::leadmean,    sb::Feature::leadarc,    sb::Feature::airarc,
+          sb::Feature::hopopen,     sb::Feature::fightway,   sb::Feature::letgo,
+          sb::Feature::retreatrun,  sb::Feature::nogoal,     sb::Feature::tripkeep,
+          sb::Feature::routetime,   sb::Feature::fetch,      sb::Feature::liftbrake,
+          sb::Feature::scriptentry, sb::Feature::calmvel,    sb::Feature::lookturn,
+          sb::Feature::viewbook,    sb::Feature::gapturn,    sb::Feature::brinkline,
+          sb::Feature::sidebrink,   sb::Feature::fallseen,   sb::Feature::liplook,
+          sb::Feature::sidehop,     sb::Feature::lostdry,    sb::Feature::jumpcuts,
+          sb::Feature::hopland,     sb::Feature::hoppitch,   sb::Feature::aimhop,
+          sb::Feature::noroute,     sb::Feature::rlfetch,    sb::Feature::holdpoint,
+          sb::Feature::errandreach, sb::Feature::fields,     sb::Feature::fieldway,
+          sb::Feature::earlob,      sb::Feature::lobtake,    sb::Feature::aimclear,
+          sb::Feature::ledgerhits,  sb::Feature::ledgerheal, sb::Feature::holdra,
+          sb::Feature::rushdetour,  sb::Feature::rlhunt,     sb::Feature::rlgang,
+          sb::Feature::shareclock,  sb::Feature::circuit,    sb::Feature::swapground})
       off = off || x == o;
     CHECK(sb::features_all()[x] == !off);
     CHECK(!sb::features_none()[x]);

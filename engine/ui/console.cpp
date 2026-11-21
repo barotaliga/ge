@@ -2,6 +2,7 @@
 //
 // ge:summary Builds the console's draw list: panel, background, lines, input, hint, list, notify
 // ge:keywords ui console draw drop-down panel notify suggestion hint cursor con_clock clock
+// ge:keywords con_scale foot download-bar remote-prompt
 // ge:skill ui console
 // ge:test tests/ui_console_test.cpp
 #include "ui/console.hpp"
@@ -47,7 +48,7 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
   const Font& font = style.font ? *style.font : named ? *named : ui_font(Weight::medium);
   const auto w = static_cast<float>(list.width());
   const auto h = static_cast<float>(list.height());
-  const float s = h / 720.0f;
+  const float s = h / 720.0f * static_cast<float>(view.text_scale());  // con_scale
   const float text = style.text_px * s, margin = style.margin_px * s;
   const VMetrics m = font.metrics(text);
   const float ascent = m.ascent;
@@ -110,16 +111,41 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
   // The lines, newest just over the input line, the page growing up from it.
   list.push_clip(panel);
   const float input_top = cover - margin - row;
-  const int rows = std::max(1, static_cast<int>((input_top - margin) / row));
+  // The foot (what a game joining loads), on the row over the input line: a bar and its words.
+  const bool footed = !view.foot().empty();
+  const float lines_bottom = footed ? input_top - row : input_top;
+  if (footed) {
+    float fx = margin;
+    const auto share = static_cast<float>(std::clamp(view.foot_progress(), 0.0, 1.0));
+    if (view.foot_progress() >= 0 && style.bar_glyphs) {  // the sheet's own bar and its knob
+      constexpr int kMiddle = 16;
+      std::string bar = "\u0080";
+      for (int i = 0; i < kMiddle; ++i) bar += "\u0081";
+      bar += "\u0082";
+      const float cell = font.advance("\u0081", text);
+      const float base = input_top - row + ascent;
+      list.text(font, text, fx, base, bar, style.input);
+      list.text(font, text, fx + cell * (1 + share * (kMiddle - 1)), base, "\u0083", style.input);
+      fx += cell * (kMiddle + 3);
+    } else if (view.foot_progress() >= 0) {
+      const float bw = std::min(w * 0.3f, 240 * s), bh = row * 0.5f, by = input_top - row * 0.75f;
+      list.rect({fx, by, bw, bh}, style.list_fill);
+      list.rect({fx, by, bw * share, bh}, style.edge);
+      fx += bw + 8 * s;
+    }
+    list.text(font, text, fx, input_top - row + ascent, view.foot(), style.hint);
+  }
+  const int rows = std::max(1, static_cast<int>((lines_bottom - margin) / row));
   const auto page = view.page(rows);
-  float y = input_top - static_cast<float>(page.size()) * row;
+  float y = lines_bottom - static_cast<float>(page.size()) * row;
   for (const con::ViewLine* l : page) {
     list.text(font, text, margin, y + ascent, l->text, style.kinds[static_cast<size_t>(l->kind)]);
     y += row;
   }
 
   // The input line: the prompt and text, the hint after it, the cursor, the scroll marker.
-  const std::string shown = "] " + view.input();
+  const std::string prompt(view.prompt());  // `] `, or `# ` in remote mode
+  const std::string shown = prompt + view.input();
   const float base = input_top + ascent;
   const float typed_w = list.text(font, text, margin, base, shown, style.input);
   const std::string hint = view.hint();
@@ -127,7 +153,7 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
   const bool lit = style.cursor_blink_s <= 0 ||
                    static_cast<long long>(std::floor(time_s / style.cursor_blink_s)) % 2 == 0;
   if (lit) {
-    const std::string before = "] " + view.input().substr(0, view.cursor());
+    const std::string before = prompt + view.input().substr(0, view.cursor());
     const float cx = margin + font.advance(before, text);
     list.rect({cx, input_top + 2 * s, 2 * s, row - 4 * s}, style.cursor);
   }
@@ -158,7 +184,10 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
     detail_w = std::max(detail_w, font.advance(detail_of(sg), text));
   }
   const float pad = 6 * s, gap = 24 * s;
-  const float x = margin + font.advance(view.input().starts_with("/") ? "] /" : "] ", text) - pad;
+  const float x =
+      margin +
+      font.advance(std::string(view.prompt()) + (view.input().starts_with("/") ? "/" : ""), text) -
+      pad;
   const float box_w = std::min(w - x - margin, name_w + gap + detail_w + 2 * pad);
   const float top = cover + 2 * s;
   list.rect({x, top, box_w, static_cast<float>(suggestions.size()) * row + 2 * pad},

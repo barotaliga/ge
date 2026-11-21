@@ -60,6 +60,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/move_study.hpp"
 #include "shooters_edge/labs/team_finger.hpp"
+#include "shooters_edge/labs/team_items.hpp"
 #include "shooters_edge/labs/team_set.hpp"
 #include "shooters_edge/labs/team_watch.hpp"
 #include "shooters_edge/labs/why_log.hpp"
@@ -330,6 +331,8 @@ void run(gl::Lab& lab) {
   // Both this run's own: a set (--seeds) runs several matches at once.
   std::ofstream trace;
   Watch watch;
+  watch.doing_on = !lab.arg("flights").empty();
+  if (watch.doing_on) make_folder_for(lab.arg("flights"));
   if (!lab.arg("trace").empty()) {
     make_folder_for(lab.arg("trace"));
     trace.open(lab.arg("trace"));
@@ -377,7 +380,11 @@ void run(gl::Lab& lab) {
     if (tr.log != nullptr)
       tr.log->take(k, w.sv.time, sp, sb::pilot_mode_name(p.mode), link_of(p), e.origin.x,
                    e.origin.y, e.origin.z - 24, by);
-    watch_view(tr, k, w.sv.time, cmd.angles.y, f.bot.view_by);
+    // A look's view by who set it (watch, held, unlock, poke, lob, spam, spamshow).
+    const bool by_look = f.bot.view_by != nullptr && f.bot.look_by != nullptr &&
+                         std::string_view(f.bot.view_by) == "look";
+    watch_view(tr, k, w.sv.time, cmd.angles.y, by_look ? f.bot.look_by : f.bot.view_by,
+               e.velocity.x, e.velocity.y);
     if (e.health > 0 && f.team != nullptr && (tr.count[static_cast<size_t>(k)] & 3) == 0) {
       // se-people's FACING rule, on the server's truth.
       const sh::Vec3f eye{e.origin.x, e.origin.y, e.origin.z + 22};
@@ -524,6 +531,26 @@ void run(gl::Lab& lab) {
     auto& ml = tr.modes[static_cast<size_t>(k)];
     const char* mode = sb::pilot_mode_name(p.mode);
     if (ml.empty() || ml.back().second != mode) ml.push_back({w.sv.time, mode});
+    if (tr.doing_on) {
+      auto& dl = tr.doing[static_cast<size_t>(k)];
+      const Watch::Doing d{
+          w.sv.time,
+          link_of(p),
+          p.because,
+          f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
+              ? shooters_edge::bots::item_call(f.items[static_cast<size_t>(f.goal_item)])
+              : "-",
+          f.press_note,
+          p.hop_tight <= 0  ? "-"
+          : p.hop_tight > 1 ? "tight"
+                            : "ok",
+          p.hop_end_why,
+          p.hop_end_at};
+      if (dl.empty() || dl.back().link != d.link || dl.back().because != d.because ||
+          dl.back().goal != d.goal || dl.back().press != d.press || dl.back().tight != d.tight ||
+          dl.back().hend != d.hend || dl.back().hend_at != d.hend_at)
+        dl.push_back(d);
+    }
     tr.t_last = std::max(tr.t_last, w.sv.time);
     if (tr.out == nullptr || (tr.count[static_cast<size_t>(k)]++ % tr.every) != 0) return;
     std::ofstream& out = *tr.out;
@@ -717,7 +744,7 @@ void run(gl::Lab& lab) {
   hop_metrics(lab, watch);
   still_view_metrics(lab, watch);
   facing_metrics(lab, watch);
-  flights_by_mode(lab, watch, r, basedir, lab.arg("game"), name, o.packed);
+  flights_by_mode(lab, watch, r, basedir, lab.arg("game"), name, o.packed, lab.arg("flights"));
   if (watch.log != nullptr) write_why(lab, why_log, r);
 
   // The table.
@@ -909,17 +936,32 @@ void run(gl::Lab& lab) {
                        std::to_string(r.item_at.size()), std::to_string(p.said)});
   }
   lab.table(kt);
-  gl::LabTable bt_{"the map's buttons: where, how, and what each opens",
-                   {"button at (x y z)", "how", "doors", "opens", "used from (x y z)"},
-                   {}};
+  gl::LabTable bt_{
+      "the map's buttons: where, how, what each opens, and its door errands (every "
+      "player's: begun, the door open, its time up, no way but through the door, "
+      "gone round instead: `errandworth`)",
+      {"#", "button at (x y z)", "how", "doors", "opens", "used from (x y z)", "begun", "open",
+       "time up", "no way", "round"},
+      {}};
   const auto xyz = [](sh::Vec3f a) {
     return to_fixed(a.x, 0) + " " + to_fixed(a.y, 0) + " " + to_fixed(a.z, 0);
   };
   for (const cn::TeamButton& b : r.buttons) {
     std::string opens;
     for (const std::string& n : b.opens) opens += (opens.empty() ? "" : ", ") + n;
-    bt_.rows.push_back({xyz(b.at), b.shoot ? "shoot" : "touch", std::to_string(b.doors.size()),
-                        opens.empty() ? "(a way through)" : opens, xyz(b.from)});
+    const size_t n = bt_.rows.size();
+    bt_.rows.push_back({std::to_string(n), xyz(b.at), b.shoot ? "shoot" : "touch",
+                        std::to_string(b.doors.size()), opens.empty() ? "(a way through)" : opens,
+                        xyz(b.from), std::to_string(b.errands[0]), std::to_string(b.errands[1]),
+                        std::to_string(b.errands[2]), std::to_string(b.errands[3]),
+                        std::to_string(b.errands[4])});
+    // A set's means by button (`team.errand.b<n>.*`), for the buttons with an errand.
+    if (b.errands[0] + b.errands[4] > 0) {
+      static const char* const kKinds[5] = {"begun", "open", "time-up", "no-way", "round"};
+      for (size_t j = 0; j < 5; j++)
+        lab.metric("team.errand.b" + std::to_string(n) + "." + kKinds[j],
+                   static_cast<double>(b.errands[j]), "count");
+    }
   }
   lab.table(bt_);
   lab.metric("team.buttons", static_cast<double>(r.buttons.size()), "count");
@@ -995,7 +1037,8 @@ void run(gl::Lab& lab) {
                  "count");
   }
   {
-    static constexpr const char* kEnd[5] = {"role", "gone", "time", "death", "retreat"};
+    // the last is not an end: thinks a taker backing off gave its armour up to a nearer enemy
+    static constexpr const char* kEnd[5] = {"role", "gone", "time", "death", "retreat-thinks"};
     for (int e = 0; e < 5; e++)
       lab.metric(std::string("team.fetch-end.") + kEnd[e],
                  static_cast<double>(r.teams[0].fetch_end[e] + r.teams[1].fetch_end[e]), "count");
@@ -1011,40 +1054,7 @@ void run(gl::Lab& lab) {
       swum += p.swim_fights;
     }
     lab.metric("team.surfaced", static_cast<double>(up), "count");
-    // Every death's pack known (bots/packs.hpp), by how its place was known; the weapon guessed
-    // right by the guesser's skill (novice, average, expert); trips to them and what ended them.
-    {
-      static constexpr const char* kFrom[5] = {"seen", "cry", "blast", "aim", "lying"};
-      int64_t known[5] = {}, guesses[4] = {}, right[4] = {}, guess_rl[4] = {}, truth_rl[4] = {};
-      int64_t trips = 0, reached = 0, gone = 0;
-      for (const cn::TeamPlayer& p : r.players) {
-        for (int k = 0; k < 5; k++) known[k] += p.packs_known[k];
-        const auto sk = static_cast<size_t>(p.skill);
-        guesses[sk] += p.pack_guesses;
-        right[sk] += p.pack_right;
-        guess_rl[sk] += p.pack_guess_rl;
-        truth_rl[sk] += p.pack_truth_rl;
-        trips += p.pack_trips;
-        reached += p.pack_reached;
-        gone += p.pack_seen_gone;
-      }
-      for (int k = 0; k < 5; k++)
-        lab.metric(std::string("team.packs.known.") + kFrom[k], static_cast<double>(known[k]),
-                   "count");
-      for (int k = 1; k < 4; k++) {  // by the guesser's skill (none plays `perfect` here)
-        const std::string pre =
-            std::string("team.packs.guess.") + sb::aim_skill_name(static_cast<sb::AimSkill>(k));
-        lab.metric(pre + ".count", static_cast<double>(guesses[k]), "count");
-        lab.metric(pre + ".right",
-                   guesses[k] ? static_cast<double>(right[k]) / static_cast<double>(guesses[k]) : 0,
-                   "share");
-        lab.metric(pre + ".rl-guessed", static_cast<double>(guess_rl[k]), "count");
-        lab.metric(pre + ".rl-true", static_cast<double>(truth_rl[k]), "count");
-      }
-      lab.metric("team.packs.trips", static_cast<double>(trips), "count");
-      lab.metric("team.packs.reached", static_cast<double>(reached), "count");
-      lab.metric("team.packs.seen-gone", static_cast<double>(gone), "count");
-    }
+    shooters_edge::labs::report_packs(lab, r);
     lab.metric("team.swim-fights", static_cast<double>(swum), "count");
     // The share of the time alive waist deep in water (people's recordings: 9 %, se-people `wet`).
     int64_t wet = 0, alive = 0;
@@ -1054,75 +1064,7 @@ void run(gl::Lab& lab) {
     }
     lab.metric("team.wet", alive > 0 ? static_cast<double>(wet) / static_cast<double>(alive) : 0,
                "share");
-    // Shots and damage by the target's state (net/qw_hits.hpp): the pellets' and the rockets'
-    // hits over those fired at a target in that state, the damage he took a minute lived in it,
-    // and the share of the time lived in it.
-    {
-      int64_t all = 0;
-      for (const int64_t f : r.frames_at) all += f;
-      for (int k = 0; k < cn::kTargetStates; k++) {
-        const auto i = static_cast<size_t>(k);
-        const std::string key = std::string("team.target.") + cn::kTargetStateNames[k];
-        const auto rate = [](const cn::HitCount& c) {
-          return c.fired > 0 ? static_cast<double>(c.hit) / static_cast<double>(c.fired) : 0;
-        };
-        // (player-minutes: a frame lasts the match's seconds over its frames)
-        const double lived = static_cast<double>(r.frames_at[i]) * r.seconds /
-                             std::max<double>(1, static_cast<double>(r.frames)) / 60;
-        lab.metric(key + ".pellets", rate(r.pellets_at[i]), "share");
-        lab.metric(key + ".rockets", rate(r.rockets_at[i]), "share");
-        lab.metric(key + ".rockets-fired", static_cast<double>(r.rockets_at[i].fired), "count");
-        lab.metric(key + ".damage-per-min", lived > 0 ? r.given_at[i] / lived : 0, "hp/min");
-        lab.metric(key + ".time",
-                   all > 0 ? static_cast<double>(r.frames_at[i]) / static_cast<double>(all) : 0,
-                   "share");
-      }
-    }
-    // The key items lying untaken (qw_team.hpp), and what the fighters made of it: nobody
-    // believed it there, nobody wanted it, the one who wanted it was fighting, one was on his way.
-    for (int k = 0; k < cn::kLyingItems; k++) {
-      const auto ki = static_cast<size_t>(k);
-      if (r.lying_n[ki] == 0) continue;
-      const std::string key = std::string("team.lying.") + cn::kLyingItemNames[k];
-      lab.metric(key, static_cast<double>(r.lying[ki]) / static_cast<double>(r.lying_n[ki]),
-                 "share");
-      lab.metric(key + ".takers",
-                 r.lying[ki] > 0
-                     ? static_cast<double>(r.lying_takers[ki]) / static_cast<double>(r.lying[ki])
-                     : 0,
-                 "share");
-      for (int w = 0; w < cn::kLyingWhy; w++)
-        lab.metric(key + "." + cn::kLyingWhyNames[w],
-                   r.lying[ki] > 0 ? static_cast<double>(r.lying_why[ki][static_cast<size_t>(w)]) /
-                                         static_cast<double>(r.lying[ki])
-                                   : 0,
-                   "share");
-    }
-    // A launcher lying with a fighter near holding none (qw_team.hpp kRlNearWhy): what he made of
-    // it, and the role of those not going for it.
-    {
-      int64_t all = 0;
-      for (const int64_t v : r.rl_near) all += v;
-      lab.metric("team.rl-near.samples", static_cast<double>(all), "count");
-      for (int w = 0; w < cn::kRlNearWhy; w++)
-        lab.metric(std::string("team.rl-near.") + cn::kRlNearWhyNames[w],
-                   all > 0 ? static_cast<double>(r.rl_near[static_cast<size_t>(w)]) /
-                                 static_cast<double>(all)
-                           : 0,
-                   "share");
-      const auto idle = static_cast<double>(std::max<int64_t>(1, r.rl_near_idle));
-      lab.metric("team.rl-near.idle.seen", static_cast<double>(r.rl_near_idle_seen) / idle,
-                 "share");
-      lab.metric("team.rl-near.idle.close", static_cast<double>(r.rl_near_idle_close) / idle,
-                 "share");
-      const char* const kRoleNames[5] = {"free", "hold", "rush", "carry", "push"};
-      for (int k = 0; k < 5; k++)
-        lab.metric(std::string("team.rl-near.role.") + kRoleNames[k],
-                   all > 0 ? static_cast<double>(r.rl_near_role[static_cast<size_t>(k)]) /
-                                 static_cast<double>(all)
-                           : 0,
-                   "share");
-    }
+    shooters_edge::labs::report_hits(lab, r);
     // The wet time by cause (bots/fighter.hpp kWetWhy), as shares of it: what keeps the bots in
     // the water; and wet aiming, swimming and walking, each's share, speed and time still.
     for (size_t w = 0; w < 12; w++) {
@@ -1147,19 +1089,7 @@ void run(gl::Lab& lab) {
       lab.metric(k + ".still", n > 0 ? static_cast<double>(still) / static_cast<double>(n) : 0,
                  "share");
     }
-    // Pickups by kind a player-minute, set beside people's (a match's statistics count them so).
-    static const char* kKinds[12] = {"health", "mega",    "armor1", "armor2", "armor3", "shells",
-                                     "nails",  "rockets", "cells",  "weapon", "quad",   "pent"};
-    int64_t ways = 0;
-    for (const cn::TeamPlayer& p : r.players) ways += p.on_the_way;
-    lab.metric("team.on-the-way", static_cast<double>(ways), "count");
-    const double player_min = static_cast<double>(r.players.size()) * r.seconds / 60.0;
-    for (size_t k = 0; k < 12; k++) {
-      int64_t n = 0;
-      for (const cn::TeamPlayer& p : r.players) n += p.took[k];
-      lab.metric(std::string("team.took-per-min.") + kKinds[k],
-                 player_min > 0 ? static_cast<double>(n) / player_min : 0, "per-min");
-    }
+    shooters_edge::labs::report_pickups(lab, r);
     lab.metric("team.surface-failed", static_cast<double>(failed), "count");
     lab.metric("team.goal-changes-per-min",
                static_cast<double>(changes) /
@@ -1202,12 +1132,14 @@ void run(gl::Lab& lab) {
     std::string dl =
         "t\tplayer\tat\tliquid\tmode\tlink\tat 3 s before\tits mode\tthe way in (2, 1, 0.5 s "
         "before)\town\tlauncher\thealth 1 s before\tnearest enemy\tweapon\this weapon\this "
-        "launcher\tpress\tpress note\n";
+        "launcher\tpress\tpress note\trole\tpush\tfight\tgoal\ttaker\n";
     for (const std::string& l : r.deaths) dl += l + "\n";
     lab.attach("deaths.tsv", std::vector<uint8_t>(dl.begin(), dl.end()), gl::Det::deterministic);
     // THE SHOWINGS (M18r.md 18b): each key item as it showed and the bots then; a set's carry its
     // variant and seed. And by kind: how long it lay (p50) and the share with a bot going for it.
-    std::string sl = "shown\titem\tlay s\tgoing\tnearest\tbots (name:goal:mode:distance)\n";
+    std::string sl =
+        "shown\titem\tlay s\tgoing\tnearest\tsoonest s\tbots (name:goal:mode:distance:armour:"
+        "belief: here, t<s> timed, g<s> guessed:role:claim, THIS its own:route s, -1 none)\n";
     for (const std::string& l2 : r.shows) sl += l2 + "\n";
     lab.attach("shows.tsv", std::vector<uint8_t>(sl.begin(), sl.end()), gl::Det::deterministic);
     {
@@ -1338,6 +1270,105 @@ void run(gl::Lab& lab) {
       for (const cn::TeamPlayer& p : r.players) nr += p.noroute, be += p.bridge_errands;
       lab.metric("team.noroute", static_cast<double>(nr), "count");
       lab.metric("team.bridge-errands", static_cast<double>(be), "count");
+      // (`locked`) The doors' errands: begun, and how they ended; (`errandworth`) gone round.
+      int64_t ebeg = 0, eopen = 0, etime = 0, enoway = 0, eround = 0;
+      for (const cn::TeamPlayer& p : r.players)
+        ebeg += p.door_errands, eopen += p.errand_open, etime += p.errand_timeup,
+            enoway += p.errand_noway, eround += p.errand_round;
+      lab.metric("team.errand.begun", static_cast<double>(ebeg), "count");
+      lab.metric("team.errand.open", static_cast<double>(eopen), "count");
+      lab.metric("team.errand.time-up", static_cast<double>(etime), "count");
+      lab.metric("team.errand.no-way", static_cast<double>(enoway), "count");
+      lab.metric("team.errand.round", static_cast<double>(eround), "count");
+      {  // (`rlhunt`) thinks going for an enemy launcher's holder
+        int64_t h = 0;
+        for (const cn::TeamPlayer& p : r.players) h += p.rl_hunts;
+        lab.metric("team.rl-hunts", static_cast<double>(h), "count");
+      }
+      // (`spamshow`) The launcher carrier's commands by the first gate that kept a rocket at a
+      // show-up spot off (`team.spamshow.<gate>`, a share; the last: turned to a spot).
+      {
+        int64_t all = 0, by[11] = {};
+        for (const cn::TeamPlayer& p : r.players)
+          for (size_t b = 0; b < 11; b++) all += p.show_gate[b], by[b] += p.show_gate[b];
+        for (size_t b = 0; b < 11 && all > 0; b++) {
+          std::string key = bt::kShowGates[b];
+          for (char& c : key)
+            if (c == ' ') c = '-';
+          lab.metric("team.spamshow." + key, static_cast<double>(by[b]) / static_cast<double>(all),
+                     "share");
+        }
+      }
+      // (`rlgang`) A free or holding fighter's thinks by the first gate that held its call onto an
+      // enemy launcher's holder off (`team.rlgang.<gate>`, a share; counted with the switch off).
+      {
+        int64_t all = 0, by[bt::kGangGates] = {};
+        for (const cn::TeamPlayer& p : r.players)
+          for (int b = 0; b < bt::kGangGates; b++) all += p.gang_gate[b], by[b] += p.gang_gate[b];
+        for (int b = 0; b < bt::kGangGates && all > 0; b++) {
+          std::string key = bt::kGangGateNames[b];
+          for (char& c : key)
+            if (c == ' ') c = '-';
+          lab.metric("team.rlgang." + key, static_cast<double>(by[b]) / static_cast<double>(all),
+                     "share");
+        }
+        lab.metric("team.rlgang.called-per-match", static_cast<double>(by[11]), "count");
+      }
+      // (P1(e)) What a push sets off: the deaths and frags of the players in it, by its kind (`rl`:
+      // on an enemy launcher's holder, `base`: a lost base's) and phase (`gather`, `in`; `lapsed`:
+      // the push still believed, its role another), a match.
+      {
+        int64_t d[2][3] = {}, fr[2][3] = {};
+        for (const cn::TeamPlayer& p : r.players)
+          for (int a = 0; a < 2; a++)
+            for (int b = 0; b < 3; b++)
+              d[a][b] += p.push_deaths[a][b], fr[a][b] += p.push_frags[a][b];
+        static const char* kKind[2] = {"base", "rl"};
+        static const char* kPhase[3] = {"gather", "in", "lapsed"};
+        for (int a = 0; a < 2; a++)
+          for (int b = 0; b < 3; b++) {
+            const std::string key = std::string("team.push.") + kKind[a] + "." + kPhase[b];
+            lab.metric(key + ".deaths", static_cast<double>(d[a][b]), "count");
+            lab.metric(key + ".frags", static_cast<double>(fr[a][b]), "count");
+          }
+      }
+      // (P1(e)) Who carries the launcher, known? Of the samples of a live enemy carrying a loaded
+      // one, the share a bot believes so (`team.rl-known.carrier-believed`) and believes and has
+      // placed within 3 s (`.carrier-placed`); of those not carrying one, the share it wrongly
+      // believes does (`.false-belief`).
+      {
+        int64_t k[2][2] = {}, placed = 0;
+        for (const cn::TeamPlayer& p : r.players) {
+          for (int a = 0; a < 2; a++)
+            for (int b = 0; b < 2; b++) k[a][b] += p.rl_known[a][b];
+          placed += p.rl_placed;
+        }
+        const double carriers = static_cast<double>(k[1][0] + k[1][1]);
+        const double others = static_cast<double>(k[0][0] + k[0][1]);
+        lab.metric("team.rl-known.carrier-share",
+                   carriers + others > 0 ? carriers / (carriers + others) : 0, "share");
+        lab.metric("team.rl-known.carrier-believed",
+                   carriers > 0 ? static_cast<double>(k[1][1]) / carriers : 0, "share");
+        lab.metric("team.rl-known.carrier-placed",
+                   carriers > 0 ? static_cast<double>(placed) / carriers : 0, "share");
+        lab.metric("team.rl-known.false-belief",
+                   others > 0 ? static_cast<double>(k[0][1]) / others : 0, "share");
+      }
+      // (`item_passed`) A key item there within 256 and not taken on the way: the share of those
+      // thinks by why (`team.passed.<item>.<reason>`), and how many thinks (`.thinks`).
+      for (size_t a = 0; a < 5; a++) {
+        int64_t all = 0, by[21] = {};
+        for (const cn::TeamPlayer& p : r.players)
+          for (size_t b = 0; b < 21; b++) all += p.passed[a][b], by[b] += p.passed[a][b];
+        const std::string at = std::string("team.passed.") + bt::kPassItems[a] + ".";
+        lab.metric(at + "thinks", static_cast<double>(all), "count");
+        for (size_t b = 0; b < 21 && all > 0; b++) {
+          std::string key = bt::kPassReasons[b];
+          for (char& c : key)
+            if (c == ' ' || c == '\'') c = '-';
+          lab.metric(at + key, static_cast<double>(by[b]) / static_cast<double>(all), "share");
+        }
+      }
       int64_t itf = 0;
       for (const cn::TeamPlayer& p : r.players) itf += p.item_first;
       lab.metric("team.item-first", static_cast<double>(itf), "count");  // `itemfirst`
@@ -1386,11 +1417,21 @@ void run(gl::Lab& lab) {
       lab.metric("team.circle-speed", cj > 0 ? cs / static_cast<double>(cj) : 0, "u/s");
       // People's hop starts played (`recipes`): looked for, proven and begun, aborted off the
       // proof's way, and those that left the ground (their takeoff speed: people's ~437).
-      int64_t ra = 0, rc = 0, rb = 0, rto = 0;
+      int64_t ra = 0, rc = 0, rb = 0, rto = 0, rcu = 0, rro = 0;
       double rs = 0;
       for (const cn::TeamPlayer& p : r.players)
         ra += p.recipe_asks, rc += p.recipe_commits, rb += p.recipe_aborts,
-            rto += p.recipe_takeoffs, rs += p.recipe_speed;
+            rto += p.recipe_takeoffs, rs += p.recipe_speed, rcu += p.recipe_cuts,
+            rro += p.recipe_ranouts;
+      // (Ended on the ground otherwise: by the hop left, `cuts`, or its frames run out, `ranouts`.)
+      lab.metric("team.recipe.cuts", static_cast<double>(rcu), "count");
+      lab.metric("team.recipe.ranouts", static_cast<double>(rro), "count");
+      for (size_t e = 0; e < static_cast<size_t>(sb::RecipeEnd::count); e++) {
+        int64_t n = 0;
+        for (const cn::TeamPlayer& p : r.players) n += p.recipe_ends[e];
+        lab.metric(std::string("team.recipe.ended.") + sb::kRecipeEndNames[e],
+                   static_cast<double>(n), "count");
+      }
       lab.metric("team.recipe.asks", static_cast<double>(ra), "count");
       lab.metric("team.recipe.commits", static_cast<double>(rc), "count");
       lab.metric("team.recipe.aborts", static_cast<double>(rb), "count");
@@ -1909,6 +1950,11 @@ const gl::LabSpec kSpec{
          "a TSV of every bot's state each --trace-every commands (the bot plan's scripts)"},
         {"why", "",
          "write the bots' decision log here (labs/why_log.hpp; read it with the se-why lab)"},
+        {"flights", "",
+         "write every flight off the match's recording taking off at 380-460 u/s here (TSV: the "
+         "bot, the takeoff's spot, heading and view, the gain, the crash's cause and spot, the "
+         "pilot's mode, the view's writer, link, reason, goal and press note at the takeoff; "
+         "in the air, the mode's first change with why a hop ended, and the view's writer)"},
         {"trace-every", "4", "--trace's row every this many commands of a bot (77 a second)"},
         {"sides", "0",
          "1: each side's fight apart (damage, accuracy, sightings, what it did not see), as when "

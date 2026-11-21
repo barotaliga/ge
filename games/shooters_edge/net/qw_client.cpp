@@ -210,6 +210,7 @@ void on_download(QwClientEnd& c, const SvcMsg& m) {
     return;
   }
   c.dl.bytes.insert(c.dl.bytes.end(), m.data.begin(), m.data.end());
+  c.dl.percent = m.ints[1];
   if (m.ints[1] >= 100) {
     c.dl.size = static_cast<int>(c.dl.bytes.size());
     finish_download(c, true);

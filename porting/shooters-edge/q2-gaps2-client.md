@@ -331,7 +331,10 @@ the console's foot shows the file being downloaded with a bar and "nn% (size)", 
 "Loading models...", "images", "clients", "sounds" in turn. [R] Ours: the classic console's look and
 `con_notifytime`, `con_notifylines`, `con_height` are had; `con_alpha`, `con_scale`, `con_clock`,
 `condump`, `clearnotify` (ours `con_clearnotify`), `remotemode` and the loading lines are not found.
-[R ours]
+[R ours] **Done (M18k4 rounds 32 and 33)**: `con_clock`, `condump`, `con_auto_chat`, `clearnotify`,
+`remotemode`, `con_scale`, `con_alpha`, the download bar and "Loading <map>..."; not taken: the
+version corner, the later loading steps, `con_background`, `con_scroll`, `con_history`,
+`con_timestampsformat`, `con_timestampscolor`.
 
 **C24. Rank 3, the loading plaque and the pause picture.** Starting to load a level stops every sound
 and the music, then draws the pack's `loading` picture centred, unless the console or a menu is up,

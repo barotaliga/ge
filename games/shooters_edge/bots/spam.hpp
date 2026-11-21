@@ -10,6 +10,11 @@
 // claim, among the nodes within the holder's leash of his area that see the spot from far enough
 // for a rocket to arm and near enough to land (`spam_plan`).
 //
+// SPAM AT SHOW-UP SPOTS (`spamshow`): with no news, the same holder fires now and then at a spot
+// enemies show up at, ahead of the way it runs (`kShowAhead`): a way into its area, a teleporter's
+// exit, a power's spawn, a key item's spot; one every `kShowGap_s`, a spot not again within
+// `kShowAgain_s`, the nearest to straight ahead.
+//
 // SPAM AT NEWS: anyone with the launcher and rockets to spare (`kNewsRocketsMost` less its
 // aggression trait, 10 for the most aggressive to 19 for the least), nobody in sight, fires at the
 // outer end of a way into the area he stands in (the map plan's entries) that leads from somewhere
@@ -42,6 +47,11 @@ constexpr float kNewsRocketsMost = 20;  // rockets to spare at news: this less t
 constexpr double kNews_s = 8;           // news of an enemy this old still makes a way in unsafe
 constexpr float kNewsNear = 1000;       // and this near beyond it
 constexpr int kNewsShots = 3;           // rockets a piece of news is worth
+constexpr double kShowGap_s = 4;        // (`spamshow`) a rocket at a show-up spot this often
+constexpr double kShowAgain_s = 10;     // and the same spot not again within this
+constexpr double kShowAhead = 60;       // and only one this near the way it runs, degrees
+constexpr double kRaiseGap_s = 0.5;     // and the launcher raised for it no sooner after a switch
+constexpr double kRaiseHold_s = 2;      // nor lowered again (`hide`) within this of the raise
 
 // The map's spots worth a rocket (teleporters' exits, the powers' spawns), off its entity text.
 void spam_init(Fighter& f, const char* entities);

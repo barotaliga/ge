@@ -24,4 +24,11 @@ concepts: [probe, trace, client-fed, mirror, bisect, loc-file, crash, stack-size
   time cost with one variant a call. `while pgrep -f x` from a shell whose command holds `x` never
   ends.
 - `kNames` is sized by `kFeatures`: a missing name compiles and crashes (`features.cpp`
-  static_asserts the last). A new lab table moves the lab's digest.
+  static_asserts the last).
+- clang-format rewraps `kNames` and `kJudging`: a scripted edit matched on the old wrapping misses,
+  `static_assert` stops the build, and a build chained behind a failed check (`grep -c x && cmake`)
+  never runs, so the old binary is copied and a set of `+newname` fails every run ("no bot feature").
+  Before a set: `test build/release/labs -nt <the edited file>`, `git diff --stat` naming every
+  file the switch touches (an edit script stops at its first failed match and leaves the rest
+  unedited: a switch with a name and no code repeats its base bit for bit), and one 3-second run
+  with the switch. A new lab table moves the lab's digest.

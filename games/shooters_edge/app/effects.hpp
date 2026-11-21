@@ -220,6 +220,10 @@ struct Screen {
   bool classic = false;
   Powerup powerup = Powerup::none;
   double hurt_rgb[3] = {255, 0, 0};
+  // The tint over the view in open air (`v_cshift`, a mod's own): its colour (0..255) and its
+  // strength (of 255); 0 none, the default.
+  double air = 0;
+  double air_rgb[3] = {130, 80, 50};
 };
 // The classic damage tint: a blow of `armour` and `blood` points adds 3 x its count (half of
 // each, at least kHurtCountMin) to `strength`, kept at most kClassicHurtMost, and takes the

@@ -392,7 +392,7 @@ float quake_respawn(A& q, float kind) {
   if (kind == 4) return 30;
   if (dm == 2) return -1;
   if (kind == 2) return dm == 4 ? -1.0f : 20.0f;
-  if (kind == 5) return (dm == 3) | (dm == 5) ? 15.0f : 30.0f;
+  if (kind == 5) return ((dm == 3) | (dm == 5)) ? 15.0f : 30.0f;
   return 20;
 }
 

@@ -31,6 +31,19 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
   return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
 }
 
+// How far item spot `at` lies from a player at `self` for a rise on its bar: as `dist`, less up to
+// kOwnOver of the player's height over standing beside it (24 over the spot), so an item under a
+// hop's flight counts as near as one walked over (one taken 67 over its spot at 30 across read 74
+// off, past kOwnPickup). Not for an item seen going: a hop over another's pickup is no rise.
+constexpr float kOwnOver = 48;  // a jump's height, units
+float own_dist(sh::Vec3f at, sh::Vec3f self) {
+  const float over = self.z - at.z - 24;
+  if (over <= 0) return dist(at, self);
+  const float dx = self.x - at.x, dy = self.y - at.y;
+  const float dz = 24 + (over > kOwnOver ? over - kOwnOver : 0.f);
+  return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
 }  // namespace
 
 bool parse_vec(const char* text, sh::Vec3f& out) {
@@ -202,6 +215,11 @@ ItemNews knowledge_update(Fighter& f, const ge::shooterbots::BotView& s, int me,
   ItemNews news;
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   // ITS OWN PICKUP, off the status bar: what rose since the last think (not across a respawn).
+  bool pack_now = false;  // a backpack in the view within a pickup's reach
+  for (const sb::ViewEntity& v : f.bot.view.entities)
+    pack_now |= v.modelindex > 0 && static_cast<size_t>(v.modelindex) < s.models.size() &&
+                s.models[static_cast<size_t>(v.modelindex)] == "progs/backpack.mdl" &&
+                dist(v.origin, self) < kOwnReach;
   const Stats was = f.bar;
   f.bar = st;
   if (was.health > 0 && st.health > 0) {
@@ -240,6 +258,9 @@ ItemNews knowledge_update(Fighter& f, const ge::shooterbots::BotView& s, int me,
         }
       }
     };
+    // A backpack in the view within a pickup's reach now or a moment ago: a rise beside an item
+    // believed gone is the pack's (no map item), not the item's.
+    const bool pack_by = pack_now || t - f.pack_seen_t < kOwnLag_s;
     int32_t mine = -1;
     float best = kOwnReach;
     for (size_t i = 0; i < f.items.size(); i++) {
@@ -247,8 +268,8 @@ ItemNews knowledge_update(Fighter& f, const ge::shooterbots::BotView& s, int me,
       if (it.ent < 0 || t - it.mine_at < kOwnLag_s || !gives(it)) continue;
       // One believed gone (a novice's guess, a sighting the view undid) only underfoot: a
       // dead player's pack dropped beside an item gives too.
-      const float d = dist(it.at, self);
-      if (!it.present && d >= kOwnPickup) continue;
+      const float d = own_dist(it.at, self);
+      if (!it.present && (d >= kOwnPickup || pack_by)) continue;
       // Its own pickup there not a respawn ago: the spot is still empty (a pack on it gave).
       if (!it.present && t - it.mine_at < it.respawn_s) continue;
       if (d < best) {
@@ -272,6 +293,7 @@ ItemNews knowledge_update(Fighter& f, const ge::shooterbots::BotView& s, int me,
       mega_taken(f, mine, t, true);
     }
   }
+  if (pack_now) f.pack_seen_t = t;
   sb::SenseSettings look = f.bot.senses.set;
   look.range = kItemSight;
   const sh::Vec3f angles{f.bot.pitch, f.bot.yaw, 0};

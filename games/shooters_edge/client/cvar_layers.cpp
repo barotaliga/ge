@@ -126,11 +126,11 @@ void add_first(con::Console& c, const GameBindings& b) {
 // - `scr_centertime` is the same setting, 2.5 seconds by default where Quake's is 2, and
 //   `cl_timeout` 120 where Quake's is 60;
 // - its own spellings of settings we have under Quake's names, the same thing in each:
-//   `vid_gamma` (`gamma`: higher darker in both), `s_volume` (`volume`), `gl_dynamic`
-//   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `fov` (`cl_fov`), `cl_vwep` (`r_drawvweps`: the
-//   weapon a figure carries, 1 in both), and its crosshair's `ch_x`, `ch_y` (`cl_crossx`,
-//   `cl_crossy`), `ch_scale` (`crosshairsize`) and `ch_alpha` (`crosshairalpha`); its own `ch_red`,
-//   `ch_green`, `ch_blue` and `ch_health` colour it;
+//   `vid_gamma` (`gamma`: higher darker in both), `s_volume` (`volume`), `con_alpha`
+//   (`con_bgalpha`), `gl_dynamic` (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `fov` (`cl_fov`),
+//   `cl_vwep` (`r_drawvweps`: the weapon a figure carries, 1 in both), and its crosshair's `ch_x`,
+//   `ch_y` (`cl_crossx`, `cl_crossy`), `ch_scale` (`crosshairsize`) and `ch_alpha`
+//   (`crosshairalpha`); its own `ch_red`, `ch_green`, `ch_blue` and `ch_health` colour it;
 // - the move keys' speeds are the same settings, 200 walking by default where Quake's
 //   are 400 (Quake II has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
@@ -191,6 +191,16 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .max = 1,
             .values = "-1..1: 0 the default; 0.1 to 0.3 lifts the dark corners"},
            b.light_lift);
+  v.add({.name = "rate",  // the bytes a second its servers may send: more than Quake's
+         .fallback = "15000",
+         .flags = con::kArchive | con::kUserInfo,
+         .help = "How many bytes a second a joined server may send you.",
+         .kind = con::CvarKind::integer,
+         .min = 500,
+         .max = 1000000,
+         .values = "500..1000000: that many bytes a second, held to the server's own bounds "
+                   "(15000 the default)",
+         .overlap = con::Overlap::same});
   v.add({.name = "cl_timeout",  // Quake II's servers are waited for longer
          .fallback = "120",
          .flags = con::kArchive,
@@ -213,7 +223,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
         std::pair{"gl_dynamic", "r_dynamic"}, std::pair{"gl_lightmap", "r_lightmap"},
         std::pair{"fov", "cl_fov"}, std::pair{"ch_x", "cl_crossx"}, std::pair{"ch_y", "cl_crossy"},
         std::pair{"ch_scale", "crosshairsize"}, std::pair{"ch_alpha", "crosshairalpha"},
-        std::pair{"cl_vwep", "r_drawvweps"}})
+        std::pair{"cl_vwep", "r_drawvweps"}, std::pair{"con_alpha", "con_bgalpha"}})
     v.add_synonym(name, ours);
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.

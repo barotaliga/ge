@@ -126,6 +126,7 @@ void watch_look(Fighter& f, const ge::shooterbots::BotView& s, int me, bool dead
                        (pm == sb::PilotMode::walk || pm == sb::PilotMode::hop) && f.plan &&
                        f.mind.claim >= 0 && !(f.bot.circleaim && f.bot.pilot.pilot.circling_now);
   f.bot.look = false;
+  f.bot.look_by = nullptr;
   if (!dead && (standing || holding) && f.mode == FightMode::roam && !f.unlocking &&
       f.escort.leader < 0 && s.world.entities[static_cast<size_t>(me)].waterlevel < 2) {
     const sh::Vec3f at = s.world.entities[static_cast<size_t>(me)].origin;
@@ -172,6 +173,7 @@ void watch_look(Fighter& f, const ge::shooterbots::BotView& s, int me, bool dead
       if (pick >= 0 && !behind) {
         f.bot.look = true;
         f.bot.look_at = spot;
+        f.bot.look_by = holding ? "watch-hold" : "watch";
         f.stats.watching++;
         if (why) {
           why->decide("watch");

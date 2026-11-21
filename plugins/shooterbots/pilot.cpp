@@ -116,6 +116,10 @@ constexpr float kSwimPitch = 70;  // a swimmer's view pitched at most this far, 
 constexpr float kSwimRise = 16;   // the next node this much higher: jump held to rise, units
 // A script's keys are pressed in full only with the view within ~14 degrees of the way (the cos).
 constexpr double kScriptFacing = 0.97;
+// A ladder is climbed looking this far up (the move climbs at 15 or more), degrees, and left for
+// its top node once the feet are within this of the top node's height, units.
+constexpr float kLadderPitch = 45;
+constexpr float kLadderOver = 8;
 constexpr float kScriptFell = 40;  // standing this far under a script's lowest step: fallen off
 constexpr float kOffFloor = 12;    // a pool's floor swum over this far above its standing height
 constexpr double kLipLiftOff_s = 0.05;  // a lip's jump is off the ground within this      //
@@ -267,7 +271,7 @@ static void hop_turn_need(Pilot& p, const PilotSense& s, float vh, float speed, 
   const float r_min = speed / (most * kDegToRad);
   for (const float look_s : kTightLook_s) {
     const float look = speed * look_s;
-    const Vec3f at = hop_aim(p, s.origin, look, p.strafe_end_node);
+    const Vec3f at = hop_aim(p, s.origin, look, hop_end_node(p));
     const float d = across(s.origin, at);
     if (d < 1) continue;
     float off = wrap(yaw_at(s.origin, at) - vh);
@@ -339,6 +343,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   }
   if (p.mode != PilotMode::hop) {
     p.gap_k = -1;
+    if (p.recipe >= 0) p.stats.recipe_cuts++;
     p.recipe = -1;  // a start under way belongs to a hop (planned again: off)
     p.safe_flight = false;
   } else if (!s.onground && p.safe_flight) {
@@ -411,6 +416,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           recipe_choose(p, s, yaw_at(s.origin, hop_aim(p, s.origin, kRecipeLook, j)), j)) {
         p.recipe_note = "begun";
         p.mode = PilotMode::hop;
+        p.hop_out = false;
         p.strafe_end_node = j;
         p.gap_k = -1;
         p.strafe_side = 0;
@@ -435,7 +441,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     if (mash_building) p.stats.mash_starts++;
     if (p.set.hop && p.mode == PilotMode::walk && (s.onground || rejoin) && !mash_building &&
         (l.kind == NavKind::walk || l.kind == NavKind::drop || (l.gap && hops_gaps(p))) &&
-        l.mover < 0 &&
+        l.mover < 0 && !l.ladder &&
         (speed >= kStrafeSpeed * s.maxspeed || near_gap || (chain && speed >= kChainSpeed) ||
          rejoin) &&
         !(l2 && leaps(l2->kind) && !(l2->gap && hops_gaps(p)))) {
@@ -443,6 +449,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       if (j >= 0 && (speed >= kStrafeSpeed * s.maxspeed || gap_in(p, j) >= 0 ||
                      (chain && speed >= kChainSpeed) || rejoin)) {
         p.mode = PilotMode::hop;
+        p.hop_out = false;
         p.strafe_end_node = j;
         p.gap_k = gap_in(p, j);
         p.strafe_side = 0;
@@ -470,25 +477,40 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // The hop turned off mid-stretch (a bot that took the view to aim): walk on from here.
       p.hop_end_why = "off";
       p.hop_end_at = "";
+      p.hop_out = false;
       restart(p, s);
       p.mode = PilotMode::walk;
     }
     if (p.mode == PilotMode::hop) {
-      hop_left = hop_follow(p, s.origin, p.strafe_end_node);
+      hop_left = hop_follow(p, s.origin, hop_end_node(p));
       target = node(g, p.route[static_cast<size_t>(p.strafe_end_node)]).origin;
       const float off =
           off_segment(s.origin, node(g, p.route[p.k]).origin, node(g, p.route[p.k + 1]).origin);
-      const bool at_end = hop_left <= p.set.hop_end && !p.gap_flight;
+      bool at_end = hop_left <= p.set.hop_end && !p.gap_flight;
+      if (p.hop_out) {
+        at_end = s.onground;  // (`airend`) flown to the landing, ended there
+      } else if (at_end && p.set.hop_air_end && !s.onground && hop_end_flown(p)) {
+        // (`airend`) The stretch ran out in the air at a climb, the goal or a plain link: the
+        // hop's air flies it on to the landing (the walk would take the flight over, a glance its
+        // view, and the turn at the end would not be flown).
+        p.hop_out = true;
+        p.hop_end_why = "end";
+        p.hop_end_at = hop_stretch_end(p);
+        at_end = false;
+      }
       const bool slow =
           s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed && p.recipe < 0;
       if (at_end || slow ||
           (p.set.hop_headroom && s.onground && !p.jump_pressed && p.gap_k < 0 &&
            hop_left <= speed * kLastJump_s)) {
-        p.hop_end_why = at_end ? "end" : slow ? "slow" : "room";
-        p.hop_end_at = at_end || !slow ? hop_stretch_end(p) : "";
-        restart(p, s);
+        if (!p.hop_out) {
+          p.hop_end_why = at_end ? "end" : slow ? "slow" : "room";
+          p.hop_end_at = at_end || !slow ? hop_stretch_end(p) : "";
+        }
+        p.hop_out = false;
+        restart(p, s, RecipeEnd::hop_end);
         p.mode = PilotMode::walk;
-      } else if (off > p.set.lost && !(p.lip_pressed_s >= 0 && !s.onground)) {
+      } else if (off > p.set.lost && !(p.lip_pressed_s >= 0 && !s.onground) && !p.hop_out) {
         // (A lip's jump flies the crossing, off the route's line: planned again once down, not
         // from over the pit, where no way starts.)
         p.stats.lost++;
@@ -513,7 +535,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
 
     // The strafe stretch, entered on a level walk moving near full speed.
     if (!p.set.hop && p.set.strafe && p.mode == PilotMode::walk && s.onground &&
-        l.kind == NavKind::walk && l.mover < 0 && speed >= kStrafeSpeed * s.maxspeed) {
+        l.kind == NavKind::walk && l.mover < 0 && !l.ladder && speed >= kStrafeSpeed * s.maxspeed) {
       const int32_t j = strafe_stretch(p, s.origin);
       if (j >= 0) {
         p.mode = PilotMode::strafe;
@@ -548,8 +570,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     } else if (p.mode == PilotMode::hop) {
       const float vh = speed > kSlow ? heading(s.velocity.x, s.velocity.y) : p.yaw;
       const float look = speed * p.set.hop_look_s > 64 ? speed * p.set.hop_look_s : 64;
-      const Vec3f aim =
-          via_aim(p, s, s.origin, look, hop_aim(p, s.origin, look, p.strafe_end_node));
+      const Vec3f aim = via_aim(p, s, s.origin, look, hop_aim(p, s.origin, look, hop_end_node(p)));
       const float aim_yaw = yaw_at(s.origin, aim);
       p.hop_aim_yaw = aim_yaw;
       const float err = wrap(aim_yaw - vh);
@@ -572,11 +593,13 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // (`hoprhythm`) A swap in the air kept a moment before anything swaps it back.
       if (s.onground) p.hop_air_swapped = false;
       const bool held = p.hop_air_swapped && p.side_s < p.set.hop_air_keep_s;
+      // (`swapground`) the aim's swap waits for the landing, unless the aim is far off
+      const bool to_ground = p.set.hop_swap_ground && !s.onground && swing <= p.set.hop_swing;
       if (!p.set.hop_simple && p.set.hop_land) {
         hop_land_side(p, s, err, vh, speed, dt);
       } else if (!p.set.hop_simple &&
                  (p.strafe_side == 0 ||
-                  (want != 0 && want != p.strafe_side && !(held && !s.onground) &&
+                  (want != 0 && want != p.strafe_side && !(held && !s.onground) && !to_ground &&
                    (p.side_s >= p.set.hop_side_s || swing > p.set.hop_swing)))) {
         if (p.strafe_side != 0 && !s.onground) p.hop_air_swapped = true;
         if (p.strafe_side != 0) p.side_why = p.side_s >= p.set.hop_side_s ? "aim" : "swing";
@@ -593,16 +616,16 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // the side held and flown straight, when straight on is clearer than both).
       if ((!p.set.hop_simple || p.set.hop_open) && s.world != nullptr &&
           (!s.onground || p.set.hop_wall_ground)) {
-        const float mine =
-            arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, p.set.hop_see_s);
+        // (`wallplan`) a flight ahead on the ground: the side set with the jump
+        const float see =
+            s.onground && p.set.hop_see_ground_s > 0 ? p.set.hop_see_ground_s : p.set.hop_see_s;
+        const float mine = arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, see);
         p.arc_mine = mine;  // (recorded: a trace's `arcm`, `arco`)
-        if (mine < p.set.hop_see_s) {
-          const float other =
-              arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, p.set.hop_see_s);
+        if (mine < see) {
+          const float other = arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, see);
           p.arc_other = other;
           const float straight =
-              p.set.hop_straight ? arc_clear(*s.world, s.origin, s.velocity, 0, dt, p.set.hop_see_s)
-                                 : 0;
+              p.set.hop_straight ? arc_clear(*s.world, s.origin, s.velocity, 0, dt, see) : 0;
           if (straight > (mine > other ? mine : other)) {
             // Straight on is the clearest: the side held, the view set where the side key's wish
             // adds nothing across (bot.cpp's lead, `-asin(30 / v)` into the turn).
@@ -610,7 +633,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
             p.hop_lead =
                 -static_cast<float>(core::libm::asin(static_cast<double>(30 / v))) / kDegToRad;
             p.hop_lead_on = true;
-          } else if (other > mine && !(held && other < p.set.hop_see_s)) {
+          } else if (other > mine && !(held && other < see)) {
             p.hop_air_swapped = !s.onground;
             p.strafe_side = static_cast<int8_t>(-p.strafe_side);
             p.side_s = 0;
@@ -815,7 +838,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
              (p.set.gap_hold && gap_hold_jumps(p, s, msec))) &&
             !(p.set.hop_headroom && s.world != nullptr &&
               jump_blocked(p, *s.world, s.origin, speed, kHeadroom_s)) &&
-            !aim_walled) {
+            !aim_walled && !p.hop_out) {
           w.jump = true;
           because = "hopping: the jump held for the landing";
         }
@@ -843,6 +866,44 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.side = static_cast<float>(p.strafe_side);
         w.jump = !p.jump_pressed;  // pressed afresh every other command: a landing catches one
         because = "in the air: the wish across the velocity";
+      }
+    } else if (l.ladder) {
+      // A LADDER (NavLink::ladder): faced into its face with the view up and forward held, which
+      // climbs it (the jump held too, which climbs it as well and rises out of water at its
+      // foot); once the feet are over its top, walked over to the top node.
+      const Vec3f me = s.origin;
+      const bool over = me.z >= B.z - kLadderOver;
+      w.yaw = unwrap(over ? yaw_at(me, B) : l.face, p.yaw);
+      w.pitch = over ? 0.f : -kLadderPitch;
+      w.forward = 1;
+      w.jump = !over;
+      p.mode = s.onground ? PilotMode::walk : PilotMode::air;
+      because = over ? "a ladder: over its top" : "a ladder: climbing";
+      const float d3 = length(me - B);
+      if (p.ladder_from != a || p.ladder_to != b) {
+        p.ladder_from = a;
+        p.ladder_to = b;
+        p.best = 1e30f;
+        p.best_s = t;
+      }
+      if (d3 < p.best - 0.5f) {
+        p.best = d3;
+        p.best_s = t;
+      } else if (t - p.best_s > 2 * p.set.stuck_s) {
+        // No higher for long: missed (twice: not taken again).
+        int times = 0;
+        for (const NavExtraLink& e : p.short_jumps) times += e.from == a && e.to == b ? 1 : 0;
+        const NavExtraLink e{a, b, l.kind, l.time_s};
+        missed_jump(p, e);
+        if (times >= 1) {
+          p.failed.push_back(e);
+          p.cut.push_back(e);
+        }
+        p.stats.stuck++;
+        p.ladder_from = -1;
+        replanned = true;
+        replan(p, s);
+        because = "a ladder: no higher, plan again";
       }
     } else if (l.escape >= 0 && static_cast<size_t>(l.escape) < g.escapes.size() && p.airborne &&
                s.onground) {

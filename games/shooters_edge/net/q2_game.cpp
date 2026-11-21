@@ -6,6 +6,8 @@
 // ge:test tests/shooters_edge_q2_net_test.cpp
 #include "shooters_edge/net/q2_game.hpp"
 
+#include "classic/protocol/masters.hpp"
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
@@ -239,6 +241,8 @@ int slots(const gs::ServerConfig& c) {
 }
 
 struct Game {
+  // The masters it reports to (`setmaster`, `heartbeat`; classic/protocol/masters.hpp).
+  ge::classic::protocol::Masters masters;
   cl::SearchPath files;
   std::unique_ptr<cl::LoadedMap> map;
   sv::RulesRunner rules;
@@ -521,8 +525,21 @@ void change_level(Game& g) {
   if (g.net) q2_net_level(*g.net, g.cfg.wire);
 }
 
+namespace cp = ge::classic::protocol;
+
+void masters_send(Game& game, const std::vector<cp::MasterSend>& out) {
+  if (!game.net || game.net->transport == nullptr) return;
+  for (const cp::MasterSend& m : out)
+    ge::net::transport_send(*game.net->transport, m.to, m.bytes.data(), m.bytes.size(),
+                            static_cast<int64_t>(game.net->now * 1e6));
+}
+
 void destroy(void* g) {
   Game* game = static_cast<Game*>(g);
+  std::vector<cp::MasterSend> out;
+  std::vector<std::string> said;
+  cp::masters_shutdown(game->masters, out, said);  // a public server's `shutdown`
+  masters_send(*game, out);
   if (game->net) q2_net_stop(*game->net);
   delete game;
 }
@@ -553,6 +570,7 @@ void fill_status(const void* g, ge::net::Status& st) {
 
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
+  game.masters.family = cp::MasterFamily::q2;  // setmaster may come before the first frame
   game.net = std::make_unique<Q2NetServer>();
   if (!q2_net_start(*game.net, game.rules, port, game.cfg, error)) return false;
   for (std::string& line : game.said) game.net->log.push_back(std::move(line));
@@ -571,6 +589,15 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
 void net_frame(void* g, int64_t now_us) {
   Game& game = *static_cast<Game*>(g);
   q2_net_frame(*game.net, now_us);
+  const double now_s = static_cast<double>(now_us) / 1e6;
+  if (!cp::masters_started(game.masters)) {  // the first round 5 s on
+    cp::masters_start(game.masters, cp::MasterFamily::q2, now_s);
+  }
+  {
+    std::vector<cp::MasterSend> out;
+    cp::masters_frame(game.masters, now_s, 0, q2_status_text(*game.net), true, out, game.net->log);
+    masters_send(game, out);
+  }
   change_level(game);
   if (game.login) q2_login_frame(*game.login);
 }
@@ -604,6 +631,20 @@ bool console_line(void* g, const std::string& line) {
   }
   const std::vector<std::string> w = q2_words(line);
   if (w.empty()) return true;
+  if (w[0] == "setmaster" || w[0] == "heartbeat") {
+    if (!game.net) {  // only a server on the network has masters
+      print_lines(game, "Only dedicated servers use masters.\n");
+      return true;
+    }
+    if (w[0] == "heartbeat") {
+      cp::force_heartbeat(game.masters);
+      return true;
+    }
+    std::vector<cp::MasterSend> out;
+    cp::set_masters(game.masters, {w.begin() + 1, w.end()}, cp::resolve_master, game.net->log, out);
+    masters_send(game, out);
+    return true;
+  }
   if (w[0] == "listmaps") {
     const ge::classicenhance::Profile* q2 = ge::classicenhance::find_profile("q2");
     std::string list;

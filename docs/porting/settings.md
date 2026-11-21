@@ -65,6 +65,9 @@ procedure.
 - The precheck's digest gate can run out of memory (signal 9): run the labs it reached again with
   `xargs -P 3` before trusting the failures.
 - A shared cvar takes its default from the game's settings, and its help words follow.
+- A user info setting both games have (`rate`, `password`) lives in the classic layer with
+  Quake's default; Quake II declares it `same` with its own. A change while joined is told the
+  server at the next frame (Quake's `setinfo`, Quake II's whole user info again).
 - A meta-cvar sets values under the explicit ones.
 - Player text has no backticks and no `next:`.
 
