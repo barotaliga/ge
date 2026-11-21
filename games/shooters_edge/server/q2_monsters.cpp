@@ -12,6 +12,7 @@
 #include <string>
 #include <string_view>
 
+#include "brush/light_probe.hpp"
 #include "brush/map.hpp"
 #include "brush/trace.hpp"
 #include "core/libm/libm.hpp"
@@ -19,6 +20,7 @@
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monster_kinds.hpp"
+#include "shooters_edge/server/q2_monster_pain.hpp"
 #include "shooters_edge/server/q2_monster_steps.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_targets.hpp"
@@ -276,7 +278,20 @@ bool step(Q2Server& s, Q2Monster& m, sh::Vec3f move) {
 void fall(Q2Server& s, Q2Monster& m) {
   Q2Entity& e = body(s, m);
   const Kind& k = kind(m);
-  if (k.flies && !m.dead) return;
+  if (k.flies && !m.dead) {  // no gravity: a blow's push, worn off by friction (a third upright)
+    if (m.velocity.x == 0 && m.velocity.y == 0 && m.velocity.z == 0) return;
+    const auto wear = [](float speed, float friction) {
+      const float drop = std::max(speed, 100.0f) * friction * kStep;
+      return speed > 0 ? std::max(0.0f, speed - drop) / speed : 0.0f;
+    };
+    const float flat = sh::length(sh::Vec3f{m.velocity.x, m.velocity.y, 0});
+    const float hs = wear(flat, 6), vs = wear(std::abs(m.velocity.z), 2);
+    m.velocity = {m.velocity.x * hs, m.velocity.y * hs, m.velocity.z * vs};
+    const ge::classic::Q2Trace t = sweep(s, m, e.origin, e.origin + m.velocity * kStep);
+    e.origin = t.end;
+    if (t.fraction < 1) m.velocity = {};
+    return;
+  }
   if (k.swims && wet(s, foot(e, e.origin))) return;
   if (m.gravity == 0 && !m.dead && (k.good || k.turret)) {  // hung up, or riding a turret
     m.velocity = {};
@@ -366,7 +381,26 @@ void found(Q2Server& s, Q2Monster& m, int foe, bool saw) {
     const bool soldier_kind =
         kind(m).sight != nullptr && std::string_view(kind(m).sight) == "soldier/solsght1.wav";
     sound(s, m.entity, soldier_kind && random01(s) < 0.5 ? "soldier/solsrch1.wav" : kind(m).sight);
+    // A soldier 500 or more off, above the easiest skill: half the time it fires on the run.
+    if (soldier_kind && skill(s) >= 1 &&
+        sh::length(foe_at(s, foe) - s.entities[size_t(m.entity)].origin) >= kNear &&
+        random01(s) < 0.5)
+      m.run_shoot = 0;
   }
+}
+
+// Whether player `slot` stands in the dark: his light (150 times the brightest channel of the
+// baked light on the floor under his eye) 5 or less, and no muzzle's flash on him (a shot in the
+// last fifth of a second). A map with no lightmaps is lit.
+bool in_dark(const Q2Server& s, int slot) {
+  const Q2Player& p = s.players[slot];
+  if (s.light == nullptr || s.map == nullptr || s.light->tris.empty()) return false;
+  if (s.level_time < p.hostile_until - 0.8) return false;
+  const sh::Vec3f eye = player_eye(p);
+  const float at[3] = {eye.x, eye.y, eye.z};
+  float rgb[3] = {1, 1, 1};
+  if (!ge::brush::light_below(*s.light, *s.map, at, rgb)) return false;
+  return 150.0f * std::max({rgb[0], rgb[1], rgb[2]}) <= 5.0f;
 }
 
 // Whether monster `m` sees `foe` now.
@@ -422,9 +456,9 @@ void notice(Q2Server& s, Q2Monster& m) {
       break;
     }
   }
-  // 4. the frame's player in turn, seen.
+  // 4. the frame's player in turn, seen (not in the dark).
   const int slot = s.sight_client;
-  if (targetable(s, slot) && sees(s, m, slot)) found(s, m, slot, true);
+  if (targetable(s, slot) && sees(s, m, slot) && !in_dark(s, slot)) found(s, m, slot, true);
 }
 
 // ---- Attacks ----
@@ -622,6 +656,7 @@ void begin_attack(Q2Server& s, Q2Monster& m, int i) {
   const Attack& a = attack_at(m, i);
   m.attack = i;
   m.pose.cue_attack = i;
+  m.slide = false;  // an attack ends a flier's slide
   m.burst_frame = 0;
   m.loops = 0;
   m.aimed = false;
@@ -791,7 +826,11 @@ void choose(Q2Server& s, Q2Monster& m) {
     if (skill(s) == 0) chance *= 0.5;
     if (skill(s) >= 2) chance *= 2;
   }
-  if (random01(s) >= chance) return;
+  if (random01(s) >= chance) {
+    // A flier that did not fire slides sideways three times in ten, each such frame afresh.
+    if (k.flies && r != Range::melee) m.slide = random01(s) < 0.3;
+    return;
+  }
   const int i = pick_ranged(s, m, dist);
   m.attack_finished = s.level_time + 2 * random01(s);
   if (dist < attack_at(m, i).closest) return;  // too near for it: keeps closing
@@ -901,38 +940,10 @@ bool tend(Q2Server& s, Q2Monster& m) {
 
 // ---- Dodging (q2-monsters-full.md § Dodging and ducking) ----
 
-// A kind's duck: its model's first frame of it (measured from the frame names), its frames, the
-// one the box goes down on, the one held low until the hold's end, the one it comes up on, and
-// each frame's walk along its facing (times `scale`, walked once a frame, not while held).
-struct Duck {
-  const char* classname;
-  int16_t first;
-  int16_t frames, down, held, up;
-  float scale;
-  int8_t steps[16];
-};
-
-constexpr Duck kDucks[] = {
-    {"monster_soldier_light", 45, 5, 0, 1, 3, 1.2f, {5, -1, 1, 0, 5}},
-    {"monster_soldier", 45, 5, 0, 1, 3, 1.2f, {5, -1, 1, 0, 5}},
-    {"monster_soldier_ss", 45, 5, 0, 1, 3, 1.2f, {5, -1, 1, 0, 5}},
-    {"monster_infantry", 120, 5, 0, 1, 3, 1, {-2, -5, 3, 4, 0}},
-    {"monster_gunner", 201, 8, 0, 2, 6, 1.15f, {1, 1, 1, 0, -1, -1, 0, -1}},
-    {"monster_medic",
-     131,
-     16,
-     2,
-     3,
-     6,
-     1,
-     {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-    {"monster_brain", 146, 8, 1, 2, 4, 1, {0, -2, 17, -3, -1, -5, -6, -6}},
-    {"monster_chick", 83, 7, 0, 2, 4, 1, {0, 1, 4, -4, -5, 3, 1}},
-};
-// The soldiers' duck that shoots: down and a shot on its third frame, round again from its sixth
-// while 0.4 s still falls inside the hold, up on its seventh; turning to the enemy all through.
-constexpr Duck kDuckShoot{"", 30, 9, 2, -1, 6, 1.2f, {}};
-constexpr int kDuckShootLoop = 5;
+using roster::Duck;
+using roster::kDucks;
+using roster::kDuckShoot;
+using roster::kDuckShootLoop;
 constexpr float kDuckDrop = 32;  // the box's top lowered while down
 
 const Duck* duck_of(const Q2Monster& m) {
@@ -945,6 +956,9 @@ bool soldier(const Q2Monster& m) {
 }
 bool named(const Q2Monster& m, std::string_view classname) {
   return kind(m).classname == classname;
+}
+bool stamps(const Q2Monster& m) {
+  return named(m, "monster_tank") || named(m, "monster_tank_commander");
 }
 
 // One think of the duck in hand: the frame shown, what it does when new, then the next.
@@ -1033,12 +1047,6 @@ void arrive_corner(Q2Server& s, Q2Monster& m) {
   }
 }
 
-constexpr const char* kInsaneDeaths[] = {"player/male/death1.wav", "player/male/death2.wav",
-                                         "player/male/death3.wav", "player/male/death4.wav"};
-constexpr const char* kInsanePains[] = {"player/male/pain25_1.wav",  "player/male/pain25_2.wav",
-                                        "player/male/pain50_1.wav",  "player/male/pain50_2.wav",
-                                        "player/male/pain75_1.wav",  "player/male/pain75_2.wav",
-                                        "player/male/pain100_1.wav", "player/male/pain100_2.wav"};
 // A prisoner's pain: the cry of the band under his health (25, 50, 75, else 100), one of two.
 const char* insane_pain(Q2Server& s, int health) {
   const int band = health < 25 ? 0 : health < 50 ? 1 : health < 75 ? 2 : 3;
@@ -1069,6 +1077,45 @@ void dying_shot(Q2Server& s, Q2Monster& m) {
   }
 }
 
+// A soldier's shot on the run at first sight, frames 109 to 122 a step each: it runs at him
+// facing him, fires at the fourth, and at the last, at skill 3 while he lives 500 or more off,
+// goes round again from the third; else it runs on as ever.
+void run_and_shoot(Q2Server& s, Q2Monster& m) {
+  const int at = m.run_shoot;
+  if (!foe_alive(s, m.enemy)) {
+    m.run_shoot = -1;
+    return;
+  }
+  m.pose.shown = 109 + at;
+  go_to(s, m, foe_at(s, m.enemy), kind(m).run);
+  if (at == 3) shoot(s, m, kind(m).missile[0], 0);
+  if (at < 13) {
+    m.run_shoot = at + 1;
+    return;
+  }
+  const bool again = skill(s) == 3 && foe_alive(s, m.enemy) &&
+                     sh::length(foe_at(s, m.enemy) - body(s, m).origin) >= kNear;
+  m.run_shoot = again ? 2 : -1;
+}
+
+// Whether kind `k` fidgets on its idle call (its poses' fidget started by no frame).
+bool fidgets_on_call(const Kind& k) {
+  const SqMonsterPoses* t = sq_monster_poses(k.classname);
+  return t != nullptr && !t->fidget.none() && t->fidget_odds == 0;
+}
+
+// Flies on an infantryman's or a mutant's corpse: once it has fallen, out of water, half the time
+// they come 5 to 15 s on (none if it lies in water then) and buzz round it for 60 s.
+void flies(Q2Server& s, Q2Monster& m) {
+  if (m.flies_at > 0 && s.level_time < m.flies_at + 60 && wet(s, body(s, m).origin))
+    m.flies_at = -1;  // in water when they would come, or while they buzz: none
+  if (m.flies_at != 0 || !(named(m, "monster_infantry") || named(m, "monster_mutant"))) return;
+  if (m.pose.act != SqMonsterPose::Act::death || m.pose.frame < m.pose.span.last) return;
+  m.flies_at = -1;
+  if (wet(s, body(s, m).origin) || random01(s) >= 0.5) return;
+  m.flies_at = s.level_time + 5 + random01(s) * 10;
+}
+
 // Monster `m`'s voice with no enemy: its idle standing (not an ambusher) or its search walking
 // its path, on one timer: the first only sets it (0 to 15 s), each after plays and sets 15 to 30.
 void voice(Q2Server& s, Q2Monster& m) {
@@ -1081,8 +1128,8 @@ void voice(Q2Server& s, Q2Monster& m) {
     while (n < 3 && k.search[n] != nullptr) n++;
     say = k.search[n == 1 ? 0 : std::min(n - 1, static_cast<int>(random01(s) * n))];
     reach = k.search_reach;
-  } else if (!walking && !m.ambush && k.idle != nullptr) {
-    say = k.idle;
+  } else if (!walking && !m.ambush && (k.idle != nullptr || fidgets_on_call(k))) {
+    say = k.idle != nullptr ? k.idle : "";  // the parasite's call is its fidget alone
   }
   if (say == nullptr) return;
   if (m.idle_at == 0) {
@@ -1091,7 +1138,8 @@ void voice(Q2Server& s, Q2Monster& m) {
   }
   if (s.level_time < m.idle_at) return;
   if (walking && k.search_odds < 1 && random01(s) >= k.search_odds) say = nullptr;
-  if (say != nullptr) sound(s, m.entity, say, reach);
+  if (say != nullptr && *say != 0) sound(s, m.entity, say, reach);
+  if (say != nullptr && !walking) m.pose.cue_fidget = true;
   m.idle_at = s.level_time + 15 + random01(s) * 15;
 }
 
@@ -1225,6 +1273,21 @@ void think(Q2Server& s, Q2Monster& m) {
     ducking(s, m);
     return;
   }
+  // A tank's enemy fallen but not torn apart (health above -80) and in sight: it stamps on him
+  // (frames 77 to 114, no harm done), then forgets him.
+  if (m.stomp < 0 && m.enemy >= 0 && !foe_alive(s, m.enemy) && stamps(m) &&
+      s.players[m.enemy].health > -80 && reaches(s, m, m.enemy, kOpaque))
+    m.stomp = 0;
+  if (m.stomp >= 0) {
+    m.pose.shown = 77 + m.stomp;
+    m.pose.shown_run = {77, 114};
+    if (m.enemy >= 0) turn(e, k, yaw_to(foe_at(s, m.enemy) - e.origin));
+    if (++m.stomp > 37) {
+      m.stomp = -1;
+      m.enemy = m.old_enemy = -1;
+    }
+    return;
+  }
   if (m.enemy != -1 && !foe_alive(s, m.enemy)) {  // dead or gone: back to the one before
     m.enemy = m.old_enemy != -1 && foe_alive(s, m.old_enemy) ? m.old_enemy : -1;
     m.old_enemy = -1;
@@ -1272,6 +1335,10 @@ void think(Q2Server& s, Q2Monster& m) {
     pursue(s, m);  // out of sight: the last sighting, then his trail; it never gives him up
   }
   if (s.level_time + 0.001 < m.pain_hold) return;  // flinching
+  if (m.run_shoot >= 0) {
+    run_and_shoot(s, m);
+    return;
+  }
   attacking(s, m);
   if (s.level_time + 0.001 < m.busy_until) return;
   if (k.screen) m.screen = std::max(m.screen, 0);
@@ -1299,6 +1366,18 @@ void think(Q2Server& s, Q2Monster& m) {
   }
   if (m.lost) {
     go_to(s, m, m.goal, k.run);
+    return;
+  }
+  if (m.slide && k.flies) {  // facing him, a run's step to one side; blocked, the other side
+    const float to = yaw_to(m.last_sight - e.origin);
+    turn(e, k, to);
+    m.ideal_yaw = to;
+    const float step_len = k.run * kStep;
+    for (int tries = 0; tries < 2; tries++) {
+      const sh::Vec3f side = forward_of(to + (m.slide_left ? 90.0f : -90.0f)) * step_len;
+      if (step(s, m, side)) return;
+      m.slide_left = !m.slide_left;
+    }
     return;
   }
   sh::Vec3f goal = m.last_sight;
@@ -1379,16 +1458,17 @@ void die(Q2Server& s, Q2Monster& m, int attacker, int damage) {
   const Kind& k = kind(m);
   m.dead = true;
   m.died_at = s.level_time;
-  m.leaping = false;
   m.duck_frame = m.duck_pose = -1;  // a duck ends at death (the corpse's box is set below)
-  m.ducked = false;
+  m.ducked = m.leaping = false;
   m.screen = 0;
   e.corpse = true;  // shots meet a corpse, moves pass it
   if (!k.good) s.monsters_killed++;
+  const DeathChoice dc = monster_death(k.classname, damage, s.rng);
+  m.death_run = dc.run;
   if (named(m, "misc_insane"))  // a prisoner dies with a man's cry, one of four, close by
     sound(s, m.entity, kInsaneDeaths[std::min(3, static_cast<int>(random01(s) * 4))], 2);
   else
-    sound(s, m.entity, k.death);
+    sound(s, m.entity, dc.sound != nullptr ? dc.sound : k.death, dc.everywhere ? 0 : 1);
   if (m.patient >= 0) {  // a medic's patient is free for another
     s.monsters[size_t(m.patient)].claimed = false;
     m.patient = -1;
@@ -1449,48 +1529,15 @@ int monster_index(const Q2Server& s, int e) {
   return -1;
 }
 
-void monster_precache(Q2Server& s) {
-  const auto model = [&s](const char* name) {
-    const auto found = std::find(s.models.begin(), s.models.end(), name);
-    if (found != s.models.end()) return static_cast<int>(found - s.models.begin());
-    s.models.emplace_back(name);
-    return static_cast<int>(s.models.size()) - 1;
-  };
-  const auto add_sound = [&s](const char* name) {
-    if (name != nullptr && std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
-      s.sounds.emplace_back(name);
-  };
-  const bool steps_on = s.cvars.find("g_monsterfootsteps")->integer() != 0;
-  const auto add_kind = [&](int k) {
-    for (const char* name : {kKinds[k].sight, kKinds[k].pain, kKinds[k].death}) add_sound(name);
-    if (kKinds[k].sight != nullptr && std::string_view(kKinds[k].sight) == "soldier/solsght1.wav")
-      add_sound("soldier/solsrch1.wav");  // the soldiers' other sight call
-    if (std::string_view(kKinds[k].classname) == "misc_insane") {
-      for (const char* name : kInsaneDeaths) add_sound(name);
-      for (const char* name : kInsanePains) add_sound(name);
-    }
-    for (const char* name : {kKinds[k].idle, kKinds[k].loop, kKinds[k].search[0],
-                             kKinds[k].search[1], kKinds[k].search[2]})
-      add_sound(name);
-    for (const char* name : monster_step_sounds(kKinds[k].classname, steps_on)) add_sound(name);
-    return model(kKinds[k].model);
-  };
-  for (Q2Entity& e : s.entities) {
-    const int k = kind_of(e.classname);
-    if (k < 0 || e.gone || (deathmatch(s) && !kKinds[k].keep)) continue;
-    e.modelindex = add_kind(k);
-    if (kKinds[k].medic)
-      for (const char* name : {"medic/medatck2.wav", "medic/medatck4.wav"}) add_sound(name);
-    if (kKinds[k].end == End::launch) add_kind(kind_of("monster_makron"));
-    if (kKinds[k].prop && kKinds[k].keep)
-      for (const char* name : {"tank/pain.wav", "tank/thud.wav"}) add_sound(name);
-  }
-  for (const Q2Entity& e : s.entities) {  // what the spawners make
-    if (e.classname != "target_spawner" || e.gone) continue;
-    const int k = kind_of(e.target);
-    if (k >= 0 && !(deathmatch(s) && !kKinds[k].keep)) add_kind(k);
-  }
+namespace {
+bool named_jail5(std::string_view map) {
+  constexpr std::string_view kJail5 = "jail5";
+  if (map.size() != kJail5.size()) return false;
+  for (size_t i = 0; i < map.size(); i++)
+    if ((map[i] >= 'A' && map[i] <= 'Z' ? char(map[i] + 32) : map[i]) != kJail5[i]) return false;
+  return true;
 }
+}  // namespace
 
 void monster_spawn(Q2Server& s) {
   s.monsters.clear();
@@ -1515,6 +1562,7 @@ void monster_spawn(Q2Server& s) {
     spare.spawnflags = 2;
     s.entities.push_back(spare);
   }
+  monster_torsos(s);
   for (size_t i = 0; i < s.entities.size(); i++) {
     Q2Entity& e = s.entities[i];
     const int k = kind_of(e.classname);
@@ -1544,6 +1592,13 @@ void monster_spawn(Q2Server& s) {
                           " " + std::to_string(int(e.origin.y)) + " " +
                           std::to_string(int(e.origin.z)) + ") has no targetname");
       if (s.cvars.find("g_fix_triggered")->integer() != 0) e.spawnflags &= ~2;
+    }
+    // jail5's flyers placed at height -104 are waited on by their target's name: the map gives
+    // them a target where it meant a name.
+    if (kd.classname == std::string_view("monster_flyer") && e.origin.z == -104 &&
+        named_jail5(s.map_name)) {
+      e.targetname = e.target;
+      e.target.clear();
     }
     m.screen = kd.screen ? 100 : 0;
     m.ambush = (e.spawnflags & 5) != 0;
@@ -1581,10 +1636,11 @@ void monster_spawn(Q2Server& s) {
   for (Q2Monster& m : s.monsters) {  // standing, where they were placed
     m.pose.last = s.entities[size_t(m.entity)].origin;
     const SqMonsterPoses* t = sq_monster_poses(kKinds[m.kind].classname);
-    if (t != nullptr && !t->stand.none()) {
-      m.pose.span = t->stand;
-      const int frames = t->stand.last - t->stand.first + 1;  // on a frame of it at random
-      m.pose.frame = t->stand.first + std::min(frames - 1, static_cast<int>(random01(s) * frames));
+    if (t != nullptr && !t->stand.none()) {  // its stand (or either), on a frame at random
+      const SqSpan stand = !t->stand2.none() && random01(s) > 0.5 ? t->stand2 : t->stand;
+      m.pose.span = stand;
+      const int frames = stand.last - stand.first + 1;
+      m.pose.frame = stand.first + std::min(frames - 1, static_cast<int>(random01(s) * frames));
     }
   }
 }
@@ -1678,6 +1734,7 @@ void monster_frame(Q2Server& s) {
       pose_monster(s, m);
       if (m.pose.frame != was) dying_shot(s, m);
       monster_footstep(s, m);
+      flies(s, m);
       continue;
     }
     if (m.waiting || body(s, m).gone) continue;
@@ -1752,7 +1809,8 @@ void react(Q2Server& s, Q2Monster& m, int attacker) {
   found(s, m, foe, false);
 }
 
-bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, bool splash) {
+bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, bool splash,
+                    const sh::Vec3f* point) {
   const int i = monster_index(s, e);
   if (i < 0) return false;
   Q2Monster& m = s.monsters[size_t(i)];
@@ -1782,8 +1840,8 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
     if (damage <= 0) return true;
   }
   ent.health -= damage;
-  // The knockback: 500 × damage / mass along the blow.
-  if (sh::normalize(dir) > 0 && !afloat(k)) {
+  // The knockback: 500 × damage / mass along the blow (a flier's too; not a swimmer's).
+  if (sh::normalize(dir) > 0 && !k.swims) {
     m.velocity = m.velocity + dir * (500.0f * float(damage) / float(std::max(50, k.mass)));
     m.on_ground = false;
   }
@@ -1795,25 +1853,50 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
     return true;
   }
   if (ent.health <= 0) {
+    // A shot that lands within 4 of a soldier's eye: its head-shot death.
+    m.head_shot = point != nullptr && soldier(m) && std::abs(point->z - (ent.origin.z + 25)) <= 4;
     die(s, m, attacker, damage);
     return true;
   }
   react(s, m, attacker);
-  if (s.level_time + 0.001 >= m.pain_at + kPainEvery && !m.leaping && !m.ducked) {
-    m.pain_at = s.level_time + (skill(s) == 3 ? 2.0 : 0.0);  // a 5 s wait at skill 3
+  if (m.leaping || m.ducked) return true;  // ducked (in the air from a leap too): no pain
+  const bool waiting = s.level_time + 0.001 < m.pain_at + kPainEvery;
+  if (monster_pain_known(k.classname)) {  // its pains as data (q2_monster_pain.cpp)
+    const PainChoice c =
+        monster_pain(k.classname, damage, skill(s), m.velocity.z, m.pose.frame, m.pose.span.first,
+                     m.pose.act == SqMonsterPose::Act::pain, waiting, s.rng);
+    if (c.spent) m.pain_at = s.level_time;
+    if (c.sound != nullptr) sound(s, e, c.sound, c.everywhere ? 0 : 1);
+    if (!c.run.none()) {  // the flinch cuts what it was doing
+      m.pose.cue_pain = true;
+      m.pose.pain_run = c.run;
+      m.pain_hold = s.level_time + 0.1 * (c.run.last - c.run.first + 1);
+      m.run_shoot = -1;
+      m.busy_until = m.burst_until = std::min(m.burst_until, s.level_time);
+    }
+  } else if (!waiting) {
+    m.pain_at = s.level_time;
     // The flinch: held until its pain frames have played (pose_monster sets the end from the
     // run it picks). At skill 3 none, but the hornet's.
     const bool flinch = skill(s) < 3 || k.classname == std::string_view("monster_boss2");
     if (flinch) {
       m.pain_hold = s.level_time + 0.3;  // a kind with no pain frames
       m.pose.cue_pain = true;
+      m.run_shoot = -1;
       if (named(m, "misc_insane"))  // a man's cry by his health, close by
         sound(s, e, insane_pain(s, ent.health), 2);
       else
         sound(s, e, k.pain);
     }
   }
+  // At skill 3 every blow puts the next pain 5 s off.
+  if (skill(s) == 3) m.pain_at = s.level_time + 2;
   return true;
+}
+
+bool monster_laser_proof(const Q2Server& s, int e) {
+  const int i = monster_index(s, e);
+  return i >= 0 && named(s.monsters[size_t(i)], "monster_boss2");
 }
 
 bool monster_use(Q2Server& s, int e, int activator) {
@@ -1911,38 +1994,6 @@ void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact) {
   Q2Player& p = s.players[slot];
   (impact ? p.impact_frame : p.noise_frame) = s.frame_number;
   (impact ? p.impact_at : p.noise_at) = at;
-}
-
-void monster_rows(Q2Server& s) {
-  RulesWorld& w = s.world;
-  for (const Q2Monster& m : s.monsters) {
-    const Q2Entity& e = s.entities[size_t(m.entity)];
-    const size_t row = size_t(map_row(m.entity));
-    if (row >= w.entities.size()) continue;
-    WorldEntity& r = w.entities[row];
-    r.free = e.gone || e.hidden;
-    r.origin = e.origin;
-    r.angles = {0, e.angles.y, 0};
-    r.velocity = m.velocity;
-    r.mins = e.mins;
-    r.maxs = e.maxs;
-    r.absmin = e.origin + e.mins;
-    r.absmax = e.origin + e.maxs;
-    r.health = float(e.health);
-    r.modelindex = e.modelindex;
-    r.loop = 0;  // the loop it carries (a flier's engine), till it is thrown apart
-    if (const char* loop = kind(m).loop; loop != nullptr && !e.gone) {
-      const auto at = std::find(s.sounds.begin(), s.sounds.end(), loop);
-      if (at != s.sounds.end()) r.loop = static_cast<int>(at - s.sounds.begin());
-    }
-    // The damaged skin below half health.
-    r.skin = kind(m).skin + (e.health < e.max_health / 2 ? 1 : 0);
-    // The commander's body slumps from frame 1 to 24, a frame every 0.1 s from 0.1 s after a use.
-    if (kind(m).prop && m.used_at >= 0)
-      r.frame = std::clamp(static_cast<int>((s.level_time - m.used_at) / 0.1), 0, 24);
-    else if (sq_monster_poses(kind(m).classname) != nullptr)
-      r.frame = m.pose.frame;
-  }
 }
 
 }  // namespace shooters_edge::server

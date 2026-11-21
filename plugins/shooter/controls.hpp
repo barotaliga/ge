@@ -38,6 +38,7 @@
 // ge:keywords in_mouse_release mouse-capture cl_yawspeed add_control_cvars cl_forwardspeed
 // ge:keywords cl_backspeed cl_sidespeed cl_upspeed cl_movespeedkey cl_anglespeedkey cl_pitchspeed
 // ge:keywords freelook mlook klook lookup lookdown centerview force_centerview m_forward
+// ge:keywords pitch-drift drift_pitch v_centermove v_centerspeed
 // ge:keywords zoom zoom-key m_autosens autosens auto_sens
 // ge:skill input shooter
 // ge:test tests/shooters_edge_listen_test.cpp
@@ -110,6 +111,8 @@ struct Controls {
   // the rig's 90), set by the window; without it the lens is 90.
   double autosens = 0;
   const double* lens_fov = nullptr;
+  double center_move = 0.15;  // v_centermove: seconds of running forward that start the drift
+  double center_speed = 500;  // v_centerspeed: the drift's speed-up, degrees a second each second
 };
 
 // m_autosens's scale on the mouse's counts: across, the lens over the tuned one in degrees; up and
@@ -179,6 +182,20 @@ void turn_view(const input::InputState& in, const Controls& c, Vec3f& view);
 // pitching the view this frame.
 void spring_view(const input::InputState& in, const Controls& c, bool on_ground, const MoveCmd& cmd,
                  float ideal, double dt, Vec3f& view);
+
+// THE PITCH DRIFT of a keyboard player on the ground (`drift_pitch`): his pitch drifts toward the
+// program's ideal pitch, from rest and faster by `v_centerspeed` each second, until it is there.
+// Looking up or down by key, or with the mouse (freelook or +mlook held), stops it; it starts again
+// on `centerview`, on letting +mlook go with lookspring on, or after running forward at full speed
+// for `v_centermove`. In the air or in noclip it rests.
+struct PitchDrift {
+  bool still = false;  // stopped by a hand on the pitch
+  double run_s = 0;    // how long he has run forward at full speed while still
+  double speed = 0;    // degrees a second now
+  bool mlook_held = false;
+};
+void drift_pitch(const Moves& m, const Controls& c, PitchDrift& d, bool on_ground, bool noclip,
+                 const MoveCmd& cmd, float ideal, double dt, Vec3f& view);
 
 // The command `m` makes (no length, no angles: the server's frame and the view give those); the
 // mouse's sideways counts sidestep when +strafe or `lookstrafe` says so. An impulse is in

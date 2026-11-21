@@ -142,9 +142,10 @@ void DemoSounds::level(const DemoState& s, const ge::brush::Map* map) {
     relist(true);
   }
   if (map != map_) {
-    channels_.stop(-1);  // the old level's loops
+    channels_.stop(-1);  // the old level's world sounds
+    for (size_t i = 0; i < static_ever_.size(); i++) channels_.stop(static_entity(i));
+    static_ever_.clear();
     stop_entity_loops();
-    statics_started_ = 0;
     map_ = map;
     if (ambience_) ambience_->silence(synth_);
     ambience_.reset();
@@ -207,6 +208,46 @@ void DemoSounds::entity_loops(const DemoState& s) {
   }
 }
 
+void DemoSounds::static_loops(const DemoState& s) {
+  // The level's loops (the signon sends them after the level starts), each on an entity of its
+  // own. The first try may take the quietest slot; a loop that lost its slot or found none
+  // starts again once a slot is free, so two loops never take a slot from each other in turn.
+  const size_t n = s.static_sounds.size();
+  if (static_ever_.size() < n) static_ever_.resize(n, 0);
+  static_heard_.assign(n, 0);
+  int free = 0;
+  for (const au::Channels::Slot& slot : channels_.slots()) {
+    if (!slot.voice.valid()) free++;
+    if (!slot.voice.valid() || slot.entity > kStaticEntity0) continue;
+    const size_t i = static_cast<size_t>(kStaticEntity0 - slot.entity);
+    if (i < n) static_heard_[i] = 1;
+  }
+  for (size_t i = 0; i < n; i++) {
+    if (static_heard_[i] != 0 || static_ever_[i] == kStaticDone ||
+        (static_ever_[i] == kStaticTried && free == 0))
+      continue;
+    const DemoStaticSound& st = s.static_sounds[i];
+    const au::Pcm* pcm = recording(st.sound);
+    if (!pcm) {
+      static_ever_[i] = kStaticDone;  // no pack holds it: never tried again
+      continue;
+    }
+    au::Emit e;
+    e.entity = static_entity(i);
+    e.at = at_of(st.origin);
+    e.volume = st.volume * volume_;
+    e.attenuation = st.attenuation / kUnitsPerAttenuation;
+    e.loop = au::Loop::file;
+    const bool retry = static_ever_[i] != 0;
+    static_ever_[i] = pcm->loops() ? kStaticTried : kStaticDone;  // a one-shot plays once
+    if (!channels_.play(*pcm, e).valid()) continue;  // no slot: tried again once one frees
+    if (retry)
+      free--;
+    else
+      stats_.loops++;
+  }
+}
+
 bool DemoSounds::sounding() const {
   for (const auto& [name, pcm] : loaded_)
     if (pcm && synth_.reads(*pcm)) return true;
@@ -234,19 +275,7 @@ void DemoSounds::frame(const DemoState& s, std::span<const DemoSound> started,
   // ce_sounds turned since the list was read: each sound read again from the copy it now names
   // (already playing ones finish as they are).
   if ((enhanced_ != nullptr && *enhanced_) != listed_enhanced_) relist(false);
-  // The level's loops as they arrive (the signon sends them after the level starts).
-  for (; statics_started_ < s.static_sounds.size(); statics_started_++) {
-    const DemoStaticSound& st = s.static_sounds[statics_started_];
-    const au::Pcm* pcm = recording(st.sound);
-    if (!pcm) continue;
-    au::Emit e;
-    e.entity = -1;
-    e.at = at_of(st.origin);
-    e.volume = st.volume * volume_;
-    e.attenuation = st.attenuation / kUnitsPerAttenuation;
-    e.loop = au::Loop::file;
-    if (channels_.play(*pcm, e).valid()) stats_.loops++;
-  }
+  static_loops(s);
   for (const auto& [entity, channel] : stopped) channels_.stop(entity, channel);
   for (const DemoSound& d : started) {
     const au::Pcm* pcm = d.name != nullptr ? by_name(s, d) : recording(d.sound);

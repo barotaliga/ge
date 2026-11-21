@@ -236,6 +236,41 @@ TEST(lookspring_never_pulls_a_mouse_look_players_pitch) {
   CHECK(!cl::button_moves(c).center);  // with freelook on, +mlook changes nothing
 }
 
+TEST(a_keyboard_players_pitch_drifts_to_the_slope_faster_each_second_until_a_hand_stops_it) {
+  // The campaign's drift: from rest, sped up by v_centerspeed (500) each second, whatever
+  // lookspring says; a mouse look or a look key stops it, running forward starts it again.
+  cl::ControlSettings c;
+  c.freelook = false;
+  cl::PitchDrift d;
+  sh::Moves m;
+  sh::MoveCmd stand;
+  sh::Vec3f view{20, 90, 0};
+  cl::drift_pitch(m, c, d, true, false, stand, 0, 0.01, view);
+  CHECK(view.x == 20);  // at rest the first frame
+  cl::drift_pitch(m, c, d, true, false, stand, 0, 0.01, view);
+  CHECK(near(view.x, 20 - 0.05f));  // 5 degrees a second after 0.01 s
+  for (int i = 0; i < 100; i++) cl::drift_pitch(m, c, d, true, false, stand, 0, 0.01, view);
+  CHECK(view.x == 0);  // there, and held
+  view.x = 30;
+  m.lookdown = true;  // a look key: stopped
+  cl::drift_pitch(m, c, d, true, false, stand, 0, 0.01, view);
+  m.lookdown = false;
+  for (int i = 0; i < 10; i++) cl::drift_pitch(m, c, d, true, false, stand, 0, 0.01, view);
+  CHECK(view.x == 30);
+  sh::MoveCmd run;
+  run.forward = 400;  // full speed forward for more than 0.15 s: drifting again
+  for (int i = 0; i < 20; i++) cl::drift_pitch(m, c, d, true, false, run, 0, 0.01, view);
+  CHECK(!d.still);
+  for (int i = 0; i < 100; i++) cl::drift_pitch(m, c, d, true, false, run, 0, 0.01, view);
+  CHECK(view.x == 0);
+  view.x = 30;
+  for (int i = 0; i < 10; i++) cl::drift_pitch(m, c, d, false, false, run, 0, 0.01, view);
+  CHECK(view.x == 30);  // in the air
+  c.freelook = true;    // the mouse looks: never
+  for (int i = 0; i < 100; i++) cl::drift_pitch(m, c, d, true, false, run, 0, 0.01, view);
+  CHECK(view.x == 30);
+}
+
 TEST(a_blow_kicks_the_view_toward_its_source_by_its_count) {
   pg::Progs stub;
   std::string error;

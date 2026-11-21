@@ -322,6 +322,7 @@ TEST(a_turntable_spins_from_the_start_carries_its_rider_round_and_stops_when_use
   place(*h, 224, -200, 16 + 24 + 1);
   run(*h, 8 * 2);  // landed on it
   const float at = table.angles.y;
+  const int16_t yaw = h->p().move.delta_angles[1];
   frames(*h, 10);  // 90 degrees at 90 a second
   CHECK_MSG(table.angles.y - at > 89.9f && table.angles.y - at < 90.1f,
             std::to_string(table.angles.y - at));
@@ -329,6 +330,9 @@ TEST(a_turntable_spins_from_the_start_carries_its_rider_round_and_stops_when_use
   // A quarter turn round (200, −200): from 24 out on +x to about 24 out on +y.
   CHECK_MSG(x > 190 && x < 210 && y > -185 && y < -170,
             std::to_string(x) + " " + std::to_string(y));
+  // His view barely turns: each frame's 9 degrees count as 9 of a turn's 65536 parts.
+  CHECK_MSG(h->p().move.delta_angles[1] - yaw == 90,
+            std::to_string(h->p().move.delta_angles[1] - yaw));
   sv::map_use_targets(h->s(), h->called("stop_table"), -1);
   const float stopped = table.angles.y;
   frames(*h, 3);

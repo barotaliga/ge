@@ -98,9 +98,11 @@ void check_water_jump(Mover& m, const ViewAxes& ax) {
   Vec3f flat = ax.forward;
   flat.z = 0;
   normalize(flat);
-  Vec3f spot = {s.origin.x + flat.x * 24, s.origin.y + flat.y * 24, s.origin.z + 8};
+  const float reach = m.set.waterjump_reach;
+  Vec3f spot = {s.origin.x + flat.x * reach, s.origin.y + flat.y * reach,
+                s.origin.z + m.set.waterjump_lip};
   if (brush_contents(m.world, spot) != kContentsSolid) return;
-  spot.z = spot.z + 24;
+  spot.z = s.origin.z + m.set.waterjump_open;
   if (brush_contents(m.world, spot) != kContentsEmpty) return;
   s.velocity = {flat.x * kWaterJumpOut, flat.y * kWaterJumpOut, m.set.waterjump};
   s.waterjump_time = kWaterJumpTime;

@@ -89,4 +89,17 @@ bool fight_use(Q2Server& s, int slot, int item) {
   return true;
 }
 
+void fight_power_frame(Q2Server& s) {
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    Q2Player& p = s.players[i];
+    if (!s.clients[i].active || !p.power_on || p.body.ammo[static_cast<int>(SqAmmo::cells)] != 0)
+      continue;
+    if (p.body.counts[sq_item("item_power_screen")] <= 0 &&
+        p.body.counts[sq_item("item_power_shield")] <= 0)
+      continue;
+    p.power_on = false;  // out of cells: off, and off it stays until used again
+    item_sound(s, i, "misc/power2.wav");
+  }
+}
+
 }  // namespace shooters_edge::server

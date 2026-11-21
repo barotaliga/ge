@@ -783,6 +783,62 @@ TEST(an_entitys_loop_plays_while_it_carries_it_and_stops_when_it_does_not) {
   CHECK(playing() == 0);
 }
 
+TEST(a_level_s_loop_that_lost_its_slot_starts_again_when_one_frees) {
+  // A static loop (a torch, a hum) holds a slot for the level; a burst of louder sounds can take
+  // it, and it starts again once one of theirs ends, counted once. A one-shot static plays once.
+  std::vector<float> tone(4410);
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 20) % 2 == 0 ? 0.3f : -0.3f;
+  std::vector<uint8_t> hum = ge::audio::wav_bytes(tone, 1, 22050);
+  const uint8_t cue[] = {'c', 'u', 'e', ' ', 28,  0,   0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                         0,   0,   'd', 'a', 't', 'a', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  hum.insert(hum.end(), std::begin(cue), std::end(cue));  // looped from its first frame
+  const uint32_t riff = static_cast<uint32_t>(hum.size() - 8);
+  for (size_t b = 0; b < 4; b++) hum[4 + b] = static_cast<uint8_t>(riff >> (8 * b));
+  std::vector<float> click(441, 0.5f);
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak(
+      {{"sound/hum.wav", hum}, {"sound/click.wav", ge::audio::wav_bytes(click, 1, 22050)}}, &pak,
+      &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::DemoSounds sounds(synth, files);
+  cl::DemoState s;
+  s.sounds = {"", "hum.wav", "click.wav"};
+  s.entities.resize(4);
+  s.static_sounds.resize(2);
+  s.static_sounds[0].sound = 1;
+  s.static_sounds[0].origin = {2000, 0, 0};  // far off: quieter than any click
+  s.static_sounds[1].sound = 2;              // a one-shot
+  sounds.level(s, nullptr);
+  const auto render = [&synth](int n) {
+    std::vector<float> out(size_t{2} * 480);
+    for (int i = 0; i < n; i++) synth.render(out.data(), 480);
+    return synth.stats().samples;
+  };
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK(sounds.stats().loops == 2);
+  CHECK(render(1) == 2);
+  render(10);  // the one-shot ends (20 ms)
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK_MSG(render(1) == 1, "the one-shot static is not played again");
+  std::vector<cl::DemoSound> burst(size_t{cl::kDemoChannels});  // every slot, the hum's too
+  for (size_t i = 0; i < burst.size(); i++) {
+    burst[i].entity = 1;
+    burst[i].sound = 2;
+    burst[i].attenuation = 0;
+  }
+  sounds.frame(s, burst, {}, 1, 0.01f);
+  CHECK(render(1) >= cl::kDemoChannels);  // the clicks (and the hum fading out)
+  render(10);                             // the clicks end
+  sounds.frame(s, {}, {}, 1, 0.01f);      // their slots freed
+  CHECK(render(1) == 0);
+  sounds.frame(s, {}, {}, 1, 0.01f);  // a slot free: the hum again
+  CHECK_MSG(render(1) == 1, std::to_string(synth.stats().samples));
+  CHECK(sounds.stats().loops == 2);  // counted once
+}
+
 TEST(ce_sounds_plays_the_enhanced_cache_s_copy_and_the_pack_s_without_it) {
   // The pack holds `sound/a.wav`; the enhanced cache only `b.wav`, a sound the pack lacks, so which
   // copy was read shows in the level's count of missing sounds. With the switch on both are found

@@ -167,14 +167,32 @@ void bi_setmodel(pg::Vm& vm) {
     refresh_from_world(qc_of(vm));
     return;
   }
-  // A single-player program sizes nothing it gives a brush model in its own file (the exploding
-  // boxes): the size is the file's first model's bounds, one unit wider on every side, unrotated.
-  // A multiplayer program sets such sizes itself, and its setmodel leaves them alone.
+  // A single-player program's setmodel gives the entity a box by the model's kind: an alias
+  // model a cube 16 units each way, a sprite half its widest frame across and half its tallest up
+  // and down, a brush model in its own file (the exploding boxes) the file's first model's bounds
+  // one unit wider on every side, unrotated. A multiplayer program sets sizes itself, and its
+  // setmodel leaves them alone.
   const size_t len = std::strlen(m);
-  const bool own_file = len > 4 && std::strcmp(m + len - 4, ".bsp") == 0;
-  if (!own_file || s.progs == nullptr || s.progs->layout == nullptr ||
-      !s.progs->layout->single_player || s.opt.model_bounds == nullptr)
+  const auto ends = [m, len](const char* ext) {
+    return len > 4 && std::strcmp(m + len - 4, ext) == 0;
+  };
+  const bool own_file = ends(".bsp");
+  if (s.progs == nullptr || s.progs->layout == nullptr || !s.progs->layout->single_player) return;
+  if (ends(".mdl")) {
+    flush_to_world(qc_of(vm));
+    sh::set_size(s.sv, e, {-16, -16, -16}, {16, 16, 16});
+    refresh_from_world(qc_of(vm));
     return;
+  }
+  if (ends(".spr") && s.opt.model_bounds != nullptr) {
+    sh::Vec3f lo, hi;
+    if (!s.opt.model_bounds(s.opt.model_ctx, m, lo, hi)) return;
+    flush_to_world(qc_of(vm));
+    sh::set_size(s.sv, e, lo, hi);
+    refresh_from_world(qc_of(vm));
+    return;
+  }
+  if (!own_file || s.opt.model_bounds == nullptr) return;
   sh::Vec3f lo, hi;
   if (!s.opt.model_bounds(s.opt.model_ctx, m, lo, hi)) {
     console_print(s, std::string("setmodel: no bounds for ") + m +

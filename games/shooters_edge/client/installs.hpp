@@ -12,7 +12,7 @@
 //
 // ge:summary Each classic game's install kept by game, and whether it is the shareware or the full
 // ge:keywords installs select-game remember_install remembered_installs edition shareware
-// ge:keywords registered full-game installs-txt
+// ge:keywords registered full-game installs-txt game_rows
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #pragma once
@@ -20,8 +20,10 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "classicenhance/profile.hpp"
+#include "shooters_edge/menu/games_page.hpp"
 
 namespace shooters_edge::client {
 
@@ -39,5 +41,12 @@ Edition edition_of(const std::string& basedir, const ge::classicenhance::Profile
 // The edition in the game's words for the player ("Shareware", "Registered"; Quake II's "Demo",
 // "Full game").
 std::string_view edition_words(Edition e, const ge::classicenhance::Profile& content);
+
+// SELECT GAME's rows: every classic game with its install kept here and its edition (missing
+// when the folder no longer holds the game); the game `playing` (a profile id, "" none) shows
+// as playing from `playing_install`.
+std::vector<shooters_edge::menu::GameRow> game_rows(const std::string& prefs,
+                                                    std::string_view playing,
+                                                    const std::string& playing_install);
 
 }  // namespace shooters_edge::client

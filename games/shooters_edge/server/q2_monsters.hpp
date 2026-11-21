@@ -60,9 +60,12 @@ void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed);
 // The frame a kind's duck holds low (its model's), or -1 for a kind that never ducks.
 int monster_duck_frame(std::string_view classname);
 // A blow of `damage` from `attacker` (a slot, or -1) to map entity `e` along `dir` (`splash` a
-// blast's, which never takes the surprise's double). False when `e` is no living monster.
+// blast's, which never takes the surprise's double; `point` where a shot landed, when one did).
+// False when `e` is no living monster.
 bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
-                    bool splash = false);
+                    bool splash = false, const sh::Vec3f* point = nullptr);
+// Whether map entity `e` is a monster lasers do not hurt (the hornet: BFG beams, laser traps).
+bool monster_laser_proof(const Q2Server& s, int e);
 // A use of map entity `e` (a monster waiting hidden appears). False when `e` is no monster.
 bool monster_use(Q2Server& s, int e, int activator);
 // Player `slot` made a noise a monster may hear (his weapon).
@@ -72,6 +75,10 @@ void monster_noise(Q2Server& s, int slot);
 void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact);
 // The monsters' world rows: place, facing, model, skin.
 void monster_rows(Q2Server& s);
+
+// At spawn: a torso waiting unseen beside each Makron, shown when he falls whole
+// (q2_monster_rows.cpp).
+void monster_torsos(Q2Server& s);
 // The monster of map entity `e` (its index in `Q2Server::monsters`), or -1.
 int monster_index(const Q2Server& s, int e);
 // Whether `classname` is a monster's (one of the roster's rows).

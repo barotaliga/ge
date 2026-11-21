@@ -23,15 +23,24 @@
 // it (from now when it lies in the past); a packet may go when the clear time is before now plus
 // 400 bytes' worth. A rate of 0 is unlimited (loopback). `copies` is 1 + the `dupe` user info key.
 //
+// SHOWING THE PACKETS (`trace`, a client's `showpackets` and `showdrop`): each packet sent is a
+// line `<ms> --> s=<sequence>(<reliable>) a=<last received>(<its reliable bit>) <bytes>`, each
+// accepted `<ms> <-- ...` the same (`packets` 1 both ways, 2 sent only, 3 received only), the
+// clock in milliseconds to a tenth; `drop` says `<where>:Out of order packet <n> at <newest>` for a
+// stale one and `<where>:Dropped <n> packets at <sequence>` for a gap.
+//
 // ge:summary The classic net channel: sequences, the reliable bit and resend, qport, rate, choke
 // ge:keywords net-channel netchan sequence ack reliable-bit resend qport rate clear-time choke
 // ge:keywords backbuf dupe channel_transmit channel_process channel_can_packet drop-count
+// ge:keywords showpackets showdrop channel-trace
 // ge:skill classic shooter net
 // ge:test tests/classic_protocol_channel_test.cpp
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <string>
 
 #include "classic/protocol/wire.hpp"
 
@@ -39,6 +48,13 @@ namespace ge::classic::protocol {
 
 constexpr int kBackBuffers = 8;
 constexpr double kRateBurstBytes = 400;
+
+struct ChannelTrace {
+  int packets = 0;    // showpackets: 0 none, 1 both ways, 2 sent, 3 received
+  bool drop = false;  // showdrop
+  std::string where;  // the peer's address, for the drop lines
+  std::function<void(const std::string&)> print;
+};
 
 struct MsgBuf {
   uint16_t size = 0;
@@ -70,7 +86,8 @@ struct Channel {
   uint32_t last_drop = 0;  // packets lost before the newest accepted
   uint64_t dropped = 0, stale = 0, accepted = 0, sent = 0, resent = 0, choked = 0;
   uint64_t bytes_in = 0, bytes_out = 0;
-  double last_received = 0;  // s
+  double last_received = 0;       // s
+  ChannelTrace* trace = nullptr;  // kept by `channel_setup`
 };
 
 void channel_setup(Channel& c, bool client, uint16_t qport, double now);

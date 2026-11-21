@@ -108,6 +108,22 @@ void add_control_cvars(console::Console& con, Controls& c) {
                     .kind = console::CvarKind::boolean,
                     .values = "0: it stays (the default); 1: it centres"},
                    &c.lookspring);
+  con.cvars().bind({.name = "v_centermove",
+                    .fallback = "0.15",
+                    .flags = console::kArchive,
+                    .help = "How long you run forward before a keyboard view drifts level again.",
+                    .min = 0,
+                    .max = 10,
+                    .values = "0..10: that many seconds (0.15 the default)"},
+                   &c.center_move);
+  con.cvars().bind({.name = "v_centerspeed",
+                    .fallback = "500",
+                    .flags = console::kArchive,
+                    .help = "How fast a keyboard view's drift toward the slope speeds up.",
+                    .min = 0,
+                    .max = 10000,
+                    .values = "0..10000: degrees a second each second (500 the default)"},
+                   &c.center_speed);
   con.cvars().bind({.name = "cl_aimhelp_turn",
                     .fallback = "1",
                     .flags = console::kArchive,
@@ -315,6 +331,39 @@ void spring_view(const input::InputState& in, const Controls& c, bool on_ground,
   const double most = kSpringSpeed * dt;
   const double gap = static_cast<double>(ideal) - view.x;
   view.x = static_cast<float>(view.x + std::clamp(gap, -most, most));
+}
+
+void drift_pitch(const Moves& m, const Controls& c, PitchDrift& d, bool on_ground, bool noclip,
+                 const MoveCmd& cmd, float ideal, double dt, Vec3f& view) {
+  if (c.freelook || m.mlook || m.lookup || m.lookdown) d.still = true;  // a hand on the pitch
+  if (d.mlook_held && !m.mlook && c.lookspring) d.still = false;
+  d.mlook_held = m.mlook;
+  if (m.center) d.still = false;
+  if (!on_ground || noclip) {
+    d.run_s = 0;
+    d.speed = 0;
+    return;
+  }
+  if (d.still) {
+    d.speed = 0;
+    const int ahead = cmd.forward < 0 ? -cmd.forward : cmd.forward;
+    d.run_s = ahead < c.forward_speed ? 0 : d.run_s + dt;
+    if (d.run_s > c.center_move) d.still = false;
+    return;
+  }
+  const double gap = static_cast<double>(ideal) - view.x;
+  if (gap == 0) {
+    d.speed = 0;
+    return;
+  }
+  double step = d.speed * dt;
+  d.speed += c.center_speed * dt;
+  const double left = gap < 0 ? -gap : gap;
+  if (step >= left) {
+    step = left;
+    d.speed = 0;
+  }
+  view.x = static_cast<float>(view.x + (gap > 0 ? step : -step));
 }
 
 AutoSens auto_sens(const Controls& c) {

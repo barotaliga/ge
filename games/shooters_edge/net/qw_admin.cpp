@@ -526,18 +526,26 @@ void add_admin_commands(ge::console::Console& con, client::Listen& l, Remote& r)
       c.print(how);
     });
   }
-  con.add_command("rcon", "rcon <password> <line>: a line for the console of the server joined",
-                  [&r](Con& c, const Args& a) {
-                    if (!r.active) {
-                      c.print("rcon: not connected to a server");
-                      return;
-                    }
-                    if (a.size() < 3) {
-                      c.print("rcon: give the password and a line (rcon secret users)");
-                      return;
-                    }
-                    client_rcon(r.end, a[1], a.rest(1));
-                  });
+  // rcon_password set: the whole line goes with it; else its first word is the password. Joined,
+  // it goes to that server; else to rcon_address, and the answers are said as they come.
+  con.add_command(
+      "rcon",
+      "rcon [<password>] <line>: a line for the console of the server joined or rcon_address",
+      [&r](Con& c, const Args& a) {
+        const ge::console::Cvar* pw = c.cvars().find("rcon_password");
+        const bool kept = pw != nullptr && !pw->value.empty();
+        if (a.size() < (kept ? 2u : 3u)) {
+          c.print(kept ? "Usage: rcon <command>"
+                       : "Usage: rcon <password> <command>, or set rcon_password and rcon "
+                         "<command>");
+          return;
+        }
+        const ge::console::Cvar* to = c.cvars().find("rcon_address");
+        std::string error;
+        const std::string text =
+            kept ? "rcon \"" + pw->value + "\" " + a.rest(0) : "rcon \"" + a[1] + "\" " + a.rest(1);
+        if (!remote_rcon(r, to != nullptr ? to->value : "", text, error)) c.print(error);
+      });
 }
 
 }  // namespace shooters_edge::net

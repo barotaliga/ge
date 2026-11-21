@@ -18,6 +18,7 @@
 #include "assets/sha256.hpp"
 #include "vfs/lha.hpp"
 #include "vfs/pak.hpp"
+#include "vfs/zip.hpp"
 
 namespace ge::classic::content {
 
@@ -81,11 +82,14 @@ std::string last_part(std::string_view p) {
   return std::string(s == std::string_view::npos ? p : p.substr(s + 1));
 }
 
+// The release's words by key, as the game reads them (files.cpp `localized_text`).
+constexpr std::string_view kWordsFile = "localization/loc_english.txt";
+
 // The folders a game reads loose files from.
 bool content_folder(std::string_view first) {
-  static const char* kFolders[] = {"maps",    "sound", "music",    "progs", "models",
-                                   "gfx",     "pics",  "textures", "env",   "sprites",
-                                   "players", "skins", "video"};
+  static const char* kFolders[] = {"maps",    "sound", "music",    "progs",       "models",
+                                   "gfx",     "pics",  "textures", "env",         "sprites",
+                                   "players", "skins", "video",    "localization"};
   const std::string f = lower(first);
   return std::any_of(std::begin(kFolders), std::end(kFolders),
                      [&](const char* k) { return f == k; });
@@ -318,6 +322,31 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
       if (root == roots[0].first && lower(fs::path(rest).extension().string()) == ".pak")
         packs.emplace_back(rel, std::move(bytes));
     }
+  }
+  // A release that prints its words by key (progs/localized.hpp) keeps their table in its own
+  // archives beside the base folder (`*.kpf`): that one file is taken out of the first that has
+  // it and kept loose in the base folder, where the game reads it.
+  for (const TreeFile& f : tree.files) {
+    const std::string l = lower(f.path);
+    if (!l.starts_with(lp) || l.find('/', lp.size()) != std::string::npos ||
+        lower(fs::path(l).extension().string()) != ".kpf")
+      continue;
+    std::vector<uint8_t> bytes;
+    std::string why;
+    vfs::Zip zip;
+    if (!f.read(&bytes, &why) || !vfs::read_zip(bytes, &zip, &why)) continue;
+    const vfs::ZipEntry* e = vfs::zip_find(zip, kWordsFile);
+    std::vector<uint8_t> text;
+    if (e == nullptr || !vfs::zip_unpack(bytes, *e, &text, &why)) continue;
+    const std::string rel = std::string(game->base_dir) + "/" + std::string(kWordsFile);
+    say("copying " + rel);
+    if (same_file(dir / rel, text)) {
+      out->same.push_back(rel);
+    } else {
+      if (!write_whole(dir / rel, text, error)) return false;
+      out->copied.push_back(rel);
+    }
+    break;
   }
   if (!opts.music) {
     write_taken(dir, from, print, false, *out);

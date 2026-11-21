@@ -29,6 +29,10 @@ void fight_clear(Q2Server& s);
 
 // The hand's step for this rules frame, with `attack` held: its shots made.
 void fight_step(Q2Server& s, int slot, bool attack);
+// Player `slot`'s hand stepped once (combat's `sq_hand_step`), with the one-shot sounds its new
+// frame makes (q2_hand_sounds.cpp), and the sounds it may make.
+SqStep fight_hand_step(Q2Server& s, int slot, bool attack, bool infinite, int swap);
+extern const char* const kHandSounds[4];
 // The missiles moved a rules frame (0.1 s): touches, fuses, explosions.
 void fight_missiles(Q2Server& s);
 
@@ -81,6 +85,10 @@ bool fight_drop(Q2Server& s, int slot, int item);
 // Item `item` used from the inventory (a powerup or power armour; `use <its name>`); false when
 // it is not one or none is held.
 bool fight_use(Q2Server& s, int slot, int item);
+
+// Each frame: power armour switched on with no cells left switches off, with its sound
+// (q2_use.cpp).
+void fight_power_frame(Q2Server& s);
 // The end of player `slot`'s rules frame: the powerups' and the air's clocks, drowning, lava,
 // slime and falling damage, and the body's sounds: the water's, breathing, landing, the frame's
 // pain cry in the player's own voice (its `*` sounds, which each client takes from that

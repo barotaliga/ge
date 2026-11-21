@@ -870,6 +870,18 @@ constexpr Entry kEntries[] = {
      .needs = "quit",
      .closes = true},
     {.page = "quit", .id = "no", .text = "NO", .kind = ItemKind::back},
+
+    // NEW GAME while a game runs asks first, as the original does.
+    {.page = "newgame", .id = "ask", .text = "ARE YOU SURE YOU WANT TO", .kind = ItemKind::label},
+    {.page = "newgame", .id = "ask2", .text = "START A NEW GAME?", .kind = ItemKind::label},
+    {.page = "newgame",
+     .id = "yes",
+     .text = "YES",
+     .hint = "The campaign from its first map; the game playing now is left.",
+     .line = "newgame",
+     .needs = "newgame",
+     .closes = true},
+    {.page = "newgame", .id = "no", .text = "NO", .kind = ItemKind::back},
 };
 
 constexpr PageTitle kPages[] = {
@@ -890,6 +902,7 @@ constexpr PageTitle kPages[] = {
     {"ce_weather", "WEATHER"},
     {"help", "HELP"},
     {"quit", "QUIT"},
+    {"newgame", "NEW GAME"},
 };
 
 std::string control_id(size_t i) { return "c" + std::to_string(i); }
@@ -947,7 +960,12 @@ std::string item_text(const Entry& e, const ge::ui::Item& it) {
 }  // namespace
 
 const MenuTable& classic_menu() {
-  static const MenuTable table{kPages, kEntries};
+  static const MenuTable table{kPages, kEntries, kUnusedSlot};
+  return table;
+}
+
+const MenuTable& q2_menu() {
+  static const MenuTable table{kPages, kEntries, kEmptySlot};
   return table;
 }
 
@@ -1012,7 +1030,7 @@ ge::ui::Menu build_menu(const MenuTable& table) {
   for (const auto& [id, title] : kSlotPages) {
     ge::ui::Page& page = m.add_page(id, title);
     for (int i = 0; i < kSaveSlots; i++) {
-      ge::ui::Item it{.id = slot_id(i), .text = std::string(kEmptySlot)};
+      ge::ui::Item it{.id = slot_id(i), .text = std::string(table.empty_slot)};
       it.hint = std::string(id) == "load" ? "Load this game." : "Save the game here.";
       page.items.push_back(std::move(it));
     }
@@ -1030,7 +1048,7 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
       const Entry* e = find_entry(id, it.id, table_of(host));
       if (e == nullptr) continue;
       if (e->kind == ItemKind::back) {
-        it.disabled = hide_back && e->page != "quit";
+        it.disabled = hide_back && e->page != "quit" && e->page != "newgame";
         continue;
       }
       if (e->kind == ItemKind::label) continue;
@@ -1103,7 +1121,7 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
       }
       const size_t i = std::stoul(it.id.substr(1));
       const std::string line = i < host.saves.size() ? host.saves[i] : std::string();
-      it.text = line.empty() ? std::string(kEmptySlot)
+      it.text = line.empty() ? std::string(table_of(host).empty_slot)
                              : slot_text(line, hide_back ? kSlotChars : kSlotCharsModern);
       it.disabled = !known || (load && line.empty());
     }
@@ -1142,6 +1160,9 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (e.page == "multi" && e.item == "join") return Outcome::servers;
   if (e.page == "main" && e.item == "demos") return Outcome::demos;
   if (e.page == "main" && e.item == "games") return Outcome::games;
+  // NEW GAME with a game running: the question first (its YES runs `newgame`).
+  if (e.page == "single" && e.item == "new" && host.server != nullptr && menu.open("newgame"))
+    return Outcome::none;
   if (e.page == "options" && e.item == "reset") {
     reset_defaults(host);
     refresh(menu, host);

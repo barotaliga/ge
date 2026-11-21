@@ -90,8 +90,12 @@ struct PageTitle {
 struct MenuTable {
   std::span<const PageTitle> pages;
   std::span<const Entry> entries;
+  std::string_view empty_slot;  // the words of an empty save slot on LOAD and SAVE
 };
+// Quake's (an empty slot "--- UNUSED SLOT ---", as the original's), and the same pages for
+// Quake II with our own words for an empty slot.
 const MenuTable& classic_menu();
+const MenuTable& q2_menu();
 
 // Quake's table, every page's rows in order.
 std::span<const Entry> entries();
@@ -116,6 +120,7 @@ const MenuTable& table_of(const Host& host);
 // The save slots the LOAD and SAVE pages show, and the words of an empty one.
 inline constexpr int kSaveSlots = 12;
 inline constexpr std::string_view kEmptySlot = "- EMPTY -";
+inline constexpr std::string_view kUnusedSlot = "--- UNUSED SLOT ---";  // Quake's
 // A slot's line cut to what a row holds: the classic look's label column, and the modern look's
 // slab on a phone (the title shortened before the kills are).
 inline constexpr size_t kSlotChars = 22;

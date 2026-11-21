@@ -25,6 +25,7 @@
 #include "vfs/disc.hpp"
 #include "vfs/lha.hpp"
 #include "vfs/pak.hpp"
+#include "vfs/zip.hpp"
 
 namespace content = ge::classic::content;
 namespace vfs = ge::vfs;
@@ -172,6 +173,24 @@ TEST(import_copies_a_store_install_and_its_music_files) {
   CHECK(r.tracks.size() == 2 && r.tracks[0].track == 2 && r.tracks[1].track == 3);
   CHECK(r.tracks[0].from == "wav" && r.tracks[0].channels == 2 && r.tracks[0].rate == 44100);
   CHECK(fs::exists(data / "q1/music/track03.flac"));
+}
+
+TEST(import_takes_the_words_by_key_out_of_the_releases_archive) {
+  // A release whose program prints keys ($qc_got_item) keeps the words in an archive beside the
+  // base folder: only that file is taken, loose under the base folder.
+  const fs::path src = fresh("kpf"), data = fresh("kpf_data");
+  save(src / "rerelease/id1/pak0.pak", pak("start"));
+  const std::string words = "qc_got_item = \"You got the {}\"\n";
+  save(src / "rerelease/Game.kpf",
+       vfs::write_stored_zip(
+           {{"localization/loc_english.txt", std::vector<uint8_t>(words.begin(), words.end())},
+            {"gfx/big.lmp", std::vector<uint8_t>(64, 3)}}));
+  content::ImportReport r;
+  std::string error;
+  CHECK_MSG(content::import_game(src.string(), data.string(), &r, &error), error);
+  const fs::path loc = data / "q1/id1/localization/loc_english.txt";
+  CHECK(fs::exists(loc) && fs::file_size(loc) == words.size());
+  CHECK(!fs::exists(data / "q1/Game.kpf") && !fs::exists(data / "q1/id1/gfx/big.lmp"));
 }
 
 TEST(import_opens_an_installers_archive) {

@@ -96,6 +96,47 @@ TEST(a_secret_door_shot_moves_back_then_aside_and_closes_again) {
   CHECK(g.s().q.faults == 0);
 }
 
+// The window's brush models are a unit wider each side, as the program sizes its movers by: the
+// secret door travels 2 units further each way, and a train rides a unit off its corners.
+TEST(brush_models_a_unit_wider_move_a_secret_door_and_a_train_by_it) {
+  Game g(R"({
+"classname" "func_door_secret"
+"model" "*1"
+"angle" "0"
+"wait" "2"
+}
+)",
+         {}, nullptr, true);
+  const int door = g.find("func_door_secret");
+  CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.hit(door, 1, 10));
+  float back = 0, aside = 0;
+  for (int i = 0; i < kFrames * 4; i++) {
+    CHECK_MSG(g.frame(0), g.error);
+    back = std::max(back, g.ed(door).origin.x);
+    aside = std::min(aside, g.ed(door).origin.y);
+  }
+  CHECK_MSG(std::fabs(aside + 130) < 1, std::to_string(aside));
+  CHECK_MSG(std::fabs(back - 18) < 1, std::to_string(back));
+  Game t(R"({
+"classname" "func_train"
+"model" "*1"
+"target" "t1"
+"speed" "200"
+}
+{
+"classname" "path_corner"
+"targetname" "t1"
+"target" "t1"
+"origin" "128 -64 0"
+}
+)",
+         {}, nullptr, true);
+  CHECK_MSG(t.frame(0), t.error);
+  CHECK_MSG(t.ed(t.find("func_train")).origin.x == 1,
+            std::to_string(t.ed(t.find("func_train")).origin.x));
+}
+
 // Each leg sounds as it starts and stops, and the door rests a second at its first stop.
 TEST(a_secret_door_sounds_each_leg_and_rests_between_them) {
   Game g(R"({

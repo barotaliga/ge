@@ -43,6 +43,8 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   s.spectator = cfg.spectator;
   s.password = cfg.password;
   s.qport = cfg.qport;
+  s.timeout = cfg.timeout;  // cl_timeout (0: never)
+  s.trace = cfg.trace;      // showpackets, showdrop
   s.into = &r.demo;
   // The files the level names that the window lacks, fetched before the game begins and kept
   // in the archive the server says each came out of (the window's `keep_file`).
@@ -179,7 +181,8 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   d.state.voice = std::move(c.news.voice);
   c.news = Q2News{};
   const double now_s = static_cast<double>(r.now_us) * 1e-6 + r.owed_s;
-  client::drop_ignored(r.ignore, d.state, d.state.prints, now_s);  // ignore lists (chat_ignore.hpp)
+  // The ignore lists, the team tags and the regex triggers (chat_ignore.hpp).
+  client::drop_ignored(r.ignore, d.state, d.state.prints, now_s, &d.state.centre);
   const bool fresh = c.frames != r.q2_frames;
   client::DemoState& st = d.state;
   if (fresh) {  // a frame came: the last two kept, as read, for drawing between them

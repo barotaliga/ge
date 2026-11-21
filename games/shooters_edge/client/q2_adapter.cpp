@@ -137,7 +137,7 @@ ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhan
 }
 
 const shooters_edge::menu::MenuTable& menu(const GameAdapter&) {
-  return shooters_edge::menu::classic_menu();
+  return shooters_edge::menu::q2_menu();
 }
 
 // A palette of the files: Quake's (`gfx/palette.lmp`) or Quake II's (the one its

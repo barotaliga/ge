@@ -65,6 +65,7 @@
 
 #include "console/console.hpp"
 #include "shooters_edge/client/place_names.hpp"
+#include "shooters_edge/client/team_items.hpp"
 #include "shooters_edge/client/team_point.hpp"
 #include "shooters_edge/hud/status.hpp"
 
@@ -97,6 +98,7 @@ struct TeamChat {
   mutable double pointed_t = -1e9;  // the frame (the state's clock) `pointed` was worked out for
   mutable Pointed last_point;
   mutable double last_point_t = -1e9;
+  TeamItems items;  // tp_took, tp_pickup, tp_point (client/team_items.hpp)
 };
 
 // The `say`/`say_team` commands and every setting the codes read, on `con` (`chat` outlives it).

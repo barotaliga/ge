@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -24,6 +25,7 @@
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_map_kinds.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_targets.hpp"
@@ -39,78 +41,7 @@ constexpr sh::MoverFrame kFrame{kStep, 10};
 constexpr uint32_t kEveryone = 0xffffffffu;
 constexpr int kMaxUseDepth = 16;  // a chain of uses deeper than this is a loop: it stops
 
-// The movers' and triggers' kinds, from their class names.
-enum Class : uint8_t {
-  kNone,
-  kDoor,
-  kButton,
-  kPlat,
-  kTrain,
-  kWall,
-  kTimer,
-  kTriggerOnce,
-  kTriggerMultiple,
-  kRelay,
-  kAlways,
-  kPush,
-  kHurt,
-  kTeleporter,
-  kChangeLevel,
-  kSpeaker,
-  kExplosion,
-  kSecret,
-  kGoal,
-  kDoorField,
-  kPlatField,
-  kDoorRotating,
-  kRotating,
-  kAreaPortal,
-  kLight,
-  kHelp,
-  kCrossTrigger,
-  kCrossTarget,
-  kElevator,
-  kSecretDoor,
-};
-
-// A mover's states: at rest at its first place, going to its second, at its second, coming back.
-enum State : uint8_t { kAtFirst, kGoing, kAtSecond, kComing };
-
-// The actions a think or an arrival runs.
-enum Act : uint8_t {
-  kNoAct,
-  kDoorClose,
-  kDoorTop,
-  kDoorBottom,
-  kButtonIn,
-  kButtonReturn,
-  kButtonOut,
-  kPlatDown,
-  kPlatTop,
-  kPlatBottom,
-  kTrainFind,
-  kTrainNext,
-  kTrainCorner,
-  kTimerFire,
-  kAlwaysFire,
-  kRemove,
-  kCrossCheck,
-  kPlatUp,  // a plat stepped on in coop, rising after coop_elevator_delay (saves keep these)
-  // A secret door's steps (secret_use): out to the side, a pause, back along its arrow, the
-  // wait, the way home in two moves.
-  kSecretAside,
-  kSecretOut,
-  kSecretOpen,
-  kSecretIn,
-  kSecretBeside,
-  kSecretHome,
-  kSecretShut,
-};
-
-struct Mover {
-  Class cls = kNone;
-  int corner = -1;  // a train's current corner
-};
+using namespace q2map;
 
 const char* kDoorStart = "doors/dr1_strt.wav";
 const char* kDoorEnd = "doors/dr1_end.wav";
@@ -263,9 +194,12 @@ bool is_ship(const Q2Entity& e) {
   return e.classname == "misc_viper" || e.classname == "misc_strogg_ship";
 }
 
+int index_of(const Q2Server& s, const Q2Entity& e);
+
 // A door's start or end sample; null when it moves quietly. A door of water sounds of water,
-// and only when it has `sounds`.
-const char* door_sample(const Q2Entity& e, bool start) {
+// and only when it has `sounds`. Only a team's master sounds.
+const char* door_sample(const Q2Server& s, const Q2Entity& e, bool start) {
+  if (e.team_master >= 0 && e.team_master != index_of(s, e)) return nullptr;
   if (e.classname == "func_water") {
     if (e.sounds == 0) return nullptr;
     return start ? "world/mov_watr.wav" : "world/stp_watr.wav";
@@ -424,7 +358,8 @@ int push(Q2Server& s, Q2Entity& e, sh::Vec3f move, sh::Vec3f turn, bool stop_typ
   const int row = map_row(index_of(s, e));
   int16_t before[sh::kMaxClients][3];
   bool moved[sh::kMaxClients] = {}, turned[sh::kMaxClients] = {};
-  const int16_t yaw = static_cast<int16_t>(num::to_int32(turn.y * (65536.0f / 360)));
+  int16_t was_yaw[sh::kMaxClients] = {};
+  const float yaw = turn.y;  // a rider's yaw delta gains the turn's degrees as its own units
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (!s.clients[i].active || s.clients[i].spectator) continue;
     Q2Player& p = s.players[i];
@@ -440,9 +375,11 @@ int push(Q2Server& s, Q2Entity& e, sh::Vec3f move, sh::Vec3f turn, bool stop_typ
       pack(p.move.origin, to);
       moved[i] = true;
       if (!rider) p.ground = -1;
-      if (rider && turn.y != 0) {  // a rider's view turns with it
-        p.move.delta_angles[1] = int16_t(p.move.delta_angles[1] + yaw);
-        p.view_angles.y += turn.y;
+      if (turn.y != 0) {  // barely turns: degrees counted as 65536ths of a turn, truncated
+        was_yaw[i] = p.move.delta_angles[1];
+        const float sum = float(p.move.delta_angles[1]) + yaw;
+        p.move.delta_angles[1] = static_cast<int16_t>(static_cast<int>(sum));
+        p.view_angles.y += float(p.move.delta_angles[1] - was_yaw[i]) * (360.0f / 65536);
         turned[i] = true;
       }
       continue;
@@ -453,8 +390,9 @@ int push(Q2Server& s, Q2Entity& e, sh::Vec3f move, sh::Vec3f turn, bool stop_typ
         for (int k = 0; k < 3; k++) s.players[j].move.origin[k] = before[j][k];
     for (int j = 0; j < sh::kMaxClients; j++)
       if (turned[j]) {
-        s.players[j].move.delta_angles[1] = int16_t(s.players[j].move.delta_angles[1] - yaw);
-        s.players[j].view_angles.y -= turn.y;
+        s.players[j].view_angles.y -=
+            float(s.players[j].move.delta_angles[1] - was_yaw[j]) * (360.0f / 65536);
+        s.players[j].move.delta_angles[1] = was_yaw[j];
       }
     e.origin = from;
     e.angles = from_angles;
@@ -474,8 +412,7 @@ int push(Q2Server& s, Q2Entity& e, sh::Vec3f move, sh::Vec3f turn, bool stop_typ
     if (turning) to = e.origin + to_world(to_local(b.origin - from, from_angles), e.angles);
     if ((!stop_type || rider) && fits_body(s, b, m.entity, to)) {
       carried.emplace_back(m.entity, b.origin);
-      b.origin = to;
-      if (rider && turn.y != 0) b.angles.y += turn.y;
+      b.origin = to;  // swung round, never turned
       continue;
     }
     if (fits_body(s, b, m.entity, b.origin)) continue;  // fits where it was: left there
@@ -485,8 +422,9 @@ int push(Q2Server& s, Q2Entity& e, sh::Vec3f move, sh::Vec3f turn, bool stop_typ
         for (int k = 0; k < 3; k++) s.players[j].move.origin[k] = before[j][k];
     for (int j = 0; j < sh::kMaxClients; j++)
       if (turned[j]) {
-        s.players[j].move.delta_angles[1] = int16_t(s.players[j].move.delta_angles[1] - yaw);
-        s.players[j].view_angles.y -= turn.y;
+        s.players[j].view_angles.y -=
+            float(s.players[j].move.delta_angles[1] - was_yaw[j]) * (360.0f / 65536);
+        s.players[j].move.delta_angles[1] = was_yaw[j];
       }
     e.origin = from;
     e.angles = from_angles;
@@ -518,7 +456,8 @@ void blocked(Q2Server& s, Q2Entity& e, int slot) {
     else
       monster_damage(s, -2 - slot, -1, e.dmg, {});
   };
-  if (c == kRotating) {  // crushes every blocked frame and never turns back
+  if (e.classname == "func_water") return;  // never blocked: it waits where it is
+  if (c == kRotating) {                     // crushes every blocked frame and never turns back
     if (e.dmg > 0) crush();
     return;
   }
@@ -538,9 +477,10 @@ void blocked(Q2Server& s, Q2Entity& e, int slot) {
     return;
   }
   if (!is_door(c) || e.wait < 0 || (e.spawnflags & 4) != 0) return;  // a crusher keeps pressing
-  for (Q2Entity& m : s.entities)                                     // the whole team turns back
+  const bool up = e.state == kComing;  // the blocked door's way turns the whole team back
+  for (Q2Entity& m : s.entities)
     if (&m == &e || (e.team_master >= 0 && m.team_master == e.team_master)) {
-      if (m.state == kComing)
+      if (up)
         door_go_up(s, m, m.activator);
       else
         door_go_down(s, m);
@@ -566,9 +506,8 @@ void door_go_up(Q2Server& s, Q2Entity& e, int activator) {
     return;
   }
   e.activator = activator;
-  if (door_sample(e, true) != nullptr &&
-      index_of(s, e) == (e.team_master >= 0 ? e.team_master : index_of(s, e)))
-    sound_at(s, map_row(index_of(s, e)), e.origin, door_sample(e, true), 1, kStatic);
+  if (door_sample(s, e, true) != nullptr)
+    sound_at(s, map_row(index_of(s, e)), e.origin, door_sample(s, e, true), 1, kStatic);
   e.state = kGoing;
   e.think_at = 0;
   if (e.turns)
@@ -581,8 +520,8 @@ void door_go_up(Q2Server& s, Q2Entity& e, int activator) {
 
 void door_go_down(Q2Server& s, Q2Entity& e) {
   if (e.max_health > 0) e.health = e.max_health;  // it can be shot again
-  if (door_sample(e, true) != nullptr)
-    sound_at(s, map_row(index_of(s, e)), e.origin, door_sample(e, true), 1, kStatic);
+  if (door_sample(s, e, true) != nullptr)
+    sound_at(s, map_row(index_of(s, e)), e.origin, door_sample(s, e, true), 1, kStatic);
   e.state = kComing;
   e.think_at = 0;
   if (e.turns)
@@ -687,8 +626,8 @@ void arrived(Q2Server& s, Q2Entity& e) {
   const int row = map_row(index_of(s, e));
   switch (act) {
     case kDoorTop:
-      if (door_sample(e, false) != nullptr)
-        sound_at(s, row, e.origin, door_sample(e, false), 1, kStatic);
+      if (door_sample(s, e, false) != nullptr)
+        sound_at(s, row, e.origin, door_sample(s, e, false), 1, kStatic);
       e.state = kAtSecond;
       if ((e.spawnflags & 32) == 0 && e.wait >= 0) {
         e.think_at = s.level_time + e.wait;
@@ -696,8 +635,8 @@ void arrived(Q2Server& s, Q2Entity& e) {
       }
       return;
     case kDoorBottom:
-      if (door_sample(e, false) != nullptr)
-        sound_at(s, row, e.origin, door_sample(e, false), 1, kStatic);
+      if (door_sample(s, e, false) != nullptr)
+        sound_at(s, row, e.origin, door_sample(s, e, false), 1, kStatic);
       e.state = kAtFirst;
       door_portals(s, e, false);
       return;
@@ -987,7 +926,7 @@ void touch(Q2Server& s, Q2Entity& e, int slot) {
 }
 
 // A use of entity `target` by `activator`.
-void fire_targets(Q2Server& s, int ent, int activator, int depth);
+void fire_targets(Q2Server& s, int ent, int activator, int depth, bool late = false);
 
 // A target_explosion goes off: the flash, its blast (`dmg`) and its targets at once.
 void explosion(Q2Server& s, int i, int activator, int depth) {
@@ -1018,7 +957,8 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
         e.avelocity = e.axis * e.speed;
       return;
     case kAreaPortal:
-      if (e.state >= 0 && size_t(e.state) < s.portals.size()) s.portals[size_t(e.state)] ^= 1;
+      e.on = !e.on;  // its own bit toggles and sets the portal (a door sets it apart from this)
+      if (e.state >= 0 && size_t(e.state) < s.portals.size()) s.portals[size_t(e.state)] = e.on;
       return;
     case kLight:
       e.spawnflags ^= 1;  // bit 1: off
@@ -1061,14 +1001,7 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
       const bool appear = !e.solid;
       e.solid = appear;
       e.gone = !appear;
-      if (appear)  // whoever is inside dies
-        for (int i = 0; i < sh::kMaxClients; i++) {
-          if (!s.clients[i].active || !s.players[i].alive) continue;
-          const Q2Player& p = s.players[i];
-          const sh::Vec3f at = unpack(p.move.origin);
-          if (overlap(at + p.mins, at + p.maxs, abs_min(e), abs_max(e)))
-            fight_hurt(s, i, -1, {}, 100000, 0, kSqByCrush, 3);
-        }
+      if (appear) targets_kill_inside(s, e);            // whoever is inside dies, monsters too
       if ((e.spawnflags & 2) == 0) e.spawnflags &= ~7;  // one use, then a plain wall
       return;
     }
@@ -1140,7 +1073,7 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
       if (s.next_unit) s.cross_bits = 0;  // a new unit
       if (deathmatch(s)) {
         if (!fight_dmflag(s, 4096)) return;  // no exit in this match
-        print_all(s, name_of(s, activator) + " left the level.\n");
+        print_all(s, name_of(s, activator) + " exited the level.\n");
         s.next_map = next.map;
         s.exit_now = true;
         return;
@@ -1216,17 +1149,19 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
   }
 }
 
-void fire_targets(Q2Server& s, int ent, int activator, int depth) {
+// `late`: a delayed use's copy, which keeps only the message and the targets: it says talk1, and
+// it uses a door's area portals too.
+void fire_targets(Q2Server& s, int ent, int activator, int depth, bool late) {
   const Q2Entity& e = s.entities[size_t(ent)];
   if (!e.message.empty()) {
     centre_to(s, activator, e.message);
-    const int sounds = e.sounds;
+    const int sounds = late ? 0 : e.sounds;
     const char* sample = sounds == 1   ? "misc/secret.wav"
                          : sounds == 2 ? "misc/talk.wav"
                          : sounds == 3 ? "misc/trigger1.wav"
                                        : kTalk;
     // A secret or a goal sounds its own noise at the finder instead (its use plays it).
-    const bool own = class_of(e) == kSecret || class_of(e) == kGoal;
+    const bool own = !late && (class_of(e) == kSecret || class_of(e) == kGoal);
     if (activator >= 0 && !own)
       sound_at(s, activator + 1, unpack(s.players[activator].move.origin), sample);
   }
@@ -1241,7 +1176,7 @@ void fire_targets(Q2Server& s, int ent, int activator, int depth) {
       }
   const std::string target = e.target;
   if (target.empty() || depth >= kMaxUseDepth) return;
-  const bool door = is_door(class_of(e));
+  const bool door = !late && is_door(class_of(e));
   for (size_t i = 0; i < s.entities.size(); i++) {
     if (s.entities[i].targetname != target || int(i) == ent) continue;
     if (door && class_of(s.entities[i]) == kAreaPortal) continue;  // the door sets those itself
@@ -1356,7 +1291,7 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
       e.solid = true;
       e.turns = true;
       e.speed = number(s, e, "speed", 100);
-      if (key(s, e, "dmg").empty()) e.dmg = 2;
+      if (e.dmg == 0) e.dmg = 2;  // never harmless, "dmg" "0" included
       e.axis = (e.spawnflags & 4) != 0   ? sh::Vec3f{0, 0, 1}
                : (e.spawnflags & 8) != 0 ? sh::Vec3f{1, 0, 0}
                                          : sh::Vec3f{0, 1, 0};
@@ -1570,6 +1505,10 @@ void link_doors(Q2Server& s) {
   const size_t count = s.entities.size();
   for (size_t i = 0; i < count; i++) {
     Q2Entity& e = s.entities[i];
+    if (!e.gone && class_of(e) == kTrain && !e.team.empty() && e.team_master < 0)
+      for (size_t j = i; j < count; j++)  // a team of trains: one moves them, one sounds
+        if (class_of(s.entities[j]) == kTrain && s.entities[j].team == e.team)
+          s.entities[j].team_master = static_cast<int>(i);
     if (e.gone || !is_door(class_of(e)) || e.team_master >= 0) continue;
     e.team_master = static_cast<int>(i);
     sh::Vec3f lo = abs_min(e), hi = abs_max(e);
@@ -1653,7 +1592,7 @@ void map_loops(Q2Server& s) {
     switch (class_of(e)) {
       case kDoor:
       case kDoorRotating:
-        for (const char* one : {door_sample(e, true), door_sample(e, false)})
+        for (const char* one : {door_sample(s, e, true), door_sample(s, e, false)})
           if (one != nullptr) sound_index(s, one);
         if (e.classname != "func_water" && e.sounds != 1) e.loop = sound_index(s, kDoorMove);
         break;
@@ -1755,14 +1694,16 @@ void map_use_targets(Q2Server& s, int e, int activator) {
 // the move a 10 Hz frame makes (`left`, rounded to eighths as that frame's is) is spread over the
 // tenth's frames, the last one taking what is left, and the step and a blocked push's harm come at
 // the tenth alone; so at every tenth a mover stands where it would at 10, and its plan holds.
-void split_push(Q2Server& s, Q2Entity& e) {
-  if (e.gone) return;
+// Returns the push's blocker (as `push`), or -1; `step` says whether the tenth's step is due.
+int split_push(Q2Server& s, Q2Entity& e, bool& step) {
+  step = false;
+  if (e.gone) return -1;
   const bool still = e.velocity.x == 0 && e.velocity.y == 0 && e.velocity.z == 0 &&
                      e.avelocity.x == 0 && e.avelocity.y == 0 && e.avelocity.z == 0;
   if (still || (!e.solid && e.arrive == kNoAct)) {
-    if (s.tenth && e.arrive != kNoAct) step_move(s, e);
+    step = s.tenth && e.arrive != kNoAct;
     e.split = false;
-    return;
+    return -1;
   }
   if (!e.split) {  // the tenth's move, as one 10 Hz frame makes it
     e.left = e.solid ? eighths(e.velocity * kStep) : e.velocity * kStep;
@@ -1780,19 +1721,14 @@ void split_push(Q2Server& s, Q2Entity& e) {
     const bool stop_type =
         class_of(e) == kButton || (class_of(e) == kRotating && (e.spawnflags & 32) != 0);
     const int by = push(s, e, move, turn, stop_type);
-    if (by != -1) {
-      if (s.tenth) {
-        if (e.think_at > 0) e.think_at += kStep;
-        blocked(s, e, by);
-      }
-      return;
-    }
+    if (by != -1) return by;
   }
   e.left = e.left - move;
   e.left_turn = e.left_turn - turn;
-  if (!s.tenth) return;
+  if (!s.tenth) return -1;
   e.split = false;
-  step_move(s, e);
+  step = true;
+  return -1;
 }
 
 void map_frame(Q2Server& s) {
@@ -1807,13 +1743,37 @@ void map_frame(Q2Server& s) {
     if (d.burst)
       explosion(s, d.entity, d.activator, 0);
     else
-      fire_targets(s, d.entity, d.activator, 0);
+      fire_targets(s, d.entity, d.activator, 0, true);
   }
   // Each mover pushes, then steps; a blocked push skips the step (its schedule slides).
+  std::vector<TeamFrame> teams;
   for (size_t i = 0; i < s.entities.size(); i++) {
     Q2Entity& e = s.entities[i];
+    TeamFrame* team = nullptr;
+    if (!e.gone && e.team_master >= 0 && !e.team.empty()) {
+      if (e.team_master == int(i)) team_begin(s, teams.emplace_back(), int(i));
+      for (TeamFrame& t : teams)
+        if (t.master == e.team_master) team = &t;
+      if (team != nullptr && team->blocked) continue;  // the parts after a blocked one: not tried
+    }
+    const auto held = [&](int by) {
+      if (team != nullptr)
+        team_undo(s, *team);
+      else if (s.entities[i].think_at > 0)
+        s.entities[i].think_at += kStep;
+      blocked(s, s.entities[i], by);
+    };
+    const auto step = [&] {
+      if (team != nullptr)
+        team->steps.push_back(i);
+      else
+        step_move(s, s.entities[i]);
+    };
     if (s.fps != 10) {
-      split_push(s, e);
+      bool due = false;
+      const int by = split_push(s, e, due);
+      if (by != -1 && s.tenth) held(by);
+      if (by == -1 && due) step();
       continue;
     }
     const bool still = e.velocity.x == 0 && e.velocity.y == 0 && e.velocity.z == 0 &&
@@ -1824,20 +1784,21 @@ void map_frame(Q2Server& s) {
           e.origin = e.origin + e.velocity * kStep;
           e.angles = e.angles + e.avelocity * kStep;
         }
-        step_move(s, s.entities[i]);
+        step();
       }
       continue;
     }
     const bool stop_type =
         class_of(e) == kButton || (class_of(e) == kRotating && (e.spawnflags & 32) != 0);
     const int by = push(s, e, eighths(e.velocity * kStep), e.avelocity * kStep, stop_type);
-    if (by != -1) {
-      if (e.think_at > 0) e.think_at += kStep;
-      blocked(s, s.entities[i], by);
-      continue;
-    }
-    step_move(s, s.entities[i]);
+    if (by != -1)
+      held(by);
+    else
+      step();
   }
+  for (const TeamFrame& t : teams)  // a team none of whose parts was blocked steps
+    if (!t.blocked)
+      for (size_t j : t.steps) step_move(s, s.entities[j]);
   for (size_t i = 0; i < s.entities.size(); i++) {
     Q2Entity& e = s.entities[i];
     if (e.think_at > 0 && s.level_time + 0.001 >= e.think_at) think(s, e);
@@ -1906,12 +1867,13 @@ void map_monster_touch(Q2Server& s, int entity) {
   }
 }
 
-bool map_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, bool splash) {
+bool map_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir, bool splash,
+                const sh::Vec3f* point) {
   if (e < 0 || size_t(e) >= s.entities.size()) return false;
   if (class_of(s.entities[size_t(e)]) == kNone && targets_damage(s, e, attacker, damage))
     return true;
   if (s.entities[size_t(e)].box || monster_index(s, e) >= 0)
-    return monster_damage(s, e, attacker, damage, dir, splash);
+    return monster_damage(s, e, attacker, damage, dir, splash, point);
   Q2Entity& d = s.entities[size_t(e)];
   const Class c = class_of(d);
   if (c == kSecretDoor && d.on && !d.gone && damage > 0) {

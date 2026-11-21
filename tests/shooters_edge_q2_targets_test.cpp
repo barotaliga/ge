@@ -405,6 +405,26 @@ TEST(a_light_ramp_steps_a_lights_letter) {
   CHECK_MSG(g->s().world.lightstyles[32] == "z", g->s().world.lightstyles[32]);
 }
 
+// A falling ramp cuts each step down: z to a over a second steps 22.5, 20, 17.5: w, u, r.
+TEST(a_falling_light_ramp_is_a_letter_ahead) {
+  auto g = open_game({relay("go", "ramp"),
+                      {{"classname", "light"}, {"targetname", "lamp"}, {"style", "32"}},
+                      {{"classname", "target_lightramp"},
+                       {"targetname", "ramp"},
+                       {"target", "lamp"},
+                       {"message", "za"},
+                       {"speed", "1"}}});
+  run(*g, 10);
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  std::string seen;
+  for (int i = 0; i < kSecond * 3 / 10; i++) {
+    run(*g, 1);
+    const std::string& now = g->s().world.lightstyles[32];
+    if (seen.empty() || seen.back() != now[0]) seen += now;
+  }
+  CHECK_MSG(seen.find("wur") != std::string::npos, seen);
+}
+
 TEST(a_string_sets_the_frames_of_its_characters) {
   auto g = open_game({relay("go", "text"),
                       {{"classname", "target_character"}, {"team", "clock"}, {"count", "1"}},

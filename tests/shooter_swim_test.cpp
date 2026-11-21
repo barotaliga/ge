@@ -29,11 +29,11 @@ struct Pool {
   sh::HullData point, clip;
   sh::MoveWorld world;
   sh::NavGraph g;
-  Pool() {
+  explicit Pool(float lip = 8) {
     const std::vector<sh::Brush> brushes = {
         box(sh::kContentsSolid, {-512, -512, -320}, {200, 512, 0}),
         box(sh::kContentsSolid, {200, -512, -320}, {1024, 512, -256}),
-        box(sh::kContentsWater, {200, -512, -256}, {1024, 512, -8})};
+        box(sh::kContentsWater, {200, -512, -256}, {1024, 512, -lip})};
     point = sh::build_point_hull(brushes);
     clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
     world.solids[0].point_hull = point.hull();
@@ -120,4 +120,35 @@ TEST(the_water_is_part_of_the_graph) {
   }
   // And back in off the ledge.
   CHECK_MSG(!sh::nav_route(g, 0, deep, search).nodes.empty(), "no way off the ledge into the pool");
+}
+
+// A bank 20 over the water: Quake's water jump (24 ahead, solid 8 up, open 32 up) climbs it,
+// Quake II's (30 ahead, solid 4 up, open 20 up, 350 up) cannot, so a swim under Quake II's move
+// proves no climb out there and plans its way out elsewhere (base1's river: he jumped at such a
+// bank for minutes).
+// A bank 20 over the water: Quake's water jump (24 ahead, solid 8 up, open 32 up) climbs it,
+// Quake II's (30 ahead, solid 4 up, open 20 up, 350 up) cannot, so a swim under Quake II's move
+// proves no climb out there and plans its way out elsewhere (base1's river: he jumped at such a
+// bank for minutes).
+TEST(a_bank_too_high_for_the_games_water_jump_is_no_way_out) {
+  const Pool high(20);
+  sh::NavGraph quake = high.g, quake2 = high.g;
+  const std::vector<uint8_t> wet_floor(high.g.nodes.size(), 0);
+  sh::SwimNavSettings q2;
+  q2.move.swimscale = 0.5;
+  q2.move.waterjump = 350;
+  q2.move.waterjump_reach = 30;
+  q2.move.waterjump_lip = 4;
+  q2.move.waterjump_open = 20;
+  const sh::SwimNavCounts a = sh::nav_add_swim(high.world, quake, wet_floor);
+  const sh::SwimNavCounts b = sh::nav_add_swim(high.world, quake2, wet_floor, q2);
+  CHECK_MSG(a.exits == 1,
+            "Quake's move climbs " + std::to_string(a.exits) + " times out, not once");
+  CHECK_MSG(b.exits == 0,
+            "Quake II's move climbs " + std::to_string(b.exits) + " times out, not never");
+  // The same lip a little lower is one Quake II's water jump does clear.
+  const Pool low(12);
+  sh::NavGraph g = low.g;
+  CHECK_MSG(sh::nav_add_swim(low.world, g, wet_floor, q2).exits == 1,
+            "Quake II's move should climb a bank 12 over the water");
 }

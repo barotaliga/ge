@@ -21,8 +21,11 @@
 // **What is copied**: the base folder's and the multiplayer folder's archives (`*.pak`, `*.pk3`,
 // `*.pkz`) and the loose files under the folders a game reads (maps, sound, music, progs, models,
 // gfx, pics, textures, env, sprites, players, skins, and video: Quake II's movies); never
-// programs, libraries, saves, configs or demos. A file already there with the same size and
-// SHA-256 is left alone; one that differs is replaced (each written through a `.part` file).
+// programs, libraries, saves, configs or demos. A release that prints its words by key keeps their
+// table (`localization/loc_english.txt`) in its own archives beside the base folder (`*.kpf`):
+// that one file is taken out and kept loose in the base folder. A file already there with the same
+// size and SHA-256 is left alone; one that differs is replaced (each written through a `.part`
+// file).
 //
 // **Taken in once** (`<data>/<profile id>/taken.txt`): a finished take-in writes the source's
 // fingerprint (where it is, and every file's path, size and last write time; a disc image's own
@@ -44,7 +47,7 @@
 // ge:summary Copies a classic game out of a folder, mounted disc or disc image into its data folder
 // ge:keywords import copy install data-folder iso cue bin disc image mounted volume usb cd steam
 // ge:keywords gog store-install libraryfolders find_game open_tree import_game store_folders
-// ge:keywords resource lha installer soundtrack music
+// ge:keywords resource lha installer soundtrack music kpf localization loc_english
 // ge:skill classic vfs shooter
 // ge:test tests/classic_content_import_test.cpp
 #pragma once

@@ -10,6 +10,7 @@
 
 #include "classicenhance/profile.hpp"
 #include "core/num_text.hpp"
+#include "shooters_edge/client/picture_files.hpp"
 
 #include <utility>
 #include <vector>
@@ -117,7 +118,8 @@ void add_first(con::Console& c, const GameBindings& b) {
 // QUAKE II (porting/shooters-edge/cvar-meanings.md):
 // - `crosshair` is its own: 0 none, 1 to 3 its own pictures (ch1, ch2, ch3), never the engine's
 //   marks, so a Quake II player's config keeps its crosshair;
-// - `scr_centertime` is the same setting, 2.5 seconds by default where Quake's is 2;
+// - `scr_centertime` is the same setting, 2.5 seconds by default where Quake's is 2, and
+//   `cl_timeout` 120 where Quake's is 60;
 // - its own spellings of settings we have under Quake's names, the same thing in each:
 //   `vid_gamma` (`gamma`: higher darker in both), `s_volume` (`volume`), `gl_dynamic`
 //   (`r_dynamic`), `gl_lightmap` (`r_lightmap`), `fov` (`cl_fov`), `cl_vwep` (`r_drawvweps`: the
@@ -182,6 +184,15 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .max = 1,
             .values = "-1..1: 0 the default; 0.1 to 0.3 lifts the dark corners"},
            b.light_lift);
+  v.add({.name = "cl_timeout",  // Quake II's servers are waited for longer
+         .fallback = "120",
+         .flags = con::kArchive,
+         .help = "How long a joined server may send nothing before you leave it, in seconds.",
+         .min = 0,
+         .max = 86400,
+         .values = "0: never; 1..86400: that many seconds (120 the default)",
+         .overlap = con::Overlap::same});
+  c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
   v.add({.name = "scr_centertime",
          .fallback = "2.5",
          .flags = con::kArchive,
@@ -441,6 +452,10 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
   con::CvarLayer layer(c.cvars(), v.layer);
   for (const GameRows& row : kGameCvars)
     if (row.game == game.id) row.add(c, b);
+  if (b.crosshair != nullptr) {  // crosshairimage's picture read again from this game's files
+    if (b.files != nullptr) add_crosshair_reader(*b.crosshair, *b.files);
+    b.crosshair->picture_of.clear();
+  }
 }
 
 int switch_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProfile& now,

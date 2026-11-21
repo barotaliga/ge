@@ -218,3 +218,27 @@ TEST(the_single_player_cheats_answer_as_the_original) {
   sv::client_command(g.s(), 0, "kill");
   CHECK(said() == "Can't suicide -- allready dead!\n");
 }
+
+TEST(pause_stops_the_game_and_says_who_paused_it) {
+  Game g;
+  std::string out;
+  const auto said = [&g, &out] {
+    out.clear();
+    for (const sv::NetEvent& ev : g.s().out.events)
+      if (ev.kind == sv::EventKind::print) out += ev.text;
+    g.s().out.events.clear();
+    return out;
+  };
+  said();
+  sv::client_command(g.s(), 0, "pause");
+  CHECK(g.s().paused);
+  CHECK_MSG(said().find(" paused the game\n") != std::string::npos, out);
+  sv::client_command(g.s(), 0, "pause");
+  CHECK(!g.s().paused);
+  CHECK_MSG(said().find(" unpaused the game\n") != std::string::npos, out);
+  // `pausable 0`: refused in the original's words.
+  g.s().cvars.set("pausable", "0", ge::console::Source::code);
+  sv::client_command(g.s(), 0, "pause");
+  CHECK(!g.s().paused);
+  CHECK_MSG(said() == "Pause not allowed.\n", out);
+}
