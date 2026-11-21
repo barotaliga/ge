@@ -820,4 +820,42 @@ void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::
     cmd.buttons |= sh::kButtonJump;
 }
 
+bool way_edge(const MapNav& nav, const Fighter& f, const ge::shooterbots::BotView& s, int me,
+              sh::MoveCmd& cmd) {
+  const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
+  if (e.health <= 0 || (e.flags & sh::kFlagOnGround) == 0 || e.waterlevel > 0 ||
+      (cmd.forward == 0 && cmd.side == 0))
+    return false;
+  const sb::NavGraph& g = nav.graph;
+  const auto trap = [&](int32_t n) {
+    return n >= 0 && static_cast<size_t>(n) < nav.trap.size() && nav.trap[static_cast<size_t>(n)];
+  };
+  if (trap(sb::nav_nearest(g, e.origin))) return false;  // in it already: the way leads out
+  // A route of his own that goes down there (an exit in a pit) is taken.
+  const sb::Pilot& p = f.bot.pilot.pilot;
+  for (size_t k = p.k; k < p.route.size() && k < p.k + 3; k++)
+    if (trap(p.route[k])) return false;
+  // The wish's heading under the view, and the floor a stride along it.
+  const double yaw = cmd.angles.y * (ge::core::kPi / 180.0);
+  const double c = ge::core::libm::cos(yaw), sn = ge::core::libm::sin(yaw);
+  const double wx = c * cmd.forward + sn * cmd.side, wy = sn * cmd.forward - c * cmd.side;
+  const double len = std::sqrt(wx * wx + wy * wy);
+  if (len <= 0) return false;
+  const sh::Vec3f dir{static_cast<float>(wx / len), static_cast<float>(wy / len), 0};
+  const sh::Vec3f ahead = e.origin + dir * kEdgeLook;
+  const sh::HullTrace side = sh::trace_move(s.sv, e.origin, sh::kPlayerMins, sh::kPlayerMaxs, ahead,
+                                            sh::kTraceNoMonsters, me);
+  if (side.fraction < 1) return false;  // a wall that way, not an edge
+  const sh::HullTrace down =
+      sh::trace_move(s.sv, ahead, sh::kPlayerMins, sh::kPlayerMaxs,
+                     ahead - sh::Vec3f{0, 0, kEdgeDrop}, sh::kTraceNoMonsters, me);
+  if (down.fraction < 1 && !trap(sb::nav_nearest(g, down.endpos))) return false;
+  // Over the lip of a pit he could not climb back out of: the keys let go, and a run into it
+  // braked by the wish turned back along it.
+  cmd.forward = static_cast<int16_t>(-cmd.forward);
+  cmd.side = static_cast<int16_t>(-cmd.side);
+  cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
+  return true;
+}
+
 }  // namespace shooters_edge::bots

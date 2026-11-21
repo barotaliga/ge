@@ -68,6 +68,7 @@ struct UnitMap {
   WayStats way;
   int64_t shoves = 0;
   int64_t breaks = 0;                  // glass he shot out of his way
+  int64_t edges = 0;                   // commands a pit's lip turned his keys back (way_edge)
   std::vector<std::string> took_keys;  // the keys he took, by their class
   sh::Vec3f lo, hi;                    // the nav's bounds
   std::vector<sh::Vec3f> nodes;        // every node (the picture's floor)

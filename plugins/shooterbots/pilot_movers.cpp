@@ -132,6 +132,9 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
     // Already aboard (it starts up under him as he steps on): no longer in his way.
     if (aboard(p, s, l.mover)) return false;
     if (away || up > kBoardRest || up < -kBoardRest || !silent(p, l.mover)) return true;
+    // A cage (its floor inside its box: base2's lift, whose box reaches 132 over its floor) is
+    // boarded at its floor, where its node was found at rest.
+    if (nb.origin.z + kPlayerMins.z < rest->absmax.z - kStepHeight) return false;
     // Its top already more than a step over the feet (rising off its rest under another rider):
     // walked on, the player goes in under it, and standing in its field holds it up for good.
     return s.onground && now->absmax.z > s.origin.z + kPlayerMins.z + kStepHeight;

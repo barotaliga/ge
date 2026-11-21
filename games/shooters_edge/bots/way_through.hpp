@@ -118,4 +118,14 @@ struct Wedge {
 };
 void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::MoveCmd& cmd);
 
+// THE PIT'S LIP: on dry ground outside a trap (map_nav.hpp: no way on foot back out), a wish
+// that would carry him over the lip of one (a stride ahead, no floor within kEdgeDrop, or only
+// the trap's) is turned back, whatever pressed it (a dodge, a U-turn): a fight's side step in
+// base2 dropped him into its south pool for good. A route of his own into the trap is let be.
+// True when it turned the keys.
+constexpr float kEdgeLook = 40;  // the stride looked along, units
+constexpr float kEdgeDrop = 64;  // a floor this far down is a step, units
+bool way_edge(const MapNav& nav, const Fighter& f, const ge::shooterbots::BotView& s, int me,
+              sh::MoveCmd& cmd);
+
 }  // namespace shooters_edge::bots
