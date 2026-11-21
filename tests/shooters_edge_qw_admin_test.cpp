@@ -177,6 +177,57 @@ TEST(kick_removes_a_player_who_may_come_back) {
   CHECK(!has(rig.admin("users"), "bert"));
 }
 
+TEST(snap_asks_a_player_for_a_screenshot_kept_in_blocks_or_refused) {
+  namespace fs = std::filesystem;
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  const fs::path dir = fs::temp_directory_path() / "se_admin_snap";
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+  cn::ServerConfig cfg;
+  cfg.snap_dir = dir.string();
+  CHECK(rig.start(cfg));
+  CHECK(rig.play());
+  rig.c[1].cfg.allow_snap = false;  // bert: scr_allowsnap 0
+  CHECK(has(rig.admin("snap"), "snap <id|name>"));
+  CHECK(has(rig.admin("snap " + std::to_string(rig.id_of(0))), "Asked anna for a screenshot"));
+  rig.frames(20);
+  CHECK(rig.c[0].up.asked);
+  CHECK(has(rig.admin("snap anna"), "anna is already sending one."));
+  // The window's picture: 3000 bytes of a JPEG, sent in three blocks.
+  std::vector<uint8_t> picture(3000, 7);
+  picture[0] = 0xff;
+  picture[1] = 0xd8;
+  cn::client_upload_start(rig.c[0], picture);
+  rig.frames(200);
+  const fs::path kept = dir / (std::to_string(rig.id_of(0)) + "-00.jpg");
+  CHECK_MSG(fs::exists(kept) && fs::file_size(kept) == 3000, kept.string());
+  CHECK(any_has(rig.c[0].up.said, "Upload starting of 3000..."));
+  CHECK(any_has(rig.c[0].up.said, "Upload completed"));
+  CHECK(!rig.c[0].up.sending && !rig.server.clients[0].up.wanted);
+  // The next one takes the next number.
+  rig.admin("snap anna");
+  rig.frames(20);
+  cn::client_upload_start(rig.c[0], picture);
+  rig.frames(200);
+  CHECK(fs::exists(dir / (std::to_string(rig.id_of(0)) + "-01.jpg")));
+  // bert says no, and everyone hears it.
+  rig.admin("snap bert");
+  rig.frames(40);
+  CHECK(!rig.c[1].up.asked && any_has(rig.c[0].prints, "bert refused remote screenshot"));
+  // snapall asks both again.
+  CHECK(has(rig.admin("snapall"), "Asked 2 players for a screenshot"));
+  fs::remove_all(dir, ec);
+}
+
+TEST(a_server_with_no_folder_for_them_asks_for_no_screenshots) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  CHECK(rig.play());
+  CHECK(has(rig.admin("snap anna"), "This server keeps no screenshots."));
+}
+
 TEST(speedjump_grants_one_player_disclosed_and_takes_it_back) {
   auto owned = std::make_unique<Rig>();
   Rig& rig = *owned;

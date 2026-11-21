@@ -656,6 +656,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   // The ban list beside the game's files, where a dedicated server keeps its own (writeip).
   if (g->host == nullptr && !g->files.folder.empty()) {
     g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
+    g->cfg.snap_dir = (std::filesystem::path(g->files.folder) / "snap").string();  // snap
     g->cfg.vip_file = (std::filesystem::path(g->files.folder) / "vip_ip.cfg").string();
   }
   g->cfg.seed = c.seed;

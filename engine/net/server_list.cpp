@@ -76,6 +76,7 @@ void read_master(ServerList& l, int m, const uint8_t* data, size_t size, int64_t
   l.stats.master_replies++;
   l.stats.master_addresses += got.size();
   for (const Address& a : got) server_list_add(l, a, kServerFromMaster, now_us);
+  l.masters[static_cast<size_t>(m)].got = std::move(got);
 }
 
 // The game servers the engine's masters listed since the last call, each queried like any other.
@@ -485,6 +486,106 @@ bool info_filter_passes(const std::vector<InfoRule>& rules,
     if (match) return r.show;
   }
   return rules.empty() || !rules.back().show;
+}
+
+namespace {
+
+std::vector<std::string_view> split_on(std::string_view text, char sep) {
+  std::vector<std::string_view> out;
+  size_t at = 0;
+  while (true) {
+    const size_t next = text.find(sep, at);
+    out.push_back(text.substr(at, next == std::string_view::npos ? text.npos : next - at));
+    if (next == std::string_view::npos) return out;
+    at = next + 1;
+  }
+}
+
+// A field kept on one line: tabs and line ends become spaces.
+std::string one_line(std::string_view text) {
+  std::string out(text);
+  for (char& c : out)
+    if (c == '\t' || c == '\n' || c == '\r') c = ' ';
+  return out;
+}
+
+bool read_int(std::string_view text, int& out) {
+  if (text.empty() || text.size() > 9) return false;
+  bool negative = text.front() == '-';
+  if (negative) text.remove_prefix(1);
+  if (text.empty()) return false;
+  int v = 0;
+  for (const char c : text) {
+    if (c < '0' || c > '9') return false;
+    v = v * 10 + (c - '0');
+  }
+  out = negative ? -v : v;
+  return true;
+}
+
+}  // namespace
+
+std::string server_list_cache_text(const ServerList& l) {
+  std::string out;
+  for (const ServerEntry& e : l.entries) {
+    if (!e.answered) continue;
+    out += to_string(e.address) + '\t' + std::to_string(e.ping_ms) + '\t' +
+           std::to_string(e.info.players) + '\t' + std::to_string(e.info.max_players) + '\t' +
+           one_line(e.info.name) + '\t' + one_line(e.info.map) + '\t' + one_line(e.info.game) +
+           '\t' + one_line(e.info.mode) + '\n';
+  }
+  return out;
+}
+
+int server_list_read_cache(ServerList& l, std::string_view text, int* bad) {
+  int read = 0, wrong = 0;
+  for (std::string_view line : split_on(text, '\n')) {
+    if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+    if (line.empty()) continue;
+    const std::vector<std::string_view> f = split_on(line, '\t');
+    Address a;
+    if (!parse_address(std::string(f[0]), a)) {
+      wrong++;
+      continue;
+    }
+    ServerInfo info;
+    int ping = -1;
+    if (f.size() != 1 && (f.size() != 8 || !read_int(f[1], ping) || !read_int(f[2], info.players) ||
+                          !read_int(f[3], info.max_players))) {
+      wrong++;
+      continue;
+    }
+    const int i = server_list_add(l, a, kServerFromCache, 0);
+    if (i < 0) break;
+    read++;
+    if (f.size() == 1) continue;
+    ServerEntry& e = l.entries[static_cast<size_t>(i)];
+    info.name = std::string(f[4]);
+    info.map = std::string(f[5]);
+    info.game = std::string(f[6]);
+    info.mode = std::string(f[7]);
+    e.info = std::move(info);
+    e.ping_ms = ping;
+    e.answered = true;
+  }
+  if (bad != nullptr) *bad = wrong;
+  return read;
+}
+
+std::string address_lines(const std::vector<Address>& addresses) {
+  std::string out;
+  for (const Address& a : addresses) out += to_string(a) + '\n';
+  return out;
+}
+
+std::vector<Address> parse_address_lines(std::string_view text) {
+  std::vector<Address> out;
+  for (std::string_view line : split_on(text, '\n')) {
+    while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.remove_suffix(1);
+    Address a;
+    if (!line.empty() && parse_address(std::string(line), a)) out.push_back(a);
+  }
+  return out;
 }
 
 }  // namespace ge::net
