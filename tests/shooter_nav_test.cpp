@@ -475,3 +475,45 @@ TEST(the_flip_flies_flatter_farther_and_quicker_than_the_shot_at_the_feet) {
                                          ", short of the shot at the feet's " +
                                          std::to_string(down.end.x));
 }
+
+TEST(a_pocket_a_drop_leads_into_is_outside_the_core_and_a_trap) {
+  // Nodes 0-1-2 walked both ways, a drop 2 -> 3 and 3-4 both ways below it with nothing back up;
+  // node 5 a rocket jump's landing from 0 that walks back to 0. Every node is marked, as a start
+  // reaches them all. The core is 0, 1, 2 (a blast link joins no core, so 5 is outside it), 5 walks
+  // back into it, and only the pocket 3, 4 cannot get back: the trap.
+  sh::NavGraph g;
+  const auto link = [](int32_t to, sh::NavKind k) {
+    sh::NavLink l;
+    l.to = to;
+    l.kind = k;
+    l.time_s = 1;
+    return l;
+  };
+  const std::vector<std::vector<sh::NavLink>> out = {
+      {link(1, sh::NavKind::walk), link(5, sh::NavKind::rocket)},
+      {link(0, sh::NavKind::walk), link(2, sh::NavKind::walk)},
+      {link(1, sh::NavKind::walk), link(3, sh::NavKind::drop)},
+      {link(4, sh::NavKind::walk)},
+      {link(3, sh::NavKind::walk)},
+      {link(0, sh::NavKind::walk)}};
+  for (const auto& ls : out) {
+    sh::NavNode nd;
+    nd.first_link = static_cast<int32_t>(g.links.size());
+    for (const sh::NavLink& l : ls) g.links.push_back(l);
+    nd.links = static_cast<int32_t>(ls.size());
+    g.nodes.push_back(nd);
+  }
+  const std::vector<uint8_t> all(g.nodes.size(), 1);
+  const std::vector<uint8_t> core = sh::nav_core(g, all);
+  CHECK(core == (std::vector<uint8_t>{1, 1, 1, 0, 0, 0}));
+  const std::vector<uint8_t> back = sh::nav_back(g, core);
+  CHECK(back == (std::vector<uint8_t>{1, 1, 1, 0, 0, 1}));
+  // The marked nodes alone: with 1 unmarked, 0 and 2 are parts of one node each.
+  std::vector<uint8_t> some = all;
+  some[1] = 0;
+  const std::vector<uint8_t> split = sh::nav_core(g, some);
+  int n = 0;
+  for (const uint8_t c : split) n += c;
+  CHECK(n == 2);  // the pocket 3, 4: the largest part left
+  CHECK(split[3] == 1 && split[4] == 1);
+}
