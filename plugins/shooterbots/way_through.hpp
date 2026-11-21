@@ -40,6 +40,7 @@ constexpr double kWayPlan_s = 0.5;   // he plans again this often, s
 constexpr double kWayGiveUp_s = 25;  // a step not done in this long past twice its walk is left
 constexpr double kWayRetry_s = 60;   // and tried again after this
 constexpr double kWayNoRoute_s = 5;  // an exit his pilot finds no route to this long is left
+constexpr double kWayCall_s = 1.5;   // waited this long for a lift its button calls: pressed
 constexpr double kWayIdle_s = 5;     // nothing to do this long: back into the water
 constexpr float kKeyCovered = 96;    // a locked door this near a key's height covers it, units
 constexpr float kWaySeen = 192;      // a node this near where he has stood is explored, units
@@ -87,6 +88,8 @@ struct WayThrough {
   std::vector<int> hatches;  // turners lying over an exit (base2's floor hatch over its shaft)
   std::vector<int> cars;     // doors a button moves that bar no one (a lift's car)
   std::vector<sh::Vec3f> cars_at;   // and where each rests
+  std::vector<int> lifts;           // floors that sink under a button and come back (ridden)
+  std::vector<sh::Vec3f> lifts_at;  // and where each stands until called
   std::vector<int32_t> barred;      // those shut now (the plan's)
   std::vector<int32_t> barred_was;  // and at the last plan
   std::vector<int32_t> node_door;   // each node: the bridge it stands on (map_nav.hpp), -1 none
@@ -98,6 +101,7 @@ struct WayThrough {
   double plan_at = -1, step_since = 0;
   double step_for = kWayGiveUp_s;  // how long the step he is on is given (its walk's worth more)
   int step = -1;                   // the step he is on, -1 none (exploring)
+  int calling = -1;                // a button step pressed to call the lift he waited for, -1
   double idle_since = -1;          // nothing to do since then, -1 something
   double no_route_since = -1;      // the exit chosen and his pilot with no route to it since then
   int dive = -1;                 // the water's entry (MapNav::entries) he goes back in by, -1 none

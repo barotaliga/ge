@@ -93,6 +93,24 @@ bool start_open(const sb::EntityBlock& b) {
   return sf && (std::atoi(sf) & 1) != 0;
 }
 
+constexpr int kDoorToggle = 32;  // a door's flag: it stays where a press sends it
+constexpr float kSinkWide = 64;  // a sinking floor's top this wide each way is stood on, units
+
+// Whether door `b` (model box `bm`) is a floor that sinks or rises and comes back: named (a
+// button or a trigger moves it), straight down or up, its top wide enough to stand on, not
+// started open, not a toggle, and back after its wait.
+bool sink_lift(const sb::EntityBlock& b, const ModelBox& bm) {
+  const char* an = sb::block_value(b, "angle");
+  const char* wt = sb::block_value(b, "wait");
+  if (sb::block_value(b, "targetname") == nullptr || an == nullptr || start_open(b)) return false;
+  const int angle = std::atoi(an);
+  if (angle != -1 && angle != -2) return false;
+  if (wt != nullptr && std::atof(wt) < 0) return false;
+  const char* sf = sb::block_value(b, "spawnflags");
+  if (sf && (std::atoi(sf) & kDoorToggle) != 0) return false;  // stays where it went
+  return bm.maxs.x - bm.mins.x >= kSinkWide && bm.maxs.y - bm.mins.y >= kSinkWide;
+}
+
 // The edict the mod made of inline model `model`, or -1.
 int edict_of(const ge::shooterbots::BotView& s, const char* model) {
   for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
@@ -328,8 +346,57 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
         mv.model = &spec.models[static_cast<size_t>(m)];
       }
       mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;  // lowered from where it was built
+      // A named one waits raised until something fires it, then lowers and rides like any other
+      // (bunk1's by its first buttons): its rest is down there, where it stands from then on.
+      if (sb::block_value(b, "targetname") != nullptr && mv.rest.z > -rise / 2) {
+        mv.rest.z -= rise;
+        mv.absmin.z -= rise;
+        mv.absmax.z -= rise;
+      }
       mv.travel = {0, 0, rise};
       mv.ride_s = 1 + rise / (speed > 0 ? speed : fallback);
+    }
+    // A car whose own button rides inside it (base1's exit) is a hollow door, not a floor.
+    bool car = false;
+    for (const sb::EntityBlock& o : blocks) {
+      const char* ocn = sb::block_value(o, "classname");
+      const char* om = sb::block_value(o, "model");
+      if (!door || !ocn || !om || om[0] != '*' || std::strcmp(ocn, "func_button") != 0) continue;
+      const int k = std::atoi(om + 1);
+      if (k <= 0 || static_cast<size_t>(k) >= model_count(spec)) continue;
+      const ModelBox ob = model_box(spec, k);
+      constexpr float kIn = 16;
+      car = car || (ob.mins.x > bm.mins.x - kIn && ob.maxs.x < bm.maxs.x + kIn &&
+                    ob.mins.y > bm.mins.y - kIn && ob.maxs.y < bm.maxs.y + kIn &&
+                    ob.mins.z > bm.mins.z - kIn && ob.maxs.z < bm.maxs.z + kIn);
+    }
+    if (door && !car && sink_lift(b, bm) && (!spec.brushes || tracer != nullptr)) {
+      // A FLOOR THAT SINKS (or rises) when its button is pressed and comes back after its wait
+      // (bunk1's by its first hall, two seconds after the button beside it): ridden like a plat,
+      // its whole height less its lip, at its speed (100 units/s unless it says).
+      const char* sp = sb::block_value(b, "speed");
+      const char* lp = sb::block_value(b, "lip");
+      const char* an = sb::block_value(b, "angle");
+      const float lip = lp ? static_cast<float>(std::atof(lp)) : 8.f;
+      const float way = (bm.maxs.z - bm.mins.z) - lip;
+      const float speed = sp ? static_cast<float>(std::atof(sp)) : 100.f;
+      if (spec.brushes) {
+        mv.tracer = tracer;
+        mv.brush_model = static_cast<uint32_t>(m);
+      } else {
+        mv.model = &spec.models[static_cast<size_t>(m)];
+      }
+      // One that sinks is ridden up from where it sinks to (called down by its button, it
+      // stands there its wait, then carries a rider back up): its rest is down there, like a
+      // named plat's, so the nav boards it at the bottom and rides it to the top.
+      mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;
+      if (an != nullptr && std::atoi(an) == -2) {
+        mv.rest.z -= way;
+        mv.absmin.z -= way;
+        mv.absmax.z -= way;
+      }
+      mv.travel = {0, 0, way};
+      mv.ride_s = 1 + way / (speed > 0 ? speed : 100.f);
     }
     if (train && (!spec.brushes || tracer != nullptr)) {
       // A MOVING PLATFORM: its path corners from its target round the chain, its model's lowest

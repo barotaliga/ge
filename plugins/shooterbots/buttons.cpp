@@ -56,7 +56,10 @@ bool sees(const ge::shooterbots::BotView& s, sh::Vec3f eye, const ButtonSpot& b)
 }
 
 // The node a button is pressed (or shot) from: the nearest within reach whose line meets the
-// button itself, so a node behind the wall the button is set in is never chosen.
+// button itself, so a node behind the wall the button is set in is never chosen. A button pressed
+// by touch is pressed from a node a standing body reaches it from (its middle within
+// kPressRise of the node's): a floor under a raised button sees it but cannot touch it.
+constexpr float kPressRise = 72;
 int32_t button_node(const sb::NavGraph& g, const ge::shooterbots::BotView& s, const ButtonSpot& b,
                     float reach) {
   int32_t best = -1;
@@ -65,6 +68,7 @@ int32_t button_node(const sb::NavGraph& g, const ge::shooterbots::BotView& s, co
     const sh::Vec3f o = g.nodes[n].origin;
     const float d = dist(o, b.at);
     if (d >= best_d || !sees(s, {o.x, o.y, o.z + 22}, b)) continue;
+    if (!b.shoot && std::fabs(b.at.z - o.z) > kPressRise) continue;
     best = static_cast<int32_t>(n);
     best_d = d;
   }
