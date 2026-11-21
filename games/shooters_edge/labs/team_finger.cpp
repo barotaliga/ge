@@ -18,6 +18,28 @@ namespace bt = shooters_edge::bots;
 namespace cn = shooters_edge::net;
 
 void report_finger(ge::lab::Lab& lab, const cn::TeamMatchReport& r, int64_t rockets, double secs) {
+  // The roles' shares of every player's live commands (`team.role.<role>.share`): what a claim is
+  // worth depends on how much of the time the rush and the push take a holder off it.
+  {
+    int64_t by[bt::kRoles] = {}, all = 0, cby[bt::kRoles] = {}, call = 0;
+    for (const cn::TeamPlayer& p : r.players)
+      for (int k = 0; k < bt::kRoles; k++) {
+        by[k] += p.role_commands[k];
+        all += p.role_commands[k];
+        cby[k] += p.claim_role_commands[k];
+        call += p.claim_role_commands[k];
+      }
+    lab.metric("team.role.claimed",
+               all > 0 ? static_cast<double>(call) / static_cast<double>(all) : 0, "share");
+    for (int k = 0; k < bt::kRoles; k++) {
+      const std::string name = bt::role_name(static_cast<bt::Role>(k));
+      lab.metric("team.role." + name + ".share",
+                 all > 0 ? static_cast<double>(by[k]) / static_cast<double>(all) : 0, "share");
+      // of the commands with a claim held, the share in each role (a holder off its area)
+      lab.metric("team.role.claimant-" + name,
+                 call > 0 ? static_cast<double>(cby[k]) / static_cast<double>(call) : 0, "share");
+    }
+  }
   // The quad's rushes begun strong (the launcher and armour), and (`rushstrong`) the thinks whose
   // ranking strength changed.
   {

@@ -777,6 +777,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       if (live) {
         static_assert(std::size(TeamPlayer{}.role_commands) == bt::kRoles);
         p.role_commands[static_cast<int>(seat.fighter.role)]++;
+        if (seat.fighter.mind.claim >= 0)
+          p.claim_role_commands[static_cast<int>(seat.fighter.role)]++;
         p.pilot_modes[static_cast<int>(seat.fighter.bot.pilot.pilot.mode)]++;
       }
       h = fold_f(fold_f(fold_f(fold_f(h, d.origin.x), d.origin.y), d.origin.z), d.health);
