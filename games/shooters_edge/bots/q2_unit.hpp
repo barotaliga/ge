@@ -31,7 +31,8 @@
 #include <vector>
 
 #include "shooterbots/aim.hpp"
-#include "shooters_edge/bots/way_through.hpp"
+#include "shooterbots/way_through.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
@@ -67,9 +68,10 @@ struct UnitMap {
   int damage = 0;
   WayStats way;
   int64_t shoves = 0;
-  int64_t breaks = 0;                  // glass he shot out of his way
-  int64_t edges = 0;                   // commands a pit's lip turned his keys back (way_edge)
-  int64_t forgot = 0;                  // times he forgot the links given up on, with no way on
+  int64_t breaks = 0;   // glass he shot out of his way
+  int64_t edges = 0;    // commands a pit's lip turned his keys back (way_edge)
+  int64_t touches = 0;  // commands he walked into a trigger past its node (way_touch)
+  int64_t forgot = 0;   // times he forgot the links given up on, with no way on
   std::vector<std::string> took_keys;  // the keys he took, by their class
   sh::Vec3f lo, hi;                    // the nav's bounds
   std::vector<sh::Vec3f> nodes;        // every node (the picture's floor)

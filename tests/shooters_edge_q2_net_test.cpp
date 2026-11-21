@@ -23,6 +23,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "console/cvar.hpp"
 #include "forward/forward.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
@@ -366,6 +367,18 @@ TEST(q2_server_game_names_itself_and_refuses_a_missing_folder) {
   std::string error;
   CHECK(g.create(c, error) == nullptr);
   CHECK_MSG(!error.empty(), "a refusal says why");
+}
+
+TEST(sv_idlekick_is_the_idle_drop_not_the_lobbys_unready_kick) {
+  ge::console::Cvars cvars;
+  ge::server::ServerConfig c;
+  ge::server::add_server_cvars(cvars, c, cn::q2_game());
+  CHECK(cvars.set("sv_idlekick", "30", ge::console::Source::code) ==
+        ge::console::SetResult::changed);
+  CHECK(c.rules["sv_idletime"] == "30");
+  CHECK(c.idle_kick_s == 0);  // the core's setting of that name is set aside
+  const ge::console::Cvar* v = cvars.find("sv_idlekick");
+  CHECK(v != nullptr && v->name == "sv_idletime");
 }
 
 TEST(refusals_read_as_a_players_words) {

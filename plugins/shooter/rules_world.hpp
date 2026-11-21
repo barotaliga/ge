@@ -94,7 +94,7 @@ struct PlayerNumbers {
   float blend[4] = {};  // the tint over his view the rules lay (Quake II's), r g b a in 0..1
   float fov = 0;        // the field of view the rules hold him to, degrees; 0 his own
   float frags = 0;
-  // A runner's own weapons and ammunition, for the bots (bots/bot_arsenal.hpp), where
+  // A runner's own weapons and ammunition, for the bots (shooterbots/bot_arsenal.hpp), where
   // Quake's bits above do not fit (Quake II's): the weapon held and those carried as bits of the
   // runner's own weapon index, and every ammunition by its own index.
   int32_t held = 0, carried = 0;

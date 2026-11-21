@@ -14,7 +14,8 @@
 #include <string>
 
 #include "shooter/usercmd.hpp"
-#include "shooters_edge/bots/keyboard.hpp"
+#include "shooterbots/keyboard.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/sim/arena.hpp"
 
 namespace sb = ge::shooterbots;

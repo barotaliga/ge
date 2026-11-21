@@ -500,6 +500,9 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     const double to = core::libm::atan2(dy, dx) * (180 / core::kPi);
     if (std::fabs(wrap(static_cast<float>(to) - pilot_yaw)) > kFrontOnly) fresh = false;
   }
+  // On a ladder the view is the climb's: turned off its face (to aim, or to a spot watched) he
+  // stops climbing and slides along its foot (base2's trench held him there for good).
+  if (b.pilot.pilot.climbing) fresh = false;
   double want[2];
   bool back_stroke = false;  // (`paceback`) the view back to the way by the hand's own stroke
   if (fresh) {
@@ -687,7 +690,8 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   // own mouse already, so it is played as it is, with no watch over it (an aim still comes first).
   const bool recipe_on = jp.recipe >= 0 && jp.mode == PilotMode::hop;
   b.since_recipe_s = recipe_on ? 0.f : b.since_recipe_s + static_cast<float>(msec) / 1000.f;
-  if ((b.aiming || (b.looking && !recipe_on)) && !blast_shot && !shot_due) {
+  const bool climbing = b.pilot.pilot.climbing;
+  if (!climbing && (b.aiming || (b.looking && !recipe_on)) && !blast_shot && !shot_due) {
     static constexpr const char* kNames[2] = {"aim_yaw", "aim_pitch"};
     ai::record_intent(why, kNames, want);
     const float aim_yaw_was = b.yaw;
@@ -768,7 +772,13 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       b.aim_side = 0;
     }
   } else {
-    if (recipe_on) {
+    if (climbing) {
+      // Up a ladder: the pilot's view exactly (its face, pitched up), no drift and no look.
+      b.view_by = "climb";
+      b.yaw = pilot_yaw;
+      b.pitch = pilot_view.x;
+      cmd.angles = pilot_view;
+    } else if (recipe_on) {
       b.view_by = "recipe";
       b.yaw = pilot_yaw;
       cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};

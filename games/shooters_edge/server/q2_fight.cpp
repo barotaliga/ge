@@ -24,6 +24,7 @@
 #include "shooter/aim_help.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
+#include "shooters_edge/server/q2_flash.hpp"
 #include "shooters_edge/server/q2_gibs.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_mods.hpp"
@@ -152,6 +153,56 @@ void sound(Q2Server& s, int ent, sh::Vec3f at, const char* sample, float volume 
   ev.values[1] = 1;
   ev.text = sample;
   event(s, std::move(ev));
+}
+
+// A player's muzzle flash `value` (server/q2_flash.hpp, the silenced bit in it) at his origin.
+void muzzle_flash(Q2Server& s, int slot, sh::Vec3f origin, int value) {
+  NetEvent ev;
+  ev.kind = EventKind::point_effect;
+  ev.to = kEveryone;
+  ev.ent = slot + 1;
+  ev.origin = origin;
+  ev.values[0] = static_cast<float>(value);
+  ev.text = "q2_flash";
+  event(s, std::move(ev));
+}
+
+// The flash value a shot of weapon `w` sends (`shots` the chain gun's bullets this frame); -1 for
+// a weapon with none (the hand grenade).
+int flash_value(int w, int shots) {
+  switch (static_cast<SqWeapon>(w)) {
+    case SqWeapon::blaster:
+      return 0;
+    case SqWeapon::machinegun:
+      return 1;
+    case SqWeapon::shotgun:
+      return 2;
+    case SqWeapon::chaingun:
+      return 3 + std::clamp(shots, 1, 3) - 1;
+    case SqWeapon::railgun:
+      return 6;
+    case SqWeapon::rocket_launcher:
+      return 7;
+    case SqWeapon::grenade_launcher:
+      return 8;
+    case SqWeapon::bfg:
+      return 12;
+    case SqWeapon::super_shotgun:
+      return 13;
+    case SqWeapon::hyperblaster:
+      return 14;
+    default:
+      return -1;
+  }
+}
+
+// Whether flash `value` plays `sample` (a remixed weapon's own sound is sent as a sound instead).
+bool flash_plays(int value, const char* sample) {
+  const Q2Flash* f = q2_player_flash(value);
+  if (f == nullptr || f->sounds[0].name == nullptr || sample == nullptr) return false;
+  const std::string_view shot = f->sounds[0].name, own = sample;
+  const size_t wild = shot.find('%');
+  return wild == std::string_view::npos ? shot == own : own.substr(0, wild) == shot.substr(0, wild);
 }
 
 // A sound from player `slot`'s body on `channel`.
@@ -885,7 +936,13 @@ void fire(Q2Server& s, int slot, int shots) {
   const int quad = p.quad_until > s.level_time ? 4 : 1;  // ×4 damage and kick
   const int damage = (dm ? r.damage_dm : r.damage_sp) * quad;
   const int kick = r.kick * quad;
-  sound(s, slot + 1, origin, r.sound, p.silencer_shots > 0 ? 0.2f : 1.0f);  // silenced: quieter
+  // The shot's sound: in its muzzle flash (the light and the tails a client plays by the value),
+  // or as a sound alone for a gun with none (a remix's own sound, the hand grenade's).
+  const int flash = flash_value(w, shots);
+  if (flash >= 0 && flash_plays(flash, r.sound))
+    muzzle_flash(s, slot, origin, flash | (p.silencer_shots > 0 ? kQ2FlashSilenced : 0));
+  else
+    sound(s, slot + 1, origin, r.sound, p.silencer_shots > 0 ? 0.2f : 1.0f);  // silenced: quieter
   if (p.silencer_shots > 0) p.silencer_shots--;
   if (quad > 1) body_sound(s, slot, kItemChannel, "items/damage3.wav");
   weapon_kick(s, slot, w, view_forward);
@@ -1895,8 +1952,10 @@ void fight_effect(Q2Server& s, const char* name, sh::Vec3f at, sh::Vec3f way) {
   effect(s, name, at, way);
 }
 
-void fight_monster_line(Q2Server& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b) {
+void fight_monster_line(Q2Server& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b,
+                        int flash) {
   line_effect(s, name, a, b, map_row(from));
+  s.out.events.back().values[3] = static_cast<float>(flash);
 }
 
 LaserEnd fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, int attacker,
@@ -1925,5 +1984,17 @@ LaserEnd fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, in
 }
 
 void fight_gib(Q2Server& s, int ent, sh::Vec3f at, const SqGibThrow& t) { gib(s, ent, at, t); }
+
+// A player's noise the monsters hear (his shot, its impact), outside deathmatch.
+void monster_noise(Q2Server& s, int slot) {
+  monster_noise(s, slot, unpack(s.players[slot].move.origin), false);
+}
+
+void monster_noise(Q2Server& s, int slot, sh::Vec3f at, bool impact) {
+  if (slot < 0 || slot >= sh::kMaxClients || deathmatch(s) || s.players[slot].notarget) return;
+  Q2Player& p = s.players[slot];
+  (impact ? p.impact_frame : p.noise_frame) = s.frame_number;
+  (impact ? p.impact_at : p.noise_at) = at;
+}
 
 }  // namespace shooters_edge::server

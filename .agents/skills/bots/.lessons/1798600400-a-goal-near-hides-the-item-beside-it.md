@@ -1,7 +1,7 @@
 ---
 title: A goal near hides the item beside it; ask the log why a key item close by was passed
 date: 2026-11-20
-scope: games/shooters_edge/bots/fighter.cpp, games/shooters_edge/bots/fighter_items.cpp
+scope: plugins/shooterbots/fighter.cpp, plugins/shooterbots/fighter_items.cpp
 concepts: [on-the-way, short-goal, item-passed, nearwait, mega, red-armour, dm2, holder, decision-log]
 ---
 

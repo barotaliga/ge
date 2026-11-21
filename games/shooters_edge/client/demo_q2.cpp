@@ -28,6 +28,7 @@
 
 #include "classic/protocol/directions.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/q2_flash_fx.hpp"
 
 namespace shooters_edge::client {
 
@@ -470,6 +471,18 @@ void flash_sound(DemoState& s, int n, const sh::Vec3f& at) {
   s.started.push_back(o);
 }
 
+// Entity `n`'s gun flash `value` (the protocol's message 1, or 2 for a monster's): its sounds and
+// the flash at its gun; the own player's plays its sounds alone (the hand draws his flash).
+void gun_flash(DemoState& s, int n, int value, bool monster) {
+  const bool own = n - 1 == s.player;
+  const sh::Vec3f angles = own ? s.angles
+                           : n >= 0 && static_cast<size_t>(n) < s.entities.size()
+                               ? s.entities[static_cast<size_t>(n)].angles
+                               : sh::Vec3f{};
+  const auto pick = static_cast<uint32_t>(n * 7919 + static_cast<int>(s.time * 10) * 31 + value);
+  q2_flash_fx(value, monster, n, entity_at(s, n), angles, own, pick, s.started, s.effects);
+}
+
 bool is_flash(const std::string& name) {
   return name == "sq_login" || name == "sq_logout" || name == "sq_respawn";
 }
@@ -728,8 +741,17 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       line(DemoEffectKind::beam);
       keep = false;
       break;
-    case 10:
-    case 15:
+    case 10:    // a splash: count, point, direction, its kind (sparks, water, mud, ...)
+    case 15: {  // a laser's sparks: count, point, direction, a palette colour
+      constexpr int kSplashColour[7] = {0x00, 0xe0, 0xb0, 0x50, 0xd0, 0xe0, 0xe8};
+      const int count = m.u8();
+      if (!point_dir(DemoEffectKind::named)) return false;
+      const int c = m.u8();
+      e.name = kind == 10 ? "sq_splash" : "sq_laser_sparks";
+      e.count = count;
+      e.colour = kind == 15 ? c : c < 7 ? kSplashColour[c] : 0;
+      break;
+    }
     case 25:
     case 29:  // count, point, direction, colour
       m.u8();
@@ -825,17 +847,21 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
     const int id = m.u8();
     switch (id) {
       case kMuzzleFlash: {  // a player entering (9), leaving (10) or respawned (11): its burst
-        const int n = m.i16(), flash = m.u8() & 127;
+        const int n = m.i16(), value = m.u8(), flash = value & 127;
         if (flash >= 9 && flash <= 11) {
           const bool leaving = flash == 10;
           arrival(s, n, flash == 9 ? "sq_login" : leaving ? "sq_logout" : "sq_respawn", leaving);
           if (seen(s, n) || leaving) flash_sound(s, n, entity_at(s, n));  // else when placed
+        } else {  // a gun's: its sounds and the look's flash (q2_flash_fx.hpp)
+          gun_flash(s, n, value, false);
         }
         break;
       }
-      case kMuzzleFlash2:
-        m.skip(3);
+      case kMuzzleFlash2: {  // a monster's gun
+        const int n = m.i16(), value = m.u8();
+        gun_flash(s, n, value, true);
         break;
+      }
       case kTempEntity:
         if (!temp_entity(s, m, error)) return false;
         break;

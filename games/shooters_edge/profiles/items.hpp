@@ -149,8 +149,8 @@ inline constexpr ge::shooterbots::SoundMeaning kQ1Sounds[] = {
     {"player/udeath.wav", SoundClass::death, false, ""},
 };
 
-// The monsters' models a co-op companion knows on sight (bots/companion.hpp): a client is sent
-// each entity's model, and these are the ones that walk, fly or swim at the players.
+// The monsters' models a co-op companion knows on sight (shooterbots/companion.hpp): a client is
+// sent each entity's model, and these are the ones that walk, fly or swim at the players.
 inline constexpr std::string_view kQ1Monsters[] = {
     "progs/soldier.mdl", "progs/dog.mdl",      "progs/knight.mdl",   "progs/hknight.mdl",
     "progs/ogre.mdl",    "progs/zombie.mdl",   "progs/wizard.mdl",   "progs/fish.mdl",

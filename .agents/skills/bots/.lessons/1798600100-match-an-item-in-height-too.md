@@ -1,7 +1,7 @@
 ---
 title: A map's item matched to its entity across the floor only merges stacked items
 date: 2026-11-20
-scope: games/shooters_edge/bots/fighter_setup.cpp
+scope: plugins/shooterbots/fighter_setup.cpp
 concepts: [items, item-spot, entity, stacked, grenade-launcher, dm2, dm6, itemz]
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: A fall into harm is staged by place and guarded along the flight; a trap is judged by who falls
 date: 2026-11-10
-scope: plugins/shooterbots/brink.cpp, plugins/shooterbots/look_ahead.cpp, games/shooters_edge/bots/floor_trap.cpp, games/shooters_edge/bots/keyboard.cpp, games/shooters_edge/bots/fighter.cpp, games/shooters_edge/labs/se_reach_lab.cpp, games/shooters_edge/labs/se_team_lab.cpp
+scope: plugins/shooterbots/brink.cpp, plugins/shooterbots/look_ahead.cpp, plugins/shooterbots/floor_trap.cpp, plugins/shooterbots/keyboard.cpp, plugins/shooterbots/fighter.cpp, games/shooters_edge/labs/se_reach_lab.cpp, games/shooters_edge/labs/se_team_lab.cpp
 concepts: [brink, brinkfall, brinkkeys, lava, falls, staging, walk, air-brake, wall-slide, keyboard-lag, floor-trap, side-metrics, client-fed, dm2]
 ---
 

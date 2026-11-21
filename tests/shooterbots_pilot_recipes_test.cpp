@@ -1,5 +1,5 @@
 // PEOPLE'S HOP STARTS PLAYED BY THE PILOT (plugins/shooterbots/pilot_recipes.hpp, the book
-// games/shooters_edge/bots/hop_start_book.hpp): in a long walled hall an expert pilot starting
+// plugins/shooterbots/hop_start_book.hpp): in a long walled hall an expert pilot starting
 // from a stand takes one of the book's starts, proves it, plays it to its takeoff and leaves the
 // ground near people's speed, on the analog hands and through the keyboard; with the book off it
 // runs and jumps at a run's speed. The book decodes: every entry has steps, from a low, with one
@@ -14,8 +14,9 @@
 #include "check.hpp"
 #include "shooter/brush_hull.hpp"
 #include "shooterbots/features.hpp"
+#include "shooterbots/hop_start_book.hpp"
 #include "shooterbots/nav.hpp"
-#include "shooters_edge/bots/hop_start_book.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 
 namespace sh = ge::shooter;

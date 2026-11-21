@@ -23,7 +23,7 @@ one game had and another did not is on in its own game and off in the others
 | Midair scoring | `plugins/shooter/midair.hpp` | its blast weapons | first | a mode |
 | Lag compensation (`sv_antilag` 1 or 2, `sv_antilag_projectiles`, `sv_antilag_max`, `cl_antilag`) | `net/qw_antilag.hpp` | its hitscan and, with 2 and projectiles, its missiles (`lag_place`, the rewound box); its server's frame times, `sv_antilag_interp` | both | off |
 | Other players run forward (`cl_predict_players`) | `plugins/shooter/predict.hpp`, `other-moves` | its move | both | on |
-| Co-op companions | `bots/companion.hpp` | its rules' buttons and exits | both | in co-op |
+| Co-op companions | `shooterbots/companion.hpp` | its rules' buttons and exits | both | in co-op |
 
 ## Seeing
 

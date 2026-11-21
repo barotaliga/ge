@@ -15,13 +15,15 @@
 #include "core/num_text.hpp"
 #include "progs/file.hpp"
 #include "progs/text.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
-#include "shooters_edge/bots/mind.hpp"
-#include "shooters_edge/bots/packs.hpp"
+#include "shooterbots/foe_ledger.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooterbots/map_nav.hpp"
+#include "shooterbots/mind.hpp"
+#include "shooterbots/packs.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/bots/talk.hpp"
-#include "shooters_edge/bots/temper.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -175,7 +177,8 @@ bool load_map(BotTeam& t, const QwClientEnd& c, const std::string& file) {
     const cl::GameAdapter& game = cl::qw_adapter();
     game.open_locations(game, m.files, name, nav->given);
   }
-  if (!bt::build_map_nav(q, t.loaded->spec, "info_player_deathmatch", nav->nav, error)) {
+  if (!bt::build_map_nav(q, t.loaded->spec, bt::quake_maps(), "info_player_deathmatch", nav->nav,
+                         error)) {
     t.map_error = file + "'s nav: " + error;
     say(t, "bots: " + t.map_error);
     return false;

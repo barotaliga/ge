@@ -143,6 +143,7 @@ struct DemoSound {
   float volume = 1;            // 0..1
   float attenuation = 1;       // the protocol's factor: 0 heard everywhere, 1 a normal sound
   sh::Vec3f origin;            // units
+  float delay = 0;             // s after the frame it starts in (a shotgun's pump after its shot)
 };
 
 // The extended protocol's look bytes. An entity's transparency: 254 and 255 (unset) solid, else
@@ -239,6 +240,7 @@ struct DemoEffect {
   sh::Vec3f at, end;  // units; a beam's start and end (`end` is `at` for the rest); a trail's
   sh::Vec3f way;      // a named effect's way
   std::string name;   // a named effect's
+  int colour = 0;     // a splash's or a laser's sparks' palette index
 };
 
 inline constexpr double kNeverFlashed = -1e9;

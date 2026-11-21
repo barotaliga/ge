@@ -17,6 +17,7 @@ Effect effect_of(const DemoEffect& d) {
   e.code = d.code;
   e.entity = d.entity;
   e.count = d.count;
+  e.colour = d.colour;
   e.at = d.at;
   e.end = d.end;
   switch (d.kind) {
