@@ -141,3 +141,22 @@ TEST(the_direction_table_is_the_protocols_and_picks_by_the_largest_dot) {
   CHECK(t[size_t(cp::direction_index(down))][2] == -1.0f);
   CHECK(cp::direction_index(none) == 0);
 }
+
+// The strict rule a modern server holds a user info to (info_strict): keys may be empty, values
+// may not; printable bytes but `"` and `;`; a key or value under 64 bytes, the whole under 512.
+TEST(a_user_info_passes_the_strict_rule_only_when_every_pair_is_clean) {
+  CHECK(sp::info_strict("\\name\\eve\\skin\\male/grunt"));
+  CHECK(sp::info_strict("name\\eve"));
+  CHECK(sp::info_strict("\\\\x"));      // an empty key
+  CHECK(!sp::info_strict("\\name\\"));  // a key with no value
+  CHECK(!sp::info_strict("\\name"));
+  CHECK(!sp::info_strict("\\name\\eve\\"));  // a trailing backslash
+  CHECK(!sp::info_strict("\\name\\a;b"));
+  CHECK(!sp::info_strict("\\name\\a\"b"));
+  CHECK(!sp::info_strict("\\name\\\xe5ve"));  // a high bit
+  CHECK(!sp::info_strict("\\" + std::string(64, 'k') + "\\v"));
+  CHECK(sp::info_strict("\\" + std::string(63, 'k') + "\\" + std::string(63, 'v')));
+  std::string big;
+  while (big.size() < 520) big += "\\k" + std::to_string(big.size()) + "\\value";
+  CHECK(!sp::info_strict(big));
+}

@@ -19,6 +19,7 @@
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "server/admission.hpp"
+#include "server/operator.hpp"
 #include "server/rate.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
@@ -33,6 +34,7 @@ namespace pg = ge::progs;
 
 constexpr size_t kSignonShare = 700;  // bytes of the signon one answer adds before its prompt
 constexpr int kStringCmdsPerPacket = 7;
+constexpr uint8_t kSvcReconnect = 8;  // a full restart: connect again (`recycle`)
 constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
 constexpr uint8_t kSvcGeOrigin = 123;      // the game's own: a download's archive (qw_svc.hpp)
 constexpr uint8_t kSvcGeMoves = 124;       // the game's own: the other players' moves
@@ -188,6 +190,7 @@ void start_download(Q2NetServer& s, Q2NetClient& c, std::string path, int offset
     reliable(c, b);
   }
   c.downloading = true;
+  c.download_name = path;
   c.download_at = static_cast<size_t>(offset);
   download_piece(c);
 }
@@ -196,6 +199,7 @@ void transmit(Q2NetServer& s, Q2NetClient& c, const uint8_t* data, size_t size) 
   uint8_t out[kMaxPacket];
   const size_t n = channel_transmit(c.ch, data, size, s.now, out);
   send_to(s, c.address, out, n);
+  if (c.packet_dup > 0) c.last_out.assign(out, out + n);
   c.sent = s.now;
 }
 
@@ -219,10 +223,10 @@ void redirect(Q2NetServer& s, const gn::Address& to, uint16_t qport, std::string
   note(s, gn::to_string(to) + " sent on to " + std::string(where));
 }
 
-void drop(Q2NetServer& s, int slot, const std::string& why) {
+void drop(Q2NetServer& s, int slot, const std::string& why, bool logged = false) {
   Q2NetClient& c = s.clients[slot];
   if (!q2_held(c)) return;
-  note(s, c.name + " dropped: " + why);
+  if (!logged) note(s, c.name + " dropped: " + why);
   // A client signing on again after a level change still holds its slot in the rules.
   if ((**s.rules).clients[slot].active) s.rules->drop(slot);
   // The disconnect, once, with whatever reliable data is still owed.
@@ -235,13 +239,48 @@ void drop(Q2NetServer& s, int slot, const std::string& why) {
   c.download.clear();
 }
 
+// How a drop is told (q2_net_server.hpp): `<name> was dropped: <reason>`, `<name> <reason>` (was
+// kicked, timed out), or to the server's console alone.
+enum class Told : uint8_t { dropped, plain, silent };
+
+// Client `slot` dropped and told so: the line to everyone in the game (when it was) and to the
+// client itself before its disconnect, and `<name>[<address>] ...` on the console.
+void drop_told(Q2NetServer& s, int slot, const std::string& reason, Told how, bool logged = true) {
+  Q2NetClient& c = s.clients[slot];
+  if (!q2_held(c)) return;
+  const std::string tail = how == Told::plain ? " " + reason : " was dropped: " + reason;
+  if (how != Told::silent) {
+    if (c.stage == Q2Slot::active)
+      for (int k = 0; k < sh::kMaxClients; k++)
+        if (k != slot && s.clients[k].stage == Q2Slot::active)
+          q2_net_print(s, k, c.name + tail + "\n");
+    q2_net_print(s, slot, c.name + tail + "\n");
+  }
+  if (logged) note(s, c.name + "[" + gn::to_string(c.address) + "]" + tail);
+  drop(s, slot, reason, true);
+}
+
+// A name a player can be shown: something but spaces and control characters in its first 15.
+bool shown_name(const std::string& name) {
+  for (size_t i = 0; i < name.size() && i < 15; i++)
+    if (name[i] > 32 && name[i] < 127) return true;
+  return false;
+}
+
+// The name a server keeps: its first 15 characters, each one's high bit cleared.
+std::string cut_name(const std::string& name) {
+  std::string out = name.substr(0, 15);
+  for (char& ch : out) ch = static_cast<char>(static_cast<unsigned char>(ch) & 0x7f);
+  return out;
+}
+
 // A password setting that asks for one: neither empty nor `none`.
 bool set(const std::string& password) { return !password.empty() && password != "none"; }
 
 std::string info_text(const Q2NetServer& s) {
   char line[96];
   std::snprintf(line, sizeof line, "%16s %8s %2d/%2d\n", s.cfg.hostname.c_str(),
-                (*s.rules)->map_name.c_str(), q2_net_clients(s), s.cfg.max_clients);
+                (*s.rules)->map_name.c_str(), q2_net_clients(s), q2_public_slots(s));
   return line;
 }
 
@@ -249,7 +288,7 @@ std::string status_text(const Q2NetServer& s) {
   std::string info;
   info_set(info, "hostname", s.cfg.hostname);
   info_set(info, "mapname", (*s.rules)->map_name);
-  info_set(info, "maxclients", std::to_string(s.cfg.max_clients));
+  info_set(info, "maxclients", std::to_string(q2_public_slots(s)));
   info_set(info, "maxspectators", std::to_string(s.cfg.max_spectators));
   // `needpass`: 1 a player's password asked, 2 a spectator's.
   info_set(info, "needpass",
@@ -280,11 +319,25 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   if (ge::server::ban_refuses(s.bans, s.cfg.ban_mode, from,
                               s.cfg.unix_time ? s.cfg.unix_time() : 0))
     return refuse(s, from, "Banned.");
-  const std::string& userinfo = w[4];
-  for (const Q2NetClient& c : s.clients)
-    if (q2_held(c) && same_host(c.address, from) &&
-        (c.qport == qport || c.address.port == from.port))
-      return;          // already in: a repeat
+  std::string userinfo = w[4];
+  // A connect from a held slot's address and port: a repeat while the slot waits for its first
+  // `new` (told again it is connected), else the client starting over: the old one dropped
+  // ("reconnected") and the slot taken again. A zombie's settings for the forced reconnect carry.
+  std::string carried_var, carried_value;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    Q2NetClient& c = s.clients[i];
+    if (c.stage == Q2Slot::free || !same_host(c.address, from) || c.address.port != from.port)
+      continue;
+    if (c.stage == Q2Slot::zombie) {
+      carried_var = c.reconnect_var;
+      carried_value = c.reconnect_value;
+      c = Q2NetClient{};
+      continue;
+    }
+    if (c.stage == Q2Slot::signon && !c.newed) return send_oob(s, from, "client_connect");
+    drop_told(s, i, "reconnected", Told::dropped);
+    c = Q2NetClient{};
+  }
   if (s.cfg.locked) {  // sv_locked: only a client taking back the slot its address still holds
     bool back = false;
     for (const Q2NetClient& c : s.clients)
@@ -299,6 +352,12 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
     const std::string refusal = ge::server::admit_refusal(s.cfg.ip_limit, from, held);
     if (!refusal.empty()) return refuse(s, from, refusal + "\nConnection refused.");
   }
+  // THE USER INFO (the strict rule, classic/protocol/info.hpp), then a name with something to
+  // show in its first 15 characters.
+  if (userinfo.empty()) return refuse(s, from, "Empty userinfo string.");
+  if (!info_strict(userinfo)) return refuse(s, from, "Malformed userinfo string.");
+  if (!shown_name(info_get(userinfo, "name")))
+    return refuse(s, from, "Please set your name before connecting.");
   const std::string asked = info_get(userinfo, "spectator");
   const bool spectator = !asked.empty() && asked != "0";
   // A wrong password past sv_passwordrate gets no answer (server/limit.hpp).
@@ -313,6 +372,12 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   if (!vip && !spectator && set(s.cfg.password) && given != s.cfg.password)
     return wrong("Password required or incorrect.\nConnection refused.");
   vip = vip || (set(s.cfg.password) && given == s.cfg.password);
+  // What the rules never see: the recorder's mark and the password (when one is asked); the
+  // address the server saw, always.
+  info_remove(userinfo, "mvdspec");
+  if (set(s.cfg.password) || !s.cfg.vip_passwords.empty()) info_remove(userinfo, "password");
+  if (!info_set(userinfo, "ip", gn::to_string(from)) || userinfo.size() >= 512)
+    return refuse(s, from, "Oversize userinfo string.");
   {  // A user info ban that kicks refuses the connect (server/settingban.hpp).
     std::vector<std::pair<std::string, std::string>> pairs;
     ge::classic::protocol::info_pairs(userinfo, pairs);
@@ -355,8 +420,9 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   c.address = from;
   c.qport = qport;
   c.userinfo = userinfo;
-  c.name = info_get(userinfo, "name");
-  if (c.name.empty()) c.name = "unnamed";
+  c.name = cut_name(info_get(userinfo, "name"));
+  c.reconnect_var = carried_var;
+  c.reconnect_value = carried_value;
   const int ext = std::atoi(info_get(userinfo, "*ge_ext").c_str());
   c.told_origins = (ext & kGeDownloadOrigin) != 0;
   c.told_moves = (ext & kGeOtherMoves) != 0;
@@ -402,6 +468,8 @@ void read_oob(Q2NetServer& s, const gn::Address& from, const uint8_t* data, size
       send_oob(s, from, "print\n" + status_text(s));
   } else if (w[0] == "ping") {
     send_oob(s, from, "ack");
+  } else if (w[0] == "ack") {  // a master heard the heartbeat (`listmasters`)
+    s.acks.push_back(from);
   } else if (w[0] == "rcon") {
     q2_rcon(s, from, text);
   }
@@ -428,8 +496,7 @@ bool act(Q2NetServer& s, int slot, ge::server::FilterDo action, const std::strin
     case ge::server::FilterDo::kick:
       note(s, said);
       if (!text.empty()) q2_net_print(s, slot, text + "\n");
-      q2_net_print(s, slot, "You were kicked from the game\n");
-      drop(s, slot, "kicked");
+      drop_told(s, slot, "was kicked", Told::plain);
       return true;
   }
   return false;
@@ -563,19 +630,157 @@ bool filtered(Q2NetServer& s, int slot, const std::string& line) {
   return true;
 }
 
+// A client's chunked answer: high-level prints of at most 1384 bytes each.
+void answer(Q2NetServer& s, int slot, const std::string& text) {
+  for (size_t at = 0; at < text.size(); at += 1384) q2_net_print(s, slot, text.substr(at, 1384));
+}
+
+// THE PLAYER'S QUERIES the server answers itself, in any stage (q2_admin.hpp): `info`, `sinfo`,
+// `lag [player]`, `packetdup [n]`, `stopdl`, `nogamedata`, `download http`. True when it was one.
+bool player_query(Q2NetServer& s, int slot, const std::vector<std::string>& w,
+                  const std::string& line) {
+  Q2NetClient& c = s.clients[slot];
+  const std::string& cmd = w[0];
+  if (cmd == "info") {
+    answer(s, slot, q2_info_lines(s));
+  } else if (cmd == "sinfo") {
+    answer(s, slot, q2_misc_lines(s, slot));
+  } else if (cmd == "lag") {
+    int who = slot;
+    if (w.size() > 1) {
+      std::vector<ge::server::PickSlot> slots;
+      for (int i = 0; i < q2_net_slots(s); i++)
+        slots.push_back({s.clients[i].name, q2_held(s.clients[i])});
+      std::string error;
+      who = ge::server::pick_player(slots, ge::server::line_rest(line, 1), true, error);
+      if (who < 0) {
+        answer(s, slot, error);
+        return true;
+      }
+    }
+    q2_net_print(s, slot, q2_lag_lines(s, who));
+  } else if (cmd == "packetdup") {
+    if (w.size() > 1) {
+      const int n = std::atoi(w[1].c_str());
+      if (n < 0 || n > s.cfg.packetdup_most) {
+        q2_net_print(s, slot,
+                     "Packetdup of " + std::to_string(n) + " is not allowed on this server.\n");
+        return true;
+      }
+      c.packet_dup = n;
+    }
+    q2_net_print(s, slot,
+                 "Server is sending " + std::to_string(c.packet_dup) + " duplicate packet" +
+                     (c.packet_dup == 1 ? "" : "s") + " to you.\n");
+  } else if (cmd == "stopdl") {
+    if (!c.downloading) return true;
+    const int percent =
+        c.download.empty() ? 0 : static_cast<int>(c.download_at * 100 / c.download.size());
+    const uint8_t stop[4] = {kSvcDownload, 0xff, 0xff, static_cast<uint8_t>(percent)};
+    reliable(c, std::vector<uint8_t>(stop, stop + 4));
+    c.downloading = false;
+    c.download.clear();
+    note(s, c.name + " stopped a download");
+  } else if (cmd == "nogamedata") {
+    c.no_game_data = !c.no_game_data;
+    if (!c.no_game_data) c.acked = -1;  // the frames start whole again
+  } else if (cmd == "download" && w.size() > 1 && w[1] == "http") {
+    c.http_download = true;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+// THE FIRST `new` of a connection: the version probe, the `connect` stuff list, then the forced
+// reconnect: a newcomer is sent its random settings and the address and dropped silently (true);
+// one that came back is asked for its setting.
+bool first_new(Q2NetServer& s, int slot) {
+  Q2NetClient& c = s.clients[slot];
+  c.newed = true;
+  c.new_at = s.now;
+  const bool local = c.address.family == gn::Family::ipv4 && c.address.bytes[0] == 127;
+  if (!s.force_reconnect.empty() && c.reconnect_var.empty() && !local) {
+    // Eight random strings A..H of 15: A a setting `set` is put in, B one `connect` is, C the
+    // setting brought back and D its value, E the address, F a decoy and G its value.
+    static constexpr char kAbc[] =
+        "!#%&()*+,-./:<=>?@[]^_{}0123456789abcdefghijklmnopqrstuvwxyz``````````~~~~~~~~~~";
+    std::string r[8];
+    for (std::string& x : r)
+      for (int k = 0; k < 15; k++) {
+        s.junk = s.junk * 1103515245u + 12345u;
+        x += kAbc[(s.junk >> 16) % (sizeof kAbc - 1)];
+      }
+    c.reconnect_var = r[2];
+    c.reconnect_value = r[3];
+    const std::string a = "$" + r[0] + " ";
+    stuff(c, "set " + r[0] + " set\n");
+    stuff(c, a + r[1] + " connect\n");
+    const std::string mine = a + r[2] + " " + r[3] + "\n";
+    const std::string to = a + r[4] + " " + s.force_reconnect + "\n" + a + r[5] + " " + r[6] + "\n";
+    s.junk = s.junk * 1103515245u + 12345u;
+    if (((s.junk >> 16) & 1) != 0) {
+      stuff(c, mine);
+      stuff(c, to);
+    } else {
+      stuff(c, to);
+      stuff(c, mine);
+    }
+    stuff(c, a + r[0] + " \"\"\n");
+    stuff(c, "$" + r[1] + " $" + r[4] + "\n");
+    // Dropped with no word to anyone; its zombie keeps the setting for the connect that follows.
+    drop(s, slot, "", true);
+    return true;
+  }
+  return false;
+}
+
+// After the first `new`'s server data (so a recording still opens with it): the version probe,
+// the `connect` stuff list, and a client back from the forced reconnect asked for its setting.
+void probe(Q2NetServer& s, int slot) {
+  Q2NetClient& c = s.clients[slot];
+  stuff(c, "cmd " + std::string(ge::server::kSettingAnswer) + " version $version\n");
+  for (const std::string& text : s.stuff_lists.connect) stuff(c, text + "\n");
+  const bool local = c.address.family == gn::Family::ipv4 && c.address.bytes[0] == 127;
+  if (!c.reconnect_var.empty() && !local)
+    stuff(c,
+          "cmd " + std::string(ge::server::kSettingAnswer) + " connect $" + c.reconnect_var + "\n");
+}
+
 void string_command(Q2NetServer& s, int slot, const std::string& line) {
   Q2NetClient& c = s.clients[slot];
   const std::vector<std::string> w = q2_words(line);
   if (w.empty()) return;
   const std::string& cmd = w[0];
-  if (cmd == ge::server::kSettingAnswer) {  // a setting ban's answer: `<DEL>c <name> <value>`
+  if (cmd == ge::server::kSettingAnswer) {  // an answer the server asked for: `<DEL>c <what> ...`
     if (w.size() < 2) return;
     const size_t at = line.find(w[1], line.find(cmd) + cmd.size()) + w[1].size();
     std::string value = at < line.size() ? line.substr(at + 1) : std::string();
     while (!value.empty() && (value.back() == '\n' || value.back() == '\r')) value.pop_back();
+    if (w[1] == "version") {  // the version probe's answer: the first one kept
+      if (c.version_heard) return;
+      c.version_heard = true;
+      c.version = value;
+      note(s, c.name + "[" + gn::to_string(c.address) + "]: " + value);
+      return;
+    }
+    if (w[1] == "console") {  // a `stuffcvar` answer: `console <name> <value>`
+      if (c.cvars_asked <= 0 || w.size() < 3) return;
+      c.cvars_asked--;
+      const size_t vat = line.find(w[2], at) + w[2].size();
+      std::string v = vat < line.size() ? line.substr(vat + 1) : std::string();
+      while (!v.empty() && (v.back() == '\n' || v.back() == '\r')) v.pop_back();
+      note(s, c.name + "[" + gn::to_string(c.address) + "]: \"" + w[2] + "\" is \"" + v + "\"");
+      return;
+    }
+    if (w[1] == "connect") {  // the forced reconnect's setting brought back
+      if (!c.reconnect_var.empty() && value == c.reconnect_value) c.reconnected = true;
+      return;
+    }
     judge(s, slot, s.cvar_bans, w[1], value);
     return;
   }
+  if (player_query(s, slot, w, line)) return;
   const bool signon = cmd == "configstrings" || cmd == "baselines" || cmd == "begin";
   const bool protocol =
       signon || cmd == "new" || cmd == "disconnect" || cmd == "download" || cmd == "nextdl";
@@ -589,7 +794,10 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
   const int at = w.size() > 2 ? std::atoi(w[2].c_str()) : 0;
   const std::string count = std::to_string(s.count);
   if (cmd == "new") {
+    const bool first = c.stage == Q2Slot::signon && !c.newed;
+    if (first && first_new(s, slot)) return;
     if (c.stage == Q2Slot::signon) start_signon(s, slot);
+    if (first) probe(s, slot);
   } else if (cmd == "configstrings") {
     if (c.stage == Q2Slot::signon)
       signon_share(c, c.signon.config_strings, at, "cmd configstrings " + count + " ",
@@ -600,6 +808,9 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
                    "precache " + count + "\n");
   } else if (cmd == "begin") {
     if (c.stage != Q2Slot::signon) return;
+    if (!c.version_heard) return drop_told(s, slot, "failed version probe", Told::silent);
+    if (!c.reconnect_var.empty() && !c.reconnected)
+      return drop_told(s, slot, "failed to reconnect", Told::silent);
     if (s.native != nullptr) {  // a game library reads the client's whole user info
       auto& info = (**s.rules).clients[slot].userinfo;
       info.clear();
@@ -624,6 +835,8 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
       reliable(c, on);
     }
     note(s, c.name + " entered the game");
+    c.http_download = false;
+    for (const std::string& text : s.stuff_lists.begin) stuff(c, text + "\n");
     rate_check(s, slot);
   } else if (cmd == "download") {
     start_download(s, c, w.size() > 1 ? w[1] : std::string(), at);
@@ -671,6 +884,8 @@ void read_messages(Q2NetServer& s, int slot, const uint8_t* data, size_t size,
       Q2Move m;
       if (!read_q2_move(r, c.ch.incoming_sequence, m)) return drop(s, slot, "a cut move");
       if (c.stage != Q2Slot::active) continue;
+      if (m.frame > c.acked && m.frame > 0 && c.sent_frame[m.frame & 63] == m.frame)
+        c.frames_acked++;  // the lag's loss toward the client
       c.acked = m.frame;
       if (m.frame > 0 && c.sent_frame[m.frame & 63] == m.frame) {
         c.ping_s = s.now - c.sent_at[m.frame & 63];
@@ -683,6 +898,9 @@ void read_messages(Q2NetServer& s, int slot, const uint8_t* data, size_t size,
         return;
       }
       c.moves++;
+      // The moves run: the newest, and one a lost packet held for each lost (two at most).
+      c.cmds_run += 1 + std::min<uint32_t>(c.ch.last_drop, 2);
+      c.scale_ms += m.cmds[2].msec;
       sh::Packet p;
       p.client = slot;
       p.sequence = c.ch.incoming_sequence;
@@ -698,6 +916,18 @@ void read_messages(Q2NetServer& s, int slot, const uint8_t* data, size_t size,
       const std::string was = info_get(c.userinfo, "rate");
       const std::string before = c.userinfo;
       c.userinfo = read_string(r);
+      // The strict rule (classic/protocol/info.hpp); a name with nothing to show keeps the one
+      // the server has.
+      if (c.userinfo.size() >= 512) return drop_told(s, slot, "oversize userinfo", Told::dropped);
+      if (c.userinfo.empty()) return drop_told(s, slot, "empty userinfo", Told::dropped);
+      if (!info_strict(c.userinfo)) return drop_told(s, slot, "malformed userinfo", Told::dropped);
+      if (!shown_name(info_get(c.userinfo, "name"))) {
+        if (c.name.empty()) return drop_told(s, slot, "malformed name", Told::dropped);
+        if (!info_set(c.userinfo, "name", c.name) || c.userinfo.size() >= 512)
+          return drop_told(s, slot, "oversize userinfo", Told::dropped);
+        q2_net_print(s, slot, "You can't have an empty name.\n");
+        stuff(c, "set name \"" + c.name + "\"\n");
+      }
       if (judge_userinfo(s, slot)) return;  // a user info ban that kicks (server/settingban.hpp)
       const bool rewound = antilag_wanted(info_get(c.userinfo, "cl_antilag"));
       if (s.cfg.antilag > 0 && c.stage == Q2Slot::active &&
@@ -712,7 +942,7 @@ void read_messages(Q2NetServer& s, int slot, const uint8_t* data, size_t size,
       }
       c.rate = rate_of(s, c.userinfo, c.address);
       if (c.stage == Q2Slot::active && info_get(c.userinfo, "rate") != was) rate_check(s, slot);
-      std::string name = info_get(c.userinfo, "name");
+      std::string name = cut_name(info_get(c.userinfo, "name"));
       // A player in the game renamed past sv_namelimit keeps the old name (server/names.hpp).
       const bool renamed = !name.empty() && name != c.name && c.stage == Q2Slot::active;
       if (renamed && !ge::server::rename_allowed(c.renames, s.now, s.cfg.names)) {
@@ -738,6 +968,7 @@ void read_messages(Q2NetServer& s, int slot, const uint8_t* data, size_t size,
       }
     } else if (id == kClcStringCmd) {
       const std::string line = read_string(r);
+      if (line.size() >= 1024) return drop_told(s, slot, "oversize stringcmd", Told::dropped);
       if (++commands <= kStringCmdsPerPacket) string_command(s, slot, line);
     } else if (id == kClcGeVoice) {
       int gen = 0, seq = 0;
@@ -748,6 +979,32 @@ void read_messages(Q2NetServer& s, int slot, const uint8_t* data, size_t size,
       return drop(s, slot, "a message " + std::to_string(id) + " it does not know");
     }
     if (r.bad) return drop(s, slot, "a message cut short");
+  }
+}
+
+// THE LAG's numbers, once a host tick: the round trip sampled and the move rate made every 10 s,
+// the time scale every 16 s.
+void lag_tick(const Q2NetServer& s, Q2NetClient& c) {
+  if (c.stage != Q2Slot::active) return;
+  if (c.ping_ms > 0) {
+    c.rtt_min = std::min(c.rtt_min, c.ping_ms);
+    c.rtt_max = std::max(c.rtt_max, c.ping_ms);
+  }
+  if (c.rtt_next < 0) c.rtt_next = s.now + 10;
+  if (s.now >= c.rtt_next) {
+    c.rtt_sum += c.ping_ms;
+    c.rtt_samples++;
+    c.move_fps = static_cast<int>((c.cmds_run - c.cmds_counted) / 10);
+    c.cmds_counted = c.cmds_run;
+    c.rtt_next += 10;
+  }
+  if (c.scale_from < 0) {
+    c.scale_from = s.now;
+    c.scale_ms = 0;
+  } else if (s.now - c.scale_from >= 16) {
+    c.scale = static_cast<double>(c.scale_ms) / ((s.now - c.scale_from) * 1000.0);
+    c.scale_from = s.now;
+    c.scale_ms = 0;
   }
 }
 
@@ -905,7 +1162,7 @@ void send_frames(Q2NetServer& s) {
       drop(s, i, "overflowed");
       continue;
     }
-    if (c.stage == Q2Slot::signon) {
+    if (c.stage == Q2Slot::signon || c.no_game_data) {  // reliable data alone (`nogamedata`)
       if (channel_reliable_backlog(c.ch) > 0 || s.now - c.sent >= 1.0) transmit(s, c, nullptr, 0);
       continue;
     }
@@ -990,6 +1247,10 @@ void send_frames(Q2NetServer& s) {
     reliable(c, rel);
     size = static_cast<int>(block.size());
     transmit(s, c, block.data(), block.size());
+    for (int k = 0; k < c.packet_dup; k++) {  // `packetdup`: the same datagram again
+      send_to(s, c.address, c.last_out.data(), c.last_out.size());
+      size += static_cast<int>(c.last_out.size());
+    }
     c.sent_frame[frame & 63] = frame;
     c.sent_at[frame & 63] = s.now;
     c.frames++;
@@ -1050,6 +1311,7 @@ bool q2_net_start(Q2NetServer& s, const sv::RulesRunner& rules, gn::Transport& t
     return false;
   }
   s.count = 0x10000 + cfg.wire.server_count;
+  s.force_reconnect = cfg.force_reconnect;
   s.written_frame = frame_of(s);
   if (s.game != nullptr && cfg.antilag > 0) {
     s.game->lag_place = &lag_place;
@@ -1072,6 +1334,7 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
     const auto size = static_cast<size_t>(n);
     s.datagrams_in++;
     s.bytes_in += n;
+    if (s.killed) continue;  // `killserver`: nothing answered until the next map
     if (!s.blackholes.entries.empty() &&
         ge::server::blackholed(s.blackholes, from, s.cfg.unix_time ? s.cfg.unix_time() : 0)) {
       s.blackholed++;
@@ -1101,7 +1364,14 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
       c = Q2NetClient{};
       continue;
     }
-    if (q2_held(c) && s.now - c.heard > s.cfg.timeout) drop(s, i, "timed out");
+    if (q2_held(c) && c.ch.outgoing_sequence >= 0x7FFFFF00u)
+      drop_told(s, i, "outgoing sequence too big", Told::dropped);
+    if (q2_held(c) && s.now - c.heard > s.cfg.timeout) {  // freed at once: no zombie
+      drop_told(s, i, "timed out", Told::plain);
+      c = Q2NetClient{};
+      continue;
+    }
+    lag_tick(s, c);
     double ratio = 0;
     const ge::server::Skew skew = c.stage == Q2Slot::active
                                       ? ge::server::skew_check(c.skew, s.now, s.cfg.skew, ratio)
@@ -1146,6 +1416,8 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
 }
 
 void q2_net_level(Q2NetServer& s, const sv::Q2WireOptions& wire) {
+  s.killed = false;
+  s.force_reconnect = s.cfg.force_reconnect;          // latched: from this map on
   const int32_t count = s.cfg.wire.server_count + 1;  // the server data carries it too
   s.cfg.wire = wire;
   s.cfg.wire.server_count = count;
@@ -1196,6 +1468,142 @@ void q2_net_stop(Q2NetServer& s) {
 
 void q2_net_oob(Q2NetServer& s, const gn::Address& to, const std::string& text) {
   send_oob(s, to, text);
+}
+
+}  // namespace shooters_edge::net
+
+namespace shooters_edge::net {
+
+namespace {
+
+// `status t`'s and the misc block's connection time: `mm.ss`, `h:mm.ss`, `d+h:mm.ss`.
+std::string span_text(double seconds) {
+  const auto t = static_cast<int64_t>(seconds < 0 ? 0 : seconds);
+  const int64_t sec = t % 60, min = t / 60 % 60, hour = t / 3600 % 24, day = t / 86400;
+  char b[48];
+  if (t < 3600)
+    std::snprintf(b, sizeof b, "%02d.%02d", int(min), int(sec));
+  else if (t < 86400)
+    std::snprintf(b, sizeof b, "%d:%02d.%02d", int(hour), int(min), int(sec));
+  else
+    std::snprintf(b, sizeof b, "%d+%d:%02d.%02d", int(day), int(hour), int(min), int(sec));
+  return b;
+}
+
+std::string padded(const char* label, const std::string& value) {
+  char b[32];
+  std::snprintf(b, sizeof b, "%-21s", label);
+  return b + value + "\n";
+}
+
+}  // namespace
+
+std::string q2_span_text(double seconds) { return span_text(seconds); }
+
+double q2_loss_down(const Q2NetClient& c) {
+  return c.frames == 0
+             ? 0.0
+             : 100.0 * (1.0 - static_cast<double>(c.frames_acked) / static_cast<double>(c.frames));
+}
+
+double q2_loss_up(const Q2NetClient& c) {
+  return c.ch.accepted == 0
+             ? 0.0
+             : 100.0 * static_cast<double>(c.ch.dropped) / static_cast<double>(c.ch.accepted);
+}
+
+int q2_rtt_avg(const Q2NetClient& c) {
+  return c.rtt_samples == 0 ? c.ping_ms : static_cast<int>(c.rtt_sum / c.rtt_samples);
+}
+
+std::string q2_misc_lines(const Q2NetServer& s, int slot) {
+  const Q2NetClient& c = s.clients[slot];
+  char b[96];
+  std::string t;
+  t += padded("version", c.version_heard ? c.version : "-");
+  t += padded("protocol (maj/min)", std::to_string(kQ2NetProtocol) + "/0");
+  t += padded("maxmsglen", "1390");
+  t += padded("zlib support", "no");
+  t += padded("netchan type", "old");
+  t += padded("ping", std::to_string(c.ping_ms));
+  t += padded("movement fps", std::to_string(c.move_fps));
+  std::snprintf(b, sizeof b, "%d/%d/%d ms", c.rtt_min, q2_rtt_avg(c), c.rtt_max);
+  t += padded("RTT (min/avg/max)", b);
+  std::snprintf(b, sizeof b, "%.2f%% (approx)", q2_loss_down(c));
+  t += padded("PL server to client", b);
+  std::snprintf(b, sizeof b, "%.2f%%", q2_loss_up(c));
+  t += padded("PL client to server", b);
+  t += padded("packetdup", std::to_string(c.packet_dup));
+  std::snprintf(b, sizeof b, "%.3f", c.scale);
+  t += padded("timescale", b);
+  t += padded("connection time", span_text(c.new_at < 0 ? 0 : s.now - c.new_at));
+  return t;
+}
+
+std::string q2_lag_lines(const Q2NetServer& s, int slot) {
+  const Q2NetClient& c = s.clients[slot];
+  char b[160];
+  std::string t = "Lag stats for:       " + c.name + "\n";
+  std::snprintf(b, sizeof b, "RTT (min/avg/max):   %d/%d/%d ms\n", c.rtt_min, q2_rtt_avg(c),
+                c.rtt_max);
+  t += b;
+  std::snprintf(b, sizeof b, "Server to client PL: %.2f%% (approx)\n", q2_loss_down(c));
+  t += b;
+  std::snprintf(b, sizeof b, "Client to server PL: %.2f%%\n", q2_loss_up(c));
+  t += b;
+  std::snprintf(b, sizeof b, "Timescale          : %.3f\n", c.scale);
+  return t + b;
+}
+
+std::string q2_info_lines(const Q2NetServer& s) {
+  std::vector<std::pair<std::string, std::string>> pairs;
+  info_pairs(status_text(s).substr(0, status_text(s).find('\n')), pairs);
+  for (auto& [k, v] : pairs)
+    if (k == "maxclients") v = std::to_string(s.cfg.max_clients);  // whole here
+  std::sort(pairs.begin(), pairs.end());
+  std::string t;
+  char b[32];
+  for (const auto& [k, v] : pairs) {
+    if (v.empty()) continue;
+    std::snprintf(b, sizeof b, "%-20s ", k.c_str());
+    t += b + v + "\n";
+  }
+  return t;
+}
+
+int q2_public_slots(const Q2NetServer& s) {
+  return std::max(0, s.cfg.max_clients - std::clamp(s.cfg.vip_slots, 0, s.cfg.max_clients - 1));
+}
+
+void q2_net_stuff(Q2NetServer& s, int slot, const std::string& text) {
+  if (slot < 0 || slot >= sh::kMaxClients || !q2_held(s.clients[slot])) return;
+  stuff(s.clients[slot], text);
+}
+
+void q2_net_kick(Q2NetServer& s, int slot, bool logged) {
+  drop_told(s, slot, "was kicked", Told::plain, logged);
+}
+
+void q2_net_ask_setting(Q2NetServer& s, int slot, const std::string& name) {
+  if (slot < 0 || slot >= sh::kMaxClients || !q2_held(s.clients[slot])) return;
+  Q2NetClient& c = s.clients[slot];
+  c.cvars_asked++;
+  stuff(c,
+        "cmd " + std::string(ge::server::kSettingAnswer) + " console " + name + " $" + name + "\n");
+}
+
+void q2_net_shutdown(Q2NetServer& s, const std::string& text, bool reconnect) {
+  std::vector<uint8_t> b = {kSvcPrint, 2};
+  b.insert(b.end(), text.begin(), text.end());
+  b.push_back(0);
+  b.push_back(reconnect ? kSvcReconnect : kSvcDisconnect);
+  for (int pass = 0; pass < 2; pass++)
+    for (Q2NetClient& c : s.clients)
+      if (q2_held(c)) transmit(s, c, b.data(), b.size());
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    if ((**s.rules).clients[i].active && q2_held(s.clients[i])) s.rules->drop(i);
+    s.clients[i] = Q2NetClient{};
+  }
 }
 
 }  // namespace shooters_edge::net

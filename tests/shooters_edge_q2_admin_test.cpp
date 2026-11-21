@@ -234,8 +234,12 @@ TEST(status_lists_the_clients_and_a_rules_line_runs_on_their_console) {
   join(*r, "bob");
   run(*r, 200);
   const std::string status = rcon(*r, "rcon letmein status");
-  CHECK_MSG(has(status, "map              : hall") && has(status, " eve ") && has(status, " bob "),
+  CHECK_MSG(has(status, "Current map: hall\n\n") && has(status, " eve ") && has(status, " bob "),
             status);
+  CHECK_MSG(
+      has(status, "num score ping name            lastmsg address                rate pr fps\n"),
+      status);
+  CHECK_MSG(has(status, " 15000 34 "), status);  // the rate in force and the protocol
   rcon(*r, "rcon letmein fraglimit 7");
   const ge::console::Cvar* frags = r->rules->cvars.find("fraglimit");
   CHECK(frags != nullptr && frags->value == "7");
@@ -253,14 +257,20 @@ TEST(kick_and_dumpuser_take_a_slot_or_a_name) {
   run(*r, 200);
   CHECK_MSG(eve.stage == cn::ClientStage::active && bob.stage == cn::ClientStage::active,
             eve.refused + bob.refused);
-  CHECK(has(rcon(*r, "rcon letmein dumpuser bob"), "name                bob"));
-  CHECK(rcon(*r, "rcon letmein kick 99") == "print\nBad client slot: 99\n");
-  CHECK(rcon(*r, "rcon letmein kick 5") == "print\nClient 5 is not active\n");
-  CHECK(rcon(*r, "rcon letmein kick nobody") == "print\nUserid nobody is not on the server\n");
-  CHECK(rcon(*r, "rcon letmein kick bob") == "print\nbob was kicked\n");
+  const std::string dump = rcon(*r, "rcon letmein dumpuser bob");
+  CHECK_MSG(has(dump, "\nuserinfo\n--------\nname                 bob\n"), dump);
+  CHECK_MSG(has(dump, "\nmiscinfo\n--------\nversion              "), dump);
+  CHECK_MSG(has(dump, "protocol (maj/min)   34/0\n") && has(dump, "netchan type         old\n"),
+            dump);
+  CHECK(has(dump, "ip                   sim:2:"));  // the address the server saw, forced
+  CHECK(rcon(*r, "rcon letmein kick 99") == "print\nBad client slot number: 99\n");
+  CHECK(rcon(*r, "rcon letmein kick 5") == "print\nClient slot 5 is not active.\n");
+  CHECK(rcon(*r, "rcon letmein kick nobody") == "print\nUserid 'nobody' is not on the server.\n");
+  CHECK(rcon(*r, "rcon letmein kick BO") == "print\nUserid 'BO' is not on the server.\n");
+  CHECK(has(rcon(*r, "rcon letmein kick bob"), "bob[sim:2:"));
   run(*r, 40);
   CHECK(bob.stage == cn::ClientStage::dropped);
-  CHECK(printed(bob, "You were kicked from the game"));
+  CHECK(printed(bob, "bob was kicked"));
   CHECK(printed(eve, "bob was kicked"));
   CHECK(eve.stage == cn::ClientStage::active);
 }
@@ -275,7 +285,7 @@ TEST(a_dropped_slot_is_a_zombie_for_zombie_time_then_free) {
   run(*r, 200);
   CHECK_MSG(eve.stage == cn::ClientStage::active && bob.stage == cn::ClientStage::active,
             eve.refused + bob.refused);
-  CHECK(rcon(*r, "rcon letmein kick bob") == "print\nbob was kicked\n");
+  CHECK(has(rcon(*r, "rcon letmein kick bob"), "] was kicked"));
   CHECK(r->server.clients[1].stage == cn::Q2Slot::zombie);
   CHECK(cn::q2_net_clients(r->server) == 1);
   const std::string status = rcon(*r, "rcon letmein status");
@@ -537,4 +547,139 @@ TEST(sv_maxents_keeps_a_frame_to_its_cap_and_the_rest_wait) {
     CHECK(r->server.clients[0].stage == cn::Q2Slot::active);
     CHECK((r->server.clients[0].wire.capped > 0) == (most == 1));
   }
+}
+
+// THE OPERATOR'S WORDS of a modern server (porting/shooters-edge/q2-operator.md): the status
+// letters, stuff and print to one or all, a client's setting asked, the stuff lists run at connect
+// and at begin, partial names, kickban and killserver.
+TEST(the_operators_words_reach_one_client_or_all_in_the_servers_words) {
+  cn::Q2NetConfig cfg;
+  cfg.rcon_password = "letmein";
+  auto r = rig(cfg);
+  CHECK(rcon(*r, "rcon letmein addstuffcmd connect echo hello there") == "print\n");
+  CHECK(rcon(*r, "rcon letmein addstuffcmd begin echo welcome") == "print\n");
+  CHECK(rcon(*r, "rcon letmein addstuffcmd begin echo welcome") ==
+        "print\nStuffcmd already exists: echo welcome\n");
+  CHECK(rcon(*r, "rcon letmein liststuffcmds begin") ==
+        "print\nid command\n-- -------\n1  echo welcome\n");
+  CHECK(rcon(*r, "rcon letmein liststuffcmds nowhere") ==
+        "print\nUnknown stuffcmd list: nowhere\n");
+  cn::Q2ClientEnd& eve = join(*r, "eve");
+  eve.cfg.setting = [](const std::string& name) {
+    return name == "version" ? std::string("q2 test 1.0") : name == "sensitivity" ? "3" : "";
+  };
+  cn::Q2ClientEnd& bob = join(*r, "Bobby");
+  run(*r, 200);
+  CHECK_MSG(eve.stage == cn::ClientStage::active && bob.stage == cn::ClientStage::active,
+            eve.refused + bob.refused);
+  const auto stuffed = [](const cn::Q2ClientEnd& c, const std::string& line) {
+    return std::find(c.stuffed.begin(), c.stuffed.end(), line) != c.stuffed.end();
+  };
+  CHECK(stuffed(eve, "echo hello there") && stuffed(eve, "echo welcome"));
+  // The version probe: its answer kept and listed.
+  CHECK_MSG(has(rcon(*r, "rcon letmein status v"), "  1 eve             q2 test 1.0\n"),
+            rcon(*r, "rcon letmein status v"));
+  CHECK(r->server.clients[0].version_heard && r->server.clients[0].version.empty());
+  CHECK(has(rcon(*r, "rcon letmein status x"), "Usage: status [d|l|p|s|t|v]\nCurrent map: hall"));
+  CHECK(
+      has(rcon(*r, "rcon letmein status p"), "  1 eve                34     0   1390  no   old\n"));
+  CHECK(has(rcon(*r, "rcon letmein status l"), "PLs2c PLc2s Rmin Ravg Rmax dup scale"));
+  CHECK(has(rcon(*r, "rcon letmein status t"), "num name            idle time\n"));
+  CHECK(has(rcon(*r, "rcon letmein status d"), "num name            download"));
+  // Stuff, print and a setting asked.
+  rcon(*r, "rcon letmein stuff eve \"echo one; echo two\"");
+  rcon(*r, "rcon letmein stuffall echo all");
+  rcon(*r, "rcon letmein printall the server says hi");
+  run(*r, 20);
+  CHECK(stuffed(eve, "echo one") && stuffed(eve, " echo two") && stuffed(bob, "echo all"));
+  CHECK(printed(eve, "the server says hi\n") && printed(bob, "the server says hi\n"));
+  rcon(*r, "rcon letmein stuffcvar eve sensitivity");
+  run(*r, 20);
+  bool told = false;
+  for (const std::string& line : r->server.log)
+    told = told || has(line, "eve[sim:1:27901]: \"sensitivity\" is \"3\"");
+  CHECK(told);
+  CHECK(rcon(*r, "rcon letmein stuff eve") == "print\nUsage: stuff <userid> <raw text>\n");
+  // Partial names only with sv_partialnames.
+  CHECK(rcon(*r, "rcon letmein dumpuser bob") == "print\nUserid 'bob' is not on the server.\n");
+  r->server.cfg.enhanced_setplayer = true;
+  CHECK(has(rcon(*r, "rcon letmein dumpuser bob"), "name                 Bobby\n"));
+  CHECK(has(rcon(*r, "rcon letmein dumpuser BOB"), "name                 Bobby\n"));
+  CHECK(rcon(*r, "rcon letmein dumpuser zed") == "print\nNo clients matching 'zed' found.\n");
+  // kickban: dropped, and his address refused.
+  CHECK(has(rcon(*r, "rcon letmein kickban bob"), "Bobby[sim:2:27901] was kicked"));
+  run(*r, 40);
+  CHECK(printed(eve, "Bobby was kicked") && printed(bob, "Bobby was kicked"));
+  CHECK(has(rcon(*r, "rcon letmein listip"), pattern_of(2)));
+  // killserver: every client told and dropped, nothing answered until the next map.
+  rcon(*r, "rcon letmein killserver");
+  run(*r, 20);
+  CHECK(printed(eve, "Server was killed.") && eve.stage == cn::ClientStage::dropped);
+  CHECK(r->server.killed && cn::q2_net_clients(r->server) == 0);
+  CHECK(rcon(*r, "rcon letmein status").empty());
+}
+
+// THE PLAYER'S QUERIES: info, sinfo, lag, packetdup, nogamedata, download http.
+TEST(a_player_asks_the_server_for_its_info_his_connection_and_another_players_lag) {
+  cn::Q2NetConfig cfg;
+  cfg.rcon_password = "letmein";
+  cfg.packetdup_most = 1;
+  auto r = rig(cfg);
+  cn::Q2ClientEnd& eve = join(*r, "eve");
+  join(*r, "Bobby");
+  run(*r, 200);
+  cn::q2_client_command(eve, "info");
+  cn::q2_client_command(eve, "sinfo");
+  cn::q2_client_command(eve, "lag bob");
+  cn::q2_client_command(eve, "lag nobody");
+  run(*r, 20);
+  CHECK(printed(eve, "hostname             Shooter's Edge\n"));
+  CHECK(printed(eve, "maxclients           8\n"));
+  CHECK(printed(eve, "protocol (maj/min)   34/0\n") && printed(eve, "connection time      00.0"));
+  CHECK(printed(eve, "Lag stats for:       Bobby\nRTT (min/avg/max):   "));
+  CHECK(printed(eve, "Timescale          : "));
+  CHECK(printed(eve, "No clients matching 'nobody' found.\n"));
+  cn::q2_client_command(eve, "packetdup 2");
+  cn::q2_client_command(eve, "packetdup 1");
+  run(*r, 20);
+  CHECK(printed(eve, "Packetdup of 2 is not allowed on this server.\n"));
+  CHECK(printed(eve, "Server is sending 1 duplicate packet to you.\n"));
+  CHECK(r->server.clients[0].packet_dup == 1);
+  const int64_t before = r->server.clients[0].frames;
+  cn::q2_client_command(eve, "nogamedata");
+  run(*r, 40);
+  CHECK(r->server.clients[0].no_game_data && r->server.clients[0].frames - before <= 2);
+  cn::q2_client_command(eve, "nogamedata");
+  run(*r, 200);  // the command waits for the last one's acknowledgement, a second away
+  CHECK_MSG(r->server.clients[0].frames - before > 2,
+            std::to_string(r->server.clients[0].frames - before));
+  CHECK(eve.stage == cn::ClientStage::active);
+}
+
+// THE USER INFO a modern server holds a client to: refusals at the connect, a name kept when
+// a change would empty it, the name cut to 15, and the drops a timeout and a reconnect tell.
+TEST(a_user_info_is_held_to_the_strict_rule_and_a_name_is_kept) {
+  cn::Q2NetConfig cfg;
+  cfg.rcon_password = "letmein";
+  cfg.timeout = 3;
+  auto r = rig(cfg);
+  cn::Q2ClientEnd& blank = join(*r, "   ");
+  cn::Q2ClientEnd& odd = join(*r, "a;b");
+  cn::Q2ClientEnd& eve = join(*r, "eve with a very long name");
+  cn::Q2ClientEnd& bob = join(*r, "bob");
+  run(*r, 200);
+  CHECK_MSG(has(blank.refused, "Please set your name before connecting."), blank.refused);
+  CHECK_MSG(has(odd.refused, "Malformed userinfo string."), odd.refused);
+  CHECK(eve.stage == cn::ClientStage::active && bob.stage == cn::ClientStage::active);
+  CHECK(r->server.clients[0].name == "eve with a very");
+  bob.cfg.name = "";
+  cn::q2_client_userinfo(bob);
+  run(*r, 20);
+  CHECK(printed(bob, "You can't have an empty name.\n"));
+  CHECK(r->server.clients[1].name == "bob" && bob.stage == cn::ClientStage::active);
+  // Silence past `timeout`: the slot freed at once, everyone told.
+  r->clients.pop_back();  // bob goes quiet
+  run(*r, 300);
+  CHECK(printed(eve, "bob timed out\n"));
+  CHECK(r->server.clients[1].stage == cn::Q2Slot::free);
 }

@@ -39,6 +39,16 @@
 // signon's first and takes it (true) before the rules; `name_rule` may change the name a client
 // connects or renames with. `q2_net_print`, `q2_net_rename` and `q2_net_drop` answer.
 //
+// THE CONNECT'S CHECKS (porting/shooters-edge/q2-operator.md): the user info held to the strict
+// rule (classic/protocol/info.hpp: "Empty userinfo string.", "Malformed userinfo string."), a name
+// with something to show ("Please set your name before connecting."), cut to 15 with high bits
+// cleared; `mvdspec` and an asked password taken out and `ip` forced. A connect from a held slot's
+// address and port is a repeat before its first `new`, else the old client dropped
+// ("reconnected"). At the first `new`, after the server data, the client is asked its version
+// (dropped silently at `begin` without an answer) and run the `connect` stuff list; with
+// `sv_forcereconnect` a newcomer is first sent through that address with a random setting it must
+// bring back. A rename to nothing keeps the old name ("You can't have an empty name.").
+//
 // A client is dropped on `disconnect`, after `timeout` seconds of silence, on a message it cannot
 // read, or on overflowing its reliable channel; it is sent the disconnect message, and its slot is
 // a ZOMBIE for `zombie_time` (sv_zombietime, Quake II's `zombietime`; 2 s) after its last
@@ -50,7 +60,9 @@
 // ge:keywords baselines begin frame delta ack move checksum status info timeout disconnect
 // ge:keywords zombie zombietime sv_zombietime
 // ge:keywords q2_net_start q2_net_frame q2_net_stop q2_net_level level-change
-// ge:keywords changelevel changing reconnect
+// ge:keywords changelevel changing reconnect version-probe force-reconnect sv_forcereconnect
+// ge:keywords userinfo-check malformed-userinfo name-cut packetdup nogamedata stopdl sinfo lag
+// ge:keywords timed-out q2_net_shutdown killserver
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_net_test.cpp
 #pragma once
@@ -68,6 +80,7 @@
 #include "server/limit.hpp"
 #include "server/lrcon.hpp"
 #include "server/names.hpp"
+#include "server/operator.hpp"
 #include "server/settingban.hpp"
 #include "server/skew.hpp"
 #include "server/status.hpp"
@@ -193,6 +206,14 @@ struct Q2NetConfig {
   bool antilag_interp = false;
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true;
+  // THE OPERATOR (q2_admin.hpp): `kick`, `kickban`, `dumpuser`, `stuff` and `stuffcvar` also take
+  // a player's name in any case or a unique part of it (sv_enhanced_setplayer).
+  bool enhanced_setplayer = false;
+  // sv_packetdup_hack: the most extra copies of each frame a client may ask for (`packetdup <n>`).
+  int packetdup_most = 0;
+  // sv_force_reconnect (latched: from the next map): the address every newcomer is first sent to,
+  // with a random setting it must bring back (THE FORCED RECONNECT); "" none.
+  std::string force_reconnect;
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
   std::function<bool(const std::string& path, ge::vfs::ArchiveOrigin* out)> file_origin;
 };
@@ -265,7 +286,37 @@ struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<uint8_t> download;  // the file being sent
   size_t download_at = 0;         // its bytes sent so far
   bool downloading = false;
-  int64_t downloads = 0;  // files sent whole
+  int64_t downloads = 0;          // files sent whole
+  std::string download_name;      // the file being sent, as asked for
+  std::vector<uint8_t> last_out;  // the last datagram sent it (`packetdup` sends it again)
+  // THE PROBES AND QUERIES (q2_admin.hpp): its first `new` sent (an assigned slot before), when;
+  // its answer to the version probe; `download http` said; `nogamedata`; `packetdup`; the settings
+  // `stuffcvar` asked it and it has not answered yet.
+  bool newed = false;
+  double new_at = -1;
+  std::string version;
+  bool version_heard = false;
+  bool http_download = false;
+  bool no_game_data = false;
+  int packet_dup = 0;
+  int cvars_asked = 0;
+  // THE FORCED RECONNECT: the random setting's name and value it must bring back; brought back.
+  std::string reconnect_var, reconnect_value;
+  bool reconnected = false;
+  // THE LAG (`lag`, `sinfo`, `status l`): frames whose acknowledgement came; the round trip's
+  // least and most (ms) and its samples every 10 s; the moves run, made a rate every 10 s; the
+  // move time it claimed against the real time over the last 16 s window, and that window's scale.
+  int64_t frames_acked = 0;
+  int rtt_min = 9999, rtt_max = 0;
+  double rtt_sum = 0;
+  int rtt_samples = 0;
+  double rtt_next = -1;
+  int64_t cmds_run = 0, cmds_counted = 0;
+  int move_fps = 0;
+  double fps_next = -1;
+  double scale = 0;
+  int64_t scale_ms = 0;
+  double scale_from = -1;
 };
 
 inline bool q2_held(const Q2NetClient& c) {
@@ -306,10 +357,15 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* hook_ctx = nullptr;
   int64_t datagrams_in = 0, bytes_in = 0, bytes_out = 0, refused = 0;
-  int64_t redirected = 0;      // newcomers sent elsewhere (sv_redirect)
-  int64_t blackholed = 0;      // datagrams dropped unread from a blackholed address
-  int64_t filtered = 0;        // client commands refused by a filter
-  int64_t setting_banned = 0;  // setting and user info ban entries that matched
+  int64_t redirected = 0;              // newcomers sent elsewhere (sv_redirect)
+  int64_t blackholed = 0;              // datagrams dropped unread from a blackholed address
+  int64_t filtered = 0;                // client commands refused by a filter
+  int64_t setting_banned = 0;          // setting and user info ban entries that matched
+  ge::server::StuffLists stuff_lists;  // `addstuffcmd`: run at connect and at begin
+  std::string force_reconnect;         // sv_force_reconnect as the level started with it
+  bool killed = false;                 // `killserver`: nothing answered until the next map
+  std::vector<gn::Address> acks;       // masters' acknowledgements, for the game to read
+  uint32_t junk = 0x2545F491u;         // the forced reconnect's random strings' state
 };
 
 // Serves the started Quake II runner `rules` (a map loaded) on `t`. False when `rules` is not the
@@ -341,5 +397,31 @@ void q2_net_drop(Q2NetServer& s, int slot, const std::string& why);
 void q2_net_ask_settings(Q2NetServer& s, int slot);
 // An out-of-band packet of `text` to `to` (a remote console's answer: "print\n...").
 void q2_net_oob(Q2NetServer& s, const gn::Address& to, const std::string& text);
+// A line the client runs (reliable), as written: add its newline.
+void q2_net_stuff(Q2NetServer& s, int slot, const std::string& text);
+// THE SHUTDOWN (`killserver`, `quit`, `recycle`): every client not a zombie sent at once, twice,
+// `text` printed (level 2) then the disconnect, or with `reconnect` the reconnect message; every
+// slot freed. `killserver` then answers nothing until the next map (`killed`).
+void q2_net_shutdown(Q2NetServer& s, const std::string& text, bool reconnect);
+// THE LAG's lines about client `slot` (`sinfo`, `dumpuser`'s misc block): a label padded to 21.
+std::string q2_misc_lines(const Q2NetServer& s, int slot);
+// `lag`'s five lines about client `slot`.
+std::string q2_lag_lines(const Q2NetServer& s, int slot);
+// The server info as `info` and `serverinfo` list it: a key padded to 20, a space, the value.
+std::string q2_info_lines(const Q2NetServer& s);
+// The players' slots `maxclients` shows outside: less the slots kept for VIPs.
+int q2_public_slots(const Q2NetServer& s);
+// THE LAG's numbers: the loss toward the client and from it (percent), the round trip's average
+// (ms), and a span as `mm.ss`, `h:mm.ss` or `d+h:mm.ss`.
+double q2_loss_down(const Q2NetClient& c);
+double q2_loss_up(const Q2NetClient& c);
+int q2_rtt_avg(const Q2NetClient& c);
+std::string q2_span_text(double seconds);
+// Client `slot` kicked: `<name> was kicked` to it and everyone in the game, then dropped; with
+// `logged` the console's `<name>[<address>] was kicked` too.
+void q2_net_kick(Q2NetServer& s, int slot, bool logged = true);
+// Client `slot` asked for its setting `name` (`stuffcvar`): its answer printed on the console as
+// `<name>[<address>]: "<setting>" is "<value>"`.
+void q2_net_ask_setting(Q2NetServer& s, int slot, const std::string& name);
 
 }  // namespace shooters_edge::net

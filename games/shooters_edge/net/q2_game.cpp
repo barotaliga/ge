@@ -9,8 +9,11 @@
 #include "classic/protocol/masters.hpp"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <filesystem>
 #include <iterator>
@@ -143,6 +146,16 @@ constexpr gs::GameRule kRules[] = {
      nullptr, "0: off (the default); 1: a frame (1 / sv_fps) further back"},
     {"sv_antilag_max", "How far back a shot may see the others, in milliseconds.", nullptr,
      "0: as far as the history goes; 1..1000: that many (250 the default)"},
+    {"sv_partialnames",
+     "Whether the operator's kick, kickban, dumpuser, stuff and stuffcvar also find a player by "
+     "his name in any case or a unique part of it.",
+     nullptr, "0: a slot number or the exact name (the default); 1: a part of a name too", false},
+    {"sv_packetdup", "The most extra copies of each frame a player may ask for with packetdup.",
+     nullptr, "0: none (the default); 1..8: that many", false},
+    {"sv_forcereconnect",
+     "An address every newcomer is first sent to and must come back from, with a setting it must "
+     "bring back; from the next map.",
+     nullptr, "empty: none (the default); an address: clients reconnect to it first", false},
 };
 
 // The rules a server may set: the engine's rate bounds and per-address limit (server/rate.hpp,
@@ -219,6 +232,9 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_timescale_warn", "sv_speedwarn"},
     {"sv_waterjump_hack", "sv_waterjump"},
     {"zombietime", "sv_zombietime"},
+    {"sv_enhanced_setplayer", "sv_partialnames"},
+    {"sv_packetdup_hack", "sv_packetdup"},
+    {"sv_force_reconnect", "sv_forcereconnect"},
 };
 
 // A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.
@@ -363,7 +379,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
         rule == "sv_minrate" || rule == "sv_zombietime" || rule == "lrcon_password" ||
         rule == "sv_ghosttime" || rule == "sv_nodelta" || rule == "sv_pingmethod" ||
         rule == "sv_maxents" || rule == "sv_entpriority" || rule == "sv_novis" ||
-        rule == "sv_vispatch" || rule == "sv_entpath")
+        rule == "sv_vispatch" || rule == "sv_entpath" || rule == "sv_partialnames" ||
+        rule == "sv_packetdup" || rule == "sv_forcereconnect")
       continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
@@ -410,8 +427,14 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       !endpoint_number(c, "sv_locked", 1, locked, error) ||
       !endpoint_number(c, "sv_vipslots", 32, g->cfg.vip_slots, error))
     return nullptr;
-  int idle = 0;
-  if (!endpoint_number(c, "sv_idletime", 86400, idle, error)) return nullptr;
+  int idle = 0, partial = 0;
+  if (!endpoint_number(c, "sv_idletime", 86400, idle, error) ||
+      !endpoint_number(c, "sv_partialnames", 1, partial, error) ||
+      !endpoint_number(c, "sv_packetdup", 8, g->cfg.packetdup_most, error))
+    return nullptr;
+  g->cfg.enhanced_setplayer = partial != 0;
+  if (const auto it = c.rules.find("sv_forcereconnect"); it != c.rules.end())
+    g->cfg.force_reconnect = it->second;
   int ghost = 6, nodelta = 1, ping_method = 2;
   if (!endpoint_number(c, "sv_ghosttime", 60, ghost, error) ||
       !endpoint_number(c, "sv_nodelta", 1, nodelta, error) ||
@@ -590,6 +613,8 @@ void net_frame(void* g, int64_t now_us) {
   Game& game = *static_cast<Game*>(g);
   q2_net_frame(*game.net, now_us);
   const double now_s = static_cast<double>(now_us) / 1e6;
+  for (const ge::net::Address& from : game.net->acks) cp::masters_heard(game.masters, from, now_s);
+  game.net->acks.clear();
   if (!cp::masters_started(game.masters)) {  // the first round 5 s on
     cp::masters_start(game.masters, cp::MasterFamily::q2, now_s);
   }
@@ -606,6 +631,35 @@ void net_frame(void* g, int64_t now_us) {
 // and a keyframe alike.
 void tv_state(const void* g, std::vector<uint8_t>& out) {
   q2_tv_state(*static_cast<const Game*>(g)->rules, out);
+}
+
+// A name `dumpents` may write under entdumps/: `\\` as `/`, `.` and `..` parts and stray slashes
+// gone, anything not printable ASCII as `_`.
+std::string dump_name(const std::string& typed) {
+  std::string path;
+  for (char ch : typed) path += ch == '\\' ? '/' : ch;
+  std::string out, part;
+  for (size_t i = 0; i <= path.size(); i++) {
+    if (i == path.size() || path[i] == '/') {
+      if (!part.empty() && part != "." && part != "..") out += (out.empty() ? "" : "/") + part;
+      part.clear();
+      continue;
+    }
+    const auto c = static_cast<unsigned char>(path[i]);
+    part += c < 32 || c > 126 ? '_' : path[i];
+  }
+  return out;
+}
+
+bool iequal_tail(const std::string& s, const char* tail) {
+  const size_t n = std::strlen(tail);
+  if (s.size() < n) return false;
+  for (size_t i = 0; i < n; i++) {
+    char a = s[s.size() - n + i];
+    if (a >= 'A' && a <= 'Z') a = static_cast<char>(a - 'A' + 'a');
+    if (a != tail[i]) return false;
+  }
+  return true;
 }
 
 // Lines the server's console prints, from a multi-line answer.
@@ -643,6 +697,51 @@ bool console_line(void* g, const std::string& line) {
     std::vector<cp::MasterSend> out;
     cp::set_masters(game.masters, {w.begin() + 1, w.end()}, cp::resolve_master, game.net->log, out);
     masters_send(game, out);
+    return true;
+  }
+  if (w[0] == "listmasters") {
+    print_lines(game, cp::masters_list_text(game.masters, game.net ? game.net->now : 0,
+                                            game.net && !game.net->killed));
+    return true;
+  }
+  if (w[0] == "sv_running" || w[0] == "sv_paused") {  // the server's state, read-only
+    const bool running = game.net == nullptr || !game.net->killed;
+    print_lines(game, w.size() > 1 ? w[0] + " is read-only: only the game sets it\n"
+                                   : "\"" + w[0] + "\" is \"" +
+                                         (w[0] == "sv_paused" ? "0"
+                                          : running           ? "2"
+                                                              : "0") +
+                                         "\"\n");
+    return true;
+  }
+  if (w[0] == "dumpents") {  // the map's entity text, as loaded, to entdumps/<name>.ent
+    if (!game.map || game.map->bsp.map.entity_text.empty()) {
+      print_lines(game, "No map loaded.\n");
+      return true;
+    }
+    if (w.size() != 2) {
+      print_lines(game, "Usage: dumpents <filename>\n");
+      return true;
+    }
+    std::string name = dump_name(w[1]);
+    if (name.empty()) {
+      print_lines(game, "Couldn't open " + w[1] + ": Invalid quake path\n");
+      return true;
+    }
+    if (name.size() < 4 || !iequal_tail(name, ".ent")) name += ".ent";
+    const std::filesystem::path path = std::filesystem::path(game.files.folder) / "entdumps" / name;
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    std::FILE* f = std::fopen(path.string().c_str(), "wb");
+    const std::string& text = game.map->bsp.map.entity_text;
+    if (f == nullptr) {
+      print_lines(game, "Couldn't open entdumps/" + name + ": " + std::strerror(errno) + "\n");
+      return true;
+    }
+    const bool ok = std::fwrite(text.data(), 1, text.size(), f) == text.size();
+    std::fclose(f);
+    print_lines(game, ok ? "Dumped entity string to entdumps/" + name + "\n"
+                         : "Couldn't write entdumps/" + name + "\n");
     return true;
   }
   if (w[0] == "listmaps") {
