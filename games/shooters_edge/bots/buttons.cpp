@@ -415,6 +415,7 @@ void button_poke_look(Fighter& f, const ge::shooter::BotView& s, int me, double 
   if (std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y) > 900) return;
   f.bot.look = true;
   f.bot.look_at = b.at;
+  f.bot.look_by = "poke";
   f.poke_looked = true;
 }
 

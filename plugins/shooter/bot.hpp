@@ -271,7 +271,8 @@ struct Bot {
   bool look = false;
   bool looking = false;
   Vec3f look_at;
-  core::Rng react_rng{1};  // the reactions' draws, off the bot's seed
+  const char* look_by = nullptr;  // who set the look (the game's name, for the trace); null: none
+  core::Rng react_rng{1};         // the reactions' draws, off the bot's seed
   BotStats stats;
 };
 
