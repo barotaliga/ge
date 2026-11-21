@@ -112,6 +112,9 @@ struct Watch {
   // Each bot's pilot mode over the match, a row a change (the time, the mode's name): the
   // flights read off the recording afterwards are put down to the mode at their takeoff.
   std::array<std::vector<std::pair<double, const char*>>, 64> modes;
+  // And who wrote its view, a row a change (watch_view's writer, a look by who set it): the
+  // flights put down to the view's writer at their takeoff too (`team.air.s380.view.*`).
+  std::array<std::vector<std::pair<double, const char*>>, 64> views;
   // The bumps (`team.bumps.*`): a speed lost in one command, 120 u/s or more (a wall, a corner,
   // a player met; the move brakes at most ~40 a command), hard when it ends under 100 u/s.
   // Each is put down to what took the speed (bump_by: a wall, a stair's step, a mover, a player,
