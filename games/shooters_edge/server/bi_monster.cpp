@@ -219,7 +219,11 @@ void new_chase_dir(QcServer& s, pg::Vm& vm, int self, int goal, float dist) {
     if (tdir != turnaround && step_direction(s, vm, self, tdir, dist)) return;
   }
   const bool coin = draw_is(s, 1, 1);
-  if (coin || std::fabs(dy) > std::fabs(dx)) {
+  // A single-player program's chase compares the distances in whole units.
+  const bool whole = s.sv.set.single_player_clock;
+  const float ay = whole ? std::fabs(std::trunc(dy)) : std::fabs(dy);
+  const float ax = whole ? std::fabs(std::trunc(dx)) : std::fabs(dx);
+  if (coin || ay > ax) {
     const float t = d1;
     d1 = d2;
     d2 = t;

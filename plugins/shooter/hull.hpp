@@ -52,6 +52,8 @@ constexpr int kContentsSolid = -2;
 constexpr int kContentsWater = -3;
 constexpr int kContentsSlime = -4;
 constexpr int kContentsLava = -5;
+constexpr int kContentsCurrent0 = -9;      // the six currents: 0, 90, 180, 270 degrees,
+constexpr int kContentsCurrentDown = -14;  // up and down
 
 // How far back toward the start an impact's end point is placed, units.
 constexpr float kDistEpsilon = 0.03125f;

@@ -383,7 +383,7 @@ int frame_move(Server& sv, int e, const FrameMoveSettings& set, double dt) {
     const float factor = ed.gravity != 0 ? ed.gravity : 1.0f;
     ed.velocity.z = static_cast<float>(ed.velocity.z - factor * sv.set.move.gravity * dt);
   }
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 3 && !sv.set.single_player_clock; i++) {  // that clock bounds it earlier
     float& c = ed.velocity[i];
     if (c != c) c = 0;
     if (c > sv.set.maxvelocity) c = sv.set.maxvelocity;

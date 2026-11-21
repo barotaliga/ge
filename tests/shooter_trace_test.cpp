@@ -16,6 +16,7 @@
 
 namespace sh = ge::shooter;
 using ge::test::loop::Bench;
+using ge::test::loop::box;
 
 namespace {
 
@@ -145,4 +146,27 @@ TEST(the_position_test_answers_whether_a_box_is_stuck) {
   sh::set_origin(b.sv, e, {304, 0, 32});
   CHECK(sh::test_entity_position(b.sv, e));
   (void)other;
+}
+
+// ON THE SINGLE-PLAYER CLOCK a sweep that starts inside a monster's box takes that box's result
+// even over a nearer wall, and one that never leaves the solid ends at its end.
+TEST(on_the_single_player_clock_a_start_in_a_box_wins_and_a_stuck_sweep_ends_at_its_end) {
+  for (const bool sp : {false, true}) {
+    Bench b;
+    sh::ServerSettings set;
+    set.single_player_clock = sp;
+    b.start({box({-1024, -1024, -64}, {1024, 1024, 0}), box({100, -64, 0}, {164, 64, 128})}, {},
+            set);
+    const int monster = b.spawn_box({0, 0, 32}, {-16, -16, -16}, {16, 16, 16}, sh::kSolidSlidebox,
+                                    sh::kMovetypeStep);
+    const sh::HullTrace tr =
+        sh::trace_move(b.sv, {0, 0, 32}, kZero, kZero, {200, 0, 32}, sh::kTraceNormal, -1);
+    CHECK(tr.startsolid);
+    CHECK(tr.ent == (sp ? monster : 0));
+    CHECK(near(tr.endpos.x, sp ? 200 : 100));
+    const sh::HullTrace stuck =
+        sh::trace_move(b.sv, {0, 0, -10}, kZero, kZero, {10, 0, -10}, sh::kTraceNormal, -1);
+    CHECK(stuck.allsolid);
+    CHECK(stuck.endpos.x == (sp ? 10 : 0));
+  }
 }

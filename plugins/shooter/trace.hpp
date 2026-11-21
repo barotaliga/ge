@@ -19,11 +19,15 @@
 // sweep (`kTraceMissile`) meets a monster (kFlagMonster) as a 30-unit cube (+-15) instead of its
 // own box. A trace that is all solid, or reaches a smaller fraction than the best so far, takes its
 // place with that entity as `ent`; "started in solid" is kept from any solid met; an all-solid best
-// ends the walk.
+// ends the walk. On the single-player clock a trace that starts in solid takes the best's place
+// too, even from a nearer hit.
 //
 // A trace's `ent` is the entity hit (0 the world), or -1 when nothing was (the fraction is 1 and it
 // did not start in a solid). Its end point is where the box stops: the end itself after a full
-// run, the start when all solid. Pure: reads the server, writes nothing.
+// run, the start when all solid (on the single-player clock the end: a thing stuck in a wall goes
+// on through it). `test_entity_position` asks whether the entity's box is in a solid by its own
+// trace kind (not solid and triggers meet brush models only), or by the normal kind whatever its
+// solidity on the single-player clock. Pure: reads the server, writes nothing.
 //
 // ge:summary Traces through the server's world: hull choice, box hulls, the area tree's solids
 // ge:keywords trace trace_move clip_to_entity test_entity_position hull-choice hull0 hull1 hull2

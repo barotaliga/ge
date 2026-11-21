@@ -647,3 +647,60 @@ other and is flattened rather than blocking.
   the leaf ambience's level, floor and fade, master volume 0.7, the player's own sounds
   centred.
 - Pause with the console or menu in single player [read].
+
+## The QuakeWorld server on the shared rows (Reader, QuakeWorld release)
+
+Read: id Software's Quake and QuakeWorld source release (GPL-2.0), the QuakeWorld server and the
+player move it shares with the QuakeWorld client. Facts in prose, no code. Marks as above. The
+row numbers are this file's sections. "Original" is the single-player engine, "ours" our tree.
+
+| Row | QuakeWorld server | How |
+| --- | --- | --- |
+| 2 Brush bounds | as the original | submodels widened 1 unit each side at load, the world too [read] |
+| 5 Pushers | as ours, with differences | placed, relinked without touches or impacts; an entity stuck before the push skipped; a think's move over 1/64 unit undone and pushed [read] |
+| 6 Toss | as ours | FL_ONGROUND cleared after the think when velocity z is above 0 [read] |
+| 7 sv_maxvelocity | as the original | per axis, default 2000; toss before gravity, falling step after gravity [read] |
+| 8 Step not solid | as the original | ordinary trace: lands on monsters and players [read] |
+| 9 Autoaim | third way | sv_aim defaults to 2, so no target ever qualifies: aim returns v_forward [derived] |
+| 10 Traces | as the original | same merge and all-solid end at the END point; the player's own move differs (below) [read] |
+| 11 findradius | as the original | entity order, prepended [read] |
+| 12 checkclient | as the original | set copied at the choice, re-chosen after 0.1 s, all 32 slots [read] |
+| 13 Removed entities | as the original | classname and health kept [read] |
+| 14 vectoyaw, vectoangles | as the original | truncated to whole degrees [read] |
+| 15 Chase axis | as the original | movetogoal is builtin 67 (walkmove 32); whole-unit compare [read] |
+| 16 setmodel | as ours | box only for "*n" names, nothing else linked or sized [read] |
+| 21 Touch order | as the original | box re-tested before each trigger [read] |
+| 22 Player bound | third way | no sv_maxvelocity bound on players at all [read] |
+| 24 Current contents | as ours | returned unchanged, never folded into water [read] |
+
+Details [read unless marked]:
+- Pushers, where the QuakeWorld server differs from ours:
+  - every stuck test is the ordinary full trace whatever the tested entity's solidity (no
+   brush-only rule for SOLID_NOT and SOLID_TRIGGER),
+  - nothing loses FL_ONGROUND in a push,
+  - an entity solid at both its moved and its old place: a point-sized one (zero width on x) is
+   relinked at its OLD place and counted as moved; a SOLID_NOT or SOLID_TRIGGER one gets mins x
+   and y set to 0 and maxs set equal to mins (size left unchanged) and is relinked at its OLD
+   place; anything else blocks,
+  - a block: the pusher goes back and is relinked without touches, its blocked function runs
+   (self the pusher, other the blocker), then every entity counted as moved is put back; ltime
+   does not advance for that move,
+  - a blocked snap push leaves the pusher at its place before the think [derived].
+- Autoaim: the userinfo key "noaim" above 0 returns v_forward at once, checked for entity
+  numbers 1 to 31 only (the 32nd slot cannot opt out) [read, derived]. With sv_aim set to 1 or
+  below the search and the answer are the original's: start at origin plus 20, answer built
+  origin to origin [read].
+- The player's own move traces each solid near him (the world, then brush entities, boxes and
+  monsters within 256 units, his own missiles left out); a start-in-solid result counts as
+  fraction 0, the nearest wins and ties keep the earlier [read].
+- The player: each command runs PlayerPreThink, the think, then the shared move, which caps the
+  wish speed (whole vector) at sv_maxspeed 320 (sv_spectatormaxspeed 500) and adds gravity,
+  commands over 50 ms are split into two halves; the frame is capped at 0.1 s. After the move
+  he is relinked with trigger touches, then each solid bumped has its touch run once per packet
+  [read].
+- Current contents: the "at or below water" tests still count a current as liquid (a toss's
+  splash, the player's water level), but watertype keeps the raw value, so a swimming player's
+  upward kick in a current is 50 (water 100, slime 80) [derived]. Nothing pushes in a current
+  [read].
+- Entities: reuse from slot 33, after 0.5 s or at once before 2 s of server time; limit 768,
+  when full a console warning and the last entity is reused instead of an error [read].

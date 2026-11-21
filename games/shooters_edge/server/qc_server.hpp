@@ -175,7 +175,8 @@ struct QcServer : RulesCommon {
   double paused_seconds = 0;
   double check_time = -1;  // checkclient: when the candidate last moved on
   int64_t trace_lines = 0;
-  int check_client = 0;  // checkclient: the candidate
+  int check_client = 0;   // checkclient: the candidate
+  sh::Vec3f check_eye{};  // checkclient on the single-player clock: the eye its set is from
   int inhibited = 0;
   int next_userid = 1;
 

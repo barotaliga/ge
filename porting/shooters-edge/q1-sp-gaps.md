@@ -23,23 +23,19 @@ Rows are named `A<n>` and `B<n>` by audit and row. Work goes rank 1 first, many 
 | --- | --- | --- |
 | 2026-11-20 | #1207 | B1, B2, B3, B5, B6, B7, B8, B9, B10, B11, B13, B14, B16, A1, A4, A19 (the cheats' words and flags), B4 in part |
 | 2026-11-20 | #1216 | B12, B15, B17, B18, B19, B21 (the loading picture), B22, B4's rest, A3, A19's rest |
+| 2026-11-20 | #1221 | A2 (for a game's own content), B20, B21's rest, A16, A17, A18 |
 
 ## In progress
 
-Round 3 (the third PR): A2 (the brush models a unit wider on each side for a game's own content,
-`CampaignOptions::wide_models`: doors, buttons and secret doors travel 2 more, a plat without a
-height drops 2 more, a train rides a unit off its corners, a trigger reaches a unit further; the
-fixture campaigns keep their bounds, so the co-op goldens stand), B20 (a keyboard player's pitch
-drifts to the slope from rest, faster by `v_centerspeed` each second, stopped by a hand on the
-pitch and started again by running forward for `v_centermove`, `centerview` or letting +mlook go
-with lookspring), B21's rest (the console's level banner, `startdemos`, `stopdemo`), A16 (a
-single-player program's setmodel gives an alias model a 32-unit cube and a sprite its half
-sizes), A17 (every sound in the campaign starts at its entity's box centre), A18 (every sound in
-the campaign goes to every player, the distance alone silencing it).
+Round 4 (the fourth PR): A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A21, A22, A24, on the
+single-player clock alone. The QuakeWorld server of the same release answers most of these rows as
+the original does (`q1-sp-host.md` § The QuakeWorld server on the shared rows), but the arena host
+keeps the rules its recordings and goldens hold, so nothing changes there.
 
-## Next
+## Kept by choice
 
-- The rank 3 rows of audit A left: A5 (pushers sweep), A6 to A15, A21 to A24; the shared physics
-  rows (A5, A6, A7, A10, A14, A15) also reach QuakeWorld's server and its goldens, so each needs
-  the same row answered for that game first. `demos` keeps listing the recordings (its meaning in
-  the other games).
+- A20: the campaign steps at a fixed 1/72 s, the original's fastest frame, so a run replays to
+  the bit; no `host_framerate`.
+- A23: co-op can be switched on during a map and the program's globals follow at once, so a
+  single-player game opened to friends plays as co-op without a restart.
+- `demos` keeps listing the recordings (its meaning in the other games).
