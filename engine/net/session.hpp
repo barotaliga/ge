@@ -41,6 +41,11 @@
 //   `command_max` bytes, it reaches the host's process as a `command` event, and whatever the
 //   server answers goes back to that player alone as PRINT lines (`session_host_print`). The
 //   session reads no command itself: the server's features do (engine/server/feature.hpp).
+// - CONFIGS (M21c). The host sends its SERVER INFO (the `sv_` settings every client follows, an
+//   info string) to each player as it is welcomed and to every player when it changes, and may
+//   STUFF console text into a client, which runs it under the client's rules; a client sends its
+//   USER INFO (its name and rates) whenever it changes. `session_config.hpp` ties them to a
+//   console's cvars.
 // - THE SERVER'S OWN WORD. `admit` may refuse an address before a seat is given (a ban list), a
 //   chat line may be held by `chat_filter` before it is relayed (it was answered instead), and
 //   `session_host_remove` takes a player off without the leader's say (an administrator's kick).
@@ -62,6 +67,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "core/prng.hpp"
@@ -144,20 +150,23 @@ const char* phase_name(SessionPhase p);
 const char* scope_name(ChatScope s);
 
 enum class SessionEventType : uint8_t {
-  welcome,   // client: seated (`player` is this client's seat)
-  joined,    // a player took a seat
-  rejoined,  // an away player came back to their seat
-  away,      // a player's peer dropped; the seat is kept
-  left,      // a seat freed (`why`: left, kicked, timed_out)
-  changed,   // a player's team, readiness or leadership changed
-  chat,      // a line (`player` from, `other` the target of a direct line)
-  settings,  // the game's settings changed (session_settings for the bytes)
-  phase,     // the phase changed
-  refused,   // client: the host refused this client's ask (`why`); host: it refused a player
-  kicked,    // client: this client was removed (`why`)
-  lost,      // client: the host is gone for good (reconnect window over, or refused)
-  command,   // host: a player's console line for the server (`player` from; session_text)
-  print,     // client: a line the server answered this client's command with (session_text)
+  welcome,      // client: seated (`player` is this client's seat)
+  joined,       // a player took a seat
+  rejoined,     // an away player came back to their seat
+  away,         // a player's peer dropped; the seat is kept
+  left,         // a seat freed (`why`: left, kicked, timed_out)
+  changed,      // a player's team, readiness or leadership changed
+  chat,         // a line (`player` from, `other` the target of a direct line)
+  settings,     // the game's settings changed (session_settings for the bytes)
+  phase,        // the phase changed
+  refused,      // client: the host refused this client's ask (`why`); host: it refused a player
+  kicked,       // client: this client was removed (`why`)
+  lost,         // client: the host is gone for good (reconnect window over, or refused)
+  command,      // host: a player's console line for the server (`player` from; session_text)
+  print,        // client: a line the server answered this client's command with (session_text)
+  server_info,  // client: the server's info changed (session_text; kept in server_info)
+  stuffed,      // client: text the server stuffed into this client's console (session_text)
+  user_info,    // host: a player's user info changed (session_text; kept in user_info)
 };
 const char* session_event_name(SessionEventType t);
 
@@ -168,7 +177,7 @@ struct SessionEvent {
   ChatScope scope = ChatScope::all;
   SessionWhy why = SessionWhy::none;
   SessionAsk ask = SessionAsk::join;  // refused: what was asked
-  uint32_t offset = 0, size = 0;      // chat, command, print: the line's bytes in event_bytes
+  uint32_t offset = 0, size = 0;  // chat, command, print, the infos, stuffed: bytes in event_bytes
 };
 
 // One seat as the host keeps it and every client mirrors it.
@@ -214,6 +223,8 @@ struct SessionHost {
   int64_t peer_drop_at[kMaxPeers] = {};  // 0: kept
   uint32_t next_order = 0;
   std::vector<uint8_t> settings;
+  std::string server_info;             // the last sent (CONFIGS)
+  std::string user_info[kMaxPlayers];  // each seat's last user info
   std::vector<uint64_t> banned_tokens;
   std::vector<Address> banned_addresses;
   int64_t roster_at = 0;
@@ -240,6 +251,7 @@ struct SessionClient {
   SessionPhase phase = SessionPhase::lobby;
   Player players[kMaxPlayers];
   std::vector<uint8_t> settings;
+  std::string server_info;  // the server's info as last sent (CONFIGS)
   int64_t lost_at = 0, tried_at = 0;
   std::vector<SessionEvent> events;
   std::vector<uint8_t> event_bytes;
@@ -266,6 +278,12 @@ bool session_host_remove(SessionHost& host, int player, SessionWhy why, bool ban
 // One line to one player, as their command's answer (false: no player there to hear it). A
 // listen server's own seat has no peer: its game prints the line itself.
 bool session_host_print(SessionHost& host, int player, const char* text, size_t size);
+// CONFIGS (M21c): the server info sent to every seated player when it changed and to each as it
+// is welcomed (false: the same as last sent, or too long); text stuffed into one player's
+// console, which runs it under the client's rules (only commands a server may stuff, only the
+// server's cvars), or into every present player's with `player` kNoPlayer.
+bool session_host_server_info(SessionHost& host, const char* info, size_t size);
+bool session_host_stuff(SessionHost& host, int player, const char* text, size_t size);
 // Where seat `player` is connected from (false: away or the host's own seat).
 bool session_host_address(const SessionHost& host, int player, Address& out);
 int session_player_count(const SessionHost& host, bool present_only);
@@ -298,6 +316,8 @@ bool session_client_settings(SessionClient& client, const uint8_t* data, size_t 
 // A console line for the server (`status`, `rcon <password> <line>`); its answer comes back as
 // `print` events.
 bool session_client_command(SessionClient& client, const char* text, size_t size);
+// The player's user info (their name, rates and the rest a server reads), sent to the host.
+bool session_client_user_info(SessionClient& client, const char* info, size_t size);
 // Leave for good: the peer is disconnected and the seat freed at once (no away time).
 void session_client_leave(SessionClient& client, int64_t now_us);
 
