@@ -266,8 +266,8 @@ the new ground's plan velocity off again.
   the arc's height exact at any step rate; where it lands moves by less than one step's travel.
 - **Ladders** are a surface flag, not a kind of solid (§ The model, step 2).
 
-A body's state is still all in `MoveState`, so a predicting client (M28d) replays these the same
-way: the ground's id, its velocity and `on_ladder` are part of what it keeps.
+A body's state is still all in `MoveState`, so a predicting client replays these the same way:
+the ground's id, its velocity and `on_ladder` are part of what it keeps (§ Prediction).
 
 ## Knobs as cvars
 
@@ -316,6 +316,42 @@ swimmer decides only the velocity: `carry_along(spec, world, state, dt, step_up)
 through the world along it (the slide, and the step's lifted try when asked), with nothing else
 applied, so a swimmer meets walls and floors as a walker does.
 
+## Prediction
+
+A server steps each player's body from the player's commands, and the player's own client steps
+the same body from the same commands at once, so the hand is never a round trip behind
+(`engine/move/wire.hpp`, over `engine/net`'s replication, `docs/networking.md`). Three pieces make
+the two steps the same:
+
+- **The body as a row.** `pack_body` turns a `MoveState` into `kWireFields` (16) numbers, each
+  with a range and the bits it needs on the wire (`wire_fields()`): the feet (28 bits over
+  +-16384, a 1/8192 of a unit), the velocity (26 bits), a word of flags (the mode, on the ground,
+  crouched, sliding, the jump's button and its rise, on a ladder, the air jumps left and the
+  ground's solid, up to 4095), the crouch's share, the three timers (coyote, the jump buffer, the
+  slide's), the ground's normal on the plan (its height rebuilt) and the ground's velocity.
+  Everything a step reads is in it: a body rebuilt by `unpack_body` steps as the one it came from
+  (`tests/move_wire_test.cpp` replays every static scenario so). The replication keeps the row on
+  its grid after every step on both sides, so a client that replays the same commands from a
+  snapshot reaches the server's body to the bit.
+- **The command as bytes.** `pack_cmd` writes 9: the stick a signed byte a direction, the yaw in
+  1/65536 of a turn, the pitch in 1/32767 of a quarter turn, the buttons, and the command's
+  milliseconds. The sender predicts with what `unpack_cmd` reads back, never its own doubles.
+- **A long command split under a cap.** A frame that hitched sends one long command. `step_wire`
+  (the step the server and the client share) steps it in `split_count(dt, max_dt)` equal pieces
+  no longer than the cap, the count settled by the length alone, so both sides split it alike and
+  the body moves as it would at the fine rate: on the stairs a quarter-second frame stepped whole
+  ends 4 m short of the fine run, split under 20 ms it ends 7 cm past it (`move-predict`'s hitch).
+
+What the client does with a correction is the replication's: the commands since the acknowledged
+one replayed over the server's word, and the error drawn out through the spring (M17o), never
+snapped below `snap_distance`. Measured by `move-predict` at 60 Hz over seven scenarios: on `lan`
+nothing is ever corrected; on `broadband` and `wifi` one command at the start (the server steps
+the first one twice before the second arrives) leaves the drawn body 12 cm off for a moment; the
+worst drawn gap is 17 cm on `mobile`, 33 on `bad` and 66 on `awful`, all under the 1 m bound the
+lab holds. A knock-back the client cannot predict (the server shoves the body 8 m/s sideways) is
+shown about a round trip later: the prediction jumps onto the server's path and the drawn body
+bends over to it, within 10 cm in 0.28 s on `wifi`.
+
 ## Determinism and cost
 
 A step is a pure function of the row, the state, the command, `dt` and the world: no clock, no
@@ -330,6 +366,7 @@ world's trace.
 | Lab | Question |
 | --- | --- |
 | `move-strafe` | How much speed does each row let a strafe jumper gain, at which angle, at which step rate? The classic row's speed over a run (a run, straight hops, the strafe jumper two ways), every row strafe jumping, the gain of one step of air against the wish's angle with the best angle marked, the paths from above, and the end speed by step rate |
+| `move-predict` | Played over each network preset, how far does a predicted body stray from the server's? Each scenario's hand on the client's prediction, every command's error and drawn gap against the server's body, one box a preset; a knock-back the client could not predict charted (server, prediction, drawn); a long frame on the stairs stepped whole and split under the cap |
 | `move-trace` | What does each scenario do? The feet and the top of the head from the side with the world's solids (or from above when the path turns), take-offs, landings, bounces, ladders, slides and walking off marked, the moving solids drawn where they start; every row's running jump; a table of every run's numbers and digest. `--preset` and `--set` retune a run |
 
 ## Decisions
@@ -348,5 +385,6 @@ world's trace.
 
 ## Later
 
-M28d brings prediction and reconciliation over the network. A rotating platform (carry turns the
-body and its view), a capsule hull and a heightfield trace wait for a game that needs them.
+A rotating platform (carry turns the body and its view), a capsule hull and a heightfield trace
+wait for a game that needs them; so does a world that moves under a predicted body (the client
+predicting a moving platform with it, M17p's predicted world).
