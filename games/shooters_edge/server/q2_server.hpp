@@ -522,9 +522,12 @@ struct Q2Server : RulesCommon {
   uint32_t cross_bits = 0;
   bool next_unit = false;
   bool exit_now = false;  // an exit was used: the intermission starts at the frame's end
-  // The area portals by number, open or shut (a door opens those its target names); what is sent
-  // to a client is cut at a shut one once the map's areas are read.
+  // The area portals by number, open or shut (a door opens those its target names), and the map's
+  // areas flooded over the open ones, redone when they change (q2_map.hpp's map_areas_connected).
   std::vector<uint8_t> portals;
+  mutable std::vector<uint8_t> flooded_portals;
+  mutable std::vector<int32_t> area_groups;
+  mutable const ge::brush::Map* flooded_map = nullptr;
   // The monsters (q2_monsters.hpp), the level's count, and who saw a player last: the map
   // entity and its frame, and the player the monsters look at this frame.
   std::vector<Q2Monster> monsters;

@@ -430,9 +430,8 @@ void notice(Q2Server& s, Q2Monster& m) {
       }
     }
   }
-  // 2. a noise a player made, heard within 1000 (an ambusher must also see where); 3. the noise
-  // of his shot's impact, heard by one with no enemy and no ambush. A noise is no enemy: it goes
-  // to where it was (`sound_target`), a second before it may shoot, with no sight call.
+  // 2. a player's noise heard (hearable, through open doors; an ambusher must see where), within
+  // 1000; 3. his shot's impact, by one with no enemy and no ambush. It goes to where it was.
   const Q2Entity& e = body(s, m);
   bool heard = false;
   for (int pass = 0; pass < 2 && !heard; pass++) {
@@ -442,9 +441,10 @@ void notice(Q2Server& s, Q2Monster& m) {
       const Q2Player& p = s.players[i];
       if ((pass == 0 ? p.noise_frame : p.impact_frame) < s.frame_number - 1) continue;
       const sh::Vec3f at = pass == 0 ? p.noise_at : p.impact_at;
-      if (sh::length(at - e.origin) > kHear) continue;
-      if (m.ambush && map_trace(s, eye(e, kind(m)), {}, {}, at, kOpaque, m.entity).fraction < 1)
+      if (m.ambush ? map_trace(s, eye(e, kind(m)), {}, {}, at, kOpaque, m.entity).fraction < 1
+                   : !map_hears(s, e.origin, at))
         continue;
+      if (sh::length(at - e.origin) > kHear || !map_areas_connected(s, e.origin, at)) continue;
       if (m.enemy == -1) {
         m.sound_target = true;
         m.sound_at = at;

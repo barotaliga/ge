@@ -175,6 +175,29 @@ void place(Hall& h, float x, float y, float z) {
 
 float z_of(const sv::Q2Player& p) { return float(p.move.origin[2]) / 8; }
 
+TEST(a_shut_area_portal_cuts_hearing_between_rooms) {
+  // The fixture's hall in area 1, its east door and side room in area 2, portal 1 between them.
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(br::write_bsp(br::sample_fixture(), br::Family::v38, &bytes, &error), error);
+  auto map = std::make_shared<br::Map>();
+  CHECK_MSG(br::read_bsp(bytes, map.get(), &error), error);
+  br::build_phs(map.get());
+  map->areas = {{0, 0}, {1, 1}, {1, 2}};
+  map->area_portals = {{0, 0}, {1, 2}, {1, 1}};
+  for (size_t i = 1; i < map->leaves.size(); i++) map->leaves[i].area = i == 2 || i == 3 ? 2 : 1;
+  sv::Q2Server s;
+  s.map = map;
+  s.portals.assign(2, 0);
+  const sh::Vec3f hall = {256, 192, 64}, side = {700, 256, 64}, corridor = {224, 600, 64};
+  CHECK(!sv::map_areas_connected(s, hall, side) && !sv::map_hears(s, hall, side));
+  CHECK(sv::map_areas_connected(s, hall, corridor));
+  s.portals[1] = 1;  // the door opens
+  CHECK(sv::map_areas_connected(s, hall, side) && sv::map_hears(s, hall, side));
+  s.portals[1] = 0;  // and shuts
+  CHECK(!sv::map_areas_connected(s, side, hall));
+}
+
 }  // namespace
 
 void plat_curve(int fps) {

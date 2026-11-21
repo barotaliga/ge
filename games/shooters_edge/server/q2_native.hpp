@@ -11,8 +11,10 @@
 //   them with the server's values.
 // - **The world** the game asks about: the map's brushes (`trace`, `pointcontents`, a brush
 //   model's hull moved to its entity), the linked entities' boxes (every linked solid entity is
-//   clipped; a list, not a tree), the visible and hearable sets by cluster. Area portals are all
-//   open: every area is connected (the note's § 17, the same picture with a little more sent).
+//   clipped; a list, not a tree), the visible and hearable sets by cluster, then the areas: an
+//   entity linked takes the first area its box touches and the last other one, the game opens and
+//   shuts the portals (all shut at the level's start) and the areas flood over the open ones, so
+//   a shut door cuts sight and hearing sets between rooms (brush/areas.hpp).
 //   A map of clip hulls (Quake's, under classic remix) is traced through the hull a box's
 //   width fits (none, the player's, which is Quake II's player box, or the large one), its
 //   contents read as Quake II's bits, every point in every set.
