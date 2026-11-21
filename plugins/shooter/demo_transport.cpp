@@ -31,6 +31,69 @@ double parse_clock(const std::string& text) {
   return parts > 3 ? -1 : total;
 }
 
+double parse_tenths_clock(const std::string& text) {
+  const auto digits = [](const std::string& d) {
+    if (d.empty() || d.size() > 9) return -1.0;
+    double v = 0;
+    for (char c : d) {
+      if (c < '0' || c > '9') return -1.0;
+      v = v * 10 + (c - '0');
+    }
+    return v;
+  };
+  const size_t colon = text.find(':');
+  const size_t dot = text.find('.');
+  if (colon != std::string::npos &&
+      (text.find(':', colon + 1) != std::string::npos || (dot != std::string::npos && dot < colon)))
+    return -1;
+  if (dot != std::string::npos && text.find('.', dot + 1) != std::string::npos) return -1;
+  const size_t s_from = colon == std::string::npos ? 0 : colon + 1;
+  const double m = colon == std::string::npos ? 0 : digits(text.substr(0, colon));
+  const double sec = digits(text.substr(s_from, dot == std::string::npos ? dot : dot - s_from));
+  const double tenths = dot == std::string::npos ? 0 : digits(text.substr(dot + 1));
+  if (m < 0 || sec < 0 || tenths < 0) return -1;
+  return m * 60 + sec + tenths / 10;
+}
+
+namespace {
+
+// Quake II's `seek [+-]<timespec|percent>[%]` into the asks (parse_tenths_clock).
+void q2_seek(console::Console& c, DemoTransport& p, const console::Args& a) {
+  const std::string w = a.size() > 1 ? a[1] : "";
+  if (a.size() != 2 || w.empty()) {
+    c.print("Usage: seek [+-]<timespec|percent>[%]");
+    return;
+  }
+  const bool rel = w[0] == '+' || w[0] == '-';
+  const double sign = w[0] == '-' ? -1 : 1;
+  const std::string body = rel ? w.substr(1) : w;
+  if (!body.empty() && body.back() == '%') {
+    char* end = nullptr;
+    const std::string n = body.substr(0, body.size() - 1);
+    const double v = std::strtod(n.c_str(), &end);
+    if (n.empty() || end == n.c_str() || *end != '\0' || !(v >= 0)) {
+      c.print("Invalid percentage.");
+      return;
+    }
+    if (rel)
+      p.share_skip_ask += sign * v / 100;
+    else
+      p.share_ask = std::min(v, 100.0) / 100;
+    return;
+  }
+  const double t = parse_tenths_clock(body);
+  if (t < 0) {
+    c.print(rel ? "Invalid relative timespec." : "Invalid absolute timespec.");
+    return;
+  }
+  if (rel)
+    p.skip_ask += sign * t;
+  else
+    p.seek_ask = t;
+}
+
+}  // namespace
+
 void add_demo_transport(console::Console& console, DemoTransport& p, const DemoCalls& calls) {
   using Con = console::Console;
   using CArgs = console::Args;
@@ -62,6 +125,12 @@ void add_demo_transport(console::Console& console, DemoTransport& p, const DemoC
   console.add_command("demo_jump",
                       "demo_jump [+|-][m:]<s>: the demo playing to a time, or on or back by one",
                       [&p](Con& c, const CArgs& a) {
+                        if (a[0].size() == 4 && (a[0][0] | 0x20) == 's' &&
+                            (a[0][1] | 0x20) == 'e' && (a[0][2] | 0x20) == 'e' &&
+                            (a[0][3] | 0x20) == 'k') {  // Quake II's spelling takes its own forms
+                          q2_seek(c, p, a);
+                          return;
+                        }
                         const std::string w = a.size() > 1 ? a[1] : "";
                         const bool rel = !w.empty() && (w[0] == '+' || w[0] == '-');
                         const double t = parse_clock(rel ? w.substr(1) : w);
@@ -74,6 +143,9 @@ void add_demo_transport(console::Console& console, DemoTransport& p, const DemoC
                         else
                           p.skip_ask += w[0] == '-' ? -t : t;
                       });
+  console.add_command("demo_jump_end",
+                      "demo_jump_end: the demo playing to two seconds before its end",
+                      [&p](Con&, const CArgs&) { p.end_ask = true; });
   console.add_command("demo_skip", "demo_skip <s>: the demo playing on (or back, negative) by s",
                       [&p](Con& c, const CArgs& a) {
                         if (a.size() < 2)
@@ -122,6 +194,14 @@ void add_demo_transport(console::Console& console, DemoTransport& p, const DemoC
                         .min = 0,
                         .max = 1},
                        &p.lerp);
+  console.cvars().bind({.name = "demo_jump_skip_messages",
+                        .fallback = "1",
+                        .flags = console::kArchive,
+                        .help = "Whether the messages a demo jump passes over are left unshown.",
+                        .kind = console::CvarKind::boolean,
+                        .values = "1: left unshown (the default); 0: printed as the jump reads "
+                                  "them"},
+                       &p.skip_messages);
 }
 
 }  // namespace ge::shooter

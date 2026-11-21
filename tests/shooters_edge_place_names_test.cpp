@@ -3,7 +3,7 @@
 // back by name and when the map starts; the same map again keeps unsaved edits; a name that would
 // leave the folder refused; no game, no adding; a place reaches loc_dist (500 units in
 // every classic game); Quake II's `$loc_here` and `$loc_there`; a file in any letter case; `%l`
-// in chat.
+// in chat; the view watched answers where the player stands and looks, nothing played none.
 //
 // ge:summary Tests the window's place names: added, removed, saved, read at map start
 // ge:keywords test shooters-edge place-names addloc saveloc loadloc removeloc map_started loc_dist
@@ -15,7 +15,9 @@
 
 #include "check.hpp"
 #include "console/console.hpp"
+#include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/place_names.hpp"
+#include "shooters_edge/client/place_seen.hpp"
 
 namespace cl = shooters_edge::client;
 namespace fs = std::filesystem;
@@ -215,4 +217,23 @@ TEST(loc_trace_passes_over_a_place_behind_a_wall) {
   CHECK(cl::fill_place_codes(p, "%l") == "other side");
   con.execute("loc_trace 1");
   CHECK(cl::fill_place_codes(p, "%l") == "this side");
+}
+
+TEST(the_view_watched_answers_where_the_player_stands_and_looks) {
+  ge::console::Console con;
+  cl::PlaceNames p;
+  cl::Listen listen;
+  cl::PlaceSeen seen;
+  cl::SearchPath files;
+  cl::add_place_queries(con, p, listen, seen, cl::qw_adapter(), files);
+  ge::shooter::Vec3f at{1, 2, 3};
+  CHECK(!p.looked_at(at));                      // nothing watched, no game played
+  CHECK(p.clear_line({0, 0, 0}, {100, 0, 0}));  // no map: nothing in the way
+  seen.on = true;
+  seen.at = {10, 20, 30};
+  seen.angles = {0, 90, 0};  // looking along +y, no map read
+  CHECK(p.looked_at(at));
+  CHECK_MSG(at.x > 9.99f && at.x < 10.01f && at.y > cl::kLookReach + 19 &&
+                at.y < cl::kLookReach + 21 && at.z == 30,
+            std::to_string(at.x) + " " + std::to_string(at.y) + " " + std::to_string(at.z));
 }

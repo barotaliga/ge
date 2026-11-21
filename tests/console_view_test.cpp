@@ -264,4 +264,8 @@ TEST(con_notify_hides_the_notify_lines_and_toggling_lets_them_go) {
   c.run();
   v.toggle();
   CHECK(v.notify().size() == 1);  // kept
+  v.clear_notify();               // a demo's jump lets them go whatever con_clearnotify says
+  CHECK(v.notify().empty());
+  v.add(LineKind::server, "four");
+  CHECK(v.notify().size() == 1 && v.notify()[0]->text == "four");
 }
