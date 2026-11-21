@@ -77,8 +77,11 @@ void reset_atlas(UiPass& pass) {
 // Where `m` sits in the atlas, copying it in when it is new; false when the atlas is full.
 bool place_in_atlas(gpu::Device& device, UiPass& pass, const ui::GlyphMask& m, uint32_t& at) {
   if (const auto hit = pass.glyphs.find(&m); hit != pass.glyphs.end()) {
-    at = hit->second;
-    return true;
+    if (hit->second.serial == m.serial) {
+      at = hit->second.at;
+      return true;
+    }
+    pass.glyphs.erase(hit);  // a mask of a font made again at an old mask's address: copied in
   }
   const auto w = static_cast<uint32_t>(m.w), h = static_cast<uint32_t>(m.h);
   if (w + kPad > kUiAtlasSize || h + kPad > kUiAtlasSize) return false;
@@ -100,7 +103,7 @@ bool place_in_atlas(gpu::Device& device, UiPass& pass, const ui::GlyphMask& m, u
   device.queue.WriteTexture(&dst, m.alpha.data(), m.alpha.size(), &layout, &size);
   ++pass.glyphs_uploaded;
   at = x | (y << 16);
-  pass.glyphs.emplace(&m, at);
+  pass.glyphs.emplace(&m, UiPass::Placed{at, m.serial});
   return true;
 }
 
@@ -226,8 +229,9 @@ bool stage(gpu::Device& device, UiPass& pass, const ui::DrawList& list) {
       it.info[1] = static_cast<uint32_t>(pass.staged_paints.size());
       auto found = b.image ? pass.pictures.find(b.image) : pass.pictures.end();
       if (b.image != nullptr && !b.image->empty() &&
-          (found == pass.pictures.end() ||
-           (found->second.revision != b.image->revision && !found->second.external))) {
+          (found == pass.pictures.end() || ((found->second.revision != b.image->revision ||
+                                             found->second.serial != b.image->serial) &&
+                                            !found->second.external))) {
         ui_image(device, pass, *b.image);
         found = pass.pictures.find(b.image);
       }
@@ -351,6 +355,7 @@ void ui_image(gpu::Device& device, UiPass& pass, const ui::Image& image) {
   }
   write_pixels(device, found->second.texture, image.rgba.data(), w, h);
   found->second.revision = image.revision;
+  found->second.serial = image.serial;
 }
 
 void ui_texture(gpu::Device& device, UiPass& pass, const ui::Image* key,

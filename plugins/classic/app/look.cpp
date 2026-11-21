@@ -583,6 +583,18 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .values = "1..100: that many ms (8.3 the default, for 120 Hz)"},
        &picture.budget_ms);
   ge::classicenhance::bind_switches(cv, &picture.ce);
+  bind(cv,
+       {.name = "ce_enabled",
+        .fallback = "1",
+        .flags = gc::kArchive,
+        .help = "Classic enhance as a whole: off, the game as its packs have it, whatever each ce_ "
+                "switch says.",
+        .kind = gc::CvarKind::boolean,
+        .min = 0,
+        .max = 1,
+        .values = "0: none of it, every ce_ switch kept as set for when it is on again; 1: each "
+                  "ce_ switch as set (the default)"},
+       &picture.ce_enabled);
   // Each dear switch's level when it is on (Stops), beside its ce_ switch.
   const auto level = [&](const char* name, const char* help, const char* values,
                          std::string* field) {
@@ -608,6 +620,18 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         "the far land round the map seen from high up (the default)",
         &picture.skies_quality);
   ge::brush::app::add_weather_cvars(cv, picture.weather);
+}
+
+void apply_ce_enabled(Picture& picture, const gc::Cvars& cvars) {
+  if (!picture.ce_enabled) {
+    for (const ge::classicenhance::SwitchSpec& s : ge::classicenhance::switches())
+      picture.ce.*s.field = false;
+  } else if (!picture.ce_applied) {
+    for (const ge::classicenhance::SwitchSpec& s : ge::classicenhance::switches())
+      if (const gc::Cvar* c = cvars.find("ce_" + std::string(s.id)); c != nullptr)
+        picture.ce.*s.field = c->on();
+  }
+  picture.ce_applied = picture.ce_enabled;
 }
 
 Look look_of(const Picture& picture) {

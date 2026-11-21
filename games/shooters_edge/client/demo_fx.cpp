@@ -50,6 +50,7 @@ Effect effect_of(const DemoEffect& d) {
       break;
     case DemoEffectKind::blood:
       e.kind = EffectKind::blood;
+      e.way = d.way;  // a program's burst's way (code -1)
       break;
   }
   return e;

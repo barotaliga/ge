@@ -94,7 +94,11 @@ struct UiPass {
   // The glyph atlas and its shelves.
   wgpu::Texture atlas;
   wgpu::TextureView atlas_view;
-  std::unordered_map<const ui::GlyphMask*, uint32_t> glyphs;  // packed x | y << 16
+  struct Placed {
+    uint32_t at = 0;      // packed x | y << 16
+    uint64_t serial = 0;  // the mask's (ui/font.hpp): another mask at its address is not it
+  };
+  std::unordered_map<const ui::GlyphMask*, Placed> glyphs;
   uint32_t shelf_x = 0, shelf_y = 0, shelf_h = 0;
   uint32_t atlas_resets = 0;
   uint32_t glyphs_uploaded = 0;
@@ -106,6 +110,7 @@ struct UiPass {
     wgpu::BindGroup group;
     uint32_t width = 0, height = 0;
     uint64_t revision = 0;  // the image's when it was uploaded
+    uint64_t serial = 0;    // the image's (ui/image.hpp): another image at its address is not it
     bool external = false;  // bound by ui_texture: never uploaded from the image
   };
   std::unordered_map<const ui::Image*, Picture> pictures;

@@ -62,7 +62,7 @@ struct TagPiece {
 // (from the lit set when `lit` and it has them); the tag's width into `width`. Empty when a letter
 // is not cut.
 std::vector<TagPiece> tag_pieces(const ClassicArt& art, std::string_view text, bool lit,
-                                 float* width);
+                                 float* width, Tone tone = Tone::full);
 
 // A PAGE'S TITLE ON A BANNER, for a page the pack has no banner for: the frame of GAME's banner
 // (its hole and logo left of x 40, its maker's mark from x 236), the dirty metal between, and the

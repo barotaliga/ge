@@ -24,7 +24,9 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <optional>
+#include <string>
 
 #include "console/view.hpp"
 #include "input/state.hpp"
@@ -34,11 +36,22 @@ namespace ge::ui {
 // The modifiers held, kept between frames, and whether the console held the keyboard this frame.
 struct ConsoleKeys {
   bool ctrl = false, alt = false, shift = false;
+  bool cmd = false;  // the Command (GUI) key: a Mac's paste is Command-V
+  // The clipboard's text for a paste (Command-V or Ctrl-V while typing); null: no paste. The
+  // platform's `clipboard_text` in a window, a fixed string in a test.
+  std::function<std::string()> paste = {};
+  // The selected scrollback text put on the clipboard (Command-C or Ctrl-C while the console has a
+  // selection, ConsoleView::selected_text); null: no copy.
+  std::function<void(const std::string&)> copy = {};
   bool held = false;  // the view was down at some point this frame: the game reads no keys
 };
 
 // The input line's key for a keyboard key by its HID usage; none for a key it does not edit.
 std::optional<console::EditKey> edit_key(uint16_t usage);
+
+// Text pasted into the input line as one line: each line break a `;` (a pasted cfg runs line by
+// line), other control characters dropped.
+std::string paste_line(std::string_view text);
 
 // Feed `queue`'s keyboard and text events, in order, to `c`'s binds and `view`'s input line.
 void feed_console(console::Console& c, console::ConsoleView& view, const input::Queue& queue,

@@ -568,6 +568,12 @@ fn exposure() -> f32 {
 // an eclipse all read bright, their seas and shading multiplied on as they are.
 const kMoonTop = 0.45;
 
+// The lift a map's sky faces put on the sky after it is drawn (FrameView::sky_lift, kept in the
+// flat fog's last lane), 1 none: what a disc already worked out as seen is divided by.
+fn sky_lift() -> f32 {
+  return max(frame.flat_fog[1].w, 1e-6);
+}
+
 fn as_seen(l: f32) -> f32 {
   let top = kMoonTop / exposure();
   let x = l / top;
