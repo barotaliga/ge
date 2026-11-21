@@ -22,7 +22,7 @@ concepts: [set, background-run, handoff, line-cap, split, metric-order, digest, 
   put on an item believed gone. Fix the belief, never the tolerance.
 - A preset change moves labs that `make precheck` never reaches (its digest step follows the
   files changed, not the bots' behaviour): #1251 put `airend` in the preset with only the tests'
-  goldens rewritten and left main red on 25 lab digests (hub-radar, match-report, se-audio...).
+  goldens rewritten and left main red on 25 lab digests.
   Before the PR, run every lab's smoke digests, ONE SHARD AT A TIME with its `--out` deleted after
   each: eight shards at once wrote ~2.6 GB of pictures and filled the disk. A GPU lab that finds a
   game's files on this Mac (`se-fly`) digests differently from CI: take CI's value for it.
