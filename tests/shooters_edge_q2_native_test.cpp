@@ -22,6 +22,7 @@
 #include "classic/protocol/directions.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_native_host.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
 
 namespace {
@@ -202,9 +203,11 @@ TEST(a_player_joins_moves_on_the_floor_and_is_stopped_by_the_box) {
   CHECK(holds(s->raw.reliable[0], "player 1 entered the game"));
   CHECK(s->raw.config[1312] == "tester\\male/grunt");
   const int64_t before = s->frame_number;
-  ticks(r, 77, 0);  // a second of host ticks: ten of the game's frames
+  r->clients[0].ping_ms = 42;  // the round trip the net server measured
+  ticks(r, 77, 0);             // a second of host ticks: ten of the game's frames
   CHECK(s->frame_number - before >= 9 && s->frame_number - before <= 11);
   CHECK(s->raw.players[0].stats[1] == 100);
+  CHECK_MSG(s->host->entity(1)->client->ping == 42, "the game reads the measured ping");
   CHECK_MSG(z_of(*s) > 23 && z_of(*s) < 25, "on the floor: z " + std::to_string(z_of(*s)));
   ticks(r, 154, 400);  // forward (+x) into the box 96 units ahead
   const float x = x_of(*s);

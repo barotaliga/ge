@@ -1,10 +1,10 @@
-// Quake II's bots lab: the one bot (bots/fighter.hpp) playing a deathmatch under Quake II's
+// Quake II's bots lab: the one bot (shooterbots/fighter.hpp) playing a deathmatch under Quake II's
 // rules on a version 38 hall built here (no game files), reading Quake II's arsenal
-// (bots/bot_arsenal.hpp). Two halves joined by a doorway, a ledge a plat rises to with the railgun
-// on it, a teleporter pad, the shotgun, the chaingun and the rocket launcher with their ammo, body
-// armour and health. Four bots for a while: their frags and deaths, what they took, which weapon
-// was in hand how long, the steps it fired in, and every bot's path drawn over the hall's plan.
-// Every number is deterministic.
+// (shooterbots/bot_arsenal.hpp). Two halves joined by a doorway, a ledge a plat rises to with the
+// railgun on it, a teleporter pad, the shotgun, the chaingun and the rocket launcher with their
+// ammo, body armour and health. Four bots for a while: their frags and deaths, what they took,
+// which weapon was in hand how long, the steps it fired in, and every bot's path drawn over the
+// hall's plan. Every number is deterministic.
 //
 // ge:summary Lab: the bots in a Quake II deathmatch on a version 38 hall: frags, pickups, weapons
 // ge:keywords lab q2 bots deathmatch arsenal se-q2-bots fighter version-38 frags pickups
@@ -22,12 +22,14 @@
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
+#include "shooterbots/bot_arsenal.hpp"
 #include "shooterbots/features.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/map_nav.hpp"
 #include "shooterbots/traits.hpp"
-#include "shooters_edge/bots/bot_arsenal.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -180,9 +182,9 @@ void run(gl::Lab& lab) {
   }
   auto nav = std::make_unique<bt::MapNav>();
   nav->move = bt::q2_nav_move(sv::q2_air_accelerate(*sv::q2_of(r)));
-  if (!bt::build_map_nav(*r, spec, "info_player_deathmatch", *nav, error)) {
+  if (!bt::build_map_nav(*r, spec, bt::quake_maps(), "info_player_deathmatch", *nav, error)) {
     lab.fail("the bots' nav did not build on " + name + ": " + error,
-             "Read bots/map_nav.cpp's build_map_nav. Skill: bots.");
+             "Read shooterbots/map_nav.cpp's build_map_nav. Skill: bots.");
     return;
   }
   const std::string text = entity_text(*map);
@@ -193,11 +195,10 @@ void run(gl::Lab& lab) {
     auto seat = std::make_unique<Seat>();
     bt::Fighter& f = seat->fighter;
     const sb::AimSkill skill = i % 2 == 0 ? sb::AimSkill::expert : sb::AimSkill::average;
-    f.arsenal = &arsenal;
     f.features = sb::features_of(skill);
     bt::fighter_init(f, nav->graph, *r, i, text.c_str(), skill,
                      sb::traits_of(skill, sb::Temper::balanced), kBotHz,
-                     static_cast<uint32_t>(1000 + i));
+                     static_cast<uint32_t>(1000 + i), arsenal);
     f.bot.yaw = r->sv.edicts[static_cast<size_t>(i) + 1].v_angle.y;
     f.bot.pilot.world = &nav->world;
     seat->path.label = kNames[i];
@@ -290,16 +291,18 @@ void run(gl::Lab& lab) {
                static_cast<double>(nav->graph.counts.by_kind[static_cast<int>(k)]), "links");
   if (pickups == 0)
     lab.fail("no bot took an item on " + name,
-             "Read the fighter's goals (bots/goals.cpp) and item_of with Quake II's arsenal "
-             "(bots/knowledge.cpp). Skill: bots.");
+             "Read the fighter's goals (shooterbots/goals.cpp) and item_of with Quake II's arsenal "
+             "(shooterbots/knowledge.cpp). Skill: bots.");
   if (shots == 0)
-    lab.fail("no bot fired a shot",
-             "Read choose_weapon and the trigger in bots/fighter.cpp, and read_stats with the "
-             "Quake II's numbers (bots/bot_arsenal.cpp). Skill: bots.");
+    lab.fail(
+        "no bot fired a shot",
+        "Read choose_weapon and the trigger in shooterbots/fighter.cpp, and read_stats with the "
+        "Quake II's numbers (shooterbots/bot_arsenal.cpp). Skill: bots.");
   if (off_blaster == 0)
-    lab.fail("no bot held anything but the blaster",
-             "Read choose_weapon in bots/fighter.cpp and the weapon numbers Quake II's rules "
-             "take (server/q2_combat.cpp). Skill: bots.");
+    lab.fail(
+        "no bot held anything but the blaster",
+        "Read choose_weapon in shooterbots/fighter.cpp and the weapon numbers Quake II's rules "
+        "take (server/q2_combat.cpp). Skill: bots.");
 
   // The paths over the plan: the walls as lines, each bot's trail its own colour.
   gl::LineChart plan;
@@ -331,7 +334,8 @@ const gl::LabSpec kSpec{
     "se-q2-bots",
     gl::LabKind::drive,
     "game:shooters_edge",
-    "the bots in a deathmatch under Quake II's rules, reading its arsenal (bots/bot_arsenal.hpp)",
+    "the bots in a deathmatch under Quake II's rules, reading its arsenal "
+    "(shooterbots/bot_arsenal.hpp)",
     "bots",
     "Do the bots walk, ride, teleport, pick up, switch to and fire Quake II's weapons, and score "
     "frags on a version 38 map under its rules?",

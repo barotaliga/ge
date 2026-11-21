@@ -122,6 +122,8 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   auto bind = [&](std::string_view id, std::string_view fallback, uint32_t flags,
                   std::string_view help, CvarKind kind, double min, double max,
                   std::string_view values, auto* target) {
+    for (int i = 0; i < game.name_count; i++)  // the game's own meaning of this name sets it aside
+      if (game.names[i].own && id == game.names[i].name) return;
     cvars.bind({.name = id,
                 .fallback = fallback,
                 .flags = flags,

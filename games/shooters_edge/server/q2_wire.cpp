@@ -24,7 +24,7 @@ namespace sh = ge::shooter;
 constexpr uint8_t kPrint = 10, kStuffText = 11, kServerData = 12, kConfigString = 13,
                   kBaseline = 14, kCenterPrint = 15, kPlayerInfo = 17, kPacketEntities = 18,
                   kFrame = 20, kSound = 9, kLayout = 4, kInventory = 5, kTempEntity = 3,
-                  kMuzzleFlash = 1;
+                  kMuzzleFlash = 1, kMuzzleFlash2 = 2;
 
 // Configstring slots.
 constexpr int kCsName = 0, kCsSky = 2, kCsSkyAxis = 3, kCsSkyRotate = 4, kCsStatusBar = 5,
@@ -129,7 +129,23 @@ namespace {
 
 // A player's entry or exit flash for `e` ("sq_login", "sq_logout" on its entity) as the
 // protocol's muzzle flash 9 or 10; false for any other effect.
+// A gun's flash: a player's shot ("q2_flash", its value in values[0]) as message 1, a monster's
+// ("te_monster_flash.*" with a value in values[3]) as message 2 (server/q2_flash.hpp).
 bool write_flash(Out& o, const NetEvent& e) {
+  if (e.text == "q2_flash" && e.ent > 0 && e.ent <= sh::kMaxClients) {
+    o.u8(kMuzzleFlash);
+    o.i16(e.ent);
+    o.u8(static_cast<uint32_t>(e.values[0]) & 255u);
+    return true;
+  }
+  if (e.kind == EventKind::trail_effect && e.text.starts_with("te_monster_flash.")) {
+    const int value = static_cast<int>(e.values[3]);
+    if (value <= 0 || value > 255 || e.ent <= 0) return true;  // none the protocol has: dropped
+    o.u8(kMuzzleFlash2);
+    o.i16(e.ent);
+    o.u8(static_cast<uint32_t>(value));
+    return true;
+  }
   const int flash = e.text == "sq_login" ? 9 : e.text == "sq_logout" ? 10 : 0;
   if (flash == 0 || e.ent <= 0 || e.ent > sh::kMaxClients) return false;
   o.u8(kMuzzleFlash);

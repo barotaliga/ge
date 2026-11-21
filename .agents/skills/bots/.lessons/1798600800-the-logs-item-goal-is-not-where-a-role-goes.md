@@ -1,7 +1,7 @@
 ---
 title: The log's item goal is not where the bot goes while a role holds it; an item score moves only free bots
 date: 2026-11-21
-scope: games/shooters_edge/bots/fighter.cpp, games/shooters_edge/bots/fighter_items.cpp, games/shooters_edge/labs/chain_read.hpp
+scope: plugins/shooterbots/fighter.cpp, plugins/shooterbots/fighter_items.cpp, games/shooters_edge/labs/chain_read.hpp
 concepts: [item-goal, role-goal, roles, hold, push, rush, circuit, chain, round, high-mega, dm2, decision-log]
 ---
 

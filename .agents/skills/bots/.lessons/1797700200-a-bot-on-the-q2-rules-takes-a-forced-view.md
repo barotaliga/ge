@@ -1,7 +1,7 @@
 ---
 title: A bot driving Quake II's rules takes the view the rules forced, or it walks the wrong way after a level change
 date: 2026-11-15
-scope: games/shooters_edge/bots/q2_unit.cpp, games/shooters_edge/bots/way_through.cpp, games/shooters_edge/server/q2_map.cpp
+scope: games/shooters_edge/bots/q2_unit.cpp, plugins/shooterbots/way_through.cpp, games/shooters_edge/server/q2_map.cpp
 concepts: [forced-view, level-change, way-through, brush-box, q2]
 ---
 

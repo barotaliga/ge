@@ -1,10 +1,10 @@
-// The maps' rocket-jump tricks (rocket_tricks.hpp).
+// Quake's maps' rocket-jump tricks (quake_maps.hpp).
 //
-// ge:summary The maps' rocket-jump tricks as rows, and as the nav's
-// ge:keywords rocket-tricks tricks rocket_tricks nav_tricks
+// ge:summary Quake's maps' rocket-jump tricks as rows
+// ge:keywords rocket-tricks tricks rocket_tricks
 // ge:skill bots
 // ge:test tests/shooters_edge_team_test.cpp
-#include "shooters_edge/bots/rocket_tricks.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 
 namespace shooters_edge::bots {
 
@@ -49,22 +49,6 @@ std::span<const RocketTrick> rocket_tricks(std::string_view name) {
     n++;
   }
   return {kTricks + first, n};
-}
-
-std::vector<ge::shooterbots::NavTrick> nav_tricks(std::span<const RocketTrick> tricks) {
-  std::vector<ge::shooterbots::NavTrick> out;
-  out.reserve(tricks.size());
-  for (const RocketTrick& t : tricks) {
-    ge::shooterbots::NavTrick n;
-    n.from = t.from;
-    n.to = t.to;
-    n.back = t.flip;
-    n.pitch = t.pitch;
-    n.run = t.run;
-    n.level = t.level;
-    out.push_back(n);
-  }
-  return out;
 }
 
 }  // namespace shooters_edge::bots

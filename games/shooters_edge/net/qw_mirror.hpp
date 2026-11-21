@@ -1,7 +1,7 @@
 // THE CLIENT'S WORLD: a fighter's world rebuilt from what its QuakeWorld client was sent, so a bot
 // plays on a server it cannot read (an existing server somewhere else) exactly as it plays on
-// ours. The fighter (bots/fighter.hpp) reads a `server::RulesCommon`; the mirror is one, filled
-// only from the client (qw_client.hpp), so whatever the fighter reads is a fact the server
+// ours. The fighter (shooterbots/fighter.hpp) reads a `server::RulesCommon`; the mirror is one,
+// filled only from the client (qw_client.hpp), so whatever the fighter reads is a fact the server
 // sent this player and nothing more.
 //
 // WHAT IS FILLED, each `mirror_update` (one a client tick, before its move is asked for):

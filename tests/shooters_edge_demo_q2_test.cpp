@@ -87,7 +87,7 @@ TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
   cl::Demo d;
   std::string error;
   CHECK_MSG(cl::open_demo(file, d, error), error);
-  int steps = 0, falls = 0, frames = 0;
+  int steps = 0, falls = 0, frames = 0, shots = 0;
   for (;;) {
     if (cl::next_frame(d, error) != cl::DemoRead::frame) break;
     frames++;
@@ -95,6 +95,11 @@ TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
       if (o.name == nullptr) continue;
       const std::string name = o.name;
       if (name == "weapons/grenlf1a.wav") continue;  // the third player's entry (below)
+      if (name.starts_with("weapons/shotg")) {       // the recorder's own shotgun flash: shot, pump
+        CHECK(o.entity == 1);
+        shots++;
+        continue;
+      }
       CHECK(o.entity == 2);
       if (name.starts_with("player/step")) {
         steps++;
@@ -106,6 +111,7 @@ TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
   CHECK(frames == 60);
   CHECK_MSG(steps == 6, std::to_string(steps));  // frames 5, 15, ..., 55: none carried over
   CHECK(falls == 1);
+  CHECK(shots % 2 == 0);  // each shot heard with its pump
   // Quake II's own arrivals, each in its frame at its entity: the teleport's burst, the item's
   // return and the third player's entry (effects.hpp's q2_teleport_burst and kin).
   CHECK_MSG(cl::open_demo(file, d, error), error);
@@ -135,13 +141,14 @@ TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
   for (const std::string& a : arrivals) got += a + " ";
   CHECK_MSG(got == "sq_login@11 sq_teleport@21 sq_item_back@41 ", got);
   CHECK(flash_heard == 1);
-  // Without the events, none.
+  // Without the events, none but the recorder's own gun's.
   const std::vector<uint8_t> plain = cl::q2_fixture(6, 7);
   cl::Demo q;
   CHECK_MSG(cl::open_demo(plain, q, error), error);
   int named = 0;
   while (cl::next_frame(q, error) == cl::DemoRead::frame)
-    for (const cl::DemoSound& o : q.state.started) named += o.name != nullptr ? 1 : 0;
+    for (const cl::DemoSound& o : q.state.started)
+      named += o.name != nullptr && !std::string(o.name).starts_with("weapons/shotg") ? 1 : 0;
   CHECK(named == 0);
 }
 

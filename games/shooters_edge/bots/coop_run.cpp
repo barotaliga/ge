@@ -290,7 +290,7 @@ CoopReport run_coop(const CoopOptions& opt) {
         std::string(kCoopHallEntities) + (opt.exit ? kCoopHallExitEntities : "");
     f.features = sb::features_of(m.skill);
     fighter_init(f, graph, s, k + 1, ents.c_str(), m.skill, m.traits, 1000.0 / kMsec,
-                 opt.seed + 31u * static_cast<uint32_t>(k + 1));
+                 opt.seed + 31u * static_cast<uint32_t>(k + 1), first_arsenal());
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 2].view_angles.y;
     f.bot.pilot.world = &world;
     escort_init(f, s, k + 1, 0);

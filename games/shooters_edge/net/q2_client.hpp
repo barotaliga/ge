@@ -19,7 +19,7 @@
 // ge:summary A scripted q2-protocol client: challenge, connect, signon, frames and moves
 // ge:keywords q2-client protocol-34 scripted-client signon getchallenge connect configstrings
 // ge:keywords baselines precache begin move ack-frame spectator recording dm2 reconnect
-// ge:keywords q2_client_start q2_client_tick q2_client_stop q2_client_command
+// ge:keywords q2_client_start q2_client_tick q2_client_stop q2_client_command q2_client_userinfo
 // ge:keywords download nextdl download-origin fetch
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_net_test.cpp
@@ -211,6 +211,8 @@ void q2_client_start(Q2ClientEnd& c, gn::Transport& t, const gn::Address& server
 void q2_client_tick(Q2ClientEnd& c, int64_t now_us);
 // Queues a string command on the reliable channel (`say hello`).
 void q2_client_command(Q2ClientEnd& c, const std::string& line);
+// The user info sent again as it stands in `c.cfg` (a setting in it changed while joined).
+void q2_client_userinfo(Q2ClientEnd& c);
 // Its voice's target (`voicetarg <word>`: all, team, near, a slot), told to the server when it
 // changes once the server takes its voice.
 void q2_voice_target(Q2ClientEnd& c, const std::string& word);

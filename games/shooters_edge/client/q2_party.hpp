@@ -1,5 +1,5 @@
-// QUAKE II'S COMPANIONS: a co-op companion (bots/companion.hpp) beside the window's player in the
-// Quake II's single-player or co-op game, which runs on the rules themselves
+// QUAKE II'S COMPANIONS: a co-op companion (shooterbots/companion.hpp) beside the window's player
+// in the Quake II's single-player or co-op game, which runs on the rules themselves
 // (server/q2_server.hpp keeps the campaign: the body carried, the coop spots) rather than on a
 // campaign host. The match path (net/qw_game.cpp) owns one once `addbot` is typed outside
 // deathmatch:
@@ -7,8 +7,9 @@
 // - `addbot [novice|average|expert]` seats a companion in the lowest free slot of the rules (its
 //   player connected as a bot), the window's player (slot 0) its leader; `removebot` lets the
 //   highest one go;
-// - the NAV is built off the map's brushes (bots/map_nav.hpp, from `info_player_start`), and the
-//   fighter reads Quake II's arsenal (bots/bot_arsenal.hpp) and Quake II's monsters;
+// - the NAV is built off the map's brushes (shooterbots/map_nav.hpp, from `info_player_start`), and
+// the
+//   fighter reads Quake II's arsenal (shooterbots/bot_arsenal.hpp) and Quake II's monsters;
 // - every map entered (a level change on the same rules, or a new game on new ones) rebuilds the
 //   nav and makes each companion afresh on it; a map no companion can walk sends them away;
 // - each frame a companion's packet goes into the frame after the player's, in slot order, made
@@ -30,8 +31,9 @@
 #include <vector>
 
 #include "shooterbots/aim.hpp"
-#include "shooters_edge/bots/fighter.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooterbots/map_nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::client {

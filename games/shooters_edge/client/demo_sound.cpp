@@ -28,6 +28,7 @@ constexpr float kUnitsPerAttenuation = 1000;  // a sound of attenuation 1 dies o
 // sounds). The bytes' units are taken as the sound message's: volume b / 255, attenuation b / 64.
 constexpr int kLoopChannel = 256;
 constexpr float kLoopAttenuation = 3;
+constexpr size_t kMostLater = 64;  // delayed sounds waiting at once (the rest start now)
 
 ge::core::Vec3 at_of(sh::Vec3f p) { return {p.x, p.y, p.z}; }
 
@@ -156,6 +157,7 @@ void DemoSounds::level(const DemoState& s, const ge::brush::Map* map) {
 }
 
 void DemoSounds::silence() {
+  later_.clear();
   std::vector<int> entities;  // every entity sounding, once (stopping changes the slots)
   for (const au::Channels::Slot& slot : channels_.slots())
     if (slot.voice.valid() &&
@@ -266,6 +268,21 @@ void RetiredSounds::prune() {
   std::erase_if(kept_, [](const std::unique_ptr<DemoSounds>& s) { return !s->sounding(); });
 }
 
+void DemoSounds::start(const DemoState& s, const DemoSound& d) {
+  const au::Pcm* pcm = d.name != nullptr ? by_name(s, d) : recording(d.sound);
+  if (!pcm && d.name == nullptr) pcm = own(s, d);
+  if (!pcm) return;
+  au::Emit e;
+  e.entity = d.entity;
+  e.channel = d.channel;
+  e.at = at_of(d.origin);
+  e.volume = d.volume * volume_;
+  e.attenuation = d.attenuation / kUnitsPerAttenuation;
+  e.loop = au::Loop::once;
+  channels_.play(*pcm, e);
+  stats_.started++;
+}
+
 void DemoSounds::frame(const DemoState& s, int listener, float dt) {
   frame(s, s.started, s.stopped, listener, dt);
 }
@@ -277,19 +294,17 @@ void DemoSounds::frame(const DemoState& s, std::span<const DemoSound> started,
   if ((enhanced_ != nullptr && *enhanced_) != listed_enhanced_) relist(false);
   static_loops(s);
   for (const auto& [entity, channel] : stopped) channels_.stop(entity, channel);
+  // The delayed ones due: each counts down by the frame's time (a shotgun's pump after its shot).
+  for (DemoSound& d : later_) d.delay -= dt;
+  for (const DemoSound& d : later_)
+    if (d.delay <= 0) start(s, d);
+  std::erase_if(later_, [](const DemoSound& d) { return d.delay <= 0; });
   for (const DemoSound& d : started) {
-    const au::Pcm* pcm = d.name != nullptr ? by_name(s, d) : recording(d.sound);
-    if (!pcm && d.name == nullptr) pcm = own(s, d);
-    if (!pcm) continue;
-    au::Emit e;
-    e.entity = d.entity;
-    e.channel = d.channel;
-    e.at = at_of(d.origin);
-    e.volume = d.volume * volume_;
-    e.attenuation = d.attenuation / kUnitsPerAttenuation;
-    e.loop = au::Loop::once;
-    channels_.play(*pcm, e);
-    stats_.started++;
+    if (d.delay > 0 && later_.size() < kMostLater) {
+      later_.push_back(d);
+      continue;
+    }
+    start(s, d);
   }
   entity_loops(s);
   // Sounds ride their entities: a door grinding as it opens, a rocket's roar in flight.

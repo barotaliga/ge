@@ -53,4 +53,7 @@ Said parse_say(std::string_view text);
 // is not one.
 bool split_team_line(std::string_view line, std::string& name, std::string& text);
 
+// `say_text` and `parse_say` as the bots' team words (an arsenal's `talk`).
+const ge::shooterbots::TeamWords& team_words();
+
 }  // namespace shooters_edge::bots

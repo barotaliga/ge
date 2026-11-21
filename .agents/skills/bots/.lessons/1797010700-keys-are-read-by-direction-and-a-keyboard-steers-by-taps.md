@@ -1,7 +1,7 @@
 ---
 title: People's keys are read off a recording by direction, a keyboard steers by tapping between sets, and keys are judged off the recording
 date: 2026-11-11
-scope: games/shooters_edge/labs/keys_read.hpp, games/shooters_edge/bots/keyboard.cpp, engine/ai/keys.hpp, plugins/shooterbots/pilot.cpp, games/shooters_edge/labs/se_people_lab.cpp
+scope: games/shooters_edge/labs/keys_read.hpp, plugins/shooterbots/keyboard.cpp, engine/ai/keys.hpp, plugins/shooterbots/pilot.cpp, games/shooters_edge/labs/se_people_lab.cpp
 concepts: [keys, keyboard, inferred-keys, key-set, keysteer, feathering, jumpkey, se-people, bumps, calm, fight]
 ---
 

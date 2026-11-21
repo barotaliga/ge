@@ -54,6 +54,8 @@ bool save_settings(ge::console::Console& con, const std::filesystem::path& serie
 
 struct UserInfo {
   int top = 0, bottom = 0;                                      // topcolor, bottomcolor
+  int rate = 2500;                                              // rate (the loaded game's)
+  std::string password;                                         // password: a closed server's
   bool speedjump = false;                                       // cl_speedjump
   float speedjump_view = 0.5f;                                  // cl_speedjump_view
   const shooters_edge::server::RulesCommon* sent_to = nullptr;  // null: send again
@@ -64,7 +66,7 @@ struct UserInfo {
   std::string model, sent_model;
 };
 // `topcolor`, `bottomcolor`, `skin`, `model` and `cl_speedjump` over `info` (it must outlive
-// `con`).
+// `con`), and the classic layer's `rate` and `password` and the `color` command.
 void add_user_info_cvars(ge::console::Console& con, UserInfo& info);
 // The name and colours sent to the server playing when they changed or it is a new server.
 void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info);

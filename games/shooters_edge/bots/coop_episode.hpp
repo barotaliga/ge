@@ -33,8 +33,9 @@
 #include <string>
 #include <vector>
 
-#include "shooters_edge/bots/companion.hpp"
-#include "shooters_edge/bots/way_through.hpp"
+#include "shooterbots/companion.hpp"
+#include "shooterbots/way_through.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/server/campaign.hpp"
 
 namespace shooters_edge::bots {

@@ -5,6 +5,7 @@
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_campaign_view_test.cpp
 #include "shooters_edge/client/coop_party.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 
 namespace sb = ge::shooterbots;
 
@@ -22,7 +23,7 @@ bool ensure_graph(Party& p, const sv::Campaign& c, const sv::MapSpec& map, std::
     return false;
   }
   auto nav = std::make_unique<bots::MapNav>();
-  if (!bots::build_map_nav(*q, map, "info_player_start", *nav, error)) {
+  if (!bots::build_map_nav(*q, map, bots::quake_maps(), "info_player_start", *nav, error)) {
     error += ". Bots can't play on this map; try coop on another.";
     return false;
   }
@@ -40,7 +41,7 @@ void make(Party& p, const sv::RulesCommon& s, const sv::MapSpec& map, int slot) 
   m.fighter.features = sb::features_of(m.skill);
   bots::fighter_init(m.fighter, p.nav->graph, s, slot, map.entities.c_str(), m.skill,
                      sb::traits_of(m.skill, sb::Temper::balanced), kHz,
-                     p.seed + 31u * static_cast<uint32_t>(slot));
+                     p.seed + 31u * static_cast<uint32_t>(slot), bots::first_arsenal());
   m.fighter.bot.yaw = s.world.entities[static_cast<size_t>(slot) + 1].view_angles.y;
   m.fighter.bot.pilot.world = &p.nav->world;
   if (p.nav->swim.leading > 0) m.fighter.swim = &p.nav->swim;
