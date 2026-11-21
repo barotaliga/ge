@@ -24,13 +24,18 @@ Rows are named `A<n>` and `B<n>` by audit and row. Work goes rank 1 first, many 
 | 2026-11-20 | #1207 | B1, B2, B3, B5, B6, B7, B8, B9, B10, B11, B13, B14, B16, A1, A4, A19 (the cheats' words and flags), B4 in part |
 | 2026-11-20 | #1216 | B12, B15, B17, B18, B19, B21 (the loading picture), B22, B4's rest, A3, A19's rest |
 | 2026-11-20 | #1221 | A2 (for a game's own content), B20, B21's rest, A16, A17, A18 |
+| 2026-11-21 | #1226 | A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A21, A22, A24 (on the single-player clock alone) |
 
-## In progress
+## Co-op on every map
 
-Round 4 (the fourth PR): A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A21, A22, A24, on the
-single-player clock alone. The QuakeWorld server of the same release answers most of these rows as
-the original does (`q1-sp-host.md` § The QuakeWorld server on the shared rows), but the arena host
-keeps the rules its recordings and goldens hold, so nothing changes there.
+The `se-coop-sweep` lab puts two players in a co-op game of the pack's own program on each of the
+32 campaign maps (`start`, the four episodes, `end`): both join, the second dies to the program's
+own damage and stands again, leaves and rejoins, both take every key where it lay, the first walks
+into each exit and both reach the next map alive with the weapons they carried (the keys stay
+behind, as in the original), and on `end` the last foe falls and the ending plays for both. Every
+map passes with no program fault (2026-11-21). The one fault the bot episodes showed (e2m1's
+doors "cross connected") was the `se-coop-episode` lab's own: it sized the brush models as built,
+not a unit wider as the window does for a game's own content; it now does.
 
 ## Kept by choice
 

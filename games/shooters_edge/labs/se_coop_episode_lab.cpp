@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstdio>
 #include <memory>
+#include <span>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -26,6 +27,7 @@
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
+#include "progs/file.hpp"
 #include "shooters_edge/bots/coop_episode.hpp"
 #include "shooters_edge/bots/coop_run.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
@@ -38,6 +40,7 @@ namespace sh = ge::shooter;
 namespace fb = shooters_edge::bots;
 namespace sv = shooters_edge::server;
 namespace ce = ge::classicenhance;
+namespace pg = ge::progs;
 using ge::core::num::to_fixed;
 using In = std::vector<std::pair<std::string, std::string>>;
 
@@ -54,6 +57,7 @@ struct PackMaps {
   std::vector<uint8_t> content;
   ge::vfs::Pak pak;
   std::unique_ptr<sv::BspMap> bsp;
+  pg::Progs progs;  // the pack's own program (--progs=pack)
 };
 
 bool pack_map(void* ctx, const std::string& name, sv::MapSpec& out, std::string& error) {
@@ -177,7 +181,25 @@ void run(gl::Lab& lab) {
     }
     o.load = &pack_map;
     o.load_ctx = &packs;
+    o.wide_models = true;  // the window's sizing of a game's movers (a door's links read it)
+    o.registered = ge::vfs::pak_find(packs.pak, "gfx/pop.lmp") != nullptr;
     o.first = lab.arg("first");
+    // `--progs=pack`: the pack's own program instead of our campaign.
+    if (lab.arg("progs") == "pack") {
+      const ge::vfs::PakEntry* e = ge::vfs::pak_find(packs.pak, "progs.dat");
+      const std::span<const uint8_t> bytes =
+          e != nullptr ? ge::vfs::pak_file(packs.content, *e) : std::span<const uint8_t>{};
+      if (e == nullptr ||
+          !pg::load_progs(bytes.data(), bytes.size(), packs.progs, error, pg::every_form())) {
+        lab.fail("se-coop-episode: the pack's program does not load: " + error,
+                 "next: pass the game's own folder, or drop --progs");
+        return;
+      }
+      o.progs = &packs.progs;
+    } else if (!lab.arg("progs").empty()) {
+      lab.fail("se-coop-episode: --progs takes pack", "next: --progs=pack, or leave it out");
+      return;
+    }
   }
   const fb::EpisodeReport r = fb::run_coop_episode(o);
   if (!r.ok) {
@@ -236,6 +258,8 @@ void run(gl::Lab& lab) {
   lab.metric("kills.by_mates", mate_kills, "count");
   lab.metric("near_share.mean", near_sum / n, "share");
   lab.metric("faults", static_cast<double>(r.faults), "count");
+  for (const fb::EpisodeMap& m : r.maps)
+    if (!m.last_fault.empty()) lab.note(m.name + ": the program's last fault: " + m.last_fault);
   for (const fb::EpisodeMap& m : r.maps) {
     if (m.plan.empty()) continue;
     gl::LabTable pt{"the leader's plan on " + m.name, {"change"}, {}};
@@ -276,6 +300,7 @@ const gl::LabSpec kSpec{
         {"skill", "1", "the campaign's skill (0..3)"},
         {"seed", "1", "the campaign's and the players' seed"},
         {"root", ".", "the repository's root (the campaign's sources are under it)"},
+        {"progs", "", "pack: the pack's own program (progs.dat) instead of our campaign"},
         {"plan", "0", "1: each map's changes of the leader's plan as a table"},
     },
     "--maps=2 --map-seconds=60",
