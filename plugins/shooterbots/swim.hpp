@@ -18,8 +18,8 @@
 // for a point: the cell's next cell's centre, or the exit node's origin at the end.
 //
 // Built once a map (it allocates); `swim_next` does not. Deterministic: integer order throughout
-// and the move's own contents queries. Used by the Shooter's Edge fighter (bots/fighter.cpp) and
-// drawn by the `se-team` lab.
+// and the move's own contents queries. Used by the Shooter's Edge fighter (shooterbots/fighter.cpp)
+// and drawn by the `se-team` lab.
 //
 // ge:summary The way out of a map's water: a breadth-first field over wet cells to the exits
 // ge:keywords swim water pool underwater escape flow-field wet-cell exit swim_field swim_next

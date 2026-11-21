@@ -4,7 +4,7 @@
 //
 // - the player (slot 0, the leader) and every bot are on the map at once, free to roam and fight;
 //   the server's frag and time limits are held at 0 so nothing ends the warmup but the lobby;
-// - `addbot [novice|average|expert]` seats a fighter (bots/fighter.hpp: it reads only what a
+// - `addbot [novice|average|expert]` seats a fighter (shooterbots/fighter.hpp: it reads only what a
 //   client is sent) in the lowest free slot, ready as it joins, on the smaller team; `removebot`
 //   frees the highest bot seat. A bot's packets are made each frame like the player's and run in
 //   the same server frame after his, in slot order;
@@ -31,8 +31,9 @@
 #include <vector>
 
 #include "shooterbots/aim.hpp"
+#include "shooterbots/fighter.hpp"
 #include "shooterbots/nav.hpp"
-#include "shooters_edge/bots/fighter.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/lobby.hpp"

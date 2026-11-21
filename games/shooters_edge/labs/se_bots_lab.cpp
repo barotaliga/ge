@@ -21,8 +21,9 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "nav_top.hpp"
+#include "shooterbots/knowledge.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/fight_run.hpp"
-#include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
@@ -297,7 +298,7 @@ const gl::LabSpec kSpec{
     "se-bots",
     gl::LabKind::scenario,
     "game:shooters_edge",
-    "games/shooters_edge/bots/fighter.hpp (the mode, the goal, the weapon, the trigger) through "
+    "plugins/shooterbots/fighter.hpp (the mode, the goal, the weapon, the trigger) through "
     "fight_run.hpp on the baseline mod over the server's arena",
     "bots",
     "Do the fighters play the baseline mod's deathmatch like players: do they score, die, pick "

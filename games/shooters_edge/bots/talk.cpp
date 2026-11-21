@@ -333,4 +333,9 @@ bool split_team_line(std::string_view line, std::string& name, std::string& text
   return true;
 }
 
+const ge::shooterbots::TeamWords& team_words() {
+  static const ge::shooterbots::TeamWords kWords{say_text, parse_say};
+  return kWords;
+}
+
 }  // namespace shooters_edge::bots

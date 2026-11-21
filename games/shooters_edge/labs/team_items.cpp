@@ -10,7 +10,8 @@
 #include <algorithm>
 #include <string>
 
-#include "shooters_edge/bots/fighter.hpp"
+#include "shooterbots/fighter.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 
 namespace shooters_edge::labs {
 
@@ -19,8 +20,9 @@ namespace bt = shooters_edge::bots;
 namespace sb = ge::shooterbots;
 
 void report_packs(ge::lab::Lab& lab, const cn::TeamMatchReport& r) {
-  // Every death's pack known (bots/packs.hpp), by how its place was known; the weapon guessed
-  // right by the guesser's skill (novice, average, expert); trips to them and what ended them.
+  // Every death's pack known (shooterbots/packs.hpp), by how its place was known; the weapon
+  // guessed right by the guesser's skill (novice, average, expert); trips to them and what ended
+  // them.
   {
     static constexpr const char* kFrom[5] = {"seen", "cry", "blast", "aim", "lying"};
     int64_t known[5] = {}, guesses[4] = {}, right[4] = {}, guess_rl[4] = {}, truth_rl[4] = {};

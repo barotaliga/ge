@@ -179,7 +179,7 @@ as below: `labs map-overview --game=<folder> --map=<path>.bsp --intent=<path>.in
 4. Change the plan, not the bots. Then run it again with the same seed, and keep the before and
    after in the PR.
 
-Bots follow the map's own plan (`games/shooters_edge/bots/map_plan.hpp` works out what to hold
+Bots follow the map's own plan (`plugins/shooterbots/map_plan.hpp` works out what to hold
 from the items): an area the bots never use may still be good for people, so say so beside it
 (`note=`) rather than bend the map to the bots. Recordings of people on the map (`--demos=`) are
 the better judge when there are any.

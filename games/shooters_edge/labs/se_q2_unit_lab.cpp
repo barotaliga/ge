@@ -315,7 +315,7 @@ void run(gl::Lab& lab) {
                  " exits, " + std::to_string(keys_taken) + " of " + std::to_string(keys) +
                  " keys, " + std::to_string(goals_found) + " of " + std::to_string(goals) +
                  " objectives",
-             "Run with --plan to see his changes of plan, then check bots/way_through.cpp's "
+             "Run with --plan to see his changes of plan, then check shooterbots/way_through.cpp's "
              "steps for Quake II's words. Skill: bots.");
   for (size_t k = 0; k < r.maps.size() && k < loader.read.size(); k++) {
     const bt::UnitMap& m = r.maps[k];

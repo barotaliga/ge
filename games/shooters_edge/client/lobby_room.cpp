@@ -79,7 +79,7 @@ void make_fighter(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, int
   b.fighter.features = ge::shooterbots::features_of(b.skill);
   bots::fighter_init(b.fighter, *r.graph, s, slot, map.entities.c_str(), b.skill,
                      ge::shooterbots::traits_of(b.skill, ge::shooterbots::Temper::balanced), kBotHz,
-                     bot_seed(r, slot));
+                     bot_seed(r, slot), bots::first_arsenal());
   b.fighter.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
   b.fighter.bot.pilot.world = r.world.get();  // the hop looks ahead through the map
 }

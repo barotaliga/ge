@@ -15,12 +15,14 @@
 #include <memory>
 
 #include "shooterbots/aim.hpp"
+#include "shooterbots/bot_arsenal.hpp"
+#include "shooterbots/companion.hpp"
 #include "shooterbots/features.hpp"
+#include "shooterbots/map_nav.hpp"
 #include "shooterbots/traits.hpp"
-#include "shooters_edge/bots/bot_arsenal.hpp"
-#include "shooters_edge/bots/companion.hpp"
-#include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
+#include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -76,11 +78,11 @@ struct OnMap {
 };
 
 bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const UnitOptions& opt,
-           int entered, const std::string& came, UnitMap& um, std::string& error) {
+           int entered, const std::vector<std::string>& been, UnitMap& um, std::string& error) {
   const sv::RulesCommon& s = *r;
   m.nav = std::make_unique<MapNav>();
   m.nav->move = q2_nav_move(0);
-  if (!build_map_nav(s, map, "info_player_start", *m.nav, error)) return false;
+  if (!build_map_nav(s, map, quake_maps(), "info_player_start", *m.nav, error)) return false;
   MapNav& nav = *m.nav;
   um.name = map.name;
   um.lo = nav.graph.lo;
@@ -89,11 +91,10 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   const std::string entities = map.entities.empty() ? map.brushes->entity_text : map.entities;
   Fighter& f = m.leader;
   f = Fighter();
-  f.arsenal = &q2_arsenal();
   f.features = sb::features_of(opt.skill);
   fighter_init(f, nav.graph, s, 0, entities.c_str(), opt.skill,
                sb::traits_of(opt.skill, sb::Temper::balanced), kHz,
-               opt.seed + 31u * static_cast<uint32_t>(entered));
+               opt.seed + 31u * static_cast<uint32_t>(entered), q2_arsenal());
   f.bot.yaw = s.world.entities[1].view_angles.y;
   f.bot.pilot.world = &nav.world;
   if (nav.swim.leading > 0) f.swim = &nav.swim;
@@ -107,13 +108,13 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   sv::MapSpec spec = map;
   spec.entities = entities;
   m.way = WayThrough();
-  m.way.back = came;
+  m.way.been = been;
   way_init(m.way, f, nav, s, spec);
   if (opt.plan) m.way.log = &um.plan;
   m.wedge = Wedge();
   m.no_route_since = -1;
   for (const WayStep& st : m.way.steps) {
-    if (st.kind == WayKind::exit) um.exits.push_back((st.lo + st.hi) * 0.5f);
+    if (way_exit(st)) um.exits.push_back((st.lo + st.hi) * 0.5f);
     if (st.kind == WayKind::key) {
       um.keys++;
       um.keys_at.push_back((st.lo + st.hi) * 0.5f);
@@ -125,24 +126,41 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
 // GLASS IN HIS WAY: a pane that breaks (a `func_explosive` that takes blows) stops him as a wall
 // does, though his nav, built of the world's brushes, runs through it. The nearest live one within
 // `kBreakReach` that his eye sees is shot: the view on its nearest point, fire held. Barrels are
-// left alone (their blast hurts him). A body lying as scenery (`misc_deadsoldier`) is solid to
-// him too, and his nav runs over it: one within `kBodyReach` is shot to pieces (base2's by the
-// south pool held him against it for good). True while he shoots.
+// left alone (their blast hurts him), and a crate a trigger blows up. A body lying as scenery
+// (`misc_deadsoldier`) is solid to him too, and his nav runs over it: one within `kBodyReach` that
+// his box, carried `kBodyAhead` along the move he means, would meet is shot to pieces (base2's by
+// the south pool held him against it for good; base3's behind a wall beside his way, shot at from
+// where he stood, held him there for good). True while he shoots.
 constexpr float kBreakReach = 192;
 constexpr float kBodyReach = 80;
+constexpr float kBodyAhead = 32;
 
 bool way_break(const sv::Q2Server& q, const sv::RulesCommon& s, sh::MoveCmd& cmd) {
-  const sh::Vec3f eye = s.world.entities[1].origin + sh::Vec3f{0, 0, 22};
+  const sh::Vec3f me = s.world.entities[1].origin;
+  const sh::Vec3f eye = me + sh::Vec3f{0, 0, 22};
+  // Where the move he means carries his box (the keys on his view's yaw).
+  const sh::ViewAxes ax = sh::angle_vectors({0, cmd.angles.y, 0});
+  sh::Vec3f wish = ax.forward * cmd.forward + ax.right * cmd.side;
+  wish.z = 0;
+  const bool moving = sh::normalize(wish) > 0;
+  const sh::Vec3f ahead = me + wish * kBodyAhead;
+  const sh::Vec3f box_lo{std::min(me.x, ahead.x) - 16, std::min(me.y, ahead.y) - 16, me.z - 24};
+  const sh::Vec3f box_hi{std::max(me.x, ahead.x) + 16, std::max(me.y, ahead.y) + 16, me.z + 32};
   int best = -1;
   float nearest = kBreakReach;
   sh::Vec3f aim;
   for (size_t i = 0; i < q.entities.size(); i++) {
     const sv::Q2Entity& e = q.entities[i];
     const bool body = e.classname == "misc_deadsoldier" && e.box && !e.gone;
-    if (!body &&
-        (e.classname != "func_explosive" || e.gone || e.hidden || !e.solid || e.health <= 0))
+    // One only named (a crate a trigger blows up, base3's by its first hall) takes no blows.
+    const bool named_only = (e.spawnflags & 1) == 0 && !e.targetname.empty();
+    if (!body && (e.classname != "func_explosive" || e.gone || e.hidden || !e.solid ||
+                  e.health <= 0 || named_only))
       continue;
     const sh::Vec3f lo = e.origin + e.mins, hi = e.origin + e.maxs;
+    if (body && (!moving || box_hi.x <= lo.x || box_lo.x >= hi.x || box_hi.y <= lo.y ||
+                 box_lo.y >= hi.y || box_hi.z <= lo.z || box_lo.z >= hi.z))
+      continue;  // not in the way he means to go
     // Its nearest point to his eye, kept 4 units inside its edges so the line meets its face.
     const auto in = [](float v, float a, float b) {
       return std::clamp(v, std::min(a + 4, (a + b) * 0.5f), std::max(b - 4, (a + b) * 0.5f));
@@ -209,14 +227,15 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
   sv::Q2Server* q = sv::q2_of(rules);
   uint64_t h = 1469598103934665603ull;
   uint32_t sequence = 0;
-  // The map before this one: on the first, the one `first` names after its `$` (a start as if
-  // arrived from there, `base2$base1`), else none.
-  std::string came;
-  if (const size_t d = opt.first.find('$'); d != std::string::npos) came = opt.first.substr(d + 1);
+  // The maps played before this one: on the first, the one `first` names after its `$` (a start
+  // as if arrived from there, `base2$base1`), then each one he leaves.
+  std::vector<std::string> been;
+  if (const size_t d = opt.first.find('$'); d != std::string::npos)
+    been.push_back(opt.first.substr(d + 1));
   for (int mi = 0; mi < opt.maps; mi++) {
     OnMap m;
     UnitMap um;
-    if (!enter(m, rules, map, opt, mi, came, um, r.error)) {
+    if (!enter(m, rules, map, opt, mi, been, um, r.error)) {
       r.error = "run_q2_unit: " + map.name + ": " + r.error;
       return r;
     }
@@ -260,8 +279,12 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       if (way_break(*q, s, m.cmds[2])) {
         um.breaks++;
         m.leader.bot.yaw = m.cmds[2].angles.y;  // he turned to it: his keys follow his view
+      } else if (way_touch(m.way, s, 1, m.cmds[2])) {
+        um.touches++;
+        m.leader.bot.yaw = m.cmds[2].angles.y;  // he turned to it: his keys follow his view
       } else {
-        unwedge(m.wedge, s, 1, t, m.cmds[2]);
+        // A climber is held to the ladder by his pilot: a shove aside takes him off it.
+        if (!m.leader.bot.pilot.pilot.climbing) unwedge(m.wedge, s, 1, t, m.cmds[2]);
         if (way_edge(*m.nav, m.leader, s, 1, m.cmds[2])) um.edges++;
       }
       // The intermission: a button now and then leaves for the next map.
@@ -306,7 +329,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       r.out_to = bare(asked);
       break;
     }
-    came = map.name;
+    been.push_back(map.name);
     if (!opt.load(opt.load_ctx, bare(asked), map, r.error)) {
       r.error = "run_q2_unit: " + asked + ": " + r.error;
       return r;

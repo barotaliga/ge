@@ -1,4 +1,4 @@
-// FIGHTERS ON THE BASELINE MOD (games/shooters_edge/bots/fighter.hpp, fight_run.hpp): four
+// FIGHTERS ON THE BASELINE MOD (plugins/shooterbots/fighter.hpp, fight_run.hpp): four
 // fighters (two expert aims, two novice) play the baseline mod's deathmatch on the arena for two
 // minutes, on six seeds. Every one dies (and an expert scores, the novices as a pair), believes
 // it took the items the server saw it take, picks items up, switches weapons and holds one
