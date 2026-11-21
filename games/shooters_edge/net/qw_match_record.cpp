@@ -34,13 +34,20 @@ int setting(const con::Console& c, const char* name, int fallback) {
 }
 
 bool joined_qw(const Remote& r) { return r.active && !r.watch && !r.q2; }
+bool joined_any(const Remote& r) { return r.active && !r.watch; }
+
+// The newest level's first byte in the level kept, the joined game's.
+size_t* level_from(Remote& r) {
+  if (r.q2 != nullptr) return &r.q2->level_from;
+  return &r.end.level_from;
+}
 
 fs::path temp_file(const fs::path& dir) { return dir / "temp" / "_match_.qwd"; }
 
 // The waiting recording moved to its name; the line said.
 std::string save_match(MatchAuto& m) {
   m.waiting = false;
-  const std::string stem = client::free_match_file(m.dir, m.name, {"qwd", "qwz", "mvd"});
+  const std::string stem = client::free_match_file(m.dir, m.name, {"qwd", "qwz", "mvd", "dm2"});
   if (stem.empty()) return "Every name from " + m.name + "_000 to _999 is taken; nothing saved.";
   const fs::path to = m.dir / (stem + ".qwd");
   std::error_code ec;
@@ -51,32 +58,82 @@ std::string save_match(MatchAuto& m) {
   return "Match recording saved to " + stem + ".qwd.";
 }
 
+// The waiting log written to its name; the line said.
+std::string save_log(MatchAuto& m) {
+  m.log_waiting = false;
+  const std::string stem = client::free_match_file(m.dir, m.name, {"log"});
+  std::string text;
+  text.swap(m.log);
+  if (stem.empty())
+    return "Every log name from " + m.name + "_000 to _999 is taken; nothing saved.";
+  const fs::path to = m.dir / (stem + ".log");
+  std::error_code ec;
+  fs::create_directories(to.parent_path(), ec);
+  std::ofstream out(to, std::ios::binary | std::ios::trunc);
+  out.write(text.data(), static_cast<std::streamsize>(text.size()));
+  if (!out) return "Couldn't write the match's console log to " + to.string() + ".";
+  return "Match console log saved to " + stem + ".log.";
+}
+
 // The file closed, nothing said.
 void close_file(Remote& r) {
   if (r.file.path.empty()) return;
   remote_record_flush(r);
+  if (r.file.q2) {  // Quake II's recording ends with a block of length -1
+    const char end[4] = {'\xff', '\xff', '\xff', '\xff'};
+    r.file.out.write(end, 4);
+  }
   r.file.out.close();
   r.file.path.clear();
 }
 
-// The match's recording ended as a match ends (`cut`: cut short, and saved by its length).
+// The console's lines kept from now on (the console's tap).
+void start_log(MatchAuto& m, con::Console& c) {
+  m.log.clear();
+  m.log_waiting = false;
+  m.logging = true;
+  c.set_tap([&m](std::string_view line) {
+    m.log.append(line);
+    m.log.push_back('\n');
+  });
+}
+
+void stop_log(MatchAuto& m, con::Console& c) {
+  if (!m.logging) return;
+  m.logging = false;
+  c.set_tap(nullptr);
+}
+
+// The match ended as a match ends (`cut`: cut short, and saved by its length).
 void end_match(Remote& r, con::Console& c, double now_s, bool cut) {
   MatchAuto& m = r.match;
   if (!m.running) return;
   if (cut && m.end_at_s >= 0) cut = false;  // its scores are in: an end
   m.running = false;
   m.end_at_s = -1;
-  close_file(r);
-  m.waiting = true;
-  if (m.mode == 1) {
-    c.print("The match's recording is complete; type match_save to keep it.");
-    return;
+  const bool short_cut = cut && now_s - m.began_s <= setting(c, "match_auto_minlength", 30);
+  const bool logged = m.logging;
+  stop_log(m, c);
+  if (m.recording) {
+    m.recording = false;
+    close_file(r);
+    m.waiting = true;
+    if (m.mode == 1) {
+      c.print("The match's recording is complete; type match_save to keep it.");
+    } else if (short_cut) {
+      c.print("The match's recording was cut short, so it isn't saved (match_save keeps it).");
+    } else {
+      c.print(save_match(m));
+    }
   }
-  if (cut && now_s - m.began_s <= setting(c, "match_auto_minlength", 30)) {
-    c.print("The match's recording was cut short, so it isn't saved (match_save keeps it).");
-    return;
+  if (logged) {
+    m.log_waiting = true;
+    if (m.log_mode == 2 && short_cut) {
+      c.print("The match's console log was cut short, so it isn't saved (match_save keeps it).");
+    } else if (m.log_mode == 2) {
+      c.print(save_log(m));
+    }
   }
-  c.print(save_match(m));
 }
 
 void start_match(Remote& r, con::Console& c, double now_s) {
@@ -84,27 +141,35 @@ void start_match(Remote& r, con::Console& c, double now_s) {
   if (m.running) end_match(r, c, now_s, true);
   if (r.end.cfg.spectator && setting(c, "match_auto_spectating", 0) == 0) return;
   const int mode = setting(c, "match_auto_record", 0);
-  if (mode == 0) return;
-  if (!r.file.path.empty()) {
-    c.print("The match isn't recorded on its own: you are recording already.");
-    return;
-  }
+  const int log_mode = setting(c, "match_auto_logconsole", 1);
+  if (mode == 0 && log_mode == 0) return;
   if (!r.joined_record.folder) return;
-  m.dir = r.joined_record.folder();
-  if (m.dir.empty()) return;
+  const fs::path dir = r.joined_record.folder();
+  if (dir.empty()) return;
+  m.dir = dir;
   m.name = r.joined_record.match_name();
   m.mode = mode;
+  m.log_mode = log_mode;
   m.began_s = now_s;
   m.end_at_s = -1;
   m.level = r.levels;
-  std::string error;
-  if (!remote_record_open(r, temp_file(m.dir), error)) {
-    c.print(error);
-    return;
+  if (mode != 0 && !r.file.path.empty()) {
+    c.print("The match isn't recorded on its own: you are recording already.");
+  } else if (mode != 0) {
+    std::string error;
+    if (remote_record_open(r, temp_file(m.dir), error)) {
+      m.recording = true;
+      m.waiting = false;
+      c.print("Recording the match.");
+    } else {
+      c.print(error);
+    }
   }
-  m.running = true;
-  m.waiting = false;
-  c.print("Recording the match.");
+  if (log_mode != 0) {
+    c.print("Logging the match's console.");
+    start_log(m, c);
+  }
+  m.running = m.recording || m.logging;
 }
 
 }  // namespace
@@ -112,17 +177,26 @@ void start_match(Remote& r, con::Console& c, double now_s) {
 client::MatchFacts match_facts(const Remote& r) {
   client::MatchFacts f;
   const QwClientEnd& e = r.end;
+  if (r.q2) {  // Quake II's: the players' names as the recording says them
+    for (const std::string& name : r.demo.state.names) f.players.push_back({name, "", false});
+    f.me = r.demo.state.player;
+    f.map = r.demo.state.map;
+    f.gamedir = "baseq2";
+  }
   for (const std::string& u : e.userinfos) {
+    if (r.q2) break;
     client::NamedPlayer p;
     p.name = info_get(u, "name");
     p.team = info_get(u, "team");
     p.spectator = !info_get(u, "*spectator").empty() && info_get(u, "*spectator") != "0";
     f.players.push_back(p);
   }
-  f.me = e.playernum;
-  f.spectating = e.cfg.spectator;
-  f.map = r.demo.state.map;
-  f.gamedir = e.gamedir.empty() ? "qw" : e.gamedir;
+  if (!r.q2) {
+    f.me = e.playernum;
+    f.spectating = e.cfg.spectator;
+    f.map = r.demo.state.map;
+    f.gamedir = e.gamedir.empty() ? "qw" : e.gamedir;
+  }
   const auto num = [&](const char* key, int fallback) {
     const std::string v = info_get(e.serverinfo, key);
     return v.empty() ? fallback : std::atoi(v.c_str());
@@ -150,11 +224,12 @@ client::MatchFacts match_facts(const Remote& r) {
 }
 
 bool remote_record_open(Remote& r, const fs::path& file, std::string& error) {
-  if (!joined_qw(r)) {
-    error = "Join a QuakeWorld server first: only its games are recorded while joined.";
+  if (!joined_any(r)) {
+    error = "Join a server first.";
     return false;
   }
   close_file(r);
+  r.file.q2 = r.q2 != nullptr;
   std::error_code ec;
   fs::create_directories(file.parent_path(), ec);
   r.file.out.open(file, std::ios::binary | std::ios::trunc);
@@ -170,7 +245,7 @@ bool remote_record_open(Remote& r, const fs::path& file, std::string& error) {
 }
 
 std::string remote_record_close(Remote& r, con::Console& c, double now_s) {
-  if (r.match.running) {
+  if (r.match.recording) {
     end_match(r, c, now_s, false);
     return " ";  // said by the match's end
   }
@@ -180,6 +255,23 @@ std::string remote_record_close(Remote& r, con::Console& c, double now_s) {
   const long kib = std::lround(static_cast<double>(r.file.bytes) / 1024);
   return "Recorded " + path + " (" + std::to_string(kib) + " KiB). Play it with playdemo " + path +
          ".";
+}
+
+void remote_record_restart(Remote& r) {
+  if (!r.file.path.empty()) {  // a recording of the last server ends with it
+    remote_record_flush(r);
+    r.file.out.close();
+    r.file.path.clear();
+  }
+  r.file.level = ClientRecorder{};
+  record_start(r.file.level, false);
+  r.file.written = 0;
+  r.end.level_record = r.q2 ? nullptr : &r.file.level;
+  r.end.level_from = 0;
+  if (r.q2) {
+    r.q2->level_record = &r.file.level.bytes;
+    r.q2->level_from = 0;
+  }
 }
 
 void remote_record_flush(Remote& r) {
@@ -192,11 +284,13 @@ void remote_record_flush(Remote& r) {
     f.bytes += static_cast<int64_t>(b.size() - f.written);
     f.written = b.size();
   }
-  const size_t from = std::min(r.end.level_from, b.size());  // the older levels let go
+  if (r.file.q2 != (r.q2 != nullptr) && !f.path.empty()) return;  // the game it was begun in left
+  size_t& at = *level_from(r);
+  const size_t from = std::min(at, b.size());  // the older levels let go
   if (from == 0) return;
   b.erase(b.begin(), b.begin() + static_cast<std::ptrdiff_t>(from));
   f.written = f.written > from ? f.written - from : 0;
-  r.end.level_from = 0;
+  at = 0;
 }
 
 void remote_match_frame(Remote& r, con::Console& c, double now_s) {
@@ -225,7 +319,8 @@ void remote_match_frame(Remote& r, con::Console& c, double now_s) {
 void add_match_record_commands(con::Console& c, Remote& r) {
   client::add_match_cvars(c);
   client::JoinedRecord& j = r.joined_record;
-  j.joined = [&r] { return joined_qw(r); };
+  j.joined = [&r] { return joined_any(r); };
+  j.extension = [&r] { return std::string(r.q2 ? "dm2" : "qwd"); };
   j.open = [&r](const fs::path& file, std::string& error) {
     return remote_record_open(r, file, error);
   };
@@ -238,7 +333,7 @@ void add_match_record_commands(con::Console& c, Remote& r) {
     return line == " " ? std::string() : line;
   };
   j.path = [&r] { return r.file.path.string(); };
-  j.automatic = [&r] { return r.match.running; };
+  j.automatic = [&r] { return r.match.recording; };
   j.match_name = [&r, &c] {
     return client::match_name(match_facts(r), client::match_words(c.cvars()),
                               [&c](const std::string& name) {
@@ -246,16 +341,18 @@ void add_match_record_commands(con::Console& c, Remote& r) {
                                 return v != nullptr ? v->value : std::string();
                               });
   };
-  c.add_command(
-      "match_save", "match_save: keep the match recorded on its own (match_auto_record 1)",
-      [&r](con::Console& cc, const con::Args&) {
-        if (r.match.waiting) {
-          cc.print("Saving the match...");
-          cc.print(save_match(r.match));
-        } else {
-          cc.print(r.match.running ? "The match is still being recorded." : "Nothing to save.");
-        }
-      });
+  c.add_command("match_save",
+                "match_save: keep the match recorded on its own (match_auto_record 1)",
+                [&r](con::Console& cc, const con::Args&) {
+                  MatchAuto& m = r.match;
+                  if (m.waiting || m.log_waiting) {
+                    cc.print("Saving the match...");
+                    if (m.waiting) cc.print(save_match(m));
+                    if (m.log_waiting) cc.print(save_log(m));
+                  } else {
+                    cc.print(m.running ? "The match is still going on." : "Nothing to save.");
+                  }
+                });
   c.add_command("match_forcestart",
                 "match_forcestart: start the match's own recording now, as if it had begun",
                 [&r, wall](con::Console& cc, const con::Args& a) {

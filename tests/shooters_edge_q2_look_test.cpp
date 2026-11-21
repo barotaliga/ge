@@ -125,4 +125,15 @@ TEST(the_first_game_takes_the_shells_and_the_pulse_only_when_asked) {
   CHECK(!cl::power_look(glowing, false, false).pulse);
 }
 
+TEST(flies_and_a_power_screens_plate_by_their_bits) {
+  CHECK(cl::q2_look(cl::kSqFlies, 0).flies && !cl::q2_look(0, 0).flies);
+  const cl::Q2Look screen = cl::q2_look(cl::kSqPowerScreen, 0);
+  CHECK(screen.power_screen && !screen.shell);
+  // A shield's hit: green; with quad's blue the blue wins, with all three white.
+  const cl::Q2Look shield = cl::q2_look(cl::kSqColourShell, cl::kRfShellGreen);
+  CHECK(shield.shell && shield.shell_rgb[0] == 0 && shield.shell_rgb[1] == 1);
+  const cl::Q2Look both = cl::q2_look(cl::kSqColourShell | cl::kSqQuad, cl::kRfShellGreen);
+  CHECK(both.shell_rgb[1] == 0 && both.shell_rgb[2] == 1);
+}
+
 }  // namespace

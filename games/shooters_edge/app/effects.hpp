@@ -94,10 +94,6 @@ inline constexpr uint32_t kTrailGib = 4, kTrailZombieGib = 32;
 inline constexpr double kBloodStep = 3 * 0.025, kThinBloodStep = 6 * 0.025;
 double blood_trail(const double from[3], const double to[3], double step, double carry,
                    uint32_t seed, Palette palette, Particles* out);
-// The same blood in Quake II's look: its palette's dark reds (232..239), each speck thrown down
-// at 40 units/s and living 1 to 1.4 s.
-double q2_blood_trail(const double from[3], const double to[3], double step, double carry,
-                      uint32_t seed, Palette palette, Particles* out);
 // A teleport's arrival at `at` (the feet): a grid of grey specks flying out.
 void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particles* out);
 // QUAKE II'S ARRIVALS, in its own numbers (map units; its specks fall at twice the gravity they
@@ -124,6 +120,38 @@ void q2_specks(const double at[3], const double normal[3], int count, int colour
 void q2_player_flash(const double at[3], Q2Arrival kind, uint32_t seed, Palette palette,
                      Particles* out);
 void q2_fountain(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// QUAKE II'S TRAILS, in its own numbers (map units; the specks' gravity as for its arrivals):
+// - THE THINNING TRAIL (a gib's blood, a grenade's and a rocket's smoke): a try every half unit
+//   along the stretch, a speck when a draw of 0..1023 falls under the piece's `count` (1024 when
+//   it first shows), the count losing 5 a try down to 100: two specks a unit at first, one in
+//   five after about 92 units. Its spread is fixed by the count at the frame's start: within 4
+//   units and drifting at up to 15 units/s above 900, 2 and 10 above 800, else 1 and 5. Blood is
+//   its dark reds (232..239), thrown down at 40 units/s with no gravity, living 1..1.4 s; smoke
+//   its greys (4..11), rising at 40 units/s^2, living 1..1.2 s.
+// - A rocket's fire beside its smoke: a speck one unit in eight, yellow to orange (220..223),
+//   within 5 units, drifting at up to 20 units/s and falling, living 1..1.2 s.
+// - A blaster's bolt: an orange speck (224) every 5 units, within 1, drifting at up to 5 units/s,
+//   living 0.3..0.5 s.
+enum class Q2Trail : uint8_t { blood, smoke };
+inline constexpr int kSqTrailStart = 1024, kSqTrailFloor = 100, kSqTrailFade = 5;
+inline constexpr double kSqTrailAttemptUnits = 0.5;
+void q2_trail(const double from[3], const double to[3], Q2Trail kind, int& count, uint32_t seed,
+              Palette palette, Particles* out);
+void q2_rocket_fire(const double from[3], const double to[3], uint32_t seed, Palette palette,
+                    Particles* out);
+void q2_bolt_trail(const double from[3], const double to[3], uint32_t seed, Palette palette,
+                   Particles* out);
+// FLIES round a corpse (its flies bit): black specks (palette 0) that swarm over a 60 s cycle
+// from the first frame they are seen (`since_s` into it): their number rises from none to 162
+// over 20 s, holds, and falls to none over the last 20 s, every second one of them drawn (81 at
+// most). Fly i swings 64 units through `at` along the i-th of the 162 directions (sin(t + i), t
+// the picture's clock in s) and 16 units out along a way that turns at its own two rates (0 to
+// 2.55 radians a second). They are thrown afresh every frame, each living `life` s (the frame's).
+inline constexpr int kSqFliesMax = 162;
+inline constexpr double kSqFliesCycleS = 60;
+int q2_flies_count(double since_s);
+void q2_flies(const double at[3], double t, double since_s, double life, Palette palette,
+              Particles* out);
 // The light a player's entry (green), exit (red) or respawn (yellow) flash gives for the one
 // frame it is drawn in: 200 to 231 units, by `seed`.
 Light q2_arrival_light(const double at[3], Q2Arrival kind, uint32_t seed);

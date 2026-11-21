@@ -70,9 +70,8 @@ companions, and saves.
 
 Quake II's single-player playthrough stuck at breakable glass; the third game's module VM
 server for its mods' client half and menus. Quake's single player against the original: the
-ranked list and what is left in `porting/shooters-edge/q1-sp-gaps.md` (the engine's half under
-the pack's own program: the joiner's level screens, the attract loop, save slots' words, the level
-loops' channels, brush models a unit wider, and the rank 3 rows).
+ranked list in `porting/shooters-edge/q1-sp-gaps.md`, every row landed but the two kept by
+choice (the fixed 1/72 s step and co-op switched on during a map).
 
 ## Labs and tests
 

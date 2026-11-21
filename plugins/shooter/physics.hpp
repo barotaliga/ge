@@ -19,13 +19,16 @@
 //
 // BY MOVETYPE (`run_entity`): push: push.hpp; none and lock: think only; noclip: think, then
 // `angles += avelocity dt`, `origin += velocity dt`, relinked without touches; step: falls while
-// off the ground (fly-move, a landing sound after a fast fall), then thinks and checks water; toss,
+// off the ground (fly-move, a landing sound after a fast fall; a `not` solid one passes monsters
+// and players, but lands on them on the single-player clock), then thinks and checks water; toss,
 // bounce, fly and flymissile: THE TOSS (`physics_toss`):
-//  1. think (a removed entity stops); 2. rising clears kFlagOnGround, and resting on the ground
-//     stops; 3. the velocity bounded (a non-number component 0, longer than sv_maxvelocity scaled
-//     to it); 4. gravity, but for fly and flymissile; 5. angles turned; 6. moved: velocity times dt
-//     (dt rounded to float), traced (a missile sweep for flymissile, nomonsters for a trigger or
-//     `not` solid), moved to the trace's end, relinked with trigger touches, both touch on a hit;
+//  1. think (a removed entity stops); 2. rising clears kFlagOnGround (not on the single-player
+//     clock, where only a pusher or the program does), and resting on the ground stops; 3. the
+//     velocity bounded (`bound_velocity`: a non-number component 0, longer than sv_maxvelocity
+//     scaled to it; on the single-player clock each axis clamped to it on its own); 4. gravity, but
+//     for fly and flymissile; 5. angles turned; 6. moved: velocity times dt (dt rounded to float),
+//     traced (a missile sweep for flymissile, nomonsters for a trigger or `not` solid), moved to
+//     the trace's end, relinked with trigger touches, both touch on a hit;
 //  7. a full run, or a removed entity, stops; 8. the velocity clipped on the plane hit (1.5 for
 //     bounce, 1 otherwise); 9. a floor (normal z above 0.7) stops it (bounce: only below 60 up)
 //     with onground, groundentity, no velocity and no turning; 10. the water check.

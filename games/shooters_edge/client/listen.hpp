@@ -499,6 +499,7 @@ struct Missile {
   // Neither: a nail, or one of Quake II's glowing shots, by the kind of shot whoever fired it
   // (a player or a monster): a blaster's bolt, or the BFG's ball.
   bool bolt = false, bfg = false;
+  bool streak = false;  // Quake II's blaster bolt (its blaster bit): specks behind it
 };
 void missiles_of(const Listen& l, std::vector<Missile>& out);
 

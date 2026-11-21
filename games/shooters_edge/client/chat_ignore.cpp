@@ -43,6 +43,7 @@ bool tv_line(const std::string& t) {
 }  // namespace
 
 void add_qw_ignore(con::Console& c, QwIgnore& g, const DemoState& s) {
+  add_chat_extras(c, g.chat);
   {
     con::CvarLayer engine(c.cvars(), kLayerEngine);
     con::add_chat_ignore(c, g.lists);
@@ -112,8 +113,8 @@ con::ChatLine chat_line_of(const DemoState& s, const DemoPrint& p) {
   return line;
 }
 
-void drop_ignored(QwIgnore& g, const DemoState& s, std::vector<DemoPrint>& prints, double now_s,
-                  std::string* centre) {
+void drop_ignored(QwIgnore& g, DemoState& s, std::vector<DemoPrint>& prints, double now_s,
+                  std::string* centre, const ChatClock& clock) {
   if (g.levels != s.levels) {  // a new map: the players' flags and the flood's memory go
     g.levels = s.levels;
     con::chat_new_level(g.lists);
@@ -143,6 +144,9 @@ void drop_ignored(QwIgnore& g, const DemoState& s, std::vector<DemoPrint>& print
                                             : con::kReChat;
     gone[i] = con::re_trigger_line(*g.con, g.triggers, prints[i].text, kind, now_s).remove;
   }
+  for (size_t i = 0; i < prints.size(); ++i)
+    if (!gone[i])
+      gone[i] = !chat_line_extras(g.chat, s, chat_line_of(s, prints[i]), prints[i], clock);
   size_t kept = 0;
   for (size_t i = 0; i < prints.size(); ++i)
     if (!gone[i]) {

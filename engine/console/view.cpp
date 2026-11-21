@@ -76,8 +76,13 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
          &notify_time_);
   v.bind({.name = "con_chat",
           .fallback = "0",
-          .help = "1: a line typed without a / is said to everyone (a multiplayer game sets it)",
-          .kind = CvarKind::boolean},
+          .help = "what a line typed without a / is: a command, or said to everyone",
+          .kind = CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "0: a command (the default); 1: said to everyone (a multiplayer game sets "
+                    "it); 2: a command when its first word is a command, alias or setting, else "
+                    "said"},
          &chat_default_);
   v.bind({.name = "con_suggest",
           .fallback = "8",
@@ -325,8 +330,12 @@ void ConsoleView::submit() {
   scroll_ = 0;
   if (line.find_first_not_of(" \t") == std::string::npos) return;
   if (history_.empty() || history_.back() != line) history_.push_back(line);
-  const bool slash = line[0] == '/';
-  if (slash || !chat_default_) {
+  if (line.starts_with("//")) {  // a note to oneself: shown, never run or said
+    add(LineKind::command, line);
+    return;
+  }
+  const bool slash = line[0] == '/' || line[0] == '\\';
+  if (slash || chat_default_ == 0 || (chat_default_ == 2 && names_something(line))) {
     const std::string cmd = slash ? line.substr(1) : line;
     const std::vector<std::string> words = tokenize(cmd);
     if (!words.empty()) ++uses_[lower(words[0])];
@@ -337,10 +346,18 @@ void ConsoleView::submit() {
   say(ChatTo::all, "", line);
 }
 
+bool ConsoleView::names_something(std::string_view line) const {
+  const std::vector<std::string> words = tokenize(line);
+  if (words.empty()) return false;
+  const std::string w = lower(words[0]);
+  return c_.has_command(w) || c_.aliases().count(w) != 0 || c_.cvars().find(w) != nullptr;
+}
+
 std::string ConsoleView::head() const {
-  // Suggestions follow the command word: after a `/`, or bare when typed text is a command.
-  const bool slash = !input_.empty() && input_[0] == '/';
-  if (!slash && chat_default_) return "";
+  // Suggestions follow the command word: after a `/` or `\`, or bare when typed text may be a
+  // command.
+  const bool slash = !input_.empty() && (input_[0] == '/' || input_[0] == '\\');
+  if (!slash && chat_default_ == 1) return "";
   std::string h = input_.substr(slash ? 1 : 0);
   if (h.empty() || h.find_first_of(" \t;") != std::string::npos) return "";
   return h;

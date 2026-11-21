@@ -273,13 +273,17 @@ void bi_checkclient(pg::Vm& vm) {
       s.check_client = c;
       break;
     }
+    // On the single-player clock the candidate's view is taken now and kept until the next
+    // choice (up to 0.1 s old when a monster looks).
+    if (s.check_client > 0 && in_use(s, s.check_client)) s.check_eye = eye_of(s, s.check_client);
   }
   const int c = s.check_client;
   if (c <= 0 || !in_use(s, c) || field_f(vm, c, pg::vm_layout(vm).f.health) <= 0 || self < 0) {
     pg::return_int(vm, 0);
     return;
   }
-  pg::return_int(vm, sees(s, eye_of(s, c), eye_of(s, self)) ? pg::entity_value(vm, c) : 0);
+  const sh::Vec3f from = s.sv.set.single_player_clock ? s.check_eye : eye_of(s, c);
+  pg::return_int(vm, sees(s, from, eye_of(s, self)) ? pg::entity_value(vm, c) : 0);
 }
 
 void bi_find(pg::Vm& vm) {
@@ -440,6 +444,20 @@ void bi_findradius(pg::Vm& vm) {
   const float grow = rad + 1;
   const sh::Vec3f lo = org - sh::Vec3f{grow, grow, grow}, hi = org + sh::Vec3f{grow, grow, grow};
   int32_t head = 0;
+  if (s.sv.set.single_player_clock) {
+    // Every entity in use in number order, linked or not, by the true distance to its box's
+    // centre: the chain runs from the highest number down.
+    for (int e = 1; e < s.sv.num_edicts; e++) {
+      const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
+      if (!in_use(s, e) || ed.solid == sh::kSolidNot) continue;
+      const sh::Vec3f d = org - (ed.origin + (ed.mins + ed.maxs) * 0.5f);
+      if (sh::length(d) > rad) continue;
+      *pg::entity_field(vm, e, pg::vm_layout(vm).f.chain) = static_cast<uint32_t>(head);
+      head = pg::entity_value(vm, e);
+    }
+    pg::return_int(vm, head);
+    return;
+  }
   radius_walk(s, vm, 0, lo, hi, org, rad * rad, head);
   pg::return_int(vm, head);
 }
@@ -486,7 +504,8 @@ sh::Vec3f box_centre(const pg::Vm& vm, const pg::LayoutFields& f, int e) {
 
 // The single-player form's autoaim: the entity straight ahead along the line of sight when it
 // takes aimed damage; else the one nearest the line of sight (a cosine of at least `sv_aim`) with
-// a clear line to it, aimed at by correcting the pitch alone; else straight ahead.
+// a clear line to it, aimed at by correcting the pitch alone (from the shooter's origin to the
+// target's); else straight ahead.
 sh::Vec3f autoaim(QcServer& s, pg::Vm& vm, int shooter, sh::Vec3f forward) {
   const ge::console::Cvar* c = s.cvars.find("sv_aim");
   const float least = c != nullptr ? static_cast<float>(c->number) : 0.93f;
@@ -521,7 +540,8 @@ sh::Vec3f autoaim(QcServer& s, pg::Vm& vm, int shooter, sh::Vec3f forward) {
     }
   }
   if (target < 0) return forward;
-  const sh::Vec3f to = box_centre(vm, f, target) - start;
+  // The pitch is corrected from origin to origin.
+  const sh::Vec3f to = field_v(vm, target, f.origin) - field_v(vm, shooter, f.origin);
   const float along = sh::dot(to, forward);
   sh::Vec3f aim{forward.x * along, forward.y * along, to.z};
   sh::normalize(aim);

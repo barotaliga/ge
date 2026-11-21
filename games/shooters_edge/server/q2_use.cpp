@@ -89,6 +89,46 @@ bool fight_use(Q2Server& s, int slot, int item) {
   return true;
 }
 
+int fight_power_save(Q2Server& s, int slot, sh::Vec3f dir, int damage) {
+  Q2Player& p = s.players[slot];
+  const int screen = p.body.counts[sq_item("item_power_screen")];
+  const int shield = p.body.counts[sq_item("item_power_shield")];
+  int& cells = p.body.ammo[static_cast<int>(SqAmmo::cells)];
+  if (!p.power_on || (screen == 0 && shield == 0) || cells <= 0) return 0;
+  int part = damage / 3, per_cell = 1;  // the screen's third, from in front
+  if (shield > 0) {
+    part = damage * 2 / 3;
+    per_cell = 2;
+  } else {
+    const sh::ViewAxes ax = sh::angle_vectors({0, p.view_angles.y, 0});
+    if (sh::dot(ax.forward, dir * -1.0f) <= 0.3f) return 0;  // a hit from the side or behind
+  }
+  const int saved = std::min(part, cells * per_cell);
+  if (saved <= 0) return 0;
+  cells -= saved / per_cell;
+  p.blow_parts[2] += saved;  // the screen's green flash (q2_blend.hpp)
+  const int16_t* o = p.move.origin;
+  const sh::Vec3f at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
+  p.power_flash = fight_power_hit(s, at - dir * 16.0f, dir * -1.0f, shield > 0);
+  return saved;
+}
+
+double fight_power_hit(Q2Server& s, sh::Vec3f at, sh::Vec3f normal, bool shield) {
+  fight_effect(s, shield ? "te_shield_sparks" : "te_screen_sparks", at, normal);
+  NetEvent ev;
+  ev.kind = EventKind::sound;
+  ev.to = kEveryone;
+  ev.level = 0;  // no entity's channel: a sound at a point
+  ev.origin = at;
+  ev.values[0] = 255;
+  ev.values[1] = 1;
+  ev.text = "weapons/lashit.wav";
+  ev.time = s.level_time;
+  s.out.events.push_back(std::move(ev));
+  s.out.events_total++;
+  return s.level_time + kSqPowerFlashS;
+}
+
 void fight_power_frame(Q2Server& s) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2Player& p = s.players[i];

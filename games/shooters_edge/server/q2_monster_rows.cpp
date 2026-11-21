@@ -173,6 +173,8 @@ void monster_rows(Q2Server& s) {
       loop = "infantry/inflies1.wav";
       r.effects = kSqFliesEffect;
     }
+    if (!m.dead && s.level_time < m.screen_flash)
+      r.effects |= kSqPowerScreenEffect;  // a blow taken
     if (loop != nullptr && !e.gone) {
       const auto at = std::find(s.sounds.begin(), s.sounds.end(), loop);
       if (at != s.sounds.end()) r.loop = static_cast<int>(at - s.sounds.begin());

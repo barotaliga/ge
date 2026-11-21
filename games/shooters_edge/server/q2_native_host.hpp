@@ -50,6 +50,10 @@ struct NativeHost {
   std::vector<std::string> commands;  // text the library queued (`add_command_string`)
 
   std::shared_ptr<ge::brush::Map> map;  // this level's, its hearing sets built
+  // Its area portals as the game set them (all shut at the level's start), and the areas flooded
+  // over the open ones (brush/areas.hpp).
+  std::vector<uint8_t> portals;
+  std::vector<int32_t> area_groups;
   std::unique_ptr<ge::brush::BrushTracer> tracer;
   // A map of clip hulls (the classic family, played under classic remix): its models' hulls
   // (pointing into the caller's map, which outlives the level) in place of `map` and `tracer`.

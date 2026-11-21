@@ -89,6 +89,13 @@ bool fight_use(Q2Server& s, int slot, int item);
 // Each frame: power armour switched on with no cells left switches off, with its sound
 // (q2_use.cpp).
 void fight_power_frame(Q2Server& s);
+// Power armour's part of a blow on player `slot` along `dir` (a screen's only from within ~73
+// degrees of his front: a third, a point a cell; a shield's two thirds, two points a cell), its
+// cells taken; a part taken flashes it (`fight_power_hit`). The points it took (q2_use.cpp).
+int fight_power_save(Q2Server& s, int slot, sh::Vec3f dir, int damage);
+// A blow power armour took at `at` (its face along `normal`): 40 green specks off a screen, pale
+// blue ones off a shield, and the hit's sound there; returns when its plate or shell stops showing.
+double fight_power_hit(Q2Server& s, sh::Vec3f at, sh::Vec3f normal, bool shield);
 // The end of player `slot`'s rules frame: the powerups' and the air's clocks, drowning, lava,
 // slime and falling damage, and the body's sounds: the water's, breathing, landing, the frame's
 // pain cry in the player's own voice (its `*` sounds, which each client takes from that
@@ -152,7 +159,7 @@ struct LaserEnd {
 LaserEnd fight_laser(Q2Server& s, sh::Vec3f start, sh::Vec3f end, int damage, int attacker,
                      int skip_entity);
 // A point effect (`te_*`) at `at` for everyone.
-void fight_effect(Q2Server& s, const char* name, sh::Vec3f at);
+void fight_effect(Q2Server& s, const char* name, sh::Vec3f at, sh::Vec3f way = {});
 // A line effect `name` from `a` to `b` that monster entity `from` makes (a cable it holds out, a
 // shot's flash from its gun along its aim): the window draws it, a QuakeWorld client ignores it.
 void fight_monster_line(Q2Server& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b);

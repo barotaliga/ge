@@ -13,6 +13,7 @@
 #include <cstring>
 #include <string>
 
+#include "brush/areas.hpp"
 #include "classic/protocol/directions.hpp"
 #include "classic/q2_move.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
@@ -329,6 +330,19 @@ void c_linkentity(NativeEntityHead* e) {
   }
   e->num_clusters = 0;
   e->area_num = e->area_num2 = 0;
+  if (h.map && !h.map->areas.empty()) {  // the first area its box touches, and the last other one
+    uint32_t leaves[128];
+    const uint32_t n_leaves =
+        std::min<uint32_t>(br::box_leaves(*h.map, e->absmin, e->absmax, leaves, 128), 128);
+    for (uint32_t i = 0; i < n_leaves; i++) {
+      const int32_t a = h.map->leaves[leaves[i]].area;
+      if (a == 0) continue;
+      if (e->area_num != 0 && e->area_num != a)
+        e->area_num2 = a;
+      else
+        e->area_num = a;
+    }
+  }
   if (e->linkcount == 0) std::memcpy(e->s.old_origin, e->s.origin, sizeof e->s.old_origin);
   e->linkcount++;
   if (e->solid == native::kSolidNot) return;
@@ -587,22 +601,40 @@ int c_pointcontents(const float* p) {
   return c;
 }
 
+// Whether the areas of points `a` and `b` are joined through the open portals.
+bool area_joined(const NativeHost& h, const float* a, const float* b) {
+  if (!h.map || h.map->areas.empty()) return true;
+  return br::areas_connected(h.area_groups, br::area_at(*h.map, a), br::area_at(*h.map, b));
+}
+
 int c_in_pvs(const float* a, const float* b) {
   NativeHost& h = *g_host;
   if (!h.map) return 1;  // a map of clip hulls: every point in every set
   const int32_t x = cluster_at(h, a), y = cluster_at(h, b);
-  return x >= 0 && y >= 0 && br::cluster_sees(*h.map, x, y) ? 1 : 0;
+  if (x < 0 || y < 0 || !br::cluster_sees(*h.map, x, y)) return 0;
+  return area_joined(h, a, b) ? 1 : 0;
 }
 
 int c_in_phs(const float* a, const float* b) {
   NativeHost& h = *g_host;
   if (!h.map) return 1;  // a map of clip hulls: every point in every set
   const int32_t x = cluster_at(h, a), y = cluster_at(h, b);
-  return x >= 0 && y >= 0 && br::cluster_hears(*h.map, x, y) ? 1 : 0;
+  if (x < 0 || y < 0 || !br::cluster_hears(*h.map, x, y)) return 0;  // doors block hearing
+  return area_joined(h, a, b) ? 1 : 0;
 }
 
-void c_set_area_portal(int, int) {}  // every area stays connected (q2_native.hpp)
-int c_areas_connected(int, int) { return 1; }
+void c_set_area_portal(int portal, int open) {
+  NativeHost& h = *g_host;
+  if (portal < 0 || size_t(portal) >= h.portals.size()) return;
+  h.portals[size_t(portal)] = open != 0 ? 1 : 0;
+  if (h.map) br::flood_areas(*h.map, h.portals, &h.area_groups);  // the last set wins
+}
+
+int c_areas_connected(int a, int b) {
+  const NativeHost& h = *g_host;
+  if (!h.map || h.map->areas.empty()) return 1;  // a map with no areas: one space
+  return br::areas_connected(h.area_groups, a, b) ? 1 : 0;
+}
 
 // --- the move ---
 

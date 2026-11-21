@@ -29,6 +29,10 @@ thread) and client cvars such as v_gunkick (client settings thread).
 
 | 2026-11-20 | world rank 3, the last | world 35 to 51 (51 and 46 as the facts say; 43, 48, 49 and 41 were already the original's); monsters 63's torso, the floater's second stand |
 
+| 2026-11-21 | client effects | flies on corpses, the power screen's plate and the shield's shell for 0.2 s after a blow (sparks and lashit), god mode's white shell checked, the thinning trail (gib, grenade, rocket smoke), a rocket's fire specks, a blaster's specks, missiles' effect bits sent on the wire |
+
+| 2026-11-21 | area portals | doors cut hearing between rooms (the map's areas flooded over the open portals), and a game library's area calls answered |
+
 ## Next
 
-Nothing open in either audit. Facts for the last round: `q2-world-round4.md`.
+Nothing open in either audit. Facts: `q2-world-round4.md`, `q2-client-effects.md`, `q2-areas.md`.

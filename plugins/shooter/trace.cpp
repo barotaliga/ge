@@ -21,6 +21,7 @@ struct Clip {
   Vec3f boxmins, boxmaxs;
   int kind = kTraceNormal;
   int passent = -1;
+  bool single_player = false;  // the single-player clock's merge
   HullTrace best;
 };
 
@@ -45,7 +46,9 @@ void clip_links(const Server& sv, int32_t n, Clip& c) {
                                  : clip_to_entity(sv, t, c.start, c.mins, c.maxs, c.end);
     if (tr.allsolid || tr.startsolid || tr.fraction < c.best.fraction) {
       const bool was_startsolid = c.best.startsolid;
-      if (tr.allsolid || tr.fraction < c.best.fraction) {
+      // On the single-player clock a result that starts in solid replaces the best so far, even
+      // a nearer wall's.
+      if (tr.allsolid || tr.fraction < c.best.fraction || c.single_player) {
         c.best = tr;
         c.best.ent = t;
       }
@@ -85,8 +88,8 @@ HullTrace clip_to_entity(const Server& sv, int ent, Vec3f start, Vec3f mins, Vec
     offset = e.origin;
     tr = walk(box.hull(), start - offset, end - offset);
   }
-  if (tr.allsolid)
-    tr.endpos = start;
+  if (tr.allsolid)  // ends at its start; on the single-player clock at its end
+    tr.endpos = sv.set.single_player_clock ? end : start;
   else if (tr.fraction == 1)
     tr.endpos = end;
   else
@@ -110,6 +113,7 @@ HullTrace trace_move(const Server& sv, Vec3f start, Vec3f mins, Vec3f maxs, Vec3
   c.maxs = maxs;
   c.kind = kind;
   c.passent = passent;
+  c.single_player = sv.set.single_player_clock;
   if (kind == kTraceMissile) {
     c.mins2 = {-kMissileHalf, -kMissileHalf, -kMissileHalf};
     c.maxs2 = {kMissileHalf, kMissileHalf, kMissileHalf};
@@ -134,8 +138,11 @@ HullTrace trace_move(const Server& sv, Vec3f start, Vec3f mins, Vec3f maxs, Vec3
 
 bool test_entity_position(const Server& sv, int e) {
   const Edict& ed = sv.edicts[static_cast<size_t>(e)];
+  // On the single-player clock everything solid counts, whatever the entity's own solidity.
   const int kind =
-      ed.solid == kSolidTrigger || ed.solid == kSolidNot ? kTraceNoMonsters : kTraceNormal;
+      (ed.solid == kSolidTrigger || ed.solid == kSolidNot) && !sv.set.single_player_clock
+          ? kTraceNoMonsters
+          : kTraceNormal;
   const HullTrace tr = trace_move(sv, ed.origin, ed.mins, ed.maxs, ed.origin, kind, e);
   return tr.startsolid;
 }

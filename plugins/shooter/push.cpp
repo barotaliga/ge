@@ -6,6 +6,7 @@
 // ge:test tests/shooter_push_test.cpp
 #include "shooter/push.hpp"
 
+#include "shooter/physics.hpp"
 #include "shooter/trace.hpp"
 
 namespace ge::shooter {
@@ -27,10 +28,92 @@ bool test_without(Server& sv, int pusher, int e) {
   return stuck;
 }
 
+// Puts the pusher back, runs its blocked function on `blocker`, and every entity moved so far
+// back; the push fails.
+bool blocked_by(Server& sv, int pusher, Vec3f pushorig, int blocker, const int* moved,
+                const Vec3f* moved_from, int num_moved) {
+  sv.counts.pushes_blocked++;
+  ent(sv, pusher).origin = pushorig;
+  link_edict(sv, pusher, false);
+  const Func blocked = ent(sv, pusher).blocked;
+  if (blocked != kNoFunc) {
+    sv.g.self = pusher;
+    sv.g.other = blocker;
+    sv.g.time = static_cast<float>(sv.time);
+    call_program(sv, blocked);
+  }
+  for (int i = 0; i < num_moved; i++) {
+    ent(sv, moved[i]).origin = moved_from[i];
+    link_edict(sv, moved[i], false);
+  }
+  return false;
+}
+
+// The single-player clock's push: every candidate swept (push.hpp).
+bool push_move_swept(Server& sv, int pusher, Vec3f move) {
+  Vec3f mins, maxs;
+  Vec3f pushorig;
+  {
+    Edict& p = ent(sv, pusher);
+    mins = p.absmin + move;
+    maxs = p.absmax + move;
+    pushorig = p.origin;
+    p.origin = p.origin + move;
+  }
+  link_edict(sv, pusher, false);
+
+  int moved[kMaxEdicts];
+  Vec3f moved_from[kMaxEdicts];
+  int num_moved = 0;
+  for (int e = 1; e < sv.num_edicts; e++) {
+    {
+      const Edict& c = ent(sv, e);
+      if (c.free || c.movetype == kMovetypePush || c.movetype == kMovetypeNone ||
+          c.movetype == kMovetypeNoclip)
+        continue;
+      const bool rider = (c.flags & kFlagOnGround) != 0 && c.groundentity == pusher;
+      if (!rider) {
+        if (c.absmin.x >= maxs.x || c.absmin.y >= maxs.y || c.absmin.z >= maxs.z ||
+            c.absmax.x <= mins.x || c.absmax.y <= mins.y || c.absmax.z <= mins.z)
+          continue;
+        if (!test_entity_position(sv, e)) continue;
+      }
+    }
+    Edict& c = ent(sv, e);
+    if (c.movetype != kMovetypeWalk) c.flags &= ~kFlagOnGround;
+    const Vec3f from = c.origin;
+    moved[num_moved] = e;
+    moved_from[num_moved] = from;
+    num_moved++;
+    {
+      Edict& p = ent(sv, pusher);
+      const int solid = p.solid;
+      p.solid = kSolidNot;
+      push_entity(sv, e, move);
+      ent(sv, pusher).solid = solid;
+    }
+    if (ent(sv, e).free || !test_entity_position(sv, e)) continue;
+
+    Edict& stuck = ent(sv, e);
+    if (stuck.mins.x == stuck.maxs.x) continue;  // a point: left where the sweep put it
+    if (stuck.solid == kSolidNot || stuck.solid == kSolidTrigger) {  // a corpse: flattened
+      stuck.mins.x = 0;
+      stuck.mins.y = 0;
+      stuck.maxs = stuck.mins;
+      continue;
+    }
+    stuck.origin = from;
+    link_edict(sv, e, true);
+    return blocked_by(sv, pusher, pushorig, e, moved, moved_from, num_moved);
+  }
+  return true;
+}
+
 }  // namespace
 
 bool push_move(Server& sv, int pusher, Vec3f move) {
   sv.counts.pushes++;
+  if (sv.set.single_player_clock) return push_move_swept(sv, pusher, move);
   Vec3f mins, maxs;
   Vec3f pushorig;
   {
@@ -93,22 +176,7 @@ bool push_move(Server& sv, int pusher, Vec3f move) {
       continue;
     }
 
-    // Blocked: everything goes back.
-    sv.counts.pushes_blocked++;
-    ent(sv, pusher).origin = pushorig;
-    link_edict(sv, pusher, false);
-    const Func blocked = ent(sv, pusher).blocked;
-    if (blocked != kNoFunc) {
-      sv.g.self = pusher;
-      sv.g.other = e;
-      sv.g.time = static_cast<float>(sv.time);
-      call_program(sv, blocked);
-    }
-    for (int i = 0; i < num_moved; i++) {
-      ent(sv, moved[i]).origin = moved_from[i];
-      link_edict(sv, moved[i], false);
-    }
-    return false;
+    return blocked_by(sv, pusher, pushorig, e, moved, moved_from, num_moved);  // all goes back
   }
   return true;
 }
@@ -139,7 +207,7 @@ void physics_pusher(Server& sv, int e, double dt) {
     call_program(sv, ent(sv, e).think);
     if (ent(sv, e).free) return;
     const Vec3f move = ent(sv, e).origin - oldorg;
-    if (length(move) > kThinkMoveEpsilon) {
+    if (length(move) > kThinkMoveEpsilon && !sv.set.single_player_clock) {
       set_origin(sv, e, oldorg);  // back, relinked, so the push starts from where it was
       push_move(sv, e, move);
     }

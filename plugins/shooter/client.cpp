@@ -297,6 +297,7 @@ void run_player_frame(Server& sv, int e, double dt) {
   if (!c.active || c.spectator) return;
   call_hook(sv, e, sv.program.player_pre_think);
   if (ent(sv, e).free) return;
+  bound_velocity(sv, e);  // before the think, gravity and the move, each axis on its own
   const int movetype = ent(sv, e).movetype;
   if (movetype == kMovetypeWalk || movetype == kMovetypeNoclip) {
     if (!run_think(sv, e, dt)) return;
@@ -304,7 +305,6 @@ void run_player_frame(Server& sv, int e, double dt) {
     frame_move(sv, e, frame_settings(sv.set), dt);
   } else if (movetype == kMovetypeFly) {  // `fly`: no gravity, sliding along what it meets
     if (!run_think(sv, e, dt)) return;
-    bound_velocity(sv, e);
     fly_move(sv, e, static_cast<float>(dt));
     link_edict(sv, e, true);
   } else {

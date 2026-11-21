@@ -118,12 +118,16 @@ void mirror_out(QcProgram& q, int e) {
   if (q.fields.maxspeed >= 0) d.maxspeed = get_f(q, e, q.fields.maxspeed);
 }
 
-// The progs' free rule on the VM's record: these cleared, nextthink -1, the rest kept.
+// The progs' free rule on the VM's record: these cleared, nextthink -1, the rest kept (a
+// single-player program's freed entity keeps its classname and health too, until reused).
 void free_rule(QcProgram& q, int e) {
   for (int f : {q.layout->f.model, q.layout->f.takedamage, q.layout->f.modelindex,
-                q.layout->f.colormap, q.layout->f.skin, q.layout->f.frame, q.layout->f.health,
-                q.layout->f.classname, q.layout->f.solid}) {
+                q.layout->f.colormap, q.layout->f.skin, q.layout->f.frame, q.layout->f.solid}) {
     *field(q, e, f) = 0;
+  }
+  if (!q.layout->single_player) {
+    *field(q, e, q.layout->f.health) = 0;
+    *field(q, e, q.layout->f.classname) = 0;
   }
   put_v(q, e, q.layout->f.origin, {});
   put_v(q, e, q.layout->f.angles, {});

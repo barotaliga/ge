@@ -6,8 +6,10 @@
 #include "shooters_edge/app/effects.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
+#include "classic/protocol/directions.hpp"
 #include "core/prng.hpp"
 
 namespace shooters_edge::effects {
@@ -160,24 +162,6 @@ double blood_trail(const double from[3], const double to[3], double step, double
   return carry + step * n - len;
 }
 
-double q2_blood_trail(const double from[3], const double to[3], double step, double carry,
-                      uint32_t seed, Palette pal, Particles* out) {
-  Rng r = ge::core::make_rng(seed);
-  const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
-  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-  const int n = len > carry ? static_cast<int>((len - carry) / step) + 1 : 0;
-  for (int i = 0; i < n; ++i) {
-    const double t = (carry + step * i) / len;
-    const double p[3] = {from[0] + d[0] * t, from[1] + d[1] * t, from[2] + d[2] * t};
-    double q[3];
-    jitter(r, p, 3, q);
-    Particle s = speck(q, pal, 232 + pick(r, 8), 0, 0, rnd(r, 1.0, 1.4));
-    s.v[1] = float(-40 * kUnit);  // the plan is x/z, y up
-    out->push_back(s);
-  }
-  return carry + step * n - len;
-}
-
 void teleport_splash(const double p[3], uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   for (int i = -16; i < 16; i += 4)
@@ -247,7 +231,7 @@ void q2_specks(const double p[3], const double normal[3], int count, int colour,
                  z = rnd(r, -4, 4) + d * normal[2];
     const double v[3] = {rnd(r, -20, 20), rnd(r, -20, 20), rnd(r, -20, 20)};
     const int index = vary ? (colour + pick(r, 8)) & 0xff : colour & 0xff;
-    out->push_back(q2_speck(p, x, y, z, v, 40, pal, index, rnd(r, 0.5, 0.8)));
+    out->push_back(q2_speck(p, x, y, z, v, 80, pal, index, rnd(r, 0.5, 0.8)));
   }
 }
 
@@ -268,6 +252,116 @@ void q2_fountain(const double p[3], uint32_t seed, Palette pal, Particles* out) 
     const double x = rnd(r, -16, 16), y = rnd(r, -16, 16), z = -1 - pick(r, 8);
     const double v[3] = {0, 0, 80.0 + pick(r, 8)};
     out->push_back(q2_speck(p, x, y, z, v, 80, pal, 219, 2));
+  }
+}
+
+namespace {
+
+// The stretch `from` .. `to` (engine metres) in map units' axes (x, y the plan, z up): its
+// length in units and its way, a unit long.
+double q2_stretch(const double from[3], const double to[3], double way[3]) {
+  const double d[3] = {(to[0] - from[0]) / kUnit, (to[2] - from[2]) / kUnit,
+                       (to[1] - from[1]) / kUnit};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  for (int k = 0; k < 3; ++k) way[k] = len > 1e-9 ? d[k] / len : 0;
+  return len;
+}
+
+}  // namespace
+
+void q2_trail(const double from[3], const double to[3], Q2Trail kind, int& count, uint32_t seed,
+              Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  double way[3];
+  const double len = q2_stretch(from, to, way);
+  // The spread, by how far it has flown when this frame starts: widest at first.
+  const double spread = count > 900 ? 4 : count > 800 ? 2 : 1;
+  const double drift = count > 900 ? 15 : count > 800 ? 10 : 5;
+  const bool blood = kind == Q2Trail::blood;
+  const int tries = static_cast<int>(std::ceil(len / kSqTrailAttemptUnits));
+  for (int k = 0; k < tries; ++k) {
+    const double gone = k * kSqTrailAttemptUnits;
+    const bool shown = pick(r, 1024) < count;
+    count = std::max(kSqTrailFloor, count - kSqTrailFade);
+    if (!shown) continue;
+    const double x = gone * way[0] + rnd(r, -spread, spread);
+    const double y = gone * way[1] + rnd(r, -spread, spread);
+    const double z = gone * way[2] + rnd(r, -spread, spread);
+    double v[3] = {rnd(r, -drift, drift), rnd(r, -drift, drift), rnd(r, -drift, drift)};
+    if (blood) {
+      v[2] -= 40;  // thrown down, then no gravity
+      out->push_back(q2_speck(from, x, y, z, v, 0, pal, 232 + pick(r, 8), rnd(r, 1.0, 1.4)));
+    } else {  // smoke, rising
+      out->push_back(q2_speck(from, x, y, z, v, -40, pal, 4 + pick(r, 8), rnd(r, 1.0, 1.2)));
+    }
+  }
+}
+
+void q2_rocket_fire(const double from[3], const double to[3], uint32_t seed, Palette pal,
+                    Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  double way[3];
+  const double len = q2_stretch(from, to, way);
+  for (int k = 0; k < static_cast<int>(std::ceil(len)); ++k) {
+    const double gone = k;
+    if (pick(r, 8) != 0) continue;
+    const double x = gone * way[0] + rnd(r, -5, 5), y = gone * way[1] + rnd(r, -5, 5),
+                 z = gone * way[2] + rnd(r, -5, 5);
+    const double v[3] = {rnd(r, -20, 20), rnd(r, -20, 20), rnd(r, -20, 20)};
+    out->push_back(q2_speck(from, x, y, z, v, 80, pal, 220 + pick(r, 4), rnd(r, 1.0, 1.2)));
+  }
+}
+
+void q2_bolt_trail(const double from[3], const double to[3], uint32_t seed, Palette pal,
+                   Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  double way[3];
+  const double len = q2_stretch(from, to, way);
+  for (int k = 0; k < static_cast<int>(std::ceil(len / 5)); ++k) {
+    const double gone = 5.0 * k;
+    const double x = gone * way[0] + rnd(r, -1, 1), y = gone * way[1] + rnd(r, -1, 1),
+                 z = gone * way[2] + rnd(r, -1, 1);
+    const double v[3] = {rnd(r, -5, 5), rnd(r, -5, 5), rnd(r, -5, 5)};
+    out->push_back(q2_speck(from, x, y, z, v, 0, pal, 224, rnd(r, 0.3, 0.5)));
+  }
+}
+
+int q2_flies_count(double since_s) {
+  const auto n = static_cast<int64_t>(since_s * 1000);
+  constexpr int64_t kRamp = 20000, kCycle = 60000;
+  if (n < kRamp) return static_cast<int>(std::max<int64_t>(0, n) * kSqFliesMax / kRamp);
+  const int64_t left = kCycle - n;
+  if (left < kRamp) return static_cast<int>(std::max<int64_t>(0, left) * kSqFliesMax / kRamp);
+  return kSqFliesMax;
+}
+
+void q2_flies(const double at[3], double t, double since_s, double life, Palette pal,
+              Particles* out) {
+  // Each fly's two turning rates (0 to 2.55 radians a second), the same for every corpse.
+  static const auto kRates = [] {
+    std::array<std::array<double, 2>, kSqFliesMax> rates{};
+    Rng r = ge::core::make_rng(0x666c6965u);
+    for (auto& f : rates)
+      for (double& v : f) v = pick(r, 256) * 0.01;
+    return rates;
+  }();
+  const auto& dirs = ge::classic::protocol::directions();
+  const int count = q2_flies_count(since_s);
+  for (int i = 0; i < count; i += 2) {
+    const double a = kRates[size_t(i)][0], b = kRates[size_t(i)][1];
+    const double yaw = t * a, pitch = t * b;
+    const double cp = std::cos(pitch), sp = std::sin(pitch), cy = std::cos(yaw), sy = std::sin(yaw);
+    const double fwd[3] = {cp * cy, cp * sy, -sp};
+    const double swing = 64 * std::sin(t + i), swing_v = 64 * std::cos(t + i);
+    const auto& n = dirs[size_t(i)];
+    // Where it is and how fast it goes there (so a speck living a frame or two stays on its path).
+    const double fwd_v[3] = {-sp * b * cy - cp * sy * a, -sp * b * sy + cp * cy * a, -cp * b};
+    double p[3], v[3];
+    for (int k = 0; k < 3; ++k) {
+      p[k] = n[size_t(k)] * swing + fwd[k] * 16;
+      v[k] = n[size_t(k)] * swing_v + fwd_v[k] * 16;
+    }
+    out->push_back(q2_speck(at, p[0], p[1], p[2], v, 0, pal, 0, life));
   }
 }
 

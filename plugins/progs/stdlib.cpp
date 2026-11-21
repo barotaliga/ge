@@ -48,10 +48,27 @@ double yaw_of(float x, float y) {
   return yaw;
 }
 
+// A single-player program's angles come back in whole degrees, truncated toward zero before a
+// negative one is turned positive. Our own rules in C++ (a native program) keep the fractions.
+bool whole_degrees(const Vm& vm) {
+  return vm_layout(vm).single_player && (vm.progs == nullptr || vm.progs->natives == nullptr);
+}
+
+double whole(const Vm& vm, double degrees) {
+  if (!whole_degrees(vm)) return degrees;
+  const double t = static_cast<double>(static_cast<int64_t>(degrees));
+  return t < 0 ? t + 360 : t;
+}
+
+double yaw_for(const Vm& vm, float x, float y) {
+  if (!whole_degrees(vm)) return yaw_of(x, y);
+  return whole(vm, core::libm::atan2(static_cast<double>(y), static_cast<double>(x)) * kDegrees);
+}
+
 void bi_vectoyaw(Vm& vm) {
   float v[3];
   arg_vector(vm, 0, v);
-  return_float(vm, v[0] == 0 && v[1] == 0 ? 0.0f : static_cast<float>(yaw_of(v[0], v[1])));
+  return_float(vm, v[0] == 0 && v[1] == 0 ? 0.0f : static_cast<float>(yaw_for(vm, v[0], v[1])));
 }
 
 void bi_vectoangles(Vm& vm) {
@@ -64,8 +81,11 @@ void bi_vectoangles(Vm& vm) {
   const double x = v[0], y = v[1];
   const double forward = std::sqrt(x * x + y * y);
   double pitch = core::libm::atan2(static_cast<double>(v[2]), forward) * kDegrees;
-  if (pitch < 0) pitch += 360;
-  return_vector(vm, static_cast<float>(pitch), static_cast<float>(yaw_of(v[0], v[1])), 0);
+  if (whole_degrees(vm))
+    pitch = whole(vm, pitch);
+  else if (pitch < 0)
+    pitch += 360;
+  return_vector(vm, static_cast<float>(pitch), static_cast<float>(yaw_for(vm, v[0], v[1])), 0);
 }
 
 // k uniform in 0..32767 from the game's generator.

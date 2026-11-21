@@ -23,6 +23,12 @@ namespace {
 
 const sh::Vec3f kPlayerMins{-16, -16, -24}, kPlayerMaxs{16, 16, 32};
 
+sh::ServerSettings settings(bool single_player) {
+  sh::ServerSettings set;
+  set.single_player_clock = single_player;
+  return set;
+}
+
 // A floor, a thick ceiling from z = 100 over x -200..200, and a plat (model 2) 128 square and 8
 // high.
 struct Room {
@@ -30,7 +36,7 @@ struct Room {
   int plat = 0;
   int blocker = -1, blocks = 0;
 
-  explicit Room(std::function<void(sh::Server&)> think = nullptr) {
+  explicit Room(std::function<void(sh::Server&)> think = nullptr, bool single_player = false) {
     const sh::Func blocked = b.add([this](sh::Server& sv) {
       blocks++;
       blocker = sv.g.other;
@@ -38,7 +44,7 @@ struct Room {
     });
     const sh::Func th = think ? b.add(std::move(think)) : sh::kNoFunc;
     b.start({box({-1024, -1024, -64}, {1024, 1024, 0}), box({-200, -200, 100}, {200, 200, 400})},
-            {{box({-64, -64, 0}, {64, 64, 8})}});
+            {{box({-64, -64, 0}, {64, 64, 8})}}, settings(single_player));
     plat = sh::spawn_edict(b.sv);
     sh::Edict& p = b.ent(plat);
     p.solid = sh::kSolidBsp;
@@ -165,4 +171,43 @@ TEST(a_think_that_moves_the_pusher_pushes_what_rides_it) {
   sh::physics_pusher(r.b.sv, r.plat, 0.1);
   CHECK(r.b.ent(r.plat).origin.z == 30);
   CHECK(r.b.ent(e).origin.z == 62);
+}
+
+// ON THE SINGLE-PLAYER CLOCK the push sweeps: what it carries is relinked with its trigger
+// touches, so a rider carried through a trigger sets it off.
+TEST(on_the_single_player_clock_a_rider_carried_through_a_trigger_sets_it_off) {
+  for (const bool sp : {false, true}) {
+    Room r(nullptr, sp);
+    int touches = 0;
+    const sh::Func touch = r.b.add([&](sh::Server&) { touches++; });
+    const int trig =
+        r.b.spawn_box({0, 0, 70}, {-16, -16, 0}, {16, 16, 8}, sh::kSolidTrigger, sh::kMovetypeNone);
+    r.b.ent(trig).touch = touch;
+    r.rider({0, 0, 32}, true);  // its top at 64
+    CHECK(sh::push_move(r.b.sv, r.plat, {0, 0, 20}));
+    CHECK(touches == (sp ? 1 : 0));
+  }
+}
+
+// One already stuck is pushed all the same, and blocks when it cannot go.
+TEST(on_the_single_player_clock_a_box_already_stuck_is_pushed_and_blocks) {
+  Room r(nullptr, true);
+  const int stuck = r.rider({0, 0, 90}, true);  // its top in the ceiling already
+  CHECK(!sh::push_move(r.b.sv, r.plat, {0, 0, 10}));
+  CHECK(r.blocks == 1);
+  CHECK(r.blocker == stuck);
+  CHECK(r.b.ent(stuck).origin.z == 90);
+  CHECK(r.b.ent(r.plat).origin.z == 0);
+}
+
+// A think's snap places the pusher and carries nothing.
+TEST(on_the_single_player_clock_a_think_that_moves_the_pusher_carries_nothing) {
+  Room* room = nullptr;
+  Room r([&](sh::Server& sv) { sh::set_origin(sv, room->plat, {0, 0, 30}); }, true);
+  room = &r;
+  const int e = r.rider({0, 0, 32}, true);
+  r.b.ent(r.plat).nextthink = 0.05f;
+  sh::physics_pusher(r.b.sv, r.plat, 0.1);
+  CHECK(r.b.ent(r.plat).origin.z == 30);
+  CHECK(r.b.ent(e).origin.z == 32);
 }

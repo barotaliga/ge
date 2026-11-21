@@ -625,3 +625,43 @@ TEST(q2_flashes_light_green_red_and_yellow) {
     CHECK(l.pos[0] == 1 && l.pos[1] == 2 && l.pos[2] == 3);
   }
 }
+
+TEST(a_quake2_trail_thins_as_its_piece_flies) {
+  // 100 units in one go: two specks a unit at first, the count at its floor by the end.
+  const double a[3] = {0, 0, 0}, b[3] = {100 * 0.025, 0, 0}, c[3] = {200 * 0.025, 0, 0};
+  int count = fx::kSqTrailStart;
+  fx::Particles first, later;
+  fx::q2_trail(a, b, fx::Q2Trail::blood, count, 3, {}, &first);
+  CHECK(count == fx::kSqTrailFloor);
+  fx::q2_trail(b, c, fx::Q2Trail::blood, count, 4, {}, &later);
+  CHECK_MSG(first.size() > 80 && first.size() < 140, std::to_string(first.size()));
+  CHECK_MSG(later.size() > 5 && later.size() < 40, std::to_string(later.size()));
+  // Blood is thrown down with no gravity, living 1 to 1.4 s; smoke rises.
+  for (const auto& p : later) CHECK(p.fall == 0 && p.life >= 1.0f && p.life <= 1.4f);
+  fx::Particles smoke;
+  count = fx::kSqTrailStart;
+  fx::q2_trail(a, b, fx::Q2Trail::smoke, count, 5, {}, &smoke);
+  CHECK(!smoke.empty() && smoke[0].fall < 0);
+  // A blaster's bolt: a speck every 5 units.
+  fx::Particles bolt;
+  fx::q2_bolt_trail(a, b, 6, {}, &bolt);
+  CHECK(bolt.size() == 20);
+}
+
+TEST(quake2_flies_swarm_up_hold_and_thin_over_a_minute) {
+  CHECK(fx::q2_flies_count(0) == 0);
+  CHECK(fx::q2_flies_count(10) == 81);
+  CHECK(fx::q2_flies_count(30) == fx::kSqFliesMax);
+  CHECK(fx::q2_flies_count(50) == 81);
+  CHECK(fx::q2_flies_count(60) == 0);
+  const double at[3] = {1, 2, 3};
+  fx::Particles flies;
+  fx::q2_flies(at, 7.5, 30, 0.02, {}, &flies);
+  CHECK(flies.size() == 81);
+  for (const auto& p : flies) {  // black, within 80 units of the corpse, living the frame
+    const double d =
+        std::sqrt((p.p[0] - at[0]) * (p.p[0] - at[0]) + (p.p[1] - at[1]) * (p.p[1] - at[1]) +
+                  (p.p[2] - at[2]) * (p.p[2] - at[2]));
+    CHECK(d <= 80 * 0.025 + 1e-4 && p.tint[0] == 0 && p.life == 0.02f);
+  }
+}

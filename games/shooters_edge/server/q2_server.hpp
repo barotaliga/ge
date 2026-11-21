@@ -184,17 +184,18 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   sh::Vec3f aim_at;
   bool leaping = false;  // in the air on a leap; `struck` once it has hurt
   bool struck = false;
-  int screen = 0;        // a power screen's points left
-  double died_at = 0;    // level time
-  double end_at = 0;     // a boss's wreck, a crashed flier: when it ends
-  int boom_step = -1;    // a boss's blasts so far
-  int patient = -1;      // a medic's corpse (a monster row) it is raising
-  int old_enemy = -1;    // and the enemy it had
-  double revive_at = 0;  // the cable's moment
-  bool claimed = false;  // a corpse a medic is raising
-  bool spare = false;    // waits to come out at a boss's death (not yet counted)
-  double used_at = -1;   // a figure's use (the commander's body)
-  SqMonsterPose pose;    // the frame it shows (q2_poses.hpp)
+  int screen = 0;           // a power screen's points left
+  double screen_flash = 0;  // its plate shown till then (level time): it took a blow
+  double died_at = 0;       // level time
+  double end_at = 0;        // a boss's wreck, a crashed flier: when it ends
+  int boom_step = -1;       // a boss's blasts so far
+  int patient = -1;         // a medic's corpse (a monster row) it is raising
+  int old_enemy = -1;       // and the enemy it had
+  double revive_at = 0;     // the cable's moment
+  bool claimed = false;     // a corpse a medic is raising
+  bool spare = false;       // waits to come out at a boss's death (not yet counted)
+  double used_at = -1;      // a figure's use (the commander's body)
+  SqMonsterPose pose;       // the frame it shows (q2_poses.hpp)
   // A dodge's duck (q2_monsters.cpp, q2-monsters-full.md § Dodging and ducking): the frame
   // of the duck it plays (-1 none), whether that frame is new this think, the soldiers' duck that
   // shoots, its box down by 32, the hold's end (level time) and the model frame it shows.
@@ -280,6 +281,7 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   double quad_until = 0, invulnerable_until = 0, breather_until = 0, suit_until = 0;
   int silencer_shots = 0;
   bool power_on = false;
+  double power_flash = 0;  // the screen's plate or the shield's shell shown till then: a blow taken
   double air_until = 0, drown_at = 0;
   int drown_damage = 2;
   float old_fall = 0;
@@ -369,6 +371,7 @@ struct Q2Missile {
   int burst = 0;         // a BFG ball's final burst's strength (0: its direct hit's)
   float reach = 1000;    // and its reach
   float fired_z = 0;     // a rocket's: the height its shooter stood at when he fired (midair)
+  int effects = -1;      // its effect bits on the wire (its trail and light); -1: by its kind
 };
 inline constexpr int kQ2Missiles = 64;  // the rows the world keeps for shots in flight
 
@@ -519,9 +522,12 @@ struct Q2Server : RulesCommon {
   uint32_t cross_bits = 0;
   bool next_unit = false;
   bool exit_now = false;  // an exit was used: the intermission starts at the frame's end
-  // The area portals by number, open or shut (a door opens those its target names); what is sent
-  // to a client is cut at a shut one once the map's areas are read.
+  // The area portals by number, open or shut (a door opens those its target names), and the map's
+  // areas flooded over the open ones, redone when they change (q2_map.hpp's map_areas_connected).
   std::vector<uint8_t> portals;
+  mutable std::vector<uint8_t> flooded_portals;
+  mutable std::vector<int32_t> area_groups;
+  mutable const ge::brush::Map* flooded_map = nullptr;
   // The monsters (q2_monsters.hpp), the level's count, and who saw a player last: the map
   // entity and its frame, and the player the monsters look at this frame.
   std::vector<Q2Monster> monsters;

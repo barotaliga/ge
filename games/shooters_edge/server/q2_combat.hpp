@@ -57,6 +57,9 @@ inline constexpr int kSqWeaponCount = 11;
 // What one shot is.
 enum class SqShot : uint8_t { bolt, pellets, bullet, grenade, rocket, rail, bfg, hand_grenade };
 inline constexpr int kSqShotKinds = 8;
+// Each kind's effect bits in flight (its trail and light on a client): a bolt the blaster's (8), a
+// grenade's smoke (32), a rocket's (16), the BFG's ball (128) with its frames run fast (0x2000).
+inline constexpr int kSqShotEffects[kSqShotKinds] = {8, 0, 0, 32, 16, 0, 128 | 0x2000, 32};
 
 struct SqWeaponRow {
   const char* name;        // the name a player reads and `use` takes

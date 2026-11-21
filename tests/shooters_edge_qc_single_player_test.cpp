@@ -8,8 +8,10 @@
 // ge:keywords test qc single-player campaign form layout mirror bprint sprint aim autoaim sv_aim
 // ge:keywords multicast destination logfrag infokey stof
 // ge:skill progs shooter testing
+#include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "shooters_edge_qc_fixture.hpp"
@@ -87,10 +89,10 @@ TEST(aim_turns_onto_a_target_near_the_line_of_sight) {
   // Nothing to aim at: straight ahead.
   fx.call(44, {ent(shooter), 1000});
   CHECK(fx.rv.x == 1 && fx.rv.y == 0 && fx.rv.z == 0);
-  // A target 200 ahead and 60 up: the pitch is corrected, the heading kept.
+  // A target 200 ahead and 60 up: the pitch is corrected from origin to origin, the heading kept.
   const int target = so.box({-216, -256, 84}, true);
   fx.call(44, {ent(shooter), 1000});
-  const float dx = 200, dz = 60 + 4 - 20;  // the box's centre, from the line's start
+  const float dx = 200, dz = 60;
   const float len = std::sqrt(dx * dx + dz * dz);
   CHECK_MSG(near(fx.rv.x, dx / len) && fx.rv.y == 0 && near(fx.rv.z, dz / len),
             std::to_string(fx.rv.x) + " " + std::to_string(fx.rv.z));
@@ -114,4 +116,35 @@ TEST(no_multicast_and_no_multiplayer_builtins) {
   CHECK(!fx.fault && fx.s->out.all.size() == 1);
   for (int n = 79; n <= 82; n++) CHECK(fx.vm().builtins[static_cast<size_t>(n)].fn == nullptr);
   CHECK(fx.vm().builtins[48].fn != nullptr);  // particle
+}
+
+// The builtins that answer as the original's single-player engine: angles in whole degrees,
+// findradius's chain in entity order (the highest number first), a removed entity keeping its
+// classname and health until its slot is reused.
+TEST(a_single_player_programs_builtins_answer_as_the_original) {
+  SoloFixture so;
+  Fixture& fx = so.fx;
+  fx.s->sv.set.single_player_clock = true;
+  fx.call(13, {sh::Vec3f{2, 1, 0}});  // vectoyaw: 26.57 degrees
+  CHECK(fx.rf == 26);
+  fx.call(51, {sh::Vec3f{2, 0, -1}});  // vectoangles: pitch -26.57, so 334
+  CHECK(fx.rv.x == 334 && fx.rv.y == 0 && fx.rv.z == 0);
+
+  const int a = so.box({-416, -256, 24}, false);
+  const int b = so.box({-316, -256, 24}, false);
+  const int c = so.box({-216, -256, 24}, false);
+  fx.call(22, {sh::Vec3f{-316, -256, 28}, 150});
+  std::vector<int> chain;
+  for (int e = fx.re; e > 0; e = pg::entity_number(fx.vm(), static_cast<int32_t>(*pg::entity_field(
+                                                                fx.vm(), e, kSp.f.chain))))
+    chain.push_back(e);
+  CHECK(chain.size() >= 3);
+  for (size_t i = 1; i < chain.size(); i++) CHECK(chain[i] < chain[i - 1]);
+  CHECK(chain[0] >= c && std::count(chain.begin(), chain.end(), a) == 1 &&
+        std::count(chain.begin(), chain.end(), b) == 1);
+
+  fx.in_call([&] { fx.set_f(c, kSp.f.health, 50); });
+  fx.call(15, {ent(c)});
+  fx.in_call([] {});
+  CHECK(fx.f(c, kSp.f.health) == 50);
 }

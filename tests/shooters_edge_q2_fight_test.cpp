@@ -449,6 +449,48 @@ TEST(the_power_shield_takes_two_thirds_and_the_screen_only_guards_in_front) {
   CHECK(b->p(1).body.ammo[int(sv::SqAmmo::cells)] == 100);
 }
 
+TEST(power_armour_that_takes_a_blow_shows_its_plate_or_shell_for_a_fifth_of_a_second) {
+  // A shield's hit: a green shell (the colour shell, the green render bit), its pale blue specks
+  // and the hit's sound, for 0.2 s.
+  auto a = facing(300);
+  a->p(1).body.counts[sv::sq_item("item_power_shield")] = 1;
+  a->p(1).body.ammo[int(sv::SqAmmo::cells)] = 100;
+  a->r.client_command(1, "use Power Shield");
+  give(*a, sv::SqWeapon::railgun, 10);
+  const auto ben = [&] { return a->s().world.entities[2]; };
+  CHECK((ben().effects & 256) == 0);
+  bool sparks = false, heard = false;
+  for (int i = 0; i < 16 && a->p(1).health == 100; i++) {
+    const int64_t before = a->s().out.events_total;
+    run(*a, 1, sh::kButtonAttack);
+    const std::vector<sv::NetEvent>& ev = a->s().out.events;
+    const int64_t first = a->s().out.events_total - static_cast<int64_t>(ev.size());
+    for (size_t k = static_cast<size_t>(std::max<int64_t>(0, before - first)); k < ev.size(); k++) {
+      sparks = sparks || ev[k].text == "te_shield_sparks";
+      heard = heard || ev[k].text == "weapons/lashit.wav";
+    }
+  }
+  CHECK(a->p(1).health < 100 && sparks && heard);
+  CHECK_MSG(a->p(1).power_flash > a->s().level_time, std::to_string(a->p(1).power_flash));
+  run(*a, 1);
+  CHECK((ben().effects & 256) != 0 && (ben().render_fx & 2048) != 0 && (ben().effects & 512) == 0);
+  run(*a, 3 * 8);
+  CHECK((ben().effects & 256) == 0 && ben().render_fx == 0);
+  // A screen's hit from in front: its plate (the screen bit), green specks.
+  auto b = facing(300);
+  b->p(1).body.counts[sv::sq_item("item_power_screen")] = 1;
+  b->p(1).body.ammo[int(sv::SqAmmo::cells)] = 100;
+  b->r.client_command(1, "use Power Screen");
+  b->p(1).view_angles.y = 180;  // facing the blow along +x
+  CHECK(sv::fight_power_save(b->s(), 1, {1, 0, 0}, 30) == 10);
+  CHECK(b->p(1).body.ammo[int(sv::SqAmmo::cells)] == 90);
+  run(*b, 1);
+  CHECK((b->s().world.entities[2].effects & 512) != 0);
+  CHECK((b->s().world.entities[2].effects & 256) == 0);
+  run(*b, 3 * 8);
+  CHECK((b->s().world.entities[2].effects & 512) == 0);
+}
+
 TEST(a_long_fall_hurts_and_lava_burns_each_frame) {
   auto a = facing(300);
   a->p(0).move.origin[2] = static_cast<int16_t>((24 + 600) * 8);

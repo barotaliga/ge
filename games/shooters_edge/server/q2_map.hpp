@@ -87,7 +87,8 @@ ge::classic::Q2Trace map_trace(const Q2Server& s, sh::Vec3f start, sh::Vec3f min
                                sh::Vec3f end, int32_t mask, int skip = -1);
 
 // Box (`mins`, `maxs`) swept from `start` to `end` into the box `lo`..`hi`: the fraction it enters
-// at (0 when it starts inside) and the face's normal, or -1 when it misses.
+// at and the face's normal, or -1 when it misses. Started inside: 0 when it ends inside too, -1
+// when it leaves (a box a player or a monster is caught in a fraction is walked out of).
 float sweep_box(sh::Vec3f start, sh::Vec3f end, sh::Vec3f mins, sh::Vec3f maxs, sh::Vec3f lo,
                 sh::Vec3f hi, sh::Vec3f& normal);
 
@@ -108,6 +109,12 @@ int map_entity_of_row(const Q2Server& s, int row);
 
 // The movers' world rows: their places and whether they are shown.
 void map_rows(Q2Server& s);
+// AREAS (q2_areas.cpp): whether the areas of points `a` and `b` are joined through the open area
+// portals (a shut door between them cuts them apart; a map with no areas joins everything); and
+// whether a noise at `to` is heard at `from`: `to`'s cluster in `from`'s hearable set, then their
+// areas joined.
+bool map_areas_connected(const Q2Server& s, sh::Vec3f a, sh::Vec3f b);
+bool map_hears(const Q2Server& s, sh::Vec3f from, sh::Vec3f to);
 
 // A kept level read back (q2_save.hpp): every cross-level target not yet fired checks again
 // its `delay` from now.

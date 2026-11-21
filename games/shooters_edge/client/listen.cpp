@@ -1317,6 +1317,7 @@ void missiles_of(const Listen& l, std::vector<Missile>& out) {
     o.grenade = r.shot == sv::WorldShot::grenade;
     o.bolt = r.shot == sv::WorldShot::bolt;
     o.bfg = r.shot == sv::WorldShot::ball;
+    o.streak = o.bolt && (r.effects & 8) != 0 && listen_is_q2(l);
     out.push_back(o);
   }
 }

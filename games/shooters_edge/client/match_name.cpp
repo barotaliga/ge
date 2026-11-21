@@ -355,6 +355,16 @@ void add_match_cvars(con::Console& c) {
                  .flags = con::kArchive,
                  .help = "Whether matches you only watch are recorded on their own too.",
                  .kind = con::CvarKind::boolean});
+  c.cvars().add({.name = "match_auto_logconsole",
+                 .fallback = "1",
+                 .flags = con::kArchive,
+                 .help = "Whether the console's lines during each match you play on a server "
+                         "are kept as a log beside its recording.",
+                 .kind = con::CvarKind::integer,
+                 .min = 0,
+                 .max = 2,
+                 .values = "0: never; 1: kept when you type match_save (the default); 2: saved "
+                           "at the end"});
 }
 
 MatchWords match_words(const con::Cvars& cvars) {

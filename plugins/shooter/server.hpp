@@ -13,7 +13,10 @@
 // turn comes, runs its touch with self the trigger and other the entity. IMPACTS (`impact`): the
 // mover's touch (self the mover, other the hit), then the hit's (self the hit, other the mover),
 // each only when it has one and is not a `not` solid. Both set `time` to the server's time and
-// restore `self` and `other` after.
+// restore `self` and `other` after. On the single-player clock the triggers are touched node by
+// node from the area tree's root, each tested against the entity's box as it is just before its
+// touch, and the walk goes down by the box as it is then (a teleporter stops the triggers at the
+// old place from firing).
 //
 // THE CLOCK: `time` is the server's time in seconds (a double), advanced only by the server's
 // frame (frame.hpp) on the run clock: never the wall clock. A run is a pure function of its map,
@@ -226,7 +229,7 @@ void call_program(Server& sv, Func fn);
 void start_sound(Server& sv, int e, int channel, const char* sample, float volume,
                  float attenuation, bool engine = false);
 
-// The world's hull 0 at a point.
+// The world's hull 0 at a point; on the single-player clock the six currents read as water.
 int world_contents(const Server& sv, Vec3f p);
 
 // A digest of the whole match state (FNV-1a 64 over the server's time and every entity's and
