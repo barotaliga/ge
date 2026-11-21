@@ -2,7 +2,7 @@
 title: A body sent over the network must carry every field the step reads, and the hand must read the prediction
 date: 2026-11-21
 scope: engine/move
-concepts: [prediction, wire, pack_body, quantize, replicate, misprediction, lab, correction]
+concepts: [prediction, wire, pack-body, quantize, replicate, misprediction, lab, correction]
 ---
 
 A predicted body is exact only when the row the network carries holds everything `step_move`

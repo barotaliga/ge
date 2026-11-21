@@ -15,6 +15,7 @@
 // ge:keywords drawn-gap misprediction spring command-split long-frame hitch stairs move-predict
 // ge:skill move net labs
 // ge:test tests/move_wire_test.cpp
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -154,7 +155,7 @@ RunResult run_one(const RunOptions& k) {
       mv::stand_at(spec, body.world, {sc.start_x * spec.unit, 0, sc.start_z * spec.unit});
   start.mode = sc.mode;
   RunResult o;
-  const int n = static_cast<int>(sc.seconds * k.hz + 0.5);
+  const auto n = static_cast<int>(std::lround(sc.seconds * k.hz));
   o.commands = n;
   o.raw.resize(static_cast<size_t>(n) + 1);
   o.drawn.resize(static_cast<size_t>(n) + 1);
@@ -363,7 +364,7 @@ void run_hitch(gl::Lab& lab) {
         mv::stand_at(spec, world, {sc->start_x * spec.unit, 0, sc->start_z * spec.unit});
     mv::ScriptMemory mem;
     gl::Trace tr{w.label, {s.pos.z / spec.unit}, {s.pos.y / spec.unit}};
-    const int steps = static_cast<int>(sc->seconds / w.dt + 0.5);
+    const auto steps = static_cast<int>(std::lround(sc->seconds / w.dt));
     for (int i = 0; i < steps; i++) {
       const mv::MoveCmd cmd = sc->script(spec, s, w.dt, mem);
       // A piece at a time, as step_move_split steps them (tests/move_wire_test.cpp holds the
@@ -434,8 +435,9 @@ void run(gl::Lab& lab) {
       }
       const RunResult o = run_one(k);
       if (!o.owned || o.gap.empty()) {
-        lab.fail(preset + " " + id + ": the client never stepped its body",
-                 "Read the handshake in engine/net/node.cpp under the preset; skill: net.");
+        std::string what = preset;
+        what += " " + id + ": the client never stepped its body";
+        lab.fail(what, "Read the handshake in engine/net/node.cpp under the preset; skill: net.");
         continue;
       }
       const gl::Summary g = gl::summarize(o.gap);

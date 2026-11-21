@@ -36,7 +36,7 @@ enum : uint8_t {
 // The ground's solid shares the flags word with twelve bits of state: 12 bits of its own.
 constexpr uint32_t kMaxSolid = 4095;
 constexpr uint32_t kMaxAirJumps = 15;
-enum : uint32_t {
+enum : uint8_t {
   kBitGrounded = 1u << 2,
   kBitDucked = 1u << 3,
   kBitSliding = 1u << 4,
