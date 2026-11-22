@@ -1,7 +1,7 @@
 // engine/net/rates.hpp: the transport counts every datagram that leaves and comes, and the rates
 // are the last whole window's packets, bytes and the caller's count a second.
 //
-// ge:summary Test: the transport's counts and the one-second rate windows
+// ge:summary Test: the transport's counts, the one-second rate windows, dns and net_stats
 // ge:keywords test net rates transport counts packets bytes
 // ge:skill net testing
 #include "net/rates.hpp"
@@ -9,6 +9,8 @@
 #include <cstdint>
 
 #include "check.hpp"
+#include "console/console.hpp"
+#include "net/net_commands.hpp"
 #include "net/sim_network.hpp"
 #include "net/transport.hpp"
 
@@ -70,4 +72,26 @@ TEST(rates_begin_again_when_the_counts_go_back) {
   CHECK(r.sent_packets == 10 && r.counted == 10);
   rates_reset(r);
   CHECK(r.from_s < 0 && r.counted == 0);
+}
+
+TEST(dns_and_net_stats_on_the_console) {
+  ge::console::Console con{false};
+  Transport t;
+  const Transport* open = nullptr;
+  add_net_commands(con, [&open] { return open; });
+  con.execute("dns 127.0.0.1");
+  CHECK(con.output().back() == "127.0.0.1 resolved to 127.0.0.1");
+  con.execute("dns");
+  CHECK(con.output().back() == "Usage: dns <name>");
+  con.execute("net_stats");
+  CHECK(con.output().back() == "Not connected to anything.");
+  SimNetwork net = make_sim_network(1, {});
+  CHECK(open_sim_transport(t, net, sim_address(0, 1)));
+  const uint8_t data[3] = {};
+  transport_send(t, sim_address(1, 1), data, sizeof data, 0);
+  open = &t;
+  con.execute("net_stats");
+  const auto& out = con.output();
+  CHECK(out[out.size() - 3] == "Sent:     1 packets, 3 bytes");
+  CHECK(out[out.size() - 2] == "Received: 0 packets, 0 bytes");
 }

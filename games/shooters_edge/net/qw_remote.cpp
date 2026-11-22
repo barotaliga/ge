@@ -14,6 +14,7 @@
 #include <functional>
 
 #include "net/crypto.hpp"
+#include "net/net_commands.hpp"
 #include "net/udp_socket.hpp"
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/net/protocol.hpp"
@@ -1035,6 +1036,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   add_remote_macros(con, r);  // $cl_server, $cl_ping, $cl_lag and the rates
   add_serverstatus_command(con, r);
   add_q2_download_command(con, r);  // download <file> (q2_remote.hpp)
+  gn::add_net_commands(con, [&r]() -> const gn::Transport* { return r.transport; });  // dns
   r.setting = [&con](const std::string& name) {
     if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;
     if (const ge::console::Synonym* s = con.cvars().synonym(name))
