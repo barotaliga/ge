@@ -259,6 +259,11 @@ struct Remote {
   int q2_shownet = 0;  // Quake II's cl_shownet: each message's size printed (q2_client.hpp)
   bool q2_showpackets = false;  // Quake II's cl_showpackets: each packet sent shown (`trace.sent`)
   double tick_frac_us = 0;
+  // Quake II's `net_clientport`: the port `own` is bound to (-1 any free one), opened again on
+  // another the frame the setting moves; `port_note` says a port that would not open (the join
+  // prints it), the socket then on any free port.
+  int own_port = -1;
+  std::string port_note;
 };
 
 // Watches the broadcast at `address` ("host:port": a stream port, our TV node's or a relay's;

@@ -186,10 +186,14 @@ void add_first(con::Console& c, const GameBindings& b) {
   }
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
-  if (b.show_misses != nullptr) *b.show_misses = false;      // Quake II's cl_showmiss
-  if (b.shownet != nullptr) *b.shownet = 0;                  // and cl_shownet
-  if (b.showpackets != nullptr) *b.showpackets = false;      // and cl_showpackets
-  if (b.items_still != nullptr) *b.items_still = false;      // and cl_nobob
+  if (b.show_misses != nullptr) *b.show_misses = false;  // Quake II's cl_showmiss
+  if (b.shownet != nullptr) *b.shownet = 0;              // and cl_shownet
+  if (b.showpackets != nullptr) *b.showpackets = false;  // and cl_showpackets
+  if (b.items_still != nullptr) *b.items_still = false;  // and cl_nobob
+  if (b.console != nullptr) {  // and con_background: the game's own picture
+    b.console->back_name = "conback";
+    b.console->read_back = nullptr;
+  }
   if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
   if (b.light_modulate != nullptr) *b.light_modulate = 1;
   if (b.light_lift != nullptr) *b.light_lift = 0;
@@ -356,6 +360,14 @@ void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its whole set of configs run again on a game change (client/install_configs.cpp's
   // run_game_settings), autoexec.cfg after config.cfg.
+  // The client's own port (net/qw_remote.cpp's `own_port`), its socket opened again when it moves.
+  v.add({.name = "net_clientport",
+         .fallback = "-1",
+         .help = "The network port your client sends from; a change applies at once.",
+         .kind = con::CvarKind::integer,
+         .min = -1,
+         .max = 65535,
+         .values = "-1: any free port (the default); 1..65535: that port"});
   v.add({.name = "fs_autoexec",
          .fallback = "1",
          .help = "Whether autoexec.cfg runs again after config.cfg when another game is loaded.",
@@ -592,6 +604,19 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .kind = con::CvarKind::boolean,
             .values = "0: none (the default); 1: each one, its sequences and size"},
            b.showpackets);
+  if (b.console != nullptr) {
+    if (b.files != nullptr)
+      b.console->read_back = [files = b.files](std::string_view name, ge::ui::Image* out) {
+        return read_console_back(*files, name, out);
+      };
+    v.bind({.name = "con_background",
+            .fallback = "conback",
+            .help = "The picture behind the console, one of the game's under pics/.",
+            .kind = con::CvarKind::text,
+            .values = "conback: the game's own (the default); NAME: that picture, the game's own "
+                      "when it is not there"},
+           &b.console->back_name);
+  }
   if (b.items_still != nullptr)
     v.bind({.name = "cl_nobob",
             .fallback = "0",

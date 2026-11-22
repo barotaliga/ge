@@ -135,7 +135,11 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own) {
     p.skin = e.skin;
     p.effects = e.effects;
     p.alpha = e.alpha;
-    if (s.format == DemoFormat::q2) q2_placed(e, p);
+    if (s.format == DemoFormat::q2) {
+      q2_placed(e, p);
+      p.infra_red =
+          q2_infra_red(s.rdflags, static_cast<uint32_t>(e.render_fx), p.shell, p.full_bright);
+    }
     p.scale = e.scale;
     for (int c = 0; c < 3; c++) p.colormod[c] = e.colormod[c];
     p.origin = e.origin;

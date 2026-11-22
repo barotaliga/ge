@@ -611,6 +611,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
                   static_cast<float>(v.gun_offset[1]) * 0.25f,
                   static_cast<float>(v.gun_offset[2]) * 0.25f};
   s.fov = static_cast<float>(v.fov);
+  s.rdflags = v.rdflags;
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;

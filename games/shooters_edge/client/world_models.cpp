@@ -1361,7 +1361,11 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     double floor_lum = 0, dyn_lum = 0;
     // Quake II's render bits: full light, its dynamic lights left out; or a tenth at least.
     double raw_rgb[3] = {lit.rgb[0], lit.rgb[1], lit.rgb[2]};
-    if (p.full_bright) {
+    if (p.infra_red) {
+      raw_rgb[0] = 1;
+      raw_rgb[1] = raw_rgb[2] = 0;
+      dyn[0] = dyn[1] = dyn[2] = 0;
+    } else if (p.full_bright) {
       raw_rgb[0] = raw_rgb[1] = raw_rgb[2] = 1;
       dyn[0] = dyn[1] = dyn[2] = 0;
     } else if (p.min_light) {
@@ -1375,7 +1379,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       // The world's own soft floor (bsp_draw's r_minlight), so a thing in a dark corner reads
       // as the walls round it do.
       const double raw = raw_rgb[c];
-      const double floor = std::sqrt(raw * raw + minlight * minlight);
+      const double floor = p.infra_red ? raw : std::sqrt(raw * raw + minlight * minlight);
       const float l = float((floor + dyn[c]) * brightness);
       // The tint on its light, not its glow.
       g.ambient[c] = (q2 ? 1 : kAmbientShare) * l * p.colormod[c];
