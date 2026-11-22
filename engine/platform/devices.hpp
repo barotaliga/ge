@@ -41,12 +41,14 @@
 // ge:keywords keyboard mouse raw-mouse relative-mouse text-input touch hot-plug rumble haptic
 // ge:keywords force-feedback ffb lightbar player-lights gyro accelerometer touchpad battery
 // ge:keywords virtual-joystick attach_virtual pump_devices play_feedback open_devices has_focus
+// ge:keywords clipboard set_clipboard_png clipboard-image copy-picture
 // ge:skill input platform
 // ge:test tests/platform_devices_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 
 #include "input/device_db.hpp"
@@ -107,6 +109,11 @@ void set_text_input(Window& window, bool on);
 std::string clipboard_text();
 // `text` (UTF-8) put on the system clipboard: what a copy from a text field gives.
 void set_clipboard_text(const std::string& text);
+// A PNG picture put on the system clipboard as an image (pasted as a picture, never saved as a
+// file), with `text` (UTF-8, "" none) beside it as the same copy's plain text, so a paste into a
+// field that takes no picture gets the words. The bytes are kept until the clipboard next changes.
+// False, with SDL's reason in `why`, when the clipboard refused them.
+bool set_clipboard_png(std::span<const uint8_t> png, const std::string& text, std::string* why);
 
 // A force (-1 .. 1, input::force_at's) as the level a constant haptic effect is given: clamped,
 // and 0 inside one count so a resting wheel's motor is silent.

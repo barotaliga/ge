@@ -22,7 +22,7 @@
 #include "input/state.hpp"
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
-#include "render/screenshot_copy.hpp"
+#include "render/gpu_debug.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/world_draw.hpp"
@@ -51,7 +51,7 @@ struct BotClientRun {
   const look::Picture& picture;
   ge::ui::DrawList& overlay;
   const menu::ClassicConsole& con_look;
-  ge::render::ScreenshotCopy& shot_copy;
+  ge::render::WindowShots& shot_copy;
   ge::capture::Screenshots& shots;
   int& w;
   int& h;

@@ -19,8 +19,11 @@
 #include <objc/runtime.h>
 #endif
 
+#include <cstring>
 #include <mutex>
+#include <span>
 #include <string>
+#include <vector>
 
 #include "core/output.hpp"
 
@@ -237,6 +240,48 @@ void set_clipboard_text(const std::string& text) {
   if (!SDL_SetClipboardText(text.c_str()))
     out::warn(std::string("platform: the text was not put on the clipboard (") + SDL_GetError() +
               "); skill: platform.");
+}
+
+namespace {
+
+// What the clipboard offers while it holds a picture: SDL asks for each type when a paste reads it.
+struct ClipboardPicture {
+  std::vector<uint8_t> png;
+  std::string text;
+};
+const void* clipboard_data(void* user, const char* mime, size_t* size) {
+  const auto* c = static_cast<const ClipboardPicture*>(user);
+  if (std::strcmp(mime, "image/png") == 0) {
+    *size = c->png.size();
+    return c->png.data();
+  }
+  if (std::strncmp(mime, "text/plain", 10) == 0 && !c->text.empty()) {
+    *size = c->text.size();
+    return c->text.data();
+  }
+  *size = 0;
+  return nullptr;
+}
+
+void clipboard_cleanup(void* user) { delete static_cast<ClipboardPicture*>(user); }
+
+}  // namespace
+
+bool set_clipboard_png(std::span<const uint8_t> png, const std::string& text, std::string* why) {
+  if (png.empty() || SDL_WasInit(SDL_INIT_VIDEO) == 0) {
+    if (why != nullptr) *why = "there is no window to put the picture on the clipboard from";
+    return false;
+  }
+  auto* c = new ClipboardPicture{{png.begin(), png.end()}, text};
+  const char* types[] = {"image/png", "text/plain;charset=utf-8", "text/plain"};
+  const size_t n = text.empty() ? 1 : 3;
+  // SDL owns `c` from here (video is up): its cleanup runs when the clipboard changes.
+  if (!SDL_SetClipboardData(clipboard_data, clipboard_cleanup, c, types, n)) {
+    if (why != nullptr)
+      *why = std::string("the picture was not put on the clipboard (") + SDL_GetError() + ")";
+    return false;
+  }
+  return true;
 }
 
 void set_text_input(Window& window, bool on) {

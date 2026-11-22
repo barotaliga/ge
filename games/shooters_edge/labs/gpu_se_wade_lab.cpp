@@ -401,7 +401,7 @@ void run_pool(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_
              std::string("Pass --") + name + "=<a map of the folder>. Skill: shooter.");
     return;
   }
-  float a[3], b[3];
+  float a[3] = {0, 0, 0}, b[3] = {0, 0, 0};
   if (!find_walk(map->bsp.map, kind, a, b)) {
     lab.fail("se-wade: " + map_name + " has no " + name + " pool a body wades 96 units through",
              std::string("Pass --") + name + "=<a map with one>. Skill: shooter.");
