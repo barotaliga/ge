@@ -544,7 +544,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   DemoState& s = d.state;
   const int32_t number = m.i32();
   const int32_t delta = m.i32();
-  if (s.protocol != 26) m.u8();  // the packets held back
+  const int held_back = s.protocol != 26 ? m.u8() : 0;  // the packets held back for the rate
   {  // the areas the eye's room joins (one bit an area); drawn only these
     const size_t n = m.u8();
     if (n > 32) {
@@ -563,6 +563,10 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   const size_t slot = static_cast<size_t>(number) & 15;
   const size_t base_slot = static_cast<size_t>(delta) & 15;
   const bool have_base = delta > 0 && d.views[base_slot].frame == delta;
+  s.q2_trouble = static_cast<uint8_t>(
+      (delta <= 0 ? kQ2FrameNoDelta : 0) |
+      (delta > 0 && !have_base ? (number - delta >= 16 ? kQ2FrameOld : kQ2FrameBad) : 0) |
+      (held_back > 0 ? kQ2FrameSuppressed : 0));
   Q2View v = have_base ? d.views[base_slot] : Q2View{};
   player_info(m, v, ext_of(s.protocol));
   v.frame = number;

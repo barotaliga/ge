@@ -262,6 +262,8 @@ TEST(cl_nodelta_has_every_frame_sent_whole) {
   const cn::Q2NetClient& sc = r->server.clients[0];
   CHECK_MSG(sc.full_frames >= c.frames - 1,
             std::to_string(sc.full_frames) + " whole of " + std::to_string(c.frames));
+  // scr_showturtle's NODELTA: the frame read came whole.
+  CHECK(c.demo.state.q2_trouble == shooters_edge::client::kQ2FrameNoDelta);
 }
 
 TEST(out_of_band_words_keep_a_quoted_word_whole) {
