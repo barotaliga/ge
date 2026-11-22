@@ -34,6 +34,7 @@
 // ge:keywords listip writeip filterban sv_banmode banned q2_admin q2_rcon
 // ge:keywords q2_status_table q2_find_slot kickban stuff stuffall printall stuffcvar
 // ge:keywords killserver pickclient passive_connect sv_enhanced_setplayer status-letters
+// ge:keywords sv-addip svcmd filter-list q2_status_keys server-info-keys gamename gamedir
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_admin_test.cpp
 #pragma once
@@ -51,6 +52,10 @@ std::string q2_status_table(const Q2NetServer& s, char letter = ' ');
 // the stock words for why.
 int q2_find_slot(const Q2NetServer& s, const std::string& word, std::string& error);
 // An administrator's console line: true when it was one of the words above, its answer in `out`.
+// The server info's keys from the rules' live settings (`deathmatch`, `coop`, `dmflags`,
+// `fraglimit`, `timelimit`, `cheats`), the build's (`version`, `gamename`, `gamedir`, `game` for a
+// mod), the server's `port`, and the keys an administrator added (`sets`), added to `info`.
+void q2_status_keys(const Q2NetServer& s, std::string& info);
 bool q2_admin(Q2NetServer& s, const std::string& line, std::string& out);
 // A remote console packet's text (`rcon <password> <line>`) from `from`, answered (above).
 void q2_rcon(Q2NetServer& s, const gn::Address& from, const std::string& text);

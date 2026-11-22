@@ -348,7 +348,7 @@ std::string status_text(const Q2NetServer& s) {
   // `needpass`: 1 a player's password asked, 2 a spectator's.
   info_set(info, "needpass",
            std::to_string((set(s.cfg.password) ? 1 : 0) | (set(s.cfg.spectator_password) ? 2 : 0)));
-  info_set(info, "deathmatch", "1");
+  q2_status_keys(s, info);
   info_set(info, "protocol", std::to_string(kQ2NetProtocol));
   if (s.cfg.status.uptime > 0)
     info_set(info, "uptime", ge::server::uptime_text(s.now - s.started, s.cfg.status.uptime));
@@ -401,7 +401,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
     for (const Q2NetClient& c : s.clients)
       back = back || (c.stage == Q2Slot::zombie && same_host(c.address, from) &&
                       (c.qport == qport || c.address.port == from.port));
-    if (!back) return refuse(s, from, "Server is locked.\nConnection refused.");
+    if (!back) return refuse(s, from, "Server is locked.");
   }
   if (s.cfg.ip_limit > 0) {  // one address's slots held to sv_iplimit, a zombie's a half
     std::vector<ge::server::HeldSeat> held;
@@ -409,7 +409,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
       if (o.stage != Q2Slot::free && o.stage != Q2Slot::dummy)
         held.push_back({o.address, o.stage == Q2Slot::zombie});
     const std::string refusal = ge::server::admit_refusal(s.cfg.ip_limit, from, held);
-    if (!refusal.empty()) return refuse(s, from, refusal + "\nConnection refused.");
+    if (!refusal.empty()) return refuse(s, from, refusal);
   }
   // THE USER INFO (the strict rule, classic/protocol/info.hpp), then a name with something to
   // show in its first 15 characters.
