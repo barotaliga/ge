@@ -35,6 +35,8 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 | The endpoint | `net/qw_server.hpp`, its own settings `net/qw_endpoint_cfg.hpp` | `net/q2_net_server.hpp` | its own |
 | Admin words | `net/qw_admin.hpp` | `net/q2_admin.hpp`: the modern server's `status` and its letters, kick, kickban, dumpuser, stuff, stuffcvar, printall, killserver, pickclient; `dumpents` and `listmasters` in `net/q2_game.cpp` | its own, over `engine/server/operator.hpp` |
 | A player's queries | (the mod's) | `info`, `sinfo`, `lag`, `packetdup`, `stopdl`, `nogamedata` in `net/q2_net_server.cpp` | its own |
+| The multiview recorder | (none) | `mvdrecord`, `mvdstop`, the relay stream over TCP on the game port (`sv_mvd_enable 2`), `addgtvhost` and `addgtvban` (`net/q2_mvd_server.hpp`); frames from the rules (`server/q2_mvd2_live.hpp`) | its own |
+| The multiview relay | (none) | `mvdconnect`, `mvdplay` and the channel words, the Waiting Room, a view per viewer forked off the channel's reader, the viewers' words and chat (`net/q2_mvd_relay.hpp`) | its own; the TV face (`net/q2_tv_face.hpp`) serves each view |
 | Later protocols | (none) | 35 and 36: the connect's tail (`sv_maxmsglen`), the newer channel, the packed frame, the streamed and compressed signon, batched moves, the client's settings (`net/q2_net_ext.hpp`, `server/q2_wire_ext.cpp`) | its own |
 | Connect checks | the endpoint's | the strict user info, a name to show, the name cut to 15, the version probe, the forced reconnect (`sv_forcereconnect`) | its own |
 | Logins | `net/qw_login.hpp` | `net/q2_login.hpp` | its own |
@@ -106,6 +108,23 @@ later moves in `net/q2_net_ext.hpp`, the frame's top and the streamed signon in
 qport) is the classic layer's channel behind fields that default to the older form
 (`plugins/classic/protocol/channel.hpp`), and the deflater that packs the signon is the engine's
 (`engine/core/deflate.hpp`).
+
+Quake II's multiview recorder (`net/q2_mvd_server.hpp`, facts in
+`porting/shooters-edge/q2-mvd-relay.md`) writes the `.mvd2` our demo player reads and serves the
+same blocks live to relays over TCP, deflated as one zlib stream with the engine's streaming
+deflater. Its access lists are the classic layer's address list (`plugins/classic/protocol/
+addr_list.hpp`: masks, comments, hits and the last hit), ready for any modern classic server's
+lists. Still to come: the recorder's dummy spectator (and with it `mvdstuff`, the begin and score
+commands, auto-recording).
+
+The relay side (`net/q2_mvd_relay.hpp`) is the same server switched into relay mode: it takes the
+game's port, dials other servers' recorders (`mvdconnect`) or plays `.mvd2` files (`mvdplay`), and
+serves each channel to stock clients. A channel keeps one reader of the stream; a viewer's view of
+the player it chases is that reader forked (`client/demo_convert.hpp`'s `convert_fork`) and served
+by its own TV face, so a new target is a fresh signon (the client reconnects, as at a level
+change). The views are frozen moves with no prediction and the attract loop off, so viewers type
+their words. Not taken yet: free flight, the stats and intermission rewrites, `mvd_filter_version`
+and `mvd_shownet`.
 
 ## Labs and tests
 

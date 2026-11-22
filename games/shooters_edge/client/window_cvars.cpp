@@ -2,6 +2,7 @@
 //
 // ge:summary The window's console settings: the engine's, scr_levelstats, showpause, host_framerate
 // ge:keywords add_window_cvars scr_levelstats showpause host_framerate slow-motion scr_printspeed
+// ge:keywords vid_restart
 // ge:skill platform shooter
 #include "shooters_edge/client/window_cvars.hpp"
 
@@ -49,6 +50,18 @@ void add_window_cvars(ge::console::Console& con, WindowCvars& w) {
                     .max = 1000,
                     .values = "1..1000: that many characters a second (8 the default)"},
                    &w.print_speed);
+  // vid_restart: the window applies its video settings the moment they change, so a typed one is
+  // refused and says why (a server's stuffed one is dropped quietly).
+  con.add_command("vid_restart", "vid_restart: not needed; video settings apply at once",
+                  [said = false](ge::console::Console& c, const ge::console::Args& a) mutable {
+                    if (a.source != ge::console::Source::local) return;
+                    c.print("Manual 'vid_restart' command ignored.");
+                    if (said) return;
+                    said = true;
+                    c.print(
+                        "Video settings are applied as soon as you change them, so a video "
+                        "restart is never needed.");
+                  });
 }
 
 }  // namespace shooters_edge::client

@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "audio/music_console.hpp"
 #include "brush/map.hpp"
 #include "camera/cvars.hpp"
 #include "capture/screenshot.hpp"
@@ -55,6 +56,7 @@ struct Window {
   shooters_edge::hud::Hud hud = shooters_edge::hud::make_hud();
   shooters_edge::menu::GameMenu menu;
   ge::capture::ScreenshotSettings shots;
+  ge::audio::MusicConsole music;  // bgmvolume and cd, the window's before the game's
   cl::GameStart start;
   cl::GameCvarValues game;
   bool predict = true;     // the remote's cl_predict
@@ -89,6 +91,7 @@ struct Window {
                          &show_pause);
     console.cvars().set_layer(cl::kLayerEngine);
     ge::capture::add_screenshot_cvars(console.cvars(), shots);
+    ge::audio::add_music_commands(console, music);
     // The pacing's frame cap as platform/pacing.cpp registers it (that file links the platform).
     console.cvars().bind({.name = "cl_maxfps",
                           .fallback = "0",
@@ -562,8 +565,10 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("cl_blend", "0", con::Source::local);      // our gl_polyblend
   CHECK(!w.picture.draw_entities && !w.picture.particles && !w.picture.dynamic);
   CHECK(!w.picture.poly_blend);
-  const cl::GameBindings gibs{
-      .gibs = &w.picture.gibs, .no_glow = &w.picture.no_glow, .q2fx = &w.picture.q2fx};
+  const cl::GameBindings gibs{.gibs = &w.picture.gibs,
+                              .no_glow = &w.picture.no_glow,
+                              .q2fx = &w.picture.q2fx,
+                              .music = &w.music};
   cl::switch_game_cvars(w.console, w.game, *q2, gibs);
   v.set("cl_gibs", "0", con::Source::local);  // our cl_gibfilter the other way round
   v.set("cl_noglow", "1", con::Source::local);
@@ -575,6 +580,11 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("cl_muzzleflashes", "0", con::Source::local);
   v.set("cl_footsteps", "0", con::Source::local);
   v.set("s_ambient", "3", con::Source::local);
+  v.set("ogg_volume", "0.25", con::Source::local);  // our bgmvolume
+  v.set("ogg_enable", "0", con::Source::local);     // the music's switch
+  v.set("ogg_shuffle", "1", con::Source::local);
+  v.set("ogg_menu_track", "7", con::Source::local);
+  CHECK(w.music.volume == 0.25 && !w.music.enabled && w.music.shuffle && w.music.menu_track == 7);
   v.set("cl_railtrail_type", "2", con::Source::local);
   v.set("cl_railcore_color", "#0f0", con::Source::local);
   CHECK(w.picture.q2fx.rail_type == 2 && w.picture.q2fx.core_colour == "#0f0");
@@ -600,7 +610,8 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(w.picture.gibs && !w.picture.no_glow);
   CHECK(w.picture.q2fx.no_particles == 0 && w.picture.q2fx.muzzle_models);  // set aside
   CHECK(v.find("cl_disable_particles") == nullptr && v.find("scr_showpause") == nullptr);
-  CHECK(w.picture.q2fx.footsteps == 1 && w.picture.q2fx.ambient == 1);
+  CHECK(w.picture.q2fx.footsteps == 1 && w.picture.q2fx.ambient == 1 && w.music.enabled);
+  CHECK(!w.music.shuffle && w.music.menu_track == 0);
   CHECK(w.picture.q2fx.rail_type == 0 && w.picture.q2fx.core_colour == "red");
   CHECK(w.game.q2.begin_cmd.empty() && w.game.q2.autopause && w.game.q2.timescale == 1);
   CHECK(v.find("cl_beginmapcmd") == nullptr && v.find("sv_running") == nullptr);

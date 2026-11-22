@@ -15,18 +15,19 @@ and a row found later is added here first. Progress is reported as the missing c
 
 | Section | Rows | Done | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- |
-| Client | 508 | 314 | 31 (0 / 0 / 31) | 163 |
+| Client | 508 | 319 | 26 (0 / 0 / 26) | 163 |
 | Server | 316 | 267 | 14 (0 / 0 / 14) | 35 |
 | Game | 245 | 226 | 1 (0 / 0 / 1) | 18 |
 | Tools | 1 | 1 | 0 (0 / 0 / 0) | 0 |
-| **All** | **1070** | **808** | **46 (0 / 0 / 46)** | **216** |
+| **All** | **1070** | **813** | **41 (0 / 0 / 41)** | **216** |
 
 (Built 2026-11-21 against main at #1237 with 217 missing (9 / 49 / 159); the first fill, Quake's
 deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.
 The second, the shared settings, masters and spectator lines, took it to 120; the third, the
 rest of the deathmatch rules, the server's lines and the idle sway, to 88; the fourth, joining a
 NetQuake server, Quake's tell, ping and version, the runes and gates, the menu words, user and
-msg, the ambience and mouse settings and the rows other threads had already built, to 46.)
+msg, the ambience and mouse settings and the rows other threads had already built, to 46; Quake
+II's console fill (sizeup, sizedown, play, playvol, stopsound, built once for every game) to 41.)
 
 ## CLIENT: the Quake and QuakeWorld clients, item by item
 
@@ -84,8 +85,8 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C39 | `envmap` (both) | write six views of the place as an environment map | not-taken | a developer or profiling tool: ours are framestats, the labs and ge |  |
 | C40 | `pointfile` (both) | draw the leak trail of a map that failed to seal | not-taken | a mapper's tool: our map compiler names leaks itself (secli map check, the map-build lab) |  |
 | C41 | `screenshot` (both) | save a picture of the screen | done | engine/capture/screenshot.cpp |  |
-| C42 | `sizeup` (both) | one step larger view (less status bar) | missing | no command steps viewsize (the menu's SCREEN SIZE does); default configs bind = and - to them | 3 |
-| C43 | `sizedown` (both) | one step smaller view (more status bar) | missing | as sizeup | 3 |
+| C42 | `sizeup` (both) | one step larger view (less status bar) | done | games/shooters_edge/hud/layout.cpp: viewsize up 10, held by its range | - |
+| C43 | `sizedown` (both) | one step smaller view (more status bar) | done | games/shooters_edge/hud/layout.cpp: viewsize down 10 | - |
 | C44 | `force_centerview` (both) | level the view at once | done | plugins/shooter/controls.cpp |  |
 | C45 | `vid_nummodes` (both) | count the video modes | not-taken | platform video modes: the window, its size and its display are engine/platform (vid_fullscreen, vid_displays) |  |
 | C46 | `vid_describecurrentmode` (both) | describe the current video mode | not-taken | platform video modes: the window, its size and its display are engine/platform (vid_fullscreen, vid_displays) |  |
@@ -154,9 +155,9 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C109 | `maxplayers` (q1) | the player count of the next game | done | the host page's MAX PLAYERS (maxclients); no maxplayers word |  |
 | C110 | `port` (q1) | the UDP port of the next game | missing | no port word in the window (the dedicated server takes a port) | 3 |
 | C111 | `+showscores` / `-showscores` (both) | the scoreboard while held | done | games/shooters_edge/client/controls.cpp |  |
-| C112 | `play` (both) | play a sound file once | missing | no play word (music_console's cd plays music only) | 3 |
-| C113 | `playvol` (both) | play a sound file at a volume | missing | none | 3 |
-| C114 | `stopsound` (both) | stop every sound | missing | none | 3 |
+| C112 | `play` (both) | play a sound file once | done | games/shooters_edge/client/menu_sound.cpp: each sound once, "Couldn't load sound/<name>" when missing | - |
+| C113 | `playvol` (both) | play a sound file at a volume | done | games/shooters_edge/client/menu_sound.cpp | - |
+| C114 | `stopsound` (both) | stop every sound | done | games/shooters_edge/client/menu_sound.cpp: every sound stopped, the music plays on | - |
 | C115 | `soundlist` (both) | list the loaded sounds | not-taken | a developer or profiling tool: ours are framestats, the labs and ge |  |
 | C116 | `soundinfo` (both) | the sound device's format | not-taken | a developer or profiling tool: ours are framestats, the labs and ge |  |
 | C117 | `sbinfo` (q1) | the DOS Sound Blaster's settings | not-taken | platform: DOS sound card |  |
@@ -584,7 +585,7 @@ and the campaign on our own host hands the client the same events without the wi
 | C507 | Demos: .qwd recorded and played (qw) | a client recording of a QuakeWorld game | done | net/qw_match_record.hpp, client/demo_playback.cpp |  |
 | C508 | Screenshot files (both) | quakeNN.pcx (GL: .tga) in the game folder | done | engine/capture/screenshot.cpp (our own format and folder) |  |
 
-Count: 508 rows, 294 done, 51 missing (rank 2 1, rank 3 50), 163 not-taken.
+Count: 508 rows, 319 done, 26 missing (rank 3 26), 163 not-taken.
 
 ## SERVER: the Quake and QuakeWorld servers, row by row
 
@@ -985,7 +986,7 @@ program's form.
 | S315 | the address filter's check (qw) | every packet from a filtered address is refused before anything else | done | `engine/server/admin.cpp` | |
 | S316 | the server's statistics (qw) | CPU use, response time and packets a frame, measured over a run of frames, shown by `status` | done | `engine/server/admin.cpp` (our own counters) | |
 
-Rows: 316 (some rows hold a group of names). Done: 241. Missing: 41 (rank 1: 0, rank 2: 2, rank 3: 39). Not-taken: 34.
+Rows: 316 (some rows hold a group of names). Done: 267. Missing: 14 (rank 1: 0, rank 2: 0, rank 3: 14). Not-taken: 35.
 
 ## GAME: the QuakeWorld game program and Quake's monsters, row by row
 

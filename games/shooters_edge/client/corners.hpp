@@ -11,6 +11,8 @@
 // ge:test tests/hud_corner_readouts_test.cpp
 #pragma once
 
+#include <ctime>
+
 #include "hud/corner_readouts.hpp"
 #include "hud/net_graph.hpp"
 #include "platform/pacing.hpp"
@@ -29,5 +31,8 @@ ge::hud::Readings corner_readings(const Listen* l, double fallback_s = 0);
 void draw_corners(ge::ui::DrawList& dl, int w, int h, const ge::platform::Pacing& pacing,
                   const ge::hud::ReadoutSettings& s, const ge::hud::Readings& r,
                   const ge::hud::NetHistory* net = nullptr);
+
+// The local date and time now (the wall clock).
+std::tm local_time();
 
 }  // namespace shooters_edge::client

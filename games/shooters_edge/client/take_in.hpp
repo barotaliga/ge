@@ -16,8 +16,9 @@
 // still played where it is (client/install_search.hpp): that install is the game's home, its
 // configs and place names with it.
 //
-// THE KEPT MUSIC plays from there too: `add_take_in_commands` binds the engine's music console
-// (engine/audio/music_console.hpp: `bgmvolume`, `cd`) to `<basedir>/music/trackNN.flac`, and
+// THE KEPT MUSIC plays from there too: `add_take_in_commands` points the engine's music console
+// (engine/audio/music_console.hpp: `bgmvolume`, `cd`, bound by the window before the game's own
+// settings) at `<basedir>/music/trackNN.flac`, and
 // `level_music` plays the track a level's world names when the level starts.
 //
 // ge:summary The window's games taken in: a folder, volume or disc image copied into data/ first
@@ -59,8 +60,8 @@ bool take_in(const std::string& from, const std::string& root, std::string* base
 bool take_in_basedir(std::string* basedir, const std::string& root);
 
 // The console's `basedir <folder>` (no folder: the one playing, `*basedir`) and `import <folder or
-// disc image>`: each sets `*ask`, which the window takes in and opens. With `music`, its console
-// too, its tracks read from the game playing's folder (`*basedir`).
+// disc image>`: each sets `*ask`, which the window takes in and opens. With `music`, its tracks
+// read from the game playing's folder (`*basedir`).
 void add_take_in_commands(ge::console::Console& con, std::string* ask, const std::string* basedir,
                           ge::audio::MusicConsole* music = nullptr);
 

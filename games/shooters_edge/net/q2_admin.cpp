@@ -187,8 +187,10 @@ bool q2_admin(Q2NetServer& s, const std::string& line, std::string& out) {
     out = letter != ' ' && kKnown.find(letter) == std::string::npos
               ? "Usage: status [d|l|p|s|t|v]\n" + q2_status_table(s, ' ')
               : q2_status_table(s, letter);
+    if (s.mvd.cfg.enable >= 2) out += q2_mvd_status(s.mvd, letter != ' ', s.now) + "\n";
     return true;
   }
+  if (q2_mvd_command(s.mvd, w, line, s.rules != nullptr && !s.killed, out)) return true;
   if (cmd == "stuffall" || cmd == "printall") {
     if (w.size() < 2) {
       out = "Usage: " + cmd + " <raw text>\n";

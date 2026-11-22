@@ -586,4 +586,21 @@ std::unique_ptr<ConvertStream> multiview_to_single_stream() {
 
 void convert_set_pov(DemoConvert& c, int slot) { c.options.pov = slot; }
 
+bool convert_fork(const DemoConvert& from, DemoConvert& to) {
+  if (!from.stream) return false;
+  std::unique_ptr<ConvertStream> copy = from.stream->clone();
+  if (!copy) return false;
+  to.from = from.from;
+  to.to = from.to;
+  to.options = from.options;
+  to.notes = ConvertNotes{};
+  to.in = from.in;
+  to.recorder = from.recorder;
+  to.ended = from.ended;
+  to.failed = from.failed;
+  to.error = from.error;
+  to.stream = std::move(copy);
+  return true;
+}
+
 }  // namespace shooters_edge::client

@@ -67,8 +67,38 @@ void add_music_commands(console::Console& con, MusicConsole& m) {
       });
 }
 
+namespace {
+
+// A random track the game has other than the one playing (0: none it has).
+int shuffled_track(MusicConsole& m) {
+  int have[99];
+  int n = 0;
+  for (int t = 1; t <= 99 && m.track_of; t++)
+    if (t != m.track && !m.track_of(t).empty()) have[n++] = t;
+  if (n == 0) return m.track > 0 && m.track_of && !m.track_of(m.track).empty() ? m.track : 0;
+  return have[core::pick_index(m.shuffle_rng, static_cast<size_t>(n))];
+}
+
+}  // namespace
+
+void play_menu_music(MusicConsole& m) {
+  if (!m.enabled || m.menu_track == m.menu_played) return;  // asked once: `cd` may change it
+  const int track = m.menu_track;
+  if (track > 0) play_level_music(m, track);
+  m.menu_played = track;
+}
+
 void play_level_music(MusicConsole& m, int track) {
+  m.menu_played = 0;  // a level's: back at the menu, its track again
   if (!m.enabled) return;
+  if (m.shuffle && track > 0) {  // the game's tracks in a random order, each once through
+    if (!m.player.playing().empty() && !m.player.loops()) return;  // a shuffled one plays
+    const int t = shuffled_track(m);
+    if (t == 0) return;
+    m.track = t;
+    m.player.play(m.track_of(t), false);
+    return;
+  }
   const std::string path = m.track_of && track > 0 ? m.track_of(track) : std::string{};
   if (path.empty()) {
     m.player.stop();
@@ -80,6 +110,20 @@ void play_level_music(MusicConsole& m, int track) {
 }
 
 void music_frame(MusicConsole& m, Synth& synth, console::Console& con) {
+  if (m.enabled != m.was_enabled) {
+    m.was_enabled = m.enabled;
+    if (!m.enabled)
+      m.player.stop();
+    else if (m.track > 0)
+      play_level_music(m, m.track);
+  }
+  if (m.enabled && m.shuffle && m.track > 0 && m.player.playing().empty()) {
+    const int t = shuffled_track(m);  // one ended: the next
+    if (t > 0) {
+      m.track = t;
+      m.player.play(m.track_of(t), false);
+    }
+  }
   m.player.gain(static_cast<float>(m.volume));
   m.player.frame(synth);
   if (const std::string e = m.player.take_error(); !e.empty()) {

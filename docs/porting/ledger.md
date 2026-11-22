@@ -38,10 +38,13 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 | Its fork's server settings: VIP slots, idle drops, speed-skew kicks, rename limits | server | `engine/server` |
 | Footsteps | sound | Quake II; Quake in remix only (it ships no step sounds) |
 | Faster rules frames (`sv_fps`) | server | Quake II's rules; the old beat kept for its world |
+| Quake II's multiview recorder served live to relays over TCP (`mvdrecord`, the access lists with hits) | server, demos | Quake II's endpoint; the address list shared (`plugins/classic/protocol/addr_list.hpp`), the streaming deflater the engine's |
+| Quake II's multiview relay: other servers' streams and `.mvd2` files as channels, the Waiting Room, a chase view per viewer, chat with its flood rule | server, demos | Quake II's endpoint; the conversion's fork (`client/demo_convert.hpp`) and the TV face's moves shared with any relay of a classic game |
 | Quake II's later protocols (35, 36): the newer channel's pieces, a deflated signon, batched moves, a client's no-gibs and no-footsteps asks | net, server | Quake II's endpoint; the channel's pieces and the deflater shared (`plugins/classic/protocol/channel.hpp`, `engine/core/deflate.hpp`) |
 | The modern server's operator words (status tables, stuff lists, partial names, kickban) and player queries (`lag`, `sinfo`) | server | `engine/server/operator.hpp`, Quake II's endpoint; Quake's to mount |
 | Stock maps' visibility mended, a map's entities from a file (`sv_vispatch`, `sv_entpath`) | maps, server | Quake II's server (`server/q2_mapfix.hpp`) |
 | Shots from the gun onto the crosshair's point (`aimfix`), a level machine gun (`g_machinegun_norecoil`), footsteps by pace (`g_footsteps`) | rules | Quake II's rules (`server/q2_fight.cpp`) |
+| The modern client's console words for every game: `_echo`, `text`, `complete`, `setu`, `sets`, `resetall`, `writeconfig`, `toggle` over a list, the clock macros, `draw` strings, local `play` and `stopsound`, `sizeup` and `sizedown`, Alt+Enter | client | `engine/console`, `engine/hud/draw_strings.hpp`, `engine/platform/window_cvars.hpp`, the shell |
 
 ### Ours, offered to every game
 
