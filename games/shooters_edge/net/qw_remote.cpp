@@ -384,6 +384,16 @@ const ge::hud::NetHistory* remote_net(const Remote& r) {
   return r.q2 ? &r.q2->net : &r.end.net;
 }
 
+bool remote_net_trouble(const Remote& r) {
+  if (!r.active || r.watch || r.q2) return false;
+  if (r.nq)
+    return r.nq->stage == ClientStage::active && r.nq->heard_us >= 0 &&
+           r.now_us - r.nq->heard_us >= 300000;
+  const Channel& ch = r.end.ch;
+  return r.end.stage == ClientStage::active &&
+         ch.outgoing_sequence - 1 - ch.incoming_acknowledged >= 63;
+}
+
 int remote_unanswered(const Remote& r) {
   if (!r.active || r.watch || !r.q2 || r.q2->stage != ClientStage::active) return 0;
   return static_cast<int>(r.q2->ch.outgoing_sequence - 1 - r.q2->ch.incoming_acknowledged);

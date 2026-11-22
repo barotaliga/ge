@@ -199,6 +199,7 @@ void tick(Remote& r, NqClientEnd& c, int64_t now) {
     const int n = gn::transport_receive(*c.t, buf, sizeof buf, from, now);
     if (n < 0) break;
     if (n < 5) continue;
+    c.heard_us = now;
     const uint32_t word = rd32(buf);
     if ((word & kControl) != 0) {
       if (c.stage != ClientStage::challenge || from != c.server) continue;

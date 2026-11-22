@@ -15,8 +15,17 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <iterator>
+#include <mutex>
 #include <thread>
+#include <utility>
+
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "console/clock_macros.hpp"
 #include "core/num.hpp"
@@ -202,6 +211,42 @@ std::string commands_added(CommandsFile& f) {
   text.resize(end + 1);
   f.seen += static_cast<std::streamoff>(text.size());
   return text;
+}
+
+// THE TERMINAL: lines typed on the server's own terminal, read on a thread of their own and run as
+// the operator's console lines with the commands file's. One reader for the process, started by
+// the first networked server whose input is a terminal it has in the foreground (a server started
+// in the background, or with its input a pipe or a file, reads none); it ends at the input's end.
+struct TerminalLines {
+  std::mutex m;
+  std::string lines;
+};
+
+bool terminal_ours() {
+#if defined(_WIN32)
+  return _isatty(_fileno(stdin)) != 0;
+#else
+  return isatty(STDIN_FILENO) != 0 && tcgetpgrp(STDIN_FILENO) == getpgrp();
+#endif
+}
+
+TerminalLines& terminal_lines() {
+  static TerminalLines* t = [] {
+    auto* made = new TerminalLines;  // never freed: the reader may outlive every server
+    std::thread([made] {
+      for (std::string line; std::getline(std::cin, line);) {
+        const std::lock_guard<std::mutex> hold(made->m);
+        made->lines += line + "\n";
+      }
+    }).detach();
+    return made;
+  }();
+  return *t;
+}
+
+std::string terminal_typed(TerminalLines& t) {
+  const std::lock_guard<std::mutex> hold(t.m);
+  return std::exchange(t.lines, std::string());
 }
 
 int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCfg& cfg,
@@ -498,6 +543,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     if (hand_record_stop(hand, s, said)) std::printf("%s\n", said.c_str());
   };
   CommandsFile commands{c.commands, c.commands.empty() ? 0 : file_size(c.commands)};
+  TerminalLines* terminal = c.offline || !terminal_ours() ? nullptr : &terminal_lines();
   const auto switch_mods = [&]() -> bool {
     switch_asked = false;
     std::string why;
@@ -582,8 +628,9 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
       con.execute(c.mapcmd);
       std::fflush(stdout);
     }
-    if (!commands.path.empty() && n % poll_frames == 0) {
-      const std::string lines = commands_added(commands);
+    if ((!commands.path.empty() || terminal != nullptr) && n % poll_frames == 0) {
+      std::string lines = commands.path.empty() ? std::string() : commands_added(commands);
+      if (terminal != nullptr) lines += terminal_typed(*terminal);
       if (!lines.empty()) {
         con.execute(lines);
         std::fflush(stdout);

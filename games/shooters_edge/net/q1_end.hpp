@@ -34,6 +34,7 @@ struct NqClientEnd {
   int held_back = 0;      // moves kept back since the level began (the first two)
   int tries = 0;          // connect requests sent
   int64_t tried_us = -1;  // when the last one went
+  int64_t heard_us = -1;  // when the server's last packet came
   float server_time = 0;  // the last `time` read (each move carries it back)
   int64_t frames = 0;     // unreliable frames read
   int64_t moves = 0;      // moves sent

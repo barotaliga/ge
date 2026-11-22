@@ -24,6 +24,7 @@
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/qw_admin.hpp"
 #include "shooters_edge/net/qw_looks.hpp"
+#include "shooters_edge/net/qw_mapsum.hpp"
 #include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/net/qw_talk.hpp"
 #include "shooters_edge/server/campaign.hpp"
@@ -123,6 +124,29 @@ void cmd_list(QwServer& s, int slot, bool models, int start) {
   }
   m.ints = {start, last + 1 < limit ? (last & 0xff) : 0};
   reliable_svc(s, slot, m);
+}
+
+// sv_mapcheck: the map checksum a client sends with its first `prespawn` against the server's
+// own file's two (every lump, and the one the wire carries). A client that matches neither is told
+// both and dropped. One that sends 0 could not read its map (a bot, a tool, a scripted client) and
+// is let in, as is everyone on a server with no file for the map or one that does not read as one.
+bool map_check(QwServer& s, int slot, const char* sent_text) {
+  if (!s.cfg.map_check || !s.cfg.read_file || s.clients[slot].local) return true;
+  const std::string path = "maps/" + s.game->map_name + ".bsp";
+  std::vector<uint8_t> bsp;
+  if (!s.cfg.read_file(path, &bsp)) return true;
+  const MapChecksums sums = map_checksums(bsp);
+  const auto sent = static_cast<uint32_t>(std::strtoll(sent_text, nullptr, 10));
+  if (sent == 0) return true;
+  const uint32_t wire = sums.ok ? sent_checksum(path, sums) : 0;
+  if (!sums.ok || sent == wire || sent == sums.all) return true;
+  const auto text = [](uint32_t v) { return std::to_string(static_cast<int32_t>(v)); };
+  client_print(s, slot, 2,
+               "Map model file does not match (" + path + "), " + text(sent) + " != " + text(wire) +
+                   "/" + text(sums.all) +
+                   ".\nYou may need a new version of the map, or the proper install files.\n");
+  qw_drop(s, slot, "had another copy of " + path);
+  return false;
 }
 
 void cmd_prespawn(QwServer& s, int slot, int n) {
@@ -594,7 +618,9 @@ void string_command(QwServer& s, int slot, const std::string& line) {
   } else if (cmd == "soundlist" || cmd == "modellist") {
     if (signon_ok()) cmd_list(s, slot, cmd == "modellist", std::atoi(pg::word(w, 2)));
   } else if (cmd == "prespawn") {
-    if (signon_ok()) cmd_prespawn(s, slot, std::atoi(pg::word(w, 2)));
+    if (signon_ok() &&
+        (w.count < 4 || std::atoi(pg::word(w, 2)) != 0 || map_check(s, slot, pg::word(w, 3))))
+      cmd_prespawn(s, slot, std::atoi(pg::word(w, 2)));
   } else if (cmd == "spawn") {
     if (signon_ok()) cmd_spawn(s, slot, std::atoi(pg::word(w, 2)));
   } else if (cmd == "begin") {

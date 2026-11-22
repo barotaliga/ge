@@ -556,6 +556,13 @@ bool keep_autosave(Listen& listen, const SearchPath& files) {
   return std::exchange(listen.load_menu_asked, false);
 }
 
+std::string load_save_asked(Listen& listen, const GameContent& content, const SearchPath& files,
+                            std::string& ask) {
+  const std::string name = std::exchange(ask, std::string());
+  std::string error;
+  return load_asked_save(listen, content, files, name, error) ? "loaded " + name : "load: " + error;
+}
+
 bool load_asked_save(Listen& listen, const GameContent& content, const SearchPath& files,
                      const std::string& name, std::string& error) {
   std::vector<uint8_t> bytes;

@@ -5,6 +5,7 @@
 // ge:skill net shooter
 // ge:test tests/shooters_edge_qw_admin_test.cpp
 #include "shooters_edge/net/qw_admin.hpp"
+#include "shooters_edge/net/qw_fraglog.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -424,6 +425,29 @@ bool qw_admin(QwServer& s, const std::string& line, std::string& out) {
       out = error + "\n";
     else
       out = name + " was kicked\n";
+    return true;
+  }
+  // A player's cheats by id or name, on a server started with cheats: the player reads the
+  // cheat's words ("godmode ON").
+  if (cmd == "fraglogfile") {  // the frag log's file on or off (qw_fraglog.hpp)
+    out = qw_fraglogfile(s);
+    return true;
+  }
+  if (cmd == "god" || cmd == "give") {
+    const std::string who = pg::word(w, 1);
+    if (!s.cfg.cheats) {
+      out = "You must run the server with -cheats to enable this command.\n";
+    } else if (who.empty()) {
+      out = cmd == "god" ? "god <id|name>: a player's godmode on or off\n"
+                         : "give <id|name> <item> <count>: a weapon (2 to 8), shells, nails, "
+                           "rockets, cells or health\n";
+    } else if (const int slot = qw_find_seat(s, who); slot < 0) {
+      out = "No player is called " + who + ". Type \"users\" to see the ids and names.\n";
+    } else {
+      std::string asked = cmd;
+      for (int i = 2; i < w.count; i++) asked += std::string(" ") + pg::word(w, i);
+      s.rules->client_command(slot, asked);
+    }
     return true;
   }
   // The command filters and the blackhole list (engine/server/cmdfilter.hpp, bans.hpp).
