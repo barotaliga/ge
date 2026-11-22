@@ -179,7 +179,8 @@ TEST(sv_entpath_plays_a_map_with_the_entities_of_its_file) {
 }
 
 // The dedicated server's own console reaches a Quake II server: the endpoint's words (`status`),
-// `listmaps`, `gamemode` for the next map, and `say` as "console:" to every player.
+// `listmaps`, `gamemode` for the next map, `say` as "console:" to every player, and the save
+// words (save, autosave, load).
 TEST(the_terminal_runs_status_listmaps_gamemode_and_say_on_a_quake_ii_server) {
   const fs::path root = fs::temp_directory_path() / "ge_q2_console";
   fs::remove_all(root);
@@ -238,6 +239,25 @@ TEST(the_terminal_runs_status_listmaps_gamemode_and_say_on_a_quake_ii_server) {
   for (const std::string& p : client.prints)
     heard = heard || p.find("console: the match starts soon") != std::string::npos;
   CHECK(heard);
+  // The save words: refused in a deathmatch, a bad name, a save that is not there; then a single
+  // player's game saved as saves/<dir>.save, the autosave kept as save0, the save loaded again.
+  CHECK(printed("save") == "Usage: save <directory>\n");
+  CHECK(printed("save ../up") == "Bad savedir.\n");
+  CHECK(printed("load nothing") == "No such savegame: nothing\n");
+  CHECK_MSG(printed("save one").find("deathmatch") != std::string::npos, "save in a deathmatch");
+  printed("gamemode sp");
+  printed("map hall");
+  frames(100);
+  CHECK_MSG(client.stage == cn::ClientStage::active, client.refused);
+  CHECK(fs::exists(root / "baseq2" / "saves" / "save0.save"));
+  CHECK(printed("save one") == "Game saved.\n");
+  CHECK(printed("autosave") == "Game saved.\n");
+  CHECK(fs::exists(root / "baseq2" / "saves" / "one.save"));
+  CHECK(fs::exists(root / "baseq2" / "saves" / "save1.save"));
+  CHECK(printed("load one").find("Couldn't") == std::string::npos);
+  frames(100);
+  CHECK_MSG(client.stage == cn::ClientStage::active, client.refused);
+  CHECK(printed("save two") == "Game saved.\n");
   ge::server::server_close(s);
   fs::remove_all(root);
 }

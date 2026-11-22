@@ -18,11 +18,14 @@ TEST(macrolist_lists_each_macro_in_a_field_then_the_count) {
   CHECK_MSG(all == "com_maplist      " + std::string(63, 'm') +
                        "\n"
                        "net_uprate       1200\n"
+                       "qt               \"\n"  // the console's own three: a quote, a ';'
                        "random           7\n"
-                       "3 of 3 macros",
+                       "sc               ;\n"
+                       "triggermatch     \n"
+                       "6 of 6 macros",
             all);
-  CHECK(sv::server_macro_list(con, "net_*") == "net_uprate       1200\n1 of 3 macros");
-  CHECK(sv::server_macro_list(con, "NET_*") == "0 of 3 macros");  // case kept
+  CHECK(sv::server_macro_list(con, "net_*") == "net_uprate       1200\n1 of 6 macros");
+  CHECK(sv::server_macro_list(con, "NET_*") == "0 of 6 macros");  // case kept
 }
 
 TEST(a_wildcard_matches_the_whole_name) {

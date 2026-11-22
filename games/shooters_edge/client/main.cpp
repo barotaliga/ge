@@ -1073,7 +1073,7 @@ int run_main(int argc, char** argv) {
       save_settings();
       break;
     }
-    ge::platform::follow_window_cvars(*window, win);  // vid_fullscreen, win_noborder, ...
+    ge::platform::follow_window_cvars(*window, win, speaker.get(), &console);  // and s_device
     ge::input::update(held, queue);
     // What the console and menu ask this frame, against before (a demo held behind it, below).
     const std::string map_before = next_map;
@@ -1567,7 +1567,7 @@ int run_main(int argc, char** argv) {
         slm::watch_frame(live_map, bench_folder.path ? *bench_folder.path : files, bench_map->file,
                          ds, overlay, w, h, playback.bar_bottom_px);
       se::Status hud_status = cl::demo_status(ds, t);
-      if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map, ds.bonuses);  // f_ events
+      if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map, ds.bonuses, &ds);
       if (drawn_remote) cl::group_status(controls.groups, hud_status, t);  // the weapon group
       cl::q2_bar_net(q2_bar, drawn_remote ? sn::remote_net(remote) : nullptr,
                      sn::remote_unanswered(remote), t);                 // scr_lag_draw's packets

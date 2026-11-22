@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 128 | 13 | 5 | 10 | 156 |
-| Client settings (cvars) | 180 | 49 | 75 | 46 | 350 |
+| Client settings (cvars) | 181 | 49 | 60 | 60 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 90 | 67 | 4 | 1 | 162 |
 | Server messages the client parses (svc) | 15 | 6 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 11 | 7 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 7 | 6 | 4 | 0 | 17 |
-| **all** | 714 | 303 | 125 | 69 | 1211 |
+| **all** | 715 | 303 | 110 | 83 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 180, partial 49, missing 75, not-taken 46
+done 181, partial 49, missing 60, not-taken 60
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -235,7 +235,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.in_grab | `in_grab` | 0 never grab the mouse in a window, 1 in a game, 2 also let go in demos and chase (default 1) | partial | `games/shooters_edge/client/q2_session.hpp` (`q2_takes_mouse`): 0 takes the mouse only while the game covers the screen; 2 is the same as 1 (a watched demo lets the mouse go in both, by our `in_mouse_release`) |
 | cvar.cl_nodelta | `cl_nodelta` | 1 asks the server for full frames, never deltas (default 0) | partial | `games/shooters_edge/client/q2_session.cpp`; `net/q2_client.hpp`'s `nodelta` acknowledges no frame, so each comes whole; read when you join, not live |
 | cvar.cl_maxpackets | `cl_maxpackets` | packets a second on the modern protocols, moves batched (default 30) | missing | waits for the batched protocol (`client-gaps.md` round 12, C43) |
-| cvar.cl_fuzzhack | `cl_fuzzhack` | sends moves with a small jitter to beat a server's speed check (default 0) | missing | not found |
+| cvar.cl_fuzzhack | `cl_fuzzhack` | sends moves with a small jitter to beat a server's speed check (default 0) | not-taken | a ping trick: packets held back (at most two moves in a row) with the sequence moved on, so the server reads loss and takes the moves from the next packet's backups; ours sends every packet it builds |
 | cvar.cl_packetdup | `cl_packetdup` | each move sent again in the next packet (default 1) | missing | waits for the batched protocol (C43) |
 | cvar.cl_showpackets | `cl_showpackets` | prints each move packet sent (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` over the channel's trace (`plugins/classic/protocol/channel.hpp`'s `sent`): each packet sent printed with its sequences and size |
 | cvar.cl_instantpacket | `cl_instantpacket` | a button press sent at once (default 1) | missing | C43 |
@@ -390,13 +390,13 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.ui_pingrate | `ui_pingrate` | server pings a second, 0 from `rate` (default 0) | done | Quake II's own (`menu/servers_page.hpp`'s `game_ping_rate`) in place of our `sb_infospersec`: 0 the player's `rate` / 450 held to 1..100 (33 at 15000), 1..100 that many a second; ours asks at that pace on every try, where its second and third passes slow to two thirds and a third |
 | cvar.ui_scale | `ui_scale` | the menus' scale, 0 auto (default 0) | partial | Quake II's own (`menu/classic_art.hpp`'s `scale`, kept by `GameMenu::set_art`, bound by `client/cvar_layers.cpp`): 1..10 that many screen px a classic px, the menus centred; 0 fills the window by whole numbers where Quake II steps 1, 2, 4 by its height (or the desktop's DPI) |
 | cvar.ui_debug | `ui_debug` | debug: outlines menu items (default 0) | not-taken | `client-gaps.md`: developer tools left out |
-| cvar.ui_open | `ui_open` | 1 opens the main menu at start-up (default 0) | missing | ours opens its own title menu always |
+| cvar.ui_open | `ui_open` | 1 opens the main menu at start-up (default 0) | not-taken | Shooter's Edge's shell opens its own title menu at start-up whatever game is loaded; Quake II's 0, the bare console, would leave a new player at a prompt; the console is one key away |
 | cvar.adr | `adr0` .. `adr15` | the address book: 16 saved server addresses (saved) | done | `adr0` .. `adr15` (`games/shooters_edge/client/cvar_layers.cpp`), archived, the address book's rows (`menu/q2_pages.cpp`) |
-| cvar.s_khz | `s_khz` | the mixing rate in kHz (default 44, saved) | missing | ours mixes at 48 kHz always (`engine/audio/voice.hpp`) (C32) |
-| cvar.s_mixahead | `s_mixahead` | seconds the mixer runs ahead (default 0.1, saved) | missing | C32 |
+| cvar.s_khz | `s_khz` | the mixing rate in kHz (default 44, saved) | not-taken | ours mixes at 48 kHz always and the platform converts to whatever the device runs at (`engine/audio/voice.hpp`'s `kRate`), so a sound's bits never depend on the device |
+| cvar.s_mixahead | `s_mixahead` | seconds the mixer runs ahead (default 0.1, saved) | not-taken | ours is pulled by the device's own thread a chunk at a time (`platform/audio.hpp`), so there is no lead to set |
 | cvar.s_testsound | `s_testsound` | debug: a test tone (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.s_swapstereo | `s_swapstereo` | swap left and right (default 0) | done | `client/room_ear.cpp` in the classic layer (Quake's too), `engine/audio/synth.cpp` swaps (M18k4 round 35) |
-| cvar.s_driver | `s_driver` | the sound driver | missing | not found |
+| cvar.s_driver | `s_driver` | the sound driver | not-taken | the platform picks the system's sound driver (SDL's `SDL_AUDIO_DRIVER` names another); `soundinfo` says which |
 | cvar.s_enable | `s_enable` | 0 none, 1 software, 2 OpenAL (default 1) | missing | C32 |
 | cvar.s_volume | `s_volume` | the effects volume (default 0.7, saved) | done | synonym of `volume` (`client/cvar_layers.cpp`) |
 | cvar.s_ambient | `s_ambient` | 0 no loops, 1 all, 2 only loops with a model, 3 only the player's own (default 1) | done | `plugins/classic/q2_fx_switches.hpp` (`ambient`), heard in `games/shooters_edge/client/demo_sound.cpp` (`entity_loops`) |
@@ -409,8 +409,8 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.ogg_shuffle | `ogg_shuffle` | shuffle every track in `music/` (default 0) | done | Quake II's own, bound to the music's `shuffle` (`engine/audio/music_console.hpp`: every track the game has, in a random order, each once through) |
 | cvar.ogg_menu_track | `ogg_menu_track` | the track played while disconnected, 0 none (default 0) | done | Quake II's own, bound to the music's `menu_track`, started on the title by `play_menu_music` (`engine/audio/music_console.hpp`, `games/shooters_edge/client/main.cpp`) |
 | cvar.ogg_remap_tracks | `ogg_remap_tracks` | remap the mission packs' track numbers to the digital release's file names (default 1) | done | `plugins/classic/content/soundtrack.hpp`'s `q2_remap_track` (rogue 2..11 as 12..21, xatrix by its table) in the music's track lookup (`games/shooters_edge/client/take_in.cpp`), bound in `client/q2_session.cpp` |
-| cvar.al_device | `al_device` | the OpenAL output device, empty the default; `?` lists the devices ("Available devices:") (default empty) | missing | C32 |
-| cvar.al_merge_looping | `al_merge_looping` | OpenAL: merge copies of one looped sound so they play as loud as on the software mixer; 0 off, 1 auto (only in plain stereo), 2 on (default 1) | missing | ours one mixer, which merges loops itself (`client/demo_sound.cpp`); no OpenAL (C32) |
+| cvar.al_device | `al_device` | the OpenAL output device, empty the default; `?` lists the devices ("Available devices:") (default empty) | done | its spelling of the engine's `s_device` (`platform/window_cvars.hpp`, every game): "" the system's default, a name moves the sound there at once (`platform/audio.hpp`'s `move_audio`), `?` lists "Available devices:" and puts the setting back, a name not there is said once and the sound stays; `s_devices` lists them too |
+| cvar.al_merge_looping | `al_merge_looping` | OpenAL: merge copies of one looped sound so they play as loud as on the software mixer; 0 off, 1 auto (only in plain stereo), 2 on (default 1) | not-taken | an OpenAL mixer's fix; ours has one mixer, which plays copies of a looped sound as the software mixer does |
 | cvar.al_hrtf | `al_hrtf` | OpenAL head-related sound (default 0) | missing | C32 |
 | cvar.gl_screenshot_format | `gl_screenshot_format` | jpg, png or tga (default jpg) | done | a synonym of ours `scr_format` (`games/shooters_edge/client/cvar_layers.cpp`), the same default |
 | cvar.gl_screenshot_async | `gl_screenshot_async` | write screenshots off the main thread (default 1) | missing | C22 |
@@ -488,17 +488,17 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_multisamples | `gl_multisamples` | MSAA samples (default 0; menu 2, 4, 8) | missing | not found (the menu row C5) |
 | cvar.basedir | `basedir` | the install folder; command line only | partial | ours finds the install itself; `basedir` is a word of the take-in (`client/take_in.cpp`) |
 | cvar.homedir | `homedir` | the writable folder; command line only | missing | not found |
-| cvar.libdir | `libdir` | the game-library folder; command line only | missing | not found |
+| cvar.libdir | `libdir` | the game-library folder; command line only | not-taken | ours loads no native game library: Quake II's rules are our own code and a mod's compiled module runs in our VM (`plugins/progs`) |
 | cvar.sys_console | `sys_console` | Unix: the terminal console's mode | not-taken | ours writes the client's console to no terminal; the dedicated server's terminal is its own |
-| cvar.win_noalttab | `win_noalttab` | Windows: disable Alt+Tab (default 0) | missing | Windows only |
-| cvar.win_disablewinkey | `win_disablewinkey` | Windows: disable the Windows key (default 0) | missing | Windows only |
+| cvar.win_noalttab | `win_noalttab` | Windows: disable Alt+Tab (default 0) | not-taken | ours leaves the system's own keys (Alt+Tab, the Windows key) to the system on every platform |
+| cvar.win_disablewinkey | `win_disablewinkey` | Windows: disable the Windows key (default 0) | not-taken | as `win_noalttab`: the system's own keys stay the system's |
 | cvar.win_noresize | `win_noresize` | Windows: a window that cannot be resized (default 0) | done | `engine/platform/window_cvars.hpp` (every game, every desktop), applied by `follow_window_cvars` through `platform::set_window_style`: the edges no longer resize it |
 | cvar.win_notitle | `win_notitle` | Windows: no title bar (default 0) | done | `engine/platform/window_cvars.hpp` (every game, every desktop), applied by `follow_window_cvars` through `platform::set_window_style`: no title bar, so no border either |
 | cvar.win_alwaysontop | `win_alwaysontop` | Windows: keep the window on top (default 0) | done | `engine/platform/window_cvars.hpp` (every game, every desktop), applied by `follow_window_cvars` through `platform::set_window_style`: kept above every other window |
 | cvar.win_noborder | `win_noborder` | Windows: no border (default 0) | done | `engine/platform/window_cvars.hpp` (every game, every desktop), applied by `follow_window_cvars` through `platform::set_window_style`: no border or title bar |
 | cvar.sys_exitonerror | `sys_exitonerror` | Windows: exit at once on a fatal error (default 0) | missing | Windows only |
-| cvar.sys_viewlog | `sys_viewlog` | Windows: show the system console window | missing | Windows only |
-| cvar.sys_disablecrashdump | `sys_disablecrashdump` | Windows: no crash dump | missing | Windows only |
+| cvar.sys_viewlog | `sys_viewlog` | Windows: show the system console window | not-taken | ours opens no system console window; the in-game console and `logfile` hold what it would show |
+| cvar.sys_disablecrashdump | `sys_disablecrashdump` | Windows: no crash dump | not-taken | ours writes no crash dumps, so there is none to turn off |
 | cvar.gl_allow_software | `gl_allow_software` | Windows: allow the software GL driver (default 0) | not-taken | `client-gaps.md`: rendering internals left out |
 | cvar.map_visibility_patch | `map_visibility_patch` | patch known maps' broken visibility (default 1) | done | synonym of `sv_vispatch` (`net/q2_game.cpp`) |
 | cvar.map_noareas | `map_noareas` | debug: every area counts as joined (default 0) | missing | not found |
@@ -532,8 +532,8 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.allow_download_pics | `allow_download_pics` | client: fetch pictures (default 1) | partial | `net/q2_downloads.hpp` gates `pics/`; joining does not fetch the level's pictures yet |
 | cvar.allow_download_others | `allow_download_others` | fetch any other file (default 0) | done | `net/q2_downloads.hpp`: every other folder, off by default |
 | cvar.rcon_password | `rcon_password` | the password `rcon` sends | done | `games/shooters_edge/net/qw_admin.cpp` |
-| cvar.sys_forcegamelib | `sys_forcegamelib` | a game library path forced; command line only | missing | not found |
-| cvar.sys_allow_unsafe_savegames | `sys_allow_unsafe_savegames` | load saves of another build; command line only (default 0) | missing | not found |
+| cvar.sys_forcegamelib | `sys_forcegamelib` | a game library path forced; command line only | not-taken | ours loads no native game library (as `libdir`) |
+| cvar.sys_allow_unsafe_savegames | `sys_allow_unsafe_savegames` | load saves of another build; command line only (default 0) | not-taken | ours reads only its own save files, each checked by its header and checksums (`engine/save`), so there is no other build's save to allow |
 | cvar.sys_history | `sys_history` | lines of the terminal's history kept | not-taken | ours writes the client's console to no terminal; the in-game console keeps its own history |
 | cvar.fs_autoexec | `fs_autoexec` | run `autoexec.cfg` on a game change (default 1) | done | Quake II's `fs_autoexec` (default 1): on a game change default.cfg (with `fs_default`, ours, in both games), the game's own settings, each game folder's autoexec.cfg (the base's, then the mod's) and postexec.cfg run in that order (`client/install_configs.cpp`'s `run_game_settings`); ours keeps each game's settings in its own file, run whatever `fs_autoexec` says |
 | cvar.fs_debug | `fs_debug` | debug: prints file opens | not-taken | `client-gaps.md`: developer tools left out |
@@ -551,7 +551,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.net_port | `net_port` | the server's port (default 27910) | partial | ours has it for the server (`engine/server/main.cpp`) |
 | cvar.net_clientport | `net_clientport` | the client's own port (default any) | done | Quake II's `net_clientport` (default -1, any free port): the client's socket on that port, opened again the frame it moves with the connection carrying on; a port that will not open says so and any free port is used (`net/qw_remote.cpp`'s `own_port`); ours keeps the setting's value rather than putting it back to -1 |
 | cvar.net_dropsim | `net_dropsim` | debug: drop this share of packets (default 0) | partial | ours simulates networks in `engine/net` (labs), not by this setting |
-| cvar.net_log | `net_log_enable`, `net_log_name`, `net_log_flush` | write a network log | missing | not found |
+| cvar.net_log | `net_log_enable`, `net_log_name`, `net_log_flush` | write a network log | not-taken | a debug build's packet log only (absent from a release); ours keeps no settings that only a debug build has, and its own captures cover the need (`engine/net`'s pcap captures) |
 | cvar.net_enable_ipv6 | `net_enable_ipv6` | IPv6 networking | missing | not found |
 | cvar.net_ignore_icmp | `net_ignore_icmp` | ignore ICMP errors (default 0) | missing | not found |
 

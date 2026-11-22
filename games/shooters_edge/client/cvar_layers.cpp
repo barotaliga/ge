@@ -363,7 +363,7 @@ void add_first(con::Console& c, const GameBindings& b) {
 // - its browsers: `ui_sortdemos` (`menu_demo_sort`, by name by default where ours lists the newest
 //   first) and `ui_colorservers` (`sb_colorservers`); its own `ui_sortservers` (one column either
 //   way, in place of `sb_sortservers`) and `ui_pingrate` (from `rate`, in place of
-//   `sb_infospersec`); `ui_scale`, the menus' size.
+//   `sb_infospersec`); `ui_scale`, the menus' size; `al_device` its spelling of `s_device`.
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its whole set of configs run again on a game change (client/install_configs.cpp's
@@ -520,6 +520,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
                    "first; 3: smallest first; -3: largest first; 0: by name",
          .overlap = con::Overlap::same});
   v.add_synonym("ui_sortdemos", "menu_demo_sort");
+  if (v.find("s_device") != nullptr)  // the window's (platform/window_cvars.hpp)
+    v.add_synonym("al_device", "s_device");
   for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)
     v.add({.name = "adr" + std::to_string(k),
            .fallback = "",
@@ -959,6 +961,10 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
                     const GameBindings& b) {
   v.layer = game_layer(game.id);
   c.cvars().set_scope(game_scope(game));  // its own values over the common ones (cvar.hpp)
+  if (c.cvars().find("cl_beginmapcmd") == nullptr) {  // every game's map commands, once
+    con::CvarLayer classic(c.cvars(), kLayerClassic);
+    add_map_command_cvars(c.cvars(), v.q2);
+  }
   con::CvarLayer layer(c.cvars(), v.layer);
   if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it
   if (b.console_view != nullptr) {  // only Quake II's con_auto_chat and stamps set them
@@ -970,6 +976,9 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
     Q2Session fresh;
     fresh.joined = v.q2.joined;
     fresh.map = v.q2.map;
+    fresh.begin_cmd = v.q2.begin_cmd;  // the map commands are every game's (classic layer)
+    fresh.change_cmd = v.q2.change_cmd;
+    fresh.disconnect_cmd = v.q2.disconnect_cmd;
     v.q2 = fresh;
   }
   if (game.id == "q2") add_q2_session_cvars(c.cvars(), v.q2);

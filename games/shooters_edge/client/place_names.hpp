@@ -27,7 +27,8 @@
 //   is not the one the player is in.
 // - **Where the player is**: the window's own game, a server joined, or a demo played (the view's
 //   point less its eye height); the map's place names are read as each one's map starts.
-// - **Quake II's macros** (the game's `place_macros`): `$loc_here` is the place the player is
+// - **The place macros**, in every game (Quake II's client brought them): `$loc_here` is the place
+// the player is
 //   in and `$loc_there` the place nearest where the view's line stops (`looked_at`: 8,192 units
 //   from where the player stands, or the first solid), each within `loc_dist`, `unknown` with
 //   none or no game; every console line expands them (`echo I am at $loc_here`).

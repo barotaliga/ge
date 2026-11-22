@@ -600,7 +600,9 @@ TEST(q2_chat_sound_and_auto_chat_are_its_own_and_go_with_it) {
 TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
-  CHECK(v.find("cl_entities") == nullptr && v.find("cl_beginmapcmd") == nullptr);
+  CHECK(v.find("cl_entities") == nullptr && v.find("cl_beginmapcmd") != nullptr);  // every game's
+  v.set("cl_beginmapcmd", "record", con::Source::local);                           // Quake too
+  CHECK(w.game.q2.begin_cmd == "record");
   const pr::GameProfile* q2 = pr::find_game("q2");
   CHECK(q2 != nullptr);
   if (q2 == nullptr) return;
@@ -662,8 +664,8 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(w.picture.q2fx.footsteps == 1 && w.picture.q2fx.ambient == 1 && w.music.enabled);
   CHECK(!w.music.shuffle && w.music.menu_track == 0);
   CHECK(w.picture.q2fx.rail_type == 0 && w.picture.q2fx.core_colour == "red");
-  CHECK(w.game.q2.begin_cmd.empty() && w.game.q2.autopause && w.game.q2.timescale == 1);
-  CHECK(v.find("cl_beginmapcmd") == nullptr && v.find("sv_running") == nullptr);
+  CHECK(w.game.q2.begin_cmd == "record" && w.game.q2.autopause && w.game.q2.timescale == 1);
+  CHECK(v.find("cl_beginmapcmd") != nullptr && v.find("sv_running") == nullptr);
   CHECK(v.clashes().empty());
 }
 
