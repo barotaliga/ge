@@ -2,10 +2,12 @@
 //
 // ge:summary Picks a game row's adapter, says which forms run, adds mods, maps, demos, game cfgs
 // ge:keywords game-adapter adapter_of runs_form add_adapter_commands mods maps demos console
-// ge:keywords read_configs_from exec config-file com_maplist
+// ge:keywords read_configs_from exec config-file com_maplist path dir fdir whereis
 // ge:skill shooter console
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include "shooters_edge/client/game_adapter.hpp"
+
+#include "vfs/search_commands.hpp"
 
 namespace shooters_edge::client {
 
@@ -46,6 +48,7 @@ void add_adapter_commands(ge::console::Console& con, const GameAdapter& adapter,
                       c.print(line);
                     }
                   });
+  ge::vfs::add_search_commands(con, files.vfs);  // path, dir, fdir, whereis
   // $com_maplist: every map the files hold, by name, a space between.
   con.add_macro("com_maplist", [&adapter, &files] {
     std::string all;

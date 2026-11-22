@@ -8,7 +8,7 @@ include(cmake/Archives.cmake)
 file(GLOB GE_VFS_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/vfs/*.cpp)
 add_library(ge_vfs STATIC ${GE_VFS_SOURCES} $<TARGET_OBJECTS:ge_vfs_codecs>
   $<TARGET_OBJECTS:ge_vfs_unrar>)
-target_link_libraries(ge_vfs PUBLIC ge_core)
+target_link_libraries(ge_vfs PUBLIC ge_core ge_console)
 target_include_directories(ge_vfs SYSTEM PRIVATE ${GE_ZSTD_INCLUDE} ${GE_LZMA_INCLUDE}
   ${GE_BZIP2_INCLUDE})
 
