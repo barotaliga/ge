@@ -125,6 +125,20 @@ bool run_named(con::Console& c, std::string_view name, ConfigsRun& out) {
   return true;
 }
 
+// Each game folder's autoexec.cfg, the base folder's then the mod's; with neither, the one the
+// search path finds in their place.
+void run_folder_autoexecs(con::Console& c, const fs::path& root, const std::string& game,
+                          const ge::classicenhance::Profile& content, ConfigsRun& out) {
+  bool ran = false;
+  for (const std::string_view folder : game_folders(game, content) | std::views::reverse) {
+    const fs::path dir = entry_named(root, folder);
+    if (dir.empty() || !run_path(c, dir / con::kAutoexecFile)) continue;
+    out.files.push_back((dir / con::kAutoexecFile).string());
+    ran = true;
+  }
+  if (!ran) run_named(c, con::kAutoexecFile, out);
+}
+
 // The console's own keys (the one under the tilde, the ISO key) in each mode, kept across a config
 // that starts with `unbindall`.
 struct KeptKeys {
@@ -219,8 +233,15 @@ std::vector<fs::path> config_dirs(const std::string& basedir, const std::string&
   return dirs;
 }
 
-bool run_game_settings(con::Console& c, const std::string& basedir, const std::string& game) {
-  return run_path(c, settings_dir(basedir, game) / con::kConfigFile);
+bool run_game_settings(con::Console& c, const std::string& basedir, const std::string& game,
+                       const ge::classicenhance::Profile& content) {
+  const bool ran = run_path(c, settings_dir(basedir, game) / con::kConfigFile);
+  const con::Cvar* again = c.cvars().find("fs_autoexec");
+  if (again == nullptr || !again->on()) return ran;
+  ConfigsRun out;
+  run_folder_autoexecs(c, basedir.empty() ? fs::path(".") : fs::path(basedir), game, content, out);
+  run_named(c, kPostexecFile, out);
+  return ran;
 }
 
 ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std::string& game,
@@ -302,18 +323,9 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
       case StartStep::autoexec:
         run_named(c, con::kAutoexecFile, out);
         break;
-      case StartStep::folder_autoexecs: {
-        // The base folder's, then the mod's; with neither, the window's own in their place.
-        bool ran = false;
-        for (const std::string_view folder : game_folders(game, content) | std::views::reverse) {
-          const fs::path dir = entry_named(root, folder);
-          if (dir.empty() || !run_path(c, dir / con::kAutoexecFile)) continue;
-          out.files.push_back((dir / con::kAutoexecFile).string());
-          ran = true;
-        }
-        if (!ran) run_named(c, con::kAutoexecFile, out);
+      case StartStep::folder_autoexecs:
+        run_folder_autoexecs(c, root, game, content, out);
         break;
-      }
       case StartStep::postexec:
         run_named(c, kPostexecFile, out);
         break;

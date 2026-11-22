@@ -1156,7 +1156,11 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.gender_auto = !cfg.gender.empty() && cvar("gender_auto", "0") == "1";
     cfg.voice = r.voip;
     cfg.live_mic = true;  // the window's microphone (remote_mic), while a voice key is held
-    cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
+    // qport: the number the server knows this client by when a NAT moves its port; 0 one
+    // picked from the name, so the same player keeps it from run to run.
+    const int qport = std::atoi(cvar("qport", "0").c_str());
+    cfg.qport = qport > 0 ? static_cast<uint16_t>(qport)
+                          : static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
     cfg.timeout = std::atof(cvar("cl_timeout", "60").c_str());  // 0: never
     cfg.trace = &r.trace;                                       // showpackets, showdrop
     cfg.read_file = r.read_file;
@@ -1337,6 +1341,15 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                      .min = 0,
                      .max = 86400,
                      .values = "0: never; 1..86400: that many seconds (60 the default)"});
+    con.cvars().add({.name = "qport",
+                     .fallback = "0",
+                     .help = "The number the server you join knows you by when your router moves "
+                             "your port; it applies from the next connect.",
+                     .kind = ge::console::CvarKind::integer,
+                     .min = 0,
+                     .max = 65535,
+                     .values = "0: one picked from your name (the default); 1..65535: that "
+                               "number"});
     con.cvars().add({.name = "rcon_password",
                      .flags = ge::console::kArchive,
                      .help = "The password rcon sends the server joined.",

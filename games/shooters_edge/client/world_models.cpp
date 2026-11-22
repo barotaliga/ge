@@ -1308,7 +1308,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       frames_of(k, p, at, frame_a, frame_b, blend);
     }
     for (int c = 0; c < 3; c++) g.now.position[c] = w[c];
-    if (p.bobs) g.now.position[1] += float(q2_bob_units(t) * br::kUnitM);
+    if (p.bobs && !in_place.items_still) g.now.position[1] += float(q2_bob_units(t) * br::kUnitM);
     float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
     if (k.spin || p.turns) ang[1] = float(std::fmod(t * kSpinDegPerS, 360.0));
     if (p.turns) ang[0] = ang[2] = 0;  // yaw only

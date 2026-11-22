@@ -112,6 +112,35 @@ TEST(q2_s_install_runs_its_client_s_order) {
   CHECK_MSG(joined(mod.seen) == "modmain,autoexec,mod,postexec,postinit", joined(mod.seen));
 }
 
+TEST(a_game_change_runs_quake_ii_s_autoexecs_after_its_settings_when_fs_autoexec_is_on) {
+  const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
+  const std::string base(two.base_dir);
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_change";
+  fs::remove_all(root);
+  write(root / base / "pak0.pak", "");
+  write(root / base / "autoexec.cfg", "mark autoexec\n");
+  write(root / base / "postexec.cfg", "mark postexec\n");
+  write(root / "ctf" / "autoexec.cfg", "mark mod\n");
+  write(cl::settings_dir(root.string(), "ctf") / "config.cfg", "mark own\n");
+  // A game without `fs_autoexec` (Quake's): its own settings alone.
+  Marks q1;
+  q1.con.set_search_path(cl::config_dirs(root.string(), "ctf", two));
+  CHECK(cl::run_game_settings(q1.con, root.string(), "ctf", two));
+  CHECK_MSG(joined(q1.seen) == "own", joined(q1.seen));
+  // Quake II's, on: its settings, the base folder's autoexec then the mod's, postexec.
+  Marks on;
+  on.con.cvars().add({.name = "fs_autoexec", .fallback = "1"});
+  on.con.set_search_path(cl::config_dirs(root.string(), "ctf", two));
+  cl::run_game_settings(on.con, root.string(), "ctf", two);
+  CHECK_MSG(joined(on.seen) == "own,autoexec,mod,postexec", joined(on.seen));
+  // Off: its settings alone again.
+  Marks off;
+  off.con.cvars().add({.name = "fs_autoexec", .fallback = "0"});
+  off.con.set_search_path(cl::config_dirs(root.string(), "ctf", two));
+  cl::run_game_settings(off.con, root.string(), "ctf", two);
+  CHECK_MSG(joined(off.seen) == "own", joined(off.seen));
+}
+
 TEST(q2_s_default_cfg_comes_from_its_pack_keeping_the_console_keys) {
   const ge::classicenhance::Profile& two = ge::classicenhance::kProfiles[1];
   const std::string base(two.base_dir);

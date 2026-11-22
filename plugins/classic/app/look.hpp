@@ -219,6 +219,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // Quake II's `cl_noskins`: 0 each their own figure, 1 every player the default figure, 2 the
   // default figure of each one's sex (a female figure's, else the male).
   int stock_figures = 0;
+  // Quake II's `cl_nobob`: items the game marks to float stay still (no 5-unit rise and fall).
+  bool items_still = false;
   int fog_serial = 0;  // how many times the `fog` command was given (above)
   std::string base_skin = "base", all_skins, all_figures;
   // teamskin, enemyskin: every teammate's or every enemy's skin ("": their own); the teamcolor and
