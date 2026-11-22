@@ -502,3 +502,39 @@ TEST(stamps_keep_the_time_beside_each_line) {
   CHECK(all.find("before\n") != std::string::npos);
   std::filesystem::remove_all(dir);
 }
+
+// A game's own Tab: the word completed to what the matches share, the matches listed in its form,
+// past the threshold asked about first.
+TEST(a_games_tab_completes_the_shared_part_and_lists_the_matches) {
+  Console c;
+  ConsoleView v(c);
+  for (const char* n : {"zfoo_a", "zfoo_bb", "zfoo_c"}) c.add_command(n, "", {});
+  c.cvars().add({.name = "zfoo_var", .fallback = "1"});
+  v.list_mode = 0;
+  v.set_open(true);
+  for (const char ch : std::string("zf")) v.type(std::string(1, ch));
+  v.key(EditKey::tab);
+  CHECK(v.input() == "zfoo_");
+  const size_t n = v.lines().size();
+  CHECK(v.lines()[n - 5].text == "]zfoo_" && v.lines()[n - 4].text == "zfoo_a");
+  CHECK(v.lines().back().text == "zfoo_var");
+  v.list_mode = 2;
+  v.key(EditKey::tab);
+  bool commands = false, variable = false;
+  for (const ViewLine& l : v.lines()) {
+    commands |= l.text == "3 possible commands:";
+    variable |= l.text == "1 possible variable:";
+  }
+  CHECK(commands && variable);
+  // Past the threshold the first Tab asks, the second lists.
+  v.list_threshold = 2;
+  v.list_mode = 1;
+  v.key(EditKey::tab);
+  CHECK(v.lines().back().text == "Press TAB again to display all 4 possibilities.");
+  v.key(EditKey::tab);
+  CHECK(v.lines().back().text.starts_with("zfoo_a"));
+  // One match: the whole name and a space.
+  v.type("b");
+  v.key(EditKey::tab);
+  CHECK(v.input() == "zfoo_bb ");
+}
