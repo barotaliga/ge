@@ -26,7 +26,8 @@
 //   is said with its size, its speed and the files left ("[HTTP] maps/q2dm1.bsp [1.2 MB,
 //   340 kB/sec] [3 remaining files]"). A `404` from the server's address leaves that file
 //   lacking; any other status, a `404` from the player's own repository, an address that does not
-//   resolve or connect, or one the client cannot fetch turns HTTP off until the next connect and
+//   resolve or connect, or a secure one whose certificate is not trusted (`cl_http_insecure 1`
+//   leaves it unchecked) or whose TLS fails turns HTTP off until the next connect and
 //   hands every file not yet fetched back to the game's channel. Any other failure (a stall, a
 //   short file) is said and leaves that file lacking.
 //
@@ -67,6 +68,7 @@ struct WebConfig {
   bool downloads = true;    // cl_http_downloads
   bool filelists = true;    // cl_http_filelists
   bool debug = false;       // cl_http_debug: each fetch's address said as it starts
+  bool insecure = false;    // cl_http_insecure: a secure address's certificate unchecked
 };
 
 // Quake's kinds of file (a file list's on a Quake or QuakeWorld server).

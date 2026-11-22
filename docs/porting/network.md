@@ -16,7 +16,8 @@ server's behaviour is [`server.md`](server.md); recordings and TV are [`demos.md
 | Classic plugin | `plugins/classic/protocol/channel.hpp` | The classic net channel: sequences, reliable bit and resend, qport, rate, choke |
 | Classic plugin | `plugins/classic/protocol/info.hpp` | Info strings: get, set, remove, star keys, names cleaned and unique |
 | Classic plugin | `plugins/classic/protocol/wire.hpp`, `directions.hpp` | Sizes, quantization, fields, CRC-16; Quake II's 162 directions |
-| Engine | `engine/net/http_fetch.hpp` | An HTTP GET for any game: proxy, redirects, chunks, failure words |
+| Engine | `engine/net/http_fetch.hpp` | An HTTP GET for any game: https, proxy (a tunnel for https), redirects, chunks, failure words |
+| Engine | `engine/net/tls_stream.hpp` | TLS 1.2 and 1.3 over caller-carried bytes (Mbed TLS): the system's roots, the name checked, a test server |
 | Classic plugin | `plugins/classic/content/web_downloads.hpp` | Downloads from a server's web address or a GitHub repository, several at once, file lists, the channel behind: Quake II's `dlserver`, our QuakeWorld server's `*dlserver`, the `cl_http_*` settings in the classic layer |
 | Shooter kit | `plugins/shooter/usercmd.hpp`, `predict.hpp` | The client's commands and prediction (`movement.md`) |
 | Shell | `games/shooters_edge/net/protocol.hpp` | The family named in the game's net namespace |

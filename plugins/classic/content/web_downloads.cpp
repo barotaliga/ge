@@ -272,7 +272,8 @@ void web_step(WebDownloads& h, const WebConfig& cfg, double now_s,
     const bool fatal =
         status ? !missing || (h.default_repo && !ended.file.filelist)
                : why == "Couldn't resolve host name" || why == "Couldn't connect to server" ||
-                     why == "Couldn't resolve proxy name" || why == "Unsupported protocol";
+                     why == "Couldn't resolve proxy name" || why.rfind("SSL ", 0) == 0 ||
+                     why.rfind("Problem with the SSL", 0) == 0;
     if (fatal) turn_off(h, ended.file, done);
   }
   if (!h.on) return;
@@ -294,6 +295,7 @@ void web_step(WebDownloads& h, const WebConfig& cfg, double now_s,
     o.user_agent = cfg.user_agent;
     o.referer = h.referer;
     o.proxy = cfg.proxy;
+    o.verify = !cfg.insecure;
     if (s.file.filelist) o.most_bytes = kMostList;
     gn::http_start(s.fetch, url, o, now_s);
     h.slots.push_back(std::move(s));

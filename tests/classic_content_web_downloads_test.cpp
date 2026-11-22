@@ -44,6 +44,13 @@ void serve(Web& w) {
     gn::tcp_take_bytes(t, got);
     w.requests[i].append(got.begin(), got.end());
     const std::string& r = w.requests[i];
+    if (!r.empty() && r[0] == '\x16') {  // a TLS hello: this server speaks plain HTTP alone
+      const std::string no = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+      gn::tcp_send_bytes(t, reinterpret_cast<const uint8_t*>(no.data()), no.size());
+      for (int k = 0; k < 100000 && !t.out.empty(); ++k) gn::tcp_pump(t);
+      gn::tcp_close(t);
+      continue;
+    }
     if (r.find("\r\n\r\n") == std::string::npos) continue;
     const size_t sp = r.find(' ');
     const std::string path = r.substr(sp + 1, r.find(' ', sp + 1) - sp - 1);
@@ -231,14 +238,15 @@ TEST(web_falls_back_to_the_channel) {
   CHECK(!h.on && all.files.empty());
   CHECK(all.back == (std::vector<std::string>{"maps/q2dm9.bsp", "sound/a.wav", "sound/b.wav"}));
   CHECK(has(h.said, "[HTTP] maps/q2dm9.bsp [404 Not Found] [2 remaining files]"));
-  // A secure address cannot be fetched here: off at the first file, the file handed back.
+  // A secure address whose server speaks no TLS: off at the first file, the file handed back.
   WebDownloads s;
-  web_connect(s, cfg, "https://secure.example/", 1, "s");
+  web_connect(s, cfg, "https://127.0.0.1:" + std::to_string(w.listener.local.port) + "/q2/", 1,
+              "s");
   web_queue(s, cfg, "maps/q2dm1.bsp");
   WebDone back;
   run(s, cfg, w, back, [](const std::string&, bool) { return true; });
   CHECK(!s.on && back.back == std::vector<std::string>{"maps/q2dm1.bsp"});
-  CHECK(has(s.said, "[HTTP] maps/q2dm1.bsp [Unsupported protocol]"));
+  CHECK(has(s.said, "[HTTP] maps/q2dm1.bsp [SSL connect error]"));
   for (gn::TcpStream& t : w.streams) gn::tcp_close(t);
   gn::tcp_close_listener(w.listener);
 }

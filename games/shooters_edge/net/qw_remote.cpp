@@ -1140,6 +1140,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.web.proxy = cvar("cl_http_proxy", "");
     cfg.web.default_url = cvar("cl_http_default_url", "");
     cfg.web.debug = cvar("cl_http_debug", "0") != "0";
+    cfg.web.insecure = cvar("cl_http_insecure", "0") != "0";
     cfg.rate = std::atoi(cvar("rate", "25000").c_str());  // the loaded game's default (classic)
     cfg.msg = std::atoi(cvar("msg", "1").c_str());
     cfg.noaim = cvar("noaim", "0") == "1";
@@ -1376,14 +1377,12 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
          .help = "Your own web address files are fetched from when a server names none.",
          .kind = ge::console::CvarKind::text,
          .values = "\"\": none (the default); TEXT: an address such as http://host/q2/"});
-    con.cvars().add(
-        {.name = "cl_http_insecure",
-         .fallback = "0",
-         .flags = ge::console::kArchive,
-         .help = "Whether a secure web address's certificate goes unchecked; secure addresses "
-                 "are not fetched here, so their files come from the server.",
-         .kind = ge::console::CvarKind::boolean,
-         .values = "0: checked (the default); 1: not"});
+    con.cvars().add({.name = "cl_http_insecure",
+                     .fallback = "0",
+                     .flags = ge::console::kArchive,
+                     .help = "Whether a secure web address's certificate goes unchecked.",
+                     .kind = ge::console::CvarKind::boolean,
+                     .values = "0: checked (the default); 1: not"});
     con.cvars().add({.name = "cl_http_debug",
                      .fallback = "0",
                      .help = "Whether each web download's address is said as it starts.",
