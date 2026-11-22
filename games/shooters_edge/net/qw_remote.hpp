@@ -84,6 +84,7 @@
 #include "shooters_edge/client/chat_ignore.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/net/qw_remote_sheet.hpp"
 #include "shooters_edge/net/q1_end.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_pingservers.hpp"
@@ -259,6 +260,7 @@ struct Remote {
   int q2_shownet = 0;  // Quake II's cl_shownet: each message's size printed (q2_client.hpp)
   bool q2_showpackets = false;  // Quake II's cl_showpackets: each packet sent shown (`trace.sent`)
   double tick_frac_us = 0;
+  RemoteSheet sheet;  // the server settings page's sheet (qw_remote_sheet.hpp)
 };
 
 // Watches the broadcast at `address` ("host:port": a stream port, our TV node's or a relay's;

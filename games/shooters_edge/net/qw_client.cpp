@@ -550,6 +550,10 @@ void apply(QwClientEnd& c, const SvcMsg& m) {
                        static_cast<uint32_t>(m.ints[4])};
       }
       break;
+    case svc::ge_sheet:  // the server's settings sheet, a part at a time (qw_sheet.hpp)
+      if (!m.ints.empty() && !m.strings.empty())
+        ge::server::sheet_take(c.sheet, m.ints[0], m.strings[0]);
+      break;
     case svc::serverinfo:  // one key changed (a match's `status`, a new limit)
       if (m.strings.size() == 2)
         info_set(c.serverinfo, m.strings[0], m.strings[1], kServerInfoBytes);

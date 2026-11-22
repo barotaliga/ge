@@ -225,7 +225,13 @@ void GameMenu::show(Host& host, std::string_view page) {
   }
 }
 
+void GameMenu::fill_server(const Host& host) {
+  sheet_seen_ = host.sheet != nullptr ? host.sheet->revision : 0;
+  server_page_.fill(main_, host.sheet, host.maps, table_ == &q2_menu(), classic());
+}
+
 void GameMenu::hide() {
+  if (con_ != nullptr) server_page_.leave(*con_);
   if (open_) cue(ui::MenuCue::back);
   open_ = false;
   waiting_.clear();
@@ -538,9 +544,16 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
     cue(ui::MenuCue::move);
     return;
   }
+  const ui::Item* held = main_.focused();
+  const std::string item_before = held != nullptr ? held->id : std::string();
   const std::vector<ui::MenuEvent> events = main_.input(in, hits_);
   cue(ui::menu_cue(events, moved()));
   for (const ui::MenuEvent& e : events) {
+    if (ServerPage::owns(e.page) && host.console != nullptr) {  // OPTIONS > SERVER SETTINGS
+      server_page_.event(e, main_, *host.console);
+      if (e.kind != ui::EventKind::changed) fill_server(host);
+      continue;
+    }
     switch (apply_event(e, main_, host)) {
       case Outcome::close:
       case Outcome::back_at_root:
@@ -582,6 +595,12 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
       help_page_ = 0;
       refresh_main(host);
     }
+  }
+  if (host.console != nullptr) {
+    server_page_.after(main_, page_before, item_before, *host.console);
+    server_page_.tick(dt, *host.console);
+    if (server_page_.open() && host.sheet != nullptr && host.sheet->revision != sheet_seen_)
+      fill_server(host);
   }
 }
 

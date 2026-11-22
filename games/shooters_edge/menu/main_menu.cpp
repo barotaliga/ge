@@ -358,6 +358,11 @@ constexpr Entry kEntries[] = {
      .hint = "Your classic packs enhanced, and the modern picture: light, water, sky, weather.",
      .opens = "enhanced",
      .needs = "ce_textures"},
+    {.page = "options",
+     .id = "server",
+     .text = "SERVER SETTINGS",
+     .hint = "The server's settings; the ones marked * change by a vote.",
+     .opens = "server"},
     {.page = "options", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
     {.page = "video",
@@ -902,6 +907,7 @@ constexpr PageTitle kPages[] = {
     {"ce_liquids", "WATER, LAVA AND SKY"},
     {"ce_fire", "FIRE AND WIND"},
     {"ce_weather", "WEATHER"},
+    {"server", "SERVER SETTINGS"},  // filled from the server's sheet (server_page.hpp)
     {"help", "HELP"},
     {"quit", "QUIT"},
     {"newgame", "NEW GAME"},

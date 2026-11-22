@@ -230,6 +230,7 @@ constexpr Entry kQ2[] = {
     opens("options", "downloads", "download options", "downloads"),
     {.page = "options", .id = "screenshots", .text = "screenshots", .needs = "screenshot"},
     opens("options", "classic", "CLASSIC ENHANCED", "enhanced", "ce_textures"),
+    opens("options", "server", "server settings", "server"),  // server_page.hpp
     {.page = "options",
      .id = "console",
      .text = "go to console",
@@ -431,6 +432,7 @@ constexpr PageTitle kQ2Pages[] = {
     {"ce_liquids", "WATER, LAVA AND SKY"},
     {"ce_fire", "FIRE AND WIND"},
     {"ce_weather", "WEATHER"},
+    {"server", "Server Settings"},
     {"help", "HELP"},
     {"quit", "QUIT"},
     {"newgame", "NEW GAME"},

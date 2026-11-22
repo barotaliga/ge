@@ -9,8 +9,8 @@
 // and server info (`*z_ext`), with no handshake, and the game's own `ge` set likewise (`*ge_ext`):
 // a QuakeWorld client never asks for it, so never gets a message it does not know.
 //
-// THE FIRST TIER we offer: every z bit (511), the ge set's named effects, aim bend, download origin
-// and item back; x scale, transparency,
+// THE FIRST TIER we offer: every z bit (511), the ge set's named effects, aim bend, download origin,
+// item back and the settings sheet; x scale, transparency,
 // colour-mod, sound-double, model-double, entity-double and entity-double2, spawnstatic2, 256
 // packet entities and chunked downloads; mvd float coords and the teleport kind on setangle.
 // Everything else is refused. x float coords (only with sv_bigcoords) and the rest exist in the
@@ -64,10 +64,13 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // run, where a stock client gets the tenths alone (net/q2_net_server.hpp); an item taken and
 // when it comes back, svc id 119 to a spawned client when it is taken and again as it changes (the
 // client draws it coming back ahead of time, classicenhance/hologram.hpp), on either server; the
-// damage the player dealt (Quake II's temporary entity 128, the hit marker's) on Quake II's server.
+// damage the player dealt (Quake II's temporary entity 128, the hit marker's) on Quake II's server;
+// the server's settings sheet (engine/server/sheet.hpp), svc id 125 in answer to `ge_sheet`
+// (net/qw_sheet.hpp).
 constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,
                    kGeSpeedJumpShare = 16, kGeAccountKey = 32, kGeMoveFeel = 64, kGeVoice = 128,
-                   kGeEveryFrame = 256, kGeItemBack = 512, kGeHitReports = 1024;
+                   kGeEveryFrame = 256, kGeItemBack = 512, kGeHitReports = 1024,
+                   kGeSettings = 2048;
 
 struct ExtBit {
   ExtFamily family;
