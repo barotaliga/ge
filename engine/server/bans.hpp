@@ -74,9 +74,10 @@ bool blackhole_command(BanList& list, std::string_view line, int64_t now, std::s
 // Whether every datagram from `a` is to be dropped unread: a blackhole entry matches it at `now`.
 bool blackholed(const BanList& list, const net::Address& a, int64_t now);
 // THE LIST'S FILE, for a game whose endpoint answers its own words: the `addip` lines `writeip`
-// saved read back into `list` (a line the words do not take is left out; no file: nothing), and
+// saved read back into `list` (a classic game's `sv addip` lines too; a line the words do not take
+// is left out; no file: nothing), with `mode` given, a `set filterban <n>` line setting it; and
 // `writeip`'s lines (`text`) saved to `path`, its answer the line an administrator reads.
-void ban_file_read(BanList& list, const std::string& path, int64_t now);
+void ban_file_read(BanList& list, const std::string& path, int64_t now, int* mode = nullptr);
 std::string ban_file_write(const BanList& list, const std::string& path, const std::string& text);
 
 }  // namespace ge::server

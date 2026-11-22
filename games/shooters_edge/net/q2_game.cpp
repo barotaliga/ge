@@ -25,8 +25,10 @@
 
 #include "brush/read.hpp"
 #include "classic/content/downloads.hpp"
+#include "classic/content/fs_words.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/num.hpp"
+#include "net/tcp_socket.hpp"
 #include "server/admission.hpp"
 #include "server/idle.hpp"
 #include "server/limit.hpp"
@@ -352,12 +354,19 @@ std::string first_mod(const std::string& mods) {
   return m;
 }
 
+// The players' slots: a deathmatch server (the one a dedicated server starts) of one slot or
+// fewer is given 8, as Quake II's server does.
+int players(const gs::ServerConfig& c) { return c.maxclients <= 1 ? 8 : c.maxclients; }
+
 // The rules' slots: the players' and the spectators' own (q2_net_server.hpp).
 int slots(const gs::ServerConfig& c) {
-  return std::min(sh::kMaxClients, c.maxclients + std::max(0, c.max_spectators));
+  return std::min(sh::kMaxClients, players(c) + std::max(0, c.max_spectators));
 }
 
 struct Game {
+  // The install's root and the game folder the files were opened from (`fs_restart` opens them
+  // again).
+  std::string root, folder;
   // The masters it reports to (`setmaster`, `heartbeat`; classic/protocol/masters.hpp).
   ge::classic::protocol::Masters masters;
   cl::SearchPath files;
@@ -445,8 +454,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     return nullptr;
   }
   const std::string base(q2->base_dir);
-  const std::string mod = first_mod(c.mod);
-  if (!cl::open_game_dir(c.root, mod.empty() ? base : mod, g->files, error, *q2)) return nullptr;
+  std::string mod = first_mod(c.mod);
+  std::string said;  // the game folder's name checked: a bad one is the base folder's
+  ge::classic::content::game_folder_check(mod, base, said);
+  if (!said.empty()) g->said.push_back(said.substr(0, said.size() - 1));
+  g->root = c.root;
+  g->folder = mod.empty() ? base : mod;
+  if (!cl::open_game_dir(c.root, g->folder, g->files, error, *q2)) return nullptr;
   const std::string name = c.map.empty() ? std::string("q2dm1") : c.map;
   if (const auto v = c.rules.find("sv_vispatch"); v != c.rules.end() && !v->second.empty())
     g->vis_patch = v->second != "0";
@@ -505,7 +519,10 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   }
   if (!g->rules.start(g->map->spec, error)) return nullptr;
   g->cfg.hostname = c.hostname;
-  g->cfg.max_clients = c.maxclients;
+  g->cfg.version = kProgramVersion;
+  g->cfg.game_dir = mod;
+  g->cfg.admin_info = c.admin_info;
+  g->cfg.max_clients = players(c);
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.max_spectators = c.max_spectators;
@@ -890,6 +907,19 @@ void sockets(const void* g, std::vector<std::pair<std::string, ge::net::Address>
   out.emplace_back(at.family == ge::net::Family::ipv6 ? "Server TCP6" : "Server TCP", at);
 }
 
+// `net_restart` opened the game's socket again: the multiview streams' TCP listener too, at its
+// address.
+void reopened(void* g, ge::net::Transport& port) {
+  Game& game = *static_cast<Game*>(g);
+  if (!game.net) return;
+  Q2Mvd& m = game.net->mvd;
+  if (m.listening) {
+    ge::net::tcp_close_listener(m.listener);
+    m.listening = false;
+  }
+  if (port.kind == ge::net::TransportKind::udp) q2_mvd_listen(m, port.local);
+}
+
 double frame_seconds(const void* g) { return static_cast<const Game*>(g)->rules->sv.set.mintic; }
 
 void frame(void* g) {
@@ -922,7 +952,8 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   if (!q2_net_start(*game.net, game.rules, port, game.cfg, error)) return false;
   for (std::string& line : game.said) game.net->log.push_back(std::move(line));
   game.said.clear();
-  gs::ban_file_read(game.net->bans, game.cfg.ban_file, game.cfg.unix_time());
+  gs::ban_file_read(game.net->bans, game.cfg.ban_file, game.cfg.unix_time(),
+                    &game.net->cfg.ban_mode);
   Q2MvdConfig& mc = game.net->mvd.cfg;  // the endpoint's own limits, as the relays' too
   mc.iplimit = game.cfg.ip_limit;
   mc.timeout = game.cfg.timeout;
@@ -1070,6 +1101,25 @@ bool console_line(void* g, const std::string& line) {
   }
   const std::vector<std::string> w = q2_words(line);
   if (w.empty()) return true;
+  // The file words (classic/content/fs_words.hpp).
+  if (w[0] == "path") {
+    print_lines(game, ge::classic::content::search_path_text(game.files, true));
+    return true;
+  }
+  if (w[0] == "fs_restart") {
+    const ge::classicenhance::Profile* q2 = ge::classicenhance::find_profile("q2");
+    std::string why;
+    if (q2 == nullptr || !cl::open_game_dir(game.root, game.folder, game.files, why, *q2)) {
+      print_lines(game, "The game's files could not be opened again: " + why + "\n");
+      return true;
+    }
+    print_lines(game, ge::classic::content::fs_restart_text(game.files));
+    return true;
+  }
+  if (std::string out; ge::classic::content::fs_command(game.files, w, out)) {
+    print_lines(game, out);
+    return true;
+  }
   if (w[0] == "setmaster" || w[0] == "heartbeat") {
     if (!game.net) {  // only a server on the network has masters
       print_lines(game, "Only dedicated servers use masters.\n");
@@ -1244,6 +1294,7 @@ const gs::ServerGame& make() {
     s.fill_status = fill_status;
     s.serve = serve;
     s.net_frame = net_frame;
+    s.reopened = reopened;
     s.tv_frame = tv_state;
     s.tv_keyframe = tv_state;
     s.player_view = player_view;
