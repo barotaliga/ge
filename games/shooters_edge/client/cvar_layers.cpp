@@ -989,15 +989,15 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
   }
   if (!v.log) v.log = std::make_shared<ConsoleLog>();
   v.log->mode = 0;  // Quake II's logfile and the rest; its file closed by the next line printed
-  v.log->flush = false;
+  v.log->flush = 0;
   if (game.id == "q2") add_console_log_cvars(c.cvars(), *v.log);
   if (!v.log_hooked && c.sink()) {
     v.log_hooked = true;
     c.set_sink([&c, log = v.log, before = c.sink()](std::string_view line) {
-      before(line);
-      if (log->mode > 0 || log->file)
+      if (log->mode > 0 || log->file->file != nullptr)  // its opening or closing shown first
         console_log_line(*log, c.search_path().empty() ? "." : c.search_path().front(), line,
-                         std::time(nullptr));
+                         std::time(nullptr), before);
+      before(line);
     });
   }
   GameBindings bound = b;
