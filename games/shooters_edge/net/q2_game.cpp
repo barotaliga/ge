@@ -1242,6 +1242,8 @@ const gs::ServerGame& make() {
     s.binary = "sesv";
     s.title = "Shooter's Edge on Quake II's protocol";
     s.version_text = kProgramVersion;
+    // The game's own id on the hub's masters, as a Quake server's: a hub lists both (sv_master).
+    s.protocol = ge::net::protocol_id("shooters_edge", 1);
     s.default_port = kPortQ2;
     s.max_clients = 32;
     s.default_map = "q2dm1";

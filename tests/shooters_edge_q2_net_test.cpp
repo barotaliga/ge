@@ -1763,3 +1763,12 @@ TEST(a_client_fetches_from_the_server_web_address_and_falls_back_to_the_channel)
   for (gn::TcpStream& t : streams) gn::tcp_close(t);
   gn::tcp_close_listener(web);
 }
+
+// A Quake II server beats to a hub's masters under the game's own id, as a Quake server does, so
+// the hub's list (which asks for that id alone) shows both.
+TEST(q2_server_is_listed_under_the_games_id) {
+  const ge::server::ServerGame& g = shooters_edge::net::q2_game();
+  CHECK(g.protocol != 0);
+  CHECK(g.protocol == ge::net::protocol_id("shooters_edge", 1));
+  CHECK(g.fill_status != nullptr);
+}

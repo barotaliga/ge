@@ -202,17 +202,8 @@ CardPicture compose_card(const HubSpec& spec, const gn::Status& s, const CardLoo
   for (const gn::StatusPlayer* p : rows) longest = std::max(longest, p->name.size());
   const int name_cells = int(std::min<size_t>(longest, 15));
   const int width_cells = 4 + 1 + 5 + 1 + (teams ? 5 : 0) + name_cells;
-  while (scale > 1 && (top + (shown_rows + 5) * lead > height / scale ||
-                       (width_cells + 2) * cell > width / scale))
-    scale--;
-  const int vw = width / scale, vh = height / scale;
-  b.px.width = vw;
-  b.px.height = vh;
-  b.px.rgba.assign(size_t(vw) * size_t(vh) * 4, 0);
-
   // The top line: the mode on the map, and the clock or the phase at the right.
   const std::string mode = s.mode.empty() ? std::string("match") : s.mode;
-  const int cols = vw / cell;
   std::string title = mode + " on " + s.map;
   std::string phase = phase_words(s.phase);
   if (s.time_left_s >= 0 && s.phase == gn::StatusPhase::playing) {
@@ -220,6 +211,17 @@ CardPicture compose_card(const HubSpec& spec, const gn::Status& s, const CardLoo
     std::snprintf(t, sizeof t, "%d:%02d left", s.time_left_s / 60, s.time_left_s % 60);
     phase = t;
   }
+  // The top line whole too where it can be: the title, the phase and three cells between.
+  const int top_cells = std::min(40, int(title.size() + phase.size()) + 3);
+  while (scale > 1 && (top + (shown_rows + 5) * lead > height / scale ||
+                       (std::max(width_cells + 2, top_cells + 2)) * cell > width / scale))
+    scale--;
+  const int vw = width / scale, vh = height / scale;
+  b.px.width = vw;
+  b.px.height = vh;
+  b.px.rgba.assign(size_t(vw) * size_t(vh) * 4, 0);
+  const int cols = vw / cell;
+
   b.text(cell, top, clip(title, size_t(std::max(0, cols - int(phase.size()) - 3))));
   b.text((cols - 1 - int(phase.size())) * cell, top, phase, look.words_alt);
 

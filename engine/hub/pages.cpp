@@ -153,12 +153,15 @@ std::string card(const HubSpec& spec, const HubNode& n, bool page_forward, const
   const std::string addr = gn::to_string(n.address);
   const std::string game = stills && spec.stills.game_of ? spec.stills.game_of(s) : std::string();
   const bool pictured = stills != nullptr && stills->look(game) != nullptr;
-  if (pictured) (void)stills->still(game, s.map);  // asked now, so it is drawn by the next refresh
+  // Asked now, so it is drawn (or read from the disk) by the next refresh; the picture's address
+  // names whether the still was there, so the page asks again once it is.
+  const bool still = pictured && stills->still(game, s.map) != nullptr;
   std::string h = "<article class=\"card phase-" + std::string(phase_word(s.phase)) + "\">";
   if (pictured) {
     h += "<img class=\"shot\" src=\"/card/" + html_escape(addr) +
-         ".jpg?v=" + std::to_string(n.changes) + "\" width=\"960\" height=\"540\" alt=\"" +
-         html_escape(s.mode) + " on " + html_escape(s.map) + "\">";
+         ".jpg?v=" + std::to_string(n.changes) + (still ? "s" : "") +
+         "\" width=\"960\" height=\"540\" alt=\"" + html_escape(s.mode) + " on " +
+         html_escape(s.map) + "\">";
   } else {
     h += "<div class=\"map\" style=\"--h:" + std::to_string(map_hue(s.map)) +
          "\"><span class=\"mapname\">" + html_escape(s.map) + "</span><span class=\"phase" +
