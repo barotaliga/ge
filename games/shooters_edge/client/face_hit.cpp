@@ -118,7 +118,10 @@ std::string surface_ahead(const ge::brush::Map& m, const sh::Vec3f& from,
   if (len < 1) return " 0";
   sh::Vec3f at = solid_end;
   constexpr double kStep = 4;  // units between the points asked
-  for (double s = kStep; s < len; s += kStep) {
+  const int steps = static_cast<int>(len / kStep);
+  for (int i = 1; i <= steps; ++i) {
+    const double s = i * kStep;
+    if (s >= len) break;
     const float p[3] = {static_cast<float>(from.x + d[0] * s / len),
                         static_cast<float>(from.y + d[1] * s / len),
                         static_cast<float>(from.z + d[2] * s / len)};
