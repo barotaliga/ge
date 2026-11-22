@@ -648,3 +648,16 @@ TEST(q2s_logfile_keeps_what_the_console_prints) {
   CHECK(text == "kept\n");
   std::filesystem::remove_all(dir);
 }
+
+TEST(quake_twos_m_side_is_quakes_sidestep_a_whole_unit_a_count) {
+  // m_side is one setting in both games (shooter/controls.cpp): Quake's default 0.8, Quake II's 1,
+  // the field written by whichever is loaded; Quake's comes back when Quake II leaves.
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("m_side")->value == "0.8" && w.controls.m_side == 0.8);
+  const cl::GameBindings b{.view = &w.view};
+  cl::switch_game_cvars(w.console, w.game, *pr::find_game("q2"), b);
+  CHECK(v.find("m_side")->value == "1" && w.controls.m_side == 1);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], b);
+  CHECK(v.find("m_side")->value == "0.8" && w.controls.m_side == 0.8);
+}

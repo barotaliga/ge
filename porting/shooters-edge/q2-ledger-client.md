@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 111 | 12 | 23 | 10 | 156 |
-| Client settings (cvars) | 141 | 41 | 128 | 40 | 350 |
+| Client settings (cvars) | 142 | 42 | 126 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 79 | 74 | 8 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 575 | 307 | 268 | 61 | 1211 |
+| **all** | 576 | 308 | 266 | 61 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 141, partial 41, missing 128, not-taken 40
+done 142, partial 42, missing 126, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -254,7 +254,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.m_pitch | `m_pitch` | degrees of pitch per mouse count, negative inverts (default 0.022) | done | `plugins/shooter/controls.cpp` |
 | cvar.m_yaw | `m_yaw` | degrees of yaw per mouse count (default 0.022) | done | `plugins/shooter/controls.cpp` |
 | cvar.m_forward | `m_forward` | forward move per vertical mouse count when not looking (default 1) | done | `plugins/shooter/controls.cpp` |
-| cvar.m_side | `m_side` | sideways move per horizontal mouse count while strafing (default 1) | missing | C35 |
+| cvar.m_side | `m_side` | sideways move per horizontal mouse count while strafing (default 1) | done | `plugins/shooter/controls.cpp`'s setting, declared `same` with Quake II's default 1 (`games/shooters_edge/client/cvar_layers.cpp`) |
 | cvar.m_filter | `m_filter` | average this frame's and last frame's mouse move (default 0) | done | `plugins/shooter/mouse_feel.cpp` |
 | cvar.m_accel | `m_accel` | mouse acceleration (default 0) | done | `plugins/shooter/mouse_feel.cpp` (Quake II's meaning, `client-gaps.md` round 6) |
 | cvar.m_autosens | `m_autosens` | scale the mouse by the field of view (default 0) | done | `plugins/shooter/controls.cpp` |
@@ -354,7 +354,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.ch_x | `ch_x` | crosshair x offset (default 0) | done | synonym of `cl_crossx` (`client/cvar_layers.cpp`) |
 | cvar.ch_y | `ch_y` | crosshair y offset (default 0) | done | synonym of `cl_crossy` (`client/cvar_layers.cpp`) |
 | cvar.scr_draw2d | `scr_draw2d` | 0 no 2D, 1 no status bar, 2 all, 3 layouts only with F1 (default 2) | partial | 0, 1, 2 and 3 (M18k4 round 34); F1 held does not bring the layouts back at 3 |
-| cvar.scr_showturtle | `scr_showturtle` | network trouble words, 2 more of them (default 1) | missing | C12 |
+| cvar.scr_showturtle | `scr_showturtle` | network trouble words, 2 more of them (default 1) | partial | `games/shooters_edge/client/q2_bar.cpp`'s `add_q2_turtle` on `DemoState::q2_trouble` (`client/demo_q2.cpp`): BADFRAME, OLDFRAME, NODELTA, and SUPPRESSED at 2; CLIENTPRED, OLDENT, CLIENTDROP and SERVERDROP not told yet |
 | cvar.scr_lag_x | `scr_lag_x` | the lag graph's x (default -1) | done | `client/q2_bar.cpp` (M18k4 round 34) |
 | cvar.scr_lag_y | `scr_lag_y` | the lag graph's y (default -1) | done | `client/q2_bar.cpp` (M18k4 round 34) |
 | cvar.scr_lag_draw | `scr_lag_draw` | 1 the lag graph, 2 on a dark box (default 0) | done | `engine/hud/net_graph.cpp` `draw_lag_graph` (M18k4 round 34) |
