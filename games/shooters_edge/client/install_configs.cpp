@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_install_configs_test.cpp
 #include "shooters_edge/client/install_configs.hpp"
 
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <ranges>
@@ -26,6 +27,7 @@ namespace con = ge::console;
 
 // The files Quake II's client runs after autoexec.cfg and after the command line.
 constexpr std::string_view kPostexecFile = "postexec.cfg";
+constexpr std::string_view kFsDefault = "fs_default";
 constexpr std::string_view kPostinitFile = "postinit.cfg";
 
 std::string lower(std::string s) {
@@ -125,6 +127,20 @@ bool run_named(con::Console& c, std::string_view name, ConfigsRun& out) {
   return true;
 }
 
+// Each game folder's autoexec.cfg, the base folder's then the mod's; with neither, the one the
+// search path finds in their place.
+void run_folder_autoexecs(con::Console& c, const fs::path& root, const std::string& game,
+                          const ge::classicenhance::Profile& content, ConfigsRun& out) {
+  bool ran = false;
+  for (const std::string_view folder : game_folders(game, content) | std::views::reverse) {
+    const fs::path dir = entry_named(root, folder);
+    if (dir.empty() || !run_path(c, dir / con::kAutoexecFile)) continue;
+    out.files.push_back((dir / con::kAutoexecFile).string());
+    ran = true;
+  }
+  if (!ran) run_named(c, con::kAutoexecFile, out);
+}
+
 // The console's own keys (the one under the tilde, the ISO key) in each mode, kept across a config
 // that starts with `unbindall`.
 struct KeptKeys {
@@ -199,6 +215,36 @@ void split_plus(const std::vector<std::string>& plus, std::vector<std::string>& 
   flush();
 }
 
+// The game's default.cfg: from its packs where its order reads it there (keeping the console's
+// keys, the move keys and the window's settings over its `unbindall`), else on the search path.
+void run_defaults(con::Console& c, const fs::path& root, const std::string& game,
+                  const ge::classicenhance::Profile& content, const LoadOrder& order,
+                  ConfigsRun& out) {
+  std::string text, from;
+  if (order.defaults_in_packs && defaults_from_packs(root, game, content, order, text, from)) {
+    const KeptKeys kept = keep_console_keys(c);
+    const KeptKeys moves = keep_move_keys(c);
+    const KeptSettings settings = keep_window_settings(c);
+    run_text(c, text, from);
+    restore_console_keys(c, kept);
+    restore_move_keys(c, moves);
+    restore_window_settings(c, settings);
+    out.files.push_back(from);
+  } else {
+    run_named(c, con::kDefaultFile, out);
+  }
+}
+
+// Whether default.cfg runs (`fs_default`): the command line's `+set fs_default` first, as it runs
+// only after the configs, else the setting as it stands (on when it is not registered).
+bool defaults_wanted(const con::Console& c, const std::vector<std::string>& sets) {
+  for (size_t i = 0; i + 2 < sets.size(); ++i)
+    if (lower(sets[i]) == "+set" && lower(sets[i + 1]) == kFsDefault)
+      return std::atof(sets[i + 2].c_str()) != 0;
+  const con::Cvar* on = c.cvars().find(kFsDefault);
+  return on == nullptr || on->on();
+}
+
 }  // namespace
 
 std::vector<fs::path> config_dirs(const std::string& basedir, const std::string& game,
@@ -219,8 +265,17 @@ std::vector<fs::path> config_dirs(const std::string& basedir, const std::string&
   return dirs;
 }
 
-bool run_game_settings(con::Console& c, const std::string& basedir, const std::string& game) {
-  return run_path(c, settings_dir(basedir, game) / con::kConfigFile);
+bool run_game_settings(con::Console& c, const std::string& basedir, const std::string& game,
+                       const ge::classicenhance::Profile& content) {
+  const fs::path root = basedir.empty() ? fs::path(".") : fs::path(basedir);
+  ConfigsRun out;
+  if (defaults_wanted(c, {})) run_defaults(c, root, game, content, load_order_of(content), out);
+  const bool ran = run_path(c, settings_dir(basedir, game) / con::kConfigFile);
+  const con::Cvar* again = c.cvars().find("fs_autoexec");
+  if (again == nullptr || !again->on()) return ran;
+  run_folder_autoexecs(c, root, game, content, out);
+  run_named(c, kPostexecFile, out);
+  return ran;
 }
 
 ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std::string& game,
@@ -272,24 +327,9 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
   counting(true);
   for (const StartStep step : order.start) {
     switch (step) {
-      case StartStep::defaults: {
-        std::string text, from;
-        if (order.defaults_in_packs &&
-            defaults_from_packs(root, game, content, order, text, from)) {
-          // The game's own default.cfg starts from no binds: the console's own keys are kept.
-          const KeptKeys kept = keep_console_keys(c);
-          const KeptKeys moves = keep_move_keys(c);
-          const KeptSettings settings = keep_window_settings(c);
-          run_text(c, text, from);
-          restore_console_keys(c, kept);
-          restore_move_keys(c, moves);
-          restore_window_settings(c, settings);
-          out.files.push_back(from);
-        } else {
-          run_named(c, con::kDefaultFile, out);
-        }
+      case StartStep::defaults:
+        if (defaults_wanted(c, sets)) run_defaults(c, root, game, content, order, out);
         break;
-      }
       case StartStep::autoexec_before_main:
         if (!main.empty()) run_named(c, con::kAutoexecFile, out);
         break;
@@ -302,18 +342,9 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
       case StartStep::autoexec:
         run_named(c, con::kAutoexecFile, out);
         break;
-      case StartStep::folder_autoexecs: {
-        // The base folder's, then the mod's; with neither, the window's own in their place.
-        bool ran = false;
-        for (const std::string_view folder : game_folders(game, content) | std::views::reverse) {
-          const fs::path dir = entry_named(root, folder);
-          if (dir.empty() || !run_path(c, dir / con::kAutoexecFile)) continue;
-          out.files.push_back((dir / con::kAutoexecFile).string());
-          ran = true;
-        }
-        if (!ran) run_named(c, con::kAutoexecFile, out);
+      case StartStep::folder_autoexecs:
+        run_folder_autoexecs(c, root, game, content, out);
         break;
-      }
       case StartStep::postexec:
         run_named(c, kPostexecFile, out);
         break;

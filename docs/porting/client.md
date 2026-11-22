@@ -55,6 +55,13 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Console scroll-back | stays where scrolled | `con_scroll` (`console/view.hpp`, every game) | the engine's | the engine's |
 | Packets sent shown | `showpackets` | `cl_showpackets` over the channel's trace (`classic/protocol/channel.hpp`) | its own | its own |
 | Held weapon's sway | ours (`cl_gunsway`) | the server's gun angles and place (`client/held.cpp`'s `q2_gun_sway` over `viewmodel/place.hpp`'s `game_turn`, `game_shift_m`), ours set aside | its own | its own |
+| Configs on a game change | `fs_default`'s default.cfg, the game's own settings | the same, then `fs_autoexec`'s autoexecs and postexec.cfg (`client/install_configs.cpp`) | the game's own settings | the engine's |
+| The connection's number | `qport` (from the name) | `qport` (from the name) | `qport`, 0 from the name (`net/qw_remote.cpp`) | the classic layer's |
+| Floating items still | none | `cl_nobob` (the picture's `items_still`, `client/world_models.cpp`) | its own | its own |
+| The client's own port | any free port | `net_clientport`, moved at once (`net/qw_remote.cpp`'s `own_port`) | its own | its own |
+| The console's picture | the pack's `conback` | `con_background`, a picture under `pics/` (`menu/classic_console.hpp`) | its own | its own |
+| The console's stamps | `con_timestamps` on chat lines (`client/chat_lines.hpp`) | its own `con_timestamps` on every line, `con_timestampsformat`, `con_timestampscolor` (`console/view.hpp`'s stamps) | its own | its own |
+| Tab in the console | ours: the top suggestion | `com_completion_mode`, `com_completion_treshold`: the shared part, the matches listed (`console/view.hpp`'s `list_mode`) | its own | its own |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Screenshot names | by the time | `gl_screenshot_template` (`quakeXXX`) and `gl_screenshot_compression` over `scr_template` and `scr_compression` (`capture/screenshot.hpp`) | by the time | the engine's |
 

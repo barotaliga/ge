@@ -62,3 +62,15 @@ TEST(opaque_is_every_stop_opaque) {
   CHECK(solid(hex(0x123456)).opaque());
   CHECK(!linear(0, 0, 1, 0, hex(0, 1), hex(0, 0.5f)).opaque());
 }
+
+TEST(a_colour_reads_as_a_setting_writes_it) {
+  Color c{};
+  CHECK(colour_from_text("#aaa", c) && std::abs(c.r - 170 / 255.0f) < 1e-6f && c.a == 1);
+  CHECK(colour_from_text("#ff8000", c) && c.r == 1 && std::abs(c.g - 128 / 255.0f) < 1e-6f);
+  CHECK(colour_from_text("#00ff0080", c) && c.g == 1 && std::abs(c.a - 128 / 255.0f) < 1e-6f);
+  CHECK(colour_from_text("magenta", c) && c.r == 1 && c.g == 0 && c.b == 1);
+  CHECK(colour_from_text("5", c) && c.r == 0 && c.g == 1 && c.b == 1);  // cyan
+  c = hex(0x123456);
+  CHECK(!colour_from_text("#12345", c) && !colour_from_text("pink", c) && !colour_from_text("", c));
+  CHECK(c.r == hex(0x123456).r);  // untouched
+}

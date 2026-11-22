@@ -48,6 +48,7 @@
 #include <string>
 #include <vector>
 
+#include "classic/content/web_downloads.hpp"
 #include "hud/net_graph.hpp"
 #include "net/transport.hpp"
 #include "net/voice_codec.hpp"
@@ -57,7 +58,6 @@
 #include "shooters_edge/client/voice_out.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_downloads.hpp"
-#include "shooters_edge/net/q2_http.hpp"
 #include "shooters_edge/net/qw_svc.hpp"
 #include "vfs/partial.hpp"
 
@@ -148,7 +148,7 @@ struct ClientConfig {
   // Who its voice goes to (`voicetarg`: all, team, near or a slot), told to the server at its
   // `begin`; "" leaves the server's own (team). `qw_voice_target` changes it later.
   std::string voice_to;
-  Q2HttpConfig q2_http;  // Quake II's `cl_http_*` downloads over HTTP (q2_http.hpp)
+  ge::classic::content::WebConfig web;  // `cl_http_*`: downloads from a web address
   int seed = 1;
   uint16_t qport = 1;
   // How long the server may send nothing once connected before the client gives it up, s: a
@@ -282,6 +282,10 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
 
   ClientDownload dl;
   std::map<std::string, std::vector<uint8_t>> downloaded;
+  // From a web address (classic/content/web_downloads.hpp): with the server's `*dlserver` or the
+  // player's `cl_http_default_url`, the files lacked are fetched from it first, `begin` held, the
+  // channel taking what it gives back; its lines for the player in `web.said`.
+  ge::classic::content::WebDownloads web;
 
   // Voice.
   client::VoiceOut voice;     // the frames cut and coded (client/voice_out.hpp)

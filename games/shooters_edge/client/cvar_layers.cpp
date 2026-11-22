@@ -186,9 +186,14 @@ void add_first(con::Console& c, const GameBindings& b) {
   }
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
-  if (b.show_misses != nullptr) *b.show_misses = false;      // Quake II's cl_showmiss
-  if (b.shownet != nullptr) *b.shownet = 0;                  // and cl_shownet
-  if (b.showpackets != nullptr) *b.showpackets = false;      // and cl_showpackets
+  if (b.show_misses != nullptr) *b.show_misses = false;  // Quake II's cl_showmiss
+  if (b.shownet != nullptr) *b.shownet = 0;              // and cl_shownet
+  if (b.showpackets != nullptr) *b.showpackets = false;  // and cl_showpackets
+  if (b.items_still != nullptr) *b.items_still = false;  // and cl_nobob
+  if (b.console != nullptr) {  // and con_background: the game's own picture
+    b.console->back_name = "conback";
+    b.console->read_back = nullptr;
+  }
   if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
   if (b.light_modulate != nullptr) *b.light_modulate = 1;
   if (b.light_lift != nullptr) *b.light_lift = 0;
@@ -353,6 +358,21 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   first) and `ui_colorservers` (`sb_colorservers`).
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
+  // Its whole set of configs run again on a game change (client/install_configs.cpp's
+  // run_game_settings), autoexec.cfg after config.cfg.
+  // The client's own port (net/qw_remote.cpp's `own_port`), its socket opened again when it moves.
+  v.add({.name = "net_clientport",
+         .fallback = "-1",
+         .help = "The network port your client sends from; a change applies at once.",
+         .kind = con::CvarKind::integer,
+         .min = -1,
+         .max = 65535,
+         .values = "-1: any free port (the default); 1..65535: that port"});
+  v.add({.name = "fs_autoexec",
+         .fallback = "1",
+         .help = "Whether autoexec.cfg runs again after config.cfg when another game is loaded.",
+         .kind = con::CvarKind::boolean,
+         .values = "0: config.cfg alone; 1: autoexec.cfg and postexec.cfg after it (the default)"});
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
   if (b.mouse != nullptr) b.mouse->per_frame = true;
   if (b.crosshair != nullptr) {
@@ -542,7 +562,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.
   if (b.chat != nullptr) add_q2_chat_sound(c, *b.chat);
-  if (b.auto_chat != nullptr)
+  if (b.console_view != nullptr) {
     v.bind({.name = "con_auto_chat",
             .fallback = "0",
             .flags = con::kArchive,
@@ -551,7 +571,47 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .min = 0,
             .max = 2,
             .values = "0: a command (the default); 1: said to everyone; 2: said to your team"},
-           b.auto_chat);
+           &b.console_view->game_chat);
+    // Its stamps on every console line, not only chat's (the classic layer's `con_timestamps`).
+    v.bind({.name = "con_timestamps",
+            .fallback = "0",
+            .help = "Whether every console line begins with the time it came.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: no time (the default); 1: the time, as con_timestampsformat writes it",
+            .overlap = con::Overlap::own},
+           &b.console_view->stamps);
+    if (b.chat != nullptr) b.chat->timestamps = 0;  // its chat lines stamped as every line is
+    v.bind({.name = "con_timestampsformat",
+            .fallback = "%H:%M:%S ",
+            .help = "How the time before each console line is written, in strftime's words.",
+            .kind = con::CvarKind::text,
+            .values = "\"%H:%M:%S \": hours, minutes and seconds (the default); TEXT: that form"},
+           &b.console_view->stamp_format);
+    v.bind({.name = "con_timestampscolor",
+            .fallback = "#aaa",
+            .help = "The colour of the time before each console line.",
+            .kind = con::CvarKind::text,
+            .values = "#aaa: light grey (the default); #rgb, #rrggbb, #rrggbbaa, a colour's name "
+                      "or 0..7"},
+           &b.console_view->stamp_colour);
+    // Its Tab: the word completed to what the matches share, the matches listed.
+    v.bind({.name = "com_completion_mode",
+            .fallback = "1",
+            .help = "How Tab lists the commands and settings a word could be.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 2,
+            .values = "0: one a line; 1: in columns (the default); 2: in columns, commands, "
+                      "settings and aliases apart"},
+           &b.console_view->list_mode);
+    v.bind({.name = "com_completion_treshold",
+            .fallback = "50",
+            .help = "How many matches Tab lists before it asks first.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .values = "50: fifty (the default); a number: that many"},
+           &b.console_view->list_threshold);
+  }
   // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
   if (b.predict != nullptr)
     v.bind({.name = "cl_predict",
@@ -584,6 +644,26 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .kind = con::CvarKind::boolean,
             .values = "0: none (the default); 1: each one, its sequences and size"},
            b.showpackets);
+  if (b.console != nullptr) {
+    if (b.files != nullptr)
+      b.console->read_back = [files = b.files](std::string_view name, ge::ui::Image* out) {
+        return read_console_back(*files, name, out);
+      };
+    v.bind({.name = "con_background",
+            .fallback = "conback",
+            .help = "The picture behind the console, one of the game's under pics/.",
+            .kind = con::CvarKind::text,
+            .values = "conback: the game's own (the default); NAME: that picture, the game's own "
+                      "when it is not there"},
+           &b.console->back_name);
+  }
+  if (b.items_still != nullptr)
+    v.bind({.name = "cl_nobob",
+            .fallback = "0",
+            .help = "Whether the items the game makes float rise and sink as they lie.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: they float (the default); 1: they lie still"},
+           b.items_still);
   if (b.crouch != nullptr)
     v.bind({.name = "cl_predict_crouch",
             .fallback = "1",
@@ -845,7 +925,11 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
   c.cvars().set_scope(game_scope(game));  // its own values over the common ones (cvar.hpp)
   con::CvarLayer layer(c.cvars(), v.layer);
   if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it
-  if (b.auto_chat != nullptr) *b.auto_chat = -1;       // only Quake II's con_auto_chat sets it
+  if (b.console_view != nullptr) {  // only Quake II's con_auto_chat and stamps set them
+    b.console_view->game_chat = -1;
+    b.console_view->stamps = false;
+    b.console_view->list_mode = -1;  // our own Tab
+  }
   {  // only Quake II's cvars set them; what the frames saw is kept
     Q2Session fresh;
     fresh.joined = v.q2.joined;

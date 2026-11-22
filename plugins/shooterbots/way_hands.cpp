@@ -203,6 +203,11 @@ bool way_touch(const WayThrough& w, const ge::shooterbots::BotView& s, int me, s
   if (d2 > kTouchReach * kTouchReach &&
       sh::trace_move(s.sv, self, {}, {}, p, sh::kTraceNoMonsters, me).fraction < 1)
     return false;
+  // Nearer, only where his box gets to touch it: base2's trigger behind a grate (the soldier on
+  // the ledge over the sewer) held him pressed to the grate for good.
+  const sh::HullTrace in =
+      sh::trace_move(s.sv, self, sh::kPlayerMins, sh::kPlayerMaxs, p, sh::kTraceNoMonsters, me);
+  if (in.fraction < 1 && !touches(in.endpos, st.lo, st.hi)) return false;
   float yaw = 0, pitch = 0;
   sh::aim_angles(self, p, yaw, pitch);
   cmd.angles = {0, yaw, 0};
@@ -241,6 +246,14 @@ bool way_edge(const MapNav& nav, const Fighter& f, const ge::shooterbots::BotVie
       sh::trace_move(s.sv, ahead, sh::kPlayerMins, sh::kPlayerMaxs,
                      ahead - sh::Vec3f{0, 0, kEdgeDrop}, sh::kTraceNoMonsters, me);
   if (down.fraction < 1 && !trap(sb::nav_nearest(g, down.endpos))) return false;
+  // No floor a step down: a drop. Onto a floor with a way back (base2's channel under the ledge
+  // its soldier waits on) it is let be; only into the trap, or into no floor at all, braked.
+  if (down.fraction >= 1) {
+    const sh::HullTrace fall =
+        sh::trace_move(s.sv, ahead, sh::kPlayerMins, sh::kPlayerMaxs,
+                       ahead - sh::Vec3f{0, 0, kEdgeFall}, sh::kTraceNoMonsters, me);
+    if (fall.fraction < 1 && !trap(sb::nav_nearest(g, fall.endpos))) return false;
+  }
   // Over the lip of a pit he could not climb back out of: the keys let go, and a run into it
   // braked by the wish turned back along it.
   cmd.forward = static_cast<int16_t>(-cmd.forward);

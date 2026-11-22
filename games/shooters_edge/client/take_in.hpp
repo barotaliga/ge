@@ -38,6 +38,8 @@
 
 namespace shooters_edge::client {
 
+struct DemoState;
+
 // `<prefs>/data` when it can be written, else `<placed>/data`; "" when neither can.
 std::string data_root(const std::string& placed, const std::string& prefs);
 
@@ -69,6 +71,9 @@ void add_take_in_commands(ge::console::Console& con, std::string* ask, const std
 
 // A level started: the track its world's `sounds` names (`entities`, the map's entity text) loops.
 void level_music(ge::audio::MusicConsole& music, std::string_view entities);
+// A recording's or a joined Quake II server's music: the track its server names, once named (0
+// stops it); `play_level_music` leaves a track already playing alone.
+void demo_music(ge::audio::MusicConsole& music, const DemoState& s);
 
 // The folder or image in `*ask` taken in, `*ask` set to the copy; `print` gets each step and the
 // result. False with the refusal in `*error` (printed too).

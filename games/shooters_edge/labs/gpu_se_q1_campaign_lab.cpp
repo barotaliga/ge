@@ -188,6 +188,10 @@ gl::Picture route_on_plate(const PackMaps& packs, const fb::EpisodeMap& m, bool&
   put(marks.kills, m.kills);
   put(marks.secrets, m.secrets);
   put(marks.exits, m.exits);
+  for (const std::vector<sh::Vec3f>& b : m.blasts) {
+    marks.blasts.emplace_back();
+    put(marks.blasts.back(), b);
+  }
   const ge::ui::Image img = lv::draw_route(plate, marks);
   out.width = img.width;
   out.height = img.height;
@@ -259,7 +263,8 @@ void run(gl::Lab& lab) {
                  {"complete", o.complete ? "on" : "off"}};
   gl::LabTable t{"each map at 100%",
                  {"map", "out", "exit s", "kills", "secrets", "100%", "ended", "deaths", "given up",
-                  "plans: exit/button/key/trigger/explore/monster/secret", "nodes", "faults"},
+                  "plans: exit/button/key/trigger/explore/monster/secret", "nodes",
+                  "tricks: rocket/grenade", "blast jumps", "faults"},
                  {}};
   std::vector<fb::EpisodeMap> maps;
   uint64_t digest = 1469598103934665603ull;
@@ -299,12 +304,13 @@ void run(gl::Lab& lab) {
                       of(m.killed_monsters, m.total_monsters), of(m.found_secrets, m.total_secrets),
                       full ? "yes" : "no", m.end, std::to_string(m.leader_deaths),
                       std::to_string(m.way.given_up), plans, std::to_string(m.nav_nodes),
-                      std::to_string(m.faults)});
+                      std::to_string(m.nav_rockets) + "/" + std::to_string(m.nav_grenades),
+                      std::to_string(m.blasts.size()), std::to_string(m.faults)});
   }
   t.rows.push_back({"all", std::to_string(finished) + "/" + std::to_string(maps.size()),
                     to_fixed(exit_sum, 0), of(kills, monsters), of(found, secrets),
                     std::to_string(cleared) + "/" + std::to_string(maps.size()), "", "", "", "", "",
-                    std::to_string(faults)});
+                    "", "", std::to_string(faults)});
   lab.table(t);
   lab.metric("maps.played", static_cast<double>(maps.size()), "count");
   lab.metric("maps.finished", finished, "count");
@@ -335,7 +341,8 @@ void run(gl::Lab& lab) {
              of(m.found_secrets, m.total_secrets),
          "The map from above as the live map draws it (or, with no pack, the walkable floor "
          "darker higher), his track blue at the start to red at the end, the exits (gold "
-         "rings), where monsters fell (crosses) and where secrets counted (gold diamonds); "
+         "rings), where monsters fell (crosses), where secrets counted (gold diamonds) and his "
+         "rocket and grenade jumps (orange, filled take-off to white landing); "
          "out at " +
              (m.exit_s >= 0 ? to_fixed(m.exit_s, 0) + " s." : std::string("no time: ") + m.end),
          "the track reaches every part of the floor and ends at an exit", in},

@@ -337,8 +337,9 @@ Ours: ignored while the slot is held, so a client that restarted must wait for t
 Original: stock answers `Server is protocol version 34.`; the extended server names the protocols
 it takes and has its own lines for a bad challenge, a full, locked or password-held server and the
 game's refusal (`Server is locked.` is one; the rest are in `q2-modern-server-inventory.md`). (R)
-Ours: `Server is protocol version 34.` for any other protocol; the others were not compared word for
-word. (R ours)
+Ours: `Server is protocol version 34.` for any other protocol; `Server is locked.` and the address
+limit's lines now stand alone as the original's do (2026-11-22, batch 9); the password lines are the
+stock library's. (R ours)
 
 **S23 (rank 2, net). A large reliable message drops the whole frame.**
 Original: when the reliable data and the frame do not fit, the stock server writes the frame
@@ -370,8 +371,10 @@ Original: the server info carries every server-info setting: `dmflags`, `fraglim
 `cheats`, `deathmatch`, `coop`, `maxclients`, `maxspectators`, `hostname`, `mapname`, `version`,
 `gamename`, `gamedir`, `protocol`, `uptime` when set, `needpass`, and any key an admin adds with
 `set <key> <value> s`. (R)
-Ours: a fixed set (hostname, mapname, maxclients, maxspectators, needpass, protocol, uptime) and
-`deathmatch` always 1, even in coop. A browser cannot see the rules or an admin's own keys. (R)
+Ours: settled 2026-11-22 (batch 9): the rules' live `deathmatch`, `coop`, `dmflags`, `fraglimit`,
+`timelimit` and `cheats`, the build's `version`, `gamename`, `gamedir` (and `game` for a mod), `port`
+and every key an administrator added with `sets` (`net/q2_admin.cpp`, `q2_status_keys`). The
+engine's `serverinfo` word still lists our own names. (R)
 
 **S28 (rank 2, admin). No classic master heartbeat.**
 Original: `public` 1 sends heartbeats every 300 s to the masters in `setmaster` (and the default
@@ -388,8 +391,9 @@ one print packet, not cut into pieces. (R)
 **S30 (rank 2, admin). `sv addip` and the other `sv` words do not reach the ban list.**
 Original: the stock game's `sv addip`, `sv removeip`, `sv listip`, `sv writeip` and the
 `listip.cfg` that `exec`s them. (R)
-Ours: `addip` and the rest are the engine's ban list, but the `sv`-prefixed form fails under our
-rules, so a stock `listip.cfg` does not load. (R)
+Ours: settled 2026-11-22 (batch 9): the `sv` forms reach the engine's ban list in the game's own
+words (`net/q2_admin.cpp`, `sv_filter`), and a `listip.cfg` of `sv addip` lines and `set filterban`
+is read back at the start with its mode. (R)
 
 **S31 (rank 2, admin). Missing operator commands.**
 Original (extended server): `kickban`, `stuff`, `stuffall`, `stuffcvar`, `printall`,
@@ -413,7 +417,9 @@ Ours: none. (R)
 
 **S35 (rank 3, admin). Slots capped at 32; default 8 not taken.**
 Original: up to 256 slots, stock and extended; the extended server's `maxclients` default is 8. (R)
-Ours: 32 slots; the engine's own default. (R)
+Ours: 32 slots; the default is 8, and a deathmatch server of one slot or fewer is given 8
+(2026-11-22, batch 9); coop's 4 and single player's 1 are not applied, the slots being fixed when
+the server starts. (R)
 
 ### Downloads
 

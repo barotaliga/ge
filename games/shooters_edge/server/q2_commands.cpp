@@ -459,8 +459,9 @@ void commands_cvars(Q2Server& s) {
                .values = "0: it takes no harm (the default); 1: the first blow throws it apart"});
   s.cvars.add({.name = "cheats",
                .fallback = "0",
-               .flags = con::kServer | con::kServerInfo,
-               .help = "Whether players may use give, god, notarget and noclip in deathmatch.",
+               .flags = con::kServer | con::kServerInfo | con::kLatch,
+               .help = "Whether players may use give, god, notarget and noclip in deathmatch "
+                       "and co-op. A change takes hold on the next map.",
                .values = "0: not in deathmatch (the default); 1: always"});
   // The held weapon moved off its place, for whoever makes a weapon's model (a developer's tool).
   for (const auto& [name, way] :

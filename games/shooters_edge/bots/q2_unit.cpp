@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 
@@ -36,7 +37,7 @@ namespace {
 namespace sv = shooters_edge::server;
 
 constexpr int kHz = 1000 / kPilotMsec;  // the rules' frames a second
-constexpr int kSampleEvery = kHz / 2;   // frames between the track's points
+constexpr int kSampleEvery = kHz / 5;   // frames between the track's points (0.2 s)
 
 uint64_t fold(uint64_t h, uint32_t w) { return (h ^ w) * 1099511628211ull; }
 
@@ -343,6 +344,23 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
     um.shoves = m.wedge.shoves;
     um.helps = q->help_changed - helped;
     count(*q, um);
+    // (`plan`) The monsters still alive when the map ended, by where they stand and the model
+    // they wear: what a 100% run left.
+    if (opt.plan) {
+      const sv::RulesCommon& s = *rules;
+      for (int k = s.sv.set.maxclients + 1; k < s.sv.num_edicts; k++) {
+        const sh::Edict& d = s.sv.edicts[static_cast<size_t>(k)];
+        if (d.free || d.health <= 0 || d.solid != sh::kSolidSlidebox) continue;
+        const int mdl = d.modelindex;
+        const std::string model = mdl > 0 && static_cast<size_t>(mdl) < s.models.size()
+                                      ? s.models[static_cast<size_t>(mdl)]
+                                      : std::string("?");
+        char line[192];
+        std::snprintf(line, sizeof line, "left alive: %d %s at %.0f %.0f %.0f", k, model.c_str(),
+                      d.origin.x, d.origin.y, d.origin.z);
+        um.plan.emplace_back(line);
+      }
+    }
     if (!changed) {
       um.end = "the time ran out";
       r.maps.push_back(std::move(um));

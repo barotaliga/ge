@@ -10,8 +10,8 @@
 // whom (the one whose sight a monster fell in); the deaths; how near the companions kept (their
 // share of the time within kEscortFar, the farthest); the buttons they pressed; what the leader's
 // plan went for; and for the pictures the map's nodes, everyone's track and the modes, a point
-// every half second. A digest folds every frame (the time, every player's origin, view and health),
-// so a run replays to the bit.
+// every fifth of a second. A digest folds every frame (the time, every player's origin, view and
+// health), so a run replays to the bit.
 //
 // A PARTY OF ONE (`skills` empty, `single`): the campaign in single player, the leader alone; with
 // `complete` the 100% run (way_through.hpp: every monster, every secret, then the exit) and `god`
@@ -85,17 +85,21 @@ struct EpisodeMap {
   int64_t far_in_water = 0;
   WayStats way;
   int64_t nav_nodes = 0, movers = 0, faults = 0;
+  // The map's tricks the move proved into blast jumps (map_nav.hpp `tricks_made`): rocket, grenade.
+  int64_t nav_rockets = 0, nav_grenades = 0;
   std::string last_fault;  // the program's newest fault on this map, with its stack
   double nav_ms = 0;       // wall time
   sh::Vec3f lo, hi;
   std::vector<sh::Vec3f> nodes;               // every node (the picture's floor)
-  std::vector<sh::Vec3f> leader;              // a point every half second
+  std::vector<sh::Vec3f> leader;              // a point every fifth of a second
   std::vector<std::vector<sh::Vec3f>> mates;  // each companion's, the same
-  std::vector<uint8_t> way_kind;              // the plan's WayKind, every half second
+  std::vector<uint8_t> way_kind;              // the plan's WayKind, every fifth of a second
   std::vector<sh::Vec3f> kills;               // where each monster fell
   std::vector<sh::Vec3f> secrets;             // where the leader stood as each secret counted
-  std::vector<sh::Vec3f> exits;               // the exits' middles
-  std::vector<std::string> plan;              // the leader's changes of plan (EpisodeOptions::plan)
+  // The leader's rocket and grenade jumps: each flight, the take-off first and the landing last.
+  std::vector<std::vector<sh::Vec3f>> blasts;
+  std::vector<sh::Vec3f> exits;   // the exits' middles
+  std::vector<std::string> plan;  // the leader's changes of plan (EpisodeOptions::plan)
 };
 
 struct EpisodeReport {

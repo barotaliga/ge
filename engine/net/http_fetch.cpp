@@ -6,6 +6,8 @@
 // ge:test tests/net_http_fetch_test.cpp
 #include "net/http_fetch.hpp"
 
+#include <utility>
+
 #include "net/udp_socket.hpp"
 
 namespace ge::net {
@@ -45,6 +47,7 @@ struct Head {
   int64_t length = -1;
   bool chunked = false;
   std::string location;
+  std::string encoding;
 };
 
 // The head of `raw` when it is whole; false while it is not. `bad` when it is not HTTP.
@@ -92,6 +95,8 @@ bool read_head(const std::vector<uint8_t>& raw, Head& h, bool& bad) {
       h.chunked = value.size() >= 7 && same_words(value.substr(value.size() - 7), "chunked");
     } else if (same_words(name, "location")) {
       h.location = std::string(value);
+    } else if (same_words(name, "content-encoding")) {
+      for (const char c : value) h.encoding += lower(c);
     }
   }
   return true;
@@ -129,21 +134,46 @@ int read_chunks(const std::vector<uint8_t>& raw, size_t at, std::vector<uint8_t>
   }
 }
 
+void send(HttpFetch& f, const std::string& text) {
+  tcp_send_bytes(f.stream, reinterpret_cast<const uint8_t*>(text.data()), text.size());
+}
+
+// The TLS session for `host` over the stream, `request` its first plain bytes.
+void start_tls(HttpFetch& f, const std::string& host, const std::string& request) {
+  TlsOptions o;
+  o.verify = f.options.verify;
+  o.ca_pem = f.options.ca_pem;
+  f.tls = tls_client(host, o);
+  tls_write(*f.tls, reinterpret_cast<const uint8_t*>(request.data()), request.size());
+}
+
+// The proxy's answer to `CONNECT` read from `f.raw`: 1 the tunnel is open (its bytes taken), 0
+// more to come, -1 refused.
+int read_tunnel(HttpFetch& f) {
+  const std::string_view text(reinterpret_cast<const char*>(f.raw.data()), f.raw.size());
+  const size_t end = text.find("\r\n\r\n");
+  if (end == std::string_view::npos) return f.raw.size() > 65536 ? -1 : 0;
+  const size_t space = text.find(' ');
+  if (space == std::string_view::npos || space > end || text.substr(space + 1, 1) != "2") return -1;
+  f.raw.erase(f.raw.begin(), f.raw.begin() + static_cast<ptrdiff_t>(end + 4));
+  return 1;
+}
+
 // Opens the request for `f.url`: false and failed when it cannot.
 bool open(HttpFetch& f, double now_s) {
   tcp_close(f.stream);
   f.stream = {};
+  f.tls.reset();
+  f.tunnel = false;
+  f.request.clear();
   f.raw.clear();
   f.body.clear();
   f.status = 0;
   f.total = -1;
+  f.encoding.clear();
   HttpUrl u;
   if (!read_http_url(f.url, u)) {
     fail(f, "URL using bad/illegal format or missing URL");
-    return false;
-  }
-  if (u.https) {
-    fail(f, "Unsupported protocol");
     return false;
   }
   Address to;
@@ -165,13 +195,25 @@ bool open(HttpFetch& f, double now_s) {
     return false;
   }
   std::string host = u.host;
-  if (u.port != 80) host += ":" + std::to_string(u.port);
+  if (u.port != (u.https ? 443 : 80)) host += ":" + std::to_string(u.port);
   std::string request = "GET ";
-  request += f.options.proxy.empty() ? u.path : "http://" + host + u.path;
+  request += f.options.proxy.empty() || u.https ? u.path : "http://" + host + u.path;
   request += " HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: " + f.options.user_agent + "\r\n";
   if (!f.options.referer.empty()) request += "Referer: " + f.options.referer + "\r\n";
+  if (!f.options.accept_encoding.empty())
+    request += "Accept-Encoding: " + f.options.accept_encoding + "\r\n";
   request += "Accept: */*\r\nConnection: close\r\n\r\n";
-  tcp_send_bytes(f.stream, reinterpret_cast<const uint8_t*>(request.data()), request.size());
+  if (!u.https) {
+    send(f, request);
+  } else if (!f.options.proxy.empty()) {
+    std::string target = u.host;
+    target += ":" + std::to_string(u.port);
+    send(f, "CONNECT " + target + " HTTP/1.1\r\nHost: " + target + "\r\n\r\n");
+    f.request = std::move(request);
+    f.tunnel = true;
+  } else {
+    start_tls(f, u.host, request);
+  }
   f.state = HttpState::connecting;
   f.last_byte_s = now_s;
   return true;
@@ -357,8 +399,49 @@ bool http_step(HttpFetch& f, double now_s) {
     }
     f.state = HttpState::waiting;
   }
-  if (tcp_take_bytes(f.stream, f.raw) > 0) f.last_byte_s = now_s;
-  const bool closed = f.stream.closed;
+  bool closed = f.stream.closed;
+  if (f.tunnel || f.tls) {
+    std::vector<uint8_t> wire;
+    if (tcp_take_bytes(f.stream, wire) > 0) f.last_byte_s = now_s;
+    if (f.tunnel) {
+      f.raw.insert(f.raw.end(), wire.begin(), wire.end());
+      wire.clear();
+      const int t = read_tunnel(f);
+      if (t < 0 || (t == 0 && closed)) {
+        fail(f, "Couldn't connect to server");
+        return true;
+      }
+      if (t == 0) {
+        if (now_s - f.last_byte_s > f.options.stall_s) fail(f, "Timeout was reached");
+        return f.state == HttpState::failed;
+      }
+      f.tunnel = false;
+      wire.swap(f.raw);  // a server's first bytes that came with the proxy's answer
+      HttpUrl u;
+      read_http_url(f.url, u);
+      start_tls(f, u.host, f.request);
+      f.request.clear();
+    }
+    tls_put_wire(*f.tls, wire.data(), wire.size());
+    const TlsState st = tls_step(*f.tls, f.raw);
+    wire.clear();
+    tls_take_wire(*f.tls, wire);
+    if (!wire.empty()) {
+      tcp_send_bytes(f.stream, wire.data(), wire.size());
+      tcp_pump(f.stream);
+    }
+    if (st == TlsState::failed) {
+      fail(f, tls_error(*f.tls).c_str());
+      return true;
+    }
+    closed = closed || st == TlsState::closed;
+    if (closed && st == TlsState::handshaking) {
+      fail(f, "SSL connect error");
+      return true;
+    }
+  } else if (tcp_take_bytes(f.stream, f.raw) > 0) {
+    f.last_byte_s = now_s;
+  }
   Head h;
   bool bad = false;
   if (!read_head(f.raw, h, bad)) {
@@ -376,6 +459,7 @@ bool http_step(HttpFetch& f, double now_s) {
   }
   f.status = h.status;
   f.total = h.length;
+  f.encoding = h.encoding == "identity" ? std::string() : h.encoding;
   const bool redirect = (h.status == 301 || h.status == 302 || h.status == 303 || h.status == 307 ||
                          h.status == 308) &&
                         !h.location.empty() && f.options.redirects > 0;
@@ -437,6 +521,10 @@ bool http_step(HttpFetch& f, double now_s) {
 void http_cancel(HttpFetch& f) {
   tcp_close(f.stream);
   f.stream = {};
+  f.encoding.clear();
+  f.tls.reset();
+  f.tunnel = false;
+  f.request.clear();
   f.raw.clear();
   f.body.clear();
   f.status = 0;

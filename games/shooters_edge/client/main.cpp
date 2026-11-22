@@ -353,6 +353,7 @@ int run_main(int argc, char** argv) {
                                   .shownet = &remote.q2_shownet,
                                   .showpackets = &remote.q2_showpackets,
                                   .noskins = &picture.stock_figures,
+                                  .items_still = &picture.items_still,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,
                                   .stuff_level = &remote.stuff.level,
@@ -364,8 +365,9 @@ int run_main(int argc, char** argv) {
                                   .no_glow = &picture.no_glow,
                                   .q2fx = &picture.q2fx,
                                   .chat = &remote.ignore.chat,
-                                  .auto_chat = &con_view.game_chat,
-                                  .music = &music};
+                                  .console_view = &con_view,
+                                  .music = &music,
+                                  .console = &con_look};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   remote.stuff_file =
       cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";
@@ -965,7 +967,7 @@ int run_main(int argc, char** argv) {
     menu_host.table = &adapter.menu(adapter);
     game_menu.set_table(*menu_host.table);
     console.set_search_path(cl::config_dirs(args.basedir, args.game, *content));
-    cl::run_game_settings(console, args.basedir, args.game);  // the new game's own meanings
+    cl::run_game_settings(console, args.basedir, args.game, *content);  // its own meanings
     switch_step("Loading the game's rules...");
     if (!cl::load_programs(adapter, files, args.progs, game_content, error, *adapter.game))
       return false;
@@ -1574,6 +1576,7 @@ int run_main(int argc, char** argv) {
       if (std::exchange(playback.jumped, false)) con_view.clear_notify();  // as a jump does
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
+      cl::demo_music(music, ds);  // the track its server names
       place_seen.on = !ds.map.empty();
       place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
       place_seen.angles = ds.angles;

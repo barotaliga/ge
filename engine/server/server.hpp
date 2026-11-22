@@ -51,6 +51,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <span>
 #include <string>
@@ -165,6 +166,10 @@ struct ServerConfig {
   // dedicated process once a master elsewhere's key is known; null: no offers to a master
   // elsewhere.
   const net::SignKeys* account_signer = nullptr;
+  // The server-info keys an administrator added with `sets` (or `set <key> <value> s`), as
+  // `\key\value` pairs, now: for a game that answers its own status queries. Set by the dedicated
+  // process; null: none.
+  std::function<std::string()> admin_info;
 };
 
 // What a replay found.
@@ -266,6 +271,9 @@ struct ServerGame {
   // offline. Both null: the core's own node, session and hosting round `frame`.
   bool (*serve)(void* game, net::Transport& port, std::string& error) = nullptr;
   void (*net_frame)(void* game, int64_t now_us) = nullptr;
+  // The game's socket opened again (`net_restart`, perhaps on another port): the game's own
+  // listeners beside it (a TCP port at the same address) opened again too. May be null.
+  void (*reopened)(void* game, net::Transport& port) = nullptr;
 
   // A game a TV node can broadcast (engine/server/record.hpp): the last frame as the game's
   // viewers need it (what changed: its moves, its events), appended to `out`, and the whole state

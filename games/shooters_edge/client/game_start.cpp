@@ -39,6 +39,16 @@ void add_start_cvars(ge::console::Console& c, GameStart& s, const profiles::Game
        .max = 100000,
        .values = "0: at once; NUMBER: the game's own speed (300 in Quake, 3 in Quake II)"},
       &s.conspeed);
+  // Whether the game's default.cfg runs, at start-up and when another game is loaded
+  // (client/install_configs.cpp); off, a player's own configs alone set the game up.
+  c.cvars().add({.name = "fs_default",
+                 .fallback = "1",
+                 .flags = ge::console::kArchive,
+                 .help = "Whether the game's default.cfg runs at start-up and when another game is "
+                         "loaded, before your own settings.",
+                 .kind = ge::console::CvarKind::boolean,
+                 .values = "0: your own configs alone (at start-up only from the command line); "
+                           "1: it runs (the default)"});
 }
 
 void start_switch_game(ge::console::Console& c, GameStart& s, const profiles::GameProfile& was,

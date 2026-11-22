@@ -13,6 +13,7 @@
 #include "classic/content/soundtrack.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/client/args.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/settings.hpp"
 
 namespace shooters_edge::client {
@@ -157,6 +158,10 @@ bool take_in_ask(std::string* ask, const std::string& root, std::string* error,
   if (!said.empty()) print(said);
   *ask = taken;
   return true;
+}
+
+void demo_music(ge::audio::MusicConsole& music, const DemoState& s) {
+  if (s.cdtrack >= 0) ge::audio::play_level_music(music, s.cdtrack);
 }
 
 void level_music(ge::audio::MusicConsole& music, std::string_view entities) {

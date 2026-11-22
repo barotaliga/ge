@@ -35,6 +35,7 @@
 #include "audio/music_console.hpp"
 #include "classic/q2_fx_switches.hpp"
 #include "console/console.hpp"
+#include "console/view.hpp"
 #include "hud/crosshair.hpp"
 #include "shooter/mouse_feel.hpp"
 #include "shooters_edge/client/chat_lines.hpp"
@@ -42,6 +43,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/q2_session.hpp"
 #include "shooters_edge/client/q2_view.hpp"
+#include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/hand.hpp"
 
@@ -72,6 +74,7 @@ struct GameBindings {
   int* shownet = nullptr;       // Quake II's `cl_shownet` (each message's size printed)
   bool* showpackets = nullptr;  // Quake II's `cl_showpackets` (each packet sent shown)
   int* noskins = nullptr;       // Quake II's `cl_noskins` (the picture's stock_figures)
+  bool* items_still = nullptr;  // Quake II's `cl_nobob` (the picture's items_still)
   // The held weapon's settings: Quake II's `hand` (2 draws no weapon), `cl_gun_x/y/z` and
   // `cl_gunfov`; Quake's `r_viewmodelsize` and `r_viewmodeloffset`.
   shooters_edge::view::ViewSettings* view = nullptr;
@@ -89,9 +92,10 @@ struct GameBindings {
   ge::classic::Q2FxSwitches* q2fx = nullptr;
   // The chat's extras: Quake II's own `cl_chat_sound` (chat_lines.hpp), "" in every other game.
   ChatExtras* chat = nullptr;
-  // The console's typed line: Quake II's `con_auto_chat` (console/view.hpp's game_chat), -1 in
-  // every other game (our `con_chat` rules).
-  int* auto_chat = nullptr;
+  // The console's view: Quake II's `con_auto_chat` (console/view.hpp's game_chat; -1 in every other
+  // game, our `con_chat` rules) and its stamps on every line (`con_timestamps`,
+  // `con_timestampsformat`, `con_timestampscolor`; off in every other game).
+  ge::console::ConsoleView* console_view = nullptr;
   // Quake II's view and 2D settings (q2_view.hpp: scr_scale, scr_draw2d, scr_alpha, scr_lag_*,
   // cl_adjustfov, uf, cl_kickangles); their defaults in every other game. add_game_cvars binds its
   // own GameCvarValues::screen when this is null.
@@ -99,6 +103,9 @@ struct GameBindings {
   // The music (audio/music_console.hpp): Quake II's `ogg_enable` (its switch, `cd on|off`),
   // `ogg_shuffle` and `ogg_menu_track`; on, unshuffled and no menu track in every other game.
   ge::audio::MusicConsole* music = nullptr;
+  // The console's look: Quake II's `con_background` (its picture under `pics/`, read from `files`);
+  // the game's own `conback` in every other game.
+  shooters_edge::menu::ClassicConsole* console = nullptr;
 };
 
 // Quake II's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,

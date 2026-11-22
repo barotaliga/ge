@@ -21,6 +21,7 @@
 namespace shooters_edge::net {
 
 namespace cl = shooters_edge::client;
+namespace wd = ge::classic::content;
 
 namespace {
 
@@ -95,7 +96,7 @@ void read_oob(Q2ClientEnd& c, const uint8_t* data, size_t size) {
     c.last_ask = c.now;
     send_connect(c);
   } else if (w[0] == "client_connect" && c.stage == ClientStage::connect) {
-    q2_http_connect(c.http, c.cfg.http, q2_http_dlserver(w), c.cfg.allow.all,
+    wd::web_connect(c.http, c.cfg.http, wd::web_dlserver(w), c.cfg.allow.all,
                     gn::to_string(c.server));
     connected(c);
   }
@@ -110,8 +111,8 @@ void next_fetch(Q2ClientEnd& c) {
   if (c.http.on) {                               // over HTTP first: `begin` held until it is done
     c.cfg.http.gamedir = q2_demo(c).state.game;  // the server's game folder ("": baseq2)
     for (const std::string& path : std::exchange(c.fetch_queue, {}))
-      if (q2_http_queue(c.http, c.cfg.http, path)) q2_client_command(c, "download http");
-    if (q2_http_busy(c.http)) return;
+      if (wd::web_queue(c.http, c.cfg.http, path)) q2_client_command(c, "download http");
+    if (wd::web_busy(c.http)) return;
   }
   if (!c.fetch_queue.empty()) {
     c.fetching = c.fetch_queue.front();
@@ -168,8 +169,7 @@ void start_fetch(Q2ClientEnd& c, const std::string& begin) {
 
 // "[3 remaining files]": the files still to ask for over the channel.
 std::string files_left(const Q2ClientEnd& c) {
-  const size_t n = c.fetch_queue.size();
-  return "[" + std::to_string(n) + " remaining file" + (n == 1 ? "]" : "s]");
+  return wd::web_files_left(static_cast<int>(c.fetch_queue.size()));
 }
 
 // The download pieces and archives the reader took off this payload.
@@ -207,8 +207,8 @@ void take_downloads(Q2ClientEnd& c) {
 // The HTTP downloads moved on: each file fetched kept as one over the channel; once none is left
 // (or HTTP gave its files back), the channel's turn.
 void step_http(Q2ClientEnd& c) {
-  Q2HttpDone done;
-  q2_http_step(
+  wd::WebDone done;
+  wd::web_step(
       c.http, c.cfg.http, c.now,
       [&c](const std::string& path, bool) {
         return q2_download_allowed(c.cfg.allow, path) && lacks(c, path);
@@ -219,7 +219,7 @@ void step_http(Q2ClientEnd& c) {
     c.downloaded[path] = std::move(bytes);
   }
   c.fetch_queue.insert(c.fetch_queue.begin(), done.back.begin(), done.back.end());
-  if (!q2_http_busy(c.http) && c.fetching.empty()) next_fetch(c);
+  if (!wd::web_busy(c.http) && c.fetching.empty()) next_fetch(c);
 }
 
 // `line` with each `$<name>` outside quotes made the setting's value, as a console expands it.
@@ -524,7 +524,7 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
       return;
     }
   }
-  if (q2_http_busy(c.http)) step_http(c);
+  if (wd::web_busy(c.http)) step_http(c);
   // A connected server that has gone quiet: given up, so the game can say so and leave.
   if ((c.stage == ClientStage::signon || c.stage == ClientStage::active) && c.cfg.timeout > 0 &&
       c.now - c.ch.last_received > c.cfg.timeout) {
@@ -584,7 +584,7 @@ std::string q2_download(Q2ClientEnd& c, const std::string& file) {
 }
 
 void q2_client_stop(Q2ClientEnd& c) {
-  q2_http_stop(c.http);
+  wd::web_stop(c.http);
   if (c.stage == ClientStage::signon || c.stage == ClientStage::active) {
     const uint8_t bye[] = {kClcStringCmd, 'd', 'i', 's', 'c', 'o', 'n', 'n', 'e', 'c', 't', 0};
     for (int k = 0; k < 3; k++) {

@@ -27,7 +27,7 @@
 // ge:keywords unpack archive single-file one-file gz gzip zst zstd xz tar tgz tar-gz zip 7z
 // ge:keywords seven-zip wrapping layers magic sniff pick truncated unpack_one wrapping_of
 // ge:keywords bz2 bzip2 lha lzh rar downloaded-demo
-// ge:keywords write_gzip
+// ge:keywords write_gzip unpack_layer compressed-download
 // ge:skill vfs
 // ge:test tests/vfs_unpack_test.cpp
 #pragma once
@@ -62,6 +62,12 @@ struct Unpacked {
 // names the layer and the next action.
 bool unpack_one(std::vector<uint8_t> bytes, Unpacked& out, std::string& error,
                 const std::function<bool(std::string_view name)>& pick = {});
+
+// One packing layer of `bytes` peeled: gzip, zstd, xz or bzip2, never an archive (a pack that is
+// a zip stays one), up to `limit` bytes; a zstd frame cut short is refused (a download must be
+// whole). False with the reason in `error` when the bytes are none of those or do not unpack.
+bool unpack_layer(std::span<const uint8_t> bytes, std::vector<uint8_t>& out, std::string& error,
+                  size_t limit = kUnpackLimit);
 
 // A gzip file of `bytes` in stored deflate blocks named `name`, for tests and fixtures.
 std::vector<uint8_t> write_gzip(std::span<const uint8_t> bytes, const std::string& name = "");
