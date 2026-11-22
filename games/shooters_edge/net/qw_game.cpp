@@ -1437,6 +1437,7 @@ void masters_send(Game& game, const std::vector<cp::MasterSend>& out) {
 // The masters told the server is going (Quake's `C`), then the game freed.
 void destroy(void* g) {
   Game* game = static_cast<Game*>(g);
+  if (game->qw) qw_shutdown(*game->qw, "server shutdown\n");
   std::vector<cp::MasterSend> out;
   std::vector<std::string> said;
   cp::masters_shutdown(game->masters, out, said);

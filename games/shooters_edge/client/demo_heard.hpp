@@ -44,7 +44,9 @@ class DemoHearing {
  public:
   // `enhanced` the switch that plays the enhanced cache's copy of a sound (ce_sounds; DemoSounds's
   // enhance_from).
-  explicit DemoHearing(ge::audio::Synth& synth, const bool* enhanced = nullptr);
+  // `q2`: Quake II's sound switches (DemoSounds::switches_from; null: all on).
+  explicit DemoHearing(ge::audio::Synth& synth, const bool* enhanced = nullptr,
+                       const ge::classic::Q2FxSwitches* q2 = nullptr);
 
   // A level of the demo starts: its sounds read through `files` (made again when the folder
   // changed), the level's loops and the ambience over `map`.
@@ -65,6 +67,7 @@ class DemoHearing {
  private:
   ge::audio::Synth& synth_;
   const bool* enhanced_ = nullptr;
+  const ge::classic::Q2FxSwitches* q2_ = nullptr;
   const SearchPath* files_ = nullptr;
   std::unique_ptr<DemoSounds> sounds_;
   RetiredSounds retired_;  // the last folders' and demos' sounds, until their voices fade

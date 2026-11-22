@@ -9,6 +9,7 @@
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooters_edge/bots/coop_episode.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -32,6 +33,7 @@ namespace sv = shooters_edge::server;
 constexpr int kMsec = 14;         // a command's length on the 1/72 s host
 constexpr int kSampleEvery = 36;  // frames between the pictures' points (half a second)
 constexpr double kHz = 1000.0 / kMsec;
+constexpr int kFlagGodmode = 64;  // the program's `flags` bit for `god`
 
 uint64_t fold(uint64_t h, uint32_t w) { return (h ^ w) * 1099511628211ull; }
 
@@ -119,6 +121,11 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
       // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
       f.features.set(sb::Feature::locked, false);
       hunt_init(f, s);
+      m.way.complete = opt.complete;
+      // The last quarter of the map's time is for the way out: a map he cannot clear still ends.
+      m.way.complete_until = s.sv.time + opt.map_seconds * 0.75;
+      m.way.avoid = opt.avoid;
+      if (opt.complete) way_complete_init(f, nav, s, c.map);
       way_init(m.way, f, nav, s, c.map);
       if (opt.plan) m.way.log = &em.plan;
     } else {
@@ -144,8 +151,10 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
 EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
   EpisodeReport r;
   const int mates = static_cast<int>(opt.skills.size());
-  if (mates < 1 || mates > 3 || !opt.load) {
-    r.error = "run_coop_episode: 1..3 companions and a map loader; next: check the options";
+  if (mates < (opt.single ? 0 : 1) || mates > (opt.single ? 0 : 3) || !opt.load) {
+    r.error =
+        "run_coop_episode: 1..3 companions (none in single player) and a map loader; next: check "
+        "the options";
     return r;
   }
   pg::Progs own;
@@ -166,7 +175,8 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
   co.load_ctx = opt.load_ctx;
   co.wide_models = opt.wide_models;
   co.registered = opt.registered;
-  co.settings = {"deathmatch 0", "coop 1", "teamplay 1", "skill " + std::to_string(opt.skill)};
+  co.settings = {"deathmatch 0", opt.single ? "coop 0" : "coop 1",
+                 opt.single ? "teamplay 0" : "teamplay 1", "skill " + std::to_string(opt.skill)};
   if (!sv::campaign_new_game(c, *progs, co, opt.first, r.error)) {
     r.error = "run_coop_episode: " + r.error;
     return r;
@@ -174,6 +184,9 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
   sv::campaign_join(c, 0, "leader");
   for (int k = 1; k <= mates; k++) sv::campaign_join(c, k, "mate" + std::to_string(k));
   const pg::Def* inter = pg::find_global(*progs, "intermission_running");
+  const pg::Def* counts[4] = {
+      pg::find_global(*progs, "total_monsters"), pg::find_global(*progs, "killed_monsters"),
+      pg::find_global(*progs, "total_secrets"), pg::find_global(*progs, "found_secrets")};
 
   uint64_t h = 1469598103934665603ull;
   std::vector<Recent> recent(static_cast<size_t>(mates) + 1);
@@ -197,13 +210,36 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
       const sv::QcServer* q = sv::qc_of(c.server);
       const bool ending =
           inter && q && pg::global_float(q->q.vm, inter->offset) != 0;  // the intermission
+      if (ending && em.exit_s < 0) em.exit_s = static_cast<double>(frame) / 72;
+      if (q && !ending) {
+        int* out[4] = {&em.total_monsters, &em.killed_monsters, &em.total_secrets,
+                       &em.found_secrets};
+        const int found_was = em.found_secrets;
+        for (int i = 0; i < 4; i++)
+          if (counts[i]) *out[i] = static_cast<int>(pg::global_float(q->q.vm, counts[i]->offset));
+        for (int k = std::max(found_was, 0); k < em.found_secrets; k++)
+          em.secrets.push_back(now.world.entities[1].origin);
+      }
+      if (opt.god && q) {
+        // The leader's `god`: the program's own flag on his entity, as the cheat sets it.
+        sv::QcServer* qs = sv::qc_of(c.server);
+        uint32_t* fl = pg::entity_field(qs->q.vm, 1, pg::vm_layout(qs->q.vm).f.flags);
+        const int had = static_cast<int>(pg::as_float(*fl));
+        if ((had & kFlagGodmode) == 0) {
+          *fl = pg::as_word(static_cast<float>(had | kFlagGodmode));
+          qs->sv.edicts[1].flags = had | kFlagGodmode;
+        }
+      }
       way_plan(m.way, m.players[0], *m.nav, now, 1, t);
       for (int k = 0; k <= mates; k++) {
         Recent& rc = recent[static_cast<size_t>(k)];
         rc.cmds[0] = rc.cmds[1];
         rc.cmds[1] = rc.cmds[2];
         rc.cmds[2] = fighter_command(m.players[static_cast<size_t>(k)], now, k, kMsec);
-        if (k == 0) way_dive(m.way, *m.nav, now, 1, rc.cmds[2]);
+        if (k == 0) {
+          way_dive(m.way, *m.nav, now, 1, rc.cmds[2]);
+          way_touch(m.way, now, 1, rc.cmds[2]);  // its keys turned or not, he goes on
+        }
         if (!m.players[static_cast<size_t>(k)].bot.pilot.pilot.climbing)  // held to his ladder
           unwedge(m.wedges[static_cast<size_t>(k)], now, k + 1, t, rc.cmds[2]);
         if (ending) rc.cmds[2].buttons = (frame & 1) ? sh::kButtonAttack : 0;
@@ -217,10 +253,14 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         return r;
       }
       if (c.history.size() != entered) {
+        // The history's entry is "<how> <map>": a level changed to, or the same one restarted
+        // (the leader died in single player).
+        const std::string& h_last = c.history.back();
+        const size_t sp = h_last.rfind(' ');
+        em.next = sp == std::string::npos ? h_last : h_last.substr(sp + 1);
         changed = true;
-        em.finished = true;
-        em.next = c.history.back();
-        em.end = "the exit, to " + em.next;
+        em.finished = h_last.rfind("restart", 0) != 0;
+        em.end = em.finished ? "the exit, to " + em.next : "he died: the level restarted";
         break;
       }
       const sv::RulesCommon& after = *c.server;
@@ -295,8 +335,16 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
       em.mate_idle += es.idle_breaks;
     }
     r.faults += em.faults;
+    const std::string next = em.next;
+    const bool died = changed && !em.finished;
     r.maps.push_back(std::move(em));
-    if (!changed) break;
+    if (!changed || died) break;
+    bool stop = false;
+    for (const std::string& x : opt.stop) stop = stop || x == next;
+    // The 100% run: an exit back to a map played ends it (the coop hall's tour loops on itself).
+    if (opt.complete)
+      for (const EpisodeMap& done : r.maps) stop = stop || done.name == next;
+    if (stop) break;
   }
   r.digest = h;
   r.ok = true;

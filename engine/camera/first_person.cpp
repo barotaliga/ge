@@ -134,9 +134,12 @@ Pose frame_first_person(const FirstPersonRow& row, const Subject& s, FirstPerson
       row.dip_max_m > 0 ? row.dip_max_m * libm::tanh(dip / row.dip_max_m) : 0.0;
   double idle_yaw = 0, idle_pitch = 0, idle_roll = 0;
   if (row.idle > 0) {
-    idle_yaw = row.idle * libm::sin(st.clock * core::kTau / 2.0);
-    idle_pitch = row.idle * libm::sin(st.clock * core::kTau / 1.0);
-    idle_roll = row.idle * 0.3 * libm::sin(st.clock * core::kTau / 0.5);
+    auto axis = [&](double share, double period) {
+      return period > 0 ? row.idle * share * libm::sin(st.clock * core::kTau / period) : 0.0;
+    };
+    idle_yaw = axis(row.idle_yaw_share, row.idle_yaw_period_s);
+    idle_pitch = axis(row.idle_pitch_share, row.idle_pitch_period_s);
+    idle_roll = axis(row.idle_roll_share, row.idle_roll_period_s);
   }
 
   Pose p;

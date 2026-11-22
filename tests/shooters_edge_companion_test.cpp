@@ -283,3 +283,28 @@ TEST(a_coop_episode_replays_to_the_bit_and_matches_its_golden) {
               "fighter or the campaign mod changed on purpose, rewrite with GE_GOLDEN_WRITE=1 and "
               "say why in the PR");
 }
+
+TEST(a_bot_alone_clears_the_hall_at_100_percent_and_then_leaves) {
+  fb::EpisodeOptions o = episode_options();
+  o.skills.clear();
+  o.single = true;
+  o.complete = true;
+  o.god = true;
+  o.maps = 2;
+  const fb::EpisodeReport r = fb::run_coop_episode(o);
+  CHECK_MSG(r.ok, r.error);
+  if (!r.ok) return;
+  CHECK(r.faults == 0);
+  CHECK_MSG(r.maps.size() == 1, "an exit back to a map already played ends the run");
+  for (const fb::EpisodeMap& m : r.maps) {
+    std::printf("%s: out %d at %.1f s (%s), kills %d/%d, secrets %d/%d, given up %lld\n",
+                m.name.c_str(), m.finished ? 1 : 0, m.exit_s, m.end.c_str(), m.killed_monsters,
+                m.total_monsters, m.found_secrets, m.total_secrets,
+                static_cast<long long>(m.way.given_up));
+    CHECK_MSG(m.finished, m.name + ": he did not get out: " + m.end);
+    CHECK_MSG(m.exit_s > 0, "the intermission never began");
+    CHECK_MSG(m.monsters == static_cast<int>(m.kills.size()),
+              "a monster was left alive at the exit of a 100% run");
+    CHECK(m.leader_deaths == 0);
+  }
+}

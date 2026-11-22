@@ -15,16 +15,17 @@ and a row found later is added here first. Progress is reported as the missing c
 
 | Section | Rows | Done | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- |
-| Client | 508 | 293 | 52 (0 / 1 / 51) | 163 |
-| Server | 316 | 243 | 39 (0 / 0 / 39) | 34 |
-| Game | 245 | 204 | 23 (0 / 0 / 23) | 18 |
+| Client | 508 | 299 | 46 (0 / 1 / 45) | 163 |
+| Server | 316 | 251 | 31 (0 / 0 / 31) | 34 |
+| Game | 245 | 222 | 5 (0 / 0 / 5) | 18 |
 | Tools | 1 | 0 | 1 (0 / 0 / 1) | 0 |
-| **All** | **1070** | **740** | **115 (0 / 1 / 114)** | **215** |
+| **All** | **1070** | **772** | **83 (0 / 1 / 82)** | **215** |
 
 (Built 2026-11-21 against main at #1237 with 217 missing (9 / 49 / 159); the first fill, Quake's
 deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.
-The second, the shared settings, masters and spectator lines, took it to 120; Quake II's console
-fill (sizeup, sizedown, play, playvol, stopsound, built once for every game) to 115.)
+The second, the shared settings, masters and spectator lines, took it to 120; the third, the
+rest of the deathmatch rules, the server's lines and the idle sway, to 88; Quake II's console
+fill (sizeup, sizedown, play, playvol, stopsound, built once for every game) to 83.)
 
 ## CLIENT: the Quake and QuakeWorld clients, item by item
 
@@ -371,12 +372,12 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C323 | `v_kicktime` (both, 0.5) | how long a hit kicks the view | done | engine/camera/cvars.cpp |  |
 | C324 | `v_kickroll` (both, 0.6) | how far a hit rolls the view | done | engine/camera/cvars.cpp |  |
 | C325 | `v_kickpitch` (both, 0.6) | how far a hit pitches the view | done | engine/camera/cvars.cpp |  |
-| C326 | `v_iyaw_cycle` (both, 2) | the idle sway's yaw period | missing | the sway's shape is fixed (only v_idlescale is a setting); the intermission and some mods set these | 3 |
-| C327 | `v_iroll_cycle` (both, 0.5) | the idle sway's roll period | missing | as v_iyaw_cycle | 3 |
-| C328 | `v_ipitch_cycle` (both, 1) | the idle sway's pitch period | missing | as v_iyaw_cycle | 3 |
-| C329 | `v_iyaw_level` (both, 0.3) | the idle sway's yaw size | missing | as v_iyaw_cycle | 3 |
-| C330 | `v_iroll_level` (both, 0.1) | the idle sway's roll size | missing | as v_iyaw_cycle | 3 |
-| C331 | `v_ipitch_level` (both, 0.3) | the idle sway's pitch size | missing | as v_iyaw_cycle | 3 |
+| C326 | `v_iyaw_cycle` (both, 2) | the idle sway's yaw period | done | games/shooters_edge/client/present.cpp (bound in the classic layer onto engine/camera/first_person.hpp's idle sway axes) | 3 |
+| C327 | `v_iroll_cycle` (both, 0.5) | the idle sway's roll period | done | games/shooters_edge/client/present.cpp (bound in the classic layer onto engine/camera/first_person.hpp's idle sway axes) | 3 |
+| C328 | `v_ipitch_cycle` (both, 1) | the idle sway's pitch period | done | games/shooters_edge/client/present.cpp (bound in the classic layer onto engine/camera/first_person.hpp's idle sway axes) | 3 |
+| C329 | `v_iyaw_level` (both, 0.3) | the idle sway's yaw size | done | games/shooters_edge/client/present.cpp (bound in the classic layer onto engine/camera/first_person.hpp's idle sway axes) | 3 |
+| C330 | `v_iroll_level` (both, 0.1) | the idle sway's roll size | done | games/shooters_edge/client/present.cpp (bound in the classic layer onto engine/camera/first_person.hpp's idle sway axes) | 3 |
+| C331 | `v_ipitch_level` (both, 0.3) | the idle sway's pitch size | done | games/shooters_edge/client/present.cpp (bound in the classic layer onto engine/camera/first_person.hpp's idle sway axes) | 3 |
 | C332 | `v_idlescale` (both, 0) | how much the view sways when idle | done | engine/camera/cvars.cpp |  |
 | C333 | `crosshair` (both, 0) | draw the crosshair | done | engine/hud/crosshair.cpp |  |
 | C334 | `cl_crossx` (both, 0) | crosshair offset across | done | engine/hud/crosshair.cpp |  |
@@ -582,7 +583,7 @@ and the campaign on our own host hands the client the same events without the wi
 | C507 | Demos: .qwd recorded and played (qw) | a client recording of a QuakeWorld game | done | net/qw_match_record.hpp, client/demo_playback.cpp |  |
 | C508 | Screenshot files (both) | quakeNN.pcx (GL: .tga) in the game folder | done | engine/capture/screenshot.cpp (our own format and folder) |  |
 
-Count: 508 rows, 282 done, 63 missing (rank 2 6, rank 3 57), 163 not-taken.
+Count: 508 rows, 294 done, 51 missing (rank 2 1, rank 3 50), 163 not-taken.
 
 ## SERVER: the Quake and QuakeWorld servers, row by row
 
@@ -615,9 +616,9 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S6 | `status` (both) | the operator's table: the server's address, CPU use, mean response time, packets a frame, then each client's frags, user id, address, name, rate, ping, loss and qport (a narrower layout over rcon, "(s)" for a spectator, CONNECTING or ZOMBIE). q1: the host name, version, map, players and each one's frags, time and address | done | `engine/server/admin.cpp`, `net/qw_admin.cpp` (our own columns) | |
 | S7 | `map <name>` (both) | refuses a map whose file is missing ("Can't find maps/<name>.bsp"), else tells clients `changing`, loads it and tells them `reconnect`. q1: also ends a running game and resets the spawn parms | done | `server/commands.cpp` (the rules' console), reached from the operator console by `net/qw_game.cpp` | |
 | S8 | `setmaster <address...>` or `none` (qw) | sets up to the master list (port 27000 when none given), pings each ("Master server at ...", "Sending a ping.") and sends a heartbeat at once; `none` turns it off | done | plugins/classic/protocol/masters.cpp, games/shooters_edge/net/qw_game.cpp (`setmaster`, `heartbeat`) |  |
-| S9 | `say <text>` (operator, both) | a chat line from the console, "console: <text>" to every player | missing | the dedicated server's console has no `say` | 3 |
+| S9 | `say <text>` (operator, both) | a chat line from the console, "console: <text>" to every player | done | `server/commands.cpp` (run_console_line: "console: " in a multiplayer game, "<hostname> " in a single-player one) | 3 |
 | S10 | `heartbeat` (qw) | sends the heartbeat to the masters now | missing | goes with S8 | 3 |
-| S11 | `quit` (both) | tells every client "server shutdown" and exits; a master is told the server is going | missing | no `quit`: the process is stopped by a signal (`engine/server/process.cpp`); clients see the drop, not the line | 3 |
+| S11 | `quit` (both) | tells every client "server shutdown" and exits; a master is told the server is going | done | `engine/server/main.cpp` (`quit`), `net/qw_game.cpp` (destroy: qw_shutdown, then the masters) | 3 |
 | S12 | `god <userid>` (qw, needs the `-cheats` start switch) | toggles one player's godmode, he reads "godmode ON" or "godmode OFF"; without the switch "You must run the server with -cheats to enable this command." (and `*cheats ON` in the server info) | missing | `server/commands.cpp`: a single-player program's `god` works with the original's words; under a multiplayer program `god` from a player with cheats on does nothing, and no operator form by user id | 3 |
 | S13 | `give <userid> <item> <n>` (qw, cheats) | gives a weapon (2..8), shells, nails, rockets, cells or health | missing | as S12: works for a single-player program, nothing under a multiplayer one | 3 |
 | S14 | `noclip <userid>` (qw, cheats) | toggles one player's noclip, "noclip ON" or "noclip OFF" | done | `server/commands.cpp` toggles noclip for the asking player with cheats on (the words only in the single-player form) | |
@@ -958,16 +959,16 @@ program's form.
 | id | item | what it does | status | ours (file) or why not | rank |
 | --- | --- | --- | --- | --- | --- |
 | S297 | "server crashed: <error>" (qw) | every client is told why the server stopped, then disconnected | missing | not sent | 3 |
-| S298 | "server shutdown" (qw) | sent to every client on `quit` | missing | goes with S11 | 3 |
+| S298 | "server shutdown" (qw) | sent to every client on `quit` | done | `net/qw_server.cpp` (qw_shutdown) | 3 |
 | S299 | "<name> timed out" (both) | everyone told after the silence of `timeout` | done | `net/qw_server.cpp` | |
-| S300 | "<name> overflowed" (qw) | a client whose reliable stream overflowed is dropped and everyone told | missing | dropped silently (logged, `net/qw_server.cpp`) | 3 |
+| S300 | "<name> overflowed" (qw) | a client whose reliable stream overflowed is dropped and everyone told | done | `net/qw_server.cpp` (qw_frame) | 3 |
 | S301 | "Pause not allowed.", "Spectators can not pause." (qw; q1 the first) | a refused pause | done | `server/commands.cpp` | |
-| S302 | "<name> paused the game", "<name> unpaused the game" (both) | everyone told who paused | missing | told only under a single-player program (`server/commands.cpp`); a multiplayer game pauses unannounced | 3 |
-| S303 | "Server is paused." (qw) | a player who begins while paused | missing | not sent | 3 |
-| S304 | "Pause released since no players are left." (qw) | the server unpauses when the last player leaves | missing | it unpauses (`server/commands.cpp`) without the line | 3 |
+| S302 | "<name> paused the game", "<name> unpaused the game" (both) | everyone told who paused | done | `server/commands.cpp` (request_pause; a multiplayer game words it by the state before, as QuakeWorld does) | 3 |
+| S303 | "Server is paused." (qw) | a player who begins while paused | done | `server/commands.cpp` (tell_paused, from connect) | 3 |
+| S304 | "Pause released since no players are left." (qw) | the server unpauses when the last player leaves | done | `server/commands.cpp` (request_pause) | 3 |
 | S305 | chat lines (both) | "<name>: " public, "(<name>): " team, "[SPEC] <name>: " a spectator's (to spectators only with `sv_spectalk 0`, and always for his team chat), "console: " the operator's | done | `engine/server/chat.cpp` (the operator's is S9) | |
 | S306 | flood protection (qw) | after the rule's count of chat lines in its seconds: "FloodProt: You can't talk for N seconds." (or the custom line), then "You can't talk for N more seconds" until it lifts; paused time does not count | done | `engine/server/guards.cpp` | |
-| S307 | "Can't suicide -- allready dead!" (both) | `kill` while dead | missing | only under a single-player program; under a multiplayer one the program's ClientKill runs anyway (`server/commands.cpp`) | 3 |
+| S307 | "Can't suicide -- allready dead!" (both) | `kill` while dead | done | `server/commands.cpp` (every game; spectators too) | 3 |
 | S308 | "godmode ON/OFF", "notarget ON/OFF", "noclip ON/OFF", "flymode ON/OFF" (both) | the cheats' answers | done | `server/commands.cpp` (single-player form; see S12) | |
 | S309 | "Kicked by <who>: <reason>" (q1) | a kick with its reason | done | `engine/server/admin.cpp` (our wording) | |
 | S310 | "<name> entered the game" (q1, console) | the host's console notes a player's arrival | done | the server log (`net/qw_server.cpp`) | |
@@ -1023,7 +1024,7 @@ How to read the "ours" column:
 | G15 | Pain frames | pain1 to pain6 or axpain1 to axpain6, 0.6 s, refused while firing or under the Ring, restarted by a new hit | done | rules/common_quake.cpp (quake_pain) | - |
 | G16 | Firing frames | the axe's four swings, shotatt, rockatt, nailatt and light frames with their view-model frames, the muzzle flash on each | done | rules/common_quake.cpp (quake_fire_frames) | - |
 | G17 | Respawn rule | once the death frames end, all of attack, jump and use released, then any pressed; no automatic respawn | done | rules/common_quake.cpp (quake_dead_frame) | - |
-| G18 | Dead body slowing | a dead body on the ground loses 20 u/s each command | missing | ours lets the body slide | 3 |
+| G18 | Dead body slowing | a dead body on the ground loses 20 u/s each command | done | rules/common_quake.cpp (quake_dead_frame); tests/shooters_edge_arena_quake_test.cpp | 3 |
 | G19 | Corpse queue | the last four bodies stay in the map, posed as they lay, taking no damage; a gibbed player leaves the head | done | rules/common_quake.cpp (quake_corpse) | - |
 | G20 | Backpack drop | dropped on death by damage when any ammo is carried; holds the four ammo counts and the weapon in hand; removed after 120 s | done | rules/common_items.cpp (it leaves out the axe and shotgun, which no taker lacks) | - |
 | G21 | Backpack throw | from 24 u below the origin at 300 u/s up and -100 to +100 u/s each way across | done | rules/common_items.cpp (backpack_drop) | - |
@@ -1048,12 +1049,12 @@ All at medium level. V the victim, K the killer.
 
 | id | item | what it does | status | ours (file) or why not | rank |
 | --- | --- | --- | --- | --- | --- |
-| G36 | "V electrocutes himself." | the deathmatch 4 and 5 discharge that kills only the firer; V -1 | missing | ours prints "V somehow becomes bored with life" | 3 |
+| G36 | "V electrocutes himself." | the deathmatch 4 and 5 discharge that kills only the firer; V -1 | done | rules/arena_glue.cpp (death_words), profiles/words.hpp `self_electrocute` | 3 |
 | G37 | "V was telefragged by K" | K +1 | done | rules/arena_glue.cpp, profiles/words.hpp | - |
-| G38 | "Satan's power deflects V's telefrag" | the one teleporting onto a pentagram holder dies; V -1 | missing | ours credits the holder (+1, "telefragged by"); the line is in profiles/words.hpp but unused | 3 |
-| G39 | "V was telefragged by K's Satan's power" | both invulnerable: both lose it and die, each -1 | missing | ours does this only in deathmatch 4, scored as world deaths | 3 |
-| G40 | "K squished a teammate" | a door opened by a teammate crushes; K -1 | missing | ours credits the door, not its opener | 3 |
-| G41 | "K squishes V" | a door opened by a player crushes another; K +1 | missing | as G40 | 3 |
+| G38 | "Satan's power deflects V's telefrag" | the one teleporting onto a pentagram holder dies; V -1 | done | rules/common_combat.cpp (telefrag, score_death); tests/shooters_edge_arena_quake_test.cpp | 3 |
+| G39 | "V was telefragged by K's Satan's power" | both invulnerable: both lose it and die, each -1 | done | rules/common_combat.cpp (telefrag, score_death); tests/shooters_edge_arena_quake_test.cpp | 3 |
+| G40 | "K squished a teammate" | a door opened by a teammate crushes; K -1 | done | rules/common_map.cpp (door_blocked credits the opener); tests/shooters_edge_arena_quake_test.cpp | 3 |
+| G41 | "K squishes V" | a door opened by a player crushes another; K +1 | done | rules/common_map.cpp (door_blocked credits the opener); tests/shooters_edge_arena_quake_test.cpp | 3 |
 | G42 | "V was squished" | a plat, train or secret door crushes; V -1 | done | rules/common_map.cpp, rules/arena_glue.cpp | - |
 | G43 | "V tries to put the pin back in" | own grenade; V -1 | done | rules/arena_glue.cpp | - |
 | G44 | "V becomes bored with life" | own rocket, and any other own death | not-taken | match mod: ours draws "discovers blast radius" or "becomes bored with life" for a rocket, "somehow becomes bored with life" otherwise | - |
@@ -1063,7 +1064,7 @@ All at medium level. V the victim, K the killer.
 | G48 | "V was nailed by K" | nail | not-taken | match mod: ours draws it or "was body pierced by" | - |
 | G49 | "V was punctured by K" | super nail | not-taken | match mod: ours draws among punctured, perforated, ventilated, and "straw-cuttered" on a gib | - |
 | G50 | "V eats K's pineapple" / "V was gibbed by K's grenade" | grenade, by health below -40 | done | rules/arena_glue.cpp | - |
-| G51 | Quad rocket lines | "brutalized by K's quad rocket" 30%, "smeared by K's quad rocket" 30%, "K rips V a new one" 40% | missing | ours draws the three at a third each | 3 |
+| G51 | Quad rocket lines | "brutalized by K's quad rocket" 30%, "smeared by K's quad rocket" 30%, "K rips V a new one" 40% | done | rules/arena_glue.cpp (death_words: 30%, 30%, 40% under Quake's rules) | 3 |
 | G52 | "V rides K's rocket" / "V was gibbed by K's rocket" | rocket, by health below -40 | done | rules/arena_glue.cpp | - |
 | G53 | "V was ax-murdered by K" | killer holding the axe | done | rules/arena_glue.cpp | - |
 | G54 | "V chewed on K's boomstick" | killer holding the shotgun | done | rules/arena_glue.cpp (a gib says "lead poisoned", match mod) | - |
@@ -1092,7 +1093,7 @@ All at medium level. V the victim, K the killer.
 | G72 | "P left the game with N frags" | high level, with `player/tornoff2.wav` map-wide on the body | done | rules/common_player.cpp | - |
 | G73 | "Spectator P entered the game" | medium level | done | games/shooters_edge/rules/arena_world.cpp (SpectatorConnect under `rules q1`) |  |
 | G74 | "Spectator P left the game" | medium level | done | games/shooters_edge/rules/arena_world.cpp (SpectatorDisconnect under `rules q1`) |  |
-| G75 | Spectator impulse 1 | jumps to the next deathmatch spot in turn, facing its angles | missing | as G73 | 3 |
+| G75 | Spectator impulse 1 | jumps to the next deathmatch spot in turn, facing its angles | done | rules/arena_world.cpp (SpectatorThink); tests/shooters_edge_arena_quake_test.cpp | 3 |
 
 ### 4. Items
 
@@ -1111,7 +1112,7 @@ All at medium level. V the victim, K the killer.
 | G86 | Ammo caps and boxes | caps 100/200/100/100; shells 20 (40), nails 25 (50), rockets 5 (10), cells 6 (12); refused at the cap | done | rules/common_items.cpp | - |
 | G87 | Ammo respawn | 30 s (deathmatch 3 and 5: 15 s; 2: never) | done | rules/common_quake.cpp (quake_item_respawn) | - |
 | G88 | Ammo pickup lines | "You got the shells" / "nails" / "rockets" / "cells", `weapons/lock4.wav` | done | rules/common_items.cpp, profiles/items.hpp | - |
-| G89 | Switch after an ammo pickup | holding the best weapon before, the player switches to the new best | missing | ours keeps the weapon | 3 |
+| G89 | Switch after an ammo pickup | holding the best weapon before, the player switches to the new best | done | rules/common_items.cpp (ammo_touch); tests/shooters_edge_arena_quake_test.cpp | 3 |
 | G90 | Weapon pickups | super shotgun 5 shells, nailguns 30 nails, launchers 5 rockets, lightning gun 15 cells; `weapons/pkup.wav` | done | rules/common_items.cpp, profiles/arsenal.hpp | - |
 | G91 | Weapon pickup lines | "You got the Double-barrelled Shotgun" / "nailgun" / "Super Nailgun" / "Grenade Launcher" / "Rocket Launcher" / "Thunderbolt" | done | profiles/items.hpp | - |
 | G92 | Weapon respawn | 30 s in deathmatch 0 and 1 | done | rules/common_items.cpp | - |
@@ -1130,8 +1131,8 @@ All at medium level. V the victim, K the killer.
 | G105 | Ring | the player is the eyes model, frame 0; no pain frames or sounds | done | rules/common_items.cpp (the pain half with G33) | - |
 | G106 | Ring breath | `items/inv3.wav` at half volume, idle attenuation, every 1 to 4 s | done | rules/common_quake.cpp (quake_power_frame) | - |
 | G107 | Biosuit | air refreshed every command, no slime damage, lava once a second | done | rules/common_items.cpp, rules/common_player.cpp | - |
-| G108 | Quad and Ring drop (`dq`, `dr`) | with the server or local info key set, a dead holder drops it with the time left; it vanishes when the time runs out | missing | ours does this under `sv_dropquad` and `sv_dropring`, not the stock keys | 3 |
-| G109 | Drop and recover lines | "V lost a quad with N seconds remaining", "V lost a ring with N seconds remaining", "P recovered a Quad with N seconds remaining!", "P recovered a Ring with N seconds remaining!" (deathmatch 4: OctaPower forms) | missing | ours tells only the taker "You got the Quad Damage" | 3 |
+| G108 | Quad and Ring drop (`dq`, `dr`) | with the server or local info key set, a dead holder drops it with the time left; it vanishes when the time runs out | done | rules/arena_glue.cpp (drop_on_death reads `dq` and `dr`); tests/shooters_edge_arena_quake_test.cpp | 3 |
+| G109 | Drop and recover lines | "V lost a quad with N seconds remaining", "V lost a ring with N seconds remaining", "P recovered a Quad with N seconds remaining!", "P recovered a Ring with N seconds remaining!" (deathmatch 4: OctaPower forms) | done | rules/common_items.cpp (power_drop, dropped_power_touch); tests/shooters_edge_arena_quake_test.cpp | 3 |
 | G110 | Backpack pickup line | "You get the W, N shells, N nails, N rockets, N cells", `weapons/lock4.wav` | done | rules/common_items.cpp | - |
 | G111 | Backpack rocket floor | deathmatch 3 and 5: a pack with a launcher raises the taker to 5 rockets | done | rules/common_items.cpp (backpack_touch) | - |
 | G112 | Pickup flash | every pickup flashes the taker's screen | done | rules/common_items.cpp | - |
@@ -1152,7 +1153,7 @@ All at medium level. V the victim, K the killer.
 | G122 | Grenade launcher | 1 rocket, 0.6 s, 600 along the view plus 200 up plus up to 10 at random sideways and up, spinning, fuse 2.5 s, bursts on a player, else `weapons/bounce.wav`; splash 120 | done | profiles/arsenal.hpp, rules/common_weapons.cpp (no random scatter) | - |
 | G123 | Rocket launcher | 1 rocket, 0.8 s, 1000 u/s, 5 s life, never hits its owner, silent in the sky, `weapons/sgun1.wav`; splash 120 sparing the thing hit; blast drawn 8 u back | done | profiles/arsenal.hpp, rules/common_weapons.cpp | - |
 | G124 | Rocket direct hit | 100 + 20 times random (100 to 120) | done | rules/common_weapons.cpp (rocket_touch) | - |
-| G125 | Explosion sound | the program starts none; the client plays `weapons/r_exp3.wav` with the explosion effect | missing | rules/common_weapons.cpp also starts it on the blast, so it may be heard twice | 3 |
+| G125 | Explosion sound | the program starts none; the client plays `weapons/r_exp3.wav` with the explosion effect | done | rules/common_set_pieces.cpp (no second sound under Quake's rules) | 3 |
 | G126 | Splash | damage less half the distance to the box centre, within damage + 40 u, halved for the attacker | done | rules/common_combat.cpp | - |
 | G127 | Splash line of sight | the blast must reach the origin or one of four points 15 u off it, past players | done | rules/common_quake.cpp (quake_sees), rules/common_combat.cpp | - |
 | G128 | Lightning gun beam | 30 a hit, 600 u, a cell every 0.1 s, beam from 16 u above the origin, three damage lines from the origin, no entity hit twice | done | rules/common_weapons.cpp (one line from the eye; the side lines are near-useless, see qw-dm-rules.md round 2, 17) | - |
@@ -1183,7 +1184,7 @@ All at medium level. V the victim, K the killer.
 | G148 | deathmatch 4 map and ammo | no weapons or ammo on the map, no ammo used, no megahealth | done | rules/common_items.cpp, rules/common_weapons.cpp | - |
 | G149 | deathmatch 4 grenades | fire time 1.1 s and 10 damage to the firer each shot | done | rules/common_weapons.cpp (quake_weapon_frame) | - |
 | G150 | deathmatch 4 OctaPower | quad times 8; taking it zeroes armour and cells; at its end 255 cells, armour 1 at 0.8, health 100 | done | rules/common_dmm4.cpp, rules/common_combat.cpp | - |
-| G151 | "OctaPower is wearing off" | the deathmatch 4 warning | missing | ours says "Quad Damage is wearing off" | 3 |
+| G151 | "OctaPower is wearing off" | the deathmatch 4 warning | done | rules/common_items.cpp (power_frame), profiles/words.hpp `power_octa_off`; tests/shooters_edge_arena_quake_test.cpp | 3 |
 | G152 | "You got the OctaPower" | | done | rules/common_items.cpp | - |
 | G153 | deathmatch 4 packs | +10 health, "You get 10 additional health"; 300 or more grants pentagram and quad for 30 s, zeroes cells, `boss1/sight1.wav`, "P attains bonus powers!!!" | not-taken | match mod: rules/common_dmm4.cpp says "gained bonus powers!!!" with `items/protect.wav` | - |
 | G154 | deathmatch 4 healing under the pentagram | no health, armour or pack while any pentagram holds | done | rules/common_items.cpp | - |
@@ -1235,7 +1236,7 @@ All at medium level. V the victim, K the killer.
 | G190 | Key doors | spawnflag 16 silver, 8 gold; "You need the silver key" (runekey, keycard) with `doors/medtry.wav`, `runetry.wav` or `basetry.wav` every 2 s; opening plays the use sound and the door stays open | done | rules/common_map.cpp (door_trigger_touch, func_door) | - |
 | G191 | `item_sigil` | a rune: "You got the rune!", `misc/runekey.wav`, adds to the episode flags, fires targets | missing | no such class in the arena | 3 |
 | G192 | `func_door` | speed 100, wait 3, lip 8, dmg 2, sounds 0 to 4, linked doors, trigger field, shot open, message every 2 s, toggle, start open | done | rules/common_map.cpp | - |
-| G193 | `func_door` crush credit | the opener is the killer (G40, G41) | missing | ours credits the door | 3 |
+| G193 | `func_door` crush credit | the opener is the killer (G40, G41) | done | rules/common_map.cpp (door_go_up keeps the opener, door_blocked credits it) | 3 |
 | G194 | `func_door_secret` | the two-leg secret door with its sounds 1 to 3, shootable when unnamed, 1 s pauses, `wait` 5 | done | rules/common_set_pieces.cpp | - |
 | G195 | `func_plat` | speed 150, sounds 1 or 2, travel by height, the inset field, 3 s wait renewed while stood on, 1 damage on a crush | done | rules/common_map.cpp | - |
 | G196 | `func_train` | speed 100, dmg 2, sounds 1, waits at corners, crush at most twice a second | done | rules/common_map.cpp | - |
@@ -1243,11 +1244,11 @@ All at medium level. V the victim, K the killer.
 | G198 | `func_wall`, `func_illusionary` | a solid brush (use toggles its frame); a non-solid one | done | rules/common_map.cpp | - |
 | G199 | `func_episodegate`, `func_bossgate` | a wall shown by the episode flags | missing | no such class; the gate is never drawn, so the way stays open | 3 |
 | G200 | `trigger_multiple`, `trigger_once` | players only, wait 0.2 s, once removed 0.1 s after | done | rules/common_map.cpp | - |
-| G201 | Trigger `angle` | fires only for a player facing within 90 degrees of it | missing | ours ignores it | 3 |
+| G201 | Trigger `angle` | fires only for a player facing within 90 degrees of it | done | rules/common_map.cpp (trigger_touch); tests/shooters_edge_arena_quake_test.cpp | 3 |
 | G202 | Trigger `sounds` | 1 `misc/secret.wav`, 2 `misc/talk.wav`, 3 `misc/trigger1.wav` when it fires | done | rules/common_map.cpp (trigger_start, trigger_fire) | - |
 | G203 | Trigger `message` | centre-printed to the player with `misc/talk.wav` when it has no `sounds` | done | rules/common_util.cpp (use_targets) | - |
 | G204 | Trigger `killtarget` | removes its targets and then fires none | done | rules/common_util.cpp (use_targets) | - |
-| G205 | Shootable triggers (`health`) | solid, fired by the killing blow, restored after `wait` | missing | ours has no shootable trigger | 3 |
+| G205 | Shootable triggers (`health`) | solid, fired by the killing blow, restored after `wait` | done | rules/common_map.cpp (trigger_shootable, trigger_killed, trigger_ready); tests/shooters_edge_arena_quake_test.cpp | 3 |
 | G206 | `trigger_secret` | "You found a secret area!", `misc/secret.wav`, the secret counter | done | rules/arena_world.cpp (trigger_secret) | - |
 | G207 | `trigger_relay` | fires its targets when used, with delay, message and killtarget | done | rules/arena_world.cpp (trigger_relay) | - |
 | G208 | `trigger_counter` | count 2; "There are more to go...", "Only 3 more to go...", "Only 2 more to go...", "Only 1 more to go...", then "Sequence completed!" | done | rules/arena_world.cpp (trigger_counter) | - |
@@ -1266,8 +1267,8 @@ All at medium level. V the victim, K the killer.
 | G221 | `viewthing`, `noclass` | a model viewer; a warning and removal | not-taken | developer-only | - |
 | G222 | `air_bubbles`, `event_lightning` | removed in deathmatch | done | freed by the server; rules/common_set_pieces.cpp | - |
 | G223 | The nine `ambient_*` sounds | suck_wind, drone, flouro_buzz, drip, comp_hum, thunder, light_buzz, swamp1, swamp2 as fixed loops | done | rules/common_set_pieces.cpp | - |
-| G224 | `light`, `light_fluoro` switching | a named light with style 32 or more toggles on use; spawnflag 1 starts off | missing | ours removes every light | 3 |
-| G225 | `light_fluoro`, `light_fluorospark` hums | `ambience/fl_hum1.wav` and `buzz1.wav` loops | missing | ours removes them silently | 3 |
+| G224 | `light`, `light_fluoro` switching | a named light with style 32 or more toggles on use; spawnflag 1 starts off | done | rules/common_map.cpp (light, light_fluoro, light_use); tests/shooters_edge_arena_quake_test.cpp | 3 |
+| G225 | `light_fluoro`, `light_fluorospark` hums | `ambience/fl_hum1.wav` and `buzz1.wav` loops | done | rules/common_map.cpp (light_fluoro, light_fluorospark); tests/shooters_edge_arena_quake_test.cpp | 3 |
 | G226 | Flames and globe | `progs/flame.mdl`, `flame2.mdl` frames 0 and 1, `s_light.spr`, static | done | rules/common_map.cpp | - |
 | G227 | Flame crackle | `ambience/fire1.wav` loop at each flame | done | rules/common_map.cpp (flame_start) | - |
 | G228 | `monster_*` in deathmatch | the fifteen classes removed as they spawn | done | the arena has no spawn for them, so the server frees them | - |

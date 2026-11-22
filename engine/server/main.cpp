@@ -428,6 +428,11 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
                     hand_record_stop(hand, s, said);
                     cn.print(said);
                   });
+  // `quit`: the server ends after this frame, as at the end of its time: every player told by
+  // the game as it closes (a classic server's "server shutdown"), the masters too.
+  bool quit_asked = false;
+  con.add_command("quit", "quit: end the server; every player is told and dropped",
+                  [&](console::Console&, const console::Args&) { quit_asked = true; });
   const auto hand_stop = [&] {
     std::string said;
     if (hand_record_stop(hand, s, said)) std::printf("%s\n", said.c_str());
@@ -536,6 +541,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     }
     hand_record_frame(hand, s);
     match_frame();
+    if (quit_asked) break;
     server_accounts_update(accounts, wall_unix_us());
     server_accounts_reports(accounts, s, wall_unix_us());
     if (status_frames > 0 && (n + 1) % status_frames == 0) {

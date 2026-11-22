@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 103 | 11 | 32 | 10 | 156 |
-| Client settings (cvars) | 116 | 30 | 164 | 40 | 350 |
+| Client settings (cvars) | 122 | 36 | 152 | 40 | 350 |
 | Macros ($name in typed and bound text) | 14 | 1 | 13 | 2 | 30 |
 | Menu pages and rows | 77 | 72 | 12 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 523 | 289 | 338 | 61 | 1211 |
+| **all** | 529 | 295 | 326 | 61 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 116, partial 30, missing 164, not-taken 40
+done 122, partial 36, missing 152, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -267,7 +267,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_gun_x | `cl_gun_x` | moves the gun right, units (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_gun_y | `cl_gun_y` | moves the gun forward (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_gun_z | `cl_gun_z` | moves the gun up (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
-| cvar.cl_footsteps | `cl_footsteps` | 0 no footsteps (and tells the server, on the modern protocol), 1 each surface's own step set when one is found, 2 always the default step sound (default 1) | missing | C16, C34 |
+| cvar.cl_footsteps | `cl_footsteps` | 0 no footsteps (and tells the server, on the modern protocol), 1 each surface's own step set when one is found, 2 always the default step sound (default 1) | partial | `plugins/classic/q2_fx_switches.hpp` (`footsteps`), heard in `games/shooters_edge/client/demo_sound.cpp`: 0 starts no `player/step` sound, joined, hosted and in demos; 2 plays the same four steps as 1 (no surface step sets), and the server is not told |
 | cvar.cl_noskins | `cl_noskins` | 1 every player the stock male, 2 female figures the stock female (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_predict | `cl_predict` | predict the player's own move (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_kickangles | `cl_kickangles` | 0 drops the view kick the server sends; cheat-protected (default 1) | done | `games/shooters_edge/client/q2_view.cpp` (M18k4 round 34) |
@@ -285,12 +285,12 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.showclamp | `showclamp` | prints when the client's time is clamped to the frames it has (default 0) | missing | not found |
 | cvar.cl_timeout | `cl_timeout` | seconds of silence before the connection is dropped (default 120) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.rcon_address | `rcon_address` | where `rcon` goes when not connected (default empty) | done | `games/shooters_edge/net/qw_remote.cpp` |
-| cvar.cl_thirdperson | `cl_thirdperson` | draws the view from behind the player; the camera stops at walls and at moving doors and platforms (traced where they are drawn), and the player's own model fades as the camera is pushed close; cheat-protected (default 0) | missing | ours has `cam_thirdperson` over demos only (`client-gaps.md` round 26) |
-| cvar.cl_thirdperson_angle | `cl_thirdperson_angle` | the third-person camera's angle round the player (default 0) | missing | not found |
-| cvar.cl_thirdperson_range | `cl_thirdperson_range` | the third-person camera's distance (default 60) | missing | ours `cam_dist` over demos only |
-| cvar.cl_disable_particles | `cl_disable_particles` | bit sum: 1 grenade blast, 2 grenade trail, 4 rocket blast, 8 rocket trail, 16 blood, 32 blaster trail particles off (default 0) | missing | C16 |
-| cvar.cl_disable_explosions | `cl_disable_explosions` | bit sum: 1 grenade, 2 rocket explosion models off (default 0) | missing | C16 |
-| cvar.cl_dlight_hacks | `cl_dlight_hacks` | bit sum: 1 rocket light recoloured, 2 smaller blast lights, 4 no muzzle light (default 0) | missing | C16 |
+| cvar.cl_thirdperson | `cl_thirdperson` | draws the view from behind the player; the camera stops at walls and at moving doors and platforms (traced where they are drawn), and the player's own model fades as the camera is pushed close; cheat-protected (default 0) | partial | `games/shooters_edge/client/q2_session.cpp` (`view_behind`, a cheat; joined and hosted): stops at the world's walls, not at moving doors and platforms; the own figure is hidden rather than faded when a wall pushes the camera close |
+| cvar.cl_thirdperson_angle | `cl_thirdperson_angle` | the third-person camera's angle round the player (default 0) | done | `games/shooters_edge/client/q2_session.cpp` |
+| cvar.cl_thirdperson_range | `cl_thirdperson_range` | the third-person camera's distance (default 60) | done | `games/shooters_edge/client/q2_session.cpp` |
+| cvar.cl_disable_particles | `cl_disable_particles` | bit sum: 1 grenade blast, 2 grenade trail, 4 rocket blast, 8 rocket trail, 16 blood, 32 blaster trail particles off (default 0) | done | `plugins/classic/q2_fx_switches.hpp`, applied in `games/shooters_edge/client/world_fx.cpp` |
+| cvar.cl_disable_explosions | `cl_disable_explosions` | bit sum: 1 grenade, 2 rocket explosion models off (default 0) | done | `plugins/classic/q2_fx_switches.hpp`: the ball of fire left out, its light kept (`client/world_fx.cpp`) |
+| cvar.cl_dlight_hacks | `cl_dlight_hacks` | bit sum: 1 rocket light recoloured, 2 smaller blast lights, 4 no muzzle light (default 0) | partial | `plugins/classic/q2_fx_switches.hpp`: 2 and 4 taken; 1 (a rocket's light recoloured) not, its colour unread |
 | cvar.cl_smooth_explosions | `cl_smooth_explosions` | explosions fade smoothly over their whole life, which also fixes some explosions' length (default 1) | missing | ours draws its own explosions; not this switch (C16) |
 | cvar.cl_lerp_lightstyles | `cl_lerp_lightstyles` | 1 blends light styles between their letters instead of stepping (default 0) | missing | not found (C21) |
 | cvar.cl_gibs | `cl_gibs` | 0 draws no gibs and tells the server (default 1) | done | `client/cvar_layers.cpp`, our `cl_gibfilter` the other way round (M18k4 round 35); the server is told nothing on protocol 34 |
@@ -327,14 +327,14 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.vid_hwgamma | `vid_hwgamma` | gamma by the display hardware (default 0) | missing | not found |
 | cvar.vid_flip_on_switch | `vid_flip_on_switch` | Windows: switch to the desktop mode when the window loses focus (default 0) | missing | Windows only |
 | cvar.viewsize | `viewsize` | the 3D view's size 40..100 percent, border tiled (default 100) | partial | ours is the first game's meaning (100..120) (C8) |
-| cvar.scr_showpause | `scr_showpause` | 1 draws the pause picture, 2 "[PAUSED]" on the demo bar (default 1) | missing | C24 |
+| cvar.scr_showpause | `scr_showpause` | 1 draws the pause picture, 2 "[PAUSED]" on the demo bar (default 1) | partial | a synonym of our `showpause` (`games/shooters_edge/client/cvar_layers.cpp`): 2's "[PAUSED]" on the demo bar is not taken |
 | cvar.scr_centertime | `scr_centertime` | seconds a centre print stays, faded 300 ms (default 2.5) | partial | `client/cvar_layers.cpp`; no fade, line cut differs (C9) |
 | cvar.scr_printspeed | `scr_printspeed` | letters a second of a typewriter centre print (extended protocol) (default 16) | missing | not found |
 | cvar.scr_demobar | `scr_demobar` | 1 a progress bar while a demo plays, 2 also the time (default 1) | partial | ours `demo_bar` (C39) |
 | cvar.scr_font | `scr_font` | the HUD's font picture (default `conchars`) | missing | not found |
 | cvar.scr_scale | `scr_scale` | the 2D scale, 0 auto by window height (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` `q2_bar_scale` (M18k4 round 34) |
 | cvar.crosshair | `crosshair` | 0 none, N the `chN` picture (default 0) | done | `engine/hud/crosshair.hpp` (Quake II's layer `same`) |
-| cvar.netgraph | `netgraph` | 1 latency bars, 2 packet sizes (default 0) | missing | ours `r_netgraph` (C13) |
+| cvar.netgraph | `netgraph` | 1 latency bars, 2 packet sizes (default 0) | partial | a synonym of our `r_netgraph` (`games/shooters_edge/client/cvar_layers.cpp`): 2's packet sizes are not drawn |
 | cvar.timegraph | `timegraph` | a frame-time graph (default 0) | missing | C13 |
 | cvar.debuggraph | `debuggraph` | a development graph (default 0) | missing | C13 |
 | cvar.graphheight | `graphheight` | the graph's height (default 32) | missing | C13 |
@@ -364,8 +364,8 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.scr_showstats | `scr_showstats` | debug: prints the player's stats on screen (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.scr_showpmove | `scr_showpmove` | debug: the move state on screen (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.scr_hit_marker_time | `scr_hit_marker_time` | ms a hit marker shows (default 500) | missing | C26 |
-| cvar.cl_muzzleflashes | `cl_muzzleflashes` | 0 hides the newer game's muzzle flash models (the flash lights stay) (default 1) | missing | ours `cl_muzzleflash` is the first game's (C16) |
-| cvar.cl_muzzlelight_time | `cl_muzzlelight_time` | how long a muzzle flash light lasts, 0 to 1000 ms (default 16) | missing | the wire's flashes are skipped (tables "Muzzle flashes"); C16 |
+| cvar.cl_muzzleflashes | `cl_muzzleflashes` | 0 hides the newer game's muzzle flash models (the flash lights stay) (default 1) | partial | `plugins/classic/q2_fx_switches.hpp`: others' and monsters' gun fire; the held weapon's own flash still drawn |
+| cvar.cl_muzzlelight_time | `cl_muzzlelight_time` | how long a muzzle flash light lasts, 0 to 1000 ms (default 16) | done | `plugins/classic/q2_fx_switches.hpp`: our flash light's fade stretched by it (16 as drawn) |
 | cvar.cl_hit_markers | `cl_hit_markers` | 0 off, 1 a hit marker, 2 a marker and a sound (default 2) | missing | C26 |
 | cvar.cl_railtrail_type | `cl_railtrail_type` | 0 classic, 1 core beam, 2 core and spiral (default 0) | missing | C17 |
 | cvar.cl_railtrail_time | `cl_railtrail_time` | seconds the rail trail lasts (default 1.0) | missing | C17 |
@@ -399,7 +399,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.s_driver | `s_driver` | the sound driver | missing | not found |
 | cvar.s_enable | `s_enable` | 0 none, 1 software, 2 OpenAL (default 1) | missing | C32 |
 | cvar.s_volume | `s_volume` | the effects volume (default 0.7, saved) | done | synonym of `volume` (`client/cvar_layers.cpp`) |
-| cvar.s_ambient | `s_ambient` | 0 no loops, 1 all, 2 only loops with a model, 3 only the player's own (default 1) | missing | C32 |
+| cvar.s_ambient | `s_ambient` | 0 no loops, 1 all, 2 only loops with a model, 3 only the player's own (default 1) | done | `plugins/classic/q2_fx_switches.hpp` (`ambient`), heard in `games/shooters_edge/client/demo_sound.cpp` (`entity_loops`) |
 | cvar.s_show | `s_show` | debug: lists the sounds playing (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.s_auto_focus | `s_auto_focus` | 0 always play, 1 not minimised, 2 only focused (default 0) | missing | C32 |
 | cvar.s_underwater | `s_underwater` | muffle sound under water (default 1) | done | `games/shooters_edge/client/room_ear.cpp` over the synth's muffle (M18k4 round 34) |

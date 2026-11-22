@@ -57,13 +57,14 @@ struct Window {
   ge::capture::ScreenshotSettings shots;
   cl::GameStart start;
   cl::GameCvarValues game;
-  bool predict = true;   // the remote's cl_predict
-  int crouch = 1;        // the remote's cl_predict_crouch
-  int noskins = 0;       // the picture's stock_figures (Quake II's cl_noskins)
-  int moves = 62;        // the remote's q2_maxfps (Quake II's cl_maxfps)
-  double frame_cap = 0;  // the pacing's frame cap (our cl_maxfps, Quake II's r_maxfps)
-  cl::ChatExtras chat;   // the chat's extras (Quake II's cl_chat_sound)
-  int auto_chat = -1;    // the console view's game_chat (Quake II's con_auto_chat)
+  bool predict = true;     // the remote's cl_predict
+  int crouch = 1;          // the remote's cl_predict_crouch
+  int noskins = 0;         // the picture's stock_figures (Quake II's cl_noskins)
+  int moves = 62;          // the remote's q2_maxfps (Quake II's cl_maxfps)
+  double frame_cap = 0;    // the pacing's frame cap (our cl_maxfps, Quake II's r_maxfps)
+  cl::ChatExtras chat;     // the chat's extras (Quake II's cl_chat_sound)
+  int auto_chat = -1;      // the console view's game_chat (Quake II's con_auto_chat)
+  bool show_pause = true;  // window_cvars.cpp's showpause (Quake II's scr_showpause)
 
   explicit Window(const pr::GameProfile& g) {
     cl::add_coop_cvars(console, coop);
@@ -78,6 +79,14 @@ struct Window {
     shooters_edge::hud::add_cvars(console, hud);
     console.cvars().set_layer(cl::kLayerShell);
     menu.add_cvars(console);
+    // showpause as window_cvars.cpp registers it (that file links the platform).
+    console.cvars().bind({.name = "showpause",
+                          .fallback = "1",
+                          .flags = con::kArchive,
+                          .help = "Whether a paused campaign shows the pause picture.",
+                          .kind = con::CvarKind::boolean,
+                          .values = "0: no picture; 1: the picture while paused (the default)"},
+                         &show_pause);
     console.cvars().set_layer(cl::kLayerEngine);
     ge::capture::add_screenshot_cvars(console.cvars(), shots);
     // The pacing's frame cap as platform/pacing.cpp registers it (that file links the platform).
@@ -553,17 +562,37 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("cl_blend", "0", con::Source::local);      // our gl_polyblend
   CHECK(!w.picture.draw_entities && !w.picture.particles && !w.picture.dynamic);
   CHECK(!w.picture.poly_blend);
-  const cl::GameBindings gibs{.gibs = &w.picture.gibs, .no_glow = &w.picture.no_glow};
+  const cl::GameBindings gibs{
+      .gibs = &w.picture.gibs, .no_glow = &w.picture.no_glow, .q2fx = &w.picture.q2fx};
   cl::switch_game_cvars(w.console, w.game, *q2, gibs);
   v.set("cl_gibs", "0", con::Source::local);  // our cl_gibfilter the other way round
   v.set("cl_noglow", "1", con::Source::local);
   CHECK(!w.picture.gibs && w.picture.no_glow);
+  v.set("cl_disable_particles", "24", con::Source::local);  // a rocket's trail, blood
+  v.set("cl_disable_explosions", "2", con::Source::local);
+  v.set("cl_dlight_hacks", "6", con::Source::local);
+  v.set("cl_muzzlelight_time", "32", con::Source::local);
+  v.set("cl_muzzleflashes", "0", con::Source::local);
+  v.set("cl_footsteps", "0", con::Source::local);
+  v.set("s_ambient", "3", con::Source::local);
+  v.set("scr_showpause", "0", con::Source::local);  // its spelling of our showpause
+  CHECK(!w.show_pause && w.picture.q2fx.footsteps == 0 && w.picture.q2fx.ambient == 3);
+  const ge::classic::Q2FxSwitches& fx = w.picture.q2fx;
+  CHECK(fx.no_particles == 24 && fx.no_explosions == 2 && fx.light_hacks == 6);
+  CHECK(fx.muzzle_light_ms == 32 && !fx.muzzle_models);
+  CHECK(ge::classic::q2_no_blast_ball(fx, ge::classic::kQ2Rocket));
+  CHECK(!ge::classic::q2_no_blast_ball(fx, ge::classic::kQ2Grenade));
+  CHECK(!ge::classic::q2_no_blast_specks(fx, ge::classic::kQ2Rocket));  // 4 is not in 24
+  CHECK(ge::classic::q2_muzzle_age(fx, 0.02) == 0.01);  // twice as long: half as old
   v.set("cl_beginmapcmd", "record", con::Source::local);
   v.set("cl_autopause", "0", con::Source::local);
   CHECK(w.game.q2.begin_cmd == "record" && !w.game.q2.autopause);
   CHECK(v.find("sv_running") != nullptr && v.find("cl_running")->value == "1");
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], gibs);
   CHECK(w.picture.gibs && !w.picture.no_glow);
+  CHECK(w.picture.q2fx.no_particles == 0 && w.picture.q2fx.muzzle_models);  // set aside
+  CHECK(v.find("cl_disable_particles") == nullptr && v.find("scr_showpause") == nullptr);
+  CHECK(w.picture.q2fx.footsteps == 1 && w.picture.q2fx.ambient == 1);
   CHECK(w.game.q2.begin_cmd.empty() && w.game.q2.autopause && w.game.q2.timescale == 1);
   CHECK(v.find("cl_beginmapcmd") == nullptr && v.find("sv_running") == nullptr);
   CHECK(v.clashes().empty());
