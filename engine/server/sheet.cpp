@@ -220,8 +220,9 @@ std::vector<SheetChoice> sheet_choices(const SheetRow& row) {
         continue;
       }
       // A range: every whole number when it is short, else the ladder inside it.
-      if (std::isfinite(lo) && std::isfinite(hi) && hi - lo <= 32) {
-        for (double v = std::ceil(lo); v <= hi; v += 1)
+      if (std::isfinite(lo) && std::isfinite(hi) && hi - lo <= 32 && lo > -1e9 && hi < 1e9) {
+        const int first = static_cast<int>(std::ceil(lo)), last = static_cast<int>(std::floor(hi));
+        for (int v = first; v <= last; v++)
           if (const std::string t = number_text(v); !has(t)) out.push_back({t, {}});
         continue;
       }
