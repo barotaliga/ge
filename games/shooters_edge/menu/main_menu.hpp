@@ -117,6 +117,9 @@ struct Host {
   std::vector<std::string> saves = {};
   const MenuTable* table = nullptr;  // the game's menu (null: classic_menu())
   bool in_level = false;             // a level is being played (ESCAPE opens `in_level`)
+  // In a level, a screen of the rules is up (Quake II's help computer, scoreboard or inventory):
+  // ESCAPE sends `putaway` to take it down and opens no menu.
+  bool screen_up = false;
 };
 
 // The command a key row binds: a CUSTOMIZE CONTROLS row's move or an entry's `bind`; "" none.

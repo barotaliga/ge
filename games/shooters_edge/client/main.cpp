@@ -1236,6 +1236,7 @@ int run_main(int argc, char** argv) {
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
       menu_host.in_level = (listen.server || remote.active) && !attract;  // ESCAPE's in-game page
+      menu_host.screen_up = q2_bar.layout_up;  // ESCAPE puts the help computer away first
       // A benchmark's Escape stops the run (below) and opens nothing.
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
                             input.tapped(Key::escape)) ||

@@ -1367,4 +1367,12 @@ TEST(q2_menu_has_its_own_pages_flags_keys_and_in_game_page) {
   host.in_level = true;
   g.update({}, true, host, 0.016);
   CHECK(g.open() && g.main().top().id == "game");
+  // With the help computer up, ESCAPE puts it away and opens nothing.
+  g.hide();
+  w.con.add_command("putaway", "", [&w](ge::console::Console&, const ge::console::Args&) {
+    w.ran.push_back("putaway");
+  });
+  host.screen_up = true;
+  g.update({}, true, host, 0.016);
+  CHECK(!g.open() && !w.ran.empty() && w.ran.back() == "putaway");
 }

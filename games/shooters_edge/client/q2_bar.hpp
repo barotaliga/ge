@@ -67,6 +67,9 @@ struct Q2Bar {
   const ge::hud::NetHistory* lag = nullptr;
   int unanswered = 0;
   int width = 0, height = 0;  // the window the last `run_q2_bar` drew for, px
+  // The last frame had a screen of the rules up (the help computer, a scoreboard or the
+  // inventory): ESCAPE puts it away rather than opening the menu (menu/main_menu.hpp's Host).
+  bool layout_up = false;
   // A console command waiting for the next frame's world (`add_q2_bar_commands`): its words, and
   // the console it prints to (null: none asked).
   std::vector<std::string> asked{};
