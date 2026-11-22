@@ -882,7 +882,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                     ? cl::fill_team_codes(words, chat, "%t")
                     : cl::fun_characters(
                           cl::fill_team_codes(words, chat, words.expand_text(teamsay)), true);
-      hud.notify.push("(Sailor): " + pointed, se::hud_style().ink, t);
+      hud.notify.push("(Sailor): " + pointed, se::hud_style().ink, t - 0.05);  // shown from now
       lab.note("view " + std::to_string(v) + (teamsay.empty() ? " points at: " : " says: ") +
                pointed);
     }
@@ -936,7 +936,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                   id,
                   "View " + std::to_string(v) + " in the " + kLooks[k] + " look" +
                       (tag.empty() ? std::string(".") : ", after the player fired.") +
-                      (pointed.empty() ? std::string() : " %t says: " + pointed),
+                      (pointed.empty()
+                           ? std::string()
+                           : (teamsay.empty() ? " %t says: " : " The team hears: ") + pointed),
                   "the map from the player's eyes",
                   {{"map", lab.arg("map")}, {"views", views}}},
                  gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
