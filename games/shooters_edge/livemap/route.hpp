@@ -30,6 +30,7 @@ struct RouteMarks {
   std::vector<std::array<float, 3>> exits;    // each exit's middle
   // Each blast jump's flight: its points from the take-off to the landing (two at least).
   std::vector<std::vector<std::array<float, 3>>> blasts;
+  std::vector<bool> combos;  // by blast: a combo (a grenade and a rocket), drawn violet; none: no
 };
 
 inline constexpr float kRouteJump = 400;  // a step this long is a teleporter: not drawn, units

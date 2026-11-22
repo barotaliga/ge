@@ -10,7 +10,8 @@ namespace shooters_edge::bots {
 
 namespace {
 
-// map, from, to, pitch, run, jumps, flip, level: the se-rj lab's tricks, most made first.
+// map, from, to, pitch, run, jumps, flip, level: the se-rj lab's tricks, most made first; a
+// combo's row ends `true` (a grenade laid, a rocket fired on it as it bursts).
 constexpr RocketTrick kTricks[] = {
     {"dm2", {2000, -450, 115}, {1922, -704, 185}, 47, 374, 24, true, 0},
     {"dm2", {2255, -188, 31}, {2612, -369, 121}, 44, 479, 24, true, 2},
@@ -91,7 +92,7 @@ constexpr RocketTrick kTricks[] = {
     {"e2m4", {1768, 1377, -44}, {2021, 1754, 150}, 51, 316, 1, true, 1},
     {"e2m4", {1416, 2046, 182}, {1392, 2100, 190}, 4, 316, 1, false, 1},
     {"e2m4", {1113, 2317, 222}, {1648, 2512, 462}, 60, 118, 1, true, 1},
-    {"e2m4", {1472, 2519, 207}, {638, 2024, 214}, 80, 148, 1, true, 1},
+    {"e2m4", {1472, 2519, 207}, {638, 2024, 214}, 80, 148, 1, true, 1, true},  // a combo
     {"e2m4", {-1056, 1944, 254}, {-1536, 1736, 426}, 79, 450, 1, false, 1},
     {"e2m5", {-18, -523, -146}, {-253, 596, 104}, 79, 377, 1, false, 1},
     {"e2m5", {-622, 2013, -90}, {-506, 2045, 38}, 73, 362, 1, false, 1},

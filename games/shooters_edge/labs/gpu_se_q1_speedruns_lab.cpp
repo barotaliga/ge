@@ -65,6 +65,12 @@ constexpr float kBlastSpeed = 600;  // u/s: a run is 320, a bunny hop rarely pas
 constexpr float kBlastRise = 400;   // u/s up: a jump leaves the ground at 270
 constexpr double kBlastLongest_s = 4;
 constexpr float kTrickPitch = 25;  // a rocket jump's view at least this far down, degrees
+// A COMBO: a grenade laid, then a rocket fired on it as it bursts: two blows within
+// `kComboBlows_s` of each other, the rocket launcher in hand at one of them and the grenade
+// launcher within `kComboLaid_s` before (the grenade's fuse is 2.5 s). Two grenades together are
+// no combo: a grenade jump.
+constexpr double kComboBlows_s = 0.35;
+constexpr double kComboLaid_s = 3;
 
 struct Run {
   std::string file, map, kind, skill;
@@ -76,6 +82,7 @@ struct Run {
   std::vector<std::vector<P3>> blasts;
   std::vector<double> blast_t;
   std::vector<bool> blast_grenade;
+  std::vector<bool> blast_combo;  // a grenade and a rocket together (kComboBlows_s)
   // And each one's shot as the nav's tricks take it (map_book.hpp `RocketTrick`): the view's pitch
   // down, the run across before the blow, units/s, and whether the shot went behind (the flip).
   std::vector<float> blast_pitch, blast_run;
@@ -93,6 +100,14 @@ void name_parts(const std::string& stem, Run& r) {
     r.skill = stem[0] == 'E' ? "easy" : "nightmare";
     r.kind = stem[1] == 'H' ? "100%" : "any%";
   }
+}
+
+// The run's blast jumps of one kind: rocket (neither), grenade, or combo (`combo`, either hand).
+int64_t blasts_of(const Run& r, bool grenade, bool combo) {
+  int64_t n = 0;
+  for (size_t i = 0; i < r.blast_grenade.size(); i++)
+    n += combo ? r.blast_combo[i] : !r.blast_combo[i] && r.blast_grenade[i] == grenade;
+  return n;
 }
 
 Run read_run(const std::filesystem::path& path) {
@@ -118,7 +133,10 @@ Run read_run(const std::filesystem::path& path) {
   int64_t blows = 0;
   double blow_t = -10;
   P3 blow_at{};
-  bool blow_grenade = false, blow_flip = false;
+  bool blow_grenade = false, blow_flip = false, blow_combo = false;
+  double prev_blow_t = -10;   // the blow before the last, any weapon in hand
+  bool prev_blow_rl = false;  // and the rocket launcher in hand at it
+  double lob_t = -10;         // the grenade launcher last in hand
   float blow_pitch = 0, blow_run = 0;
   float run_x = 0, run_y = 0;  // the run across over the last tic, units/s
   P3 stood{};  // where the eye last held its height a tic (standing or running on a floor)
@@ -162,13 +180,21 @@ Run read_run(const std::filesystem::path& path) {
       break;
     }
     const int weapon = s.stats[cl::kStatActiveWeapon];
-    if (s.blows_taken > blows &&
-        (weapon == kItemRocketLauncher || weapon == kItemGrenadeLauncher) && flight.empty()) {
+    const bool blown = s.blows_taken > blows;
+    const bool laid = t - lob_t <= kComboLaid_s;
+    // A second blow just after a blast jump's first, with a grenade laid: the jump was a combo.
+    if (blown && !flight.empty() && laid && t - flight_t <= kComboBlows_s &&
+        !r.blast_combo.empty() && (weapon == kItemRocketLauncher || !r.blast_grenade.back()))
+      r.blast_combo.back() = true;
+    if (blown && (weapon == kItemRocketLauncher || weapon == kItemGrenadeLauncher) &&
+        flight.empty()) {
       blow_t = t;
       // The takeoff: where he last stood (the eye level a tic) within half a second, as a jump
       // before the shot has him in the air when the blow lands.
       blow_at = last_t >= 0 ? (t - stood_t <= 0.5 ? stood : last) : p;
       blow_grenade = weapon == kItemGrenadeLauncher;
+      blow_combo = laid && t - prev_blow_t <= kComboBlows_s &&
+                   (weapon == kItemRocketLauncher || prev_blow_rl);
       blow_pitch = s.angles.x;
       blow_run = std::sqrt(run_x * run_x + run_y * run_y);
       // Behind: the view's yaw more than a right angle off the run's heading.
@@ -179,6 +205,11 @@ Run read_run(const std::filesystem::path& path) {
       blow_flip = blow_run > 100 && (off > 90 || off < -90);
     }
     r.view_height = s.view_height;
+    if (blown) {
+      prev_blow_t = t;
+      prev_blow_rl = weapon == kItemRocketLauncher;
+    }
+    if (weapon == kItemGrenadeLauncher) lob_t = t;
     blows = s.blows_taken;
     if (t <= last_t) continue;  // a frame on the same tic
     const float dx = p[0] - last[0], dy = p[1] - last[1], dz = p[2] - last[2];
@@ -209,6 +240,7 @@ Run read_run(const std::filesystem::path& path) {
         flight_t = blow_t;
         r.blast_t.push_back(blow_t);
         r.blast_grenade.push_back(blow_grenade);
+        r.blast_combo.push_back(blow_combo);
         r.blast_pitch.push_back(blow_pitch);
         r.blast_run.push_back(blow_run);
         r.blast_flip.push_back(blow_flip);
@@ -313,7 +345,7 @@ void run(gl::Lab& lab) {
   const In in = {{"demos", "the folder given"}, {"only", only}, {"maps", maps}};
   gl::LabTable t{"each recorded run",
                  {"file", "map", "kind", "skill", "exit s", "kills", "secrets", "rocket jumps",
-                  "grenade jumps", "boosts", "points", "read"},
+                  "grenade jumps", "combo jumps", "boosts", "points", "read"},
                  {}};
   std::string tsv = "run\tmap\tkind\tt\tx\ty\tz\twhat\n";
   const auto rows = [&](const Run& r, const std::vector<P3>& ps, const std::vector<double>* ts,
@@ -328,19 +360,20 @@ void run(gl::Lab& lab) {
   int read = 0;
   for (const Run& r : runs) {
     read += r.error.empty() ? 1 : 0;
-    t.rows.push_back(
-        {r.file, r.map, r.kind, r.skill, r.exit_s >= 0 ? to_fixed(r.exit_s, 1) : "-",
-         of(r.kills, r.monsters), of(r.secrets, r.total_secrets),
-         std::to_string(std::count(r.blast_grenade.begin(), r.blast_grenade.end(), false)),
-         std::to_string(std::count(r.blast_grenade.begin(), r.blast_grenade.end(), true)),
-         std::to_string(r.boosts.size()), std::to_string(r.track.size()),
-         r.error.empty() ? "yes" : r.error});
+    t.rows.push_back({r.file, r.map, r.kind, r.skill, r.exit_s >= 0 ? to_fixed(r.exit_s, 1) : "-",
+                      of(r.kills, r.monsters), of(r.secrets, r.total_secrets),
+                      std::to_string(blasts_of(r, false, false)),
+                      std::to_string(blasts_of(r, true, false)),
+                      std::to_string(blasts_of(r, false, true)), std::to_string(r.boosts.size()),
+                      std::to_string(r.track.size()), r.error.empty() ? "yes" : r.error});
     rows(r, r.track, nullptr, "track");
     rows(r, r.kill_at, &r.kill_t, "kill");
     rows(r, r.secret_at, &r.secret_t, "secret");
     rows(r, r.boosts, &r.boost_t, "boost");
     for (size_t i = 0; i < r.blasts.size(); i++) {
-      const char* what = r.blast_grenade[i] ? "grenade-jump" : "rocket-jump";
+      const char* what = r.blast_combo[i]     ? "combo-jump"
+                         : r.blast_grenade[i] ? "grenade-jump"
+                                              : "rocket-jump";
       const std::vector<double> at_t(r.blasts[i].size(), r.blast_t[i]);
       std::vector<P3> ends = {r.blasts[i].front(), r.blasts[i].back()};
       rows(r, ends, &at_t, what);  // the take-off, then the landing
@@ -362,6 +395,7 @@ void run(gl::Lab& lab) {
     int jumps;
     bool flip;
     int level;
+    bool combo;
   };
   std::vector<Row> tricks;
   for (const Run& r : runs) {
@@ -369,7 +403,8 @@ void run(gl::Lab& lab) {
     for (size_t i = 0; i < r.blasts.size(); i++) {
       // A rocket fired under his own feet looks down (a blow from a monster's with the launcher
       // in hand looks anywhere): the rest are no trick of his.
-      if (!r.blast_grenade[i] && r.blast_pitch[i] < kTrickPitch) continue;
+      const bool combo = r.blast_combo[i];
+      if (!combo && !r.blast_grenade[i] && r.blast_pitch[i] < kTrickPitch) continue;
       P3 a = r.blasts[i].front(), b = r.blasts[i].back();
       a[2] -= r.view_height;
       b[2] -= r.view_height;
@@ -379,7 +414,7 @@ void run(gl::Lab& lab) {
       };
       bool merged = false;
       for (Row& tr : tricks)
-        if (tr.map == r.map && near(tr.from, a) && near(tr.to, b)) {
+        if (tr.map == r.map && tr.combo == combo && near(tr.from, a) && near(tr.to, b)) {
           tr.jumps++;
           merged = true;
           break;
@@ -390,7 +425,8 @@ void run(gl::Lab& lab) {
       tricks.push_back({r.map, a, b, r.blast_pitch[i], run, 1, flip,
                         flip && run > 400 ? 2
                         : run > 100       ? 1
-                                          : 0});
+                                          : 0,
+                        combo});
     }
   }
   // A map's rows together (rocket_tricks.cpp finds them as one run), in the order read.
@@ -404,7 +440,7 @@ void run(gl::Lab& lab) {
     trick_rows += "    {\"" + tr.map + "\", " + v(tr.from) + ", " + v(tr.to) + ", " +
                   to_fixed(tr.pitch, 0) + ", " + to_fixed(tr.run, 0) + ", " +
                   std::to_string(tr.jumps) + ", " + (tr.flip ? "true" : "false") + ", " +
-                  std::to_string(tr.level) + "},\n";
+                  std::to_string(tr.level) + (tr.combo ? ", true" : "") + "},\n";
   }
   lab.attach("tricks.txt", std::vector<uint8_t>(trick_rows.begin(), trick_rows.end()));
   lab.metric("tricks", static_cast<double>(tricks.size()), "count");
@@ -425,6 +461,7 @@ void run(gl::Lab& lab) {
     marks.kills = r.kill_at;
     marks.secrets = r.secret_at;
     marks.blasts = r.blasts;
+    marks.combos = r.blast_combo;
     const ge::ui::Image img = lv::draw_route(plate, marks);
     gl::Picture p;
     p.width = img.width;
@@ -437,11 +474,13 @@ void run(gl::Lab& lab) {
          "RUN " + r.map + " " + r.kind + " " + r.skill + ", " +
              (r.exit_s >= 0 ? to_fixed(r.exit_s, 1) + " S" : std::string("NO EXIT")) + ", KILLS " +
              of(r.kills, r.monsters) + ", SECRETS " + of(r.secrets, r.total_secrets) +
-             ", BLAST JUMPS " + std::to_string(r.blasts.size()),
+             ", BLAST JUMPS " + std::to_string(r.blasts.size()) + " (COMBOS " +
+             std::to_string(blasts_of(r, false, true)) + ")",
          "A recorded fast run on the live map's plate: the route (blue at the start to red "
          "at the exit), where kills counted (crosses, at the player), where secrets counted "
          "(gold diamonds) and each rocket or grenade jump (orange: the flight from the "
-         "filled take-off to the white landing).",
+         "filled take-off to the white landing; violet a combo, a grenade laid and a rocket "
+         "fired on it as it bursts).",
          "the route ends at the exit and every blast jump lands where a ledge or a gap is "
          "otherwise out of reach",
          in},

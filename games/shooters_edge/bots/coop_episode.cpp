@@ -98,6 +98,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   em.nav_nodes = static_cast<int64_t>(nav.graph.nodes.size());
   em.nav_rockets = nav.tricks_made.held;
   em.nav_grenades = nav.tricks_made.grenades;
+  em.nav_combos = nav.tricks_made.combos;
   em.movers = static_cast<int64_t>(nav.movers.size());
   em.nav_ms = nav.build_ms;
   em.lo = nav.graph.lo;
