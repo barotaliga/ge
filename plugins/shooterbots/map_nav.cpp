@@ -540,10 +540,12 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
     if (plat && (!spec.brushes || tracer != nullptr)) {
       // Drawn raised and lowered by its height (else its own height less its lip, 8 units unless
       // it says: base2's lift sets 132, and taken as 8 its top went past the floor above, so no
-      // ride up was found); Quake II's default speed is 200 units/s, Quake's 150.
+      // ride up was found); Quake II's default speed is 200 units/s, Quake's 150. Quake's plat
+      // reads no lip (always 8 under its height: e2m5's pit lift says 2, and taken as 2 its top
+      // stood 6 over the nook it rises to, its rider's head in the nook's ceiling, no way off).
       const char* h = sb::block_value(b, "height");
       const char* sp = sb::block_value(b, "speed");
-      const char* lp = sb::block_value(b, "lip");
+      const char* lp = spec.brushes ? sb::block_value(b, "lip") : nullptr;
       const float lip = lp ? static_cast<float>(std::atof(lp)) : 8.f;
       const float rise = h ? static_cast<float>(std::atof(h)) : (bm.maxs.z - bm.mins.z) - lip;
       const float fallback = spec.brushes ? 200.f : 150.f;
