@@ -37,7 +37,7 @@
 // ge:keywords lookstrafe attack2 buttons forward attack speed strafe key_moves movedown moveup
 // ge:keywords in_mouse_release mouse-capture cl_yawspeed add_control_cvars cl_forwardspeed
 // ge:keywords cl_backspeed cl_sidespeed cl_upspeed cl_movespeedkey cl_anglespeedkey cl_pitchspeed
-// ge:keywords freelook mlook klook lookup lookdown centerview force_centerview m_forward
+// ge:keywords freelook mlook klook lookup lookdown centerview force_centerview m_forward m_side use
 // ge:keywords pitch-drift drift_pitch v_centermove v_centerspeed
 // ge:keywords zoom zoom-key m_autosens autosens auto_sens
 // ge:skill input shooter
@@ -92,8 +92,8 @@ struct Controls {
   int side_speed = 400;
   int up_speed = 400;
   double move_speed_key = 2;
-  double strafe_scale = 36;  // units/s of sidestep a degree the mouse's counts would have turned
-  bool aim_turn = true;      // cl_aimhelp_turn: the view turns onto the aim help's bend
+  double m_side = 0.8;   // m_side: the mouse's sideways counts as sidestep, units a count
+  bool aim_turn = true;  // cl_aimhelp_turn: the view turns onto the aim help's bend
   // in_mouse_release: what takes the pointer back from the look (input::Release's bits)
   uint32_t mouse_release = input::kReleaseDefault;
   ControlButtons buttons;

@@ -563,3 +563,31 @@ TEST(a_filtered_command_never_reaches_the_rules_and_a_blackholed_address_is_neve
   CHECK(rig.server.counts.filtered == 2);
   CHECK(any_has(rig.server.log, "anna[") && any_has(rig.server.log, "issued banned command: GOD"));
 }
+
+TEST(user_prints_one_players_info_and_msg_sets_the_print_level) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  CHECK(rig.play());
+  // The operator's `user`: a key a line, padded to 20 columns.
+  const std::string u = rig.admin("user " + std::to_string(rig.id_of(0)));
+  CHECK_MSG(has(u, "name                anna\n"), u);
+  CHECK_MSG(has(u, "msg                 1\n"), u);
+  CHECK(has(rig.admin("user nobody"), "No player is called nobody"));
+  CHECK(has(rig.admin("user"), "user <id|name>"));
+  // The client saw every player's user id.
+  bool seen = false;
+  for (int i = 0; i < 32; i++)
+    seen = seen || (rig.c[1].userids[i] == rig.id_of(0) &&
+                    cn::info_get(rig.c[1].userinfos[i], "name") == "anna");
+  CHECK(seen);
+  // A player's `msg`: shown, then set (no range), each answer at the high level.
+  rig.c[0].prints.clear();
+  cn::client_command(rig.c[0], "msg");
+  rig.frames(20);
+  CHECK(any_has(rig.c[0].prints, "Current msg level is 1"));
+  cn::client_command(rig.c[0], "msg 2");
+  rig.frames(20);
+  CHECK(any_has(rig.c[0].prints, "Msg level set to 2"));
+  CHECK(rig.server.clients[0].msg_level == 2);
+}

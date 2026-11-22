@@ -430,6 +430,12 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
                   });
   // `quit`: the server ends after this frame, as at the end of its time: every player told by
   // the game as it closes (a classic server's "server shutdown"), the masters too.
+  // `version`: the game's own build version.
+  con.add_command(
+      "version", "version: the server's version",
+      [&game](console::Console& cn, const console::Args&) {
+        cn.print(std::string("Version ") + (*game.version_text ? game.version_text : "unknown"));
+      });
   bool quit_asked = false;
   con.add_command("quit", "quit: end the server; every player is told and dropped",
                   [&](console::Console&, const console::Args&) { quit_asked = true; });

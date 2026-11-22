@@ -9,13 +9,15 @@
 // ge:summary Tests: Quake's deathmatch rules on the arena, rule by rule, and the server's lines
 // ge:keywords test arena quake-rules rules-q1 squish door-crush pentagram telefrag satans-power
 // ge:keywords dq dr dropped-power octapower spectator-impulse light-switch fluoro operator-say
-// ge:keywords pause server-is-paused pause-released suicide-refused
+// ge:keywords pause server-is-paused pause-released suicide-refused item_sigil rune serverflags
+// ge:keywords func_episodegate func_bossgate trigger_onlyregistered misc_teleporttrain
 // ge:skill progs shooter testing
 #include <string>
 #include <vector>
 
 #include "check.hpp"
 #include "progs/file.hpp"
+#include "progs/native.hpp"
 #include "shooters_edge/profiles/words.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge_qc_fixture.hpp"
@@ -59,7 +61,16 @@ std::string entities() {
          "{\n\"classname\" \"item_artifact_invisibility\"\n\"origin\" \"-160 -300 24\"\n}\n"
          "{\n\"classname\" \"trigger_multiple\"\n\"model\" \"*2\"\n\"health\" \"10\"\n"
          "\"target\" \"sw\"\n\"wait\" \"1\"\n}\n"
-         "{\n\"classname\" \"func_door\"\n\"model\" \"*1\"\n\"angle\" \"-1\"\n}\n";
+         "{\n\"classname\" \"func_door\"\n\"model\" \"*1\"\n\"angle\" \"-1\"\n}\n"
+         "{\n\"classname\" \"item_sigil\"\n\"spawnflags\" \"2\"\n\"target\" \"sw\"\n"
+         "\"origin\" \"200 -200 24\"\n}\n"
+         "{\n\"classname\" \"func_episodegate\"\n\"model\" \"*1\"\n\"spawnflags\" \"1\"\n}\n"
+         "{\n\"classname\" \"func_bossgate\"\n\"model\" \"*1\"\n}\n"
+         "{\n\"classname\" \"trigger_onlyregistered\"\n\"model\" \"*2\"\n"
+         "\"message\" \"Not in this version\"\n\"target\" \"sw\"\n}\n"
+         "{\n\"classname\" \"misc_teleporttrain\"\n\"target\" \"tc\"\n\"origin\" \"0 0 300\"\n}\n"
+         "{\n\"classname\" \"path_corner\"\n\"targetname\" \"tc\"\n\"target\" \"tc\"\n"
+         "\"origin\" \"256 0 300\"\n}\n";
 }
 
 // The console a test starts with: Quake's words, then its own lines (Quake's rules unless `own`).
@@ -459,4 +470,55 @@ TEST(a_trigger_with_health_is_fired_by_a_blow_and_comes_back) {
   Rig own(quake({"deathmatch 1"}, false));
   const int o = own.first("trigger_multiple");
   CHECK(o > 0 && own.get(o, "takedamage") == 0);
+}
+
+TEST(a_rune_opens_the_episode_and_the_gates_and_the_full_games_trigger_answer) {
+  Rig r(quake({"deathmatch 1"}));
+  const int a = r.join("a");
+  r.frames(2);
+  // No episode done: the episode's gate is gone and the boss's stands.
+  CHECK(r.first("func_episodegate") == 0);
+  CHECK(r.first("func_bossgate") > 0);
+  const int rune = r.first("item_sigil");
+  CHECK(rune > 0);
+  r.said();
+  r.fx.s->out.events.clear();
+  r.run("sigil_touch", rune, a);
+  bool told = false, flashed = false;
+  for (const sv::NetEvent& e : r.fx.s->out.events) {
+    told = told || (e.kind == sv::EventKind::centerprint && e.text == "You got the rune!");
+    flashed = flashed || (e.kind == sv::EventKind::stuffcmd && e.text == "bf\n");
+  }
+  CHECK(told);
+  CHECK(flashed);
+  CHECK(r.first("item_sigil") == 0);
+  const int flags = r.fx.s->q.layout->g.serverflags;
+  CHECK(flags >= 0);
+  if (flags >= 0) CHECK(pg::global_float(r.fx.s->q.vm, flags) == 2);
+  // The full game's trigger on the shareware packs: its words, at most once in 2 s.
+  const int only = r.first("trigger_onlyregistered");
+  CHECK(only > 0);
+  r.fx.s->out.events.clear();
+  r.run("onlyregistered_touch", only, a);
+  r.run("onlyregistered_touch", only, a);
+  int words = 0;
+  for (const sv::NetEvent& e : r.fx.s->out.events)
+    words += e.kind == sv::EventKind::centerprint && e.text == "Not in this version" ? 1 : 0;
+  CHECK(words == 1);
+  // The teleport ball spins on its path, not solid.
+  const int ball = r.first("misc_teleporttrain");
+  CHECK(ball > 0);
+  r.frames(20);
+  const sh::Edict& b = r.fx.s->sv.edicts[static_cast<size_t>(ball)];
+  CHECK(b.solid == 0);
+  CHECK(r.get(ball, "avelocity", 1) == 200);
+  CHECK(r.get(ball, "velocity") > 0);
+  r.no_fault();
+}
+
+TEST(the_arenas_own_rules_have_no_rune) {
+  Rig r(quake({"deathmatch 1"}, false));
+  r.frames(1);
+  CHECK(r.first("item_sigil") == 0);
+  r.no_fault();
 }

@@ -1820,6 +1820,7 @@ gs::ServerGame make() {
   gs::ServerGame g;
   g.binary = "sesv";
   g.title = "Shooter's Edge";
+  g.version_text = kProgramVersion;
   g.protocol = ge::net::protocol_id("shooters_edge", 1);
   g.default_port = server::kServerPort;
   g.discovery_port = 0;  // QuakeWorld browsers ask the port itself (status, ping)

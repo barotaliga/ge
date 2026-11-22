@@ -203,6 +203,7 @@ struct SettingName {
 struct ServerGame {
   const char* binary = "server";  // the executable's name, at the head of every line it prints
   const char* title = "a game";   // the game's name, for the banner and `--help`
+  const char* version_text = "";  // the build's version as words, printed by `version`
   uint32_t protocol = 0;          // the LAN advert's protocol (net/packet.hpp's protocol_id)
   uint16_t default_port = 27500;
   uint16_t discovery_port = 0;    // the game's fixed LAN discovery port (0: no LAN answers)
