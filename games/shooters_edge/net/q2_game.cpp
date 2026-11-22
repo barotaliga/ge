@@ -404,7 +404,7 @@ struct Game {
   bool vis_patch = true;
   std::string ent_path;
   std::vector<std::string> said;
-  std::string mode;        // `gamemode`'s choice for the next map ("": as it is)
+  std::string mode;  // `gamemode`'s choice for the next map ("": as it is)
   // CINEMATIC AND PICTURE LEVELS (show_level): the files still to show after the one on now, the
   // map that follows them ("" none), the `nextserver` text we set (run as ours when unchanged),
   // whether this show's `nextserver` was taken; `sv_cinematics` (0: a movie with something after it
