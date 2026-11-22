@@ -3,7 +3,8 @@
 // (`vid_displays`), the game's sound (`volume`, 0..1) and when it is heard (`s_auto_focus`: 0
 // always, 1 not while the window is minimised, 2 only while it has the focus), the window's border
 // and title bar, its place above the others and its edges (`win_noborder`, `win_notitle`,
-// `win_alwaysontop`, `win_noresize`; `follow_window_cvars` applies them). A game binds them
+// `win_alwaysontop`, `win_noresize`) and its size and place (`vid_geometry`, `WxH+X+Y`;
+// `follow_window_cvars` applies them all). A game binds them
 // once before its config runs, follows `fullscreen` each frame and reads `display` when it goes
 // fullscreen; a setting only one game has (a campaign's scores key) stays in that game, bound
 // beside these.
@@ -12,10 +13,14 @@
 // ge:keywords vid_fullscreen vid_display vid_displays fullscreen display window cvars volume
 // ge:keywords window-cvars add_window_cvars s_auto_focus heard_volume minimised unfocused
 // ge:keywords alt-enter alt_enter win_noborder win_notitle win_alwaysontop win_noresize
-// ge:keywords follow_window_cvars window_style borderless always-on-top
+// ge:keywords follow_window_cvars window_style borderless always-on-top vid_geometry
+// ge:keywords window_place_of window-size window-position geometry
 // ge:skill platform console
 // ge:test tests/platform_window_cvars_test.cpp
 #pragma once
+
+#include <string>
+#include <string_view>
 
 #include "console/console.hpp"
 #include "platform/window.hpp"
@@ -30,10 +35,17 @@ struct WindowCvars {
   // win_noborder, win_notitle (either drops the border and title bar), win_alwaysontop,
   // win_noresize: the window's style (`window_style`), followed each frame.
   bool no_border = false, no_title = false, on_top = false, no_resize = false;
+  // vid_geometry: the window's size and place, `WxH+X+Y` ("" as the game opened it).
+  std::string geometry;
   // What `follow_window_cvars` last set the window to.
   bool full_applied = false;
   WindowStyle style_applied;
+  std::string geometry_applied;
 };
+
+// `WxH`, `WxH+X+Y` or `+X+Y` (X and Y signed, from the desktop's top left) as a place; false for
+// anything else, the empty text too.
+bool window_place_of(std::string_view text, WindowPlace& out);
 
 // The cvars over `w` (it must outlive `con`), and `vid_displays`.
 void add_window_cvars(console::Console& con, WindowCvars& w);
