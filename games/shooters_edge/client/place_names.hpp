@@ -82,6 +82,9 @@ struct PlaceNames {
   const ge::console::Cvar* trace = nullptr;  // loc_trace
   const ge::console::Cvar* draw = nullptr;   // loc_draw (world_fx.hpp's place markers)
   WhereAmI where;  // where the player stands (add_place_commands keeps it)
+  // Where a player can be in the map played or watched (its open space sampled), for `pruneloc`;
+  // empty (or null) when no map is loaded.
+  std::function<std::vector<ge::shooter::Vec3f>()> spots;
 };
 
 // The map `map` started: its points read as the header says (`adapter` and `files` the game's).

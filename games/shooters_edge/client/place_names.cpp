@@ -226,6 +226,21 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
          p.locs.points.clear();
          c.print("Cleared " + std::to_string(n) + " places.");
        });
+  // The points no spot needs: each one whose going leaves every spot in the map named the same.
+  const auto prune = [&p](con::Console& c, const CArgs&) {
+    const std::vector<sh::Vec3f> spots = p.spots ? p.spots() : std::vector<sh::Vec3f>{};
+    if (spots.empty()) {
+      c.print("You need to be in a game to tidy the places.");
+      return;
+    }
+    const size_t was = p.locs.points.size();
+    const int gone = ge::shooter::prune_locs(p.locs, spots, range_of(p), sight_of(p));
+    c.print("Took out " + std::to_string(gone) + " of " + std::to_string(was) +
+            " places that named nowhere new; " + std::to_string(p.locs.points.size()) +
+            " left. Save them with saveloc.");
+  };
+  both("locations_prune", "pruneloc",
+       "locations_prune: take out every place whose going changes no spot's name", prune);
   const auto save = [&p](con::Console& c, const CArgs& a) {
     if (a.size() != 2) {
       c.print("Usage: saveloc <name>");
@@ -295,8 +310,8 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
     return false;
   };
   con.add_command(
-      "loc", "loc: the place you are in; loc add|del|set|list|save edits the places",
-      [&p, in_game, add, remove, save](con::Console& c, const CArgs& a) {
+      "loc", "loc: the place you are in; loc add|del|set|list|save|prune edits the places",
+      [&p, in_game, add, remove, save, prune](con::Console& c, const CArgs& a) {
         const std::string sub = a.size() > 1 ? lower(a[1]) : "";
         const auto shifted = [&a](const char* name, bool joined) {
           CArgs b = a;
@@ -338,12 +353,14 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
             c.print((l.raw.empty() ? l.name : l.raw) + " at " + at_text(l.at));
           c.print(p.locs.points.empty() ? "There are no places on this map."
                                         : std::to_string(p.locs.points.size()) + " places.");
+        } else if (sub == "prune") {
+          prune(c, a);
         } else if (sub == "save") {
           CArgs b = shifted("saveloc", false);
           if (b.size() < 2) b.words.push_back(p.map);
           save(c, b);
         } else {
-          c.print("Usage: loc, or loc add|del|set|list|save");
+          c.print("Usage: loc, or loc add|del|set|list|save|prune");
         }
       });
 }

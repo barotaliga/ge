@@ -9,6 +9,7 @@
 #include <cmath>
 #include <string>
 
+#include "brush/survey.hpp"
 #include "shooters_edge/client/face_hit.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/map_line.hpp"
@@ -24,6 +25,14 @@ void add_place_queries(ge::console::Console& con, PlaceNames& places, const List
     if (map == nullptr) return true;
     const V end = line_end(*map, from, to);
     return end.x == to.x && end.y == to.y && end.z == to.z;
+  };
+  // Where a player can be: the map's open space every 32 units (a player's width).
+  places.spots = [&listen, &seen] {
+    const server::BspMap* map = seen.on ? seen.map : (listen.map ? &listen.map->bsp : nullptr);
+    std::vector<V> out;
+    if (map == nullptr) return out;
+    for (const auto& p : ge::brush::open_spots(map->map, 32)) out.push_back({p[0], p[1], p[2]});
+    return out;
   };
   places.looked_at = [&listen, &seen](V& at) {
     V from, angles;

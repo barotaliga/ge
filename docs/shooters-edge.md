@@ -183,7 +183,10 @@ format, `loadloc <name>` reads one, and `loc` says where you are. The long names
 someplace and `removeloc` or `loc set` finds nothing. With `loc_trace 1` a point behind a wall
 from where the player stands is passed over too. `loc_draw 1` stands a marker at every point
 within reach (Quake's the player's head, Quake II's the ancient head), the nearest bobbing under a
-white light, to check a place file by eye. The places follow the player's view on a
+white light, to check a place file by eye. `pruneloc` (`locations_prune`, `loc prune`) tidies a
+file: it takes out every point whose going leaves every spot of the map (its open space every 32
+units) named the same, so a room marked by fifty points of one name keeps the few its edges need;
+`saveloc` then writes the smaller file. The places follow the player's view on a
 server joined and in a demo played as well as in the window's own game: each map's file is read as
 it starts, from the recording's game folder for a demo, and edited and saved the same way. A
 recording keeps the place names it was played with (stuffed `//loc` lines in its signon, a comment

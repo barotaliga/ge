@@ -121,3 +121,28 @@ TEST(a_point_out_of_sight_is_passed_over_for_the_next_nearest) {
         nullptr);  // the one in sight is too far
   CHECK(ge::classic::loc_name_at(l, {0, 0, 0}, 0, counted) == "behind the wall" && asked == 1);
 }
+
+TEST(pruning_keeps_only_the_points_a_spot_needs) {
+  // A corridor 0..1000: "a" marked every 10 units up to 400, "b" from 600; a spot every 10 units.
+  ge::classic::Locs locs;
+  for (int x = 0; x <= 400; x += 10) ge::classic::add_loc(locs, {float(x), 0, 0}, "a");
+  for (int x = 600; x <= 1000; x += 10) ge::classic::add_loc(locs, {float(x), 0, 0}, "b");
+  std::vector<ge::shooter::Vec3f> spots;
+  for (int x = 0; x <= 1000; x += 10) spots.push_back({float(x), 0, 0});
+  std::vector<std::string> before;
+  for (const auto& s : spots) before.push_back(ge::classic::loc_name_at(locs, s));
+  const int gone = ge::shooter::prune_locs(locs, spots);
+  CHECK_MSG(gone == 80 && locs.points.size() == 2, std::to_string(gone));
+  CHECK(locs.points[0].name == "a" && locs.points[0].at.x == 400);  // the edge each side keeps
+  CHECK(locs.points[1].name == "b" && locs.points[1].at.x == 600);
+  for (size_t i = 0; i < spots.size(); ++i)
+    CHECK(ge::classic::loc_name_at(locs, spots[i]) == before[i]);
+  // With a reach of 150 the far ends need points of their own, or they would go unnamed.
+  ge::classic::Locs reach;
+  for (int x = 0; x <= 400; x += 10) ge::classic::add_loc(reach, {float(x), 0, 0}, "a");
+  ge::shooter::prune_locs(reach, spots, 150);
+  for (size_t i = 0; i < spots.size(); ++i)
+    CHECK(ge::classic::loc_name_at(reach, spots[i], 150) == (spots[i].x <= 550 ? "a" : ""));
+  CHECK_MSG(reach.points.size() >= 2 && reach.points.size() < 6,
+            std::to_string(reach.points.size()));
+}

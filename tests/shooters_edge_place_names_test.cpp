@@ -9,11 +9,13 @@
 // ge:keywords test shooters-edge place-names addloc saveloc loadloc removeloc map_started loc_dist
 // ge:keywords loc_here loc_there place-macros
 // ge:skill shooter console testing
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
 
 #include "brush/read.hpp"
+#include "brush/survey.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "console/console.hpp"
@@ -282,4 +284,43 @@ TEST(loc_draw_stands_a_marker_at_each_place_within_reach) {
   CHECK(cl::place_markers(p, 0, marks) && marks.size() == 3);
   playing = false;
   CHECK(!cl::place_markers(p, 0, marks) && marks.empty());
+}
+
+TEST(pruneloc_tidies_a_dense_place_file_on_a_real_map) {
+  std::vector<uint8_t> bytes;
+  std::string error;
+  const ge::brush::Fixture fixture = ge::brush::sample_fixture();
+  CHECK_MSG(ge::brush::write_bsp(fixture, ge::brush::Family::v29, &bytes, &error), error);
+  ge::brush::Map m;
+  CHECK_MSG(ge::brush::read_bsp(bytes, &m, &error), error);
+  ge::console::Console con;
+  cl::PlaceNames p;
+  cl::SearchPath files;
+  cl::add_place_commands(con, p, cl::qw_adapter(), files, [](ge::shooter::Vec3f& at) {
+    at = {256, 192, 40};
+    return true;
+  });
+  // Every room marked every 32 units at waist height, each point by its room's name.
+  for (const ge::brush::FixtureRoom& r : fixture.rooms)
+    for (int y = r.min[1] + 16; y < r.max[1]; y += 32)
+      for (int x = r.min[0] + 16; x < r.max[0]; x += 32)
+        ge::classic::add_loc(p.locs, {float(x), float(y), float(r.min[2] + 40)}, r.name);
+  con.execute("loc_dist 0");
+  const std::vector<std::array<float, 3>> open = ge::brush::open_spots(m, 32);
+  std::vector<ge::shooter::Vec3f> spots;
+  for (const auto& o : open) spots.push_back({o[0], o[1], o[2]});
+  p.spots = [&spots] { return spots; };
+  std::vector<std::string> before;
+  for (const auto& s : spots) before.push_back(ge::classic::loc_name_at(p.locs, s));
+  const size_t was = p.locs.points.size();
+  con.execute("pruneloc");
+  const size_t now = p.locs.points.size();
+  CHECK_MSG(spots.size() > 1000 && was > 400 && now * 4 < was,
+            std::to_string(spots.size()) + " spots, " + std::to_string(was) + " -> " +
+                std::to_string(now));
+  size_t moved = 0;
+  for (size_t i = 0; i < spots.size(); ++i)
+    moved += ge::classic::loc_name_at(p.locs, spots[i]) != before[i] ? 1 : 0;
+  CHECK(moved == 0);
+  std::printf("pruneloc on the fixture: %zu spots, %zu places -> %zu\n", spots.size(), was, now);
 }
