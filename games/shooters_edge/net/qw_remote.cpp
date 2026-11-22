@@ -1167,6 +1167,13 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.q2_downloads.pics = kind("allow_download_pics", "1");
     cfg.q2_downloads.others = kind("allow_download_others", "0");
     cfg.q2_nodelta = cvar("cl_nodelta", "0") != "0";
+    cfg.q2_protocol = std::atoi(cvar("cl_protocol", "0").c_str());
+    cfg.q2_msglen = std::atoi(cvar("net_maxmsglen", "1390").c_str());
+    cfg.q2_chantype = std::atoi(cvar("net_chantype", "1").c_str());
+    cfg.q2_batch = cvar("cl_batchcmds", "1") != "0";
+    cfg.q2_packetdup = std::atoi(cvar("cl_packetdup", "1").c_str());
+    cfg.q2_maxpackets = std::atoi(cvar("cl_maxpackets", "30").c_str());
+    cfg.q2_instantpacket = cvar("cl_instantpacket", "1") != "0";
     // Quake II's downloads over HTTP (classic/content/web_downloads.hpp), registered while it is
     // the game.
     cfg.web.downloads = cvar("cl_http_downloads", "1") != "0";
@@ -1225,12 +1232,15 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
       "connect",
       "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in Quake II; "
       "port 26000 is a server of Quake's own protocol)",
-      [join](Con& c, const Args& a) {
+      [join, &r](Con& c, const Args& a) {
         if (a.size() < 2) {
           c.print("connect: name a server (connect 192.168.1.20)");
           return;
         }
-        if (a.size() > 2) c.print("Second argument to connect is ignored.");
+        if (a.size() > 2 && r.q2_game && r.q2_game())  // Quake II's protocol is a setting
+          c.print("The second argument to connect is ignored. Set the protocol with cl_protocol.");
+        else if (a.size() > 2)
+          c.print("Second argument to connect is ignored.");
         join(c, a[1]);
       });
   con.add_command(

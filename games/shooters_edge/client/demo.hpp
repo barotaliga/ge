@@ -392,7 +392,13 @@ struct Demo {
   std::string inner_name;                 // the recording's name inside an archive ("": none)
   bool dzip = false;                      // it came out of a Dzip archive (demo_dzip.hpp)
   bool truncated = false;                 // a packed recording cut short: plays to its last flush
-  bool replay_v2 = false;                 // it came out of a replay file version 2 (.ged)
+  // Quake II blocks of up to 32768 bytes (a joined later protocol's stream: one message longer
+  // than a block, q2_proto_in.hpp); a recording's are 1400 unless its server data says extended.
+  bool wide_blocks = false;
+  // A later protocol's server data said its landing takes no pause (its strafe-jump hack; a
+  // joined client sets it, net/q2_proto_in.hpp): what the prediction runs when no feel is told.
+  bool strafe_hack = false;
+  bool replay_v2 = false;  // it came out of a replay file version 2 (.ged)
   size_t pos = 0;
   DemoState state;
   std::vector<DemoEntity> baselines;  // by entity number
@@ -534,6 +540,13 @@ DemoRead next_q2(Demo& d, std::string& error);
 // `d` set up to read Quake II format from blocks appended to `d.bytes` as they come (a live
 // connection's payloads); open_demo does the same for a file.
 void q2_stream_begin(Demo& d);
+// The end of the one protocol 34 message at `at` in `b` (its id first), found by reading it into
+// `scratch` (a stream begun with q2_stream_begin, never shown): what Quake II's later protocols
+// copy as they are (net/q2_proto_in.hpp). False with the reason.
+bool q2_message_end(Demo& scratch, std::span<const uint8_t> b, size_t at, size_t& end,
+                    std::string& error);
+// What reading into a scratch stream left that would otherwise pile up (effects, prints, sounds).
+void q2_scratch_clear(Demo& d);
 inline constexpr size_t kQ2StuffedKept = 256;
 
 // The voice message's body (after the id byte) into `out`; false when it runs past the end.

@@ -120,6 +120,7 @@ struct ClientConfig {
   // Off unless asked (the window's join turns them on by those settings).
   bool fetch_lit = false;
   bool fetch_locs = false;
+  bool q2_batch = true, q2_instantpacket = true;  // cl_batchcmds, cl_instantpacket (below)
   // A file fetched, handed on to be kept (the window writes it into the game's folder, or into a
   // partial of the archive `origin` names when the server told it: engine/vfs/partial.hpp);
   // `downloaded` holds it either way. `origin` is null for a loose file or a server that did not.
@@ -137,6 +138,7 @@ struct ClientConfig {
   // `script`. It may read anything its owner gives it; the client sends what it returns.
   std::function<sh::MoveCmd(int tick)> brain;
   bool voice = false;                          // ask for voice and speak while `talk` says so
+  int q2_maxpackets = 30;                      // Quake II's cl_maxpackets (below)
   ClientTalk talk = nullptr;                   // null: never speaks
   const std::vector<float>* speech = nullptr;  // 48 kHz mono to speak (null: a voice of its own)
   // A player's own microphone in place of `talk` and `speech`: the samples the window hands in
@@ -166,6 +168,9 @@ struct ClientConfig {
   // (`cl_c2sImpulseBackup`: 1 the new move, 2 the one before too, 3 the one before that; 0 none).
   int c2spps = 0;
   int c2s_impulse_backup = 3;
+  // Quake II's later protocols (q2_client.hpp): cl_protocol, net_maxmsglen, net_chantype,
+  // cl_packetdup (cl_maxpackets beside `voice`).
+  int q2_protocol = 0, q2_msglen = 1390, q2_chantype = 1, q2_packetdup = 1;
 };
 
 // A SCREENSHOT THE SERVER ASKED FOR (a stuffed "cmd snap"): `asked` until the window hands the

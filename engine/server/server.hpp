@@ -106,9 +106,9 @@ struct ServerConfig {
   int32_t con_tab_threshold = 50;   // con_completion_threshold: matches listed before asking
   int32_t con_logfile = 0;          // con_logfile: the console log (console_log.hpp) 0 off, 1, 2
   int32_t con_logfile_flush = 0;    // con_logfile_flush: 0 buffered, 1 each line, 2 unbuffered
+  int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
   std::string con_logfile_name = "console";              // con_logfile_name: logs/<name>.log
   std::string con_logfile_prefix = "[%Y-%m-%d %H:%M] ";  // con_logfile_prefix: before each line
-  int32_t max_spectators = 0;      // sv_maxspectators: spectators beside the players
   int32_t vote = 1;                // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
   int32_t timeouts = 1;            // sv_timeouts: each side's timeouts a map (timeout.hpp)
   std::string spectator_password;  // sv_spectatorpassword: watching takes it
