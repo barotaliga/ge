@@ -436,7 +436,7 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
   if (!l.strip && !quit) scroll_rows(page, l, kRowTop * l.scale + l.y);
   const bool slots = page.id == "load" || page.id == "save";
   if (const ui::Image* plaque = art.find("qplaque"); plaque != nullptr && !slots && !l.strip)
-    l.label_left = 16 + art.width_of(*plaque) + 4;  // the plaque at x 16 and a gap
+    l.label_left = 16 + art.width_of(*plaque);  // the plaque at x 16, the labels from its edge
   return l;
 }
 
