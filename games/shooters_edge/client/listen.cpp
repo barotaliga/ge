@@ -627,7 +627,10 @@ void read_streams(Listen& l, const sv::RulesCommon& s, bool clear = true) {
       if (ev.kind != sv::EventKind::particle || (ev.to & 1u) == 0) continue;
       Effect e;
       e.code = -1;
-      e.kind = ev.text == "explosion" ? EffectKind::explosion : EffectKind::blood;
+      e.colour = static_cast<int>(ev.values[0]);
+      e.kind = ev.text == "explosion"  ? EffectKind::explosion
+               : ev.text == "particle" ? EffectKind::burst
+                                       : EffectKind::blood;
       e.at = e.end = ev.origin;
       // A burst's drops and its way as the wire would carry them: the count a byte, each axis of
       // the way in sixteenths from -8 to 7.94.
@@ -639,7 +642,8 @@ void read_streams(Listen& l, const sv::RulesCommon& s, bool clear = true) {
       l.effects.push_back(e);
     }
     for (size_t i = first; i < l.effects.size(); i++)
-      if (l.effects[i].kind == EffectKind::explosion) l.explosions.push_back(l.effects[i].at);
+      if (l.effects[i].kind == EffectKind::explosion && l.effects[i].code != 12)  // 12: its own
+        l.explosions.push_back(l.effects[i].at);
     for (const sv::NetEvent& ev : out.events) take_named(l, ev);
   }
   if (!clear) return;  // the door routes them to the clients, then empties them

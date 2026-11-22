@@ -53,7 +53,7 @@ void item_taken(A& q) {
 
 // Common setup: a trigger box on the floor, its model and pick-up sound.
 void item_start(A& q, int32_t mdl, int32_t snd, Vec3 lo, Vec3 hi, float respawn) {
-  q.precache_model(mdl);
+  if (!q.is(mdl, "")) q.precache_model(mdl);  // the old box of no kind has none
   q.precache_sound(snd);
   if (midair_on(q)) {  // nothing lies on the map in midair
     q.remove(q.self());
@@ -199,14 +199,18 @@ void armour_start(A& q, float slot, float bit) {
   item_start(q, mdl, snd, {-16, -16, 0}, {16, 16, 56}, 20);
 }
 
-void ammo_start(A& q, int32_t mdl, int32_t setting) {
+// An ammunition box: `big` (spawnflags 1) holds twice as much and lies as the big box's model.
+void ammo_start(A& q, int32_t mdl, int32_t big, int32_t setting) {
   const int32_t me = q.self();
   if (q.deathmatch() == 4) {  // none lies on the map in deathmatch 4
     q.remove(me);
     return;
   }
   float n = 1;
-  if (on(band(q.f(me, q.L.f.spawnflags), 1))) n = 2;
+  if (on(band(q.f(me, q.L.f.spawnflags), 1))) {
+    n = 2;
+    mdl = big;
+  }
   q.set_f(me, q.L.f.ammo_shells, q.f(me, q.L.f.ammo_shells) * n);
   q.set_f(me, q.L.f.ammo_nails, q.f(me, q.L.f.ammo_nails) * n);
   q.set_f(me, q.L.f.ammo_rockets, q.f(me, q.L.f.ammo_rockets) * n);
@@ -443,14 +447,19 @@ void ammo_touch(A& q) {
     best = q.f(q.self(), q.L.f.weapon) == quake_best_weapon(q);
     q.set_self(was);
   }
-  if (!ammo_give_own(q)) return;
+  // The old box (item_weapon) is named by the kind it holds, and says "You got the " even with
+  // none.
+  const bool old_box = q.is(q.i(q.self(), q.L.f.classname), "item_weapon");
+  const bool empty = old_box & q.is(q.i(q.self(), q.L.f.netname), "");
+  if (!ammo_give_own(q) & !empty) return;
   if (best) {
     q.set_self(q.other());
     q.set_f(q.self(), q.L.f.weapon, quake_best_weapon(q));
     q.set_self(was);
   }
-  const int32_t n = name_of(q, q.i(q.self(), q.L.f.classname), 0);
-  if (q.is(n, "")) {
+  const int32_t n =
+      old_box ? q.i(q.self(), q.L.f.netname) : name_of(q, q.i(q.self(), q.L.f.classname), 0);
+  if (q.is(n, "") & !old_box) {
     say_to(q, q.other(), kPrintLow, {q.s(s_you_got_ammunition)});
   } else {
     say_to(q, q.other(), kPrintLow, {q.s(s_you_got_the), n, q.s(s_nl)});
@@ -464,19 +473,51 @@ void ammo_touch(A& q) {
 
 void item_shells(A& q) {
   q.set_f(q.self(), q.L.f.ammo_shells, 20);
-  ammo_start(q, q.s(s_b_shell0), q.s(s_arsenal_ammo1));
+  ammo_start(q, q.s(s_b_shell0), q.s(s_b_shell1), q.s(s_arsenal_ammo1));
 }
 void item_spikes(A& q) {
   q.set_f(q.self(), q.L.f.ammo_nails, 25);
-  ammo_start(q, q.s(s_b_nail0), q.s(s_arsenal_ammo2));
+  ammo_start(q, q.s(s_b_nail0), q.s(s_b_nail1), q.s(s_arsenal_ammo2));
 }
 void item_rockets(A& q) {
   q.set_f(q.self(), q.L.f.ammo_rockets, 5);
-  ammo_start(q, q.s(s_b_rock0), q.s(s_arsenal_ammo3));
+  ammo_start(q, q.s(s_b_rock0), q.s(s_b_rock1), q.s(s_arsenal_ammo3));
 }
 void item_cells(A& q) {
   q.set_f(q.self(), q.L.f.ammo_cells, 6);
-  ammo_start(q, q.s(s_b_batt0), q.s(s_arsenal_ammo4));
+  ammo_start(q, q.s(s_b_batt0), q.s(s_b_batt1), q.s(s_arsenal_ammo4));
+}
+
+// The old ammunition box kept for old maps: spawnflags 1 shells, 4 nails, 2 rockets (the last of
+// these that is set wins), 8 the big box; it lies in deathmatch 4 too. With no kind it gives
+// nothing and still says "You got the ".
+void item_weapon(A& q) {
+  const int32_t me = q.self();
+  const float flags = q.f(me, q.L.f.spawnflags);
+  const bool big = on(band(flags, 8));
+  int32_t mdl = q.s(s_empty);
+  int32_t kind = q.s(s_empty);
+  if (on(band(flags, 1))) {
+    mdl = q.s(big ? s_b_shell1 : s_b_shell0);
+    kind = q.s(s_shells);
+    q.set_f(me, q.L.f.ammo_shells, big ? 40 : 20);
+  }
+  if (on(band(flags, 4))) {
+    mdl = q.s(big ? s_b_nail1 : s_b_nail0);
+    kind = q.s(s_spikes);
+    q.set_f(me, q.L.f.ammo_shells, 0);
+    q.set_f(me, q.L.f.ammo_nails, big ? 40 : 20);
+  }
+  if (on(band(flags, 2))) {
+    mdl = q.s(big ? s_b_rock1 : s_b_rock0);
+    kind = q.s(s_rockets);
+    q.set_f(me, q.L.f.ammo_shells, 0);
+    q.set_f(me, q.L.f.ammo_nails, 0);
+    q.set_f(me, q.L.f.ammo_rockets, big ? 10 : 5);
+  }
+  q.set_i(me, q.L.f.netname, kind);  // its name when taken
+  q.set_i(me, q.L.f.touch, q.fn(fn_ammo_touch));
+  item_start(q, mdl, q.s(s_lock4_wav), {0, 0, 0}, {32, 32, 56}, 20);
 }
 
 void weapon_touch(A& q) {

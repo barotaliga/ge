@@ -39,6 +39,7 @@ struct ListenTargets {
   int& port;
   int& maxclients;
   LoginSettings& login;
+  std::string& hostname;  // sv_hostname: the match's name in the browser and the lobby
 };
 
 // The settings over `t`; `lobby` is set on (a window's match opens in the lobby).

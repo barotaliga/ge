@@ -2,6 +2,7 @@
 //
 // ge:summary A hosting window's lobby words and settings: ready, team, sv_lobby, sv_port, sv_login
 // ge:keywords lobby console add_lobby_words add_listen_cvars sv_lobby sv_port sv_login hosting
+// ge:keywords sv_hostname
 // ge:skill net console
 // ge:test tests/shooters_edge_lobby_test.cpp
 #include "server/listen_console.hpp"
@@ -67,6 +68,12 @@ void add_listen_cvars(console::Cvars& cvars, const ListenTargets& t) {
                       "takes effect with the next map",
               .kind = console::CvarKind::integer},
              &t.port);
+  cvars.bind({.name = "sv_hostname",
+              .fallback = t.hostname,
+              .help = "the name the next match others join shows in the server browser and the "
+                      "lobby; takes effect with the next map",
+              .kind = console::CvarKind::text},
+             &t.hostname);
   cvars.bind({.name = "sv_maxclients",
               .fallback = "32",
               .help = "the match's slots: the player, the bots and who joins (1..32)",

@@ -562,6 +562,23 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
   } else if (page.id == "quit" || page.id == "newgame") {
     pen.box(56, 68, 24, 5);
   }
+  // The setup page's figure in the shirt and pants its rows hold now, in its box under the rows.
+  if (page.id == "setup" && art.loaded()) {
+    int top = -1, bottom = -1;
+    float below = kRowTop;
+    for (size_t i = 0; i < page.items.size(); i++) {
+      const ui::Item& it = page.items[i];
+      if (l.items[i].w > 0) below = std::max(below, local_y(l.items[i]) + 8);
+      if (it.id == "topcolor" && !it.disabled) top = it.choice;
+      if (it.id == "bottomcolor" && !it.disabled) bottom = it.choice;
+    }
+    const ui::Image* fig = top >= 0 && bottom >= 0 ? art.player_in(top, bottom) : nullptr;
+    if (fig != nullptr) {
+      const float bx = std::floor((kScreenW - 72) / 2.0f), by = below + 8;
+      pen.picture(art.find("bigbox"), bx, by);
+      pen.picture(fig, bx + 12, by + 8);
+    }
+  }
   for (size_t i = 0; i < page.items.size(); i++) {
     const ui::Item& it = page.items[i];
     const ui::Rect& r = l.items[i];

@@ -68,7 +68,8 @@ enum class EffectKind : uint8_t {
   beam,
   blood,
   named,
-  named_trail
+  named_trail,
+  burst  // a program's burst in a colour other than blood's
 };
 struct Effect {
   EffectKind kind = EffectKind::impact;
@@ -79,7 +80,7 @@ struct Effect {
   ge::shooter::Vec3f end;  // a beam's end; a named trail's
   ge::shooter::Vec3f way;  // a named effect's way (zero: up)
   std::string name;        // a named effect's
-  int colour = 0;          // a laser's sparks' palette index
+  int colour = 0;          // a laser's sparks' palette index; a burst's; explosion2's first
 };
 
 inline constexpr double kPrintSpeed = 8;  // scr_printspeed's default, characters a second

@@ -834,6 +834,11 @@ bool bind_map(QwServer& s, const sv::RulesRunner& rules, std::string& error) {
     info_set(s.serverinfo, rule, c->value, kServerInfoBytes);
     if (std::string_view(rule) == "deathmatch") monsters = false;
   }
+  // The match's settings every QuakeWorld server publishes, zero or not.
+  info_set(s.serverinfo, "maxspectators", std::to_string(s.cfg.max_spectators), kServerInfoBytes);
+  for (const char* rule : {"teamplay", "fraglimit", "timelimit", "samelevel", "watervis"})
+    if (const ge::console::Cvar* c = qc.cvars.find(rule); c != nullptr && !c->value.empty())
+      info_set(s.serverinfo, rule, c->value, kServerInfoBytes);
   if (!s.cfg.progs_crc.empty()) info_set(s.serverinfo, "*progs", s.cfg.progs_crc, kServerInfoBytes);
   if (s.cfg.cheats) {  // the rules' sv_cheats with it: god, give, noclip and fly
     info_set(s.serverinfo, "*cheats", "ON", kServerInfoBytes);
@@ -941,6 +946,8 @@ void qw_drop(QwServer& s, int slot, const std::string& why) {
   line += why;
   s.log.push_back(line);
   s.counts.drops++;
+  if (!c.local && why != "timed out" && s.cfg.zombie_s > 0)
+    s.zombies.push_back({c.address, c.ch, slot, c.userid, s.now + s.cfg.zombie_s});
   c = QwClient{};
   full_client_update(s, slot, -1);
 }
@@ -1159,8 +1166,32 @@ void tell_frags(QwServer& s) {
 
 }  // namespace
 
+namespace {
+
+// A packet from a zombie's address and port (QwServer::zombies): taken on his channel, its
+// commands never run, answered with the goodbye alone.
+void answer_zombie(QwServer& s, const gn::Address& from, uint16_t qport, const uint8_t* buf,
+                   size_t size) {
+  for (QwServer::Zombie& z : s.zombies) {
+    if (!same_host(z.address, from) || z.ch.qport != qport) continue;
+    z.address = from;
+    size_t at = 0;
+    if (!channel_process(z.ch, buf, size, s.now, at)) return;
+    uint8_t out[kMaxPacket];
+    const uint8_t bye = svc::disconnect;
+    const size_t n = channel_transmit(z.ch, &bye, 1, s.now, out);
+    gn::transport_send(*s.transport, z.address, out, n, static_cast<int64_t>(s.now * 1e6));
+    s.counts.datagrams_out++;
+    s.counts.bytes_out += static_cast<int64_t>(n);
+    return;
+  }
+}
+
+}  // namespace
+
 void qw_frame(QwServer& s, int64_t now_us) {
   s.now = static_cast<double>(now_us) / 1e6;
+  std::erase_if(s.zombies, [&s](const QwServer::Zombie& z) { return s.now > z.until; });
   if (s.started < 0) s.started = s.now;
   s.frames++;
   s.packets.clear();
@@ -1192,7 +1223,10 @@ void qw_frame(QwServer& s, int64_t now_us) {
       slot = i;
       break;
     }
-    if (slot < 0) continue;
+    if (slot < 0) {
+      answer_zombie(s, from, qport, buf, size);
+      continue;
+    }
     QwClient& c = s.clients[slot];
     if (c.hold_s > 0 || !c.held.empty()) {  // held back for the minimum ping
       c.held.push_back({s.now + c.hold_s, std::vector<uint8_t>(buf, buf + size)});

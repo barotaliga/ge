@@ -282,7 +282,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   // An old Quake config's saved name and colours: `_cl_name` is the name, `_cl_color` both
   // colours as one number (shirt times 16 plus pants), so its config dresses you as it did.
   c.cvars().add_synonym("_cl_name", "name");
-  c.cvars().add_synonym("port", "sv_port");  // the port the next game is served on
+  c.cvars().add_synonym("port", "sv_port");          // the port the next game is served on
+  c.cvars().add_synonym("hostname", "sv_hostname");  // the name the next game is served under
   c.add_command(
       "_cl_color", "_cl_color <shirt*16+pants>: both your colours as one number",
       [](con::Console& k, const con::Args& a) {

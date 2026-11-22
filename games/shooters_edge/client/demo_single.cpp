@@ -375,7 +375,10 @@ bool temp_entity(DemoMsg& m, DemoState& s, std::string& error) {
   }
   e.at = point();
   e.end = e.kind == DemoEffectKind::beam ? point() : e.at;
-  if (e.code == 12) m.skip(2);  // its colour range
+  if (e.code == 12) {  // its colours: the first and the run's length
+    e.colour = m.u8();
+    e.count = m.u8();
+  }
   if (!m.bad) s.effects.push_back(e);
   return true;
 }
@@ -465,17 +468,21 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         }
         case kParticle: {
           // A program's burst: blood's colour (73) is a body's blood, its drops thrown along its
-          // way (sixteenths a byte); the beam's blood (225) is a burst of its own. Other colours
-          // are drawn by nothing.
+          // way (sixteenths a byte); the beam's blood (225) is a burst of its own; any other colour
+          // is a burst of that colour's shades; a count of 255 is an explosion.
           const float x = coord(m), y = coord(m), z = coord(m);
           float way[3];
           for (float& v : way) v = static_cast<float>(static_cast<int8_t>(m.u8())) / 16;
           const int count = m.u8(), colour = m.u8();
-          if (!m.bad && (colour == kBloodColour || colour == kBeamBloodColour)) {
+          if (!m.bad) {
             DemoEffect e;
-            e.kind = DemoEffectKind::blood;
-            e.code = colour == kBeamBloodColour ? 13 : -1;  // -1: a program's burst
+            const bool blood = colour == kBloodColour || colour == kBeamBloodColour;
+            e.kind = count == 255 ? DemoEffectKind::explosion
+                     : blood      ? DemoEffectKind::blood
+                                  : DemoEffectKind::burst;
+            e.code = count == 255 ? 3 : colour == kBeamBloodColour ? 13 : -1;  // -1: a burst
             e.count = count;
+            e.colour = colour;
             e.at = e.end = {x, y, z};
             e.way = {way[0], way[1], way[2]};
             s.effects.push_back(e);

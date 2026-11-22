@@ -162,6 +162,7 @@ struct ServerConfig {
   std::string password, spectator_password;
   std::string rcon_password;  // the remote console's (qw_admin.hpp; empty: none offered)
   std::string ban_file;
+  double zombie_s = 2;   // zombietime: s a dropped player's address is still answered
   std::string frag_dir;  // where `fraglogfile` writes frag_<n>.log ("": nowhere)
   // Where `snap` keeps the screenshots players send, as <userid>-<nn>.<ext> ("": none asked).
   std::string snap_dir;
@@ -430,6 +431,16 @@ struct QwServer {
   // the client reads nothing yet.
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* name_ctx = nullptr;
+  // ZOMBIES: a player dropped (but not by a time-out) whose packets, for `cfg.zombie_s` seconds,
+  // are still taken on his channel and answered with the goodbye alone, so a client that missed
+  // it learns it was dropped. His slot is free at once for whoever joins next.
+  struct Zombie {
+    gn::Address address;
+    Channel ch;
+    int slot = 0, userid = 0;
+    double until = 0;  // the network's time it ends, s
+  };
+  std::vector<Zombie> zombies;
   FragLog frags;  // the frag log, its file and the buffer the `log` query reads (qw_fraglog.hpp)
 };
 

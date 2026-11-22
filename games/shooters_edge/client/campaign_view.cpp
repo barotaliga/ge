@@ -155,7 +155,11 @@ void read_effects(CampaignView& v, std::span<const uint8_t> bytes, std::vector<E
     }
     e.at = point();
     e.end = beam ? point() : e.at;
-    if (code == 12) i += 2;  // the colour range
+    if (code == 12) {  // its colours: the first and the run's length
+      e.colour = bytes[i];
+      e.count = bytes[i + 1];
+      i += 2;
+    }
     out.push_back(e);
   }
 }

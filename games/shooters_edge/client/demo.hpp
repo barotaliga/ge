@@ -212,7 +212,8 @@ enum class DemoEffectKind : uint8_t {
   teleport,
   blood,
   named,
-  named_trail
+  named_trail,
+  burst  // a program's burst in a colour other than blood's (`colour`, `count` specks, `way`)
 };
 // A blow the player took (the protocol's damage message, to him alone): the armour and the blood it
 // cost, and where it came from (units). What tips the classic view (demo_eyes.hpp).
@@ -240,7 +241,8 @@ struct DemoEffect {
   sh::Vec3f at, end;  // units; a beam's start and end (`end` is `at` for the rest); a trail's
   sh::Vec3f way;      // a named effect's way
   std::string name;   // a named effect's
-  int colour = 0;     // a splash's or a laser's sparks' palette index
+  int colour = 0;     // a splash's or a laser's sparks' palette index; a burst's; explosion2's
+                      // first colour (`count` its run's length)
 };
 
 inline constexpr double kNeverFlashed = -1e9;

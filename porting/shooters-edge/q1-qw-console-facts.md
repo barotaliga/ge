@@ -859,3 +859,208 @@ client's `msg` setting defaults to "1" and is a user info key, so a stock client
   seconds of the server's clock have passed; packets from it are taken by the channel but not run,
   each answered with the reliable stream alone; it counts against the slots (a connect can be told
   the server is full); `status` lists it with "ZOMBIE". A time-out frees the slot at once.
+
+### 27. Effects, the setup figure and the game options page (Quake client)
+
+#### Shared particle facts used below
+
+- The particle pool holds 2048 particles by default; the command-line option `-particles N`
+  changes it, never below 512. When the pool is empty, an effect simply stops adding
+  particles; the remaining ones are silently dropped. **[read]**
+- Each frame a particle moves by its velocity times the frame time, then its velocity is
+  changed by its kind's rule. A particle is removed once its death time is earlier than the
+  current client time. **[read]**
+- The per-frame gravity step is frame time times gravity times 0.05: at gravity 800 that is
+  an acceleration of 40 units/s² downward ("slow gravity"). **[derived]**
+- A particle is drawn as one flat palette colour; its colour never changes unless its kind is
+  one of the ramp kinds (the rocket explosion's two ramps, fire). **[read]**
+
+#### 27.1 explosion2 (temp entity 12)
+
+- Wire: three coordinates, then a colour-start byte, then a colour-length byte (as you
+  have). **[read]**
+- Particles: 512, one burst. **[read]**
+- Colour: assigned in sequence, not at random. The n-th particle (n counting from 0) gets
+  palette index start + (n modulo length). So with start 224 and length 8 the particles cycle
+  224, 225, …, 231, 224, … **[read]** A length byte of 0 makes the modulo divide by zero; the
+  source has no guard (in practice a crash). **[derived]**
+- Colour over life: fixed; no fade or ramp. **[read]**
+- Life: exactly 0.3 s for every particle. **[read]**
+- Spread: each axis of the start position is the point plus an integer in −16…+15 (uniform).
+  **[read]**
+- Velocity: each axis independently an integer in −256…+255 units/s (uniform), so the burst is
+  a cube-shaped random spray, not a sphere. **[read]**
+- Motion rule: every frame each velocity component grows by itself times 4 × frame time (the
+  particles speed up outward, roughly ×e^(4t), about ×3.3 over the 0.3 s life), and the
+  vertical component also loses the slow-gravity step (40 units/s² at gravity 800). **[read]
+  / [derived for the e^(4t) and 3.3 figures]**
+- Dynamic light: yes. Placed at the point, radius 350 units, lives 0.5 s, radius shrinks by
+  300 units per second (so about 200 units when it dies). It is allocated without an owner
+  key, so it takes the first expired slot of the 32 light slots (slot 0 if none is free) and
+  never replaces another explosion's light by key. **[read]** NetQuake lights have no colour
+  of their own: on the world's lightmaps the light is white (lightmaps are intensity only),
+  when drawn as a flash-blend glow it gets the fixed orange glow of question 5. **[derived]**
+- Sound: `weapons/r_exp3.wav` (the same file the rocket explosion and tarbaby explosion use),
+  full volume, attenuation 1 (normal), played at the point, not attached to any entity. **[read]**
+- Sprite or model: none. The effect is particles, light and sound only. **[read]**
+- QuakeWorld: number 12 is the "blood" temp entity there (a count byte then a point); the
+  QuakeWorld client has no explosion2 at all. **[read]**
+
+#### 27.2 svc particle (message 18)
+
+- Wire: point (three coordinates), direction (three signed bytes, each divided by 16), count
+  byte, colour byte. **[read]**
+- Count: the count byte is the number of particles, 0–254. **[read]** Count 255 is special: it
+  becomes 1024 particles drawn as the classic rocket explosion (the two-ramp burst, lifetime cap
+  5 s, ends early when its ramp runs out), and the colour byte and direction are ignored in that
+  case. **[read]**
+- Ordinary case (count 0–254):
+  - Colour: the colour byte with its low 3 bits cleared, plus a random 0–7. So the particle takes a random shade from the colour's 8-entry palette row (colour 73 gives 72…79). **[read]**
+  - Spread: each axis of the start position is the point plus an integer in −8…+7. **[read]**
+  - Velocity: the direction times 15, with no random part. Since the direction is already in sixteenths, a wire byte b gives b × 15/16 units/s on that axis; all particles of one message share one velocity. **[read]/[derived for the combined factor]**
+  - Life: 0.1 × a random integer 0–4, i.e. 0, 0.1, 0.2, 0.3 or 0.4 s. A life of 0 means the particle is gone after at most a frame. **[read]/[derived for the zero case]**
+  - Gravity: slow gravity (40 units/s² downward at gravity 800); no drag or growth. **[read] /[derived for the figure]**
+  - Colour over life: fixed. **[read]**
+- QuakeWorld: message 18 is commented out of its protocol; the QuakeWorld client never
+  parses it. Its own copy of the same particle routine (used by its temp entities) differs: its spread is multiplied by 2 when the count is
+  above 20 and by 3 when above 130, it has no 1024-particle explosion case, and its gravity is
+  40 units/s² computed from a fixed 800 rather than the gravity setting. **[read]/[derived for the 40]**
+
+#### 27.3 beam (temp entity 13)
+
+- Model: `progs/beam.mdl`, loaded on first use with a fatal error if the file is missing.
+  **[read]** Whether that file exists in the base game's packs is not in the source. **[open]**
+- It uses the very same beam machinery as the three lightning temp entities (which use
+  `progs/bolt.mdl`, `progs/bolt2.mdl`, `progs/bolt3.mdl`); only the model differs. **[read]**
+- Wire: entity number (short), start point, end point. **[read]**
+- Lifetime: a beam lasts 0.2 s after the message that set it. **[read]**
+- Replacement: if any beam slot already belongs to the same entity number, that slot is
+  overwritten (new model, start, end, and a fresh 0.2 s), whatever model it had; otherwise
+  the first empty or expired slot is used. There are 24 beam slots in NetQuake (8 in
+  QuakeWorld); when all are busy the console prints "beam list overflow!" and the beam is
+  dropped. **[read]**
+- Following the player: each frame, if the beam's entity number is the entity the client is
+  viewing from, the beam's start is reset to that entity's current origin (the entity's
+  origin, not the eye). Other entities' beams keep the start from the message. **[read]**
+- Layout each frame: from start to end, yaw and pitch of the line are computed in degrees and
+  truncated to whole degrees; pitch is up-positive, both wrapped into 0…359. A vertical line
+  gets yaw 0 and pitch 90 (up) or 270 (down). **[read]** Copies of the model are placed
+  starting exactly at the start point and then every 30 units along the line, while the
+  remaining length is above zero, so a line of length L gets ceil(L/30) copies (the last one
+  may overshoot the end by up to 30 units). **[derived]** Each copy has the line's pitch and
+  yaw and a roll chosen at random every frame as a whole number of degrees 0–359. **[read]**
+- Cap: the copies are temporary entities; at most 64 temporary entities are drawn per frame
+  in NetQuake, and copies beyond that are silently dropped (this budget is shared by all
+  beams on screen). **[read]**
+- QuakeWorld: does not handle 13 as a beam. In QuakeWorld, 13 is "lightning blood" (a point,
+  50 particles of colour 225). An unknown temp entity number is a fatal "bad type" error in
+  both clients. QuakeWorld's beam code (for its lightning) makes the start follow the local
+  player when the entity is the player's own (player number + 1), using the predicted origin.
+  **[read]**
+
+#### 27.4 r_shadows
+
+- Default 0. It is not saved to the config (registered without the archive flag). **[read]**
+- It exists only in the GL renderer; the software renderer has no shadows and no such setting.
+  **[read]** QuakeWorld's GL client has the same setting and default. **[read]**
+- Who gets one: every alias model (the vertex-animated `.mdl` kind) that is drawn: players,
+  monsters, items, missiles, gibs, torches. Brush models and sprites do not. The first-person
+  weapon is drawn through the same path, so it also casts one when the setting is on. A model
+  culled by the view frustum casts none. **[read]/[derived for the weapon]**
+- Shape: the model itself, flattened. Every vertex of the current animation pose (no
+  interpolation, the same pose the model shows) is pushed sideways in proportion to its
+  height above the floor, then laid flat at the floor height; the triangle strips and fans of
+  the model are drawn with that flattened geometry. It is a projected silhouette, not a blob.
+  **[read]**
+- Darkness: untextured black at alpha 0.5, alpha-blended over the scene, with depth testing
+  on. There is no stencil, so where the flattened triangles overlap the shadow gets darker
+  (0.75 where two layers meet, and so on). **[read]/[derived for the overlap values]**
+- Light direction: a fixed world direction, the same for every model and every map: the
+  vertices slide toward world −X by 1/√2 ≈ 0.707 units per unit of height, i.e. the light
+  comes from +X at 45° elevation. (It is built from the model's yaw and then undone by the
+  model's own rotation, so the model's facing does not matter.) **[derived]** Map lights are
+  not consulted. **[read]**
+- Floor height: the point found by tracing straight down from the entity's origin up to 2048
+  units and stopping at the first lightmapped surface (the same trace that finds the model's
+  lighting). The shadow is laid 1 unit above that point's height. If the map has no lightmap
+  data, or the trace finds nothing, the point left from the previous trace is used (a stale
+  height). The shadow is drawn in the model's own rotated frame, so a model with pitch or
+  roll gets a tilted shadow plane. Nothing clips the shadow to the floor's edge: it can hang
+  in the air past a ledge. **[read]/[derived for edges and tilt]**
+
+#### 27.5 gl_flashblend
+
+- Default 1. Not saved to the config. GL renderer only. **[read]**
+- When 1, for every live dynamic light (any light whose time has not passed and whose radius
+  is not 0: muzzle flashes, explosions, glowing entities, all of them) the GL client draws a
+  glow instead of lighting the world: **[read]**
+  - Shape: a flat disc facing the viewer, made of a centre point and 17 rim points (16 segments) on a circle in the view's right/up plane. Radius 0.35 × the light's radius. The centre point is pulled toward the viewer by the same 0.35 × radius. **[read]**
+  - Colour: NetQuake: centre (0.2, 0.1, 0.0), rim black, smoothly shaded between. QuakeWorld: the centre colour is the light's own colour: dim orange (0.2, 0.1, 0.05), blue (0.05, 0.05, 0.3), red (0.5, 0.05, 0.05) or purple (0.5, 0.05, 0.4); rim black. **[read]**
+  - Blending: additive (one, one), depth test on, depth writes off, untextured. Drawn after the world and the entities, before the particles. **[read]**
+  - View inside the glow: if the eye is closer to the light than 0.35 × radius, no disc is drawn; instead the full-screen colour blend is tinted orange (1, 0.5, 0) with strength radius × 0.0003 (so about 0.1 for a radius-350 explosion). **[read]** The mix has a slip: the red channel of the existing blend is mixed from the old green value rather than the old red. **[derived]**
+- World lighting when 1: the world's and brush models' lightmaps are NOT lit by dynamic
+  lights at all. Alias models are still brightened by nearby dynamic lights either way (by
+  radius minus distance). **[read]**
+- When 0: no glow discs; every live dynamic light is pushed into the world's and brush
+  models' lightmaps the usual way. **[read]**
+- QuakeWorld extra: with flash-blend on, the local player's own glow lights and own muzzle
+  flash are not created at all, so the player never sees a disc around himself. **[read]**
+
+#### 27.6 Setup menu figure (NetQuake)
+
+- Picture: `gfx/menuplyr.lmp`, drawn with colour 255 transparent. It sits on
+  `gfx/bigbox.lmp`, drawn at (160, 64). The figure is drawn at (172, 72). Coordinates are in
+  the 320-wide menu space, which is centred on wider screens (x shifted by (screen width −
+  320)/2). **[read]**
+- Colours: two 16-entry palette ranges of the picture are remapped; all other indices stay.
+  Picture indices 16–31 (the shirt range) are replaced by the shirt colour's palette row
+  (row number × 16 to row × 16 + 15); indices 96–111 (the pants range) by the pants colour's row.
+  A row starting at 128 or above is copied in reverse order (its brightest end first), since
+  those rows run the other way in the palette. **[read]**
+- Colour rows: each is a row number 0–13 (14 choices), changed by left/right arrows or Enter,
+  wrapping 13 to 0 and 0 to 13, with the sound `misc/menu3.wav`. The starting values come from
+  the player's current colour setting (`_cl_color`'s high and low halves). **[read]**
+- Live update: yes. The remap is rebuilt from the menu's current shirt and pants rows every
+  time the page is drawn, so the figure changes as soon as a row changes, before anything is
+  accepted. The player's real colours change only on "Accept Changes", which issues
+  `color <shirt> <pants>` if either changed (and `name` / `hostname` for the text rows).
+  **[read]**
+- In the GL client, the picture is resampled into a 64 × 64 texture each time it is drawn
+  through this remap. **[read]**
+
+#### 27.7 New game and the multiplayer game options page
+
+Single-player "New Game" **[read]**:
+- There is no episode or level choice in the menu. Enter on "New Game" (after a yes/no prompt
+  "Are you sure you want to start a new game?" if a server is already running) issues
+  `disconnect` (only if a server was running), then `maxplayers 1`, then `map start`. The
+  episode choice happens inside that map, which the client's code does not describe. **[read]
+  /[open for what the map contains]**
+
+Multiplayer game options page (reached by starting a new network game) **[read]**:
+- Nine rows, the cursor moves with up/down arrows and wraps top to bottom and back
+  (`misc/menu1.wav`). The episode row is labelled "Episode" (y 112) and the level row "Level"
+  (y 120); values are printed at x 160.
+- Picking: left/right arrows step the selected row by −1/+1 (`misc/menu3.wav`); Enter on any
+  row other than the first steps it by +1. Both lists wrap (past the last to the first, before
+  the first to the last). Changing the episode resets the level to the episode's first.
+  The selection is remembered between visits to the page within a session. **[read]**
+- What is shown: the episode row shows the episode's long name. The level row shows the
+  level's long name on its own line (y 120) and the map file name under it (y 128, x 160). Both.
+  **[read]**
+- Counts, base game: 7 episodes when the registered game is detected, only the first 2 in the
+  shareware game. Their level counts in order are 1, 8, 7, 7, 8, 1 and 6 (the last is the
+  deathmatch arenas): 38 levels in all, or 9 reachable in shareware. **[read]/[derived for the
+  totals]**
+- Mission packs: chosen by command-line options, not by the content found: `-hipnotic` gives a
+  list of 6 episodes with 1, 5, 6, 4, 1 and 1 levels (18); `-rogue` gives 4 episodes with 1, 7,
+  8 and 1 levels (17). If both options are given, the menu uses the `-hipnotic` list. The
+  registered/shareware test applies only to the base list. **[read]/[derived for totals and
+  the both-options case]**
+- Start: Enter on the first row ("begin game") issues `disconnect` (if a server is running),
+  `listen 0`, `maxplayers <the page's value>`, shows the loading plaque, then
+  `map <the selected level's file name>`. **[read]**
+- Long names against the map's own title: the menu's long names are fixed text in the
+  client, separate from the maps. Whether each one is the same text as that map's worldspawn
+  message cannot be told from the source alone, because the maps are not in it. **[open]**
+  (Measuring it means reading each map's worldspawn message from the game data.)

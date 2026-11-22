@@ -250,6 +250,8 @@ struct Remote {
   // `client_move_rate`), taken by the client every step; the tick clock's fraction of a
   // microsecond.
   int physfps = 0, physfps_spectator = 77;
+  bool localid_cleared = false;  // a wrong id cleared it: the setting is cleared at the frame's end
+  std::string localid;  // localid: the id a server browser's command packets carry (qw_client.hpp)
   int c2spps = 0, c2s_impulse_backup = 3;  // cl_c2spps, cl_c2sImpulseBackup (qw_client.hpp)
   bool gunkick = false;  // v_gunkick: the server's kicks drawn on the view (client/demo_eyes.hpp)
   int q2_maxfps = 62;    // Quake II's own cl_maxfps: its moves a second (q2_remote.hpp)

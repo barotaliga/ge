@@ -83,8 +83,8 @@ std::vector<std::string> quake(std::vector<std::string> more, bool rules = true)
 
 struct Rig {
   Fixture fx;
-  explicit Rig(const std::vector<std::string>& console)
-      : fx(entities().c_str(), console, &arena(), true) {
+  explicit Rig(const std::vector<std::string>& console, const std::string& more = "")
+      : fx((entities() + more).c_str(), console, &arena(), true) {
     CHECK_MSG(fx.loaded, fx.error);
   }
   int fd(const char* name) {
@@ -294,6 +294,44 @@ TEST(ammunition_brings_up_the_best_weapon_for_one_holding_the_best) {
     CHECK(r.get(a, "ammo_nails") > 0);
     CHECK_MSG(r.get(a, "weapon") == (rules ? kItNailgun : kItShotgun),
               std::to_string(r.get(a, "weapon")));
+    r.no_fault();
+  }
+}
+
+TEST(the_old_ammunition_box_gives_its_kind_and_big_boxes_lie_as_the_big_model) {
+  const std::string boxes =
+      "{\n\"classname\" \"item_weapon\"\n\"spawnflags\" \"12\"\n\"origin\" \"64 -96 24\"\n}\n"
+      "{\n\"classname\" \"item_weapon\"\n\"spawnflags\" \"3\"\n\"origin\" \"-160 96 24\"\n}\n"
+      "{\n\"classname\" \"item_weapon\"\n\"origin\" \"-160 -96 24\"\n}\n"
+      "{\n\"classname\" \"item_shells\"\n\"spawnflags\" \"1\"\n\"origin\" \"-64 -96 24\"\n}\n";
+  for (const float dm : {1.0f, 4.0f}) {
+    Rig r(quake({dm == 4 ? "deathmatch 4" : "deathmatch 1"}), boxes);
+    const int a = r.join("a");
+    r.frames(30);
+    const int nails = r.first("item_weapon");
+    const int rockets = r.first("item_weapon", nails);
+    const int none = r.first("item_weapon", rockets);
+    CHECK(nails > 0 && rockets > 0 && none > 0);  // it lies in deathmatch 4 too
+    CHECK(r.fx.str_field(nails, r.fd("model")) == "maps/b_nail1.bsp");
+    CHECK(r.fx.str_field(rockets, r.fd("model")) == "maps/b_rock0.bsp");  // rockets win
+    CHECK(r.fx.str_field(none, r.fd("model")).empty());
+    const int big = r.first("item_shells");
+    if (dm == 4) {
+      CHECK(big == 0);  // the other boxes do not lie in deathmatch 4
+    } else {
+      CHECK(big > 0);
+      if (big > 0) CHECK(r.fx.str_field(big, r.fd("model")) == "maps/b_shell1.bsp");
+    }
+    for (const char* ammo : {"ammo_shells", "ammo_nails", "ammo_rockets", "ammo_cells"})
+      r.set(a, ammo, 0);  // deathmatch 4 hands out more than a box may top up
+    r.said();
+    r.run("ammo_touch", nails, a);
+    CHECK(r.get(a, "ammo_nails") == 40);
+    r.run("ammo_touch", rockets, a);
+    CHECK(r.get(a, "ammo_rockets") == 5);
+    r.run("ammo_touch", none, a);
+    const std::string out = r.said();
+    CHECK_MSG(out == "You got the spikes\nYou got the rockets\nYou got the \n", out);
     r.no_fault();
   }
 }

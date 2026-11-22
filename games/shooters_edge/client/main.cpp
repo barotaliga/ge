@@ -605,7 +605,8 @@ int run_main(int argc, char** argv) {
   listen_opt.lobby_settings = listen.opt.lobby_settings;
   listen_opt.port = listen.opt.port;  // others join on it (sv_port)
   listen_opt.maxclients = listen.opt.maxclients;
-  listen_opt.login = listen.opt.login;  // sv_login and the rest, as the console set them
+  listen_opt.hostname = listen.opt.hostname;  // sv_hostname (Quake's hostname)
+  listen_opt.login = listen.opt.login;        // sv_login and the rest, as the console set them
   if (!prefs.empty())
     listen_opt.accounts_dir = (std::filesystem::path(prefs) / "accounts").string();
   listen_opt.registered = game_content.registered;

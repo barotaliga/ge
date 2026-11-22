@@ -61,6 +61,17 @@ struct ClassicArt {
   // The tag letters cut from the lit tags (`_sel`), each as wide as its plain one.
   std::map<char, ge::ui::Image> letters_lit;
 
+  // The setup page's figure (`menuplyr`) as the pack's palette indices, to be dressed in a
+  // player's colours; empty when the pack has none.
+  std::vector<uint8_t> player_indices;
+  int player_width = 0, player_height = 0;
+  // `player_indices` dressed: the shirt's range (16..31) in row `top`'s colours and the pants'
+  // (96..111) in row `bottom`'s (rows 0..13; a row from 128 up runs the other way), at the set's
+  // density; null without the picture. The last one dressed is kept.
+  const ge::ui::Image* player_in(int top, int bottom) const;
+  mutable ge::ui::Image player_dressed;
+  mutable int player_colours = -1;
+
   // A picture's size in classic pixels.
   float width_of(const ge::ui::Image& img) const { return static_cast<float>(img.width) / density; }
   float height_of(const ge::ui::Image& img) const {
