@@ -334,8 +334,9 @@ ClassicLayout classic_screen(int width, int height) {
 ClassicLayout classic_screen(const ClassicArt& art, int width, int height) {
   const float tall = art.screen_height();
   ClassicLayout l;
-  l.scale = std::max(1.0f, std::floor(std::min(static_cast<float>(width) / kScreenW,
-                                               static_cast<float>(height) / tall)));
+  l.scale = art.scale > 0 ? std::max(1.0f, art.scale)
+                          : std::max(1.0f, std::floor(std::min(static_cast<float>(width) / kScreenW,
+                                                               static_cast<float>(height) / tall)));
   l.x = std::floor((static_cast<float>(width) - kScreenW * l.scale) / 2);
   l.y = std::floor((static_cast<float>(height) - tall * l.scale) / 2) +
         (tall - kScreenH) / 2 * l.scale;

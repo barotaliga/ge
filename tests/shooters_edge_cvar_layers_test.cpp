@@ -194,7 +194,8 @@ TEST(each_games_fov_and_move_speeds) {
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
                          .items_still = &w.items_still,
-                         .view = &w.view});
+                         .view = &w.view,
+                         .menu = &w.menu});
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
     CHECK_MSG(v.find(name)->value == "200", name);  // Quake II's walk
   CHECK(v.find("rate")->value == "15000");          // its servers may send more
@@ -222,6 +223,11 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(w.noskins == 2 && v.find("noskins")->value == "0");
   v.set("cl_nobob", "1", con::Source::local);  // its floating items lie still
   CHECK(w.items_still && v.find("fs_autoexec")->value == "1");
+  v.set("ui_scale", "2", con::Source::local);  // its menus' size; its browser's sort and pace
+  v.set("ui_sortservers", "-4", con::Source::local);
+  v.set("ui_pingrate", "20", con::Source::local);
+  CHECK(w.menu.menu_scale() == 2 && w.menu.servers().game_sort == -4 &&
+        w.menu.servers().game_ping_rate == 20);
   v.set("fov", "100", con::Source::local);
   CHECK(v.find("cl_fov")->value == "100");
   v.set("cl_sidespeed", "300", con::Source::local);  // the player's own stays across the switch
@@ -232,14 +238,18 @@ TEST(each_games_fov_and_move_speeds) {
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
                          .items_still = &w.items_still,
-                         .view = &w.view});
+                         .view = &w.view,
+                         .menu = &w.menu});
   CHECK(v.find("cl_forwardspeed")->value == "400");
   CHECK(v.find("rate")->value == "2500");  // Quake's default again
   CHECK(!w.controls.mouse.per_frame && v.find("hand") == nullptr);
-  CHECK(w.predict && v.find("cl_predict") == nullptr);       // Quake always predicts
-  CHECK(v.find("cl_predict_crouch") == nullptr);             // and never ducks
-  CHECK(v.find("cl_noskins") == nullptr && w.noskins == 0);  // its figures its own
-  CHECK(v.find("cl_nobob") == nullptr && !w.items_still);    // nothing floats in Quake
+  CHECK(w.predict && v.find("cl_predict") == nullptr);               // Quake always predicts
+  CHECK(v.find("cl_predict_crouch") == nullptr);                     // and never ducks
+  CHECK(v.find("cl_noskins") == nullptr && w.noskins == 0);          // its figures its own
+  CHECK(v.find("cl_nobob") == nullptr && !w.items_still);            // nothing floats in Quake
+  CHECK(w.menu.menu_scale() == 0 && v.find("ui_scale") == nullptr);  // its menus fill the window
+  CHECK(w.menu.servers().game_sort == shooters_edge::menu::ServersPage::kNoGameSort &&
+        w.menu.servers().game_ping_rate == -1);
   CHECK(v.find("fs_autoexec") == nullptr);
   CHECK(w.view.hand == 0 && w.view.gun == 1);  // its weapon always drawn
   CHECK(v.find("cl_gun") == nullptr && v.find("ch_red") == nullptr);
