@@ -198,3 +198,34 @@ TEST(the_chat_line_takes_the_keys_while_open) {
   ui::feed_console(c, v, q, keys);
   CHECK(!v.chatting() && said == "we go");
 }
+
+// A menu up has the keys: W presses nothing, F1 still runs its bind, and a key held when the menu
+// opened is let go under it.
+TEST(a_menu_up_lets_only_the_function_keys_press_their_binds) {
+  constexpr uint16_t kF1 = 58;
+  console::Console c;
+  console::ConsoleView v(c);
+  c.binds().set(console::BindMode::game, "w", "+forward");
+  c.binds().set(console::BindMode::game, "f1", "+help");
+  console::Button& forward = c.add_button("forward", "move forward");
+  console::Button& help = c.add_button("help", "the help");
+  ui::ConsoleKeys keys;
+  input::Queue q;
+  key(q, kW, true);
+  ui::feed_console(c, v, q, keys);
+  CHECK(forward.down());
+  keys.menu = true;
+  q.clear();
+  key(q, kW, false);  // let go under the menu: released
+  ui::feed_console(c, v, q, keys);
+  CHECK(!forward.down());
+  q.clear();
+  key(q, kW, true);  // pressed under the menu: the menu's alone
+  key(q, kF1, true);
+  ui::feed_console(c, v, q, keys);
+  CHECK(!forward.down() && help.down());
+  q.clear();
+  key(q, kF1, false);
+  ui::feed_console(c, v, q, keys);
+  CHECK(!help.down());
+}

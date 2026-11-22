@@ -10,10 +10,10 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client console commands | 111 | 12 | 23 | 10 | 156 |
+| Client console commands | 115 | 13 | 18 | 10 | 156 |
 | Client settings (cvars) | 142 | 42 | 126 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
-| Menu pages and rows | 79 | 74 | 8 | 1 | 162 |
+| Menu pages and rows | 87 | 66 | 8 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
 | Temporary entities (svc_temp_entity) | 14 | 50 | 1 | 0 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 18 | 0 | 2 | 0 | 20 |
@@ -23,17 +23,17 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 7 | 7 | 2 | 0 | 16 |
 | The layout language (status bar and layouts) | 24 | 1 | 2 | 0 | 27 |
 | HUD and screen elements | 11 | 10 | 7 | 1 | 29 |
-| Messages printed to the player | 39 | 57 | 46 | 5 | 147 |
+| Messages printed to the player | 46 | 57 | 39 | 5 | 147 |
 | Demo playback and recording features | 4 | 10 | 7 | 2 | 23 |
-| Keys: the fixed keys and the default bindings | 4 | 4 | 3 | 0 | 11 |
+| Keys: the fixed keys and the default bindings | 5 | 4 | 2 | 0 | 11 |
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 576 | 308 | 266 | 61 | 1211 |
+| **all** | 596 | 301 | 253 | 61 | 1211 |
 
 ## Client console commands
 
-done 111, partial 12, missing 23, not-taken 10
+done 115, partial 13, missing 18, not-taken 10
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -52,7 +52,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.+strafe | `+strafe` / `-strafe` | turn keys and the mouse sidestep while held | done | `plugins/shooter/controls.cpp` |
 | cmd.+speed | `+speed` / `-speed` | toggles run/walk against `cl_run` while held; turn rates times `cl_anglespeedkey` | done | `plugins/shooter/controls.cpp` |
 | cmd.+attack | `+attack` / `-attack` | fire while held (button bit 1) | done | `plugins/shooter/controls.cpp` |
-| cmd.+use | `+use` / `-use` | the use button (button bit 2), sent only on the extended protocols | missing | C35 |
+| cmd.+use | `+use` / `-use` | the use button (button bit 2), sent only on the extended protocols | done | `plugins/shooter/controls.cpp` (`+use`, `kButtonUse`; a tap between two moves kept), sent as Quake II's use bit by `games/shooters_edge/net/q2_remote.cpp` |
 | cmd.+klook | `+klook` / `-klook` | forward/back keys look up and down while held | done | `plugins/shooter/controls.cpp` |
 | cmd.+mlook | `+mlook` / `-mlook` | mouse looks up and down while held; releasing re-centres with `lookspring` | done | `plugins/shooter/controls.cpp` |
 | cmd.centerview | `centerview` | levels the view pitch | done | `plugins/shooter/controls.cpp` |
@@ -95,7 +95,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.stopsound | `stopsound` | stops every sound playing | done | `games/shooters_edge/client/menu_sound.cpp`: every sampled voice stopped, the music bus kept (`engine/audio/synth.cpp` `sample_stop_all`) |
 | cmd.soundlist | `soundlist` | lists loaded sounds | missing | ours `soundlist` is the server's |
 | cmd.soundinfo | `soundinfo` | prints the sound device's state | missing | C32 |
-| cmd.ogg | `ogg info/play/stop/next/pause` | the music player: `info` describes the playing stream's format (or "Playback stopped."), `play <track> [soft]` plays a track number or a file under `music/`, `stop`, `next` (the next shuffled track, or restarts the automatic track), `pause` or `toggle` pauses and resumes | missing | ours `cd` (`engine/audio/music_console.cpp`) (C29) |
+| cmd.ogg | `ogg info/play/stop/next/pause` | the music player: `info` describes the playing stream's format (or "Playback stopped."), `play <track> [soft]` plays a track number or a file under `music/`, `stop`, `next` (the next shuffled track, or restarts the automatic track), `pause` or `toggle` pauses and resumes | partial | `engine/audio/music_console.cpp` (`music`, `ogg` its Quake II spelling in `client/cvar_layers.cpp`): info names the track (not the decoder's dump), play takes a track number (a file name under `music/` is not looked up), soft lets the old fade, stop, next, pause and toggle |
 | cmd.wave | `wave <n>` | forwarded: plays a gesture | done | forwarded to the rules (`games/shooters_edge/client/main.cpp` unknown-word hook; `server/q2_commands.cpp`) |
 | cmd.inven | `inven` | forwarded: opens/closes the inventory | done | `games/shooters_edge/net/game_commands.hpp` |
 | cmd.kill | `kill` | forwarded: suicide | done | forwarded (`server/q2_server.cpp`) |
@@ -136,9 +136,9 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.undraw | `undraw <name/all>` | removes a drawn value | done | `engine/hud/draw_strings.cpp` |
 | cmd.clearchathud | `clearchathud` | clears the chat lines on screen | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
 | cmd.viewpos | `viewpos` | prints the view's position and yaw | done | `games/shooters_edge/client/place_seen.cpp` |
-| cmd.gun_next | `gun_next` | debug: show the next view model | missing | C33 |
-| cmd.gun_prev | `gun_prev` | debug: show the previous view model | missing | C33 |
-| cmd.gun_model | `gun_model <name>` | debug: show a named view model | missing | C33 |
+| cmd.gun_next | `gun_next` | debug: show the next view model | done | `games/shooters_edge/view/hand.cpp` (`add_gun_commands`), drawn by `client/held.cpp`: says "frame n" |
+| cmd.gun_prev | `gun_prev` | debug: show the previous view model | done | `games/shooters_edge/view/hand.cpp` (`add_gun_commands`): held at 0, the game's frame again |
+| cmd.gun_model | `gun_model <name>` | debug: show a named view model | done | `games/shooters_edge/view/hand.cpp` (`add_gun_commands`): a weapon of the game's own set by its folder; no name the game's again |
 | cmd.fog | `fog [r g b density] [sky_factor]` | prints or sets the global fog | done | `plugins/classic/app/look.cpp` |
 | cmd.loc | `loc add/del/set/list/save` | edits the map's place names | done | `games/shooters_edge/client/place_names.cpp` |
 | cmd.pushmenu | `pushmenu <menu> [args]` | opens a menu page by name | done | `games/shooters_edge/menu/game_menu.cpp`: the game's pages by name, Quake II's names mapped |
@@ -596,7 +596,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 79, partial 74, missing 8, not-taken 1
+done 87, partial 66, missing 8, not-taken 1
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
@@ -662,7 +662,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.pl.skin | player: skin | the chosen figure's skins | done | `games/shooters_edge/menu/figures.cpp`, `menu/main_menu.cpp`: a skin with its icon; a new model at its first skin |
 | menu.pl.hand | player: handedness | right, left, center (`hand`) | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.pl.figure | player: the figure drawn | the chosen figure and skin turning, holding the weapon | missing | C5 |
-| menu.pl.none | player: no figures | "No player models found." when none | partial | `games/shooters_edge/menu/figures.cpp`, `menu/main_menu.cpp`: the rows read NONE, dimmed; the page still opens and says nothing |
+| menu.pl.none | player: no figures | "No player models found." when none | done | `games/shooters_edge/menu/main_menu.cpp` (`apply_event`): "No player models found." and the page does not open |
 | menu.in.sens | input: mouse sens | a number field for `sensitivity` | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.in.autosens | input: auto sens | `m_autosens` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.in.filter | input: mouse filter | `m_filter` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
@@ -748,13 +748,13 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.ch.scale | crosshair: crosshair scale | 0.5x, 1x, 2x | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.ch.health | crosshair: color by health | `ch_health` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.ch.rgba | crosshair: red, green, blue, alpha channel | four sliders 0 to 1 | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.dl.allow | downloads: allow downloading | `allow_download` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.dl.maps | downloads: maps | `allow_download_maps` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.dl.players | downloads: player models/skins | `allow_download_players` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.dl.models | downloads: models | `allow_download_models` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.dl.sounds | downloads: sounds | `allow_download_sounds` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.dl.textures | downloads: textures | `allow_download_textures` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.dl.pics | downloads: pics | `allow_download_pics` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
+| menu.dl.allow | downloads: allow downloading | `allow_download` | done | `games/shooters_edge/menu/q2_pages.cpp`, the setting registered by `client/q2_session.cpp` |
+| menu.dl.maps | downloads: maps | `allow_download_maps` | done | `games/shooters_edge/menu/q2_pages.cpp`, the setting registered by `client/q2_session.cpp` |
+| menu.dl.players | downloads: player models/skins | `allow_download_players` | done | `games/shooters_edge/menu/q2_pages.cpp`, the setting registered by `client/q2_session.cpp` |
+| menu.dl.models | downloads: models | `allow_download_models` | done | `games/shooters_edge/menu/q2_pages.cpp`, the setting registered by `client/q2_session.cpp` |
+| menu.dl.sounds | downloads: sounds | `allow_download_sounds` | done | `games/shooters_edge/menu/q2_pages.cpp`, the setting registered by `client/q2_session.cpp` |
+| menu.dl.textures | downloads: textures | `allow_download_textures` | done | `games/shooters_edge/menu/q2_pages.cpp`, the setting registered by `client/q2_session.cpp` |
+| menu.dl.pics | downloads: pics | `allow_download_pics` | done | `games/shooters_edge/menu/q2_pages.cpp`, the setting registered by `client/q2_session.cpp` |
 | menu.dl.http | downloads: HTTP downloads | `cl_http_downloads` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.ab.fields | address book | 16 text fields `adr0` to `adr15` | missing | C5 |
 | menu.game.page | the in-game page | compact list: browse q2servers.com, browse address book, browse demos, single player, options, disconnect, quit | partial | `games/shooters_edge/menu/q2_pages.cpp`: the page and ESCAPE in a level; one browse row (ours lists LAN, masters and hub) for the two |
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 39, partial 57, missing 46, not-taken 5
+done 46, partial 57, missing 39, not-taken 5
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1181,7 +1181,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.dl.mapload | "Couldn't load %s: %s" | the map cannot be loaded (missing or damaged): the connection drops | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.dl.mapversion | "Local map version differs from server: %i != %s" | the map on disk is not the server's: the connection drops | missing | the feature is missing (C36) |
 | msg.dl.demomapversion | "Local map version differs from demo: %i != %s" | the map on disk is not the recording's: a warning, playback goes on | missing | the feature is missing |
-| msg.map.novis | "Map has no Visibility, expect bugs and bad performance!" | a map loaded with no visibility data (a warning) | missing | the feature is missing |
+| msg.map.novis | "Map has no Visibility, expect bugs and bad performance!" | a map loaded with no visibility data (a warning) | done | `games/shooters_edge/client/map_load.cpp` (`kNoVisibility`): a Quake II map this window loads |
 | msg.http.server | "[HTTP] Download server at %s" | the server named an HTTP download URL | missing | the feature is missing |
 | msg.http.progress | "[HTTP] %s [%s, %s/sec] [%d remaining file%s]" | an HTTP download finished | missing | the feature is missing |
 | msg.http.fail | "[HTTP] Failed to fetch '%s': %s" | an HTTP download failed | missing | the feature is missing |
@@ -1248,7 +1248,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.userinfo | "User info settings:" | `userinfo` | done | `engine/console/console_more.cpp` |
 | msg.play.usage | "Usage: %s <sound> [...]" | `play` alone | done | `games/shooters_edge/client/menu_sound.cpp` |
 | msg.vidrestart | "Manual `vid_restart' command ignored." | a typed `vid_restart` (with an explanation that video settings apply themselves) | done | `games/shooters_edge/client/window_cvars.cpp` |
-| msg.fps.round | "%s value `%d' is inexact and will be rounded to `%d'." | a `cl_maxfps` that is not whole milliseconds (with "(Set `cl_warn_on_fps_rounding' to `0' to disable this warning.)") | missing | the feature is missing |
+| msg.fps.round | "%s value `%d' is inexact and will be rounded to `%d'." | a `cl_maxfps` that is not whole milliseconds (with "(Set `cl_warn_on_fps_rounding' to `0' to disable this warning.)") | done | `games/shooters_edge/client/q2_session.cpp` (`q2_fps_warning`, `cl_warn_on_fps_rounding`): said without the quote marks; `r_maxfps` is not rounded to whole milliseconds here, so it never warns |
 | msg.mouse.off | "Mouse input disabled." | the mouse could not start | missing | the feature is missing |
 | msg.draw.none | "No draw strings registered." | `draw` or `undraw` with none | done | `engine/hud/draw_strings.cpp` |
 | msg.draw.list | "Name X Y (table of draw strings)" | `draw` alone lists them | done | `engine/hud/draw_strings.cpp` |
@@ -1264,16 +1264,16 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.fog.usage | "Usage: %s <r g b density> [sky_factor]" | `fog` misuse | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.menu.nomenu | "No such menu: %s" | `pushmenu` of an unknown page | done | `games/shooters_edge/menu/game_menu.cpp` |
 | msg.menu.usage | "Usage: %s <menu>" | `pushmenu` alone | done | `games/shooters_edge/menu/game_menu.cpp` |
-| msg.menu.noplayers | "No player models found." | the player page with no figures | missing | the feature is missing |
+| msg.menu.noplayers | "No player models found." | the player page with no figures | done | `games/shooters_edge/menu/main_menu.cpp` (`apply_event`): said, and the player page does not open |
 | msg.menu.script | "Unknown keyword '%s'" | a bad line in the menu script (and its other warnings) | missing | the feature is missing |
 | msg.servers.http | "Can't fetch '%s', no HTTP support compiled in." | an HTTP server list without HTTP | missing | the feature is missing |
 | msg.servers.badaddr | "Bad server address: %s" | a bad line in a server list | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.snd.notstarted | "Sound system not started." | `soundinfo` or `soundlist` with no sound | missing | the feature is missing |
-| msg.ogg.stopped | "Playback stopped." | `ogg info` with no music, and `ogg stop` | missing | the feature is missing |
+| msg.ogg.stopped | "Playback stopped." | `ogg info` with no music, and `ogg stop` | done | `engine/audio/music_console.cpp` |
 | msg.ogg.cin | "Can't play music in cinematic mode." | `ogg play` during a cinematic | missing | the feature is missing |
-| msg.ogg.usage | "Usage: %s <info\|play\|stop\|next\|pause>" | `ogg` alone or with an unknown word | missing | the feature is missing (C29) |
-| msg.ogg.notrack | "No such track: %s" | `ogg play` of a track that is not found | missing | the feature is missing (C29) |
-| msg.ogg.playusage | "Usage: %s %s <track>" | `ogg play` with no track | missing | the feature is missing (C29) |
+| msg.ogg.usage | "Usage: %s <info\|play\|stop\|next\|pause>" | `ogg` alone or with an unknown word | done | `engine/audio/music_console.cpp` |
+| msg.ogg.notrack | "No such track: %s" | `ogg play` of a track that is not found | done | `engine/audio/music_console.cpp` |
+| msg.ogg.playusage | "Usage: %s %s <track>" | `ogg play` with no track | done | `engine/audio/music_console.cpp` |
 | msg.al.init | "OpenAL initialized." | the OpenAL backend started | missing | the feature is missing |
 | msg.al.fail | "Failed to initialize OpenAL: %s" | the OpenAL backend failed | missing | the feature is missing |
 | msg.al.devices | "Available devices:" / "No devices available" | `al_device ?` lists the OpenAL output devices | missing | the feature is missing (C32) |
@@ -1318,7 +1318,7 @@ What a player can do with client recordings (`.dm2`) and multi-view recordings (
 
 ## Keys: the fixed keys and the default bindings
 
-done 4, partial 4, missing 3, not-taken 0
+done 5, partial 4, missing 2, not-taken 0
 
 Keys the client handles itself (a player cannot unbind them) and where the default bindings come from.
 
@@ -1328,7 +1328,7 @@ Keys the client handles itself (a player cannot unbind them) and where the defau
 | key.altenter | Alt+Enter | toggles full screen, always | done | `engine/platform/window_cvars.cpp` `alt_enter` |
 | key.escape.menu | ESCAPE | closes the console (or opens the main menu before a game), leaves chat, opens the in-game page in a game, the main page out of one | done | `games/shooters_edge/menu/game_menu.cpp`: in a level the in-game page (`MenuTable::in_level`) |
 | key.escape.putaway | ESCAPE with a screen up | puts away the help computer or inventory (`putaway`); held, opens the menu | partial | `games/shooters_edge/menu/game_menu.cpp` (`Host::screen_up`, set from `client/q2_bar.cpp`'s `layout_up`): ESCAPE sends `putaway`; held, opening the menu, missing |
-| key.fkeys.menu | F1 to F12 in a menu | still run their bindings | missing | not found |
+| key.fkeys.menu | F1 to F12 in a menu | still run their bindings | done | `engine/ui/console_keys.cpp` (`ConsoleKeys::menu`, set by the window while a menu is up): F1 to F12 and the console key alone run their binds; a key let go always releases |
 | key.cinematic | any button key in a cinematic | skips it | done | `games/shooters_edge/client/cinematic.cpp` |
 | key.shift.demo | SHIFT in a demo | takes the mouse for free look | missing | C15 |
 | key.f1.demo | F1 in a demo | shows the recorded layout | missing | C15 |

@@ -18,8 +18,9 @@ namespace con = ge::console;
 
 constexpr uint16_t kGrave = 53;   // the key under the tilde
 constexpr uint16_t kNonUs = 100;  // the ISO key, the key under Escape on some Macs (binds.cpp)
-constexpr uint16_t kC = 6;        // C: with Command or Ctrl, a copy
-constexpr uint16_t kV = 25;       // V: with Command or Ctrl, a paste
+constexpr uint16_t kF1 = 58, kF12 = 69;  // the function keys run their binds over a menu
+constexpr uint16_t kC = 6;               // C: with Command or Ctrl, a copy
+constexpr uint16_t kV = 25;              // V: with Command or Ctrl, a paste
 constexpr uint16_t kLeftGui = 227, kRightGui = 231;  // the Command keys
 
 // The code point as UTF-8.
@@ -146,6 +147,10 @@ void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& q
     }
     if (key.empty() || (down && e.aux != 0)) continue;  // a repeat edits; it presses no bind
     if (down && (e.code == kGrave || e.code == kNonUs)) toggled = true;
+    // A menu up has the keys: only the function keys and the console's key press a bind.
+    const bool menu_lets = !keys.menu || typing || (e.code >= kF1 && e.code <= kF12) ||
+                           e.code == kGrave || e.code == kNonUs;
+    if (down && !menu_lets) continue;
     if (down) {
       // While the chat line has the keys the binds are the console's (the tilde alone), so a
       // letter typed presses nothing in the game.

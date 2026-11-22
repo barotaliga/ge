@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "brush/map.hpp"
 #include "shooter/hull.hpp"
@@ -157,7 +158,34 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
            .help = helps[k],
            .kind = con::CvarKind::boolean,
            .values = "0: no; 1: yes (set by the game alone)"});
+  v.bind({.name = "cl_warn_on_fps_rounding",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether you are told when cl_maxfps is rounded to whole milliseconds.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: told (the default); 0: not"},
+         &s.warn_fps);
   s.state = -1;
+  s.fps_seen = 0;
+}
+
+int q2_fps_rounded(int fps) {
+  if (fps <= 0) return 0;
+  const int held = std::clamp(fps, 10, 125);
+  return 1000 / (1000 / held);
+}
+
+void q2_fps_warning(con::Console& c, Q2Session& s) {
+  const con::Cvar* v = c.cvars().find("cl_maxfps");
+  if (v == nullptr || v->revision == s.fps_seen) return;
+  s.fps_seen = v->revision;
+  const int asked = std::clamp(v->integer(), 0, 125);
+  const int got = q2_fps_rounded(asked);
+  if (!s.warn_fps || asked < 10 || got == asked) return;
+  c.print("cl_maxfps value " + std::to_string(asked) + " is inexact and will be rounded to " +
+          std::to_string(got) + ".");
+  if (!std::exchange(s.fps_told, true))
+    c.print("(Set cl_warn_on_fps_rounding to 0 to disable this warning.)");
 }
 
 double q2_game_dt(const Q2Session& s, double host_framerate, double wall) {
@@ -178,6 +206,7 @@ void q2_session_step(con::Console& c, Q2Session& s, bool joined, std::string_vie
     if (!map.empty() && map != s.map) run(c, s.begin_cmd);
     s.joined = true;
     s.map = std::string(map);
+    q2_fps_warning(c, s);  // in a game: a cl_maxfps changed since it was checked
   }
   const int state = 1 | (paused ? 2 : 0) | (hosting ? 4 : 0) | (hosting && paused ? 8 : 0);
   if (state == s.state) return;

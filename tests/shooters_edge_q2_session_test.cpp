@@ -124,6 +124,32 @@ TEST(cl_thirdperson_stops_short_of_a_wall) {
   CHECK(std::abs(went - 26) < 0.1);  // the trace stops a hair short
 }
 
+// cl_maxfps is whole milliseconds apart: 120 is 8 ms, so 125, and the player is told once per
+// change (how to turn it off the first time only); exact values and 0 say nothing.
+TEST(an_inexact_cl_maxfps_is_told_rounded_once_per_change) {
+  CHECK(cl::q2_fps_rounded(62) == 62 && cl::q2_fps_rounded(120) == 125);
+  CHECK(cl::q2_fps_rounded(144) == 125 && cl::q2_fps_rounded(0) == 0);
+  CHECK(cl::q2_fps_rounded(60) == 62 && cl::q2_fps_rounded(5) == 10);
+  Rig r;
+  r.c.cvars().add({.name = "cl_maxfps", .fallback = "62", .kind = con::CvarKind::integer});
+  r.step(true, "base1");
+  CHECK(r.c.output().empty());
+  r.c.execute("cl_maxfps 120");
+  r.step(true, "base1");
+  CHECK(r.c.output().size() == 2);
+  CHECK(r.c.output()[0] == "cl_maxfps value 120 is inexact and will be rounded to 125.");
+  CHECK(r.c.output()[1] == "(Set cl_warn_on_fps_rounding to 0 to disable this warning.)");
+  r.step(true, "base1");  // no change: nothing more
+  r.c.execute("cl_maxfps 60");
+  r.step(true, "base1");
+  CHECK(r.c.output().size() == 3);  // told again, without the hint
+  r.c.execute("cl_maxfps 100; cl_warn_on_fps_rounding 0");
+  r.step(true, "base1");
+  r.c.execute("cl_maxfps 90");
+  r.step(true, "base1");
+  CHECK(r.c.output().size() == 3);
+}
+
 TEST(in_grab_0_takes_the_mouse_only_while_the_game_covers_the_screen) {
   Rig r;
   CHECK(cl::q2_takes_mouse(r.s, false) && cl::q2_takes_mouse(r.s, true));  // 1, the default
