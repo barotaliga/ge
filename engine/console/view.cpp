@@ -230,6 +230,11 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           con.print("There is no remote console in this game.");
           return;
         }
+        const ge::console::Cvar* to = con.cvars().find("rcon_address");
+        if (a.size() < 2 && (to == nullptr || to->value.empty())) {  // no server to send to
+          con.print("Usage: " + a[0] + " <address> <password>");
+          return;
+        }
         if (a.size() > 1 && con.cvars().find("rcon_address") != nullptr)
           con.cvars().set("rcon_address", a[1], Source::local);
         if (a.size() > 2 && con.cvars().find("rcon_password") != nullptr)

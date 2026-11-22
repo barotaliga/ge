@@ -1226,10 +1226,12 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
       "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in Quake II; "
       "port 26000 is a server of Quake's own protocol)",
       [join](Con& c, const Args& a) {
-        if (a.size() < 2)
+        if (a.size() < 2) {
           c.print("connect: name a server (connect 192.168.1.20)");
-        else
-          join(c, a[1]);
+          return;
+        }
+        if (a.size() > 2) c.print("Second argument to connect is ignored.");
+        join(c, a[1]);
       });
   con.add_command(
       "watch", "watch <host>:<port> [password]: watch a broadcast (a server's stream port or a TV)",

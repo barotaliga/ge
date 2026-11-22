@@ -69,6 +69,14 @@ void add_window_cvars(ge::console::Console& con, WindowCvars& w) {
                         "Video settings are applied as soon as you change them, so a video "
                         "restart is never needed.");
                   });
+  // in_restart: the input devices are found as they come and go, so it needs no restart by hand.
+  con.add_command("in_restart", "in_restart: not needed; input devices are found as they come",
+                  [](ge::console::Console& c, const ge::console::Args& a) {
+                    if (a.source != ge::console::Source::local) return;
+                    c.print(
+                        "Mice, keyboards and controllers are picked up as they are plugged in, "
+                        "so an input restart is never needed.");
+                  });
 }
 
 }  // namespace shooters_edge::client

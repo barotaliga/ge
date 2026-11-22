@@ -190,6 +190,9 @@ TEST(remotemode_clearnotify_scale_and_the_foot) {
   std::vector<std::string> sent;
   c.add_command("rcon", "", [&](Console&, const Args& a) { sent.push_back(a.rest(0)); });
   c.cvars().add({.name = "rcon_address", .fallback = "", .kind = CvarKind::text});
+  c.execute("remotemode");  // no server named, none set: how to name one
+  c.run();
+  CHECK(!v.remote() && v.lines().back().text == "Usage: remotemode <address> <password>");
   c.execute("remotemode 10.0.0.2:27910 secret");
   c.run();
   CHECK(v.remote() && v.prompt() == "# ");

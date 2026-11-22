@@ -10,7 +10,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client console commands | 118 | 13 | 15 | 10 | 156 |
+| Client console commands | 121 | 13 | 12 | 10 | 156 |
 | Client settings (cvars) | 180 | 48 | 78 | 44 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 89 | 67 | 5 | 1 | 162 |
@@ -23,17 +23,17 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 8 | 8 | 0 | 0 | 16 |
 | The layout language (status bar and layouts) | 26 | 1 | 0 | 0 | 27 |
 | HUD and screen elements | 16 | 10 | 2 | 1 | 29 |
-| Messages printed to the player | 59 | 58 | 23 | 7 | 147 |
+| Messages printed to the player | 62 | 59 | 19 | 7 | 147 |
 | Demo playback and recording features | 10 | 10 | 1 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 6 | 4 | 1 | 0 | 11 |
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 11 | 7 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 7 | 6 | 4 | 0 | 17 |
-| **all** | 694 | 303 | 147 | 67 | 1211 |
+| **all** | 700 | 304 | 140 | 67 | 1211 |
 
 ## Client console commands
 
-done 118, partial 13, missing 15, not-taken 10
+done 121, partial 13, missing 12, not-taken 10
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -57,7 +57,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.+mlook | `+mlook` / `-mlook` | mouse looks up and down while held; releasing re-centres with `lookspring` | done | `plugins/shooter/controls.cpp` |
 | cmd.centerview | `centerview` | levels the view pitch | done | `plugins/shooter/controls.cpp` |
 | cmd.impulse | `impulse <n>` | sends an impulse byte with the next move | done | `games/shooters_edge/client/controls.cpp` |
-| cmd.in_restart | `in_restart` | restarts the input (mouse) layer | missing | C33 |
+| cmd.in_restart | `in_restart` | restarts the input (mouse) layer | done | `games/shooters_edge/client/window_cvars.cpp`: typed, it says why none is needed (input devices are picked up as they are plugged in) |
 | cmd.bind | `bind <key> [command]` | binds a key, or prints its binding; "\"x\" isn't a valid key" | done | `engine/console/console_binds.cpp` |
 | cmd.unbind | `unbind <key>` | removes a key's binding | done | `engine/console/console_binds.cpp` |
 | cmd.unbindall | `unbindall` | removes every binding | done | `engine/console/console_binds.cpp` |
@@ -90,11 +90,11 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.writeconfig | `writeconfig <file> [-a -b -c -m]` | writes aliases, binds, saved and changed settings to a file | done | `engine/console/console_more.cpp`: -a -b -c -m, default bindings and archived settings, `.cfg` added |
 | cmd.vid_restart | `vid_restart` | restarts video (manual use ignored unless `cl_allow_vid_restart`) | done | `games/shooters_edge/client/window_cvars.cpp`: typed, it is ignored with the line and why (the window applies video settings at once) |
 | cmd.r_reload | `r_reload` | reloads every picture and model | missing | C33 |
-| cmd.snd_restart | `snd_restart` | restarts the sound system | missing | C32, C33 |
+| cmd.snd_restart | `snd_restart` | restarts the sound system | done | `games/shooters_edge/client/menu_sound.cpp`: typed, it says why none is needed (sound settings apply as they change), as `vid_restart` does |
 | cmd.play | `play <sound> [...]` | plays local sounds by name | done | `games/shooters_edge/client/menu_sound.cpp` (`play`, `playvol`); the music player keeps its own words under `cd` |
 | cmd.stopsound | `stopsound` | stops every sound playing | done | `games/shooters_edge/client/menu_sound.cpp`: every sampled voice stopped, the music bus kept (`engine/audio/synth.cpp` `sample_stop_all`) |
 | cmd.soundlist | `soundlist` | lists loaded sounds | missing | ours `soundlist` is the server's |
-| cmd.soundinfo | `soundinfo` | prints the sound device's state | missing | C32 |
+| cmd.soundinfo | `soundinfo` | prints the sound device's state | done | `games/shooters_edge/client/menu_sound.cpp` (`add_sound_status_commands`): the device's driver, the rate and format, the sounds playing and cut short |
 | cmd.ogg | `ogg info/play/stop/next/pause` | the music player: `info` describes the playing stream's format (or "Playback stopped."), `play <track> [soft]` plays a track number or a file under `music/`, `stop`, `next` (the next shuffled track, or restarts the automatic track), `pause` or `toggle` pauses and resumes | partial | `engine/audio/music_console.cpp` (`music`, `ogg` its Quake II spelling in `client/cvar_layers.cpp`): info names the track (not the decoder's dump), play takes a track number (a file name under `music/` is not looked up), soft lets the old fade, stop, next, pause and toggle |
 | cmd.wave | `wave <n>` | forwarded: plays a gesture | done | forwarded to the rules (`games/shooters_edge/client/main.cpp` unknown-word hook; `server/q2_commands.cpp`) |
 | cmd.inven | `inven` | forwarded: opens/closes the inventory | done | `games/shooters_edge/net/game_commands.hpp` |
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 59, partial 58, missing 23, not-taken 7
+done 62, partial 59, missing 19, not-taken 7
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1139,7 +1139,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.connect.challenge | "Requesting challenge... %i" | each try to get a challenge while connecting | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.connect.request | "Requesting connection... %i" | each try to connect | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.connect.usage | "Usage: %s <server>" | `connect` with no address | partial | ours does it but says it in its own words (the exact line not found) |
-| msg.connect.protoarg | "Second argument to `%s' is now ignored. Set protocol via `cl_protocol' variable." | a second `connect` argument | missing | the feature is missing |
+| msg.connect.protoarg | "Second argument to `%s' is now ignored. Set protocol via `cl_protocol' variable." | a second `connect` argument | done | `games/shooters_edge/net/qw_remote.cpp`: "Second argument to connect is ignored." (no `cl_protocol` to name yet) |
 | msg.connect.badaddr | "Bad server address" | an address that does not resolve | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.connect.connected | "Connected to %s (protocol %d)." | the server accepted us | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.connect.anticheat | "Loading anticheat, this may take a few moments..." | the server asked for anticheat | missing | the feature is missing |
@@ -1224,7 +1224,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.con.usage | "Usage: %s <filename>" | `condump`, `demo`, `dumpstatusbar` misuse | partial | `games/shooters_edge/client/q2_bar.cpp`: `dumpstatusbar` and `dumplayout` say it; ours `condump` writes `condump.txt` without a name, `demo` has its own words |
 | msg.con.dumped | "Dumped console text to %s." | `condump` | done | `engine/console/view.cpp` (#1248) |
 | msg.con.chatlevel | "You must be in a level to chat." | `messagemode` while not in a level | partial | ours does it but says it in its own words (the exact line not found) |
-| msg.con.remoteusage | "Usage: %s <address> <password>" | `remotemode` misuse | missing | the feature is missing |
+| msg.con.remoteusage | "Usage: %s <address> <password>" | `remotemode` misuse | done | `engine/console/view.cpp`: `remotemode` with no address given and none set |
 | msg.con.badvalue | "Invalid value '%s' for '%s'" | a bad colour or value for a setting | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.bind.unbindusage | "unbind <key> : remove commands from a key" | `unbind` alone | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.bind.usage | "bind <key> [command] : attach a command to a key" | `bind` alone | partial | ours does it but says it in its own words (the exact line not found) |
@@ -1266,11 +1266,11 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.menu.usage | "Usage: %s <menu>" | `pushmenu` alone | done | `games/shooters_edge/menu/game_menu.cpp` |
 | msg.menu.noplayers | "No player models found." | the player page with no figures | done | `games/shooters_edge/menu/main_menu.cpp` (`apply_event`): said, and the player page does not open |
 | msg.menu.script | "Unknown keyword '%s'" | a bad line in the menu script (and its other warnings) | missing | the feature is missing |
-| msg.servers.http | "Can't fetch '%s', no HTTP support compiled in." | an HTTP server list without HTTP | not-taken | HTTP is always built in; a secure (https) list fails with "Unsupported protocol" in the fetch failure line |
+| msg.servers.http | "Can't fetch '%s', no HTTP support compiled in." | an HTTP server list without HTTP | not-taken | HTTP is always built in, and a secure (https) list is fetched over TLS (`engine/net/tls_stream.hpp`) |
 | msg.servers.badaddr | "Bad server address: %s" | a bad line in a server list | partial | ours does it but says it in its own words (the exact line not found) |
-| msg.snd.notstarted | "Sound system not started." | `soundinfo` or `soundlist` with no sound | missing | the feature is missing |
+| msg.snd.notstarted | "Sound system not started." | `soundinfo` or `soundlist` with no sound | partial | `games/shooters_edge/client/menu_sound.cpp`: said by `soundinfo` with no sound device; `soundlist` is still missing |
 | msg.ogg.stopped | "Playback stopped." | `ogg info` with no music, and `ogg stop` | done | `engine/audio/music_console.cpp` |
-| msg.ogg.cin | "Can't play music in cinematic mode." | `ogg play` during a cinematic | missing | the feature is missing |
+| msg.ogg.cin | "Can't play music in cinematic mode." | `ogg play` during a cinematic | done | `engine/audio/music_console.cpp` (`MusicConsole::held`, set by the window while a cinematic shows): `ogg play` refused |
 | msg.ogg.usage | "Usage: %s <info\|play\|stop\|next\|pause>" | `ogg` alone or with an unknown word | done | `engine/audio/music_console.cpp` |
 | msg.ogg.notrack | "No such track: %s" | `ogg play` of a track that is not found | done | `engine/audio/music_console.cpp` |
 | msg.ogg.playusage | "Usage: %s %s <track>" | `ogg play` with no track | done | `engine/audio/music_console.cpp` |

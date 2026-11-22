@@ -43,7 +43,8 @@ struct MusicConsole {
   bool shuffle = false;                      // every track in a random order (a game's switch)
   int menu_track = 0;                        // the track while no game runs (0 none)
   int menu_played = 0;                       // play_menu_music's: the menu track started
-  int manual = 0;  // `music play`'s track, playing once through (0 none: the level's)
+  int manual = 0;     // `music play`'s track, playing once through (0 none: the level's)
+  bool held = false;  // a game's movie plays with its own sound: `play` refused while it does
   core::Rng shuffle_rng = core::make_rng(0x5eed7ac);
 };
 
