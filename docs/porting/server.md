@@ -146,6 +146,18 @@ macros.hpp`) beside the console's clock macros. Quake II's farewell is "Server q
 restarted", with the reason, to every player and relay viewer; after `killserver` its endpoint
 answers only rcon and runs no frame until the next map.
 
+At a terminal the dedicated process is a line editor (`engine/server/terminal.hpp`): the keys
+edit the line after `]`, Up and Down walk the typed lines (`con_history` kept and saved to
+`.syshistory` in the base folder), and Tab lists the matches as the player's console does
+(`engine/console/tab_list.hpp`, `con_completion_mode` and `con_completion_threshold`); a line
+printed meanwhile goes above the one being typed. Every printed line can be kept in
+`logs/<name>.log` too (`engine/server/console_log.hpp`: `con_logfile`, `con_logfile_name`,
+`con_logfile_prefix`, `con_logfile_flush`). Quake II's names for these six are synonyms
+(`sys_history`, `com_completion_mode`, `com_completion_treshold`, `logfile` and its three).
+Quake II's dedicated server saves a single player's or co-op game (`save <dir>`, `autosave`,
+`load <dir>`, net/q2_game.cpp's `save_words`) where the window keeps it, `saves/<dir>.save`, and
+keeps each level's autosave as `save0`.
+
 Quake II's downloads (`net/q2_net_server.cpp`, facts in `porting/shooters-edge/
 q2-downloads-facts.md`) make the asked name plain first (slashes, `.` and `..`), then offer each
 kind by its own setting (`sv_download_textures` for textures and skies, `sv_download_pics`,

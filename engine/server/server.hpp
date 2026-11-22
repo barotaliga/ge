@@ -101,10 +101,17 @@ struct ServerConfig {
   std::string maprotation;          // sv_maprotation: the maps after the first, space-separated
   std::string mapcmd;               // sv_mapcmd: a console line run after each map loads
   std::string console_prefix;       // console_prefix: before each terminal line (macros.hpp)
-  int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
-  int32_t vote = 1;                 // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
-  int32_t timeouts = 1;             // sv_timeouts: each side's timeouts a map (timeout.hpp)
-  std::string spectator_password;   // sv_spectatorpassword: watching takes it
+  int32_t con_history = 128;        // con_history: typed lines kept and saved (terminal.hpp)
+  int32_t con_tab_mode = 1;         // con_completion_mode: how Tab lists matches (tab_list.hpp)
+  int32_t con_tab_threshold = 50;   // con_completion_threshold: matches listed before asking
+  int32_t con_logfile = 0;          // con_logfile: the console log (console_log.hpp) 0 off, 1, 2
+  int32_t con_logfile_flush = 0;    // con_logfile_flush: 0 buffered, 1 each line, 2 unbuffered
+  std::string con_logfile_name = "console";              // con_logfile_name: logs/<name>.log
+  std::string con_logfile_prefix = "[%Y-%m-%d %H:%M] ";  // con_logfile_prefix: before each line
+  int32_t max_spectators = 0;      // sv_maxspectators: spectators beside the players
+  int32_t vote = 1;                // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
+  int32_t timeouts = 1;            // sv_timeouts: each side's timeouts a map (timeout.hpp)
+  std::string spectator_password;  // sv_spectatorpassword: watching takes it
   int32_t tv_port = 0;           // sv_tvport: the server's own TV's port (0: none; spectators.hpp)
   int32_t tv_max_viewers = 32;   // sv_tvmaxviewers: the TV's viewers at most (0: no cap)
   double tv_delay_s = 10;        // sv_tvdelay: what the TV's spectators see is this old, s
