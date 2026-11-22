@@ -118,6 +118,9 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   spec.entities = entities;
   m.way = WayThrough();
   m.way.been = been;
+  m.way.complete = opt.complete;
+  m.way.complete_until = s.sv.time + opt.map_seconds * 0.75;
+  if (opt.complete) way_complete_init(f, nav, s, spec);
   way_init(m.way, f, nav, s, spec);
   if (opt.plan) m.way.log = &um.plan;
   m.wedge = Wedge();

@@ -125,6 +125,12 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
     // a mover 7.4 -> 5.0 %; head to head the side with it +16 and +19 u/s, +2.4 frags a match.
     const float up = now->absmin.z - rest->absmin.z;
     const bool away = up > kRideRest || up < -kRideRest;
+    // A node it holds where it stands now, away from its rest, is filled by it: bunk1's floor that
+    // sinks, half way down its pit, came down onto him there and stalled on him for good.
+    if (nb.mover == l.mover && away && !aboard(p, s, l.mover) &&
+        now->absmax.z > nb.origin.z + kPlayerMins.z + kStepHeight &&
+        now->absmin.z < nb.origin.z + kPlayerMaxs.z)
+      return true;
     if (nb.mover != l.mover || na.mover == l.mover)
       return away && s.onground && now->absmin.z > s.origin.z + kPlayerMins.z &&
              s.origin.x + kPlayerMaxs.x > now->absmin.x &&
@@ -171,8 +177,11 @@ bool under_raised(const Pilot& p, const PilotSense& s, int32_t m) {
   if (rest == nullptr || now == nullptr || !ridden(*rest)) return false;
   const float up = now->absmin.z - rest->absmin.z;
   const float feet = s.origin.z + kPlayerMins.z;
+  // Or inside its box's height (a floor that sinks into the pit he stands in, coming down round
+  // him: bunk1's stalled on him there for good).
+  const bool inside = now->absmin.z < feet && now->absmax.z > feet + kStepHeight;
   return (up > kRideRest || up < -kRideRest) &&
-         feet < std::min(now->absmin.z + kStepHeight, now->absmax.z - kStepHeight);
+         (feet < std::min(now->absmin.z + kStepHeight, now->absmax.z - kStepHeight) || inside);
 }
 
 // The node a plan starts from: the nearest, or the nearest off a ridden mover the player is under

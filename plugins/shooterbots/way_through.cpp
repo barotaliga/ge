@@ -1259,9 +1259,17 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // (`complete`) A step is open while not done once, not left and reached; the nearest monster
   // alive whose place is reached; the exit waits for all of them.
   for (WayStep& st : w.steps) st.ever = st.ever || st.done;
+  // A car's button (base1's: the car drops him to the exit) is a way out like the exit itself.
+  const auto carries = [&](const WayStep& st) {
+    if (st.kind != WayKind::button) return false;
+    for (const int d : st.doors)
+      for (const int c : needed)
+        if (c == d) return true;
+    return false;
+  };
   const auto open_step = [&](const WayStep& st) {
-    return st.kind != WayKind::exit && !st.ever && t >= st.left_until && st.node >= 0 &&
-           reach(st.node);
+    return st.kind != WayKind::exit && !carries(st) && !st.ever && t >= st.left_until &&
+           st.node >= 0 && reach(st.node);
   };
   int prey = -1;
   int32_t prey_node = -1;
@@ -1388,7 +1396,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (size_t k = 0; k < w.steps.size(); k++) {
       const WayStep& st = w.steps[k];
       if (way_exit(st) || st.done || t < st.left_until || st.node < 0 || !reach(st.node) ||
-          (st.keyed && !key_held))
+          (st.keyed && !key_held) || (left_to_do && carries(st)))
         continue;
       bool covered = false;
       for (const int c : st.covers)
