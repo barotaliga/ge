@@ -13,6 +13,7 @@
 #include <cstring>
 #include <filesystem>
 #include <functional>
+#include <utility>
 
 #include "net/crypto.hpp"
 #include "net/net_commands.hpp"
@@ -969,6 +970,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     }
   }
   r.end.oob_prints.clear();
+  for (std::string& line : std::exchange(r.end.web.said, {})) said.push_back(std::move(line));
   if (r.end.stage != r.said) {
     r.said = r.end.stage;
     std::string line = remote_stage_words(r.said) + r.server_name;
@@ -1032,6 +1034,8 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
   r.ignore.chat.relay = false;
+  // A listing asked for the settings page (qw_remote_sheet.hpp), on the tick clock its asks keep.
+  remote_sheet_step(r, prints, static_cast<double>(r.now_us) * 1e-6 + r.owed_s);
   client::drop_ignored(r.ignore, d.state, prints, wall_s, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
@@ -1163,13 +1167,15 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.q2_downloads.pics = kind("allow_download_pics", "1");
     cfg.q2_downloads.others = kind("allow_download_others", "0");
     cfg.q2_nodelta = cvar("cl_nodelta", "0") != "0";
-    // Quake II's downloads over HTTP (q2_http.hpp), registered while it is the game.
-    cfg.q2_http.downloads = cvar("cl_http_downloads", "1") != "0";
-    cfg.q2_http.filelists = cvar("cl_http_filelists", "1") != "0";
-    cfg.q2_http.max_connections = std::atoi(cvar("cl_http_max_connections", "2").c_str());
-    cfg.q2_http.proxy = cvar("cl_http_proxy", "");
-    cfg.q2_http.default_url = cvar("cl_http_default_url", "");
-    cfg.q2_http.debug = cvar("cl_http_debug", "0") != "0";
+    // Quake II's downloads over HTTP (classic/content/web_downloads.hpp), registered while it is
+    // the game.
+    cfg.web.downloads = cvar("cl_http_downloads", "1") != "0";
+    cfg.web.filelists = cvar("cl_http_filelists", "1") != "0";
+    cfg.web.max_connections = std::atoi(cvar("cl_http_max_connections", "2").c_str());
+    cfg.web.proxy = cvar("cl_http_proxy", "");
+    cfg.web.default_url = cvar("cl_http_default_url", "");
+    cfg.web.debug = cvar("cl_http_debug", "0") != "0";
+    cfg.web.insecure = cvar("cl_http_insecure", "0") != "0";
     cfg.rate = std::atoi(cvar("rate", "25000").c_str());  // the loaded game's default (classic)
     cfg.msg = std::atoi(cvar("msg", "1").c_str());
     cfg.noaim = cvar("noaim", "0") == "1";
@@ -1220,10 +1226,12 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
       "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in Quake II; "
       "port 26000 is a server of Quake's own protocol)",
       [join](Con& c, const Args& a) {
-        if (a.size() < 2)
+        if (a.size() < 2) {
           c.print("connect: name a server (connect 192.168.1.20)");
-        else
-          join(c, a[1]);
+          return;
+        }
+        if (a.size() > 2) c.print("Second argument to connect is ignored.");
+        join(c, a[1]);
       });
   con.add_command(
       "watch", "watch <host>:<port> [password]: watch a broadcast (a server's stream port or a TV)",
@@ -1375,6 +1383,60 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                      .min = 0,
                      .max = 86400,
                      .values = "0: never; 1..86400: that many seconds (60 the default)"});
+    // Downloads from a web address (classic/content/web_downloads.hpp), read at each `connect`;
+    // the server list's web lists read `cl_http_blocking_timeout` (menu/servers_page.hpp).
+    con.cvars().add({.name = "cl_http_downloads",
+                     .fallback = "1",
+                     .flags = ge::console::kArchive,
+                     .help = "Whether joining fetches files from the web address a server names.",
+                     .kind = ge::console::CvarKind::boolean,
+                     .values = "1: from the web first (the default); 0: from the server alone"});
+    con.cvars().add(
+        {.name = "cl_http_filelists",
+         .fallback = "1",
+         .flags = ge::console::kArchive,
+         .help = "Whether a server's web lists of further files are fetched and followed.",
+         .kind = ge::console::CvarKind::boolean,
+         .values = "1: followed (the default); 0: not"});
+    con.cvars().add({.name = "cl_http_max_connections",
+                     .fallback = "2",
+                     .flags = ge::console::kArchive,
+                     .help = "How many files are fetched from the web at once.",
+                     .kind = ge::console::CvarKind::integer,
+                     .min = 1,
+                     .max = 4,
+                     .values = "2: two at once (the default); 1 to 4: that many"});
+    con.cvars().add({.name = "cl_http_proxy",
+                     .fallback = "",
+                     .flags = ge::console::kArchive,
+                     .help = "The web proxy downloads go through.",
+                     .kind = ge::console::CvarKind::text,
+                     .values = "\"\": none (the default); TEXT: host:port"});
+    con.cvars().add(
+        {.name = "cl_http_default_url",
+         .fallback = "",
+         .flags = ge::console::kArchive,
+         .help = "Your own web address files are fetched from when a server names none.",
+         .kind = ge::console::CvarKind::text,
+         .values = "\"\": none (the default); TEXT: an address such as http://host/q2/"});
+    con.cvars().add({.name = "cl_http_insecure",
+                     .fallback = "0",
+                     .flags = ge::console::kArchive,
+                     .help = "Whether a secure web address's certificate goes unchecked.",
+                     .kind = ge::console::CvarKind::boolean,
+                     .values = "0: checked (the default); 1: not"});
+    con.cvars().add({.name = "cl_http_debug",
+                     .fallback = "0",
+                     .help = "Whether each web download's address is said as it starts.",
+                     .kind = ge::console::CvarKind::boolean,
+                     .values = "0: not said (the default); 1: said"});
+    con.cvars().add({.name = "cl_http_blocking_timeout",
+                     .fallback = "15",
+                     .flags = ge::console::kArchive,
+                     .help = "Seconds of silence before a web list of servers is given up.",
+                     .kind = ge::console::CvarKind::number,
+                     .min = 1,
+                     .values = "15: fifteen seconds (the default); a number: that many"});
     con.cvars().add({.name = "qport",
                      .fallback = "0",
                      .help = "The number the server you join knows you by when your router moves "

@@ -38,6 +38,7 @@
 #include <vector>
 
 #include "console/console.hpp"
+#include "server/sheet.hpp"
 #include "shooters_edge/menu/controls_page.hpp"
 #include "ui/menu.hpp"
 #include "vfs/search.hpp"
@@ -123,6 +124,9 @@ struct Host {
   bool screen_up = false;
   // The game's files (null: none): the player page's figures and skins (figures.hpp).
   const ge::vfs::SearchPath* files = nullptr;
+  // The server settings pages' sheet (net/qw_remote_sheet.hpp; null: none): what OPTIONS ▸ SERVER
+  // SETTINGS shows (server_page.hpp).
+  const ge::server::SettingsSheet* sheet = nullptr;
 };
 
 // The command a key row binds: a CUSTOMIZE CONTROLS row's move or an entry's `bind`; "" none.

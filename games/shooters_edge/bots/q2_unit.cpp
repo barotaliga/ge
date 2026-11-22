@@ -37,7 +37,7 @@ namespace {
 namespace sv = shooters_edge::server;
 
 constexpr int kHz = 1000 / kPilotMsec;  // the rules' frames a second
-constexpr int kSampleEvery = kHz / 2;   // frames between the track's points
+constexpr int kSampleEvery = kHz / 5;   // frames between the track's points (0.2 s)
 
 uint64_t fold(uint64_t h, uint32_t w) { return (h ^ w) * 1099511628211ull; }
 

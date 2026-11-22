@@ -13,18 +13,18 @@ q2-sp-gaps.md).
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client commands (what a player types; the game library answers them) | 35 | 0 | 0 | 2 | 37 |
-| Server commands (`sv <word>` typed at the server console) | 2 | 4 | 0 | 0 | 6 |
-| Cvars the game library registers or reads | 40 | 6 | 0 | 0 | 46 |
+| Server commands (`sv <word>` typed at the server console) | 6 | 0 | 0 | 0 | 6 |
+| Cvars the game library registers or reads | 43 | 3 | 0 | 0 | 46 |
 | User info keys the game reads | 9 | 0 | 0 | 0 | 9 |
 | dmflags bits | 16 | 0 | 0 | 0 | 16 |
 | Items (the item list, in its order; each is also a spawnable classname) | 42 | 0 | 0 | 0 | 42 |
 | Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 83 | 0 | 0 | 0 | 83 |
 | Monsters | 26 | 0 | 0 | 0 | 26 |
-| Player messages (printed, broadcast and centre-printed) | 78 | 1 | 0 | 2 | 81 |
+| Player messages (printed, broadcast and centre-printed) | 79 | 0 | 0 | 2 | 81 |
 | Server console lines (what an admin reads; `dprintf`) | 36 | 0 | 0 | 2 | 38 |
 | Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 17 | 0 | 0 | 0 | 17 |
 | Rules a player sees (behaviour not in a row above) | 44 | 0 | 0 | 0 | 44 |
-| **all** | 428 | 11 | 0 | 6 | 445 |
+| **all** | 436 | 3 | 0 | 6 | 445 |
 
 ## Client commands (what a player types; the game library answers them)
 
@@ -82,10 +82,10 @@ count: done 0, partial 4, missing 2, not-taken 0
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | svcmd.test | `sv test` | developer test, prints `Svcmd_Test_f()` | done | q2_server.cpp sq_console |
-| svcmd.addip | `sv addip <mask>` | adds an address mask to the filter list (a 0 octet or a short mask is a wildcard); `Usage:  addip <ip-mask>`, `IP filter list is full`, `Bad filter address: <text>` | partial | engine/server/bans.cpp answers `addip` with its own words and `*` wildcards; the `sv` form does not reach it (S30) |
-| svcmd.removeip | `sv removeip <mask>` | removes an entry typed the same way: `Removed.` / `Didn't find <mask>.`; `Usage:  sv removeip <ip-mask>` | partial | engine/server/bans.cpp, own wording (S30) |
-| svcmd.listip | `sv listip` | `Filter list:` then one `%3i.%3i.%3i.%3i` per entry | partial | engine/server/bans.cpp, own format (S30) |
-| svcmd.writeip | `sv writeip` | writes `set filterban N` and one `sv addip` per entry to `<game>/listip.cfg`: `Writing <file>.` / `Couldn't open <file>` | partial | engine/server/bans.cpp writes `addip` lines (S30) |
+| svcmd.addip | `sv addip <mask>` | adds an address mask to the filter list (a 0 octet or a short mask is a wildcard); `Usage:  addip <ip-mask>`, `IP filter list is full`, `Bad filter address: <text>` | done | games/shooters_edge/net/q2_admin.cpp (`sv_filter`): the mask's 0 or missing parts a wildcard on the server's ban list; the usage, `Bad filter address: <text>` and `IP filter list is full` (1024); a matching client dropped |
+| svcmd.removeip | `sv removeip <mask>` | removes an entry typed the same way: `Removed.` / `Didn't find <mask>.`; `Usage:  sv removeip <ip-mask>` | done | games/shooters_edge/net/q2_admin.cpp: `Removed.` / `Didn't find <mask>.`, the usage |
+| svcmd.listip | `sv listip` | `Filter list:` then one `%3i.%3i.%3i.%3i` per entry | done | games/shooters_edge/net/q2_admin.cpp: `Filter list:` and the `%3i` columns, a wildcard as 0 |
+| svcmd.writeip | `sv writeip` | writes `set filterban N` and one `sv addip` per entry to `<game>/listip.cfg`: `Writing <file>.` / `Couldn't open <file>` | done | games/shooters_edge/net/q2_admin.cpp: `set filterban N` and `sv addip` lines to `<game>/listip.cfg`, `Writing <file>.` / `Couldn't open <file>`; read back at the start (engine/server/bans.hpp) with its mode |
 | svcmd.unknown | any other `sv` word | `Unknown server command "<word>"` | done | q2_server.cpp sq_console; addip and its kin left to the network server |
 
 ## Cvars the game library registers or reads
@@ -120,9 +120,9 @@ count: done 29, partial 10, missing 7, not-taken 0
 | cvar.g_monsterfootsteps | `g_monsterfootsteps` 0 (A) | monsters' footsteps | done | q2_commands.cpp, q2_monster_steps.cpp |
 | cvar.g_fix_triggered | `g_fix_triggered` 0 | a monster waiting for a trigger nothing names stands from the start (and the console note `fixed TRIGGERED flag on ...`) | done | q2_commands.cpp, q2_monsters.cpp; the reference game has neither this setting nor a line for it, so ours prints none (the trigger_once line is con.fixed-triggered) |
 | cvar.g_commanderbody_nogod | `g_commanderbody_nogod` 0 (A) | the commander's body may be shot apart | done | q2_commands.cpp |
-| cvar.dmflags | `dmflags` 0 (SI) | deathmatch rule bits (table below) | partial | q2_server.cpp; not in our server info (S27); bits: dmf table |
-| cvar.fraglimit | `fraglimit` 0 (SI) | frags that end the level, `Fraglimit hit.` | partial | q2_server.cpp, q2_fight.cpp; not in our server info (S27) |
-| cvar.timelimit | `timelimit` 0 (SI) | minutes that end the level, `Timelimit hit.` | partial | q2_server.cpp; not in our server info (S27) |
+| cvar.dmflags | `dmflags` 0 (SI) | deathmatch rule bits (table below) | done | q2_server.cpp; in the status answer's server info (games/shooters_edge/net/q2_admin.cpp, `q2_status_keys`); bits: dmf table |
+| cvar.fraglimit | `fraglimit` 0 (SI) | frags that end the level, `Fraglimit hit.` | done | q2_server.cpp, q2_fight.cpp; in the status answer's server info |
+| cvar.timelimit | `timelimit` 0 (SI) | minutes that end the level, `Timelimit hit.` | done | q2_server.cpp; in the status answer's server info |
 | cvar.password | `password` "" (U flag) | a player's password to join and to return from spectating (`none` = none) | done | net/q2_net_server.cpp at connect; q2_spectate.cpp on returning (the gate) |
 | cvar.spectator_password | `spectator_password` "" | a spectator's password (`none` = none) | done | net/q2_game.cpp; q2_spectate.cpp mid-match |
 | cvar.needpass | `needpass` 0 (SI) | set by the game every frame: 1 player password asked, 2 spectator password asked | done | net/q2_net_server.cpp `status_text` |
@@ -465,7 +465,7 @@ count: done 50, partial 16, missing 15, not-taken 0
 | msg.players | `%3i name` lines, `...`, blank, `<n> players` | `players` | done | q2_commands.cpp |
 | msg.playerlist | `mm:ss ping score name[ (spectator)]`, `And more...` | `playerlist` | done | q2_commands.cpp |
 | msg.wave | `flipoff` / `salute` / `taunt` / `wave` / `point` | `wave`'s echo to the player | done | q2_commands.cpp |
-| msg.rejmsg | `Banned.`, `Spectator password required or incorrect.`, `Server spectator limit is full.`, `Password required or incorrect.` | connect refusals the game library sets | partial | net/q2_net_server.cpp adds `Connection refused.` (S22) |
+| msg.rejmsg | `Banned.`, `Spectator password required or incorrect.`, `Server spectator limit is full.`, `Password required or incorrect.` | connect refusals the game library sets | done | The game's words; games/shooters_edge/net/q2_net_server.cpp adds `Connection refused.` after a game's refusal, as the server does with a library's |
 | msg.intermission-scores | (nothing printed) | the intermission shows the layout only | done | q2_server.cpp prints nothing |
 | msg.help-icon-weapon | (help slot weapon icon) | see layout.help-slot | done | q2_bar.cpp |
 

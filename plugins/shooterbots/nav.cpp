@@ -923,6 +923,7 @@ void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra) {
       l.pitch = e.pitch;
       l.level = e.level;
       l.lead = e.lead;
+      l.combo = e.combo;
       l.mover = e.mover;
       l.script = e.script;
       l.teleport = e.teleport;
@@ -1253,6 +1254,12 @@ NavProof prove_grenade_jump(const MoveWorld& world, const MoveSettings& move, Ve
   Vec3f burst_at, stand;
   float shot_t = 0;
   bool burst = false, jumped = false;
+  // A combo's rocket (`rocket_pitch`): fired on the jump, where and when it bursts.
+  const bool combo = gj.rocket_pitch > 0;
+  Vec3f rocket_at;
+  float rocket_t = -1;
+  bool rocket_burst_done = !combo, fire = false;
+  float taken = 0;
   const float limit = gj.fuse + set.limit_s;
   for (int i = 0;; i++) {
     const float t = static_cast<float>(i + 1) * step_s;
@@ -1271,10 +1278,22 @@ NavProof prove_grenade_jump(const MoveWorld& world, const MoveSettings& move, Ve
       // The jump with the fuse nearly out, then forward at the target through the flight.
       c.angles = {0, across(s.origin, to) > 0.01f ? yaw_at(s.origin, to) : aim, 0};
       c.forward = static_cast<int16_t>(move.maxspeed);
-      if (!jumped) c.buttons = kButtonJump;
+      if (!jumped) {
+        c.buttons = kButtonJump;
+        fire = combo;
+        if (combo) c.angles.x = gj.rocket_pitch;
+      }
       jumped = true;
     }
     player_move(s, c, move, world);
+    if (fire) {
+      // The combo's rocket, fired after the jump command's move, down at the grenade.
+      fire = false;
+      const RocketBurst rb = rocket_burst(world, s.origin, c.angles, gj.blast);
+      if (!rb.ok) return p;
+      rocket_at = rb.at;
+      rocket_t = t + rb.flight_s;
+    }
     if (i == 0) {
       // The grenade, thrown after the command's move; where it lies when the fuse runs out.
       shot_t = t;
@@ -1285,8 +1304,15 @@ NavProof prove_grenade_jump(const MoveWorld& world, const MoveSettings& move, Ve
     if (!burst && t >= shot_t + gj.fuse) {
       burst = true;
       const float d = rocket_blast(s, burst_at, gj.blast);
-      if (d <= 0) return p;  // too far from the blast: no push
-      if (health) *health = d;
+      if (d <= 0 && !combo) return p;  // too far from the blast: no push
+      taken += d;
+      if (health) *health = taken;
+    }
+    if (!rocket_burst_done && rocket_t >= 0 && t >= rocket_t) {
+      rocket_burst_done = true;
+      const float d = rocket_blast(s, rocket_at, gj.blast);
+      taken += d;
+      if (health) *health = taken;
     }
     p.commands++;
     if (path) path->push_back(s.origin);
@@ -1298,7 +1324,8 @@ NavProof prove_grenade_jump(const MoveWorld& world, const MoveSettings& move, Ve
     p.end = s.origin;
     p.time_s = t;
     const bool grounded = s.ground >= 0;
-    if (burst && grounded) {
+    if (burst && rocket_burst_done && grounded) {
+      if (combo && taken <= 0) return p;  // neither blast pushed him
       const float h = across(s.origin, to), dz = s.origin.z - to.z;
       p.landed = true;
       p.reached = h <= set.arrive * 3 && dz <= kArriveUp && dz >= -kArriveUp;
@@ -1700,6 +1727,28 @@ NavTrickCounts nav_add_tricks(const MoveWorld& world, const MoveSettings& move, 
         extra.push_back(l);
         out.grenades++;
         out.grenade_from[t] = starts[x].n;
+        done = true;
+        break;
+      }
+    // The combo, for a trick people made as one and no rocket jump alone landed: the grenade jump
+    // with a rocket under the feet on the jump.
+    done = !set.combos || !tr.combo || out.rocket_from[t] >= 0;
+    GrenadeJumpSpec cj = set.gj;
+    cj.rocket_pitch = 89;
+    for (size_t x = 0; x < starts.size() && !done; x++)
+      for (const float lead : set.leads) {
+        out.proofs++;
+        const Vec3f from = g.nodes[static_cast<size_t>(starts[x].n)].origin;
+        const NavProof pr = prove_grenade_jump(world, move, from, tr.to, lead, g.set, cj);
+        const int32_t at = pr.landed ? landed(pr.end, tr.to) : -1;
+        if (at < 0 || at == starts[x].n) continue;
+        NavExtraLink l{starts[x].n, at, NavKind::grenade, pr.time_s + set.cost_s};
+        l.pitch = set.gj.pitch;
+        l.lead = lead;
+        l.combo = true;
+        l.level = tr.level > 1 ? tr.level : uint8_t{1};
+        extra.push_back(l);
+        out.combos++;
         done = true;
         break;
       }

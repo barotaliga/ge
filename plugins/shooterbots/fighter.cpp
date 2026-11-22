@@ -104,6 +104,7 @@ constexpr double kSwimExit_s = 3;    // a climb out of the water kept this long 
 constexpr double kSwimWayFlat = 48;  // a swim's way nearer than this across is risen or sunk to
 constexpr double kLanding_s = 2;  // out of the water, its exit node walked onto this long at most
 constexpr float kRocketJumpHealth = 70;  // the health a rocket jump is tried with (it costs ~50)
+constexpr float kComboHealth = 130;      // and a combo's, health and armour (two blasts)
 // A hopper plans the map's gap tricks only this fast or faster, units/s (people take off at
 // 420 to 500; a gap's jump is flown only when the move says it lands across).
 constexpr float kGapPlanSpeed = 380;
@@ -648,6 +649,11 @@ void think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& s
     jumper.rockets = (st.items & arsenal.launcher) != 0 && afford && f.features[sb::Feature::rj];
     jumper.grenades = (st.items & arsenal.lob) != 0 && (st.items & arsenal.launcher) == 0 &&
                       afford && f.features[sb::Feature::gj];
+    // Combos (a grenade laid, a rocket on it as it bursts): both launchers, a rocket for each, and
+    // the health for both blasts.
+    jumper.combos = (st.items & arsenal.launcher) != 0 && (st.items & arsenal.lob) != 0 &&
+                    rockets >= 2 && st.health + st.armor >= kComboHealth && afford &&
+                    f.features[sb::Feature::rj] && f.features[sb::Feature::gj];
     jumper.level = moves >= kRocketLevelMoves[2] ? 2 : moves >= kRocketLevelMoves[1] ? 1 : 0;
     jumper.extra_s = kRocketLevelExtra_s[jumper.level];
     jumper.cuts_all = f.features[sb::Feature::jumpcuts] ||
@@ -1183,7 +1189,8 @@ void think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& s
   // A blast jump on the way next: its launcher in hand for it (a rocket jump's, a grenade
   // jump's).
   const sb::Pilot& pl = f.bot.pilot.pilot;
-  if ((pl.set.jumper.rockets || pl.set.jumper.grenades || pl.set.jumper.escapes) &&
+  if ((pl.set.jumper.rockets || pl.set.jumper.grenades || pl.set.jumper.combos ||
+       pl.set.jumper.escapes) &&
       t - f.impulse_at >= kImpulseGap_s)
     for (size_t k = pl.k; k + 1 < pl.route.size() && k < pl.k + 3; k++) {
       const sb::NavNode& from = pl.g->nodes[static_cast<size_t>(pl.route[k])];
@@ -1196,7 +1203,12 @@ void think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& s
         const BotWeapon* rl = weapon_row(arsenal, arsenal.launcher);
         const BotWeapon* gl = weapon_row(arsenal, arsenal.lob);
         if (l.kind == sb::NavKind::rocket && rl && st.weapon != rl->bit) number = rl->number;
-        if (l.kind == sb::NavKind::grenade && gl && st.weapon != gl->bit) number = gl->number;
+        // A combo's: the grenade launcher for its grenade, then (the grenade out, the first
+        // link the pilot is on) the rocket launcher for the rocket on it.
+        const bool laid = l.combo && k == pl.k && pl.grenade_s >= 0;
+        if (l.kind == sb::NavKind::grenade && !laid && gl && st.weapon != gl->bit)
+          number = gl->number;
+        if (laid && rl && st.weapon != rl->bit) number = rl->number;
       }
       if (number > 0) {
         f.want_weapon = number;

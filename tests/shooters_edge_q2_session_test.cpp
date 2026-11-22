@@ -170,6 +170,8 @@ TEST(in_grab_0_takes_the_mouse_only_while_the_game_covers_the_screen) {
   CHECK(!cl::q2_takes_mouse(r.s, false) && cl::q2_takes_mouse(r.s, true));
   r.c.execute("in_grab 2");
   CHECK(cl::q2_takes_mouse(r.s, false));
+  r.c.execute("in_enable 0");  // the mouse left alone, whatever in_grab says
+  CHECK(!cl::q2_takes_mouse(r.s, false) && !cl::q2_takes_mouse(r.s, true));
 }
 
 TEST(the_download_switches_are_quake_iis_settings) {

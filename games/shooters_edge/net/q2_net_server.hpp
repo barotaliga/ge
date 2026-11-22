@@ -95,6 +95,10 @@ namespace sv = shooters_edge::server;
 
 struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a server
   std::string hostname = "Shooter's Edge";
+  // The server info's `version`, and the game folder its `gamedir` names ("" the base folder).
+  std::string version, game_dir;
+  // The server-info keys an administrator added (`sets`), as `\key\value` pairs; null: none.
+  std::function<std::string()> admin_info;
   Q2MvdConfig mvd;  // the multiview recorder and its relay stream (q2_mvd_server.hpp)
   int max_clients = 8;
   std::string password;  // "" or "none": none asked

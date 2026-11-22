@@ -51,6 +51,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <span>
 #include <string>
@@ -66,6 +67,7 @@
 #include "net/transport.hpp"
 #include "server/login.hpp"
 #include "server/match.hpp"
+#include "server/sheet.hpp"
 #include "server/timeout.hpp"
 #include "server/vote.hpp"
 
@@ -164,6 +166,10 @@ struct ServerConfig {
   // dedicated process once a master elsewhere's key is known; null: no offers to a master
   // elsewhere.
   const net::SignKeys* account_signer = nullptr;
+  // The server-info keys an administrator added with `sets` (or `set <key> <value> s`), as
+  // `\key\value` pairs, now: for a game that answers its own status queries. Set by the dedicated
+  // process; null: none.
+  std::function<std::string()> admin_info;
 };
 
 // What a replay found.
@@ -265,6 +271,9 @@ struct ServerGame {
   // offline. Both null: the core's own node, session and hosting round `frame`.
   bool (*serve)(void* game, net::Transport& port, std::string& error) = nullptr;
   void (*net_frame)(void* game, int64_t now_us) = nullptr;
+  // The game's socket opened again (`net_restart`, perhaps on another port): the game's own
+  // listeners beside it (a TCP port at the same address) opened again too. May be null.
+  void (*reopened)(void* game, net::Transport& port) = nullptr;
 
   // A game a TV node can broadcast (engine/server/record.hpp): the last frame as the game's
   // viewers need it (what changed: its moves, its events), appended to `out`, and the whole state
@@ -295,6 +304,12 @@ struct ServerGame {
   // says it, and the server's features act on it (`sv_autorecord` records each match). Null: the
   // game is always in its match.
   LobbyPhase (*phase)(const void* game) = nullptr;
+
+  // THE SETTINGS SHEET (sheet.hpp): what the player in `slot` may read and change of the server
+  // now (its map, mode, limits, rules and aids, each with how it changes), for a client's server
+  // settings page. The game sends it to its clients in its own protocol; a listen server's window
+  // reads it here. Null: the game shows none.
+  void (*sheet)(const void* game, int slot, SettingsSheet& out) = nullptr;
 };
 
 // A change of the match's phase, at the server's frame and clock after which it was read.

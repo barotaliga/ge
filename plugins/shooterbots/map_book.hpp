@@ -39,12 +39,13 @@ namespace ge::shooterbots {
 
 struct RocketTrick {
   const char* map;
-  Vec3f from, to;  // people's takeoff and landing (origins)
-  float pitch;     // the shot, degrees down
-  float run;       // the run at the shot, units/s (0: standing)
-  int jumps;       // how often people made it in the games read
-  bool flip;       // flown as the flip (the shot behind)
-  uint8_t level;   // 0 amateur, 1 intermediate, 2 expert
+  Vec3f from, to;      // people's takeoff and landing (origins)
+  float pitch;         // the shot, degrees down
+  float run;           // the run at the shot, units/s (0: standing)
+  int jumps;           // how often people made it in the games read
+  bool flip;           // flown as the flip (the shot behind)
+  uint8_t level;       // 0 amateur, 1 intermediate, 2 expert
+  bool combo = false;  // a combo: a grenade laid, a rocket fired on it as it bursts
 };
 
 struct GapTrick {

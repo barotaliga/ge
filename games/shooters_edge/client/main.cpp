@@ -365,9 +365,10 @@ int run_main(int argc, char** argv) {
                                   .no_glow = &picture.no_glow,
                                   .q2fx = &picture.q2fx,
                                   .chat = &remote.ignore.chat,
-                                  .auto_chat = &con_view.game_chat,
+                                  .console_view = &con_view,
                                   .music = &music,
-                                  .console = &con_look};
+                                  .console = &con_look,
+                                  .menu = &game_menu};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   remote.stuff_file =
       cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";
@@ -524,8 +525,10 @@ int run_main(int argc, char** argv) {
   // The install's game's adapter, copied: LOAD GAME of another install swaps it for every reader.
   cl::GameAdapter adapter = cl::adapter_of(sp::game_or_quake(args.profile));
   remote.q2_game = [&adapter] { return adapter.game->id == "q2"; };
-  shooters_edge::menu::Host menu_host{
-      .console = &console, .maps = adapter.list_maps(adapter, files), .files = &files.vfs};
+  shooters_edge::menu::Host menu_host{.console = &console,
+                                      .maps = adapter.list_maps(adapter, files),
+                                      .files = &files.vfs,
+                                      .sheet = &remote.sheet.sheet};  // SERVER SETTINGS
   cl::add_adapter_commands(console, adapter, files, args.basedir);
   cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
   // The map's place names, read as it starts and made in the game (client/place_names.hpp).
@@ -741,8 +744,7 @@ int run_main(int argc, char** argv) {
   cl::hear_worlds_on(&synth, &under_ear);  // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
-  out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
-                      : std::string("shooters_edge: no audio device; a demo plays silent"));
+  cl::add_sound_status_commands(console, speaker ? speaker->driver() : nullptr, synth);
   // The microphone, opened the first time a talk key is held on a server joined (the system asks
   // the player's leave then, never at start) and read every frame after (net/qw_remote.hpp).
   std::unique_ptr<ge::platform::AudioIn> mic;
@@ -1149,6 +1151,7 @@ int run_main(int argc, char** argv) {
   while ((args.frames == 0 || presented < args.frames) && !quit) {
     cl::start_apply_speed(console, game_start);
     shooters_edge::look::apply_ce_enabled(picture, console.cvars());  // ce_enabled 0: none of it
+    music.held = cl::cinematic_on(cine);  // a movie's own sound: `ogg play` refused meanwhile
     ge::audio::music_frame(music, synth, console);
     cl::hear_swap(synth, under_ear);  // s_swapstereo
     if (std::exchange(attract_at_start, false) && !start_attract())
@@ -1574,6 +1577,7 @@ int run_main(int argc, char** argv) {
       if (std::exchange(playback.jumped, false)) con_view.clear_notify();  // as a jump does
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
+      cl::demo_music(music, ds);  // the track its server names
       place_seen.on = !ds.map.empty();
       place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
       place_seen.angles = ds.angles;

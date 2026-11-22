@@ -1174,6 +1174,27 @@ TEST(join_a_game_s_filters_hide_full_and_empty_servers_a_mode_and_a_ping_kept_as
       "sb_showtimelimit 1; sb_status 0");
   run({});
   CHECK(page.sort_words() == "ping, then address" && page.hide_on_join());
+  // Quake II's ui_sortservers in its place: one column, the players most first; D and RIGHT
+  // move its sort and leave both settings as they are.
+  menu.servers().game_sort = 4;
+  run({});
+  CHECK(page.sort_words() == "players (high to low), then name");
+  CHECK(page.list().entries[static_cast<size_t>(page.rows().front())].info.name == "full");
+  key('d');
+  CHECK(page.game_sort == -4 && con.cvars().find("sb_sortservers")->value == "32");
+  CHECK(page.list().entries[static_cast<size_t>(page.rows().front())].info.name == "empty");
+  {
+    ge::ui::MenuInput right;
+    right.right = true;
+    run(right);
+  }
+  CHECK(page.game_sort == 5 && page.sort_words() == "ping, then name");
+  menu.servers().game_sort = 0;
+  run({});
+  CHECK(page.sort_words() == "as found");
+  menu.servers().game_sort = shooters_edge::menu::ServersPage::kNoGameSort;
+  run({});
+  CHECK(page.sort_words() == "ping, then address");
   for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{390, 844}}) {
     ge::ui::DrawList dl;
     dl.begin(w, h);
@@ -1587,4 +1608,18 @@ TEST(servers_page_reads_web_lists) {
   CHECK(printed("Ignoring invalid master URL: +3" + base + "/bad"));
   for (gn::TcpStream& t : streams) gn::tcp_close(t);
   gn::tcp_close_listener(web);
+}
+
+TEST(the_game_sets_the_menus_size) {
+  sm::ClassicArt art;  // by the window: the largest whole number that fits 1920 x 1080
+  CHECK(sm::classic_screen(art, 1920, 1080).scale == 5);
+  art.scale = 2;  // Quake II's ui_scale 2: twice the game's own size, centred
+  const sm::ClassicLayout l = sm::classic_screen(art, 1920, 1080);
+  CHECK(l.scale == 2 && l.x == 640 && l.y == 340);
+  art.scale = 0.5f;  // never smaller than the game's own
+  CHECK(sm::classic_screen(art, 1920, 1080).scale == 1);
+  sm::GameMenu menu;  // the setting outlives the game's pictures
+  menu.menu_scale() = 3;
+  menu.set_art(sm::ClassicArt{});
+  CHECK(menu.menu_scale() == 3);
 }

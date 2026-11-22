@@ -71,7 +71,10 @@ constexpr uint8_t updatestatfloat = 79, voice = 84, spawnstaticsound2 = 94;
 // directory's: engine/vfs/partial.hpp's ArchiveOrigin).
 // An item taken and coming back (entity, model, skin, origin, yaw, the milliseconds until it
 // shows; the ge set's `item-back`).
+// The server's settings sheet a part at a time (the part, begin, row or end, and the row's text:
+// engine/server/sheet.hpp; the ge set's `settings-sheet`, asked with `ge_sheet`).
 constexpr uint8_t ge_point = 120, ge_trail = 121, ge_aim = 122, ge_origin = 123, ge_back = 119;
+constexpr uint8_t ge_sheet = 125;
 }  // namespace svc
 
 namespace clc {

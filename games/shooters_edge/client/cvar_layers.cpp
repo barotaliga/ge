@@ -15,6 +15,7 @@
 #include "classicenhance/profile.hpp"
 #include "core/num_text.hpp"
 #include "shooters_edge/client/picture_files.hpp"
+#include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/sound/ambience.hpp"
 
 #include <algorithm>
@@ -190,6 +191,11 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.shownet != nullptr) *b.shownet = 0;              // and cl_shownet
   if (b.showpackets != nullptr) *b.showpackets = false;  // and cl_showpackets
   if (b.items_still != nullptr) *b.items_still = false;  // and cl_nobob
+  if (b.menu != nullptr) {  // and ui_scale, ui_sortservers, ui_pingrate: the menus by the window
+    b.menu->menu_scale() = 0;
+    b.menu->servers().game_sort = shooters_edge::menu::ServersPage::kNoGameSort;
+    b.menu->servers().game_ping_rate = -1;
+  }
   if (b.console != nullptr) {  // and con_background: the game's own picture
     b.console->back_name = "conback";
     b.console->read_back = nullptr;
@@ -355,7 +361,9 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   `scr_lag_*`, `cl_adjustfov`, `uf`, `cl_kickangles`; and `s_underwater` the same setting as
 //   Quake's (room_ear.hpp), on by default where Quake's is off;
 // - its browsers: `ui_sortdemos` (`menu_demo_sort`, by name by default where ours lists the newest
-//   first) and `ui_colorservers` (`sb_colorservers`).
+//   first) and `ui_colorservers` (`sb_colorservers`); its own `ui_sortservers` (one column either
+//   way, in place of `sb_sortservers`) and `ui_pingrate` (from `rate`, in place of
+//   `sb_infospersec`); `ui_scale`, the menus' size.
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its whole set of configs run again on a game change (client/install_configs.cpp's
@@ -562,7 +570,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.
   if (b.chat != nullptr) add_q2_chat_sound(c, *b.chat);
-  if (b.auto_chat != nullptr)
+  if (b.console_view != nullptr) {
     v.bind({.name = "con_auto_chat",
             .fallback = "0",
             .flags = con::kArchive,
@@ -571,7 +579,47 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .min = 0,
             .max = 2,
             .values = "0: a command (the default); 1: said to everyone; 2: said to your team"},
-           b.auto_chat);
+           &b.console_view->game_chat);
+    // Its stamps on every console line, not only chat's (the classic layer's `con_timestamps`).
+    v.bind({.name = "con_timestamps",
+            .fallback = "0",
+            .help = "Whether every console line begins with the time it came.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: no time (the default); 1: the time, as con_timestampsformat writes it",
+            .overlap = con::Overlap::own},
+           &b.console_view->stamps);
+    if (b.chat != nullptr) b.chat->timestamps = 0;  // its chat lines stamped as every line is
+    v.bind({.name = "con_timestampsformat",
+            .fallback = "%H:%M:%S ",
+            .help = "How the time before each console line is written, in strftime's words.",
+            .kind = con::CvarKind::text,
+            .values = "\"%H:%M:%S \": hours, minutes and seconds (the default); TEXT: that form"},
+           &b.console_view->stamp_format);
+    v.bind({.name = "con_timestampscolor",
+            .fallback = "#aaa",
+            .help = "The colour of the time before each console line.",
+            .kind = con::CvarKind::text,
+            .values = "#aaa: light grey (the default); #rgb, #rrggbb, #rrggbbaa, a colour's name "
+                      "or 0..7"},
+           &b.console_view->stamp_colour);
+    // Its Tab: the word completed to what the matches share, the matches listed.
+    v.bind({.name = "com_completion_mode",
+            .fallback = "1",
+            .help = "How Tab lists the commands and settings a word could be.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 2,
+            .values = "0: one a line; 1: in columns (the default); 2: in columns, commands, "
+                      "settings and aliases apart"},
+           &b.console_view->list_mode);
+    v.bind({.name = "com_completion_treshold",
+            .fallback = "50",
+            .help = "How many matches Tab lists before it asks first.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .values = "50: fifty (the default); a number: that many"},
+           &b.console_view->list_threshold);
+  }
   // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
   if (b.predict != nullptr)
     v.bind({.name = "cl_predict",
@@ -617,6 +665,34 @@ void add_q2(con::Console& c, const GameBindings& b) {
                       "when it is not there"},
            &b.console->back_name);
   }
+  if (b.menu != nullptr) {
+    v.bind({.name = "ui_sortservers",
+            .fallback = "0",
+            .help = "How JOIN A GAME sorts its servers: by one column, either way.",
+            .kind = con::CvarKind::integer,
+            .min = -5,
+            .max = 5,
+            .values = "0: as they are found (the default); 1 name, 2 game, 3 map, 4 players (the "
+                      "busiest first), 5 ping; -1..-5: the same the other way"},
+           &b.menu->servers().game_sort);
+    v.bind({.name = "ui_pingrate",
+            .fallback = "0",
+            .help = "How many servers JOIN A GAME asks a second.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 100,
+            .values = "0: from your rate (the default; 33 at 15000); 1..100: that many a second"},
+           &b.menu->servers().game_ping_rate);
+  }
+  if (b.menu != nullptr)
+    v.bind({.name = "ui_scale",
+            .fallback = "0",
+            .help = "How large the menus are drawn.",
+            .min = 0,
+            .max = 10,
+            .values = "0: as large as fits the window (the default); 1..10: that many times the "
+                      "game's own size"},
+           &b.menu->menu_scale());
   if (b.items_still != nullptr)
     v.bind({.name = "cl_nobob",
             .fallback = "0",
@@ -889,7 +965,11 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
   }
   con::CvarLayer layer(c.cvars(), v.layer);
   if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it
-  if (b.auto_chat != nullptr) *b.auto_chat = -1;       // only Quake II's con_auto_chat sets it
+  if (b.console_view != nullptr) {  // only Quake II's con_auto_chat and stamps set them
+    b.console_view->game_chat = -1;
+    b.console_view->stamps = false;
+    b.console_view->list_mode = -1;  // our own Tab
+  }
   {  // only Quake II's cvars set them; what the frames saw is kept
     Q2Session fresh;
     fresh.joined = v.q2.joined;

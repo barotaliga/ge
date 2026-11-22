@@ -86,6 +86,9 @@ struct Q2Bar {
   // The hit marker (classic/q2_fx_switches.hpp's `cl_hit_markers`): the switches (null: none
   // drawn), the recording's hits last seen and the real time of the last new one, s.
   const ge::classic::Q2FxSwitches* fx = nullptr;
+  // The crosshair's settings the last draw_q2_crosshair was given (ch_scale, ch_x, ch_y: a
+  // scope's picture follows them); null: their defaults.
+  const ge::hud::CrosshairSettings* cross = nullptr;
   int64_t hits_seen = 0;
   double hit_at = -1e9;
 };

@@ -85,6 +85,8 @@ struct EpisodeMap {
   int64_t far_in_water = 0;
   WayStats way;
   int64_t nav_nodes = 0, movers = 0, faults = 0;
+  // The map's tricks the move proved into blast jumps (map_nav.hpp `tricks_made`): rocket, grenade.
+  int64_t nav_rockets = 0, nav_grenades = 0, nav_combos = 0;
   std::string last_fault;  // the program's newest fault on this map, with its stack
   double nav_ms = 0;       // wall time
   sh::Vec3f lo, hi;
