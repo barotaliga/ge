@@ -376,6 +376,19 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .min = -1,
          .max = 65535,
          .values = "-1: any free port (the default); 1..65535: that port"});
+  // Joining an IPv6 server (net/qw_remote.cpp's `own_v6`), the socket on `net_ip6`'s address.
+  v.add({.name = "net_enable_ipv6",
+         .fallback = "1",
+         .help = "Whether the client may join a server by an IPv6 address.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 2,
+         .values = "0: IPv4 only; 1: IPv6 too (the default); 2: the same"});
+  v.add({.name = "net_ip6",
+         .fallback = "",
+         .help = "The IPv6 address on this computer the client sends from when it joins by IPv6.",
+         .kind = con::CvarKind::text,
+         .values = "\"\": any of them (the default); ADDRESS: that one"});
   v.add({.name = "fs_autoexec",
          .fallback = "1",
          .help = "Whether autoexec.cfg runs again after config.cfg when another game is loaded.",

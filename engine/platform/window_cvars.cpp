@@ -93,6 +93,15 @@ void add_window_cvars(console::Console& con, WindowCvars& w) {
                               "WxH+X+Y: that size, X and Y from the desktop's top left; +X+Y: "
                               "that place alone"},
                    &w.geometry);
+  con.cvars().bind({.name = "s_enable",
+                    .fallback = "1",
+                    .flags = console::kArchive,
+                    .help = "Whether the game makes any sound.",
+                    .kind = console::CvarKind::integer,
+                    .min = 0,
+                    .max = 2,
+                    .values = "0: no sound at all; 1: the sound on (the default); 2: the same"},
+                   &w.sound);
   con.cvars().bind({.name = "s_device",
                     .fallback = "",
                     .flags = console::kArchive,
@@ -199,7 +208,8 @@ bool alt_enter(const InputSnapshot& in, console::Console& con) {
 }
 
 double heard_volume(const WindowCvars& w, bool focused, bool minimised) {
-  const bool silent = (w.auto_focus >= 1 && minimised) || (w.auto_focus >= 2 && !focused);
+  const bool silent =
+      w.sound == 0 || (w.auto_focus >= 1 && minimised) || (w.auto_focus >= 2 && !focused);
   return silent ? 0 : w.volume;
 }
 

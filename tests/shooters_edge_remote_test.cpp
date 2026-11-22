@@ -864,3 +864,33 @@ TEST(net_clientport_binds_the_client_s_socket_and_moves_it_at_once) {
   cn::remote_disconnect(remote);
   gn::close_transport(held);
 }
+
+TEST(an_ipv6_server_is_joined_from_an_ipv6_socket) {
+  cn::Remote remote;
+  remote.q2_game = [] { return true; };
+  std::string enable = "0";  // Quake II's net_enable_ipv6 0: IPv4 only, refused before any socket
+  remote.setting = [&enable](const std::string& name) {
+    return name == "net_enable_ipv6" ? enable : std::string();
+  };
+  std::string error;
+  CHECK(!cn::remote_connect(remote, "[::1]:27911", {}, error));
+  CHECK(error == "IPv6 is turned off; set net_enable_ipv6 to 1 to join [::1]:27911.");
+  CHECK(!cn::remote_connect(remote, "::1", {}, error));  // a bare address read as IPv6
+  CHECK(error == "IPv6 is turned off; set net_enable_ipv6 to 1 to join ::1.");
+  enable = "1";
+  {
+    gn::Transport probe;  // the rest needs IPv6 on this machine (a container may have none)
+    gn::Address any;
+    any.family = gn::Family::ipv6;
+    if (!gn::open_udp_transport(probe, any, &error)) return;
+    gn::close_transport(probe);
+  }
+  CHECK_MSG(cn::remote_connect(remote, "::1", {}, error), error);  // the game's port added
+  CHECK(remote.own_v6 && remote.own.local.family == gn::Family::ipv6);
+  CHECK(remote.server.family == gn::Family::ipv6 && remote.server.port == 27910);
+  CHECK_MSG(cn::remote_connect(remote, "[::1]:27911", {}, error), error);
+  CHECK(remote.server.port == 27911 && remote.own_v6);
+  CHECK_MSG(cn::remote_connect(remote, "127.0.0.1:9", {}, error), error);  // IPv4 again
+  CHECK(!remote.own_v6 && remote.own.local.family == gn::Family::ipv4);
+  cn::remote_disconnect(remote);
+}
