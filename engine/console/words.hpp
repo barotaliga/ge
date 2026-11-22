@@ -24,7 +24,7 @@
 //
 // ge:summary A setting's words: one-sentence help, what each value does, and whether a value fits
 // ge:keywords help values cvar-help explanation value-pattern value_fits words_fault sentence
-// ge:keywords setting-words cfg-check cfg-comments stated_default
+// ge:keywords setting-words cfg-check cfg-comments stated_default value_choices few-values
 // ge:skill console
 // ge:test tests/console_words_test.cpp
 #pragma once
@@ -58,6 +58,11 @@ std::string words_fault(const Cvar& cvar);
 // from "1: normal (the default)"), or the value inside "(<value> the default)" ("10" from
 // "0..1000: that rate (10 the default)"); "" when it names none.
 std::string stated_default(std::string_view values);
+// THE FEW VALUES a cvar takes, in its values' order, when it takes at most `most` (literal words,
+// `""` and whole-number ranges of an integer or boolean cvar spelled out; a boolean with no values
+// 0 and 1; an integer with none its min..max): what the console's suggestions offer as it is typed.
+// Empty when it takes any number, any text, a wider range or fewer than two.
+std::vector<std::string> value_choices(const Cvar& cvar, size_t most = 8);
 // `values` for a cvar whose default is `fallback`: as written when it states that default or none,
 // else with each "(... the default ...)" mark taken out, so a game that registers a shared cvar
 // with its own default never reads another's named as its default.

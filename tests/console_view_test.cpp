@@ -360,6 +360,70 @@ TEST(arrows_select_and_enter_takes_the_selection) {
   CHECK(v.suggestions().empty());
 }
 
+// A cvar with a few values lists them while its name is typed and offers them once it is; a game's
+// spelling of a setting or a command says whose it is, and ours names the game's.
+TEST(a_few_values_and_a_games_spellings_are_suggested) {
+  Console c;
+  ConsoleView v(c);
+  c.cvars().add({.name = "r_look",
+                 .fallback = "modern",
+                 .help = "How the world looks.",
+                 .kind = CvarKind::text,
+                 .values = "classic: the original look; modern: lit and shaded (the default)"});
+  c.cvars().add({.name = "r_vsync", .fallback = "1", .kind = CvarKind::boolean});
+  c.cvars().add(
+      {.name = "r_level", .fallback = "1", .kind = CvarKind::integer, .min = 0, .max = 3});
+  c.cvars().add({.name = "r_bloom", .fallback = "0.04"});
+  CHECK(c.cvars().add_synonym("gl_look", "r_look"));
+  c.add_command("screenshot", "screenshot: a picture of the screen", [](Console&, const Args&) {});
+  c.add_command_synonym("sshot", "screenshot");
+  v.type("/r_");
+  std::vector<Suggestion> s = v.suggestions();
+  const auto find = [&s](std::string_view n) -> const Suggestion* {
+    for (const Suggestion& x : s)
+      if (x.name == n) return &x;
+    return nullptr;
+  };
+  CHECK(find("r_look") != nullptr && find("r_look")->choices == "classic, modern" &&
+        find("r_look")->note == "alias gl_look");
+  CHECK(find("r_vsync") != nullptr && find("r_vsync")->choices == "0, 1");
+  CHECK(find("r_level") != nullptr && find("r_level")->choices == "0, 1, 2, 3");
+  CHECK(find("r_bloom") != nullptr && find("r_bloom")->choices.empty());
+  // Its values once the name and a space are typed: those the text starts, Tab takes one.
+  v.key(EditKey::backspace);
+  v.key(EditKey::backspace);
+  v.key(EditKey::backspace);
+  v.type("/r_look ");
+  s = v.suggestions();
+  CHECK(s.size() == 2 && s[0].name == "classic" && s[0].kind == Suggestion::Kind::value &&
+        s[0].detail == "the original look" && s[1].detail == "lit and shaded (the default) (now)");
+  CHECK(v.suggest_at() == 8);
+  v.type("c");
+  CHECK(v.suggestions().size() == 1 && v.hint() == "lassic");
+  v.key(EditKey::tab);
+  CHECK(v.input() == "/r_look classic");
+  v.key(EditKey::enter);
+  c.run();
+  CHECK(c.cvars().find("r_look")->value == "classic");
+  v.type("/r_bloom ");
+  CHECK(v.suggestions().empty());  // any number: no list
+  while (!v.input().empty()) v.key(EditKey::backspace);
+  // The game's spellings, said whose they are.
+  v.type("/gl_lo");
+  s = v.suggestions();
+  CHECK(s.size() == 1 && s[0].name == "gl_look" && s[0].kind == Suggestion::Kind::cvar &&
+        s[0].detail == "classic" && s[0].note == "alias of r_look" &&
+        s[0].choices == "classic, modern");
+  while (!v.input().empty()) v.key(EditKey::backspace);
+  v.type("/ssh");
+  s = v.suggestions();
+  CHECK(s.size() == 1 && s[0].name == "sshot" && s[0].note == "alias of screenshot");
+  while (!v.input().empty()) v.key(EditKey::backspace);
+  v.type("/screens");
+  s = v.suggestions();
+  CHECK(s.size() == 1 && s[0].note == "alias sshot");
+}
+
 TEST(scrollback_notify_and_triggers_on_game_lines) {
   Console c;
   ConsoleView v(c);

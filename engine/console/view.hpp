@@ -53,6 +53,7 @@
 // ge:keywords chat-line messagemode chat-prompt typing
 // ge:keywords completion tab con_height con_chat con_speed con_lines slash-command loading full
 // ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage con_font
+// ge:keywords value-suggestions synonym-note
 // ge:keywords autocomplete suggestion suggestions hint con_suggest condump con_clock game_chat
 // ge:keywords con_history con_scroll scroll-back
 // ge:keywords clearnotify remotemode rcon con_scale foot loading download-bar
@@ -134,11 +135,16 @@ struct Background {
 
 // One match for what is being typed, as the list under the input line shows it.
 struct Suggestion {
-  enum class Kind : uint8_t { cvar, command, alias };
+  // `value`: one of the few values the cvar typed before it takes (words.hpp's value_choices).
+  enum class Kind : uint8_t { cvar, command, alias, value };
   std::string name;
   Kind kind = Kind::command;
-  std::string detail;  // a cvar's value, a command's help, an alias's body
-  int uses = 0;        // how often it was submitted from this console
+  std::string detail;   // a cvar's value, a command's help, an alias's body, a value's meaning
+  int uses = 0;         // how often it was submitted from this console
+  std::string choices;  // a cvar's few values, "classic, modern" ("" when it takes many)
+  // How it stands to another name: "alias of r_look" (a game's spelling of ours), "alias gl_look"
+  // (ours, and the game's spellings of it); "" none.
+  std::string note;
 };
 
 // The keys the input line answers, besides typed text.
@@ -230,12 +236,16 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   const std::vector<std::string>& history() const { return history_; }
 
   // AUTOCOMPLETE. While the first word is typed (after a `/`, or bare when con_chat is 0), every
-  // command, cvar and alias it starts is a suggestion, the most submitted first (then the
-  // shortest, then by name), at most con_suggest of them. Up and Down move through them, Tab
-  // takes the selected one (the top one when none is), Enter on a cvar fills it in for a value
-  // and on a command runs it. `hint` is the rest of the name Tab would take, drawn after the
-  // cursor.
+  // command, cvar, alias and game spelling (a synonym) it starts is a suggestion, the most
+  // submitted first (then the shortest, then by name), at most con_suggest of them; a cvar with a
+  // few values lists them (`choices`), and a synonym and its setting name each other (`note`).
+  // Once a cvar with a few values is typed and a space, its values are the suggestions instead
+  // (those the typed text starts, in their own order, each with what it does). Up and Down move
+  // through them, Tab takes the selected one (the top one when none is), Enter on a cvar fills it
+  // in for a value and on a command or a value runs it. `hint` is the rest of the word Tab would
+  // take, drawn after the cursor; `suggest_at` is where in the input line that word starts.
   std::vector<Suggestion> suggestions() const;
+  size_t suggest_at() const;
   int selected() const { return selected_; }
   std::string hint() const;
 
@@ -312,6 +322,10 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   void tab_list();           // list_mode's Tab (above)
   std::string tab_asked_;    // the line the last Tab asked about (list_threshold)
   std::string head() const;  // the first word being typed, or "" when no suggestion applies
+  // The cvar whose value is being typed ("<name> <part>", a cvar with a few values), its choices,
+  // the part typed and where it starts; false when the line is not one.
+  bool value_typed(const Cvar*& cvar, std::vector<std::string>& choices, std::string& part,
+                   size_t& at) const;
   void chat_key(EditKey k);
   Console& c_;
   std::deque<ViewLine> lines_;
