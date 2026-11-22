@@ -9,6 +9,7 @@
 // ge:skill shooter net testing
 #include <cstdint>
 #include <cstring>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -170,4 +171,106 @@ TEST(the_trace_shows_each_packet_and_each_loss) {
   got.drop = false;
   deliver(b, p3, 2);
   CHECK(lines.size() == 4);  // off: nothing
+}
+
+namespace {
+
+// Delivers through `channel_read`; the payload as text ("" until a message is whole).
+std::string read_whole(sp::Channel& c, const Wire& w, double now, bool* ok = nullptr) {
+  std::span<const uint8_t> p;
+  const bool whole = sp::channel_read(c, w.data, w.size, now, p);
+  if (ok) *ok = whole;
+  return whole ? std::string(reinterpret_cast<const char*>(p.data()), p.size()) : std::string();
+}
+
+void newer(sp::Channel& c, bool client, uint16_t qport, uint8_t bytes) {
+  sp::channel_setup(c, client, qport, 0);
+  c.qport_bytes = bytes;
+  c.fragments = true;
+  c.packet_len = 100;
+}
+
+}  // namespace
+
+TEST(a_later_protocols_qport_is_one_byte_or_none) {
+  for (const uint8_t bytes : {uint8_t(1), uint8_t(0)}) {
+    sp::Channel client, server;
+    sp::channel_setup(client, true, bytes == 1 ? 77 : 0, 0);
+    sp::channel_setup(server, false, bytes == 1 ? 77 : 0, 0);
+    client.qport_bytes = server.qport_bytes = bytes;
+    const Wire w = send(client, "move", 0);
+    CHECK(w.size == size_t(8 + bytes + 4));
+    if (bytes == 1) CHECK(int(w.data[8]) == 77);
+    CHECK(deliver(server, w, 0) == std::string("move"));
+  }
+}
+
+TEST(the_newer_channel_sends_a_big_datagram_in_pieces) {
+  sp::Channel server, client;
+  newer(server, false, 9, 1);
+  newer(client, true, 9, 1);
+  std::string big;
+  for (int i = 0; i < 260; i++) big += static_cast<char>('a' + i % 26);
+  const Wire first = send(server, big, 0);
+  CHECK((first.data[3] & 0x40) != 0);  // a piece
+  CHECK(sp::channel_sending_pieces(server));
+  CHECK(read_whole(client, first, 0) == std::string());
+  const Wire second = send(server, "ignored", 0.01);
+  CHECK(read_whole(client, second, 0.01) == std::string());
+  const Wire third = send(server, "ignored", 0.02);
+  CHECK(!sp::channel_sending_pieces(server));
+  bool ok = false;
+  CHECK(read_whole(client, third, 0.02, &ok) == big);
+  CHECK(ok);
+  CHECK(server.outgoing_sequence == 2u);  // the pieces shared one sequence
+  CHECK(client.incoming_sequence == 1u);
+}
+
+TEST(a_lost_piece_loses_the_datagram_and_the_reliable_part_goes_again) {
+  sp::Channel server, client;
+  newer(server, false, 0, 0);
+  newer(client, true, 0, 0);
+  std::string rel(150, 'r');
+  CHECK(sp::channel_reliable(server, reinterpret_cast<const uint8_t*>(rel.data()), rel.size()));
+  const Wire a = send(server, "", 0);
+  CHECK((a.data[3] & 0xC0) == 0xC0);  // reliable and a piece
+  const Wire lost = send(server, "", 0.01);
+  (void)lost;
+  CHECK(read_whole(client, a, 0) == std::string());
+  // A later datagram reaches the client, which acknowledges it without the reliable bit.
+  const Wire later = send(server, "x", 0.015);
+  CHECK(read_whole(client, later, 0.015) == std::string("x"));
+  const Wire ack = send(client, "", 0.02);
+  read_whole(server, ack, 0.02);
+  const Wire again = send(server, "", 0.1);  // the reliable message resent, again in pieces
+  CHECK((again.data[3] & 0xC0) == 0xC0);
+  CHECK(read_whole(client, again, 0.1) == std::string());
+  const Wire end = send(server, "", 0.11);
+  CHECK(read_whole(client, end, 0.11) == rel);
+  CHECK(server.resent >= 1);
+}
+
+TEST(the_newer_channel_gathers_reliable_data_and_overflows_past_its_buffer) {
+  sp::Channel server;
+  newer(server, false, 0, 0);
+  std::vector<uint8_t> chunk(4000, 1);
+  for (int i = 0; i < 8; i++) CHECK(sp::channel_reliable(server, chunk.data(), chunk.size()));
+  CHECK(!server.overflow);
+  CHECK(!sp::channel_reliable(server, chunk.data(), chunk.size()));
+  CHECK(server.overflow);
+}
+
+TEST(a_piece_past_a_gap_is_thrown_away) {
+  sp::Channel server, client;
+  newer(server, false, 0, 0);
+  newer(client, true, 0, 0);
+  const std::string big(250, 'z');
+  const Wire a = send(server, big, 0);
+  const Wire b = send(server, "", 0.01);
+  const Wire c = send(server, "", 0.02);
+  (void)a;
+  CHECK(read_whole(client, b, 0.01) == std::string());  // the first piece never came
+  CHECK(read_whole(client, c, 0.02) == std::string());
+  CHECK(client.pieces_lost >= 1);
+  CHECK(client.incoming_sequence == 0u);
 }

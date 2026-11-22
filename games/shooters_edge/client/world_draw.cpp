@@ -896,12 +896,15 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       if (f.beam_draws.size() >= f.beam_shapes.size()) break;
       gr::BeamShape& shape = f.beam_shapes[f.beam_draws.size()];
       if (b.laser) f.beam_looks[f.beam_draws.size()] = effects::laser_look(b.laser_m, b.laser_rgb);
-      const gr::BeamLook* look = b.laser    ? &f.beam_looks[f.beam_draws.size()]
-                                 : b.coil   ? &effects::rail_coil_look()
-                                 : b.rail   ? &effects::rail_look()
-                                 : b.plasma ? &effects::plasma_look()
-                                 : b.across ? &effects::prong_arc_look()
-                                            : &effects::bolt_look();
+      if (b.q2_trail)
+        f.beam_looks[f.beam_draws.size()] =
+            effects::q2_rail_trail_look(b.trail_m, b.trail_radius_m, b.trail_rgb, b.trail_fade_s);
+      const gr::BeamLook* look = b.laser || b.q2_trail ? &f.beam_looks[f.beam_draws.size()]
+                                 : b.coil              ? &effects::rail_coil_look()
+                                 : b.rail              ? &effects::rail_look()
+                                 : b.plasma            ? &effects::plasma_look()
+                                 : b.across            ? &effects::prong_arc_look()
+                                                       : &effects::bolt_look();
       gr::build_beam(*look, b.shot, view.time_s, shape);
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }

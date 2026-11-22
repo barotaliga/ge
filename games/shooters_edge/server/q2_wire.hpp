@@ -99,6 +99,9 @@ struct Q2WireOptions {
   // each; the rest wait for a frame with room.
   int max_entities = 0;
   bool prioritize = false;
+  // The viewer's protocol: 34, or a later one (35 or 36, q2_wire_ext.cpp) with its minor version.
+  int protocol = kQ2Protocol;
+  int minor = 0;
 };
 
 // The sky the map's world entity names (its `sky`, `skyaxis` and `skyrotate` keys) into `opt`.
@@ -157,6 +160,16 @@ struct Q2Wire {
   // The frames held back for the viewer's rate since the last one written: the next frame's
   // suppress count, set back to 0 as it is written (a live server's; a recording's stays 0).
   uint8_t suppress = 0;
+  // A later protocol's viewer (q2_wire_ext.cpp): what its client asked to be left out (its client
+  // settings: no gun 1 the whole gun, 2 all but its model; no blend; recording turns every leaving
+  // out off; no gibs; no footsteps; no prediction) and the frame's flags for 36 (1 frames held
+  // back, 2 the client's packets lost, 4 the client's moves ran short), cleared as it is written.
+  struct Asked {
+    int no_gun = 0;
+    bool no_blend = false, recording = false, no_gibs = false, no_footsteps = false,
+         no_predict = false;
+  } asked;
+  uint8_t frame_flags = 0;
 };
 
 // What the runner shows, in the wire's terms (the pieces every writer of Quake II's messages
@@ -175,6 +188,9 @@ uint32_t q2_entity_flags(const Q2EntityState& from, const Q2EntityState& to, int
 void q2_write_entity(std::vector<uint8_t>& out, uint32_t flags, int number,
                      const Q2EntityState& to);
 void q2_write_player(std::vector<uint8_t>& out, const Q2PlayerState& from, const Q2PlayerState& to);
+// A rules' effect event (a point or a trail) as its muzzle flash or temporary entity message;
+// false when the protocol has none for it (nothing written).
+bool q2_write_effect(std::vector<uint8_t>& out, const NetEvent& e);
 
 // The map's checksum as configstring 31 carries it: the MD4 of the whole map file, its four
 // little-endian words XORed, read as a signed number.
@@ -227,6 +243,37 @@ void q2_signon_raw(Q2Wire& w, const Q2Raw& raw, int slot, const Q2WireOptions& o
 void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8_t>& block,
                   std::vector<uint8_t>& reliable);
 
+// QUAKE II'S LATER PROTOCOLS (35 and 36, q2_wire_ext.cpp; porting/shooters-edge/demo-formats-q2.md
+// § A and q2-proto36-server.md): what a frame and the signon write differently to such a viewer.
+// - The server data's tail: 35 a zero byte, the minor version (short), a zero byte and the
+//   strafe-jump flag; 36 the minor version, the server's state (2, a game) and the movement flags
+//   (a short from minor 1024, else three bytes), all clear: the move runs as 34's.
+// - The frame: the id's top 3 bits and the suppress byte's top 4 the player state's extra flags
+//   (gun offset, gun angles, velocity z, origin z, roll, stats, 36's client number); the frame
+//   number in 27 bits and how far back its delta is in 5 (31: none); the suppress byte's low 4
+//   bits the count held back (35) or the frame's flags (36); the player state with no id and
+//   only what changed; the entities with no id.
+// - Entities: the solid a long (36, and 35 from minor 1905). With `asked`: gibs left out, a
+//   footstep's event cleared; to 36 not recording, the viewer's own entity alive keeps the origin,
+//   angles and old origin its client has.
+// - The player state, not recording: the view angles left out while the viewer is alive and
+//   predicts, the delta angles while dead; the gun and blend as asked; 36 with no prediction
+//   asked, the velocity, the move's time, flags and gravity. A field left out keeps its old value
+//   in what the wire holds, so the next delta is from what the client has.
+// The id-less frame top (frame, player state, client number) written after the reliable part,
+// and the stored player state taken.
+void q2_write_frame_top_ext(std::vector<uint8_t>& out, Q2Wire& w, int32_t number,
+                            const Q2PlayerState& p);
+// The server data's tail for `opt`'s protocol (nothing for 34).
+void q2_server_data_tail(std::vector<uint8_t>& out, const Q2WireOptions& opt);
+// An entity as a later protocol's viewer is sent it (`asked`, its own entity), from `base`.
+void q2_entity_for_ext(const Q2Wire& w, int number, const Q2EntityState& base, Q2EntityState& s);
+// The solid's long form from protocol 34's packed short (31 a brush model kept).
+int32_t q2_long_solid(int solid);
+// The protocol 36 signon's messages from its parts: one game state (minor below 1024), or the
+// configstring then baseline streams, each message at most kQ2BigMessage bytes.
+inline constexpr size_t kQ2BigMessage = 32768;
+void q2_signon_streams(const Q2Signon& parts, int minor, std::vector<std::vector<uint8_t>>& out);
 // A RECORDING (`.dm2`): blocks of a 32-bit length and the block, ended by a length of -1.
 struct Q2Recorder {
   Q2Wire wire;

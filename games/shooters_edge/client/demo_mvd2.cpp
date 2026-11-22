@@ -376,6 +376,12 @@ struct Mvd2ToQ2 final : ConvertStream {
   Q2PlayerState held_player;
   std::vector<std::vector<uint8_t>> blocks;
 
+  std::unique_ptr<ConvertStream> clone() const override {
+    auto copy = std::make_unique<Mvd2ToQ2>(*this);
+    copy->blocks.clear();
+    return copy;
+  }
+
   void message(const std::vector<uint8_t>& msg) {
     if (blocks.empty() || blocks.back().size() + msg.size() > kMostBlock) blocks.emplace_back();
     blocks.back().insert(blocks.back().end(), msg.begin(), msg.end());
@@ -469,6 +475,7 @@ struct Mvd2ToQ2 final : ConvertStream {
     Q2PlayerState p = held_player;
     if (size_t(pov) < r.now.players.size() && r.now.players[size_t(pov)].in)
       p = r.now.players[size_t(pov)].s;
+    if (c.options.touch_player) c.options.touch_player(pov, p.type, p.flags, p.stats);
     std::vector<uint8_t> one;
     sv::q2_write_player(one, last_frame < 0 ? Q2PlayerState{} : held_player, p);
     f.bytes(one);
@@ -666,6 +673,19 @@ struct Mvd2ToQ2 final : ConvertStream {
 }  // namespace
 
 std::unique_ptr<ConvertStream> mvd2_to_q2_stream() { return std::make_unique<Mvd2ToQ2>(); }
+
+bool mvd2_reader_level(const DemoConvert& c, Mvd2Level& out) {
+  const auto* view = dynamic_cast<const Mvd2ToQ2*>(c.stream.get());
+  if (view == nullptr || !view->r.have_level) return false;
+  out = view->r.level;
+  out.base = view->r.now;
+  out.base.config_strings.clear();
+  out.base.prints.clear();
+  out.base.unicasts.clear();
+  out.base.multicasts.clear();
+  out.base.sounds.clear();
+  return true;
+}
 
 bool mvd2_view(std::span<const uint8_t> bytes, int slot, std::vector<uint8_t>& out,
                std::string& error, bool player_stats) {

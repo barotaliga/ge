@@ -40,6 +40,7 @@
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_game_tv.hpp"
 #include "shooters_edge/net/q2_login.hpp"
+#include "shooters_edge/net/q2_mvd_relay.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/server/q2_mapfix.hpp"
@@ -156,6 +157,59 @@ constexpr gs::GameRule kRules[] = {
      "An address every newcomer is first sent to and must come back from, with a setting it must "
      "bring back; from the next map.",
      nullptr, "empty: none (the default); an address: clients reconnect to it first", false},
+    {"sv_maxmsglen",
+     "The largest packet a player whose game speaks the newer protocols may ask for, in bytes.",
+     nullptr, "0: what the player asks; 512..4086: at most that many (1390 the default)", false},
+    // The multiview recorder and its relay stream (q2_mvd_server.hpp).
+    {"sv_mvd_enable", "Whether the server keeps a multiview recorder, and serves it to relays.",
+     nullptr, "0: none (the default); 1: recordings (mvdrecord); 2: relays over TCP too", false},
+    {"sv_mvd_maxclients", "How many relays may watch over TCP at once.", nullptr,
+     "1..256 (8 the default)", false},
+    {"sv_mvd_bufsize", "How much a relay may fall behind before it is dropped, in 32 KiB.", nullptr,
+     "1..4 (2 the default)", false},
+    {"sv_mvd_password", "The password a relay must bring; empty lets any relay in.", nullptr,
+     "empty (the default) or a password", false},
+    {"sv_mvd_maxsize", "The size a multiview recording stops at, in kilobytes.", nullptr,
+     "0: no limit (the default); 1..2000000", false},
+    {"sv_mvd_maxtime", "The length a multiview recording stops at, in minutes.", nullptr,
+     "0: no limit (the default); a count of minutes", false},
+    {"sv_mvd_maxmaps", "The level changes a multiview recording stops at.", nullptr,
+     "0: never; 1 the default (it stops at the first change)", false},
+    {"sv_mvd_noblend", "Whether the multiview stream leaves the players' screen blends out.",
+     nullptr, "0: kept (the default); 1: left out", false},
+    {"sv_mvd_nogun", "Whether the multiview stream leaves the players' held weapons out.", nullptr,
+     "0: kept (the default); 1: left out", false},
+    {"sv_mvd_suspend_time",
+     "The minutes with no player in the game after which the multiview stream pauses.", nullptr,
+     "0: never; 5 the default", false},
+    {"sv_mvd_disconnect_time",
+     "The minutes with no recording and no relay after which the multiview recorder stops.",
+     nullptr, "0: never; 15 the default", false},
+    // The relay (q2_mvd_relay.hpp): another server's stream watched, or a recording played.
+    {"mvd_timeout", "The seconds a relay waits on a silent game server before it drops it.",
+     nullptr, "90 the default", false},
+    {"mvd_suspend_time",
+     "The minutes with no viewer doing anything after which a relay stops its streams.", nullptr,
+     "0: never; 5 the default", false},
+    {"mvd_wait_delay", "The seconds of the match a relay holds before it plays a channel.", nullptr,
+     "20 the default", false},
+    {"mvd_wait_percent", "How full a relay's buffer may get before it plays a channel anyway.",
+     nullptr, "50 the default (percent)", false},
+    {"mvd_buffer_size", "The size of a relay's buffer for each channel, in 32 KiB.", nullptr,
+     "8 the default", false},
+    {"mvd_username", "The name a relay gives the game server.", nullptr, "unnamed the default",
+     false},
+    {"mvd_password", "The password a relay gives the game server.", nullptr, "empty the default",
+     false},
+    {"mvd_snaps", "The seconds between the snapshots a played recording seeks back to.", nullptr,
+     "0: none; 10 the default", false},
+    {"mvd_admin_password", "The password a relay's viewer becomes its admin with.", nullptr,
+     "empty: nobody (the default)", false},
+    {"mvd_part_filter", "Whose comings and goings a relay's channel is told of.", nullptr,
+     "0: everyone's (the default); below 0: nobody's; N: who talked within N s", false},
+    {"mvd_default_map", "The map of a relay's Waiting Room.", nullptr, "q2dm1 the default", false},
+    {"mvd_chase_prefix", "Where a relay's chase line is drawn, as a layout's position.", nullptr,
+     "xv 0 yb -64 the default", false},
 };
 
 // The rules a server may set: the engine's rate bounds and per-address limit (server/rate.hpp,
@@ -235,6 +289,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_enhanced_setplayer", "sv_partialnames"},
     {"sv_packetdup_hack", "sv_packetdup"},
     {"sv_force_reconnect", "sv_forcereconnect"},
+    {"net_maxmsglen", "sv_maxmsglen"},
 };
 
 // A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.
@@ -273,6 +328,11 @@ struct Game {
   std::string base;                           // the ladder's game: Quake II's folder
   bool logins_wanted = false;
   std::unique_ptr<Q2Login> login;
+  // The relay (q2_mvd_relay.hpp): once relay mode starts it takes the port from the game.
+  Q2Relay relay;
+  ge::net::Transport* port = nullptr;
+  bool relayed = false;  // the game's clients were sent away to the relay
+  double now_s = 0;
   // The maps mended as they load (server/q2_mapfix.hpp): sv_vispatch, sv_entpath; what that said,
   // for the log once the network is up.
   bool vis_patch = true;
@@ -380,7 +440,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
         rule == "sv_ghosttime" || rule == "sv_nodelta" || rule == "sv_pingmethod" ||
         rule == "sv_maxents" || rule == "sv_entpriority" || rule == "sv_novis" ||
         rule == "sv_vispatch" || rule == "sv_entpath" || rule == "sv_partialnames" ||
-        rule == "sv_packetdup" || rule == "sv_forcereconnect")
+        rule == "sv_packetdup" || rule == "sv_forcereconnect" || rule == "sv_maxmsglen" ||
+        rule.rfind("sv_mvd_", 0) == 0 || rule.rfind("mvd_", 0) == 0)
       continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
@@ -430,8 +491,68 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   int idle = 0, partial = 0;
   if (!endpoint_number(c, "sv_idletime", 86400, idle, error) ||
       !endpoint_number(c, "sv_partialnames", 1, partial, error) ||
-      !endpoint_number(c, "sv_packetdup", 8, g->cfg.packetdup_most, error))
+      !endpoint_number(c, "sv_packetdup", 8, g->cfg.packetdup_most, error) ||
+      !endpoint_number(c, "sv_maxmsglen", 4086, g->cfg.net_maxmsglen, error))
     return nullptr;
+  if (g->cfg.net_maxmsglen > 0 && g->cfg.net_maxmsglen < 512) g->cfg.net_maxmsglen = 512;
+  {  // the multiview recorder
+    Q2MvdConfig& m = g->cfg.mvd;
+    int noblend = 0, nogun = 0, maxsize = 0, maxtime = 0;
+    if (!endpoint_number(c, "sv_mvd_enable", 2, m.enable, error) ||
+        !endpoint_number(c, "sv_mvd_maxclients", 256, m.maxclients, error) ||
+        !endpoint_number(c, "sv_mvd_bufsize", 4, m.bufsize, error) ||
+        !endpoint_number(c, "sv_mvd_maxsize", 2000000, maxsize, error) ||
+        !endpoint_number(c, "sv_mvd_maxtime", 3456000, maxtime, error) ||
+        !endpoint_number(c, "sv_mvd_maxmaps", 1000000, m.maxmaps, error) ||
+        !endpoint_number(c, "sv_mvd_noblend", 1, noblend, error) ||
+        !endpoint_number(c, "sv_mvd_nogun", 1, nogun, error) ||
+        !endpoint_number(c, "sv_mvd_suspend_time", 34560, m.suspend_min, error) ||
+        !endpoint_number(c, "sv_mvd_disconnect_time", 34560, m.disconnect_min, error))
+      return nullptr;
+    m.maxclients = std::max(m.maxclients, 1);
+    m.bufsize = std::max(m.bufsize, 1);
+    m.maxsize_kb = maxsize;
+    m.maxtime_min = maxtime;
+    m.noblend = noblend != 0;
+    m.nogun = nogun != 0;
+    if (const auto it = c.rules.find("sv_mvd_password"); it != c.rules.end())
+      m.password = it->second;
+    m.demos = (std::filesystem::path(c.root) / base / "demos").string();
+  }
+  {  // the relay
+    Q2RelayConfig& rc = g->relay.cfg;
+    int timeout = 90;
+    if (!endpoint_number(c, "mvd_timeout", 2073600, timeout, error) ||
+        !endpoint_number(c, "mvd_suspend_time", 34560, rc.suspend_min, error) ||
+        !endpoint_number(c, "mvd_wait_delay", 3600, rc.wait_delay, error) ||
+        !endpoint_number(c, "mvd_wait_percent", 1000000, rc.wait_percent, error) ||
+        !endpoint_number(c, "mvd_buffer_size", 256, rc.buffer_size, error) ||
+        !endpoint_number(c, "mvd_snaps", 1000000, rc.snaps, error))
+      return nullptr;
+    rc.timeout = timeout;
+    const auto text = [&c](const char* rule, std::string& out) {
+      if (const auto it = c.rules.find(rule); it != c.rules.end() && !it->second.empty())
+        out = it->second;
+    };
+    text("mvd_username", rc.username);
+    text("mvd_password", rc.upstream_password);
+    text("mvd_admin_password", rc.admin_password);
+    text("mvd_default_map", rc.default_map);
+    text("mvd_chase_prefix", rc.chase_prefix);
+    if (const auto it = c.rules.find("mvd_part_filter"); it != c.rules.end() && !it->second.empty())
+      rc.part_filter = std::atoi(it->second.c_str());
+    // The chat flood rule's settings, the rules' own names, read by the relay's chat too.
+    if (const auto it = c.rules.find("flood_msgs"); it != c.rules.end() && !it->second.empty())
+      rc.flood_msgs = std::atoi(it->second.c_str());
+    if (const auto it = c.rules.find("flood_persecond"); it != c.rules.end() && !it->second.empty())
+      rc.flood_persecond = std::atof(it->second.c_str());
+    if (const auto it = c.rules.find("flood_waitdelay"); it != c.rules.end() && !it->second.empty())
+      rc.flood_waitdelay = std::atof(it->second.c_str());
+    if (const auto it = c.rules.find("flood_mute"); it != c.rules.end() && !it->second.empty())
+      rc.flood_mute = std::atoi(it->second.c_str()) != 0;
+    rc.demos = g->cfg.mvd.demos;
+    rc.hostname = c.hostname.empty() ? rc.hostname : c.hostname;
+  }
   g->cfg.enhanced_setplayer = partial != 0;
   if (const auto it = c.rules.find("sv_forcereconnect"); it != c.rules.end())
     g->cfg.force_reconnect = it->second;
@@ -571,6 +692,7 @@ double frame_seconds(const void* g) { return static_cast<const Game*>(g)->rules-
 
 void frame(void* g) {
   Game& game = *static_cast<Game*>(g);
+  if (game.relay.spawned) return;  // no game while it relays
   game.rules.frame(nullptr, 0);
   change_level(game);
 }
@@ -599,6 +721,39 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   for (std::string& line : game.said) game.net->log.push_back(std::move(line));
   game.said.clear();
   gs::ban_file_read(game.net->bans, game.cfg.ban_file, game.cfg.unix_time());
+  Q2MvdConfig& mc = game.net->mvd.cfg;  // the endpoint's own limits, as the relays' too
+  mc.iplimit = game.cfg.ip_limit;
+  mc.timeout = game.cfg.timeout;
+  mc.zombie = game.cfg.zombie_time;
+  mc.ghost = game.cfg.ghost_time > 0 ? game.cfg.ghost_time : 6;
+  game.net->mvd.log = [&game](const std::string& line) { game.net->log.push_back(line); };
+  if (port.kind == ge::net::TransportKind::udp) q2_mvd_listen(game.net->mvd, port.local);
+  game.port = &port;
+  game.relay.log = [&game](const std::string& line) { game.net->log.push_back(line); };
+  game.relay.spot = [&game](const std::string& name, float origin[3], float angles[3],
+                            int32_t& checksum, std::string& why) {
+    std::unique_ptr<cl::LoadedMap> m = cl::load_named_map(game.files, name, why);
+    if (!m) return false;
+    checksum = sv::q2_map_checksum(m->file);
+    const ge::brush::Entity* best = nullptr;
+    for (const char* kind :
+         {"info_player_intermission", "info_player_deathmatch", "info_player_start"}) {
+      for (const ge::brush::Entity& e : m->bsp.map.entities)
+        if (e.get("classname") == kind) {
+          best = &e;
+          break;
+        }
+      if (best != nullptr) break;
+    }
+    if (best != nullptr) {
+      std::sscanf(best->get("origin").c_str(), "%f %f %f", &origin[0], &origin[1], &origin[2]);
+      if (!best->get("angles").empty())
+        std::sscanf(best->get("angles").c_str(), "%f %f %f", &angles[0], &angles[1], &angles[2]);
+      else
+        angles[1] = static_cast<float>(std::atof(best->get("angle").c_str()));
+    }
+    return true;
+  };
   if (!game.logins_wanted) return true;
   game.login = std::make_unique<Q2Login>();
   game.login->game = game.base;
@@ -611,7 +766,17 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
 
 void net_frame(void* g, int64_t now_us) {
   Game& game = *static_cast<Game*>(g);
+  game.now_s = static_cast<double>(now_us) / 1e6;
+  if (game.relay.spawned) {  // relay mode: the port is the relay's
+    if (!game.relayed) {
+      q2_net_shutdown(*game.net, "Server restarted\n", true);
+      game.relayed = true;
+    }
+    q2_relay_frame(game.relay, now_us);
+    return;
+  }
   q2_net_frame(*game.net, now_us);
+  if (!game.relay.conns.empty()) q2_relay_frame(game.relay, now_us);
   const double now_s = static_cast<double>(now_us) / 1e6;
   for (const ge::net::Address& from : game.net->acks) cp::masters_heard(game.masters, from, now_s);
   game.net->acks.clear();
@@ -679,6 +844,16 @@ void print_lines(Game& game, const std::string& text) {
 bool console_line(void* g, const std::string& line) {
   Game& game = *static_cast<Game*>(g);
   std::string answer;
+  {  // the relay's words (its own mvdrecord and mvdstop once relay mode runs)
+    const std::vector<std::string> rw = q2_words(line);
+    if (game.net && !rw.empty() && rw[0].rfind("mvd", 0) == 0 &&
+        (game.relay.spawned ||
+         (rw[0] != "mvdrecord" && rw[0] != "mvdstop" && rw[0] != "mvdstuff")) &&
+        q2_relay_command(game.relay, rw, line, game.port, game.now_s, answer)) {
+      print_lines(game, answer);
+      return true;
+    }
+  }
   if (game.net && q2_admin(*game.net, line, answer)) {
     print_lines(game, answer);
     return true;

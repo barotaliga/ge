@@ -174,7 +174,10 @@ class GameMenu {
   ge::ui::Menu& main() { return main_; }
   // The game's own menu (its adapter's `menu`) in place of Quake's: the pages rebuilt.
   // The host's `table` must name the same table.
-  void set_table(const MenuTable& table) { main_ = build_menu(table); }
+  void set_table(const MenuTable& table) {
+    table_ = &table;
+    main_ = build_menu(table);
+  }
   ge::ui::Menu& enhance() { return enhance_; }
   int help_page() const { return help_page_; }
   // What the layout drawn last found wrong (layout_problems or classic_problems).
@@ -208,12 +211,16 @@ class GameMenu {
   void cue(ge::ui::MenuCue c) { cue_ = ge::ui::louder(cue_, c); }
   bool toggle_ = false;
   bool settle_ = false;
-  std::string_view toggle_page_ = "main";  // a literal: the commands' pages
+  std::string toggle_page_ = "main";  // the page a command opens
+  bool toggle_open_ = false;          // pushmenu: opened even when the menu is up at the root
+  int pending_ = 0;                   // 1: popmenu (one page back), 2: forcemenuoff
   int help_page_ = 0;
   double dt_ = 1.0 / 60;  // the last frame's, s
 
-  std::string waiting_;         // the CUSTOMIZE CONTROLS row waiting for a key, or ""
-  bool waiting_fresh_ = false;  // it started this frame
+  const MenuTable* table_ = &classic_menu();  // the pages built (set_table)
+  std::string waiting_page_;                  // the page of the key row waiting
+  std::string waiting_;                       // the CUSTOMIZE CONTROLS row waiting for a key, or ""
+  bool waiting_fresh_ = false;                // it started this frame
 
   bool in_enhance_ = false;
   ge::classicenhance::Switches switches_;

@@ -49,20 +49,20 @@ part differs; `missing` not in our tree; `not-taken` a note or doc of ours decid
 
 | kind | done | partial | missing | not-taken | all |
 | --- | --- | --- | --- | --- | --- |
-| Server console commands (the operator's words) | 35 | 11 | 19 | 11 | 76 |
+| Server console commands (the operator's words) | 54 | 10 | 1 | 11 | 76 |
 | General console commands and macros the server's console has (common) | 16 | 6 | 35 | 0 | 57 |
-| Server settings (cvars) with their defaults | 47 | 27 | 69 | 27 | 170 |
-| Server-to-client messages (svc) and protocol extensions the server writes | 22 | 13 | 18 | 0 | 53 |
-| What the server accepts from clients | 21 | 11 | 23 | 2 | 57 |
+| Server settings (cvars) with their defaults | 75 | 22 | 46 | 27 | 170 |
+| Server-to-client messages (svc) and protocol extensions the server writes | 37 | 9 | 7 | 0 | 53 |
+| What the server accepts from clients | 41 | 13 | 1 | 2 | 57 |
 | The game library interface | 41 | 24 | 23 | 0 | 88 |
-| Messages a player sees (refusals, drops, prints), quoted exactly | 33 | 19 | 18 | 2 | 72 |
-| Messages an admin sees on the server console, quoted exactly | 8 | 23 | 4 | 1 | 36 |
-| Server features beyond single words | 24 | 18 | 11 | 2 | 55 |
-| **all** | 247 | 152 | 220 | 45 | 664 |
+| Messages a player sees (refusals, drops, prints), quoted exactly | 48 | 15 | 7 | 2 | 72 |
+| Messages an admin sees on the server console, quoted exactly | 9 | 24 | 1 | 2 | 36 |
+| Server features beyond single words | 29 | 16 | 8 | 2 | 55 |
+| **all** | 350 | 139 | 129 | 46 | 664 |
 
 ## 1. Server console commands (the operator's words)
 
-done 35, partial 11, missing 19, not-taken 11
+done 54, partial 10, missing 1, not-taken 11
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -108,30 +108,30 @@ done 35, partial 11, missing 19, not-taken 11
 | cmd.adduserinfoban | `adduserinfoban` | A user info value refused. | done | same |
 | cmd.deluserinfoban | `deluserinfoban` | Removes them. | done | same |
 | cmd.listuserinfobans | `listuserinfobans` | Lists them. | done | same |
-| cmd.mvdrecord | `mvdrecord [-z] <name>` | Multi-view recording of every player to `demos/<name>.mvd2` (gzip with `-z`); on a relay, records the channel. | missing | S40: a `.mvd2` writer exists (`games/shooters_edge/server/q2_mvd2.hpp`) but no command; `serverrecord` writes our `.ged` |
-| cmd.mvdstop | `mvdstop` | Ends it. | missing | S40 |
+| cmd.mvdrecord | `mvdrecord [-z] <name>` | Multi-view recording of every player to `demos/<name>.mvd2` (gzip with `-z`); on a relay, records the channel. | done | games/shooters_edge/net/q2_mvd_server.cpp (`q2_mvd_command`): `-h`, `-z` (gzip), the refusals and lines; frames from games/shooters_edge/server/q2_mvd2_live.hpp; a relay channel's recording comes with the relay |
+| cmd.mvdstop | `mvdstop` | Ends it. | done | games/shooters_edge/net/q2_mvd_server.cpp |
 | cmd.say | `say <text>` | Dedicated server only: `console: <text>` to everyone at chat level. | done | `games/shooters_edge/server/q2_server.cpp` |
-| cmd.mvdstuff | `mvdstuff <text>` | Runs text as the recorder's dummy client. | missing | S40 |
-| cmd.addgtvhost | `addgtvhost` | A relay viewer address allowed without password. | missing | No TCP relay (S40) |
-| cmd.delgtvhost | `delgtvhost` | | missing | S40 |
-| cmd.listgtvhosts | `listgtvhosts` | | missing | S40 |
-| cmd.addgtvban | `addgtvban` | A relay viewer address refused. | missing | S40 |
-| cmd.delgtvban | `delgtvban` | | missing | S40 |
-| cmd.listgtvbans | `listgtvbans` | | missing | S40 |
+| cmd.mvdstuff | `mvdstuff <text>` | Runs text as the recorder's dummy client. | partial | games/shooters_edge/net/q2_mvd_server.cpp: refused (`Can't 'mvdstuff', dummy MVD client is not active`), as our rules keep no dummy (feat.recording.dummy) |
+| cmd.addgtvhost | `addgtvhost` | A relay viewer address allowed without password. | done | plugins/classic/protocol/addr_list.hpp, mounted in games/shooters_edge/net/q2_mvd_server.cpp |
+| cmd.delgtvhost | `delgtvhost` | | done | plugins/classic/protocol/addr_list.hpp |
+| cmd.listgtvhosts | `listgtvhosts` | | done | plugins/classic/protocol/addr_list.hpp: id, address/mask, hits, last hit, comment |
+| cmd.addgtvban | `addgtvban` | A relay viewer address refused. | done | plugins/classic/protocol/addr_list.hpp, mounted in games/shooters_edge/net/q2_mvd_server.cpp |
+| cmd.delgtvban | `delgtvban` | | done | plugins/classic/protocol/addr_list.hpp |
+| cmd.listgtvbans | `listgtvbans` | | done | plugins/classic/protocol/addr_list.hpp |
 | cmd.save | `save <dir>` | Saves the game (`You must be in a game to save.`, `Game does not support enhanced savegames.`, `Can't savegame in a deathmatch.`, `Can't savegame while dead!`, `Bad savedir.`, `Game saved.`); the library may refuse through its own can-save call. | partial | Our rules and a hosted library save (`games/shooters_edge/server/q2_save.hpp`, `q2_native_save.cpp`); no `save` word on the dedicated server (S31) |
 | cmd.load | `load <dir>` | Loads a save (`No such savegame: <name>`, `Bad savedir.`). | partial | Same: on the window's menu; not on the dedicated server (S31) |
 | cmd.autosave | `autosave` | A save into the fixed slot `save1`, with the same refusals as `save`. | missing | Our hosted library autosaves as a level is entered (`q2_native_save.cpp`), but there is no word |
-| cmd.mvdplay | `mvdplay [-l n] [-n name] [-r chan] <file>...` | Relay: plays recordings to relay viewers. | partial | Our TV plays a `.dm2` to stock viewers (`games/shooters_edge/net/q2_tv_demo.hpp`); no `.mvd2`, no channels, no word on `sesv` |
-| cmd.mvdconnect | `mvdconnect [-n] [-u] [-p] <addr>` | Relay: connects to a server's recorder over TCP. | partial | Our TV watches a server as a spectator client (`games/shooters_edge/net/q2_tv_relay.hpp`); not the recorder's TCP stream |
-| cmd.mvdisconnect | `mvdisconnect [-a]` | Relay: drops the upstream. | missing | |
-| cmd.mvdkill | `mvdkill` | Relay: kills a channel. | missing | |
-| cmd.mvdspawn | `mvdspawn` | Relay: starts serving viewers. | missing | |
-| cmd.mvdchannels | `mvdchannels` | Relay: lists channels. | missing | |
-| cmd.mvdservers | `mvdservers` | Relay: lists upstreams. | missing | |
-| cmd.mvdcontrol | `mvdcontrol` | Relay: a channel's settings. | missing | |
-| cmd.mvdpause | `mvdpause` | Relay: pauses a played recording. | missing | |
-| cmd.mvdskip | `mvdskip` | Relay: skips in a played recording. | missing | |
-| cmd.mvdseek | `mvdseek` | Relay: seeks in a played recording. | missing | |
+| cmd.mvdplay | `mvdplay [-l n] [-n name] [-r chan] <file>...` | Relay: plays recordings to relay viewers. | done | games/shooters_edge/net/q2_mvd_relay.cpp: files from demos/ (gzip too), `-l`, `-n`, `-r`, a 10 Hz pace, snapshots for the seek |
+| cmd.mvdconnect | `mvdconnect [-n] [-u] [-p] <addr>` | Relay: connects to a server's recorder over TCP. | done | games/shooters_edge/net/q2_mvd_relay.cpp: `-n`, `-u`, `-p`, the hello (no deflate asked), drops and destroys in the server's words, the backoff |
+| cmd.mvdisconnect | `mvdisconnect [-a]` | Relay: drops the upstream. | done | games/shooters_edge/net/q2_mvd_relay.cpp: one or `-a` |
+| cmd.mvdkill | `mvdkill` | Relay: kills a channel. | done | games/shooters_edge/net/q2_mvd_relay.cpp |
+| cmd.mvdspawn | `mvdspawn` | Relay: starts serving viewers. | done | games/shooters_edge/net/q2_mvd_relay.cpp and games/shooters_edge/net/q2_game.cpp: relay mode takes the port, the game's clients told to reconnect |
+| cmd.mvdchannels | `mvdchannels` | Relay: lists channels. | done | games/shooters_edge/net/q2_mvd_relay.cpp: both tables (`r` the recordings) |
+| cmd.mvdservers | `mvdservers` | Relay: lists upstreams. | done | games/shooters_edge/net/q2_mvd_relay.cpp: the ratio is always 100% (the relay asks no deflate) |
+| cmd.mvdcontrol | `mvdcontrol` | Relay: a channel's settings. | done | games/shooters_edge/net/q2_mvd_relay.cpp: `-n` renames, `-l` checked only |
+| cmd.mvdpause | `mvdpause` | Relay: pauses a played recording. | done | games/shooters_edge/net/q2_mvd_relay.cpp |
+| cmd.mvdskip | `mvdskip` | Relay: skips in a played recording. | done | games/shooters_edge/net/q2_mvd_relay.cpp |
+| cmd.mvdseek | `mvdseek` | Relay: seeks in a played recording. | done | games/shooters_edge/net/q2_mvd_relay.cpp: relative, absolute and percent; back through the reader forked every `mvd_snaps` s |
 | cmd.svaclist | `svaclist` | Anticheat: lists clients' anticheat state. | not-taken | `q2-gaps2-server.md` B1; docs/goals.md M17l (no client scanning) |
 | cmd.svacinfo | `svacinfo` | Anticheat: one client's details. | not-taken | same |
 | cmd.svacupdate | `svacupdate` | Anticheat: reloads the lists. | not-taken | same |
@@ -215,7 +215,7 @@ done 16, partial 6, missing 35, not-taken 0
 Defaults are upstream's; flags as registered. Our Quake II spellings that are synonyms are listed in
 `games/shooters_edge/net/q2_game.cpp` (`kSettingNames`).
 
-done 47, partial 27, missing 69, not-taken 27
+done 75, partial 22, missing 46, not-taken 27
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -280,46 +280,46 @@ done 47, partial 27, missing 69, not-taken 27
 | cvar.lrcon_password | `lrcon_password` = `` (private) | Limited rcon password. | done | Engine `lrcon_password` |
 | cvar.sv_features | `sv_features` (read-only) | The engine's feature bits for the library. | missing | S17 |
 | cvar.g_features | `g_features` = `0` (read-only) | The library's feature bits (section 6, api.gmf.*); reset to 0 when the library unloads. | missing | S17 |
-| cvar.sv_mvd_enable | `sv_mvd_enable` = `0` (latched) | Multi-view recorder: 1 local, 2 also TCP viewers. | missing | S40 |
-| cvar.sv_mvd_maxclients | `sv_mvd_maxclients` = `8` (latched) | TCP viewers. | partial | Our TV's `sv_tvmaxviewers` (engine) for our own TV, not this stream |
-| cvar.sv_mvd_bufsize | `sv_mvd_bufsize` = `2` (latched) | Viewer send buffer. | missing | |
-| cvar.sv_mvd_password | `sv_mvd_password` = `` (private) | Viewer password. | missing | |
-| cvar.sv_mvd_maxsize | `sv_mvd_maxsize` = `0` | Recording size limit. | missing | S40 |
-| cvar.sv_mvd_maxtime | `sv_mvd_maxtime` = `0` | Recording time limit (minutes). | missing | S40 |
-| cvar.sv_mvd_maxmaps | `sv_mvd_maxmaps` = `1` | Map changes before a recording stops. | missing | S40 |
-| cvar.sv_mvd_noblend | `sv_mvd_noblend` = `0` (latched) | Leaves screen blends out. | missing | |
-| cvar.sv_mvd_nogun | `sv_mvd_nogun` = `0` (latched) | Leaves the held weapon out. | missing | |
+| cvar.sv_mvd_enable | `sv_mvd_enable` = `0` (latched) | Multi-view recorder: 1 local, 2 also TCP viewers. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: 1 recordings, 2 the TCP stream on the game port |
+| cvar.sv_mvd_maxclients | `sv_mvd_maxclients` = `8` (latched) | TCP viewers. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: the TCP slots |
+| cvar.sv_mvd_bufsize | `sv_mvd_bufsize` = `2` (latched) | Viewer send buffer. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: 32 KiB units unsent before `overflowed` |
+| cvar.sv_mvd_password | `sv_mvd_password` = `` (private) | Viewer password. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp |
+| cvar.sv_mvd_maxsize | `sv_mvd_maxsize` = `0` | Recording size limit. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp |
+| cvar.sv_mvd_maxtime | `sv_mvd_maxtime` = `0` | Recording time limit (minutes). | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp |
+| cvar.sv_mvd_maxmaps | `sv_mvd_maxmaps` = `1` | Map changes before a recording stops. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp |
+| cvar.sv_mvd_noblend | `sv_mvd_noblend` = `0` (latched) | Leaves screen blends out. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/server/q2_mvd2_live.cpp |
+| cvar.sv_mvd_nogun | `sv_mvd_nogun` = `0` (latched) | Leaves the held weapon out. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/server/q2_mvd2_live.cpp |
 | cvar.sv_mvd_nomsgs | `sv_mvd_nomsgs` = `1` (latched) | Leaves text messages out. | missing | |
 | cvar.sv_mvd_begincmd | `sv_mvd_begincmd` = `wait 50; putaway; wait 10; help;` | The dummy's commands on entering. | missing | |
 | cvar.sv_mvd_scorecmd | `sv_mvd_scorecmd` = `putaway; wait 10; help;` | Run when the scoreboard has been gone a while. | missing | |
 | cvar.sv_mvd_autorecord | `sv_mvd_autorecord` = `0` (latched) | Local recordings started by itself. | partial | Engine `sv_autorecord` records each match (`engine/server/autorecord.hpp`) as `.ged` |
 | cvar.sv_mvd_capture_flags | `sv_mvd_capture_flags` = `5` | Which players are recorded. | missing | |
-| cvar.sv_mvd_disconnect_time | `sv_mvd_disconnect_time` = `15` | Minutes. | missing | |
-| cvar.sv_mvd_suspend_time | `sv_mvd_suspend_time` = `5` | Minutes. | missing | |
+| cvar.sv_mvd_disconnect_time | `sv_mvd_disconnect_time` = `15` | Minutes. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp |
+| cvar.sv_mvd_suspend_time | `sv_mvd_suspend_time` = `5` | Minutes. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: an empty block to the relays, a fresh game state at the resume |
 | cvar.sv_mvd_allow_stufftext | `sv_mvd_allow_stufftext` = `0` (latched) | Runs text the game sends the dummy. | missing | |
 | cvar.sv_mvd_spawn_dummy | `sv_mvd_spawn_dummy` = `1` | When the scoreboard dummy is spawned. | missing | |
 | cvar.sv_noreload | `sv_noreload` = `0` | Skips reloading a visited level. | done | Rules setting |
 | cvar.mvd_shownet | `mvd_shownet` = `0` | Relay debug prints. | missing | |
-| cvar.mvd_timeout | `mvd_timeout` = `90` | Relay upstream timeout. | missing | Our relay redials after 5 s (`games/shooters_edge/net/q2_tv_relay.hpp`), no setting |
-| cvar.mvd_suspend_time | `mvd_suspend_time` = `5` | Minutes. | missing | |
-| cvar.mvd_wait_delay | `mvd_wait_delay` = `20` | Seconds of buffering before play. | partial | Our TV's delay (`sv_tvdelay`, `setv --delay`) |
-| cvar.mvd_wait_percent | `mvd_wait_percent` = `50` | Buffer fill before play. | missing | |
-| cvar.mvd_buffer_size | `mvd_buffer_size` = `8` | Relay buffer. | missing | |
-| cvar.mvd_username | `mvd_username` = `unnamed` | Name sent upstream. | missing | |
-| cvar.mvd_password | `mvd_password` = `` (private) | Upstream password. | missing | |
-| cvar.mvd_snaps | `mvd_snaps` = `10` | Seek snapshots. | missing | |
-| cvar.mvd_admin_password | `mvd_admin_password` = `` (private) | `!mvdadmin` password. | missing | |
-| cvar.mvd_part_filter | `mvd_part_filter` = `0` | Join/part messages in the relay. | missing | |
-| cvar.flood_msgs | `flood_msgs` = `4` | Relay spectators' chat flood count (the server's; players' flood is the library's). | partial | Ours are the stock library's player chat flood settings (our rules); no relay chat |
-| cvar.flood_persecond | `flood_persecond` = `4` | Relay chat flood window. | partial | same |
-| cvar.flood_waitdelay | `flood_waitdelay` = `10` | Relay chat flood wait. | partial | same |
-| cvar.flood_mute | `flood_mute` = `0` | Relay spectators may not talk. | missing | |
+| cvar.mvd_timeout | `mvd_timeout` = `90` | Relay upstream timeout. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
+| cvar.mvd_suspend_time | `mvd_suspend_time` = `5` | Minutes. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
+| cvar.mvd_wait_delay | `mvd_wait_delay` = `20` | Seconds of buffering before play. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
+| cvar.mvd_wait_percent | `mvd_wait_percent` = `50` | Buffer fill before play. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
+| cvar.mvd_buffer_size | `mvd_buffer_size` = `8` | Relay buffer. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
+| cvar.mvd_username | `mvd_username` = `unnamed` | Name sent upstream. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
+| cvar.mvd_password | `mvd_password` = `` (private) | Upstream password. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
+| cvar.mvd_snaps | `mvd_snaps` = `10` | Seek snapshots. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
+| cvar.mvd_admin_password | `mvd_admin_password` = `` (private) | `!mvdadmin` password. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| cvar.mvd_part_filter | `mvd_part_filter` = `0` | Join/part messages in the relay. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| cvar.flood_msgs | `flood_msgs` = `4` | Relay spectators' chat flood count (the server's; players' flood is the library's). | done | The relay's chat (games/shooters_edge/net/q2_mvd_relay_viewers.cpp), read from the rules' own setting in games/shooters_edge/net/q2_game.cpp; players' flood is the library's |
+| cvar.flood_persecond | `flood_persecond` = `4` | Relay chat flood window. | done | same |
+| cvar.flood_waitdelay | `flood_waitdelay` = `10` | Relay chat flood wait. | done | same |
+| cvar.flood_mute | `flood_mute` = `0` | Relay spectators may not talk. | done | same: non-admin viewers may not talk |
 | cvar.mvd_filter_version | `mvd_filter_version` = `0` | Rewrites `!version` in relay chat. | missing | |
-| cvar.mvd_default_map | `mvd_default_map` = `q2dm1` (latched) | Map shown while waiting. | missing | |
+| cvar.mvd_default_map | `mvd_default_map` = `q2dm1` (latched) | Map shown while waiting. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the map's intermission spot, its checksum; q2dm1 when it does not load |
 | cvar.mvd_stats_score | `mvd_stats_score` = `0` | Which stat is the chase score. | missing | |
 | cvar.mvd_stats_hack | `mvd_stats_hack` = `0` | Dummy's stats copied to chasers. | missing | |
 | cvar.mvd_freeze_hack | `mvd_freeze_hack` = `1` | Frozen dummy means intermission. | missing | |
-| cvar.mvd_chase_prefix | `mvd_chase_prefix` = `xv 0 yb -64` | Layout prefix of the chase text. | missing | |
+| cvar.mvd_chase_prefix | `mvd_chase_prefix` = `xv 0 yb -64` | Layout prefix of the chase text. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
 | cvar.sv_anticheat_required | `sv_anticheat_required` = `0` (latched) | Anticheat module required. | not-taken | `q2-gaps2-server.md` B1; docs/goals.md M17l |
 | cvar.sv_anticheat_server_address | `sv_anticheat_server_address` = `anticheat.r1ch.net` (latched) | The service. | not-taken | same |
 | cvar.sv_anticheat_error_action | `sv_anticheat_error_action` = `0` | When the service is down. | not-taken | same |
@@ -377,7 +377,7 @@ done 47, partial 27, missing 69, not-taken 27
 | cvar.showpackets | `showpackets` = `0` | Packet prints (debug). | not-taken | `q2-server-gaps.md` "Not worth building" |
 | cvar.showdrop | `showdrop` = `0` | Drop prints (debug). | not-taken | same |
 | cvar.qport | `qport` = random | Client's qport. | not-taken | same |
-| cvar.net_maxmsglen | `net_maxmsglen` = `1390` | Largest packet a client may ask for. | missing | S18 |
+| cvar.net_maxmsglen | `net_maxmsglen` = `1390` | Largest packet a client may ask for. | done | ours `sv_maxmsglen` (games/shooters_edge/net/q2_game.cpp), the reference's name a synonym; read by `q2_msglen` (`q2_msglen`, games/shooters_edge/net/q2_net_ext.cpp) |
 | cvar.net_chantype | `net_chantype` = `1` | Channel kind (new or old). | missing | S18 |
 | cvar.net_ip | `net_ip` = `` | IPv4 bind address. | done | Engine `net_ip` |
 | cvar.net_ip6 | `net_ip6` = `` | IPv6 bind address. | missing | |
@@ -392,7 +392,7 @@ done 47, partial 27, missing 69, not-taken 27
 
 ## 4. Server-to-client messages (svc) and protocol extensions the server writes
 
-done 22, partial 13, missing 18, not-taken 0
+done 37, partial 9, missing 7, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -407,31 +407,31 @@ done 22, partial 13, missing 18, not-taken 0
 | svc.sound | message 9 | A sound with optional volume, attenuation, time offset, entity and channel, and position; a 16-bit index under protocol extensions. | partial | `games/shooters_edge/server/q2_wire.cpp`: always carries a position (S5); our rules' sounds go to everyone (S3); a library's bad volume clamped (S16) |
 | svc.print | message 10 | A text line at a level (pickup, medium, high, chat). | partial | Sent; the client's `msg` level is not honoured (S6) |
 | svc.stufftext | message 11 | Text the client runs. | done | `games/shooters_edge/net/q2_net_server.cpp`, `games/shooters_edge/server/q2_wire.cpp` |
-| svc.serverdata | message 12 | Protocol, server count, attract flag, game folder, player number (-1 on a cinematic or picture), level name; 35 adds an enhanced flag, the minor, an advanced-delta flag and the strafe-fix byte; 36 adds the minor, the server state, then a flag word (minor 1024 and up) or three move bytes. | partial | `games/shooters_edge/server/q2_wire.cpp`: protocol 34's fields; none of the tails (S18) |
+| svc.serverdata | message 12 | Protocol, server count, attract flag, game folder, player number (-1 on a cinematic or picture), level name; 35 adds an enhanced flag, the minor, an advanced-delta flag and the strafe-fix byte; 36 adds the minor, the server state, then a flag word (minor 1024 and up) or three move bytes. | done | games/shooters_edge/server/q2_wire.cpp; the 35 and 36 tails in games/shooters_edge/server/q2_wire_ext.cpp (`q2_server_data_tail`): no movement hacks, so a client predicts our move |
 | svc.configstring | message 13 | One configstring by index. | done | `games/shooters_edge/server/q2_wire.cpp`; index overflow is not an error (S14) |
 | svc.spawnbaseline | message 14 | One entity's baseline. | done | `games/shooters_edge/server/q2_wire.cpp` |
 | svc.centerprint | message 15 | Centred text. | done | `games/shooters_edge/server/q2_wire.cpp` |
 | svc.download | message 16 | A download piece with size and percent. | partial | `games/shooters_edge/net/q2_net_server.cpp`: 1024-byte pieces, one a frame (S39) |
 | svc.playerinfo | message 17 | The player state delta. | done | `games/shooters_edge/server/q2_wire.cpp` |
-| svc.packetentities | message 18 | The entity deltas of a frame. | partial | Done for protocol 34; the extended path's 512 entities and its packing absent (S18) |
+| svc.packetentities | message 18 | The entity deltas of a frame. | partial | 35 and 36 send the list with no id byte and long solids (games/shooters_edge/server/q2_wire_ext.cpp); the extended limits (512 entities and up) absent (proto.extended-limits) |
 | svc.deltapacketentities | message 19 | Unused by the server (defined only). | done | Not sent by either |
-| svc.frame | message 20 | Frame number, delta frame, suppress count, area bits. | partial | Protocol 34's frame; area bits always all ones in 32 bytes (S2); extended packing absent (S18) |
-| svc.zpacket | message 21 | A deflate-compressed block of messages (35 and 36 with zlib). | missing | S18 |
+| svc.frame | message 20 | Frame number, delta frame, suppress count, area bits. | partial | 34 and the later frame top (games/shooters_edge/server/q2_wire_ext.cpp, `q2_write_frame_top_ext`: extra flags, the 27-bit number and back offset, frame flags); area bits always all ones (S2) |
+| svc.zpacket | message 21 | A deflate-compressed block of messages (35 and 36 with zlib). | done | games/shooters_edge/net/q2_net_server.cpp (`packed`, engine/core/deflate.hpp): a signon message deflated when it comes out smaller |
 | svc.zdownload | message 22 | A compressed download piece straight from a pack (36 minor 1021 and up). | missing | S18 |
-| svc.gamestate | message 23 | The whole game state at once (36). | missing | S18 |
+| svc.gamestate | message 23 | The whole game state at once (36). | done | games/shooters_edge/server/q2_wire_ext.cpp (`q2_signon_streams`), for 36 below minor 1024 |
 | svc.setting | message 24 | A server setting: index and value; two kinds, 0 player updates and 1 frame rate. | missing | S18 (our own clients get the frame rate by the `*ge_ext` bit instead) |
-| svc.configstringstream | message 25 | Configstrings streamed (36). | missing | S18 |
-| svc.baselinestream | message 26 | Baselines streamed (36). | missing | S18 |
+| svc.configstringstream | message 25 | Configstrings streamed (36). | done | games/shooters_edge/server/q2_wire_ext.cpp (`q2_signon_streams`), 36 from minor 1024 |
+| svc.baselinestream | message 26 | Baselines streamed (36). | done | games/shooters_edge/server/q2_wire_ext.cpp (`q2_signon_streams`), 36 from minor 1024 |
 | svc.ge-own | messages 119, 121 to 124, 126, 127 | Ours only, to our own clients that ask by `*ge_ext`: item back times, voice, move feel, download archive, others' moves, jump share, account key. | done | `games/shooters_edge/net/q2_net_server.cpp` (not in the reference; listed so the ledger accounts for every byte ours writes) |
 | proto.34 | protocol 34 | The stock protocol. | done | `games/shooters_edge/net/q2_net.hpp`, `games/shooters_edge/net/q2_net_server.cpp` |
-| proto.35 | protocol 35 | First extended client protocol: 8-bit qport, larger packets, minor 1903 to 1905. | missing | S18 |
-| proto.36 | protocol 36 | The extended protocol: compression, streams, packed frames, new or old channel, minor 1015 to 1026 (1024 and 1025 extended limits, 1026 player fog). | missing | S18 |
-| proto.37 | protocol 37 | The multi-view recording's protocol, minor 2009 to 2013; never on UDP. | partial | Our `.mvd2` writer speaks it in a file (`games/shooters_edge/server/q2_mvd2.hpp`); not served |
-| proto.challenge-list | `challenge <n> p=34,35,36` | Lists the protocols on offer. | partial | `challenge <n> p=34` (S18) |
-| proto.challenge-table | challenges | A random 31-bit number per address, 1024 kept, oldest replaced, used once. | partial | 15-bit, kept forever (S20) |
-| proto.connect-answer | `client_connect[ nc=0\|1][ ac=1][ dlserver=<url>] map=<map>` | The admission answer: channel kind for 36, anticheat, HTTP download address, the map name. | partial | Added (upstream); ours sends a bare `client_connect` (`games/shooters_edge/net/q2_net_server.cpp`) |
+| proto.35 | protocol 35 | First extended client protocol: 8-bit qport, larger packets, minor 1903 to 1905. | done | games/shooters_edge/net/q2_net_server.cpp, games/shooters_edge/net/q2_net_ext.cpp: the byte qport, the asked packet length, the compact move from 1904, long solids from 1905 |
+| proto.36 | protocol 36 | The extended protocol: compression, streams, packed frames, new or old channel, minor 1015 to 1026 (1024 and 1025 extended limits, 1026 player fog). | done | games/shooters_edge/net/q2_net_server.cpp, games/shooters_edge/net/q2_net_ext.cpp, games/shooters_edge/server/q2_wire_ext.cpp: compression, streams, the packed frame, either channel; player fog is never sent (no game of ours sets it); the extended limits are their own row |
+| proto.37 | protocol 37 | The multi-view recording's protocol, minor 2009 to 2013; never on UDP. | done | games/shooters_edge/server/q2_mvd2.hpp written live by games/shooters_edge/net/q2_mvd_server.cpp to a file and over TCP |
+| proto.challenge-list | `challenge <n> p=34,35,36` | Lists the protocols on offer. | done | games/shooters_edge/net/q2_net_server.cpp: `challenge <n> p=34,35,36` |
+| proto.challenge-table | challenges | A random 31-bit number per address, 1024 kept, oldest replaced, used once. | done | games/shooters_edge/net/q2_net_server.cpp (`challenge_key`): a new 31-bit number per address and port, 1024 kept, the oldest replaced, used up on admission |
+| proto.connect-answer | `client_connect[ nc=0\|1][ ac=1][ dlserver=<url>] map=<map>` | The admission answer: channel kind for 36, anticheat, HTTP download address, the map name. | partial | games/shooters_edge/net/q2_net_server.cpp: `client_connect` and ` nc=<n>` for 36; ` map=` and ` dlserver=` not sent (S36) |
 | proto.mapchange | map change | Every client is stuffed `changing map=<map>` before the level loads and `reconnect` after. | done | Added (upstream); our level changes stuff `changing` and `reconnect` |
-| proto.fragments | the new channel's fragments | A message larger than a packet in pieces; packet size agreed by `net_maxmsglen`. | missing | S18, S24 |
+| proto.fragments | the new channel's fragments | A message larger than a packet in pieces; packet size agreed by `net_maxmsglen`. | done | plugins/classic/protocol/channel.cpp (`channel_read`, `newer_transmit`): 30-bit sequences, pieces with a fragment word, a 32768-byte reliable message; pieces held to our 1450-byte datagram |
 | proto.extended-limits | protocol extensions (36 minor 1024 and up) | When the library sets the protocol-extensions bit: `protocol` key 36, up to 8192 entities and more configstrings, a 16-bit sound index; old clients refused. | missing | S17, S18 |
 | proto.version-probe | version probe at `new` | The client is made to report its `version`; one that has not by `begin` is dropped silently; the console logs it. | done | games/shooters_edge/net/q2_net_server.cpp (`probe`): asked after the server data, so a recording still opens with it |
 | proto.force-reconnect | forced reconnect | Random values the client must bring back from a reconnect (`sv_force_reconnect`). | done | games/shooters_edge/net/q2_net_server.cpp (`first_new`); our client runs the stuffed settings (`q2_client.cpp`) |
@@ -440,11 +440,11 @@ done 22, partial 13, missing 18, not-taken 0
 | proto.phs-sounds | sounds by the hearing set and areas | Positioned sounds and multicasts only to clients that can hear them. | partial | Hosted library: by cluster without the area test (S4); our rules: to everyone (S3) |
 | proto.entity-follow | a sound follows its entity | Position left out so the client places it on the moving entity. | missing | S5 |
 | proto.overflow-priority | frame overflow | Low-priority sounds and effects then entities dropped to fit. | missing | S23 |
-| proto.move-repeat | lost moves repeated | With some packets lost, the oldest move is run again for each. | missing | S19 |
+| proto.move-repeat | lost moves repeated | With some packets lost, the oldest move is run again for each. | done | games/shooters_edge/net/q2_net_server.cpp: the last command run again for each lost packet (frame flag 4 past what the packet repeats) |
 | proto.rate-hold | rate holds frames | A frame is held when recent messages pass the rate; suppress count. | done | `games/shooters_edge/net/q2_net_server.cpp` |
-| proto.client-setting-msg | client settings (message 5) | A client's index and value: no gun, no blend, recording, player updates, frame rate, no gibs, no footsteps, no prediction, no flares. | missing | |
-| proto.nogibs | client setting 10 | Server stops sending gibs to that client. | missing | |
-| proto.nofootsteps | client setting 11 | Server clears footstep events for that client. | missing | |
+| proto.client-setting-msg | client settings (message 5) | A client's index and value: no gun, no blend, recording, player updates, frame rate, no gibs, no footsteps, no prediction, no flares. | done | games/shooters_edge/net/q2_net_server.cpp: every index read and kept (`asked`), `status s` shows them; no gun, no blend, recording, no gibs, no footsteps and no prediction shape the frames (games/shooters_edge/server/q2_wire_ext.cpp) |
+| proto.nogibs | client setting 10 | Server stops sending gibs to that client. | done | games/shooters_edge/server/q2_wire_ext.cpp (`q2_entity_for_ext`) |
+| proto.nofootsteps | client setting 11 | Server clears footstep events for that client. | done | games/shooters_edge/server/q2_wire_ext.cpp (`q2_entity_for_ext`) |
 | proto.packet-limits | per-packet limits | At most 8 string commands, 8 user info updates, 32 moves per frame, 4 frames; an oversize string command drops (`oversize stringcmd`). | partial | One move a packet read (`read_messages`); the other limits: verify |
 | proto.name-cut | the name cut to 15 characters, high bits cleared | | done | games/shooters_edge/net/q2_net_server.cpp (`cut_name`) |
 | proto.ip-key | `ip` user info key forced to the address | On connect and every change. | done | games/shooters_edge/net/q2_net_server.cpp: forced at the connect |
@@ -452,18 +452,18 @@ done 22, partial 13, missing 18, not-taken 0
 
 ## 5. What the server accepts from clients: clc messages, string commands, out-of-band words
 
-done 21, partial 11, missing 23, not-taken 2
+done 41, partial 13, missing 1, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | clc.nop | message 1 | Nothing. | done | `games/shooters_edge/net/q2_net_server.cpp` |
-| clc.move | message 2 | Checksum byte, last frame, three delta-coded moves. | partial | Read (`read_q2_move`); lost-move repeat absent (S19) |
+| clc.move | message 2 | Checksum byte, last frame, three delta-coded moves. | done | Read (`read_q2_move`; 35 and 36 `read_q2_move_ext` in games/shooters_edge/net/q2_net_ext.cpp); lost moves repeated |
 | clc.userinfo | message 3 | A new user info. | partial | Read; with a hosted library only the name reaches it in a game (S8) |
 | clc.stringcmd | message 4 | A string command. | done | `string_command` |
-| clc.setting | message 5 | A client setting (extended). | missing | (proto.client-setting-msg) |
-| clc.move_nodelta | message 10 | A move asking for a full frame (extended). | missing | S18 |
-| clc.move_batched | message 11 | Batched moves (extended). | missing | S18 |
-| clc.userinfo_delta | message 12 | A user info change as a delta (extended). | missing | S18 |
+| clc.setting | message 5 | A client setting (extended). | done | games/shooters_edge/net/q2_net_server.cpp |
+| clc.move_nodelta | message 10 | A move asking for a full frame (extended). | done | games/shooters_edge/net/q2_net_ext.cpp (`read_q2_batch`), run in games/shooters_edge/net/q2_net_server.cpp |
+| clc.move_batched | message 11 | Batched moves (extended). | done | games/shooters_edge/net/q2_net_ext.cpp (`read_q2_batch`), run in games/shooters_edge/net/q2_net_server.cpp |
+| clc.userinfo_delta | message 12 | A user info change as a delta (extended). | done | games/shooters_edge/net/q2_net_server.cpp (`userinfo_delta`) |
 | ucmd.new | `new` | Starts the signon. | done | `string_command` |
 | ucmd.begin | `begin` | Enters the game (refused silently before the client is primed or on a cinematic). | partial | Done; the library's connect call runs here, not at the connect packet (S9) |
 | ucmd.baselines | `baselines` | Signon step (stock prompt). | done | `string_command` |
@@ -488,31 +488,31 @@ done 21, partial 11, missing 23, not-taken 2
 | oob.ping | `ping` | Answers `ack`. | done | `read_oob` |
 | oob.ack | `ack` | From a master: notes the time; otherwise silent. | done | Ignored |
 | oob.status | `status` | `print`, the server info (slots less the reserved), then `<frags> <ping> "<name>"` lines; rate limited. | partial | Done in shape; key set differs (S27) |
-| oob.info | `info <version>` | `<hostname> <map> <n>/<slots>` for versions 34 to 36; ignored with 1 slot or another version. | partial | 34 only, others get `<hostname>: wrong version` (the stock answer); reserved slots not subtracted: verify |
-| oob.getchallenge | `getchallenge` | Answers `challenge <n> p=34,35,36`. | partial | S18, S20 |
-| oob.connect | `connect <proto> <qport> <challenge> "<userinfo>" [...]` | Admits or refuses a client. | partial | Protocol 34 only (S18); a reconnect from the same address and port is ignored (S21); refusal words in section 7 |
+| oob.info | `info <version>` | `<hostname> <map> <n>/<slots>` for versions 34 to 36; ignored with 1 slot or another version. | partial | games/shooters_edge/net/q2_net_server.cpp: versions 34 to 36 answered; others get `<hostname>: wrong version` (the stock answer); reserved slots counted |
+| oob.getchallenge | `getchallenge` | Answers `challenge <n> p=34,35,36`. | done | games/shooters_edge/net/q2_net_server.cpp |
+| oob.connect | `connect <proto> <qport> <challenge> "<userinfo>" [...]` | Admits or refuses a client. | partial | Protocols 34, 35 and 36 (games/shooters_edge/net/q2_net_server.cpp); a reconnect from the same address and port is ignored (S21); refusal words in section 7 |
 | oob.rcon | `rcon <password> <line>` | Runs any console command, the answer cut into packets; macros expanded. | partial | `q2_rcon` (`games/shooters_edge/net/q2_admin.cpp`): admin words and the rules' console only, one answer packet (S29) |
 | oob.passive | `passive_connect` | Sent by `pickclient` to a waiting client. | done | games/shooters_edge/net/q2_admin.cpp |
 | oob.blackhole | blackholed addresses | Every packet ignored. | done | Engine blackholes |
 | oob.before-game | before a game starts only `rcon` is answered | | partial | `sesv` starts with a map, so the case does not arise |
-| mvdcmd.mvdadmin | `!mvdadmin <password>` | Relay: become an admin (`[MVD] Granted admin status.`, `[MVD] Lost admin status.`, `[MVD] Invalid password.`). | missing | Our TV face ignores what viewers send (`games/shooters_edge/net/q2_tv_face.hpp`) |
-| mvdcmd.fwd | `fwd <cmd>` | Relay: forward a command upstream. | missing | same |
-| mvdcmd.say | `say`, `say_team` | Relay chat, `[MVD] <name>: <text>`. | missing | same |
-| mvdcmd.follow | `follow`/`chase [id]` | Relay: chase a player (`[MVD] Chasing <name>.`; targets q, i, r, b, p). | missing | Our watcher's camera chooses for every viewer |
-| mvdcmd.autofollow | `autofollow`/`autochase add\|rm\|set\|list\|on\|off` | Relay: automatic chase list. | missing | |
-| mvdcmd.observe | `observe`, `spectate`, `observer`, `spectator`, `obs`, `spec` | Relay: free fly. | missing | |
-| mvdcmd.inven | `inven`/`menu` | Relay: main menu. | missing | |
-| mvdcmd.invnext | `invnext` | Relay menu next. | missing | |
-| mvdcmd.invprev | `invprev` | Relay menu previous. | missing | |
-| mvdcmd.invuse | `invuse` | Relay menu select. | missing | |
-| mvdcmd.help | `help`/`score` | Relay: the scoreboard. | missing | |
-| mvdcmd.oldscore | `oldscore(s)`/`lastscore(s)` | Relay: the last map's scores. | missing | |
-| mvdcmd.putaway | `putaway` | Relay: close the layout. | missing | |
-| mvdcmd.channels | `channels` | Relay: list channels. | missing | |
-| mvdcmd.clients | `clients`/`players` | Relay: list players. | missing | |
-| mvdcmd.join | `join [id]` | Relay: enter a channel. | missing | |
-| mvdcmd.leave | `leave` | Relay: back to the waiting room. | missing | |
-| mvdcmd.commands | `commands` | Relay: the list of these commands. | missing | |
+| mvdcmd.mvdadmin | `!mvdadmin <password>` | Relay: become an admin (`[MVD] Granted admin status.`, `[MVD] Lost admin status.`, `[MVD] Invalid password.`). | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| mvdcmd.fwd | `fwd <cmd>` | Relay: forward a command upstream. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the string command up when the server took the flag |
+| mvdcmd.say | `say`, `say_team` | Relay chat, `[MVD] <name>: <text>`. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the channel's viewers, high level in the bright font, the flood rule |
+| mvdcmd.follow | `follow`/`chase [id]` | Relay: chase a player (`[MVD] Chasing <name>.`; targets q, i, r, b, p). | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: slots, names, `!q` `!i` `!r` `!b` `!p` `!!`; a new target is a new signon (the view reconnects) |
+| mvdcmd.autofollow | `autofollow`/`autochase add\|rm\|set\|list\|on\|off` | Relay: automatic chase list. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| mvdcmd.observe | `observe`, `spectate`, `observer`, `spectator`, `obs`, `spec` | Relay: free fly. | partial | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: back to the view's own choice (the lowest playing); no free flight |
+| mvdcmd.inven | `inven`/`menu` | Relay: main menu. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the Main Menu's rows |
+| mvdcmd.invnext | `invnext` | Relay menu next. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| mvdcmd.invprev | `invprev` | Relay menu previous. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| mvdcmd.invuse | `invuse` | Relay menu select. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: every row, `set uf <n> u` |
+| mvdcmd.help | `help`/`score` | Relay: the scoreboard. | partial | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: a scoreboard of the players by frags (no recorder's dummy to send its own) |
+| mvdcmd.oldscore | `oldscore(s)`/`lastscore(s)` | Relay: the last map's scores. | partial | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the last level's scoreboard, kept at the next game state |
+| mvdcmd.putaway | `putaway` | Relay: close the layout. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| mvdcmd.channels | `channels` | Relay: list channels. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| mvdcmd.clients | `clients`/`players` | Relay: list players. | partial | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the list and its pages; the round trip shows 0 |
+| mvdcmd.join | `join [id]` | Relay: enter a channel. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| mvdcmd.leave | `leave` | Relay: back to the waiting room. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| mvdcmd.commands | `commands` | Relay: the list of these commands. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
 
 ## 6. The game library interface: what the server gives a library (imports) and calls in it
 
@@ -616,20 +616,20 @@ done 41, partial 24, missing 23, not-taken 0
 
 `<x>` marks a filled-in value. Ours quoted where it differs.
 
-done 33, partial 19, missing 18, not-taken 2
+done 48, partial 15, missing 7, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| msg.oob.protocol | `Unsupported protocol version <n>.` | Connect with an unknown protocol. | partial | Ours `Server is protocol version 34.` (S22) |
-| msg.oob.old-protocol | `You need Quake 2 version 3.19 or higher.` | Protocol 26 to 33. | partial | Ours `Server is protocol version 34.` (S22) |
+| msg.oob.protocol | `Unsupported protocol version <n>.` | Connect with an unknown protocol. | done | games/shooters_edge/net/q2_net_server.cpp (`q2_connect_ask`) |
+| msg.oob.old-protocol | `You need Quake 2 version 3.19 or higher.` | Protocol 26 to 33. | done | games/shooters_edge/net/q2_net_server.cpp (`q2_connect_ask`) |
 | msg.oob.bad-challenge | `Bad challenge.` | | done | `games/shooters_edge/net/q2_net_server.cpp` |
 | msg.oob.no-challenge | `No challenge for address.` | | done | same |
 | msg.oob.banned | `<comment>` or `Your IP address is banned from this server.`, then `Connection refused.` | Ban list refusal. | partial | Ours `Banned.` (the stock library's word) |
 | msg.oob.locked | `Server is locked.` | | partial | Ours `Server is locked.` then `Connection refused.` |
 | msg.oob.iplimit | `Too many connections from your IP address.` | | partial | Same words then `Connection refused.` (`engine/server/admission.cpp`) |
 | msg.oob.iplimit6 | `Too many connections from your IPv6 network.` | | partial | same |
-| msg.oob.maxmsglen | `Invalid maximum message length.` | Extended connect. | missing | S18 |
-| msg.oob.netchan | `Invalid netchan type.` | Extended connect. | missing | S18 |
+| msg.oob.maxmsglen | `Invalid maximum message length.` | Extended connect. | done | games/shooters_edge/net/q2_net_ext.cpp (`q2_connect_ask`) |
+| msg.oob.netchan | `Invalid netchan type.` | Extended connect. | done | games/shooters_edge/net/q2_net_ext.cpp (`q2_connect_ask`) |
 | msg.oob.extended-limits | `This is a protocol limit removing enhanced server.` then `Your client version is not compatible. Make sure you are running the latest Q2PRO client version.` | Old client on an extended-limits server. | missing | S17, S18 |
 | msg.oob.empty-userinfo | `Empty userinfo string.` | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.oob.malformed-userinfo | `Malformed userinfo string.` | | done | games/shooters_edge/net/q2_net_server.cpp (`info_strict`, plugins/classic/protocol/info.hpp) |
@@ -656,11 +656,11 @@ done 33, partial 19, missing 18, not-taken 2
 | msg.drop.nodelta | `<name> was dropped: too many nodelta frames` | | partial | Dropped; announced only in our log (S33) |
 | msg.drop.sequence | `outgoing sequence too big` | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.drop.reset | `connection reset by peer` | Unreachable notices. | not-taken | `q2-server-gaps.md` row 17 |
-| msg.drop.multiple-moves | `multiple clc_move commands in packet` | | partial | Ours ignores the rest of the packet instead of dropping |
+| msg.drop.multiple-moves | `multiple clc_move commands in packet` | | done | games/shooters_edge/net/q2_net_server.cpp (`read_messages`) |
 | msg.drop.too-many-frames | `too many frames in packet` | | missing | S18 (extended moves) |
-| msg.drop.read-past-end | `read past end of message` | | partial | Ours drops on `a cut move` |
+| msg.drop.read-past-end | `read past end of message` | | done | games/shooters_edge/net/q2_net_server.cpp (`read_messages`) |
 | msg.drop.too-many-usercmds | `too many usercmds in frame` | | missing | S18 |
-| msg.drop.unknown-byte | `unknown command byte` | | partial | Ours drops on a message it cannot read: words: verify |
+| msg.drop.unknown-byte | `unknown command byte` | | done | games/shooters_edge/net/q2_net_server.cpp (`read_messages`) |
 | msg.drop.empty-userinfo | `empty userinfo` | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.drop.malformed-userinfo | `malformed userinfo` | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.drop.malformed-name | `malformed name` | | done | games/shooters_edge/net/q2_net_server.cpp |
@@ -681,15 +681,15 @@ done 33, partial 19, missing 18, not-taken 2
 | msg.packetdup | `Packetdup of <n> is not allowed on this server.`, `Server is sending <n> duplicate packet(s) to you.` (`packet` for one) | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.slot255 | `WARNING: Server has allocated client slot number 255. This is known to be broken in your Q2PRO client version. Please update your client to latest version.` | An old protocol-36 client given no slot number. | missing | Cannot arise while slots are capped at 32 (S35) |
 | msg.rate | (none) | The reference clamps a client's rate silently. | partial | Ours tells the client `Your rate setting is too high/low for this server.` and `Rate set to <n>` (`engine/server/rate.cpp`) |
-| msg.mvd.prefix | relay lines start `[MVD] ` | | missing | No relay chat |
-| msg.mvd.stream | `[MVD] Streaming resumed.`, `[MVD] Buffering data, please wait...`, `[MVD] Restored connection to the game server!`, `[MVD] Delay buffer overflowed!`, `[MVD] Disconnected from the game server!`, `[MVD] Lost connection to the game server!` | Relay state to viewers. | missing | Our TV face's viewers see no such lines |
-| msg.mvd.fwd | `[MVD] Not connected to the game server.`, `[MVD] Game server does not allow command forwarding.`, `[MVD] Send buffer not empty, please wait.`, `[MVD] This channel does not support command forwarding.` | `fwd` answers. | missing | |
-| msg.mvd.channel | `[MVD] You are already <where>.`, `[MVD] This channel is not compatible with your client version.`, `[MVD] You may not switch channels too soon.`, `[MVD] <name> left the channel`, `[MVD] <name> entered the channel`, `[MVD] Please enter a channel first.`, `[MVD] This channel is not ready yet.`, `[MVD] GTV server doesn't have this map!` | Channels. | missing | |
-| msg.mvd.admin | `[MVD] Lost admin status.`, `[MVD] Invalid password.`, `[MVD] Granted admin status.`, `[MVD] You don't have admin status.` | | missing | |
-| msg.mvd.talk | `[MVD] Spectators may not talk on this server.`, `[MVD] Please turn off ignore mode first.`, `[MVD] You can't talk for <n> more seconds.`, `[MVD] You can't talk for <n> seconds.` | | missing | |
-| msg.mvd.chase | `[MVD] Chasing <name>.`, `[MVD] No players to chase.`, `[MVD] Player slot number <n> is invalid.`, `[MVD] Player slot number <n> is not active.`, `[MVD] No players matching '<x>' found.`, `[MVD] '<x>' matches multiple players.`, `[MVD] Previous chase target is not active.`, `[MVD] You have no previous chase target.`, `[MVD] Unknown chase target '<x>'. Valid targets are: ...`, `[MVD] Chasing players with '<x>' powerup.` | | missing | |
-| msg.mvd.autochase | `[MVD] Auto chasing is <ON/OFF> (<n> target(s)).`, `[MVD] Auto chasing <list>`, `[MVD] Auto chase list is empty.`, `[MVD] Please add auto chase targets first.`, `[MVD] Usage: ...` | | missing | |
-| msg.mvd.lists | the `channels` table and the `commands` help text | | missing | |
+| msg.mvd.prefix | relay lines start `[MVD] ` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| msg.mvd.stream | `[MVD] Streaming resumed.`, `[MVD] Buffering data, please wait...`, `[MVD] Restored connection to the game server!`, `[MVD] Delay buffer overflowed!`, `[MVD] Disconnected from the game server!`, `[MVD] Lost connection to the game server!` | Relay state to viewers. | done | games/shooters_edge/net/q2_mvd_relay.cpp |
+| msg.mvd.fwd | `[MVD] Not connected to the game server.`, `[MVD] Game server does not allow command forwarding.`, `[MVD] Send buffer not empty, please wait.`, `[MVD] This channel does not support command forwarding.` | `fwd` answers. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| msg.mvd.channel | `[MVD] You are already <where>.`, `[MVD] This channel is not compatible with your client version.`, `[MVD] You may not switch channels too soon.`, `[MVD] <name> left the channel`, `[MVD] <name> entered the channel`, `[MVD] Please enter a channel first.`, `[MVD] This channel is not ready yet.`, `[MVD] GTV server doesn't have this map!` | Channels. | partial | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: all but the version check and the missing map |
+| msg.mvd.admin | `[MVD] Lost admin status.`, `[MVD] Invalid password.`, `[MVD] Granted admin status.`, `[MVD] You don't have admin status.` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| msg.mvd.talk | `[MVD] Spectators may not talk on this server.`, `[MVD] Please turn off ignore mode first.`, `[MVD] You can't talk for <n> more seconds.`, `[MVD] You can't talk for <n> seconds.` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| msg.mvd.chase | `[MVD] Chasing <name>.`, `[MVD] No players to chase.`, `[MVD] Player slot number <n> is invalid.`, `[MVD] Player slot number <n> is not active.`, `[MVD] No players matching '<x>' found.`, `[MVD] '<x>' matches multiple players.`, `[MVD] Previous chase target is not active.`, `[MVD] You have no previous chase target.`, `[MVD] Unknown chase target '<x>'. Valid targets are: ...`, `[MVD] Chasing players with '<x>' powerup.` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| msg.mvd.autochase | `[MVD] Auto chasing is <ON/OFF> (<n> target(s)).`, `[MVD] Auto chasing <list>`, `[MVD] Auto chase list is empty.`, `[MVD] Please add auto chase targets first.`, `[MVD] Usage: ...` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| msg.mvd.lists | the `channels` table and the `commands` help text | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
 | msg.mvd.names | `[MVD] <old> changed name to <new>`, `[MVD] <name> disconnected` | | missing | |
 | msg.ac | anticheat lines to players (lost service, modified file, unable to take connections, exempt, failed file checks, not using anticheat) | Anticheat lines. | not-taken | `q2-gaps2-server.md` B1 |
 
@@ -698,7 +698,7 @@ done 33, partial 19, missing 18, not-taken 2
 Developer-only prints (the reference's developer level) are left out; one row per message or per
 tight group of one command's answers.
 
-done 8, partial 23, missing 4, not-taken 1
+done 9, partial 24, missing 1, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -729,19 +729,19 @@ done 8, partial 23, missing 4, not-taken 1
 | log.rate-limit | `Period too large: <n>`, `Limit too large: <n>`, `Burst too large: <n>` | Rate-limit syntax errors. | partial | `engine/server/limit.hpp` refuses with its own words |
 | log.rcon | `Rcon from <addr>:` / `<line>`, `Invalid rcon from <addr>:` / `<line>`, `Limited rcon from <addr>:`, `Invalid limited rcon from <addr>:` | | partial | Ours `rcon from <addr>: <line>`, `bad rcon from <addr>`, `limited rcon from ...` (`games/shooters_edge/net/q2_admin.cpp`) |
 | log.skew | `<name>[<addr>]: detected time skew: <x.xxx>` | `sv_timescale_warn`. | partial | `engine/server/skew.hpp` words: verify |
-| log.maxmsglen | `Fixing up maxmsglen for <name>: <a> --> <b>` | | missing | S18 |
+| log.maxmsglen | `Fixing up maxmsglen for <name>: <a> --> <b>` | | not-taken | porting/shooters-edge/q2-proto36-server.md: printed only by path-MTU discovery, which the reference build never enables |
 | log.overflow | `Game left <n> bytes in multicast buffer, cleared.`, `Frame overflowed for <name>`, `Dumping datagram for <name>`, `<msg> to <name>: overflow on the first message`, `Error <n> compressing <n> bytes message for <name>` | | partial | Ours drops the unreliable part (S23) with its own log words |
 | log.name | `<old>[<addr>] changed name to <new>` | Every rename on the dedicated console. | partial | Ours logs renames with its own words: verify |
 | log.drop | `<name>[<addr>] was dropped: <reason>` (or `<name>[<addr>] <reason>`) | Every drop, on a dedicated server. | partial | Ours `<name> dropped: <reason>` (`games/shooters_edge/net/q2_net_server.cpp`) |
-| log.mvd | `Auto-recording local MVD to <path>`, `Not recording a local MVD.`, `Stopped local MVD auto-recording.`, `No slot for dummy MVD client`, `Dummy MVD client rejected by game: <reason>`, `Stopping MVD recording, maximum size reached.`, `... maximum duration reached.`, `... maximum number of level changes reached.`, `Couldn't write local MVD: <error>`, `MVD recording is disabled on this server.`, `Already recording a local MVD.`, `Begin local MVD recording.`, `Missing filename argument.`, `Recording local MVD to <path>`, `Stopped local MVD recording.`, `Can't 'mvdstuff', dummy MVD client is not active`, `Unreliable MVD datagram overflowed.`, `Dumping unreliable MVD datagram.` | Recorder. | missing | S40 (ours prints `autorecord: ...` and `serverrecord` lines for `.ged`) |
-| log.mvd-tcp | `Accepted MVD client <name>[<addr>]`, `TCP client <name>[<addr>] dropped: <reason>`, `TCP client [<addr>] rejected: too many connections`, `TCP client [<addr>] rejected: no free slots`, `Error opening server TCP port.`, `Server TCP port already in use.`, `Fatal MVD server error: <x>`, the TCP clients' table (`ZMBI`, `ASGN`, `CNCT`, `PRIM`, `SEND`) and versions table, `No TCP clients.` | Viewers over TCP. | missing | S40 |
+| log.mvd | `Auto-recording local MVD to <path>`, `Not recording a local MVD.`, `Stopped local MVD auto-recording.`, `No slot for dummy MVD client`, `Dummy MVD client rejected by game: <reason>`, `Stopping MVD recording, maximum size reached.`, `... maximum duration reached.`, `... maximum number of level changes reached.`, `Couldn't write local MVD: <error>`, `MVD recording is disabled on this server.`, `Already recording a local MVD.`, `Begin local MVD recording.`, `Missing filename argument.`, `Recording local MVD to <path>`, `Stopped local MVD recording.`, `Can't 'mvdstuff', dummy MVD client is not active`, `Unreliable MVD datagram overflowed.`, `Dumping unreliable MVD datagram.` | Recorder. | partial | games/shooters_edge/net/q2_mvd_server.cpp: the recording's lines and the fatal errors; the dummy's and auto-recording's lines wait on the dummy (feat.recording.dummy) |
+| log.mvd-tcp | `Accepted MVD client <name>[<addr>]`, `TCP client <name>[<addr>] dropped: <reason>`, `TCP client [<addr>] rejected: too many connections`, `TCP client [<addr>] rejected: no free slots`, `Error opening server TCP port.`, `Server TCP port already in use.`, `Fatal MVD server error: <x>`, the TCP clients' table (`ZMBI`, `ASGN`, `CNCT`, `PRIM`, `SEND`) and versions table, `No TCP clients.` | Viewers over TCP. | done | games/shooters_edge/net/q2_mvd_server.cpp: accepted, dropped with each reason, rejected (too many connections, no free slots), the port error |
 | log.save | `Savegame cvar name too long`, `Savegame cvar value too long`, `Game does not support enhanced savegames`, `Savegame path too long`, `Bad savegame configstring index`, `Savegame configstring too long`, `Couldn't write level file.`, `Couldn't write server file.`, `Couldn't wipe '<dir>' directory.`, `Couldn't write '<dir>' directory.`, `Couldn't read level file.`, `Game supports Q2PRO enhanced savegames.`, `Game supports YQ2 enhanced savegames.`, `Use of unsafe savegames forced from command line.`, `Game does not support enhanced savegames. Savegames will not work.`, `Usage: <cmd> <directory>`, `Bad savedir.`, `No such savegame: <name>`, `Couldn't read '<dir>' directory.`, `Couldn't read server file.`, `You must be in a game to save.`, `Can't savegame in a deathmatch.`, `Can't savegame while dead!`, `Game saved.` | Saves. | partial | Saves exist (`games/shooters_edge/server/q2_save.hpp`, `q2_native_save.cpp`) with our own words; no dedicated `save`/`load` (S31) |
 | log.world | `Bad mins/maxs on entity <n>: <mins> <maxs>` (developer), `SV_AreaEdicts: MAXCOUNT`, `<call>: inline model <n> out of range`, `<call>: NULL` | World errors. | partial | Our host's own words |
 | log.ac | anticheat console lines (violations, kicks, the service's state) | | not-taken | `q2-gaps2-server.md` B1 |
 
 ## 9. Server features beyond single words: downloads, rates, floods, bans, filters, recording, status
 
-done 24, partial 18, missing 11, not-taken 2
+done 29, partial 16, missing 8, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -756,7 +756,7 @@ done 24, partial 18, missing 11, not-taken 2
 | feat.rate.no-key | no `rate` key: 5000, not clamped | | done | 5000, held to no limit (`RateBounds::none_held`); `server_rate_test` |
 | feat.rate.hold | frames held over the rate | | done | `games/shooters_edge/net/q2_net_server.cpp` |
 | feat.flood.players | players' chat flood | The library's (stock: `flood_msgs`, `flood_persecond`, `flood_waitdelay`). | done | Our rules (`games/shooters_edge/server/q2_commands.cpp`); a hosted library its own |
-| feat.flood.relay | relay spectators' chat flood | `[MVD] You can't talk for <n> seconds.` | missing | No relay chat |
+| feat.flood.relay | relay spectators' chat flood | `[MVD] You can't talk for <n> seconds.` | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the 16-line ring, the wait, the lines |
 | feat.ban.list | address list with masks, comments, hits, last hit | Refuses connects. | partial | Engine ban list (patterns, timed entries, `sv_banmode`); no hit counts or comments column: verify |
 | feat.ban.blackhole | blackholes | Every packet ignored. | done | Engine |
 | feat.ban.drop-on-add | a ban that matches a connected client drops it | | done | `drop_refused` (`games/shooters_edge/net/q2_admin.cpp`; the stock library's `addip` behaviour) |
@@ -782,14 +782,14 @@ done 24, partial 18, missing 11, not-taken 2
 | feat.status.keys | server info keys: `protocol`, `deathmatch`, `cheats`, `dmflags`, `fraglimit`, `timelimit`, `maxclients`, `hostname`, `version`, `game`, `mapname`, `port`, `uptime`, admins' own keys, the library's own (stock: `gamename`, `needpass`) | | partial | Fixed set, `deathmatch` always 1 (S27); no `port` |
 | feat.status.reserved | `maxclients` shown minus reserved slots (status, heartbeat and `info`) | | done | games/shooters_edge/net/q2_net_server.cpp (`q2_public_slots`): `info` and status answers and heartbeats |
 | feat.status.uptime | `uptime` key short or long form | | done | `engine/server/status.hpp` |
-| feat.recording.mvd2 | multi-view recording file (`MVD2`, length-led blocks, ends with 0; gzip) | | partial | Writer exists (`games/shooters_edge/server/q2_mvd2.hpp`) without gzip and without a command or recorder (S40) |
+| feat.recording.mvd2 | multi-view recording file (`MVD2`, length-led blocks, ends with 0; gzip) | | done | games/shooters_edge/net/q2_mvd_server.cpp: `mvdrecord`, gzip with `-z`, the limits; frames from games/shooters_edge/server/q2_mvd2_live.hpp |
 | feat.recording.dummy | the recorder's dummy client `[MVDSPEC]` holding the scoreboard (begin and score commands) | | missing | S40 |
-| feat.recording.limits | stop by size, time, map count | | missing | S40 |
+| feat.recording.limits | stop by size, time, map count | | done | games/shooters_edge/net/q2_mvd_server.cpp: `sv_mvd_maxsize`, `sv_mvd_maxtime`, `sv_mvd_maxmaps`, each with its line |
 | feat.recording.capture | which players are recorded (in game, invisible, visible) | | missing | |
-| feat.relay.tcp | viewers over TCP on the game port (`MVD2` magic, hello, deflate; access by allow list, ban list, password) | | missing | S40; our TV is another design (`docs/tv.md` § Quake II's TV) |
-| feat.relay.channels | the relay's channels, waiting room, chase cameras, menus, scoreboard, `[MVD]` chat | | partial | Our TV face serves stock viewers one watcher's camera (`games/shooters_edge/net/q2_tv_face.hpp`); no channels, chase choice or chat |
-| feat.relay.demo | relay plays recorded files in a loop | | partial | `games/shooters_edge/net/q2_tv_demo.hpp` loops a `.dm2`; not `.mvd2` |
-| feat.serverdemo | the server's own recording | | partial | Engine `serverrecord` (`.ged`), not `.dm2` or `.mvd2` (S40) |
+| feat.relay.tcp | viewers over TCP on the game port (`MVD2` magic, hello, deflate; access by allow list, ban list, password) | | done | games/shooters_edge/net/q2_mvd_server.cpp: the magic, hello, deflate as one zlib stream, the allow list, the ban list, the password, stream start and stop, ping |
+| feat.relay.channels | the relay's channels, waiting room, chase cameras, menus, scoreboard, `[MVD]` chat | | partial | games/shooters_edge/net/q2_mvd_relay.hpp: channels, the Waiting Room and its chooser, a view a viewer, the menus, chat, admin; no free flight, no stats rewrites |
+| feat.relay.demo | relay plays recorded files in a loop | | done | games/shooters_edge/net/q2_mvd_relay.hpp: `mvdplay` loops `.mvd2` files (`-l 0`) |
+| feat.serverdemo | the server's own recording | | partial | Engine `serverrecord` (`.ged`) and `mvdrecord` (`.mvd2`, games/shooters_edge/net/q2_mvd_server.cpp); no `.dm2` (S40) |
 | feat.cinematics | cinematic and picture levels (`.cin`, `.pcx`, `.dm2`) and `nextserver` | | missing | S41 |
 | feat.map.chain | `+` chained level after a cinematic; `*` end of unit; `$spot`; `!` stop if missing | | partial | Unit ends and spawn spots: our rules (`games/shooters_edge/server/q2_campaign.hpp`); cinematic chaining missing (S41) |
 | feat.map.entfile | entity file `<map>@<crc>.ent` (four hex digits of the map's entity text checksum) then `<map>.ent` in `map_override_path` | | done | `sv_entpath` |

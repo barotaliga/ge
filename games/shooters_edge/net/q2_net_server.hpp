@@ -78,7 +78,9 @@
 #include "server/skew.hpp"
 #include "server/status.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q2_mvd_server.hpp"
 #include "shooters_edge/net/q2_net.hpp"
+#include "shooters_edge/net/q2_net_ext.hpp"
 #include "shooters_edge/net/qw_antilag.hpp"
 #include "shooters_edge/net/qw_voice_route.hpp"
 #include "shooters_edge/server/q2_native.hpp"
@@ -93,6 +95,7 @@ namespace sv = shooters_edge::server;
 
 struct Q2NetConfig {
   std::string hostname = "Shooter's Edge";
+  Q2MvdConfig mvd;  // the multiview recorder and its relay stream (q2_mvd_server.hpp)
   int max_clients = 8;
   std::string password;  // "" or "none": none asked
   // SPECTATORS (user info `spectator` other than 0): with a spectator password set ("" or `none`:
@@ -135,6 +138,9 @@ struct Q2NetConfig {
   double ghost_time = 6;
   // sv_nodelta: 1 sends whole frames whenever asked; 0 drops a client that asks for more than 64.
   bool allow_nodelta = true;
+  // net_maxmsglen: the largest packet a client of protocol 35 or 36 gets (512..4086; 0: what it
+  // asks; a client on this machine is never held to it). q2_net_ext.hpp.
+  int net_maxmsglen = 1390;
   // sv_pingmethod: 0 no ping is shown; 1 the average of the last 16 round trips; 2 their least.
   int ping_method = 2;
   // Each client sent only the entities it may see (server/q2_wire.hpp § the viewer's cut);
@@ -305,6 +311,18 @@ struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int rtt_samples = 0;
   double rtt_next = -1;
   int64_t cmds_run = 0, cmds_counted = 0;
+  // A LATER PROTOCOL's client (35 or 36, q2_net_ext.hpp): its protocol, minor version, packet
+  // length, compression, its client settings (clc 5, 14 of them; the frame rate starts at 10),
+  // the sequence its commands are handed to the rules by (one command a packet), the last command
+  // (run again for each packet lost past what a move carries), the frame's flags for 36, and the
+  // signon waiting for room on the old channel.
+  int protocol = 34, minor = 0, msglen = 1390;
+  bool zlib = false;
+  int16_t asked[14] = {0, 0, 0, 0, 10};
+  uint32_t run_sequence = 0;
+  Q2Cmd last_run;
+  uint8_t frame_flags = 0;
+  std::vector<std::vector<uint8_t>> signon_queue;
   int move_fps = 0;
   double fps_next = -1;
   double scale = 0;
@@ -323,7 +341,13 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   sv::NativeQ2* native = nullptr;  // a hosted game library's runner (q2_native.hpp)
   gn::Transport* transport = nullptr;
   Q2NetClient clients[sh::kMaxClients];
-  std::map<uint64_t, int32_t> challenges;  // by the address with its port off
+  Q2Mvd mvd;               // the multiview recorder (sv_mvd_enable)
+  int64_t mvd_frame = -1;  // the rules frame last recorded
+  bool mvd_level = true;   // a level waits for its game state
+  // The challenges (1024 kept, one an address and port, each used once; the oldest
+  // replaced when full): by address, and the addresses oldest first.
+  std::map<uint64_t, int32_t> challenges;
+  std::vector<uint64_t> challenge_order;
   uint32_t next_challenge = 0;
   int32_t count = 0;           // the level's count, as the server data carries it
   int64_t written_frame = -1;  // the tenth last sent

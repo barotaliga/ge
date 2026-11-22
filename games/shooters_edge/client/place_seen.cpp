@@ -1,10 +1,13 @@
 // The player's place for the place names, watched or played (place_seen.hpp).
 //
 // ge:summary The place names' questions answered off the view watched or the window's own player
-// ge:keywords add_place_queries clear-line looked-at
+// ge:keywords add_place_queries clear-line looked-at viewpos cl_ups speed-macro
 // ge:skill shooter
 // ge:test tests/shooters_edge_place_names_test.cpp
 #include "shooters_edge/client/place_seen.hpp"
+
+#include <cmath>
+#include <string>
 
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/map_line.hpp"
@@ -49,6 +52,32 @@ void add_place_queries(ge::console::Console& con, PlaceNames& places, const List
       return false;
     at = listen.server->world.entities[1].origin;
     return true;
+  });
+  // viewpos: where the view stands and its yaw, in whole units and degrees.
+  con.add_command("viewpos", "viewpos: where the view stands, and the way it faces",
+                  [&listen, &seen](ge::console::Console& c, const ge::console::Args&) {
+                    V at, angles;
+                    if (seen.on) {
+                      at = seen.at;
+                      angles = seen.angles;
+                    } else if (listen.server != nullptr && listen.map &&
+                               listen.server->world.entities.size() > 1) {
+                      at = listen.server->world.entities[1].origin;
+                      angles = listen.server->world.entities[1].view_angles;
+                    } else {
+                      c.print("Must be in a level.");
+                      return;
+                    }
+                    const auto whole = [](float v) { return std::to_string(std::lround(v)); };
+                    c.print("(" + whole(at.x) + " " + whole(at.y) + " " + whole(at.z) +
+                            ") : " + whole(angles.y));
+                  });
+  // $cl_ups: the player's speed along the ground, units a second (0 for a view watched).
+  con.add_macro("cl_ups", [&listen, &seen] {
+    if (seen.on || listen.server == nullptr || listen.server->world.entities.size() < 2)
+      return std::string("0");
+    const V v = listen.server->world.entities[1].velocity;
+    return std::to_string(std::lround(std::sqrt(v.x * v.x + v.y * v.y)));
   });
 }
 
