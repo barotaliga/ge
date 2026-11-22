@@ -563,3 +563,70 @@ TEST(a_filtered_command_never_reaches_the_rules_and_a_blackholed_address_is_neve
   CHECK(rig.server.counts.filtered == 2);
   CHECK(any_has(rig.server.log, "anna[") && any_has(rig.server.log, "issued banned command: GOD"));
 }
+
+TEST(user_prints_one_players_info_and_msg_sets_the_print_level) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  CHECK(rig.play());
+  // The operator's `user`: a key a line, padded to 20 columns.
+  const std::string u = rig.admin("user " + std::to_string(rig.id_of(0)));
+  CHECK_MSG(has(u, "name                anna\n"), u);
+  CHECK_MSG(has(u, "msg                 1\n"), u);
+  CHECK(has(rig.admin("user nobody"), "No player is called nobody"));
+  CHECK(has(rig.admin("user"), "user <id|name>"));
+  // The client saw every player's user id.
+  bool seen = false;
+  for (int i = 0; i < 32; i++)
+    seen = seen || (rig.c[1].userids[i] == rig.id_of(0) &&
+                    cn::info_get(rig.c[1].userinfos[i], "name") == "anna");
+  CHECK(seen);
+  // A player's `msg`: shown, then set (no range), each answer at the high level.
+  rig.c[0].prints.clear();
+  cn::client_command(rig.c[0], "msg");
+  rig.frames(20);
+  CHECK(any_has(rig.c[0].prints, "Current msg level is 1"));
+  cn::client_command(rig.c[0], "msg 2");
+  rig.frames(20);
+  CHECK(any_has(rig.c[0].prints, "Msg level set to 2"));
+  CHECK(rig.server.clients[0].msg_level == 2);
+}
+
+TEST(the_server_info_carries_cheats_and_sv_gamedir_changes_its_folder) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.cheats = true;
+  CHECK(rig.start(cfg));
+  const std::string& si = rig.server.serverinfo;
+  CHECK_MSG(cn::info_get(si, "*cheats") == "ON", si);
+  CHECK(cn::info_get(si, "*progs").empty());  // the built-in rules have no program file
+  // sv_gamedir: shown, set, refused as a path, and its usage.
+  CHECK(has(rig.admin("sv_gamedir"), "Current *gamedir: "));
+  CHECK(rig.admin("sv_gamedir ktx").empty());
+  CHECK(cn::info_get(rig.server.serverinfo, "*gamedir") == "ktx");
+  CHECK(rig.server.cfg.gamedir == "ktx");
+  CHECK(has(rig.admin("sv_gamedir"), "Current *gamedir: ktx"));
+  CHECK(has(rig.admin("sv_gamedir ../x"), "*Gamedir should be a single filename, not a path"));
+  CHECK(has(rig.admin("sv_gamedir a b"), "Usage: sv_gamedir <newgamedir>"));
+  // Without cheats the key is never there.
+  auto plain = std::make_unique<Rig>();
+  CHECK(plain->start(cn::ServerConfig{}));
+  CHECK(cn::info_get(plain->server.serverinfo, "*cheats").empty());
+}
+
+TEST(sv_highchars_0_keeps_a_players_info_to_plain_characters) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.high_chars = false;
+  CHECK(rig.start(cfg));
+  CHECK(rig.play());
+  // A coloured name (high bit set) becomes its plain letters on setinfo.
+  std::string coloured = "z";
+  for (const char ch : std::string("oe")) coloured.push_back(static_cast<char>(ch | 0x80));
+  cn::client_command(rig.c[0], "setinfo team " + coloured);
+  rig.frames(40);
+  CHECK_MSG(cn::info_get(rig.server.clients[0].userinfo, "team") == "zoe",
+            rig.server.clients[0].userinfo);
+}

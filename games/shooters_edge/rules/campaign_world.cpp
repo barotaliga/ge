@@ -240,51 +240,7 @@ void trigger_setskill(A& q) {
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_setskill_touch));
 }
 
-// Acts as a trigger_once on the full game's packs; on the shareware ones it only shows its message.
-void onlyregistered_touch(A& q) {
-  const int32_t me = q.self();
-  const int32_t other = q.other();
-  if (!is_player(q, other) | (q.f(other, q.L.f.health) <= 0)) return;
-  if (q.f(me, f_attack_finished) > q.time()) return;
-  q.set_f(me, f_attack_finished, q.time() + 2);
-  if (on(q.cvar(q.s(s_registered)))) {
-    q.set_i(me, q.L.f.message, q.s(s_empty));
-    q.set_ge(g_activator, other);
-    q.set_f(me, f_wait, -1);
-    trigger_fire(q);
-    return;
-  }
-  if (!q.is(q.i(me, q.L.f.message), "")) {
-    q.centerprint(other, {q.i(me, q.L.f.message)});
-    q.sound(other, kChanBody, q.s(s_misc_talk_wav), 1, kAttnNorm);
-  }
-}
-
-void trigger_onlyregistered(A& q) {
-  trigger_start(q);
-  q.set_i(q.self(), q.L.f.touch, q.fn(fn_onlyregistered_touch));
-}
-
 void trigger_monsterjump(A& q) { trigger_start(q); }
-
-// THE EPISODES.
-// Stands (blocking the hall) once its episode is done.
-void func_episodegate(A& q) {
-  if (band(q.serverflags(), q.f(q.self(), q.L.f.spawnflags)) == 0) {
-    q.remove(q.self());
-    return;
-  }
-  func_wall(q);
-}
-
-// Gone once all four episodes are done.
-void func_bossgate(A& q) {
-  if (band(q.serverflags(), 15) == 15) {
-    q.remove(q.self());
-    return;
-  }
-  func_wall(q);
-}
 
 // The rune: its episode's bit in serverflags, and the episode's closing words for the way out.
 void sigil_touch(A& q) {

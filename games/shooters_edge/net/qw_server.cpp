@@ -214,6 +214,12 @@ void handle_connect(QwServer& s, const gn::Address& from, const std::string& tex
   const auto qport = static_cast<uint16_t>(std::atoi(pg::word(w, 2)));
   const int32_t challenge = std::atoi(pg::word(w, 3));
   std::string userinfo = pg::word(w, 4);
+  // sv_highchars 0: a joining player's user info keeps only plain printable characters.
+  if (!s.cfg.high_chars)
+    std::erase_if(userinfo, [](char ch) {
+      const auto b = static_cast<uint8_t>(ch);
+      return b < 32 || b > 127;
+    });
   int found = -1;
   // The host's challenge that matches; any of the host's when none does (its reason a bad one). A
   // port that moved between the two asks still finds its challenge by the host and the value.
@@ -825,6 +831,8 @@ bool bind_map(QwServer& s, const sv::RulesRunner& rules, std::string& error) {
     info_set(s.serverinfo, rule, c->value, kServerInfoBytes);
     if (std::string_view(rule) == "deathmatch") monsters = false;
   }
+  if (!s.cfg.progs_crc.empty()) info_set(s.serverinfo, "*progs", s.cfg.progs_crc, kServerInfoBytes);
+  if (s.cfg.cheats) info_set(s.serverinfo, "*cheats", "ON", kServerInfoBytes);
   if (const ge::console::Cvar* c = qc.cvars.find("skill"); c != nullptr && monsters)
     info_set(s.serverinfo, "skill", c->value, kServerInfoBytes);
   // A cooperative campaign says `deathmatch 0` outright, as other coop servers do.

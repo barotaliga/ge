@@ -209,12 +209,50 @@ bool q2_world_of(const DemoState& ds, server::RulesWorld& out) {
   return true;
 }
 
+void draw_q2_hit_marker(ge::ui::DrawList& dl, Q2Bar& bar, int64_t hits, int width, int height) {
+  if (hits > bar.hits_seen) bar.hit_at = bar.now;  // a new hit: the fade starts over
+  bar.hits_seen = hits;                            // (fewer: a new recording or a seek back)
+  const float alpha =
+      bar.fx != nullptr ? ge::classic::q2_hit_marker_alpha(*bar.fx, bar.now - bar.hit_at) : 0;
+  if (alpha <= 0 || (bar.screen != nullptr && bar.screen->draw2d == 0)) return;
+  const BarPicture* mark = picture(bar, hud::layout_picture_path("marker"));
+  if (mark == nullptr) return;  // the pack has no marker picture: none drawn
+  const auto u = static_cast<float>(q2_bar_scale(bar, width, height));
+  ge::ui::Box b;
+  b.fill = ge::ui::solid({1, 0, 0, alpha});
+  b.rect = {(static_cast<float>(width) - mark->width() * u) / 2,
+            (static_cast<float>(height) - mark->height() * u) / 2, mark->width() * u,
+            mark->height() * u};
+  b.image = &mark->image;
+  b.nearest = mark->k == 1;
+  b.feather = 0;
+  dl.box(b);
+}
+
+void add_q2_turtle(Q2Bar& bar, uint8_t trouble, int width, int height) {
+  const int turtle = bar.screen != nullptr ? bar.screen->turtle : 1;
+  if (turtle <= 0 || trouble == 0 || (bar.screen != nullptr && bar.screen->draw2d == 0)) return;
+  const int scale = q2_bar_scale(bar, width, height);
+  int y = height / scale - 11 * 8;  // one word a line, eleven lines over the bottom
+  const std::pair<uint8_t, const char*> words[] = {{kQ2FrameBad, "BADFRAME"},
+                                                   {kQ2FrameOld, "OLDFRAME"},
+                                                   {kQ2FrameNoDelta, "NODELTA"},
+                                                   {kQ2FrameSuppressed, "SUPPRESSED"}};
+  for (const auto& [bit, word] : words) {
+    if ((trouble & bit) == 0 || (bit == kQ2FrameSuppressed && turtle < 2)) continue;
+    add_text(bar.ops, 0, y, word, true);
+    y += 8;
+  }
+}
+
 bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds, int width,
                           int height) {
   if (!bar.recorded) bar.recorded = std::make_shared<server::RulesWorld>();
   if (!q2_world_of(ds, *bar.recorded)) return false;
   run_q2_bar(bar, *bar.recorded, ds.player, ds.frames, width, height);
+  add_q2_turtle(bar, ds.q2_trouble, width, height);
   draw_q2_bar(dl, bar, q2_bar_scale(bar, width, height));
+  draw_q2_hit_marker(dl, bar, ds.hits, width, height);
   return true;
 }
 
@@ -434,15 +472,19 @@ bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
   const float alpha =
       bar.screen != nullptr ? static_cast<float>(std::clamp(bar.screen->alpha, 0.0, 1.0)) : 1;
   bool drew = draw_lag(dl, bar, f, alpha);
+  // gl_fontshadow: each letter drawn first in black that many units down and right; and
+  // gl_bilerp_chars: the letters smoothed.
+  const int shadow = bar.screen != nullptr ? bar.screen->font_shadow : 0;
+  const bool smooth_chars = bar.screen != nullptr && bar.screen->bilerp_chars;
   const auto box = [&](const BarPicture* img, float x, float y, float w, float h, ge::ui::Rect uv,
-                       const uint8_t rgba[4]) {
+                       const uint8_t rgba[4], bool smooth = false) {
     ge::ui::Box b;
     b.fill =
         ge::ui::solid({rgba[0] / 255.0f, rgba[1] / 255.0f, rgba[2] / 255.0f, rgba[3] / 255.0f});
     b.rect = {x * f, y * f, w * f, h * f};
     b.image = &img->image;
     b.uv = uv;
-    b.nearest = img->k == 1;
+    b.nearest = img->k == 1 && !smooth;
     b.feather = 0;
     b.opacity = alpha;
     dl.box(b);
@@ -469,9 +511,14 @@ bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
       if ((code & 0x7F) == ' ') continue;
       const float x = static_cast<float>(op.x) + 8 * static_cast<float>(i);
       if (op.y <= -8) continue;
-      box(glyphs, x, static_cast<float>(op.y), 8, 8,
-          {static_cast<float>(code & 15) * cell, static_cast<float>(code >> 4) * cell, cell, cell},
-          op.rgba);
+      const ge::ui::Rect uv{static_cast<float>(code & 15) * cell,
+                            static_cast<float>(code >> 4) * cell, cell, cell};
+      if (shadow > 0) {
+        static constexpr uint8_t kBlack[4] = {0, 0, 0, 255};
+        box(glyphs, x + static_cast<float>(shadow), static_cast<float>(op.y + shadow), 8, 8, uv,
+            kBlack, smooth_chars);
+      }
+      box(glyphs, x, static_cast<float>(op.y), 8, 8, uv, op.rgba, smooth_chars);
     }
   }
   return drew;

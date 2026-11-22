@@ -151,6 +151,14 @@ std::string track_path(const std::string& game_dir, int track) {
   return std::filesystem::is_regular_file(p, ec) ? p.string() : std::string{};
 }
 
+int q2_remap_track(std::string_view game_folder, int track) {
+  if (track < 2 || track > 11) return track;
+  if (game_folder == "rogue") return track + 10;
+  static constexpr int kXatrix[10] = {9, 13, 14, 7, 16, 2, 15, 3, 4, 18};
+  if (game_folder == "xatrix") return kXatrix[track - 2];
+  return track;
+}
+
 int level_track(std::string_view entities) {
   const size_t open = entities.find('{');
   if (open == std::string_view::npos) return 0;

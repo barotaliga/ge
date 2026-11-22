@@ -46,21 +46,22 @@
 
 namespace ge::shooterbots {
 
-constexpr double kWayPlan_s = 0.5;   // he plans again this often, s
-constexpr double kWayGiveUp_s = 25;  // a step not done in this long past twice its walk is left
-constexpr double kWayRetry_s = 60;   // and tried again after this
-constexpr double kWayNoRoute_s = 5;  // an exit his pilot finds no route to this long is left
-constexpr double kWayCall_s = 1.5;   // waited this long for a lift its button calls: pressed
+constexpr double kWayPlan_s = 0.5;      // he plans again this often, s
+constexpr double kWayGiveUp_s = 25;     // a step not done in this long past twice its walk is left
+constexpr double kWayPreySpent_s = 90;  // a monster chased this long in all, spells added, is left
+constexpr double kWayRetry_s = 60;      // and tried again after this
+constexpr double kWayNoRoute_s = 5;     // an exit his pilot finds no route to this long is left
+constexpr double kWayCall_s = 1.5;      // waited this long for a lift its button calls: pressed
 constexpr double kWayDone_s = 10;  // (`complete`) the exit waits this long past the last thing left
 constexpr float kWayTouchBy = 48;  // (`complete`) a node this near a step's box stands by it, units
 constexpr float kWayTouchFrom = 96;  // and from this near its node he goes into the box, units
-constexpr float kWayCrawlNear =
-    32;  // (`complete`) in a crawl this near one of its points, he crawls it, units
+constexpr float kWayCrawlNear = 32;  // (`complete`) a crawl's point this near: he crawls it, units
 constexpr double kWayCrawlOut_s = 15;  // and the way back out is crawled this long at most, s
 constexpr double kWayIdle_s = 5;       // nothing to do this long: back into the water
 constexpr float kKeyCovered = 96;      // a locked door this near a key's height covers it, units
 constexpr float kWaySeen = 192;        // a node this near where he has stood is explored, units
 
+constexpr uint8_t kLockedOut = 2;     // `locked_turns`: a bridge open only once all the way out
 constexpr double kWayTour_s = 30;     // (`complete`) the tour worked out again this often, s
 constexpr int kWayTourMax = 96;       // and over the nearest this many stops at most
 constexpr float kWayStill = 96;       // (`complete`) no further than this, units, in
@@ -118,9 +119,10 @@ struct WayThrough {
   double crawl_out_at = 0;              // since this game time
   std::vector<std::string> avoid;  // maps an exit to is no way on (a secret level; before way_init)
   std::vector<WayStep> steps;
-  std::vector<int> locked;            // doors something else opens: their entities
-  std::vector<sh::Vec3f> locked_at;   // and where each stands shut (a turning bridge: its angles)
-  std::vector<uint8_t> locked_turns;  // and whether each is a turning bridge (map_nav.hpp)
+  std::vector<int> locked;           // doors something else opens: their entities
+  std::vector<sh::Vec3f> locked_at;  // and where each stands shut (a turning bridge: its angles)
+  std::vector<uint8_t>
+      locked_turns;  // and whether each is a turning bridge (map_nav.hpp; 2: slid out)
   // The maps he has played (set before way_init): an exit to one is taken last, once nothing else
   // is left (base3's way on is back through base2, by another exit than the one he came in by).
   std::vector<std::string> been;
@@ -184,8 +186,8 @@ struct WayThrough {
   double hopeful_until = -1;  // (`complete`) nothing to do: every door taken as open until then
   std::vector<double> prey_left;
   std::vector<uint8_t> prey_tries;
-  std::vector<double> prey_until;  // (`complete`) each one's time to be caught by, from when it was
-                                   // first chased (-1: not chased since it was last left)
+  std::vector<double> prey_spent;  // the time each has been chased since it was last left, s
+  double prey_tick = -1;           // the last frame a monster was chased (-1: none)
   // (`complete`) THE TOUR (tour.hpp): the stops open now (a step's index, or -1 - a monster's
   // entity) in the quickest order through them all and out, worked out again every kWayTour_s or
   // when the first stop is gone; the time from each to each, and its own search.

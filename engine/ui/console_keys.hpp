@@ -16,9 +16,13 @@
 // pressed to type a command must not also steer. The window turns text input on while the view
 // is down (platform/devices.hpp's `set_text_input`).
 //
+// A MENU UP (`ConsoleKeys::menu`, the window's to set): the menu has the keys, so only F1 to F12
+// and the key under the tilde run their binds; every other key goes to the menu alone. A key let
+// go always releases its bind, so a `+` bind held when the menu opened is not left down.
+//
 // ge:summary The console at the keyboard: keys to binds, edit keys and typed text to the view
 // ge:keywords ui console keyboard keys text typing edit-key toggleconsole tilde bind modifier
-// ge:keywords feed_console console-keys repeat utf-8 chat-line messagemode
+// ge:keywords feed_console console-keys repeat utf-8 chat-line messagemode menu-keys function-keys
 // ge:skill ui console
 // ge:test tests/ui_console_keys_test.cpp
 #pragma once
@@ -44,6 +48,7 @@ struct ConsoleKeys {
   // selection, ConsoleView::selected_text); null: no copy.
   std::function<void(const std::string&)> copy = {};
   bool held = false;  // the view was down at some point this frame: the game reads no keys
+  bool menu = false;  // a menu has the keys: only F1..F12 (and the tilde's key) run their binds
 };
 
 // The input line's key for a keyboard key by its HID usage; none for a key it does not edit.

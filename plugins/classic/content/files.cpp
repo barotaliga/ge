@@ -242,6 +242,19 @@ std::vector<std::string> archive_paths(const SearchPath& path) {
   return out;
 }
 
+std::string search_path_text(const SearchPath& path) {
+  std::string out = "Current search path:\n";
+  for (auto it = path.vfs.sources.rbegin(); it != path.vfs.sources.rend(); ++it) {
+    out += it->path;
+    if (it->kind == ge::vfs::SourceKind::pack)
+      out += " (" + std::to_string(it->pak.entries.size()) + " files)";
+    else if (it->kind == ge::vfs::SourceKind::zip)
+      out += " (" + std::to_string(it->zip.entries.size()) + " files)";
+    out += '\n';
+  }
+  return out;
+}
+
 std::vector<std::span<const uint8_t>> content_packs(const SearchPath& path) {
   const ge::classicenhance::Profile& p = ge::classicenhance::q1_profile();
   const auto name_of = [](const std::string& at) {

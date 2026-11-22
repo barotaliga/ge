@@ -15,7 +15,10 @@
 #include "classicenhance/profile.hpp"
 #include "core/num_text.hpp"
 #include "shooters_edge/client/picture_files.hpp"
+#include "shooters_edge/sound/ambience.hpp"
 
+#include <algorithm>
+#include <cstdlib>
 #include <ctime>
 #include <utility>
 #include <vector>
@@ -145,6 +148,25 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .max = 64,
           .values = "0..64: the game's units (3 the default)"},
          &x.spiral_radius);
+  v.bind({.name = "cl_hit_markers",
+          .fallback = "2",
+          .flags = con::kArchive,
+          .help = "What shows when your shot hurts someone, on servers that tell.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "2: a red mark at the centre and a sound (the default); 1: the mark alone; "
+                    "0: nothing"},
+         &x.hit_markers);
+  v.bind({.name = "scr_hit_marker_time",
+          .fallback = "500",
+          .flags = con::kArchive,
+          .help = "Milliseconds the hit mark takes to fade.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 10000,
+          .values = "500: the default; 0: no mark; 1..10000: that many milliseconds"},
+         &x.hit_marker_ms);
 }
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
@@ -164,6 +186,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   }
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
+  if (b.show_misses != nullptr) *b.show_misses = false;      // Quake II's cl_showmiss
+  if (b.shownet != nullptr) *b.shownet = 0;                  // and cl_shownet
   if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
   if (b.light_modulate != nullptr) *b.light_modulate = 1;
   if (b.light_lift != nullptr) *b.light_lift = 0;
@@ -180,6 +204,7 @@ void add_first(con::Console& c, const GameBindings& b) {
     b.view->gun = 1;
     b.view->gun_units[0] = b.view->gun_units[1] = b.view->gun_units[2] = 0;
     b.view->gun_fov_h = 0;
+    b.view->alpha = 1;
   }
   // Its weapon's depth and offset, in its units; the offset adds to our cl_gunx/y/z.
   const con::CvarSpec size{
@@ -224,6 +249,24 @@ void add_first(con::Console& c, const GameBindings& b) {
     c.cvars().add(offset);
     c.cvars().add(last_fired);
   }
+  // Its ambience of water and sky (sound/ambience.hpp): how loud, and how fast it swells and fades.
+  c.cvars().bind({.name = "ambient_level",
+                  .fallback = "0.3",
+                  .help = "How loud the water and wind around you sound.",
+                  .kind = con::CvarKind::number,
+                  .min = 0,
+                  .max = 1,
+                  .values = "0: silent; 0..1: that share of full (0.3 the default)"},
+                 &ambient_settings().level);
+  c.cvars().bind({.name = "ambient_fade",
+                  .fallback = "100",
+                  .help = "How fast the water and wind swell and fade as you move, in 255ths of "
+                          "full a second.",
+                  .kind = con::CvarKind::number,
+                  .min = 1,
+                  .max = 10000,
+                  .values = "1..10000: that fast (100 the default: silence to full in 2.55 s)"},
+                 &ambient_settings().fade);
   if (b.noskins != nullptr) *b.noskins = 0;         // its figures are its own (choose_figure)
   if (b.screen != nullptr) *b.screen = Q2Screen{};  // Quake II's view and 2D settings set aside
   c.cvars().add_synonym("fov", "cl_fov");
@@ -234,6 +277,28 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("image_jpeg_quality_level", "scr_quality");
   c.add_command_synonym("cvar_reset", "reset");  // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
+  c.add_command_synonym("togglechat", "toggleconsole");  // QuakeWorld's second name for it
+  c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left
+  // An old Quake config's saved name and colours: `_cl_name` is the name, `_cl_color` both
+  // colours as one number (shirt times 16 plus pants), so its config dresses you as it did.
+  c.cvars().add_synonym("_cl_name", "name");
+  c.cvars().add_synonym("port", "sv_port");  // the port the next game is served on
+  c.add_command(
+      "_cl_color", "_cl_color <shirt*16+pants>: both your colours as one number",
+      [](con::Console& k, const con::Args& a) {
+        const auto colour = [&k](const char* name) {
+          const con::Cvar* v = k.cvars().find(name);
+          return v != nullptr ? std::atoi(v->value.c_str()) : 0;
+        };
+        if (a.size() < 2) {
+          k.print("\"_cl_color\" is \"" +
+                  std::to_string(colour("topcolor") * 16 + colour("bottomcolor")) + "\"");
+          return;
+        }
+        const int n = static_cast<int>(std::atof(a[1].c_str()));
+        k.cvars().set("topcolor", std::to_string(std::min((n >> 4) & 15, 13)), con::Source::local);
+        k.cvars().set("bottomcolor", std::to_string(std::min(n & 15, 13)), con::Source::local);
+      });
   c.cvars().add({.name = "cl_novweps",
                  .fallback = "0",
                  .flags = con::kArchive,
@@ -266,7 +331,7 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   `ch_y` (`cl_crossx`, `cl_crossy`), `ch_scale` (`crosshairsize`) and `ch_alpha`
 //   (`crosshairalpha`); its own `ch_red`, `ch_green`, `ch_blue` and `ch_health` colour it;
 //   `scr_showpause` (`showpause`), `netgraph` (`r_netgraph`) and `ogg_volume` (`bgmvolume`); its
-//   `ogg_enable` is the music's switch (`cd on|off`);
+//   `ogg_enable` is the music's switch (`cd on|off`); `ogg` its spelling of `music`;
 // - the move keys' speeds are the same settings, 200 walking by default where Quake's
 //   are 400 (Quake II has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
@@ -348,6 +413,15 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .max = 86400,
          .values = "0: never; 1..86400: that many seconds (120 the default)",
          .overlap = con::Overlap::same});
+  v.add({.name = "m_side",  // the same sidestep as Quake's, a whole unit a count
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "How far the mouse's sideways moves sidestep you when they do (+strafe held, or "
+                 "lookstrafe with +mlook).",
+         .min = -10,
+         .max = 10,
+         .values = "-10..10: units a count at sensitivity 1 (1 the default)",
+         .overlap = con::Overlap::same});
   v.add({.name = "s_underwater",  // its own client muffles the world under water; Quake's never
          .fallback = "1",
          .flags = con::kArchive,
@@ -402,6 +476,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
   } else {
     v.add(music_on), v.add(shuffle), v.add(menu_track);
   }
+  c.add_command_synonym("ogg", "music");       // its music player (engine/audio/music_console.hpp)
   c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
   v.add({.name = "scr_centertime",
          .fallback = "2.5",
@@ -454,6 +529,22 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .values = "1: predicted, drawn where you will be (the default); 0: drawn where the "
                       "server last put you, a round trip late"},
            b.predict);
+  if (b.show_misses != nullptr)
+    v.bind({.name = "cl_showmiss",
+            .fallback = "0",
+            .help = "Whether each miss of your moves' prediction is printed, with its size.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: not printed (the default); 1: the frame and how far off, in units"},
+           b.show_misses);
+  if (b.shownet != nullptr)
+    v.bind({.name = "cl_shownet",
+            .fallback = "0",
+            .help = "Whether each message from the server you joined is printed, as its size.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 3,
+            .values = "0: none (the default); 1..3: each message's size in bytes"},
+           b.shownet);
   if (b.crouch != nullptr)
     v.bind({.name = "cl_predict_crouch",
             .fallback = "1",
@@ -583,6 +674,18 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(gun_fov, &b.view->gun_fov_h);
   else
     v.add(gun_fov);
+  const con::CvarSpec gun_alpha{
+      .name = "cl_gunalpha",
+      .fallback = "1",
+      .flags = con::kArchive,
+      .help = "How solid the held weapon is drawn.",
+      .min = 0,
+      .max = 1,
+      .values = "1: solid (the default); 0.1..0.9: see-through; 0: not seen"};
+  if (b.view != nullptr)
+    v.bind(gun_alpha, &b.view->alpha);
+  else
+    v.add(gun_alpha);
   // Its move rate and its frame cap: its `cl_maxfps` is the moves a second (ours, the frame cap, is
   // set aside while it is loaded and comes back with its value after), its `r_maxfps` the frame
   // cap, starting at the cap in force when the game loads and kept with the game's own settings.
@@ -696,6 +799,11 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
     v.q2 = fresh;
   }
   if (game.id == "q2") add_q2_session_cvars(c.cvars(), v.q2);
+  if (b.view != nullptr) {  // gun_next, gun_prev and gun_model over the game's own weapons
+    b.view->gun_frame = 0;
+    b.view->gun_model = -1;
+    shooters_edge::view::add_gun_commands(c, *b.view, game.held_weapons);
+  }
   if (!v.log) v.log = std::make_shared<ConsoleLog>();
   v.log->mode = 0;  // Quake II's logfile and the rest; its file closed by the next line printed
   v.log->flush = false;

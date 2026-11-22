@@ -55,6 +55,7 @@
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/client/voice_out.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q2_downloads.hpp"
 #include "shooters_edge/net/qw_svc.hpp"
 #include "vfs/partial.hpp"
 
@@ -82,6 +83,8 @@ using ClientTalk = bool (*)(int tick, int seed);
 inline constexpr size_t kStuffedKept = 256;
 
 struct ClientConfig {
+  // Keys the player set by `fullinfo` that no setting of the window holds, sent as given.
+  std::vector<std::pair<std::string, std::string>> extra_info;
   std::string name = "player";
   std::string skin = "base";
   std::string model;  // the user info's `model`: the player figure in players/<model>/ ("": none)
@@ -90,10 +93,14 @@ struct ClientConfig {
   std::string gender;              // Quake II's user info `gender` ("": not sent)
   int topcolor = 0, bottomcolor = 0;
   int rate = 25000;
+  int msg = 1;             // the user info's `msg`: the lowest print level wanted
+  bool noaim = false;      // the user info's `noaim`: no aim help
   int fov = 90, hand = 0;  // Quake II's user info carries them (q2_client.hpp)
   bool spectator = false;
   bool gender_auto = false;  // Quake II's: `gender` picked from the skin's figure
   bool speedjump = false;    // cl_speedjump: the easy jump asked for (sent only when set)
+  Q2Downloads q2_downloads;  // Quake II's `allow_download` switches (q2_downloads.hpp)
+  bool q2_nodelta = false;   // Quake II's `cl_nodelta`: every frame asked for whole
   std::string password;
   // Through forwarders (qw_forward.hpp): the route after the first one, the server last
   // ("host:port@host:port"); `client_start`'s address is then the first forwarder's. "": direct.
@@ -248,6 +255,7 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   PlayerState players[32];
   bool player_seen[32] = {};
   std::string userinfos[32];
+  int userids[32] = {};  // each slot's user id (updateuserinfo)
   int frags[32] = {};
   int32_t stats[kStats] = {};
   std::vector<std::string> prints, centerprints;

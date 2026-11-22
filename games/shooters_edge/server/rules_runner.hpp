@@ -182,7 +182,8 @@ struct ModSetting {
   const char* help = "";
   const char* values = "";
   ge::console::CvarKind kind = ge::console::CvarKind::number;
-  bool info = false;  // published in the server info
+  bool info = false;     // published in the server info
+  bool archive = false;  // kept in the config the window saves
 };
 
 // Those settings in the order they are registered, the move's and the loop's own at the row with

@@ -93,7 +93,7 @@ namespace shooters_edge::net {
 
 namespace sv = shooters_edge::server;
 
-struct Q2NetConfig {
+struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a server
   std::string hostname = "Shooter's Edge";
   Q2MvdConfig mvd;  // the multiview recorder and its relay stream (q2_mvd_server.hpp)
   int max_clients = 8;
@@ -153,8 +153,10 @@ struct Q2NetConfig {
   // piece of up to 1024 bytes) read from the game's files (`read_file`; unset: every download
   // refused). Refused, as size -1 and percent 0: downloads off, a path holding `..`, starting with
   // `.` or `/` or with no `/`, a file missing, a kind switched off (`players/` skins and figures,
-  // `models/`, `sound/`, `maps/`), and a map out of an archive to a client that would keep it loose
-  // (any but ours). A client that agreed the download origin (`*ge_ext` bit 4 in its user info)
+  // `models/` and `sprites/`, `sound/`, `maps/`, `textures/` and `env/`, `pics/`, anything else),
+  // a file past `max_download_size`, and a map out of an archive to a client that would keep it
+  // loose (any but ours). A resume past the file's end is told "File size differs from server."
+  // before the refusal. A client that agreed the download origin (`*ge_ext` bit 4 in its user info)
   // is told each file's archive (`file_origin`) first, as svc 123, and keeps the file in it
   // (engine/vfs/partial.hpp); maps out of archives are sent to it.
   //
@@ -204,7 +206,12 @@ struct Q2NetConfig {
   bool antilag_projectiles = false;
   bool antilag_interp = false;
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
-  bool allow_maps = true;
+  bool allow_maps = true, allow_textures = true, allow_pics = true, allow_others = false;
+  // sv_max_download_size: the largest file sent, bytes (0 or past 128 MiB and 4 KiB: that cap).
+  int64_t max_download_size = 8388608;
+  // sv_downloadserver: the web address a client may fetch content from instead (` dlserver=` in
+  // the connect answer); empty: none.
+  std::string download_server;
   // THE OPERATOR (q2_admin.hpp): `kick`, `kickban`, `dumpuser`, `stuff` and `stuffcvar` also take
   // a player's name in any case or a unique part of it (sv_enhanced_setplayer).
   bool enhanced_setplayer = false;

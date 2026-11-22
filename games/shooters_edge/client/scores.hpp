@@ -43,12 +43,12 @@ ScoresScreen scores_screen(const Listen& l, bool held, bool teams_held = false);
 // the teams' board when the player is dead. `board` keeps the board's columns for the session.
 void draw_scores(ge::ui::DrawList& dl, const Listen& l, const menu::ClassicArt& art, int w, int h,
                  bool held, bool level_stats, menu::BoardView& board, bool teams_held = false,
-                 bool show_pause = true);
+                 bool show_pause = true, double print_speed = kPrintSpeed);
 // A co-op game joined over the network at its level's end (the program's intermission and
 // finale, read from the stream as `ds` keeps them): the intermission's figures, or the finale's
 // title and text typed out; false (nothing drawn) at any other time, and for a match. The pause
 // picture too while the server has the game paused.
 bool draw_joined_level_end(ge::ui::DrawList& dl, const DemoState& ds, const menu::ClassicArt& art,
-                           int w, int h);
+                           int w, int h, double print_speed = kPrintSpeed);
 
 }  // namespace shooters_edge::client

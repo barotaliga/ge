@@ -91,7 +91,7 @@ class DemoSounds {
   void hear_as(std::string_view game);
   // Quake II's sound switches (null: Quake's, all on): `cl_footsteps` 0 starts no footstep
   // (`player/step*`); `s_ambient` 0 no entity's loop, 2 only one with a model, 3 only the
-  // listener's own.
+  // listener's own; `cl_hit_markers` under 2 no `weapons/marker.wav` (the hit's sound).
   void switches_from(const ge::classic::Q2FxSwitches* q2) { q2_ = q2; }
 
  private:

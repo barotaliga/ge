@@ -80,7 +80,7 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
     e.clock = -1;  // the next one drawn starts over
     ge::render::FrameView v =
         demo_view(drawn, fov_y, time_s, e.view_kick == nullptr || *e.view_kick);
-    demo_view_behind(drawn, e.behind, world, v);
+    demo_view_behind(drawn, e.behind, world, v, e.side);
     demo_view_locked(drawn, e, v);
     return v;
   }
@@ -90,12 +90,13 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
   if (cut) {
     const bool* gun_kick = e.gun_kick;
     const bool* view_kick = e.view_kick;
-    const float behind = e.behind;
+    const float behind = e.behind, side = e.side;
     const bool lock_pos = e.lock_pos;
     e = DemoEyes{};
     e.gun_kick = gun_kick;
     e.view_kick = view_kick;
     e.behind = behind;
+    e.side = side;
     e.lock_pos = lock_pos;
     e.kicks_seen = read.kicks_taken;
     e.levels = drawn.levels;
@@ -181,7 +182,7 @@ ge::render::FrameView demo_eyes_view(const DemoState& drawn, const DemoState& re
   ge::camera::to_frame_view(pose, view);
   view.fov_y = fov_y;
   view.time_s = time_s;
-  demo_view_behind(drawn, e.behind, world, view);
+  demo_view_behind(drawn, e.behind, world, view, e.side);
   demo_view_locked(drawn, e, view);
   return view;
 }
@@ -202,7 +203,7 @@ void demo_view_locked(const DemoState& s, DemoEyes& e, ge::render::FrameView& vi
 }
 
 void demo_view_behind(const DemoState& s, float units, const sh::BrushModel* world,
-                      ge::render::FrameView& view) {
+                      ge::render::FrameView& view, float side) {
   if (!(units > 0) || s.intermission || s.format == DemoFormat::single || s.player < 0 ||
       static_cast<size_t>(s.player) >= s.players.size() ||
       !s.players[static_cast<size_t>(s.player)].present)
@@ -222,7 +223,10 @@ void demo_view_behind(const DemoState& s, float units, const sh::BrushModel* wor
         reach = std::max(0.0f, tr.fraction * (units + kBehindWallGap) - kBehindWallGap);
     }
   }
-  const ge::camera::Vec3 at = engine_point(from + back * reach);
+  // The view's level right is (sin yaw, -cos yaw) in the map's plan whatever the pitch: a step
+  // left is its negative.
+  const sh::Vec3f left{static_cast<float>(-std::sin(yaw)), static_cast<float>(std::cos(yaw)), 0};
+  const ge::camera::Vec3 at = engine_point(from + back * reach + left * side);
   const ge::camera::Vec3 eye = engine_point(from);
   // The rig's bob and roll ride along: the camera keeps its offset from the eye it was given.
   view.eye[0] += at.x - eye.x;

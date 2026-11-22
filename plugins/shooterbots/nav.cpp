@@ -531,9 +531,16 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
       if (na.mover != m.ent) continue;
       const float x = na.origin.x, y = na.origin.y;
       // Ridden only where the player's whole box stands on the top: a ride from a column on its
-      // edge ends half over the drop.
-      if (x - m.absmin.x < kPlayerMaxs.x || m.absmax.x - x < kPlayerMaxs.x ||
-          y - m.absmin.y < kPlayerMaxs.y || m.absmax.y - y < kPlayerMaxs.y)
+      // edge ends half over the drop. A top hardly wider than the box (e2m6's pillars that rise
+      // out of its pool, 38 units across) is ridden from a column over it at all: the plat lifts
+      // any box it touches (one a column fits on, e2m2's 62 across, keeps the rule: a ride from
+      // its edge left him on its top with no way off).
+      const float in_x =
+          m.absmax.x - m.absmin.x >= 2 * kPlayerMaxs.x + 0.5f * set.spacing ? kPlayerMaxs.x : 0;
+      const float in_y =
+          m.absmax.y - m.absmin.y >= 2 * kPlayerMaxs.y + 0.5f * set.spacing ? kPlayerMaxs.y : 0;
+      if (x - m.absmin.x < in_x || m.absmax.x - x < in_x || y - m.absmin.y < in_y ||
+          m.absmax.y - y < in_y)
         continue;
       // The mover's top in this column: the highest floor above a step and below its travel's
       // reach plus the player's height (a ceiling's own floor above is not it).

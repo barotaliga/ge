@@ -190,11 +190,14 @@ sh::Vec3f spawned_at(const sb::EntityBlock& b) {
   return o ? origin_of(o) : sh::Vec3f{};
 }
 
-// Whether locked door `k` has moved off where it stood shut (a turning bridge: turned).
+// Whether locked door `k` has moved off where it stood shut (a turning bridge: turned; a bridge
+// slid out of the floor, `kLockedOut`: all the way out to where the map drew it, `locked_at`, so
+// one still rising or sinking again, as e2m6's pool bridges do on their clock, is still shut).
 bool locked_moved(const WayThrough& w, const ge::shooterbots::BotView& s, size_t k) {
   const sh::Edict& d = s.sv.edicts[static_cast<size_t>(w.locked[k])];
-  const bool turns = k < w.locked_turns.size() && w.locked_turns[k] != 0;
-  return dist(turns ? d.angles : d.origin, w.locked_at[k]) >= 1;
+  const uint8_t kind = k < w.locked_turns.size() ? w.locked_turns[k] : 0;
+  if (kind == kLockedOut) return dist(d.origin, w.locked_at[k]) < 1;
+  return dist(kind != 0 ? d.angles : d.origin, w.locked_at[k]) >= 1;
 }
 
 // Every node a player at `from` gets to past no door in `barred` (nav_reach with the doors), on
@@ -440,7 +443,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.prey_since = 0;
   w.prey_left.assign(s.sv.edicts.size(), -1);
   w.prey_tries.assign(s.sv.edicts.size(), 0);
-  w.prey_until.assign(s.sv.edicts.size(), -1);
+  w.prey_spent.assign(s.sv.edicts.size(), 0);
+  w.prey_tick = -1;
   const sb::NavGraph& g = nav.graph;
   w.seen.assign(g.nodes.size(), 0);
   w.node_door.assign(g.nodes.size(), -1);
@@ -721,8 +725,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
         for (const NavBridge& br : nav.bridges)
           if (br.ent == e && name) {
             w.locked.push_back(e);
-            w.locked_at.push_back(br.spawn);
-            w.locked_turns.push_back(0);
+            w.locked_at.push_back(spawned_at(b));
+            w.locked_turns.push_back(kLockedOut);
             for (const int32_t n : br.nodes) w.node_door[static_cast<size_t>(n)] = e;
           }
         continue;
@@ -1621,18 +1625,25 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
              : w.complete && prey >= 0 &&
                    (pick < 0 || way_exit(w.steps[static_cast<size_t>(pick)]) || prey_c < best);
   if (chase) pick = -1;
-  // The time a monster is given counts from when it was first chased, so two chased by turns (each
-  // the nearer as he goes) are both left in time.
-  if (chase && w.prey_until[static_cast<size_t>(prey)] < 0)  // as a step: past twice the walk
-    w.prey_until[static_cast<size_t>(prey)] = t + kWayGiveUp_s + 2 * prey_c;
-  if (!chase || prey != w.prey) {
+  // Its time in all, over every spell he chased it: one he keeps turning to between others (e2m6's
+  // monster past the pool's bridges, the plat out of the water between) restarts the clock below
+  // each time and was chased for the whole map.
+  bool spent = false;
+  if (chase && prey >= 0 && static_cast<size_t>(prey) < w.prey_spent.size()) {
+    double& sp = w.prey_spent[static_cast<size_t>(prey)];
+    if (w.prey_tick >= 0 && t - w.prey_tick < 1) sp += t - w.prey_tick;
+    spent = sp > kWayPreySpent_s;
+    if (spent) sp = 0;
+  }
+  w.prey_tick = chase ? t : -1;
+  if (!spent && (!chase || prey != w.prey)) {
     w.prey = chase ? prey : -1;
     w.prey_since = t;
-  } else if (t > w.prey_until[static_cast<size_t>(prey)]) {
+  } else if (spent || t - w.prey_since > kWayGiveUp_s) {
+    w.prey = prey;
     // Gone for this long and still alive: left for a while, and for good after kWayTries.
     const size_t e = static_cast<size_t>(prey);
     w.prey_tries[e]++;
-    w.prey_until[e] = -1;
     w.prey_left[e] = w.prey_tries[e] >= kWayTries ? kWayForever : t + kWayRetry_s;
     w.stats.left++;
     if (w.prey_tries[e] >= kWayTries) w.stats.given_up++;
@@ -1657,7 +1668,6 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       if (chase) {
         const size_t e = static_cast<size_t>(prey);
         w.prey_tries[e]++;
-        w.prey_until[e] = -1;
         w.prey_left[e] = w.prey_tries[e] >= kWayTries ? kWayForever : t + kWayRetry_s;
         if (w.prey_tries[e] >= kWayTries) w.stats.given_up++;
         w.prey = -1;

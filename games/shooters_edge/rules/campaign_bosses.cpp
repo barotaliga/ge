@@ -4,7 +4,7 @@
 //
 // ge:summary The campaign's bosses in C++: the lava boss, the lightning, the final boss, teleports
 // ge:keywords campaign native-campaign monster_boss event_lightning monster_oldone
-// ge:keywords misc_teleporttrain teleport_takes teleport_arrived boss_struck finale
+// ge:keywords teleport_takes teleport_arrived boss_struck finale
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_campaign_rules_test.cpp
 #include <cstdint>
@@ -45,49 +45,6 @@ void teleport_arrived(A& q, int32_t who) {
       damage(q, e, who, who, 50000);
     }
     e = q.i(e, q.L.f.chain);
-  }
-}
-
-// A teleport destination that moves: once used it rides its path of corners round at .speed
-// (100 when not set), a teleporter naming it sending a player to wherever it is.
-void teleporttrain_next(A& q) {
-  const int32_t me = q.self();
-  const int32_t corner = q.find(q.world(), q.L.f.targetname, q.i(me, q.L.f.target));
-  if (corner == 0) {
-    q.set_v(me, q.L.f.velocity, {0, 0, 0});
-    return;
-  }
-  q.set_i(me, q.L.f.target, q.i(corner, q.L.f.target));
-  const Vec3 delta = q.v(corner, q.L.f.origin) - q.v(me, q.L.f.origin);
-  if (q.vlen(delta) < 1) {
-    think_again(q, fn_teleporttrain_next);
-    return;
-  }
-  q.set_v(me, q.L.f.velocity, q.normalize(delta) * q.f(me, f_speed));
-  q.set_i(me, q.L.f.think, q.fn(fn_teleporttrain_next));
-  q.set_f(me, q.L.f.nextthink, q.time() + q.vlen(delta) / q.f(me, f_speed));
-}
-
-void teleporttrain_use(A& q) {
-  if (!same_vec(q.v(q.self(), q.L.f.velocity), {0, 0, 0})) return;  // already riding
-  q.set_i(q.self(), q.L.f.use, q.fn(fn_noop));
-  teleporttrain_next(q);
-}
-
-void misc_teleporttrain(A& q) {
-  const int32_t me = q.self();
-  if (q.f(me, f_speed) == 0) q.set_f(me, f_speed, 100);
-  if (q.is(q.i(me, q.L.f.target), "")) q.objerror({q.s(s_a_teleport_train_needs)});
-  q.precache_model(q.s(s_teleport_mdl));
-  q.set_f(me, q.L.f.solid, kSolidNot);
-  q.set_f(me, q.L.f.movetype, kMovetypeNoclip);
-  q.set_v(me, q.L.f.avelocity, {100, 200, 300});
-  q.setmodel(me, q.s(s_teleport_mdl));
-  q.setsize(me, {0, 0, 0}, {0, 0, 0});
-  q.setorigin(me, q.v(me, q.L.f.origin));
-  q.set_i(me, q.L.f.use, q.fn(fn_teleporttrain_use));
-  if (q.is(q.i(me, q.L.f.targetname), "")) {  // unnamed: it rides from the start
-    think_again(q, fn_teleporttrain_use);
   }
 }
 

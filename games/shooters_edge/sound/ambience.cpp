@@ -16,11 +16,21 @@ void leaf_ambience(const ge::brush::Map& map, const float at[3], float volume, f
   for (int k = 0; k < 4; k++) out[k] = static_cast<float>(leaf.ambient[k]) / 255.0f * volume;
 }
 
+AmbientSettings& ambient_settings() {
+  static AmbientSettings s;
+  return s;
+}
+
 Ambience::Ambience(const ge::audio::Pcm& water, const ge::audio::Pcm& sky, int bus)
     : bed_(kAmbientRate, kAmbientFloor, bus), water_(bed_.add(water)), sky_(bed_.add(sky)) {}
 
 void Ambience::step(ge::audio::Synth& synth, const ge::brush::Map& map, const float at[3], float dt,
                     float volume) {
+  if (volume <= 0) {  // ambient_level 0: silence at once, no fade
+    bed_.silence(synth);
+    return;
+  }
+  bed_.set_rate(ambient_settings().fade / 255.0f);
   float levels[4];
   leaf_ambience(map, at, volume, levels);
   bed_.target(water_, levels[ge::brush::kAmbientWater]);

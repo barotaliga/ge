@@ -476,6 +476,11 @@ TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   cl::turn_view(in, m, c, 0.01, view);
   CHECK(view.y == 90);
   CHECK(cl::read_controls(m, in, c).side > 0);
+  // m_side scales it: 50 counts at sensitivity s and m_side 2 are 100 s units sideways.
+  con.execute("m_side 2");
+  const double sens = c.sensitivity;
+  CHECK(cl::read_controls(m, in, c).side == static_cast<int>(50 * sens * 2));
+  con.execute("m_side 0.8");
   // The menu took the keys: everything let go.
   cl::release_buttons(c);
   CHECK(cl::read_controls(cl::button_moves(c), {}, c).forward == 0);

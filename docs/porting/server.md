@@ -85,15 +85,50 @@ lines a Quake server's players read are each game's own (`server/commands.cpp`):
 by the state before it in QuakeWorld, so a pause reads "unpaused", as that game does), "Server is
 paused." to one who joins a paused game and the release when the last player leaves, the refused
 suicide of the dead and of spectators, "<name> overflowed", and `quit` (`engine/server`): every
-QuakeWorld player told "server shutdown" in the datagram that drops it, then the masters.
+QuakeWorld player told "server shutdown" in the datagram that drops it, then the masters. A Quake
+server also answers `tell` (the first player by whole name, ignoring case, reads "<sender>: <the
+whole arguments>", cut to 62 bytes) and `ping` ("Client ping times:" and each player's), and its
+console refuses both ("Can't "tell", not connected"); `version` on the dedicated console prints
+the game's version. Quake's spare program settings (`noexit`, `nomonsters`, `gamecfg`, `temp1`,
+`scratch1` to `scratch4`, `savedgamecfg` and `saved1` to `saved4`, the last five kept in the
+config) are registered so a program reads and sets them. There is no "server crashed" line:
+our server never stops on a fault, since a mod's error is caught and the game goes on. A Quake
+single-player program's `dprint` lines show only with `developer 1`; a multiplayer program's
+always do. A QuakeWorld server's info carries `*progs` (the mod program file's CRC-16) and `*cheats ON` with the game rule `cheats 1`; `sv_gamedir` changes only
+the game folder the server info and the next handshake name; `sv_highchars 0` strips a joining
+player's info to plain characters and turns a later `setinfo`'s coloured letters plain; and a
+player whose `pmodel` or `emodel` differs from the CRC-16 of the server's own player or eyes model
+is announced to everyone at his `begin` ("<name> WARNING: non standard player/eyes model
+detected"), the player kept (`net/qw_signon.cpp`).
 
 Quake II's ledger (`porting/shooters-edge/q2-ledger-server.md`) is the checklist; the facts of the
 operator's words, the player's queries and the connect checks are in
 `porting/shooters-edge/q2-operator.md`; those of the later protocols 35 and 36 in
-`porting/shooters-edge/q2-proto36-server.md`. Still to come there: `quit` and `recycle` with the
-lines players read (over the dedicated process's `quit`), the extended limits, compressed downloads
-and layouts, the game library's extended interface, the multi-view recorder's words and its relay
-protocol.
+`porting/shooters-edge/q2-proto36-server.md`; those of the general console words and the
+shutdown in `porting/shooters-edge/q2-console-words-facts.md`. Still to come there: the extended
+limits, compressed downloads and layouts, the game library's extended interface.
+
+The dedicated process (`engine/server/main.cpp`) gives every game `quit [reason]` and `recycle
+[reason]` (the words joined by spaces, handed to the game's `ServerGame::quit` before it closes;
+both exit with success, a recycle's players told to reconnect for whatever supervises the process
+to start it again), `showip` (the machine's addresses, `engine/net/udp_socket.hpp`, then the
+sockets the core and the game listen on), `macrolist` and `$com_maplist` (`engine/server/
+macros.hpp`) beside the console's clock macros. Quake II's farewell is "Server quit" or "Server
+restarted", with the reason, to every player and relay viewer; after `killserver` its endpoint
+answers only rcon and runs no frame until the next map.
+
+Quake II's downloads (`net/q2_net_server.cpp`, facts in `porting/shooters-edge/
+q2-downloads-facts.md`) make the asked name plain first (slashes, `.` and `..`), then offer each
+kind by its own setting (`sv_download_textures` for textures and skies, `sv_download_pics`,
+`sv_download_others` off by default), refuse a file past `sv_max_download_size`, tell a resume past
+the end that the file size differs, and send a downloading client reliable data alone. The connect
+answer names `sv_downloadserver`'s web copy and the map. A long rcon answer comes in packets of
+1384 bytes, whole lines where they fit; a wrong password is noted without the guess.
+
+What exists only in the reference's debug builds (`fs_stats`, `sv_debug`, `sv_pad_packets`,
+`mvd_shownet`, `com_debug_break`, the file fuzzing settings, the library's debug drawing) is not
+taken: our servers are debugged with the log channels and the labs (`docs/debugging.md`), never a
+separate build with its own words.
 
 Quake II's later protocols are the endpoint's (`net/q2_net_server.cpp`, the connect's tail and the
 later moves in `net/q2_net_ext.hpp`, the frame's top and the streamed signon in
@@ -116,8 +151,9 @@ serves each channel to stock clients. A channel keeps one reader of the stream; 
 the player it chases is that reader forked (`client/demo_convert.hpp`'s `convert_fork`) and served
 by its own TV face, so a new target is a fresh signon (the client reconnects, as at a level
 change). The views are frozen moves with no prediction and the attract loop off, so viewers type
-their words. Not taken yet: free flight, the stats and intermission rewrites, `mvd_filter_version`
-and `mvd_shownet`.
+their words. `mvd_stats_score` chooses the frags a viewer's status bar shows (none, the channel's
+number, the followed player's). Not taken yet: free flight, the dummy's stats and intermission
+rewrites, `mvd_filter_version`.
 
 ## Labs and tests
 

@@ -258,6 +258,10 @@ bool q2_admin(Q2NetServer& s, const std::string& line, std::string& out) {
     return true;
   }
   if (cmd == "killserver") {
+    if (s.killed) {
+      out = "No server running.\n";
+      return true;
+    }
     q2_net_shutdown(s, "Server was killed.\n", false);
     s.killed = true;
     return true;
@@ -314,6 +318,9 @@ bool q2_admin(Q2NetServer& s, const std::string& line, std::string& out) {
   return false;
 }
 
+// The most text one rcon answer packet carries after its `print\n`.
+constexpr size_t kRconPacket = 1384;
+
 void q2_rcon(Q2NetServer& s, const gn::Address& from, const std::string& text) {
   if (gs::ban_refuses(s.bans, s.cfg.ban_mode, from, unix_now(s))) {
     s.rcon_refused++;  // a banned address is not answered
@@ -329,7 +336,7 @@ void q2_rcon(Q2NetServer& s, const gn::Address& from, const std::string& text) {
                        w[1] == s.cfg.lrcon.password && w[1] != s.cfg.rcon_password;
   if (!limited && (s.cfg.rcon_password.empty() || w.size() < 2 || w[1] != s.cfg.rcon_password)) {
     s.rcon_refused++;
-    note(s, "bad rcon from " + gn::to_string(from));
+    note(s, "Invalid rcon from " + gn::to_string(from));  // the guess never kept in the log
     q2_net_oob(s, from, "print\nBad rcon_password.\n");
     return;
   }
@@ -352,7 +359,28 @@ void q2_rcon(Q2NetServer& s, const gn::Address& from, const std::string& text) {
       answer = "Unknown command \"" + w[2] + "\"\n";
     for (size_t i = before; i < game.console.size(); i++) answer += game.console[i] + "\n";
   }
-  q2_net_oob(s, from, "print\n" + answer);
+  // The answer in packets of at most 1384 bytes after `print\n`, whole lines where they fit, a
+  // longer line in slices; an empty answer still sends one.
+  std::string packet;
+  const auto send = [&] {
+    q2_net_oob(s, from, "print\n" + packet);
+    packet.clear();
+  };
+  size_t at = 0;
+  while (at < answer.size()) {
+    size_t end = answer.find('\n', at);
+    end = end == std::string::npos ? answer.size() : end + 1;
+    std::string line_text = answer.substr(at, end - at);
+    at = end;
+    if (packet.size() + line_text.size() > kRconPacket && !packet.empty()) send();
+    while (line_text.size() > kRconPacket) {
+      packet = line_text.substr(0, kRconPacket);
+      line_text.erase(0, kRconPacket);
+      send();
+    }
+    packet += line_text;
+  }
+  if (!packet.empty() || answer.empty()) send();
 }
 
 }  // namespace shooters_edge::net

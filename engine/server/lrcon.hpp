@@ -30,7 +30,8 @@ namespace ge::server {
 
 inline constexpr GameRule kLrconRules[] = {
     {"lrcon_password", "The password of the limited remote console a helper uses.", nullptr,
-     "\"\": none (the default); TEXT: the password, which runs only the lines lrcon_add allows"},
+     "\"\": none (the default); TEXT: the password, which runs only the lines lrcon_add allows",
+     false},  // a password: never in the server info
 };
 
 inline constexpr const char* kLrconRefusal = "This command is not permitted.\n";

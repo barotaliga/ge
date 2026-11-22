@@ -135,3 +135,75 @@ TEST(an_enhanced_picture_is_drawn_at_the_packs_size_filtered_from_the_cache) {
   }
   std::filesystem::remove_all(cache);
 }
+
+TEST(a_reported_hit_shows_the_red_marker_fading_by_the_square_of_its_age) {
+  // cl_hit_markers 2 and scr_hit_marker_time 500 (the defaults): a new hit in the recording draws
+  // the pack's marker at the centre in red, fading as 1 - f^2; the count going back (a seek, a new
+  // recording) starts nothing.
+  ge::classic::Q2FxSwitches fx;
+  cl::Q2Bar bar;
+  bar.fx = &fx;
+  cl::BarPicture mark;
+  mark.image.width = mark.image.height = 16;
+  mark.image.rgba.assign(size_t{16} * 16 * 4, 255);
+  bar.pictures[shooters_edge::hud::layout_picture_path("marker")] = mark;
+  ge::ui::DrawList dl;
+  dl.begin(640, 480);
+  bar.now = 10;
+  cl::draw_q2_hit_marker(dl, bar, 0, 640, 480);
+  CHECK(dl.cmds().empty());  // no hit yet
+  cl::draw_q2_hit_marker(dl, bar, 1, 640, 480);
+  CHECK(dl.cmds().size() == 1);
+  CHECK(ge::classic::q2_hit_marker_alpha(fx, 0) == 1.0f);
+  CHECK(ge::classic::q2_hit_marker_alpha(fx, 0.25) == 0.75f);  // half the time: 1 - 1/4
+  CHECK(ge::classic::q2_hit_marker_alpha(fx, 0.6) == 0.0f);
+  bar.now = 10.6;  // past the 500 ms
+  cl::draw_q2_hit_marker(dl, bar, 1, 640, 480);
+  CHECK(dl.cmds().size() == 1);
+  cl::draw_q2_hit_marker(dl, bar, 0, 640, 480);  // a seek back: nothing new
+  CHECK(dl.cmds().size() == 1);
+  fx.hit_markers = 0;  // off: no marker for a new hit
+  cl::draw_q2_hit_marker(dl, bar, 1, 640, 480);
+  CHECK(dl.cmds().size() == 1);
+}
+
+TEST(scr_showturtle_writes_a_frames_troubles_at_the_lower_left) {
+  // One word a line in the alternate colour from eleven lines over the bottom; SUPPRESSED only
+  // at 2; 0 writes none.
+  cl::Q2Screen screen;
+  cl::Q2Bar bar;
+  bar.screen = &screen;
+  const uint8_t all =
+      cl::kQ2FrameBad | cl::kQ2FrameNoDelta | cl::kQ2FrameSuppressed;  // as a damaged frame
+  cl::add_q2_turtle(bar, all, 320, 240);
+  CHECK_MSG(placed(bar) == "'BADFRAME'@0,152 'NODELTA'@0,160 ", placed(bar));
+  CHECK(bar.ops.size() == 2 && bar.ops[0].alt);
+  bar.ops.clear();
+  screen.turtle = 2;
+  cl::add_q2_turtle(bar, cl::kQ2FrameOld | cl::kQ2FrameSuppressed, 320, 240);
+  CHECK_MSG(placed(bar) == "'OLDFRAME'@0,152 'SUPPRESSED'@0,160 ", placed(bar));
+  bar.ops.clear();
+  screen.turtle = 0;
+  cl::add_q2_turtle(bar, all, 320, 240);
+  CHECK(bar.ops.empty());
+}
+
+TEST(gl_fontshadow_draws_each_letter_first_in_black_and_gl_bilerp_chars_smooths_it) {
+  cl::Q2Screen screen;
+  cl::Q2Bar bar;
+  bar.screen = &screen;
+  cl::BarPicture glyphs;
+  glyphs.image.width = glyphs.image.height = 128;
+  glyphs.image.rgba.assign(size_t{128} * 128 * 4, 255);
+  bar.pictures["pics/conchars.pcx"] = glyphs;
+  cl::add_q2_turtle(bar, cl::kQ2FrameNoDelta, 320, 240);  // one word: NODELTA, seven letters
+  ge::ui::DrawList dl;
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  CHECK_MSG(dl.cmds().size() == 7, std::to_string(dl.cmds().size()));
+  screen.font_shadow = 1;
+  screen.bilerp_chars = true;
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  CHECK_MSG(dl.cmds().size() == 14, std::to_string(dl.cmds().size()));
+}

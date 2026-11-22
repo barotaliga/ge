@@ -78,3 +78,26 @@ TEST(udp_two_nodes_talk) {
   close_transport(ht);
   close_transport(ct);
 }
+
+// `showip`'s lines: the canonical name, each address with its reverse name, then the sockets.
+TEST(showip_lists_the_machines_addresses_then_the_servers_sockets) {
+  Address v4, v6, udp, tcp;
+  CHECK(parse_address("192.168.1.20:0", v4) && parse_address("[fe80::1]:0", v6));
+  CHECK(parse_address("0.0.0.0:27910", udp) && parse_address("0.0.0.0:27910", tcp));
+  const std::string text = showip_text("box.example", {{v4, "box.lan"}, {v6, ""}},
+                                       {{"Server UDP", udp}, {"Server TCP", tcp}});
+  CHECK_MSG(text ==
+                "Hostname: box.example\n"
+                "IP      : 192.168.1.20 (box.lan)\n"
+                "IP6     : fe80::1\n"
+                "Server UDP socket bound to 0.0.0.0:27910\n"
+                "Server TCP socket bound to 0.0.0.0:27910\n",
+            text);
+  // The machine's own: a name, or the resolver's refusal in the game's words.
+  std::string name, canonical, why;
+  std::vector<HostAddress> mine;
+  if (host_addresses(name, canonical, mine, true, &why))
+    CHECK(!name.empty());
+  else
+    CHECK_MSG(why.rfind("Couldn't ", 0) == 0, why);
+}

@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "brush/map.hpp"
 #include "shooter/hull.hpp"
@@ -102,6 +103,59 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
           .max = 1000,
           .values = "60: the default; 0..1000: that many units, nearer where a wall is in the way"},
          &s.third_range);
+  v.bind({.name = "in_grab",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether the game takes the mouse while it is in a window.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: it does (the default), as 2; 0: only while it covers the screen"},
+         &s.grab);
+  v.bind(
+      {.name = "ogg_remap_tracks",
+       .fallback = "1",
+       .flags = con::kArchive,
+       .help = "Whether a mission pack's music tracks are found by the digital release's numbers.",
+       .kind = con::CvarKind::boolean,
+       .values = "1: by the digital release's numbers (the default); 0: by the disc's"},
+      &s.remap_tracks);
+  v.add(
+      {.name = "cl_nodelta",
+       .fallback = "0",
+       .help = "Whether the server sends every frame whole, never as changes (read when you join).",
+       .kind = con::CvarKind::boolean,
+       .values = "0: changes (the default); 1: whole frames"});
+  // What joining a server fetches (net/q2_downloads.hpp), read at each `connect`.
+  v.add({.name = "allow_download",
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "Whether joining a server fetches the files you lack.",
+         .kind = con::CvarKind::integer,
+         .min = -1,
+         .max = 1,
+         .values = "1: it does (the default); 0: nothing fetched; -1: not even by download"});
+  const struct {
+    const char* name;
+    const char* fallback;
+    const char* help;
+  } kinds[] = {
+      {"allow_download_maps", "1", "Whether joining fetches a map you lack."},
+      {"allow_download_players", "1", "Whether joining fetches the player models and skins."},
+      {"allow_download_models", "1", "Whether joining fetches models and sprites."},
+      {"allow_download_sounds", "1", "Whether joining fetches sounds."},
+      {"allow_download_textures", "1", "Whether joining fetches wall textures and skies."},
+      {"allow_download_pics", "1", "Whether joining fetches pictures."},
+      {"allow_download_others", "0", "Whether joining fetches any other file."},
+  };
+  for (const auto& k : kinds)
+    v.add({.name = k.name,
+           .fallback = k.fallback,
+           .flags = con::kArchive,
+           .help = k.help,
+           .kind = con::CvarKind::boolean,
+           .values = k.fallback[0] == '1' ? "1: fetched (the default); 0: not"
+                                          : "0: not fetched (the default); 1: fetched"});
   const char* helps[4] = {
       "Whether the game is running: always 1.", "Whether the game you play is paused.",
       "Whether this window runs a server.", "Whether the server this window runs is paused."};
@@ -112,7 +166,34 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
            .help = helps[k],
            .kind = con::CvarKind::boolean,
            .values = "0: no; 1: yes (set by the game alone)"});
+  v.bind({.name = "cl_warn_on_fps_rounding",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether you are told when cl_maxfps is rounded to whole milliseconds.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: told (the default); 0: not"},
+         &s.warn_fps);
   s.state = -1;
+  s.fps_seen = 0;
+}
+
+int q2_fps_rounded(int fps) {
+  if (fps <= 0) return 0;
+  const int held = std::clamp(fps, 10, 125);
+  return 1000 / (1000 / held);
+}
+
+void q2_fps_warning(con::Console& c, Q2Session& s) {
+  const con::Cvar* v = c.cvars().find("cl_maxfps");
+  if (v == nullptr || v->revision == s.fps_seen) return;
+  s.fps_seen = v->revision;
+  const int asked = std::clamp(v->integer(), 0, 125);
+  const int got = q2_fps_rounded(asked);
+  if (!s.warn_fps || asked < 10 || got == asked) return;
+  c.print("cl_maxfps value " + std::to_string(asked) + " is inexact and will be rounded to " +
+          std::to_string(got) + ".");
+  if (!std::exchange(s.fps_told, true))
+    c.print("(Set cl_warn_on_fps_rounding to 0 to disable this warning.)");
 }
 
 double q2_game_dt(const Q2Session& s, double host_framerate, double wall) {
@@ -133,6 +214,7 @@ void q2_session_step(con::Console& c, Q2Session& s, bool joined, std::string_vie
     if (!map.empty() && map != s.map) run(c, s.begin_cmd);
     s.joined = true;
     s.map = std::string(map);
+    q2_fps_warning(c, s);  // in a game: a cl_maxfps changed since it was checked
   }
   const int state = 1 | (paused ? 2 : 0) | (hosting ? 4 : 0) | (hosting && paused ? 8 : 0);
   if (state == s.state) return;

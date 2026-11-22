@@ -248,6 +248,35 @@ TEST(the_checksum_is_the_byte_a_live_server_expected) {
   for (int i = 960; i < cn::kQ2ChecksumTableSize; i++) CHECK(cn::kQ2ChecksumTable[i] == 0);
 }
 
+TEST(cl_nodelta_has_every_frame_sent_whole) {
+  // A client that acknowledges no frame (`nodelta`, the window's cl_nodelta) is sent each one
+  // whole, and still plays.
+  auto r = rig({});
+  cn::Q2ClientConfig cfg;
+  cfg.name = "eve";
+  cfg.nodelta = true;
+  // cl_shownet 1: each message the server sent printed as its size.
+  cfg.shownet = 1;
+  ge::classic::protocol::ChannelTrace trace;
+  int sizes = 0;
+  bool numbers = true;
+  trace.print = [&](const std::string& line) {
+    sizes++;
+    numbers = numbers && !line.empty() && line.find_first_not_of("0123456789") == std::string::npos;
+  };
+  cfg.trace = &trace;
+  cn::Q2ClientEnd& c = join(*r, cfg);
+  run(*r, 200);
+  CHECK_MSG(sizes >= c.frames && numbers, std::to_string(sizes) + " sizes printed");
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+  CHECK(c.frames >= 10);
+  const cn::Q2NetClient& sc = r->server.clients[0];
+  CHECK_MSG(sc.full_frames >= c.frames - 1,
+            std::to_string(sc.full_frames) + " whole of " + std::to_string(c.frames));
+  // scr_showturtle's NODELTA: the frame read came whole.
+  CHECK(c.demo.state.q2_trouble == shooters_edge::client::kQ2FrameNoDelta);
+}
+
 TEST(out_of_band_words_keep_a_quoted_word_whole) {
   const auto w = cn::q2_words("connect 34 7 99 \"\\name\\a b\\skin\\male/grunt\"\n");
   CHECK(w.size() == 5);
@@ -311,6 +340,48 @@ TEST(a_map_with_no_sky_gets_the_default_and_a_download_is_refused) {
   for (const std::string& line : r->server.log)
     noted = noted || line.find("asked for env/rt.tga") != std::string::npos;
   CHECK(noted);
+}
+
+// Which files are offered: each kind by its own setting (textures/ and env/, pics/, anything else
+// off by default), none past sv_max_download_size, a resume past the end told the size differs;
+// the connect answer names the web address and the map.
+TEST(downloads_are_offered_by_kind_and_size_and_a_bad_resume_is_told) {
+  cn::Q2NetConfig cfg;
+  cfg.allow_pics = false;
+  cfg.max_download_size = 50;
+  cfg.download_server = "http://files.example/q2/";
+  cfg.read_file = [](const std::string& path, std::vector<uint8_t>* out) {
+    out->assign(path.rfind("models/big", 0) == 0 ? 100 : 10, uint8_t{7});
+    return true;
+  };
+  auto r = rig(cfg);
+  cn::Q2ClientConfig cc;
+  cn::Q2ClientEnd& c = join(*r, cc);
+  run(*r, 120);
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+  const auto why = [&](const std::string& asked) -> std::string {
+    const size_t before = r->server.log.size();
+    cn::q2_client_command(c, "download " + asked);
+    run(*r, 10);
+    for (size_t i = before; i < r->server.log.size(); i++) {
+      const std::string& l = r->server.log[i];
+      if (const size_t at = l.find(": refused, "); at != std::string::npos)
+        return l.substr(at + 11);
+    }
+    return "sent";
+  };
+  CHECK(why("env/unit1_up.tga") == "sent");
+  CHECK(why("sprites/s_bfg1.sp2") == "sent");
+  CHECK(why("pics/colormap.pcx") == "that kind of file is not offered");
+  CHECK(why("docs/readme.txt") == "that kind of file is not offered");
+  CHECK(why("models/big/tris.md2") == "larger than sv_max_download_size");
+  CHECK(why("/models/./a/../b/tris.md2") == "sent");  // made plain first
+  CHECK(why("../models/x.md2") == "not a file the server offers");
+  CHECK(why("models/x.md2.") == "not a file the server offers");
+  CHECK(why("models/x.md2 20") == "a resume past its end");
+  CHECK(std::find(c.prints.begin(), c.prints.end(),
+                  "File size differs from server.\nPlease delete the corresponding .tmp file "
+                  "from your system.\n") != c.prints.end());
 }
 
 TEST(a_level_change_keeps_every_connection_and_seats_each_client_again) {
@@ -798,9 +869,17 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
                                   const ge::vfs::ArchiveOrigin* origin) {
     stock_told += origin != nullptr ? 1 : 0;
   };
+  // allow_download_players 0: the map alone is fetched, the skins left lacking.
+  cn::Q2ClientConfig picky = ours;
+  picky.name = "picky";
+  picky.allow.players = false;
+  picky.keep_file = nullptr;
   cn::Q2ClientEnd& a = join(*r, ours);
   cn::Q2ClientEnd& b = join(*r, stock);
+  cn::Q2ClientEnd& p = join(*r, picky);
   run(*r, 300);
+  CHECK_MSG(p.stage == cn::ClientStage::active, p.refused);
+  CHECK(p.downloaded.size() == 1 && p.downloaded.count("maps/hall.bsp") == 1);
   CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
   CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
   CHECK(a.downloaded.size() == 3 && a.downloads_refused == 0);
@@ -812,6 +891,26 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
   CHECK(b.downloaded.size() == 2 && b.downloads_refused == 1 && stock_told == 0);
   CHECK(b.downloaded.count("maps/hall.bsp") == 0);
   std::filesystem::remove_all(dir);
+}
+
+TEST(the_download_switches_gate_each_kind_of_file) {
+  // allow_download and its kinds (net/q2_downloads.hpp): each folder its switch, the rest
+  // `others` (off by default), and nothing at all once `allow_download` is 0 or -1.
+  cn::Q2Downloads d;
+  CHECK(cn::q2_download_allowed(d, "maps/q2dm1.bsp"));
+  CHECK(cn::q2_download_allowed(d, "players/male/grunt.pcx"));
+  CHECK(cn::q2_download_allowed(d, "sprites/s_bfg1.sp2"));
+  CHECK(cn::q2_download_allowed(d, "env/unit1_up.pcx"));
+  CHECK(!cn::q2_download_allowed(d, "locs/q2dm1.loc"));
+  d.textures = false;
+  CHECK(!cn::q2_download_allowed(d, "textures/e1u1/floor1_1.wal"));
+  CHECK(!cn::q2_download_allowed(d, "env/unit1_up.pcx"));
+  d.others = true;
+  CHECK(cn::q2_download_allowed(d, "locs/q2dm1.loc"));
+  for (const int all : {0, -1}) {
+    d.all = all;
+    CHECK(!cn::q2_download_allowed(d, "maps/q2dm1.bsp"));
+  }
 }
 
 TEST(each_client_is_sent_only_what_it_may_see) {
@@ -897,6 +996,19 @@ TEST(the_window_predicts_its_moves_on_a_server_of_the_q2) {
   CHECK(remote.q2_ahead.origin.y == static_cast<float>(v.origin[1]) * 0.125f);
   CHECK(remote.q2_ahead.origin.z == static_cast<float>(v.origin[2]) * 0.125f);
   CHECK(st.eye.z > remote.q2_ahead.origin.z);
+  // cl_showmiss: none so far; a base knocked 10 units aside is a miss the next frame shows and the
+  // window prints, once.
+  CHECK(remote.q2_ahead.misses == 0);
+  std::vector<std::string> printed;
+  remote.trace.print = [&printed](const std::string& line) { printed.push_back(line); };
+  remote.q2_ahead.show_misses = true;
+  remote.q2_ahead.base.origin[0] = static_cast<int16_t>(remote.q2_ahead.base.origin[0] + 80);
+  steps(20);
+  CHECK_MSG(remote.q2_ahead.misses == 1, std::to_string(remote.q2_ahead.misses) + " misses");
+  CHECK_MSG(printed.size() == 1 && printed[0].rfind("prediction miss on ", 0) == 0 &&
+                printed[0].substr(printed[0].size() - 4) == ": 10",
+            printed.empty() ? "nothing printed" : printed[0]);
+  remote.trace.print = nullptr;
   // cl_predict_crouch 2: a duck lowers the eye the frame it goes down, ahead of the server's
   // frames, which catch up; 0: the eye stays the server's.
   const auto crouch = [&](int mode) {

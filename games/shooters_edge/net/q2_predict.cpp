@@ -188,8 +188,15 @@ bool q2_predict_step(Q2Predict& p, const Q2ClientEnd& c, const client::Demo& d, 
     int n = 0;
     if (run_ahead(old, p.base_acked, c, feel, world, n)) {
       gc::Q2State now = state_of(v);
-      if (run_ahead(now, acked, c, feel, world, n))
+      if (run_ahead(now, acked, c, feel, world, n)) {
         ge::shooter::smoothing_frame(p.smooth, origin_of(old), origin_of(now));
+        const float miss = ge::shooter::length(origin_of(old) - origin_of(now));
+        if (miss > 0) {
+          p.misses++;
+          p.miss_units = miss;
+          p.miss_frame = d.last_frame;
+        }
+      }
     }
   }
   if (fresh) {

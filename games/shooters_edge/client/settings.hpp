@@ -56,6 +56,8 @@ struct UserInfo {
   int top = 0, bottom = 0;                                      // topcolor, bottomcolor
   int rate = 2500;                                              // rate (the loaded game's)
   std::string password;                                         // password: a closed server's
+  int msg = 1;                                                  // msg: the lowest print level
+  bool noaim = false;                                           // noaim: no aim help asked
   bool speedjump = false;                                       // cl_speedjump
   float speedjump_view = 0.5f;                                  // cl_speedjump_view
   const shooters_edge::server::RulesCommon* sent_to = nullptr;  // null: send again

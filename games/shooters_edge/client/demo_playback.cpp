@@ -14,6 +14,7 @@
 #include "console/clock_macros.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
+#include "shooters_edge/client/demo_eyes.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/mvd_info.hpp"
 #include "shooters_edge/hud/layout.hpp"
@@ -179,6 +180,16 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
                           .values = "100: the default; 0..1000: that many units"},
                          &p.behind);
     p.dist_cvar = console.cvars().find("cam_dist");
+    console.cvars().bind({.name = "cam_side",
+                          .fallback = "0",
+                          .help = "How far to the side of the player you watch the camera sits "
+                                  "with cam_thirdperson 1, in units: to his left, or his right "
+                                  "when negative.",
+                          .min = -1000,
+                          .max = 1000,
+                          .values = "0: straight behind (the default); -1000..1000: that many "
+                                    "units to his left"},
+                         &p.side);
     p.console = &console;
     console.cvars().bind({.name = "mvd_info",
                           .fallback = "0",
@@ -474,6 +485,12 @@ void zoom_third_person(DemoPlayback& p, int dir, double dt_s) {
 
 float third_person_units(const DemoPlayback& p, bool watching) {
   return p.third_person != 0 && watching ? p.behind : 0;
+}
+
+void third_person_eyes(const DemoPlayback& p, bool watching, DemoEyes& e) {
+  e.behind = third_person_units(p, watching);
+  e.side = p.side;
+  e.lock_pos = p.lock_pos != 0;
 }
 
 std::string demo_clock_text(double s) {

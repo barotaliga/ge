@@ -732,7 +732,8 @@ TEST(cl_footsteps_0_starts_no_footstep_and_every_other_sound) {
   std::string error;
   std::vector<uint8_t> pak;
   CHECK(ge::vfs::write_pak({{"sound/player/step1.wav", ge::audio::wav_bytes(tone, 1, 22050)},
-                            {"sound/world/land.wav", ge::audio::wav_bytes(tone, 1, 22050)}},
+                            {"sound/world/land.wav", ge::audio::wav_bytes(tone, 1, 22050)},
+                            {"sound/weapons/marker.wav", ge::audio::wav_bytes(tone, 1, 22050)}},
                            &pak, &error));
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
   ge::audio::Synth synth;
@@ -755,6 +756,16 @@ TEST(cl_footsteps_0_starts_no_footstep_and_every_other_sound) {
   q2.footsteps = 1;
   sounds.frame(s, started, {}, 1, 0.01f);
   CHECK_MSG(sounds.stats().started == 3, std::to_string(sounds.stats().started));
+  // The hit's sound (temporary entity 128) only with cl_hit_markers 2, the default.
+  cl::DemoSound hit;
+  hit.name = "weapons/marker.wav";
+  hit.attenuation = 0;
+  q2.hit_markers = 1;
+  sounds.frame(s, std::span<const cl::DemoSound>(&hit, 1), {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 3, std::to_string(sounds.stats().started));
+  q2.hit_markers = 2;
+  sounds.frame(s, std::span<const cl::DemoSound>(&hit, 1), {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 4, std::to_string(sounds.stats().started));
 }
 
 TEST(an_entitys_loop_plays_while_it_carries_it_and_stops_when_it_does_not) {
