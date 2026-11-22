@@ -7,6 +7,7 @@
 #include "shooters_edge/net/game_commands.hpp"
 
 #include "console/console.hpp"
+#include "server/server.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/qw_admin.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
@@ -32,6 +33,21 @@ void add_server_commands(ge::console::Console& con, client::Listen& l, Remote& r
                       c.print("cmd: type the command to send after it.");
                     else if (!send_game_command(l, r, line))
                       c.print("You need to be in a game for that.");
+                  });
+  // The server settings page's sheet (qw_remote_sheet.hpp): the window's own match server's read in
+  // process, else the server joined's.
+  r.sheet.local = [&l, &r](ge::server::SettingsSheet& out) {
+    if (r.active || !l.match || l.match->game == nullptr || l.match->game->sheet == nullptr)
+      return false;
+    l.match->game->sheet(l.match->state, 0, out);
+    return true;
+  };
+  con.add_command("serversheet",
+                  "serversheet open|refresh|changed|close: the server settings page's sheet asked "
+                  "for, kept, asked again after a change, or let go",
+                  [&r](Con&, const Args& a) {
+                    remote_sheet_command(r, a.size() > 1 ? a[1] : std::string("refresh"),
+                                         static_cast<double>(r.now_us) * 1e-6 + r.owed_s);
                   });
   for (const char* word : kQ2Words)
     con.add_command(word,

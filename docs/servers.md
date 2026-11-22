@@ -427,6 +427,40 @@ Any player may ask everyone on the server to change a setting until the map chan
   (`games/shooters_edge/rules/common_midair.cpp`) play it. A vote on `k_midair` restarts the map into or out of the mode; on rules that do not
   play it the vote is refused.
 
+## The settings sheet: the server's settings browsed in the menu
+
+OPTIONS ▸ SERVER SETTINGS shows a player the server's settings with their values now, the ones
+they can change, and how (`engine/server/sheet.hpp`, every game's). The server's answer is a
+SHEET: rows of `{name, words, group, value, values, help, line, how}`, `values` in the console's
+grammar (`0: no limit; 1..N: that many frags`), `line` the words that change it (`%v` the value,
+`up|down` a stepper, no `%v` a toggle sent as it is) and `how` one of fixed (the owner's), direct
+(changed at once by a word, a match mod's `dmm4`), vote (asked of everyone) or admin.
+
+- **The pages.** The first holds the map and the match's rules (mode, deathmatch mode, teamplay,
+  the limits, overtime, midair), always shown so the limits are on view; every other row is on a
+  subpage named by its `group` (PLAYER HELP: the rocket jump helpers, the aim help and each
+  player's own grant; MOVEMENT; RULES). A row is offered only when the player can change it: the
+  vote's lists and the game's check decide (`sheet_how_by_vote`), and a setting the server is
+  started with is never offered.
+- **Votes are starred.** A row a vote decides reads `FRAG LIMIT*`, with a legend line under the
+  first page. Turning a direct row sends its words at once; turning a vote row waits until the
+  focus leaves it or the page is left (ESCAPE included), then asks CALL A VOTE? with the old and the
+  new value: YES sends `vote <name> <value>` (the row's `line`), NO puts it back. Rows the player
+  cannot change are dimmed with the reason.
+- **Where the sheet comes from.** A listen server's window reads its own match through
+  `ServerGame::sheet`. A client of our QuakeWorld server that agreed the `ge` set's
+  `settings-sheet` bit asks with `ge_sheet` and gets svc `ge_sheet` (begin, a row a message, end,
+  a few each frame so the reliable channel never overflows) and the sheet again whenever a vote
+  changes a setting; `ge_sheet stop` ends it. A stock server is read, never extended
+  (`plugins/classic/server_sheet.hpp`): a QuakeWorld server's serverinfo (a key missing is 0), a
+  match mod's listing (`cmd status1`, `cmd status2`, taken out of the console for a few seconds
+  while it comes) with its own words (`dmm1`..`dmm5`, `fragsup`, `votemap`); a Quake II server's
+  `info` and a match mod's `settings` listing, never a word the game would broadcast as chat.
+- **The window's side** (`games/shooters_edge/net/qw_remote_sheet.hpp`): `serversheet
+  open|refresh|changed|close` is what the page says; the window asks once when it opens, every
+  half second while it is open, at once after a change, and lets the sheet go when the player
+  leaves.
+
 ## Timeouts: the match stopped for a while
 
 `engine/server/timeout.hpp`. A player in the match says `timeout` and the game stops for everyone

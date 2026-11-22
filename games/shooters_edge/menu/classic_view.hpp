@@ -42,10 +42,13 @@
 namespace shooters_edge::menu {
 
 struct ClassicLayout {
-  float scale = 1;                  // screen px a classic pixel
-  float x = 0, y = 0;               // the 320 x 200 screen's top left, px (classic 0, 0)
-  bool strip = false;               // the page is drawn as the pack's strip of rows
-  bool plates = false;              // the page is Quake II's root: a plate a row
+  float scale = 1;      // screen px a classic pixel
+  float x = 0, y = 0;   // the 320 x 200 screen's top left, px (classic 0, 0)
+  bool strip = false;   // the page is drawn as the pack's strip of rows
+  bool plates = false;  // the page is Quake II's root: a plate a row
+  // Where a row's label may start at the furthest left (classic px): right of the plaque when the
+  // page draws it, so a label never runs onto it; 0 with no plaque.
+  float label_left = 0;
   std::vector<ge::ui::Rect> items;  // index for index with the page's items; empty: not drawn
   // A strip page's rows, index for index with the items: the strip's band the row shows (its
   // place in the pack's picture), or -1 for a row the picture has no words for (DEMOS on the

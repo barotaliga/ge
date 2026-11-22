@@ -27,6 +27,16 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 | Shell | `games/shooters_edge/server/lobby.hpp`, `announce.hpp`, `chat_rules.hpp`, `commands.hpp` | The lobby's words, the server's chat for every runner, client commands to the rules |
 | Shell | `games/shooters_edge/net/qw_cheats.hpp` | The speed check's cuts scored by the guard, named in the match report |
 
+### The settings sheet (every ported game owes it)
+
+OPTIONS ▸ SERVER SETTINGS (`docs/servers.md` § The settings sheet) works for a game once it gives
+three things: its server's `ServerGame::sheet` (the rows from its rules, each rule's group and words,
+the vote's lists; Shooter's Edge's `net/qw_sheet.hpp` is the pattern), a wire for its own clients
+(a bit in its extension set and one message carrying `sheet_row_text`, paced on the reliable
+channel), and readers for the stock servers of that game in `plugins/classic/server_sheet.hpp`
+(what a joined client can ask without a word the server would echo as chat). The menu page is the
+shell's and needs nothing from the game.
+
 ## Each game's
 
 | | Quake | Quake II | Next |

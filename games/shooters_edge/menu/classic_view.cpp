@@ -29,6 +29,13 @@ constexpr float kRowTop = 32;
 constexpr float kLabelEnd = 192, kCursorX = 200, kValueX = 220;
 constexpr size_t kLabelChars = 22, kValueChars = 12;
 constexpr size_t kSlotChars = 39;  // a save slot's comment line, the whole width from x 16
+
+// The glyphs a row's label holds on a layout: right-aligned to kLabelEnd, clear of the plaque.
+size_t label_chars(const ClassicLayout& l) {
+  if (l.label_left <= 0) return kLabelChars;
+  const auto room = static_cast<size_t>(std::max(0.0f, (kLabelEnd - l.label_left) / 8));
+  return std::min(kLabelChars, room);
+}
 constexpr int kSliderCells = 10;
 
 constexpr float kBand = 20;  // a strip's row, classic px
@@ -427,6 +434,9 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
     row += 8;
   }
   if (!l.strip && !quit) scroll_rows(page, l, kRowTop * l.scale + l.y);
+  const bool slots = page.id == "load" || page.id == "save";
+  if (const ui::Image* plaque = art.find("qplaque"); plaque != nullptr && !slots && !l.strip)
+    l.label_left = 16 + art.width_of(*plaque);  // the plaque at x 16, the labels from its edge
   return l;
 }
 
@@ -444,7 +454,9 @@ std::vector<std::string> classic_problems(const ui::Menu& menu, const ClassicLay
       out.push_back("page '" + page.id + "', row '" + it.id + "' is off the screen");
     if (layout.strip || layout.plates) continue;
     const bool slot = (page.id == "load" || page.id == "save") && it.kind != ui::ItemKind::back;
-    const size_t cap = it.kind == ui::ItemKind::label ? 40 : slot ? kSlotChars : kLabelChars;
+    const size_t cap = it.kind == ui::ItemKind::label ? 40
+                       : slot                         ? kSlotChars
+                                                      : label_chars(layout);
     if (it.text.size() > cap)
       out.push_back("page '" + page.id + "', row '" + it.id + "': the label \"" + it.text +
                     "\" is wider than its " + std::to_string(cap) + " glyphs; shorten it");
@@ -583,7 +595,7 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
         pen.glyph(static_cast<uint8_t>(12 + (static_cast<int>(std::floor(t * 4)) & 1)), 8, y);
       continue;
     }
-    if (label.size() > kLabelChars) label.resize(kLabelChars);
+    if (const size_t most = label_chars(l); label.size() > most) label.resize(most);
     if (page.id == "quit" || page.id == "newgame") {
       // The answers centred in the box, the cursor before the focused one.
       const float x = std::floor((kScreenW - 8 * static_cast<float>(label.size())) / 2);

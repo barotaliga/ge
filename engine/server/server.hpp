@@ -67,6 +67,7 @@
 #include "net/transport.hpp"
 #include "server/login.hpp"
 #include "server/match.hpp"
+#include "server/sheet.hpp"
 #include "server/timeout.hpp"
 #include "server/vote.hpp"
 
@@ -303,6 +304,12 @@ struct ServerGame {
   // says it, and the server's features act on it (`sv_autorecord` records each match). Null: the
   // game is always in its match.
   LobbyPhase (*phase)(const void* game) = nullptr;
+
+  // THE SETTINGS SHEET (sheet.hpp): what the player in `slot` may read and change of the server
+  // now (its map, mode, limits, rules and aids, each with how it changes), for a client's server
+  // settings page. The game sends it to its clients in its own protocol; a listen server's window
+  // reads it here. Null: the game shows none.
+  void (*sheet)(const void* game, int slot, SettingsSheet& out) = nullptr;
 };
 
 // A change of the match's phase, at the server's frame and clock after which it was read.

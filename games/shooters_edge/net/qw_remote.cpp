@@ -1034,6 +1034,8 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
   r.ignore.chat.relay = false;
+  // A listing asked for the settings page (qw_remote_sheet.hpp), on the tick clock its asks keep.
+  remote_sheet_step(r, prints, static_cast<double>(r.now_us) * 1e-6 + r.owed_s);
   client::drop_ignored(r.ignore, d.state, prints, wall_s, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
