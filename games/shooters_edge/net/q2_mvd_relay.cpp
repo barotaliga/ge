@@ -950,6 +950,13 @@ void q2_relay_frame(Q2Relay& r, int64_t now_us) {
   if (r.spawned) relay::viewers_frame(r, now_us);
 }
 
+void q2_relay_farewell(Q2Relay& r, const std::string& text, bool reconnect) {
+  for (auto& [key, rec] : r.viewers)
+    if (rec.view) q2_tv_farewell(rec.view->face, text, reconnect);
+  if (r.room) q2_tv_farewell(r.room->face, text, reconnect);
+  q2_relay_stop(r);
+}
+
 void q2_relay_stop(Q2Relay& r) {
   for (Q2GtvConn& g : r.conns) gn::tcp_close(g.stream);
   r.conns.clear();

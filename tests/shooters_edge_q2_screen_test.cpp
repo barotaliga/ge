@@ -166,3 +166,24 @@ TEST(a_reported_hit_shows_the_red_marker_fading_by_the_square_of_its_age) {
   cl::draw_q2_hit_marker(dl, bar, 1, 640, 480);
   CHECK(dl.cmds().size() == 1);
 }
+
+TEST(scr_showturtle_writes_a_frames_troubles_at_the_lower_left) {
+  // One word a line in the alternate colour from eleven lines over the bottom; SUPPRESSED only
+  // at 2; 0 writes none.
+  cl::Q2Screen screen;
+  cl::Q2Bar bar;
+  bar.screen = &screen;
+  const uint8_t all =
+      cl::kQ2FrameBad | cl::kQ2FrameNoDelta | cl::kQ2FrameSuppressed;  // as a damaged frame
+  cl::add_q2_turtle(bar, all, 320, 240);
+  CHECK_MSG(placed(bar) == "'BADFRAME'@0,152 'NODELTA'@0,160 ", placed(bar));
+  CHECK(bar.ops.size() == 2 && bar.ops[0].alt);
+  bar.ops.clear();
+  screen.turtle = 2;
+  cl::add_q2_turtle(bar, cl::kQ2FrameOld | cl::kQ2FrameSuppressed, 320, 240);
+  CHECK_MSG(placed(bar) == "'OLDFRAME'@0,152 'SUPPRESSED'@0,160 ", placed(bar));
+  bar.ops.clear();
+  screen.turtle = 0;
+  cl::add_q2_turtle(bar, all, 320, 240);
+  CHECK(bar.ops.empty());
+}

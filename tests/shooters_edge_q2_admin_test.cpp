@@ -611,12 +611,39 @@ TEST(the_operators_words_reach_one_client_or_all_in_the_servers_words) {
   run(*r, 40);
   CHECK(printed(eve, "Bobby was kicked") && printed(bob, "Bobby was kicked"));
   CHECK(has(rcon(*r, "rcon letmein listip"), pattern_of(2)));
-  // killserver: every client told and dropped, nothing answered until the next map.
+  // killserver: every client told and dropped; only the operator answered until the next map.
   rcon(*r, "rcon letmein killserver");
   run(*r, 20);
   CHECK(printed(eve, "Server was killed.") && eve.stage == cn::ClientStage::dropped);
   CHECK(r->server.killed && cn::q2_net_clients(r->server) == 0);
-  CHECK(rcon(*r, "rcon letmein status").empty());
+  CHECK(rcon(*r, "rcon letmein killserver") == "print\nNo server running.\n");
+  CHECK(rcon(*r, "info 34").empty());  // the browsers' questions go unanswered
+}
+
+// A long rcon answer comes in packets of at most 1384 bytes after `print\n`, whole lines each.
+TEST(a_long_rcon_answer_is_cut_into_packets_of_whole_lines) {
+  cn::Q2NetConfig cfg;
+  cfg.rcon_password = "letmein";
+  auto r = rig(cfg);
+  for (int i = 0; i < 60; i++)
+    rcon(*r, "rcon letmein addstuffcmd connect echo line " + std::to_string(i) +
+                 " of the welcome that goes on a while");
+  const std::vector<uint8_t> b = cn::q2_oob("rcon letmein liststuffcmds connect");
+  gn::transport_send(r->admin, gn::sim_address(0, cn::kPortQ2), b.data(), b.size(), r->now);
+  run(*r, 8);
+  std::vector<std::string> packets;
+  uint8_t buf[2048];
+  gn::Address from;
+  for (int n; (n = gn::transport_receive(r->admin, buf, sizeof buf, from, r->now)) >= 0;)
+    packets.push_back(cn::q2_oob_text(buf, static_cast<size_t>(n)));
+  CHECK_MSG(packets.size() >= 2, std::to_string(packets.size()) + " packets");
+  std::string whole;
+  for (const std::string& p : packets) {
+    CHECK(p.rfind("print\n", 0) == 0 && p.size() <= 6 + 1384 && p.back() == '\n');
+    whole += p.substr(6);
+  }
+  CHECK(has(whole, "60 echo line 59 of the welcome"));
+  CHECK(rcon(*r, "rcon letmein addstuffcmd begin echo hi") == "print\n");  // an empty answer
 }
 
 // THE PLAYER'S QUERIES: info, sinfo, lag, packetdup, nogamedata, download http.

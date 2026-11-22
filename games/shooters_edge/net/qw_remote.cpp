@@ -1099,6 +1099,19 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.topcolor = std::atoi(cvar("topcolor", "0").c_str());
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
     cfg.speedjump = cvar("cl_speedjump", "0") == "1";
+    // Quake II's download switches, registered while it is the game (q2_session.cpp).
+    cfg.q2_downloads.all = std::atoi(cvar("allow_download", "1").c_str());
+    const auto kind = [&cvar](const char* name, const char* fallback) {
+      return cvar(name, fallback) != "0";
+    };
+    cfg.q2_downloads.maps = kind("allow_download_maps", "1");
+    cfg.q2_downloads.players = kind("allow_download_players", "1");
+    cfg.q2_downloads.models = kind("allow_download_models", "1");
+    cfg.q2_downloads.sounds = kind("allow_download_sounds", "1");
+    cfg.q2_downloads.textures = kind("allow_download_textures", "1");
+    cfg.q2_downloads.pics = kind("allow_download_pics", "1");
+    cfg.q2_downloads.others = kind("allow_download_others", "0");
+    cfg.q2_nodelta = cvar("cl_nodelta", "0") != "0";
     cfg.rate = std::atoi(cvar("rate", "25000").c_str());  // the loaded game's default (classic)
     cfg.msg = std::atoi(cvar("msg", "1").c_str());
     cfg.noaim = cvar("noaim", "0") == "1";

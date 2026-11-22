@@ -11,19 +11,24 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <thread>
 
+#include "console/clock_macros.hpp"
 #include "core/num.hpp"
 #include "net/address.hpp"
+#include "net/net_commands.hpp"
+#include "net/rates.hpp"
 #include "net/udp_socket.hpp"
 #include "server/accounts.hpp"
 #include "server/admin.hpp"
 #include "server/autorecord.hpp"
 #include "server/hand_record.hpp"
+#include "server/macros.hpp"
 #include "server/record.hpp"
 #include "server/spectators.hpp"
 
@@ -428,17 +433,66 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
                     hand_record_stop(hand, s, said);
                     cn.print(said);
                   });
-  // `quit`: the server ends after this frame, as at the end of its time: every player told by
-  // the game as it closes (a classic server's "server shutdown"), the masters too.
   // `version`: the game's own build version.
   con.add_command(
       "version", "version: the server's version",
       [&game](console::Console& cn, const console::Args&) {
         cn.print(std::string("Version ") + (*game.version_text ? game.version_text : "unknown"));
       });
+  // `quit [reason]`: the server ends after this frame, as at the end of its time: every player
+  // told by the game as it closes (a classic server's "server shutdown"), the masters too.
+  // `recycle [reason]` ends it the same way but tells the players to come back: whatever keeps
+  // the process running (a script, a service) starts it again. Both exit with success.
   bool quit_asked = false;
-  con.add_command("quit", "quit: end the server; every player is told and dropped",
-                  [&](console::Console&, const console::Args&) { quit_asked = true; });
+  bool quit_restart = false;
+  std::string quit_reason;  // the words after the command, joined by single spaces
+  const auto ask_quit = [&](const console::Args& a, bool restart) {
+    quit_asked = true;
+    quit_restart = restart;
+    quit_reason.clear();
+    for (size_t i = 1; i < a.size(); i++) quit_reason += (i > 1 ? " " : "") + a.words[i];
+  };
+  con.add_command("quit", "quit [reason]: end the server; every player is told and dropped",
+                  [&](console::Console&, const console::Args& a) { ask_quit(a, false); });
+  // `dns` and `net_stats` over the server's socket; `$net_uprate` and `$net_dnrate`, the bytes a
+  // second it sent and received over the last three seconds.
+  gn::add_net_commands(con, [&]() -> const gn::Transport* { return c.offline ? nullptr : &sock; });
+  gn::Rates rates;
+  con.add_macro("net_uprate",
+                [&] { return std::to_string(static_cast<int64_t>(rates.sent_bytes)); });
+  con.add_macro("net_dnrate",
+                [&] { return std::to_string(static_cast<int64_t>(rates.received_bytes)); });
+  // `$com_maplist`: the maps the game finds, by name ignoring case, each once, by single spaces.
+  con.add_macro("com_maplist", [&] {
+    std::vector<std::string> maps;
+    if (game.maps != nullptr && s.state != nullptr) game.maps(s.state, maps);
+    return server_map_list(maps);
+  });
+  // `showip`: this machine's name and addresses, then the sockets the server listens on.
+  con.add_command(
+      "showip", "showip: this machine's addresses and the sockets the server listens on",
+      [&](console::Console& cn, const console::Args&) {
+        std::string name, canonical, why;
+        std::vector<gn::HostAddress> addresses;
+        if (!gn::host_addresses(name, canonical, addresses, true, &why)) {
+          cn.print(why);
+          return;
+        }
+        std::vector<std::pair<std::string, gn::Address>> sockets;
+        const auto udp = [](const gn::Address& a) {
+          return std::string(a.family == gn::Family::ipv6 ? "Server UDP6" : "Server UDP");
+        };
+        if (!c.offline) sockets.emplace_back(udp(sock.local), sock.local);
+        if (tv_sock.kind != gn::TransportKind::none) sockets.emplace_back("TV UDP", tv_sock.local);
+        if (game.sockets != nullptr && s.state != nullptr) game.sockets(s.state, sockets);
+        std::string text = gn::showip_text(canonical, addresses, sockets);
+        if (!text.empty() && text.back() == '\n') text.pop_back();
+        cn.print(text);
+      });
+  con.add_command("recycle",
+                  "recycle [reason]: end the server and tell every player to reconnect; whatever "
+                  "keeps it running starts it again",
+                  [&](console::Console&, const console::Args& a) { ask_quit(a, true); });
   const auto hand_stop = [&] {
     std::string said;
     if (hand_record_stop(hand, s, said)) std::printf("%s\n", said.c_str());
@@ -546,8 +600,12 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
       rec_write();
     }
     hand_record_frame(hand, s);
+    if (!c.offline) gn::rates_step(rates, static_cast<double>(s.now_us) / 1e6, sock, 0, 3);
     match_frame();
-    if (quit_asked) break;
+    if (quit_asked) {
+      if (game.quit != nullptr && s.state != nullptr) game.quit(s.state, quit_reason, quit_restart);
+      break;
+    }
     server_accounts_update(accounts, wall_unix_us());
     server_accounts_reports(accounts, s, wall_unix_us());
     if (status_frames > 0 && (n + 1) % status_frames == 0) {
@@ -641,6 +699,33 @@ int main_body(int argc, char** argv, const ServerGame& game) {
   con.set_sink([](std::string_view line) {
     std::printf("%.*s\n", static_cast<int>(line.size()), line.data());
   });
+  // The clock's macros ($com_date, $com_time, $com_uptime, $com_uptime_long, $random) for an
+  // operator's scripts and messages, as a player's console has them.
+  const auto born = std::chrono::steady_clock::now();
+  console::add_clock_macros(
+      con,
+      {.local =
+           [] {
+             const std::time_t t = std::time(nullptr);
+             std::tm out{};
+#if defined(_WIN32)
+             localtime_s(&out, &t);
+#else
+             localtime_r(&t, &out);
+#endif
+             return out;
+           },
+       .uptime_s =
+           [born] {
+             return std::chrono::duration<double>(std::chrono::steady_clock::now() - born).count();
+           },
+       .seed = static_cast<uint32_t>(wall_unix_us())});
+  // `macrolist [filter]`: each `$` macro (its name in 16 columns, then what it gives now), the
+  // filter a wildcard on the name; then "<shown> of <all> macros".
+  con.add_command("macrolist", "macrolist [filter]: every $ macro and what it gives now",
+                  [](console::Console& cn, const console::Args& a) {
+                    cn.print(server_macro_list(cn, a.size() > 1 ? a[1] : ""));
+                  });
   ServerConfig c;
   ServerCfg cfg;
   AdminFeatures admin;

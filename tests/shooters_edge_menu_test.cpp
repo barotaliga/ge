@@ -1438,3 +1438,18 @@ TEST(q2_player_page_lists_figures_and_writes_the_skin) {
   for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
   CHECK(skin == "female/athena");  // a new model at its first skin
 }
+
+// Quake II's player page with no figure in the packs: said, and the page does not open.
+TEST(q2_player_page_without_figures_does_not_open) {
+  ge::vfs::SearchPath sp;
+  World w;
+  sm::Host host{.console = &w.con, .table = &sm::q2_menu(), .files = &sp};
+  Menu m = sm::build_menu(sm::q2_menu());
+  sm::refresh(m, host);
+  m.open("multi");
+  std::vector<MenuEvent> events;
+  m.open("setup", &events);
+  for (const MenuEvent& e : events) sm::apply_event(e, m, host);
+  CHECK(m.top().id == "multi");
+  CHECK(!w.con.output().empty() && w.con.output().back() == "No player models found.");
+}

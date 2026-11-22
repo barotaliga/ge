@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <string>
 #include <string_view>
 
 #include "core/math.hpp"
@@ -18,6 +19,31 @@ namespace con = ge::console;
 // A frame stepped on by a shot is held this many of the clip's frame times waiting for the next
 // shot before the weapon goes back to rest (the classic weapon falls back a frame after the last).
 constexpr double kShotFrameHold = 1.5;
+
+void add_gun_commands(con::Console& con, ViewSettings& out,
+                      std::span<const std::string_view> held) {
+  con.add_command("gun_next", "gun_next: the held weapon's next frame shown (a developer's look)",
+                  [&out](con::Console& c, const con::Args&) {
+                    out.gun_frame++;
+                    c.print("frame " + std::to_string(out.gun_frame));
+                  });
+  con.add_command("gun_prev",
+                  "gun_prev: the held weapon's frame before shown; at 0 the game's own again",
+                  [&out](con::Console& c, const con::Args&) {
+                    out.gun_frame = std::max(0, out.gun_frame - 1);
+                    c.print("frame " + std::to_string(out.gun_frame));
+                  });
+  con.add_command("gun_model",
+                  "gun_model <name>: the weapon models/<name>/tris.md2 shown in hand; no name: "
+                  "the game's own again",
+                  [&out, held](con::Console&, const con::Args& a) {
+                    out.gun_model = -1;
+                    if (a.size() != 2) return;
+                    const std::string path = "models/" + a[1] + "/tris.md2";
+                    for (size_t i = 0; i < held.size(); i++)
+                      if (held[i] == path) out.gun_model = static_cast<int>(i);
+                  });
+}
 
 void add_view_cvars(con::Cvars& c, ViewSettings& out) {
   con::CvarLayer shell(c, "shell");  // the shell's own (client/cvar_layers.hpp's layers)
@@ -292,6 +318,7 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   const int side = gun_side(s);
   f.placement.mirror = side < 0;
   f.drawn = s.draw && side != 0 && hand.place.lowered < 1.0;
+  f.opacity = static_cast<float>(std::clamp(s.alpha, 0.0, 1.0));  // cl_gunalpha
   f.hands = s.hands;
   f.fired = in.fired;
 

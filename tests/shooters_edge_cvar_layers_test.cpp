@@ -455,6 +455,11 @@ TEST(each_games_own_gun_place_adds_to_ours_and_its_lens_stands_in) {
                   ge::camera::fov_y_of(ge::core::kPi / 2, 4.0 / 3.0)) < 1e-12);  // cl_gunfov 90
   u.set("r_viewmodel_fov", "50", con::Source::local);                            // ours set wins
   CHECK(std::fabs(shooters_edge::view::eye_row(q.view).fov_y - 50 * ge::core::kPi / 180) < 1e-12);
+  // Its cl_gunalpha: how solid the weapon is drawn; Quake has none.
+  CHECK(q.view.alpha == 1);
+  u.set("cl_gunalpha", "0.4", con::Source::local);
+  CHECK(q.view.alpha == 0.4);
+  CHECK(v.find("cl_gunalpha") == nullptr && w.view.alpha == 1);
 }
 
 TEST(quake_twos_cl_maxfps_is_its_move_rate_and_r_maxfps_its_frame_cap) {
@@ -653,4 +658,17 @@ TEST(q2s_logfile_keeps_what_the_console_prints) {
   std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   CHECK(text == "kept\n");
   std::filesystem::remove_all(dir);
+}
+
+TEST(quake_twos_m_side_is_quakes_sidestep_a_whole_unit_a_count) {
+  // m_side is one setting in both games (shooter/controls.cpp): Quake's default 0.8, Quake II's 1,
+  // the field written by whichever is loaded; Quake's comes back when Quake II leaves.
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("m_side")->value == "0.8" && w.controls.m_side == 0.8);
+  const cl::GameBindings b{.view = &w.view};
+  cl::switch_game_cvars(w.console, w.game, *pr::find_game("q2"), b);
+  CHECK(v.find("m_side")->value == "1" && w.controls.m_side == 1);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], b);
+  CHECK(v.find("m_side")->value == "0.8" && w.controls.m_side == 0.8);
 }

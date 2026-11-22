@@ -75,6 +75,16 @@ constexpr gs::GameRule kRules[] = {
      "0: not offered; 1: offered (the default)", false},
     {"sv_download_maps", "Whether files in maps/ are offered.", nullptr,
      "0: not offered; 1: offered (the default)", false},
+    {"sv_download_textures", "Whether files in textures/ and env/ (the skies) are offered.",
+     nullptr, "0: not offered; 1: offered (the default)", false},
+    {"sv_download_pics", "Whether files in pics/ are offered.", nullptr,
+     "0: not offered; 1: offered (the default)", false},
+    {"sv_download_others", "Whether files in any other folder are offered.", "0",
+     "0: not offered (the default); 1: offered", false},
+    {"sv_max_download_size", "The largest file offered, in bytes.", "8388608",
+     "N: that many bytes (8388608 the default); 0: the most, 128 MiB and 4 KiB", false},
+    {"sv_downloadserver", "A web address clients may fetch the server's files from instead.",
+     nullptr, "empty: none (the default); a URL ending in /", false},
     {"sv_speedcheck", "Whether a player whose moves add up to more time than passed is held back.",
      nullptr, "0: not checked; 1: a move past his time budget is not run (the default)"},
     {"sv_fps",
@@ -205,6 +215,8 @@ constexpr gs::GameRule kRules[] = {
      "0: none; 10 the default", false},
     {"mvd_admin_password", "The password a relay's viewer becomes its admin with.", nullptr,
      "empty: nobody (the default)", false},
+    {"mvd_stats_score", "What a relay's viewer sees as the frags on the status bar.", nullptr,
+     "0: nothing (the default); 1: the channel's number; 2: the followed player's frags", false},
     {"mvd_part_filter", "Whose comings and goings a relay's channel is told of.", nullptr,
      "0: everyone's (the default); below 0: nobody's; N: who talked within N s", false},
     {"mvd_default_map", "The map of a relay's Waiting Room.", nullptr, "q2dm1 the default", false},
@@ -255,6 +267,9 @@ constexpr gs::SettingName kSettingNames[] = {
     {"allow_download_models", "sv_download_models"},
     {"allow_download_sounds", "sv_download_sounds"},
     {"allow_download_maps", "sv_download_maps"},
+    {"allow_download_textures", "sv_download_textures"},
+    {"allow_download_pics", "sv_download_pics"},
+    {"allow_download_others", "sv_download_others"},
     {"filterban", "sv_banmode"},
     {"map_override_path", "sv_entpath"},
     {"map_visibility_patch", "sv_vispatch"},
@@ -541,6 +556,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     text("mvd_chase_prefix", rc.chase_prefix);
     if (const auto it = c.rules.find("mvd_part_filter"); it != c.rules.end() && !it->second.empty())
       rc.part_filter = std::atoi(it->second.c_str());
+    if (const auto it = c.rules.find("mvd_stats_score"); it != c.rules.end() && !it->second.empty())
+      rc.stats_score = std::atoi(it->second.c_str());
     // The chat flood rule's settings, the rules' own names, read by the relay's chat too.
     if (const auto it = c.rules.find("flood_msgs"); it != c.rules.end() && !it->second.empty())
       rc.flood_msgs = std::atoi(it->second.c_str());
@@ -609,6 +626,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.allow_models = switch_on(c, "sv_download_models");
   g->cfg.allow_sounds = switch_on(c, "sv_download_sounds");
   g->cfg.allow_maps = switch_on(c, "sv_download_maps");
+  g->cfg.allow_textures = switch_on(c, "sv_download_textures");
+  g->cfg.allow_pics = switch_on(c, "sv_download_pics");
+  g->cfg.allow_others = switch_on(c, "sv_download_others");
+  if (const auto it = c.rules.find("sv_max_download_size"); it != c.rules.end())
+    g->cfg.max_download_size = std::atoll(it->second.c_str());
+  if (const auto it = c.rules.find("sv_downloadserver"); it != c.rules.end())
+    g->cfg.download_server = it->second;
   Game* gp = g.get();
   g->cfg.read_file = [gp](const std::string& path, std::vector<uint8_t>* out) {
     std::vector<uint8_t> store;
@@ -686,6 +710,37 @@ void destroy(void* g) {
   masters_send(*game, out);
   if (game->net) q2_net_stop(*game->net);
   delete game;
+}
+
+// `quit [reason]` and `recycle [reason]`: every player (or relay viewer) told "Server quit" or
+// "Server restarted", with the reason when one was given, and the disconnect or the reconnect;
+// the multiview streams' relays the same; the masters then hear `shutdown` from `destroy`.
+void quit(void* g, const std::string& reason, bool restart) {
+  Game& game = *static_cast<Game*>(g);
+  std::string text = restart ? "Server restarted" : "Server quit";
+  if (!reason.empty()) text += ": " + reason;
+  text = text.substr(0, 1022) + "\n";
+  if (game.relay.spawned) {
+    q2_relay_farewell(game.relay, text, restart);
+  } else {
+    if (!game.relay.conns.empty()) q2_relay_stop(game.relay);
+    if (game.net && !game.net->killed) q2_net_shutdown(*game.net, text, restart);
+  }
+}
+
+// `$com_maplist`'s maps: those the search path holds.
+void maps(const void* g, std::vector<std::string>& out) {
+  const Game& game = *static_cast<const Game*>(g);
+  const ge::classicenhance::Profile* q2 = ge::classicenhance::find_profile("q2");
+  if (q2 != nullptr) out = cl::map_names(game.files, *q2);
+}
+
+// `showip`'s line for the multiview streams' TCP listener, while it is open.
+void sockets(const void* g, std::vector<std::pair<std::string, ge::net::Address>>& out) {
+  const Game& game = *static_cast<const Game*>(g);
+  if (!game.net || !game.net->mvd.listening) return;
+  const ge::net::Address& at = game.net->mvd.listener.local;
+  out.emplace_back(at.family == ge::net::Family::ipv6 ? "Server TCP6" : "Server TCP", at);
 }
 
 double frame_seconds(const void* g) { return static_cast<const Game*>(g)->rules->sv.set.mintic; }
@@ -783,7 +838,7 @@ void net_frame(void* g, int64_t now_us) {
   if (!cp::masters_started(game.masters)) {  // the first round 5 s on
     cp::masters_start(game.masters, cp::MasterFamily::q2, now_s);
   }
-  {
+  if (!game.net->killed) {  // `killserver`: no heartbeats until the next map
     std::vector<cp::MasterSend> out;
     cp::masters_frame(game.masters, now_s, 0, q2_status_text(*game.net), true, out, game.net->log);
     masters_send(game, out);
@@ -854,7 +909,14 @@ bool console_line(void* g, const std::string& line) {
       return true;
     }
   }
+  const bool was_up = game.net && !game.net->killed;
   if (game.net && q2_admin(*game.net, line, answer)) {
+    if (was_up && game.net->killed) {  // killserver: a public server's masters hear `shutdown`
+      std::vector<cp::MasterSend> out;
+      std::vector<std::string> said;
+      cp::masters_shutdown(game.masters, out, said);
+      masters_send(game, out);
+    }
     print_lines(game, answer);
     return true;
   }
@@ -917,6 +979,46 @@ bool console_line(void* g, const std::string& line) {
     std::fclose(f);
     print_lines(game, ok ? "Dumped entity string to entdumps/" + name + "\n"
                          : "Couldn't write entdumps/" + name + "\n");
+    return true;
+  }
+  if (w[0] == "bsplist") {  // the map held: its size, and with any word its counts
+    if (!game.map || !game.map->from_file || (game.net && game.net->killed)) {
+      print_lines(game, "BSP cache is empty\n");
+      return true;
+    }
+    const ge::brush::Map& m = game.map->bsp.map;
+    const std::string name = "maps/" + game.map->name + ".bsp";
+    const size_t bytes = game.map->file.size();
+    char row[160];
+    std::string out = "------------------\n";
+    std::snprintf(row, sizeof row, "%8zu : %s (1 refs)\n", bytes, name.c_str());
+    out += row;
+    if (w.size() > 1) {
+      const std::pair<size_t, const char*> counts[] = {{m.brush_sides.size(), "brushsides"},
+                                                       {m.planes.size(), "planes"},
+                                                       {m.nodes.size(), "nodes"},
+                                                       {m.leaves.size(), "leafs"},
+                                                       {m.leaf_brushes.size(), "leafbrushes"},
+                                                       {m.models.size(), "models"},
+                                                       {m.brushes.size(), "brushes"},
+                                                       {m.entity_text.size(), "entitychars"},
+                                                       {m.areas.size(), "areas"},
+                                                       {m.area_portals.size(), "areaportals"}};
+      for (const auto& [n, label] : counts) {
+        std::snprintf(row, sizeof row, "%8zu : %s\n", n, label);
+        out += row;
+      }
+      if (m.clusters > 0) {
+        std::snprintf(row, sizeof row, "%8d : clusters\n", m.clusters);
+        out += row;
+      }
+      const uint32_t sum = sv::q2_map_checksum(game.map->file);
+      std::snprintf(row, sizeof row, "Checksum : %s%x\n", sum != 0 ? "0x" : "", sum);
+      out += row;
+      out += "------------------\n";
+    }
+    std::snprintf(row, sizeof row, "Total resident: %zu\n", bytes);
+    print_lines(game, out + row);
     return true;
   }
   if (w[0] == "listmaps") {
@@ -999,6 +1101,9 @@ const gs::ServerGame& make() {
     s.player_view = player_view;
     s.console_lines = console_lines;
     s.console = console_line;
+    s.quit = quit;
+    s.sockets = sockets;
+    s.maps = maps;
     q2_watch_hooks(s);
     return s;
   }();

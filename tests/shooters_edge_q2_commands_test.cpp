@@ -6,6 +6,7 @@
 // ge:keywords q2 client-command say flood cheats give god noclip weaplast wave players test
 // ge:keywords spectator-chat sv_spectalk g_select_empty g_quick_weap g_swap_speed
 // ge:skill testing shooter
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -201,9 +202,26 @@ TEST(a_chat_flood_is_stopped_and_told) {
   CHECK(printed(*g, 1, "line 3"));
   g->r.client_command(0, "say line 4");
   CHECK(!printed(*g, 1, "line 4"));
-  CHECK(printed(*g, 0, "you can't talk for 10 seconds", 3));
+  CHECK(printed(*g, 0, "Flood protection: You can't talk for 10 seconds.\n", 3));
   g->r.client_command(0, "say line 5");
-  CHECK(printed(*g, 0, "You can't talk for"));
+  CHECK(printed(*g, 0, "You can't talk for 10 more seconds\n"));
+  // A said text that starts with a quote loses its first and its last character.
+  auto q = game("1");
+  run(*q, 10);
+  q->r.client_command(0, "say \"hi there");
+  CHECK(printed(*q, 1, "Ana: hi ther\n"));
+  // A flood_msgs over 10 is lowered to 10, said on the server's console.
+  auto big = game("1", 2, "flood_msgs 20");
+  run(*big, 10);
+  big->r.client_command(0, "say once");
+  CHECK(big->s().cvars.find("flood_msgs")->integer() == 10);
+  CHECK(std::find(big->s().console.begin(), big->s().console.end(),
+                  "flood_msgs lowered to max: 10") != big->s().console.end());
+  // Single player never floods.
+  auto single = game("0", 1);
+  run(*single, 10);
+  for (int i = 0; i < 8; i++) single->r.client_command(0, "say line " + std::to_string(i));
+  CHECK(!printed(*single, 0, "Flood protection"));
 }
 
 TEST(the_cheats_are_refused_in_deathmatch_without_cheats) {
@@ -252,8 +270,13 @@ TEST(give_all_and_its_forms) {
   CHECK(sv::sq_holds(p.body, int(sv::SqWeapon::railgun)));
   CHECK(p.body.counts[sv::sq_item_named("Quad Damage")] == 1);
   CHECK(p.body.counts[sv::sq_item_named("Power Shield")] == 1);
+  g->r.client_command(0, "give Power Shield");  // always one more, through the pickup
+  CHECK(p.body.counts[sv::sq_item_named("Power Shield")] == 2);
   g->r.client_command(0, "give health 7");
   CHECK(p.health == 7);
+  g->r.client_command(0, "give health -5");  // never below 1
+  CHECK(p.health == 1);
+  g->r.client_command(0, "give health 7");
   g->r.client_command(0, "give rockets 3");
   CHECK(p.body.ammo[int(sv::SqAmmo::rockets)] == 3);
   g->r.client_command(0, "give Rockets");

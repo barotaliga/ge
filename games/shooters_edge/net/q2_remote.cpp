@@ -7,6 +7,7 @@
 #include "shooters_edge/net/q2_remote.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <utility>
 
@@ -19,6 +20,8 @@
 namespace shooters_edge::net {
 
 namespace {
+
+constexpr uint8_t kQ2ButtonUse = 2;  // Quake II's use button in a move's buttons byte
 
 float angle16(int16_t a) { return static_cast<float>(a) * (360.0f / 65536.0f); }
 
@@ -50,8 +53,10 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   // in the archive the server says each came out of (the window's `keep_file`).
   s.fetch = true;
   s.fetch_level = true;
-  s.ask_moves = true;  // the other players' moves, to run them forward (q2_predict.hpp)
-  s.ask_back = true;   // the items coming back, drawn ahead of time (ce_respawns)
+  s.allow = cfg.q2_downloads;  // allow_download and its kinds
+  s.nodelta = cfg.q2_nodelta;  // cl_nodelta
+  s.ask_moves = true;          // the other players' moves, to run them forward (q2_predict.hpp)
+  s.ask_back = true;           // the items coming back, drawn ahead of time (ce_respawns)
   s.read_file = [&r](const std::string& path) {
     return r.read_file ? r.read_file("", path) : std::vector<uint8_t>{};
   };
@@ -86,6 +91,8 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
       m.up = std::max<int16_t>(m.up, ge::classic::kSqJumpUp);
       m.buttons = static_cast<uint8_t>(m.buttons & ~sh::kButtonJump);
     }
+    if ((m.buttons & sh::kButtonUse) != 0)  // +use is Quake II's second button
+      m.buttons = static_cast<uint8_t>((m.buttons & ~sh::kButtonUse) | kQ2ButtonUse);
     return m;
   };
   return s;
@@ -156,6 +163,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   r.owed_s += wall_s;
   int ticks = 0;
   const int tick_us = q2_move_ms(r.q2_maxfps) * 1000;  // its own cl_maxfps, live
+  c.cfg.shownet = r.q2_shownet;                        // cl_shownet, live
   while (r.owed_s >= tick_us * 1e-6) {
     r.owed_s -= tick_us * 1e-6;
     if (ticks++ >= kMostTicks) continue;  // a stall: the time is dropped, not paid down
@@ -221,6 +229,12 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   sh::Vec3f drawn;
   const bool predicted = !r.nopred && r.predict && q2_predict_step(ahead, c, d, wall_s, drawn);
   if (!predicted) ahead.predicted = false;
+  if (ahead.misses != ahead.misses_told) {  // cl_showmiss
+    if (ahead.show_misses && r.trace.print)
+      r.trace.print("prediction miss on " + std::to_string(ahead.miss_frame) + ": " +
+                    std::to_string(std::lround(ahead.miss_units)));
+    ahead.misses_told = ahead.misses;
+  }
   // Everything between the last two frames, one frame behind the newest.
   r.lerped = 0;
   if (!r.nolerp && r.frame_old_s >= 0 && r.frame_new_s > r.frame_old_s) {

@@ -50,15 +50,15 @@ part differs; `missing` not in our tree; `not-taken` a note or doc of ours decid
 | kind | done | partial | missing | not-taken | all |
 | --- | --- | --- | --- | --- | --- |
 | Server console commands (the operator's words) | 54 | 10 | 1 | 11 | 76 |
-| General console commands and macros the server's console has (common) | 16 | 6 | 35 | 0 | 57 |
-| Server settings (cvars) with their defaults | 75 | 22 | 46 | 27 | 170 |
-| Server-to-client messages (svc) and protocol extensions the server writes | 37 | 9 | 7 | 0 | 53 |
-| What the server accepts from clients | 41 | 13 | 1 | 2 | 57 |
-| The game library interface | 41 | 24 | 23 | 0 | 88 |
-| Messages a player sees (refusals, drops, prints), quoted exactly | 48 | 15 | 7 | 2 | 72 |
+| General console commands and macros the server's console has (common) | 35 | 8 | 13 | 1 | 57 |
+| Server settings (cvars) with their defaults | 83 | 22 | 32 | 33 | 170 |
+| Server-to-client messages (svc) and protocol extensions the server writes | 39 | 8 | 6 | 0 | 53 |
+| What the server accepts from clients | 42 | 12 | 1 | 2 | 57 |
+| The game library interface | 41 | 24 | 22 | 1 | 88 |
+| Messages a player sees (refusals, drops, prints), quoted exactly | 50 | 15 | 5 | 2 | 72 |
 | Messages an admin sees on the server console, quoted exactly | 9 | 24 | 1 | 2 | 36 |
-| Server features beyond single words | 29 | 16 | 8 | 2 | 55 |
-| **all** | 350 | 139 | 129 | 46 | 664 |
+| Server features beyond single words | 34 | 13 | 6 | 2 | 55 |
+| **all** | 387 | 136 | 87 | 54 | 664 |
 
 ## 1. Server console commands (the operator's words)
 
@@ -83,7 +83,7 @@ done 54, partial 10, missing 1, not-taken 11
 | cmd.gamemap | `gamemap <name>` | Level change keeping the game (and the unit's saves); with `sv_recycle` set, a full restart (2: quit and tell clients to reconnect). | done | `games/shooters_edge/server/q2_server.cpp`, `q2_native.cpp` (`changelevel` too); the recycle path is not taken (row 15) |
 | cmd.demomap | `demomap <file>` | Loads a demo or cinematic as the server's level; on a client build it plays the demo instead. | not-taken | `q2-gaps2-server.md` B1 |
 | cmd.dumpents | `dumpents <file>` | Writes the map's entity text to `entdumps/<file>.ent`; `No map loaded.`, `Dumped entity string to <path>`. | done | games/shooters_edge/net/q2_game.cpp |
-| cmd.killserver | `killserver` | Stops the server; clients read `Server was killed.` and are disconnected. | done | games/shooters_edge/net/q2_admin.cpp (`q2_net_shutdown`); the server answers nothing until the next `map` |
+| cmd.killserver | `killserver` | Stops the server; clients read `Server was killed.` and are disconnected. | done | games/shooters_edge/net/q2_admin.cpp, games/shooters_edge/net/q2_game.cpp: `No server running.` when killed already; the masters sent `shutdown`; then only rcon answered, no frames or heartbeats until the next `map` |
 | cmd.sv | `sv <command>` | Passes the words to the game library's server command; `No game loaded.` | partial | Hosted library: done (`games/shooters_edge/server/q2_native.cpp`); our rules: the `sv`-prefixed ban words fail (S30) |
 | cmd.pickclient | `pickclient <addr:port>` | Sends `passive_connect` to a waiting client; `Single player server running.`, `Bad client address: <addr>`, `Please specify client port explicitly.` | done | games/shooters_edge/net/q2_admin.cpp |
 | cmd.addban | `addban <addr[/mask]> [comment]` | Adds a ban entry. | partial | The engine list's `addip` (`engine/server/bans.hpp`, `games/shooters_edge/net/q2_admin.cpp`); the word `addban`, masks as `/bits` and the comment: verify |
@@ -148,42 +148,42 @@ done 54, partial 10, missing 1, not-taken 11
 Our dedicated server's console is the engine console (`engine/console`), fed by `--commands` and
 `+commands`; rcon reaches only Quake II's admin words and the rules' console (S29).
 
-done 16, partial 6, missing 35, not-taken 0
+done 35, partial 8, missing 13, not-taken 1
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | con.cmdlist | `cmdlist` | Lists commands (with a filter). | done | `engine/console/console_builtins.cpp` |
-| con.macrolist | `macrolist` | Lists the `$` macros. | missing | Only the client has one (`games/shooters_edge/client/team_chat.cpp`) |
+| con.macrolist | `macrolist` | Lists the `$` macros. | done | engine/server/macros.hpp: the name in 16 columns, the value cut to 63, the filter a wildcard, `<n> of <m> macros`; listed by name, not newest first |
 | con.exec | `exec <file>` | Runs a config file. | done | engine console |
 | con.echo | `echo <text>` | Prints a line. | done | engine console |
-| con._echo | `_echo [-e] [-n] <text>` | Echo with backslash escapes and without the newline. | missing | |
+| con._echo | `_echo [-e] [-n] <text>` | Echo with backslash escapes and without the newline. | done | engine/console/console_more.cpp (every console, the dedicated one too) |
 | con.alias | `alias <name> <cmds>` | Defines an alias (also lists). | done | engine console |
 | con.unalias | `unalias` | Removes an alias. | done | engine console |
 | con.wait | `wait` | Defers the rest of the buffer a frame. | done | engine console |
-| con.text | `text <command>` | Runs its argument as command text (used inside aliases). | missing | |
-| con.complete | `complete <command>` | Declares a name for completion. | missing | |
+| con.text | `text <command>` | Runs its argument as command text (used inside aliases). | done | engine/console/console_more.cpp |
+| con.complete | `complete <command>` | Declares a name for completion. | done | engine/console/console_more.cpp |
 | con.trigger | `trigger <command> <match>` | Runs a command when printed text matches. | done | engine/console/re_triggers.hpp (#1248), on every console |
 | con.untrigger | `untrigger` | Removes a trigger. | done | engine/console/re_triggers.hpp (#1248) |
 | con.if | `if <expr> <op> <expr> [then] <cmd> [else <cmd>]` | Conditional. | done | `engine/console/script.cpp` |
 | con.set | `set <var> <value> [u\|s]` | Sets a setting; `u`/`s` add the user/server-info flag; `Usage: set <variable> <value> [u / s]`. | partial | engine `set`; the `u`/`s` letters: verify |
-| con.setu | `setu` | Set with the user-info flag. | missing | |
-| con.sets | `sets` | Set with the server-info flag (an admin's own status key). | missing | S27 notes admins' own keys are not shown |
+| con.setu | `setu` | Set with the user-info flag. | done | engine/console/console_more.cpp |
+| con.sets | `sets` | Set with the server-info flag (an admin's own status key). | done | engine/console/console_more.cpp: the key joins the server info; which keys a status answer shows is S27's |
 | con.seta | `seta` | Set and archive. | done | engine console |
 | con.cvarlist | `cvarlist [-a -c -h -l -m -n -r -s -t -u -v]` | Lists settings, filtered by flag, with flag letters; `<i> of <n> cvars`. | done | engine console (its own letters) |
 | con.toggle | `toggle <var> [values]` | Flips or cycles values (`"<v>" is "<x>", can't toggle` / `can't cycle`). | done | `engine/console/script.cpp` |
 | con.inc | `inc <var> [value]` | Adds to a number. | done | engine |
 | con.dec | `dec <var> [value]` | Subtracts. | done | engine |
 | con.reset | `reset <var>` | Back to the default. | done | engine |
-| con.resetall | `resetall` | Every setting back to its default. | partial | `cvar_reset_re` with a pattern; no `resetall` word |
+| con.resetall | `resetall` | Every setting back to its default. | done | engine/console/console_more.cpp |
 | con.show-var | typing a setting's name | Prints `"<name>" is "<value>"`, then `  default: "<d>"` and `  latched: "<l>"` when they differ. | partial | Engine prints the value; wording and the default/latched suffix: verify |
 | con.z_stats | `z_stats` | Memory zone statistics. | missing | |
-| con.lasterror | `lasterror` | Prints the last error. | missing | |
-| con.quit | `quit [reason]` | Stops the server; clients read `Server quit` or `Server quit: <reason>` (msg.shutdown). | missing | `sesv` ends on a signal; no word, no line sent (`q2_net_stop` notes it in our log only) |
-| con.recycle | `recycle [reason]` | As quit, but clients read `Server restarted: <reason>` and are told to reconnect. | missing | `q2-server-gaps.md` row 15 takes no restart |
+| con.lasterror | `lasterror` | Prints the last error. | done | engine/console/console_more.cpp: the last error line, or an empty line |
+| con.quit | `quit [reason]` | Stops the server; clients read `Server quit` or `Server quit: <reason>` (msg.shutdown). | done | engine/server/main.cpp (`quit [reason]`, the words joined by spaces) and games/shooters_edge/net/q2_game.cpp (`quit`): every player and relay viewer told at the high level and disconnected, the stream relays sent their disconnect, the masters `shutdown`; exit 0 |
+| con.recycle | `recycle [reason]` | As quit, but clients read `Server restarted: <reason>` and are told to reconnect. | done | engine/server/main.cpp, games/shooters_edge/net/q2_game.cpp: as quit with `Server restarted` and the reconnect; the process exits 0 for its supervisor to start again |
 | con.path | `path` | Shows the search path. | missing | |
 | con.fdir | `fdir` | Lists files by filter. | missing | |
 | con.dir | `dir` | Lists a directory. | missing | |
-| con.fs_stats | `fs_stats` | File system statistics (debug build only). | missing | |
+| con.fs_stats | `fs_stats` | File system statistics (debug build only). | not-taken | docs/porting/server.md: debug build only, not taken |
 | con.whereis | `whereis <file>` | Which pack or folder holds a file. | missing | |
 | con.link | `link` | Adds a file link. | missing | |
 | con.unlink | `unlink` | | missing | |
@@ -191,19 +191,19 @@ done 16, partial 6, missing 35, not-taken 0
 | con.softunlink | `softunlink` | | missing | |
 | con.fs_restart | `fs_restart` | Re-reads the file system (and tells an extended library). | missing | |
 | con.net_restart | `net_restart` | Re-opens the sockets. | missing | |
-| con.net_stats | `net_stats` | Socket counters and rates. | missing | |
-| con.showip | `showip` | The host's addresses. | missing | |
-| con.dns | `dns <name>` | Resolves a name. | missing | |
-| con.bsplist | `bsplist` | Loaded maps. | missing | |
+| con.net_stats | `net_stats` | Socket counters and rates. | partial | engine/server/main.cpp: sent, received and refused counts; no uptime, per-second averages, error split or current rates lines |
+| con.showip | `showip` | The host's addresses. | done | engine/net/udp_socket.hpp (`host_addresses`, `showip_text`), engine/server/main.cpp, games/shooters_edge/net/q2_game.cpp (the stream listener's `Server TCP` line) |
+| con.dns | `dns <name>` | Resolves a name. | partial | engine/server/main.cpp: resolves; the answer reads "<name> resolved to <address>", not the Hostname and IP lines with reverse names |
+| con.bsplist | `bsplist` | Loaded maps. | partial | games/shooters_edge/net/q2_game.cpp: the held map, its size and `Total resident`; with a word its counts, clusters and checksum (texinfo, visibility and the features line not counted) |
 | con.tests | `error`, `errordrop`, `freeze`, `crash`, `doublefree`, `printjunk`, `bsptest`, `wildtest`, `normtest`, `infotest`, `snprintftest`, `modeltest`, `imagetest`, `soundtest`, `activate`, `mdfourtest`, `mdfoursum`, `extcmptest`, `nextpathtest`, `extract` | Developer tests (debug build only). | missing | Candidates for not-taken (no doc yet) |
-| macro.com_date | `$com_date` | Today's date by `com_date_format`. | missing | |
-| macro.com_time | `$com_time` | The time by `com_time_format`. | missing | |
-| macro.com_uptime | `$com_uptime` | Uptime, short. | missing | |
-| macro.com_uptime_long | `$com_uptime_long` | Uptime, long. | missing | |
-| macro.random | `$random` | One digit 0 to 9. | missing | |
-| macro.com_maplist | `$com_maplist` | The maps found. | missing | |
-| macro.net_uprate | `$net_uprate` | Outgoing rate. | missing | |
-| macro.net_dnrate | `$net_dnrate` | Incoming rate. | missing | |
+| macro.com_date | `$com_date` | Today's date by `com_date_format`. | done | engine/console/clock_macros.hpp, on the dedicated console (engine/server/main.cpp) |
+| macro.com_time | `$com_time` | The time by `com_time_format`. | done | engine/console/clock_macros.hpp, on the dedicated console |
+| macro.com_uptime | `$com_uptime` | Uptime, short. | done | engine/console/clock_macros.hpp: `MM.SS`, `H:MM.SS`, `D+H:MM.SS`; on the dedicated console |
+| macro.com_uptime_long | `$com_uptime_long` | Uptime, long. | done | engine/console/clock_macros.hpp, on the dedicated console |
+| macro.random | `$random` | One digit 0 to 9. | done | engine/console/clock_macros.hpp, on the dedicated console |
+| macro.com_maplist | `$com_maplist` | The maps found. | done | engine/server/macros.hpp, games/shooters_edge/net/q2_game.cpp (`maps`): sorted ignoring case, each once, by spaces |
+| macro.net_uprate | `$net_uprate` | Outgoing rate. | done | engine/server/main.cpp: bytes a second sent over three-second windows (engine/net/rates.hpp) |
+| macro.net_dnrate | `$net_dnrate` | Incoming rate. | done | engine/server/main.cpp: bytes a second received over three-second windows |
 | con.refusals | `<name> is read-only.`, `<name> is cheat protected.`, `<name> may be set from command line only.`, `<name> will be changed for next game.`, `<name> is not a variable` | A setting's refusals. | partial | Engine says `<name> will be "<v>" after a restart (it is latched)` and its own words for the rest (`engine/console/console_builtins.cpp`) |
 | con.info-refusals | `Info cvars should not contain '\', ';' or '"' characters.`, `Info cvars should be less than 64 characters long.` | Server/user info values checked. | partial | The hosted library's `cvar` refuses unsafe info values (`info_safe`, `games/shooters_edge/server/q2_native_calls.cpp`); the engine's words differ: verify |
 | con.game-check | `'game' should contain characters [A-Za-z0-9_-] only.` | A bad game folder name is refused and the setting reset; the base folder's own name reads as empty. | missing | Added (upstream); ours takes the game by `sesv -game` and `sv_mod` |
@@ -215,7 +215,7 @@ done 16, partial 6, missing 35, not-taken 0
 Defaults are upstream's; flags as registered. Our Quake II spellings that are synonyms are listed in
 `games/shooters_edge/net/q2_game.cpp` (`kSettingNames`).
 
-done 75, partial 22, missing 46, not-taken 27
+done 83, partial 22, missing 32, not-taken 33
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -249,16 +249,16 @@ done 75, partial 22, missing 46, not-taken 27
 | cvar.sv_reserved_password | `sv_reserved_password` = `` (private) | Reserved slots' password. | done | `sv_vippassword` (synonym) |
 | cvar.sv_locked | `sv_locked` = `0` | Refuses new connections. | partial | Engine `sv_locked`; refusal adds `Connection refused.` (msg.oob.locked) |
 | cvar.sv_novis | `sv_novis` = `0` | Sends every entity unculled. | done | Rules setting (`games/shooters_edge/net/q2_game.cpp`) |
-| cvar.sv_downloadserver | `sv_downloadserver` = `` (empty) | HTTP download address given at connect (`dlserver=`). | missing | S36 (`sv_downloadurl` proposed) |
+| cvar.sv_downloadserver | `sv_downloadserver` = `` (empty) | HTTP download address given at connect (`dlserver=`). | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_net_server.cpp: ` dlserver=<url>` in the connect answer, as given |
 | cvar.sv_redirect_address | `sv_redirect_address` = `` | Full: send newcomers to this address (`!` first: everyone but reserved-password holders). | done | `sv_redirect` (synonym; `engine/server/admission.hpp`) |
-| cvar.sv_debug | `sv_debug` = `0` | Debug prints (debug build only). | missing | |
-| cvar.sv_pad_packets | `sv_pad_packets` = `0` | Pads packets with no-ops (debug build only). | missing | |
+| cvar.sv_debug | `sv_debug` = `0` | Debug prints (debug build only). | not-taken | docs/porting/server.md: debug build only, not taken |
+| cvar.sv_pad_packets | `sv_pad_packets` = `0` | Pads packets with no-ops (debug build only). | not-taken | docs/porting/server.md: debug build only, not taken |
 | cvar.sv_lan_force_rate | `sv_lan_force_rate` = `0` (latched) | LAN clients unlimited. | done | `sv_lanrate` (synonym) |
 | cvar.sv_min_rate | `sv_min_rate` = `15000` (latched) | Lowest client rate. | done | `sv_minrate` (synonym; `engine/server/rate.hpp`) |
 | cvar.sv_max_rate | `sv_max_rate` = `60000` (latched) | Highest client rate. | done | `sv_maxrate` (synonym) |
 | cvar.sv_calcpings_method | `sv_calcpings_method` = `2` | Ping as none, average or minimum of 16 frames. | done | `sv_pingmethod` (synonym; `take_trip` in `games/shooters_edge/net/q2_net_server.cpp`) |
 | cvar.sv_changemapcmd | `sv_changemapcmd` = `` | Command run after each map loads. | done | `sv_mapcmd` (synonym; engine) |
-| cvar.sv_max_download_size | `sv_max_download_size` = `8388608` | Largest file sent. | missing | S37 |
+| cvar.sv_max_download_size | `sv_max_download_size` = `8388608` | Largest file sent. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_net_server.cpp: bytes, 0 or past 128 MiB and 4 KiB the cap; a larger file refused |
 | cvar.sv_max_packet_entities | `sv_max_packet_entities` = `0` | Most entities a frame (0: 128 old clients, 512 extended). | partial | `sv_maxents` (synonym), our rules only; a hosted library's frames uncapped |
 | cvar.sv_trunc_packet_entities | `sv_trunc_packet_entities` = `1` | Cuts an oversize frame short for old clients. | not-taken | `q2-server-gaps.md` row 18 (our frames stop at the packet's room) |
 | cvar.sv_prioritize_entities | `sv_prioritize_entities` = `0` | Which entities first when over the cap. | partial | `sv_entpriority` (synonym), our rules only |
@@ -299,7 +299,7 @@ done 75, partial 22, missing 46, not-taken 27
 | cvar.sv_mvd_allow_stufftext | `sv_mvd_allow_stufftext` = `0` (latched) | Runs text the game sends the dummy. | missing | |
 | cvar.sv_mvd_spawn_dummy | `sv_mvd_spawn_dummy` = `1` | When the scoreboard dummy is spawned. | missing | |
 | cvar.sv_noreload | `sv_noreload` = `0` | Skips reloading a visited level. | done | Rules setting |
-| cvar.mvd_shownet | `mvd_shownet` = `0` | Relay debug prints. | missing | |
+| cvar.mvd_shownet | `mvd_shownet` = `0` | Relay debug prints. | not-taken | docs/porting/server.md: debug build only, not taken |
 | cvar.mvd_timeout | `mvd_timeout` = `90` | Relay upstream timeout. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
 | cvar.mvd_suspend_time | `mvd_suspend_time` = `5` | Minutes. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
 | cvar.mvd_wait_delay | `mvd_wait_delay` = `20` | Seconds of buffering before play. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
@@ -316,7 +316,7 @@ done 75, partial 22, missing 46, not-taken 27
 | cvar.flood_mute | `flood_mute` = `0` | Relay spectators may not talk. | done | same: non-admin viewers may not talk |
 | cvar.mvd_filter_version | `mvd_filter_version` = `0` | Rewrites `!version` in relay chat. | missing | |
 | cvar.mvd_default_map | `mvd_default_map` = `q2dm1` (latched) | Map shown while waiting. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the map's intermission spot, its checksum; q2dm1 when it does not load |
-| cvar.mvd_stats_score | `mvd_stats_score` = `0` | Which stat is the chase score. | missing | |
+| cvar.mvd_stats_score | `mvd_stats_score` = `0` | Which stat is the chase score. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp (`touch`): 0 the frags shown as 0, 1 the channel's number, else the followed player's |
 | cvar.mvd_stats_hack | `mvd_stats_hack` = `0` | Dummy's stats copied to chasers. | missing | |
 | cvar.mvd_freeze_hack | `mvd_freeze_hack` = `1` | Frozen dummy means intermission. | missing | |
 | cvar.mvd_chase_prefix | `mvd_chase_prefix` = `xv 0 yb -64` | Layout prefix of the chase text. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
@@ -350,27 +350,27 @@ done 75, partial 22, missing 46, not-taken 27
 | cvar.cl_paused | `cl_paused` = `0` (read-only) | State report (client builds). | missing | |
 | cvar.sv_running | `sv_running` = `0` (read-only) | State report. | done | games/shooters_edge/net/q2_game.cpp: answered read-only (2 while a map runs, 0 after `killserver`) |
 | cvar.sv_paused | `sv_paused` = `0` (read-only) | State report. | done | games/shooters_edge/net/q2_game.cpp: answered read-only, 0 (a dedicated server never pauses) |
-| cvar.com_date_format | `com_date_format` = `%Y-%m-%d` | For `$com_date`. | missing | |
-| cvar.com_time_format | `com_time_format` = `%H:%M` (`%H.%M` on Windows) | For `$com_time`. | missing | |
-| cvar.com_debug_break | `com_debug_break` = `0` | Debugger break (debug build only). | missing | |
+| cvar.com_date_format | `com_date_format` = `%Y-%m-%d` | For `$com_date`. | done | engine/console/clock_macros.hpp |
+| cvar.com_time_format | `com_time_format` = `%H:%M` (`%H.%M` on Windows) | For `$com_time`. | partial | engine/console/clock_macros.hpp: `%H:%M` on every system (Windows' own default is `%H.%M`) |
+| cvar.com_debug_break | `com_debug_break` = `0` | Debugger break (debug build only). | not-taken | docs/porting/server.md: debug build only, not taken |
 | cvar.com_fatal_error | `com_fatal_error` = `0` | Fatal error mode. | missing | |
 | cvar.version | `version` (server info, read-only) | Version text. | not-taken | `q2-server-gaps.md` "Not worth building" |
 | cvar.allow_download | `allow_download` = `0` on a dedicated server, `1` otherwise (archive) | Master download switch. | partial | `sv_download` (synonym) defaults to 1 (`games/shooters_edge/net/q2_game.cpp`) |
 | cvar.allow_download_players | `allow_download_players` = `1` (archive) | `players/`. | done | `sv_download_players` (synonym) |
-| cvar.allow_download_models | `allow_download_models` = `1` (archive) | `models/` and `sprites/`. | partial | `sv_download_models` (synonym); `sprites/` under it: verify |
+| cvar.allow_download_models | `allow_download_models` = `1` (archive) | `models/` and `sprites/`. | done | `sv_download_models` (synonym): models/ and sprites/ |
 | cvar.allow_download_sounds | `allow_download_sounds` = `1` (archive) | `sound/`. | done | `sv_download_sounds` (synonym) |
-| cvar.allow_download_maps | `allow_download_maps` = `1` (archive) | `maps/`. | partial | `sv_download_maps` (synonym); from inside packs: verify |
-| cvar.allow_download_textures | `allow_download_textures` = `1` (archive) | `textures/` and `env/`. | missing | S37 |
-| cvar.allow_download_pics | `allow_download_pics` = `1` (archive) | `pics/`. | missing | S37 |
-| cvar.allow_download_others | `allow_download_others` = `0` | Anything else. | missing | S37 |
+| cvar.allow_download_maps | `allow_download_maps` = `1` (archive) | `maps/`. | partial | `sv_download_maps` (synonym); a map inside a pack is sent only to our clients, which keep it in its archive (docs/porting/content.md, downloads kept in the archive they came from) |
+| cvar.allow_download_textures | `allow_download_textures` = `1` (archive) | `textures/` and `env/`. | done | `sv_download_textures` (synonym; games/shooters_edge/net/q2_game.cpp): textures/ and env/ |
+| cvar.allow_download_pics | `allow_download_pics` = `1` (archive) | `pics/`. | done | `sv_download_pics` (synonym) |
+| cvar.allow_download_others | `allow_download_others` = `0` | Anything else. | done | `sv_download_others` (synonym), off by default: any other folder |
 | cvar.rcon_password | `rcon_password` = `` (private) | Remote console password. | done | Engine `rcon_password`; `games/shooters_edge/net/q2_admin.cpp` |
 | cvar.sys_forcegamelib | `sys_forcegamelib` = `` (no-set) | Game library path tried first. | partial | The hosted library is loaded from a path the server is given (`games/shooters_edge/server/q2_native.hpp`); this name: verify |
 | cvar.sys_allow_unsafe_savegames | `sys_allow_unsafe_savegames` = `0` (no-set) | Allows saves with libraries lacking the enhanced-savegame bit. | missing | |
 | cvar.sys_history | `sys_history` | Command history size. | missing | |
 | cvar.fs_autoexec | `fs_autoexec` = `1` | Rerun configs when `game` changes. | missing | |
 | cvar.fs_debug | `fs_debug` = `0` | File debug prints. | not-taken | `q2-server-gaps.md` "Not worth building" |
-| cvar.fs_fuzz_factor | `fs_fuzz_factor` = `0` | File fuzzing (debug). | missing | |
-| cvar.fs_fuzz_filter | `fs_fuzz_filter` = `*` | File fuzzing filter (debug). | missing | |
+| cvar.fs_fuzz_factor | `fs_fuzz_factor` = `0` | File fuzzing (debug). | not-taken | docs/porting/server.md: debug build only, not taken |
+| cvar.fs_fuzz_filter | `fs_fuzz_filter` = `*` | File fuzzing filter (debug). | not-taken | docs/porting/server.md: debug build only, not taken |
 | cvar.game | `game` = `` (latched, server info, not archived) | Game folder; empty is the base game. | partial | `sesv -game 2` and the mods (`sv_mod`, engine); no `game` setting or key: verify |
 | cvar.com_completion_mode | `com_completion_mode` = `1` | Tab completion. | missing | |
 | cvar.com_completion_treshold | `com_completion_treshold` = `50` | Completion list size. | missing | |
@@ -392,7 +392,7 @@ done 75, partial 22, missing 46, not-taken 27
 
 ## 4. Server-to-client messages (svc) and protocol extensions the server writes
 
-done 37, partial 9, missing 7, not-taken 0
+done 39, partial 8, missing 6, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -402,8 +402,8 @@ done 37, partial 9, missing 7, not-taken 0
 | svc.layout | message 4 | The scoreboard or help layout text. | done | `games/shooters_edge/server/q2_wire.cpp` |
 | svc.inventory | message 5 | The 256 inventory counts. | done | `games/shooters_edge/server/q2_wire.cpp` |
 | svc.nop | message 6 | Padding (debug builds pad packets with it). | done | Not needed to be sent; readers skip it |
-| svc.disconnect | message 7 | Tells the client to disconnect; at a drop, and twice to every client at shutdown. | partial | `games/shooters_edge/net/q2_net_server.cpp`; the extra copies are not sent (S26) |
-| svc.reconnect | message 8 | Tells clients to reconnect, at a full restart (`Server restarted`) or `recycle`. | missing | No restart or recycle (con.recycle); level changes use stuffed `changing` and `reconnect` (proto.mapchange) |
+| svc.disconnect | message 7 | Tells the client to disconnect; at a drop, and twice to every client at shutdown. | done | games/shooters_edge/net/q2_net_server.cpp (`q2_net_shutdown`): twice to every client at shutdown, killserver and quit |
+| svc.reconnect | message 8 | Tells clients to reconnect, at a full restart (`Server restarted`) or `recycle`. | partial | Sent at `recycle` and when relay mode takes the port (`Server restarted`); a `map` restarting the game in place still moves clients by stuffed `changing` and `reconnect` (proto.mapchange) |
 | svc.sound | message 9 | A sound with optional volume, attenuation, time offset, entity and channel, and position; a 16-bit index under protocol extensions. | partial | `games/shooters_edge/server/q2_wire.cpp`: always carries a position (S5); our rules' sounds go to everyone (S3); a library's bad volume clamped (S16) |
 | svc.print | message 10 | A text line at a level (pickup, medium, high, chat). | partial | Sent; the client's `msg` level is not honoured (S6) |
 | svc.stufftext | message 11 | Text the client runs. | done | `games/shooters_edge/net/q2_net_server.cpp`, `games/shooters_edge/server/q2_wire.cpp` |
@@ -429,7 +429,7 @@ done 37, partial 9, missing 7, not-taken 0
 | proto.37 | protocol 37 | The multi-view recording's protocol, minor 2009 to 2013; never on UDP. | done | games/shooters_edge/server/q2_mvd2.hpp written live by games/shooters_edge/net/q2_mvd_server.cpp to a file and over TCP |
 | proto.challenge-list | `challenge <n> p=34,35,36` | Lists the protocols on offer. | done | games/shooters_edge/net/q2_net_server.cpp: `challenge <n> p=34,35,36` |
 | proto.challenge-table | challenges | A random 31-bit number per address, 1024 kept, oldest replaced, used once. | done | games/shooters_edge/net/q2_net_server.cpp (`challenge_key`): a new 31-bit number per address and port, 1024 kept, the oldest replaced, used up on admission |
-| proto.connect-answer | `client_connect[ nc=0\|1][ ac=1][ dlserver=<url>] map=<map>` | The admission answer: channel kind for 36, anticheat, HTTP download address, the map name. | partial | games/shooters_edge/net/q2_net_server.cpp: `client_connect` and ` nc=<n>` for 36; ` map=` and ` dlserver=` not sent (S36) |
+| proto.connect-answer | `client_connect[ nc=0\|1][ ac=1][ dlserver=<url>] map=<map>` | The admission answer: channel kind for 36, anticheat, HTTP download address, the map name. | done | games/shooters_edge/net/q2_net_server.cpp: ` nc=` for 36, ` dlserver=` when set, ` map=` always (no anticheat build, so no ` ac=`) |
 | proto.mapchange | map change | Every client is stuffed `changing map=<map>` before the level loads and `reconnect` after. | done | Added (upstream); our level changes stuff `changing` and `reconnect` |
 | proto.fragments | the new channel's fragments | A message larger than a packet in pieces; packet size agreed by `net_maxmsglen`. | done | plugins/classic/protocol/channel.cpp (`channel_read`, `newer_transmit`): 30-bit sequences, pieces with a fragment word, a 32768-byte reliable message; pieces held to our 1450-byte datagram |
 | proto.extended-limits | protocol extensions (36 minor 1024 and up) | When the library sets the protocol-extensions bit: `protocol` key 36, up to 8192 entities and more configstrings, a 16-bit sound index; old clients refused. | missing | S17, S18 |
@@ -452,7 +452,7 @@ done 37, partial 9, missing 7, not-taken 0
 
 ## 5. What the server accepts from clients: clc messages, string commands, out-of-band words
 
-done 41, partial 13, missing 1, not-taken 2
+done 42, partial 12, missing 1, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -472,7 +472,7 @@ done 41, partial 13, missing 1, not-taken 2
 | ucmd.disconnect | `disconnect` | Leaves; the server's own drop line is silent, the library announces it (stock: `<name> disconnected`). | done | `string_command` drops; our rules say `<name> disconnected` (`games/shooters_edge/server/q2_server.cpp`) |
 | ucmd.info | `info` | The server info to the asking client. | done | games/shooters_edge/net/q2_net_server.cpp (`player_query`, `q2_info_lines`) |
 | ucmd.sinfo | `sinfo` | The client's own connection details (the miscinfo block). | done | games/shooters_edge/net/q2_net_server.cpp (`q2_misc_lines`) |
-| ucmd.download | `download <file> [offset]` | Starts or resumes a download. | partial | `start_download`: players, models, sounds, maps only; no size limit; no `File size differs` (S37, S38) |
+| ucmd.download | `download <file> [offset]` | Starts or resumes a download. | partial | games/shooters_edge/net/q2_net_server.cpp (`start_download`): the name made plain, every kind, the size limit, the size-differs message; pieces of 1024 bytes (feat.dl.pieces) |
 | ucmd.download-http | `download http` | Marks the client as fetching by HTTP, so `status` shows HTTP. | done | games/shooters_edge/net/q2_net_server.cpp; shown as HTTP in `status` and `status d` |
 | ucmd.nextdl | `nextdl` | Next piece (stock clients). | done | `string_command` |
 | ucmd.stopdl | `stopdl` | Stops a download. | done | games/shooters_edge/net/q2_net_server.cpp |
@@ -494,7 +494,7 @@ done 41, partial 13, missing 1, not-taken 2
 | oob.rcon | `rcon <password> <line>` | Runs any console command, the answer cut into packets; macros expanded. | partial | `q2_rcon` (`games/shooters_edge/net/q2_admin.cpp`): admin words and the rules' console only, one answer packet (S29) |
 | oob.passive | `passive_connect` | Sent by `pickclient` to a waiting client. | done | games/shooters_edge/net/q2_admin.cpp |
 | oob.blackhole | blackholed addresses | Every packet ignored. | done | Engine blackholes |
-| oob.before-game | before a game starts only `rcon` is answered | | partial | `sesv` starts with a map, so the case does not arise |
+| oob.before-game | before a game starts only `rcon` is answered | | done | games/shooters_edge/net/q2_net_server.cpp: after `killserver` (the one way to have no game) only `rcon` is answered |
 | mvdcmd.mvdadmin | `!mvdadmin <password>` | Relay: become an admin (`[MVD] Granted admin status.`, `[MVD] Lost admin status.`, `[MVD] Invalid password.`). | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
 | mvdcmd.fwd | `fwd <cmd>` | Relay: forward a command upstream. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the string command up when the server took the flag |
 | mvdcmd.say | `say`, `say_team` | Relay chat, `[MVD] <name>: <text>`. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the channel's viewers, high level in the bright font, the flood rule |
@@ -519,7 +519,7 @@ done 41, partial 13, missing 1, not-taken 2
 Ours: the native host (`games/shooters_edge/server/q2_native.hpp`, `q2_native_calls.cpp`,
 `q2_native_abi.hpp`, `q2_native_save.cpp`).
 
-done 41, partial 24, missing 23, not-taken 0
+done 41, partial 24, missing 22, not-taken 1
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -598,7 +598,7 @@ done 41, partial 24, missing 23, not-taken 0
 | api.ex.CustomizeEntityToClient | export `CustomizeEntityToClient` | Per-client entity edits. | missing | S17 |
 | api.ex.EntityVisibleToClient | export `EntityVisibleToClient` | Per-client culling. | missing | S17 |
 | api.ex.filesystem | file system API v1 (open, close, load, read, write, flush, tell, seek, read line, list, free list, error string) | Files for the library. | missing | S17 |
-| api.ex.debugdraw | debug draw API v1 | Lines, points, axes, boxes, spheres, circles, cylinders, arrows, text (debug builds with a renderer; never on a dedicated server). | missing | |
+| api.ex.debugdraw | debug draw API v1 | Lines, points, axes, boxes, spheres, circles, cylinders, arrows, text (debug builds with a renderer; never on a dedicated server). | not-taken | docs/porting/server.md: debug build only, not taken (and never on a dedicated server) |
 | api.gmf.clientnum | feature bit 0: client number | The library fills each client's number; the server trusts it in frames. | missing | Added (upstream); no `g_features` read (S17) |
 | api.gmf.properinuse | feature bit 1: proper in-use | The library keeps the entity in-use flag right, so the server can rely on it. | missing | Added (upstream); verify what our host assumes |
 | api.gmf.mvdspec | feature bit 2: recorder-aware | The library knows the recorder's dummy spectator. | missing | Added (upstream); S40 |
@@ -616,7 +616,7 @@ done 41, partial 24, missing 23, not-taken 0
 
 `<x>` marks a filled-in value. Ours quoted where it differs.
 
-done 48, partial 15, missing 7, not-taken 2
+done 50, partial 15, missing 5, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -670,12 +670,12 @@ done 48, partial 15, missing 7, not-taken 2
 | msg.drop.version-probe | `failed version probe` (silent) | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.drop.reconnect-check | `failed to reconnect` (silent) | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.drop.cvarban | `<name> was kicked` | A cvar ban or a filtered command with the kick action. | done | games/shooters_edge/net/q2_net_server.cpp (`act`): `<name> was kicked` |
-| msg.shutdown | `Server quit`, `Server quit: <reason>`, `Server restarted: <reason>`, `Server restarted`, `Server was killed.` | Printed to every client before the disconnect or reconnect at `quit`, `recycle`, a full restart, `killserver`. | missing | Added (upstream); ours sends nothing at stop (con.quit) |
+| msg.shutdown | `Server quit`, `Server quit: <reason>`, `Server restarted: <reason>`, `Server restarted`, `Server was killed.` | Printed to every client before the disconnect or reconnect at `quit`, `recycle`, a full restart, `killserver`. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_admin.cpp; the 1023-character cap kept |
 | msg.name.empty | `You can't have an empty name.` | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.name.too-often | `You can't change your name too often.` | | done | `engine/server/names.hpp` |
 | msg.name.changed | `<old> changed name to <new>` | With `sv_show_name_changes`. | partial | Ours ends with a full stop |
 | msg.console-say | `console: <text>` | The operator's `say`. | done | `games/shooters_edge/server/q2_server.cpp` |
-| msg.download.size-differs | `File size differs from server.` then `Please delete the corresponding .tmp file from your system.` | A resume past the file's size. | missing | S38 |
+| msg.download.size-differs | `File size differs from server.` then `Please delete the corresponding .tmp file from your system.` | A resume past the file's size. | done | games/shooters_edge/net/q2_net_server.cpp: at the high level, then the refusal |
 | msg.lag | `Lag stats for:       <name>`, `RTT (min/avg/max):   <a>/<b>/<c> ms`, `Server to client PL: <x>% (approx)`, `Client to server PL: <y>%`, `Timescale          : <t>` | `lag` answer. | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.sinfo | the `sinfo` block: version, protocol (maj/min), maxmsglen, zlib support, netchan type, ping, movement fps, update rate, RTT, PL both ways, packetdup, timescale, connection time | `sinfo` answer. | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.packetdup | `Packetdup of <n> is not allowed on this server.`, `Server is sending <n> duplicate packet(s) to you.` (`packet` for one) | | done | games/shooters_edge/net/q2_net_server.cpp |
@@ -741,16 +741,16 @@ done 9, partial 24, missing 1, not-taken 2
 
 ## 9. Server features beyond single words: downloads, rates, floods, bans, filters, recording, status
 
-done 29, partial 16, missing 8, not-taken 2
+done 34, partial 13, missing 6, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| feat.dl.http | HTTP downloads | `dlserver=<url>` in the connect answer sends clients to a web copy. | missing | S36 |
+| feat.dl.http | HTTP downloads | `dlserver=<url>` in the connect answer sends clients to a web copy. | done | games/shooters_edge/net/q2_net_server.cpp: the connect answer names the web copy (`sv_downloadserver`) |
 | feat.dl.pieces | piece size and pace | Pieces sized to the packet's room, several a frame within the rate (extended); 1024 a frame stock. | partial | 1024 a piece (S39) |
-| feat.dl.no-frames | no frames while downloading | Game frames are not sent to a downloading client. | partial | Verify ours (`download_piece` in `games/shooters_edge/net/q2_net_server.cpp`) |
+| feat.dl.no-frames | no frames while downloading | Game frames are not sent to a downloading client. | done | games/shooters_edge/net/q2_net_server.cpp (`send_frames`): reliable data alone while a file comes down |
 | feat.dl.compressed | compressed downloads | Deflate pieces straight from compressed packs (36 minor 1021 and up, zlib, from offset 0). | missing | S18 |
-| feat.dl.resume | resume by offset | A download restarts at the client's offset. | partial | Offset taken; a bad offset refused without the size-differs message (S38) |
-| feat.dl.kinds | what may be downloaded | A path with a folder, no `..`, by folder: players, models and sprites, sounds, maps, textures and env, pics, others; empty files and files past the size limit refused. | partial | Players, models, sounds, maps only; no size limit (S37) |
+| feat.dl.resume | resume by offset | A download restarts at the client's offset. | done | games/shooters_edge/net/q2_net_server.cpp: from the client's offset; past the end told the size differs and refused |
+| feat.dl.kinds | what may be downloaded | A path with a folder, no `..`, by folder: players, models and sprites, sounds, maps, textures and env, pics, others; empty files and files past the size limit refused. | done | games/shooters_edge/net/q2_net_server.cpp: a folder, no climbing out, a plain first and last letter; by folder players, models and sprites, sound, maps, textures and env, pics, others; empty files and files past the size limit refused |
 | feat.dl.refused | refused download | The empty download answer (size -1). | done | `start_download` sends the refusal piece |
 | feat.rate.clamp | rate clamped to the bounds | `rate` held to `sv_min_rate`..`sv_max_rate`; LAN unlimited by setting; loopback unlimited. | done | `engine/server/rate.hpp`; loopback: verify |
 | feat.rate.no-key | no `rate` key: 5000, not clamped | | done | 5000, held to no limit (`RateBounds::none_held`); `server_rate_test` |
@@ -765,7 +765,7 @@ done 29, partial 16, missing 8, not-taken 2
 | feat.filter.userinfo | user info bans checked at connect, at `new` and on change | | done | `judge_userinfo` |
 | feat.stuff.connect | text run at connect and at begin (`addstuffcmd`) | | done | games/shooters_edge/net/q2_net_server.cpp: the connect list after the first `new`'s probe, the begin list at each `begin` |
 | feat.lrcon | limited rcon by prefixes, not macro-expanded | | done | `engine/server/lrcon.hpp` |
-| feat.rcon.split | rcon answers cut into packets | | missing | S29 |
+| feat.rcon.split | rcon answers cut into packets | | done | games/shooters_edge/net/q2_admin.cpp: packets of at most 1384 bytes after `print\n`, whole lines where they fit; an empty answer still sends one |
 | feat.rcon.reach | rcon runs any console command | | partial | S29 |
 | feat.slots.reserved | reserved slots and password; server password counts | | done | `engine/server/admission.hpp` |
 | feat.slots.redirect | redirect when full, or always with `!` first (everyone but reserved-password holders) | | done | same |

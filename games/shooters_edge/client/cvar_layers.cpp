@@ -186,6 +186,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   }
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
+  if (b.show_misses != nullptr) *b.show_misses = false;      // Quake II's cl_showmiss
+  if (b.shownet != nullptr) *b.shownet = 0;                  // and cl_shownet
   if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
   if (b.light_modulate != nullptr) *b.light_modulate = 1;
   if (b.light_lift != nullptr) *b.light_lift = 0;
@@ -202,6 +204,7 @@ void add_first(con::Console& c, const GameBindings& b) {
     b.view->gun = 1;
     b.view->gun_units[0] = b.view->gun_units[1] = b.view->gun_units[2] = 0;
     b.view->gun_fov_h = 0;
+    b.view->alpha = 1;
   }
   // Its weapon's depth and offset, in its units; the offset adds to our cl_gunx/y/z.
   const con::CvarSpec size{
@@ -328,7 +331,7 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   `ch_y` (`cl_crossx`, `cl_crossy`), `ch_scale` (`crosshairsize`) and `ch_alpha`
 //   (`crosshairalpha`); its own `ch_red`, `ch_green`, `ch_blue` and `ch_health` colour it;
 //   `scr_showpause` (`showpause`), `netgraph` (`r_netgraph`) and `ogg_volume` (`bgmvolume`); its
-//   `ogg_enable` is the music's switch (`cd on|off`);
+//   `ogg_enable` is the music's switch (`cd on|off`); `ogg` its spelling of `music`;
 // - the move keys' speeds are the same settings, 200 walking by default where Quake's
 //   are 400 (Quake II has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
@@ -410,6 +413,15 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .max = 86400,
          .values = "0: never; 1..86400: that many seconds (120 the default)",
          .overlap = con::Overlap::same});
+  v.add({.name = "m_side",  // the same sidestep as Quake's, a whole unit a count
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "How far the mouse's sideways moves sidestep you when they do (+strafe held, or "
+                 "lookstrafe with +mlook).",
+         .min = -10,
+         .max = 10,
+         .values = "-10..10: units a count at sensitivity 1 (1 the default)",
+         .overlap = con::Overlap::same});
   v.add({.name = "s_underwater",  // its own client muffles the world under water; Quake's never
          .fallback = "1",
          .flags = con::kArchive,
@@ -464,6 +476,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
   } else {
     v.add(music_on), v.add(shuffle), v.add(menu_track);
   }
+  c.add_command_synonym("ogg", "music");       // its music player (engine/audio/music_console.hpp)
   c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
   v.add({.name = "scr_centertime",
          .fallback = "2.5",
@@ -516,6 +529,22 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .values = "1: predicted, drawn where you will be (the default); 0: drawn where the "
                       "server last put you, a round trip late"},
            b.predict);
+  if (b.show_misses != nullptr)
+    v.bind({.name = "cl_showmiss",
+            .fallback = "0",
+            .help = "Whether each miss of your moves' prediction is printed, with its size.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: not printed (the default); 1: the frame and how far off, in units"},
+           b.show_misses);
+  if (b.shownet != nullptr)
+    v.bind({.name = "cl_shownet",
+            .fallback = "0",
+            .help = "Whether each message from the server you joined is printed, as its size.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 3,
+            .values = "0: none (the default); 1..3: each message's size in bytes"},
+           b.shownet);
   if (b.crouch != nullptr)
     v.bind({.name = "cl_predict_crouch",
             .fallback = "1",
@@ -645,6 +674,18 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(gun_fov, &b.view->gun_fov_h);
   else
     v.add(gun_fov);
+  const con::CvarSpec gun_alpha{
+      .name = "cl_gunalpha",
+      .fallback = "1",
+      .flags = con::kArchive,
+      .help = "How solid the held weapon is drawn.",
+      .min = 0,
+      .max = 1,
+      .values = "1: solid (the default); 0.1..0.9: see-through; 0: not seen"};
+  if (b.view != nullptr)
+    v.bind(gun_alpha, &b.view->alpha);
+  else
+    v.add(gun_alpha);
   // Its move rate and its frame cap: its `cl_maxfps` is the moves a second (ours, the frame cap, is
   // set aside while it is loaded and comes back with its value after), its `r_maxfps` the frame
   // cap, starting at the cap in force when the game loads and kept with the game's own settings.
@@ -758,6 +799,11 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
     v.q2 = fresh;
   }
   if (game.id == "q2") add_q2_session_cvars(c.cvars(), v.q2);
+  if (b.view != nullptr) {  // gun_next, gun_prev and gun_model over the game's own weapons
+    b.view->gun_frame = 0;
+    b.view->gun_model = -1;
+    shooters_edge::view::add_gun_commands(c, *b.view, game.held_weapons);
+  }
   if (!v.log) v.log = std::make_shared<ConsoleLog>();
   v.log->mode = 0;  // Quake II's logfile and the rest; its file closed by the next line printed
   v.log->flush = false;

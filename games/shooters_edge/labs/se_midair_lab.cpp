@@ -168,6 +168,25 @@ void tick(Stage& d, uint8_t buttons, float pitch, float yaw) {
   d.r.frame(packets, 2);
 }
 
+constexpr int32_t kWorld = sh::kSqSolid | sh::kSqWindow;
+
+// Ana steps 64 units off her start, the first way with room, before Ben spawns: a spawn on a
+// standing player kills that player.
+void step_off_start(Stage& d) {
+  tick(d, 0, 0, 0);
+  const sv::Q2Player& ana = d.p(0);
+  const sh::Vec3f at{ana.move.origin[0] / 8.0f, ana.move.origin[1] / 8.0f,
+                     ana.move.origin[2] / 8.0f};
+  const sh::Vec3f lo{-16, -16, -24}, hi{16, 16, 32};
+  const float ways[4][2] = {{-64, 0}, {64, 0}, {0, -64}, {0, 64}};
+  for (const auto& w : ways) {
+    const sh::Vec3f to = at + sh::Vec3f{w[0], w[1], 0};
+    if (sv::map_trace(d.s(), at, lo, hi, to, kWorld).fraction < 1) continue;
+    put(d.p(0), to);
+    return;
+  }
+}
+
 std::unique_ptr<Stage> stage(const std::shared_ptr<const br::Map>& map, const std::string& name,
                              int level, std::string& error, bool midair = true) {
   auto d = std::make_unique<Stage>();
@@ -180,6 +199,7 @@ std::unique_ptr<Stage> stage(const std::shared_ptr<const br::Map>& map, const st
   spec.brushes = map;
   if (!d->r.start(spec, error)) return nullptr;
   d->r.connect(0, "Ana", false, false);
+  step_off_start(*d);
   d->r.connect(1, "Ben", false, false);
   if (!midair) {  // the launcher in hand as midair gives it
     sv::SqBody& body = d->p(0).body;
@@ -191,7 +211,6 @@ std::unique_ptr<Stage> stage(const std::shared_ptr<const br::Map>& map, const st
   return d;
 }
 
-constexpr int32_t kWorld = sh::kSqSolid | sh::kSqWindow;
 constexpr float kDist = 200;  // the target's distance ahead of the shooter
 
 // Where the shooter stands and which way he fires (one of the four axes, so a slice of the map
@@ -294,7 +313,11 @@ Shot fire_at(Stage& d, const Spot& sp, float height, bool feet) {
   out.landed = out.landed || out.killed;
   out.frags = shooter.frags - frags;
   if (d.s().obituaries.size() > lines) out.line = d.s().obituaries.back();
-  for (int i = 0; i < 300 && !target.alive; i++) tick(d, 0, 0, sp.yaw());  // back by himself
+  // Back by himself, the shooter off the start he spawns on.
+  for (int i = 0; i < 300 && !target.alive; i++) {
+    put(shooter, sp.from + sp.dir() * (kDist / 2));
+    tick(d, 0, 0, sp.yaw());
+  }
   return out;
 }
 

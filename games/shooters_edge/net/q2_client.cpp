@@ -119,17 +119,22 @@ bool lacks(const Q2ClientEnd& c, const std::string& path) {
   return c.downloaded.count(path) == 0 && (!c.cfg.read_file || c.cfg.read_file(path).empty());
 }
 
+// Lacked and let through by the player's download switches: fetched on joining.
+bool wanted(const Q2ClientEnd& c, const std::string& path) {
+  return q2_download_allowed(c.cfg.allow, path) && lacks(c, path);
+}
+
 // `precache`: the files lacked queued, `begin` held until they are fetched.
 void start_fetch(Q2ClientEnd& c, const std::string& begin) {
   c.fetch_queue.clear();
   const std::vector<std::string>& models = q2_demo(c).state.models;
-  if (models.size() > 1 && models[1].rfind("maps/", 0) == 0 && lacks(c, models[1]))
+  if (models.size() > 1 && models[1].rfind("maps/", 0) == 0 && wanted(c, models[1]))
     c.fetch_queue.push_back(models[1]);
   if (c.cfg.fetch_level) {  // what the level names: models, sounds and the players' figures
     const auto queue = [&c](const std::string& path) {
       if (path.empty() || path[0] == '*' || path[0] == '#' || path.find('/') == std::string::npos)
         return;
-      if (lacks(c, path) &&
+      if (wanted(c, path) &&
           std::find(c.fetch_queue.begin(), c.fetch_queue.end(), path) == c.fetch_queue.end())
         c.fetch_queue.push_back(path);
     };
@@ -146,7 +151,7 @@ void start_fetch(Q2ClientEnd& c, const std::string& begin) {
     }
   }
   for (const std::string& w : c.cfg.want)
-    if (lacks(c, w) &&
+    if (wanted(c, w) &&
         std::find(c.fetch_queue.begin(), c.fetch_queue.end(), w) == c.fetch_queue.end())
       c.fetch_queue.push_back(w);
   c.held_begin = begin;
@@ -244,7 +249,9 @@ void run_stuffed(Q2ClientEnd& c) {
 
 // One payload as one block of the recording, then read.
 void read_payload(Q2ClientEnd& c, const uint8_t* data, size_t size) {
-  if (size == 0) return;  // a keep-alive
+  if (c.cfg.shownet > 0 && c.cfg.trace != nullptr && c.cfg.trace->print)
+    c.cfg.trace->print(std::to_string(size));  // cl_shownet
+  if (size == 0) return;                       // a keep-alive
   const int levels = q2_demo(c).state.levels;
   const auto len = static_cast<uint32_t>(size);
   for (int k = 0; k < 4; k++) q2_demo(c).bytes.push_back(static_cast<uint8_t>(len >> (8 * k)));
@@ -360,6 +367,7 @@ void send_packet(Q2ClientEnd& c, int64_t now_us) {
     // For 150 ms (past the server's next 10 Hz frame, whatever moves come between) no frame is
     // acknowledged, so the server's next one is whole.
     if (c.cfg.whole_every > 0 && c.now - c.last_whole < 0.15) acked = -1;
+    if (c.cfg.nodelta) acked = -1;  // cl_nodelta: every frame asked for whole
     write_q2_move(w, acked, c.cmds, c.ch.outgoing_sequence);
     c.moves++;
     speak(c, w, m.msec * gn::kVoiceRate / 1000);

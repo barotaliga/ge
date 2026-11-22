@@ -115,6 +115,9 @@ void q2_tv_block(Q2TvFace& f, std::span<const uint8_t> block);
 void q2_tv_frame(Q2TvFace& f, int64_t now_us);
 // Every viewer sent the disconnect.
 void q2_tv_stop(Q2TvFace& f);
+// The server going away: every viewer sent `text` at the high print level and the disconnect (or
+// the reconnect, a restart's), twice, then freed silently.
+void q2_tv_farewell(Q2TvFace& f, const std::string& text, bool reconnect);
 int q2_tv_viewers(const Q2TvFace& f);
 // A message queued to one viewer alone, after what it was sent already (a print, a layout).
 void q2_tv_send(Q2Viewer& v, std::span<const uint8_t> msg);
