@@ -34,6 +34,7 @@ struct Q2Screen {
   int draw2d = 2;    // scr_draw2d: 0 nothing, 1 all but the status bar, 2 all, 3 no layouts
   double alpha = 1;  // scr_alpha: every element's opacity but the crosshair's
   int lag_draw = 0;  // scr_lag_draw: 0 off, 1 the lag graph, 2 on a dark box
+  int turtle = 1;    // scr_showturtle: 0 off, 1 a frame's troubles, 2 also the packets held back
   int lag_x = -1, lag_y = -1;  // scr_lag_x, scr_lag_y: its corner; negative from the far edge
   double lag_min = 0, lag_max = 200;  // scr_lag_min, scr_lag_max: its bottom and top, ms
   int adjust_fov = 1;                 // cl_adjustfov: 1 the 4:3 view's height kept, 0 its width

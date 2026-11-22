@@ -6,7 +6,7 @@
 //
 // ge:summary The OS's non-blocking UDP sockets (POSIX and Winsock), IPv4 and IPv6; OS entropy
 // ge:keywords net udp socket sockets bsd-sockets winsock bind sendto recvfrom non-blocking
-// ge:keywords ipv4 ipv6 loopback entropy random-device os
+// ge:keywords ipv4 ipv6 loopback entropy random-device os showip host-name host_addresses
 // ge:skill net
 // ge:test tests/net_udp_socket_test.cpp
 #pragma once
@@ -15,6 +15,8 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "net/address.hpp"
 
@@ -43,5 +45,22 @@ uint64_t os_entropy();
 // game calls it when the player acts (a refresh, a connect), never in a frame's hot path. False
 // and `error` when the name does not resolve.
 bool resolve_ipv4(std::string_view text, uint16_t port, Address& out, std::string* error);
+
+// One of this machine's addresses (`showip`), with the name a reverse lookup finds ("" when none).
+struct HostAddress {
+  Address address;
+  std::string reverse;
+};
+// This machine's name, the resolver's canonical name for it ("" when it gives none) and its
+// addresses (IPv4, and IPv6 too when `ipv6`). It blocks while the resolver asks: an operator's
+// word, never a frame's work. False and `error` ("Couldn't get system host name", "Couldn't
+// resolve <name>: <why>") when the name cannot be had or looked up.
+bool host_addresses(std::string& name, std::string& canonical, std::vector<HostAddress>& out,
+                    bool ipv6, std::string* error);
+// `showip`'s lines: "Hostname: <canonical>", one "IP      : <address> (<reverse>)" or
+// "IP6     : ..." per address, then one "<what> socket bound to <address>" per socket
+// (`sockets`' first: "Server UDP", "Server TCP", "Server UDP6", ...).
+std::string showip_text(const std::string& canonical, const std::vector<HostAddress>& addresses,
+                        const std::vector<std::pair<std::string, Address>>& sockets);
 
 }  // namespace ge::net

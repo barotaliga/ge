@@ -304,3 +304,19 @@ TEST(a_blow_kicks_the_view_toward_its_source_by_its_count) {
   CHECK_MSG(std::fabs((after.roll - before.roll) - kick) < 1e-3,
             std::to_string(after.roll - before.roll));
 }
+
+// +use sets the use button while held, and a tap between two commands still reaches the next.
+TEST(use_button_held_or_tapped_reaches_the_command) {
+  cl::ControlSettings c;
+  ge::console::Console con;
+  ge::shooter::add_control_cvars(con, c);
+  ge::input::InputState in;
+  CHECK((ge::shooter::read_controls(cl::button_moves(c), in, c).buttons & sh::kButtonUse) == 0);
+  con.execute("+use");
+  CHECK((ge::shooter::read_controls(cl::button_moves(c), in, c).buttons & sh::kButtonUse) != 0);
+  con.execute("-use");
+  CHECK((ge::shooter::read_controls(cl::button_moves(c), in, c).buttons & sh::kButtonUse) == 0);
+  con.execute("+use; -use");  // a tap between two commands
+  CHECK((ge::shooter::read_controls(cl::button_moves(c), in, c).buttons & sh::kButtonUse) != 0);
+  CHECK((ge::shooter::read_controls(cl::button_moves(c), in, c).buttons & sh::kButtonUse) == 0);
+}

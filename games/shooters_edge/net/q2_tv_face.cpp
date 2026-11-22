@@ -19,8 +19,9 @@ namespace shooters_edge::net {
 
 namespace {
 
-constexpr uint8_t kSvcDisconnect = 7, kSvcReconnect = 8, kSvcStuffText = 11, kSvcServerData = 12,
-                  kSvcConfigString = 13, kSvcBaseline = 14, kSvcDownload = 16, kSvcFrame = 20;
+constexpr uint8_t kSvcDisconnect = 7, kSvcReconnect = 8, kSvcPrint = 10, kSvcStuffText = 11,
+                  kSvcServerData = 12, kSvcConfigString = 13, kSvcBaseline = 14, kSvcDownload = 16,
+                  kSvcFrame = 20;
 constexpr size_t kUnit = 1200;  // the most bytes one reliable message carries
 constexpr size_t kLogKept = 256;
 constexpr int kStringCmdsPerPacket = 7;
@@ -442,6 +443,22 @@ void q2_tv_frame(Q2TvFace& f, int64_t now_us) {
 
 void q2_tv_stop(Q2TvFace& f) {
   for (Q2Viewer& v : f.viewers) drop(f, v, "the broadcast stopped");
+}
+
+void q2_tv_farewell(Q2TvFace& f, const std::string& text, bool reconnect) {
+  std::vector<uint8_t> bye = {kSvcPrint, 2};  // the high print level
+  bye.insert(bye.end(), text.begin(), text.end());
+  bye.push_back(0);
+  bye.push_back(reconnect ? kSvcReconnect : kSvcDisconnect);
+  for (Q2Viewer& v : f.viewers) {
+    if (v.stage == Q2ViewerStage::free) continue;
+    for (int pass = 0; pass < 2; pass++) {  // twice, as the last word on a lossy line
+      uint8_t out[kMaxPacket];
+      const size_t n = channel_transmit(v.ch, bye.data(), bye.size(), f.now, out);
+      send_to(f, v.address, out, n);
+    }
+    v = Q2Viewer{};  // freed with no line of its own
+  }
 }
 
 }  // namespace shooters_edge::net

@@ -72,5 +72,9 @@ void targets_rows(Q2Server& s);
 // Kills every living player and monster in `e`'s box (a killbox, a thing appearing in place),
 // past armour and god mode, as a telefrag.
 void targets_kill_inside(Q2Server& s, const Q2Entity& e);
+// Player `slot` placed (a spawn, a teleport): every living player and monster his box overlaps is
+// struck with 100 000 points no armour, god mode or invulnerability stops, he the attacker, the
+// telefrag the cause.
+void targets_telefrag(Q2Server& s, int slot);
 
 }  // namespace shooters_edge::server

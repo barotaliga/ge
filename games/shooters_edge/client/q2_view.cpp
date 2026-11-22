@@ -85,6 +85,16 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
           .max = 2,
           .values = "0: none (the default); 1: the graph; 2: the graph on a dark box"},
          &s.lag_draw);
+  v.bind({.name = "scr_showturtle",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Words at the lower left when a frame from the server came with a problem.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: the frame's own problems (the default); 2: also the packets held back; "
+                    "0: none"},
+         &s.turtle);
   for (const auto& [name, field, across] :
        {std::tuple{"scr_lag_x", &s.lag_x, true}, std::tuple{"scr_lag_y", &s.lag_y, false}})
     v.bind({.name = name,

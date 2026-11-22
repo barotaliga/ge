@@ -54,6 +54,7 @@
 #include <map>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "console/cvar.hpp"
@@ -203,6 +204,7 @@ struct SettingName {
 struct ServerGame {
   const char* binary = "server";  // the executable's name, at the head of every line it prints
   const char* title = "a game";   // the game's name, for the banner and `--help`
+  const char* version_text = "";  // the build's version as words, printed by `version`
   uint32_t protocol = 0;          // the LAN advert's protocol (net/packet.hpp's protocol_id)
   uint16_t default_port = 27500;
   uint16_t discovery_port = 0;    // the game's fixed LAN discovery port (0: no LAN answers)
@@ -232,6 +234,16 @@ struct ServerGame {
   // `map`, `changelevel`, a mod's commands); false when the game does not take it either. May be
   // null.
   bool (*console)(void* game, const std::string& line) = nullptr;
+  // The game's farewell as `quit [reason]` or `recycle [reason]` ends the server (`reason` the
+  // words after it; `restart`: recycle's, the players told to reconnect), before `destroy`. Null:
+  // `destroy` alone says goodbye.
+  void (*quit)(void* game, const std::string& reason, bool restart) = nullptr;
+  // The maps the game can load, by name (`$com_maplist`); may be null.
+  void (*maps)(const void* game, std::vector<std::string>& out) = nullptr;
+  // The game's own listening sockets for `showip` ("Server TCP" and where it is bound), appended
+  // to `out`; may be null.
+  void (*sockets)(const void* game,
+                  std::vector<std::pair<std::string, net::Address>>& out) = nullptr;
   // The game's part of a status line (`players=8 commands=…`); may be null.
   std::string (*status)(const void* game) = nullptr;
   // The game's part of the public status record (net/status.hpp) a hub or a browser asks for: its

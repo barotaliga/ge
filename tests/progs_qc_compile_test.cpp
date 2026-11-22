@@ -273,3 +273,20 @@ TEST(mistakes_name_their_line) {
         diagnostic_text(d) + " (want line " + std::to_string(c.line) + ": " + c.says + ")");
   }
 }
+
+TEST(too_few_arguments_warn_and_build_too_many_refuse) {
+  const QcResult r = build(
+      "float(float a, float b) two = { return a + b; };\n"
+      "float() f = { return two(3); };");
+  CHECK_MSG(r.ok, diagnostics(r));
+  CHECK(r.diagnostics.size() == 1u);
+  if (r.diagnostics.size() == 1u) {
+    CHECK(!r.diagnostics[0].error && r.diagnostics[0].line == 2);
+    CHECK_MSG(r.diagnostics[0].message.find("got 1") != std::string::npos,
+              diagnostic_text(r.diagnostics[0]));
+  }
+  const QcResult many = build(
+      "float(float a) one = { return a; };\n"
+      "float() f = { return one(1, 2); };");
+  CHECK(!many.ok);
+}

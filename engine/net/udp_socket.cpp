@@ -142,4 +142,63 @@ bool resolve_ipv4(std::string_view text, uint16_t port, Address& out, std::strin
   return true;
 }
 
+bool host_addresses(std::string& name, std::string& canonical, std::vector<HostAddress>& out,
+                    bool ipv6, std::string* error) {
+  out.clear();
+  canonical.clear();
+  char host[256] = {};
+  if (!startup() || gethostname(host, sizeof host - 1) != 0) {
+    if (error) *error = "Couldn't get system host name";
+    return false;
+  }
+  name = host;
+  addrinfo hints;
+  std::memset(&hints, 0, sizeof hints);
+  hints.ai_family = ipv6 ? AF_UNSPEC : AF_INET;
+  hints.ai_socktype = SOCK_DGRAM;
+  hints.ai_flags = AI_CANONNAME;
+  addrinfo* found = nullptr;
+  const int r = getaddrinfo(host, nullptr, &hints, &found);
+  if (r != 0 || found == nullptr) {
+    if (error) *error = "Couldn't resolve " + name + ": " + gai_strerror(r);
+    return false;
+  }
+  if (found->ai_canonname != nullptr) canonical = found->ai_canonname;
+  for (const addrinfo* a = found; a != nullptr; a = a->ai_next) {
+    sockaddr_storage sa;
+    std::memset(&sa, 0, sizeof sa);
+    std::memcpy(&sa, a->ai_addr, a->ai_addrlen < sizeof sa ? a->ai_addrlen : sizeof sa);
+    HostAddress h;
+    h.address = from_sockaddr(sa);
+    char back[NI_MAXHOST] = {};
+    if (getnameinfo(a->ai_addr, static_cast<SockLen>(a->ai_addrlen), back, sizeof back, nullptr, 0,
+                    NI_NAMEREQD) == 0)
+      h.reverse = back;
+    out.push_back(std::move(h));
+  }
+  freeaddrinfo(found);
+  return true;
+}
+
+std::string showip_text(const std::string& canonical, const std::vector<HostAddress>& addresses,
+                        const std::vector<std::pair<std::string, Address>>& sockets) {
+  std::string out;
+  if (!canonical.empty()) out += "Hostname: " + canonical + "\n";
+  for (const HostAddress& h : addresses) {
+    Address bare = h.address;
+    bare.port = 0;
+    std::string text = to_string(bare);
+    if (const size_t colon = text.rfind(":0");
+        colon != std::string::npos && colon + 2 == text.size())
+      text.resize(colon);  // the address alone
+    if (bare.family == Family::ipv6 && text.size() > 1 && text.front() == '[')
+      text = text.substr(1, text.find(']') - 1);
+    out += (bare.family == Family::ipv6 ? "IP6     : " : "IP      : ") + text;
+    if (!h.reverse.empty()) out += " (" + h.reverse + ")";
+    out += "\n";
+  }
+  for (const auto& [what, at] : sockets) out += what + " socket bound to " + to_string(at) + "\n";
+  return out;
+}
+
 }  // namespace ge::net

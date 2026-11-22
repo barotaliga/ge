@@ -455,6 +455,11 @@ TEST(each_games_own_gun_place_adds_to_ours_and_its_lens_stands_in) {
                   ge::camera::fov_y_of(ge::core::kPi / 2, 4.0 / 3.0)) < 1e-12);  // cl_gunfov 90
   u.set("r_viewmodel_fov", "50", con::Source::local);                            // ours set wins
   CHECK(std::fabs(shooters_edge::view::eye_row(q.view).fov_y - 50 * ge::core::kPi / 180) < 1e-12);
+  // Its cl_gunalpha: how solid the weapon is drawn; Quake has none.
+  CHECK(q.view.alpha == 1);
+  u.set("cl_gunalpha", "0.4", con::Source::local);
+  CHECK(q.view.alpha == 0.4);
+  CHECK(v.find("cl_gunalpha") == nullptr && w.view.alpha == 1);
 }
 
 TEST(quake_twos_cl_maxfps_is_its_move_rate_and_r_maxfps_its_frame_cap) {
@@ -530,6 +535,17 @@ TEST(color_sets_both_colours_as_quake_keeps_them) {
   CHECK(!w.console.output().empty() && w.console.output()[0].find("13") != std::string::npos);
 }
 
+TEST(an_old_quake_configs_cl_name_and_cl_color_dress_you) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("name") == nullptr || v.synonym("_cl_name") != nullptr);  // name: the settings'
+  w.console.execute("_cl_color \"77.000000\"");  // shirt 4, pants 13, as Quake saved them
+  CHECK(v.find("topcolor")->value == "4" && v.find("bottomcolor")->value == "13");
+  w.console.clear_output();
+  w.console.execute("_cl_color");
+  CHECK(!w.console.output().empty() && w.console.output()[0] == "\"_cl_color\" is \"77\"");
+}
+
 TEST(q2_chat_sound_and_auto_chat_are_its_own_and_go_with_it) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
@@ -585,6 +601,9 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("ogg_shuffle", "1", con::Source::local);
   v.set("ogg_menu_track", "7", con::Source::local);
   CHECK(w.music.volume == 0.25 && !w.music.enabled && w.music.shuffle && w.music.menu_track == 7);
+  v.set("cl_hit_markers", "1", con::Source::local);
+  v.set("scr_hit_marker_time", "250", con::Source::local);
+  CHECK(w.picture.q2fx.hit_markers == 1 && w.picture.q2fx.hit_marker_ms == 250);
   v.set("cl_railtrail_type", "2", con::Source::local);
   v.set("cl_railcore_color", "#0f0", con::Source::local);
   CHECK(w.picture.q2fx.rail_type == 2 && w.picture.q2fx.core_colour == "#0f0");
@@ -639,4 +658,17 @@ TEST(q2s_logfile_keeps_what_the_console_prints) {
   std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   CHECK(text == "kept\n");
   std::filesystem::remove_all(dir);
+}
+
+TEST(quake_twos_m_side_is_quakes_sidestep_a_whole_unit_a_count) {
+  // m_side is one setting in both games (shooter/controls.cpp): Quake's default 0.8, Quake II's 1,
+  // the field written by whichever is loaded; Quake's comes back when Quake II leaves.
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("m_side")->value == "0.8" && w.controls.m_side == 0.8);
+  const cl::GameBindings b{.view = &w.view};
+  cl::switch_game_cvars(w.console, w.game, *pr::find_game("q2"), b);
+  CHECK(v.find("m_side")->value == "1" && w.controls.m_side == 1);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], b);
+  CHECK(v.find("m_side")->value == "0.8" && w.controls.m_side == 0.8);
 }

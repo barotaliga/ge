@@ -5,10 +5,12 @@
 // ge:skill render shooter
 #include "shooters_edge/client/map_load.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <exception>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "core/num_text.hpp"
@@ -31,6 +33,9 @@ MapRead read_map(const SearchPath* files, const RemixFiles* remix, const std::st
   MapRead r;
   try {
     r.map = load_remixed_map(*files, name, remix, r.error, &r.said);
+    // A Quake II map with no visibility loads, everything seen from everywhere: the player told.
+    if (r.map && r.map->bsp.map.family == ge::brush::Family::v38 && r.map->bsp.map.pvs.empty())
+      r.said += std::string(r.said.empty() ? "" : "\n") + std::string(kNoVisibility);
   } catch (const std::exception& e) {
     r.map.reset();
     r.error = failed_on("the map " + name, e);
@@ -198,7 +203,11 @@ int take_load(MapLoad& l, const LoadWindow& at, Listen& listen, ge::console::Con
         step.map = load_named_map(*at.files, "arena", error);
     }
     if (step.map) {
-      if (!step.said.empty()) con.print(step.said);
+      for (size_t at_line = 0; at_line < step.said.size();) {  // a line each
+        const size_t end = std::min(step.said.find('\n', at_line), step.said.size());
+        con.print(step.said.substr(at_line, end - at_line));
+        at_line = end + 1;
+      }
       if (!start_map(listen, *at.content, std::move(step.map), error)) {
         out::error("shooters_edge: the map change failed: " + error +
                    "; see docs/shooters-edge.md § Playing it");

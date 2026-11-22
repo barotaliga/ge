@@ -136,7 +136,12 @@ needs all of it, and Shooter's Edge has its own copy of half of it today.
   `gesample`). A started server runs the console lines a launcher adds to its `--commands` file
   (`hosted_command`); `mod arena,ctf` there resets every server value, remounts the search path,
   reads the layers again with the command line kept, and restarts the match under them on the
-  same port (`server_switch_mods`). From a game's repo, `ge server --map --bots --for` builds the
+  same port (`server_switch_mods`). `quit [reason]` ends the server after the frame (the game's
+  `ServerGame::quit` says goodbye with the reason first) and `recycle [reason]` the same with the
+  players told to reconnect: both exit with success, so a supervisor (a script, a service) starts
+  the server again. The operator's console also has `showip`, `dns`, `net_stats`, `macrolist` and the macros
+  (`$com_date`, `$com_time`, `$com_uptime`, `$com_uptime_long`, `$random`, `$com_maplist`, the
+  game's maps by `ServerGame::maps`). From a game's repo, `ge server --map --bots --for` builds the
   game's dedicated binary (the one `ge_add_server` names, or `--game`) and runs it headless for
   its digest and input log; `--replay=<log>` runs a log again to the bit.
 

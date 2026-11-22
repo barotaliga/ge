@@ -99,7 +99,6 @@ constexpr const char* kBodySounds[] = {
 constexpr int kAutoChannel = 0, kVoiceChannel = 2, kItemChannel = 3, kBodyChannel = 4;
 constexpr double kPainEvery = 0.75;  // a pain cry at most once in this long, s
 constexpr float kGibHealth = -40;    // a death under this throws the body apart
-constexpr float kItemHalf = 15;      // a dropped item's box, ±15 each way
 
 bool grenade(SqShot k) { return k == SqShot::grenade || k == SqShot::hand_grenade; }
 
@@ -417,7 +416,8 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
           bool energy, int weapon, bool no_armour = false, bool past_invulnerable = false) {
   if (!fightable(s, target) || damage <= 0) return;
   // A teammate's blow does nothing with `dmflags` 256 (no friendly fire) but push.
-  if (attacker >= 0 && attacker != target && fight_teammates(s, attacker, target) && dmflag(s, 256))
+  if (attacker >= 0 && attacker != target && fight_skin_mates(s, attacker, target) &&
+      fight_anyflag(s, 256))
     damage = 0;
   if (damage > 0) damage = q2_mods_damage(s, target, attacker, damage);  // the push still lands
   if (fight_midair(s)) {
@@ -988,38 +988,6 @@ void fire(Q2Server& s, int slot, int shots) {
   }
 }
 
-// Item `item` thrown from player `slot`: 100 forward along his view turned `turn` degrees, 300
-// up, from 24 ahead and 16 below his eye (nearer when a wall is closer); his to take back after
-// 1 s, gone after 30 s in deathmatch. Null when every drop's row is in use.
-Q2Drop* toss(Q2Server& s, int slot, int item, float turn) {
-  Q2Drop* d = nullptr;
-  for (Q2Drop& free : s.drops)
-    if (!free.live) {
-      d = &free;
-      break;
-    }
-  if (d == nullptr) return nullptr;
-  const Q2Player& p = s.players[slot];
-  const sh::Vec3f origin = unpack(p.move.origin);
-  const sh::ViewAxes ax = sh::angle_vectors(p.view_angles + sh::Vec3f{0, turn, 0});
-  sh::Vec3f start = origin + sh::Vec3f{0, 0, p.view_height - 16} + ax.forward * 24;
-  const float a[3] = {origin.x, origin.y, origin.z}, b[3] = {start.x, start.y, start.z};
-  const float lo[3] = {-kItemHalf, -kItemHalf, -kItemHalf};
-  const float hi[3] = {kItemHalf, kItemHalf, kItemHalf};
-  const ge::brush::Trace t = s.tracer->trace(a, b, lo, hi, kWorldMask);
-  if (t.fraction < 1) start = {t.end[0], t.end[1], t.end[2]};
-  *d = Q2Drop{};
-  d->live = true;
-  d->item = item;
-  d->owner = slot;
-  d->origin = start;
-  d->velocity = ax.forward * 100;
-  d->velocity.z = 300;
-  d->takeable_at = s.level_time + 1;
-  d->dies_at = deathmatch(s) ? s.level_time + 30 : 0;
-  return d;
-}
-
 }  // namespace
 
 size_t fight_first_row(const Q2Server& s) { return 1 + sh::kMaxClients + s.entities.size(); }
@@ -1295,7 +1263,7 @@ void fight_step(Q2Server& s, int slot, bool attack) {
   if (!fightable(s, slot)) return;
   // g_swap_speed: frames a lower or raise advances a frame; 1 or less, or 65535 or more, is 1.
   const int swap = s.cvars.find("g_swap_speed")->integer();
-  const SqStep step = fight_hand_step(s, slot, attack, dmflag(s, 8192) || fight_midair(s),
+  const SqStep step = fight_hand_step(s, slot, attack, fight_anyflag(s, 8192) || fight_midair(s),
                                       swap > 1 && swap < 65535 ? swap : 1);
   if (step.click) sound(s, slot + 1, unpack(p.move.origin), kClick);
   if (step.shots > 0 && p.hand.weapon == int(SqWeapon::hand_grenade))
@@ -1424,7 +1392,7 @@ void fight_choose(Q2Server& s, int slot, int w) {
   if (fightable(s, slot)) sq_choose(p.hand, p.body, w);
 }
 
-void fight_took(Q2Server& s, int slot, int item) {
+void fight_took(Q2Server& s, int slot, int item, int grenades_before) {
   const int w = sq_weapon_of_item(item);
   Q2Player& p = s.players[slot];
   const SqItem& it = kSqItems[item];
@@ -1437,9 +1405,10 @@ void fight_took(Q2Server& s, int slot, int item) {
   if (it.kind == SqKind::powerup && dm && (s.cvars.find("dmflags")->integer() & 16) != 0)
     fight_use(s, slot, item);  // instant items
   const bool may = !dm || p.hand.weapon == int(SqWeapon::blaster);
-  // Grenades, both ammunition and a weapon: the first ones held are taken in hand.
+  // Grenades, both ammunition and a weapon: the first ones held (none before) are taken in hand.
   if (it.kind == SqKind::ammo && it.ammo == SqAmmo::grenades &&
-      p.body.ammo[static_cast<int>(SqAmmo::grenades)] == it.amount &&
+      (grenades_before >= 0 ? grenades_before == 0
+                            : p.body.ammo[static_cast<int>(SqAmmo::grenades)] == it.amount) &&
       p.hand.weapon != int(SqWeapon::hand_grenade) && may)
     sq_choose(p.hand, p.body, int(SqWeapon::hand_grenade));
   if (w < 0 || p.body.counts[item] != 1) return;  // only a newly owned weapon
@@ -1452,7 +1421,8 @@ bool fight_command(Q2Server& s, int slot, const std::string& cmd, const std::str
     const int w = sq_weapon_named(arg);
     // g_select_empty 0: a held weapon short of a shot's ammunition is refused and the player told.
     if (w >= 0 && w != int(SqWeapon::hand_grenade) && fightable(s, slot) && sq_holds(p.body, w) &&
-        !sq_can_fire(p.body, w) && !dmflag(s, 8192) && !s.cvars.find("g_select_empty")->on()) {
+        !sq_can_fire(p.body, w) && !fight_anyflag(s, 8192) &&
+        !s.cvars.find("g_select_empty")->on()) {
       std::string say = p.body.ammo[int(kSqWeapons[w].ammo)] > 0 ? "Not enough " : "No ";
       for (const SqItem& it : kSqItems)
         if (it.kind == SqKind::ammo && it.ammo == kSqWeapons[w].ammo) say += it.pickup;
@@ -1549,42 +1519,15 @@ void fight_kill(Q2Server& s, int slot, int killer, int weapon) {
   } else {  // a death cry in the player's own voice
     body_sound(s, slot, kVoiceChannel, kOwnSounds[variant(s, slot, 1, 4)]);
   }
-  // In deathmatch the weapon in hand (not the blaster, only with its ammo) is dropped, and each
-  // powerup running with more than 1 s left (the silencer with shots left) whose drop setting is on
-  // (`sv_dropquad` or `dmflags` 16384 for the quad), all thrown 22.5 degrees apart.
-  if (deathmatch(s)) {
-    const SqWeaponRow& r = kSqWeapons[p.hand.weapon];
-    struct Toss {
-      double left;  // a power's time left, s (0: not a power)
-      int item;
-      int shots;  // the silencer's shots left
-    };
-    Toss out[6];
-    int n = 0;
-    if (r.item != nullptr && r.ammo != SqAmmo::none && p.body.ammo[static_cast<int>(r.ammo)] > 0)
-      out[n++] = {0, sq_item(r.item), 0};
-    const auto on = [&](const char* name) { return s.cvars.find(name)->on(); };
-    const auto timed = [&](bool wanted, double until, const char* item) {
-      if (wanted && until > s.level_time + 1) out[n++] = {until - s.level_time, sq_item(item), 0};
-    };
-    timed(dmflag(s, 16384) || on("sv_dropquad"), p.quad_until, "item_quad");
-    timed(on("sv_droppent"), p.invulnerable_until, "item_invulnerability");
-    timed(on("sv_dropsuit"), p.suit_until, "item_enviro");
-    timed(on("sv_dropbreather"), p.breather_until, "item_breather");
-    if (on("sv_dropsilencer") && p.silencer_shots > 0)
-      out[n++] = {0, sq_item("item_silencer"), p.silencer_shots};
-    for (int i = 0; i < n; i++) {
-      Q2Drop* d = toss(s, slot, out[i].item, (float(i) - float(n - 1) * 0.5f) * 22.5f);
-      if (d == nullptr) continue;
-      d->power_left = out[i].left;
-      d->shots = out[i].shots;
-    }
-  }
+  fight_death_drops(s, slot);
   p.quad_until = p.invulnerable_until = p.breather_until = p.suit_until = 0;
   p.silencer_shots = 0;
 }
 
 bool fight_dmflag(const Q2Server& s, int bit) { return dmflag(s, bit); }
+bool fight_anyflag(const Q2Server& s, int bit) {
+  return (s.cvars.find("dmflags")->integer() & bit) != 0;
+}
 
 bool fight_midair(const Q2Server& s) {
   const auto* c = s.cvars.find("k_midair");
@@ -1625,48 +1568,6 @@ void fight_hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage
 
 void fight_blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int weapon) {
   blast(s, at, attacker, damage, radius, -1, weapon);
-}
-
-bool fight_drop(Q2Server& s, int slot, int item) {
-  if (item < 0 || item >= kSqItemCount || !fightable(s, slot)) return false;
-  Q2Player& p = s.players[slot];
-  const SqItem& it = kSqItems[item];
-  switch (it.kind) {
-    case SqKind::weapon: {
-      if (dmflag(s, 4)) {
-        return false;  // weapons stay: nothing said
-      }
-      if (p.body.counts[item] <= 0) return false;
-      if (sq_weapon_of_item(item) == p.hand.weapon && p.body.counts[item] == 1) {
-        print_to(s, slot, "Can't drop current weapon\n");
-        return false;
-      }
-      if (toss(s, slot, item, 0) == nullptr) return false;
-      p.body.counts[item]--;
-      return true;
-    }
-    case SqKind::ammo: {
-      int& held = p.body.ammo[static_cast<int>(it.ammo)];
-      const int n = std::min(held, it.amount);
-      if (n <= 0) return false;
-      if (p.hand.weapon == int(SqWeapon::hand_grenade) && it.ammo == SqAmmo::grenades &&
-          held - n <= 0) {
-        print_to(s, slot, "Can't drop current weapon\n");
-        return false;
-      }
-      Q2Drop* d = toss(s, slot, item, 0);
-      if (d == nullptr) return false;
-      d->count = n;
-      held -= n;
-      return true;
-    }
-    case SqKind::powerup:
-      if (p.body.counts[item] <= 0 || toss(s, slot, item, 0) == nullptr) return false;
-      p.body.counts[item]--;
-      return true;
-    default:
-      return false;
-  }
 }
 
 namespace {
@@ -1802,11 +1703,12 @@ void fight_rows(Q2Server& s) {
 
 namespace {
 
-// The part of `skin` ("model/skin") that names a team: the skin after the slash, or the model.
+// The part of `skin` ("model/skin") that names a team: the skin after the slash, or the model;
+// a skin with no slash is its own team whole.
 std::string team_part(const std::string& skin, bool by_model) {
   const size_t slash = skin.find('/');
-  if (by_model) return slash == std::string::npos ? skin : skin.substr(0, slash);
-  return slash == std::string::npos ? std::string() : skin.substr(slash + 1);
+  if (slash == std::string::npos) return skin;
+  return by_model ? skin.substr(0, slash) : skin.substr(slash + 1);
 }
 
 std::string info(const Q2Server& s, int slot, const char* key) {
@@ -1820,14 +1722,19 @@ std::string info(const Q2Server& s, int slot, const char* key) {
 bool fight_teammates(const Q2Server& s, int a, int b) {
   if (a < 0 || b < 0 || a >= sh::kMaxClients || b >= sh::kMaxClients) return false;
   if (s.cvars.find("coop")->on()) return true;
-  if (!deathmatch(s) || !(dmflag(s, 64) || dmflag(s, 128))) return false;
-  const bool by_model = dmflag(s, 128);
+  return deathmatch(s) && fight_skin_mates(s, a, b);
+}
+
+bool fight_skin_mates(const Q2Server& s, int a, int b) {
+  if (a < 0 || b < 0 || a >= sh::kMaxClients || b >= sh::kMaxClients) return false;
+  if (!(fight_anyflag(s, 64) || fight_anyflag(s, 128))) return false;
+  const bool by_model = fight_anyflag(s, 128);
   const std::string ta = team_part(info(s, a, "skin"), by_model);
   return !ta.empty() && ta == team_part(info(s, b, "skin"), by_model);
 }
 
 float fight_fov(const Q2Server& s, int slot) {
-  if (deathmatch(s) && dmflag(s, 32768)) return 90;
+  if ((deathmatch(s) && dmflag(s, 32768)) || s.intermission_at > 0) return 90;
   const std::string text = info(s, slot, "fov");
   if (text.empty()) return 90;
   const float fov = std::strtof(text.c_str(), nullptr);

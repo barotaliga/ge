@@ -1224,8 +1224,14 @@ int listen_players(const Listen& l) {
 }
 
 bool listen_campaign_word(Listen& l, const std::string& line) {
-  if (l.campaign_host == nullptr || l.rules == nullptr || l.server == nullptr) return false;
+  if (l.rules == nullptr || l.server == nullptr) return false;
   const std::string word = line.substr(0, line.find_first_of(" \t"));
+  // Quake's `tell` and `ping` always go to the server, a listen server too.
+  if (l.server->sv.set.single_player_clock && (word == "tell" || word == "ping")) {
+    l.rules->client_command(0, line);
+    return true;
+  }
+  if (l.campaign_host == nullptr) return false;
   for (const char* w : {"god", "notarget", "noclip", "fly", "give", "kill", "pause"})
     if (word == w) {
       l.rules->client_command(0, line);

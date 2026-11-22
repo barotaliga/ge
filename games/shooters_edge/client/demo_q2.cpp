@@ -544,7 +544,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   DemoState& s = d.state;
   const int32_t number = m.i32();
   const int32_t delta = m.i32();
-  if (s.protocol != 26) m.u8();  // the packets held back
+  const int held_back = s.protocol != 26 ? m.u8() : 0;  // the packets held back for the rate
   {  // the areas the eye's room joins (one bit an area); drawn only these
     const size_t n = m.u8();
     if (n > 32) {
@@ -563,6 +563,10 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   const size_t slot = static_cast<size_t>(number) & 15;
   const size_t base_slot = static_cast<size_t>(delta) & 15;
   const bool have_base = delta > 0 && d.views[base_slot].frame == delta;
+  s.q2_trouble = static_cast<uint8_t>(
+      (delta <= 0 ? kQ2FrameNoDelta : 0) |
+      (delta > 0 && !have_base ? (number - delta >= 16 ? kQ2FrameOld : kQ2FrameBad) : 0) |
+      (held_back > 0 ? kQ2FrameSuppressed : 0));
   Q2View v = have_base ? d.views[base_slot] : Q2View{};
   player_info(m, v, ext_of(s.protocol));
   v.frame = number;
@@ -874,10 +878,18 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
     case 63:  // explosions that give no light
       point(DemoEffectKind::explosion);
       break;
-    case 128:  // damage dealt: a number for the screen alone
-      m.i16();
+    case 128: {  // damage dealt: the hit marker's (q2_bar.hpp) and its sound, heard everywhere
+      if (m.i16() > 0 && !m.bad) {
+        s.hits++;
+        DemoSound o;
+        o.name = "weapons/marker.wav";  // DemoSounds plays it only with cl_hit_markers 2
+        o.attenuation = 0;
+        o.origin = s.eye;
+        s.started.push_back(o);
+      }
       keep = false;
       break;
+    }
     default:
       error = "a temporary entity of kind " + std::to_string(kind) + at_byte(m) +
               " that this game's recordings do not carry: the recording is damaged";

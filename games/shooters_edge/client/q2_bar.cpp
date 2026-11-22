@@ -209,12 +209,50 @@ bool q2_world_of(const DemoState& ds, server::RulesWorld& out) {
   return true;
 }
 
+void draw_q2_hit_marker(ge::ui::DrawList& dl, Q2Bar& bar, int64_t hits, int width, int height) {
+  if (hits > bar.hits_seen) bar.hit_at = bar.now;  // a new hit: the fade starts over
+  bar.hits_seen = hits;                            // (fewer: a new recording or a seek back)
+  const float alpha =
+      bar.fx != nullptr ? ge::classic::q2_hit_marker_alpha(*bar.fx, bar.now - bar.hit_at) : 0;
+  if (alpha <= 0 || (bar.screen != nullptr && bar.screen->draw2d == 0)) return;
+  const BarPicture* mark = picture(bar, hud::layout_picture_path("marker"));
+  if (mark == nullptr) return;  // the pack has no marker picture: none drawn
+  const auto u = static_cast<float>(q2_bar_scale(bar, width, height));
+  ge::ui::Box b;
+  b.fill = ge::ui::solid({1, 0, 0, alpha});
+  b.rect = {(static_cast<float>(width) - mark->width() * u) / 2,
+            (static_cast<float>(height) - mark->height() * u) / 2, mark->width() * u,
+            mark->height() * u};
+  b.image = &mark->image;
+  b.nearest = mark->k == 1;
+  b.feather = 0;
+  dl.box(b);
+}
+
+void add_q2_turtle(Q2Bar& bar, uint8_t trouble, int width, int height) {
+  const int turtle = bar.screen != nullptr ? bar.screen->turtle : 1;
+  if (turtle <= 0 || trouble == 0 || (bar.screen != nullptr && bar.screen->draw2d == 0)) return;
+  const int scale = q2_bar_scale(bar, width, height);
+  int y = height / scale - 11 * 8;  // one word a line, eleven lines over the bottom
+  const std::pair<uint8_t, const char*> words[] = {{kQ2FrameBad, "BADFRAME"},
+                                                   {kQ2FrameOld, "OLDFRAME"},
+                                                   {kQ2FrameNoDelta, "NODELTA"},
+                                                   {kQ2FrameSuppressed, "SUPPRESSED"}};
+  for (const auto& [bit, word] : words) {
+    if ((trouble & bit) == 0 || (bit == kQ2FrameSuppressed && turtle < 2)) continue;
+    add_text(bar.ops, 0, y, word, true);
+    y += 8;
+  }
+}
+
 bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds, int width,
                           int height) {
   if (!bar.recorded) bar.recorded = std::make_shared<server::RulesWorld>();
   if (!q2_world_of(ds, *bar.recorded)) return false;
   run_q2_bar(bar, *bar.recorded, ds.player, ds.frames, width, height);
+  add_q2_turtle(bar, ds.q2_trouble, width, height);
   draw_q2_bar(dl, bar, q2_bar_scale(bar, width, height));
+  draw_q2_hit_marker(dl, bar, ds.hits, width, height);
   return true;
 }
 

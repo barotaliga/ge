@@ -292,6 +292,24 @@ TEST(escape_opens_the_menu_and_backs_out_of_it) {
   CHECK(!w.ran.empty() && w.ran.back() == "quit");
 }
 
+TEST(quakes_menu_words_open_each_page) {
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .maps = {"start"}};
+  const struct {
+    const char* word;
+    const char* page;
+  } words[] = {{"menu_singleplayer", "single"}, {"menu_load", "load"},   {"menu_save", "save"},
+               {"menu_multiplayer", "multi"},   {"menu_setup", "setup"}, {"menu_keys", "controls"},
+               {"menu_video", "video"}};
+  for (const auto& wp : words) {
+    w.con.execute(wp.word);
+    g.update({}, false, host, 0.016);
+    CHECK_MSG(g.open() && g.main().top().id == wp.page, wp.word);
+  }
+}
+
 TEST(every_press_leaves_the_sound_it_makes) {
   using ge::ui::MenuCue;
   World w;
@@ -1419,4 +1437,19 @@ TEST(q2_player_page_lists_figures_and_writes_the_skin) {
   right.right = true;
   for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
   CHECK(skin == "female/athena");  // a new model at its first skin
+}
+
+// Quake II's player page with no figure in the packs: said, and the page does not open.
+TEST(q2_player_page_without_figures_does_not_open) {
+  ge::vfs::SearchPath sp;
+  World w;
+  sm::Host host{.console = &w.con, .table = &sm::q2_menu(), .files = &sp};
+  Menu m = sm::build_menu(sm::q2_menu());
+  sm::refresh(m, host);
+  m.open("multi");
+  std::vector<MenuEvent> events;
+  m.open("setup", &events);
+  for (const MenuEvent& e : events) sm::apply_event(e, m, host);
+  CHECK(m.top().id == "multi");
+  CHECK(!w.con.output().empty() && w.con.output().back() == "No player models found.");
 }

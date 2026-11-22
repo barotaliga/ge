@@ -82,6 +82,7 @@
 #include "shooters_edge/client/chat_ignore.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/net/q1_end.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_predict.hpp"
 #include "shooters_edge/net/qw_client.hpp"
@@ -160,8 +161,13 @@ struct Remote {
   JoinedFile file;  // `record` while joined: the level kept and the file (qw_match_record.hpp)
   MatchAuto match;  // the match recorded on its own (match_auto_record)
   client::JoinedRecord joined_record;  // the window's record commands reach the join through it
-  std::unique_ptr<Q2ClientEnd> q2;     // joined to a server of Quake II (q2_remote)
-  Q2Predict q2_ahead;                  // Quake II's own moves run ahead (q2_predict.hpp)
+  // `rerecord <name>`: the file the next join records to from its start ("": none waiting).
+  std::filesystem::path rerecord;
+  // `fullinfo`'s keys no window setting holds, sent in the user info at the next join.
+  std::vector<std::pair<std::string, std::string>> extra_info;
+  std::unique_ptr<Q2ClientEnd> q2;  // joined to a server of Quake II (q2_remote)
+  std::unique_ptr<NqClientEnd> nq;  // joined to a Quake server of protocol 15 (nq_remote)
+  Q2Predict q2_ahead;               // Quake II's own moves run ahead (q2_predict.hpp)
   // The window's game is Quake II: `connect` speaks its protocol (port 27910 when none is given).
   std::function<bool()> q2_game;
   int64_t now_us = 0;                         // the tick clock
@@ -242,6 +248,7 @@ struct Remote {
   int c2spps = 0, c2s_impulse_backup = 3;  // cl_c2spps, cl_c2sImpulseBackup (qw_client.hpp)
   bool gunkick = false;  // v_gunkick: the server's kicks drawn on the view (client/demo_eyes.hpp)
   int q2_maxfps = 62;    // Quake II's own cl_maxfps: its moves a second (q2_remote.hpp)
+  int q2_shownet = 0;    // Quake II's cl_shownet: each message's size printed (q2_client.hpp)
   double tick_frac_us = 0;
 };
 
@@ -252,7 +259,8 @@ bool remote_watch(Remote& r, const std::string& address, const std::string& name
                   const std::string& password, std::string& error);
 
 // Joins `address` ("host", "host:port"; the QuakeWorld server port when none, Quake II's when
-// `q2_game` says the window plays Quake II: q2_remote.hpp) over a UDP socket of its own.
+// `q2_game` says the window plays Quake II: q2_remote.hpp) over a UDP socket of its own. Port 26000
+// (`kPortNetQuake`) in Quake is a server of Quake's own protocol 15 (q1_remote.hpp).
 // False with the reason when the address or the socket does not open.
 bool remote_connect(Remote& r, const std::string& address, const ClientConfig& cfg,
                     std::string& error);

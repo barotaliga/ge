@@ -59,7 +59,8 @@ std::string userinfo_of(const QwClientEnd& c) {
   info_set(u, "topcolor", std::to_string(c.cfg.topcolor));
   info_set(u, "bottomcolor", std::to_string(c.cfg.bottomcolor));
   info_set(u, "rate", std::to_string(c.cfg.rate));
-  info_set(u, "msg", "1");
+  info_set(u, "msg", std::to_string(c.cfg.msg));
+  if (c.cfg.noaim) info_set(u, "noaim", "1");
   if (!c.cfg.team.empty()) info_set(u, "team", c.cfg.team);
   if (!c.cfg.w_switch.empty()) info_set(u, "w_switch", c.cfg.w_switch);
   if (!c.cfg.b_switch.empty()) info_set(u, "b_switch", c.cfg.b_switch);
@@ -68,6 +69,8 @@ std::string userinfo_of(const QwClientEnd& c) {
     info_set(u, "cl_speedjump", "1");  // a server that does not know it ignores it
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
   if (!c.cfg.prx.empty()) info_set(u, "prx", c.cfg.prx);
+  for (const auto& [k, v] : c.cfg.extra_info)
+    if (info_get(u, k).empty()) info_set(u, k, v);
   if (c.cfg.ask[ExtFamily::z]) info_set(u, "*z_ext", std::to_string(c.cfg.ask[ExtFamily::z]));
   if (c.cfg.ask[ExtFamily::ge]) info_set(u, "*ge_ext", std::to_string(c.cfg.ask[ExtFamily::ge]));
   return u;
@@ -488,7 +491,10 @@ void apply(QwClientEnd& c, const SvcMsg& m) {
       c.lightstyles++;
       break;
     case svc::updateuserinfo:
-      if (m.ints[0] >= 0 && m.ints[0] < 32) c.userinfos[m.ints[0]] = m.strings[0];
+      if (m.ints[0] >= 0 && m.ints[0] < 32) {
+        c.userinfos[m.ints[0]] = m.strings[0];
+        c.userids[m.ints[0]] = m.ints.size() > 1 ? m.ints[1] : 0;
+      }
       break;
     case svc::setinfo:
       if (m.ints[0] >= 0 && m.ints[0] < 32)

@@ -28,6 +28,15 @@ inline constexpr float kAmbientVolume = 0.3f;  // the player's ambient volume by
 inline constexpr float kAmbientRate = 0.4f;    // the most a level moves a second
 inline constexpr float kAmbientFloor = 0.03f;  // a target under this is silence
 
+// THE PLAYER'S AMBIENCE SETTINGS (`ambient_level`, `ambient_fade`), one set for the window: the
+// volume a leaf's full level plays at, and how fast a level moves, in 255ths of full a second.
+// `ambient_level` 0 silences the ambience at once.
+struct AmbientSettings {
+  float level = kAmbientVolume;
+  float fade = 100;
+};
+AmbientSettings& ambient_settings();
+
 // The four levels (water, sky, slime, lava; `brush::kAmbientWater` ...) a listener at `at` (map
 // units) hears, each 0..1.
 void leaf_ambience(const ge::brush::Map& map, const float at[3], float volume, float out[4]);

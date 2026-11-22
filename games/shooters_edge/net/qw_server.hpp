@@ -213,6 +213,11 @@ struct ServerConfig {
   int earshot =
       1000;  // sv_earshot: how near `say_near` and the near voice reach, map units (0 off)
   bool min_ping_cmd = true;  // sv_minpingcmd
+  // Started with cheats (`-cheats`): the server info says `*cheats ON` and the operator's `god`,
+  // `give` and `noclip` work on a player; else they refuse.
+  bool cheats = false;
+  std::string progs_crc;   // `*progs`: a mod program's 16-bit CRC as a decimal ("": native rules)
+  bool high_chars = true;  // sv_highchars: 0 strips a joining player's user info to plain ASCII
 };
 
 enum class ConnState : uint8_t { free, connected, spawned };

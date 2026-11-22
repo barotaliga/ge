@@ -36,6 +36,7 @@
 #include "net/transport.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q2_downloads.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/qw_client.hpp"
 #include "vfs/partial.hpp"
@@ -52,6 +53,9 @@ struct Q2ClientConfig {
   uint16_t qport = 1;
   int seed = 1;
   int send_every = 1;  // ticks between packets in the game (a slower client sends fewer)
+  // The kinds of file it may fetch on joining (q2_downloads.hpp; the window's `allow_download`
+  // switches); a scripted client's fetches every kind.
+  Q2Downloads allow{.others = true};
   // Seconds between spells of 150 ms in which the moves acknowledge no frame (0: never), so the
   // server sends its next frame whole: a relay of this recording starts a late viewer there.
   double whole_every = 0;
@@ -100,6 +104,13 @@ struct Q2ClientConfig {
   // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 512),
   // so the window draws one coming back ahead of time (classicenhance/hologram.hpp).
   bool ask_back = false;
+  // `cl_nodelta`: no frame is ever acknowledged, so the server sends each one whole (more bytes,
+  // nothing lost to a dropped packet's delta); a server that forbids it (`sv_allow_nodelta 0`)
+  // may refuse.
+  bool nodelta = false;
+  // `cl_shownet` 1 or more: each message the server sends printed as its size in bytes (through
+  // `trace`'s print).
+  int shownet = 0;
   // VOICE, as Quake's client speaks (net/qw_client.hpp): `voice` asks our server for
   // it (`*ge_ext` bit 128); once the server says it takes it, the client sends `unmuteall` and its
   // target (`voice_to`, `voicetarg`), and each tick the frames it said as one voice message

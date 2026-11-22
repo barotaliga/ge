@@ -85,7 +85,8 @@ std::unique_ptr<Arena> arena(const char* deathmatch = "1", const char* dmflags =
   std::string error;
   CHECK_MSG(a->r.start(map, error), error);
   a->r.connect(0, "Ana", false, false);
-  a->r.connect(1, "Ben", false, false);
+  a->p(0).move.origin[0] = static_cast<int16_t>(a->p(0).move.origin[0] - 64 * 8);  // off the start
+  a->r.connect(1, "Ben", false, false);  // so Ben's arrival there does not telefrag her
   return a;
 }
 
@@ -622,7 +623,13 @@ TEST(the_frag_limit_ends_the_level_after_the_intermission) {
   CHECK(a->p(1).alive && a->r->pending_map.empty());
   CHECK(a->r->world.clients[0].numbers.weapon_model == 0);
   CHECK(a->p(0).move.origin[0] == -300 * 8 && a->p(1).move.origin[0] == -300 * 8);
-  run(*a, 8 * 40);  // 4 s more, no button: nothing
+  a->r.user_info(1, "fov", "110");
+  CHECK(a->r->world.clients[1].numbers.fov == 90);  // every view at 90 till it ends
+  run(*a, 8 * 40);                                  // 4 s more, no button: nothing
+  CHECK(a->r->pending_map.empty());
+  // Ben stood up on the start Ana stood on, which kills her as any placing does.
+  CHECK(a->s().obituaries.back() == "Ana tried to invade Ben's personal space");
+  run(*a, 8 * 300);  // nor after 20 s more: it waits for a person's button
   CHECK(a->r->pending_map.empty());
   run(*a, 8 * 10, sh::kButtonAttack);  // past 5 s, a button leaves
   CHECK(a->r->pending_map == "hall");
@@ -741,9 +748,12 @@ TEST(a_death_drops_the_weapon_and_the_quad_and_a_big_blow_gibs) {
   CHECK(weapon >= 0 && quad >= 0);
   if (weapon < 0 || quad < 0) return;
   CHECK(a->s().drops[quad].power_left > 19);
-  run(*a, 8 * 20);  // they fall to rest on the floor
+  run(*a, 8 * 20);  // they fall to rest on the floor, a dropped item's box ±16
   const sv::Q2Drop& d = a->s().drops[quad];
-  CHECK_MSG(d.resting && d.origin.z > 14 && d.origin.z < 16, std::to_string(d.origin.z));
+  CHECK_MSG(d.resting && d.origin.z > 15 && d.origin.z < 17, std::to_string(d.origin.z));
+  // Thrown 45 degrees apart: the weapon to his right (yaw lowered), the quad to his left.
+  const sv::Q2Drop& w = a->s().drops[weapon];
+  CHECK(w.origin.y < d.origin.y);
   // Ana walks onto them: the quad is used at once with the time it had left.
   for (int k : {weapon, quad}) {
     int16_t* o = a->p(0).move.origin;
@@ -777,6 +787,109 @@ TEST(drop_throws_a_weapon_but_not_the_one_in_hand_nor_while_weapons_stay) {
   CHECK(live == 2);
   run(*a, 8 * 3);  // her own drop is not hers again within the second
   for (const sv::Q2Drop& d : a->s().drops) CHECK(!d.live || d.owner == 0);
+}
+
+TEST(a_weapon_thrown_by_drop_gives_no_ammo_and_keys_and_power_armour_drop_too) {
+  auto a = facing(300);
+  const int sg = sv::sq_item("weapon_shotgun");
+  a->p(0).body.counts[sg] = 1;
+  a->r.client_command(0, "drop Shotgun");
+  run(*a, 8 * 20);  // it lands
+  const int shells = a->p(1).body.ammo[int(sv::SqAmmo::shells)];
+  for (const sv::Q2Drop& d : a->s().drops)
+    if (d.live && d.item == sg) {
+      CHECK(d.bare);
+      a->p(1).move.origin[0] = static_cast<int16_t>(d.origin.x * 8);
+      a->p(1).move.origin[1] = static_cast<int16_t>(d.origin.y * 8);
+    }
+  run(*a, 2);
+  CHECK(a->p(1).body.counts[sg] == 1);  // the weapon alone
+  CHECK(a->p(1).body.ammo[int(sv::SqAmmo::shells)] == shells);
+  // A key and power armour may be thrown; the last shield switched on is switched off first.
+  const int key = sv::sq_item("key_blue_key"), shield = sv::sq_item("item_power_shield");
+  a->p(0).body.counts[key] = 1;
+  a->p(0).body.counts[shield] = 1;
+  a->p(0).power_on = true;
+  a->r.client_command(0, "drop Blue Key");
+  a->r.client_command(0, "drop Power Shield");
+  CHECK(a->p(0).body.counts[key] == 0 && a->p(0).body.counts[shield] == 0);
+  CHECK(!a->p(0).power_on);
+  // Armour is never thrown.
+  a->r.client_command(0, "drop Body Armor");
+  bool told = false;
+  for (const sv::NetEvent& e : a->s().out.events)
+    told = told || (e.kind == sv::EventKind::print && e.text == "Item is not dropable.\n");
+  CHECK(told);
+}
+
+TEST(in_coop_the_items_that_stay_cannot_be_dropped) {
+  auto a = facing(300, "0");
+  a->r.console("coop 1");
+  const int sg = sv::sq_item("weapon_shotgun"), suit = sv::sq_item("item_enviro");
+  a->p(0).body.counts[sg] = 1;
+  a->p(0).body.counts[suit] = 1;
+  CHECK(!sv::fight_droppable(a->s(), sg) && !sv::fight_droppable(a->s(), suit));
+  CHECK(sv::fight_droppable(a->s(), sv::sq_item("item_quad")));
+  a->r.client_command(0, "drop Shotgun");
+  a->r.client_command(0, "drop Environment Suit");
+  CHECK(a->p(0).body.counts[sg] == 1 && a->p(0).body.counts[suit] == 1);
+}
+
+TEST(a_spawn_telefrags_whoever_stands_where_he_appears) {
+  auto a = facing(300);
+  run(*a, 8 * 60);  // past the 5 s `kill` waits
+  a->r.client_command(0, "kill");
+  place(*a, 1, -300);  // Ben onto the start Ana comes back at
+  run(*a, 8 * 12);
+  run(*a, 8, sh::kButtonAttack);
+  CHECK(a->p(0).alive && !a->p(1).alive);
+  CHECK(a->s().obituaries.back() == "Ben tried to invade Ana's personal space");
+  CHECK(a->p(0).frags == 0);  // −1 for the suicide, +1 for the telefrag
+}
+
+TEST(the_dead_respawn_only_on_a_fresh_press_of_attack_or_in_coop_of_any_button) {
+  auto a = facing(300);
+  run(*a, 8 * 60);
+  run(*a, 2, sh::kButtonAttack);
+  a->r.client_command(0, "kill");
+  run(*a, 8 * 20, sh::kButtonAttack);  // held through the death: not a press
+  CHECK(!a->p(0).alive);
+  run(*a, 1);
+  run(*a, 8, sh::kButtonAttack);
+  CHECK(a->p(0).alive);
+  // Co-op: any button, and he comes back held still with the teleport's burst.
+  auto c = facing(300, "0");
+  c->r.console("coop 1");
+  run(*c, 8 * 60);
+  c->r.client_command(0, "kill");
+  run(*c, 8 * 12);
+  CHECK(!c->p(0).alive);
+  for (int i = 0; i < 8 && !c->p(0).alive; i++) run(*c, 1, sh::kButtonUse);
+  CHECK(c->p(0).alive && (c->p(0).move.flags & ge::classic::kSqTimeTeleport) != 0);
+}
+
+TEST(a_deathmatch_exit_without_allow_exit_kills_and_kill_is_free_on_a_first_spawn) {
+  auto a = facing(300);
+  // `kill` counts its 5 s from the map's start for a player placed there first: one who joins a
+  // match already 5 s old may use it at once.
+  run(*a, 8 * 60);
+  place(*a, 0, -100);  // off the start Cy arrives at
+  a->r.connect(2, "Cy", false, false);
+  a->r.client_command(2, "kill");
+  CHECK(!a->p(2).alive);
+  CHECK(sv::sq_obituary("Ben", "", false, sv::kSqByExit, 0, "") == "Ben found a way out.");
+}
+
+TEST(coop_reads_the_team_flags_and_scores_its_monster_kills) {
+  auto a = facing(300, "0");
+  a->r.console("coop 1");
+  a->r.user_info(0, "skin", "red");  // no slash: the whole name is the team
+  a->r.user_info(1, "skin", "red");
+  a->r.console("dmflags 320");  // skin teams, no friendly fire: in co-op too
+  CHECK(sv::fight_skin_mates(a->s(), 0, 1));
+  give(*a, sv::SqWeapon::railgun, 10);
+  run(*a, 8, sh::kButtonAttack);
+  CHECK(a->p(1).alive && a->p(1).health == 100);
 }
 
 TEST(a_weapon_stays_when_taken_and_infinite_ammo_fills_the_stock) {

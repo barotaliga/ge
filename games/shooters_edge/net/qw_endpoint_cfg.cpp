@@ -103,7 +103,7 @@ constexpr gs::GameRule kEndpointRules[] = {
     {"qtv_maxstreams", "The relays streamed at once.", nullptr,
      "N: that many, 0 or less no limit (1 the default)"},
     {"qtv_password", "The password a relay must give.", nullptr,
-     "\"\": none (the default); TEXT: that password"},
+     "\"\": none (the default); TEXT: that password", false},
     {"qtv_pendingtimeout", "The seconds a relay has to finish its request.", nullptr,
      "1..60: that many seconds (5 the default)"},
     {"qtv_streamtimeout", "The seconds a relay may send nothing before it is dropped.", nullptr,
