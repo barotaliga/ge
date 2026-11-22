@@ -239,3 +239,55 @@ TEST(timegraph_draws_each_frames_time_along_the_bottom_held_to_graphheight) {
   cl::draw_q2_bar(dl, bar, 2);
   CHECK(dl.cmds().empty());
 }
+
+TEST(gl_bilerp_pics_smooths_the_large_pictures_and_gl_gamma_scale_pics_brightens_them) {
+  // The pack's health icon (24 x 24) and help screen (160 x 128), a colour of 90 each: 1 (its
+  // default) smooths the help screen alone, 0 neither, 2 both; under gl_gamma_scale_pics they are
+  // read again at the brightness `gamma` gives the world, and back at 1 without it.
+  const auto pcx = [](int w, int h) {
+    ge::assets::IndexedImage img;
+    img.width = w;
+    img.height = h;
+    img.indices.assign(size_t(w) * size_t(h), 7);
+    img.palette.assign(768, 90);
+    return ge::assets::encode_pcx(img);
+  };
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"pics/i_health.pcx", pcx(24, 24)}, {"pics/help.pcx", pcx(160, 128)}},
+                           &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  cl::Q2Screen screen;
+  screen.bilerp_pics = 1;
+  double gamma = 0.5;
+  cl::Q2Bar bar;
+  bar.files = &files;
+  bar.screen = &screen;
+  bar.gamma = &gamma;
+  for (const char* name : {"i_health", "help"}) {
+    shooters_edge::hud::LayoutOp op;
+    op.name = name;
+    bar.ops.push_back(op);
+  }
+  const auto smooth = [&](size_t i) {
+    ge::ui::DrawList dl;
+    dl.begin(640, 480);
+    cl::draw_q2_bar(dl, bar, 1);
+    CHECK(dl.cmds().size() == 2);
+    return dl.cmds().size() == 2 && !dl.cmds()[i].box.nearest;
+  };
+  CHECK(!smooth(0) && smooth(1));
+  screen.bilerp_pics = 0;
+  CHECK(!smooth(0) && !smooth(1));
+  screen.bilerp_pics = 2;
+  CHECK(smooth(0) && smooth(1));
+  const auto red = [&] { return bar.pictures["pics/help.pcx"].image.rgba[0]; };
+  CHECK(red() == 90);
+  screen.gamma_pics = true;  // 255 x (90 / 255)^0.5
+  smooth(0);
+  CHECK_MSG(red() == 151, std::to_string(red()));
+  screen.gamma_pics = false;
+  smooth(0);
+  CHECK(red() == 90);
+}

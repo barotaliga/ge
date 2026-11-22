@@ -18,6 +18,7 @@
 // ge:summary Quake II's view and 2D settings: the server's field of view drawn, scale, HUD switches
 // ge:keywords q2 fov cl_adjustfov uf hor-plus field-of-view zoom scr_scale scr_draw2d scr_alpha
 // ge:keywords scr_lag_draw scr_lag_x scr_lag_y scr_lag_min scr_lag_max cl_kickangles q2_shown_fov
+// ge:keywords gl_bilerp_pics gl_gamma_scale_pics
 // ge:skill shooter ui camera
 // ge:test tests/shooters_edge_q2_view_test.cpp
 #pragma once
@@ -36,7 +37,12 @@ struct Q2Screen {
   int lag_draw = 0;     // scr_lag_draw: 0 off, 1 the lag graph, 2 on a dark box
   int turtle = 1;       // scr_showturtle: 0 off, 1 a frame's troubles, 2 also the packets held back
   int font_shadow = 0;  // gl_fontshadow: the letters' shadow, units down and right (0 none)
-  bool bilerp_chars = false;   // gl_bilerp_chars: the letters smoothed
+  bool bilerp_chars = false;  // gl_bilerp_chars: the letters smoothed
+  // gl_bilerp_pics: the status bar's and the layouts' pictures smoothed when drawn larger: 0 none
+  // (every other game's), 1 those of 64 x 64 and up (Quake II's default), 2 all of them.
+  int bilerp_pics = 0;
+  // gl_gamma_scale_pics: those pictures brightened by `gamma` (vid_gamma) as the world is.
+  bool gamma_pics = false;
   int lag_x = -1, lag_y = -1;  // scr_lag_x, scr_lag_y: its corner; negative from the far edge
   double lag_min = 0, lag_max = 200;  // scr_lag_min, scr_lag_max: its bottom and top, ms
   int adjust_fov = 1;                 // cl_adjustfov: 1 the 4:3 view's height kept, 0 its width
