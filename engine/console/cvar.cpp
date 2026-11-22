@@ -96,8 +96,15 @@ std::string set_result_text(SetResult r, std::string_view name) {
       return "the server may not set " + n + ": it is this player's own setting";
     case SetResult::bad_name:
       return "'" + n + "' is not a cvar name: use 1-63 of a-z 0-9 _ + - . , no leading digit";
+    case SetResult::locked:
+      return n + " is locked";
   }
   return {};
+}
+
+std::string set_result_text(SetResult r, const Cvar& cvar) {
+  if (r == SetResult::locked && cvar.lock && !cvar.lock->why.empty()) return cvar.lock->why;
+  return set_result_text(r, cvar.name);
 }
 
 Cvars::Cvars(bool is_server) : is_server_(is_server) {
@@ -306,6 +313,53 @@ void Cvars::store(Cvar& c, std::string_view text) {
     if (const Meta* m = meta(c.name)) apply_meta(*m);
 }
 
+namespace {
+
+// Two values the same: as numbers when both are ("1" and "1.0"), else as lower-case text.
+bool same_value(std::string_view a, std::string_view b) {
+  double x = 0, y = 0;
+  if (parse_number(a, x) && parse_number(b, y)) return x == y;
+  return lower(a) == lower(b);
+}
+
+}  // namespace
+
+bool Cvars::lock(std::string_view name, CvarLock lock) {
+  Cvar* c = find(name);
+  if (c == nullptr) return false;
+  lock.wanted = c->lock ? c->lock->wanted : (c->has_latched ? c->latched : c->value);
+  c->lock = std::make_shared<CvarLock>(std::move(lock));
+  const CvarLock& l = *c->lock;
+  std::string value = l.value;
+  if (!l.fixed) {
+    double v = 0;
+    parse_number(l.wanted, v);
+    value = number_text(std::clamp(v, l.min, l.max));
+  }
+  locking_ = true;
+  const bool explicit_set = c->explicit_set;
+  c->has_latched = false;  // a value waiting is the player's: kept as `wanted`
+  c->latched.clear();
+  set(*c, value, Source::code);
+  c->explicit_set = explicit_set;
+  locking_ = false;
+  return true;
+}
+
+int Cvars::unlock(std::string_view owner) {
+  int n = 0;
+  for (auto& c : all_) {
+    if (!c->lock || c->lock->owner != owner) continue;
+    const std::string wanted = c->lock->wanted;
+    c->lock.reset();
+    const bool explicit_set = c->explicit_set;
+    set(*c, wanted, Source::code);
+    c->explicit_set = explicit_set;
+    ++n;
+  }
+  return n;
+}
+
 SetResult Cvars::set(std::string_view name, std::string_view value, Source source, bool create,
                      uint32_t extra_flags) {
   if (std::string scope, base; split_scoped(name, scope, base))
@@ -342,6 +396,18 @@ SetResult Cvars::set(std::string_view name, std::string_view value, Source sourc
 }
 
 SetResult Cvars::set(Cvar& c, std::string_view value, Source source) {
+  std::string kept;  // a value clamped into a lock's range
+  if (c.lock && !locking_) {
+    // LOCKS: whatever asks, the lock decides; the value asked for is the player's, kept for later.
+    c.lock->wanted = std::string(value);
+    if (c.lock->fixed)
+      return same_value(value, c.lock->value) ? SetResult::same : SetResult::locked;
+    double v = 0;
+    if (parse_number(value, v)) {
+      kept = number_text(std::clamp(v, c.lock->min, c.lock->max));
+      value = kept;
+    }
+  }
   if (source != Source::code) {
     if ((c.flags & kReadOnly) != 0) return SetResult::read_only;
     if (source == Source::server) {

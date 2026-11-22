@@ -166,6 +166,28 @@ std::string Console::expand_text(std::string_view text) const {
   });
 }
 
+void Console::gate_command(std::string_view name, CommandGate gate) {
+  gates_[lower(name)] = std::move(gate);
+}
+
+int Console::ungate(std::string_view owner) {
+  int n = 0;
+  for (auto it = gates_.begin(); it != gates_.end();)
+    if (it->second.owner == owner) {
+      it = gates_.erase(it);
+      ++n;
+    } else {
+      ++it;
+    }
+  return n;
+}
+
+const CommandGate* Console::gate_of(std::string_view name) const {
+  const auto g = gates_.find(lower(name));
+  if (g == gates_.end()) return nullptr;
+  return !g->second.when || g->second.when() ? &g->second : nullptr;
+}
+
 void Console::dispatch(Entry& e) {
   if (e.depth > kMaxDepth) {
     Args where;
@@ -217,6 +239,8 @@ void Console::dispatch(Entry& e) {
     if (e.source == Source::server && (cmd->second.flags & kStuffable) == 0) {
       error("the server may not run '" + name + "' here",
             "nothing to do: a server's stuffed text runs only the commands a game allows");
+    } else if (const CommandGate* g = e.source != Source::server ? gate_of(name) : nullptr; g) {
+      print(g->why);  // a ruleset's refusal reads as the game's words
     } else {
       cmd->second.fn(*this, args);
     }
@@ -238,7 +262,7 @@ void Console::dispatch(Entry& e) {
       const SetResult r = cvars_.set(name, args[1], e.source);
       if (r == SetResult::latched)
         print(c->name + " will be \"" + c->latched + "\" after a restart (it is latched)");
-      const std::string why = set_result_text(r, c->name);
+      const std::string why = set_result_text(r, *c);
       if (!why.empty()) error(why, "");
     }
   } else if (const Synonym* syn = cvars_.synonym(name)) {  // a part of another setting

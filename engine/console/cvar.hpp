@@ -55,6 +55,7 @@
 // ge:keywords meta-cvar meta add_meta level implied explicit restore include cycle meta_members
 // ge:keywords cvar-layer layer drop_layer overlap clash same-name one-name-one-meaning own same
 // ge:keywords game-scope per-game-cvar shadow set-aside retired
+// ge:keywords lock unlock locked held-value clamp-range ruleset competition-lock
 // ge:skill console
 // ge:test tests/console_cvar_test.cpp
 #pragma once
@@ -131,6 +132,24 @@ struct CvarSpec {
 using CvarTarget =
     std::variant<std::monostate, double*, float*, int32_t*, uint32_t*, bool*, std::string*>;
 
+// LOCKS (`lock`, `unlock`; console/ruleset.hpp builds rulesets on them): an owner (a competition
+// ruleset, a game in progress) HOLDS a cvar at one value or KEEPS it inside a range while the lock
+// lasts. A set from any source while it holds is refused (`SetResult::locked`, the lock's own
+// words say why), and a set into a range is clamped into it; either way the value asked for is
+// remembered as the player's, so `unlock` gives it back and `cfg_save` writes it, never the
+// locked one. Locking a name no layer registers yet does nothing (the owner locks again when the
+// game's settings arrive).
+// A LOCK on a cvar (LOCKS above): held at `value` when `fixed`, else kept inside [min, max].
+struct CvarLock {
+  std::string owner;  // who holds it ("ruleset smackdown"): `unlock` takes an owner's locks away
+  std::string why;    // the refusal a player reads ("cl_hud is locked by the smackdown ruleset.")
+  bool fixed = true;
+  std::string value;  // the held value, when fixed
+  double min = -std::numeric_limits<double>::infinity();
+  double max = std::numeric_limits<double>::infinity();
+  std::string wanted;  // the player's own value, given back by `unlock` and saved by cfg_save
+};
+
 struct Cvar;
 // A definition a later layer replaced (`same`) or set aside (`own`), kept to come back with it.
 struct CvarEarlier {
@@ -168,6 +187,8 @@ struct Cvar {
   // common value while the loaded scope overrides it.
   std::map<std::string, std::string> scoped;
   std::string common;
+  // LOCKS (above): the lock holding it, or null.
+  std::shared_ptr<CvarLock> lock;
 
   bool on() const { return number != 0; }
   int32_t integer() const;
@@ -221,11 +242,14 @@ enum class SetResult : uint8_t {
   cheat,      // kCheat while sv_cheats is 0
   refused,    // the server may not set a player's own cvar
   bad_name,   // a name with a character outside [a-z0-9_+.-]
+  locked,     // held by a lock (LOCKS above): the lock's `why` says by whom
 };
 
 // One line saying why `r` refused `name`, with the next action; empty for changed, same and
 // latched.
 std::string set_result_text(SetResult r, std::string_view name);
+// The same for a cvar in hand: a locked one answers its lock's own words.
+std::string set_result_text(SetResult r, const Cvar& cvar);
 
 // The registry. Addresses are stable: a `Cvar&` held at startup stays valid.
 class Cvars {
@@ -260,6 +284,14 @@ class Cvars {
   // A cvar `set` made (kCreated) taken away, as if never set; false when `name` is none or code
   // registered it.
   bool remove_created(std::string_view name);
+
+  // LOCKS (above): `name` held or kept by `lock` (its `wanted` is filled from the value now). A
+  // second lock replaces the first, keeping the player's value. False when no live cvar has the
+  // name.
+  bool lock(std::string_view name, CvarLock lock);
+  // Every lock `owner` holds taken away, each cvar back to the player's own value; returns how
+  // many.
+  int unlock(std::string_view owner);
 
   // Every latched value takes effect; returns how many moved.
   int apply_latched();
@@ -346,6 +378,7 @@ class Cvars {
   std::string scope_;
   bool config_ = false;
   bool applying_ = false;  // a scope's value going live: not the player's common value
+  bool locking_ = false;   // a lock putting its value in place (LOCKS)
   void store(Cvar& cvar, std::string_view text);
   void put(Cvar& cvar, std::string_view text);  // a meta's value: latched when the cvar is
   void apply_meta(const Meta& meta);

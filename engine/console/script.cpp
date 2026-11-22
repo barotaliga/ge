@@ -197,7 +197,9 @@ void if_exists(Console& c, const Args& a) {
 
 void store(Console& c, const Args& a, const std::string& name, const std::string& value) {
   const SetResult r = c.cvars().set(name, value, a.source, true);
-  const std::string why = set_result_text(r, lower(name));
+  const std::string why =
+      (c.cvars().find(name) != nullptr ? set_result_text(r, *c.cvars().find(name))
+                                       : set_result_text(r, lower(name)));
   if (!why.empty()) c.error(why, "");
 }
 

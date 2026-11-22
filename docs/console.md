@@ -144,6 +144,15 @@ The other flags:
 - `kReadOnly`: only code sets it.
 - `kUserInfo`: rides in the user info a client sends the server (`name`).
 
+LOCKS AND RULESETS (`engine/console/ruleset.hpp`). A competition's rules are data: a RULESET holds
+some settings at one value, keeps others inside a range and refuses some commands (always, or only
+while a match is played). The player picks one by name (`ruleset smackdown`; `rulesets` lists the
+game's book, `rulesets <name>` says what one holds), and it changes only while not connected. A
+held setting refuses every set with the ruleset's words ("cl_hud is locked by the smackdown
+ruleset."), a set into a range is clamped into it, and the value asked for is kept as the
+player's: `cfg_save` writes it and leaving the ruleset gives it back. A server's stuffed text is
+never refused by a ruleset. The classic games' books are `plugins/classic/rulesets.hpp`.
+
 A server's stuffed text may run only the commands marked as safe to stuff (`echo`, `set`,
 `wait`, `say`, `say_team`, `say_near`) and set only the server's cvars. It never touches a player's files,
 binds or archived cvars. Over a network the session carries the server info, the user info and

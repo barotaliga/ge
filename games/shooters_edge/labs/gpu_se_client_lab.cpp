@@ -41,6 +41,7 @@
 // `--remix-items=1` the played game's rules wear the other game's things (`cr_items`):
 // Quake's rules its rows, Quake II's renamed by `sv_wear`.
 // `--remix-models=1` draws every player as the other game's figure (`cr_models`).
+// `--ruleset=<name>`: the right side under that competition ruleset (`smackdown`, `duel`).
 // `--remix-monsters=1` swaps the map's monsters for the other game's (`cr_monsters`).
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
@@ -54,7 +55,7 @@
 // ge:keywords axe-swing swings two-swings weaponframe film_swings breath exertion film-hand
 // ge:keywords fire explobox film_death death jump-sound film_switch weapon-change cl_gunswitch
 // ge:keywords say vote notify-feed episodes bars sv_episodes_done start-map point-at
-// ge:keywords coop-server-lines addbot remix classic-remix other-game-map
+// ge:keywords coop-server-lines addbot remix classic-remix other-game-map ruleset smackdown
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -69,11 +70,13 @@
 #include "assets/sha256.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
+#include "classic/rulesets.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/pipeline.hpp"
 #include "classicenhance/profile.hpp"
 #include "classicenhance/texture.hpp"
 #include "console/console.hpp"
+#include "console/ruleset.hpp"
 #include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "gpu/device.hpp"
@@ -657,8 +660,27 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   }
   const std::string before = lab.arg("before");
   con[0].execute(before.empty() ? "r_look classic" : before);
+  // `--ruleset=<name>`: the right side under that competition ruleset (classic/rulesets.hpp),
+  // chosen before the cvars, so a held one refuses them as the console would.
+  std::unique_ptr<ge::console::Rulesets> rules;
+  if (const std::string rs = lab.arg("ruleset"); !rs.empty()) {
+    rules = std::make_unique<ge::console::Rulesets>(con[1]);
+    const bool q2 =
+        folder.ends_with("/" + std::string(ge::classicenhance::find_profile("q2")->base_dir));
+    rules->set_book(q2 ? ge::classic::q2_rulesets() : ge::classic::qw_rulesets());
+    con[1].execute("ruleset " + rs);
+    rules->update();
+  }
   con[1].execute(lab.arg("cvars"));
   con[1].execute(lab.cvars());  // the runner's --cvars on the modern side (`ge lab pair`)
+  if (rules) {
+    int held = 0;
+    for (const std::string& line : con[1].output()) {
+      lab.note(line);
+      held += line.find(" is locked by the ") != std::string::npos;
+    }
+    lab.metric("ruleset.refused_sets", held, "sets the ruleset refused on the right side");
+  }
   // `--warp`: another player stood there warping, and the local player's own arrival through his
   // eyes with the weapon in hand (the enhanced side alone draws them).
   float warp_at[4] = {0, 0, 0, 0};
@@ -1243,6 +1265,8 @@ const gl::LabSpec kSpec{
       "with --remix: 1 dresses this game's rules in the other game's things: weapons, armour, "
       "ammunition and health (cr_items)"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
+     {"ruleset", "",
+      "with --game: the right side under that competition ruleset (smackdown, duel)"},
      {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
      {"hud", "auto", "with --game: the HUD's art: auto, classic or free"},
      {"hudcvars", "",
