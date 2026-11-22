@@ -1425,7 +1425,14 @@ bool sq_console(void* r, const std::string& line) {
   if (w.count == 0) return true;
   const std::string cmd = ge::progs::word(w, 0);
   if ((cmd == "map" || cmd == "changelevel" || cmd == "gamemap") && w.count >= 2) {
-    s.pending_map = ge::progs::word(w, 1);
+    // A level string (q2_campaign.hpp): its shows first, the map, the spawn spot; a leading `!`
+    // (stop the server when the map is missing) is taken off.
+    std::string text(ge::progs::word(w, 1));
+    if (!text.empty() && text.front() == '!') text.erase(0, 1);
+    const LevelString ls = level_string(text);
+    s.pending_map = ls.map;
+    s.cinematic = ls.shows;
+    s.next_spawn = ls.spawn;
     s.pending_change = cmd == "map" ? MapChange::new_game : MapChange::change_level;
     return true;
   }

@@ -43,7 +43,9 @@ inline constexpr uint8_t kMvd2Magic[4] = {'M', 'V', 'D', '2'};
 inline constexpr int kMvd2Major = 37;
 inline constexpr int kMvd2Minor = 2010;  // the ordinary limits' minor version, as written
 inline constexpr int kMvd2MostClients = 256;
-inline constexpr size_t kMvd2MostCast = 2047;  // a unicast's or a multicast's payload, bytes
+inline constexpr size_t kMvd2MostCast = 2047;
+// The stream's flag: the prints to other players than the observer were left out.
+inline constexpr uint8_t kMvfNoMsgs = 1;  // a unicast's or a multicast's payload, bytes
 
 // The stream's message ids (the low 5 bits of the command byte; the top 3 carry a length's
 // high bits or the stream's flags).
@@ -119,6 +121,7 @@ struct Mvd2Level {
   int32_t server_count = 1;
   std::string game;                         // the game folder ("" the base game)
   int observer = -1;                        // the recording's own observer's client number
+  uint8_t flags = 0;                        // the stream's flags (kMvfNoMsgs)
   std::vector<std::string> config_strings;  // kQ2ConfigStrings long
   Mvd2Frame base;                           // the frame the game state holds
 };

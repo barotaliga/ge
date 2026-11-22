@@ -384,7 +384,12 @@ void read_viewer(Q2Mvd& m, Q2MvdViewer& v, double now) {
         drop(m, v, "unexpected stringcmd message", now);
         break;
       }
-      // No recorder's dummy runs a forwarded command here: ignored.
+      // Run as the dummy's own command only when the relay was let send them (the string-commands
+      // flag, kept only while sv_mvd_allow_stufftext is below 0) and a dummy plays.
+      std::string text(reinterpret_cast<const char*>(p), static_cast<size_t>(end - p));
+      if (const size_t z = text.find('\0'); z != std::string::npos) text.resize(z);
+      if ((v.flags & kGtfStringCmds) != 0 && m.dummy >= 0 && !text.empty())
+        m.dummy_forwarded.push_back(text);
     } else {
       drop(m, v, "unknown command byte", now);
       break;
@@ -477,6 +482,60 @@ void q2_mvd_shutdown(Q2Mvd& m, bool restart) {
   m.have_level = false;
 }
 
+bool q2_mvd_record(Q2Mvd& m, std::string name, bool gzip, std::string& path, std::string& out) {
+  if (m.file != nullptr) {
+    out = "Already recording a local MVD.\n";
+    return false;
+  }
+  if (name.find("..") != std::string::npos || name.find('/') != std::string::npos ||
+      name.find('\\') != std::string::npos) {
+    out = "Couldn't open " + name + ": the name may not leave the demos folder\n";
+    return false;
+  }
+  const std::string ext = ".mvd2";
+  if (name.size() < ext.size() || name.compare(name.size() - ext.size(), ext.size(), ext) != 0)
+    name += ext;
+  if (gzip) name += ".gz";
+  const std::filesystem::path dir = m.cfg.demos.empty() ? "demos" : m.cfg.demos;
+  std::error_code ec;
+  std::filesystem::create_directories(dir, ec);
+  path = (dir / name).string();
+  m.file = std::fopen(path.c_str(), "wb");
+  if (m.file == nullptr) {
+    out = "Couldn't open " + path + ": the file could not be made\n";
+    return false;
+  }
+  m.path = path;
+  m.gzip = gzip;
+  m.gz = ge::core::DeflateStream{};
+  m.gz.wrap = ge::core::DeflateWrap::gzip;
+  m.written = 0;
+  m.frames = 0;
+  m.maps = 0;
+  switch_on(m, m.now);
+  start_file(m);
+  return true;
+}
+
+bool q2_mvd_stop(Q2Mvd& m) {
+  if (m.file == nullptr) return false;
+  file_close(m);
+  return true;
+}
+
+void q2_mvd_switch_on(Q2Mvd& m, double now) { switch_on(m, now); }
+
+void q2_mvd_dummy_refused(Q2Mvd& m) {
+  file_close(m);
+  for (Q2MvdViewer& v : m.viewers)
+    if (v.stage == Stage::sending) {
+      send(m, v, kGtsError, {});
+      drop(m, v, "couldn't create MVD dummy", m.now);
+    }
+  m.on = false;
+  m.active = false;
+}
+
 bool q2_mvd_command(Q2Mvd& m, const std::vector<std::string>& w, const std::string& line,
                     bool in_game, std::string& out) {
   out.clear();
@@ -518,51 +577,25 @@ bool q2_mvd_command(Q2Mvd& m, const std::vector<std::string>& w, const std::stri
       out = "MVD recording is disabled on this server.\n";
       return true;
     }
-    if (m.file != nullptr) {
-      out = "Already recording a local MVD.\n";
-      return true;
-    }
-    if (name.find("..") != std::string::npos || name.find('/') != std::string::npos ||
-        name.find('\\') != std::string::npos) {
-      out = "Couldn't open " + name + ": the name may not leave the demos folder\n";
-      return true;
-    }
-    const std::string ext = ".mvd2";
-    if (name.size() < ext.size() || name.compare(name.size() - ext.size(), ext.size(), ext) != 0)
-      name += ext;
-    if (gzip) name += ".gz";
-    const std::filesystem::path dir = m.cfg.demos.empty() ? "demos" : m.cfg.demos;
-    std::error_code ec;
-    std::filesystem::create_directories(dir, ec);
-    const std::string path = (dir / name).string();
-    m.file = std::fopen(path.c_str(), "wb");
-    if (m.file == nullptr) {
-      out = "Couldn't open " + path + ": the file could not be made\n";
-      return true;
-    }
-    m.path = path;
-    m.gzip = gzip;
-    m.gz = ge::core::DeflateStream{};
-    m.gz.wrap = ge::core::DeflateWrap::gzip;
-    m.written = 0;
-    m.frames = 0;
-    m.maps = 0;
-    switch_on(m, m.now);
-    start_file(m);
+    std::string path;
+    if (!q2_mvd_record(m, name, gzip, path, out)) return true;
     out = "Recording local MVD to " + path + "\n";
     return true;
   }
   if (cmd == "mvdstop") {
-    if (m.file == nullptr) {
-      out = "Not recording a local MVD.\n";
-    } else {
-      file_close(m);
-      out = "Stopped local MVD recording.\n";
-    }
+    out = q2_mvd_stop(m) ? "Stopped local MVD recording.\n" : "Not recording a local MVD.\n";
     return true;
   }
   if (cmd == "mvdstuff") {
-    out = "Can't 'mvdstuff', dummy MVD client is not active\n";
+    if (m.dummy < 0) {
+      out = "Can't '" + cmd + "', dummy MVD client is not active\n";
+      return true;
+    }
+    std::string text = args;
+    while (!text.empty() && text.front() == ' ') text.erase(0, 1);
+    if (text.size() >= 2 && text.front() == '"' && text.back() == '"')
+      text = text.substr(1, text.size() - 2);
+    m.dummy_cmds += text + "\n";
     return true;
   }
   if (cmd == "addgtvhost" || cmd == "addgtvban") {
