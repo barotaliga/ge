@@ -47,6 +47,7 @@ struct Head {
   int64_t length = -1;
   bool chunked = false;
   std::string location;
+  std::string encoding;
 };
 
 // The head of `raw` when it is whole; false while it is not. `bad` when it is not HTTP.
@@ -94,6 +95,8 @@ bool read_head(const std::vector<uint8_t>& raw, Head& h, bool& bad) {
       h.chunked = value.size() >= 7 && same_words(value.substr(value.size() - 7), "chunked");
     } else if (same_words(name, "location")) {
       h.location = std::string(value);
+    } else if (same_words(name, "content-encoding")) {
+      for (const char c : value) h.encoding += lower(c);
     }
   }
   return true;
@@ -167,6 +170,7 @@ bool open(HttpFetch& f, double now_s) {
   f.body.clear();
   f.status = 0;
   f.total = -1;
+  f.encoding.clear();
   HttpUrl u;
   if (!read_http_url(f.url, u)) {
     fail(f, "URL using bad/illegal format or missing URL");
@@ -196,6 +200,8 @@ bool open(HttpFetch& f, double now_s) {
   request += f.options.proxy.empty() || u.https ? u.path : "http://" + host + u.path;
   request += " HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: " + f.options.user_agent + "\r\n";
   if (!f.options.referer.empty()) request += "Referer: " + f.options.referer + "\r\n";
+  if (!f.options.accept_encoding.empty())
+    request += "Accept-Encoding: " + f.options.accept_encoding + "\r\n";
   request += "Accept: */*\r\nConnection: close\r\n\r\n";
   if (!u.https) {
     send(f, request);
@@ -453,6 +459,7 @@ bool http_step(HttpFetch& f, double now_s) {
   }
   f.status = h.status;
   f.total = h.length;
+  f.encoding = h.encoding == "identity" ? std::string() : h.encoding;
   const bool redirect = (h.status == 301 || h.status == 302 || h.status == 303 || h.status == 307 ||
                          h.status == 308) &&
                         !h.location.empty() && f.options.redirects > 0;
@@ -514,6 +521,7 @@ bool http_step(HttpFetch& f, double now_s) {
 void http_cancel(HttpFetch& f) {
   tcp_close(f.stream);
   f.stream = {};
+  f.encoding.clear();
   f.tls.reset();
   f.tunnel = false;
   f.request.clear();

@@ -2,20 +2,25 @@
 // size words, a GitHub repository read as its raw files' address, the server's `dlserver` word,
 // the address turned on or refused at connect, and against a loopback
 // web server: files fetched and said, a file list followed (packs first, bad lines said), a 404
-// from the server's address leaving the file lacking, and a failure that turns HTTP off handing
-// the files back to the game's channel. A machine with no loopback socket skips the served cases.
+// from the server's address leaving the file lacking, a failure that turns HTTP off handing
+// the files back to the game's channel, and files kept packed (`.zst`, found and then asked
+// first, the plain file behind it) or sent packed (`Content-Encoding: gzip`), unpacked. A machine
+// with no loopback socket skips the served cases.
 //
 // ge:summary Test: web downloads: GitHub, dlserver, sizes, file lists, 404, fall back to UDP
-// ge:keywords test web-downloads dlserver filelist http-download fallback github
+// ge:keywords test web-downloads dlserver filelist http-download fallback github packed-download
 // ge:skill classic net testing
 #include "classic/content/web_downloads.hpp"
 
+#include <algorithm>
 #include <map>
 #include <string>
 #include <vector>
 
 #include "check.hpp"
 #include "net/tcp_socket.hpp"
+#include "vfs/unpack.hpp"
+#include "vfs/zstd.hpp"
 
 using namespace ge::classic::content;
 namespace gn = ge::net;
@@ -26,6 +31,7 @@ namespace {
 struct Web {
   gn::TcpListener listener;
   std::map<std::string, std::string> files;
+  std::map<std::string, std::string> gzipped;  // sent with `Content-Encoding: gzip`
   std::vector<gn::TcpStream> streams;
   std::vector<std::string> requests;
   std::vector<std::string> asked;  // the paths, in order
@@ -55,6 +61,14 @@ void serve(Web& w) {
     const size_t sp = r.find(' ');
     const std::string path = r.substr(sp + 1, r.find(' ', sp + 1) - sp - 1);
     w.asked.push_back(path);
+    if (const auto g = w.gzipped.find(path); g != w.gzipped.end()) {
+      const std::string reply = "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: " +
+                                std::to_string(g->second.size()) + "\r\n\r\n" + g->second;
+      gn::tcp_send_bytes(t, reinterpret_cast<const uint8_t*>(reply.data()), reply.size());
+      for (int k = 0; k < 100000 && !t.out.empty(); ++k) gn::tcp_pump(t);
+      gn::tcp_close(t);
+      continue;
+    }
     const auto it = w.files.find(path);
     const std::string reply =
         it == w.files.end()
@@ -271,6 +285,47 @@ TEST(web_falls_back_to_the_channel) {
   run(s, cfg, w, back, [](const std::string&, bool) { return true; });
   CHECK(!s.on && back.back == std::vector<std::string>{"maps/q2dm1.bsp"});
   CHECK(has(s.said, "[HTTP] maps/q2dm1.bsp [SSL connect error]"));
+  for (gn::TcpStream& t : w.streams) gn::tcp_close(t);
+  gn::tcp_close_listener(w.listener);
+}
+
+TEST(web_packed_files) {
+  Web w;
+  if (!open(w)) return;
+  const std::string bsp(4000, 'b');
+  const auto zst = ge::vfs::zstd_pack({reinterpret_cast<const uint8_t*>(bsp.data()), bsp.size()});
+  w.files["/q2/baseq2/maps/a.bsp.zst"] = std::string(zst.begin(), zst.end());
+  w.files["/q2/baseq2/maps/torn.bsp.zst"] = "not packed at all";
+  w.files["/q2/baseq2/sound/b.wav"] = "wav";
+  const std::string pcx = "pcx";
+  const auto gz = ge::vfs::write_gzip({reinterpret_cast<const uint8_t*>(pcx.data()), pcx.size()});
+  w.gzipped["/q2/baseq2/pics/c.pcx"] = std::string(gz.begin(), gz.end());
+  WebDownloads h;
+  WebConfig cfg;
+  cfg.filelists = false;
+  web_connect(h, cfg, base_of(w), 1, "s");
+  web_queue(h, cfg, "maps/a.bsp");
+  web_queue(h, cfg, "sound/b.wav");
+  web_queue(h, cfg, "pics/c.pcx");
+  web_queue(h, cfg, "maps/torn.bsp");
+  WebDone all;
+  run(h, cfg, w, all, [](const std::string&, bool) { return true; });
+  std::map<std::string, std::string> got;
+  for (auto& [path, bytes] : all.files) got[path] = std::string(bytes.begin(), bytes.end());
+  CHECK(got.size() == 3 && all.back.empty());
+  CHECK(got["maps/a.bsp"] == bsp && got["sound/b.wav"] == "wav" && got["pics/c.pcx"] == "pcx");
+  CHECK(h.packing == 1);  // zstd, found on the first file
+  CHECK(has(h.said, "[HTTP] maps/a.bsp [4 kB from zstd, "));
+  CHECK(has(h.said, "[HTTP] maps/torn.bsp [the file is not packed by"));
+  // The first file tried each packed form in turn; the rest asked the found form, then the plain.
+  CHECK(w.asked.size() >= 6 && w.asked[0] == "/q2/baseq2/maps/a.bsp.xz" &&
+        w.asked[1] == "/q2/baseq2/maps/a.bsp.zst");
+  const auto asked = [&w](const char* p) {
+    return std::count(w.asked.begin(), w.asked.end(), std::string(p)) == 1;
+  };
+  CHECK(asked("/q2/baseq2/sound/b.wav.zst") && asked("/q2/baseq2/sound/b.wav"));
+  CHECK(!asked("/q2/baseq2/sound/b.wav.xz"));
+  CHECK(w.requests[0].find("\r\nAccept-Encoding: gzip, zstd, xz, bzip2\r\n") != std::string::npos);
   for (gn::TcpStream& t : w.streams) gn::tcp_close(t);
   gn::tcp_close_listener(w.listener);
 }
