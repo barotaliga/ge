@@ -1220,3 +1220,21 @@ TEST(q2_pads_rise_and_its_items_glow_back_in_the_windows_own_game) {
   }
   CHECK_MSG(glows == 1, std::to_string(glows));
 }
+
+TEST(quake_twos_gun_sway_turns_and_moves_the_held_weapon_and_sets_ours_aside) {
+  // Its degrees (pitch down, yaw left, roll right side down) as the hand's turn (yaw right, pitch
+  // up, roll right side down); its place along the world's axes as right, up and forward of the
+  // view; the hand's own lag set aside.
+  shooters_edge::view::HandInput in;
+  shooters_edge::client::q2_gun_sway({2, 4, 6}, {0, 40, 0}, {0, 90, 0}, in);
+  constexpr double kRad = 0.017453292519943295;
+  CHECK(in.game_sway);
+  CHECK(std::fabs(in.place.game_turn[0] + 4 * kRad) < 1e-6);
+  CHECK(std::fabs(in.place.game_turn[1] + 2 * kRad) < 1e-6);
+  CHECK(std::fabs(in.place.game_turn[2] - 6 * kRad) < 1e-6);
+  // Facing +y (yaw 90), 40 units along +y is a metre forward.
+  CHECK_MSG(std::fabs(in.place.game_shift_m[2] - 1.0) < 1e-5 &&
+                std::fabs(in.place.game_shift_m[0]) < 1e-5 &&
+                std::fabs(in.place.game_shift_m[1]) < 1e-5,
+            std::to_string(in.place.game_shift_m[2]));
+}

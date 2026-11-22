@@ -54,6 +54,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | The window's size and place | as the game opens it | `vid_geometry`, `WxH+X+Y` (`platform/window_cvars.hpp`) | the engine's | the engine's |
 | Console scroll-back | stays where scrolled | `con_scroll` (`console/view.hpp`, every game) | the engine's | the engine's |
 | Packets sent shown | `showpackets` | `cl_showpackets` over the channel's trace (`classic/protocol/channel.hpp`) | its own | its own |
+| Held weapon's sway | ours (`cl_gunsway`) | the server's gun angles and place (`client/held.cpp`'s `q2_gun_sway` over `viewmodel/place.hpp`'s `game_turn`, `game_shift_m`), ours set aside | its own | its own |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Screenshot names | by the time | `gl_screenshot_template` (`quakeXXX`) and `gl_screenshot_compression` over `scr_template` and `scr_compression` (`capture/screenshot.hpp`) | by the time | the engine's |
 
