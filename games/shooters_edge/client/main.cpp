@@ -348,6 +348,8 @@ int run_main(int argc, char** argv) {
                                   .mouse = &controls.mouse,
                                   .predict = &remote.predict,
                                   .crouch = &remote.q2_ahead.crouch,
+                                  .show_misses = &remote.q2_ahead.show_misses,
+                                  .shownet = &remote.q2_shownet,
                                   .noskins = &picture.stock_figures,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,
@@ -381,8 +383,7 @@ int run_main(int argc, char** argv) {
     const shooters_edge::profiles::GameProfile* g = shooters_edge::profiles::find_game(id);
     return g != nullptr ? *g : shooters_edge::profiles::q1_game();
   };
-  // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
-  cl::Q2Bar q2_bar{.files = &files,
+  cl::Q2Bar q2_bar{.files = &files,  // Quake II's status bar, from its rules' program (q2_bar.hpp)
                    .binds = &console.binds().table(ge::console::BindMode::game),
                    .screen = &q2_screen,
                    .fx = &picture.q2fx};
@@ -429,8 +430,7 @@ int run_main(int argc, char** argv) {
     out::status("shooters_edge: " + std::to_string(cl::archive_paths(files).size()) +
                 " archives on the search path of " + files.folder);
   }
-  // A joined server's files read from the window's game folders and kept in them
-  // (net/window_words).
+  // A joined server's files read from and kept in the window's game folders (net/window_words).
   bool locs_fetched = false;  // a map's place names fetched: read again when its level starts
   sn::wire_remote_files(remote, files, args.basedir, args.game, args.profile, locs_fetched);
   if (!args.demovideo.empty()) return cl::demo_video_main(console, args, files, picture, playback);
@@ -735,8 +735,7 @@ int run_main(int argc, char** argv) {
     static_cast<ge::audio::Synth*>(user)->render(out, frames);
   };
   // The hearings before the device (closed first: its thread never reads what they free).
-  // A demo's sounds, voices and lines; the window's own game's sounds (cl_footsteps and s_ambient
-  // over both).
+  // A demo's sounds, voices and lines; the window's own game's (cl_footsteps, s_ambient over both).
   cl::DemoHearing hearing(synth, &picture.ce.sounds, &picture.q2fx);
   cl::ListenHearing heard_here(synth, &picture.ce.sounds, &picture.q2fx);
   cl::Cinematic cine;                 // Quake II's movies (cinematic.hpp)

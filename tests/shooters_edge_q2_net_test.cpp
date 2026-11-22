@@ -255,8 +255,19 @@ TEST(cl_nodelta_has_every_frame_sent_whole) {
   cn::Q2ClientConfig cfg;
   cfg.name = "eve";
   cfg.nodelta = true;
+  // cl_shownet 1: each message the server sent printed as its size.
+  cfg.shownet = 1;
+  ge::classic::protocol::ChannelTrace trace;
+  int sizes = 0;
+  bool numbers = true;
+  trace.print = [&](const std::string& line) {
+    sizes++;
+    numbers = numbers && !line.empty() && line.find_first_not_of("0123456789") == std::string::npos;
+  };
+  cfg.trace = &trace;
   cn::Q2ClientEnd& c = join(*r, cfg);
   run(*r, 200);
+  CHECK_MSG(sizes >= c.frames && numbers, std::to_string(sizes) + " sizes printed");
   CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
   CHECK(c.frames >= 10);
   const cn::Q2NetClient& sc = r->server.clients[0];
@@ -985,6 +996,19 @@ TEST(the_window_predicts_its_moves_on_a_server_of_the_q2) {
   CHECK(remote.q2_ahead.origin.y == static_cast<float>(v.origin[1]) * 0.125f);
   CHECK(remote.q2_ahead.origin.z == static_cast<float>(v.origin[2]) * 0.125f);
   CHECK(st.eye.z > remote.q2_ahead.origin.z);
+  // cl_showmiss: none so far; a base knocked 10 units aside is a miss the next frame shows and the
+  // window prints, once.
+  CHECK(remote.q2_ahead.misses == 0);
+  std::vector<std::string> printed;
+  remote.trace.print = [&printed](const std::string& line) { printed.push_back(line); };
+  remote.q2_ahead.show_misses = true;
+  remote.q2_ahead.base.origin[0] = static_cast<int16_t>(remote.q2_ahead.base.origin[0] + 80);
+  steps(20);
+  CHECK_MSG(remote.q2_ahead.misses == 1, std::to_string(remote.q2_ahead.misses) + " misses");
+  CHECK_MSG(printed.size() == 1 && printed[0].rfind("prediction miss on ", 0) == 0 &&
+                printed[0].substr(printed[0].size() - 4) == ": 10",
+            printed.empty() ? "nothing printed" : printed[0]);
+  remote.trace.print = nullptr;
   // cl_predict_crouch 2: a duck lowers the eye the frame it goes down, ahead of the server's
   // frames, which catch up; 0: the eye stays the server's.
   const auto crouch = [&](int mode) {
