@@ -51,14 +51,14 @@ part differs; `missing` not in our tree; `not-taken` a note or doc of ours decid
 | --- | --- | --- | --- | --- | --- |
 | Server console commands (the operator's words) | 59 | 6 | 0 | 11 | 76 |
 | General console commands and macros the server's console has (common) | 46 | 8 | 0 | 3 | 57 |
-| Server settings (cvars) with their defaults | 104 | 20 | 8 | 38 | 170 |
+| Server settings (cvars) with their defaults | 109 | 20 | 2 | 39 | 170 |
 | Server-to-client messages (svc) and protocol extensions the server writes | 39 | 8 | 6 | 0 | 53 |
 | What the server accepts from clients | 44 | 11 | 0 | 2 | 57 |
 | The game library interface | 55 | 29 | 3 | 1 | 88 |
-| Messages a player sees (refusals, drops, prints), quoted exactly | 53 | 13 | 4 | 2 | 72 |
+| Messages a player sees (refusals, drops, prints), quoted exactly | 53 | 13 | 3 | 3 | 72 |
 | Messages an admin sees on the server console, quoted exactly | 9 | 25 | 0 | 2 | 36 |
 | Server features beyond single words | 39 | 12 | 2 | 2 | 55 |
-| **all** | 448 | 132 | 23 | 61 | 664 |
+| **all** | 453 | 132 | 16 | 63 | 664 |
 
 ## 1. Server console commands (the operator's words)
 
@@ -215,7 +215,7 @@ done 46, partial 8, missing 0, not-taken 3
 Defaults are upstream's; flags as registered. Our Quake II spellings that are synonyms are listed in
 `games/shooters_edge/net/q2_game.cpp` (`kSettingNames`).
 
-done 104, partial 20, missing 8, not-taken 38
+done 109, partial 20, missing 2, not-taken 39
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -353,7 +353,7 @@ done 104, partial 20, missing 8, not-taken 38
 | cvar.com_date_format | `com_date_format` = `%Y-%m-%d` | For `$com_date`. | done | engine/console/clock_macros.hpp |
 | cvar.com_time_format | `com_time_format` = `%H:%M` (`%H.%M` on Windows) | For `$com_time`. | partial | engine/console/clock_macros.hpp: `%H:%M` on every system (Windows' own default is `%H.%M`) |
 | cvar.com_debug_break | `com_debug_break` = `0` | Debugger break (debug build only). | not-taken | docs/porting/server.md: debug build only, not taken |
-| cvar.com_fatal_error | `com_fatal_error` = `0` | Fatal error mode. | missing | |
+| cvar.com_fatal_error | `com_fatal_error` = `0` | Fatal error mode. | done | engine/server/main.cpp (`com_fatal_error`, `ServerGame::drop_error` and `crash`): a game's recoverable error (a hosted library's error call, `Game Error: <text>`) prints the stars and `ERROR:` and drops every client with `Server crashed: <text>`, the server idle until the next map; with the setting the clients get `Server fatal crashed: <text>`, the console log `FATAL: <text>`, the stars go to the error stream (`<3>` before each with a `<?>` console prefix) and the process ends with 1; games/shooters_edge/net/q2_game.cpp |
 | cvar.version | `version` (server info, read-only) | Version text. | not-taken | `q2-server-gaps.md` "Not worth building" |
 | cvar.allow_download | `allow_download` = `0` on a dedicated server, `1` otherwise (archive) | Master download switch. | partial | `sv_download` (synonym) defaults to 1 (`games/shooters_edge/net/q2_game.cpp`) |
 | cvar.allow_download_players | `allow_download_players` = `1` (archive) | `players/`. | done | `sv_download_players` (synonym) |
@@ -367,7 +367,7 @@ done 104, partial 20, missing 8, not-taken 38
 | cvar.sys_forcegamelib | `sys_forcegamelib` = `` (no-set) | Game library path tried first. | partial | The hosted library is loaded from a path the server is given (`games/shooters_edge/server/q2_native.hpp`); this name: verify |
 | cvar.sys_allow_unsafe_savegames | `sys_allow_unsafe_savegames` = `0` (no-set) | Allows saves with libraries lacking the enhanced-savegame bit. | missing | |
 | cvar.sys_history | `sys_history` | Command history size. | done | engine/server/terminal.hpp (`con_history`, Quake II's spelling a synonym): the last 128 lines typed kept, that many saved to `.syshistory` in the base game folder and read back, 0 neither, empty lines left out; tests/server_terminal_test.cpp |
-| cvar.fs_autoexec | `fs_autoexec` = `1` | Rerun configs when `game` changes. | missing | |
+| cvar.fs_autoexec | `fs_autoexec` = `1` | Rerun configs when `game` changes. | done | engine/server/main.cpp (`server_switch_mods`): a mod switch (our change of `game`) reads every layer's server.cfg again; 0 changes the folders alone |
 | cvar.fs_debug | `fs_debug` = `0` | File debug prints. | not-taken | `q2-server-gaps.md` "Not worth building" |
 | cvar.fs_fuzz_factor | `fs_fuzz_factor` = `0` | File fuzzing (debug). | not-taken | docs/porting/server.md: debug build only, not taken |
 | cvar.fs_fuzz_filter | `fs_fuzz_filter` = `*` | File fuzzing filter (debug). | not-taken | docs/porting/server.md: debug build only, not taken |
@@ -378,15 +378,15 @@ done 104, partial 20, missing 8, not-taken 38
 | cvar.showdrop | `showdrop` = `0` | Drop prints (debug). | not-taken | same |
 | cvar.qport | `qport` = random | Client's qport. | not-taken | same |
 | cvar.net_maxmsglen | `net_maxmsglen` = `1390` | Largest packet a client may ask for. | done | ours `sv_maxmsglen` (games/shooters_edge/net/q2_game.cpp), the reference's name a synonym; read by `q2_msglen` (`q2_msglen`, games/shooters_edge/net/q2_net_ext.cpp) |
-| cvar.net_chantype | `net_chantype` = `1` | Channel kind (new or old). | missing | S18 |
+| cvar.net_chantype | `net_chantype` = `1` | Channel kind (new or old). | not-taken | A client's own setting the server never reads; the server's half (the client's choice taken for protocol 36, `Invalid netchan type.`, the ` nc=` answer) is games/shooters_edge/net/q2_net_ext.cpp |
 | cvar.net_ip | `net_ip` = `` | IPv4 bind address. | done | Engine `net_ip` |
 | cvar.net_ip6 | `net_ip6` = `` | IPv6 bind address. | missing | |
 | cvar.net_port | `net_port` = `27910` | Port. | done | Engine `net_port`, Quake II's default port |
 | cvar.net_clientport | `net_clientport` = any | Client's port. | not-taken | A client's own port; the dedicated server has no client (the client's ledger has it) |
 | cvar.net_dropsim | `net_dropsim` = `0` | Simulated loss. | not-taken | Loss is simulated by the engine's simulated network in tests and labs (engine/net, net-link lab), not by a setting on a live server |
-| cvar.net_log_enable | `net_log_enable` = `0` | Packet log. | missing | |
-| cvar.net_log_name | `net_log_name` = `network` | Packet log file. | missing | |
-| cvar.net_log_flush | `net_log_flush` = `0` | Packet log flush. | missing | |
+| cvar.net_log_enable | `net_log_enable` = `0` | Packet log. | done | engine/net/packet_log.hpp on every dedicated server (`net_log`, Quake II's spelling a synonym): each datagram in and out, `UDP`/`TCP` `recv`/`send`, the time in ms, the peer, the length, 16-byte hex rows with the letters; 1 a new file, 2 added to; the open, close and failure lines, a failure setting it back to 0; tests/net_packet_log_test.cpp |
+| cvar.net_log_name | `net_log_name` = `network` | Packet log file. | done | engine/net/packet_log.hpp: `logs/<name>.log` in the game's folder, `.log` added unless given, odd letters made `_` |
+| cvar.net_log_flush | `net_log_flush` = `0` | Packet log flush. | done | engine/net/packet_log.hpp: 0 buffered, 1 each entry flushed, 2 unbuffered; a change reopens the log |
 | cvar.net_enable_ipv6 | `net_enable_ipv6` = 1 when the system has IPv6 | 2 also listens on IPv6. | partial | Engine addresses carry IPv6 (`engine/net/address.cpp`, `sv_iplimit`'s /48); whether `sesv` listens on IPv6: verify |
 | cvar.net_ignore_icmp | `net_ignore_icmp` = `0` | Ignores unreachable notices. | not-taken | `q2-server-gaps.md` row 17 (our transport hears no ICMP) |
 
@@ -616,7 +616,7 @@ done 55, partial 29, missing 3, not-taken 1
 
 `<x>` marks a filled-in value. Ours quoted where it differs.
 
-done 53, partial 13, missing 4, not-taken 2
+done 53, partial 13, missing 3, not-taken 3
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -679,7 +679,7 @@ done 53, partial 13, missing 4, not-taken 2
 | msg.lag | `Lag stats for:       <name>`, `RTT (min/avg/max):   <a>/<b>/<c> ms`, `Server to client PL: <x>% (approx)`, `Client to server PL: <y>%`, `Timescale          : <t>` | `lag` answer. | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.sinfo | the `sinfo` block: version, protocol (maj/min), maxmsglen, zlib support, netchan type, ping, movement fps, update rate, RTT, PL both ways, packetdup, timescale, connection time | `sinfo` answer. | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.packetdup | `Packetdup of <n> is not allowed on this server.`, `Server is sending <n> duplicate packet(s) to you.` (`packet` for one) | | done | games/shooters_edge/net/q2_net_server.cpp |
-| msg.slot255 | `WARNING: Server has allocated client slot number 255. This is known to be broken in your Q2PRO client version. Please update your client to latest version.` | An old protocol-36 client given no slot number. | missing | Cannot arise while slots are capped at 32 (S35) |
+| msg.slot255 | `WARNING: Server has allocated client slot number 255. This is known to be broken in your Q2PRO client version. Please update your client to latest version.` | An old protocol-36 client given no slot number. | not-taken | Cannot arise: slots are capped at 32 (S35), so no client is ever given slot 255 |
 | msg.rate | (none) | The reference clamps a client's rate silently. | partial | Ours tells the client `Your rate setting is too high/low for this server.` and `Rate set to <n>` (`engine/server/rate.cpp`) |
 | msg.mvd.prefix | relay lines start `[MVD] ` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
 | msg.mvd.stream | `[MVD] Streaming resumed.`, `[MVD] Buffering data, please wait...`, `[MVD] Restored connection to the game server!`, `[MVD] Delay buffer overflowed!`, `[MVD] Disconnected from the game server!`, `[MVD] Lost connection to the game server!` | Relay state to viewers. | done | games/shooters_edge/net/q2_mvd_relay.cpp |
