@@ -60,7 +60,12 @@ std::optional<ge::assets::Image> decode_picture(std::span<const uint8_t> bytes,
   return img;
 }
 
-bool read_crosshair_image(const SearchPath& files, std::string_view name, ge::ui::Image* out) {
+namespace {
+
+// `folder/<name>` as a .tga, .png, .jpg or .pcx (`what` names it in the console's line, `instead`
+// says what is drawn when it is not there).
+bool read_named_picture(const SearchPath& files, std::string_view folder, std::string_view name,
+                        std::string_view what, std::string_view instead, ge::ui::Image* out) {
   std::string stem(name);
   for (const std::string_view ext : {".tga", ".png", ".jpg", ".jpeg", ".pcx"})
     if (ends_with(stem, ext)) {
@@ -71,15 +76,15 @@ bool read_crosshair_image(const SearchPath& files, std::string_view name, ge::ui
                       stem.find("..") != std::string::npos || stem.find(':') != std::string::npos;
   if (!climbs) {
     for (const std::string_view ext : {".tga", ".png", ".jpg", ".pcx"}) {
-      const std::string path = "crosshairs/" + stem + std::string(ext);
+      const std::string path = std::string(folder) + "/" + stem + std::string(ext);
       std::vector<uint8_t> store;
       const std::span<const uint8_t> bytes = find_file(files, path, store);
       if (bytes.empty()) continue;
       std::string why;
       std::optional<ge::assets::Image> img = decode_picture(bytes, path, {}, &why, 255);
       if (!img) {
-        std::string line = "Couldn't read the crosshair picture " + path;
-        line.append(" (").append(why).append("); the crosshair's mark is drawn.");
+        std::string line = "Couldn't read the " + std::string(what) + " " + path;
+        line.append(" (").append(why).append("); ").append(instead).append(" is drawn.");
         ge::core::output::status(line);
         return false;
       }
@@ -89,9 +94,22 @@ bool read_crosshair_image(const SearchPath& files, std::string_view name, ge::ui
       return true;
     }
   }
-  ge::core::output::status("Couldn't find the crosshair picture " + std::string(name) +
-                           " in the crosshairs folder; the crosshair's mark is drawn.");
+  ge::core::output::status("Couldn't find the " + std::string(what) + " " + std::string(name) +
+                           " in the " + std::string(folder) + " folder; " + std::string(instead) +
+                           " is drawn.");
   return false;
+}
+
+}  // namespace
+
+bool read_crosshair_image(const SearchPath& files, std::string_view name, ge::ui::Image* out) {
+  return read_named_picture(files, "crosshairs", name, "crosshair picture", "the crosshair's mark",
+                            out);
+}
+
+bool read_console_back(const SearchPath& files, std::string_view name, ge::ui::Image* out) {
+  return read_named_picture(files, "pics", name, "console picture", "the console's own picture",
+                            out);
 }
 
 void add_crosshair_reader(ge::hud::CrosshairSettings& s, const SearchPath& files) {
