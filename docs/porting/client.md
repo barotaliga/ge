@@ -61,6 +61,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | The client's own port | any free port | `net_clientport`, moved at once (`net/qw_remote.cpp`'s `own_port`) | its own | its own |
 | The console's picture | the pack's `conback` | `con_background`, a picture under `pics/` (`menu/classic_console.hpp`) | its own | its own |
 | The console's stamps | `con_timestamps` on chat lines (`client/chat_lines.hpp`) | its own `con_timestamps` on every line, `con_timestampsformat`, `con_timestampscolor` (`console/view.hpp`'s stamps) | its own | its own |
+| Tab in the console | ours: the top suggestion | `com_completion_mode`, `com_completion_treshold`: the shared part, the matches listed (`console/view.hpp`'s `list_mode`) | its own | its own |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Screenshot names | by the time | `gl_screenshot_template` (`quakeXXX`) and `gl_screenshot_compression` over `scr_template` and `scr_compression` (`capture/screenshot.hpp`) | by the time | the engine's |
 

@@ -33,14 +33,15 @@
 // recording's only warns and plays on.
 //
 // THE MOUSE: `in_grab` 0 never takes the mouse while the game is in a window (only covering the
-// screen); 1 and 2 take it as ours does (`q2_takes_mouse`).
+// screen); 1 and 2 take it as ours does (`q2_takes_mouse`). `in_enable` 0 never takes it, so the
+// mouse never turns the view; the keys work either way.
 //
 // ge:summary Quake II's session settings: the map commands, the game clock, the state cvars
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd auto-record map-change timescale
 // ge:keywords fixedtime cl_running cl_paused sv_running sv_paused read-only q2_session_step
 // ge:keywords cl_warn_on_fps_rounding fps-rounding inexact map-version map-checksum
 // ge:keywords cl_autopause cl_thirdperson cl_thirdperson_angle cl_thirdperson_range
-// ge:keywords third-person chase-camera view_behind in_grab q2_takes_mouse
+// ge:keywords third-person chase-camera view_behind in_grab in_enable q2_takes_mouse
 // ge:skill console shooter
 // ge:test tests/shooters_edge_q2_session_test.cpp
 #pragma once
@@ -76,6 +77,7 @@ struct Q2Session {
   uint32_t fps_seen = 0;       // cl_maxfps's revision when it was last checked
   bool fps_told = false;       // how to turn the warning off said once
   int grab = 1;                // in_grab: 0 never in a window, 1 and 2 as ours
+  bool mouse = true;           // in_enable: 0 the mouse never taken, so it never looks
   bool remap_tracks = false;   // ogg_remap_tracks (1 once Quake II registers it): take_in.hpp
   // What the last frame saw: in a game, its map ("" while it loads), the state cvars' values.
   bool joined = false;
@@ -123,9 +125,10 @@ double view_behind(ge::render::FrameView& view, double units, double angle_deg,
 double q2_third_person(const Q2Session& s, ge::render::FrameView& view,
                        const ge::shooter::BrushModel* world);
 
-// Whether the look may take the mouse under `in_grab`: never in a window at 0.
+// Whether the look may take the mouse under `in_grab` (never in a window at 0) and `in_enable`
+// (never at 0).
 inline bool q2_takes_mouse(const Q2Session& s, bool fullscreen) {
-  return s.grab != 0 || fullscreen;
+  return s.mouse && (s.grab != 0 || fullscreen);
 }
 
 }  // namespace shooters_edge::client
