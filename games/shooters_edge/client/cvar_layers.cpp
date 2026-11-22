@@ -453,8 +453,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .kind = con::CvarKind::integer,
          .min = -3,
          .max = 3,
-         .values = "1: by name (the default); 2: oldest first; 3: smallest first; -1, -2, -3: "
-                   "the same the other way round; 0: by name",
+         .values = "1: by name, A to Z (the default); -1: Z to A; 2: oldest first; -2: newest "
+                   "first; 3: smallest first; -3: largest first; 0: by name",
          .overlap = con::Overlap::same});
   v.add_synonym("ui_sortdemos", "menu_demo_sort");
   for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)

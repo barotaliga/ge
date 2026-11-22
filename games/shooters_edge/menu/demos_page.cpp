@@ -51,17 +51,17 @@ void DemosPage::add_cvars(ge::console::Console& con) {
                     .kind = ge::console::CvarKind::text,
                     .values = "\"\": the game's folder (the default); TEXT: that folder"},
                    &last_dir_);
-  con.cvars().bind({.name = "menu_demo_sort",
-                    .fallback = "-2",
-                    .flags = ge::console::kArchive,
-                    .help = "The order DEMOS lists the recordings in.",
-                    .kind = ge::console::CvarKind::integer,
-                    .min = -3,
-                    .max = 3,
-                    .values = "1: by name; 2: oldest first; 3: smallest first; -1, -2, -3: the "
-                              "same the other way round (-2, newest first, the default); 0: by "
-                              "name"},
-                   &order_);
+  con.cvars().bind(
+      {.name = "menu_demo_sort",
+       .fallback = "-2",
+       .flags = ge::console::kArchive,
+       .help = "The order DEMOS lists the recordings in.",
+       .kind = ge::console::CvarKind::integer,
+       .min = -3,
+       .max = 3,
+       .values = "-2: newest first (the default); 2: oldest first; 1: by name, A to Z; -1: Z to A; "
+                 "3: smallest first; -3: largest first; 0: by name"},
+      &order_);
 }
 
 void DemosPage::open() {
