@@ -188,6 +188,9 @@ uint32_t q2_entity_flags(const Q2EntityState& from, const Q2EntityState& to, int
 void q2_write_entity(std::vector<uint8_t>& out, uint32_t flags, int number,
                      const Q2EntityState& to);
 void q2_write_player(std::vector<uint8_t>& out, const Q2PlayerState& from, const Q2PlayerState& to);
+// A rules' effect event (a point or a trail) as its muzzle flash or temporary entity message;
+// false when the protocol has none for it (nothing written).
+bool q2_write_effect(std::vector<uint8_t>& out, const NetEvent& e);
 
 // The map's checksum as configstring 31 carries it: the MD4 of the whole map file, its four
 // little-endian words XORed, read as a signed number.

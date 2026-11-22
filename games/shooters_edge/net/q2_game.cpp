@@ -159,6 +159,31 @@ constexpr gs::GameRule kRules[] = {
     {"sv_maxmsglen",
      "The largest packet a player whose game speaks the newer protocols may ask for, in bytes.",
      nullptr, "0: what the player asks; 512..4086: at most that many (1390 the default)", false},
+    // The multiview recorder and its relay stream (q2_mvd_server.hpp).
+    {"sv_mvd_enable", "Whether the server keeps a multiview recorder, and serves it to relays.",
+     nullptr, "0: none (the default); 1: recordings (mvdrecord); 2: relays over TCP too", false},
+    {"sv_mvd_maxclients", "How many relays may watch over TCP at once.", nullptr,
+     "1..256 (8 the default)", false},
+    {"sv_mvd_bufsize", "How much a relay may fall behind before it is dropped, in 32 KiB.", nullptr,
+     "1..4 (2 the default)", false},
+    {"sv_mvd_password", "The password a relay must bring; empty lets any relay in.", nullptr,
+     "empty (the default) or a password", false},
+    {"sv_mvd_maxsize", "The size a multiview recording stops at, in kilobytes.", nullptr,
+     "0: no limit (the default); 1..2000000", false},
+    {"sv_mvd_maxtime", "The length a multiview recording stops at, in minutes.", nullptr,
+     "0: no limit (the default); a count of minutes", false},
+    {"sv_mvd_maxmaps", "The level changes a multiview recording stops at.", nullptr,
+     "0: never; 1 the default (it stops at the first change)", false},
+    {"sv_mvd_noblend", "Whether the multiview stream leaves the players' screen blends out.",
+     nullptr, "0: kept (the default); 1: left out", false},
+    {"sv_mvd_nogun", "Whether the multiview stream leaves the players' held weapons out.", nullptr,
+     "0: kept (the default); 1: left out", false},
+    {"sv_mvd_suspend_time",
+     "The minutes with no player in the game after which the multiview stream pauses.", nullptr,
+     "0: never; 5 the default", false},
+    {"sv_mvd_disconnect_time",
+     "The minutes with no recording and no relay after which the multiview recorder stops.",
+     nullptr, "0: never; 15 the default", false},
 };
 
 // The rules a server may set: the engine's rate bounds and per-address limit (server/rate.hpp,
@@ -384,7 +409,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
         rule == "sv_ghosttime" || rule == "sv_nodelta" || rule == "sv_pingmethod" ||
         rule == "sv_maxents" || rule == "sv_entpriority" || rule == "sv_novis" ||
         rule == "sv_vispatch" || rule == "sv_entpath" || rule == "sv_partialnames" ||
-        rule == "sv_packetdup" || rule == "sv_forcereconnect" || rule == "sv_maxmsglen")
+        rule == "sv_packetdup" || rule == "sv_forcereconnect" || rule == "sv_maxmsglen" ||
+        rule.rfind("sv_mvd_", 0) == 0)
       continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
@@ -438,6 +464,30 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       !endpoint_number(c, "sv_maxmsglen", 4086, g->cfg.net_maxmsglen, error))
     return nullptr;
   if (g->cfg.net_maxmsglen > 0 && g->cfg.net_maxmsglen < 512) g->cfg.net_maxmsglen = 512;
+  {  // the multiview recorder
+    Q2MvdConfig& m = g->cfg.mvd;
+    int noblend = 0, nogun = 0, maxsize = 0, maxtime = 0;
+    if (!endpoint_number(c, "sv_mvd_enable", 2, m.enable, error) ||
+        !endpoint_number(c, "sv_mvd_maxclients", 256, m.maxclients, error) ||
+        !endpoint_number(c, "sv_mvd_bufsize", 4, m.bufsize, error) ||
+        !endpoint_number(c, "sv_mvd_maxsize", 2000000, maxsize, error) ||
+        !endpoint_number(c, "sv_mvd_maxtime", 3456000, maxtime, error) ||
+        !endpoint_number(c, "sv_mvd_maxmaps", 1000000, m.maxmaps, error) ||
+        !endpoint_number(c, "sv_mvd_noblend", 1, noblend, error) ||
+        !endpoint_number(c, "sv_mvd_nogun", 1, nogun, error) ||
+        !endpoint_number(c, "sv_mvd_suspend_time", 34560, m.suspend_min, error) ||
+        !endpoint_number(c, "sv_mvd_disconnect_time", 34560, m.disconnect_min, error))
+      return nullptr;
+    m.maxclients = std::max(m.maxclients, 1);
+    m.bufsize = std::max(m.bufsize, 1);
+    m.maxsize_kb = maxsize;
+    m.maxtime_min = maxtime;
+    m.noblend = noblend != 0;
+    m.nogun = nogun != 0;
+    if (const auto it = c.rules.find("sv_mvd_password"); it != c.rules.end())
+      m.password = it->second;
+    m.demos = (std::filesystem::path(c.root) / base / "demos").string();
+  }
   g->cfg.enhanced_setplayer = partial != 0;
   if (const auto it = c.rules.find("sv_forcereconnect"); it != c.rules.end())
     g->cfg.force_reconnect = it->second;
@@ -605,6 +655,13 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   for (std::string& line : game.said) game.net->log.push_back(std::move(line));
   game.said.clear();
   gs::ban_file_read(game.net->bans, game.cfg.ban_file, game.cfg.unix_time());
+  Q2MvdConfig& mc = game.net->mvd.cfg;  // the endpoint's own limits, as the relays' too
+  mc.iplimit = game.cfg.ip_limit;
+  mc.timeout = game.cfg.timeout;
+  mc.zombie = game.cfg.zombie_time;
+  mc.ghost = game.cfg.ghost_time > 0 ? game.cfg.ghost_time : 6;
+  game.net->mvd.log = [&game](const std::string& line) { game.net->log.push_back(line); };
+  if (port.kind == ge::net::TransportKind::udp) q2_mvd_listen(game.net->mvd, port.local);
   if (!game.logins_wanted) return true;
   game.login = std::make_unique<Q2Login>();
   game.login->game = game.base;
