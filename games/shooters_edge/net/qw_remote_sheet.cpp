@@ -19,9 +19,14 @@ namespace gs = ge::server;
 
 namespace {
 
+// Our server: QuakeWorld's agreed the bit; Quake II's offered its sheet (svc 120) as we entered.
 bool ours(const Remote& r) {
-  return r.active && !r.q2 && !r.nq && r.end.ext.has(ExtFamily::ge, kGeSettings);
+  if (!r.active || r.nq) return false;
+  if (r.q2) return q2_demo(*r.q2).sheet_offered;
+  return r.end.ext.has(ExtFamily::ge, kGeSettings);
 }
+// The sheet our server sent this end.
+gs::SettingsSheet& sent(Remote& r) { return r.q2 ? q2_demo(*r.q2).sheet : r.end.sheet; }
 
 void say(Remote& r, const std::string& line) { remote_command(r, line); }
 
@@ -80,7 +85,7 @@ void remote_sheet_command(Remote& r, const std::string& word, double now_s) {
   if (ours(r)) {
     s.source = gc::SheetSource::ours;
     if (opening) {
-      r.end.sheet.asked = true;
+      sent(r).asked = true;
       say(r, "ge_sheet");
     }
     return;
@@ -126,10 +131,11 @@ bool remote_sheet_take_print(RemoteSheet& s, bool q2, const std::string& text, s
 void remote_sheet_step(Remote& r, std::vector<client::DemoPrint>& prints, double now_s) {
   RemoteSheet& s = r.sheet;
   if (!s.open) return;
-  if (s.source == gc::SheetSource::ours && !s.local && ours(r) &&
-      r.end.sheet.revision != s.ours_seen) {
-    s.ours_seen = r.end.sheet.revision;
-    s.sheet = r.end.sheet;
+  // The sheet as asked: a whole one, never the empty one offered before the window asked.
+  if (s.source == gc::SheetSource::ours && !s.local && ours(r) && sent(r).revision != s.ours_seen &&
+      sent(r).whole && !sent(r).asked) {
+    s.ours_seen = sent(r).revision;
+    s.sheet = sent(r);
   }
   if (s.source == gc::SheetSource::qw_plain || s.source == gc::SheetSource::qw_match) {
     read_qw_info(r);  // the info changes as the server's settings do

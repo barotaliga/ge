@@ -13,6 +13,7 @@
 #include <fstream>
 
 #include "console/lex.hpp"
+#include "console/tab_list.hpp"
 
 namespace ge::console {
 
@@ -608,75 +609,13 @@ bool ConsoleView::accept() {
 }
 
 void ConsoleView::tab_list() {
-  const std::string h = head();
-  const bool slash = !input_.empty() && (input_[0] == '/' || input_[0] == '\\');
   cursor_ = input_.size();
-  if (h.empty()) return;
-  const std::vector<std::string> found = c_.complete(h);
-  if (found.empty()) return;
-  if (found.size() == 1) {
-    input_ = (slash ? input_.substr(0, 1) : std::string()) + found[0] + " ";
-    cursor_ = input_.size();
-    tab_asked_.clear();
-    return;
-  }
-  // What every match shares, the word completed to it.
-  size_t same = found[0].size();
-  for (const std::string& n : found) {
-    size_t k = 0;
-    while (k < same && k < n.size() && n[k] == found[0][k]) ++k;
-    same = k;
-  }
-  if (same > h.size())
-    input_ = (slash ? input_.substr(0, 1) : std::string()) + found[0].substr(0, same);
+  const TabList t =
+      ge::console::tab_list(c_, input_, head(), list_mode, list_threshold, tab_asked_);
+  input_ = t.input;
   cursor_ = input_.size();
-  add(LineKind::command, "]" + input_);
-  const int n = static_cast<int>(found.size());
-  if (n > list_threshold && tab_asked_ != input_) {
-    tab_asked_ = input_;
-    add(LineKind::output,
-        "Press TAB again to display all " + std::to_string(n) + " possibilities.");
-    return;
-  }
-  tab_asked_.clear();
-  // In columns as many as fit a line of 78 letters, at most 6.
-  const auto columns = [this](const std::vector<std::string>& names) {
-    size_t widest = 1;
-    for (const std::string& s : names) widest = std::max(widest, s.size());
-    const size_t per = std::clamp<size_t>(78 / (widest + 2), 1, 6);
-    std::string row;
-    for (size_t i = 0; i < names.size(); ++i) {
-      std::string cell = names[i];
-      if ((i + 1) % per != 0 && i + 1 < names.size()) cell.resize(widest + 2, ' ');
-      row += cell;
-      if ((i + 1) % per == 0 || i + 1 == names.size()) {
-        add(LineKind::output, row);
-        row.clear();
-      }
-    }
-  };
-  if (list_mode == 0) {
-    for (const std::string& name : found) add(LineKind::output, name);
-  } else if (list_mode == 1) {
-    columns(found);
-  } else {
-    std::vector<std::string> commands, settings, aliases;
-    for (const std::string& name : found)
-      (c_.cvars().find(name) != nullptr ? settings
-       : c_.aliases().count(name) != 0  ? aliases
-                                        : commands)
-          .push_back(name);
-    const auto group = [&](const std::vector<std::string>& names, const char* one,
-                           const char* many) {
-      if (names.empty()) return;
-      add(LineKind::output,
-          std::to_string(names.size()) + " possible " + (names.size() == 1 ? one : many) + ":");
-      columns(names);
-    };
-    group(commands, "command", "commands");
-    group(settings, "variable", "variables");
-    group(aliases, "alias", "aliases");
-  }
+  if (!t.echo.empty()) add(LineKind::command, t.echo);
+  for (const std::string& line : t.lines) add(LineKind::output, line);
 }
 
 void ConsoleView::say(ChatTo to, std::string_view nick, std::string_view text) {

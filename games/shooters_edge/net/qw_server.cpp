@@ -1113,6 +1113,14 @@ void status_players(const QwServer& s, std::vector<gn::StatusPlayer>& out) {
     gn::StatusPlayer p;
     p.name = c.name;
     p.team = info_get(c.userinfo, "team");
+    // The colours the player picked (the palette's rows 0 to 13), drawn by a hub on its board.
+    auto row = [&](const char* key) {
+      const std::string v = info_get(c.userinfo, key);
+      const int n = v.empty() ? -1 : std::atoi(v.c_str());
+      return n < 0 ? gn::kNoColourRow : static_cast<uint8_t>(n > 13 ? 13 : n);
+    };
+    p.top = row("topcolor");
+    p.bottom = row("bottomcolor");
     p.score = c.rules_active ? static_cast<int32_t>(s.game->world.clients[i].numbers.frags) : 0;
     const int ping = c.state != ConnState::spawned || c.ping_samples == 0
                          ? 0

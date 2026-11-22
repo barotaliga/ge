@@ -1,7 +1,7 @@
 // The clock's macros (clock_macros.hpp).
 //
 // ge:summary $com_date, $com_time, $com_uptime and its long form, $random, from the host's clock
-// ge:keywords add_clock_macros uptime_short uptime_long strftime
+// ge:keywords add_clock_macros uptime_short uptime_long strftime time date timestamp dateiso rand
 // ge:skill console
 // ge:test tests/console_more_test.cpp
 #include "console/clock_macros.hpp"
@@ -93,6 +93,26 @@ void add_clock_macros(Console& con, Clock clock) {
   auto rng = std::make_shared<core::Rng>(core::make_rng(c->seed));
   con.keep(rng);
   con.add_macro("random", [rng] { return std::to_string(core::int_in(*rng, 0, 9)); });
+  // The older clients' fixed forms: $time 14:05, $date 22.11.26, $timestamp 20261122-1405,
+  // $dateiso 2026-11-22_14-05; $rand a number from 0 to 1 with six decimals.
+  const auto fixed = [c](const char* format) {
+    return [c, format] {
+      if (!c->local) return std::string();
+      const std::tm now = c->local();
+      char buf[64];
+      const size_t n = std::strftime(buf, sizeof buf, format, &now);
+      return std::string(buf, n);
+    };
+  };
+  con.add_macro("time", fixed("%H:%M"));
+  con.add_macro("date", fixed("%d.%m.%y"));
+  con.add_macro("timestamp", fixed("%Y%m%d-%H%M"));
+  con.add_macro("dateiso", fixed("%Y-%m-%d_%H-%M"));
+  con.add_macro("rand", [rng] {
+    char buf[32];
+    std::snprintf(buf, sizeof buf, "%.6f", core::int_in(*rng, 0, 1000000) / 1e6);
+    return std::string(buf);
+  });
 }
 
 }  // namespace ge::console

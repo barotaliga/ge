@@ -244,3 +244,66 @@ TEST(set_ex_fills_in_and_set_tp_takes_only_teamplay_settings) {
   CHECK(!f.con.output().empty() && f.con.output().back().ends_with(" in all"));
   CHECK(std::find(f.con.output().begin(), f.con.output().end(), "$health") != f.con.output().end());
 }
+
+// The team's $ macros (team_macros.hpp) read what the codes read, in every classic game.
+TEST(the_team_macros_name_the_players_state) {
+  Fixture f;
+  cl::team_frame(f.con, f.chat, rocketeer(), "dm6");
+  const auto x = [&](const char* t) { return f.con.expand_text(t); };
+  expect(x("$health/$armor $armortype $shells $rockets $cells $ammo"), "34/25 y 12 23 30 23");
+  expect(x("$weapon $weaponnum [$weapons] $bestweapon:$bestammo"), "rl 7 [rl/sg/axe] rl:23");
+  expect(x("$powerups|$colored_powerups|$colored_short_powerups|$tp_powerups"), "quad|quad|q|quad");
+  f.con.execute("tp_poweruptextstyle 1");
+  expect(x("$tp_powerups $need $location $took $point"),
+         "q armor/health someplace nothing nothing");
+  expect(x("$ledstatus $ledpoint $matchstatus $team1"), "$R $B disconnected team1");
+  hud::Status s = rocketeer();
+  s.keyed.set = true;  // Quake II: its own weapons by their words
+  s.keyed.in_hand = 9;
+  s.keyed.carried = (1u << 1) | (1u << 9);
+  s.keyed.ammo[9] = 7;
+  cl::team_frame(f.con, f.chat, s, "q2dm1");
+  expect(x("$weapon $weaponnum $weapons $bestweapon $ammo"), "rg 9 rg/blaster rg 7");
+}
+
+// A server joined: the level's end and the countdown run their aliases; $team1 and $team2.
+TEST(the_match_runs_f_mapend_and_the_countdowns) {
+  Fixture f;
+  f.con.execute(
+      "alias f_mapend \"echo end\"; alias f_countdownstart \"echo count\";"
+      "alias f_countdownbreak \"echo break\"");
+  cl::DemoState s;
+  s.names[0] = "me";
+  s.names[1] = "Zed";
+  s.names[2] = "amy";
+  s.teams = {"red", "Blue", "red"};
+  s.serverinfo = {{"teamplay", "2"}, {"status", "Standby"}};
+  const hud::Status st = rocketeer();
+  cl::team_frame(f.con, f.chat, st, "dm6", 0, &s);
+  s.serverinfo[1].second = "Countdown";
+  cl::team_frame(f.con, f.chat, st, "dm6", 0, &s);
+  s.serverinfo[1].second = "Standby";
+  cl::team_frame(f.con, f.chat, st, "dm6", 0, &s);
+  s.intermission = true;
+  cl::team_frame(f.con, f.chat, st, "dm6", 0, &s);
+  cl::team_frame(f.con, f.chat, st, "dm6", 0, &s);
+  f.con.clear_output();
+  f.con.run();
+  std::string got;
+  for (const std::string& l : f.con.output()) got += l + "|";
+  expect(got, "count|break|end|");
+  expect(f.con.expand_text("$team1 $team2 $matchstatus"), "Blue red standby");
+}
+
+TEST(a_made_up_name_and_flood_protection) {
+  Fixture f;
+  cl::team_frame(f.con, f.chat, rocketeer(), "dm6");
+  f.con.execute("cl_fakename Ace; say_team hi; say hi");
+  expect(f.sent[0], "say_team \"\rAce: hi\"");
+  expect(f.sent[1], "say \"hi\"");
+  f.con.execute("cl_floodprot 1; cl_fp_messages 3; cl_fp_persecond 10");
+  f.con.clear_output();
+  f.con.execute("say a; say b; say c");
+  CHECK_MSG(f.sent.size() == 3, "the third line in ten seconds is held back");
+  CHECK(!f.con.output().empty() && f.con.output().back() == "Flood Protection");
+}

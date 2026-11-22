@@ -9,6 +9,10 @@
 // arrives through the synth's ring. Losing focus does not stop the stream; the game silences its
 // buses (and `pause_audio` holds the device where the platform wants the session given back).
 //
+// THE DEVICE CHOSEN: the system's default output unless the player names another
+// (`audio_devices` lists them, `move_audio` moves the stream there, held and let go so the pull
+// never runs on two threads at once).
+//
 // THE MICROPHONE (`AudioIn`): the default recording device as one mono float stream at the rate
 // asked for (48 kHz for voice chat, net/voice.hpp), converted by the platform from whatever the
 // device runs at. The game thread reads what has been captured since its last read
@@ -22,6 +26,7 @@
 // ge:summary The audio device: one stereo float output pulled on the device thread; the microphone
 // ge:keywords platform audio device output stream playback callback pull sdl dummy-driver
 // ge:keywords audio-thread open_audio pause_audio resume_audio audio_available frames-pulled
+// ge:keywords audio_devices move_audio output-device sound-device playback-device
 // ge:keywords microphone recording capture audio-in open_audio_in read_audio_in voice-chat
 // ge:skill platform audio
 // ge:test tests/platform_audio_test.cpp
@@ -29,6 +34,8 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace ge::platform {
 
@@ -57,6 +64,7 @@ class AudioOut {
  private:
   explicit AudioOut(std::unique_ptr<Impl> impl);
   friend std::unique_ptr<AudioOut> open_audio(const AudioDesc& desc);
+  friend bool move_audio(AudioOut& out, const std::string& name);
   friend void pause_audio(AudioOut& out);
   friend void resume_audio(AudioOut& out);
   std::unique_ptr<Impl> impl_;
@@ -68,6 +76,13 @@ bool audio_available();
 // Open the default output and start pulling. Returns nullptr after an agent-actionable error
 // line when it cannot (no device, no driver).
 std::unique_ptr<AudioOut> open_audio(const AudioDesc& desc);
+
+// The playback devices' names, as the system lists them (none when there is no driver).
+std::vector<std::string> audio_devices();
+// The output moved to the playback device called `name` ("" the system's default), the pull and
+// what it was pulled so far kept. False, the output left where it was, when no device has that
+// name or it does not open.
+bool move_audio(AudioOut& out, const std::string& name);
 
 // Hold the device (it stops pulling) and let it go again.
 void pause_audio(AudioOut& out);

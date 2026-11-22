@@ -452,9 +452,20 @@ void Console::message(std::string_view line) {
   fire_triggers(line);
 }
 
-void Console::fire_triggers(std::string_view line) {
+void Console::fire_triggers(std::string_view line) { fire_triggers(line, -1, false); }
+
+void Console::fire_triggers(std::string_view line, int level, bool team) {
+  // The newest trigger first, as each queues its alias at the front.
   for (const Trigger& t : triggers_) {
-    if (line.find(t.match) == std::string_view::npos) continue;
+    if (t.match.empty() || line.find(t.match) == std::string_view::npos) continue;
+    if (level >= 0 && t.level != level &&
+        !(t.level == kTriggerTeam && level == kTriggerChat && team))
+      continue;
+    if (aliases_.count(t.alias) == 0 && level >= 0) {
+      print("trigger \"" + t.alias + "\" has no matching alias");
+      continue;
+    }
+    trigger_match_ = std::string(line.substr(0, 255));
     queue_front(t.alias, Source::local, {}, current_depth_ + 1, t.alias, false);
   }
 }
