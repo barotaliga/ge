@@ -321,7 +321,12 @@ void web_step(WebDownloads& h, const WebConfig& cfg, double now_s,
       std::string bad;
       if (!unpacked(f, packing, ended.file.filelist ? kMostList : ge::vfs::kUnpackLimit, body,
                     bad)) {
-        h.said.push_back("[HTTP] " + path + " [" + bad + "] " + web_files_left(remaining(h)));
+        std::string said = "[HTTP] " + path;
+        said += " [";
+        said += bad;
+        said += "] ";
+        said += web_files_left(remaining(h));
+        h.said.push_back(std::move(said));
         continue;
       }
       const double took = std::max(now_s - ended.started_s, 1e-3);
