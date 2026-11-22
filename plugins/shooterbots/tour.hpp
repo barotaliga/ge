@@ -16,7 +16,7 @@
 // when quicker. Deterministic to the bit: the same table gives the same order everywhere. No
 // allocation once `Tour`'s arrays are sized; a few milliseconds for 150 stops.
 //
-// ge:summary The tour: the quickest order through a map's stops (or-opt, 2-opt, stops before others)
+// ge:summary The tour: the quickest order through a map's stops (or-opt, 2-opt, stops first)
 // ge:keywords tour route-order tsp travelling-salesman or-opt 2-opt precedence speed-run stops
 // ge:keywords complete hundred-percent kill-order secrets-order campaign single-player
 // ge:skill shooterbots bots

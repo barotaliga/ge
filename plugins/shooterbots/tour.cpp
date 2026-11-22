@@ -1,3 +1,9 @@
+// The tour's search: nearest first under the stops-before rule, then or-opt, 2-opt and seeded kicks.
+//
+// ge:summary The tour's search: the order built, bettered by or-opt and 2-opt, kicked and kept
+// ge:keywords tour or-opt 2-opt precedence kicks route-order
+// ge:skill shooterbots bots
+// ge:test tests/shooterbots_tour_test.cpp
 #include "shooterbots/tour.hpp"
 
 #include <cstddef>
