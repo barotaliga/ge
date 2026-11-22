@@ -575,6 +575,14 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("cl_muzzleflashes", "0", con::Source::local);
   v.set("cl_footsteps", "0", con::Source::local);
   v.set("s_ambient", "3", con::Source::local);
+  v.set("cl_railtrail_type", "2", con::Source::local);
+  v.set("cl_railcore_color", "#0f0", con::Source::local);
+  CHECK(w.picture.q2fx.rail_type == 2 && w.picture.q2fx.core_colour == "#0f0");
+  float rgb[3] = {};
+  CHECK(ge::classic::q2_colour(w.picture.q2fx.core_colour, rgb) && rgb[1] == 1 && rgb[0] == 0);
+  CHECK(ge::classic::q2_colour("magenta", rgb) && rgb[0] == 1 && rgb[1] == 0 && rgb[2] == 1);
+  CHECK(ge::classic::q2_colour("#336699", rgb) && rgb[0] == 0.2f && rgb[2] == 0.6f);
+  CHECK(!ge::classic::q2_colour("purple", rgb) && !ge::classic::q2_colour("#12345z", rgb));
   v.set("scr_showpause", "0", con::Source::local);  // its spelling of our showpause
   CHECK(!w.show_pause && w.picture.q2fx.footsteps == 0 && w.picture.q2fx.ambient == 3);
   const ge::classic::Q2FxSwitches& fx = w.picture.q2fx;
@@ -593,6 +601,7 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(w.picture.q2fx.no_particles == 0 && w.picture.q2fx.muzzle_models);  // set aside
   CHECK(v.find("cl_disable_particles") == nullptr && v.find("scr_showpause") == nullptr);
   CHECK(w.picture.q2fx.footsteps == 1 && w.picture.q2fx.ambient == 1);
+  CHECK(w.picture.q2fx.rail_type == 0 && w.picture.q2fx.core_colour == "red");
   CHECK(w.game.q2.begin_cmd.empty() && w.game.q2.autopause && w.game.q2.timescale == 1);
   CHECK(v.find("cl_beginmapcmd") == nullptr && v.find("sv_running") == nullptr);
   CHECK(v.clashes().empty());

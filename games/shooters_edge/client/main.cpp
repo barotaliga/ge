@@ -744,6 +744,9 @@ int run_main(int argc, char** argv) {
   // nothing in `in_mouse_release` asks for the pointer. Taken below on the first frame.
   ge::input::MouseCapture mouse;
   bool focused = ge::platform::has_focus(*window);
+  const auto heard = [&] {  // the player's volume, unless s_auto_focus silences the window
+    return ge::platform::heard_volume(win, focused, ge::platform::minimised(*window));
+  };
   bool paused_before_menu = false;  // a played demo's pause when the menu opened over it
   bool vsync = true;  // false while a timedemo runs unlocked; the player's vid_vsync otherwise
   // The surface at the window's size, its present mode the player's vid_vsync (a timedemo's
@@ -1001,7 +1004,7 @@ int run_main(int argc, char** argv) {
   };
   // The window's own game heard this frame (`dt` s), at the player's volume.
   const auto hear_here = [&](double dt) {
-    synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+    synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
     heard_here.frame(listen, remix.heard_from(files), static_cast<float>(dt), remix.heard);
   };
   // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
@@ -1235,7 +1238,7 @@ int run_main(int argc, char** argv) {
       }
       cl::keys_to_menu(game_menu, menu_host, queue, held);  // CUSTOMIZE CONTROLS' key
       // The click the presses made, from the game's own recordings, at the player's volume.
-      synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+      synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
       menu_sounds.play(game_menu.take_cue(), adapter, files, cl::kDemoVolume);
       if (std::string demo = game_menu.take_demo(); !demo.empty()) {  // DEMOS: checked, played
         bench_ask = std::move(demo);
@@ -1623,7 +1626,7 @@ int run_main(int argc, char** argv) {
         bench_models = ds.models.size();
       }
       if (paced) {  // what the frames read carried: heard, and its lines shown
-        synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+        synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
         std::vector<std::string> lines;
         std::vector<bool> chat_lines;  // which are chat (cl_chat_notify, scr_chathud)
         cl::DemoHeard joined_heard;    // a game joined: what its frames read carried (remote_step)
