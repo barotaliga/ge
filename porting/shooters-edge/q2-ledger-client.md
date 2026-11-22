@@ -508,10 +508,10 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.developer | `developer` | prints developer messages (default 0) | partial | ours has `developer` for the game library (`server/qvm_server.cpp`); verify the client's prints |
 | cvar.timescale | `timescale` | game speed; cheat-protected (default 1) | done | `client/q2_session.cpp`, a cheat, on a game this window runs (M18k4 round 35) |
 | cvar.fixedtime | `fixedtime` | fixed frame time; cheat-protected (default 0) | done | `client/q2_session.cpp`, a cheat, on a game this window runs (M18k4 round 35) |
-| cvar.logfile | `logfile` | 1 writes the console to a log file, 2 flushed each line (default 0) | done | `client/console_log.cpp`, in Quake II's layer (M18k4 round 35) |
-| cvar.logfile_flush | `logfile_flush` | flush the log each line (default 0) | done | `client/console_log.cpp` (M18k4 round 35) |
+| cvar.logfile | `logfile` | 1 writes the console to a new log file, 2 or more adds to it (default 0) | done | `client/console_log.cpp` over the server's log (`engine/server/console_log.hpp`), in Quake II's layer: the same meanings as the server's |
+| cvar.logfile_flush | `logfile_flush` | 0 buffered, 1 each line flushed, 2 or more unbuffered (default 0) | done | `client/console_log.cpp` over `engine/server/console_log.hpp` |
 | cvar.logfile_name | `logfile_name` | the log's name (default `console`) | done | `client/console_log.cpp`, `logs/<name>.log` beside the settings (M18k4 round 35) |
-| cvar.logfile_prefix | `logfile_prefix` | each log line's time prefix (default `[%Y-%m-%d %H:%M] `) | done | `client/console_log.cpp` (M18k4 round 35) |
+| cvar.logfile_prefix | `logfile_prefix` | each log line's prefix, `console_prefix`'s forms (default `[%Y-%m-%d %H:%M] `) | done | `client/console_log.cpp`: the server's `terminal_prefix` (`<?>`, `@`, the time) |
 | cvar.console_prefix | `console_prefix` | a prefix on the system console's lines (default empty) | not-taken | ours writes the client's console to no terminal; the dedicated server has it (`engine/server/macros.hpp`'s `terminal_prefix`) |
 | cvar.dedicated | `dedicated` | read-only: a dedicated server | done | `engine/server/spawn.cpp` |
 | cvar.cl_running | `cl_running` | read-only: the client is running | done | `client/q2_session.cpp`, read-only (M18k4 round 35) |
