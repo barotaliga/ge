@@ -13,6 +13,7 @@
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "shooters_edge/server/q2_lines.hpp"
+#include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace {
@@ -175,4 +176,21 @@ TEST(a_frame_on_the_elevators_and_monsters_say_what_they_lack) {
     return l.rfind("monster_soldier can't find target lost at (300 0 ", 0) == 0;
   });
   CHECK(lost != s.console.end() && counted < lost);  // after the load's counts
+}
+
+TEST(a_put_off_use_with_nobody_to_hand_on_says_so_when_it_is_put_off) {
+  sv::RulesRunner r = open("0");
+  sv::Q2Server& s = *sv::q2_of(r);
+  sv::Q2Entity relay;
+  relay.classname = "trigger_relay";
+  relay.delay = 1;
+  relay.target = "somewhere";
+  s.entities.push_back(relay);
+  const int at = static_cast<int>(s.entities.size()) - 1;
+  const size_t lines = s.console.size();
+  sv::map_use_targets(s, at, -1);  // a use by no player: nothing said
+  CHECK(s.console.size() == lines);
+  sv::map_use_targets(s, at, sv::kNoActivator);
+  CHECK(s.console.back() == "Think_Delay with no activator");
+  CHECK(s.delayed.back().activator == -1);
 }
