@@ -1,7 +1,7 @@
 // A demo watched like a video (demo_playback.hpp): the commands, the keys and the bar.
 //
 // ge:summary The demo's playback controls: console commands, keys, the bar's pointer, the seek
-// ge:keywords demo playback keys pointer seek skip jump speed pause markers parse_clock
+// ge:keywords cl_demopos demo playback keys pointer seek skip jump speed pause markers parse_clock
 // ge:skill shooter replay ui
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #include "shooters_edge/client/demo_playback.hpp"
@@ -11,8 +11,10 @@
 #include <cstdlib>
 #include <utility>
 
+#include "console/clock_macros.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
+#include "shooters_edge/client/demo_eyes.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/mvd_info.hpp"
 #include "shooters_edge/hud/layout.hpp"
@@ -110,6 +112,10 @@ float hud_inset(std::span<const ge::hud::Placed> placed, int height) {
 }
 
 void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench) {
+  // $cl_demopos: how far the demo playing is, to the tenth ("3:07.4"; "0:00.0" with none).
+  console.add_macro("cl_demopos", [&bench] {
+    return ge::console::tenths_clock(bench.active ? bench.timeline.t : 0);
+  });
   {
     ge::console::CvarLayer shell(console.cvars(), kLayerShell);
     bind_record_cvars(console, p.record);
@@ -174,6 +180,16 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
                           .values = "100: the default; 0..1000: that many units"},
                          &p.behind);
     p.dist_cvar = console.cvars().find("cam_dist");
+    console.cvars().bind({.name = "cam_side",
+                          .fallback = "0",
+                          .help = "How far to the side of the player you watch the camera sits "
+                                  "with cam_thirdperson 1, in units: to his left, or his right "
+                                  "when negative.",
+                          .min = -1000,
+                          .max = 1000,
+                          .values = "0: straight behind (the default); -1000..1000: that many "
+                                    "units to his left"},
+                         &p.side);
     p.console = &console;
     console.cvars().bind({.name = "mvd_info",
                           .fallback = "0",
@@ -469,6 +485,12 @@ void zoom_third_person(DemoPlayback& p, int dir, double dt_s) {
 
 float third_person_units(const DemoPlayback& p, bool watching) {
   return p.third_person != 0 && watching ? p.behind : 0;
+}
+
+void third_person_eyes(const DemoPlayback& p, bool watching, DemoEyes& e) {
+  e.behind = third_person_units(p, watching);
+  e.side = p.side;
+  e.lock_pos = p.lock_pos != 0;
 }
 
 std::string demo_clock_text(double s) {

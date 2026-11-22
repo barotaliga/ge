@@ -116,6 +116,12 @@ struct BotArsenal {
   // What a model a client is sent is to a companion (shooterbots/companion.hpp): 0 no monster, 1 a
   // monster any weapon puts down, 2 one only a blast keeps down, 3 one no weapon kills.
   int (*monster)(std::string_view model) = nullptr;
+  // How a player keeps to a monster of a model in a fight (none: as to a player): the distance he
+  // backs off to while it is nearer (one that bites or leaps: a dog, a fiend, a knight), units.
+  float (*keep_off)(std::string_view model) = nullptr;
+  // Whether a monster of a model is put down for good only by a blast (Quake's zombie: anything
+  // less knocks it down to get up again); none: every monster falls to any weapon.
+  bool (*blast_only)(std::string_view model) = nullptr;
   // The game's maps as its bots' book: people's tricks, routes and item rules by map
   // (shooterbots/map_book.hpp; none: no map has any).
   const ge::shooterbots::MapBook* maps = nullptr;
@@ -139,6 +145,8 @@ float launcher_rounds(const Stats& st);
 bool holds_launcher(const Stats& st);
 // Carrying the launcher.
 bool has_launcher(const Stats& st);
+// Carrying a weapon that blasts (the launcher or the lob) with its ammunition.
+bool can_blast(const Stats& st);
 // The impulse that asks for the launcher (0 when the game has none).
 int launcher_number(const BotArsenal& a);
 

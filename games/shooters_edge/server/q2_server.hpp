@@ -162,7 +162,8 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   float ideal_yaw = 0;
   sh::Vec3f velocity;  // its fall, a blow's push
   bool on_ground = false;
-  sh::Vec3f last_sight;  // where it last saw (or heard) its enemy
+  bool start_solid = false;  // placed inside solid (said a frame after the map's load)
+  sh::Vec3f last_sight;      // where it last saw (or heard) its enemy
   double seen_at = -100;
   double attack_finished = 0;  // the next missile attack's earliest time
   double busy_until = 0;       // an attack's wind-up, shots and recovery
@@ -170,12 +171,13 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   int attack = 0;  // the attack in progress: 0 and 1 the blows, 2.. the ranged ones
   int burst_frame = 0;
   double pain_at = -100, pain_hold = 0;
-  float gravity = 1;     // its share of the world's gravity (a gravity trigger sets it)
-  int corner = -1;       // the `path_corner` it walks to
-  int combat = -1;       // the `point_combat` it runs to on finding an enemy
-  bool hold = false;     // holds its ground (at its combat point)
-  bool ambush = false;   // wakes only by seeing or being hurt
-  bool waiting = false;  // hidden until used
+  float gravity = 1;        // its share of the world's gravity (a gravity trigger sets it)
+  int corner = -1;          // the `path_corner` it walks to
+  int combat = -1;          // the `point_combat` it runs to on finding an enemy
+  std::string lost_combat;  // a `combattarget` naming nothing, said on finding an enemy
+  bool hold = false;        // holds its ground (at its combat point)
+  bool ambush = false;      // wakes only by seeing or being hurt
+  bool waiting = false;     // hidden until used
   bool dead = false;
   std::string item;  // dropped at death
   // The full game's (q2-monsters-full.md):
@@ -252,9 +254,18 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   float health = 0;
   float frags = 0;
   double spawned_at = 0, died_at = 0;  // level time, s
-  uint8_t buttons = 0;                 // the last command's
-  int16_t cmd_angles[3] = {};          // the last command's view, 65536ths of a turn
-  bool changed = false;                // placed by the rules since its last move (a spawn)
+  // The time `kill` (and a change to spectating) counts 5 s from: his last respawn's, 0 (the map's
+  // start) after a first placing.
+  double respawn_time = 0;
+  uint8_t buttons = 0;  // the last command's
+  uint8_t pressed = 0;  // the buttons pressed afresh since he died (a respawn wants a new press)
+  // Spectating (q2_spectate.hpp): his `spectator` wish, the slot his chase camera follows (-1
+  // none), and whether his last command held the up move (a jump's press is its first).
+  bool want_spectator = false;
+  int chase = -1;
+  bool jump_held = false;
+  int16_t cmd_angles[3] = {};  // the last command's view, 65536ths of a turn
+  bool changed = false;        // placed by the rules since its last move (a spawn)
   // The view the rules turned him to (a spawn), 65536ths of a turn, until his client sends it back
   // as its own (with `Q2ServerOptions::clients_take_view`): the delta angles that turned him
   // are then spent (zeroed), so the turn is not added twice.
@@ -387,6 +398,7 @@ struct Q2Drop {
   double power_left = 0;  // a dropped timed powerup's time left, s
   int shots = 0;          // a dropped silencer's shots left
   bool resting = false;   // come to rest on a floor
+  bool bare = false;      // a weapon thrown by `drop`: taking it gives no ammunition
 };
 inline constexpr int kQ2Drops = 32;  // the rows the world keeps for dropped items
 
@@ -436,8 +448,16 @@ inline constexpr const char* kQ2PlayerModel = "players/male/tris.md2";
 inline constexpr int32_t kTimeBudgetMs = 1800;
 inline constexpr int64_t kTimeBudgetFrames = 16;
 
+// What a change to or from spectating is checked against, the network server's (q2_spectate.hpp):
+// the players' password, the spectators' password ("" or `none`: none) and the spectators' limit.
+struct Q2Gate {
+  std::string password, spectator_password;
+  int max_spectators = 4;
+};
+
 struct Q2Server : RulesCommon {
   Q2ServerOptions opt;
+  Q2Gate gate;
   int64_t moves_held = 0;  // moves past a budget not run (`sv_speedcheck`)
   std::shared_ptr<const ge::brush::Map> map;
   std::unique_ptr<ge::brush::BrushTracer> tracer;

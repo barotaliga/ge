@@ -15,6 +15,7 @@
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_server.hpp"
+#include "shooters_edge/server/q2_spectate.hpp"
 
 namespace shooters_edge::server {
 
@@ -130,6 +131,7 @@ bool screens_command(Q2Server& s, int slot, const std::string& cmd) {
                 {"invnextp", 1, Steps::powerups}, {"invprevp", -1, Steps::powerups}};
   for (const auto& st : kSteps)
     if (cmd == st.name) {
+      if (spectate_step(s, slot, st.way)) return true;  // a chaser steps to another player
       step_selection(p, st.way, st.steps);
       return true;
     }
@@ -144,7 +146,7 @@ bool screens_command(Q2Server& s, int slot, const std::string& cmd) {
   }
   if (cmd == "score" || cmd == "help") p.inven_open = false;
   if (help) {
-    if (p.screen == kScreenHelp && p.help_seen == s.help_changed) {
+    if (p.screen == kScreenHelp) {  // open: closed, whatever came since
       p.screen = kScreenNone;
       return true;
     }
@@ -167,10 +169,21 @@ bool screens_command(Q2Server& s, int slot, const std::string& cmd) {
 }
 
 void screens_frame(Q2Server& s) {
+  for (int i = 0; i < sh::kMaxClients; i++)  // an open inventory's counts, every frame
+    if (s.clients[i].active && s.players[i].inven_open)
+      s.players[i].inventory = counts_of(s.players[i].body);
   if (s.frame_number % kRefresh != 0) return;
-  for (int i = 0; i < sh::kMaxClients; i++)
-    if (s.clients[i].active && s.players[i].screen == kScreenScores)
-      s.players[i].layout = q2_scoreboard(s, i, s.intermission_at > 0 ? -1 : s.players[i].killer);
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    Q2Player& p = s.players[i];
+    if (!s.clients[i].active) continue;
+    if (p.screen == kScreenScores)
+      p.layout = q2_scoreboard(s, i, s.intermission_at > 0 ? -1 : p.killer);
+    if (p.screen == kScreenHelp) {  // the help computer's counts live, and its news read
+      p.layout = campaign_help_screen(s);
+      p.help_seen = s.help_changed;
+      p.help_unread = 0;
+    }
+  }
 }
 
 void screens_died(Q2Server& s, int slot) {

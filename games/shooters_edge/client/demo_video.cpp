@@ -106,6 +106,10 @@ void q2_placed(const DemoEntity& e, Placed& p) {
   const Q2Look look = q2_look(static_cast<uint32_t>(e.effects), static_cast<uint32_t>(e.render_fx));
   p.effects = 0;
   p.turns = look.turns;
+  p.spinning = look.spinning;
+  p.bobs = look.bobs;
+  p.full_bright = look.full_bright;
+  p.min_light = look.min_light;
   p.alpha *= look.alpha;
   p.pulse = look.pulse;
   p.shell = look.shell;
@@ -131,7 +135,11 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own) {
     p.skin = e.skin;
     p.effects = e.effects;
     p.alpha = e.alpha;
-    if (s.format == DemoFormat::q2) q2_placed(e, p);
+    if (s.format == DemoFormat::q2) {
+      q2_placed(e, p);
+      p.infra_red =
+          q2_infra_red(s.rdflags, static_cast<uint32_t>(e.render_fx), p.shell, p.full_bright);
+    }
     p.scale = e.scale;
     for (int c = 0; c < 3; c++) p.colormod[c] = e.colormod[c];
     p.origin = e.origin;
@@ -182,6 +190,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own) {
 void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
                    const ge::render::FrameView& view, FxScene& out) {
   out.map = map;
+  out.areas = s.areas;
   out.server = nullptr;
   out.pose.eye = {view.eye[0], view.eye[1], view.eye[2]};
   out.pose.yaw = view.heading;
@@ -189,6 +198,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.pose.fov_y = view.fov_y;
   out.missiles = fx.missiles;
   out.explosions = fx.explosions;
+  out.explosion_kinds = fx.explosion_kinds;
   out.effects = fx.effects;
   out.blows = {};
   out.bonuses = s.bonuses;

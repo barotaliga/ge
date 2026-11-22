@@ -380,6 +380,94 @@ void q2_ion_trail(const double from[3], const double to[3], int& side, uint32_t 
   }
 }
 
+constexpr double kOneFrameS = 1.0 / 60;  // a speck drawn for one frame
+
+void q2_trap(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int i = 0; i < 13; ++i) {
+    const double v[3] = {rnd(r, -15, 15), rnd(r, -15, 15), rnd(r, -15, 15)};
+    out->push_back(q2_speck(p, rnd(r, -1, 1), rnd(r, -1, 1), -14 + 5 * i + rnd(r, -1, 1), v, -80,
+                            pal, 224, rnd(r, 0.3, 0.5)));
+  }
+  for (int i = 0; i < 8; ++i) {
+    const double o[3] = {(i & 1) != 0 ? 2.0 : -2.0, (i & 2) != 0 ? 2.0 : -2.0,
+                         (i & 4) != 0 ? 2.0 : -2.0};
+    // Thrown along the offset with x and y swapped, 50 to 113 units a second.
+    const double len = std::sqrt(o[0] * o[0] + o[1] * o[1] + o[2] * o[2]);
+    const double speed = 50 + pick(r, 64);
+    const double v[3] = {o[1] / len * speed, o[0] / len * speed, o[2] / len * speed};
+    out->push_back(q2_speck(p, o[0] + pick(r, 24) * rnd(r, -1, 1),
+                            o[1] + pick(r, 24) * rnd(r, -1, 1), o[2] + pick(r, 24) * rnd(r, -1, 1),
+                            v, 80, pal, 224 + pick(r, 4), 0.30 + 0.02 * pick(r, 8)));
+  }
+}
+
+void q2_tracker_trail(const double from[3], const double to[3], uint32_t seed, Palette pal,
+                      Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  double way[3];
+  const double len = q2_stretch(from, to, way);
+  // "Up" square to the flight: the world's up less its share along the way, else the world's y.
+  double up[3] = {-way[2] * way[0], -way[2] * way[1], 1 - way[2] * way[2]};
+  double ul = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);
+  if (ul < 1e-6) up[0] = 0, up[1] = 1, up[2] = 0, ul = 1;
+  for (double& c : up) c /= ul;
+  const double v[3] = {0, 0, 5};
+  int side = pick(r, 2) != 0 ? 1 : -1;
+  for (int i = 0; i * 3 < len; ++i) {
+    const double d = i * 3.0;
+    const double off = side * 8 * std::cos(d * 3.14159265358979323846 / 64);
+    side = -side;
+    out->push_back(q2_speck(from, d * way[0] + off * up[0], d * way[1] + off * up[1],
+                            d * way[2] + off * up[2], v, 0, pal, 0, 0.5));
+  }
+}
+
+void q2_tracker_shell(const double p[3], double radius_u, uint32_t seed, Palette pal,
+                      Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  const double zero[3] = {0, 0, 0};
+  for (int n = 0; n < 300; ++n) {
+    const double h = rnd(r, -1, 1), turn = rnd(r, 0, 2 * 3.14159265358979323846);
+    const double flat = std::sqrt(std::max(0.0, 1 - h * h));
+    out->push_back(q2_speck(p, flat * std::cos(turn) * radius_u, flat * std::sin(turn) * radius_u,
+                            h * radius_u, zero, 0, pal, 0, kOneFrameS));
+  }
+}
+
+namespace {
+// `n` specks on a sphere of `radius_u` round `p`, moving out at `speed` units a second, each of a
+// colour `colour(r)` and a life `life(r)`.
+template <class Colour, class Life>
+void q2_sphere(const double p[3], int n, double radius_u, double speed, uint32_t seed, Palette pal,
+               Particles* out, Colour colour, Life life) {
+  Rng r = ge::core::make_rng(seed);
+  for (int i = 0; i < n; ++i) {
+    const double h = rnd(r, -1, 1), turn = rnd(r, 0, 2 * 3.14159265358979323846);
+    const double flat = std::sqrt(std::max(0.0, 1 - h * h));
+    const double d[3] = {flat * std::cos(turn), flat * std::sin(turn), h};
+    const double v[3] = {d[0] * speed, d[1] * speed, d[2] * speed};
+    const int c = colour(r);
+    out->push_back(
+        q2_speck(p, d[0] * radius_u, d[1] * radius_u, d[2] * radius_u, v, 0, pal, c, life(r)));
+  }
+}
+}  // namespace
+
+void q2_power_splash(const double p[3], double radius_u, uint32_t seed, Palette pal,
+                     Particles* out) {
+  q2_sphere(
+      p, 256, radius_u, 40, seed, pal, out, [](Rng& r) { return 208 + pick(r, 4); },
+      [](Rng& r) { return rnd(r, 0.5, 0.8); });
+}
+
+void q2_beam_out(const double p[3], double ratio, uint32_t seed, Palette pal, Particles* out) {
+  constexpr int kColours[4] = {16, 104, 168, 144};
+  q2_sphere(
+      p, 300, 45 * ratio, 0, seed, pal, out, [&](Rng& r) { return kColours[pick(r, 4)]; },
+      [](Rng&) { return kOneFrameS; });
+}
+
 Light q2_point_light(const double p[3], double radius_u, double red, double green, double blue) {
   Light l;
   for (int k = 0; k < 3; ++k) l.pos[k] = p[k];

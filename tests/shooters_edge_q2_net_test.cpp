@@ -27,7 +27,9 @@
 #include "forward/forward.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
+#include "net/tcp_socket.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_game.hpp"
@@ -41,6 +43,7 @@
 #include "vfs/pak.hpp"
 #include "vfs/partial.hpp"
 #include "vfs/search.hpp"
+#include "vfs/unpack.hpp"
 
 namespace {
 
@@ -248,6 +251,35 @@ TEST(the_checksum_is_the_byte_a_live_server_expected) {
   for (int i = 960; i < cn::kQ2ChecksumTableSize; i++) CHECK(cn::kQ2ChecksumTable[i] == 0);
 }
 
+TEST(cl_nodelta_has_every_frame_sent_whole) {
+  // A client that acknowledges no frame (`nodelta`, the window's cl_nodelta) is sent each one
+  // whole, and still plays.
+  auto r = rig({});
+  cn::Q2ClientConfig cfg;
+  cfg.name = "eve";
+  cfg.nodelta = true;
+  // cl_shownet 1: each message the server sent printed as its size.
+  cfg.shownet = 1;
+  ge::classic::protocol::ChannelTrace trace;
+  int sizes = 0;
+  bool numbers = true;
+  trace.print = [&](const std::string& line) {
+    sizes++;
+    numbers = numbers && !line.empty() && line.find_first_not_of("0123456789") == std::string::npos;
+  };
+  cfg.trace = &trace;
+  cn::Q2ClientEnd& c = join(*r, cfg);
+  run(*r, 200);
+  CHECK_MSG(sizes >= c.frames && numbers, std::to_string(sizes) + " sizes printed");
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+  CHECK(c.frames >= 10);
+  const cn::Q2NetClient& sc = r->server.clients[0];
+  CHECK_MSG(sc.full_frames >= c.frames - 1,
+            std::to_string(sc.full_frames) + " whole of " + std::to_string(c.frames));
+  // scr_showturtle's NODELTA: the frame read came whole.
+  CHECK(c.demo.state.q2_trouble == shooters_edge::client::kQ2FrameNoDelta);
+}
+
 TEST(out_of_band_words_keep_a_quoted_word_whole) {
   const auto w = cn::q2_words("connect 34 7 99 \"\\name\\a b\\skin\\male/grunt\"\n");
   CHECK(w.size() == 5);
@@ -311,6 +343,48 @@ TEST(a_map_with_no_sky_gets_the_default_and_a_download_is_refused) {
   for (const std::string& line : r->server.log)
     noted = noted || line.find("asked for env/rt.tga") != std::string::npos;
   CHECK(noted);
+}
+
+// Which files are offered: each kind by its own setting (textures/ and env/, pics/, anything else
+// off by default), none past sv_max_download_size, a resume past the end told the size differs;
+// the connect answer names the web address and the map.
+TEST(downloads_are_offered_by_kind_and_size_and_a_bad_resume_is_told) {
+  cn::Q2NetConfig cfg;
+  cfg.allow_pics = false;
+  cfg.max_download_size = 50;
+  cfg.download_server = "http://files.example/q2/";
+  cfg.read_file = [](const std::string& path, std::vector<uint8_t>* out) {
+    out->assign(path.rfind("models/big", 0) == 0 ? 100 : 10, uint8_t{7});
+    return true;
+  };
+  auto r = rig(cfg);
+  cn::Q2ClientConfig cc;
+  cn::Q2ClientEnd& c = join(*r, cc);
+  run(*r, 120);
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+  const auto why = [&](const std::string& asked) -> std::string {
+    const size_t before = r->server.log.size();
+    cn::q2_client_command(c, "download " + asked);
+    run(*r, 10);
+    for (size_t i = before; i < r->server.log.size(); i++) {
+      const std::string& l = r->server.log[i];
+      if (const size_t at = l.find(": refused, "); at != std::string::npos)
+        return l.substr(at + 11);
+    }
+    return "sent";
+  };
+  CHECK(why("env/unit1_up.tga") == "sent");
+  CHECK(why("sprites/s_bfg1.sp2") == "sent");
+  CHECK(why("pics/colormap.pcx") == "that kind of file is not offered");
+  CHECK(why("docs/readme.txt") == "that kind of file is not offered");
+  CHECK(why("models/big/tris.md2") == "larger than sv_max_download_size");
+  CHECK(why("/models/./a/../b/tris.md2") == "sent");  // made plain first
+  CHECK(why("../models/x.md2") == "not a file the server offers");
+  CHECK(why("models/x.md2.") == "not a file the server offers");
+  CHECK(why("models/x.md2 20") == "a resume past its end");
+  CHECK(std::find(c.prints.begin(), c.prints.end(),
+                  "File size differs from server.\nPlease delete the corresponding .tmp file "
+                  "from your system.\n") != c.prints.end());
 }
 
 TEST(a_level_change_keeps_every_connection_and_seats_each_client_again) {
@@ -417,7 +491,7 @@ TEST(a_fourth_client_from_one_address_is_refused) {
   cn::Q2ClientEnd& other = join(*r, {});
   run(*r, 80);
   CHECK(fourth.stage == cn::ClientStage::dropped);
-  CHECK(fourth.refused == "Too many connections from your IP address.\nConnection refused.\n");
+  CHECK(fourth.refused == "Too many connections from your IP address.\n");
   CHECK_MSG(other.stage == cn::ClientStage::active, other.refused);
 }
 
@@ -534,7 +608,7 @@ TEST(a_locked_server_refuses_newcomers) {
   CHECK(cn::q2_admin(r->server, "sv_locked 1", out) && r->server.cfg.locked);
   cn::Q2ClientEnd& b = join(*r, {});
   run(*r, 80);
-  CHECK(b.refused == "Server is locked.\nConnection refused.\n");
+  CHECK(b.refused == "Server is locked.\n");
   CHECK(cn::q2_admin(r->server, "sv_locked 0", out) && out == "Server unlocked.\n");
   cn::Q2ClientEnd& c = join(*r, {});
   run(*r, 80);
@@ -693,6 +767,15 @@ TEST(the_window_joins_a_server_of_q2_and_plays) {
   CHECK(cn::q2_net_clients(r->server) == 0);
 }
 
+TEST(a_q2_recording_s_size_is_said_in_decimal_units) {
+  CHECK(cl::q2_demo_size(1) == "1 byte");
+  CHECK(cl::q2_demo_size(999) == "999 bytes");
+  CHECK(cl::q2_demo_size(12345) == "12 kB");
+  CHECK(cl::q2_demo_size(1250000) == "1.2 MB");
+  CHECK(cl::q2_demo_size(45600000) == "45 MB");
+  CHECK(cl::q2_demo_size(2500000000) == "2.5 GB");
+}
+
 TEST(a_recording_of_a_q2_server_joined_late_plays_from_its_server_data) {
   // Recording begun well into the level still opens with the level's server data (the client
   // keeps the level from its start), and the file ends with Quake II's end block (length -1).
@@ -723,7 +806,24 @@ TEST(a_recording_of_a_q2_server_joined_late_plays_from_its_server_data) {
   steps(60);
   ge::console::Console con{false};
   const std::string line = cn::remote_record_close(remote, con, 0);
-  CHECK_MSG(line.starts_with("Recorded "), line);
+  CHECK_MSG(
+      line.starts_with("Stopped demo (") && line.ends_with(").") && !line.ends_with("(0 bytes)."),
+      line);
+  // The same through gzip (`record -z`): the file a gzip stream of the same kind of recording.
+  const std::filesystem::path packed = file.string() + ".gz";
+  CHECK_MSG(cn::remote_record_open(remote, packed, error), error);
+  steps(30);
+  CHECK(cn::remote_record_close(remote, con, 0).starts_with("Stopped demo ("));
+  {
+    std::ifstream zin(packed, std::ios::binary);
+    std::vector<uint8_t> zbytes((std::istreambuf_iterator<char>(zin)), {});
+    zin.close();
+    std::filesystem::remove(packed);
+    CHECK(ge::vfs::wrapping_of(zbytes) == ge::vfs::Wrapping::gzip);
+    ge::vfs::Unpacked plain;
+    CHECK_MSG(ge::vfs::unpack_one(zbytes, plain, error), error);
+    CHECK(plain.bytes.size() > 8 && plain.bytes.back() == 0xff);
+  }
   std::ifstream in(file, std::ios::binary);
   std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), {});
   in.close();
@@ -798,9 +898,17 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
                                   const ge::vfs::ArchiveOrigin* origin) {
     stock_told += origin != nullptr ? 1 : 0;
   };
+  // allow_download_players 0: the map alone is fetched, the skins left lacking.
+  cn::Q2ClientConfig picky = ours;
+  picky.name = "picky";
+  picky.allow.players = false;
+  picky.keep_file = nullptr;
   cn::Q2ClientEnd& a = join(*r, ours);
   cn::Q2ClientEnd& b = join(*r, stock);
+  cn::Q2ClientEnd& p = join(*r, picky);
   run(*r, 300);
+  CHECK_MSG(p.stage == cn::ClientStage::active, p.refused);
+  CHECK(p.downloaded.size() == 1 && p.downloaded.count("maps/hall.bsp") == 1);
   CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
   CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
   CHECK(a.downloaded.size() == 3 && a.downloads_refused == 0);
@@ -812,6 +920,26 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
   CHECK(b.downloaded.size() == 2 && b.downloads_refused == 1 && stock_told == 0);
   CHECK(b.downloaded.count("maps/hall.bsp") == 0);
   std::filesystem::remove_all(dir);
+}
+
+TEST(the_download_switches_gate_each_kind_of_file) {
+  // allow_download and its kinds (net/q2_downloads.hpp): each folder its switch, the rest
+  // `others` (off by default), and nothing at all once `allow_download` is 0 or -1.
+  cn::Q2Downloads d;
+  CHECK(cn::q2_download_allowed(d, "maps/q2dm1.bsp"));
+  CHECK(cn::q2_download_allowed(d, "players/male/grunt.pcx"));
+  CHECK(cn::q2_download_allowed(d, "sprites/s_bfg1.sp2"));
+  CHECK(cn::q2_download_allowed(d, "env/unit1_up.pcx"));
+  CHECK(!cn::q2_download_allowed(d, "locs/q2dm1.loc"));
+  d.textures = false;
+  CHECK(!cn::q2_download_allowed(d, "textures/e1u1/floor1_1.wal"));
+  CHECK(!cn::q2_download_allowed(d, "env/unit1_up.pcx"));
+  d.others = true;
+  CHECK(cn::q2_download_allowed(d, "locs/q2dm1.loc"));
+  for (const int all : {0, -1}) {
+    d.all = all;
+    CHECK(!cn::q2_download_allowed(d, "maps/q2dm1.bsp"));
+  }
 }
 
 TEST(each_client_is_sent_only_what_it_may_see) {
@@ -897,6 +1025,19 @@ TEST(the_window_predicts_its_moves_on_a_server_of_the_q2) {
   CHECK(remote.q2_ahead.origin.y == static_cast<float>(v.origin[1]) * 0.125f);
   CHECK(remote.q2_ahead.origin.z == static_cast<float>(v.origin[2]) * 0.125f);
   CHECK(st.eye.z > remote.q2_ahead.origin.z);
+  // cl_showmiss: none so far; a base knocked 10 units aside is a miss the next frame shows and the
+  // window prints, once.
+  CHECK(remote.q2_ahead.misses == 0);
+  std::vector<std::string> printed;
+  remote.trace.print = [&printed](const std::string& line) { printed.push_back(line); };
+  remote.q2_ahead.show_misses = true;
+  remote.q2_ahead.base.origin[0] = static_cast<int16_t>(remote.q2_ahead.base.origin[0] + 80);
+  steps(20);
+  CHECK_MSG(remote.q2_ahead.misses == 1, std::to_string(remote.q2_ahead.misses) + " misses");
+  CHECK_MSG(printed.size() == 1 && printed[0].rfind("prediction miss on ", 0) == 0 &&
+                printed[0].substr(printed[0].size() - 4) == ": 10",
+            printed.empty() ? "nothing printed" : printed[0]);
+  remote.trace.print = nullptr;
   // cl_predict_crouch 2: a duck lowers the eye the frame it goes down, ahead of the server's
   // frames, which catch up; 0: the eye stays the server's.
   const auto crouch = [&](int mode) {
@@ -1311,6 +1452,25 @@ TEST(at_sv_fps_40_our_client_gets_every_frame_and_a_stock_one_the_tenths) {
   CHECK(o.stage == cn::ClientStage::active && k.stage == cn::ClientStage::active);
 }
 
+// Our client asks for the damage it dealt (`*ge_ext` bit 1024) and its frames carry the hit
+// report; a stock client's never do.
+TEST(our_client_is_sent_the_hit_report_and_a_stock_one_is_not) {
+  auto r = rig({});
+  cn::Q2ClientConfig ours, stock;
+  ours.name = "eve";
+  ours.ask_hits = true;
+  stock = ours;
+  stock.name = "bob";
+  stock.ask_hits = false;
+  cn::Q2ClientEnd& o = join(*r, ours);
+  cn::Q2ClientEnd& k = join(*r, stock);
+  run(*r, 60);
+  CHECK_MSG(o.stage == cn::ClientStage::active && k.stage == cn::ClientStage::active,
+            o.refused + k.refused);
+  CHECK(r->server.clients[0].told_hits && !r->server.clients[1].told_hits);
+  CHECK(r->server.clients[0].wire.opt.hit_reports && !r->server.clients[1].wire.opt.hit_reports);
+}
+
 TEST(a_frame_carries_the_count_held_back_before_it) {
   auto r = rig({});
   run(*r, 20);
@@ -1556,4 +1716,87 @@ TEST(the_landing_and_surfacing_settings_reach_a_client_told_the_feel) {
   CHECK(untold.land_pause && untold.surface_lift);
   game.cvars.set("sv_landjump", "2", ge::console::Source::code);
   CHECK(!sv::q2_move_feel(game, 0).land_pause);
+}
+
+TEST(a_client_fetches_from_the_server_web_address_and_falls_back_to_the_channel) {
+  // The server names a web address (sv_downloadserver). The web holds the map: the client fetches
+  // it there, says so, and tells the server `download http`; a skin the web lacks (404) is left
+  // lacking. A second client's own repository (cl_http_default_url) lacks the map: HTTP turns off
+  // and the map comes over the game's channel. Both play on.
+  gn::TcpListener web;
+  std::string error;
+  if (!gn::tcp_listen(web, gn::loopback_v4(0), &error)) {
+    ge::test::skip("no loopback TCP socket here: " + error);
+    return;
+  }
+  const std::string base = "http://127.0.0.1:" + std::to_string(web.local.port) + "/";
+  const std::vector<uint8_t> map(5000, 1);
+  cn::Q2NetConfig cfg;
+  cfg.download_server = base;
+  cfg.read_file = [&map](const std::string& path, std::vector<uint8_t>* out) {
+    if (path != "maps/hall.bsp") return false;
+    *out = map;
+    return true;
+  };
+  auto r = rig(cfg);
+  cn::Q2ClientConfig web_one;
+  web_one.name = "web";
+  web_one.fetch = true;
+  web_one.want = {"players/male/red.pcx"};
+  cn::Q2ClientConfig own = web_one;
+  own.name = "own";
+  own.http.default_url = base + "mine/";
+  cn::Q2ClientEnd& a = join(*r, web_one);
+  std::vector<gn::TcpStream> streams;
+  std::vector<std::string> asked;
+  for (int i = 0; i < 400; i++) {
+    if (i == 30) {  // the second joins once the server names no address: its own is asked
+      r->server.cfg.download_server.clear();
+      join(*r, own);
+    }
+    for (gn::TcpStream in; gn::tcp_accept(web, in); in = {}) streams.push_back(in);
+    for (gn::TcpStream& t : streams) {
+      if (t.handle == -1) continue;
+      gn::tcp_pump(t);
+      std::vector<uint8_t> got;
+      gn::tcp_take_bytes(t, got);
+      const std::string req(got.begin(), got.end());
+      if (req.find("\r\n\r\n") == std::string::npos) continue;
+      const std::string path = req.substr(4, req.find(' ', 4) - 4);
+      asked.push_back(path);
+      const bool has = path == "/baseq2/maps/hall.bsp";
+      std::string reply = has ? "HTTP/1.1 200 OK\r\nContent-Length: 5000\r\n\r\n"
+                              : "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+      if (has) reply.append(map.begin(), map.end());
+      gn::tcp_send_bytes(t, reinterpret_cast<const uint8_t*>(reply.data()), reply.size());
+      for (int k = 0; k < 100000 && !t.out.empty(); ++k) gn::tcp_pump(t);
+      gn::tcp_close(t);
+    }
+    run(*r, 1);
+  }
+  cn::Q2ClientEnd& b = *r->clients[1];
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+  CHECK(a.downloaded.size() == 1 && a.downloaded["maps/hall.bsp"] == map);
+  CHECK(std::find(asked.begin(), asked.end(), "/baseq2/players/male/red.pcx") != asked.end());
+  CHECK(std::find(asked.begin(), asked.end(), "/baseq2.filelist") != asked.end());
+  CHECK(std::find(asked.begin(), asked.end(), "/baseq2/maps/hall.filelist") != asked.end());
+  CHECK(b.downloaded.size() == 1 && b.downloaded["maps/hall.bsp"] == map);
+  CHECK(!b.http.on);
+  CHECK(std::find(b.http.said.begin(), b.http.said.end(),
+                  "[UDP] maps/hall.bsp [DONE] [1 remaining file]") != b.http.said.end());
+  CHECK(std::find(a.http.said.begin(), a.http.said.end(), "[HTTP] Download server at " + base) !=
+        a.http.said.end());
+  CHECK(std::find(asked.begin(), asked.end(), "/mine/baseq2/maps/hall.bsp") != asked.end());
+  for (gn::TcpStream& t : streams) gn::tcp_close(t);
+  gn::tcp_close_listener(web);
+}
+
+// A Quake II server beats to a hub's masters under the game's own id, as a Quake server does, so
+// the hub's list (which asks for that id alone) shows both.
+TEST(q2_server_is_listed_under_the_games_id) {
+  const ge::server::ServerGame& g = shooters_edge::net::q2_game();
+  CHECK(g.protocol != 0);
+  CHECK(g.protocol == ge::net::protocol_id("shooters_edge", 1));
+  CHECK(g.fill_status != nullptr);
 }

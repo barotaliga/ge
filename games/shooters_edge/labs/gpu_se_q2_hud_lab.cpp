@@ -206,6 +206,10 @@ gl::Picture plan(const std::vector<hud::LayoutOp>& ops, int w, int h) {
                     op.alt ? gl::Rgba{240, 170, 60} : gl::Rgba{230, 230, 230});
       continue;
     }
+    if (op.kind == hud::LayoutOp::Kind::fill) {
+      gl::fill_rect(p, op.x, op.y, op.w, op.h, gl::Rgba{op.rgba[0], op.rgba[1], op.rgba[2]});
+      continue;
+    }
     const bool digit = op.name.rfind("num_", 0) == 0 || op.name.rfind("anum_", 0) == 0;
     const int bw = digit ? 16 : 24;
     const gl::Rgba c = op.name == "field_3"             ? gl::Rgba{120, 40, 40}

@@ -6,7 +6,8 @@
 // - WHAT IS LISTED: folders, and the files named as the game's recordings (the window hands the
 //   game's extensions, `set_extensions`), plain or packed (`match.mvd.gz`, `duel.dem.zip`,
 //   `final.mvd.7z`, `.tar.gz`); a packed name with no recording's extension under its packing is
-//   left out. Newest first, so the file just downloaded is at the top.
+//   left out. Newest first, so the file just downloaded is at the top; `menu_demo_sort` (Quake II
+//   spells it `ui_sortdemos`) lists them by name, age or size instead, either way round.
 // - THE PLACES: the game's own first (`set_game_places`: its folder), then the player's home,
 //   Downloads, Desktop, Documents and the machine's roots; a row of them over the list, the one
 //   the folder is in lit. It opens where the player last played a demo from (`menu_demo_dir`,
@@ -50,7 +51,7 @@ enum class DemosAction : uint8_t { none, leave, play };
 
 class DemosPage {
  public:
-  // Registers `menu_demo_dir` on `con`, which must outlive the page.
+  // Registers `menu_demo_dir` and `menu_demo_sort` on `con`, which must outlive the page.
   void add_cvars(ge::console::Console& con);
   // The extensions listed (each with its dot): the game's recordings'.
   void set_extensions(std::vector<std::string> extensions) {
@@ -91,6 +92,7 @@ class DemosPage {
   std::vector<ge::vfs::Place> player_places_;
   Check check_;
   std::string last_dir_;  // menu_demo_dir
+  int order_ = -2;        // menu_demo_sort (vfs::sort_files)
   std::string facts_;
   bool refused_ = false;             // the note is the check's refusal
   int first_ = 0;                    // the first row shown

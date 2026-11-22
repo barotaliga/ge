@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_qc_hooks_test.cpp
 #include "shooters_edge/server/commands.hpp"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -66,17 +67,17 @@ void set_field_f(QcServer& s, int e, int f, float v) {
   *pg::entity_field(s.q.vm, e, f) = pg::as_word(v);
 }
 
-// The single-player game's cheats as the original's server answers them, for any player alone or
-// in co-op (refused only in deathmatch): `god`, `notarget`, `noclip`, `fly` toggled with the
-// original's words, `give` a weapon (2..8), ammunition (s n r c) or health (h) with a count.
-// The program's own fields and flags carry them; false: not one of them.
-bool single_player_cheat(QcServer& s, int slot, const pg::Words& w) {
+// The cheats with the single-player game's words: `god`, `notarget`, `noclip`, `fly` toggled
+// ("godmode ON"), `give` a weapon (2..8), ammunition (s n r c) or health (h) with a count. The
+// program's own fields and flags carry them; false: not one of them. A single-player program's
+// player has them alone or in co-op; a multiplayer program's with sv_cheats on (the operator's
+// `god <id>` and `give <id> ...` on the classic endpoint come here too).
+bool run_cheat(QcServer& s, int slot, const pg::Words& w) {
   const char* cmd = pg::word(w, 0);
   const bool god = std::strcmp(cmd, "god") == 0, notarget = std::strcmp(cmd, "notarget") == 0;
   const bool noclip = std::strcmp(cmd, "noclip") == 0, fly = std::strcmp(cmd, "fly") == 0;
   const bool give = std::strcmp(cmd, "give") == 0;
   if (!god && !notarget && !noclip && !fly && !give) return false;
-  if (s.cvars.find("deathmatch") != nullptr && s.cvars.find("deathmatch")->on()) return true;
   const int e = slot + 1;
   const uint32_t me = 1u << slot;
   const pg::LayoutFields& f = s.q.layout->f;
@@ -118,14 +119,73 @@ bool single_player_cheat(QcServer& s, int slot, const pg::Words& w) {
   return true;
 }
 
+// The same refused (done, nothing changed) in deathmatch: a single-player program's.
+bool single_player_cheat(QcServer& s, int slot, const pg::Words& w) {
+  const char* cmd = pg::word(w, 0);
+  for (const char* c : {"god", "notarget", "noclip", "fly", "give"})
+    if (std::strcmp(cmd, c) == 0) {
+      const ge::console::Cvar* dm = s.cvars.find("deathmatch");
+      return dm != nullptr && dm->on() ? true : run_cheat(s, slot, w);
+    }
+  return false;
+}
+
+// Two names the same over their whole length, a-z and A-Z folded.
+bool same_name(const std::string& a, const char* b) {
+  const size_t n = std::strlen(b);
+  if (a.size() != n) return false;
+  for (size_t i = 0; i < n; i++) {
+    char x = a[i], y = b[i];
+    if (x >= 'A' && x <= 'Z') x = static_cast<char>(x + 32);
+    if (y >= 'A' && y <= 'Z') y = static_cast<char>(y + 32);
+    if (x != y) return false;
+  }
+  return true;
+}
+
+// Quake's `tell <name> <text>`: the first player in slot order whose whole name matches,
+// ignoring case, reads "<sender>: <the whole arguments>" (the target's name still at the
+// front; quotes round the arguments taken off), cut to 62 bytes, in the plain font. The sender
+// sees nothing; no match, or no text after the name, does nothing.
+void quake_tell(QcServer& s, int slot, const pg::Words& w) {
+  if (w.count < 3) return;
+  std::string text = w.args;
+  if (!text.empty() && text.front() == '"')
+    text = text.size() >= 2 ? text.substr(1, text.size() - 2) : "";
+  std::string line = info_value(s.clients[slot].userinfo, "name") + ": " + text;
+  if (line.size() > 62) line.resize(62);
+  const char* target = pg::word(w, 1);
+  for (size_t i = 0; i < std::size(s.clients); i++) {
+    const ClientInfo& c = s.clients[i];
+    if (!c.active || !same_name(info_value(c.userinfo, "name"), target)) continue;
+    print_to(s, 1u << i, 2, line + "\n");
+    return;
+  }
+}
+
+// Quake's `ping`: the asker reads "Client ping times:" and each connected player's ping in
+// milliseconds, right-aligned in four columns, then the name, in slot order.
+void quake_ping(QcServer& s, int slot) {
+  std::string out = "Client ping times:\n";
+  for (const ClientInfo& c : s.clients) {
+    if (!c.active) continue;
+    char head[24];
+    std::snprintf(head, sizeof head, "%4d ", c.ping_ms);
+    out += head + info_value(c.userinfo, "name") + "\n";
+  }
+  print_to(s, 1u << slot, 2, out);
+}
+
 void run_server_command(QcServer& s, int slot, const pg::Words& w) {
   const char* cmd = pg::word(w, 0);
   const uint32_t me = 1u << slot;
   const int e = slot + 1;
   ClientInfo& c = s.clients[slot];
   if (std::strcmp(cmd, "kill") == 0) {
-    if (s.sv.set.single_player_clock && s.sv.edicts[static_cast<size_t>(e)].health <= 0)
-      print_to(s, me, 2, "Can't suicide -- allready dead!\n");  // the original's own words
+    // Both games refuse the dead (spectators too, whose health is never set); the misspelling
+    // is theirs.
+    if (c.spectator || s.sv.edicts[static_cast<size_t>(e)].health <= 0)
+      print_to(s, me, 2, "Can't suicide -- allready dead!\n");
     else if (!c.spectator)
       call_hook(s, HookId::client_kill, s.q.hooks.client_kill, e, {});
   } else if (std::strcmp(cmd, "say") == 0 || std::strcmp(cmd, "say_team") == 0) {
@@ -145,6 +205,10 @@ void run_server_command(QcServer& s, int slot, const pg::Words& w) {
     if (w.count >= 2) set_user_info(s, slot, "rate", pg::word(w, 1));
   } else if (std::strcmp(cmd, "drop") == 0) {
     c.drop = true;
+  } else if (s.sv.set.single_player_clock && std::strcmp(cmd, "tell") == 0) {
+    quake_tell(s, slot, w);
+  } else if (s.sv.set.single_player_clock && std::strcmp(cmd, "ping") == 0) {
+    quake_ping(s, slot);
   } else if (s.sv.set.single_player_clock && single_player_cheat(s, slot, w)) {
     // done: a single-player program's cheats (no sv_cheats; refused in deathmatch)
   } else if (std::strcmp(cmd, "setpos") == 0) {
@@ -171,11 +235,7 @@ void run_server_command(QcServer& s, int slot, const pg::Words& w) {
       print_to(s, me, 2, "Cheats are not enabled on this server\n");
       return;
     }
-    sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
-    if (std::strcmp(cmd, "noclip") == 0)
-      ed.movetype = ed.movetype == sh::kMovetypeNoclip ? sh::kMovetypeWalk : sh::kMovetypeNoclip;
-    if (std::strcmp(cmd, "fly") == 0)
-      ed.movetype = ed.movetype == sh::kMovetypeFly ? sh::kMovetypeWalk : sh::kMovetypeFly;
+    run_cheat(s, slot, w);  // with the single-player game's words, in deathmatch too
   } else {
     // The rest of the server's own commands are the protocol's and the admin tools' (M18g).
     print_to(s, me, 2, std::string(cmd) + ": not available on this server yet\n");
@@ -230,7 +290,9 @@ static CommandResult run_client_command(QcServer& s, int slot, const std::string
   else if (s.named.user_cmd > 0)
     handled = call_hook(s, HookId::user_cmd, s.named.user_cmd, e, {cmd});
   if (handled != 0) return CommandResult::mod;
-  if (listed(kOverridable, cmd.c_str())) {
+  // Quake's `tell` and `ping` (a mod may still take them first); QuakeWorld has neither.
+  const bool quake_word = s.sv.set.single_player_clock && (cmd == "tell" || cmd == "ping");
+  if (quake_word || listed(kOverridable, cmd.c_str())) {
     pg::tokenize_words(line.c_str(), w);  // the hook may have tokenized something else
     run_server_command(s, slot, w);
     return CommandResult::server;
@@ -279,6 +341,24 @@ static bool run_console_line(QcServer& s, const std::string& line) {
     s.pending_change = cmd == "map" ? MapChange::new_game : MapChange::change_level;
     return true;
   }
+  // The operator's chat: QuakeWorld's "console: " at chat level; the single-player server's
+  // game names its host instead, as "<hostname> ".
+  if ((cmd == "say" || cmd == "say_team") && w.count >= 2) {
+    const std::string text = chat_text(w);
+    const ge::console::Cvar* host = s.cvars.find("hostname");
+    const std::string from =
+        s.sv.set.single_player_clock
+            ? "<" + (host != nullptr ? host->value : std::string("UNNAMED")) + "> "
+            : std::string("console: ");
+    print_to(s, all_clients(s), 3, from + text + "\n");
+    if (s.sv.set.single_player_clock) console_print(s, from + text);
+    return true;
+  }
+  // Quake's `tell` and `ping` are a player's: the server's own console is no player.
+  if (s.sv.set.single_player_clock && (cmd == "tell" || cmd == "ping")) {
+    console_print(s, "Can't \"" + cmd + "\", not connected");
+    return true;
+  }
   if (cmd == "restart") {
     s.pending_map = s.map_name;
     s.pending_change = MapChange::restart;
@@ -323,11 +403,20 @@ bool request_pause(QcServer& s, int slot, bool pause) {
   }
   s.paused = pause;
   if (pause) s.paused_seconds = 0;
-  // A single-player program's game tells everyone who paused it, as the original does.
-  if (s.sv.set.single_player_clock && slot >= 0)
-    print_to(s, all_clients(s), 2,
-             info_value(s.clients[slot].userinfo, "name") +
-                 (pause ? " paused the game\n" : " unpaused the game\n"));
+  // Everyone is told who paused. A single-player program's game words it as it happened; a
+  // multiplayer one, as QuakeWorld does, by the state before the toggle, so the words come out
+  // the other way round ("unpaused" for a pause), and the console hears it too.
+  if (slot >= 0) {
+    const bool says_paused = s.sv.set.single_player_clock ? pause : !pause;
+    const std::string line = info_value(s.clients[slot].userinfo, "name") +
+                             (says_paused ? " paused the game\n" : " unpaused the game\n");
+    print_to(s, all_clients(s), 2, line);
+    if (!s.sv.set.single_player_clock) console_print(s, line.substr(0, line.size() - 1));
+  } else if (!pause && slot != kPauseByServer && !s.sv.set.single_player_clock) {
+    const std::string line = "Pause released since no players are left.\n";
+    print_to(s, all_clients(s), 2, line);
+    console_print(s, line.substr(0, line.size() - 1));
+  }
   NetEvent ev;
   ev.kind = EventKind::pause;
   ev.to = all_clients(s);
@@ -337,6 +426,19 @@ bool request_pause(QcServer& s, int slot, bool pause) {
   s.out.events.push_back(std::move(ev));
   s.out.events_total++;
   return true;
+}
+
+void tell_paused(QcServer& s, int slot) {
+  if (!s.paused || s.sv.set.single_player_clock) return;
+  NetEvent ev;
+  ev.kind = EventKind::pause;
+  ev.to = 1u << slot;
+  ev.reliable = true;
+  ev.time = s.sv.time;
+  ev.level = 1;
+  s.out.events.push_back(std::move(ev));
+  s.out.events_total++;
+  print_to(s, 1u << slot, 2, "Server is paused.\n");
 }
 
 // The entry points: each leaves the rules' world as the command left the server.

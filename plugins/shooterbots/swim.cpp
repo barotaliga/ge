@@ -347,6 +347,7 @@ SwimNavCounts nav_add_swim(const MoveWorld& world, NavGraph& g, std::span<const 
                                    (near[y].d == near[y - 1].d && near[y].node < near[y - 1].node));
            y--)
         std::swap(near[y], near[y - 1]);
+    bool out_proven = false;
     for (size_t x = 0; x < near.size() && static_cast<int>(x) < set.exit_tries; x++) {
       out.proofs++;
       const float s = out_time(world, set.move, near[x].at, o, set.prove_s);
@@ -354,7 +355,18 @@ SwimNavCounts nav_add_swim(const MoveWorld& world, NavGraph& g, std::span<const 
       extra.push_back({near[x].node, static_cast<int32_t>(a), NavKind::swim, s});
       extra.push_back({static_cast<int32_t>(a), near[x].node, NavKind::swim, set.in_s});
       out.exits++;
+      out_proven = true;
       break;
+    }
+    // No climb out from here (a ledge a swimmer cannot climb: base1's pool room's), but off its
+    // edge into the water under it all the same: in by the nearest, the way back out elsewhere.
+    if (!out_proven) {
+      out.proofs++;
+      const float s = fall_in_time(world, set.move, o, near[0].at, cell * 1.5f, set.prove_s);
+      if (s >= 0) {
+        extra.push_back({static_cast<int32_t>(a), near[0].node, NavKind::swim, s});
+        out.falls++;
+      }
     }
   }
   nav_add_links(g, extra);

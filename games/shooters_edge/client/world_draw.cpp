@@ -819,6 +819,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (f.has_map) {
     GE_ZONE("world.bsp");
     ba::set_dynamic_lights(f.bsp, lights);
+    ba::set_areas(f.bsp,
+                  f.from_above ? std::span<const uint8_t>() : std::span<const uint8_t>(fx.areas));
     // The moving models' shadows (M54): every model near the eye and the player himself.
     const bool self = fx.has_self && (!f.picture || f.picture->draw_entities);
     shadow_casters(f.models, drawn, self ? &fx.self : nullptr, view, f.casters, f.caster_boxes);
@@ -895,12 +897,15 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       if (f.beam_draws.size() >= f.beam_shapes.size()) break;
       gr::BeamShape& shape = f.beam_shapes[f.beam_draws.size()];
       if (b.laser) f.beam_looks[f.beam_draws.size()] = effects::laser_look(b.laser_m, b.laser_rgb);
-      const gr::BeamLook* look = b.laser    ? &f.beam_looks[f.beam_draws.size()]
-                                 : b.coil   ? &effects::rail_coil_look()
-                                 : b.rail   ? &effects::rail_look()
-                                 : b.plasma ? &effects::plasma_look()
-                                 : b.across ? &effects::prong_arc_look()
-                                            : &effects::bolt_look();
+      if (b.q2_trail)
+        f.beam_looks[f.beam_draws.size()] =
+            effects::q2_rail_trail_look(b.trail_m, b.trail_radius_m, b.trail_rgb, b.trail_fade_s);
+      const gr::BeamLook* look = b.laser || b.q2_trail ? &f.beam_looks[f.beam_draws.size()]
+                                 : b.coil              ? &effects::rail_coil_look()
+                                 : b.rail              ? &effects::rail_look()
+                                 : b.plasma            ? &effects::plasma_look()
+                                 : b.across            ? &effects::prong_arc_look()
+                                                       : &effects::bolt_look();
       gr::build_beam(*look, b.shot, view.time_s, shape);
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
@@ -920,7 +925,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .explosions = on.explosions,
                            .bubbles_share = f.picture->bubbles_share,
                            .power_shells = f.picture->power_shells,
-                           .item_pulse = f.picture->item_pulse};
+                           .item_pulse = f.picture->item_pulse && !f.picture->no_glow,
+                           .items_still = f.picture->items_still};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,

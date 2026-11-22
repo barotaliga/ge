@@ -47,6 +47,7 @@
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_weather.hpp"
 #include "brush/map.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "classicenhance/switches.hpp"
 #include "console/console.hpp"
 #include "render/post.hpp"
@@ -152,6 +153,12 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // drawn; cl_deadbodyfilter: a player's body not drawn once it lies still on the last frame of a
   // death. The game decides which models those are; the switches are here. Either look.
   bool gib_filter = false, dead_body_filter = false;
+  // cl_gibs (Quake II's own, the other way round): 0 no piece drawn either. Either look.
+  bool gibs = true;
+  // cl_noglow (Quake II's own, over r_itempulse): 1 the items' light never pulses. Either look.
+  bool no_glow = false;
+  // Quake II's own effect switches (classic/q2_fx_switches.hpp). Either look.
+  ge::classic::Q2FxSwitches q2fx;
   // r_drawflame: the torches' and braziers' flames drawn; 0 none, nor their fire. Either look.
   bool draw_flame = true;
   // r_drawvweps (Quake II's spelling cl_vwep): a player drawn with the weapon he carries, where
@@ -212,6 +219,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // Quake II's `cl_noskins`: 0 each their own figure, 1 every player the default figure, 2 the
   // default figure of each one's sex (a female figure's, else the male).
   int stock_figures = 0;
+  // Quake II's `cl_nobob`: items the game marks to float stay still (no 5-unit rise and fall).
+  bool items_still = false;
   int fog_serial = 0;  // how many times the `fog` command was given (above)
   std::string base_skin = "base", all_skins, all_figures;
   // teamskin, enemyskin: every teammate's or every enemy's skin ("": their own); the teamcolor and

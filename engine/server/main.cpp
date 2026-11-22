@@ -10,22 +10,42 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <iterator>
+#include <mutex>
 #include <thread>
+#include <utility>
 
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <signal.h>
+#include <termios.h>
+#include <unistd.h>
+#endif
+
+#include "console/clock_macros.hpp"
 #include "core/num.hpp"
 #include "net/address.hpp"
+#include "net/net_commands.hpp"
+#include "net/rates.hpp"
 #include "net/udp_socket.hpp"
 #include "server/accounts.hpp"
 #include "server/admin.hpp"
 #include "server/autorecord.hpp"
+#include "server/console_log.hpp"
 #include "server/hand_record.hpp"
+#include "server/macros.hpp"
+#include "server/net_restart.hpp"
 #include "server/record.hpp"
 #include "server/spectators.hpp"
+#include "server/terminal.hpp"
 
 namespace ge::server {
 
@@ -199,6 +219,112 @@ std::string commands_added(CommandsFile& f) {
   return text;
 }
 
+// THE TERMINAL: lines typed on the server's own terminal, read on a thread of their own and run as
+// the operator's console lines with the commands file's. One reader for the process, started by
+// the first networked server whose input is a terminal it has in the foreground (a server started
+// in the background, or with its input a pipe or a file, reads none); it ends at the input's end.
+// Where the terminal can be edited (not Windows, `TERM` set and not `dumb`) it is put in raw mode
+// and the reader hands over every key as it comes, for the editor (server/terminal.hpp).
+struct TerminalLines {
+  std::mutex m;
+  std::string lines;  // whole lines, or the raw keys when `raw`
+  bool raw = false;
+};
+
+// The editor while the terminal is raw (null otherwise): the sink and the game's lines put their
+// line above the one being typed.
+TermEdit* g_edit = nullptr;
+// The console log (console_log.hpp) every printed line is copied to, and its prefix setting.
+ConsoleLog g_log;
+const std::string* g_log_prefix = nullptr;
+
+#if !defined(_WIN32)
+termios g_cooked{};
+void terminal_restore() { tcsetattr(STDIN_FILENO, TCSANOW, &g_cooked); }
+extern "C" void terminal_signal(int sig) {
+  terminal_restore();
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
+#endif
+
+bool terminal_ours() {
+#if defined(_WIN32)
+  return _isatty(_fileno(stdin)) != 0;
+#else
+  return isatty(STDIN_FILENO) != 0 && tcgetpgrp(STDIN_FILENO) == getpgrp();
+#endif
+}
+
+// Raw mode (no line buffering, no echo; signals kept), undone at exit or on a signal.
+bool terminal_make_raw() {
+#if defined(_WIN32)
+  return false;
+#else
+  const char* term = std::getenv("TERM");
+  if (term == nullptr || *term == 0 || std::strcmp(term, "dumb") == 0) return false;
+  if (isatty(STDOUT_FILENO) == 0 || tcgetattr(STDIN_FILENO, &g_cooked) != 0) return false;
+  termios raw = g_cooked;
+  raw.c_lflag &= ~static_cast<tcflag_t>(ICANON | ECHO);
+  raw.c_cc[VMIN] = 1;
+  raw.c_cc[VTIME] = 0;
+  if (tcsetattr(STDIN_FILENO, TCSANOW, &raw) != 0) return false;
+  std::atexit(terminal_restore);
+  for (const int sig : {SIGINT, SIGTERM, SIGHUP, SIGQUIT}) signal(sig, terminal_signal);
+  return true;
+#endif
+}
+
+TerminalLines& terminal_lines() {
+  static TerminalLines* t = [] {
+    auto* made = new TerminalLines;  // never freed: the reader may outlive every server
+    made->raw = terminal_make_raw();
+    std::thread([made] {
+#if !defined(_WIN32)
+      if (made->raw) {
+        char c = 0;
+        while (read(STDIN_FILENO, &c, 1) == 1) {
+          const std::lock_guard<std::mutex> hold(made->m);
+          made->lines.push_back(c);
+        }
+        return;
+      }
+#endif
+      for (std::string line; std::getline(std::cin, line);) {
+        const std::lock_guard<std::mutex> hold(made->m);
+        made->lines += line + "\n";
+      }
+    }).detach();
+    return made;
+  }();
+  return *t;
+}
+
+// A line printed on the terminal, above the line being typed when there is one.
+void terminal_print(const std::string& head, std::string_view line) {
+  if (g_log.file != nullptr) {
+    const std::time_t t = std::time(nullptr);
+    std::tm now{};
+#if defined(_WIN32)
+    localtime_s(&now, &t);
+#else
+    localtime_r(&t, &now);
+#endif
+    console_log_line(g_log, g_log_prefix != nullptr ? *g_log_prefix : "", line, now);
+  }
+  if (g_edit == nullptr) {
+    std::printf("%s%.*s\n", head.c_str(), static_cast<int>(line.size()), line.data());
+    return;
+  }
+  std::printf("%s%s%.*s\n%s", term_hide().c_str(), head.c_str(), static_cast<int>(line.size()),
+              line.data(), term_redraw(*g_edit).c_str());
+}
+
+std::string terminal_typed(TerminalLines& t) {
+  const std::lock_guard<std::mutex> hold(t.m);
+  return std::exchange(t.lines, std::string());
+}
+
 int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCfg& cfg,
         Features& features) {
   gn::Transport sock, lan;
@@ -250,6 +376,20 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   Server s;
   s.features = &features;
   take_created(con, c);
+  c.admin_info = [&con] {
+    std::string out;
+    const std::string all = con.cvars().info_string(console::kServerInfo);
+    size_t at = 0;
+    while (at < all.size()) {  // each pair kept when `sets` made it
+      const size_t k = all.find('\\', at + 1), v = all.find('\\', k + 1);
+      const std::string key = all.substr(at + 1, k - at - 1);
+      const console::Cvar* cv = con.cvars().find(key);
+      if (cv != nullptr && (cv->flags & console::kCreated) != 0)
+        out += all.substr(at, (v == std::string::npos ? all.size() : v) - at);
+      at = v == std::string::npos ? all.size() : v;
+    }
+    return out;
+  };
   if (!server_open(s, game, c, c.offline ? nullptr : &sock, have_lan ? &lan : nullptr, error)) {
     std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());
     close_all();
@@ -428,11 +568,121 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
                     hand_record_stop(hand, s, said);
                     cn.print(said);
                   });
+  // `version`: the game's own build version.
+  con.add_command(
+      "version", "version: the server's version",
+      [&game](console::Console& cn, const console::Args&) {
+        cn.print(std::string("Version ") + (*game.version_text ? game.version_text : "unknown"));
+      });
+  // `quit [reason]`: the server ends after this frame, as at the end of its time: every player
+  // told by the game as it closes (a classic server's "server shutdown"), the masters too.
+  // `recycle [reason]` ends it the same way but tells the players to come back: whatever keeps
+  // the process running (a script, a service) starts it again. Both exit with success.
+  bool quit_asked = false;
+  bool quit_restart = false;
+  std::string quit_reason;  // the words after the command, joined by single spaces
+  const auto ask_quit = [&](const console::Args& a, bool restart) {
+    quit_asked = true;
+    quit_restart = restart;
+    quit_reason.clear();
+    for (size_t i = 1; i < a.size(); i++) quit_reason += (i > 1 ? " " : "") + a.words[i];
+  };
+  con.add_command("quit", "quit [reason]: end the server; every player is told and dropped",
+                  [&](console::Console&, const console::Args& a) { ask_quit(a, false); });
+  // `dns` and `net_stats` over the server's socket; `$net_uprate` and `$net_dnrate`, the bytes a
+  // second it sent and received over the last three seconds.
+  gn::add_net_commands(con, [&]() -> const gn::Transport* { return c.offline ? nullptr : &sock; });
+  gn::Rates rates;
+  con.add_macro("net_uprate",
+                [&] { return std::to_string(static_cast<int64_t>(rates.sent_bytes)); });
+  con.add_macro("net_dnrate",
+                [&] { return std::to_string(static_cast<int64_t>(rates.received_bytes)); });
+  // `$com_maplist`: the maps the game finds, by name ignoring case, each once, by single spaces.
+  con.add_macro("com_maplist", [&] {
+    std::vector<std::string> maps;
+    if (game.maps != nullptr && s.state != nullptr) game.maps(s.state, maps);
+    return server_map_list(maps);
+  });
+  // `net_restart`: the server's socket closed and opened again on net_ip and net_port, a value
+  // waiting on either (latched) taken now; when that cannot be had, the last port that opened.
+  std::string good_ip = c.ip;
+  int good_port = c.port;
+  con.add_command("net_restart",
+                  "net_restart: open the server's socket again on net_ip and net_port",
+                  [&](console::Console& cn, const console::Args&) {
+                    if (c.offline) return;
+                    for (const char* name : {"net_ip", "net_port"}) {
+                      console::Cvar* v = con.cvars().find(name);
+                      if (v == nullptr || !v->has_latched) continue;
+                      const std::string to = v->latched;
+                      con.cvars().set(*v, to, console::Source::code);
+                      v->has_latched = false;
+                      v->latched.clear();
+                    }
+                    int port = c.port;
+                    std::string said;
+                    const bool open = net_restart(sock, c.ip, port, good_ip, good_port, said);
+                    if (port != c.port)
+                      if (console::Cvar* v = con.cvars().find("net_port"))
+                        con.cvars().set(*v, std::to_string(port), console::Source::code);
+                    c.port = port;
+                    if (!said.empty()) cn.print(said.substr(0, said.size() - 1));
+                    if (!open) return;
+                    good_ip = c.ip;
+                    good_port = c.port;
+                    if (game.reopened != nullptr && s.state != nullptr)
+                      game.reopened(s.state, sock);
+                  });
+  // `showip`: this machine's name and addresses, then the sockets the server listens on.
+  con.add_command(
+      "showip", "showip: this machine's addresses and the sockets the server listens on",
+      [&](console::Console& cn, const console::Args&) {
+        std::string name, canonical, why;
+        std::vector<gn::HostAddress> addresses;
+        if (!gn::host_addresses(name, canonical, addresses, true, &why)) {
+          cn.print(why);
+          return;
+        }
+        std::vector<std::pair<std::string, gn::Address>> sockets;
+        const auto udp = [](const gn::Address& a) {
+          return std::string(a.family == gn::Family::ipv6 ? "Server UDP6" : "Server UDP");
+        };
+        if (!c.offline) sockets.emplace_back(udp(sock.local), sock.local);
+        if (tv_sock.kind != gn::TransportKind::none) sockets.emplace_back("TV UDP", tv_sock.local);
+        if (game.sockets != nullptr && s.state != nullptr) game.sockets(s.state, sockets);
+        std::string text = gn::showip_text(canonical, addresses, sockets);
+        if (!text.empty() && text.back() == '\n') text.pop_back();
+        cn.print(text);
+      });
+  con.add_command("recycle",
+                  "recycle [reason]: end the server and tell every player to reconnect; whatever "
+                  "keeps it running starts it again",
+                  [&](console::Console&, const console::Args& a) { ask_quit(a, true); });
   const auto hand_stop = [&] {
     std::string said;
     if (hand_record_stop(hand, s, said)) std::printf("%s\n", said.c_str());
   };
   CommandsFile commands{c.commands, c.commands.empty() ? 0 : file_size(c.commands)};
+  TerminalLines* terminal = c.offline || !terminal_ours() ? nullptr : &terminal_lines();
+  // The editor over a raw terminal, its history read from the base game folder.
+  const std::string history_file =
+      (std::filesystem::path(c.root.empty() ? "." : c.root) / game.base_dir / ".syshistory")
+          .string();
+  TermEdit edit;
+  const bool edit_on = terminal != nullptr && terminal->raw;
+  if (edit_on) {
+    term_history_load(edit, history_file, c.con_history);
+    g_edit = &edit;
+    std::fputs(term_redraw(edit).c_str(), stdout);
+    std::fflush(stdout);
+  }
+  const auto edit_off = [&] {
+    console_log_close(g_log);
+    if (!edit_on || g_edit == nullptr) return;
+    g_edit = nullptr;
+    std::fputs(term_hide().c_str(), stdout);
+    term_history_save(edit, history_file, c.con_history);
+  };
   const auto switch_mods = [&]() -> bool {
     switch_asked = false;
     std::string why;
@@ -496,34 +746,69 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   const auto start = std::chrono::steady_clock::now();
   std::vector<std::string> printed;  // the game's console lines of one frame
   std::string map_seen;              // the map sv_mapcmd last ran after
+  // The game's console lines since the last call, printed and logged.
+  const auto print_lines = [&] {
+    if (game.console_lines == nullptr || s.state == nullptr) return;
+    printed.clear();
+    game.console_lines(s.state, printed);
+    for (std::string& line : printed) {
+      while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+      terminal_print("", line);
+      features_log(features, line);
+    }
+    if (!printed.empty()) std::fflush(stdout);
+  };
+  // The console log brought to its settings each frame (a change closes and opens it again).
+  g_log_prefix = &c.con_logfile_prefix;
+  const auto log_check = [&] {
+    std::string said;
+    const std::string folder =
+        con.search_path().empty()
+            ? (std::filesystem::path(c.root.empty() ? "." : c.root) / game.base_dir).string()
+            : con.search_path().front().string();
+    console_log_update(g_log, c.con_logfile, folder, c.con_logfile_name, c.con_logfile_flush, said);
+    if (said.empty()) return;
+    said.pop_back();  // each line ends in a newline; print adds the last
+    con.print(said);
+  };
   for (int64_t n = 0; c.seconds == 0 || n < frames; n++) {
+    log_check();
     if (c.realtime) {
       const auto due = start + std::chrono::duration<double>(static_cast<double>(n) * step);
       std::this_thread::sleep_until(due);
     }
     server_frame(s);
-    if (game.console_lines != nullptr && s.state != nullptr) {
-      printed.clear();
-      game.console_lines(s.state, printed);
-      for (std::string& line : printed) {
-        while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
-        std::printf("%s\n", line.c_str());
-        features_log(features, line);
-      }
-      if (!printed.empty()) std::fflush(stdout);
-    }
+    print_lines();
     // sv_mapcmd once after each map loads, the change seen within a quarter of a second.
     if (n % poll_frames == 0 && server_map_loaded(s, map_seen) && !c.mapcmd.empty()) {
       con.execute(c.mapcmd);
       std::fflush(stdout);
     }
-    if (!commands.path.empty() && n % poll_frames == 0) {
-      const std::string lines = commands_added(commands);
+    if (edit_on) {  // every key as it comes, each finished line run
+      const std::string keys = terminal_typed(*terminal);
+      std::string shown;
+      std::vector<std::string> done;
+      edit.mode = c.con_tab_mode;
+      edit.threshold = std::max(c.con_tab_threshold, 1);
+      for (const char k : keys) term_feed(edit, con, k, shown, done);
+      if (!shown.empty()) {
+        std::fputs(shown.c_str(), stdout);
+        std::fflush(stdout);
+      }
+      for (const std::string& line : done) {
+        con.execute(line);
+        std::fflush(stdout);
+      }
+    }
+    if ((!commands.path.empty() || (terminal != nullptr && !edit_on)) && n % poll_frames == 0) {
+      std::string lines = commands.path.empty() ? std::string() : commands_added(commands);
+      if (terminal != nullptr && !edit_on) lines += terminal_typed(*terminal);
       if (!lines.empty()) {
         con.execute(lines);
         std::fflush(stdout);
       }
       if (switch_asked && !switch_mods()) {
+        edit_off();
         tv_off();
         server_close(s);
         close_all();
@@ -535,7 +820,13 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
       rec_write();
     }
     hand_record_frame(hand, s);
+    if (!c.offline) gn::rates_step(rates, static_cast<double>(s.now_us) / 1e6, sock, 0, 3);
     match_frame();
+    if (quit_asked) {
+      if (game.quit != nullptr && s.state != nullptr) game.quit(s.state, quit_reason, quit_restart);
+      print_lines();  // what the game said as it ended
+      break;
+    }
     server_accounts_update(accounts, wall_unix_us());
     server_accounts_reports(accounts, s, wall_unix_us());
     if (status_frames > 0 && (n + 1) % status_frames == 0) {
@@ -611,6 +902,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
       }
     }
   }
+  edit_off();
   server_close(s);
   close_all();
   return code;
@@ -629,7 +921,45 @@ int main_body(int argc, char** argv, const ServerGame& game) {
   con.set_sink([](std::string_view line) {
     std::printf("%.*s\n", static_cast<int>(line.size()), line.data());
   });
+  // The clock's macros ($com_date, $com_time, $com_uptime, $com_uptime_long, $random) for an
+  // operator's scripts and messages, as a player's console has them.
+  const auto born = std::chrono::steady_clock::now();
+  console::add_clock_macros(
+      con,
+      {.local =
+           [] {
+             const std::time_t t = std::time(nullptr);
+             std::tm out{};
+#if defined(_WIN32)
+             localtime_s(&out, &t);
+#else
+             localtime_r(&t, &out);
+#endif
+             return out;
+           },
+       .uptime_s =
+           [born] {
+             return std::chrono::duration<double>(std::chrono::steady_clock::now() - born).count();
+           },
+       .seed = static_cast<uint32_t>(wall_unix_us())});
+  // `macrolist [filter]`: each `$` macro (its name in 16 columns, then what it gives now), the
+  // filter a wildcard on the name; then "<shown> of <all> macros".
+  con.add_command("macrolist", "macrolist [filter]: every $ macro and what it gives now",
+                  [](console::Console& cn, const console::Args& a) {
+                    cn.print(server_macro_list(cn, a.size() > 1 ? a[1] : ""));
+                  });
   ServerConfig c;
+  // Each line the terminal prints, `console_prefix` before it (read at every line).
+  con.set_sink([&c](std::string_view line) {
+    const std::time_t t = std::time(nullptr);
+    std::tm now{};
+#if defined(_WIN32)
+    localtime_s(&now, &t);
+#else
+    localtime_r(&t, &now);
+#endif
+    terminal_print(terminal_prefix(c.console_prefix, LineLevel::normal, now), line);
+  });
   ServerCfg cfg;
   AdminFeatures admin;
   Features features;

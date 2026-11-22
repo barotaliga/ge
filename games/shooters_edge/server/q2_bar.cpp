@@ -8,15 +8,20 @@
 #include "shooters_edge/server/q2_screens.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <string>
 
 #include "shooters_edge/server/q2_combat.hpp"
+#include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_server.hpp"
+#include "shooters_edge/server/q2_spectate.hpp"
 
 namespace shooters_edge::server {
 
 namespace {
+
+namespace con = ge::console;
 
 // The game's item list in its own order: the class name (the one health row stands for the
 // four), the icon, the name a player reads.
@@ -118,6 +123,13 @@ int ammo_number(SqAmmo a) {
   return 0;
 }
 
+// Player `slot`'s `hand` setting: 0 right, 1 left, 2 centre.
+int hand_of(const Q2Server& s, int slot) {
+  for (const auto& [k, v] : s.clients[slot].userinfo)
+    if (k == "hand") return std::atoi(v.c_str());
+  return 0;
+}
+
 }  // namespace
 
 int sq_item_number(int row) {
@@ -187,13 +199,14 @@ void bar_rows(Q2Server& s) {
   RulesWorld& w = s.world;
   if (w.images.empty()) return;
   const bool flash_on = (s.frame_number & 8) != 0;
+  const bool match = s.cvars.find("deathmatch")->on();
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (!s.clients[i].active) continue;
     const Q2Player& p = s.players[i];
     int16_t* st = w.clients[i].numbers.stats;
     std::fill(st, st + 32, int16_t(0));
     st[0] = static_cast<int16_t>(image(s, "i_health"));
-    st[1] = clamp16(p.health);
+    st[1] = clamp16(std::max(p.health, -99.0f));  // never below −99
     const SqAmmo ammo = kSqWeapons[p.hand.weapon].ammo;
     if (ammo != SqAmmo::none) {
       st[2] = static_cast<int16_t>(image(s, sq_icon(ammo_number(ammo))));
@@ -229,14 +242,28 @@ void bar_rows(Q2Server& s) {
       st[10] = static_cast<int16_t>(frames / 10);
       break;
     }
-    if (p.help_unread >= 1 && flash_on) st[11] = static_cast<int16_t>(image(s, "i_help"));
-    if (p.screen != kScreenNone) st[13] |= 1;
+    // The help slot: the help computer's icon blinking while unread; else, with the gun not drawn
+    // in the view (`hand` 2, or a field of view over 91) and the host's own `cl_gun` not 2, the
+    // weapon in hand.
+    const con::Cvar* gun = s.cvars.find("cl_gun");
+    if (p.help_unread >= 1 && flash_on) {
+      st[11] = static_cast<int16_t>(image(s, "i_help"));
+    } else if (p.help_unread == 0 && (gun == nullptr ? 2 : gun->number) != 2 &&
+               (hand_of(s, i) == 2 || fight_fov(s, i) > 91)) {
+      st[11] = static_cast<int16_t>(image(s, sq_icon(sq_weapon_number(p.hand.weapon))));
+    }
+    // A screen over the bar; the scoreboard always while dead or between levels in deathmatch.
+    const bool dead = !p.alive && !s.clients[i].spectator;  // a spectator is not dead
+    if (p.screen != kScreenNone || (match && (dead || s.intermission_at > 0))) st[13] |= 1;
     if (p.inven_open && p.alive) st[13] |= 2;  // a screen over the bar (q2_screens.hpp)
     st[14] = clamp16(p.frags);
     // A blow in this frame, or between the last frame and this one (a move's fall), shows once a
     // frame's rows are sent.
     if (p.hit_frame >= s.frame_number - 1) st[15] = static_cast<int16_t>(p.hit_bits);
   }
+  // A spectator's flag, and a chaser's view of his target's bar (every player's filled first).
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (s.clients[i].active) spectate_stats(s, i, w.clients[i].numbers.stats);
 }
 
 }  // namespace shooters_edge::server

@@ -1134,6 +1134,25 @@ inline constexpr Kind kKinds[] = {
                   .recover = 0.4f}},
      .end = End::explode,
      .burst = 120},
+    // A scripted figure (q2_actor.hpp): walks its target_actor points when used, says its lines,
+    // taunts a player who shoots it and fights only what an ATTACK point or a monster's blow names.
+    {.classname = "misc_actor",
+     .name = "a man",
+     .model = "players/male/tris.md2",
+     .health = 100,
+     .gib = -80,
+     .mass = 200,
+     .walk = 48.75f,  // 39 units over its 8 walking frames
+     .run = 128.3f,   // 77 over its 6 running frames
+     .missile = {{.fire = Fire::burst,
+                  .damage = 3,
+                  .damage_max = 3,
+                  .kick = 4,
+                  .h = 300,
+                  .v = 500,
+                  .burst_min = 1.0f,
+                  .burst_max = 2.5f}},
+     .good = true},
 };
 inline constexpr int kKindCount = int(sizeof(kKinds) / sizeof(kKinds[0]));
 

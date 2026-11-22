@@ -6,7 +6,7 @@
 //
 // ge:summary Tests: a single-player program on the mod server: the mirror and its builtins
 // ge:keywords test qc single-player campaign form layout mirror bprint sprint aim autoaim sv_aim
-// ge:keywords multicast destination logfrag infokey stof
+// ge:keywords multicast destination logfrag infokey stof tell ping client-ping-times
 // ge:skill progs shooter testing
 #include <algorithm>
 #include <cmath>
@@ -147,4 +147,57 @@ TEST(a_single_player_programs_builtins_answer_as_the_original) {
   fx.call(15, {ent(c)});
   fx.in_call([] {});
   CHECK(fx.f(c, kSp.f.health) == 50);
+}
+
+TEST(tell_reaches_one_player_by_whole_name_and_ping_lists_everyone) {
+  SoloFixture so;
+  Fixture& fx = so.fx;
+  fx.s->sv.set.single_player_clock = true;
+  fx.join(0, "alice");
+  fx.join(1, "Bob");
+  fx.join(2, "bobby");
+  fx.s->clients[1].ping_ms = 48;
+  fx.s->clients[2].ping_ms = 12345;
+  const auto prints = [&] {  // copies: the events are cleared
+    std::vector<sv::NetEvent> p;
+    for (const sv::NetEvent* e : fx.events(sv::EventKind::print)) p.push_back(*e);
+    fx.s->out.events.clear();
+    return p;
+  };
+  prints();
+  // The whole argument text after the sender's name, the target's name still in it; one reader.
+  sv::client_command(*fx.s, 0, "tell bob hi there");
+  std::vector<sv::NetEvent> p = prints();
+  CHECK(p.size() == 1u);
+  if (p.size() == 1u) {
+    CHECK_MSG(p[0].text == "alice: bob hi there\n", p[0].text);
+    CHECK(p[0].to == 2u);
+    CHECK(p[0].level != 3);  // no chat sound
+  }
+  // Arguments that start with a quote lose their first and last byte; the line is cut to 62.
+  sv::client_command(*fx.s, 0, "tell \"bobby\" " + std::string(80, 'x'));
+  p = prints();
+  CHECK(p.size() == 1u);
+  if (p.size() == 1u) {
+    CHECK_MSG(p[0].text.size() == 63u && p[0].text.rfind("alice: bobby\" xxx", 0) == 0, p[0].text);
+    CHECK(p[0].to == 4u);
+  }
+  // A part of a name, no text, or no one by that name: nothing at all.
+  sv::client_command(*fx.s, 0, "tell bo hi");
+  sv::client_command(*fx.s, 0, "tell bob");
+  sv::client_command(*fx.s, 0, "tell carol hi");
+  CHECK(prints().empty());
+  // `ping`: the asker alone reads everyone's.
+  sv::client_command(*fx.s, 1, "ping");
+  p = prints();
+  CHECK(p.size() == 1u);
+  if (p.size() == 1u) {
+    CHECK_MSG(p[0].text == "Client ping times:\n   0 alice\n  48 Bob\n12345 bobby\n", p[0].text);
+    CHECK(p[0].to == 2u);
+  }
+  // The server's own console is no player.
+  CHECK(sv::server_command(*fx.s, "tell bob hi"));
+  CHECK(!fx.s->console.empty() && fx.s->console.back() == "Can't \"tell\", not connected");
+  CHECK(sv::server_command(*fx.s, "ping"));
+  CHECK(!fx.s->console.empty() && fx.s->console.back() == "Can't \"ping\", not connected");
 }

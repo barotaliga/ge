@@ -271,13 +271,13 @@ constexpr PageShot kPages[] = {
      "CLASSIC ENHANCED: LOAD GAME (the folder the game is installed in) and ENHANCE, then a page "
      "a subject."},
     {"ce_art", "ce_relief",
-     "TEXTURES AND MODELS: the enhanced textures and skins, the relief and the depth, smooth "
+     "TEXTURES, MODELS: the enhanced textures and skins, the relief and the depth, smooth "
      "shading, the 2D art."},
     {"ce_light", "r_fx_lights",
      "LIGHT AND SHADOW: the rebaked light, the shadows, the effects' light, the sparks' glow, "
      "the bloom."},
     {"ce_liquids", "r_lava_glow",
-     "WATER, LAVA AND SKY: each liquid on or off with its light, the teleporters, the sky and "
+     "LIQUIDS AND SKY: each liquid on or off with its light, the teleporters, the sky and "
      "the low clouds."},
     {"ce_fire", "ce_bonfires", "FIRE AND WIND: the live fire, the bonfires and the wind."},
     {"ce_weather", "sv_rain",

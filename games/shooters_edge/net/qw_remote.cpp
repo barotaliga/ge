@@ -6,20 +6,25 @@
 #include "shooters_edge/net/qw_remote.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <functional>
+#include <utility>
 
 #include "net/crypto.hpp"
+#include "net/net_commands.hpp"
 #include "net/udp_socket.hpp"
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q1_remote.hpp"
 #include "shooters_edge/net/q2_remote.hpp"
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/net/qw_login.hpp"
+#include "shooters_edge/net/qw_remote_macros.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
 
 namespace shooters_edge::net {
@@ -112,7 +117,10 @@ void presence_close(RemoteLogin& l) {
 }
 
 // The stage of whichever client the window joined with.
-ClientStage stage_of(const Remote& r) { return r.q2 ? r.q2->stage : r.end.stage; }
+ClientStage stage_of(const Remote& r) {
+  if (r.nq) return r.nq->stage;
+  return r.q2 ? r.q2->stage : r.end.stage;
+}
 
 // While in the game, with the account file's ticket: friends see the player on this server and
 // its map, and their invites are said on the console. A file that does not load says nothing
@@ -373,8 +381,18 @@ std::string coming(const std::string& name, int percent, size_t bytes, double& p
 }  // namespace
 
 const ge::hud::NetHistory* remote_net(const Remote& r) {
-  if (!r.active || r.watch) return nullptr;
+  if (!r.active || r.watch || r.nq) return nullptr;
   return r.q2 ? &r.q2->net : &r.end.net;
+}
+
+bool remote_net_trouble(const Remote& r) {
+  if (!r.active || r.watch || r.q2) return false;
+  if (r.nq)
+    return r.nq->stage == ClientStage::active && r.nq->heard_us >= 0 &&
+           r.now_us - r.nq->heard_us >= 300000;
+  const Channel& ch = r.end.ch;
+  return r.end.stage == ClientStage::active &&
+         ch.outgoing_sequence - 1 - ch.incoming_acknowledged >= 63;
 }
 
 int remote_unanswered(const Remote& r) {
@@ -387,6 +405,7 @@ std::string remote_foot(const Remote& r, double& progress) {
   if (!r.active || r.watch) return {};
   const std::string& map = r.demo.state.map;
   const std::string loading = map.empty() ? "Loading..." : "Loading " + map + "...";
+  if (r.nq) return r.nq->stage == ClientStage::signon ? loading : std::string();
   if (r.q2) {
     const Q2ClientEnd& c = *r.q2;
     if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
@@ -407,6 +426,32 @@ std::string remote_foot(const Remote& r, double& progress) {
   return c.stage == ClientStage::signon ? loading : std::string();
 }
 
+namespace {
+
+// The port Quake II's `net_clientport` asks for (-1 any free one; never in Quake).
+int wanted_port(const Remote& r) {
+  if (!r.setting || !(r.q2_game && r.q2_game())) return -1;
+  const std::string v = r.setting("net_clientport");
+  const int port = v.empty() ? -1 : std::atoi(v.c_str());
+  return port > 0 && port <= 65535 ? port : -1;
+}
+
+// The client's socket on `port` (-1 any free one), else on any free port with `r.port_note`
+// saying so; false only when no port opens.
+bool open_own(Remote& r, int port, std::string& error) {
+  r.own_port = port;
+  r.port_note.clear();
+  if (port > 0) {
+    if (gn::open_udp_transport(r.own, gn::ipv4(0, 0, 0, 0, static_cast<uint16_t>(port)), &error))
+      return true;
+    r.port_note = "Couldn't open port " + std::to_string(port) +
+                  " for the client; another program may be using it. Using any free port.";
+  }
+  return gn::open_udp_transport(r.own, gn::ipv4(0, 0, 0, 0, 0), &error);
+}
+
+}  // namespace
+
 bool remote_connect(Remote& r, const std::string& address, const ClientConfig& cfg,
                     std::string& error) {
   remote_disconnect(r);
@@ -422,7 +467,7 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
             "192.168.1.20, connect 192.168.1.20:27500, connect example.org:27500) or localhost.";
     return false;
   }
-  if (!gn::open_udp_transport(r.own, gn::ipv4(0, 0, 0, 0, 0), &error)) {
+  if (!open_own(r, q2 ? wanted_port(r) : -1, error)) {
     error =
         "the client's socket did not open: " + error + ". Check that the computer is on a network.";
     return false;
@@ -433,6 +478,8 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   r.trace.where = text;
   if (q2)
     q2_remote_start(r, cfg);
+  else if (to.port == kPortNetQuake)
+    nq_remote_start(r, cfg);
   else
     start(r, cfg);
   return true;
@@ -501,8 +548,13 @@ void remote_queue_frame(Remote& r, ge::console::Console& con) {
   const double wall =  // the wall clock: the match's recording and the rcon answers run on it
       std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
   remote_match_frame(r, con, wall);
-  if (!r.away) return;
-  said.clear();  // the answers to an rcon sent while not joined
+  said.clear();  // `pingservers`' answers (q2_pingservers.hpp)
+  pingservers_step(r.ping, wall, r.now_us, said);
+  const std::string called = passive_step(r.passive, r.active, r.now_us, said);  // `passive`
+  for (const std::string& line : said) con.print(line);
+  if (!called.empty()) con.execute("connect " + called);
+  if (!r.away && !r.status_ask) return;
+  said.clear();  // the answers to an rcon sent while not joined, and to `serverstatus`
   remote_rcon_step(r, wall, said);
   for (const std::string& line : said) con.print(line);
 }
@@ -563,6 +615,7 @@ bool remote_rcon(Remote& r, const std::string& address, const std::string& text,
 }
 
 void remote_rcon_step(Remote& r, double now_s, std::vector<std::string>& said) {
+  serverstatus_step(r, now_s, said);  // `serverstatus`'s answer (qw_serverstatus.hpp)
   if (!r.away || r.away->until_s < 0) return;
   RconAway& a = *r.away;
   gn::Transport& link = a.link != nullptr ? *a.link : a.own;
@@ -601,6 +654,8 @@ void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const 
   r.trace.where = r.server_name;
   if (r.q2_game && r.q2_game())
     q2_remote_start(r, cfg);
+  else if (server.port == kPortNetQuake)
+    nq_remote_start(r, cfg);
   else
     start(r, cfg);
 }
@@ -618,6 +673,14 @@ void remote_disconnect(Remote& r) {
   if (r.watch) {
     watch_close(*r.watch);
     r.watch.reset();
+    r.active = false;
+    return;
+  }
+  if (r.nq) {
+    nq_stop(*r.nq, r.now_us);  // the disconnect byte, once
+    r.nq.reset();
+    if (r.transport == &r.own) gn::close_transport(r.own);
+    r.transport = nullptr;
     r.active = false;
     return;
   }
@@ -647,7 +710,7 @@ void remote_disconnect(Remote& r) {
 }
 
 void remote_mic(Remote& r, std::span<const float> samples) {
-  if (!r.active) return;
+  if (!r.active || r.nq) return;
   if (r.q2 ? !r.q2->cfg.live_mic || !r.q2->voice_on
            : !r.end.cfg.live_mic || !r.end.ext.has(ExtFamily::x2, kX2Voice))
     return;
@@ -665,6 +728,11 @@ bool remote_lobby(Remote& r, const std::string& line) {
 
 bool remote_rules_word(Remote& r, const std::string& line) {
   if (!r.active || r.watch) return false;
+  if (r.nq) {  // a server of protocol 15: the words it takes from a player
+    if (!nq_server_word(line.substr(0, line.find_first_of(" \t")))) return false;
+    nq_command(*r.nq, line);
+    return true;
+  }
   if (!r.q2) {  // Quake's client sends on only its server's own words, never any unknown one
     const std::string word = line.substr(0, line.find_first_of(" \t"));
     if (word != "kill" && word != "pause" && word != "serverinfo") return false;
@@ -674,14 +742,16 @@ bool remote_rules_word(Remote& r, const std::string& line) {
 }
 
 void remote_command(Remote& r, const std::string& line) {
-  if (r.q2)
+  if (r.nq)
+    nq_command(*r.nq, line);
+  else if (r.q2)
     q2_client_command(*r.q2, line);
   else
     client_command(r.end, line);
 }
 
 bool remote_talking(const Remote& r) {
-  if (!r.active) return false;
+  if (!r.active || r.nq) return false;
   if (r.q2 ? !r.q2->voice_on : !r.end.cfg.voice) return false;  // our server's only
   if (r.talk != nullptr && ge::console::talk_voice(*r.talk).on) return true;
   return r.voip_key != nullptr && r.voip_key->down();
@@ -828,6 +898,15 @@ void user_info_step(Remote& r) {
     client_command(r.end, std::string("setinfo ") + key + " " + std::to_string(*held));
   }
   if (password_moved) client_command(r.end, "setinfo password \"" + password + "\"");
+  // `msg` and `noaim` as they now are.
+  if (const std::string m = r.setting("msg"); !m.empty() && std::atoi(m.c_str()) != c.msg) {
+    c.msg = std::atoi(m.c_str());
+    client_command(r.end, "setinfo msg " + std::to_string(c.msg));
+  }
+  if (const std::string n = r.setting("noaim"); !n.empty() && (n == "1") != c.noaim) {
+    c.noaim = n == "1";
+    client_command(r.end, std::string("setinfo noaim ") + (c.noaim ? "1" : "0"));
+  }
 }
 
 }  // namespace
@@ -835,8 +914,17 @@ void user_info_step(Remote& r) {
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
   if (r.watch) return watch_step(r, said);
+  if (r.nq) return nq_remote_step(r, wall_s, said);
+  remote_rates_step(r, wall_s);  // $cl_pps and the other rates (qw_remote_macros.hpp)
   user_info_step(r);
   if (r.q2) {
+    // net_clientport moved: the socket opened again on the new port, the connection carrying on
+    // (the server knows the client by its qport).
+    if (const int port = wanted_port(r); port != r.own_port && r.transport == &r.own) {
+      std::string error;
+      if (!open_own(r, port, error)) said.emplace_back("Couldn't open a port for the client.");
+      if (!r.port_note.empty()) said.push_back(r.port_note);
+    }
     const RemoteStep step = q2_remote_step(r, wall_s, said);
     remote_record_flush(r);  // `record`'s file (qw_match_record.hpp)
     login_step(r, said);     // logged in by the account file, and seen by friends, as below
@@ -882,6 +970,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     }
   }
   r.end.oob_prints.clear();
+  for (std::string& line : std::exchange(r.end.web.said, {})) said.push_back(std::move(line));
   if (r.end.stage != r.said) {
     r.said = r.end.stage;
     std::string line = remote_stage_words(r.said) + r.server_name;
@@ -945,6 +1034,8 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
   r.ignore.chat.relay = false;
+  // A listing asked for the settings page (qw_remote_sheet.hpp), on the tick clock its asks keep.
+  remote_sheet_step(r, prints, static_cast<double>(r.now_us) * 1e-6 + r.owed_s);
   client::drop_ignored(r.ignore, d.state, prints, wall_s, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
@@ -1000,7 +1091,7 @@ std::string remote_status(const Remote& r) {
   if (r.watch)
     return (r.watch->state == WatchState::watching ? "watching " : "asking to watch ") +
            r.server_name;
-  return remote_stage_words(r.q2 ? r.q2->stage : r.end.stage) + r.server_name;
+  return remote_stage_words(stage_of(r)) + r.server_name;
 }
 
 void remote_hands(Remote& r, const client::Moves& m, const ge::input::InputState& in,
@@ -1029,6 +1120,14 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   using Con = ge::console::Console;
   using Args = ge::console::Args;
   client::add_qw_ignore(con, r.ignore, r.demo.state);
+  add_remote_macros(con, r);  // $cl_server, $cl_ping, $cl_lag and the rates
+  add_serverstatus_command(con, r);
+  add_q2_download_command(con, r);  // download <file> (q2_remote.hpp)
+  add_q2_skins_command(con, r);     // skins
+  gn::add_net_commands(con, [&r]() -> const gn::Transport* { return r.transport; });  // dns
+  gn::add_client_showip(con, [&r]() -> const gn::Transport* { return r.transport; });
+  add_pingservers_command(con, r.ping, steady_now_s);  // pingservers (q2_pingservers.hpp)
+  add_passive_command(con, r.passive);                 // passive (the same)
   r.setting = [&con](const std::string& name) {
     if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;
     if (const ge::console::Synonym* s = con.cvars().synonym(name))
@@ -1055,10 +1154,35 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.topcolor = std::atoi(cvar("topcolor", "0").c_str());
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
     cfg.speedjump = cvar("cl_speedjump", "0") == "1";
+    // Quake II's download switches, registered while it is the game (q2_session.cpp).
+    cfg.q2_downloads.all = std::atoi(cvar("allow_download", "1").c_str());
+    const auto kind = [&cvar](const char* name, const char* fallback) {
+      return cvar(name, fallback) != "0";
+    };
+    cfg.q2_downloads.maps = kind("allow_download_maps", "1");
+    cfg.q2_downloads.players = kind("allow_download_players", "1");
+    cfg.q2_downloads.models = kind("allow_download_models", "1");
+    cfg.q2_downloads.sounds = kind("allow_download_sounds", "1");
+    cfg.q2_downloads.textures = kind("allow_download_textures", "1");
+    cfg.q2_downloads.pics = kind("allow_download_pics", "1");
+    cfg.q2_downloads.others = kind("allow_download_others", "0");
+    cfg.q2_nodelta = cvar("cl_nodelta", "0") != "0";
+    // Quake II's downloads over HTTP (classic/content/web_downloads.hpp), registered while it is
+    // the game.
+    cfg.web.downloads = cvar("cl_http_downloads", "1") != "0";
+    cfg.web.filelists = cvar("cl_http_filelists", "1") != "0";
+    cfg.web.max_connections = std::atoi(cvar("cl_http_max_connections", "2").c_str());
+    cfg.web.proxy = cvar("cl_http_proxy", "");
+    cfg.web.default_url = cvar("cl_http_default_url", "");
+    cfg.web.debug = cvar("cl_http_debug", "0") != "0";
+    cfg.web.insecure = cvar("cl_http_insecure", "0") != "0";
     cfg.rate = std::atoi(cvar("rate", "25000").c_str());  // the loaded game's default (classic)
-    cfg.password = cvar("password", "");                  // a closed server's password
-    cfg.spectator = cvar("spectator", "0") == "1";        // `set spectator 1`: join to watch
-    cfg.w_switch = cvar("w_switch", "");                  // Quake's switch rules on a pickup
+    cfg.msg = std::atoi(cvar("msg", "1").c_str());
+    cfg.noaim = cvar("noaim", "0") == "1";
+    cfg.extra_info = r.extra_info;
+    cfg.password = cvar("password", "");            // a closed server's password
+    cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
+    cfg.w_switch = cvar("w_switch", "");            // Quake's switch rules on a pickup
     cfg.b_switch = cvar("b_switch", "");
     // cl_novweps 1: the visible weapons not asked for, so the server sends neither list nor index.
     if (cvar("cl_novweps", "0") != "0") cfg.ask[ExtFamily::z] &= ~kZVwep;
@@ -1071,7 +1195,11 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.gender_auto = !cfg.gender.empty() && cvar("gender_auto", "0") == "1";
     cfg.voice = r.voip;
     cfg.live_mic = true;  // the window's microphone (remote_mic), while a voice key is held
-    cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
+    // qport: the number the server knows this client by when a NAT moves its port; 0 one
+    // picked from the name, so the same player keeps it from run to run.
+    const int qport = std::atoi(cvar("qport", "0").c_str());
+    cfg.qport = qport > 0 ? static_cast<uint16_t>(qport)
+                          : static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
     cfg.timeout = std::atof(cvar("cl_timeout", "60").c_str());  // 0: never
     cfg.trace = &r.trace;                                       // showpackets, showdrop
     cfg.read_file = r.read_file;
@@ -1089,17 +1217,21 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
       c.print("connect: " + error);
       return;
     }
+    if (!r.port_note.empty()) c.print(r.port_note);
     if (!cfg.prx.empty()) r.server_name = address;  // reconnect: the server, through the chain
     c.print(remote_status(r));
   };
   con.add_command(
       "connect",
-      "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in Quake II)",
+      "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in Quake II; "
+      "port 26000 is a server of Quake's own protocol)",
       [join](Con& c, const Args& a) {
-        if (a.size() < 2)
+        if (a.size() < 2) {
           c.print("connect: name a server (connect 192.168.1.20)");
-        else
-          join(c, a[1]);
+          return;
+        }
+        if (a.size() > 2) c.print("Second argument to connect is ignored.");
+        join(c, a[1]);
       });
   con.add_command(
       "watch", "watch <host>:<port> [password]: watch a broadcast (a server's stream port or a TV)",
@@ -1134,6 +1266,77 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
         remote_ranked(r, kGameFolder, a[1], a.size() > 2 ? a[2] : "", said);
         c.print(said);
       });
+  // `user <name|id>`: one player's user info on the QuakeWorld server joined, as the server last
+  // told it, a key a line in a column of 20; the first by user id or exact name.
+  con.add_command("user", "user <name|id>: one player's user info on the server you joined",
+                  [&r](Con& c, const Args& a) {
+                    if (a.size() != 2) {
+                      c.print("user <name|id>: one player's user info on the server you joined");
+                      return;
+                    }
+                    if (!r.active || r.q2 || r.nq) {
+                      c.print("You aren't on a QuakeWorld server.");
+                      return;
+                    }
+                    const int id = std::atoi(a[1].c_str());
+                    for (int i = 0; i < 32; i++) {
+                      const std::string& info = r.end.userinfos[i];
+                      const std::string name = info_get(info, "name");
+                      if (name.empty() || (r.end.userids[i] != id && name != a[1])) continue;
+                      std::vector<std::pair<std::string, std::string>> pairs;
+                      info_pairs(info, pairs);
+                      for (const auto& [k, v] : pairs) {
+                        std::string line = k;
+                        line.append(k.size() < 20 ? 20 - k.size() : 0, ' ');
+                        line += v;
+                        c.print(line);
+                      }
+                      return;
+                    }
+                    c.print("No player by that name or id is on the server.");
+                  });
+  // `fullinfo <info string>`: every key and value of it made the player's own (a setting's key sets
+  // the setting; any other kept for the next join). Nothing is sent now; star keys are refused.
+  con.add_command("fullinfo", "fullinfo <\\key\\value...>: your whole user info set at once",
+                  [&r](Con& c, const Args& a) {
+                    if (a.size() != 2) {
+                      c.print("fullinfo <complete info string>");
+                      return;
+                    }
+                    std::string_view s = a[1];
+                    if (!s.empty() && s.front() == '\\') s.remove_prefix(1);
+                    while (!s.empty()) {
+                      const size_t k_end = s.find('\\');
+                      const std::string key(s.substr(0, k_end));
+                      if (k_end == std::string_view::npos) {
+                        c.print("MISSING VALUE");
+                        return;
+                      }
+                      s.remove_prefix(k_end + 1);
+                      const size_t v_end = s.find('\\');
+                      const std::string value(s.substr(0, v_end));
+                      s.remove_prefix(v_end == std::string_view::npos ? s.size() : v_end + 1);
+                      std::string low = key;
+                      for (char& ch : low)
+                        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                      if (low == "pmodel" || low == "emodel") continue;  // the client's own checks
+                      if (!key.empty() && key.front() == '*') {
+                        c.print("Can't set * keys");
+                        continue;
+                      }
+                      const ge::console::Cvar* v = c.cvars().find(key);
+                      if (v != nullptr && (v->flags & ge::console::kUserInfo) != 0) {
+                        c.cvars().set(key, value, ge::console::Source::local);
+                        continue;
+                      }
+                      std::erase_if(r.extra_info,
+                                    [&key](const auto& kv) { return kv.first == key; });
+                      if (!value.empty()) r.extra_info.emplace_back(key, value);
+                    }
+                  });
+  // `version`: the build's own, printed in the window; never asked of a server.
+  con.add_command("version", "version: the game's version",
+                  [](Con& c, const Args&) { c.print(std::string("Version ") + kProgramVersion); });
   con.add_command("reconnect", "reconnect: join the last server again",
                   [&r, join](Con& c, const Args&) {
                     if (r.server_name.empty())
@@ -1180,6 +1383,69 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                      .min = 0,
                      .max = 86400,
                      .values = "0: never; 1..86400: that many seconds (60 the default)"});
+    // Downloads from a web address (classic/content/web_downloads.hpp), read at each `connect`;
+    // the server list's web lists read `cl_http_blocking_timeout` (menu/servers_page.hpp).
+    con.cvars().add({.name = "cl_http_downloads",
+                     .fallback = "1",
+                     .flags = ge::console::kArchive,
+                     .help = "Whether joining fetches files from the web address a server names.",
+                     .kind = ge::console::CvarKind::boolean,
+                     .values = "1: from the web first (the default); 0: from the server alone"});
+    con.cvars().add(
+        {.name = "cl_http_filelists",
+         .fallback = "1",
+         .flags = ge::console::kArchive,
+         .help = "Whether a server's web lists of further files are fetched and followed.",
+         .kind = ge::console::CvarKind::boolean,
+         .values = "1: followed (the default); 0: not"});
+    con.cvars().add({.name = "cl_http_max_connections",
+                     .fallback = "2",
+                     .flags = ge::console::kArchive,
+                     .help = "How many files are fetched from the web at once.",
+                     .kind = ge::console::CvarKind::integer,
+                     .min = 1,
+                     .max = 4,
+                     .values = "2: two at once (the default); 1 to 4: that many"});
+    con.cvars().add({.name = "cl_http_proxy",
+                     .fallback = "",
+                     .flags = ge::console::kArchive,
+                     .help = "The web proxy downloads go through.",
+                     .kind = ge::console::CvarKind::text,
+                     .values = "\"\": none (the default); TEXT: host:port"});
+    con.cvars().add(
+        {.name = "cl_http_default_url",
+         .fallback = "",
+         .flags = ge::console::kArchive,
+         .help = "Your own web address files are fetched from when a server names none.",
+         .kind = ge::console::CvarKind::text,
+         .values = "\"\": none (the default); TEXT: an address such as http://host/q2/"});
+    con.cvars().add({.name = "cl_http_insecure",
+                     .fallback = "0",
+                     .flags = ge::console::kArchive,
+                     .help = "Whether a secure web address's certificate goes unchecked.",
+                     .kind = ge::console::CvarKind::boolean,
+                     .values = "0: checked (the default); 1: not"});
+    con.cvars().add({.name = "cl_http_debug",
+                     .fallback = "0",
+                     .help = "Whether each web download's address is said as it starts.",
+                     .kind = ge::console::CvarKind::boolean,
+                     .values = "0: not said (the default); 1: said"});
+    con.cvars().add({.name = "cl_http_blocking_timeout",
+                     .fallback = "15",
+                     .flags = ge::console::kArchive,
+                     .help = "Seconds of silence before a web list of servers is given up.",
+                     .kind = ge::console::CvarKind::number,
+                     .min = 1,
+                     .values = "15: fifteen seconds (the default); a number: that many"});
+    con.cvars().add({.name = "qport",
+                     .fallback = "0",
+                     .help = "The number the server you join knows you by when your router moves "
+                             "your port; it applies from the next connect.",
+                     .kind = ge::console::CvarKind::integer,
+                     .min = 0,
+                     .max = 65535,
+                     .values = "0: one picked from your name (the default); 1..65535: that "
+                               "number"});
     con.cvars().add({.name = "rcon_password",
                      .flags = ge::console::kArchive,
                      .help = "The password rcon sends the server joined.",

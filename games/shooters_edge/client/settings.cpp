@@ -93,6 +93,24 @@ void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {
                       .kind = ge::console::CvarKind::text,
                       .values = "\"\": none (the default); TEXT: sent when you join"},
                      &info.password);
+    con.cvars().bind({.name = "msg",
+                      .fallback = "1",
+                      .flags = ge::console::kArchive | ge::console::kUserInfo,
+                      .help = "The least important messages a joined server sends you.",
+                      .kind = ge::console::CvarKind::integer,
+                      .min = 0,
+                      .max = 3,
+                      .values = "0: pickups and everything; 1: from medium up, no pickups (the "
+                                "default); 2: important ones and chat; 3: chat alone"},
+                     &info.msg);
+    con.cvars().bind({.name = "noaim",
+                      .fallback = "0",
+                      .flags = ge::console::kArchive | ge::console::kUserInfo,
+                      .help = "Whether you ask a joined QuakeWorld server for no aim help on "
+                              "rockets and grenades.",
+                      .kind = ge::console::CvarKind::boolean,
+                      .values = "0: the server's aim help (the default); 1: none"},
+                     &info.noaim);
   }
   ge::console::CvarLayer shell(con.cvars(), kLayerShell);  // client/cvar_layers.hpp
   // Quake's one word for both colours: `color 4` dresses you all in one, `color 4 12` apart.

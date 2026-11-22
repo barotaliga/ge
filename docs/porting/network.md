@@ -16,6 +16,9 @@ server's behaviour is [`server.md`](server.md); recordings and TV are [`demos.md
 | Classic plugin | `plugins/classic/protocol/channel.hpp` | The classic net channel: sequences, reliable bit and resend, qport, rate, choke |
 | Classic plugin | `plugins/classic/protocol/info.hpp` | Info strings: get, set, remove, star keys, names cleaned and unique |
 | Classic plugin | `plugins/classic/protocol/wire.hpp`, `directions.hpp` | Sizes, quantization, fields, CRC-16; Quake II's 162 directions |
+| Engine | `engine/net/http_fetch.hpp` | An HTTP GET for any game: https, proxy (a tunnel for https), redirects, chunks, failure words |
+| Engine | `engine/net/tls_stream.hpp` | TLS 1.2 and 1.3 over caller-carried bytes (Mbed TLS): the system's roots, the name checked, a test server |
+| Classic plugin | `plugins/classic/content/web_downloads.hpp` | Downloads from a server's web address or a GitHub repository, several at once, file lists, the channel behind: Quake II's `dlserver`, our QuakeWorld server's `*dlserver`, the `cl_http_*` settings in the classic layer |
 | Shooter kit | `plugins/shooter/usercmd.hpp`, `predict.hpp` | The client's commands and prediction (`movement.md`) |
 | Shell | `games/shooters_edge/net/protocol.hpp` | The family named in the game's net namespace |
 | Shell | `games/shooters_edge/net/qw_antilag.hpp`, `qw_hits.hpp` | Lag compensation for hitscan (origin history, rewinds); shots and hits per weapon |
@@ -28,7 +31,7 @@ server's behaviour is [`server.md`](server.md); recordings and TV are [`demos.md
 | --- | --- | --- | --- | --- |
 | Wire, version, ports | `net/qw_wire.hpp`, `qw_svc.hpp`, `qw_delta.hpp` | `net/q2_net.hpp`, `server/q2_wire.hpp` (protocol 34) | its own (Huffman-coded, delta snapshots: a reader's facts first) | its own (peer-to-peer lockstep in the original: `engine/net/lockstep.hpp` exists) |
 | Server end | `net/qw_server.hpp` | `net/q2_net_server.hpp` | its own | its own |
-| Client end | `net/qw_client.hpp`, `qw_remote.hpp` | `net/q2_client.hpp`, `q2_remote.hpp` | its own | its own |
+| Client end | `net/qw_client.hpp`, `qw_remote.hpp`; Quake's own protocol 15 (a server on port 26000) by `net/q1_remote.hpp` | `net/q2_client.hpp`, `q2_remote.hpp` | its own | its own |
 | Extensions | `net/qw_ext.hpp`: the `x`, `x2`, `z` families and our `ge` set in `*ge_ext` | the `ge` set in `*ge_ext`, its own message ids in the unused range | the `ge` set by its own carrier | ours |
 
 ## Our extensions
@@ -78,6 +81,7 @@ The checklist for a new extension, in every game that gets it:
 | Extensions negotiated by bit, stock ends untouched | Quake's later clients and servers | `qw_ext.hpp`, both games |
 | Lag compensation for hitscan and missiles (levels 1 and 2, the cap, the opt-out) | Quake's later servers; Quake II's modern servers (the cap, the box, the opt-out, `sv_antilag_interp`) | `qw_antilag.hpp` |
 | Chunked downloads into archives | Quake's later protocol | `content.md` |
+| Downloads from a web address, a GitHub repository too | Quake II's modern clients | `web_downloads.hpp`, both games |
 | Moves sent between the 10 Hz frames | ours, for Quake II | Quake II's server, by `other-moves` |
 
 | Drawback left behind | How |
@@ -91,6 +95,9 @@ The checklist for a new extension, in every game that gets it:
 - Prediction and the inventory on a joined Quake II server (#1112), a per-client PVS cut, the
   normals table for a spark's direction (Quake II's effects carry no surface normal).
 - The third game's protocol; the sector family's lockstep.
+- A Quake server of protocol 15 is joined without prediction: the window draws what it is sent,
+  as a demo of that protocol plays (`net/q1_remote.hpp`; the transport's facts are
+  `porting/shooters-edge/netgame-transport.md`).
 
 ## Labs and tests
 

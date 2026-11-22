@@ -852,6 +852,21 @@ gr::BeamLook laser_look(float width_m, const float rgb[3]) {
   return a;
 }
 
+gr::BeamLook q2_rail_trail_look(float width_m, float radius_m, const float rgb[3], float fade_s) {
+  gr::BeamLook a = laser_look(width_m, rgb);
+  a.core_keys = 1;  // as bright as a lit wall, seen through at its edge
+  a.glow_keys = 0.1f;
+  a.release_s = fade_s > 0.01f ? fade_s : 0.01f;
+  if (radius_m > 0) {  // the spiral: one thin line circling the core
+    a.step_m = 0.06f;
+    a.braid_m = radius_m;
+    a.twist = 1.4f;  // a turn every 0.7 m
+    a.core_m = 0.01f;
+    a.glow_m = 0.03f;
+  }
+  return a;
+}
+
 const gr::BeamLook& rail_look() {
   static const gr::BeamLook l = [] {
     gr::BeamLook a;

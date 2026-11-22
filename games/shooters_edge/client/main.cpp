@@ -70,6 +70,7 @@
 #include "capture/screenshot.hpp"
 #include "classic/content/downloads.hpp"
 #include "console/cfg.hpp"
+#include "console/clock_macros.hpp"
 #include "console/lex.hpp"
 #include "console/view.hpp"
 #include "core/output.hpp"
@@ -130,6 +131,7 @@
 #include "shooters_edge/client/team_chat.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/title.hpp"
+#include "shooters_edge/client/trouble_icons.hpp"
 #include "shooters_edge/client/tv_live.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/view_from.hpp"
@@ -169,6 +171,7 @@ namespace cl = shooters_edge::client;
 namespace se = shooters_edge::hud;
 namespace sn = shooters_edge::net;
 namespace slm = shooters_edge::livemap;
+namespace sp = shooters_edge::profiles;
 
 // A timedemo shows one frame in this many ns (30 a second) and draws the rest offscreen.
 constexpr uint64_t kBenchShowNs = 33'333'333;
@@ -264,7 +267,8 @@ int run_main(int argc, char** argv) {
   slm::add_live_map_cvars(console.cvars(), live_map.settings);
   // The window's sound (client/listen_sound.hpp, client/demo_heard.hpp), at `volume`.
   ge::audio::MusicConsole music;  // the kept soundtrack (`cd`, `bgmvolume`): outlives the synth
-  ge::audio::Synth synth;         // outlives the device that pulls it (opened with the window)
+  ge::audio::add_music_commands(console, music);  // before the game's (Quake II's ogg_volume)
+  ge::audio::Synth synth;  // outlives the device that pulls it (opened with the window)
   se::Hud hud = se::make_hud();
   const auto tell = [&](const std::string& line, double at, bool chat = false) {  // and the HUD
     console.print(line);
@@ -332,13 +336,12 @@ int run_main(int argc, char** argv) {
   // scr_conspeed in the loaded game's unit (client/game_start.hpp), known before the configs.
   cl::GameStart game_start;
   cl::LoadLine load_line;  // a classic game's map loading in the console (client/map_load.hpp)
-  const auto* found_game = shooters_edge::profiles::find_game(args.profile);
-  const auto& started_game = found_game ? *found_game : shooters_edge::profiles::q1_game();
+  const auto& started_game = sp::game_or_quake(args.profile);
   cl::add_start_cvars(console, game_start, started_game);
   // The loaded game's own settings in its layer (client/cvar_layers.hpp), meaning a shared name.
   cl::GameCvarValues game_cvars;
   cl::SearchPath files;
-  cl::Q2Screen q2_screen;  // Quake II's view and 2D settings (client/q2_view.hpp)
+  cl::Q2Screen& q2_screen = game_cvars.screen;  // Quake II's view and 2D (client/q2_view.hpp)
   cl::UnderEar under_ear;  // the muffle under water (s_underwater, client/room_ear.hpp)
   cl::add_under_cvars(console, under_ear);
   const cl::GameBindings bindings{.files = &files,
@@ -346,17 +349,29 @@ int run_main(int argc, char** argv) {
                                   .mouse = &controls.mouse,
                                   .predict = &remote.predict,
                                   .crouch = &remote.q2_ahead.crouch,
+                                  .show_misses = &remote.q2_ahead.show_misses,
+                                  .shownet = &remote.q2_shownet,
+                                  .showpackets = &remote.q2_showpackets,
                                   .noskins = &picture.stock_figures,
+                                  .items_still = &picture.items_still,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,
+                                  .stuff_level = &remote.stuff.level,
                                   .frame_cap = &pacing.settings.max_fps,
                                   .light_intensity = &picture.light_intensity,
                                   .light_modulate = &picture.light_modulate,
                                   .light_lift = &picture.light_lift,
+                                  .gibs = &picture.gibs,
+                                  .no_glow = &picture.no_glow,
+                                  .q2fx = &picture.q2fx,
                                   .chat = &remote.ignore.chat,
-                                  .auto_chat = &con_view.game_chat,
-                                  .screen = &q2_screen};
+                                  .console_view = &con_view,
+                                  .music = &music,
+                                  .console = &con_look,
+                                  .menu = &game_menu};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
+  remote.stuff_file =
+      cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
   const auto save_settings = [&console, &series] { cl::save_settings(console, series); };
@@ -372,14 +387,12 @@ int run_main(int argc, char** argv) {
   console.cvars().apply_latched();
 
   // The game the install is (args.profile, found by its folders: client/game_folder.hpp).
-  const auto game_row = [](const std::string& id) -> const shooters_edge::profiles::GameProfile& {
-    const shooters_edge::profiles::GameProfile* g = shooters_edge::profiles::find_game(id);
-    return g != nullptr ? *g : shooters_edge::profiles::q1_game();
-  };
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
   cl::Q2Bar q2_bar{.files = &files,
                    .binds = &console.binds().table(ge::console::BindMode::game),
-                   .screen = &q2_screen};
+                   .screen = &q2_screen,
+                   .fx = &picture.q2fx};
+  cl::add_q2_bar_commands(console, q2_bar);  // dumpstatusbar, dumplayout, aashot, aadump
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
@@ -391,9 +404,8 @@ int run_main(int argc, char** argv) {
   remote.snap_take = [&shots](std::vector<uint8_t>& out) { return shots.take_grab(out); };
   std::string error;
   // No packs and no `+map`: the built-in arena (the start map below falls back to it).
-  const bool opened =
-      cl::open_game_dir(args.basedir, args.game, files, error,
-                        shooters_edge::profiles::content_of(game_row(args.profile)));
+  const bool opened = cl::open_game_dir(args.basedir, args.game, files, error,
+                                        sp::content_of(sp::game_or_quake(args.profile)));
   if (!opened) {
     if (!next_map.empty() && next_map != "arena") {
       out::error("shooters_edge: the game folder did not open: " + error +
@@ -422,8 +434,7 @@ int run_main(int argc, char** argv) {
     out::status("shooters_edge: " + std::to_string(cl::archive_paths(files).size()) +
                 " archives on the search path of " + files.folder);
   }
-  // A joined server's files read from the window's game folders and kept in them
-  // (net/window_words).
+  // A joined server's files read from and kept in the window's game folders (net/window_words).
   bool locs_fetched = false;  // a map's place names fetched: read again when its level starts
   sn::wire_remote_files(remote, files, args.basedir, args.game, args.profile, locs_fetched);
   if (!args.demovideo.empty()) return cl::demo_video_main(console, args, files, picture, playback);
@@ -478,6 +489,12 @@ int run_main(int argc, char** argv) {
   }
   ge::ui::DrawList overlay;
   const uint64_t first_ns = ge::platform::now_ns();
+  ge::console::add_clock_macros(
+      console, {.local = [] { return cl::local_time(); },
+                .uptime_s =
+                    [first_ns] {
+                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
+                    }});  // $com_date, $com_time, $com_uptime, $random
   // The title with the spinner in its corner: the first frame, and a map's frames with no world.
   // The title's night with the menu over it; `lobby` puts the lobby's screen between them.
   const auto title_frame = [&](double t, double dt, std::string_view caption, double since,
@@ -506,10 +523,12 @@ int run_main(int argc, char** argv) {
   title_frame(0, 0, "LOADING", 0);
   // The main menu's maps, its classic pictures when the packs carry them, and enhance's packs.
   // The install's game's adapter, copied: LOAD GAME of another install swaps it for every reader.
-  cl::GameAdapter adapter = cl::adapter_of(game_row(args.profile));
+  cl::GameAdapter adapter = cl::adapter_of(sp::game_or_quake(args.profile));
   remote.q2_game = [&adapter] { return adapter.game->id == "q2"; };
   shooters_edge::menu::Host menu_host{.console = &console,
-                                      .maps = adapter.list_maps(adapter, files)};
+                                      .maps = adapter.list_maps(adapter, files),
+                                      .files = &files.vfs,
+                                      .sheet = &remote.sheet.sheet};  // SERVER SETTINGS
   cl::add_adapter_commands(console, adapter, files, args.basedir);
   cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
   // The map's place names, read as it starts and made in the game (client/place_names.hpp).
@@ -558,12 +577,7 @@ int run_main(int argc, char** argv) {
     shooters_edge::menu::classic_console(game_menu.art(), con_look);
     classic_art = std::move(pics.hud);
     classic_art.finish();
-    if (!say) return pics.enhanced;
-    if (!classic_art.bar.empty())
-      out::status("shooters_edge: the HUD draws the packs' own status bar pictures" +
-                  std::string(classic_art.density > 1 ? ", enhanced (ce_pictures)" : ""));
-    else if (!cl::archive_paths(files).empty())
-      out::status("shooters_edge: the HUD has no status bar pictures: " + pics.hud_why);
+    if (say) cl::say_hud_pictures(classic_art, files, pics.hud_why);
     return pics.enhanced;
   };
   const auto load_pictures = [&](bool say) {
@@ -612,14 +626,13 @@ int run_main(int argc, char** argv) {
   cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
   cl::add_window_dedicated(console, prefs, args.basedir, adapter.game->id);  // NEW GAME, DEDICATED
   // The install's enhancing, in the background unless ce_auto is off or a run is measured.
-  if (std::string basedir, why;
-      opened && cl::check_game_folder(args.basedir, &basedir, &why,
-                                      shooters_edge::profiles::content_of(*adapter.game))) {
+  if (std::string basedir, why; opened && cl::check_game_folder(args.basedir, &basedir, &why,
+                                                                sp::content_of(*adapter.game))) {
     game_menu.set_game(basedir);
     game_menu.servers().set_masters(shooters_edge::net::qw_install_masters(basedir));
     // The game played is the one the next start opens, however it was picked (-basedir too).
-    cl::remember_game(prefs, basedir, shooters_edge::profiles::content_of(*adapter.game));
-    cl::remember_install(prefs, shooters_edge::profiles::content_of(*adapter.game).id, basedir);
+    cl::remember_game(prefs, basedir, sp::content_of(*adapter.game));
+    cl::remember_install(prefs, sp::content_of(*adapter.game).id, basedir);
     if (game_menu.auto_enhance() && !measured) {
       if (game_menu.enhance_game(false, &why))
         out::status("shooters_edge: enhancing " + basedir +
@@ -722,15 +735,16 @@ int run_main(int argc, char** argv) {
     static_cast<ge::audio::Synth*>(user)->render(out, frames);
   };
   // The hearings before the device (closed first: its thread never reads what they free).
-  cl::DemoHearing hearing(synth, &picture.ce.sounds);       // a demo's sounds, voices, lines
-  cl::ListenHearing heard_here(synth, &picture.ce.sounds);  // the window's own game's sounds
-  cl::Cinematic cine;                                       // Quake II's movies (cinematic.hpp)
-  cl::MenuSounds menu_sounds(synth);       // the main menu's clicks (menu_sound.hpp)
+  // A demo's sounds, voices and lines; the window's own game's (cl_footsteps, s_ambient over both).
+  cl::DemoHearing hearing(synth, &picture.ce.sounds, &picture.q2fx);
+  cl::ListenHearing heard_here(synth, &picture.ce.sounds, &picture.q2fx);
+  cl::Cinematic cine;                 // Quake II's movies (cinematic.hpp)
+  cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp), play
+  cl::add_local_sound_commands(console, menu_sounds, adapter, files, synth, music.player.bus());
   cl::hear_worlds_on(&synth, &under_ear);  // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
-  out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
-                      : std::string("shooters_edge: no audio device; a demo plays silent"));
+  cl::add_sound_status_commands(console, speaker ? speaker->driver() : nullptr, synth);
   // The microphone, opened the first time a talk key is held on a server joined (the system asks
   // the player's leave then, never at start) and read every frame after (net/qw_remote.hpp).
   std::unique_ptr<ge::platform::AudioIn> mic;
@@ -740,6 +754,9 @@ int run_main(int argc, char** argv) {
   // nothing in `in_mouse_release` asks for the pointer. Taken below on the first frame.
   ge::input::MouseCapture mouse;
   bool focused = ge::platform::has_focus(*window);
+  const auto heard = [&] {  // the player's volume, unless s_auto_focus silences the window
+    return ge::platform::heard_volume(win, focused, ge::platform::minimised(*window));
+  };
   bool paused_before_menu = false;  // a played demo's pause when the menu opened over it
   bool vsync = true;  // false while a timedemo runs unlocked; the player's vid_vsync otherwise
   // The surface at the window's size, its present mode the player's vid_vsync (a timedemo's
@@ -751,7 +768,6 @@ int run_main(int argc, char** argv) {
     ge::platform::set_swap_images(*window, ge::platform::swap_images(pacing.settings));
     pacing.present = surface.present_mode();
   };
-  bool full_applied = false;  // what the window was last set to; vid_fullscreen is the ask
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
   cl::DemoFolder bench_folder;               // the demo's game folder (timedemo.hpp's demo_folder)
   size_t bench_models = 0;         // the model list's length the demo's world was made with
@@ -794,8 +810,7 @@ int run_main(int argc, char** argv) {
   bool attract_asked = false;  // one was asked for and has not started yet
   size_t attract_next = 0;     // the next one's place in the list
   bool attract_waits = false;  // one ended under the menu: the next once the menu closes
-  // Until the world is the demo's own level the last frame stays; the start's console waits for the
-  // demo to be seen (`demo_shown`).
+  // The last frame stays until the world is the demo's level; the console waits for `demo_shown`.
   bool demo_world = false;
   bool demo_shown = false;
   // A demo's first frames come before it places the player: seen only kDemoSettle s into its level,
@@ -825,6 +840,7 @@ int run_main(int argc, char** argv) {
                       });
   console.add_command("stopdemo", "stopdemo: the recording playing stopped",
                       [&](Con&, const CArgs&) { stop_demo = true; });
+  cl::add_path_command(console, files);
   const auto end_bench = [&](const std::string& why, double now_s, bool by_player = false) {
     attract = false;
     if (std::exchange(demo_hold, false) && !game_start.loading)  // the next demo holds it again
@@ -834,26 +850,11 @@ int run_main(int argc, char** argv) {
     const std::string setup = std::to_string(w) + "x" + std::to_string(h) +
                               ", drawn offscreen, shown at 30 Hz, r_look " + picture.look + ", " +
                               device->report.name + " on " + device->report.backend;
-    // A run stopped before a frame was timed has no report, only its reason; playback times none.
-    if (bench.paced) {
-      console.print("playdemo: " + bench.name + (why.empty() ? " ended" : " stopped: " + why));
-      if (!by_player && !why.empty()) bench_failed = 1;
-    } else if (why.empty() || !bench.frame_s.empty()) {
-      const cl::BenchStats stats = cl::bench_stats(bench.frame_s);
-      for (const std::string& line : cl::bench_report(bench.name, setup, stats)) tell(line, now_s);
-      std::string dump_error;  // demo_benchmarkdumps: the result kept in the game's timedemo.log
-      if (playback.bench_dumps != 0 &&
-          !cl::bench_dump(cl::settings_dir(args.basedir, args.game).parent_path() / "timedemo.log",
-                          cl::bench_dump_record(bench.name, setup, stats, cl::local_date_now()),
-                          dump_error))
-        console.print(dump_error);
-    }
-    if (!bench.paced && (why.empty() || !bench.frame_s.empty()))
-      console.print(cl::span_report(bench.passes));
-    if (!why.empty() && !bench.paced) {
-      console.print("timedemo: stopped early: " + why);
+    if (cl::bench_end_report(
+            console, bench, why, by_player, setup, playback.bench_dumps,
+            cl::settings_dir(args.basedir, args.game).parent_path() / "timedemo.log",
+            [&](const std::string& line) { tell(line, now_s); }))
       bench_failed = 1;
-    }
     if (bench_in_flight.id != 0) ge::gpu::wait(*device, bench_in_flight);
     bench_in_flight = {};
     bench_off = {};
@@ -912,7 +913,8 @@ int run_main(int argc, char** argv) {
   std::string folder_ask;
   cl::InstallAsk install_ask =
       cl::ask_install(*window, args, measured);  // -classic <id>, none kept
-  cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music);
+  cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music, &args.game,
+                           &game_cvars.q2.remap_tracks);
   cl::add_games_command(console, installs, folder_ask);  // `games`: the installs found, `games <n>`
   // A GAME SWITCHED SHOWS ITS LOADING: a console line and a frame before each long step of
   // `open_folder`, so the window never looks hung; the new game's look once its pictures are in.
@@ -956,8 +958,8 @@ int run_main(int argc, char** argv) {
     places.locs = {};
     places.map.clear();
     places.game_dir = std::filesystem::path(basedir) / args.game;
-    const shooters_edge::profiles::GameProfile& was_game = *adapter.game;
-    adapter = cl::adapter_of(game_row(args.profile));
+    const sp::GameProfile& was_game = *adapter.game;
+    adapter = cl::adapter_of(sp::game_or_quake(args.profile));
     save_settings();  // the game left keeps its own settings in its folder
     cl::start_switch_game(console, game_start, was_game, *adapter.game);
     cl::switch_game_cvars(console, game_cvars, *adapter.game, bindings);
@@ -965,7 +967,7 @@ int run_main(int argc, char** argv) {
     menu_host.table = &adapter.menu(adapter);
     game_menu.set_table(*menu_host.table);
     console.set_search_path(cl::config_dirs(args.basedir, args.game, *content));
-    cl::run_game_settings(console, args.basedir, args.game);  // the new game's own meanings
+    cl::run_game_settings(console, args.basedir, args.game, *content);  // its own meanings
     switch_step("Loading the game's rules...");
     if (!cl::load_programs(adapter, files, args.progs, game_content, error, *adapter.game))
       return false;
@@ -1012,7 +1014,7 @@ int run_main(int argc, char** argv) {
   };
   // The window's own game heard this frame (`dt` s), at the player's volume.
   const auto hear_here = [&](double dt) {
-    synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+    synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
     heard_here.frame(listen, remix.heard_from(files), static_cast<float>(dt), remix.heard);
   };
   // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
@@ -1149,7 +1151,9 @@ int run_main(int argc, char** argv) {
   while ((args.frames == 0 || presented < args.frames) && !quit) {
     cl::start_apply_speed(console, game_start);
     shooters_edge::look::apply_ce_enabled(picture, console.cvars());  // ce_enabled 0: none of it
+    music.held = cl::cinematic_on(cine);  // a movie's own sound: `ogg play` refused meanwhile
     ge::audio::music_frame(music, synth, console);
+    cl::hear_swap(synth, under_ear);  // s_swapstereo
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
@@ -1169,6 +1173,8 @@ int run_main(int argc, char** argv) {
     }
     queue.clear();
     ge::platform::poll_input(*window, input, *devices, queue);
+    if (ge::platform::alt_enter(input, console))  // not the menu's ENTER too
+      input.pressed[static_cast<size_t>(ge::platform::Key::enter)] = false;
     const uint64_t now = ge::platform::now_ns();
     const double frame_s = static_cast<double>(now - last) * 1e-9;
     // The game's time: at vsync whole refreshes (vid_steady), so the motion is even whenever the
@@ -1182,16 +1188,12 @@ int run_main(int argc, char** argv) {
       save_settings();
       break;
     }
-    if (win.fullscreen != full_applied) {  // the size follows through `input.resized`
-      if (!ge::platform::set_fullscreen(*window, win.fullscreen, win.display))
-        win.fullscreen = full_applied;
-      full_applied = win.fullscreen;
-    }
+    ge::platform::follow_window_cvars(*window, win, speaker.get(), &console);  // and s_device
     ge::input::update(held, queue);
-    // What the console and the menu ask for this frame, against what was asked before it: a
-    // played demo paused behind the menu gives the window up to it (below).
+    // What the console and menu ask this frame, against before (a demo held behind it, below).
     const std::string map_before = next_map;
     const bool joined_before = remote.active;
+    con_keys.menu = game_menu.open();  // a menu has the keys: only F1..F12 run their binds
     ge::ui::feed_console(console, con_view, queue, con_keys);
     if (con_view.typing() != text_on) {
       text_on = con_view.typing();
@@ -1229,6 +1231,9 @@ int run_main(int argc, char** argv) {
         }
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
+      menu_host.in_level = (listen.server || remote.active) && !attract;  // ESCAPE's in-game page
+      menu_host.screen_up = q2_bar.layout_up;  // ESCAPE puts the help computer away first
+      q2_bar.f1 = ge::input::key_held(held, 58) ? (bench.active ? 2 : 1) : 0;  // F1: the layout
       // A benchmark's Escape stops the run (below) and opens nothing.
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
                             input.tapped(Key::escape)) ||
@@ -1245,7 +1250,7 @@ int run_main(int argc, char** argv) {
       }
       cl::keys_to_menu(game_menu, menu_host, queue, held);  // CUSTOMIZE CONTROLS' key
       // The click the presses made, from the game's own recordings, at the player's volume.
-      synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+      synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
       menu_sounds.play(game_menu.take_cue(), adapter, files, cl::kDemoVolume);
       if (std::string demo = game_menu.take_demo(); !demo.empty()) {  // DEMOS: checked, played
         bench_ask = std::move(demo);
@@ -1277,10 +1282,11 @@ int run_main(int argc, char** argv) {
     // menu keeps it and is driven by the keys unless the menu's bit is set.
     if (input.focus_lost) focused = false;
     if (input.focus_gained) focused = true;
-    const ge::input::CaptureFacts facts{.focused = focused,
-                                        .console = con_view.open(),
-                                        .menu = game_menu.open(),
-                                        .watching = bench.active && bench.paced};
+    const ge::input::CaptureFacts facts{
+        .focused = focused && cl::q2_takes_mouse(game_cvars.q2, win.fullscreen),
+        .console = con_view.open(),
+        .menu = game_menu.open(),
+        .watching = bench.active && bench.paced};
     switch (ge::input::follow_capture(mouse, facts, controls.mouse_release)) {
       case ge::input::CaptureStep::take:
         ge::platform::set_relative_mouse(*window, true, controls.mouse.raw);
@@ -1395,7 +1401,6 @@ int run_main(int argc, char** argv) {
       place_seen.on = false;
       cl::map_started(places, adapter, files, listen.map->name);
     }
-
     // Co-op as the window's mode: `sv_coop` turned on, the friendly-fire settings, the episodes.
     cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
                    next_map);
@@ -1436,12 +1441,8 @@ int run_main(int argc, char** argv) {
     }
 
     // A save asked for: the game it holds now playing (its world made behind the window, below).
-    if (!load_ask.empty()) {
-      const std::string name = std::exchange(load_ask, std::string());
-      console.print(cl::load_asked_save(listen, game_content, files, name, error)
-                        ? "loaded " + name
-                        : "load: " + error);
-    }
+    if (!load_ask.empty())
+      console.print(cl::load_save_asked(listen, game_content, files, load_ask));
 
     // A benchmark asked for: vsync off, the listen server waits until it is done. A demo played
     // at its pace keeps vsync.
@@ -1576,6 +1577,7 @@ int run_main(int argc, char** argv) {
       if (std::exchange(playback.jumped, false)) con_view.clear_notify();  // as a jump does
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
+      cl::demo_music(music, ds);  // the track its server names
       place_seen.on = !ds.map.empty();
       place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
       place_seen.angles = ds.angles;
@@ -1603,6 +1605,11 @@ int run_main(int argc, char** argv) {
         if (!bench_map) {
           if (!end_bench("the demo's map " + ds.map + ": " + error, t)) return 1;
           continue;
+        }
+        if (std::string v = cl::q2_map_version(ds.map_checksum, bench_map->file, drawn_remote);
+            !v.empty()) {  // a server's other map drops the game; a recording's plays on
+          console.print(v);
+          if (drawn_remote) console.append("disconnect");
         }
         if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from)) return 1;
         demo_world = true;
@@ -1633,7 +1640,7 @@ int run_main(int argc, char** argv) {
         bench_models = ds.models.size();
       }
       if (paced) {  // what the frames read carried: heard, and its lines shown
-        synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+        synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
         std::vector<std::string> lines;
         std::vector<bool> chat_lines;  // which are chat (cl_chat_notify, scr_chathud)
         cl::DemoHeard joined_heard;    // a game joined: what its frames read carried (remote_step)
@@ -1656,10 +1663,7 @@ int run_main(int argc, char** argv) {
       const cl::DemoState& ds_read = drawn_remote ? remote.demo.state : bench.demo.state;
       const ge::shooter::BrushModel* ground =
           bench_map && !bench_map->spec.models.empty() ? &bench_map->spec.models[0] : nullptr;
-      demo_eyes.behind =
-          cl::third_person_units(playback, !drawn_remote || remote.end.cfg.spectator);
-      bench_demo_fx.draw_own = demo_eyes.behind > 0;  // his figure seen from behind
-      demo_eyes.lock_pos = playback.lock_pos != 0;
+      cl::third_person_eyes(playback, !drawn_remote || remote.end.cfg.spectator, demo_eyes);
       ge::render::FrameView view = cl::demo_eyes_view(
           ds, ds_read, demo_eyes, shown.row, ground, body,
           cl::q2_demo_fov_y(ds, camera_cvars.fov, !drawn_remote, q2_screen, w, h),
@@ -1667,6 +1671,9 @@ int run_main(int argc, char** argv) {
           : bench.clock < 0 ? ds.time
                             : bench.clock,
           t);
+      const double own_behind =  // cl_thirdperson: the player's own view from behind him
+          demo_eyes.behind > 0 ? 0 : cl::q2_third_person(game_cvars.q2, view, ground);
+      bench_demo_fx.draw_own = demo_eyes.behind > 0 || own_behind > cl::kOwnFigureUnits;
       view.frame = static_cast<uint64_t>(presented);
       cl::from_above(*world, !drawn_remote &&
                                  slm::watch_fly_view(live_map, view, w, h, playback.bar_bottom_px));
@@ -1675,7 +1682,7 @@ int run_main(int argc, char** argv) {
         slm::watch_frame(live_map, bench_folder.path ? *bench_folder.path : files, bench_map->file,
                          ds, overlay, w, h, playback.bar_bottom_px);
       se::Status hud_status = cl::demo_status(ds, t);
-      if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map, ds.bonuses);  // f_ events
+      if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map, ds.bonuses, &ds);
       if (drawn_remote) cl::group_status(controls.groups, hud_status, t);  // the weapon group
       cl::q2_bar_net(q2_bar, drawn_remote ? sn::remote_net(remote) : nullptr,
                      sn::remote_unanswered(remote), t);                 // scr_lag_draw's packets
@@ -1684,11 +1691,14 @@ int run_main(int argc, char** argv) {
         playback.bar_bottom_px = cl::hud_inset(
             hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look()), h);
       }
-      if (drawn_remote) cl::draw_joined_level_end(overlay, ds, game_menu.art(), w, h);  // co-op
+      if (drawn_remote)
+        cl::draw_joined_level_end(overlay, ds, game_menu.art(), w, h, win.print_speed);
       if (bench.paced && !attract && !game_menu.open())
         cl::playback_draw(overlay, playback, bench, w, h, t);
       cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t),
                        drawn_remote ? sn::remote_net(remote) : nullptr);
+      cl::draw_trouble_icons(overlay, w, h, cl::hud_art_of(files, classic_art, free_art),
+                             pacing.times, win.show_turtle, sn::remote_net_trouble(remote));
       if (paced) {  // a demo watched or a game joined: the menu and the console over it
         game_menu.draw(overlay, w, h, t);
         con_view.frame(wall);
@@ -1729,7 +1739,9 @@ int run_main(int argc, char** argv) {
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
       view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
-      auto* gun = (!drawn_remote && live_map.fly.p < 1) || demo_eyes.behind > 0 ? nullptr : &hand;
+      auto* gun = (!drawn_remote && live_map.fly.p < 1) || demo_eyes.behind > 0 || own_behind > 0
+                      ? nullptr
+                      : &hand;
       cl::draw_world(*device, *world, view, bench_fx, gun, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
@@ -1773,6 +1785,7 @@ int run_main(int argc, char** argv) {
       const bool console_load =
           con_look.on() && cl::console_load_line(loader, load_line, console, con_view, t);
       if (console_load) caption.clear();
+      if (!cl::busy(loader)) ge::audio::play_menu_music(music);  // no game: the menu's track
       title_frame(t, wall, caption, loader.since_s, false, console_load);
       ++presented;
       continue;
@@ -1823,8 +1836,10 @@ int run_main(int argc, char** argv) {
     const bool movie = cl::cinematic_frame(cine, files, synth, cmd.buttons != 0, ui_up,
                                            !listen.pending_map.empty(), t);
     for (const std::string& line : std::exchange(cine.said, {})) tell(line, t);
-    const bool paused = movie || (listen.campaign_host && ui_up && cl::listen_players(listen) <= 1);
-    const double moved = win.host_framerate > 0 ? win.host_framerate : wall;  // host_framerate
+    const bool paused = movie || (game_cvars.q2.autopause && listen.campaign_host && ui_up &&
+                                  cl::listen_players(listen) <= 1);                // cl_autopause
+    const double moved = cl::q2_game_dt(game_cvars.q2, win.host_framerate, wall);  // its clock
+    cl::q2_session_frame(console, game_cvars.q2, remote, listen, paused);  // cl_beginmapcmd ...
     const int frames = paused ? 0 : cl::listen_advance(listen, moved, cmd);
     cl::record_tick(recorder, listen, frames, console);
     hear_here(wall);
@@ -1861,6 +1876,9 @@ int run_main(int argc, char** argv) {
     shown.aspect = h > 0 ? static_cast<double>(w) / h : shown.aspect;  // cl_adjustfov 0's
     cl::apply_view_cvars(camera_cvars, shown);
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
+    const double behind = cl::q2_third_person(  // cl_thirdperson
+        game_cvars.q2, view,
+        listen.map && !listen.map->spec.models.empty() ? &listen.map->spec.models[0] : nullptr);
     view.frame = static_cast<uint64_t>(presented);
     fx_state.models = world ? &cl::world_models(*world) : nullptr;
     if (!fx_palette_read) {
@@ -1871,6 +1889,7 @@ int run_main(int argc, char** argv) {
     fx_state.book = &fx_book;
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
+    if (behind > cl::kOwnFigureUnits && fx.has_self) fx.models.push_back(fx.self);
     // See-through liquids where the server allows them (its `watervis`).
     fx.see_through = listen.server == nullptr ||
                      shooters_edge::look::watervis_allowed(listen.server->serverinfo);
@@ -1922,8 +1941,10 @@ int run_main(int argc, char** argv) {
     const bool scores_on = !con_keys.held && !was_open;  // the score keys (TAB: +showscores)
     cl::draw_scores(overlay, listen, game_menu.art(), w, h, scores_on && cl::scores_held(controls),
                     win.level_stats, board_view, scores_on && cl::team_scores_held(controls),
-                    win.show_pause);
+                    win.show_pause, win.print_speed);
     cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(&listen));
+    cl::draw_trouble_icons(overlay, w, h, cl::hud_art_of(files, classic_art, free_art),
+                           pacing.times, win.show_turtle, false);
     cl::draw_cinematic(overlay, cine, w, h);
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
@@ -1934,7 +1955,7 @@ int run_main(int argc, char** argv) {
     if (!target) continue;
     cl::apply_view_from(view_from, view,
                         std::string(adapter.game->id) + " " + (listen.map ? listen.map->name : ""));
-    cl::draw_world(*device, *world, view, fx, &hand, wall, overlay, target);
+    cl::draw_world(*device, *world, view, fx, behind > 0 ? nullptr : &hand, wall, overlay, target);
     cl::gpu_watch_frame(gpu_watch, *world, wall, console);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
     present_frame();

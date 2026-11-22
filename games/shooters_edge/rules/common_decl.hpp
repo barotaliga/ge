@@ -213,6 +213,28 @@ namespace pg = ge::progs;
   X(entered_the_game, " entered the game\n")                                                       \
   X(spectator_word, "Spectator ")                                                                  \
   X(left_the_game, " left the game\n")                                                             \
+  X(self_electrocute, "self_electrocute")                                                          \
+  X(deflected, "deflected")                                                                        \
+  X(satans_power, "satans power")                                                                  \
+  X(pent_deflect, "pent_deflect")                                                                  \
+  X(pent_both, "pent_both")                                                                        \
+  X(obit_rl_quad_1, "obit_rl_quad_1")                                                              \
+  X(obit_rl_quad_2, "obit_rl_quad_2")                                                              \
+  X(obit_rl_quad_3, "obit_rl_quad_3")                                                              \
+  X(power_octa_off, "power_octa_off")                                                              \
+  X(dq, "dq")                                                                                      \
+  X(dr, "dr")                                                                                      \
+  X(lost_a_quad, " lost a quad with ")                                                             \
+  X(lost_an_octa, " lost an OctaPower with ")                                                      \
+  X(lost_a_ring, " lost a ring with ")                                                             \
+  X(seconds_remaining, " seconds remaining\n")                                                     \
+  X(you_got_the_rune, "You got the rune!")                                                         \
+  X(a_rune_needs_its_episode, "a rune needs its episode in its spawnflags")                        \
+  X(recovered_a_quad, " recovered a Quad with ")                                                   \
+  X(recovered_an_octa, " recovered an OctaPower with ")                                            \
+  X(recovered_a_ring, " recovered a Ring with ")                                                   \
+  X(seconds_remaining_bang, " seconds remaining!\n")                                               \
+  X(style_off, "a")                                                                                \
   X(falling, "falling")                                                                            \
   X(fell_out, "an item fell out of the map at ")                                                   \
   X(flame2_mdl, "progs/flame2.mdl")                                                                \
@@ -877,7 +899,17 @@ namespace pg = ge::progs;
   X(ambient_thunder, "ambient_thunder")                             \
   X(laser_touch, "laser_touch")                                     \
   X(tele_sound, "tele_sound")                                       \
-  X(quake_key_touch, "quake_key_touch")
+  X(quake_key_touch, "quake_key_touch")                             \
+  X(light_use, "light_use")                                         \
+  X(light_fluorospark, "light_fluorospark")                         \
+  X(trigger_killed, "trigger_killed")                               \
+  X(func_episodegate, "func_episodegate")                           \
+  X(func_bossgate, "func_bossgate")                                 \
+  X(onlyregistered_touch, "onlyregistered_touch")                   \
+  X(trigger_onlyregistered, "trigger_onlyregistered")               \
+  X(teleporttrain_next, "teleporttrain_next")                       \
+  X(teleporttrain_use, "teleporttrain_use")                         \
+  X(misc_teleporttrain, "misc_teleporttrain")
 
 // WORDS AS THE BYTECODE TESTS THEM. A condition on a float (IF / IFNOT) tests the word, so -0 is
 // true; `!x`, `&&` and `||` compare as floats (and evaluate both sides: the rules ask both

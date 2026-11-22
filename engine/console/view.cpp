@@ -8,12 +8,34 @@
 #include "console/view.hpp"
 
 #include <algorithm>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 
 #include "console/lex.hpp"
+#include "console/tab_list.hpp"
 
 namespace ge::console {
+
+namespace {
+
+// The local time now in `format` (strftime's words); "" when the format is empty or writes more
+// than a console line's worth.
+std::string local_stamp(const std::string& format) {
+  if (format.empty()) return {};
+  const std::time_t now = std::time(nullptr);
+  std::tm local{};
+#if defined(_WIN32)
+  localtime_s(&local, &now);
+#else
+  localtime_r(&now, &local);
+#endif
+  char out[128];
+  const size_t n = std::strftime(out, sizeof out, format.c_str(), &local);
+  return std::string(out, n);
+}
+
+}  // namespace
 
 std::string_view line_kind_name(LineKind k) {
   switch (k) {
@@ -154,6 +176,25 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           .kind = CvarKind::boolean,
           .values = "0: no clock (the default); 1: the local hours and minutes"},
          &clock_on_);
+  v.bind({.name = "con_history",
+          .fallback = "128",
+          .flags = kArchive,
+          .help = "how many typed lines Up and Down walk back through",
+          .kind = CvarKind::integer,
+          .min = 1,
+          .max = 4096,
+          .values = "1..4096: that many, the oldest dropped first (128 the default)"},
+         &history_max_);
+  v.bind({.name = "con_scroll",
+          .fallback = "0",
+          .flags = kArchive,
+          .help = "what brings the console back to its newest lines once scrolled back",
+          .kind = CvarKind::integer,
+          .min = 0,
+          .max = 3,
+          .values = "0: only Page Down or a line typed and run (the default); 1: a new line; 2: "
+                    "a key typed; 3: both"},
+         &scroll_back_);
   if (v.find("name") == nullptr) {
     v.add({.name = "name",
            .fallback = "player",
@@ -188,6 +229,11 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
         }
         if (!con.has_command("rcon")) {
           con.print("There is no remote console in this game.");
+          return;
+        }
+        const ge::console::Cvar* to = con.cvars().find("rcon_address");
+        if (a.size() < 2 && (to == nullptr || to->value.empty())) {  // no server to send to
+          con.print("Usage: " + a[0] + " <address> <password>");
           return;
         }
         if (a.size() > 1 && con.cvars().find("rcon_address") != nullptr)
@@ -229,7 +275,7 @@ bool ConsoleView::dump(std::string_view name, std::string& why) const {
   std::error_code ec;
   std::filesystem::create_directories(path.parent_path(), ec);
   std::ofstream out(path, std::ios::binary);
-  for (const ViewLine& l : lines_) out << l.text << '\n';
+  for (const ViewLine& l : lines_) out << l.stamp << l.text << '\n';
   out.close();
   if (!out) {
     why = "Couldn't write " + path.string() + ".";
@@ -292,17 +338,19 @@ void ConsoleView::add(LineKind kind, std::string_view text) {
   // newline ("You got the shells\n"): that newline ends the line, it opens no empty one after it
   // (so a print of "\n" alone is one empty line).
   if (!text.empty() && text.back() == '\n') text.remove_suffix(1);
+  const std::string stamp = stamps ? local_stamp(stamp_format) : std::string();
   size_t at = 0;
   while (at <= text.size()) {
     const size_t nl = text.find('\n', at);
     const std::string_view part =
         text.substr(at, nl == std::string_view::npos ? text.npos : nl - at);
-    lines_.push_back({kind, std::string(part), clock_, added_++});
+    lines_.push_back({kind, std::string(part), clock_, added_++, stamp});
     if (kind != LineKind::output && kind != LineKind::command) c_.fire_triggers(part);
     if (nl == std::string_view::npos) break;
     at = nl + 1;
   }
   while (static_cast<int32_t>(lines_.size()) > keep_) lines_.pop_front();
+  if ((scroll_back_ & 1) != 0) scroll_ = 0;  // con_scroll 1: a new line brings the newest back
 }
 
 bool ConsoleView::rewrite(uint64_t n, std::string_view text) {
@@ -365,6 +413,7 @@ void ConsoleView::type(std::string_view text) {
     }
     return;
   }
+  if ((scroll_back_ & 2) != 0 && !text.empty()) scroll_ = 0;  // con_scroll 2: a key typed
   for (char ch : text) {
     if (ch == '\n' || ch == '\r' || ch == '`') continue;  // the toggle key types nothing
     input_.insert(cursor_++, 1, ch);
@@ -377,6 +426,7 @@ void ConsoleView::key(EditKey k) {
     chat_key(k);
     return;
   }
+  if ((scroll_back_ & 2) != 0 && k != EditKey::page_up && k != EditKey::page_down) scroll_ = 0;
   switch (k) {
     case EditKey::enter: {
       // Enter on a selected cvar fills it in for its value; on anything else it runs it.
@@ -411,7 +461,10 @@ void ConsoleView::key(EditKey k) {
       cursor_ = input_.size();
       break;
     case EditKey::tab:
-      accept();
+      if (list_mode >= 0)
+        tab_list();
+      else
+        accept();
       break;
     case EditKey::up:
     case EditKey::down: {
@@ -466,6 +519,9 @@ void ConsoleView::submit() {
   scroll_ = 0;
   if (line.find_first_not_of(" \t") == std::string::npos) return;
   if (history_.empty() || history_.back() != line) history_.push_back(line);
+  if (history_.size() > static_cast<size_t>(std::max(1, history_max_)))  // con_history
+    history_.erase(history_.begin(),
+                   history_.end() - static_cast<std::ptrdiff_t>(std::max(1, history_max_)));
   if (line.starts_with("//")) {  // a note to oneself: shown, never run or said
     add(LineKind::command, line);
     return;
@@ -550,6 +606,16 @@ bool ConsoleView::accept() {
   cursor_ = input_.size();
   selected_ = -1;
   return true;
+}
+
+void ConsoleView::tab_list() {
+  cursor_ = input_.size();
+  const TabList t =
+      ge::console::tab_list(c_, input_, head(), list_mode, list_threshold, tab_asked_);
+  input_ = t.input;
+  cursor_ = input_.size();
+  if (!t.echo.empty()) add(LineKind::command, t.echo);
+  for (const std::string& line : t.lines) add(LineKind::output, line);
 }
 
 void ConsoleView::say(ChatTo to, std::string_view nick, std::string_view text) {

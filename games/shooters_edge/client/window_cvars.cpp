@@ -1,7 +1,8 @@
 // The window's settings in this game (window_cvars.hpp).
 //
 // ge:summary The window's console settings: the engine's, scr_levelstats, showpause, host_framerate
-// ge:keywords add_window_cvars scr_levelstats showpause host_framerate slow-motion
+// ge:keywords add_window_cvars scr_levelstats showpause host_framerate slow-motion scr_printspeed
+// ge:keywords vid_restart showturtle turtle slow-frame
 // ge:skill platform shooter
 #include "shooters_edge/client/window_cvars.hpp"
 
@@ -30,6 +31,13 @@ void add_window_cvars(ge::console::Console& con, WindowCvars& w) {
                     .kind = ge::console::CvarKind::boolean,
                     .values = "0: no picture; 1: the picture while paused (the default)"},
                    &w.show_pause);
+  con.cvars().bind({.name = "showturtle",
+                    .fallback = "0",
+                    .help = "Whether the turtle picture shows in the top-left corner while the "
+                            "game runs at ten frames a second or fewer.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: never (the default); 1: after three slow frames in a row"},
+                   &w.show_turtle);
   con.cvars().bind({.name = "host_framerate",
                     .fallback = "0",
                     .help = "Slow or fast motion in a game this window runs: each frame moves the "
@@ -39,6 +47,36 @@ void add_window_cvars(ge::console::Console& con, WindowCvars& w) {
                     .max = 0.1,
                     .values = "0: the real time (the default); up to 0.1: seconds a frame"},
                    &w.host_framerate);
+  con.cvars().bind({.name = "scr_printspeed",
+                    .fallback = "8",
+                    .flags = ge::console::kArchive,
+                    .help = "How fast the end of an episode types its text out, in characters a "
+                            "second.",
+                    .kind = ge::console::CvarKind::number,
+                    .min = 1,
+                    .max = 1000,
+                    .values = "1..1000: that many characters a second (8 the default)"},
+                   &w.print_speed);
+  // vid_restart: the window applies its video settings the moment they change, so a typed one is
+  // refused and says why (a server's stuffed one is dropped quietly).
+  con.add_command("vid_restart", "vid_restart: not needed; video settings apply at once",
+                  [said = false](ge::console::Console& c, const ge::console::Args& a) mutable {
+                    if (a.source != ge::console::Source::local) return;
+                    c.print("Manual 'vid_restart' command ignored.");
+                    if (said) return;
+                    said = true;
+                    c.print(
+                        "Video settings are applied as soon as you change them, so a video "
+                        "restart is never needed.");
+                  });
+  // in_restart: the input devices are found as they come and go, so it needs no restart by hand.
+  con.add_command("in_restart", "in_restart: not needed; input devices are found as they come",
+                  [](ge::console::Console& c, const ge::console::Args& a) {
+                    if (a.source != ge::console::Source::local) return;
+                    c.print(
+                        "Mice, keyboards and controllers are picked up as they are plugged in, "
+                        "so an input restart is never needed.");
+                  });
 }
 
 }  // namespace shooters_edge::client

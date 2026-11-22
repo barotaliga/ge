@@ -55,6 +55,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <span>
@@ -62,6 +63,7 @@
 #include <vector>
 
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 
 namespace shooters_edge::client {
 
@@ -79,6 +81,19 @@ struct ConvertOptions {
   // state the demo's scan and autotrack read (the game's own message, demo_mvd2.hpp), which a
   // stock client could not play.
   bool player_stats = false;
+  // A Quake II view's player state touched before it is written (a relay's view: its viewer's
+  // layout bit, the frozen move that keeps a stock client from predicting): the type, the move's
+  // flags and the 32 stats.
+  std::function<void(int pov, uint8_t& type, uint8_t& flags, int16_t* stats)> touch_player;
+  // A Quake II multiview view's player state touched from the recording's own observer's (the
+  // recorder's spectator, slot `observer`) before `touch_player`, when the recording has one in
+  // the game (a relay's `mvd_stats_hack` and the frozen observer of an intermission).
+  std::function<void(int pov, int observer, const server::Q2PlayerState& seen,
+                     server::Q2PlayerState& p)>
+      touch_observer;
+  // A Quake II view's broadcast print touched before it is written (a relay's
+  // `mvd_filter_version`): its level and text.
+  std::function<void(int level, std::string& text)> touch_print;
 };
 
 // What a conversion changed: each kind of message the target has no place for, with how many
@@ -97,6 +112,8 @@ struct DemoConvert;
 struct ConvertStream {
   virtual ~ConvertStream() = default;
   virtual bool step(DemoConvert& c, std::vector<uint8_t>& out, std::string& error) = 0;
+  // A copy at the point it has read to; null when the pair cannot be copied.
+  virtual std::unique_ptr<ConvertStream> clone() const { return nullptr; }
 };
 
 struct DemoConvert {
@@ -127,6 +144,10 @@ bool convert_take(DemoConvert& c, std::vector<uint8_t>& out, std::string& error)
 // The view a conversion to one player's view rides from the next frame on (`ConvertOptions::pov`):
 // a view chosen or changed partway starts with a whole signon and a whole frame.
 void convert_set_pov(DemoConvert& c, int slot);
+// A second conversion `to` that has read what `from` has, so it goes on from the same frame (a
+// relay's view of another player forked off the channel's reader). False when the pair cannot be
+// copied (only the multiview recording's view to protocol 34 can).
+bool convert_fork(const DemoConvert& from, DemoConvert& to);
 
 // A whole recording converted at once: the source detected (open_demo's formats; packed and
 // archived files unpacked first), then converted to `to`. False with the reason.

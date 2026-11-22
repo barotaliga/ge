@@ -8,10 +8,15 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <tuple>
+#include <unordered_map>
 #include <utility>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "shooter/map_spec.hpp"
 #include "shooter/world.hpp"
 #include "shooterbots/entities.hpp"
@@ -25,6 +30,8 @@ namespace sh = ge::shooter;
 
 namespace sb = ge::shooterbots;
 
+constexpr float kHatchDrop = 64;    // a floor door's drop: the floor under it this far down or more
+constexpr float kHatchAcross = 24;  // and the node under within this across, units
 constexpr float kOwnDrop = 24;  // a bridge's own node: no floor of the map's within this under it
 
 // A model's box, either family: [0] the world, then the inline models ("*N").
@@ -91,6 +98,24 @@ sh::Solid model_solid(const ge::shooter::MapSpec& spec, ge::brush::BrushTracer* 
 bool start_open(const sb::EntityBlock& b) {
   const char* sf = sb::block_value(b, "spawnflags");
   return sf && (std::atoi(sf) & 1) != 0;
+}
+
+constexpr int kDoorToggle = 32;  // a door's flag: it stays where a press sends it
+constexpr float kSinkWide = 64;  // a sinking floor's top this wide each way is stood on, units
+
+// Whether door `b` (model box `bm`) is a floor that sinks or rises and comes back: named (a
+// button or a trigger moves it), straight down or up, its top wide enough to stand on, not
+// started open, not a toggle, and back after its wait.
+bool sink_lift(const sb::EntityBlock& b, const ModelBox& bm) {
+  const char* an = sb::block_value(b, "angle");
+  const char* wt = sb::block_value(b, "wait");
+  if (sb::block_value(b, "targetname") == nullptr || an == nullptr || start_open(b)) return false;
+  const int angle = std::atoi(an);
+  if (angle != -1 && angle != -2) return false;
+  if (wt != nullptr && std::atof(wt) < 0) return false;
+  const char* sf = sb::block_value(b, "spawnflags");
+  if (sf && (std::atoi(sf) & kDoorToggle) != 0) return false;  // stays where it went
+  return bm.maxs.x - bm.mins.x >= kSinkWide && bm.maxs.y - bm.mins.y >= kSinkWide;
 }
 
 // The edict the mod made of inline model `model`, or -1.
@@ -269,7 +294,15 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
     const ModelBox bm = model_box(spec, m);
     sh::Solid& so = world.solids[world.count++];
     so = model_solid(spec, tracer, m, s.sv.edicts[static_cast<size_t>(e)].origin);
-    if (plate(bm)) {
+    // A pillar that sinks to open and rises to shut, with room to stand on its top where the map
+    // drew it: a bridge raised out of a pit (e2m6's, raised by the trigger round the start room's
+    // pillar), as a plate slid out is.
+    const char* angle = sb::block_value(b, "angle");
+    const sh::Vec3f size = bm.maxs - bm.mins;
+    const bool pillar = angle && std::atof(angle) == -2 && size.x >= 48 && size.y >= 48 &&
+                        sh::box_free(world, {(bm.mins.x + bm.maxs.x) * 0.5f,
+                                             (bm.mins.y + bm.maxs.y) * 0.5f, bm.maxs.z + 25});
+    if (plate(bm) || pillar) {
       NavBridge br;
       br.ent = e;
       br.spawn = so.origin;
@@ -283,6 +316,200 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
 }
 
 sh::Vec3f origin_of(const char* org);  // below
+
+// (`add_crawlways`) A ducked box swept through the world's brushes.
+constexpr sh::Vec3f kDuckMins{-16, -16, -24}, kDuckMaxs{16, 16, 4};
+constexpr float kCrawlCell = 16;    // the crawl's grid, units
+constexpr int kCrawlCells = 1500;   // cells one crawl visits at most
+constexpr float kCrawlSpeed = 100;  // ducked, units/s (the move's own crawl, less a little)
+
+sh::HullTrace duck_trace(const sh::Solid& w, sh::Vec3f a, sh::Vec3f b, sh::Vec3f mn, sh::Vec3f mx) {
+  return sh::solid_box_trace(w, a, mn, mx, b);
+}
+
+// A crawl's step from `o` to the cell at (x, y): up a step, across ducked, down onto a floor.
+bool crawl_step(const sh::Solid& w, sh::Vec3f o, float x, float y, sh::Vec3f& to) {
+  o.z += 0.25f;  // off the floor it stands on (a box touching a brush starts in it)
+  // Straight across first (a roof that slopes down takes no step up), then up a step and across.
+  for (const float rise : {0.0f, 18.0f}) {
+    sh::Vec3f u = o;
+    if (rise > 0) {
+      const sh::HullTrace up = duck_trace(w, o, {o.x, o.y, o.z + rise}, kDuckMins, kDuckMaxs);
+      if (up.startsolid) return false;
+      u = up.endpos;
+      if (up.fraction < 1) u.z = std::max(o.z, u.z - 0.25f);  // off the roof it rose to
+    }
+    const sh::HullTrace across = duck_trace(w, u, {x, y, u.z}, kDuckMins, kDuckMaxs);
+    if (across.startsolid || across.fraction < 1) continue;
+    const sh::HullTrace down = duck_trace(w, across.endpos, {x, y, u.z - 64}, kDuckMins, kDuckMaxs);
+    if (down.startsolid || down.fraction >= 1 || down.plane.normal.z < 0.7f) continue;
+    to = down.endpos;
+    return true;
+  }
+  return false;
+}
+
+bool stands_at(const sh::Solid& w, sh::Vec3f p) {
+  p.z += 0.25f;
+  return !duck_trace(w, p, p, sh::kPlayerMins, sh::kPlayerMaxs).startsolid;
+}
+
+}  // namespace
+
+std::vector<sh::Vec3f> crawl_path(const MapCrawl& cr, int a, int b) {
+  std::vector<int> up_a, up_b;
+  for (int k = a; k >= 0; k = cr.cells[static_cast<size_t>(k)].parent) up_a.push_back(k);
+  for (int k = b; k >= 0; k = cr.cells[static_cast<size_t>(k)].parent) up_b.push_back(k);
+  while (up_a.size() > 1 && up_b.size() > 1 && up_a[up_a.size() - 2] == up_b[up_b.size() - 2]) {
+    up_a.pop_back();
+    up_b.pop_back();
+  }
+  std::vector<sh::Vec3f> out;
+  out.reserve(up_a.size() + up_b.size());
+  for (const int k : up_a) out.push_back(cr.cells[static_cast<size_t>(k)].at);
+  for (size_t k = up_b.size() - 1; k-- > 0;)
+    out.push_back(cr.cells[static_cast<size_t>(up_b[k])].at);
+  return out;
+}
+
+int add_crawlways(const sh::Solid& w, sb::NavGraph& g, std::vector<MapCrawl>* keep) {
+  // One crawl (a region under the roof) is searched once, as a tree from where it was first
+  // entered; a node that steps into it is joined through the tree to a node it comes out by.
+  using Crawl = MapCrawl;
+  const auto key = [](sh::Vec3f p) {
+    const auto q = [](float v) {
+      return static_cast<uint64_t>(static_cast<int64_t>(std::floor(v / 8)) & 0x1fffff);
+    };
+    return q(p.x) | q(p.y) << 21 | q(p.z) << 42;
+  };
+  std::vector<Crawl> crawls;
+  std::unordered_map<uint64_t, std::pair<int, int>> where;  // cell -> (crawl, cell)
+  std::vector<sb::NavExtraLink> links;
+  std::vector<std::pair<int32_t, int32_t>> made;
+  constexpr float kDirs[8][2] = {{1, 0}, {-1, 0}, {0, 1},  {0, -1},
+                                 {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+  const auto search = [&](sh::Vec3f entry) {
+    Crawl cr;
+    cr.cells.push_back({entry, -1});
+    const int id = static_cast<int>(crawls.size());
+    where[key(entry)] = {id, 0};
+    for (size_t c = 0; c < cr.cells.size() && cr.cells.size() < kCrawlCells; c++) {
+      const sh::Vec3f o = cr.cells[c].at;
+      if (stands_at(w, o)) {  // out from under the roof: the crawl ends here, by a node
+        const int32_t near = sb::nav_nearest(g, o);
+        if (near >= 0) {
+          const sh::Vec3f no = g.nodes[static_cast<size_t>(near)].origin;
+          const float dx = no.x - o.x, dy = no.y - o.y, dz = no.z - o.z;
+          if (dx * dx + dy * dy <= 56 * 56 && dz <= 20 && dz >= -20)
+            cr.ends.push_back({static_cast<int>(c), near});
+        }
+        continue;
+      }
+      for (int k = 0; k < 4; k++) {
+        sh::Vec3f to;
+        if (!crawl_step(w, o, o.x + kDirs[k][0] * kCrawlCell, o.y + kDirs[k][1] * kCrawlCell, to))
+          continue;
+        const uint64_t kk = key(to);
+        if (where.count(kk) != 0) continue;
+        where[kk] = {id, static_cast<int>(cr.cells.size())};
+        cr.cells.push_back({to, static_cast<int>(c)});
+      }
+    }
+    crawls.push_back(std::move(cr));
+    return id;
+  };
+  const auto one = [&](int32_t a, int32_t b, const std::vector<sh::Vec3f>& way) {
+    if (std::find(made.begin(), made.end(), std::make_pair(a, b)) != made.end()) return;
+    sb::NavScript sc;
+    float len = 0;
+    sh::Vec3f last = g.nodes[static_cast<size_t>(a)].origin;
+    for (size_t k = 0; k < way.size(); k += 2) {
+      sc.steps.push_back({way[k], false, true});
+      const sh::Vec3f dd = way[k] - last;
+      len += std::sqrt(dd.x * dd.x + dd.y * dd.y);
+      last = way[k];
+    }
+    sc.steps.push_back({g.nodes[static_cast<size_t>(b)].origin, false, false});
+    sb::NavExtraLink e{a, b, sb::NavKind::script, 0.5f + len / kCrawlSpeed};
+    e.script = static_cast<int32_t>(g.scripts.size());
+    g.scripts.push_back(std::move(sc));
+    links.push_back(e);
+    made.push_back({a, b});
+  };
+  // The places the graph already joins (undirected): a crawl is a way only between two of them.
+  const size_t nodes = g.nodes.size();
+  std::vector<int32_t> comp(nodes);
+  for (size_t n = 0; n < nodes; n++) comp[n] = static_cast<int32_t>(n);
+  const auto root = [&](int32_t a) {
+    while (comp[static_cast<size_t>(a)] != a)
+      a = comp[static_cast<size_t>(a)] = comp[static_cast<size_t>(comp[static_cast<size_t>(a)])];
+    return a;
+  };
+  for (size_t n = 0; n < nodes; n++) {
+    const sb::NavNode& nn = g.nodes[n];
+    for (int32_t k = nn.first_link; k < nn.first_link + nn.links; k++) {
+      const int32_t a = root(static_cast<int32_t>(n)), b = root(g.links[static_cast<size_t>(k)].to);
+      if (a != b) comp[static_cast<size_t>(a)] = b;
+    }
+  }
+  // The best way a crawl gives between two places: (crawl, from place, to place) -> the pair.
+  struct Way {
+    int32_t a, b;
+    int ca, cb;
+    size_t len;
+  };
+  std::vector<std::pair<std::tuple<int, int32_t, int32_t>, Way>> best;
+  const auto snap = [](float v) { return std::round(v / kCrawlCell) * kCrawlCell; };
+  for (size_t n = 0; n < nodes; n++) {
+    const sb::NavNode& from = g.nodes[n];
+    if (from.swim || from.mover >= 0 || from.ride >= 0) continue;
+    for (const auto& d : kDirs) {
+      // The first cell of the crawl's grid along the way where he no longer stands.
+      sh::Vec3f entry;
+      bool found = false;
+      for (float r = 16; r <= 112 && !found; r += 8) {
+        const float x = snap(from.origin.x + d[0] * r), y = snap(from.origin.y + d[1] * r);
+        if (!crawl_step(w, from.origin, x, y, entry)) break;
+        found = !stands_at(w, entry);
+      }
+      if (!found) continue;
+      int id, cell;
+      if (const auto it = where.find(key(entry)); it != where.end()) {
+        id = it->second.first;
+        cell = it->second.second;
+      } else {
+        id = search(entry);
+        cell = 0;
+      }
+      const Crawl& cr = crawls[static_cast<size_t>(id)];
+      const int32_t pa = root(static_cast<int32_t>(n));
+      for (const auto& [c, end] : cr.ends) {
+        const int32_t pb = root(end);
+        if (pa == pb) continue;
+        const size_t len = crawl_path(cr, cell, c).size();
+        const auto k = std::make_tuple(id, pa, pb);
+        auto it =
+            std::find_if(best.begin(), best.end(), [&](const auto& e) { return e.first == k; });
+        if (it == best.end())
+          best.push_back({k, {static_cast<int32_t>(n), end, cell, c, len}});
+        else if (len < it->second.len)
+          it->second = {static_cast<int32_t>(n), end, cell, c, len};
+      }
+    }
+  }
+  for (const auto& [k, wy] : best) {
+    const Crawl& cr = crawls[static_cast<size_t>(std::get<0>(k))];
+    std::vector<sh::Vec3f> path = crawl_path(cr, wy.ca, wy.cb);
+    one(wy.a, wy.b, path);
+    std::reverse(path.begin(), path.end());
+    one(wy.b, wy.a, path);
+  }
+  sb::nav_add_links(g, links);
+  if (keep != nullptr) *keep = std::move(crawls);
+  return static_cast<int>(links.size());
+}
+
+namespace {
 
 std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
                                     const ge::shooter::MapSpec& spec,
@@ -328,8 +555,57 @@ std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
         mv.model = &spec.models[static_cast<size_t>(m)];
       }
       mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;  // lowered from where it was built
+      // A named one waits raised until something fires it, then lowers and rides like any other
+      // (bunk1's by its first buttons): its rest is down there, where it stands from then on.
+      if (sb::block_value(b, "targetname") != nullptr && mv.rest.z > -rise / 2) {
+        mv.rest.z -= rise;
+        mv.absmin.z -= rise;
+        mv.absmax.z -= rise;
+      }
       mv.travel = {0, 0, rise};
       mv.ride_s = 1 + rise / (speed > 0 ? speed : fallback);
+    }
+    // A car whose own button rides inside it (base1's exit) is a hollow door, not a floor.
+    bool car = false;
+    for (const sb::EntityBlock& o : blocks) {
+      const char* ocn = sb::block_value(o, "classname");
+      const char* om = sb::block_value(o, "model");
+      if (!door || !ocn || !om || om[0] != '*' || std::strcmp(ocn, "func_button") != 0) continue;
+      const int k = std::atoi(om + 1);
+      if (k <= 0 || static_cast<size_t>(k) >= model_count(spec)) continue;
+      const ModelBox ob = model_box(spec, k);
+      constexpr float kIn = 16;
+      car = car || (ob.mins.x > bm.mins.x - kIn && ob.maxs.x < bm.maxs.x + kIn &&
+                    ob.mins.y > bm.mins.y - kIn && ob.maxs.y < bm.maxs.y + kIn &&
+                    ob.mins.z > bm.mins.z - kIn && ob.maxs.z < bm.maxs.z + kIn);
+    }
+    if (door && !car && sink_lift(b, bm) && (!spec.brushes || tracer != nullptr)) {
+      // A FLOOR THAT SINKS (or rises) when its button is pressed and comes back after its wait
+      // (bunk1's by its first hall, two seconds after the button beside it): ridden like a plat,
+      // its whole height less its lip, at its speed (100 units/s unless it says).
+      const char* sp = sb::block_value(b, "speed");
+      const char* lp = sb::block_value(b, "lip");
+      const char* an = sb::block_value(b, "angle");
+      const float lip = lp ? static_cast<float>(std::atof(lp)) : 8.f;
+      const float way = (bm.maxs.z - bm.mins.z) - lip;
+      const float speed = sp ? static_cast<float>(std::atof(sp)) : 100.f;
+      if (spec.brushes) {
+        mv.tracer = tracer;
+        mv.brush_model = static_cast<uint32_t>(m);
+      } else {
+        mv.model = &spec.models[static_cast<size_t>(m)];
+      }
+      // One that sinks is ridden up from where it sinks to (called down by its button, it
+      // stands there its wait, then carries a rider back up): its rest is down there, like a
+      // named plat's, so the nav boards it at the bottom and rides it to the top.
+      mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;
+      if (an != nullptr && std::atoi(an) == -2) {
+        mv.rest.z -= way;
+        mv.absmin.z -= way;
+        mv.absmax.z -= way;
+      }
+      mv.travel = {0, 0, way};
+      mv.ride_s = 1 + way / (speed > 0 ? speed : 100.f);
     }
     if (train && (!spec.brushes || tracer != nullptr)) {
       // A MOVING PLATFORM: its path corners from its target round the chain, its model's lowest
@@ -400,8 +676,7 @@ bool teleport_dest(const std::vector<sb::EntityBlock>& blocks, const char* targe
   return false;
 }
 
-std::vector<sb::NavExtraLink> teleport_links(const sb::NavGraph& g,
-                                             const ge::shooter::MapSpec& spec,
+std::vector<sb::NavExtraLink> teleport_links(sb::NavGraph& g, const ge::shooter::MapSpec& spec,
                                              const std::vector<sb::EntityBlock>& blocks) {
   std::vector<sb::NavExtraLink> out;
   for (const sb::EntityBlock& b : blocks) {
@@ -429,6 +704,7 @@ std::vector<sb::NavExtraLink> teleport_links(const sb::NavGraph& g,
     if (!teleport_dest(blocks, target, dest)) continue;
     const int32_t to = sb::nav_nearest(g, dest);
     if (to < 0) continue;
+    const size_t had = out.size();
     for (size_t a = 0; a < g.nodes.size(); a++) {
       const sh::Vec3f o = g.nodes[a].origin;
       if (o.x + 16 < box.mins.x || o.x - 16 > box.maxs.x || o.y + 16 < box.mins.y ||
@@ -436,6 +712,111 @@ std::vector<sb::NavExtraLink> teleport_links(const sb::NavGraph& g,
         continue;
       sb::NavExtraLink e{static_cast<int32_t>(a), to, sb::NavKind::walk, 0.1f};
       e.teleport = true;
+      out.push_back(e);
+    }
+    if (out.size() > had) continue;
+    // None touches it (a thin one on a pit's end wall, the last node a step short: e1m6's spike
+    // pit held him for the whole map): a node of its own where the nearest node within
+    // kTeleportReach, walked toward it, first touches it, linked both ways to that node.
+    constexpr float kTeleportReach = 64;
+    int32_t near = -1;
+    float near_d = kTeleportReach;
+    sh::Vec3f at;
+    for (size_t a = 0; a < g.nodes.size(); a++) {
+      const sh::Vec3f o = g.nodes[a].origin;
+      if (o.z + 32 < box.mins.z || o.z - 24 > box.maxs.z) continue;
+      const sh::Vec3f p{std::clamp(o.x, box.mins.x - 15, box.maxs.x + 15),
+                        std::clamp(o.y, box.mins.y - 15, box.maxs.y + 15), o.z};
+      const float dx = p.x - o.x, dy = p.y - o.y;
+      const float d = std::sqrt(dx * dx + dy * dy);
+      if (d < near_d) {
+        near = static_cast<int32_t>(a);
+        near_d = d;
+        at = p;
+      }
+    }
+    if (near < 0) continue;
+    sb::NavNode pad = g.nodes[static_cast<size_t>(near)];
+    pad.origin = at;
+    pad.first_link = pad.links = 0;
+    const auto id = static_cast<int32_t>(g.nodes.size());
+    g.nodes.push_back(pad);
+    out.push_back({near, id, sb::NavKind::walk, near_d / 320 + 0.05f});
+    out.push_back({id, near, sb::NavKind::walk, near_d / 320 + 0.05f});
+    sb::NavExtraLink e{id, to, sb::NavKind::walk, 0.1f};
+    e.teleport = true;
+    out.push_back(e);
+  }
+  return out;
+}
+
+// A push's ways (`trigger_push`): from each node in its brush (walked into, as a teleporter's) to
+// the node where it throws him: up (angle -1), the nearest node standing over its top within
+// kPushLand across; across (a heading), the nearest beyond its far face. e3m5 starts under one
+// ("Jump up here"), the only way out of its first room.
+std::vector<sb::NavExtraLink> push_links(const sb::NavGraph& g, const ge::shooter::MapSpec& spec,
+                                         const std::vector<sb::EntityBlock>& blocks) {
+  constexpr float kPushLand = 256;
+  constexpr float kPushOver = 160;  // its landing at most this far over its top, units
+  constexpr float kPushJump = 44;   // a standing jump's rise (its apex near 45), near enough
+  std::vector<sb::NavExtraLink> out;
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    if (!cn || std::strcmp(cn, "trigger_push") != 0 || sb::block_value(b, "targetname")) continue;
+    const char* model = sb::block_value(b, "model");
+    if (!model || model[0] != '*' || std::atoi(model + 1) <= 0) continue;
+    const ModelBox box = model_box(spec, std::atoi(model + 1));
+    if (!box.ok) continue;
+    const char* av = sb::block_value(b, "angle");
+    const double angle = av ? std::atof(av) : 0;
+    if (angle == -2) continue;  // down: no way anywhere new
+    const bool up = angle == -1;
+    const double a = angle * ge::core::kPi / 180;
+    const float dx = up ? 0.0f : static_cast<float>(ge::core::libm::cos(a));
+    const float dy = up ? 0.0f : static_cast<float>(ge::core::libm::sin(a));
+    const sh::Vec3f mid = (box.mins + box.maxs) * 0.5f;
+    // Where he leaves it.
+    const sh::Vec3f exit = up ? sh::Vec3f{mid.x, mid.y, box.maxs.z}
+                              : sh::Vec3f{mid.x + dx * (box.maxs.x - box.mins.x) * 0.5f,
+                                          mid.y + dy * (box.maxs.y - box.mins.y) * 0.5f, mid.z};
+    int32_t land = -1;
+    float land_d = kPushLand;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      if (g.nodes[n].swim) continue;
+      const bool inside = o.x + 16 > box.mins.x && o.x - 16 < box.maxs.x && o.y + 16 > box.mins.y &&
+                          o.y - 16 < box.maxs.y && o.z + 32 > box.mins.z && o.z - 24 < box.maxs.z;
+      if (inside) continue;
+      // A floor up at its top: not one beside it below, nor one far over it (e3m5's air tube's
+      // landing is the ledge at its top, not the roof a floor above).
+      if (up && (o.z < box.maxs.z - 64 || o.z > box.maxs.z + kPushOver)) continue;
+      const float ex = o.x - exit.x, ey = o.y - exit.y, ez = o.z - exit.z;
+      const float d = std::sqrt(ex * ex + ey * ey + ez * ez);
+      if (!up && ex * dx + ey * dy < 0) continue;  // ahead of its face only
+      if (d < land_d) {
+        land = static_cast<int32_t>(n);
+        land_d = d;
+      }
+    }
+    if (land < 0) continue;
+    const float height = up ? box.maxs.z - box.mins.z : 0.0f;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      if (g.nodes[n].swim || static_cast<int32_t>(n) == land) continue;
+      if (o.x + 16 < box.mins.x || o.x - 16 > box.maxs.x || o.y + 16 < box.mins.y ||
+          o.y - 16 > box.maxs.y || o.z - 24 > box.maxs.z)
+        continue;
+      if (o.z + 32 < box.mins.z) {
+        // Under it, out of reach standing: a standing jump into it from a node well inside its
+        // plan (e3m5's "Jump up here"), the push carrying him on to the landing.
+        if (!up || o.z + 32 + kPushJump < box.mins.z || o.x < box.mins.x + 8 ||
+            o.x > box.maxs.x - 8 || o.y < box.mins.y + 8 || o.y > box.maxs.y - 8)
+          continue;
+        out.push_back({static_cast<int32_t>(n), land, sb::NavKind::jump, 1.5f + height / 400});
+        continue;
+      }
+      sb::NavExtraLink e{static_cast<int32_t>(n), land, sb::NavKind::walk, 1.0f + height / 400};
+      e.teleport = true;  // walked into, then carried
       out.push_back(e);
     }
   }
@@ -629,7 +1010,9 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
   sb::build_nav(out.world, out.movers, out.move, set, out.graph);
-  const std::vector<sb::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
+  std::vector<sb::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
+  const std::vector<sb::NavExtraLink> pushes = push_links(out.graph, spec, blocks);
+  teleports.insert(teleports.end(), pushes.begin(), pushes.end());
   sb::nav_add_links(out.graph, teleports);
   if (spec.brushes) {
     const std::vector<sb::NavExtraLink> ladders = ladder_links(s, out.graph, *spec.brushes);
@@ -669,6 +1052,63 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
       if (down.startsolid || down.fraction >= 1) br.own.push_back(n);
     }
     out.world.count = count;
+  }
+  // The drops through each floor door, from the nodes that walk onto the ones it alone holds up
+  // to the highest node under each (a straight fall in the map's own solids, the door left out).
+  out.hatches.clear();
+  if (out.hatch_drops) {
+    std::vector<sb::NavExtraLink> drops;
+    std::vector<int> door_of;
+    std::vector<sh::Vec3f> rest_of;
+    const int32_t count = out.world.count;
+    out.world.count = 1;
+    for (const NavBridge& br : out.bridges) {
+      if (!br.floor) continue;
+      std::vector<uint8_t> on(out.graph.nodes.size(), 0);
+      for (const int32_t n : br.nodes) on[static_cast<size_t>(n)] = 1;
+      for (const int32_t n : br.own) {
+        const sh::Vec3f o = out.graph.nodes[static_cast<size_t>(n)].origin;
+        int32_t under = -1;
+        for (size_t m = 0; m < out.graph.nodes.size(); m++) {
+          const sh::Vec3f u = out.graph.nodes[m].origin;
+          if (on[m] || u.z > o.z - kHatchDrop || std::fabs(u.x - o.x) > kHatchAcross ||
+              std::fabs(u.y - o.y) > kHatchAcross)
+            continue;
+          if (under >= 0 && u.z <= out.graph.nodes[static_cast<size_t>(under)].origin.z) continue;
+          if (sh::player_trace(out.world, o, u).fraction < 1) continue;
+          under = static_cast<int32_t>(m);
+        }
+        if (under < 0) continue;
+        const float fall = o.z - out.graph.nodes[static_cast<size_t>(under)].origin.z;
+        for (size_t a = 0; a < out.graph.nodes.size(); a++) {
+          if (on[a]) continue;
+          const sb::NavNode& na = out.graph.nodes[a];
+          for (int32_t k = 0; k < na.links; k++) {
+            const sb::NavLink& l =
+                out.graph.links[static_cast<size_t>(na.first_link) + static_cast<size_t>(k)];
+            if (l.to != n || l.kind != sb::NavKind::walk) continue;
+            drops.push_back(
+                {static_cast<int32_t>(a), under, sb::NavKind::drop, l.time_s + 0.2f + fall / 800});
+            door_of.push_back(br.ent);
+            rest_of.push_back(br.spawn);
+          }
+        }
+      }
+    }
+    out.world.count = count;
+    sb::nav_add_links(out.graph, drops);
+    for (size_t k = 0; k < drops.size(); k++) {
+      const sb::NavNode& na = out.graph.nodes[static_cast<size_t>(drops[k].from)];
+      for (int32_t j = na.links - 1; j >= 0; j--) {
+        const size_t li = static_cast<size_t>(na.first_link) + static_cast<size_t>(j);
+        const sb::NavLink& l = out.graph.links[li];
+        if (l.to == drops[k].to && l.kind == sb::NavKind::drop) {
+          out.hatches.push_back(
+              {static_cast<int32_t>(li), drops[k].from, drops[k].to, door_of[k], rest_of[k]});
+          break;
+        }
+      }
+    }
   }
   out.teleport_links = static_cast<int64_t>(teleports.size());
   // SCRIPTED ROUTES to key items (the book's, shooterbots/map_book.hpp): each proven by the move
@@ -717,6 +1157,12 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     }
     sb::nav_add_links(out.graph, scripted);
   }
+  // CRAWLWAYS (Quake II's: a roof too low to stand under, walked ducked; base1's way east is one,
+  // "Crouch here"). From each node a step out to where a ducked box fits and a standing one does
+  // not, the crawl is followed cell by cell (a step up, across ducked, down to a floor) to where
+  // he stands again by another node: a scripted way each way, its steps ducked.
+  if (spec.brushes && out.tracer != nullptr && out.world.count > 0)
+    out.crawlways = add_crawlways(out.world.solids[0], out.graph, &out.crawls);
   // LAVA AND SLIME: a floor node standing in either (a shallow pool at the feet too: it burns
   // there as well) harms whoever goes there; no way leads into one (the links out are kept: a
   // player knocked in walks out).
@@ -803,7 +1249,8 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
       for (size_t n = 0; n < main.size(); n++)
         main[n] = out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
       std::vector<uint8_t> back = sb::nav_back(graph, main);
-      for (size_t n = 0; n < back.size(); n++) back[n] = back[n] && !out.harm[n] ? 1 : 0;
+      for (size_t n = 0; n < back.size(); n++)
+        back[n] = (back[n] || out.one_way_tricks) && !out.harm[n] ? 1 : 0;
       // The tricks as rocket jumps and as grenade jumps; then a grenade jump for each rocket
       // jump the pockets were bridged by (the way into a pocket for a player with no launcher).
       std::vector<sb::NavTrick> bridged;
@@ -819,8 +1266,17 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
         }
       sb::NavTrickSettings ts;
       ts.grenades = true;
+      ts.combos = out.one_way_tricks;  // a record run's grenade and rocket together
+      if (out.one_way_tricks) {
+        // A record run's jump flown its own way (air control, another run-up): a takeoff and a
+        // landing further from the runner's still make the same way past what blocks the floor.
+        ts.near = 96;
+        ts.land = 160;
+        ts.takeoffs = 8;
+      }
       out.tricks_made = sb::nav_add_tricks(out.world, out.move, graph, tricks, back, ts);
       ts.rockets = false;
+      ts.combos = false;
       ts.near = 8;  // from the bridge's own takeoff
       out.bridged_grenades = sb::nav_add_tricks(out.world, out.move, graph, bridged, back, ts);
     }

@@ -176,6 +176,7 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
   float best = across(from, to);
   float best_s = 0;
   bool landed = false;  // a jump down on the target's floor, walking the rest
+  bool over = false;    // passed over the target in the air
   p.lo = from + kPlayerMins;
   p.hi = from + kPlayerMaxs;
   if (path) path->push_back(from);
@@ -204,7 +205,14 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
       p.reached = true;
       return p;
     }
-    if (grounded && s.origin.z < floor_z) return p;  // fell below both ends: missed
+    // Walked down a ramp (base1's east stair, 28 degrees): the move leaves the ground on a slope
+    // that steep and comes down again further on, so he can pass over the target in the air. Down
+    // on the slope past it, no lower than the slope's run, he is there.
+    if (!jump && !grounded && h <= set.arrive && dz <= kArriveUp && dz >= -kArriveUp) over = true;
+    if (grounded && s.origin.z < floor_z) {
+      p.reached = over && dz >= -h;
+      return p;  // fell below both ends: missed, unless down the slope past it
+    }
     if (jump && grounded && !landed) {
       // A standing jump landed on the target's own floor just short of it (a stair's tread): the
       // rest is walked, the stall rule holding the walk. Anything else did not leave the ground,
@@ -523,9 +531,16 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
       if (na.mover != m.ent) continue;
       const float x = na.origin.x, y = na.origin.y;
       // Ridden only where the player's whole box stands on the top: a ride from a column on its
-      // edge ends half over the drop.
-      if (x - m.absmin.x < kPlayerMaxs.x || m.absmax.x - x < kPlayerMaxs.x ||
-          y - m.absmin.y < kPlayerMaxs.y || m.absmax.y - y < kPlayerMaxs.y)
+      // edge ends half over the drop. A top hardly wider than the box (e2m6's pillars that rise
+      // out of its pool, 38 units across) is ridden from a column over it at all: the plat lifts
+      // any box it touches (one a column fits on, e2m2's 62 across, keeps the rule: a ride from
+      // its edge left him on its top with no way off).
+      const float in_x =
+          m.absmax.x - m.absmin.x >= 2 * kPlayerMaxs.x + 0.5f * set.spacing ? kPlayerMaxs.x : 0;
+      const float in_y =
+          m.absmax.y - m.absmin.y >= 2 * kPlayerMaxs.y + 0.5f * set.spacing ? kPlayerMaxs.y : 0;
+      if (x - m.absmin.x < in_x || m.absmax.x - x < in_x || y - m.absmin.y < in_y ||
+          m.absmax.y - y < in_y)
         continue;
       // The mover's top in this column: the highest floor above a step and below its travel's
       // reach plus the player's height (a ceiling's own floor above is not it).
@@ -699,6 +714,10 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   }
 }
 
+// A node with no links at all (a corner cell cut off from the rest) is taken as the nearest only
+// when no node with a way out of it is this much nearer, squared units (64 units).
+constexpr float kDeadNode = 64 * 64;
+
 int32_t nav_nearest(const NavGraph& g, Vec3f p) {
   if ((g.cols == 0 || g.rows == 0) && g.swim_first < 0) return -1;
   const int32_t ci = static_cast<int32_t>((p.x - g.lo.x) / g.set.spacing);
@@ -715,7 +734,7 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
         const int32_t n = g.col_first[c] + k;
         const Vec3f d = g.nodes[static_cast<size_t>(n)].origin - p;
         if (d.z > kNearestUp || d.z < -kNearestUp) continue;
-        const float dd = dot(d, d);
+        const float dd = dot(d, d) + (g.nodes[static_cast<size_t>(n)].links > 0 ? 0 : kDeadNode);
         if (best < 0 || dd < best_d) {
           best = n;
           best_d = dd;
@@ -746,7 +765,9 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
                                      static_cast<size_t>(j)) *
                                         static_cast<size_t>(g.swim_nx) +
                                     static_cast<size_t>(i)];
-      if (n >= 0) {
+      // Not a cell with no way out of it at all (shallow water over a pool's floor, too low to
+      // swim across): a bot standing there in e2m5's pool planned from it and found nothing.
+      if (n >= 0 && g.nodes[static_cast<size_t>(n)].links > 0) {
         const Vec3f d = g.nodes[static_cast<size_t>(n)].origin - p;
         const float dd = dot(d, d);
         if (best < 0 || dd < best_d) best = n;
@@ -902,6 +923,7 @@ void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra) {
       l.pitch = e.pitch;
       l.level = e.level;
       l.lead = e.lead;
+      l.combo = e.combo;
       l.mover = e.mover;
       l.script = e.script;
       l.teleport = e.teleport;
@@ -1232,6 +1254,12 @@ NavProof prove_grenade_jump(const MoveWorld& world, const MoveSettings& move, Ve
   Vec3f burst_at, stand;
   float shot_t = 0;
   bool burst = false, jumped = false;
+  // A combo's rocket (`rocket_pitch`): fired on the jump, where and when it bursts.
+  const bool combo = gj.rocket_pitch > 0;
+  Vec3f rocket_at;
+  float rocket_t = -1;
+  bool rocket_burst_done = !combo, fire = false;
+  float taken = 0;
   const float limit = gj.fuse + set.limit_s;
   for (int i = 0;; i++) {
     const float t = static_cast<float>(i + 1) * step_s;
@@ -1250,10 +1278,22 @@ NavProof prove_grenade_jump(const MoveWorld& world, const MoveSettings& move, Ve
       // The jump with the fuse nearly out, then forward at the target through the flight.
       c.angles = {0, across(s.origin, to) > 0.01f ? yaw_at(s.origin, to) : aim, 0};
       c.forward = static_cast<int16_t>(move.maxspeed);
-      if (!jumped) c.buttons = kButtonJump;
+      if (!jumped) {
+        c.buttons = kButtonJump;
+        fire = combo;
+        if (combo) c.angles.x = gj.rocket_pitch;
+      }
       jumped = true;
     }
     player_move(s, c, move, world);
+    if (fire) {
+      // The combo's rocket, fired after the jump command's move, down at the grenade.
+      fire = false;
+      const RocketBurst rb = rocket_burst(world, s.origin, c.angles, gj.blast);
+      if (!rb.ok) return p;
+      rocket_at = rb.at;
+      rocket_t = t + rb.flight_s;
+    }
     if (i == 0) {
       // The grenade, thrown after the command's move; where it lies when the fuse runs out.
       shot_t = t;
@@ -1264,8 +1304,15 @@ NavProof prove_grenade_jump(const MoveWorld& world, const MoveSettings& move, Ve
     if (!burst && t >= shot_t + gj.fuse) {
       burst = true;
       const float d = rocket_blast(s, burst_at, gj.blast);
-      if (d <= 0) return p;  // too far from the blast: no push
-      if (health) *health = d;
+      if (d <= 0 && !combo) return p;  // too far from the blast: no push
+      taken += d;
+      if (health) *health = taken;
+    }
+    if (!rocket_burst_done && rocket_t >= 0 && t >= rocket_t) {
+      rocket_burst_done = true;
+      const float d = rocket_blast(s, rocket_at, gj.blast);
+      taken += d;
+      if (health) *health = taken;
     }
     p.commands++;
     if (path) path->push_back(s.origin);
@@ -1277,7 +1324,8 @@ NavProof prove_grenade_jump(const MoveWorld& world, const MoveSettings& move, Ve
     p.end = s.origin;
     p.time_s = t;
     const bool grounded = s.ground >= 0;
-    if (burst && grounded) {
+    if (burst && rocket_burst_done && grounded) {
+      if (combo && taken <= 0) return p;  // neither blast pushed him
       const float h = across(s.origin, to), dz = s.origin.z - to.z;
       p.landed = true;
       p.reached = h <= set.arrive * 3 && dz <= kArriveUp && dz >= -kArriveUp;
@@ -1679,6 +1727,28 @@ NavTrickCounts nav_add_tricks(const MoveWorld& world, const MoveSettings& move, 
         extra.push_back(l);
         out.grenades++;
         out.grenade_from[t] = starts[x].n;
+        done = true;
+        break;
+      }
+    // The combo, for a trick people made as one and no rocket jump alone landed: the grenade jump
+    // with a rocket under the feet on the jump.
+    done = !set.combos || !tr.combo || out.rocket_from[t] >= 0;
+    GrenadeJumpSpec cj = set.gj;
+    cj.rocket_pitch = 89;
+    for (size_t x = 0; x < starts.size() && !done; x++)
+      for (const float lead : set.leads) {
+        out.proofs++;
+        const Vec3f from = g.nodes[static_cast<size_t>(starts[x].n)].origin;
+        const NavProof pr = prove_grenade_jump(world, move, from, tr.to, lead, g.set, cj);
+        const int32_t at = pr.landed ? landed(pr.end, tr.to) : -1;
+        if (at < 0 || at == starts[x].n) continue;
+        NavExtraLink l{starts[x].n, at, NavKind::grenade, pr.time_s + set.cost_s};
+        l.pitch = set.gj.pitch;
+        l.lead = lead;
+        l.combo = true;
+        l.level = tr.level > 1 ? tr.level : uint8_t{1};
+        extra.push_back(l);
+        out.combos++;
         done = true;
         break;
       }

@@ -20,6 +20,7 @@
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_demo_q2_test.cpp
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -65,6 +66,7 @@ enum : uint8_t {
   kGeShare = 126,       // and the easy jump's share (net/q2_net_server.hpp)
   kGeAccountKey = 127,  // and the tag of its logins' key
   kGeBack = 119,        // and an item taken and when it comes back
+  kGeSheet = 120,       // and a part of the settings sheet (net/q2_votes.hpp)
 };
 
 // The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
@@ -256,6 +258,17 @@ bool bad_number(int n, int most, const DemoMsg& m, const char* what, std::string
   return true;
 }
 
+}  // namespace
+
+int q2_music_track(const std::string& text, int last) {
+  if (text.empty()) return 0;
+  char* end = nullptr;
+  const long n = std::strtol(text.c_str(), &end, 10);
+  return *end == '\0' && n >= 0 && n < 100 ? static_cast<int>(n) : last;
+}
+
+namespace {
+
 void set_string(Demo& d, int index, std::string text) {
   DemoState& s = d.state;
   const CsLayout& cs = layout_of(s.protocol);
@@ -263,10 +276,14 @@ void set_string(Demo& d, int index, std::string text) {
     if (static_cast<size_t>(i) >= list.size()) list.resize(static_cast<size_t>(i) + 1);
     list[static_cast<size_t>(i)] = std::move(v);
   };
-  if (index == cs.max_clients) {
+  if (index == 1) {
+    s.cdtrack = q2_music_track(text, s.cdtrack);
+  } else if (index == cs.max_clients) {
     // Entities 1 to this are the players: kept by slot, so the rest number past `players`.
     d.max_clients = std::clamp(std::atoi(text.c_str()), 1, 32);
     s.players.assign(static_cast<size_t>(d.max_clients), DemoEntity{});
+  } else if (index == cs.max_clients + 1) {  // the map's checksum, just after the slots
+    s.map_checksum = std::move(text);
   } else if (index >= cs.models && index < cs.sounds) {
     // The world is model 1; a recording that puts it elsewhere is read by the first map named.
     const std::string map = map_of_model(text);
@@ -543,8 +560,17 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   DemoState& s = d.state;
   const int32_t number = m.i32();
   const int32_t delta = m.i32();
-  if (s.protocol != 26) m.u8();         // the packets held back
-  m.skip(static_cast<size_t>(m.u8()));  // the areas seen
+  const int held_back = s.protocol != 26 ? m.u8() : 0;  // the packets held back for the rate
+  {  // the areas the eye's room joins (one bit an area); drawn only these
+    const size_t n = m.u8();
+    if (n > 32) {
+      error = "the frame" + at_byte(m) + " names " + std::to_string(n) +
+              " bytes of areas, past the 32 the game allows: the recording is damaged";
+      return false;
+    }
+    s.areas.resize(n);
+    for (uint8_t& b : s.areas) b = static_cast<uint8_t>(m.u8());
+  }
   if (m.u8() != kPlayerInfo) {
     error = "the frame" + at_byte(m) +
             " is not followed by the player's state: the recording is damaged";
@@ -553,6 +579,10 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   const size_t slot = static_cast<size_t>(number) & 15;
   const size_t base_slot = static_cast<size_t>(delta) & 15;
   const bool have_base = delta > 0 && d.views[base_slot].frame == delta;
+  s.q2_trouble = static_cast<uint8_t>(
+      (delta <= 0 ? kQ2FrameNoDelta : 0) |
+      (delta > 0 && !have_base ? (number - delta >= 16 ? kQ2FrameOld : kQ2FrameBad) : 0) |
+      (held_back > 0 ? kQ2FrameSuppressed : 0));
   Q2View v = have_base ? d.views[base_slot] : Q2View{};
   player_info(m, v, ext_of(s.protocol));
   v.frame = number;
@@ -588,7 +618,14 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   s.angles = {angle16(v.angles[0]), angle16(v.angles[1]), angle16(v.angles[2])};
   s.kick = {static_cast<float>(v.kick[0]) * 0.25f, static_cast<float>(v.kick[1]) * 0.25f,
             static_cast<float>(v.kick[2]) * 0.25f};
+  s.gun_angles = {static_cast<float>(v.gun_angles[0]) * 0.25f,
+                  static_cast<float>(v.gun_angles[1]) * 0.25f,
+                  static_cast<float>(v.gun_angles[2]) * 0.25f};
+  s.gun_offset = {static_cast<float>(v.gun_offset[0]) * 0.25f,
+                  static_cast<float>(v.gun_offset[1]) * 0.25f,
+                  static_cast<float>(v.gun_offset[2]) * 0.25f};
   s.fov = static_cast<float>(v.fov);
+  s.rdflags = v.rdflags;
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;
@@ -818,10 +855,10 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       e.way = e.way * static_cast<float>(magnitude);  // the jet: its way times its speed
       break;
     }
-    case 50:  // an id and a point
-      m.i16();
-      point(DemoEffectKind::spike);
-      keep = false;
+    case 50:  // the widow's beam-out: an id and a point, a sphere growing for 2.1 s
+      e.entity = m.i16();
+      point(DemoEffectKind::named);
+      e.name = "sq_widow_beam";
       break;
     // The kinds a newer game's server sends, in any protocol's recording.
     case 31:  // a lighter rail's line
@@ -840,19 +877,42 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       e.entity = m.i16();
       line(DemoEffectKind::beam);
       break;
-    case 60:  // a power splash: entity, size
-      m.i16();
+    case 60: {  // a power splash: entity, a count not drawn; round the entity's box as it stands
+      const int n = m.i16();
       m.u8();
       keep = false;
+      if (n < 1 || static_cast<size_t>(n) >= s.entities.size() || !s.entities[size_t(n)].present)
+        break;
+      const DemoEntity& d = s.entities[size_t(n)];
+      // The packed box: half width, depth below and height above, in units.
+      const float x = 8.0f * float(d.solid & 31), below = 8.0f * float((d.solid >> 5) & 31),
+                  above = 8.0f * float((d.solid >> 10) & 63) - 32;
+      const bool boxed = d.solid != 0 && d.solid != 31;
+      e.kind = DemoEffectKind::named;
+      e.name = "sq_power_splash";
+      e.at = d.origin + sh::Vec3f{0, 0, boxed ? (above - below) / 2 : 0.0f};
+      e.end = e.at;
+      const float h = above + below;
+      e.way = {boxed ? 0.5f * std::sqrt(8 * x * x + h * h) : 0.0f, 0, 0};  // its reach, units
+      keep = true;
       break;
+    }
     case 62:
     case 63:  // explosions that give no light
       point(DemoEffectKind::explosion);
       break;
-    case 128:  // damage dealt: a number for the screen alone
-      m.i16();
+    case 128: {  // damage dealt: the hit marker's (q2_bar.hpp) and its sound, heard everywhere
+      if (m.i16() > 0 && !m.bad) {
+        s.hits++;
+        DemoSound o;
+        o.name = "weapons/marker.wav";  // DemoSounds plays it only with cl_hit_markers 2
+        o.attenuation = 0;
+        o.origin = s.eye;
+        s.started.push_back(o);
+      }
       keep = false;
       break;
+    }
     default:
       error = "a temporary entity of kind " + std::to_string(kind) + at_byte(m) +
               " that this game's recordings do not carry: the recording is damaged";
@@ -1048,6 +1108,13 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
           d.state.voice.push_back(std::move(v));
         break;
       }
+      case kGeSheet: {  // a part of the settings sheet: offered, or sent as asked
+        const int part = m.u8();
+        const std::string text = m.str();
+        d.sheet_offered = true;
+        ge::server::sheet_take(d.sheet, part, text);
+        break;
+      }
       case kGeShare: {  // the easy jump's share, thousandths
         const int lo = m.u8(), hi = m.u8();
         d.speedjump_share = static_cast<float>(std::min(1000, lo | hi << 8)) * 0.001f;
@@ -1116,13 +1183,24 @@ void q2_stream_begin(Demo& d) {
 }
 
 bool is_q2_demo(std::span<const uint8_t> bytes) {
-  if (bytes.size() < 13) return false;
-  const int32_t len = i32_at(bytes, 0);
-  if (len < 9 || bytes[4] != kServerData) return false;
-  const int32_t protocol = i32_at(bytes, 5);
-  const bool extended = ext_of(protocol) > 0;
-  if (len > (extended ? kMostBlockExt : kMostBlock)) return false;
-  return (extended || (protocol >= 26 && protocol <= 34)) && bytes[13] <= 2;
+  // The server data opens the recording, or follows a few short blocks a recording tool put
+  // first (a stuffed command such as "hand 3"); each block before it is a whole one.
+  size_t at = 0;
+  for (int skipped = 0; skipped < 4; skipped++) {
+    if (at + 13 > bytes.size()) return false;
+    const int32_t len = i32_at(bytes, at);
+    if (len <= 0 || len > kMostBlockExt || at + 4 + size_t(len) > bytes.size()) return false;
+    if (bytes[at + 4] == kServerData) {
+      if (len < 9) return false;
+      const int32_t protocol = i32_at(bytes, at + 5);
+      const bool extended = ext_of(protocol) > 0;
+      if (len > (extended ? kMostBlockExt : kMostBlock)) return false;
+      return (extended || (protocol >= 26 && protocol <= 34)) && bytes[at + 13] <= 2;
+    }
+    if (len > kMostBlock) return false;
+    at += 4 + size_t(len);
+  }
+  return false;
 }
 
 DemoRead next_q2(Demo& d, std::string& error) {

@@ -13,6 +13,7 @@
 #include "classic/content/soundtrack.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/client/args.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/settings.hpp"
 
 namespace shooters_edge::client {
@@ -119,11 +120,14 @@ bool take_in_basedir(std::string* basedir, const std::string& root) {
 }
 
 void add_take_in_commands(ge::console::Console& con, std::string* ask, const std::string* basedir,
-                          ge::audio::MusicConsole* music) {
-  if (music != nullptr) {
-    music->track_of = [basedir](int track) { return content::track_path(*basedir, track); };
-    ge::audio::add_music_commands(con, *music);
-  }
+                          ge::audio::MusicConsole* music, const std::string* game,
+                          const bool* remap) {
+  if (music != nullptr)  // its cvar and `cd` are the window's own, bound before the game's
+    music->track_of = [basedir, game, remap](int track) {
+      if (game != nullptr && remap != nullptr && *remap)
+        track = content::q2_remap_track(*game, track);
+      return content::track_path(*basedir, track);
+    };
   using Con = ge::console::Console;
   using CArgs = ge::console::Args;
   con.add_command("basedir", "basedir <folder>: load your game's install (the folder holding id1)",
@@ -154,6 +158,10 @@ bool take_in_ask(std::string* ask, const std::string& root, std::string* error,
   if (!said.empty()) print(said);
   *ask = taken;
   return true;
+}
+
+void demo_music(ge::audio::MusicConsole& music, const DemoState& s) {
+  if (s.cdtrack >= 0) ge::audio::play_level_music(music, s.cdtrack);
 }
 
 void level_music(ge::audio::MusicConsole& music, std::string_view entities) {

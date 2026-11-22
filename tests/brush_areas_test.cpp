@@ -66,4 +66,31 @@ TEST(a_v38_map_reads_its_leaves_areas) {
   CHECK(q1.areas.empty() && br::area_at(q1, p) == 0);
 }
 
+// The potentially visible set with the frame's areas: a leaf in an area whose bit is unset (or in
+// solid) marks none of its surfaces, with or without visibility; no bits, every leaf as before.
+TEST(the_visible_set_leaves_out_unshown_areas) {
+  br::Map m;
+  m.surfaces.resize(3);
+  m.marks = {0, 1, 2};
+  br::Leaf solid, a1, a2;
+  solid.solid = true;
+  solid.area = 1;
+  solid.first_mark = 0;
+  solid.marks = 1;
+  a1.area = 1;
+  a1.first_mark = 1;
+  a1.marks = 1;
+  a2.area = 2;
+  a2.first_mark = 2;
+  a2.marks = 1;
+  m.leaves = {solid, a1, a2};
+  std::vector<uint8_t> seen;
+  CHECK(br::potentially_visible(m, 1, &seen) == 3);  // no visibility, no areas: everything
+  const uint8_t only_1[1] = {0x02}, both[1] = {0x06};
+  CHECK(br::potentially_visible(m, 1, &seen, only_1) == 1 && seen[1] == 1 && seen[2] == 0);
+  CHECK(br::potentially_visible(m, 1, &seen, both) == 2 && seen[0] == 0);  // solid draws none
+  const uint8_t none[1] = {0};
+  CHECK(br::potentially_visible(m, 1, &seen, none) == 0);
+}
+
 }  // namespace

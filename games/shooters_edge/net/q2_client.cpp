@@ -8,7 +8,9 @@
 #include "shooters_edge/net/q2_client.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <iterator>
 #include <utility>
 
 #include "net/voice_trial.hpp"
@@ -19,6 +21,7 @@
 namespace shooters_edge::net {
 
 namespace cl = shooters_edge::client;
+namespace wd = ge::classic::content;
 
 namespace {
 
@@ -54,7 +57,8 @@ std::string userinfo_of(const Q2ClientEnd& c) {
       (c.cfg.ask_moves ? kGeOtherMoves : 0u) | (c.cfg.speedjump ? kGeSpeedJumpShare : 0u) |
       (c.cfg.ask_login ? kGeAccountKey : 0u) | (c.cfg.ask_feel ? kGeMoveFeel : 0u) |
       (c.cfg.voice ? kGeVoice : 0u) | (c.cfg.ask_frames ? kGeEveryFrame : 0u) |
-      (c.cfg.ask_back ? kGeItemBack : 0u);
+      (c.cfg.ask_back ? kGeItemBack : 0u) | (c.cfg.ask_hits ? kGeHitReports : 0u) |
+      (c.cfg.ask_sheet ? kGeSettings : 0u);
   if (ext != 0) info_set(u, "*ge_ext", std::to_string(ext));
   return u;
 }
@@ -93,6 +97,8 @@ void read_oob(Q2ClientEnd& c, const uint8_t* data, size_t size) {
     c.last_ask = c.now;
     send_connect(c);
   } else if (w[0] == "client_connect" && c.stage == ClientStage::connect) {
+    wd::web_connect(c.http, c.cfg.http, wd::web_dlserver(w), c.cfg.allow.all,
+                    gn::to_string(c.server));
     connected(c);
   }
 }
@@ -103,6 +109,12 @@ void next_fetch(Q2ClientEnd& c) {
   c.fetched_bytes.clear();
   c.fetched_percent = 0;
   c.fetched_origin = false;
+  if (c.http.on) {                               // over HTTP first: `begin` held until it is done
+    c.cfg.http.gamedir = q2_demo(c).state.game;  // the server's game folder ("": baseq2)
+    for (const std::string& path : std::exchange(c.fetch_queue, {}))
+      if (wd::web_queue(c.http, c.cfg.http, path)) q2_client_command(c, "download http");
+    if (wd::web_busy(c.http)) return;
+  }
   if (!c.fetch_queue.empty()) {
     c.fetching = c.fetch_queue.front();
     c.fetch_queue.erase(c.fetch_queue.begin());
@@ -117,17 +129,22 @@ bool lacks(const Q2ClientEnd& c, const std::string& path) {
   return c.downloaded.count(path) == 0 && (!c.cfg.read_file || c.cfg.read_file(path).empty());
 }
 
+// Lacked and let through by the player's download switches: fetched on joining.
+bool wanted(const Q2ClientEnd& c, const std::string& path) {
+  return q2_download_allowed(c.cfg.allow, path) && lacks(c, path);
+}
+
 // `precache`: the files lacked queued, `begin` held until they are fetched.
 void start_fetch(Q2ClientEnd& c, const std::string& begin) {
   c.fetch_queue.clear();
   const std::vector<std::string>& models = q2_demo(c).state.models;
-  if (models.size() > 1 && models[1].rfind("maps/", 0) == 0 && lacks(c, models[1]))
+  if (models.size() > 1 && models[1].rfind("maps/", 0) == 0 && wanted(c, models[1]))
     c.fetch_queue.push_back(models[1]);
   if (c.cfg.fetch_level) {  // what the level names: models, sounds and the players' figures
     const auto queue = [&c](const std::string& path) {
       if (path.empty() || path[0] == '*' || path[0] == '#' || path.find('/') == std::string::npos)
         return;
-      if (lacks(c, path) &&
+      if (wanted(c, path) &&
           std::find(c.fetch_queue.begin(), c.fetch_queue.end(), path) == c.fetch_queue.end())
         c.fetch_queue.push_back(path);
     };
@@ -144,11 +161,16 @@ void start_fetch(Q2ClientEnd& c, const std::string& begin) {
     }
   }
   for (const std::string& w : c.cfg.want)
-    if (lacks(c, w) &&
+    if (wanted(c, w) &&
         std::find(c.fetch_queue.begin(), c.fetch_queue.end(), w) == c.fetch_queue.end())
       c.fetch_queue.push_back(w);
   c.held_begin = begin;
   next_fetch(c);
+}
+
+// "[3 remaining files]": the files still to ask for over the channel.
+std::string files_left(const Q2ClientEnd& c) {
+  return wd::web_files_left(static_cast<int>(c.fetch_queue.size()));
 }
 
 // The download pieces and archives the reader took off this payload.
@@ -163,6 +185,8 @@ void take_downloads(Q2ClientEnd& c) {
     if (c.fetching.empty()) continue;
     if (p.size < 0) {
       c.downloads_refused++;
+      c.http.said.push_back("[UDP] " + c.fetching +
+                            (c.fetched_percent > 0 ? " [STOP] " : " [FAIL] ") + files_left(c));
       next_fetch(c);
       continue;
     }
@@ -173,11 +197,30 @@ void take_downloads(Q2ClientEnd& c) {
       continue;
     }
     c.downloaded[c.fetching] = c.fetched_bytes;
+    c.http.said.push_back("[UDP] " + c.fetching + " [DONE] " + files_left(c));
     if (c.cfg.keep_file)
       c.cfg.keep_file(c.fetching, c.fetched_bytes, c.fetched_origin ? &c.fetching_origin : nullptr);
     next_fetch(c);
   }
   q2_demo(c).download_pieces.clear();
+}
+
+// The HTTP downloads moved on: each file fetched kept as one over the channel; once none is left
+// (or HTTP gave its files back), the channel's turn.
+void step_http(Q2ClientEnd& c) {
+  wd::WebDone done;
+  wd::web_step(
+      c.http, c.cfg.http, c.now,
+      [&c](const std::string& path, bool) {
+        return q2_download_allowed(c.cfg.allow, path) && lacks(c, path);
+      },
+      done);
+  for (auto& [path, bytes] : done.files) {
+    if (c.cfg.keep_file) c.cfg.keep_file(path, bytes, nullptr);
+    c.downloaded[path] = std::move(bytes);
+  }
+  c.fetch_queue.insert(c.fetch_queue.begin(), done.back.begin(), done.back.end());
+  if (!wd::web_busy(c.http) && c.fetching.empty()) next_fetch(c);
 }
 
 // `line` with each `$<name>` outside quotes made the setting's value, as a console expands it.
@@ -214,6 +257,11 @@ void run_stuffed(Q2ClientEnd& c) {
       from = end + 1;
       if (raw.empty()) continue;
       if (c.stuffed.size() < kKept) c.stuffed.push_back(raw);
+      if (c.cfg.stuff != nullptr && !ge::classic::stuff_allowed(*c.cfg.stuff, raw)) {
+        if (std::string said = ge::classic::stuff_ignored_line(*c.cfg.stuff, raw); !said.empty())
+          c.ignored.push_back(std::move(said));
+        continue;
+      }
       const std::string line = expand_settings(c, raw);  // as a console runs it
       const std::vector<std::string> w = q2_words(line);
       if (w.empty()) continue;
@@ -242,7 +290,9 @@ void run_stuffed(Q2ClientEnd& c) {
 
 // One payload as one block of the recording, then read.
 void read_payload(Q2ClientEnd& c, const uint8_t* data, size_t size) {
-  if (size == 0) return;  // a keep-alive
+  if (c.cfg.shownet > 0 && c.cfg.trace != nullptr && c.cfg.trace->print)
+    c.cfg.trace->print(std::to_string(size));  // cl_shownet
+  if (size == 0) return;                       // a keep-alive
   const int levels = q2_demo(c).state.levels;
   const auto len = static_cast<uint32_t>(size);
   for (int k = 0; k < 4; k++) q2_demo(c).bytes.push_back(static_cast<uint8_t>(len >> (8 * k)));
@@ -358,6 +408,7 @@ void send_packet(Q2ClientEnd& c, int64_t now_us) {
     // For 150 ms (past the server's next 10 Hz frame, whatever moves come between) no frame is
     // acknowledged, so the server's next one is whole.
     if (c.cfg.whole_every > 0 && c.now - c.last_whole < 0.15) acked = -1;
+    if (c.cfg.nodelta) acked = -1;  // cl_nodelta: every frame asked for whole
     write_q2_move(w, acked, c.cmds, c.ch.outgoing_sequence);
     c.moves++;
     speak(c, w, m.msec * gn::kVoiceRate / 1000);
@@ -474,6 +525,7 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
       return;
     }
   }
+  if (wd::web_busy(c.http)) step_http(c);
   // A connected server that has gone quiet: given up, so the game can say so and leave.
   if ((c.stage == ClientStage::signon || c.stage == ClientStage::active) && c.cfg.timeout > 0 &&
       c.now - c.ch.last_received > c.cfg.timeout) {
@@ -503,7 +555,37 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
   c.last_tick = c.now;
 }
 
+std::string q2_download(Q2ClientEnd& c, const std::string& file) {
+  if (file.size() > 63) return "File name too long";
+  std::string path = file;
+  for (char& ch : path) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  for (char& ch : path)
+    if (ch == '\\') ch = '/';
+  const auto name_char = [](char ch) {
+    return std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_' || ch == '-';
+  };
+  static constexpr const char* kKinds[] = {"bsp", "dm2", "ent", "jpg", "loc", "md2", "md3", "ogg",
+                                           "pcx", "png", "sp2", "tga", "txt", "wal", "wav"};
+  const size_t dot = path.rfind('.');
+  const std::string kind = dot == std::string::npos ? std::string() : path.substr(dot + 1);
+  const bool known = std::any_of(std::begin(kKinds), std::end(kKinds),
+                                 [&kind](const char* k) { return kind == k; });
+  if (path.empty() || !name_char(path.front()) || !name_char(path.back()) ||
+      path.find("..") != std::string::npos || path.find('/') == std::string::npos || !known ||
+      path.find("//") != std::string::npos)
+    return "Invalid quake path";
+  if (!lacks(c, path) || path == c.fetching ||
+      std::find(c.fetch_queue.begin(), c.fetch_queue.end(), path) != c.fetch_queue.end())
+    return "File exists";
+  if (path.rfind("save/", 0) == 0 || path.rfind("music/", 0) == 0 || path.rfind("video/", 0) == 0)
+    return "Operation not permitted";
+  c.fetch_queue.push_back(path);
+  if (c.fetching.empty()) next_fetch(c);
+  return {};
+}
+
 void q2_client_stop(Q2ClientEnd& c) {
+  wd::web_stop(c.http);
   if (c.stage == ClientStage::signon || c.stage == ClientStage::active) {
     const uint8_t bye[] = {kClcStringCmd, 'd', 'i', 's', 'c', 'o', 'n', 'n', 'e', 'c', 't', 0};
     for (int k = 0; k < 3; k++) {

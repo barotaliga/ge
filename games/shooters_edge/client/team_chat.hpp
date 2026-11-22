@@ -2,66 +2,69 @@
 // Quake's clients work here (docs/shooters-edge.md § Configs).
 //
 // - **say and say_team** (`add_team_chat`): the line's PERCENT CODES are filled in from the
-//   player's own state, then its FUN CHARACTERS become the classic font's glyphs, then it is
-//   quoted and sent. `cl_parseSay 0` and `cl_parseFunChars 0` turn either pass off.
-// - **The percent codes** (`fill_team_codes`): `%h` health, `%a` armour, `%A` its class word,
-//   `%c` cells, `%w` the weapon in hand and its ammunition (`rl:23`), `%b` the best weapon owned
-//   by `tp_weapon_order` and its ammunition (in Quake II its own weapons by their words,
-//   `tp_name_hb`, `rg`, `bfg` and kin, best first from the big gun down), `%p` and `%P` the
-//   powerups held, `%R` the rune,
-//   `%u` what the player needs (armour, health, the rocket launcher, the weapon's ammunition, by
-//   the `tp_need_*` thresholds), `%l` the place the player is in, `%d` where they last died this
-//   map, `%L` that place for five seconds after a death and the place now after, `%r` the last
-//   place a code named, `%S` the skin. The bracketed forms `%[a]`, `%[h]` and `%[p]` put the
-//   font's gold brackets round the figure when it is low (armour below 30, health below 50, any
-//   powerup held). `%%` is a `%`; `%<width>X` with `l`, `r` or `c` before the `>` pads or cuts
-//   (`%<5r>h`). `%i` the last pickup and where (`ra at quad`), `%X` the pickup, `%Y` its place,
-//   all for `tp_tooktimeout` seconds; `%k` and `%m` the same for five. A pickup is read from the
-//   state's change: a powerup's time starting, armour at a box's value, a new weapon, the big
-//   health, a rune, rockets, cells or a pack. What the player points at (client/team_point.hpp):
-//   `%t` the thing and its place (`quaded enemy at ra`), `%x` the thing, `%y` its place (the
-//   player's own when nothing), `%j` the last thing pointed at within `tp_pointtimeout` seconds;
-//   `nothing` when there is none. `%q` names the quad. The
-//   player counts (`%e %E %o %O %s`) need a server's leave and stay as written. Any other letter
-//   is left as written. Every word is a `tp_name_*` setting, plain words by default (`rl`, `ga`,
-//   `quad`, `nothing`, `at`), so a player's own words stand.
-// - **Fun characters** (`fun_characters`): `$[` `$]` the gold brackets, `$0`..`$9` the gold
-//   digits, `$G $R $Y $B $W` the five lights, `$( $= $) $a` the slider, `$b` a box, `$c $d $\`
-//   the arrowhead, `$<` `$-` `$>` the separator bar, `$,` `$.` dots, `$:` a new line, `$$` and
-//   `$^` themselves, `$xHH` any byte (`$x00` a blank). Outside chat (`chat` false) `^c` puts the
-//   next character in the font's coloured half. An unknown pair is left as written.
+//   player's own state, then its FUN CHARACTERS become the classic font's glyphs, then it is quoted
+//   and sent. `cl_parseSay 0` and `cl_parseFunChars 0` turn either pass off. With `cl_fakename`
+//   set, a team line starts with a carriage return, that name and `cl_fakename_suffix`, drawn over
+//   the `(name): ` the others' clients write (the canned messages then put no short name of their
+//   own). `cl_floodprot 1` keeps back a line past `cl_fp_messages` (4, at most 10) in any
+//   `cl_fp_persecond` (4) seconds, saying "Flood Protection".
+// - **The percent codes** (`fill_team_codes`): `%h` health, `%a` armour, `%A` its class word, `%c`
+//   cells, `%w` the weapon in hand and its ammunition (`rl:23`), `%b` the best weapon owned by
+//   `tp_weapon_order` and its ammunition (Quake II's by its own words, `rg`, `bfg`, best first),
+//   `%p` and `%P` the powerups held, `%R` the rune, `%u` what the player needs (by the `tp_need_*`
+//   thresholds), `%l` the place the player is in, `%d` where they last died this map, `%L` that
+//   place for five seconds after a death and the place now after, `%r` the last place named, `%S`
+//   the skin. `%[a]`, `%[h]`, `%[p]` add gold brackets when low (armour under 30, health under 50,
+//   a powerup held). `%%` is a `%`; `%<width>X` with `l`, `r` or `c` before the `>` pads or cuts
+//   (`%<5r>h`). `%i` the last pickup and where (`ra at quad`), `%X` the pickup, `%Y` its place, all
+//   for `tp_tooktimeout` seconds; `%k` and `%m` the same for five. What the player points at
+//   (client/team_point.hpp): `%t` the thing and its place (`quaded enemy at ra`), `%x` the thing,
+//   `%y` its place (the player's own when nothing), `%j` the last thing pointed at within
+//   `tp_pointtimeout` seconds; `nothing` when there is none. `%q` names the quad. The player counts
+//   (`%e %E %o %O %s`) need a server's leave and stay as written. Other letters stay as written.
+//   Every word is a `tp_name_*` setting (`rl`, `ga`, `quad`, `at`).
+// - **Fun characters** (`fun_characters`): `$[` `$]` the gold brackets, `$0`..`$9` the gold digits,
+//   `$G $R $Y $B $W` the five lights, the slider, box, arrowhead, bar and dot glyphs, `$:` a new
+//   line, `$xHH` any byte. Outside chat (`chat` false) `^c` puts the next character in the font's
+//   coloured half. An unknown pair is left as written.
 // - **The events** (`team_frame`, once a frame with the player's state and the map): aliases a
 //   player names `f_newmap` (a new map, and every connect or demo), `f_spawn` (its first frame),
 //   `f_weaponchange` (the weapon in hand changed), `f_death` and `f_respawn` (health crossing 0),
-//   `f_took` (a pickup) and `f_bonusflash` (the server's `bf`, flashed or not) run when the
-//   event happens. `tp_triggers 0` stops them all; `f_death`, `f_respawn` and `f_took` are a
-//   team's, run only with a teammate in the game or `tp_forceTriggers 1`. The game runs
-//   `f_demostart`, `f_demoend` and `f_exit` through `team_event`; `cfg_load` runs `f_cfgload`
-//   after the config it read (an alias the config defines included; not when there is no file).
+//   `f_took` (a pickup) and `f_bonusflash` run when the event happens. On a server joined or a
+//   recording watched also `f_mapend` (the level's end), `f_countdownstart` (the server's `status`
+//   turned to countdown) and `f_countdownbreak` (back to standby from it). `tp_triggers 0` stops
+//   them all; `f_death`, `f_respawn` and `f_took` are a team's, run only with a teammate in the
+//   game or `tp_forceTriggers 1`. The game runs `f_demostart`, `f_demoend` and `f_exit` through
+//   `team_event`; `cfg_load` runs `f_cfgload` after the config it read.
 // - **The canned messages** (`team_message`, the `tp_msg*` commands): `tp_msgreport`, `lost`,
 //   `need`, `safe`, `killme`, `help`, `utake`, `enemypwr`, `quaddead`, `getquad`, `getpent` and the
 //   one-line set (`yesok`, `nocancel`, `itemsoon`, `waiting`, `slipped`, `replace`, `trick`,
 //   `coming`) say the player's state to the team behind their short name (`nick`, else the name's
-//   first three letters, then `cl_fakename_suffix`); `tp_msgtook` the last pickup.
-//   `tp_msgpoint` names what the player points at and where; `enemypwr`, `safe`, `killme`,
-//   `utake`, `quaddead`, `getquad` and `getpent` read it too (a glowing enemy, a teammate).
+//   first three letters, then `cl_fakename_suffix`); `tp_msgtook` the last pickup. `tp_msgpoint`
+//   names what the player points at; seven others read it too.
 // - **`echo`** and `set_ex` fill in the codes and fun characters (`set_ex2` codes only).
+// - **The `$` macros** (`$health`, `$bestweapon`, `$location`, `$ledstatus`...) are
+//   team_macros.hpp's, added here.
 // The lines it prints are a player's: plain words, no next steps.
 //
 // ge:summary Team chat in a player's config: percent codes, fun characters, f_ event triggers
 // ge:keywords say say_team percent-codes team-message fun-characters f_newmap f_spawn f_death
-// ge:keywords f_respawn f_weaponchange tp_triggers tp_forcetriggers cl_parsesay
-// ge:keywords cl_parsefunchars tp_name tp_need tp_weapon_order gold-brackets event-triggers
-// ge:keywords tp_msgreport tp_msglost tp_msgneed tp_msgsafe canned-messages f_cfgload f_exit
-// ge:keywords f_demostart f_demoend echo nick f_took tp_msgtook pickup took tp_tooktimeout
-// ge:keywords tp_msgpoint tp_pointtimeout pointing set_ex set_ex2 set_tp macrolist f_bonusflash
+// ge:keywords f_respawn f_weaponchange tp_triggers tp_forcetriggers cl_parsesay cl_parsefunchars
+// ge:keywords tp_name tp_need tp_weapon_order gold-brackets event-triggers tp_msgreport tp_msglost
+// ge:keywords tp_msgneed tp_msgsafe canned-messages f_cfgload f_exit f_demostart f_demoend echo
+// ge:keywords nick f_took tp_msgtook pickup took tp_tooktimeout tp_msgpoint tp_pointtimeout
+// ge:keywords pointing set_ex set_ex2 set_tp macrolist f_bonusflash cl_fakename cl_floodprot
+// ge:keywords cl_fp_messages cl_fp_persecond flood-protection f_mapend f_countdownstart
+// ge:keywords f_countdownbreak
 // ge:skill shooter console
 // ge:test tests/shooters_edge_team_chat_test.cpp
 #pragma once
 
+#include <array>
 #include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "console/console.hpp"
 #include "shooters_edge/client/place_names.hpp"
@@ -82,6 +85,7 @@ struct TeamChat {
   hud::Status status;
   bool known = false;            // a frame's state has come
   std::string map;               // the map the events were run for
+  double level_from = 0;         // the state's clock when that map's first frame came ($cl_timer)
   int last_health = 0;           // the health the last frame had
   int last_weapon = -1;          // the weapon in hand (-1: none yet this map)
   int64_t bonuses = 0;           // the items taken the server told of, as last seen
@@ -99,6 +103,15 @@ struct TeamChat {
   mutable Pointed last_point;
   mutable double last_point_t = -1e9;
   TeamItems items;  // tp_took, tp_pickup, tp_point (client/team_items.hpp)
+  // What the server joined or the recording watched said last (team_frame's `state`), for
+  // $matchstatus, $team1, $team2 and the match's events.
+  bool joined = false;        // a frame came with a state ($matchstatus "disconnected" else)
+  bool intermission = false;  // its level has ended
+  std::string match_status;   // the server's `status` ("countdown", "standby", ...)
+  std::string team1, team2;   // the first two teams by name (with teamplay off, players)
+  // When the last lines were sent (cl_floodprot), a ring of ten.
+  std::array<double, 10> sent_at{-1e9, -1e9, -1e9, -1e9, -1e9, -1e9, -1e9, -1e9, -1e9, -1e9};
+  int sent_next = 0;
 };
 
 // The `say`/`say_team` commands and every setting the codes read, on `con` (`chat` outlives it).
@@ -116,6 +129,15 @@ std::string fun_characters(std::string_view text, bool chat);
 std::string team_message(const ge::console::Console& con, const TeamChat& chat,
                          std::string_view which);
 
+// How many things `s` needs by the `tp_need_*` thresholds (what %u lists), the rocket launcher
+// counted only with `rl`.
+int needed_count(const ge::console::Console& con, const hud::Status& s, bool rl);
+// The weapons `s` holds, best first, in the team's words (Quake II's by its keys); the melee
+// weapon last.
+std::vector<std::string> held_weapon_words(const ge::console::Console& con, const hud::Status& s);
+// The weapon in hand in the team's words, and its number (1..8; Quake II's key) in `number`.
+std::string hand_weapon_word(const ge::console::Console& con, const hud::Status& s, int& number);
+
 // The player's `alias` ("f_exit") queued, unless `tp_triggers` is 0.
 void team_event(ge::console::Console& con, std::string_view alias);
 
@@ -123,6 +145,6 @@ void team_event(ge::console::Console& con, std::string_view alias);
 // the events it makes run. `bonuses` counts the items taken the server told of (its `bf`): one
 // or more new ones run `f_bonusflash` once.
 void team_frame(ge::console::Console& con, TeamChat& chat, const hud::Status& status,
-                std::string_view map, int64_t bonuses = 0);
+                std::string_view map, int64_t bonuses = 0, const DemoState* state = nullptr);
 
 }  // namespace shooters_edge::client

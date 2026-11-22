@@ -20,6 +20,7 @@
 // ge:keywords q2-client protocol-34 scripted-client signon getchallenge connect configstrings
 // ge:keywords baselines precache begin move ack-frame spectator recording dm2 reconnect
 // ge:keywords q2_client_start q2_client_tick q2_client_stop q2_client_command q2_client_userinfo
+// ge:keywords q2_download download-command
 // ge:keywords download nextdl download-origin fetch
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_net_test.cpp
@@ -31,10 +32,13 @@
 #include <string>
 #include <vector>
 
+#include "classic/content/web_downloads.hpp"
+#include "classic/protocol/stuff_filter.hpp"
 #include "forward/forward.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q2_downloads.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/qw_client.hpp"
 #include "vfs/partial.hpp"
@@ -51,6 +55,9 @@ struct Q2ClientConfig {
   uint16_t qport = 1;
   int seed = 1;
   int send_every = 1;  // ticks between packets in the game (a slower client sends fewer)
+  // The kinds of file it may fetch on joining (q2_downloads.hpp; the window's `allow_download`
+  // switches); a scripted client's fetches every kind.
+  Q2Downloads allow{.others = true};
   // Seconds between spells of 150 ms in which the moves acknowledge no frame (0: never), so the
   // server sends its next frame whole: a relay of this recording starts a late viewer there.
   double whole_every = 0;
@@ -62,6 +69,9 @@ struct Q2ClientConfig {
   // How long the server may send nothing once connected before the client gives it up, s: a
   // server that quit or crashed, or a link gone, ends the game with a reason (0: never).
   double timeout = 60;
+  // What the server's stuffed lines may run (`cl_ignore_stufftext`, classic/protocol/
+  // stuff_filter.hpp); null: every one. A line dropped is said in `ignored`.
+  const ge::classic::StuffFilter* stuff = nullptr;
   // The packets shown (`showpackets`, `showdrop`): the channel prints through it (null: none).
   sp::ChannelTrace* trace = nullptr;
   // DOWNLOADS: with `fetch` on, at `precache` and before `begin` it asks the server, one file at a
@@ -72,6 +82,10 @@ struct Q2ClientConfig {
   // info, so our server tells each file's archive.
   bool fetch = false;
   bool ask_origins = true;
+  // HTTP (classic/content/web_downloads.hpp): with a web address from the server (`dlserver=`) or
+  // the player's own, the files lacked are fetched from it first, the channel taking those HTTP
+  // gives back.
+  ge::classic::content::WebConfig http;
   // With `fetch_level` on (the window's), every model, sound and player figure the level names
   // that `read_file` lacks is fetched too, as a player's client fetches them.
   bool fetch_level = false;
@@ -99,6 +113,19 @@ struct Q2ClientConfig {
   // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 512),
   // so the window draws one coming back ahead of time (classicenhance/hologram.hpp).
   bool ask_back = false;
+  // `ask_hits`: asks our server for the damage the player dealt (`*ge_ext` bit 1024), the hit
+  // marker's (`cl_hit_markers`); a stock client is sent none of it.
+  bool ask_hits = false;
+  // `ask_sheet`: asks our server for its settings sheet (`*ge_ext` bit 2048, net/q2_votes.hpp),
+  // the server settings page's; a stock client is offered none.
+  bool ask_sheet = false;
+  // `cl_nodelta`: no frame is ever acknowledged, so the server sends each one whole (more bytes,
+  // nothing lost to a dropped packet's delta); a server that forbids it (`sv_allow_nodelta 0`)
+  // may refuse.
+  bool nodelta = false;
+  // `cl_shownet` 1 or more: each message the server sends printed as its size in bytes (through
+  // `trace`'s print).
+  int shownet = 0;
   // VOICE, as Quake's client speaks (net/qw_client.hpp): `voice` asks our server for
   // it (`*ge_ext` bit 128); once the server says it takes it, the client sends `unmuteall` and its
   // target (`voice_to`, `voicetarg`), and each tick the frames it said as one voice message
@@ -161,6 +188,7 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   size_t level_from = 0;
   bool recording = true;
   std::vector<std::string> stuffed;          // every line stuffed, in order (the first 256)
+  std::vector<std::string> ignored;          // the lines said for stuffed commands dropped
   std::vector<std::string> prints;           // every print's text, in order (the first 256)
   int signon_steps = 0;                      // signon commands answered
   int levels = 0;                            // server data read
@@ -177,6 +205,10 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::string held_begin;
   std::map<std::string, std::vector<uint8_t>> downloaded;
   int downloads_refused = 0;
+  // The HTTP downloads (classic/content/web_downloads.hpp). `http.said` holds every download's line
+  // for the player, over HTTP and over the channel ("[UDP] maps/q2dm1.bsp [DONE] [2 remaining
+  // files]"; [FAIL] a file refused, [STOP] one cut off part way).
+  ge::classic::content::WebDownloads http;
 
   Q2Cmd cmds[3];  // the three newest, oldest first
   // Every move sent, by its packet's outgoing sequence (its low 6 bits), as the player's hands made
@@ -214,6 +246,13 @@ void q2_client_start(Q2ClientEnd& c, gn::Transport& t, const gn::Address& server
 void q2_client_tick(Q2ClientEnd& c, int64_t now_us);
 // Queues a string command on the reliable channel (`say hello`).
 void q2_client_command(Q2ClientEnd& c, const std::string& line);
+// `download <file>` asked while playing: the path checked and queued behind any fetch under way,
+// "" when queued, else the reason it is not ("Invalid quake path", "File exists", "Operation not
+// permitted"): a path of at most 63 characters with a folder, no `..`, starting and ending in a
+// name's character, of a kind a server sends (bsp, dm2, ent, jpg, loc, md2, md3, ogg, pcx, png,
+// sp2, tga, txt, wal, wav), lowered; not one the files hold or already queued; never under
+// `save/`, `music/` or `video/`.
+std::string q2_download(Q2ClientEnd& c, const std::string& file);
 // The user info sent again as it stands in `c.cfg` (a setting in it changed while joined).
 void q2_client_userinfo(Q2ClientEnd& c);
 // Its voice's target (`voicetarg <word>`: all, team, near, a slot), told to the server when it

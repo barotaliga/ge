@@ -31,30 +31,47 @@
 namespace shooters_edge::client {
 
 // The effect bits (the entity's `effects`) this client reads.
-inline constexpr uint32_t kSqRotate = 1u, kSqGib = 2u, kSqBlaster = 8u, kSqRocket = 16u,
-                          kSqGrenade = 32u, kSqHyperblaster = 64u, kSqBfg = 128u,
+inline constexpr uint32_t kSqRotate = 1u, kSqGib = 2u, kSqBob = 4u, kSqBlaster = 8u,
+                          kSqRocket = 16u, kSqGrenade = 32u, kSqHyperblaster = 64u, kSqBfg = 128u,
                           kSqColourShell = 256u, kSqPowerScreen = 512u, kSqFlies = 16384u,
                           kSqQuad = 32768u, kSqInvulnerable = 65536u, kSqFlag1 = 1u << 18,
                           kSqFlag2 = 1u << 19, kSqIonRipper = 1u << 20, kSqGreenGib = 1u << 21,
-                          kSqBlueHyperblaster = 1u << 22, kSqPlasma = 1u << 24, kSqTrap = 1u << 25,
-                          kSqTracker = 1u << 26, kSqDoubleDamage = 1u << 27,
-                          kSqSphereTrans = 1u << 28, kSqTagTrail = 1u << 29,
-                          kSqHalfDamage = 1u << 30, kSqTrackerTrail = 1u << 31;
+                          kSqBlueHyperblaster = 1u << 22, kSqSpinningLights = 1u << 23,
+                          kSqPlasma = 1u << 24, kSqTrap = 1u << 25, kSqTracker = 1u << 26,
+                          kSqDoubleDamage = 1u << 27, kSqSphereTrans = 1u << 28,
+                          kSqTagTrail = 1u << 29, kSqHalfDamage = 1u << 30,
+                          kSqTrackerTrail = 1u << 31;
 // The render bits (the entity's `renderfx`).
-inline constexpr uint32_t kRfTranslucent = 32u, kRfBeam = 128u, kRfGlow = 512u, kRfShellRed = 1024u,
+inline constexpr uint32_t kRfMinLight = 1u, kRfFullBright = 8u, kRfTranslucent = 32u,
+                          kRfBeam = 128u, kRfGlow = 512u, kRfShellRed = 1024u,
                           kRfShellGreen = 2048u, kRfShellBlue = 4096u, kRfShellDouble = 65536u,
-                          kRfShellHalf = 131072u;
+                          kRfShellHalf = 131072u, kRfShellLiteGreen = 1u << 19,
+                          kRfIrVisible = 32768u;
+// The view's bit for infra-red goggles: an `kRfIrVisible` model drawn red, lit by nothing.
+inline constexpr int kQ2RdIrGoggles = 4;
 
 inline constexpr const char* kSqPowerScreenModel = "models/items/armor/effect/tris.md2";
 inline constexpr float kSqShellPushUnits = 4;  // a shell's points out along their normals
 inline constexpr float kSqShellAlpha = 0.3f;
+inline constexpr double kSqSpinDegPerS = 500;  // spinning lights' turn
+// Seen through infra-red goggles (the view's `kQ2RdIrGoggles`): a model marked `kRfIrVisible`
+// is drawn as its skin times pure red, lit by nothing, unless a shell or full light holds it.
+bool q2_infra_red(int rdflags, uint32_t render_fx, bool shell, bool full_bright);
+// The bob bit's lift at `t` s, units.
+double q2_bob_units(double t);
 
 struct Q2Look {
-  float alpha = 1;                 // the model's (or sprite's) share that shows; 1 solid
-  bool turns = false;              // about its yaw on the picture's clock
-  bool pulse = false;              // its light pulses (`q2_pulse`)
-  bool shell = false;              // a shell copy over it
-  bool bleeds = false;             // a body's piece: a blood trail behind it (the gib bit)
+  float alpha = 1;     // the model's (or sprite's) share that shows; 1 solid
+  bool turns = false;  // about its yaw on the picture's clock
+  // Upside down, spinning 500 degrees a second, a red light 64 units ahead of it (spinning lights;
+  // the rotate bit wins).
+  bool spinning = false;
+  // Its light: full whatever the room (fullbright), or never darker than a tenth (minlight).
+  bool full_bright = false, min_light = false;
+  bool bobs = false;    // rises and sinks 5 units, a cycle every 2.5 s, all in step (the bob bit)
+  bool pulse = false;   // its light pulses (`q2_pulse`)
+  bool shell = false;   // a shell copy over it
+  bool bleeds = false;  // a body's piece: a blood trail behind it (the gib bit)
   bool green_blood = false;        // that trail green (the green gib bit alone)
   bool flies = false;              // a corpse: flies swarm round it (effects::q2_flies)
   bool power_screen = false;       // a power screen's plate before it, a green shell (it was hit)
@@ -75,7 +92,11 @@ struct Q2Look {
     tag,
     ion,
     blue,
-    plasma
+    plasma,
+    trap,
+    tracker,
+    tracker_dark,
+    tracker_shell
   } missile = Missile::none;
 };
 

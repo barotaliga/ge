@@ -155,7 +155,7 @@ TEST(q2_s_macros_name_where_the_player_is_and_looks) {
   CHECK(con.expand_text("$loc_here") == "unknown");
 }
 
-TEST(the_first_game_has_no_place_macros) {
+TEST(the_first_game_has_the_place_macros_too) {
   ge::console::Console con;
   cl::PlaceNames p;
   cl::SearchPath files;
@@ -163,7 +163,7 @@ TEST(the_first_game_has_no_place_macros) {
     at = {0, 0, 0};
     return true;
   });
-  CHECK(con.expand_text("$loc_here") == "$loc_here");
+  CHECK(con.expand_text("$loc_here") == "unknown");  // no point read yet
 }
 
 TEST(a_loc_file_is_found_whatever_its_letter_case) {

@@ -19,7 +19,12 @@
 //   out of range draws nothing); `picn name` the named one.
 // - **Text** in the console's letters, 8 px each: `string "t"` and `string2` (coloured) one line at
 //   the cursor; `cstring` and `cstring2` each line centred in 320 px from the cursor's x, 8 px
-//   apart; `stat_string s` the server string stat s names.
+//   apart; `rstring` and `rstring2` one line ending at the cursor (the second with each letter's
+//   top bit flipped); `stat_string s` the server string stat s names, and `stat_string2`,
+//   `stat_cstring`, `stat_cstring2`, `stat_rstring`, `stat_rstring2` the same in each form.
+// - **Colour**: `color c` tints everything drawn after it in that program: `#rgb`, `#rrggbb`,
+//   `#rrggbbaa`, a name (black, red, green, yellow, blue, cyan, magenta, white) or its index 0..7;
+//   anything else leaves the colour as it was. Each program starts white.
 // - **Conditions**: `if s` .. `endif`: when stat s is 0 every word up to the first `endif` is
 //   skipped (no nesting).
 // - **Score blocks**: `client x y c score ping time` (the icon, the name, score, ping and minutes,
@@ -31,7 +36,9 @@
 //
 // ge:summary Quake II's status bar language run into pictures and text at screen positions
 // ge:keywords q2 layout status-bar statusbar layout-language hnum anum rnum stat_string cstring
-// ge:keywords scoreboard client-block stats field_3 num_minus conchars picn q2-hud
+// ge:keywords rstring rstring2 color stat_cstring stat_rstring
+// ge:keywords scoreboard client-block stats field_3 num_minus conchars picn q2-hud aashot
+// ge:keywords aadump layout_text text-picture
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_q2_layout_test.cpp
 #pragma once
@@ -51,7 +58,7 @@ inline constexpr int kLayoutSkins = 1312;    // the first player's `name\model/s
 
 // One thing the program draws, its top left in screen pixels.
 struct LayoutOp {
-  enum class Kind : uint8_t { picture, text };
+  enum class Kind : uint8_t { picture, text, fill };
   Kind kind = Kind::picture;
   int x = 0, y = 0;
   // A picture by the program's name for it (`num_3`, `i_health`, `/players/male/grunt_i.pcx`; see
@@ -59,6 +66,11 @@ struct LayoutOp {
   std::string name, fallback;
   std::string text;  // a line of text, each byte a letter of the console's sheet
   bool alt = false;  // the text's coloured set (each letter + 128)
+  // The colour it is drawn in, multiplied over its pixels (`color`; white: as it is), RGBA.
+  uint8_t rgba[4] = {255, 255, 255, 255};
+  // A picture stretched to this size (0: its own); a fill's rectangle, solid `rgba` (a boss's
+  // health bar: neither `color` nor the HUD's alpha reaches it).
+  int w = 0, h = 0;
 };
 
 struct LayoutInput {
@@ -70,10 +82,24 @@ struct LayoutInput {
   // The server's string `index` (0..2079), empty when none.
   std::string_view (*string)(const void* ctx, int index) = nullptr;
   const void* ctx = nullptr;
+  bool text_numbers = false;  // numbers as text ops, right-aligned in their field (layout_text)
+  // A scope's picture (`pic` of `scope?x` at `xv 0 yv 0`): 320 by 240 times `ch_scale`, centred
+  // on the screen and moved by `ch_x` and `ch_y`.
+  float scope_scale = 1;
+  int scope_x = 0, scope_y = 0;
 };
 
 // Runs `in.program` into `out` (cleared first), in drawing order.
 void run_layout(const LayoutInput& in, std::vector<LayoutOp>& out);
+
+// A `color` word's colour into `rgba`; false (left as it was) for anything it does not name.
+bool layout_colour(std::string_view c, uint8_t rgba[4]);
+
+// THE TEXT PICTURE (`aashot`, `aadump`): `in.program` (the status bar), then `over` (the layout
+// up, "" none), drawn as 40 rows of 80 letters, one letter to 8 px of a 640 x 320 screen: text
+// and numbers in letters, pictures left out, the font's coloured half plain and its bar pieces
+// as > [ ] < = (other control letters blanks).
+std::vector<std::string> layout_text(LayoutInput in, std::string_view over);
 
 // The file a picture name means: `pics/<name>.pcx`, or the path after a leading slash.
 std::string layout_picture_path(std::string_view name);

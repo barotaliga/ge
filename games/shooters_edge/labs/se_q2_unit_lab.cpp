@@ -274,6 +274,7 @@ void run(gl::Lab& lab) {
   opt.maps = static_cast<int>(lab.arg_num("maps"));
   opt.map_seconds = lab.arg_num("seconds");
   opt.plan = !lab.arg("plan").empty();
+  opt.complete = !lab.arg("complete").empty();
   const bt::UnitReport r = bt::run_q2_unit(opt);
   if (!r.ok) {
     lab.fail(r.error, "Read the reason above. Skill: bots.");
@@ -345,7 +346,8 @@ const gl::LabSpec kSpec{
      {"first", "", "the unit's first map (default unit1; base1 with --game)"},
      {"maps", "12", "at most this many maps entered"},
      {"seconds", "600", "a map's time before it is called unfinished, s"},
-     {"plan", "", "any value: note every change of the script's plan"}},
+     {"plan", "", "any value: note every change of the script's plan"},
+     {"complete", "", "any value: the 100% run (every monster and secret, then the exit)"}},
     "",
     run,
 };

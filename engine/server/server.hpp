@@ -51,9 +51,11 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "console/cvar.hpp"
@@ -65,6 +67,7 @@
 #include "net/transport.hpp"
 #include "server/login.hpp"
 #include "server/match.hpp"
+#include "server/sheet.hpp"
 #include "server/timeout.hpp"
 #include "server/vote.hpp"
 
@@ -97,10 +100,18 @@ struct ServerConfig {
   std::string public_addr;          // sv_publicaddr: the "host:port" a browser should show
   std::string maprotation;          // sv_maprotation: the maps after the first, space-separated
   std::string mapcmd;               // sv_mapcmd: a console line run after each map loads
-  int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
-  int32_t vote = 1;                 // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
-  int32_t timeouts = 1;             // sv_timeouts: each side's timeouts a map (timeout.hpp)
-  std::string spectator_password;   // sv_spectatorpassword: watching takes it
+  std::string console_prefix;       // console_prefix: before each terminal line (macros.hpp)
+  int32_t con_history = 128;        // con_history: typed lines kept and saved (terminal.hpp)
+  int32_t con_tab_mode = 1;         // con_completion_mode: how Tab lists matches (tab_list.hpp)
+  int32_t con_tab_threshold = 50;   // con_completion_threshold: matches listed before asking
+  int32_t con_logfile = 0;          // con_logfile: the console log (console_log.hpp) 0 off, 1, 2
+  int32_t con_logfile_flush = 0;    // con_logfile_flush: 0 buffered, 1 each line, 2 unbuffered
+  std::string con_logfile_name = "console";              // con_logfile_name: logs/<name>.log
+  std::string con_logfile_prefix = "[%Y-%m-%d %H:%M] ";  // con_logfile_prefix: before each line
+  int32_t max_spectators = 0;      // sv_maxspectators: spectators beside the players
+  int32_t vote = 1;                // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
+  int32_t timeouts = 1;            // sv_timeouts: each side's timeouts a map (timeout.hpp)
+  std::string spectator_password;  // sv_spectatorpassword: watching takes it
   int32_t tv_port = 0;           // sv_tvport: the server's own TV's port (0: none; spectators.hpp)
   int32_t tv_max_viewers = 32;   // sv_tvmaxviewers: the TV's viewers at most (0: no cap)
   double tv_delay_s = 10;        // sv_tvdelay: what the TV's spectators see is this old, s
@@ -162,6 +173,10 @@ struct ServerConfig {
   // dedicated process once a master elsewhere's key is known; null: no offers to a master
   // elsewhere.
   const net::SignKeys* account_signer = nullptr;
+  // The server-info keys an administrator added with `sets` (or `set <key> <value> s`), as
+  // `\key\value` pairs, now: for a game that answers its own status queries. Set by the dedicated
+  // process; null: none.
+  std::function<std::string()> admin_info;
 };
 
 // What a replay found.
@@ -203,6 +218,7 @@ struct SettingName {
 struct ServerGame {
   const char* binary = "server";  // the executable's name, at the head of every line it prints
   const char* title = "a game";   // the game's name, for the banner and `--help`
+  const char* version_text = "";  // the build's version as words, printed by `version`
   uint32_t protocol = 0;          // the LAN advert's protocol (net/packet.hpp's protocol_id)
   uint16_t default_port = 27500;
   uint16_t discovery_port = 0;    // the game's fixed LAN discovery port (0: no LAN answers)
@@ -232,6 +248,16 @@ struct ServerGame {
   // `map`, `changelevel`, a mod's commands); false when the game does not take it either. May be
   // null.
   bool (*console)(void* game, const std::string& line) = nullptr;
+  // The game's farewell as `quit [reason]` or `recycle [reason]` ends the server (`reason` the
+  // words after it; `restart`: recycle's, the players told to reconnect), before `destroy`. Null:
+  // `destroy` alone says goodbye.
+  void (*quit)(void* game, const std::string& reason, bool restart) = nullptr;
+  // The maps the game can load, by name (`$com_maplist`); may be null.
+  void (*maps)(const void* game, std::vector<std::string>& out) = nullptr;
+  // The game's own listening sockets for `showip` ("Server TCP" and where it is bound), appended
+  // to `out`; may be null.
+  void (*sockets)(const void* game,
+                  std::vector<std::pair<std::string, net::Address>>& out) = nullptr;
   // The game's part of a status line (`players=8 commands=…`); may be null.
   std::string (*status)(const void* game) = nullptr;
   // The game's part of the public status record (net/status.hpp) a hub or a browser asks for: its
@@ -252,6 +278,9 @@ struct ServerGame {
   // offline. Both null: the core's own node, session and hosting round `frame`.
   bool (*serve)(void* game, net::Transport& port, std::string& error) = nullptr;
   void (*net_frame)(void* game, int64_t now_us) = nullptr;
+  // The game's socket opened again (`net_restart`, perhaps on another port): the game's own
+  // listeners beside it (a TCP port at the same address) opened again too. May be null.
+  void (*reopened)(void* game, net::Transport& port) = nullptr;
 
   // A game a TV node can broadcast (engine/server/record.hpp): the last frame as the game's
   // viewers need it (what changed: its moves, its events), appended to `out`, and the whole state
@@ -282,6 +311,12 @@ struct ServerGame {
   // says it, and the server's features act on it (`sv_autorecord` records each match). Null: the
   // game is always in its match.
   LobbyPhase (*phase)(const void* game) = nullptr;
+
+  // THE SETTINGS SHEET (sheet.hpp): what the player in `slot` may read and change of the server
+  // now (its map, mode, limits, rules and aids, each with how it changes), for a client's server
+  // settings page. The game sends it to its clients in its own protocol; a listen server's window
+  // reads it here. Null: the game shows none.
+  void (*sheet)(const void* game, int slot, SettingsSheet& out) = nullptr;
 };
 
 // A change of the match's phase, at the server's frame and clock after which it was read.

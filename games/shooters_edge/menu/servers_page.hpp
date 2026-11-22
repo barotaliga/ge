@@ -4,10 +4,11 @@
 //
 // - WHERE IT LOOKS: the LAN (`sb_lan` 1: the status query broadcast to the ports the game's
 //   servers use), the masters (`sb_masters`, host:port words, and the masters the loaded install
-//   lists, `set_masters`), the community masters our own servers beat to (`sb_hubmasters`, the
-//   engine's masters, net/master.hpp, asked for the query's `protocol`), and the player's own
-//   servers (`sb_servers`). The game hands it its protocol (`set_query`); with none, the page says
-//   so and lists nothing.
+//   lists, `set_masters`; a web address there is a list over HTTP, `WebList`), the community
+//   masters our own servers beat to (`sb_hubmasters`, the engine's masters, net/master.hpp,
+//   asked for the query's `protocol`), and the player's own servers (`sb_servers`, and the
+//   address book a game keeps, Quake II's `adr0` to `adr15`). The game hands it its protocol
+//   (`set_query`); with none, the page says so and lists nothing.
 // - THE TABLE: one row a server: its name (a padlock's `*` when it wants a password), the mode
 //   (ffa, team, duel, coop or a match mod's own word), the map, players over slots, the ping and
 //   the skill when the server says it; the selection ringed in the accent. The title row says how
@@ -27,6 +28,9 @@
 //   their name, `-*gamedir=fortress` hides one game; net/server_list.hpp's `parse_info_filter`),
 //   a word it cannot read said in the footer. The title row says which are on and how many
 //   servers they hide; a list they empty says so, not "no servers found".
+// - THE COLOURS (`sb_colorservers` 1; Quake II spells it `ui_colorservers`): a row's words grey
+//   when the server wants a password, says `anticheat` 2 or more or `NoFake` ENABLED, green when
+//   it answered in under 30 ms, the usual colour otherwise (`row_colour`).
 // - THE COLUMNS (`sb_show*`, `sb_status`) and THE SORT (`sb_sortservers`): servers_page.cpp.
 // - ROUTES (`sb_findroutes` 1): once the refresh is done, each forwarder listed is asked for the
 //   servers it reaches (engine/forward/routes.hpp, `sb_proxinfopersec` 10, `sb_proxretries` 3,
@@ -44,7 +48,7 @@
 //
 // ge:summary Shooter's Edge's server browser page: LAN, masters and own servers listed, joined
 // ge:keywords server-browser servers page join-a-game menu_servers sb_masters sb_servers sb_lan
-// ge:keywords sb_hubmasters hub-master sv-master
+// ge:keywords sb_hubmasters hub-master sv-master address-book adr0 web-list
 // ge:keywords connect refresh sort ping players mode map skill coop shooters-edge
 // ge:keywords filter sb_hidefull sb_hideempty sb_mode sb_maxping hide-full hide-empty
 // ge:keywords sb_hidenotempty sb_hidedead sb_hidehighping sb_pinglimit sb_info_filter sb_status
@@ -63,6 +67,7 @@
 #include <vector>
 
 #include "forward/routes.hpp"
+#include "net/http_fetch.hpp"
 #include "net/server_list.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
@@ -84,6 +89,16 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   ServersPage(const ServersPage&) = delete;
   ServersPage& operator=(const ServersPage&) = delete;
   ~ServersPage();
+
+  // Quake II's browser settings, bound by its layer (client/cvar_layers.cpp) and set aside for
+  // every other game: `ui_sortservers` sorts by one column in place of `sb_sortservers`
+  // (kNoGameSort off; 0 the order the servers were found; 1 name, 2 game folder, 3 map, 4 players
+  // (most first), 5 ping; minus the other way; ties by name the same way, then by address), and
+  // `ui_pingrate` paces the asks in place of `sb_infospersec` (-1 off; 0 the player's `rate`
+  // / 450, 1..100; 1..100 that many a second).
+  static constexpr int32_t kNoGameSort = 99;
+  int32_t game_sort = kNoGameSort;
+  int32_t game_ping_rate = -1;
 
   // Registers `sb_lan`, `sb_masters`, `sb_servers` and the filters' cvars on `con`; the filter
   // keys then set the cvars, so a filter the player picks is kept with the config.
@@ -143,6 +158,8 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   std::string filter_words() const;
   int hidden() const { return hidden_; }
   const ge::net::ServerFilter& filter() const { return filter_; }
+  // sb_colorservers' colour for a server's row (`answered` in `ping_ms`); false: the usual one.
+  static bool row_colour(const ge::net::ServerInfo& in, int ping_ms, ge::ui::Color& out);
 
  private:
   void refresh();
@@ -151,6 +168,7 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   void sort_step(int dir);
   bool sorted_by(ge::net::ServerColumn c) const;
   int effective_ping() const;  // sb_maxping, or sb_pinglimit when sb_hidehighping is lower
+  int32_t ping_rate() const;   // the servers asked a second
   void read_settings();  // the sort's codes and the info filter's words, when their text changed
   void route_frame();
   bool read_list_cache();  // sb_listcache's file into the list; false: none read
@@ -183,8 +201,9 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   int selected_ = 0;
   int first_ = 0;  // the first row shown
   std::vector<ge::net::ServerSortKey> sort_keys_;
-  std::string sort_seen_ = "\x01";  // the sb_sortservers text `sort_keys_` was read from
-  std::string info_seen_ = "\x01";  // the sb_info_filter text `info_rules_` was read from
+  std::string sort_seen_ = "\x01";        // the sb_sortservers text `sort_keys_` was read from
+  int32_t game_sort_seen_ = kNoGameSort;  // the game_sort `sort_keys_` was read from
+  std::string info_seen_ = "\x01";        // the sb_info_filter text `info_rules_` was read from
   std::vector<ge::net::InfoRule> info_rules_;
   std::string info_problem_;  // the first word the info filter could not read
   double live_s_ = 0;         // since the selected server was last asked
@@ -213,6 +232,7 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   int32_t autohide_ = 1;                                                // sb_autohide
   bool autoupdate_ = true;                                              // sb_autoupdate
   bool find_routes_ = false;                                            // sb_findroutes
+  bool colour_servers_ = false;                                         // sb_colorservers
   std::filesystem::path cache_dir_;
   bool list_cache_ = false, master_cache_ = true;  // sb_listcache, sb_mastercache
   bool cache_written_ = false;                     // this refresh's caches written
@@ -222,6 +242,16 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   ge::console::Console* con_ = nullptr;  // the filter keys set the cvars through it
   ge::net::ServerFilter filter_;
   int hidden_ = 0;
+  // Lists of servers on the web (`sb_masters` words `http://...`; `+http://...` the binary list
+  // of 6-byte records, `+<n>http://...` of n-byte records), fetched at each refresh.
+  struct WebList {
+    std::string url;
+    int record = 0;  // 0: text, an address a line
+    ge::net::HttpFetch fetch;
+    bool over = true;
+  };
+  std::vector<WebList> web_lists_;
+  void web_frame();
 };
 
 }  // namespace shooters_edge::menu

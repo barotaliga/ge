@@ -13,6 +13,7 @@
 // ge:skill net shooter testing
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <system_error>
@@ -44,6 +45,7 @@ struct Rig {
   gn::Transport st, raw, ct[2];
   cn::QwServer server;
   cn::QwClientEnd c[2];
+  std::vector<uint8_t> maps[2];  // client i's maps/arena.bsp, none when empty
   int64_t now = 0;
 
   bool start(const cn::ServerConfig& cfg) {
@@ -85,6 +87,10 @@ struct Rig {
     cc.qport = static_cast<uint16_t>(100 + i);
     cc.seed = i + 1;
     cc.speedjump = i == 1;
+    if (!maps[i].empty())
+      cc.read_file = [bsp = maps[i]](const std::string&, const std::string& path) {
+        return path == "maps/arena.bsp" ? bsp : std::vector<uint8_t>{};
+      };
     cn::client_start(c[i], ct[i], gn::sim_address(0, cn::kPortServer), cc,
                      static_cast<double>(now) / 1e6);
   }
@@ -120,6 +126,24 @@ struct Rig {
     return out;
   }
 };
+
+// A BSP of 15 lumps, lump i holding 10 + 7 i bytes of (i * 31 + k + salt) & 255.
+std::vector<uint8_t> built_bsp(int salt) {
+  std::vector<uint8_t> v(4 + 15 * 8, 0);
+  const auto put32 = [&v](size_t at, uint32_t x) {
+    for (size_t i = 0; i < 4; i++) v[at + i] = static_cast<uint8_t>(x >> (8 * i));
+  };
+  put32(0, 29);
+  for (uint32_t i = 0; i < 15; i++) {
+    const auto ofs = static_cast<uint32_t>(v.size());
+    const uint32_t len = 10 + 7 * i;
+    for (uint32_t k = 0; k < len; k++)
+      v.push_back(static_cast<uint8_t>((i * 31 + k + static_cast<uint32_t>(salt)) & 255));
+    put32(4 + 8 * i, ofs);
+    put32(8 + 8 * i, len);
+  }
+  return v;
+}
 
 bool has(const std::string& text, const std::string& what) {
   return text.find(what) != std::string::npos;
@@ -562,4 +586,164 @@ TEST(a_filtered_command_never_reaches_the_rules_and_a_blackholed_address_is_neve
   CHECK(rig.c[0].stage != cn::ClientStage::active);
   CHECK(rig.server.counts.filtered == 2);
   CHECK(any_has(rig.server.log, "anna[") && any_has(rig.server.log, "issued banned command: GOD"));
+}
+
+TEST(user_prints_one_players_info_and_msg_sets_the_print_level) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  CHECK(rig.play());
+  // The operator's `user`: a key a line, padded to 20 columns.
+  const std::string u = rig.admin("user " + std::to_string(rig.id_of(0)));
+  CHECK_MSG(has(u, "name                anna\n"), u);
+  CHECK_MSG(has(u, "msg                 1\n"), u);
+  CHECK(has(rig.admin("user nobody"), "No player is called nobody"));
+  CHECK(has(rig.admin("user"), "user <id|name>"));
+  // The client saw every player's user id.
+  bool seen = false;
+  for (int i = 0; i < 32; i++)
+    seen = seen || (rig.c[1].userids[i] == rig.id_of(0) &&
+                    cn::info_get(rig.c[1].userinfos[i], "name") == "anna");
+  CHECK(seen);
+  // A player's `msg`: shown, then set (no range), each answer at the high level.
+  rig.c[0].prints.clear();
+  cn::client_command(rig.c[0], "msg");
+  rig.frames(20);
+  CHECK(any_has(rig.c[0].prints, "Current msg level is 1"));
+  cn::client_command(rig.c[0], "msg 2");
+  rig.frames(20);
+  CHECK(any_has(rig.c[0].prints, "Msg level set to 2"));
+  CHECK(rig.server.clients[0].msg_level == 2);
+}
+
+TEST(the_server_info_carries_cheats_and_sv_gamedir_changes_its_folder) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.cheats = true;
+  CHECK(rig.start(cfg));
+  const std::string& si = rig.server.serverinfo;
+  CHECK_MSG(cn::info_get(si, "*cheats") == "ON", si);
+  CHECK(cn::info_get(si, "*progs").empty());  // the built-in rules have no program file
+  // sv_gamedir: shown, set, refused as a path, and its usage.
+  CHECK(has(rig.admin("sv_gamedir"), "Current *gamedir: "));
+  CHECK(rig.admin("sv_gamedir ktx").empty());
+  CHECK(cn::info_get(rig.server.serverinfo, "*gamedir") == "ktx");
+  CHECK(rig.server.cfg.gamedir == "ktx");
+  CHECK(has(rig.admin("sv_gamedir"), "Current *gamedir: ktx"));
+  CHECK(has(rig.admin("sv_gamedir ../x"), "*Gamedir should be a single filename, not a path"));
+  CHECK(has(rig.admin("sv_gamedir a b"), "Usage: sv_gamedir <newgamedir>"));
+  // Without cheats the key is never there.
+  auto plain = std::make_unique<Rig>();
+  CHECK(plain->start(cn::ServerConfig{}));
+  CHECK(cn::info_get(plain->server.serverinfo, "*cheats").empty());
+}
+
+TEST(sv_highchars_0_keeps_a_players_info_to_plain_characters) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.high_chars = false;
+  CHECK(rig.start(cfg));
+  CHECK(rig.play());
+  // A coloured name (high bit set) becomes its plain letters on setinfo.
+  std::string coloured = "z";
+  for (const char ch : std::string("oe")) coloured.push_back(static_cast<char>(ch | 0x80));
+  cn::client_command(rig.c[0], "setinfo team " + coloured);
+  rig.frames(40);
+  CHECK_MSG(cn::info_get(rig.server.clients[0].userinfo, "team") == "zoe",
+            rig.server.clients[0].userinfo);
+}
+
+TEST(sv_mapcheck_turns_away_a_player_whose_map_differs) {
+  for (const bool check : {true, false}) {
+    auto owned = std::make_unique<Rig>();
+    Rig& rig = *owned;
+    cn::ServerConfig cfg;
+    cfg.map_check = check;
+    const std::vector<uint8_t> server_map = built_bsp(0);
+    cfg.read_file = [&server_map](const std::string& path, std::vector<uint8_t>* out) {
+      if (path != "maps/arena.bsp") return false;
+      *out = server_map;
+      return true;
+    };
+    CHECK(rig.start(cfg));
+    rig.maps[0] = server_map;    // anna has the server's map
+    rig.maps[1] = built_bsp(1);  // bert has another
+    for (int i = 0; i < 2; i++) rig.begin(i);
+    rig.frames(600);
+    CHECK(rig.c[0].stage == cn::ClientStage::active);
+    bool told = false;
+    for (const std::string& p : rig.c[1].prints)
+      told = told || has(p, "Map model file does not match (maps/arena.bsp)");
+    CHECK_MSG(told == check, check ? "on" : "off");
+    CHECK((rig.c[1].stage == cn::ClientStage::active) == !check);
+  }
+}
+
+TEST(god_and_give_by_id_need_cheats_and_reach_the_player) {
+  auto plain = std::make_unique<Rig>();
+  CHECK(plain->start(cn::ServerConfig{}));
+  CHECK(plain->play());
+  CHECK(has(plain->admin("god 1"), "You must run the server with -cheats to enable this command."));
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.cheats = true;
+  CHECK(rig.start(cfg));
+  CHECK(rig.play());
+  CHECK(has(rig.admin("god nobody"), "No player is called nobody"));
+  CHECK(rig.admin("god " + std::to_string(rig.id_of(0))).empty());
+  rig.frames(20);
+  bool told = false;
+  for (const std::string& p : rig.c[0].prints) told = told || has(p, "godmode ON");
+  CHECK(told);
+  CHECK(rig.admin("give anna h 77").empty());
+  rig.frames(20);
+  const int slot = cn::qw_find_seat(rig.server, "anna");
+  CHECK(slot >= 0);
+  const float health = rig.qc->sv.edicts[static_cast<size_t>(slot) + 1].health;
+  CHECK_MSG(health == 77, std::to_string(health));
+}
+
+TEST(fraglogfile_writes_the_frags_and_log_answers_with_the_last_buffer) {
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "se_qw_fraglog_test";
+  std::error_code ec;
+  std::filesystem::remove_all(dir, ec);
+  std::filesystem::create_directories(dir);
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  cn::ServerConfig cfg;
+  cfg.frag_dir = dir.string();
+  CHECK(rig.start(cfg));
+  // Raw answers: neither carries the out-of-band marker.
+  const auto ask = [&rig](const std::string& line) {
+    rig.oob(line);
+    rig.frames(5);
+    std::string got;
+    uint8_t buf[2048];
+    gn::Address from;
+    for (int n; (n = gn::transport_receive(rig.raw, buf, sizeof buf, from, rig.now)) >= 0;)
+      got.assign(reinterpret_cast<const char*>(buf), static_cast<size_t>(n));
+    return got;
+  };
+  CHECK(ask("log") == "m");                           // no file open
+  { std::ofstream(dir / "frag_0.log") << "kept\n"; }  // a name in use is passed over
+  CHECK(rig.admin("fraglogfile") == "Logging frags to " + (dir / "frag_1.log").string() + ".\n");
+  rig.qc->frag_log.push_back("\\anna\\bert\\\n");
+  rig.frames(2);
+  {
+    std::ifstream in(dir / "frag_1.log");
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    CHECK_MSG(text == "\\anna\\bert\\\n", text);
+  }
+  CHECK(ask("log") == std::string("stdlog 0\n") + '\0');  // nothing turned over yet
+  rig.server.frags.turned_at = rig.server.now - 601;      // ten minutes on
+  rig.frames(1);
+  CHECK(rig.server.frags.sequence == 2);
+  CHECK(ask("log") == std::string("stdlog 1\n\\anna\\bert\\\n") + '\0');
+  CHECK(ask("log 1") == "m");  // the asker has it
+  CHECK(rig.admin("fraglogfile") == "Frag file logging off.\n");
+  CHECK(ask("log") == "m");
+  std::filesystem::remove_all(dir, ec);
 }

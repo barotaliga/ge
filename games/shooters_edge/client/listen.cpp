@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/q2_look.hpp"
+#include "shooters_edge/server/q2_map.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -18,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "classic/q2_fx_switches.hpp"
 #include "core/num.hpp"
 #include "progs/layout.hpp"
 #include "progs/vm.hpp"
@@ -189,7 +191,13 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
                      name == "te_rocket_explosion" || name == "te_grenade_explosion" ||
                      name == "te_explosion1" || name == "te_explosion2" ||
                      name == "te_plasma_explosion";
-  if (blast) l.explosions.push_back(ev.origin);
+  if (blast) {
+    l.explosions.push_back(ev.origin);
+    l.explosion_kinds.resize(l.explosions.size());  // cl_disable_explosions reads which
+    l.explosion_kinds.back() = name == "te_rocket_explosion"    ? ge::classic::kQ2Rocket
+                               : name == "te_grenade_explosion" ? ge::classic::kQ2Grenade
+                                                                : 0;
+  }
   if (blast && name != "te_bfg_bigexplosion") return;
   const bool sparks = name == "te_sparks" || name == "te_bullet_sparks" ||
                       name == "te_screen_sparks" || name == "te_shield_sparks" ||
@@ -255,6 +263,7 @@ void entered(Listen& l) {
   l.owed = 0;
   l.pending_map.clear();
   l.explosions.clear();
+  l.explosion_kinds.clear();
   l.blows.clear();
   l.effects.clear();
   l.entries++;
@@ -1215,8 +1224,14 @@ int listen_players(const Listen& l) {
 }
 
 bool listen_campaign_word(Listen& l, const std::string& line) {
-  if (l.campaign_host == nullptr || l.rules == nullptr || l.server == nullptr) return false;
+  if (l.rules == nullptr || l.server == nullptr) return false;
   const std::string word = line.substr(0, line.find_first_of(" \t"));
+  // Quake's `tell` and `ping` always go to the server, a listen server too.
+  if (l.server->sv.set.single_player_clock && (word == "tell" || word == "ping")) {
+    l.rules->client_command(0, line);
+    return true;
+  }
+  if (l.campaign_host == nullptr) return false;
   for (const char* w : {"god", "notarget", "noclip", "fly", "give", "kill", "pause"})
     if (word == w) {
       l.rules->client_command(0, line);
@@ -1338,6 +1353,15 @@ bool aim_turn_points(const Listen& l, int target, sh::Vec3f& eye, sh::Vec3f& mid
   return true;
 }
 
+void listen_area_bits(const Listen& l, std::vector<uint8_t>& out) {
+  out.clear();
+  const sv::Q2Server* sq = l.rules != nullptr ? sv::q2_of(*l.rules) : nullptr;
+  if (sq == nullptr || l.server == nullptr || l.server->world.entities.size() < 2) return;
+  const sv::RulesWorld& w = l.server->world;
+  const float view_z = w.clients[0].numbers.view_z;
+  sv::map_area_bits(*sq, w.entities[1].origin + sh::Vec3f{0, 0, view_z != 0 ? view_z : 22}, out);
+}
+
 void missiles_of(const Listen& l, std::vector<Missile>& out) {
   out.clear();
   // The shots in flight as the rules' world names them, whatever runs the rules (a player's or a
@@ -1350,11 +1374,14 @@ void missiles_of(const Listen& l, std::vector<Missile>& out) {
     Missile o;
     if (r.shot == sv::WorldShot::none) {  // Quake II's marks by their bits (a game library's)
       if (!listen_is_q2(l)) continue;
-      const Q2Look::Missile k = q2_look(static_cast<uint32_t>(r.effects), 0).missile;
-      if (k < Q2Look::Missile::flag1) continue;
+      const Q2Look look = q2_look(static_cast<uint32_t>(r.effects), 0);
+      const Q2Look::Missile k = look.missile;
+      if (k < Q2Look::Missile::flag1 && !look.spinning) continue;
       o.entity = static_cast<int>(e);
       o.origin = r.origin;
-      o.q2_mark = static_cast<uint8_t>(k);
+      if (k >= Q2Look::Missile::flag1) o.q2_mark = static_cast<uint8_t>(k);
+      o.q2_spin = look.spinning;
+      o.yaw = r.angles.y;
       out.push_back(o);
       continue;
     }

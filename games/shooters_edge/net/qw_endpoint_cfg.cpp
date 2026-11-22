@@ -71,6 +71,8 @@ constexpr gs::GameRule kEndpointRules[] = {
      "0: not offered (the default); 1: offered"},
     {"sv_downloadchunks", "The 1 KB chunks a downloading client gets a frame.", nullptr,
      "1..30: that many (30 the default)"},
+    {"sv_downloadserver", "A web address clients may fetch the server's files from instead.",
+     nullptr, "\"\": none (the default); TEXT: a URL ending in /, or github:<owner>/<repo>"},
     {"sv_watervis", "Whether clients are told they may see through water.", nullptr,
      "0: not told (the default); 1: told"},
     {"sv_fullspectate",
@@ -103,7 +105,7 @@ constexpr gs::GameRule kEndpointRules[] = {
     {"qtv_maxstreams", "The relays streamed at once.", nullptr,
      "N: that many, 0 or less no limit (1 the default)"},
     {"qtv_password", "The password a relay must give.", nullptr,
-     "\"\": none (the default); TEXT: that password"},
+     "\"\": none (the default); TEXT: that password", false},
     {"qtv_pendingtimeout", "The seconds a relay has to finish its request.", nullptr,
      "1..60: that many seconds (5 the default)"},
     {"qtv_streamtimeout", "The seconds a relay may send nothing before it is dropped.", nullptr,
@@ -320,6 +322,8 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
     cfg.default_name = n->second;
   }
   cfg.reconnect_wait_s = reconnect_wait;
+  if (const auto it = c.rules.find("sv_downloadserver"); it != c.rules.end())
+    cfg.download_server = it->second;
   cfg.locked = locked != 0;
   if (const auto it = c.rules.find("lrcon_password"); it != c.rules.end())
     cfg.lrcon.password = it->second;

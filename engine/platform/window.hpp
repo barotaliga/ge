@@ -20,7 +20,8 @@
 // ge:keywords fullscreen set_fullscreen displays external-monitor pick_folder folder_picked
 // ge:keywords folder-dialog file-dialog folder-chooser run_app app-entry uikit ios-main
 // ge:keywords refresh_hz refresh-rate promotion wait_until_ns precise-sleep set_swap_images
-// ge:keywords maximum-drawable-count swap-images
+// ge:keywords maximum-drawable-count swap-images set_window_style window-style borderless
+// ge:keywords always-on-top resizable set_window_place window-place window-size window-position
 // ge:skill platform
 // ge:test tests/platform_window_test.cpp
 #pragma once
@@ -117,6 +118,23 @@ bool display_available();
 // is the only way a window can open there; elsewhere it runs the body directly.
 int run_app(int argc, char** argv, int (*body)(int argc, char** argv));
 
+// How a window (not full screen) stands on the desktop: its border and title bar, kept above the
+// others, resized by dragging its edges.
+struct WindowStyle {
+  bool border = true;
+  bool on_top = false;
+  bool resizable = true;
+};
+
+// Where a window (not full screen) stands and how big it is, in logical units: `width` and
+// `height` 0 leave its size, `has_place` false leaves where it stands (`x`, `y` from the desktop's
+// top left).
+struct WindowPlace {
+  int width = 0, height = 0;
+  bool has_place = false;
+  int x = 0, y = 0;
+};
+
 class Window {
  public:
   ~Window();
@@ -136,8 +154,11 @@ class Window {
   friend void set_relative_mouse(Window& window, bool on, bool raw);
   friend bool relative_mouse(const Window& window);
   friend bool has_focus(const Window& window);
+  friend bool minimised(const Window& window);
   friend void set_text_input(Window& window, bool on);
   friend bool set_fullscreen(Window& window, bool on, int display);
+  friend bool set_window_style(Window& window, const WindowStyle& style);
+  friend bool set_window_place(Window& window, const WindowPlace& place);
   friend bool pick_folder(Window& window, std::string_view title, std::string_view start);
   friend bool folder_picked(Window& window, std::string* path, std::string* error);
   friend double refresh_hz(const Window& window);
@@ -163,6 +184,15 @@ std::vector<Display> displays();
 // or more later, through `InputSnapshot::resized`. False after an agent-actionable error line when
 // the platform refuses.
 bool set_fullscreen(Window& window, bool on, int display = 0);
+
+// The window's border, its place above the others and its edges, as `style` says. False after an
+// agent-actionable error line when the platform refuses one of them (the rest still applied).
+bool set_window_style(Window& window, const WindowStyle& style);
+
+// The window resized and moved as `place` says. The pixel size follows a frame or more later,
+// through `InputSnapshot::resized`. False after an agent-actionable error line when the platform
+// refuses.
+bool set_window_place(Window& window, const WindowPlace& place);
 
 // THE DESKTOP'S FOLDER CHOOSER over `window`, titled `title` and opened at `start` (empty: where
 // the desktop last was). It answers later, on a frame of its own: `folder_picked` is true once,

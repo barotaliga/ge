@@ -14,8 +14,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <iterator>
+#include <span>
 #include <utility>
 
+#include "classic/content/web_downloads.hpp"
+#include "core/deflate.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "server/admission.hpp"
@@ -23,6 +26,7 @@
 #include "server/rate.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
+#include "shooters_edge/net/q2_mvd_dummy.hpp"
 #include "shooters_edge/net/qw_ext.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 
@@ -34,6 +38,7 @@ namespace pg = ge::progs;
 
 constexpr size_t kSignonShare = 700;  // bytes of the signon one answer adds before its prompt
 constexpr int kStringCmdsPerPacket = 7;
+constexpr uint8_t kSvcZPacket = 21;   // a compressed block of messages (35 and 36)
 constexpr uint8_t kSvcReconnect = 8;  // a full restart: connect again (`recycle`)
 constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
 constexpr uint8_t kSvcGeOrigin = 123;      // the game's own: a download's archive (qw_svc.hpp)
@@ -50,8 +55,11 @@ constexpr size_t kLogKept = 512;
 // to the engine's most (sv_minrate and sv_maxrate, 15000 and 60000 by default, hold it nearer).
 constexpr ge::server::RateBounds kRateBounds{
     .none = 5000, .zero = 100, .low = 100, .none_held = false};
-constexpr int kRateFrames = 10;  // the frames whose sizes are summed (a second at 10 Hz)
-constexpr int kRateSlots = 60;   // the most: a second at `sv_fps` 60
+constexpr int kRateFrames = 10;
+constexpr size_t kChallengesKept = 1024;
+// sv_nodelta 0: the whole frames a client may ask for before it is dropped.
+constexpr int kNoDeltaMost = 64;  // the frames whose sizes are summed (a second at 10 Hz)
+constexpr int kRateSlots = 60;    // the most: a second at `sv_fps` 60
 
 // The move's feel as svc 122 carries it: a count of 32-bit floats (little-endian) and the floats
 // (the top speed, the friction, the air acceleration, the swimmer's share, the water's friction,
@@ -77,10 +85,8 @@ void note(Q2NetServer& s, std::string line) {
   if (s.log.size() < kLogKept) s.log.push_back(std::move(line));
 }
 
-uint64_t host_key(gn::Address a) {
-  a.port = 0;
-  return gn::address_hash(a);
-}
+// A challenge's key: the address and its port, so clients on one machine each keep their own.
+uint64_t challenge_key(const gn::Address& a) { return gn::address_hash(a); }
 
 bool same_host(gn::Address a, gn::Address b) {
   a.port = b.port = 0;
@@ -132,6 +138,9 @@ void rate_check(Q2NetServer& s, int slot) {
   stuff(c, "rate " + std::to_string(v.rate) + "\n");
 }
 
+// The most `sv_max_download_size` may allow: 128 MiB and 4 KiB.
+constexpr int64_t kQ2DownloadCap = 134221824;
+
 // THE DOWNLOADS (Q2NetConfig): the next piece of the file being sent, up to 1024 bytes: size,
 // percent, the bytes; percent 100 ends it.
 void download_piece(Q2NetClient& c) {
@@ -151,37 +160,83 @@ void download_piece(Q2NetClient& c) {
   }
 }
 
-void start_download(Q2NetServer& s, Q2NetClient& c, std::string path, int offset) {
+// A download's name made plain: `\` as `/`, lower case, leading slashes and `.` parts dropped,
+// `..` taking the part before it away; "" when it climbs out of the game's folders.
+std::string plain_download_path(std::string path) {
   for (char& ch : path) {
     if (ch == '\\') ch = '/';
     if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
   }
+  std::vector<std::string> parts;
+  size_t at = 0;
+  while (at <= path.size()) {
+    const size_t end = std::min(path.find('/', at), path.size());
+    const std::string part = path.substr(at, end - at);
+    if (part == "..") {
+      if (parts.empty()) return "";
+      parts.pop_back();
+    } else if (!part.empty() && part != ".") {
+      parts.push_back(part);
+    }
+    at = end + 1;
+  }
+  std::string out;
+  for (const std::string& p : parts) out += (out.empty() ? "" : "/") + p;
+  return out;
+}
+
+void start_download(Q2NetServer& s, Q2NetClient& c, const std::string& asked, int offset) {
   c.downloading = false;
   c.download.clear();
+  const std::string path = asked.size() >= 64 ? std::string() : plain_download_path(asked);
   const auto under = [&path](const char* dir) { return path.rfind(dir, 0) == 0; };
+  const auto plain_end = [](char ch) {
+    return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-';
+  };
+  // The kind a file is by its first folder, each switched on or off by its own setting.
+  const bool kind_on = under("players/")                       ? s.cfg.allow_players
+                       : under("models/") || under("sprites/") ? s.cfg.allow_models
+                       : under("sound/")                       ? s.cfg.allow_sounds
+                       : under("maps/")                        ? s.cfg.allow_maps
+                       : under("textures/") || under("env/")   ? s.cfg.allow_textures
+                       : under("pics/")                        ? s.cfg.allow_pics
+                                                               : s.cfg.allow_others;
+  const int64_t most = s.cfg.max_download_size <= 0 || s.cfg.max_download_size > kQ2DownloadCap
+                           ? kQ2DownloadCap
+                           : s.cfg.max_download_size;
   std::string why;
   ge::vfs::ArchiveOrigin origin;
   bool packed = false;
   if (!s.cfg.allow_download || !s.cfg.read_file) {
     why = "downloads are off";
-  } else if (path.empty() || path[0] == '.' || path[0] == '/' ||
-             path.find("..") != std::string::npos || path.find('/') == std::string::npos) {
+  } else if (path.empty() || offset < 0 || !plain_end(path.front()) || !plain_end(path.back()) ||
+             path.find('/') == std::string::npos) {
     why = "not a file the server offers";
-  } else if ((under("players/") && !s.cfg.allow_players) ||
-             (under("models/") && !s.cfg.allow_models) ||
-             (under("sound/") && !s.cfg.allow_sounds) || (under("maps/") && !s.cfg.allow_maps)) {
+  } else if (!kind_on) {
     why = "that kind of file is not offered";
   } else if (!s.cfg.read_file(path, &c.download) || c.download.empty()) {
     why = "not found";
+  } else if (static_cast<int64_t>(c.download.size()) > most) {
+    why = "larger than sv_max_download_size";
   } else {
     packed = s.cfg.file_origin && s.cfg.file_origin(path, &origin);
     if (packed && under("maps/") && !c.told_origins) why = "the map is in an archive";
   }
-  if (!why.empty() || offset < 0 || static_cast<size_t>(offset) > c.download.size()) {
+  if (why.empty() && static_cast<size_t>(offset) > c.download.size()) {
+    const std::string told =
+        "File size differs from server.\nPlease delete the corresponding .tmp file from your "
+        "system.\n";
+    std::vector<uint8_t> b = {kSvcPrint, 2};  // the high print level
+    b.insert(b.end(), told.begin(), told.end());
+    b.push_back(0);
+    reliable(c, b);
+    why = "a resume past its end";
+  }
+  if (!why.empty()) {
     c.download.clear();
     const uint8_t refused[4] = {kSvcDownload, 0xff, 0xff, 0};
     reliable(c, std::vector<uint8_t>(refused, refused + 4));
-    note(s, c.name + " asked for " + path + ": refused, " + (why.empty() ? "a bad offset" : why));
+    note(s, c.name + " asked for " + asked + ": refused, " + why);
     return;
   }
   if (packed && c.told_origins) {  // the archive the file comes out of, before its first piece
@@ -293,7 +348,7 @@ std::string status_text(const Q2NetServer& s) {
   // `needpass`: 1 a player's password asked, 2 a spectator's.
   info_set(info, "needpass",
            std::to_string((set(s.cfg.password) ? 1 : 0) | (set(s.cfg.spectator_password) ? 2 : 0)));
-  info_set(info, "deathmatch", "1");
+  q2_status_keys(s, info);
   info_set(info, "protocol", std::to_string(kQ2NetProtocol));
   if (s.cfg.status.uptime > 0)
     info_set(info, "uptime", ge::server::uptime_text(s.now - s.started, s.cfg.status.uptime));
@@ -309,11 +364,13 @@ std::string status_text(const Q2NetServer& s) {
 }
 
 void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::string>& w) {
+  if (w.size() < 2) return;
+  Q2ConnectAsk ask;
+  std::string unsupported;
+  if (!q2_connect_ask(w, ask, unsupported)) return refuse(s, from, unsupported);
   if (w.size() < 5) return;
-  if (std::atoi(w[1].c_str()) != kQ2NetProtocol)
-    return refuse(s, from, "Server is protocol version 34.");
   const auto qport = static_cast<uint16_t>(std::atoi(w[2].c_str()));
-  const auto at = s.challenges.find(host_key(from));
+  const auto at = s.challenges.find(challenge_key(from));
   if (at == s.challenges.end()) return refuse(s, from, "No challenge for address.");
   if (at->second != std::atoi(w[3].c_str())) return refuse(s, from, "Bad challenge.");
   if (ge::server::ban_refuses(s.bans, s.cfg.ban_mode, from,
@@ -326,7 +383,8 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   std::string carried_var, carried_value;
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2NetClient& c = s.clients[i];
-    if (c.stage == Q2Slot::free || !same_host(c.address, from) || c.address.port != from.port)
+    if (c.stage == Q2Slot::free || c.stage == Q2Slot::dummy || !same_host(c.address, from) ||
+        c.address.port != from.port)
       continue;
     if (c.stage == Q2Slot::zombie) {
       carried_var = c.reconnect_var;
@@ -343,14 +401,15 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
     for (const Q2NetClient& c : s.clients)
       back = back || (c.stage == Q2Slot::zombie && same_host(c.address, from) &&
                       (c.qport == qport || c.address.port == from.port));
-    if (!back) return refuse(s, from, "Server is locked.\nConnection refused.");
+    if (!back) return refuse(s, from, "Server is locked.");
   }
   if (s.cfg.ip_limit > 0) {  // one address's slots held to sv_iplimit, a zombie's a half
     std::vector<ge::server::HeldSeat> held;
     for (const Q2NetClient& o : s.clients)
-      if (o.stage != Q2Slot::free) held.push_back({o.address, o.stage == Q2Slot::zombie});
+      if (o.stage != Q2Slot::free && o.stage != Q2Slot::dummy)
+        held.push_back({o.address, o.stage == Q2Slot::zombie});
     const std::string refusal = ge::server::admit_refusal(s.cfg.ip_limit, from, held);
-    if (!refusal.empty()) return refuse(s, from, refusal + "\nConnection refused.");
+    if (!refusal.empty()) return refuse(s, from, refusal);
   }
   // THE USER INFO (the strict rule, classic/protocol/info.hpp), then a name with something to
   // show in its first 15 characters.
@@ -400,7 +459,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
     const Q2NetClient& o = s.clients[i];
     if (o.stage == Q2Slot::free) {
       if (slot < 0) slot = i;
-    } else {
+    } else if (o.stage != Q2Slot::dummy) {
       (o.spectator ? watching : players)++;
     }
   }
@@ -414,6 +473,8 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   if ((!spectator || !own) &&
       ge::server::vip_slots_refuse(s.cfg.max_clients, taken, s.cfg.vip_slots, vip))
     return full("Server and reserved slots are full.");
+  s.challenges.erase(challenge_key(from));  // used once
+  std::erase(s.challenge_order, challenge_key(from));
   Q2NetClient& c = s.clients[slot];
   c = Q2NetClient{};
   c.stage = Q2Slot::signon;
@@ -432,6 +493,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   c.told_back = (ext & kGeItemBack) != 0;
   c.told_voice = s.cfg.voice && (ext & kGeVoice) != 0;
   c.told_frames = (ext & kGeEveryFrame) != 0;
+  c.told_hits = (ext & kGeHitReports) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
   c.rate = rate_of(s, userinfo, from);
@@ -439,7 +501,24 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   c.heard = s.now;
   channel_setup(c.ch, false, qport, s.now);
   channel_set_rate(c.ch, 0);
-  send_oob(s, from, "client_connect");
+  c.protocol = ask.protocol;
+  c.minor = ask.minor;
+  c.zlib = ask.zlib;
+  const bool local = from.family == gn::Family::ipv4 && from.bytes[0] == 127;
+  c.msglen = q2_msglen(ask, s.cfg.net_maxmsglen, local);
+  if (c.protocol != kQ2NetProtocol) {  // a byte of qport, none when it is 0
+    c.ch.qport_bytes = qport != 0 ? 1 : 0;
+    c.ch.fragments = ask.chan == 1;
+    c.ch.packet_len = static_cast<size_t>(c.msglen);
+  }
+  // The answer: the channel kind a 36 client asked for, the web address files come from, the map.
+  std::string answer = "client_connect";
+  if (c.protocol == kQ2Protocol36) answer += " nc=" + std::to_string(ask.chan);
+  // A GitHub repository named as its raw files' address, which a stock client fetches as it is.
+  if (!s.cfg.download_server.empty())
+    answer += " dlserver=" + ge::classic::content::web_base(s.cfg.download_server);
+  answer += " map=" + (*s.rules)->map_name;
+  send_oob(s, from, answer);
   note(s, c.name + " connected");
 }
 
@@ -447,19 +526,30 @@ void read_oob(Q2NetServer& s, const gn::Address& from, const uint8_t* data, size
   const std::string text = q2_oob_text(data, size);
   const std::vector<std::string> w = q2_words(text);
   if (w.empty()) return;
+  if (s.killed && w[0] != "rcon") return;  // `killserver`: only the operator answered
   if (w[0] == "getchallenge") {
-    auto at = s.challenges.find(host_key(from));
-    if (at == s.challenges.end()) {
-      s.next_challenge = s.next_challenge * 1103515245u + 12345u;
-      at = s.challenges
-               .emplace(host_key(from), static_cast<int32_t>((s.next_challenge >> 16) & 0x7FFFu))
-               .first;
+    // A new number each time (31 bits, never 0), one an address and port, the oldest of 1024
+    // replaced.
+    const uint64_t key = challenge_key(from);
+    s.next_challenge = s.next_challenge * 1103515245u + 12345u;
+    const uint32_t high = s.next_challenge >> 16;
+    s.next_challenge = s.next_challenge * 1103515245u + 12345u;
+    const auto number =
+        static_cast<int32_t>(((high << 16) | (s.next_challenge >> 16)) & 0x7FFFFFFFu) | 1;
+    if (s.challenges.find(key) == s.challenges.end()) {
+      if (s.challenge_order.size() >= kChallengesKept) {
+        s.challenges.erase(s.challenge_order.front());
+        s.challenge_order.erase(s.challenge_order.begin());
+      }
+      s.challenge_order.push_back(key);
     }
-    send_oob(s, from, "challenge " + std::to_string(at->second) + " p=34");
+    s.challenges[key] = number;
+    send_oob(s, from, "challenge " + std::to_string(number) + " p=34,35,36");
   } else if (w[0] == "connect") {
     connect(s, from, w);
   } else if (w[0] == "info") {
-    if (w.size() > 1 && std::atoi(w[1].c_str()) != kQ2NetProtocol)
+    const int asked = w.size() > 1 ? std::atoi(w[1].c_str()) : kQ2NetProtocol;
+    if (asked < kQ2NetProtocol || asked > kQ2Protocol36)
       send_oob(s, from, "info\n" + s.cfg.hostname + ": wrong version\n");
     else
       send_oob(s, from, "info\n" + info_text(s));
@@ -540,6 +630,9 @@ void start_signon(Q2NetServer& s, int slot) {
   }
   sv::Q2WireOptions opt = s.cfg.wire;
   opt.attract_loop = 0;
+  opt.protocol = c.protocol;
+  opt.minor = c.minor;
+  opt.hit_reports = c.told_hits;  // our own client draws the hit marker from it
   if (s.native != nullptr)
     sv::q2_signon_raw(c.wire, s.native->raw, slot, opt, c.signon);
   else
@@ -547,7 +640,67 @@ void start_signon(Q2NetServer& s, int slot) {
   ask_settings(s, c);  // setting bans and user info bans at every `new` (server/settingban.hpp)
   if (judge_userinfo(s, slot)) return;
   reliable(c, c.signon.server_data);
-  stuff(c, "cmd configstrings " + std::to_string(s.count) + " 0\n");
+  c.signon_queue.clear();
+  if (c.protocol == kQ2NetProtocol && s.cfg.wire.show.empty())  // a show: the server data alone
+    stuff(c, "cmd configstrings " + std::to_string(s.count) + " 0\n");
+}
+
+// A message compressed for a client that takes it (zpacket: its id, the compressed and the plain
+// length as words, a raw deflate stream), when that is smaller; else the message as it is.
+std::vector<uint8_t> packed(const Q2NetClient& c, std::vector<uint8_t> msg) {
+  if (!c.zlib || msg.size() > sv::kQ2BigMessage) return msg;
+  const std::vector<uint8_t> z = ge::core::deflate_raw(msg);
+  if (z.size() + 5 >= msg.size()) return msg;
+  std::vector<uint8_t> out = {
+      kSvcZPacket, static_cast<uint8_t>(z.size() & 0xFF), static_cast<uint8_t>(z.size() >> 8),
+      static_cast<uint8_t>(msg.size() & 0xFF), static_cast<uint8_t>(msg.size() >> 8)};
+  out.insert(out.end(), z.begin(), z.end());
+  return out;
+}
+
+// A later protocol's signon after the server data, all at once and in order: on the newer
+// channel the game state (minor below 1024) or the configstring then baseline streams; on the old
+// channel the configstrings then the baselines in reliable messages that fit a packet; each
+// compressed when the client takes it, then `precache`. Queued, and fed to the channel as it has
+// room (`feed_signon`).
+void queue_signon(Q2NetServer& s, Q2NetClient& c) {
+  if (c.ch.fragments) {
+    std::vector<std::vector<uint8_t>> streams;
+    sv::q2_signon_streams(c.signon, c.minor, streams);
+    for (std::vector<uint8_t>& m : streams) c.signon_queue.push_back(packed(c, std::move(m)));
+  } else {
+    const size_t budget = std::min<size_t>(static_cast<size_t>(c.msglen), kMaxMsgLen - 16) - 64;
+    std::vector<uint8_t> batch;
+    const auto add = [&](const std::vector<uint8_t>& one) {
+      if (!batch.empty() && batch.size() + one.size() > budget) {
+        c.signon_queue.push_back(packed(c, std::move(batch)));
+        batch.clear();
+      }
+      batch.insert(batch.end(), one.begin(), one.end());
+    };
+    for (const auto& [i, one] : c.signon.config_strings) add(one);
+    for (const auto& [n, one] : c.signon.baselines) add(one);
+    if (!batch.empty()) c.signon_queue.push_back(packed(c, std::move(batch)));
+  }
+  const std::string line = "precache " + std::to_string(s.count) + "\n";
+  std::vector<uint8_t> pre = {kSvcStuffText};
+  pre.insert(pre.end(), line.begin(), line.end());
+  pre.push_back(0);
+  c.signon_queue.push_back(std::move(pre));
+}
+
+// The queued signon into the channel while it has room: the newer channel's one buffer, or the
+// old channel's waiting messages less one.
+void feed_signon(Q2NetClient& c) {
+  size_t taken = 0;
+  for (; taken < c.signon_queue.size(); taken++) {
+    const std::vector<uint8_t>& m = c.signon_queue[taken];
+    const bool room = c.ch.fragments ? c.ch.big_pending.size() + m.size() <= sp::kBigMessage
+                                     : c.ch.pending_count < sp::kBackBuffers - 1;
+    if (!room) break;
+    reliable(c, m);
+  }
+  c.signon_queue.erase(c.signon_queue.begin(), c.signon_queue.begin() + static_cast<long>(taken));
 }
 
 // The signon's parts from `from` on, about 700 bytes of them, and the next prompt.
@@ -784,8 +937,8 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
   }
   if (player_query(s, slot, w, line)) return;
   const bool signon = cmd == "configstrings" || cmd == "baselines" || cmd == "begin";
-  const bool protocol =
-      signon || cmd == "new" || cmd == "disconnect" || cmd == "download" || cmd == "nextdl";
+  const bool protocol = signon || cmd == "new" || cmd == "disconnect" || cmd == "download" ||
+                        cmd == "nextdl" || cmd == "nextserver";
   if (!protocol && filtered(s, slot, line)) return;
   if (!protocol && s.line_hook != nullptr && s.line_hook(s.hook_ctx, slot, line)) return;
   if (!protocol && c.stage == Q2Slot::active && talk_command(s, slot, line)) return;
@@ -800,16 +953,22 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
     if (first && first_new(s, slot)) return;
     if (c.stage == Q2Slot::signon) start_signon(s, slot);
     if (first) probe(s, slot);
+    if (c.stage == Q2Slot::signon && c.protocol != kQ2NetProtocol && s.cfg.wire.show.empty()) {
+      queue_signon(s, c);
+      feed_signon(c);
+    }
   } else if (cmd == "configstrings") {
-    if (c.stage == Q2Slot::signon)
+    if (c.stage == Q2Slot::signon && c.protocol == kQ2NetProtocol)
       signon_share(c, c.signon.config_strings, at, "cmd configstrings " + count + " ",
                    "cmd baselines " + count + " 0\n");
   } else if (cmd == "baselines") {
-    if (c.stage == Q2Slot::signon)
+    if (c.stage == Q2Slot::signon && c.protocol == kQ2NetProtocol)
       signon_share(c, c.signon.baselines, at, "cmd baselines " + count + " ",
                    "precache " + count + "\n");
+  } else if (cmd == "nextserver") {  // a show watched to its end (q2_net_server.hpp)
+    if (s.nextserver) s.nextserver(w.size() > 1 ? std::atoi(w[1].c_str()) : -1);
   } else if (cmd == "begin") {
-    if (c.stage != Q2Slot::signon) return;
+    if (c.stage != Q2Slot::signon || !s.cfg.wire.show.empty()) return;
     if (!c.version_heard) return drop_told(s, slot, "failed version probe", Told::silent);
     if (!c.reconnect_var.empty() && !c.reconnected)
       return drop_told(s, slot, "failed to reconnect", Told::silent);
@@ -852,9 +1011,6 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
   }
 }
 
-// sv_nodelta 0: the whole frames a client may ask for before it is dropped.
-constexpr int kNoDeltaMost = 64;
-
 // A move's round trip `trip` (s) kept, and the ping it makes by sv_pingmethod told to the rules.
 void take_trip(Q2NetServer& s, int slot, double trip) {
   Q2NetClient& c = s.clients[slot];
@@ -871,6 +1027,138 @@ void take_trip(Q2NetServer& s, int slot, double trip) {
 }
 
 // One packet's messages from client `slot`; its moves onto `packets`.
+// A client's new user info (whole, or 36's change applied): the strict rule, the name, the bans,
+// what the rules are told. False when the client was dropped.
+bool take_userinfo(Q2NetServer& s, int slot, std::string info) {
+  Q2NetClient& c = s.clients[slot];
+  const auto dropped = [&](const char* why) {
+    drop_told(s, slot, why, Told::dropped);
+    return false;
+  };
+  const std::string was = info_get(c.userinfo, "rate");
+  const std::string before = c.userinfo;
+  c.userinfo = std::move(info);
+  // The strict rule (classic/protocol/info.hpp); a name with nothing to show keeps the one
+  // the server has.
+  if (c.userinfo.size() >= 512) return dropped("oversize userinfo");
+  if (c.userinfo.empty()) return dropped("empty userinfo");
+  if (!info_strict(c.userinfo)) return dropped("malformed userinfo");
+  if (!shown_name(info_get(c.userinfo, "name"))) {
+    if (c.name.empty()) return dropped("malformed name");
+    if (!info_set(c.userinfo, "name", c.name) || c.userinfo.size() >= 512)
+      return dropped("oversize userinfo");
+    q2_net_print(s, slot, "You can't have an empty name.\n");
+    stuff(c, "set name \"" + c.name + "\"\n");
+  }
+  if (judge_userinfo(s, slot)) return false;  // a user info ban that kicks (server/settingban.hpp)
+  const bool rewound = antilag_wanted(info_get(c.userinfo, "cl_antilag"));
+  if (s.cfg.antilag > 0 && c.stage == Q2Slot::active &&
+      rewound != antilag_wanted(info_get(before, "cl_antilag")))
+    q2_net_print(s, slot, antilag_told(rewound));          // his own shots rewound or not
+  if (c.stage == Q2Slot::active && s.native == nullptr) {  // what changed, to the rules
+    std::vector<std::pair<std::string, std::string>> pairs;
+    ge::classic::protocol::info_pairs(c.userinfo, pairs);
+    for (const auto& [k, v] : pairs)
+      if (k != "name" && k != "*ge_ext" && info_get(before, k) != v) s.rules->user_info(slot, k, v);
+  }
+  c.rate = rate_of(s, c.userinfo, c.address);
+  if (c.stage == Q2Slot::active && info_get(c.userinfo, "rate") != was) rate_check(s, slot);
+  std::string name = cut_name(info_get(c.userinfo, "name"));
+  // A player in the game renamed past sv_namelimit keeps the old name (server/names.hpp).
+  const bool renamed = !name.empty() && name != c.name && c.stage == Q2Slot::active;
+  if (renamed && !ge::server::rename_allowed(c.renames, s.now, s.cfg.names)) {
+    info_set(c.userinfo, "name", c.name);
+    q2_net_print(s, slot, ge::server::kRenameRefusal);
+    name = c.name;
+  }
+  if (!name.empty() && s.name_rule != nullptr)
+    s.name_rule(s.hook_ctx, slot, name, c.stage != Q2Slot::active);
+  if (!name.empty() && name != c.name) {
+    const std::string old = c.name;
+    c.name = name;
+    if (c.stage == Q2Slot::active) {
+      s.rules->user_info(slot, "name", name);
+      std::string line = old;
+      line += " [" + gn::to_string(c.address) + "] renamed ";
+      note(s, line + name);
+      if (ge::server::rename_told(s.cfg.names, !c.spectator))
+        for (int k = 0; k < sh::kMaxClients; k++)
+          if (s.clients[k].stage == Q2Slot::active)
+            q2_net_print(s, k, ge::server::rename_notice(old, name));
+    }
+  }
+  return true;
+}
+
+// The frame a later protocol's move says the client read: the lag's numbers, the ping, a whole
+// frame asked for too often (sv_nodelta 0). False when the client was dropped.
+bool took_frame(Q2NetServer& s, int slot, int32_t frame) {
+  Q2NetClient& c = s.clients[slot];
+  const bool sent = frame > 0 && c.sent_frame[frame & 63] == frame;
+  if (frame > c.acked && sent) c.frames_acked++;
+  c.acked = frame;
+  if (sent) {
+    c.ping_s = s.now - c.sent_at[frame & 63];
+    take_trip(s, slot, c.ping_s);
+  }
+  if (frame <= 0 && ++c.nodelta > kNoDeltaMost && !s.cfg.allow_nodelta) {
+    drop(s, slot, "too many nodelta frames");
+    return false;
+  }
+  c.moves++;
+  return true;
+}
+
+// One command of a later protocol's client handed to the rules as a packet of its own (its own
+// sequence), so a batch of any length runs whole and in order.
+void run_command(Q2NetServer& s, int slot, const Q2Cmd& cmd, std::vector<sh::Packet>& packets) {
+  Q2NetClient& c = s.clients[slot];
+  sh::Packet p;
+  p.client = slot;
+  p.sequence = ++c.run_sequence;
+  const sh::MoveCmd m = move_cmd(cmd);
+  for (sh::MoveCmd& k : p.cmds) k = m;
+  packets.push_back(p);
+  c.last_run = cmd;
+  c.last_cmd = ge::classic::q2_command(m);
+  c.last_cmd_at = s.now;
+  c.cmds_run++;
+  c.scale_ms += cmd.msec;
+  const int msec[3] = {0, 0, cmd.msec};
+  ge::server::skew_packet(c.skew, s.now, p.sequence, msec);
+  ge::server::idle_move(c.idle, s.now, c.last_cmd.buttons, c.last_cmd.forward, c.last_cmd.side,
+                        c.last_cmd.up);
+}
+
+// 36's user info change (clc 12, its id read): a key and a value, again while the next byte is 12,
+// each set (an empty value takes the key out), then the whole user info judged as a new one.
+bool userinfo_delta(Q2NetServer& s, int slot, gn::Reader& r) {
+  Q2NetClient& c = s.clients[slot];
+  std::string info = c.userinfo;
+  for (bool first = true; first || (gn::remaining(r) > 0 && r.data[r.at] == kClcUserInfoDelta);
+       first = false) {
+    if (!first) read_byte(r);
+    const std::string key = read_string(r), value = read_string(r);
+    if (r.bad) {
+      drop_told(s, slot, "read past end of message", Told::dropped);
+      return false;
+    }
+    const char* refused = key.size() >= 64     ? "oversize userinfo key"
+                          : value.size() >= 64 ? "oversize userinfo value"
+                                               : nullptr;
+    if (refused == nullptr && value.empty()) {
+      info_remove(info, key);
+    } else if (refused == nullptr && !info_set(info, key, value)) {
+      refused = "malformed userinfo";
+    }
+    if (refused != nullptr) {
+      drop_told(s, slot, refused, Told::dropped);
+      return false;
+    }
+  }
+  return take_userinfo(s, slot, std::move(info));
+}
+
 void read_messages(Q2NetServer& s, int slot, const uint8_t* data, size_t size,
                    std::vector<sh::Packet>& packets) {
   Q2NetClient& c = s.clients[slot];
@@ -880,12 +1168,67 @@ void read_messages(Q2NetServer& s, int slot, const uint8_t* data, size_t size,
   while (gn::remaining(r) > 0 && q2_held(c)) {
     const int id = read_byte(r);
     if (id == kClcNop) continue;
+    const bool later = c.protocol != kQ2NetProtocol;
+    const int low = id & 0x1F;
+    if (later && id == kClcSetting) {  // a client setting: kept as sent, an unknown index ignored
+      const int index = read_short(r), value = read_short(r);
+      if (index >= 0 && index < kQ2Settings) c.asked[index] = static_cast<int16_t>(value);
+      continue;
+    }
+    if (c.protocol == kQ2Protocol36 && id == kClcUserInfoDelta) {
+      if (!userinfo_delta(s, slot, r)) return;
+      continue;
+    }
+    if (c.protocol == kQ2Protocol36 && (low == kClcMoveNoDelta || low == kClcMoveBatched)) {
+      if (moved) return drop_told(s, slot, "multiple clc_move commands in packet", Told::dropped);
+      moved = true;
+      Q2Batch b;
+      std::string reason;
+      if (!read_q2_batch(r, static_cast<uint8_t>(id), b, reason))
+        return drop_told(s, slot, reason, Told::dropped);
+      if (c.stage != Q2Slot::active) {
+        c.acked = -1;
+        continue;
+      }
+      if (!took_frame(s, slot, b.frame)) return;
+      // The frames a loss covers (all their commands, oldest first), the last command again for
+      // each packet lost past them, then the newest frame.
+      const int extra = static_cast<int>(b.frames.size()) - 1;
+      const int lost = static_cast<int>(c.ch.last_drop);
+      if (lost > extra) c.frame_flags |= 4;
+      if (lost < 20) {
+        for (int k = extra; k < lost; k++) run_command(s, slot, c.last_run, packets);
+        for (int f = std::max(0, extra - lost); f < extra; f++)
+          for (const Q2Cmd& cmd : b.frames[size_t(f)]) run_command(s, slot, cmd, packets);
+      }
+      for (const Q2Cmd& cmd : b.frames.back()) run_command(s, slot, cmd, packets);
+      continue;
+    }
     if (id == kClcMove) {
-      if (moved) return;  // one move a packet: the rest is ignored
+      if (moved) {
+        if (later) return drop_told(s, slot, "multiple clc_move commands in packet", Told::dropped);
+        return;  // one move a packet: the rest is ignored
+      }
       moved = true;
       Q2Move m;
-      if (!read_q2_move(r, c.ch.incoming_sequence, m)) return drop(s, slot, "a cut move");
-      if (c.stage != Q2Slot::active) continue;
+      const bool read = later ? read_q2_move_ext(r, c.protocol, c.minor, m)
+                              : read_q2_move(r, c.ch.incoming_sequence, m);
+      if (!read) return drop(s, slot, "a cut move");
+      if (c.stage != Q2Slot::active) {
+        c.acked = -1;
+        continue;
+      }
+      if (later) {  // the commands one by one: the last again past two lost, then those held
+        if (!took_frame(s, slot, m.frame)) return;
+        const int lost = static_cast<int>(c.ch.last_drop);
+        if (lost > 2) c.frame_flags |= 4;
+        if (lost < 20) {
+          for (int k = 2; k < lost; k++) run_command(s, slot, c.last_run, packets);
+          for (int k = 2 - std::min(lost, 2); k < 2; k++) run_command(s, slot, m.cmds[k], packets);
+        }
+        run_command(s, slot, m.cmds[2], packets);
+        continue;
+      }
       if (m.frame > c.acked && m.frame > 0 && c.sent_frame[m.frame & 63] == m.frame)
         c.frames_acked++;  // the lag's loss toward the client
       c.acked = m.frame;
@@ -915,59 +1258,7 @@ void read_messages(Q2NetServer& s, int slot, const uint8_t* data, size_t size,
       ge::server::idle_move(c.idle, s.now, c.last_cmd.buttons, c.last_cmd.forward, c.last_cmd.side,
                             c.last_cmd.up);
     } else if (id == kClcUserInfo) {
-      const std::string was = info_get(c.userinfo, "rate");
-      const std::string before = c.userinfo;
-      c.userinfo = read_string(r);
-      // The strict rule (classic/protocol/info.hpp); a name with nothing to show keeps the one
-      // the server has.
-      if (c.userinfo.size() >= 512) return drop_told(s, slot, "oversize userinfo", Told::dropped);
-      if (c.userinfo.empty()) return drop_told(s, slot, "empty userinfo", Told::dropped);
-      if (!info_strict(c.userinfo)) return drop_told(s, slot, "malformed userinfo", Told::dropped);
-      if (!shown_name(info_get(c.userinfo, "name"))) {
-        if (c.name.empty()) return drop_told(s, slot, "malformed name", Told::dropped);
-        if (!info_set(c.userinfo, "name", c.name) || c.userinfo.size() >= 512)
-          return drop_told(s, slot, "oversize userinfo", Told::dropped);
-        q2_net_print(s, slot, "You can't have an empty name.\n");
-        stuff(c, "set name \"" + c.name + "\"\n");
-      }
-      if (judge_userinfo(s, slot)) return;  // a user info ban that kicks (server/settingban.hpp)
-      const bool rewound = antilag_wanted(info_get(c.userinfo, "cl_antilag"));
-      if (s.cfg.antilag > 0 && c.stage == Q2Slot::active &&
-          rewound != antilag_wanted(info_get(before, "cl_antilag")))
-        q2_net_print(s, slot, antilag_told(rewound));          // his own shots rewound or not
-      if (c.stage == Q2Slot::active && s.native == nullptr) {  // what changed, to the rules
-        std::vector<std::pair<std::string, std::string>> pairs;
-        ge::classic::protocol::info_pairs(c.userinfo, pairs);
-        for (const auto& [k, v] : pairs)
-          if (k != "name" && k != "*ge_ext" && info_get(before, k) != v)
-            s.rules->user_info(slot, k, v);
-      }
-      c.rate = rate_of(s, c.userinfo, c.address);
-      if (c.stage == Q2Slot::active && info_get(c.userinfo, "rate") != was) rate_check(s, slot);
-      std::string name = cut_name(info_get(c.userinfo, "name"));
-      // A player in the game renamed past sv_namelimit keeps the old name (server/names.hpp).
-      const bool renamed = !name.empty() && name != c.name && c.stage == Q2Slot::active;
-      if (renamed && !ge::server::rename_allowed(c.renames, s.now, s.cfg.names)) {
-        info_set(c.userinfo, "name", c.name);
-        q2_net_print(s, slot, ge::server::kRenameRefusal);
-        name = c.name;
-      }
-      if (!name.empty() && s.name_rule != nullptr)
-        s.name_rule(s.hook_ctx, slot, name, c.stage != Q2Slot::active);
-      if (!name.empty() && name != c.name) {
-        const std::string old = c.name;
-        c.name = name;
-        if (c.stage == Q2Slot::active) {
-          s.rules->user_info(slot, "name", name);
-          std::string line = old;
-          line += " [" + gn::to_string(c.address) + "] renamed ";
-          note(s, line + name);
-          if (ge::server::rename_told(s.cfg.names, !c.spectator))
-            for (int k = 0; k < sh::kMaxClients; k++)
-              if (s.clients[k].stage == Q2Slot::active)
-                q2_net_print(s, k, ge::server::rename_notice(old, name));
-        }
-      }
+      if (!take_userinfo(s, slot, read_string(r))) return;
     } else if (id == kClcStringCmd) {
       const std::string line = read_string(r);
       if (line.size() >= 1024) return drop_told(s, slot, "oversize stringcmd", Told::dropped);
@@ -977,10 +1268,15 @@ void read_messages(Q2NetServer& s, int slot, const uint8_t* data, size_t size,
       std::vector<uint8_t> frames;
       if (!read_voice_up(r, gen, seq, frames)) return drop(s, slot, "a voice message cut short");
       relay_voice(s, slot, gen, seq, frames);
+    } else if (later) {
+      return drop_told(s, slot, "unknown command byte", Told::dropped);
     } else {
       return drop(s, slot, "a message " + std::to_string(id) + " it does not know");
     }
-    if (r.bad) return drop(s, slot, "a message cut short");
+    if (r.bad) {
+      if (later) return drop_told(s, slot, "read past end of message", Told::dropped);
+      return drop(s, slot, "a message cut short");
+    }
   }
 }
 
@@ -1012,11 +1308,24 @@ void lag_tick(const Q2NetServer& s, Q2NetClient& c) {
 
 // The slot a packet is from: a held one first, then a zombie (whose packets are read for their
 // acknowledgements alone), so a client that connects again from the same port is its new slot.
-int find_client(const Q2NetServer& s, const gn::Address& from, uint16_t qport) {
+// Protocol 34's qport is a word after the header; 35's and 36's a byte, or none when it is 0 (the
+// client then known by its port).
+int find_client(const Q2NetServer& s, const gn::Address& from, const uint8_t* data, size_t size) {
   int zombie = -1;
   for (int i = 0; i < sh::kMaxClients; i++) {
     const Q2NetClient& c = s.clients[i];
-    if (c.stage == Q2Slot::free || c.qport != qport || !same_host(c.address, from)) continue;
+    if (c.stage == Q2Slot::free || c.stage == Q2Slot::dummy || !same_host(c.address, from))
+      continue;
+    bool match = false;
+    if (c.protocol == kQ2NetProtocol) {
+      uint16_t qport = 0;
+      match = peek_qport(data, size, qport) && qport == c.qport;
+    } else if (c.ch.qport_bytes == 1) {
+      match = size > 8 && data[8] == (c.qport & 0xFFu);
+    } else {
+      match = c.address.port == from.port;
+    }
+    if (!match) continue;
     if (q2_held(c)) return i;
     if (zombie < 0) zombie = i;
   }
@@ -1155,7 +1464,7 @@ void send_frames(Q2NetServer& s) {
   std::vector<uint8_t> block, rel;
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2NetClient& c = s.clients[i];
-    if (c.stage == Q2Slot::free) continue;
+    if (c.stage == Q2Slot::free || c.stage == Q2Slot::dummy) continue;
     if (c.stage == Q2Slot::zombie) {  // the disconnect resent until the client has it
       if (channel_reliable_backlog(c.ch) > 0 && s.now - c.sent >= 0.1) transmit(s, c, nullptr, 0);
       continue;
@@ -1164,7 +1473,9 @@ void send_frames(Q2NetServer& s) {
       drop(s, i, "overflowed");
       continue;
     }
-    if (c.stage == Q2Slot::signon || c.no_game_data) {  // reliable data alone (`nogamedata`)
+    if (!c.signon_queue.empty()) feed_signon(c);
+    // Reliable data alone: in the signon, after `nogamedata`, and while a file comes down.
+    if (c.stage == Q2Slot::signon || c.no_game_data || c.downloading) {
       if (channel_reliable_backlog(c.ch) > 0 || s.now - c.sent >= 1.0) transmit(s, c, nullptr, 0);
       continue;
     }
@@ -1182,6 +1493,12 @@ void send_frames(Q2NetServer& s) {
         transmit(s, c, block.data(), block.size());
         c.moves_sent = s.now;
       }
+      continue;
+    }
+    // The newer channel still sending a datagram's pieces: the next piece in place of this frame.
+    if (channel_sending_pieces(c.ch)) {
+      transmit(s, c, nullptr, 0);
+      if (c.wire.suppress < 255) c.wire.suppress++;
       continue;
     }
     // THE RATE: past it over the last second, this frame is held back.
@@ -1208,6 +1525,17 @@ void send_frames(Q2NetServer& s) {
     }
     rel.clear();
     c.wire.sight = sight;
+    if (c.protocol != kQ2NetProtocol) {  // what the client asked to be left out, the frame's flags
+      const bool on = c.asked[kQ2SetRecording] != 0;
+      c.wire.asked = {.no_gun = c.asked[kQ2SetNoGun],
+                      .no_blend = c.asked[kQ2SetNoBlend] != 0,
+                      .recording = on,
+                      .no_gibs = c.asked[kQ2SetNoGibs] != 0,
+                      .no_footsteps = c.asked[kQ2SetNoFootsteps] != 0,
+                      .no_predict = c.asked[kQ2SetNoPredict] != 0};
+      c.wire.frame_flags = c.frame_flags;
+      c.frame_flags = 0;
+    }
     if (s.native != nullptr)
       sv::q2_frame_raw(c.wire, s.native->raw, static_cast<int32_t>(frame), block, rel);
     else
@@ -1301,6 +1629,33 @@ int q2_net_clients(const Q2NetServer& s) {
   return n;
 }
 
+namespace {
+
+// The multiview recorder's turn (q2_mvd_server.hpp): its viewers each tick, a level's game state
+// and a block each 10 Hz rules frame (our rules only: a hosted library's world is its own).
+void record_multiview(Q2NetServer& s) {
+  if (s.mvd.cfg.enable <= 0) return;
+  q2_mvd_pump(s.mvd, s.now);
+  if (s.game == nullptr) return;
+  sv::Mvd2Capture cap;
+  cap.no_blend = s.mvd.cfg.noblend;
+  cap.no_gun = s.mvd.cfg.nogun;
+  for (int i = 0; i < sh::kMaxClients; i++) cap.moves[i] = &s.game->players[i].move;
+  const int64_t frame = frame_of(s);
+  const bool level = s.mvd_level;
+  if (!level && frame == s.mvd_frame) return;
+  s.mvd_level = false;
+  s.mvd_frame = frame;
+  q2_mvd_dummy_before(s, level, cap);  // the recorder's spectator first (q2_mvd_dummy.hpp)
+  if (level)
+    q2_mvd_level(s.mvd, **s.rules, s.cfg.wire, cap, s.now);
+  else
+    q2_mvd_frame(s.mvd, **s.rules, s.cfg.wire, cap, s.now);
+  q2_mvd_dummy_after(s);
+}
+
+}  // namespace
+
 bool q2_net_start(Q2NetServer& s, const sv::RulesRunner& rules, gn::Transport& t,
                   const Q2NetConfig& cfg, std::string& error) {
   s.cfg = cfg;
@@ -1314,6 +1669,8 @@ bool q2_net_start(Q2NetServer& s, const sv::RulesRunner& rules, gn::Transport& t
   }
   s.count = 0x10000 + cfg.wire.server_count;
   s.force_reconnect = cfg.force_reconnect;
+  s.mvd.cfg = cfg.mvd;
+  s.mvd.unix_time = cfg.unix_time;
   s.written_frame = frame_of(s);
   if (s.game != nullptr && cfg.antilag > 0) {
     s.game->lag_place = &lag_place;
@@ -1336,7 +1693,6 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
     const auto size = static_cast<size_t>(n);
     s.datagrams_in++;
     s.bytes_in += n;
-    if (s.killed) continue;  // `killserver`: nothing answered until the next map
     if (!s.blackholes.entries.empty() &&
         ge::server::blackholed(s.blackholes, from, s.cfg.unix_time ? s.cfg.unix_time() : 0)) {
       s.blackholed++;
@@ -1346,17 +1702,17 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
       read_oob(s, from, buf, size);
       continue;
     }
-    uint16_t qport = 0;
-    if (!peek_qport(buf, size, qport)) continue;
-    const int slot = find_client(s, from, qport);
+    if (s.killed) continue;  // `killserver`: no player's packets until the next map
+    const int slot = find_client(s, from, buf, size);
     if (slot < 0) continue;
     Q2NetClient& c = s.clients[slot];
     c.address = from;  // a router may have moved its port
-    size_t at = 0;
-    if (!channel_process(c.ch, buf, size, s.now, at)) continue;
+    std::span<const uint8_t> payload;
+    if (!channel_read(c.ch, buf, size, s.now, payload)) continue;
     c.heard = s.now;
     c.heard_once = true;
-    if (q2_held(c)) read_messages(s, slot, buf + at, size - at, packets);
+    if (c.ch.last_drop > 0) c.frame_flags |= 2;  // 36's frame flag: the client's packets lost
+    if (q2_held(c)) read_messages(s, slot, payload.data(), payload.size(), packets);
   }
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2NetClient& c = s.clients[i];
@@ -1395,7 +1751,15 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
     }
     if (c.stage == Q2Slot::zombie && s.now - c.heard > s.cfg.zombie_time) c = Q2NetClient{};
   }
+  if (s.killed) return;   // `killserver`: no game runs until the next map
+  if (s.game != nullptr)  // what the rules check a switch to or from watching against
+    s.game->gate = {s.cfg.password, s.cfg.spectator_password,
+                    s.cfg.max_spectators > 0 ? s.cfg.max_spectators : sh::kMaxClients};
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
+  if (s.game != nullptr)  // a seat watches as the rules say: a switch mid-match lands here
+    for (int i = 0; i < sh::kMaxClients; i++)
+      if (s.clients[i].stage == Q2Slot::active)
+        s.clients[i].spectator = s.game->clients[i].spectator;
   if (s.game != nullptr && s.cfg.antilag)  // where each player stands now, for the rewinds
     for (int i = 0; i < sh::kMaxClients; i++) {
       if (s.clients[i].stage != Q2Slot::active) {
@@ -1409,6 +1773,7 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
                      p.maxs);
     }
   send_frames(s);
+  record_multiview(s);
   for (Q2NetClient& c : s.clients) {  // the voices relayed this tick: a frame late is lost
     if (c.voice_out.empty()) continue;
     if (c.stage == Q2Slot::active) transmit(s, c, c.voice_out.data(), c.voice_out.size());
@@ -1426,6 +1791,7 @@ void q2_net_level(Q2NetServer& s, const sv::Q2WireOptions& wire) {
   s.count = 0x10000 + count;
   s.written_frame = frame_of(s);
   s.written_fast = fast_of(s);
+  s.mvd_level = true;
   for (Q2NetClient& c : s.clients) {
     std::fill(std::begin(c.frame_sizes), std::end(c.frame_sizes), 0);  // the numbers start again
     for (Q2NetClient::SentFrame& f : c.sent_frames) f.number = -1;
@@ -1523,10 +1889,10 @@ std::string q2_misc_lines(const Q2NetServer& s, int slot) {
   char b[96];
   std::string t;
   t += padded("version", c.version_heard ? c.version : "-");
-  t += padded("protocol (maj/min)", std::to_string(kQ2NetProtocol) + "/0");
-  t += padded("maxmsglen", "1390");
-  t += padded("zlib support", "no");
-  t += padded("netchan type", "old");
+  t += padded("protocol (maj/min)", std::to_string(c.protocol) + "/" + std::to_string(c.minor));
+  t += padded("maxmsglen", std::to_string(c.msglen));
+  t += padded("zlib support", c.zlib ? "yes" : "no");
+  t += padded("netchan type", c.ch.fragments ? "new" : "old");
   t += padded("ping", std::to_string(c.ping_ms));
   t += padded("movement fps", std::to_string(c.move_fps));
   std::snprintf(b, sizeof b, "%d/%d/%d ms", c.rtt_min, q2_rtt_avg(c), c.rtt_max);
@@ -1595,6 +1961,7 @@ void q2_net_ask_setting(Q2NetServer& s, int slot, const std::string& name) {
 }
 
 void q2_net_shutdown(Q2NetServer& s, const std::string& text, bool reconnect) {
+  q2_mvd_shutdown(s.mvd, reconnect);
   std::vector<uint8_t> b = {kSvcPrint, 2};
   b.insert(b.end(), text.begin(), text.end());
   b.push_back(0);

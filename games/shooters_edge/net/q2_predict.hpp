@@ -79,6 +79,13 @@ struct Q2Predict {
   float eye_shift = 0;     // the predicted eye's height less the newest frame's
   int replayed = 0;        // the moves run past the acknowledged one, the last step
   bool predicted = false;  // the last step drew a prediction
+  // A miss: a new frame put the newest move somewhere else than the last base did (the
+  // correction's size). `cl_showmiss` (`show_misses`) prints each one as the frame it came in on.
+  bool show_misses = false;
+  int64_t misses = 0;       // since the client began predicting
+  int64_t misses_told = 0;  // the ones printed (or passed over while `show_misses` was off)
+  float miss_units = 0;     // the last one's size, units
+  int miss_frame = 0;       // the frame it came in on
 };
 
 // The feel the move is predicted on: the one our server told (svc 122), else the stock move with

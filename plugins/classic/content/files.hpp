@@ -20,7 +20,7 @@
 // ge:keywords on_disk_any_case any-case letter-case
 // ge:keywords open_game_dir loose-files palette maps map_names content_packs archive_paths
 // ge:keywords map_lit lit coloured-light lits sky_box_files sky-box skybox env content-layer
-// ge:keywords client_folder
+// ge:keywords client_folder search_path_text path-command
 // ge:skill classic vfs shooter
 // ge:test tests/classic_content_files_test.cpp
 #pragma once
@@ -32,6 +32,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "classic/content/map_groups.hpp"
@@ -41,6 +42,13 @@
 
 namespace ge::classic::content {
 
+// THE LINKS (`link`, `softlink`; content/fs_words.hpp): read-only path rewrites, a name's
+// prefix replaced by a target. Hard links rewrite every path read before it is looked up; soft
+// links are tried only when the path itself is not found. The first link made that matches wins.
+struct FileLinks {
+  std::vector<std::pair<std::string, std::string>> hard, soft;  // name, target
+};
+
 struct SearchPath {
   std::string folder;       // the game folder on disk, the mod's when one is named ("" none)
   ge::vfs::SearchPath vfs;  // every source mounted, the last winning
@@ -48,6 +56,8 @@ struct SearchPath {
   // The map and sky groups the lookups fall back through (map_groups.hpp), kept when the path is
   // opened again; copies share them.
   std::shared_ptr<MapGroups> groups = std::make_shared<MapGroups>();
+  // The links (above), kept when the path is opened again (`fs_restart`); copies share them.
+  std::shared_ptr<FileLinks> links = std::make_shared<FileLinks>();
 };
 
 // The base folder `<basedir>/<the content profile's base folder>`, the bundled client's folder over
@@ -78,7 +88,7 @@ std::filesystem::path on_disk_any_case(const std::filesystem::path& dir, std::st
 
 // The file at `path` ('/' separated, as the game names it): a loose file's bytes copied into
 // `store` and viewed, or a view into its pack, a loose file's name matched in any letter case.
-// Empty when no place has it.
+// Empty when no place has it. The links apply (FileLinks above).
 std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
                                    std::vector<uint8_t>& store);
 
@@ -116,6 +126,11 @@ std::vector<std::string> map_names(
 
 // Every archive mounted (packs and zips), by its path, in mount order.
 std::vector<std::string> archive_paths(const SearchPath& path);
+// The console's `path`: "Current search path:", then a line a source, the one searched first at
+// the top: an archive's path and "(<n> files)", a folder's path alone. With `totals` (Quake II's
+// form) the footers "<n> files in PAK files" and "<n> files in PKZ files" follow, each only when
+// it is not zero.
+std::string search_path_text(const SearchPath& path, bool totals = false);
 // The numbered packs of the first folder mounted (the base game's: pak0, pak1, ...), in order,
 // with its content zip `pak0.pk3` first when it has no `pak0.pak` (the zip standing in for it):
 // what classic-enhance keys its cache by (classicenhance/cached.hpp's `find_cache`).

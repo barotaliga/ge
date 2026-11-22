@@ -62,6 +62,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <string>
 #include <vector>
@@ -161,6 +162,7 @@ struct ServerConfig {
   std::string password, spectator_password;
   std::string rcon_password;  // the remote console's (qw_admin.hpp; empty: none offered)
   std::string ban_file;
+  std::string frag_dir;  // where `fraglogfile` writes frag_<n>.log ("": nowhere)
   // Where `snap` keeps the screenshots players send, as <userid>-<nn>.<ext> ("": none asked).
   std::string snap_dir;
   std::vector<std::string> vip_passwords;  // sv_vippassword's words
@@ -187,8 +189,12 @@ struct ServerConfig {
   int maxfps = 77;             // maxfps: the moves a second clients are told they may send
   int info_flood_count = 300;  // sv_infoflood's first word
   int chunks_per_frame = 30;   // sv_downloadchunks
-  int safe_strafe = 0;         // sv_safestrafe
-  uint32_t seed = 1;           // the challenges' stream
+  // sv_downloadserver: the web address (or `github:<owner>/<repo>`) a client may fetch the
+  // server's files from instead, said in the server info as `*dlserver` (classic/content/
+  // web_downloads.hpp); "": none.
+  std::string download_server;
+  int safe_strafe = 0;  // sv_safestrafe
+  uint32_t seed = 1;    // the challenges' stream
   // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
   int most_players = 0;
   int max_spectators = 0;      // sv_maxspectators
@@ -213,6 +219,12 @@ struct ServerConfig {
   int earshot =
       1000;  // sv_earshot: how near `say_near` and the near voice reach, map units (0 off)
   bool min_ping_cmd = true;  // sv_minpingcmd
+  // Started with cheats (`-cheats`): the server info says `*cheats ON` and the operator's `god`,
+  // `give` and `noclip` work on a player; else they refuse.
+  bool cheats = false;
+  std::string progs_crc;   // `*progs`: a mod program's 16-bit CRC as a decimal ("": native rules)
+  bool high_chars = true;  // sv_highchars: 0 strips a joining player's user info to plain ASCII
+  bool map_check = true;   // sv_mapcheck: a client whose map's checksum differs is dropped
 };
 
 enum class ConnState : uint8_t { free, connected, spawned };
@@ -339,6 +351,18 @@ struct Challenge {
   int64_t made = 0;  // the order it was made, for replacing the oldest
 };
 
+// The frag log (net/qw_fraglog.hpp): the rules' frag lines read so far, the file `fraglogfile`
+// opened, the buffer being filled and the last one filled, which the `log` query answers with.
+struct FragLog {
+  std::FILE* file = nullptr;
+  std::string path;
+  size_t seen = 0;   // the rules' frag lines read
+  int sequence = 1;  // the buffer being filled; the one served is sequence - 1
+  std::string filling, served;
+  double turned_at = 0;  // the network's time of the last turnover, s
+  bool started = false;  // `turned_at` set by the first frame
+};
+
 struct QwServer {
   ServerConfig cfg;
   gs::BanList bans;
@@ -410,6 +434,7 @@ struct QwServer {
   // the client reads nothing yet.
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* name_ctx = nullptr;
+  FragLog frags;  // the frag log, its file and the buffer the `log` query reads (qw_fraglog.hpp)
 };
 
 // Serves `rules` (its map already started) over `t`. False with `error` when it cannot.
@@ -436,6 +461,9 @@ void qw_local_voice(QwServer& s, int slot, const ClcMsg& m);
 void qw_set_info(QwServer& s, int slot, const std::string& key, const std::string& value);
 // A line printed to every spawned client.
 void qw_print_all(QwServer& s, const std::string& text);
+// The server going away: every spawned client told `text` (high level, "server shutdown\n"
+// when it quits) in the datagram that disconnects it.
+void qw_shutdown(QwServer& s, const std::string& text);
 // One key of the server info set (empty: removed) and told to every client in the game; nothing
 // when it already holds the value.
 void qw_set_serverinfo(QwServer& s, const std::string& key, const std::string& value);

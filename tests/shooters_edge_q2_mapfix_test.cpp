@@ -1,10 +1,12 @@
 // shooters_edge/server/q2_mapfix: the visibility patch by map checksum (rows only gain bits, both
 // sets, a map it does not know untouched) and the entity file's name by the CRC-16 of the entities;
 // a server of Quake II plays a map with the entities of its file under sv_entpath; the dedicated
-// server's terminal runs status, listmaps, gamemode and say on it.
+// server's terminal runs status, listmaps, gamemode and say on it; a movie between maps is a level
+// of its own until the client's `nextserver`, or skipped with sv_cinematics 0.
 //
 // ge:summary Test: Quake II's maps mended at load: the visibility patch, the entity file's name
 // ge:keywords test q2 vis-patch q2_vis_patch q2_entity_file_name listmaps gamemode console-say
+// ge:keywords nextserver sv_cinematics cinematic-level
 // ge:skill shooter testing
 #include <cstring>
 #include <filesystem>
@@ -177,7 +179,8 @@ TEST(sv_entpath_plays_a_map_with_the_entities_of_its_file) {
 }
 
 // The dedicated server's own console reaches a Quake II server: the endpoint's words (`status`),
-// `listmaps`, `gamemode` for the next map, and `say` as "console:" to every player.
+// `listmaps`, `gamemode` for the next map, `say` as "console:" to every player, and the save
+// words (save, autosave, load).
 TEST(the_terminal_runs_status_listmaps_gamemode_and_say_on_a_quake_ii_server) {
   const fs::path root = fs::temp_directory_path() / "ge_q2_console";
   fs::remove_all(root);
@@ -236,6 +239,98 @@ TEST(the_terminal_runs_status_listmaps_gamemode_and_say_on_a_quake_ii_server) {
   for (const std::string& p : client.prints)
     heard = heard || p.find("console: the match starts soon") != std::string::npos;
   CHECK(heard);
+  // The save words: refused in a deathmatch, a bad name, a save that is not there; then a single
+  // player's game saved as saves/<dir>.save, the autosave kept as save0, the save loaded again.
+  CHECK(printed("save") == "Usage: save <directory>\n");
+  CHECK(printed("save ../up") == "Bad savedir.\n");
+  CHECK(printed("load nothing") == "No such savegame: nothing\n");
+  CHECK_MSG(printed("save one").find("deathmatch") != std::string::npos, "save in a deathmatch");
+  printed("gamemode sp");
+  printed("map hall");
+  frames(100);
+  CHECK_MSG(client.stage == cn::ClientStage::active, client.refused);
+  CHECK(fs::exists(root / "baseq2" / "saves" / "save0.save"));
+  CHECK(printed("save one") == "Game saved.\n");
+  CHECK(printed("autosave") == "Game saved.\n");
+  CHECK(fs::exists(root / "baseq2" / "saves" / "one.save"));
+  CHECK(fs::exists(root / "baseq2" / "saves" / "save1.save"));
+  CHECK(printed("load one").find("Couldn't") == std::string::npos);
+  frames(100);
+  CHECK_MSG(client.stage == cn::ClientStage::active, client.refused);
+  CHECK(printed("save two") == "Game saved.\n");
   ge::server::server_close(s);
+  fs::remove_all(root);
+}
+
+// A MOVIE BETWEEN MAPS: `gamemap "intro.cin+hall"` puts the server on the movie: the client is
+// told the level changed and gets server data with no player slot, the movie as the level, and
+// nothing more; a `nextserver` of another level is ignored, the right one runs the setting
+// (`gamemap "!hall"`, emptied) and the map follows; with `sv_cinematics 0` the movie is skipped.
+TEST(a_movie_between_maps_is_a_level_of_its_own_until_nextserver) {
+  const fs::path root = fs::temp_directory_path() / "ge_q2_cinematic";
+  fs::remove_all(root);
+  write_hall(root);
+  for (const char* cinematics : {"1", "0"}) {
+    ge::server::ServerConfig c;
+    c.root = root.string();
+    c.map = "hall";
+    c.seed = 3;
+    c.rules["sv_cinematics"] = cinematics;
+    ge::net::SimNetwork net = ge::net::make_sim_network(3, ge::net::LinkConditions{});
+    ge::net::Transport port;
+    ge::net::open_sim_transport(port, net, ge::net::sim_address(0, cn::kPortQ2));
+    ge::server::Server s;
+    std::string error;
+    const ge::server::ServerGame& g = cn::q2_game();
+    CHECK_MSG(ge::server::server_open(s, g, c, &port, nullptr, error), error);
+    if (s.state == nullptr) return;
+    ge::net::Transport near;
+    ge::net::open_sim_transport(near, net, ge::net::sim_address(1, 27901));
+    cn::Q2ClientEnd client;
+    cn::Q2ClientConfig cc;
+    cc.name = "watcher";
+    cn::q2_client_start(client, near, ge::net::sim_address(0, cn::kPortQ2), cc,
+                        static_cast<double>(s.now_us) / 1e6);
+    const auto frames = [&](int n) {
+      for (int f = 0; f < n; f++) {
+        ge::net::sim_advance(net, s.now_us);
+        cn::q2_client_tick(client, s.now_us);
+        ge::server::server_frame(s);
+      }
+    };
+    frames(100);
+    CHECK_MSG(client.stage == cn::ClientStage::active, client.refused);
+    const int32_t first = cn::q2_demo(client).server_count;
+    std::vector<std::string> lines;
+    CHECK(g.console(s.state, "gamemap \"intro.cin+hall\""));
+    frames(100);
+    const int32_t count = cn::q2_demo(client).server_count;
+    if (std::string(cinematics) == "0") {  // skipped: the map at once, the client back in it
+      CHECK(count != first);
+      CHECK_MSG(client.stage == cn::ClientStage::active, client.refused);
+      lines.clear();
+      g.console_lines(s.state, lines);
+      bool movie = false;
+      for (const std::string& l : lines) movie = movie || l == "SpawnServer: intro.cin";
+      CHECK(!movie);
+    } else {
+      CHECK(count != first);
+      CHECK(cn::q2_demo(client).state.player == 0);  // no slot (read as -1, kept at 0)
+      g.console_lines(s.state, lines);
+      bool movie = false;
+      for (const std::string& l : lines) movie = movie || l == "SpawnServer: intro.cin";
+      CHECK(movie);
+      CHECK(g.console(s.state, "nextserver"));  // the setting as it stands
+      cn::q2_client_command(client, "nextserver " + std::to_string(count + 1));  // not this one
+      frames(30);
+      CHECK(cn::q2_demo(client).server_count == count);
+      cn::q2_client_command(client, "nextserver " + std::to_string(count));
+      frames(150);
+      CHECK(cn::q2_demo(client).server_count != count);
+      CHECK_MSG(client.stage == cn::ClientStage::active, client.refused);
+      CHECK_MSG(cn::q2_demo(client).state.map == "hall", cn::q2_demo(client).state.map);
+    }
+    ge::server::server_close(s);
+  }
   fs::remove_all(root);
 }

@@ -3,8 +3,11 @@
 // ge:summary The window's cvar layers: each game's own settings, the switch, the clashes printed
 // ge:keywords cvar-layer game-cvars per-game-cvar same own clash game-switch crosshair
 // ge:keywords vid_gamma s_volume gl_dynamic gl_lightmap cl_gun scr_centertime
-// ge:keywords intensity gl_modulate gl_brightness
-// ge:keywords sshot_format sshot_dir image_jpeg_quality_level
+// ge:keywords intensity gl_modulate gl_brightness cl_blend cl_entities cl_particles cl_lights
+// ge:keywords cl_gibs cl_noglow logfile cl_disable_particles cl_disable_explosions
+// ge:keywords cl_dlight_hacks cl_muzzlelight_time cl_muzzleflashes
+// ge:keywords sshot_format sshot_dir image_jpeg_quality_level gl_screenshot_format
+// ge:keywords gl_screenshot_quality gl_screenshot_template gl_screenshot_compression
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -12,7 +15,12 @@
 #include "classicenhance/profile.hpp"
 #include "core/num_text.hpp"
 #include "shooters_edge/client/picture_files.hpp"
+#include "shooters_edge/menu/game_menu.hpp"
+#include "shooters_edge/sound/ambience.hpp"
 
+#include <algorithm>
+#include <cstdlib>
+#include <ctime>
 #include <utility>
 #include <vector>
 
@@ -21,6 +29,146 @@ namespace shooters_edge::client {
 namespace con = ge::console;
 
 namespace {
+
+// Quake II's effect switches (classic/q2_fx_switches.hpp) on `v`, bound to `x`.
+void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
+  v.bind({.name = "cl_disable_particles",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Which specks are left out, as a sum.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 63,
+          .values = "0: none (the default); add 1 a grenade's explosion, 2 a grenade's trail, 4 a "
+                    "rocket's explosion, 8 a rocket's trail, 16 blood, 32 a blaster bolt's trail"},
+         &x.no_particles);
+  v.bind({.name = "cl_disable_explosions",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Which explosions' balls of fire are left out, as a sum (their light stays).",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 3,
+          .values = "0: none (the default); add 1 a grenade's, 2 a rocket's"},
+         &x.no_explosions);
+  v.bind({.name = "cl_dlight_hacks",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Changes to the lights the shots and explosions give, as a sum.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 7,
+          .values = "0: none (the default); add 2 for explosions lighting half as far, 4 for no "
+                    "light from a machine gun's or a chain gun's flash"},
+         &x.light_hacks);
+  v.bind({.name = "cl_muzzlelight_time",
+          .fallback = "16",
+          .flags = con::kArchive,
+          .help = "How long a gun's flash lights the room, in milliseconds.",
+          .min = 0,
+          .max = 1000,
+          .values = "16: the default; 0: no light; 1..1000: that long, the light fading over it"},
+         &x.muzzle_light_ms);
+  v.bind({.name = "cl_muzzleflashes",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether fire shows at the guns of other players and monsters as they shoot.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: it shows (the default); 0: only their light"},
+         &x.muzzle_models);
+  v.bind({.name = "cl_footsteps",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether you hear the players' footsteps.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: you do (the default); 0: none; 2: the same as 1, the game's own four "
+                    "steps"},
+         &x.footsteps);
+  v.bind({.name = "s_ambient",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Which of the sounds that go round and round as things move are heard.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 3,
+          .values = "1: all of them (the default); 0: none; 2: only those of a thing you can "
+                    "see; 3: only your own"},
+         &x.ambient);
+  v.bind({.name = "cl_railtrail_type",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "How a railgun's shot is drawn.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "0: the game's own trail of specks (the default); 1: a beam; 2: a beam with a "
+                    "line spiralling round it"},
+         &x.rail_type);
+  v.bind({.name = "cl_railtrail_time",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Seconds a railgun's beam takes to fade.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 10,
+          .values = "0..10: seconds (1 the default)"},
+         &x.rail_time);
+  v.bind({.name = "cl_railcore_color",
+          .fallback = "red",
+          .flags = con::kArchive,
+          .help = "The colour of a railgun's beam.",
+          .kind = con::CvarKind::text,
+          .values = "a colour's name (red the default; black, green, yellow, blue, cyan, "
+                    "magenta, white) or #rgb or #rrggbb"},
+         &x.core_colour);
+  v.bind({.name = "cl_railcore_width",
+          .fallback = "2",
+          .flags = con::kArchive,
+          .help = "How wide a railgun's beam is.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 64,
+          .values = "0..64: the game's units (2 the default)"},
+         &x.core_width);
+  v.bind({.name = "cl_railspiral_color",
+          .fallback = "blue",
+          .flags = con::kArchive,
+          .help = "The colour of the line spiralling round a railgun's beam.",
+          .kind = con::CvarKind::text,
+          .values = "a colour's name (blue the default; black, red, green, yellow, cyan, "
+                    "magenta, white) or #rgb or #rrggbb"},
+         &x.spiral_colour);
+  v.bind({.name = "cl_railspiral_radius",
+          .fallback = "3",
+          .flags = con::kArchive,
+          .help = "How far the spiralling line keeps from a railgun's beam.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 64,
+          .values = "0..64: the game's units (3 the default)"},
+         &x.spiral_radius);
+  v.bind({.name = "cl_hit_markers",
+          .fallback = "2",
+          .flags = con::kArchive,
+          .help = "What shows when your shot hurts someone, on servers that tell.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "2: a red mark at the centre and a sound (the default); 1: the mark alone; "
+                    "0: nothing"},
+         &x.hit_markers);
+  v.bind({.name = "scr_hit_marker_time",
+          .fallback = "500",
+          .flags = con::kArchive,
+          .help = "Milliseconds the hit mark takes to fade.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 10000,
+          .values = "500: the default; 0: no mark; 1..10000: that many milliseconds"},
+         &x.hit_marker_ms);
+}
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
 // in the game (its crosshair: 0 none, 1 its own +, 2 a dot, as the engine's marks begin), so it has
@@ -39,14 +187,36 @@ void add_first(con::Console& c, const GameBindings& b) {
   }
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
+  if (b.show_misses != nullptr) *b.show_misses = false;  // Quake II's cl_showmiss
+  if (b.shownet != nullptr) *b.shownet = 0;              // and cl_shownet
+  if (b.showpackets != nullptr) *b.showpackets = false;  // and cl_showpackets
+  if (b.items_still != nullptr) *b.items_still = false;  // and cl_nobob
+  if (b.menu != nullptr) {  // and ui_scale, ui_sortservers, ui_pingrate: the menus by the window
+    b.menu->menu_scale() = 0;
+    b.menu->servers().game_sort = shooters_edge::menu::ServersPage::kNoGameSort;
+    b.menu->servers().game_ping_rate = -1;
+  }
+  if (b.console != nullptr) {  // and con_background: the game's own picture
+    b.console->back_name = "conback";
+    b.console->read_back = nullptr;
+  }
   if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
   if (b.light_modulate != nullptr) *b.light_modulate = 1;
   if (b.light_lift != nullptr) *b.light_lift = 0;
+  if (b.gibs != nullptr) *b.gibs = true;
+  if (b.no_glow != nullptr) *b.no_glow = false;
+  if (b.q2fx != nullptr) *b.q2fx = {};  // Quake II's effect switches set aside
+  if (b.music != nullptr) {             // its ogg_enable, ogg_shuffle and ogg_menu_track set aside
+    b.music->enabled = true;
+    b.music->shuffle = false;
+    b.music->menu_track = 0;
+  }
   if (b.view != nullptr) {  // Quake's weapon is always drawn, at its own place and lens
     b.view->hand = 0;
     b.view->gun = 1;
     b.view->gun_units[0] = b.view->gun_units[1] = b.view->gun_units[2] = 0;
     b.view->gun_fov_h = 0;
+    b.view->alpha = 1;
   }
   // Its weapon's depth and offset, in its units; the offset adds to our cl_gunx/y/z.
   const con::CvarSpec size{
@@ -91,6 +261,24 @@ void add_first(con::Console& c, const GameBindings& b) {
     c.cvars().add(offset);
     c.cvars().add(last_fired);
   }
+  // Its ambience of water and sky (sound/ambience.hpp): how loud, and how fast it swells and fades.
+  c.cvars().bind({.name = "ambient_level",
+                  .fallback = "0.3",
+                  .help = "How loud the water and wind around you sound.",
+                  .kind = con::CvarKind::number,
+                  .min = 0,
+                  .max = 1,
+                  .values = "0: silent; 0..1: that share of full (0.3 the default)"},
+                 &ambient_settings().level);
+  c.cvars().bind({.name = "ambient_fade",
+                  .fallback = "100",
+                  .help = "How fast the water and wind swell and fade as you move, in 255ths of "
+                          "full a second.",
+                  .kind = con::CvarKind::number,
+                  .min = 1,
+                  .max = 10000,
+                  .values = "1..10000: that fast (100 the default: silence to full in 2.55 s)"},
+                 &ambient_settings().fade);
   if (b.noskins != nullptr) *b.noskins = 0;         // its figures are its own (choose_figure)
   if (b.screen != nullptr) *b.screen = Q2Screen{};  // Quake II's view and 2D settings set aside
   c.cvars().add_synonym("fov", "cl_fov");
@@ -101,6 +289,28 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("image_jpeg_quality_level", "scr_quality");
   c.add_command_synonym("cvar_reset", "reset");  // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
+  c.add_command_synonym("togglechat", "toggleconsole");  // QuakeWorld's second name for it
+  c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left
+  // An old Quake config's saved name and colours: `_cl_name` is the name, `_cl_color` both
+  // colours as one number (shirt times 16 plus pants), so its config dresses you as it did.
+  c.cvars().add_synonym("_cl_name", "name");
+  c.cvars().add_synonym("port", "sv_port");  // the port the next game is served on
+  c.add_command(
+      "_cl_color", "_cl_color <shirt*16+pants>: both your colours as one number",
+      [](con::Console& k, const con::Args& a) {
+        const auto colour = [&k](const char* name) {
+          const con::Cvar* v = k.cvars().find(name);
+          return v != nullptr ? std::atoi(v->value.c_str()) : 0;
+        };
+        if (a.size() < 2) {
+          k.print("\"_cl_color\" is \"" +
+                  std::to_string(colour("topcolor") * 16 + colour("bottomcolor")) + "\"");
+          return;
+        }
+        const int n = static_cast<int>(std::atof(a[1].c_str()));
+        k.cvars().set("topcolor", std::to_string(std::min((n >> 4) & 15, 13)), con::Source::local);
+        k.cvars().set("bottomcolor", std::to_string(std::min(n & 15, 13)), con::Source::local);
+      });
   c.cvars().add({.name = "cl_novweps",
                  .fallback = "0",
                  .flags = con::kArchive,
@@ -132,6 +342,8 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   `cl_vwep` (`r_drawvweps`: the weapon a figure carries, 1 in both), and its crosshair's `ch_x`,
 //   `ch_y` (`cl_crossx`, `cl_crossy`), `ch_scale` (`crosshairsize`) and `ch_alpha`
 //   (`crosshairalpha`); its own `ch_red`, `ch_green`, `ch_blue` and `ch_health` colour it;
+//   `scr_showpause` (`showpause`), `netgraph` (`r_netgraph`) and `ogg_volume` (`bgmvolume`); its
+//   `ogg_enable` is the music's switch (`cd on|off`); `ogg` its spelling of `music`;
 // - the move keys' speeds are the same settings, 200 walking by default where Quake's
 //   are 400 (Quake II has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
@@ -147,9 +359,28 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   typed line to the team, where our `con_chat` 2 tells a command by its first word);
 // - its view and 2D (q2_view.hpp): `scr_scale`, `scr_draw2d`, `scr_alpha`, the lag graph's
 //   `scr_lag_*`, `cl_adjustfov`, `uf`, `cl_kickangles`; and `s_underwater` the same setting as
-//   Quake's (room_ear.hpp), on by default where Quake's is off.
+//   Quake's (room_ear.hpp), on by default where Quake's is off;
+// - its browsers: `ui_sortdemos` (`menu_demo_sort`, by name by default where ours lists the newest
+//   first) and `ui_colorservers` (`sb_colorservers`); its own `ui_sortservers` (one column either
+//   way, in place of `sb_sortservers`) and `ui_pingrate` (from `rate`, in place of
+//   `sb_infospersec`); `ui_scale`, the menus' size; `al_device` its spelling of `s_device`.
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
+  // Its whole set of configs run again on a game change (client/install_configs.cpp's
+  // run_game_settings), autoexec.cfg after config.cfg.
+  // The client's own port (net/qw_remote.cpp's `own_port`), its socket opened again when it moves.
+  v.add({.name = "net_clientport",
+         .fallback = "-1",
+         .help = "The network port your client sends from; a change applies at once.",
+         .kind = con::CvarKind::integer,
+         .min = -1,
+         .max = 65535,
+         .values = "-1: any free port (the default); 1..65535: that port"});
+  v.add({.name = "fs_autoexec",
+         .fallback = "1",
+         .help = "Whether autoexec.cfg runs again after config.cfg when another game is loaded.",
+         .kind = con::CvarKind::boolean,
+         .values = "0: config.cfg alone; 1: autoexec.cfg and postexec.cfg after it (the default)"});
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
   if (b.mouse != nullptr) b.mouse->per_frame = true;
   if (b.crosshair != nullptr) {
@@ -213,6 +444,15 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .max = 86400,
          .values = "0: never; 1..86400: that many seconds (120 the default)",
          .overlap = con::Overlap::same});
+  v.add({.name = "m_side",  // the same sidestep as Quake's, a whole unit a count
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "How far the mouse's sideways moves sidestep you when they do (+strafe held, or "
+                 "lookstrafe with +mlook).",
+         .min = -10,
+         .max = 10,
+         .values = "-10..10: units a count at sensitivity 1 (1 the default)",
+         .overlap = con::Overlap::same});
   v.add({.name = "s_underwater",  // its own client muffles the world under water; Quake's never
          .fallback = "1",
          .flags = con::kArchive,
@@ -221,7 +461,74 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .values = "1: muffled (the default); 0: as in the air",
          .overlap = con::Overlap::same});
   if (b.screen != nullptr) add_q2_screen_cvars(v, *b.screen);
+  if (b.gibs != nullptr)  // our cl_gibfilter, the other way round
+    v.bind({.name = "cl_gibs",
+            .fallback = "1",
+            .flags = con::kArchive,
+            .help = "Whether the pieces a body bursts into are drawn.",
+            .kind = con::CvarKind::boolean,
+            .values = "1: they fly and lie about (the default); 0: none is drawn"},
+           b.gibs);
+  if (b.no_glow != nullptr)  // over r_itempulse
+    v.bind({.name = "cl_noglow",
+            .fallback = "0",
+            .flags = con::kArchive,
+            .help = "Whether the items lying about never pulse with light.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: they pulse as r_itempulse says (the default); 1: never"},
+           b.no_glow);
+  if (b.q2fx != nullptr) add_q2_fx_cvars(v, *b.q2fx);
+  const con::CvarSpec music_on{.name = "ogg_enable",
+                               .fallback = "1",
+                               .flags = con::kArchive,
+                               .help = "Whether the game's music plays.",
+                               .kind = con::CvarKind::boolean,
+                               .values = "1: it plays (the default); 0: no music"};
+  const con::CvarSpec shuffle{.name = "ogg_shuffle",
+                              .fallback = "0",
+                              .flags = con::kArchive,
+                              .help =
+                                  "Whether the game's music plays every track in a random "
+                                  "order instead of each level's own.",
+                              .kind = con::CvarKind::boolean,
+                              .values = "0: each level's own track (the default); 1: shuffled"};
+  const con::CvarSpec menu_track{.name = "ogg_menu_track",
+                                 .fallback = "0",
+                                 .flags = con::kArchive,
+                                 .help = "The track played while no game is running.",
+                                 .kind = con::CvarKind::integer,
+                                 .min = 0,
+                                 .max = 99,
+                                 .values = "0: none (the default); 1..99: that track"};
+  if (b.music != nullptr) {
+    v.bind(music_on, &b.music->enabled);
+    v.bind(shuffle, &b.music->shuffle);
+    v.bind(menu_track, &b.music->menu_track);
+  } else {
+    v.add(music_on), v.add(shuffle), v.add(menu_track);
+  }
+  c.add_command_synonym("ogg", "music");       // its music player (engine/audio/music_console.hpp)
   c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
+  v.add({.name = "menu_demo_sort",             // its demo browser lists by name (demos_page.hpp)
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "The order DEMOS lists the recordings in.",
+         .kind = con::CvarKind::integer,
+         .min = -3,
+         .max = 3,
+         .values = "1: by name, A to Z (the default); -1: Z to A; 2: oldest first; -2: newest "
+                   "first; 3: smallest first; -3: largest first; 0: by name",
+         .overlap = con::Overlap::same});
+  v.add_synonym("ui_sortdemos", "menu_demo_sort");
+  if (v.find("s_device") != nullptr)  // the window's (platform/window_cvars.hpp)
+    v.add_synonym("al_device", "s_device");
+  for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)
+    v.add({.name = "adr" + std::to_string(k),
+           .fallback = "",
+           .flags = con::kArchive,
+           .help = "A server in your address book, asked whenever the server list refreshes.",
+           .kind = con::CvarKind::text,
+           .values = "\"\": none (the default); TEXT: a server's address, host:port"});
   v.add({.name = "scr_centertime",
          .fallback = "2.5",
          .flags = con::kArchive,
@@ -230,17 +537,42 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .max = 30,
          .values = "0..30: that many seconds (2.5 the default)",
          .overlap = con::Overlap::same});
-  for (const auto& [name, ours] :
-       {std::pair{"vid_gamma", "gamma"}, std::pair{"s_volume", "volume"},
-        std::pair{"gl_dynamic", "r_dynamic"}, std::pair{"gl_lightmap", "r_lightmap"},
-        std::pair{"fov", "cl_fov"}, std::pair{"ch_x", "cl_crossx"}, std::pair{"ch_y", "cl_crossy"},
-        std::pair{"ch_scale", "crosshairsize"}, std::pair{"ch_alpha", "crosshairalpha"},
-        std::pair{"cl_vwep", "r_drawvweps"}, std::pair{"con_alpha", "con_bgalpha"}})
+  v.add({.name = "scr_template",  // its screenshots are numbered, quake000 up
+         .fallback = "quakeXXX",
+         .flags = con::kArchive,
+         .help = "The screenshot's file name, its X's numbered.",
+         .kind = con::CvarKind::text,
+         .values = "quakeXXX: quake000, quake001 ... (the default); \"\": named by the time; "
+                   "NAME: that name, its last run of X's the first free number",
+         .overlap = con::Overlap::same});
+  for (const auto& [name, ours] : {std::pair{"vid_gamma", "gamma"},
+                                   std::pair{"s_volume", "volume"},
+                                   std::pair{"gl_dynamic", "r_dynamic"},
+                                   std::pair{"gl_lightmap", "r_lightmap"},
+                                   std::pair{"fov", "cl_fov"},
+                                   std::pair{"ch_x", "cl_crossx"},
+                                   std::pair{"ch_y", "cl_crossy"},
+                                   std::pair{"ch_scale", "crosshairsize"},
+                                   std::pair{"ch_alpha", "crosshairalpha"},
+                                   std::pair{"cl_vwep", "r_drawvweps"},
+                                   std::pair{"con_alpha", "con_bgalpha"},
+                                   std::pair{"cl_entities", "r_drawentities"},
+                                   std::pair{"cl_particles", "r_particles"},
+                                   std::pair{"cl_lights", "r_dynamic"},
+                                   std::pair{"cl_blend", "gl_polyblend"},
+                                   std::pair{"gl_screenshot_format", "scr_format"},
+                                   std::pair{"gl_screenshot_quality", "scr_quality"},
+                                   std::pair{"gl_screenshot_template", "scr_template"},
+                                   std::pair{"gl_screenshot_compression", "scr_compression"},
+                                   std::pair{"scr_showpause", "showpause"},
+                                   std::pair{"netgraph", "r_netgraph"},
+                                   std::pair{"ogg_volume", "bgmvolume"},
+                                   std::pair{"ui_colorservers", "sb_colorservers"}})
     v.add_synonym(name, ours);
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.
   if (b.chat != nullptr) add_q2_chat_sound(c, *b.chat);
-  if (b.auto_chat != nullptr)
+  if (b.console_view != nullptr) {
     v.bind({.name = "con_auto_chat",
             .fallback = "0",
             .flags = con::kArchive,
@@ -249,7 +581,47 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .min = 0,
             .max = 2,
             .values = "0: a command (the default); 1: said to everyone; 2: said to your team"},
-           b.auto_chat);
+           &b.console_view->game_chat);
+    // Its stamps on every console line, not only chat's (the classic layer's `con_timestamps`).
+    v.bind({.name = "con_timestamps",
+            .fallback = "0",
+            .help = "Whether every console line begins with the time it came.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: no time (the default); 1: the time, as con_timestampsformat writes it",
+            .overlap = con::Overlap::own},
+           &b.console_view->stamps);
+    if (b.chat != nullptr) b.chat->timestamps = 0;  // its chat lines stamped as every line is
+    v.bind({.name = "con_timestampsformat",
+            .fallback = "%H:%M:%S ",
+            .help = "How the time before each console line is written, in strftime's words.",
+            .kind = con::CvarKind::text,
+            .values = "\"%H:%M:%S \": hours, minutes and seconds (the default); TEXT: that form"},
+           &b.console_view->stamp_format);
+    v.bind({.name = "con_timestampscolor",
+            .fallback = "#aaa",
+            .help = "The colour of the time before each console line.",
+            .kind = con::CvarKind::text,
+            .values = "#aaa: light grey (the default); #rgb, #rrggbb, #rrggbbaa, a colour's name "
+                      "or 0..7"},
+           &b.console_view->stamp_colour);
+    // Its Tab: the word completed to what the matches share, the matches listed.
+    v.bind({.name = "com_completion_mode",
+            .fallback = "1",
+            .help = "How Tab lists the commands and settings a word could be.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 2,
+            .values = "0: one a line; 1: in columns (the default); 2: in columns, commands, "
+                      "settings and aliases apart"},
+           &b.console_view->list_mode);
+    v.bind({.name = "com_completion_treshold",
+            .fallback = "50",
+            .help = "How many matches Tab lists before it asks first.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .values = "50: fifty (the default); a number: that many"},
+           &b.console_view->list_threshold);
+  }
   // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
   if (b.predict != nullptr)
     v.bind({.name = "cl_predict",
@@ -259,6 +631,77 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .values = "1: predicted, drawn where you will be (the default); 0: drawn where the "
                       "server last put you, a round trip late"},
            b.predict);
+  if (b.show_misses != nullptr)
+    v.bind({.name = "cl_showmiss",
+            .fallback = "0",
+            .help = "Whether each miss of your moves' prediction is printed, with its size.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: not printed (the default); 1: the frame and how far off, in units"},
+           b.show_misses);
+  if (b.shownet != nullptr)
+    v.bind({.name = "cl_shownet",
+            .fallback = "0",
+            .help = "Whether each message from the server you joined is printed, as its size.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 3,
+            .values = "0: none (the default); 1..3: each message's size in bytes"},
+           b.shownet);
+  if (b.showpackets != nullptr)
+    v.bind({.name = "cl_showpackets",
+            .fallback = "0",
+            .help = "Whether each packet you send to the server you joined is printed.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: none (the default); 1: each one, its sequences and size"},
+           b.showpackets);
+  if (b.console != nullptr) {
+    if (b.files != nullptr)
+      b.console->read_back = [files = b.files](std::string_view name, ge::ui::Image* out) {
+        return read_console_back(*files, name, out);
+      };
+    v.bind({.name = "con_background",
+            .fallback = "conback",
+            .help = "The picture behind the console, one of the game's under pics/.",
+            .kind = con::CvarKind::text,
+            .values = "conback: the game's own (the default); NAME: that picture, the game's own "
+                      "when it is not there"},
+           &b.console->back_name);
+  }
+  if (b.menu != nullptr) {
+    v.bind({.name = "ui_sortservers",
+            .fallback = "0",
+            .help = "How JOIN A GAME sorts its servers: by one column, either way.",
+            .kind = con::CvarKind::integer,
+            .min = -5,
+            .max = 5,
+            .values = "0: as they are found (the default); 1 name, 2 game, 3 map, 4 players (the "
+                      "busiest first), 5 ping; -1..-5: the same the other way"},
+           &b.menu->servers().game_sort);
+    v.bind({.name = "ui_pingrate",
+            .fallback = "0",
+            .help = "How many servers JOIN A GAME asks a second.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 100,
+            .values = "0: from your rate (the default; 33 at 15000); 1..100: that many a second"},
+           &b.menu->servers().game_ping_rate);
+  }
+  if (b.menu != nullptr)
+    v.bind({.name = "ui_scale",
+            .fallback = "0",
+            .help = "How large the menus are drawn.",
+            .min = 0,
+            .max = 10,
+            .values = "0: as large as fits the window (the default); 1..10: that many times the "
+                      "game's own size"},
+           &b.menu->menu_scale());
+  if (b.items_still != nullptr)
+    v.bind({.name = "cl_nobob",
+            .fallback = "0",
+            .help = "Whether the items the game makes float rise and sink as they lie.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: they float (the default); 1: they lie still"},
+           b.items_still);
   if (b.crouch != nullptr)
     v.bind({.name = "cl_predict_crouch",
             .fallback = "1",
@@ -388,6 +831,18 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(gun_fov, &b.view->gun_fov_h);
   else
     v.add(gun_fov);
+  const con::CvarSpec gun_alpha{
+      .name = "cl_gunalpha",
+      .fallback = "1",
+      .flags = con::kArchive,
+      .help = "How solid the held weapon is drawn.",
+      .min = 0,
+      .max = 1,
+      .values = "1: solid (the default); 0.1..0.9: see-through; 0: not seen"};
+  if (b.view != nullptr)
+    v.bind(gun_alpha, &b.view->alpha);
+  else
+    v.add(gun_alpha);
   // Its move rate and its frame cap: its `cl_maxfps` is the moves a second (ours, the frame cap, is
   // set aside while it is loaded and comes back with its value after), its `r_maxfps` the frame
   // cap, starting at the cap in force when the game loads and kept with the game's own settings.
@@ -405,6 +860,21 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(moves, b.moves);
   else
     v.add(moves);
+  const con::CvarSpec stuff{
+      .name = "cl_ignore_stufftext",
+      .fallback = "0",
+      .flags = con::kArchive,
+      .help = "Which console lines a server you join may run on your client.",
+      .kind = con::CvarKind::integer,
+      .min = 0,
+      .max = 2,
+      .values =
+          "0: every one (the default); 1: only those stufftext-whitelist.txt names; 2: the "
+          "same, each one refused said"};
+  if (b.stuff_level != nullptr)
+    v.bind(stuff, b.stuff_level);
+  else
+    v.add(stuff);
   const std::string cap = b.frame_cap != nullptr ? ge::core::num::to_string(*b.frame_cap) : "0";
   const con::CvarSpec frames{
       .name = "r_maxfps",
@@ -491,11 +961,49 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
                     const GameBindings& b) {
   v.layer = game_layer(game.id);
   c.cvars().set_scope(game_scope(game));  // its own values over the common ones (cvar.hpp)
+  if (c.cvars().find("cl_beginmapcmd") == nullptr) {  // every game's map commands, once
+    con::CvarLayer classic(c.cvars(), kLayerClassic);
+    add_map_command_cvars(c.cvars(), v.q2);
+  }
   con::CvarLayer layer(c.cvars(), v.layer);
   if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it
-  if (b.auto_chat != nullptr) *b.auto_chat = -1;       // only Quake II's con_auto_chat sets it
+  if (b.console_view != nullptr) {  // only Quake II's con_auto_chat and stamps set them
+    b.console_view->game_chat = -1;
+    b.console_view->stamps = false;
+    b.console_view->list_mode = -1;  // our own Tab
+  }
+  {  // only Quake II's cvars set them; what the frames saw is kept
+    Q2Session fresh;
+    fresh.joined = v.q2.joined;
+    fresh.map = v.q2.map;
+    fresh.begin_cmd = v.q2.begin_cmd;  // the map commands are every game's (classic layer)
+    fresh.change_cmd = v.q2.change_cmd;
+    fresh.disconnect_cmd = v.q2.disconnect_cmd;
+    v.q2 = fresh;
+  }
+  if (game.id == "q2") add_q2_session_cvars(c.cvars(), v.q2);
+  if (b.view != nullptr) {  // gun_next, gun_prev and gun_model over the game's own weapons
+    b.view->gun_frame = 0;
+    b.view->gun_model = -1;
+    shooters_edge::view::add_gun_commands(c, *b.view, game.held_weapons);
+  }
+  if (!v.log) v.log = std::make_shared<ConsoleLog>();
+  v.log->mode = 0;  // Quake II's logfile and the rest; its file closed by the next line printed
+  v.log->flush = false;
+  if (game.id == "q2") add_console_log_cvars(c.cvars(), *v.log);
+  if (!v.log_hooked && c.sink()) {
+    v.log_hooked = true;
+    c.set_sink([&c, log = v.log, before = c.sink()](std::string_view line) {
+      before(line);
+      if (log->mode > 0 || log->file)
+        console_log_line(*log, c.search_path().empty() ? "." : c.search_path().front(), line,
+                         std::time(nullptr));
+    });
+  }
+  GameBindings bound = b;
+  if (bound.screen == nullptr) bound.screen = &v.screen;
   for (const GameRows& row : kGameCvars)
-    if (row.game == game.id) row.add(c, b);
+    if (row.game == game.id) row.add(c, bound);
   if (b.crosshair != nullptr) {  // crosshairimage's picture read again from this game's files
     if (b.files != nullptr) add_crosshair_reader(*b.crosshair, *b.files);
     b.crosshair->picture_of.clear();

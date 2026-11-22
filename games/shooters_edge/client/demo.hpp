@@ -70,6 +70,7 @@
 
 #include "classic/locs.hpp"
 #include "classic/q2_move.hpp"
+#include "server/sheet.hpp"
 #include "shooter/vec.hpp"
 #include "vfs/partial.hpp"
 #include "vfs/unpack.hpp"
@@ -250,12 +251,18 @@ inline std::array<double, 32> never_flashed() {
   return a;
 }
 
+// The troubles of a Quake II frame (`DemoState::q2_trouble`): sent whole, its base not held, its
+// base older than the frames kept, packets the server held back for the rate.
+inline constexpr uint8_t kQ2FrameNoDelta = 1, kQ2FrameBad = 2, kQ2FrameOld = 4,
+                         kQ2FrameSuppressed = 8;
+
 struct DemoState {
   DemoFormat format = DemoFormat::single;
-  bool voice_format = false;  // a `.qwdv` or `.mvdv` (the voice header)
-  int protocol = 0;           // 15 single, 28 client and multiview, 34 Quake II
-  std::string map;            // "e1m1" off `maps/e1m1.bsp`; "" before the first level
-  int levels = 0;             // level starts read so far (a new level: load its map)
+  bool voice_format = false;   // a `.qwdv` or `.mvdv` (the voice header)
+  int protocol = 0;            // 15 single, 28 client and multiview, 34 Quake II
+  std::string map;             // "e1m1" off `maps/e1m1.bsp`; "" before the first level
+  std::vector<uint8_t> areas;  // Quake II: the last frame's areas shown (a bit each); empty, all
+  int levels = 0;              // level starts read so far (a new level: load its map)
   // The level's place names as the recording kept them (`//loc` lines, plugins/classic/locs.hpp);
   // empty when it kept none.
   ge::classic::Locs places;
@@ -263,11 +270,20 @@ struct DemoState {
   sh::Vec3f eye;     // the view's eye, units
   sh::Vec3f angles;  // the view's angles, degrees
   sh::Vec3f kick;    // Quake II: the server's kick angles on the view, degrees
-  float fov = 0;     // Quake II: the field of view the server sends, degrees (0: none sent)
+  // Quake II: the server's sway on the held weapon, degrees (pitch down, yaw left, roll right side
+  // down), and its place off the hand, units along the world's axes.
+  sh::Vec3f gun_angles, gun_offset;
+  float fov = 0;    // Quake II: the field of view the server sends, degrees (0: none sent)
+  int rdflags = 0;  // Quake II: the view's bits (kQ2RdIrGoggles: infra-red goggles on)
+  // Quake II: the music track the server names (its configstring 1; 0 none, -1 never named).
+  int cdtrack = -1;
   // The blows the view's player took (single, client, multiview): the last `kKeptBlows` of them
   // and how many in all since the demo was opened, so a look after several frames misses none.
   std::vector<DemoBlow> blows;
   int64_t blows_taken = 0;
+  // Quake II's damage the player dealt, as the server reports it (temporary entity 128): hits
+  // counted (each with damage over 0), for the hit marker (q2_bar.hpp).
+  int64_t hits = 0;
   // The server's kicks on the view (client, multiview: its small and big kick messages to the
   // player): how many since the demo was opened and the last one's size (2 small, 4 big).
   int64_t kicks_taken = 0;
@@ -275,15 +291,18 @@ struct DemoState {
   // The items the view's player took (the server's stuffed `bf`; single: its bonus flash too),
   // since the demo was opened: each flashes the view gold.
   int64_t bonuses = 0;
-  sh::Vec3f velocity;              // client: the recording's player's, units/s (`velocity_read`)
-  bool velocity_read = false;      // client: the player's velocity came in his last player state
-  int view_entity = 1;             // single: the entity the eye rides
-  int max_clients = 1;             // single: the players, entities 1 to this
-  int player = 0;                  // the recording (client) or tracked (multiview) slot
-  float view_height = 22;          // over the origin, units
-  int weapon_frame = 0;            // single: the held weapon's frame (client data)
-  bool intermission = false;       // the level ended: the eye is the intermission's
-  int32_t stats[kStatCount] = {};  // health, ammo, items ... (DemoStat)
+  sh::Vec3f velocity;          // client: the recording's player's, units/s (`velocity_read`)
+  bool velocity_read = false;  // client: the player's velocity came in his last player state
+  // Quake II: what went wrong with the last frame read (kQ2Frame* bits; `scr_showturtle` writes
+  // them on the screen, client/q2_bar.hpp's `add_q2_turtle`).
+  uint8_t q2_trouble = 0;
+  int view_entity = 1;                      // single: the entity the eye rides
+  int max_clients = 1;                      // single: the players, entities 1 to this
+  int player = 0;                           // the recording (client) or tracked (multiview) slot
+  float view_height = 22;                   // over the origin, units
+  int weapon_frame = 0;                     // single: the held weapon's frame (client data)
+  bool intermission = false;                // the level ended: the eye is the intermission's
+  int32_t stats[kStatCount] = {};           // health, ammo, items ... (DemoStat)
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
   // Client: the visible weapons' list the server stuffed (`//vwep`, classic/vweps.hpp), entry 0
   // the body; emptied with each level's server data. A multiview recording names none: it is
@@ -299,6 +318,7 @@ struct DemoState {
   std::string layout;
   std::vector<int16_t> inventory;
   std::array<std::string, 32> looks;  // Quake II: each slot's model and skin ("male/grunt")
+  std::string map_checksum;           // Quake II: the level's map checksum as stated ("" none)
   float air_accelerate = 0;           // Quake II: the air acceleration the server states (0: none)
   std::vector<DemoEntity> entities;   // by number
   std::vector<DemoEntity> players;    // client, multiview: by slot (32)
@@ -440,6 +460,10 @@ struct Demo {
   float speedjump_share = -1;
   // The tag of our server's logins' key (svc 127; "" none told).
   std::string account_tag;
+  // The settings sheet our server of Quake II sends (svc 120, net/q2_votes.hpp), and whether it
+  // offered one (any part came): the server settings page asks it only then.
+  ge::server::SettingsSheet sheet;
+  bool sheet_offered = false;
   // The feel our server of Quake II runs every move on (svc 122), when it told one; the
   // stock move's (with the server's stated air acceleration) until then.
   bool feel_told = false;
@@ -523,5 +547,9 @@ std::string map_of_model(const std::string& model);
 // The visible weapons' list `s` is drawn with: a multiview recording's the fixed one (each
 // player's weapon from his weapon stat, demo_video.cpp), else the one the server stuffed.
 std::span<const std::string> demo_vweps(const DemoState& s);
+
+// Quake II's music configstring read: "" or "0" stops (0), a number 1 to 99 is that track, a
+// name of a file is not played (the track `last` stays).
+int q2_music_track(const std::string& text, int last);
 
 }  // namespace shooters_edge::client

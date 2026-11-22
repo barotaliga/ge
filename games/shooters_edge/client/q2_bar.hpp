@@ -17,6 +17,7 @@
 // ge:keywords q2 status-bar layout pictures conchars pcx draw scale q2-hud crosshair
 // ge:keywords centre-print ch1 layout-message scoreboard help-computer inventory hotkey
 // ge:keywords scr_scale scr_draw2d scr_alpha scr_lag_draw lag-graph net-picture hud-scale
+// ge:keywords dumpstatusbar dumplayout dumpclients aashot aadump scoreshot
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_q2_screen_test.cpp
 #pragma once
@@ -29,6 +30,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include "classic/q2_fx_switches.hpp"
+#include "console/console.hpp"
+#include "hud/bottom_graph.hpp"
 #include "hud/crosshair.hpp"
 #include "hud/net_graph.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -64,8 +68,39 @@ struct Q2Bar {
   // pack's `net` picture blinks in the graph's place); null and 0 when nothing is joined.
   const ge::hud::NetHistory* lag = nullptr;
   int unanswered = 0;
+  // The graph along the bottom (timegraph): each frame's time from `now`, the last frame's time.
+  std::unique_ptr<ge::hud::BottomGraph> graph = std::make_unique<ge::hud::BottomGraph>();
+  double graph_at = -1;
   int width = 0, height = 0;  // the window the last `run_q2_bar` drew for, px
+  // The last frame had a screen of the rules up (the help computer, a scoreboard or the
+  // inventory): ESCAPE puts it away rather than opening the menu (menu/main_menu.hpp's Host).
+  bool layout_up = false;
+  // F1 held this frame: 1 in a game, 2 in a recording played back. In a recording it shows the
+  // last layout the rules sent whether or not the recorded flag has it up; with scr_draw2d 3 it
+  // shows the layouts that setting hides.
+  int f1 = 0;
+  // A console command waiting for the next frame's world (`add_q2_bar_commands`): its words, and
+  // the console it prints to (null: none asked).
+  std::vector<std::string> asked{};
+  ge::console::Console* asked_by = nullptr;
+  // The hit marker (classic/q2_fx_switches.hpp's `cl_hit_markers`): the switches (null: none
+  // drawn), the recording's hits last seen and the real time of the last new one, s.
+  const ge::classic::Q2FxSwitches* fx = nullptr;
+  // The crosshair's settings the last draw_q2_crosshair was given (ch_scale, ch_x, ch_y: a
+  // scope's picture follows them); null: their defaults.
+  const ge::hud::CrosshairSettings* cross = nullptr;
+  int64_t hits_seen = 0;
+  double hit_at = -1e9;
 };
+
+// The console's looks at the bar's program, answered by the next frame that runs a Quake II bar
+// (`run_q2_bar`); "Must be in a level..." when the last frame ran none:
+// `dumpstatusbar <file>` and `dumplayout <file>` (the status bar's program, or the layout up, to
+// `layouts/<file>.txt`), `dumpclients` (each player's slot and name), `aashot [name]` (the bar
+// and the layout up as an 80 x 40 text picture, hud/q2_layout.hpp's `layout_text`, to
+// `scoreshots/<name>.txt` or the first free `scoreshots/quakeNNN.txt`) and `aadump` (the same
+// picture in the console).
+void add_q2_bar_commands(ge::console::Console& con, Q2Bar& bar);
 
 // The world a Quake II recording or a joined Quake II server gives its bar (the bar's program, the
 // pictures and item names, the player's stats, screen and inventory, the players' names), filled
@@ -73,7 +108,8 @@ struct Q2Bar {
 // carries no bar program (the window's own HUD is drawn instead).
 bool q2_world_of(const DemoState& ds, server::RulesWorld& out);
 // A recording's (or a joined server's) Quake II bar run and drawn on `dl` over a `width` x
-// `height` window; false when `ds` has none to draw (`q2_world_of`).
+// `height` window, and its hit marker (`DemoState::hits`) at the centre in red, fading; false when
+// `ds` has none to draw (`q2_world_of`).
 bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds, int width,
                           int height);
 
@@ -113,6 +149,14 @@ void add_q2_screen(Q2Bar& bar, int crosshair, std::string_view centre, int width
 // under it. Nothing when the settings hide it or the pack has no such picture.
 // It stands off the middle by cl_crossx and cl_crossy (its ch_x and ch_y) in bar pixels, and
 // takes the colour of `health` when ch_health asks.
+// The hit marker over `dl`: `hits` (DemoState::hits) more than last seen starts its fade at
+// `bar.now`; drawn while `bar.fx`'s cl_hit_markers and scr_hit_marker_time keep it.
+// scr_showturtle (the screen's `turtle`): a frame's troubles (`DemoState::q2_trouble`) as words
+// in the alternate colour, one a line from eleven lines over the bottom at the left: BADFRAME,
+// OLDFRAME, NODELTA, and at 2 SUPPRESSED. Into `bar.ops`, after `run_q2_bar`.
+void add_q2_turtle(Q2Bar& bar, uint8_t trouble, int width, int height);
+
+void draw_q2_hit_marker(ge::ui::DrawList& dl, Q2Bar& bar, int64_t hits, int width, int height);
 void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::CrosshairSettings& s,
                        int width, int height, int health = 100);
 

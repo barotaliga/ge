@@ -90,6 +90,9 @@ std::unique_ptr<Stage> stage(int level = 1) {
   std::string error;
   CHECK_MSG(d->r.start(spec, error), error);
   d->r.connect(0, "Ana", false, false);
+  // Off the one start, so Ben's spawn (and his respawn) lands beside her, not on her.
+  tick(*d, 0, 0);
+  put(d->p(0), -200, 24);
   d->r.connect(1, "Ben", false, false);
   for (int i = 0; i < 160; i++) tick(*d, 0, 0);
   return d;
@@ -101,13 +104,13 @@ void fire_at(Stage& d, float height) {
   const float pitch =
       -static_cast<float>(ge::core::libm::atan2(height + 4 - 22.0, 200.0) * 180.0 / 3.14159265);
   for (int i = 0; i < 80; i++) {
-    put(d.p(0), 0, 24);
-    put(d.p(1), 200, 24 + height);
+    put(d.p(0), -200, 24);
+    put(d.p(1), 0, 24 + height);
     tick(d, 0, pitch);
   }
   tick(d, sh::kButtonAttack, pitch);
   for (int i = 0; i < 80 && d.p(1).alive; i++) {
-    put(d.p(1), 200, 24 + height);
+    put(d.p(1), 0, 24 + height);
     tick(d, 0, pitch);
   }
 }

@@ -91,6 +91,7 @@ struct PlayerNumbers {
   // the eye's offset from the origin (units) and the angles added to the view (degrees).
   bool view_set = false;
   float view_offset[3] = {}, kick[3] = {};
+  float gun_offset[3] = {}, gun_angles[3] = {};  // the held weapon's own shift and sway
   float blend[4] = {};  // the tint over his view the rules lay (Quake II's), r g b a in 0..1
   float fov = 0;        // the field of view the rules hold him to, degrees; 0 his own
   float frags = 0;

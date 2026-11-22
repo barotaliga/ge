@@ -36,7 +36,8 @@
 // is drawn on: con_bgtop and con_bgbottom (a gradient's colours, "rrggbb"), con_bgalpha and
 // con_bgimage (a picture over the gradient); and con_font, the charset its text is written in
 // (docs/charsets.md: terminal, mono, ...; "" the 2D layer's own UI font); con_clock (1: the
-// local time in the panel's lower right corner).
+// local time in the panel's lower right corner); con_history (the typed lines kept, 128);
+// con_scroll (scrolled back, 1 a new line and 2 a key typed bring the newest lines back).
 //
 // `clearnotify` lets the notify lines so far go. `remotemode [address [password]]` sends each line
 // typed without a slash to the game's `rcon` command, the prompt `#` (the address and password set
@@ -53,6 +54,7 @@
 // ge:keywords completion tab con_height con_chat con_speed con_lines slash-command loading full
 // ge:keywords background gradient colour con_bgtop con_bgbottom con_bgalpha con_bgimage con_font
 // ge:keywords autocomplete suggestion suggestions hint con_suggest condump con_clock game_chat
+// ge:keywords con_history con_scroll scroll-back
 // ge:keywords clearnotify remotemode rcon con_scale foot loading download-bar
 // ge:skill console
 // ge:test tests/console_view_test.cpp
@@ -89,6 +91,10 @@ struct ViewLine {
   std::string text;
   double time_s = 0;  // the view's clock when it came
   uint64_t n = 0;     // its number, counted from the view's first line
+  // The local time it came, as `ConsoleView::stamp_format` wrote it when stamps were on ("":
+  // none): drawn before the text in `stamp_colour` on the console (not on the notify lines) and
+  // written by condump, but no part of `text` (search and selection never see it).
+  std::string stamp;
 };
 
 // A place in the scrollback: a line by its number (ViewLine::n) and a byte in its text.
@@ -241,6 +247,20 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   // A game's own setting for what a line typed without a slash is, in its order: 0 a command, 1
   // said to everyone, 2 said to the team; -1 (none): con_chat rules.
   int game_chat = -1;
+  // A game's stamps on every line (Quake II's `con_timestamps`, `con_timestampsformat`,
+  // `con_timestampscolor`): on, each line added from then on keeps the local time in
+  // `stamp_format` (strftime's words; "" none) as its `stamp`, drawn in `stamp_colour`
+  // (ui/paint.hpp's colour_from_text; light grey when it does not read).
+  bool stamps = false;
+  std::string stamp_format = "%H:%M:%S ";
+  std::string stamp_colour = "#aaa";
+  // A game's own Tab (Quake II's `com_completion_mode` and `com_completion_treshold`): -1 ours (the
+  // top suggestion taken); 0, 1 or 2 the word completed to what every match shares and, with more
+  // than one, the line echoed and the matches listed: 0 one a line, 1 in columns, 2 in columns
+  // under a heading for each kind (commands, settings, aliases). Past `list_threshold` matches the
+  // first Tab only asks ("Press TAB again to display all N possibilities.").
+  int list_mode = -1;
+  int list_threshold = 50;
   // What a line typed without a slash is now, in con_chat's values (3: said to the team).
   int chat_mode() const;
   // Where `condump` writes ("": it refuses, saying so).
@@ -289,6 +309,8 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   // Whether `line`'s first word names a command, alias or setting (con_chat 2).
   bool names_something(std::string_view line) const;
   bool accept();             // the selected or top suggestion into the input line; false: none
+  void tab_list();           // list_mode's Tab (above)
+  std::string tab_asked_;    // the line the last Tab asked about (list_threshold)
   std::string head() const;  // the first word being typed, or "" when no suggestion applies
   void chat_key(EditKey k);
   Console& c_;
@@ -317,6 +339,8 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   double notify_time_ = 4;
   int chat_default_ = 0;   // con_chat
   bool clock_on_ = false;  // con_clock
+  int history_max_ = 128;  // con_history: the typed lines kept, the oldest dropped first
+  int scroll_back_ = 0;    // con_scroll: 1 a new line, 2 a key typed, brings the newest lines back
   bool remote_ = false;    // remotemode
   double scale_ = 0;       // con_scale
   std::string foot_;

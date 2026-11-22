@@ -78,6 +78,7 @@
 #include "shooters_edge/menu/gallery_page.hpp"
 #include "shooters_edge/menu/games_page.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
+#include "shooters_edge/menu/server_page.hpp"
 #include "shooters_edge/menu/servers_page.hpp"
 #include "ui/draw.hpp"
 #include "ui/menu.hpp"
@@ -100,6 +101,8 @@ class GameMenu {
   const std::string& attract() const { return attract_; }
   // The classic pictures (empty: the classic look is not offered).
   void set_art(ClassicArt art);
+  // The menus' size the loaded game sets (ClassicArt::scale, kept across set_art).
+  float& menu_scale() { return art_.scale; }
   const ClassicArt& art() const { return art_; }
   // LOAD GAME was pressed since the last call: the window shows the desktop's folder chooser.
   bool take_load() { return std::exchange(load_asked_, false); }
@@ -142,6 +145,9 @@ class GameMenu {
   ge::capture::Gallery& gallery() { return gallery_; }
   // Whether the screenshots page is the one up.
   bool in_gallery() const { return in_gallery_; }
+  // OPTIONS ▸ SERVER SETTINGS (server_page.hpp): its pages live in `main()`, filled from the
+  // host's sheet.
+  ServerPage& server_page() { return server_page_; }
   // The server browser (JOIN A GAME), and whether it is the page up.
   ServersPage& servers() { return servers_; }
   bool in_servers() const { return in_servers_; }
@@ -174,7 +180,10 @@ class GameMenu {
   ge::ui::Menu& main() { return main_; }
   // The game's own menu (its adapter's `menu`) in place of Quake's: the pages rebuilt.
   // The host's `table` must name the same table.
-  void set_table(const MenuTable& table) { main_ = build_menu(table); }
+  void set_table(const MenuTable& table) {
+    table_ = &table;
+    main_ = build_menu(table);
+  }
   ge::ui::Menu& enhance() { return enhance_; }
   int help_page() const { return help_page_; }
   // What the layout drawn last found wrong (layout_problems or classic_problems).
@@ -208,12 +217,16 @@ class GameMenu {
   void cue(ge::ui::MenuCue c) { cue_ = ge::ui::louder(cue_, c); }
   bool toggle_ = false;
   bool settle_ = false;
-  std::string_view toggle_page_ = "main";  // a literal: the commands' pages
+  std::string toggle_page_ = "main";  // the page a command opens
+  bool toggle_open_ = false;          // pushmenu: opened even when the menu is up at the root
+  int pending_ = 0;                   // 1: popmenu (one page back), 2: forcemenuoff
   int help_page_ = 0;
   double dt_ = 1.0 / 60;  // the last frame's, s
 
-  std::string waiting_;         // the CUSTOMIZE CONTROLS row waiting for a key, or ""
-  bool waiting_fresh_ = false;  // it started this frame
+  const MenuTable* table_ = &classic_menu();  // the pages built (set_table)
+  std::string waiting_page_;                  // the page of the key row waiting
+  std::string waiting_;                       // the CUSTOMIZE CONTROLS row waiting for a key, or ""
+  bool waiting_fresh_ = false;                // it started this frame
 
   bool in_enhance_ = false;
   ge::classicenhance::Switches switches_;
@@ -237,6 +250,9 @@ class GameMenu {
   std::string demo_ask_;  // the demo picked, the window not told yet
   GamesPage games_;
   GameAsk game_ask_;  // SELECT GAME's pick, the window not told yet
+  ServerPage server_page_;
+  uint32_t sheet_seen_ = 0;  // the sheet's revision the server pages were last filled from
+  void fill_server(const Host& host);
   bool in_gallery_ = false;
   bool in_servers_ = false;
   bool in_demos_ = false;

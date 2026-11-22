@@ -84,6 +84,8 @@ background:var(--live);align-self:center;animation:pulse 1.8s infinite}
 .card{transition:none}}
 /* the servers' cards */
 .cards{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));align-items:start}
+/* cards that are pictures: wide enough that the board reads, two across a desktop */
+.cards.shots{grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr))}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
 box-shadow:var(--shadow);transition:transform .15s ease}.card:hover{transform:translateY(-2px)}
 .map{--h:160;position:relative;display:flex;justify-content:space-between;align-items:flex-end;gap:8px;
@@ -97,6 +99,7 @@ linear-gradient(160deg,hsl(var(--h) 45% var(--banner-l)),hsl(calc(var(--h) + 60)
 :root[data-look=alpine] .map{background:
 repeating-radial-gradient(ellipse at 30% 130%,rgba(255,255,255,.11) 0 1px,transparent 1px 12px),
 linear-gradient(160deg,hsl(var(--h) 55% var(--banner-l)),hsl(calc(var(--h) + 25) 45% calc(var(--banner-l) - 14%)))}
+img.shot{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#111}
 .phase-scores .map,.phase-waiting .map{filter:saturate(.55)}
 .mapname{font:700 24px/1 var(--display);text-transform:uppercase;letter-spacing:.04em;
 text-shadow:0 2px 12px rgba(0,0,0,.35);overflow-wrap:anywhere}

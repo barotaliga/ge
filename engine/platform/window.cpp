@@ -218,6 +218,10 @@ bool has_focus(const Window& window) {
   return (SDL_GetWindowFlags(window.impl_->window) & SDL_WINDOW_INPUT_FOCUS) != 0;
 }
 
+bool minimised(const Window& window) {
+  return (SDL_GetWindowFlags(window.impl_->window) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
 bool relative_mouse(const Window& window) {
   return SDL_GetWindowRelativeMouseMode(window.impl_->window);
 }
@@ -304,6 +308,29 @@ std::vector<Display> displays() {
   SDL_free(ids);
   SDL_QuitSubSystem(SDL_INIT_VIDEO);
   return out;
+}
+
+bool set_window_style(Window& window, const WindowStyle& style) {
+  SDL_Window* w = window.impl_->window;
+  const bool ok = SDL_SetWindowBordered(w, style.border) &&
+                  SDL_SetWindowAlwaysOnTop(w, style.on_top) &&
+                  SDL_SetWindowResizable(w, style.resizable);
+  if (!ok)
+    out::error(
+        std::string("platform: the window's border, place on top or edges could not be set (") +
+        SDL_GetError() + "); the window keeps what it took; skill: platform.");
+  return ok;
+}
+
+bool set_window_place(Window& window, const WindowPlace& place) {
+  SDL_Window* w = window.impl_->window;
+  bool ok = true;
+  if (place.width > 0 && place.height > 0) ok = SDL_SetWindowSize(w, place.width, place.height);
+  if (place.has_place) ok = SDL_SetWindowPosition(w, place.x, place.y) && ok;
+  if (!ok)
+    out::error(std::string("platform: the window's size or place could not be set (") +
+               SDL_GetError() + "); the window keeps what it had; skill: platform.");
+  return ok;
 }
 
 bool set_fullscreen(Window& window, bool on, int display) {

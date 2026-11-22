@@ -127,8 +127,9 @@ struct RulesCommon {
   ClientInfo clients[sh::kMaxClients];
   std::vector<std::pair<std::string, std::string>> serverinfo, localinfo;
 
-  MessageSink out;                   // what the network builtins wrote (messages.hpp)
-  std::vector<std::string> console;  // the server console's lines, in order
+  MessageSink out;                    // what the network builtins wrote (messages.hpp)
+  std::vector<std::string> console;   // the server console's lines, in order
+  std::vector<std::string> frag_log;  // the rules' frag lines (logfrag), one a frag
 
   std::string stop_reason;  // why the map stopped (error / objerror)
   std::string pending_map;  // a `map`, `changelevel` or `restart` console line: the change made
@@ -182,7 +183,8 @@ struct ModSetting {
   const char* help = "";
   const char* values = "";
   ge::console::CvarKind kind = ge::console::CvarKind::number;
-  bool info = false;  // published in the server info
+  bool info = false;     // published in the server info
+  bool archive = false;  // kept in the config the window saves
 };
 
 // Those settings in the order they are registered, the move's and the loop's own at the row with

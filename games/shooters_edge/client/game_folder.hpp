@@ -30,7 +30,7 @@
 // ge:keywords game-folder load-game basedir install check_game_folder game_of multiplayer-dir
 // ge:keywords install_of which-game content-profile q2
 // ge:keywords remembered_game remember_game kept-game last-game prefs load_programs first-map
-// ge:keywords campaign-program
+// ge:keywords campaign-program path-command search-path
 // ge:keywords choose_folder campaign_commands newgame coopgame save load
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
@@ -161,5 +161,13 @@ bool keep_autosave(Listen& listen, const SearchPath& files);
 // name, else the classic text save (`<name>.sav` names it alone). False with the reason.
 bool load_asked_save(Listen& listen, const GameContent& content, const SearchPath& files,
                      const std::string& name, std::string& error);
+// The same for the save `ask` names, `ask` cleared: the console's words, "loaded <name>" or
+// "load: " and why not.
+std::string load_save_asked(Listen& listen, const GameContent& content, const SearchPath& files,
+                            std::string& ask);
+
+// The console's `path`: where the game's files come from, the first searched at the top
+// (plugins/classic/content/files.hpp's search_path_text over `files`, read when typed).
+void add_path_command(ge::console::Console& con, const SearchPath& files);
 
 }  // namespace shooters_edge::client

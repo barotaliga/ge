@@ -3,6 +3,7 @@
 //
 // ge:summary The main menu over the game: open, close, presses, the looks, classic enhance
 // ge:keywords menu game-menu escape togglemenu menu_look draw update enhance job pointer
+// ge:keywords pushmenu popmenu forcemenuoff
 // ge:keywords load-game enhance_game take_ended ce_auto screenshots gallery
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
@@ -16,6 +17,7 @@
 
 #include "classicenhance/cache.hpp"
 #include "classicenhance/source.hpp"
+#include "console/cvar.hpp"
 #include "core/output.hpp"
 
 namespace shooters_edge::menu {
@@ -88,6 +90,19 @@ void GameMenu::add_cvars(ge::console::Console& con) {
   con.add_command("menu_options", "menu_options: the main menu opened at OPTIONS",
                   opener("options"));
   con.add_command("menu_quit", "menu_quit: the main menu opened at QUIT", opener("quit"));
+  // Quake's own words for the other pages (and Quake II's where they share one).
+  con.add_command("menu_singleplayer", "menu_singleplayer: the main menu opened at SINGLE PLAYER",
+                  opener("single"));
+  con.add_command("menu_load", "menu_load: the main menu opened at LOAD", opener("load"));
+  con.add_command("menu_save", "menu_save: the main menu opened at SAVE", opener("save"));
+  con.add_command("menu_multiplayer", "menu_multiplayer: the main menu opened at MULTIPLAYER",
+                  opener("multi"));
+  con.add_command("menu_setup", "menu_setup: the main menu opened at MULTIPLAYER > SETUP",
+                  opener("setup"));
+  con.add_command("menu_keys", "menu_keys: the main menu opened at OPTIONS > CUSTOMIZE CONTROLS",
+                  opener("controls"));
+  con.add_command("menu_video", "menu_video: the main menu opened at OPTIONS > VIDEO",
+                  opener("video"));
   con.add_command("menu_screenshots",
                   "menu_screenshots: the main menu opened at OPTIONS > SCREENSHOTS (the "
                   "screenshots F12 took)",
@@ -103,11 +118,49 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                   "menu_games: the main menu opened at SELECT GAME (the classic games and their "
                   "installs)",
                   opener("games"));
+  // pushmenu <name>: a page by its name, ours or Quake II's; popmenu one page back; forcemenuoff
+  // every page closed.
+  con.add_command("pushmenu", "pushmenu <page>: the main menu opened at that page",
+                  [this](Con& c, const CArgs& a) {
+                    if (a.size() < 2) {
+                      c.print("Usage: " + a[0] + " <menu>");
+                      return;
+                    }
+                    // A page the game's table has by that name first, then Quake II's names
+                    // for ours.
+                    static constexpr std::pair<std::string_view, std::string_view> kNames[] = {
+                        {"singleplayer", "single"}, {"game", "single"},
+                        {"loadgame", "load"},       {"savegame", "save"},
+                        {"multiplayer", "multi"},   {"startserver", "host"},
+                        {"players", "setup"},       {"keys", "controls"},
+                        {"dmflags", "gameflags"},   {"legacy", "legacykeys"}};
+                    std::string page = ge::console::lower(a[1]);
+                    if (main_.page(page) == nullptr)
+                      for (const auto& [name, ours] : kNames)
+                        if (page == name) page = ours;
+                    const bool special = page == "servers" || page == "demos" ||
+                                         page == "screenshots" || page == "games";
+                    if (!special && main_.page(page) == nullptr) {
+                      c.print("No such menu: " + a[1]);
+                      return;
+                    }
+                    toggle_ = true;
+                    toggle_open_ = true;
+                    toggle_page_ = page;
+                  });
+  con.add_command("popmenu", "popmenu: the main menu one page back (closed from its root)",
+                  [this](Con&, const CArgs&) { pending_ = 1; });
+  con.add_command("forcemenuoff", "forcemenuoff: the main menu closed, whatever page is up",
+                  [this](Con&, const CArgs&) { pending_ = 2; });
   servers_.add_cvars(con);
   demos_.add_cvars(con);
 }
 
-void GameMenu::set_art(ClassicArt art) { art_ = std::move(art); }
+void GameMenu::set_art(ClassicArt art) {
+  const float scale = art_.scale;  // the game's setting outlives the pictures
+  art_ = std::move(art);
+  art_.scale = scale;
+}
 
 void GameMenu::load_refused(std::string why) {
   games_.set_note(why);
@@ -147,7 +200,14 @@ void GameMenu::show(Host& host, std::string_view page) {
   if (demos) page = "main";
   const bool games = page == "games";
   if (games) page = "main";
-  if (page != "main") main_.open(page);
+  if (ServerPage::owns(page) && host.console != nullptr) {
+    // SERVER SETTINGS opened directly (a bind, the console): its pages filled and the sheet asked
+    // for first, as when the player opens it from OPTIONS; a subpage over its first page.
+    fill_server(host);
+    main_.open(kServerPage);
+    server_page_.event({ui::EventKind::opened, std::string(kServerPage), ""}, main_, *host.console);
+  }
+  if (page != "main" && main_.top().id != page) main_.open(page);
   refresh_main(host);
   main_.top().focus = -1;
   main_.move_focus(0);
@@ -176,7 +236,13 @@ void GameMenu::show(Host& host, std::string_view page) {
   }
 }
 
+void GameMenu::fill_server(const Host& host) {
+  sheet_seen_ = host.sheet != nullptr ? host.sheet->revision : 0;
+  server_page_.fill(main_, host.sheet, host.maps, table_ == &q2_menu(), classic());
+}
+
 void GameMenu::hide() {
+  if (con_ != nullptr) server_page_.leave(*con_);
   if (open_) cue(ui::MenuCue::back);
   open_ = false;
   waiting_.clear();
@@ -397,13 +463,13 @@ void GameMenu::apply_enhance(const ui::MenuEvent& e, Host& host) {
 
 void GameMenu::press_key(std::string_view key, Host& host) {
   if (waiting_.empty() || waiting_fresh_ || host.console == nullptr) return;
-  const Control* c = control_of(waiting_);
+  const std::string command(bind_command(*table_, waiting_page_, waiting_));
   waiting_.clear();
   cue(key == "escape" ? ui::MenuCue::back : ui::MenuCue::change);
-  if (c != nullptr && (key == "backspace" || key == "del")) {
-    unbind_control(*host.console, c->command);
-  } else if (c != nullptr && key != "escape") {
-    if (!bind_control(*host.console, c->command, key))
+  if (!command.empty() && (key == "backspace" || key == "del")) {
+    unbind_control(*host.console, command);
+  } else if (!command.empty() && key != "escape") {
+    if (!bind_control(*host.console, command, key))
       host.console->print("controls: '" + std::string(key) + "' names no key to bind");
   }
   refresh_main(host);
@@ -413,16 +479,39 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
   dt_ = dt;
   waiting_fresh_ = false;
   if (!waiting_.empty()) return;  // the keys are press_key's until one comes
+  if (pending_ != 0) {
+    const int p = pending_;
+    pending_ = 0;
+    if (p == 2 || !open_) {
+      if (open_) hide();
+      return;
+    }
+    update(ui::MenuInput{.back = true}, false, host, dt);
+    return;
+  }
   if (toggle_) {
     toggle_ = false;
-    if (open_ && toggle_page_ == "main")
+    const bool push = toggle_open_;
+    toggle_open_ = false;
+    if (open_ && toggle_page_ == "main" && !push)
       hide();
+    else if (toggle_page_ == "controls" && main_.page("keys") != nullptr)
+      show(host, "keys");  // a game whose menu has its own key page (Quake II's)
     else
       show(host, toggle_page_);
     return;
   }
   if (!open_) {
-    if (escape) show(host);
+    if (escape && host.in_level && host.screen_up && host.console != nullptr) {
+      host.console->execute("putaway");  // the rules' screen taken down, no menu
+      return;
+    }
+    if (escape) {  // in a level, the game's in-game page when it has one
+      const std::string_view in_level = table_of(host).in_level;
+      show(host, host.in_level && !in_level.empty() && main_.page(in_level) != nullptr
+                     ? in_level
+                     : std::string_view("main"));
+    }
     return;
   }
   if (in_gallery_) {
@@ -466,9 +555,16 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
     cue(ui::MenuCue::move);
     return;
   }
+  const ui::Item* held = main_.focused();
+  const std::string item_before = held != nullptr ? held->id : std::string();
   const std::vector<ui::MenuEvent> events = main_.input(in, hits_);
   cue(ui::menu_cue(events, moved()));
   for (const ui::MenuEvent& e : events) {
+    if (ServerPage::owns(e.page) && host.console != nullptr) {  // OPTIONS > SERVER SETTINGS
+      server_page_.event(e, main_, *host.console);
+      if (e.kind != ui::EventKind::changed) fill_server(host);
+      continue;
+    }
     switch (apply_event(e, main_, host)) {
       case Outcome::close:
       case Outcome::back_at_root:
@@ -476,9 +572,11 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
         return;
       case Outcome::bind_key:
         waiting_ = e.item;
+        waiting_page_ = e.page;
         waiting_fresh_ = true;
         if (ui::Item* it = main_.top().find(e.item); it != nullptr) {
           it->choices = {"PRESS A KEY"};
+          if (e.page != "controls") it->hint = "Press the desired key, Escape to cancel";
           it->choice = 0;
         }
         return;
@@ -508,6 +606,12 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
       help_page_ = 0;
       refresh_main(host);
     }
+  }
+  if (host.console != nullptr) {
+    server_page_.after(main_, page_before, item_before, *host.console);
+    server_page_.tick(dt, *host.console);
+    if (server_page_.open() && host.sheet != nullptr && host.sheet->revision != sheet_seen_)
+      fill_server(host);
   }
 }
 

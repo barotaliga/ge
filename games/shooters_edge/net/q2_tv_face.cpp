@@ -19,8 +19,9 @@ namespace shooters_edge::net {
 
 namespace {
 
-constexpr uint8_t kSvcDisconnect = 7, kSvcReconnect = 8, kSvcStuffText = 11, kSvcServerData = 12,
-                  kSvcConfigString = 13, kSvcBaseline = 14, kSvcDownload = 16, kSvcFrame = 20;
+constexpr uint8_t kSvcDisconnect = 7, kSvcReconnect = 8, kSvcPrint = 10, kSvcStuffText = 11,
+                  kSvcServerData = 12, kSvcConfigString = 13, kSvcBaseline = 14, kSvcDownload = 16,
+                  kSvcFrame = 20;
 constexpr size_t kUnit = 1200;  // the most bytes one reliable message carries
 constexpr size_t kLogKept = 256;
 constexpr int kStringCmdsPerPacket = 7;
@@ -222,6 +223,7 @@ void string_command(Q2TvFace& f, Q2Viewer& v, const std::string& line) {
     v.stage = Q2ViewerStage::active;
     for (const auto& b : f.since_whole) queue(v, b);
     v.blocks += static_cast<int64_t>(f.since_whole.size());
+    if (f.on_begin) f.on_begin(v);
   } else if (w[0] == "download") {
     // A file the viewer lacks (a model the recording names that its paks do not hold): refused,
     // so the client goes on without it rather than waiting on the loading screen for ever.
@@ -231,6 +233,8 @@ void string_command(Q2TvFace& f, Q2Viewer& v, const std::string& line) {
     f.downloads_refused++;
   } else if (w[0] == "disconnect") {
     drop(f, v, "left");
+  } else if (f.on_command) {
+    f.on_command(v, line);
   }
 }
 
@@ -241,8 +245,9 @@ void read_messages(Q2TvFace& f, Q2Viewer& v, const uint8_t* data, size_t size) {
     const int id = read_byte(r);
     if (id == kClcNop) continue;
     if (id == kClcMove) return;  // a viewer's moves move nothing: the rest of the packet is too
-    if (id == kClcUserInfo) {
-      read_string(r);
+    if (id == kClcUserInfo) {    // a new name taken (the relay tells the channel)
+      const std::string name = info_get(read_string(r), "name");
+      if (!r.bad) v.name = name.empty() ? "unnamed" : name;
     } else if (id == kClcStringCmd) {
       const std::string line = read_string(r);
       if (++commands <= kStringCmdsPerPacket) string_command(f, v, line);
@@ -253,28 +258,30 @@ void read_messages(Q2TvFace& f, Q2Viewer& v, const uint8_t* data, size_t size) {
   }
 }
 
+// As a server changing levels: the client keeps its connection and asks for the signon again
+// with `new`; it may be sent this one message before it does.
+void again(Q2Viewer& v) {
+  v.queue.clear();
+  static constexpr char kAgain[] =
+      "\x0b"
+      "changing\n\0"
+      "\x0b"
+      "reconnect\n";
+  queue(v, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(kAgain), sizeof kAgain));
+  v.stage = Q2ViewerStage::signon;
+  v.asked = false;
+  v.signed_on = false;
+  v.go = 1;
+}
+
 // A new level: everything kept starts over, and every viewer is told the level changed.
 void new_level(Q2TvFace& f) {
   f.strings.clear();
   f.baselines.clear();
   f.since_whole.clear();
   f.levels++;
-  for (Q2Viewer& v : f.viewers) {
-    if (v.stage == Q2ViewerStage::free) continue;
-    v.queue.clear();
-    // As a server changing levels: the client keeps its connection and asks for the signon again
-    // with `new`; it may be sent this one message before it does.
-    static constexpr char kAgain[] =
-        "\x0b"
-        "changing\n\0"
-        "\x0b"
-        "reconnect\n";
-    queue(v, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(kAgain), sizeof kAgain));
-    v.stage = Q2ViewerStage::signon;
-    v.asked = false;
-    v.signed_on = false;
-    v.go = 1;
-  }
+  for (Q2Viewer& v : f.viewers)
+    if (v.stage != Q2ViewerStage::free) again(v);
 }
 
 }  // namespace
@@ -283,6 +290,32 @@ int q2_tv_viewers(const Q2TvFace& f) {
   int n = 0;
   for (const Q2Viewer& v : f.viewers) n += v.stage != Q2ViewerStage::free ? 1 : 0;
   return n;
+}
+
+void q2_tv_send(Q2Viewer& v, std::span<const uint8_t> msg) {
+  if (v.stage == Q2ViewerStage::free) return;
+  queue(v, msg);
+}
+
+Q2Viewer* q2_tv_find(Q2TvFace& f, const gn::Address& host, uint16_t qport) {
+  for (Q2Viewer& v : f.viewers)
+    if (v.stage != Q2ViewerStage::free && v.qport == qport && same_host(v.address, host)) return &v;
+  return nullptr;
+}
+
+bool q2_tv_move(Q2TvFace& from, Q2TvFace& to, Q2Viewer& v) {
+  if (&from == &to) return true;
+  Q2Viewer* slot = nullptr;
+  for (int i = 0; i < to.cfg.max_viewers && i < static_cast<int>(to.viewers.size()); i++)
+    if (to.viewers[size_t(i)].stage == Q2ViewerStage::free) {
+      slot = &to.viewers[size_t(i)];
+      break;
+    }
+  if (slot == nullptr) return false;
+  *slot = std::move(v);
+  v = Q2Viewer{};
+  again(*slot);
+  return true;
 }
 
 void q2_tv_start(Q2TvFace& f, gn::Transport& t, const Q2TvConfig& cfg) {
@@ -322,7 +355,7 @@ void q2_tv_block(Q2TvFace& f, std::span<const uint8_t> block) {
     if (s.id == kSvcServerData) {
       if (!f.server_data.empty()) new_level(f);
       f.server_data.assign(msg.begin(), msg.end());
-      if (f.server_data.size() > 9) f.server_data[9] = 1;  // attract loop: a recording played
+      if (f.server_data.size() > 9) f.server_data[9] = f.cfg.attract_loop;
       f.count = i32_at(msg, 5);
       continue;
     }
@@ -411,6 +444,22 @@ void q2_tv_frame(Q2TvFace& f, int64_t now_us) {
 
 void q2_tv_stop(Q2TvFace& f) {
   for (Q2Viewer& v : f.viewers) drop(f, v, "the broadcast stopped");
+}
+
+void q2_tv_farewell(Q2TvFace& f, const std::string& text, bool reconnect) {
+  std::vector<uint8_t> bye = {kSvcPrint, 2};  // the high print level
+  bye.insert(bye.end(), text.begin(), text.end());
+  bye.push_back(0);
+  bye.push_back(reconnect ? kSvcReconnect : kSvcDisconnect);
+  for (Q2Viewer& v : f.viewers) {
+    if (v.stage == Q2ViewerStage::free) continue;
+    for (int pass = 0; pass < 2; pass++) {  // twice, as the last word on a lossy line
+      uint8_t out[kMaxPacket];
+      const size_t n = channel_transmit(v.ch, bye.data(), bye.size(), f.now, out);
+      send_to(f, v.address, out, n);
+    }
+    v = Q2Viewer{};  // freed with no line of its own
+  }
 }
 
 }  // namespace shooters_edge::net

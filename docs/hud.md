@@ -172,6 +172,12 @@ measured round trip) and the loss (the share that never came) over the same pack
 client records each packet into a `NetHistory` as it reads it (`net_arrived`, `net_lost`); the
 `se-net` lab draws one for each condition preset (`net-graph`).
 
+Along the bottom of the screen, `hud/bottom_graph.hpp` draws a **development graph**: one column a
+sample in its own colour across the whole width, newest at the right, a column `value x scale +
+shift` units of the game's 2D screen tall, held to the graph's height. A game feeds it and owns
+its settings: Quake II's `timegraph` feeds each frame's time (a unit a millisecond), `debuggraph`
+draws it whatever feeds it, and `graphheight`, `graphscale` and `graphshift` size it.
+
 ## Skins: the player's and the game's own textures
 
 A **skin** is a directory of images, `skins/<name>/`, that replaces an element's drawn parts.

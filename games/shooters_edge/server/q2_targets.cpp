@@ -20,6 +20,7 @@
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_gibs.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -88,6 +89,7 @@ Kind kind_of(std::string_view c) {
       {"misc_satellite_dish", kFigure},
       {"light_mine1", kFigure},
       {"light_mine2", kFigure},
+      {"viewthing", kFigure},
       {"misc_gib_arm", kGibPart},
       {"misc_gib_leg", kGibPart},
       {"misc_gib_head", kGibPart},
@@ -158,6 +160,8 @@ constexpr Figure kFigures[] = {
      true},
     {"light_mine1", "models/objects/minelite/light1/tris.md2", {}, {}, 0, 0, true},
     {"light_mine2", "models/objects/minelite/light2/tris.md2", {}, {}, 0, 0, true},
+    // A developer's model on show: the banner's first 7 frames, from half a second in.
+    {"viewthing", "models/objects/banner/tris.md2", {-16, -16, -24}, {16, 16, 32}, 0, 6, true},
 };
 constexpr int kDishLast = 38;
 const Figure* figure_of(std::string_view c) {
@@ -262,6 +266,24 @@ void targets_kill_inside(Q2Server& s, const Q2Entity& e) {
     if (m.dead || b.gone || !b.box) continue;
     if (overlap(b.origin + b.mins, b.origin + b.maxs, lo, hi))
       monster_damage(s, m.entity, -1, 100000, {});
+  }
+}
+
+void targets_telefrag(Q2Server& s, int slot) {
+  const Q2Player& p = s.players[slot];
+  const sh::Vec3f at = unpack(p.move.origin);
+  const sh::Vec3f lo = at + p.mins, hi = at + p.maxs;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    if (i == slot || !alive(s, i)) continue;
+    const sh::Vec3f o = unpack(s.players[i].move.origin);
+    if (overlap(o + s.players[i].mins, o + s.players[i].maxs, lo, hi))
+      fight_hurt(s, i, slot, {}, 100000, 0, kSqByTelefrag, 3);
+  }
+  for (const Q2Monster& m : s.monsters) {
+    const Q2Entity& b = s.entities[size_t(m.entity)];
+    if (m.dead || b.gone || !b.box) continue;
+    if (overlap(b.origin + b.mins, b.origin + b.maxs, lo, hi))
+      monster_damage(s, m.entity, slot, 100000, {});
   }
 }
 
@@ -467,8 +489,7 @@ void clock_think(Q2Server& s, int i) {
   if (e.aim < 0) {
     for (size_t t = 0; t < s.entities.size() && e.aim < 0; t++)
       if (s.entities[t].targetname == e.target) e.aim = static_cast<int>(t);
-    if (e.aim < 0) {
-      s.console.push_back("A clock's target '" + e.target + "' is not on the map; it stops.");
+    if (e.aim < 0) {  // silently stopped
       e.on = false;
       return;
     }
@@ -489,7 +510,8 @@ void clock_think(Q2Server& s, int i) {
       const std::string target = e.target, text_was = e.message;
       e.target = e.pathtarget;
       e.message.clear();
-      map_use_targets(s, i, e.activator);
+      // A clock that started itself has no user at all to hand on.
+      map_use_targets(s, i, (e.spawnflags & 4) != 0 ? e.activator : kNoActivator);
       s.entities[size_t(i)].target = target;
       s.entities[size_t(i)].message = text_was;
     }
@@ -555,7 +577,10 @@ void turn_breach(Q2Server& s, int i) {
     for (size_t t = 0; t < s.entities.size(); t++)
       if (!e.target.empty() && s.entities[t].targetname == e.target) e.aim = static_cast<int>(t);
     if (e.aim < 0) {
-      s.console.push_back("A turret's breach has no muzzle marker named '" + e.target + "'.");
+      if (e.target.empty())
+        s.console.push_back(e.classname + " at " + q2_pos(e.origin) + " needs a target");
+      else
+        q2_pick_missing(s, e.target);
     } else {
       Q2Entity& mark = s.entities[size_t(e.aim)];
       const sh::Vec3f off = mark.origin - e.origin;
@@ -601,11 +626,9 @@ bool targets_spawn(Q2Server& s, int i) {
     case kClock: {
       const int flags = e.spawnflags;
       if (e.target.empty() || ((flags & 2) != 0 && e.count == 0)) {
-        s.console.push_back("A clock at " + std::to_string(int(e.origin.x)) + " " +
-                            std::to_string(int(e.origin.y)) +
-                            ((flags & 2) != 0 && !e.target.empty() ? " counts down from nothing"
-                                                                   : " has no target") +
-                            "; it is left out.");
+        s.console.push_back(e.classname +
+                            (e.target.empty() ? " with no target at " : " with no count at ") +
+                            q2_pos(e.origin));
         e.gone = true;
         return true;
       }
@@ -623,12 +646,7 @@ bool targets_spawn(Q2Server& s, int i) {
     }
     case kKey:
       e.needs = sq_item(key(s, e, "item"));
-      if (e.needs < 0 || e.target.empty()) {
-        s.console.push_back("A key lock at " + std::to_string(int(e.origin.x)) + " " +
-                            std::to_string(int(e.origin.y)) +
-                            " has no item it knows or no target; it does nothing.");
-        e.gone = true;
-      }
+      if (e.needs < 0 || e.target.empty()) e.gone = true;  // said at load (q2_lines.cpp)
       add_sound(s, "misc/keytry.wav");
       add_sound(s, "misc/keyuse.wav");
       e.touched_at = -100;
@@ -642,10 +660,7 @@ bool targets_spawn(Q2Server& s, int i) {
       if (e.angles.y == 0) e.angles.y = 360;
       return true;
     case kGravity:
-      if (key(s, e, "gravity").empty()) {
-        s.console.push_back("A gravity trigger has no gravity; it is left out.");
-        e.gone = true;
-      }
+      if (key(s, e, "gravity").empty()) e.gone = true;  // said at load (q2_lines.cpp)
       e.random = static_cast<float>(std::atoi(key(s, e, "gravity").c_str()));  // whole numbers
       return true;
     case kTempEntity:
@@ -712,12 +727,8 @@ bool targets_spawn(Q2Server& s, int i) {
         return true;
       }
       if (e.message.size() != 2 || e.message[0] < 'a' || e.message[0] > 'z' || e.message[1] < 'a' ||
-          e.message[1] > 'z' || e.message[0] == e.message[1] || e.speed <= 0) {
-        s.console.push_back(
-            "A light ramp has no two different letters or no time; it is left "
-            "out.");
-        e.gone = true;
-      }
+          e.message[1] > 'z' || e.message[0] == e.message[1] || e.speed <= 0)
+        e.gone = true;  // said at load (q2_lines.cpp)
       return true;
     case kConveyor:
       e.solid = true;
@@ -751,6 +762,7 @@ bool targets_spawn(Q2Server& s, int i) {
       e.frame = fig->first;
       if (e.classname == "misc_banner") e.state = static_cast<int>(ge::core::next(s.rng) * 16) % 16;
       if (e.classname == "misc_satellite_dish") e.state = -1;  // still until used
+      if (e.classname == "viewthing") e.state = -4 - static_cast<int>(s.frame_number);
       return true;
     }
     case kGibPart:  // a body part placed on the map: it falls when the level starts
@@ -787,10 +799,7 @@ bool targets_spawn(Q2Server& s, int i) {
         gibs_part_model(s, gib_part(made));
         return true;
       }
-      if (sq_item(made) < 0)
-        s.console.push_back("A spawner makes '" + made +
-                            "', which is no monster or item it can make; it makes nothing.");
-      return true;
+      return true;  // a class it cannot make: it makes nothing
     }
     case kBomb:
       add_model(s, e, kBombModel);
@@ -812,9 +821,7 @@ bool targets_spawn(Q2Server& s, int i) {
       e.open = e.angles;  // where it aims
       e.until = s.level_time + kStep;
       e.count = -1;  // its driver
-      if (e.target.empty())
-        s.console.push_back("A turret's breach has no muzzle marker; it fires from its middle.");
-      return true;
+      return true;   // with no target, said a frame on and firing from its middle
     }
     case kTurretBase:
       e.solid = true;
@@ -935,6 +942,8 @@ bool targets_use(Q2Server& s, int i, int activator) {
       }
       return true;
     case kLightRamp:
+      if (e.aim < 0) e.aim = q2_ramp_light(s, i);  // its light, found at the first use
+      if (e.aim < 0) return true;
       e.until = s.level_time;  // the ramp starts now
       e.tick_at = s.level_time;
       e.activator = activator;
@@ -1093,7 +1102,8 @@ void targets_frame(Q2Server& s) {
             for (size_t t = 0; t < s.entities.size(); t++)
               if (s.entities[t].targetname == e.target) e.aim = static_cast<int>(t);
             if (e.aim < 0)
-              s.console.push_back("A laser's target '" + e.target + "' is not on the map.");
+              s.console.push_back(e.classname + " at " + q2_pos(e.origin) + ": " + e.target +
+                                  " is a bad target");
           }
           e.dir = way_of(e);
           if ((e.spawnflags & 1) != 0) {
@@ -1115,10 +1125,7 @@ void targets_frame(Q2Server& s) {
         break;
       case kLightRamp: {
         if (e.tick_at <= 0 || s.level_time + 0.001 < e.tick_at) break;
-        int light = -1;
-        for (size_t t = 0; t < s.entities.size(); t++)
-          if (s.entities[t].targetname == e.target && s.entities[t].classname == "light")
-            light = static_cast<int>(t);
+        const int light = e.aim;
         if (light < 0) {
           e.gone = true;
           break;
@@ -1263,7 +1270,8 @@ void targets_rows(Q2Server& s) {
     if (k == kFigure) {  // its frames on a loop
       const Figure* f = figure_of(e.classname);
       const int count = f->last - f->first + 1;
-      r.frame = f->first + static_cast<int>((s.frame_number + e.state) % count);
+      const int64_t at = static_cast<int64_t>(s.frame_number) + e.state;
+      r.frame = f->first + static_cast<int>(std::max<int64_t>(at, 0) % count);
       if (e.classname == "misc_satellite_dish")
         r.frame = e.state < 0 ? 0 : std::min(kDishLast, int(s.frame_number) - e.state);
     }

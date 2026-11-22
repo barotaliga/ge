@@ -150,6 +150,8 @@ bool send_now(Transport& t, const Address& to, const uint8_t* data, size_t size,
     t.send_failures++;
     return false;
   }
+  t.sent_packets++;
+  t.sent_bytes += size;
   if (t.capture) capture_datagram(*t.capture, now_us, t.local, to, data, size);
   if (t.tap) tap_datagram(*t.tap, now_us, t.local, to, data, size);
   return true;
@@ -239,6 +241,10 @@ int receive_one(Transport& t, uint8_t* buffer, size_t capacity, Address& from, i
       break;
     case TransportKind::none:
       break;
+  }
+  if (n >= 0) {
+    t.received_packets++;
+    t.received_bytes += static_cast<uint64_t>(n);
   }
   if (n >= 0 && t.tap) tap_datagram(*t.tap, now_us, from, t.local, buffer, static_cast<size_t>(n));
   if (n >= 0 && t.capture) {

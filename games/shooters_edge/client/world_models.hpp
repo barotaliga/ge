@@ -98,8 +98,14 @@ struct Placed {
   int q2_anim = -1;
   float shell_rgb[3] = {0, 0, 0};
   bool turns = false;  // it turns about its yaw on the picture's clock (the rules' world says so)
-  float alpha = 1;     // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
-  float scale = 1;     // its size about the origin (a mod's `scale`)
+  bool spinning = false;  // Quake II's spinning lights: upside down, 500 degrees a second
+  bool bobs = false;      // Quake II's bob bit: rising and sinking 5 units
+  // Quake II's render bits: lit full whatever the room, or never darker than a tenth.
+  bool full_bright = false, min_light = false;
+  // Seen through infra-red goggles: its skin times pure red, no light of the room, no glow.
+  bool infra_red = false;
+  float alpha = 1;  // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
+  float scale = 1;  // its size about the origin (a mod's `scale`)
   float colormod[3] = {1, 1, 1};  // its light tinted, glowing texels kept (a mod's `colormod`)
   // An item coming back as a hologram (ce_respawns, classicenhance/hologram.hpp): the share of its
   // light that is the hologram's blue, and the blue shell over it (0: none).
@@ -344,6 +350,8 @@ struct InPlace {
   // r_powershells and r_itempulse (q2_look.hpp's power_look): a power's coloured shell over
   // its carrier and an item's pulsing light, in either game.
   bool power_shells = false, item_pulse = false;
+  // cl_nobob: an item the game marks to float (Quake II's bob bit) drawn still.
+  bool items_still = false;
 };
 
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a

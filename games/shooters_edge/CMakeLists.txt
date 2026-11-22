@@ -96,8 +96,15 @@ ge_add_server(shooters_edge_dedicated OUTPUT_NAME sesv SOURCES server/bin/main.c
 # The classic protocol's library gives it the classic status query (net/qw_browse,
 # plugins/classic/protocol/info) and the match a Play page's map is started on to name its files
 # (client/play_content.hpp); the client's demo reader names a demo's (client/demo_content.hpp).
+# The match cards' game half (hub/cards.cpp, docs/hub.md § Match cards): the game a record's match
+# is of, its content under the hub's --content, the board's look (the packs' glyph sheet), the
+# still's camera. No GPU; the stills themselves are drawn by `shooters_edge_hub_gpu` (below).
+add_library(shooters_edge_hub STATIC hub/cards.cpp)
+target_link_libraries(shooters_edge_hub PUBLIC shooters_edge_client ge_hub)
+target_include_directories(shooters_edge_hub PUBLIC ${PROJECT_SOURCE_DIR}/games)
+set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_hub)
 ge_add_hub(shooters_edge_hub_bin OUTPUT_NAME sehub SOURCES hub/main.cpp
-           LINK shooters_edge_classic)
+           LINK shooters_edge_classic shooters_edge_hub)
 target_include_directories(shooters_edge_hub_bin PRIVATE ${PROJECT_SOURCE_DIR}/games)
 
 # The bot team, headless (net/bots_main.cpp), named `sebots` on disk at the build's
@@ -150,7 +157,7 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_view)
 file(GLOB SHOOTERS_EDGE_MENU_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/menu/*.cpp)
 add_library(shooters_edge_menu STATIC ${SHOOTERS_EDGE_MENU_SOURCES})
 target_include_directories(shooters_edge_menu PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_net ge_forward ge_classicenhance
+target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_net ge_server ge_forward ge_classicenhance
                                             ge_assets ge_play shooters_edge_hud)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_menu)
 # SELECT GAME's pictures of the games' names, by content profile (menu/games_page.cpp).
@@ -241,6 +248,20 @@ if(GE_GPU AND TARGET ge_brush_app)
                                                         ge_brush_app ge_classicenhance ge_render
                                                         ge_ui ge_morph ge_play ge_detail)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_client_gpu)
+endif()
+# The maps' stills under the hub's match cards (hub/still.cpp): each map drawn from its intermission
+# view by the world draw above in the classic look, keyed by the map and by the stamp of the code
+# that draws it (cmake/SourceStamp.cmake), so a new renderer draws them again. `sehub` draws them
+# when this is built (SE_HUB_STILLS); without the GPU its cards show each map's hue.
+if(TARGET shooters_edge_client_gpu)
+  add_library(shooters_edge_hub_gpu STATIC hub/still.cpp)
+  target_link_libraries(shooters_edge_hub_gpu PUBLIC shooters_edge_hub shooters_edge_client_gpu)
+  ge_source_stamp(shooters_edge_hub_gpu still_code_stamp CONSTANT kStillCodeStamp SHADERS
+                  DIRS games/shooters_edge/hub games/shooters_edge/client games/shooters_edge/app
+                       plugins/brush plugins/classic/app engine/render engine/gpu)
+  set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_hub_gpu)
+  target_link_libraries(shooters_edge_hub_bin PRIVATE shooters_edge_hub_gpu)
+  target_compile_definitions(shooters_edge_hub_bin PRIVATE SE_HUB_STILLS=1)
 endif()
 # The web viewer (web/viewer.cpp, docs/hub.md § Watching in a browser): the world drawn on the hub
 # page's canvas, a demo played from the hub's archive; `shooters_edge_viewer.js` and `.wasm` in

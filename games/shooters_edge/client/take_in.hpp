@@ -16,8 +16,9 @@
 // still played where it is (client/install_search.hpp): that install is the game's home, its
 // configs and place names with it.
 //
-// THE KEPT MUSIC plays from there too: `add_take_in_commands` binds the engine's music console
-// (engine/audio/music_console.hpp: `bgmvolume`, `cd`) to `<basedir>/music/trackNN.flac`, and
+// THE KEPT MUSIC plays from there too: `add_take_in_commands` points the engine's music console
+// (engine/audio/music_console.hpp: `bgmvolume`, `cd`, bound by the window before the game's own
+// settings) at `<basedir>/music/trackNN.flac`, and
 // `level_music` plays the track a level's world names when the level starts.
 //
 // ge:summary The window's games taken in: a folder, volume or disc image copied into data/ first
@@ -36,6 +37,8 @@
 #include "console/console.hpp"
 
 namespace shooters_edge::client {
+
+struct DemoState;
 
 // `<prefs>/data` when it can be written, else `<placed>/data`; "" when neither can.
 std::string data_root(const std::string& placed, const std::string& prefs);
@@ -59,13 +62,18 @@ bool take_in(const std::string& from, const std::string& root, std::string* base
 bool take_in_basedir(std::string* basedir, const std::string& root);
 
 // The console's `basedir <folder>` (no folder: the one playing, `*basedir`) and `import <folder or
-// disc image>`: each sets `*ask`, which the window takes in and opens. With `music`, its console
-// too, its tracks read from the game playing's folder (`*basedir`).
+// disc image>`: each sets `*ask`, which the window takes in and opens. With `music`, its tracks
+// read from the game playing's folder (`*basedir`); with `remap` true (Quake II's
+// `ogg_remap_tracks`), the mission pack in `*game` asks the digital release's numbers.
 void add_take_in_commands(ge::console::Console& con, std::string* ask, const std::string* basedir,
-                          ge::audio::MusicConsole* music = nullptr);
+                          ge::audio::MusicConsole* music = nullptr,
+                          const std::string* game = nullptr, const bool* remap = nullptr);
 
 // A level started: the track its world's `sounds` names (`entities`, the map's entity text) loops.
 void level_music(ge::audio::MusicConsole& music, std::string_view entities);
+// A recording's or a joined Quake II server's music: the track its server names, once named (0
+// stops it); `play_level_music` leaves a track already playing alone.
+void demo_music(ge::audio::MusicConsole& music, const DemoState& s);
 
 // The folder or image in `*ask` taken in, `*ask` set to the copy; `print` gets each step and the
 // result. False with the refusal in `*error` (printed too).

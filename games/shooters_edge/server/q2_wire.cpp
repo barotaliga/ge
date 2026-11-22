@@ -79,7 +79,7 @@ int8_t quarter(float v) { return static_cast<int8_t>(std::clamp(v * 4.0f, -128.0
 // A named effect (a point or a line the rules threw) as the protocol's temporary entity: its kind
 // byte and payload. How each kind's bytes run: a point; a point and a direction byte; a count, a
 // point, a direction and a colour; two points (a line); an entity and two points.
-enum class TeBody : uint8_t { point, point_dir, splash, line, entity_line };
+enum class TeBody : uint8_t { point, point_dir, splash, line, entity_line, count };
 struct TeName {
   const char* name;
   uint8_t kind;
@@ -88,6 +88,7 @@ struct TeName {
 };
 constexpr TeName kTeNames[] = {
     {"te_gunshot", 0, TeBody::point_dir, 0},
+    {"te_damage_dealt", 128, TeBody::count, 0},  // the hit report: one short, the points dealt
     {"te_blood", 1, TeBody::point_dir, 0},
     {"te_blaster", 2, TeBody::point_dir, 0},
     {"te_railtrail", 3, TeBody::line, 0},
@@ -192,6 +193,9 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
     case TeBody::line:
       point(e.origin);
       point(end);
+      break;
+    case TeBody::count:
+      o.i16(static_cast<int>(e.values[0]));
       break;
     case TeBody::entity_line:
       o.i16(std::clamp(e.ent, 0, kQ2Entities - 1));
@@ -340,7 +344,8 @@ void sized(Out& o, uint32_t v, bool lo, bool hi) {
 }
 
 // One entity entry: the header bytes, the number, the fields in the wire's order.
-void write_entity(Out& o, uint32_t f, int number, const Q2EntityState& to) {
+void write_entity(Out& o, uint32_t f, int number, const Q2EntityState& to,
+                  bool long_solid = false) {
   if (f & 0xFF000000u) f |= kMore3;
   if (f & 0x00FF0000u) f |= kMore2;
   if (f & 0x0000FF00u) f |= kMore1;
@@ -374,7 +379,12 @@ void write_entity(Out& o, uint32_t f, int number, const Q2EntityState& to) {
     for (const int16_t v : to.old_origin) o.i16(v);
   if (f & kSoundBit) o.u8(static_cast<uint32_t>(to.sound));
   if (f & kEvent) o.u8(static_cast<uint32_t>(to.event));
-  if (f & kSolid) o.i16(to.solid);
+  if (f & kSolid) {
+    if (long_solid)
+      o.i32(q2_long_solid(to.solid));
+    else
+      o.i16(to.solid);
+  }
 }
 
 Q2PlayerState player_state(const RulesCommon& c, int slot, const ge::classic::Q2State* move) {
@@ -407,6 +417,8 @@ Q2PlayerState player_state(const RulesCommon& c, int slot, const ge::classic::Q2
     for (int k = 0; k < 3; k++) {
       p.view_offset[k] = quarter(wc.numbers.view_offset[k]);
       p.kick[k] = quarter(wc.numbers.kick[k]);
+      p.gun_offset[k] = quarter(wc.numbers.gun_offset[k]);
+      p.gun_angles[k] = quarter(wc.numbers.gun_angles[k]);
     }
   const float va[3] = {e.view_angles.x, e.view_angles.y, e.view_angles.z};
   for (int k = 0; k < 3; k++) p.view_angles[k] = angle16(va[k]);
@@ -478,6 +490,11 @@ void write_player(Out& o, const Q2PlayerState& a, const Q2PlayerState& b) {
   o.i32(static_cast<int32_t>(mask));
   for (int i = 0; i < 32; i++)
     if (mask & (1u << i)) o.i16(b.stats[i]);
+}
+
+// A later protocol's viewer reads the solid as a long (36, and 35 from minor 1905).
+bool long_solid(const Q2WireOptions& opt) {
+  return opt.protocol == 36 || (opt.protocol == 35 && opt.minor >= 1905);
 }
 
 bool to_slot(const NetEvent& e, int slot) { return (e.to >> slot) & 1u; }
@@ -646,9 +663,11 @@ void q2_signon_parts(Q2Wire& w, const RulesCommon& c, int slot, const Q2WireOpti
     o.i32(0x10000 + opt.server_count);
     o.u8(opt.attract_loop);
     o.str("");
-    o.i16(slot);
-    o.str(w.sent[kCsName]);
+    o.i16(opt.show.empty() ? slot : -1);
+    o.str(opt.show.empty() ? w.sent[kCsName] : opt.show);
   }
+  q2_server_data_tail(out.server_data, opt);
+  if (!opt.show.empty()) return;  // a cinematic or a picture: nothing more
   for (int i = 0; i < kQ2ConfigStrings; i++) {
     const std::string& s = w.sent[size_t(i)];
     if (s.empty()) continue;
@@ -667,7 +686,7 @@ void q2_signon_parts(Q2Wire& w, const RulesCommon& c, int slot, const Q2WireOpti
     std::vector<uint8_t> one;
     Out e{one};
     e.u8(kBaseline);
-    write_entity(e, delta_flags(zero, s, n, true), n, s);
+    write_entity(e, delta_flags(zero, s, n, true), n, s, long_solid(opt));
     out.baselines.emplace_back(n, std::move(one));
   }
 }
@@ -754,22 +773,27 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
   // The frame, numbered from 1: a stock client draws nothing from a frame numbered 0 (measured: it
   // stops on a field of view of 0 before the first frame it keeps).
   const int32_t number = frame_number + 1;
-  o.u8(kFrame);
-  o.i32(number);
-  o.i32(w.last_frame);
-  o.u8(w.suppress);
-  w.suppress = 0;
-  o.u8(32);
-  for (int k = 0; k < 32; k++) o.u8(0xFF);
   const Q2PlayerState p = player_state(c, w.slot, move);
-  write_player(o, w.last_frame < 0 ? Q2PlayerState{} : w.last_player, p);
-  w.last_player = p;
+  const bool ext = w.opt.protocol != kQ2Protocol;
+  if (ext) {
+    q2_write_frame_top_ext(block, w, number, p);
+  } else {
+    o.u8(kFrame);
+    o.i32(number);
+    o.i32(w.last_frame);
+    o.u8(w.suppress);
+    w.suppress = 0;
+    o.u8(32);
+    for (int k = 0; k < 32; k++) o.u8(0xFF);
+    write_player(o, w.last_frame < 0 ? Q2PlayerState{} : w.last_player, p);
+    w.last_player = p;
+  }
   float eye[3];
   sight_eye(p, eye);
   const bool cut = q2_sight_view(w, eye);
   const std::vector<uint8_t> over =
       w.opt.max_entities > 0 ? over_cap(w, c, eye, cut) : std::vector<uint8_t>{};
-  o.u8(kPacketEntities);
+  if (!ext) o.u8(kPacketEntities);
   const Q2EntityState zero;
   // An entry is at most 44 bytes; past the room left (the list's end and the sounds' share kept)
   // an entity waits for the next frame, as the one it holds is what the viewer holds.
@@ -795,9 +819,17 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
     const Q2EntityState& base =
         fresh ? (w.baselines[size_t(n)].present ? w.baselines[size_t(n)] : zero) : was;
     std::memcpy(s.old_origin, base.origin, sizeof s.old_origin);
+    if (ext) {
+      q2_entity_for_ext(w, n, base, s);
+      if (!s.present) {
+        if (was.present) write_entity(o, kRemove | (n >= 256 ? kNumberShort : 0u), n, s);
+        w.last[size_t(n)] = Q2EntityState{};
+        continue;
+      }
+    }
     const bool player = n <= sh::kMaxClients;
     const uint32_t f = delta_flags(base, s, n, fresh || player);
-    if ((f & ~kNumberShort) != 0) write_entity(o, f, n, s);
+    if ((f & ~kNumberShort) != 0) write_entity(o, f, n, s, long_solid(w.opt));
     w.last[size_t(n)] = s;
   }
   o.u8(0);
@@ -810,7 +842,8 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
     if ((e.kind != EventKind::point_effect && e.kind != EventKind::trail_effect) ||
         !to_slot(e, w.slot))
       continue;
-    if (block.size() + 18 + 13 > size_t(kQ2MaxBlock)) break;  // a sound's room kept too
+    if (block.size() + 18 + 13 > size_t(kQ2MaxBlock)) break;          // a sound's room kept too
+    if (e.text == "te_damage_dealt" && !w.opt.hit_reports) continue;  // a stock client has none
     if (!write_flash(o, e)) write_temp_entity(o, e);
   }
   for (size_t i = from; i < events.size(); i++) {
@@ -853,9 +886,11 @@ void q2_signon_raw(Q2Wire& w, const Q2Raw& raw, int slot, const Q2WireOptions& o
     o.i32(0x10000 + opt.server_count);
     o.u8(opt.attract_loop);
     o.str("");
-    o.i16(slot);
-    o.str(w.sent[kCsName]);
+    o.i16(opt.show.empty() ? slot : -1);
+    o.str(opt.show.empty() ? w.sent[kCsName] : opt.show);
   }
+  q2_server_data_tail(out.server_data, opt);
+  if (!opt.show.empty()) return;  // a cinematic or a picture: nothing more
   for (int i = 0; i < kQ2ConfigStrings; i++) {
     const std::string& s = w.sent[size_t(i)];
     if (s.empty()) continue;
@@ -874,7 +909,7 @@ void q2_signon_raw(Q2Wire& w, const Q2Raw& raw, int slot, const Q2WireOptions& o
     std::vector<uint8_t> one;
     Out e{one};
     e.u8(kBaseline);
-    write_entity(e, delta_flags(zero, s, n, true), n, s);
+    write_entity(e, delta_flags(zero, s, n, true), n, s, long_solid(opt));
     out.baselines.emplace_back(n, std::move(one));
   }
 }
@@ -895,20 +930,25 @@ void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8
   raw.reliable[slot].clear();
   Out o{block};
   const int32_t number = frame_number + 1;  // as q2_frame numbers them
-  o.u8(kFrame);
-  o.i32(number);
-  o.i32(w.last_frame);
-  o.u8(w.suppress);
-  w.suppress = 0;
-  o.u8(32);
-  for (int k = 0; k < 32; k++) o.u8(0xFF);
   const Q2PlayerState& p = raw.players[slot];
-  write_player(o, w.last_frame < 0 ? Q2PlayerState{} : w.last_player, p);
-  w.last_player = p;
+  const bool ext = w.opt.protocol != kQ2Protocol;
+  if (ext) {
+    q2_write_frame_top_ext(block, w, number, p);
+  } else {
+    o.u8(kFrame);
+    o.i32(number);
+    o.i32(w.last_frame);
+    o.u8(w.suppress);
+    w.suppress = 0;
+    o.u8(32);
+    for (int k = 0; k < 32; k++) o.u8(0xFF);
+    write_player(o, w.last_frame < 0 ? Q2PlayerState{} : w.last_player, p);
+    w.last_player = p;
+  }
   float eye[3];
   sight_eye(p, eye);
   const bool cut = q2_sight_view(w, eye);
-  o.u8(kPacketEntities);
+  if (!ext) o.u8(kPacketEntities);
   const Q2EntityState zero;
   const size_t room = size_t(kQ2MaxBlock) - 2 - 200;
   for (int n = 1; n < kQ2Entities; n++) {
@@ -919,6 +959,8 @@ void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8
       s.present = false;
       w.cut++;
     }
+    if (s.present && raw.touch != nullptr && !raw.touch(raw.touch_ctx, slot, n, s))
+      s.present = false;
     if (!s.present) {
       if (was.present) write_entity(o, kRemove | (n >= 256 ? kNumberShort : 0u), n, s);
       w.last[size_t(n)] = Q2EntityState{};
@@ -929,8 +971,16 @@ void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8
     const bool fresh = !was.present || w.last_frame < 0;
     const Q2EntityState& base =
         fresh ? (w.baselines[size_t(n)].present ? w.baselines[size_t(n)] : zero) : was;
+    if (ext) {
+      q2_entity_for_ext(w, n, base, s);
+      if (!s.present) {
+        if (was.present) write_entity(o, kRemove | (n >= 256 ? kNumberShort : 0u), n, s);
+        w.last[size_t(n)] = Q2EntityState{};
+        continue;
+      }
+    }
     const uint32_t f = delta_flags(base, s, n, fresh || n <= sh::kMaxClients);
-    if ((f & ~kNumberShort) != 0) write_entity(o, f, n, s);
+    if ((f & ~kNumberShort) != 0) write_entity(o, f, n, s, long_solid(w.opt));
     w.last[size_t(n)] = s;
   }
   o.u8(0);
@@ -997,6 +1047,14 @@ void q2_write_player(std::vector<uint8_t>& out, const Q2PlayerState& from,
                      const Q2PlayerState& to) {
   Out o{out};
   write_player(o, from, to);
+}
+
+bool q2_write_effect(std::vector<uint8_t>& out, const NetEvent& e) {
+  if (e.kind != EventKind::point_effect && e.kind != EventKind::trail_effect) return false;
+  Out o{out};
+  const size_t before = out.size();
+  if (!write_flash(o, e)) write_temp_entity(o, e);
+  return out.size() > before;
 }
 
 }  // namespace shooters_edge::server

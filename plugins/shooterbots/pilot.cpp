@@ -163,6 +163,10 @@ constexpr float kBrake = 0.25f;  // the least share of maxspeed walked into the 
 constexpr float kAirCorner = 64, kAirPast = 24, kAirSlow = 100;
 constexpr float kAirGiveUp = 100, kAirHold = 2, kAirFull = 12;
 constexpr float kGrenadeStill = 30;  // a grenade jump fires only this slow, units/s
+// A combo (nav.hpp `NavLink::combo`): the view this far down for the rocket on the jump, turned
+// down this long before it.
+constexpr float kComboPitch = 89;
+constexpr float kComboLook_s = 0.5f;
 constexpr float kGrenadeAim = 4;     // and with the view this near the target's way, deg
 constexpr float kGrenadeNear = 32;   // and within this of its start, units
 constexpr float kGrenadeSlow = 160;  // slowing into the start from this far, units
@@ -1074,6 +1078,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
                                       : 0.0f;
         w.forward = k.forward * faces;
         w.jump = k.jump && c >= kScriptFacing && !p.jump_pressed;
+        w.duck = k.duck;
         if (w.jump) p.stats.jumps++;
         because = k.jump ? "a scripted way: a hop up" : "a scripted way";
       }
@@ -1325,6 +1330,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           // The view kept on the target, stepped to the stand with the keys in its frame (a
           // person does not turn to walk a few units; late hands turning to a point circle it).
           w.yaw = unwrap(p.grenade_yaw, p.yaw);
+          // A combo's view down at the grenade in time for the rocket on the jump.
+          if (l.combo && p.grenade_s >= gj.fuse - kComboLook_s) w.pitch = kComboPitch;
           const ViewAxes ax = angle_vectors({0, p.yaw, 0});
           const Vec3f d{p.grenade_stand.x - s.origin.x, p.grenade_stand.y - s.origin.y, 0};
           const auto key = [&](float along) {
@@ -1341,10 +1348,22 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           p.leap_s = p.clock_s;
           p.stats.jumps++;
           because = "the grenade jump: jump as the fuse runs out";
+          if (l.combo) {
+            // The combo's rocket down at the grenade as it bursts (the launcher in hand by now,
+            // or the jump goes on without it and lands short: missed, the way round planned).
+            w.pitch = kComboPitch;
+            w.attack = s.rocket_ready;
+            p.stats.combos += s.rocket_ready;
+            because = s.rocket_ready ? "the combo: jump and the rocket on the grenade"
+                                     : "the combo: jump, the launcher not yet in hand";
+          }
         }
       }
     } else if (flies(l.kind) && p.airborne) {
-      if (!s.onground) {
+      // Down in water short of a dry target (a gap over a pool: base2's, its bridge there only in
+      // deathmatch) is landed short: swimming, he is never on the ground to land.
+      const bool fell_in = s.waterlevel >= 2 && !node(g, b).wet && s.origin.z < B.z - kStepHeight;
+      if (!s.onground && !fell_in) {
         p.mode = PilotMode::air;
         // STEERED IN THE AIR (pilot.hpp `air`): the aim the target, or near it the node after it
         // when the route walks on from there (the momentum carried round the corner it turns).
@@ -1686,6 +1705,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   c.angles = {quantize_angle(w.pitch), quantize_angle(wrap(p.yaw)), 0};
   c.forward = quantize_axis(static_cast<float>(pressed[1]) * s.maxspeed);
   c.side = quantize_axis(static_cast<float>(pressed[2]) * s.maxspeed);
+  if (w.duck) c.up = quantize_axis(-s.maxspeed);  // down: ducked (a game that ducks)
   p.jump_pressed = pressed[3] > 0.5;
   c.buttons =
       static_cast<uint8_t>((p.jump_pressed ? kButtonJump : 0) | (w.attack ? kButtonAttack : 0));

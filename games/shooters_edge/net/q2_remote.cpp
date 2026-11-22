@@ -7,7 +7,10 @@
 #include "shooters_edge/net/q2_remote.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <utility>
 
 #include "classic/q2_move.hpp"
@@ -20,6 +23,8 @@ namespace shooters_edge::net {
 
 namespace {
 
+constexpr uint8_t kQ2ButtonUse = 2;  // Quake II's use button in a move's buttons byte
+
 float angle16(int16_t a) { return static_cast<float>(a) * (360.0f / 65536.0f); }
 
 // The player's settings as Quake II's user info: its figure and skin are one word
@@ -28,6 +33,7 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   Q2ClientConfig s;
   s.name = cfg.name;
   s.skin = !cfg.model.empty() ? cfg.model + "/" + cfg.skin : "male/grunt";
+  s.stuff = &r.stuff;
   if (cfg.skin.find('/') != std::string::npos) s.skin = cfg.skin;
   s.rate = cfg.rate;
   s.fov = cfg.fov;
@@ -50,8 +56,13 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   // in the archive the server says each came out of (the window's `keep_file`).
   s.fetch = true;
   s.fetch_level = true;
-  s.ask_moves = true;  // the other players' moves, to run them forward (q2_predict.hpp)
-  s.ask_back = true;   // the items coming back, drawn ahead of time (ce_respawns)
+  s.allow = cfg.q2_downloads;  // allow_download and its kinds
+  s.http = cfg.web;            // cl_http_*: the files over HTTP first
+  s.nodelta = cfg.q2_nodelta;  // cl_nodelta
+  s.ask_moves = true;          // the other players' moves, to run them forward (q2_predict.hpp)
+  s.ask_back = true;           // the items coming back, drawn ahead of time (ce_respawns)
+  s.ask_hits = true;           // the damage dealt, the hit marker's (cl_hit_markers)
+  s.ask_sheet = true;          // the settings sheet, the server settings page's
   s.read_file = [&r](const std::string& path) {
     return r.read_file ? r.read_file("", path) : std::vector<uint8_t>{};
   };
@@ -86,6 +97,8 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
       m.up = std::max<int16_t>(m.up, ge::classic::kSqJumpUp);
       m.buttons = static_cast<uint8_t>(m.buttons & ~sh::kButtonJump);
     }
+    if ((m.buttons & sh::kButtonUse) != 0)  // +use is Quake II's second button
+      m.buttons = static_cast<uint8_t>((m.buttons & ~sh::kButtonUse) | kQ2ButtonUse);
     return m;
   };
   return s;
@@ -113,6 +126,12 @@ int lerp_list(std::vector<client::DemoEntity>& drawn, const std::vector<client::
 
 void q2_remote_start(Remote& r, const ClientConfig& cfg) {
   r.q2 = std::make_unique<Q2ClientEnd>();
+  if (!r.stuff_file.empty()) {  // the whitelist read again at each join
+    std::ifstream in(r.stuff_file, std::ios::binary);
+    std::ostringstream text;
+    text << in.rdbuf();
+    r.stuff.patterns = ge::classic::read_stuff_whitelist(text.str());
+  }
   q2_client_start(*r.q2, *r.transport, r.server, q2_config(r, cfg), 0);
   remote_record_restart(r);  // the level kept for `record` (qw_match_record.hpp)
   r.active = true;
@@ -156,12 +175,16 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   r.owed_s += wall_s;
   int ticks = 0;
   const int tick_us = q2_move_ms(r.q2_maxfps) * 1000;  // its own cl_maxfps, live
+  c.cfg.shownet = r.q2_shownet;                        // cl_shownet, live
+  r.trace.sent = r.q2_showpackets;                     // cl_showpackets, live
   while (r.owed_s >= tick_us * 1e-6) {
     r.owed_s -= tick_us * 1e-6;
     if (ticks++ >= kMostTicks) continue;  // a stall: the time is dropped, not paid down
     r.now_us += tick_us;
     q2_client_tick(c, r.now_us);
   }
+  for (std::string& line : std::exchange(c.ignored, {})) said.push_back(std::move(line));
+  for (std::string& line : std::exchange(c.http.said, {})) said.push_back(std::move(line));
   if (c.stage != r.said) {
     r.said = c.stage;
     std::string line = remote_stage_words(r.said) + r.server_name;
@@ -183,7 +206,8 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   c.news = Q2News{};
   const double now_s = static_cast<double>(r.now_us) * 1e-6 + r.owed_s;
   // The ignore lists, the team tags and the regex triggers (chat_ignore.hpp).
-  r.ignore.chat.relay = false;  // a game joined: Quake II's message triggers run
+  r.ignore.chat.relay = false;                  // a game joined: Quake II's message triggers run
+  remote_sheet_step(r, d.state.prints, now_s);  // `info` asked for the settings page
   client::drop_ignored(r.ignore, d.state, d.state.prints, now_s, &d.state.centre);
   const bool fresh = c.frames != r.q2_frames;
   client::DemoState& st = d.state;
@@ -221,6 +245,12 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   sh::Vec3f drawn;
   const bool predicted = !r.nopred && r.predict && q2_predict_step(ahead, c, d, wall_s, drawn);
   if (!predicted) ahead.predicted = false;
+  if (ahead.misses != ahead.misses_told) {  // cl_showmiss
+    if (ahead.show_misses && r.trace.print)
+      r.trace.print("prediction miss on " + std::to_string(ahead.miss_frame) + ": " +
+                    std::to_string(std::lround(ahead.miss_units)));
+    ahead.misses_told = ahead.misses;
+  }
   // Everything between the last two frames, one frame behind the newest.
   r.lerped = 0;
   if (!r.nolerp && r.frame_old_s >= 0 && r.frame_new_s > r.frame_old_s) {
@@ -257,6 +287,44 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
     return RemoteStep::new_level;
   }
   return RemoteStep::frame;
+}
+
+void add_q2_download_command(ge::console::Console& con, Remote& r) {
+  con.add_command("download", "download <file>: a file asked of the server you are on",
+                  [&r](ge::console::Console& c, const ge::console::Args& a) {
+                    if (!r.active || r.watch || !r.q2 || r.q2->stage != ClientStage::active) {
+                      c.print("Must be connected to a server.");
+                      return;
+                    }
+                    const ge::console::Cvar* allow = c.cvars().find("allow_download");
+                    if (allow != nullptr && allow->value == "-1") {
+                      c.print("Downloads are permanently disabled.");
+                      return;
+                    }
+                    if (a.size() != 2) {
+                      c.print("Usage: download <filename>");
+                      return;
+                    }
+                    const std::string why = q2_download(*r.q2, a[1]);
+                    if (!why.empty()) c.print("Couldn't download " + a[1] + ": " + why);
+                  });
+}
+
+void add_q2_skins_command(ge::console::Console& con, Remote& r) {
+  con.add_command("skins", "skins: every player's model and skin read again",
+                  [&r](ge::console::Console& c, const ge::console::Args&) {
+                    const client::DemoState& st = r.demo.state;
+                    if (!r.active || r.watch || !r.q2 || st.map.empty()) {
+                      c.print("Must be in a level to load skins.");
+                      return;
+                    }
+                    r.kept = true;  // the level read again: every figure and skin drawn anew
+                    for (size_t i = 0; i < st.looks.size(); i++) {
+                      if (st.looks[i].empty()) continue;
+                      c.print("client " + std::to_string(i) + ": " + st.names[i] + "\\" +
+                              st.looks[i] + " --> " + st.looks[i]);
+                    }
+                  });
 }
 
 }  // namespace shooters_edge::net

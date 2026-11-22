@@ -335,3 +335,15 @@ TEST(blood_sprays_by_the_weapon_red_falling_and_the_same_for_the_same_seed) {
   spray(fx::BloodBy::arc, 1, a);
   CHECK(a.size() < one + 10);
 }
+
+TEST(quake_twos_rail_trail_beams_take_its_colour_width_and_fade) {
+  // cl_railtrail_type's core: straight, the width and colour asked, fading over cl_railtrail_time;
+  // its spiral circles the core at the radius asked.
+  const float red[3] = {1, 0, 0};
+  const gr::BeamLook core = fx::q2_rail_trail_look(0.05f, 0, red, 2.0f);
+  CHECK(core.wander == 0 && core.braid_m == 0 && core.core_m == 0.05f);
+  CHECK(core.core_rgb[0] == 1 && core.core_rgb[2] == 0 && core.release_s == 2.0f);
+  CHECK(core.light_cd == 0 && core.hit_cd == 0);  // no light of its own
+  const gr::BeamLook spiral = fx::q2_rail_trail_look(0.05f, 0.075f, red, 0);
+  CHECK(spiral.braid_m == 0.075f && spiral.twist > 0 && spiral.release_s > 0);
+}

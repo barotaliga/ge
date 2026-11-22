@@ -2,6 +2,7 @@
 //
 // ge:summary Quake II's field of view as shown and its view and 2D cvars
 // ge:keywords q2 fov cl_adjustfov uf scr_scale scr_draw2d scr_alpha scr_lag_draw cl_kickangles
+// ge:keywords timegraph debuggraph graphheight graphscale graphshift
 // ge:skill shooter ui camera
 // ge:test tests/shooters_edge_q2_view_test.cpp
 #include "shooters_edge/client/q2_view.hpp"
@@ -85,6 +86,32 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
           .max = 2,
           .values = "0: none (the default); 1: the graph; 2: the graph on a dark box"},
          &s.lag_draw);
+  v.bind({.name = "gl_fontshadow",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "A black shadow under the screen's letters, this many units down and right.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "0: none (the default); 1..2: that far"},
+         &s.font_shadow);
+  v.bind({.name = "gl_bilerp_chars",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Whether the screen's letters are smoothed when drawn larger.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: sharp pixels (the default); 1: smoothed"},
+         &s.bilerp_chars);
+  v.bind({.name = "scr_showturtle",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Words at the lower left when a frame from the server came with a problem.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: the frame's own problems (the default); 2: also the packets held back; "
+                    "0: none"},
+         &s.turtle);
   for (const auto& [name, field, across] :
        {std::tuple{"scr_lag_x", &s.lag_x, true}, std::tuple{"scr_lag_y", &s.lag_y, false}})
     v.bind({.name = name,
@@ -116,6 +143,40 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
           .max = 10000,
           .values = "1 and up: 200 the default"},
          &s.lag_max);
+  v.bind({.name = "timegraph",
+          .fallback = "0",
+          .help = "Whether each frame's time is drawn as a column along the bottom of the screen.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: not drawn (the default); 1: a column a frame, a unit tall a millisecond"},
+         &s.time_graph);
+  v.bind({.name = "debuggraph",
+          .fallback = "0",
+          .help = "Whether the graph along the bottom of the screen is drawn.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: only with timegraph (the default); 1: always"},
+         &s.debug_graph);
+  v.bind({.name = "graphheight",
+          .fallback = "32",
+          .help = "The graph's height along the bottom of the screen.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 1000,
+          .values = "0..1000: that many units of the screen (32 the default)"},
+         &s.graph_height);
+  v.bind({.name = "graphscale",
+          .fallback = "1",
+          .help = "The graph's units a unit of value.",
+          .min = 0,
+          .max = 100,
+          .values = "0..100: 1 the default"},
+         &s.graph_scale);
+  v.bind({.name = "graphshift",
+          .fallback = "0",
+          .help = "The units added to every column of the graph.",
+          .min = -1000,
+          .max = 1000,
+          .values = "-1000..1000: 0 the default"},
+         &s.graph_shift);
   v.bind(
       {.name = "cl_adjustfov",
        .fallback = "1",

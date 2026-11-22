@@ -20,6 +20,23 @@ namespace shooters_edge::client {
 namespace {
 
 constexpr double kWalking = 0.5;  // m/s along the ground the stride's clock runs above
+constexpr double kDegRad = 0.017453292519943295;
+
+}  // namespace
+
+void q2_gun_sway(ge::shooter::Vec3f gun_angles, ge::shooter::Vec3f gun_offset,
+                 ge::shooter::Vec3f view_angles, view::HandInput& in) {
+  in.game_sway = true;
+  in.place.game_turn[0] = -gun_angles.y * kDegRad;  // its yaw is to the left, ours to the right
+  in.place.game_turn[1] = -gun_angles.x * kDegRad;  // its pitch is down, ours up
+  in.place.game_turn[2] = gun_angles.z * kDegRad;
+  const ge::shooter::ViewAxes ax = ge::shooter::angle_vectors(view_angles);
+  in.place.game_shift_m[0] = ge::shooter::dot(gun_offset, ax.right) * ge::brush::kUnitM;
+  in.place.game_shift_m[1] = ge::shooter::dot(gun_offset, ax.up) * ge::brush::kUnitM;
+  in.place.game_shift_m[2] = ge::shooter::dot(gun_offset, ax.forward) * ge::brush::kUnitM;
+}
+
+namespace {
 
 // The frame of a held model of `count` frames Quake II's hand on `frame` of weapon `w` shows.
 // Quake II's own model has every frame its hand runs through. Another game's (classic remix's
@@ -57,6 +74,7 @@ view::HandFrame step_q2_held(const server::Q2Server& sq, const PlayerState& p, c
   }
   s.q2_frame = hand.frame;
   if (in.fired) ++s.shots;
+  q2_gun_sway(sq.players[0].seen.gun_angles, sq.players[0].seen.gun_offset, p.v_angle, in);
   in.place.look_yaw = v.pose.yaw;
   in.place.look_pitch = v.pose.pitch;
   const double vx = p.velocity.x, vy = p.velocity.y;
@@ -80,6 +98,15 @@ view::HandFrame step_q2_held(const server::Q2Server& sq, const PlayerState& p, c
   return f;
 }
 
+// The developer's look (`gun_next`, `gun_prev`): the frame asked shown still, held to the model's.
+void gun_look(const view::ViewSettings& s, std::span<const ge::viewmodel::HeldModel> models,
+              view::HandFrame& f) {
+  const auto w = static_cast<size_t>(f.weapon);
+  if (s.gun_frame <= 0 || w >= models.size() || models[w].frames.empty()) return;
+  f.frame_a = f.frame_b = std::min(s.gun_frame, static_cast<int>(models[w].frames.size()) - 1);
+  f.frame_t = 0;
+}
+
 // A hosted game library's hand: the weapon whose view model it names (Quake II's set, by the
 // Quake II's names, read from the mod's folder first) on the frame it names. The library's frames
 // carry its own firing; the hand adds no kick or flash of its own.
@@ -97,7 +124,9 @@ view::HandFrame step_native_held(const server::NativeQ2& ns, const PlayerState& 
     if (name == server::kSqWeapons[static_cast<size_t>(k)].view_model) w = k;
   const int frame = static_cast<int>(nb.weapon_frame);
   view::HandInput in;
-  in.weapon = static_cast<view::Weapon>(w < 0 ? 0 : w);
+  in.weapon = static_cast<view::Weapon>(settings.gun_model >= 0 ? settings.gun_model
+                                        : w < 0                 ? 0
+                                                                : w);
   in.q2 = true;
   in.dead = p.dead || w < 0;
   in.place.look_yaw = v.pose.yaw;
@@ -121,6 +150,7 @@ view::HandFrame step_native_held(const server::NativeQ2& ns, const PlayerState& 
     f.frame_t = settings.lerp && from >= 0 ? g : 0;
   }
   s.recorded_weapon = w;
+  gun_look(settings, models, f);
   return f;
 }
 
@@ -215,13 +245,16 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
       game = static_cast<view::Weapon>(h.last_fired);
     }
   }
-  in.weapon = h.show >= 0 ? static_cast<view::Weapon>(h.show) : game;
+  in.weapon = settings.gun_model >= 0 ? static_cast<view::Weapon>(settings.gun_model)
+              : h.show >= 0           ? static_cast<view::Weapon>(h.show)
+                                      : game;
   in.place.look_yaw = pose.yaw;
   in.place.look_pitch = pose.pitch;
   in.place.grounded = true;
   // Dead, the recorder's weapon sinks out of view (the recording clears the weapon at once: the
   // one shown goes on being drawn as it sinks).
   in.dead = s.stats[kStatHealth] <= 0;
+  if (s.format == DemoFormat::q2) q2_gun_sway(s.gun_angles, s.gun_offset, s.angles, in);
   view::HandFrame f = view::step_hand(h.hand, in, settings, models, pose, dt);
   // A classic set's frame as the server sent it: its fire animations played as recorded.
   const auto w = static_cast<size_t>(f.weapon);
@@ -239,6 +272,7 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   }
   f.drawn = f.drawn && !s.intermission && (s.stats[kStatWeapon] != 0 || (in.dead && h.shown));
   h.shown = f.drawn;
+  gun_look(settings, models, f);
   return f;
 }
 

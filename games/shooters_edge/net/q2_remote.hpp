@@ -10,9 +10,10 @@
 //
 // THE MOVE RATE: Quake II's own `cl_maxfps` (`Remote::q2_maxfps`, 62 by default; 0 the top, 125;
 // at least 10), as whole milliseconds between moves (`q2_move_ms`: 62 a second is 16 ms apart).
-// THE HANDS: a move a tick with the window's view angles. Quake II's game draws the view as those
-// angles plus the turn the server holds for the player (its delta angles: a spawn's facing, a
-// teleport's), so the drawn view is the hands' plus that turn, never a tick behind. A weapon key
+// THE HANDS: a move a tick with the window's view angles (`+use` as Quake II's use button, the
+// buttons byte's second bit). Quake II's game draws the view as those angles plus the turn the
+// server holds for the player (its delta angles: a spawn's facing, a teleport's), so the drawn view
+// is the hands' plus that turn, never a tick behind. A weapon key
 // (`impulse 1` .. `impulse 11`: the weapon groups and the quick weapon ask the same way) goes as
 // Quake II's `use <weapon>` command, which a stock server takes and an impulse it does not.
 //
@@ -29,6 +30,7 @@
 // ge:keywords remote-client connect join-server q2 protocol-34 q2-join delta-angles
 // ge:keywords use-weapon impulse lerp q2_remote_start q2_remote_step
 // ge:keywords cl_speedjump easy-jump speedjump-share cl_maxfps move-rate q2_move_ms
+// ge:keywords download add_q2_download_command skins add_q2_skins_command
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_net_test.cpp
 #pragma once
@@ -47,5 +49,13 @@ int q2_move_ms(int rate);
 void q2_remote_start(Remote& r, const ClientConfig& cfg);
 // One window frame of `wall_s` s (qw_remote.hpp's `remote_step` for a server of Quake II).
 RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& said);
+// `download <file>`: a file asked of the server joined (q2_client.hpp's `q2_download`), saying
+// "Must be connected to a server." when none is, "Downloads are permanently disabled." with
+// `allow_download -1`, "Usage: download <filename>" without exactly one file, and "Couldn't
+// download <file>: <reason>" when it is refused.
+void add_q2_download_command(ge::console::Console& con, Remote& r);
+// `skins`: every player's figure and skin read again ("Must be in a level to load skins." when
+// none is joined), a line each, "client <n>: <name>\<model>/<skin> --> <model>/<skin>".
+void add_q2_skins_command(ge::console::Console& con, Remote& r);
 
 }  // namespace shooters_edge::net

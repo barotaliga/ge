@@ -575,6 +575,16 @@ TEST(cl_physfps_sets_the_moves_sent_a_second_on_a_server_joined) {
   CHECK(con.cvars().find("cl_physfps_spectator")->value == "77");
 }
 
+TEST(version_prints_the_windows_own) {
+  ge::console::Console con{false};
+  cn::Remote r;
+  cn::add_remote_commands(con, r);
+  con.clear_output();
+  con.execute("version");
+  CHECK(!con.output().empty() &&
+        con.output().back() == std::string("Version ") + cn::kProgramVersion);
+}
+
 TEST(cl_c2spps_holds_moves_back_to_its_packet_rate_never_one_with_an_impulse) {
   auto c = std::make_unique<cn::QwClientEnd>();
   CHECK(!cn::client_hold_move(*c, 1.0 / 72));  // 0: one packet a move
@@ -813,4 +823,44 @@ TEST(the_consoles_foot_says_what_is_coming_while_a_game_is_joined) {
   CHECK(cn::remote_foot(r, share) == "Loading dm2..." && share < 0);
   r.end.stage = cn::ClientStage::active;
   CHECK(cn::remote_foot(r, share).empty());
+}
+
+TEST(net_clientport_binds_the_client_s_socket_and_moves_it_at_once) {
+  // Two free ports, found by opening and closing a socket on each.
+  const auto free_port = [] {
+    gn::Transport probe;
+    std::string why;
+    if (!gn::open_udp_transport(probe, gn::ipv4(0, 0, 0, 0, 0), &why)) return uint16_t{0};
+    const uint16_t port = probe.local.port;
+    gn::close_transport(probe);
+    return port;
+  };
+  const uint16_t first = free_port();
+  CHECK(first != 0);
+  if (first == 0) return;
+  cn::Remote remote;
+  remote.q2_game = [] { return true; };
+  std::string port = std::to_string(first);
+  remote.setting = [&port](const std::string& name) {
+    return name == "net_clientport" ? port : std::string();
+  };
+  std::string error;
+  CHECK_MSG(cn::remote_connect(remote, "127.0.0.1:9", {}, error), error);
+  CHECK(remote.own.local.port == first && remote.port_note.empty());
+  // Another program holds the next port asked for: any free port, and the player told.
+  gn::Transport held;
+  CHECK(gn::open_udp_transport(held, gn::ipv4(0, 0, 0, 0, 0), &error));
+  port = std::to_string(held.local.port);
+  std::vector<std::string> said;
+  cn::remote_step(remote, 0.01, said);
+  CHECK(remote.own.local.port != held.local.port && remote.own.local.port != 0);
+  CHECK(std::find(said.begin(), said.end(), remote.port_note) != said.end());
+  CHECK(remote.port_note.find("Couldn't open port") == 0);
+  // -1: any free port, opened again at once.
+  port = "-1";
+  said.clear();
+  cn::remote_step(remote, 0.01, said);
+  CHECK(remote.own_port == -1 && remote.port_note.empty());
+  cn::remote_disconnect(remote);
+  gn::close_transport(held);
 }

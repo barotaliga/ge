@@ -3,13 +3,14 @@
 //
 // ge:summary Shooter's Edge's HUDs defined: the table, hud_style and the fill
 // ge:keywords hud layout table looks hud_style fill_hud classic modern compact status-bar
-// ge:keywords inventory-bar face flash low-figures frags notify centre
+// ge:keywords inventory-bar face flash low-figures frags notify centre sizeup sizedown
 // ge:skill ui console
 // ge:test tests/shooters_edge_hud_test.cpp
 #include "shooters_edge/hud/layout.hpp"
 
 #include <algorithm>
 #include <array>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -760,6 +761,8 @@ Hud make_hud() {
 void add_cvars(ge::console::Console& con, Hud& hud) {
   ge::hud::add_crosshair_cvars(con.cvars(), hud.crosshair);
   ge::hud::add_readout_cvars(con.cvars(), hud.readouts);
+  ge::hud::add_draw_commands(con, hud.readouts.draws);  // draw, undraw
+  hud.readouts.console = &con;
   // The rest is the shell's own HUD (client/cvar_layers.hpp's layers).
   ge::console::CvarLayer shell(con.cvars(), "shell");
   con.cvars().bind(
@@ -782,6 +785,16 @@ void add_cvars(ge::console::Console& con, Hud& hud) {
        .values = "100: every one (the default); 110: the classic look's status bar without its "
                  "inventory bar; 120: none, the crosshair and the messages staying"},
       &hud.viewsize);
+  // sizeup and sizedown: viewsize ten more or ten less, held in its own range (the default
+  // configs bind them to = and -).
+  for (const auto& [word, step] : {std::pair<const char*, int>{"sizeup", 10}, {"sizedown", -10}})
+    con.add_command(word, std::string(word) + ": viewsize " + (step > 0 ? "up" : "down") + " by 10",
+                    [step](ge::console::Console& c, const ge::console::Args&) {
+                      if (const ge::console::Cvar* v = c.cvars().find("viewsize"))
+                        c.cvars().set("viewsize",
+                                      std::to_string(static_cast<int>(v->number) + step),
+                                      ge::console::Source::local);
+                    });
   con.cvars().bind(
       {.name = "hud_sbar",
        .fallback = "1",

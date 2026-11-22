@@ -32,11 +32,13 @@ namespace save = ge::save;
 constexpr uint32_t kGame = save::tag("SQGM");
 constexpr uint32_t kLevel = save::tag("SQLV");
 constexpr uint32_t kPlayers = save::tag("SQPL");
-constexpr uint16_t kChunkVersion = 9;  // 2: a monster's duck; 3: a coop weapon taken; 4: a dropped
-                                       // silencer's shots; 5: a corpse's box; 6: a monster's
-                                       // liquid; 7: the trail, a monster's hunt and calls; 8: a
-                                       // soldier's run-and-shoot and head shot; 9: coop power
-                                       // cubes, the Makron's torso
+constexpr uint16_t kChunkVersion = 11;  // 2: a monster's duck; 3: a coop weapon taken; 4: a
+                                        // dropped silencer's shots; 5: a corpse's box; 6: a
+                                        // monster's liquid; 7: the trail, a monster's hunt and
+                                        // calls; 8: a soldier's run-and-shoot and head shot; 9:
+                                        // coop power cubes, the Makron's torso; 10: a weapon
+                                        // dropped bare; 11: the gun's lag, a lost
+                                        // combat point
 constexpr const char* kSaveGameName = "shooters_edge_q2";  // the file's game (Meta::game)
 constexpr uint32_t kSaveVersion = 1;
 constexpr int kSettleFrames = 2;   // a map's frames before the kept state is read over it
@@ -174,6 +176,7 @@ void monster(Io& io, Q2Monster& m) {
   io.since(8, m.slide_left, false);
   io.since(8, m.pose.pain_run.first, int16_t{-1});
   io.since(8, m.pose.pain_run.last, int16_t{-1});
+  io.since(11, m.lost_combat, std::string());
 }
 
 template <class Io>
@@ -208,6 +211,7 @@ void drop(Io& io, Q2Drop& d) {
   io(d.power_left);
   io(d.resting);
   io.since(4, d.shots, 0);
+  io.since(10, d.bare, false);
 }
 
 template <class Io>
@@ -255,6 +259,10 @@ void view_state(Io& io, ge::classic::Q2ViewState& v) {
   v3(io, v.blow_way);
   v3(io, v.weapon_angles);
   v3(io, v.weapon_origin);
+  io.since(11, v.last_view.x, 0.0f);
+  io.since(11, v.last_view.y, 0.0f);
+  io.since(11, v.last_view.z, 0.0f);
+  io.since(11, v.have_last, false);
 }
 
 // SQLV: the level, without its players.
@@ -436,6 +444,9 @@ void player(Io& io, Q2Player& p) {
   view_state(io, p.view);
   v3(io, p.seen.offset);
   v3(io, p.seen.kick);
+  for (float* f : {&p.seen.gun_offset.x, &p.seen.gun_offset.y, &p.seen.gun_offset.z,
+                   &p.seen.gun_angles.x, &p.seen.gun_angles.y, &p.seen.gun_angles.z})
+    io.since(11, *f, 0.0f);
   v3(io, p.dead_angles);
   io(p.god);
   io(p.notarget);

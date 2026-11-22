@@ -192,6 +192,21 @@ ge::classic::Q2Trace map_trace(const Q2Server& s, sh::Vec3f start, sh::Vec3f min
   return r;
 }
 
+int32_t map_contents(const Q2Server& s, sh::Vec3f p) {
+  if (s.tracer == nullptr) return 0;
+  const float q[3] = {p.x, p.y, p.z};
+  int32_t c = s.tracer->contents(q);
+  for (const Q2Entity& e : s.entities) {
+    if (e.gone || !e.solid || e.modelindex <= 0 || !brush(e)) continue;
+    if (!overlap(p, p, abs_min(e), abs_max(e))) continue;
+    sh::Vec3f l = p - e.origin;
+    if (e.angles.x != 0 || e.angles.y != 0 || e.angles.z != 0) l = to_local(l, e.angles);
+    const float lq[3] = {l.x, l.y, l.z};
+    c |= s.tracer->contents(lq, uint32_t(e.modelindex));
+  }
+  return c;
+}
+
 namespace {
 
 ge::classic::Q2Trace world_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
@@ -203,8 +218,7 @@ ge::classic::Q2Trace world_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh:
 }
 
 int32_t world_contents(void* ctx, sh::Vec3f p) {
-  const float q[3] = {p.x, p.y, p.z};
-  return static_cast<const MapWorld*>(ctx)->s->tracer->contents(q);
+  return map_contents(*static_cast<const MapWorld*>(ctx)->s, p);
 }
 
 }  // namespace

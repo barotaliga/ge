@@ -13,10 +13,13 @@
 // ge:keywords test synth render golden hash envelope onset pan bus echo layer glide limiter
 // ge:keywords ring steal rack determinism
 // ge:skill audio testing
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "audio/meter.hpp"
@@ -252,6 +255,27 @@ TEST(the_muffle_cuts_the_treble_and_leaves_the_bass) {
   back.tone({.wave = Wave::sine, .from_hz = 12000, .duration_ms = 100});
   dry.tone({.wave = Wave::sine, .from_hz = 12000, .duration_ms = 100});
   CHECK(peak_of(render(back, 0.2)) == peak_of(render(dry, 0.2)));  // the dry mix's own bits
+}
+
+TEST(swap_stereo_trades_the_channels) {
+  // A tone panned hard left comes out on the right while swapped, and on the left again after.
+  const auto sides = [](Synth& s) {
+    s.tone({.wave = Wave::sine, .from_hz = 440, .duration_ms = 100, .pan = -1});
+    const std::vector<float> v = render(s, 0.1);
+    float l = 0, r = 0;
+    for (size_t i = 0; i + 1 < v.size(); i += 2) {
+      l = std::max(l, std::abs(v[i]));
+      r = std::max(r, std::abs(v[i + 1]));
+    }
+    return std::pair{l, r};
+  };
+  Synth s;
+  s.swap_stereo(true);
+  const auto [l1, r1] = sides(s);
+  CHECK(r1 > 0.05f && l1 < r1 * 0.01f);
+  s.swap_stereo(false);
+  const auto [l2, r2] = sides(s);
+  CHECK(l2 > 0.05f && r2 < l2 * 0.01f);
 }
 
 TEST(the_echo_answers_after_its_delay) {

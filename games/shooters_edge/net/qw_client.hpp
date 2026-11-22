@@ -48,13 +48,16 @@
 #include <string>
 #include <vector>
 
+#include "classic/content/web_downloads.hpp"
 #include "hud/net_graph.hpp"
 #include "net/transport.hpp"
 #include "net/voice_codec.hpp"
+#include "server/sheet.hpp"
 #include "shooter/predict.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/client/voice_out.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q2_downloads.hpp"
 #include "shooters_edge/net/qw_svc.hpp"
 #include "vfs/partial.hpp"
 
@@ -82,6 +85,8 @@ using ClientTalk = bool (*)(int tick, int seed);
 inline constexpr size_t kStuffedKept = 256;
 
 struct ClientConfig {
+  // Keys the player set by `fullinfo` that no setting of the window holds, sent as given.
+  std::vector<std::pair<std::string, std::string>> extra_info;
   std::string name = "player";
   std::string skin = "base";
   std::string model;  // the user info's `model`: the player figure in players/<model>/ ("": none)
@@ -90,10 +95,14 @@ struct ClientConfig {
   std::string gender;              // Quake II's user info `gender` ("": not sent)
   int topcolor = 0, bottomcolor = 0;
   int rate = 25000;
+  int msg = 1;             // the user info's `msg`: the lowest print level wanted
+  bool noaim = false;      // the user info's `noaim`: no aim help
   int fov = 90, hand = 0;  // Quake II's user info carries them (q2_client.hpp)
   bool spectator = false;
   bool gender_auto = false;  // Quake II's: `gender` picked from the skin's figure
   bool speedjump = false;    // cl_speedjump: the easy jump asked for (sent only when set)
+  Q2Downloads q2_downloads;  // Quake II's `allow_download` switches (q2_downloads.hpp)
+  bool q2_nodelta = false;   // Quake II's `cl_nodelta`: every frame asked for whole
   std::string password;
   // Through forwarders (qw_forward.hpp): the route after the first one, the server last
   // ("host:port@host:port"); `client_start`'s address is then the first forwarder's. "": direct.
@@ -119,7 +128,7 @@ struct ClientConfig {
       keep_file;
   // The game's file at `path` ("maps/dm4.bsp") in the server's game folder `gamedir`, empty when
   // it has none. The first `prespawn` carries the map's checksum off it (qw_mapsum.hpp); with
-  // no reader or no file it carries 0, which a server checking maps refuses. Before it, the client
+  // no reader or no file it carries 0, which a server checking maps lets in. Before it, the client
   // reports its player and eyes models' CRC-16 (`setinfo pmodel`, `emodel`) when it has them.
   std::function<std::vector<uint8_t>(const std::string& gamedir, const std::string& path)>
       read_file;
@@ -139,6 +148,7 @@ struct ClientConfig {
   // Who its voice goes to (`voicetarg`: all, team, near or a slot), told to the server at its
   // `begin`; "" leaves the server's own (team). `qw_voice_target` changes it later.
   std::string voice_to;
+  ge::classic::content::WebConfig web;  // `cl_http_*`: downloads from a web address
   int seed = 1;
   uint16_t qport = 1;
   // How long the server may send nothing once connected before the client gives it up, s: a
@@ -225,6 +235,9 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int spawncount = 0;
   int playernum = -1;
   std::string gamedir, level, serverinfo;
+  // The server's settings sheet as our server tells it (svc ge_sheet; net/qw_sheet.hpp), asked
+  // for with `ge_sheet` while the server settings page is up.
+  ge::server::SettingsSheet sheet;
   std::vector<std::string> sounds, models;  // [0] ""
   int sound_last = 0, model_last = 0;
   int stufftexts = 0;
@@ -248,6 +261,7 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   PlayerState players[32];
   bool player_seen[32] = {};
   std::string userinfos[32];
+  int userids[32] = {};  // each slot's user id (updateuserinfo)
   int frags[32] = {};
   int32_t stats[kStats] = {};
   std::vector<std::string> prints, centerprints;
@@ -268,6 +282,10 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
 
   ClientDownload dl;
   std::map<std::string, std::vector<uint8_t>> downloaded;
+  // From a web address (classic/content/web_downloads.hpp): with the server's `*dlserver` or the
+  // player's `cl_http_default_url`, the files lacked are fetched from it first, `begin` held, the
+  // channel taking what it gives back; its lines for the player in `web.said`.
+  ge::classic::content::WebDownloads web;
 
   // Voice.
   client::VoiceOut voice;     // the frames cut and coded (client/voice_out.hpp)

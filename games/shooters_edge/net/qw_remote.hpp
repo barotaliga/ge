@@ -61,6 +61,7 @@
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
 
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <span>
@@ -71,9 +72,11 @@
 #include "account/client_presence.hpp"
 #include "account/client_queue.hpp"
 #include "classic/predict_original.hpp"
+#include "classic/protocol/stuff_filter.hpp"
 #include "console/console.hpp"
 #include "console/talk.hpp"
 #include "input/state.hpp"
+#include "net/rates.hpp"
 #include "net/transport.hpp"
 #include "shooter/aim_turn.hpp"
 #include "shooter/predict.hpp"
@@ -81,11 +84,15 @@
 #include "shooters_edge/client/chat_ignore.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/net/q1_end.hpp"
 #include "shooters_edge/net/q2_client.hpp"
+#include "shooters_edge/net/q2_pingservers.hpp"
 #include "shooters_edge/net/q2_predict.hpp"
 #include "shooters_edge/net/qw_client.hpp"
 #include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_record.hpp"
+#include "shooters_edge/net/qw_remote_sheet.hpp"
+#include "shooters_edge/net/qw_serverstatus.hpp"
 #include "shooters_edge/net/qw_watch.hpp"
 
 namespace shooters_edge::net {
@@ -154,11 +161,19 @@ struct Remote {
   std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
   std::unique_ptr<RemoteLogin> login;             // logging in by the account file, when named
   std::unique_ptr<RconAway> away;                 // rcon to `rcon_address`, not joined
+  std::unique_ptr<StatusAsk> status_ask;          // `serverstatus` waiting for its answer
+  PingSweep ping;                                 // `pingservers`' asks (q2_pingservers.hpp)
+  PassiveListen passive;                          // `passive` waiting for a server's call
   JoinedFile file;  // `record` while joined: the level kept and the file (qw_match_record.hpp)
   MatchAuto match;  // the match recorded on its own (match_auto_record)
   client::JoinedRecord joined_record;  // the window's record commands reach the join through it
-  std::unique_ptr<Q2ClientEnd> q2;     // joined to a server of Quake II (q2_remote)
-  Q2Predict q2_ahead;                  // Quake II's own moves run ahead (q2_predict.hpp)
+  // `rerecord <name>`: the file the next join records to from its start ("": none waiting).
+  std::filesystem::path rerecord;
+  // `fullinfo`'s keys no window setting holds, sent in the user info at the next join.
+  std::vector<std::pair<std::string, std::string>> extra_info;
+  std::unique_ptr<Q2ClientEnd> q2;  // joined to a server of Quake II (q2_remote)
+  std::unique_ptr<NqClientEnd> nq;  // joined to a Quake server of protocol 15 (nq_remote)
+  Q2Predict q2_ahead;               // Quake II's own moves run ahead (q2_predict.hpp)
   // The window's game is Quake II: `connect` speaks its protocol (port 27910 when none is given).
   std::function<bool()> q2_game;
   int64_t now_us = 0;                         // the tick clock
@@ -171,6 +186,7 @@ struct Remote {
   // The window's `topcolor` and `bottomcolor` last seen: a change of them is told the server.
   std::string seen_top, seen_bottom;
   sp::ChannelTrace trace;  // showpackets, showdrop: the channel's lines (add_remote_commands)
+  ge::net::Rates rates;    // $cl_pps, $cl_mps, $net_uprate, $net_dnrate (qw_remote_macros.hpp)
   // Lerp: the last two frames' entities as read (by number), before anything drawn moved them.
   std::vector<client::DemoEntity> ents_old, ents_new;
   std::vector<client::DemoEntity> players_old, players_new;  // Quake II's players, the same way
@@ -238,7 +254,18 @@ struct Remote {
   int c2spps = 0, c2s_impulse_backup = 3;  // cl_c2spps, cl_c2sImpulseBackup (qw_client.hpp)
   bool gunkick = false;  // v_gunkick: the server's kicks drawn on the view (client/demo_eyes.hpp)
   int q2_maxfps = 62;    // Quake II's own cl_maxfps: its moves a second (q2_remote.hpp)
+  // Quake II's cl_ignore_stufftext and its whitelist file (read at each join; "" none).
+  ge::classic::StuffFilter stuff;
+  std::filesystem::path stuff_file;
+  int q2_shownet = 0;  // Quake II's cl_shownet: each message's size printed (q2_client.hpp)
+  bool q2_showpackets = false;  // Quake II's cl_showpackets: each packet sent shown (`trace.sent`)
   double tick_frac_us = 0;
+  RemoteSheet sheet;  // the server settings page's sheet (qw_remote_sheet.hpp)
+  // Quake II's `net_clientport`: the port `own` is bound to (-1 any free one), opened again on
+  // another the frame the setting moves; `port_note` says a port that would not open (the join
+  // prints it), the socket then on any free port.
+  int own_port = -1;
+  std::string port_note;
 };
 
 // Watches the broadcast at `address` ("host:port": a stream port, our TV node's or a relay's;
@@ -248,7 +275,8 @@ bool remote_watch(Remote& r, const std::string& address, const std::string& name
                   const std::string& password, std::string& error);
 
 // Joins `address` ("host", "host:port"; the QuakeWorld server port when none, Quake II's when
-// `q2_game` says the window plays Quake II: q2_remote.hpp) over a UDP socket of its own.
+// `q2_game` says the window plays Quake II: q2_remote.hpp) over a UDP socket of its own. Port 26000
+// (`kPortNetQuake`) in Quake is a server of Quake's own protocol 15 (q1_remote.hpp).
 // False with the reason when the address or the socket does not open.
 bool remote_connect(Remote& r, const std::string& address, const ClientConfig& cfg,
                     std::string& error);
@@ -305,6 +333,9 @@ std::string remote_foot(const Remote& r, double& progress);
 // The joined server's packets as they came (the net graph and Quake II's lag graph), whichever
 // protocol it speaks; null when nothing is joined or a broadcast is watched.
 const ge::hud::NetHistory* remote_net(const Remote& r);
+// Whether the classic net icon shows: a Quake server silent 0.3 s or more, or a QuakeWorld one
+// with 63 or more of the client's packets unacknowledged; never while watching or signing on.
+bool remote_net_trouble(const Remote& r);
 // The moves sent to a joined Quake II server it has not answered yet (0: none, or not Quake II).
 int remote_unanswered(const Remote& r);
 // A line for the server joined (`say hello`, `vote map dm2`), whichever protocol it speaks.

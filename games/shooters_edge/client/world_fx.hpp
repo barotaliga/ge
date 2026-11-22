@@ -74,6 +74,7 @@
 
 #include "brush/light_probe.hpp"
 #include "camera/subject.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "detail/decals.hpp"
 #include "particles/effect.hpp"
 #include "render/beam.hpp"
@@ -125,6 +126,8 @@ struct FxSwitches {
   int muzzle_flash = 1;
   // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
   ModelLerpSwitches lerp;
+  // Quake II's own (either look): specks, explosions' balls, lights and guns' fire left out.
+  ge::classic::Q2FxSwitches q2;
 };
 // The switches `picture` asks for: each ce_ switch, in the modern look only.
 // The explosion is the engine's where classic-enhance's replacement table names `explosion` for the
@@ -146,6 +149,10 @@ struct HeldBeam {
   bool rail = false;    // Quake II's rail (fx::rail_look): fired once, then fading
   bool coil = false;    // with `rail`: the line circling it (fx::rail_coil_look)
   bool plasma = false;  // a bolt's streak (fx::plasma_look), riding it while it flies
+  // Quake II's `cl_railtrail_type` beam (fx::q2_rail_trail_look), drawn in either look: its width
+  // or (the spiral) its radius off the axis, m; its colour; its fade, s.
+  bool q2_trail = false;
+  float trail_m = 0, trail_radius_m = 0, trail_rgb[3] = {1, 0, 0}, trail_fade_s = 1;
   // A laser (Quake II's beam entity): drawn in either look, its width and this frame's colour
   // (one of its four palette shades, picked again every frame) set in `laser_m` and `laser_rgb`.
   bool laser = false;
@@ -276,6 +283,13 @@ struct FxState {
   // when the flies round each corpse began their cycle (the picture's clock, s).
   std::unordered_map<int, int> q2_trails;
   std::unordered_map<int, double> flies_from;
+  // Quake II's widow beam-outs growing: each one's id, its centre (engine m) and when it began.
+  struct BeamOut {
+    int id = 0;
+    double at[3] = {0, 0, 0};
+    double born = 0;
+  };
+  std::vector<BeamOut> beam_outs;
   // THE MONSTERS' MISSILES (app/monster_fx.hpp: a model the replacement table or its trail flags
   // name): each in flight as it was a frame ago (m, and map units), the way it flew, its kind and
   // its classic trail's side; those gone this frame (where their spit lands); the splashes whose
@@ -357,6 +371,7 @@ struct FxState {
 // One frame's effects for the world pass.
 struct FxFrame {
   effects::Particles births;
+  std::vector<uint8_t> areas;  // the areas the world draws (FxScene::areas); empty, all
   std::vector<effects::Light> lights;
   double blend[4] = {0, 0, 0, 0};  // the screen's: sRGB colour and share
   // The same without a lava's or a slime's tint, for a look that draws the liquid round the eye.
@@ -409,12 +424,18 @@ void warp_dust(const Warp& w, const effects::Dust& d, double was, double age, ui
 // WHAT THE EFFECTS READ, wherever the game comes from: the listen server (`fx_scene`, off the
 // server's state and the view), or a demo or a server joined (demo_fx.hpp, off what was sent).
 struct FxScene {
+  // Quake II's areas the eye sees, a bit each (a recording's frame, the listen server's open
+  // portals); empty, every area. Passed on in FxFrame::areas for the world's draw.
+  std::vector<uint8_t> areas;
   const LoadedMap* map = nullptr;         // the map's faces (marks, floors, what a blast hit)
   const sh::Server* server = nullptr;     // the brush entities an explosion's floor is traced
                                           // through too (null: the map's world alone)
   ge::camera::Pose pose;                  // the eye this frame
   std::span<const Missile> missiles;      // in flight now
   std::span<const sh::Vec3f> explosions;  // every one this map so far, in order
+  // Each one's kind where it is known (classic/q2_fx_switches.hpp's kQ2Grenade, kQ2Rocket; 0 any
+  // other), by index; shorter than `explosions` (or empty) where it is not.
+  std::span<const uint8_t> explosion_kinds;
   std::span<const Effect> effects;        // every temporary entity this map so far, in order
   std::span<const Blow> blows;            // a campaign's blows to the player this map so far
   int64_t bonuses = 0;                    // the items the viewed player took, so far (bf)
@@ -483,13 +504,15 @@ void land_drops(FxState& s, double t);
 void tread_blood(const FxScene& l, FxState& s, std::span<const Placed> placed, double t);
 // QUAKE II'S OWN (client/world_fx_q2.cpp): a named `sq_*` effect `e` at `p` (engine m; `dust`:
 // a warp's dust already covers it), a trail `sq_bubbles`/`sq_force_wall` over `from`..`to` (false
-// for any other name), and a flying entity's effect-bit mark (`Q2Look::Missile`; `moved`: it has a
-// stretch from `from`) at `to`.
-void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, FxFrame& out);
+// for any other name), and a flying entity's effect-bit mark (`Q2Look::Missile`) and spinning
+// lights at `to` (`moved`: it has a stretch from `from`) at `t` s.
+void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, double t, FxFrame& out);
 bool q2_named_trail(FxState& s, const Effect& e, const double from[3], const double to[3],
                     FxFrame& out);
-void q2_mark_fx(FxState& s, int mark, bool moved, const double from[3], const double to[3],
-                FxFrame& out);
+// The widow beam-outs still growing at `t`: a sphere of specks each frame (client/world_fx_q2.cpp).
+void q2_sustains(FxState& s, double t, FxFrame& out);
+void q2_mark_fx(FxState& s, const Missile& m, bool moved, const double from[3], const double to[3],
+                double t, FxFrame& out);
 // A decal pressed onto the marks' faces in the light where it lies; its slot, -1 when none took it.
 int press_mark(FxState& s, const ge::detail::DecalAt& d);
 // The floor under `at` (map units) seen from `from`, world y (m) (world_fx.cpp).

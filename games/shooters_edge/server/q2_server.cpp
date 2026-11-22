@@ -26,16 +26,19 @@
 #include "core/num_text.hpp"
 #include "core/prng.hpp"
 #include "progs/text.hpp"
+#include "shooters_edge/server/q2_actor.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
 #include "shooters_edge/server/q2_blend.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_commands.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_mods.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
+#include "shooters_edge/server/q2_spectate.hpp"
 #include "shooters_edge/server/q2_targets.hpp"
 #include "shooters_edge/server/rjump_rules.hpp"
 #include "shooters_edge/server/shot_help.hpp"
@@ -54,8 +57,8 @@ constexpr uint8_t kRespawnHold = 14;  // the deathmatch respawn's teleport hold,
 constexpr int kSqItemBackEvent = 1;   // the entity event an item that shows again carries
 constexpr float kSpawnHealth = 100;
 constexpr double kIntermissionHold = 5;  // the intermission's least time before a button leaves, s
-// Its most in deathmatch: a match nobody presses a button on (everyone away, a dedicated server)
-// still moves on, s. Single player and coop wait for a button as long as it takes.
+// Its most in a deathmatch of bots alone (no person to press a button), s. A match with a person
+// in it, single player and coop wait for a button as long as it takes.
 constexpr double kIntermissionMost = 20;
 
 Q2Server& sq(void* rules) { return *static_cast<Q2Server*>(rules); }
@@ -277,8 +280,10 @@ double nearest_player(const Q2Server& s, sh::Vec3f p, int skip) {
   return best;
 }
 
-// The spot a player spawns at: in deathmatch a random `info_player_deathmatch` that is not one of
-// the two nearest to a living player (any of them with two or fewer); else, or with none, the
+// The spot a player spawns at: in deathmatch a random `info_player_deathmatch` not among a pair
+// near a living player (any of them with two or fewer): walking the spots in map order, one
+// nearer than the nearest so far takes its place, one nearer only than the second the second's;
+// else, or with none, the
 // first `info_player_start`; else the map's origin.
 const Q2Entity* spawn_spot(Q2Server& s, int slot) {
   if (deathmatch(s)) {
@@ -304,10 +309,8 @@ const Q2Entity* spawn_spot(Q2Server& s, int slot) {
         double d1 = 1e31, d2 = 1e31;
         for (const Q2Entity* e : spots) {
           const double d = nearest_player(s, e->origin, slot);
-          if (d < d1) {
-            d2 = d1;
-            near2 = near1;
-            d1 = d;
+          if (d < d1) {  // the old nearest is not moved to second: the pair left out is
+            d1 = d;      // not always the two nearest
             near1 = e;
           } else if (d < d2) {
             d2 = d;
@@ -323,6 +326,8 @@ const Q2Entity* spawn_spot(Q2Server& s, int slot) {
   }
   return campaign_spot(s, slot);
 }
+
+void arrival_flash(Q2Server& s, int slot, const char* name);
 
 void spawn_player(Q2Server& s, int slot, bool respawn) {
   Q2Player& p = s.players[slot];
@@ -343,7 +348,7 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   for (int i = 0; i < 3; i++) st.delta_angles[i] = int16_t(want[i] - p.cmd_angles[i]);
   p.forced = true;
   for (int i = 0; i < 3; i++) p.forced_angles[i] = want[i];
-  if (respawn && deathmatch(s)) {
+  if (respawn && (deathmatch(s) || coop(s))) {
     st.flags |= ge::classic::kSqTimeTeleport;
     st.time = kRespawnHold;
     // The teleport's burst where he comes back, at his box's middle.
@@ -354,6 +359,8 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   p.alive = !s.clients[slot].spectator;
   p.health = p.alive ? kSpawnHealth : 0;
   p.spawned_at = s.level_time;
+  p.respawn_time = respawn ? s.level_time : 0;  // a first placing counts from the map's start
+  p.pressed = 0;
   p.view_angles = {0, yaw, 0};
   p.body = sq_new_body();
   p.body.health = static_cast<int>(p.health);
@@ -374,6 +381,7 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   fight_midair_kit(s, slot);
   q2_mods_spawn(s, slot);
   commands_spawn(s, slot);
+  if (p.alive) targets_telefrag(s, slot);  // whatever stands where he appears dies
 }
 
 int skill(const Q2Server& s) {
@@ -442,6 +450,7 @@ void drop_items(Q2Server& s) {
         map_trace(s, e.origin, mins, maxs, e.origin - sh::Vec3f{0, 0, 128},
                   sh::kSqSolid | sh::kSqWindow, static_cast<int>(i));
     if (t.start_solid) {
+      s.console.push_back("droptofloor: " + e.classname + " startsolid at " + q2_pos(e.origin));
       e.gone = true;
       continue;
     }
@@ -483,8 +492,10 @@ void touch_items(Q2Server& s, int slot) {
     // A weapon that stays (`dmflags` 4; always in coop) is refused to one who holds it, and stays
     // when taken; in coop with `coop_pickup_weapons` a holder may take a copy nobody has yet.
     const bool coop = !deathmatch(s) && s.cvars.find("coop")->on();
-    const bool stays = (it.kind == SqKind::weapon && (fight_dmflag(s, 4) || coop)) ||
-                       (it.kind == SqKind::key && coop);
+    const std::string_view cn = it.classname;
+    const bool stays =
+        (it.kind == SqKind::weapon && (fight_anyflag(s, 4) || coop)) ||
+        (coop && (it.kind == SqKind::key || cn == "item_breather" || cn == "item_enviro"));
     const int cube = (item.spawnflags >> 8) & 0xff;  // a coop power cube's bit, once a player
     if (coop && it.kind == SqKind::key && item.classname == "key_power_cube") {
       if ((p.body.cubes & cube) != 0) continue;
@@ -497,15 +508,16 @@ void touch_items(Q2Server& s, int slot) {
     int count = 0;  // ammo the map gives a `count` of
     if (it.kind == SqKind::ammo && item.block >= 0 && size_t(item.block) < s.map->entities.size())
       count = std::atoi(s.map->entities[size_t(item.block)].get_any_case("count").c_str());
+    const int grenades = p.body.ammo[static_cast<int>(SqAmmo::grenades)];
     if (!sq_pick_up(item.item, p.body, deathmatch(s), skill(s), s.level_time, count)) continue;
     p.health = static_cast<float>(p.body.health);
-    if (it.kind == SqKind::weapon && fight_dmflag(s, 8192)) {  // infinite ammo: a full stock
+    if (it.kind == SqKind::weapon && fight_anyflag(s, 8192)) {  // infinite ammo: a full stock
       const int k = static_cast<int>(it.ammo);
       p.body.ammo[k] = std::max(p.body.ammo[k], std::min(1000, p.body.max_ammo[k]));
     }
     if (coop && item.classname == "key_power_cube") p.body.cubes |= cube;
     p.taken.push_back(item.item);
-    fight_took(s, slot, item.item);
+    fight_took(s, slot, item.item, grenades);
     if (stays && coop) item.coop_taken = true;
     if (stays) continue;
     if (std::string_view(it.classname) == "item_health_mega") {
@@ -550,6 +562,7 @@ void item_frame(Q2Server& s) {
 void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   q2_mods_pre_think(s, slot);
   Q2Player& p = s.players[slot];
+  if (s.clients[slot].spectator && s.intermission_at <= 0 && spectate_command(s, slot, c)) return;
   ge::classic::Q2Move pm;
   pm.s = p.move;
   if (s.intermission_at > 0)
@@ -575,6 +588,7 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   p.move = pm.s;
   p.changed = false;
   for (int i = 0; i < 3; i++) p.cmd_angles[i] = pm.cmd.angles[i];
+  if (!p.alive) p.pressed = static_cast<uint8_t>(p.pressed | (c.buttons & ~p.buttons));
   p.buttons = c.buttons;
   p.view_angles = pm.view_angles;
   p.mins = pm.mins;
@@ -625,6 +639,7 @@ void take_packet(Q2Server& s, const sh::Packet& pk) {
       continue;
     }
     run_command(s, pk.client, pk.cmds[i]);
+    spectate_follow(s, pk.client);  // the chase cameras on him, behind his new view
   }
   p.last_sequence = pk.sequence;
   q2_mods_post_think(s, pk.client);
@@ -636,8 +651,6 @@ void take_packet(Q2Server& s, const sh::Packet& pk) {
 void start_intermission(Q2Server& s) {
   s.intermission_at = s.level_time;
   screens_intermission(s);
-  if (deathmatch(s) || s.cvars.find("coop")->on())  // the scores, for everyone
-    for (const std::string& l : fight_scores(s)) fight_print(s, -1, l + "\n");
   for (const std::string& l : fight_midair_report(s)) fight_print(s, -1, l);
   // One of the first four intermission spots: 0..3 steps on from the first, wrapping round
   // (so with three, the first twice as often); none, the first start.
@@ -675,13 +688,16 @@ void start_intermission(Q2Server& s) {
   }
 }
 
-// The intermission's frame: past 5 s, any button pressed leaves for the next map; in deathmatch,
-// after 20 s it leaves by itself.
+// The intermission's frame: past 5 s, any button pressed leaves for the next map, however long
+// it takes; a deathmatch with no person in it (bots alone) leaves by itself after 20 s.
 void intermission_frame(Q2Server& s) {
   if (s.game_over || !s.pending_map.empty() ||
       s.level_time <= s.intermission_at + kIntermissionHold + 0.001)
     return;
-  const bool over = deathmatch(s) && s.level_time + 0.001 >= s.intermission_at + kIntermissionMost;
+  bool people = false;
+  for (const ClientInfo& c : s.clients) people = people || (c.active && !c.bot);
+  const bool over =
+      deathmatch(s) && !people && s.level_time + 0.001 >= s.intermission_at + kIntermissionMost;
   for (int i = 0; i < sh::kMaxClients; i++)
     if (over || (s.clients[i].active && s.players[i].buttons != 0)) {
       s.pending_map = s.next_map;
@@ -715,6 +731,9 @@ void view_frame(Q2Server& s, int slot) {
   set.bob_up = static_cast<float>(s.cvars.find("bob_up")->number);
   set.bob_pitch = static_cast<float>(s.cvars.find("bob_pitch")->number);
   set.bob_roll = static_cast<float>(s.cvars.find("bob_roll")->number);
+  set.gun_x = static_cast<float>(s.cvars.find("gun_x")->number);
+  set.gun_y = static_cast<float>(s.cvars.find("gun_y")->number);
+  set.gun_z = static_cast<float>(s.cvars.find("gun_z")->number);
   ge::classic::Q2ViewIn in;
   in.velocity = unpack(p.move.velocity);
   in.view_angles = p.view_angles;
@@ -737,20 +756,25 @@ void view_frame(Q2Server& s, int slot) {
   p.dead_angles = {ge::classic::kQ2DeadPitch, yaw, ge::classic::kQ2DeadRoll};
 }
 
-// The dead who may respawn: by pressing attack (deathmatch and co-op), or at once with `dmflags`
-// 1024 (forced respawn, deathmatch only); by himself after 2 s in midair.
+// The dead who may respawn, on the first frame past 1 s after dying: by a fresh press of attack
+// since he died (deathmatch; holding it through the death does not count) or of any button
+// (co-op), or at once with `dmflags` 1024 (forced respawn, deathmatch only); by himself after 2 s
+// in midair.
 void respawn_frame(Q2Server& s) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2Player& p = s.players[i];
     if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
-    if (s.level_time < p.died_at + kRespawnAfter - 0.001) continue;
+    if (s.level_time <= p.died_at + kRespawnAfter + 0.001) continue;
     const bool by_himself =
         fight_midair(s) && s.level_time >= p.died_at + sh::kMidairRespawn - 0.001;
-    // Co-op respawns by attack too (single player asks for the load menu, q2_save.hpp).
-    const bool attack = (p.buttons & sh::kButtonAttack) != 0;
+    // Single player asks for the load menu instead (q2_save.hpp).
+    const bool attack = (p.pressed & sh::kButtonAttack) != 0;
     if ((deathmatch(s) && (attack || fight_dmflag(s, 1024) || by_himself)) ||
-        (!deathmatch(s) && coop(s) && attack))
+        (coop(s) && p.pressed != 0)) {
+      // A respawn takes his wish as it stands: to watching, or back, with no check and no word.
+      if (deathmatch(s)) s.clients[i].spectator = p.want_spectator;
       spawn_player(s, i, true);
+    }
   }
 }
 
@@ -795,6 +819,17 @@ void rules_frame(Q2Server& s) {
   s.level_time = double(s.frame_number) * kFrameSeconds;
   for (Q2Player& p : s.players) p.pushed = {};
   q2_mods_start_frame(s);
+  bool placed[sh::kMaxClients] = {};
+  spectate_frame(s, placed);  // before anything else moves
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    if (!placed[i]) continue;
+    spawn_player(s, i, false);  // no body left behind, at a spawn spot as a respawn picks
+    s.players[i].respawn_time = s.level_time;
+    if (s.clients[i].spectator) continue;
+    arrival_flash(s, i, "sq_login");  // back to play: the login flash and a short hold
+    s.players[i].move.flags |= ge::classic::kSqTimeTeleport;
+    s.players[i].move.time = kRespawnHold;
+  }
   item_frame(s);
   screens_frame(s);
   if (s.intermission_at > 0) {
@@ -877,9 +912,13 @@ void fill_rows(Q2Server& s) {
         still ? sh::Vec3f{0, 0, s.intermission_at > 0 ? 0 : p.view_height} : p.seen.offset;
     const sh::Vec3f kick = still ? sh::Vec3f{} : p.seen.kick;
     const float offs[3] = {off.x, off.y, off.z}, kicks[3] = {kick.x, kick.y, kick.z};
+    const sh::Vec3f go = p.seen.gun_offset, ga = p.seen.gun_angles;
+    const float guns[6] = {go.x, go.y, go.z, ga.x, ga.y, ga.z};
     for (int k = 0; k < 3; k++) {
       wc.numbers.view_offset[k] = offs[k];
       wc.numbers.kick[k] = kicks[k];
+      wc.numbers.gun_offset[k] = still ? 0 : guns[k];
+      wc.numbers.gun_angles[k] = still ? 0 : guns[k + 3];
     }
     wc.numbers.fov = fight_fov(s, i);
     for (int k = 0; k < 4; k++) wc.numbers.blend[k] = s.intermission_at > 0 ? 0 : p.blend[k];
@@ -1093,6 +1132,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     return false;
   }
   s.restored = 0;
+  s.cvars.apply_latched();  // the settings that wait for a new map (cheats, gamename, ...)
   // A load asked (q2_save.hpp) sets the save's game first.
   if (!s.load_file.empty() && !q2_load_begin(s, error)) return false;
   q2_leave(s);  // the level left kept for a return within its unit, or the unit's forgotten
@@ -1107,7 +1147,8 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     s.looks = worn->looks;
   s.q1_physics = s.cvars.find("sv_physics")->value == "q1";
   s.entities.clear();
-  int cubes = 0;  // the power cubes so far (each its own bit in coop)
+  int cubes = 0;                // the power cubes so far (each its own bit in coop)
+  std::vector<char> inhibited;  // by the map's order: left out by skill or mode
   for (size_t i = 1; i < s.map->entities.size(); i++) {
     const ge::brush::Entity& b = s.map->entities[i];
     Q2Entity e;
@@ -1132,13 +1173,14 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
       e.origin.z = 64;
     e.item = sq_item(e.classname);
     if (e.item >= 0) e.team = b.get_any_case("team");
-    e.gone = left_out(s, e.spawnflags) || dm_left_out(s, e.item);
+    inhibited.push_back(left_out(s, e.spawnflags) ? 1 : 0);
+    e.gone = inhibited.back() != 0 || dm_left_out(s, e.item);
     // An item keeps its own flags only as a power cube: TRIGGER_SPAWN (1) hides it until used,
     // NO_TOUCH (2) leaves it lying there, never taken. Any other item's are cleared, and said.
     if (e.item >= 0 && (e.spawnflags & 0xff) != 0 && e.classname != "key_power_cube") {
-      s.console.push_back("A " + e.classname + " at " + std::to_string(int(e.origin.x)) + " " +
-                          std::to_string(int(e.origin.y)) +
-                          " has spawn flags only a power cube may have; they are cleared.");
+      if (!e.gone)
+        s.console.push_back(e.classname + " at " + q2_pos(e.origin) +
+                            " has invalid spawnflags set");
       e.spawnflags &= ~0xff;
     }
     if (e.item >= 0 && (e.spawnflags & 1) != 0) e.hidden = true;
@@ -1183,8 +1225,12 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     const std::string& g = s.map->entities[0].get_any_case("gravity");
     s.cvars.set("sv_gravity", g.empty() ? "800" : g, con::Source::local);
   }
+  q2_spawn_lines(s, inhibited);
   map_spawn(s);
   monster_spawn(s);
+  actor_spawn(s);  // an actor's own health (q2_actor.hpp)
+  q2_count_lines(s, static_cast<int>(std::count(inhibited.begin(), inhibited.end(), 1)));
+  q2_start_lines(s);
   s.host_time = 0;
   s.map_stopped = false;
   s.pending_map.clear();
@@ -1271,6 +1317,7 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   }
   c = ClientInfo{};
   c.active = true;
+  if (s.sv.set.maxclients > 1) s.console.push_back(name + " connected");  // the console's alone
   c.spectator = spectator;
   c.bot = bot;
   c.userid = s.next_userid++;
@@ -1279,6 +1326,7 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   pool_slot(s, slot).speedjump = false;
   s.players[slot] = Q2Player{};
   s.players[slot].time_budget_ms = kTimeBudgetMs;
+  s.players[slot].want_spectator = spectator && deathmatch(s);
   if (s.map != nullptr) q2_mods_connect(s, slot);
   if (s.map != nullptr) spawn_player(s, slot, false);
   if (s.map != nullptr) fill_rows(s);
@@ -1354,7 +1402,7 @@ CommandResult sq_client_command(void* r, int slot, const std::string& line) {
   }
   if (!between && cmd == "kill") {
     Q2Player& p = s.players[slot];
-    if (p.alive && s.level_time >= p.spawned_at + kKillAfter) {
+    if (p.alive && s.level_time >= p.respawn_time + kKillAfter) {
       p.god = false;
       fight_kill(s, slot, slot, -1);
     }
@@ -1382,7 +1430,14 @@ bool sq_console(void* r, const std::string& line) {
   if (w.count == 0) return true;
   const std::string cmd = ge::progs::word(w, 0);
   if ((cmd == "map" || cmd == "changelevel" || cmd == "gamemap") && w.count >= 2) {
-    s.pending_map = ge::progs::word(w, 1);
+    // A level string (q2_campaign.hpp): its shows first, the map, the spawn spot; a leading `!`
+    // (stop the server when the map is missing) is taken off.
+    std::string text(ge::progs::word(w, 1));
+    if (!text.empty() && text.front() == '!') text.erase(0, 1);
+    const LevelString ls = level_string(text);
+    s.pending_map = ls.map;
+    s.cinematic = ls.shows;
+    s.next_spawn = ls.spawn;
     s.pending_change = cmd == "map" ? MapChange::new_game : MapChange::change_level;
     return true;
   }
@@ -1400,6 +1455,17 @@ bool sq_console(void* r, const std::string& line) {
     s.console.push_back("console: " + text);
     s.out.events.push_back(std::move(ev));
     s.out.events_total++;
+    return true;
+  }
+  if (cmd == "sv") {  // the game's own server words
+    const std::string word = w.count >= 2 ? std::string(ge::progs::word(w, 1)) : std::string();
+    if (q2_same_name(word, "test")) {
+      s.console.push_back("Svcmd_Test_f()");
+      return true;
+    }
+    for (const char* ip : {"addip", "removeip", "listip", "writeip"})
+      if (q2_same_name(word, ip)) return false;  // the network server's filter answers these
+    s.console.push_back("Unknown server command \"" + word + "\"");
     return true;
   }
   if (cmd == "restart") {
@@ -1425,6 +1491,7 @@ void sq_user_info(void* r, int slot, const std::string& key, const std::string& 
   Q2Server& s = sq(r);
   if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].active) return;
   set_info(s.clients[slot].userinfo, key, value);
+  if (key == "spectator") s.players[slot].want_spectator = spectate_wish(s, slot);
   if (key == "cl_speedjump") pool_slot(s, slot).speedjump = value == "1";  // the easy jump's ask
   if (key == kAimHelpKey) pool_slot(s, slot);  // the grant lands on a seat the pool keeps
   note_aim_help_info(s, slot, key, value);
@@ -1497,6 +1564,7 @@ std::unique_ptr<Q2Server> make_q2_server(const Q2ServerOptions& opt) {
   s->rng = ge::core::make_rng(opt.seed);
   register_cvars(*s);
   add_aim_help(*s);
+  s->console.push_back("==== InitGame ====");
   return s;
 }
 
@@ -1607,14 +1675,15 @@ bool sq_give(Q2Server& s, int slot, int item) {
   if (!p.alive) return false;
   const SqItem& it = kSqItems[item];
   p.body.health = static_cast<int>(p.health);
+  const int grenades = p.body.ammo[static_cast<int>(SqAmmo::grenades)];
   if (!sq_pick_up(item, p.body, deathmatch(s), skill(s), s.level_time)) return false;
   p.health = static_cast<float>(p.body.health);
-  if (it.kind == SqKind::weapon && fight_dmflag(s, 8192)) {  // infinite ammo: a full stock
+  if (it.kind == SqKind::weapon && fight_anyflag(s, 8192)) {  // infinite ammo: a full stock
     const int k = static_cast<int>(it.ammo);
     p.body.ammo[k] = std::max(p.body.ammo[k], std::min(1000, p.body.max_ammo[k]));
   }
   p.taken.push_back(item);
-  fight_took(s, slot, item);
+  fight_took(s, slot, item, grenades);
   return true;
 }
 

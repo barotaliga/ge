@@ -118,6 +118,48 @@ std::string_view wrapping_name(Wrapping w) {
   return "none";
 }
 
+bool unpack_layer(std::span<const uint8_t> bytes, std::vector<uint8_t>& out, std::string& error,
+                  size_t limit) {
+  out.clear();
+  const Wrapping w = wrapping_of(bytes);
+  switch (w) {
+    case Wrapping::gzip: {
+      auto u = core::inflate_gzip(bytes);
+      if (!u) {
+        error = "the gzip file does not unpack (torn, or its checksum is off)";
+        return false;
+      }
+      out = std::move(*u);
+      break;
+    }
+    case Wrapping::zstd: {
+      bool cut = false;
+      if (!zstd_unpack(bytes, out, cut, error, limit)) return false;
+      if (cut) {
+        error = "the zstd file is cut short";
+        return false;
+      }
+      break;
+    }
+    case Wrapping::xz:
+      if (!xz_unpack(bytes, out, error, limit)) return false;
+      break;
+    case Wrapping::bzip2:
+      if (!bzip2_unpack(bytes, out, error, limit)) return false;
+      break;
+    default:
+      error = "the file is not packed by gzip, zstd, xz or bzip2 (it opens as " +
+              std::string(wrapping_name(w)) + ")";
+      return false;
+  }
+  if (out.size() > limit) {
+    error = "the file unpacks to more than " + std::to_string(limit) + " bytes";
+    out.clear();
+    return false;
+  }
+  return true;
+}
+
 bool unpack_one(std::vector<uint8_t> bytes, Unpacked& out, std::string& error,
                 const std::function<bool(std::string_view)>& pick) {
   out = Unpacked{};

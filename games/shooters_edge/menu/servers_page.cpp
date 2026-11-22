@@ -20,6 +20,7 @@
 #include "shooters_edge/menu/servers_page.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -30,6 +31,21 @@
 #include "ui/font.hpp"
 
 namespace shooters_edge::menu {
+
+namespace {
+
+// Whether `w` is a web address (`http://` or `https://`, any case).
+bool web_address(std::string_view w) {
+  const auto starts = [&w](std::string_view p) {
+    if (w.size() < p.size()) return false;
+    for (size_t i = 0; i < p.size(); ++i)
+      if (std::tolower(static_cast<unsigned char>(w[i])) != p[i]) return false;
+    return true;
+  };
+  return starts("http://") || starts("https://");
+}
+
+}  // namespace
 
 namespace {
 
@@ -270,6 +286,10 @@ void ServersPage::add_cvars(ge::console::Console& con) {
       &live_update_);
   number("sb_autohide", "1", "Whether joining a server from JOIN A GAME closes the menu.",
          "0: the menu stays open; 1: it closes (the default); 2: it closes too", 0, 2, &autohide_);
+  flag("sb_colorservers", "0",
+       "Whether JOIN A GAME colours each server: grey when locked, green when very near.",
+       "0: no (the default); 1: grey for a password or a cheat guard, green under 30 ms",
+       &colour_servers_);
   flag("sb_findroutes", "0",
        "Whether JOIN A GAME looks for faster routes to the servers through forwarders.",
        "0: no (the default); 1: yes, and joining goes the fastest way", &find_routes_);
@@ -317,12 +337,44 @@ void ServersPage::add_cvars(ge::console::Console& con) {
   con_ = &con;
 }
 
+namespace {
+
+// Quake II's `ui_sortservers` as keys: one column either way, ties by the name the same way.
+std::vector<gn::ServerSortKey> game_sort_keys(int32_t v) {
+  if (v == 0) return {};  // the order found: `update` puts the rows back in the list's order
+  constexpr gn::ServerColumn kColumn[] = {gn::ServerColumn::name, gn::ServerColumn::game,
+                                          gn::ServerColumn::map, gn::ServerColumn::players,
+                                          gn::ServerColumn::ping};
+  const bool back = v < 0;
+  const gn::ServerColumn c = kColumn[std::clamp(std::abs(v), 1, 5) - 1];
+  std::vector<gn::ServerSortKey> keys = {
+      {c, c == gn::ServerColumn::players ? !back : back, {}}};  // its players run most first
+  if (c != gn::ServerColumn::name) keys.push_back({gn::ServerColumn::name, back, {}});
+  return keys;
+}
+
+}  // namespace
+
+// The servers asked a second: `sb_infospersec`, or Quake II's `ui_pingrate` while it is bound.
+int32_t ServersPage::ping_rate() const {
+  if (game_ping_rate < 0) return infos_per_s_;
+  if (game_ping_rate > 0) return std::min(game_ping_rate, 100);
+  const ge::console::Cvar* rate = con_ != nullptr ? con_->cvars().find("rate") : nullptr;
+  const int32_t bytes = rate != nullptr ? std::atoi(rate->value.c_str()) : 15000;
+  return std::clamp(bytes / 450, 1, 100);  // a reply's 450 bytes in the player's rate
+}
+
 void ServersPage::read_settings() {
+  if (game_sort != game_sort_seen_) {
+    game_sort_seen_ = game_sort;
+    sort_seen_ = "\x01";  // read again below
+  }
   if (sort_servers_ != sort_seen_) {
     sort_seen_ = sort_servers_;
     sort_keys_.clear();
+    if (game_sort != kNoGameSort) sort_keys_ = game_sort_keys(game_sort);
     bool down = false;
-    for (const char c : sort_servers_) {
+    for (const char c : game_sort != kNoGameSort ? std::string() : sort_servers_) {
       if (c == '-') {
         down = true;
         continue;
@@ -345,6 +397,7 @@ bool ServersPage::sorted_by(gn::ServerColumn c) const {
 }
 
 std::string ServersPage::sort_words() const {
+  if (game_sort == 0) return "as found";  // Quake II's ui_sortservers 0
   if (sort_keys_.empty()) return "busy first";
   std::string out;
   for (size_t i = 0; i < sort_keys_.size() && i < 2; i++) {
@@ -360,6 +413,11 @@ std::string ServersPage::sort_words() const {
 }
 
 void ServersPage::sort_step(int dir) {
+  if (game_sort != kNoGameSort) {  // Quake II's columns in turn, its setting left as it is
+    const int32_t at = std::abs(game_sort);
+    game_sort = ((at == 0 ? (dir > 0 ? 0 : 1) : at) - 1 + dir + 5) % 5 + 1;
+    return;
+  }
   // The code in front now, and the next or last in LEFT and RIGHT's order.
   const std::string& text = sort_servers_;
   const size_t lead = !text.empty() && text[0] == '-' ? 1 : 0;
@@ -408,6 +466,8 @@ bool ServersPage::filter_key(char letter) {
     set_cvar("sb_mode", mode_.empty()       ? (modes.empty() ? "" : modes.front())
                         : it == modes.end() ? ""
                                             : *it);
+  } else if (letter == 'd' && game_sort != kNoGameSort) {
+    game_sort = -game_sort;  // Quake II's sort turned round, its setting left as it is
   } else if (letter == 'd') {
     // The sort turned round: a - in front, or the one there taken away.
     std::string t = sort_servers_;
@@ -495,14 +555,46 @@ bool ServersPage::open(std::string* why) {
     }
     if (std::find(into.begin(), into.end(), a) == into.end()) into.push_back(a);
   };
-  for (const std::string& m : masters) resolve(m, 27000, config_.masters);
+  web_lists_.clear();
+  for (const std::string& m : masters) {
+    // A web list: `http://...`, `+http://...` (6-byte records) or `+<n>http://...`.
+    std::string_view w = m;
+    int record = 0;
+    if (!w.empty() && (w[0] == '+' || w[0] == '-')) {
+      w.remove_prefix(1);
+      int n = 0;
+      bool digits = false;
+      while (!w.empty() && w[0] >= '0' && w[0] <= '9' && n < 100000) {
+        n = n * 10 + (w[0] - '0');
+        digits = true;
+        w.remove_prefix(1);
+      }
+      record = digits ? n : 6;
+      if (record < 6 || !web_address(w)) {
+        if (con_ != nullptr) con_->print("Ignoring invalid master URL: " + m);
+        continue;
+      }
+    }
+    if (web_address(w)) {
+      web_lists_.push_back({.url = std::string(w), .record = record, .fetch = {}, .over = true});
+      continue;
+    }
+    resolve(m, 27000, config_.masters);
+  }
   if (query_.protocol != 0)
     for (const std::string& m : split_words(hub_masters_))
       resolve(m, gn::kMasterPort, config_.own_masters);
   for (const std::string& s : split_words(servers_)) resolve(s, lan_first_, config_.servers);
+  // The address book a game keeps (Quake II's `adr0`, `adr1`, ...): read in order until one is
+  // not registered, the empty ones skipped.
+  for (int k = 0; con_ != nullptr; k++) {
+    const ge::console::Cvar* adr = con_->cvars().find("adr" + std::to_string(k));
+    if (adr == nullptr) break;
+    for (const std::string& s : split_words(adr->value)) resolve(s, lan_first_, config_.servers);
+  }
   config_.tries = info_retries_;
   config_.timeout_us = int64_t{info_timeout_} * 1000;
-  config_.gap_us = 1000000 / std::max(1, infos_per_s_);
+  config_.gap_us = 1000000 / std::max(1, ping_rate());
   config_.master_tries = master_retries_;
   config_.master_timeout_us = int64_t{master_timeout_} * 1000;
   const bool first = !inited_ || list_.transport != t;
@@ -594,6 +686,21 @@ void ServersPage::write_caches() {
 
 void ServersPage::refresh() {
   gn::server_list_refresh(list_, now_us_);
+  // The web lists asked again: no redirect followed, given up after `cl_http_blocking_timeout` s
+  // of silence (15 when the game has none).
+  double wait_s = 15;
+  if (con_ != nullptr)
+    if (const ge::console::Cvar* v = con_->cvars().find("cl_http_blocking_timeout"))
+      wait_s = std::max(1.0, std::atof(v->value.c_str()));
+  for (WebList& l : web_lists_) {
+    gn::HttpOptions o;
+    o.user_agent = "shooters_edge";
+    o.redirects = 0;
+    o.stall_s = wait_s;
+    o.most_bytes = 1024 * 1024 - 1;
+    gn::http_start(l.fetch, l.url, o, static_cast<double>(now_us_) / 1e6);
+    l.over = false;
+  }
   add_cached();
   cache_written_ = false;
   routing_ = routes_ready_ = false;
@@ -617,6 +724,7 @@ void ServersPage::frame(double dt) {
     gn::server_list_requery(list_, rows_[static_cast<size_t>(selected_)]);
     live_s_ = 0;
   }
+  web_frame();
   gn::server_list_update(list_, now_us_);
   write_caches();
   route_frame();
@@ -631,6 +739,34 @@ void ServersPage::frame(double dt) {
   }
 }
 
+// The web lists moved on; each that came read into the list, each that failed said.
+void ServersPage::web_frame() {
+  for (WebList& l : web_lists_) {
+    if (l.over || !gn::http_step(l.fetch, static_cast<double>(now_us_) / 1e6)) continue;
+    l.over = true;
+    const gn::HttpFetch& f = l.fetch;
+    if (f.state != gn::HttpState::done || f.status >= 400) {
+      if (con_ != nullptr)
+        con_->print("[HTTP] Failed to fetch '" + l.url + "': " +
+                    (f.state == gn::HttpState::done ? gn::http_status_text(f.status) : f.error));
+      continue;
+    }
+    std::vector<gn::Address> found;
+    if (l.record == 0) {
+      found = gn::parse_address_lines(
+          std::string_view(reinterpret_cast<const char*>(f.body.data()), f.body.size()));
+    } else {
+      const auto n = static_cast<size_t>(l.record);
+      for (size_t at = 0; at + n <= f.body.size(); at += n) {
+        const uint8_t* b = f.body.data() + at;
+        found.push_back(gn::ipv4(b[0], b[1], b[2], b[3], static_cast<uint16_t>(b[4] << 8 | b[5])));
+      }
+    }
+    for (const gn::Address& a : found)
+      gn::server_list_add(list_, a, gn::kServerFromMaster, now_us_);
+  }
+}
+
 void ServersPage::build_rows() {
   read_settings();
   filter_ = gn::ServerFilter{};
@@ -642,6 +778,12 @@ void ServersPage::build_rows() {
   filter_.max_ping_ms = effective_ping();
   filter_.info = info_rules_;
   gn::server_list_view(list_, filter_, sort_keys_, rows_);
+  if (game_sort == 0)  // Quake II's 0: the order the servers were found, the silent last
+    std::stable_sort(rows_.begin(), rows_.end(), [&](int a, int b) {
+      const bool sa = list_.entries[static_cast<size_t>(a)].ping_ms < 0;
+      const bool sb = list_.entries[static_cast<size_t>(b)].ping_ms < 0;
+      return sa != sb ? sb : a < b;
+    });
   if (show_proxies_ != 1)  // sb_showproxies: the forwarders hidden (0) or alone (2)
     rows_.erase(std::remove_if(rows_.begin(), rows_.end(),
                                [&](int i) {
@@ -863,8 +1005,9 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
     list.rect(cell, sel ? style.accent : style.slab, style.radius * s);
     const float base = cell.y + cell.h * 0.5f + word * 0.36f;
     const bool full = in.max_players > 0 && in.players >= in.max_players;
-    const ui::Color tc = sel ? style.text_focus : style.text;
-    const ui::Color dim = sel ? style.text_focus : style.text_dim;
+    ui::Color tc = sel ? style.text_focus : style.text;
+    ui::Color dim = sel ? style.text_focus : style.text_dim;
+    if (ui::Color c; colour_servers_ && row_colour(in, se.ping_ms, c)) tc = dim = c;
     const std::string name = (in.locked ? "* " : "") + printable(in.name);
     const auto key = [&](const char* k) {
       for (const auto& [kk, v] : in.keys)
@@ -941,6 +1084,30 @@ void ServersPage::route_frame() {
     table_ = ge::forward::route_finder_table(finder_, list_);
     routes_ready_ = true;
   }
+}
+
+bool ServersPage::row_colour(const gn::ServerInfo& in, int ping_ms, ui::Color& out) {
+  const auto key = [&](std::string_view k) {
+    for (const auto& [kk, v] : in.keys)
+      if (kk.size() == k.size() && std::equal(kk.begin(), kk.end(), k.begin(), [](char a, char b) {
+            return std::tolower(static_cast<unsigned char>(a)) ==
+                   std::tolower(static_cast<unsigned char>(b));
+          }))
+        return v;
+    return std::string();
+  };
+  std::string nofake = key("nofake");
+  for (char& ch : nofake) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+  if (in.locked || std::atoi(key("needpass").c_str()) >= 1 ||
+      std::atoi(key("anticheat").c_str()) >= 2 || nofake == "ENABLED") {
+    out = ui::hex(0x7f7f7f);
+    return true;
+  }
+  if (ping_ms >= 0 && ping_ms < 30) {
+    out = ui::hex(0x00ff00);
+    return true;
+  }
+  return false;
 }
 
 std::string ServersPage::ping_words(int index, int ping_ms) const {

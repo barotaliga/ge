@@ -165,6 +165,24 @@ void q2_fountain(const double at[3], uint32_t seed, Palette palette, Particles* 
 enum class Q2Trail : uint8_t { blood, smoke, green_blood };
 void q2_column_trail(const double from[3], const double to[3], int colour, uint32_t seed,
                      Palette palette, Particles* out);
+// The trap's glow at `at` (its origin raised 32 units): a column of yellow specks rising from 14
+// below to 50 above it, a speck every 5 units, and 8 thrown out from round it that fall.
+void q2_trap(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// The disruptor's bolt: two black strands woven about its line, a speck every 3 units, rising
+// slowly, 0.5 s each.
+void q2_tracker_trail(const double from[3], const double to[3], uint32_t seed, Palette palette,
+                      Particles* out);
+// A tracker's dark shell: 300 black specks on a sphere of `radius_u` units round `at`, drawn for
+// one frame.
+void q2_tracker_shell(const double at[3], double radius_u, uint32_t seed, Palette palette,
+                      Particles* out);
+// A power screen's or shield's splash: 256 green specks on a sphere of `radius_u` units round `at`,
+// moving out at 40 units a second, 0.5 to 0.8 s each.
+void q2_power_splash(const double at[3], double radius_u, uint32_t seed, Palette palette,
+                     Particles* out);
+// The widow's beam-out, `ratio` (0..1) of its way through: 300 specks on a sphere of 45 × ratio
+// units round `at` in its four colours, drawn for one frame.
+void q2_beam_out(const double at[3], double ratio, uint32_t seed, Palette palette, Particles* out);
 void q2_ion_trail(const double from[3], const double to[3], int& side, uint32_t seed,
                   Palette palette, Particles* out);
 inline constexpr int kSqTrailStart = 1024, kSqTrailFloor = 100, kSqTrailFade = 5;

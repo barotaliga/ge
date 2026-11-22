@@ -42,6 +42,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "classic/q2_move.hpp"
 
@@ -69,8 +70,12 @@ void map_frame(Q2Server& s);
 // leans on (a door's message).
 void map_touch(Q2Server& s, int slot);
 
+// An activator that is nobody at all: not a player (-1 is that) and not the entity firing. A
+// put-off use handed it says `Think_Delay with no activator` on the console.
+inline constexpr int kNoActivator = -1000;
+
 // Uses entity `e`'s targets (its delay, message, killtarget and targets), `activator` a player's
-// slot or -1.
+// slot, -1 or kNoActivator.
 void map_use_targets(Q2Server& s, int e, int activator);
 
 // Monster `entity` (alive) touching the map: a door's touch field opens the door, unless it says
@@ -90,6 +95,9 @@ inline constexpr sh::Vec3f kDiscMins{-32, -32, -24}, kDiscMaxs{32, 32, -16};
 // when `mask` has the solid bit and, when it has the monster bit, every living monster but map
 // entity `skip` (`mask` the contents that stop it). The hit entity is the world row (0 the world,
 // a mover's, disc's or monster's row) or -1 for none.
+// What is at `p`: the world's contents and every brush mover's that holds it, where it stands now
+// (a func_water's water moves with it: base3's tank a button floods). 0 without a map.
+int32_t map_contents(const Q2Server& s, sh::Vec3f p);
 ge::classic::Q2Trace map_trace(const Q2Server& s, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
                                sh::Vec3f end, int32_t mask, int skip = -1);
 
@@ -122,6 +130,10 @@ void map_rows(Q2Server& s);
 // areas joined.
 bool map_areas_connected(const Q2Server& s, sh::Vec3f a, sh::Vec3f b);
 bool map_hears(const Q2Server& s, sh::Vec3f from, sh::Vec3f to);
+// The areas an eye at `eye` sees into, one bit an area (area n bit n % 8 of byte n / 8): those
+// joined to its own; every area when it stands in none (outside or in solid); empty when the map
+// has no areas (every area shown).
+void map_area_bits(const Q2Server& s, sh::Vec3f eye, std::vector<uint8_t>& out);
 
 // A kept level read back (q2_save.hpp): every cross-level target not yet fired checks again
 // its `delay` from now.

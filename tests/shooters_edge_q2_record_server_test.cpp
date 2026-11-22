@@ -7,6 +7,7 @@
 // ge:summary Tests: Quake II's dedicated server recorded and played back from every view
 // ge:keywords test q2-game record playback player-view seek server-record q2_player_view
 // ge:skill net replay testing
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -215,4 +216,44 @@ TEST(a_q2_server_beats_to_its_master_once_set) {
   gn::sim_advance(net, s.now_us + 1000000);
   listen();
   CHECK(!heard.empty() && heard.back() == "\xff\xff\xff\xffshutdown");
+}
+
+// `quit [reason]` and `recycle [reason]`: every player told why at the high level and sent the
+// disconnect, or the reconnect for a recycle; the server holds no player after.
+TEST(a_q2_server_says_goodbye_with_the_operators_reason) {
+  for (const bool restart : {false, true}) {
+    sv::ServerConfig c;
+    c.root = hall_folder();
+    c.map = "hall";
+    c.maxclients = kSlots;
+    gn::LinkConditions lan;
+    gn::SimNetwork net = gn::make_sim_network(5, lan);
+    gn::Transport port, mine;
+    gn::open_sim_transport(port, net, gn::sim_address(0, cn::kPortQ2));
+    gn::open_sim_transport(mine, net, gn::sim_address(1, 27901));
+    sv::Server s;
+    std::string error;
+    const sv::ServerGame& g = cn::q2_game();
+    CHECK_MSG(sv::server_open(s, g, c, &port, nullptr, error), error);
+    if (!s.state) return;
+    cn::Q2ClientEnd eve;
+    cn::Q2ClientConfig cc;
+    cc.name = "eve";
+    cn::q2_client_start(eve, mine, gn::sim_address(0, cn::kPortQ2), cc,
+                        static_cast<double>(s.now_us) / 1e6);
+    const auto step = [&] {
+      gn::sim_advance(net, s.now_us);
+      cn::q2_client_tick(eve, s.now_us);
+      sv::server_frame(s);
+    };
+    for (int f = 0; f < 200; f++) step();
+    CHECK_MSG(eve.stage == cn::ClientStage::active, eve.refused);
+    g.quit(s.state, "going down for now", restart);
+    for (int f = 0; f < 4; f++) step();
+    const std::string want =
+        restart ? "Server restarted: going down for now\n" : "Server quit: going down for now\n";
+    CHECK(std::find(eve.prints.begin(), eve.prints.end(), want) != eve.prints.end());
+    CHECK(restart || eve.stage == cn::ClientStage::dropped);
+    sv::server_close(s);
+  }
 }

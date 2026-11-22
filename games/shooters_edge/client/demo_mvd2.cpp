@@ -242,6 +242,7 @@ struct Mvd2Reader {
     level.server_count = m.i32();
     level.game = m.str();
     level.observer = m.i16();
+    level.flags = static_cast<uint8_t>(flags & 0xFF);
     level.config_strings.assign(size_t(kSlots), std::string());
     for (;;) {
       const int i = m.u16();
@@ -376,6 +377,12 @@ struct Mvd2ToQ2 final : ConvertStream {
   Q2PlayerState held_player;
   std::vector<std::vector<uint8_t>> blocks;
 
+  std::unique_ptr<ConvertStream> clone() const override {
+    auto copy = std::make_unique<Mvd2ToQ2>(*this);
+    copy->blocks.clear();
+    return copy;
+  }
+
   void message(const std::vector<uint8_t>& msg) {
     if (blocks.empty() || blocks.back().size() + msg.size() > kMostBlock) blocks.emplace_back();
     blocks.back().insert(blocks.back().end(), msg.begin(), msg.end());
@@ -440,7 +447,9 @@ struct Mvd2ToQ2 final : ConvertStream {
         o.str(s);
         message(msg);
       }
-    for (const auto& [level, text] : b.changes.prints) {
+    for (const auto& [level, said] : b.changes.prints) {
+      std::string text = said;
+      if (c.options.touch_print) c.options.touch_print(level, text);
       msg.clear();
       o.u8(kPrint);
       o.u8(static_cast<uint32_t>(level));
@@ -469,6 +478,11 @@ struct Mvd2ToQ2 final : ConvertStream {
     Q2PlayerState p = held_player;
     if (size_t(pov) < r.now.players.size() && r.now.players[size_t(pov)].in)
       p = r.now.players[size_t(pov)].s;
+    if (const int obs = r.level.observer; c.options.touch_observer && obs >= 0 &&
+                                          size_t(obs) < r.now.players.size() &&
+                                          r.now.players[size_t(obs)].in)
+      c.options.touch_observer(pov, obs, r.now.players[size_t(obs)].s, p);
+    if (c.options.touch_player) c.options.touch_player(pov, p.type, p.flags, p.stats);
     std::vector<uint8_t> one;
     sv::q2_write_player(one, last_frame < 0 ? Q2PlayerState{} : held_player, p);
     f.bytes(one);
@@ -588,10 +602,15 @@ struct Mvd2ToQ2 final : ConvertStream {
     }
   }
 
-  // The player a view of `-1` follows: the lowest one in the game (-2 when none is).
+  // The player a view of `-1` follows: the lowest one in the game but the recording's own
+  // observer (the recorder's spectator), else that observer, else -2.
   int lowest_playing() const {
+    const int observer = r.level.observer;
     for (size_t i = 0; i < r.now.players.size(); i++)
-      if (r.now.players[i].in) return static_cast<int>(i);
+      if (r.now.players[i].in && static_cast<int>(i) != observer) return static_cast<int>(i);
+    if (observer >= 0 && size_t(observer) < r.now.players.size() &&
+        r.now.players[size_t(observer)].in)
+      return observer;
     return -2;
   }
 
@@ -666,6 +685,19 @@ struct Mvd2ToQ2 final : ConvertStream {
 }  // namespace
 
 std::unique_ptr<ConvertStream> mvd2_to_q2_stream() { return std::make_unique<Mvd2ToQ2>(); }
+
+bool mvd2_reader_level(const DemoConvert& c, Mvd2Level& out) {
+  const auto* view = dynamic_cast<const Mvd2ToQ2*>(c.stream.get());
+  if (view == nullptr || !view->r.have_level) return false;
+  out = view->r.level;
+  out.base = view->r.now;
+  out.base.config_strings.clear();
+  out.base.prints.clear();
+  out.base.unicasts.clear();
+  out.base.multicasts.clear();
+  out.base.sounds.clear();
+  return true;
+}
 
 bool mvd2_view(std::span<const uint8_t> bytes, int slot, std::vector<uint8_t>& out,
                std::string& error, bool player_stats) {

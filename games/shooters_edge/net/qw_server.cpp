@@ -26,6 +26,7 @@
 #include "shooter/settings.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/qw_admin.hpp"
+#include "shooters_edge/net/qw_fraglog.hpp"
 #include "shooters_edge/net/qw_record.hpp"
 #include "shooters_edge/net/qw_talk.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -214,6 +215,12 @@ void handle_connect(QwServer& s, const gn::Address& from, const std::string& tex
   const auto qport = static_cast<uint16_t>(std::atoi(pg::word(w, 2)));
   const int32_t challenge = std::atoi(pg::word(w, 3));
   std::string userinfo = pg::word(w, 4);
+  // sv_highchars 0: a joining player's user info keeps only plain printable characters.
+  if (!s.cfg.high_chars)
+    std::erase_if(userinfo, [](char ch) {
+      const auto b = static_cast<uint8_t>(ch);
+      return b < 32 || b > 127;
+    });
   int found = -1;
   // The host's challenge that matches; any of the host's when none does (its reason a bad one). A
   // port that moved between the two asks still finds its challenge by the host and the value.
@@ -425,8 +432,10 @@ void handle_oob(QwServer& s, const gn::Address& from, const uint8_t* data, size_
     handle_connect(s, from, text);
   } else if (cmd == "rcon") {
     qw_rcon(s, from, text.substr(0, text.find('\n')));
+  } else if (cmd == "log") {  // the frag log's last buffer (qw_fraglog.hpp)
+    qw_log_query(s, from, pg::word(w, 1), w.count == 2);
   }
-  // `ip`, `log` and the server extras are not answered.
+  // `ip` and the server extras are not answered.
 }
 
 // The packet's commands the loop will run (the lost ones' copies first, as it runs them) through
@@ -825,6 +834,13 @@ bool bind_map(QwServer& s, const sv::RulesRunner& rules, std::string& error) {
     info_set(s.serverinfo, rule, c->value, kServerInfoBytes);
     if (std::string_view(rule) == "deathmatch") monsters = false;
   }
+  if (!s.cfg.progs_crc.empty()) info_set(s.serverinfo, "*progs", s.cfg.progs_crc, kServerInfoBytes);
+  if (!s.cfg.download_server.empty())
+    info_set(s.serverinfo, "*dlserver", s.cfg.download_server, kServerInfoBytes);
+  if (s.cfg.cheats) {  // the rules' sv_cheats with it: god, give, noclip and fly
+    info_set(s.serverinfo, "*cheats", "ON", kServerInfoBytes);
+    qc.cvars.set("sv_cheats", "1", ge::console::Source::local, true);
+  }
   if (const ge::console::Cvar* c = qc.cvars.find("skill"); c != nullptr && monsters)
     info_set(s.serverinfo, "skill", c->value, kServerInfoBytes);
   // A cooperative campaign says `deathmatch 0` outright, as other coop servers do.
@@ -991,6 +1007,16 @@ void qw_print_all(QwServer& s, const std::string& text) {
     if (s.clients[j].state == ConnState::spawned) client_print(s, j, 2, text);
 }
 
+void qw_shutdown(QwServer& s, const std::string& text) {
+  qw_frag_close(s);
+  for (int j = 0; j < sh::kMaxClients; j++) {
+    // A listen server's own seat is the window itself, which closes with it.
+    if (s.clients[j].state != ConnState::spawned || s.clients[j].local) continue;
+    client_print(s, j, 2, text);  // goes with the disconnect's first datagram
+    qw_drop(s, j, "server shutdown");
+  }
+}
+
 int qw_count(const QwServer& s, ConnState at_least) {
   int n = 0;
   for (const QwClient& c : s.clients)
@@ -1087,6 +1113,14 @@ void status_players(const QwServer& s, std::vector<gn::StatusPlayer>& out) {
     gn::StatusPlayer p;
     p.name = c.name;
     p.team = info_get(c.userinfo, "team");
+    // The colours the player picked (the palette's rows 0 to 13), drawn by a hub on its board.
+    auto row = [&](const char* key) {
+      const std::string v = info_get(c.userinfo, key);
+      const int n = v.empty() ? -1 : std::atoi(v.c_str());
+      return n < 0 ? gn::kNoColourRow : static_cast<uint8_t>(n > 13 ? 13 : n);
+    };
+    p.top = row("topcolor");
+    p.bottom = row("bottomcolor");
     p.score = c.rules_active ? static_cast<int32_t>(s.game->world.clients[i].numbers.frags) : 0;
     const int ping = c.state != ConnState::spawned || c.ping_samples == 0
                          ? 0
@@ -1203,15 +1237,18 @@ void qw_frame(QwServer& s, int64_t now_us) {
                      s.game->sv.edicts[static_cast<size_t>(i) + 1].origin);
   route_events(s);
   tell_frags(s);
+  qw_frag_frame(s);
   if (s.mvd) mvd_frame(s, *s.mvd);
   for (MultiviewRecorder* r : s.streams) mvd_frame(s, *r);
 
   for (int i = 0; i < sh::kMaxClients; i++) {
     QwClient& c = s.clients[i];
     if (c.state == ConnState::free || c.local) continue;
-    if (c.ch.overflow)
+    if (c.ch.overflow) {
+      const std::string name = c.name;
       qw_drop(s, i, "reliable channel overflowed");
-    else if (s.now - c.ch.last_received > s.cfg.timeout_s) {
+      qw_print_all(s, name + " overflowed\n");  // everyone told, as the timeout is
+    } else if (s.now - c.ch.last_received > s.cfg.timeout_s) {
       const std::string name = c.name;
       qw_drop(s, i, "timed out");
       qw_print_all(s, name + " timed out\n");

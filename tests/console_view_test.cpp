@@ -190,6 +190,9 @@ TEST(remotemode_clearnotify_scale_and_the_foot) {
   std::vector<std::string> sent;
   c.add_command("rcon", "", [&](Console&, const Args& a) { sent.push_back(a.rest(0)); });
   c.cvars().add({.name = "rcon_address", .fallback = "", .kind = CvarKind::text});
+  c.execute("remotemode");  // no server named, none set: how to name one
+  c.run();
+  CHECK(!v.remote() && v.lines().back().text == "Usage: remotemode <address> <password>");
   c.execute("remotemode 10.0.0.2:27910 secret");
   c.run();
   CHECK(v.remote() && v.prompt() == "# ");
@@ -271,6 +274,18 @@ TEST(editing_and_history) {
   v.key(EditKey::down);
   v.key(EditKey::down);
   CHECK(v.input().empty());
+}
+
+// con_history: only the newest typed lines are walked back through.
+TEST(con_history_keeps_the_newest_lines) {
+  Console c;
+  ConsoleView v(c);
+  c.execute("con_history 2");
+  for (const char* line : {"echo a", "echo b", "echo c"}) {
+    v.type(line);
+    v.key(EditKey::enter);
+  }
+  CHECK(v.history().size() == 2 && v.history().front() == "echo b");
 }
 
 // The list under the input line: every name the typed word starts, the most submitted first.
@@ -437,4 +452,92 @@ TEST(con_notify_hides_the_notify_lines_and_toggling_lets_them_go) {
   CHECK(v.notify().empty());
   v.add(LineKind::server, "four");
   CHECK(v.notify().size() == 1 && v.notify()[0]->text == "four");
+}
+
+TEST(con_scroll_brings_the_newest_lines_back_on_a_new_line_or_a_key) {
+  Console c;
+  ConsoleView v(c);
+  for (int i = 0; i < 40; ++i) v.add(LineKind::output, "line " + std::to_string(i));
+  v.key(EditKey::page_up);
+  v.add(LineKind::output, "new");
+  CHECK(v.scroll() == 8);  // 0: a new line leaves the view where it was scrolled
+  v.type("x");
+  CHECK(v.scroll() == 8);
+  c.execute("con_scroll 1");
+  v.add(LineKind::output, "newer");
+  CHECK(v.scroll() == 0 && v.page(1).back()->text == "newer");
+  c.execute("con_scroll 2");
+  v.key(EditKey::page_up);
+  v.add(LineKind::output, "newest");
+  CHECK(v.scroll() == 8);
+  v.key(EditKey::page_up);  // the page keys scroll still
+  CHECK(v.scroll() == 16);
+  v.type("y");
+  CHECK(v.scroll() == 0);
+  v.key(EditKey::page_up);
+  v.key(EditKey::left);
+  CHECK(v.scroll() == 0);
+}
+
+// A game's stamps: each line added while they are on keeps the time apart from its text; condump
+// writes it, the text and its search never hold it.
+TEST(stamps_keep_the_time_beside_each_line) {
+  Console c;
+  ConsoleView v(c);
+  v.add(LineKind::output, "before");
+  CHECK(v.lines().back().stamp.empty());
+  v.stamps = true;
+  v.stamp_format = "<%Y>";
+  v.add(LineKind::output, "two\nlines");
+  CHECK(v.lines().back().text == "lines" && v.lines().back().stamp.size() == 6);
+  CHECK(v.lines().back().stamp.front() == '<' && v.lines()[1].stamp == v.lines().back().stamp);
+  v.stamp_format.clear();  // no form: no stamp
+  v.add(LineKind::output, "bare");
+  CHECK(v.lines().back().stamp.empty());
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge_stamp_dump_test";
+  std::filesystem::remove_all(dir);
+  v.set_dump_folder(dir.string());
+  c.execute("condump stamped");
+  c.run();
+  std::ifstream in(dir / "stamped.txt");
+  std::string all((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  CHECK(all.find(v.lines()[2].stamp + "lines\n") != std::string::npos);
+  CHECK(all.find("before\n") != std::string::npos);
+  std::filesystem::remove_all(dir);
+}
+
+// A game's own Tab: the word completed to what the matches share, the matches listed in its form,
+// past the threshold asked about first.
+TEST(a_games_tab_completes_the_shared_part_and_lists_the_matches) {
+  Console c;
+  ConsoleView v(c);
+  for (const char* n : {"zfoo_a", "zfoo_bb", "zfoo_c"}) c.add_command(n, "", {});
+  c.cvars().add({.name = "zfoo_var", .fallback = "1"});
+  v.list_mode = 0;
+  v.set_open(true);
+  for (const char ch : std::string("zf")) v.type(std::string(1, ch));
+  v.key(EditKey::tab);
+  CHECK(v.input() == "zfoo_");
+  const size_t n = v.lines().size();
+  CHECK(v.lines()[n - 5].text == "]zfoo_" && v.lines()[n - 4].text == "zfoo_a");
+  CHECK(v.lines().back().text == "zfoo_var");
+  v.list_mode = 2;
+  v.key(EditKey::tab);
+  bool commands = false, variable = false;
+  for (const ViewLine& l : v.lines()) {
+    commands |= l.text == "3 possible commands:";
+    variable |= l.text == "1 possible variable:";
+  }
+  CHECK(commands && variable);
+  // Past the threshold the first Tab asks, the second lists.
+  v.list_threshold = 2;
+  v.list_mode = 1;
+  v.key(EditKey::tab);
+  CHECK(v.lines().back().text == "Press TAB again to display all 4 possibilities.");
+  v.key(EditKey::tab);
+  CHECK(v.lines().back().text.starts_with("zfoo_a"));
+  // One match: the whole name and a space.
+  v.type("b");
+  v.key(EditKey::tab);
+  CHECK(v.input() == "zfoo_bb ");
 }

@@ -5,6 +5,7 @@
 // ge:skill net shooter
 // ge:test tests/shooters_edge_qw_admin_test.cpp
 #include "shooters_edge/net/qw_admin.hpp"
+#include "shooters_edge/net/qw_fraglog.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -334,6 +335,20 @@ void qw_upload_block(QwServer& s, int slot, const ClcMsg& m) {
   s.log.push_back("Snap: Couldn't create a file, clean some out.");
 }
 
+// An info string as the classic games print it: each key padded to 20 columns, then its value.
+static std::string info_table(const std::string& info) {
+  std::vector<std::pair<std::string, std::string>> pairs;
+  info_pairs(info, pairs);
+  std::string t;
+  for (const auto& [k, v] : pairs) {
+    t += k;
+    if (k.size() < 20) t.append(20 - k.size(), ' ');
+    t += v;
+    t += '\n';
+  }
+  return t;
+}
+
 bool qw_admin(QwServer& s, const std::string& line, std::string& out) {
   pg::Words w;
   pg::tokenize_words(line.c_str(), w);
@@ -346,6 +361,34 @@ bool qw_admin(QwServer& s, const std::string& line, std::string& out) {
   }
   if (cmd == "status") {
     out = qw_status_table(s);
+    return true;
+  }
+  if (cmd == "sv_gamedir") {  // the game folder the server info names; its own files unchanged
+    if (w.count == 1) {
+      out = "Current *gamedir: " + info_get(s.serverinfo, "*gamedir") + "\n";
+    } else if (w.count > 2) {
+      out = "Usage: sv_gamedir <newgamedir>\n";
+    } else {
+      const std::string dir = pg::word(w, 1);
+      if (dir.find("..") != std::string::npos || dir.find_first_of("/\\:") != std::string::npos) {
+        out = "*Gamedir should be a single filename, not a path\n";
+      } else {
+        // Clients read it at their next connection, so none is told now.
+        info_set(s.serverinfo, "*gamedir", dir, kServerInfoBytes);
+        s.cfg.gamedir = dir.empty() ? ServerConfig{}.gamedir : dir;
+      }
+    }
+    return true;
+  }
+  if (cmd == "user") {  // one player's user info, a key a line in a column of 20
+    const std::string who = pg::word(w, 1);
+    if (who.empty()) {
+      out = "user <id|name>: one player's user info\n";
+    } else if (const int slot = qw_find_seat(s, who); slot < 0) {
+      out = "No player is called " + who + ". Type \"users\" to see the ids and names.\n";
+    } else {
+      out = info_table(s.clients[slot].userinfo);
+    }
     return true;
   }
   if (cmd == "snap" || cmd == "snapall") {
@@ -382,6 +425,29 @@ bool qw_admin(QwServer& s, const std::string& line, std::string& out) {
       out = error + "\n";
     else
       out = name + " was kicked\n";
+    return true;
+  }
+  // A player's cheats by id or name, on a server started with cheats: the player reads the
+  // cheat's words ("godmode ON").
+  if (cmd == "fraglogfile") {  // the frag log's file on or off (qw_fraglog.hpp)
+    out = qw_fraglogfile(s);
+    return true;
+  }
+  if (cmd == "god" || cmd == "give") {
+    const std::string who = pg::word(w, 1);
+    if (!s.cfg.cheats) {
+      out = "You must run the server with -cheats to enable this command.\n";
+    } else if (who.empty()) {
+      out = cmd == "god" ? "god <id|name>: a player's godmode on or off\n"
+                         : "give <id|name> <item> <count>: a weapon (2 to 8), shells, nails, "
+                           "rockets, cells or health\n";
+    } else if (const int slot = qw_find_seat(s, who); slot < 0) {
+      out = "No player is called " + who + ". Type \"users\" to see the ids and names.\n";
+    } else {
+      std::string asked = cmd;
+      for (int i = 2; i < w.count; i++) asked += std::string(" ") + pg::word(w, i);
+      s.rules->client_command(slot, asked);
+    }
     return true;
   }
   // The command filters and the blackhole list (engine/server/cmdfilter.hpp, bans.hpp).

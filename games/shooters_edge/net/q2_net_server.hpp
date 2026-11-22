@@ -78,7 +78,9 @@
 #include "server/skew.hpp"
 #include "server/status.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q2_mvd_server.hpp"
 #include "shooters_edge/net/q2_net.hpp"
+#include "shooters_edge/net/q2_net_ext.hpp"
 #include "shooters_edge/net/qw_antilag.hpp"
 #include "shooters_edge/net/qw_voice_route.hpp"
 #include "shooters_edge/server/q2_native.hpp"
@@ -91,8 +93,13 @@ namespace shooters_edge::net {
 
 namespace sv = shooters_edge::server;
 
-struct Q2NetConfig {
+struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a server
   std::string hostname = "Shooter's Edge";
+  // The server info's `version`, and the game folder its `gamedir` names ("" the base folder).
+  std::string version, game_dir;
+  // The server-info keys an administrator added (`sets`), as `\key\value` pairs; null: none.
+  std::function<std::string()> admin_info;
+  Q2MvdConfig mvd;  // the multiview recorder and its relay stream (q2_mvd_server.hpp)
   int max_clients = 8;
   std::string password;  // "" or "none": none asked
   // SPECTATORS (user info `spectator` other than 0): with a spectator password set ("" or `none`:
@@ -135,6 +142,9 @@ struct Q2NetConfig {
   double ghost_time = 6;
   // sv_nodelta: 1 sends whole frames whenever asked; 0 drops a client that asks for more than 64.
   bool allow_nodelta = true;
+  // net_maxmsglen: the largest packet a client of protocol 35 or 36 gets (512..4086; 0: what it
+  // asks; a client on this machine is never held to it). q2_net_ext.hpp.
+  int net_maxmsglen = 1390;
   // sv_pingmethod: 0 no ping is shown; 1 the average of the last 16 round trips; 2 their least.
   int ping_method = 2;
   // Each client sent only the entities it may see (server/q2_wire.hpp § the viewer's cut);
@@ -147,8 +157,10 @@ struct Q2NetConfig {
   // piece of up to 1024 bytes) read from the game's files (`read_file`; unset: every download
   // refused). Refused, as size -1 and percent 0: downloads off, a path holding `..`, starting with
   // `.` or `/` or with no `/`, a file missing, a kind switched off (`players/` skins and figures,
-  // `models/`, `sound/`, `maps/`), and a map out of an archive to a client that would keep it loose
-  // (any but ours). A client that agreed the download origin (`*ge_ext` bit 4 in its user info)
+  // `models/` and `sprites/`, `sound/`, `maps/`, `textures/` and `env/`, `pics/`, anything else),
+  // a file past `max_download_size`, and a map out of an archive to a client that would keep it
+  // loose (any but ours). A resume past the file's end is told "File size differs from server."
+  // before the refusal. A client that agreed the download origin (`*ge_ext` bit 4 in its user info)
   // is told each file's archive (`file_origin`) first, as svc 123, and keeps the file in it
   // (engine/vfs/partial.hpp); maps out of archives are sent to it.
   //
@@ -198,7 +210,12 @@ struct Q2NetConfig {
   bool antilag_projectiles = false;
   bool antilag_interp = false;
   bool allow_download = true, allow_players = true, allow_models = true, allow_sounds = true;
-  bool allow_maps = true;
+  bool allow_maps = true, allow_textures = true, allow_pics = true, allow_others = false;
+  // sv_max_download_size: the largest file sent, bytes (0 or past 128 MiB and 4 KiB: that cap).
+  int64_t max_download_size = 8388608;
+  // sv_downloadserver: the web address a client may fetch content from instead (` dlserver=` in
+  // the connect answer); empty: none.
+  std::string download_server;
   // THE OPERATOR (q2_admin.hpp): `kick`, `kickban`, `dumpuser`, `stuff` and `stuffcvar` also take
   // a player's name in any case or a unique part of it (sv_enhanced_setplayer).
   bool enhanced_setplayer = false;
@@ -213,8 +230,9 @@ struct Q2NetConfig {
 
 // A slot's stage. A ZOMBIE is a client dropped: for `zombie_time` seconds after the last packet
 // from it the slot still resends what it owes (the disconnect) and reads nothing it sends, then
-// it is free. Only `signon` and `active` hold a client (`q2_held`).
-enum class Q2Slot : uint8_t { free, signon, active, zombie };
+// it is free. Only `signon` and `active` hold a client (`q2_held`). A DUMMY is the multiview
+// recorder's own spectator (q2_mvd_dummy.hpp): in the rules, with no connection, sent nothing.
+enum class Q2Slot : uint8_t { free, signon, active, zombie, dummy };
 
 struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a slot
   Q2Slot stage = Q2Slot::free;
@@ -265,6 +283,7 @@ struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<uint8_t> feel_sent;  // the feel's message last sent (empty: none yet)
   bool told_voice = false;         // agreed voice (`*ge_ext` bit 128)
   bool told_frames = false;        // agreed every rules frame (`*ge_ext` bit 256)
+  bool told_hits = false;          // agreed the damage it dealt (`*ge_ext` bit 1024)
   TalkState talk;                  // its voice's target, mutes (qw_voice_route.hpp)
   std::vector<uint8_t> voice_out;  // voices relayed to it this tick (svc 121 each), unreliable
   int64_t voice_in = 0, voice_heard = 0;  // its voice messages taken; voices relayed to it
@@ -305,6 +324,18 @@ struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int rtt_samples = 0;
   double rtt_next = -1;
   int64_t cmds_run = 0, cmds_counted = 0;
+  // A LATER PROTOCOL's client (35 or 36, q2_net_ext.hpp): its protocol, minor version, packet
+  // length, compression, its client settings (clc 5, 14 of them; the frame rate starts at 10),
+  // the sequence its commands are handed to the rules by (one command a packet), the last command
+  // (run again for each packet lost past what a move carries), the frame's flags for 36, and the
+  // signon waiting for room on the old channel.
+  int protocol = 34, minor = 0, msglen = 1390;
+  bool zlib = false;
+  int16_t asked[14] = {0, 0, 0, 0, 10};
+  uint32_t run_sequence = 0;
+  Q2Cmd last_run;
+  uint8_t frame_flags = 0;
+  std::vector<std::vector<uint8_t>> signon_queue;
   int move_fps = 0;
   double fps_next = -1;
   double scale = 0;
@@ -323,7 +354,13 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   sv::NativeQ2* native = nullptr;  // a hosted game library's runner (q2_native.hpp)
   gn::Transport* transport = nullptr;
   Q2NetClient clients[sh::kMaxClients];
-  std::map<uint64_t, int32_t> challenges;  // by the address with its port off
+  Q2Mvd mvd;               // the multiview recorder (sv_mvd_enable)
+  int64_t mvd_frame = -1;  // the rules frame last recorded
+  bool mvd_level = true;   // a level waits for its game state
+  // The challenges (1024 kept, one an address and port, each used once; the oldest
+  // replaced when full): by address, and the addresses oldest first.
+  std::map<uint64_t, int32_t> challenges;
+  std::vector<uint64_t> challenge_order;
   uint32_t next_challenge = 0;
   int32_t count = 0;           // the level's count, as the server data carries it
   int64_t written_frame = -1;  // the tenth last sent
@@ -333,6 +370,9 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)
+  // A client's `nextserver <count>` (a cinematic or picture level watched to its end, while
+  // `cfg.wire.show` names one): the game decides (q2_game.cpp); null: ignored.
+  std::function<void(int32_t count)> nextserver;
   // The tag of the key the logins' tickets are signed with (q2_login.hpp), once known: told to
   // each client that agreed it (`*ge_ext` bit 32) as svc 127, so our client logs itself in.
   std::string account_tag;

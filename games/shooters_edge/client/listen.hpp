@@ -322,6 +322,9 @@ struct Listen {
   // Where the mod's explosions went off on this map (its temporary-entity message), map units,
   // in order.
   std::vector<sh::Vec3f> explosions;
+  // Quake II's: each one's kind by index (classic/q2_fx_switches.hpp; 0 any other), as long as
+  // the last one with a kind (the rest are 0).
+  std::vector<uint8_t> explosion_kinds;
   std::vector<Blow> blows;  // the blows the player took on this map, in order
   int64_t bonuses = 0;      // the items he took (the server's `bf`), since the window opened
   double cshift[4] = {130, 80, 50, 0};  // v_cshift: the tint in open air (red, green, blue, of 255)
@@ -435,7 +438,7 @@ bool listen_rules_word(Listen& l, const std::string& line);
 // A console line the window does not know, in a single-player program's game: the original's
 // cheats and `kill` (god, notarget, noclip, fly, give, kill) go to the server as slot 0's own
 // command, its level commands (restart, changelevel) to the server's console; false for any other
-// line or game.
+// line or game. On any Quake server (deathmatch too), `tell` and `ping` go to it as slot 0's.
 bool listen_campaign_word(Listen& l, const std::string& line);
 // The people playing in the game the window hosts (its own player and those who joined; never
 // a bot, so a game with companions alone still pauses under the menu).
@@ -507,8 +510,14 @@ struct Missile {
   // Quake II's other marks by its effect bits (q2_look.hpp's Q2Look::Missile as a number: a
   // flag, the tag token, an ion ripper's, a blue or a plasma bolt); 0 none of these.
   uint8_t q2_mark = 0;
+  // Quake II's spinning lights: a red light 64 units ahead along its spin from its `yaw` (degrees).
+  bool q2_spin = false;
+  float yaw = 0;
 };
 void missiles_of(const Listen& l, std::vector<Missile>& out);
+// Quake II's areas the player's eye sees into, one bit an area (server/q2_map.hpp's
+// `map_area_bits`); empty when the game is not Quake II's or its map has no areas.
+void listen_area_bits(const Listen& l, std::vector<uint8_t>& out);
 
 // True when the entity is drawn: a model index and a model text (a program hides a taken item by
 // emptying its text; server::model_shown). Without a QC program: a model index alone.

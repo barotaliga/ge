@@ -48,4 +48,16 @@ bool map_hears(const Q2Server& s, sh::Vec3f from, sh::Vec3f to) {
   return map_areas_connected(s, from, to);
 }
 
+void map_area_bits(const Q2Server& s, sh::Vec3f eye, std::vector<uint8_t>& out) {
+  out.clear();
+  if (!s.map || s.map->areas.empty()) return;
+  const size_t n = s.map->areas.size();
+  const int32_t from = area_of(*s.map, eye);
+  out.assign((n + 7) / 8, from == 0 ? 0xff : 0);
+  if (from == 0) return;
+  const std::vector<int32_t>& g = groups(s);
+  for (size_t a = 1; a < n; ++a)
+    if (br::areas_connected(g, from, int32_t(a))) out[a / 8] |= uint8_t(1u << (a % 8));
+}
+
 }  // namespace shooters_edge::server
