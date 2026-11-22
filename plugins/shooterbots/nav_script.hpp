@@ -47,6 +47,7 @@ struct ScriptKeys {
   float yaw = 0;      // the view's heading, degrees
   float forward = 0;  // a share of maxspeed
   bool jump = false;
+  bool duck = false;  // ducked toward this step (`ScriptStep::duck`)
   bool done = false;  // the last step reached
 };
 

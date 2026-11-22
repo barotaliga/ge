@@ -427,6 +427,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.step_for = kWayGiveUp_s;
   w.step = -1;
   w.calling = -1;
+  w.busy_at = -kWayForever;
   w.explore = -1;
   w.explore_since = 0;
   w.idle_since = -1;
@@ -622,6 +623,23 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       st.lo = {o.x - 16, o.y - 16, o.z};
       st.hi = {o.x + 16, o.y + 16, o.z + 32};
       st.node = node_in(g, st.lo, st.hi);
+      st.name = cn;
+      w.steps.push_back(st);
+      continue;
+    } else if (w.complete && target &&
+               (std::strncmp(cn, "weapon_", 7) == 0 || std::strncmp(cn, "ammo_", 5) == 0 ||
+                std::strncmp(cn, "item_", 5) == 0)) {
+      // (`complete`) A thing that fires its target when taken (base1's shotgun in the east wing:
+      // two soldiers come for it): walked over, like a trigger.
+      const char* org = sb::block_value(b, "origin");
+      if (!org) continue;
+      st.kind = WayKind::trigger;
+      st.target = target;
+      st.opens = opens(target, st.doors);
+      const sh::Vec3f o = origin_of(org);
+      st.lo = {o.x - 8, o.y - 8, o.z - 8};
+      st.hi = {o.x + 8, o.y + 8, o.z + 24};
+      st.node = node_in(g, {o.x - 16, o.y - 16, o.z}, {o.x + 16, o.y + 16, o.z + 32});
       st.name = cn;
       w.steps.push_back(st);
       continue;
@@ -932,6 +950,34 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     w.walls.push_back(e);
   }
+  // (`complete`) A trigger or a secret whose node the start does not reach (a strip at the foot of
+  // a ledge over water, its node on the ledge): a node he reaches that stands by its box instead.
+  if (w.complete) {
+    const int32_t start = sb::nav_nearest(g, s.sv.edicts[1].origin);
+    ge::ai::Search reach;
+    if (start >= 0) sb::nav_reach(g, start, reach);
+    for (WayStep& st : w.steps) {
+      if ((st.kind != WayKind::trigger && st.kind != WayKind::secret) || start < 0 ||
+          (st.node >= 0 && reach.reached(st.node)))
+        continue;
+      const sh::Vec3f mid = (st.lo + st.hi) * 0.5f, grow{kWayTouchBy, kWayTouchBy, kWayTouchBy};
+      int32_t best = -1;
+      float best_d = 0;
+      for (size_t n = 0; n < g.nodes.size(); n++) {
+        const sh::Vec3f o = g.nodes[n].origin;
+        if (!reach.reached(static_cast<int32_t>(n)) || !touches(o, st.lo - grow, st.hi + grow))
+          continue;
+        const float d = dist(o, mid);
+        if (best < 0 || d < best_d) {
+          best = static_cast<int32_t>(n);
+          best_d = d;
+        }
+      }
+      if (best < 0) continue;
+      st.node = best;
+      st.reach_in = true;
+    }
+  }
 }
 
 void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
@@ -1235,8 +1281,17 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   for (size_t n = 0; n < g.nodes.size() && !strict_work && !w.complete; n++)
     strict_work = !w.seen[n] && w.search.reached(static_cast<int32_t>(n)) && !no_place(n) &&
                   round_trip(static_cast<int32_t>(n));
+  // A car's button (base1's: the car drops him to the exit) is a way out like the exit itself.
+  const auto carries = [&](const WayStep& st) {
+    if (st.kind != WayKind::button) return false;
+    for (const int d : st.doors)
+      for (const int c : w.cars)
+        if (c == d) return true;
+    return false;
+  };
   for (const WayStep& st : w.steps)
-    strict_work = strict_work || (!st.done && st.kind != WayKind::exit && t >= st.left_until &&
+    strict_work = strict_work || (!st.done && st.kind != WayKind::exit &&
+                                  !(w.complete && carries(st)) && t >= st.left_until &&
                                   st.node >= 0 && w.search.reached(st.node) && round_trip(st.node));
   const auto reach = [&](int32_t n) {
     return w.search.reached(n) && (!strict_work || round_trip(n));
@@ -1259,14 +1314,6 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // (`complete`) A step is open while not done once, not left and reached; the nearest monster
   // alive whose place is reached; the exit waits for all of them.
   for (WayStep& st : w.steps) st.ever = st.ever || st.done;
-  // A car's button (base1's: the car drops him to the exit) is a way out like the exit itself.
-  const auto carries = [&](const WayStep& st) {
-    if (st.kind != WayKind::button) return false;
-    for (const int d : st.doors)
-      for (const int c : needed)
-        if (c == d) return true;
-    return false;
-  };
   const auto open_step = [&](const WayStep& st) {
     return st.kind != WayKind::exit && !carries(st) && !st.ever && t >= st.left_until &&
            st.node >= 0 && reach(st.node);
@@ -1279,7 +1326,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (const WayStep& st : w.steps) left_to_do = left_to_do || open_step(st);
     for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
       const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
-      if (d.free || (d.flags & sh::kFlagMonster) == 0 || d.health <= 0 ||
+      // A monster: Quake's by its flag, Quake II's (no such flag in its view) by its live box.
+      const bool monster =
+          (d.flags & sh::kFlagMonster) != 0 || d.solid == sh::kSolidSlidebox;
+      if (d.free || !monster || d.health <= 0 ||
           d.solid == sh::kSolidNot || static_cast<size_t>(e) >= w.prey_left.size() ||
           t < w.prey_left[static_cast<size_t>(e)])
         continue;
@@ -1306,6 +1356,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       }
     }
     left_to_do = left_to_do || prey >= 0;
+    // Nothing reached for a moment (a door the last trigger opens still on its way) is not yet
+    // the end: the exit waits kWayDone_s past the last thing left to do.
+    if (left_to_do) w.busy_at = t;
+    left_to_do = left_to_do || t - w.busy_at < kWayDone_s;
   }
   // The exit; else the nearest step not done; else the nearest place not seen.
   int pick = -1;
@@ -1417,6 +1471,13 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         best = c;
       }
     }
+  }
+  if (pick >= 0 && w.steps[static_cast<size_t>(pick)].kind == WayKind::button && pick != w.step) {  // DBG
+    const WayStep& ps = w.steps[static_cast<size_t>(pick)];
+    std::fprintf(stderr, "DBG pick button %d t %.1f left_to_do %d prey %d carries %d calling %d cars %zu doors", pick, t, int(left_to_do), prey, int(carries(ps)), w.calling, w.cars.size());
+    for (const int d : ps.doors) std::fprintf(stderr, " %d", d);
+    for (const int c : w.cars) std::fprintf(stderr, " car %d", c);
+    std::fprintf(stderr, "\n");
   }
   // (`complete`) The nearest monster alive when it is nearer than the step.
   const bool chase = w.complete && prey >= 0 &&
@@ -1615,6 +1676,28 @@ void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooterbots::Bot
   const double flat = std::sqrt(dx * dx + dy * dy);
   cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
   cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(dz, flat) * (180.0 / ge::core::kPi));
+  cmd.forward = sh::quantize_axis(320);
+  cmd.side = 0;
+  if (self_e.waterlevel > 0 && dz > 8) cmd.buttons |= sh::kButtonJump;
+}
+
+void way_touch(const WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
+               sh::MoveCmd& cmd) {
+  if (w.step < 0) return;
+  const WayStep& st = w.steps[static_cast<size_t>(w.step)];
+  if (!st.reach_in || st.done || st.node < 0) return;
+  const ge::shooter::WorldEntity& self_e = s.world.entities[static_cast<size_t>(me)];
+  const sh::Vec3f self = self_e.origin;
+  if (dist(self, nav.graph.nodes[static_cast<size_t>(st.node)].origin) > kWayTouchFrom) return;
+  // The box's nearest point, his box's middle held to it.
+  const sh::Vec3f to{std::clamp(self.x, st.lo.x, st.hi.x), std::clamp(self.y, st.lo.y, st.hi.y),
+                     std::clamp(self.z + 4, st.lo.z, st.hi.z) - 4};
+  const double dx = to.x - self.x, dy = to.y - self.y, dz = to.z - self.z;
+  const double flat = std::sqrt(dx * dx + dy * dy);
+  cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
+  cmd.angles.x = self_e.waterlevel > 0 ? static_cast<float>(-ge::core::libm::atan2(dz, flat) *
+                                                            (180.0 / ge::core::kPi))
+                                       : 0.0f;
   cmd.forward = sh::quantize_axis(320);
   cmd.side = 0;
   if (self_e.waterlevel > 0 && dz > 8) cmd.buttons |= sh::kButtonJump;

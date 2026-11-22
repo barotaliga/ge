@@ -118,6 +118,7 @@ struct MapNav {
     int32_t from = -1, to = -1, mover = -1;
   };
   std::vector<ScriptMade> scripts_made;
+  int crawlways = 0;  // scripted ways ducked under a low roof (Quake II's maps)
   ge::ai::Search main;  // what the map's main part reaches (the most a start spot reaches)
   int32_t main_n = 0;
   int64_t teleport_links = 0, closed_links = 0, harm_links = 0;
@@ -137,6 +138,11 @@ std::vector<ge::shooterbots::NavMover> map_movers(const ge::shooterbots::BotView
 // `book`: the game's people's tricks and routes by map (shooterbots/map_book.hpp), each proven by
 // the move. False with `error` when no floor holds a node. `set`: the grid's (a trick map's narrow
 // platforms need a finer one than the default 32 units: the `se-trick` lab's --spacing).
+// (Quake II's maps) The crawlways under roofs too low to stand under, found through world solid
+// `w` (a `brushes` solid) from the graph's nodes and added as scripted ways walked ducked, one
+// each way; how many links.
+int add_crawlways(const ge::shooter::Solid& w, NavGraph& g);
+
 bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
                    const ge::shooterbots::MapBook& book, const char* start_class, MapNav& out,
                    std::string& error,
