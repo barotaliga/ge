@@ -184,6 +184,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   }
   if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
   if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
+  if (b.show_misses != nullptr) *b.show_misses = false;      // Quake II's cl_showmiss
+  if (b.shownet != nullptr) *b.shownet = 0;                  // and cl_shownet
   if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
   if (b.light_modulate != nullptr) *b.light_modulate = 1;
   if (b.light_lift != nullptr) *b.light_lift = 0;
@@ -504,6 +506,22 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .values = "1: predicted, drawn where you will be (the default); 0: drawn where the "
                       "server last put you, a round trip late"},
            b.predict);
+  if (b.show_misses != nullptr)
+    v.bind({.name = "cl_showmiss",
+            .fallback = "0",
+            .help = "Whether each miss of your moves' prediction is printed, with its size.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: not printed (the default); 1: the frame and how far off, in units"},
+           b.show_misses);
+  if (b.shownet != nullptr)
+    v.bind({.name = "cl_shownet",
+            .fallback = "0",
+            .help = "Whether each message from the server you joined is printed, as its size.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 3,
+            .values = "0: none (the default); 1..3: each message's size in bytes"},
+           b.shownet);
   if (b.crouch != nullptr)
     v.bind({.name = "cl_predict_crouch",
             .fallback = "1",

@@ -7,6 +7,7 @@
 #include "shooters_edge/net/q2_remote.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <utility>
 
@@ -162,6 +163,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   r.owed_s += wall_s;
   int ticks = 0;
   const int tick_us = q2_move_ms(r.q2_maxfps) * 1000;  // its own cl_maxfps, live
+  c.cfg.shownet = r.q2_shownet;                        // cl_shownet, live
   while (r.owed_s >= tick_us * 1e-6) {
     r.owed_s -= tick_us * 1e-6;
     if (ticks++ >= kMostTicks) continue;  // a stall: the time is dropped, not paid down
@@ -227,6 +229,12 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   sh::Vec3f drawn;
   const bool predicted = !r.nopred && r.predict && q2_predict_step(ahead, c, d, wall_s, drawn);
   if (!predicted) ahead.predicted = false;
+  if (ahead.misses != ahead.misses_told) {  // cl_showmiss
+    if (ahead.show_misses && r.trace.print)
+      r.trace.print("prediction miss on " + std::to_string(ahead.miss_frame) + ": " +
+                    std::to_string(std::lround(ahead.miss_units)));
+    ahead.misses_told = ahead.misses;
+  }
   // Everything between the last two frames, one frame behind the newest.
   r.lerped = 0;
   if (!r.nolerp && r.frame_old_s >= 0 && r.frame_new_s > r.frame_old_s) {

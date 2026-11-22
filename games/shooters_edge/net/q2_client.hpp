@@ -108,6 +108,9 @@ struct Q2ClientConfig {
   // nothing lost to a dropped packet's delta); a server that forbids it (`sv_allow_nodelta 0`)
   // may refuse.
   bool nodelta = false;
+  // `cl_shownet` 1 or more: each message the server sends printed as its size in bytes (through
+  // `trace`'s print).
+  int shownet = 0;
   // VOICE, as Quake's client speaks (net/qw_client.hpp): `voice` asks our server for
   // it (`*ge_ext` bit 128); once the server says it takes it, the client sends `unmuteall` and its
   // target (`voice_to`, `voicetarg`), and each tick the frames it said as one voice message

@@ -249,7 +249,9 @@ void run_stuffed(Q2ClientEnd& c) {
 
 // One payload as one block of the recording, then read.
 void read_payload(Q2ClientEnd& c, const uint8_t* data, size_t size) {
-  if (size == 0) return;  // a keep-alive
+  if (c.cfg.shownet > 0 && c.cfg.trace != nullptr && c.cfg.trace->print)
+    c.cfg.trace->print(std::to_string(size));  // cl_shownet
+  if (size == 0) return;                       // a keep-alive
   const int levels = q2_demo(c).state.levels;
   const auto len = static_cast<uint32_t>(size);
   for (int k = 0; k < 4; k++) q2_demo(c).bytes.push_back(static_cast<uint8_t>(len >> (8 * k)));
