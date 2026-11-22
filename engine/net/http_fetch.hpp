@@ -12,26 +12,29 @@
 //   `HttpOptions::redirects` redirects (301, 302, 303, 307, 308) followed to their `Location`
 //   (0: none, the redirect is the answer).
 // - THE FAILURES, in words a caller can print (`HttpFetch::error`): "Couldn't resolve host name",
-//   "Couldn't connect to server", "Couldn't resolve proxy name", "Unsupported protocol", "URL
-//   using bad/illegal format or missing URL", "Timeout was reached" (no byte for
-//   `HttpOptions::stall_s`), "Number of redirects hit maximum amount", "Transferred a partial
-//   file", "Maximum file size exceeded" (`HttpOptions::most_bytes`).
+//   "Couldn't connect to server", "Couldn't resolve proxy name", "URL using bad/illegal format or
+//   missing URL", TLS's own (tls_stream.hpp: a certificate not trusted, no roots, the handshake),
+//   "Timeout was reached" (no byte for `HttpOptions::stall_s`), "Number of redirects hit maximum
+//   amount", "Transferred a partial file", "Maximum file size exceeded"
+//   (`HttpOptions::most_bytes`).
 // - `http_status_text`: a status as words ("404 Not Found"; an unusual one by its class).
 // - `url_escape`: every byte but a letter, a digit and `/-_.~` as `%XX`.
 //
 // ge:summary An HTTP GET over a non-blocking TCP socket: URL, proxy, redirects, chunks, failures
 // ge:keywords http http-get fetch download url proxy redirect chunked content-length status
-// ge:keywords url_escape http_status_text user-agent referer
+// ge:keywords url_escape http_status_text user-agent referer https tls connect-tunnel
 // ge:skill net
 // ge:test tests/net_http_fetch_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "net/tcp_socket.hpp"
+#include "net/tls_stream.hpp"
 
 namespace ge::net {
 
@@ -51,15 +54,18 @@ struct HttpOptions {
   std::string user_agent = "ge";
   std::string referer;                  // "": none sent
   std::string proxy;                    // "": straight to the server
+  std::string ca_pem;                   // https: "" the system's roots; else these alone
   int redirects = 5;                    // 0: none followed, the redirect itself the answer
   double stall_s = 30;                  // no byte for this long: "Timeout was reached"
   size_t most_bytes = size_t{1} << 30;  // a body larger is refused
+  bool verify = true;                   // https: the server's certificate and name checked
 };
 
 enum class HttpState : uint8_t { idle, connecting, waiting, done, failed };
 
 struct HttpFetch {
   HttpState state = HttpState::idle;
+  bool tunnel = false;  // https through a proxy: the proxy's answer to `CONNECT` awaited
   HttpOptions options;
   std::string url;  // the one asked now (after any redirect)
   int status = 0;   // the answer's (0: none yet)
@@ -69,7 +75,9 @@ struct HttpFetch {
   int redirected = 0;
   double last_byte_s = 0;
   TcpStream stream;
-  std::vector<uint8_t> raw;  // the answer as it came
+  std::shared_ptr<TlsStream> tls;  // https: the session over `stream`
+  std::string request;             // https: sent once the tunnel is open
+  std::vector<uint8_t> raw;        // the answer as it came (plain)
 };
 
 // Starts `f` on `url` at `now_s` (a running one dropped). A URL it cannot fetch fails at once.

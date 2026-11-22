@@ -17,6 +17,7 @@
 #include <span>
 #include <utility>
 
+#include "classic/content/web_downloads.hpp"
 #include "core/deflate.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
@@ -513,7 +514,9 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   // The answer: the channel kind a 36 client asked for, the web address files come from, the map.
   std::string answer = "client_connect";
   if (c.protocol == kQ2Protocol36) answer += " nc=" + std::to_string(ask.chan);
-  if (!s.cfg.download_server.empty()) answer += " dlserver=" + s.cfg.download_server;
+  // A GitHub repository named as its raw files' address, which a stock client fetches as it is.
+  if (!s.cfg.download_server.empty())
+    answer += " dlserver=" + ge::classic::content::web_base(s.cfg.download_server);
   answer += " map=" + (*s.rules)->map_name;
   send_oob(s, from, answer);
   note(s, c.name + " connected");
