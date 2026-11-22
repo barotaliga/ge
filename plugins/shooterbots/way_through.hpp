@@ -107,8 +107,8 @@ struct WayThrough {
   std::vector<int> hatches;  // turners lying over an exit (base2's floor hatch over its shaft)
   std::vector<int> cars;     // doors a button moves that bar no one (a lift's car)
   std::vector<sh::Vec3f> cars_at;   // and where each rests
-  std::vector<int> lifts;           // floors that sink under a button and come back (ridden)
-  std::vector<sh::Vec3f> lifts_at;  // and where each stands until called
+  std::vector<int> sinks;           // floors that sink under a button and come back (ridden)
+  std::vector<sh::Vec3f> sinks_at;  // and where each stands until called
   std::vector<int32_t> barred;      // those shut now (the plan's)
   std::vector<int32_t> barred_was;  // and at the last plan
   std::vector<int32_t> node_door;   // each node: the bridge it stands on (map_nav.hpp), -1 none

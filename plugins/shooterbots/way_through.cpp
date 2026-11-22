@@ -415,8 +415,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.locked_turns.clear();
   w.cars.clear();
   w.cars_at.clear();
-  w.lifts.clear();
-  w.lifts_at.clear();
+  w.sinks.clear();
+  w.sinks_at.clear();
   w.turners.clear();
   w.turners_at.clear();
   w.hatches.clear();
@@ -715,8 +715,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       bool lift = false;
       for (const sb::NavMover& mv : g.movers) lift = lift || (mv.ent == e && sb::ridden(mv));
       if (lift) {
-        w.lifts.push_back(e);  // open while away from where it stands (called down)
-        w.lifts_at.push_back(spawned_at(b));
+        w.sinks.push_back(e);  // open while away from where it stands (called down)
+        w.sinks_at.push_back(spawned_at(b));
         continue;
       }
       // A door whose own button rides inside it is a lift's car, not a barrier (base1's exit and
@@ -1023,9 +1023,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (size_t k = 0; k < w.turners.size(); k++)
       if (w.turners[k] == ent)
         return dist(s.sv.edicts[static_cast<size_t>(ent)].angles, w.turners_at[k]) >= 1;
-    for (size_t k = 0; k < w.lifts.size(); k++)
-      if (w.lifts[k] == ent)
-        return dist(s.sv.edicts[static_cast<size_t>(ent)].origin, w.lifts_at[k]) >= 1;
+    for (size_t k = 0; k < w.sinks.size(); k++)
+      if (w.sinks[k] == ent)
+        return dist(s.sv.edicts[static_cast<size_t>(ent)].origin, w.sinks_at[k]) >= 1;
     return true;  // no door of the plan's
   };
   for (WayStep& st : w.steps) {
