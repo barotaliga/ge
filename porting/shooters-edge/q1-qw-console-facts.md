@@ -836,3 +836,26 @@ client's `msg` setting defaults to "1" and is a user info key, so a stock client
   switches to the new best. Then the item's targets fire.
 - Respawn **[read]**: the box hides; it returns 30 s later, 15 s in `deathmatch` 3 or 5, and never
   in `deathmatch` 2; on return it plays `items/itembk2.wav`.
+
+### 26. The frag log, the `log` query and `zombietime` (QW server)
+
+- `fraglogfile` **[read]**: a toggle, arguments ignored. On: tries `frag_0.log` to `frag_999.log`
+  in the game folder (by default `./qw/`), a name counted as used when it can be read; the first
+  unused one is created empty and the server prints "Logging frags to <path>."; a failed create,
+  or every name in use, prints "Can't open any logfiles.". Off: "Frag file logging off.". No
+  header; a line `\killer\victim\` a frag, flushed each time; the file stays open across maps.
+- The buffer **[read]**: every frag report adds its line to a buffer whether or not a file is open
+  (a report naming a non-player is ignored). Two buffers of 1450 bytes, the text closed by a zero
+  byte; a line that would overflow it empties it first. It turns over, checked each frame, when
+  more than 600 s have passed since the last turnover and it holds a line (a 4096-byte rule can
+  never fire); the console prints "beginning fraglog sequence <n>" with the new number; the
+  numbering starts at 1, so the first buffer served is 0. The clock stands while paused.
+- `log [<sequence>]` **[read]**: one argument read as a number, none (or two or more) as -1.
+  Answers `m` (one byte) when the sequence equals the served one or no file is open; else
+  "stdlog <served>", a newline, the served buffer's lines and a zero byte. Neither answer carries
+  the out-of-band marker.
+- `zombietime` **[read]**: default 2 s, no range, not archived. A drop other than a time-out keeps
+  the slot taken (its name and info cleared, the disconnect queued) until more than `zombietime`
+  seconds of the server's clock have passed; packets from it are taken by the channel but not run,
+  each answered with the reliable stream alone; it counts against the slots (a connect can be told
+  the server is full); `status` lists it with "ZOMBIE". A time-out frees the slot at once.

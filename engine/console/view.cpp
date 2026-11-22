@@ -163,6 +163,16 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           .max = 4096,
           .values = "1..4096: that many, the oldest dropped first (128 the default)"},
          &history_max_);
+  v.bind({.name = "con_scroll",
+          .fallback = "0",
+          .flags = kArchive,
+          .help = "what brings the console back to its newest lines once scrolled back",
+          .kind = CvarKind::integer,
+          .min = 0,
+          .max = 3,
+          .values = "0: only Page Down or a line typed and run (the default); 1: a new line; 2: "
+                    "a key typed; 3: both"},
+         &scroll_back_);
   if (v.find("name") == nullptr) {
     v.add({.name = "name",
            .fallback = "player",
@@ -312,6 +322,7 @@ void ConsoleView::add(LineKind kind, std::string_view text) {
     at = nl + 1;
   }
   while (static_cast<int32_t>(lines_.size()) > keep_) lines_.pop_front();
+  if ((scroll_back_ & 1) != 0) scroll_ = 0;  // con_scroll 1: a new line brings the newest back
 }
 
 bool ConsoleView::rewrite(uint64_t n, std::string_view text) {
@@ -374,6 +385,7 @@ void ConsoleView::type(std::string_view text) {
     }
     return;
   }
+  if ((scroll_back_ & 2) != 0 && !text.empty()) scroll_ = 0;  // con_scroll 2: a key typed
   for (char ch : text) {
     if (ch == '\n' || ch == '\r' || ch == '`') continue;  // the toggle key types nothing
     input_.insert(cursor_++, 1, ch);
@@ -386,6 +398,7 @@ void ConsoleView::key(EditKey k) {
     chat_key(k);
     return;
   }
+  if ((scroll_back_ & 2) != 0 && k != EditKey::page_up && k != EditKey::page_down) scroll_ = 0;
   switch (k) {
     case EditKey::enter: {
       // Enter on a selected cvar fills it in for its value; on anything else it runs it.

@@ -63,6 +63,7 @@
 #include <vector>
 
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 
 namespace shooters_edge::client {
 
@@ -84,6 +85,12 @@ struct ConvertOptions {
   // layout bit, the frozen move that keeps a stock client from predicting): the type, the move's
   // flags and the 32 stats.
   std::function<void(int pov, uint8_t& type, uint8_t& flags, int16_t* stats)> touch_player;
+  // A Quake II multiview view's player state touched from the recording's own observer's (the
+  // recorder's spectator, slot `observer`) before `touch_player`, when the recording has one in
+  // the game (a relay's `mvd_stats_hack` and the frozen observer of an intermission).
+  std::function<void(int pov, int observer, const server::Q2PlayerState& seen,
+                     server::Q2PlayerState& p)>
+      touch_observer;
   // A Quake II view's broadcast print touched before it is written (a relay's
   // `mvd_filter_version`): its level and text.
   std::function<void(int level, std::string& text)> touch_print;

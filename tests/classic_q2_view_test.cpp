@@ -113,3 +113,30 @@ TEST(the_offset_stays_in_the_box) {
   const ge::classic::Q2View v = ge::classic::step_q2_view(st, {}, in);
   CHECK(v.offset.x == 14 && v.offset.y == -14 && v.offset.z == 30);
 }
+
+TEST(the_gun_sways_with_the_stride_lags_a_turn_and_moves_by_the_settings) {
+  ge::classic::Q2ViewState st;
+  ge::classic::Q2ViewIn in = running({0, 0, 0});
+  in.velocity = {300, 0, 0};
+  in.view_angles = {0, 0, 0};
+  ge::classic::Q2View v = ge::classic::step_q2_view(st, {}, in);  // the clock at 0.25: share 0.707
+  const float sway = 300 * 0.70710677f;
+  CHECK_MSG(near(v.gun_angles.x, sway * 0.005f, 1e-3f), std::to_string(v.gun_angles.x));
+  CHECK(near(v.gun_angles.y, sway * 0.01f, 1e-3f) && near(v.gun_angles.z, sway * 0.005f, 1e-3f));
+  in.velocity = {};
+  in.view_angles = {0, 100, 0};  // a turn of 100 degrees left: the gun trails 45 of it
+  v = ge::classic::step_q2_view(st, {}, in);
+  CHECK(near(v.gun_angles.y, -9, 1e-4f) && near(v.gun_angles.z, -4.5f, 1e-4f));
+  in.view_angles = {0, -170, 0};  // on past 180: the change wraps to -90, held to -45
+  v = ge::classic::step_q2_view(st, {}, in);
+  CHECK(near(v.gun_angles.y, -9, 1e-4f));
+  ge::classic::Q2ViewSettings set;
+  set.gun_x = 2;
+  set.gun_z = 3;
+  in.view_angles = {0, -170, 0};
+  v = ge::classic::step_q2_view(st, set, in);
+  CHECK(v.gun_angles.y == 0);
+  const ge::shooter::ViewAxes ax = ge::shooter::angle_vectors(in.view_angles);
+  const ge::shooter::Vec3f want = ax.right * 2.0f - ax.up * 3.0f;
+  CHECK(near(v.gun_offset.x, want.x, 1e-4f) && near(v.gun_offset.z, want.z, 1e-4f));
+}

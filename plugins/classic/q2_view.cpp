@@ -90,6 +90,24 @@ Q2View step_q2_view(Q2ViewState& st, const Q2ViewSettings& set, const Q2ViewIn& 
     out.kick.x += share * set.bob_pitch * speed * duck;
     out.kick.z += (odd ? -1.0f : 1.0f) * share * set.bob_roll * speed * duck;
   }
+  // The gun: the stride's sway, the lag behind a turn, the developer's shift.
+  const float sway = share * speed, flip = odd ? -1.0f : 1.0f;
+  out.gun_angles = {sway * 0.005f, sway * 0.01f * flip, sway * 0.005f * flip};
+  const Vec3f last = st.have_last ? st.last_view : in.view_angles;
+  const float now[3] = {in.view_angles.x, in.view_angles.y, in.view_angles.z};
+  const float was[3] = {last.x, last.y, last.z};
+  float lag[3];
+  for (int k = 0; k < 3; k++) {
+    float d = was[k] - now[k];
+    if (d > 180) d -= 360;
+    if (d < -180) d += 360;
+    lag[k] = std::clamp(d, -45.0f, 45.0f);
+  }
+  out.gun_angles = out.gun_angles + Vec3f{lag[0] * 0.2f, lag[1] * 0.2f, lag[2] * 0.2f};
+  out.gun_angles.z += lag[1] * 0.1f;
+  st.last_view = in.view_angles;
+  st.have_last = true;
+  out.gun_offset = ax.forward * set.gun_y + ax.right * set.gun_x - ax.up * set.gun_z;
   // The eye: the view height, the fall's dip, the bob's lift, the shot's push.
   out.offset.z = in.view_height;
   if (st.fall_left > 0) out.offset.z -= st.fall_value * (st.fall_left / kFallTime) * 0.4f;

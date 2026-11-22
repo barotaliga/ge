@@ -257,6 +257,7 @@ struct Remote {
   ge::classic::StuffFilter stuff;
   std::filesystem::path stuff_file;
   int q2_shownet = 0;  // Quake II's cl_shownet: each message's size printed (q2_client.hpp)
+  bool q2_showpackets = false;  // Quake II's cl_showpackets: each packet sent shown (`trace.sent`)
   double tick_frac_us = 0;
 };
 
@@ -325,6 +326,9 @@ std::string remote_foot(const Remote& r, double& progress);
 // The joined server's packets as they came (the net graph and Quake II's lag graph), whichever
 // protocol it speaks; null when nothing is joined or a broadcast is watched.
 const ge::hud::NetHistory* remote_net(const Remote& r);
+// Whether the classic net icon shows: a Quake server silent 0.3 s or more, or a QuakeWorld one
+// with 63 or more of the client's packets unacknowledged; never while watching or signing on.
+bool remote_net_trouble(const Remote& r);
 // The moves sent to a joined Quake II server it has not answered yet (0: none, or not Quake II).
 int remote_unanswered(const Remote& r);
 // A line for the server joined (`say hello`, `vote map dm2`), whichever protocol it speaks.

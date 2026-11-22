@@ -157,14 +157,15 @@ std::string player_name(const sv::Mvd2Level& level, int slot) {
   return s;
 }
 
+// A player in the game: the recorder's own spectator is no one to chase.
 bool playing(const sv::Mvd2Level& level, int slot) {
-  return slot >= 0 && size_t(slot) < level.base.players.size() &&
+  return slot >= 0 && slot != level.observer && size_t(slot) < level.base.players.size() &&
          level.base.players[size_t(slot)].in;
 }
 
 int players_in(const sv::Mvd2Level& level) {
   int n = 0;
-  for (const sv::Mvd2Player& p : level.base.players) n += p.in ? 1 : 0;
+  for (int i = 0; i < static_cast<int>(level.base.players.size()); i++) n += playing(level, i);
   return n;
 }
 
@@ -357,6 +358,14 @@ void touch(const Q2Relay& r, uint64_t key, int chan, uint8_t& type, uint8_t& fla
     stats[kStatFrags] = static_cast<int16_t>(chan);
 }
 
+// mvd_stats_hack: the stats whose bits are set seen from the spectator's, by a chaser.
+void stats_hack(const Q2Relay& r, int pov, int observer, const sv::Q2PlayerState& seen,
+                sv::Q2PlayerState& p) {
+  if (pov == observer || r.cfg.stats_hack == 0) return;
+  for (int k = 0; k < 32; k++)
+    if ((r.cfg.stats_hack >> k) & 1u) p.stats[k] = seen.stats[k];
+}
+
 // mvd_filter_version: each `!version` in a chat line from the recorded server made `!versi0n`.
 void filter_version(const Q2Relay& r, int level, std::string& text) {
   if (!r.cfg.filter_version || level != kPrintChat) return;
@@ -376,6 +385,10 @@ std::unique_ptr<Q2RelayView> view_of(Q2Relay& r, Q2Channel& c, uint64_t key, int
   };
   v->conv.options.touch_print = [&r](int level, std::string& text) {
     filter_version(r, level, text);
+  };
+  v->conv.options.touch_observer = [&r](int pov, int observer, const sv::Q2PlayerState& seen,
+                                        sv::Q2PlayerState& p) {
+    stats_hack(r, pov, observer, seen, p);
   };
   client::convert_set_pov(v->conv, target);
   return v;
@@ -470,7 +483,7 @@ void follow(Q2Relay& r, Q2RelayViewer& rec, Q2Viewer& q, const std::vector<std::
   if (rec.chan < 0) return mvd(q, "Please enter a channel first.");
   Q2Channel* c = relay::channel(r, rec.chan);
   sv::Mvd2Level level;
-  if (c == nullptr || !level_of(*c, level)) return;
+  if (c == nullptr || !level_of(*c, level) || c->intermission) return;
   if (w.size() < 2) {
     // As `observe`.
     rec.powerup = 0;
@@ -550,7 +563,7 @@ void autofollow(Q2Relay& r, Q2RelayViewer& rec, Q2Viewer& q, const std::vector<s
   if (rec.chan < 0) return mvd(q, "Please enter a channel first.");
   Q2Channel* c = relay::channel(r, rec.chan);
   sv::Mvd2Level level;
-  if (c == nullptr || !level_of(*c, level)) return;
+  if (c == nullptr || !level_of(*c, level) || c->intermission) return;
   const auto count = [&rec]() {
     return std::to_string(rec.marks.size()) + (rec.marks.size() == 1 ? " target" : " targets");
   };
@@ -768,7 +781,7 @@ void command(Q2Relay& r, Q2RelayView& view, Q2Viewer& q, const std::string& line
       return cursor(r, rec, dir);
     Q2Channel* ch = relay::channel(r, rec.chan);
     sv::Mvd2Level level;
-    if (ch == nullptr || !level_of(*ch, level)) return;
+    if (ch == nullptr || !level_of(*ch, level) || ch->intermission) return;
     rec.powerup = 0;
     const int s = step_player(level, rec.target, dir, rec.autochase ? &rec.marks : nullptr);
     if (s >= 0 && s != rec.target) chase(r, rec, q, s, level);
@@ -793,7 +806,7 @@ void command(Q2Relay& r, Q2RelayView& view, Q2Viewer& q, const std::string& line
       int plr = 0;
       if (level_of(*ch, level))
         for (size_t i = 0; i < level.base.players.size(); i++)
-          if (level.base.players[i].in) {
+          if (playing(level, static_cast<int>(i))) {
             names += (names.empty() ? "" : ", ") + player_name(level, static_cast<int>(i));
             plr++;
           }
@@ -947,12 +960,39 @@ void tell(Q2Relay& r, int chan, const std::string& text, int level) {
       if (Q2Viewer* q = viewer_of(r, rec)) print(*q, level, "[MVD] " + text + "\n");
 }
 
+// mvd_freeze_hack: the intermission begun or ended by the spectator's move (the header).
+void intermission(Q2Relay& r, Q2Channel& c, bool new_level) {
+  sv::Mvd2Level now;
+  const bool have = level_of(c, now);
+  const int o = have ? now.observer : -1;
+  const bool frozen = r.cfg.freeze_hack && !new_level && o >= 0 &&
+                      size_t(o) < now.base.players.size() && now.base.players[size_t(o)].in &&
+                      now.base.players[size_t(o)].s.type == kPmFreeze;
+  if (!frozen && !c.intermission) return;
+  const bool ended = c.intermission && !frozen;
+  c.intermission = frozen;
+  for (auto& [key, rec] : r.viewers) {
+    if (rec.chan != c.id || !rec.view) continue;
+    if (ended) {
+      if (rec.layout == Q2Layout::score) rec.layout = Q2Layout::none;
+      retarget(rec, playing(now, rec.saved) ? rec.saved : -1);
+      draw(r, rec);
+    } else if (rec.target != o) {  // a newcomer too
+      rec.saved = rec.target;
+      retarget(rec, o);
+      if (rec.layout == Q2Layout::none) rec.layout = Q2Layout::score;
+      draw(r, rec);
+    }
+  }
+}
+
 void feed_views(Q2Relay& r, Q2Channel& c, const std::vector<uint8_t>& bytes) {
   const bool level = bytes.size() > 2 && (bytes[2] & 0x1F) == sv::kMv2ServerData;
   if (level) {
     // The last level's scoreboard kept for `oldscore`, before the reader moves on.
     c.oldscore = scoreboard(c);
   }
+  intermission(r, c, level);
   for (auto& [key, rec] : r.viewers) {
     if (rec.chan != c.id || !rec.view) continue;
     Q2RelayView& v = *rec.view;
@@ -969,9 +1009,11 @@ void refork(Q2Relay& r, Q2Channel& c) {
     if (rec.chan != c.id || !rec.view) continue;
     auto opts = rec.view->conv.options.touch_player;
     auto prints = rec.view->conv.options.touch_print;
+    auto seen = rec.view->conv.options.touch_observer;
     client::convert_fork(c.base, rec.view->conv);
     rec.view->conv.options.touch_player = opts;
     rec.view->conv.options.touch_print = prints;
+    rec.view->conv.options.touch_observer = seen;
     client::convert_set_pov(rec.view->conv, rec.target);
   }
 }

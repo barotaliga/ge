@@ -86,7 +86,6 @@ struct QvmServer : RulesCommon {
   size_t entity_at = 0;
   ge::progs::Words words;  // the console's words (argc, argv, args, tokenize)
   std::string command_buffer;
-  std::vector<std::string> frag_log;
   QvmFile files[kQvmMaxFiles];
   int32_t bound[256] = {};  // the extension call bound at 256 + i (an id; 0 none)
 

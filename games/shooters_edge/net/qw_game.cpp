@@ -214,6 +214,8 @@ constexpr gs::GameRule kModRules[] = {
      nullptr, "0: never; 1: during a match (the default); 2: outside a match; 3: always"},
     {"cheats", "Whether the server runs with cheats, which its info then says as *cheats ON.",
      nullptr, "0: no cheats (the default); 1: cheats, set at start"},
+    {"sv_mapcheck", "Whether a player whose map file differs from the server's is turned away.",
+     nullptr, "0: anyone joins; 1: only the server's map (the default)"},
     {"sv_highchars", "Whether a joining player's name and info may hold coloured characters.",
      nullptr, "0: only plain letters, digits and signs are kept; 1: any (the default)"},
 };
@@ -673,6 +675,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->cfg.cheats = true;
   if (const auto w = c.rules.find("sv_highchars"); w != c.rules.end() && w->second == "0")
     g->cfg.high_chars = false;
+  if (const auto w = c.rules.find("sv_mapcheck"); w != c.rules.end() && w->second == "0")
+    g->cfg.map_check = false;
   g->cfg.progs_crc = g->progs_crc;
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
@@ -681,6 +685,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   // The ban list beside the game's files, where a dedicated server keeps its own (writeip).
   if (g->host == nullptr && !g->files.folder.empty()) {
     g->cfg.ban_file = (std::filesystem::path(g->files.folder) / "listip.cfg").string();
+    g->cfg.frag_dir = g->files.folder;  // fraglogfile's frag_<n>.log
     g->cfg.snap_dir = (std::filesystem::path(g->files.folder) / "snap").string();  // snap
     g->cfg.vip_file = (std::filesystem::path(g->files.folder) / "vip_ip.cfg").string();
   }

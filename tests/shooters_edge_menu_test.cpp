@@ -368,6 +368,10 @@ TEST(customize_controls_shows_the_binds_and_binds_the_next_key) {
   CHECK(item(g.main(), "controls", "c1")->choices[0] == "UP, W");  // MOVE FORWARD
   CHECK(item(g.main(), "controls", "c0")->disabled);               // no +attack button here
   CHECK(g.main().focus("c5"));                                     // JUMP
+  // The look keys close the page: look up and down, center view, mouse and keyboard look.
+  CHECK(item(g.main(), "controls", "c19")->text == "LOOK UP");
+  CHECK(item(g.main(), "controls", "c21")->text == "CENTER VIEW");
+  CHECK(item(g.main(), "controls", "c23")->text == "KEYBOARD LOOK");
   MenuInput accept;
   accept.accept = true;
   g.update(accept, false, host, 0.016);
@@ -599,6 +603,27 @@ TEST(load_and_save_show_the_slots_and_run_their_lines) {
   none.saves = host.saves;
   sm::refresh(m, none);
   CHECK(item(m, "load", "s3")->disabled && item(m, "save", "s0")->disabled);
+}
+
+TEST(a_classic_page_longer_than_the_screen_scrolls_to_its_focus) {
+  const auto files = sm::fixture_files();
+  World w;
+  for (const char* b : {"forward", "lookup", "klook"}) w.con.add_button(b, "");
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con};
+  sm::ClassicArt art;
+  std::string error;
+  CHECK(sm::load_classic_art(fixture_find(files), &art, &error));
+  g.set_art(art);
+  g.show(host, "controls");
+  for (const char* row : {"c1", "c23", "c19", "c1"}) {
+    CHECK(g.main().focus(row));
+    DrawList dl;
+    dl.begin(640, 400);
+    g.draw(dl, 640, 400, 0.25);
+    CHECK_MSG(g.problems().empty(), row);
+  }
 }
 
 TEST(both_looks_lay_every_page_out_clean) {

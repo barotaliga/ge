@@ -6,14 +6,17 @@
 // ge:test tests/shooters_edge_q2_lines_test.cpp
 #include "shooters_edge/server/q2_lines.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "brush/map.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
@@ -30,6 +33,214 @@ std::string coord(float v) {
 bool dm(const Q2Server& s) { return s.cvars.find("deathmatch")->on(); }
 
 void say(Q2Server& s, std::string line) { s.console.push_back(std::move(line)); }
+
+// Every class name the game can spawn (its items, monsters and map entities), in order.
+constexpr std::string_view kSpawnable[] = {
+    "ammo_bullets",
+    "ammo_cells",
+    "ammo_grenades",
+    "ammo_rockets",
+    "ammo_shells",
+    "ammo_slugs",
+    "func_areaportal",
+    "func_button",
+    "func_clock",
+    "func_conveyor",
+    "func_door",
+    "func_door_rotating",
+    "func_door_secret",
+    "func_explosive",
+    "func_group",
+    "func_killbox",
+    "func_object",
+    "func_plat",
+    "func_rotating",
+    "func_timer",
+    "func_train",
+    "func_wall",
+    "func_water",
+    "info_notnull",
+    "info_null",
+    "info_player_coop",
+    "info_player_deathmatch",
+    "info_player_intermission",
+    "info_player_start",
+    "item_adrenaline",
+    "item_ancient_head",
+    "item_armor_body",
+    "item_armor_combat",
+    "item_armor_jacket",
+    "item_armor_shard",
+    "item_bandolier",
+    "item_breather",
+    "item_enviro",
+    "item_health",
+    "item_health_large",
+    "item_health_mega",
+    "item_health_small",
+    "item_invulnerability",
+    "item_pack",
+    "item_power_screen",
+    "item_power_shield",
+    "item_quad",
+    "item_silencer",
+    "key_airstrike_target",
+    "key_blue_key",
+    "key_commander_head",
+    "key_data_cd",
+    "key_data_spinner",
+    "key_pass",
+    "key_power_cube",
+    "key_pyramid",
+    "key_red_key",
+    "light",
+    "light_mine1",
+    "light_mine2",
+    "misc_actor",
+    "misc_banner",
+    "misc_bigviper",
+    "misc_blackhole",
+    "misc_deadsoldier",
+    "misc_easterchick",
+    "misc_easterchick2",
+    "misc_eastertank",
+    "misc_explobox",
+    "misc_gib_arm",
+    "misc_gib_head",
+    "misc_gib_leg",
+    "misc_insane",
+    "misc_satellite_dish",
+    "misc_strogg_ship",
+    "misc_teleporter",
+    "misc_teleporter_dest",
+    "misc_viper",
+    "misc_viper_bomb",
+    "monster_berserk",
+    "monster_boss2",
+    "monster_boss3_stand",
+    "monster_brain",
+    "monster_chick",
+    "monster_commander_body",
+    "monster_flipper",
+    "monster_floater",
+    "monster_flyer",
+    "monster_gladiator",
+    "monster_gunner",
+    "monster_hover",
+    "monster_infantry",
+    "monster_jorg",
+    "monster_makron",
+    "monster_medic",
+    "monster_mutant",
+    "monster_parasite",
+    "monster_soldier",
+    "monster_soldier_light",
+    "monster_soldier_ss",
+    "monster_supertank",
+    "monster_tank",
+    "monster_tank_commander",
+    "path_corner",
+    "point_combat",
+    "target_actor",
+    "target_blaster",
+    "target_changelevel",
+    "target_character",
+    "target_crosslevel_target",
+    "target_crosslevel_trigger",
+    "target_earthquake",
+    "target_explosion",
+    "target_goal",
+    "target_help",
+    "target_laser",
+    "target_lightramp",
+    "target_secret",
+    "target_spawner",
+    "target_speaker",
+    "target_splash",
+    "target_string",
+    "target_temp_entity",
+    "trigger_always",
+    "trigger_counter",
+    "trigger_elevator",
+    "trigger_gravity",
+    "trigger_hurt",
+    "trigger_key",
+    "trigger_monsterjump",
+    "trigger_multiple",
+    "trigger_once",
+    "trigger_push",
+    "trigger_relay",
+    "turret_base",
+    "turret_breach",
+    "turret_driver",
+    "viewthing",
+    "weapon_bfg",
+    "weapon_blaster",
+    "weapon_chaingun",
+    "weapon_grenadelauncher",
+    "weapon_hyperblaster",
+    "weapon_machinegun",
+    "weapon_railgun",
+    "weapon_rocketlauncher",
+    "weapon_shotgun",
+    "weapon_supershotgun",
+    "worldspawn",
+};
+
+// Every key an entity may carry (`light` taken and set aside), lower case.
+constexpr std::string_view kKeys[] = {
+    "accel",    "angle",       "angles",     "attenuation", "classname",   "combattarget",
+    "count",    "deathtarget", "decel",      "delay",       "distance",    "dmg",
+    "gravity",  "health",      "height",     "item",        "killtarget",  "light",
+    "lip",      "map",         "mass",       "maxpitch",    "maxyaw",      "message",
+    "minpitch", "minyaw",      "model",      "move_angles", "move_origin", "musictrack",
+    "nextmap",  "noise",       "origin",     "pathtarget",  "pausetime",   "random",
+    "sky",      "skyaxis",     "skyrotate",  "sounds",      "spawnflags",  "speed",
+    "style",    "target",      "targetname", "team",        "volume",      "wait",
+};
+constexpr std::string_view kVectors[] = {"angles", "move_angles", "move_origin", "origin",
+                                         "skyaxis"};
+
+std::string lower(std::string_view k) {
+  std::string out(k);
+  for (char& ch : out)
+    if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
+  return out;
+}
+
+// Whether `v` starts with three numbers (what follows them is not read).
+bool three_numbers(const std::string& v) {
+  const char* at = v.c_str();
+  for (int k = 0; k < 3; k++) {
+    char* end = nullptr;
+    std::strtof(at, &end);
+    if (end == at) return false;
+    at = end;
+  }
+  return true;
+}
+
+// The lines an entity's keys earn as the map is read, before anything is decided about it: a key
+// the game does not know, and a position or angles that are not three numbers. A key starting
+// with `_` is the map tools' own and passes unremarked.
+void key_lines(Q2Server& s, const ge::brush::Entity& b) {
+  for (const auto& [key, value] : b.pairs) {
+    if (!key.empty() && key[0] == '_') continue;
+    const std::string k = lower(key);
+    if (!std::binary_search(std::begin(kKeys), std::end(kKeys), std::string_view(k)))
+      say(s, "ED_ParseEdict: " + key + " is not a field");
+    else if (std::find(std::begin(kVectors), std::end(kVectors), std::string_view(k)) !=
+                 std::end(kVectors) &&
+             !three_numbers(value))
+      say(s, "ED_ParseField: couldn't parse '" + key + "'");
+  }
+}
+
+// The game's own, or one the remix brings in from another game (Quake's monsters, its items).
+bool spawnable(std::string_view c) {
+  return std::binary_search(std::begin(kSpawnable), std::end(kSpawnable), c) || monster_class(c) ||
+         sq_item(c) >= 0;
+}
 
 }  // namespace
 
@@ -48,18 +259,56 @@ void q2_pick_missing(Q2Server& s, const std::string& target, const std::string& 
   if (!then.empty()) say(s, then);
 }
 
+int q2_find_named(const Q2Server& s, const std::string& name, const char* classname) {
+  if (name.empty()) return -1;
+  for (size_t i = 0; i < s.entities.size(); i++)
+    if (s.entities[i].targetname == name && s.entities[i].classname == classname)
+      return static_cast<int>(i);
+  return -1;
+}
+
+bool q2_named(const Q2Server& s, const std::string& name) {
+  for (const Q2Entity& e : s.entities)
+    if (!e.gone && e.targetname == name) return true;
+  return false;
+}
+
+void q2_lost_combat(Q2Server& s, Q2Monster& m) {
+  const std::string t = std::move(m.lost_combat);
+  m.lost_combat.clear();
+  if (q2_named(s, t)) return;
+  const Q2Entity& e = s.entities[size_t(m.entity)];
+  q2_pick_missing(s, t,
+                  e.classname + " at " + q2_pos(e.origin) + ", combattarget " + t + " not found");
+}
+
+void q2_combat_point_missing(Q2Server& s, int at) {
+  Q2Entity& e = s.entities[size_t(at)];
+  if (e.target.empty() || q2_named(s, e.target)) return;
+  q2_pick_missing(
+      s, e.target,
+      e.classname + " at " + q2_pos(e.origin) + " target " + e.target + " does not exist");
+  e.target.clear();
+}
+
 void q2_spawn_lines(Q2Server& s, const std::vector<char>& inhibited) {
   if (s.map == nullptr) return;
   const sh::Vec3f zero{};
   const size_t n = std::min(s.entities.size(), s.map->entities.size() - 1);
+  if (!s.map->entities.empty()) key_lines(s, s.map->entities[0]);
   for (size_t i = 0; i < n; i++) {
+    key_lines(s, s.map->entities[i + 1]);
     if (i < inhibited.size() && inhibited[i] != 0) continue;
     Q2Entity& e = s.entities[i];
     const ge::brush::Entity& b = s.map->entities[i + 1];
     const auto has = [&b](const char* k) { return !b.get_any_case(k).empty(); };
     const std::string at = q2_pos(e.origin);
     const std::string& c = e.classname;
-    if (c == "path_corner" && e.targetname.empty()) {
+    if (c.empty() || !spawnable(c)) {
+      say(s, c.empty() ? std::string("ED_CallSpawn: NULL classname")
+                       : c + " doesn't have a spawn function");
+      e.gone = true;
+    } else if (c == "path_corner" && e.targetname.empty()) {
       say(s, "path_corner with no targetname at " + at);
       e.gone = true;
     } else if (c == "viewthing") {

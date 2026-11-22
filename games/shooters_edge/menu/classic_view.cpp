@@ -370,6 +370,33 @@ std::string_view banner_of(std::string_view page) {
   return {};
 }
 
+namespace {
+
+// A page longer than the screen's rows shows the ones round the focus, moved up so the last
+// fits; the rows above and below are not drawn (and not pointed at).
+void scroll_rows(const ui::Page& page, ClassicLayout& l, float top) {
+  const auto fit = static_cast<int>((kScreenH - kRowTop) / 8);
+  std::vector<size_t> shown;
+  int focus_row = 0;
+  for (size_t i = 0; i < page.items.size(); i++) {
+    if (l.items[i].w <= 0) continue;
+    if (static_cast<int>(i) == page.focus) focus_row = static_cast<int>(shown.size());
+    shown.push_back(i);
+  }
+  const int n = static_cast<int>(shown.size());
+  if (n <= fit) return;
+  const int first = std::clamp(focus_row - fit / 2, 0, n - fit);
+  for (int k = 0; k < n; k++) {
+    ui::Rect& r = l.items[shown[static_cast<size_t>(k)]];
+    if (k < first || k >= first + fit)
+      r = {};
+    else
+      r.y = top + static_cast<float>((k - first) * 8) * l.scale;
+  }
+}
+
+}  // namespace
+
 ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int width, int height) {
   if (art.plates() && menu.top().id == "main") return layout_plates(menu, art, width, height);
   ClassicLayout l = classic_screen(art, width, height);
@@ -399,6 +426,7 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
     l.items[i] = rect(16, row, kScreenW - 32, 8);
     row += 8;
   }
+  if (!l.strip && !quit) scroll_rows(page, l, kRowTop * l.scale + l.y);
   return l;
 }
 

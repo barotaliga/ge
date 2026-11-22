@@ -70,6 +70,7 @@ struct GameBindings {
   int* crouch = nullptr;        // Quake II's `cl_predict_crouch` (the eye's height predicted)
   bool* show_misses = nullptr;  // Quake II's `cl_showmiss` (each prediction miss printed)
   int* shownet = nullptr;       // Quake II's `cl_shownet` (each message's size printed)
+  bool* showpackets = nullptr;  // Quake II's `cl_showpackets` (each packet sent shown)
   int* noskins = nullptr;       // Quake II's `cl_noskins` (the picture's stock_figures)
   // The held weapon's settings: Quake II's `hand` (2 draws no weapon), `cl_gun_x/y/z` and
   // `cl_gunfov`; Quake's `r_viewmodelsize` and `r_viewmodeloffset`.
