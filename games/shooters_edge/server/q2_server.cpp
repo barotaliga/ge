@@ -1132,6 +1132,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     return false;
   }
   s.restored = 0;
+  s.cvars.apply_latched();  // the settings that wait for a new map (cheats, gamename, ...)
   // A load asked (q2_save.hpp) sets the save's game first.
   if (!s.load_file.empty() && !q2_load_begin(s, error)) return false;
   q2_leave(s);  // the level left kept for a return within its unit, or the unit's forgotten

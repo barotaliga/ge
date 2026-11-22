@@ -257,6 +257,17 @@ bool bad_number(int n, int most, const DemoMsg& m, const char* what, std::string
   return true;
 }
 
+}  // namespace
+
+int q2_music_track(const std::string& text, int last) {
+  if (text.empty()) return 0;
+  char* end = nullptr;
+  const long n = std::strtol(text.c_str(), &end, 10);
+  return *end == '\0' && n >= 0 && n < 100 ? static_cast<int>(n) : last;
+}
+
+namespace {
+
 void set_string(Demo& d, int index, std::string text) {
   DemoState& s = d.state;
   const CsLayout& cs = layout_of(s.protocol);
@@ -264,7 +275,9 @@ void set_string(Demo& d, int index, std::string text) {
     if (static_cast<size_t>(i) >= list.size()) list.resize(static_cast<size_t>(i) + 1);
     list[static_cast<size_t>(i)] = std::move(v);
   };
-  if (index == cs.max_clients) {
+  if (index == 1) {
+    s.cdtrack = q2_music_track(text, s.cdtrack);
+  } else if (index == cs.max_clients) {
     // Entities 1 to this are the players: kept by slot, so the rest number past `players`.
     d.max_clients = std::clamp(std::atoi(text.c_str()), 1, 32);
     s.players.assign(static_cast<size_t>(d.max_clients), DemoEntity{});
@@ -611,6 +624,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
                   static_cast<float>(v.gun_offset[1]) * 0.25f,
                   static_cast<float>(v.gun_offset[2]) * 0.25f};
   s.fov = static_cast<float>(v.fov);
+  s.rdflags = v.rdflags;
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;

@@ -43,6 +43,7 @@
 #include <string_view>
 
 #include "console/console.hpp"
+#include "core/deflate.hpp"
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/match_name.hpp"
 #include "shooters_edge/net/qw_record.hpp"
@@ -60,6 +61,9 @@ struct JoinedFile {
   size_t written = 0;          // of `level.bytes`
   int64_t bytes = 0;           // written to the file
   bool q2 = false;             // Quake II's recording (.dm2): its blocks, ended by a -1 length
+  // A file named `.gz`: written through gzip, `bytes` counting what went in (not the file's size).
+  bool gzip = false;
+  ge::core::DeflateStream zip;
 };
 
 struct MatchAuto {

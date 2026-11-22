@@ -457,7 +457,7 @@ void blocked(Q2Server& s, Q2Entity& e, int slot) {
   for (Q2Entity& m : s.entities)
     if (&m == &e || (e.team_master >= 0 && m.team_master == e.team_master)) {
       if (up)
-        door_go_up(s, m, m.activator);
+        door_go_up(s, m, kNoActivator);  // a door keeps no user for the way back
       else
         door_go_down(s, m);
     }
@@ -481,7 +481,7 @@ void door_go_up(Q2Server& s, Q2Entity& e, int activator) {
     if (e.wait >= 0) e.think_at = s.level_time + e.wait;
     return;
   }
-  e.activator = activator;
+  e.activator = activator == kNoActivator ? -1 : activator;
   if (door_sample(s, e, true) != nullptr)
     sound_at(s, map_row(index_of(s, e)), e.origin, door_sample(s, e, true), 1, kStatic);
   e.state = kGoing;
@@ -1684,7 +1684,10 @@ void map_spawn(Q2Server& s) {
 void map_use_targets(Q2Server& s, int e, int activator) {
   if (e < 0 || size_t(e) >= s.entities.size()) return;
   const Q2Entity& ent = s.entities[size_t(e)];
+  const bool none = activator == kNoActivator;
+  if (none) activator = -1;
   if (ent.delay > 0) {
+    if (none) s.console.push_back("Think_Delay with no activator");  // said as it is put off
     s.delayed.push_back({e, s.level_time + double(ent.delay), activator});
     return;
   }
