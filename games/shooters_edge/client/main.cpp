@@ -607,12 +607,7 @@ int run_main(int argc, char** argv) {
   listen_opt.files = &files;
   if (const ge::console::Cvar* n = console.cvars().find("name"); n != nullptr && !n->value.empty())
     listen_opt.player = n->value;
-  listen_opt.lobby = listen.opt.lobby;  // the lobby's settings, as the console set them
-  listen_opt.lobby_settings = listen.opt.lobby_settings;
-  listen_opt.port = listen.opt.port;  // others join on it (sv_port)
-  listen_opt.maxclients = listen.opt.maxclients;
-  listen_opt.hostname = listen.opt.hostname;  // sv_hostname (Quake's hostname)
-  listen_opt.login = listen.opt.login;        // sv_login and the rest, as the console set them
+  cl::take_console_settings(listen_opt, listen.opt);  // the lobby, sv_port, sv_hostname, sv_login
   if (!prefs.empty())
     listen_opt.accounts_dir = (std::filesystem::path(prefs) / "accounts").string();
   listen_opt.registered = game_content.registered;

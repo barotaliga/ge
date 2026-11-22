@@ -267,6 +267,17 @@ struct ListenOptions {
   bool new_game = false;
 };
 
+// What the console set on the window's listen (`from`: the lobby, its settings, sv_port,
+// maxclients, sv_hostname, sv_login and the rest) copied onto the options a new game opens with.
+inline void take_console_settings(ListenOptions& to, const ListenOptions& from) {
+  to.lobby = from.lobby;
+  to.lobby_settings = from.lobby_settings;
+  to.port = from.port;
+  to.maxclients = from.maxclients;
+  to.hostname = from.hostname;
+  to.login = from.login;
+}
+
 // A blow the player took (a single-player program's damage record, client_data.hpp): its armour
 // and blood, 0..255 each, and where it came from, map units.
 struct Blow {
