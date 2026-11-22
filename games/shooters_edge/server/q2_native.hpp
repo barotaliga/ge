@@ -113,5 +113,7 @@ std::string native_q2_load_ask(NativeQ2& s, std::span<const uint8_t> bytes, std:
                                std::string& error);
 // The native runner's state, or null when `r` is another runner.
 NativeQ2* native_q2_of(const RulesRunner& r);
+// The text the hosted library's own error call gave once it stopped ("" while it runs).
+std::string native_q2_error(const NativeQ2& s);
 
 }  // namespace shooters_edge::server

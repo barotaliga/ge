@@ -13,6 +13,8 @@
 #include <fstream>
 
 #include "console/lex.hpp"
+#include "console/tab_list.hpp"
+#include "console/words.hpp"
 
 namespace ge::console {
 
@@ -560,25 +562,128 @@ std::string ConsoleView::head() const {
   return h;
 }
 
+namespace {
+
+std::string joined(const std::vector<std::string>& words, std::string_view between) {
+  std::string out;
+  for (const std::string& w : words) {
+    if (!out.empty()) out += between;
+    out += w;
+  }
+  return out;
+}
+
+// "alias a, b": the game spellings of cvar or command `name` ("" none).
+std::string spellings_of(const Console& c, std::string_view name) {
+  std::vector<std::string> names;
+  for (const Synonym& s : c.cvars().synonyms())
+    if (s.part < 0 && s.target != nullptr && s.target->name == name) names.push_back(s.name);
+  for (const auto& [syn, target] : c.command_synonyms())
+    if (target == name) names.push_back(syn);
+  return names.empty() ? std::string() : "alias " + joined(names, ", ");
+}
+
+}  // namespace
+
+bool ConsoleView::value_typed(const Cvar*& cvar, std::vector<std::string>& choices,
+                              std::string& part, size_t& at) const {
+  const bool slash = !input_.empty() && (input_[0] == '/' || input_[0] == '\\');
+  if (!slash && (remote_ || chat_mode() == 1 || chat_mode() == 3)) return false;
+  const size_t from = slash ? 1 : 0;
+  const size_t space = input_.find(' ', from);
+  if (space == std::string::npos || space == from) return false;
+  const std::string name = input_.substr(from, space - from);
+  const std::string rest = input_.substr(space + 1);
+  if (name.find_first_of("\t;") != std::string::npos ||
+      rest.find_first_of(" \t;") != std::string::npos)
+    return false;
+  cvar = c_.cvars().find(name);
+  if (cvar == nullptr) return false;
+  choices = value_choices(*cvar);
+  if (choices.empty()) return false;
+  part = rest;
+  at = space + 1;
+  return true;
+}
+
+size_t ConsoleView::suggest_at() const {
+  const Cvar* cvar = nullptr;
+  std::vector<std::string> choices;
+  std::string part;
+  size_t at = 0;
+  if (value_typed(cvar, choices, part, at)) return at;
+  return !input_.empty() && (input_[0] == '/' || input_[0] == '\\') ? 1 : 0;
+}
+
 std::vector<Suggestion> ConsoleView::suggestions() const {
   std::vector<Suggestion> out;
+  if (suggest_ <= 0) return out;
+  const Cvar* typed = nullptr;
+  std::vector<std::string> choices;
+  std::string part;
+  size_t at = 0;
+  if (value_typed(typed, choices, part, at)) {  // the cvar's values, in their own order
+    const std::string p = lower(part);
+    for (const std::string& v : choices) {
+      if (lower(v).compare(0, p.size(), p) != 0) continue;
+      Suggestion s;
+      s.name = v;
+      s.kind = Suggestion::Kind::value;
+      s.detail = value_meaning(*typed, v);
+      if (v == typed->value) s.detail = s.detail.empty() ? "now" : s.detail + " (now)";
+      out.push_back(std::move(s));
+    }
+    if (static_cast<int32_t>(out.size()) > suggest_) out.resize(static_cast<size_t>(suggest_));
+    return out;
+  }
   const std::string h = head();
-  if (h.empty() || suggest_ <= 0) return out;
+  if (h.empty()) return out;
+  const auto described = [&](Suggestion& s, const Cvar& v) {
+    s.kind = Suggestion::Kind::cvar;
+    s.detail = v.value;
+    s.choices = joined(value_choices(v), ", ");
+  };
   for (const std::string& name : c_.complete(h)) {
     Suggestion s;
     s.name = name;
-    const auto u = uses_.find(name);
-    s.uses = u == uses_.end() ? 0 : u->second;
     if (const Cvar* v = c_.cvars().find(name)) {
-      s.kind = Suggestion::Kind::cvar;
-      s.detail = v->value;
+      described(s, *v);
     } else if (const auto a = c_.aliases().find(name); a != c_.aliases().end()) {
       s.kind = Suggestion::Kind::alias;
       s.detail = a->second.body;
     } else if (const auto m = c_.commands().find(name); m != c_.commands().end()) {
       s.detail = m->second.help;
     }
+    if (s.kind != Suggestion::Kind::alias) s.note = spellings_of(c_, name);
     out.push_back(std::move(s));
+  }
+  // A game's spellings: its name for one of ours, said so.
+  const std::string p = lower(h);
+  const auto listed = [&out](const std::string& name) {
+    return std::any_of(out.begin(), out.end(), [&](const Suggestion& s) { return s.name == name; });
+  };
+  for (const Synonym& syn : c_.cvars().synonyms()) {
+    if (syn.part >= 0 || syn.target == nullptr || syn.target->retired ||
+        syn.name.compare(0, p.size(), p) != 0 || listed(syn.name))
+      continue;
+    Suggestion s;
+    s.name = syn.name;
+    described(s, *syn.target);
+    s.note = "alias of " + syn.target->name;
+    out.push_back(std::move(s));
+  }
+  for (const auto& [syn, target] : c_.command_synonyms()) {
+    if (syn.compare(0, p.size(), p) != 0 || listed(syn)) continue;
+    Suggestion s;
+    s.name = syn;
+    if (const auto m = c_.commands().find(target); m != c_.commands().end())
+      s.detail = m->second.help;
+    s.note = "alias of " + target;
+    out.push_back(std::move(s));
+  }
+  for (Suggestion& s : out) {
+    const auto u = uses_.find(s.name);
+    s.uses = u == uses_.end() ? 0 : u->second;
   }
   std::stable_sort(out.begin(), out.end(), [](const Suggestion& a, const Suggestion& b) {
     if (a.uses != b.uses) return a.uses > b.uses;
@@ -593,90 +698,33 @@ std::string ConsoleView::hint() const {
   const std::vector<Suggestion> s = suggestions();
   if (s.empty()) return "";
   const std::string& name = s[static_cast<size_t>(std::max(selected_, 0))].name;
-  const std::string h = lower(head());
-  return name.size() > h.size() ? name.substr(h.size()) : "";
+  const size_t typed = input_.size() - std::min(input_.size(), suggest_at());
+  return name.size() > typed ? name.substr(typed) : "";
 }
 
 bool ConsoleView::accept() {
   const std::vector<Suggestion> s = suggestions();
   if (s.empty()) return false;
-  const bool slash = input_[0] == '/';
-  input_ = (slash ? "/" : "") + s[static_cast<size_t>(std::max(selected_, 0))].name + " ";
+  const Suggestion& pick = s[static_cast<size_t>(std::max(selected_, 0))];
+  if (pick.kind == Suggestion::Kind::value) {
+    input_ = input_.substr(0, suggest_at()) + pick.name;
+  } else {
+    const bool slash = input_[0] == '/';
+    input_ = (slash ? "/" : "") + pick.name + " ";
+  }
   cursor_ = input_.size();
   selected_ = -1;
   return true;
 }
 
 void ConsoleView::tab_list() {
-  const std::string h = head();
-  const bool slash = !input_.empty() && (input_[0] == '/' || input_[0] == '\\');
   cursor_ = input_.size();
-  if (h.empty()) return;
-  const std::vector<std::string> found = c_.complete(h);
-  if (found.empty()) return;
-  if (found.size() == 1) {
-    input_ = (slash ? input_.substr(0, 1) : std::string()) + found[0] + " ";
-    cursor_ = input_.size();
-    tab_asked_.clear();
-    return;
-  }
-  // What every match shares, the word completed to it.
-  size_t same = found[0].size();
-  for (const std::string& n : found) {
-    size_t k = 0;
-    while (k < same && k < n.size() && n[k] == found[0][k]) ++k;
-    same = k;
-  }
-  if (same > h.size())
-    input_ = (slash ? input_.substr(0, 1) : std::string()) + found[0].substr(0, same);
+  const TabList t =
+      ge::console::tab_list(c_, input_, head(), list_mode, list_threshold, tab_asked_);
+  input_ = t.input;
   cursor_ = input_.size();
-  add(LineKind::command, "]" + input_);
-  const int n = static_cast<int>(found.size());
-  if (n > list_threshold && tab_asked_ != input_) {
-    tab_asked_ = input_;
-    add(LineKind::output,
-        "Press TAB again to display all " + std::to_string(n) + " possibilities.");
-    return;
-  }
-  tab_asked_.clear();
-  // In columns as many as fit a line of 78 letters, at most 6.
-  const auto columns = [this](const std::vector<std::string>& names) {
-    size_t widest = 1;
-    for (const std::string& s : names) widest = std::max(widest, s.size());
-    const size_t per = std::clamp<size_t>(78 / (widest + 2), 1, 6);
-    std::string row;
-    for (size_t i = 0; i < names.size(); ++i) {
-      std::string cell = names[i];
-      if ((i + 1) % per != 0 && i + 1 < names.size()) cell.resize(widest + 2, ' ');
-      row += cell;
-      if ((i + 1) % per == 0 || i + 1 == names.size()) {
-        add(LineKind::output, row);
-        row.clear();
-      }
-    }
-  };
-  if (list_mode == 0) {
-    for (const std::string& name : found) add(LineKind::output, name);
-  } else if (list_mode == 1) {
-    columns(found);
-  } else {
-    std::vector<std::string> commands, settings, aliases;
-    for (const std::string& name : found)
-      (c_.cvars().find(name) != nullptr ? settings
-       : c_.aliases().count(name) != 0  ? aliases
-                                        : commands)
-          .push_back(name);
-    const auto group = [&](const std::vector<std::string>& names, const char* one,
-                           const char* many) {
-      if (names.empty()) return;
-      add(LineKind::output,
-          std::to_string(names.size()) + " possible " + (names.size() == 1 ? one : many) + ":");
-      columns(names);
-    };
-    group(commands, "command", "commands");
-    group(settings, "variable", "variables");
-    group(aliases, "alias", "aliases");
-  }
+  if (!t.echo.empty()) add(LineKind::command, t.echo);
+  for (const std::string& line : t.lines) add(LineKind::output, line);
 }
 
 void ConsoleView::say(ChatTo to, std::string_view nick, std::string_view text) {

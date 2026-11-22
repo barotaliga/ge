@@ -49,6 +49,7 @@
 #include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/server/q2_mapfix.hpp"
 #include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
 
@@ -340,6 +341,14 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_packetdup_hack", "sv_packetdup"},
     {"sv_force_reconnect", "sv_forcereconnect"},
     {"net_maxmsglen", "sv_maxmsglen"},
+    {"sys_history", "con_history"},
+    {"com_completion_mode", "con_completion_mode"},
+    {"com_completion_treshold", "con_completion_threshold"},
+    {"logfile", "con_logfile"},
+    {"logfile_flush", "con_logfile_flush"},
+    {"logfile_name", "con_logfile_name"},
+    {"logfile_prefix", "con_logfile_prefix"},
+    {"net_log_enable", "net_log"},
 };
 
 // A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.
@@ -403,6 +412,7 @@ struct Game {
   std::vector<std::string> shows;
   std::string show_map, show_next;
   bool show_taken = false, show_new_game = false, cinematics = true;
+  bool drop_told = false;  // the stopped map's error handed to the core (drop_error)
   // What the console printed and was handed on (console_lines): the rules' lines told so far.
   const sv::RulesCommon* told_rules = nullptr;
   size_t told = 0;
@@ -823,6 +833,78 @@ void next_server(Game& g, int32_t count) {
   }
 }
 
+// The autosave the rules wrote as a level of a unit started (not in deathmatch), kept as `save0`.
+void keep_autosave(Game& g) {
+  const sv::RunnerCalls* c = g.rules.calls;
+  if (c == nullptr || c->take_autosave == nullptr) return;
+  const std::vector<uint8_t> bytes = c->take_autosave(g.rules.rules);
+  std::string why;
+  if (!bytes.empty() && !cl::write_save(g.files, "save0", bytes, why) && g.net)
+    g.net->log.push_back("The autosave was not written: " + why);
+}
+
+// THE SAVE WORDS on a dedicated server (`save <dir>`, `autosave` into `save1`, `load <dir>`): the
+// game kept as `saves/<dir>.save` in the game's folder, as the window keeps it; a load starts the
+// save's map with the game read back. True when `w[0]` was one, its answer in `out`.
+bool save_words(Game& g, const std::vector<std::string>& w, std::string& out) {
+  const bool autosave = w[0] == "autosave";
+  if (w[0] != "save" && w[0] != "load" && !autosave) return false;
+  if (!autosave && w.size() != 2) {
+    out = "Usage: " + w[0] + " <directory>\n";
+    return true;
+  }
+  const std::string dir = autosave ? "save1" : w[1];
+  bool name_ok = !dir.empty() && dir.size() <= 64;
+  for (const char ch : dir)
+    name_ok = name_ok && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                          (ch >= '0' && ch <= '9') || ch == '_' || ch == '-');
+  if (!name_ok) {
+    out = "Bad savedir.\n";
+    return true;
+  }
+  const sv::RunnerCalls* c = g.rules.calls;
+  if (w[0] == "load") {
+    std::vector<uint8_t> bytes;
+    std::string why;
+    if (!cl::read_save(g.files, dir, bytes, why)) {
+      out = "No such savegame: " + dir + "\n";
+      return true;
+    }
+    std::string map;
+    if (sv::NativeQ2* nq = sv::native_q2_of(g.rules); nq != nullptr)
+      map = sv::native_q2_load_ask(*nq, bytes, dir, why);
+    else if (sv::Q2Server* sq = sv::q2_of(g.rules); sq != nullptr)
+      map = sv::q2_load_ask(*sq, bytes, dir, why);
+    else
+      why = "this game cannot read saves";
+    if (map.empty()) {
+      out = "Couldn't load " + dir + ": " + why + "\n";
+      return true;
+    }
+    g.rules.console("deathmatch 0");
+    (*g.rules).pending_map = map;
+    return true;
+  }
+  if (c == nullptr || c->save == nullptr || c->save_problem == nullptr) {
+    out = "Game does not support enhanced savegames.\n";
+    return true;
+  }
+  const std::string problem = c->save_problem(g.rules.rules);
+  if (!problem.empty()) {
+    out = problem + "\n";
+    return true;
+  }
+  std::vector<uint8_t> bytes;
+  std::string why;
+  if (!c->save(g.rules.rules, bytes, why, static_cast<int64_t>(std::time(nullptr))) ||
+      !cl::write_save(g.files, dir, bytes, why)) {
+    out = "Couldn't save " + dir + ": " + why + "\n";
+    return true;
+  }
+  out = "Game saved.\n";
+  return true;
+}
+
 // The map the rules asked for (an intermission's end, `map`, `changelevel`, `restart`) loaded and
 // the rules started on it, the clients told; a map that cannot be read starts this one again.
 // An exit's shows come first (take_shows).
@@ -864,6 +946,7 @@ void change_level(Game& g) {
   g.cfg.wire.map_checksum = sv::q2_map_checksum(g.map->file);
   sv::q2_sky(*g.map->spec.brushes, g.cfg.wire);
   if (g.net) q2_net_level(*g.net, g.cfg.wire);
+  keep_autosave(g);
 }
 
 namespace cp = ge::classic::protocol;
@@ -933,6 +1016,32 @@ void reopened(void* g, ge::net::Transport& port) {
 }
 
 double frame_seconds(const void* g) { return static_cast<const Game*>(g)->rules->sv.set.mintic; }
+
+// A RECOVERABLE ERROR (ServerGame::drop_error): the rules stopped the map (a hosted library's
+// error call: "Game Error: <its text>"), told once a map.
+std::string drop_error(void* g) {
+  Game& game = *static_cast<Game*>(g);
+  const sv::RulesCommon& r = *game.rules;
+  if (!r.map_stopped) {
+    game.drop_told = false;
+    return {};
+  }
+  if (game.drop_told || (game.net && game.net->killed)) return {};
+  game.drop_told = true;
+  if (const sv::NativeQ2* nq = sv::native_q2_of(game.rules); nq != nullptr) {
+    const std::string e = sv::native_q2_error(*nq);
+    if (!e.empty()) return "Game Error: " + e;
+  }
+  return r.stop_reason;
+}
+
+// Every client told `text` and dropped; the server answers nothing but rcon until the next map.
+void crash(void* g, const std::string& text) {
+  Game& game = *static_cast<Game*>(g);
+  if (!game.net || game.net->killed) return;
+  q2_net_shutdown(*game.net, text, false);
+  game.net->killed = true;
+}
 
 void frame(void* g) {
   Game& game = *static_cast<Game*>(g);
@@ -1148,6 +1257,10 @@ bool console_line(void* g, const std::string& line) {
     print_lines(game, ge::classic::content::fs_restart_text(game.files));
     return true;
   }
+  if (std::string out; save_words(game, w, out)) {
+    print_lines(game, out);
+    return true;
+  }
   if (std::string out; ge::classic::content::fs_command(game.files, w, out)) {
     print_lines(game, out);
     return true;
@@ -1334,6 +1447,8 @@ const gs::ServerGame& make() {
     s.player_view = player_view;
     s.console_lines = console_lines;
     s.console = console_line;
+    s.drop_error = drop_error;
+    s.crash = crash;
     s.quit = quit;
     s.sockets = sockets;
     s.maps = maps;

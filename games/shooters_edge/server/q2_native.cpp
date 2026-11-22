@@ -886,4 +886,8 @@ NativeQ2* native_q2_of(const RulesRunner& r) {
   return r.calls == &kNativeCalls ? static_cast<NativeQ2*>(r.rules) : nullptr;
 }
 
+std::string native_q2_error(const NativeQ2& s) {
+  return s.host != nullptr && s.host->dead ? s.host->error_text : std::string();
+}
+
 }  // namespace shooters_edge::server

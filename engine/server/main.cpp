@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <exception>
@@ -24,6 +25,8 @@
 #if defined(_WIN32)
 #include <io.h>
 #else
+#include <signal.h>
+#include <termios.h>
 #include <unistd.h>
 #endif
 
@@ -31,16 +34,19 @@
 #include "core/num.hpp"
 #include "net/address.hpp"
 #include "net/net_commands.hpp"
+#include "net/packet_log.hpp"
 #include "net/rates.hpp"
 #include "net/udp_socket.hpp"
 #include "server/accounts.hpp"
 #include "server/admin.hpp"
 #include "server/autorecord.hpp"
+#include "server/console_log.hpp"
 #include "server/hand_record.hpp"
 #include "server/macros.hpp"
 #include "server/net_restart.hpp"
 #include "server/record.hpp"
 #include "server/spectators.hpp"
+#include "server/terminal.hpp"
 
 namespace ge::server {
 
@@ -218,10 +224,31 @@ std::string commands_added(CommandsFile& f) {
 // the operator's console lines with the commands file's. One reader for the process, started by
 // the first networked server whose input is a terminal it has in the foreground (a server started
 // in the background, or with its input a pipe or a file, reads none); it ends at the input's end.
+// Where the terminal can be edited (not Windows, `TERM` set and not `dumb`) it is put in raw mode
+// and the reader hands over every key as it comes, for the editor (server/terminal.hpp).
 struct TerminalLines {
   std::mutex m;
-  std::string lines;
+  std::string lines;  // whole lines, or the raw keys when `raw`
+  bool raw = false;
 };
+
+// The editor while the terminal is raw (null otherwise): the sink and the game's lines put their
+// line above the one being typed.
+TermEdit* g_edit = nullptr;
+// The console log (console_log.hpp) every printed line is copied to, and its prefix setting.
+ConsoleLog g_log;
+gn::PacketLog g_netlog;  // the packet log (net/packet_log.hpp) the server's sockets write to
+const std::string* g_log_prefix = nullptr;
+
+#if !defined(_WIN32)
+termios g_cooked{};
+void terminal_restore() { tcsetattr(STDIN_FILENO, TCSANOW, &g_cooked); }
+extern "C" void terminal_signal(int sig) {
+  terminal_restore();
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
+#endif
 
 bool terminal_ours() {
 #if defined(_WIN32)
@@ -231,10 +258,40 @@ bool terminal_ours() {
 #endif
 }
 
+// Raw mode (no line buffering, no echo; signals kept), undone at exit or on a signal.
+bool terminal_make_raw() {
+#if defined(_WIN32)
+  return false;
+#else
+  const char* term = std::getenv("TERM");
+  if (term == nullptr || *term == 0 || std::strcmp(term, "dumb") == 0) return false;
+  if (isatty(STDOUT_FILENO) == 0 || tcgetattr(STDIN_FILENO, &g_cooked) != 0) return false;
+  termios raw = g_cooked;
+  raw.c_lflag &= ~static_cast<tcflag_t>(ICANON | ECHO);
+  raw.c_cc[VMIN] = 1;
+  raw.c_cc[VTIME] = 0;
+  if (tcsetattr(STDIN_FILENO, TCSANOW, &raw) != 0) return false;
+  std::atexit(terminal_restore);
+  for (const int sig : {SIGINT, SIGTERM, SIGHUP, SIGQUIT}) signal(sig, terminal_signal);
+  return true;
+#endif
+}
+
 TerminalLines& terminal_lines() {
   static TerminalLines* t = [] {
     auto* made = new TerminalLines;  // never freed: the reader may outlive every server
+    made->raw = terminal_make_raw();
     std::thread([made] {
+#if !defined(_WIN32)
+      if (made->raw) {
+        char c = 0;
+        while (read(STDIN_FILENO, &c, 1) == 1) {
+          const std::lock_guard<std::mutex> hold(made->m);
+          made->lines.push_back(c);
+        }
+        return;
+      }
+#endif
       for (std::string line; std::getline(std::cin, line);) {
         const std::lock_guard<std::mutex> hold(made->m);
         made->lines += line + "\n";
@@ -243,6 +300,26 @@ TerminalLines& terminal_lines() {
     return made;
   }();
   return *t;
+}
+
+// A line printed on the terminal, above the line being typed when there is one.
+void terminal_print(const std::string& head, std::string_view line) {
+  if (g_log.file != nullptr) {
+    const std::time_t t = std::time(nullptr);
+    std::tm now{};
+#if defined(_WIN32)
+    localtime_s(&now, &t);
+#else
+    localtime_r(&t, &now);
+#endif
+    console_log_line(g_log, g_log_prefix != nullptr ? *g_log_prefix : "", line, now);
+  }
+  if (g_edit == nullptr) {
+    std::printf("%s%.*s\n", head.c_str(), static_cast<int>(line.size()), line.data());
+    return;
+  }
+  std::printf("%s%s%.*s\n%s", term_hide().c_str(), head.c_str(), static_cast<int>(line.size()),
+              line.data(), term_redraw(*g_edit).c_str());
 }
 
 std::string terminal_typed(TerminalLines& t) {
@@ -589,6 +666,26 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   };
   CommandsFile commands{c.commands, c.commands.empty() ? 0 : file_size(c.commands)};
   TerminalLines* terminal = c.offline || !terminal_ours() ? nullptr : &terminal_lines();
+  // The editor over a raw terminal, its history read from the base game folder.
+  const std::string history_file =
+      (std::filesystem::path(c.root.empty() ? "." : c.root) / game.base_dir / ".syshistory")
+          .string();
+  TermEdit edit;
+  const bool edit_on = terminal != nullptr && terminal->raw;
+  if (edit_on) {
+    term_history_load(edit, history_file, c.con_history);
+    g_edit = &edit;
+    std::fputs(term_redraw(edit).c_str(), stdout);
+    std::fflush(stdout);
+  }
+  const auto edit_off = [&] {
+    console_log_close(g_log);
+    gn::packet_log_close(g_netlog);
+    if (!edit_on || g_edit == nullptr) return;
+    g_edit = nullptr;
+    std::fputs(term_hide().c_str(), stdout);
+    term_history_save(edit, history_file, c.con_history);
+  };
   const auto switch_mods = [&]() -> bool {
     switch_asked = false;
     std::string why;
@@ -659,31 +756,92 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     game.console_lines(s.state, printed);
     for (std::string& line : printed) {
       while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
-      std::printf("%s\n", line.c_str());
+      terminal_print("", line);
       features_log(features, line);
     }
     if (!printed.empty()) std::fflush(stdout);
   };
+  // The console log brought to its settings each frame (a change closes and opens it again).
+  g_log_prefix = &c.con_logfile_prefix;
+  const auto log_check = [&] {
+    std::string said;
+    const std::string folder =
+        con.search_path().empty()
+            ? (std::filesystem::path(c.root.empty() ? "." : c.root) / game.base_dir).string()
+            : con.search_path().front().string();
+    console_log_update(g_log, c.con_logfile, folder, c.con_logfile_name, c.con_logfile_flush, said);
+    if (!gn::packet_log_update(g_netlog, c.net_log, folder, c.net_log_name, c.net_log_flush,
+                               said)) {
+      con.cvars().set("net_log", "0", console::Source::code);
+      g_netlog.mode = 0;
+    }
+    sock.log = g_netlog.file != nullptr ? &g_netlog : nullptr;
+    lan.log = sock.log;
+    if (said.empty()) return;
+    said.pop_back();  // each line ends in a newline; print adds the last
+    con.print(said);
+  };
   for (int64_t n = 0; c.seconds == 0 || n < frames; n++) {
+    log_check();
     if (c.realtime) {
       const auto due = start + std::chrono::duration<double>(static_cast<double>(n) * step);
       std::this_thread::sleep_until(due);
     }
     server_frame(s);
     print_lines();
+    // A recoverable error the game raised: its players dropped, or the process ended with it.
+    if (game.drop_error != nullptr && s.state != nullptr) {
+      const std::string e = game.drop_error(s.state);
+      if (!e.empty() && c.fatal_errors != 0) {
+        if (game.crash != nullptr) game.crash(s.state, "Server fatal crashed: " + e + "\n");
+        if (g_log.file != nullptr) {
+          std::fputs(("FATAL: " + e + "\n").c_str(), g_log.file);
+        }
+        edit_off();
+        const char* mark = c.console_prefix.starts_with("<?>") ? "<3>" : "";
+        std::fprintf(stderr, "%s********************\n%sFATAL: %s\n%s********************\n", mark,
+                     mark, e.c_str(), mark);
+        tv_off();
+        server_close(s);
+        close_all();
+        return 1;
+      }
+      if (!e.empty()) {
+        con.print("********************\nERROR: " + e + "\n********************");
+        if (game.crash != nullptr) game.crash(s.state, "Server crashed: " + e + "\n");
+        std::fflush(stdout);
+      }
+    }
     // sv_mapcmd once after each map loads, the change seen within a quarter of a second.
     if (n % poll_frames == 0 && server_map_loaded(s, map_seen) && !c.mapcmd.empty()) {
       con.execute(c.mapcmd);
       std::fflush(stdout);
     }
-    if ((!commands.path.empty() || terminal != nullptr) && n % poll_frames == 0) {
+    if (edit_on) {  // every key as it comes, each finished line run
+      const std::string keys = terminal_typed(*terminal);
+      std::string shown;
+      std::vector<std::string> done;
+      edit.mode = c.con_tab_mode;
+      edit.threshold = std::max(c.con_tab_threshold, 1);
+      for (const char k : keys) term_feed(edit, con, k, shown, done);
+      if (!shown.empty()) {
+        std::fputs(shown.c_str(), stdout);
+        std::fflush(stdout);
+      }
+      for (const std::string& line : done) {
+        con.execute(line);
+        std::fflush(stdout);
+      }
+    }
+    if ((!commands.path.empty() || (terminal != nullptr && !edit_on)) && n % poll_frames == 0) {
       std::string lines = commands.path.empty() ? std::string() : commands_added(commands);
-      if (terminal != nullptr) lines += terminal_typed(*terminal);
+      if (terminal != nullptr && !edit_on) lines += terminal_typed(*terminal);
       if (!lines.empty()) {
         con.execute(lines);
         std::fflush(stdout);
       }
       if (switch_asked && !switch_mods()) {
+        edit_off();
         tv_off();
         server_close(s);
         close_all();
@@ -777,6 +935,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
       }
     }
   }
+  edit_off();
   server_close(s);
   close_all();
   return code;
@@ -832,8 +991,7 @@ int main_body(int argc, char** argv, const ServerGame& game) {
 #else
     localtime_r(&t, &now);
 #endif
-    const std::string head = terminal_prefix(c.console_prefix, LineLevel::normal, now);
-    std::printf("%s%.*s\n", head.c_str(), static_cast<int>(line.size()), line.data());
+    terminal_print(terminal_prefix(c.console_prefix, LineLevel::normal, now), line);
   });
   ServerCfg cfg;
   AdminFeatures admin;
@@ -953,6 +1111,7 @@ bool server_switch_mods(console::Console& con, ServerCfg& cfg, const ServerConfi
   const std::vector<std::string> was = cfg.mods;
   cfg.mods = mods;
   mount(con, config.root, cfg);
+  if (config.fs_autoexec == 0) return true;  // the folders switched, no config run again
   if (read_layers(con, cfg, true, error)) return true;
   std::string ignored;
   cfg.mods = was;

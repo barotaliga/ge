@@ -9,9 +9,24 @@
 #include <string>
 #include <vector>
 
+#include "platform/audio.hpp"
 #include "platform/window.hpp"
 
 namespace ge::platform {
+
+namespace {
+
+void list_sound_devices(console::Console& c) {
+  const std::vector<std::string> all = audio_devices();
+  if (all.empty()) {
+    c.print("No sound devices.");
+    return;
+  }
+  c.print("Available devices:");
+  for (const std::string& d : all) c.print(d);
+}
+
+}  // namespace
 
 void add_window_cvars(console::Console& con, WindowCvars& w) {
   con.cvars().bind(
@@ -78,6 +93,25 @@ void add_window_cvars(console::Console& con, WindowCvars& w) {
                               "WxH+X+Y: that size, X and Y from the desktop's top left; +X+Y: "
                               "that place alone"},
                    &w.geometry);
+  con.cvars().bind({.name = "s_enable",
+                    .fallback = "1",
+                    .flags = console::kArchive,
+                    .help = "Whether the game makes any sound.",
+                    .kind = console::CvarKind::integer,
+                    .min = 0,
+                    .max = 2,
+                    .values = "0: no sound at all; 1: the sound on (the default); 2: the same"},
+                   &w.sound);
+  con.cvars().bind({.name = "s_device",
+                    .fallback = "",
+                    .flags = console::kArchive,
+                    .help = "The sound device the game plays on.",
+                    .kind = console::CvarKind::text,
+                    .values = "\"\": the system's default (the default); NAME: that device, as "
+                              "s_devices lists them; ?: the list"},
+                   &w.sound_device);
+  con.add_command("s_devices", "list the sound devices s_device names",
+                  [](console::Console& c, const console::Args&) { list_sound_devices(c); });
   con.add_command("vid_displays", "list the displays vid_display numbers",
                   [](console::Console& c, const console::Args&) {
                     const std::vector<Display> all = displays();
@@ -131,7 +165,22 @@ WindowStyle window_style(const WindowCvars& w) {
   return {.border = !w.no_border && !w.no_title, .on_top = w.on_top, .resizable = !w.no_resize};
 }
 
-void follow_window_cvars(Window& window, WindowCvars& w) {
+void follow_sound_device(AudioOut* out, WindowCvars& w, console::Console& con) {
+  if (out == nullptr || w.sound_device == w.sound_applied) return;
+  if (w.sound_device == "?") {  // the list, the setting left as it was
+    list_sound_devices(con);
+    con.cvars().set("s_device", w.sound_applied, console::Source::local);
+    return;
+  }
+  if (!move_audio(*out, w.sound_device))
+    con.print("There is no sound device called " + w.sound_device + "; the sound stays on " +
+              (w.sound_applied.empty() ? std::string("the default device") : w.sound_applied) +
+              ".");
+  w.sound_applied = w.sound_device;  // asked once: a missing device is not asked for again
+}
+
+void follow_window_cvars(Window& window, WindowCvars& w, AudioOut* sound, console::Console* con) {
+  if (con != nullptr) follow_sound_device(sound, w, *con);
   if (w.fullscreen != w.full_applied) {  // the size follows through `InputSnapshot::resized`
     if (!set_fullscreen(window, w.fullscreen, w.display)) w.fullscreen = w.full_applied;
     w.full_applied = w.fullscreen;
@@ -159,7 +208,8 @@ bool alt_enter(const InputSnapshot& in, console::Console& con) {
 }
 
 double heard_volume(const WindowCvars& w, bool focused, bool minimised) {
-  const bool silent = (w.auto_focus >= 1 && minimised) || (w.auto_focus >= 2 && !focused);
+  const bool silent =
+      w.sound == 0 || (w.auto_focus >= 1 && minimised) || (w.auto_focus >= 2 && !focused);
   return silent ? 0 : w.volume;
 }
 

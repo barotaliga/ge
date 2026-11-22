@@ -683,12 +683,16 @@ TEST(q2s_logfile_keeps_what_the_console_prints) {
   cl::add_game_cvars(c, v, *q2, {});
   c.execute("logfile 2; logfile_prefix \"\"");
   c.print("kept");
-  CHECK(shown.size() == 1 && shown[0] == "kept");  // the console's own sink still sees it
+  const std::string opened =
+      "Logging console to " + (dir / "logs" / "console.log").generic_string();
+  // The console's own sink still sees it, after the log's opening.
+  CHECK(shown.size() == 2 && shown[0] == opened && shown[1] == "kept");
   c.execute("logfile 0");
   c.print("not kept");
+  CHECK(shown.size() == 4 && shown[2] == "Closing console log." && shown[3] == "not kept");
   std::ifstream in(dir / "logs" / "console.log");
   std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  CHECK(text == "kept\n");
+  CHECK_MSG(text == opened + "\nkept\nClosing console log.\n", text);
   std::filesystem::remove_all(dir);
 }
 
