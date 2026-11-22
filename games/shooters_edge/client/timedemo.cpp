@@ -547,4 +547,15 @@ bool bench_end_report(ge::console::Console& c, const Timedemo& bench, const std:
   return true;
 }
 
+std::string run_frames_line(long frames, double seconds, double longest_s, int w, int h,
+                            unsigned gpu_errors) {
+  char line[200];
+  std::snprintf(line, sizeof line,
+                "shooters_edge: %ld frames in %.2f s (%.1f ms a frame, the longest %.0f ms) at "
+                "%dx%d, %u GPU errors",
+                frames, seconds, frames ? seconds * 1e3 / static_cast<double>(frames) : 0.0,
+                longest_s * 1e3, w, h, gpu_errors);
+  return line;
+}
+
 }  // namespace shooters_edge::client

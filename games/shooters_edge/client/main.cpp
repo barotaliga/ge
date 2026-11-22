@@ -1967,14 +1967,7 @@ int run_main(int argc, char** argv) {
     save_settings();
   }
   const double seconds = static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
-  char line[200];
-  std::snprintf(line, sizeof line,
-                "shooters_edge: %ld frames in %.2f s (%.1f ms a frame, the longest %.0f ms) at "
-                "%dx%d, %u GPU errors",
-                presented, seconds,
-                presented ? seconds * 1e3 / static_cast<double>(presented) : 0.0, longest * 1e3, w,
-                h, device->errors.load());
-  out::status(line);
+  out::status(cl::run_frames_line(presented, seconds, longest, w, h, device->errors.load()));
   return device->errors.load() == 0 && !device->lost.load() && bench_failed == 0 ? 0 : 1;
 }
 

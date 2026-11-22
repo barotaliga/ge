@@ -264,4 +264,9 @@ ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s,
 // The HUD's snapshot from the demo's stats.
 hud::Status demo_status(const DemoState& s, double t);
 
+// The window's last line: `frames` presented in `seconds`, the mean and the `longest_s` frame, the
+// size and the GPU's errors.
+std::string run_frames_line(long frames, double seconds, double longest_s, int w, int h,
+                            unsigned gpu_errors);
+
 }  // namespace shooters_edge::client
