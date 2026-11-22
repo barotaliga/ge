@@ -289,6 +289,24 @@ TEST(escape_opens_the_menu_and_backs_out_of_it) {
   CHECK(!w.ran.empty() && w.ran.back() == "quit");
 }
 
+TEST(quakes_menu_words_open_each_page) {
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .maps = {"start"}};
+  const struct {
+    const char* word;
+    const char* page;
+  } words[] = {{"menu_singleplayer", "single"}, {"menu_load", "load"},   {"menu_save", "save"},
+               {"menu_multiplayer", "multi"},   {"menu_setup", "setup"}, {"menu_keys", "controls"},
+               {"menu_video", "video"}};
+  for (const auto& wp : words) {
+    w.con.execute(wp.word);
+    g.update({}, false, host, 0.016);
+    CHECK_MSG(g.open() && g.main().top().id == wp.page, wp.word);
+  }
+}
+
 TEST(every_press_leaves_the_sound_it_makes) {
   using ge::ui::MenuCue;
   World w;

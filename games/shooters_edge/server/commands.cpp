@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_qc_hooks_test.cpp
 #include "shooters_edge/server/commands.hpp"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -118,6 +119,52 @@ bool single_player_cheat(QcServer& s, int slot, const pg::Words& w) {
   return true;
 }
 
+// Two names the same over their whole length, a-z and A-Z folded.
+bool same_name(const std::string& a, const char* b) {
+  const size_t n = std::strlen(b);
+  if (a.size() != n) return false;
+  for (size_t i = 0; i < n; i++) {
+    char x = a[i], y = b[i];
+    if (x >= 'A' && x <= 'Z') x = static_cast<char>(x + 32);
+    if (y >= 'A' && y <= 'Z') y = static_cast<char>(y + 32);
+    if (x != y) return false;
+  }
+  return true;
+}
+
+// Quake's `tell <name> <text>`: the first player in slot order whose whole name matches,
+// ignoring case, reads "<sender>: <the whole arguments>" (the target's name still at the
+// front; quotes round the arguments taken off), cut to 62 bytes, in the plain font. The sender
+// sees nothing; no match, or no text after the name, does nothing.
+void quake_tell(QcServer& s, int slot, const pg::Words& w) {
+  if (w.count < 3) return;
+  std::string text = w.args;
+  if (!text.empty() && text.front() == '"')
+    text = text.size() >= 2 ? text.substr(1, text.size() - 2) : "";
+  std::string line = info_value(s.clients[slot].userinfo, "name") + ": " + text;
+  if (line.size() > 62) line.resize(62);
+  const char* target = pg::word(w, 1);
+  for (size_t i = 0; i < std::size(s.clients); i++) {
+    const ClientInfo& c = s.clients[i];
+    if (!c.active || !same_name(info_value(c.userinfo, "name"), target)) continue;
+    print_to(s, 1u << i, 2, line + "\n");
+    return;
+  }
+}
+
+// Quake's `ping`: the asker reads "Client ping times:" and each connected player's ping in
+// milliseconds, right-aligned in four columns, then the name, in slot order.
+void quake_ping(QcServer& s, int slot) {
+  std::string out = "Client ping times:\n";
+  for (const ClientInfo& c : s.clients) {
+    if (!c.active) continue;
+    char head[24];
+    std::snprintf(head, sizeof head, "%4d ", c.ping_ms);
+    out += head + info_value(c.userinfo, "name") + "\n";
+  }
+  print_to(s, 1u << slot, 2, out);
+}
+
 void run_server_command(QcServer& s, int slot, const pg::Words& w) {
   const char* cmd = pg::word(w, 0);
   const uint32_t me = 1u << slot;
@@ -147,6 +194,10 @@ void run_server_command(QcServer& s, int slot, const pg::Words& w) {
     if (w.count >= 2) set_user_info(s, slot, "rate", pg::word(w, 1));
   } else if (std::strcmp(cmd, "drop") == 0) {
     c.drop = true;
+  } else if (s.sv.set.single_player_clock && std::strcmp(cmd, "tell") == 0) {
+    quake_tell(s, slot, w);
+  } else if (s.sv.set.single_player_clock && std::strcmp(cmd, "ping") == 0) {
+    quake_ping(s, slot);
   } else if (s.sv.set.single_player_clock && single_player_cheat(s, slot, w)) {
     // done: a single-player program's cheats (no sv_cheats; refused in deathmatch)
   } else if (std::strcmp(cmd, "setpos") == 0) {
@@ -232,7 +283,9 @@ static CommandResult run_client_command(QcServer& s, int slot, const std::string
   else if (s.named.user_cmd > 0)
     handled = call_hook(s, HookId::user_cmd, s.named.user_cmd, e, {cmd});
   if (handled != 0) return CommandResult::mod;
-  if (listed(kOverridable, cmd.c_str())) {
+  // Quake's `tell` and `ping` (a mod may still take them first); QuakeWorld has neither.
+  const bool quake_word = s.sv.set.single_player_clock && (cmd == "tell" || cmd == "ping");
+  if (quake_word || listed(kOverridable, cmd.c_str())) {
     pg::tokenize_words(line.c_str(), w);  // the hook may have tokenized something else
     run_server_command(s, slot, w);
     return CommandResult::server;
@@ -292,6 +345,11 @@ static bool run_console_line(QcServer& s, const std::string& line) {
             : std::string("console: ");
     print_to(s, all_clients(s), 3, from + text + "\n");
     if (s.sv.set.single_player_clock) console_print(s, from + text);
+    return true;
+  }
+  // Quake's `tell` and `ping` are a player's: the server's own console is no player.
+  if (s.sv.set.single_player_clock && (cmd == "tell" || cmd == "ping")) {
+    console_print(s, "Can't \"" + cmd + "\", not connected");
     return true;
   }
   if (cmd == "restart") {

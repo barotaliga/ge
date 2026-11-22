@@ -82,7 +82,14 @@ lines a Quake server's players read are each game's own (`server/commands.cpp`):
 by the state before it in QuakeWorld, so a pause reads "unpaused", as that game does), "Server is
 paused." to one who joins a paused game and the release when the last player leaves, the refused
 suicide of the dead and of spectators, "<name> overflowed", and `quit` (`engine/server`): every
-QuakeWorld player told "server shutdown" in the datagram that drops it, then the masters.
+QuakeWorld player told "server shutdown" in the datagram that drops it, then the masters. A Quake
+server also answers `tell` (the first player by whole name, ignoring case, reads "<sender>: <the
+whole arguments>", cut to 62 bytes) and `ping` ("Client ping times:" and each player's), and its
+console refuses both ("Can't "tell", not connected"); `version` on the dedicated console prints
+the game's version. Quake's spare program settings (`noexit`, `nomonsters`, `gamecfg`, `temp1`,
+`scratch1` to `scratch4`, `savedgamecfg` and `saved1` to `saved4`, the last five kept in the
+config) are registered so a program reads and sets them. There is no "server crashed" line:
+our server never stops on a fault, since a mod's error is caught and the game goes on.
 
 Quake II's ledger (`porting/shooters-edge/q2-ledger-server.md`) is the checklist; the facts of the
 operator's words, the player's queries and the connect checks are in

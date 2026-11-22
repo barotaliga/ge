@@ -79,6 +79,14 @@ the game's own letters, and the text a player reads. Settings and commands are t
 - `toggle`: it flips each named setting in one game and cycles values in the other; there is no
   per-game command layer yet to give one name both meanings.
 - The third game's client half (its HUD and prediction in bytecode).
+- `version` prints the game's version alone, not the build's time and date as the classic clients
+  do: a build stamp would make every build differ and empty the compiler cache. The menu words
+  (`menu_singleplayer`, `menu_load`, `menu_save`, `menu_multiplayer`, `menu_setup`, `menu_keys`,
+  `menu_video`) open the shell's pages; `menu_keys` opens a game's own key page where its menu has
+  one. `user` prints a joined QuakeWorld player's user info from what the server last told;
+  `msg` and `noaim` go in the user info; `ambient_level` and `ambient_fade` set the water and
+  wind's loudness and how fast they swell (the fade in 255ths of full a second); `m_side` scales
+  the mouse's sidestep in every shooter; `+use` is held but never sent, as in the classic games.
 
 ## Labs and tests
 

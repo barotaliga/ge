@@ -435,7 +435,7 @@ bool listen_rules_word(Listen& l, const std::string& line);
 // A console line the window does not know, in a single-player program's game: the original's
 // cheats and `kill` (god, notarget, noclip, fly, give, kill) go to the server as slot 0's own
 // command, its level commands (restart, changelevel) to the server's console; false for any other
-// line or game.
+// line or game. On any Quake server (deathmatch too), `tell` and `ping` go to it as slot 0's.
 bool listen_campaign_word(Listen& l, const std::string& line);
 // The people playing in the game the window hosts (its own player and those who joined; never
 // a bot, so a game with companions alone still pauses under the menu).

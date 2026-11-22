@@ -325,7 +325,7 @@ void DemoSounds::frame(const DemoState& s, std::span<const DemoSound> started,
   channels_.update(l);
   if (ambience_ && map_) {
     const float at[3] = {s.eye.x, s.eye.y, s.eye.z};
-    ambience_->step(synth_, *map_, at, dt, kAmbientVolume * volume_ / kDemoVolume);
+    ambience_->step(synth_, *map_, at, dt, ambient_settings().level * volume_ / kDemoVolume);
   }
 }
 

@@ -90,6 +90,8 @@ struct ClientConfig {
   std::string gender;              // Quake II's user info `gender` ("": not sent)
   int topcolor = 0, bottomcolor = 0;
   int rate = 25000;
+  int msg = 1;             // the user info's `msg`: the lowest print level wanted
+  bool noaim = false;      // the user info's `noaim`: no aim help
   int fov = 90, hand = 0;  // Quake II's user info carries them (q2_client.hpp)
   bool spectator = false;
   bool gender_auto = false;  // Quake II's: `gender` picked from the skin's figure
@@ -248,6 +250,7 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   PlayerState players[32];
   bool player_seen[32] = {};
   std::string userinfos[32];
+  int userids[32] = {};  // each slot's user id (updateuserinfo)
   int frags[32] = {};
   int32_t stats[kStats] = {};
   std::vector<std::string> prints, centerprints;

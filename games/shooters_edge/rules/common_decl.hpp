@@ -228,6 +228,8 @@ namespace pg = ge::progs;
   X(lost_an_octa, " lost an OctaPower with ")                                                      \
   X(lost_a_ring, " lost a ring with ")                                                             \
   X(seconds_remaining, " seconds remaining\n")                                                     \
+  X(you_got_the_rune, "You got the rune!")                                                         \
+  X(a_rune_needs_its_episode, "a rune needs its episode in its spawnflags")                        \
   X(recovered_a_quad, " recovered a Quad with ")                                                   \
   X(recovered_an_octa, " recovered an OctaPower with ")                                            \
   X(recovered_a_ring, " recovered a Ring with ")                                                   \
@@ -900,7 +902,14 @@ namespace pg = ge::progs;
   X(quake_key_touch, "quake_key_touch")                             \
   X(light_use, "light_use")                                         \
   X(light_fluorospark, "light_fluorospark")                         \
-  X(trigger_killed, "trigger_killed")
+  X(trigger_killed, "trigger_killed")                               \
+  X(func_episodegate, "func_episodegate")                           \
+  X(func_bossgate, "func_bossgate")                                 \
+  X(onlyregistered_touch, "onlyregistered_touch")                   \
+  X(trigger_onlyregistered, "trigger_onlyregistered")               \
+  X(teleporttrain_next, "teleporttrain_next")                       \
+  X(teleporttrain_use, "teleporttrain_use")                         \
+  X(misc_teleporttrain, "misc_teleporttrain")
 
 // WORDS AS THE BYTECODE TESTS THEM. A condition on a float (IF / IFNOT) tests the word, so -0 is
 // true; `!x`, `&&` and `||` compare as floats (and evaluate both sides: the rules ask both

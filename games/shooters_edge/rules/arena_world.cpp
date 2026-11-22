@@ -336,6 +336,47 @@ void item_key2(A& q) {
   }
 }
 
+// A rune (Quake's rules): its model by its episode's bit; touched by a live player it is gone for
+// good, its bits join the server's `serverflags` (kept from map to map, which the gates read), the
+// player reads "You got the rune!" with a flash, and its targets fire. Without a bit the map does
+// not load. The arena's own rules have none.
+void item_sigil(A& q) {
+  const int32_t me = q.self();
+  if (!quake_rules(q)) {
+    q.remove(me);
+    return;
+  }
+  const float flags = q.f(me, q.L.f.spawnflags);
+  if (band(flags, 15) == 0) q.objerror({q.s(s_a_rune_needs_its_episode)});
+  int32_t mdl = q.s(s_end1_mdl);
+  if (band(flags, 2) != 0) mdl = q.s(s_end2_mdl);
+  if (band(flags, 4) != 0) mdl = q.s(s_end3_mdl);
+  if (band(flags, 8) != 0) mdl = q.s(s_end4_mdl);
+  q.precache_model(mdl);
+  q.precache_sound(q.s(s_runekey_wav));
+  q.setmodel(me, mdl);
+  q.set_f(me, q.L.f.flags, kFlItem);
+  q.set_f(me, q.L.f.solid, kSolidTrigger);
+  q.set_f(me, q.L.f.movetype, kMovetypeToss);
+  q.setsize(me, {-16, -16, -24}, {16, 16, 32});
+  q.set_v(me, q.L.f.origin, q.v(me, q.L.f.origin) + Vec3{0, 0, 6});
+  q.droptofloor();
+  q.set_i(me, q.L.f.touch, q.fn(fn_sigil_touch));
+}
+
+void sigil_touch(A& q) {
+  const int32_t me = q.self();
+  const int32_t o = q.other();
+  if (!q.is(q.i(o, q.L.f.classname), "player") | (q.f(o, q.L.f.health) <= 0)) return;
+  q.centerprint(o, {q.s(s_you_got_the_rune)});
+  q.sound(o, kChanItem, q.s(s_runekey_wav), 1, kAttnNorm);
+  q.stuffcmd(o, q.s(s_bf));
+  q.set_gf(q.L.g.serverflags, bor(q.gf(q.L.g.serverflags), band(q.f(me, q.L.f.spawnflags), 15)));
+  q.set_ge(g_activator, o);
+  use_targets(q);
+  q.remove(me);
+}
+
 // A relay: fires its targets when used (with its delay, words and kill target).
 void trigger_relay(A& q) { q.set_i(q.self(), q.L.f.use, q.fn(fn_use_targets)); }
 
