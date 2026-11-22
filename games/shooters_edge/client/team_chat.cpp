@@ -952,8 +952,12 @@ void add_team_chat(con::Console& c, TeamChat& chat) {
           if (text.empty()) return;
           if (on(con, "cl_parseSay")) text = fill_team_codes(con, chat, text);
           const std::string fake = word(con, "cl_fakename");
-          if (a[0] == "say_team" && !fake.empty() && text.find('\r') == std::string::npos)
-            text = "\r" + fake + word(con, "cl_fakename_suffix") + text;  // over "(name): "
+          if (a[0] == "say_team" && !fake.empty() && text.find('\r') == std::string::npos) {
+            std::string head = "\r";  // drawn over the "(name): " the others' clients write
+            head += fake;
+            head += word(con, "cl_fakename_suffix");
+            text.insert(0, head);
+          }
           if (on(con, "cl_parseFunChars")) text = fun_characters(text, true);
           if (flooding(con, chat)) {
             con.print("Flood Protection");

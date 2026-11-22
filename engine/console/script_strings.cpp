@@ -28,7 +28,7 @@ int options_of(const Args& a, size_t at) {
 
 // `alias_in` and `cvar_in` (`into_alias`): the second name's value put into the first's text.
 void put_in(Console& c, const Args& a, bool into_alias) {
-  const std::string what = a[0];
+  const std::string& what = a[0];
   if (a.size() < 3 || a.size() > 4) {
     c.print(what + (into_alias ? " <alias> <cvar> [<options>]" : " <cvar1> <cvar2> [<options>]"));
     return;
@@ -72,7 +72,7 @@ void put_in(Console& c, const Args& a, bool into_alias) {
 
 // `alias_out` and `cvar_out`: the first place the second name's value is found taken out.
 void take_out(Console& c, const Args& a, bool from_alias) {
-  const std::string what = a[0];
+  const std::string& what = a[0];
   if (a.size() < 3 || a.size() > 4) {
     c.print(what + (from_alias ? " <alias> <cvar> [<options>]" : " <cvar1> <cvar2> [<options>]"));
     return;
