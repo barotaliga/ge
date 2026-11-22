@@ -744,8 +744,6 @@ int run_main(int argc, char** argv) {
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
   cl::add_sound_status_commands(console, speaker ? speaker->driver() : nullptr, synth);
-  out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
-                      : std::string("shooters_edge: no audio device; a demo plays silent"));
   // The microphone, opened the first time a talk key is held on a server joined (the system asks
   // the player's leave then, never at start) and read every frame after (net/qw_remote.hpp).
   std::unique_ptr<ge::platform::AudioIn> mic;

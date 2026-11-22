@@ -11,6 +11,8 @@
 #include <string>
 #include <utility>
 
+#include "core/output.hpp"
+
 namespace shooters_edge::client {
 
 namespace au = ge::audio;
@@ -120,6 +122,9 @@ void add_local_sound_commands(ge::console::Console& con, MenuSounds& sounds,
 void add_sound_status_commands(ge::console::Console& con, const char* driver,
                                const ge::audio::Synth& synth) {
   const std::string name = driver != nullptr ? driver : "";
+  ge::core::output::status(driver != nullptr
+                               ? "shooters_edge: audio on '" + name + "'"
+                               : "shooters_edge: no audio device; a demo plays silent");
   con.add_command(
       "soundinfo", "soundinfo: the sound device and what is playing on it",
       [name, &synth, on = driver != nullptr](ge::console::Console& c, const ge::console::Args&) {
