@@ -135,6 +135,13 @@ TEST(rows_dim_until_the_console_knows_what_they_need) {
   CHECK(!item(m, "host", "fraglimit")->disabled);
   CHECK(item(m, "host", "fraglimit")
             ->choices[static_cast<size_t>(item(m, "host", "fraglimit")->choice)] == "20");
+  // HOST NAME shows the server's name beside it once the server has one.
+  CHECK(item(m, "host", "hostname")->disabled);
+  server.add({.name = "hostname", .fallback = "Frag Hall", .kind = ge::console::CvarKind::text});
+  sm::refresh(m, host);
+  CHECK_MSG(!item(m, "host", "hostname")->disabled &&
+                item(m, "host", "hostname")->text == "HOST NAME  Frag Hall",
+            item(m, "host", "hostname")->text);
 }
 
 TEST(a_setting_is_its_cvar_read_and_written) {
