@@ -70,6 +70,12 @@ bool holds_launcher(const Stats& st) {
 
 bool has_launcher(const Stats& st) { return (st.items & st.arsenal->launcher) != 0; }
 
+bool can_blast(const Stats& st) {
+  const BotArsenal& a = *st.arsenal;
+  return launcher_rounds(st) > 0 && ((a.launcher != 0 && (st.items & a.launcher) != 0) ||
+                                     (a.lob != 0 && (st.items & a.lob) != 0));
+}
+
 int launcher_number(const BotArsenal& a) {
   const BotWeapon* w = weapon_row(a, a.launcher);
   return w != nullptr ? w->number : 0;

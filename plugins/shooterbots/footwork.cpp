@@ -191,6 +191,20 @@ void fighter_dodge(Fighter& f, const ge::shooterbots::BotView& s, int me, double
           f.press_note = "keep-off";
         }
       }
+      // ONE HE CANNOT PUT DOWN (BotArsenal::blast_only without a blast in hand: a zombie he only
+      // knocks down to rise again): no fight to stand in, the feet keep the route. Standing to it
+      // held him in e1m3's corridors for minutes.
+      if (in_sight && routing && f.arsenal->blast_only != nullptr &&
+          f.bot.target > s.sv.set.maxclients && f.bot.target < s.sv.num_edicts) {
+        const sh::Edict& foe = s.sv.edicts[static_cast<size_t>(f.bot.target)];
+        if (foe.modelindex > 0 && static_cast<size_t>(foe.modelindex) < s.models.size() &&
+            f.arsenal->blast_only(s.models[static_cast<size_t>(foe.modelindex)]) &&
+            !sb::can_blast(read_stats(s, me, *f.arsenal))) {
+          cmd.forward = route_f;
+          cmd.side = route_s;
+          f.press_note = "past";
+        }
+      }
       if (why) {
         why->decide("dodge");
         why->fact("goal_feet", goal_feet);
