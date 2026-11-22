@@ -58,7 +58,7 @@ std::vector<fs::path> pngs(const fs::path& dir, const char* ext = ".png") {
   return out;
 }
 
-const gc::ScreenshotSettings kPng{"png", 90, 444, ""};
+const gc::ScreenshotSettings kPng{"png", 90, 444, "", "", 6};
 
 }  // namespace
 
@@ -209,6 +209,47 @@ TEST(a_named_screenshot_keeps_its_name_and_never_overwrites) {
   CHECK(gc::still_options(set, note).format == gc::StillFormat::kPng && note.empty());
   set.format = "jpeg";
   CHECK(gc::still_options(set, note).format == gc::StillFormat::kJpg && note.empty());
+}
+
+// A template (`scr_template`) names each screenshot by the first free number in its X's; one with
+// no X is a plain name; one leaving the folder is passed over for the time's name. Compression 0
+// stores a png's rows unpacked.
+TEST(a_template_numbers_its_xs_and_compression_zero_stores_the_rows) {
+  CHECK(gc::screenshot_template_name("quakeXXX", 7) == "quake007");
+  CHECK(gc::screenshot_template_name("aXXb", 42) == "a42b");
+  CHECK(gc::screenshot_template_name("quakeXXX", 1000).empty());
+  CHECK(gc::screenshot_template_name("shot", 3) == "shot");
+  const fs::path dir = fresh_dir("ge_screenshot_template") / "screenshots";
+  gc::ScreenshotSettings set = kPng;
+  set.name_template = "quakeXXX";
+  gc::Screenshots shots(dir.string(), "game", &set);
+  const std::vector<uint8_t> rgba = frame(8, 8);
+  for (int i = 0; i < 2; i++) {
+    shots.request();
+    CHECK(shots.due() && shots.write(8, 8, rgba));
+  }
+  set.name_template = "../out";
+  shots.request();
+  CHECK(shots.due() && shots.write(8, 8, rgba));
+  shots.flush();
+  CHECK(fs::exists(dir / "quake000.png") && fs::exists(dir / "quake001.png"));
+  CHECK(!fs::exists(dir.parent_path() / "out.png"));
+  std::string note;
+  set.compression = 0;
+  CHECK(gc::still_options(set, note).stored);
+  set.compression = 6;
+  CHECK(!gc::still_options(set, note).stored);
+  gc::StillOptions o;
+  o.format = gc::StillFormat::kPng;
+  std::vector<uint8_t> packed, stored;
+  gc::StillFormat used;
+  const std::vector<uint8_t> big = frame(64, 64);
+  CHECK(gc::encode_still(o, 64, 64, big, packed, used, note));
+  o.stored = true;
+  CHECK(gc::encode_still(o, 64, 64, big, stored, used, note));
+  CHECK_MSG(stored.size() > packed.size(), std::to_string(stored.size()));
+  auto back = gc::decode_still(stored, note);
+  CHECK(back && back->width == 64 && back->rgba == big);
 }
 
 TEST(a_grab_is_kept_in_memory_scaled_and_packed_as_jpeg_with_no_file) {

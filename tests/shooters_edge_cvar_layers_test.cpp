@@ -672,3 +672,19 @@ TEST(quake_twos_m_side_is_quakes_sidestep_a_whole_unit_a_count) {
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], b);
   CHECK(v.find("m_side")->value == "0.8" && w.controls.m_side == 0.8);
 }
+
+TEST(quake_twos_screenshots_are_numbered_quake000_up_and_packed_by_its_setting) {
+  // scr_template is the engine's (capture/screenshot.hpp): named by the time unless a game names
+  // a template; Quake II's are quakeXXX, spelled gl_screenshot_template, and its
+  // gl_screenshot_compression is scr_compression.
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("scr_template")->value.empty() && w.shots.name_template.empty());
+  const cl::GameBindings b{.view = &w.view};
+  cl::switch_game_cvars(w.console, w.game, *pr::find_game("q2"), b);
+  CHECK(w.shots.name_template == "quakeXXX");
+  w.console.execute("gl_screenshot_template shotXX; gl_screenshot_compression 0");
+  CHECK(w.shots.name_template == "shotXX" && w.shots.compression == 0);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], b);  // one setting: the player's
+  CHECK(v.find("scr_template")->value == "shotXX" && w.shots.name_template == "shotXX");
+}

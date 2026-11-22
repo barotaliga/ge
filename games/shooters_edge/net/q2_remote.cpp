@@ -60,6 +60,7 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   s.nodelta = cfg.q2_nodelta;  // cl_nodelta
   s.ask_moves = true;          // the other players' moves, to run them forward (q2_predict.hpp)
   s.ask_back = true;           // the items coming back, drawn ahead of time (ce_respawns)
+  s.ask_hits = true;           // the damage dealt, the hit marker's (cl_hit_markers)
   s.read_file = [&r](const std::string& path) {
     return r.read_file ? r.read_file("", path) : std::vector<uint8_t>{};
   };

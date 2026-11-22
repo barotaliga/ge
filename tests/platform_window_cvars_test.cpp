@@ -2,7 +2,7 @@
 // settings, volume is held to 0..1. No window is opened.
 //
 // ge:summary Tests the window's settings: vid_fullscreen, vid_display, volume, vid_displays
-// ge:keywords test window-cvars vid_fullscreen vid_display volume vid_displays
+// ge:keywords test window-cvars vid_fullscreen vid_display volume vid_displays vid_geometry
 // ge:skill platform testing
 #include "platform/window_cvars.hpp"
 
@@ -61,4 +61,22 @@ TEST(the_window_style_follows_win_noborder_notitle_alwaysontop_and_noresize) {
   CHECK(!ge::platform::window_style(w).border);
   con.execute("win_noborder 0");
   CHECK(ge::platform::window_style(w).border);
+}
+
+TEST(vid_geometry_reads_a_size_a_place_or_both) {
+  ge::platform::WindowPlace p;
+  CHECK(ge::platform::window_place_of("640x480", p) && p.width == 640 && p.height == 480 &&
+        !p.has_place);
+  CHECK(ge::platform::window_place_of("800x600+10-20", p) && p.width == 800 && p.height == 600 &&
+        p.has_place && p.x == 10 && p.y == -20);
+  CHECK(ge::platform::window_place_of("+5+7", p) && p.width == 0 && p.has_place && p.x == 5 &&
+        p.y == 7);
+  for (const char* bad :
+       {"", "640", "640x", "x480", "0x480", "640x480+5", "640x480+a+b", "640x480 ", "+5"})
+    CHECK_MSG(!ge::platform::window_place_of(bad, p), bad);
+  ge::console::Console con;
+  ge::platform::WindowCvars w;
+  ge::platform::add_window_cvars(con, w);
+  con.execute("vid_geometry 1024x768+0+0");
+  CHECK(w.geometry == "1024x768+0+0");
 }
