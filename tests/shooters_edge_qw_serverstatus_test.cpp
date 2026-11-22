@@ -1,7 +1,7 @@
 // games/shooters_edge/net/qw_serverstatus.hpp: an answer of either game read into the block
 // serverstatus prints (info keys padded, players by score), and the command's refusals.
 //
-// ge:summary Test: serverstatus's block for both games' answers, its usage and bad address lines
+// ge:summary Test: serverstatus's block for both games' answers and refusals; download's checks
 // ge:keywords test serverstatus status-response players score ping
 // ge:skill net testing
 #include "shooters_edge/net/qw_serverstatus.hpp"
@@ -53,4 +53,23 @@ TEST(command_needs_an_address_and_reads_it) {
   CHECK(con.output().back() == "Usage: serverstatus [address]");
   con.execute("serverstatus not..an..address..");
   CHECK(con.output().back() == "Bad address: not..an..address..");
+}
+
+TEST(download_checks_the_path_and_queues_it) {
+  ge::console::Console con{false};
+  cn::Remote r;
+  cn::add_remote_commands(con, r);
+  con.execute("download maps/q2dm1.bsp");
+  CHECK(con.output().back() == "Must be connected to a server.");
+  cn::Q2ClientEnd c;
+  c.fetching = "maps/q2dm8.bsp";  // a fetch under way: the next waits behind it
+  CHECK(cn::q2_download(c, "pics/colormap.pcx") == "");
+  CHECK(c.fetch_queue.size() == 1 && c.fetch_queue[0] == "pics/colormap.pcx");
+  CHECK(cn::q2_download(c, "PICS/ColorMap.PCX") == "File exists");  // lowered, already queued
+  CHECK(cn::q2_download(c, "maps/q2dm8.bsp") == "File exists");     // the one coming
+  CHECK(cn::q2_download(c, "config.cfg") == "Invalid quake path");
+  CHECK(cn::q2_download(c, "maps/q2dm1.exe") == "Invalid quake path");
+  CHECK(cn::q2_download(c, "maps/../q2dm1.bsp") == "Invalid quake path");
+  CHECK(cn::q2_download(c, "save/game.txt") == "Operation not permitted");
+  CHECK(cn::q2_download(c, "maps/" + std::string(60, 'a') + ".bsp") == "File name too long");
 }

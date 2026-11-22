@@ -8,7 +8,9 @@
 #include "shooters_edge/net/q2_client.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <iterator>
 #include <utility>
 
 #include "net/voice_trial.hpp"
@@ -501,6 +503,35 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
       break;
   }
   c.last_tick = c.now;
+}
+
+std::string q2_download(Q2ClientEnd& c, const std::string& file) {
+  if (file.size() > 63) return "File name too long";
+  std::string path = file;
+  for (char& ch : path) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  for (char& ch : path)
+    if (ch == '\\') ch = '/';
+  const auto name_char = [](char ch) {
+    return std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_' || ch == '-';
+  };
+  static constexpr const char* kKinds[] = {"bsp", "dm2", "ent", "jpg", "loc", "md2", "md3", "ogg",
+                                           "pcx", "png", "sp2", "tga", "txt", "wal", "wav"};
+  const size_t dot = path.rfind('.');
+  const std::string kind = dot == std::string::npos ? std::string() : path.substr(dot + 1);
+  const bool known = std::any_of(std::begin(kKinds), std::end(kKinds),
+                                 [&kind](const char* k) { return kind == k; });
+  if (path.empty() || !name_char(path.front()) || !name_char(path.back()) ||
+      path.find("..") != std::string::npos || path.find('/') == std::string::npos || !known ||
+      path.find("//") != std::string::npos)
+    return "Invalid quake path";
+  if (!lacks(c, path) || path == c.fetching ||
+      std::find(c.fetch_queue.begin(), c.fetch_queue.end(), path) != c.fetch_queue.end())
+    return "File exists";
+  if (path.rfind("save/", 0) == 0 || path.rfind("music/", 0) == 0 || path.rfind("video/", 0) == 0)
+    return "Operation not permitted";
+  c.fetch_queue.push_back(path);
+  if (c.fetching.empty()) next_fetch(c);
+  return {};
 }
 
 void q2_client_stop(Q2ClientEnd& c) {

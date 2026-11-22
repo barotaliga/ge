@@ -1034,6 +1034,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   client::add_qw_ignore(con, r.ignore, r.demo.state);
   add_remote_macros(con, r);  // $cl_server, $cl_ping, $cl_lag and the rates
   add_serverstatus_command(con, r);
+  add_q2_download_command(con, r);  // download <file> (q2_remote.hpp)
   r.setting = [&con](const std::string& name) {
     if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;
     if (const ge::console::Synonym* s = con.cvars().synonym(name))

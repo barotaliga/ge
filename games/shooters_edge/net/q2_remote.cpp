@@ -259,4 +259,25 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   return RemoteStep::frame;
 }
 
+void add_q2_download_command(ge::console::Console& con, Remote& r) {
+  con.add_command("download", "download <file>: a file asked of the server you are on",
+                  [&r](ge::console::Console& c, const ge::console::Args& a) {
+                    if (!r.active || r.watch || !r.q2 || r.q2->stage != ClientStage::active) {
+                      c.print("Must be connected to a server.");
+                      return;
+                    }
+                    const ge::console::Cvar* allow = c.cvars().find("allow_download");
+                    if (allow != nullptr && allow->value == "-1") {
+                      c.print("Downloads are permanently disabled.");
+                      return;
+                    }
+                    if (a.size() != 2) {
+                      c.print("Usage: download <filename>");
+                      return;
+                    }
+                    const std::string why = q2_download(*r.q2, a[1]);
+                    if (!why.empty()) c.print("Couldn't download " + a[1] + ": " + why);
+                  });
+}
+
 }  // namespace shooters_edge::net
