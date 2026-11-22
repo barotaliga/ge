@@ -158,3 +158,21 @@ TEST(in_grab_0_takes_the_mouse_only_while_the_game_covers_the_screen) {
   r.c.execute("in_grab 2");
   CHECK(cl::q2_takes_mouse(r.s, false));
 }
+
+TEST(the_download_switches_are_quake_iis_settings) {
+  // allow_download and its kinds, read at each connect (net/qw_remote.cpp): every kind fetched
+  // but `others`; `allow_download -1` refuses even a typed download.
+  Rig r;
+  const ge::console::Cvar* all = r.c.cvars().find("allow_download");
+  CHECK(all != nullptr && all->value == "1");
+  for (const char* kind : {"maps", "players", "models", "sounds", "textures", "pics"}) {
+    const ge::console::Cvar* v = r.c.cvars().find(std::string("allow_download_") + kind);
+    CHECK_MSG(v != nullptr && v->value == "1", kind);
+  }
+  const ge::console::Cvar* others = r.c.cvars().find("allow_download_others");
+  CHECK(others != nullptr && others->value == "0");
+  r.c.execute("allow_download -1");
+  CHECK(all->value == "-1");
+  r.c.execute("allow_download -2");  // out of range: held to -1
+  CHECK(all->value == "-1");
+}

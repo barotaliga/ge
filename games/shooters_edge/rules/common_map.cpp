@@ -1,5 +1,6 @@
 // The arena's map things: teleport destinations, lights and flames, walls, doors, plats, buttons
-// and triggers, teleporters, pushes and hurts.
+// and triggers, teleporters, pushes and hurts; Quake's episode gates, the trigger only the full
+// game fires and the teleport ball that rides a path (the arena's and the campaign's alike).
 //
 // Doors whose boxes touch are one GROUP and open and shut together (spawnflag 4 keeps a door
 // apart). The group's first door is its master, every door's .owner; .enemy chains the group
@@ -12,7 +13,8 @@
 // ge:keywords arena native-arena func_door func_plat func_button trigger_multiple teleporter
 // ge:keywords trigger_push trigger_hurt door_link door-group movers func_train train
 // ge:keywords moving-platform
-// ge:keywords path_corner
+// ge:keywords path_corner func_episodegate func_bossgate trigger_onlyregistered misc_teleporttrain
+// ge:keywords episode-gates serverflags
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_arena_rules_test.cpp
 #include <cstdint>
@@ -941,6 +943,96 @@ void trigger_hurt(A& q) {
   trigger_start(q);
   q.set_i(q.self(), q.L.f.touch, q.fn(fn_hurt_touch));
   if (q.f(q.self(), f_dmg) == 0) q.set_f(q.self(), f_dmg, 5);
+}
+
+// THE EPISODES: Quake's gates by the runes' bits in `serverflags`, kept from map to map, and the
+// trigger only the full game's packs fire. The arena and the campaign share them.
+// Stands (blocking the hall) once its episode is done.
+void func_episodegate(A& q) {
+  if (band(q.gf(q.L.g.serverflags), q.f(q.self(), q.L.f.spawnflags)) == 0) {
+    q.remove(q.self());
+    return;
+  }
+  func_wall(q);
+}
+
+// Gone once all four episodes are done.
+void func_bossgate(A& q) {
+  if (band(q.gf(q.L.g.serverflags), 15) == 15) {
+    q.remove(q.self());
+    return;
+  }
+  func_wall(q);
+}
+
+// Acts as a trigger_once on the full game's packs; on the shareware ones it only shows its message.
+void onlyregistered_touch(A& q) {
+  const int32_t me = q.self();
+  const int32_t other = q.other();
+  if (!q.is(q.i(other, q.L.f.classname), "player") | (q.f(other, q.L.f.health) <= 0)) return;
+  if (q.f(me, f_attack_finished) > q.time()) return;
+  q.set_f(me, f_attack_finished, q.time() + 2);
+  if (on(q.cvar(q.s(s_registered)))) {
+    q.set_i(me, q.L.f.message, q.s(s_empty));
+    q.set_ge(g_activator, other);
+    q.set_f(me, f_wait, -1);
+    trigger_fire(q);
+    return;
+  }
+  if (!q.is(q.i(me, q.L.f.message), "")) {
+    q.centerprint(other, {q.i(me, q.L.f.message)});
+    q.sound(other, kChanBody, q.s(s_misc_talk_wav), 1, kAttnNorm);
+  }
+}
+
+void trigger_onlyregistered(A& q) {
+  trigger_start(q);
+  q.set_i(q.self(), q.L.f.touch, q.fn(fn_onlyregistered_touch));
+}
+
+// A teleport destination that moves: once used it rides its path of corners round at .speed
+// (100 when not set), a teleporter naming it sending a player to wherever it is.
+void teleporttrain_next(A& q) {
+  const int32_t me = q.self();
+  const int32_t corner = q.find(q.world(), q.L.f.targetname, q.i(me, q.L.f.target));
+  if (corner == 0) {
+    q.set_v(me, q.L.f.velocity, {0, 0, 0});
+    return;
+  }
+  q.set_i(me, q.L.f.target, q.i(corner, q.L.f.target));
+  const Vec3 delta = q.v(corner, q.L.f.origin) - q.v(me, q.L.f.origin);
+  if (q.vlen(delta) < 1) {
+    q.set_i(me, q.L.f.think, q.fn(fn_teleporttrain_next));
+    q.set_f(me, q.L.f.nextthink, q.time() + 0.1f);
+    return;
+  }
+  q.set_v(me, q.L.f.velocity, q.normalize(delta) * q.f(me, f_speed));
+  q.set_i(me, q.L.f.think, q.fn(fn_teleporttrain_next));
+  q.set_f(me, q.L.f.nextthink, q.time() + q.vlen(delta) / q.f(me, f_speed));
+}
+
+void teleporttrain_use(A& q) {
+  if (!same_vec(q.v(q.self(), q.L.f.velocity), {0, 0, 0})) return;  // already riding
+  q.set_i(q.self(), q.L.f.use, q.fn(fn_noop));
+  teleporttrain_next(q);
+}
+
+void misc_teleporttrain(A& q) {
+  const int32_t me = q.self();
+  if (q.f(me, f_speed) == 0) q.set_f(me, f_speed, 100);
+  if (q.is(q.i(me, q.L.f.target), "")) q.objerror({q.s(s_a_teleport_train_needs)});
+  q.precache_model(q.s(s_teleport_mdl));
+  q.set_f(me, q.L.f.solid, kSolidNot);
+  q.set_f(me, q.L.f.movetype, kMovetypeNoclip);
+  q.set_v(me, q.L.f.avelocity, {100, 200, 300});
+  q.setmodel(me, q.s(s_teleport_mdl));
+  q.setsize(me, {0, 0, 0}, {0, 0, 0});
+  q.setorigin(me, q.v(me, q.L.f.origin));
+  q.set_i(me, q.L.f.use, q.fn(fn_teleporttrain_use));
+  if (q.is(q.i(me, q.L.f.targetname), "")) {  // unnamed: it rides from the start
+    q.set_i(me, q.L.f.think, q.fn(fn_teleporttrain_use));
+    q.set_f(me, q.L.f.nextthink, q.time() + 0.1f);
+  }
 }
 
 }  // namespace shooters_edge::server::rules::SE_RULES_NS

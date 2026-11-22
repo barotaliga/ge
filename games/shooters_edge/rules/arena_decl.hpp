@@ -56,7 +56,9 @@ namespace shooters_edge::server::rules::arena {
   X(counter_use, "counter_use")                       \
   X(SpectatorConnect, "SpectatorConnect")             \
   X(SpectatorDisconnect, "SpectatorDisconnect")       \
-  X(SpectatorThink, "SpectatorThink")
+  X(SpectatorThink, "SpectatorThink")                 \
+  X(item_sigil, "item_sigil")                         \
+  X(sigil_touch, "sigil_touch")
 
 #define SE_X(name, ...) g_##name,
 enum Gl : uint8_t { SE_COMMON_GLOBALS(SE_X) SE_ARENA_GLOBALS(SE_X) kGlobalCount };

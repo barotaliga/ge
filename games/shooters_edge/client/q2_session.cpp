@@ -112,6 +112,42 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
           .max = 2,
           .values = "1: it does (the default), as 2; 0: only while it covers the screen"},
          &s.grab);
+  v.add(
+      {.name = "cl_nodelta",
+       .fallback = "0",
+       .help = "Whether the server sends every frame whole, never as changes (read when you join).",
+       .kind = con::CvarKind::boolean,
+       .values = "0: changes (the default); 1: whole frames"});
+  // What joining a server fetches (net/q2_downloads.hpp), read at each `connect`.
+  v.add({.name = "allow_download",
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "Whether joining a server fetches the files you lack.",
+         .kind = con::CvarKind::integer,
+         .min = -1,
+         .max = 1,
+         .values = "1: it does (the default); 0: nothing fetched; -1: not even by download"});
+  const struct {
+    const char* name;
+    const char* fallback;
+    const char* help;
+  } kinds[] = {
+      {"allow_download_maps", "1", "Whether joining fetches a map you lack."},
+      {"allow_download_players", "1", "Whether joining fetches the player models and skins."},
+      {"allow_download_models", "1", "Whether joining fetches models and sprites."},
+      {"allow_download_sounds", "1", "Whether joining fetches sounds."},
+      {"allow_download_textures", "1", "Whether joining fetches wall textures and skies."},
+      {"allow_download_pics", "1", "Whether joining fetches pictures."},
+      {"allow_download_others", "0", "Whether joining fetches any other file."},
+  };
+  for (const auto& k : kinds)
+    v.add({.name = k.name,
+           .fallback = k.fallback,
+           .flags = con::kArchive,
+           .help = k.help,
+           .kind = con::CvarKind::boolean,
+           .values = k.fallback[0] == '1' ? "1: fetched (the default); 0: not"
+                                          : "0: not fetched (the default); 1: fetched"});
   const char* helps[4] = {
       "Whether the game is running: always 1.", "Whether the game you play is paused.",
       "Whether this window runs a server.", "Whether the server this window runs is paused."};

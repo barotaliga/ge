@@ -118,6 +118,35 @@ constexpr ModSetting kModSettings[] = {
      "\"\": the built-in test mod (the default); TEXT: that file", con::CvarKind::text, false},
     {"hostname", "unnamed", "The server's name.", "TEXT: that name (unnamed the default)",
      con::CvarKind::text, true},
+    // Quake's settings for programs to read (and the spare ones they keep their own state in).
+    {"noexit", "0",
+     "Whether a Quake program's level exits kill whoever touches them in deathmatch.",
+     "0: exits work (the default); 1: an exit kills; N: as the program reads it",
+     con::CvarKind::number, false},
+    {"nomonsters", "0", "A setting a Quake program may read to leave its monsters out.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"gamecfg", "0", "A setting a Quake program may read.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"temp1", "0", "A spare setting a Quake program may read.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"scratch1", "0", "A spare setting a Quake program may read and set.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"scratch2", "0", "A spare setting a Quake program may read and set.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"scratch3", "0", "A spare setting a Quake program may read and set.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"scratch4", "0", "A spare setting a Quake program may read and set.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false},
+    {"savedgamecfg", "0", "A Quake program's setting kept in the config.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false, true},
+    {"saved1", "0", "A Quake program's setting kept in the config.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false, true},
+    {"saved2", "0", "A Quake program's setting kept in the config.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false, true},
+    {"saved3", "0", "A Quake program's setting kept in the config.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false, true},
+    {"saved4", "0", "A Quake program's setting kept in the config.",
+     "0: the default; N: as the program reads it", con::CvarKind::number, false, true},
     // Midair (games/shooters_edge/rules/common_midair.cpp; a loaded mod may read its own).
     {"k_midair", "0", "Whether rockets count only on a player in the air, in deathmatch.",
      "0: every hit counts (the default); 1: midair only", con::CvarKind::number, false},
@@ -134,12 +163,13 @@ void add_mod_settings(RulesCommon& s, const sh::ServerSettings& loop) {
   const uint32_t srv = con::kServer, info = con::kServer | con::kServerInfo;
   for (const ModSetting& m : kModSettings) {
     if (m.name != nullptr) {
-      s.cvars.add({.name = m.name,
-                   .fallback = m.fallback,
-                   .flags = m.info ? info : srv,
-                   .help = m.help,
-                   .kind = m.kind,
-                   .values = m.values});
+      s.cvars.add(
+          {.name = m.name,
+           .fallback = m.fallback,
+           .flags = (m.info ? info : srv) | (m.archive ? static_cast<uint32_t>(con::kArchive) : 0u),
+           .help = m.help,
+           .kind = m.kind,
+           .values = m.values});
       continue;
     }
     int count = 0;

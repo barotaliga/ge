@@ -265,6 +265,24 @@ void targets_kill_inside(Q2Server& s, const Q2Entity& e) {
   }
 }
 
+void targets_telefrag(Q2Server& s, int slot) {
+  const Q2Player& p = s.players[slot];
+  const sh::Vec3f at = unpack(p.move.origin);
+  const sh::Vec3f lo = at + p.mins, hi = at + p.maxs;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    if (i == slot || !alive(s, i)) continue;
+    const sh::Vec3f o = unpack(s.players[i].move.origin);
+    if (overlap(o + s.players[i].mins, o + s.players[i].maxs, lo, hi))
+      fight_hurt(s, i, slot, {}, 100000, 0, kSqByTelefrag, 3);
+  }
+  for (const Q2Monster& m : s.monsters) {
+    const Q2Entity& b = s.entities[size_t(m.entity)];
+    if (m.dead || b.gone || !b.box) continue;
+    if (overlap(b.origin + b.mins, b.origin + b.maxs, lo, hi))
+      monster_damage(s, m.entity, slot, 100000, {});
+  }
+}
+
 namespace {
 
 // A thing that breaks: its blast, its targets, and it is gone.

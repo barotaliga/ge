@@ -318,6 +318,7 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   const int side = gun_side(s);
   f.placement.mirror = side < 0;
   f.drawn = s.draw && side != 0 && hand.place.lowered < 1.0;
+  f.opacity = static_cast<float>(std::clamp(s.alpha, 0.0, 1.0));  // cl_gunalpha
   f.hands = s.hands;
   f.fired = in.fired;
 

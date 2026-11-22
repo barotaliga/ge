@@ -334,6 +334,20 @@ void qw_upload_block(QwServer& s, int slot, const ClcMsg& m) {
   s.log.push_back("Snap: Couldn't create a file, clean some out.");
 }
 
+// An info string as the classic games print it: each key padded to 20 columns, then its value.
+static std::string info_table(const std::string& info) {
+  std::vector<std::pair<std::string, std::string>> pairs;
+  info_pairs(info, pairs);
+  std::string t;
+  for (const auto& [k, v] : pairs) {
+    t += k;
+    if (k.size() < 20) t.append(20 - k.size(), ' ');
+    t += v;
+    t += '\n';
+  }
+  return t;
+}
+
 bool qw_admin(QwServer& s, const std::string& line, std::string& out) {
   pg::Words w;
   pg::tokenize_words(line.c_str(), w);
@@ -346,6 +360,17 @@ bool qw_admin(QwServer& s, const std::string& line, std::string& out) {
   }
   if (cmd == "status") {
     out = qw_status_table(s);
+    return true;
+  }
+  if (cmd == "user") {  // one player's user info, a key a line in a column of 20
+    const std::string who = pg::word(w, 1);
+    if (who.empty()) {
+      out = "user <id|name>: one player's user info\n";
+    } else if (const int slot = qw_find_seat(s, who); slot < 0) {
+      out = "No player is called " + who + ". Type \"users\" to see the ids and names.\n";
+    } else {
+      out = info_table(s.clients[slot].userinfo);
+    }
     return true;
   }
   if (cmd == "snap" || cmd == "snapall") {

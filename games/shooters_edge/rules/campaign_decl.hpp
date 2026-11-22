@@ -134,11 +134,7 @@ namespace shooters_edge::server::rules::campaign {
   X(trigger_relay, "trigger_relay")                   \
   X(setskill_touch, "setskill_touch")                 \
   X(trigger_setskill, "trigger_setskill")             \
-  X(onlyregistered_touch, "onlyregistered_touch")     \
-  X(trigger_onlyregistered, "trigger_onlyregistered") \
   X(trigger_monsterjump, "trigger_monsterjump")       \
-  X(func_episodegate, "func_episodegate")             \
-  X(func_bossgate, "func_bossgate")                   \
   X(sigil_touch, "sigil_touch")                       \
   X(item_sigil, "item_sigil")                         \
   X(key_touch, "key_touch")                           \
@@ -242,9 +238,6 @@ namespace shooters_edge::server::rules::campaign {
   X(hknight_flinch, "hknight_flinch")                 \
   X(hknight_pain, "hknight_pain")                     \
   X(monster_hell_knight, "monster_hell_knight")       \
-  X(teleporttrain_next, "teleporttrain_next")         \
-  X(teleporttrain_use, "teleporttrain_use")           \
-  X(misc_teleporttrain, "misc_teleporttrain")         \
   X(boss_ball_touch, "boss_ball_touch")               \
   X(boss_think, "boss_think")                         \
   X(boss_use, "boss_use")                             \

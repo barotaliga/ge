@@ -289,6 +289,9 @@ std::string sq_obituary(const std::string& victim, const std::string& killer, bo
     case kSqByHurt:
       world = "was in the wrong place";
       break;
+    case kSqByExit:
+      world = "found a way out";
+      break;
     default:
       break;
   }

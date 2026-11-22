@@ -546,3 +546,17 @@ TEST(the_gun_commands_show_a_frame_and_a_weapon_in_place_of_the_games) {
   con.execute("gun_model weapons/v_blast; gun_model");
   CHECK(s.gun_model == -1);
 }
+
+TEST(cl_gunalpha_draws_the_weapon_see_through) {
+  // Quake II's cl_gunalpha (hand.hpp's ViewSettings::alpha) is the share of the weapon drawn.
+  const std::vector<vm::HeldModel>& m = models();
+  se::Hand hand;
+  se::HandInput in;
+  in.weapon = se::weapon_looks().front().weapon;
+  se::ViewSettings s;
+  CHECK(se::step_hand(hand, in, s, m, eye(), 1.0 / 60).opacity == 1);
+  s.alpha = 0.4;
+  CHECK(se::step_hand(hand, in, s, m, eye(), 1.0 / 60).opacity == 0.4f);
+  s.alpha = 3;  // held to solid
+  CHECK(se::step_hand(hand, in, s, m, eye(), 1.0 / 60).opacity == 1);
+}

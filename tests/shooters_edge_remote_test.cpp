@@ -575,6 +575,16 @@ TEST(cl_physfps_sets_the_moves_sent_a_second_on_a_server_joined) {
   CHECK(con.cvars().find("cl_physfps_spectator")->value == "77");
 }
 
+TEST(version_prints_the_windows_own) {
+  ge::console::Console con{false};
+  cn::Remote r;
+  cn::add_remote_commands(con, r);
+  con.clear_output();
+  con.execute("version");
+  CHECK(!con.output().empty() &&
+        con.output().back() == std::string("Version ") + cn::kProgramVersion);
+}
+
 TEST(cl_c2spps_holds_moves_back_to_its_packet_rate_never_one_with_an_impulse) {
   auto c = std::make_unique<cn::QwClientEnd>();
   CHECK(!cn::client_hold_move(*c, 1.0 / 72));  // 0: one packet a move

@@ -52,8 +52,10 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   // in the archive the server says each came out of (the window's `keep_file`).
   s.fetch = true;
   s.fetch_level = true;
-  s.ask_moves = true;  // the other players' moves, to run them forward (q2_predict.hpp)
-  s.ask_back = true;   // the items coming back, drawn ahead of time (ce_respawns)
+  s.allow = cfg.q2_downloads;  // allow_download and its kinds
+  s.nodelta = cfg.q2_nodelta;  // cl_nodelta
+  s.ask_moves = true;          // the other players' moves, to run them forward (q2_predict.hpp)
+  s.ask_back = true;           // the items coming back, drawn ahead of time (ce_respawns)
   s.read_file = [&r](const std::string& path) {
     return r.read_file ? r.read_file("", path) : std::vector<uint8_t>{};
   };

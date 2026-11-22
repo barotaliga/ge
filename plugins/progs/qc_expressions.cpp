@@ -328,12 +328,21 @@ Val Compiler::call(const Val& callee) {
     }
   }
   if (args.size() > static_cast<size_t>(kMaxParms)) fail("a call passes at most 8 arguments");
-  if (args.size() < ft.params.size() || (!ft.varargs && args.size() > ft.params.size())) {
-    fail("this function takes " + std::to_string(ft.params.size()) +
-         (ft.varargs ? " or more" : "") + " arguments (" + type_name(callee.type) + "), got " +
-         std::to_string(args.size()));
+  if (!ft.varargs && args.size() > ft.params.size()) {
+    fail("this function takes " + std::to_string(ft.params.size()) + " arguments (" +
+         type_name(callee.type) + "), got " + std::to_string(args.size()));
   }
-  for (size_t i = 0; i < ft.params.size(); ++i) {
+  // Too few is a warning, as older mods' sources rely on: the missing parameters read whatever
+  // the parameter slots last held.
+  if (args.size() < ft.params.size()) {
+    diagnostics.push_back(
+        {file, peek().line, false,
+         "this function takes " + std::to_string(ft.params.size()) +
+             (ft.varargs ? " or more" : "") + " arguments (" + type_name(callee.type) + "), got " +
+             std::to_string(args.size()) +
+             "; the rest read whatever the parameter slots last held: pass them all"});
+  }
+  for (size_t i = 0; i < args.size() && i < ft.params.size(); ++i) {
     check_assign(ft.params[i], args[i].second, "argument " + std::to_string(i + 1));
   }
   for (size_t i = 0; i < args.size(); ++i) {
