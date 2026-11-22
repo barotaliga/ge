@@ -53,6 +53,29 @@ fx::Light q2_blast_light(const FxState& s, fx::Light light) {
   return light;
 }
 
+// Quake II's rail trail as `cl_railtrail_type` asks (1 the core, 2 the core and its spiral),
+// from `from` to `to` (engine metres), fading over `cl_railtrail_time`.
+void q2_rail_trail(FxState& s, int entity, const double from[3], const double to[3], double t) {
+  const ge::classic::Q2FxSwitches& q = s.on.q2;
+  HeldBeam b;
+  b.entity = entity;
+  b.q2_trail = true;
+  b.shot.born_s = t;
+  b.shot.end_s = t;  // let go at once: the whole of its life its fade
+  b.shot.seed = s.seed++;
+  for (int k = 0; k < 3; ++k) b.shot.from[k] = from[k], b.shot.to[k] = to[k];
+  b.seen = t;
+  b.trail_fade_s = static_cast<float>(q.rail_time);
+  b.trail_m = static_cast<float>(q.core_width * ge::brush::kUnitM);
+  ge::classic::q2_colour(q.core_colour, b.trail_rgb);  // an unknown name keeps red
+  s.beams.push_back(b);
+  if (q.rail_type < 2) return;
+  b.trail_radius_m = static_cast<float>(q.spiral_radius * ge::brush::kUnitM);
+  b.trail_rgb[0] = 0, b.trail_rgb[1] = 0, b.trail_rgb[2] = 1;
+  ge::classic::q2_colour(q.spiral_colour, b.trail_rgb);  // an unknown name keeps blue
+  if (b.trail_radius_m > 0) s.beams.push_back(b);
+}
+
 // The unit way from `p` toward the eye (engine metres): a scripted hit's `along`.
 std::array<double, 3> toward(const double p[3], const ge::camera::Vec3& eye) {
   const double d[3] = {eye.x - p[0], eye.y - p[1], eye.z - p[2]};
@@ -1510,7 +1533,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           break;
         }
         if (e.name == "te_railtrail") {  // Quake II's rail: a beam, a line circling it (ce_beams)
-          if (s.on.beams) {
+          if (s.on.q2.rail_type > 0) {   // cl_railtrail_type: its own core, and spiral at 2
+            q2_rail_trail(s, e.entity, from, to, t);
+          } else if (s.on.beams) {
             HeldBeam b;
             b.entity = e.entity;
             b.rail = true;
@@ -1602,11 +1627,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   for (HeldBeam& b : s.beams)
     if (b.shot.end_s < 0 && t - b.seen > kBeamHoldS) b.shot.end_s = b.seen + kBeamHoldS;
   std::erase_if(s.beams, [&](const HeldBeam& b) {
-    const double release = !s.on.beams ? 0
-                           : b.coil    ? fx::rail_coil_look().release_s
-                           : b.rail    ? fx::rail_look().release_s
-                           : b.plasma  ? fx::plasma_look().release_s
-                                       : fx::bolt_look().release_s;
+    const double release = b.q2_trail    ? b.trail_fade_s
+                           : !s.on.beams ? 0
+                           : b.coil      ? fx::rail_coil_look().release_s
+                           : b.rail      ? fx::rail_look().release_s
+                           : b.plasma    ? fx::plasma_look().release_s
+                                         : fx::bolt_look().release_s;
     return b.shot.end_s >= 0 && t > b.shot.end_s + release;
   });
   if (!l.beams.empty())
@@ -1614,6 +1640,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   ge::core::Rng roll = ge::core::make_rng(s.seed++);          // the classic bolt's segments' roll
   int segment = 0;
   for (HeldBeam& b : s.beams) {
+    if (b.q2_trail) {  // Quake II's cl_railtrail_type beam: drawn in either look
+      out.beams.push_back(b);
+      continue;
+    }
     if (b.rail || b.plasma) {  // a rail's or a bolt's streak: drawn, no burns
       if (!s.on.beams) continue;
       out.beams.push_back(b);

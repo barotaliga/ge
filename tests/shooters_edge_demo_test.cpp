@@ -724,6 +724,39 @@ TEST(a_players_own_sound_comes_from_its_models_folder_else_the_base_voice) {
   CHECK_MSG(sounds.stats().started == 3, std::to_string(sounds.stats().started));
 }
 
+TEST(cl_footsteps_0_starts_no_footstep_and_every_other_sound) {
+  // Quake II's cl_footsteps: at 0 a player/step sound never starts; the rest play as before.
+  std::vector<float> tone(4410);
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 20) % 2 == 0 ? 0.3f : -0.3f;
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak({{"sound/player/step1.wav", ge::audio::wav_bytes(tone, 1, 22050)},
+                            {"sound/world/land.wav", ge::audio::wav_bytes(tone, 1, 22050)}},
+                           &pak, &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::DemoSounds sounds(synth, files);
+  ge::classic::Q2FxSwitches q2;
+  q2.footsteps = 0;
+  sounds.switches_from(&q2);
+  cl::DemoState s;
+  s.sounds = {"", "player/step1.wav", "world/land.wav"};
+  s.entities.resize(4);
+  sounds.level(s, nullptr);
+  std::vector<cl::DemoSound> started(2);
+  for (int i = 0; i < 2; i++) {
+    started[size_t(i)].entity = 1;
+    started[size_t(i)].channel = i + 1;
+    started[size_t(i)].sound = i + 1;
+  }
+  sounds.frame(s, started, {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 1, std::to_string(sounds.stats().started));
+  q2.footsteps = 1;
+  sounds.frame(s, started, {}, 1, 0.01f);
+  CHECK_MSG(sounds.stats().started == 3, std::to_string(sounds.stats().started));
+}
+
 TEST(an_entitys_loop_plays_while_it_carries_it_and_stops_when_it_does_not) {
   // Quake II's entity loops: a rocket's roar starts with the entity, holds one slot frame after
   // frame, changes with the field, and stops when the field clears or the entity goes; a loop far
@@ -780,6 +813,26 @@ TEST(an_entitys_loop_plays_while_it_carries_it_and_stops_when_it_does_not) {
   e.present = false;  // the entity gone: its loop with it
   sounds.frame(s, {}, {}, 1, 0.01f);
   for (int i = 0; i < 30; i++) playing();  // its fade out (150 ms)
+  CHECK(playing() == 0);
+  // Quake II's s_ambient: 0 none, 2 only an entity with a model, 3 only the listener's own.
+  ge::classic::Q2FxSwitches q2;
+  sounds.switches_from(&q2);
+  e.present = true;
+  q2.ambient = 2;  // a speaker with no model: silent
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK(sounds.stats().entity_loops == 3);
+  e.model = 4;
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  CHECK(sounds.stats().entity_loops == 4);
+  q2.ambient = 3;  // the listener is entity 1, the loop entity 5's: stopped
+  sounds.frame(s, {}, {}, 1, 0.01f);
+  for (int i = 0; i < 30; i++) playing();
+  CHECK(playing() == 0);
+  sounds.frame(s, {}, {}, 5, 0.01f);  // heard as entity 5: its own
+  CHECK(sounds.stats().entity_loops == 5);
+  q2.ambient = 0;
+  sounds.frame(s, {}, {}, 5, 0.01f);
+  for (int i = 0; i < 30; i++) playing();
   CHECK(playing() == 0);
 }
 

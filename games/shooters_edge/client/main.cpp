@@ -70,6 +70,7 @@
 #include "capture/screenshot.hpp"
 #include "classic/content/downloads.hpp"
 #include "console/cfg.hpp"
+#include "console/clock_macros.hpp"
 #include "console/lex.hpp"
 #include "console/view.hpp"
 #include "core/output.hpp"
@@ -264,7 +265,8 @@ int run_main(int argc, char** argv) {
   slm::add_live_map_cvars(console.cvars(), live_map.settings);
   // The window's sound (client/listen_sound.hpp, client/demo_heard.hpp), at `volume`.
   ge::audio::MusicConsole music;  // the kept soundtrack (`cd`, `bgmvolume`): outlives the synth
-  ge::audio::Synth synth;         // outlives the device that pulls it (opened with the window)
+  ge::audio::add_music_commands(console, music);  // before the game's (Quake II's ogg_volume)
+  ge::audio::Synth synth;  // outlives the device that pulls it (opened with the window)
   se::Hud hud = se::make_hud();
   const auto tell = [&](const std::string& line, double at, bool chat = false) {  // and the HUD
     console.print(line);
@@ -357,7 +359,8 @@ int run_main(int argc, char** argv) {
                                   .no_glow = &picture.no_glow,
                                   .q2fx = &picture.q2fx,
                                   .chat = &remote.ignore.chat,
-                                  .auto_chat = &con_view.game_chat};
+                                  .auto_chat = &con_view.game_chat,
+                                  .music = &music};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
@@ -382,6 +385,7 @@ int run_main(int argc, char** argv) {
   cl::Q2Bar q2_bar{.files = &files,
                    .binds = &console.binds().table(ge::console::BindMode::game),
                    .screen = &q2_screen};
+  cl::add_q2_bar_commands(console, q2_bar);  // dumpstatusbar, dumplayout, aashot, aadump
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
@@ -480,6 +484,12 @@ int run_main(int argc, char** argv) {
   }
   ge::ui::DrawList overlay;
   const uint64_t first_ns = ge::platform::now_ns();
+  ge::console::add_clock_macros(
+      console, {.local = [] { return cl::local_time(); },
+                .uptime_s =
+                    [first_ns] {
+                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
+                    }});  // $com_date, $com_time, $com_uptime, $random
   // The title with the spinner in its corner: the first frame, and a map's frames with no world.
   // The title's night with the menu over it; `lobby` puts the lobby's screen between them.
   const auto title_frame = [&](double t, double dt, std::string_view caption, double since,
@@ -724,10 +734,13 @@ int run_main(int argc, char** argv) {
     static_cast<ge::audio::Synth*>(user)->render(out, frames);
   };
   // The hearings before the device (closed first: its thread never reads what they free).
-  cl::DemoHearing hearing(synth, &picture.ce.sounds);       // a demo's sounds, voices, lines
-  cl::ListenHearing heard_here(synth, &picture.ce.sounds);  // the window's own game's sounds
-  cl::Cinematic cine;                                       // Quake II's movies (cinematic.hpp)
-  cl::MenuSounds menu_sounds(synth);       // the main menu's clicks (menu_sound.hpp)
+  // A demo's sounds, voices and lines; the window's own game's sounds (cl_footsteps and s_ambient
+  // over both).
+  cl::DemoHearing hearing(synth, &picture.ce.sounds, &picture.q2fx);
+  cl::ListenHearing heard_here(synth, &picture.ce.sounds, &picture.q2fx);
+  cl::Cinematic cine;                 // Quake II's movies (cinematic.hpp)
+  cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp), play
+  cl::add_local_sound_commands(console, menu_sounds, adapter, files, synth, music.player.bus());
   cl::hear_worlds_on(&synth, &under_ear);  // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
@@ -742,6 +755,9 @@ int run_main(int argc, char** argv) {
   // nothing in `in_mouse_release` asks for the pointer. Taken below on the first frame.
   ge::input::MouseCapture mouse;
   bool focused = ge::platform::has_focus(*window);
+  const auto heard = [&] {  // the player's volume, unless s_auto_focus silences the window
+    return ge::platform::heard_volume(win, focused, ge::platform::minimised(*window));
+  };
   bool paused_before_menu = false;  // a played demo's pause when the menu opened over it
   bool vsync = true;  // false while a timedemo runs unlocked; the player's vid_vsync otherwise
   // The surface at the window's size, its present mode the player's vid_vsync (a timedemo's
@@ -999,7 +1015,7 @@ int run_main(int argc, char** argv) {
   };
   // The window's own game heard this frame (`dt` s), at the player's volume.
   const auto hear_here = [&](double dt) {
-    synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+    synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
     heard_here.frame(listen, remix.heard_from(files), static_cast<float>(dt), remix.heard);
   };
   // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
@@ -1157,6 +1173,8 @@ int run_main(int argc, char** argv) {
     }
     queue.clear();
     ge::platform::poll_input(*window, input, *devices, queue);
+    if (ge::platform::alt_enter(input, console))  // not the menu's ENTER too
+      input.pressed[static_cast<size_t>(ge::platform::Key::enter)] = false;
     const uint64_t now = ge::platform::now_ns();
     const double frame_s = static_cast<double>(now - last) * 1e-9;
     // The game's time: at vsync whole refreshes (vid_steady), so the motion is even whenever the
@@ -1217,6 +1235,7 @@ int run_main(int argc, char** argv) {
         }
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
+      menu_host.in_level = (listen.server || remote.active) && !attract;  // ESCAPE's in-game page
       // A benchmark's Escape stops the run (below) and opens nothing.
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
                             input.tapped(Key::escape)) ||
@@ -1233,7 +1252,7 @@ int run_main(int argc, char** argv) {
       }
       cl::keys_to_menu(game_menu, menu_host, queue, held);  // CUSTOMIZE CONTROLS' key
       // The click the presses made, from the game's own recordings, at the player's volume.
-      synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+      synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
       menu_sounds.play(game_menu.take_cue(), adapter, files, cl::kDemoVolume);
       if (std::string demo = game_menu.take_demo(); !demo.empty()) {  // DEMOS: checked, played
         bench_ask = std::move(demo);
@@ -1621,7 +1640,7 @@ int run_main(int argc, char** argv) {
         bench_models = ds.models.size();
       }
       if (paced) {  // what the frames read carried: heard, and its lines shown
-        synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+        synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
         std::vector<std::string> lines;
         std::vector<bool> chat_lines;  // which are chat (cl_chat_notify, scr_chathud)
         cl::DemoHeard joined_heard;    // a game joined: what its frames read carried (remote_step)
@@ -1765,6 +1784,7 @@ int run_main(int argc, char** argv) {
       const bool console_load =
           con_look.on() && cl::console_load_line(loader, load_line, console, con_view, t);
       if (console_load) caption.clear();
+      if (!cl::busy(loader)) ge::audio::play_menu_music(music);  // no game: the menu's track
       title_frame(t, wall, caption, loader.since_s, false, console_load);
       ++presented;
       continue;

@@ -37,7 +37,8 @@
 // ge:summary Quake II's status bar language run into pictures and text at screen positions
 // ge:keywords q2 layout status-bar statusbar layout-language hnum anum rnum stat_string cstring
 // ge:keywords rstring rstring2 color stat_cstring stat_rstring
-// ge:keywords scoreboard client-block stats field_3 num_minus conchars picn q2-hud
+// ge:keywords scoreboard client-block stats field_3 num_minus conchars picn q2-hud aashot
+// ge:keywords aadump layout_text text-picture
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_q2_layout_test.cpp
 #pragma once
@@ -78,6 +79,7 @@ struct LayoutInput {
   // The server's string `index` (0..2079), empty when none.
   std::string_view (*string)(const void* ctx, int index) = nullptr;
   const void* ctx = nullptr;
+  bool text_numbers = false;  // numbers as text ops, right-aligned in their field (layout_text)
 };
 
 // Runs `in.program` into `out` (cleared first), in drawing order.
@@ -85,6 +87,12 @@ void run_layout(const LayoutInput& in, std::vector<LayoutOp>& out);
 
 // A `color` word's colour into `rgba`; false (left as it was) for anything it does not name.
 bool layout_colour(std::string_view c, uint8_t rgba[4]);
+
+// THE TEXT PICTURE (`aashot`, `aadump`): `in.program` (the status bar), then `over` (the layout
+// up, "" none), drawn as 40 rows of 80 letters, one letter to 8 px of a 640 x 320 screen: text
+// and numbers in letters, pictures left out, the font's coloured half plain and its bar pieces
+// as > [ ] < = (other control letters blanks).
+std::vector<std::string> layout_text(LayoutInput in, std::string_view over);
 
 // The file a picture name means: `pics/<name>.pcx`, or the path after a leading slash.
 std::string layout_picture_path(std::string_view name);

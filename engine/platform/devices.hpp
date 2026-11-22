@@ -99,6 +99,8 @@ bool relative_mouse(const Window& window);
 // Whether the window has the keyboard's (the input) focus now: what `input::CaptureFacts::focused`
 // reads at start, before any focus event (a window opened behind a terminal starts without it).
 bool has_focus(const Window& window);
+// Whether the window is minimised now (window_cvars.hpp's heard_volume reads it).
+bool minimised(const Window& window);
 // Text events (a console, a name field; on a phone, the on-screen keyboard). Off by default.
 void set_text_input(Window& window, bool on);
 // The system clipboard's text, UTF-8 ("" when it holds none): what a paste into a text field types.

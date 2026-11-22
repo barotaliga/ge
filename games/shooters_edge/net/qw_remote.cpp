@@ -1029,6 +1029,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   using Con = ge::console::Console;
   using Args = ge::console::Args;
   client::add_qw_ignore(con, r.ignore, r.demo.state);
+  // $cl_server: the server joined as it was asked for ("" when none is).
+  con.add_macro("cl_server", [&r] { return r.active ? r.server_name : std::string(); });
   r.setting = [&con](const std::string& name) {
     if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;
     if (const ge::console::Synonym* s = con.cvars().synonym(name))
