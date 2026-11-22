@@ -621,3 +621,41 @@ TEST(a_player_entering_and_leaving_flashes_on_the_wire) {
   CHECK_MSG(got.find("sq_logout:2 ") != std::string::npos, got);
   CHECK_MSG(heard == 2, std::to_string(heard));
 }
+
+// The hit report (temporary entity 128, one short: the points dealt) goes only to a viewer that
+// reads it; a stock client's stream never carries it.
+TEST(the_hit_report_goes_only_to_a_viewer_that_reads_it) {
+  for (const bool reads : {false, true}) {
+    sv::RulesRunner r = start();
+    sv::Q2Server& s = *sv::q2_of(r);
+    r.connect(0, "eve", false, false);
+    sv::Q2Recorder rec;
+    sv::Q2WireOptions opt;
+    opt.hit_reports = reads;
+    sv::q2_record_start(rec, *r, 0, opt);
+    uint32_t seq = 0;
+    for (int t = 0; t < 30; t++) {
+      sh::Packet p;
+      p.client = 0;
+      p.sequence = ++seq;
+      p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
+      r.frame(&p, 1);
+      if (t == 20) {
+        sv::NetEvent ev;
+        ev.kind = sv::EventKind::point_effect;
+        ev.to = 1u;
+        ev.ent = 1;
+        ev.values[0] = 25;
+        ev.text = "te_damage_dealt";
+        r->out.events.push_back(ev);
+        r->out.events_total++;
+      }
+      sv::q2_record_frame(rec, *r, static_cast<int32_t>(s.frame_number), &s.players[0].move);
+    }
+    sv::q2_record_stop(rec);
+    const uint8_t report[] = {3, 128, 25, 0};  // svc_temp_entity, 128, the short 25
+    const bool carried = std::search(rec.bytes.begin(), rec.bytes.end(), std::begin(report),
+                                     std::end(report)) != rec.bytes.end();
+    CHECK_MSG(carried == reads, reads ? "the report is missing" : "a stock stream carried it");
+  }
+}

@@ -1739,8 +1739,15 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
     }
     if (c.stage == Q2Slot::zombie && s.now - c.heard > s.cfg.zombie_time) c = Q2NetClient{};
   }
-  if (s.killed) return;  // `killserver`: no game runs until the next map
+  if (s.killed) return;   // `killserver`: no game runs until the next map
+  if (s.game != nullptr)  // what the rules check a switch to or from watching against
+    s.game->gate = {s.cfg.password, s.cfg.spectator_password,
+                    s.cfg.max_spectators > 0 ? s.cfg.max_spectators : sh::kMaxClients};
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
+  if (s.game != nullptr)  // a seat watches as the rules say: a switch mid-match lands here
+    for (int i = 0; i < sh::kMaxClients; i++)
+      if (s.clients[i].stage == Q2Slot::active)
+        s.clients[i].spectator = s.game->clients[i].spectator;
   if (s.game != nullptr && s.cfg.antilag)  // where each player stands now, for the rewinds
     for (int i = 0; i < sh::kMaxClients; i++) {
       if (s.clients[i].stage != Q2Slot::active) {

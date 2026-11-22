@@ -25,6 +25,7 @@
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map_kinds.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -147,45 +148,7 @@ std::string name_of(const Q2Server& s, int slot) {
   return "someone";
 }
 
-Class class_of(std::string_view c) {
-  constexpr std::pair<std::string_view, Class> kClasses[] = {
-      {"func_door", kDoor},
-      {"func_door_secret", kSecretDoor},
-      {"func_water", kDoor},  // a door of water
-      {"func_button", kButton},
-      {"func_plat", kPlat},
-      {"func_train", kTrain},
-      {"trigger_elevator", kElevator},
-      {"misc_viper", kTrain},  // the fly-by ships run their path as a train
-      {"misc_strogg_ship", kTrain},
-      {"func_wall", kWall},
-      {"func_timer", kTimer},
-      {"trigger_once", kTriggerOnce},
-      {"trigger_multiple", kTriggerMultiple},
-      {"trigger_relay", kRelay},
-      {"trigger_always", kAlways},
-      {"trigger_push", kPush},
-      {"trigger_hurt", kHurt},
-      {"misc_teleporter", kTeleporter},
-      {"target_changelevel", kChangeLevel},
-      {"target_speaker", kSpeaker},
-      {"target_explosion", kExplosion},
-      {"target_secret", kSecret},
-      {"target_goal", kGoal},
-      {"door_field", kDoorField},
-      {"plat_field", kPlatField},
-      {"func_door_rotating", kDoorRotating},
-      {"func_rotating", kRotating},
-      {"func_areaportal", kAreaPortal},
-      {"light", kLight},
-      {"target_help", kHelp},
-      {"target_crosslevel_trigger", kCrossTrigger},
-      {"target_crosslevel_target", kCrossTarget},
-  };
-  for (const auto& [name, cls] : kClasses)
-    if (c == name) return cls;
-  return kNone;
-}
+Class class_of(std::string_view c) { return class_of_name(c); }
 
 Class class_of(const Q2Entity& e) { return class_of(e.classname); }
 
@@ -612,6 +575,7 @@ void train_next(Q2Server& s, Q2Entity& e) {
   for (int hops = 0; hops < 2; hops++) {
     const int c = corner_named(s, e.target);
     if (c < 0) {
+      q2_pick_missing(s, e.target, "train_next: bad target " + e.target);  // none: the path's end
       e.velocity = {};
       e.arrive = kNoAct;
       return;
@@ -629,7 +593,10 @@ void train_next(Q2Server& s, Q2Entity& e) {
     begin_move(e, corner.origin - e.mins, kTrainCorner);
     return;
   }
-  e.velocity = {};  // two teleport corners in a row: it stops
+  const Q2Entity& second = s.entities[size_t(e.owner)];  // two teleport corners in a row: it stops
+  s.console.push_back("connected teleport path_corners, see " + second.classname + " at " +
+                      q2_pos(second.origin));
+  e.velocity = {};
   e.arrive = kNoAct;
 }
 
@@ -755,8 +722,7 @@ void think(Q2Server& s, Q2Entity& e) {
     case kTrainFind: {
       const int c = corner_named(s, e.target);
       if (c < 0) {
-        s.console.push_back("A train at " + std::to_string(int(e.origin.x)) + " " +
-                            std::to_string(int(e.origin.y)) + " has no corner to follow.");
+        q2_pick_missing(s, e.target, "train_find: target " + e.target + " not found");
         return;
       }
       Q2Entity& corner = s.entities[size_t(c)];
@@ -836,7 +802,7 @@ void teleport(Q2Server& s, Q2Entity& pad, int slot) {
   int dest = -1;
   for (size_t i = 0; i < s.entities.size() && dest < 0; i++)
     if (!pad.target.empty() && s.entities[i].targetname == pad.target) dest = static_cast<int>(i);
-  if (dest < 0) return;
+  if (dest < 0) return s.console.push_back("Couldn't find destination");  // each touch
   const Q2Entity& d = s.entities[size_t(dest)];
   effect(s, "te_teleport", pad.origin);
   effect(s, "te_teleport", d.origin);
@@ -1024,7 +990,9 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
         if (s.entities[t].targetname == e.target && class_of(s.entities[t]) == kTrain)
           train = static_cast<int>(t);
       if (train < 0) {
-        s.console.push_back("An elevator's target '" + e.target + "' is not a train.");
+        s.console.push_back(e.target.empty()
+                                ? std::string("trigger_elevator has no target")
+                                : "trigger_elevator target " + e.target + " is not a train");
         return;
       }
       Q2Entity& t = s.entities[size_t(train)];
@@ -1033,10 +1001,9 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
           other >= 0 ? key(s, s.entities[size_t(other)], "pathtarget") : std::string();
       const int c = corner_named(s, floor);
       if (c < 0) {
-        s.console.push_back(floor.empty() ? "An elevator was used by something with no path "
-                                            "target; it stays."
-                                          : "An elevator's corner '" + floor +
-                                                "' is not on the map; it stays.");
+        if (!floor.empty()) q2_pick_missing(s, floor);
+        s.console.push_back(floor.empty() ? std::string("elevator used with no pathtarget")
+                                          : "elevator used with bad pathtarget: " + floor);
         return;
       }
       const Q2Entity& corner = s.entities[size_t(c)];
@@ -1193,7 +1160,9 @@ void fire_targets(Q2Server& s, int ent, int activator, int depth, bool late) {
   if (target.empty() || depth >= kMaxUseDepth) return;
   const bool door = !late && is_door(class_of(e));
   for (size_t i = 0; i < s.entities.size(); i++) {
-    if (s.entities[i].targetname != target || int(i) == ent) continue;
+    if (s.entities[i].targetname != target) continue;
+    if (int(i) == ent) s.console.push_back("WARNING: Entity used itself.");
+    if (int(i) == ent) continue;
     if (door && class_of(s.entities[i]) == kAreaPortal) continue;  // the door sets those itself
     use(s, static_cast<int>(i), activator, depth + 1, ent);
   }
@@ -1294,8 +1263,7 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
       float distance = number(s, e, "distance", 0);
       if (distance == 0) {
         distance = 90;
-        s.console.push_back("A turning door at " + std::to_string(int(e.origin.x)) + " " +
-                            std::to_string(int(e.origin.y)) + " has no distance; it turns 90.");
+        s.console.push_back(e.classname + " at " + q2_pos(e.origin) + " with no distance set");
       }
       e.axis = (e.spawnflags & 64) != 0    ? sh::Vec3f{0, 0, 1}
                : (e.spawnflags & 128) != 0 ? sh::Vec3f{1, 0, 0}
@@ -1391,9 +1359,8 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
     case kTrain:
       if (is_ship(e)) {  // hidden and passable until used, then off along its path
         if (e.target.empty()) {
-          s.console.push_back("A ship at " + std::to_string(int(e.origin.x)) + " " +
-                              std::to_string(int(e.origin.y)) +
-                              " has no path to fly; it is left out.");
+          // Said by its lower corner, which is not yet placed: all zeros.
+          s.console.push_back(e.classname + " without a target at (0 0 0)");
           e.gone = true;
           return;
         }
@@ -1487,8 +1454,7 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
         return;
       }
       if (e.message.empty()) {
-        s.console.push_back("A help computer at " + std::to_string(int(e.origin.x)) + " " +
-                            std::to_string(int(e.origin.y)) + " has no message; it is left out.");
+        s.console.push_back(e.classname + " with no message at " + q2_pos(e.origin));
         e.gone = true;
       }
       return;

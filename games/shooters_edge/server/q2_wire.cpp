@@ -79,7 +79,7 @@ int8_t quarter(float v) { return static_cast<int8_t>(std::clamp(v * 4.0f, -128.0
 // A named effect (a point or a line the rules threw) as the protocol's temporary entity: its kind
 // byte and payload. How each kind's bytes run: a point; a point and a direction byte; a count, a
 // point, a direction and a colour; two points (a line); an entity and two points.
-enum class TeBody : uint8_t { point, point_dir, splash, line, entity_line };
+enum class TeBody : uint8_t { point, point_dir, splash, line, entity_line, count };
 struct TeName {
   const char* name;
   uint8_t kind;
@@ -88,6 +88,7 @@ struct TeName {
 };
 constexpr TeName kTeNames[] = {
     {"te_gunshot", 0, TeBody::point_dir, 0},
+    {"te_damage_dealt", 128, TeBody::count, 0},  // the hit report: one short, the points dealt
     {"te_blood", 1, TeBody::point_dir, 0},
     {"te_blaster", 2, TeBody::point_dir, 0},
     {"te_railtrail", 3, TeBody::line, 0},
@@ -192,6 +193,9 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
     case TeBody::line:
       point(e.origin);
       point(end);
+      break;
+    case TeBody::count:
+      o.i16(static_cast<int>(e.values[0]));
       break;
     case TeBody::entity_line:
       o.i16(std::clamp(e.ent, 0, kQ2Entities - 1));
@@ -835,7 +839,8 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
     if ((e.kind != EventKind::point_effect && e.kind != EventKind::trail_effect) ||
         !to_slot(e, w.slot))
       continue;
-    if (block.size() + 18 + 13 > size_t(kQ2MaxBlock)) break;  // a sound's room kept too
+    if (block.size() + 18 + 13 > size_t(kQ2MaxBlock)) break;          // a sound's room kept too
+    if (e.text == "te_damage_dealt" && !w.opt.hit_reports) continue;  // a stock client has none
     if (!write_flash(o, e)) write_temp_entity(o, e);
   }
   for (size_t i = from; i < events.size(); i++) {

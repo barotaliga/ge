@@ -15,6 +15,7 @@
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_server.hpp"
+#include "shooters_edge/server/q2_spectate.hpp"
 
 namespace shooters_edge::server {
 
@@ -252,13 +253,17 @@ void bar_rows(Q2Server& s) {
       st[11] = static_cast<int16_t>(image(s, sq_icon(sq_weapon_number(p.hand.weapon))));
     }
     // A screen over the bar; the scoreboard always while dead or between levels in deathmatch.
-    if (p.screen != kScreenNone || (match && (!p.alive || s.intermission_at > 0))) st[13] |= 1;
+    const bool dead = !p.alive && !s.clients[i].spectator;  // a spectator is not dead
+    if (p.screen != kScreenNone || (match && (dead || s.intermission_at > 0))) st[13] |= 1;
     if (p.inven_open && p.alive) st[13] |= 2;  // a screen over the bar (q2_screens.hpp)
     st[14] = clamp16(p.frags);
     // A blow in this frame, or between the last frame and this one (a move's fall), shows once a
     // frame's rows are sent.
     if (p.hit_frame >= s.frame_number - 1) st[15] = static_cast<int16_t>(p.hit_bits);
   }
+  // A spectator's flag, and a chaser's view of his target's bar (every player's filled first).
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (s.clients[i].active) spectate_stats(s, i, w.clients[i].numbers.stats);
 }
 
 }  // namespace shooters_edge::server

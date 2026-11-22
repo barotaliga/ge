@@ -151,6 +151,11 @@ size_t fight_first_row(const Q2Server& s);
 // True when players `a` and `b` (two slots) are on one team: in deathmatch with `dmflags` 64 (by
 // the skin of `skin`'s model/skin) or 128 (by the model), or in co-op (everyone).
 bool fight_teammates(const Q2Server& s, int a, int b);
+// The hit report: `points` of a blow slot `attacker` dealt on entity `target_entity` (a player's is
+// his slot + 1), summed per frame into one `te_damage_dealt` event to the attacker alone (temporary
+// entity 128 on the wire, sent only to a client that reads it). His own blows report nothing.
+void fight_dealt(Q2Server& s, int attacker, int target_entity, int points);
+
 // Player `slot`'s field of view from his `fov` setting: 1..160, 90 when unset or with `dmflags`
 // 32768 in deathmatch.
 float fight_fov(const Q2Server& s, int slot);

@@ -344,7 +344,7 @@ TEST(a_power_cube_hidden_until_used_then_never_taken_and_other_items_lose_their_
   CHECK((g->at(g->find("item_health")).spawnflags & 2) == 0);
   bool told = false;
   for (const std::string& line : g->s().console)
-    if (line.find("only a power cube") != std::string::npos) told = true;
+    if (line == "item_health at (-900 0 16) has invalid spawnflags set") told = true;
   CHECK(told);
   run(*g, 10);
   sv::map_use_targets(g->s(), g->named("go"), 0);

@@ -1174,3 +1174,21 @@ TEST(entering_and_leaving_are_said_to_everyone) {
     CHECK(said_to_all(g->s(), "Ana entered the game\n") == (most > 1));
   }
 }
+
+TEST(a_blow_reports_its_points_to_the_attacker_once_a_frame_and_not_his_own) {
+  auto a = arena();
+  run(*a, 10);
+  const size_t from = a->s().out.events.size();
+  sv::fight_hurt(a->s(), 1, 0, {1, 0, 0}, 10, 0, 0);
+  sv::fight_hurt(a->s(), 1, 0, {1, 0, 0}, 15, 0, 0);
+  sv::fight_hurt(a->s(), 0, 0, {1, 0, 0}, 5, 0, 0);  // his own: nothing
+  int reports = 0;
+  for (size_t i = from; i < a->s().out.events.size(); i++) {
+    const auto& e = a->s().out.events[i];
+    if (e.text != "te_damage_dealt") continue;
+    reports++;
+    CHECK(e.to == 1u && e.ent == 1);
+    CHECK_MSG(e.values[0] == 25, std::to_string(e.values[0]));
+  }
+  CHECK(reports == 1);
+}

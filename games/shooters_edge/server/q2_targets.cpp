@@ -20,6 +20,7 @@
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_gibs.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -573,7 +574,10 @@ void turn_breach(Q2Server& s, int i) {
     for (size_t t = 0; t < s.entities.size(); t++)
       if (!e.target.empty() && s.entities[t].targetname == e.target) e.aim = static_cast<int>(t);
     if (e.aim < 0) {
-      s.console.push_back("A turret's breach has no muzzle marker named '" + e.target + "'.");
+      if (e.target.empty())
+        s.console.push_back(e.classname + " at " + q2_pos(e.origin) + " needs a target");
+      else
+        q2_pick_missing(s, e.target);
     } else {
       Q2Entity& mark = s.entities[size_t(e.aim)];
       const sh::Vec3f off = mark.origin - e.origin;
@@ -619,11 +623,9 @@ bool targets_spawn(Q2Server& s, int i) {
     case kClock: {
       const int flags = e.spawnflags;
       if (e.target.empty() || ((flags & 2) != 0 && e.count == 0)) {
-        s.console.push_back("A clock at " + std::to_string(int(e.origin.x)) + " " +
-                            std::to_string(int(e.origin.y)) +
-                            ((flags & 2) != 0 && !e.target.empty() ? " counts down from nothing"
-                                                                   : " has no target") +
-                            "; it is left out.");
+        s.console.push_back(e.classname +
+                            (e.target.empty() ? " with no target at " : " with no count at ") +
+                            q2_pos(e.origin));
         e.gone = true;
         return true;
       }
