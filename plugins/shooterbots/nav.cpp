@@ -176,6 +176,7 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
   float best = across(from, to);
   float best_s = 0;
   bool landed = false;  // a jump down on the target's floor, walking the rest
+  bool over = false;    // passed over the target in the air
   p.lo = from + kPlayerMins;
   p.hi = from + kPlayerMaxs;
   if (path) path->push_back(from);
@@ -204,7 +205,14 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
       p.reached = true;
       return p;
     }
-    if (grounded && s.origin.z < floor_z) return p;  // fell below both ends: missed
+    // Walked down a ramp (base1's east stair, 28 degrees): the move leaves the ground on a slope
+    // that steep and comes down again further on, so he can pass over the target in the air. Down
+    // on the slope past it, no lower than the slope's run, he is there.
+    if (!jump && !grounded && h <= set.arrive && dz <= kArriveUp && dz >= -kArriveUp) over = true;
+    if (grounded && s.origin.z < floor_z) {
+      p.reached = over && dz >= -h;
+      return p;  // fell below both ends: missed, unless down the slope past it
+    }
     if (jump && grounded && !landed) {
       // A standing jump landed on the target's own floor just short of it (a stair's tread): the
       // rest is walked, the stall rule holding the walk. Anything else did not leave the ground,

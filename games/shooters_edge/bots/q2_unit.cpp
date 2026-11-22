@@ -118,6 +118,9 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   spec.entities = entities;
   m.way = WayThrough();
   m.way.been = been;
+  m.way.complete = opt.complete;
+  m.way.complete_until = s.sv.time + opt.map_seconds * 0.75;
+  if (opt.complete) way_complete_init(f, nav, s, spec);
   way_init(m.way, f, nav, s, spec);
   if (opt.plan) m.way.log = &um.plan;
   m.wedge = Wedge();
@@ -301,6 +304,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       m.cmds[2] = fighter_command(m.leader, s, 0, kPilotMsec);
       if (forced) m.cmds[2].angles = s.sv.edicts[1].v_angle;
       way_dive(m.way, *m.nav, s, 1, m.cmds[2]);
+      way_reach_in(m.way, *m.nav, s, 1, m.cmds[2]);
       if (way_break(*q, s, m.breaking, t, m.cmds[2])) {
         um.breaks++;
         m.leader.bot.yaw = m.cmds[2].angles.y;  // he turned to it: his keys follow his view

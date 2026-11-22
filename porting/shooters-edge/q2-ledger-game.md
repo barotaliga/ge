@@ -12,19 +12,19 @@ q2-sp-gaps.md).
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client commands (what a player types; the game library answers them) | 34 | 1 | 2 | 0 | 37 |
+| Client commands (what a player types; the game library answers them) | 34 | 1 | 0 | 2 | 37 |
 | Server commands (`sv <word>` typed at the server console) | 2 | 4 | 0 | 0 | 6 |
-| Cvars the game library registers or reads | 33 | 7 | 6 | 0 | 46 |
+| Cvars the game library registers or reads | 38 | 8 | 0 | 0 | 46 |
 | User info keys the game reads | 9 | 0 | 0 | 0 | 9 |
 | dmflags bits | 16 | 0 | 0 | 0 | 16 |
 | Items (the item list, in its order; each is also a spawnable classname) | 42 | 0 | 0 | 0 | 42 |
-| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 80 | 1 | 0 | 0 | 81 |
+| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 80 | 1 | 2 | 0 | 83 |
 | Monsters | 26 | 0 | 0 | 0 | 26 |
-| Player messages (printed, broadcast and centre-printed) | 78 | 1 | 2 | 0 | 81 |
-| Server console lines (what an admin reads; `dprintf`) | 22 | 6 | 8 | 0 | 36 |
+| Player messages (printed, broadcast and centre-printed) | 78 | 1 | 0 | 2 | 81 |
+| Server console lines (what an admin reads; `dprintf`) | 34 | 2 | 0 | 2 | 38 |
 | Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 17 | 0 | 0 | 0 | 17 |
 | Rules a player sees (behaviour not in a row above) | 44 | 0 | 0 | 0 | 44 |
-| **all** | 403 | 20 | 18 | 0 | 441 |
+| **all** | 420 | 17 | 2 | 6 | 445 |
 
 ## Client commands (what a player types; the game library answers them)
 
@@ -65,8 +65,8 @@ count: done 17, partial 13, missing 7, not-taken 0
 | cmd.wave | `wave <0-4>` | gesture: 0 flipoff, 1 salute, 2 taunt, 3 wave, other point; not while crouched or during a higher animation; prints the gesture's word to the player | done | q2_commands.cpp |
 | cmd.playerlist | `playerlist` | per player `mm:ss ping score name` plus ` (spectator)`, `And more...` past the buffer | done | q2_commands.cpp |
 | cmd.teleport | `teleport x y z` | cheat: moves the player to (x, y, z+10), stopped, held, view cleared, telefrags; `Usage: teleport x y z` | done | `games/shooters_edge/server/q2_commands.cpp`, `q2_map.cpp` (`map_place_player`) |
-| cmd.spawnentity | `spawnentity classname x y z [pitch yaw roll [flags]]` | cheat: spawns any entity there; usage line on bad arity | missing | R28 |
-| cmd.spawnonstart | `spawnonstart classname` | cheat: spawns one at every start/deathmatch/co-op spot, `Spawned entity at x y z` to the console | missing | R28 |
+| cmd.spawnentity | `spawnentity classname x y z [pitch yaw roll [flags]]` | cheat: spawns any entity there; usage line on bad arity | not-taken | the game this port follows has no such command (q2-entity-keys answers); a cheat outside it |
+| cmd.spawnonstart | `spawnonstart classname` | cheat: spawns one at every start/deathmatch/co-op spot, `Spawned entity at x y z` to the console | not-taken | not in the game this port follows; a cheat outside it |
 | cmd.listentities | `listentities <all/ammo/items/keys/monsters/weapons>` | cheat: lists matching entities `classname: x y z` to the server console | done | `games/shooters_edge/server/q2_commands.cpp` |
 | cmd.cycleweap | `cycleweap <classname...>` | switches through a listed set of weapons; usage line with no names | done | `games/shooters_edge/server/q2_commands.cpp` (`weapon_list`) |
 | cmd.prefweap | `prefweap <classname...>` | switches to the first listed weapon held with ammo; usage line | done | `games/shooters_edge/server/q2_commands.cpp` (`weapon_list`) |
@@ -97,17 +97,17 @@ count: done 29, partial 10, missing 7, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| cvar.gun_x | `gun_x` 0 | developer: moves the view weapon right by N units | missing | R45; the client has `cl_gun_x` (games/shooters_edge/client/cvar_layers.cpp), not this server name |
-| cvar.gun_y | `gun_y` 0 | developer: moves the view weapon forward | missing | R45 |
-| cvar.gun_z | `gun_z` 0 | developer: moves the view weapon down | missing | R45 |
+| cvar.gun_x | `gun_x` 0 | developer: moves the view weapon right by N units | done | q2_commands.cpp; plugins/classic/q2_view.cpp moves the gun offset along the view's right; on the wire's gun offset |
+| cvar.gun_y | `gun_y` 0 | developer: moves the view weapon forward | done | the same, along the view's forward |
+| cvar.gun_z | `gun_z` 0 | developer: moves the view weapon down | done | the same, down |
 | cvar.sv_rollspeed | `sv_rollspeed` 200 | side speed at which a player's view and figure roll fully | done | q2_commands.cpp |
 | cvar.sv_rollangle | `sv_rollangle` 2 | most roll angle in degrees | done | q2_commands.cpp |
 | cvar.sv_maxvelocity | `sv_maxvelocity` 2000 | per-axis speed cap for thrown and falling things | done | q2_commands.cpp |
 | cvar.sv_gravity | `sv_gravity` 800 | gravity; reset to 800 or the world's `gravity` key at each map | done | q2_targets.cpp, q2_server.cpp (world 9) |
 | cvar.dedicated | `dedicated` 0 (N) | read to know whether the server has a local player | done | q2_native.cpp; our rules know it from the host |
 | cvar.cheats | `cheats` 0 (SI, L) | allows the cheat commands in deathmatch and co-op | partial | q2_commands.cpp gates deathmatch and co-op; not latched |
-| cvar.gamename | `gamename` baseq2 (SI, L) | the game's name in the server info, for browsers | missing | R45, S27 |
-| cvar.gamedate | `gamedate` build date (SI, L) | the build date in the server info | missing | R45, S27 |
+| cvar.gamename | `gamename` baseq2 (SI, L) | the game's name in the server info, for browsers | done | q2_commands.cpp: baseq2, server info, latched |
+| cvar.gamedate | `gamedate` build date (SI, L) | the build date in the server info | done | q2_commands.cpp: server info, latched; a fixed date so every build serves the same info |
 | cvar.maxclients | `maxclients` 4 (SI, L) | player slots; forced to at least 1 | partial | net/q2_net_server.hpp default 8 (S35); q2_native.cpp passes it to a library |
 | cvar.maxspectators | `maxspectators` 4 (SI) | the most spectators at once (a separate count, players' slots shared) | partial | net/q2_game.cpp synonym of `sv_maxspectators`, default 0 meaning "spectators take free slots" (differs in default and meaning) |
 | cvar.deathmatch | `deathmatch` 0 (L) | deathmatch rules | done | q2_monsters.cpp, q2_server.cpp |
@@ -115,7 +115,7 @@ count: done 29, partial 10, missing 7, not-taken 0
 | cvar.coop_pickup_weapons | `coop_pickup_weapons` 1 (A) | co-op: a weapon already held may be picked up again for its ammo | done | q2_server.cpp |
 | cvar.coop_elevator_delay | `coop_elevator_delay` 1.0 (A) | co-op: a plat waits this long before rising | done | q2_map.cpp |
 | cvar.skill | `skill` 1 (L) | 0 easy .. 3 hard+; clamped and forced back at each map | done | q2_server.cpp, q2_monsters.cpp |
-| cvar.maxentities | `maxentities` 1024 (L) | the entity slots | missing | R45; ours has no such cap setting |
+| cvar.maxentities | `maxentities` 1024 (L) | the entity slots | partial | q2_commands.cpp: 1024, latched, kept for configs; this server sizes itself to the map and caps nothing |
 | cvar.g_footsteps | `g_footsteps` 1 (A) | when players' footsteps sound | done | q2_commands.cpp |
 | cvar.g_monsterfootsteps | `g_monsterfootsteps` 0 (A) | monsters' footsteps | done | q2_commands.cpp, q2_monster_steps.cpp |
 | cvar.g_fix_triggered | `g_fix_triggered` 0 | a monster waiting for a trigger nothing names stands from the start (and the console note `fixed TRIGGERED flag on ...`) | partial | q2_commands.cpp, q2_monsters.cpp; the console note is missing (see msg table) |
@@ -318,6 +318,8 @@ count: done 73, partial 7, missing 1, not-taken 0
 | ent.point_combat | point_combat | where a monster goes to fight, hold flag | done | q2_monsters.cpp (monsters 9) |
 | ent.misc_explobox | misc_explobox | exploding barrel, pushable; obituary `blew up` | done | q2_targets.cpp |
 | ent.misc_banner | misc_banner | waving banner | done | q2_targets.cpp |
+| ent.misc_actor | misc_actor | a scripted figure that walks a path, says its lines and fights back; `untargeted misc_actor at <pos>`, `misc_actor with no target at <pos>`, `misc_actor has bad target <t> at <pos>` | missing | added by the 2026-11-22 audit; no stock map places one |
+| ent.target_actor | target_actor | a misc_actor's path point: its message, jump, shoot and attack flags; `target_actor with no targetname at <pos>` | missing | added by the 2026-11-22 audit; goes with misc_actor |
 | ent.misc_satellite_dish | misc_satellite_dish | dish that turns on use | done | q2_targets.cpp |
 | ent.misc_gib_arm | misc_gib_arm | placed gib | done | q2_targets.cpp |
 | ent.misc_gib_leg | misc_gib_leg | placed gib | done | q2_targets.cpp |
@@ -452,8 +454,8 @@ count: done 50, partial 16, missing 15, not-taken 0
 | msg.noclip | `noclip ON` / `noclip OFF` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.cheats | `You must run the server with '+set cheats 1' to enable this command.` | the cheat refusal | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.usage-teleport | `Usage: teleport x y z` | done | `games/shooters_edge/server/q2_commands.cpp` |
-| msg.usage-spawnentity | `Usage: spawnentity classname x y z <angle_x angle_y angle_z> <flags>` | | missing | R28 |
-| msg.usage-spawnonstart | `Usage: spawnonstart classname` | | missing | R28 |
+| msg.usage-spawnentity | `Usage: spawnentity classname x y z <angle_x angle_y angle_z> <flags>` | not-taken | goes with cmd.spawnentity |
+| msg.usage-spawnonstart | `Usage: spawnonstart classname` | not-taken | goes with cmd.spawnonstart |
 | msg.usage-listentities | `Usage: listentities <all\|ammo\|items\|keys\|monsters\|weapons>` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.usage-cycleweap | `Usage: cycleweap classname1 classname2 .. classnameN` | done | `games/shooters_edge/server/q2_commands.cpp` |
 | msg.usage-prefweap | `Usage: prefweap classname1 classname2 .. classnameN` | done | `games/shooters_edge/server/q2_commands.cpp` |
@@ -474,37 +476,39 @@ count: done 1, partial 1, missing 34, not-taken 0
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | con.startup | `Game is starting up.` / `Game is <name> built on <date>.` / `==== ShutdownGame ====` | library start and end | partial | q2_server.cpp `==== InitGame ====` when the rules are made; no ShutdownGame line |
-| con.no-spawn | `<class> doesn't have a spawn function` | unknown classname | missing | ours drops it silently |
-| con.not-field | `'<key>' is not a field. Value is '<value>'` | unknown entity key | missing | |
-| con.incomplete-field | `<func>: entity <n>: incomplete '<key>' field` | a vector key with fewer than three numbers | missing | |
+| con.no-spawn | `<class> doesn't have a spawn function` | unknown classname | done | q2_lines.cpp: `<class> doesn't have a spawn function` (and `ED_CallSpawn: NULL classname`), the entity removed; the class list is the game's spawn table and item list |
+| con.not-field | `'<key>' is not a field. Value is '<value>'` | unknown entity key | done | q2_lines.cpp key_lines: `ED_ParseEdict: <key> is not a field`, keys matched ignoring case, `_` keys passed over, inhibited entities too |
+| con.incomplete-field | `<func>: entity <n>: incomplete '<key>' field` | a vector key with fewer than three numbers | done | q2_lines.cpp key_lines: `ED_ParseField: couldn't parse '<key>'` for a vector key short of three numbers |
 | con.teams | `<n> teams with <m> entities.` | mover teams found | done | q2_lines.cpp (the Q2PRO wording, no full stop) |
 | con.inhibited | `<n> entities inhibited.` | entities left out by skill or mode | done | q2_lines.cpp (the Q2PRO wording), skill and deathmatch flags only |
 | con.invalid-spawnflags | `<class> at <pos> has invalid spawnflags set` | item spawnflags cleared | done | q2_server.cpp with q2_pos |
 | con.path-corner | `path_corner with no targetname at <pos>` | done | q2_lines.cpp; left out |
-| con.target-missing | `<class> at <pos> target <name> does not exist` | a path's target | missing | |
+| con.target-missing | `<class> at <pos> target <name> does not exist` | a path's target | done | q2_lines.cpp q2_combat_point_missing on arrival: the pick line, then the line; the target cleared |
 | con.viewthing | `viewthing spawned` | done | q2_lines.cpp |
 | con.func-wall | `func_wall START_ON without TOGGLE` | done | q2_lines.cpp; the toggle added |
 | con.viper | `misc_viper without a target at <pos>` / `<class> without a target at <pos>` | ships | done | q2_map.cpp, `(0 0 0)` |
 | con.no-target-count | `<class> with no target at <pos>`, `<class> with no count at <pos>` | done | q2_targets.cpp |
 | con.teleporter | `Couldn't find destination` / `teleporter without a target.` | done | q2_lines.cpp at spawn; q2_map.cpp each touch |
-| con.turret | `<class> at <pos> needs a target` / `<class> at <pos> has bad item: <item>` | partial | q2_targets.cpp needs a target and the pick line; no turret_driver bad item |
+| con.turret | `<class> at <pos> needs a target` / `<class> at <pos> has bad item: <item>` | done | q2_targets.cpp needs a target and the pick line; q2_lines.cpp `has bad item` for turret_driver and every monster at spawn |
+| con.monster-start | `<class> at <pos> has target with mixed types`, `<class> at <pos> has a bad combattarget <t> : <class> at <pos>`, `<class> can't find target <t> at <pos>`, `<class> in solid at <pos>` | a frame after the load, each monster started | done | q2_lines.cpp q2_start_lines (added by the 2026-11-22 audit) |
+| con.droptofloor | `droptofloor: <class> startsolid at <pos>` | an item placed inside solid, removed | done | q2_server.cpp drop_items (added by the 2026-11-22 audit) |
 | con.no-distance | `<class> at <pos> with no distance set` | a rotating door or a button | done | q2_map.cpp |
 | con.train | `train_next: bad target <t>`, `connected teleport path_corners, see <class> at <pos>`, `train_find: no target`, `train_find: target <t> not found`, `func_train without a target at <pos>` | done | q2_map.cpp train_find, train_next, connected teleports; q2_lines.cpp the lower corner less 1 |
-| con.elevator | `elevator used with no pathtarget`, `elevator used with bad pathtarget: <t>`, `trigger_elevator has no target`, `trigger_elevator unable to find target <t>`, `trigger_elevator target <t> is not a train` | partial | q2_map.cpp wording; said at each use, not once at set-up |
+| con.elevator | `elevator used with no pathtarget`, `elevator used with bad pathtarget: <t>`, `trigger_elevator has no target`, `trigger_elevator unable to find target <t>`, `trigger_elevator target <t> is not a train` | done | q2_lines.cpp q2_start_lines says the set-up lines once a frame after the load; q2_map.cpp the use lines at each use |
 | con.timer | `func_timer at <pos> has random >= wait` | done | q2_lines.cpp |
-| con.combattarget | `<class> at <pos>, combattarget <t> not found` | | missing | |
-| con.picktarget | `G_PickTarget called with NULL targetname`, `G_PickTarget: target <t> not found` | partial | q2_lines.cpp q2_pick_missing before the train, elevator and turret lines; not yet before combattarget and monster targets |
-| con.usetargets | `Think_Delay with no activator`, `entity was removed while using killtargets`, `WARNING: <class> used itself.`, `entity was removed while using targets` | partial | q2_map.cpp `WARNING: Entity used itself.`; the removed-while-using and Think_Delay lines not yet |
+| con.combattarget | `<class> at <pos>, combattarget <t> not found` | done | q2_lines.cpp q2_lost_combat on a monster's first enemy: the pick line, then the line, once |
+| con.picktarget | `G_PickTarget called with NULL targetname`, `G_PickTarget: target <t> not found` | done | q2_lines.cpp q2_pick_missing before the train, elevator, turret, combat point, combattarget and monster target lines |
+| con.usetargets | `Think_Delay with no activator`, `entity was removed while using killtargets`, `WARNING: <class> used itself.`, `entity was removed while using targets` | partial | q2_map.cpp `WARNING: Entity used itself.` and both removed-while-using lines; `Think_Delay with no activator` not yet |
 | con.speaker | `target_speaker with no noise set at <pos>` | done | q2_lines.cpp |
 | con.no-message | `<class> with no message at <pos>` | target_help | done | q2_map.cpp |
 | con.no-map | `target_changelevel with no map at <pos>` | done | q2_lines.cpp |
-| con.bad-target | `<class> at <pos>: <t> is a bad target` | target_laser | missing | |
-| con.lightramp | `<class> at <pos> target <t> (<class> at <pos>) is not a light`, `<class> target <t> not found at <pos>`, `target_lightramp has bad ramp (<r>) at <pos>`, `<class> with no target at <pos>` | partial | q2_lines.cpp the bad ramp and no target at spawn; the first use's lines not yet |
+| con.bad-target | `<class> at <pos>: <t> is a bad target` | target_laser | done | q2_targets.cpp: `target_laser at <pos>: <t> is a bad target` as the laser starts |
+| con.lightramp | `<class> at <pos> target <t> (<class> at <pos>) is not a light`, `<class> target <t> not found at <pos>`, `target_lightramp has bad ramp (<r>) at <pos>`, `<class> with no target at <pos>` | done | q2_lines.cpp the bad ramp and no target at spawn; q2_ramp_light the first use's not-a-light and not-found lines |
 | con.untargeted | `untargeted <class> at <pos>` | target_earthquake etc. | done | q2_lines.cpp target_earthquake |
 | con.flood-clamp | `flood_msgs lowered to max: 10` | done | q2_commands.cpp |
-| con.spawned | `Spawned entity at <x> <y> <z>` | spawnonstart | missing | R28 |
+| con.spawned | `Spawned entity at <x> <y> <z>` | spawnonstart | not-taken | goes with cmd.spawnonstart |
 | con.listentities | `<class>: <x> <y> <z>` | listentities | done | `games/shooters_edge/server/q2_commands.cpp` |
-| con.bad-movetype | `<class>:<n> has bad movetype: <n>` | | missing | |
+| con.bad-movetype | `<class>:<n> has bad movetype: <n>` | not-taken | a guard no map can reach: every entity's move type is set by the game's own code |
 | con.connected | `<name> connected` | a client connects | done | q2_server.cpp sq_connect when maxclients is above 1 |
 | con.fixed-triggered | `fixed TRIGGERED flag on <class> at <pos>` | g_fix_triggered | done | q2_lines.cpp `(0 0 0)` |
 | con.trigger-key | `no key item for trigger_key at <pos>`, `item <i> not found for trigger_key at <pos>`, `<class> at <pos> has no target` | done | q2_lines.cpp |

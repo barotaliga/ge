@@ -23,6 +23,11 @@
 //   lower, fading over 0.3 s.
 // - A WEAPON'S KICK (`Q2ViewState::weapon_angles`, `weapon_origin`): set by the shot, held one
 //   frame and cleared by `step_q2_view`.
+// - THE GUN'S SWAY (`Q2View::gun_angles`): the stride's share x speed tips it, 0.005 into the
+//   pitch, 0.01 into the yaw and 0.005 into the roll (yaw and roll flipped each stride); and it
+//   lags a turn: the view's change since the last frame (wrapped to -180..180, held to 45 degrees)
+//   x 0.2 on each axis, the yaw's x 0.1 into the roll too. `gun_x`, `gun_y` and `gun_z` move it
+//   right, forward and down (`Q2View::gun_offset`).
 // - DEAD: no kick; the view lies at `kQ2DeadRoll` and looks `kQ2DeadPitch` up, toward the
 //   killer (the rules give the yaw).
 // - THE OFFSET is the view height, less the fall's dip, plus the bob's height and the weapon's kick
@@ -52,6 +57,7 @@ inline constexpr float kQ2DeadPitch = -15;   // the dead view's pitch, degrees (
 struct Q2ViewSettings {
   float run_pitch = 0.002f, run_roll = 0.005f;
   float bob_up = 0.005f, bob_pitch = 0.002f, bob_roll = 0.002f;
+  float gun_x = 0, gun_y = 0, gun_z = 0;  // `gun_x`, `gun_y`, `gun_z`: the weapon moved, units
 };
 
 struct Q2ViewState {
@@ -61,6 +67,8 @@ struct Q2ViewState {
   int blow_count = 0, blow_push = 0;                   // this frame's blows, summed
   Vec3f blow_way;                                      // the last blow's way to its source
   Vec3f weapon_angles, weapon_origin;                  // this frame's shot's kick
+  Vec3f last_view;                                     // the view's angles a frame ago
+  bool have_last = false;
 };
 
 // What the frame's player is.
@@ -73,8 +81,10 @@ struct Q2ViewIn {
 };
 
 struct Q2View {
-  Vec3f offset;  // the eye over the origin, units
-  Vec3f kick;    // added to the view's angles, degrees (pitch down, yaw, roll right side down)
+  Vec3f offset;      // the eye over the origin, units
+  Vec3f kick;        // added to the view's angles, degrees (pitch down, yaw, roll right side down)
+  Vec3f gun_offset;  // the held weapon moved off its place, units (along the world's axes)
+  Vec3f gun_angles;  // the held weapon's sway, degrees (pitch, yaw, roll)
 };
 
 // A blow taken this frame: its points (armour included), its push, its way from the player

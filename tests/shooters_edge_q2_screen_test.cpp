@@ -7,6 +7,7 @@
 // ge:keywords test q2 centre-print crosshair status-bar scale add_q2_screen
 // ge:skill ui testing
 // ge:test tests/shooters_edge_q2_screen_test.cpp
+#include <cmath>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -206,4 +207,35 @@ TEST(gl_fontshadow_draws_each_letter_first_in_black_and_gl_bilerp_chars_smooths_
   dl.begin(320, 240);
   cl::draw_q2_bar(dl, bar, 1);
   CHECK_MSG(dl.cmds().size() == 14, std::to_string(dl.cmds().size()));
+}
+
+TEST(timegraph_draws_each_frames_time_along_the_bottom_held_to_graphheight) {
+  // A column a frame, a unit tall a millisecond (graphscale 1, graphshift 0), held to graphheight;
+  // the newest at the bottom right of the bar's screen. debuggraph draws it without feeding it.
+  cl::Q2Screen screen;
+  cl::Q2Bar bar;
+  bar.screen = &screen;
+  bar.width = 640;
+  bar.height = 480;
+  ge::ui::DrawList dl;
+  screen.time_graph = true;
+  for (const double now : {1.0, 1.010, 1.050}) {  // frames of 10 and 40 ms
+    bar.now = now;
+    dl.begin(640, 480);
+    cl::draw_q2_bar(dl, bar, 2);
+  }
+  CHECK_MSG(dl.cmds().size() == 2, std::to_string(dl.cmds().size()));
+  const ge::ui::Rect newest = dl.cmds()[0].box.rect, older = dl.cmds()[1].box.rect;
+  CHECK(newest.x == 638 && newest.w == 2 && newest.h == 64 && newest.y == 416);  // 40 ms: 32 high
+  CHECK_MSG(older.x == 636 && std::abs(older.h - 20) < 0.01f, std::to_string(older.h));
+  screen.time_graph = false;
+  screen.debug_graph = true;
+  bar.now = 2;
+  dl.begin(640, 480);
+  cl::draw_q2_bar(dl, bar, 2);
+  CHECK(dl.cmds().size() == 2);  // the same two, nothing fed
+  screen.debug_graph = false;
+  dl.begin(640, 480);
+  cl::draw_q2_bar(dl, bar, 2);
+  CHECK(dl.cmds().empty());
 }

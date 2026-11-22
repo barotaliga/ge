@@ -242,6 +242,7 @@ struct Mvd2Reader {
     level.server_count = m.i32();
     level.game = m.str();
     level.observer = m.i16();
+    level.flags = static_cast<uint8_t>(flags & 0xFF);
     level.config_strings.assign(size_t(kSlots), std::string());
     for (;;) {
       const int i = m.u16();
@@ -477,6 +478,10 @@ struct Mvd2ToQ2 final : ConvertStream {
     Q2PlayerState p = held_player;
     if (size_t(pov) < r.now.players.size() && r.now.players[size_t(pov)].in)
       p = r.now.players[size_t(pov)].s;
+    if (const int obs = r.level.observer; c.options.touch_observer && obs >= 0 &&
+                                          size_t(obs) < r.now.players.size() &&
+                                          r.now.players[size_t(obs)].in)
+      c.options.touch_observer(pov, obs, r.now.players[size_t(obs)].s, p);
     if (c.options.touch_player) c.options.touch_player(pov, p.type, p.flags, p.stats);
     std::vector<uint8_t> one;
     sv::q2_write_player(one, last_frame < 0 ? Q2PlayerState{} : held_player, p);
@@ -597,10 +602,15 @@ struct Mvd2ToQ2 final : ConvertStream {
     }
   }
 
-  // The player a view of `-1` follows: the lowest one in the game (-2 when none is).
+  // The player a view of `-1` follows: the lowest one in the game but the recording's own
+  // observer (the recorder's spectator), else that observer, else -2.
   int lowest_playing() const {
+    const int observer = r.level.observer;
     for (size_t i = 0; i < r.now.players.size(); i++)
-      if (r.now.players[i].in) return static_cast<int>(i);
+      if (r.now.players[i].in && static_cast<int>(i) != observer) return static_cast<int>(i);
+    if (observer >= 0 && size_t(observer) < r.now.players.size() &&
+        r.now.players[size_t(observer)].in)
+      return observer;
     return -2;
   }
 

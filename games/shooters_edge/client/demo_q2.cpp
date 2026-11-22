@@ -268,6 +268,8 @@ void set_string(Demo& d, int index, std::string text) {
     // Entities 1 to this are the players: kept by slot, so the rest number past `players`.
     d.max_clients = std::clamp(std::atoi(text.c_str()), 1, 32);
     s.players.assign(static_cast<size_t>(d.max_clients), DemoEntity{});
+  } else if (index == cs.max_clients + 1) {  // the map's checksum, just after the slots
+    s.map_checksum = std::move(text);
   } else if (index >= cs.models && index < cs.sounds) {
     // The world is model 1; a recording that puts it elsewhere is read by the first map named.
     const std::string map = map_of_model(text);
@@ -602,6 +604,12 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   s.angles = {angle16(v.angles[0]), angle16(v.angles[1]), angle16(v.angles[2])};
   s.kick = {static_cast<float>(v.kick[0]) * 0.25f, static_cast<float>(v.kick[1]) * 0.25f,
             static_cast<float>(v.kick[2]) * 0.25f};
+  s.gun_angles = {static_cast<float>(v.gun_angles[0]) * 0.25f,
+                  static_cast<float>(v.gun_angles[1]) * 0.25f,
+                  static_cast<float>(v.gun_angles[2]) * 0.25f};
+  s.gun_offset = {static_cast<float>(v.gun_offset[0]) * 0.25f,
+                  static_cast<float>(v.gun_offset[1]) * 0.25f,
+                  static_cast<float>(v.gun_offset[2]) * 0.25f};
   s.fov = static_cast<float>(v.fov);
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];

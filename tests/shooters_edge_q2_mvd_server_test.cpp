@@ -197,7 +197,7 @@ TEST(mvdrecord_writes_a_recording_our_reader_follows) {
   CHECK(admin(*r, "mvdrecord again") == "Already recording a local MVD.\n");
   run(*r, 150);
   CHECK(admin(*r, "mvdstop") == "Stopped local MVD recording.\n");
-  CHECK(admin(*r, "mvdstuff wait 10") == "Can't 'mvdstuff', dummy MVD client is not active\n");
+  CHECK(admin(*r, "mvdstuff wait 10").empty());  // the recorder's spectator takes it
   std::ifstream f(dir / "duel.mvd2", std::ios::binary);
   const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)), {});
   CHECK(sv::is_mvd2(bytes));
@@ -222,6 +222,56 @@ TEST(a_disabled_recorder_refuses_to_record) {
   auto r = rig({});
   run(*r, 5);
   CHECK(admin(*r, "mvdrecord x") == "MVD recording is disabled on this server.\n");
+  CHECK(admin(*r, "mvdstuff help") == "Can't 'mvdstuff', dummy MVD client is not active\n");
+}
+
+// The recorder's spectator: made when the recorder switches on, in a slot past the seats, a
+// spectator to the rules, sent nothing and listed nowhere; its begin commands open the
+// scoreboard, `mvdstuff` runs its words; the stream names it the observer with the "messages
+// left out" flag, and a view of no one follows the player, not it. Off, it leaves.
+TEST(the_recorders_spectator_holds_the_scoreboard_and_takes_mvdstuff) {
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge_q2_mvd_dummy_test";
+  std::filesystem::remove_all(dir);
+  cn::Q2MvdConfig cfg;
+  cfg.enable = 1;
+  cfg.demos = dir.string();
+  cfg.begincmd = "wait 2; help;";
+  cfg.disconnect_min = 1;
+  auto r = rig(cfg);
+  run(*r, 100);
+  CHECK(r->server.mvd.dummy < 0);
+  CHECK(admin(*r, "mvdrecord spec").rfind("Recording local MVD to ", 0) == 0);
+  run(*r, 10);
+  const int d = r->server.mvd.dummy;
+  CHECK_MSG(d >= cn::q2_net_slots(r->server), std::to_string(d));
+  CHECK(r->server.clients[d].stage == cn::Q2Slot::dummy);
+  CHECK(r->server.clients[d].name == "[MVDSPEC]");
+  CHECK((*r->rules).clients[d].active && (*r->rules).clients[d].spectator);
+  CHECK(cn::q2_net_clients(r->server) == 1);  // the browser counts the player alone
+  CHECK(admin(*r, "status").find("[MVDSPEC]") == std::string::npos);
+  run(*r, 60);  // `wait 2` over, `help`: the scoreboard up
+  CHECK_MSG(sv::q2_of(r->rules)->players[d].screen != 0, "no scoreboard");
+  CHECK(admin(*r, "mvdstuff \"putaway\"").empty());
+  run(*r, 20);
+  CHECK(sv::q2_of(r->rules)->players[d].screen == 0);
+  CHECK(admin(*r, "mvdstop") == "Stopped local MVD recording.\n");
+  std::ifstream f(dir / "spec.mvd2", std::ios::binary);
+  const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)), {});
+  CHECK(bytes.size() > 22);
+  // The magic, the block's length, the server data with the flag in its top bits, 37, 2010, the
+  // count, the game folder, the observer.
+  CHECK(bytes[6] == (sv::kMv2ServerData | (sv::kMvfNoMsgs << 5)));
+  const size_t at = 6 + 1 + 4 + 2 + 4 + 1;
+  CHECK(int(int16_t(bytes[at] | bytes[at + 1] << 8)) == d);
+  std::vector<uint8_t> view;
+  std::string error;
+  CHECK_MSG(shooters_edge::client::mvd2_view(bytes, -1, view, error), error);
+  // Nothing records or streams: after `sv_mvd_disconnect_time` the recorder stops and it leaves.
+  run(*r, 4800);
+  CHECK(r->server.mvd.dummy < 0);
+  CHECK(r->server.clients[d].stage == cn::Q2Slot::free);
+  CHECK(!(*r->rules).clients[d].active);
+  std::filesystem::remove_all(dir);
 }
 
 TEST(a_relay_gets_the_game_state_and_a_block_a_frame) {

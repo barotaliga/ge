@@ -14,23 +14,35 @@ namespace shooters_edge::server {
 namespace {
 
 constexpr uint8_t kPrint = 10, kStuffText = 11, kCenterPrint = 15, kLayout = 4;
-constexpr int kSpectatorMove = 1;
+constexpr int kSpectatorMove = 1, kFreezeMove = 4;
+constexpr uint8_t kNoPrediction = 64;
+constexpr int kStatLayouts = 13;
 
 void put_str(std::vector<uint8_t>& b, const std::string& s) {
   b.insert(b.end(), s.begin(), s.end());
   b.push_back(0);
 }
 
-bool captured(const RulesCommon& c, int slot, const Q2PlayerState& p) {
-  return c.clients[slot].active && !c.clients[slot].spectator && p.type != kSpectatorMove &&
-         p.fov != 0;
+// The capture's test (the header's WHO IS CAPTURED).
+bool captured(const RulesCommon& c, const Mvd2Capture& cap, int slot, const Q2PlayerState& p) {
+  if (!c.clients[slot].active) return false;
+  if ((cap.flags & 1) != 0 && c.clients[slot].bot) return false;
+  if (p.fov == 0) return false;
+  if (slot == cap.dummy) return true;
+  if (c.clients[slot].spectator || p.type == kSpectatorMove) return false;
+  const Q2EntityState e = q2_entity_state(c, slot + 1);
+  const bool unseen =
+      !e.present || (e.model[0] == 0 && e.effects == 0 && e.sound == 0 && e.event == 0);
+  if (unseen && (cap.flags & 2) != 0) return false;
+  if (!unseen && (cap.flags & 4) != 0) return true;
+  return p.type != kFreezeMove && (p.flags & kNoPrediction) == 0;
 }
 
 void players(const RulesCommon& c, const Mvd2Capture& cap, Mvd2Frame& out) {
   out.players.assign(sh::kMaxClients, Mvd2Player{});
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2PlayerState p = q2_player_state(c, i, cap.moves[i]);
-    if (!captured(c, i, p)) continue;
+    if (!captured(c, cap, i, p)) continue;
     if (cap.no_blend) std::memset(p.blend, 0, sizeof p.blend);
     if (cap.no_gun) {
       p.gun_index = 0;
@@ -60,7 +72,8 @@ void q2_mvd2_level(const RulesCommon& c, const Q2WireOptions& opt, const Mvd2Cap
                    Mvd2Live& live, Mvd2Level& out) {
   out = Mvd2Level{};
   out.server_count = opt.server_count;
-  out.observer = -1;
+  out.observer = cap.dummy;
+  out.flags = cap.dummy >= 0 && cap.no_msgs ? kMvfNoMsgs : 0;
   q2_config_strings(c, opt, out.config_strings);
   out.config_strings.resize(kQ2ConfigStrings);
   players(c, cap, out.base);
@@ -94,12 +107,19 @@ void q2_mvd2_frame(const RulesCommon& c, const Q2WireOptions& opt, const Mvd2Cap
     if (bytes.size() > kMvd2MostCast) return;  // too big for the stream: left out
     out.unicasts.emplace_back(slot, std::move(bytes));
   };
-  // A captured player's layout when it changed.
+  const bool dummy = cap.dummy >= 0;
+  live.dummy_layout = false;
+  live.dummy_lines.clear();
+  // A captured player's layout when it changed (with a dummy, the dummy's alone). The dummy's
+  // scoreboard counts as seen while it is up (its layouts stat): a game shows it again while open.
+  if (dummy && in(cap.dummy) && (out.players[size_t(cap.dummy)].s.stats[kStatLayouts] & 1) != 0)
+    live.dummy_layout = true;
   for (int i = 0; i < sh::kMaxClients; i++) {
     const std::string& layout = c.world.clients[i].layout;
     if (layout == live.layouts[i]) continue;
     live.layouts[i] = layout;
-    if (!in(i)) continue;
+    if (!in(i) || (dummy && i != cap.dummy)) continue;
+    if (i == cap.dummy) live.dummy_layout = true;
     std::vector<uint8_t> b{kLayout};
     put_str(b, layout);
     unicast(i, std::move(b));
@@ -114,7 +134,7 @@ void q2_mvd2_frame(const RulesCommon& c, const Q2WireOptions& opt, const Mvd2Cap
     if (e.kind == EventKind::print) {
       if (all) {
         out.prints.emplace_back(std::clamp(e.level, 0, 3), e.text);
-      } else if (in(slot)) {
+      } else if (in(slot) && !(dummy && cap.no_msgs && slot != cap.dummy)) {
         std::vector<uint8_t> b{kPrint, static_cast<uint8_t>(std::clamp(e.level, 0, 3))};
         put_str(b, e.text);
         unicast(slot, std::move(b));
@@ -129,6 +149,8 @@ void q2_mvd2_frame(const RulesCommon& c, const Q2WireOptions& opt, const Mvd2Cap
         unicast(slot, std::move(b));
       }
     } else if (e.kind == EventKind::stuffcmd) {
+      if (cap.dummy_stuff && dummy && (all || slot == cap.dummy))
+        live.dummy_lines.push_back(e.text.substr(0, 1024));
       if (!in(slot) || e.text.rfind("play ", 0) != 0) continue;  // only a sound's line
       std::vector<uint8_t> b{kStuffText};
       put_str(b, e.text);

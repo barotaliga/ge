@@ -113,6 +113,8 @@ bool classic_art(const PictureFind& find, std::string_view where, HudArt* out, s
     ok = load("num_" + d, &a.digit[k]) && load("anum_" + d, &a.digit_low[k]);
   }
   if (!ok) return false;
+  find("turtle", &a.turtle);  // the corner's icons: drawn when the pack has them
+  find("net", &a.net);
   // The sheet's gold figures are its cells 18 to 27. The crosshair is the sheet's '+' cell, as
   // Quake drew it; there is no health icon (the modern looks show the portrait).
   a.digits_at = 18;

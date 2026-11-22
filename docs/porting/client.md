@@ -49,9 +49,13 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Hit markers | none | `cl_hit_markers`, `scr_hit_marker_time` on temporary entity 128 (`client/q2_bar.cpp`'s `draw_q2_hit_marker`), sent by our server to a client that asks (`*ge_ext` bit 1024) | its own | its own |
 | Download switches | the server's `sv_download_*` | `allow_download` and its kinds gate what joining fetches (`net/q2_downloads.hpp`), `cl_nodelta` | its own | its own |
 | See-through weapon | none | `cl_gunalpha` (`view/hand.hpp`'s `alpha`) | its own | its own |
-| Network trouble words | none | `scr_showturtle` (`client/q2_bar.cpp`'s `add_q2_turtle`) | its own | its own |
+| Network trouble words | the turtle (`showturtle`) and the net picture in the view's corner (`client/trouble_icons.hpp`) | `scr_showturtle` (`client/q2_bar.cpp`'s `add_q2_turtle`) | its own | its own |
 | The window's style | always a usual window | `win_noborder`, `win_notitle`, `win_alwaysontop`, `win_noresize` (`platform/window_cvars.hpp`) | the engine's | the engine's |
 | The window's size and place | as the game opens it | `vid_geometry`, `WxH+X+Y` (`platform/window_cvars.hpp`) | the engine's | the engine's |
+| Console scroll-back | stays where scrolled | `con_scroll` (`console/view.hpp`, every game) | the engine's | the engine's |
+| Packets sent shown | `showpackets` | `cl_showpackets` over the channel's trace (`classic/protocol/channel.hpp`) | its own | its own |
+| Held weapon's sway | ours (`cl_gunsway`) | the server's gun angles and place (`client/held.cpp`'s `q2_gun_sway` over `viewmodel/place.hpp`'s `game_turn`, `game_shift_m`), ours set aside | its own | its own |
+| Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Screenshot names | by the time | `gl_screenshot_template` (`quakeXXX`) and `gl_screenshot_compression` over `scr_template` and `scr_compression` (`capture/screenshot.hpp`) | by the time | the engine's |
 
 ## Adding a game

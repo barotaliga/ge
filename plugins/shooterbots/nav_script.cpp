@@ -106,6 +106,8 @@ ScriptKeys script_keys(const NavScript& sc, size_t& i, Vec3f origin, Vec3f veloc
   const bool last = i + 1 >= sc.steps.size();
   k.forward = (last || i == 0) && h < kSlowInto ? (h / kSlowInto > 0.2f ? h / kSlowInto : 0.2f) : 1;
   k.jump = st.hop && onground && st.at.z > origin.z + kStepUp && h <= kHopReach;
+  // Ducked toward a ducked step and away from one (up only once out from under the roof).
+  k.duck = st.duck || (i > 0 && sc.steps[i - 1].duck);
   return k;
 }
 

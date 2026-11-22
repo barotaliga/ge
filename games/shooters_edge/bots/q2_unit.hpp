@@ -54,6 +54,9 @@ struct UnitOptions {
   uint32_t seed = 1;
   bool god = true;
   bool plan = false;  // keep his changes of plan
+  // The 100% run (way_through.hpp): every monster he can reach and every secret before the exit;
+  // the last quarter of `map_seconds` is for the way out.
+  bool complete = false;
 };
 
 struct UnitMap {

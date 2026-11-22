@@ -52,9 +52,14 @@ constexpr double kWayPreySpent_s = 90;  // a monster chased this long in all, sp
 constexpr double kWayRetry_s = 60;      // and tried again after this
 constexpr double kWayNoRoute_s = 5;     // an exit his pilot finds no route to this long is left
 constexpr double kWayCall_s = 1.5;      // waited this long for a lift its button calls: pressed
-constexpr double kWayIdle_s = 5;        // nothing to do this long: back into the water
-constexpr float kKeyCovered = 96;       // a locked door this near a key's height covers it, units
-constexpr float kWaySeen = 192;         // a node this near where he has stood is explored, units
+constexpr double kWayDone_s = 10;  // (`complete`) the exit waits this long past the last thing left
+constexpr float kWayTouchBy = 48;  // (`complete`) a node this near a step's box stands by it, units
+constexpr float kWayTouchFrom = 96;  // and from this near its node he goes into the box, units
+constexpr float kWayCrawlNear = 32;  // (`complete`) a crawl's point this near: he crawls it, units
+constexpr double kWayCrawlOut_s = 15;  // and the way back out is crawled this long at most, s
+constexpr double kWayIdle_s = 5;       // nothing to do this long: back into the water
+constexpr float kKeyCovered = 96;      // a locked door this near a key's height covers it, units
+constexpr float kWaySeen = 192;        // a node this near where he has stood is explored, units
 
 constexpr uint8_t kLockedOut = 2;     // `locked_turns`: a bridge open only once all the way out
 constexpr double kWayTour_s = 30;     // (`complete`) the tour worked out again this often, s
@@ -79,15 +84,19 @@ struct WayStep {
   double left_until = -1;
   WayKind kind = WayKind::exit;
   bool done = false;
-  bool opens = false;    // it opens a door that only something else opens (or counts toward one)
-  bool keyed = false;    // a trigger that opens only for a key held: done once its doors open
-  bool revisit = false;  // an exit to a map he has played: taken last
-  bool leaves = false;   // a button that leads to a level change (base2's lift down to bunk1)
-  bool drains = false;   // a button that moves water (it strands him in the pool): pressed last
-  bool ever = false;     // (`complete`) done once: a lift's button shut again is not pressed again
-  int tries = 0;         // (`complete`) times it was left
-  std::vector<int> doors;   // those doors' entities
-  std::vector<int> covers;  // a key's: the locked doors (WayThrough::locked) lying over it
+  bool opens = false;     // it opens a door that only something else opens (or counts toward one)
+  bool keyed = false;     // a trigger that opens only for a key held: done once its doors open
+  bool revisit = false;   // an exit to a map he has played: taken last
+  bool leaves = false;    // a button that leads to a level change (base2's lift down to bunk1)
+  bool drains = false;    // a button that moves water (it strands him in the pool): pressed last
+  bool ever = false;      // (`complete`) done once: a lift's button shut again is not pressed again
+  int tries = 0;          // (`complete`) times it was left
+  bool reach_in = false;  // (`complete`) its node lies by it, not in it: the last stretch is
+                          // walked or swum into its box (`way_reach_in`)
+  std::vector<sh::Vec3f> crawl;  // (`complete`) or crawled from its node, ducked (a nook under a
+                                 // floor: base1's silencer), these origins in turn
+  std::vector<int> doors;        // those doors' entities
+  std::vector<int> covers;       // a key's: the locked doors (WayThrough::locked) lying over it
 };
 
 // An exit: a trigger walked through, or a button pressed, that changes the level.
@@ -105,6 +114,9 @@ struct WayThrough {
   bool complete = false;                // the 100% run (set before way_init)
   double complete_until = kWayForever;  // and after this game time, only the way out (a map he
                                         // cannot clear still ends at its exit in its time)
+  double busy_at = -kWayForever;        // (`complete`) the last time something was left to do
+  std::vector<sh::Vec3f> crawl_out;     // (`complete`) the way back out of a nook, ducked
+  double crawl_out_at = 0;              // since this game time
   std::vector<std::string> avoid;  // maps an exit to is no way on (a secret level; before way_init)
   std::vector<WayStep> steps;
   std::vector<int> locked;           // doors something else opens: their entities
@@ -207,6 +219,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
 // edge, then across to the far side's entry (`out`) and up onto its land.
 void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
               sh::MoveCmd& cmd);
+// (`complete`) The leader's command after his own, at a step whose box no node of his reaches
+// (base1's pool secret, a strip over the water at the foot of a ledge he cannot climb): from its
+// node, into the box.
+void way_reach_in(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
+                  sh::MoveCmd& cmd);
 
 constexpr float kWayStuck = 24;
 constexpr double kWayStuck_s = 1.5;

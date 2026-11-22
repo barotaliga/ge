@@ -32,9 +32,15 @@
 // `mvd_filter_version` a chat line from the recorded server has each `!version` made `!versi0n`, so
 // the viewers' scripts do not answer it.
 //
-// WHAT IT DOES NOT: a viewer flies free only by following no one (a view needs a player); stats
-// and intermission rewrites from the recorder's dummy (`mvd_stats_hack`, `mvd_freeze_hack`) are not
-// made, as our recordings carry no dummy;
+// THE RECORDER'S SPECTATOR (the stream's observer, q2_mvd_dummy.hpp) is no one to chase: a view
+// of no one follows the lowest player, else it. `mvd_stats_hack` is a mask of stats (0 to 31) a
+// chaser sees from the spectator's (its scoreboard's numbers), before `mvd_stats_score`. With
+// `mvd_freeze_hack` (1 the default) a frozen spectator is the intermission: every viewer of the
+// channel follows it (each one's player kept), with the scoreboard up unless another screen was;
+// no `follow`, `observe`, `autofollow` or next and previous player meanwhile; when it moves again
+// (or the level changes) the scoreboard goes and each goes back to his player, or to no one.
+//
+// WHAT IT DOES NOT: a viewer flies free only by following no one (a view needs a player);
 // a stream with the extended limits is refused by the reader.
 //
 // ge:summary Quake II's multiview relay: mvdconnect, mvdplay, channels, the Waiting Room, viewers
@@ -68,19 +74,21 @@ struct Q2RelayConfig {
   std::string hostname = "Shooter's Edge TV";
   std::string version = "Shooter's Edge";  // the relay's version, in its hello and on the chooser
   int max_viewers = 32;
-  std::string password;                      // what a viewer must bring
-  double timeout = 90;                       // mvd_timeout, s
-  int suspend_min = 5;                       // mvd_suspend_time, minutes (0: always active)
-  int wait_delay = 20;                       // mvd_wait_delay, s
-  int wait_percent = 50;                     // mvd_wait_percent
-  int buffer_size = 8;                       // mvd_buffer_size, 32 KiB
-  std::string username = "unnamed";          // mvd_username
-  std::string upstream_password;             // mvd_password
-  int snaps = 10;                            // mvd_snaps, s
-  std::string admin_password;                // mvd_admin_password
-  int part_filter = 0;                       // mvd_part_filter
-  int stats_score = 0;                       // mvd_stats_score: 0 none, 1 the channel, else frags
-  bool filter_version = false;               // mvd_filter_version: `!version` in chat made inert
+  std::string password;              // what a viewer must bring
+  double timeout = 90;               // mvd_timeout, s
+  int suspend_min = 5;               // mvd_suspend_time, minutes (0: always active)
+  int wait_delay = 20;               // mvd_wait_delay, s
+  int wait_percent = 50;             // mvd_wait_percent
+  int buffer_size = 8;               // mvd_buffer_size, 32 KiB
+  std::string username = "unnamed";  // mvd_username
+  std::string upstream_password;     // mvd_password
+  int snaps = 10;                    // mvd_snaps, s
+  std::string admin_password;        // mvd_admin_password
+  int part_filter = 0;               // mvd_part_filter
+  int stats_score = 0;               // mvd_stats_score: 0 none, 1 the channel, else frags
+  bool filter_version = false;       // mvd_filter_version: `!version` in chat made inert
+  uint32_t stats_hack = 0;           // mvd_stats_hack: the stats a chaser sees from the spectator's
+  bool freeze_hack = true;           // mvd_freeze_hack: a frozen spectator is the intermission
   std::string default_map = "q2dm1";         // mvd_default_map
   std::string chase_prefix = "xv 0 yb -64";  // mvd_chase_prefix
   int flood_msgs = 4;
@@ -147,7 +155,8 @@ struct Q2Channel {
   client::DemoConvert base;  // reads every block: the state a new view forks from
   bool have_state = false;
   std::string map;
-  std::string oldscore;  // the last level's scoreboard, as a layout
+  std::string oldscore;       // the last level's scoreboard, as a layout
+  bool intermission = false;  // the recorder's spectator is frozen (mvd_freeze_hack)
   int64_t frame = 0, level_frame = 0;
   // A played file.
   std::vector<std::string> files;
@@ -175,6 +184,7 @@ struct Q2RelayViewer {
   int chan = -1;    // the channel's id; -1 the Waiting Room
   int target = -1;  // the player chased (-1: the view's own choice)
   int prev = -1;
+  int saved = -1;  // the player to go back to after an intermission
   bool admin = false;
   int uf = 0;
   Q2Layout layout = Q2Layout::none;

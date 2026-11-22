@@ -9,12 +9,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <utility>
 
 #include "brush/map.hpp"
 #include "shooter/hull.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 
 namespace shooters_edge::client {
 
@@ -156,6 +158,59 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
            .kind = con::CvarKind::boolean,
            .values = k.fallback[0] == '1' ? "1: fetched (the default); 0: not"
                                           : "0: not fetched (the default); 1: fetched"});
+  // Downloads over HTTP (net/q2_http.hpp), read at each `connect`; the server list's web lists
+  // read `cl_http_blocking_timeout` (menu/servers_page.hpp).
+  v.add({.name = "cl_http_downloads",
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "Whether joining fetches files from the web address a server names.",
+         .kind = con::CvarKind::boolean,
+         .values = "1: from the web first (the default); 0: from the server alone"});
+  v.add({.name = "cl_http_filelists",
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "Whether a server's web lists of further files are fetched and followed.",
+         .kind = con::CvarKind::boolean,
+         .values = "1: followed (the default); 0: not"});
+  v.add({.name = "cl_http_max_connections",
+         .fallback = "2",
+         .flags = con::kArchive,
+         .help = "How many files are fetched from the web at once.",
+         .kind = con::CvarKind::integer,
+         .min = 1,
+         .max = 4,
+         .values = "2: two at once (the default); 1 to 4: that many"});
+  v.add({.name = "cl_http_proxy",
+         .fallback = "",
+         .flags = con::kArchive,
+         .help = "The web proxy downloads go through.",
+         .kind = con::CvarKind::text,
+         .values = "\"\": none (the default); TEXT: host:port"});
+  v.add({.name = "cl_http_default_url",
+         .fallback = "",
+         .flags = con::kArchive,
+         .help = "Your own web address files are fetched from when a server names none.",
+         .kind = con::CvarKind::text,
+         .values = "\"\": none (the default); TEXT: an address such as http://host/q2/"});
+  v.add({.name = "cl_http_insecure",
+         .fallback = "0",
+         .flags = con::kArchive,
+         .help = "Whether a secure web address's certificate goes unchecked; secure addresses "
+                 "are not fetched here, so their files come from the server.",
+         .kind = con::CvarKind::boolean,
+         .values = "0: checked (the default); 1: not"});
+  v.add({.name = "cl_http_debug",
+         .fallback = "0",
+         .help = "Whether each web download's address is said as it starts.",
+         .kind = con::CvarKind::boolean,
+         .values = "0: not said (the default); 1: said"});
+  v.add({.name = "cl_http_blocking_timeout",
+         .fallback = "15",
+         .flags = con::kArchive,
+         .help = "Seconds of silence before a web list of servers is given up.",
+         .kind = con::CvarKind::number,
+         .min = 1,
+         .values = "15: fifteen seconds (the default); a number: that many"});
   const char* helps[4] = {
       "Whether the game is running: always 1.", "Whether the game you play is paused.",
       "Whether this window runs a server.", "Whether the server this window runs is paused."};
@@ -175,6 +230,15 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
          &s.warn_fps);
   s.state = -1;
   s.fps_seen = 0;
+}
+
+std::string q2_map_version(std::string_view stated, std::span<const uint8_t> file, bool server) {
+  if (stated.empty() || file.empty()) return {};
+  const int32_t ours = shooters_edge::server::q2_map_checksum(file);
+  const std::string theirs(stated);
+  if (static_cast<int32_t>(std::strtoll(theirs.c_str(), nullptr, 10)) == ours) return {};
+  return std::string("Local map version differs from ") + (server ? "server: " : "demo: ") +
+         std::to_string(ours) + " != " + theirs;
 }
 
 int q2_fps_rounded(int fps) {

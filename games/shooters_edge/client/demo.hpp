@@ -269,7 +269,10 @@ struct DemoState {
   sh::Vec3f eye;     // the view's eye, units
   sh::Vec3f angles;  // the view's angles, degrees
   sh::Vec3f kick;    // Quake II: the server's kick angles on the view, degrees
-  float fov = 0;     // Quake II: the field of view the server sends, degrees (0: none sent)
+  // Quake II: the server's sway on the held weapon, degrees (pitch down, yaw left, roll right side
+  // down), and its place off the hand, units along the world's axes.
+  sh::Vec3f gun_angles, gun_offset;
+  float fov = 0;  // Quake II: the field of view the server sends, degrees (0: none sent)
   // The blows the view's player took (single, client, multiview): the last `kKeptBlows` of them
   // and how many in all since the demo was opened, so a look after several frames misses none.
   std::vector<DemoBlow> blows;
@@ -311,6 +314,7 @@ struct DemoState {
   std::string layout;
   std::vector<int16_t> inventory;
   std::array<std::string, 32> looks;  // Quake II: each slot's model and skin ("male/grunt")
+  std::string map_checksum;           // Quake II: the level's map checksum as stated ("" none)
   float air_accelerate = 0;           // Quake II: the air acceleration the server states (0: none)
   std::vector<DemoEntity> entities;   // by number
   std::vector<DemoEntity> players;    // client, multiview: by slot (32)

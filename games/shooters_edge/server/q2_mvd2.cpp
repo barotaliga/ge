@@ -244,7 +244,7 @@ void mvd2_write_magic(std::vector<uint8_t>& out) {
 void mvd2_write_level(std::vector<uint8_t>& out, const Mvd2Level& level) {
   std::vector<uint8_t> block;
   Out o{block};
-  o.u8(kMv2ServerData);
+  o.u8(kMv2ServerData | static_cast<uint8_t>((level.flags & 7) << 5));
   o.i32(kMvd2Major);
   o.i16(kMvd2Minor);
   o.i32(level.server_count);
