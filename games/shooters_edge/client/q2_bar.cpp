@@ -344,6 +344,7 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
   bar.ops.clear();
   bar.width = width;
   bar.height = height;
+  bar.layout_up = false;
   if (world.status_bar.empty() || slot < 0 || slot >= ge::shooter::kMaxClients) return;
   // scr_draw2d: 0 none of it; 1 no status bar; 3 no layouts (the scoreboard, the help computer).
   const int draw2d = bar.screen != nullptr ? bar.screen->draw2d : 2;
@@ -365,6 +366,7 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
   if (draw2d != 1) hud::run_layout(in, bar.ops);  // its text copied out of the strings as read
   if (bar.asked_by != nullptr && !bar.asked.empty()) answer(bar, world, slot, in);
   const server::WorldClient& me = world.clients[slot];
+  bar.layout_up = (in.stats[13] & 3) != 0;
   if ((in.stats[13] & 1) != 0 && !me.layout.empty() && draw2d != 3) {
     std::vector<hud::LayoutOp> over;  // the screen the rules sent him, over the bar
     in.program = me.layout;

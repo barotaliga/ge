@@ -90,6 +90,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   }
   const sv::RulesCommon& s = *c.server;
   m.nav = std::make_unique<MapNav>();
+  m.nav->hatch_drops = true;  // the campaign's floor doors open drops (map_nav.hpp)
   if (!build_map_nav(*q, c.map, quake_maps(), "info_player_start", *m.nav, error)) return false;
   MapNav& nav = *m.nav;
   em.name = c.map.name;
@@ -122,6 +123,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
       f.features.set(sb::Feature::locked, false);
       hunt_init(f, s);
       m.way.complete = opt.complete;
+      m.way.toured = opt.tour;
       // The last quarter of the map's time is for the way out: a map he cannot clear still ends.
       m.way.complete_until = s.sv.time + opt.map_seconds * 0.75;
       m.way.avoid = opt.avoid;

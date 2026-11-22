@@ -66,6 +66,11 @@ using server::Mvd2Sound;
 bool mvd2_view(std::span<const uint8_t> bytes, int slot, std::vector<uint8_t>& out,
                std::string& error, bool player_stats = false);
 
+struct DemoConvert;
+// The level a conversion from a multiview recording has read to, its frame as the game state's
+// (a relay's recording of a channel starts with it). False when it has read no level yet.
+bool mvd2_reader_level(const DemoConvert& c, Mvd2Level& out);
+
 struct Demo;
 // A demo opened from a multiview recording (`Demo::multiview_source`) made to follow `slot` from
 // the frame it is at: the view written again for him and read up to that frame. False with the

@@ -210,6 +210,7 @@ void run(gl::Lab& lab) {
   o.skills.clear();
   o.single = true;
   o.complete = lab.arg("complete") != "0";
+  o.tour = lab.arg("tour") != "0";
   o.god = lab.arg("god") != "0";
   o.stop = {"start", "end"};
   PackMaps packs;
@@ -368,6 +369,7 @@ const gl::LabSpec kSpec{
         {"seed", "1", "the campaign's and the bot's seed"},
         {"god", "1", "0: the bot can die"},
         {"complete", "1", "0: the way through alone, the exit as soon as it is open"},
+        {"tour", "1", "0: the nearest stop each time rather than the tour's order (tour.hpp)"},
         {"root", ".", "the repository's root"},
         {"plan", "0", "1: each map's changes of plan as a table"},
     },

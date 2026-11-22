@@ -78,6 +78,7 @@
 #include "server/skew.hpp"
 #include "server/status.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q2_mvd_server.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_ext.hpp"
 #include "shooters_edge/net/qw_antilag.hpp"
@@ -94,6 +95,7 @@ namespace sv = shooters_edge::server;
 
 struct Q2NetConfig {
   std::string hostname = "Shooter's Edge";
+  Q2MvdConfig mvd;  // the multiview recorder and its relay stream (q2_mvd_server.hpp)
   int max_clients = 8;
   std::string password;  // "" or "none": none asked
   // SPECTATORS (user info `spectator` other than 0): with a spectator password set ("" or `none`:
@@ -339,6 +341,9 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   sv::NativeQ2* native = nullptr;  // a hosted game library's runner (q2_native.hpp)
   gn::Transport* transport = nullptr;
   Q2NetClient clients[sh::kMaxClients];
+  Q2Mvd mvd;               // the multiview recorder (sv_mvd_enable)
+  int64_t mvd_frame = -1;  // the rules frame last recorded
+  bool mvd_level = true;   // a level waits for its game state
   // The challenges (1024 kept, one an address and port, each used once; the oldest
   // replaced when full): by address, and the addresses oldest first.
   std::map<uint64_t, int32_t> challenges;

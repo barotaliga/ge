@@ -222,6 +222,7 @@ void string_command(Q2TvFace& f, Q2Viewer& v, const std::string& line) {
     v.stage = Q2ViewerStage::active;
     for (const auto& b : f.since_whole) queue(v, b);
     v.blocks += static_cast<int64_t>(f.since_whole.size());
+    if (f.on_begin) f.on_begin(v);
   } else if (w[0] == "download") {
     // A file the viewer lacks (a model the recording names that its paks do not hold): refused,
     // so the client goes on without it rather than waiting on the loading screen for ever.
@@ -231,6 +232,8 @@ void string_command(Q2TvFace& f, Q2Viewer& v, const std::string& line) {
     f.downloads_refused++;
   } else if (w[0] == "disconnect") {
     drop(f, v, "left");
+  } else if (f.on_command) {
+    f.on_command(v, line);
   }
 }
 
@@ -253,28 +256,30 @@ void read_messages(Q2TvFace& f, Q2Viewer& v, const uint8_t* data, size_t size) {
   }
 }
 
+// As a server changing levels: the client keeps its connection and asks for the signon again
+// with `new`; it may be sent this one message before it does.
+void again(Q2Viewer& v) {
+  v.queue.clear();
+  static constexpr char kAgain[] =
+      "\x0b"
+      "changing\n\0"
+      "\x0b"
+      "reconnect\n";
+  queue(v, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(kAgain), sizeof kAgain));
+  v.stage = Q2ViewerStage::signon;
+  v.asked = false;
+  v.signed_on = false;
+  v.go = 1;
+}
+
 // A new level: everything kept starts over, and every viewer is told the level changed.
 void new_level(Q2TvFace& f) {
   f.strings.clear();
   f.baselines.clear();
   f.since_whole.clear();
   f.levels++;
-  for (Q2Viewer& v : f.viewers) {
-    if (v.stage == Q2ViewerStage::free) continue;
-    v.queue.clear();
-    // As a server changing levels: the client keeps its connection and asks for the signon again
-    // with `new`; it may be sent this one message before it does.
-    static constexpr char kAgain[] =
-        "\x0b"
-        "changing\n\0"
-        "\x0b"
-        "reconnect\n";
-    queue(v, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(kAgain), sizeof kAgain));
-    v.stage = Q2ViewerStage::signon;
-    v.asked = false;
-    v.signed_on = false;
-    v.go = 1;
-  }
+  for (Q2Viewer& v : f.viewers)
+    if (v.stage != Q2ViewerStage::free) again(v);
 }
 
 }  // namespace
@@ -283,6 +288,32 @@ int q2_tv_viewers(const Q2TvFace& f) {
   int n = 0;
   for (const Q2Viewer& v : f.viewers) n += v.stage != Q2ViewerStage::free ? 1 : 0;
   return n;
+}
+
+void q2_tv_send(Q2Viewer& v, std::span<const uint8_t> msg) {
+  if (v.stage == Q2ViewerStage::free) return;
+  queue(v, msg);
+}
+
+Q2Viewer* q2_tv_find(Q2TvFace& f, const gn::Address& host, uint16_t qport) {
+  for (Q2Viewer& v : f.viewers)
+    if (v.stage != Q2ViewerStage::free && v.qport == qport && same_host(v.address, host)) return &v;
+  return nullptr;
+}
+
+bool q2_tv_move(Q2TvFace& from, Q2TvFace& to, Q2Viewer& v) {
+  if (&from == &to) return true;
+  Q2Viewer* slot = nullptr;
+  for (int i = 0; i < to.cfg.max_viewers && i < static_cast<int>(to.viewers.size()); i++)
+    if (to.viewers[size_t(i)].stage == Q2ViewerStage::free) {
+      slot = &to.viewers[size_t(i)];
+      break;
+    }
+  if (slot == nullptr) return false;
+  *slot = std::move(v);
+  v = Q2Viewer{};
+  again(*slot);
+  return true;
 }
 
 void q2_tv_start(Q2TvFace& f, gn::Transport& t, const Q2TvConfig& cfg) {
@@ -322,7 +353,7 @@ void q2_tv_block(Q2TvFace& f, std::span<const uint8_t> block) {
     if (s.id == kSvcServerData) {
       if (!f.server_data.empty()) new_level(f);
       f.server_data.assign(msg.begin(), msg.end());
-      if (f.server_data.size() > 9) f.server_data[9] = 1;  // attract loop: a recording played
+      if (f.server_data.size() > 9) f.server_data[9] = f.cfg.attract_loop;
       f.count = i32_at(msg, 5);
       continue;
     }

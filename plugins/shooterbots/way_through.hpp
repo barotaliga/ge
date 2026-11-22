@@ -42,6 +42,7 @@
 #include "ai/path.hpp"
 #include "shooterbots/fighter.hpp"
 #include "shooterbots/map_nav.hpp"
+#include "shooterbots/tour.hpp"
 
 namespace ge::shooterbots {
 
@@ -60,6 +61,11 @@ constexpr double kWayIdle_s = 5;       // nothing to do this long: back into the
 constexpr float kKeyCovered = 96;      // a locked door this near a key's height covers it, units
 constexpr float kWaySeen = 192;        // a node this near where he has stood is explored, units
 
+constexpr double kWayTour_s = 30;     // (`complete`) the tour worked out again this often, s
+constexpr int kWayTourMax = 96;       // and over the nearest this many stops at most
+constexpr float kWayStill = 96;       // (`complete`) no further than this, units, in
+constexpr double kWayStill_s = 15;    // this long with work to do: what he is on is left
+constexpr double kWayHopeful_s = 20;  // (`complete`) and for this long the doors taken as open
 constexpr int kWayTries = 2;  // (`complete`) a step or a monster left this often is given up
 constexpr double kWayForever = 1e30;  // the time a thing given up for good is left until
 
@@ -98,6 +104,9 @@ inline bool way_exit(const WayStep& st) { return st.kind == WayKind::exit || st.
 struct WayStats {
   int64_t plans = 0, by_kind[kWayKinds] = {}, steps_done = 0, left = 0;
   int64_t given_up = 0;  // (`complete`) steps and monsters given up for good
+  int64_t retried = 0;   // (`complete`) times nothing was left to do and the left was tried again
+  int64_t hopeful = 0;   // (`complete`) times every door was taken as open with nothing to do
+  int64_t stood = 0;     // (`complete`) steps and monsters left for standing still on the way
 };
 
 struct WayThrough {
@@ -132,6 +141,9 @@ struct WayThrough {
     int door = -1;
   };
   std::vector<Crossing> crossings;
+  // The drops through a floor door (MapNav::hatches) shut now (it rests over its hole): their
+  // links, and at the last plan.
+  std::vector<int32_t> hatch_shut, hatch_shut_was;
   std::vector<int> walls;  // the secret walls among `locked`
   struct KeyDoor {
     int door = -1, bit = 0;  // a Quake key door among `locked`, and its key's item bit
@@ -167,10 +179,23 @@ struct WayThrough {
   // tries and the time it is left until.
   int prey = -1;
   double prey_since = 0;
+  sh::Vec3f still_at;         // (`complete`) where he last moved from with work to do
+  double still_since = -1;    // and since when (-1: no work, or moving)
+  double hopeful_until = -1;  // (`complete`) nothing to do: every door taken as open until then
   std::vector<double> prey_left;
   std::vector<uint8_t> prey_tries;
   std::vector<double> prey_until;  // (`complete`) each one's time to be caught by, from when it was
                                    // first chased (-1: not chased since it was last left)
+  // (`complete`) THE TOUR (tour.hpp): the stops open now (a step's index, or -1 - a monster's
+  // entity) in the quickest order through them all and out, worked out again every kWayTour_s or
+  // when the first stop is gone; the time from each to each, and its own search.
+  bool toured = true;  // the tour's order rather than the nearest stop each time
+  Tour tour;
+  std::vector<int32_t> tour_stops, tour_nodes;
+  std::vector<double> tour_cost;
+  ge::ai::Search tour_search;
+  double tour_at = -1;
+  int64_t tours = 0;
 };
 
 // The steps off `spec`'s entities (the fighter's buttons already read by `fighter_init`), the

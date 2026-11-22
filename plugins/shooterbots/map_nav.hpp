@@ -135,6 +135,17 @@ struct MapNav {
   std::vector<MapCrawl> crawls;  // the crawls searched for them
   ge::ai::Search main;           // what the map's main part reaches (the most a start spot reaches)
   int32_t main_n = 0;
+  // THE DROP THROUGH A FLOOR DOOR (`hatch_drops`, set before `build_map_nav`): a floor door that
+  // slides away opens a hole to the floor below (e1m6's corridor over the way down, opened by the
+  // button at its end). Each node that walks onto one gets a drop link through it to the node under
+  // it, open only while the door is away from where it rests: those links (`hatches`).
+  bool hatch_drops = false;
+  struct Hatch {
+    int32_t link = -1, from = -1, to = -1;
+    int door = -1;            // the floor door's edict
+    ge::shooter::Vec3f rest;  // where it rests (shut)
+  };
+  std::vector<Hatch> hatches;
   int64_t teleport_links = 0, closed_links = 0, harm_links = 0;
   int64_t ladder_links = 0;      // climbs up a ladder (Quake II's, `NavLink::ladder`)
   int64_t brink_links = 0;       // walks and drops along a lip over lava or slime (`nav_mark_harm`)

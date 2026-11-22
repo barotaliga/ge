@@ -30,6 +30,8 @@ namespace sh = ge::shooter;
 
 namespace sb = ge::shooterbots;
 
+constexpr float kHatchDrop = 64;    // a floor door's drop: the floor under it this far down or more
+constexpr float kHatchAcross = 24;  // and the node under within this across, units
 constexpr float kOwnDrop = 24;  // a bridge's own node: no floor of the map's within this under it
 
 // A model's box, either family: [0] the world, then the inline models ("*N").
@@ -1049,6 +1051,63 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
       if (down.startsolid || down.fraction >= 1) br.own.push_back(n);
     }
     out.world.count = count;
+  }
+  // The drops through each floor door, from the nodes that walk onto the ones it alone holds up
+  // to the highest node under each (a straight fall in the map's own solids, the door left out).
+  out.hatches.clear();
+  if (out.hatch_drops) {
+    std::vector<sb::NavExtraLink> drops;
+    std::vector<int> door_of;
+    std::vector<sh::Vec3f> rest_of;
+    const int32_t count = out.world.count;
+    out.world.count = 1;
+    for (const NavBridge& br : out.bridges) {
+      if (!br.floor) continue;
+      std::vector<uint8_t> on(out.graph.nodes.size(), 0);
+      for (const int32_t n : br.nodes) on[static_cast<size_t>(n)] = 1;
+      for (const int32_t n : br.own) {
+        const sh::Vec3f o = out.graph.nodes[static_cast<size_t>(n)].origin;
+        int32_t under = -1;
+        for (size_t m = 0; m < out.graph.nodes.size(); m++) {
+          const sh::Vec3f u = out.graph.nodes[m].origin;
+          if (on[m] || u.z > o.z - kHatchDrop || std::fabs(u.x - o.x) > kHatchAcross ||
+              std::fabs(u.y - o.y) > kHatchAcross)
+            continue;
+          if (under >= 0 && u.z <= out.graph.nodes[static_cast<size_t>(under)].origin.z) continue;
+          if (sh::player_trace(out.world, o, u).fraction < 1) continue;
+          under = static_cast<int32_t>(m);
+        }
+        if (under < 0) continue;
+        const float fall = o.z - out.graph.nodes[static_cast<size_t>(under)].origin.z;
+        for (size_t a = 0; a < out.graph.nodes.size(); a++) {
+          if (on[a]) continue;
+          const sb::NavNode& na = out.graph.nodes[a];
+          for (int32_t k = 0; k < na.links; k++) {
+            const sb::NavLink& l =
+                out.graph.links[static_cast<size_t>(na.first_link) + static_cast<size_t>(k)];
+            if (l.to != n || l.kind != sb::NavKind::walk) continue;
+            drops.push_back(
+                {static_cast<int32_t>(a), under, sb::NavKind::drop, l.time_s + 0.2f + fall / 800});
+            door_of.push_back(br.ent);
+            rest_of.push_back(br.spawn);
+          }
+        }
+      }
+    }
+    out.world.count = count;
+    sb::nav_add_links(out.graph, drops);
+    for (size_t k = 0; k < drops.size(); k++) {
+      const sb::NavNode& na = out.graph.nodes[static_cast<size_t>(drops[k].from)];
+      for (int32_t j = na.links - 1; j >= 0; j--) {
+        const size_t li = static_cast<size_t>(na.first_link) + static_cast<size_t>(j);
+        const sb::NavLink& l = out.graph.links[li];
+        if (l.to == drops[k].to && l.kind == sb::NavKind::drop) {
+          out.hatches.push_back(
+              {static_cast<int32_t>(li), drops[k].from, drops[k].to, door_of[k], rest_of[k]});
+          break;
+        }
+      }
+    }
   }
   out.teleport_links = static_cast<int64_t>(teleports.size());
   // SCRIPTED ROUTES to key items (the book's, shooterbots/map_book.hpp): each proven by the move

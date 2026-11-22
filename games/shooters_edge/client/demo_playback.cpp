@@ -1,7 +1,7 @@
 // A demo watched like a video (demo_playback.hpp): the commands, the keys and the bar.
 //
 // ge:summary The demo's playback controls: console commands, keys, the bar's pointer, the seek
-// ge:keywords demo playback keys pointer seek skip jump speed pause markers parse_clock
+// ge:keywords cl_demopos demo playback keys pointer seek skip jump speed pause markers parse_clock
 // ge:skill shooter replay ui
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #include "shooters_edge/client/demo_playback.hpp"
@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <utility>
 
+#include "console/clock_macros.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
@@ -110,6 +111,10 @@ float hud_inset(std::span<const ge::hud::Placed> placed, int height) {
 }
 
 void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench) {
+  // $cl_demopos: how far the demo playing is, to the tenth ("3:07.4"; "0:00.0" with none).
+  console.add_macro("cl_demopos", [&bench] {
+    return ge::console::tenths_clock(bench.active ? bench.timeline.t : 0);
+  });
   {
     ge::console::CvarLayer shell(console.cvars(), kLayerShell);
     bind_record_cvars(console, p.record);

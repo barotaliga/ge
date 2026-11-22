@@ -6,6 +6,8 @@
 // ge:test tests/core_deflate_test.cpp
 #include "core/deflate.hpp"
 
+#include "core/inflate.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -89,12 +91,9 @@ uint32_t hash3(const uint8_t* p) {
   return (v * 2654435761u) >> (32 - kHashBits);
 }
 
-}  // namespace
-
-std::vector<uint8_t> deflate_raw(std::span<const uint8_t> in) {
-  Out o;
-  o.bytes.reserve(in.size() / 2 + 16);
-  o.put(1, 1);  // the final block
+// One block's codes for `in` into `o` (`final` its first bit).
+void block(Out& o, std::span<const uint8_t> in, bool final) {
+  o.put(final ? 1u : 0u, 1);
   o.put(1, 2);  // fixed codes
   const int n = static_cast<int>(in.size());
   std::vector<int32_t> head(size_t(1) << kHashBits, -1), prev(in.size(), -1);
@@ -132,8 +131,72 @@ std::vector<uint8_t> deflate_raw(std::span<const uint8_t> in) {
     }
   }
   symbol(o, 256);
+}
+
+void start(DeflateStream& s, std::vector<uint8_t>& out) {
+  if (s.started) return;
+  s.started = true;
+  if (s.wrap == DeflateWrap::zlib) {
+    out.push_back(0x78);
+    out.push_back(0x01);
+  } else if (s.wrap == DeflateWrap::gzip) {
+    const uint8_t header[10] = {0x1F, 0x8B, 8, 0, 0, 0, 0, 0, 0, 0xFF};  // no time, OS unknown
+    out.insert(out.end(), header, header + 10);
+  }
+}
+
+}  // namespace
+
+std::vector<uint8_t> deflate_raw(std::span<const uint8_t> in) {
+  Out o;
+  o.bytes.reserve(in.size() / 2 + 16);
+  block(o, in, true);
   o.flush();
   return o.bytes;
+}
+
+uint32_t adler32(const uint8_t* bytes, size_t n, uint32_t a) {
+  uint32_t lo = a & 0xFFFFu, hi = a >> 16;
+  for (size_t i = 0; i < n; i++) {
+    lo = (lo + bytes[i]) % 65521u;
+    hi = (hi + lo) % 65521u;
+  }
+  return hi << 16 | lo;
+}
+
+void deflate_sync(DeflateStream& s, std::span<const uint8_t> bytes, std::vector<uint8_t>& out) {
+  if (s.finished) return;
+  start(s, out);
+  Out o;
+  if (!bytes.empty()) block(o, bytes, false);
+  // The sync flush: an empty stored block (not final), its lengths after the byte boundary.
+  o.put(0, 3);
+  o.flush();
+  out.insert(out.end(), o.bytes.begin(), o.bytes.end());
+  const uint8_t lengths[4] = {0x00, 0x00, 0xFF, 0xFF};
+  out.insert(out.end(), lengths, lengths + 4);
+  s.adler = adler32(bytes.data(), bytes.size(), s.adler);
+  s.crc = crc32(bytes.data(), bytes.size(), s.crc);
+  s.length += bytes.size();
+}
+
+void deflate_finish(DeflateStream& s, std::vector<uint8_t>& out) {
+  if (s.finished) return;
+  start(s, out);
+  s.finished = true;
+  Out o;
+  o.put(1, 1);
+  o.put(1, 2);
+  symbol(o, 256);
+  o.flush();
+  out.insert(out.end(), o.bytes.begin(), o.bytes.end());
+  if (s.wrap == DeflateWrap::zlib) {
+    for (int k = 3; k >= 0; k--) out.push_back(static_cast<uint8_t>((s.adler >> (8 * k)) & 0xFF));
+  } else if (s.wrap == DeflateWrap::gzip) {
+    for (int k = 0; k < 4; k++) out.push_back(static_cast<uint8_t>((s.crc >> (8 * k)) & 0xFF));
+    const auto size = static_cast<uint32_t>(s.length & 0xFFFFFFFFu);
+    for (int k = 0; k < 4; k++) out.push_back(static_cast<uint8_t>((size >> (8 * k)) & 0xFF));
+  }
 }
 
 }  // namespace ge::core
