@@ -146,6 +146,25 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .max = 64,
           .values = "0..64: the game's units (3 the default)"},
          &x.spiral_radius);
+  v.bind({.name = "cl_hit_markers",
+          .fallback = "2",
+          .flags = con::kArchive,
+          .help = "What shows when your shot hurts someone, on servers that tell.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "2: a red mark at the centre and a sound (the default); 1: the mark alone; "
+                    "0: nothing"},
+         &x.hit_markers);
+  v.bind({.name = "scr_hit_marker_time",
+          .fallback = "500",
+          .flags = con::kArchive,
+          .help = "Milliseconds the hit mark takes to fade.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 10000,
+          .values = "500: the default; 0: no mark; 1..10000: that many milliseconds"},
+         &x.hit_marker_ms);
 }
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means

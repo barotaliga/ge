@@ -279,6 +279,9 @@ void DemoSounds::start(const DemoState& s, const DemoSound& d) {
                                                     : std::string_view();
     if (name.starts_with("player/step")) return;
   }
+  if (q2_ != nullptr && q2_->hit_markers < 2 && d.name != nullptr &&
+      std::string_view(d.name) == "weapons/marker.wav")  // cl_hit_markers: no hit sound
+    return;
   const au::Pcm* pcm = d.name != nullptr ? by_name(s, d) : recording(d.sound);
   if (!pcm && d.name == nullptr) pcm = own(s, d);
   if (!pcm) return;

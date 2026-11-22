@@ -102,6 +102,15 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
           .max = 1000,
           .values = "60: the default; 0..1000: that many units, nearer where a wall is in the way"},
          &s.third_range);
+  v.bind({.name = "in_grab",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether the game takes the mouse while it is in a window.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: it does (the default), as 2; 0: only while it covers the screen"},
+         &s.grab);
   const char* helps[4] = {
       "Whether the game is running: always 1.", "Whether the game you play is paused.",
       "Whether this window runs a server.", "Whether the server this window runs is paused."};

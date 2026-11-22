@@ -23,11 +23,14 @@
 // short of the world's walls, and his own figure, drawn while the camera is off him, is hidden
 // once a wall pushes it within kOwnFigureUnits. Joined or hosted, never while he watches another.
 //
+// THE MOUSE: `in_grab` 0 never takes the mouse while the game is in a window (only covering the
+// screen); 1 and 2 take it as ours does (`q2_takes_mouse`).
+//
 // ge:summary Quake II's session settings: the map commands, the game clock, the state cvars
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd auto-record map-change timescale
 // ge:keywords fixedtime cl_running cl_paused sv_running sv_paused read-only q2_session_step
 // ge:keywords cl_autopause cl_thirdperson cl_thirdperson_angle cl_thirdperson_range
-// ge:keywords third-person chase-camera view_behind
+// ge:keywords third-person chase-camera view_behind in_grab q2_takes_mouse
 // ge:skill console shooter
 // ge:test tests/shooters_edge_q2_session_test.cpp
 #pragma once
@@ -57,6 +60,7 @@ struct Q2Session {
   bool third_person = false;   // cl_thirdperson (a cheat)
   double third_angle = 0;      // cl_thirdperson_angle, degrees round the player
   double third_range = 60;     // cl_thirdperson_range, units behind him
+  int grab = 1;                // in_grab: 0 never in a window, 1 and 2 as ours
   // What the last frame saw: in a game, its map ("" while it loads), the state cvars' values.
   bool joined = false;
   std::string map;
@@ -92,5 +96,10 @@ double view_behind(ge::render::FrameView& view, double units, double angle_deg,
 // the camera went back (0: off).
 double q2_third_person(const Q2Session& s, ge::render::FrameView& view,
                        const ge::shooter::BrushModel* world);
+
+// Whether the look may take the mouse under `in_grab`: never in a window at 0.
+inline bool q2_takes_mouse(const Q2Session& s, bool fullscreen) {
+  return s.grab != 0 || fullscreen;
+}
 
 }  // namespace shooters_edge::client

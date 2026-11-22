@@ -585,6 +585,9 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("ogg_shuffle", "1", con::Source::local);
   v.set("ogg_menu_track", "7", con::Source::local);
   CHECK(w.music.volume == 0.25 && !w.music.enabled && w.music.shuffle && w.music.menu_track == 7);
+  v.set("cl_hit_markers", "1", con::Source::local);
+  v.set("scr_hit_marker_time", "250", con::Source::local);
+  CHECK(w.picture.q2fx.hit_markers == 1 && w.picture.q2fx.hit_marker_ms == 250);
   v.set("cl_railtrail_type", "2", con::Source::local);
   v.set("cl_railcore_color", "#0f0", con::Source::local);
   CHECK(w.picture.q2fx.rail_type == 2 && w.picture.q2fx.core_colour == "#0f0");
