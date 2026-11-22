@@ -118,7 +118,12 @@ bool encode_still(const StillOptions& o, int width, int height, std::span<const 
   for (;;) {
     std::string why;
     if (at.format == StillFormat::kPng) {
-      out = lab::encode_png_rgb(width, height, rgba);
+      out = o.stored
+                ? lab::encode_png(lab::Picture{
+                      width,
+                      height,
+                      {rgba.begin(), rgba.begin() + static_cast<ptrdiff_t>(width) * height * 4}})
+                : lab::encode_png_rgb(width, height, rgba);
     } else if (at.format == StillFormat::kJpg) {
       out = encode_jpeg(width, height, rgba, o.quality, o.subsample);
     } else if (!encode_heif(at, width, height, rgba, out, why)) {
