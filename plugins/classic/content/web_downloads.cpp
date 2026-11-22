@@ -195,7 +195,32 @@ void web_connect(WebDownloads& h, const WebConfig& cfg, const std::string& dlser
   h.default_repo = url.empty();
   if (url.empty()) url = cfg.default_url;
   if (url.empty()) return;
+  // Set by hand: `{game}` where the game folder goes, or `#` at the end for an address that is the
+  // game folder's files already; neither added again to each path.
+  bool set = false;
+  if (!url.empty() && url.back() == '#') {
+    url.pop_back();
+    set = true;
+  }
+  const std::string named = url;
   url = web_base(url);
+  if (const size_t at = lowered(url).find("{game}"); at != std::string::npos) {
+    url.replace(at, 6, gamedir_of(cfg));
+    set = true;
+  }
+  if (!url.empty() && url.back() != '/') url += '/';
+  // A repository's folder that names the game folder itself (`github:o/r/quakeworld/qw` while
+  // `qw` is played) is read as its parent, as the game folder is added to every path anyway. Only
+  // a folder: never the owner, the repository or the branch (three names after the host).
+  const std::string tail = "/" + lowered(gamedir_of(cfg)) + "/";
+  const size_t host = std::string("https://raw.githubusercontent.com/").size();
+  if (!set && url != named && url.size() > host + tail.size() &&
+      lowered(url).compare(url.size() - tail.size(), tail.size(), tail) == 0) {
+    const size_t cut = url.size() - tail.size() + 1;
+    if (std::count(url.begin() + static_cast<ptrdiff_t>(host),
+                   url.begin() + static_cast<ptrdiff_t>(cut), '/') >= 3)
+      url.resize(cut);
+  }
   const std::string scheme = lowered(url.substr(0, 8));
   if (scheme.rfind("http://", 0) != 0 && scheme.rfind("https://", 0) != 0) {
     h.said.push_back("[HTTP] Ignoring download server URL with non-HTTP schema.");
@@ -206,6 +231,7 @@ void web_connect(WebDownloads& h, const WebConfig& cfg, const std::string& dlser
     return;
   }
   h.on = true;
+  h.game_in_base = set;
   h.base = url;
   h.referer = cfg.referer_scheme + "://" + server;
   h.said.push_back("[HTTP] Download server at " + url);
@@ -218,16 +244,18 @@ bool web_queue(WebDownloads& h, const WebConfig& cfg, const std::string& path) {
     h.told_server = true;
     tell = !h.default_repo;
   }
-  const std::string dir = gamedir_of(cfg);
-  if (cfg.filelists && !h.asked_list) {
+  // The address set to the game folder's own files: its maps' lists under it, no list beside it.
+  const std::string dir = h.game_in_base ? std::string() : gamedir_of(cfg);
+  if (cfg.filelists && !h.asked_list && !h.game_in_base) {
     h.asked_list = true;
     push(h, {.path = dir + ".filelist", .filelist = true, .pak = false});
   }
   push(h, {.path = path, .filelist = false, .pak = false});
   if (cfg.filelists && path.size() > 4 && lowered(path.substr(path.size() - 4)) == ".bsp")
-    push(h, {.path = dir + "/" + path.substr(0, path.size() - 4) + ".filelist",
-             .filelist = true,
-             .pak = false});
+    push(h,
+         {.path = (dir.empty() ? dir : dir + "/") + path.substr(0, path.size() - 4) + ".filelist",
+          .filelist = true,
+          .pak = false});
   return tell;
 }
 
@@ -287,9 +315,9 @@ void web_step(WebDownloads& h, const WebConfig& cfg, double now_s,
     s.file = h.queue.front();
     h.queue.erase(h.queue.begin());
     s.started_s = now_s;
-    const std::string url =
-        h.base +
-        gn::url_escape(s.file.filelist ? s.file.path : gamedir_of(cfg) + "/" + s.file.path);
+    const std::string url = h.base + gn::url_escape(s.file.filelist || h.game_in_base
+                                                        ? s.file.path
+                                                        : gamedir_of(cfg) + "/" + s.file.path);
     if (cfg.debug) h.said.push_back("[HTTP] Fetching " + url + "...");
     gn::HttpOptions o;
     o.user_agent = cfg.user_agent;
