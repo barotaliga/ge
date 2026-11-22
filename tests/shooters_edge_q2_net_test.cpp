@@ -491,7 +491,7 @@ TEST(a_fourth_client_from_one_address_is_refused) {
   cn::Q2ClientEnd& other = join(*r, {});
   run(*r, 80);
   CHECK(fourth.stage == cn::ClientStage::dropped);
-  CHECK(fourth.refused == "Too many connections from your IP address.\nConnection refused.\n");
+  CHECK(fourth.refused == "Too many connections from your IP address.\n");
   CHECK_MSG(other.stage == cn::ClientStage::active, other.refused);
 }
 
@@ -608,7 +608,7 @@ TEST(a_locked_server_refuses_newcomers) {
   CHECK(cn::q2_admin(r->server, "sv_locked 1", out) && r->server.cfg.locked);
   cn::Q2ClientEnd& b = join(*r, {});
   run(*r, 80);
-  CHECK(b.refused == "Server is locked.\nConnection refused.\n");
+  CHECK(b.refused == "Server is locked.\n");
   CHECK(cn::q2_admin(r->server, "sv_locked 0", out) && out == "Server unlocked.\n");
   cn::Q2ClientEnd& c = join(*r, {});
   run(*r, 80);

@@ -10,6 +10,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,6 +21,7 @@
 #include "server/lrcon.hpp"
 #include "server/operator.hpp"
 #include "shooters_edge/net/q2_net.hpp"
+#include "shooters_edge/server/q2_native.hpp"
 
 namespace shooters_edge::net {
 
@@ -42,6 +44,101 @@ void drop_refused(Q2NetServer& s) {
     if (gs::ban_refuses(s.bans, s.cfg.ban_mode, c.address, unix_now(s)))
       q2_net_drop(s, i, "banned");
   }
+}
+
+// THE GAME'S OWN FILTER WORDS (`sv addip`, `sv removeip`, `sv listip`, `sv writeip`): the ban
+// list under Quake II's words. A mask is up to four numbers split by dots; a 0 or a missing one
+// matches any (the list's `*`).
+constexpr size_t kMostFilters = 1024;
+
+// `text` as the list's pattern ("10.0" is "10.0.*.*"); false when it is not a mask.
+bool filter_pattern(const std::string& text, std::string& out) {
+  int parts[4] = {0, 0, 0, 0};
+  size_t at = 0;
+  for (int i = 0; i < 4 && at < text.size(); i++) {
+    if (text[at] < '0' || text[at] > '9') return false;
+    int n = 0;
+    while (at < text.size() && text[at] >= '0' && text[at] <= '9')
+      n = std::min(n * 10 + (text[at++] - '0'), 256);
+    if (n > 255) return false;
+    parts[i] = n;
+    if (at < text.size()) {
+      if (text[at] != '.') return false;
+      at++;
+    }
+  }
+  if (at < text.size()) return false;
+  out.clear();
+  for (int i = 0; i < 4; i++)
+    out += (i > 0 ? "." : "") + (parts[i] == 0 ? std::string("*") : std::to_string(parts[i]));
+  return true;
+}
+
+// An entry's four numbers, a part that matches any read as 0.
+std::string filter_text(const gs::BanEntry& e, const char* format) {
+  int b[4];
+  for (int i = 0; i < 4; i++) {
+    const int shift = 24 - 8 * i;
+    b[i] = ((e.mask >> shift) & 0xff) == 0 ? 0 : static_cast<int>((e.ip >> shift) & 0xff);
+  }
+  char line[64];
+  std::snprintf(line, sizeof line, format, b[0], b[1], b[2], b[3]);
+  return line;
+}
+
+bool sv_filter(Q2NetServer& s, const std::vector<std::string>& w, std::string& out) {
+  const std::string word = w.size() > 1 ? w[1] : std::string();
+  std::string pattern, said;
+  if (word == "addip") {
+    if (w.size() < 3) {
+      out = "Usage:  addip <ip-mask>\n";
+    } else if (!filter_pattern(w[2], pattern)) {
+      out = "Bad filter address: " + w[2] + "\n";
+    } else if (s.bans.entries.size() >= kMostFilters) {
+      out = "IP filter list is full\n";
+    } else {
+      gs::ban_command(s.bans, "addip " + pattern, unix_now(s), said);
+      drop_refused(s);
+    }
+    return true;
+  }
+  if (word == "removeip") {
+    if (w.size() < 3) {
+      out = "Usage:  sv removeip <ip-mask>\n";
+      return true;
+    }
+    gs::BanEntry want;
+    if (!filter_pattern(w[2], pattern) || !gs::parse_ban_pattern(pattern, want)) {
+      out = "Bad filter address: " + w[2] + "\n";
+      return true;
+    }
+    for (const gs::BanEntry& e : s.bans.entries)
+      if (e.ip == want.ip && e.mask == want.mask) {
+        gs::ban_command(s.bans, "removeip " + e.text, unix_now(s), said);
+        out = "Removed.\n";
+        return true;
+      }
+    out = "Didn't find " + w[2] + ".\n";
+    return true;
+  }
+  if (word == "listip") {
+    out = "Filter list:\n";
+    for (const gs::BanEntry& e : s.bans.entries) out += filter_text(e, "%3i.%3i.%3i.%3i\n");
+    return true;
+  }
+  if (word == "writeip") {
+    const std::string& path = s.cfg.ban_file;
+    std::string text = "set filterban " + std::to_string(s.cfg.ban_mode) + "\n";
+    for (const gs::BanEntry& e : s.bans.entries) text += filter_text(e, "sv addip %i.%i.%i.%i\n");
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    if (path.empty() || !(f << text)) {
+      out = "Couldn't open " + path + "\n";
+      return true;
+    }
+    out = "Writing " + path + ".\n";
+    return true;
+  }
+  return false;
 }
 
 }  // namespace
@@ -173,11 +270,47 @@ int q2_find_slot(const Q2NetServer& s, const std::string& word, std::string& err
   return gs::pick_player(pick_slots(s), word, s.cfg.enhanced_setplayer, error);
 }
 
+void q2_status_keys(const Q2NetServer& s, std::string& info) {
+  static const char* const kKeys[][2] = {{"deathmatch", "deathmatch"}, {"coop", "coop"},
+                                         {"dmflags", "dmflags"},       {"fraglimit", "fraglimit"},
+                                         {"timelimit", "timelimit"},   {"cheats", "sv_cheats"}};
+  const ge::console::Cvars& cvars = (**s.rules).cvars;
+  for (const auto& [key, name] : kKeys) {
+    const ge::console::Cvar* v = cvars.find(name);
+    if (v == nullptr) v = cvars.find(key);
+    if (v != nullptr)
+      ge::classic::protocol::info_set(info, key, v->value);
+    else if (std::string_view(key) == "deathmatch")
+      ge::classic::protocol::info_set(info, key, "1");
+  }
+  if (!s.cfg.version.empty()) ge::classic::protocol::info_set(info, "version", s.cfg.version);
+  const std::string game = s.cfg.game_dir.empty() ? std::string("baseq2") : s.cfg.game_dir;
+  ge::classic::protocol::info_set(info, "gamename", game);
+  ge::classic::protocol::info_set(info, "gamedir", game);
+  if (!s.cfg.game_dir.empty()) ge::classic::protocol::info_set(info, "game", s.cfg.game_dir);
+  if (s.transport != nullptr)
+    ge::classic::protocol::info_set(info, "port", std::to_string(s.transport->local.port));
+  if (!s.cfg.admin_info) return;
+  const std::string more = s.cfg.admin_info();  // `\key\value` pairs
+  size_t at = 0;
+  while (at < more.size()) {
+    const size_t k = more.find('\\', at + 1);
+    if (k == std::string::npos) break;
+    const size_t v = more.find('\\', k + 1);
+    ge::classic::protocol::info_set(
+        info, more.substr(at + 1, k - at - 1),
+        more.substr(k + 1, (v == std::string::npos ? more.size() : v) - k - 1));
+    at = v == std::string::npos ? more.size() : v;
+  }
+}
+
 bool q2_admin(Q2NetServer& s, const std::string& line, std::string& out) {
   const std::vector<std::string> w = q2_words(line);
   if (w.empty()) return false;
   const std::string& cmd = w[0];
   if (gs::lock_command(line, s.cfg.locked, out)) return true;
+  // The game's own filter words, when the rules are ours (a hosted library answers its own).
+  if (cmd == "sv" && sv::native_q2_of(*s.rules) == nullptr && sv_filter(s, w, out)) return true;
   // The helpers' list, in our words or the modern server's.
   static const char* const kLrconWords[3] = {"addlrconcmd", "dellrconcmd", "listlrconcmds"};
   if (gs::lrcon_command(s.cfg.lrcon, line, out, &kLrconWords)) return true;

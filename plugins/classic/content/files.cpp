@@ -13,6 +13,7 @@
 #include <set>
 #include <system_error>
 
+#include "classic/content/fs_words.hpp"
 #include "classic/content/load_order.hpp"
 #include "classicenhance/profile.hpp"
 #include "save/file.hpp"
@@ -47,8 +48,10 @@ bool add_archive(SearchPath& path, const std::string& name, std::vector<uint8_t>
 bool open_game_dir(const std::string& basedir, const std::string& game, SearchPath& out,
                    std::string& error, const ge::classicenhance::Profile& content) {
   std::shared_ptr<MapGroups> groups = std::move(out.groups);
+  std::shared_ptr<FileLinks> links = std::move(out.links);
   out = SearchPath{};
   if (groups) out.groups = std::move(groups);
+  if (links) out.links = std::move(links);
   const fs::path root = basedir.empty() ? "." : basedir;
   const std::string base(content.base_dir);
   std::error_code ec;
@@ -133,8 +136,10 @@ fs::path on_disk_any_case(const fs::path& dir, std::string_view name) {
   return at;
 }
 
-std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
-                                   std::vector<uint8_t>& store) {
+namespace {
+
+std::span<const uint8_t> find_unlinked(const SearchPath& path, std::string_view name,
+                                       std::vector<uint8_t>& store) {
   // A loose file in the game folder, as it is on disk now (one written since the mount): first
   // where loose files win, else only when no archive holds the name.
   const auto loose = [&]() -> std::span<const uint8_t> {
@@ -154,6 +159,19 @@ std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name
   std::string why;
   if (!ge::vfs::read(path.vfs, *ref, &store, &why)) return {};
   return store;
+}
+
+}  // namespace
+
+std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
+                                   std::vector<uint8_t>& store) {
+  if (!path.links || (path.links->hard.empty() && path.links->soft.empty()))
+    return find_unlinked(path, name, store);
+  std::string at(name);
+  if (const std::string hard = linked(path.links->hard, at); !hard.empty()) at = hard;
+  if (const std::span<const uint8_t> b = find_unlinked(path, at, store); !b.empty()) return b;
+  const std::string soft = linked(path.links->soft, at);
+  return soft.empty() ? std::span<const uint8_t>{} : find_unlinked(path, soft, store);
 }
 
 std::span<const uint8_t> game_palette(const SearchPath& path, std::vector<uint8_t>& store,
@@ -242,16 +260,22 @@ std::vector<std::string> archive_paths(const SearchPath& path) {
   return out;
 }
 
-std::string search_path_text(const SearchPath& path) {
+std::string search_path_text(const SearchPath& path, bool totals) {
   std::string out = "Current search path:\n";
+  size_t packs = 0, zips = 0;
   for (auto it = path.vfs.sources.rbegin(); it != path.vfs.sources.rend(); ++it) {
     out += it->path;
-    if (it->kind == ge::vfs::SourceKind::pack)
+    if (it->kind == ge::vfs::SourceKind::pack) {
       out += " (" + std::to_string(it->pak.entries.size()) + " files)";
-    else if (it->kind == ge::vfs::SourceKind::zip)
+      packs += it->pak.entries.size();
+    } else if (it->kind == ge::vfs::SourceKind::zip) {
       out += " (" + std::to_string(it->zip.entries.size()) + " files)";
+      zips += it->zip.entries.size();
+    }
     out += '\n';
   }
+  if (totals && packs > 0) out += std::to_string(packs) + " files in PAK files\n";
+  if (totals && zips > 0) out += std::to_string(zips) + " files in PKZ files\n";
   return out;
 }
 
