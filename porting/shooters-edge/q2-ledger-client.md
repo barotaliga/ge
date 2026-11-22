@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 118 | 13 | 15 | 10 | 156 |
-| Client settings (cvars) | 175 | 47 | 88 | 40 | 350 |
+| Client settings (cvars) | 178 | 48 | 84 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 89 | 67 | 5 | 1 | 162 |
 | Server messages the client parses (svc) | 15 | 6 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 11 | 7 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 7 | 6 | 4 | 0 | 17 |
-| **all** | 689 | 302 | 157 | 63 | 1211 |
+| **all** | 692 | 303 | 153 | 63 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 175, partial 47, missing 88, not-taken 40
+done 178, partial 48, missing 84, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -231,7 +231,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_http_insecure | `cl_http_insecure` | 1 skips TLS certificate checks (default 0) | done | the classic layer's (`net/qw_remote.cpp`): a secure address's certificate unchecked (`classic/content/web_downloads.hpp`, `net/tls_stream.hpp`, #1309) |
 | cvar.cl_http_debug | `cl_http_debug` | prints HTTP transfer details (default 0) | done | `net/q2_http`: each download's address said as it starts (#1305) |
 | cvar.cl_http_blocking_timeout | `cl_http_blocking_timeout` | seconds before a stalled HTTP fetch is dropped (default 15) | done | the stall timeout of a web list of servers (`menu/servers_page.hpp`, #1305) |
-| cvar.in_enable | `in_enable` | use the input layer at all (default 1) | missing | C35 |
+| cvar.in_enable | `in_enable` | use the input layer at all (default 1) | partial | Quake II's (`client/q2_session.hpp`'s `mouse`): 0 never takes the mouse, so it never turns the view, the keys working either way; "Mouse input disabled." is not printed |
 | cvar.in_grab | `in_grab` | 0 never grab the mouse in a window, 1 in a game, 2 also let go in demos and chase (default 1) | partial | `games/shooters_edge/client/q2_session.hpp` (`q2_takes_mouse`): 0 takes the mouse only while the game covers the screen; 2 is the same as 1 (a watched demo lets the mouse go in both, by our `in_mouse_release`) |
 | cvar.cl_nodelta | `cl_nodelta` | 1 asks the server for full frames, never deltas (default 0) | partial | `games/shooters_edge/client/q2_session.cpp`; `net/q2_client.hpp`'s `nodelta` acknowledges no frame, so each comes whole; read when you join, not live |
 | cvar.cl_maxpackets | `cl_maxpackets` | packets a second on the modern protocols, moves batched (default 30) | missing | waits for the batched protocol (`client-gaps.md` round 12, C43) |
@@ -271,7 +271,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_noskins | `cl_noskins` | 1 every player the stock male, 2 female figures the stock female (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_predict | `cl_predict` | predict the player's own move (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_kickangles | `cl_kickangles` | 0 drops the view kick the server sends; cheat-protected (default 1) | done | `games/shooters_edge/client/q2_view.cpp` (M18k4 round 34) |
-| cvar.cl_warn_on_fps_rounding | `cl_warn_on_fps_rounding` | warns when `cl_maxfps` will be rounded to whole milliseconds (default 1) | missing | not found |
+| cvar.cl_warn_on_fps_rounding | `cl_warn_on_fps_rounding` | warns when `cl_maxfps` will be rounded to whole milliseconds (default 1) | done | `client/q2_session.cpp` (#1282): "cl_maxfps value N is inexact and will be rounded to M.", the hint the first time |
 | cvar.cl_maxfps | `cl_maxfps` | moves (packets) a second on the asynchronous client, held between 10 and 125 (default 62) | done | `games/shooters_edge/net/q2_remote.cpp` (`own` row, `client-gaps.md` round 12); verify the 125 cap |
 | cvar.cl_async | `cl_async` | 0 one rate for moves and frames, 1 frames drawn apart from the move rate, 2 the display's buffer swaps pace the drawing (needs a newer OpenGL) (default 1) | partial | ours is always asynchronous; no setting (`client-gaps.md` round 12) |
 | cvar.r_maxfps | `r_maxfps` | caps drawn frames a second, 0 none (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
@@ -539,8 +539,8 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.fs_debug | `fs_debug` | debug: prints file opens | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.fs_fuzz | `fs_fuzz_factor`, `fs_fuzz_filter` | debug: fail file reads at random | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.game | `game` | the mod folder; latched, server info | partial | ours switches games by its own words (`client/game_folder.cpp`); verify `game` as a setting |
-| cvar.com_completion_mode | `com_completion_mode` | how Tab completion lists matches (default 1) | missing | not found |
-| cvar.com_completion_treshold | `com_completion_treshold` | matches above which Tab asks first (default 50) | missing | not found |
+| cvar.com_completion_mode | `com_completion_mode` | how Tab completion lists matches (default 1) | done | Quake II's Tab (`client/cvar_layers.cpp` over `console/view.hpp`'s `list_mode`): the word completed to what the matches share, the line echoed and the matches listed one a line (0), in columns (1) or in columns under a heading for each kind (2); ours lists the first word's matches only, in columns as many as fit 78 letters |
+| cvar.com_completion_treshold | `com_completion_treshold` | matches above which Tab asks first (default 50) | done | `console/view.hpp`'s `list_threshold`: past it the first Tab says "Press TAB again to display all N possibilities.", the second lists |
 | cvar.showpackets | `showpackets` | prints every packet (default 0) | done | `plugins/classic/protocol/channel.hpp` (`client-gaps.md` round 21) |
 | cvar.showdrop | `showdrop` | prints dropped packets (default 0) | done | `plugins/classic/protocol/channel.hpp` |
 | cvar.qport | `qport` | the client's port inside the connection (random) | done | `qport` (classic layer, both games): 0 one picked from the name (ours keeps it from run to run, upstream's from the clock), 1..65535 that number, from the next connect (`net/qw_remote.cpp`); 2 bytes on protocol 34 |

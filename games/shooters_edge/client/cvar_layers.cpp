@@ -594,6 +594,23 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .values = "#aaa: light grey (the default); #rgb, #rrggbb, #rrggbbaa, a colour's name "
                       "or 0..7"},
            &b.console_view->stamp_colour);
+    // Its Tab: the word completed to what the matches share, the matches listed.
+    v.bind({.name = "com_completion_mode",
+            .fallback = "1",
+            .help = "How Tab lists the commands and settings a word could be.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 2,
+            .values = "0: one a line; 1: in columns (the default); 2: in columns, commands, "
+                      "settings and aliases apart"},
+           &b.console_view->list_mode);
+    v.bind({.name = "com_completion_treshold",
+            .fallback = "50",
+            .help = "How many matches Tab lists before it asks first.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .values = "50: fifty (the default); a number: that many"},
+           &b.console_view->list_threshold);
   }
   // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
   if (b.predict != nullptr)
@@ -911,6 +928,7 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
   if (b.console_view != nullptr) {  // only Quake II's con_auto_chat and stamps set them
     b.console_view->game_chat = -1;
     b.console_view->stamps = false;
+    b.console_view->list_mode = -1;  // our own Tab
   }
   {  // only Quake II's cvars set them; what the frames saw is kept
     Q2Session fresh;

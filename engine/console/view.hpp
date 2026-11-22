@@ -254,6 +254,13 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   bool stamps = false;
   std::string stamp_format = "%H:%M:%S ";
   std::string stamp_colour = "#aaa";
+  // A game's own Tab (Quake II's `com_completion_mode` and `com_completion_treshold`): -1 ours (the
+  // top suggestion taken); 0, 1 or 2 the word completed to what every match shares and, with more
+  // than one, the line echoed and the matches listed: 0 one a line, 1 in columns, 2 in columns
+  // under a heading for each kind (commands, settings, aliases). Past `list_threshold` matches the
+  // first Tab only asks ("Press TAB again to display all N possibilities.").
+  int list_mode = -1;
+  int list_threshold = 50;
   // What a line typed without a slash is now, in con_chat's values (3: said to the team).
   int chat_mode() const;
   // Where `condump` writes ("": it refuses, saying so).
@@ -302,6 +309,8 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   // Whether `line`'s first word names a command, alias or setting (con_chat 2).
   bool names_something(std::string_view line) const;
   bool accept();             // the selected or top suggestion into the input line; false: none
+  void tab_list();           // list_mode's Tab (above)
+  std::string tab_asked_;    // the line the last Tab asked about (list_threshold)
   std::string head() const;  // the first word being typed, or "" when no suggestion applies
   void chat_key(EditKey k);
   Console& c_;

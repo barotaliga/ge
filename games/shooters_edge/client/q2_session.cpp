@@ -114,6 +114,12 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
           .max = 2,
           .values = "1: it does (the default), as 2; 0: only while it covers the screen"},
          &s.grab);
+  v.bind({.name = "in_enable",
+          .fallback = "1",
+          .help = "Whether the mouse turns your view; the keys work either way.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: it does (the default); 0: the mouse is left alone"},
+         &s.mouse);
   v.bind(
       {.name = "ogg_remap_tracks",
        .fallback = "1",
