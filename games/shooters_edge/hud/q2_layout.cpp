@@ -145,6 +145,10 @@ struct Run {
     width = std::min(width, 5);
     const std::string t = std::to_string(value);
     const int shown = std::min(static_cast<int>(t.size()), width);
+    if (in.text_numbers) {  // the text picture's: the digits in letters, right-aligned
+      text(x + kLetter * (width - shown), y, t.substr(0, static_cast<size_t>(shown)), false);
+      return;
+    }
     int at = x + 2 + kDigitWidth * (width - shown);
     for (int i = 0; i < shown; i++, at += kDigitWidth) {
       const std::string digit = t[static_cast<size_t>(i)] == '-'
@@ -311,6 +315,62 @@ void run_layout(const LayoutInput& in, std::vector<LayoutOp>& out) {
     }
     // Any other word (an `endif` met while drawing among them) is skipped.
   }
+}
+
+std::vector<std::string> layout_text(LayoutInput in, std::string_view over) {
+  constexpr int kCols = 80, kRows = 40;
+  std::vector<std::string> rows(kRows, std::string(kCols, ' '));
+  in.width = kCols * kLetter;
+  in.height = kRows * kLetter;
+  in.text_numbers = true;
+  std::vector<LayoutOp> ops;
+  const auto put = [&rows](const std::vector<LayoutOp>& list) {
+    for (const LayoutOp& op : list) {
+      if (op.kind != LayoutOp::Kind::text) continue;  // pictures have no letters
+      const int row = op.y / kLetter;
+      if (row < 0 || row >= kRows) continue;
+      int col = op.x / kLetter;
+      for (const char ch : op.text) {
+        if (col >= kCols) break;
+        if (col >= 0) {
+          const auto c = static_cast<unsigned char>(ch & 0x7f);
+          char shown = static_cast<char>(c);
+          switch (c) {
+            case 13:
+              shown = '>';
+              break;
+            case 16:
+              shown = '[';
+              break;
+            case 17:
+              shown = ']';
+              break;
+            case 29:
+              shown = '<';
+              break;
+            case 30:
+              shown = '=';
+              break;
+            case 31:
+              shown = '>';
+              break;
+            default:
+              if (c < 32 || c == 127) shown = ' ';
+          }
+          rows[static_cast<size_t>(row)][static_cast<size_t>(col)] = shown;
+        }
+        ++col;
+      }
+    }
+  };
+  run_layout(in, ops);
+  put(ops);
+  if (!over.empty()) {
+    in.program = over;
+    run_layout(in, ops);
+    put(ops);
+  }
+  return rows;
 }
 
 }  // namespace shooters_edge::hud

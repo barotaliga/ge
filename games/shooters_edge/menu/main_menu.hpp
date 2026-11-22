@@ -75,6 +75,9 @@ struct Entry {                 // NOLINT(clang-analyzer-optin.performance.Paddin
   std::span<const Choice> choices = {};  // choice
   double min = 0, max = 1, step = 0.1;   // slider
   std::string_view unit = {};            // slider
+  int bit = -1;           // toggle: the one bit of the cvar's number it reads and writes (-1 none)
+  bool inverted = false;  // toggle: on writes 0 (or clears the bit)
+  std::string_view bind = {};  // a key row: the command a key is bound to (shown as its keys)
 };
 
 // A page of a menu: its id and its title ("" for the root, which shows the game's own picture).
@@ -90,7 +93,8 @@ struct PageTitle {
 struct MenuTable {
   std::span<const PageTitle> pages;
   std::span<const Entry> entries;
-  std::string_view empty_slot;  // the words of an empty save slot on LOAD and SAVE
+  std::string_view empty_slot;     // the words of an empty save slot on LOAD and SAVE
+  std::string_view in_level = {};  // the page ESCAPE opens in a level ("" the root)
 };
 // Quake's (an empty slot "--- UNUSED SLOT ---", as the original's), and the same pages for
 // Quake II with our own words for an empty slot.
@@ -112,7 +116,11 @@ struct Host {
   // Each save slot's line (slot i is the save `s<i>`): the save's title, "" for an empty slot.
   std::vector<std::string> saves = {};
   const MenuTable* table = nullptr;  // the game's menu (null: classic_menu())
+  bool in_level = false;             // a level is being played (ESCAPE opens `in_level`)
 };
+
+// The command a key row binds: a CUSTOMIZE CONTROLS row's move or an entry's `bind`; "" none.
+std::string_view bind_command(const MenuTable& table, std::string_view page, std::string_view item);
 
 // The table `host` reads.
 const MenuTable& table_of(const Host& host);

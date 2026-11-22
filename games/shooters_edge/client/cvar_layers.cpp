@@ -6,7 +6,8 @@
 // ge:keywords intensity gl_modulate gl_brightness cl_blend cl_entities cl_particles cl_lights
 // ge:keywords cl_gibs cl_noglow logfile cl_disable_particles cl_disable_explosions
 // ge:keywords cl_dlight_hacks cl_muzzlelight_time cl_muzzleflashes
-// ge:keywords sshot_format sshot_dir image_jpeg_quality_level
+// ge:keywords sshot_format sshot_dir image_jpeg_quality_level gl_screenshot_format
+// ge:keywords gl_screenshot_quality
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -383,7 +384,9 @@ void add_q2(con::Console& c, const GameBindings& b) {
         std::pair{"cl_vwep", "r_drawvweps"}, std::pair{"con_alpha", "con_bgalpha"},
         std::pair{"cl_entities", "r_drawentities"}, std::pair{"cl_particles", "r_particles"},
         std::pair{"cl_lights", "r_dynamic"}, std::pair{"cl_blend", "gl_polyblend"},
-        std::pair{"scr_showpause", "showpause"}, std::pair{"netgraph", "r_netgraph"}})
+        std::pair{"gl_screenshot_format", "scr_format"},
+        std::pair{"gl_screenshot_quality", "scr_quality"}, std::pair{"scr_showpause", "showpause"},
+        std::pair{"netgraph", "r_netgraph"}})
     v.add_synonym(name, ours);
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.

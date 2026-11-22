@@ -70,6 +70,7 @@
 #include "capture/screenshot.hpp"
 #include "classic/content/downloads.hpp"
 #include "console/cfg.hpp"
+#include "console/clock_macros.hpp"
 #include "console/lex.hpp"
 #include "console/view.hpp"
 #include "core/output.hpp"
@@ -382,6 +383,7 @@ int run_main(int argc, char** argv) {
   cl::Q2Bar q2_bar{.files = &files,
                    .binds = &console.binds().table(ge::console::BindMode::game),
                    .screen = &q2_screen};
+  cl::add_q2_bar_commands(console, q2_bar);  // dumpstatusbar, dumplayout, aashot, aadump
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
@@ -480,6 +482,12 @@ int run_main(int argc, char** argv) {
   }
   ge::ui::DrawList overlay;
   const uint64_t first_ns = ge::platform::now_ns();
+  ge::console::add_clock_macros(
+      console, {.local = [] { return cl::local_time(); },
+                .uptime_s =
+                    [first_ns] {
+                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
+                    }});  // $com_date, $com_time, $com_uptime, $random
   // The title with the spinner in its corner: the first frame, and a map's frames with no world.
   // The title's night with the menu over it; `lobby` puts the lobby's screen between them.
   const auto title_frame = [&](double t, double dt, std::string_view caption, double since,
@@ -728,8 +736,9 @@ int run_main(int argc, char** argv) {
   // over both).
   cl::DemoHearing hearing(synth, &picture.ce.sounds, &picture.q2fx);
   cl::ListenHearing heard_here(synth, &picture.ce.sounds, &picture.q2fx);
-  cl::Cinematic cine;                      // Quake II's movies (cinematic.hpp)
-  cl::MenuSounds menu_sounds(synth);       // the main menu's clicks (menu_sound.hpp)
+  cl::Cinematic cine;                 // Quake II's movies (cinematic.hpp)
+  cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp), play
+  cl::add_local_sound_commands(console, menu_sounds, adapter, files, synth, music.player.bus());
   cl::hear_worlds_on(&synth, &under_ear);  // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
@@ -1162,6 +1171,8 @@ int run_main(int argc, char** argv) {
     }
     queue.clear();
     ge::platform::poll_input(*window, input, *devices, queue);
+    if (ge::platform::alt_enter(input, console))  // not the menu's ENTER too
+      input.pressed[static_cast<size_t>(ge::platform::Key::enter)] = false;
     const uint64_t now = ge::platform::now_ns();
     const double frame_s = static_cast<double>(now - last) * 1e-9;
     // The game's time: at vsync whole refreshes (vid_steady), so the motion is even whenever the
@@ -1222,6 +1233,7 @@ int run_main(int argc, char** argv) {
         }
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
+      menu_host.in_level = (listen.server || remote.active) && !attract;  // ESCAPE's in-game page
       // A benchmark's Escape stops the run (below) and opens nothing.
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
                             input.tapped(Key::escape)) ||
