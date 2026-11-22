@@ -61,6 +61,8 @@ TEST(download_checks_the_path_and_queues_it) {
   cn::add_remote_commands(con, r);
   con.execute("download maps/q2dm1.bsp");
   CHECK(con.output().back() == "Must be connected to a server.");
+  con.execute("skins");
+  CHECK(con.output().back() == "Must be in a level to load skins.");
   cn::Q2ClientEnd c;
   c.fetching = "maps/q2dm8.bsp";  // a fetch under way: the next waits behind it
   CHECK(cn::q2_download(c, "pics/colormap.pcx") == "");

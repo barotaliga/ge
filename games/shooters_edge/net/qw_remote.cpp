@@ -1036,6 +1036,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   add_remote_macros(con, r);  // $cl_server, $cl_ping, $cl_lag and the rates
   add_serverstatus_command(con, r);
   add_q2_download_command(con, r);  // download <file> (q2_remote.hpp)
+  add_q2_skins_command(con, r);     // skins
   gn::add_net_commands(con, [&r]() -> const gn::Transport* { return r.transport; });  // dns
   r.setting = [&con](const std::string& name) {
     if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;

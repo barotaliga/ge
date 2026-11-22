@@ -29,7 +29,7 @@
 // ge:keywords remote-client connect join-server q2 protocol-34 q2-join delta-angles
 // ge:keywords use-weapon impulse lerp q2_remote_start q2_remote_step
 // ge:keywords cl_speedjump easy-jump speedjump-share cl_maxfps move-rate q2_move_ms
-// ge:keywords download add_q2_download_command
+// ge:keywords download add_q2_download_command skins add_q2_skins_command
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_net_test.cpp
 #pragma once
@@ -53,5 +53,8 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
 // `allow_download -1`, "Usage: download <filename>" without exactly one file, and "Couldn't
 // download <file>: <reason>" when it is refused.
 void add_q2_download_command(ge::console::Console& con, Remote& r);
+// `skins`: every player's figure and skin read again ("Must be in a level to load skins." when
+// none is joined), a line each, "client <n>: <name>\<model>/<skin> --> <model>/<skin>".
+void add_q2_skins_command(ge::console::Console& con, Remote& r);
 
 }  // namespace shooters_edge::net
