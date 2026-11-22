@@ -46,8 +46,8 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <utility>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/deflate.hpp"
@@ -62,19 +62,19 @@ struct Q2RelayConfig {
   std::string hostname = "Shooter's Edge TV";
   std::string version = "Shooter's Edge";  // the relay's version, in its hello and on the chooser
   int max_viewers = 32;
-  std::string password;                // what a viewer must bring
-  double timeout = 90;                 // mvd_timeout, s
-  int suspend_min = 5;                 // mvd_suspend_time, minutes (0: always active)
-  int wait_delay = 20;                 // mvd_wait_delay, s
-  int wait_percent = 50;               // mvd_wait_percent
-  int buffer_size = 8;                 // mvd_buffer_size, 32 KiB
-  std::string username = "unnamed";    // mvd_username
-  std::string upstream_password;       // mvd_password
-  int snaps = 10;                      // mvd_snaps, s
-  std::string admin_password;          // mvd_admin_password
-  int part_filter = 0;                 // mvd_part_filter
-  bool filter_version = false;         // mvd_filter_version
-  std::string default_map = "q2dm1";   // mvd_default_map
+  std::string password;                      // what a viewer must bring
+  double timeout = 90;                       // mvd_timeout, s
+  int suspend_min = 5;                       // mvd_suspend_time, minutes (0: always active)
+  int wait_delay = 20;                       // mvd_wait_delay, s
+  int wait_percent = 50;                     // mvd_wait_percent
+  int buffer_size = 8;                       // mvd_buffer_size, 32 KiB
+  std::string username = "unnamed";          // mvd_username
+  std::string upstream_password;             // mvd_password
+  int snaps = 10;                            // mvd_snaps, s
+  std::string admin_password;                // mvd_admin_password
+  int part_filter = 0;                       // mvd_part_filter
+  bool filter_version = false;               // mvd_filter_version
+  std::string default_map = "q2dm1";         // mvd_default_map
   std::string chase_prefix = "xv 0 yb -64";  // mvd_chase_prefix
   int flood_msgs = 4;
   double flood_persecond = 4, flood_waitdelay = 10;
@@ -136,7 +136,7 @@ struct Q2Channel {
   std::deque<std::vector<uint8_t>> buffer;
   size_t buffered = 0, most = 0;
   int target = 0, underflows = 0;
-  double next = 0;  // the next 10 Hz frame, s
+  double next = 0;           // the next 10 Hz frame, s
   client::DemoConvert base;  // reads every block: the state a new view forks from
   bool have_state = false;
   std::string map;
@@ -205,8 +205,8 @@ struct Q2Relay {
   // Moves asked by viewers' words, made once every face has read its datagrams.
   struct Move {
     uint64_t key = 0;
-    int chan = -1;     // the channel to enter (-1: the Waiting Room)
-    int target = -1;   // the player to follow there
+    int chan = -1;      // the channel to enter (-1: the Waiting Room)
+    int target = -1;    // the player to follow there
     bool same = false;  // the same channel: the view follows `target` now
   };
   std::vector<Move> moves;

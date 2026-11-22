@@ -40,8 +40,8 @@
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_game_tv.hpp"
 #include "shooters_edge/net/q2_login.hpp"
-#include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_mvd_relay.hpp"
+#include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/server/q2_mapfix.hpp"
 #include "shooters_edge/server/q2_native.hpp"
@@ -191,8 +191,8 @@ constexpr gs::GameRule kRules[] = {
     {"mvd_suspend_time",
      "The minutes with no viewer doing anything after which a relay stops its streams.", nullptr,
      "0: never; 5 the default", false},
-    {"mvd_wait_delay", "The seconds of the match a relay holds before it plays a channel.",
-     nullptr, "20 the default", false},
+    {"mvd_wait_delay", "The seconds of the match a relay holds before it plays a channel.", nullptr,
+     "20 the default", false},
     {"mvd_wait_percent", "How full a relay's buffer may get before it plays a channel anyway.",
      nullptr, "50 the default (percent)", false},
     {"mvd_buffer_size", "The size of a relay's buffer for each channel, in 32 KiB.", nullptr,
@@ -207,8 +207,7 @@ constexpr gs::GameRule kRules[] = {
      "empty: nobody (the default)", false},
     {"mvd_part_filter", "Whose comings and goings a relay's channel is told of.", nullptr,
      "0: everyone's (the default); below 0: nobody's; N: who talked within N s", false},
-    {"mvd_default_map", "The map of a relay's Waiting Room.", nullptr, "q2dm1 the default",
-     false},
+    {"mvd_default_map", "The map of a relay's Waiting Room.", nullptr, "q2dm1 the default", false},
     {"mvd_chase_prefix", "Where a relay's chase line is drawn, as a layout's position.", nullptr,
      "xv 0 yb -64 the default", false},
 };
@@ -542,6 +541,15 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     text("mvd_chase_prefix", rc.chase_prefix);
     if (const auto it = c.rules.find("mvd_part_filter"); it != c.rules.end() && !it->second.empty())
       rc.part_filter = std::atoi(it->second.c_str());
+    // The chat flood rule's settings, the rules' own names, read by the relay's chat too.
+    if (const auto it = c.rules.find("flood_msgs"); it != c.rules.end() && !it->second.empty())
+      rc.flood_msgs = std::atoi(it->second.c_str());
+    if (const auto it = c.rules.find("flood_persecond"); it != c.rules.end() && !it->second.empty())
+      rc.flood_persecond = std::atof(it->second.c_str());
+    if (const auto it = c.rules.find("flood_waitdelay"); it != c.rules.end() && !it->second.empty())
+      rc.flood_waitdelay = std::atof(it->second.c_str());
+    if (const auto it = c.rules.find("flood_mute"); it != c.rules.end() && !it->second.empty())
+      rc.flood_mute = std::atoi(it->second.c_str()) != 0;
     rc.demos = g->cfg.mvd.demos;
     rc.hostname = c.hostname.empty() ? rc.hostname : c.hostname;
   }
@@ -728,8 +736,8 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
     if (!m) return false;
     checksum = sv::q2_map_checksum(m->file);
     const ge::brush::Entity* best = nullptr;
-    for (const char* kind : {"info_player_intermission", "info_player_deathmatch",
-                             "info_player_start"}) {
+    for (const char* kind :
+         {"info_player_intermission", "info_player_deathmatch", "info_player_start"}) {
       for (const ge::brush::Entity& e : m->bsp.map.entities)
         if (e.get("classname") == kind) {
           best = &e;
@@ -839,8 +847,8 @@ bool console_line(void* g, const std::string& line) {
   {  // the relay's words (its own mvdrecord and mvdstop once relay mode runs)
     const std::vector<std::string> rw = q2_words(line);
     if (game.net && !rw.empty() && rw[0].rfind("mvd", 0) == 0 &&
-        (game.relay.spawned || (rw[0] != "mvdrecord" && rw[0] != "mvdstop" &&
-                                rw[0] != "mvdstuff")) &&
+        (game.relay.spawned ||
+         (rw[0] != "mvdrecord" && rw[0] != "mvdstop" && rw[0] != "mvdstuff")) &&
         q2_relay_command(game.relay, rw, line, game.port, game.now_s, answer)) {
       print_lines(game, answer);
       return true;

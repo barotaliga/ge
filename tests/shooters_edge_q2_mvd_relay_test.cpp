@@ -249,6 +249,14 @@ TEST(a_recording_plays_on_a_channel_and_a_stock_client_watches_it) {
   CHECK(printed(v, "[MVD] Player slot number 40 is invalid."));
   CHECK(printed(v, "[MVD] No players matching 'nobody' found."));
   CHECK(printed(v, "[MVD] You are already on this channel."));
+  cn::q2_client_command(v, "follow run");
+  run(*r, 300, false);
+  CHECK(printed(v, "[MVD] Chasing runner."));
+  CHECK_MSG(v.demo.state.map == "hall", v.demo.state.map);  // the view again, on the player
+  bool chasing = false;
+  for (const auto& [key, rec] : r->relay.viewers)
+    chasing |= rec.name == "watcher" && rec.target == 0;
+  CHECK(chasing);
   // A second viewer: chat among the channel's viewers, then the flood rule.
   cn::Q2ClientEnd& w = watch(*r, "second");
   run(*r, 400, false);
@@ -300,8 +308,7 @@ TEST(a_relay_dials_a_live_servers_recorder_and_lists_its_channel) {
   run(*r, 100);
   const std::string at = "127.0.0.1:" + std::to_string(r->server.mvd.listener.local.port);
   CHECK(word(*r, "mvdconnect " + at) == "[net0] -=- Connecting to " + at + "...\n");
-  CHECK(word(*r, "mvdconnect " + at) ==
-        "[net0] <warn> Connection to " + at + " already exists.\n");
+  CHECK(word(*r, "mvdconnect " + at) == "[net0] <warn> Connection to " + at + " already exists.\n");
   for (int i = 0; i < 600 && r->relay.channels.empty(); i++) run(*r, 1);
   run(*r, 300);
   CHECK(logged(*r, "[net0] -=- Connected to the game server!"));
@@ -334,7 +341,7 @@ TEST(a_wrong_password_destroys_the_connection) {
   const std::string at = "127.0.0.1:" + std::to_string(r->server.mvd.listener.local.port);
   word(*r, "mvdconnect -p guess " + at);
   for (int i = 0; i < 600 && !r->relay.conns.empty(); i++) run(*r, 1);
-  CHECK(logged(*r,
-               "[net0] =X= You don't have permission to access MVD/GTV stream on this server."));
+  CHECK(
+      logged(*r, "[net0] =X= You don't have permission to access MVD/GTV stream on this server."));
   CHECK(r->relay.conns.empty());
 }

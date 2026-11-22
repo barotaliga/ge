@@ -150,7 +150,7 @@ bool level_of(const Q2Channel& c, sv::Mvd2Level& level) {
 }
 
 std::string player_name(const sv::Mvd2Level& level, int slot) {
-  const size_t cs = size_t(kCsPlayerSkins + slot);
+  const size_t cs = size_t(kCsPlayerSkins) + size_t(slot);
   if (cs >= level.config_strings.size()) return "";
   std::string s = level.config_strings[cs];
   if (const size_t bs = s.find('\\'); bs != std::string::npos) s.resize(bs);
@@ -198,9 +198,10 @@ int most_followed(const Q2Relay& r, int chan) {
 // --- layouts ---
 
 std::string chooser(const Q2Relay& r, const Q2RelayViewer& rec) {
-  std::string t = "xv 32 yv 8 picn inventory xv 240 yv 172 string2 \"" + r.cfg.version +
-                  "\" xv 0 yv 32 cstring \"[ Channel Chooser ]\" xv 64 yv 48 string2 \"Name         "
-                  "Map     S/P\" yv 56 string \"------------ ------- ---\" ";
+  std::string t =
+      "xv 32 yv 8 picn inventory xv 240 yv 172 string2 \"" + r.cfg.version +
+      "\" xv 0 yv 32 cstring \"[ Channel Chooser ]\" xv 64 yv 48 string2 \"Name         "
+      "Map     S/P\" yv 56 string \"------------ ------- ---\" ";
   const std::vector<const Q2Channel*> list = listed_channels(r);
   if (list.empty()) {
     if (r.active)
@@ -219,7 +220,8 @@ std::string chooser(const Q2Relay& r, const Q2RelayViewer& rec) {
     char row[96];
     std::snprintf(row, sizeof row, "%-12.12s %-7.7s %d/%d", c.name.c_str(), c.map.c_str(),
                   spectators_on(r, c.id), plr);
-    if (static_cast<int>(i) == rec.cursor) t += "xv 56 yv " + std::to_string(y) + " string \"\x0d\" ";
+    if (static_cast<int>(i) == rec.cursor)
+      t += "xv 56 yv " + std::to_string(y) + " string \"\x0d\" ";
     t += "xv 64 yv " + std::to_string(y) + (c.id == rec.chan ? " string2 \"" : " string \"") + row +
          "\" ";
   }
@@ -357,7 +359,7 @@ std::unique_ptr<Q2RelayView> view_of(Q2Relay& r, Q2Channel& c, uint64_t key, int
   v->pov = target;
   client::convert_fork(c.base, v->conv);
   v->conv.options.touch_player = [&r, key, id = c.id](int, uint8_t& type, uint8_t& flags,
-                                                     int16_t* stats) {
+                                                      int16_t* stats) {
     touch(r, key, id, type, flags, stats);
   };
   client::convert_set_pov(v->conv, target);
@@ -475,7 +477,8 @@ void follow(Q2Relay& r, Q2RelayViewer& rec, Q2Viewer& q, const std::vector<std::
   if (a.size() >= 2 && a[0] == '!' && a[1] == '!') {
     name = a.substr(1);
   } else if (a[0] == '!') {
-    const char k = a.size() > 1 ? static_cast<char>(std::tolower(static_cast<unsigned char>(a[1]))) : 0;
+    const char k =
+        a.size() > 1 ? static_cast<char>(std::tolower(static_cast<unsigned char>(a[1]))) : 0;
     if (k == 'q' || k == 'i' || k == 'r' || k == 'b') {
       rec.powerup = k;
       rec.autochase = false;
@@ -541,7 +544,8 @@ void autofollow(Q2Relay& r, Q2RelayViewer& rec, Q2Viewer& q, const std::vector<s
                       count() + ").");
   const std::string& sub = w[1];
   if (sub == "add" || sub == "rm" || sub == "del") {
-    if (w.size() < 3) return print(q, kPrintHigh, "Usage: " + w[0] + " " + sub + " <wildcard> [...]\n");
+    if (w.size() < 3)
+      return print(q, kPrintHigh, "Usage: " + w[0] + " " + sub + " <wildcard> [...]\n");
     for (size_t i = 2; i < w.size(); i++)
       for (size_t s = 0; s < level.base.players.size(); s++) {
         if (!wildcard(w[i], player_name(level, static_cast<int>(s)))) continue;
@@ -612,7 +616,8 @@ void fwd(Q2Relay& r, Q2RelayViewer& rec, Q2Viewer& q, const std::string& line) {
   if (g == nullptr || !g->hello) return mvd(q, "Not connected to the game server.");
   if ((g->flags & kGtfStringCmds) == 0)
     return mvd(q, "Game server does not allow command forwarding.");
-  if (g->stream.out.size() > g->stream.out_head) return mvd(q, "Send buffer not empty, please wait.");
+  if (g->stream.out.size() > g->stream.out_head)
+    return mvd(q, "Send buffer not empty, please wait.");
   std::string rest = line.size() > 4 ? line.substr(4) : "";
   if (rest.size() > 150) rest.resize(150);
   std::vector<uint8_t> m;
@@ -625,7 +630,9 @@ void fwd(Q2Relay& r, Q2RelayViewer& rec, Q2Viewer& q, const std::string& line) {
   g->sent = r.now;
 }
 
-void set_uf(Q2RelayViewer& rec, Q2Viewer& q) { stuff(q, "set uf " + std::to_string(rec.uf) + " u\n"); }
+void set_uf(Q2RelayViewer& rec, Q2Viewer& q) {
+  stuff(q, "set uf " + std::to_string(rec.uf) + " u\n");
+}
 
 void cursor(Q2Relay& r, Q2RelayViewer& rec, int dir) {
   int rows = 0;
@@ -640,7 +647,8 @@ void cursor(Q2Relay& r, Q2RelayViewer& rec, int dir) {
 void join(Q2Relay& r, Q2RelayViewer& rec, Q2Viewer& q, int chan) {
   const uint64_t key = key_of(rec.addr, rec.qport);
   if (chan == rec.chan)
-    return mvd(q, chan < 0 ? "You are already in the Waiting Room." : "You are already on this channel.");
+    return mvd(
+        q, chan < 0 ? "You are already in the Waiting Room." : "You are already on this channel.");
   if (r.now - rec.entered < 2) return mvd(q, "You may not switch channels too soon.");
   int target = -1;
   if (chan >= 0) target = most_followed(r, chan);
@@ -761,8 +769,9 @@ void command(Q2Relay& r, Q2RelayView& view, Q2Viewer& q, const std::string& line
     rec.layout = rec.chan < 0 ? Q2Layout::chooser : Q2Layout::none;
     draw(r, rec);
   } else if (c == "channels") {
-    std::string t = "id name         map      spc plr who is playing\n"
-                    "-- ------------ -------- --- --- --------------\n";
+    std::string t =
+        "id name         map      spc plr who is playing\n"
+        "-- ------------ -------- --- --- --------------\n";
     for (const Q2Channel* ch : listed_channels(r)) {
       sv::Mvd2Level level;
       std::string names;
@@ -804,7 +813,8 @@ void command(Q2Relay& r, Q2RelayView& view, Q2Viewer& q, const std::string& line
     } else {
       const bool number = w[1].find_first_not_of("0123456789") == std::string::npos;
       for (const Q2Channel* ch : list)
-        if ((number && ch->id == std::atoi(w[1].c_str())) || (!number && ch->name == w[1])) pick = ch;
+        if ((number && ch->id == std::atoi(w[1].c_str())) || (!number && ch->name == w[1]))
+          pick = ch;
       if (pick == nullptr) return print(q, kPrintHigh, "No such channel ID: " + w[1] + "\n");
     }
     join(r, rec, q, pick->id);
@@ -838,7 +848,8 @@ void begun(Q2Relay& r, Q2RelayView& view, Q2Viewer& q) {
     draw(r, rec);
     const std::vector<const Q2Channel*> list = listed_channels(r);
     // A viewer just come to the relay goes straight to the only channel.
-    if (fresh && list.size() == 1) ask_move(r, key, list[0]->id, most_followed(r, list[0]->id), false);
+    if (fresh && list.size() == 1)
+      ask_move(r, key, list[0]->id, most_followed(r, list[0]->id), false);
     return;
   }
   announce(r, rec, rec.chan, rec.name + " entered the channel");
@@ -872,9 +883,11 @@ void room_start(Q2Relay& r) {
   str("");
   i16(0);
   str("Waiting Room");
-  const std::pair<int, std::string> strings[] = {
-      {0, "Waiting Room"}, {2, "unit1_"}, {30, "8"},
-      {31, std::to_string(r.room_checksum)}, {33, "maps/" + r.room_map + ".bsp"}};
+  const std::pair<int, std::string> strings[] = {{0, "Waiting Room"},
+                                                 {2, "unit1_"},
+                                                 {30, "8"},
+                                                 {31, std::to_string(r.room_checksum)},
+                                                 {33, "maps/" + r.room_map + ".bsp"}};
   for (const auto& [i, s] : strings) {
     u8(kSvcConfigString);
     i16(i);
@@ -970,10 +983,9 @@ void open_room(Q2Relay& r) {
   r.room_map = r.cfg.default_map;
   bool ok = r.spot && r.spot(r.room_map, r.room_origin, r.room_angles, r.room_checksum, error);
   if (!ok) {
-    if (r.spot)
-      say(r, "Couldn't load maps/" + r.room_map + ".bsp for the Waiting Room: " + error);
+    if (r.spot) say(r, "Couldn't load maps/" + r.room_map + ".bsp for the Waiting Room: " + error);
     r.cfg.default_map = r.room_map = "q2dm1";
-    if (r.spot) ok = r.spot(r.room_map, r.room_origin, r.room_angles, r.room_checksum, error);
+    if (r.spot) r.spot(r.room_map, r.room_origin, r.room_angles, r.room_checksum, error);
   }
   r.room_next = r.now;
   room_start(r);

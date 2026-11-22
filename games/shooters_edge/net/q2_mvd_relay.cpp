@@ -288,21 +288,22 @@ void read_conn(Q2Relay& r, Q2GtvConn& g) {
         break;
       case kGtsStreamStart:
         if (g.state != Q2GtvState::waiting)
-          return destroy_conn(r, g, "Unexpected stream start ack in state " +
-                                        std::to_string(int(g.state)));
+          return destroy_conn(
+              r, g, "Unexpected stream start ack in state " + std::to_string(int(g.state)));
         g.state = Q2GtvState::reading;
         conn_say(r, g, "-=- Stream start ack received.");
         break;
       case kGtsStreamStop:
         if (g.state != Q2GtvState::suspending)
-          return destroy_conn(r, g, "Unexpected stream stop ack in state " +
-                                        std::to_string(int(g.state)));
+          return destroy_conn(
+              r, g, "Unexpected stream stop ack in state " + std::to_string(int(g.state)));
         g.state = Q2GtvState::connected;
         conn_say(r, g, "-=- Stream stop ack received.");
         break;
       case kGtsStreamData: {
         if (g.state == Q2GtvState::suspending) break;  // after a stop asked: discarded
-        if (g.state != Q2GtvState::reading) return destroy_conn(r, g, "Unexpected stream data packet");
+        if (g.state != Q2GtvState::reading)
+          return destroy_conn(r, g, "Unexpected stream data packet");
         if (payload.empty()) {
           if (!g.suspended) conn_say(r, g, "-=- Stream suspended by server.");
           g.suspended = true;
@@ -401,12 +402,15 @@ bool block_at(const std::vector<uint8_t>& data, size_t& pos, std::vector<uint8_t
   if (pos + 2 > data.size()) return false;
   const size_t len = data[pos] | size_t(data[pos + 1]) << 8;
   if (len == 0 || pos + 2 + len > data.size()) return false;
-  block.assign(data.begin() + std::ptrdiff_t(pos + 2), data.begin() + std::ptrdiff_t(pos + 2 + len));
+  block.assign(data.begin() + std::ptrdiff_t(pos + 2),
+               data.begin() + std::ptrdiff_t(pos + 2 + len));
   pos += 2 + len;
   return true;
 }
 
-bool next_block(Q2Channel& c, std::vector<uint8_t>& block) { return block_at(c.data, c.pos, block); }
+bool next_block(Q2Channel& c, std::vector<uint8_t>& block) {
+  return block_at(c.data, c.pos, block);
+}
 
 // The next file of the play list, or false when the list has ended.
 bool next_file(Q2Relay& r, Q2Channel& c) {
@@ -466,8 +470,9 @@ void play_stream(Q2Relay& r, Q2Channel& c) {
     const bool any = !streaming && !c.buffer.empty();
     if (!streaming && c.buffer.empty()) return destroy_channel(r, c.id, "Ran out of buffers");
     if (!by_count && !by_fill && !any) return;
-    chan_say(r, c, by_count || any ? "-=- Waiting finished, reading..."
-                                   : "-=- Buffering finished, reading...");
+    chan_say(r, c,
+             by_count || any ? "-=- Waiting finished, reading..."
+                             : "-=- Buffering finished, reading...");
     relay::tell(r, c.id, "Streaming resumed.");
     c.state = Q2ChanState::read;
   }
@@ -670,8 +675,8 @@ void cmd_connect(Q2Relay& r, const std::vector<std::string>& w, gn::Transport* p
 
 void cmd_play(Q2Relay& r, const std::vector<std::string>& w, gn::Transport* port, double now,
               std::string& out) {
-  const Opts o = parse_opts(w, "lnr", {{"help", 'h'}, {"loop", 'l'}, {"name", 'n'},
-                                       {"replace", 'r'}});
+  const Opts o =
+      parse_opts(w, "lnr", {{"help", 'h'}, {"loop", 'l'}, {"name", 'n'}, {"replace", 'r'}});
   const std::string hint = "Try 'mvdplay --help' for more information.\n";
   if (!o.bad.empty()) {
     out += "Unknown option: " + o.bad + "\n" + hint;
@@ -770,7 +775,8 @@ void seek_to(Q2Relay& r, Q2Channel& c, int64_t target, std::string& out) {
   if (target < c.frame) {
     const Q2Snap* best = nullptr;
     for (const Q2Snap& s : c.snaps)
-      if (s.frame <= target && s.frame >= c.level_frame && (best == nullptr || s.frame > best->frame))
+      if (s.frame <= target && s.frame >= c.level_frame &&
+          (best == nullptr || s.frame > best->frame))
         best = &s;
     if (best == nullptr) {
       out += "[" + c.name + "] Couldn't seek backwards without snapshots!\n";
@@ -1010,9 +1016,10 @@ bool q2_relay_command(Q2Relay& r, const std::vector<std::string>& w, const std::
       return true;
     }
     const bool recs = w.size() > 1 && !w[1].empty() && w[1][0] == 'r';
-    out += recs ? "id name         map      size name\n-- ------------ -------- ---- --------------\n"
-                : "id name         map      spc plr stat buf pckt address       \n"
-                  "-- ------------ -------- --- --- ---- --- ---- --------------\n";
+    out +=
+        recs ? "id name         map      size name\n-- ------------ -------- ---- --------------\n"
+             : "id name         map      spc plr stat buf pckt address       \n"
+               "-- ------------ -------- --- --- ---- --- ---- --------------\n";
     for (const auto& cp : r.channels) {
       const Q2Channel& c = *cp;
       char row[256];

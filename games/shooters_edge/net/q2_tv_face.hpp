@@ -19,8 +19,9 @@
 // the reliable channel, in order: the frames delta against the ones before them, so a viewer must
 // hold every one, and a lost packet is resent rather than leaving the viewer on a frame it cannot
 // read. The server data says the stream is a recording played (attract loop 1), so the viewer's
-// client neither predicts nor moves. What a viewer sends besides is ignored; a viewer silent for
-// `timeout` seconds, or that falls behind by more than `most_behind` blocks, is dropped.
+// client neither predicts nor moves. What a viewer sends besides is ignored (or handed to a relay's
+// hook, `on_command`); a viewer silent for `timeout` seconds, or that falls behind by more than
+// `most_behind` blocks, is dropped.
 //
 // A NEW LEVEL (the server data again, after a `reconnect`): the face starts over and every viewer
 // is sent `reconnect`, so its client asks for the new signon.
