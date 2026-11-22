@@ -1,13 +1,17 @@
 // Quake II's session settings: the map commands, the clock and the state (q2_session.hpp).
 //
 // ge:summary Quake II's map commands run on a change, its game clock, its read-only state cvars
+// ge:keywords cl_thirdperson cl_thirdperson_angle cl_thirdperson_range third-person view_behind
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd timescale fixedtime cl_paused
 // ge:skill console shooter
 // ge:test tests/shooters_edge_q2_session_test.cpp
 #include "shooters_edge/client/q2_session.hpp"
 
 #include <algorithm>
+#include <cmath>
 
+#include "brush/map.hpp"
+#include "shooter/hull.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
 
@@ -16,6 +20,8 @@ namespace shooters_edge::client {
 namespace con = ge::console;
 
 namespace {
+
+constexpr double kDeg = 3.14159265358979323846 / 180;
 
 constexpr const char* kStateNames[4] = {"cl_running", "cl_paused", "sv_running", "sv_paused"};
 
@@ -72,6 +78,30 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
           .kind = con::CvarKind::boolean,
           .values = "1: it waits (the default); 0: it runs on"},
          &s.autopause);
+  v.bind({.name = "cl_thirdperson",
+          .fallback = "0",
+          .flags = con::kCheat,
+          .help = "Whether you see yourself from behind, only while the server allows cheats.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: through your own eyes (the default); 1: from behind you"},
+         &s.third_person);
+  v.bind({.name = "cl_thirdperson_angle",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Where round you the camera sits with cl_thirdperson 1, in degrees.",
+          .min = -360,
+          .max = 360,
+          .values = "0: behind you (the default); 90: to your right; 180: in front, looking back "
+                    "at you; -360..360: any angle between"},
+         &s.third_angle);
+  v.bind({.name = "cl_thirdperson_range",
+          .fallback = "60",
+          .flags = con::kArchive,
+          .help = "How far from you the camera sits with cl_thirdperson 1.",
+          .min = 0,
+          .max = 1000,
+          .values = "60: the default; 0..1000: that many units, nearer where a wall is in the way"},
+         &s.third_range);
   const char* helps[4] = {
       "Whether the game is running: always 1.", "Whether the game you play is paused.",
       "Whether this window runs a server.", "Whether the server this window runs is paused."};
@@ -121,6 +151,40 @@ void q2_session_frame(con::Console& c, Q2Session& s, const net::Remote& remote,
                                                : s.map;
   q2_session_step(c, s, remote.active || hosting, remote.active || hosting ? map : "", hosting,
                   hosting && (paused || listen.server->paused));
+}
+
+double view_behind(ge::render::FrameView& view, double units, double angle_deg,
+                   const ge::shooter::BrushModel* world) {
+  if (!(units > 0)) return 0;
+  constexpr double kWallGap = 4;  // units the camera keeps off a wall
+  const double heading = view.heading - angle_deg * kDeg;
+  // Back along the way it looks (engine axes: heading clockwise from +z, pitch up positive).
+  const double back[3] = {-std::sin(heading) * std::cos(view.pitch), -std::sin(view.pitch),
+                          -std::cos(heading) * std::cos(view.pitch)};
+  const double unit = ge::brush::kUnitM;
+  double reach = units;
+  if (world != nullptr) {
+    const ge::shooter::Hull& hull = world->hulls[0];
+    if (hull.nodes != nullptr && hull.planes != nullptr) {
+      // Map units: x, y the plan, z up (the engine's x, z and y).
+      const ge::shooter::Vec3f from{float(view.eye[0] / unit), float(view.eye[2] / unit),
+                                    float(view.eye[1] / unit)};
+      const double far = units + kWallGap;
+      const ge::shooter::Vec3f to{float(from.x + back[0] * far), float(from.y + back[2] * far),
+                                  float(from.z + back[1] * far)};
+      const ge::shooter::HullTrace tr = ge::shooter::trace_hull(hull, from, to);
+      if (tr.startsolid) return 0;
+      if (tr.fraction < 1) reach = std::max(0.0, double(tr.fraction) * far - kWallGap);
+    }
+  }
+  for (int k = 0; k < 3; ++k) view.eye[k] += back[k] * reach * unit;
+  view.heading = heading;
+  return reach;
+}
+
+double q2_third_person(const Q2Session& s, ge::render::FrameView& view,
+                       const ge::shooter::BrushModel* world) {
+  return s.third_person ? view_behind(view, s.third_range, s.third_angle, world) : 0;
 }
 
 }  // namespace shooters_edge::client

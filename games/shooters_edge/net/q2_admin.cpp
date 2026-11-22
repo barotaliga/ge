@@ -58,6 +58,21 @@ std::string row(const char* format, ...) {
   return b;
 }
 
+// The client settings a later protocol's client asked for, as `status s` shows them: G no gun,
+// B no blend, R recording, I no gibs, F no footsteps, P no prediction, L no flares.
+std::string options(const Q2NetClient& c) {
+  static constexpr struct {
+    int index;
+    char letter;
+  } kShown[] = {{kQ2SetNoGun, 'G'},   {kQ2SetNoBlend, 'B'},     {kQ2SetRecording, 'R'},
+                {kQ2SetNoGibs, 'I'},  {kQ2SetNoFootsteps, 'F'}, {kQ2SetNoPredict, 'P'},
+                {kQ2SetNoFlares, 'L'}};
+  std::string o;
+  for (const auto& k : kShown)
+    if (c.asked[k.index] != 0) o += k.letter;
+  return o;
+}
+
 // A client's ping word: ZMBI dropped, ASGN before its first `new`, DNLD sending it a file, HTTP
 // fetching from the web, CNCT signing on, else its ping (at most 9999).
 std::string ping_word(const Q2NetClient& c) {
@@ -130,10 +145,13 @@ std::string q2_status_table(const Q2NetServer& s, char letter) {
                  q2_loss_up(c), c.rtt_min, q2_rtt_avg(c), c.rtt_max, c.packet_dup, c.scale);
         break;
       case 3:
-        t += row("%3d %-15.15s %5d %5d %6d  no   old\n", i, name, kQ2NetProtocol, 0, 1390);
+        t += row("%3d %-15.15s %5d %5d %6d  %s  %s\n", i, name, c.protocol, c.minor, c.msglen,
+                 c.zlib ? "yes" : "no ", c.ch.fragments ? "new" : "old");
         break;
       case 4:
-        t += row("%3d %-15.15s %5d %7s %3d %3d\n", i, name, kQ2NetProtocol, "", 0, 0);
+        t += row("%3d %-15.15s %5d %7s %3d %3d\n", i, name, c.protocol, options(c).c_str(),
+                 c.asked[kQ2SetPlayerUpdates],
+                 c.protocol == kQ2NetProtocol ? 0 : c.asked[kQ2SetFps]);
         break;
       case 5: {
         const int idle = std::min(

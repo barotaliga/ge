@@ -436,6 +436,9 @@ void qw_local_voice(QwServer& s, int slot, const ClcMsg& m);
 void qw_set_info(QwServer& s, int slot, const std::string& key, const std::string& value);
 // A line printed to every spawned client.
 void qw_print_all(QwServer& s, const std::string& text);
+// The server going away: every spawned client told `text` (high level, "server shutdown\n"
+// when it quits) in the datagram that disconnects it.
+void qw_shutdown(QwServer& s, const std::string& text);
 // One key of the server info set (empty: removed) and told to every client in the game; nothing
 // when it already holds the value.
 void qw_set_serverinfo(QwServer& s, const std::string& key, const std::string& value);

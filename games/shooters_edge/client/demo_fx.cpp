@@ -8,6 +8,7 @@
 
 #include <cstddef>
 
+#include "classic/q2_fx_switches.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 
 namespace shooters_edge::client {
@@ -86,12 +87,23 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
   if (s.levels != fx.levels) {  // a new level: the effects start again
     fx.levels = s.levels;
     fx.explosions.clear();
+    fx.explosion_kinds.clear();
     fx.effects.clear();
   }
   for (const DemoEffect& e : s.effects) {
-    if (e.kind == DemoEffectKind::explosion)
+    if (e.kind == DemoEffectKind::explosion) {
       fx.explosions.push_back(e.at);
-    else
+      // Quake II's rocket's and grenade's (in the air and in water), for cl_disable_explosions.
+      const bool q2 = s.format == DemoFormat::q2 || s.format == DemoFormat::q2_multiview;
+      const uint8_t kind = !q2                           ? 0
+                           : e.code == 7 || e.code == 17 ? ge::classic::kQ2Rocket
+                           : e.code == 8 || e.code == 18 ? ge::classic::kQ2Grenade
+                                                         : 0;
+      if (kind != 0) {
+        fx.explosion_kinds.resize(fx.explosions.size());
+        fx.explosion_kinds.back() = kind;
+      }
+    } else
       fx.effects.push_back(effect_of(e));
   }
   fx.missiles.clear();

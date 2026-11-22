@@ -435,7 +435,20 @@ void item_armorInv(A& q) { armour_start(q, 3, kItArmor3); }
 
 void ammo_touch(A& q) {
   if (!can_pick_up(q)) return;
+  // Quake's: one holding the best weapon before takes up the new best after.
+  const int32_t was = q.self();
+  bool best = false;
+  if (quake_rules(q)) {
+    q.set_self(q.other());
+    best = q.f(q.self(), q.L.f.weapon) == quake_best_weapon(q);
+    q.set_self(was);
+  }
   if (!ammo_give_own(q)) return;
+  if (best) {
+    q.set_self(q.other());
+    q.set_f(q.self(), q.L.f.weapon, quake_best_weapon(q));
+    q.set_self(was);
+  }
   const int32_t n = name_of(q, q.i(q.self(), q.L.f.classname), 0);
   if (q.is(n, "")) {
     say_to(q, q.other(), kPrintLow, {q.s(s_you_got_ammunition)});
@@ -659,8 +672,15 @@ void power_drop(A& q, float bit) {
   const int32_t me = q.self();
   const PowerKind k = power_kind(bit);
   const float until = q.f(me, k.field);
-  if ((until < q.time() + 1) | ((bit == kItQuad) & (q.deathmatch() == 4)))
-    return;  // the OctaPower stays
+  const bool octa = (bit == kItQuad) & (q.deathmatch() == 4);
+  if ((until < q.time() + 1) | (octa & !quake_rules(q))) return;  // the OctaPower stays
+  if (quake_rules(q)) {  // Quake's: everyone told what was lost and how long it had left
+    St lost = s_lost_a_ring;
+    if (bit == kItQuad) lost = octa ? s_lost_an_octa : s_lost_a_quad;
+    say_all(q, kPrintLow,
+            {q.i(me, q.L.f.netname), q.s(lost), q.ftos(q.rint(until - q.time())),
+             q.s(s_seconds_remaining)});
+  }
   const int32_t p = q.spawn();
   q.set_i(p, q.L.f.classname, q.s(k.class_name));
   q.set_f(p, q.L.f.items, bit);
@@ -691,8 +711,16 @@ void dropped_power_touch(A& q) {
   const PowerKind k = power_kind(bit);
   q.set_f(o, k.field, q.f(me, k.field));
   clear_bit(q, o, q.own_field(f_power_said), bit);
-  say_to(q, o, kPrintLow,
-         {q.s(s_you_got_the), name_of(q, q.i(me, q.L.f.classname), q.s(k.ours)), q.s(s_nl)});
+  if (quake_rules(q)) {  // Quake's: everyone told who took it up and how long it has left
+    St took = s_recovered_a_ring;
+    if (bit == kItQuad) took = q.deathmatch() == 4 ? s_recovered_an_octa : s_recovered_a_quad;
+    say_all(q, kPrintLow,
+            {q.i(o, q.L.f.netname), q.s(took), q.ftos(q.rint(q.f(me, k.field) - q.time())),
+             q.s(s_seconds_remaining_bang)});
+  } else {
+    say_to(q, o, kPrintLow,
+           {q.s(s_you_got_the), name_of(q, q.i(me, q.L.f.classname), q.s(k.ours)), q.s(s_nl)});
+  }
   q.set_f(o, q.L.f.items, bor(q.f(o, q.L.f.items), bit));
   q.sound(o, kChanItem, q.i(me, q.L.f.noise), 1, kAttnNorm);
   q.stuffcmd(o, q.s(s_bf));
@@ -702,8 +730,9 @@ void dropped_power_touch(A& q) {
 // Each frame for a living player: the powers that ran out taken away, the glow of those held.
 void power_frame(A& q) {
   if (q.deathmatch() == 4) dmm4_frame(q);
-  power_warn(q, kItQuad, q.f(q.self(), f_super_damage_finished), q.s(s_power_quad_off),
-             q.s(s_damage2_wav));
+  const bool octa = quake_rules(q) & (q.deathmatch() == 4);  // Quake's mode 4 names it
+  power_warn(q, kItQuad, q.f(q.self(), f_super_damage_finished),
+             q.s(octa ? s_power_octa_off : s_power_quad_off), q.s(s_damage2_wav));
   power_warn(q, kItInvulnerability, q.f(q.self(), f_invincible_finished), q.s(s_power_pent_off),
              q.s(s_protect2_wav));
   power_warn(q, kItInvisibility, q.f(q.self(), f_invisible_finished), q.s(s_power_ring_off),

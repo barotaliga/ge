@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "classic/q2_fx_switches.hpp"
 #include "core/num.hpp"
 #include "progs/layout.hpp"
 #include "progs/vm.hpp"
@@ -190,7 +191,13 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
                      name == "te_rocket_explosion" || name == "te_grenade_explosion" ||
                      name == "te_explosion1" || name == "te_explosion2" ||
                      name == "te_plasma_explosion";
-  if (blast) l.explosions.push_back(ev.origin);
+  if (blast) {
+    l.explosions.push_back(ev.origin);
+    l.explosion_kinds.resize(l.explosions.size());  // cl_disable_explosions reads which
+    l.explosion_kinds.back() = name == "te_rocket_explosion"    ? ge::classic::kQ2Rocket
+                               : name == "te_grenade_explosion" ? ge::classic::kQ2Grenade
+                                                                : 0;
+  }
   if (blast && name != "te_bfg_bigexplosion") return;
   const bool sparks = name == "te_sparks" || name == "te_bullet_sparks" ||
                       name == "te_screen_sparks" || name == "te_shield_sparks" ||
@@ -256,6 +263,7 @@ void entered(Listen& l) {
   l.owed = 0;
   l.pending_map.clear();
   l.explosions.clear();
+  l.explosion_kinds.clear();
   l.blows.clear();
   l.effects.clear();
   l.entries++;

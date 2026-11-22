@@ -62,17 +62,25 @@ bool sees(const ge::shooterbots::BotView& s, sh::Vec3f eye, const ButtonSpot& b)
 constexpr float kPressRise = 72;
 int32_t button_node(const sb::NavGraph& g, const ge::shooterbots::BotView& s, const ButtonSpot& b,
                     float reach) {
-  int32_t best = -1;
-  float best_d = reach;
-  for (size_t n = 0; n < g.nodes.size(); n++) {
-    const sh::Vec3f o = g.nodes[n].origin;
-    const float d = dist(o, b.at);
-    if (d >= best_d || !sees(s, {o.x, o.y, o.z + 22}, b)) continue;
-    if (!b.shoot && std::fabs(b.at.z - o.z) > kPressRise) continue;
-    best = static_cast<int32_t>(n);
-    best_d = d;
+  // A shot button from a node off any mover first: one on a door's or a stair's travel may stand
+  // where nothing is until the button itself is fired (e1m3's shot button that lowers the stairs
+  // was given a node on their far side, never reached). A pressed one keeps the nearest (a lift's
+  // button is pressed from on the lift).
+  for (const bool on_mover : {!b.shoot, true}) {
+    int32_t best = -1;
+    float best_d = reach;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      if (!on_mover && g.nodes[n].mover >= 0) continue;
+      const sh::Vec3f o = g.nodes[n].origin;
+      const float d = dist(o, b.at);
+      if (d >= best_d || !sees(s, {o.x, o.y, o.z + 22}, b)) continue;
+      if (!b.shoot && std::fabs(b.at.z - o.z) > kPressRise) continue;
+      best = static_cast<int32_t>(n);
+      best_d = d;
+    }
+    if (best >= 0) return best;
   }
-  return best >= 0 ? best : sb::nav_nearest(g, b.at);
+  return sb::nav_nearest(g, b.at);
 }
 
 // Within `r` of the box from `lo` to `hi`.

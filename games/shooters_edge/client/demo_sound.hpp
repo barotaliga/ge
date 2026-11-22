@@ -42,6 +42,7 @@
 #include "audio/pcm.hpp"
 #include "audio/synth.hpp"
 #include "brush/map.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
@@ -88,6 +89,10 @@ class DemoSounds {
   // Every sound heard as game `game`'s (classic remix's `cr_sounds`: profiles/remix_sounds.hpp's
   // `heard_as`; "" each as it is named), the sound list read again at once.
   void hear_as(std::string_view game);
+  // Quake II's sound switches (null: Quake's, all on): `cl_footsteps` 0 starts no footstep
+  // (`player/step*`); `s_ambient` 0 no entity's loop, 2 only one with a model, 3 only the
+  // listener's own.
+  void switches_from(const ge::classic::Q2FxSwitches* q2) { q2_ = q2; }
 
  private:
   const ge::audio::Pcm* recording(int index);
@@ -102,7 +107,7 @@ class DemoSounds {
   const ge::audio::Pcm* load(const std::string& name);  // as the game names it
   void relist(bool count);  // the list's recordings read again, missing ones counted when `count`
   // The loops the entities carry (DemoEntity::loop): each started, changed or stopped with them.
-  void entity_loops(const DemoState& s);
+  void entity_loops(const DemoState& s, int listener);
   void stop_entity_loops();
 
   ge::audio::Synth& synth_;
@@ -130,6 +135,7 @@ class DemoSounds {
   const ge::brush::Map* map_ = nullptr;
   DemoSoundStats stats_;
   const bool* enhanced_ = nullptr;
+  const ge::classic::Q2FxSwitches* q2_ = nullptr;
   bool listed_enhanced_ = false;  // the switch as the list was read
   std::filesystem::path cache_;   // the packs' cache folder ("" none)
   bool cache_known_ = false;      // looked for (or given)

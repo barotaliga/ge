@@ -114,7 +114,14 @@ int32_t death_words(A& q, int32_t targ, int32_t attacker) {
   const bool gib = q.f(targ, q.L.f.health) < -40;
   auto say = [&](St key) { return q.words(q.s(key), v, k, hv, hk); };
   auto pick = [&](St stem) { return game_variant(q, q.s(stem), v, k, hv, hk); };
+  // Quake's telefrags against the pentagram come first: the one deflected, and both shielded.
+  if (quake_rules(q)) {
+    if (q.is(how, "deflected")) return say(s_pent_deflect);
+    if (q.is(how, "satans power")) return say(s_pent_both);
+  }
   if (attacker == targ) {
+    // Quake's deathmatch 4 and 5: the arc gun under water that kills only its firer.
+    if (quake_rules(q) & q.is(how, "discharged")) return say(s_self_electrocute);
     if (q.is(how, "gibbed by a grenade")) return say(s_self_gl);
     if (q.is(how, "blown apart")) return pick(s_self_rl);
     if (q.is(how, "electrocuted")) {
@@ -156,6 +163,12 @@ int32_t death_words(A& q, int32_t targ, int32_t attacker) {
       return say(s_obit_gl);
     }
     if (q.is(how, "blown apart")) {
+      if (gib & quad & quake_rules(q)) {  // Quake's: 30%, 30% and 40%
+        const float r = q.random();
+        if (r < 0.3f) return say(s_obit_rl_quad_1);
+        if (r < 0.6f) return say(s_obit_rl_quad_2);
+        return say(s_obit_rl_quad_3);
+      }
       if (gib & quad) return pick(s_obit_rl_quad);
       if (gib) return say(s_obit_rl_gib);
       return say(s_obit_rl);
@@ -202,6 +215,12 @@ int32_t death_words(A& q, int32_t targ, int32_t attacker) {
 // (sv_dropquad, sv_dropring, sv_dropsuit, off by default).
 void drop_on_death(A& q) {
   if (on(q.cvar(q.s(s_sv_droppack)))) backpack_drop(q);
+  if (quake_rules(q)) {  // Quake's: the server's (or local) info keys `dq` and `dr`
+    if (on(number_of(q, q.infokey(q.world(), q.s(s_dq))))) power_drop(q, kItQuad);
+    if (on(number_of(q, q.infokey(q.world(), q.s(s_dr))))) power_drop(q, kItInvisibility);
+    if (on(q.cvar(q.s(s_sv_dropsuit)))) power_drop(q, kItSuit);
+    return;
+  }
   if (on(q.cvar(q.s(s_sv_dropquad)))) power_drop(q, kItQuad);
   if (on(q.cvar(q.s(s_sv_dropring)))) power_drop(q, kItInvisibility);
   if (on(q.cvar(q.s(s_sv_dropsuit)))) power_drop(q, kItSuit);

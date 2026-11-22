@@ -362,8 +362,6 @@ void secret_touch(A& q) {
   trigger_fire(q);
 }
 
-// A counter (Quake's rules): fires on its `count`th use (2 when unset), counting down out loud to
-// a player unless spawnflag 1 keeps it quiet.
 // void() SpectatorConnect and SpectatorDisconnect: under Quake's rules everyone is told when a
 // spectator comes and goes; the arena's own keep quiet.
 void SpectatorConnect(A& q) {
@@ -379,6 +377,26 @@ void SpectatorDisconnect(A& q) {
           {q.s(s_spectator_word), q.i(q.self(), q.L.f.netname), q.s(s_left_the_game)});
 }
 
+// void() SpectatorThink: under Quake's rules impulse 1 takes the spectator to the next
+// deathmatch spot in turn, facing as it faces.
+void SpectatorThink(A& q) {
+  const int32_t me = q.self();
+  if (!quake_rules(q) || (q.f(me, q.L.f.impulse) != 1)) {
+    q.set_f(me, q.L.f.impulse, 0);
+    return;
+  }
+  q.set_f(me, q.L.f.impulse, 0);
+  int32_t spot = q.find(q.i(me, q.L.f.goalentity), q.L.f.classname, q.s(s_info_player_deathmatch));
+  if (spot == 0) spot = q.find(q.world(), q.L.f.classname, q.s(s_info_player_deathmatch));
+  if (spot == 0) return;
+  q.set_i(me, q.L.f.goalentity, spot);
+  q.setorigin(me, q.v(spot, q.L.f.origin));
+  q.set_v(me, q.L.f.angles, q.v(spot, q.L.f.angles));
+  q.set_f(me, q.L.f.fixangle, 1);
+}
+
+// A counter (Quake's rules): fires on its `count`th use (2 when unset), counting down out loud to
+// a player unless spawnflag 1 keeps it quiet.
 void trigger_counter(A& q) {
   const int32_t me = q.self();
   if (!quake_rules(q)) {

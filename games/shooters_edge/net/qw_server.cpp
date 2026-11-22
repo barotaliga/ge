@@ -991,6 +991,15 @@ void qw_print_all(QwServer& s, const std::string& text) {
     if (s.clients[j].state == ConnState::spawned) client_print(s, j, 2, text);
 }
 
+void qw_shutdown(QwServer& s, const std::string& text) {
+  for (int j = 0; j < sh::kMaxClients; j++) {
+    // A listen server's own seat is the window itself, which closes with it.
+    if (s.clients[j].state != ConnState::spawned || s.clients[j].local) continue;
+    client_print(s, j, 2, text);  // goes with the disconnect's first datagram
+    qw_drop(s, j, "server shutdown");
+  }
+}
+
 int qw_count(const QwServer& s, ConnState at_least) {
   int n = 0;
   for (const QwClient& c : s.clients)
@@ -1209,9 +1218,11 @@ void qw_frame(QwServer& s, int64_t now_us) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     QwClient& c = s.clients[i];
     if (c.state == ConnState::free || c.local) continue;
-    if (c.ch.overflow)
+    if (c.ch.overflow) {
+      const std::string name = c.name;
       qw_drop(s, i, "reliable channel overflowed");
-    else if (s.now - c.ch.last_received > s.cfg.timeout_s) {
+      qw_print_all(s, name + " overflowed\n");  // everyone told, as the timeout is
+    } else if (s.now - c.ch.last_received > s.cfg.timeout_s) {
       const std::string name = c.name;
       qw_drop(s, i, "timed out");
       qw_print_all(s, name + " timed out\n");
