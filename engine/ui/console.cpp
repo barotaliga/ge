@@ -30,9 +30,12 @@ Color color_of(con::Rgb c, float alpha) {
 }
 
 std::string detail_of(const con::Suggestion& s) {
-  if (s.kind == con::Suggestion::Kind::cvar) return "= " + s.detail;
-  if (s.kind == con::Suggestion::Kind::alias) return ": " + s.detail;
-  return s.detail;
+  std::string out = s.kind == con::Suggestion::Kind::cvar    ? "= " + s.detail
+                    : s.kind == con::Suggestion::Kind::alias ? ": " + s.detail
+                                                             : s.detail;
+  if (!s.choices.empty()) out += "  (" + s.choices + ")";  // the few values it takes
+  if (!s.note.empty()) out += (out.empty() ? "" : "  ") + s.note;
+  return out;
 }
 
 // The text that fits `width` px, cut with "..." when it does not.
@@ -287,7 +290,9 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
   const float pad = 6 * s, gap = 24 * s;
   const float x =
       margin +
-      font.advance(std::string(view.prompt()) + (view.input().starts_with("/") ? "/" : ""), text) -
+      font.advance(std::string(view.prompt()) +
+                       view.input().substr(0, std::min(view.input().size(), view.suggest_at())),
+                   text) -
       pad;
   const float box_w = std::min(w - x - margin, name_w + gap + detail_w + 2 * pad);
   const float top = cover + 2 * s;

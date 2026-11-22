@@ -77,6 +77,8 @@ class WindowShots {
     shots_.frame(device, shown, shots, console);
     debug_copy_.frame(device, shown, debug_, console);
   }
+  // Whether gpudebug is taking a frame now (the console left out of it).
+  bool hiding() const { return debug_.hiding(); }
 
  private:
   capture::DebugShot& debug_;

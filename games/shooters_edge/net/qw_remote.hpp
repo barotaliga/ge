@@ -265,6 +265,7 @@ struct Remote {
   // another the frame the setting moves; `port_note` says a port that would not open (the join
   // prints it), the socket then on any free port.
   int own_port = -1;
+  bool own_v6 = false;  // the client's socket is IPv6's (an IPv6 server joined)
   std::string port_note;
 };
 

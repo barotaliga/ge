@@ -10,9 +10,11 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <numbers>
 #include <sstream>
 #include <vector>
 
@@ -332,8 +334,8 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   return g;
 }
 
-// THE MAP'S OWN SKY BOX: `r_skyname` (`chosen`), else the worldspawn's `sky` (or `_sky`, or
-// `skyname`), names six pictures
+// THE MAP'S OWN SKY BOX: the one `sky` typed for this map (classic/sky_typed.hpp, turned as typed),
+// else `r_skyname`, else the worldspawn's `sky` (or `_sky`, or `skyname`), names six pictures
 // (files.hpp's `sky_box_files`), read and built into the scene's box (brush/app/sky_box.hpp),
 // drawn where the pack's sky is drawn. A box with a picture missing or unreadable is not drawn:
 // the sky texture's layers are, with a status line saying why. A Quake II map's sky is the one its
@@ -341,8 +343,9 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
 // and `skyrotate`. A map in a sky group (`skygroup`, classic/content/map_groups.hpp) draws the box
 // named after its group in place of any other.
 void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba::Scene& scene,
-                  const std::string& chosen, std::string_view map) {
-  std::string name = chosen;
+                  const look::Picture& picture, std::string_view map) {
+  const bool typed = picture.sky_typed.for_map(map);
+  std::string name = typed ? picture.sky_typed.name : picture.sky_name;
   if (scene.map.family == ge::brush::Family::v38) {
     sv::Q2WireOptions sent;
     sv::q2_sky(scene.map, sent);
@@ -358,7 +361,11 @@ void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba:
     if (name.empty()) name = world.get("_sky");
     if (name.empty()) name = world.get("skyname");
   }
-  if (files.groups)
+  if (typed) {
+    std::copy(picture.sky_typed.axis.begin(), picture.sky_typed.axis.end(), scene.sky_axis);
+    scene.sky_rotate = picture.sky_typed.rotate;
+  }
+  if (files.groups && !typed)
     if (std::string group = ge::classic::content::group_of(files.groups->skies, map);
         !group.empty())
       name = std::move(group);
@@ -490,7 +497,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
             : "shooters_edge: " + lit_path + " was made for another build of " + map.name +
                   "; drawn with the map's own light");
   }
-  read_sky_box(files, map_palette, r->scene, picture.sky_name, map.name);
+  read_sky_box(files, map_palette, r->scene, picture, map.name);
   // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
   // adds its bounce under the live lights (look.cpp).
   if (picture.ce.rebake && !cache.empty()) {
@@ -684,6 +691,26 @@ void resize_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t hei
 void own_sky(WorldDraw& f, bool own) { f.own_sky = own; }
 
 void from_above(WorldDraw& f, bool on) { f.from_above = on; }
+
+double time_refresh(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFrame& fx,
+                    int frames, bool one_frame, int width, int height,
+                    const std::function<wgpu::TextureView()>& acquire,
+                    const std::function<void()>& present) {
+  ge::ui::DrawList none;
+  none.begin(width, height);
+  const double heading = view.heading;
+  const auto from = std::chrono::steady_clock::now();
+  wgpu::TextureView target;
+  for (int i = 0; i < frames; ++i) {
+    if (!one_frame || !target) target = acquire();
+    if (!target) return 0;
+    view.heading = heading + 2 * std::numbers::pi * i / frames;
+    draw_world(d, f, view, fx, nullptr, 0, none, target);
+    if (!one_frame) present();
+  }
+  if (one_frame) present();
+  return std::chrono::duration<double>(std::chrono::steady_clock::now() - from).count();
+}
 
 bool world_stale(const WorldDraw& f) {
   const look::Picture& a = f.made;

@@ -44,6 +44,10 @@ TEST(s_auto_focus_silences_a_window_minimised_or_out_of_focus) {
   con.execute("s_auto_focus 2");
   CHECK(ge::platform::heard_volume(w, false, false) == 0);
   CHECK(ge::platform::heard_volume(w, true, false) == 0.7);
+  con.execute("s_enable 0");  // no sound at all, in focus or not
+  CHECK(ge::platform::heard_volume(w, true, false) == 0);
+  con.execute("s_enable 2");  // another game's other mixer: ours plays
+  CHECK(ge::platform::heard_volume(w, true, false) == 0.7);
 }
 
 TEST(the_window_style_follows_win_noborder_notitle_alwaysontop_and_noresize) {
