@@ -661,6 +661,7 @@ void command_packet(QwClientEnd& c, const gn::Address& from, const uint8_t* data
                              "|\nYou may need to reload your server browser and QuakeWorld.\n" +
                              bar + "\n");
       c.localid.clear();
+      c.localid_refused = true;
       return;
     }
   }

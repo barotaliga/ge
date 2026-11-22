@@ -267,6 +267,7 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   // accept), and the commands accepted, for the caller to run.
   std::string localid;
   bool commands_unchecked = true;
+  bool localid_refused = false;  // a wrong id cleared `localid` (the caller clears its setting)
   std::vector<std::string> local_commands;
   std::vector<ClientSound> heard;  // the sounds read this tick (cleared as the tick starts)
   float set_angles[3] = {};        // the server's last turn of the player (setangle), degrees

@@ -541,7 +541,7 @@ std::string remote_queue_step(Remote& r, std::vector<std::string>& said) {
 
 void remote_queue_frame(Remote& r, ge::console::Console& con) {
   // A server browser's commands from this machine (`localid`), and the id it got wrong cleared.
-  if (std::exchange(r.localid_cleared, false)) con.execute("localid \"\"");
+  if (std::exchange(r.end.localid_refused, false)) con.execute("localid \"\"");
   for (const std::string& line : std::exchange(r.end.local_commands, {})) con.execute(line);
   std::vector<std::string> said;
   const std::string found = remote_queue_step(r, said);
@@ -973,7 +973,6 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     }
   }
   r.end.oob_prints.clear();
-  if (r.end.localid != r.localid) r.localid_cleared = true;
   if (r.end.stage != r.said) {
     r.said = r.end.stage;
     std::string line = remote_stage_words(r.said) + r.server_name;
