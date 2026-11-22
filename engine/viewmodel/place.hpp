@@ -45,7 +45,7 @@
 // ge:keywords gun-bob weapon-bob sway weapon-sway lag inertia kick recoil dip landing switch
 // ge:keywords lower raise put-away idle breathing viewmodel-fov frame_viewmodel placement-row
 // ge:keywords breath idle-sway weapon-breathing exertion out-of-breath wander
-// ge:keywords depth-scale stubby-gun viewmodel-size
+// ge:keywords depth-scale stubby-gun viewmodel-size game_turn game_shift_m
 // ge:keywords held_to_world held_dir_to_world muzzle-world lens-match muzzle_to_world muzzle-pose
 // ge:skill render camera
 // ge:test tests/viewmodel_place_test.cpp
@@ -106,6 +106,10 @@ struct PlaceInput {
   double shot = 0;     // a shot fired this frame: its size (0: none)
   double landing = 0;  // a landing this frame: its fall speed, m/s (0: none)
   double lowered = 0;  // the target: 0 held up, 1 put away
+  // A game's own sway and offset on top (a server that sends the gun's angles and place): the
+  // turn (yaw right, pitch up, roll right side down, rad) and the shift (right, up, forward, m).
+  double game_turn[3] = {0, 0, 0};
+  double game_shift_m[3] = {0, 0, 0};
 };
 
 struct PlaceState {

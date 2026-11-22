@@ -35,6 +35,12 @@
 
 namespace shooters_edge::client {
 
+// Quake II's server's sway on the held weapon into `in` (its `game_sway` on): `gun_angles`
+// degrees (pitch down, yaw left, roll right side down) as the hand's turn, `gun_offset` units
+// along the world's axes as its shift along the view of `view_angles` (degrees).
+void q2_gun_sway(ge::shooter::Vec3f gun_angles, ge::shooter::Vec3f gun_offset,
+                 ge::shooter::Vec3f view_angles, view::HandInput& in);
+
 struct HeldState {
   view::Hand hand;
   float attack_finished = 0;  // the last frame's

@@ -69,6 +69,23 @@ TEST(at_rest_it_sits_at_its_offset) {
   CHECK(std::fabs(p.m[0] - 1) < 1e-12 && std::fabs(p.m[5] - 1) < 1e-12);
 }
 
+TEST(a_games_own_turn_and_shift_go_on_top_at_once) {
+  // A server's gun angles and place (Quake II's): added as given, no follower between.
+  const vm::PlaceRow row = still_classic();
+  vm::PlaceState st;
+  vm::PlaceInput in;
+  in.game_turn[2] = 0.1;      // rolled right side down
+  in.game_shift_m[1] = 0.02;  // lifted
+  vm::Placement p;
+  for (int i = 0; i < 30; ++i) p = vm::frame_viewmodel(row, in, st, kDt);
+  CHECK(std::fabs(p.turn[2] - 0.1) < 1e-12 && std::fabs(p.shift_m[1] - 0.02) < 1e-12);
+  CHECK(std::fabs(p.m[1 * 4 + 3] - (row.offset_m[1] + 0.02)) < 1e-12);
+  CHECK(std::fabs(p.m[0] - std::cos(0.1)) < 1e-9);  // the right axis tipped by the roll
+  vm::PlaceState half;
+  p = vm::frame_viewmodel(row, in, half, kDt, 0.5);  // the comfort scale halves it
+  CHECK(std::fabs(p.turn[2] - 0.05) < 1e-12);
+}
+
 TEST(a_depth_under_one_squashes_only_the_forward_axis) {
   vm::PlaceRow row = still_classic();
   row.depth = 0.75;

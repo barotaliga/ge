@@ -176,6 +176,10 @@ Placement frame_viewmodel(const PlaceRow& row, const PlaceInput& in, PlaceState&
   p.turn[0] = motion * lag_yaw;
   p.turn[1] = motion * (lag_pitch + rise + breath_pitch) - away * row.lower_pitch;
   p.turn[2] = 0;
+  for (size_t k = 0; k < 3; ++k) {  // the game's own sway and place on top
+    p.turn[k] += motion * in.game_turn[k];
+    p.shift_m[k] += motion * in.game_shift_m[k];
+  }
   p.exertion = st.exertion;
   p.breath = motion * breath;
 

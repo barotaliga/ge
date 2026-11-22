@@ -308,6 +308,13 @@ void q2_spawn_lines(Q2Server& s, const std::vector<char>& inhibited) {
       say(s, c.empty() ? std::string("ED_CallSpawn: NULL classname")
                        : c + " doesn't have a spawn function");
       e.gone = true;
+    } else if ((monster_class(c) || c == "turret_driver") && !dm(s) && has("item") &&
+               sq_item(b.get_any_case("item")) < 0) {
+      say(s, std::string(c)
+                 .append(" at ")
+                 .append(at)
+                 .append(" has bad item: ")
+                 .append(b.get_any_case("item")));
     } else if (c == "path_corner" && e.targetname.empty()) {
       say(s, "path_corner with no targetname at " + at);
       e.gone = true;
@@ -358,6 +365,69 @@ void q2_spawn_lines(Q2Server& s, const std::vector<char>& inhibited) {
     } else if (c == "trigger_gravity" && !has("gravity")) {
       say(s, "trigger_gravity without gravity set at " + at);
     }
+  }
+}
+
+int q2_ramp_light(Q2Server& s, int i) {
+  int light = -1;
+  const Q2Entity& e = s.entities[size_t(i)];
+  for (size_t t = 0; t < s.entities.size(); t++) {
+    const Q2Entity& l = s.entities[t];
+    if (l.gone || l.targetname != e.target) continue;
+    if (l.classname == "light")
+      light = static_cast<int>(t);
+    else
+      say(s, e.classname + " at " + q2_pos(e.origin) + " target " + e.target + " (" + l.classname +
+                 " at " + q2_pos(l.origin) + ") is not a light");
+  }
+  if (light < 0) {
+    say(s, e.classname + " target " + e.target + " not found at " + q2_pos(e.origin));
+    s.entities[size_t(i)].gone = true;
+  }
+  return light;
+}
+
+void q2_start_lines(Q2Server& s) {
+  for (const Q2Entity& e : s.entities) {  // the elevators set up
+    if (e.gone || e.classname != "trigger_elevator") continue;
+    if (e.target.empty()) {
+      say(s, "trigger_elevator has no target");
+      continue;
+    }
+    int t = -1;
+    for (size_t k = 0; k < s.entities.size() && t < 0; k++)
+      if (!s.entities[k].gone && s.entities[k].targetname == e.target) t = static_cast<int>(k);
+    if (t < 0)
+      q2_pick_missing(s, e.target, "trigger_elevator unable to find target " + e.target);
+    else if (s.entities[size_t(t)].classname != "func_train")
+      say(s, "trigger_elevator target " + e.target + " is not a train");
+  }
+  for (const Q2Monster& m : s.monsters) {  // the monsters started
+    const Q2Entity& e = s.entities[size_t(m.entity)];
+    if (e.gone || m.spare || e.block < 0) continue;  // a boss's or a spawner's spare
+    const std::string at = e.classname + " at " + q2_pos(e.origin);
+    bool point = false, other = false;
+    const std::string combattarget = s.map->entities[size_t(e.block)].get_any_case("combattarget");
+    for (const Q2Entity& t : s.entities) {
+      if (t.gone) continue;
+      if (!e.target.empty() && t.targetname == e.target) {
+        point = point || t.classname == "point_combat";
+        other = other || t.classname != "point_combat";
+      }
+      if (!combattarget.empty() && t.targetname == combattarget && t.classname != "point_combat")
+        say(s, std::string(at)
+                   .append(" has a bad combattarget ")
+                   .append(combattarget)
+                   .append(" : ")
+                   .append(t.classname)
+                   .append(" at ")
+                   .append(q2_pos(t.origin)));
+    }
+    if (point && other) say(s, at + " has target with mixed types");
+    if (!e.target.empty() && !point && !other)
+      q2_pick_missing(s, e.target,
+                      e.classname + " can't find target " + e.target + " at " + q2_pos(e.origin));
+    if (m.start_solid) say(s, e.classname + " in solid at " + q2_pos(e.origin));
   }
 }
 
