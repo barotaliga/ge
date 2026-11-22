@@ -18,9 +18,6 @@
 //   returns to CLASSIC ENHANCED. It keeps the modern look in both looks, since its progress panel
 //   is drawn for that view. The run goes on in the background with the menu closed.
 //
-// OPTIONS ▸ SERVER SETTINGS shows the settings of the server the player is on, the ones a vote
-// decides marked, and asks before calling a vote (server_page.hpp, over the host's `sheet`).
-//
 // OPTIONS ▸ SCREENSHOTS shows the screenshots F12 took (gallery_page.hpp over the engine's
 // gallery, capture/gallery.hpp): the window names their folder with `set_screenshots`; the arrows
 // and the pointer move through them, ENTER views one, DELETE (or BACKSPACE, a Mac's delete) asks

@@ -1,7 +1,7 @@
 // OPTIONS > SERVER SETTINGS (server_page.hpp).
 //
 // ge:summary The server settings pages filled from the sheet; changes sent, votes asked on leaving
-// ge:keywords ServerPage fill vote-question serversheet
+// ge:keywords server-page fill vote-question serversheet
 // ge:skill ui net
 // ge:test tests/shooters_edge_server_page_test.cpp
 #include "shooters_edge/menu/server_page.hpp"

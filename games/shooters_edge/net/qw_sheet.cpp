@@ -1,6 +1,6 @@
 // Shooter's Edge's QuakeWorld server's settings sheet (qw_sheet.hpp).
 //
-// ge:summary The QuakeWorld server's sheet rows from its rules, votes and aids; sent as svc ge_sheet
+// ge:summary The QuakeWorld server's sheet rows from its rules, votes and aids; svc ge_sheet
 // ge:keywords qw_sheet_rows qw_send_sheet qw_sheet_group
 // ge:skill net shooter
 // ge:test tests/shooters_edge_qw_sheet_test.cpp

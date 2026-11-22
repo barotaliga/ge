@@ -17,7 +17,7 @@
 // vote changes a setting or the map puts one back. A stock QuakeWorld client never agrees the bit,
 // so never asks.
 //
-// ge:summary Shooter's Edge's QuakeWorld server's settings sheet: the rows and the svc that sends them
+// ge:summary Our QuakeWorld server's settings sheet: the rows and the svc that sends them
 // ge:keywords server-settings settings-sheet ge_sheet votable player-help qw_sheet_rows
 // ge:keywords qw_send_sheet settings-sheet-bit
 // ge:skill net shooter

@@ -19,7 +19,7 @@
 //
 // Quake's pages write their words in capitals, Quake II's in small letters (`lower`).
 //
-// ge:summary OPTIONS > SERVER SETTINGS: the server's settings, votes marked, a vote asked on leaving
+// ge:summary OPTIONS > SERVER SETTINGS: the server's settings, votes marked, a vote asked on leave
 // ge:keywords server-settings menu server-page vote-question call-a-vote asterisk serversheet
 // ge:keywords settings-sheet player-help votable browse-settings
 // ge:skill ui net
