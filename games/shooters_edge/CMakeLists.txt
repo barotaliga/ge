@@ -203,7 +203,7 @@ target_compile_definitions(shooters_edge_rules_campaign_package PRIVATE SE_RULES
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
-     "/client/(main|window_cvars|install_ask|bot_view|world_draw|world_extras|world_fx|world_fx_book|world_fx_blood|world_fx_q2|world_fx_screen|world_fx_wounds|world_lasers|world_models|burning|demo_video|title|map_load)\.cpp$")
+     "/client/(main|window_cvars|install_ask|bot_view|bot_client|world_draw|world_extras|world_fx|world_fx_book|world_fx_blood|world_fx_q2|world_fx_screen|world_fx_wounds|world_lasers|world_models|burning|demo_video|title|map_load)\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
@@ -258,6 +258,7 @@ if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
   # The window, `se` on disk at the build's root (build/<preset>/se) beside `sesv` and the hops;
   # the target keeps the game's name, so `make run:shooters_edge` builds it.
   add_executable(shooters_edge client/main.cpp client/window_cvars.cpp client/bot_view.cpp
+                 client/bot_client.cpp
                  client/install_ask.cpp)
   set_target_properties(shooters_edge PROPERTIES OUTPUT_NAME se
                         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
