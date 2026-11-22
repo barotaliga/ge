@@ -362,6 +362,23 @@ bool qw_admin(QwServer& s, const std::string& line, std::string& out) {
     out = qw_status_table(s);
     return true;
   }
+  if (cmd == "sv_gamedir") {  // the game folder the server info names; its own files unchanged
+    if (w.count == 1) {
+      out = "Current *gamedir: " + info_get(s.serverinfo, "*gamedir") + "\n";
+    } else if (w.count > 2) {
+      out = "Usage: sv_gamedir <newgamedir>\n";
+    } else {
+      const std::string dir = pg::word(w, 1);
+      if (dir.find("..") != std::string::npos || dir.find_first_of("/\\:") != std::string::npos) {
+        out = "*Gamedir should be a single filename, not a path\n";
+      } else {
+        // Clients read it at their next connection, so none is told now.
+        info_set(s.serverinfo, "*gamedir", dir, kServerInfoBytes);
+        s.cfg.gamedir = dir.empty() ? ServerConfig{}.gamedir : dir;
+      }
+    }
+    return true;
+  }
   if (cmd == "user") {  // one player's user info, a key a line in a column of 20
     const std::string who = pg::word(w, 1);
     if (who.empty()) {

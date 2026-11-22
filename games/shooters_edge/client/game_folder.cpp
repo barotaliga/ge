@@ -577,4 +577,16 @@ bool load_asked_save(Listen& listen, const GameContent& content, const SearchPat
   return listen_load(listen, *content.campaign, lo, bytes, name, error);
 }
 
+void add_path_command(ge::console::Console& con, const SearchPath& files) {
+  con.add_command("path", "path: the folders and archives the game's files come from",
+                  [&files](ge::console::Console& c, const ge::console::Args&) {
+                    std::string text = ge::classic::content::search_path_text(files);
+                    while (!text.empty()) {
+                      const size_t nl = text.find('\n');
+                      c.print(text.substr(0, nl));
+                      text.erase(0, nl == std::string::npos ? text.size() : nl + 1);
+                    }
+                  });
+}
+
 }  // namespace shooters_edge::client

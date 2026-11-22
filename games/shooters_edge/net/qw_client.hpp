@@ -83,6 +83,8 @@ using ClientTalk = bool (*)(int tick, int seed);
 inline constexpr size_t kStuffedKept = 256;
 
 struct ClientConfig {
+  // Keys the player set by `fullinfo` that no setting of the window holds, sent as given.
+  std::vector<std::pair<std::string, std::string>> extra_info;
   std::string name = "player";
   std::string skin = "base";
   std::string model;  // the user info's `model`: the player figure in players/<model>/ ("": none)

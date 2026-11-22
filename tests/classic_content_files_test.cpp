@@ -86,6 +86,11 @@ TEST(the_base_folder_layers_its_packs_and_loose_files) {
   CHECK(maps.size() == 2 && maps[0] == "start" && maps[1] == "a");
   CHECK(cl::archive_paths(sp).size() == 2);
   CHECK(cl::content_packs(sp).size() == 2);
+  // `path`: the header, then the source searched first at the top, a pack with its count.
+  const std::string path = ge::classic::content::search_path_text(sp);
+  CHECK_MSG(path.starts_with("Current search path:\n"), path);
+  const size_t p1 = path.find("PAK1.PAK (1 files)"), p0 = path.find("pak0.pak (3 files)");
+  CHECK_MSG(p1 != std::string::npos && p0 != std::string::npos && p1 < p0, path);
   fs::remove_all(root);
 }
 

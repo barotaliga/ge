@@ -92,7 +92,14 @@ console refuses both ("Can't "tell", not connected"); `version` on the dedicated
 the game's version. Quake's spare program settings (`noexit`, `nomonsters`, `gamecfg`, `temp1`,
 `scratch1` to `scratch4`, `savedgamecfg` and `saved1` to `saved4`, the last five kept in the
 config) are registered so a program reads and sets them. There is no "server crashed" line:
-our server never stops on a fault, since a mod's error is caught and the game goes on.
+our server never stops on a fault, since a mod's error is caught and the game goes on. A Quake
+single-player program's `dprint` lines show only with `developer 1`; a multiplayer program's
+always do. A QuakeWorld server's info carries `*progs` (the mod program file's CRC-16) and `*cheats ON` with the game rule `cheats 1`; `sv_gamedir` changes only
+the game folder the server info and the next handshake name; `sv_highchars 0` strips a joining
+player's info to plain characters and turns a later `setinfo`'s coloured letters plain; and a
+player whose `pmodel` or `emodel` differs from the CRC-16 of the server's own player or eyes model
+is announced to everyone at his `begin` ("<name> WARNING: non standard player/eyes model
+detected"), the player kept (`net/qw_signon.cpp`).
 
 Quake II's ledger (`porting/shooters-edge/q2-ledger-server.md`) is the checklist; the facts of the
 operator's words, the player's queries and the connect checks are in

@@ -238,6 +238,15 @@ TEST(cam_thirdperson_sits_behind_the_watched_player_and_draws_him) {
   CHECK(std::abs((back.eye[0] - own.eye[0]) - (d0.x - o.x)) < 1e-4);
   CHECK(std::abs((back.eye[2] - own.eye[2]) - (d0.z - o.z)) < 1e-4);
   CHECK(std::abs(back.eye[1] - own.eye[1]) < 1e-6);
+  {  // cam_side (Quake's chase_right): looking along +x, his left is +y, whatever the pitch
+    cl::DemoEyes l = e;
+    l.side = 30;
+    const ge::render::FrameView left =
+        cl::demo_eyes_view(s, s, l, classic(), nullptr, {}, kFov, 0, 0);
+    const cam::Vec3 d1 = cl::engine_point({-100, 30, 0});
+    CHECK(std::abs((left.eye[0] - own.eye[0]) - (d1.x - o.x)) < 1e-4);
+    CHECK(std::abs((left.eye[2] - own.eye[2]) - (d1.z - o.z)) < 1e-4);
+  }
   s.angles.x = 45;  // looking down: the camera rises behind him
   back = cl::demo_eyes_view(s, s, e, classic(), nullptr, {}, kFov, 0, 0);
   CHECK(back.eye[1] > own.eye[1] + 0.5);

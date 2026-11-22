@@ -20,7 +20,7 @@
 // ge:keywords on_disk_any_case any-case letter-case
 // ge:keywords open_game_dir loose-files palette maps map_names content_packs archive_paths
 // ge:keywords map_lit lit coloured-light lits sky_box_files sky-box skybox env content-layer
-// ge:keywords client_folder
+// ge:keywords client_folder search_path_text path-command
 // ge:skill classic vfs shooter
 // ge:test tests/classic_content_files_test.cpp
 #pragma once
@@ -116,6 +116,9 @@ std::vector<std::string> map_names(
 
 // Every archive mounted (packs and zips), by its path, in mount order.
 std::vector<std::string> archive_paths(const SearchPath& path);
+// The console's `path`: "Current search path:", then a line a source, the one searched first at
+// the top: an archive's path and "(<n> files)", a folder's path alone.
+std::string search_path_text(const SearchPath& path);
 // The numbered packs of the first folder mounted (the base game's: pak0, pak1, ...), in order,
 // with its content zip `pak0.pk3` first when it has no `pak0.pak` (the zip standing in for it):
 // what classic-enhance keys its cache by (classicenhance/cached.hpp's `find_cache`).

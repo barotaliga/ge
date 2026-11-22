@@ -15,11 +15,11 @@ and a row found later is added here first. Progress is reported as the missing c
 
 | Section | Rows | Done | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- |
-| Client | 508 | 319 | 26 (0 / 0 / 26) | 163 |
-| Server | 316 | 267 | 14 (0 / 0 / 14) | 35 |
+| Client | 508 | 329 | 16 (0 / 0 / 16) | 163 |
+| Server | 316 | 273 | 8 (0 / 0 / 8) | 35 |
 | Game | 245 | 226 | 1 (0 / 0 / 1) | 18 |
 | Tools | 1 | 1 | 0 (0 / 0 / 0) | 0 |
-| **All** | **1070** | **813** | **41 (0 / 0 / 41)** | **216** |
+| **All** | **1070** | **829** | **25 (0 / 0 / 25)** | **216** |
 
 (Built 2026-11-21 against main at #1237 with 217 missing (9 / 49 / 159); the first fill, Quake's
 deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.
@@ -27,7 +27,9 @@ The second, the shared settings, masters and spectator lines, took it to 120; th
 rest of the deathmatch rules, the server's lines and the idle sway, to 88; the fourth, joining a
 NetQuake server, Quake's tell, ping and version, the runes and gates, the menu words, user and
 msg, the ambience and mouse settings and the rows other threads had already built, to 46; Quake
-II's console fill (sizeup, sizedown, play, playvol, stopsound, built once for every game) to 41.)
+II's console fill (sizeup, sizedown, play, playvol, stopsound, built once for every game) to 41;
+the fifth, the QuakeWorld server's star keys and checks and the client's path, rerecord, fullinfo,
+chase_right and old config names, to 25.)
 
 ## CLIENT: the Quake and QuakeWorld clients, item by item
 
@@ -75,7 +77,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C29 | `alias` (both) | make a command from others, or list them | done | engine/console/console_builtins.cpp |  |
 | C30 | `cmd` (both) | send the rest of the line to the server as a command | done | games/shooters_edge/net/game_commands.cpp |  |
 | C31 | `wait` (both) | hold the rest of the command buffer to the next frame | done | engine/console/console_builtins.cpp |  |
-| C32 | `path` (both) | print the search path (folders and packs) | missing | no console command lists the search path (secli pak ls shows a folder's mounts outside the game) | 3 |
+| C32 | `path` (both) | print the search path (folders and packs) | done | games/shooters_edge/client/game_folder.cpp add_path_command over plugins/classic/content/files.cpp search_path_text: the header, the first searched at the top, an archive with its file count | 3 |
 | C33 | `toggleconsole` (both) | the console down or up | done | engine/console/view.cpp |  |
 | C34 | `messagemode` (both) | type a chat line to everyone | done | engine/console/talk.cpp |  |
 | C35 | `messagemode2` (both) | type a chat line to the team | done | engine/console/talk.cpp |  |
@@ -153,7 +155,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C107 | `slist` (q1) | search the LAN for NetQuake games | not-taken | covered by JOIN A GAME's server list (menu/servers_page.cpp), which finds LAN and master servers; NetQuake servers are not joined (see C-connect-nq) |  |
 | C108 | `listen` (q1) | allow or forbid network players on your game | done | the host page's SERVER row (menu/main_menu.cpp) opens the game to others |  |
 | C109 | `maxplayers` (q1) | the player count of the next game | done | the host page's MAX PLAYERS (maxclients); no maxplayers word |  |
-| C110 | `port` (q1) | the UDP port of the next game | missing | no port word in the window (the dedicated server takes a port) | 3 |
+| C110 | `port` (q1) | the UDP port of the next game | done | the Quake spelling of sv_port (client/cvar_layers.cpp): the port the next game is served on (0: nobody joins) | 3 |
 | C111 | `+showscores` / `-showscores` (both) | the scoreboard while held | done | games/shooters_edge/client/controls.cpp |  |
 | C112 | `play` (both) | play a sound file once | done | games/shooters_edge/client/menu_sound.cpp: each sound once, "Couldn't load sound/<name>" when missing | - |
 | C113 | `playvol` (both) | play a sound file at a volume | done | games/shooters_edge/client/menu_sound.cpp | - |
@@ -173,7 +175,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C127 | `centerview` (both) | level the view smoothly (v_centerspeed) | done | plugins/shooter/controls.cpp |  |
 | C128 | `flush` (both) | empty the model cache | not-taken | a developer or profiling tool: ours are framestats, the labs and ge |  |
 | C129 | `changing` (qw) | the server's word before a map change: stop drawing, keep the connection | done | games/shooters_edge/net/qw_client.cpp |  |
-| C130 | `rerecord` (qw) | reconnect and record from the start | missing | none | 3 |
+| C130 | `rerecord` (qw) | reconnect and record from the start | done | net/qw_match_record.cpp: the recording stopped, the last server joined again and recorded from the start of the join | 3 |
 | C131 | `skins` (qw) | fetch every player's skin again | done | games/shooters_edge/net/qw_client.cpp (as the server stuffs it) |  |
 | C132 | `allskins` (qw) | one skin on everyone, or each their own | done | plugins/classic/app/look.cpp |  |
 | C133 | `rcon` (qw) | a command to the server's console by password | done | games/shooters_edge/net/qw_admin.cpp |  |
@@ -181,7 +183,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C135 | `user` (qw) | one player's user info | done | net/qw_remote.cpp (`user <name|id>`, from the user info the server last told; net/qw_client.cpp keeps each slot's user id) | 3 |
 | C136 | `users` (qw) | every player's user id, frags and name | done | games/shooters_edge/net/qw_admin.cpp |  |
 | C137 | `setinfo` (qw) | set or list your user info | done | engine/console/console_builtins.cpp |  |
-| C138 | `fullinfo` (qw) | the whole user info in one string (the server stuffs it at connect) | missing | not a command here; the user info is built from settings at connect (net/qw_remote.cpp) | 3 |
+| C138 | `fullinfo` (qw) | the whole user info in one string (the server stuffs it at connect) | done | net/qw_remote.cpp: each pair set (a setting's key sets it, others kept for the next join); pmodel and emodel skipped, star keys refused, MISSING VALUE | 3 |
 | C139 | `fullserverinfo` (qw) | the whole server info from the server | done | games/shooters_edge/net/qw_client.cpp |  |
 | C140 | `download` (qw) | download a file from the server | done | games/shooters_edge/net/qw_client.cpp (the missing files fetched at signon); not a typed word |  |
 | C141 | `nextul` (qw) | send the next piece of an upload the server asked for | not-taken | we refuse uploads (protocol.md, clc upload) |  |
@@ -199,7 +201,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | --- | --- | --- | --- | --- | --- |
 | C149 | `chase_back` (q1, 100) | the chase camera's distance behind | done | engine/camera/cvars.cpp cl_chasedist; cam_dist (client/demo_playback.cpp) for the third person |  |
 | C150 | `chase_up` (q1, 16) | the chase camera's height | done | engine/camera/cvars.cpp cl_chaseheight |  |
-| C151 | `chase_right` (q1, 0) | the chase camera's side offset | missing | no side offset | 3 |
+| C151 | `chase_right` (q1, 0) | the chase camera's side offset | done | cam_side with Quake's spelling chase_right (client/demo_playback.cpp, demo_eyes.cpp): units to the player's left | 3 |
 | C152 | `chase_active` (q1, 0) | the view from a chase camera behind yourself | done | cam_thirdperson (client/demo_playback.cpp) in the same meaning |  |
 | C153 | `cl_upspeed` (both, 200) | swim up and down speed asked | done | plugins/shooter/controls.cpp |  |
 | C154 | `cl_forwardspeed` (both, 200) | forward speed asked | done | plugins/shooter/controls.cpp |  |
@@ -209,8 +211,8 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C158 | `cl_yawspeed` (both, 140) | turn rate of the turn keys | done | plugins/shooter/controls.cpp |  |
 | C159 | `cl_pitchspeed` (both, 150) | look rate of the look keys | done | plugins/shooter/controls.cpp |  |
 | C160 | `cl_anglespeedkey` (both, 1.5) | running multiplies the key turn rates by this | done | plugins/shooter/controls.cpp |  |
-| C161 | `_cl_name` (q1, player) | the saved name an old config carries | missing | not read: an old config.cfg's name is lost (ours keeps name) | 3 |
-| C162 | `_cl_color` (q1, 0) | the saved colours an old config carries | missing | not read: an old config.cfg's colours are lost (ours keeps topcolor and bottomcolor) | 3 |
+| C161 | `_cl_name` (q1, player) | the saved name an old config carries | done | Quake's spelling of name (client/cvar_layers.cpp) | 3 |
+| C162 | `_cl_color` (q1, 0) | the saved colours an old config carries | done | client/cvar_layers.cpp: shirt times 16 plus pants sets topcolor and bottomcolor; shown as one number | 3 |
 | C163 | `cl_shownet` (both, 0) | print each message's size or name as it is read | not-taken | a developer or profiling tool: ours are framestats, the labs and ge (showpackets is ours) |  |
 | C164 | `cl_nolerp` (q1, 0) | draw entities where the packet says, no smoothing | done | games/shooters_edge/net/qw_remote.cpp |  |
 | C165 | `lookspring` (both, 0) | the view recentres when mouse look is released | done | plugins/shooter/controls.cpp |  |
@@ -287,13 +289,13 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C236 | `timelimit` (q1, 0) | minutes that end the match | done | the window's own server (the SERVER section checks the meaning): net/qw_game.cpp, menu host page |  |
 | C237 | `teamplay` (q1, 0) | team rules | done | the window's own server (the SERVER section checks the meaning): net/qw_game.cpp, menu host page |  |
 | C238 | `samelevel` (q1, 0) | stay on the same map | done | the window's own server (the SERVER section checks the meaning): net/qw_game.cpp |  |
-| C239 | `noexit` (q1, 0) | the exit kills in deathmatch | missing | no noexit setting on the window's server | 3 |
-| C240 | `developer` (both, 0) | print developer messages (the program's dprint lines) | missing | not a setting in the window (only the module VM's server has it) | 3 |
+| C239 | `noexit` (q1, 0) | the exit kills in deathmatch | done | server/qc_server.cpp's setting, the window's listen server's too | 3 |
+| C240 | `developer` (both, 0) | print developer messages (the program's dprint lines) | done | server/qc_server.cpp developer: a Quake single-player program's dprint lines only with it on (server/bi_message.cpp) | 3 |
 | C241 | `skill` (q1, 1) | the next map's skill | done | the window's own server (the SERVER section checks the meaning): net/qw_coop_game.cpp, menu SKILL |  |
 | C242 | `deathmatch` (q1, 0) | deathmatch rules | done | the window's own server (the SERVER section checks the meaning): net/qw_game.cpp, menu GAME TYPE |  |
 | C243 | `coop` (q1, 0) | cooperative rules | done | the window's own server (the SERVER section checks the meaning): client/coop_mode.cpp |  |
 | C244 | `pausable` (q1, 1) | whether pause works in a network game | done | the window's own server (the SERVER section checks the meaning): net/qw_game.cpp |  |
-| C245 | `temp1` (q1, 0) | a spare setting some mods read | missing | none | 3 |
+| C245 | `temp1` (q1, 0) | a spare setting some mods read | done | server/qc_server.cpp's setting, the window's listen server's too | 3 |
 | C246 | `joystick` (both, 0) | use the joystick | not-taken | the old joystick axis table: devices, axes and bindings are engine/input (gamepads, sticks, wheels) and stronger |  |
 | C247 | `joybuttons` (q1, 4) | DOS joystick buttons | not-taken | the old joystick axis table: devices, axes and bindings are engine/input (gamepads, sticks, wheels) and stronger |  |
 | C248 | `auxlook` (q1, 1) | DOS aux look | not-taken | the old joystick axis table: devices, axes and bindings are engine/input (gamepads, sticks, wheels) and stronger |  |
@@ -585,7 +587,7 @@ and the campaign on our own host hands the client the same events without the wi
 | C507 | Demos: .qwd recorded and played (qw) | a client recording of a QuakeWorld game | done | net/qw_match_record.hpp, client/demo_playback.cpp |  |
 | C508 | Screenshot files (both) | quakeNN.pcx (GL: .tga) in the game folder | done | engine/capture/screenshot.cpp (our own format and folder) |  |
 
-Count: 508 rows, 319 done, 26 missing (rank 3 26), 163 not-taken.
+Count: 508 rows, 329 done, 16 missing (rank 3 16), 163 not-taken.
 
 ## SERVER: the Quake and QuakeWorld servers, row by row
 
@@ -628,7 +630,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S16 | `localinfo [<key> <value>]` (qw) | the server's private key list the program reads with `infokey(world, ...)` | done | `server/commands.cpp` (`set_local_info`, with the program's hook) | |
 | S17 | `user <userid>` (qw) | prints one player's user info | done | net/qw_admin.cpp (`user <id|name>`: a key a line, padded to 20) | 3 |
 | S18 | `gamedir <dir>` (qw) | switches the game folder (a single name, no path: "Gamedir should be a single filename, not a path") and sets `*gamedir` | done | `sv_mod` (`engine/server/server.cpp`) and the `mod` command (`engine/server/main.cpp`) | |
-| S19 | `sv_gamedir <dir>` (qw) | changes only the `*gamedir` the server advertises | missing | `*gamedir` follows the mod folder (`net/qw_game.cpp`); not set on its own | 3 |
+| S19 | `sv_gamedir <dir>` (qw) | changes only the `*gamedir` the server advertises | done | net/qw_admin.cpp: shown, set (the server info's *gamedir and what serverdata names), a path refused | 3 |
 | S20 | `floodprot <msgs> <seconds> <silence>` (qw) | the chat flood rule (up to 10 messages tracked; stock 4 in 4 s, then 10 s silent) | done | `sv_floodprot`, `floodprot` a synonym (`net/qw_game.cpp`, `engine/server/guards.cpp`); our default is "10 1 1" | |
 | S21 | `floodprotmsg <text>` (qw) | the line a flooder reads instead of the default | done | `sv_floodprotmsg` (synonym) | |
 | S22 | `addip <ip>` (qw) | adds an address filter; missing trailing parts match anything | done | `engine/server/bans.cpp`, `admin.cpp` | |
@@ -687,7 +689,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S65 | `sv_aim` (both; q1 0.93, qw 2) | the autoaim cone's cosine; 2 in qw means no autoaim | done | `server/bi_world.cpp`: the single-player form aims by it, the multiplayer form returns the view straight (as qw's 2 does) | |
 | S66 | `sv_mintic` (qw, 0.03) | the shortest physics frame | done | `plugins/shooter/settings.cpp` | |
 | S67 | `sv_maxtic` (qw, 0.1) | the longest physics frame | done | `plugins/shooter/settings.cpp` | |
-| S68 | `developer` (both, 0) | extra console messages; q1's `dprint` only shows with it | missing | no switch on our server: `dprint` lines always reach the console (`server/bi_message.cpp`), as qw does | 3 |
+| S68 | `developer` (both, 0) | extra console messages; q1's `dprint` only shows with it | done | server/qc_server.cpp developer: a Quake single-player program's dprint only with it on; a multiplayer program's always | 3 |
 | S69 | `timeout` (qw, 65) | seconds without a packet before a client is dropped, everyone told "<name> timed out" | done | `sv_timeout` (synonym), `net/qw_server.cpp` | |
 | S70 | `zombietime` (qw, 2) | seconds a dropped slot stays taken so the last reliable message is resent | missing | a dropped slot is freed at once; the disconnect is sent twice instead (`net/qw_server.cpp`) | 3 |
 | S71 | `rcon_password` (qw) | the remote console's password; empty: no rcon | done | `engine/server/server.cpp`, `net/qw_admin.cpp` | |
@@ -698,7 +700,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S76 | `allow_download_models` (qw, 1) | files under `progs/` | done | `sv_download_models` | |
 | S77 | `allow_download_sounds` (qw, 1) | files under `sound/` | done | `sv_download_sounds` | |
 | S78 | `allow_download_maps` (qw, 1) | files under `maps/`, never from a pack | done | `sv_download_maps` | |
-| S79 | `sv_highchars` (qw, 1) | 0 strips characters outside plain printable ASCII from a joining player's user info | missing | no such switch | 3 |
+| S79 | `sv_highchars` (qw, 1) | 0 strips characters outside plain printable ASCII from a joining player's user info | done | net/qw_server.cpp (connect: plain printable bytes kept), net/qw_signon.cpp (setinfo: high bit cleared, control bytes dropped); the game rule sv_highchars | 3 |
 | S80 | `sv_phs` (qw, 1) | sounds and multicasts limited to who can hear them | done | `server/bi_message.cpp`, `qc_server.cpp` | |
 | S81 | `pausable` (both, 1) | whether players may pause | done | `server/commands.cpp`, `qc_server.cpp` | |
 | S82 | `fraglimit` (both, server info) | frags that end the match, read by the program | done | `server/qc_server.cpp` (published in the server info) | |
@@ -846,12 +848,12 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | id | item | what it does | status | ours (file) or why not | rank |
 | --- | --- | --- | --- | --- | --- |
 | S196 | `*version` (server info) | the server's version | done | `net/qw_server.cpp` | |
-| S197 | `*progs` (server info) | the program's checksum | missing | not published | 3 |
+| S197 | `*progs` (server info) | the program's checksum | done | net/qw_game.cpp: the program file's CRC-16 as a decimal; absent for the built-in rules | 3 |
 | S198 | `*gamedir` (server info) | the game folder | done | `net/qw_game.cpp` | |
-| S199 | `*cheats` (server info) | "ON" when started with cheats | missing | not published | 3 |
+| S199 | `*cheats` (server info) | "ON" when started with cheats | done | net/qw_server.cpp: ON with the game rule cheats 1 | 3 |
 | S200 | `map` (server info) | the map's name | done | `net/qw_server.cpp` | |
 | S201 | `needpass` (server info) | 1 a player password, 2 a spectator password, 3 both ("Updated needpass.") | done | `net/qw_server.cpp` | |
-| S202 | server settings in the server info (`hostname`, `maxclients`, `maxspectators`, `fraglimit`, `timelimit`, `teamplay`, `deathmatch`, `samelevel`, `spawn`, `watervis`) | each copied into the server info when set | missing | all but `maxspectators` (and `spawn`, S89) are published (`net/qw_server.cpp`, `server/qc_server.cpp`) | 3 |
+| S202 | server settings in the server info (`hostname`, `maxclients`, `maxspectators`, `fraglimit`, `timelimit`, `teamplay`, `deathmatch`, `samelevel`, `spawn`, `watervis`) | each copied into the server info when set | missing | the rules keys appear only when not zero (net/qw_server.cpp); copying them from the start moves every server info and the recordings that carry it, kept for its own PR | 3 |
 | S203 | `name` (user info) | trimmed of spaces and line ends; empty or "console" becomes "unnamed"; a taken name gets "(N)" in front; more than four changes inside 5 s kicks ("<name> was kicked for name spam", "You were kicked from the game for name spamming"); a change in play is announced "<old> changed name to <new>" | done | `net/qw_server.cpp`, `qw_signon.cpp`, `engine/server/names.hpp` (`sv_namelimit` refuses the change instead of kicking) | |
 | S204 | `rate` (user info) | the rate, held to 500..10000 | done | `net/qw_signon.cpp` (`sv_minrate`, `sv_maxrate`) | |
 | S205 | `msg` (user info) | the lowest print level sent to the player | done | `net/qw_signon.cpp` | |
@@ -859,7 +861,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S207 | `password` (user info) | the join password, removed once checked | done | `net/qw_server.cpp` | |
 | S208 | `team` (user info) | who team chat reaches | done | `engine/server/chat.cpp` | |
 | S209 | `skin`, `topcolor`, `bottomcolor` (user info) | reported in the status packet | done | `net/qw_server.cpp` | |
-| S210 | `pmodel`, `emodel` (user info) | checksums of the player and eyes models; a mismatch is announced "<name> WARNING: non standard player/eyes model detected" | missing | not checked | 3 |
+| S210 | `pmodel`, `emodel` (user info) | checksums of the player and eyes models; a mismatch is announced "<name> WARNING: non standard player/eyes model detected" | done | net/qw_signon.cpp model_check: at begin, the player and eyes models' CRC-16 against the server's; the warning to everyone, the player kept | 3 |
 | S211 | `noaim` (user info) | above 0, no autoaim for that player | done | the multiplayer form never autoaims (`server/bi_world.cpp`) | |
 | S212 | keys starting with `_` (user info) | kept from the other players | done | `net/qw_signon.cpp` (`info_public`) | |
 | S213 | `ip`, `ping` (`infokey` on a player) | the address and ping, not keys of the info | done | `server/bi_settings.cpp` | |
@@ -986,7 +988,7 @@ program's form.
 | S315 | the address filter's check (qw) | every packet from a filtered address is refused before anything else | done | `engine/server/admin.cpp` | |
 | S316 | the server's statistics (qw) | CPU use, response time and packets a frame, measured over a run of frames, shown by `status` | done | `engine/server/admin.cpp` (our own counters) | |
 
-Rows: 316 (some rows hold a group of names). Done: 267. Missing: 14 (rank 1: 0, rank 2: 0, rank 3: 14). Not-taken: 35.
+Rows: 316 (some rows hold a group of names). Done: 273. Missing: 8 (rank 1: 0, rank 2: 0, rank 3: 8). Not-taken: 35.
 
 ## GAME: the QuakeWorld game program and Quake's monsters, row by row
 
