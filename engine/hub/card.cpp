@@ -80,7 +80,7 @@ struct Board {
 
 std::string clip(std::string_view s, size_t n) { return std::string(s.substr(0, n)); }
 
-std::string right(std::string s, size_t n) {
+std::string right(const std::string& s, size_t n) {
   if (s.size() > n) return s.substr(s.size() - n);
   return std::string(n - s.size(), ' ') + s;
 }

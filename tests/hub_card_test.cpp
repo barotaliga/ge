@@ -36,7 +36,7 @@ HubSpec spec() {
 CardLook solid_look() {
   CardLook l;
   l.charset.width = l.charset.height = 128;
-  l.charset.rgba.assign(128 * 128 * 4, 0);
+  l.charset.rgba.assign(size_t{128} * 128 * 4, 0);
   for (int g = 33; g < 256; g++) {
     if (g >= 127 && g < 161) continue;
     for (int y = 0; y < 8; y++)
@@ -94,9 +94,9 @@ TEST(card_draws_the_board_over_the_still_or_the_hue) {
   CardPicture still;
   still.width = 32;
   still.height = 18;
-  still.rgba.assign(32 * 18 * 4, 200);
+  still.rgba.assign(size_t{32} * 18 * 4, 200);
   const CardPicture a = compose_card(spec(), match("1on1", 2, false), look, still, 960, 270);
-  CHECK(a.width == 960 && a.height == 270 && a.rgba.size() == 960u * 270u * 4u);
+  CHECK(a.width == 960 && a.height == 270 && a.rgba.size() == size_t{960} * 270 * 4);
   // The still darkened to three fifths where nothing is drawn (the bottom-left corner).
   const uint8_t* corner = &a.rgba[(size_t(269) * 960 + 1) * 4];
   CHECK(corner[0] == 120 && corner[1] == 120 && corner[2] == 120);

@@ -7,6 +7,8 @@
 // (client/play_content.hpp: the Play page). Built as `sehub` at the build's root by `ge_add_hub`;
 // `--help` lists its flags.
 //
+// voice: agent (a command-line tool's main: its errors are for whoever runs the hub)
+//
 // ge:summary Shooter's Edge's hub binary: the engine's hub with the game's modes and words
 // ge:keywords shooters-edge hub hubspec modes frags website server-list classic browse play
 // ge:skill net

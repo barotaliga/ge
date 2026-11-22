@@ -18,7 +18,9 @@
 // ge:keywords scoreboard team-column duel 4on4 ffa key cache
 // ge:skill net render labs
 #include <chrono>
+#include <initializer_list>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "core/num_text.hpp"
@@ -47,7 +49,8 @@ gh::CardLook own_look() {
     if (c < 32 || c == 127) continue;
     const std::string s(1, char(c));
     const gl::Rgba ink = g >= 128 ? gl::Rgba{232, 196, 96, 255} : gl::Rgba{226, 226, 226, 255};
-    gl::draw_text(sheet, (g % 16) * 8 + 1, (g / 16) * 8, s, ink);
+    const int cx = (g % 16) * 8 + 1, cy = (g / 16) * 8;
+    gl::draw_text(sheet, cx, cy, s, ink);
   }
   // The rule's glyphs: a line across the cell.
   for (int g : {0x1d, 0x1e, 0x1f})
@@ -126,6 +129,13 @@ std::vector<std::pair<std::string, gn::Status>> matches(const std::string& map,
   return out;
 }
 
+// Words joined into one string (one allocation, not a temporary each `+`).
+std::string cat(std::initializer_list<std::string_view> parts) {
+  std::string out;
+  for (const std::string_view p : parts) out += p;
+  return out;
+}
+
 gl::Picture picture(const gh::CardPicture& c) { return gl::Picture{c.width, c.height, c.rgba}; }
 
 void run(gl::Lab& lab) {
@@ -151,14 +161,14 @@ void run(gl::Lab& lab) {
     for (const auto& [game, map] : maps) {
       for (const auto& [kind, s] : matches(map, game)) {
         const gh::CardPicture card = gh::compose_card(spec, s, look, {}, w, h);
-        lab.shot({map + "-" + kind,
-                  map + ": a " + kind + "'s card over the map's hue",
-                  "The card a match on " + map +
-                      " gets with no still (no content, or a map the "
-                      "content lacks): the map's hue, the board in the lab's own charset.",
-                  "the board centred, the team column only in the 4on4, the spectators at the foot",
-                  {{"map", map}, {"match", kind}, {"game", "none"}}},
-                 picture(card));
+        lab.shot(
+            {cat({map, "-", kind}),
+             cat({map, ": a ", kind, "'s card over the map's hue"}),
+             cat({"The card a match on ", map, " gets with no still (no content, or a map the ",
+                  "content lacks): the map's hue, the board in the lab's own charset."}),
+             "the board centred, the team column only in the 4on4, the spectators at the foot",
+             {{"map", map}, {"match", kind}, {"game", "none"}}},
+            picture(card));
       }
     }
     return;
@@ -173,14 +183,15 @@ void run(gl::Lab& lab) {
     gh::CardLook look;
     std::string error;
     if (!sh::hub_card_look(content, game, look, error)) {
-      lab.fail(game + ": " + error, "Pass --content=<dir> holding " + game +
-                                        "'s install (q1/id1, q2/baseq2). Skill: net.");
+      lab.fail(cat({game, ": ", error}), cat({"Pass --content=<dir> holding ", game,
+                                              "'s install (q1/id1, q2/baseq2). Skill: net."}));
       continue;
     }
     const std::string key = sh::still_key(content, game, map, w, h);
-    lab.metric(map + ".key-same", key == sh::still_key(content, game, map, w, h) ? 1 : 0, "bool");
+    lab.metric(cat({map, ".key-same"}), key == sh::still_key(content, game, map, w, h) ? 1 : 0,
+               "bool");
     if (key.empty()) {
-      lab.fail(map + ": no such map in " + game + "'s packs", "Check --maps. Skill: net.");
+      lab.fail(cat({map, ": no such map in ", game, "'s packs"}), "Check --maps. Skill: net.");
       continue;
     }
     gh::CardPicture still;
@@ -188,27 +199,27 @@ void run(gl::Lab& lab) {
     still.height = h;
     const auto t0 = std::chrono::steady_clock::now();
     if (!sh::draw_still(content, game, map, w, h, still.rgba, error)) {
-      lab.fail(map + ": " + error, "Read the gpu: lines above. Skill: render.");
+      lab.fail(cat({map, ": ", error}), "Read the gpu: lines above. Skill: render.");
       continue;
     }
     const double ms =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-    lab.metric(map + ".still-ms", ms, "ms", gl::Det::measured);
-    lab.shot({map + "-still",
-              map + "'s still from its intermission view (" + game + ")",
-              "The map drawn once from where its intermission looks, in the classic look with "
-              "classic enhance off (the packs' own texels and lightmaps). Kept by the hub as " +
-                  map + "-" + key + ".jpg; drawn in " + ge::core::num::to_fixed(ms, 0) + " ms.",
-              "the map's own view, every wall textured, the light as the map was lit",
-              {{"map", map}, {"game", game}, {"key", key}}},
-             picture(still), gl::Det::measured);
+    lab.metric(cat({map, ".still-ms"}), ms, "ms", gl::Det::measured);
+    lab.shot(
+        {cat({map, "-still"}),
+         cat({map, "'s still from its intermission view (", game, ")"}),
+         cat({"The map drawn once from where its intermission looks, in the classic look with ",
+              "classic enhance off (the packs' own texels and lightmaps). Kept by the hub as ", map,
+              "-", key, ".jpg; drawn in ", ge::core::num::to_fixed(ms, 0), " ms."}),
+         "the map's own view, every wall textured, the light as the map was lit",
+         {{"map", map}, {"game", game}, {"key", key}}},
+        picture(still), gl::Det::measured);
     for (const auto& [kind, s] : matches(map, game)) {
       const gh::CardPicture card = gh::compose_card(spec, s, look, still, w, h);
-      lab.shot({map + "-" + kind,
-                map + ": a " + kind + "'s card",
-                "The hub's card of a " + kind + " on " + map +
-                    ": the still darkened, the board "
-                    "in the game's own glyph sheet at whole multiples of its pixels.",
+      lab.shot({cat({map, "-", kind}),
+                cat({map, ": a ", kind, "'s card"}),
+                cat({"The hub's card of a ", kind, " on ", map, ": the still darkened, the board ",
+                     "in the game's own glyph sheet at whole multiples of its pixels."}),
                 "ping, frags, the team only in the 4on4, the name; the game's own letters",
                 {{"map", map}, {"match", kind}, {"game", game}}},
                picture(card), gl::Det::measured);
