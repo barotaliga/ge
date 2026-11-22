@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "brush/areas.hpp"
 #include "classic/protocol/directions.hpp"
 #include "shooters_edge/server/md4.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
@@ -499,6 +500,20 @@ bool long_solid(const Q2WireOptions& opt) {
 
 bool to_slot(const NetEvent& e, int slot) { return (e.to >> slot) & 1u; }
 
+// The most bytes this frame's block may take: the block's own 1400, or less when the packet's
+// room (the reliable data it carries, and `written` more when this frame's reliable data joins
+// it, with 64 for the messages the caller adds after) leaves less; never under 64.
+size_t frame_cap(const Q2Wire& w, size_t written) {
+  if (w.room == 0) return size_t(kQ2MaxBlock);
+  const size_t taken = w.room_grows ? written + 64 : 0;
+  const size_t left = taken < w.room ? w.room - taken : 0;
+  return std::clamp(left, size_t{64}, size_t(kQ2MaxBlock));
+}
+
+// The bytes the entities may fill of a frame of `cap` bytes: the list's end and the effects' and
+// sounds' share (200 bytes, or a quarter of a short frame) kept.
+size_t entity_room(size_t cap) { return cap - 2 - std::min(size_t{200}, cap / 4); }
+
 // The viewer's eye for the cut (map units): the player state's origin and view offset.
 void sight_eye(const Q2PlayerState& p, float eye[3]) {
   for (int k = 0; k < 3; k++)
@@ -508,10 +523,32 @@ void sight_eye(const Q2PlayerState& p, float eye[3]) {
 }  // namespace
 
 bool q2_sight_view(Q2Wire& w, const float eye[3]) {
+  w.area = 0;
+  w.area_bits.clear();
   if (w.sight == nullptr || w.sight->map == nullptr) return false;
-  ge::brush::clusters_seen_from(*w.sight->map, eye, 8.0f, w.seen);
-  ge::brush::clusters_heard_from(*w.sight->map, eye, w.heard);
+  const ge::brush::Map& m = *w.sight->map;
+  ge::brush::clusters_seen_from(m, eye, 8.0f, w.seen);
+  ge::brush::clusters_heard_from(m, eye, w.heard);
+  if (!m.areas.empty() && !w.sight->groups.empty()) {
+    w.area = ge::brush::area_at(m, eye);
+    const size_t n = m.areas.size();
+    w.area_bits.assign((n + 7) / 8, w.area == 0 ? 0xff : 0);
+    if (w.area != 0)
+      for (size_t a = 1; a < n; a++)
+        if (ge::brush::areas_connected(w.sight->groups, w.area, int32_t(a)))
+          w.area_bits[a / 8] |= uint8_t(1u << (a % 8));
+  }
   return true;
+}
+
+void q2_write_area_bits(std::vector<uint8_t>& out, const Q2Wire& w) {
+  if (w.area_bits.empty()) {
+    out.push_back(32);
+    out.insert(out.end(), 32, 0xFF);
+    return;
+  }
+  out.push_back(static_cast<uint8_t>(w.area_bits.size()));
+  out.insert(out.end(), w.area_bits.begin(), w.area_bits.end());
 }
 
 namespace {
@@ -519,7 +556,35 @@ bool bit(const std::vector<uint8_t>& bits, int32_t c) {
   return c >= 0 && size_t(c) / 8 < bits.size() && ((bits[size_t(c) / 8] >> (c % 8)) & 1) != 0;
 }
 
+// Whether sound `e` may leave its position out for this viewer, so his client plays it on its
+// entity as it moves: the entity is in the frame just written, is not a brush model (a door's
+// sound is placed at its middle, not its origin) and stands where the sound was made.
+bool follows(const Q2Wire& w, const RulesCommon& c, const NetEvent& e) {
+  if (e.ent <= 0 || size_t(e.ent) >= w.last.size()) return false;
+  const Q2EntityState& s = w.last[size_t(e.ent)];
+  if (!s.present || s.model[0] == 0) return false;
+  if (size_t(s.model[0]) < c.models.size() && !c.models[size_t(s.model[0])].empty() &&
+      c.models[size_t(s.model[0])][0] == '*')
+    return false;
+  const float at[3] = {e.origin.x, e.origin.y, e.origin.z};
+  for (int k = 0; k < 3; k++)
+    if (std::abs(static_cast<float>(s.origin[k]) / 8.0f - at[k]) > 1.0f) return false;
+  return true;
+}
+
 }  // namespace
+
+bool q2_sight_hears(const Q2Wire& w, const float ear[3], sh::Vec3f at) {
+  const ge::brush::Map& m = *w.sight->map;
+  if (m.leaves.empty()) return true;
+  const float p[3] = {at.x, at.y, at.z};
+  const int32_t from = m.leaves[ge::brush::leaf_at(m, p)].cluster;
+  const int32_t to = m.leaves[ge::brush::leaf_at(m, ear)].cluster;
+  if (!m.phs.empty() && !ge::brush::cluster_hears(m, from, to)) return false;
+  if (w.sight->groups.empty() || m.areas.empty()) return true;
+  const int32_t a = ge::brush::area_at(m, p), b = ge::brush::area_at(m, ear);
+  return a != 0 && b != 0 && ge::brush::areas_connected(w.sight->groups, a, b);
+}
 
 bool q2_sight_keeps(const Q2Wire& w, int n, const Q2EntityState& s, const float eye[3]) {
   if (n == w.slot + 1) return true;
@@ -532,6 +597,12 @@ bool q2_sight_keeps(const Q2Wire& w, int n, const Q2EntityState& s, const float 
     bool seen = false;
     for (int i = 0; i < l.count && !seen; i++) seen = bit(w.seen, l.clusters[i]);
     if (!seen) return false;
+  }
+  if (!w.sight->groups.empty() && !w.sight->map->areas.empty()) {  // a shut door between them
+    const auto joined = [&](int32_t a) {
+      return a != 0 && w.area != 0 && ge::brush::areas_connected(w.sight->groups, w.area, a);
+    };
+    if (!joined(l.area1) && (l.area2 == 0 || !joined(l.area2))) return false;
   }
   if (s.model[0] == 0) {
     float d2 = 0;
@@ -598,6 +669,14 @@ void q2_sight_link(Q2Sight& s, int number, const float lo[3], const float hi[3])
   if (found > 128) {
     l.everywhere = true;
     return;
+  }
+  for (uint32_t i = 0; i < found; i++) {  // its areas: the first two its leaves lie in
+    const int32_t a = leaves[i] < s.map->leaves.size() ? s.map->leaves[leaves[i]].area : 0;
+    if (a == 0 || a == l.area1 || a == l.area2) continue;
+    if (l.area1 == 0)
+      l.area1 = a;
+    else if (l.area2 == 0)
+      l.area2 = a;
   }
   for (uint32_t i = 0; i < found; i++) {
     const int32_t c = leaves[i] < s.map->leaves.size() ? s.map->leaves[leaves[i]].cluster : -1;
@@ -774,6 +853,9 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
   // stops on a field of view of 0 before the first frame it keeps).
   const int32_t number = frame_number + 1;
   const Q2PlayerState p = player_state(c, w.slot, move);
+  float eye[3];
+  sight_eye(p, eye);
+  const bool cut = q2_sight_view(w, eye);
   const bool ext = w.opt.protocol != kQ2Protocol;
   if (ext) {
     q2_write_frame_top_ext(block, w, number, p);
@@ -783,21 +865,18 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
     o.i32(w.last_frame);
     o.u8(w.suppress);
     w.suppress = 0;
-    o.u8(32);
-    for (int k = 0; k < 32; k++) o.u8(0xFF);
+    q2_write_area_bits(block, w);
     write_player(o, w.last_frame < 0 ? Q2PlayerState{} : w.last_player, p);
     w.last_player = p;
   }
-  float eye[3];
-  sight_eye(p, eye);
-  const bool cut = q2_sight_view(w, eye);
   const std::vector<uint8_t> over =
       w.opt.max_entities > 0 ? over_cap(w, c, eye, cut) : std::vector<uint8_t>{};
   if (!ext) o.u8(kPacketEntities);
   const Q2EntityState zero;
   // An entry is at most 44 bytes; past the room left (the list's end and the sounds' share kept)
   // an entity waits for the next frame, as the one it holds is what the viewer holds.
-  const size_t room = size_t(kQ2MaxBlock) - 2 - 200;
+  const size_t cap = frame_cap(w, reliable != nullptr ? reliable->size() : 0);
+  const size_t room = entity_room(cap);
   for (int n = 1; n < kQ2Entities; n++) {
     Q2EntityState s = entity_state(c, n);
     const Q2EntityState& was = w.last[size_t(n)];
@@ -836,25 +915,32 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
   o.u8(0);
   w.last_frame = number;
   // The unreliable part: the frame's temporary entities (the rules' named effects the protocol
-  // has: blasts, sparks, blood, the rail's line, splashes, cables, teleports), then its sounds.
+  // has: blasts, sparks, blood, the rail's line, splashes, cables, teleports), then its sounds,
+  // each to a viewer in its point's hearing set with the areas joined when the frame is cut.
+  const float ear[3] = {static_cast<float>(p.origin[0]) / 8.0f,
+                        static_cast<float>(p.origin[1]) / 8.0f,
+                        static_cast<float>(p.origin[2]) / 8.0f};
   for (size_t i = from; i < events.size(); i++) {
     const NetEvent& e = events[i];
     if ((e.kind != EventKind::point_effect && e.kind != EventKind::trail_effect) ||
         !to_slot(e, w.slot))
       continue;
-    if (block.size() + 18 + 13 > size_t(kQ2MaxBlock)) break;          // a sound's room kept too
+    if (cut && !q2_sight_hears(w, ear, e.origin)) continue;
+    if (block.size() + 18 + 13 > cap) break;                          // a sound's room kept too
     if (e.text == "te_damage_dealt" && !w.opt.hit_reports) continue;  // a stock client has none
     if (!write_flash(o, e)) write_temp_entity(o, e);
   }
   for (size_t i = from; i < events.size(); i++) {
     const NetEvent& e = events[i];
     if (e.kind != EventKind::sound || !to_slot(e, w.slot)) continue;
-    if (block.size() + 13 > size_t(kQ2MaxBlock)) break;  // a sound is at most 13 bytes
+    if (block.size() + 13 > cap) break;  // a sound is at most 13 bytes
     const auto at = std::find(c.sounds.begin(), c.sounds.end(), e.text);
     if (at == c.sounds.end() || at == c.sounds.begin() || at - c.sounds.begin() > 255) continue;
     const float volume = e.values[0] > 0 ? e.values[0] / 255.0f : 1.0f;  // sent as 0..255
     const float att = e.values[1];
-    uint32_t flags = 8 | 4;  // the entity and channel, the position
+    if (cut && att != 0 && !q2_sight_hears(w, ear, e.origin)) continue;  // 0: heard everywhere
+    uint32_t flags = 8;                                                  // the entity and channel
+    if (!follows(w, c, e)) flags |= 4;  // the position, unless it is the entity's own
     if (volume != 1.0f) flags |= 1;
     if (att != 1.0f) flags |= 2;
     o.u8(kSound);
@@ -863,6 +949,7 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
     if (flags & 1) o.u8(static_cast<uint32_t>(std::clamp(volume * 255.0f, 0.0f, 255.0f)));
     if (flags & 2) o.u8(static_cast<uint32_t>(std::clamp(att * 64.0f, 0.0f, 255.0f)));
     o.i16(std::clamp(e.ent, 0, kQ2Entities - 1) * 8 + (e.level & 7));
+    if ((flags & 4) == 0) continue;
     o.i16(coord(e.origin.x));
     o.i16(coord(e.origin.y));
     o.i16(coord(e.origin.z));
@@ -931,6 +1018,9 @@ void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8
   Out o{block};
   const int32_t number = frame_number + 1;  // as q2_frame numbers them
   const Q2PlayerState& p = raw.players[slot];
+  float eye[3];
+  sight_eye(p, eye);
+  const bool cut = q2_sight_view(w, eye);
   const bool ext = w.opt.protocol != kQ2Protocol;
   if (ext) {
     q2_write_frame_top_ext(block, w, number, p);
@@ -940,17 +1030,14 @@ void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8
     o.i32(w.last_frame);
     o.u8(w.suppress);
     w.suppress = 0;
-    o.u8(32);
-    for (int k = 0; k < 32; k++) o.u8(0xFF);
+    q2_write_area_bits(block, w);
     write_player(o, w.last_frame < 0 ? Q2PlayerState{} : w.last_player, p);
     w.last_player = p;
   }
-  float eye[3];
-  sight_eye(p, eye);
-  const bool cut = q2_sight_view(w, eye);
   if (!ext) o.u8(kPacketEntities);
   const Q2EntityState zero;
-  const size_t room = size_t(kQ2MaxBlock) - 2 - 200;
+  const size_t cap = frame_cap(w, reliable.size());
+  const size_t room = entity_room(cap);
   for (int n = 1; n < kQ2Entities; n++) {
     Q2EntityState s = size_t(n) < raw.entities.size() ? raw.entities[size_t(n)] : zero;
     const Q2EntityState& was = w.last[size_t(n)];
@@ -987,7 +1074,7 @@ void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8
   o.u8(0);
   w.last_frame = number;
   std::vector<uint8_t>& d = raw.datagram[slot];
-  if (block.size() + d.size() <= size_t(kQ2MaxBlock)) block.insert(block.end(), d.begin(), d.end());
+  if (block.size() + d.size() <= cap) block.insert(block.end(), d.begin(), d.end());
   d.clear();
 }
 
