@@ -3,7 +3,8 @@
 //
 // ge:summary Quake II's wire for protocols 35 and 36: the frame top, the server data, streams
 // ge:keywords protocol-35 protocol-36 frame-top extra-flags long-solid gamestate
-// ge:keywords configstring-stream baseline-stream client-settings nogun noblend nogibs nofootsteps noprediction
+// ge:keywords configstring-stream baseline-stream client-settings nogun noblend nogibs
+// ge:keywords nofootsteps noprediction
 // ge:skill shooter net
 // ge:test tests/shooters_edge_q2_wire_ext_test.cpp
 #include <cstring>
