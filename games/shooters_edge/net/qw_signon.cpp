@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "classic/protocol/wire.hpp"
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
 #include "progs/vm.hpp"
@@ -231,6 +232,25 @@ void cmd_spawn(QwServer& s, int slot, int n) {
   stuff(s, slot, "skins\n");
 }
 
+// The player and eyes models a client loaded, by the CRC-16 it puts in `pmodel` and `emodel`,
+// against the server's own: a mismatch is announced to everyone (a see-through or glowing figure
+// is the usual reason), the player kept. Once a map, at his `begin`; a seat in this process, or a
+// server with no game folder to read the models from, is not checked.
+void model_check(QwServer& s, int slot) {
+  const QwClient& c = s.clients[slot];
+  if (c.local || !s.cfg.read_file) return;
+  for (const auto& [file, key] : {std::pair<const char*, const char*>{"progs/player.mdl", "pmodel"},
+                                  {"progs/eyes.mdl", "emodel"}}) {
+    std::vector<uint8_t> bytes;
+    if (!s.cfg.read_file(file, &bytes)) continue;
+    const int ours = ge::classic::protocol::crc16(bytes.data(), bytes.size());
+    if (std::atoi(info_get(c.userinfo, key).c_str()) != ours) {
+      qw_print_all(s, c.name + " WARNING: non standard player/eyes model detected\n");
+      return;
+    }
+  }
+}
+
 void cmd_begin(QwServer& s, int slot) {
   QwClient& c = s.clients[slot];
   if (c.state == ConnState::spawned) return;
@@ -260,6 +280,7 @@ void cmd_begin(QwServer& s, int slot) {
   else
     s.rules->connect(slot, c.name, c.spectator, false, c.carried ? c.parms : nullptr);
   c.carried = false;
+  model_check(s, slot);
   std::vector<std::pair<std::string, std::string>> pairs;
   info_pairs(c.userinfo, pairs);
   for (const auto& [k, v] : pairs)
@@ -592,7 +613,21 @@ void string_command(QwServer& s, int slot, const std::string& line) {
         reliable_svc(s, slot, m);
       }
   } else if (cmd == "setinfo") {
-    if (w.count >= 3) cmd_setinfo(s, slot, pg::word(w, 1), pg::word(w, 2));
+    if (w.count >= 3) {
+      std::string key = pg::word(w, 1), value = pg::word(w, 2);
+      // sv_highchars 0: a coloured character becomes its plain one; what is then a control
+      // character is dropped.
+      if (!s.cfg.high_chars)
+        for (std::string* t : {&key, &value}) {
+          std::string plain;
+          for (const char ch : *t) {
+            const auto b = static_cast<uint8_t>(static_cast<uint8_t>(ch) & 127u);
+            if (b >= 32) plain.push_back(static_cast<char>(b));
+          }
+          *t = std::move(plain);
+        }
+      cmd_setinfo(s, slot, key, value);
+    }
   } else if (cmd == "serverinfo") {
     std::vector<std::pair<std::string, std::string>> pairs;
     info_pairs(s.serverinfo, pairs);

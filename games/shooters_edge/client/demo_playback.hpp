@@ -106,6 +106,7 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   std::string startup;   // `cl_startupdemo`: played once at start-up when nothing else is asked
   int third_person = 0;  // `cam_thirdperson`: the watched player seen from behind
   float behind = 100;    // `cam_dist`: how far behind, units
+  float side = 0;        // `cam_side`: how far to the player's left, units (negative: right)
   int lock_pos = 0;      // `cam_lockpos`: the third-person camera stays put, turned to the player
   float zoom_accel = 2000, zoom_top = 300;  // `cam_zoomaccel`, `cam_zoomspeed`: units/s², units/s
   float zoom_speed = 0;                     // the zoom's speed now, units/s
@@ -140,6 +141,10 @@ std::string demo_clock_text(double s);
 // The third person's distance now (`cam_thirdperson` on: `cam_dist`, else 0), `watching` true for a
 // demo, TV or a server joined as a spectator (playing, the view is always your own).
 float third_person_units(const DemoPlayback& p, bool watching);
+struct DemoEyes;
+// The rig's third person from the settings: its distance (third_person_units), `cam_side` and
+// `cam_lockpos`.
+void third_person_eyes(const DemoPlayback& p, bool watching, DemoEyes& e);
 
 // One frame of the third person's zoom: `dir` 1 in (+forward), -1 out (+back), 0 none; the speed
 // grows at `cam_zoomaccel` to `cam_zoomspeed`, `cam_dist` never below 0, its cvar written when the

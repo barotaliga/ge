@@ -6,6 +6,7 @@
 #include "shooters_edge/net/qw_remote.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -1114,6 +1115,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.rate = std::atoi(cvar("rate", "25000").c_str());  // the loaded game's default (classic)
     cfg.msg = std::atoi(cvar("msg", "1").c_str());
     cfg.noaim = cvar("noaim", "0") == "1";
+    cfg.extra_info = r.extra_info;
     cfg.password = cvar("password", "");            // a closed server's password
     cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
     cfg.w_switch = cvar("w_switch", "");            // Quake's switch rules on a pickup
@@ -1221,6 +1223,45 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                       return;
                     }
                     c.print("No player by that name or id is on the server.");
+                  });
+  // `fullinfo <info string>`: every key and value of it made the player's own (a setting's key sets
+  // the setting; any other kept for the next join). Nothing is sent now; star keys are refused.
+  con.add_command("fullinfo", "fullinfo <\\key\\value...>: your whole user info set at once",
+                  [&r](Con& c, const Args& a) {
+                    if (a.size() != 2) {
+                      c.print("fullinfo <complete info string>");
+                      return;
+                    }
+                    std::string_view s = a[1];
+                    if (!s.empty() && s.front() == '\\') s.remove_prefix(1);
+                    while (!s.empty()) {
+                      const size_t k_end = s.find('\\');
+                      const std::string key(s.substr(0, k_end));
+                      if (k_end == std::string_view::npos) {
+                        c.print("MISSING VALUE");
+                        return;
+                      }
+                      s.remove_prefix(k_end + 1);
+                      const size_t v_end = s.find('\\');
+                      const std::string value(s.substr(0, v_end));
+                      s.remove_prefix(v_end == std::string_view::npos ? s.size() : v_end + 1);
+                      std::string low = key;
+                      for (char& ch : low)
+                        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                      if (low == "pmodel" || low == "emodel") continue;  // the client's own checks
+                      if (!key.empty() && key.front() == '*') {
+                        c.print("Can't set * keys");
+                        continue;
+                      }
+                      const ge::console::Cvar* v = c.cvars().find(key);
+                      if (v != nullptr && (v->flags & ge::console::kUserInfo) != 0) {
+                        c.cvars().set(key, value, ge::console::Source::local);
+                        continue;
+                      }
+                      std::erase_if(r.extra_info,
+                                    [&key](const auto& kv) { return kv.first == key; });
+                      if (!value.empty()) r.extra_info.emplace_back(key, value);
+                    }
                   });
   // `version`: the build's own, printed in the window; never asked of a server.
   con.add_command("version", "version: the game's version",

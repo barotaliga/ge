@@ -348,6 +348,10 @@ void bi_dprint(pg::Vm& vm) {
   char buf[pg::kTempStringBytes];
   pg::localize_join_args(vm, s.opt.localized.get(), 0, buf, sizeof buf);
   if (vm.fault.set) return;
+  // A Quake single-player program's developer lines show only with `developer` on; a
+  // multiplayer program's always do.
+  if (s.sv.set.single_player_clock)
+    if (const ge::console::Cvar* d = s.cvars.find("developer"); d == nullptr || !d->on()) return;
   console_print(s, buf);
 }
 

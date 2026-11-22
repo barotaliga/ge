@@ -332,6 +332,14 @@ void remote_match_frame(Remote& r, con::Console& c, double now_s) {
     m.level = -1;
     return;
   }
+  if (!r.rerecord.empty()) {  // `rerecord`: the join just started, recorded from its first byte
+    std::string error;
+    if (remote_record_open(r, r.rerecord, error))
+      c.print("recording to " + r.rerecord.string() + ".");
+    else
+      c.print("ERROR: couldn't open.");
+    r.rerecord.clear();
+  }
   if (m.level != r.levels) {  // a new level: the old one's match is over
     if (m.running) end_match(r, c, now_s, true);
     m.standby = false;
@@ -372,6 +380,29 @@ void add_match_record_commands(con::Console& c, Remote& r) {
                                 return v != nullptr ? v->value : std::string();
                               });
   };
+  // `rerecord <name>`: the recording stopped, the last server joined again and recorded from the
+  // start of the join (`<game folder>/<name>`, .qwd added when it has no extension).
+  c.add_command(
+      "rerecord", "rerecord <name>: join the last server again and record from the start",
+      [&r](con::Console& cc, const con::Args& a) {
+        if (a.size() != 2) {
+          cc.print("rerecord <demoname>");
+          return;
+        }
+        if (r.server_name.empty()) {
+          cc.print("No server to reconnect to...");
+          return;
+        }
+        if (r.joined_record.close) {
+          const std::string done = r.joined_record.close();
+          if (!done.empty()) cc.print(done);
+        }
+        fs::path file =
+            fs::path(r.joined_record.folder ? r.joined_record.folder() : std::string(".")) / a[1];
+        if (!file.has_extension()) file += ".qwd";
+        r.rerecord = file;
+        cc.execute("reconnect");
+      });
   c.add_command("match_save",
                 "match_save: keep the match recorded on its own (match_auto_record 1)",
                 [&r](con::Console& cc, const con::Args&) {

@@ -843,6 +843,7 @@ int run_main(int argc, char** argv) {
                       });
   console.add_command("stopdemo", "stopdemo: the recording playing stopped",
                       [&](Con&, const CArgs&) { stop_demo = true; });
+  cl::add_path_command(console, files);
   const auto end_bench = [&](const std::string& why, double now_s, bool by_player = false) {
     attract = false;
     if (std::exchange(demo_hold, false) && !game_start.loading)  // the next demo holds it again
@@ -1664,9 +1665,7 @@ int run_main(int argc, char** argv) {
       const cl::DemoState& ds_read = drawn_remote ? remote.demo.state : bench.demo.state;
       const ge::shooter::BrushModel* ground =
           bench_map && !bench_map->spec.models.empty() ? &bench_map->spec.models[0] : nullptr;
-      demo_eyes.behind =
-          cl::third_person_units(playback, !drawn_remote || remote.end.cfg.spectator);
-      demo_eyes.lock_pos = playback.lock_pos != 0;
+      cl::third_person_eyes(playback, !drawn_remote || remote.end.cfg.spectator, demo_eyes);
       ge::render::FrameView view = cl::demo_eyes_view(
           ds, ds_read, demo_eyes, shown.row, ground, body,
           cl::q2_demo_fov_y(ds, camera_cvars.fov, !drawn_remote, q2_screen, w, h),

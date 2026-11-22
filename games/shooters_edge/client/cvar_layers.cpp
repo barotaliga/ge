@@ -17,6 +17,8 @@
 #include "shooters_edge/client/picture_files.hpp"
 #include "shooters_edge/sound/ambience.hpp"
 
+#include <algorithm>
+#include <cstdlib>
 #include <ctime>
 #include <utility>
 #include <vector>
@@ -276,6 +278,27 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.add_command_synonym("cvar_reset", "reset");  // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
   c.add_command_synonym("togglechat", "toggleconsole");  // QuakeWorld's second name for it
+  c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left
+  // An old Quake config's saved name and colours: `_cl_name` is the name, `_cl_color` both
+  // colours as one number (shirt times 16 plus pants), so its config dresses you as it did.
+  c.cvars().add_synonym("_cl_name", "name");
+  c.cvars().add_synonym("port", "sv_port");  // the port the next game is served on
+  c.add_command(
+      "_cl_color", "_cl_color <shirt*16+pants>: both your colours as one number",
+      [](con::Console& k, const con::Args& a) {
+        const auto colour = [&k](const char* name) {
+          const con::Cvar* v = k.cvars().find(name);
+          return v != nullptr ? std::atoi(v->value.c_str()) : 0;
+        };
+        if (a.size() < 2) {
+          k.print("\"_cl_color\" is \"" +
+                  std::to_string(colour("topcolor") * 16 + colour("bottomcolor")) + "\"");
+          return;
+        }
+        const int n = static_cast<int>(std::atof(a[1].c_str()));
+        k.cvars().set("topcolor", std::to_string(std::min((n >> 4) & 15, 13)), con::Source::local);
+        k.cvars().set("bottomcolor", std::to_string(std::min(n & 15, 13)), con::Source::local);
+      });
   c.cvars().add({.name = "cl_novweps",
                  .fallback = "0",
                  .flags = con::kArchive,
