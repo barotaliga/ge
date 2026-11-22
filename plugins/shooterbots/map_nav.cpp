@@ -10,7 +10,6 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
-#include <cstdio>  // DBG
 #include <cstring>
 #include <unordered_map>
 #include <tuple>
@@ -355,18 +354,24 @@ bool stands_at(const sh::Solid& w, sh::Vec3f p) {
 
 }  // namespace
 
-int add_crawlways(const sh::Solid& w, sb::NavGraph& g) {
+std::vector<sh::Vec3f> crawl_path(const MapCrawl& cr, int a, int b) {
+  std::vector<int> up_a, up_b;
+  for (int k = a; k >= 0; k = cr.cells[static_cast<size_t>(k)].parent) up_a.push_back(k);
+  for (int k = b; k >= 0; k = cr.cells[static_cast<size_t>(k)].parent) up_b.push_back(k);
+  while (up_a.size() > 1 && up_b.size() > 1 && up_a[up_a.size() - 2] == up_b[up_b.size() - 2]) {
+    up_a.pop_back();
+    up_b.pop_back();
+  }
+  std::vector<sh::Vec3f> out;
+  for (const int k : up_a) out.push_back(cr.cells[static_cast<size_t>(k)].at);
+  for (size_t k = up_b.size() - 1; k-- > 0;) out.push_back(cr.cells[static_cast<size_t>(up_b[k])].at);
+  return out;
+}
+
+int add_crawlways(const sh::Solid& w, sb::NavGraph& g, std::vector<MapCrawl>* keep) {
   // One crawl (a region under the roof) is searched once, as a tree from where it was first
-  // entered; every node that steps into it is joined through the tree to every node it comes
-  // out by.
-  struct Cell {
-    sh::Vec3f at;
-    int parent;
-  };
-  struct Crawl {
-    std::vector<Cell> cells;
-    std::vector<std::pair<int, int32_t>> ends;  // (cell, node he stands by there)
-  };
+  // entered; a node that steps into it is joined through the tree to a node it comes out by.
+  using Crawl = MapCrawl;
   const auto key = [](sh::Vec3f p) {
     const auto q = [](float v) {
       return static_cast<uint64_t>(static_cast<int64_t>(std::floor(v / 8)) & 0x1fffff);
@@ -405,26 +410,8 @@ int add_crawlways(const sh::Solid& w, sb::NavGraph& g) {
         cr.cells.push_back({to, static_cast<int>(c)});
       }
     }
-    if (std::fabs(entry.x + 384) < 80 && entry.y < -380 && entry.y > -560) {  // DBG
-      std::fprintf(stderr, "DBG crawl %d entry %.0f %.0f %.0f cells %zu ends %zu\n", id, double(entry.x), double(entry.y), double(entry.z), cr.cells.size(), cr.ends.size());
-      for (const auto& [c, e] : cr.ends) std::fprintf(stderr, "DBG   end %.0f %.0f %.0f node %d comp?\n", double(cr.cells[size_t(c)].at.x), double(cr.cells[size_t(c)].at.y), double(cr.cells[size_t(c)].at.z), e);
-    }
     crawls.push_back(std::move(cr));
     return id;
-  };
-  // The tree's path from cell `a` to cell `b` of one crawl.
-  const auto tree_path = [](const Crawl& cr, int a, int b) {
-    std::vector<int> up_a, up_b;
-    for (int k = a; k >= 0; k = cr.cells[static_cast<size_t>(k)].parent) up_a.push_back(k);
-    for (int k = b; k >= 0; k = cr.cells[static_cast<size_t>(k)].parent) up_b.push_back(k);
-    while (up_a.size() > 1 && up_b.size() > 1 && up_a[up_a.size() - 2] == up_b[up_b.size() - 2]) {
-      up_a.pop_back();
-      up_b.pop_back();
-    }
-    std::vector<sh::Vec3f> out;
-    for (const int k : up_a) out.push_back(cr.cells[static_cast<size_t>(k)].at);
-    for (size_t k = up_b.size() - 1; k-- > 0;) out.push_back(cr.cells[static_cast<size_t>(up_b[k])].at);
-    return out;
   };
   const auto one = [&](int32_t a, int32_t b, const std::vector<sh::Vec3f>& way) {
     if (std::find(made.begin(), made.end(), std::make_pair(a, b)) != made.end()) return;
@@ -494,7 +481,7 @@ int add_crawlways(const sh::Solid& w, sb::NavGraph& g) {
       for (const auto& [c, end] : cr.ends) {
         const int32_t pb = root(end);
         if (pa == pb) continue;
-        const size_t len = tree_path(cr, cell, c).size();
+        const size_t len = crawl_path(cr, cell, c).size();
         const auto k = std::make_tuple(id, pa, pb);
         auto it = std::find_if(best.begin(), best.end(), [&](const auto& e) { return e.first == k; });
         if (it == best.end())
@@ -506,12 +493,13 @@ int add_crawlways(const sh::Solid& w, sb::NavGraph& g) {
   }
   for (const auto& [k, wy] : best) {
     const Crawl& cr = crawls[static_cast<size_t>(std::get<0>(k))];
-    std::vector<sh::Vec3f> path = tree_path(cr, wy.ca, wy.cb);
+    std::vector<sh::Vec3f> path = crawl_path(cr, wy.ca, wy.cb);
     one(wy.a, wy.b, path);
     std::reverse(path.begin(), path.end());
     one(wy.b, wy.a, path);
   }
   sb::nav_add_links(g, links);
+  if (keep != nullptr) *keep = std::move(crawls);
   return static_cast<int>(links.size());
 }
 
@@ -1111,7 +1099,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   // not, the crawl is followed cell by cell (a step up, across ducked, down to a floor) to where
   // he stands again by another node: a scripted way each way, its steps ducked.
   if (spec.brushes && out.tracer != nullptr && out.world.count > 0)
-    out.crawlways = add_crawlways(out.world.solids[0], out.graph);
+    out.crawlways = add_crawlways(out.world.solids[0], out.graph, &out.crawls);
   // LAVA AND SLIME: a floor node standing in either (a shallow pool at the feet too: it burns
   // there as well) harms whoever goes there; no way leads into one (the links out are kept: a
   // player knocked in walks out).

@@ -53,6 +53,8 @@ constexpr double kWayCall_s = 1.5;   // waited this long for a lift its button c
 constexpr double kWayDone_s = 10;   // (`complete`) the exit waits this long past the last thing left
 constexpr float kWayTouchBy = 48;     // (`complete`) a node this near a step's box stands by it, units
 constexpr float kWayTouchFrom = 96;   // and from this near its node he goes into the box, units
+constexpr float kWayCrawlNear = 32;   // (`complete`) in a crawl this near one of its points, he crawls it, units
+constexpr double kWayCrawlOut_s = 15;  // and the way back out is crawled this long at most, s
 constexpr double kWayIdle_s = 5;     // nothing to do this long: back into the water
 constexpr float kKeyCovered = 96;    // a locked door this near a key's height covers it, units
 constexpr float kWaySeen = 192;      // a node this near where he has stood is explored, units
@@ -83,6 +85,8 @@ struct WayStep {
   int tries = 0;         // (`complete`) times it was left
   bool reach_in = false;  // (`complete`) its node lies by it, not in it: the last stretch is
                           // walked or swum into its box (`way_touch`)
+  std::vector<sh::Vec3f> crawl;  // (`complete`) or crawled from its node, ducked (a nook under a
+                                 // floor: base1's silencer), these origins in turn
   std::vector<int> doors;   // those doors' entities
   std::vector<int> covers;  // a key's: the locked doors (WayThrough::locked) lying over it
 };
@@ -100,6 +104,8 @@ struct WayThrough {
   double complete_until = kWayForever;  // and after this game time, only the way out (a map he
                                         // cannot clear still ends at its exit in its time)
   double busy_at = -kWayForever;  // (`complete`) the last time something was left to do
+  std::vector<sh::Vec3f> crawl_out;  // (`complete`) the way back out of a nook, ducked
+  double crawl_out_at = 0;           // since this game time
   std::vector<std::string> avoid;  // maps an exit to is no way on (a secret level; before way_init)
   std::vector<WayStep> steps;
   std::vector<int> locked;            // doors something else opens: their entities
@@ -160,6 +166,7 @@ struct WayThrough {
   // tries and the time it is left until.
   int prey = -1;
   double prey_since = 0;
+  double prey_for = 0;  // (`complete`) and given this long, s
   std::vector<double> prey_left;
   std::vector<uint8_t> prey_tries;
 };
@@ -186,7 +193,7 @@ void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooterbots::Bot
 // (`complete`) The leader's command after his own, at a step whose box no node of his reaches
 // (base1's pool secret, a strip over the water at the foot of a ledge he cannot climb): from its
 // node, into the box.
-void way_touch(const WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
+void way_touch(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
                sh::MoveCmd& cmd);
 
 constexpr float kWayStuck = 24;

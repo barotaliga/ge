@@ -49,6 +49,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ai/path.hpp"
@@ -85,6 +86,18 @@ struct NavBridge {
   ge::shooter::Vec3f spawn_angles;
 };
 
+// A crawl (`add_crawlways`): a region under a roof too low to stand under, searched as a tree of
+// ducked cells (16 units apart) from where it was first entered; its ends where he stands again,
+// each by the node there.
+struct MapCrawl {
+  struct Cell {
+    ge::shooter::Vec3f at;  // a ducked player's origin
+    int parent = -1;        // the cell it was reached from (-1: the first)
+  };
+  std::vector<Cell> cells;
+  std::vector<std::pair<int, int32_t>> ends;  // (cell, the node he stands by there)
+};
+
 struct MapNav {
   // A version 38 map's: the map the world's solids trace and the tracer they share (single
   // threaded: the nav and the bots that read it trace on one thread).
@@ -119,6 +132,7 @@ struct MapNav {
   };
   std::vector<ScriptMade> scripts_made;
   int crawlways = 0;  // scripted ways ducked under a low roof (Quake II's maps)
+  std::vector<MapCrawl> crawls;  // the crawls searched for them
   ge::ai::Search main;  // what the map's main part reaches (the most a start spot reaches)
   int32_t main_n = 0;
   int64_t teleport_links = 0, closed_links = 0, harm_links = 0;
@@ -127,6 +141,14 @@ struct MapNav {
   int64_t side_brink_links = 0;  // walks and drops a side step off into it (`nav_mark_side_harm`)
   double build_ms = 0;           // wall time, never in a digest
 };
+
+// (Quake II's maps) The crawlways under roofs too low to stand under, found through world solid
+// `w` (a `brushes` solid) from the graph's nodes and added as scripted ways walked ducked, one
+// each way between places the graph does not already join; how many links. Each crawl searched
+// is kept in `keep` (null: none), for what lies in one (base1's silencer, under a floor).
+int add_crawlways(const ge::shooter::Solid& w, NavGraph& g, std::vector<MapCrawl>* keep = nullptr);
+// The ducked way through crawl `c` from its cell `a` to its cell `b` (the cells' origins).
+std::vector<ge::shooter::Vec3f> crawl_path(const MapCrawl& c, int a, int b);
 
 // The doors and plats of `spec` as movers, off its entity text and the edicts `s` made of them.
 // A version 38 map's plats ride on `tracer` (the nav's own; null: none ridden).
@@ -138,11 +160,6 @@ std::vector<ge::shooterbots::NavMover> map_movers(const ge::shooterbots::BotView
 // `book`: the game's people's tricks and routes by map (shooterbots/map_book.hpp), each proven by
 // the move. False with `error` when no floor holds a node. `set`: the grid's (a trick map's narrow
 // platforms need a finer one than the default 32 units: the `se-trick` lab's --spacing).
-// (Quake II's maps) The crawlways under roofs too low to stand under, found through world solid
-// `w` (a `brushes` solid) from the graph's nodes and added as scripted ways walked ducked, one
-// each way; how many links.
-int add_crawlways(const ge::shooter::Solid& w, NavGraph& g);
-
 bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
                    const ge::shooterbots::MapBook& book, const char* start_class, MapNav& out,
                    std::string& error,

@@ -977,6 +977,28 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       st.node = best;
       st.reach_in = true;
     }
+    // One no node stands by, in a crawl's cell (a nook under a floor): crawled to from the end of
+    // that crawl he reaches, the nearest way.
+    for (WayStep& st : w.steps) {
+      if ((st.kind != WayKind::trigger && st.kind != WayKind::secret) || st.reach_in ||
+          start < 0 || (st.node >= 0 && touches(g.nodes[static_cast<size_t>(st.node)].origin,
+                                                 st.lo, st.hi)))
+        continue;
+      for (const MapCrawl& cr : nav.crawls) {
+        for (size_t c = 0; c < cr.cells.size(); c++) {
+          if (!touches(cr.cells[c].at, st.lo, st.hi)) continue;
+          for (const auto& [e, n] : cr.ends) {
+            if (!reach.reached(n)) continue;
+            std::vector<sh::Vec3f> way = crawl_path(cr, e, static_cast<int>(c));
+            if (!st.crawl.empty() && way.size() >= st.crawl.size()) continue;
+            st.crawl = std::move(way);
+            st.node = n;
+          }
+          break;
+        }
+      }
+      st.reach_in = !st.crawl.empty();
+    }
   }
 }
 
@@ -1119,6 +1141,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         break;
     }
     if (st.done && !was_done) w.stats.steps_done++;
+    if (st.done && !was_done && !st.crawl.empty()) {  // back the way he crawled in
+      w.crawl_out.assign(st.crawl.rbegin(), st.crawl.rend());
+      if (st.node >= 0) w.crawl_out.push_back(g.nodes[static_cast<size_t>(st.node)].origin);
+      w.crawl_out_at = t;
+    }
   }
   // A waiting plat once moved runs for good: never locked again (where it stood is put out of
   // reach).
@@ -1486,7 +1513,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   if (!chase || prey != w.prey) {
     w.prey = chase ? prey : -1;
     w.prey_since = t;
-  } else if (t - w.prey_since > kWayGiveUp_s) {
+    w.prey_for = kWayGiveUp_s + (chase ? 2 * prey_c : 0);  // as a step: past twice the walk
+  } else if (t - w.prey_since > w.prey_for) {
     // Gone for this long and still alive: left for a while, and for good after kWayTries.
     const size_t e = static_cast<size_t>(prey);
     w.prey_tries[e]++;
@@ -1681,13 +1709,58 @@ void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooterbots::Bot
   if (self_e.waterlevel > 0 && dz > 8) cmd.buttons |= sh::kButtonJump;
 }
 
-void way_touch(const WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
+void way_touch(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
                sh::MoveCmd& cmd) {
+  const ge::shooter::WorldEntity& self_e = s.world.entities[static_cast<size_t>(me)];
+  const sh::Vec3f self = self_e.origin;
+  const double t = s.sv.time;
+  const auto crawl_to = [&](sh::Vec3f to) {
+    const double dx = to.x - self.x, dy = to.y - self.y;
+    cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
+    cmd.angles.x = 0;
+    cmd.forward = sh::quantize_axis(320);
+    cmd.side = 0;
+    cmd.up = sh::quantize_axis(-320);  // ducked
+  };
+  // The nearest of a crawl's points to him, and the next one on.
+  const auto next_on = [&](const std::vector<sh::Vec3f>& way, size_t& k) {
+    float best = 0;
+    for (size_t i = 0; i < way.size(); i++) {
+      const float dx = way[i].x - self.x, dy = way[i].y - self.y;
+      const float d = dx * dx + dy * dy;
+      if (i == 0 || d < best) {
+        best = d;
+        k = i;
+      }
+    }
+    return best;
+  };
+  if (!w.crawl_out.empty()) {
+    size_t k = 0;
+    next_on(w.crawl_out, k);
+    if (k + 1 >= w.crawl_out.size() || t - w.crawl_out_at > kWayCrawlOut_s) {
+      w.crawl_out.clear();  // out (or given up on: the pilot's own way from here)
+    } else {
+      crawl_to(w.crawl_out[k + 1]);
+      return;
+    }
+  }
   if (w.step < 0) return;
   const WayStep& st = w.steps[static_cast<size_t>(w.step)];
   if (!st.reach_in || st.done || st.node < 0) return;
-  const ge::shooter::WorldEntity& self_e = s.world.entities[static_cast<size_t>(me)];
-  const sh::Vec3f self = self_e.origin;
+  if (!st.crawl.empty()) {
+    size_t k = 0;
+    const float d = next_on(st.crawl, k);
+    const bool by_node =
+        dist(self, nav.graph.nodes[static_cast<size_t>(st.node)].origin) <= kWayTouchFrom;
+    if (!by_node && d > kWayCrawlNear * kWayCrawlNear) return;
+    if (k + 1 < st.crawl.size()) {
+      crawl_to(st.crawl[k + 1]);
+    } else {
+      crawl_to((st.lo + st.hi) * 0.5f);
+    }
+    return;
+  }
   if (dist(self, nav.graph.nodes[static_cast<size_t>(st.node)].origin) > kWayTouchFrom) return;
   // The box's nearest point, his box's middle held to it.
   const sh::Vec3f to{std::clamp(self.x, st.lo.x, st.hi.x), std::clamp(self.y, st.lo.y, st.hi.y),
