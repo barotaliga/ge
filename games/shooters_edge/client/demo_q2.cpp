@@ -1175,13 +1175,24 @@ void q2_stream_begin(Demo& d) {
 }
 
 bool is_q2_demo(std::span<const uint8_t> bytes) {
-  if (bytes.size() < 13) return false;
-  const int32_t len = i32_at(bytes, 0);
-  if (len < 9 || bytes[4] != kServerData) return false;
-  const int32_t protocol = i32_at(bytes, 5);
-  const bool extended = ext_of(protocol) > 0;
-  if (len > (extended ? kMostBlockExt : kMostBlock)) return false;
-  return (extended || (protocol >= 26 && protocol <= 34)) && bytes[13] <= 2;
+  // The server data opens the recording, or follows a few short blocks a recording tool put
+  // first (a stuffed command such as "hand 3"); each block before it is a whole one.
+  size_t at = 0;
+  for (int skipped = 0; skipped < 4; skipped++) {
+    if (at + 13 > bytes.size()) return false;
+    const int32_t len = i32_at(bytes, at);
+    if (len <= 0 || len > kMostBlockExt || at + 4 + size_t(len) > bytes.size()) return false;
+    if (bytes[at + 4] == kServerData) {
+      if (len < 9) return false;
+      const int32_t protocol = i32_at(bytes, at + 5);
+      const bool extended = ext_of(protocol) > 0;
+      if (len > (extended ? kMostBlockExt : kMostBlock)) return false;
+      return (extended || (protocol >= 26 && protocol <= 34)) && bytes[at + 13] <= 2;
+    }
+    if (len > kMostBlock) return false;
+    at += 4 + size_t(len);
+  }
+  return false;
 }
 
 DemoRead next_q2(Demo& d, std::string& error) {

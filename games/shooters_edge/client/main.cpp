@@ -365,7 +365,7 @@ int run_main(int argc, char** argv) {
                                   .no_glow = &picture.no_glow,
                                   .q2fx = &picture.q2fx,
                                   .chat = &remote.ignore.chat,
-                                  .auto_chat = &con_view.game_chat,
+                                  .console_view = &con_view,
                                   .music = &music,
                                   .console = &con_look};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);

@@ -35,6 +35,7 @@
 #include "audio/music_console.hpp"
 #include "classic/q2_fx_switches.hpp"
 #include "console/console.hpp"
+#include "console/view.hpp"
 #include "hud/crosshair.hpp"
 #include "shooter/mouse_feel.hpp"
 #include "shooters_edge/client/chat_lines.hpp"
@@ -91,9 +92,10 @@ struct GameBindings {
   ge::classic::Q2FxSwitches* q2fx = nullptr;
   // The chat's extras: Quake II's own `cl_chat_sound` (chat_lines.hpp), "" in every other game.
   ChatExtras* chat = nullptr;
-  // The console's typed line: Quake II's `con_auto_chat` (console/view.hpp's game_chat), -1 in
-  // every other game (our `con_chat` rules).
-  int* auto_chat = nullptr;
+  // The console's view: Quake II's `con_auto_chat` (console/view.hpp's game_chat; -1 in every other
+  // game, our `con_chat` rules) and its stamps on every line (`con_timestamps`,
+  // `con_timestampsformat`, `con_timestampscolor`; off in every other game).
+  ge::console::ConsoleView* console_view = nullptr;
   // Quake II's view and 2D settings (q2_view.hpp: scr_scale, scr_draw2d, scr_alpha, scr_lag_*,
   // cl_adjustfov, uf, cl_kickangles); their defaults in every other game. add_game_cvars binds its
   // own GameCvarValues::screen when this is null.

@@ -562,7 +562,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.
   if (b.chat != nullptr) add_q2_chat_sound(c, *b.chat);
-  if (b.auto_chat != nullptr)
+  if (b.console_view != nullptr) {
     v.bind({.name = "con_auto_chat",
             .fallback = "0",
             .flags = con::kArchive,
@@ -571,7 +571,30 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .min = 0,
             .max = 2,
             .values = "0: a command (the default); 1: said to everyone; 2: said to your team"},
-           b.auto_chat);
+           &b.console_view->game_chat);
+    // Its stamps on every console line, not only chat's (the classic layer's `con_timestamps`).
+    v.bind({.name = "con_timestamps",
+            .fallback = "0",
+            .help = "Whether every console line begins with the time it came.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: no time (the default); 1: the time, as con_timestampsformat writes it",
+            .overlap = con::Overlap::own},
+           &b.console_view->stamps);
+    if (b.chat != nullptr) b.chat->timestamps = 0;  // its chat lines stamped as every line is
+    v.bind({.name = "con_timestampsformat",
+            .fallback = "%H:%M:%S ",
+            .help = "How the time before each console line is written, in strftime's words.",
+            .kind = con::CvarKind::text,
+            .values = "\"%H:%M:%S \": hours, minutes and seconds (the default); TEXT: that form"},
+           &b.console_view->stamp_format);
+    v.bind({.name = "con_timestampscolor",
+            .fallback = "#aaa",
+            .help = "The colour of the time before each console line.",
+            .kind = con::CvarKind::text,
+            .values = "#aaa: light grey (the default); #rgb, #rrggbb, #rrggbbaa, a colour's name "
+                      "or 0..7"},
+           &b.console_view->stamp_colour);
+  }
   // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
   if (b.predict != nullptr)
     v.bind({.name = "cl_predict",
@@ -885,7 +908,10 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
   c.cvars().set_scope(game_scope(game));  // its own values over the common ones (cvar.hpp)
   con::CvarLayer layer(c.cvars(), v.layer);
   if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it
-  if (b.auto_chat != nullptr) *b.auto_chat = -1;       // only Quake II's con_auto_chat sets it
+  if (b.console_view != nullptr) {  // only Quake II's con_auto_chat and stamps set them
+    b.console_view->game_chat = -1;
+    b.console_view->stamps = false;
+  }
   {  // only Quake II's cvars set them; what the frames saw is kept
     Q2Session fresh;
     fresh.joined = v.q2.joined;
