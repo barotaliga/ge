@@ -18,13 +18,13 @@ q2-sp-gaps.md).
 | User info keys the game reads | 9 | 0 | 0 | 0 | 9 |
 | dmflags bits | 16 | 0 | 0 | 0 | 16 |
 | Items (the item list, in its order; each is also a spawnable classname) | 42 | 0 | 0 | 0 | 42 |
-| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 80 | 1 | 2 | 0 | 83 |
+| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 82 | 1 | 0 | 0 | 83 |
 | Monsters | 26 | 0 | 0 | 0 | 26 |
 | Player messages (printed, broadcast and centre-printed) | 78 | 1 | 0 | 2 | 81 |
 | Server console lines (what an admin reads; `dprintf`) | 34 | 2 | 0 | 2 | 38 |
 | Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 17 | 0 | 0 | 0 | 17 |
 | Rules a player sees (behaviour not in a row above) | 44 | 0 | 0 | 0 | 44 |
-| **all** | 420 | 17 | 2 | 6 | 445 |
+| **all** | 422 | 17 | 0 | 6 | 445 |
 
 ## Client commands (what a player types; the game library answers them)
 
@@ -318,8 +318,8 @@ count: done 73, partial 7, missing 1, not-taken 0
 | ent.point_combat | point_combat | where a monster goes to fight, hold flag | done | q2_monsters.cpp (monsters 9) |
 | ent.misc_explobox | misc_explobox | exploding barrel, pushable; obituary `blew up` | done | q2_targets.cpp |
 | ent.misc_banner | misc_banner | waving banner | done | q2_targets.cpp |
-| ent.misc_actor | misc_actor | a scripted figure that walks a path, says its lines and fights back; `untargeted misc_actor at <pos>`, `misc_actor with no target at <pos>`, `misc_actor has bad target <t> at <pos>` | missing | added by the 2026-11-22 audit; no stock map places one |
-| ent.target_actor | target_actor | a misc_actor's path point: its message, jump, shoot and attack flags; `target_actor with no targetname at <pos>` | missing | added by the 2026-11-22 audit; goes with misc_actor |
+| ent.misc_actor | misc_actor | a scripted figure that walks a path, says its lines and fights back; `untargeted misc_actor at <pos>`, `misc_actor with no target at <pos>`, `misc_actor has bad target <t> at <pos>` | done | q2_actor.cpp on the monster rules (its row in q2_monster_kinds.hpp): stands until used, walks its points, its lines at spawn and use, the taunts, fights only what a point or a monster's blow names; no stock map places one |
+| ent.target_actor | target_actor | a misc_actor's path point: its message, jump, shoot and attack flags; `target_actor with no targetname at <pos>` | done | q2_actor.cpp actor_arrive: message to all as chat, JUMP, SHOOT (nothing), ATTACK with HOLD, the pathtarget fired, on to its target; the no-targetname line in q2_lines.cpp |
 | ent.misc_satellite_dish | misc_satellite_dish | dish that turns on use | done | q2_targets.cpp |
 | ent.misc_gib_arm | misc_gib_arm | placed gib | done | q2_targets.cpp |
 | ent.misc_gib_leg | misc_gib_leg | placed gib | done | q2_targets.cpp |

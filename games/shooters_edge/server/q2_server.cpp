@@ -26,6 +26,7 @@
 #include "core/num_text.hpp"
 #include "core/prng.hpp"
 #include "progs/text.hpp"
+#include "shooters_edge/server/q2_actor.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
 #include "shooters_edge/server/q2_blend.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
@@ -1226,6 +1227,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   q2_spawn_lines(s, inhibited);
   map_spawn(s);
   monster_spawn(s);
+  actor_spawn(s);  // an actor's own health (q2_actor.hpp)
   q2_count_lines(s, static_cast<int>(std::count(inhibited.begin(), inhibited.end(), 1)));
   q2_start_lines(s);
   s.host_time = 0;
