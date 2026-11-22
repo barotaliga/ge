@@ -449,6 +449,7 @@ void drop_items(Q2Server& s) {
         map_trace(s, e.origin, mins, maxs, e.origin - sh::Vec3f{0, 0, 128},
                   sh::kSqSolid | sh::kSqWindow, static_cast<int>(i));
     if (t.start_solid) {
+      s.console.push_back("droptofloor: " + e.classname + " startsolid at " + q2_pos(e.origin));
       e.gone = true;
       continue;
     }
@@ -1226,6 +1227,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   map_spawn(s);
   monster_spawn(s);
   q2_count_lines(s, static_cast<int>(std::count(inhibited.begin(), inhibited.end(), 1)));
+  q2_start_lines(s);
   s.host_time = 0;
   s.map_stopped = false;
   s.pending_map.clear();
