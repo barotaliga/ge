@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 118 | 13 | 15 | 10 | 156 |
-| Client settings (cvars) | 161 | 46 | 103 | 40 | 350 |
+| Client settings (cvars) | 171 | 47 | 92 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 89 | 67 | 5 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 634 | 307 | 207 | 63 | 1211 |
+| **all** | 644 | 308 | 196 | 63 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 161, partial 46, missing 103, not-taken 40
+done 171, partial 47, missing 92, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -223,14 +223,14 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_demomsglen | `cl_demomsglen` | the largest message a recorded demo frame holds (default 1390) | not-taken | `client-gaps.md` (C38): not taken |
 | cvar.cl_demowait | `cl_demowait` | 1 holds a finished demo on its last frame (default 0) | done | `games/shooters_edge/client/demo_playback.cpp` |
 | cvar.cl_demosuspendtoggle | `cl_demosuspendtoggle` | `suspend` toggles rather than only pauses (default 1) | not-taken | `client-gaps.md` round 27: `suspend` not taken |
-| cvar.cl_http_downloads | `cl_http_downloads` | fetch files over HTTP when the server names a URL (default 1) | missing | C37 |
-| cvar.cl_http_filelists | `cl_http_filelists` | read a `.filelist` of extra files for a map or mod (default 1) | missing | C37 |
-| cvar.cl_http_max_connections | `cl_http_max_connections` | parallel HTTP fetches (default 2) | missing | C37 |
-| cvar.cl_http_proxy | `cl_http_proxy` | an HTTP proxy for downloads (default empty) | missing | C37 |
-| cvar.cl_http_default_url | `cl_http_default_url` | a download URL used when the server names none (default empty) | missing | C37 |
-| cvar.cl_http_insecure | `cl_http_insecure` | 1 skips TLS certificate checks (default 0) | missing | C37 |
-| cvar.cl_http_debug | `cl_http_debug` | prints HTTP transfer details (default 0) | missing | C37 |
-| cvar.cl_http_blocking_timeout | `cl_http_blocking_timeout` | seconds before a stalled HTTP fetch is dropped (default 15) | missing | C37 |
+| cvar.cl_http_downloads | `cl_http_downloads` | fetch files over HTTP when the server names a URL (default 1) | done | Quake II's layer (`client/q2_session.cpp`) over `net/q2_http` and `engine/net/http_fetch` (#1305) |
+| cvar.cl_http_filelists | `cl_http_filelists` | read a `.filelist` of extra files for a map or mod (default 1) | done | `net/q2_http`: `.filelist` files followed, packs first (#1305) |
+| cvar.cl_http_max_connections | `cl_http_max_connections` | parallel HTTP fetches (default 2) | done | `net/q2_http`: up to that many files at once (#1305) |
+| cvar.cl_http_proxy | `cl_http_proxy` | an HTTP proxy for downloads (default empty) | done | `engine/net/http_fetch`'s proxy (#1305) |
+| cvar.cl_http_default_url | `cl_http_default_url` | a download URL used when the server names none (default empty) | done | `net/q2_http`: the address when the server names none (#1305) |
+| cvar.cl_http_insecure | `cl_http_insecure` | 1 skips TLS certificate checks (default 0) | partial | registered (#1305); secure addresses are not fetched by ours, so their files come over the game's connection |
+| cvar.cl_http_debug | `cl_http_debug` | prints HTTP transfer details (default 0) | done | `net/q2_http`: each download's address said as it starts (#1305) |
+| cvar.cl_http_blocking_timeout | `cl_http_blocking_timeout` | seconds before a stalled HTTP fetch is dropped (default 15) | done | the stall timeout of a web list of servers (`menu/servers_page.hpp`, #1305) |
 | cvar.in_enable | `in_enable` | use the input layer at all (default 1) | missing | C35 |
 | cvar.in_grab | `in_grab` | 0 never grab the mouse in a window, 1 in a game, 2 also let go in demos and chase (default 1) | partial | `games/shooters_edge/client/q2_session.hpp` (`q2_takes_mouse`): 0 takes the mouse only while the game covers the screen; 2 is the same as 1 (a watched demo lets the mouse go in both, by our `in_mouse_release`) |
 | cvar.cl_nodelta | `cl_nodelta` | 1 asks the server for full frames, never deltas (default 0) | partial | `games/shooters_edge/client/q2_session.cpp`; `net/q2_client.hpp`'s `nodelta` acknowledges no frame, so each comes whole; read when you join, not live |
@@ -278,7 +278,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_autopause | `cl_autopause` | pause single player and demos while the console or a menu is up (default 1) | partial | `client/q2_session.cpp`, a game played alone (M18k4 round 35); a demo is not held under the menu |
 | cvar.cl_rollhack | `cl_rollhack` | other players' models lean the classic renderer's (wrong) way (default 1) | missing | C16 |
 | cvar.cl_noglow | `cl_noglow` | 1 stops items' light pulsing (default 0) | done | `client/cvar_layers.cpp`, over `r_itempulse` (M18k4 round 35) |
-| cvar.cl_nobob | `cl_nobob` | 1 stops the view bobbing (default 0) | missing | ours has `cl_bob` (`engine/camera/cvars.cpp`); no `cl_nobob` spelling |
+| cvar.cl_nobob | `cl_nobob` | 1 stops the view bobbing (default 0) | done | Quake II's `cl_nobob` (default 0): items the game marks to float (the bob bit) lie still (`client/world_models.cpp`, the picture's `items_still`); the view's bob untouched |
 | cvar.cl_nolerp | `cl_nolerp` | 1 draws entities at the newest frame without interpolation (default 0) | partial | `games/shooters_edge/net/qw_remote.cpp` (the first game's: missiles and movers only); verify on a Quake II server |
 | cvar.cl_shownet | `cl_shownet` | prints received messages: 1 sizes, 2 kinds, 3 entities (default 0) | partial | `net/q2_client.cpp`'s `read_payload` prints each message's size at 1 and above; the kinds (2) and entities (3) not listed |
 | cvar.cl_showmiss | `cl_showmiss` | prints each prediction miss (default 0) | done | `net/q2_predict.cpp` counts a miss (a new frame puts the newest move elsewhere than the last base did) and `net/q2_remote.cpp` prints "prediction miss on <frame>: <units>"; bound in `client/cvar_layers.cpp` |
@@ -535,7 +535,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.sys_forcegamelib | `sys_forcegamelib` | a game library path forced; command line only | missing | not found |
 | cvar.sys_allow_unsafe_savegames | `sys_allow_unsafe_savegames` | load saves of another build; command line only (default 0) | missing | not found |
 | cvar.sys_history | `sys_history` | lines of the terminal's history kept | missing | not found |
-| cvar.fs_autoexec | `fs_autoexec` | run `autoexec.cfg` on a game change (default 1) | missing | not found |
+| cvar.fs_autoexec | `fs_autoexec` | run `autoexec.cfg` on a game change (default 1) | done | Quake II's `fs_autoexec` (default 1): on a game change default.cfg (with `fs_default`, ours, in both games), the game's own settings, each game folder's autoexec.cfg (the base's, then the mod's) and postexec.cfg run in that order (`client/install_configs.cpp`'s `run_game_settings`); ours keeps each game's settings in its own file, run whatever `fs_autoexec` says |
 | cvar.fs_debug | `fs_debug` | debug: prints file opens | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.fs_fuzz | `fs_fuzz_factor`, `fs_fuzz_filter` | debug: fail file reads at random | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.game | `game` | the mod folder; latched, server info | partial | ours switches games by its own words (`client/game_folder.cpp`); verify `game` as a setting |
@@ -543,7 +543,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.com_completion_treshold | `com_completion_treshold` | matches above which Tab asks first (default 50) | missing | not found |
 | cvar.showpackets | `showpackets` | prints every packet (default 0) | done | `plugins/classic/protocol/channel.hpp` (`client-gaps.md` round 21) |
 | cvar.showdrop | `showdrop` | prints dropped packets (default 0) | done | `plugins/classic/protocol/channel.hpp` |
-| cvar.qport | `qport` | the client's port inside the connection (random) | missing | C43 |
+| cvar.qport | `qport` | the client's port inside the connection (random) | done | `qport` (classic layer, both games): 0 one picked from the name (ours keeps it from run to run, upstream's from the clock), 1..65535 that number, from the next connect (`net/qw_remote.cpp`); 2 bytes on protocol 34 |
 | cvar.net_maxmsglen | `net_maxmsglen` | the largest packet asked of the server (default 1390) | missing | not found |
 | cvar.net_chantype | `net_chantype` | 1 the newer net channel on modern protocols (default 1) | missing | ours speaks 34 only |
 | cvar.net_ip | `net_ip` | the local address to bind | partial | ours has it for the server (`engine/server/main.cpp`), not the client |

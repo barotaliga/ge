@@ -189,6 +189,7 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.show_misses != nullptr) *b.show_misses = false;      // Quake II's cl_showmiss
   if (b.shownet != nullptr) *b.shownet = 0;                  // and cl_shownet
   if (b.showpackets != nullptr) *b.showpackets = false;      // and cl_showpackets
+  if (b.items_still != nullptr) *b.items_still = false;      // and cl_nobob
   if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
   if (b.light_modulate != nullptr) *b.light_modulate = 1;
   if (b.light_lift != nullptr) *b.light_lift = 0;
@@ -353,6 +354,13 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   first) and `ui_colorservers` (`sb_colorservers`).
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
+  // Its whole set of configs run again on a game change (client/install_configs.cpp's
+  // run_game_settings), autoexec.cfg after config.cfg.
+  v.add({.name = "fs_autoexec",
+         .fallback = "1",
+         .help = "Whether autoexec.cfg runs again after config.cfg when another game is loaded.",
+         .kind = con::CvarKind::boolean,
+         .values = "0: config.cfg alone; 1: autoexec.cfg and postexec.cfg after it (the default)"});
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
   if (b.mouse != nullptr) b.mouse->per_frame = true;
   if (b.crosshair != nullptr) {
@@ -584,6 +592,13 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .kind = con::CvarKind::boolean,
             .values = "0: none (the default); 1: each one, its sequences and size"},
            b.showpackets);
+  if (b.items_still != nullptr)
+    v.bind({.name = "cl_nobob",
+            .fallback = "0",
+            .help = "Whether the items the game makes float rise and sink as they lie.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: they float (the default); 1: they lie still"},
+           b.items_still);
   if (b.crouch != nullptr)
     v.bind({.name = "cl_predict_crouch",
             .fallback = "1",

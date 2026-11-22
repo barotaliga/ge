@@ -72,6 +72,7 @@ struct GameBindings {
   int* shownet = nullptr;       // Quake II's `cl_shownet` (each message's size printed)
   bool* showpackets = nullptr;  // Quake II's `cl_showpackets` (each packet sent shown)
   int* noskins = nullptr;       // Quake II's `cl_noskins` (the picture's stock_figures)
+  bool* items_still = nullptr;  // Quake II's `cl_nobob` (the picture's items_still)
   // The held weapon's settings: Quake II's `hand` (2 draws no weapon), `cl_gun_x/y/z` and
   // `cl_gunfov`; Quake's `r_viewmodelsize` and `r_viewmodeloffset`.
   shooters_edge::view::ViewSettings* view = nullptr;

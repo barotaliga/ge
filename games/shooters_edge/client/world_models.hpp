@@ -348,6 +348,8 @@ struct InPlace {
   // r_powershells and r_itempulse (q2_look.hpp's power_look): a power's coloured shell over
   // its carrier and an item's pulsing light, in either game.
   bool power_shells = false, item_pulse = false;
+  // cl_nobob: an item the game marks to float (Quake II's bob bit) drawn still.
+  bool items_still = false;
 };
 
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a
