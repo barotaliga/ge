@@ -353,6 +353,7 @@ int run_main(int argc, char** argv) {
                                   .shownet = &remote.q2_shownet,
                                   .showpackets = &remote.q2_showpackets,
                                   .noskins = &picture.stock_figures,
+                                  .items_still = &picture.items_still,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,
                                   .stuff_level = &remote.stuff.level,
@@ -365,7 +366,8 @@ int run_main(int argc, char** argv) {
                                   .q2fx = &picture.q2fx,
                                   .chat = &remote.ignore.chat,
                                   .auto_chat = &con_view.game_chat,
-                                  .music = &music};
+                                  .music = &music,
+                                  .console = &con_look};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   remote.stuff_file =
       cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";
@@ -963,7 +965,7 @@ int run_main(int argc, char** argv) {
     menu_host.table = &adapter.menu(adapter);
     game_menu.set_table(*menu_host.table);
     console.set_search_path(cl::config_dirs(args.basedir, args.game, *content));
-    cl::run_game_settings(console, args.basedir, args.game);  // the new game's own meanings
+    cl::run_game_settings(console, args.basedir, args.game, *content);  // its own meanings
     switch_step("Loading the game's rules...");
     if (!cl::load_programs(adapter, files, args.progs, game_content, error, *adapter.game))
       return false;

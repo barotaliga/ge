@@ -488,3 +488,5 @@ Rank 3: 22 (SP 9, DM 7, commands 5, coop 1).
 | 2026-11-22 | batch 7 | R15, R16, R46 (spectating mid-match, the chase camera, deathmatch only), the server console lines at load and in play, `sv test` and unknown words, the connect line, the hit report |
 | 2026-11-22 | batch 8 | R45 (gun_x, gun_y, gun_z, gamename, gamedate, maxentities), the map's key and class lines, the laser's and combat points' lines, the gun's sway; spawnentity and spawnonstart not taken |
 | 2026-11-22 | batch 9 | the start lines a frame after load (elevators, monsters), bad items, items in solid, the light ramp's first use, uses stopped by removal; the audit's misc_actor and target_actor rows |
+| 2026-11-22 | batch 10 | misc_actor and target_actor on the monster rules: the use, the points, the chat lines, the taunts |
+| 2026-11-22 | batch 11 | Think_Delay line, ShutdownGame line, cheats latched, viewthing's model; game ledger 17 partial to 11 |

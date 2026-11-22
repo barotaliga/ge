@@ -63,9 +63,10 @@ struct SeriesConfig {
 };
 
 // The game's own saved settings (`<game folder>/settings/config.cfg`) run, as another game is
-// loaded; false when there are none.
+// loaded; false when there are none. Where the loaded game has `fs_autoexec` (Quake II) and it is
+// on, each game folder's autoexec.cfg (the base's, then the mod's) and postexec.cfg run after.
 bool run_game_settings(ge::console::Console& con, const std::string& basedir,
-                       const std::string& game);
+                       const std::string& game, const ge::classicenhance::Profile& content);
 
 // The startup over `con` (its search path set to `config_dirs` first by the caller), with the
 // command line's words `plus` (from the first `+` word on).

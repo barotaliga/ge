@@ -67,6 +67,9 @@ constexpr PainRule kPains[] = {
     soldier("monster_soldier_light", "soldier/solpain2.wav"),
     soldier("monster_soldier", "soldier/solpain1.wav"),
     soldier("monster_soldier_ss", "soldier/solpain3.wav"),
+    {.classname = "misc_actor",  // silent; a taunt in its place first (q2_actor.cpp)
+     .nightmare = Nightmare::both,
+     .bands = {{kAny, 1, {{S(74, 76)}, {S(77, 79)}, {S(80, 82)}}}}},
     {.classname = "monster_infantry",
      .bands = {{kAny,
                 1,

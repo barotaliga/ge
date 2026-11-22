@@ -426,6 +426,32 @@ std::string remote_foot(const Remote& r, double& progress) {
   return c.stage == ClientStage::signon ? loading : std::string();
 }
 
+namespace {
+
+// The port Quake II's `net_clientport` asks for (-1 any free one; never in Quake).
+int wanted_port(const Remote& r) {
+  if (!r.setting || !(r.q2_game && r.q2_game())) return -1;
+  const std::string v = r.setting("net_clientport");
+  const int port = v.empty() ? -1 : std::atoi(v.c_str());
+  return port > 0 && port <= 65535 ? port : -1;
+}
+
+// The client's socket on `port` (-1 any free one), else on any free port with `r.port_note`
+// saying so; false only when no port opens.
+bool open_own(Remote& r, int port, std::string& error) {
+  r.own_port = port;
+  r.port_note.clear();
+  if (port > 0) {
+    if (gn::open_udp_transport(r.own, gn::ipv4(0, 0, 0, 0, static_cast<uint16_t>(port)), &error))
+      return true;
+    r.port_note = "Couldn't open port " + std::to_string(port) +
+                  " for the client; another program may be using it. Using any free port.";
+  }
+  return gn::open_udp_transport(r.own, gn::ipv4(0, 0, 0, 0, 0), &error);
+}
+
+}  // namespace
+
 bool remote_connect(Remote& r, const std::string& address, const ClientConfig& cfg,
                     std::string& error) {
   remote_disconnect(r);
@@ -441,7 +467,7 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
             "192.168.1.20, connect 192.168.1.20:27500, connect example.org:27500) or localhost.";
     return false;
   }
-  if (!gn::open_udp_transport(r.own, gn::ipv4(0, 0, 0, 0, 0), &error)) {
+  if (!open_own(r, q2 ? wanted_port(r) : -1, error)) {
     error =
         "the client's socket did not open: " + error + ". Check that the computer is on a network.";
     return false;
@@ -892,6 +918,13 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   remote_rates_step(r, wall_s);  // $cl_pps and the other rates (qw_remote_macros.hpp)
   user_info_step(r);
   if (r.q2) {
+    // net_clientport moved: the socket opened again on the new port, the connection carrying on
+    // (the server knows the client by its qport).
+    if (const int port = wanted_port(r); port != r.own_port && r.transport == &r.own) {
+      std::string error;
+      if (!open_own(r, port, error)) said.emplace_back("Couldn't open a port for the client.");
+      if (!r.port_note.empty()) said.push_back(r.port_note);
+    }
     const RemoteStep step = q2_remote_step(r, wall_s, said);
     remote_record_flush(r);  // `record`'s file (qw_match_record.hpp)
     login_step(r, said);     // logged in by the account file, and seen by friends, as below
@@ -1160,7 +1193,11 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.gender_auto = !cfg.gender.empty() && cvar("gender_auto", "0") == "1";
     cfg.voice = r.voip;
     cfg.live_mic = true;  // the window's microphone (remote_mic), while a voice key is held
-    cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
+    // qport: the number the server knows this client by when a NAT moves its port; 0 one
+    // picked from the name, so the same player keeps it from run to run.
+    const int qport = std::atoi(cvar("qport", "0").c_str());
+    cfg.qport = qport > 0 ? static_cast<uint16_t>(qport)
+                          : static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
     cfg.timeout = std::atof(cvar("cl_timeout", "60").c_str());  // 0: never
     cfg.trace = &r.trace;                                       // showpackets, showdrop
     cfg.read_file = r.read_file;
@@ -1178,6 +1215,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
       c.print("connect: " + error);
       return;
     }
+    if (!r.port_note.empty()) c.print(r.port_note);
     if (!cfg.prx.empty()) r.server_name = address;  // reconnect: the server, through the chain
     c.print(remote_status(r));
   };
@@ -1395,6 +1433,15 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                      .kind = ge::console::CvarKind::number,
                      .min = 1,
                      .values = "15: fifteen seconds (the default); a number: that many"});
+    con.cvars().add({.name = "qport",
+                     .fallback = "0",
+                     .help = "The number the server you join knows you by when your router moves "
+                             "your port; it applies from the next connect.",
+                     .kind = ge::console::CvarKind::integer,
+                     .min = 0,
+                     .max = 65535,
+                     .values = "0: one picked from your name (the default); 1..65535: that "
+                               "number"});
     con.cvars().add({.name = "rcon_password",
                      .flags = ge::console::kArchive,
                      .help = "The password rcon sends the server joined.",

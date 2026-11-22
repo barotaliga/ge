@@ -188,6 +188,10 @@ gl::Picture route_on_plate(const PackMaps& packs, const fb::EpisodeMap& m, bool&
   put(marks.kills, m.kills);
   put(marks.secrets, m.secrets);
   put(marks.exits, m.exits);
+  for (const std::vector<sh::Vec3f>& b : m.blasts) {
+    marks.blasts.emplace_back();
+    put(marks.blasts.back(), b);
+  }
   const ge::ui::Image img = lv::draw_route(plate, marks);
   out.width = img.width;
   out.height = img.height;
@@ -335,7 +339,8 @@ void run(gl::Lab& lab) {
              of(m.found_secrets, m.total_secrets),
          "The map from above as the live map draws it (or, with no pack, the walkable floor "
          "darker higher), his track blue at the start to red at the end, the exits (gold "
-         "rings), where monsters fell (crosses) and where secrets counted (gold diamonds); "
+         "rings), where monsters fell (crosses), where secrets counted (gold diamonds) and his "
+         "rocket and grenade jumps (orange, filled take-off to white landing); "
          "out at " +
              (m.exit_s >= 0 ? to_fixed(m.exit_s, 0) + " s." : std::string("no time: ") + m.end),
          "the track reaches every part of the floor and ends at an exit", in},

@@ -761,7 +761,14 @@ void think(Fighter& f, const ge::shooterbots::BotView& s, int me, const Stats& s
           escaping = true;
         }
       }
-      if (!escaping && !was_diving &&
+      // Carried up a lift's shaft (the pilot's `ride`, dry, on a mover going up), no node is near
+      // him until its top: never lost there (walked to the nearest node, he stepped off e1m4's
+      // lift halfway up, again and again).
+      const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(me)];
+      const bool riding = f.bot.pilot.pilot.mode == sb::PilotMode::ride && self.waterlevel == 0 &&
+                          ed.groundentity > 0 && ed.groundentity < s.sv.num_edicts &&
+                          s.sv.edicts[static_cast<size_t>(ed.groundentity)].velocity.z > 0;
+      if (!escaping && !was_diving && !riding &&
           ((pool && (f.dry_pockets || swim)) || sb::nav_nearest(g, self.origin) < 0)) {
         f.lost++;
         // The nearest few by distance; the first of them in a clear line is walked or swum at (out

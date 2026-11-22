@@ -556,6 +556,24 @@ TEST(a_classic_game_s_console_is_in_its_letters_over_its_background) {
   int backs = 0;
   for (const auto& c : dl.cmds()) backs += c.box.image == look.back ? 1 : 0;
   CHECK(backs == 1);
+  // con_background: another picture, read once and drawn in its place; one that does not read
+  // leaves the game's own.
+  int reads = 0;
+  look.read_back = [&reads](std::string_view name, ge::ui::Image* out) {
+    ++reads;
+    if (name != "inter") return false;
+    out->width = out->height = 2;
+    out->rgba.assign(16, 255);
+    return true;
+  };
+  look.back_name = "inter";
+  const ge::ui::Image* other = look.background();
+  CHECK(other != nullptr && other != look.back && other->width == 2);
+  CHECK(look.background() == other && reads == 1);
+  look.back_name = "missing";
+  CHECK(look.background() == look.back && reads == 2);
+  look.back_name = "conback";
+  CHECK(look.background() == look.back && reads == 2);
   // No pictures read: the engine's own look, no background.
   sm::ClassicConsole none;
   sm::classic_console(sm::ClassicArt{}, none);
