@@ -43,6 +43,7 @@
 #include "shooters_edge/net/q2_mvd_relay.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
+#include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/server/q2_mapfix.hpp"
 #include "shooters_edge/server/q2_native.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -910,6 +911,23 @@ uint64_t hash(const void* g) {
 void fill_status(const void* g, ge::net::Status& st) {
   const Game& game = *static_cast<const Game*>(g);
   st.map = game.map->name;
+  // The game (the hub draws Quake II's map and board: hub/cards.hpp), the mode by the seats, and
+  // every client held with his frags and ping, as Quake II's own status answer lists them.
+  st.keys.emplace_back("*game", "q2");
+  if (!game.net) return;
+  const Q2NetServer& s = *game.net;
+  st.mode = qw_mode(false, false, q2_public_slots(s));
+  st.max_players = q2_public_slots(s);
+  for (int i = 0; i < q2_net_slots(s); i++) {
+    const Q2NetClient& c = s.clients[i];
+    if (!q2_held(c)) continue;
+    ge::net::StatusPlayer p;
+    p.name = c.name;
+    p.score = static_cast<int32_t>(game.rules->world.clients[i].numbers.frags);
+    p.ping_ms = static_cast<uint16_t>(std::clamp(c.ping_ms, 0, 9999));
+    p.flags = c.spectator ? ge::net::kPlayerSpectator : 0;
+    st.players.push_back(std::move(p));
+  }
 }
 
 bool serve(void* g, ge::net::Transport& port, std::string& error) {

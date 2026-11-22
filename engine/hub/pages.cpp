@@ -14,6 +14,7 @@
 #include "hub/link.hpp"
 #include "hub/page_parts.hpp"
 #include "hub/radar.hpp"
+#include "hub/stills.hpp"
 #include "hub/watch.hpp"
 
 namespace ge::hub {
@@ -118,13 +119,6 @@ std::string colour_dot(uint32_t rgb) {
   return out;
 }
 
-// A map's banner hue (0..359), the same for a name on every page and every hub: FNV-1a of it.
-int map_hue(std::string_view map) {
-  uint32_t h = 2166136261u;
-  for (const char ch : map) h = (h ^ static_cast<uint8_t>(ch)) * 16777619u;
-  return static_cast<int>(h % 360u);
-}
-
 // A count in the sums: the number large, its word after ("1 server", "3 servers").
 std::string sum_count(size_t n, const char* one, const char* many) {
   return "<span><b>" + std::to_string(n) + "</b>" + (n == 1 ? one : many) + "</span>";
@@ -151,15 +145,26 @@ std::string scoreboard(const HubSpec& spec, const gn::Status& s) {
 }
 
 // `page_forward`: a forwarder takes a browser page to this server (Play here opens /join/...).
-std::string card(const HubSpec& spec, const HubNode& n, bool page_forward) {
+// `stills`: the card's top is its picture (the map's still, the board in the game's charset) when
+// the game has a board's look, the HTML board left out.
+std::string card(const HubSpec& spec, const HubNode& n, bool page_forward, const Stills* stills) {
   const gn::Status& s = n.status;
   const Counts c = counts(s);
   const std::string addr = gn::to_string(n.address);
+  const std::string game = stills && spec.stills.game_of ? spec.stills.game_of(s) : std::string();
+  const bool pictured = stills != nullptr && stills->look(game) != nullptr;
+  if (pictured) (void)stills->still(game, s.map);  // asked now, so it is drawn by the next refresh
   std::string h = "<article class=\"card phase-" + std::string(phase_word(s.phase)) + "\">";
-  h += "<div class=\"map\" style=\"--h:" + std::to_string(map_hue(s.map)) +
-       "\"><span class=\"mapname\">" + html_escape(s.map) + "</span><span class=\"phase" +
-       (s.phase == gn::StatusPhase::playing ? " live" : "") + "\">" + phase_word(s.phase) +
-       (s.time_left_s >= 0 ? " " + clock(s.time_left_s) : std::string()) + "</span></div>";
+  if (pictured) {
+    h += "<img class=\"shot\" src=\"/card/" + html_escape(addr) +
+         ".jpg?v=" + std::to_string(n.changes) + "\" width=\"960\" height=\"540\" alt=\"" +
+         html_escape(s.mode) + " on " + html_escape(s.map) + "\">";
+  } else {
+    h += "<div class=\"map\" style=\"--h:" + std::to_string(map_hue(s.map)) +
+         "\"><span class=\"mapname\">" + html_escape(s.map) + "</span><span class=\"phase" +
+         (s.phase == gn::StatusPhase::playing ? " live" : "") + "\">" + phase_word(s.phase) +
+         (s.time_left_s >= 0 ? " " + clock(s.time_left_s) : std::string()) + "</span></div>";
+  }
   h += "<h2>" + html_escape(s.name) + (s.locked ? " <small>locked</small>" : "") + "</h2>";
   h += "<p class=\"meta\"><b>" + html_escape(s.mode.empty() ? "-" : s.mode) + "</b> · " +
        std::to_string(c.people - c.bots) + " / " + std::to_string(s.max_players) + " playing";
@@ -177,7 +182,7 @@ std::string card(const HubSpec& spec, const HubNode& n, bool page_forward) {
     }
     h += "</div>";
   }
-  h += scoreboard(spec, s);
+  if (!pictured) h += scoreboard(spec, s);
   if (c.spectators || c.viewers) {
     h += "<p class=\"watchers\">" + std::to_string(c.spectators) + " spectating · " +
          std::to_string(c.viewers) + " watching</p>";
@@ -198,6 +203,13 @@ std::string card(const HubSpec& spec, const HubNode& n, bool page_forward) {
 }
 
 }  // namespace
+
+// A map's banner hue (0..359), the same for a name on every page and every hub: FNV-1a of it.
+int map_hue(std::string_view map) {
+  uint32_t h = 2166136261u;
+  for (const char ch : map) h = (h ^ static_cast<uint8_t>(ch)) * 16777619u;
+  return static_cast<int>(h % 360u);
+}
 
 std::string scoreboard_html(const HubSpec& spec, const gn::Status& s) {
   return scoreboard(spec, s);
@@ -240,7 +252,7 @@ std::string html_escape(std::string_view s) {
 }
 
 std::string servers_page(const Poller& p, const HubSpec& spec, std::string_view mode,
-                         int64_t now_us) {
+                         int64_t now_us, const Stills* stills) {
   std::vector<std::pair<int64_t, const HubNode*>> live, empty;
   int people = 0, broadcasts = 0;
   for (const HubNode& n : p.nodes) {
@@ -272,7 +284,7 @@ std::string servers_page(const Poller& p, const HubSpec& spec, std::string_view 
        sum_count(static_cast<size_t>(broadcasts), " broadcast", " broadcasts") + "</p>";
   h += "<section class=\"cards\">\n";
   for (const auto& r : live)
-    h += card(spec, *r.second, poller_page_forward(p, r.second->address) != nullptr);
+    h += card(spec, *r.second, poller_page_forward(p, r.second->address) != nullptr, stills);
   h += "</section>";
   if (live.empty()) h += "<p class=\"none\">Nobody is playing right now.</p>";
   if (!empty.empty()) {
@@ -468,8 +480,10 @@ Answer hub_answer(const Poller& p, const HubSpec& spec, std::string_view target,
   while (path.size() > 1 && path.back() == '/') path.pop_back();
   if (path == "/demos") return html(200, demos_page(site, spec, target), 30);
   if (path == "/" || path.empty()) {
-    return html(200, servers_page(p, spec, query_param(target, "mode"), now_us), kPageRefreshS);
+    return html(200, servers_page(p, spec, query_param(target, "mode"), now_us, site.stills),
+                kPageRefreshS);
   }
+  if (Answer a; stills_answer(p, spec, site.stills, path, a)) return a;
   if (path == "/players") return html(200, players_page(p, spec, now_us), kPageRefreshS);
   if (path == "/style.css") {
     Answer a = html(200, hub_stylesheet(), 3600);

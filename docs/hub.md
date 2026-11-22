@@ -141,6 +141,31 @@ It speaks plain HTTP on one port; TLS and a CDN are the operator's reverse proxy
 `docs/networking.md` rule: no hosted service, a community runs what this tree builds). A hub, a
 master and a TV node can share one small machine. The labs run all of it on the simulated network.
 
+## Match cards
+
+A live match's card on the Servers page is a picture of the match as the game shows it, not an
+HTML table: the map seen from its intermission view with the board over it in the game's own
+letters (`engine/hub/card.hpp`, `engine/hub/stills.hpp`; Shooter's Edge's half in
+`games/shooters_edge/hub/cards.hpp` and `still.hpp`).
+
+| Part | Made | Kept |
+| --- | --- | --- |
+| The map's STILL | Once a map, the first time a match on it is shown, by the game (`HubStills::render`): Shooter's Edge draws the map with the window's own world draw from its first intermission spot (else a deathmatch spawn, else the start) in the classic look with classic enhance off, on any GPU adapter (lavapipe in software on a server with none), on the hub's worker thread so no page waits | On disk, `<--stills>/<game>/<map>-<key>.jpg`. The key digests the map's file, the source stamp of every directory whose code draws it (`cmake/SourceStamp.cmake`, shaders included) and the size: a changed map or a new build draws it again and the old file goes. Never committed: each hub draws its own from its own packs |
+| The BOARD | Every time the card is asked for (`/card/<address>.jpg`, the page's `<img>` keyed by the record's change count), from the live status record | Nowhere: it is as live as the poller |
+
+The board is the game's: its glyph sheet from its packs (`conchars`, never enhanced), drawn at
+whole multiples of its pixels (the largest at which every row fits, a duel's six times) so every texel is a square;
+the columns ping, frags, team and name in the game's order, the team column only when the match
+is played in teams (never in a duel or a free-for-all), the players then grouped by team; Quake's
+frags on a box of the player's colour, Quake II's bare with the column words in its green set; the
+mode on the map and the clock along the top, the spectators along the foot. A map the content does
+not hold, or a hub with no `--content`, gets the map's hue under the same board; a game with no
+glyph sheet gets the HTML card.
+
+A map's name comes from a server's record, so it is used as a file name only when it is a plain
+one (`still_name_ok`). The server's record names its classic game in the `*game` key; a browsed
+classic server is Quake's.
+
 ## Watching in a browser
 
 A hub page shows a match with the ENGINE ITSELF: a viewer built from the same C++ as the game,

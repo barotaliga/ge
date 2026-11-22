@@ -97,6 +97,7 @@ linear-gradient(160deg,hsl(var(--h) 45% var(--banner-l)),hsl(calc(var(--h) + 60)
 :root[data-look=alpine] .map{background:
 repeating-radial-gradient(ellipse at 30% 130%,rgba(255,255,255,.11) 0 1px,transparent 1px 12px),
 linear-gradient(160deg,hsl(var(--h) 55% var(--banner-l)),hsl(calc(var(--h) + 25) 45% calc(var(--banner-l) - 14%)))}
+img.shot{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#111}
 .phase-scores .map,.phase-waiting .map{filter:saturate(.55)}
 .mapname{font:700 24px/1 var(--display);text-transform:uppercase;letter-spacing:.04em;
 text-shadow:0 2px 12px rgba(0,0,0,.35);overflow-wrap:anywhere}
