@@ -1,13 +1,14 @@
 // Team chat and the game's events in a player's config (team_chat.hpp).
 //
 // ge:summary Team chat's percent codes, fun characters and f_ event triggers, defined
-// ge:keywords say say_team percent-codes fun-characters f_newmap f_spawn f_death f_respawn
+// ge:keywords cl_timer say say_team percent-codes fun-characters f_newmap f_spawn f_death f_respawn
 // ge:keywords cl_health cl_armor cl_ammo cl_mapname macros
 // ge:skill shooter console
 // ge:test tests/shooters_edge_team_chat_test.cpp
 #include "shooters_edge/client/team_chat.hpp"
 
 #include "console/cfg.hpp"
+#include "console/clock_macros.hpp"
 
 #include <algorithm>
 #include <array>
@@ -836,6 +837,10 @@ void add_team_chat(con::Console& c, TeamChat& chat) {
   c.add_macro("cl_ammo",
               [&chat] { return std::to_string(chat.status.ammo_for(chat.status.weapon)); });
   c.add_macro("cl_mapname", [&chat] { return chat.map; });
+  // $cl_timer: the level's time, "4:05" ("0:00" before a level).
+  c.add_macro("cl_timer", [&chat] {
+    return con::level_clock(chat.map.empty() || !chat.known ? 0 : chat.status.t - chat.level_from);
+  });
   auto& v = c.cvars();
   for (const Word& w : kWords)
     if (v.find(w.name) == nullptr)
@@ -965,6 +970,7 @@ void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std:
   if (map.empty()) return;
   if (map != chat.map) {  // a new map: what was remembered goes, f_newmap then its first frame
     chat.map = std::string(map);
+    chat.level_from = status.t;
     chat.known = false;
     chat.last_weapon = -1;
     chat.died_at.clear();

@@ -10,9 +10,9 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client console commands | 103 | 11 | 32 | 10 | 156 |
+| Client console commands | 111 | 11 | 24 | 10 | 156 |
 | Client settings (cvars) | 133 | 36 | 141 | 40 | 350 |
-| Macros ($name in typed and bound text) | 14 | 1 | 13 | 2 | 30 |
+| Macros ($name in typed and bound text) | 23 | 1 | 4 | 2 | 30 |
 | Menu pages and rows | 77 | 72 | 12 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
 | Temporary entities (svc_temp_entity) | 14 | 50 | 1 | 0 | 65 |
@@ -23,17 +23,17 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 7 | 7 | 2 | 0 | 16 |
 | The layout language (status bar and layouts) | 24 | 1 | 2 | 0 | 27 |
 | HUD and screen elements | 11 | 10 | 7 | 1 | 29 |
-| Messages printed to the player | 32 | 56 | 54 | 5 | 147 |
+| Messages printed to the player | 38 | 56 | 48 | 5 | 147 |
 | Demo playback and recording features | 4 | 10 | 7 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 4 | 3 | 4 | 0 | 11 |
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 540 | 295 | 315 | 61 | 1211 |
+| **all** | 563 | 295 | 292 | 61 | 1211 |
 
 ## Client console commands
 
-done 103, partial 11, missing 32, not-taken 10
+done 111, partial 11, missing 24, not-taken 10
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -79,11 +79,11 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.passive | `passive` | toggles waiting for a server to connect to us (through a NAT) | missing | C42 |
 | cmd.rcon | `rcon <command>` | sends a remote-console command with `rcon_password` to the server or `rcon_address` | done | `games/shooters_edge/net/qw_admin.cpp` |
 | cmd.pingservers | `pingservers` | pings the address book `adr0`..`adr15` and the LAN | missing | C41 |
-| cmd.serverstatus | `serverstatus [address]` | asks a server for its info and players and prints them by frags | missing | C41 |
+| cmd.serverstatus | `serverstatus [address]` | asks a server for its info and players and prints them by frags | done | `games/shooters_edge/net/qw_serverstatus.cpp`: its own socket, joined or not; both games' answers |
 | cmd.pause | `pause` | pauses a single-player game or a demo | partial | a word of the window's own game (`client/listen.cpp`); not found to pause a demo or a joined single-player server (C24) |
 | cmd.skins | `skins` | reloads every client's skin and prints "client n: name --> model/skin" | missing | not found as a console command in Quake II's client |
 | cmd.userinfo | `userinfo` | prints the user info being sent | done | `engine/console/console_more.cpp`: "User info settings:" then each key padded to 20 |
-| cmd.download | `download <file>` | asks the server for a file over the connection | missing | the client asks for files only on connecting (`net/q2_client.cpp`); no command (C36) |
+| cmd.download | `download <file>` | asks the server for a file over the connection | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
 | cmd.dumpclients | `dumpclients` | prints every client's index and configstring | done | `games/shooters_edge/client/q2_bar.cpp` |
 | cmd.dumpstatusbar | `dumpstatusbar <file>` | writes the status-bar program to a file | done | `games/shooters_edge/client/q2_bar.cpp`: written under `layouts/` |
 | cmd.dumplayout | `dumplayout <file>` | writes the current layout program to a file | done | `games/shooters_edge/client/q2_bar.cpp`: written under `layouts/` |
@@ -178,10 +178,10 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.quit | `quit` | exits | done | `games/shooters_edge/client/main.cpp` |
 | cmd.recycle | `recycle` | restarts the program in place | missing | not found |
 | cmd.lasterror | `lasterror` | prints the last error | done | `engine/console/console_more.cpp` |
-| cmd.path | `path` | prints the search path | missing | ours prints it through `ge`/`secli`, not the console |
-| cmd.dir | `dir <path> [ext]` | lists files in the search path | missing | not found |
-| cmd.fdir | `fdir <wildcard>` | lists files by wildcard | missing | not found |
-| cmd.whereis | `whereis <path> [all]` | says which pack or folder a file comes from | missing | not found |
+| cmd.path | `path` | prints the search path | done | `engine/vfs/search_commands.cpp`: each source, the winner first, with its count of files |
+| cmd.dir | `dir <path> [ext]` | lists files in the search path | done | `engine/vfs/search_commands.cpp` |
+| cmd.fdir | `fdir <wildcard>` | lists files by wildcard | done | `engine/vfs/search_commands.cpp` |
+| cmd.whereis | `whereis <path> [all]` | says which pack or folder a file comes from | done | `engine/vfs/search_commands.cpp`: the winner, and with `all` every source holding it |
 | cmd.fs_stats | `fs_stats` | file-system counters | not-taken | `client-gaps.md`: developer tools left out |
 | cmd.link | `link <from> <to>` | links one path to another | missing | not found |
 | cmd.unlink | `unlink <from>` | removes a link | missing | not found |
@@ -191,9 +191,9 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.bsplist | `bsplist` | lists loaded maps | not-taken | `client-gaps.md`: developer tools left out |
 | cmd.z_stats | `z_stats` | memory statistics | not-taken | `client-gaps.md`: developer tools left out |
 | cmd.net_restart | `net_restart` | restarts networking | missing | not found |
-| cmd.net_stats | `net_stats` | prints network counters | missing | not found |
+| cmd.net_stats | `net_stats` | prints network counters | done | `engine/net/net_commands.cpp`: packets and bytes each way since the socket opened (`engine/net/transport.cpp` counts them) |
 | cmd.showip | `showip` | prints the local addresses | missing | not found |
-| cmd.dns | `dns <name>` | resolves a host name | missing | not found |
+| cmd.dns | `dns <name>` | resolves a host name | done | `engine/net/net_commands.cpp` |
 | cmd.tests | `error`, `errordrop`, `freeze`, `crash`, `doublefree`, `printjunk`, `bsptest`, `wildtest`, `normtest`, `infotest`, `snprintftest`, `modeltest`, `imagetest`, `soundtest`, `activate`, `mdfourtest`, `mdfoursum`, `extcmptest`, `nextpathtest`, `extract`, `utf8test` | the test build's self-tests and fault triggers | not-taken | `client-gaps.md`: developer tools left out |
 
 ## Client settings (cvars)
@@ -557,7 +557,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 
 ## Macros ($name in typed and bound text)
 
-done 14, partial 1, missing 13, not-taken 2
+done 23, partial 1, missing 4, not-taken 2
 
 A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's value.
 
@@ -567,15 +567,15 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 | macro.loc_there | `$loc_there` | the name of the place the player looks at | done | `games/shooters_edge/client/place_names.cpp` |
 | macro.cl_mapname | `$cl_mapname` | the map's file name | done | `games/shooters_edge/client/team_chat.cpp` |
 | macro.cl_server | `$cl_server` | the server's address | done | `games/shooters_edge/net/qw_remote.cpp`: the server joined, as asked |
-| macro.cl_timer | `$cl_timer` | time on this level, m:ss or h:mm:ss | missing | C44 |
-| macro.cl_demopos | `$cl_demopos` | the playing demo's position, m:ss.t | missing | C44 |
+| macro.cl_timer | `$cl_timer` | time on this level, m:ss or h:mm:ss | done | `games/shooters_edge/client/team_chat.cpp` (`engine/console/clock_macros.cpp` `level_clock`) |
+| macro.cl_demopos | `$cl_demopos` | the playing demo's position, m:ss.t | done | `games/shooters_edge/client/demo_playback.cpp` (`tenths_clock`) |
 | macro.cl_ups | `$cl_ups` | the player's speed along the ground, units a second (predicted when predicting) | done | `games/shooters_edge/client/place_seen.cpp` |
 | macro.cl_fps | `$cl_fps` | moves (client frames) a second | missing | C44 |
 | macro.r_fps | `$r_fps` | drawn frames a second | done | `engine/platform/pacing.cpp`: frames drawn in the last second |
-| macro.cl_mps | `$cl_mps` | moves a second sent | missing | C44 |
-| macro.cl_pps | `$cl_pps` | packets a second sent | missing | C44 |
-| macro.cl_ping | `$cl_ping` | the round trip, ms | missing | C44 |
-| macro.cl_lag | `$cl_lag` | packets lost, percent with 2 decimals | missing | C44 |
+| macro.cl_mps | `$cl_mps` | moves a second sent | done | `games/shooters_edge/net/qw_remote_macros.cpp`: the moves sent, the last whole second (`engine/net/rates.cpp`) |
+| macro.cl_pps | `$cl_pps` | packets a second sent | done | `games/shooters_edge/net/qw_remote_macros.cpp`: the packets sent, the last whole second (`engine/net/rates.cpp`) |
+| macro.cl_ping | `$cl_ping` | the round trip, ms | done | `games/shooters_edge/net/qw_remote_macros.cpp` |
+| macro.cl_lag | `$cl_lag` | packets lost, percent with 2 decimals | done | `games/shooters_edge/net/qw_remote_macros.cpp` |
 | macro.cl_health | `$cl_health` | the health stat | done | `games/shooters_edge/client/team_chat.cpp` |
 | macro.cl_ammo | `$cl_ammo` | the ammo stat | done | `games/shooters_edge/client/team_chat.cpp` |
 | macro.cl_armor | `$cl_armor` | the armour stat | done | `games/shooters_edge/client/team_chat.cpp` |
@@ -589,9 +589,9 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 | macro.com_uptime | `$com_uptime` | how long the program has run | done | `engine/console/clock_macros.cpp` |
 | macro.com_uptime_long | `$com_uptime_long` | the same in words | done | `engine/console/clock_macros.cpp` |
 | macro.random | `$random` | a digit 0..9 | done | `engine/console/clock_macros.cpp` |
-| macro.com_maplist | `$com_maplist` | every map's name (the start-server page lists them) | missing | C44 |
-| macro.net_uprate | `$net_uprate` | bytes a second sent | missing | C44 |
-| macro.net_dnrate | `$net_dnrate` | bytes a second received | missing | C44 |
+| macro.com_maplist | `$com_maplist` | every map's name (the start-server page lists them) | done | `games/shooters_edge/client/game_adapter.cpp` |
+| macro.net_uprate | `$net_uprate` | bytes a second sent | done | `games/shooters_edge/net/qw_remote_macros.cpp` (`engine/net/rates.cpp`, the transport's counts) |
+| macro.net_dnrate | `$net_dnrate` | bytes a second received | done | `games/shooters_edge/net/qw_remote_macros.cpp` (`engine/net/rates.cpp`, the transport's counts) |
 | macro.cvars | `$<any setting>` | any setting's value expands the same way (`$$` defers it in menu lines) | partial | ours expands `$name` of settings in the console language (`engine/console/script.cpp`); verify in binds and `say` |
 
 ## Menu pages and rows
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 32, partial 56, missing 54, not-taken 5
+done 38, partial 56, missing 48, not-taken 5
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1168,15 +1168,15 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.rcon.nopass | "You must set 'rcon_password' before issuing an rcon command." | `rcon` without a password | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.rcon.noaddr | "You must either be connected, or set the 'rcon_address' cvar to issue rcon commands." | `rcon` with nowhere to send | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.rcon.badaddr | "Bad address: %s" | a bad `rcon_address`, `serverstatus` or `remotemode` address | partial | ours does it but says it in its own words (the exact line not found) |
-| msg.status.head | "Status response from %s" | `serverstatus` answer | missing | the feature is missing |
-| msg.status.cols | "Num Score Ping Name" | `serverstatus` player table | missing | the feature is missing |
-| msg.status.usage | "Usage: %s [address]" | `serverstatus` misuse | missing | the feature is missing |
+| msg.status.head | "Status response from %s" | `serverstatus` answer | done | `games/shooters_edge/net/qw_serverstatus.cpp` |
+| msg.status.cols | "Num Score Ping Name" | `serverstatus` player table | done | `games/shooters_edge/net/qw_serverstatus.cpp` |
+| msg.status.usage | "Usage: %s [address]" | `serverstatus` misuse | done | `games/shooters_edge/net/qw_serverstatus.cpp` |
 | msg.dl.progress | "[UDP] %s [%s] [%d remaining file%s]" | a download finished, with how many remain | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.dl.open | "[UDP] Couldn't open %s for writing: %s" | a download's file cannot be written | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.dl.rename | "[UDP] Couldn't rename %s to %s: %s" | the finished `.tmp` cannot be renamed | missing | the feature is missing |
-| msg.dl.mustconnect | "Must be connected to a server." | `download` while not connected | missing | the feature is missing |
-| msg.dl.disabled | "Downloads are permanently disabled." | `download` with `allow_download -1` | missing | the feature is missing |
-| msg.dl.usage | "Usage: download <filename>" | `download` alone | missing | the feature is missing |
+| msg.dl.mustconnect | "Must be connected to a server." | `download` while not connected | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
+| msg.dl.disabled | "Downloads are permanently disabled." | `download` with `allow_download -1` | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
+| msg.dl.usage | "Usage: download <filename>" | `download` alone | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
 | msg.dl.fail | "Couldn't download %s: %s" | the server refused a file | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.dl.mapload | "Couldn't load %s: %s" | the map cannot be loaded (missing or damaged): the connection drops | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.dl.mapversion | "Local map version differs from server: %i != %s" | the map on disk is not the server's: the connection drops | missing | the feature is missing (C36) |

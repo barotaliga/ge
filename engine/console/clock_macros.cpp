@@ -13,6 +13,23 @@
 
 namespace ge::console {
 
+std::string level_clock(double seconds) {
+  const long s = seconds > 0 ? static_cast<long>(seconds) : 0;
+  char buf[48];
+  if (s >= 3600)
+    std::snprintf(buf, sizeof buf, "%ld:%ld:%02ld", s / 3600, s / 60 % 60, s % 60);
+  else
+    std::snprintf(buf, sizeof buf, "%ld:%02ld", s / 60, s % 60);
+  return buf;
+}
+
+std::string tenths_clock(double seconds) {
+  const long t = seconds > 0 ? static_cast<long>(seconds * 10 + 1e-6) : 0;
+  char buf[48];
+  std::snprintf(buf, sizeof buf, "%ld:%02ld.%ld", t / 600, t / 10 % 60, t % 10);
+  return buf;
+}
+
 std::string uptime_short(double seconds) {
   const long s = seconds > 0 ? static_cast<long>(seconds) : 0;
   const long days = s / 86400, hours = s / 3600 % 24, mins = s / 60 % 60, secs = s % 60;

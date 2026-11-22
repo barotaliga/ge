@@ -74,6 +74,7 @@
 #include "console/console.hpp"
 #include "console/talk.hpp"
 #include "input/state.hpp"
+#include "net/rates.hpp"
 #include "net/transport.hpp"
 #include "shooter/aim_turn.hpp"
 #include "shooter/predict.hpp"
@@ -86,6 +87,7 @@
 #include "shooters_edge/net/qw_client.hpp"
 #include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_record.hpp"
+#include "shooters_edge/net/qw_serverstatus.hpp"
 #include "shooters_edge/net/qw_watch.hpp"
 
 namespace shooters_edge::net {
@@ -154,6 +156,7 @@ struct Remote {
   std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
   std::unique_ptr<RemoteLogin> login;             // logging in by the account file, when named
   std::unique_ptr<RconAway> away;                 // rcon to `rcon_address`, not joined
+  std::unique_ptr<StatusAsk> status_ask;          // `serverstatus` waiting for its answer
   JoinedFile file;  // `record` while joined: the level kept and the file (qw_match_record.hpp)
   MatchAuto match;  // the match recorded on its own (match_auto_record)
   client::JoinedRecord joined_record;  // the window's record commands reach the join through it
@@ -171,6 +174,7 @@ struct Remote {
   // The window's `topcolor` and `bottomcolor` last seen: a change of them is told the server.
   std::string seen_top, seen_bottom;
   sp::ChannelTrace trace;  // showpackets, showdrop: the channel's lines (add_remote_commands)
+  ge::net::Rates rates;    // $cl_pps, $cl_mps, $net_uprate, $net_dnrate (qw_remote_macros.hpp)
   // Lerp: the last two frames' entities as read (by number), before anything drawn moved them.
   std::vector<client::DemoEntity> ents_old, ents_new;
   std::vector<client::DemoEntity> players_old, players_new;  // Quake II's players, the same way

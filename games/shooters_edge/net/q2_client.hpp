@@ -20,6 +20,7 @@
 // ge:keywords q2-client protocol-34 scripted-client signon getchallenge connect configstrings
 // ge:keywords baselines precache begin move ack-frame spectator recording dm2 reconnect
 // ge:keywords q2_client_start q2_client_tick q2_client_stop q2_client_command q2_client_userinfo
+// ge:keywords q2_download download-command
 // ge:keywords download nextdl download-origin fetch
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_net_test.cpp
@@ -214,6 +215,13 @@ void q2_client_start(Q2ClientEnd& c, gn::Transport& t, const gn::Address& server
 void q2_client_tick(Q2ClientEnd& c, int64_t now_us);
 // Queues a string command on the reliable channel (`say hello`).
 void q2_client_command(Q2ClientEnd& c, const std::string& line);
+// `download <file>` asked while playing: the path checked and queued behind any fetch under way,
+// "" when queued, else the reason it is not ("Invalid quake path", "File exists", "Operation not
+// permitted"): a path of at most 63 characters with a folder, no `..`, starting and ending in a
+// name's character, of a kind a server sends (bsp, dm2, ent, jpg, loc, md2, md3, ogg, pcx, png,
+// sp2, tga, txt, wal, wav), lowered; not one the files hold or already queued; never under
+// `save/`, `music/` or `video/`.
+std::string q2_download(Q2ClientEnd& c, const std::string& file);
 // The user info sent again as it stands in `c.cfg` (a setting in it changed while joined).
 void q2_client_userinfo(Q2ClientEnd& c);
 // Its voice's target (`voicetarg <word>`: all, team, near, a slot), told to the server when it
