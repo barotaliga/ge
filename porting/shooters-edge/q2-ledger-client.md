@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 74 | 13 | 59 | 10 | 156 |
-| Client settings (cvars) | 125 | 36 | 149 | 40 | 350 |
+| Client settings (cvars) | 129 | 36 | 145 | 40 | 350 |
 | Macros ($name in typed and bound text) | 2 | 1 | 25 | 2 | 30 |
 | Menu pages and rows | 25 | 25 | 111 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 416 | 255 | 479 | 61 | 1211 |
+| **all** | 420 | 255 | 475 | 61 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 125, partial 36, missing 149, not-taken 40
+done 129, partial 36, missing 145, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -404,10 +404,10 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.s_auto_focus | `s_auto_focus` | 0 always play, 1 not minimised, 2 only focused (default 0) | done | the engine's `engine/platform/window_cvars.hpp` (`heard_volume`), every game |
 | cvar.s_underwater | `s_underwater` | muffle sound under water (default 1) | done | `games/shooters_edge/client/room_ear.cpp` over the synth's muffle (M18k4 round 34) |
 | cvar.s_underwater_gain_hf | `s_underwater_gain_hf` | the muffle's treble gain (default 0.25) | done | (M18k4 round 34) |
-| cvar.ogg_enable | `ogg_enable` | play background music in any of the supported formats (`.flac`, `.opus`, `.ogg`, `.mp3`, `.wav`) (default 1) | missing | C29 |
-| cvar.ogg_volume | `ogg_volume` | the music volume (default 1) | missing | ours `bgmvolume` (C29) |
-| cvar.ogg_shuffle | `ogg_shuffle` | shuffle every track in `music/` (default 0) | missing | C29 |
-| cvar.ogg_menu_track | `ogg_menu_track` | the track played while disconnected, 0 none (default 0) | missing | C29 |
+| cvar.ogg_enable | `ogg_enable` | play background music in any of the supported formats (`.flac`, `.opus`, `.ogg`, `.mp3`, `.wav`) (default 1) | done | Quake II's own, bound to the music's switch (`engine/audio/music_console.hpp`'s `enabled`, `cd on|off`) in `games/shooters_edge/client/cvar_layers.cpp`; on again plays the last track |
+| cvar.ogg_volume | `ogg_volume` | the music volume (default 1) | done | a synonym of our `bgmvolume` (`games/shooters_edge/client/cvar_layers.cpp`) |
+| cvar.ogg_shuffle | `ogg_shuffle` | shuffle every track in `music/` (default 0) | done | Quake II's own, bound to the music's `shuffle` (`engine/audio/music_console.hpp`: every track the game has, in a random order, each once through) |
+| cvar.ogg_menu_track | `ogg_menu_track` | the track played while disconnected, 0 none (default 0) | done | Quake II's own, bound to the music's `menu_track`, started on the title by `play_menu_music` (`engine/audio/music_console.hpp`, `games/shooters_edge/client/main.cpp`) |
 | cvar.ogg_remap_tracks | `ogg_remap_tracks` | remap the mission packs' track numbers to the digital release's file names (default 1) | missing | C29 |
 | cvar.al_device | `al_device` | the OpenAL output device, empty the default; `?` lists the devices ("Available devices:") (default empty) | missing | C32 |
 | cvar.al_merge_looping | `al_merge_looping` | OpenAL: merge copies of one looped sound so they play as loud as on the software mixer; 0 off, 1 auto (only in plain stereo), 2 on (default 1) | missing | ours one mixer, which merges loops itself (`client/demo_sound.cpp`); no OpenAL (C32) |

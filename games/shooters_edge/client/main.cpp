@@ -264,7 +264,8 @@ int run_main(int argc, char** argv) {
   slm::add_live_map_cvars(console.cvars(), live_map.settings);
   // The window's sound (client/listen_sound.hpp, client/demo_heard.hpp), at `volume`.
   ge::audio::MusicConsole music;  // the kept soundtrack (`cd`, `bgmvolume`): outlives the synth
-  ge::audio::Synth synth;         // outlives the device that pulls it (opened with the window)
+  ge::audio::add_music_commands(console, music);  // before the game's (Quake II's ogg_volume)
+  ge::audio::Synth synth;  // outlives the device that pulls it (opened with the window)
   se::Hud hud = se::make_hud();
   const auto tell = [&](const std::string& line, double at, bool chat = false) {  // and the HUD
     console.print(line);
@@ -357,7 +358,8 @@ int run_main(int argc, char** argv) {
                                   .no_glow = &picture.no_glow,
                                   .q2fx = &picture.q2fx,
                                   .chat = &remote.ignore.chat,
-                                  .auto_chat = &con_view.game_chat};
+                                  .auto_chat = &con_view.game_chat,
+                                  .music = &music};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
@@ -1770,6 +1772,7 @@ int run_main(int argc, char** argv) {
       const bool console_load =
           con_look.on() && cl::console_load_line(loader, load_line, console, con_view, t);
       if (console_load) caption.clear();
+      if (!cl::busy(loader)) ge::audio::play_menu_music(music);  // no game: the menu's track
       title_frame(t, wall, caption, loader.since_s, false, console_load);
       ++presented;
       continue;
