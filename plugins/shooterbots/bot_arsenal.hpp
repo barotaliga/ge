@@ -116,6 +116,9 @@ struct BotArsenal {
   // What a model a client is sent is to a companion (shooterbots/companion.hpp): 0 no monster, 1 a
   // monster any weapon puts down, 2 one only a blast keeps down, 3 one no weapon kills.
   int (*monster)(std::string_view model) = nullptr;
+  // How a player keeps to a monster of a model in a fight (none: as to a player): the distance he
+  // backs off to while it is nearer (one that bites or leaps: a dog, a fiend, a knight), units.
+  float (*keep_off)(std::string_view model) = nullptr;
   // The game's maps as its bots' book: people's tricks, routes and item rules by map
   // (shooterbots/map_book.hpp; none: no map has any).
   const ge::shooterbots::MapBook* maps = nullptr;

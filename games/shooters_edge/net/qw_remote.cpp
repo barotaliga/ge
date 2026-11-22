@@ -14,12 +14,14 @@
 #include <functional>
 
 #include "net/crypto.hpp"
+#include "net/net_commands.hpp"
 #include "net/udp_socket.hpp"
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_remote.hpp"
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/net/qw_login.hpp"
+#include "shooters_edge/net/qw_remote_macros.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
 
 namespace shooters_edge::net {
@@ -501,8 +503,8 @@ void remote_queue_frame(Remote& r, ge::console::Console& con) {
   const double wall =  // the wall clock: the match's recording and the rcon answers run on it
       std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
   remote_match_frame(r, con, wall);
-  if (!r.away) return;
-  said.clear();  // the answers to an rcon sent while not joined
+  if (!r.away && !r.status_ask) return;
+  said.clear();  // the answers to an rcon sent while not joined, and to `serverstatus`
   remote_rcon_step(r, wall, said);
   for (const std::string& line : said) con.print(line);
 }
@@ -563,6 +565,7 @@ bool remote_rcon(Remote& r, const std::string& address, const std::string& text,
 }
 
 void remote_rcon_step(Remote& r, double now_s, std::vector<std::string>& said) {
+  serverstatus_step(r, now_s, said);  // `serverstatus`'s answer (qw_serverstatus.hpp)
   if (!r.away || r.away->until_s < 0) return;
   RconAway& a = *r.away;
   gn::Transport& link = a.link != nullptr ? *a.link : a.own;
@@ -835,6 +838,7 @@ void user_info_step(Remote& r) {
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
   if (r.watch) return watch_step(r, said);
+  remote_rates_step(r, wall_s);  // $cl_pps and the other rates (qw_remote_macros.hpp)
   user_info_step(r);
   if (r.q2) {
     const RemoteStep step = q2_remote_step(r, wall_s, said);
@@ -1029,8 +1033,10 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   using Con = ge::console::Console;
   using Args = ge::console::Args;
   client::add_qw_ignore(con, r.ignore, r.demo.state);
-  // $cl_server: the server joined as it was asked for ("" when none is).
-  con.add_macro("cl_server", [&r] { return r.active ? r.server_name : std::string(); });
+  add_remote_macros(con, r);  // $cl_server, $cl_ping, $cl_lag and the rates
+  add_serverstatus_command(con, r);
+  add_q2_download_command(con, r);  // download <file> (q2_remote.hpp)
+  gn::add_net_commands(con, [&r]() -> const gn::Transport* { return r.transport; });  // dns
   r.setting = [&con](const std::string& name) {
     if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;
     if (const ge::console::Synonym* s = con.cvars().synonym(name))

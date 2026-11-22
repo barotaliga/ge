@@ -82,6 +82,7 @@ struct TeamChat {
   hud::Status status;
   bool known = false;            // a frame's state has come
   std::string map;               // the map the events were run for
+  double level_from = 0;         // the state's clock when that map's first frame came ($cl_timer)
   int last_health = 0;           // the health the last frame had
   int last_weapon = -1;          // the weapon in hand (-1: none yet this map)
   int64_t bonuses = 0;           // the items taken the server told of, as last seen
