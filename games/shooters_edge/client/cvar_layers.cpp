@@ -200,6 +200,7 @@ void add_first(con::Console& c, const GameBindings& b) {
     b.view->gun = 1;
     b.view->gun_units[0] = b.view->gun_units[1] = b.view->gun_units[2] = 0;
     b.view->gun_fov_h = 0;
+    b.view->alpha = 1;
   }
   // Its weapon's depth and offset, in its units; the offset adds to our cl_gunx/y/z.
   const con::CvarSpec size{
@@ -622,6 +623,18 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(gun_fov, &b.view->gun_fov_h);
   else
     v.add(gun_fov);
+  const con::CvarSpec gun_alpha{
+      .name = "cl_gunalpha",
+      .fallback = "1",
+      .flags = con::kArchive,
+      .help = "How solid the held weapon is drawn.",
+      .min = 0,
+      .max = 1,
+      .values = "1: solid (the default); 0.1..0.9: see-through; 0: not seen"};
+  if (b.view != nullptr)
+    v.bind(gun_alpha, &b.view->alpha);
+  else
+    v.add(gun_alpha);
   // Its move rate and its frame cap: its `cl_maxfps` is the moves a second (ours, the frame cap, is
   // set aside while it is loaded and comes back with its value after), its `r_maxfps` the frame
   // cap, starting at the cap in force when the game loads and kept with the game's own settings.

@@ -46,6 +46,8 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Sound out of focus | always heard | `s_auto_focus` (`platform/window_cvars.hpp`, every game) | the engine's | the engine's |
 | Music | `cd`, `bgmvolume` | `ogg_enable`, `ogg_volume`, `ogg_shuffle`, `ogg_menu_track` over the engine's music (`audio/music_console.hpp`) | its own | its own |
 | Hit markers | none | `cl_hit_markers`, `scr_hit_marker_time` on temporary entity 128 (`client/q2_bar.cpp`'s `draw_q2_hit_marker`) | its own | its own |
+| Download switches | the server's `sv_download_*` | `allow_download` and its kinds gate what joining fetches (`net/q2_downloads.hpp`), `cl_nodelta` | its own | its own |
+| See-through weapon | none | `cl_gunalpha` (`view/hand.hpp`'s `alpha`) | its own | its own |
 
 ## Adding a game
 

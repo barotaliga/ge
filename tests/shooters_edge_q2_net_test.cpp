@@ -248,6 +248,22 @@ TEST(the_checksum_is_the_byte_a_live_server_expected) {
   for (int i = 960; i < cn::kQ2ChecksumTableSize; i++) CHECK(cn::kQ2ChecksumTable[i] == 0);
 }
 
+TEST(cl_nodelta_has_every_frame_sent_whole) {
+  // A client that acknowledges no frame (`nodelta`, the window's cl_nodelta) is sent each one
+  // whole, and still plays.
+  auto r = rig({});
+  cn::Q2ClientConfig cfg;
+  cfg.name = "eve";
+  cfg.nodelta = true;
+  cn::Q2ClientEnd& c = join(*r, cfg);
+  run(*r, 200);
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+  CHECK(c.frames >= 10);
+  const cn::Q2NetClient& sc = r->server.clients[0];
+  CHECK_MSG(sc.full_frames >= c.frames - 1,
+            std::to_string(sc.full_frames) + " whole of " + std::to_string(c.frames));
+}
+
 TEST(out_of_band_words_keep_a_quoted_word_whole) {
   const auto w = cn::q2_words("connect 34 7 99 \"\\name\\a b\\skin\\male/grunt\"\n");
   CHECK(w.size() == 5);
@@ -798,9 +814,17 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
                                   const ge::vfs::ArchiveOrigin* origin) {
     stock_told += origin != nullptr ? 1 : 0;
   };
+  // allow_download_players 0: the map alone is fetched, the skins left lacking.
+  cn::Q2ClientConfig picky = ours;
+  picky.name = "picky";
+  picky.allow.players = false;
+  picky.keep_file = nullptr;
   cn::Q2ClientEnd& a = join(*r, ours);
   cn::Q2ClientEnd& b = join(*r, stock);
+  cn::Q2ClientEnd& p = join(*r, picky);
   run(*r, 300);
+  CHECK_MSG(p.stage == cn::ClientStage::active, p.refused);
+  CHECK(p.downloaded.size() == 1 && p.downloaded.count("maps/hall.bsp") == 1);
   CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
   CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
   CHECK(a.downloaded.size() == 3 && a.downloads_refused == 0);
@@ -812,6 +836,26 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
   CHECK(b.downloaded.size() == 2 && b.downloads_refused == 1 && stock_told == 0);
   CHECK(b.downloaded.count("maps/hall.bsp") == 0);
   std::filesystem::remove_all(dir);
+}
+
+TEST(the_download_switches_gate_each_kind_of_file) {
+  // allow_download and its kinds (net/q2_downloads.hpp): each folder its switch, the rest
+  // `others` (off by default), and nothing at all once `allow_download` is 0 or -1.
+  cn::Q2Downloads d;
+  CHECK(cn::q2_download_allowed(d, "maps/q2dm1.bsp"));
+  CHECK(cn::q2_download_allowed(d, "players/male/grunt.pcx"));
+  CHECK(cn::q2_download_allowed(d, "sprites/s_bfg1.sp2"));
+  CHECK(cn::q2_download_allowed(d, "env/unit1_up.pcx"));
+  CHECK(!cn::q2_download_allowed(d, "locs/q2dm1.loc"));
+  d.textures = false;
+  CHECK(!cn::q2_download_allowed(d, "textures/e1u1/floor1_1.wal"));
+  CHECK(!cn::q2_download_allowed(d, "env/unit1_up.pcx"));
+  d.others = true;
+  CHECK(cn::q2_download_allowed(d, "locs/q2dm1.loc"));
+  for (const int all : {0, -1}) {
+    d.all = all;
+    CHECK(!cn::q2_download_allowed(d, "maps/q2dm1.bsp"));
+  }
 }
 
 TEST(each_client_is_sent_only_what_it_may_see) {
