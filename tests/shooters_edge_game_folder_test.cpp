@@ -355,3 +355,29 @@ TEST(game_n_opens_the_install_kept_for_it_or_asks_for_its_folder) {
   cl::choose_folder(gone, prefs.string());
   CHECK(gone.ask_install);
 }
+
+TEST(the_file_words_link_over_the_game_s_files) {
+  ge::console::Console con;
+  cl::SearchPath files;
+  std::vector<uint8_t> pack;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"maps/a.bsp", {1, 2}}}, &pack, &error));
+  CHECK(cl::add_archive(files, "pak0.pak", std::move(pack), error));
+  cl::add_path_command(con, files);
+  con.execute("link maps/b.bsp maps/a.bsp");
+  con.run();
+  con.execute("link");
+  con.run();
+  bool listed = false;
+  for (const std::string& line : con.output())
+    listed = listed || (line.find("maps/b.bsp") != std::string::npos &&
+                        line.find("maps/a.bsp") != std::string::npos);
+  CHECK(listed);
+  con.execute("unlink -a");
+  con.run();
+  con.execute("fs_restart");
+  con.run();
+  bool banner = false;
+  for (const std::string& line : con.output()) banner = banner || line == "----- FS_Restart -----";
+  CHECK(banner);
+}
