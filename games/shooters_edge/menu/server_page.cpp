@@ -139,7 +139,7 @@ void ServerPage::ask(ge::ui::Menu& menu) {
        .text = cased(pending_->words + ": " + pending_->from + " to " + pending_->to, lower_),
        .kind = ItemKind::label});
   p->items.push_back(
-      {.id = "yes", .text = cased("Yes, call the vote", lower_), .kind = ItemKind::action});
+      {.id = "yes", .text = cased("Yes, call it", lower_), .kind = ItemKind::action});
   p->items.push_back({.id = "no", .text = cased("No, leave it", lower_), .kind = ItemKind::action});
   p->focus = -1;
   menu.open(kVotePage);

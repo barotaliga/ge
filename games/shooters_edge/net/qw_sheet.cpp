@@ -37,17 +37,17 @@ std::string words_of(std::string_view name) {
     std::string_view name, words;
   };
   static constexpr Known kKnown[] = {
-      {"sv_rjump", "Rocket jump helper"},
-      {"sv_rrjump", "Reverse jump helper"},
+      {"sv_rjump", "Rocket jump aid"},
+      {"sv_rrjump", "Reverse jump aid"},
       {"sv_aimhelp_allow", "Aim help weapons"},
-      {"sv_aimhelp_deny", "Aim help never on"},
+      {"sv_aimhelp_deny", "Aim help skips"},
       {"sv_aimhelp_x", "Aim help across"},
       {"sv_aimhelp_y", "Aim help up"},
       {"pm_speedjump", "Easy jump share"},
       {"sv_overtime", "Overtime"},
       {"sv_overtime_minutes", "Overtime minutes"},
       {"k_midair", "Midair"},
-      {"k_midair_minheight", "Midair least height"},
+      {"k_midair_minheight", "Midair height"},
   };
   for (const Known& k : kKnown)
     if (k.name == name) return std::string(k.words);
