@@ -223,6 +223,29 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        "TEXT: as console_prefix: <?> the syslog level, @ its letter, %H:%M and the rest the "
        "local time ([%Y-%m-%d %H:%M] the default); \"\": none",
        &c.con_logfile_prefix);
+  bind("fs_autoexec", "1", cn::kServer,
+       "Whether switching the mods runs the server's configs again from the new folders.",
+       CvarKind::boolean, 0, 1,
+       "0: only the folders change; 1: every layer's server.cfg read again (the default)",
+       &c.fs_autoexec);
+  bind("com_fatal_error", "0", cn::kServer,
+       "Whether an error the game could recover from ends the server instead.", CvarKind::boolean,
+       0, 1,
+       "0: the players are dropped and the server waits for the next map (the default); 1: the "
+       "server ends with a failure, for whatever supervises it to start it again",
+       &c.fatal_errors);
+  bind("net_log", "0", cn::kServer,
+       "Whether every packet the server sends and takes in is written to logs/<name>.log.",
+       CvarKind::integer, 0, kAny,
+       "0: no log (the default); 1: a new file each time it opens; 2: added to the file's end",
+       &c.net_log);
+  bind("net_log_flush", "0", cn::kServer, "How soon each packet reaches the packet log.",
+       CvarKind::integer, 0, kAny,
+       "0: now and then (the default); 1: at the end of each packet; 2: nothing held at all",
+       &c.net_log_flush);
+  bind("net_log_name", "network", cn::kServer,
+       "The packet log's name, in the logs folder of the game's folder.", CvarKind::text, -kAny,
+       kAny, "TEXT: the name, .log added (network the default)", &c.net_log_name);
   bind("sv_maxspectators", spectators, latched_info,
        "How many spectator slots the server has beside the players'.", CvarKind::integer, 0,
        static_cast<double>(kMaxClients),

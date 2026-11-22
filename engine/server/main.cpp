@@ -34,6 +34,7 @@
 #include "core/num.hpp"
 #include "net/address.hpp"
 #include "net/net_commands.hpp"
+#include "net/packet_log.hpp"
 #include "net/rates.hpp"
 #include "net/udp_socket.hpp"
 #include "server/accounts.hpp"
@@ -236,6 +237,7 @@ struct TerminalLines {
 TermEdit* g_edit = nullptr;
 // The console log (console_log.hpp) every printed line is copied to, and its prefix setting.
 ConsoleLog g_log;
+gn::PacketLog g_netlog;  // the packet log (net/packet_log.hpp) the server's sockets write to
 const std::string* g_log_prefix = nullptr;
 
 #if !defined(_WIN32)
@@ -678,6 +680,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   }
   const auto edit_off = [&] {
     console_log_close(g_log);
+    gn::packet_log_close(g_netlog);
     if (!edit_on || g_edit == nullptr) return;
     g_edit = nullptr;
     std::fputs(term_hide().c_str(), stdout);
@@ -767,6 +770,13 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
             ? (std::filesystem::path(c.root.empty() ? "." : c.root) / game.base_dir).string()
             : con.search_path().front().string();
     console_log_update(g_log, c.con_logfile, folder, c.con_logfile_name, c.con_logfile_flush, said);
+    if (!gn::packet_log_update(g_netlog, c.net_log, folder, c.net_log_name, c.net_log_flush,
+                               said)) {
+      con.cvars().set("net_log", "0", console::Source::code);
+      g_netlog.mode = 0;
+    }
+    sock.log = g_netlog.file != nullptr ? &g_netlog : nullptr;
+    lan.log = sock.log;
     if (said.empty()) return;
     said.pop_back();  // each line ends in a newline; print adds the last
     con.print(said);
@@ -779,6 +789,29 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     }
     server_frame(s);
     print_lines();
+    // A recoverable error the game raised: its players dropped, or the process ended with it.
+    if (game.drop_error != nullptr && s.state != nullptr) {
+      const std::string e = game.drop_error(s.state);
+      if (!e.empty() && c.fatal_errors != 0) {
+        if (game.crash != nullptr) game.crash(s.state, "Server fatal crashed: " + e + "\n");
+        if (g_log.file != nullptr) {
+          std::fputs(("FATAL: " + e + "\n").c_str(), g_log.file);
+        }
+        edit_off();
+        const char* mark = c.console_prefix.starts_with("<?>") ? "<3>" : "";
+        std::fprintf(stderr, "%s********************\n%sFATAL: %s\n%s********************\n", mark,
+                     mark, e.c_str(), mark);
+        tv_off();
+        server_close(s);
+        close_all();
+        return 1;
+      }
+      if (!e.empty()) {
+        con.print("********************\nERROR: " + e + "\n********************");
+        if (game.crash != nullptr) game.crash(s.state, "Server crashed: " + e + "\n");
+        std::fflush(stdout);
+      }
+    }
     // sv_mapcmd once after each map loads, the change seen within a quarter of a second.
     if (n % poll_frames == 0 && server_map_loaded(s, map_seen) && !c.mapcmd.empty()) {
       con.execute(c.mapcmd);
@@ -1078,6 +1111,7 @@ bool server_switch_mods(console::Console& con, ServerCfg& cfg, const ServerConfi
   const std::vector<std::string> was = cfg.mods;
   cfg.mods = mods;
   mount(con, config.root, cfg);
+  if (config.fs_autoexec == 0) return true;  // the folders switched, no config run again
   if (read_layers(con, cfg, true, error)) return true;
   std::string ignored;
   cfg.mods = was;

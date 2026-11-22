@@ -318,6 +318,7 @@ TEST(the_games_error_stops_the_map_and_nothing_more_is_called) {
   r.client_command(0, "crash");
   CHECK(s->map_stopped);
   CHECK(s->stop_reason.find("asked to stop by crash") != std::string::npos);
+  CHECK(sv::native_q2_error(*s) == "asked to stop by crash");  // the dedicated server's drop
   const int64_t frame = s->frame_number;
   ticks(r, 20, 0);
   CHECK(s->frame_number == frame);
