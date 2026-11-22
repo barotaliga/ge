@@ -32,6 +32,7 @@
 
 #include "classic/q2_fx_switches.hpp"
 #include "console/console.hpp"
+#include "hud/bottom_graph.hpp"
 #include "hud/crosshair.hpp"
 #include "hud/net_graph.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -67,6 +68,9 @@ struct Q2Bar {
   // pack's `net` picture blinks in the graph's place); null and 0 when nothing is joined.
   const ge::hud::NetHistory* lag = nullptr;
   int unanswered = 0;
+  // The graph along the bottom (timegraph): each frame's time from `now`, the last frame's time.
+  std::unique_ptr<ge::hud::BottomGraph> graph = std::make_unique<ge::hud::BottomGraph>();
+  double graph_at = -1;
   int width = 0, height = 0;  // the window the last `run_q2_bar` drew for, px
   // The last frame had a screen of the rules up (the help computer, a scoreboard or the
   // inventory): ESCAPE puts it away rather than opening the menu (menu/main_menu.hpp's Host).
