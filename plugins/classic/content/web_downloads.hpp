@@ -12,7 +12,13 @@
 //   repository's page `https://github.com/<owner>/<repo>[/tree/<ref>[/<folder>]]`, is read as its
 //   raw files' address (`https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<folder>/`; the
 //   default branch when no ref is named), so a community keeps a game's maps and skins in a
-//   repository and names it.
+//   repository and names it. The game folder being played is added to every path, so one address
+//   serves every mod (`github:o/r/quakeworld` asks `quakeworld/qw/...` or `quakeworld/ktx/...`);
+//   a folder whose last name is that game folder (`github:o/r/quakeworld/qw`) is read as its
+//   parent, the same files. For a repository laid out otherwise the place is set by hand:
+//   `{game}` where the game folder goes (`github:o/r/{game}/files`), or `#` at the end for an
+//   address that holds the game's files already (`github:o/r/odd/place#`); then the game
+//   folder is not added again and the game folder's own list is not asked (each map's is).
 // - A FILE'S ADDRESS: the address, then `<game folder>/<path>` escaped (`WebConfig::base_folder`
 //   when no mod is played: `baseq2`, `id1`); asked with the player's agent and `Referer:
 //   <referer_scheme>://<server>`. The first file queued tells the server `download http` (when
@@ -91,8 +97,9 @@ struct WebDownloads {
   bool default_repo = false;  // the address is the player's own, not the server's
   std::string base;           // the address files are asked under
   std::string referer;
-  bool told_server = false;  // `download http` sent
-  bool asked_list = false;   // the mod's file list queued
+  bool game_in_base = false;  // the address is the game folder's own (`{game}` or `#`)
+  bool told_server = false;   // `download http` sent
+  bool asked_list = false;    // the mod's file list queued
   std::vector<WebFile> queue;
   std::vector<WebSlot> slots;
   std::set<std::string> asked;  // every path queued this connection, each tried once

@@ -126,6 +126,30 @@ TEST(web_github_repositories_read_as_raw_files) {
         "https://raw.githubusercontent.com/quakers/maps/main/files/q2/");
   CHECK(web_base("http://dl.example/q2/") == "http://dl.example/q2/");
   CHECK(web_base("github:alone") == "github:alone");
+  {
+    // The game folder is added to every path; a folder that names it is read as its parent.
+    WebConfig qw;
+    qw.gamedir = "qw";
+    WebDownloads h;
+    web_connect(h, qw, "github:quakers/maps/quakeworld", 1, "s");
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/HEAD/quakeworld/");
+    web_connect(h, qw, "github:quakers/maps/quakeworld/QW", 1, "s");
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/HEAD/quakeworld/");
+    web_connect(h, qw, "github:quakers/maps/qw", 1, "s");
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/HEAD/");
+    web_connect(h, qw, "github:quakers/maps@qw", 1, "s");  // a branch named qw stays
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/qw/");
+    web_connect(h, qw, "http://dl.example/qw/", 1, "s");  // a server's own address stays as named
+    CHECK(h.base == "http://dl.example/qw/");
+    CHECK(!h.game_in_base);
+    // Set by hand, for a repository laid out otherwise: the game folder not added again.
+    web_connect(h, qw, "github:quakers/maps/{game}/files", 1, "s");
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/HEAD/qw/files/");
+    CHECK(h.game_in_base);
+    web_connect(h, qw, "github:quakers/maps/odd/place#", 1, "s");
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/HEAD/odd/place/");
+    CHECK(h.game_in_base);
+  }
   WebDownloads h;
   web_connect(h, {}, "github:quakers/maps@main", 1, "s");
   CHECK(h.on && h.base == "https://raw.githubusercontent.com/quakers/maps/main/");
