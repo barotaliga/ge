@@ -308,9 +308,11 @@ TEST(pruneloc_tidies_a_dense_place_file_on_a_real_map) {
   con.execute("loc_dist 0");
   const std::vector<std::array<float, 3>> open = ge::brush::open_spots(m, 32);
   std::vector<ge::shooter::Vec3f> spots;
+  spots.reserve(open.size());
   for (const auto& o : open) spots.push_back({o[0], o[1], o[2]});
   p.spots = [&spots] { return spots; };
   std::vector<std::string> before;
+  before.reserve(spots.size());
   for (const auto& s : spots) before.push_back(ge::classic::loc_name_at(p.locs, s));
   const size_t was = p.locs.points.size();
   con.execute("pruneloc");

@@ -130,6 +130,7 @@ TEST(pruning_keeps_only_the_points_a_spot_needs) {
   std::vector<ge::shooter::Vec3f> spots;
   for (int x = 0; x <= 1000; x += 10) spots.push_back({float(x), 0, 0});
   std::vector<std::string> before;
+  before.reserve(spots.size());
   for (const auto& s : spots) before.push_back(ge::classic::loc_name_at(locs, s));
   const int gone = ge::shooter::prune_locs(locs, spots);
   CHECK_MSG(gone == 80 && locs.points.size() == 2, std::to_string(gone));
