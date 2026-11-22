@@ -11,7 +11,9 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "progs/text.hpp"
@@ -460,6 +462,33 @@ void commands_cvars(Q2Server& s) {
                .flags = con::kServer | con::kServerInfo,
                .help = "Whether players may use give, god, notarget and noclip in deathmatch.",
                .values = "0: not in deathmatch (the default); 1: always"});
+  // The held weapon moved off its place, for whoever makes a weapon's model (a developer's tool).
+  for (const auto& [name, way] :
+       {std::pair{"gun_x", "right"}, std::pair{"gun_y", "forward"}, std::pair{"gun_z", "down"}})
+    s.cvars.add({.name = name,
+                 .fallback = "0",
+                 .flags = con::kServer,
+                 .help = std::string("Moves every player's held weapon ") + way +
+                         " by that many units, to line a weapon's model up.",
+                 .values = "0: in its place (the default); N: units"});
+  // What a server browser shows of the game: its folder and the day its rules were settled (fixed,
+  // so every build serves the same server info).
+  s.cvars.add({.name = "gamename",
+               .fallback = "baseq2",
+               .flags = con::kServer | con::kServerInfo | con::kLatch,
+               .help = "The game's name in the server info, for server browsers.",
+               .values = "baseq2 (the default)"});
+  s.cvars.add({.name = "gamedate",
+               .fallback = "Nov 22 2026",
+               .flags = con::kServer | con::kServerInfo | con::kLatch,
+               .help = "The date of the game's rules in the server info, for server browsers.",
+               .values = "a date, month day year"});
+  s.cvars.add({.name = "maxentities",
+               .fallback = "1024",
+               .flags = con::kServer | con::kLatch,
+               .help = "The entity slots a map may fill. This server makes room for every map, "
+                       "so it is kept for configs that set it.",
+               .values = "N: slots (1024 the default)"});
   s.cvars.add({.name = "flood_msgs",
                .fallback = "4",
                .flags = con::kServer,
