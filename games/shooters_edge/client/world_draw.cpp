@@ -857,6 +857,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     GE_ZONE("world.extras");
     // The players wading in lava or slime part its surface (ce_wade).
     wade_extras(*f.extras, fx.models, fx.has_self ? &fx.self : nullptr, view.time_s);
+    burn_extras(*f.extras, fx.fires);  // the hot marks' flames (ce_decals)
     prepare_extras(d, *f.extras, f.bsp, view, o, f.staged);
   }
   {

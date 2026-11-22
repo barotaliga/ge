@@ -270,7 +270,7 @@ std::vector<gl::Picture> shoot(ge::gpu::Device& d, es::Scene& s, const Gun& g, g
     // The gun lit by the brightest flame still burning (a nailgun's puff throws no light).
     double burning = 0;
     for (const gr::MuzzleFire& f : fires) {
-      const gr::Flame flame = gr::flame_at(f.shot, f.pose, when);
+      const gr::MuzzleFlame flame = gr::flame_at(f.shot, f.pose, when);
       if (flame.alive && g.look.flash > 0) burning = std::max(burning, flame.fire);
     }
     draw_gun(pic, g, m, view, v.sun_elevation, fire ? burning : 0, fire);
