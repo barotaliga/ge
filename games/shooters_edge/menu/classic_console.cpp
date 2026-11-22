@@ -39,10 +39,19 @@ void classic_console(const ClassicArt& art, ClassicConsole& out) {
   out.back = art.find("conback");
 }
 
+const ui::Image* ClassicConsole::background() const {
+  if (back_name.empty() || back_name == "conback" || !read_back) return back;
+  if (back_name != read_name_) {
+    read_name_ = back_name;
+    read_ok_ = read_back(back_name, &own_back_);
+  }
+  return read_ok_ ? &own_back_ : back;
+}
+
 void draw_game_console(ui::DrawList& list, const ge::console::ConsoleView& view,
                        const ClassicConsole& look, double t) {
   if (look.on())
-    ui::draw_console(list, view, look.style, look.back, t);
+    ui::draw_console(list, view, look.style, look.background(), t);
   else
     ui::draw_console(list, view, {}, nullptr, t);
 }
