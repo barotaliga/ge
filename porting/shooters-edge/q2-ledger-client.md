@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 118 | 13 | 15 | 10 | 156 |
-| Client settings (cvars) | 151 | 45 | 114 | 40 | 350 |
+| Client settings (cvars) | 159 | 46 | 105 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 88 | 68 | 5 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 617 | 308 | 225 | 61 | 1211 |
+| **all** | 625 | 309 | 216 | 61 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 151, partial 45, missing 114, not-taken 40
+done 159, partial 46, missing 105, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -302,7 +302,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_disconnectcmd | `cl_disconnectcmd` | a command run at each disconnect (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
 | cvar.cl_changemapcmd | `cl_changemapcmd` | a command run at each map change (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
 | cvar.cl_beginmapcmd | `cl_beginmapcmd` | a command run on entering each map (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
-| cvar.cl_ignore_stufftext | `cl_ignore_stufftext` | 1 refuses server-pushed commands not on a whitelist file (default 0) | missing | C33 |
+| cvar.cl_ignore_stufftext | `cl_ignore_stufftext` | 1 refuses server-pushed commands not on a whitelist file (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` over `plugins/classic/protocol/stuff_filter`: 1 runs only what `stufftext-whitelist.txt` names, 2 says each refusal too |
 | cvar.cl_allow_vid_restart | `cl_allow_vid_restart` | 1 lets a typed `vid_restart` run (default 0) | missing | C33 |
 | cvar.cl_protocol | `cl_protocol` | 0 the best the server offers; 34, 35, 36 forced (default 0) | missing | ours speaks 34 only (C42) |
 | cvar.gender_auto | `gender_auto` | set `gender` from the skin's model (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
@@ -335,11 +335,11 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.scr_scale | `scr_scale` | the 2D scale, 0 auto by window height (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` `q2_bar_scale` (M18k4 round 34) |
 | cvar.crosshair | `crosshair` | 0 none, N the `chN` picture (default 0) | done | `engine/hud/crosshair.hpp` (Quake II's layer `same`) |
 | cvar.netgraph | `netgraph` | 1 latency bars, 2 packet sizes (default 0) | partial | a synonym of our `r_netgraph` (`games/shooters_edge/client/cvar_layers.cpp`): 2's packet sizes are not drawn |
-| cvar.timegraph | `timegraph` | a frame-time graph (default 0) | missing | C13 |
-| cvar.debuggraph | `debuggraph` | a development graph (default 0) | missing | C13 |
-| cvar.graphheight | `graphheight` | the graph's height (default 32) | missing | C13 |
-| cvar.graphscale | `graphscale` | the graph's vertical scale (default 1) | missing | C13 |
-| cvar.graphshift | `graphshift` | the graph's vertical offset (default 0) | missing | C13 |
+| cvar.timegraph | `timegraph` | a frame-time graph (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp`: a column a frame along the bottom, a unit tall a millisecond |
+| cvar.debuggraph | `debuggraph` | a development graph (default 0) | partial | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp`: the graph drawn; ours feeds it no development values of its own |
+| cvar.graphheight | `graphheight` | the graph's height (default 32) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp` |
+| cvar.graphscale | `graphscale` | the graph's vertical scale (default 1) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp` |
+| cvar.graphshift | `graphshift` | the graph's vertical offset (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp` |
 | cvar.scr_chathud | `scr_chathud` | 0 off, 1 last chat lines on screen, 2 in the alternate colour (default 0) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
 | cvar.scr_chathud_lines | `scr_chathud_lines` | chat lines shown (default 4) | done | (M18k4 round 32) |
 | cvar.scr_chathud_time | `scr_chathud_time` | seconds a chat line stays, 0 for ever (default 0) | done | (M18k4 round 32) |
@@ -383,15 +383,15 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_entities | `cl_entities` | 0 adds no entities (default 1) | done | a synonym of `r_drawentities` (M18k4 round 35) |
 | cvar.cl_blend | `cl_blend` | 0 drops the full-screen tints (default 1) | done | a synonym of `gl_polyblend` (M18k4 round 35) |
 | cvar.cl_adjustfov | `cl_adjustfov` | 1 hor+ on wide screens, 0 vert- (default 1) | done | `games/shooters_edge/client/q2_view.cpp` (M18k4 round 34) |
-| cvar.ui_sortdemos | `ui_sortdemos` | the demo browser's sort column, negative descending (default 1) | missing | C40 |
+| cvar.ui_sortdemos | `ui_sortdemos` | the demo browser's sort column, negative descending (default 1) | done | a synonym of ours `menu_demo_sort` (`games/shooters_edge/client/cvar_layers.cpp`) |
 | cvar.ui_listalldemos | `ui_listalldemos` | the demo browser lists every folder (default 0) | missing | C40 |
 | cvar.ui_sortservers | `ui_sortservers` | the server browser's sort column (default 0) | missing | C41 |
-| cvar.ui_colorservers | `ui_colorservers` | colour the server list: grey for a password, anticheat 2 or a no-fake server, green under 30 ms, white otherwise (default 0) | missing | C41 |
+| cvar.ui_colorservers | `ui_colorservers` | colour the server list: grey for a password, anticheat 2 or a no-fake server, green under 30 ms, white otherwise (default 0) | done | a synonym of ours `sb_colorservers` (`games/shooters_edge/client/cvar_layers.cpp`) |
 | cvar.ui_pingrate | `ui_pingrate` | server pings a second, 0 from `rate` (default 0) | missing | C41 |
 | cvar.ui_scale | `ui_scale` | the menus' scale, 0 auto (default 0) | missing | C4 |
 | cvar.ui_debug | `ui_debug` | debug: outlines menu items (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.ui_open | `ui_open` | 1 opens the main menu at start-up (default 0) | missing | ours opens its own title menu always |
-| cvar.adr | `adr0` .. `adr15` | the address book: 16 saved server addresses (saved) | missing | C41 |
+| cvar.adr | `adr0` .. `adr15` | the address book: 16 saved server addresses (saved) | done | `adr0` .. `adr15` (`games/shooters_edge/client/cvar_layers.cpp`), archived, the address book's rows (`menu/q2_pages.cpp`) |
 | cvar.s_khz | `s_khz` | the mixing rate in kHz (default 44, saved) | missing | ours mixes at 48 kHz always (`engine/audio/voice.hpp`) (C32) |
 | cvar.s_mixahead | `s_mixahead` | seconds the mixer runs ahead (default 0.1, saved) | missing | C32 |
 | cvar.s_testsound | `s_testsound` | debug: a test tone (default 0) | not-taken | `client-gaps.md`: developer tools left out |
