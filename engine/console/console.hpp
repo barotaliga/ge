@@ -50,6 +50,9 @@
 
 namespace ge::console {
 
+// A message trigger's levels: the game's print levels, and the team's own chat.
+inline constexpr int kTriggerLow = 0, kTriggerMedium = 1, kTriggerHigh = 2, kTriggerChat = 3,
+                     kTriggerTeam = 4;
 inline constexpr int kMaxDepth = 64;       // nested alias, exec and trigger calls in one run
 inline constexpr int kMaxPerRun = 100000;  // commands one run executes before it stops
 inline constexpr int kMaxFrames = 1000;    // runs `execute` and startup take before they return
@@ -191,8 +194,15 @@ class Console {
   // A line from the game (a chat line, the server's print): printed, then every message trigger
   // it matches queues its alias.
   void message(std::string_view line);
-  // Every message trigger `line` matches queues its alias (what `message` does after printing).
+  // Every message trigger `line` matches queues its alias (what `message` does after printing),
+  // whatever its level.
   void fire_triggers(std::string_view line);
+  // The same for a line of the game's print `level` (kTriggerLow .. kTriggerChat; `team`: a chat
+  // line from the player's own team): a trigger fires on lines of its own level, a `t` trigger
+  // on the team's chat alone. A firing sets `$triggermatch` to the line (cut at 255 bytes).
+  void fire_triggers(std::string_view line, int level, bool team);
+  const std::string& trigger_match() const { return trigger_match_; }
+  void clear_trigger_match() { trigger_match_.clear(); }
   const std::vector<std::string>& output() const { return output_; }
   void clear_output() { output_.clear(); }
 
@@ -241,6 +251,7 @@ class Console {
   struct Trigger {
     std::string alias;
     std::string match;
+    int level = kTriggerHigh;  // the print level it fires on (kTriggerTeam: the team's chat)
   };
   std::vector<Trigger>& triggers() { return triggers_; }
 
@@ -287,6 +298,7 @@ class Console {
   std::map<std::string, std::unique_ptr<Button>> buttons_;
   std::map<std::string, std::string> held_;  // key → the + command it went down with
   std::vector<Trigger> triggers_;
+  std::string trigger_match_;  // $triggermatch: the line the last trigger fired on
   std::vector<std::shared_ptr<void>> kept_;
   std::map<std::string, Origin> created_;
   std::deque<Entry> buffer_;
@@ -314,6 +326,10 @@ std::string game_file(std::string_view file, std::string_view scope);
 // The built-in command sets, each registered by the Console's constructor.
 void register_builtin_commands(Console& c);  // console_builtins.cpp
 void register_script(Console& c);            // script.cpp
+void register_script_strings(Console& c);    // script_strings.cpp
+// `hash`'s number: each byte with bit 5 cleared (letters in either case alike), h = c + 64h +
+// 65536h - h, wrapping at 2^32.
+uint32_t text_hash(std::string_view text);
 void register_bind_commands(Console& c);     // console_binds.cpp
 void register_pattern_commands(Console& c);  // console_patterns.cpp
 void register_more_commands(Console& c);     // console_more.cpp

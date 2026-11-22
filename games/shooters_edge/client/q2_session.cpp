@@ -34,7 +34,7 @@ void run(con::Console& c, const std::string& text) {
 
 }  // namespace
 
-void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
+void add_map_command_cvars(con::Cvars& v, Q2Session& s) {
   const struct {
     const char* name;
     const char* help;
@@ -56,6 +56,9 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
             .kind = con::CvarKind::text,
             .values = r.values},
            r.field);
+}
+
+void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
   v.bind({.name = "timescale",
           .fallback = "1",
           .flags = con::kCheat,

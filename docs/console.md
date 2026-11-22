@@ -179,7 +179,10 @@ yet starts from the defaults and is made by the first save.
 - **Lookup.** The first word is looked up as a command, then an alias, then a cvar. A cvar's
   name alone prints it; with a value it sets it (`r_bloom 0.1`).
 - **Expansion.** `$name` and `${name}` become a macro's or a cvar's value (a macro wins); `$$`
-  is a `$`. An alias's body gets its arguments as `$1`…`$9` and `$*`.
+  is a `$`. An alias's body gets its arguments as `$1`…`$9`, `$*` (each quoted as needed), `$@`
+  (joined by blanks), `${N-M}` and `${N-}` (a run of them) and `$0` (its own name); a body with a
+  `%` in it also takes `%1`…`%9`, `%0` (all of them) and `%%` (a `%`), the form older teamplay
+  configs write. `$qt` is a double quote and `$sc` a semicolon.
 - **The buffer.** Commands are queued and run once a frame. `exec` and an alias put theirs at
   the front, so they run before what followed them. `wait` leaves the rest for the next frame.
   An alias or a trigger that calls itself is stopped after 64 nested calls in one frame, with a
@@ -267,7 +270,7 @@ by default.
 
 | Command | What it does |
 | --- | --- |
-| `if <a> [<op> <b>] [then] <commands> [else <commands>]` | Runs one branch. The ops are `==` `=` `!=` `<>` `<` `<=` `>` `>=`, `isin` `!isin` (a substring of b) and `=~` `!~` (b a regular expression found in a). With no op, `a` is tested as true (not empty, not 0). `then` may be left out after `a op b`, as old configs write it. |
+| `if <a> [<op> <b>] [then] <commands> [else <commands>]` | Runs one branch. The ops are `==` `=` `!=` `<>` `<` `<=` `>` `>=`, `isin` `!isin` (a substring of b), `isini` `!isini` (the same in any case), `eq` `ne` (text, any case) and `=~` `!~` (b a regular expression found in a). With no op, `a` is tested as true (not empty, not 0). `then` may be left out after `a op b`, as old configs write it. |
 | `if (<expression>) then <commands> [else <commands>]` | Runs one branch on an expression (below). |
 | `if_exists <cvar\|alias\|trigger\|command> <name> <commands> [<else>]` | Runs the first commands when the name exists, else the second. |
 | `eval <expression>` | Prints the expression's value and its kind: `Result: 3.5 (number)`. |
@@ -277,7 +280,11 @@ by default.
 | `mul <name> [<by>]` / `div <name> [<by>]` | Multiplies or divides a cvar (by 1); dividing by 0 keeps it. |
 | `toggle <name> [<v1> <v2> ...]` | Flips a cvar between 0 and 1; with values, sets the one after its own (matched without case, wrapping); a value not in the list is refused, "can't cycle". |
 | `cycle <name> <v1> <v2> ...` | Sets a cvar to the value after its own in the list. |
-| `msg_trigger <alias> <match>` | A chat, server or event line holding `match` runs the alias. |
+| `msg_trigger <alias> <match> [-l <level>]` | A game line of that print level (0 low, 1 medium, 2 high, the default; 3 chat; `t` the team's chat) holding `match` runs the alias; `$triggermatch` is the line (a chat line's words after its speaker), until the next map. Alone, the list. A line that asks or answers a version query fires none. |
+| `alias_in <alias> <cvar> [<options>]` / `cvar_in <cvar1> <cvar2> [<options>]` | A cvar's value put at the start of an alias's text or another cvar's value; options, a sum: 1 at the end, 2 not when it is there already, 4 say so, 8 make the alias or cvar. |
+| `alias_out <alias> <cvar> [<options>]` / `cvar_out <cvar1> <cvar2> [<options>]` | The first place the value is found taken out; options 1 only test, 2 quietly. |
+| `set_alias_str <cvar> <alias>` / `set_bind_str <cvar> <key>` | A cvar set to an alias's text or a key's bind. |
+| `hash <text>` | The text's hash, a whole number (letters in either case alike). |
 | `msg_trigger_remove <alias>` | Stops a trigger. |
 | `re_trigger <name> <pattern>` | A game line a regular expression finds runs the alias `<name>` at once; `re_trigger_options`, `_delete`, `_enable`, `_disable`, `_match` and `re_trigger_match_0..9` (`console/re_triggers.hpp`). |
 
@@ -285,9 +292,12 @@ by default.
 `$com_date` and `$com_time` by `com_date_format` (`%Y-%m-%d`) and `com_time_format` (`%H:%M`),
 the date letters of the C library; `$com_uptime` (`MM.SS`, `H:MM.SS`, `D+H:MM.SS`),
 `$com_uptime_long` ("1 day, 2 hours, 5 secs") and `$random` (a digit from the console's seed);
+the older clients' fixed forms `$time` (14:05), `$date` (22.11.26), `$timestamp` (20261122-1405),
+`$dateiso` (2026-11-22_14-05) and `$rand` (0 to 1, six decimals);
 `level_clock` (`$cl_timer`, "4:05", "1:4:05") and `tenths_clock` (`$cl_demopos`, "3:07.4") are the
 forms a game's own clocks print in. A joined server's macros (Shooter's Edge,
-`net/qw_remote_macros.hpp`): `$cl_ping`, `$cl_lag` ("1.25%"), and the last whole second's
+`net/qw_remote_macros.hpp`): `$cl_ping` (also `$ping` and `$latency`), `$cl_lag` ("1.25%"),
+`$serverip`, `$connectiontype` (disconnected, spectator or player), and the last whole second's
 `$cl_pps`, `$cl_mps`, `$net_uprate`, `$net_dnrate` (`engine/net/rates.hpp` over the transport's
 counts). **The files and the network** (`engine/vfs/search_commands.hpp`, `engine/net/net_commands.hpp`):
 `path`, `dir <folder> [ext]`, `fdir <pattern>`, `whereis <file> [all]`, `dns <name>` and `net_stats`.
