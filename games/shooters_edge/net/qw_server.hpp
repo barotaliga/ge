@@ -62,6 +62,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <string>
 #include <vector>
@@ -161,6 +162,7 @@ struct ServerConfig {
   std::string password, spectator_password;
   std::string rcon_password;  // the remote console's (qw_admin.hpp; empty: none offered)
   std::string ban_file;
+  std::string frag_dir;  // where `fraglogfile` writes frag_<n>.log ("": nowhere)
   // Where `snap` keeps the screenshots players send, as <userid>-<nn>.<ext> ("": none asked).
   std::string snap_dir;
   std::vector<std::string> vip_passwords;  // sv_vippassword's words
@@ -218,6 +220,7 @@ struct ServerConfig {
   bool cheats = false;
   std::string progs_crc;   // `*progs`: a mod program's 16-bit CRC as a decimal ("": native rules)
   bool high_chars = true;  // sv_highchars: 0 strips a joining player's user info to plain ASCII
+  bool map_check = true;   // sv_mapcheck: a client whose map's checksum differs is dropped
 };
 
 enum class ConnState : uint8_t { free, connected, spawned };
@@ -344,6 +347,18 @@ struct Challenge {
   int64_t made = 0;  // the order it was made, for replacing the oldest
 };
 
+// The frag log (net/qw_fraglog.hpp): the rules' frag lines read so far, the file `fraglogfile`
+// opened, the buffer being filled and the last one filled, which the `log` query answers with.
+struct FragLog {
+  std::FILE* file = nullptr;
+  std::string path;
+  size_t seen = 0;   // the rules' frag lines read
+  int sequence = 1;  // the buffer being filled; the one served is sequence - 1
+  std::string filling, served;
+  double turned_at = 0;  // the network's time of the last turnover, s
+  bool started = false;  // `turned_at` set by the first frame
+};
+
 struct QwServer {
   ServerConfig cfg;
   gs::BanList bans;
@@ -415,6 +430,7 @@ struct QwServer {
   // the client reads nothing yet.
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* name_ctx = nullptr;
+  FragLog frags;  // the frag log, its file and the buffer the `log` query reads (qw_fraglog.hpp)
 };
 
 // Serves `rules` (its map already started) over `t`. False with `error` when it cannot.

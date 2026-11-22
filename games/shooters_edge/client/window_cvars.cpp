@@ -2,7 +2,7 @@
 //
 // ge:summary The window's console settings: the engine's, scr_levelstats, showpause, host_framerate
 // ge:keywords add_window_cvars scr_levelstats showpause host_framerate slow-motion scr_printspeed
-// ge:keywords vid_restart
+// ge:keywords vid_restart showturtle turtle slow-frame
 // ge:skill platform shooter
 #include "shooters_edge/client/window_cvars.hpp"
 
@@ -31,6 +31,13 @@ void add_window_cvars(ge::console::Console& con, WindowCvars& w) {
                     .kind = ge::console::CvarKind::boolean,
                     .values = "0: no picture; 1: the picture while paused (the default)"},
                    &w.show_pause);
+  con.cvars().bind({.name = "showturtle",
+                    .fallback = "0",
+                    .help = "Whether the turtle picture shows in the top-left corner while the "
+                            "game runs at ten frames a second or fewer.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: never (the default); 1: after three slow frames in a row"},
+                   &w.show_turtle);
   con.cvars().bind({.name = "host_framerate",
                     .fallback = "0",
                     .help = "Slow or fast motion in a game this window runs: each frame moves the "

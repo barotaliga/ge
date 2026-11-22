@@ -131,6 +131,7 @@
 #include "shooters_edge/client/team_chat.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/title.hpp"
+#include "shooters_edge/client/trouble_icons.hpp"
 #include "shooters_edge/client/tv_live.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/view_from.hpp"
@@ -570,12 +571,7 @@ int run_main(int argc, char** argv) {
     shooters_edge::menu::classic_console(game_menu.art(), con_look);
     classic_art = std::move(pics.hud);
     classic_art.finish();
-    if (!say) return pics.enhanced;
-    if (!classic_art.bar.empty())
-      out::status("shooters_edge: the HUD draws the packs' own status bar pictures" +
-                  std::string(classic_art.density > 1 ? ", enhanced (ce_pictures)" : ""));
-    else if (!cl::archive_paths(files).empty())
-      out::status("shooters_edge: the HUD has no status bar pictures: " + pics.hud_why);
+    if (say) cl::say_hud_pictures(classic_art, files, pics.hud_why);
     return pics.enhanced;
   };
   const auto load_pictures = [&](bool say) {
@@ -1439,12 +1435,8 @@ int run_main(int argc, char** argv) {
     }
 
     // A save asked for: the game it holds now playing (its world made behind the window, below).
-    if (!load_ask.empty()) {
-      const std::string name = std::exchange(load_ask, std::string());
-      console.print(cl::load_asked_save(listen, game_content, files, name, error)
-                        ? "loaded " + name
-                        : "load: " + error);
-    }
+    if (!load_ask.empty())
+      console.print(cl::load_save_asked(listen, game_content, files, load_ask));
 
     // A benchmark asked for: vsync off, the listen server waits until it is done. A demo played
     // at its pace keeps vsync.
@@ -1698,6 +1690,8 @@ int run_main(int argc, char** argv) {
         cl::playback_draw(overlay, playback, bench, w, h, t);
       cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t),
                        drawn_remote ? sn::remote_net(remote) : nullptr);
+      cl::draw_trouble_icons(overlay, w, h, cl::hud_art_of(files, classic_art, free_art),
+                             pacing.times, win.show_turtle, sn::remote_net_trouble(remote));
       if (paced) {  // a demo watched or a game joined: the menu and the console over it
         game_menu.draw(overlay, w, h, t);
         con_view.frame(wall);
@@ -1942,6 +1936,8 @@ int run_main(int argc, char** argv) {
                     win.level_stats, board_view, scores_on && cl::team_scores_held(controls),
                     win.show_pause, win.print_speed);
     cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(&listen));
+    cl::draw_trouble_icons(overlay, w, h, cl::hud_art_of(files, classic_art, free_art),
+                           pacing.times, win.show_turtle, false);
     cl::draw_cinematic(overlay, cine, w, h);
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);

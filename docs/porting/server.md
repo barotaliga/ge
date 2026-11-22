@@ -99,7 +99,13 @@ the game folder the server info and the next handshake name; `sv_highchars 0` st
 player's info to plain characters and turns a later `setinfo`'s coloured letters plain; and a
 player whose `pmodel` or `emodel` differs from the CRC-16 of the server's own player or eyes model
 is announced to everyone at his `begin` ("<name> WARNING: non standard player/eyes model
-detected"), the player kept (`net/qw_signon.cpp`).
+detected"), the player kept (`net/qw_signon.cpp`). With `sv_mapcheck 1` (the default) a player
+whose map checksum differs from the server's own file's is told and dropped. On a server started
+with cheats the operator's `god <id>` and `give <id> <item> <count>` reach the player, and the
+rules take `sv_cheats` with it. `fraglogfile` writes the frag lines to `frag_<n>.log` and the
+out-of-band `log` query answers with the last ten-minute buffer of them (`net/qw_fraglog.hpp`).
+Every dedicated server runs the lines typed on its own terminal in the foreground
+(`engine/server/main.cpp`).
 
 Quake II's ledger (`porting/shooters-edge/q2-ledger-server.md`) is the checklist; the facts of the
 operator's words, the player's queries and the connect checks are in

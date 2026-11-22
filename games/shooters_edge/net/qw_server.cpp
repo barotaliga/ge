@@ -26,6 +26,7 @@
 #include "shooter/settings.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/qw_admin.hpp"
+#include "shooters_edge/net/qw_fraglog.hpp"
 #include "shooters_edge/net/qw_record.hpp"
 #include "shooters_edge/net/qw_talk.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -431,8 +432,10 @@ void handle_oob(QwServer& s, const gn::Address& from, const uint8_t* data, size_
     handle_connect(s, from, text);
   } else if (cmd == "rcon") {
     qw_rcon(s, from, text.substr(0, text.find('\n')));
+  } else if (cmd == "log") {  // the frag log's last buffer (qw_fraglog.hpp)
+    qw_log_query(s, from, pg::word(w, 1), w.count == 2);
   }
-  // `ip`, `log` and the server extras are not answered.
+  // `ip` and the server extras are not answered.
 }
 
 // The packet's commands the loop will run (the lost ones' copies first, as it runs them) through
@@ -832,7 +835,10 @@ bool bind_map(QwServer& s, const sv::RulesRunner& rules, std::string& error) {
     if (std::string_view(rule) == "deathmatch") monsters = false;
   }
   if (!s.cfg.progs_crc.empty()) info_set(s.serverinfo, "*progs", s.cfg.progs_crc, kServerInfoBytes);
-  if (s.cfg.cheats) info_set(s.serverinfo, "*cheats", "ON", kServerInfoBytes);
+  if (s.cfg.cheats) {  // the rules' sv_cheats with it: god, give, noclip and fly
+    info_set(s.serverinfo, "*cheats", "ON", kServerInfoBytes);
+    qc.cvars.set("sv_cheats", "1", ge::console::Source::local, true);
+  }
   if (const ge::console::Cvar* c = qc.cvars.find("skill"); c != nullptr && monsters)
     info_set(s.serverinfo, "skill", c->value, kServerInfoBytes);
   // A cooperative campaign says `deathmatch 0` outright, as other coop servers do.
@@ -1000,6 +1006,7 @@ void qw_print_all(QwServer& s, const std::string& text) {
 }
 
 void qw_shutdown(QwServer& s, const std::string& text) {
+  qw_frag_close(s);
   for (int j = 0; j < sh::kMaxClients; j++) {
     // A listen server's own seat is the window itself, which closes with it.
     if (s.clients[j].state != ConnState::spawned || s.clients[j].local) continue;
@@ -1220,6 +1227,7 @@ void qw_frame(QwServer& s, int64_t now_us) {
                      s.game->sv.edicts[static_cast<size_t>(i) + 1].origin);
   route_events(s);
   tell_frags(s);
+  qw_frag_frame(s);
   if (s.mvd) mvd_frame(s, *s.mvd);
   for (MultiviewRecorder* r : s.streams) mvd_frame(s, *r);
 

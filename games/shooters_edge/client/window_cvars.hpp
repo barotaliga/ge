@@ -15,6 +15,7 @@ namespace shooters_edge::client {
 struct WindowCvars : ge::platform::WindowCvars {
   bool level_stats = true;
   bool show_pause = true;     // showpause
+  bool show_turtle = false;   // showturtle: the slow-frame turtle
   double host_framerate = 0;  // host_framerate: game seconds a frame (0: the real time)
   double print_speed = 8;     // scr_printspeed: a finale's characters a second
 };
