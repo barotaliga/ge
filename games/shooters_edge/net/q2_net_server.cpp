@@ -136,6 +136,9 @@ void rate_check(Q2NetServer& s, int slot) {
   stuff(c, "rate " + std::to_string(v.rate) + "\n");
 }
 
+// The most `sv_max_download_size` may allow: 128 MiB and 4 KiB.
+constexpr int64_t kQ2DownloadCap = 134221824;
+
 // THE DOWNLOADS (Q2NetConfig): the next piece of the file being sent, up to 1024 bytes: size,
 // percent, the bytes; percent 100 ends it.
 void download_piece(Q2NetClient& c) {
@@ -155,37 +158,83 @@ void download_piece(Q2NetClient& c) {
   }
 }
 
-void start_download(Q2NetServer& s, Q2NetClient& c, std::string path, int offset) {
+// A download's name made plain: `\` as `/`, lower case, leading slashes and `.` parts dropped,
+// `..` taking the part before it away; "" when it climbs out of the game's folders.
+std::string plain_download_path(std::string path) {
   for (char& ch : path) {
     if (ch == '\\') ch = '/';
     if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
   }
+  std::vector<std::string> parts;
+  size_t at = 0;
+  while (at <= path.size()) {
+    const size_t end = std::min(path.find('/', at), path.size());
+    const std::string part = path.substr(at, end - at);
+    if (part == "..") {
+      if (parts.empty()) return "";
+      parts.pop_back();
+    } else if (!part.empty() && part != ".") {
+      parts.push_back(part);
+    }
+    at = end + 1;
+  }
+  std::string out;
+  for (const std::string& p : parts) out += (out.empty() ? "" : "/") + p;
+  return out;
+}
+
+void start_download(Q2NetServer& s, Q2NetClient& c, const std::string& asked, int offset) {
   c.downloading = false;
   c.download.clear();
+  const std::string path = asked.size() >= 64 ? std::string() : plain_download_path(asked);
   const auto under = [&path](const char* dir) { return path.rfind(dir, 0) == 0; };
+  const auto plain_end = [](char ch) {
+    return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-';
+  };
+  // The kind a file is by its first folder, each switched on or off by its own setting.
+  const bool kind_on = under("players/")                       ? s.cfg.allow_players
+                       : under("models/") || under("sprites/") ? s.cfg.allow_models
+                       : under("sound/")                       ? s.cfg.allow_sounds
+                       : under("maps/")                        ? s.cfg.allow_maps
+                       : under("textures/") || under("env/")   ? s.cfg.allow_textures
+                       : under("pics/")                        ? s.cfg.allow_pics
+                                                               : s.cfg.allow_others;
+  const int64_t most = s.cfg.max_download_size <= 0 || s.cfg.max_download_size > kQ2DownloadCap
+                           ? kQ2DownloadCap
+                           : s.cfg.max_download_size;
   std::string why;
   ge::vfs::ArchiveOrigin origin;
   bool packed = false;
   if (!s.cfg.allow_download || !s.cfg.read_file) {
     why = "downloads are off";
-  } else if (path.empty() || path[0] == '.' || path[0] == '/' ||
-             path.find("..") != std::string::npos || path.find('/') == std::string::npos) {
+  } else if (path.empty() || offset < 0 || !plain_end(path.front()) || !plain_end(path.back()) ||
+             path.find('/') == std::string::npos) {
     why = "not a file the server offers";
-  } else if ((under("players/") && !s.cfg.allow_players) ||
-             (under("models/") && !s.cfg.allow_models) ||
-             (under("sound/") && !s.cfg.allow_sounds) || (under("maps/") && !s.cfg.allow_maps)) {
+  } else if (!kind_on) {
     why = "that kind of file is not offered";
   } else if (!s.cfg.read_file(path, &c.download) || c.download.empty()) {
     why = "not found";
+  } else if (static_cast<int64_t>(c.download.size()) > most) {
+    why = "larger than sv_max_download_size";
   } else {
     packed = s.cfg.file_origin && s.cfg.file_origin(path, &origin);
     if (packed && under("maps/") && !c.told_origins) why = "the map is in an archive";
   }
-  if (!why.empty() || offset < 0 || static_cast<size_t>(offset) > c.download.size()) {
+  if (why.empty() && static_cast<size_t>(offset) > c.download.size()) {
+    const std::string told =
+        "File size differs from server.\nPlease delete the corresponding .tmp file from your "
+        "system.\n";
+    std::vector<uint8_t> b = {kSvcPrint, 2};  // the high print level
+    b.insert(b.end(), told.begin(), told.end());
+    b.push_back(0);
+    reliable(c, b);
+    why = "a resume past its end";
+  }
+  if (!why.empty()) {
     c.download.clear();
     const uint8_t refused[4] = {kSvcDownload, 0xff, 0xff, 0};
     reliable(c, std::vector<uint8_t>(refused, refused + 4));
-    note(s, c.name + " asked for " + path + ": refused, " + (why.empty() ? "a bad offset" : why));
+    note(s, c.name + " asked for " + asked + ": refused, " + why);
     return;
   }
   if (packed && c.told_origins) {  // the archive the file comes out of, before its first piece
@@ -457,9 +506,12 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
     c.ch.fragments = ask.chan == 1;
     c.ch.packet_len = static_cast<size_t>(c.msglen);
   }
-  send_oob(s, from,
-           c.protocol == kQ2Protocol36 ? "client_connect nc=" + std::to_string(ask.chan)
-                                       : std::string("client_connect"));
+  // The answer: the channel kind a 36 client asked for, the web address files come from, the map.
+  std::string answer = "client_connect";
+  if (c.protocol == kQ2Protocol36) answer += " nc=" + std::to_string(ask.chan);
+  if (!s.cfg.download_server.empty()) answer += " dlserver=" + s.cfg.download_server;
+  answer += " map=" + (*s.rules)->map_name;
+  send_oob(s, from, answer);
   note(s, c.name + " connected");
 }
 
@@ -1411,7 +1463,8 @@ void send_frames(Q2NetServer& s) {
       continue;
     }
     if (!c.signon_queue.empty()) feed_signon(c);
-    if (c.stage == Q2Slot::signon || c.no_game_data) {  // reliable data alone (`nogamedata`)
+    // Reliable data alone: in the signon, after `nogamedata`, and while a file comes down.
+    if (c.stage == Q2Slot::signon || c.no_game_data || c.downloading) {
       if (channel_reliable_backlog(c.ch) > 0 || s.now - c.sent >= 1.0) transmit(s, c, nullptr, 0);
       continue;
     }

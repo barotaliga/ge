@@ -414,7 +414,7 @@ TEST(a_protocol_36_client_on_the_newer_channel_joins_and_walks) {
   auto r = rig({});
   Raw& c = join(*r, 36, 1026, 1);
   run(*r, 120);
-  CHECK(c.connect_answer == "client_connect nc=1");
+  CHECK(c.connect_answer == "client_connect nc=1 map=hall");
   CHECK(c.server_minor == 1026 && c.server_state == 2);
   CHECK(c.streams >= 2);   // configstrings then baselines, as streams
   CHECK(c.zpackets >= 1);  // compressed
@@ -447,7 +447,7 @@ TEST(a_protocol_35_client_on_the_old_channel_joins_and_walks) {
   auto r = rig({});
   Raw& c = join(*r, 35, 1905, 0);
   run(*r, 120);
-  CHECK(c.connect_answer == "client_connect");
+  CHECK(c.connect_answer == "client_connect map=hall");
   CHECK(c.server_minor == 1905);
   CHECK(c.config_strings > 5);
   CHECK(c.zpackets >= 1);

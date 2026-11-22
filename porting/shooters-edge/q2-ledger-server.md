@@ -51,14 +51,14 @@ part differs; `missing` not in our tree; `not-taken` a note or doc of ours decid
 | --- | --- | --- | --- | --- | --- |
 | Server console commands (the operator's words) | 54 | 10 | 1 | 11 | 76 |
 | General console commands and macros the server's console has (common) | 35 | 8 | 13 | 1 | 57 |
-| Server settings (cvars) with their defaults | 77 | 23 | 37 | 33 | 170 |
-| Server-to-client messages (svc) and protocol extensions the server writes | 38 | 9 | 6 | 0 | 53 |
+| Server settings (cvars) with their defaults | 83 | 22 | 32 | 33 | 170 |
+| Server-to-client messages (svc) and protocol extensions the server writes | 39 | 8 | 6 | 0 | 53 |
 | What the server accepts from clients | 42 | 12 | 1 | 2 | 57 |
 | The game library interface | 41 | 24 | 22 | 1 | 88 |
-| Messages a player sees (refusals, drops, prints), quoted exactly | 49 | 15 | 6 | 2 | 72 |
+| Messages a player sees (refusals, drops, prints), quoted exactly | 50 | 15 | 5 | 2 | 72 |
 | Messages an admin sees on the server console, quoted exactly | 9 | 24 | 1 | 2 | 36 |
-| Server features beyond single words | 29 | 16 | 8 | 2 | 55 |
-| **all** | 374 | 141 | 95 | 54 | 664 |
+| Server features beyond single words | 34 | 13 | 6 | 2 | 55 |
+| **all** | 387 | 136 | 87 | 54 | 664 |
 
 ## 1. Server console commands (the operator's words)
 
@@ -215,7 +215,7 @@ done 35, partial 8, missing 13, not-taken 1
 Defaults are upstream's; flags as registered. Our Quake II spellings that are synonyms are listed in
 `games/shooters_edge/net/q2_game.cpp` (`kSettingNames`).
 
-done 77, partial 23, missing 37, not-taken 33
+done 83, partial 22, missing 32, not-taken 33
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -249,7 +249,7 @@ done 77, partial 23, missing 37, not-taken 33
 | cvar.sv_reserved_password | `sv_reserved_password` = `` (private) | Reserved slots' password. | done | `sv_vippassword` (synonym) |
 | cvar.sv_locked | `sv_locked` = `0` | Refuses new connections. | partial | Engine `sv_locked`; refusal adds `Connection refused.` (msg.oob.locked) |
 | cvar.sv_novis | `sv_novis` = `0` | Sends every entity unculled. | done | Rules setting (`games/shooters_edge/net/q2_game.cpp`) |
-| cvar.sv_downloadserver | `sv_downloadserver` = `` (empty) | HTTP download address given at connect (`dlserver=`). | missing | S36 (`sv_downloadurl` proposed) |
+| cvar.sv_downloadserver | `sv_downloadserver` = `` (empty) | HTTP download address given at connect (`dlserver=`). | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_net_server.cpp: ` dlserver=<url>` in the connect answer, as given |
 | cvar.sv_redirect_address | `sv_redirect_address` = `` | Full: send newcomers to this address (`!` first: everyone but reserved-password holders). | done | `sv_redirect` (synonym; `engine/server/admission.hpp`) |
 | cvar.sv_debug | `sv_debug` = `0` | Debug prints (debug build only). | not-taken | docs/porting/server.md: debug build only, not taken |
 | cvar.sv_pad_packets | `sv_pad_packets` = `0` | Pads packets with no-ops (debug build only). | not-taken | docs/porting/server.md: debug build only, not taken |
@@ -258,7 +258,7 @@ done 77, partial 23, missing 37, not-taken 33
 | cvar.sv_max_rate | `sv_max_rate` = `60000` (latched) | Highest client rate. | done | `sv_maxrate` (synonym) |
 | cvar.sv_calcpings_method | `sv_calcpings_method` = `2` | Ping as none, average or minimum of 16 frames. | done | `sv_pingmethod` (synonym; `take_trip` in `games/shooters_edge/net/q2_net_server.cpp`) |
 | cvar.sv_changemapcmd | `sv_changemapcmd` = `` | Command run after each map loads. | done | `sv_mapcmd` (synonym; engine) |
-| cvar.sv_max_download_size | `sv_max_download_size` = `8388608` | Largest file sent. | missing | S37 |
+| cvar.sv_max_download_size | `sv_max_download_size` = `8388608` | Largest file sent. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_net_server.cpp: bytes, 0 or past 128 MiB and 4 KiB the cap; a larger file refused |
 | cvar.sv_max_packet_entities | `sv_max_packet_entities` = `0` | Most entities a frame (0: 128 old clients, 512 extended). | partial | `sv_maxents` (synonym), our rules only; a hosted library's frames uncapped |
 | cvar.sv_trunc_packet_entities | `sv_trunc_packet_entities` = `1` | Cuts an oversize frame short for old clients. | not-taken | `q2-server-gaps.md` row 18 (our frames stop at the packet's room) |
 | cvar.sv_prioritize_entities | `sv_prioritize_entities` = `0` | Which entities first when over the cap. | partial | `sv_entpriority` (synonym), our rules only |
@@ -357,12 +357,12 @@ done 77, partial 23, missing 37, not-taken 33
 | cvar.version | `version` (server info, read-only) | Version text. | not-taken | `q2-server-gaps.md` "Not worth building" |
 | cvar.allow_download | `allow_download` = `0` on a dedicated server, `1` otherwise (archive) | Master download switch. | partial | `sv_download` (synonym) defaults to 1 (`games/shooters_edge/net/q2_game.cpp`) |
 | cvar.allow_download_players | `allow_download_players` = `1` (archive) | `players/`. | done | `sv_download_players` (synonym) |
-| cvar.allow_download_models | `allow_download_models` = `1` (archive) | `models/` and `sprites/`. | partial | `sv_download_models` (synonym); `sprites/` under it: verify |
+| cvar.allow_download_models | `allow_download_models` = `1` (archive) | `models/` and `sprites/`. | done | `sv_download_models` (synonym): models/ and sprites/ |
 | cvar.allow_download_sounds | `allow_download_sounds` = `1` (archive) | `sound/`. | done | `sv_download_sounds` (synonym) |
-| cvar.allow_download_maps | `allow_download_maps` = `1` (archive) | `maps/`. | partial | `sv_download_maps` (synonym); from inside packs: verify |
-| cvar.allow_download_textures | `allow_download_textures` = `1` (archive) | `textures/` and `env/`. | missing | S37 |
-| cvar.allow_download_pics | `allow_download_pics` = `1` (archive) | `pics/`. | missing | S37 |
-| cvar.allow_download_others | `allow_download_others` = `0` | Anything else. | missing | S37 |
+| cvar.allow_download_maps | `allow_download_maps` = `1` (archive) | `maps/`. | partial | `sv_download_maps` (synonym); a map inside a pack is sent only to our clients, which keep it in its archive (docs/porting/content.md, downloads kept in the archive they came from) |
+| cvar.allow_download_textures | `allow_download_textures` = `1` (archive) | `textures/` and `env/`. | done | `sv_download_textures` (synonym; games/shooters_edge/net/q2_game.cpp): textures/ and env/ |
+| cvar.allow_download_pics | `allow_download_pics` = `1` (archive) | `pics/`. | done | `sv_download_pics` (synonym) |
+| cvar.allow_download_others | `allow_download_others` = `0` | Anything else. | done | `sv_download_others` (synonym), off by default: any other folder |
 | cvar.rcon_password | `rcon_password` = `` (private) | Remote console password. | done | Engine `rcon_password`; `games/shooters_edge/net/q2_admin.cpp` |
 | cvar.sys_forcegamelib | `sys_forcegamelib` = `` (no-set) | Game library path tried first. | partial | The hosted library is loaded from a path the server is given (`games/shooters_edge/server/q2_native.hpp`); this name: verify |
 | cvar.sys_allow_unsafe_savegames | `sys_allow_unsafe_savegames` = `0` (no-set) | Allows saves with libraries lacking the enhanced-savegame bit. | missing | |
@@ -392,7 +392,7 @@ done 77, partial 23, missing 37, not-taken 33
 
 ## 4. Server-to-client messages (svc) and protocol extensions the server writes
 
-done 38, partial 9, missing 6, not-taken 0
+done 39, partial 8, missing 6, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -429,7 +429,7 @@ done 38, partial 9, missing 6, not-taken 0
 | proto.37 | protocol 37 | The multi-view recording's protocol, minor 2009 to 2013; never on UDP. | done | games/shooters_edge/server/q2_mvd2.hpp written live by games/shooters_edge/net/q2_mvd_server.cpp to a file and over TCP |
 | proto.challenge-list | `challenge <n> p=34,35,36` | Lists the protocols on offer. | done | games/shooters_edge/net/q2_net_server.cpp: `challenge <n> p=34,35,36` |
 | proto.challenge-table | challenges | A random 31-bit number per address, 1024 kept, oldest replaced, used once. | done | games/shooters_edge/net/q2_net_server.cpp (`challenge_key`): a new 31-bit number per address and port, 1024 kept, the oldest replaced, used up on admission |
-| proto.connect-answer | `client_connect[ nc=0\|1][ ac=1][ dlserver=<url>] map=<map>` | The admission answer: channel kind for 36, anticheat, HTTP download address, the map name. | partial | games/shooters_edge/net/q2_net_server.cpp: `client_connect` and ` nc=<n>` for 36; ` map=` and ` dlserver=` not sent (S36) |
+| proto.connect-answer | `client_connect[ nc=0\|1][ ac=1][ dlserver=<url>] map=<map>` | The admission answer: channel kind for 36, anticheat, HTTP download address, the map name. | done | games/shooters_edge/net/q2_net_server.cpp: ` nc=` for 36, ` dlserver=` when set, ` map=` always (no anticheat build, so no ` ac=`) |
 | proto.mapchange | map change | Every client is stuffed `changing map=<map>` before the level loads and `reconnect` after. | done | Added (upstream); our level changes stuff `changing` and `reconnect` |
 | proto.fragments | the new channel's fragments | A message larger than a packet in pieces; packet size agreed by `net_maxmsglen`. | done | plugins/classic/protocol/channel.cpp (`channel_read`, `newer_transmit`): 30-bit sequences, pieces with a fragment word, a 32768-byte reliable message; pieces held to our 1450-byte datagram |
 | proto.extended-limits | protocol extensions (36 minor 1024 and up) | When the library sets the protocol-extensions bit: `protocol` key 36, up to 8192 entities and more configstrings, a 16-bit sound index; old clients refused. | missing | S17, S18 |
@@ -472,7 +472,7 @@ done 42, partial 12, missing 1, not-taken 2
 | ucmd.disconnect | `disconnect` | Leaves; the server's own drop line is silent, the library announces it (stock: `<name> disconnected`). | done | `string_command` drops; our rules say `<name> disconnected` (`games/shooters_edge/server/q2_server.cpp`) |
 | ucmd.info | `info` | The server info to the asking client. | done | games/shooters_edge/net/q2_net_server.cpp (`player_query`, `q2_info_lines`) |
 | ucmd.sinfo | `sinfo` | The client's own connection details (the miscinfo block). | done | games/shooters_edge/net/q2_net_server.cpp (`q2_misc_lines`) |
-| ucmd.download | `download <file> [offset]` | Starts or resumes a download. | partial | `start_download`: players, models, sounds, maps only; no size limit; no `File size differs` (S37, S38) |
+| ucmd.download | `download <file> [offset]` | Starts or resumes a download. | partial | games/shooters_edge/net/q2_net_server.cpp (`start_download`): the name made plain, every kind, the size limit, the size-differs message; pieces of 1024 bytes (feat.dl.pieces) |
 | ucmd.download-http | `download http` | Marks the client as fetching by HTTP, so `status` shows HTTP. | done | games/shooters_edge/net/q2_net_server.cpp; shown as HTTP in `status` and `status d` |
 | ucmd.nextdl | `nextdl` | Next piece (stock clients). | done | `string_command` |
 | ucmd.stopdl | `stopdl` | Stops a download. | done | games/shooters_edge/net/q2_net_server.cpp |
@@ -616,7 +616,7 @@ done 41, partial 24, missing 22, not-taken 1
 
 `<x>` marks a filled-in value. Ours quoted where it differs.
 
-done 49, partial 15, missing 6, not-taken 2
+done 50, partial 15, missing 5, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -675,7 +675,7 @@ done 49, partial 15, missing 6, not-taken 2
 | msg.name.too-often | `You can't change your name too often.` | | done | `engine/server/names.hpp` |
 | msg.name.changed | `<old> changed name to <new>` | With `sv_show_name_changes`. | partial | Ours ends with a full stop |
 | msg.console-say | `console: <text>` | The operator's `say`. | done | `games/shooters_edge/server/q2_server.cpp` |
-| msg.download.size-differs | `File size differs from server.` then `Please delete the corresponding .tmp file from your system.` | A resume past the file's size. | missing | S38 |
+| msg.download.size-differs | `File size differs from server.` then `Please delete the corresponding .tmp file from your system.` | A resume past the file's size. | done | games/shooters_edge/net/q2_net_server.cpp: at the high level, then the refusal |
 | msg.lag | `Lag stats for:       <name>`, `RTT (min/avg/max):   <a>/<b>/<c> ms`, `Server to client PL: <x>% (approx)`, `Client to server PL: <y>%`, `Timescale          : <t>` | `lag` answer. | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.sinfo | the `sinfo` block: version, protocol (maj/min), maxmsglen, zlib support, netchan type, ping, movement fps, update rate, RTT, PL both ways, packetdup, timescale, connection time | `sinfo` answer. | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.packetdup | `Packetdup of <n> is not allowed on this server.`, `Server is sending <n> duplicate packet(s) to you.` (`packet` for one) | | done | games/shooters_edge/net/q2_net_server.cpp |
@@ -741,16 +741,16 @@ done 9, partial 24, missing 1, not-taken 2
 
 ## 9. Server features beyond single words: downloads, rates, floods, bans, filters, recording, status
 
-done 29, partial 16, missing 8, not-taken 2
+done 34, partial 13, missing 6, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| feat.dl.http | HTTP downloads | `dlserver=<url>` in the connect answer sends clients to a web copy. | missing | S36 |
+| feat.dl.http | HTTP downloads | `dlserver=<url>` in the connect answer sends clients to a web copy. | done | games/shooters_edge/net/q2_net_server.cpp: the connect answer names the web copy (`sv_downloadserver`) |
 | feat.dl.pieces | piece size and pace | Pieces sized to the packet's room, several a frame within the rate (extended); 1024 a frame stock. | partial | 1024 a piece (S39) |
-| feat.dl.no-frames | no frames while downloading | Game frames are not sent to a downloading client. | partial | Verify ours (`download_piece` in `games/shooters_edge/net/q2_net_server.cpp`) |
+| feat.dl.no-frames | no frames while downloading | Game frames are not sent to a downloading client. | done | games/shooters_edge/net/q2_net_server.cpp (`send_frames`): reliable data alone while a file comes down |
 | feat.dl.compressed | compressed downloads | Deflate pieces straight from compressed packs (36 minor 1021 and up, zlib, from offset 0). | missing | S18 |
-| feat.dl.resume | resume by offset | A download restarts at the client's offset. | partial | Offset taken; a bad offset refused without the size-differs message (S38) |
-| feat.dl.kinds | what may be downloaded | A path with a folder, no `..`, by folder: players, models and sprites, sounds, maps, textures and env, pics, others; empty files and files past the size limit refused. | partial | Players, models, sounds, maps only; no size limit (S37) |
+| feat.dl.resume | resume by offset | A download restarts at the client's offset. | done | games/shooters_edge/net/q2_net_server.cpp: from the client's offset; past the end told the size differs and refused |
+| feat.dl.kinds | what may be downloaded | A path with a folder, no `..`, by folder: players, models and sprites, sounds, maps, textures and env, pics, others; empty files and files past the size limit refused. | done | games/shooters_edge/net/q2_net_server.cpp: a folder, no climbing out, a plain first and last letter; by folder players, models and sprites, sound, maps, textures and env, pics, others; empty files and files past the size limit refused |
 | feat.dl.refused | refused download | The empty download answer (size -1). | done | `start_download` sends the refusal piece |
 | feat.rate.clamp | rate clamped to the bounds | `rate` held to `sv_min_rate`..`sv_max_rate`; LAN unlimited by setting; loopback unlimited. | done | `engine/server/rate.hpp`; loopback: verify |
 | feat.rate.no-key | no `rate` key: 5000, not clamped | | done | 5000, held to no limit (`RateBounds::none_held`); `server_rate_test` |
@@ -765,7 +765,7 @@ done 29, partial 16, missing 8, not-taken 2
 | feat.filter.userinfo | user info bans checked at connect, at `new` and on change | | done | `judge_userinfo` |
 | feat.stuff.connect | text run at connect and at begin (`addstuffcmd`) | | done | games/shooters_edge/net/q2_net_server.cpp: the connect list after the first `new`'s probe, the begin list at each `begin` |
 | feat.lrcon | limited rcon by prefixes, not macro-expanded | | done | `engine/server/lrcon.hpp` |
-| feat.rcon.split | rcon answers cut into packets | | missing | S29 |
+| feat.rcon.split | rcon answers cut into packets | | done | games/shooters_edge/net/q2_admin.cpp: packets of at most 1384 bytes after `print\n`, whole lines where they fit; an empty answer still sends one |
 | feat.rcon.reach | rcon runs any console command | | partial | S29 |
 | feat.slots.reserved | reserved slots and password; server password counts | | done | `engine/server/admission.hpp` |
 | feat.slots.redirect | redirect when full, or always with `!` first (everyone but reserved-password holders) | | done | same |
