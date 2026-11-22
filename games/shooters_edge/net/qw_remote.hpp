@@ -161,9 +161,13 @@ struct Remote {
   JoinedFile file;  // `record` while joined: the level kept and the file (qw_match_record.hpp)
   MatchAuto match;  // the match recorded on its own (match_auto_record)
   client::JoinedRecord joined_record;  // the window's record commands reach the join through it
-  std::unique_ptr<Q2ClientEnd> q2;     // joined to a server of Quake II (q2_remote)
-  std::unique_ptr<NqClientEnd> nq;     // joined to a Quake server of protocol 15 (nq_remote)
-  Q2Predict q2_ahead;                  // Quake II's own moves run ahead (q2_predict.hpp)
+  // `rerecord <name>`: the file the next join records to from its start ("": none waiting).
+  std::filesystem::path rerecord;
+  // `fullinfo`'s keys no window setting holds, sent in the user info at the next join.
+  std::vector<std::pair<std::string, std::string>> extra_info;
+  std::unique_ptr<Q2ClientEnd> q2;  // joined to a server of Quake II (q2_remote)
+  std::unique_ptr<NqClientEnd> nq;  // joined to a Quake server of protocol 15 (nq_remote)
+  Q2Predict q2_ahead;               // Quake II's own moves run ahead (q2_predict.hpp)
   // The window's game is Quake II: `connect` speaks its protocol (port 27910 when none is given).
   std::function<bool()> q2_game;
   int64_t now_us = 0;                         // the tick clock

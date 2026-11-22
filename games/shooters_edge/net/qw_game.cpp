@@ -23,6 +23,7 @@
 
 #include "classic/content/downloads.hpp"
 #include "classic/protocol/masters.hpp"
+#include "classic/protocol/wire.hpp"
 #include "core/num.hpp"
 #include "mod/loader.hpp"
 #include "net/packet.hpp"
@@ -76,6 +77,7 @@ struct Game {
   // The C++ mod packages named in sv_mod (docs/mods.md § On the server), open while any rules run.
   std::vector<std::unique_ptr<ge::mod::LoadedMod>> packages;
   ge::progs::Progs progs;
+  std::string progs_crc;  // the program file's CRC-16 as a decimal (`*progs`; "": the baseline)
   const ge::progs::Progs* program = &progs;  // the one played: `progs`, or a listen's own
   std::vector<uint8_t> module;               // the mod's compiled module (a .qvm); empty: `program`
   // The mod's game library of Quake II's interface (server/q2_native.hpp), which plays in
@@ -210,6 +212,10 @@ constexpr gs::GameRule kModRules[] = {
     {"sv_sayteam_to_spec",
      "When spectators read the team messages of the team they follow (never a line typed by hand).",
      nullptr, "0: never; 1: during a match (the default); 2: outside a match; 3: always"},
+    {"cheats", "Whether the server runs with cheats, which its info then says as *cheats ON.",
+     nullptr, "0: no cheats (the default); 1: cheats, set at start"},
+    {"sv_highchars", "Whether a joining player's name and info may hold coloured characters.",
+     nullptr, "0: only plain letters, digits and signs are kept; 1: any (the default)"},
 };
 
 // Every rule, in the order `--explain` lists them: built once.
@@ -588,6 +594,13 @@ bool open_program(Game& g, const std::string& mod, std::string& error) {
     return false;
   }
   g.progs = std::move(found.progs);
+  // `*progs`: the program file's 16-bit CRC, so a browser tells one build of a mod from another.
+  std::vector<uint8_t> bytes;
+  for (const char* name : {"qwprogs.dat", "progs.dat"})
+    if (read_game_file(&g.files, name, bytes)) {
+      g.progs_crc = std::to_string(ge::classic::protocol::crc16(bytes.data(), bytes.size()));
+      break;
+    }
   return true;
 }
 
@@ -656,6 +669,11 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   if (const auto w = c.rules.find("sv_safestrafe");
       w != c.rules.end() && !w->second.empty() && w->second != "0")
     g->cfg.info.emplace_back("sv_safestrafe", w->second);
+  if (const auto w = c.rules.find("cheats"); w != c.rules.end() && w->second == "1")
+    g->cfg.cheats = true;
+  if (const auto w = c.rules.find("sv_highchars"); w != c.rules.end() && w->second == "0")
+    g->cfg.high_chars = false;
+  g->cfg.progs_crc = g->progs_crc;
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.rcon_password = c.rcon_password;

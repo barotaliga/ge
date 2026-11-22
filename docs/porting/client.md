@@ -25,6 +25,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Shell | `games/shooters_edge/hud/` (`layout.hpp`, `status.hpp`, `crosshair.hpp`, `classic_art.hpp`) | The HUDs: the classic status bar and other looks (`hud_style`), drawn from the game's own pictures |
 | Shell | `games/shooters_edge/menu/` (`main_menu.hpp`, `game_menu.hpp`, `classic_view.hpp`, `classic_console.hpp`, `games_page.hpp`, `servers_page.hpp`, `controls_page.hpp`) | The main menu model, the classic pages, the console in the game's letters, SELECT GAME, the browser, controls |
 | Shell | `games/shooters_edge/client/touch_play.hpp` | The game played by touch |
+| Classic plugin | `plugins/classic/content/files.hpp` (`search_path_text`) | The console's `path` for every classic game: the folders and archives, the first searched at the top |
 
 ## Each game's
 

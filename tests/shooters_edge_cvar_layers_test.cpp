@@ -530,6 +530,17 @@ TEST(color_sets_both_colours_as_quake_keeps_them) {
   CHECK(!w.console.output().empty() && w.console.output()[0].find("13") != std::string::npos);
 }
 
+TEST(an_old_quake_configs_cl_name_and_cl_color_dress_you) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("name") == nullptr || v.synonym("_cl_name") != nullptr);  // name: the settings'
+  w.console.execute("_cl_color \"77.000000\"");  // shirt 4, pants 13, as Quake saved them
+  CHECK(v.find("topcolor")->value == "4" && v.find("bottomcolor")->value == "13");
+  w.console.clear_output();
+  w.console.execute("_cl_color");
+  CHECK(!w.console.output().empty() && w.console.output()[0] == "\"_cl_color\" is \"77\"");
+}
+
 TEST(q2_chat_sound_and_auto_chat_are_its_own_and_go_with_it) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
