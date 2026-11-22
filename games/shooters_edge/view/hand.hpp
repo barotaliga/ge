@@ -177,6 +177,9 @@ struct HandInput {
   int fire_frame = 0;  // the model's frame the game says the shot starts on (0: not said)
   bool dead = false;   // the player is dead: the weapon sinks out of view (kDeathLowerS)
   bool q2 = false;     // the weapon is Quake II's (its looks: q2_weapon_look)
+  // The game sends the gun's own sway (`place.game_turn`, `place.game_shift_m`): ours, the lag
+  // behind a turn and the swing across, is set aside so it is not swayed twice.
+  bool game_sway = false;
 };
 
 struct HandFrame {

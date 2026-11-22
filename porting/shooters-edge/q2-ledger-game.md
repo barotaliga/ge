@@ -18,13 +18,13 @@ q2-sp-gaps.md).
 | User info keys the game reads | 9 | 0 | 0 | 0 | 9 |
 | dmflags bits | 16 | 0 | 0 | 0 | 16 |
 | Items (the item list, in its order; each is also a spawnable classname) | 42 | 0 | 0 | 0 | 42 |
-| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 80 | 1 | 0 | 0 | 81 |
+| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 80 | 1 | 2 | 0 | 83 |
 | Monsters | 26 | 0 | 0 | 0 | 26 |
 | Player messages (printed, broadcast and centre-printed) | 78 | 1 | 0 | 2 | 81 |
-| Server console lines (what an admin reads; `dprintf`) | 28 | 6 | 0 | 2 | 36 |
+| Server console lines (what an admin reads; `dprintf`) | 34 | 2 | 0 | 2 | 38 |
 | Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 17 | 0 | 0 | 0 | 17 |
 | Rules a player sees (behaviour not in a row above) | 44 | 0 | 0 | 0 | 44 |
-| **all** | 414 | 21 | 0 | 6 | 441 |
+| **all** | 420 | 17 | 2 | 6 | 445 |
 
 ## Client commands (what a player types; the game library answers them)
 
@@ -318,6 +318,8 @@ count: done 73, partial 7, missing 1, not-taken 0
 | ent.point_combat | point_combat | where a monster goes to fight, hold flag | done | q2_monsters.cpp (monsters 9) |
 | ent.misc_explobox | misc_explobox | exploding barrel, pushable; obituary `blew up` | done | q2_targets.cpp |
 | ent.misc_banner | misc_banner | waving banner | done | q2_targets.cpp |
+| ent.misc_actor | misc_actor | a scripted figure that walks a path, says its lines and fights back; `untargeted misc_actor at <pos>`, `misc_actor with no target at <pos>`, `misc_actor has bad target <t> at <pos>` | missing | added by the 2026-11-22 audit; no stock map places one |
+| ent.target_actor | target_actor | a misc_actor's path point: its message, jump, shoot and attack flags; `target_actor with no targetname at <pos>` | missing | added by the 2026-11-22 audit; goes with misc_actor |
 | ent.misc_satellite_dish | misc_satellite_dish | dish that turns on use | done | q2_targets.cpp |
 | ent.misc_gib_arm | misc_gib_arm | placed gib | done | q2_targets.cpp |
 | ent.misc_gib_leg | misc_gib_leg | placed gib | done | q2_targets.cpp |
@@ -487,19 +489,21 @@ count: done 1, partial 1, missing 34, not-taken 0
 | con.viper | `misc_viper without a target at <pos>` / `<class> without a target at <pos>` | ships | done | q2_map.cpp, `(0 0 0)` |
 | con.no-target-count | `<class> with no target at <pos>`, `<class> with no count at <pos>` | done | q2_targets.cpp |
 | con.teleporter | `Couldn't find destination` / `teleporter without a target.` | done | q2_lines.cpp at spawn; q2_map.cpp each touch |
-| con.turret | `<class> at <pos> needs a target` / `<class> at <pos> has bad item: <item>` | partial | q2_targets.cpp needs a target and the pick line; no turret_driver bad item |
+| con.turret | `<class> at <pos> needs a target` / `<class> at <pos> has bad item: <item>` | done | q2_targets.cpp needs a target and the pick line; q2_lines.cpp `has bad item` for turret_driver and every monster at spawn |
+| con.monster-start | `<class> at <pos> has target with mixed types`, `<class> at <pos> has a bad combattarget <t> : <class> at <pos>`, `<class> can't find target <t> at <pos>`, `<class> in solid at <pos>` | a frame after the load, each monster started | done | q2_lines.cpp q2_start_lines (added by the 2026-11-22 audit) |
+| con.droptofloor | `droptofloor: <class> startsolid at <pos>` | an item placed inside solid, removed | done | q2_server.cpp drop_items (added by the 2026-11-22 audit) |
 | con.no-distance | `<class> at <pos> with no distance set` | a rotating door or a button | done | q2_map.cpp |
 | con.train | `train_next: bad target <t>`, `connected teleport path_corners, see <class> at <pos>`, `train_find: no target`, `train_find: target <t> not found`, `func_train without a target at <pos>` | done | q2_map.cpp train_find, train_next, connected teleports; q2_lines.cpp the lower corner less 1 |
-| con.elevator | `elevator used with no pathtarget`, `elevator used with bad pathtarget: <t>`, `trigger_elevator has no target`, `trigger_elevator unable to find target <t>`, `trigger_elevator target <t> is not a train` | partial | q2_map.cpp wording; said at each use, not once at set-up |
+| con.elevator | `elevator used with no pathtarget`, `elevator used with bad pathtarget: <t>`, `trigger_elevator has no target`, `trigger_elevator unable to find target <t>`, `trigger_elevator target <t> is not a train` | done | q2_lines.cpp q2_start_lines says the set-up lines once a frame after the load; q2_map.cpp the use lines at each use |
 | con.timer | `func_timer at <pos> has random >= wait` | done | q2_lines.cpp |
 | con.combattarget | `<class> at <pos>, combattarget <t> not found` | done | q2_lines.cpp q2_lost_combat on a monster's first enemy: the pick line, then the line, once |
-| con.picktarget | `G_PickTarget called with NULL targetname`, `G_PickTarget: target <t> not found` | partial | q2_lines.cpp q2_pick_missing before the train, elevator and turret lines; not yet before combattarget and monster targets |
-| con.usetargets | `Think_Delay with no activator`, `entity was removed while using killtargets`, `WARNING: <class> used itself.`, `entity was removed while using targets` | partial | q2_map.cpp `WARNING: Entity used itself.`; the removed-while-using and Think_Delay lines not yet |
+| con.picktarget | `G_PickTarget called with NULL targetname`, `G_PickTarget: target <t> not found` | done | q2_lines.cpp q2_pick_missing before the train, elevator, turret, combat point, combattarget and monster target lines |
+| con.usetargets | `Think_Delay with no activator`, `entity was removed while using killtargets`, `WARNING: <class> used itself.`, `entity was removed while using targets` | partial | q2_map.cpp `WARNING: Entity used itself.` and both removed-while-using lines; `Think_Delay with no activator` not yet |
 | con.speaker | `target_speaker with no noise set at <pos>` | done | q2_lines.cpp |
 | con.no-message | `<class> with no message at <pos>` | target_help | done | q2_map.cpp |
 | con.no-map | `target_changelevel with no map at <pos>` | done | q2_lines.cpp |
 | con.bad-target | `<class> at <pos>: <t> is a bad target` | target_laser | done | q2_targets.cpp: `target_laser at <pos>: <t> is a bad target` as the laser starts |
-| con.lightramp | `<class> at <pos> target <t> (<class> at <pos>) is not a light`, `<class> target <t> not found at <pos>`, `target_lightramp has bad ramp (<r>) at <pos>`, `<class> with no target at <pos>` | partial | q2_lines.cpp the bad ramp and no target at spawn; the first use's lines not yet |
+| con.lightramp | `<class> at <pos> target <t> (<class> at <pos>) is not a light`, `<class> target <t> not found at <pos>`, `target_lightramp has bad ramp (<r>) at <pos>`, `<class> with no target at <pos>` | done | q2_lines.cpp the bad ramp and no target at spawn; q2_ramp_light the first use's not-a-light and not-found lines |
 | con.untargeted | `untargeted <class> at <pos>` | target_earthquake etc. | done | q2_lines.cpp target_earthquake |
 | con.flood-clamp | `flood_msgs lowered to max: 10` | done | q2_commands.cpp |
 | con.spawned | `Spawned entity at <x> <y> <z>` | spawnonstart | not-taken | goes with cmd.spawnonstart |

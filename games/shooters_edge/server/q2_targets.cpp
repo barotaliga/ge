@@ -937,6 +937,8 @@ bool targets_use(Q2Server& s, int i, int activator) {
       }
       return true;
     case kLightRamp:
+      if (e.aim < 0) e.aim = q2_ramp_light(s, i);  // its light, found at the first use
+      if (e.aim < 0) return true;
       e.until = s.level_time;  // the ramp starts now
       e.tick_at = s.level_time;
       e.activator = activator;
@@ -1118,10 +1120,7 @@ void targets_frame(Q2Server& s) {
         break;
       case kLightRamp: {
         if (e.tick_at <= 0 || s.level_time + 0.001 < e.tick_at) break;
-        int light = -1;
-        for (size_t t = 0; t < s.entities.size(); t++)
-          if (s.entities[t].targetname == e.target && s.entities[t].classname == "light")
-            light = static_cast<int>(t);
+        const int light = e.aim;
         if (light < 0) {
           e.gone = true;
           break;

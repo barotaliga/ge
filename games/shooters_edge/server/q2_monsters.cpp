@@ -1632,6 +1632,7 @@ void monster_spawn(Q2Server& s) {
     Q2Entity& e = s.entities[size_t(m.entity)];
     const ge::classic::Q2Trace t =
         sweep(s, m, e.origin + sh::Vec3f{0, 0, 1}, e.origin - sh::Vec3f{0, 0, 256});
+    m.start_solid = t.start_solid;
     if (t.start_solid) continue;
     e.origin = t.end;
     m.on_ground = t.fraction < 1;
