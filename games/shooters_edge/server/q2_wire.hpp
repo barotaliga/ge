@@ -234,6 +234,11 @@ struct Q2Raw {
   Q2Sight sight;                                    // this frame's links (the cut's)
   Q2PlayerState players[32];                        // by slot
   std::vector<uint8_t> reliable[32], datagram[32];  // by slot, taken by each frame written
+  // One slot's own look at an entity it is about to be sent (a game library's per-client calls):
+  // false leaves it out of that slot's frame, and it may rewrite the state. Null: every slot sees
+  // the same.
+  bool (*touch)(void* ctx, int slot, int number, Q2EntityState& s) = nullptr;
+  void* touch_ctx = nullptr;
 };
 
 // The signon from a raw game, as `q2_signon_parts`.

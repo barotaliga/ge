@@ -27,8 +27,14 @@
 // channel's viewers, held to the flood rule (`flood_msgs`, `flood_persecond`, `flood_waitdelay`,
 // `flood_mute`).
 //
+// A viewer's new name and leaving are told to the channel (`[MVD] <old> changed name to <new>`,
+// `[MVD] <name> disconnected`), as its comings are, under `mvd_part_filter` and the `uf` mute; with
+// `mvd_filter_version` a chat line from the recorded server has each `!version` made `!versi0n`, so
+// the viewers' scripts do not answer it.
+//
 // WHAT IT DOES NOT: a viewer flies free only by following no one (a view needs a player); stats
-// and intermission rewrites (`mvd_stats_score`, `mvd_stats_hack`, `mvd_freeze_hack`) are not made;
+// and intermission rewrites from the recorder's dummy (`mvd_stats_hack`, `mvd_freeze_hack`) are not
+// made, as our recordings carry no dummy;
 // a stream with the extended limits is refused by the reader.
 //
 // ge:summary Quake II's multiview relay: mvdconnect, mvdplay, channels, the Waiting Room, viewers
@@ -74,7 +80,7 @@ struct Q2RelayConfig {
   std::string admin_password;                // mvd_admin_password
   int part_filter = 0;                       // mvd_part_filter
   int stats_score = 0;                       // mvd_stats_score: 0 none, 1 the channel, else frags
-  bool filter_version = false;               // mvd_filter_version
+  bool filter_version = false;               // mvd_filter_version: `!version` in chat made inert
   std::string default_map = "q2dm1";         // mvd_default_map
   std::string chase_prefix = "xv 0 yb -64";  // mvd_chase_prefix
   int flood_msgs = 4;

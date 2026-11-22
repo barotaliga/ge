@@ -950,6 +950,8 @@ void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8
       s.present = false;
       w.cut++;
     }
+    if (s.present && raw.touch != nullptr && !raw.touch(raw.touch_ctx, slot, n, s))
+      s.present = false;
     if (!s.present) {
       if (was.present) write_entity(o, kRemove | (n >= 256 ? kNumberShort : 0u), n, s);
       w.last[size_t(n)] = Q2EntityState{};

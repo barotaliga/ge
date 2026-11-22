@@ -35,3 +35,19 @@ TEST(com_maplist_sorts_ignoring_case_and_keeps_each_map_once) {
   CHECK(sv::server_map_list({"q2dm2", "Base1", "q2dm1", "base1", "Q2DM1"}) == "Base1 q2dm1 q2dm2");
   CHECK(sv::server_map_list({}).empty());
 }
+
+TEST(console_prefix_stamps_a_line_with_its_level_and_the_time) {
+  std::tm now{};
+  now.tm_year = 126;
+  now.tm_mon = 10;
+  now.tm_mday = 22;
+  now.tm_hour = 7;
+  now.tm_min = 5;
+  CHECK(sv::terminal_prefix("", sv::LineLevel::normal, now).empty());
+  CHECK(sv::terminal_prefix("[%H:%M] ", sv::LineLevel::normal, now) == "[07:05] ");
+  CHECK(sv::terminal_prefix("@: ", sv::LineLevel::warning, now) == "W: ");
+#if !defined(_WIN32)
+  CHECK(sv::terminal_prefix("<?>", sv::LineLevel::error, now) == "<3>");
+  CHECK(sv::terminal_prefix("<?>@ ", sv::LineLevel::normal, now) == "<6>A ");
+#endif
+}
