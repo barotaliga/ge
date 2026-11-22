@@ -10,7 +10,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client console commands | 121 | 13 | 12 | 10 | 156 |
+| Client console commands | 125 | 14 | 7 | 10 | 156 |
 | Client settings (cvars) | 180 | 49 | 75 | 46 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 89 | 67 | 5 | 1 | 162 |
@@ -29,11 +29,11 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 11 | 7 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 7 | 6 | 4 | 0 | 17 |
-| **all** | 700 | 305 | 137 | 69 | 1211 |
+| **all** | 704 | 306 | 132 | 69 | 1211 |
 
 ## Client console commands
 
-done 121, partial 13, missing 12, not-taken 10
+done 125, partial 14, missing 7, not-taken 10
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -183,11 +183,11 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.fdir | `fdir <wildcard>` | lists files by wildcard | done | `engine/vfs/search_commands.cpp` |
 | cmd.whereis | `whereis <path> [all]` | says which pack or folder a file comes from | done | `engine/vfs/search_commands.cpp`: the winner, and with `all` every source holding it |
 | cmd.fs_stats | `fs_stats` | file-system counters | not-taken | `client-gaps.md`: developer tools left out |
-| cmd.link | `link <from> <to>` | links one path to another | missing | not found |
-| cmd.unlink | `unlink <from>` | removes a link | missing | not found |
-| cmd.softlink | `softlink <name> <target>` | a soft link in the search path | missing | not found |
-| cmd.softunlink | `softunlink [-ah] <name>` | removes a soft link | missing | not found |
-| cmd.fs_restart | `fs_restart` | restarts the file system | missing | C33 |
+| cmd.link | `link <from> <to>` | links one path to another | done | `games/shooters_edge/client/game_folder.cpp` (`add_path_command`) over `classic/content/fs_words.hpp`: a hard link made or moved, none listed |
+| cmd.unlink | `unlink <from>` | removes a link | done | `games/shooters_edge/client/game_folder.cpp` over `classic/content/fs_words.hpp`: one link, or `-a` every one |
+| cmd.softlink | `softlink <name> <target>` | a soft link in the search path | done | `games/shooters_edge/client/game_folder.cpp` over `classic/content/fs_words.hpp`: tried only when the path itself is missing |
+| cmd.softunlink | `softunlink [-ah] <name>` | removes a soft link | done | `games/shooters_edge/client/game_folder.cpp` over `classic/content/fs_words.hpp`: `-a`, `-h` as upstream |
+| cmd.fs_restart | `fs_restart` | restarts the file system | partial | `games/shooters_edge/client/game_folder.cpp`: the banner and the search path listed, the links kept; the folders are not opened again in the window (the dedicated server does, net/q2_game.cpp) |
 | cmd.bsplist | `bsplist` | lists loaded maps | not-taken | `client-gaps.md`: developer tools left out |
 | cmd.z_stats | `z_stats` | memory statistics | not-taken | `client-gaps.md`: developer tools left out |
 | cmd.net_restart | `net_restart` | restarts networking | missing | not found |
