@@ -1,4 +1,8 @@
 // The dedicated server's macro list and $com_maplist (engine/server/macros.hpp).
+//
+// ge:summary Tests of the dedicated server's macrolist, wildcards and $com_maplist
+// ge:keywords macrolist com_maplist wildcard
+// ge:skill net
 #include "server/macros.hpp"
 
 #include "check.hpp"

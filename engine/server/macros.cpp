@@ -1,6 +1,7 @@
 // The dedicated server's macro list and map list (macros.hpp).
 //
 // ge:summary A dedicated server's macro list and $com_maplist
+// ge:keywords macrolist com_maplist wildcard_match
 // ge:skill net console
 // ge:test tests/server_macros_test.cpp
 #include "server/macros.hpp"
