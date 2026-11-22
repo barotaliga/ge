@@ -388,12 +388,12 @@ int run_main(int argc, char** argv) {
                 "passed over");
   console.cvars().apply_latched();
 
-  // The game the install is (args.profile, found by its folders: client/game_folder.hpp).
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
   cl::Q2Bar q2_bar{.files = &files,
                    .binds = &console.binds().table(ge::console::BindMode::game),
                    .screen = &q2_screen,
-                   .fx = &picture.q2fx};
+                   .fx = &picture.q2fx,
+                   .gamma = &picture.gamma};
   cl::add_q2_bar_commands(console, q2_bar);  // dumpstatusbar, dumplayout, aashot, aadump
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };

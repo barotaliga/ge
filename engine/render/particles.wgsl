@@ -116,12 +116,33 @@ fn forward_lobe(c: f32, g: f32) -> f32 {
   return (1.0 - g * g) / (d * sqrt(d));
 }
 
+// How much of the particle covers `q` on its quad (-1..1 each way) in its shape (ParticleShape):
+// the soft capsule, full on its axis and gone at its rim and its ends; the soft dot, falling
+// straight to nothing at 15/16 of the way out; the square, the middle 5/8 at 60 %; the sharp dot,
+// 60 % out to 13/16, its rim falling four times as steeply.
+fn shape_cover(q: vec2f) -> f32 {
+  let r = length(q);
+  switch (pp.info.y) {
+    case 1u: {
+      return clamp(1.0 - r / 0.9375, 0.0, 1.0);
+    }
+    case 2u: {
+      return select(0.0, 0.6, max(abs(q.x), abs(q.y)) <= 0.625);
+    }
+    case 3u: {
+      return clamp(4.0 * (0.9375 - r) / 0.9375, 0.0, 0.6);
+    }
+    default: {
+      let across = 1.0 - q.y * q.y;
+      let ends = 1.0 - smoothstep(0.6, 1.0, abs(q.x));
+      return across * ends;
+    }
+  }
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> FragmentOut {
-  // A soft capsule: full on its axis, gone at its rim and its ends.
-  let across = 1.0 - in.quad.y * in.quad.y;
-  let ends = 1.0 - smoothstep(0.6, 1.0, abs(in.quad.x));
-  var a = in.look.y * in.look.z * across * ends;
+  var a = in.look.y * in.look.z * shape_cover(in.quad);
   // Softened where it nears what is behind it.
   let d = textureLoad(scene_depth, vec2i(in.position.xy), 0);
   let behind = pp.step.y / max(d, 1e-7);
@@ -152,7 +173,8 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   }
   let hazed = haze(c, in.position.xy * frame.size.zw, length(in.rel));
   var out: FragmentOut;
-  out.colour = vec4f(hazed * a, a);
+  // Added to what is behind (ParticleSettings::additive): the light alone, nothing hidden.
+  out.colour = vec4f(hazed * a, select(a, 0.0, pp.info.z != 0u));
   out.motion = vec4f(0.0, 0.0, a, 0.0);
   return out;
 }

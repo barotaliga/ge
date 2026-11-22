@@ -39,6 +39,7 @@ struct Look {
   d: vec4f,  // the screen's blend: an sRGB-encoded colour, its share (`set_post_blend`)
   e: vec4f,  // the arrival (`set_post_warp`): share, reveal, zoom, flash
   f: vec4f,  // the arrival's tint, sRGB-encoded
+  g: vec4f,  // the ripple (`set_post_ripple`): its reach (a share of the screen), waves, phase
 }
 @group(1) @binding(6) var<uniform> look: Look;
 // Motion blur's inputs at the render size (render/motion_blur.hpp): the motion target (rg the
@@ -294,7 +295,12 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   let uv = in.position.xy / size;
   let p = vec2i(in.position.xy);
   let e = exposure();
-  let base = textureLoad(hdr, p, 0).rgb;
+  var base = textureLoad(hdr, p, 0).rgb;
+  if (look.g.x > 0.0) {  // THE RIPPLE: across by the height, down by the width, `g.y` waves
+    let w = 6.2831853 * look.g.y;
+    let at = uv + look.g.x * vec2f(sin(uv.y * w + look.g.z), sin(uv.x * w + look.g.z));
+    base = textureSampleLevel(hdr, lin, clamp(at, vec2f(0.0), vec2f(1.0)), 0.0).rgb;
+  }
   var c = base;
   if (kSharpen) {
     c = sharpened(p, base, e);

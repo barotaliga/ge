@@ -102,6 +102,22 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
           .kind = con::CvarKind::boolean,
           .values = "0: sharp pixels (the default); 1: smoothed"},
          &s.bilerp_chars);
+  v.bind({.name = "gl_bilerp_pics",
+          .fallback = "1",
+          .help = "Whether the status bar's pictures are smoothed when drawn larger.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: the large ones, the small icons and digits sharp (the default); 0: none, "
+                    "sharp pixels; 2: all of them"},
+         &s.bilerp_pics);
+  v.bind({.name = "gl_gamma_scale_pics",
+          .fallback = "0",
+          .help = "Whether the brightness setting brightens the status bar's pictures too.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: they keep their own brightness (the default); 1: brightened with the "
+                    "world"},
+         &s.gamma_pics);
   v.bind({.name = "scr_showturtle",
           .fallback = "1",
           .flags = con::kArchive,
