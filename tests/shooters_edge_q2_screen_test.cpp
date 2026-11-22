@@ -177,12 +177,12 @@ TEST(scr_showturtle_writes_a_frames_troubles_at_the_lower_left) {
   const uint8_t all =
       cl::kQ2FrameBad | cl::kQ2FrameNoDelta | cl::kQ2FrameSuppressed;  // as a damaged frame
   cl::add_q2_turtle(bar, all, 320, 240);
-  CHECK_MSG(placed(bar) == "'BADFRAME'@0,152 'NODELTA'@0,160 ", placed(bar));
+  CHECK_MSG(placed(bar) == "'BADFRAME'@8,152 'NODELTA'@8,160 ", placed(bar));
   CHECK(bar.ops.size() == 2 && bar.ops[0].alt);
   bar.ops.clear();
   screen.turtle = 2;
   cl::add_q2_turtle(bar, cl::kQ2FrameOld | cl::kQ2FrameSuppressed, 320, 240);
-  CHECK_MSG(placed(bar) == "'OLDFRAME'@0,152 'SUPPRESSED'@0,160 ", placed(bar));
+  CHECK_MSG(placed(bar) == "'SUPPRESSED'@8,152 'OLDFRAME'@8,160 ", placed(bar));
   bar.ops.clear();
   screen.turtle = 0;
   cl::add_q2_turtle(bar, all, 320, 240);

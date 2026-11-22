@@ -272,7 +272,8 @@ struct DemoState {
   // Quake II: the server's sway on the held weapon, degrees (pitch down, yaw left, roll right side
   // down), and its place off the hand, units along the world's axes.
   sh::Vec3f gun_angles, gun_offset;
-  float fov = 0;  // Quake II: the field of view the server sends, degrees (0: none sent)
+  float fov = 0;    // Quake II: the field of view the server sends, degrees (0: none sent)
+  int rdflags = 0;  // Quake II: the view's bits (kQ2RdIrGoggles: infra-red goggles on)
   // The blows the view's player took (single, client, multiview): the last `kKeptBlows` of them
   // and how many in all since the demo was opened, so a look after several frames misses none.
   std::vector<DemoBlow> blows;

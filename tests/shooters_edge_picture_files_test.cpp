@@ -70,6 +70,19 @@ TEST(the_crosshair_picture_is_found_under_crosshairs) {
   fs::remove_all(game);
 }
 
+TEST(con_background_s_picture_is_found_under_pics) {
+  const fs::path game = fs::temp_directory_path() / "ge_se_picture_files_pics";
+  fs::remove_all(game);
+  write(game / "pics" / "inter.pcx",
+        ge::assets::encode_pcx({4, 2, std::vector<uint8_t>(8, 3), {}}));
+  cl::SearchPath files;
+  files.folder = game.string();
+  ge::ui::Image out;
+  CHECK(cl::read_console_back(files, "inter", &out) && out.width == 4 && out.height == 2);
+  CHECK(!cl::read_console_back(files, "none", &out));
+  fs::remove_all(game);
+}
+
 TEST(crosshairimage_draws_the_players_picture_in_place_of_the_mark) {
   ge::console::Console c;
   ge::hud::CrosshairSettings s;

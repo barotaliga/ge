@@ -58,6 +58,8 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Configs on a game change | `fs_default`'s default.cfg, the game's own settings | the same, then `fs_autoexec`'s autoexecs and postexec.cfg (`client/install_configs.cpp`) | the game's own settings | the engine's |
 | The connection's number | `qport` (from the name) | `qport` (from the name) | `qport`, 0 from the name (`net/qw_remote.cpp`) | the classic layer's |
 | Floating items still | none | `cl_nobob` (the picture's `items_still`, `client/world_models.cpp`) | its own | its own |
+| The client's own port | any free port | `net_clientport`, moved at once (`net/qw_remote.cpp`'s `own_port`) | its own | its own |
+| The console's picture | the pack's `conback` | `con_background`, a picture under `pics/` (`menu/classic_console.hpp`) | its own | its own |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Screenshot names | by the time | `gl_screenshot_template` (`quakeXXX`) and `gl_screenshot_compression` over `scr_template` and `scr_compression` (`capture/screenshot.hpp`) | by the time | the engine's |
 

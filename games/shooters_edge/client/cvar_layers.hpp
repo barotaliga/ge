@@ -42,6 +42,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/q2_session.hpp"
 #include "shooters_edge/client/q2_view.hpp"
+#include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/hand.hpp"
 
@@ -100,6 +101,9 @@ struct GameBindings {
   // The music (audio/music_console.hpp): Quake II's `ogg_enable` (its switch, `cd on|off`),
   // `ogg_shuffle` and `ogg_menu_track`; on, unshuffled and no menu track in every other game.
   ge::audio::MusicConsole* music = nullptr;
+  // The console's look: Quake II's `con_background` (its picture under `pics/`, read from `files`);
+  // the game's own `conback` in every other game.
+  shooters_edge::menu::ClassicConsole* console = nullptr;
 };
 
 // Quake II's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,

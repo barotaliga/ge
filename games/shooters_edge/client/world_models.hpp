@@ -102,6 +102,8 @@ struct Placed {
   bool bobs = false;      // Quake II's bob bit: rising and sinking 5 units
   // Quake II's render bits: lit full whatever the room, or never darker than a tenth.
   bool full_bright = false, min_light = false;
+  // Seen through infra-red goggles: its skin times pure red, no light of the room, no glow.
+  bool infra_red = false;
   float alpha = 1;  // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
   float scale = 1;  // its size about the origin (a mod's `scale`)
   float colormod[3] = {1, 1, 1};  // its light tinted, glowing texels kept (a mod's `colormod`)
