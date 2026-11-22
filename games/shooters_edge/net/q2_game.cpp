@@ -217,6 +217,8 @@ constexpr gs::GameRule kRules[] = {
      "empty: nobody (the default)", false},
     {"mvd_stats_score", "What a relay's viewer sees as the frags on the status bar.", nullptr,
      "0: nothing (the default); 1: the channel's number; 2: the followed player's frags", false},
+    {"mvd_filter_version", "Whether a relay hides the version trigger in the players' chat.",
+     nullptr, "0: chat as said (the default); 1: each !version shown as !versi0n", false},
     {"mvd_part_filter", "Whose comings and goings a relay's channel is told of.", nullptr,
      "0: everyone's (the default); below 0: nobody's; N: who talked within N s", false},
     {"mvd_default_map", "The map of a relay's Waiting Room.", nullptr, "q2dm1 the default", false},
@@ -558,6 +560,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       rc.part_filter = std::atoi(it->second.c_str());
     if (const auto it = c.rules.find("mvd_stats_score"); it != c.rules.end() && !it->second.empty())
       rc.stats_score = std::atoi(it->second.c_str());
+    if (const auto it = c.rules.find("mvd_filter_version"); it != c.rules.end())
+      rc.filter_version = std::atoi(it->second.c_str()) != 0;
     // The chat flood rule's settings, the rules' own names, read by the relay's chat too.
     if (const auto it = c.rules.find("flood_msgs"); it != c.rules.end() && !it->second.empty())
       rc.flood_msgs = std::atoi(it->second.c_str());

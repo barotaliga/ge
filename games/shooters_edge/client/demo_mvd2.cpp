@@ -446,7 +446,9 @@ struct Mvd2ToQ2 final : ConvertStream {
         o.str(s);
         message(msg);
       }
-    for (const auto& [level, text] : b.changes.prints) {
+    for (const auto& [level, said] : b.changes.prints) {
+      std::string text = said;
+      if (c.options.touch_print) c.options.touch_print(level, text);
       msg.clear();
       o.u8(kPrint);
       o.u8(static_cast<uint32_t>(level));

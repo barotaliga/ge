@@ -4,7 +4,9 @@
 // a refusal, its commands, a level change asked for, an `error` that stops the map, a spark's way
 // by the table of directions, a turned brush entity traced in its own frame, and single player:
 // the spawn point, levels kept within a unit, the autosave, a save and its load, the refusals,
-// a new game's held settings.
+// a new game's held settings; the extended interface: the features, the extra user info, the
+// calls a game makes (configstrings, clip, visibility, files, memory, a sound to one client) and
+// those it answers (per client, its own end of frame, whether it may be saved).
 //
 // ge:summary Tests for hosting Quake II's game library: load, spawn, move, messages, error
 // ge:keywords game-library native-host fixture m18v10
@@ -413,6 +415,118 @@ TEST(a_save_is_refused_in_deathmatch_and_while_dead) {
   CHECK(menu);
   ticks(r, 20, 0);
   CHECK(r.calls->save_problem(r.rules) == "Can't savegame while dead!");
+}
+
+// The game with the extended interface on (`fixture_ex 1`): four slots, deathmatch.
+sv::RulesRunner start_ex(int max_clients = 4, bool deathmatch = true) {
+  std::filesystem::path lib;
+  CHECK(sv::find_native_library(kRoot, "fixturemod", "base", lib));
+  sv::NativeQ2Options o;
+  o.library = lib;
+  o.max_clients = max_clients;
+  o.game = "fixturemod";
+  o.settings = {{"fixture_ex", "1"}};
+  std::string error;
+  std::unique_ptr<sv::NativeQ2> s = sv::load_native_q2(o, error);
+  CHECK_MSG(s != nullptr, error);
+  if (!s) return {};
+  sv::RulesRunner r = sv::native_q2_runner(std::move(s));
+  if (!deathmatch) {
+    r.console("deathmatch 0");
+    r.console("map \"hall\"");
+  }
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = hall();
+  CHECK_MSG(r.start(map, error), error);
+  return r;
+}
+
+std::string said(const std::vector<uint8_t>& b, const std::string& head) {
+  const auto at = std::search(b.begin(), b.end(), head.begin(), head.end());
+  if (at == b.end()) return "";
+  return std::string(at, std::find(at, b.end(), uint8_t{'\n'}));
+}
+
+TEST(the_extended_interface_answers_the_games_calls_and_asks_its_own) {
+  sv::RulesRunner r = start_ex();
+  sv::NativeQ2* s = sv::native_q2_of(r);
+  if (s == nullptr) return;
+  CHECK(s->host->ex != nullptr && s->host->ex->apiversion == 3);
+  // The features: the server's offer read, the game's answer kept.
+  CHECK(s->host->find_setting("sv_features")->value == std::to_string(sv::kNativeServerFeatures));
+  CHECK(sv::native_features(*s->host) == (2 | 4096));
+  r->clients[0].address = "[2001:db8:1::5]:27901";
+  r.connect(0, "tester", false, false, nullptr);
+  std::vector<uint8_t>& out = s->raw.reliable[0];
+  r.client_command(0, "extra");  // an IPv6 address told as IPv4 to a game that did not ask
+  CHECK_MSG(said(out, "extra") ==
+                "extra '\\challenge\\0\\ip\\198.51.100.149:27901\\major\\34\\minor\\0"
+                "\\netchan\\1\\packetlen\\1390\\qport\\0\\zlib\\0'",
+            said(out, "extra"));
+  r.client_command(0, "cs 2");
+  CHECK(said(out, "cs ") == "cs 'sky1'");
+  r.client_command(0, "clip");
+  CHECK_MSG(said(out, "clip") == "clip 80 box 1 world 200", said(out, "clip"));
+  r.client_command(0, "vis");
+  CHECK(said(out, "vis") == "vis 1 1 1");
+  r.client_command(0, "grow");
+  CHECK(said(out, "grow") == "grow 'abc'");
+  r.client_command(0, "files");
+  CHECK_MSG(said(out, "files") ==
+                "files 18 'line one' 1 'a.txt' unknown 1 bad 'Bad file descriptor' "
+                "missing 'No such file or directory'",
+            said(out, "files"));
+  std::filesystem::remove_all(kRoot / "fixturemod" / "notes");
+  r.client_command(0, "cs 99999");  // a bad index stops the map
+  CHECK(s->map_stopped &&
+        s->stop_reason.find("PF_GetConfigstring: bad index: 99999") != std::string::npos);
+}
+
+TEST(the_extended_game_sees_each_client_alone_and_clears_its_own_events) {
+  sv::RulesRunner r = start_ex();
+  sv::NativeQ2* s = sv::native_q2_of(r);
+  if (s == nullptr) return;
+  r.connect(0, "tester", false, false, nullptr);
+  r.connect(1, "other", false, false, nullptr);
+  ticks(r, 20, 0);
+  CHECK(s->raw.touch != nullptr);
+  // The box (entity 6) as each player sees it: its skin is the viewer's number.
+  for (int slot = 0; slot < 2; slot++) {
+    sv::Q2Wire w;
+    w.slot = slot;
+    sv::Q2Signon on;
+    sv::q2_signon_raw(w, s->raw, slot, {}, on);
+    std::vector<uint8_t> block, rel;
+    sv::q2_frame_raw(w, s->raw, static_cast<int32_t>(s->frame_number), block, rel);
+    CHECK(w.last[6].present && w.last[6].skin == uint32_t(slot + 1));
+  }
+  r.client_command(0, "hide");
+  sv::Q2Wire w;
+  sv::Q2Signon on;
+  sv::q2_signon_raw(w, s->raw, 0, {}, on);
+  std::vector<uint8_t> block, rel;
+  sv::q2_frame_raw(w, s->raw, static_cast<int32_t>(s->frame_number), block, rel);
+  CHECK(!w.last[6].present && w.last[5].present);  // hidden; the platform still sent
+  // A sound to the player alone, reliable, on his own entity.
+  s->raw.reliable[0].clear();
+  s->raw.reliable[1].clear();
+  r.client_command(0, "beep");
+  const std::vector<uint8_t> beep = {9, 8, 1, uint8_t((1 << 3) | 0), 0};
+  CHECK(s->raw.reliable[0] == beep && s->raw.reliable[1].empty());
+}
+
+TEST(the_extended_game_says_whether_it_may_be_saved) {
+  sv::RulesRunner r = start_ex(1, false);
+  if (!r) return;
+  r.connect(0, "tester", false, false, nullptr);
+  ticks(r, 10, 0);
+  CHECK(r.calls->save_problem(r.rules).empty());
+  r.client_command(0, "die");  // dead, but the game's word is taken in place of the server's
+  ticks(r, 10, 0);
+  CHECK(r.calls->save_problem(r.rules).empty());
+  r.client_command(0, "nosave");
+  CHECK(r.calls->save_problem(r.rules) == "The game does not allow saving now.");
 }
 
 }  // namespace
