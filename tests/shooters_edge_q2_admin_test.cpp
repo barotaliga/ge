@@ -611,12 +611,13 @@ TEST(the_operators_words_reach_one_client_or_all_in_the_servers_words) {
   run(*r, 40);
   CHECK(printed(eve, "Bobby was kicked") && printed(bob, "Bobby was kicked"));
   CHECK(has(rcon(*r, "rcon letmein listip"), pattern_of(2)));
-  // killserver: every client told and dropped, nothing answered until the next map.
+  // killserver: every client told and dropped; only the operator answered until the next map.
   rcon(*r, "rcon letmein killserver");
   run(*r, 20);
   CHECK(printed(eve, "Server was killed.") && eve.stage == cn::ClientStage::dropped);
   CHECK(r->server.killed && cn::q2_net_clients(r->server) == 0);
-  CHECK(rcon(*r, "rcon letmein status").empty());
+  CHECK(rcon(*r, "rcon letmein killserver") == "print\nNo server running.\n");
+  CHECK(rcon(*r, "info 34").empty());  // the browsers' questions go unanswered
 }
 
 // THE PLAYER'S QUERIES: info, sinfo, lag, packetdup, nogamedata, download http.

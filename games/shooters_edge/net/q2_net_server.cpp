@@ -467,6 +467,7 @@ void read_oob(Q2NetServer& s, const gn::Address& from, const uint8_t* data, size
   const std::string text = q2_oob_text(data, size);
   const std::vector<std::string> w = q2_words(text);
   if (w.empty()) return;
+  if (s.killed && w[0] != "rcon") return;  // `killserver`: only the operator answered
   if (w[0] == "getchallenge") {
     // A new number each time (31 bits, never 0), one an address and port, the oldest of 1024
     // replaced.
@@ -1627,7 +1628,6 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
     const auto size = static_cast<size_t>(n);
     s.datagrams_in++;
     s.bytes_in += n;
-    if (s.killed) continue;  // `killserver`: nothing answered until the next map
     if (!s.blackholes.entries.empty() &&
         ge::server::blackholed(s.blackholes, from, s.cfg.unix_time ? s.cfg.unix_time() : 0)) {
       s.blackholed++;
@@ -1637,6 +1637,7 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
       read_oob(s, from, buf, size);
       continue;
     }
+    if (s.killed) continue;  // `killserver`: no player's packets until the next map
     const int slot = find_client(s, from, buf, size);
     if (slot < 0) continue;
     Q2NetClient& c = s.clients[slot];
@@ -1685,6 +1686,7 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
     }
     if (c.stage == Q2Slot::zombie && s.now - c.heard > s.cfg.zombie_time) c = Q2NetClient{};
   }
+  if (s.killed) return;  // `killserver`: no game runs until the next map
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
   if (s.game != nullptr && s.cfg.antilag)  // where each player stands now, for the rewinds
     for (int i = 0; i < sh::kMaxClients; i++) {

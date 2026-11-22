@@ -97,10 +97,23 @@ our server never stops on a fault, since a mod's error is caught and the game go
 Quake II's ledger (`porting/shooters-edge/q2-ledger-server.md`) is the checklist; the facts of the
 operator's words, the player's queries and the connect checks are in
 `porting/shooters-edge/q2-operator.md`; those of the later protocols 35 and 36 in
-`porting/shooters-edge/q2-proto36-server.md`. Still to come there: `quit` and `recycle` with the
-lines players read (over the dedicated process's `quit`), the extended limits, compressed downloads
-and layouts, the game library's extended interface, the multi-view recorder's words and its relay
-protocol.
+`porting/shooters-edge/q2-proto36-server.md`; those of the general console words and the
+shutdown in `porting/shooters-edge/q2-console-words-facts.md`. Still to come there: the extended
+limits, compressed downloads and layouts, the game library's extended interface.
+
+The dedicated process (`engine/server/main.cpp`) gives every game `quit [reason]` and `recycle
+[reason]` (the words joined by spaces, handed to the game's `ServerGame::quit` before it closes;
+both exit with success, a recycle's players told to reconnect for whatever supervises the process
+to start it again), `showip` (the machine's addresses, `engine/net/udp_socket.hpp`, then the
+sockets the core and the game listen on), `macrolist` and `$com_maplist` (`engine/server/
+macros.hpp`) beside the console's clock macros. Quake II's farewell is "Server quit" or "Server
+restarted", with the reason, to every player and relay viewer; after `killserver` its endpoint
+answers only rcon and runs no frame until the next map.
+
+What exists only in the reference's debug builds (`fs_stats`, `sv_debug`, `sv_pad_packets`,
+`mvd_shownet`, `com_debug_break`, the file fuzzing settings, the library's debug drawing) is not
+taken: our servers are debugged with the log channels and the labs (`docs/debugging.md`), never a
+separate build with its own words.
 
 Quake II's later protocols are the endpoint's (`net/q2_net_server.cpp`, the connect's tail and the
 later moves in `net/q2_net_ext.hpp`, the frame's top and the streamed signon in
@@ -123,8 +136,9 @@ serves each channel to stock clients. A channel keeps one reader of the stream; 
 the player it chases is that reader forked (`client/demo_convert.hpp`'s `convert_fork`) and served
 by its own TV face, so a new target is a fresh signon (the client reconnects, as at a level
 change). The views are frozen moves with no prediction and the attract loop off, so viewers type
-their words. Not taken yet: free flight, the stats and intermission rewrites, `mvd_filter_version`
-and `mvd_shownet`.
+their words. `mvd_stats_score` chooses the frags a viewer's status bar shows (none, the channel's
+number, the followed player's). Not taken yet: free flight, the dummy's stats and intermission
+rewrites, `mvd_filter_version`.
 
 ## Labs and tests
 
