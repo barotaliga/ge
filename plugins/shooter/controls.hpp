@@ -1,7 +1,8 @@
 // THE PLAYER'S HANDS: one frame's keys and mouse as the view's turn and the command the listen
 // server runs. The keys are the console's binds (`bind w +forward`): `add_control_cvars` registers
 // the moves as buttons (+forward, +back, +moveleft, +moveright, +moveup, +movedown, +jump, +attack,
-// +speed, +strafe, +left, +right, +attack2: the quick weapon's second key, quick_fire.hpp; +rjump
+// +speed, +strafe, +left, +right, +use (the use button, kButtonUse; a tap between two commands
+// still sent), +attack2: the quick weapon's second key, quick_fire.hpp; +rjump
 // and +rrjump: the rocket jump helpers, a press asking the server for one rocket jump, down or
 // back, with the jump in the same command: shooter/rjump_assist.hpp).
 // A game adds its own words (a mod's `impulse <n>`), its default keys and the quick weapon's and
@@ -34,7 +35,7 @@
 // ge:summary Any shooter's keys and mouse: the move buttons, mouse look, cl_run, lookspring
 // ge:keywords controls keys mouse-look raw-mouse sensitivity invert wasd jump fire read_controls
 // ge:keywords turn_view move-cmd m_invert lookspring spring_view ideal-pitch always-run cl_run
-// ge:keywords lookstrafe attack2 buttons forward attack speed strafe key_moves movedown moveup
+// ge:keywords use-button +use lookstrafe attack2 buttons forward attack speed strafe key_moves movedown moveup
 // ge:keywords in_mouse_release mouse-capture cl_yawspeed add_control_cvars cl_forwardspeed
 // ge:keywords cl_backspeed cl_sidespeed cl_upspeed cl_movespeedkey cl_anglespeedkey cl_pitchspeed
 // ge:keywords freelook mlook klook lookup lookdown centerview force_centerview m_forward
@@ -61,6 +62,7 @@ struct ControlButtons {
                   *moveup = nullptr, *movedown = nullptr, *jump = nullptr, *attack = nullptr,
                   *speed = nullptr, *strafe = nullptr, *left = nullptr, *right = nullptr,
                   *attack2 = nullptr;
+  console::Button* use = nullptr;  // +use: the use button (a server's game may act on it)
   // Looking by key: +lookup, +lookdown (cl_pitchspeed), +klook (the move keys look), +mlook (the
   // mouse looks up and down with freelook off).
   console::Button *lookup = nullptr, *lookdown = nullptr, *klook = nullptr, *mlook = nullptr;
@@ -131,6 +133,7 @@ struct Moves {
   bool moveup = false, movedown = false;  // swim up and down; down crouches where the move ducks
   bool jump = false, attack = false, speed = false, strafe = false;
   bool attack2 = false;  // the second fire key (quick_fire.hpp); a plain attack where unread
+  bool use = false;      // +use held, or tapped since the last command (kButtonUse)
   bool left = false, right = false;  // turning
   bool lookup = false, lookdown = false, klook = false, mlook = false;
   bool center = false;  // `centerview`: level the pitch

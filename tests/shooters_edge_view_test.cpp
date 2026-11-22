@@ -19,6 +19,7 @@
 #include "assets/gltf.hpp"
 #include "assets/pose.hpp"
 #include "check.hpp"
+#include "console/console.hpp"
 #include "console/cvar.hpp"
 #include "shooters_edge/view/hand.hpp"
 #include "shooters_edge/view/weapons.hpp"
@@ -524,4 +525,24 @@ TEST(an_axe_of_two_swings_plays_one_swing_a_shot) {
   int second = 0;
   for (int i = 0; i < 40; ++i) second += swing(hand, 0);
   CHECK(second > 8 && second < 32);
+}
+
+// gun_next and gun_prev step the frame shown (held at 0, the game's own), each saying it;
+// gun_model names a weapon of the game's set by its folder, and with no name gives it back.
+TEST(the_gun_commands_show_a_frame_and_a_weapon_in_place_of_the_games) {
+  static constexpr std::string_view kHeld[] = {"models/weapons/v_blast/tris.md2",
+                                               "models/weapons/v_rail/tris.md2"};
+  ge::console::Console con;
+  se::ViewSettings s;
+  se::add_gun_commands(con, s, kHeld);
+  con.execute("gun_next; gun_next");
+  CHECK(s.gun_frame == 2 && con.output().back() == "frame 2");
+  con.execute("gun_prev; gun_prev; gun_prev");
+  CHECK(s.gun_frame == 0 && con.output().back() == "frame 0");
+  con.execute("gun_model weapons/v_rail");
+  CHECK(s.gun_model == 1);
+  con.execute("gun_model weapons/v_nothing");
+  CHECK(s.gun_model == -1);
+  con.execute("gun_model weapons/v_blast; gun_model");
+  CHECK(s.gun_model == -1);
 }

@@ -20,6 +20,8 @@ namespace shooters_edge::net {
 
 namespace {
 
+constexpr uint8_t kQ2ButtonUse = 2;  // Quake II's use button in a move's buttons byte
+
 float angle16(int16_t a) { return static_cast<float>(a) * (360.0f / 65536.0f); }
 
 // The player's settings as Quake II's user info: its figure and skin are one word
@@ -86,6 +88,8 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
       m.up = std::max<int16_t>(m.up, ge::classic::kSqJumpUp);
       m.buttons = static_cast<uint8_t>(m.buttons & ~sh::kButtonJump);
     }
+    if ((m.buttons & sh::kButtonUse) != 0)  // +use is Quake II's second button
+      m.buttons = static_cast<uint8_t>((m.buttons & ~sh::kButtonUse) | kQ2ButtonUse);
     return m;
   };
   return s;

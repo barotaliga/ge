@@ -80,6 +80,15 @@ view::HandFrame step_q2_held(const server::Q2Server& sq, const PlayerState& p, c
   return f;
 }
 
+// The developer's look (`gun_next`, `gun_prev`): the frame asked shown still, held to the model's.
+void gun_look(const view::ViewSettings& s, std::span<const ge::viewmodel::HeldModel> models,
+              view::HandFrame& f) {
+  const auto w = static_cast<size_t>(f.weapon);
+  if (s.gun_frame <= 0 || w >= models.size() || models[w].frames.empty()) return;
+  f.frame_a = f.frame_b = std::min(s.gun_frame, static_cast<int>(models[w].frames.size()) - 1);
+  f.frame_t = 0;
+}
+
 // A hosted game library's hand: the weapon whose view model it names (Quake II's set, by the
 // Quake II's names, read from the mod's folder first) on the frame it names. The library's frames
 // carry its own firing; the hand adds no kick or flash of its own.
@@ -97,7 +106,9 @@ view::HandFrame step_native_held(const server::NativeQ2& ns, const PlayerState& 
     if (name == server::kSqWeapons[static_cast<size_t>(k)].view_model) w = k;
   const int frame = static_cast<int>(nb.weapon_frame);
   view::HandInput in;
-  in.weapon = static_cast<view::Weapon>(w < 0 ? 0 : w);
+  in.weapon = static_cast<view::Weapon>(settings.gun_model >= 0 ? settings.gun_model
+                                         : w < 0                  ? 0
+                                                                  : w);
   in.q2 = true;
   in.dead = p.dead || w < 0;
   in.place.look_yaw = v.pose.yaw;
@@ -121,6 +132,7 @@ view::HandFrame step_native_held(const server::NativeQ2& ns, const PlayerState& 
     f.frame_t = settings.lerp && from >= 0 ? g : 0;
   }
   s.recorded_weapon = w;
+  gun_look(settings, models, f);
   return f;
 }
 
@@ -215,7 +227,9 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
       game = static_cast<view::Weapon>(h.last_fired);
     }
   }
-  in.weapon = h.show >= 0 ? static_cast<view::Weapon>(h.show) : game;
+  in.weapon = settings.gun_model >= 0 ? static_cast<view::Weapon>(settings.gun_model)
+              : h.show >= 0           ? static_cast<view::Weapon>(h.show)
+                                      : game;
   in.place.look_yaw = pose.yaw;
   in.place.look_pitch = pose.pitch;
   in.place.grounded = true;
@@ -239,6 +253,7 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   }
   f.drawn = f.drawn && !s.intermission && (s.stats[kStatWeapon] != 0 || (in.dead && h.shown));
   h.shown = f.drawn;
+  gun_look(settings, models, f);
   return f;
 }
 

@@ -1198,6 +1198,7 @@ int run_main(int argc, char** argv) {
     // played demo paused behind the menu gives the window up to it (below).
     const std::string map_before = next_map;
     const bool joined_before = remote.active;
+    con_keys.menu = game_menu.open();  // a menu has the keys: only F1..F12 run their binds
     ge::ui::feed_console(console, con_view, queue, con_keys);
     if (con_view.typing() != text_on) {
       text_on = con_view.typing();

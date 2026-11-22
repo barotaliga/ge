@@ -16,7 +16,7 @@
 //
 // ge:summary A map loaded behind the window: read and decoded on a thread, compiled while drawing
 // ge:keywords map-load background-load async loading spinner load_map load_world step_load
-// ge:keywords cancel_load take_load freeze hitch title warm-up
+// ge:keywords cancel_load take_load freeze hitch title warm-up no-visibility kNoVisibility
 // ge:skill render shooter
 #pragma once
 
@@ -27,6 +27,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "console/console.hpp"
@@ -113,6 +114,10 @@ void load_map(MapLoad& load, const SearchPath& files, const std::string& name, d
 void load_world(MapLoad& load, const SearchPath& files, const LoadedMap& map,
                 const look::Picture& picture, std::span<const std::string> models,
                 const GameAdapter& game, double now_s, std::span<const std::string> vweps = {});
+
+// What a Quake II map read with no visibility says (the map still plays, everything drawn).
+inline constexpr std::string_view kNoVisibility =
+    "Map has no Visibility, expect bugs and bad performance!";
 
 // What a frame's step gave: a map read (start it on the server, then `load_world`), a world made
 // (draw it from now on), or a step that failed (which, and its reason).
