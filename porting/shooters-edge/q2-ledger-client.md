@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 103 | 11 | 32 | 10 | 156 |
-| Client settings (cvars) | 133 | 36 | 141 | 40 | 350 |
+| Client settings (cvars) | 134 | 38 | 138 | 40 | 350 |
 | Macros ($name in typed and bound text) | 14 | 1 | 13 | 2 | 30 |
 | Menu pages and rows | 77 | 72 | 12 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 540 | 295 | 315 | 61 | 1211 |
+| **all** | 541 | 297 | 312 | 61 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 133, partial 36, missing 141, not-taken 40
+done 134, partial 38, missing 138, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -232,7 +232,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_http_debug | `cl_http_debug` | prints HTTP transfer details (default 0) | missing | C37 |
 | cvar.cl_http_blocking_timeout | `cl_http_blocking_timeout` | seconds before a stalled HTTP fetch is dropped (default 15) | missing | C37 |
 | cvar.in_enable | `in_enable` | use the input layer at all (default 1) | missing | C35 |
-| cvar.in_grab | `in_grab` | 0 never grab the mouse in a window, 1 in a game, 2 also let go in demos and chase (default 1) | missing | C35 |
+| cvar.in_grab | `in_grab` | 0 never grab the mouse in a window, 1 in a game, 2 also let go in demos and chase (default 1) | partial | `games/shooters_edge/client/q2_session.hpp` (`q2_takes_mouse`): 0 takes the mouse only while the game covers the screen; 2 is the same as 1 (a watched demo lets the mouse go in both, by our `in_mouse_release`) |
 | cvar.cl_nodelta | `cl_nodelta` | 1 asks the server for full frames, never deltas (default 0) | missing | C43 |
 | cvar.cl_maxpackets | `cl_maxpackets` | packets a second on the modern protocols, moves batched (default 30) | missing | waits for the batched protocol (`client-gaps.md` round 12, C43) |
 | cvar.cl_fuzzhack | `cl_fuzzhack` | sends moves with a small jitter to beat a server's speed check (default 0) | missing | not found |
@@ -363,10 +363,10 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.scr_alpha | `scr_alpha` | the opacity of every 2D element but the crosshair (default 1) | done | `client/q2_bar.cpp` (M18k4 round 34) |
 | cvar.scr_showstats | `scr_showstats` | debug: prints the player's stats on screen (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.scr_showpmove | `scr_showpmove` | debug: the move state on screen (default 0) | not-taken | `client-gaps.md`: developer tools left out |
-| cvar.scr_hit_marker_time | `scr_hit_marker_time` | ms a hit marker shows (default 500) | missing | C26 |
+| cvar.scr_hit_marker_time | `scr_hit_marker_time` | ms a hit marker shows (default 500) | done | `plugins/classic/q2_fx_switches.hpp` (`q2_hit_marker_alpha`) |
 | cvar.cl_muzzleflashes | `cl_muzzleflashes` | 0 hides the newer game's muzzle flash models (the flash lights stay) (default 1) | partial | `plugins/classic/q2_fx_switches.hpp`: others' and monsters' gun fire; the held weapon's own flash still drawn |
 | cvar.cl_muzzlelight_time | `cl_muzzlelight_time` | how long a muzzle flash light lasts, 0 to 1000 ms (default 16) | done | `plugins/classic/q2_fx_switches.hpp`: our flash light's fade stretched by it (16 as drawn) |
-| cvar.cl_hit_markers | `cl_hit_markers` | 0 off, 1 a hit marker, 2 a marker and a sound (default 2) | missing | C26 |
+| cvar.cl_hit_markers | `cl_hit_markers` | 0 off, 1 a hit marker, 2 a marker and a sound (default 2) | partial | `plugins/classic/q2_fx_switches.hpp`, read from temporary entity 128 (`games/shooters_edge/client/demo_q2.cpp`), drawn by `client/q2_bar.cpp`'s `draw_q2_hit_marker` and heard in `client/demo_sound.cpp`, joined and in recordings: drawn whether or not a crosshair is up, unscaled by `ch_scale` and unmoved by `ch_x`/`ch_y`; the hosted game's rules send no report yet |
 | cvar.cl_railtrail_type | `cl_railtrail_type` | 0 classic, 1 core beam, 2 core and spiral (default 0) | done | `plugins/classic/q2_fx_switches.hpp`, drawn in either look by `games/shooters_edge/client/world_fx.cpp` (`q2_rail_trail`) and `app/weapon_fx.cpp` (`q2_rail_trail_look`) |
 | cvar.cl_railtrail_time | `cl_railtrail_time` | seconds the rail trail lasts (default 1.0) | done | `plugins/classic/q2_fx_switches.hpp`, drawn in either look by `games/shooters_edge/client/world_fx.cpp` (`q2_rail_trail`) and `app/weapon_fx.cpp` (`q2_rail_trail_look`) |
 | cvar.cl_railcore_color | `cl_railcore_color` | the rail core's colour (default red) | done | `plugins/classic/q2_fx_switches.hpp`, drawn in either look by `games/shooters_edge/client/world_fx.cpp` (`q2_rail_trail`) and `app/weapon_fx.cpp` (`q2_rail_trail_look`) |

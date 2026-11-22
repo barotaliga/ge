@@ -874,10 +874,18 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
     case 63:  // explosions that give no light
       point(DemoEffectKind::explosion);
       break;
-    case 128:  // damage dealt: a number for the screen alone
-      m.i16();
+    case 128: {  // damage dealt: the hit marker's (q2_bar.hpp) and its sound, heard everywhere
+      if (m.i16() > 0 && !m.bad) {
+        s.hits++;
+        DemoSound o;
+        o.name = "weapons/marker.wav";  // DemoSounds plays it only with cl_hit_markers 2
+        o.attenuation = 0;
+        o.origin = s.eye;
+        s.started.push_back(o);
+      }
       keep = false;
       break;
+    }
     default:
       error = "a temporary entity of kind " + std::to_string(kind) + at_byte(m) +
               " that this game's recordings do not carry: the recording is damaged";

@@ -209,12 +209,33 @@ bool q2_world_of(const DemoState& ds, server::RulesWorld& out) {
   return true;
 }
 
+void draw_q2_hit_marker(ge::ui::DrawList& dl, Q2Bar& bar, int64_t hits, int width, int height) {
+  if (hits > bar.hits_seen) bar.hit_at = bar.now;  // a new hit: the fade starts over
+  bar.hits_seen = hits;                            // (fewer: a new recording or a seek back)
+  const float alpha =
+      bar.fx != nullptr ? ge::classic::q2_hit_marker_alpha(*bar.fx, bar.now - bar.hit_at) : 0;
+  if (alpha <= 0 || (bar.screen != nullptr && bar.screen->draw2d == 0)) return;
+  const BarPicture* mark = picture(bar, hud::layout_picture_path("marker"));
+  if (mark == nullptr) return;  // the pack has no marker picture: none drawn
+  const auto u = static_cast<float>(q2_bar_scale(bar, width, height));
+  ge::ui::Box b;
+  b.fill = ge::ui::solid({1, 0, 0, alpha});
+  b.rect = {(static_cast<float>(width) - mark->width() * u) / 2,
+            (static_cast<float>(height) - mark->height() * u) / 2, mark->width() * u,
+            mark->height() * u};
+  b.image = &mark->image;
+  b.nearest = mark->k == 1;
+  b.feather = 0;
+  dl.box(b);
+}
+
 bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds, int width,
                           int height) {
   if (!bar.recorded) bar.recorded = std::make_shared<server::RulesWorld>();
   if (!q2_world_of(ds, *bar.recorded)) return false;
   run_q2_bar(bar, *bar.recorded, ds.player, ds.frames, width, height);
   draw_q2_bar(dl, bar, q2_bar_scale(bar, width, height));
+  draw_q2_hit_marker(dl, bar, ds.hits, width, height);
   return true;
 }
 

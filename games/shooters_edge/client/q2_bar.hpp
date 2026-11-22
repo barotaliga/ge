@@ -30,6 +30,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "classic/q2_fx_switches.hpp"
 #include "console/console.hpp"
 #include "hud/crosshair.hpp"
 #include "hud/net_graph.hpp"
@@ -71,6 +72,11 @@ struct Q2Bar {
   // the console it prints to (null: none asked).
   std::vector<std::string> asked{};
   ge::console::Console* asked_by = nullptr;
+  // The hit marker (classic/q2_fx_switches.hpp's `cl_hit_markers`): the switches (null: none
+  // drawn), the recording's hits last seen and the real time of the last new one, s.
+  const ge::classic::Q2FxSwitches* fx = nullptr;
+  int64_t hits_seen = 0;
+  double hit_at = -1e9;
 };
 
 // The console's looks at the bar's program, answered by the next frame that runs a Quake II bar
@@ -88,7 +94,8 @@ void add_q2_bar_commands(ge::console::Console& con, Q2Bar& bar);
 // carries no bar program (the window's own HUD is drawn instead).
 bool q2_world_of(const DemoState& ds, server::RulesWorld& out);
 // A recording's (or a joined server's) Quake II bar run and drawn on `dl` over a `width` x
-// `height` window; false when `ds` has none to draw (`q2_world_of`).
+// `height` window, and its hit marker (`DemoState::hits`) at the centre in red, fading; false when
+// `ds` has none to draw (`q2_world_of`).
 bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds, int width,
                           int height);
 
@@ -128,6 +135,9 @@ void add_q2_screen(Q2Bar& bar, int crosshair, std::string_view centre, int width
 // under it. Nothing when the settings hide it or the pack has no such picture.
 // It stands off the middle by cl_crossx and cl_crossy (its ch_x and ch_y) in bar pixels, and
 // takes the colour of `health` when ch_health asks.
+// The hit marker over `dl`: `hits` (DemoState::hits) more than last seen starts its fade at
+// `bar.now`; drawn while `bar.fx`'s cl_hit_markers and scr_hit_marker_time keep it.
+void draw_q2_hit_marker(ge::ui::DrawList& dl, Q2Bar& bar, int64_t hits, int width, int height);
 void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::CrosshairSettings& s,
                        int width, int height, int health = 100);
 
