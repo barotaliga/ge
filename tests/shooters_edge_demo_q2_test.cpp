@@ -263,3 +263,11 @@ TEST(an_extended_entity_past_the_limit_is_refused_with_its_place) {
       error.find("entity 9000") != std::string::npos && error.find("8191") != std::string::npos,
       error);
 }
+
+TEST(the_music_a_q2_server_names_is_a_track_number_or_none) {
+  CHECK(cl::q2_music_track("", 5) == 0);  // empty: the music stops
+  CHECK(cl::q2_music_track("0", 5) == 0);
+  CHECK(cl::q2_music_track("7", -1) == 7);
+  CHECK(cl::q2_music_track("ambient", 7) == 7);  // a file's name: not played, the last kept
+  CHECK(cl::q2_music_track("100", 3) == 3);
+}

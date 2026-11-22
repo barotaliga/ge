@@ -24,6 +24,23 @@ namespace shooters_edge::client {
 
 namespace fs = std::filesystem;
 
+// `n` bytes as Quake II says a recording's size: decimal units, a tenth below ten of them.
+std::string q2_demo_size(int64_t n) {
+  char text[32];
+  if (n >= 1000000000)
+    std::snprintf(text, sizeof text, "%.1f GB", static_cast<double>(n) / 1e9);
+  else if (n >= 10000000)
+    std::snprintf(text, sizeof text, "%lld MB", static_cast<long long>(n / 1000000));
+  else if (n >= 1000000)
+    std::snprintf(text, sizeof text, "%.1f MB", static_cast<double>(n) / 1e6);
+  else if (n >= 1000)
+    std::snprintf(text, sizeof text, "%lld kB", static_cast<long long>(n / 1000));
+  else
+    std::snprintf(text, sizeof text, n == 1 ? "%lld byte" : "%lld bytes",
+                  static_cast<long long>(n));
+  return text;
+}
+
 namespace {
 
 constexpr int kAll = 6, kStats = 5;        // the record kinds written
@@ -441,6 +458,55 @@ bool record_name_fits(const std::string& name) {
 
 bool joined_now(const JoinedRecord* j) { return j != nullptr && j->joined && j->joined(); }
 
+// Quake II's `record [-z] [-e] [-s] <name>` on a joined server, in its own words: the name gets
+// `.dm2` (and `.gz` with -z, the file then written through gzip); a recording already going is
+// left as it is. -e and -s set the original's frame buffer; ours copies the server's messages
+// whole, so they change nothing.
+void q2_record(ge::console::Console& c, const ge::console::Args& a, JoinedRecord& j) {
+  bool gzip = false;
+  std::string name;
+  for (size_t i = 1; i < a.size(); i++) {
+    const std::string& w = a[i];
+    if (w == "-h" || w == "--help") {
+      c.print(
+          "Usage: record [-h] [-z] [-e] [-s] <filename>\nBegin client demo recording.\n"
+          "-h | --help: display this message\n-z | --compress: compress demo with gzip\n"
+          "-e | --extended: use extended packet size\n-s | --standard: use standard packet "
+          "size");
+      return;
+    }
+    if (w == "-z" || w == "--compress") {
+      gzip = true;
+    } else if (w == "-e" || w == "--extended" || w == "-s" || w == "--standard") {
+    } else if (w.size() > 1 && w[0] == '-') {
+      c.print("Unknown option: " + w + ".\nTry record --help for more information.");
+      return;
+    } else {
+      name = w;
+    }
+  }
+  if (const std::string now = j.path(); !now.empty()) {
+    c.print("Already recording (" + q2_demo_size(j.bytes ? j.bytes() : 0) + ").");
+    return;
+  }
+  if (name.empty()) {
+    c.print("Missing filename argument.\nTry record --help for more information.");
+    return;
+  }
+  for (char& ch : name)  // what a file's name may not hold becomes an underscore
+    if (ch == '/' || ch == '\\' || ch == ':' || ch == '*' || ch == '?' || ch == '"' || ch == '<' ||
+        ch == '>' || ch == '|' || static_cast<unsigned char>(ch) < 32)
+      ch = '_';
+  if (name.size() < 4 || name.compare(name.size() - 4, 4, ".dm2") != 0) name += ".dm2";
+  if (gzip) name += ".gz";
+  const std::filesystem::path file = std::filesystem::path(j.folder()) / name;
+  std::string error;
+  if (!j.open(file, error))
+    c.print("Couldn't open " + name + ": " + error);
+  else
+    c.print("Recording client demo to " + file.string() + ".");
+}
+
 }  // namespace
 
 void add_record_commands(ge::console::Console& console, ListenRecorder& r, const Listen& listen,
@@ -462,6 +528,10 @@ void add_record_commands(ge::console::Console& console, ListenRecorder& r, const
             c.print("Recording to " + path + ".");
           else
             c.print("Not recording. Type record and a name to start (record match1).");
+          return;
+        }
+        if (on_server && joined->extension() == "dm2" && !joined->automatic()) {
+          q2_record(c, a, *joined);
           return;
         }
         if (!on_server) {

@@ -274,6 +274,8 @@ struct DemoState {
   sh::Vec3f gun_angles, gun_offset;
   float fov = 0;    // Quake II: the field of view the server sends, degrees (0: none sent)
   int rdflags = 0;  // Quake II: the view's bits (kQ2RdIrGoggles: infra-red goggles on)
+  // Quake II: the music track the server names (its configstring 1; 0 none, -1 never named).
+  int cdtrack = -1;
   // The blows the view's player took (single, client, multiview): the last `kKeptBlows` of them
   // and how many in all since the demo was opened, so a look after several frames misses none.
   std::vector<DemoBlow> blows;
@@ -540,5 +542,9 @@ std::string map_of_model(const std::string& model);
 // The visible weapons' list `s` is drawn with: a multiview recording's the fixed one (each
 // player's weapon from his weapon stat, demo_video.cpp), else the one the server stuffed.
 std::span<const std::string> demo_vweps(const DemoState& s);
+
+// Quake II's music configstring read: "" or "0" stops (0), a number 1 to 99 is that track, a
+// name of a file is not played (the track `last` stays).
+int q2_music_track(const std::string& text, int last);
 
 }  // namespace shooters_edge::client
