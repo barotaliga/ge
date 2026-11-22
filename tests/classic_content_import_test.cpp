@@ -238,3 +238,12 @@ TEST(a_levels_track_and_its_kept_file) {
   CHECK(content::track_path(dir.string(), 4) == (dir / "music/track04.flac").string());
   CHECK(content::track_path(dir.string(), 5).empty() && content::track_path("", 4).empty());
 }
+
+TEST(quake_iis_mission_packs_ask_the_digital_releases_track_numbers) {
+  // ogg_remap_tracks: rogue's 2..11 are 12..21, xatrix's a table of its own; anything else stays.
+  CHECK(content::q2_remap_track("rogue", 2) == 12 && content::q2_remap_track("rogue", 11) == 21);
+  CHECK(content::q2_remap_track("xatrix", 2) == 9 && content::q2_remap_track("xatrix", 7) == 2);
+  CHECK(content::q2_remap_track("xatrix", 11) == 18);
+  CHECK(content::q2_remap_track("baseq2", 5) == 5 && content::q2_remap_track("rogue", 12) == 12);
+  CHECK(content::q2_remap_track("rogue", 1) == 1);
+}

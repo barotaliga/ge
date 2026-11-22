@@ -187,3 +187,23 @@ TEST(scr_showturtle_writes_a_frames_troubles_at_the_lower_left) {
   cl::add_q2_turtle(bar, all, 320, 240);
   CHECK(bar.ops.empty());
 }
+
+TEST(gl_fontshadow_draws_each_letter_first_in_black_and_gl_bilerp_chars_smooths_it) {
+  cl::Q2Screen screen;
+  cl::Q2Bar bar;
+  bar.screen = &screen;
+  cl::BarPicture glyphs;
+  glyphs.image.width = glyphs.image.height = 128;
+  glyphs.image.rgba.assign(size_t{128} * 128 * 4, 255);
+  bar.pictures["pics/conchars.pcx"] = glyphs;
+  cl::add_q2_turtle(bar, cl::kQ2FrameNoDelta, 320, 240);  // one word: NODELTA, seven letters
+  ge::ui::DrawList dl;
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  CHECK_MSG(dl.cmds().size() == 7, std::to_string(dl.cmds().size()));
+  screen.font_shadow = 1;
+  screen.bilerp_chars = true;
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  CHECK_MSG(dl.cmds().size() == 14, std::to_string(dl.cmds().size()));
+}

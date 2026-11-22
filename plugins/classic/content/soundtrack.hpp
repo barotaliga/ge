@@ -30,7 +30,7 @@
 // ge:summary A game's soundtrack kept one way: music/trackNN.flac, a manifest, tracks known by hash
 // ge:keywords soundtrack music cd-audio track track02 flac lossless manifest tracks-txt known-track
 // ge:keywords pcm-sha256 store_track decode_music ogg vorbis wav track_numbers music-files
-// ge:keywords steam gog rerelease import
+// ge:keywords steam gog rerelease import q2_remap_track ogg_remap_tracks mission-pack rogue xatrix
 // ge:skill classic audio
 // ge:test tests/classic_content_import_test.cpp
 #pragma once
@@ -73,6 +73,10 @@ std::string track_file(int track);
 std::string track_path(const std::string& game_dir, int track);
 // The track a level plays: its first entity's (the world's) `sounds` key, 0 when it names none.
 int level_track(std::string_view entities);
+// Quake II's mission packs' disc tracks as the digital release numbers them (`ogg_remap_tracks`):
+// in game folder `rogue` tracks 2..11 are 12..21, in `xatrix` 9, 13, 14, 7, 16, 2, 15, 3, 4, 18;
+// any other folder or track is itself.
+int q2_remap_track(std::string_view game_folder, int track);
 
 // Samples as a source decodes them.
 struct Samples {
