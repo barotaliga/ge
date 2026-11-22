@@ -10,7 +10,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client console commands | 111 | 11 | 24 | 10 | 156 |
+| Client console commands | 111 | 12 | 23 | 10 | 156 |
 | Client settings (cvars) | 133 | 36 | 141 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 77 | 73 | 11 | 1 | 162 |
@@ -23,17 +23,17 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 7 | 7 | 2 | 0 | 16 |
 | The layout language (status bar and layouts) | 24 | 1 | 2 | 0 | 27 |
 | HUD and screen elements | 11 | 10 | 7 | 1 | 29 |
-| Messages printed to the player | 38 | 56 | 48 | 5 | 147 |
+| Messages printed to the player | 39 | 57 | 46 | 5 | 147 |
 | Demo playback and recording features | 4 | 10 | 7 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 4 | 4 | 3 | 0 | 11 |
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 564 | 299 | 287 | 61 | 1211 |
+| **all** | 565 | 301 | 284 | 61 | 1211 |
 
 ## Client console commands
 
-done 111, partial 11, missing 24, not-taken 10
+done 111, partial 12, missing 23, not-taken 10
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -81,7 +81,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.pingservers | `pingservers` | pings the address book `adr0`..`adr15` and the LAN | missing | C41 |
 | cmd.serverstatus | `serverstatus [address]` | asks a server for its info and players and prints them by frags | done | `games/shooters_edge/net/qw_serverstatus.cpp`: its own socket, joined or not; both games' answers |
 | cmd.pause | `pause` | pauses a single-player game or a demo | partial | a word of the window's own game (`client/listen.cpp`); not found to pause a demo or a joined single-player server (C24) |
-| cmd.skins | `skins` | reloads every client's skin and prints "client n: name --> model/skin" | missing | not found as a console command in Quake II's client |
+| cmd.skins | `skins` | reloads every client's skin and prints "client n: name --> model/skin" | partial | `games/shooters_edge/net/q2_remote.cpp`: on a Quake II server joined, the level read again and a line a player; the right side is the look asked, not the stand-in drawn when it is missing |
 | cmd.userinfo | `userinfo` | prints the user info being sent | done | `engine/console/console_more.cpp`: "User info settings:" then each key padded to 20 |
 | cmd.download | `download <file>` | asks the server for a file over the connection | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
 | cmd.dumpclients | `dumpclients` | prints every client's index and configstring | done | `games/shooters_edge/client/q2_bar.cpp` |
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 38, partial 56, missing 48, not-taken 5
+done 39, partial 57, missing 46, not-taken 5
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1243,8 +1243,8 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.dump.mustlevel | "Must be in a level to dump." | `dumpclients`, `dumpstatusbar` outside a level | done | `games/shooters_edge/client/q2_bar.cpp` |
 | msg.dump.none | "No %s to dump." | `dumplayout` with none | done | `games/shooters_edge/client/q2_bar.cpp` |
 | msg.dump.done | "Dumped %s program to %s." | `dumpstatusbar`, `dumplayout` | done | `games/shooters_edge/client/q2_bar.cpp` |
-| msg.skins.mustlevel | "Must be in a level to load skins." | `skins` outside a level | missing | the feature is missing |
-| msg.skins.line | "client %d: %s --> %s/%s" | `skins` per player | missing | the feature is missing |
+| msg.skins.mustlevel | "Must be in a level to load skins." | `skins` outside a level | done | `games/shooters_edge/net/q2_remote.cpp` |
+| msg.skins.line | "client %d: %s --> %s/%s" | `skins` per player | partial | `games/shooters_edge/net/q2_remote.cpp`: the look asked on the right |
 | msg.userinfo | "User info settings:" | `userinfo` | done | `engine/console/console_more.cpp` |
 | msg.play.usage | "Usage: %s <sound> [...]" | `play` alone | done | `games/shooters_edge/client/menu_sound.cpp` |
 | msg.vidrestart | "Manual `vid_restart' command ignored." | a typed `vid_restart` (with an explanation that video settings apply themselves) | done | `games/shooters_edge/client/window_cvars.cpp` |
