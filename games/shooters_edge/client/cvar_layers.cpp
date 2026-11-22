@@ -363,7 +363,7 @@ void add_first(con::Console& c, const GameBindings& b) {
 // - its browsers: `ui_sortdemos` (`menu_demo_sort`, by name by default where ours lists the newest
 //   first) and `ui_colorservers` (`sb_colorservers`); its own `ui_sortservers` (one column either
 //   way, in place of `sb_sortservers`) and `ui_pingrate` (from `rate`, in place of
-//   `sb_infospersec`); `ui_scale`, the menus' size.
+//   `sb_infospersec`); `ui_scale`, the menus' size; `al_device` its spelling of `s_device`.
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its whole set of configs run again on a game change (client/install_configs.cpp's
@@ -520,6 +520,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
                    "first; 3: smallest first; -3: largest first; 0: by name",
          .overlap = con::Overlap::same});
   v.add_synonym("ui_sortdemos", "menu_demo_sort");
+  if (v.find("s_device") != nullptr)  // the window's (platform/window_cvars.hpp)
+    v.add_synonym("al_device", "s_device");
   for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)
     v.add({.name = "adr" + std::to_string(k),
            .fallback = "",

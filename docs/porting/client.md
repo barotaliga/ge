@@ -64,6 +64,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Tab in the console | ours: the top suggestion | `com_completion_mode`, `com_completion_treshold`: the shared part, the matches listed (`console/view.hpp`'s `list_mode`) | its own | its own |
 | The server browser's sort and pace | `sb_sortservers` (codes), `sb_infospersec` | `ui_sortservers` (one column either way), `ui_pingrate` (from `rate`) in their place (`menu/servers_page.hpp`'s `game_sort`, `game_ping_rate`) | its own | its own |
 | The menus' size | the largest whole number that fits | `ui_scale` 1..10 that many times (`menu/classic_art.hpp`'s `scale`) | its own | its own |
+| The sound device | `s_device`, `s_devices` lists them (`platform/window_cvars.hpp`, every game) | `al_device` its spelling | the engine's | the engine's |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Screenshot names | by the time | `gl_screenshot_template` (`quakeXXX`) and `gl_screenshot_compression` over `scr_template` and `scr_compression` (`capture/screenshot.hpp`) | by the time | the engine's |
 

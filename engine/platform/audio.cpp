@@ -13,6 +13,7 @@
 
 #include <atomic>
 #include <string>
+#include <vector>
 
 #include "core/output.hpp"
 
@@ -29,6 +30,7 @@ struct AudioOut::Impl {
   SDL_AudioStream* stream = nullptr;
   AudioPull pull = nullptr;
   void* user = nullptr;
+  int rate = 48000;
   std::atomic<uint64_t> pulled{0};
 };
 
@@ -82,6 +84,7 @@ std::unique_ptr<AudioOut> open_audio(const AudioDesc& desc) {
   auto impl = std::make_unique<AudioOut::Impl>();
   impl->pull = desc.pull;
   impl->user = desc.user;
+  impl->rate = desc.rate;
   const SDL_AudioSpec spec{SDL_AUDIO_F32, 2, desc.rate};
   impl->stream =
       SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, feed, impl.get());
@@ -93,6 +96,43 @@ std::unique_ptr<AudioOut> open_audio(const AudioDesc& desc) {
   }
   SDL_ResumeAudioStreamDevice(impl->stream);
   return std::unique_ptr<AudioOut>(new AudioOut(std::move(impl)));
+}
+
+std::vector<std::string> audio_devices() {
+  std::vector<std::string> names;
+  if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) return names;
+  int count = 0;
+  SDL_AudioDeviceID* ids = SDL_GetAudioPlaybackDevices(&count);
+  for (int i = 0; ids != nullptr && i < count; i++) {
+    const char* name = SDL_GetAudioDeviceName(ids[i]);
+    if (name != nullptr) names.emplace_back(name);
+  }
+  SDL_free(ids);
+  SDL_QuitSubSystem(SDL_INIT_AUDIO);
+  return names;
+}
+
+bool move_audio(AudioOut& out, const std::string& name) {
+  SDL_AudioDeviceID device = SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK;
+  if (!name.empty()) {
+    device = 0;
+    int count = 0;
+    SDL_AudioDeviceID* ids = SDL_GetAudioPlaybackDevices(&count);
+    for (int i = 0; ids != nullptr && i < count && device == 0; i++) {
+      const char* n = SDL_GetAudioDeviceName(ids[i]);
+      if (n != nullptr && name == n) device = ids[i];
+    }
+    SDL_free(ids);
+    if (device == 0) return false;
+  }
+  AudioOut::Impl& impl = *out.impl_;
+  const SDL_AudioSpec spec{SDL_AUDIO_F32, 2, impl.rate};
+  SDL_AudioStream* next = SDL_OpenAudioDeviceStream(device, &spec, feed, &impl);  // held
+  if (next == nullptr) return false;
+  SDL_DestroyAudioStream(impl.stream);  // its thread has stopped pulling when this returns
+  impl.stream = next;
+  SDL_ResumeAudioStreamDevice(next);
+  return true;
 }
 
 void pause_audio(AudioOut& out) { SDL_PauseAudioStreamDevice(out.impl_->stream); }

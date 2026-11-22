@@ -1188,7 +1188,7 @@ int run_main(int argc, char** argv) {
       save_settings();
       break;
     }
-    ge::platform::follow_window_cvars(*window, win);  // vid_fullscreen, win_noborder, ...
+    ge::platform::follow_window_cvars(*window, win, speaker.get(), &console);  // and s_device
     ge::input::update(held, queue);
     // What the console and menu ask this frame, against before (a demo held behind it, below).
     const std::string map_before = next_map;
