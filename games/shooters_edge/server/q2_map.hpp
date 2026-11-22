@@ -95,6 +95,9 @@ inline constexpr sh::Vec3f kDiscMins{-32, -32, -24}, kDiscMaxs{32, 32, -16};
 // when `mask` has the solid bit and, when it has the monster bit, every living monster but map
 // entity `skip` (`mask` the contents that stop it). The hit entity is the world row (0 the world,
 // a mover's, disc's or monster's row) or -1 for none.
+// What is at `p`: the world's contents and every brush mover's that holds it, where it stands now
+// (a func_water's water moves with it: base3's tank a button floods). 0 without a map.
+int32_t map_contents(const Q2Server& s, sh::Vec3f p);
 ge::classic::Q2Trace map_trace(const Q2Server& s, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
                                sh::Vec3f end, int32_t mask, int skip = -1);
 
