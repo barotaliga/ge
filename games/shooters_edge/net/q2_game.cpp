@@ -156,6 +156,9 @@ constexpr gs::GameRule kRules[] = {
      "An address every newcomer is first sent to and must come back from, with a setting it must "
      "bring back; from the next map.",
      nullptr, "empty: none (the default); an address: clients reconnect to it first", false},
+    {"sv_maxmsglen",
+     "The largest packet a player whose game speaks the newer protocols may ask for, in bytes.",
+     nullptr, "0: what the player asks; 512..4086: at most that many (1390 the default)", false},
 };
 
 // The rules a server may set: the engine's rate bounds and per-address limit (server/rate.hpp,
@@ -235,6 +238,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_enhanced_setplayer", "sv_partialnames"},
     {"sv_packetdup_hack", "sv_packetdup"},
     {"sv_force_reconnect", "sv_forcereconnect"},
+    {"net_maxmsglen", "sv_maxmsglen"},
 };
 
 // A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.
@@ -380,7 +384,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
         rule == "sv_ghosttime" || rule == "sv_nodelta" || rule == "sv_pingmethod" ||
         rule == "sv_maxents" || rule == "sv_entpriority" || rule == "sv_novis" ||
         rule == "sv_vispatch" || rule == "sv_entpath" || rule == "sv_partialnames" ||
-        rule == "sv_packetdup" || rule == "sv_forcereconnect")
+        rule == "sv_packetdup" || rule == "sv_forcereconnect" || rule == "sv_maxmsglen")
       continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
@@ -430,8 +434,10 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   int idle = 0, partial = 0;
   if (!endpoint_number(c, "sv_idletime", 86400, idle, error) ||
       !endpoint_number(c, "sv_partialnames", 1, partial, error) ||
-      !endpoint_number(c, "sv_packetdup", 8, g->cfg.packetdup_most, error))
+      !endpoint_number(c, "sv_packetdup", 8, g->cfg.packetdup_most, error) ||
+      !endpoint_number(c, "sv_maxmsglen", 4086, g->cfg.net_maxmsglen, error))
     return nullptr;
+  if (g->cfg.net_maxmsglen > 0 && g->cfg.net_maxmsglen < 512) g->cfg.net_maxmsglen = 512;
   g->cfg.enhanced_setplayer = partial != 0;
   if (const auto it = c.rules.find("sv_forcereconnect"); it != c.rules.end())
     g->cfg.force_reconnect = it->second;
