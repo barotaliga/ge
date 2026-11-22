@@ -242,7 +242,7 @@ enum class SetResult : uint8_t {
   cheat,      // kCheat while sv_cheats is 0
   refused,    // the server may not set a player's own cvar
   bad_name,   // a name with a character outside [a-z0-9_+.-]
-  locked,     // held by a lock (LOCKS above): the lock's `why` says by whom
+  locked,     // held by a lock, or kept inside its range (LOCKS above): its `why` says by whom
 };
 
 // One line saying why `r` refused `name`, with the next action; empty for changed, same and

@@ -92,7 +92,9 @@ void Rulesets::lock_all() {
     if (had == nullptr) continue;
     if (had->lock && had->lock->owner == kOwner) continue;  // already held
     CvarLock lock{.owner = std::string(kOwner),
-                  .why = had->name + " is locked by the " + rname + " ruleset.",
+                  .why = !l.value.empty()
+                             ? had->name + " is locked by the " + rname + " ruleset."
+                             : "The " + rname + " ruleset keeps " + lock_words(l) + ".",
                   .fixed = !l.value.empty(),
                   .value = std::string(l.value),
                   .min = l.min,

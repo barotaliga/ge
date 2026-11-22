@@ -403,7 +403,7 @@ SetResult Cvars::set(Cvar& c, std::string_view value, Source source) {
     if (c.lock->fixed)
       return same_value(value, c.lock->value) ? SetResult::same : SetResult::locked;
     double v = 0;
-    if (parse_number(value, v)) {
+    if (parse_number(value, v) && (v < c.lock->min || v > c.lock->max)) {
       kept = number_text(std::clamp(v, c.lock->min, c.lock->max));
       value = kept;
     }
@@ -449,6 +449,7 @@ SetResult Cvars::set(Cvar& c, std::string_view value, Source source) {
         store(*k, k->fallback);
         k->below = k->value;
       }
+  if (!kept.empty()) return SetResult::locked;  // kept inside a lock's range: its words say so
   return c.revision != before ? SetResult::changed : SetResult::same;
 }
 

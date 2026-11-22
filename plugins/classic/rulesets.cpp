@@ -196,9 +196,8 @@ std::string fair_help() {
   return "f_ruleset: every player's client answers a chat line f_ruleset with its server, its "
          "version and its ruleset.\n"
          "f_ruleset check: ask everyone now.\n"
-         "The answer ends with + and the aids on, then - and the aids off: m the game's models "
-         "or sounds changed, s movement scripts, f one skin forced on every enemy, i the "
-         "side-step aid.";
+         "The answer ends with + and the aids on, then - and the aids off:\n"
+         "m models or sounds changed, s movement scripts, f enemy skins forced, i side-step aid.";
 }
 
 bool FairReplies::may_answer(double now_s) {
