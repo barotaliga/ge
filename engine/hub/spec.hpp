@@ -34,7 +34,30 @@
 
 namespace ge::hub {
 
-struct DemoRow;  // archive.hpp
+struct DemoRow;      // archive.hpp
+struct CardLook;     // card.hpp
+struct CardPicture;  // card.hpp
+
+// A MAP'S STILL AND A MATCH'S CARD (card.hpp, stills.hpp): what a game gives for the front page's
+// pictures. Each hook reads the game's own content under `content` (the hub's --content folder;
+// the game decides its layout). Unset `render`: no stills; an empty charset from `look`: no cards.
+struct HubStills {
+  // The game a record's match is of ("q1", "q2"): which content its map and its charset are read
+  // from. Unset: "".
+  std::function<std::string(const net::Status& s)> game_of;
+  // The still's cache key for `map` of `game` at `width` x `height`: a digest of the map's file
+  // and of the code and the settings that draw it, so a changed map or a changed renderer makes a
+  // new still. "" when the content holds no such map (no still is made).
+  std::function<std::string(std::string_view content, std::string_view game, std::string_view map,
+                            int width, int height)>
+      key;
+  // The still drawn into `out` at `width` x `height` (RGBA). False with the reason.
+  std::function<bool(std::string_view content, std::string_view game, std::string_view map,
+                     int width, int height, CardPicture& out, std::string& error)>
+      render;
+  // The board's look for `game`: its charset and its style.
+  std::function<bool(std::string_view content, std::string_view game, CardLook& out)> look;
+};
 
 struct HubMode {
   std::string name;  // as the game's record says it ("4on4", "race")
@@ -98,6 +121,8 @@ struct HubSpec {
   // A run's input log read into its archive row (archive.hpp § Runs): the game's map, mode,
   // racers and times. Unset: the hub keeps replay files only.
   std::function<bool(std::span<const uint8_t> log, DemoRow& out, std::string& error)> run_row;
+  // The front page's pictures: each map's still under each match's live board (HubStills).
+  HubStills stills;
 };
 
 // A score as the page shows it: the number, or a time (`score_ms`) as m:ss.cc.

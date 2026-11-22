@@ -1,11 +1,13 @@
 // QUAKE II'S SESSION SETTINGS: what its own cvars do round the game being played, while it is the
 // game loaded (client/cvar_layers.cpp registers them in its layer; another game's window keeps the
-// defaults below and never runs the commands).
+// defaults below), and the map commands every classic game shares.
 //
-// THE MAP COMMANDS: `cl_beginmapcmd` runs on entering each map, `cl_changemapcmd` as a map is left
+// THE MAP COMMANDS, in every game (the classic layer, `add_map_command_cvars`; Quake II's client
+// brought them): `cl_beginmapcmd` runs on entering each map, `cl_changemapcmd` as a map is left
 // for the next, `cl_disconnectcmd` on leaving the game (each empty by default: nothing run). They
 // are how a player records every map (`cl_beginmapcmd "record demo"`). A game is joined while a
-// server is joined or this window hosts one; its map is the one the server names.
+// server is joined or this window hosts one; its map is the one the server names. They keep their
+// text when another game is loaded.
 //
 // THE CLOCK: `timescale` speeds or slows a game this window runs (2 twice as fast) and `fixedtime`
 // moves it a fixed number of milliseconds each frame; both are cheats (only while sv_cheats is 1),
@@ -85,6 +87,8 @@ struct Q2Session {
   int state = -1;  // the read-only cvars' bits as last set (-1: never)
 };
 
+// The map commands on `v`, bound to `s`'s, for every game (the caller holds the classic layer).
+void add_map_command_cvars(ge::console::Cvars& v, Q2Session& s);
 // Quake II's session cvars on `v`, bound to `s` (the read-only ones added, set by the frames).
 void add_q2_session_cvars(ge::console::Cvars& v, Q2Session& s);
 

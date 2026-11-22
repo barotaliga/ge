@@ -45,8 +45,11 @@
 #include "shooters_edge/net/q2_mvd_relay.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
+#include "shooters_edge/net/q2_votes.hpp"
+#include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/server/q2_mapfix.hpp"
 #include "shooters_edge/server/q2_native.hpp"
+#include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
 
@@ -338,6 +341,13 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_packetdup_hack", "sv_packetdup"},
     {"sv_force_reconnect", "sv_forcereconnect"},
     {"net_maxmsglen", "sv_maxmsglen"},
+    {"sys_history", "con_history"},
+    {"com_completion_mode", "con_completion_mode"},
+    {"com_completion_treshold", "con_completion_threshold"},
+    {"logfile", "con_logfile"},
+    {"logfile_flush", "con_logfile_flush"},
+    {"logfile_name", "con_logfile_name"},
+    {"logfile_prefix", "con_logfile_prefix"},
 };
 
 // A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.
@@ -404,6 +414,7 @@ struct Game {
   // What the console printed and was handed on (console_lines): the rules' lines told so far.
   const sv::RulesCommon* told_rules = nullptr;
   size_t told = 0;
+  Q2Votes votes;  // the players' votes and the settings sheet (q2_votes.hpp)
 };
 
 // `m` mended as it loads (server/q2_mapfix.hpp): the visibility patch, then an entity file.
@@ -518,6 +529,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->rules.console(line);
   }
   if (!g->rules.start(g->map->spec, error)) return nullptr;
+  q2_votes_rules(g->votes, g->rules, gs::vote_settings(c));
+  Game* game = g.get();
+  g->votes.map = [game] { return game->map ? game->map->name : std::string(); };
+  g->votes.has_map = [game](const std::string& wanted) {
+    std::string why;
+    return cl::load_named_map(game->files, wanted, why) != nullptr;
+  };
   g->cfg.hostname = c.hostname;
   g->cfg.version = kProgramVersion;
   g->cfg.game_dir = mod;
@@ -813,6 +831,78 @@ void next_server(Game& g, int32_t count) {
   }
 }
 
+// The autosave the rules wrote as a level of a unit started (not in deathmatch), kept as `save0`.
+void keep_autosave(Game& g) {
+  const sv::RunnerCalls* c = g.rules.calls;
+  if (c == nullptr || c->take_autosave == nullptr) return;
+  const std::vector<uint8_t> bytes = c->take_autosave(g.rules.rules);
+  std::string why;
+  if (!bytes.empty() && !cl::write_save(g.files, "save0", bytes, why) && g.net)
+    g.net->log.push_back("The autosave was not written: " + why);
+}
+
+// THE SAVE WORDS on a dedicated server (`save <dir>`, `autosave` into `save1`, `load <dir>`): the
+// game kept as `saves/<dir>.save` in the game's folder, as the window keeps it; a load starts the
+// save's map with the game read back. True when `w[0]` was one, its answer in `out`.
+bool save_words(Game& g, const std::vector<std::string>& w, std::string& out) {
+  const bool autosave = w[0] == "autosave";
+  if (w[0] != "save" && w[0] != "load" && !autosave) return false;
+  if (!autosave && w.size() != 2) {
+    out = "Usage: " + w[0] + " <directory>\n";
+    return true;
+  }
+  const std::string dir = autosave ? "save1" : w[1];
+  bool name_ok = !dir.empty() && dir.size() <= 64;
+  for (const char ch : dir)
+    name_ok = name_ok && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                          (ch >= '0' && ch <= '9') || ch == '_' || ch == '-');
+  if (!name_ok) {
+    out = "Bad savedir.\n";
+    return true;
+  }
+  const sv::RunnerCalls* c = g.rules.calls;
+  if (w[0] == "load") {
+    std::vector<uint8_t> bytes;
+    std::string why;
+    if (!cl::read_save(g.files, dir, bytes, why)) {
+      out = "No such savegame: " + dir + "\n";
+      return true;
+    }
+    std::string map;
+    if (sv::NativeQ2* nq = sv::native_q2_of(g.rules); nq != nullptr)
+      map = sv::native_q2_load_ask(*nq, bytes, dir, why);
+    else if (sv::Q2Server* sq = sv::q2_of(g.rules); sq != nullptr)
+      map = sv::q2_load_ask(*sq, bytes, dir, why);
+    else
+      why = "this game cannot read saves";
+    if (map.empty()) {
+      out = "Couldn't load " + dir + ": " + why + "\n";
+      return true;
+    }
+    g.rules.console("deathmatch 0");
+    (*g.rules).pending_map = map;
+    return true;
+  }
+  if (c == nullptr || c->save == nullptr || c->save_problem == nullptr) {
+    out = "Game does not support enhanced savegames.\n";
+    return true;
+  }
+  const std::string problem = c->save_problem(g.rules.rules);
+  if (!problem.empty()) {
+    out = problem + "\n";
+    return true;
+  }
+  std::vector<uint8_t> bytes;
+  std::string why;
+  if (!c->save(g.rules.rules, bytes, why, static_cast<int64_t>(std::time(nullptr))) ||
+      !cl::write_save(g.files, dir, bytes, why)) {
+    out = "Couldn't save " + dir + ": " + why + "\n";
+    return true;
+  }
+  out = "Game saved.\n";
+  return true;
+}
+
 // The map the rules asked for (an intermission's end, `map`, `changelevel`, `restart`) loaded and
 // the rules started on it, the clients told; a map that cannot be read starts this one again.
 // An exit's shows come first (take_shows).
@@ -834,6 +924,8 @@ void change_level(Game& g) {
     error = "maps/" + asked + ".bsp is not a map of Quake II's family";
     next.reset();
   }
+  if (s.pending_change != sv::MapChange::restart)
+    q2_votes_map_over(g.votes);  // a vote's restart keeps them
   g.rules.carry();
   if (sv::NativeQ2* ns = sv::native_q2_of(g.rules); ns != nullptr && next)
     ns->map_checksum = sv::q2_map_checksum(next->file);
@@ -852,6 +944,7 @@ void change_level(Game& g) {
   g.cfg.wire.map_checksum = sv::q2_map_checksum(g.map->file);
   sv::q2_sky(*g.map->spec.brushes, g.cfg.wire);
   if (g.net) q2_net_level(*g.net, g.cfg.wire);
+  keep_autosave(g);
 }
 
 namespace cp = ge::classic::protocol;
@@ -943,6 +1036,23 @@ uint64_t hash(const void* g) {
 void fill_status(const void* g, ge::net::Status& st) {
   const Game& game = *static_cast<const Game*>(g);
   st.map = game.map->name;
+  // The game (the hub draws Quake II's map and board: hub/cards.hpp), the mode by the seats, and
+  // every client held with his frags and ping, as Quake II's own status answer lists them.
+  st.keys.emplace_back("*game", "q2");
+  if (!game.net) return;
+  const Q2NetServer& s = *game.net;
+  st.mode = qw_mode(false, false, q2_public_slots(s));
+  st.max_players = q2_public_slots(s);
+  for (int i = 0; i < q2_net_slots(s); i++) {
+    const Q2NetClient& c = s.clients[i];
+    if (!q2_held(c)) continue;
+    ge::net::StatusPlayer p;
+    p.name = c.name;
+    p.score = static_cast<int32_t>(game.rules->world.clients[i].numbers.frags);
+    p.ping_ms = static_cast<uint16_t>(std::clamp(c.ping_ms, 0, 9999));
+    p.flags = c.spectator ? ge::net::kPlayerSpectator : 0;
+    st.players.push_back(std::move(p));
+  }
 }
 
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
@@ -988,13 +1098,15 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
     }
     return true;
   };
-  if (!game.logins_wanted) return true;
-  game.login = std::make_unique<Q2Login>();
-  game.login->game = game.base;
-  if (!q2_login_open(*game.login, *game.net, game.login_set, game.accounts, game.account_link,
-                     game.unix_us, error))
-    return false;
-  game.login->logins.signer = game.signer;
+  if (game.logins_wanted) {
+    game.login = std::make_unique<Q2Login>();
+    game.login->game = game.base;
+    if (!q2_login_open(*game.login, *game.net, game.login_set, game.accounts, game.account_link,
+                       game.unix_us, error))
+      return false;
+    game.login->logins.signer = game.signer;
+  }
+  q2_votes_open(game.votes, *game.net);  // after the logins: their hook runs first
   return true;
 }
 
@@ -1022,6 +1134,7 @@ void net_frame(void* g, int64_t now_us) {
     cp::masters_frame(game.masters, now_s, 0, q2_status_text(*game.net), true, out, game.net->log);
     masters_send(game, out);
   }
+  q2_votes_frame(game.votes);
   change_level(game);
   if (game.login) q2_login_frame(*game.login);
 }
@@ -1114,6 +1227,10 @@ bool console_line(void* g, const std::string& line) {
       return true;
     }
     print_lines(game, ge::classic::content::fs_restart_text(game.files));
+    return true;
+  }
+  if (std::string out; save_words(game, w, out)) {
+    print_lines(game, out);
     return true;
   }
   if (std::string out; ge::classic::content::fs_command(game.files, w, out)) {
@@ -1277,6 +1394,8 @@ const gs::ServerGame& make() {
     s.binary = "sesv";
     s.title = "Shooter's Edge on Quake II's protocol";
     s.version_text = kProgramVersion;
+    // The game's own id on the hub's masters, as a Quake server's: a hub lists both (sv_master).
+    s.protocol = ge::net::protocol_id("shooters_edge", 1);
     s.default_port = kPortQ2;
     s.max_clients = 32;
     s.default_map = "q2dm1";
@@ -1303,6 +1422,9 @@ const gs::ServerGame& make() {
     s.quit = quit;
     s.sockets = sockets;
     s.maps = maps;
+    s.sheet = [](const void* game, int, gs::SettingsSheet& out) {
+      q2_votes_sheet(static_cast<const Game*>(game)->votes, out);
+    };
     q2_watch_hooks(s);
     return s;
   }();

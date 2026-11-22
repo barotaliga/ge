@@ -70,7 +70,12 @@ struct MapLoad {
   // world drawn with its own files; null or off: the played game's alone. The window's, outliving
   // the load.
   const RemixFiles* remix = nullptr;
+  bool plaque_gone = false;  // the loading plaque gave up on this load (kPlaqueMostS)
 };
+
+// The most seconds the loading plaque stays over a load: then "Loading plaque timed out." and the
+// spinner in its place, the load going on.
+inline constexpr double kPlaqueMostS = 120;
 
 // Whether `f` holds a result now; with `wait`, waited for (false only when it holds none).
 template <class T>
@@ -102,7 +107,7 @@ bool console_load_line(const MapLoad& load, LoadLine& line, ge::console::Console
 void release_load_line(const MapLoad& load, LoadLine& line, ge::console::ConsoleView& view,
                        bool keep);
 // What a load in flight shows over the frame: a single-player game in its pack's pictures the
-// loading plaque (gfx/loading), as the original does; anything else the spinner and its caption.
+// loading plaque (gfx/loading) for up to kPlaqueMostS; anything else the spinner and its caption.
 void draw_loading(ge::ui::DrawList& dl, const MapLoad& load, const Listen& l,
                   const shooters_edge::menu::ClassicArt& art, int w, int h, double now_s);
 

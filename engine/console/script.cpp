@@ -2,7 +2,8 @@
 //
 //   if <a> [<op> <b>] [then] <commands> [else <commands>]
 //       op: == = != <> < <= > >= (numbers when both sides are; else text), isin and !isin (a is
-//       a substring of b), =~ and !~ (b a regular expression found in a). With no op, a is true
+//       a substring of b), isini and !isini (the same in any case), eq and ne (text, any case),
+//       =~ and !~ (b a regular expression found in a). With no op, a is true
 //       unless it is empty or 0. `then` may be left out after `a op b`, as old configs write it.
 //       The condition is expanded when `if` runs; the branch runs (and is expanded) after it,
 //       before what followed.
@@ -15,13 +16,23 @@
 //       | int <x> | tobrown <s> | towhite <s> | <a>
 //   inc <name> [<by>]   dec <name> [<by>]   mul <name> [<by>]   div <name> [<by>]
 //   toggle <name>   cycle <name> <v1> <v2> ...
-//   msg_trigger [<alias> [<match>]]     a line from the game containing match runs the alias
+//   msg_trigger [<alias> [<match> [-l <level>]]]   a game line of that print level (0 low, 1
+//       medium, 2 high, the default; 3 chat, t the team's chat) holding match runs the alias;
+//       $triggermatch is the line
 //   msg_trigger_remove <alias>
+//   alias_in <alias> <cvar> [<options>]   alias_out ...   cvar_in <cvar1> <cvar2> [<options>]
+//       cvar_out ...: a cvar's value put into (at the start; options 1 the end, 2 not when it is
+//       there already, 4 say so, 8 make the alias or cvar) or taken out of (the first; options 1
+//       only test, 2 quietly) an alias's text or a cvar's value
+//   set_alias_str <cvar> <alias>   set_bind_str <cvar> <key>   hash <text>
+//   $qt a double quote, $sc a semicolon (inside an argument), $triggermatch
 //
 // ge:summary The console's scripting: if/else, if_exists, eval, set_calc, inc, cycle, triggers
 // ge:keywords console script if else then set_calc calc arithmetic strlen substr strstr inc dec
 // ge:keywords if_exists eval set_eval div xor tobrown towhite pos regex
-// ge:keywords mul div toggle cycle msg_trigger trigger conditional compare isin
+// ge:keywords mul div toggle cycle msg_trigger trigger conditional compare isin isini eq ne
+// ge:keywords triggermatch trigger-level alias_in alias_out cvar_in cvar_out set_alias_str
+// ge:keywords set_bind_str hash qt sc
 // ge:skill console
 // ge:test tests/console_script_test.cpp
 #include <cmath>
@@ -42,6 +53,11 @@ int compare(const std::string& a, const std::string& op, const std::string& b) {
   const bool nums = parse_number(a, x) && parse_number(b, y);
   if (op == "isin") return b.find(a) != std::string::npos ? 1 : 0;
   if (op == "!isin") return b.find(a) == std::string::npos ? 1 : 0;
+  const std::string lop = lower(op);
+  if (lop == "isini") return lower(b).find(lower(a)) != std::string::npos ? 1 : 0;
+  if (lop == "!isini") return lower(b).find(lower(a)) == std::string::npos ? 1 : 0;
+  if (lop == "eq") return lower(a) == lower(b) ? 1 : 0;
+  if (lop == "ne") return lower(a) != lower(b) ? 1 : 0;
   if (op == "==" || op == "=") return (nums ? x == y : a == b) ? 1 : 0;
   if (op == "!=" || op == "<>") return (nums ? x != y : a != b) ? 1 : 0;
   if (op == "<") return (nums ? x < y : a < b) ? 1 : 0;
@@ -59,10 +75,11 @@ int compare(const std::string& a, const std::string& op, const std::string& b) {
 }
 
 bool is_compare_op(const std::string& op) {
-  static const char* const kOps[] = {
-      "==", "=", "!=", "<>", "<", "<=", ">", ">=", "isin", "!isin", "=~", "!~"};
+  static const char* const kOps[] = {"==",   "=",     "!=",    "<>",     "<",  ">=", "<=", ">",
+                                     "isin", "!isin", "isini", "!isini", "eq", "ne", "=~", "!~"};
+  const std::string lop = lower(op);
   for (const char* o : kOps)
-    if (op == o) return true;
+    if (op == o || lop == o) return true;
   return false;
 }
 
@@ -150,7 +167,7 @@ void if_cmd(Console& c, const Args& a) {
       const int r = compare(cond[0], cond[1], cond[2]);
       if (r == -1) {
         c.error("if: '" + cond[1] + "' is not a comparison",
-                "use == = != <> < <= > >= isin !isin =~ or !~");
+                "use == = != <> < <= > >= isin !isin isini !isini eq ne =~ or !~");
         return;
       }
       if (r == -2) {
@@ -251,7 +268,8 @@ void set_calc(Console& c, const Args& a) {
   }
   const std::string& op = a[3];
   const int cmp = compare(a[2], op, a[4]);
-  if (cmp >= 0 && op != "isin" && op != "!isin") return store(c, a, a[1], cmp ? "1" : "0");
+  if (cmp >= 0 && op != "isin" && op != "!isin" && lower(op) != "isini" && lower(op) != "!isini")
+    return store(c, a, a[1], cmp ? "1" : "0");
   double x = 0, y = 0;
   if (!num(a[2], x) || !num(a[4], y)) return;
   double r = 0;
@@ -401,22 +419,42 @@ void register_script(Console& con) {
                     cycle(c, a);
                   });
   con.add_command(
-      "msg_trigger", "msg_trigger <alias> <match>: a game line holding match runs the alias",
+      "msg_trigger",
+      "msg_trigger <alias> <match> [-l <level>]: a game line holding match runs the alias",
       [](Console& c, const Args& a) {
         auto& t = c.triggers();
+        const auto level_text = [](int l) {
+          return l == kTriggerTeam ? std::string("t") : std::to_string(l);
+        };
         if (a.size() < 3) {
+          bool any = false;
           for (const auto& tr : t)
-            if (a.size() < 2 || tr.alias == lower(a[1]))
-              c.print(tr.alias + " : \"" + tr.match + "\"");
+            if (a.size() < 2 || tr.alias == lower(a[1])) {
+              any = true;
+              c.print(tr.alias + " : \"" + tr.match + "\"" +
+                      (tr.level == kTriggerHigh ? std::string() : " -l " + level_text(tr.level)));
+            }
+          if (!any)
+            c.print(a.size() < 2 ? "no triggers defined" : "trigger \"" + a[1] + "\" not found");
           return;
+        }
+        int level = -1;  // kept when left out
+        if (a.size() >= 5 && lower(a[3]) == "-l") {
+          const std::string& l = a[4];
+          double n = 0;
+          level = lower(l) == "t"       ? kTriggerTeam
+                  : !parse_number(l, n) ? kTriggerLow
+                  : n > 3 || n < 0      ? kTriggerHigh
+                                        : static_cast<int>(n);
         }
         for (auto& tr : t) {
           if (tr.alias == lower(a[1])) {
             tr.match = a[2];
+            if (level >= 0) tr.level = level;
             return;
           }
         }
-        t.push_back({lower(a[1]), a[2]});
+        t.push_back({lower(a[1]), a[2], level >= 0 ? level : kTriggerHigh});
       },
       kNoExpand);
   con.add_command("msg_trigger_remove", "msg_trigger_remove <alias>: stop a trigger",
@@ -428,6 +466,10 @@ void register_script(Console& con) {
                     if (t.size() == before)
                       c.error("no trigger '" + lower(a[1]) + "'", "type msg_trigger to list them");
                   });
+  con.add_macro("triggermatch", [&con] { return con.trigger_match(); });
+  con.add_macro("qt", [] { return std::string("\""); });
+  con.add_macro("sc", [] { return std::string(";"); });
+  register_script_strings(con);
 }
 
 }  // namespace ge::console

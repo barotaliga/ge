@@ -348,7 +348,8 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
              if (p.hightrack != 0)
                console.cvars().set("cl_hightrack", "0", ge::console::Source::code);
            },
-       .highlights = [&p](bool all) { return highlight_lines(p, all); }});
+       .highlights = [&p](bool all) { return highlight_lines(p, all); },
+       .playing = [&bench] { return bench.active; }});
 }
 
 bool playback_begin(DemoPlayback& p, const Timedemo& t, std::string& error) {

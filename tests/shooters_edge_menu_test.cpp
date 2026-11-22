@@ -135,6 +135,13 @@ TEST(rows_dim_until_the_console_knows_what_they_need) {
   CHECK(!item(m, "host", "fraglimit")->disabled);
   CHECK(item(m, "host", "fraglimit")
             ->choices[static_cast<size_t>(item(m, "host", "fraglimit")->choice)] == "20");
+  // HOST NAME shows the server's name beside it once the server has one.
+  CHECK(item(m, "host", "hostname")->disabled);
+  server.add({.name = "hostname", .fallback = "Frag Hall", .kind = ge::console::CvarKind::text});
+  sm::refresh(m, host);
+  CHECK_MSG(!item(m, "host", "hostname")->disabled &&
+                item(m, "host", "hostname")->text == "HOST NAME  Frag Hall",
+            item(m, "host", "hostname")->text);
 }
 
 TEST(a_setting_is_its_cvar_read_and_written) {
@@ -1608,4 +1615,18 @@ TEST(servers_page_reads_web_lists) {
   CHECK(printed("Ignoring invalid master URL: +3" + base + "/bad"));
   for (gn::TcpStream& t : streams) gn::tcp_close(t);
   gn::tcp_close_listener(web);
+}
+
+TEST(the_game_sets_the_menus_size) {
+  sm::ClassicArt art;  // by the window: the largest whole number that fits 1920 x 1080
+  CHECK(sm::classic_screen(art, 1920, 1080).scale == 5);
+  art.scale = 2;  // Quake II's ui_scale 2: twice the game's own size, centred
+  const sm::ClassicLayout l = sm::classic_screen(art, 1920, 1080);
+  CHECK(l.scale == 2 && l.x == 640 && l.y == 340);
+  art.scale = 0.5f;  // never smaller than the game's own
+  CHECK(sm::classic_screen(art, 1920, 1080).scale == 1);
+  sm::GameMenu menu;  // the setting outlives the game's pictures
+  menu.menu_scale() = 3;
+  menu.set_art(sm::ClassicArt{});
+  CHECK(menu.menu_scale() == 3);
 }

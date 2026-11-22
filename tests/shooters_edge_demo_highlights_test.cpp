@@ -314,6 +314,18 @@ TEST(quake_ii_s_seek_takes_tenths_of_a_second_and_shares_of_the_demo) {
   CHECK(printed.size() == 4 && printed[0] == "Invalid percentage." &&
         printed[1] == "Invalid absolute timespec." && printed[2] == "Invalid relative timespec." &&
         printed[3] == "Usage: seek [+-]<timespec|percent>[%]");
+  {  // no demo playing: said so, nothing asked
+    ge::console::Console idle{false};
+    std::vector<std::string> said;
+    idle.set_sink([&said](std::string_view l) { said.emplace_back(l); });
+    ge::shooter::DemoTransport u;
+    ge::shooter::DemoCalls none;
+    none.playing = [] { return false; };
+    ge::shooter::add_demo_transport(idle, u, none);
+    idle.add_command_synonym("seek", "demo_jump");
+    idle.run_now("seek 1:00");
+    CHECK(said.size() == 1 && said[0] == "Not playing a demo." && u.seek_ask < 0);
+  }
 }
 
 TEST(demo_jump_end_lands_two_seconds_before_the_end_and_shares_seek) {

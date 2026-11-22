@@ -64,7 +64,12 @@ struct StatusPlayer {
   uint16_t minutes = 0;  // on the server
   uint8_t flags = 0;
   uint32_t colour = 0;  // 0xRRGGBB, the game's own choice of a player's colour
+  // The game's own colour numbers for the player's upper and lower half (rows of its palette, as
+  // a player picks them), kNoColourRow when the game has none: a hub draws them in the game's own
+  // shades from its content (hub/card.hpp).
+  uint8_t top = 0xff, bottom = 0xff;
 };
+inline constexpr uint8_t kNoColourRow = 0xff;
 
 struct StatusTeam {
   std::string name;

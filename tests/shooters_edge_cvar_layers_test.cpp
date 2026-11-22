@@ -194,7 +194,8 @@ TEST(each_games_fov_and_move_speeds) {
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
                          .items_still = &w.items_still,
-                         .view = &w.view});
+                         .view = &w.view,
+                         .menu = &w.menu});
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
     CHECK_MSG(v.find(name)->value == "200", name);  // Quake II's walk
   CHECK(v.find("rate")->value == "15000");          // its servers may send more
@@ -222,6 +223,11 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(w.noskins == 2 && v.find("noskins")->value == "0");
   v.set("cl_nobob", "1", con::Source::local);  // its floating items lie still
   CHECK(w.items_still && v.find("fs_autoexec")->value == "1");
+  v.set("ui_scale", "2", con::Source::local);  // its menus' size; its browser's sort and pace
+  v.set("ui_sortservers", "-4", con::Source::local);
+  v.set("ui_pingrate", "20", con::Source::local);
+  CHECK(w.menu.menu_scale() == 2 && w.menu.servers().game_sort == -4 &&
+        w.menu.servers().game_ping_rate == 20);
   v.set("fov", "100", con::Source::local);
   CHECK(v.find("cl_fov")->value == "100");
   v.set("cl_sidespeed", "300", con::Source::local);  // the player's own stays across the switch
@@ -232,14 +238,18 @@ TEST(each_games_fov_and_move_speeds) {
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
                          .items_still = &w.items_still,
-                         .view = &w.view});
+                         .view = &w.view,
+                         .menu = &w.menu});
   CHECK(v.find("cl_forwardspeed")->value == "400");
   CHECK(v.find("rate")->value == "2500");  // Quake's default again
   CHECK(!w.controls.mouse.per_frame && v.find("hand") == nullptr);
-  CHECK(w.predict && v.find("cl_predict") == nullptr);       // Quake always predicts
-  CHECK(v.find("cl_predict_crouch") == nullptr);             // and never ducks
-  CHECK(v.find("cl_noskins") == nullptr && w.noskins == 0);  // its figures its own
-  CHECK(v.find("cl_nobob") == nullptr && !w.items_still);    // nothing floats in Quake
+  CHECK(w.predict && v.find("cl_predict") == nullptr);               // Quake always predicts
+  CHECK(v.find("cl_predict_crouch") == nullptr);                     // and never ducks
+  CHECK(v.find("cl_noskins") == nullptr && w.noskins == 0);          // its figures its own
+  CHECK(v.find("cl_nobob") == nullptr && !w.items_still);            // nothing floats in Quake
+  CHECK(w.menu.menu_scale() == 0 && v.find("ui_scale") == nullptr);  // its menus fill the window
+  CHECK(w.menu.servers().game_sort == shooters_edge::menu::ServersPage::kNoGameSort &&
+        w.menu.servers().game_ping_rate == -1);
   CHECK(v.find("fs_autoexec") == nullptr);
   CHECK(w.view.hand == 0 && w.view.gun == 1);  // its weapon always drawn
   CHECK(v.find("cl_gun") == nullptr && v.find("ch_red") == nullptr);
@@ -590,7 +600,9 @@ TEST(q2_chat_sound_and_auto_chat_are_its_own_and_go_with_it) {
 TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
-  CHECK(v.find("cl_entities") == nullptr && v.find("cl_beginmapcmd") == nullptr);
+  CHECK(v.find("cl_entities") == nullptr && v.find("cl_beginmapcmd") != nullptr);  // every game's
+  v.set("cl_beginmapcmd", "record", con::Source::local);                           // Quake too
+  CHECK(w.game.q2.begin_cmd == "record");
   const pr::GameProfile* q2 = pr::find_game("q2");
   CHECK(q2 != nullptr);
   if (q2 == nullptr) return;
@@ -652,8 +664,8 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(w.picture.q2fx.footsteps == 1 && w.picture.q2fx.ambient == 1 && w.music.enabled);
   CHECK(!w.music.shuffle && w.music.menu_track == 0);
   CHECK(w.picture.q2fx.rail_type == 0 && w.picture.q2fx.core_colour == "red");
-  CHECK(w.game.q2.begin_cmd.empty() && w.game.q2.autopause && w.game.q2.timescale == 1);
-  CHECK(v.find("cl_beginmapcmd") == nullptr && v.find("sv_running") == nullptr);
+  CHECK(w.game.q2.begin_cmd == "record" && w.game.q2.autopause && w.game.q2.timescale == 1);
+  CHECK(v.find("cl_beginmapcmd") != nullptr && v.find("sv_running") == nullptr);
   CHECK(v.clashes().empty());
 }
 

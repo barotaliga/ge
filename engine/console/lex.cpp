@@ -142,13 +142,47 @@ std::string expand(std::string_view s,
 }
 
 std::string substitute_args(std::string_view body, const std::vector<std::string>& args) {
+  // Arguments `from`..`to` (inclusive, held to those given) joined by single blanks.
+  const auto joined = [&args](size_t from, size_t to) {
+    std::string s;
+    for (size_t k = from; k <= to && k < args.size(); ++k) {
+      if (k > from) s += ' ';
+      s += args[k];
+    }
+    return s;
+  };
+  const auto digits = [&body](size_t& i, size_t& n) {
+    const size_t from = i;
+    n = 0;
+    while (i < body.size() && body[i] >= '0' && body[i] <= '9' && i - from < 3)
+      n = n * 10 + static_cast<size_t>(body[i++] - '0');
+    return i > from;
+  };
+  // A body with a `%` in it takes `%0`..`%9` too, and `%%` is a `%` (an old config's form).
+  const bool percents = body.find('%') != std::string_view::npos;
   std::string out;
   out.reserve(body.size());
   for (size_t i = 0; i < body.size(); ++i) {
+    if (percents && body[i] == '%' && i + 1 < body.size()) {
+      const char n = body[i + 1];
+      if (n >= '0' && n <= '9') {
+        out += n == '0' ? joined(1, args.size())
+                        : (static_cast<size_t>(n - '0') < args.size()
+                               ? args[static_cast<size_t>(n - '0')]
+                               : std::string());
+        ++i;
+        continue;
+      }
+      if (n == '%') {
+        out += '%';
+        ++i;
+        continue;
+      }
+    }
     if (body[i] == '$' && i + 1 < body.size()) {
       const char n = body[i + 1];
-      if (n >= '1' && n <= '9') {
-        const size_t k = static_cast<size_t>(n - '0');
+      if (n >= '0' && n <= '9') {
+        const auto k = static_cast<size_t>(n - '0');
         if (k < args.size()) out += args[k];
         ++i;
         continue;
@@ -160,6 +194,23 @@ std::string substitute_args(std::string_view body, const std::vector<std::string
         }
         ++i;
         continue;
+      }
+      if (n == '@') {
+        out += joined(1, args.size());
+        ++i;
+        continue;
+      }
+      if (n == '{') {  // `${N-M}` and `${N-}`: a run of the arguments
+        size_t at = i + 2, from = 0, to = 0;
+        if (digits(at, from) && at < body.size() && body[at] == '-') {
+          ++at;
+          const bool upper = digits(at, to);
+          if (at < body.size() && body[at] == '}') {
+            out += joined(from, upper ? to : args.size());
+            i = at;
+            continue;
+          }
+        }
       }
       if (n == '$') {  // kept for expansion at run time
         out += "$$";

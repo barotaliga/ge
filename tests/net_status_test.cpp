@@ -41,6 +41,7 @@ Status sample(int players) {
     p.minutes = static_cast<uint16_t>(i);
     p.flags = i == 3 ? kPlayerBot : 0;
     p.colour = 0x112233u * static_cast<uint32_t>(i);
+    if (i == 1) p.top = 4, p.bottom = 13;
     s.players.push_back(p);
   }
   s.teams = {{"red", 40, 0xff0000}, {"blue", 37, 0x0000ff}};
@@ -70,6 +71,8 @@ TEST(status_record_round_trips) {
   CHECK(back.players.size() == 4 && back.players[2].name == "player2");
   CHECK(back.players[0].score == -3 && back.players[3].flags == kPlayerBot);
   CHECK(back.players[1].team == "blue" && back.players[1].ping_ms == 21);
+  CHECK(back.players[1].top == 4 && back.players[1].bottom == 13);
+  CHECK(back.players[0].top == kNoColourRow && back.players[0].bottom == kNoColourRow);
   CHECK(back.teams.size() == 2 && back.teams[1].score == 37);
   CHECK(back.streams.size() == 1 && back.streams[0].node == sim_address(9, 4400));
   CHECK(back.streams[0].viewers == 12 && back.streams[0].delay_s == 10);

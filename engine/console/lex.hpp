@@ -7,8 +7,10 @@
 //   - EXPANSION, done when a command runs (never when an alias or a bind is defined, whose bodies
 //     are quoted and kept as written): `$name` or `${name}` is replaced by a macro's or a cvar's
 //     value (a name of a-z 0-9 _ . + -, letters first); `$$` is a literal `$`; an unknown name is
-//     left as written. Inside an alias's body `$1` … `$9` are its arguments and `$*` all of them,
-//     substituted when the alias is called.
+//     left as written. Inside an alias's body `$0` is its name, `$1` … `$9` its arguments, `$*`
+//     all of them (each quoted as needed), `$@` all of them joined by blanks and `${N-M}` or
+//     `${N-}` a run of them; a body with a `%` in it also takes `%1` … `%9`, `%0` (all of them)
+//     and `%%` (a `%`); any other `%x` stays. Substituted when the alias is called.
 //
 // ge:summary The console language's text: commands split on ; and lines, words, $ expansion
 // ge:keywords console lexer tokenize split_commands words quotes comment semicolon expand
@@ -44,7 +46,7 @@ std::string rest_after(std::string_view command, size_t skip);
 std::string expand(std::string_view text,
                    const std::function<bool(std::string_view, std::string&)>& lookup);
 
-// An alias body with `$1` … `$9` and `$*` replaced by `args` (args[0] is the alias's name).
+// An alias body with its arguments put in (above; args[0] is the alias's name).
 std::string substitute_args(std::string_view body, const std::vector<std::string>& args);
 
 // `word` quoted for writing back into a command: as is when it needs no quotes.

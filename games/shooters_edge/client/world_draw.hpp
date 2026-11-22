@@ -21,11 +21,12 @@
 // ge:keywords create_world_draw draw_world resize_world palette particles dynamic-lights blend
 // ge:keywords models items flames read_world begin_world world_compiled finish_world own_sky
 // ge:keywords background-load async-load title warm_world warm-up shadow-cubes
-// ge:keywords viewmodel held-weapon light-probe
+// ge:keywords viewmodel held-weapon light-probe time_refresh timerefresh
 // ge:skill render brush shooter
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -116,6 +117,15 @@ bool world_stale(const WorldDraw& w);
 void draw_world(ge::gpu::Device& device, WorldDraw& w, ge::render::FrameView view,
                 const FxFrame& fx, const shooters_edge::view::HandFrame* held, double dt,
                 const ge::ui::DrawList& overlay, const wgpu::TextureView& target);
+
+// `timerefresh` (render_words.hpp): the world drawn `frames` times from `view`'s eye, turning a
+// whole circle, with `fx` and no weapon or overlay; each frame shown through `acquire` and
+// `present`, or with `one_frame` all into one target shown once. The wall seconds it took (0: no
+// target came).
+double time_refresh(ge::gpu::Device& device, WorldDraw& w, ge::render::FrameView view,
+                    const FxFrame& fx, int frames, bool one_frame, int width, int height,
+                    const std::function<wgpu::TextureView()>& acquire,
+                    const std::function<void()>& present);
 
 // A WARM-UP frame of a world not shown yet, from `view` (where the player will see it from first):
 // nothing drawn but its sky's tables and at most `cubes` new shadow cubes (each the map drawn six

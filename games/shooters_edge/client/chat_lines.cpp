@@ -179,6 +179,30 @@ void add_chat_extras(con::Console& c, ChatExtras& x) {
           .max = 3600,
           .values = "0: until newer lines push it off (the default); SECONDS: that long"},
          &x.hud_time);
+  v.bind({.name = "cl_nofake",
+          .fallback = "2",
+          .flags = con::kArchive,
+          .help = "Whether a chat line may hide who said it behind a line break.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "0: lines as sent; 1: line breaks shown as blanks in every chat line; 2: in "
+                    "every one but your own team's (the default)"},
+         &x.nofake);
+  v.bind({.name = "tp_soundtrigger",
+          .fallback = "~",
+          .flags = con::kArchive,
+          .help = "The characters that start a sound's name at the end of a teammate's line.",
+          .kind = con::CvarKind::text,
+          .values = "\"\": off; CHARACTERS: any of them starts the name (~ the default)"},
+         &x.sound_trigger);
+  v.bind({.name = "cl_queries",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether you answer f_version, !version and f_server asked in chat.",
+          .kind = con::CvarKind::boolean},
+         &x.queries);
+  c.add_macro("lastip", [&x] { return x.seen.empty() ? std::string() : x.seen.back(); });
   c.add_command("clearchathud", "clearchathud: the chat lines on screen taken away",
                 [&x](con::Console&, const con::Args&) { x.feed.clear(); });
   c.add_command("followip",
@@ -375,6 +399,106 @@ bool chat_line_extras(ChatExtras& x, DemoState& s, const con::ChatLine& line, De
   d.attenuation = 0;  // heard everywhere
   s.started.push_back(d);
   return true;
+}
+
+namespace {
+
+// The query a chat line's words ask: 0 f_version or !version, 1 f_server, -1 none. The word, then
+// only digits and blanks.
+int query_of(std::string_view words) {
+  std::string plain;
+  for (const char ch : words) plain += static_cast<char>(static_cast<unsigned char>(ch) & 0x7f);
+  while (!plain.empty() && (plain.back() == '\n' || plain.back() == '\r')) plain.pop_back();
+  const auto only_after = [&plain](size_t from) {
+    for (size_t i = from; i < plain.size(); ++i)
+      if (plain[i] != ' ' && (plain[i] < '0' || plain[i] > '9')) return false;
+    return true;
+  };
+  for (const auto& [word, kind] :
+       {std::pair<const char*, int>{"f_version", 0}, std::pair<const char*, int>{"!version", 0},
+        std::pair<const char*, int>{"f_server", 1}}) {
+    const std::string_view w = word;
+    if (plain.starts_with(w) && only_after(w.size())) return kind;
+  }
+  return -1;
+}
+
+// Any of the replies' words in a chat line: such a line fires no trigger.
+bool asks_or_answers(std::string_view words) {
+  static constexpr const char* kWords[] = {"f_version", "f_skins",   "f_fakeshaft",
+                                           "f_server",  "f_scripts", "f_cmdline",
+                                           "f_system",  "f_speed",   "f_modified"};
+  for (const char* w : kWords)
+    if (words.find(w) != std::string_view::npos) return true;
+  return false;
+}
+
+}  // namespace
+
+void chat_line_teamplay(ChatExtras& x, DemoState& s, const con::ChatLine& line, DemoPrint& p,
+                        double now_s, bool triggers_on, std::string_view version) {
+  const bool chat = p.level == kChatLevel;
+  const size_t colon = chat && line.place >= 0 ? p.text.find(": ") : std::string::npos;
+  const size_t words_at = colon == std::string::npos ? 0 : colon + 2;
+  const bool own_team = line.kind == con::ChatKind::team;
+  if (chat && (x.nofake == 1 || (x.nofake == 2 && !own_team))) {
+    for (size_t i = words_at; i < p.text.size(); ++i)
+      if (p.text[i] == '\r' || (p.text[i] == '\n' && i + 1 < p.text.size())) p.text[i] = ' ';
+  }
+  if (chat && own_team && !x.sound_trigger.empty()) {
+    // The sound word: the line's last run of name characters after a trigger character.
+    size_t end = p.text.size();
+    while (end > words_at && (p.text[end - 1] == '\n' || p.text[end - 1] == '\r')) --end;
+    size_t at = end;
+    const auto name_char = [](char ch) {
+      const auto u = static_cast<unsigned char>(ch);
+      return u > ' ' && u < 127 &&
+             std::string_view("\"&'*,:;<>?|").find(ch) == std::string_view::npos;
+    };
+    while (at > words_at && name_char(p.text[at - 1]) &&
+           x.sound_trigger.find(p.text[at - 1]) == std::string::npos)
+      --at;
+    if (at > words_at && x.sound_trigger.find(p.text[at - 1]) != std::string::npos && at < end &&
+        end - at <= 63) {
+      std::string name = p.text.substr(at, end - at);
+      std::replace(name.begin(), name.end(), '\\', '/');
+      p.text.erase(at - 1, end - at + 1);
+      if (name.find("..") == std::string::npos) {
+        if (name.find('.') == std::string::npos) name += ".wav";
+        std::string& kept = x.sound_names[x.sound_next++ % x.sound_names.size()];
+        kept = name;
+        // In place of the chat sound this line started (chat_line_extras added it last).
+        if (!s.started.empty() && s.started.back().name != nullptr &&
+            s.started.back().entity == s.player + 1 && s.started.back().attenuation == 0)
+          s.started.pop_back();
+        DemoSound d;
+        d.entity = s.player + 1;
+        d.name = kept.c_str();
+        d.attenuation = 0;
+        s.started.push_back(d);
+      }
+    }
+  }
+  const std::string words = p.text.substr(std::min(words_at, p.text.size()));
+  const bool asking = chat && asks_or_answers(words);
+  const bool watching = s.player >= 0 && static_cast<size_t>(s.player) < s.spectator.size() &&
+                        s.spectator[static_cast<size_t>(s.player)];
+  const bool spoken = line.kind == con::ChatKind::everyone || line.kind == con::ChatKind::spectator;
+  if (chat && x.queries && x.con != nullptr && spoken && line.place != s.player && !watching) {
+    const int q = query_of(words);
+    if (q >= 0 && now_s - x.answered_at[static_cast<size_t>(q)] >= 20) {
+      x.answered_at[static_cast<size_t>(q)] = now_s;
+      const std::string server = x.con->expand_text("$cl_server");
+      if (q == 0)
+        x.con->append("say \"" + std::string(version) + "\"");
+      else if (server != "$cl_server" && !server.empty())
+        x.con->append("say \"f_server response: " + server + "\"");
+    }
+  }
+  if (triggers_on && x.con != nullptr && !asking) {
+    const int level = p.level < 0 ? 0 : p.level > kChatLevel ? kChatLevel : p.level;
+    x.con->fire_triggers(words, level, own_team);
+  }
 }
 
 }  // namespace shooters_edge::client

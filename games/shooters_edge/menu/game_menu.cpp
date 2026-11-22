@@ -156,7 +156,11 @@ void GameMenu::add_cvars(ge::console::Console& con) {
   demos_.add_cvars(con);
 }
 
-void GameMenu::set_art(ClassicArt art) { art_ = std::move(art); }
+void GameMenu::set_art(ClassicArt art) {
+  const float scale = art_.scale;  // the game's setting outlives the pictures
+  art_ = std::move(art);
+  art_.scale = scale;
+}
 
 void GameMenu::load_refused(std::string why) {
   games_.set_note(why);

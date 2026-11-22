@@ -34,8 +34,10 @@ three things: its server's `ServerGame::sheet` (the rows from its rules, each ru
 the vote's lists; Shooter's Edge's `net/qw_sheet.hpp` is the pattern), a wire for its own clients
 (a bit in its extension set and one message carrying `sheet_row_text`, paced on the reliable
 channel), and readers for the stock servers of that game in `plugins/classic/server_sheet.hpp`
-(what a joined client can ask without a word the server would echo as chat). The menu page is the
-shell's and needs nothing from the game.
+(what a joined client can ask without a word the server would echo as chat). A protocol whose
+server never answers the client's extension bits offers the sheet instead, as Quake II's does
+(`net/q2_votes.hpp`: an empty sheet as the player enters, then `ge_sheet`), and keeps each packet
+within what that game's client reads. The menu page is the shell's and needs nothing from the game.
 
 ## Each game's
 
@@ -145,6 +147,18 @@ opened again, the last good port when the new one fails, the game's own listener
 macros.hpp`) beside the console's clock macros. Quake II's farewell is "Server quit" or "Server
 restarted", with the reason, to every player and relay viewer; after `killserver` its endpoint
 answers only rcon and runs no frame until the next map.
+
+At a terminal the dedicated process is a line editor (`engine/server/terminal.hpp`): the keys
+edit the line after `]`, Up and Down walk the typed lines (`con_history` kept and saved to
+`.syshistory` in the base folder), and Tab lists the matches as the player's console does
+(`engine/console/tab_list.hpp`, `con_completion_mode` and `con_completion_threshold`); a line
+printed meanwhile goes above the one being typed. Every printed line can be kept in
+`logs/<name>.log` too (`engine/server/console_log.hpp`: `con_logfile`, `con_logfile_name`,
+`con_logfile_prefix`, `con_logfile_flush`). Quake II's names for these six are synonyms
+(`sys_history`, `com_completion_mode`, `com_completion_treshold`, `logfile` and its three).
+Quake II's dedicated server saves a single player's or co-op game (`save <dir>`, `autosave`,
+`load <dir>`, net/q2_game.cpp's `save_words`) where the window keeps it, `saves/<dir>.save`, and
+keeps each level's autosave as `save0`.
 
 Quake II's downloads (`net/q2_net_server.cpp`, facts in `porting/shooters-edge/
 q2-downloads-facts.md`) make the asked name plain first (slashes, `.` and `..`), then offer each

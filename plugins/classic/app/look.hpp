@@ -37,6 +37,7 @@
 // ge:test tests/classic_look_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -48,6 +49,7 @@
 #include "brush/app/bsp_weather.hpp"
 #include "brush/map.hpp"
 #include "classic/q2_fx_switches.hpp"
+#include "classic/sky_typed.hpp"
 #include "classicenhance/switches.hpp"
 #include "console/console.hpp"
 #include "render/post.hpp"
@@ -121,6 +123,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_skyname: the sky box drawn through every map's sky in place of the one its settings name
   // (client/files.hpp's `sky_box_files`); empty, each map's own. Read when the world is made.
   std::string sky_name;
+  // `sky <name> [rotate] [axis x y z]`: the sky box typed for one map (classic/sky_typed.hpp).
+  SkyTyped sky_typed;
   // gl_texturemode: how the map's textures are sampled, either look: empty the look's own (the
   // classic crisp, the modern filtered); a mode whose first filter is nearest (GL_NEAREST,
   // GL_NEAREST_MIPMAP_NEAREST, ...) crisp, each texel a square; one that starts linear filtered
