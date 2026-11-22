@@ -22,6 +22,7 @@ namespace {
 
 std::vector<uint8_t> pak_of(const std::vector<std::string>& names) {
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files;
+  files.reserve(names.size());
   for (const std::string& n : names) files.emplace_back(n, std::vector<uint8_t>{1, 2, 3});
   std::vector<uint8_t> b;
   std::string error;
