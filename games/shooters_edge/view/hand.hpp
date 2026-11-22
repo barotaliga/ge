@@ -73,8 +73,9 @@ struct ViewSettings {
   double idle_exertion = 1;     // cl_gunidle_exertion
   bool centre = true;           // r_viewmodel_center
   bool hands = true;            // r_viewmodel_hands
-  int hand = 0;  // Quake II's `hand` (user info): 1 left, 2 in the middle (no weapon drawn)
-  int gun = 1;   // Quake II's `cl_gun`: 0 or -1 none, 1 by `hand`, 2 always right, 3 left
+  int hand = 0;      // Quake II's `hand` (user info): 1 left, 2 in the middle (no weapon drawn)
+  int gun = 1;       // Quake II's `cl_gun`: 0 or -1 none, 1 by `hand`, 2 always right, 3 left
+  double alpha = 1;  // Quake II's `cl_gunalpha`: how solid the weapon is drawn, 0..1
   bool last_fired = false;  // r_viewmodellastfired (Quake's): a recording shows the last fired
   bool lerp = true;  // r_lerpmodels (bound with the picture's): a clip's end flows back to rest
   double switch_s = 0.2;   // cl_gunswitch, s a whole switch takes (0: at once)

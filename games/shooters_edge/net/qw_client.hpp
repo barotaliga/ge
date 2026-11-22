@@ -55,6 +55,7 @@
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/client/voice_out.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q2_downloads.hpp"
 #include "shooters_edge/net/qw_svc.hpp"
 #include "vfs/partial.hpp"
 
@@ -96,6 +97,8 @@ struct ClientConfig {
   bool spectator = false;
   bool gender_auto = false;  // Quake II's: `gender` picked from the skin's figure
   bool speedjump = false;    // cl_speedjump: the easy jump asked for (sent only when set)
+  Q2Downloads q2_downloads;  // Quake II's `allow_download` switches (q2_downloads.hpp)
+  bool q2_nodelta = false;   // Quake II's `cl_nodelta`: every frame asked for whole
   std::string password;
   // Through forwarders (qw_forward.hpp): the route after the first one, the server last
   // ("host:port@host:port"); `client_start`'s address is then the first forwarder's. "": direct.

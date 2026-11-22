@@ -525,3 +525,17 @@ TEST(an_axe_of_two_swings_plays_one_swing_a_shot) {
   for (int i = 0; i < 40; ++i) second += swing(hand, 0);
   CHECK(second > 8 && second < 32);
 }
+
+TEST(cl_gunalpha_draws_the_weapon_see_through) {
+  // Quake II's cl_gunalpha (hand.hpp's ViewSettings::alpha) is the share of the weapon drawn.
+  const std::vector<vm::HeldModel>& m = models();
+  se::Hand hand;
+  se::HandInput in;
+  in.weapon = se::weapon_looks().front().weapon;
+  se::ViewSettings s;
+  CHECK(se::step_hand(hand, in, s, m, eye(), 1.0 / 60).opacity == 1);
+  s.alpha = 0.4;
+  CHECK(se::step_hand(hand, in, s, m, eye(), 1.0 / 60).opacity == 0.4f);
+  s.alpha = 3;  // held to solid
+  CHECK(se::step_hand(hand, in, s, m, eye(), 1.0 / 60).opacity == 1);
+}

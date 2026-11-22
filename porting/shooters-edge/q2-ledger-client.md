@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 111 | 12 | 23 | 10 | 156 |
-| Client settings (cvars) | 134 | 38 | 138 | 40 | 350 |
+| Client settings (cvars) | 141 | 41 | 128 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 79 | 74 | 8 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 568 | 304 | 278 | 61 | 1211 |
+| **all** | 575 | 307 | 268 | 61 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 134, partial 38, missing 138, not-taken 40
+done 141, partial 41, missing 128, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -233,7 +233,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_http_blocking_timeout | `cl_http_blocking_timeout` | seconds before a stalled HTTP fetch is dropped (default 15) | missing | C37 |
 | cvar.in_enable | `in_enable` | use the input layer at all (default 1) | missing | C35 |
 | cvar.in_grab | `in_grab` | 0 never grab the mouse in a window, 1 in a game, 2 also let go in demos and chase (default 1) | partial | `games/shooters_edge/client/q2_session.hpp` (`q2_takes_mouse`): 0 takes the mouse only while the game covers the screen; 2 is the same as 1 (a watched demo lets the mouse go in both, by our `in_mouse_release`) |
-| cvar.cl_nodelta | `cl_nodelta` | 1 asks the server for full frames, never deltas (default 0) | missing | C43 |
+| cvar.cl_nodelta | `cl_nodelta` | 1 asks the server for full frames, never deltas (default 0) | partial | `games/shooters_edge/client/q2_session.cpp`; `net/q2_client.hpp`'s `nodelta` acknowledges no frame, so each comes whole; read when you join, not live |
 | cvar.cl_maxpackets | `cl_maxpackets` | packets a second on the modern protocols, moves batched (default 30) | missing | waits for the batched protocol (`client-gaps.md` round 12, C43) |
 | cvar.cl_fuzzhack | `cl_fuzzhack` | sends moves with a small jitter to beat a server's speed check (default 0) | missing | not found |
 | cvar.cl_packetdup | `cl_packetdup` | each move sent again in the next packet (default 1) | missing | waits for the batched protocol (C43) |
@@ -262,7 +262,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.loc_draw | `loc_draw` | draws each place point as a marker (default 0) | missing | C45 |
 | cvar.loc_dist | `loc_dist` | the farthest a place counts, units (default 500) | done | `games/shooters_edge/client/place_names.cpp` |
 | cvar.cl_gun | `cl_gun` | 0 hides the held gun, 2 right, 3 left (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
-| cvar.cl_gunalpha | `cl_gunalpha` | the held gun's opacity (default 1) | missing | C16 |
+| cvar.cl_gunalpha | `cl_gunalpha` | the held gun's opacity (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` into `view/hand.hpp`'s `alpha`, the hand's opacity (`view/hand.cpp`), drawn see-through by the view model pass |
 | cvar.cl_gunfov | `cl_gunfov` | the gun's own field of view (default 90) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_gun_x | `cl_gun_x` | moves the gun right, units (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_gun_y | `cl_gun_y` | moves the gun forward (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
@@ -523,14 +523,14 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.com_time_format | `com_time_format` | the `$com_time` format (default `%H.%M`) | done | `engine/console/clock_macros.cpp`: `%H:%M`, as on every system but Windows |
 | cvar.com_debug_break | `com_debug_break` | debug: break into the debugger on an error | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.com_fatal_error | `com_fatal_error` | debug: errors are fatal | not-taken | `client-gaps.md`: developer tools left out |
-| cvar.allow_download | `allow_download` | client: 0 fetch nothing, -1 refuse even `download` (default 1, saved) | missing | ours has the server's (`net/q2_game.cpp`); the client's missing (C36) |
-| cvar.allow_download_players | `allow_download_players` | client: fetch player figures (default 1) | missing | the server's only (C36) |
-| cvar.allow_download_models | `allow_download_models` | client: fetch models (default 1) | missing | the server's only (C36) |
-| cvar.allow_download_sounds | `allow_download_sounds` | client: fetch sounds (default 1) | missing | the server's only (C36) |
-| cvar.allow_download_maps | `allow_download_maps` | client: fetch maps (default 1) | missing | the server's only (C36) |
-| cvar.allow_download_textures | `allow_download_textures` | client: fetch wall textures and skies (default 1) | missing | C36 |
-| cvar.allow_download_pics | `allow_download_pics` | client: fetch pictures (default 1) | missing | C36 |
-| cvar.allow_download_others | `allow_download_others` | fetch any other file (default 0) | missing | C36 |
+| cvar.allow_download | `allow_download` | client: 0 fetch nothing, -1 refuse even `download` (default 1, saved) | done | `games/shooters_edge/client/q2_session.cpp`, read at each join (`net/qw_remote.cpp`) into `net/q2_downloads.hpp`'s switches: 0 fetches nothing joining, -1 refuses a typed `download` too (`net/q2_remote.cpp`) |
+| cvar.allow_download_players | `allow_download_players` | client: fetch player figures (default 1) | done | `net/q2_downloads.hpp` (`q2_download_allowed`): `players/` held back from what joining fetches (`net/q2_client.cpp`) |
+| cvar.allow_download_models | `allow_download_models` | client: fetch models (default 1) | done | `net/q2_downloads.hpp`: `models/` and `sprites/` |
+| cvar.allow_download_sounds | `allow_download_sounds` | client: fetch sounds (default 1) | done | `net/q2_downloads.hpp`: `sound/` |
+| cvar.allow_download_maps | `allow_download_maps` | client: fetch maps (default 1) | done | `net/q2_downloads.hpp`: `maps/` |
+| cvar.allow_download_textures | `allow_download_textures` | client: fetch wall textures and skies (default 1) | partial | `net/q2_downloads.hpp` gates `textures/` and `env/`; joining does not fetch a map's wall textures or sky yet |
+| cvar.allow_download_pics | `allow_download_pics` | client: fetch pictures (default 1) | partial | `net/q2_downloads.hpp` gates `pics/`; joining does not fetch the level's pictures yet |
+| cvar.allow_download_others | `allow_download_others` | fetch any other file (default 0) | done | `net/q2_downloads.hpp`: every other folder, off by default |
 | cvar.rcon_password | `rcon_password` | the password `rcon` sends | done | `games/shooters_edge/net/qw_admin.cpp` |
 | cvar.sys_forcegamelib | `sys_forcegamelib` | a game library path forced; command line only | missing | not found |
 | cvar.sys_allow_unsafe_savegames | `sys_allow_unsafe_savegames` | load saves of another build; command line only (default 0) | missing | not found |

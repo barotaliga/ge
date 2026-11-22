@@ -455,6 +455,11 @@ TEST(each_games_own_gun_place_adds_to_ours_and_its_lens_stands_in) {
                   ge::camera::fov_y_of(ge::core::kPi / 2, 4.0 / 3.0)) < 1e-12);  // cl_gunfov 90
   u.set("r_viewmodel_fov", "50", con::Source::local);                            // ours set wins
   CHECK(std::fabs(shooters_edge::view::eye_row(q.view).fov_y - 50 * ge::core::kPi / 180) < 1e-12);
+  // Its cl_gunalpha: how solid the weapon is drawn; Quake has none.
+  CHECK(q.view.alpha == 1);
+  u.set("cl_gunalpha", "0.4", con::Source::local);
+  CHECK(q.view.alpha == 0.4);
+  CHECK(v.find("cl_gunalpha") == nullptr && w.view.alpha == 1);
 }
 
 TEST(quake_twos_cl_maxfps_is_its_move_rate_and_r_maxfps_its_frame_cap) {
