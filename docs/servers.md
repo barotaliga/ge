@@ -451,7 +451,14 @@ grammar (`0: no limit; 1..N: that many frags`), `line` the words that change it 
   `ServerGame::sheet`. A client of our QuakeWorld server that agreed the `ge` set's
   `settings-sheet` bit asks with `ge_sheet` and gets svc `ge_sheet` (begin, a row a message, end,
   a few each frame so the reliable channel never overflows) and the sheet again whenever a vote
-  changes a setting; `ge_sheet stop` ends it. A stock server is read, never extended
+  changes a setting; `ge_sheet stop` ends it. Our Quake II server has no reply to a client's
+  bits, so it OFFERS the sheet instead: a client whose `*ge_ext` carries the bit gets an empty
+  sheet on svc 120 as it enters (begin, end), and only a window that saw that offer sends
+  `ge_sheet` (a stock Quake II server would echo the word as chat). Its parts go as the reliable
+  channel drains, so a packet stays within the 1400 bytes a Quake II client reads. Its votes
+  (`games/shooters_edge/net/q2_votes.hpp`) are the engine's: every rule but the owner's
+  (`deathmatch`, `coop`, `skill`, `sv_maplist`, `nextserver`), `vote map`, `vote kick`, put back
+  at the next map. A stock server is read, never extended
   (`plugins/classic/server_sheet.hpp`): a QuakeWorld server's serverinfo (a key missing is 0), a
   match mod's listing (`cmd status1`, `cmd status2`, taken out of the console for a few seconds
   while it comes) with its own words (`dmm1`..`dmm5`, `fragsup`, `votemap`); a Quake II server's
