@@ -52,6 +52,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Network trouble words | none | `scr_showturtle` (`client/q2_bar.cpp`'s `add_q2_turtle`) | its own | its own |
 | The window's style | always a usual window | `win_noborder`, `win_notitle`, `win_alwaysontop`, `win_noresize` (`platform/window_cvars.hpp`) | the engine's | the engine's |
 | The window's size and place | as the game opens it | `vid_geometry`, `WxH+X+Y` (`platform/window_cvars.hpp`) | the engine's | the engine's |
+| Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Screenshot names | by the time | `gl_screenshot_template` (`quakeXXX`) and `gl_screenshot_compression` over `scr_template` and `scr_compression` (`capture/screenshot.hpp`) | by the time | the engine's |
 
 ## Adding a game
