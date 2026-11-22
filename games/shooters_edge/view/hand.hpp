@@ -48,14 +48,17 @@
 // ge:keywords cl_gunidle cl_gunidle_rate cl_gunidle_exertion idle-sway breathing breath
 // ge:keywords cl_gunswitch cl_gunswitch_fire switch-speed rushed-raise fire-during-switch
 // ge:keywords r_viewmodelsize r_viewmodeloffset cl_gun_x cl_gun_y cl_gun_z cl_gunfov game_offset_m
+// ge:keywords gun_next gun_prev gun_model add_gun_commands gun-frame-override
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
 #pragma once
 
 #include <span>
 #include <string>
+#include <string_view>
 
 #include "camera/pose.hpp"
+#include "console/console.hpp"
 #include "console/cvar.hpp"
 #include "core/prng.hpp"
 #include "shooters_edge/view/weapons.hpp"
@@ -87,6 +90,11 @@ struct ViewSettings {
   double gun_units[3] = {0, 0, 0};  // cl_gun_x, cl_gun_y, cl_gun_z (Quake II's): right, forward, up
   double gun_fov_h = 0;             // cl_gunfov (Quake II's): degrees across at 4:3 (0: none)
   double unit_m = 0.025;            // a game unit, m (the brush maps')
+  // The developer's look at a weapon (`gun_next`, `gun_prev`, `gun_model`): a frame shown in place
+  // of the one the game asks (0: the game's) and a weapon of the game's set shown in place of the
+  // one held (-1: the game's). Neither is a setting: nothing saves them.
+  int gun_frame = 0;
+  int gun_model = -1;
 };
 
 // The side the weapon is drawn on: 0 not drawn, 1 right, -1 mirrored to the left. `cl_gun` 1
@@ -119,6 +127,12 @@ inline constexpr double kDeathLowerS = 0.6;
 // and lifted until its body shows; its muzzle still sits under the crosshair, not on it.
 inline constexpr double kCentreRiseM = 0.01;
 inline constexpr double kCentreNearM = 0.06;
+
+// `gun_next` and `gun_prev` (the frame shown, one on or back, held at 0; each says "frame <n>") and
+// `gun_model <name>` (the weapon of `held` named `models/<name>/tris.md2` shown in hand; no name:
+// the game's again), over `out`. `held` must outlive the console (a game's static list).
+void add_gun_commands(ge::console::Console& con, ViewSettings& out,
+                      std::span<const std::string_view> held);
 
 // The player's view-model cvars, bound to `out`.
 void add_view_cvars(ge::console::Cvars& cvars, ViewSettings& out);

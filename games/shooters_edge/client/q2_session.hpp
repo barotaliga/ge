@@ -14,6 +14,11 @@
 // `cl_autopause` 1 (the default, as every other game does) holds a game played alone while the
 // console or a menu is up; 0 lets it run on.
 //
+// THE MOVE RATE ROUNDED: moves go whole milliseconds apart, so a `cl_maxfps` that is not 1000 over
+// a whole number of them (120: 8 ms, so 125) is rounded up; set in a game, the player is told
+// ("cl_maxfps value 120 is inexact and will be rounded to 125.") unless `cl_warn_on_fps_rounding`
+// is 0, and the first time how to turn that off. 0 (the most) never warns.
+//
 // THE STATE, read-only: `cl_running` 1 (the client is up), `cl_paused` 1 while the game this
 // window runs is paused, `sv_running` 1 while it runs a server, `sv_paused` 1 while that is paused.
 //
@@ -29,12 +34,14 @@
 // ge:summary Quake II's session settings: the map commands, the game clock, the state cvars
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd auto-record map-change timescale
 // ge:keywords fixedtime cl_running cl_paused sv_running sv_paused read-only q2_session_step
+// ge:keywords cl_warn_on_fps_rounding fps-rounding inexact
 // ge:keywords cl_autopause cl_thirdperson cl_thirdperson_angle cl_thirdperson_range
 // ge:keywords third-person chase-camera view_behind in_grab q2_takes_mouse
 // ge:skill console shooter
 // ge:test tests/shooters_edge_q2_session_test.cpp
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -60,6 +67,9 @@ struct Q2Session {
   bool third_person = false;   // cl_thirdperson (a cheat)
   double third_angle = 0;      // cl_thirdperson_angle, degrees round the player
   double third_range = 60;     // cl_thirdperson_range, units behind him
+  bool warn_fps = true;        // cl_warn_on_fps_rounding
+  uint32_t fps_seen = 0;       // cl_maxfps's revision when it was last checked
+  bool fps_told = false;       // how to turn the warning off said once
   int grab = 1;                // in_grab: 0 never in a window, 1 and 2 as ours
   // What the last frame saw: in a game, its map ("" while it loads), the state cvars' values.
   bool joined = false;
@@ -69,6 +79,11 @@ struct Q2Session {
 
 // Quake II's session cvars on `v`, bound to `s` (the read-only ones added, set by the frames).
 void add_q2_session_cvars(ge::console::Cvars& v, Q2Session& s);
+
+// The moves a second `cl_maxfps` `fps` gives (held to 10..125, whole milliseconds apart); 0: 0.
+int q2_fps_rounded(int fps);
+// The warning above, once per change of `cl_maxfps` while in a game (q2_session_step calls it).
+void q2_fps_warning(ge::console::Console& con, Q2Session& s);
 
 // The game's step for one frame of `wall` seconds: host_framerate's seconds when set, else
 // fixedtime's milliseconds when set, else `wall`; times timescale.

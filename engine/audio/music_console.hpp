@@ -9,9 +9,17 @@
 // `menu_track` (a game's own setting bound to it, 0 none) is the track `play_menu_music` starts
 // while no game runs.
 //
-// ge:summary The music's console for any game: bgmvolume, cd play/loop/stop/pause/resume/info
+// THE PLAYER'S BUTTONS (`music`, which a game may also spell its own way): `music info` names the
+// track playing ("Playback stopped." when none), `music play <n> [soft]` plays track n once through
+// and then the level's own track again (soft: without cutting the one playing first), `music stop`,
+// `music next` (the level's track from its start, or the next shuffled one) and `music pause [0|1]`
+// (`toggle` the same: without a number it flips). Refusals: "Usage: music <info|play|stop|next|
+// pause>", "Usage: music play <track>", "No such track: <n>".
+//
+// ge:summary The music's console for any game: bgmvolume, cd play/loop/stop/pause/resume/info,
+// ge:summary music info/play/stop/next/pause
 // ge:keywords music bgmvolume cd cdtrack console track level-music play loop pause resume
-// ge:keywords shuffle menu-track play_menu_music
+// ge:keywords shuffle menu-track play_menu_music music-command ogg manual-track toggle
 // ge:skill audio console
 // ge:test tests/audio_music_test.cpp
 #pragma once
@@ -35,6 +43,7 @@ struct MusicConsole {
   bool shuffle = false;                      // every track in a random order (a game's switch)
   int menu_track = 0;                        // the track while no game runs (0 none)
   int menu_played = 0;                       // play_menu_music's: the menu track started
+  int manual = 0;  // `music play`'s track, playing once through (0 none: the level's)
   core::Rng shuffle_rng = core::make_rng(0x5eed7ac);
 };
 
