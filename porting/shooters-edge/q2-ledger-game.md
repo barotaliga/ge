@@ -12,19 +12,19 @@ q2-sp-gaps.md).
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client commands (what a player types; the game library answers them) | 34 | 1 | 0 | 2 | 37 |
+| Client commands (what a player types; the game library answers them) | 35 | 0 | 0 | 2 | 37 |
 | Server commands (`sv <word>` typed at the server console) | 2 | 4 | 0 | 0 | 6 |
-| Cvars the game library registers or reads | 38 | 8 | 0 | 0 | 46 |
+| Cvars the game library registers or reads | 40 | 6 | 0 | 0 | 46 |
 | User info keys the game reads | 9 | 0 | 0 | 0 | 9 |
 | dmflags bits | 16 | 0 | 0 | 0 | 16 |
 | Items (the item list, in its order; each is also a spawnable classname) | 42 | 0 | 0 | 0 | 42 |
-| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 82 | 1 | 0 | 0 | 83 |
+| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 83 | 0 | 0 | 0 | 83 |
 | Monsters | 26 | 0 | 0 | 0 | 26 |
 | Player messages (printed, broadcast and centre-printed) | 78 | 1 | 0 | 2 | 81 |
-| Server console lines (what an admin reads; `dprintf`) | 34 | 2 | 0 | 2 | 38 |
+| Server console lines (what an admin reads; `dprintf`) | 36 | 0 | 0 | 2 | 38 |
 | Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 17 | 0 | 0 | 0 | 17 |
 | Rules a player sees (behaviour not in a row above) | 44 | 0 | 0 | 0 | 44 |
-| **all** | 422 | 17 | 0 | 6 | 445 |
+| **all** | 428 | 11 | 0 | 6 | 445 |
 
 ## Client commands (what a player types; the game library answers them)
 
@@ -72,7 +72,7 @@ count: done 17, partial 13, missing 7, not-taken 0
 | cmd.prefweap | `prefweap <classname...>` | switches to the first listed weapon held with ammo; usage line | done | `games/shooters_edge/server/q2_commands.cpp` (`weapon_list`) |
 | cmd.chat-fallback | any other word | the whole line said as chat (not during the intermission) | done | q2_commands.cpp |
 | cmd.intermission-gate | the intermission's five | only players, say, say_team, score, help answered during the intermission | done | q2_commands.cpp `commands_in_intermission` |
-| cmd.cheat-gate | the cheat gate | give, god, notarget, noclip, teleport, spawnentity, spawnonstart, listentities refused in deathmatch AND co-op unless `cheats` | partial | q2_commands.cpp gates deathmatch and co-op with the game's line; teleport, spawnentity, spawnonstart, listentities missing (R28) |
+| cmd.cheat-gate | the cheat gate | give, god, notarget, noclip, teleport, spawnentity, spawnonstart, listentities refused in deathmatch AND co-op unless `cheats` | done | q2_commands.cpp `cheats_allowed` gates give, god, notarget, noclip, teleport and listentities in deathmatch and co-op with the game's line; spawnentity and spawnonstart are not in this game (not taken rows) |
 | cmd.spectator-jump | jump / attack as a spectator | attack starts/stops chasing, jump steps the chase target | done | q2_spectate.cpp, q2_screens.cpp |
 
 ## Server commands (`sv <word>` typed at the server console)
@@ -105,7 +105,7 @@ count: done 29, partial 10, missing 7, not-taken 0
 | cvar.sv_maxvelocity | `sv_maxvelocity` 2000 | per-axis speed cap for thrown and falling things | done | q2_commands.cpp |
 | cvar.sv_gravity | `sv_gravity` 800 | gravity; reset to 800 or the world's `gravity` key at each map | done | q2_targets.cpp, q2_server.cpp (world 9) |
 | cvar.dedicated | `dedicated` 0 (N) | read to know whether the server has a local player | done | q2_native.cpp; our rules know it from the host |
-| cvar.cheats | `cheats` 0 (SI, L) | allows the cheat commands in deathmatch and co-op | partial | q2_commands.cpp gates deathmatch and co-op; not latched |
+| cvar.cheats | `cheats` 0 (SI, L) | allows the cheat commands in deathmatch and co-op | done | q2_commands.cpp: server info, latched; q2_server.cpp applies latched settings as each map starts |
 | cvar.gamename | `gamename` baseq2 (SI, L) | the game's name in the server info, for browsers | done | q2_commands.cpp: baseq2, server info, latched |
 | cvar.gamedate | `gamedate` build date (SI, L) | the build date in the server info | done | q2_commands.cpp: server info, latched; a fixed date so every build serves the same info |
 | cvar.maxclients | `maxclients` 4 (SI, L) | player slots; forced to at least 1 | partial | net/q2_net_server.hpp default 8 (S35); q2_native.cpp passes it to a library |
@@ -118,7 +118,7 @@ count: done 29, partial 10, missing 7, not-taken 0
 | cvar.maxentities | `maxentities` 1024 (L) | the entity slots | partial | q2_commands.cpp: 1024, latched, kept for configs; this server sizes itself to the map and caps nothing |
 | cvar.g_footsteps | `g_footsteps` 1 (A) | when players' footsteps sound | done | q2_commands.cpp |
 | cvar.g_monsterfootsteps | `g_monsterfootsteps` 0 (A) | monsters' footsteps | done | q2_commands.cpp, q2_monster_steps.cpp |
-| cvar.g_fix_triggered | `g_fix_triggered` 0 | a monster waiting for a trigger nothing names stands from the start (and the console note `fixed TRIGGERED flag on ...`) | partial | q2_commands.cpp, q2_monsters.cpp; the console note is missing (see msg table) |
+| cvar.g_fix_triggered | `g_fix_triggered` 0 | a monster waiting for a trigger nothing names stands from the start (and the console note `fixed TRIGGERED flag on ...`) | done | q2_commands.cpp, q2_monsters.cpp; the reference game has neither this setting nor a line for it, so ours prints none (the trigger_once line is con.fixed-triggered) |
 | cvar.g_commanderbody_nogod | `g_commanderbody_nogod` 0 (A) | the commander's body may be shot apart | done | q2_commands.cpp |
 | cvar.dmflags | `dmflags` 0 (SI) | deathmatch rule bits (table below) | partial | q2_server.cpp; not in our server info (S27); bits: dmf table |
 | cvar.fraglimit | `fraglimit` 0 (SI) | frags that end the level, `Fraglimit hit.` | partial | q2_server.cpp, q2_fight.cpp; not in our server info (S27) |
@@ -307,7 +307,7 @@ count: done 73, partial 7, missing 1, not-taken 0
 | ent.target_character | target_character | one digit of a target_string | done | q2_targets.cpp |
 | ent.target_string | target_string | shows text on target_characters | done | q2_targets.cpp |
 | ent.worldspawn | worldspawn | sky, skyaxis, skyrotate, sounds/music (CD track), gravity, message (level name), nextmap; the status bar; precaches | done | `games/shooters_edge/server/q2_server.cpp` |
-| ent.viewthing | viewthing | developer: an animating model, `viewthing spawned` on the console | partial | q2_lines.cpp says `viewthing spawned`; no model drawn |
+| ent.viewthing | viewthing | developer: an animating model, `viewthing spawned` on the console | done | q2_targets.cpp: the banner model's frames 0-6 looped at 10 a second from half a second in, a 32x32x56 solid box; q2_lines.cpp says `viewthing spawned` |
 | ent.light | light | toggled light styles (start off) | done | q2_targets.cpp (world 23) |
 | ent.light_mine1 | light_mine1 | mine lamp model | done | q2_targets.cpp (world 25) |
 | ent.light_mine2 | light_mine2 | mine lamp model | done | q2_targets.cpp |
@@ -475,7 +475,7 @@ count: done 1, partial 1, missing 34, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| con.startup | `Game is starting up.` / `Game is <name> built on <date>.` / `==== ShutdownGame ====` | library start and end | partial | q2_server.cpp `==== InitGame ====` when the rules are made; no ShutdownGame line |
+| con.startup | `Game is starting up.` / `Game is <name> built on <date>.` / `==== ShutdownGame ====` | library start and end | done | q2_server.cpp `==== InitGame ====` when the rules are made; net/q2_game.cpp `==== ShutdownGame ====` on quit and restart, printed by engine/server/main.cpp's last drain |
 | con.no-spawn | `<class> doesn't have a spawn function` | unknown classname | done | q2_lines.cpp: `<class> doesn't have a spawn function` (and `ED_CallSpawn: NULL classname`), the entity removed; the class list is the game's spawn table and item list |
 | con.not-field | `'<key>' is not a field. Value is '<value>'` | unknown entity key | done | q2_lines.cpp key_lines: `ED_ParseEdict: <key> is not a field`, keys matched ignoring case, `_` keys passed over, inhibited entities too |
 | con.incomplete-field | `<func>: entity <n>: incomplete '<key>' field` | a vector key with fewer than three numbers | done | q2_lines.cpp key_lines: `ED_ParseField: couldn't parse '<key>'` for a vector key short of three numbers |
@@ -498,7 +498,7 @@ count: done 1, partial 1, missing 34, not-taken 0
 | con.timer | `func_timer at <pos> has random >= wait` | done | q2_lines.cpp |
 | con.combattarget | `<class> at <pos>, combattarget <t> not found` | done | q2_lines.cpp q2_lost_combat on a monster's first enemy: the pick line, then the line, once |
 | con.picktarget | `G_PickTarget called with NULL targetname`, `G_PickTarget: target <t> not found` | done | q2_lines.cpp q2_pick_missing before the train, elevator, turret, combat point, combattarget and monster target lines |
-| con.usetargets | `Think_Delay with no activator`, `entity was removed while using killtargets`, `WARNING: <class> used itself.`, `entity was removed while using targets` | partial | q2_map.cpp `WARNING: Entity used itself.` and both removed-while-using lines; `Think_Delay with no activator` not yet |
+| con.usetargets | `Think_Delay with no activator`, `entity was removed while using killtargets`, `WARNING: <class> used itself.`, `entity was removed while using targets` | done | q2_map.cpp `WARNING: Entity used itself.`, both removed-while-using lines, and `Think_Delay with no activator` when a use with nobody (kNoActivator: a blocked door's way back, a self-started clock) is put off |
 | con.speaker | `target_speaker with no noise set at <pos>` | done | q2_lines.cpp |
 | con.no-message | `<class> with no message at <pos>` | target_help | done | q2_map.cpp |
 | con.no-map | `target_changelevel with no map at <pos>` | done | q2_lines.cpp |

@@ -241,6 +241,21 @@ TEST(the_cheats_are_refused_in_deathmatch_without_cheats) {
   CHECK(single->p(0).notarget);
 }
 
+TEST(cheats_set_during_a_map_wait_for_the_next) {
+  auto g = game("1");
+  run(*g, 10);
+  g->r.console("cheats 1");
+  g->r.client_command(0, "god");
+  CHECK(!g->p(0).god);  // still refused on this map
+  CHECK(g->s().cvars.find("cheats")->integer() == 0);
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = hall();
+  std::string error;
+  CHECK_MSG(g->r.start(map, error), error);
+  CHECK(g->s().cvars.find("cheats")->integer() == 1);
+}
+
 TEST(god_takes_no_harm_but_the_push_lands_and_kill_clears_it) {
   auto g = game("0", 1);
   run(*g, 10);

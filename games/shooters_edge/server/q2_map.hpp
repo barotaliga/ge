@@ -70,8 +70,12 @@ void map_frame(Q2Server& s);
 // leans on (a door's message).
 void map_touch(Q2Server& s, int slot);
 
+// An activator that is nobody at all: not a player (-1 is that) and not the entity firing. A
+// put-off use handed it says `Think_Delay with no activator` on the console.
+inline constexpr int kNoActivator = -1000;
+
 // Uses entity `e`'s targets (its delay, message, killtarget and targets), `activator` a player's
-// slot or -1.
+// slot, -1 or kNoActivator.
 void map_use_targets(Q2Server& s, int e, int activator);
 
 // Monster `entity` (alive) touching the map: a door's touch field opens the door, unless it says
