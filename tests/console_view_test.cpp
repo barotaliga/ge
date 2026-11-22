@@ -475,3 +475,30 @@ TEST(con_scroll_brings_the_newest_lines_back_on_a_new_line_or_a_key) {
   v.key(EditKey::left);
   CHECK(v.scroll() == 0);
 }
+
+// A game's stamps: each line added while they are on keeps the time apart from its text; condump
+// writes it, the text and its search never hold it.
+TEST(stamps_keep_the_time_beside_each_line) {
+  Console c;
+  ConsoleView v(c);
+  v.add(LineKind::output, "before");
+  CHECK(v.lines().back().stamp.empty());
+  v.stamps = true;
+  v.stamp_format = "<%Y>";
+  v.add(LineKind::output, "two\nlines");
+  CHECK(v.lines().back().text == "lines" && v.lines().back().stamp.size() == 6);
+  CHECK(v.lines().back().stamp.front() == '<' && v.lines()[1].stamp == v.lines().back().stamp);
+  v.stamp_format.clear();  // no form: no stamp
+  v.add(LineKind::output, "bare");
+  CHECK(v.lines().back().stamp.empty());
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge_stamp_dump_test";
+  std::filesystem::remove_all(dir);
+  v.set_dump_folder(dir.string());
+  c.execute("condump stamped");
+  c.run();
+  std::ifstream in(dir / "stamped.txt");
+  std::string all((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  CHECK(all.find(v.lines()[2].stamp + "lines\n") != std::string::npos);
+  CHECK(all.find("before\n") != std::string::npos);
+  std::filesystem::remove_all(dir);
+}

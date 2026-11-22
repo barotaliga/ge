@@ -91,6 +91,10 @@ struct ViewLine {
   std::string text;
   double time_s = 0;  // the view's clock when it came
   uint64_t n = 0;     // its number, counted from the view's first line
+  // The local time it came, as `ConsoleView::stamp_format` wrote it when stamps were on ("":
+  // none): drawn before the text in `stamp_colour` on the console (not on the notify lines) and
+  // written by condump, but no part of `text` (search and selection never see it).
+  std::string stamp;
 };
 
 // A place in the scrollback: a line by its number (ViewLine::n) and a byte in its text.
@@ -243,6 +247,13 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   // A game's own setting for what a line typed without a slash is, in its order: 0 a command, 1
   // said to everyone, 2 said to the team; -1 (none): con_chat rules.
   int game_chat = -1;
+  // A game's stamps on every line (Quake II's `con_timestamps`, `con_timestampsformat`,
+  // `con_timestampscolor`): on, each line added from then on keeps the local time in
+  // `stamp_format` (strftime's words; "" none) as its `stamp`, drawn in `stamp_colour`
+  // (ui/paint.hpp's colour_from_text; light grey when it does not read).
+  bool stamps = false;
+  std::string stamp_format = "%H:%M:%S ";
+  std::string stamp_colour = "#aaa";
   // What a line typed without a slash is now, in con_chat's values (3: said to the team).
   int chat_mode() const;
   // Where `condump` writes ("": it refuses, saying so).

@@ -8,6 +8,7 @@
 #include "ui/paint.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "core/libm/libm.hpp"
@@ -17,6 +18,39 @@ namespace ge::ui {
 Color lerp(Color a, Color b, float t) {
   return {a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t,
           a.a + (b.a - a.a) * t};
+}
+
+bool colour_from_text(std::string_view text, Color& out) {
+  static constexpr std::array<std::string_view, 8> kNames{"black", "red",  "green",   "yellow",
+                                                          "blue",  "cyan", "magenta", "white"};
+  static constexpr std::array<uint32_t, 8> kRgb{0x000000, 0xff0000, 0x00ff00, 0xffff00,
+                                                0x0000ff, 0x00ffff, 0xff00ff, 0xffffff};
+  for (size_t i = 0; i < kNames.size(); ++i)
+    if (text == kNames[i] || (text.size() == 1 && text[0] == static_cast<char>('0' + i))) {
+      out = hex(kRgb[i]);
+      return true;
+    }
+  if (text.empty() || text[0] != '#') return false;
+  const std::string_view digits = text.substr(1);
+  if (digits.size() != 3 && digits.size() != 6 && digits.size() != 8) return false;
+  uint32_t v = 0;
+  for (const char c : digits) {
+    const int d = c >= '0' && c <= '9'   ? c - '0'
+                  : c >= 'a' && c <= 'f' ? c - 'a' + 10
+                  : c >= 'A' && c <= 'F' ? c - 'A' + 10
+                                         : -1;
+    if (d < 0) return false;
+    v = v * 16 + static_cast<uint32_t>(d);
+  }
+  uint32_t a = 0xff;
+  if (digits.size() == 3)  // each digit twice
+    v = ((v >> 8) & 0xf) * 0x110000 + ((v >> 4) & 0xf) * 0x1100 + (v & 0xf) * 0x11;
+  if (digits.size() == 8) {
+    a = v & 0xff;
+    v >>= 8;
+  }
+  out = hex(v, static_cast<float>(a) / 255.0f);
+  return true;
 }
 
 namespace {
