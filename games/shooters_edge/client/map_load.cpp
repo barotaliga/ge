@@ -104,6 +104,7 @@ void load_map(MapLoad& l, const SearchPath& files, const std::string& name, doub
   l.what = name;
   l.since_s = now_s;
   l.began = std::chrono::steady_clock::now();
+  l.plaque_gone = false;
   l.map = std::async(std::launch::async, read_map, &files, l.remix, name);
 }
 
@@ -117,6 +118,7 @@ void load_world(MapLoad& l, const SearchPath& files, const LoadedMap& map,
     l.what = map.name;
     l.since_s = now_s;
     l.began = std::chrono::steady_clock::now();
+    l.plaque_gone = false;
   }
   // The thread's own copies: the map's bytes (the server keeps its own map), the names.
   auto copy = std::make_shared<LoadedMap>();
@@ -186,6 +188,10 @@ int take_load(MapLoad& l, const LoadWindow& at, Listen& listen, ge::console::Con
               bool measured, double now_s, WorldDrawPtr& world, bool& current, bool& fresh) {
   namespace out = ge::core::output;
   fresh = false;
+  if (busy(l) && listen.campaign_host && !l.plaque_gone && now_s - l.since_s >= kPlaqueMostS) {
+    l.plaque_gone = true;
+    con.print("Loading plaque timed out.");
+  }
   while (busy(l)) {
     LoadStep step =
         step_load(l, *at.device, at.width, at.height, at.format, *at.picture, at.weapons, measured);
@@ -254,7 +260,7 @@ void cancel_load(MapLoad& l) {
 void draw_loading(ge::ui::DrawList& dl, const MapLoad& load, const Listen& l,
                   const shooters_edge::menu::ClassicArt& art, int w, int h, double now_s) {
   if (!busy(load)) return;
-  if (l.campaign_host && art.find("loading") != nullptr) {
+  if (l.campaign_host && !load.plaque_gone && art.find("loading") != nullptr) {
     shooters_edge::menu::draw_plaque(dl, art, w, h, "loading");
     return;
   }

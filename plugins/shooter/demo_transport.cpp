@@ -58,10 +58,14 @@ double parse_tenths_clock(const std::string& text) {
 namespace {
 
 // Quake II's `seek [+-]<timespec|percent>[%]` into the asks (parse_tenths_clock).
-void q2_seek(console::Console& c, DemoTransport& p, const console::Args& a) {
+void q2_seek(console::Console& c, DemoTransport& p, const console::Args& a, bool playing) {
   const std::string w = a.size() > 1 ? a[1] : "";
   if (a.size() != 2 || w.empty()) {
     c.print("Usage: seek [+-]<timespec|percent>[%]");
+    return;
+  }
+  if (!playing) {
+    c.print("Not playing a demo.");
     return;
   }
   const bool rel = w[0] == '+' || w[0] == '-';
@@ -124,11 +128,11 @@ void add_demo_transport(console::Console& console, DemoTransport& p, const DemoC
                       });
   console.add_command("demo_jump",
                       "demo_jump [+|-][m:]<s>: the demo playing to a time, or on or back by one",
-                      [&p](Con& c, const CArgs& a) {
+                      [&p, calls](Con& c, const CArgs& a) {
                         if (a[0].size() == 4 && (a[0][0] | 0x20) == 's' &&
                             (a[0][1] | 0x20) == 'e' && (a[0][2] | 0x20) == 'e' &&
                             (a[0][3] | 0x20) == 'k') {  // Quake II's spelling takes its own forms
-                          q2_seek(c, p, a);
+                          q2_seek(c, p, a, !calls.playing || calls.playing());
                           return;
                         }
                         const std::string w = a.size() > 1 ? a[1] : "";

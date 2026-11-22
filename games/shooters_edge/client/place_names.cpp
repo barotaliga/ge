@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_place_names_test.cpp
 #include "shooters_edge/client/place_names.hpp"
 
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <system_error>
@@ -94,6 +95,23 @@ void map_started(PlaceNames& p, const GameAdapter& adapter, const SearchPath& fi
   }
 }
 
+bool place_markers(const PlaceNames& p, double t, std::vector<PlaceMarker>& out) {
+  out.clear();
+  sh::Vec3f me;
+  if (p.draw == nullptr || !p.draw->on() || !p.where || !p.where(me)) return false;
+  const float range = range_of(p);
+  const ge::classic::Loc* near = ge::classic::nearest_loc(p.locs, me, range, sight_of(p));
+  if (near == nullptr) return false;
+  for (const ge::classic::Loc& c : p.locs.points) {
+    const float dx = c.at.x - me.x, dy = c.at.y - me.y, dz = c.at.z - me.z;
+    if (range > 0 && static_cast<int>(std::sqrt(dx * dx + dy * dy + dz * dz)) > range) continue;
+    PlaceMarker m{.at = c.at, .light = c.at, .nearest = &c == near};
+    if (m.nearest) m.at.z += static_cast<float>(10 * std::sin(t * 10));
+    out.push_back(m);
+  }
+  return true;
+}
+
 std::string place_at(const PlaceNames& p, sh::Vec3f at) {
   std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
   if (name.empty()) name = p.someplace != nullptr ? p.someplace->value : "someplace";
@@ -148,6 +166,12 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
                     .flags = con::kArchive,
                     .help = "1: a place's point behind a wall is not where you are",
                     .kind = con::CvarKind::boolean});
+  p.draw = &v.add({.name = "loc_draw",
+                   .fallback = "0",
+                   .flags = con::kArchive,
+                   .help = "1: a marker stands at every place point within reach, the nearest "
+                           "bobbing in a white light",
+                   .kind = con::CvarKind::boolean});
   // The place macros, in every game (Quake II's client brought them): where the player is and
   // where the view looks, `unknown` when no place is within reach or no game is playing.
   {
@@ -202,6 +226,21 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
          p.locs.points.clear();
          c.print("Cleared " + std::to_string(n) + " places.");
        });
+  // The points no spot needs: each one whose going leaves every spot in the map named the same.
+  const auto prune = [&p](con::Console& c, const CArgs&) {
+    const std::vector<sh::Vec3f> spots = p.spots ? p.spots() : std::vector<sh::Vec3f>{};
+    if (spots.empty()) {
+      c.print("You need to be in a game to tidy the places.");
+      return;
+    }
+    const size_t was = p.locs.points.size();
+    const int gone = ge::shooter::prune_locs(p.locs, spots, range_of(p), sight_of(p));
+    c.print("Took out " + std::to_string(gone) + " of " + std::to_string(was) +
+            " places that named nowhere new; " + std::to_string(p.locs.points.size()) +
+            " left. Save them with saveloc.");
+  };
+  both("locations_prune", "pruneloc",
+       "locations_prune: take out every place whose going changes no spot's name", prune);
   const auto save = [&p](con::Console& c, const CArgs& a) {
     if (a.size() != 2) {
       c.print("Usage: saveloc <name>");
@@ -271,8 +310,8 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
     return false;
   };
   con.add_command(
-      "loc", "loc: the place you are in; loc add|del|set|list|save edits the places",
-      [&p, in_game, add, remove, save](con::Console& c, const CArgs& a) {
+      "loc", "loc: the place you are in; loc add|del|set|list|save|prune edits the places",
+      [&p, in_game, add, remove, save, prune](con::Console& c, const CArgs& a) {
         const std::string sub = a.size() > 1 ? lower(a[1]) : "";
         const auto shifted = [&a](const char* name, bool joined) {
           CArgs b = a;
@@ -314,12 +353,14 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
             c.print((l.raw.empty() ? l.name : l.raw) + " at " + at_text(l.at));
           c.print(p.locs.points.empty() ? "There are no places on this map."
                                         : std::to_string(p.locs.points.size()) + " places.");
+        } else if (sub == "prune") {
+          prune(c, a);
         } else if (sub == "save") {
           CArgs b = shifted("saveloc", false);
           if (b.size() < 2) b.words.push_back(p.map);
           save(c, b);
         } else {
-          c.print("Usage: loc, or loc add|del|set|list|save");
+          c.print("Usage: loc, or loc add|del|set|list|save|prune");
         }
       });
 }

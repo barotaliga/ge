@@ -364,7 +364,7 @@ void add_first(con::Console& c, const GameBindings& b) {
 // - its browsers: `ui_sortdemos` (`menu_demo_sort`, by name by default where ours lists the newest
 //   first) and `ui_colorservers` (`sb_colorservers`); its own `ui_sortservers` (one column either
 //   way, in place of `sb_sortservers`) and `ui_pingrate` (from `rate`, in place of
-//   `sb_infospersec`); `ui_scale`, the menus' size.
+//   `sb_infospersec`); `ui_scale`, the menus' size; `al_device` its spelling of `s_device`.
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its whole set of configs run again on a game change (client/install_configs.cpp's
@@ -377,6 +377,19 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .min = -1,
          .max = 65535,
          .values = "-1: any free port (the default); 1..65535: that port"});
+  // Joining an IPv6 server (net/qw_remote.cpp's `own_v6`), the socket on `net_ip6`'s address.
+  v.add({.name = "net_enable_ipv6",
+         .fallback = "1",
+         .help = "Whether the client may join a server by an IPv6 address.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 2,
+         .values = "0: IPv4 only; 1: IPv6 too (the default); 2: the same"});
+  v.add({.name = "net_ip6",
+         .fallback = "",
+         .help = "The IPv6 address on this computer the client sends from when it joins by IPv6.",
+         .kind = con::CvarKind::text,
+         .values = "\"\": any of them (the default); ADDRESS: that one"});
   v.add({.name = "fs_autoexec",
          .fallback = "1",
          .help = "Whether autoexec.cfg runs again after config.cfg when another game is loaded.",
@@ -521,6 +534,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
                    "first; 3: smallest first; -3: largest first; 0: by name",
          .overlap = con::Overlap::same});
   v.add_synonym("ui_sortdemos", "menu_demo_sort");
+  if (v.find("s_device") != nullptr)  // the window's (platform/window_cvars.hpp)
+    v.add_synonym("al_device", "s_device");
   for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)
     v.add({.name = "adr" + std::to_string(k),
            .fallback = "",
@@ -988,15 +1003,15 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
   }
   if (!v.log) v.log = std::make_shared<ConsoleLog>();
   v.log->mode = 0;  // Quake II's logfile and the rest; its file closed by the next line printed
-  v.log->flush = false;
+  v.log->flush = 0;
   if (game.id == "q2") add_console_log_cvars(c.cvars(), *v.log);
   if (!v.log_hooked && c.sink()) {
     v.log_hooked = true;
     c.set_sink([&c, log = v.log, before = c.sink()](std::string_view line) {
-      before(line);
-      if (log->mode > 0 || log->file)
+      if (log->mode > 0 || log->file->file != nullptr)  // its opening or closing shown first
         console_log_line(*log, c.search_path().empty() ? "." : c.search_path().front(), line,
-                         std::time(nullptr));
+                         std::time(nullptr), before);
+      before(line);
     });
   }
   GameBindings bound = b;

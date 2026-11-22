@@ -132,9 +132,12 @@ inline constexpr float kBoxLowUnits = -24, kBoxHighUnits = 32;
 // window after the server's list whether the program precached them or not (a pack without one
 // draws nothing in its place, silently): the explosion's sprite and the three bolts' segments. A
 // placed one's modelindex is the server's list's size plus its slot here (`effect_model`).
-enum class EffectModel : uint8_t { explosion, bolt, bolt2, bolt3 };
-inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr", "progs/bolt.mdl",
-                                                "progs/bolt2.mdl", "progs/bolt3.mdl"};
+// `loc_draw`'s marker is a head: Quake's the player's, Quake II's the ancient head (each game's
+// pack has only its own, so the other draws nothing).
+enum class EffectModel : uint8_t { explosion, bolt, bolt2, bolt3, place_q1, place_q2 };
+inline constexpr const char* kEffectModels[] = {
+    "progs/s_explod.spr", "progs/bolt.mdl",     "progs/bolt2.mdl",
+    "progs/bolt3.mdl",    "progs/h_player.mdl", "models/items/c_head/tris.md2"};
 inline int effect_model(const Listen& l, EffectModel m) {
   return (l.server ? static_cast<int>(l.server->models.size()) : 0) + static_cast<int>(m);
 }

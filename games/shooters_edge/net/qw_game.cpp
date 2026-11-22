@@ -1761,6 +1761,10 @@ void fill_status(const void* g, ge::net::Status& st) {
   }
   if (const std::string mods = mods_info(game.packages); !mods.empty())
     st.keys.emplace_back("*mods", mods);
+  // The classic game the match is of (its content id): the hub draws its map and its board from
+  // that game's files (hub/cards.hpp).
+  const bool q2 = game.rules && (sv::q2_of(game.rules) || sv::native_q2_of(game.rules));
+  st.keys.emplace_back("*game", q2 ? "q2" : "q1");
   if (game.qw) status_players(*game.qw, st.players);
 }
 

@@ -33,6 +33,8 @@
 
 namespace ge::hub {
 
+class Stills;  // stills.hpp
+
 constexpr int kPageRefreshS = 5;
 
 // What a page knows beyond the index: the archive (null when the hub keeps none), the wall
@@ -44,6 +46,8 @@ struct Site {
   std::string host;
   std::string viewer_dir;  // the web viewer's built files (watch.hpp; "" none)
   bool gzip = false;       // the reader takes gzip: a viewer file's `.gz` beside it goes instead
+  // The maps' stills (stills.hpp; null: the cards show the map's hue and an HTML board).
+  const Stills* stills = nullptr;
 };
 
 // Any GET the hub answers: the API under /v1, the archive's paths, a page, the stylesheet, or a
@@ -52,8 +56,9 @@ Answer hub_answer(const Poller& p, const HubSpec& spec, std::string_view target,
                   const Site& site = {});
 
 // The pages one by one (tests and the lab call them).
+// With `stills` each live match's card is its picture (card.hpp) when the game has a board's look.
 std::string servers_page(const Poller& p, const HubSpec& spec, std::string_view mode,
-                         int64_t now_us);
+                         int64_t now_us, const Stills* stills = nullptr);
 std::string players_page(const Poller& p, const HubSpec& spec, int64_t now_us);
 std::string scoreboard_page(const HubSpec& spec, const HubNode& n);
 // The Demos page: the search form, a row a demo (scores folded away until asked), the pages.

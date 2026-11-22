@@ -64,6 +64,9 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Tab in the console | ours: the top suggestion | `com_completion_mode`, `com_completion_treshold`: the shared part, the matches listed (`console/view.hpp`'s `list_mode`) | its own | its own |
 | The server browser's sort and pace | `sb_sortservers` (codes), `sb_infospersec` | `ui_sortservers` (one column either way), `ui_pingrate` (from `rate`) in their place (`menu/servers_page.hpp`'s `game_sort`, `game_ping_rate`) | its own | its own |
 | The menus' size | the largest whole number that fits | `ui_scale` 1..10 that many times (`menu/classic_art.hpp`'s `scale`) | its own | its own |
+| The sound device | `s_device`, `s_devices` lists them (`platform/window_cvars.hpp`, every game) | `al_device` its spelling | the engine's | the engine's |
+| No sound | `s_enable` 0 (`platform/window_cvars.hpp`, every game) | the same | the engine's | the engine's |
+| IPv6 servers | `connect [addr]:port` from an IPv6 socket (`net/qw_remote.cpp`) | `net_enable_ipv6` 0 refuses one, `net_ip6` the socket's address | the same join | the same join |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Command packets | `localid`: a server browser on this machine sends commands that carry it (`net/qw_client.cpp`) | none | its own | its own |
 | Setup figure | the pack's figure in the chosen shirt and pants (`menu/classic_art.cpp`'s `player_in`) | its figure rows (`menu/q2_pages.cpp`) | its own | its own |
@@ -101,6 +104,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | The string commands (`alias_in`, `cvar_in`, `set_bind_str`, `hash` ...), `msg_trigger` levels, `$triggermatch` | Quake's later clients | `engine/console/script_strings.cpp`, `script.cpp` |
 | Alias arguments `$0`, `$@`, `${1-3}`, `%1`; `if ... eq/ne/isin` | Quake II's later client | `engine/console/lex.cpp`, `script.cpp` |
 | The team's `$` macros, `$ledpoint`, `$ledstatus`, the match's `f_` hooks, fake names, flood protection, `cl_nofake`, the sound trigger, `f_version` answers | Quake's later clients | `client/team_macros.hpp`, `team_chat.hpp`, `chat_lines.hpp` (the classic layer) |
+| `loc_draw` markers at the place points, `$cl_surface` | Quake II's later client | `client/place_names.hpp` (`place_markers`), `client/world_fx.cpp`, `client/face_hit.hpp` |
 | Map commands (`cl_beginmapcmd`, `cl_changemapcmd`, `cl_disconnectcmd`), `$loc_here`, `$loc_there` | Quake II's later client | `client/q2_session.hpp` (`add_map_command_cvars`), `place_names.hpp` |
 
 | Drawback left behind | How |

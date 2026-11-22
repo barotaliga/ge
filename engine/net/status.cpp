@@ -17,7 +17,7 @@ namespace {
 
 constexpr uint8_t kMagic[4] = {'g', 'e', 'S', 'T'};
 constexpr uint8_t kAsk = 1, kCookie = 2, kRecord = 3;
-constexpr uint8_t kRecordVersion = 1;
+constexpr uint8_t kRecordVersion = 2;  // 2: a player's colour rows
 constexpr uint8_t kFlagLocked = 1, kFlagTruncated = 2;
 constexpr int64_t kBucketUs = 10000000;  // a cookie's bucket: ten seconds
 constexpr size_t kAskHead = 4 + 1 + 4 + 8 + 8;
@@ -65,7 +65,7 @@ bool read_start(Reader& r, uint8_t& kind) {
 }
 
 size_t player_size(const StatusPlayer& p) {
-  return str_size(p.name, kStatusPlayer) + str_size(p.team, kStatusTeam) + 4 + 2 + 2 + 1 + 4;
+  return str_size(p.name, kStatusPlayer) + str_size(p.team, kStatusTeam) + 4 + 2 + 2 + 1 + 4 + 2;
 }
 size_t team_size(const StatusTeam& t) { return str_size(t.name, kStatusTeam) + 4 + 4; }
 size_t key_size(const std::pair<std::string, std::string>& k) {
@@ -165,6 +165,8 @@ size_t status_write(const Status& s, uint8_t* out, size_t capacity) {
         write_u16(w, p.minutes);
         write_u8(w, p.flags);
         write_u32(w, p.colour);
+        write_u8(w, p.top);
+        write_u8(w, p.bottom);
       });
   section(
       s.teams.size(), 2, [&](size_t i) { return team_size(s.teams[i]); },
@@ -224,6 +226,8 @@ bool status_read(const uint8_t* data, size_t size, Status& s) {
     p.minutes = read_u16(r);
     p.flags = read_u8(r);
     p.colour = read_u32(r);
+    p.top = read_u8(r);
+    p.bottom = read_u8(r);
   }
   s.teams.assign(read_u8(r), {});
   for (StatusTeam& t : s.teams) {

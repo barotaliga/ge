@@ -1,12 +1,10 @@
 // Quake II's console log (console_log.hpp).
 //
-// ge:summary Quake II's console log: the cvars and each printed line appended with its time
+// ge:summary Quake II's console log: the cvars, the log kept to them, each printed line written
 // ge:keywords q2 logfile logfile_flush logfile_name logfile_prefix console-log
 // ge:skill console shooter
 // ge:test tests/shooters_edge_console_log_test.cpp
 #include "shooters_edge/client/console_log.hpp"
-
-#include <system_error>
 
 namespace shooters_edge::client {
 
@@ -19,16 +17,19 @@ void add_console_log_cvars(con::Cvars& v, ConsoleLog& log) {
           .help = "Whether everything the console prints is kept in a log file.",
           .kind = con::CvarKind::integer,
           .min = 0,
-          .max = 2,
-          .values = "0: no log (the default); 1: kept in logs/<logfile_name>.log; 2: kept, each "
-                    "line written at once"},
+          .max = 9,
+          .values = "0: no log (the default); 1: kept in logs/<logfile_name>.log, a new file each "
+                    "time it opens; 2 or more: added to the end of the file"},
          &log.mode);
   v.bind({.name = "logfile_flush",
           .fallback = "0",
           .flags = con::kArchive,
-          .help = "Whether each line of the log file is written at once.",
-          .kind = con::CvarKind::boolean,
-          .values = "0: now and then (the default); 1: each line at once"},
+          .help = "How soon each line of the log file reaches the disk.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 9,
+          .values = "0: now and then (the default); 1: each line at once; 2 or more: nothing held "
+                    "back at all"},
          &log.flush);
   v.bind({.name = "logfile_name",
           .fallback = "console",
@@ -40,45 +41,34 @@ void add_console_log_cvars(con::Cvars& v, ConsoleLog& log) {
   v.bind({.name = "logfile_prefix",
           .fallback = "[%Y-%m-%d %H:%M] ",
           .flags = con::kArchive,
-          .help = "The time written before each line of the log file.",
+          .help = "What is written before each line of the log file.",
           .kind = con::CvarKind::text,
-          .values = "TEXT: a time pattern, %Y-%m-%d the date and %H:%M:%S the time "
-                    "([%Y-%m-%d %H:%M] the default); \"\": none"},
+          .values = "TEXT: a time pattern, %Y-%m-%d the date and %H:%M:%S the time, <?> the "
+                    "line's kind and @ the seconds ([%Y-%m-%d %H:%M] the default); \"\": none"},
          &log.prefix);
 }
 
-bool console_log_line(ConsoleLog& log, const std::filesystem::path& dir, std::string_view line,
-                      std::time_t now) {
-  if (log.mode <= 0 || log.name.empty()) {
-    log.file.reset();
-    log.open_path.clear();
-    return true;
-  }
-  const std::filesystem::path path = dir / "logs" / (log.name + ".log");
-  if (!log.file || path != log.open_path) {
-    log.file.reset();
-    std::error_code ec;
-    std::filesystem::create_directories(path.parent_path(), ec);
-    std::FILE* f = std::fopen(path.string().c_str(), "ab");
-    if (f == nullptr) return false;
-    log.file = std::shared_ptr<std::FILE>(f, [](std::FILE* p) { std::fclose(p); });
-    log.open_path = path;
-  }
-  char stamp[128] = {};
-  if (!log.prefix.empty()) {
-    std::tm parts{};
+void console_log_line(ConsoleLog& log, const std::filesystem::path& dir, std::string_view line,
+                      std::time_t now, const std::function<void(std::string_view)>& show) {
+  std::tm parts{};
 #if defined(_WIN32)
-    localtime_s(&parts, &now);
+  localtime_s(&parts, &now);
 #else
-    localtime_r(&now, &parts);
+  localtime_r(&now, &parts);
 #endif
-    if (std::strftime(stamp, sizeof stamp, log.prefix.c_str(), &parts) == 0) stamp[0] = 0;
+  std::string said;
+  ge::server::console_log_update(*log.file, log.name.empty() ? 0 : log.mode, dir.string(), log.name,
+                                 log.flush, said);
+  for (size_t at = 0; at < said.size();) {
+    const size_t end = said.find('\n', at);
+    const std::string_view one(said.data() + at,
+                               (end == std::string::npos ? said.size() : end) - at);
+    if (show) show(one);
+    if (one != "Closing console log.")  // the closed file had it; the new one starts with its own
+      ge::server::console_log_line(*log.file, log.prefix, one, parts);
+    at = end == std::string::npos ? said.size() : end + 1;
   }
-  std::fputs(stamp, log.file.get());
-  std::fwrite(line.data(), 1, line.size(), log.file.get());
-  std::fputc('\n', log.file.get());
-  if (log.mode >= 2 || log.flush) std::fflush(log.file.get());
-  return true;
+  ge::server::console_log_line(*log.file, log.prefix, line, parts);
 }
 
 }  // namespace shooters_edge::client

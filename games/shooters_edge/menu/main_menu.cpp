@@ -200,6 +200,13 @@ constexpr Entry kEntries[] = {
      .hint = "The map the match starts on.",
      .needs = "map"},
     {.page = "host",
+     .id = "hostname",
+     .text = "HOST NAME",
+     .hint = "The server's name in the server lists. Type \"sv hostname <name>\" in the console.",
+     .line = "toggleconsole",
+     .needs = "hostname",
+     .closes = true},
+    {.page = "host",
      .id = "server",
      .text = "SERVER",
      .kind = ItemKind::choice,
@@ -1162,8 +1169,7 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
           if (it.choices[i] == was) it.choice = static_cast<int>(i);
         continue;
       }
-      if (e->id == "name" || e->id == "hostname" ||
-          e->page == "addresses") {  // a text cvar shown beside its row
+      if (e->id == "name" || e->id == "hostname" || e->page == "addresses") {  // a text cvar
         const std::string name = host_value(host, e->needs);
         it.text = name.empty() ? std::string(e->text) : std::string(e->text) + "  " + name;
         continue;

@@ -126,6 +126,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
       // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
       f.features.set(sb::Feature::locked, false);
       hunt_init(f, s);
+      f.ledge_guard = true;  // a fall into a pit with no way out ends his map
       m.way.complete = opt.complete;
       m.way.toured = opt.tour;
       // The last quarter of the map's time is for the way out: a map he cannot clear still ends.

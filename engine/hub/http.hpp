@@ -29,6 +29,8 @@
 
 namespace ge::hub {
 
+class Stills;  // stills.hpp
+
 constexpr size_t kMaxRequest = 8192;             // a request's head: more is refused (431)
 constexpr int64_t kRequestTimeoutUs = 10000000;  // a request not whole by then: closed
 constexpr int64_t kEventPingUs = 15000000;       // an open event stream's comment line
@@ -84,6 +86,7 @@ struct HttpServer {
   std::string viewer_dir;                // the web viewer's files (watch.hpp; "" none)
   account::Service* accounts = nullptr;  // the account service the Account page works (null: none)
   const Results* results = nullptr;      // the classic servers' results (null: none read)
+  const Stills* stills = nullptr;        // the maps' stills (stills.hpp; null: none drawn)
   int64_t unix_s = 0;                    // the wall clock's time, set by the process each turn
 };
 
