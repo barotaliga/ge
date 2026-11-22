@@ -21,6 +21,8 @@
 #include "console/clock_macros.hpp"
 #include "core/num.hpp"
 #include "net/address.hpp"
+#include "net/net_commands.hpp"
+#include "net/rates.hpp"
 #include "net/udp_socket.hpp"
 #include "server/accounts.hpp"
 #include "server/admin.hpp"
@@ -446,6 +448,14 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   };
   con.add_command("quit", "quit [reason]: end the server; every player is told and dropped",
                   [&](console::Console&, const console::Args& a) { ask_quit(a, false); });
+  // `dns` and `net_stats` over the server's socket; `$net_uprate` and `$net_dnrate`, the bytes a
+  // second it sent and received over the last three seconds.
+  gn::add_net_commands(con, [&]() -> const gn::Transport* { return c.offline ? nullptr : &sock; });
+  gn::Rates rates;
+  con.add_macro("net_uprate",
+                [&] { return std::to_string(static_cast<int64_t>(rates.sent_bytes)); });
+  con.add_macro("net_dnrate",
+                [&] { return std::to_string(static_cast<int64_t>(rates.received_bytes)); });
   // `$com_maplist`: the maps the game finds, by name ignoring case, each once, by single spaces.
   con.add_macro("com_maplist", [&] {
     std::vector<std::string> maps;
@@ -584,6 +594,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
       rec_write();
     }
     hand_record_frame(hand, s);
+    if (!c.offline) gn::rates_step(rates, static_cast<double>(s.now_us) / 1e6, sock, 0, 3);
     match_frame();
     if (quit_asked) {
       if (game.quit != nullptr && s.state != nullptr) game.quit(s.state, quit_reason, quit_restart);

@@ -139,7 +139,7 @@ needs all of it, and Shooter's Edge has its own copy of half of it today.
   same port (`server_switch_mods`). `quit [reason]` ends the server after the frame (the game's
   `ServerGame::quit` says goodbye with the reason first) and `recycle [reason]` the same with the
   players told to reconnect: both exit with success, so a supervisor (a script, a service) starts
-  the server again. The operator's console also has `showip`, `macrolist` and the macros
+  the server again. The operator's console also has `showip`, `dns`, `net_stats`, `macrolist` and the macros
   (`$com_date`, `$com_time`, `$com_uptime`, `$com_uptime_long`, `$random`, `$com_maplist`, the
   game's maps by `ServerGame::maps`). From a game's repo, `ge server --map --bots --for` builds the
   game's dedicated binary (the one `ge_add_server` names, or `--game`) and runs it headless for

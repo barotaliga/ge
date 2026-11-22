@@ -50,7 +50,7 @@ part differs; `missing` not in our tree; `not-taken` a note or doc of ours decid
 | kind | done | partial | missing | not-taken | all |
 | --- | --- | --- | --- | --- | --- |
 | Server console commands (the operator's words) | 54 | 10 | 1 | 11 | 76 |
-| General console commands and macros the server's console has (common) | 33 | 6 | 17 | 1 | 57 |
+| General console commands and macros the server's console has (common) | 35 | 8 | 13 | 1 | 57 |
 | Server settings (cvars) with their defaults | 77 | 23 | 37 | 33 | 170 |
 | Server-to-client messages (svc) and protocol extensions the server writes | 38 | 9 | 6 | 0 | 53 |
 | What the server accepts from clients | 42 | 12 | 1 | 2 | 57 |
@@ -58,7 +58,7 @@ part differs; `missing` not in our tree; `not-taken` a note or doc of ours decid
 | Messages a player sees (refusals, drops, prints), quoted exactly | 49 | 15 | 6 | 2 | 72 |
 | Messages an admin sees on the server console, quoted exactly | 9 | 24 | 1 | 2 | 36 |
 | Server features beyond single words | 29 | 16 | 8 | 2 | 55 |
-| **all** | 372 | 139 | 99 | 54 | 664 |
+| **all** | 374 | 141 | 95 | 54 | 664 |
 
 ## 1. Server console commands (the operator's words)
 
@@ -148,7 +148,7 @@ done 54, partial 10, missing 1, not-taken 11
 Our dedicated server's console is the engine console (`engine/console`), fed by `--commands` and
 `+commands`; rcon reaches only Quake II's admin words and the rules' console (S29).
 
-done 33, partial 6, missing 17, not-taken 1
+done 35, partial 8, missing 13, not-taken 1
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -191,9 +191,9 @@ done 33, partial 6, missing 17, not-taken 1
 | con.softunlink | `softunlink` | | missing | |
 | con.fs_restart | `fs_restart` | Re-reads the file system (and tells an extended library). | missing | |
 | con.net_restart | `net_restart` | Re-opens the sockets. | missing | |
-| con.net_stats | `net_stats` | Socket counters and rates. | missing | |
+| con.net_stats | `net_stats` | Socket counters and rates. | partial | engine/server/main.cpp: sent, received and refused counts; no uptime, per-second averages, error split or current rates lines |
 | con.showip | `showip` | The host's addresses. | done | engine/net/udp_socket.hpp (`host_addresses`, `showip_text`), engine/server/main.cpp, games/shooters_edge/net/q2_game.cpp (the stream listener's `Server TCP` line) |
-| con.dns | `dns <name>` | Resolves a name. | missing | |
+| con.dns | `dns <name>` | Resolves a name. | partial | engine/server/main.cpp: resolves; the answer reads "<name> resolved to <address>", not the Hostname and IP lines with reverse names |
 | con.bsplist | `bsplist` | Loaded maps. | partial | games/shooters_edge/net/q2_game.cpp: the held map, its size and `Total resident`; with a word its counts, clusters and checksum (texinfo, visibility and the features line not counted) |
 | con.tests | `error`, `errordrop`, `freeze`, `crash`, `doublefree`, `printjunk`, `bsptest`, `wildtest`, `normtest`, `infotest`, `snprintftest`, `modeltest`, `imagetest`, `soundtest`, `activate`, `mdfourtest`, `mdfoursum`, `extcmptest`, `nextpathtest`, `extract` | Developer tests (debug build only). | missing | Candidates for not-taken (no doc yet) |
 | macro.com_date | `$com_date` | Today's date by `com_date_format`. | done | engine/console/clock_macros.hpp, on the dedicated console (engine/server/main.cpp) |
@@ -202,8 +202,8 @@ done 33, partial 6, missing 17, not-taken 1
 | macro.com_uptime_long | `$com_uptime_long` | Uptime, long. | done | engine/console/clock_macros.hpp, on the dedicated console |
 | macro.random | `$random` | One digit 0 to 9. | done | engine/console/clock_macros.hpp, on the dedicated console |
 | macro.com_maplist | `$com_maplist` | The maps found. | done | engine/server/macros.hpp, games/shooters_edge/net/q2_game.cpp (`maps`): sorted ignoring case, each once, by spaces |
-| macro.net_uprate | `$net_uprate` | Outgoing rate. | missing | |
-| macro.net_dnrate | `$net_dnrate` | Incoming rate. | missing | |
+| macro.net_uprate | `$net_uprate` | Outgoing rate. | done | engine/server/main.cpp: bytes a second sent over three-second windows (engine/net/rates.hpp) |
+| macro.net_dnrate | `$net_dnrate` | Incoming rate. | done | engine/server/main.cpp: bytes a second received over three-second windows |
 | con.refusals | `<name> is read-only.`, `<name> is cheat protected.`, `<name> may be set from command line only.`, `<name> will be changed for next game.`, `<name> is not a variable` | A setting's refusals. | partial | Engine says `<name> will be "<v>" after a restart (it is latched)` and its own words for the rest (`engine/console/console_builtins.cpp`) |
 | con.info-refusals | `Info cvars should not contain '\', ';' or '"' characters.`, `Info cvars should be less than 64 characters long.` | Server/user info values checked. | partial | The hosted library's `cvar` refuses unsafe info values (`info_safe`, `games/shooters_edge/server/q2_native_calls.cpp`); the engine's words differ: verify |
 | con.game-check | `'game' should contain characters [A-Za-z0-9_-] only.` | A bad game folder name is refused and the setting reset; the base folder's own name reads as empty. | missing | Added (upstream); ours takes the game by `sesv -game` and `sv_mod` |
