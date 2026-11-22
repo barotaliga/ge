@@ -24,6 +24,7 @@
 // ge:test tests/shooters_edge_companion_test.cpp
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <span>
@@ -31,6 +32,7 @@
 #include <vector>
 
 #include "classicenhance/source.hpp"
+#include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
@@ -55,12 +57,14 @@ constexpr float kBoostRise = 150;  // units in the window: a jump lifts ~45, sta
 constexpr float kTeleport = 400;   // a step this long between frames is a teleporter
 // A BLAST JUMP: a blow taken with the rocket or grenade launcher in hand (the game's item bits for
 // them in the active-weapon stat), then within `kBlastWithin_s` a speed no run or jump reaches
-// (`kBlastSpeed`, or `kBlastRise` upward); its flight is followed until the eye stops falling.
+// (`kBlastSpeed` across, or `kBlastRise` upward); its flight is followed until the eye stops
+// falling.
 constexpr int kItemGrenadeLauncher = 16, kItemRocketLauncher = 32;
 constexpr double kBlastWithin_s = 0.4;
 constexpr float kBlastSpeed = 600;  // u/s: a run is 320, a bunny hop rarely past 500
 constexpr float kBlastRise = 400;   // u/s up: a jump leaves the ground at 270
 constexpr double kBlastLongest_s = 4;
+constexpr float kTrickPitch = 25;  // a rocket jump's view at least this far down, degrees
 
 struct Run {
   std::string file, map, kind, skill;
@@ -72,6 +76,11 @@ struct Run {
   std::vector<std::vector<P3>> blasts;
   std::vector<double> blast_t;
   std::vector<bool> blast_grenade;
+  // And each one's shot as the nav's tricks take it (map_book.hpp `RocketTrick`): the view's pitch
+  // down, the run across before the blow, units/s, and whether the shot went behind (the flip).
+  std::vector<float> blast_pitch, blast_run;
+  std::vector<bool> blast_flip;
+  float view_height = 22;
   std::string error;
 };
 
@@ -109,7 +118,11 @@ Run read_run(const std::filesystem::path& path) {
   int64_t blows = 0;
   double blow_t = -10;
   P3 blow_at{};
-  bool blow_grenade = false;
+  bool blow_grenade = false, blow_flip = false;
+  float blow_pitch = 0, blow_run = 0;
+  float run_x = 0, run_y = 0;  // the run across over the last tic, units/s
+  P3 stood{};  // where the eye last held its height a tic (standing or running on a floor)
+  double stood_t = -10;
   std::vector<P3> flight;  // a blast jump in the air (empty: none)
   double flight_t = 0, still_since = -1;
   for (;;) {
@@ -152,9 +165,20 @@ Run read_run(const std::filesystem::path& path) {
     if (s.blows_taken > blows &&
         (weapon == kItemRocketLauncher || weapon == kItemGrenadeLauncher) && flight.empty()) {
       blow_t = t;
-      blow_at = last_t >= 0 ? last : p;
+      // The takeoff: where he last stood (the eye level a tic) within half a second, as a jump
+      // before the shot has him in the air when the blow lands.
+      blow_at = last_t >= 0 ? (t - stood_t <= 0.5 ? stood : last) : p;
       blow_grenade = weapon == kItemGrenadeLauncher;
+      blow_pitch = s.angles.x;
+      blow_run = std::sqrt(run_x * run_x + run_y * run_y);
+      // Behind: the view's yaw more than a right angle off the run's heading.
+      const double heading = ge::core::libm::atan2(run_y, run_x) * (180 / 3.141592653589793);
+      double off = s.angles.y - heading;
+      while (off > 180) off -= 360;
+      while (off < -180) off += 360;
+      blow_flip = blow_run > 100 && (off > 90 || off < -90);
     }
+    r.view_height = s.view_height;
     blows = s.blows_taken;
     if (t <= last_t) continue;  // a frame on the same tic
     const float dx = p[0] - last[0], dy = p[1] - last[1], dz = p[2] - last[2];
@@ -179,14 +203,25 @@ Run read_run(const std::filesystem::path& path) {
         still_since = -1;
       }
     } else if (last_t >= 0 && t - blow_t <= kBlastWithin_s && !teleported) {
-      const float v2 = (dx * dx + dy * dy + dz * dz) / (dt * dt);
+      const float v2 = (dx * dx + dy * dy) / (dt * dt);  // across: a fall is no blast
       if (v2 > kBlastSpeed * kBlastSpeed || dz / dt > kBlastRise) {
         flight = {blow_at, p};
         flight_t = blow_t;
         r.blast_t.push_back(blow_t);
         r.blast_grenade.push_back(blow_grenade);
+        r.blast_pitch.push_back(blow_pitch);
+        r.blast_run.push_back(blow_run);
+        r.blast_flip.push_back(blow_flip);
         blow_t = -10;
       }
+    }
+    if (last_t >= 0 && !teleported && dz > -0.5f && dz < 0.5f && flight.empty()) {
+      stood = p;
+      stood_t = t;
+    }
+    if (last_t >= 0 && !teleported) {
+      run_x = dx / dt;
+      run_y = dy / dt;
     }
     last_t = t;
     last = p;
@@ -315,6 +350,64 @@ void run(gl::Lab& lab) {
   lab.metric("runs", static_cast<double>(runs.size()), "count");
   lab.metric("runs.read", read, "count");
   lab.attach("routes.tsv", std::vector<uint8_t>(tsv.begin(), tsv.end()));
+  // The 100% runs' blast jumps as the nav's trick rows
+  // (games/shooters_edge/bots/rocket_tricks.cpp): map, takeoff and landing origins, pitch, run, how
+  // many runs made it, flip, level (a flip at a run past 400 expert, any other run intermediate, a
+  // standing one amateur). One a map within 64 units of another's takeoff and landing is counted
+  // with it.
+  struct Row {
+    std::string map;
+    P3 from, to;
+    float pitch, run;
+    int jumps;
+    bool flip;
+    int level;
+  };
+  std::vector<Row> tricks;
+  for (const Run& r : runs) {
+    if (r.kind != "100%") continue;
+    for (size_t i = 0; i < r.blasts.size(); i++) {
+      // A rocket fired under his own feet looks down (a blow from a monster's with the launcher
+      // in hand looks anywhere): the rest are no trick of his.
+      if (!r.blast_grenade[i] && r.blast_pitch[i] < kTrickPitch) continue;
+      P3 a = r.blasts[i].front(), b = r.blasts[i].back();
+      a[2] -= r.view_height;
+      b[2] -= r.view_height;
+      const auto near = [](const P3& u, const P3& v) {
+        const float x = u[0] - v[0], y = u[1] - v[1], z = u[2] - v[2];
+        return x * x + y * y + z * z < 64 * 64;
+      };
+      bool merged = false;
+      for (Row& tr : tricks)
+        if (tr.map == r.map && near(tr.from, a) && near(tr.to, b)) {
+          tr.jumps++;
+          merged = true;
+          break;
+        }
+      if (merged) continue;
+      const float run = r.blast_run[i];
+      const bool flip = r.blast_flip[i];
+      tricks.push_back({r.map, a, b, r.blast_pitch[i], run, 1, flip,
+                        flip && run > 400 ? 2
+                        : run > 100       ? 1
+                                          : 0});
+    }
+  }
+  // A map's rows together (rocket_tricks.cpp finds them as one run), in the order read.
+  std::stable_sort(tricks.begin(), tricks.end(),
+                   [](const Row& a, const Row& b) { return a.map < b.map; });
+  std::string trick_rows;
+  for (const Row& tr : tricks) {
+    const auto v = [](const P3& p) {
+      return "{" + to_fixed(p[0], 0) + ", " + to_fixed(p[1], 0) + ", " + to_fixed(p[2], 0) + "}";
+    };
+    trick_rows += "    {\"" + tr.map + "\", " + v(tr.from) + ", " + v(tr.to) + ", " +
+                  to_fixed(tr.pitch, 0) + ", " + to_fixed(tr.run, 0) + ", " +
+                  std::to_string(tr.jumps) + ", " + (tr.flip ? "true" : "false") + ", " +
+                  std::to_string(tr.level) + "},\n";
+  }
+  lab.attach("tricks.txt", std::vector<uint8_t>(trick_rows.begin(), trick_rows.end()));
+  lab.metric("tricks", static_cast<double>(tricks.size()), "count");
   if (game.empty() || lab.arg("pictures") == "0") return;
   const ge::vfs::PakEntry* pal = ge::vfs::pak_find(pak, "gfx/palette.lmp");
   for (const Run& r : runs) {

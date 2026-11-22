@@ -1249,7 +1249,8 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
       for (size_t n = 0; n < main.size(); n++)
         main[n] = out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
       std::vector<uint8_t> back = sb::nav_back(graph, main);
-      for (size_t n = 0; n < back.size(); n++) back[n] = back[n] && !out.harm[n] ? 1 : 0;
+      for (size_t n = 0; n < back.size(); n++)
+        back[n] = (back[n] || out.one_way_tricks) && !out.harm[n] ? 1 : 0;
       // The tricks as rocket jumps and as grenade jumps; then a grenade jump for each rocket
       // jump the pockets were bridged by (the way into a pocket for a player with no launcher).
       std::vector<sb::NavTrick> bridged;
@@ -1265,6 +1266,13 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
         }
       sb::NavTrickSettings ts;
       ts.grenades = true;
+      if (out.one_way_tricks) {
+        // A record run's jump flown its own way (air control, another run-up): a takeoff and a
+        // landing further from the runner's still make the same way past what blocks the floor.
+        ts.near = 96;
+        ts.land = 160;
+        ts.takeoffs = 8;
+      }
       out.tricks_made = sb::nav_add_tricks(out.world, out.move, graph, tricks, back, ts);
       ts.rockets = false;
       ts.near = 8;  // from the bridge's own takeoff
