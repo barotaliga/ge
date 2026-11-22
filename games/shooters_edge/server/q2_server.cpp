@@ -31,11 +31,13 @@
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_commands.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_mods.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
+#include "shooters_edge/server/q2_spectate.hpp"
 #include "shooters_edge/server/q2_targets.hpp"
 #include "shooters_edge/server/rjump_rules.hpp"
 #include "shooters_edge/server/shot_help.hpp"
@@ -324,6 +326,8 @@ const Q2Entity* spawn_spot(Q2Server& s, int slot) {
   return campaign_spot(s, slot);
 }
 
+void arrival_flash(Q2Server& s, int slot, const char* name);
+
 void spawn_player(Q2Server& s, int slot, bool respawn) {
   Q2Player& p = s.players[slot];
   if (respawn) fight_bury(s, slot);
@@ -556,6 +560,7 @@ void item_frame(Q2Server& s) {
 void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   q2_mods_pre_think(s, slot);
   Q2Player& p = s.players[slot];
+  if (s.clients[slot].spectator && s.intermission_at <= 0 && spectate_command(s, slot, c)) return;
   ge::classic::Q2Move pm;
   pm.s = p.move;
   if (s.intermission_at > 0)
@@ -632,6 +637,7 @@ void take_packet(Q2Server& s, const sh::Packet& pk) {
       continue;
     }
     run_command(s, pk.client, pk.cmds[i]);
+    spectate_follow(s, pk.client);  // the chase cameras on him, behind his new view
   }
   p.last_sequence = pk.sequence;
   q2_mods_post_think(s, pk.client);
@@ -759,8 +765,11 @@ void respawn_frame(Q2Server& s) {
     // Single player asks for the load menu instead (q2_save.hpp).
     const bool attack = (p.pressed & sh::kButtonAttack) != 0;
     if ((deathmatch(s) && (attack || fight_dmflag(s, 1024) || by_himself)) ||
-        (coop(s) && p.pressed != 0))
+        (coop(s) && p.pressed != 0)) {
+      // A respawn takes his wish as it stands: to watching, or back, with no check and no word.
+      if (deathmatch(s)) s.clients[i].spectator = p.want_spectator;
       spawn_player(s, i, true);
+    }
   }
 }
 
@@ -805,6 +814,17 @@ void rules_frame(Q2Server& s) {
   s.level_time = double(s.frame_number) * kFrameSeconds;
   for (Q2Player& p : s.players) p.pushed = {};
   q2_mods_start_frame(s);
+  bool placed[sh::kMaxClients] = {};
+  spectate_frame(s, placed);  // before anything else moves
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    if (!placed[i]) continue;
+    spawn_player(s, i, false);  // no body left behind, at a spawn spot as a respawn picks
+    s.players[i].respawn_time = s.level_time;
+    if (s.clients[i].spectator) continue;
+    arrival_flash(s, i, "sq_login");  // back to play: the login flash and a short hold
+    s.players[i].move.flags |= ge::classic::kSqTimeTeleport;
+    s.players[i].move.time = kRespawnHold;
+  }
   item_frame(s);
   screens_frame(s);
   if (s.intermission_at > 0) {
@@ -1117,7 +1137,8 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     s.looks = worn->looks;
   s.q1_physics = s.cvars.find("sv_physics")->value == "q1";
   s.entities.clear();
-  int cubes = 0;  // the power cubes so far (each its own bit in coop)
+  int cubes = 0;                // the power cubes so far (each its own bit in coop)
+  std::vector<char> inhibited;  // by the map's order: left out by skill or mode
   for (size_t i = 1; i < s.map->entities.size(); i++) {
     const ge::brush::Entity& b = s.map->entities[i];
     Q2Entity e;
@@ -1142,13 +1163,14 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
       e.origin.z = 64;
     e.item = sq_item(e.classname);
     if (e.item >= 0) e.team = b.get_any_case("team");
-    e.gone = left_out(s, e.spawnflags) || dm_left_out(s, e.item);
+    inhibited.push_back(left_out(s, e.spawnflags) ? 1 : 0);
+    e.gone = inhibited.back() != 0 || dm_left_out(s, e.item);
     // An item keeps its own flags only as a power cube: TRIGGER_SPAWN (1) hides it until used,
     // NO_TOUCH (2) leaves it lying there, never taken. Any other item's are cleared, and said.
     if (e.item >= 0 && (e.spawnflags & 0xff) != 0 && e.classname != "key_power_cube") {
-      s.console.push_back("A " + e.classname + " at " + std::to_string(int(e.origin.x)) + " " +
-                          std::to_string(int(e.origin.y)) +
-                          " has spawn flags only a power cube may have; they are cleared.");
+      if (!e.gone)
+        s.console.push_back(e.classname + " at " + q2_pos(e.origin) +
+                            " has invalid spawnflags set");
       e.spawnflags &= ~0xff;
     }
     if (e.item >= 0 && (e.spawnflags & 1) != 0) e.hidden = true;
@@ -1193,8 +1215,10 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     const std::string& g = s.map->entities[0].get_any_case("gravity");
     s.cvars.set("sv_gravity", g.empty() ? "800" : g, con::Source::local);
   }
+  q2_spawn_lines(s, inhibited);
   map_spawn(s);
   monster_spawn(s);
+  q2_count_lines(s, static_cast<int>(std::count(inhibited.begin(), inhibited.end(), 1)));
   s.host_time = 0;
   s.map_stopped = false;
   s.pending_map.clear();
@@ -1281,6 +1305,7 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   }
   c = ClientInfo{};
   c.active = true;
+  if (s.sv.set.maxclients > 1) s.console.push_back(name + " connected");  // the console's alone
   c.spectator = spectator;
   c.bot = bot;
   c.userid = s.next_userid++;
@@ -1289,6 +1314,7 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   pool_slot(s, slot).speedjump = false;
   s.players[slot] = Q2Player{};
   s.players[slot].time_budget_ms = kTimeBudgetMs;
+  s.players[slot].want_spectator = spectator && deathmatch(s);
   if (s.map != nullptr) q2_mods_connect(s, slot);
   if (s.map != nullptr) spawn_player(s, slot, false);
   if (s.map != nullptr) fill_rows(s);
@@ -1412,6 +1438,17 @@ bool sq_console(void* r, const std::string& line) {
     s.out.events_total++;
     return true;
   }
+  if (cmd == "sv") {  // the game's own server words
+    const std::string word = w.count >= 2 ? std::string(ge::progs::word(w, 1)) : std::string();
+    if (q2_same_name(word, "test")) {
+      s.console.push_back("Svcmd_Test_f()");
+      return true;
+    }
+    for (const char* ip : {"addip", "removeip", "listip", "writeip"})
+      if (q2_same_name(word, ip)) return false;  // the network server's filter answers these
+    s.console.push_back("Unknown server command \"" + word + "\"");
+    return true;
+  }
   if (cmd == "restart") {
     s.pending_map = s.map_name;
     s.pending_change = MapChange::restart;
@@ -1435,6 +1472,7 @@ void sq_user_info(void* r, int slot, const std::string& key, const std::string& 
   Q2Server& s = sq(r);
   if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].active) return;
   set_info(s.clients[slot].userinfo, key, value);
+  if (key == "spectator") s.players[slot].want_spectator = spectate_wish(s, slot);
   if (key == "cl_speedjump") pool_slot(s, slot).speedjump = value == "1";  // the easy jump's ask
   if (key == kAimHelpKey) pool_slot(s, slot);  // the grant lands on a seat the pool keeps
   note_aim_help_info(s, slot, key, value);
@@ -1507,6 +1545,7 @@ std::unique_ptr<Q2Server> make_q2_server(const Q2ServerOptions& opt) {
   s->rng = ge::core::make_rng(opt.seed);
   register_cvars(*s);
   add_aim_help(*s);
+  s->console.push_back("==== InitGame ====");
   return s;
 }
 
