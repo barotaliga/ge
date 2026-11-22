@@ -44,6 +44,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Footsteps and loops heard | the sounds as sent | `cl_footsteps` 0 and `s_ambient` (`client/demo_sound.hpp`'s `switches_from`) | its own | its own |
 | Rail trail beams | the game's own specks | `cl_railtrail_*`, `cl_railcore_*`, `cl_railspiral_*` (`client/world_fx.cpp`'s `q2_rail_trail`) | its own | its own |
 | Sound out of focus | always heard | `s_auto_focus` (`platform/window_cvars.hpp`, every game) | the engine's | the engine's |
+| Music | `cd`, `bgmvolume` | `ogg_enable`, `ogg_volume`, `ogg_shuffle`, `ogg_menu_track` over the engine's music (`audio/music_console.hpp`) | its own | its own |
 
 ## Adding a game
 

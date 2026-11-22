@@ -32,6 +32,7 @@
 #include <string>
 #include <string_view>
 
+#include "audio/music_console.hpp"
 #include "classic/q2_fx_switches.hpp"
 #include "console/console.hpp"
 #include "hud/crosshair.hpp"
@@ -91,6 +92,9 @@ struct GameBindings {
   // cl_adjustfov, uf, cl_kickangles); their defaults in every other game. add_game_cvars binds its
   // own GameCvarValues::screen when this is null.
   Q2Screen* screen = nullptr;
+  // The music (audio/music_console.hpp): Quake II's `ogg_enable` (its switch, `cd on|off`),
+  // `ogg_shuffle` and `ogg_menu_track`; on, unshuffled and no menu track in every other game.
+  ge::audio::MusicConsole* music = nullptr;
 };
 
 // Quake II's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,
