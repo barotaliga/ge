@@ -98,6 +98,7 @@ struct ServerConfig {
   std::string public_addr;          // sv_publicaddr: the "host:port" a browser should show
   std::string maprotation;          // sv_maprotation: the maps after the first, space-separated
   std::string mapcmd;               // sv_mapcmd: a console line run after each map loads
+  std::string console_prefix;       // console_prefix: before each terminal line (macros.hpp)
   int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
   int32_t vote = 1;                 // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
   int32_t timeouts = 1;             // sv_timeouts: each side's timeouts a map (timeout.hpp)

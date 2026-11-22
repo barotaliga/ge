@@ -61,6 +61,7 @@
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
 
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <span>
@@ -71,6 +72,7 @@
 #include "account/client_presence.hpp"
 #include "account/client_queue.hpp"
 #include "classic/predict_original.hpp"
+#include "classic/protocol/stuff_filter.hpp"
 #include "console/console.hpp"
 #include "console/talk.hpp"
 #include "input/state.hpp"
@@ -248,7 +250,10 @@ struct Remote {
   int c2spps = 0, c2s_impulse_backup = 3;  // cl_c2spps, cl_c2sImpulseBackup (qw_client.hpp)
   bool gunkick = false;  // v_gunkick: the server's kicks drawn on the view (client/demo_eyes.hpp)
   int q2_maxfps = 62;    // Quake II's own cl_maxfps: its moves a second (q2_remote.hpp)
-  int q2_shownet = 0;    // Quake II's cl_shownet: each message's size printed (q2_client.hpp)
+  // Quake II's cl_ignore_stufftext and its whitelist file (read at each join; "" none).
+  ge::classic::StuffFilter stuff;
+  std::filesystem::path stuff_file;
+  int q2_shownet = 0;  // Quake II's cl_shownet: each message's size printed (q2_client.hpp)
   double tick_frac_us = 0;
 };
 

@@ -1,7 +1,7 @@
 // The window's own settings (window_cvars.hpp).
 //
 // ge:summary The window's settings for any game: vid_fullscreen, vid_display, volume, s_auto_focus
-// ge:keywords add_window_cvars vid_displays
+// ge:keywords add_window_cvars vid_displays follow_window_cvars window_style
 // ge:skill platform console
 // ge:test tests/platform_window_cvars_test.cpp
 #include "platform/window_cvars.hpp"
@@ -46,6 +46,29 @@ void add_window_cvars(console::Console& con, WindowCvars& w) {
                     .values = "0: always (the default); 1: not while the game is minimised; 2: "
                               "only while the game's window is the one you are in"},
                    &w.auto_focus);
+  const struct {
+    const char* name;
+    const char* help;
+    const char* values;
+    bool* field;
+  } style[] = {
+      {"win_noborder", "Whether the window has no border or title bar.",
+       "0: a border (the default); 1: none", &w.no_border},
+      {"win_notitle", "Whether the window has no title bar (and so no border).",
+       "0: a title bar (the default); 1: none", &w.no_title},
+      {"win_alwaysontop", "Whether the window stays above every other window.",
+       "0: as any window (the default); 1: always on top", &w.on_top},
+      {"win_noresize", "Whether the window's edges no longer resize it.",
+       "0: resized by its edges (the default); 1: a fixed size", &w.no_resize},
+  };
+  for (const auto& s : style)
+    con.cvars().bind({.name = s.name,
+                      .fallback = "0",
+                      .flags = console::kArchive,
+                      .help = s.help,
+                      .kind = console::CvarKind::boolean,
+                      .values = s.values},
+                     s.field);
   con.add_command("vid_displays", "list the displays vid_display numbers",
                   [](console::Console& c, const console::Args&) {
                     const std::vector<Display> all = displays();
@@ -54,6 +77,24 @@ void add_window_cvars(console::Console& con, WindowCvars& w) {
                       c.print(std::to_string(d.number) + ": " + d.name + ", " +
                               std::to_string(d.width_px) + "x" + std::to_string(d.height_px));
                   });
+}
+
+WindowStyle window_style(const WindowCvars& w) {
+  return {.border = !w.no_border && !w.no_title, .on_top = w.on_top, .resizable = !w.no_resize};
+}
+
+void follow_window_cvars(Window& window, WindowCvars& w) {
+  if (w.fullscreen != w.full_applied) {  // the size follows through `InputSnapshot::resized`
+    if (!set_fullscreen(window, w.fullscreen, w.display)) w.fullscreen = w.full_applied;
+    w.full_applied = w.fullscreen;
+  }
+  const WindowStyle want = window_style(w);
+  if (!w.fullscreen &&
+      (want.border != w.style_applied.border || want.on_top != w.style_applied.on_top ||
+       want.resizable != w.style_applied.resizable)) {
+    set_window_style(window, want);  // a refusal is said once: it is not asked again
+    w.style_applied = want;
+  }
 }
 
 bool alt_enter(const InputSnapshot& in, console::Console& con) {

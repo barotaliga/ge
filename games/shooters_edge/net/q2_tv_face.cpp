@@ -245,8 +245,9 @@ void read_messages(Q2TvFace& f, Q2Viewer& v, const uint8_t* data, size_t size) {
     const int id = read_byte(r);
     if (id == kClcNop) continue;
     if (id == kClcMove) return;  // a viewer's moves move nothing: the rest of the packet is too
-    if (id == kClcUserInfo) {
-      read_string(r);
+    if (id == kClcUserInfo) {    // a new name taken (the relay tells the channel)
+      const std::string name = info_get(read_string(r), "name");
+      if (!r.bad) v.name = name.empty() ? "unnamed" : name;
     } else if (id == kClcStringCmd) {
       const std::string line = read_string(r);
       if (++commands <= kStringCmdsPerPacket) string_command(f, v, line);

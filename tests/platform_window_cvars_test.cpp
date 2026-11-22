@@ -45,3 +45,20 @@ TEST(s_auto_focus_silences_a_window_minimised_or_out_of_focus) {
   CHECK(ge::platform::heard_volume(w, false, false) == 0);
   CHECK(ge::platform::heard_volume(w, true, false) == 0.7);
 }
+
+TEST(the_window_style_follows_win_noborder_notitle_alwaysontop_and_noresize) {
+  // Either win_noborder or win_notitle drops the border and title bar; the defaults are a
+  // window's usual: a border, among the others, resized by its edges.
+  ge::console::Console con;
+  ge::platform::WindowCvars w;
+  ge::platform::add_window_cvars(con, w);
+  ge::platform::WindowStyle s = ge::platform::window_style(w);
+  CHECK(s.border && !s.on_top && s.resizable);
+  con.execute("win_notitle 1; win_alwaysontop 1; win_noresize 1");
+  s = ge::platform::window_style(w);
+  CHECK(!s.border && s.on_top && !s.resizable);
+  con.execute("win_notitle 0; win_noborder 1");
+  CHECK(!ge::platform::window_style(w).border);
+  con.execute("win_noborder 0");
+  CHECK(ge::platform::window_style(w).border);
+}

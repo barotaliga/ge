@@ -1086,7 +1086,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     if (!w.seen[n] && dist(g.nodes[n].origin, self) < kWaySeen) w.seen[n] = 1;
 
   // What is done.
-  const int items = read_stats(s, me, *f.arsenal).items;
+  const sb::Stats stats_now = read_stats(s, me, *f.arsenal);
+  const int items = stats_now.items;
+  const bool blasts = sb::can_blast(stats_now);
   const auto door_open = [&](int ent) {
     for (size_t k = 0; k < w.locked.size(); k++)
       if (w.locked[k] == ent) return locked_moved(w, s, k);
@@ -1375,6 +1377,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       const bool monster = (d.flags & sh::kFlagMonster) != 0 || d.solid == sh::kSolidSlidebox;
       if (d.free || !monster || d.health <= 0 || d.solid == sh::kSolidNot ||
           static_cast<size_t>(e) >= w.prey_left.size() || t < w.prey_left[static_cast<size_t>(e)])
+        continue;
+      // One only a blast puts down (a zombie) waits until he carries one: before that he stood
+      // knocking e1m3's down again and again for the rest of the map.
+      if (!blasts && f.arsenal->blast_only != nullptr && d.modelindex > 0 &&
+          static_cast<size_t>(d.modelindex) < s.models.size() &&
+          f.arsenal->blast_only(s.models[static_cast<size_t>(d.modelindex)]))
         continue;
       int32_t n = sb::nav_nearest(g, d.origin);
       if (n >= 0 && static_cast<size_t>(n) < nav.wet.size() && nav.wet[static_cast<size_t>(n)]) {

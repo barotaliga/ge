@@ -231,6 +231,7 @@ struct Wedge {
   sh::Vec3f still_at;      // where he last moved from
   double still_since = 0;  // and since when he has not
   int64_t shoves = 0;      // commands he jumped and stepped aside to come free
+  int64_t shots = 0;       // commands he fired at a monster that held him up
 };
 void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::MoveCmd& cmd);
 

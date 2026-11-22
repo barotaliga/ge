@@ -136,7 +136,8 @@ namespace {
 // A body that blocks as a box (a monster, a barrel; not a player) alive against him: its box within
 // kWayAgainst of his.
 constexpr float kWayAgainst = 8;
-bool body_against(const ge::shooterbots::BotView& s, int me) {
+// The body's edict number, or -1: none.
+int body_against(const ge::shooterbots::BotView& s, int me) {
   const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
   for (int k = s.sv.set.maxclients + 1; k < s.sv.num_edicts; k++) {
     const sh::Edict& o = s.sv.edicts[static_cast<size_t>(k)];
@@ -146,9 +147,9 @@ bool body_against(const ge::shooterbots::BotView& s, int me) {
     const sh::Vec3f mlo = e.origin + e.mins, mhi = e.origin + e.maxs;
     if (lo.x < mhi.x + kWayAgainst && hi.x > mlo.x - kWayAgainst && lo.y < mhi.y + kWayAgainst &&
         hi.y > mlo.y - kWayAgainst && lo.z < mhi.z + kWayAgainst && hi.z > mlo.z - kWayAgainst)
-      return true;
+      return k;
   }
-  return false;
+  return -1;
 }
 
 }  // namespace
@@ -166,8 +167,21 @@ void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::
   cmd.side = static_cast<int16_t>((phase & 1) ? 400 : -400);
   // Held up by a body (a monster, a barrel), he steps round it but never jumps onto it: a jump
   // there left him standing on a pack of soldiers' heads in base1, as no person would.
-  if (!body_against(s, me) && static_cast<int>((t - w.still_since) * 4) % 4 == 0)
+  const int body = body_against(s, me);
+  if (body < 0 && static_cast<int>((t - w.still_since) * 4) % 4 == 0)
     cmd.buttons |= sh::kButtonJump;
+  // Held up by a monster that is no fight of his (a zombie walking its beat in e1m3's corridor,
+  // never his target): shot down out of the way, as a person would, while he steps round it.
+  if (body >= 0 && (s.sv.edicts[static_cast<size_t>(body)].flags & sh::kFlagMonster) != 0) {
+    const sh::Edict& b = s.sv.edicts[static_cast<size_t>(body)];
+    const double dx = b.origin.x - e.origin.x, dy = b.origin.y - e.origin.y;
+    const double dz = (b.origin.z + (b.mins.z + b.maxs.z) * 0.5) - (e.origin.z + 22);
+    const double flat = std::sqrt(dx * dx + dy * dy);
+    cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
+    cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(dz, flat) * (180.0 / ge::core::kPi));
+    cmd.buttons |= sh::kButtonAttack;
+    w.shots++;
+  }
 }
 
 bool way_touch(const WayThrough& w, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd) {

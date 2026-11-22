@@ -18,6 +18,7 @@
 // ge:summary Quake II's game library interface: the records and the two tables of calls
 // ge:keywords game-library native-game-library gamelib abi entry-point imports exports edict
 // ge:keywords entity-head player-state move-block trace-result cvar-record m18v10
+// ge:keywords getgameapiex extended-game-interface g_features sv_features filesystem-api
 // ge:skill shooter mod
 // ge:test tests/shooters_edge_q2_native_test.cpp
 #pragma once
@@ -255,16 +256,102 @@ struct NativeExports {
 
 using NativeEntryFn = NativeExports* (*)(NativeImports* imports);
 
+// THE EXTENDED INTERFACE (porting/shooters-edge/q2-game-api-ex-facts.md): a second, optional entry
+// point, `kNativeEntryEx`, called after the first and before `init` with the server's extended
+// table (`NativeImportsEx`, version `kNativeVersionEx`); it returns the game's (`NativeExportsEx`),
+// taken when its version is 1 or more. Fields are only ever added at the end, so a version-1 game's
+// table stops after `RestartFilesystem` and the per-client calls are read at version 3 only.
+inline constexpr const char* kNativeEntryEx = "GetGameAPIEx";
+inline constexpr uint32_t kNativeVersionEx = 3;
+inline constexpr const char* kNativeFilesApi = "FILESYSTEM_API_V1";
+inline constexpr int kVisPvs = 0, kVisPhs = 1, kVisNoAreas = 2;
+
+// The feature bits a game and the server tell each other (`g_features`, `sv_features`).
+inline constexpr int32_t kGmfClientNum = 1, kGmfProperInUse = 2, kGmfMvdSpec = 4,
+                         kGmfAllDisconnects = 8, kGmfEnhancedSaves = 1024, kGmfVariableFps = 2048,
+                         kGmfExtraUserInfo = 4096, kGmfIpv6 = 8192, kGmfIndexOverflow = 16384,
+                         kGmfProtocolExtensions = 32768;
+
+struct NativeImportsEx {
+  uint32_t apiversion;
+  uint32_t structsize;
+  void (*local_sound)(NativeEntityHead* target, const float* origin, NativeEntityHead* ent,
+                      int channel, int index, float volume, float attenuation, float offset);
+  const char* (*get_configstring)(int index);
+  NativeTrace (*clip)(const float* start, const float* mins, const float* maxs, const float* end,
+                      NativeEntityHead* ent, int mask);
+  int (*in_vis)(const float* a, const float* b, int kind);
+  const void* (*get_extension)(const char* name);
+  void* (*tag_realloc)(void* block, size_t size);
+};
+
+// An entity's state as one client is to see it (104 bytes): the state, then the extended
+// protocol's fields (unused here: the extensions are not offered).
+struct NativeCustomize {
+  NativeState s;
+  int32_t morefx;
+  float alpha, scale, loop_volume, loop_attenuation;
+};
+
+struct NativeExportsEx {
+  uint32_t apiversion;
+  uint32_t structsize;
+  const void* (*get_extension)(const char* name);
+  int (*can_save)();
+  void (*prep_frame)();
+  void (*restart_filesystem)();
+  int (*customize_entity_to_client)(NativeEntityHead* client, NativeEntityHead* ent,
+                                    NativeCustomize* out);  // since 2; read at 3
+  int (*entity_visible_to_client)(NativeEntityHead* client, NativeEntityHead* ent);  // since 3
+};
+
+using NativeEntryExFn = const NativeExportsEx* (*)(const NativeImportsEx* imports);
+
+// The files a game reads and writes beside its own (`kNativeFilesApi`). Answers below 0 are
+// errors: a system error number negated, or one of the `kFsErr*` codes (`error_string`).
+inline constexpr uint32_t kFsModeMask = 3, kFsModeRead = 0, kFsModeWrite = 1, kFsModeAppend = 2,
+                          kFsModeReadWrite = 3, kFsPathBase = 0x40, kFsPathGame = 0x80,
+                          kFsFlagGzip = 0x100, kFsFlagExclusive = 0x200, kFsFlagDeflate = 0x800,
+                          kFsSearchByFilter = 0x100, kFsSearchSavePath = 0x200,
+                          kFsSearchExtraInfo = 0x400, kFsSearchStripExt = 0x800,
+                          kFsSearchDirsOnly = 0x1000, kFsSearchRecursive = 0x2000;
+inline constexpr int kFsErrBase = 0x5000;  // kFsErrBase + k, negated: the engine's own errors
+
+struct NativeFileInfo {  // a list entry with extra info: the name follows it
+  int64_t size;
+  int64_t ctime;
+  int64_t mtime;
+  char name[1];
+};
+
+struct NativeFilesApi {
+  int64_t (*open_file)(const char* path, int32_t* handle, uint32_t mode);
+  int (*close_file)(int32_t handle);
+  int (*load_file)(const char* path, void** buffer, uint32_t flags, uint32_t tag);
+  int (*read_file)(void* buffer, size_t length, int32_t handle);
+  int (*write_file)(const void* buffer, size_t length, int32_t handle);
+  int (*flush_file)(int32_t handle);
+  int64_t (*tell_file)(int32_t handle);
+  int (*seek_file)(int32_t handle, int64_t offset, int whence);
+  int (*read_line)(int32_t handle, char* buffer, size_t size);
+  void** (*list_files)(const char* path, const char* filter, uint32_t flags, int* count);
+  void (*free_file_list)(void** list);
+  const char* (*error_string)(int error);
+};
+
 static_assert(sizeof(NativeState) == 84 && sizeof(NativeMoveState) == 28);
 static_assert(sizeof(NativePlayer) == 184 && sizeof(NativeCmd) == 16);
 static_assert(sizeof(NativePlane) == 20 && sizeof(NativeSurface) == 24);
+static_assert(sizeof(NativeCustomize) == 104 && offsetof(NativeCustomize, morefx) == 84);
 static_assert(sizeof(void*) != 8 ||
                   (sizeof(NativeEntityHead) == 280 && offsetof(NativeEntityHead, svflags) == 200 &&
                    offsetof(NativeEntityHead, owner) == 272 && sizeof(NativeTrace) == 72 &&
                    offsetof(NativeTrace, ent) == 64 && sizeof(NativeMoveBlock) == 384 &&
                    offsetof(NativeMoveBlock, groundentity) == 352 && sizeof(NativeCvar) == 56 &&
                    sizeof(NativeImports) == 352 && sizeof(NativeExports) == 152 &&
-                   offsetof(NativeExports, edicts) == 128 && sizeof(NativeClientHead) == 188),
+                   offsetof(NativeExports, edicts) == 128 && sizeof(NativeClientHead) == 188 &&
+                   sizeof(NativeImportsEx) == 56 && sizeof(NativeExportsEx) == 56 &&
+                   sizeof(NativeFilesApi) == 96),
               "the game library's 64-bit layout");
 
 }  // namespace shooters_edge::server::native

@@ -257,6 +257,11 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   double respawn_time = 0;
   uint8_t buttons = 0;  // the last command's
   uint8_t pressed = 0;  // the buttons pressed afresh since he died (a respawn wants a new press)
+  // Spectating (q2_spectate.hpp): his `spectator` wish, the slot his chase camera follows (-1
+  // none), and whether his last command held the up move (a jump's press is its first).
+  bool want_spectator = false;
+  int chase = -1;
+  bool jump_held = false;
   int16_t cmd_angles[3] = {};  // the last command's view, 65536ths of a turn
   bool changed = false;        // placed by the rules since its last move (a spawn)
   // The view the rules turned him to (a spawn), 65536ths of a turn, until his client sends it back
@@ -441,8 +446,16 @@ inline constexpr const char* kQ2PlayerModel = "players/male/tris.md2";
 inline constexpr int32_t kTimeBudgetMs = 1800;
 inline constexpr int64_t kTimeBudgetFrames = 16;
 
+// What a change to or from spectating is checked against, the network server's (q2_spectate.hpp):
+// the players' password, the spectators' password ("" or `none`: none) and the spectators' limit.
+struct Q2Gate {
+  std::string password, spectator_password;
+  int max_spectators = 4;
+};
+
 struct Q2Server : RulesCommon {
   Q2ServerOptions opt;
+  Q2Gate gate;
   int64_t moves_held = 0;  // moves past a budget not run (`sv_speedcheck`)
   std::shared_ptr<const ge::brush::Map> map;
   std::unique_ptr<ge::brush::BrushTracer> tracer;

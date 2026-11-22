@@ -51,14 +51,14 @@ part differs; `missing` not in our tree; `not-taken` a note or doc of ours decid
 | --- | --- | --- | --- | --- | --- |
 | Server console commands (the operator's words) | 54 | 10 | 1 | 11 | 76 |
 | General console commands and macros the server's console has (common) | 35 | 8 | 13 | 1 | 57 |
-| Server settings (cvars) with their defaults | 83 | 22 | 32 | 33 | 170 |
+| Server settings (cvars) with their defaults | 86 | 23 | 28 | 33 | 170 |
 | Server-to-client messages (svc) and protocol extensions the server writes | 39 | 8 | 6 | 0 | 53 |
 | What the server accepts from clients | 42 | 12 | 1 | 2 | 57 |
-| The game library interface | 41 | 24 | 22 | 1 | 88 |
-| Messages a player sees (refusals, drops, prints), quoted exactly | 50 | 15 | 5 | 2 | 72 |
-| Messages an admin sees on the server console, quoted exactly | 9 | 24 | 1 | 2 | 36 |
+| The game library interface | 55 | 28 | 4 | 1 | 88 |
+| Messages a player sees (refusals, drops, prints), quoted exactly | 50 | 16 | 4 | 2 | 72 |
+| Messages an admin sees on the server console, quoted exactly | 9 | 25 | 0 | 2 | 36 |
 | Server features beyond single words | 34 | 13 | 6 | 2 | 55 |
-| **all** | 387 | 136 | 87 | 54 | 664 |
+| **all** | 404 | 143 | 63 | 54 | 664 |
 
 ## 1. Server console commands (the operator's words)
 
@@ -215,7 +215,7 @@ done 35, partial 8, missing 13, not-taken 1
 Defaults are upstream's; flags as registered. Our Quake II spellings that are synonyms are listed in
 `games/shooters_edge/net/q2_game.cpp` (`kSettingNames`).
 
-done 83, partial 22, missing 32, not-taken 33
+done 86, partial 23, missing 28, not-taken 33
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -278,8 +278,8 @@ done 83, partial 22, missing 32, not-taken 33
 | cvar.sv_namechange_limit | `sv_namechange_limit` = `5/min` | Renames allowed. | done | `sv_namelimit` (synonym) |
 | cvar.sv_allow_unconnected_cmds | `sv_allow_unconnected_cmds` = `0` | 0 keeps commands of clients not in the game from the library. | partial | Ours always behaves as 0 (`string_command` passes only active clients' lines); no setting |
 | cvar.lrcon_password | `lrcon_password` = `` (private) | Limited rcon password. | done | Engine `lrcon_password` |
-| cvar.sv_features | `sv_features` (read-only) | The engine's feature bits for the library. | missing | S17 |
-| cvar.g_features | `g_features` = `0` (read-only) | The library's feature bits (section 6, api.gmf.*); reset to 0 when the library unloads. | missing | S17 |
+| cvar.sv_features | `sv_features` (read-only) | The engine's feature bits for the library. | done | games/shooters_edge/server/q2_native.cpp: read-only, proper in-use, all disconnects, enhanced saves, extra user info, IPv6, index overflow (29706) |
+| cvar.g_features | `g_features` = `0` (read-only) | The library's feature bits (section 6, api.gmf.*); reset to 0 when the library unloads. | done | games/shooters_edge/server/q2_native.cpp: read-only `0`, set by the game's force-set, back to 0 as the game restarts |
 | cvar.sv_mvd_enable | `sv_mvd_enable` = `0` (latched) | Multi-view recorder: 1 local, 2 also TCP viewers. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: 1 recordings, 2 the TCP stream on the game port |
 | cvar.sv_mvd_maxclients | `sv_mvd_maxclients` = `8` (latched) | TCP viewers. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: the TCP slots |
 | cvar.sv_mvd_bufsize | `sv_mvd_bufsize` = `2` (latched) | Viewer send buffer. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: 32 KiB units unsent before `overflowed` |
@@ -314,7 +314,7 @@ done 83, partial 22, missing 32, not-taken 33
 | cvar.flood_persecond | `flood_persecond` = `4` | Relay chat flood window. | done | same |
 | cvar.flood_waitdelay | `flood_waitdelay` = `10` | Relay chat flood wait. | done | same |
 | cvar.flood_mute | `flood_mute` = `0` | Relay spectators may not talk. | done | same: non-admin viewers may not talk |
-| cvar.mvd_filter_version | `mvd_filter_version` = `0` | Rewrites `!version` in relay chat. | missing | |
+| cvar.mvd_filter_version | `mvd_filter_version` = `0` | Rewrites `!version` in relay chat. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp (`filter_version`): each `!version` in a chat-level print from the recorded server made `!versi0n` |
 | cvar.mvd_default_map | `mvd_default_map` = `q2dm1` (latched) | Map shown while waiting. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the map's intermission spot, its checksum; q2dm1 when it does not load |
 | cvar.mvd_stats_score | `mvd_stats_score` = `0` | Which stat is the chase score. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp (`touch`): 0 the frags shown as 0, 1 the channel's number, else the followed player's |
 | cvar.mvd_stats_hack | `mvd_stats_hack` = `0` | Dummy's stats copied to chasers. | missing | |
@@ -344,7 +344,7 @@ done 83, partial 22, missing 32, not-taken 33
 | cvar.logfile_flush | `logfile_flush` = `0` | Flush per line / unbuffered. | missing | |
 | cvar.logfile_name | `logfile_name` = `console` | Log at `logs/<name>.log`. | partial | Engine `sv_logfile` names the file in the game's folder |
 | cvar.logfile_prefix | `logfile_prefix` = `[%Y-%m-%d %H:%M] ` | Time stamp per line. | partial | Our log stamps each line with the server's time (`engine/server/admin.hpp`); format not settable |
-| cvar.console_prefix | `console_prefix` = `` | Prefix on console lines. | missing | |
+| cvar.console_prefix | `console_prefix` = `` | Prefix on console lines. | partial | engine/server/server.cpp, main.cpp: before each line the console prints, `<?>` the syslog level, `@` its letter, `%` the time; the process's start-up errors on stderr carry none |
 | cvar.dedicated | `dedicated` = `1` (read-only) on the dedicated program; `0` (no-set) otherwise | Whether dedicated. | partial | A hosted library's `cvar("dedicated")` answer: verify it reads 1 on `sesv` |
 | cvar.cl_running | `cl_running` = `0` (read-only) | State report (client builds). | missing | |
 | cvar.cl_paused | `cl_paused` = `0` (read-only) | State report (client builds). | missing | |
@@ -519,7 +519,7 @@ done 42, partial 12, missing 1, not-taken 2
 Ours: the native host (`games/shooters_edge/server/q2_native.hpp`, `q2_native_calls.cpp`,
 `q2_native_abi.hpp`, `q2_native_save.cpp`).
 
-done 41, partial 24, missing 22, not-taken 1
+done 55, partial 28, missing 4, not-taken 1
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -585,28 +585,28 @@ done 41, partial 24, missing 22, not-taken 1
 | api.apiversion | version 3 or 3302 | `Game library is version <n>, expected 3 or 3302`. | partial | `q2_native.cpp` accepts 3 only (`kNativeVersion`) |
 | api.newgame | the second interface (version 3302) | A library built on the newer client and move records (and the newer move), the same calls otherwise. | missing | Added (upstream) |
 | api.loadlib | the library from `<dir>/<game>/game<cpu>.<ext>` | `sys_forcegamelib` first, then the home and the library folders for the game folder, then for the base folder; `Loaded game library from <path>`, `Failed to load game library: <error>`. | partial | Our host loads a library path it is given; the path rule and words: verify |
-| api.ex | the extended interface (`GetGameAPIEx`) | Extended imports and exports, versions 1 to 3 (2 added entity customizing, 3 the per-client visibility call). | missing | S17 |
-| api.ex.local_sound | `local_sound` | A sound to one client only. | missing | S17 |
-| api.ex.get_configstring | `get_configstring` | Reads a configstring. | missing | S17 |
-| api.ex.clip | `clip` | Trace against one entity. | missing | S17 |
-| api.ex.inVIS | `inVIS` | Visibility test of a chosen kind (visible, hearing, with or without areas). | missing | S17 |
-| api.ex.GetExtension | `GetExtension` | Named APIs (the file system; debug drawing). | missing | S17 |
-| api.ex.TagRealloc | `TagRealloc` | Grows a tagged block (`untagged allocation not allowed` for a new one). | missing | S17 |
-| api.ex.CanSave | export `CanSave` | The library says whether saving is allowed (in place of the dead-player check). | missing | S17 |
-| api.ex.PrepFrame | export `PrepFrame` | Called before frames are built. | missing | S17 |
-| api.ex.RestartFilesystem | export `RestartFilesystem` | On `fs_restart`. | missing | S17 |
-| api.ex.CustomizeEntityToClient | export `CustomizeEntityToClient` | Per-client entity edits. | missing | S17 |
-| api.ex.EntityVisibleToClient | export `EntityVisibleToClient` | Per-client culling. | missing | S17 |
-| api.ex.filesystem | file system API v1 (open, close, load, read, write, flush, tell, seek, read line, list, free list, error string) | Files for the library. | missing | S17 |
+| api.ex | the extended interface (`GetGameAPIEx`) | Extended imports and exports, versions 1 to 3 (2 added entity customizing, 3 the per-client visibility call). | done | games/shooters_edge/server/q2_native.cpp: `GetGameAPIEx` after the stock entry and before `Init`, our table at version 3, the game's taken at 1 or more; tests/shooters_edge_q2_native_test.cpp |
+| api.ex.local_sound | `local_sound` | A sound to one client only. | done | games/shooters_edge/server/q2_native_calls.cpp (`x_local_sound`): to the target alone on its own entity, reliable with the reliable channel bit |
+| api.ex.get_configstring | `get_configstring` | Reads a configstring. | done | games/shooters_edge/server/q2_native_calls.cpp: `PF_GetConfigstring: bad index: <n>` stops the map |
+| api.ex.clip | `clip` | Trace against one entity. | done | games/shooters_edge/server/q2_native_calls.cpp (`x_clip`): the world, a brush or trigger by its model (turned), else its box; the answer names the entity |
+| api.ex.inVIS | `inVIS` | Visibility test of a chosen kind (visible, hearing, with or without areas). | done | games/shooters_edge/server/q2_native_calls.cpp (`x_in_vis`): visible or hearable, the areas unless no-areas is added |
+| api.ex.GetExtension | `GetExtension` | Named APIs (the file system; debug drawing). | done | games/shooters_edge/server/q2_native_calls.cpp: `FILESYSTEM_API_V1`; anything else (debug drawing on a dedicated server too) null |
+| api.ex.TagRealloc | `TagRealloc` | Grows a tagged block (`untagged allocation not allowed` for a new one). | done | games/shooters_edge/server/q2_native_calls.cpp (`x_tag_realloc`): tag kept, growth not cleared, 0 frees, `PF_TagRealloc: untagged allocation not allowed` |
+| api.ex.CanSave | export `CanSave` | The library says whether saving is allowed (in place of the dead-player check). | done | games/shooters_edge/server/q2_native_save.cpp: the game's answer in place of the dead player's check (refused: "The game does not allow saving now.") |
+| api.ex.PrepFrame | export `PrepFrame` | Called before frames are built. | done | games/shooters_edge/server/q2_native.cpp (`take_view`): in place of the server's event clearing |
+| api.ex.RestartFilesystem | export `RestartFilesystem` | On `fs_restart`. | partial | Taken; never called, as our server has no `fs_restart` and no `game` change while running |
+| api.ex.CustomizeEntityToClient | export `CustomizeEntityToClient` | Per-client entity edits. | done | games/shooters_edge/server/q2_native.cpp (`per_client`, games/shooters_edge/server/q2_wire.cpp `Q2Raw::touch`): at version 3, the record sent in place of the state; one naming another entity is told and the real state sent |
+| api.ex.EntityVisibleToClient | export `EntityVisibleToClient` | Per-client culling. | done | games/shooters_edge/server/q2_native.cpp (`per_client`): at version 3, false leaves the entity out of that client's frame |
+| api.ex.filesystem | file system API v1 (open, close, load, read, write, flush, tell, seek, read line, list, free list, error string) | Files for the library. | partial | games/shooters_edge/server/q2_native_files.cpp: every call, the modes, exclusive, lists by extension or filter, the error texts; loose files only (no packs), no gzip or raw deflate |
 | api.ex.debugdraw | debug draw API v1 | Lines, points, axes, boxes, spheres, circles, cylinders, arrows, text (debug builds with a renderer; never on a dedicated server). | not-taken | docs/porting/server.md: debug build only, not taken (and never on a dedicated server) |
-| api.gmf.clientnum | feature bit 0: client number | The library fills each client's number; the server trusts it in frames. | missing | Added (upstream); no `g_features` read (S17) |
-| api.gmf.properinuse | feature bit 1: proper in-use | The library keeps the entity in-use flag right, so the server can rely on it. | missing | Added (upstream); verify what our host assumes |
+| api.gmf.clientnum | feature bit 0: client number | The library fills each client's number; the server trusts it in frames. | partial | Not offered in `sv_features`: the slot is the client number, as without the bit |
+| api.gmf.properinuse | feature bit 1: proper in-use | The library keeps the entity in-use flag right, so the server can rely on it. | done | games/shooters_edge/server/q2_native.cpp (`take_view`): an entity not in use is not sent |
 | api.gmf.mvdspec | feature bit 2: recorder-aware | The library knows the recorder's dummy spectator. | missing | Added (upstream); S40 |
-| api.gmf.alldisconnects | feature bit 3: all disconnects | The disconnect call also for clients that never entered. | missing | Added (upstream) |
+| api.gmf.alldisconnects | feature bit 3: all disconnects | The disconnect call also for clients that never entered. | done | games/shooters_edge/server/q2_native.cpp (`nv_drop`): the disconnect call for a client the game said yes to that never entered |
 | api.gmf.savegames | feature bit 10: enhanced savegames | Saves allowed only with this bit (or `sys_allow_unsafe_savegames`); `Game supports Q2PRO enhanced savegames.` | partial | Added (upstream); ours saves any library, no bit check |
 | api.gmf.variablefps | feature bit 11: variable frame rate | `sv_fps` above 10 used only with this bit. | missing | Added (upstream); ours runs the hosted library at 10 Hz |
-| api.gmf.extrauserinfo | feature bit 12: extra user info | The connect call gets a second info string: challenge, ip, major, minor, netchan, packetlen, qport, zlib. | missing | Added (upstream) |
-| api.gmf.ipv6 | feature bit 13: IPv6-aware | The `ip` key may carry an IPv6 address. | missing | Added (upstream) |
+| api.gmf.extrauserinfo | feature bit 12: extra user info | The connect call gets a second info string: challenge, ip, major, minor, netchan, packetlen, qport, zlib. | partial | games/shooters_edge/server/q2_native.cpp (`userinfo_text`): the second string in order; challenge, qport and the channel's numbers are fixed (0, 34/0, 1, 1390), as the hosted game sits behind our own server |
+| api.gmf.ipv6 | feature bit 13: IPv6-aware | The `ip` key may carry an IPv6 address. | done | games/shooters_edge/server/q2_native.cpp (`ipv4_for_game`): without the bit an IPv6 client's `ip` reads 198.51.100.X:PORT |
 | api.gmf.indexoverflow | feature bit 14: index overflow allowed | A full model, sound or image table returns 0 instead of stopping the level. | partial | Added (upstream); ours always returns 0, whatever the library asks (S14) |
 | api.gmf.protoext | feature bit 15: protocol extensions | Turns on the extended limits (proto.extended-limits). | missing | Added (upstream); S17 |
 | api.save-files | `save/<name>/` with server, game and level files; `save/.current` the unit in play; `save/save0` the level-start autosave; `save1` the `autosave` word | The save layout and the unit's levels. | partial | Same model (`q2_native_save.cpp`, `q2-gaps2-server.md` B3.4), but packed into our own save file, not these folders |
@@ -616,7 +616,7 @@ done 41, partial 24, missing 22, not-taken 1
 
 `<x>` marks a filled-in value. Ours quoted where it differs.
 
-done 50, partial 15, missing 5, not-taken 2
+done 50, partial 16, missing 4, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -690,7 +690,7 @@ done 50, partial 15, missing 5, not-taken 2
 | msg.mvd.chase | `[MVD] Chasing <name>.`, `[MVD] No players to chase.`, `[MVD] Player slot number <n> is invalid.`, `[MVD] Player slot number <n> is not active.`, `[MVD] No players matching '<x>' found.`, `[MVD] '<x>' matches multiple players.`, `[MVD] Previous chase target is not active.`, `[MVD] You have no previous chase target.`, `[MVD] Unknown chase target '<x>'. Valid targets are: ...`, `[MVD] Chasing players with '<x>' powerup.` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
 | msg.mvd.autochase | `[MVD] Auto chasing is <ON/OFF> (<n> target(s)).`, `[MVD] Auto chasing <list>`, `[MVD] Auto chase list is empty.`, `[MVD] Please add auto chase targets first.`, `[MVD] Usage: ...` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
 | msg.mvd.lists | the `channels` table and the `commands` help text | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
-| msg.mvd.names | `[MVD] <old> changed name to <new>`, `[MVD] <name> disconnected` | | missing | |
+| msg.mvd.names | `[MVD] <old> changed name to <new>`, `[MVD] <name> disconnected` | | partial | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: `[MVD] <old> changed name to <new>` and `[MVD] <name> disconnected` to the channel under `mvd_part_filter` and the `uf` mute; a kick or a time-out also reads `disconnected` |
 | msg.ac | anticheat lines to players (lost service, modified file, unable to take connections, exempt, failed file checks, not using anticheat) | Anticheat lines. | not-taken | `q2-gaps2-server.md` B1 |
 
 ## 8. Messages an admin sees on the server console, quoted exactly
@@ -698,7 +698,7 @@ done 50, partial 15, missing 5, not-taken 2
 Developer-only prints (the reference's developer level) are left out; one row per message or per
 tight group of one command's answers.
 
-done 9, partial 24, missing 1, not-taken 2
+done 9, partial 25, missing 0, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -723,7 +723,7 @@ done 9, partial 24, missing 1, not-taken 2
 | log.version | `<name>[<addr>]: <version>` | Version probe answer. | done | games/shooters_edge/net/q2_net_server.cpp |
 | log.game | `Game Error: <text>`, `<call>: bad index: <n>`, `<call>(<name>): overflow`, `<call>: volume = <x>`, `<call>: attenuation = <x>`, `<call>: timeofs = <x>`, `<call>: soundindex = <n>`, `<call>: edict = NULL`, `<call>: bad tag`, `<call>: untagged allocation not allowed`, `PF_setmodel: NULL`, `<call>: message buffer overflowed`, `<call>: bad to: <n>`, `<call>: NULL origin`, `PF_WriteFloat not implemented` | Library errors that stop the level. | partial | Our host fails with its own words; index overflow and bad sound values are not errors (S14, S16) |
 | log.gamelib | `Failed to load game library: <error>`, `Loaded game library from <path>`, `Game library path length exceeded`, `Can't access <path>: <error>`, `Failed to load game library`, `Game library returned NULL exports`, `Game library is version <n>, expected 3 or 3302`, `Game library corrupted maxclients value`, `Game library returned bad size of edict_t`, `Game library returned bad number of max_edicts` | Loading the library. | partial | `games/shooters_edge/server/q2_native.cpp` has its own words (version mismatch named) |
-| log.extensions | `Game supports Q2PRO protocol extensions.` (and at developer level `Game supports Q2PRO extended API version <n>.`); `Game attempted to set extended flags on '<name>', masked out.` | The library's extensions at load. | missing | Added (upstream); S17 |
+| log.extensions | `Game supports Q2PRO protocol extensions.` (and at developer level `Game supports Q2PRO extended API version <n>.`); `Game attempted to set extended flags on '<name>', masked out.` | The library's extensions at load. | partial | games/shooters_edge/server/q2_native_calls.cpp: `Game attempted to set extended flags on '<name>', masked out.`; the protocol extensions are not offered, so their line is never printed |
 | log.spawn | `------- Server Initialization -------`, `SpawnServer: <map>`, `-------------------------------------`, `Too many inline models`, `Couldn't load <path>: <error>`, `Deathmatch and Coop both set, disabling Coop` | Map start. | partial | Our rules print their own map-start lines; the coop-off rule: verify |
 | log.override | `Loaded entity string from <path>`, `Couldn't load entity string from <path>: <error>`, `Loaded <path>`, `Couldn't load <path>: <error>` | Entity files and binary override files at map load. | partial | Added (upstream); `sv_entpath` loads entity files with its own log words |
 | log.rate-limit | `Period too large: <n>`, `Limit too large: <n>`, `Burst too large: <n>` | Rate-limit syntax errors. | partial | `engine/server/limit.hpp` refuses with its own words |

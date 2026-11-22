@@ -109,6 +109,31 @@ TEST(a_folder_lists_up_folders_then_files_newest_first) {
   CHECK(out[4].age_s >= 59 && out[4].age_s < 600);
 }
 
+TEST(files_sort_by_name_age_or_size_either_way_after_the_folders) {
+  namespace gv = ge::vfs;
+  const std::vector<gv::FolderEntry> listed = {
+      {.name = "..", .path = "", .folder = true},
+      {.name = "maps", .path = "", .folder = true},
+      {.name = "b.dm2", .path = "", .bytes = 30, .age_s = 5},
+      {.name = "a.dm2", .path = "", .bytes = 10, .age_s = 50},
+      {.name = "c.dm2", .path = "", .bytes = 20, .age_s = 500},
+  };
+  const auto names = [&](int order) {
+    std::vector<gv::FolderEntry> e = listed;
+    gv::sort_files(e, order);
+    std::string out;
+    for (const gv::FolderEntry& f : e) out += f.name.substr(0, 1);
+    return out;
+  };
+  CHECK(names(1) == ".mabc");
+  CHECK(names(-1) == ".mcba");
+  CHECK(names(2) == ".mcab");   // oldest first
+  CHECK(names(-2) == ".mbac");  // newest first
+  CHECK(names(3) == ".macb");
+  CHECK(names(-3) == ".mbca");
+  CHECK(names(0) == ".mabc");
+}
+
 TEST(a_folder_that_does_not_open_is_said) {
   std::vector<vfs::FolderEntry> out;
   std::string error;

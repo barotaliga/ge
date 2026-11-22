@@ -11,9 +11,9 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 115 | 13 | 18 | 10 | 156 |
-| Client settings (cvars) | 144 | 45 | 121 | 40 | 350 |
+| Client settings (cvars) | 148 | 45 | 117 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
-| Menu pages and rows | 87 | 66 | 8 | 1 | 162 |
+| Menu pages and rows | 88 | 68 | 5 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
 | Temporary entities (svc_temp_entity) | 14 | 50 | 1 | 0 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 18 | 0 | 2 | 0 | 20 |
@@ -23,13 +23,13 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 7 | 7 | 2 | 0 | 16 |
 | The layout language (status bar and layouts) | 24 | 1 | 2 | 0 | 27 |
 | HUD and screen elements | 11 | 10 | 7 | 1 | 29 |
-| Messages printed to the player | 46 | 57 | 39 | 5 | 147 |
+| Messages printed to the player | 47 | 58 | 37 | 5 | 147 |
 | Demo playback and recording features | 4 | 10 | 7 | 2 | 23 |
-| Keys: the fixed keys and the default bindings | 5 | 4 | 2 | 0 | 11 |
+| Keys: the fixed keys and the default bindings | 6 | 4 | 1 | 0 | 11 |
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 598 | 304 | 248 | 61 | 1211 |
+| **all** | 605 | 307 | 238 | 61 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 144, partial 45, missing 121, not-taken 40
+done 148, partial 45, missing 117, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -492,10 +492,10 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.sys_console | `sys_console` | Unix: the terminal console's mode | missing | not found |
 | cvar.win_noalttab | `win_noalttab` | Windows: disable Alt+Tab (default 0) | missing | Windows only |
 | cvar.win_disablewinkey | `win_disablewinkey` | Windows: disable the Windows key (default 0) | missing | Windows only |
-| cvar.win_noresize | `win_noresize` | Windows: a window that cannot be resized (default 0) | missing | Windows only |
-| cvar.win_notitle | `win_notitle` | Windows: no title bar (default 0) | missing | Windows only |
-| cvar.win_alwaysontop | `win_alwaysontop` | Windows: keep the window on top (default 0) | missing | Windows only |
-| cvar.win_noborder | `win_noborder` | Windows: no border (default 0) | missing | Windows only |
+| cvar.win_noresize | `win_noresize` | Windows: a window that cannot be resized (default 0) | done | `engine/platform/window_cvars.hpp` (every game, every desktop), applied by `follow_window_cvars` through `platform::set_window_style`: the edges no longer resize it |
+| cvar.win_notitle | `win_notitle` | Windows: no title bar (default 0) | done | `engine/platform/window_cvars.hpp` (every game, every desktop), applied by `follow_window_cvars` through `platform::set_window_style`: no title bar, so no border either |
+| cvar.win_alwaysontop | `win_alwaysontop` | Windows: keep the window on top (default 0) | done | `engine/platform/window_cvars.hpp` (every game, every desktop), applied by `follow_window_cvars` through `platform::set_window_style`: kept above every other window |
+| cvar.win_noborder | `win_noborder` | Windows: no border (default 0) | done | `engine/platform/window_cvars.hpp` (every game, every desktop), applied by `follow_window_cvars` through `platform::set_window_style`: no border or title bar |
 | cvar.sys_exitonerror | `sys_exitonerror` | Windows: exit at once on a fatal error (default 0) | missing | Windows only |
 | cvar.sys_viewlog | `sys_viewlog` | Windows: show the system console window | missing | Windows only |
 | cvar.sys_disablecrashdump | `sys_disablecrashdump` | Windows: no crash dump | missing | Windows only |
@@ -596,7 +596,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 87, partial 66, missing 8, not-taken 1
+done 88, partial 68, missing 5, not-taken 1
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
@@ -756,13 +756,13 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.dl.textures | downloads: textures | `allow_download_textures` | done | `games/shooters_edge/menu/q2_pages.cpp`, the setting registered by `client/q2_session.cpp` |
 | menu.dl.pics | downloads: pics | `allow_download_pics` | done | `games/shooters_edge/menu/q2_pages.cpp`, the setting registered by `client/q2_session.cpp` |
 | menu.dl.http | downloads: HTTP downloads | `cl_http_downloads` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.ab.fields | address book | 16 text fields `adr0` to `adr15` | missing | C5 |
+| menu.ab.fields | address book | 16 text fields `adr0` to `adr15` | partial | `games/shooters_edge/menu/q2_pages.cpp`: MULTIPLAYER > address book lists `adr0` to `adr15` (Quake II's cvars, `client/cvar_layers.cpp`) with each address beside it; a row opens the console to type it, no text field on the page; JOIN A GAME asks them (`menu/servers_page.cpp`) |
 | menu.game.page | the in-game page | compact list: browse q2servers.com, browse address book, browse demos, single player, options, disconnect, quit | partial | `games/shooters_edge/menu/q2_pages.cpp`: the page and ESCAPE in a level; one browse row (ours lists LAN, masters and hub) for the two |
 | menu.demos.list | demo browser | lists `demos/` (all folders with `ui_listalldemos`): `.dm2`, `.dm2.gz`, `.mvd2`, `.mvd2.gz` | partial | ours `menu/demos_page.cpp` (folders anywhere, newest first) (C40) |
-| menu.demos.columns | demo browser columns | name, Date, Size, Map, POV; sorted by `ui_sortdemos` | missing | C40 |
+| menu.demos.columns | demo browser columns | name, Date, Size, Map, POV; sorted by `ui_sortdemos` | partial | ours `menu/demos_page.cpp`: name, age and size on each row, sorted by `menu_demo_sort` (`vfs::sort_files`; Quake II spells it `ui_sortdemos`, by name by default); no Map or POV column |
 | menu.servers.list | server browser | servers from an HTTP list, favourites, `servers.lst`, broadcast | partial | ours `menu/servers_page.cpp` (LAN, masters, hub) (C41) |
 | menu.servers.columns | server browser columns | Hostname, Mod (the game folder, `baseq2` when empty), Map, Players, RTT; the selection's info as Key and Value, its players as Frg, RTT, Name | partial | ours its own columns (C41) |
-| menu.servers.colours | server browser colours | with `ui_colorservers` 1: grey for a password, anticheat or no-fake server, green under 30 ms, white otherwise | missing | C41 |
+| menu.servers.colours | server browser colours | with `ui_colorservers` 1: grey for a password, anticheat or no-fake server, green under 30 ms, white otherwise | done | `games/shooters_edge/menu/servers_page.cpp` (`row_colour`): `sb_colorservers`, which Quake II spells `ui_colorservers` |
 | menu.script | the menu script file | `q2pro.menu`: pages and rows defined as text a player or mod can change | missing | ours pages are built in (`menu/main_menu.cpp`) |
 
 ## Server messages the client parses (svc)
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 46, partial 57, missing 39, not-taken 5
+done 47, partial 58, missing 37, not-taken 5
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1221,7 +1221,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.loc.usage | "Usage: %s <add\|del\|set\|list\|save>" | `loc` misuse | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.loc.line | "Line %d is incomplete in %s" | a bad line in a `.loc` file | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.mustlevel | "Must be in a level." | `loc`, `aashot` and others while not in a level | partial | ours does it but says it in its own words (the exact line not found) |
-| msg.con.usage | "Usage: %s <filename>" | `condump`, `demo`, `dumpstatusbar` misuse | missing | the feature is missing |
+| msg.con.usage | "Usage: %s <filename>" | `condump`, `demo`, `dumpstatusbar` misuse | partial | `games/shooters_edge/client/q2_bar.cpp`: `dumpstatusbar` and `dumplayout` say it; ours `condump` writes `condump.txt` without a name, `demo` has its own words |
 | msg.con.dumped | "Dumped console text to %s." | `condump` | done | `engine/console/view.cpp` (#1248) |
 | msg.con.chatlevel | "You must be in a level to chat." | `messagemode` while not in a level | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.con.remoteusage | "Usage: %s <address> <password>" | `remotemode` misuse | missing | the feature is missing |
@@ -1236,7 +1236,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.ignore.short | "Match string "%s" is too short." | `ignoretext` of a too-short pattern | done | the same words in `engine/console/chat_ignore.cpp` |
 | msg.ignore.notfound | "Can't find ignore filter "%s"" | `unignoretext` of an unknown one | done | the same words in `engine/console/chat_ignore.cpp` |
 | msg.ignore.removed | "Removed %d ignore filter%s." | `unignoretext` | done | the same words in `engine/console/chat_ignore.cpp` |
-| msg.stuff.ignored | "Ignored stufftext: %s" | a pushed command refused by `cl_ignore_stufftext` | missing | the feature is missing |
+| msg.stuff.ignored | "Ignored stufftext: %s" | a pushed command refused by `cl_ignore_stufftext` | done | `plugins/classic/protocol/stuff_filter.cpp` (`stuff_ignored_line`), said by `games/shooters_edge/net/q2_remote.cpp` for a Quake II server joined |
 | msg.writeconfig.help | "Save current configuration into file." | `writeconfig` help | done | `engine/console/console_more.cpp` |
 | msg.writeconfig.wrote | "Wrote %s." | `writeconfig`, `aashot`, `dumpstatusbar` done | done | `engine/console/console_more.cpp` |
 | msg.write.error | "Error writing %s" | a file could not be written | done | `engine/console/console_more.cpp` |
@@ -1318,7 +1318,7 @@ What a player can do with client recordings (`.dm2`) and multi-view recordings (
 
 ## Keys: the fixed keys and the default bindings
 
-done 5, partial 4, missing 2, not-taken 0
+done 6, partial 4, missing 1, not-taken 0
 
 Keys the client handles itself (a player cannot unbind them) and where the default bindings come from.
 
@@ -1331,7 +1331,7 @@ Keys the client handles itself (a player cannot unbind them) and where the defau
 | key.fkeys.menu | F1 to F12 in a menu | still run their bindings | done | `engine/ui/console_keys.cpp` (`ConsoleKeys::menu`, set by the window while a menu is up): F1 to F12 and the console key alone run their binds; a key let go always releases |
 | key.cinematic | any button key in a cinematic | skips it | done | `games/shooters_edge/client/cinematic.cpp` |
 | key.shift.demo | SHIFT in a demo | takes the mouse for free look | missing | C15 |
-| key.f1.demo | F1 in a demo | shows the recorded layout | missing | C15 |
+| key.f1.demo | F1 in a demo | shows the recorded layout | done | `games/shooters_edge/client/q2_bar.cpp` (`Q2Bar::f1`, set by the window): held in a recording, the last layout sent; with `scr_draw2d 3` it shows the layouts that hides |
 | key.buttons | button keys | a `+` binding gets the key and time; its release runs the `-` form even in the console | done | `engine/console/binds.cpp` |
 | key.keypad | the keypad in the console | the keypad's keys type their characters in the console | partial | verify (`engine/console/view.cpp`) |
 | key.defaults | the default bindings | none built in: the game's `default.cfg` (in the pack) binds the keys, then `config.cfg`; `bindlist` shows them | partial | ours runs the pack's `default.cfg` in Quake II's start order (`porting/shooters-edge/installs.md` § Q2PRO); verify that our own default binds (`client/controls.cpp`) do not replace the pack's |

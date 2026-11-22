@@ -310,6 +310,18 @@ std::vector<Display> displays() {
   return out;
 }
 
+bool set_window_style(Window& window, const WindowStyle& style) {
+  SDL_Window* w = window.impl_->window;
+  const bool ok = SDL_SetWindowBordered(w, style.border) &&
+                  SDL_SetWindowAlwaysOnTop(w, style.on_top) &&
+                  SDL_SetWindowResizable(w, style.resizable);
+  if (!ok)
+    out::error(
+        std::string("platform: the window's border, place on top or edges could not be set (") +
+        SDL_GetError() + "); the window keeps what it took; skill: platform.");
+  return ok;
+}
+
 bool set_fullscreen(Window& window, bool on, int display) {
   SDL_Window* w = window.impl_->window;
   if (on && display > 0) {

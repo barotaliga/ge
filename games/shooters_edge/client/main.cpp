@@ -170,6 +170,7 @@ namespace cl = shooters_edge::client;
 namespace se = shooters_edge::hud;
 namespace sn = shooters_edge::net;
 namespace slm = shooters_edge::livemap;
+namespace sp = shooters_edge::profiles;
 
 // A timedemo shows one frame in this many ns (30 a second) and draws the rest offscreen.
 constexpr uint64_t kBenchShowNs = 33'333'333;
@@ -334,8 +335,7 @@ int run_main(int argc, char** argv) {
   // scr_conspeed in the loaded game's unit (client/game_start.hpp), known before the configs.
   cl::GameStart game_start;
   cl::LoadLine load_line;  // a classic game's map loading in the console (client/map_load.hpp)
-  const auto* found_game = shooters_edge::profiles::find_game(args.profile);
-  const auto& started_game = found_game ? *found_game : shooters_edge::profiles::q1_game();
+  const auto& started_game = sp::game_or_quake(args.profile);
   cl::add_start_cvars(console, game_start, started_game);
   // The loaded game's own settings in its layer (client/cvar_layers.hpp), meaning a shared name.
   cl::GameCvarValues game_cvars;
@@ -353,6 +353,7 @@ int run_main(int argc, char** argv) {
                                   .noskins = &picture.stock_figures,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,
+                                  .stuff_level = &remote.stuff.level,
                                   .frame_cap = &pacing.settings.max_fps,
                                   .light_intensity = &picture.light_intensity,
                                   .light_modulate = &picture.light_modulate,
@@ -364,6 +365,8 @@ int run_main(int argc, char** argv) {
                                   .auto_chat = &con_view.game_chat,
                                   .music = &music};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
+  remote.stuff_file =
+      cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
   const auto save_settings = [&console, &series] { cl::save_settings(console, series); };
@@ -379,11 +382,8 @@ int run_main(int argc, char** argv) {
   console.cvars().apply_latched();
 
   // The game the install is (args.profile, found by its folders: client/game_folder.hpp).
-  const auto game_row = [](const std::string& id) -> const shooters_edge::profiles::GameProfile& {
-    const shooters_edge::profiles::GameProfile* g = shooters_edge::profiles::find_game(id);
-    return g != nullptr ? *g : shooters_edge::profiles::q1_game();
-  };
-  cl::Q2Bar q2_bar{.files = &files,  // Quake II's status bar, from its rules' program (q2_bar.hpp)
+  // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
+  cl::Q2Bar q2_bar{.files = &files,
                    .binds = &console.binds().table(ge::console::BindMode::game),
                    .screen = &q2_screen,
                    .fx = &picture.q2fx};
@@ -399,9 +399,8 @@ int run_main(int argc, char** argv) {
   remote.snap_take = [&shots](std::vector<uint8_t>& out) { return shots.take_grab(out); };
   std::string error;
   // No packs and no `+map`: the built-in arena (the start map below falls back to it).
-  const bool opened =
-      cl::open_game_dir(args.basedir, args.game, files, error,
-                        shooters_edge::profiles::content_of(game_row(args.profile)));
+  const bool opened = cl::open_game_dir(args.basedir, args.game, files, error,
+                                        sp::content_of(sp::game_or_quake(args.profile)));
   if (!opened) {
     if (!next_map.empty() && next_map != "arena") {
       out::error("shooters_edge: the game folder did not open: " + error +
@@ -519,7 +518,7 @@ int run_main(int argc, char** argv) {
   title_frame(0, 0, "LOADING", 0);
   // The main menu's maps, its classic pictures when the packs carry them, and enhance's packs.
   // The install's game's adapter, copied: LOAD GAME of another install swaps it for every reader.
-  cl::GameAdapter adapter = cl::adapter_of(game_row(args.profile));
+  cl::GameAdapter adapter = cl::adapter_of(sp::game_or_quake(args.profile));
   remote.q2_game = [&adapter] { return adapter.game->id == "q2"; };
   shooters_edge::menu::Host menu_host{
       .console = &console, .maps = adapter.list_maps(adapter, files), .files = &files.vfs};
@@ -625,14 +624,13 @@ int run_main(int argc, char** argv) {
   cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
   cl::add_window_dedicated(console, prefs, args.basedir, adapter.game->id);  // NEW GAME, DEDICATED
   // The install's enhancing, in the background unless ce_auto is off or a run is measured.
-  if (std::string basedir, why;
-      opened && cl::check_game_folder(args.basedir, &basedir, &why,
-                                      shooters_edge::profiles::content_of(*adapter.game))) {
+  if (std::string basedir, why; opened && cl::check_game_folder(args.basedir, &basedir, &why,
+                                                                sp::content_of(*adapter.game))) {
     game_menu.set_game(basedir);
     game_menu.servers().set_masters(shooters_edge::net::qw_install_masters(basedir));
     // The game played is the one the next start opens, however it was picked (-basedir too).
-    cl::remember_game(prefs, basedir, shooters_edge::profiles::content_of(*adapter.game));
-    cl::remember_install(prefs, shooters_edge::profiles::content_of(*adapter.game).id, basedir);
+    cl::remember_game(prefs, basedir, sp::content_of(*adapter.game));
+    cl::remember_install(prefs, sp::content_of(*adapter.game).id, basedir);
     if (game_menu.auto_enhance() && !measured) {
       if (game_menu.enhance_game(false, &why))
         out::status("shooters_edge: enhancing " + basedir +
@@ -769,7 +767,6 @@ int run_main(int argc, char** argv) {
     ge::platform::set_swap_images(*window, ge::platform::swap_images(pacing.settings));
     pacing.present = surface.present_mode();
   };
-  bool full_applied = false;  // what the window was last set to; vid_fullscreen is the ask
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
   cl::DemoFolder bench_folder;               // the demo's game folder (timedemo.hpp's demo_folder)
   size_t bench_models = 0;         // the model list's length the demo's world was made with
@@ -960,8 +957,8 @@ int run_main(int argc, char** argv) {
     places.locs = {};
     places.map.clear();
     places.game_dir = std::filesystem::path(basedir) / args.game;
-    const shooters_edge::profiles::GameProfile& was_game = *adapter.game;
-    adapter = cl::adapter_of(game_row(args.profile));
+    const sp::GameProfile& was_game = *adapter.game;
+    adapter = cl::adapter_of(sp::game_or_quake(args.profile));
     save_settings();  // the game left keeps its own settings in its folder
     cl::start_switch_game(console, game_start, was_game, *adapter.game);
     cl::switch_game_cvars(console, game_cvars, *adapter.game, bindings);
@@ -1189,11 +1186,7 @@ int run_main(int argc, char** argv) {
       save_settings();
       break;
     }
-    if (win.fullscreen != full_applied) {  // the size follows through `input.resized`
-      if (!ge::platform::set_fullscreen(*window, win.fullscreen, win.display))
-        win.fullscreen = full_applied;
-      full_applied = win.fullscreen;
-    }
+    ge::platform::follow_window_cvars(*window, win);  // vid_fullscreen, win_noborder, ...
     ge::input::update(held, queue);
     // What the console and menu ask this frame, against before (a demo held behind it, below).
     const std::string map_before = next_map;
@@ -1238,6 +1231,7 @@ int run_main(int argc, char** argv) {
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
       menu_host.in_level = (listen.server || remote.active) && !attract;  // ESCAPE's in-game page
       menu_host.screen_up = q2_bar.layout_up;  // ESCAPE puts the help computer away first
+      q2_bar.f1 = ge::input::key_held(held, 58) ? (bench.active ? 2 : 1) : 0;  // F1: the layout
       // A benchmark's Escape stops the run (below) and opens nothing.
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
                             input.tapped(Key::escape)) ||

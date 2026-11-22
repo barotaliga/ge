@@ -9,6 +9,7 @@
 
 #include <csetjmp>
 #include <cstdint>
+#include <cstdio>
 #include <deque>
 #include <filesystem>
 #include <map>
@@ -38,6 +39,20 @@ struct NativeHost {
   ge::mod::Library library;
   native::NativeImports imports{};
   native::NativeExports* game = nullptr;
+  // The extended interface (q2_native_abi.hpp): the server's table and the game's, null when the
+  // game has none.
+  native::NativeImportsEx imports_ex{};
+  const native::NativeExportsEx* ex = nullptr;
+  // The files the extended interface reads, the game's folder first then the base folder's, and
+  // writes, in the game's folder; the files it has open, by handle less 1 (null: free).
+  std::vector<std::filesystem::path> folders;
+  std::filesystem::path write_dir, base_dir;
+  struct OpenFile {
+    std::FILE* file = nullptr;
+    bool write = false;
+    int error = 0;  // the first error it met, kept
+  };
+  std::vector<OpenFile> files;
   int max_clients = 8;
   bool dead = false;             // the library called `error`: nothing more is called
   std::string error_text;        // its text
@@ -110,7 +125,19 @@ struct NativeHost {
 // The library's calls (q2_native_calls.cpp): the table filled, and the host whose world they
 // answer (one at a time: the runner makes it current before each call into its library).
 void native_fill_imports(native::NativeImports& t);
+void native_fill_imports_ex(native::NativeImportsEx& t);
+// The game's feature bits as it set them (`g_features`), and the server's it reads
+// (`kNativeServerFeatures`: proper in-use, every disconnect, enhanced saves, the extra user info,
+// IPv6 addresses, the index lists' overflow answered with 0).
+int32_t native_features(NativeHost& h);
+inline constexpr int32_t kNativeServerFeatures =
+    native::kGmfProperInUse | native::kGmfAllDisconnects | native::kGmfEnhancedSaves |
+    native::kGmfExtraUserInfo | native::kGmfIpv6 | native::kGmfIndexOverflow;
+// The file calls (q2_native_files.cpp) and the files left open closed.
+const native::NativeFilesApi* native_files_api();
+void native_close_files(NativeHost& h);
 void native_make_current(NativeHost* h);
+NativeHost* native_current();
 NativeSetting& native_setting(NativeHost& h, const std::string& name, const std::string& value,
                               int flags);
 void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool force);

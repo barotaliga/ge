@@ -30,7 +30,7 @@ namespace {
 
 constexpr uint8_t kSvcLayout = 4, kSvcPrint = 10, kSvcStuffText = 11, kSvcServerData = 12,
                   kSvcConfigString = 13, kSvcFrame = 20, kSvcPacketEntities = 18;
-constexpr int kPrintLow = 0, kPrintMedium = 1, kPrintHigh = 2;
+constexpr int kPrintLow = 0, kPrintMedium = 1, kPrintHigh = 2, kPrintChat = 3;
 constexpr int kStatLayouts = 13, kStatFrags = 14;
 constexpr int kCsPlayerSkins = 1312;
 constexpr uint8_t kPmFreeze = 4, kPmfNoPrediction = 64;
@@ -357,6 +357,14 @@ void touch(const Q2Relay& r, uint64_t key, int chan, uint8_t& type, uint8_t& fla
     stats[kStatFrags] = static_cast<int16_t>(chan);
 }
 
+// mvd_filter_version: each `!version` in a chat line from the recorded server made `!versi0n`.
+void filter_version(const Q2Relay& r, int level, std::string& text) {
+  if (!r.cfg.filter_version || level != kPrintChat) return;
+  for (size_t at = text.find("!version"); at != std::string::npos;
+       at = text.find("!version", at + 8))
+    text[at + 6] = '0';
+}
+
 // A view of `c` for the viewer `key`, following `target` (-1: the view's own choice).
 std::unique_ptr<Q2RelayView> view_of(Q2Relay& r, Q2Channel& c, uint64_t key, int target) {
   auto v = make_view(r, 1);
@@ -365,6 +373,9 @@ std::unique_ptr<Q2RelayView> view_of(Q2Relay& r, Q2Channel& c, uint64_t key, int
   v->conv.options.touch_player = [&r, key, id = c.id](int, uint8_t& type, uint8_t& flags,
                                                       int16_t* stats) {
     touch(r, key, id, type, flags, stats);
+  };
+  v->conv.options.touch_print = [&r](int level, std::string& text) {
+    filter_version(r, level, text);
   };
   client::convert_set_pov(v->conv, target);
   return v;
@@ -957,8 +968,10 @@ void refork(Q2Relay& r, Q2Channel& c) {
   for (auto& [key, rec] : r.viewers) {
     if (rec.chan != c.id || !rec.view) continue;
     auto opts = rec.view->conv.options.touch_player;
+    auto prints = rec.view->conv.options.touch_print;
     client::convert_fork(c.base, rec.view->conv);
     rec.view->conv.options.touch_player = opts;
+    rec.view->conv.options.touch_print = prints;
     client::convert_set_pov(rec.view->conv, rec.target);
   }
 }
@@ -1084,12 +1097,21 @@ void viewers_frame(Q2Relay& r, int64_t now_us) {
       if (s >= 0) retarget(rec, s);
     }
   }
-  // Viewers gone from their faces are forgotten.
+  // Viewers gone from their faces are forgotten, their channel told; a new name is told too.
   for (auto it = r.viewers.begin(); it != r.viewers.end();) {
-    if (viewer_of(r, it->second) == nullptr)
+    Q2RelayViewer& rec = it->second;
+    const Q2Viewer* q = viewer_of(r, rec);
+    if (q == nullptr) {
+      if (rec.chan >= 0) announce(r, rec, rec.chan, rec.name + " disconnected");
       it = r.viewers.erase(it);
-    else
-      ++it;
+      continue;
+    }
+    if (q->name != rec.name) {
+      if (!rec.name.empty() && rec.chan >= 0)
+        announce(r, rec, rec.chan, rec.name + " changed name to " + q->name);
+      rec.name = q->name;
+    }
+    ++it;
   }
   room_tick(r);
 }
