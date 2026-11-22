@@ -174,13 +174,16 @@ struct NavEscape {
 struct NavLink {
   int32_t to = 0;
   NavKind kind = NavKind::walk;
-  float time_s = 0;     // the proof's time
-  int32_t mover = -1;   // a mover the proof's path crosses, or -1
-  float speed = 0;      // a jump's speed toward the target at its start, units/s
-  bool back = false;    // a rocket jump played as the flip (`RocketJumpSpec::back`)
-  float pitch = 0;      // a rocket jump's shot, degrees down (0: the player's own)
-  uint8_t level = 0;    // a rocket jump's: the least jumper's level that takes it (`NavJumper`)
-  float lead = 0;       // a grenade jump's: the jumper stands this far past the grenade, units
+  float time_s = 0;    // the proof's time
+  int32_t mover = -1;  // a mover the proof's path crosses, or -1
+  float speed = 0;     // a jump's speed toward the target at its start, units/s
+  bool back = false;   // a rocket jump played as the flip (`RocketJumpSpec::back`)
+  float pitch = 0;     // a rocket jump's shot, degrees down (0: the player's own)
+  uint8_t level = 0;   // a rocket jump's: the least jumper's level that takes it (`NavJumper`)
+  float lead = 0;      // a grenade jump's: the jumper stands this far past the grenade, units
+  // A grenade jump's: a COMBO, a rocket fired straight down on the jump as the grenade bursts
+  // (both launchers and two rockets: `NavJumper::combos`).
+  bool combo = false;
   int32_t script = -1;  // a scripted way's: its index in `NavGraph::scripts`
   bool teleport =
       false;            // a teleporter's: walked INTO its trigger (at the link's start), not across
@@ -209,6 +212,7 @@ inline bool nav_blast(NavKind k) { return k == NavKind::rocket || k == NavKind::
 struct NavJumper {
   bool rockets = false;
   bool grenades = false;
+  bool combos = false;   // the combos (`NavLink::combo`) taken: both launchers, two rockets
   bool scripts = true;   // the scripted ways taken (a game's switch)
   bool escapes = false;  // the rockets out of a pit's liquid (`NavLink::escape`) taken
   bool gaps = false;     // the jumps over a gap at a hopper's speed (`NavLink::gap`) taken
@@ -234,6 +238,7 @@ struct NavJumper {
     if (l.escape >= 0) return escapes;
     if (l.gap) return gaps && l.level <= level;
     if (!nav_blast(l.kind)) return true;
+    if (l.combo) return combos && l.level <= level;
     return (l.kind == NavKind::rocket ? rockets : grenades) && l.level <= level;
   }
   // Whether he takes the gap `l` reached `at_s` into the route, building the speed on the way.
@@ -330,6 +335,7 @@ struct NavExtraLink {
   float pitch = 0;        // and its shot (NavLink::pitch)
   uint8_t level = 0;      // and its level (NavLink::level)
   float lead = 0;         // a grenade jump's stand past the grenade (NavLink::lead)
+  bool combo = false;     // and a rocket on it as it bursts (NavLink::combo)
   int32_t mover = -1;     // a mover the way crosses (NavLink::mover): shut, it bars the link
   int32_t script = -1;    // a scripted way's steps (NavLink::script)
   bool teleport = false;  // a teleporter's (NavLink::teleport)
@@ -406,6 +412,8 @@ struct GrenadeJumpSpec {
   float pitch = 80;
   float speed = 600, up = 200, gravity = 800, bounce = 1.5f, fuse = 2.5f;
   float jump_before_s = 0.1f;
+  // A COMBO: a rocket fired this far down (degrees) on the jump command as well; 0: none.
+  float rocket_pitch = 0;
   RocketJumpSpec blast;  // the burst's damage, self share and push, and the eye's height
 };
 // Where a grenade fired by a player standing at `origin` along the view `angles` is `t` seconds
@@ -530,11 +538,12 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
 // grenade) and kept the same way at the first level (a standing jump timed by the fuse needs no
 // skilled hands): the way up for a player with the grenade launcher and no rocket launcher.
 struct NavTrick {
-  Vec3f from, to;     // where people took off and landed (their origins)
-  bool back = false;  // flipped (`RocketJumpSpec::back`)
-  float pitch = 45;   // the shot, degrees down
-  float run = 320;    // the run at the shot, units/s (0: standing)
-  uint8_t level = 0;  // the least level that makes it (`NavLink::level`)
+  Vec3f from, to;      // where people took off and landed (their origins)
+  bool back = false;   // flipped (`RocketJumpSpec::back`)
+  float pitch = 45;    // the shot, degrees down
+  float run = 320;     // the run at the shot, units/s (0: standing)
+  uint8_t level = 0;   // the least level that makes it (`NavLink::level`)
+  bool combo = false;  // people laid a grenade and fired a rocket on it (`NavLink::combo`)
 };
 struct NavTrickSettings {
   float near = 64;   // a takeoff node within this of people's takeoff, units
@@ -543,11 +552,15 @@ struct NavTrickSettings {
   float cost_s = 0;  // the link costs its flight and this (a jumper's own price is `NavJumper`)
   RocketJumpSpec rj;
   bool rockets = true, grenades = false;
+  // A COMBO for a trick people made as one (`NavTrick::combo`): the grenade jump with a rocket
+  // fired under the feet on the jump (`GrenadeJumpSpec::rocket_pitch`), tried when no rocket
+  // jump alone lands; kept as a grenade link with `combo` at least at the middle level.
+  bool combos = false;
   float leads[4] = {16, 32, 0, 48};
   GrenadeJumpSpec gj;
 };
 struct NavTrickCounts {
-  int64_t held = 0, flips = 0, grenades = 0, proofs = 0;
+  int64_t held = 0, flips = 0, grenades = 0, combos = 0, proofs = 0;
   // Each trick's link start, -1 where no proof landed: its rocket jump's and its grenade jump's.
   std::vector<int32_t> rocket_from, grenade_from;
 };

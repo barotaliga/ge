@@ -1266,6 +1266,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
         }
       sb::NavTrickSettings ts;
       ts.grenades = true;
+      ts.combos = out.one_way_tricks;  // a record run's grenade and rocket together
       if (out.one_way_tricks) {
         // A record run's jump flown its own way (air control, another run-up): a takeoff and a
         // landing further from the runner's still make the same way past what blocks the floor.
@@ -1275,6 +1276,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
       }
       out.tricks_made = sb::nav_add_tricks(out.world, out.move, graph, tricks, back, ts);
       ts.rockets = false;
+      ts.combos = false;
       ts.near = 8;  // from the bridge's own takeoff
       out.bridged_grenades = sb::nav_add_tricks(out.world, out.move, graph, bridged, back, ts);
     }

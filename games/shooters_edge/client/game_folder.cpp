@@ -14,6 +14,7 @@
 #include <system_error>
 #include <utility>
 
+#include "classic/content/fs_words.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
@@ -593,6 +594,32 @@ void add_path_command(ge::console::Console& con, const SearchPath& files) {
                       c.print(text.substr(0, nl));
                       text.erase(0, nl == std::string::npos ? text.size() : nl + 1);
                     }
+                  });
+  // The read-only links over the search path (classic/content/fs_words.hpp), and fs_restart's
+  // listing of it; dir, fdir and whereis are the engine's (vfs/search_commands.hpp).
+  const auto say = [](ge::console::Console& c, std::string text) {
+    while (!text.empty()) {
+      const size_t nl = text.find('\n');
+      c.print(text.substr(0, nl));
+      text.erase(0, nl == std::string::npos ? text.size() : nl + 1);
+    }
+  };
+  const std::pair<const char*, const char*> words[] = {
+      {"link", "link [<name> <target>]: a link over the game's files made, or listed"},
+      {"softlink", "softlink [<name> <target>]: a link over the game's files made, or listed"},
+      {"unlink", "unlink <name> | -a: a link over the game's files taken away"},
+      {"softunlink", "softunlink <name> | -a: a link over the game's files taken away"}};
+  for (const auto& [word, help] : words) {
+    con.add_command(word, help, [&files, say](ge::console::Console& c, const ge::console::Args& a) {
+      std::vector<std::string> w;
+      for (size_t i = 0; i < a.size(); ++i) w.push_back(a[i]);
+      std::string out;
+      if (ge::classic::content::fs_command(files, w, out)) say(c, out);
+    });
+  }
+  con.add_command("fs_restart", "fs_restart: the folders and archives the game reads, listed again",
+                  [&files, say](ge::console::Console& c, const ge::console::Args&) {
+                    say(c, ge::classic::content::fs_restart_text(files));
                   });
 }
 
