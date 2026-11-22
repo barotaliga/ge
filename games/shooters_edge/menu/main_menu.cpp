@@ -7,9 +7,11 @@
 // ge:test tests/shooters_edge_menu_test.cpp
 #include "shooters_edge/menu/main_menu.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 #include "console/cvar.hpp"
+#include "shooters_edge/menu/figures.hpp"
 
 namespace shooters_edge::menu {
 
@@ -967,6 +969,53 @@ std::string keys_or(const std::vector<std::string>& keys) {
   return keys.size() == 1 ? keys[0] : keys[0] + " or " + keys[1];
 }
 
+// The player page's model or skin row (`figskin`) from the game's figures and the `skin` setting:
+// a model or skin not found shows the first; no figures, "NONE" dimmed.
+void figure_row(const Entry& e, ge::ui::Item& it, const Host& host) {
+  it.choices.clear();
+  it.choice = 0;
+  const std::vector<Figure> figures =
+      host.files != nullptr ? player_figures(*host.files) : std::vector<Figure>{};
+  if (figures.empty()) {
+    it.choices.emplace_back("NONE");
+    it.disabled = true;
+    return;
+  }
+  const auto [model, skin] = split_look(host_value(host, "skin"));
+  size_t m = 0;
+  for (size_t i = 0; i < figures.size(); i++)
+    if (figures[i].model == model) m = i;
+  if (e.id == "model") {
+    for (const Figure& f : figures) it.choices.push_back(f.model);
+    it.choice = static_cast<int>(m);
+    return;
+  }
+  it.choices = figures[m].skins;
+  for (size_t i = 0; i < it.choices.size(); i++)
+    if (it.choices[i] == skin) it.choice = static_cast<int>(i);
+}
+
+// The player page's model or skin changed: `skin` written as `<model>/<skin>`, a new model at its
+// first skin.
+void figure_changed(const ge::ui::Page& page, std::string_view changed, Host& host) {
+  const ge::ui::Item* model = page.find("model");
+  const ge::ui::Item* skin = page.find("figskin");
+  if (model == nullptr || skin == nullptr || host.files == nullptr || host.console == nullptr ||
+      model->choices.empty())
+    return;
+  const std::string m = model->choices[static_cast<size_t>(model->choice)];
+  const std::vector<Figure> figures = player_figures(*host.files);
+  std::string s;
+  for (const Figure& f : figures)
+    if (f.model == m) {
+      const std::string was = changed == "model" || skin->choices.empty()
+                                  ? std::string()
+                                  : skin->choices[static_cast<size_t>(skin->choice)];
+      s = std::find(f.skins.begin(), f.skins.end(), was) != f.skins.end() ? was : f.skins.front();
+    }
+  if (!s.empty()) host.console->execute("skin " + m + "/" + s);
+}
+
 }  // namespace
 
 const MenuTable& classic_menu() {
@@ -1081,6 +1130,10 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         it.choice = 0;
         continue;
       }
+      if (e->page == "setup" && (e->id == "model" || e->id == "figskin")) {
+        figure_row(*e, it, host);
+        continue;
+      }
       if (e->page == "host" && e->id == "map") {
         const std::string was =
             it.choices.empty() ? std::string() : it.choices[static_cast<size_t>(it.choice)];
@@ -1180,6 +1233,12 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   const ge::ui::Item* it = page->find(e.item);
   if (it == nullptr) return Outcome::none;
   if (e.kind == ge::ui::EventKind::changed && !entry->bind.empty()) return Outcome::bind_key;
+  if (e.kind == ge::ui::EventKind::changed && e.page == "setup" &&
+      (e.item == "model" || e.item == "figskin")) {
+    figure_changed(*page, e.item, host);
+    refresh(menu, host);  // a new model starts at its first skin
+    return Outcome::none;
+  }
   if (e.kind == ge::ui::EventKind::changed && entry->bit >= 0) {  // one bit of the number
     double x = 0;
     long v =
