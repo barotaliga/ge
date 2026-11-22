@@ -44,14 +44,14 @@ namespace shooters_edge::net {
 
 // The player's `cl_http_*` settings, as the window reads them at connect.
 struct Q2HttpConfig {
-  bool downloads = true;    // cl_http_downloads
-  bool filelists = true;    // cl_http_filelists
-  int max_connections = 2;  // cl_http_max_connections, held to 1..4
   std::string proxy;        // cl_http_proxy ("": none)
   std::string default_url;  // cl_http_default_url ("": none)
-  bool debug = false;       // cl_http_debug: each fetch's address said as it starts
-  std::string gamedir;      // the mod played ("": baseq2)
+  std::string gamedir;      // the server's game folder ("": baseq2)
   std::string user_agent = "shooters_edge";
+  int max_connections = 2;  // cl_http_max_connections, held to 1..4
+  bool downloads = true;    // cl_http_downloads
+  bool filelists = true;    // cl_http_filelists
+  bool debug = false;       // cl_http_debug: each fetch's address said as it starts
 };
 
 struct Q2HttpFile {

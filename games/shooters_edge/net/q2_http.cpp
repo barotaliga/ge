@@ -85,7 +85,12 @@ void read_list(Q2Http& h, const std::vector<uint8_t>& body,
     const std::string kind = lowered(line.substr(dot + 1));
     const bool pak = kind == "pak" || kind == "pkz";
     if (pak) {
-      h.said.push_back("[HTTP] Filelist is requesting a ." + kind + " file '" + line + "'");
+      std::string said = "[HTTP] Filelist is requesting a .";
+      said += kind;
+      said += " file '";
+      said += line;
+      said += "'";
+      h.said.push_back(std::move(said));
     } else if (std::none_of(std::begin(kKinds), std::end(kKinds),
                             [&kind](const char* k) { return kind == k; })) {
       h.said.push_back("[HTTP] Illegal file type '" + line + "' in filelist.");
@@ -219,7 +224,12 @@ void q2_http_step(Q2Http& h, const Q2HttpConfig& cfg, double now_s,
     }
     const bool status = f.state == gn::HttpState::done;
     const std::string why = status ? gn::http_status_text(f.status) : f.error;
-    h.said.push_back("[HTTP] " + path + " [" + why + "] " + files_left(remaining(h)));
+    std::string said = "[HTTP] " + path;
+    said += " [";
+    said += why;
+    said += "] ";
+    said += files_left(remaining(h));
+    h.said.push_back(std::move(said));
     const bool missing = status && f.status == 404;
     const bool fatal =
         status ? !missing || (h.default_repo && !ended.file.filelist)

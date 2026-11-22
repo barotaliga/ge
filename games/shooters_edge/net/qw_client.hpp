@@ -101,7 +101,6 @@ struct ClientConfig {
   bool gender_auto = false;  // Quake II's: `gender` picked from the skin's figure
   bool speedjump = false;    // cl_speedjump: the easy jump asked for (sent only when set)
   Q2Downloads q2_downloads;  // Quake II's `allow_download` switches (q2_downloads.hpp)
-  Q2HttpConfig q2_http;      // Quake II's `cl_http_*` downloads over HTTP (q2_http.hpp)
   bool q2_nodelta = false;   // Quake II's `cl_nodelta`: every frame asked for whole
   std::string password;
   // Through forwarders (qw_forward.hpp): the route after the first one, the server last
@@ -148,6 +147,7 @@ struct ClientConfig {
   // Who its voice goes to (`voicetarg`: all, team, near or a slot), told to the server at its
   // `begin`; "" leaves the server's own (team). `qw_voice_target` changes it later.
   std::string voice_to;
+  Q2HttpConfig q2_http;  // Quake II's `cl_http_*` downloads over HTTP (q2_http.hpp)
   int seed = 1;
   uint16_t qport = 1;
   // How long the server may send nothing once connected before the client gives it up, s: a
