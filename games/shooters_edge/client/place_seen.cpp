@@ -9,6 +9,7 @@
 #include <cmath>
 #include <string>
 
+#include "shooters_edge/client/face_hit.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/map_line.hpp"
 
@@ -72,6 +73,15 @@ void add_place_queries(ge::console::Console& con, PlaceNames& places, const List
                     c.print("(" + whole(at.x) + " " + whole(at.y) + " " + whole(at.z) +
                             ") : " + whole(angles.y));
                   });
+  // $cl_surface: the texture straight ahead and its flags ("" outside a level).
+  con.add_macro("cl_surface", [&places, &listen, &seen] {
+    const server::BspMap* map = seen.on ? seen.map : (listen.map ? &listen.map->bsp : nullptr);
+    V at;
+    if (map == nullptr || !places.looked_at || !places.looked_at(at)) return std::string();
+    V from;
+    if (!places.where || !places.where(from)) return std::string();
+    return surface_ahead(map->map, from, at);
+  });
   // $cl_ups: the player's speed along the ground, units a second (0 for a view watched).
   con.add_macro("cl_ups", [&listen, &seen] {
     if (seen.on || listen.server == nullptr || listen.server->world.entities.size() < 2)

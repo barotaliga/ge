@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_place_names_test.cpp
 #include "shooters_edge/client/place_names.hpp"
 
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <system_error>
@@ -94,6 +95,23 @@ void map_started(PlaceNames& p, const GameAdapter& adapter, const SearchPath& fi
   }
 }
 
+bool place_markers(const PlaceNames& p, double t, std::vector<PlaceMarker>& out) {
+  out.clear();
+  sh::Vec3f me;
+  if (p.draw == nullptr || !p.draw->on() || !p.where || !p.where(me)) return false;
+  const float range = range_of(p);
+  const ge::classic::Loc* near = ge::classic::nearest_loc(p.locs, me, range, sight_of(p));
+  if (near == nullptr) return false;
+  for (const ge::classic::Loc& c : p.locs.points) {
+    const float dx = c.at.x - me.x, dy = c.at.y - me.y, dz = c.at.z - me.z;
+    if (range > 0 && static_cast<int>(std::sqrt(dx * dx + dy * dy + dz * dz)) > range) continue;
+    PlaceMarker m{.at = c.at, .light = c.at, .nearest = &c == near};
+    if (m.nearest) m.at.z += static_cast<float>(10 * std::sin(t * 10));
+    out.push_back(m);
+  }
+  return true;
+}
+
 std::string place_at(const PlaceNames& p, sh::Vec3f at) {
   std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
   if (name.empty()) name = p.someplace != nullptr ? p.someplace->value : "someplace";
@@ -148,6 +166,12 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
                     .flags = con::kArchive,
                     .help = "1: a place's point behind a wall is not where you are",
                     .kind = con::CvarKind::boolean});
+  p.draw = &v.add({.name = "loc_draw",
+                   .fallback = "0",
+                   .flags = con::kArchive,
+                   .help = "1: a marker stands at every place point within reach, the nearest "
+                           "bobbing in a white light",
+                   .kind = con::CvarKind::boolean});
   // The place macros, in every game (Quake II's client brought them): where the player is and
   // where the view looks, `unknown` when no place is within reach or no game is playing.
   {

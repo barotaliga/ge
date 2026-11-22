@@ -99,6 +99,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | The string commands (`alias_in`, `cvar_in`, `set_bind_str`, `hash` ...), `msg_trigger` levels, `$triggermatch` | Quake's later clients | `engine/console/script_strings.cpp`, `script.cpp` |
 | Alias arguments `$0`, `$@`, `${1-3}`, `%1`; `if ... eq/ne/isin` | Quake II's later client | `engine/console/lex.cpp`, `script.cpp` |
 | The team's `$` macros, `$ledpoint`, `$ledstatus`, the match's `f_` hooks, fake names, flood protection, `cl_nofake`, the sound trigger, `f_version` answers | Quake's later clients | `client/team_macros.hpp`, `team_chat.hpp`, `chat_lines.hpp` (the classic layer) |
+| `loc_draw` markers at the place points, `$cl_surface` | Quake II's later client | `client/place_names.hpp` (`place_markers`), `client/world_fx.cpp`, `client/face_hit.hpp` |
 | Map commands (`cl_beginmapcmd`, `cl_changemapcmd`, `cl_disconnectcmd`), `$loc_here`, `$loc_there` | Quake II's later client | `client/q2_session.hpp` (`add_map_command_cvars`), `place_names.hpp` |
 
 | Drawback left behind | How |

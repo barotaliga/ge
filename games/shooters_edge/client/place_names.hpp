@@ -54,6 +54,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "classic/locs.hpp"
 #include "console/console.hpp"
@@ -79,6 +80,7 @@ struct PlaceNames {
   // place's point behind a wall is not where the player is); null: no map to ask.
   ge::classic::LocSight clear_line;
   const ge::console::Cvar* trace = nullptr;  // loc_trace
+  const ge::console::Cvar* draw = nullptr;   // loc_draw (world_fx.hpp's place markers)
   WhereAmI where;  // where the player stands (add_place_commands keeps it)
 };
 
@@ -89,6 +91,16 @@ void map_started(PlaceNames& p, const GameAdapter& adapter, const SearchPath& fi
 // The place commands and cvars above (`p`, `adapter`, `files` and `where` outlive `con`).
 void add_place_commands(ge::console::Console& con, PlaceNames& p, const GameAdapter& adapter,
                         const SearchPath& files, const WhereAmI& where);
+
+// `loc_draw`'s markers: every place point within `loc_dist` of where the player is (a whole
+// number of units), drawn where `at` says, the nearest (by `loc_trace`'s sight) bobbing 10 units
+// on a 0.63 s swing with its light at the point itself. False (and none) when `loc_draw` is off,
+// no game is playing or no point is nearest.
+struct PlaceMarker {
+  ge::shooter::Vec3f at, light;
+  bool nearest = false;
+};
+bool place_markers(const PlaceNames& p, double t, std::vector<PlaceMarker>& out);
 
 // The place `at` is in, as `loc` names it (`tp_name_someplace` with none).
 std::string place_at(const PlaceNames& p, ge::shooter::Vec3f at);
