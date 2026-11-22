@@ -1,9 +1,12 @@
 // The window's frame pacing (pacing.hpp).
 //
 // ge:summary The pacing cvars, the cap's wait on the clock, framestats
-// ge:keywords pacing framestats add_pacing_cvars
+// ge:keywords pacing framestats add_pacing_cvars r_fps
 // ge:skill platform
 #include "platform/pacing.hpp"
+
+#include <cmath>
+#include <string>
 
 #include "console/console.hpp"
 #include "core/num.hpp"
@@ -93,6 +96,13 @@ void add_pacing_cvars(console::Console& con, Pacing& p) {
                     .values = "0: off (the default); 1: the frame rate; 2: with the last frames' "
                               "times as a graph, the refresh's interval a line"},
                    &p.show);
+  // $r_fps: the frames drawn in the last second (the last frames' mean rate while under one).
+  con.add_macro("r_fps", [&p] {
+    double sum = 0;
+    size_t n = 0;
+    while (n < p.times.size() && sum < 1) sum += p.times.recent(n++);
+    return std::to_string(sum > 0 ? std::lround(static_cast<double>(n) / sum) : 0L);
+  });
   con.add_command("framestats",
                   "the last frames' pacing in one line (rate, percentiles, jitter, hitches, "
                   "waits); `framestats clear` starts the record again",

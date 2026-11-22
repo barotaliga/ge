@@ -27,6 +27,7 @@ Console::Console(bool is_server) : cvars_(is_server) {
   register_builtin_commands(*this);
   register_script(*this);
   register_pattern_commands(*this);
+  register_more_commands(*this);
   register_bind_commands(*this);
 }
 
@@ -326,8 +327,9 @@ bool Console::write_file(std::string_view name, std::string_view text) const {
   if (writer_) return writer_(name, text);
   const std::filesystem::path dir = search_.empty() ? std::filesystem::path(".") : search_[0];
   std::error_code ec;
-  std::filesystem::create_directories(dir, ec);
-  std::ofstream out(dir / std::filesystem::path(std::string(name)), std::ios::binary);
+  const std::filesystem::path path = dir / std::filesystem::path(std::string(name));
+  std::filesystem::create_directories(path.parent_path(), ec);  // a folder in the name made too
+  std::ofstream out(path, std::ios::binary);
   if (!out) return false;
   out << text;
   return static_cast<bool>(out);

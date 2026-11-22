@@ -9,11 +9,13 @@
 // ge:summary The window's settings for any game: vid_fullscreen, vid_display, volume, s_auto_focus
 // ge:keywords vid_fullscreen vid_display vid_displays fullscreen display window cvars volume
 // ge:keywords window-cvars add_window_cvars s_auto_focus heard_volume minimised unfocused
+// ge:keywords alt-enter alt_enter
 // ge:skill platform console
 // ge:test tests/platform_window_cvars_test.cpp
 #pragma once
 
 #include "console/console.hpp"
+#include "platform/window.hpp"
 
 namespace ge::platform {
 
@@ -29,5 +31,9 @@ void add_window_cvars(console::Console& con, WindowCvars& w);
 // The loudness heard now: `volume`, or 0 while `s_auto_focus` silences a window that is minimised
 // (1 or 2) or has not the focus (2).
 double heard_volume(const WindowCvars& w, bool focused, bool minimised);
+
+// ALT+ENTER: the window in and out of full screen, whatever the binds say (`vid_fullscreen`
+// flipped as typed). True when this frame's keys asked for it.
+bool alt_enter(const InputSnapshot& in, console::Console& con);
 
 }  // namespace ge::platform

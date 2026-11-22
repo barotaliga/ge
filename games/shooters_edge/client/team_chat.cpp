@@ -2,6 +2,7 @@
 //
 // ge:summary Team chat's percent codes, fun characters and f_ event triggers, defined
 // ge:keywords say say_team percent-codes fun-characters f_newmap f_spawn f_death f_respawn
+// ge:keywords cl_health cl_armor cl_ammo cl_mapname macros
 // ge:skill shooter console
 // ge:test tests/shooters_edge_team_chat_test.cpp
 #include "shooters_edge/client/team_chat.hpp"
@@ -828,6 +829,13 @@ void team_event(con::Console& c, std::string_view alias) {
 
 void add_team_chat(con::Console& c, TeamChat& chat) {
   add_item_commands(c, chat.items);
+  // The player's figures as macros for binds, draw and say: $cl_health, $cl_armor, $cl_ammo (the
+  // weapon in hand's), and $cl_mapname, as the last frame's state had them.
+  c.add_macro("cl_health", [&chat] { return std::to_string(chat.status.health); });
+  c.add_macro("cl_armor", [&chat] { return std::to_string(chat.status.armour); });
+  c.add_macro("cl_ammo",
+              [&chat] { return std::to_string(chat.status.ammo_for(chat.status.weapon)); });
+  c.add_macro("cl_mapname", [&chat] { return chat.map; });
   auto& v = c.cvars();
   for (const Word& w : kWords)
     if (v.find(w.name) == nullptr)
