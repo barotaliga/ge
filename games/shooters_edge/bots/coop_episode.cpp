@@ -122,6 +122,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
       f.features.set(sb::Feature::locked, false);
       hunt_init(f, s);
       m.way.complete = opt.complete;
+      m.way.toured = opt.tour;
       // The last quarter of the map's time is for the way out: a map he cannot clear still ends.
       m.way.complete_until = s.sv.time + opt.map_seconds * 0.75;
       m.way.avoid = opt.avoid;

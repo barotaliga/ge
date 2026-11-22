@@ -42,6 +42,7 @@
 #include "ai/path.hpp"
 #include "shooterbots/fighter.hpp"
 #include "shooterbots/map_nav.hpp"
+#include "shooterbots/tour.hpp"
 
 namespace ge::shooterbots {
 
@@ -53,7 +54,9 @@ constexpr double kWayIdle_s = 5;     // nothing to do this long: back into the w
 constexpr float kKeyCovered = 96;    // a locked door this near a key's height covers it, units
 constexpr float kWaySeen = 192;      // a node this near where he has stood is explored, units
 
-constexpr int kWayTries = 2;  // (`complete`) a step or a monster left this often is given up
+constexpr double kWayTour_s = 4;  // (`complete`) the tour worked out again this often, s
+constexpr int kWayTourMax = 96;   // and over the nearest this many stops at most
+constexpr int kWayTries = 2;      // (`complete`) a step or a monster left this often is given up
 constexpr double kWayForever = 1e30;  // the time a thing given up for good is left until
 
 enum class WayKind : uint8_t { exit, button, key, trigger, explore, monster, secret };
@@ -152,6 +155,16 @@ struct WayThrough {
   double prey_since = 0;
   std::vector<double> prey_left;
   std::vector<uint8_t> prey_tries;
+  // (`complete`) THE TOUR (tour.hpp): the stops open now (a step's index, or -1 - a monster's
+  // entity) in the quickest order through them all and out, worked out again every kWayTour_s or
+  // when the first stop is gone; the time from each to each, and its own search.
+  bool toured = true;  // the tour's order rather than the nearest stop each time
+  Tour tour;
+  std::vector<int32_t> tour_stops, tour_nodes;
+  std::vector<double> tour_cost;
+  ge::ai::Search tour_search;
+  double tour_at = -1;
+  int64_t tours = 0;
 };
 
 // The steps off `spec`'s entities (the fighter's buttons already read by `fighter_init`), the

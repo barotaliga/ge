@@ -1248,6 +1248,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
            reach(st.node);
   };
   int prey = -1;
+  std::vector<std::pair<int, int32_t>> preys;  // (`complete`) every monster reached: its node
   int32_t prey_node = -1;
   double prey_c = 0;
   bool left_to_do = false;
@@ -1275,6 +1276,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       }
       if (n < 0 || !reach(n)) continue;
       const double c = w.search.cost(n);
+      preys.push_back({e, n});
       if (prey < 0 || c < prey_c) {
         prey = e;
         prey_node = n;
@@ -1354,9 +1356,105 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       }
     }
   }
-  // (`complete`) The nearest monster alive when it is nearer than the step.
-  const bool chase = w.complete && prey >= 0 &&
-                     (pick < 0 || way_exit(w.steps[static_cast<size_t>(pick)]) || prey_c < best);
+  // (`complete`) THE TOUR (tour.hpp): every step open and every monster reached, taken in the
+  // order quickest through them all and out by the exit, not the nearest each time (which leaves a
+  // straggler at the far end of the map for last). Steps taken last (in a trap, a pool's drain) and
+  // the way back are left to the passes above.
+  int toured = 0;  // 1 a step, 2 a monster, from the tour
+  if (w.complete && w.toured && left_to_do && !me_trapped && w.out < 0) {
+    const auto open_now = [&](int32_t stop) {
+      if (stop < 0) {
+        for (const auto& [e, n] : preys)
+          if (e == -1 - stop) return n;
+        return -1;
+      }
+      const WayStep& st = w.steps[static_cast<size_t>(stop)];
+      if (way_exit(st)) return st.node >= 0 && reach(st.node) ? st.node : -1;
+      if (st.done || st.ever || t < st.left_until || st.node < 0 || !reach(st.node) ||
+          (st.keyed && !key_held) || st.drains || (!me_trapped && trapped_in(st.node)))
+        return -1;
+      for (const int c : st.covers)
+        if (!locked_moved(w, s, static_cast<size_t>(c))) return -1;
+      return st.node;
+    };
+    bool first_gone = w.tour.order.empty();
+    if (!first_gone) {
+      const int32_t s0 = w.tour_stops[static_cast<size_t>(w.tour.order.front() - 1)];
+      first_gone = open_now(s0) < 0 || (s0 >= 0 && way_exit(w.steps[static_cast<size_t>(s0)]));
+    }
+    if (t >= w.tour_at || first_gone) {
+      w.tour_at = t + kWayTour_s;
+      w.tours++;
+      // The stops: the nearest kWayTourMax open, then the nearest exit last.
+      std::vector<std::pair<double, int32_t>> near;
+      for (size_t k = 0; k < w.steps.size(); k++) {
+        if (way_exit(w.steps[k])) continue;
+        const int32_t n = open_now(static_cast<int32_t>(k));
+        if (n >= 0) near.push_back({w.search.cost(n), static_cast<int32_t>(k)});
+      }
+      for (const auto& [e, n] : preys) near.push_back({w.search.cost(n), -1 - e});
+      std::sort(near.begin(), near.end());
+      if (near.size() > static_cast<size_t>(kWayTourMax)) near.resize(kWayTourMax);
+      w.tour_stops.clear();
+      w.tour_nodes.clear();
+      for (const auto& [c, stop] : near) {
+        w.tour_stops.push_back(stop);
+        w.tour_nodes.push_back(open_now(stop));
+      }
+      int32_t out = -1;
+      for (size_t k = 0; k < w.steps.size(); k++) {
+        const WayStep& st = w.steps[k];
+        if (!way_exit(st) || st.revisit || st.node < 0 || !reach(st.node) || t < st.left_until)
+          continue;
+        if (out < 0 ||
+            w.search.cost(st.node) < w.search.cost(w.steps[static_cast<size_t>(out)].node))
+          out = static_cast<int32_t>(k);
+      }
+      if (out >= 0) {
+        w.tour_stops.push_back(out);
+        w.tour_nodes.push_back(w.steps[static_cast<size_t>(out)].node);
+      }
+      const int32_t n = static_cast<int32_t>(w.tour_stops.size());
+      const size_t row = static_cast<size_t>(n) + 1;
+      w.tour_cost.assign(row * row, ge::ai::kUnreached);
+      w.tour_cost[0] = 0;
+      for (int32_t j = 0; j < n; j++)
+        w.tour_cost[static_cast<size_t>(j) + 1] =
+            w.search.cost(w.tour_nodes[static_cast<size_t>(j)]);
+      for (int32_t i = 0; i < n; i++) {
+        reach_past(g, w.tour_nodes[static_cast<size_t>(i)], w.barred, w.node_door,
+                   f.bot.pilot.pilot.set.jumper, w.tour_search, &w);
+        for (int32_t j = 0; j < n; j++) {
+          const int32_t to = w.tour_nodes[static_cast<size_t>(j)];
+          if (w.tour_search.reached(to))
+            w.tour_cost[(static_cast<size_t>(i) + 1) * row + static_cast<size_t>(j) + 1] =
+                w.tour_search.cost(to);
+        }
+      }
+      tour_plan(w.tour, w.tour_cost, n, {}, out >= 0 ? n : 0);
+    }
+    for (const int32_t k : w.tour.order) {
+      const int32_t stop = w.tour_stops[static_cast<size_t>(k - 1)];
+      if (stop >= 0 && way_exit(w.steps[static_cast<size_t>(stop)])) break;
+      const int32_t n = open_now(stop);
+      if (n < 0) continue;
+      if (stop >= 0) {
+        pick = stop;
+        toured = 1;
+      } else {
+        prey = -1 - stop;
+        prey_node = n;
+        prey_c = w.search.cost(n);
+        toured = 2;
+      }
+      break;
+    }
+  }
+  // (`complete`) The nearest monster alive when it is nearer than the step (or the tour's next).
+  const bool chase =
+      toured ? toured == 2
+             : w.complete && prey >= 0 &&
+                   (pick < 0 || way_exit(w.steps[static_cast<size_t>(pick)]) || prey_c < best);
   if (chase) pick = -1;
   if (!chase || prey != w.prey) {
     w.prey = chase ? prey : -1;
