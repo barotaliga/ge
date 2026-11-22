@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 #include "hub/api.hpp"
 #include "hub/spec.hpp"
@@ -25,5 +26,7 @@ std::string foot();
 std::string scoreboard_html(const HubSpec& spec, const net::Status& s);
 // An HTML answer, cacheable for `max_age_s`.
 Answer html(int code, std::string body, int max_age_s);
+// A map's banner hue (0..359), the same for a name on every page and every hub.
+int map_hue(std::string_view map);
 
 }  // namespace ge::hub

@@ -15,7 +15,8 @@
 // bind, both sockets), --port (the UDP socket's; 0 any), --http (the web port; the game's default),
 // --list-every / --status-every / --busy-every (seconds), --for (seconds; 0 runs until killed),
 // --status (seconds between status lines), --browse-master / --browse-server (host:port,...),
-// --browse-every (seconds), --help.
+// --browse-every (seconds), --content=<dir> and --stills=<dir> (the maps' stills under the
+// match cards: stills.hpp), --help.
 //
 // ge:summary A hub's process: flags, the poller's socket, the HTTP port, the loop, status lines
 // ge:keywords hub hub_main process flags master http port loop status ge_add_hub
@@ -43,6 +44,9 @@ struct HubOptions {
   std::string archive;                         // the demo archive's directory ("" none)
   double keep_gb = 0, keep_days = 0;           // the archive's retention (0: no limit)
   std::string viewer;                          // the web viewer's built files ("" none, watch.hpp)
+  // The maps' stills (stills.hpp): the game's content they are drawn from ("" none drawn) and the
+  // folder they are kept in.
+  std::string content, stills = "hub-stills";
   std::string accounts;   // the account service's folder ("" none run here; account/host.hpp)
   int accounts_port = 0;  // its UDP port (0: kAccountPort)
   int season_days = 14;   // the ladders' season, days (account/ladder.hpp)
