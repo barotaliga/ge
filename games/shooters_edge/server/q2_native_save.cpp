@@ -250,6 +250,8 @@ bool native_restart(NativeHost& h, std::string& error) {
   guarded(h, [&] { h.game->shutdown(); });
   for (auto& [p, tag] : h.blocks) std::free(p);
   h.blocks.clear();
+  native_close_files(h);
+  if (NativeSetting* f = h.find_setting("g_features")) native_set(h, *f, "0", true);
   for (int i = 0; i < 32; i++) h.connected[i] = h.begun[i] = h.carried[i] = false;
   if (!guarded(h, [&] { h.game->init(); })) {
     error = "the game library stopped as it started again: " + h.error_text;
@@ -363,6 +365,12 @@ std::string native_save_problem(const NativeQ2& s) {
   if (h.dead || h.game == nullptr || s.map_name.empty() || s.map_stopped)
     return "You must be in a game to save.";
   if (deathmatch(h)) return "Can't savegame in a deathmatch";
+  if (h.ex != nullptr && h.ex->can_save != nullptr) {  // the game's own word, in place of the
+    int yes = 0;                                       // dead player's (it says why itself)
+    NativeHost& m = const_cast<NativeHost&>(h);
+    if (!guarded(m, [&] { yes = h.ex->can_save(); })) return "You must be in a game to save.";
+    return yes != 0 ? "" : "The game does not allow saving now.";
+  }
   const bool coop = setting_on(const_cast<NativeHost&>(h), "coop");
   if (!coop && h.begun[0] && h.entity(1)->client != nullptr &&
       h.entity(1)->client->ps.stats[kStatHealth] <= 0)

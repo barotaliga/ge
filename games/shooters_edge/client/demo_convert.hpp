@@ -84,6 +84,9 @@ struct ConvertOptions {
   // layout bit, the frozen move that keeps a stock client from predicting): the type, the move's
   // flags and the 32 stats.
   std::function<void(int pov, uint8_t& type, uint8_t& flags, int16_t* stats)> touch_player;
+  // A Quake II view's broadcast print touched before it is written (a relay's
+  // `mvd_filter_version`): its level and text.
+  std::function<void(int level, std::string& text)> touch_print;
 };
 
 // What a conversion changed: each kind of message the target has no place for, with how many

@@ -727,6 +727,18 @@ int main_body(int argc, char** argv, const ServerGame& game) {
                     cn.print(server_macro_list(cn, a.size() > 1 ? a[1] : ""));
                   });
   ServerConfig c;
+  // Each line the terminal prints, `console_prefix` before it (read at every line).
+  con.set_sink([&c](std::string_view line) {
+    const std::time_t t = std::time(nullptr);
+    std::tm now{};
+#if defined(_WIN32)
+    localtime_s(&now, &t);
+#else
+    localtime_r(&t, &now);
+#endif
+    const std::string head = terminal_prefix(c.console_prefix, LineLevel::normal, now);
+    std::printf("%s%.*s\n", head.c_str(), static_cast<int>(line.size()), line.data());
+  });
   ServerCfg cfg;
   AdminFeatures admin;
   Features features;

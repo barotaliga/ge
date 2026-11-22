@@ -767,7 +767,6 @@ int run_main(int argc, char** argv) {
     ge::platform::set_swap_images(*window, ge::platform::swap_images(pacing.settings));
     pacing.present = surface.present_mode();
   };
-  bool full_applied = false;  // what the window was last set to; vid_fullscreen is the ask
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
   cl::DemoFolder bench_folder;               // the demo's game folder (timedemo.hpp's demo_folder)
   size_t bench_models = 0;         // the model list's length the demo's world was made with
@@ -1187,11 +1186,7 @@ int run_main(int argc, char** argv) {
       save_settings();
       break;
     }
-    if (win.fullscreen != full_applied) {  // the size follows through `input.resized`
-      if (!ge::platform::set_fullscreen(*window, win.fullscreen, win.display))
-        win.fullscreen = full_applied;
-      full_applied = win.fullscreen;
-    }
+    ge::platform::follow_window_cvars(*window, win);  // vid_fullscreen, win_noborder, ...
     ge::input::update(held, queue);
     // What the console and menu ask this frame, against before (a demo held behind it, below).
     const std::string map_before = next_map;
