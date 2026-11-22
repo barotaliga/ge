@@ -55,6 +55,7 @@ struct HudArt {
   std::array<ge::ui::Image, 4> rune;
   std::array<ge::ui::Image, 11> digit, digit_low;  // 0..9 and the minus; low: the alarm colour
   ge::ui::Image crosshair;
+  ge::ui::Image turtle, net;  // the slow-frame and the silent-server icons; empty: none drawn
   // The classic palette's 256 colours (768 bytes) when the set came from the packs; empty for the
   // free set (crosshair.hpp's colours by index).
   std::vector<uint8_t> palette;

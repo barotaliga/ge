@@ -1043,7 +1043,8 @@ bool q2_relay_command(Q2Relay& r, const std::vector<std::string>& w, const std::
       sv::Mvd2Level level;
       int plr = 0;
       if (client::mvd2_reader_level(c.base, level))
-        for (const sv::Mvd2Player& p : level.base.players) plr += p.in ? 1 : 0;
+        for (size_t i = 0; i < level.base.players.size(); i++)  // the recorder's spectator: none
+          plr += level.base.players[i].in && static_cast<int>(i) != level.observer ? 1 : 0;
       const char* st = c.state == Q2ChanState::dead   ? "DEAD"
                        : c.state == Q2ChanState::wait ? "WAIT"
                                                       : "READ";

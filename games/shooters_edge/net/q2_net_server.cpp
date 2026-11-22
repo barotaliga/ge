@@ -25,6 +25,7 @@
 #include "server/rate.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
+#include "shooters_edge/net/q2_mvd_dummy.hpp"
 #include "shooters_edge/net/qw_ext.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 
@@ -381,7 +382,8 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   std::string carried_var, carried_value;
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2NetClient& c = s.clients[i];
-    if (c.stage == Q2Slot::free || !same_host(c.address, from) || c.address.port != from.port)
+    if (c.stage == Q2Slot::free || c.stage == Q2Slot::dummy || !same_host(c.address, from) ||
+        c.address.port != from.port)
       continue;
     if (c.stage == Q2Slot::zombie) {
       carried_var = c.reconnect_var;
@@ -403,7 +405,8 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   if (s.cfg.ip_limit > 0) {  // one address's slots held to sv_iplimit, a zombie's a half
     std::vector<ge::server::HeldSeat> held;
     for (const Q2NetClient& o : s.clients)
-      if (o.stage != Q2Slot::free) held.push_back({o.address, o.stage == Q2Slot::zombie});
+      if (o.stage != Q2Slot::free && o.stage != Q2Slot::dummy)
+        held.push_back({o.address, o.stage == Q2Slot::zombie});
     const std::string refusal = ge::server::admit_refusal(s.cfg.ip_limit, from, held);
     if (!refusal.empty()) return refuse(s, from, refusal + "\nConnection refused.");
   }
@@ -455,7 +458,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
     const Q2NetClient& o = s.clients[i];
     if (o.stage == Q2Slot::free) {
       if (slot < 0) slot = i;
-    } else {
+    } else if (o.stage != Q2Slot::dummy) {
       (o.spectator ? watching : players)++;
     }
   }
@@ -635,7 +638,7 @@ void start_signon(Q2NetServer& s, int slot) {
   if (judge_userinfo(s, slot)) return;
   reliable(c, c.signon.server_data);
   c.signon_queue.clear();
-  if (c.protocol == kQ2NetProtocol)
+  if (c.protocol == kQ2NetProtocol && s.cfg.wire.show.empty())  // a show: the server data alone
     stuff(c, "cmd configstrings " + std::to_string(s.count) + " 0\n");
 }
 
@@ -931,8 +934,8 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
   }
   if (player_query(s, slot, w, line)) return;
   const bool signon = cmd == "configstrings" || cmd == "baselines" || cmd == "begin";
-  const bool protocol =
-      signon || cmd == "new" || cmd == "disconnect" || cmd == "download" || cmd == "nextdl";
+  const bool protocol = signon || cmd == "new" || cmd == "disconnect" || cmd == "download" ||
+                        cmd == "nextdl" || cmd == "nextserver";
   if (!protocol && filtered(s, slot, line)) return;
   if (!protocol && s.line_hook != nullptr && s.line_hook(s.hook_ctx, slot, line)) return;
   if (!protocol && c.stage == Q2Slot::active && talk_command(s, slot, line)) return;
@@ -947,7 +950,7 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
     if (first && first_new(s, slot)) return;
     if (c.stage == Q2Slot::signon) start_signon(s, slot);
     if (first) probe(s, slot);
-    if (c.stage == Q2Slot::signon && c.protocol != kQ2NetProtocol) {
+    if (c.stage == Q2Slot::signon && c.protocol != kQ2NetProtocol && s.cfg.wire.show.empty()) {
       queue_signon(s, c);
       feed_signon(c);
     }
@@ -959,8 +962,10 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
     if (c.stage == Q2Slot::signon && c.protocol == kQ2NetProtocol)
       signon_share(c, c.signon.baselines, at, "cmd baselines " + count + " ",
                    "precache " + count + "\n");
+  } else if (cmd == "nextserver") {  // a show watched to its end (q2_net_server.hpp)
+    if (s.nextserver) s.nextserver(w.size() > 1 ? std::atoi(w[1].c_str()) : -1);
   } else if (cmd == "begin") {
-    if (c.stage != Q2Slot::signon) return;
+    if (c.stage != Q2Slot::signon || !s.cfg.wire.show.empty()) return;
     if (!c.version_heard) return drop_told(s, slot, "failed version probe", Told::silent);
     if (!c.reconnect_var.empty() && !c.reconnected)
       return drop_told(s, slot, "failed to reconnect", Told::silent);
@@ -1306,7 +1311,8 @@ int find_client(const Q2NetServer& s, const gn::Address& from, const uint8_t* da
   int zombie = -1;
   for (int i = 0; i < sh::kMaxClients; i++) {
     const Q2NetClient& c = s.clients[i];
-    if (c.stage == Q2Slot::free || !same_host(c.address, from)) continue;
+    if (c.stage == Q2Slot::free || c.stage == Q2Slot::dummy || !same_host(c.address, from))
+      continue;
     bool match = false;
     if (c.protocol == kQ2NetProtocol) {
       uint16_t qport = 0;
@@ -1455,7 +1461,7 @@ void send_frames(Q2NetServer& s) {
   std::vector<uint8_t> block, rel;
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2NetClient& c = s.clients[i];
-    if (c.stage == Q2Slot::free) continue;
+    if (c.stage == Q2Slot::free || c.stage == Q2Slot::dummy) continue;
     if (c.stage == Q2Slot::zombie) {  // the disconnect resent until the client has it
       if (channel_reliable_backlog(c.ch) > 0 && s.now - c.sent >= 0.1) transmit(s, c, nullptr, 0);
       continue;
@@ -1633,15 +1639,16 @@ void record_multiview(Q2NetServer& s) {
   cap.no_gun = s.mvd.cfg.nogun;
   for (int i = 0; i < sh::kMaxClients; i++) cap.moves[i] = &s.game->players[i].move;
   const int64_t frame = frame_of(s);
-  if (s.mvd_level) {
-    s.mvd_level = false;
-    s.mvd_frame = frame;
-    q2_mvd_level(s.mvd, **s.rules, s.cfg.wire, cap, s.now);
-    return;
-  }
-  if (frame == s.mvd_frame) return;
+  const bool level = s.mvd_level;
+  if (!level && frame == s.mvd_frame) return;
+  s.mvd_level = false;
   s.mvd_frame = frame;
-  q2_mvd_frame(s.mvd, **s.rules, s.cfg.wire, cap, s.now);
+  q2_mvd_dummy_before(s, level, cap);  // the recorder's spectator first (q2_mvd_dummy.hpp)
+  if (level)
+    q2_mvd_level(s.mvd, **s.rules, s.cfg.wire, cap, s.now);
+  else
+    q2_mvd_frame(s.mvd, **s.rules, s.cfg.wire, cap, s.now);
+  q2_mvd_dummy_after(s);
 }
 
 }  // namespace

@@ -126,7 +126,7 @@ struct ClientConfig {
       keep_file;
   // The game's file at `path` ("maps/dm4.bsp") in the server's game folder `gamedir`, empty when
   // it has none. The first `prespawn` carries the map's checksum off it (qw_mapsum.hpp); with
-  // no reader or no file it carries 0, which a server checking maps refuses. Before it, the client
+  // no reader or no file it carries 0, which a server checking maps lets in. Before it, the client
   // reports its player and eyes models' CRC-16 (`setinfo pmodel`, `emodel`) when it has them.
   std::function<std::vector<uint8_t>(const std::string& gamedir, const std::string& path)>
       read_file;

@@ -384,6 +384,16 @@ const ge::hud::NetHistory* remote_net(const Remote& r) {
   return r.q2 ? &r.q2->net : &r.end.net;
 }
 
+bool remote_net_trouble(const Remote& r) {
+  if (!r.active || r.watch || r.q2) return false;
+  if (r.nq)
+    return r.nq->stage == ClientStage::active && r.nq->heard_us >= 0 &&
+           r.now_us - r.nq->heard_us >= 300000;
+  const Channel& ch = r.end.ch;
+  return r.end.stage == ClientStage::active &&
+         ch.outgoing_sequence - 1 - ch.incoming_acknowledged >= 63;
+}
+
 int remote_unanswered(const Remote& r) {
   if (!r.active || r.watch || !r.q2 || r.q2->stage != ClientStage::active) return 0;
   return static_cast<int>(r.q2->ch.outgoing_sequence - 1 - r.q2->ch.incoming_acknowledged);
@@ -511,6 +521,11 @@ void remote_queue_frame(Remote& r, ge::console::Console& con) {
   const double wall =  // the wall clock: the match's recording and the rcon answers run on it
       std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
   remote_match_frame(r, con, wall);
+  said.clear();  // `pingservers`' answers (q2_pingservers.hpp)
+  pingservers_step(r.ping, wall, r.now_us, said);
+  const std::string called = passive_step(r.passive, r.active, r.now_us, said);  // `passive`
+  for (const std::string& line : said) con.print(line);
+  if (!called.empty()) con.execute("connect " + called);
   if (!r.away && !r.status_ask) return;
   said.clear();  // the answers to an rcon sent while not joined, and to `serverstatus`
   remote_rcon_step(r, wall, said);
@@ -1074,6 +1089,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   add_q2_skins_command(con, r);     // skins
   gn::add_net_commands(con, [&r]() -> const gn::Transport* { return r.transport; });  // dns
   gn::add_client_showip(con, [&r]() -> const gn::Transport* { return r.transport; });
+  add_pingservers_command(con, r.ping, steady_now_s);  // pingservers (q2_pingservers.hpp)
+  add_passive_command(con, r.passive);                 // passive (the same)
   r.setting = [&con](const std::string& name) {
     if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;
     if (const ge::console::Synonym* s = con.cvars().synonym(name))

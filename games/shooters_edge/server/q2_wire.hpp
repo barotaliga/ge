@@ -102,6 +102,10 @@ struct Q2WireOptions {
   // The viewer's protocol: 34, or a later one (35 or 36, q2_wire_ext.cpp) with its minor version.
   int protocol = kQ2Protocol;
   int minor = 0;
+  // A CINEMATIC OR PICTURE LEVEL (a `.cin` or `.pcx` shown between maps): the file. The signon
+  // is the server data alone, naming no player slot (-1) and the file as the level; protocol 36
+  // says the state 5 (a cinematic, minor 1023 on) or 3 (a picture). Empty: a game.
+  std::string show;
   // The viewer reads the hit report (temporary entity 128, `fight_dealt`): our own client does,
   // a stock client does not, so it is sent nothing of it.
   bool hit_reports = false;

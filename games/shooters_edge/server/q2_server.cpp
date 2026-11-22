@@ -729,6 +729,9 @@ void view_frame(Q2Server& s, int slot) {
   set.bob_up = static_cast<float>(s.cvars.find("bob_up")->number);
   set.bob_pitch = static_cast<float>(s.cvars.find("bob_pitch")->number);
   set.bob_roll = static_cast<float>(s.cvars.find("bob_roll")->number);
+  set.gun_x = static_cast<float>(s.cvars.find("gun_x")->number);
+  set.gun_y = static_cast<float>(s.cvars.find("gun_y")->number);
+  set.gun_z = static_cast<float>(s.cvars.find("gun_z")->number);
   ge::classic::Q2ViewIn in;
   in.velocity = unpack(p.move.velocity);
   in.view_angles = p.view_angles;
@@ -907,9 +910,13 @@ void fill_rows(Q2Server& s) {
         still ? sh::Vec3f{0, 0, s.intermission_at > 0 ? 0 : p.view_height} : p.seen.offset;
     const sh::Vec3f kick = still ? sh::Vec3f{} : p.seen.kick;
     const float offs[3] = {off.x, off.y, off.z}, kicks[3] = {kick.x, kick.y, kick.z};
+    const sh::Vec3f go = p.seen.gun_offset, ga = p.seen.gun_angles;
+    const float guns[6] = {go.x, go.y, go.z, ga.x, ga.y, ga.z};
     for (int k = 0; k < 3; k++) {
       wc.numbers.view_offset[k] = offs[k];
       wc.numbers.kick[k] = kicks[k];
+      wc.numbers.gun_offset[k] = still ? 0 : guns[k];
+      wc.numbers.gun_angles[k] = still ? 0 : guns[k + 3];
     }
     wc.numbers.fov = fight_fov(s, i);
     for (int k = 0; k < 4; k++) wc.numbers.blend[k] = s.intermission_at > 0 ? 0 : p.blend[k];
@@ -1418,7 +1425,14 @@ bool sq_console(void* r, const std::string& line) {
   if (w.count == 0) return true;
   const std::string cmd = ge::progs::word(w, 0);
   if ((cmd == "map" || cmd == "changelevel" || cmd == "gamemap") && w.count >= 2) {
-    s.pending_map = ge::progs::word(w, 1);
+    // A level string (q2_campaign.hpp): its shows first, the map, the spawn spot; a leading `!`
+    // (stop the server when the map is missing) is taken off.
+    std::string text(ge::progs::word(w, 1));
+    if (!text.empty() && text.front() == '!') text.erase(0, 1);
+    const LevelString ls = level_string(text);
+    s.pending_map = ls.map;
+    s.cinematic = ls.shows;
+    s.next_spawn = ls.spawn;
     s.pending_change = cmd == "map" ? MapChange::new_game : MapChange::change_level;
     return true;
   }

@@ -15,6 +15,9 @@ namespace ge::classic::protocol {
 
 namespace {
 
+// A packet sent is shown: showpackets 1 or 2, or Quake II's cl_showpackets.
+bool shows_sent(const ChannelTrace& t) { return t.packets == 1 || t.packets == 2 || t.sent; }
+
 // One `showpackets` line.
 void packet_line(const Channel& c, const char* arrow, uint32_t seq, bool rel, uint32_t ack,
                  bool ack_rel, size_t bytes, double now) {
@@ -53,7 +56,7 @@ size_t send_piece(Channel& c, double now, uint8_t* out) {
   if (c.client) write_qport(w, c);
   gn::write_u16(w, static_cast<uint16_t>(c.frag_out_at | (more ? 0x8000u : 0u)));
   gn::write_bytes(w, c.frag_out.data() + c.frag_out_at, piece);
-  if (c.trace != nullptr && c.trace->print && (c.trace->packets == 1 || c.trace->packets == 2))
+  if (c.trace != nullptr && c.trace->print && shows_sent(*c.trace))
     packet_line(c, "-->", c.outgoing_sequence, c.frag_out_reliable, c.incoming_sequence,
                 c.incoming_reliable_sequence, w.size, now);
   c.frag_out_at += piece;
@@ -104,7 +107,7 @@ size_t newer_transmit(Channel& c, const uint8_t* unreliable, size_t size, double
   if (c.client) write_qport(w, c);
   if (send_reliable) gn::write_bytes(w, c.big_reliable.data(), rel);
   if (size > 0) gn::write_bytes(w, unreliable, size);
-  if (c.trace != nullptr && c.trace->print && (c.trace->packets == 1 || c.trace->packets == 2))
+  if (c.trace != nullptr && c.trace->print && shows_sent(*c.trace))
     packet_line(c, "-->", c.outgoing_sequence, send_reliable, c.incoming_sequence,
                 c.incoming_reliable_sequence, w.size, now);
   c.outgoing_sequence++;
@@ -201,7 +204,7 @@ size_t channel_transmit(Channel& c, const uint8_t* unreliable, size_t size, doub
     c.last_reliable_sequence = c.outgoing_sequence;
   }
   if (size > 0 && w.size + size <= kMaxPacket) gn::write_bytes(w, unreliable, size);
-  if (c.trace != nullptr && c.trace->print && (c.trace->packets == 1 || c.trace->packets == 2))
+  if (c.trace != nullptr && c.trace->print && shows_sent(*c.trace))
     packet_line(c, "-->", c.outgoing_sequence, send_reliable, c.incoming_sequence,
                 c.incoming_reliable_sequence, w.size, now);
   c.outgoing_sequence++;

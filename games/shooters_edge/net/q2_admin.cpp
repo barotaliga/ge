@@ -99,7 +99,8 @@ std::vector<gs::PickSlot> pick_slots(const Q2NetServer& s) {
 std::string q2_status_table(const Q2NetServer& s, char letter) {
   std::string t = "Current map: " + (*s.rules)->map_name + "\n\n";
   bool any = false;
-  for (int i = 0; i < q2_net_slots(s); i++) any = any || s.clients[i].stage != Q2Slot::free;
+  for (int i = 0; i < q2_net_slots(s); i++)
+    any = any || (s.clients[i].stage != Q2Slot::free && s.clients[i].stage != Q2Slot::dummy);
   if (!any) return t + "No UDP clients.\n\n";
   static const char* const kHead[][2] = {
       {"num score ping name            lastmsg address                rate pr fps",
@@ -121,7 +122,7 @@ std::string q2_status_table(const Q2NetServer& s, char letter) {
   t += std::string(kHead[kind][0]) + "\n" + kHead[kind][1] + "\n";
   for (int i = 0; i < q2_net_slots(s); i++) {
     const Q2NetClient& c = s.clients[i];
-    if (c.stage == Q2Slot::free) continue;
+    if (c.stage == Q2Slot::free || c.stage == Q2Slot::dummy) continue;
     const char* name = c.name.c_str();
     switch (kind) {
       case 0: {

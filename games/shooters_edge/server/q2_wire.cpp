@@ -417,6 +417,8 @@ Q2PlayerState player_state(const RulesCommon& c, int slot, const ge::classic::Q2
     for (int k = 0; k < 3; k++) {
       p.view_offset[k] = quarter(wc.numbers.view_offset[k]);
       p.kick[k] = quarter(wc.numbers.kick[k]);
+      p.gun_offset[k] = quarter(wc.numbers.gun_offset[k]);
+      p.gun_angles[k] = quarter(wc.numbers.gun_angles[k]);
     }
   const float va[3] = {e.view_angles.x, e.view_angles.y, e.view_angles.z};
   for (int k = 0; k < 3; k++) p.view_angles[k] = angle16(va[k]);
@@ -661,10 +663,11 @@ void q2_signon_parts(Q2Wire& w, const RulesCommon& c, int slot, const Q2WireOpti
     o.i32(0x10000 + opt.server_count);
     o.u8(opt.attract_loop);
     o.str("");
-    o.i16(slot);
-    o.str(w.sent[kCsName]);
+    o.i16(opt.show.empty() ? slot : -1);
+    o.str(opt.show.empty() ? w.sent[kCsName] : opt.show);
   }
   q2_server_data_tail(out.server_data, opt);
+  if (!opt.show.empty()) return;  // a cinematic or a picture: nothing more
   for (int i = 0; i < kQ2ConfigStrings; i++) {
     const std::string& s = w.sent[size_t(i)];
     if (s.empty()) continue;
@@ -883,10 +886,11 @@ void q2_signon_raw(Q2Wire& w, const Q2Raw& raw, int slot, const Q2WireOptions& o
     o.i32(0x10000 + opt.server_count);
     o.u8(opt.attract_loop);
     o.str("");
-    o.i16(slot);
-    o.str(w.sent[kCsName]);
+    o.i16(opt.show.empty() ? slot : -1);
+    o.str(opt.show.empty() ? w.sent[kCsName] : opt.show);
   }
   q2_server_data_tail(out.server_data, opt);
+  if (!opt.show.empty()) return;  // a cinematic or a picture: nothing more
   for (int i = 0; i < kQ2ConfigStrings; i++) {
     const std::string& s = w.sent[size_t(i)];
     if (s.empty()) continue;

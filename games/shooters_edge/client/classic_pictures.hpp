@@ -48,6 +48,10 @@ ClassicPictures load_classic_pictures(const SearchPath& files, bool enhance,
 // The HUD's pictures the window draws: with a classic game's folder open (`files.folder` set)
 // that game's own (`game`, from its adapter), even when they are missing, never Shooter's Edge's
 // own set in their place; Shooter's Edge's own (`own`) only for its own content.
+// The status line for the HUD's pictures as loaded: the packs' own (enhanced or not), or why a
+// classic game's folder has none (`why`); nothing for Shooter's Edge's own content.
+void say_hud_pictures(const hud::HudArt& art, const SearchPath& files, const std::string& why);
+
 const hud::HudArt& hud_art_of(const SearchPath& files, const hud::HudArt& game,
                               const hud::HudArt& own);
 

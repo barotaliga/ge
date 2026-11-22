@@ -67,17 +67,17 @@ void set_field_f(QcServer& s, int e, int f, float v) {
   *pg::entity_field(s.q.vm, e, f) = pg::as_word(v);
 }
 
-// The single-player game's cheats as the original's server answers them, for any player alone or
-// in co-op (refused only in deathmatch): `god`, `notarget`, `noclip`, `fly` toggled with the
-// original's words, `give` a weapon (2..8), ammunition (s n r c) or health (h) with a count.
-// The program's own fields and flags carry them; false: not one of them.
-bool single_player_cheat(QcServer& s, int slot, const pg::Words& w) {
+// The cheats with the single-player game's words: `god`, `notarget`, `noclip`, `fly` toggled
+// ("godmode ON"), `give` a weapon (2..8), ammunition (s n r c) or health (h) with a count. The
+// program's own fields and flags carry them; false: not one of them. A single-player program's
+// player has them alone or in co-op; a multiplayer program's with sv_cheats on (the operator's
+// `god <id>` and `give <id> ...` on the classic endpoint come here too).
+bool run_cheat(QcServer& s, int slot, const pg::Words& w) {
   const char* cmd = pg::word(w, 0);
   const bool god = std::strcmp(cmd, "god") == 0, notarget = std::strcmp(cmd, "notarget") == 0;
   const bool noclip = std::strcmp(cmd, "noclip") == 0, fly = std::strcmp(cmd, "fly") == 0;
   const bool give = std::strcmp(cmd, "give") == 0;
   if (!god && !notarget && !noclip && !fly && !give) return false;
-  if (s.cvars.find("deathmatch") != nullptr && s.cvars.find("deathmatch")->on()) return true;
   const int e = slot + 1;
   const uint32_t me = 1u << slot;
   const pg::LayoutFields& f = s.q.layout->f;
@@ -117,6 +117,17 @@ bool single_player_cheat(QcServer& s, int slot, const pg::Words& w) {
     }
   }
   return true;
+}
+
+// The same refused (done, nothing changed) in deathmatch: a single-player program's.
+bool single_player_cheat(QcServer& s, int slot, const pg::Words& w) {
+  const char* cmd = pg::word(w, 0);
+  for (const char* c : {"god", "notarget", "noclip", "fly", "give"})
+    if (std::strcmp(cmd, c) == 0) {
+      const ge::console::Cvar* dm = s.cvars.find("deathmatch");
+      return dm != nullptr && dm->on() ? true : run_cheat(s, slot, w);
+    }
+  return false;
 }
 
 // Two names the same over their whole length, a-z and A-Z folded.
@@ -224,11 +235,7 @@ void run_server_command(QcServer& s, int slot, const pg::Words& w) {
       print_to(s, me, 2, "Cheats are not enabled on this server\n");
       return;
     }
-    sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
-    if (std::strcmp(cmd, "noclip") == 0)
-      ed.movetype = ed.movetype == sh::kMovetypeNoclip ? sh::kMovetypeWalk : sh::kMovetypeNoclip;
-    if (std::strcmp(cmd, "fly") == 0)
-      ed.movetype = ed.movetype == sh::kMovetypeFly ? sh::kMovetypeWalk : sh::kMovetypeFly;
+    run_cheat(s, slot, w);  // with the single-player game's words, in deathmatch too
   } else {
     // The rest of the server's own commands are the protocol's and the admin tools' (M18g).
     print_to(s, me, 2, std::string(cmd) + ": not available on this server yet\n");

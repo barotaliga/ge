@@ -144,7 +144,6 @@ struct QcServer : RulesCommon {
   pg::ExtensionRegistry extensions;
   NamedHooks named;
 
-  std::vector<std::string> frag_log;      // logfrag's lines
   std::string command_buffer;             // localcmd's text, run at the next frame
   std::vector<std::string> map_messages;  // the entity text's messages ("x is not a field")
   // particleeffectnum's names, number n the name at n - 1, kept for the server's life.

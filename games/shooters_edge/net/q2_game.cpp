@@ -195,6 +195,29 @@ constexpr gs::GameRule kRules[] = {
     {"sv_mvd_disconnect_time",
      "The minutes with no recording and no relay after which the multiview recorder stops.",
      nullptr, "0: never; 15 the default", false},
+    {"sv_cinematics",
+     "Whether a movie an exit names before its map is shown, as a level of its own.", nullptr,
+     "0: skipped when something follows it; 1: shown (the default)", false},
+    {"sv_mvd_spawn_dummy",
+     "Whether the multiview recorder keeps its own spectator in the game for the scoreboard.",
+     nullptr, "0: never; 1: when the rules know it (the default; ours do); 2: always", false},
+    {"sv_mvd_begincmd", "The commands the recorder's spectator runs as it enters a level.", nullptr,
+     "wait 50; putaway; wait 10; help; the default", false},
+    {"sv_mvd_scorecmd",
+     "The commands the recorder's spectator runs when its scoreboard has been gone 9 seconds.",
+     nullptr, "putaway; wait 10; help; the default; empty: none", false},
+    {"sv_mvd_capture_flags", "Which players the multiview stream records, as bits.", nullptr,
+     "1: only players with a connection; 2: not the unseen; 4: every seen one (5 the default)",
+     false},
+    {"sv_mvd_nomsgs",
+     "Whether the multiview stream keeps only the recorder's spectator's own messages.", nullptr,
+     "0: everyone's; 1: the spectator's alone (the default)", false},
+    {"sv_mvd_allow_stufftext",
+     "Whether the recorder's spectator runs what the game sends it, or what relays send it.",
+     nullptr, "-1: the relays' commands; 0: neither (the default); 1: the game's lines", false},
+    {"sv_mvd_autorecord",
+     "Whether the recorder's spectator is made at every level, so the game can record with it.",
+     nullptr, "0: no (the default); 1: yes", false},
     // The relay (q2_mvd_relay.hpp): another server's stream watched, or a recording played.
     {"mvd_timeout", "The seconds a relay waits on a silent game server before it drops it.",
      nullptr, "90 the default", false},
@@ -219,6 +242,12 @@ constexpr gs::GameRule kRules[] = {
      "0: nothing (the default); 1: the channel's number; 2: the followed player's frags", false},
     {"mvd_filter_version", "Whether a relay hides the version trigger in the players' chat.",
      nullptr, "0: chat as said (the default); 1: each !version shown as !versi0n", false},
+    {"mvd_stats_hack",
+     "Which numbers of a relay's chased player's status bar come from the recorder's spectator.",
+     nullptr, "0: none (the default); a mask of the stats 0 to 31", false},
+    {"mvd_freeze_hack",
+     "Whether a relay takes the recorder's spectator frozen as the intermission and shows it.",
+     nullptr, "0: no; 1: yes (the default)", false},
     {"mvd_part_filter", "Whose comings and goings a relay's channel is told of.", nullptr,
      "0: everyone's (the default); below 0: nobody's; N: who talked within N s", false},
     {"mvd_default_map", "The map of a relay's Waiting Room.", nullptr, "q2dm1 the default", false},
@@ -356,6 +385,13 @@ struct Game {
   std::string ent_path;
   std::vector<std::string> said;
   std::string mode;  // `gamemode`'s choice for the next map ("": as it is)
+  // CINEMATIC AND PICTURE LEVELS (show_level): the files still to show after the one on now, the
+  // map that follows them ("" none), the `nextserver` text we set (run as ours when unchanged),
+  // whether this show's `nextserver` was taken; `sv_cinematics` (0: a movie with something after it
+  // is skipped).
+  std::vector<std::string> shows;
+  std::string show_map, show_next;
+  bool show_taken = false, show_new_game = false, cinematics = true;
   // What the console printed and was handed on (console_lines): the rules' lines told so far.
   const sv::RulesCommon* told_rules = nullptr;
   size_t told = 0;
@@ -414,6 +450,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   const std::string name = c.map.empty() ? std::string("q2dm1") : c.map;
   if (const auto v = c.rules.find("sv_vispatch"); v != c.rules.end() && !v->second.empty())
     g->vis_patch = v->second != "0";
+  if (const auto v = c.rules.find("sv_cinematics"); v != c.rules.end() && !v->second.empty())
+    g->cinematics = v->second != "0";
   if (const auto p = c.rules.find("sv_entpath"); p != c.rules.end()) g->ent_path = p->second;
   while (!g->ent_path.empty() && g->ent_path.back() == '/') g->ent_path.pop_back();
   g->map = cl::load_named_map(g->files, name, error);
@@ -458,7 +496,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
         rule == "sv_maxents" || rule == "sv_entpriority" || rule == "sv_novis" ||
         rule == "sv_vispatch" || rule == "sv_entpath" || rule == "sv_partialnames" ||
         rule == "sv_packetdup" || rule == "sv_forcereconnect" || rule == "sv_maxmsglen" ||
-        rule.rfind("sv_mvd_", 0) == 0 || rule.rfind("mvd_", 0) == 0)
+        rule == "sv_cinematics" || rule.rfind("sv_mvd_", 0) == 0 || rule.rfind("mvd_", 0) == 0)
       continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
@@ -514,7 +552,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   if (g->cfg.net_maxmsglen > 0 && g->cfg.net_maxmsglen < 512) g->cfg.net_maxmsglen = 512;
   {  // the multiview recorder
     Q2MvdConfig& m = g->cfg.mvd;
-    int noblend = 0, nogun = 0, maxsize = 0, maxtime = 0;
+    int noblend = 0, nogun = 0, maxsize = 0, maxtime = 0, nomsgs = 1, autorecord = 0;
     if (!endpoint_number(c, "sv_mvd_enable", 2, m.enable, error) ||
         !endpoint_number(c, "sv_mvd_maxclients", 256, m.maxclients, error) ||
         !endpoint_number(c, "sv_mvd_bufsize", 4, m.bufsize, error) ||
@@ -524,8 +562,20 @@ void* create(const gs::ServerConfig& c, std::string& error) {
         !endpoint_number(c, "sv_mvd_noblend", 1, noblend, error) ||
         !endpoint_number(c, "sv_mvd_nogun", 1, nogun, error) ||
         !endpoint_number(c, "sv_mvd_suspend_time", 34560, m.suspend_min, error) ||
-        !endpoint_number(c, "sv_mvd_disconnect_time", 34560, m.disconnect_min, error))
+        !endpoint_number(c, "sv_mvd_disconnect_time", 34560, m.disconnect_min, error) ||
+        !endpoint_number(c, "sv_mvd_spawn_dummy", 2, m.spawn_dummy, error) ||
+        !endpoint_number(c, "sv_mvd_capture_flags", 7, m.capture_flags, error) ||
+        !endpoint_number(c, "sv_mvd_nomsgs", 1, nomsgs, error) ||
+        !endpoint_number(c, "sv_mvd_autorecord", 1, autorecord, error))
       return nullptr;
+    m.nomsgs = nomsgs != 0;
+    m.autorecord = autorecord != 0;
+    if (const auto it = c.rules.find("sv_mvd_allow_stufftext"); it != c.rules.end())
+      m.allow_stufftext = std::clamp(std::atoi(it->second.c_str()), -1, 1);
+    if (const auto it = c.rules.find("sv_mvd_begincmd"); it != c.rules.end())
+      m.begincmd = it->second;
+    if (const auto it = c.rules.find("sv_mvd_scorecmd"); it != c.rules.end())
+      m.scorecmd = it->second;
     m.maxclients = std::max(m.maxclients, 1);
     m.bufsize = std::max(m.bufsize, 1);
     m.maxsize_kb = maxsize;
@@ -562,6 +612,10 @@ void* create(const gs::ServerConfig& c, std::string& error) {
       rc.stats_score = std::atoi(it->second.c_str());
     if (const auto it = c.rules.find("mvd_filter_version"); it != c.rules.end())
       rc.filter_version = std::atoi(it->second.c_str()) != 0;
+    if (const auto it = c.rules.find("mvd_stats_hack"); it != c.rules.end())
+      rc.stats_hack = static_cast<uint32_t>(std::strtoul(it->second.c_str(), nullptr, 0));
+    if (const auto it = c.rules.find("mvd_freeze_hack"); it != c.rules.end())
+      rc.freeze_hack = std::atoi(it->second.c_str()) != 0;
     // The chat flood rule's settings, the rules' own names, read by the relay's chat too.
     if (const auto it = c.rules.find("flood_msgs"); it != c.rules.end() && !it->second.empty())
       rc.flood_msgs = std::atoi(it->second.c_str());
@@ -659,11 +713,97 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   return g.release();
 }
 
+// A SHOW (a `.cin` or `.pcx` an exit names before its map, or the game's end): on the network the
+// level changes to the file (no world: the server data names it, Q2WireOptions::show) and the
+// clients play it. Its `nextserver` setting is `gamemap "!<what follows>"`, or `gamemap "!*base1"`
+// after co-op's victory picture, or empty. A client's `nextserver <count>` is taken once a show,
+// with the level's count, on a movie or (in co-op) a picture: the setting run and emptied, an
+// empty one stopping the server (`killserver`).
+bool is_movie(const std::string& f) { return f.ends_with(".cin"); }
+
+bool coop_on(const Game& g) {
+  const ge::console::Cvar* v = (*g.rules).cvars.find("coop");
+  return v != nullptr && std::atoi(v->value.c_str()) != 0;
+}
+
+void start_show(Game& g) {
+  const std::string show = g.shows.front();
+  g.shows.erase(g.shows.begin());
+  std::string rest;
+  for (const std::string& f : g.shows) rest += (rest.empty() ? "" : "+") + f;
+  if (!g.show_map.empty()) rest += (rest.empty() ? "" : "+") + g.show_map;
+  const bool coop = coop_on(g);
+  g.show_new_game = rest.empty() && coop && show == "victory.pcx";
+  g.show_next = g.show_new_game ? "gamemap \"!*base1\""
+                : rest.empty()  ? std::string()
+                                : "gamemap \"!" + rest + "\"";
+  g.rules->cvars.set("nextserver", g.show_next, ge::console::Source::local, true);
+  g.show_taken = false;
+  g.cfg.wire.show = show;
+  q2_net_level(*g.net, g.cfg.wire);
+  g.net->log.push_back("------- Server Initialization -------");
+  g.net->log.push_back("SpawnServer: " + show);
+  g.net->log.push_back("-------------------------------------");
+}
+
+// The shows the rules' exit named taken before its map (true: one is on).
+bool take_shows(Game& g) {
+  sv::Q2Server* q = sv::q2_of(g.rules);
+  if (q == nullptr || q->cinematic.empty() || !g.net) return false;
+  std::vector<std::string> files;
+  for (size_t from = 0; from <= q->cinematic.size();) {
+    const size_t plus = std::min(q->cinematic.find('+', from), q->cinematic.size());
+    if (plus > from) files.push_back(q->cinematic.substr(from, plus - from));
+    from = plus + 1;
+  }
+  g.show_map = (*g.rules).pending_map;
+  // sv_cinematics 0: a movie with something after it is skipped.
+  for (size_t i = 0; i < files.size();)
+    if (!g.cinematics && is_movie(files[i]) && (i + 1 < files.size() || !g.show_map.empty()))
+      files.erase(files.begin() + static_cast<std::ptrdiff_t>(i));
+    else
+      i++;
+  q->cinematic.clear();
+  if (files.empty()) return false;
+  g.shows = files;
+  (*g.rules).pending_map.clear();
+  start_show(g);
+  return true;
+}
+
+// A client's `nextserver <count>` (above).
+void next_server(Game& g, int32_t count) {
+  if (g.cfg.wire.show.empty() || g.show_taken || count != g.net->count) return;
+  const bool coop = coop_on(g);
+  if (!is_movie(g.cfg.wire.show) && !coop) return;  // a picture outside co-op stays up
+  g.show_taken = true;
+  const ge::console::Cvar* v = (*g.rules).cvars.find("nextserver");
+  const std::string text = v != nullptr ? v->value : std::string();
+  g.rules->cvars.set("nextserver", "", ge::console::Source::local, true);
+  std::string out;
+  if (text.empty()) {
+    g.cfg.wire.show.clear();
+    q2_admin(*g.net, "killserver", out);
+  } else if (text != g.show_next) {  // an operator's own: run as he wrote it
+    g.cfg.wire.show.clear();
+    q2_admin(*g.net, text, out);
+  } else if (!g.shows.empty()) {
+    start_show(g);
+  } else {
+    g.cfg.wire.show.clear();
+    (*g.rules).pending_map = g.show_new_game ? "base1" : g.show_map;
+    if (g.show_new_game) (*g.rules).pending_change = sv::MapChange::new_game;
+  }
+}
+
 // The map the rules asked for (an intermission's end, `map`, `changelevel`, `restart`) loaded and
 // the rules started on it, the clients told; a map that cannot be read starts this one again.
+// An exit's shows come first (take_shows).
 void change_level(Game& g) {
   sv::RulesCommon& s = *g.rules;
+  if (take_shows(g)) return;
   if (s.pending_map.empty()) return;
+  g.cfg.wire.show.clear();
   const std::string asked = s.pending_map;
   std::string error;
   std::unique_ptr<cl::LoadedMap> next = cl::load_named_map(g.files, asked, error);
@@ -786,6 +926,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   mc.zombie = game.cfg.zombie_time;
   mc.ghost = game.cfg.ghost_time > 0 ? game.cfg.ghost_time : 6;
   game.net->mvd.log = [&game](const std::string& line) { game.net->log.push_back(line); };
+  game.net->nextserver = [&game](int32_t count) { next_server(game, count); };
   if (port.kind == ge::net::TransportKind::udp) q2_mvd_listen(game.net->mvd, port.local);
   game.port = &port;
   game.relay.log = [&game](const std::string& line) { game.net->log.push_back(line); };

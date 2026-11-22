@@ -49,20 +49,20 @@ part differs; `missing` not in our tree; `not-taken` a note or doc of ours decid
 
 | kind | done | partial | missing | not-taken | all |
 | --- | --- | --- | --- | --- | --- |
-| Server console commands (the operator's words) | 54 | 10 | 1 | 11 | 76 |
+| Server console commands (the operator's words) | 55 | 9 | 1 | 11 | 76 |
 | General console commands and macros the server's console has (common) | 35 | 8 | 13 | 1 | 57 |
-| Server settings (cvars) with their defaults | 86 | 23 | 28 | 33 | 170 |
+| Server settings (cvars) with their defaults | 97 | 22 | 18 | 33 | 170 |
 | Server-to-client messages (svc) and protocol extensions the server writes | 39 | 8 | 6 | 0 | 53 |
-| What the server accepts from clients | 42 | 12 | 1 | 2 | 57 |
-| The game library interface | 55 | 28 | 4 | 1 | 88 |
+| What the server accepts from clients | 43 | 12 | 0 | 2 | 57 |
+| The game library interface | 55 | 29 | 3 | 1 | 88 |
 | Messages a player sees (refusals, drops, prints), quoted exactly | 50 | 16 | 4 | 2 | 72 |
 | Messages an admin sees on the server console, quoted exactly | 9 | 25 | 0 | 2 | 36 |
-| Server features beyond single words | 34 | 13 | 6 | 2 | 55 |
-| **all** | 404 | 143 | 63 | 54 | 664 |
+| Server features beyond single words | 37 | 13 | 3 | 2 | 55 |
+| **all** | 420 | 142 | 48 | 54 | 664 |
 
 ## 1. Server console commands (the operator's words)
 
-done 54, partial 10, missing 1, not-taken 11
+done 55, partial 9, missing 1, not-taken 11
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -111,7 +111,7 @@ done 54, partial 10, missing 1, not-taken 11
 | cmd.mvdrecord | `mvdrecord [-z] <name>` | Multi-view recording of every player to `demos/<name>.mvd2` (gzip with `-z`); on a relay, records the channel. | done | games/shooters_edge/net/q2_mvd_server.cpp (`q2_mvd_command`): `-h`, `-z` (gzip), the refusals and lines; frames from games/shooters_edge/server/q2_mvd2_live.hpp; a relay channel's recording comes with the relay |
 | cmd.mvdstop | `mvdstop` | Ends it. | done | games/shooters_edge/net/q2_mvd_server.cpp |
 | cmd.say | `say <text>` | Dedicated server only: `console: <text>` to everyone at chat level. | done | `games/shooters_edge/server/q2_server.cpp` |
-| cmd.mvdstuff | `mvdstuff <text>` | Runs text as the recorder's dummy client. | partial | games/shooters_edge/net/q2_mvd_server.cpp: refused (`Can't 'mvdstuff', dummy MVD client is not active`), as our rules keep no dummy (feat.recording.dummy) |
+| cmd.mvdstuff | `mvdstuff <text>` | Runs text as the recorder's dummy client. | done | games/shooters_edge/net/q2_mvd_server.cpp: the text (outer quotes off) added to the spectator's commands; the refusal without one |
 | cmd.addgtvhost | `addgtvhost` | A relay viewer address allowed without password. | done | plugins/classic/protocol/addr_list.hpp, mounted in games/shooters_edge/net/q2_mvd_server.cpp |
 | cmd.delgtvhost | `delgtvhost` | | done | plugins/classic/protocol/addr_list.hpp |
 | cmd.listgtvhosts | `listgtvhosts` | | done | plugins/classic/protocol/addr_list.hpp: id, address/mask, hits, last hit, comment |
@@ -215,7 +215,7 @@ done 35, partial 8, missing 13, not-taken 1
 Defaults are upstream's; flags as registered. Our Quake II spellings that are synonyms are listed in
 `games/shooters_edge/net/q2_game.cpp` (`kSettingNames`).
 
-done 86, partial 23, missing 28, not-taken 33
+done 97, partial 22, missing 18, not-taken 33
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -266,7 +266,7 @@ done 86, partial 23, missing 28, not-taken 33
 | cvar.sv_waterjump_hack | `sv_waterjump_hack` = `1` (latched) | Removes the fixed water-jump lift. | done | `sv_waterjump` (synonym) |
 | cvar.sv_packetdup_hack | `sv_packetdup_hack` = `0` | Most duplicate packets a client may ask for. | done | ours `sv_packetdup` (games/shooters_edge/net/q2_game.cpp), the reference's name a synonym |
 | cvar.sv_allow_map | `sv_allow_map` = `0` on a dedicated server, `1` otherwise | Refuses `map` mid-game; 2 makes it `gamemap`. | not-taken | `q2-server-gaps.md` row 15 |
-| cvar.sv_cinematics | `sv_cinematics` = `1` | Serves cinematic levels. | missing | S41 |
+| cvar.sv_cinematics | `sv_cinematics` = `1` | Serves cinematic levels. | done | games/shooters_edge/net/q2_game.cpp (`take_shows`): 0 skips a movie with something after it; `.dm2` names no level here |
 | cvar.sv_recycle | `sv_recycle` = `0` | Next `gamemap` a full restart (1) or a quit-and-reconnect (2); reset at each new game. | not-taken | `q2-server-gaps.md` row 15 |
 | cvar.sv_enhanced_setplayer | `sv_enhanced_setplayer` = `0` | Player words match part of a name. | done | ours `sv_partialnames` (games/shooters_edge/net/q2_game.cpp), the reference's name a synonym |
 | cvar.sv_iplimit | `sv_iplimit` = `3` | Connections per address or IPv6 /48. | done | Engine `sv_iplimit` |
@@ -289,15 +289,15 @@ done 86, partial 23, missing 28, not-taken 33
 | cvar.sv_mvd_maxmaps | `sv_mvd_maxmaps` = `1` | Map changes before a recording stops. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp |
 | cvar.sv_mvd_noblend | `sv_mvd_noblend` = `0` (latched) | Leaves screen blends out. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/server/q2_mvd2_live.cpp |
 | cvar.sv_mvd_nogun | `sv_mvd_nogun` = `0` (latched) | Leaves the held weapon out. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/server/q2_mvd2_live.cpp |
-| cvar.sv_mvd_nomsgs | `sv_mvd_nomsgs` = `1` (latched) | Leaves text messages out. | missing | |
-| cvar.sv_mvd_begincmd | `sv_mvd_begincmd` = `wait 50; putaway; wait 10; help;` | The dummy's commands on entering. | missing | |
-| cvar.sv_mvd_scorecmd | `sv_mvd_scorecmd` = `putaway; wait 10; help;` | Run when the scoreboard has been gone a while. | missing | |
-| cvar.sv_mvd_autorecord | `sv_mvd_autorecord` = `0` (latched) | Local recordings started by itself. | partial | Engine `sv_autorecord` records each match (`engine/server/autorecord.hpp`) as `.ged` |
-| cvar.sv_mvd_capture_flags | `sv_mvd_capture_flags` = `5` | Which players are recorded. | missing | |
+| cvar.sv_mvd_nomsgs | `sv_mvd_nomsgs` = `1` (latched) | Leaves text messages out. | done | games/shooters_edge/server/q2_mvd2_live.cpp: with a spectator, a print to anyone else left out and the stream's flag set; tests/shooters_edge_q2_mvd_server_test.cpp |
+| cvar.sv_mvd_begincmd | `sv_mvd_begincmd` = `wait 50; putaway; wait 10; help;` | The dummy's commands on entering. | done | games/shooters_edge/net/q2_mvd_dummy.cpp: added to the spectator's commands at each seating |
+| cvar.sv_mvd_scorecmd | `sv_mvd_scorecmd` = `putaway; wait 10; help;` | Run when the scoreboard has been gone a while. | done | games/shooters_edge/net/q2_mvd_dummy.cpp: added when its scoreboard (its layouts stat, or a new layout) has not been seen for 9 s while the stream plays |
+| cvar.sv_mvd_autorecord | `sv_mvd_autorecord` = `0` (latched) | Local recordings started by itself. | done | games/shooters_edge/net/q2_mvd_dummy.cpp: the spectator made at every level (the pause off), its `record <name>` and `stop` taken with their lines |
+| cvar.sv_mvd_capture_flags | `sv_mvd_capture_flags` = `5` | Which players are recorded. | done | games/shooters_edge/server/q2_mvd2_live.cpp (`captured`): 1 no bots, 2 not the unseen, 4 every seen one, then frozen or not predicted left out |
 | cvar.sv_mvd_disconnect_time | `sv_mvd_disconnect_time` = `15` | Minutes. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp |
 | cvar.sv_mvd_suspend_time | `sv_mvd_suspend_time` = `5` | Minutes. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_server.cpp: an empty block to the relays, a fresh game state at the resume |
-| cvar.sv_mvd_allow_stufftext | `sv_mvd_allow_stufftext` = `0` (latched) | Runs text the game sends the dummy. | missing | |
-| cvar.sv_mvd_spawn_dummy | `sv_mvd_spawn_dummy` = `1` | When the scoreboard dummy is spawned. | missing | |
+| cvar.sv_mvd_allow_stufftext | `sv_mvd_allow_stufftext` = `0` (latched) | Runs text the game sends the dummy. | done | games/shooters_edge/net/q2_mvd_dummy.cpp, games/shooters_edge/net/q2_mvd_server.cpp: above 0 the game's stuffed lines run as the spectator's; below 0 relays' commands run as its own (the string-commands flag kept); 0 neither |
+| cvar.sv_mvd_spawn_dummy | `sv_mvd_spawn_dummy` = `1` | When the scoreboard dummy is spawned. | done | games/shooters_edge/net/q2_mvd_dummy.cpp: 0 never, 1 when the rules know it (ours do), 2 always |
 | cvar.sv_noreload | `sv_noreload` = `0` | Skips reloading a visited level. | done | Rules setting |
 | cvar.mvd_shownet | `mvd_shownet` = `0` | Relay debug prints. | not-taken | docs/porting/server.md: debug build only, not taken |
 | cvar.mvd_timeout | `mvd_timeout` = `90` | Relay upstream timeout. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay.cpp |
@@ -317,8 +317,8 @@ done 86, partial 23, missing 28, not-taken 33
 | cvar.mvd_filter_version | `mvd_filter_version` = `0` | Rewrites `!version` in relay chat. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp (`filter_version`): each `!version` in a chat-level print from the recorded server made `!versi0n` |
 | cvar.mvd_default_map | `mvd_default_map` = `q2dm1` (latched) | Map shown while waiting. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay_viewers.cpp: the map's intermission spot, its checksum; q2dm1 when it does not load |
 | cvar.mvd_stats_score | `mvd_stats_score` = `0` | Which stat is the chase score. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp (`touch`): 0 the frags shown as 0, 1 the channel's number, else the followed player's |
-| cvar.mvd_stats_hack | `mvd_stats_hack` = `0` | Dummy's stats copied to chasers. | missing | |
-| cvar.mvd_freeze_hack | `mvd_freeze_hack` = `1` | Frozen dummy means intermission. | missing | |
+| cvar.mvd_stats_hack | `mvd_stats_hack` = `0` | Dummy's stats copied to chasers. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp (`stats_hack`): the masked stats from the spectator's to a chaser, before `mvd_stats_score` |
+| cvar.mvd_freeze_hack | `mvd_freeze_hack` = `1` | Frozen dummy means intermission. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp (`intermission`): a frozen spectator is the intermission: everyone follows it with the scoreboard, no target changes, each back to his player after |
 | cvar.mvd_chase_prefix | `mvd_chase_prefix` = `xv 0 yb -64` | Layout prefix of the chase text. | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
 | cvar.sv_anticheat_required | `sv_anticheat_required` = `0` (latched) | Anticheat module required. | not-taken | `q2-gaps2-server.md` B1; docs/goals.md M17l |
 | cvar.sv_anticheat_server_address | `sv_anticheat_server_address` = `anticheat.r1ch.net` (latched) | The service. | not-taken | same |
@@ -333,7 +333,7 @@ done 86, partial 23, missing 28, not-taken 33
 | cvar.map_visibility_patch | `map_visibility_patch` = `1` | Repairs three stock maps' visibility. | done | `sv_vispatch` (synonym; facts in `q2-vispatch.md`) |
 | cvar.map_noareas | `map_noareas` = `0` | Ignores area portals. | not-taken | `q2-server-gaps.md` "Not worth building" |
 | cvar.map_override_path | `map_override_path` = `` | Folder of entity files and binary override files (feat.map.entfile, feat.map.override). | done | `sv_entpath` (synonym) for the entity files |
-| cvar.nextserver | `nextserver` (made on demand) | The command the `nextserver` client word runs after a cinematic or picture level (`gamemap "!<next>"`); `gamemap "!*base1"` after the coop victory picture. | missing | Added (upstream); S41 |
+| cvar.nextserver | `nextserver` (made on demand) | The command the `nextserver` client word runs after a cinematic or picture level (`gamemap "!<next>"`); `gamemap "!*base1"` after the coop victory picture. | done | games/shooters_edge/net/q2_game.cpp (`start_show`): `gamemap "!<what follows>"`, `gamemap "!*base1"` after co-op's victory picture, else empty; tests/shooters_edge_q2_mapfix_test.cpp |
 | cvar.z_perturb | `z_perturb` = `0` | Memory debugging. | missing | |
 | cvar.host_speeds | `host_speeds` = `0` | Frame timing prints. | missing | |
 | cvar.developer | `developer` = `0` | Developer prints. | not-taken | `q2-server-gaps.md` "Not worth building" |
@@ -452,7 +452,7 @@ done 39, partial 8, missing 6, not-taken 0
 
 ## 5. What the server accepts from clients: clc messages, string commands, out-of-band words
 
-done 42, partial 12, missing 1, not-taken 2
+done 43, partial 12, missing 0, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -468,7 +468,7 @@ done 42, partial 12, missing 1, not-taken 2
 | ucmd.begin | `begin` | Enters the game (refused silently before the client is primed or on a cinematic). | partial | Done; the library's connect call runs here, not at the connect packet (S9) |
 | ucmd.baselines | `baselines` | Signon step (stock prompt). | done | `string_command` |
 | ucmd.configstrings | `configstrings` | Signon step (stock prompt). | done | `string_command` |
-| ucmd.nextserver | `nextserver` | After a cinematic or picture level, runs `nextserver` (or stops the server when it is empty). | missing | S41 |
+| ucmd.nextserver | `nextserver` | After a cinematic or picture level, runs `nextserver` (or stops the server when it is empty). | done | games/shooters_edge/net/q2_net_server.cpp, games/shooters_edge/net/q2_game.cpp (`next_server`): the level's count, once, a movie or a co-op picture; the setting run and emptied, `killserver` when empty |
 | ucmd.disconnect | `disconnect` | Leaves; the server's own drop line is silent, the library announces it (stock: `<name> disconnected`). | done | `string_command` drops; our rules say `<name> disconnected` (`games/shooters_edge/server/q2_server.cpp`) |
 | ucmd.info | `info` | The server info to the asking client. | done | games/shooters_edge/net/q2_net_server.cpp (`player_query`, `q2_info_lines`) |
 | ucmd.sinfo | `sinfo` | The client's own connection details (the miscinfo block). | done | games/shooters_edge/net/q2_net_server.cpp (`q2_misc_lines`) |
@@ -519,7 +519,7 @@ done 42, partial 12, missing 1, not-taken 2
 Ours: the native host (`games/shooters_edge/server/q2_native.hpp`, `q2_native_calls.cpp`,
 `q2_native_abi.hpp`, `q2_native_save.cpp`).
 
-done 55, partial 28, missing 4, not-taken 1
+done 55, partial 29, missing 3, not-taken 1
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -601,7 +601,7 @@ done 55, partial 28, missing 4, not-taken 1
 | api.ex.debugdraw | debug draw API v1 | Lines, points, axes, boxes, spheres, circles, cylinders, arrows, text (debug builds with a renderer; never on a dedicated server). | not-taken | docs/porting/server.md: debug build only, not taken (and never on a dedicated server) |
 | api.gmf.clientnum | feature bit 0: client number | The library fills each client's number; the server trusts it in frames. | partial | Not offered in `sv_features`: the slot is the client number, as without the bit |
 | api.gmf.properinuse | feature bit 1: proper in-use | The library keeps the entity in-use flag right, so the server can rely on it. | done | games/shooters_edge/server/q2_native.cpp (`take_view`): an entity not in use is not sent |
-| api.gmf.mvdspec | feature bit 2: recorder-aware | The library knows the recorder's dummy spectator. | missing | Added (upstream); S40 |
+| api.gmf.mvdspec | feature bit 2: recorder-aware | The library knows the recorder's dummy spectator. | partial | Our own rules count as knowing the spectator (`sv_mvd_spawn_dummy` 1 makes it); the recorder records our rules only, so a hosted library's bit is not read |
 | api.gmf.alldisconnects | feature bit 3: all disconnects | The disconnect call also for clients that never entered. | done | games/shooters_edge/server/q2_native.cpp (`nv_drop`): the disconnect call for a client the game said yes to that never entered |
 | api.gmf.savegames | feature bit 10: enhanced savegames | Saves allowed only with this bit (or `sys_allow_unsafe_savegames`); `Game supports Q2PRO enhanced savegames.` | partial | Added (upstream); ours saves any library, no bit check |
 | api.gmf.variablefps | feature bit 11: variable frame rate | `sv_fps` above 10 used only with this bit. | missing | Added (upstream); ours runs the hosted library at 10 Hz |
@@ -733,7 +733,7 @@ done 9, partial 25, missing 0, not-taken 2
 | log.overflow | `Game left <n> bytes in multicast buffer, cleared.`, `Frame overflowed for <name>`, `Dumping datagram for <name>`, `<msg> to <name>: overflow on the first message`, `Error <n> compressing <n> bytes message for <name>` | | partial | Ours drops the unreliable part (S23) with its own log words |
 | log.name | `<old>[<addr>] changed name to <new>` | Every rename on the dedicated console. | partial | Ours logs renames with its own words: verify |
 | log.drop | `<name>[<addr>] was dropped: <reason>` (or `<name>[<addr>] <reason>`) | Every drop, on a dedicated server. | partial | Ours `<name> dropped: <reason>` (`games/shooters_edge/net/q2_net_server.cpp`) |
-| log.mvd | `Auto-recording local MVD to <path>`, `Not recording a local MVD.`, `Stopped local MVD auto-recording.`, `No slot for dummy MVD client`, `Dummy MVD client rejected by game: <reason>`, `Stopping MVD recording, maximum size reached.`, `... maximum duration reached.`, `... maximum number of level changes reached.`, `Couldn't write local MVD: <error>`, `MVD recording is disabled on this server.`, `Already recording a local MVD.`, `Begin local MVD recording.`, `Missing filename argument.`, `Recording local MVD to <path>`, `Stopped local MVD recording.`, `Can't 'mvdstuff', dummy MVD client is not active`, `Unreliable MVD datagram overflowed.`, `Dumping unreliable MVD datagram.` | Recorder. | partial | games/shooters_edge/net/q2_mvd_server.cpp: the recording's lines and the fatal errors; the dummy's and auto-recording's lines wait on the dummy (feat.recording.dummy) |
+| log.mvd | `Auto-recording local MVD to <path>`, `Not recording a local MVD.`, `Stopped local MVD auto-recording.`, `No slot for dummy MVD client`, `Dummy MVD client rejected by game: <reason>`, `Stopping MVD recording, maximum size reached.`, `... maximum duration reached.`, `... maximum number of level changes reached.`, `Couldn't write local MVD: <error>`, `MVD recording is disabled on this server.`, `Already recording a local MVD.`, `Begin local MVD recording.`, `Missing filename argument.`, `Recording local MVD to <path>`, `Stopped local MVD recording.`, `Can't 'mvdstuff', dummy MVD client is not active`, `Unreliable MVD datagram overflowed.`, `Dumping unreliable MVD datagram.` | Recorder. | partial | games/shooters_edge/net/q2_mvd_server.cpp, games/shooters_edge/net/q2_mvd_dummy.cpp: the recording's lines, the fatal errors, `No slot for dummy MVD client`, the auto-recording lines; the unreliable datagram's two lines never arise (blocks are written whole) |
 | log.mvd-tcp | `Accepted MVD client <name>[<addr>]`, `TCP client <name>[<addr>] dropped: <reason>`, `TCP client [<addr>] rejected: too many connections`, `TCP client [<addr>] rejected: no free slots`, `Error opening server TCP port.`, `Server TCP port already in use.`, `Fatal MVD server error: <x>`, the TCP clients' table (`ZMBI`, `ASGN`, `CNCT`, `PRIM`, `SEND`) and versions table, `No TCP clients.` | Viewers over TCP. | done | games/shooters_edge/net/q2_mvd_server.cpp: accepted, dropped with each reason, rejected (too many connections, no free slots), the port error |
 | log.save | `Savegame cvar name too long`, `Savegame cvar value too long`, `Game does not support enhanced savegames`, `Savegame path too long`, `Bad savegame configstring index`, `Savegame configstring too long`, `Couldn't write level file.`, `Couldn't write server file.`, `Couldn't wipe '<dir>' directory.`, `Couldn't write '<dir>' directory.`, `Couldn't read level file.`, `Game supports Q2PRO enhanced savegames.`, `Game supports YQ2 enhanced savegames.`, `Use of unsafe savegames forced from command line.`, `Game does not support enhanced savegames. Savegames will not work.`, `Usage: <cmd> <directory>`, `Bad savedir.`, `No such savegame: <name>`, `Couldn't read '<dir>' directory.`, `Couldn't read server file.`, `You must be in a game to save.`, `Can't savegame in a deathmatch.`, `Can't savegame while dead!`, `Game saved.` | Saves. | partial | Saves exist (`games/shooters_edge/server/q2_save.hpp`, `q2_native_save.cpp`) with our own words; no dedicated `save`/`load` (S31) |
 | log.world | `Bad mins/maxs on entity <n>: <mins> <maxs>` (developer), `SV_AreaEdicts: MAXCOUNT`, `<call>: inline model <n> out of range`, `<call>: NULL` | World errors. | partial | Our host's own words |
@@ -741,7 +741,7 @@ done 9, partial 25, missing 0, not-taken 2
 
 ## 9. Server features beyond single words: downloads, rates, floods, bans, filters, recording, status
 
-done 34, partial 13, missing 6, not-taken 2
+done 37, partial 13, missing 3, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -783,15 +783,15 @@ done 34, partial 13, missing 6, not-taken 2
 | feat.status.reserved | `maxclients` shown minus reserved slots (status, heartbeat and `info`) | | done | games/shooters_edge/net/q2_net_server.cpp (`q2_public_slots`): `info` and status answers and heartbeats |
 | feat.status.uptime | `uptime` key short or long form | | done | `engine/server/status.hpp` |
 | feat.recording.mvd2 | multi-view recording file (`MVD2`, length-led blocks, ends with 0; gzip) | | done | games/shooters_edge/net/q2_mvd_server.cpp: `mvdrecord`, gzip with `-z`, the limits; frames from games/shooters_edge/server/q2_mvd2_live.hpp |
-| feat.recording.dummy | the recorder's dummy client `[MVDSPEC]` holding the scoreboard (begin and score commands) | | missing | S40 |
+| feat.recording.dummy | the recorder's dummy client `[MVDSPEC]` holding the scoreboard (begin and score commands) | | done | games/shooters_edge/net/q2_mvd_dummy.cpp: `[MVDSPEC]` in a slot past the seats, a spectator to the rules, its commands (`wait`, `cmd`, `set`, `alias`, settings, the ignored words), the scoreboard kept up, out when the recorder stops; tests/shooters_edge_q2_mvd_server_test.cpp |
 | feat.recording.limits | stop by size, time, map count | | done | games/shooters_edge/net/q2_mvd_server.cpp: `sv_mvd_maxsize`, `sv_mvd_maxtime`, `sv_mvd_maxmaps`, each with its line |
-| feat.recording.capture | which players are recorded (in game, invisible, visible) | | missing | |
+| feat.recording.capture | which players are recorded (in game, invisible, visible) | | done | games/shooters_edge/server/q2_mvd2_live.cpp: the capture test in its order; layouts only the spectator's |
 | feat.relay.tcp | viewers over TCP on the game port (`MVD2` magic, hello, deflate; access by allow list, ban list, password) | | done | games/shooters_edge/net/q2_mvd_server.cpp: the magic, hello, deflate as one zlib stream, the allow list, the ban list, the password, stream start and stop, ping |
 | feat.relay.channels | the relay's channels, waiting room, chase cameras, menus, scoreboard, `[MVD]` chat | | partial | games/shooters_edge/net/q2_mvd_relay.hpp: channels, the Waiting Room and its chooser, a view a viewer, the menus, chat, admin; no free flight, no stats rewrites |
 | feat.relay.demo | relay plays recorded files in a loop | | done | games/shooters_edge/net/q2_mvd_relay.hpp: `mvdplay` loops `.mvd2` files (`-l 0`) |
 | feat.serverdemo | the server's own recording | | partial | Engine `serverrecord` (`.ged`) and `mvdrecord` (`.mvd2`, games/shooters_edge/net/q2_mvd_server.cpp); no `.dm2` (S40) |
-| feat.cinematics | cinematic and picture levels (`.cin`, `.pcx`, `.dm2`) and `nextserver` | | missing | S41 |
-| feat.map.chain | `+` chained level after a cinematic; `*` end of unit; `$spot`; `!` stop if missing | | partial | Unit ends and spawn spots: our rules (`games/shooters_edge/server/q2_campaign.hpp`); cinematic chaining missing (S41) |
+| feat.cinematics | cinematic and picture levels (`.cin`, `.pcx`, `.dm2`) and `nextserver` | | done | games/shooters_edge/net/q2_game.cpp, games/shooters_edge/server/q2_wire.cpp: a level of its own, server data with no slot and the file as the level (state 5 or 3 for 36), no configstrings, no `begin` |
+| feat.map.chain | `+` chained level after a cinematic; `*` end of unit; `$spot`; `!` stop if missing | | partial | Unit ends and spawn spots: our rules (`games/shooters_edge/server/q2_campaign.hpp`); the shows before a map and `+` after them (`games/shooters_edge/net/q2_game.cpp`, a level each); `map`'s and `gamemap`'s level string read the same way; `!` is taken off, so a missing map leaves the level as it is instead of stopping the server |
 | feat.map.entfile | entity file `<map>@<crc>.ent` (four hex digits of the map's entity text checksum) then `<map>.ent` in `map_override_path` | | done | `sv_entpath` |
 | feat.map.override | `<map>.bsp.override` (name, checksum, entities) | | not-taken | `q2-server-gaps.md` row 19 |
 | feat.map.vispatch | three stock maps' visibility repaired | | done | `sv_vispatch` |
