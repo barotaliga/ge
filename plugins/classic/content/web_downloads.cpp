@@ -12,6 +12,8 @@
 #include <iterator>
 #include <utility>
 
+#include "vfs/unpack.hpp"
+
 namespace ge::classic::content {
 
 namespace gn = ge::net;
@@ -28,6 +30,36 @@ std::string lowered(std::string s) {
 
 std::string gamedir_of(const WebConfig& cfg) {
   return cfg.gamedir.empty() ? cfg.base_folder : cfg.gamedir;
+}
+
+constexpr const char* kAcceptEncoding = "gzip, zstd, xz, bzip2";
+
+// `f` asked again at the front of the queue, in its next form (no line said for a form missing).
+void ask_again(WebDownloads& h, WebFile f, int packing) {
+  f.packing = packing;
+  h.queue.insert(h.queue.begin(), std::move(f));
+}
+
+// A body's packing peeled: a packed form asked, then the server's own `Content-Encoding`.
+bool unpacked(const gn::HttpFetch& f, int packing, size_t most, std::vector<uint8_t>& out,
+              std::string& why) {
+  out = f.body;
+  std::vector<uint8_t> inner;
+  const std::string& e = f.encoding;
+  if (!e.empty() && e != "identity") {
+    if (e != "gzip" && e != "x-gzip" && e != "zstd" && e != "xz" && e != "x-xz" && e != "bzip2" &&
+        e != "x-bzip2") {
+      why = "sent packed as " + e;
+      return false;
+    }
+    if (!ge::vfs::unpack_layer(out, inner, why, most)) return false;
+    out.swap(inner);
+  }
+  if (packing >= 0 && packing < kWebPlain) {
+    if (!ge::vfs::unpack_layer(out, inner, why, most)) return false;
+    out.swap(inner);
+  }
+  return true;
 }
 
 int remaining(const WebDownloads& h) { return static_cast<int>(h.queue.size() + h.slots.size()); }
@@ -275,16 +307,40 @@ void web_step(WebDownloads& h, const WebConfig& cfg, double now_s,
     h.slots.erase(h.slots.begin() + static_cast<ptrdiff_t>(i));
     const gn::HttpFetch& f = ended.fetch;
     const std::string& path = ended.file.path;
+    const int packing = ended.file.packing;
+    const bool packed = packing >= 0 && packing < kWebPlain;
+    if (f.state == gn::HttpState::done && f.status == 404 && packed) {
+      // This packed form is missing: the next form while the address's is not known, else the
+      // plain file.
+      ask_again(h, ended.file, h.packing < 0 ? packing + 1 : kWebPlain);
+      continue;
+    }
     if (f.state == gn::HttpState::done && f.status == 200) {
+      if (h.packing < 0 && !ended.file.filelist) h.packing = packing;
+      std::vector<uint8_t> body;
+      std::string bad;
+      if (!unpacked(f, packing, ended.file.filelist ? kMostList : ge::vfs::kUnpackLimit, body,
+                    bad)) {
+        std::string said = "[HTTP] " + path;
+        said += " [";
+        said += bad;
+        said += "] ";
+        said += web_files_left(remaining(h));
+        h.said.push_back(std::move(said));
+        continue;
+      }
       const double took = std::max(now_s - ended.started_s, 1e-3);
-      const auto size = static_cast<int64_t>(f.body.size());
-      h.said.push_back("[HTTP] " + path + " [" + web_size_text(size) + ", " +
-                       web_size_text(static_cast<int64_t>(static_cast<double>(size) / took)) +
-                       "/sec] " + web_files_left(remaining(h)));
+      const auto size = static_cast<int64_t>(body.size());
+      const auto sent = static_cast<double>(f.body.size());
+      std::string said = "[HTTP] " + path + " [" + web_size_text(size);
+      if (packed) said += std::string(" from ") + kWebPackings[packing].name;
+      said += ", " + web_size_text(static_cast<int64_t>(sent / took)) + "/sec] ";
+      said += web_files_left(remaining(h));
+      h.said.push_back(std::move(said));
       if (ended.file.filelist) {
-        if (cfg.filelists) read_list(h, cfg, f.body, wanted);
+        if (cfg.filelists) read_list(h, cfg, body, wanted);
       } else {
-        done.files.emplace_back(path, f.body);
+        done.files.emplace_back(path, std::move(body));
       }
       continue;
     }
@@ -311,19 +367,30 @@ void web_step(WebDownloads& h, const WebConfig& cfg, double now_s,
     const bool pak_coming =
         std::any_of(h.slots.begin(), h.slots.end(), [](const WebSlot& s) { return s.file.pak; });
     if (pak_coming || (h.queue.front().pak && !h.slots.empty())) break;
+    // While the address's packed form is not known, one file at a time finds it.
+    const bool finding = h.packing < 0 && !h.queue.front().filelist;
+    if (finding && std::any_of(h.slots.begin(), h.slots.end(),
+                               [](const WebSlot& s) { return !s.file.filelist; }))
+      break;
     WebSlot s;
     s.file = h.queue.front();
     h.queue.erase(h.queue.begin());
     s.started_s = now_s;
-    const std::string url = h.base + gn::url_escape(s.file.filelist || h.game_in_base
-                                                        ? s.file.path
-                                                        : gamedir_of(cfg) + "/" + s.file.path);
+    if (s.file.filelist)
+      s.file.packing = kWebPlain;
+    else if (s.file.packing < 0)
+      s.file.packing = h.packing < 0 ? 0 : h.packing;
+    std::string url = h.base + gn::url_escape(s.file.filelist || h.game_in_base
+                                                  ? s.file.path
+                                                  : gamedir_of(cfg) + "/" + s.file.path);
+    if (s.file.packing < kWebPlain) url += kWebPackings[s.file.packing].suffix;
     if (cfg.debug) h.said.push_back("[HTTP] Fetching " + url + "...");
     gn::HttpOptions o;
     o.user_agent = cfg.user_agent;
     o.referer = h.referer;
     o.proxy = cfg.proxy;
     o.verify = !cfg.insecure;
+    o.accept_encoding = kAcceptEncoding;
     if (s.file.filelist) o.most_bytes = kMostList;
     gn::http_start(s.fetch, url, o, now_s);
     h.slots.push_back(std::move(s));

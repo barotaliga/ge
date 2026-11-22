@@ -7,7 +7,8 @@
 // - THROUGH A PROXY (`HttpOptions::proxy`, "host:port" or "http://host:port"): the request goes to
 //   the proxy with the whole URL in its first line.
 // - THE REQUEST: `GET`, HTTP/1.1, `Host`, `User-Agent`, `Referer` when given, `Connection:
-//   close`; no compression asked for.
+//   close`; `Accept-Encoding` when `HttpOptions::accept_encoding` names one, the body then left
+//   packed as it came (`HttpFetch::encoding` says how) for the caller to unpack.
 // - THE ANSWER: the status, the body by `Content-Length`, by chunks, or to the close; up to
 //   `HttpOptions::redirects` redirects (301, 302, 303, 307, 308) followed to their `Location`
 //   (0: none, the redirect is the answer).
@@ -55,6 +56,7 @@ struct HttpOptions {
   std::string referer;                  // "": none sent
   std::string proxy;                    // "": straight to the server
   std::string ca_pem;                   // https: "" the system's roots; else these alone
+  std::string accept_encoding;          // "": none asked; else sent as `Accept-Encoding`
   int redirects = 5;                    // 0: none followed, the redirect itself the answer
   double stall_s = 30;                  // no byte for this long: "Timeout was reached"
   size_t most_bytes = size_t{1} << 30;  // a body larger is refused
@@ -70,8 +72,9 @@ struct HttpFetch {
   std::string url;  // the one asked now (after any redirect)
   int status = 0;   // the answer's (0: none yet)
   std::vector<uint8_t> body;
-  int64_t total = -1;  // the body's length when the answer gave it
-  std::string error;   // why it failed ("" while it goes or once done)
+  int64_t total = -1;    // the body's length when the answer gave it
+  std::string error;     // why it failed ("" while it goes or once done)
+  std::string encoding;  // the answer's `Content-Encoding`, lower case ("": none; the body as sent)
   int redirected = 0;
   double last_byte_s = 0;
   TcpStream stream;

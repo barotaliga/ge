@@ -28,6 +28,13 @@
 //   one path a line (`@` first: looked for in the game folder only); a pack (`.pak`, `.pkz`) is
 //   said and fetched before the rest, a kind the game's servers never send (`WebConfig::kinds`)
 //   is refused and said.
+// - PACKED FILES: a source may keep each file packed beside or instead of the plain one
+//   (`maps/q2dm1.bsp.xz`; `.zst`, `.bz2`, `.gz` too), which a GitHub repository or any static
+//   server can hold. The first file of a connection asks each packed form in turn, then the plain
+//   file; the form found is asked first for the rest, the plain file when a packed one is
+//   missing. A server may also pack a file as it sends it (`Content-Encoding` gzip, zstd, xz or
+//   bzip2, all asked for). Either way the file is unpacked and checked by its format's checksum
+//   before it is kept; one that does not unpack is said and left lacking.
 // - THE ENDS: a file comes whole on `200 OK` and is kept as one fetched over the channel; each
 //   is said with its size, its speed and the files left ("[HTTP] maps/q2dm1.bsp [1.2 MB,
 //   340 kB/sec] [3 remaining files]"). A `404` from the server's address leaves that file
@@ -43,7 +50,8 @@
 // ge:keywords web-downloads http-download dlserver cl_http_downloads cl_http_filelists filelist
 // ge:keywords cl_http_max_connections cl_http_proxy cl_http_default_url cl_http_insecure
 // ge:keywords cl_http_debug cl_http_blocking_timeout download-http web_size_text github
-// ge:keywords github-repository raw-githubusercontent web_base
+// ge:keywords github-repository raw-githubusercontent web_base packed-download xz zstd gzip bzip2
+// ge:keywords content-encoding accept-encoding kwebpackings
 // ge:skill classic net
 // ge:test tests/classic_content_web_downloads_test.cpp
 #pragma once
@@ -82,9 +90,19 @@ std::vector<std::string> quake_web_kinds();
 
 struct WebFile {
   std::string path;
+  int packing = -1;  // the packed form asked (`kWebPackings`' index; that count: plain; -1 not yet)
   bool filelist = false;
   bool pak = false;
 };
+
+// The packed forms a web source may keep a file in, asked as `<path><suffix>` in this order.
+struct WebPacking {
+  const char* suffix;
+  const char* name;
+};
+inline constexpr WebPacking kWebPackings[] = {
+    {".xz", "xz"}, {".zst", "zstd"}, {".bz2", "bzip2"}, {".gz", "gzip"}};
+inline constexpr int kWebPlain = 4;  // `kWebPackings`' count: the file as it is
 
 struct WebSlot {
   WebFile file;
@@ -97,6 +115,9 @@ struct WebDownloads {
   bool default_repo = false;  // the address is the player's own, not the server's
   std::string base;           // the address files are asked under
   std::string referer;
+  // The address's packed form: -1 not known yet (each form tried on a file, then the plain);
+  // `kWebPackings`' index; `kWebPlain` none.
+  int packing = -1;
   bool game_in_base = false;  // the address is the game folder's own (`{game}` or `#`)
   bool told_server = false;   // `download http` sent
   bool asked_list = false;    // the mod's file list queued
