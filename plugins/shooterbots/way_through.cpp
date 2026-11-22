@@ -1376,9 +1376,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   int toured = 0;  // 1 a step, 2 a monster, from the tour
   if (w.complete && w.toured && left_to_do && !me_trapped && w.out < 0) {
     const auto open_now = [&](int32_t stop) {
+      // A monster in a trap (map_nav.hpp: a pool dropped into with no way back) is no stop of the
+      // tour while he is out of it.
       if (stop < 0) {
         for (const auto& [e, n] : preys)
-          if (e == -1 - stop) return n;
+          if (e == -1 - stop) return !me_trapped && trapped_in(n) ? -1 : n;
         return -1;
       }
       const WayStep& st = w.steps[static_cast<size_t>(stop)];
@@ -1605,7 +1607,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     // (`complete`) Nothing at all to do for kWayIdle_s: what was left for a while is tried again
     // now rather than at its time (e1m1's lift button, pressed once, left while its car stood at
     // the top: the rest of the map lay below it, and he stood up there for a minute and a half).
-    if (w.complete && far < 0 && w.idle_since >= 0 && t - w.idle_since > kWayIdle_s) {
+    if (w.complete && far < 0 && w.idle_since >= 0 && t - w.idle_since > kWayIdle_s &&
+        t >= w.hopeful_until + kWayIdle_s) {
       bool any = false;
       for (WayStep& st : w.steps)
         if (st.left_until > t && st.left_until < kWayForever) {
@@ -1624,8 +1627,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         }
       // And for a while the doors are taken as open (a plat or a lift he rode that the plan holds
       // shut at rest, the way back down past it): his routes find out whether they are.
+      // (The idle clock runs on: the swim back out of a pool below still comes at its time.)
       w.hopeful_until = t + kWayHopeful_s;
-      w.idle_since = -1;
       w.plan_at = -1;
       w.stats.retried += any ? 1 : 0;
       w.stats.hopeful++;
