@@ -17,6 +17,7 @@
 #include "brush/trace.hpp"
 #include "core/libm/libm.hpp"
 #include "core/prng.hpp"
+#include "shooters_edge/server/q2_actor.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_flash.hpp"
 #include "shooters_edge/server/q2_lines.hpp"
@@ -174,6 +175,9 @@ float yaw_to(sh::Vec3f d) {
 }
 
 const Kind& kind(const Q2Monster& m) { return kKinds[m.kind]; }
+bool named(const Q2Monster& m, std::string_view classname) {
+  return kind(m).classname == classname;
+}
 Q2Entity& body(Q2Server& s, const Q2Monster& m) { return s.entities[size_t(m.entity)]; }
 
 // Monster `m` thrown apart by a blow of `damage`: its pieces by its kind (q2_gibs.hpp).
@@ -360,7 +364,7 @@ void go_to(Q2Server& s, Q2Monster& m, sh::Vec3f goal, float speed) {
 
 // The monster turns on `foe` (seen when `saw`).
 void found(Q2Server& s, Q2Monster& m, int foe, bool saw) {
-  if (kind(m).good) return;  // a good guy hunts no one
+  if (kind(m).good && !named(m, "misc_actor")) return;  // a good guy hunts no one
   m.enemy = foe;
   if (!m.lost_combat.empty()) q2_lost_combat(s, m);
   m.seen_at = s.level_time;
@@ -413,6 +417,7 @@ bool sees(const Q2Server& s, const Q2Monster& m, int foe) {
 }
 
 void notice(Q2Server& s, Q2Monster& m) {
+  if (kind(m).good) return;  // a good guy looks for no one (an actor is set on its foes)
   // 1. a monster that saw a player this frame or the last.
   if (!m.ambush && s.sight_entity >= 0 && s.sight_entity != m.entity &&
       s.sight_frame >= s.frame_number - 1) {
@@ -951,9 +956,6 @@ const Duck* duck_of(const Q2Monster& m) {
 bool soldier(const Q2Monster& m) {
   return std::string_view(kind(m).classname).starts_with("monster_soldier");
 }
-bool named(const Q2Monster& m, std::string_view classname) {
-  return kind(m).classname == classname;
-}
 bool stamps(const Q2Monster& m) {
   return named(m, "monster_tank") || named(m, "monster_tank_commander");
 }
@@ -1317,7 +1319,7 @@ void think(Q2Server& s, Q2Monster& m) {
       d.z = 0;
       if (s.level_time + 0.001 < m.corner_wait) return;  // held at its corner
       if (sh::length(d) < 16) {
-        arrive_corner(s, m);
+        named(m, "misc_actor") ? actor_arrive(s, m) : arrive_corner(s, m);
         return;
       }
       go_to(s, m, c.origin, k.walk);
@@ -1787,7 +1789,7 @@ void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed) {
 // the heavy kinds whose splash hits its own side; one that was aiming at it; else it joins that
 // monster's fight against its foe.
 void react(Q2Server& s, Q2Monster& m, int attacker) {
-  if (hunted(s, attacker)) {
+  if (hunted(s, attacker) && !kind(m).good) {
     if (m.patient >= 0 && m.enemy != -1) return;  // a medic at a corpse keeps to it
     if (attacker == m.enemy) return;
     if (m.enemy >= 0 && m.patient < 0) m.old_enemy = m.enemy;
@@ -1795,7 +1797,8 @@ void react(Q2Server& s, Q2Monster& m, int attacker) {
     return;
   }
   const Q2Monster* a = foe_monster(s, attacker);
-  if (a == nullptr || a == &m || a->dead || attacker == m.enemy || kind(m).good) return;
+  if (a == nullptr || a == &m || a->dead || attacker == m.enemy) return;
+  if (kind(m).good && !named(m, "misc_actor")) return;  // an actor fights back
   const Kind& ak = kind(*a);
   const Kind& k = kind(m);
   const bool alike = ak.flies == k.flies && ak.swims == k.swims;
@@ -1867,6 +1870,7 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
   react(s, m, attacker);
   if (m.leaping || m.ducked) return true;  // ducked (in the air from a leap too): no pain
   const bool waiting = s.level_time + 0.001 < m.pain_at + kPainEvery;
+  if (named(m, "misc_actor") && actor_pain(s, m, attacker, waiting)) return true;
   if (monster_pain_known(k.classname)) {  // its pains as data (q2_monster_pain.cpp)
     const PainChoice c =
         monster_pain(k.classname, damage, skill(s), m.velocity.z, m.pose.frame, m.pose.span.first,
@@ -1924,6 +1928,7 @@ bool monster_use(Q2Server& s, int e, int activator) {
     return true;
   }
   if (m.spare) return true;
+  if (!m.waiting && named(m, "misc_actor")) return actor_use(s, m);
   if (!m.waiting) {  // awake: a use with no enemy angers it at a player who used it
     if (!m.dead && m.enemy == -1 && targetable(s, activator)) found(s, m, activator, false);
     return true;
