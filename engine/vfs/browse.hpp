@@ -77,6 +77,11 @@ std::string age_text(int64_t age_s);
 // A size: "812 B", "12.4 KB", "20.8 MB", "1.2 GB".
 std::string size_text(uint64_t bytes);
 
+// The files of `entries` (after its folders, which keep their place) put in `order`: 1 by name,
+// 2 by age (oldest first), 3 by size (smallest first); negative the same the other way round
+// (-2: newest first, how `list_folder` lists them); 0 by name. Ties go by name.
+void sort_files(std::vector<FolderEntry>& entries, int order);
+
 // One frame's presses on the browser.
 struct BrowseInput {
   bool up = false, down = false, page_up = false, page_down = false, home = false, end = false;
@@ -93,6 +98,8 @@ class FolderBrowser {
   // The extensions shown (each with its dot).
   void set_extensions(std::vector<std::string> extensions) { extensions_ = std::move(extensions); }
   void set_places(std::vector<Place> places) { places_ = std::move(places); }
+  // The files' order (`sort_files`), from the next listing on; -2 (newest first) by default.
+  void set_order(int order) { order_ = order; }
   const std::vector<Place>& places() const { return places_; }
 
   // `dir` listed and made the folder open, the selection on the first file (or on `select`, an
@@ -129,6 +136,7 @@ class FolderBrowser {
   std::vector<FolderEntry> entries_;
   int selected_ = 0;
   int page_rows_ = 10;
+  int order_ = -2;
   std::string chosen_;
   std::string note_;
 };

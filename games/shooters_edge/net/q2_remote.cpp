@@ -8,7 +8,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <utility>
 
 #include "classic/q2_move.hpp"
@@ -31,6 +33,7 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   Q2ClientConfig s;
   s.name = cfg.name;
   s.skin = !cfg.model.empty() ? cfg.model + "/" + cfg.skin : "male/grunt";
+  s.stuff = &r.stuff;
   if (cfg.skin.find('/') != std::string::npos) s.skin = cfg.skin;
   s.rate = cfg.rate;
   s.fov = cfg.fov;
@@ -120,6 +123,12 @@ int lerp_list(std::vector<client::DemoEntity>& drawn, const std::vector<client::
 
 void q2_remote_start(Remote& r, const ClientConfig& cfg) {
   r.q2 = std::make_unique<Q2ClientEnd>();
+  if (!r.stuff_file.empty()) {  // the whitelist read again at each join
+    std::ifstream in(r.stuff_file, std::ios::binary);
+    std::ostringstream text;
+    text << in.rdbuf();
+    r.stuff.patterns = ge::classic::read_stuff_whitelist(text.str());
+  }
   q2_client_start(*r.q2, *r.transport, r.server, q2_config(r, cfg), 0);
   remote_record_restart(r);  // the level kept for `record` (qw_match_record.hpp)
   r.active = true;
@@ -170,6 +179,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
     r.now_us += tick_us;
     q2_client_tick(c, r.now_us);
   }
+  for (std::string& line : std::exchange(c.ignored, {})) said.push_back(std::move(line));
   if (c.stage != r.said) {
     r.said = c.stage;
     std::string line = remote_stage_words(r.said) + r.server_name;
