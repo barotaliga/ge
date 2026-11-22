@@ -259,4 +259,42 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   return RemoteStep::frame;
 }
 
+void add_q2_download_command(ge::console::Console& con, Remote& r) {
+  con.add_command("download", "download <file>: a file asked of the server you are on",
+                  [&r](ge::console::Console& c, const ge::console::Args& a) {
+                    if (!r.active || r.watch || !r.q2 || r.q2->stage != ClientStage::active) {
+                      c.print("Must be connected to a server.");
+                      return;
+                    }
+                    const ge::console::Cvar* allow = c.cvars().find("allow_download");
+                    if (allow != nullptr && allow->value == "-1") {
+                      c.print("Downloads are permanently disabled.");
+                      return;
+                    }
+                    if (a.size() != 2) {
+                      c.print("Usage: download <filename>");
+                      return;
+                    }
+                    const std::string why = q2_download(*r.q2, a[1]);
+                    if (!why.empty()) c.print("Couldn't download " + a[1] + ": " + why);
+                  });
+}
+
+void add_q2_skins_command(ge::console::Console& con, Remote& r) {
+  con.add_command("skins", "skins: every player's model and skin read again",
+                  [&r](ge::console::Console& c, const ge::console::Args&) {
+                    const client::DemoState& st = r.demo.state;
+                    if (!r.active || r.watch || !r.q2 || st.map.empty()) {
+                      c.print("Must be in a level to load skins.");
+                      return;
+                    }
+                    r.kept = true;  // the level read again: every figure and skin drawn anew
+                    for (size_t i = 0; i < st.looks.size(); i++) {
+                      if (st.looks[i].empty()) continue;
+                      c.print("client " + std::to_string(i) + ": " + st.names[i] + "\\" +
+                              st.looks[i] + " --> " + st.looks[i]);
+                    }
+                  });
+}
+
 }  // namespace shooters_edge::net

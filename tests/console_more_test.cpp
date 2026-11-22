@@ -149,6 +149,15 @@ TEST(uptime_reads_in_both_forms) {
   CHECK(uptime_long(86400 + 7200 + 5) == "1 day, 2 hours, 5 secs");
 }
 
+TEST(level_and_tenths_clocks_leave_minutes_unpadded) {
+  CHECK(level_clock(0) == "0:00");
+  CHECK(level_clock(245) == "4:05");
+  CHECK(level_clock(3600 + 240 + 5) == "1:4:05");
+  CHECK(tenths_clock(0) == "0:00.0");
+  CHECK(tenths_clock(187.4) == "3:07.4");
+  CHECK(tenths_clock(3725.25) == "62:05.2");
+}
+
 TEST(clock_macros_read_the_clock_given) {
   Console c;
   std::tm t{};

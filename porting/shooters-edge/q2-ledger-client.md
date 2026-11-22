@@ -10,10 +10,10 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client console commands | 103 | 11 | 32 | 10 | 156 |
+| Client console commands | 111 | 12 | 23 | 10 | 156 |
 | Client settings (cvars) | 133 | 36 | 141 | 40 | 350 |
-| Macros ($name in typed and bound text) | 14 | 1 | 13 | 2 | 30 |
-| Menu pages and rows | 77 | 72 | 12 | 1 | 162 |
+| Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
+| Menu pages and rows | 79 | 74 | 8 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
 | Temporary entities (svc_temp_entity) | 14 | 50 | 1 | 0 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 18 | 0 | 2 | 0 | 20 |
@@ -23,17 +23,17 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 7 | 7 | 2 | 0 | 16 |
 | The layout language (status bar and layouts) | 24 | 1 | 2 | 0 | 27 |
 | HUD and screen elements | 11 | 10 | 7 | 1 | 29 |
-| Messages printed to the player | 32 | 56 | 54 | 5 | 147 |
+| Messages printed to the player | 39 | 57 | 46 | 5 | 147 |
 | Demo playback and recording features | 4 | 10 | 7 | 2 | 23 |
-| Keys: the fixed keys and the default bindings | 4 | 3 | 4 | 0 | 11 |
+| Keys: the fixed keys and the default bindings | 4 | 4 | 3 | 0 | 11 |
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 540 | 295 | 315 | 61 | 1211 |
+| **all** | 567 | 302 | 281 | 61 | 1211 |
 
 ## Client console commands
 
-done 103, partial 11, missing 32, not-taken 10
+done 111, partial 12, missing 23, not-taken 10
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -79,11 +79,11 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.passive | `passive` | toggles waiting for a server to connect to us (through a NAT) | missing | C42 |
 | cmd.rcon | `rcon <command>` | sends a remote-console command with `rcon_password` to the server or `rcon_address` | done | `games/shooters_edge/net/qw_admin.cpp` |
 | cmd.pingservers | `pingservers` | pings the address book `adr0`..`adr15` and the LAN | missing | C41 |
-| cmd.serverstatus | `serverstatus [address]` | asks a server for its info and players and prints them by frags | missing | C41 |
+| cmd.serverstatus | `serverstatus [address]` | asks a server for its info and players and prints them by frags | done | `games/shooters_edge/net/qw_serverstatus.cpp`: its own socket, joined or not; both games' answers |
 | cmd.pause | `pause` | pauses a single-player game or a demo | partial | a word of the window's own game (`client/listen.cpp`); not found to pause a demo or a joined single-player server (C24) |
-| cmd.skins | `skins` | reloads every client's skin and prints "client n: name --> model/skin" | missing | not found as a console command in Quake II's client |
+| cmd.skins | `skins` | reloads every client's skin and prints "client n: name --> model/skin" | partial | `games/shooters_edge/net/q2_remote.cpp`: on a Quake II server joined, the level read again and a line a player; the right side is the look asked, not the stand-in drawn when it is missing |
 | cmd.userinfo | `userinfo` | prints the user info being sent | done | `engine/console/console_more.cpp`: "User info settings:" then each key padded to 20 |
-| cmd.download | `download <file>` | asks the server for a file over the connection | missing | the client asks for files only on connecting (`net/q2_client.cpp`); no command (C36) |
+| cmd.download | `download <file>` | asks the server for a file over the connection | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
 | cmd.dumpclients | `dumpclients` | prints every client's index and configstring | done | `games/shooters_edge/client/q2_bar.cpp` |
 | cmd.dumpstatusbar | `dumpstatusbar <file>` | writes the status-bar program to a file | done | `games/shooters_edge/client/q2_bar.cpp`: written under `layouts/` |
 | cmd.dumplayout | `dumplayout <file>` | writes the current layout program to a file | done | `games/shooters_edge/client/q2_bar.cpp`: written under `layouts/` |
@@ -178,10 +178,10 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.quit | `quit` | exits | done | `games/shooters_edge/client/main.cpp` |
 | cmd.recycle | `recycle` | restarts the program in place | missing | not found |
 | cmd.lasterror | `lasterror` | prints the last error | done | `engine/console/console_more.cpp` |
-| cmd.path | `path` | prints the search path | missing | ours prints it through `ge`/`secli`, not the console |
-| cmd.dir | `dir <path> [ext]` | lists files in the search path | missing | not found |
-| cmd.fdir | `fdir <wildcard>` | lists files by wildcard | missing | not found |
-| cmd.whereis | `whereis <path> [all]` | says which pack or folder a file comes from | missing | not found |
+| cmd.path | `path` | prints the search path | done | `engine/vfs/search_commands.cpp`: each source, the winner first, with its count of files |
+| cmd.dir | `dir <path> [ext]` | lists files in the search path | done | `engine/vfs/search_commands.cpp` |
+| cmd.fdir | `fdir <wildcard>` | lists files by wildcard | done | `engine/vfs/search_commands.cpp` |
+| cmd.whereis | `whereis <path> [all]` | says which pack or folder a file comes from | done | `engine/vfs/search_commands.cpp`: the winner, and with `all` every source holding it |
 | cmd.fs_stats | `fs_stats` | file-system counters | not-taken | `client-gaps.md`: developer tools left out |
 | cmd.link | `link <from> <to>` | links one path to another | missing | not found |
 | cmd.unlink | `unlink <from>` | removes a link | missing | not found |
@@ -191,9 +191,9 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.bsplist | `bsplist` | lists loaded maps | not-taken | `client-gaps.md`: developer tools left out |
 | cmd.z_stats | `z_stats` | memory statistics | not-taken | `client-gaps.md`: developer tools left out |
 | cmd.net_restart | `net_restart` | restarts networking | missing | not found |
-| cmd.net_stats | `net_stats` | prints network counters | missing | not found |
+| cmd.net_stats | `net_stats` | prints network counters | done | `engine/net/net_commands.cpp`: packets and bytes each way since the socket opened (`engine/net/transport.cpp` counts them) |
 | cmd.showip | `showip` | prints the local addresses | missing | not found |
-| cmd.dns | `dns <name>` | resolves a host name | missing | not found |
+| cmd.dns | `dns <name>` | resolves a host name | done | `engine/net/net_commands.cpp` |
 | cmd.tests | `error`, `errordrop`, `freeze`, `crash`, `doublefree`, `printjunk`, `bsptest`, `wildtest`, `normtest`, `infotest`, `snprintftest`, `modeltest`, `imagetest`, `soundtest`, `activate`, `mdfourtest`, `mdfoursum`, `extcmptest`, `nextpathtest`, `extract`, `utf8test` | the test build's self-tests and fault triggers | not-taken | `client-gaps.md`: developer tools left out |
 
 ## Client settings (cvars)
@@ -557,7 +557,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 
 ## Macros ($name in typed and bound text)
 
-done 14, partial 1, missing 13, not-taken 2
+done 24, partial 3, missing 1, not-taken 2
 
 A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's value.
 
@@ -567,20 +567,20 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 | macro.loc_there | `$loc_there` | the name of the place the player looks at | done | `games/shooters_edge/client/place_names.cpp` |
 | macro.cl_mapname | `$cl_mapname` | the map's file name | done | `games/shooters_edge/client/team_chat.cpp` |
 | macro.cl_server | `$cl_server` | the server's address | done | `games/shooters_edge/net/qw_remote.cpp`: the server joined, as asked |
-| macro.cl_timer | `$cl_timer` | time on this level, m:ss or h:mm:ss | missing | C44 |
-| macro.cl_demopos | `$cl_demopos` | the playing demo's position, m:ss.t | missing | C44 |
+| macro.cl_timer | `$cl_timer` | time on this level, m:ss or h:mm:ss | done | `games/shooters_edge/client/team_chat.cpp` (`engine/console/clock_macros.cpp` `level_clock`) |
+| macro.cl_demopos | `$cl_demopos` | the playing demo's position, m:ss.t | done | `games/shooters_edge/client/demo_playback.cpp` (`tenths_clock`) |
 | macro.cl_ups | `$cl_ups` | the player's speed along the ground, units a second (predicted when predicting) | done | `games/shooters_edge/client/place_seen.cpp` |
-| macro.cl_fps | `$cl_fps` | moves (client frames) a second | missing | C44 |
+| macro.cl_fps | `$cl_fps` | moves (client frames) a second | done | `games/shooters_edge/net/qw_remote_macros.cpp`: one move a frame, so the moves' rate |
 | macro.r_fps | `$r_fps` | drawn frames a second | done | `engine/platform/pacing.cpp`: frames drawn in the last second |
-| macro.cl_mps | `$cl_mps` | moves a second sent | missing | C44 |
-| macro.cl_pps | `$cl_pps` | packets a second sent | missing | C44 |
-| macro.cl_ping | `$cl_ping` | the round trip, ms | missing | C44 |
-| macro.cl_lag | `$cl_lag` | packets lost, percent with 2 decimals | missing | C44 |
+| macro.cl_mps | `$cl_mps` | moves a second sent | done | `games/shooters_edge/net/qw_remote_macros.cpp`: the moves sent, the last whole second (`engine/net/rates.cpp`) |
+| macro.cl_pps | `$cl_pps` | packets a second sent | done | `games/shooters_edge/net/qw_remote_macros.cpp`: the packets sent, the last whole second (`engine/net/rates.cpp`) |
+| macro.cl_ping | `$cl_ping` | the round trip, ms | done | `games/shooters_edge/net/qw_remote_macros.cpp` |
+| macro.cl_lag | `$cl_lag` | packets lost, percent with 2 decimals | done | `games/shooters_edge/net/qw_remote_macros.cpp` |
 | macro.cl_health | `$cl_health` | the health stat | done | `games/shooters_edge/client/team_chat.cpp` |
 | macro.cl_ammo | `$cl_ammo` | the ammo stat | done | `games/shooters_edge/client/team_chat.cpp` |
 | macro.cl_armor | `$cl_armor` | the armour stat | done | `games/shooters_edge/client/team_chat.cpp` |
-| macro.cl_weaponmodel | `$cl_weaponmodel` | the held weapon's model name | missing | C44 |
-| macro.cl_numentities | `$cl_numentities` | entities in the frame | missing | C44 |
+| macro.cl_weaponmodel | `$cl_weaponmodel` | the held weapon's model name | partial | `games/shooters_edge/net/qw_remote_macros.cpp`: on a Quake II server joined; a game played in the window reads "" |
+| macro.cl_numentities | `$cl_numentities` | entities in the frame | partial | `games/shooters_edge/net/qw_remote_macros.cpp`: on a server joined; a game played in the window reads 0 |
 | macro.cl_surface | `$cl_surface` | the texture name and flags in the line of sight | missing | C44 |
 | macro.gl_viewcluster | `$gl_viewcluster` | the view's visibility cluster number | not-taken | `client-gaps.md`: developer tools left out |
 | macro.gl_viewleaf | `$gl_viewleaf` | the view's leaf number (a debug build's) | not-taken | `client-gaps.md`: developer tools left out |
@@ -589,14 +589,14 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 | macro.com_uptime | `$com_uptime` | how long the program has run | done | `engine/console/clock_macros.cpp` |
 | macro.com_uptime_long | `$com_uptime_long` | the same in words | done | `engine/console/clock_macros.cpp` |
 | macro.random | `$random` | a digit 0..9 | done | `engine/console/clock_macros.cpp` |
-| macro.com_maplist | `$com_maplist` | every map's name (the start-server page lists them) | missing | C44 |
-| macro.net_uprate | `$net_uprate` | bytes a second sent | missing | C44 |
-| macro.net_dnrate | `$net_dnrate` | bytes a second received | missing | C44 |
+| macro.com_maplist | `$com_maplist` | every map's name (the start-server page lists them) | done | `games/shooters_edge/client/game_adapter.cpp` |
+| macro.net_uprate | `$net_uprate` | bytes a second sent | done | `games/shooters_edge/net/qw_remote_macros.cpp` (`engine/net/rates.cpp`, the transport's counts) |
+| macro.net_dnrate | `$net_dnrate` | bytes a second received | done | `games/shooters_edge/net/qw_remote_macros.cpp` (`engine/net/rates.cpp`, the transport's counts) |
 | macro.cvars | `$<any setting>` | any setting's value expands the same way (`$$` defers it in menu lines) | partial | ours expands `$name` of settings in the console language (`engine/console/script.cpp`); verify in binds and `say` |
 
 ## Menu pages and rows
 
-done 77, partial 72, missing 12, not-taken 1
+done 79, partial 74, missing 8, not-taken 1
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
@@ -608,7 +608,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.look.weapon | player-setup weapon | the figure on the player page holds the railgun's world model | missing | no figure drawn (C5) |
 | menu.esc.disconnected | ESCAPE while not in a game | opens the main page | done | `games/shooters_edge/menu/main_menu.cpp` |
 | menu.esc.ingame | ESCAPE in a game | opens the compact in-game page (below) over the world | done | `games/shooters_edge/menu/q2_pages.cpp` |
-| menu.esc.layout | ESCAPE with a layout up | sends `putaway` (closes the help computer or inventory); held, opens the in-game page | missing | not found |
+| menu.esc.layout | ESCAPE with a layout up | sends `putaway` (closes the help computer or inventory); held, opens the in-game page | partial | `games/shooters_edge/menu/game_menu.cpp` (`Host::screen_up`, set from `client/q2_bar.cpp`'s `layout_up`): ESCAPE sends `putaway`; held, opening the in-game page, missing |
 | menu.main.plaque | main: plaque and logo | the `m_main_plaque` and `m_main_logo` pictures beside the list | done | `menu/classic_art.cpp` (Quake II's plates) |
 | menu.main.game | main: game | picture row opening the single-player page | done | ours SINGLE PLAYER |
 | menu.main.multiplayer | main: multiplayer | picture row opening the multiplayer page | done | ours MULTIPLAYER |
@@ -647,7 +647,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.dmf.infiniteammo | flags: infinite ammo | dmflag 8192 | done | `games/shooters_edge/menu/q2_pages.cpp`: one bit of `dmflags` (`Entry::bit`) |
 | menu.dmf.fixedfov | flags: fixed FOV | dmflag 32768 | done | `games/shooters_edge/menu/q2_pages.cpp`: one bit of `dmflags` (`Entry::bit`) |
 | menu.dmf.quaddrop | flags: quad drop | dmflag 16384 | done | `games/shooters_edge/menu/q2_pages.cpp`: one bit of `dmflags` (`Entry::bit`) |
-| menu.opt.player | options: player setup | opens the player page | partial | `games/shooters_edge/menu/q2_pages.cpp`: OPTIONS opens player setup with name and handedness; model, skin and the figure missing |
+| menu.opt.player | options: player setup | opens the player page | partial | `games/shooters_edge/menu/q2_pages.cpp`: name, model, skin and handedness; the figure drawn missing |
 | menu.opt.input | options: input setup | opens the input page | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.opt.keys | options: key bindings | opens the key page | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.opt.weapons | options: weapon bindings | opens the weapon-key page | done | `games/shooters_edge/menu/q2_pages.cpp` |
@@ -658,11 +658,11 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.opt.downloads | options: download options | opens the download page | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.opt.addressbook | options: address book | opens the address book | partial | not on OPTIONS: our menu has no text field for `adr0`..`adr15` |
 | menu.pl.name | player: name | a text field for `name` | done | ours SETUP NAME |
-| menu.pl.model | player: model | every figure in `players/` | missing | C5 |
-| menu.pl.skin | player: skin | the chosen figure's skins | missing | C5 |
+| menu.pl.model | player: model | every figure in `players/` | done | `games/shooters_edge/menu/figures.cpp`, `menu/main_menu.cpp`: male, female, then by name; written to `skin` |
+| menu.pl.skin | player: skin | the chosen figure's skins | done | `games/shooters_edge/menu/figures.cpp`, `menu/main_menu.cpp`: a skin with its icon; a new model at its first skin |
 | menu.pl.hand | player: handedness | right, left, center (`hand`) | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.pl.figure | player: the figure drawn | the chosen figure and skin turning, holding the weapon | missing | C5 |
-| menu.pl.none | player: no figures | "No player models found." when none | missing | not found |
+| menu.pl.none | player: no figures | "No player models found." when none | partial | `games/shooters_edge/menu/figures.cpp`, `menu/main_menu.cpp`: the rows read NONE, dimmed; the page still opens and says nothing |
 | menu.in.sens | input: mouse sens | a number field for `sensitivity` | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.in.autosens | input: auto sens | `m_autosens` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.in.filter | input: mouse filter | `m_filter` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 32, partial 56, missing 54, not-taken 5
+done 39, partial 57, missing 46, not-taken 5
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1168,15 +1168,15 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.rcon.nopass | "You must set 'rcon_password' before issuing an rcon command." | `rcon` without a password | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.rcon.noaddr | "You must either be connected, or set the 'rcon_address' cvar to issue rcon commands." | `rcon` with nowhere to send | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.rcon.badaddr | "Bad address: %s" | a bad `rcon_address`, `serverstatus` or `remotemode` address | partial | ours does it but says it in its own words (the exact line not found) |
-| msg.status.head | "Status response from %s" | `serverstatus` answer | missing | the feature is missing |
-| msg.status.cols | "Num Score Ping Name" | `serverstatus` player table | missing | the feature is missing |
-| msg.status.usage | "Usage: %s [address]" | `serverstatus` misuse | missing | the feature is missing |
+| msg.status.head | "Status response from %s" | `serverstatus` answer | done | `games/shooters_edge/net/qw_serverstatus.cpp` |
+| msg.status.cols | "Num Score Ping Name" | `serverstatus` player table | done | `games/shooters_edge/net/qw_serverstatus.cpp` |
+| msg.status.usage | "Usage: %s [address]" | `serverstatus` misuse | done | `games/shooters_edge/net/qw_serverstatus.cpp` |
 | msg.dl.progress | "[UDP] %s [%s] [%d remaining file%s]" | a download finished, with how many remain | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.dl.open | "[UDP] Couldn't open %s for writing: %s" | a download's file cannot be written | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.dl.rename | "[UDP] Couldn't rename %s to %s: %s" | the finished `.tmp` cannot be renamed | missing | the feature is missing |
-| msg.dl.mustconnect | "Must be connected to a server." | `download` while not connected | missing | the feature is missing |
-| msg.dl.disabled | "Downloads are permanently disabled." | `download` with `allow_download -1` | missing | the feature is missing |
-| msg.dl.usage | "Usage: download <filename>" | `download` alone | missing | the feature is missing |
+| msg.dl.mustconnect | "Must be connected to a server." | `download` while not connected | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
+| msg.dl.disabled | "Downloads are permanently disabled." | `download` with `allow_download -1` | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
+| msg.dl.usage | "Usage: download <filename>" | `download` alone | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
 | msg.dl.fail | "Couldn't download %s: %s" | the server refused a file | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.dl.mapload | "Couldn't load %s: %s" | the map cannot be loaded (missing or damaged): the connection drops | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.dl.mapversion | "Local map version differs from server: %i != %s" | the map on disk is not the server's: the connection drops | missing | the feature is missing (C36) |
@@ -1243,8 +1243,8 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.dump.mustlevel | "Must be in a level to dump." | `dumpclients`, `dumpstatusbar` outside a level | done | `games/shooters_edge/client/q2_bar.cpp` |
 | msg.dump.none | "No %s to dump." | `dumplayout` with none | done | `games/shooters_edge/client/q2_bar.cpp` |
 | msg.dump.done | "Dumped %s program to %s." | `dumpstatusbar`, `dumplayout` | done | `games/shooters_edge/client/q2_bar.cpp` |
-| msg.skins.mustlevel | "Must be in a level to load skins." | `skins` outside a level | missing | the feature is missing |
-| msg.skins.line | "client %d: %s --> %s/%s" | `skins` per player | missing | the feature is missing |
+| msg.skins.mustlevel | "Must be in a level to load skins." | `skins` outside a level | done | `games/shooters_edge/net/q2_remote.cpp` |
+| msg.skins.line | "client %d: %s --> %s/%s" | `skins` per player | partial | `games/shooters_edge/net/q2_remote.cpp`: the look asked on the right |
 | msg.userinfo | "User info settings:" | `userinfo` | done | `engine/console/console_more.cpp` |
 | msg.play.usage | "Usage: %s <sound> [...]" | `play` alone | done | `games/shooters_edge/client/menu_sound.cpp` |
 | msg.vidrestart | "Manual `vid_restart' command ignored." | a typed `vid_restart` (with an explanation that video settings apply themselves) | done | `games/shooters_edge/client/window_cvars.cpp` |
@@ -1318,7 +1318,7 @@ What a player can do with client recordings (`.dm2`) and multi-view recordings (
 
 ## Keys: the fixed keys and the default bindings
 
-done 4, partial 3, missing 4, not-taken 0
+done 4, partial 4, missing 3, not-taken 0
 
 Keys the client handles itself (a player cannot unbind them) and where the default bindings come from.
 
@@ -1327,7 +1327,7 @@ Keys the client handles itself (a player cannot unbind them) and where the defau
 | key.console | the console key | ` and ~ (without SHIFT) always toggle the console | partial | ours: the key under ESCAPE toggles it (`engine/console/view.cpp`); verify SHIFT+` types the letter |
 | key.altenter | Alt+Enter | toggles full screen, always | done | `engine/platform/window_cvars.cpp` `alt_enter` |
 | key.escape.menu | ESCAPE | closes the console (or opens the main menu before a game), leaves chat, opens the in-game page in a game, the main page out of one | done | `games/shooters_edge/menu/game_menu.cpp`: in a level the in-game page (`MenuTable::in_level`) |
-| key.escape.putaway | ESCAPE with a screen up | puts away the help computer or inventory (`putaway`); held, opens the menu | missing | not found |
+| key.escape.putaway | ESCAPE with a screen up | puts away the help computer or inventory (`putaway`); held, opens the menu | partial | `games/shooters_edge/menu/game_menu.cpp` (`Host::screen_up`, set from `client/q2_bar.cpp`'s `layout_up`): ESCAPE sends `putaway`; held, opening the menu, missing |
 | key.fkeys.menu | F1 to F12 in a menu | still run their bindings | missing | not found |
 | key.cinematic | any button key in a cinematic | skips it | done | `games/shooters_edge/client/cinematic.cpp` |
 | key.shift.demo | SHIFT in a demo | takes the mouse for free look | missing | C15 |

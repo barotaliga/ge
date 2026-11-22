@@ -175,6 +175,22 @@ void fighter_dodge(Fighter& f, const ge::shooterbots::BotView& s, int me, double
           f.stats.goal_behind++;
         }
       }
+      // THE MONSTER'S REACH (BotArsenal::keep_off): one that bites or leaps (a dog, a fiend, a
+      // knight's sword) is fought backing off while it is nearer than its reach, as a person
+      // keeps a dog off with the shotgun, whatever the route or the press says.
+      if (in_sight && f.arsenal->keep_off != nullptr && f.bot.target > s.sv.set.maxclients &&
+          f.bot.target < s.sv.num_edicts) {
+        const sh::Edict& foe = s.sv.edicts[static_cast<size_t>(f.bot.target)];
+        const float keep =
+            foe.modelindex > 0 && static_cast<size_t>(foe.modelindex) < s.models.size()
+                ? f.arsenal->keep_off(s.models[static_cast<size_t>(foe.modelindex)])
+                : 0;
+        if (keep > 0 && f.bot.aim_dist < keep && sb::dodge_clear(s.sv, me_at, yaw + 90, -1, me)) {
+          cmd.forward = sh::quantize_axis(-320);
+          f.stats.kept_off++;
+          f.press_note = "keep-off";
+        }
+      }
       if (why) {
         why->decide("dodge");
         why->fact("goal_feet", goal_feet);

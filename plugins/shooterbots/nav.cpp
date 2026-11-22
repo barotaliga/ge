@@ -699,6 +699,10 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   }
 }
 
+// A node with no links at all (a corner cell cut off from the rest) is taken as the nearest only
+// when no node with a way out of it is this much nearer, squared units (64 units).
+constexpr float kDeadNode = 64 * 64;
+
 int32_t nav_nearest(const NavGraph& g, Vec3f p) {
   if ((g.cols == 0 || g.rows == 0) && g.swim_first < 0) return -1;
   const int32_t ci = static_cast<int32_t>((p.x - g.lo.x) / g.set.spacing);
@@ -715,7 +719,7 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
         const int32_t n = g.col_first[c] + k;
         const Vec3f d = g.nodes[static_cast<size_t>(n)].origin - p;
         if (d.z > kNearestUp || d.z < -kNearestUp) continue;
-        const float dd = dot(d, d);
+        const float dd = dot(d, d) + (g.nodes[static_cast<size_t>(n)].links > 0 ? 0 : kDeadNode);
         if (best < 0 || dd < best_d) {
           best = n;
           best_d = dd;
@@ -746,7 +750,9 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
                                      static_cast<size_t>(j)) *
                                         static_cast<size_t>(g.swim_nx) +
                                     static_cast<size_t>(i)];
-      if (n >= 0) {
+      // Not a cell with no way out of it at all (shallow water over a pool's floor, too low to
+      // swim across): a bot standing there in e2m5's pool planned from it and found nothing.
+      if (n >= 0 && g.nodes[static_cast<size_t>(n)].links > 0) {
         const Vec3f d = g.nodes[static_cast<size_t>(n)].origin - p;
         const float dd = dot(d, d);
         if (best < 0 || dd < best_d) best = n;

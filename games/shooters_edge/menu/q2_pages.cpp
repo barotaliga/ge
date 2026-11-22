@@ -181,6 +181,9 @@ constexpr Entry kQ2[] = {
 
     // player setup.
     {.page = "setup", .id = "name", .text = "name", .needs = "name"},
+    // The figure and its skin (menu/figures.hpp), read off the game's files, written to `skin`.
+    {.page = "setup", .id = "model", .text = "model", .kind = ItemKind::choice, .needs = "skin"},
+    {.page = "setup", .id = "figskin", .text = "skin", .kind = ItemKind::choice, .needs = "skin"},
     spin("setup", "hand", "handedness", kHand),
     back("setup"),
 
