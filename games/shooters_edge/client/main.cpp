@@ -524,8 +524,10 @@ int run_main(int argc, char** argv) {
   // The install's game's adapter, copied: LOAD GAME of another install swaps it for every reader.
   cl::GameAdapter adapter = cl::adapter_of(sp::game_or_quake(args.profile));
   remote.q2_game = [&adapter] { return adapter.game->id == "q2"; };
-  shooters_edge::menu::Host menu_host{
-      .console = &console, .maps = adapter.list_maps(adapter, files), .files = &files.vfs};
+  shooters_edge::menu::Host menu_host{.console = &console,
+                                      .maps = adapter.list_maps(adapter, files),
+                                      .files = &files.vfs,
+                                      .sheet = &remote.sheet.sheet};  // SERVER SETTINGS
   cl::add_adapter_commands(console, adapter, files, args.basedir);
   cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
   // The map's place names, read as it starts and made in the game (client/place_names.hpp).

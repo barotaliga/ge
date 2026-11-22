@@ -52,6 +52,7 @@
 #include "hud/net_graph.hpp"
 #include "net/transport.hpp"
 #include "net/voice_codec.hpp"
+#include "server/sheet.hpp"
 #include "shooter/predict.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/client/voice_out.hpp"
@@ -234,6 +235,9 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int spawncount = 0;
   int playernum = -1;
   std::string gamedir, level, serverinfo;
+  // The server's settings sheet as our server tells it (svc ge_sheet; net/qw_sheet.hpp), asked
+  // for with `ge_sheet` while the server settings page is up.
+  ge::server::SettingsSheet sheet;
   std::vector<std::string> sounds, models;  // [0] ""
   int sound_last = 0, model_last = 0;
   int stufftexts = 0;

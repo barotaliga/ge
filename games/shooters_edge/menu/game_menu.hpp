@@ -78,6 +78,7 @@
 #include "shooters_edge/menu/gallery_page.hpp"
 #include "shooters_edge/menu/games_page.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
+#include "shooters_edge/menu/server_page.hpp"
 #include "shooters_edge/menu/servers_page.hpp"
 #include "ui/draw.hpp"
 #include "ui/menu.hpp"
@@ -142,6 +143,9 @@ class GameMenu {
   ge::capture::Gallery& gallery() { return gallery_; }
   // Whether the screenshots page is the one up.
   bool in_gallery() const { return in_gallery_; }
+  // OPTIONS ▸ SERVER SETTINGS (server_page.hpp): its pages live in `main()`, filled from the
+  // host's sheet.
+  ServerPage& server_page() { return server_page_; }
   // The server browser (JOIN A GAME), and whether it is the page up.
   ServersPage& servers() { return servers_; }
   bool in_servers() const { return in_servers_; }
@@ -244,6 +248,9 @@ class GameMenu {
   std::string demo_ask_;  // the demo picked, the window not told yet
   GamesPage games_;
   GameAsk game_ask_;  // SELECT GAME's pick, the window not told yet
+  ServerPage server_page_;
+  uint32_t sheet_seen_ = 0;  // the sheet's revision the server pages were last filled from
+  void fill_server(const Host& host);
   bool in_gallery_ = false;
   bool in_servers_ = false;
   bool in_demos_ = false;

@@ -71,6 +71,7 @@ const SvcDef kDefs[] = {
     {svc::ge_aim, false, "ge_aim", "h"},
     {svc::ge_origin, true, "ge_origin", "ssslllll"},
     {svc::ge_back, true, "ge_back", "hhbCCCAl"},
+    {svc::ge_sheet, true, "ge_sheet", "bs"},
 };
 constexpr int kDefCount = static_cast<int>(sizeof kDefs / sizeof kDefs[0]);
 
