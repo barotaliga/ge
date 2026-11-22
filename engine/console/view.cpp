@@ -8,12 +8,33 @@
 #include "console/view.hpp"
 
 #include <algorithm>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 
 #include "console/lex.hpp"
 
 namespace ge::console {
+
+namespace {
+
+// The local time now in `format` (strftime's words); "" when the format is empty or writes more
+// than a console line's worth.
+std::string local_stamp(const std::string& format) {
+  if (format.empty()) return {};
+  const std::time_t now = std::time(nullptr);
+  std::tm local{};
+#if defined(_WIN32)
+  localtime_s(&local, &now);
+#else
+  localtime_r(&now, &local);
+#endif
+  char out[128];
+  const size_t n = std::strftime(out, sizeof out, format.c_str(), &local);
+  return std::string(out, n);
+}
+
+}  // namespace
 
 std::string_view line_kind_name(LineKind k) {
   switch (k) {
@@ -248,7 +269,7 @@ bool ConsoleView::dump(std::string_view name, std::string& why) const {
   std::error_code ec;
   std::filesystem::create_directories(path.parent_path(), ec);
   std::ofstream out(path, std::ios::binary);
-  for (const ViewLine& l : lines_) out << l.text << '\n';
+  for (const ViewLine& l : lines_) out << l.stamp << l.text << '\n';
   out.close();
   if (!out) {
     why = "Couldn't write " + path.string() + ".";
@@ -311,12 +332,13 @@ void ConsoleView::add(LineKind kind, std::string_view text) {
   // newline ("You got the shells\n"): that newline ends the line, it opens no empty one after it
   // (so a print of "\n" alone is one empty line).
   if (!text.empty() && text.back() == '\n') text.remove_suffix(1);
+  const std::string stamp = stamps ? local_stamp(stamp_format) : std::string();
   size_t at = 0;
   while (at <= text.size()) {
     const size_t nl = text.find('\n', at);
     const std::string_view part =
         text.substr(at, nl == std::string_view::npos ? text.npos : nl - at);
-    lines_.push_back({kind, std::string(part), clock_, added_++});
+    lines_.push_back({kind, std::string(part), clock_, added_++, stamp});
     if (kind != LineKind::output && kind != LineKind::command) c_.fire_triggers(part);
     if (nl == std::string_view::npos) break;
     at = nl + 1;

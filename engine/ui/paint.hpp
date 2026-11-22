@@ -22,6 +22,7 @@
 
 #include <array>
 #include <cstdint>
+#include <string_view>
 
 namespace ge::ui {
 
@@ -37,6 +38,10 @@ constexpr Color hex(uint32_t rgb, float alpha = 1) {
 }
 constexpr Color with_alpha(Color c, float a) { return {c.r, c.g, c.b, a}; }
 Color lerp(Color a, Color b, float t);
+// A colour as a setting writes one: `#rgb`, `#rrggbb` or `#rrggbbaa`, one of the eight names
+// (black, red, green, yellow, blue, cyan, magenta, white) or their numbers 0..7 in that order;
+// false (and `out` untouched) for anything else.
+bool colour_from_text(std::string_view text, Color& out);
 
 struct Stop {
   float at = 0;  // 0..1 along the gradient, ascending

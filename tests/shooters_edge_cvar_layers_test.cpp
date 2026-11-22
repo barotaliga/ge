@@ -66,7 +66,6 @@ struct Window {
   int moves = 62;            // the remote's q2_maxfps (Quake II's cl_maxfps)
   double frame_cap = 0;      // the pacing's frame cap (our cl_maxfps, Quake II's r_maxfps)
   cl::ChatExtras chat;       // the chat's extras (Quake II's cl_chat_sound)
-  int auto_chat = -1;        // the console view's game_chat (Quake II's con_auto_chat)
   bool show_pause = true;    // window_cvars.cpp's showpause (Quake II's scr_showpause)
 
   explicit Window(const pr::GameProfile& g) {
@@ -118,8 +117,7 @@ struct Window {
                         .light_lift = &picture.light_lift,
                         .gibs = &picture.gibs,
                         .no_glow = &picture.no_glow,
-                        .chat = &chat,
-                        .auto_chat = &auto_chat});
+                        .chat = &chat});
   }
 };
 
@@ -557,21 +555,35 @@ TEST(an_old_quake_configs_cl_name_and_cl_color_dress_you) {
 TEST(q2_chat_sound_and_auto_chat_are_its_own_and_go_with_it) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
-  CHECK(w.chat.named_sound.empty() && w.auto_chat == -1);  // Quake: s_chat_custom, con_chat
+  ge::console::ConsoleView con_view(w.console);  // its game_chat and stamps, as the window's
+  CHECK(w.chat.named_sound.empty() && con_view.game_chat == -1);  // Quake: s_chat_custom, con_chat
   CHECK(v.find("cl_chat_sound") == nullptr && v.find("con_auto_chat") == nullptr);
   CHECK(v.find("cl_chat_notify") != nullptr && v.find("scr_chathud") != nullptr);  // both games
   const pr::GameProfile* q2 = pr::find_game("q2");
   CHECK(q2 != nullptr);
   if (q2 == nullptr) return;
-  const cl::GameBindings b{.chat = &w.chat, .auto_chat = &w.auto_chat};
+  v.set("con_timestamps", "2", con::Source::local);  // Quake's: chat lines, the seconds too
+  CHECK(w.chat.timestamps == 2);
+  const cl::GameBindings b{.chat = &w.chat, .console_view = &con_view};
   cl::switch_game_cvars(w.console, w.game, *q2, b);
-  CHECK(w.chat.named_sound == "1" && w.auto_chat == 0);
+  CHECK(w.chat.named_sound == "1" && con_view.game_chat == 0);
+  // Its own con_timestamps: every console line stamped, the chat's own stamps set aside.
+  CHECK(w.chat.timestamps == 0 && !con_view.stamps && v.find("con_timestamps")->value == "0");
+  v.set("con_timestamps", "1", con::Source::local);
+  v.set("con_timestampsformat", "[%H]", con::Source::local);
+  v.set("con_timestampscolor", "red", con::Source::local);
+  CHECK(con_view.stamps && con_view.stamp_format == "[%H]" && con_view.stamp_colour == "red");
+  con_view.add(ge::console::LineKind::output, "stamped");
+  CHECK(con_view.lines().back().stamp.size() == 4 && con_view.lines().back().text == "stamped");
   v.set("cl_chat_sound", "2", con::Source::local);
   v.set("con_auto_chat", "2", con::Source::local);
   CHECK(std::string(cl::q2_chat_sound(w.chat.named_sound)) == "misc/talk1.wav");
-  CHECK(w.auto_chat == 2);
+  CHECK(con_view.game_chat == 2);
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], b);
-  CHECK(w.chat.named_sound.empty() && w.auto_chat == -1);
+  CHECK(w.chat.named_sound.empty() && con_view.game_chat == -1);
+  CHECK(!con_view.stamps && w.chat.timestamps == 2);  // Quake's chat stamps back
+  con_view.add(ge::console::LineKind::output, "plain");
+  CHECK(con_view.lines().back().stamp.empty());
   CHECK(v.clashes().empty());
 }
 
