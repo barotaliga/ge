@@ -33,7 +33,8 @@
 // what the server prints back shown in the HUD's feed (a vote on the settings, say).
 // `--point=1` writes what the player points at from each view, as team chat's `%t` says it, in the
 // feed and the caption; `--teamsay="$health $bestweapon at %l"` a team line from each view, its
-// macros and codes filled (`--locs="x,y,z,name;..."` the places it names).
+// macros and codes filled (`--locs="x,y,z,name;..."` the places it names, `--locdraw=1` their
+// markers).
 // `--server="coop 1"` gives the server those lines before the map starts: with the packs' own
 // program, a coop game in which `--say="addbot"` seats a companion beside the player.
 //
@@ -730,7 +731,33 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   const se::HudArt& art = se::pick_art(hud_art, classic_art, free_art);
   lab.metric("hud.classic_art", &art == &classic_art ? 1 : 0, "");
   cl::ViewState shown;
-  cl::FxState fx_state;
+  // `--locs`' places (team lines name them; `--locdraw=1` stands loc_draw's markers at them).
+  ge::console::Console place_words{false};
+  cl::PlaceNames places_named;
+  cl::SearchPath no_files;
+  cl::add_place_commands(place_words, places_named, cl::qw_adapter(), no_files,
+                         [&l](sh::Vec3f& at) {
+                           if (l.server == nullptr || l.server->sv.edicts.size() < 2) return false;
+                           const auto& me = l.server->sv.edicts[1].origin;
+                           at = {me[0], me[1], me[2]};
+                           return true;
+                         });
+  if (l.map)
+    places_named.clear_line = [&l](sh::Vec3f a, sh::Vec3f b) {
+      const sh::Vec3f e = cl::line_end(l.map->bsp, a, b);
+      return e.x == b.x && e.y == b.y && e.z == b.z;
+    };
+  const std::string locs = lab.arg("locs");
+  for (size_t a = 0; a < locs.size();) {
+    const size_t b = std::min(locs.find(';', a), locs.size());
+    float x = 0, y = 0, z = 0;
+    int used = 0;
+    if (std::sscanf(locs.substr(a, b - a).c_str(), "%f,%f,%f,%n", &x, &y, &z, &used) >= 3)
+      ge::classic::add_loc(places_named.locs, {x, y, z}, locs.substr(a + used, b - a - used));
+    a = b + 1;
+  }
+  if (lab.arg("locdraw") == "1") place_words.execute("loc_draw 1");
+  cl::FxState fx_state = cl::fx_state_for(&places_named);
   cl::FxFrame fx;
   const shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::HandFrame hand;
@@ -856,25 +883,6 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       cl::TeamChat chat;
       cl::add_team_chat(words, chat);
       chat.scene = [&l] { return cl::point_scene(l); };
-      cl::PlaceNames places_named;
-      places_named.clear_line = [&l](sh::Vec3f a, sh::Vec3f b) {
-        const sh::Vec3f e = cl::line_end(l.map->bsp, a, b);
-        return e.x == b.x && e.y == b.y && e.z == b.z;
-      };
-      const std::string locs = lab.arg("locs");
-      for (size_t a = 0; a < locs.size();) {
-        const size_t b = std::min(locs.find(';', a), locs.size());
-        float x = 0, y = 0, z = 0;
-        int used = 0;
-        if (std::sscanf(locs.substr(a, b - a).c_str(), "%f,%f,%f,%n", &x, &y, &z, &used) >= 3)
-          ge::classic::add_loc(places_named.locs, {x, y, z}, locs.substr(a + used, b - a - used));
-        a = b + 1;
-      }
-      const auto& me = l.server->sv.edicts[1].origin;
-      places_named.where = [me](sh::Vec3f& at) {
-        at = {me[0], me[1], me[2]};
-        return true;
-      };
       chat.places = &places_named;
       chat.status = cl::status_of(l, t);
       chat.status.t = t;
@@ -1316,6 +1324,8 @@ const gl::LabSpec kSpec{
      {"teamsay", "",
       "with --game: a team line from each view, its $ macros and % codes filled from the "
       "player's state (`$health $armortype $bestweapon at %l`), in the feed and the caption"},
+     {"locdraw", "",
+      "with --locs: 1 stands loc_draw's markers at the places, the nearest bobbing in its light"},
      {"locs", "",
       "with --teamsay: place names, 'x,y,z,name' and ';' between, for $location and %l"},
      {"point", "",

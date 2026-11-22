@@ -89,6 +89,27 @@ Cell leaf_cell(const Map& map, const Leaf& leaf) {
   return leaf.solid ? Cell::solid : Cell::empty;
 }
 
+std::vector<std::array<float, 3>> open_spots(const Map& map, float step, size_t most) {
+  std::vector<std::array<float, 3>> out;
+  if (map.models.empty() || step <= 0) return out;
+  const Model& w = map.models[0];
+  int n[3];
+  for (int k = 0; k < 3; ++k) n[k] = static_cast<int>((w.maxs[k] - w.mins[k]) / step);
+  for (int iz = 0; iz < n[2]; ++iz)
+    for (int iy = 0; iy < n[1]; ++iy)
+      for (int ix = 0; ix < n[0]; ++ix) {
+        const float x = w.mins[0] + step * (static_cast<float>(ix) + 0.5f);
+        const float y = w.mins[1] + step * (static_cast<float>(iy) + 0.5f);
+        const float z = w.mins[2] + step * (static_cast<float>(iz) + 0.5f);
+        const float p[3] = {x, y, z};
+        const Cell c = cell_at(map, p);
+        if (c == Cell::solid || c == Cell::sky) continue;
+        out.push_back({x, y, z});
+        if (out.size() >= most) return out;
+      }
+  return out;
+}
+
 Cell cell_at(const Map& map, const float p[3]) {
   if (map.leaves.empty()) return Cell::empty;
   return leaf_cell(map, map.leaves[leaf_at(map, p)]);

@@ -90,6 +90,7 @@
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/model_lerp.hpp"
+#include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/warps.hpp"
 #include "shooters_edge/client/world_models.hpp"
@@ -234,6 +235,9 @@ struct LitGlow {
 
 struct FxState {
   FxSwitches on;  // set by the caller each frame
+  // The map's place points (`loc_draw` stands a marker at each within reach of where the player
+  // is, place_names.hpp); null: none. Set by the caller.
+  const PlaceNames* places = nullptr;
   // The effects the game's files define (`particles/*.fx`, load_effects); null or without the
   // name: the game's own. Set by the caller.
   const ge::particles::Book* book = nullptr;
@@ -367,6 +371,13 @@ struct FxState {
   const WorldModels* models = nullptr;
   std::vector<Warp> began;  // scratch: the warps that began this frame
 };
+
+// A fresh state with the map's place points (`loc_draw`'s markers) to read.
+inline FxState fx_state_for(const PlaceNames* places) {
+  FxState s;
+  s.places = places;
+  return s;
+}
 
 // One frame's effects for the world pass.
 struct FxFrame {

@@ -49,7 +49,8 @@ struct DatagramPipe {
 // The most streams a TCP host holds: every peer's, and room for the ones it will deny.
 constexpr size_t kMaxStreams = 64;
 
-struct Tap;  // tap.hpp
+struct Tap;        // tap.hpp
+struct PacketLog;  // packet_log.hpp
 
 // FAKE CONDITIONS on a live transport, for a developer's experiments on a real game: every
 // datagram it sends is put through `conditions` (conditions.hpp's fates: delay, jitter, loss,
@@ -82,6 +83,7 @@ struct Transport {
   DatagramPipe pipe;           // a pipe transport's
   Capture* capture = nullptr;  // when set, every datagram in and out is written to it
   Tap* tap = nullptr;          // when set, every datagram in and out is mirrored to it (tap.hpp)
+  PacketLog* log = nullptr;    // when set, every datagram in and out is written to it as text
   FakeLink* fake = nullptr;    // when set, every send goes through its conditions first
   uint64_t send_failures = 0;
   // Every datagram that left and came, and their bytes (a rate meter reads them: net/rates.hpp).
