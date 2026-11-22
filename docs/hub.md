@@ -157,7 +157,8 @@ The board is the game's: its glyph sheet from its packs (`conchars`, never enhan
 whole multiples of its pixels (the largest at which every row fits, a duel's six times) so every texel is a square;
 the columns ping, frags, team and name in the game's order, the team column only when the match
 is played in teams (never in a duel or a free-for-all), the players then grouped by team; Quake's
-frags on a box of the player's colour, Quake II's bare with the column words in its green set; the
+frags on a box of the top and bottom colours the player picked (the record's colour rows, drawn in
+the shades of the game's own palette; else the team's colour), Quake II's bare with the column words in its green set; the
 mode on the map and the clock along the top, the spectators along the foot. A map the content does
 not hold, or a hub with no `--content`, gets the map's hue under the same board; a game with no
 glyph sheet gets the HTML card.
@@ -334,7 +335,7 @@ Next: Fall Line's live races on its hub, once it has a dedicated server (M17k).
 
 ### Built so far
 
-- **M56a** (`hub-master`): `engine/net/status.hpp` is the record (version 1, rows left out from
+- **M56a** (`hub-master`): `engine/net/status.hpp` is the record (version 2 since the players' colour rows; rows left out from
   the end with a `truncated` flag when it outgrows the datagram) and its ask: a padded 64-byte ask,
   answered first with an 8-byte-heavy cookie (a keyed hash of the asker's address and a 10 s
   bucket) and only then with the record, so a forged source address gets nothing bigger than its

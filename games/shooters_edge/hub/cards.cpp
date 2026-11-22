@@ -12,8 +12,10 @@
 
 #include "classicenhance/profile.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
+#include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "vfs/palette.hpp"
 
 namespace shooters_edge::hub {
 
@@ -57,6 +59,18 @@ bool hub_card_look(std::string_view content, std::string_view game, ge::hub::Car
   const bool q2 = game == "q2";
   out.score_box = !q2;
   out.words_alt = q2;
+  // Quake's colour rows (0 to 13, sixteen shades each) in the shade its board fills a frag box
+  // with: the row's ninth.
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> bytes = cl::find_file(files, "gfx/palette.lmp", store);
+  ge::vfs::Palette pal;
+  std::string ignored;
+  if (!q2 && ge::vfs::read_palette(bytes, &pal, &ignored))
+    for (int row = 0; row < 14; row++) {
+      const size_t i = size_t(row * 16 + 8) * 3;
+      out.rows.push_back(uint32_t(pal.rgb[i]) << 16 | uint32_t(pal.rgb[i + 1]) << 8 |
+                         pal.rgb[i + 2]);
+    }
   return true;
 }
 

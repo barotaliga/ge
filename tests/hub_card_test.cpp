@@ -122,6 +122,24 @@ TEST(card_draws_the_board_over_the_still_or_the_hue) {
   CHECK(back && back->width == 960 && back->height == 270);
 }
 
+TEST(frag_boxes_take_the_players_colour_rows_in_the_games_shades) {
+  CardLook look = solid_look();
+  Status s = match("1on1", 2, false);
+  s.players[0].top = 1;
+  s.players[0].bottom = 2;
+  auto green = [](const CardPicture& c) {
+    int n = 0;
+    for (size_t i = 0; i < c.rgba.size(); i += 4)
+      if (c.rgba[i] == 0 && c.rgba[i + 1] == 255 && c.rgba[i + 2] == 0) n++;
+    return n;
+  };
+  CHECK(green(compose_card(spec(), s, look, {}, 960, 270)) == 0);  // no shades: the brown box
+  look.rows.assign(14, 0x00ff00);
+  CHECK(green(compose_card(spec(), s, look, {}, 960, 270)) > 0);
+  s.players[0].top = s.players[0].bottom = kNoColourRow;  // none picked: the brown box again
+  CHECK(green(compose_card(spec(), s, look, {}, 960, 270)) == 0);
+}
+
 TEST(names_from_the_wire_are_plain_file_names) {
   CHECK(still_name_ok("dm2") && still_name_ok("q2dm1") && still_name_ok("ztn_dm3+x.v2"));
   CHECK(!still_name_ok("") && !still_name_ok("../etc") && !still_name_ok("a/b"));

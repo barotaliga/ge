@@ -282,7 +282,7 @@ std::string servers_page(const Poller& p, const HubSpec& spec, std::string_view 
   h += "<p class=\"sum\">" + sum_count(live.size() + empty.size(), " server", " servers") +
        "<span class=\"live\"><b>" + std::to_string(people) + "</b> playing</span>" +
        sum_count(static_cast<size_t>(broadcasts), " broadcast", " broadcasts") + "</p>";
-  h += "<section class=\"cards\">\n";
+  h += stills ? "<section class=\"cards shots\">\n" : "<section class=\"cards\">\n";
   for (const auto& r : live)
     h += card(spec, *r.second, poller_page_forward(p, r.second->address) != nullptr, stills);
   h += "</section>";

@@ -63,8 +63,11 @@ gh::CardLook own_look() {
 }
 
 gn::StatusPlayer player(const char* name, const char* team, int frags, int ping, uint32_t colour,
-                        uint8_t flags = 0) {
+                        uint8_t flags = 0, int top = gn::kNoColourRow,
+                        int bottom = gn::kNoColourRow) {
   gn::StatusPlayer p;
+  p.top = uint8_t(top);
+  p.bottom = uint8_t(bottom);
   p.name = name;
   p.team = team;
   p.score = frags;
@@ -83,8 +86,9 @@ std::vector<std::pair<std::string, gn::Status>> matches(const std::string& map,
   duel.mode = "1on1";
   duel.phase = gn::StatusPhase::playing;
   duel.time_left_s = 312;
-  duel.players = {player("Milton", "", 17, 25, 0x4f6fbf),
-                  player("wimdowlicker", "", 14, 25, 0xbf3f3f),
+  // The duellists' own colour rows (drawn in the game's shades where it has them).
+  duel.players = {player("Milton", "", 17, 25, 0x4f6fbf, 0, 3, 11),
+                  player("wimdowlicker", "", 14, 25, 0xbf3f3f, 0, 0, 4),
                   player("stepcop", "", 0, 31, 0, gn::kPlayerSpectator),
                   player("hub", "", 0, 0, 0, gn::kPlayerSpectator)};
   out.emplace_back("duel", duel);

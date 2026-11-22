@@ -196,10 +196,13 @@ CardPicture compose_card(const HubSpec& spec, const gn::Status& s, const CardLoo
   const int shown_rows = std::max<int>(1, int(rows.size()));
   int scale = std::max(1, height / (90 * cell / 8));
   // ... and at which the columns fit across: ping 4, frags 5 (a box), team 4 when shown, the name
-  // 15, a cell between each and one at each side.
-  const int name_cells = 15;
+  // as wide as the longest (4 to 15), a cell between each and one at each side. The rows need the
+  // top line, a gap, the words, the rule, the rows and the foot: the rows and five more.
+  size_t longest = 4;
+  for (const gn::StatusPlayer* p : rows) longest = std::max(longest, p->name.size());
+  const int name_cells = int(std::min<size_t>(longest, 15));
   const int width_cells = 4 + 1 + 5 + 1 + (teams ? 5 : 0) + name_cells;
-  while (scale > 1 && (top + (shown_rows + 6) * lead > height / scale ||
+  while (scale > 1 && (top + (shown_rows + 5) * lead > height / scale ||
                        (width_cells + 2) * cell > width / scale))
     scale--;
   const int vw = width / scale, vh = height / scale;
@@ -251,9 +254,14 @@ CardPicture compose_card(const HubSpec& spec, const gn::Status& s, const CardLoo
     if (look.score_box) {
       uint32_t c = p->colour ? p->colour : team_colour(s, p->team);
       if (!c) c = look.box_rgb;
-      // The box a little taller than a glyph: the top half its colour, the bottom half darker.
-      const uint32_t dark =
+      // The box a little taller than a glyph: the top half its colour, the bottom half darker;
+      // with the player's own rows and the game's shades, the upper and lower colour he picked.
+      uint32_t dark =
           ((c >> 16 & 255) * 3 / 4) << 16 | ((c >> 8 & 255) * 3 / 4) << 8 | ((c & 255) * 3 / 4);
+      if (p->top < look.rows.size() && p->bottom < look.rows.size()) {
+        c = look.rows[p->top];
+        dark = look.rows[p->bottom];
+      }
       b.rect(xfrags, y - 1, 5 * cell, (cell + 2) / 2, c);
       b.rect(xfrags, y - 1 + (cell + 2) / 2, 5 * cell, (cell + 2) - (cell + 2) / 2, dark);
       b.text(xfrags + cell, y, frags);

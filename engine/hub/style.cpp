@@ -84,6 +84,8 @@ background:var(--live);align-self:center;animation:pulse 1.8s infinite}
 .card{transition:none}}
 /* the servers' cards */
 .cards{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));align-items:start}
+/* cards that are pictures: wide enough that the board reads, two across a desktop */
+.cards.shots{grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr))}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
 box-shadow:var(--shadow);transition:transform .15s ease}.card:hover{transform:translateY(-2px)}
 .map{--h:160;position:relative;display:flex;justify-content:space-between;align-items:flex-end;gap:8px;

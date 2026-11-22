@@ -49,6 +49,9 @@ struct CardLook {
   bool score_box = true;        // frags on a box of the player's (else his team's) colour
   bool words_alt = false;       // the column words and the clock in the charset's second set
   uint32_t box_rgb = 0x5f4f3f;  // a box's colour when neither the player nor his team has one
+  // The shade of each colour row a player may pick (StatusPlayer::top and bottom), 0xRRGGBB, from
+  // the game's own palette; empty: the box takes the player's or the team's colour.
+  std::vector<uint32_t> rows;
 };
 
 // Whether the record's match is played in teams (the team column shown).
