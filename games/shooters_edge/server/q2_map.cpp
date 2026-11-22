@@ -829,15 +829,7 @@ void place_player(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f angles) {
   p.changed = true;
   p.view_angles = {angles.x, angles.y, 0};
   p.ground = -1;
-  // Whoever stands there dies.
-  const sh::Vec3f at = unpack(p.move.origin);
-  for (int i = 0; i < sh::kMaxClients; i++) {
-    if (i == slot || !s.clients[i].active || !s.players[i].alive) continue;
-    const Q2Player& o = s.players[i];
-    const sh::Vec3f oa = unpack(o.move.origin);
-    if (overlap(at + p.mins, at + p.maxs, oa + o.mins, oa + o.maxs))
-      fight_hurt(s, i, slot, {}, 100000, 0, kSqByTelefrag, 3);
-  }
+  targets_telefrag(s, slot);  // whoever stands there dies, monsters too
 }
 
 void teleport(Q2Server& s, Q2Entity& pad, int slot) {
@@ -1090,7 +1082,12 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
       s.next_unit = next.unit;
       if (s.next_unit) s.cross_bits = 0;  // a new unit
       if (deathmatch(s)) {
-        if (!fight_dmflag(s, 4096)) return;  // no exit in this match
+        if (!fight_dmflag(s, 4096)) {  // no exit in this match: it kills its toucher
+          if (activator >= 0 && activator < sh::kMaxClients)
+            fight_hurt(s, activator, -1, {}, 10 * s.players[activator].body.max_health, 1000,
+                       kSqByExit);
+          return;
+        }
         print_all(s, name_of(s, activator) + " exited the level.\n");
         s.next_map = next.map;
         s.exit_now = true;

@@ -32,11 +32,12 @@ namespace save = ge::save;
 constexpr uint32_t kGame = save::tag("SQGM");
 constexpr uint32_t kLevel = save::tag("SQLV");
 constexpr uint32_t kPlayers = save::tag("SQPL");
-constexpr uint16_t kChunkVersion = 9;  // 2: a monster's duck; 3: a coop weapon taken; 4: a dropped
-                                       // silencer's shots; 5: a corpse's box; 6: a monster's
-                                       // liquid; 7: the trail, a monster's hunt and calls; 8: a
-                                       // soldier's run-and-shoot and head shot; 9: coop power
-                                       // cubes, the Makron's torso
+constexpr uint16_t kChunkVersion = 10;  // 2: a monster's duck; 3: a coop weapon taken; 4: a
+                                        // dropped silencer's shots; 5: a corpse's box; 6: a
+                                        // monster's liquid; 7: the trail, a monster's hunt and
+                                        // calls; 8: a soldier's run-and-shoot and head shot; 9:
+                                        // coop power cubes, the Makron's torso; 10: a weapon
+                                        // dropped bare
 constexpr const char* kSaveGameName = "shooters_edge_q2";  // the file's game (Meta::game)
 constexpr uint32_t kSaveVersion = 1;
 constexpr int kSettleFrames = 2;   // a map's frames before the kept state is read over it
@@ -208,6 +209,7 @@ void drop(Io& io, Q2Drop& d) {
   io(d.power_left);
   io(d.resting);
   io.since(4, d.shots, 0);
+  io.since(10, d.bare, false);
 }
 
 template <class Io>

@@ -1467,6 +1467,10 @@ void die(Q2Server& s, Q2Monster& m, int attacker, int damage) {
   m.screen = 0;
   e.corpse = true;  // shots meet a corpse, moves pass it
   if (!k.good) s.monsters_killed++;
+  // Co-op scores each kill to the player who made it.
+  if (!k.good && attacker >= 0 && attacker < sh::kMaxClients && s.cvars.find("coop")->on() &&
+      !s.cvars.find("deathmatch")->on())
+    s.players[attacker].frags += 1;
   const DeathChoice dc = monster_death(k.classname, damage, s.rng);
   m.death_run = dc.run;
   if (named(m, "misc_insane"))  // a prisoner dies with a man's cry, one of four, close by

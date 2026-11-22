@@ -75,14 +75,20 @@ bool cheats_allowed(Q2Server& s, int slot) {
   return false;
 }
 
-// The player's chat line: refused while quiet, else counted; true when it may be said.
+// The player's chat line: refused while quiet, else counted; true when it may be said. Only
+// deathmatch and co-op guard against a flood; a `flood_msgs` over 10 is lowered to 10.
 bool flood_ok(Q2Server& s, int slot) {
   Q2Player& p = s.players[slot];
-  const int most = std::min(cvar_int(s, "flood_msgs"), kFloodKept);
+  if (!deathmatch_on(s) && cvar_int(s, "coop") == 0) return true;
+  if (cvar_int(s, "flood_msgs") > kFloodKept) {
+    s.cvars.set("flood_msgs", std::to_string(kFloodKept), con::Source::local);
+    s.console.push_back("flood_msgs lowered to max: " + std::to_string(kFloodKept));
+  }
+  const int most = cvar_int(s, "flood_msgs");
   if (most <= 0) return true;
   if (s.level_time < p.quiet_until) {
     const int left = static_cast<int>(p.quiet_until - s.level_time);
-    fight_print(s, slot, "You can't talk for " + std::to_string(left) + " more seconds.\n");
+    fight_print(s, slot, "You can't talk for " + std::to_string(left) + " more seconds\n");
     return false;
   }
   // The `most`-th last line said: too recent, and the player is quiet for a while.
@@ -96,7 +102,7 @@ bool flood_ok(Q2Server& s, int slot) {
     ev.to = 1u << slot;
     ev.reliable = true;
     ev.level = 3;
-    ev.text = "Flood protection: you can't talk for " + std::to_string(static_cast<int>(wait)) +
+    ev.text = "Flood protection: You can't talk for " + std::to_string(static_cast<int>(wait)) +
               " seconds.\n";
     send(s, std::move(ev));
     return false;
@@ -111,10 +117,9 @@ bool flood_ok(Q2Server& s, int slot) {
 // spectators, and so does his `say` in a match while `sv_spectalk` is 0.
 void say(Q2Server& s, int slot, std::string text, bool team) {
   if (text.empty()) return;
-  if (text.size() >= 2 && text.front() == '"' && text.back() == '"')
-    text = text.substr(1, text.size() - 2);
-  const bool teams = (deathmatch_on(s) && (fight_dmflag(s, 64) || fight_dmflag(s, 128))) ||
-                     s.clients[slot].spectator;
+  // A text that starts with a double quote loses its first and its last character.
+  if (text.front() == '"') text = text.size() >= 2 ? text.substr(1, text.size() - 2) : "";
+  const bool teams = fight_anyflag(s, 64) || fight_anyflag(s, 128) || s.clients[slot].spectator;
   team = team && teams;
   if (!flood_ok(s, slot)) return;
   // The seats as the route reads them: only the speaker's team matters, so a teammate holds his
@@ -126,7 +131,7 @@ void say(Q2Server& s, int slot, std::string text, bool team) {
     if (!d.active) continue;
     d.spectator = s.clients[i].spectator;
     d.name = name_of(s, i);
-    d.team = i == slot || fight_teammates(s, slot, i) ? "=" : std::to_string(i);
+    d.team = i == slot || fight_skin_mates(s, slot, i) ? "=" : std::to_string(i);
   }
   ge::server::ChatLine said = ge::server::chat_route(seats, slot, team, false, chat_in_match(s),
                                                      ge::server::chat_settings(s.cvars), text);
@@ -151,7 +156,7 @@ void give(Q2Server& s, int slot, const std::vector<std::string>& w, const std::s
   const std::string first = w.size() > 1 ? w[1] : std::string();
   if (all || fold_is(first, "health")) {
     if (!all && w.size() == 3) {
-      p.health = static_cast<float>(std::atoi(w[2].c_str()));
+      p.health = static_cast<float>(std::max(1, std::atoi(w[2].c_str())));
     } else {
       p.health = static_cast<float>(b.max_health);
     }
@@ -174,8 +179,8 @@ void give(Q2Server& s, int slot, const std::vector<std::string>& w, const std::s
     if (!all) return;
   }
   if (all) {  // the power shield as a pickup; every powerup, key and pack held once
-    const int shield = sq_item_named("Power Shield");
-    if (shield >= 0 && b.counts[shield] == 0 && p.alive) sq_give(s, slot, shield);
+    const int shield = sq_item_named("Power Shield");  // always one more, by the pickup rules
+    if (shield >= 0 && p.alive) sq_give(s, slot, shield);
     for (int i = 0; i < kSqItemCount; i++) {
       const SqKind k = kSqItems[i].kind;
       if (k == SqKind::powerup || k == SqKind::key || k == SqKind::pack) b.counts[i] = 1;
@@ -503,9 +508,11 @@ bool commands_refuse_item(Q2Server& s, int slot, bool use, const std::string& na
     return true;
   }
   const SqKind kind = w >= 0 ? SqKind::weapon : kSqItems[item].kind;
+  const int row =
+      w >= 0 ? (kSqWeapons[w].item != nullptr ? sq_item(kSqWeapons[w].item) : -1) : item;
   const bool able =
       use ? kind == SqKind::weapon || kind == SqKind::powerup || kind == SqKind::power_armour
-          : kind == SqKind::weapon || kind == SqKind::ammo || kind == SqKind::powerup;
+          : fight_droppable(s, row);
   if (!able) {
     fight_print(s, slot, use ? "Item is not usable.\n" : "Item is not dropable.\n");
     return true;
