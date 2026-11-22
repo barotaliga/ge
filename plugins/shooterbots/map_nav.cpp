@@ -11,6 +11,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <tuple>
+#include <unordered_map>
 #include <utility>
 
 #include "core/libm/libm.hpp"
@@ -314,6 +316,200 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
 }
 
 sh::Vec3f origin_of(const char* org);  // below
+
+// (`add_crawlways`) A ducked box swept through the world's brushes.
+constexpr sh::Vec3f kDuckMins{-16, -16, -24}, kDuckMaxs{16, 16, 4};
+constexpr float kCrawlCell = 16;    // the crawl's grid, units
+constexpr int kCrawlCells = 1500;   // cells one crawl visits at most
+constexpr float kCrawlSpeed = 100;  // ducked, units/s (the move's own crawl, less a little)
+
+sh::HullTrace duck_trace(const sh::Solid& w, sh::Vec3f a, sh::Vec3f b, sh::Vec3f mn, sh::Vec3f mx) {
+  return sh::solid_box_trace(w, a, mn, mx, b);
+}
+
+// A crawl's step from `o` to the cell at (x, y): up a step, across ducked, down onto a floor.
+bool crawl_step(const sh::Solid& w, sh::Vec3f o, float x, float y, sh::Vec3f& to) {
+  o.z += 0.25f;  // off the floor it stands on (a box touching a brush starts in it)
+  // Straight across first (a roof that slopes down takes no step up), then up a step and across.
+  for (const float rise : {0.0f, 18.0f}) {
+    sh::Vec3f u = o;
+    if (rise > 0) {
+      const sh::HullTrace up = duck_trace(w, o, {o.x, o.y, o.z + rise}, kDuckMins, kDuckMaxs);
+      if (up.startsolid) return false;
+      u = up.endpos;
+      if (up.fraction < 1) u.z = std::max(o.z, u.z - 0.25f);  // off the roof it rose to
+    }
+    const sh::HullTrace across = duck_trace(w, u, {x, y, u.z}, kDuckMins, kDuckMaxs);
+    if (across.startsolid || across.fraction < 1) continue;
+    const sh::HullTrace down = duck_trace(w, across.endpos, {x, y, u.z - 64}, kDuckMins, kDuckMaxs);
+    if (down.startsolid || down.fraction >= 1 || down.plane.normal.z < 0.7f) continue;
+    to = down.endpos;
+    return true;
+  }
+  return false;
+}
+
+bool stands_at(const sh::Solid& w, sh::Vec3f p) {
+  p.z += 0.25f;
+  return !duck_trace(w, p, p, sh::kPlayerMins, sh::kPlayerMaxs).startsolid;
+}
+
+}  // namespace
+
+std::vector<sh::Vec3f> crawl_path(const MapCrawl& cr, int a, int b) {
+  std::vector<int> up_a, up_b;
+  for (int k = a; k >= 0; k = cr.cells[static_cast<size_t>(k)].parent) up_a.push_back(k);
+  for (int k = b; k >= 0; k = cr.cells[static_cast<size_t>(k)].parent) up_b.push_back(k);
+  while (up_a.size() > 1 && up_b.size() > 1 && up_a[up_a.size() - 2] == up_b[up_b.size() - 2]) {
+    up_a.pop_back();
+    up_b.pop_back();
+  }
+  std::vector<sh::Vec3f> out;
+  out.reserve(up_a.size() + up_b.size());
+  for (const int k : up_a) out.push_back(cr.cells[static_cast<size_t>(k)].at);
+  for (size_t k = up_b.size() - 1; k-- > 0;)
+    out.push_back(cr.cells[static_cast<size_t>(up_b[k])].at);
+  return out;
+}
+
+int add_crawlways(const sh::Solid& w, sb::NavGraph& g, std::vector<MapCrawl>* keep) {
+  // One crawl (a region under the roof) is searched once, as a tree from where it was first
+  // entered; a node that steps into it is joined through the tree to a node it comes out by.
+  using Crawl = MapCrawl;
+  const auto key = [](sh::Vec3f p) {
+    const auto q = [](float v) {
+      return static_cast<uint64_t>(static_cast<int64_t>(std::floor(v / 8)) & 0x1fffff);
+    };
+    return q(p.x) | q(p.y) << 21 | q(p.z) << 42;
+  };
+  std::vector<Crawl> crawls;
+  std::unordered_map<uint64_t, std::pair<int, int>> where;  // cell -> (crawl, cell)
+  std::vector<sb::NavExtraLink> links;
+  std::vector<std::pair<int32_t, int32_t>> made;
+  constexpr float kDirs[8][2] = {{1, 0}, {-1, 0}, {0, 1},  {0, -1},
+                                 {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+  const auto search = [&](sh::Vec3f entry) {
+    Crawl cr;
+    cr.cells.push_back({entry, -1});
+    const int id = static_cast<int>(crawls.size());
+    where[key(entry)] = {id, 0};
+    for (size_t c = 0; c < cr.cells.size() && cr.cells.size() < kCrawlCells; c++) {
+      const sh::Vec3f o = cr.cells[c].at;
+      if (stands_at(w, o)) {  // out from under the roof: the crawl ends here, by a node
+        const int32_t near = sb::nav_nearest(g, o);
+        if (near >= 0) {
+          const sh::Vec3f no = g.nodes[static_cast<size_t>(near)].origin;
+          const float dx = no.x - o.x, dy = no.y - o.y, dz = no.z - o.z;
+          if (dx * dx + dy * dy <= 56 * 56 && dz <= 20 && dz >= -20)
+            cr.ends.push_back({static_cast<int>(c), near});
+        }
+        continue;
+      }
+      for (int k = 0; k < 4; k++) {
+        sh::Vec3f to;
+        if (!crawl_step(w, o, o.x + kDirs[k][0] * kCrawlCell, o.y + kDirs[k][1] * kCrawlCell, to))
+          continue;
+        const uint64_t kk = key(to);
+        if (where.count(kk) != 0) continue;
+        where[kk] = {id, static_cast<int>(cr.cells.size())};
+        cr.cells.push_back({to, static_cast<int>(c)});
+      }
+    }
+    crawls.push_back(std::move(cr));
+    return id;
+  };
+  const auto one = [&](int32_t a, int32_t b, const std::vector<sh::Vec3f>& way) {
+    if (std::find(made.begin(), made.end(), std::make_pair(a, b)) != made.end()) return;
+    sb::NavScript sc;
+    float len = 0;
+    sh::Vec3f last = g.nodes[static_cast<size_t>(a)].origin;
+    for (size_t k = 0; k < way.size(); k += 2) {
+      sc.steps.push_back({way[k], false, true});
+      const sh::Vec3f dd = way[k] - last;
+      len += std::sqrt(dd.x * dd.x + dd.y * dd.y);
+      last = way[k];
+    }
+    sc.steps.push_back({g.nodes[static_cast<size_t>(b)].origin, false, false});
+    sb::NavExtraLink e{a, b, sb::NavKind::script, 0.5f + len / kCrawlSpeed};
+    e.script = static_cast<int32_t>(g.scripts.size());
+    g.scripts.push_back(std::move(sc));
+    links.push_back(e);
+    made.push_back({a, b});
+  };
+  // The places the graph already joins (undirected): a crawl is a way only between two of them.
+  const size_t nodes = g.nodes.size();
+  std::vector<int32_t> comp(nodes);
+  for (size_t n = 0; n < nodes; n++) comp[n] = static_cast<int32_t>(n);
+  const auto root = [&](int32_t a) {
+    while (comp[static_cast<size_t>(a)] != a)
+      a = comp[static_cast<size_t>(a)] = comp[static_cast<size_t>(comp[static_cast<size_t>(a)])];
+    return a;
+  };
+  for (size_t n = 0; n < nodes; n++) {
+    const sb::NavNode& nn = g.nodes[n];
+    for (int32_t k = nn.first_link; k < nn.first_link + nn.links; k++) {
+      const int32_t a = root(static_cast<int32_t>(n)), b = root(g.links[static_cast<size_t>(k)].to);
+      if (a != b) comp[static_cast<size_t>(a)] = b;
+    }
+  }
+  // The best way a crawl gives between two places: (crawl, from place, to place) -> the pair.
+  struct Way {
+    int32_t a, b;
+    int ca, cb;
+    size_t len;
+  };
+  std::vector<std::pair<std::tuple<int, int32_t, int32_t>, Way>> best;
+  const auto snap = [](float v) { return std::round(v / kCrawlCell) * kCrawlCell; };
+  for (size_t n = 0; n < nodes; n++) {
+    const sb::NavNode& from = g.nodes[n];
+    if (from.swim || from.mover >= 0 || from.ride >= 0) continue;
+    for (const auto& d : kDirs) {
+      // The first cell of the crawl's grid along the way where he no longer stands.
+      sh::Vec3f entry;
+      bool found = false;
+      for (float r = 16; r <= 112 && !found; r += 8) {
+        const float x = snap(from.origin.x + d[0] * r), y = snap(from.origin.y + d[1] * r);
+        if (!crawl_step(w, from.origin, x, y, entry)) break;
+        found = !stands_at(w, entry);
+      }
+      if (!found) continue;
+      int id, cell;
+      if (const auto it = where.find(key(entry)); it != where.end()) {
+        id = it->second.first;
+        cell = it->second.second;
+      } else {
+        id = search(entry);
+        cell = 0;
+      }
+      const Crawl& cr = crawls[static_cast<size_t>(id)];
+      const int32_t pa = root(static_cast<int32_t>(n));
+      for (const auto& [c, end] : cr.ends) {
+        const int32_t pb = root(end);
+        if (pa == pb) continue;
+        const size_t len = crawl_path(cr, cell, c).size();
+        const auto k = std::make_tuple(id, pa, pb);
+        auto it =
+            std::find_if(best.begin(), best.end(), [&](const auto& e) { return e.first == k; });
+        if (it == best.end())
+          best.push_back({k, {static_cast<int32_t>(n), end, cell, c, len}});
+        else if (len < it->second.len)
+          it->second = {static_cast<int32_t>(n), end, cell, c, len};
+      }
+    }
+  }
+  for (const auto& [k, wy] : best) {
+    const Crawl& cr = crawls[static_cast<size_t>(std::get<0>(k))];
+    std::vector<sh::Vec3f> path = crawl_path(cr, wy.ca, wy.cb);
+    one(wy.a, wy.b, path);
+    std::reverse(path.begin(), path.end());
+    one(wy.b, wy.a, path);
+  }
+  sb::nav_add_links(g, links);
+  if (keep != nullptr) *keep = std::move(crawls);
+  return static_cast<int>(links.size());
+}
+
+namespace {
 
 std::vector<sb::NavMover> movers_of(const ge::shooterbots::BotView& s,
                                     const ge::shooter::MapSpec& spec,
@@ -961,6 +1157,12 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
     }
     sb::nav_add_links(out.graph, scripted);
   }
+  // CRAWLWAYS (Quake II's: a roof too low to stand under, walked ducked; base1's way east is one,
+  // "Crouch here"). From each node a step out to where a ducked box fits and a standing one does
+  // not, the crawl is followed cell by cell (a step up, across ducked, down to a floor) to where
+  // he stands again by another node: a scripted way each way, its steps ducked.
+  if (spec.brushes && out.tracer != nullptr && out.world.count > 0)
+    out.crawlways = add_crawlways(out.world.solids[0], out.graph, &out.crawls);
   // LAVA AND SLIME: a floor node standing in either (a shallow pool at the feet too: it burns
   // there as well) harms whoever goes there; no way leads into one (the links out are kept: a
   // player knocked in walks out).

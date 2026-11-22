@@ -1074,6 +1074,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
                                       : 0.0f;
         w.forward = k.forward * faces;
         w.jump = k.jump && c >= kScriptFacing && !p.jump_pressed;
+        w.duck = k.duck;
         if (w.jump) p.stats.jumps++;
         because = k.jump ? "a scripted way: a hop up" : "a scripted way";
       }
@@ -1344,7 +1345,10 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         }
       }
     } else if (flies(l.kind) && p.airborne) {
-      if (!s.onground) {
+      // Down in water short of a dry target (a gap over a pool: base2's, its bridge there only in
+      // deathmatch) is landed short: swimming, he is never on the ground to land.
+      const bool fell_in = s.waterlevel >= 2 && !node(g, b).wet && s.origin.z < B.z - kStepHeight;
+      if (!s.onground && !fell_in) {
         p.mode = PilotMode::air;
         // STEERED IN THE AIR (pilot.hpp `air`): the aim the target, or near it the node after it
         // when the route walks on from there (the momentum carried round the corner it turns).
@@ -1686,6 +1690,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   c.angles = {quantize_angle(w.pitch), quantize_angle(wrap(p.yaw)), 0};
   c.forward = quantize_axis(static_cast<float>(pressed[1]) * s.maxspeed);
   c.side = quantize_axis(static_cast<float>(pressed[2]) * s.maxspeed);
+  if (w.duck) c.up = quantize_axis(-s.maxspeed);  // down: ducked (a game that ducks)
   p.jump_pressed = pressed[3] > 0.5;
   c.buttons =
       static_cast<uint8_t>((p.jump_pressed ? kButtonJump : 0) | (w.attack ? kButtonAttack : 0));

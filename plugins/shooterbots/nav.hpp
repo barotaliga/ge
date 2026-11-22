@@ -152,6 +152,7 @@ struct NavNode {
 struct ScriptStep {
   Vec3f at;
   bool hop = false;
+  bool duck = false;  // walked to ducked (a crawlway under a low roof: Quake II's)
 };
 struct NavScript {
   std::vector<ScriptStep> steps;
