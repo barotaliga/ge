@@ -19,6 +19,7 @@
 #include "core/prng.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_flash.hpp"
+#include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monster_kinds.hpp"
 #include "shooters_edge/server/q2_monster_pain.hpp"
@@ -355,20 +356,13 @@ void go_to(Q2Server& s, Q2Monster& m, sh::Vec3f goal, float speed) {
   if (!step(s, m, side * (len * sign))) step(s, m, side * (-len * sign));
 }
 
-int corner_named(const Q2Server& s, const std::string& name, const char* classname) {
-  if (name.empty()) return -1;
-  for (size_t i = 0; i < s.entities.size(); i++)
-    if (s.entities[i].targetname == name && s.entities[i].classname == classname)
-      return static_cast<int>(i);
-  return -1;
-}
-
 // ---- Noticing ----
 
 // The monster turns on `foe` (seen when `saw`).
 void found(Q2Server& s, Q2Monster& m, int foe, bool saw) {
   if (kind(m).good) return;  // a good guy hunts no one
   m.enemy = foe;
+  if (!m.lost_combat.empty()) q2_lost_combat(s, m);
   m.seen_at = s.level_time;
   m.last_sight = foe_at(s, foe);
   if (!m.hold) m.attack_finished = s.level_time + 1;  // a second before its first shot
@@ -1041,12 +1035,12 @@ void arrive_corner(Q2Server& s, Q2Monster& m) {
     return;
   }
   m.corner_wait = s.level_time + double(wait);
-  m.corner = corner_named(s, s.entities[size_t(here)].target, "path_corner");
+  m.corner = q2_find_named(s, s.entities[size_t(here)].target, "path_corner");
   if (m.corner >= 0 && (s.entities[size_t(m.corner)].spawnflags & 1) != 0) {
     const Q2Entity& next = s.entities[size_t(m.corner)];
     Q2Entity& e = body(s, m);
     e.origin = next.origin + sh::Vec3f{0, 0, -8 - e.mins.z};  // its feet at the corner's foot
-    m.corner = corner_named(s, next.target, "path_corner");
+    m.corner = q2_find_named(s, next.target, "path_corner");
   }
 }
 
@@ -1356,8 +1350,9 @@ void think(Q2Server& s, Q2Monster& m) {
     if (sh::length(d) < 16) {  // its pathtarget fired; on to the next, or held there
       const int at = m.combat;
       arrive(s, at);
+      q2_combat_point_missing(s, at);
       const Q2Entity& point = s.entities[size_t(at)];
-      m.combat = corner_named(s, point.target, "point_combat");
+      m.combat = q2_find_named(s, point.target, "point_combat");
       if (m.combat < 0) m.hold = (point.spawnflags & 1) != 0 && !afloat(k);
       return;
     }
@@ -1596,9 +1591,8 @@ void monster_spawn(Q2Server& s) {
     // A monster waiting for a use that nothing can give (no name to be targeted by) is said, and
     // with g_fix_triggered 1 stands from the start like any other.
     if (!m.spare && !kd.prop && (e.spawnflags & 2) != 0 && e.targetname.empty()) {
-      s.console.push_back("triggered " + e.classname + " at (" + std::to_string(int(e.origin.x)) +
-                          " " + std::to_string(int(e.origin.y)) + " " +
-                          std::to_string(int(e.origin.z)) + ") has no targetname");
+      s.console.push_back("triggered " + e.classname + " at " + q2_pos(e.origin) +
+                          " has no targetname");
       if (s.cvars.find("g_fix_triggered")->integer() != 0) e.spawnflags &= ~2;
     }
     // jail5's flyers placed at height -104 are waited on by their target's name: the map gives
@@ -1617,10 +1611,11 @@ void monster_spawn(Q2Server& s) {
       m.waiting = true;
     }
     m.ideal_yaw = e.angles.y;
-    m.corner = corner_named(s, e.target, "path_corner");
+    m.corner = q2_find_named(s, e.target, "path_corner");
     const std::string combattarget =
         m.spare ? std::string() : s.map->entities[size_t(e.block)].get_any_case("combattarget");
-    m.combat = corner_named(s, combattarget.empty() ? e.target : combattarget, "point_combat");
+    m.combat = q2_find_named(s, combattarget.empty() ? e.target : combattarget, "point_combat");
+    if (m.combat < 0) m.lost_combat = combattarget;
     if (m.corner >= 0)
       e.angles.y = m.ideal_yaw = yaw_to(s.entities[size_t(m.corner)].origin - e.origin);
     if (kd.turret) m.gravity = 0;              // it rides its turret

@@ -50,6 +50,11 @@ std::shared_ptr<const br::Map> faulty() {
       entity({{"classname", "item_armor_shard"}, {"origin", "70 70 16"}, {"team", "pair"}}));
   w.entities.push_back(
       entity({{"classname", "item_armor_jacket"}, {"origin", "80 80 16"}, {"team", "pair"}}));
+  w.entities.push_back(entity({{"classname", "monster_no_such"}, {"origin", "1 1 1"}}));
+  w.entities.push_back(
+      entity({{"classname", "info_null"}, {"Bogus", "x"}, {"_color", "1 0 0"}, {"ORIGIN", "1 2"}}));
+  w.entities.push_back(
+      entity({{"classname", "target_laser"}, {"origin", "-20 0 40"}, {"target", "nowhere"}}));
   std::vector<uint8_t> bytes;
   std::string error;
   auto map = std::make_shared<br::Map>();
@@ -91,6 +96,10 @@ TEST(a_map_s_faults_are_said_as_it_loads_and_the_counts_after) {
   CHECK(said(s, "item key_no_such_thing not found for trigger_key at (7 8 9)"));
   CHECK(said(s, "trigger_key at (7 8 9) has no target"));
   CHECK(said(s, "item_health at (50 50 16) has invalid spawnflags set"));
+  CHECK(said(s, "monster_no_such doesn't have a spawn function"));
+  CHECK(said(s, "ED_ParseEdict: Bogus is not a field"));  // `_color` passes unremarked
+  CHECK(!said(s, "ED_ParseEdict: _color is not a field"));
+  CHECK(said(s, "ED_ParseField: couldn't parse 'ORIGIN'"));
   // The body armour is left out of deathmatch by its flag; the two of team "pair" are one team.
   CHECK(said(s, "1 entities inhibited"));
   CHECK_MSG(said(s, "1 teams with 2 entities"), s.console.back());
@@ -112,4 +121,40 @@ TEST(a_connect_is_said_on_the_console_when_more_than_one_may_play) {
   sv::RulesRunner r = open("1");
   r.connect(0, "Ana", false, false);
   CHECK(said(*sv::q2_of(r), "Ana connected"));
+}
+
+TEST(a_laser_aimed_at_nothing_is_said_when_it_starts) {
+  sv::RulesRunner r = open("0");
+  r.connect(0, "Ana", false, false);
+  for (int i = 0; i < 160; i++) {  // 2 s of 13 ms moves
+    sh::Packet pk;
+    pk.client = 0;
+    pk.sequence = i + 1;
+    sh::MoveCmd c;
+    c.msec = 13;
+    pk.cmds[0] = pk.cmds[1] = pk.cmds[2] = c;
+    r.frame(&pk, 1);
+  }
+  const sv::Q2Server& s = *sv::q2_of(r);
+  std::string all;
+  for (const std::string& l : s.console) all += l + "|";
+  CHECK_MSG(said(s, "target_laser at (-20 0 40): nowhere is a bad target"), all);
+}
+
+TEST(a_combat_point_leading_nowhere_is_said_once_and_forgotten) {
+  sv::RulesRunner r = open("0");
+  sv::Q2Server& s = *sv::q2_of(r);
+  sv::Q2Entity point;
+  point.classname = "point_combat";
+  point.origin = {10, 20, 30};
+  point.target = "gone";
+  s.entities.push_back(point);
+  const int at = static_cast<int>(s.entities.size()) - 1;
+  sv::q2_combat_point_missing(s, at);
+  CHECK(s.console[s.console.size() - 2] == "G_PickTarget: target gone not found");
+  CHECK(s.console.back() == "point_combat at (10 20 30) target gone does not exist");
+  CHECK(s.entities[size_t(at)].target.empty());
+  const size_t lines = s.console.size();
+  sv::q2_combat_point_missing(s, at);
+  CHECK(s.console.size() == lines);
 }

@@ -170,12 +170,13 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   int attack = 0;  // the attack in progress: 0 and 1 the blows, 2.. the ranged ones
   int burst_frame = 0;
   double pain_at = -100, pain_hold = 0;
-  float gravity = 1;     // its share of the world's gravity (a gravity trigger sets it)
-  int corner = -1;       // the `path_corner` it walks to
-  int combat = -1;       // the `point_combat` it runs to on finding an enemy
-  bool hold = false;     // holds its ground (at its combat point)
-  bool ambush = false;   // wakes only by seeing or being hurt
-  bool waiting = false;  // hidden until used
+  float gravity = 1;        // its share of the world's gravity (a gravity trigger sets it)
+  int corner = -1;          // the `path_corner` it walks to
+  int combat = -1;          // the `point_combat` it runs to on finding an enemy
+  std::string lost_combat;  // a `combattarget` naming nothing, said on finding an enemy
+  bool hold = false;        // holds its ground (at its combat point)
+  bool ambush = false;      // wakes only by seeing or being hurt
+  bool waiting = false;     // hidden until used
   bool dead = false;
   std::string item;  // dropped at death
   // The full game's (q2-monsters-full.md):
