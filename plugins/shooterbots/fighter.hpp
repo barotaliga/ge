@@ -333,9 +333,10 @@ struct FighterStats {
   double dive_wet_s = 0;          // time in the water on a dive
   int64_t outmatched = 0;         // commands spent turned from a fight it believed it loses
   int64_t sound_chases = 0;       // commands spent going at an enemy it only heard
-  int64_t dodging = 0;            // commands spent stepping across an enemy's line (dodge.hpp)
-  int64_t brink = 0;              // commands whose keys the brink changed (shooterbots/brink.hpp)
-  int64_t dodge_turns = 0;        // and the times it turned the step back
+  int64_t kept_off = 0;     // commands backing off a monster that bites (BotArsenal::keep_off)
+  int64_t dodging = 0;      // commands spent stepping across an enemy's line (dodge.hpp)
+  int64_t brink = 0;        // commands whose keys the brink changed (shooterbots/brink.hpp)
+  int64_t dodge_turns = 0;  // and the times it turned the step back
   // The press (`press`, footwork.hpp): commands it was weighed in a fight, those pressed on at him
   // and back, and those held off by his nearness or a step not clear.
   int64_t press_weighed = 0, press_on = 0, press_back = 0, press_near = 0, press_blocked = 0;
