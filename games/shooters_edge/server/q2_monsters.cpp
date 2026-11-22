@@ -185,11 +185,7 @@ void gib_monster(Q2Server& s, const Q2Monster& m, int damage) {
 bool afloat(const Kind& k) { return k.flies || k.swims; }
 
 // Water (or slime or lava) at `p`.
-bool wet(const Q2Server& s, sh::Vec3f p) {
-  if (!s.tracer) return false;
-  const float q[3] = {p.x, p.y, p.z};
-  return (s.tracer->contents(q) & sh::kSqMaskWater) != 0;
-}
+bool wet(const Q2Server& s, sh::Vec3f p) { return (map_contents(s, p) & sh::kSqMaskWater) != 0; }
 // The point 1 above the bottom of a box at `origin`.
 sh::Vec3f foot(const Q2Entity& e, sh::Vec3f origin) {
   return origin + sh::Vec3f{0, 0, e.mins.z + 1};
@@ -1656,11 +1652,7 @@ void monster_spawn(Q2Server& s) {
 namespace {
 
 // The contents at `p` (none without a map).
-int contents_at(const Q2Server& s, sh::Vec3f p) {
-  if (!s.tracer) return 0;
-  const float q[3] = {p.x, p.y, p.z};
-  return s.tracer->contents(q);
-}
+int contents_at(const Q2Server& s, sh::Vec3f p) { return map_contents(s, p); }
 
 // Monster `m` in liquid this think: its level (1 above its feet, then 26 and 22 higher), the
 // sounds going in and out, lava's 10 a level every 0.2 s and slime's 4 a level every second, and
