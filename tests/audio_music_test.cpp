@@ -17,8 +17,10 @@
 
 #include "audio/flac.hpp"
 #include "audio/music.hpp"
+#include "audio/music_console.hpp"
 #include "audio/synth.hpp"
 #include "check.hpp"
+#include "console/console.hpp"
 
 namespace audio = ge::audio;
 namespace fs = std::filesystem;
@@ -112,4 +114,50 @@ TEST(music_from_flac_spreads_a_mono_file_on_both_sides) {
   CHECK(t.left.samples[0] == 0.5f);
   CHECK(!audio::music_from_flac(std::vector<uint8_t>{1, 2, 3}, "bad.flac", &t, &error));
   CHECK(error.rfind("bad.flac: ", 0) == 0);
+}
+
+TEST(the_music_switch_off_stops_the_track_and_on_plays_it_again) {
+  // `enabled` (cd on|off, a game's own switch bound to it) followed by music_frame.
+  const std::string path = write_track();
+  audio::Synth synth;
+  ge::console::Console con;
+  audio::MusicConsole m;
+  audio::add_music_commands(con, m);
+  m.track_of = [&path](int track) { return track == 3 ? path : std::string{}; };
+  audio::play_level_music(m, 3);
+  audio::music_frame(m, synth, con);
+  CHECK(m.track == 3 && !m.player.playing().empty());
+  m.enabled = false;  // switched off: stopped, the track kept
+  audio::music_frame(m, synth, con);
+  CHECK(m.player.playing().empty() && m.track == 3);
+  audio::play_level_music(m, 3);  // a level starting while off: nothing
+  CHECK(m.player.playing().empty());
+  m.enabled = true;  // on again: the same track
+  audio::music_frame(m, synth, con);
+  CHECK(!m.player.playing().empty());
+  m.player.stop();
+  audio::music_frame(m, synth, con);
+}
+
+TEST(shuffled_music_plays_the_games_tracks_and_the_menu_has_its_own) {
+  const std::string path = write_track();
+  audio::MusicConsole m;
+  m.track_of = [&path](int track) { return track == 2 || track == 5 ? path : std::string{}; };
+  m.shuffle = true;  // a level's own track 9 is passed over for one the game has
+  audio::play_level_music(m, 9);
+  CHECK(m.track == 2 || m.track == 5);
+  CHECK(!m.player.playing().empty() && !m.player.loops());  // once through, then the next
+  m.player.stop();
+  m.shuffle = false;
+  m.menu_track = 5;  // no game running: the menu's track, started once
+  audio::play_menu_music(m);
+  CHECK(m.track == 5 && m.player.loops());
+  audio::play_level_music(m, 2);
+  CHECK(m.track == 2);
+  audio::play_menu_music(m);  // back at the menu: its track again
+  CHECK(m.track == 5);
+  m.player.stop();
+  m.track = 0;
+  audio::play_menu_music(m);  // asked already: the music left as it is
+  CHECK(m.track == 0);
 }

@@ -415,6 +415,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.locked_turns.clear();
   w.cars.clear();
   w.cars_at.clear();
+  w.sinks.clear();
+  w.sinks_at.clear();
   w.turners.clear();
   w.turners_at.clear();
   w.hatches.clear();
@@ -424,6 +426,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.step_since = 0;
   w.step_for = kWayGiveUp_s;
   w.step = -1;
+  w.calling = -1;
   w.explore = -1;
   w.explore_since = 0;
   w.idle_since = -1;
@@ -706,6 +709,16 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       }
       const int e = edict_of(s, model);
       if (e < 0) continue;
+      // A floor that sinks under its button and comes back (the nav rides it from where it
+      // sinks to, map_nav's sink lift) is a lift, not a barrier: barred, its top kept him on it for
+      // good.
+      bool lift = false;
+      for (const sb::NavMover& mv : g.movers) lift = lift || (mv.ent == e && sb::ridden(mv));
+      if (lift) {
+        w.sinks.push_back(e);  // open while away from where it stands (called down)
+        w.sinks_at.push_back(spawned_at(b));
+        continue;
+      }
       // A door whose own button rides inside it is a lift's car, not a barrier (base1's exit and
       // base2's start: a hollow car the button on its inner wall sends along its shaft): it keeps
       // no one out, and barring it kept him from the button that moves it.
@@ -1010,6 +1023,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (size_t k = 0; k < w.turners.size(); k++)
       if (w.turners[k] == ent)
         return dist(s.sv.edicts[static_cast<size_t>(ent)].angles, w.turners_at[k]) >= 1;
+    for (size_t k = 0; k < w.sinks.size(); k++)
+      if (w.sinks[k] == ent)
+        return dist(s.sv.edicts[static_cast<size_t>(ent)].origin, w.sinks_at[k]) >= 1;
     return true;  // no door of the plan's
   };
   for (WayStep& st : w.steps) {
@@ -1286,6 +1302,46 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // The exit; else the nearest step not done; else the nearest place not seen.
   int pick = -1;
   double best = 0;
+  // A lift he waits for that only its button calls (bunk1's floor that sinks into the pit
+  // under it, back up after its wait): its nearest button pressed again, first.
+  {
+    const sb::Pilot& pp = f.bot.pilot.pilot;
+    int32_t lift = -1;
+    if (pp.mode == sb::PilotMode::wait && pp.wait_s > kWayCall_s && pp.k + 1 < pp.route.size())
+      lift = g.nodes[static_cast<size_t>(pp.route[pp.k + 1])].mover;
+    // Only one standing still at the top of its travel (a plat on its way down is waited for).
+    const sb::NavMover* lm = nullptr;
+    for (const sb::NavMover& mv : g.movers)
+      if (mv.ent == lift && sb::ridden(mv) && !sb::moving_platform(mv)) lm = &mv;
+    if (lm != nullptr) {
+      const sh::Edict& le = s.sv.edicts[static_cast<size_t>(lift)];
+      const float up = le.absmin.z - lm->absmin.z;
+      if (up < lm->travel.z - 2 || up > lm->travel.z + 2 || le.velocity.z != 0) lm = nullptr;
+    }
+    if (lm == nullptr) lift = -1;
+    for (size_t k = 0; lift >= 0 && k < w.steps.size(); k++) {
+      const WayStep& st = w.steps[k];
+      bool calls = false;
+      for (const int d : st.doors) calls = calls || d == lift;
+      if (st.kind != WayKind::button || !calls || way_exit(st) || st.node < 0 ||
+          !w.search.reached(st.node))
+        continue;
+      const double c = w.search.cost(st.node);
+      if (pick < 0 || c < best) {
+        pick = static_cast<int>(k);
+        best = c;
+      }
+    }
+    if (pick >= 0) {
+      w.steps[static_cast<size_t>(pick)].done = false;
+      w.calling = pick;
+    } else if (w.calling >= 0 && !w.steps[static_cast<size_t>(w.calling)].done &&
+               t >= w.steps[static_cast<size_t>(w.calling)].left_until) {
+      pick = w.calling;  // on his way to it
+    } else {
+      w.calling = -1;
+    }
+  }
   for (size_t k = 0; k < w.steps.size(); k++) {
     const WayStep& st = w.steps[k];
     if (left_to_do || car_first || !way_exit(st) || st.revisit || st.node < 0 || !reach(st.node) ||
