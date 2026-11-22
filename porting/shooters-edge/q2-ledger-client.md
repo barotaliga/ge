@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 128 | 13 | 5 | 10 | 156 |
-| Client settings (cvars) | 181 | 49 | 60 | 60 | 350 |
+| Client settings (cvars) | 182 | 51 | 56 | 61 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 90 | 67 | 4 | 1 | 162 |
 | Server messages the client parses (svc) | 15 | 6 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 11 | 7 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 7 | 6 | 4 | 0 | 17 |
-| **all** | 715 | 303 | 110 | 83 | 1211 |
+| **all** | 716 | 305 | 106 | 84 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 181, partial 49, missing 60, not-taken 60
+done 182, partial 51, missing 56, not-taken 61
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -397,7 +397,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.s_testsound | `s_testsound` | debug: a test tone (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.s_swapstereo | `s_swapstereo` | swap left and right (default 0) | done | `client/room_ear.cpp` in the classic layer (Quake's too), `engine/audio/synth.cpp` swaps (M18k4 round 35) |
 | cvar.s_driver | `s_driver` | the sound driver | not-taken | the platform picks the system's sound driver (SDL's `SDL_AUDIO_DRIVER` names another); `soundinfo` says which |
-| cvar.s_enable | `s_enable` | 0 none, 1 software, 2 OpenAL (default 1) | missing | C32 |
+| cvar.s_enable | `s_enable` | 0 none, 1 software, 2 OpenAL (default 1) | done | the engine's `s_enable` (`platform/window_cvars.hpp`, every game): 0 no sound at all (the heard volume 0), 1 the sound on, 2 the same (its OpenAL mixer is our one mixer) |
 | cvar.s_volume | `s_volume` | the effects volume (default 0.7, saved) | done | synonym of `volume` (`client/cvar_layers.cpp`) |
 | cvar.s_ambient | `s_ambient` | 0 no loops, 1 all, 2 only loops with a model, 3 only the player's own (default 1) | done | `plugins/classic/q2_fx_switches.hpp` (`ambient`), heard in `games/shooters_edge/client/demo_sound.cpp` (`entity_loops`) |
 | cvar.s_show | `s_show` | debug: lists the sounds playing (default 0) | not-taken | `client-gaps.md`: developer tools left out |
@@ -547,13 +547,13 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.net_maxmsglen | `net_maxmsglen` | the largest packet asked of the server (default 1390) | missing | not found |
 | cvar.net_chantype | `net_chantype` | 1 the newer net channel on modern protocols (default 1) | missing | ours speaks 34 only |
 | cvar.net_ip | `net_ip` | the local address to bind | partial | ours has it for the server (`engine/server/main.cpp`), not the client |
-| cvar.net_ip6 | `net_ip6` | the local IPv6 address | missing | not found |
+| cvar.net_ip6 | `net_ip6` | the local IPv6 address | partial | Quake II's: the IPv6 address the client's IPv6 socket is bound to ("" any), read at each join, not at once |
 | cvar.net_port | `net_port` | the server's port (default 27910) | partial | ours has it for the server (`engine/server/main.cpp`) |
 | cvar.net_clientport | `net_clientport` | the client's own port (default any) | done | Quake II's `net_clientport` (default -1, any free port): the client's socket on that port, opened again the frame it moves with the connection carrying on; a port that will not open says so and any free port is used (`net/qw_remote.cpp`'s `own_port`); ours keeps the setting's value rather than putting it back to -1 |
 | cvar.net_dropsim | `net_dropsim` | debug: drop this share of packets (default 0) | partial | ours simulates networks in `engine/net` (labs), not by this setting |
 | cvar.net_log | `net_log_enable`, `net_log_name`, `net_log_flush` | write a network log | not-taken | a debug build's packet log only (absent from a release); ours keeps no settings that only a debug build has, and its own captures cover the need (`engine/net`'s pcap captures) |
-| cvar.net_enable_ipv6 | `net_enable_ipv6` | IPv6 networking | missing | not found |
-| cvar.net_ignore_icmp | `net_ignore_icmp` | ignore ICMP errors (default 0) | missing | not found |
+| cvar.net_enable_ipv6 | `net_enable_ipv6` | IPv6 networking | partial | Quake II's (`client/cvar_layers.cpp`, read by `net/qw_remote.cpp`): 0 refuses to join an IPv6 address ("IPv6 is turned off; set net_enable_ipv6 to 1 to join ..."), 1 and 2 join one from an IPv6 socket (`own_v6`), every game's `connect` reading `[addr]:port` and a bare IPv6 address; names resolve to IPv4 only, and a listen server never listens on IPv6 (2's half) |
+| cvar.net_ignore_icmp | `net_ignore_icmp` | ignore ICMP errors (default 0) | not-taken | ours always passes over the system's unreachable errors (`engine/net/udp_socket.cpp`), as its 1 does; a server that went away is found by `cl_timeout` instead |
 
 ## Macros ($name in typed and bound text)
 
