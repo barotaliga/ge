@@ -1217,6 +1217,13 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (e.kind == ge::ui::EventKind::back_at_root) return Outcome::back_at_root;
   if (host.console == nullptr) return Outcome::none;
   ge::console::Console& con = *host.console;
+  // Quake II's player page needs a figure to show: with none in the packs it does not open.
+  if (e.kind == ge::ui::EventKind::opened && e.page == "setup" && &table_of(host) == &q2_menu() &&
+      host.files != nullptr && player_figures(*host.files).empty()) {
+    con.print("No player models found.");
+    menu.close();
+    return Outcome::none;
+  }
   if (slot_page(e.page)) {
     if (e.kind != ge::ui::EventKind::activated || e.item.empty() || e.item[0] != 's')
       return Outcome::none;

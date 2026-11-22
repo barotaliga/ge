@@ -161,3 +161,43 @@ TEST(shuffled_music_plays_the_games_tracks_and_the_menu_has_its_own) {
   audio::play_menu_music(m);  // asked already: the music left as it is
   CHECK(m.track == 0);
 }
+
+// `music` (Quake II's `ogg`): a track played by hand once through, then the level's again; info,
+// pause and toggle, next, stop and the refusals.
+TEST(the_music_command_plays_a_track_by_hand_then_the_levels_again) {
+  const std::string path = write_track();
+  audio::Synth synth;
+  ge::console::Console con;
+  audio::MusicConsole m;
+  audio::add_music_commands(con, m);
+  m.track_of = [&path](int track) { return track == 3 || track == 4 ? path : std::string{}; };
+  con.execute("music info");
+  CHECK(con.output().back() == "Playback stopped.");
+  con.execute("music pause");
+  CHECK(con.output().back() == "Playback stopped.");
+  con.execute("music");
+  CHECK(con.output().back() == "Usage: music <info|play|stop|next|pause>");
+  con.execute("music play");
+  CHECK(con.output().back() == "Usage: music play <track>");
+  con.execute("music play 9");
+  CHECK(con.output().back() == "No such track: 9");
+  con.execute("music play foo");
+  CHECK(con.output().back() == "No such track: foo");
+  audio::play_level_music(m, 3);
+  con.execute("music play 4");
+  CHECK(m.manual == 4 && m.track == 3 && !m.player.loops());
+  con.execute("music info");
+  CHECK(con.output().back().rfind("Playing track 4 (", 0) == 0);
+  con.execute("music toggle");
+  CHECK(m.player.paused());
+  con.execute("music pause 0");
+  CHECK(!m.player.paused());
+  m.player.stop();  // the hand's track ended: the level's own again, looping
+  audio::music_frame(m, synth, con);
+  CHECK(m.manual == 0 && m.track == 3 && m.player.loops());
+  con.execute("music next");  // the level's track from its start
+  CHECK(m.track == 3 && !m.player.playing().empty());
+  con.execute("music stop");
+  CHECK(m.player.playing().empty() && m.track == 3);
+  audio::music_frame(m, synth, con);
+}

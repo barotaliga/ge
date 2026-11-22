@@ -306,7 +306,7 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   `ch_y` (`cl_crossx`, `cl_crossy`), `ch_scale` (`crosshairsize`) and `ch_alpha`
 //   (`crosshairalpha`); its own `ch_red`, `ch_green`, `ch_blue` and `ch_health` colour it;
 //   `scr_showpause` (`showpause`), `netgraph` (`r_netgraph`) and `ogg_volume` (`bgmvolume`); its
-//   `ogg_enable` is the music's switch (`cd on|off`);
+//   `ogg_enable` is the music's switch (`cd on|off`); `ogg` its spelling of `music`;
 // - the move keys' speeds are the same settings, 200 walking by default where Quake's
 //   are 400 (Quake II has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
@@ -442,6 +442,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
   } else {
     v.add(music_on), v.add(shuffle), v.add(menu_track);
   }
+  c.add_command_synonym("ogg", "music");       // its music player (engine/audio/music_console.hpp)
   c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
   v.add({.name = "scr_centertime",
          .fallback = "2.5",
@@ -748,6 +749,11 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
     v.q2 = fresh;
   }
   if (game.id == "q2") add_q2_session_cvars(c.cvars(), v.q2);
+  if (b.view != nullptr) {  // gun_next, gun_prev and gun_model over the game's own weapons
+    b.view->gun_frame = 0;
+    b.view->gun_model = -1;
+    shooters_edge::view::add_gun_commands(c, *b.view, game.held_weapons);
+  }
   if (!v.log) v.log = std::make_shared<ConsoleLog>();
   v.log->mode = 0;  // Quake II's logfile and the rest; its file closed by the next line printed
   v.log->flush = false;
