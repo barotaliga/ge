@@ -225,7 +225,10 @@ TEST(noreload_a_new_unit_a_new_game_and_deathmatch_keep_nothing) {
     go_to(*g, b);
     run(*g, kSecond);
     leave_by(*g, "back");
-    if (deathmatch[0] != '0') run(*g, 25 * kSecond);
+    if (deathmatch[0] != '0') {  // a match's intermission waits for a button too
+      run(*g, 6 * kSecond);
+      run(*g, 10, -1, sh::kButtonAttack);
+    }
     go_to(*g, a);
     const bool fresh =
         !g->s().entities[size_t(g->classname("item_armor_shard"))].gone && g->s().level_time < 1.0;

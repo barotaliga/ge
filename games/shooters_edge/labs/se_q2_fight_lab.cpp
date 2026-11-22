@@ -87,6 +87,9 @@ std::unique_ptr<Duel> duel(const std::shared_ptr<const br::Map>& map, std::strin
   spec.brushes = map;
   if (!d->r.start(spec, error)) return nullptr;
   d->r.connect(0, "Ana", false, false);
+  // Ana steps off the one start first: a spawn on a standing player kills that player.
+  tick(*d, 0, 0);
+  place(*d, 0, -100);
   d->r.connect(1, "Ben", false, false);
   for (int i = 0; i < 80; i++) tick(*d, 0, 0);
   place(*d, 0, -100);

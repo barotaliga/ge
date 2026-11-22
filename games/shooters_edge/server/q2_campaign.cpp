@@ -35,9 +35,11 @@ SqBody leaving(const SqBody& b) {
   return out;
 }
 
+// A co-op unit's end: every key goes, and the record of the power cubes taken with them.
 void strip_keys(SqBody& b) {
   for (int i = 0; i < kSqItemCount; i++)
     if (kSqItems[i].kind == SqKind::key) b.counts[i] = 0;
+  b.cubes = 0;
 }
 
 std::string skill_name(const Q2Server& s) {
