@@ -43,6 +43,7 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 | Stock maps' visibility mended, a map's entities from a file (`sv_vispatch`, `sv_entpath`) | maps, server | Quake II's server (`server/q2_mapfix.hpp`) |
 | Shots from the gun onto the crosshair's point (`aimfix`), a level machine gun (`g_machinegun_norecoil`), footsteps by pace (`g_footsteps`) | rules | Quake II's rules (`server/q2_fight.cpp`) |
 | The modern client's console words for every game: `_echo`, `text`, `complete`, `setu`, `sets`, `resetall`, `writeconfig`, `toggle` over a list, the clock macros, `draw` strings, local `play` and `stopsound`, `sizeup` and `sizedown`, Alt+Enter | client | `engine/console`, `engine/hud/draw_strings.hpp`, `engine/platform/window_cvars.hpp`, the shell |
+| The connection's macros (`$cl_ping`, `$cl_lag`, the rates), `serverstatus`, the files' words (`path`, `dir`, `fdir`, `whereis`), `dns`, `net_stats` for every game | client | `engine/net/rates.hpp`, `engine/net/net_commands.hpp`, `engine/vfs/search_commands.hpp`, the shell's join |
 
 ### Ours, offered to every game
 
