@@ -365,6 +365,7 @@ std::vector<sh::Vec3f> crawl_path(const MapCrawl& cr, int a, int b) {
     up_b.pop_back();
   }
   std::vector<sh::Vec3f> out;
+  out.reserve(up_a.size() + up_b.size());
   for (const int k : up_a) out.push_back(cr.cells[static_cast<size_t>(k)].at);
   for (size_t k = up_b.size() - 1; k-- > 0;)
     out.push_back(cr.cells[static_cast<size_t>(up_b[k])].at);
