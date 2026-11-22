@@ -27,6 +27,7 @@
 #include "forward/forward.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
+#include "net/tcp_socket.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_client.hpp"
@@ -1687,4 +1688,78 @@ TEST(the_landing_and_surfacing_settings_reach_a_client_told_the_feel) {
   CHECK(untold.land_pause && untold.surface_lift);
   game.cvars.set("sv_landjump", "2", ge::console::Source::code);
   CHECK(!sv::q2_move_feel(game, 0).land_pause);
+}
+
+TEST(a_client_fetches_from_the_server_web_address_and_falls_back_to_the_channel) {
+  // The server names a web address (sv_downloadserver). The web holds the map: the client fetches
+  // it there, says so, and tells the server `download http`; a skin the web lacks (404) is left
+  // lacking. A second client's own repository (cl_http_default_url) lacks the map: HTTP turns off
+  // and the map comes over the game's channel. Both play on.
+  gn::TcpListener web;
+  std::string error;
+  if (!gn::tcp_listen(web, gn::loopback_v4(0), &error)) {
+    ge::test::skip("no loopback TCP socket here: " + error);
+    return;
+  }
+  const std::string base = "http://127.0.0.1:" + std::to_string(web.local.port) + "/";
+  const std::vector<uint8_t> map(5000, 1);
+  cn::Q2NetConfig cfg;
+  cfg.download_server = base;
+  cfg.read_file = [&map](const std::string& path, std::vector<uint8_t>* out) {
+    if (path != "maps/hall.bsp") return false;
+    *out = map;
+    return true;
+  };
+  auto r = rig(cfg);
+  cn::Q2ClientConfig web_one;
+  web_one.name = "web";
+  web_one.fetch = true;
+  web_one.want = {"players/male/red.pcx"};
+  cn::Q2ClientConfig own = web_one;
+  own.name = "own";
+  own.http.default_url = base + "mine/";
+  cn::Q2ClientEnd& a = join(*r, web_one);
+  std::vector<gn::TcpStream> streams;
+  std::vector<std::string> asked;
+  for (int i = 0; i < 400; i++) {
+    if (i == 30) {  // the second joins once the server names no address: its own is asked
+      r->server.cfg.download_server.clear();
+      join(*r, own);
+    }
+    for (gn::TcpStream in; gn::tcp_accept(web, in); in = {}) streams.push_back(in);
+    for (gn::TcpStream& t : streams) {
+      if (t.handle == -1) continue;
+      gn::tcp_pump(t);
+      std::vector<uint8_t> got;
+      gn::tcp_take_bytes(t, got);
+      const std::string req(got.begin(), got.end());
+      if (req.find("\r\n\r\n") == std::string::npos) continue;
+      const std::string path = req.substr(4, req.find(' ', 4) - 4);
+      asked.push_back(path);
+      const bool has = path == "/baseq2/maps/hall.bsp";
+      std::string reply = has ? "HTTP/1.1 200 OK\r\nContent-Length: 5000\r\n\r\n"
+                              : "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+      if (has) reply.append(map.begin(), map.end());
+      gn::tcp_send_bytes(t, reinterpret_cast<const uint8_t*>(reply.data()), reply.size());
+      for (int k = 0; k < 100000 && !t.out.empty(); ++k) gn::tcp_pump(t);
+      gn::tcp_close(t);
+    }
+    run(*r, 1);
+  }
+  cn::Q2ClientEnd& b = *r->clients[1];
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+  CHECK(a.downloaded.size() == 1 && a.downloaded["maps/hall.bsp"] == map);
+  CHECK(std::find(asked.begin(), asked.end(), "/baseq2/players/male/red.pcx") != asked.end());
+  CHECK(std::find(asked.begin(), asked.end(), "/baseq2.filelist") != asked.end());
+  CHECK(std::find(asked.begin(), asked.end(), "/baseq2/maps/hall.filelist") != asked.end());
+  CHECK(b.downloaded.size() == 1 && b.downloaded["maps/hall.bsp"] == map);
+  CHECK(!b.http.on);
+  CHECK(std::find(b.http.said.begin(), b.http.said.end(),
+                  "[UDP] maps/hall.bsp [DONE] [1 remaining file]") != b.http.said.end());
+  CHECK(std::find(a.http.said.begin(), a.http.said.end(), "[HTTP] Download server at " + base) !=
+        a.http.said.end());
+  CHECK(std::find(asked.begin(), asked.end(), "/mine/baseq2/maps/hall.bsp") != asked.end());
+  for (gn::TcpStream& t : streams) gn::tcp_close(t);
+  gn::tcp_close_listener(web);
 }

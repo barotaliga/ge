@@ -57,6 +57,7 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   s.fetch = true;
   s.fetch_level = true;
   s.allow = cfg.q2_downloads;  // allow_download and its kinds
+  s.http = cfg.q2_http;        // cl_http_*: the files over HTTP first
   s.nodelta = cfg.q2_nodelta;  // cl_nodelta
   s.ask_moves = true;          // the other players' moves, to run them forward (q2_predict.hpp)
   s.ask_back = true;           // the items coming back, drawn ahead of time (ce_respawns)
@@ -181,6 +182,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
     q2_client_tick(c, r.now_us);
   }
   for (std::string& line : std::exchange(c.ignored, {})) said.push_back(std::move(line));
+  for (std::string& line : std::exchange(c.http.said, {})) said.push_back(std::move(line));
   if (c.stage != r.said) {
     r.said = c.stage;
     std::string line = remote_stage_words(r.said) + r.server_name;
