@@ -355,6 +355,7 @@ int run_main(int argc, char** argv) {
                                   .light_lift = &picture.light_lift,
                                   .gibs = &picture.gibs,
                                   .no_glow = &picture.no_glow,
+                                  .q2fx = &picture.q2fx,
                                   .chat = &remote.ignore.chat,
                                   .auto_chat = &con_view.game_chat};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
@@ -723,9 +724,11 @@ int run_main(int argc, char** argv) {
     static_cast<ge::audio::Synth*>(user)->render(out, frames);
   };
   // The hearings before the device (closed first: its thread never reads what they free).
-  cl::DemoHearing hearing(synth, &picture.ce.sounds);       // a demo's sounds, voices, lines
-  cl::ListenHearing heard_here(synth, &picture.ce.sounds);  // the window's own game's sounds
-  cl::Cinematic cine;                                       // Quake II's movies (cinematic.hpp)
+  // A demo's sounds, voices and lines; the window's own game's sounds (cl_footsteps and s_ambient
+  // over both).
+  cl::DemoHearing hearing(synth, &picture.ce.sounds, &picture.q2fx);
+  cl::ListenHearing heard_here(synth, &picture.ce.sounds, &picture.q2fx);
+  cl::Cinematic cine;                      // Quake II's movies (cinematic.hpp)
   cl::MenuSounds menu_sounds(synth);       // the main menu's clicks (menu_sound.hpp)
   cl::hear_worlds_on(&synth, &under_ear);  // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
@@ -741,6 +744,9 @@ int run_main(int argc, char** argv) {
   // nothing in `in_mouse_release` asks for the pointer. Taken below on the first frame.
   ge::input::MouseCapture mouse;
   bool focused = ge::platform::has_focus(*window);
+  const auto heard = [&] {  // the player's volume, unless s_auto_focus silences the window
+    return ge::platform::heard_volume(win, focused, ge::platform::minimised(*window));
+  };
   bool paused_before_menu = false;  // a played demo's pause when the menu opened over it
   bool vsync = true;  // false while a timedemo runs unlocked; the player's vid_vsync otherwise
   // The surface at the window's size, its present mode the player's vid_vsync (a timedemo's
@@ -998,7 +1004,7 @@ int run_main(int argc, char** argv) {
   };
   // The window's own game heard this frame (`dt` s), at the player's volume.
   const auto hear_here = [&](double dt) {
-    synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+    synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
     heard_here.frame(listen, remix.heard_from(files), static_cast<float>(dt), remix.heard);
   };
   // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
@@ -1232,7 +1238,7 @@ int run_main(int argc, char** argv) {
       }
       cl::keys_to_menu(game_menu, menu_host, queue, held);  // CUSTOMIZE CONTROLS' key
       // The click the presses made, from the game's own recordings, at the player's volume.
-      synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+      synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
       menu_sounds.play(game_menu.take_cue(), adapter, files, cl::kDemoVolume);
       if (std::string demo = game_menu.take_demo(); !demo.empty()) {  // DEMOS: checked, played
         bench_ask = std::move(demo);
@@ -1620,7 +1626,7 @@ int run_main(int argc, char** argv) {
         bench_models = ds.models.size();
       }
       if (paced) {  // what the frames read carried: heard, and its lines shown
-        synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+        synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
         std::vector<std::string> lines;
         std::vector<bool> chat_lines;  // which are chat (cl_chat_notify, scr_chathud)
         cl::DemoHeard joined_heard;    // a game joined: what its frames read carried (remote_step)
@@ -1645,7 +1651,6 @@ int run_main(int argc, char** argv) {
           bench_map && !bench_map->spec.models.empty() ? &bench_map->spec.models[0] : nullptr;
       demo_eyes.behind =
           cl::third_person_units(playback, !drawn_remote || remote.end.cfg.spectator);
-      bench_demo_fx.draw_own = demo_eyes.behind > 0;  // his figure seen from behind
       demo_eyes.lock_pos = playback.lock_pos != 0;
       ge::render::FrameView view = cl::demo_eyes_view(
           ds, ds_read, demo_eyes, shown.row, ground, body,
@@ -1654,6 +1659,9 @@ int run_main(int argc, char** argv) {
           : bench.clock < 0 ? ds.time
                             : bench.clock,
           t);
+      const double own_behind =  // cl_thirdperson: the player's own view from behind him
+          demo_eyes.behind > 0 ? 0 : cl::q2_third_person(game_cvars.q2, view, ground);
+      bench_demo_fx.draw_own = demo_eyes.behind > 0 || own_behind > cl::kOwnFigureUnits;
       view.frame = static_cast<uint64_t>(presented);
       cl::from_above(*world, !drawn_remote &&
                                  slm::watch_fly_view(live_map, view, w, h, playback.bar_bottom_px));
@@ -1717,7 +1725,9 @@ int run_main(int argc, char** argv) {
       auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       if (drawn_remote) cl::quick_hand(controls.quick, hand);
       view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
-      auto* gun = (!drawn_remote && live_map.fly.p < 1) || demo_eyes.behind > 0 ? nullptr : &hand;
+      auto* gun = (!drawn_remote && live_map.fly.p < 1) || demo_eyes.behind > 0 || own_behind > 0
+                      ? nullptr
+                      : &hand;
       cl::draw_world(*device, *world, view, bench_fx, gun, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
@@ -1851,6 +1861,9 @@ int run_main(int argc, char** argv) {
     shown.aspect = h > 0 ? static_cast<double>(w) / h : shown.aspect;  // cl_adjustfov 0's
     cl::apply_view_cvars(camera_cvars, shown);
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
+    const double behind = cl::q2_third_person(  // cl_thirdperson
+        game_cvars.q2, view,
+        listen.map && !listen.map->spec.models.empty() ? &listen.map->spec.models[0] : nullptr);
     view.frame = static_cast<uint64_t>(presented);
     fx_state.models = world ? &cl::world_models(*world) : nullptr;
     if (!fx_palette_read) {
@@ -1861,6 +1874,7 @@ int run_main(int argc, char** argv) {
     fx_state.book = &fx_book;
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
+    if (behind > cl::kOwnFigureUnits && fx.has_self) fx.models.push_back(fx.self);
     // See-through liquids where the server allows them (its `watervis`).
     fx.see_through = listen.server == nullptr ||
                      shooters_edge::look::watervis_allowed(listen.server->serverinfo);
@@ -1924,7 +1938,7 @@ int run_main(int argc, char** argv) {
     if (!target) continue;
     cl::apply_view_from(view_from, view,
                         std::string(adapter.game->id) + " " + (listen.map ? listen.map->name : ""));
-    cl::draw_world(*device, *world, view, fx, &hand, wall, overlay, target);
+    cl::draw_world(*device, *world, view, fx, behind > 0 ? nullptr : &hand, wall, overlay, target);
     cl::gpu_watch_frame(gpu_watch, *world, wall, console);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
     present_frame();

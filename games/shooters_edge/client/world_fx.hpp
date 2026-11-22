@@ -74,6 +74,7 @@
 
 #include "brush/light_probe.hpp"
 #include "camera/subject.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "detail/decals.hpp"
 #include "particles/effect.hpp"
 #include "render/beam.hpp"
@@ -124,6 +125,8 @@ struct FxSwitches {
   int muzzle_flash = 1;
   // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
   ModelLerpSwitches lerp;
+  // Quake II's own (either look): specks, explosions' balls, lights and guns' fire left out.
+  ge::classic::Q2FxSwitches q2;
 };
 // The switches `picture` asks for: each ce_ switch, in the modern look only.
 // The explosion is the engine's where classic-enhance's replacement table names `explosion` for the
@@ -145,6 +148,10 @@ struct HeldBeam {
   bool rail = false;    // Quake II's rail (fx::rail_look): fired once, then fading
   bool coil = false;    // with `rail`: the line circling it (fx::rail_coil_look)
   bool plasma = false;  // a bolt's streak (fx::plasma_look), riding it while it flies
+  // Quake II's `cl_railtrail_type` beam (fx::q2_rail_trail_look), drawn in either look: its width
+  // or (the spiral) its radius off the axis, m; its colour; its fade, s.
+  bool q2_trail = false;
+  float trail_m = 0, trail_radius_m = 0, trail_rgb[3] = {1, 0, 0}, trail_fade_s = 1;
   // A laser (Quake II's beam entity): drawn in either look, its width and this frame's colour
   // (one of its four palette shades, picked again every frame) set in `laser_m` and `laser_rgb`.
   bool laser = false;
@@ -420,6 +427,9 @@ struct FxScene {
   ge::camera::Pose pose;                  // the eye this frame
   std::span<const Missile> missiles;      // in flight now
   std::span<const sh::Vec3f> explosions;  // every one this map so far, in order
+  // Each one's kind where it is known (classic/q2_fx_switches.hpp's kQ2Grenade, kQ2Rocket; 0 any
+  // other), by index; shorter than `explosions` (or empty) where it is not.
+  std::span<const uint8_t> explosion_kinds;
   std::span<const Effect> effects;        // every temporary entity this map so far, in order
   std::span<const Blow> blows;            // a campaign's blows to the player this map so far
   int64_t bonuses = 0;                    // the items the viewed player took, so far (bf)

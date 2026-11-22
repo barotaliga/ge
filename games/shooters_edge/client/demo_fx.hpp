@@ -28,11 +28,12 @@
 namespace shooters_edge::client {
 
 struct DemoFx {
-  int levels = -1;                    // the level these are of (DemoState::levels)
-  std::vector<sh::Vec3f> explosions;  // every one this level, in order
-  std::vector<Effect> effects;        // every other temporary entity this level, in order
-  std::vector<Missile> missiles;      // in flight this frame
-  bool draw_own = false;              // the tracked player's figure drawn too (cam_thirdperson)
+  int levels = -1;                       // the level these are of (DemoState::levels)
+  std::vector<sh::Vec3f> explosions;     // every one this level, in order
+  std::vector<uint8_t> explosion_kinds;  // Quake II's: each one's kind (world_fx.hpp's FxScene)
+  std::vector<Effect> effects;           // every other temporary entity this level, in order
+  std::vector<Missile> missiles;         // in flight this frame
+  bool draw_own = false;                 // the tracked player's figure drawn too (cam_thirdperson)
 };
 
 // The listen server's form of a demo's temporary entity (not an explosion: those are points).

@@ -38,6 +38,7 @@ its rows here in the PR that lifts or leaves each thing; each system's page has 
 | Its fork's server settings: VIP slots, idle drops, speed-skew kicks, rename limits | server | `engine/server` |
 | Footsteps | sound | Quake II; Quake in remix only (it ships no step sounds) |
 | Faster rules frames (`sv_fps`) | server | Quake II's rules; the old beat kept for its world |
+| Quake II's later protocols (35, 36): the newer channel's pieces, a deflated signon, batched moves, a client's no-gibs and no-footsteps asks | net, server | Quake II's endpoint; the channel's pieces and the deflater shared (`plugins/classic/protocol/channel.hpp`, `engine/core/deflate.hpp`) |
 | The modern server's operator words (status tables, stuff lists, partial names, kickban) and player queries (`lag`, `sinfo`) | server | `engine/server/operator.hpp`, Quake II's endpoint; Quake's to mount |
 | Stock maps' visibility mended, a map's entities from a file (`sv_vispatch`, `sv_entpath`) | maps, server | Quake II's server (`server/q2_mapfix.hpp`) |
 | Shots from the gun onto the crosshair's point (`aimfix`), a level machine gun (`g_machinegun_norecoil`), footsteps by pace (`g_footsteps`) | rules | Quake II's rules (`server/q2_fight.cpp`) |

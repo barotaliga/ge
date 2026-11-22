@@ -1,12 +1,14 @@
 // THE WINDOW'S OWN SETTINGS, for any game with a window: whether it covers the screen and which
 // display it covers (`vid_fullscreen`, `vid_display`), the command that lists the displays
-// (`vid_displays`) and the game's sound (`volume`, 0..1). A game binds them once before its config
-// runs, follows `fullscreen` each frame and reads `display` when it goes fullscreen; a setting
-// only one game has (a campaign's scores key) stays in that game, bound beside these.
+// (`vid_displays`), the game's sound (`volume`, 0..1) and when it is heard (`s_auto_focus`: 0
+// always, 1 not while the window is minimised, 2 only while it has the focus). A game binds them
+// once before its config runs, follows `fullscreen` each frame and reads `display` when it goes
+// fullscreen; a setting only one game has (a campaign's scores key) stays in that game, bound
+// beside these.
 //
-// ge:summary The window's console settings for any game: vid_fullscreen, vid_display, volume
+// ge:summary The window's settings for any game: vid_fullscreen, vid_display, volume, s_auto_focus
 // ge:keywords vid_fullscreen vid_display vid_displays fullscreen display window cvars volume
-// ge:keywords window-cvars add_window_cvars
+// ge:keywords window-cvars add_window_cvars s_auto_focus heard_volume minimised unfocused
 // ge:skill platform console
 // ge:test tests/platform_window_cvars_test.cpp
 #pragma once
@@ -19,9 +21,13 @@ struct WindowCvars {
   bool fullscreen = false;  // the window follows it each frame
   int display = 0;          // read when the window goes fullscreen
   double volume = 0.7;
+  int auto_focus = 0;  // s_auto_focus
 };
 
 // The cvars over `w` (it must outlive `con`), and `vid_displays`.
 void add_window_cvars(console::Console& con, WindowCvars& w);
+// The loudness heard now: `volume`, or 0 while `s_auto_focus` silences a window that is minimised
+// (1 or 2) or has not the focus (2).
+double heard_volume(const WindowCvars& w, bool focused, bool minimised);
 
 }  // namespace ge::platform

@@ -17,10 +17,17 @@
 // THE STATE, read-only: `cl_running` 1 (the client is up), `cl_paused` 1 while the game this
 // window runs is paused, `sv_running` 1 while it runs a server, `sv_paused` 1 while that is paused.
 //
+// THE THIRD PERSON, a cheat: `cl_thirdperson` 1 puts the player's own view `cl_thirdperson_range`
+// units (60) behind his eye, turned `cl_thirdperson_angle` degrees round him the way a yaw turns
+// (0 behind, 180 in front looking back at him), looking the way he would from there; it stops
+// short of the world's walls, and his own figure, drawn while the camera is off him, is hidden
+// once a wall pushes it within kOwnFigureUnits. Joined or hosted, never while he watches another.
+//
 // ge:summary Quake II's session settings: the map commands, the game clock, the state cvars
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd auto-record map-change timescale
 // ge:keywords fixedtime cl_running cl_paused sv_running sv_paused read-only q2_session_step
-// ge:keywords cl_autopause
+// ge:keywords cl_autopause cl_thirdperson cl_thirdperson_angle cl_thirdperson_range
+// ge:keywords third-person chase-camera view_behind
 // ge:skill console shooter
 // ge:test tests/shooters_edge_q2_session_test.cpp
 #pragma once
@@ -29,6 +36,8 @@
 #include <string_view>
 
 #include "console/console.hpp"
+#include "render/view.hpp"
+#include "shooter/brush_hull.hpp"
 
 namespace shooters_edge::net {
 struct Remote;
@@ -45,6 +54,9 @@ struct Q2Session {
   double timescale = 1;        // timescale: the game's speed
   double fixed_ms = 0;         // fixedtime: milliseconds a frame, 0 the real time
   bool autopause = true;       // cl_autopause: a game played alone waits under the menu
+  bool third_person = false;   // cl_thirdperson (a cheat)
+  double third_angle = 0;      // cl_thirdperson_angle, degrees round the player
+  double third_range = 60;     // cl_thirdperson_range, units behind him
   // What the last frame saw: in a game, its map ("" while it loads), the state cvars' values.
   bool joined = false;
   std::string map;
@@ -67,5 +79,18 @@ void q2_session_step(ge::console::Console& con, Q2Session& s, bool joined, std::
 // by cl_autopause, or its server paused).
 void q2_session_frame(ge::console::Console& con, Q2Session& s, const net::Remote& remote,
                       const Listen& listen, bool paused);
+
+// Closer than this (units) the camera is in the player's own head: his figure is not drawn.
+inline constexpr double kOwnFigureUnits = 20;
+
+// `view` moved `units` back from its eye, its heading turned `angle_deg` the way a map yaw turns
+// (counter-clockwise from above) first; traced against `world`'s point hull (map units), stopping
+// short of a wall. The distance it went back, units (0: `units` not above 0, or a wall at once).
+double view_behind(ge::render::FrameView& view, double units, double angle_deg,
+                   const ge::shooter::BrushModel* world);
+// cl_thirdperson on `view`: view_behind by the range and the angle while it is on; the distance
+// the camera went back (0: off).
+double q2_third_person(const Q2Session& s, ge::render::FrameView& view,
+                       const ge::shooter::BrushModel* world);
 
 }  // namespace shooters_edge::client

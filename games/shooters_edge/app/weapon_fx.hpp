@@ -246,6 +246,10 @@ const gr::BeamLook& rail_look();
 // A laser (Quake II's beam entity): a straight, steady line `width_m` across in `rgb`, seen
 // through (the classic's 0.3), no light of its own, no burns.
 gr::BeamLook laser_look(float width_m, const float rgb[3]);
+// Quake II's rail trail as its `cl_railtrail_type` draws it (classic/q2_fx_switches.hpp), in either
+// look: the core, straight and `width_m` across, or (`radius_m` > 0) the line spiralling round it
+// that far off the axis; in `rgb`, fading over `fade_s`, no light of its own.
+gr::BeamLook q2_rail_trail_look(float width_m, float radius_m, const float rgb[3], float fade_s);
 // The one glowing line that circles the rail's beam, fading with it.
 const gr::BeamLook& rail_coil_look();
 // The rail's soft lights along its line at `t_s` (up to kRailLights into `out`); the count.

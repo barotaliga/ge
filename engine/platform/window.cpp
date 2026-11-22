@@ -218,6 +218,10 @@ bool has_focus(const Window& window) {
   return (SDL_GetWindowFlags(window.impl_->window) & SDL_WINDOW_INPUT_FOCUS) != 0;
 }
 
+bool minimised(const Window& window) {
+  return (SDL_GetWindowFlags(window.impl_->window) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
 bool relative_mouse(const Window& window) {
   return SDL_GetWindowRelativeMouseMode(window.impl_->window);
 }

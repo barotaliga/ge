@@ -4,7 +4,8 @@
 // ge:keywords cvar-layer game-cvars per-game-cvar same own clash game-switch crosshair
 // ge:keywords vid_gamma s_volume gl_dynamic gl_lightmap cl_gun scr_centertime
 // ge:keywords intensity gl_modulate gl_brightness cl_blend cl_entities cl_particles cl_lights
-// ge:keywords cl_gibs cl_noglow logfile
+// ge:keywords cl_gibs cl_noglow logfile cl_disable_particles cl_disable_explosions
+// ge:keywords cl_dlight_hacks cl_muzzlelight_time cl_muzzleflashes
 // ge:keywords sshot_format sshot_dir image_jpeg_quality_level
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
@@ -24,6 +25,127 @@ namespace shooters_edge::client {
 namespace con = ge::console;
 
 namespace {
+
+// Quake II's effect switches (classic/q2_fx_switches.hpp) on `v`, bound to `x`.
+void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
+  v.bind({.name = "cl_disable_particles",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Which specks are left out, as a sum.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 63,
+          .values = "0: none (the default); add 1 a grenade's explosion, 2 a grenade's trail, 4 a "
+                    "rocket's explosion, 8 a rocket's trail, 16 blood, 32 a blaster bolt's trail"},
+         &x.no_particles);
+  v.bind({.name = "cl_disable_explosions",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Which explosions' balls of fire are left out, as a sum (their light stays).",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 3,
+          .values = "0: none (the default); add 1 a grenade's, 2 a rocket's"},
+         &x.no_explosions);
+  v.bind({.name = "cl_dlight_hacks",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Changes to the lights the shots and explosions give, as a sum.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 7,
+          .values = "0: none (the default); add 2 for explosions lighting half as far, 4 for no "
+                    "light from a machine gun's or a chain gun's flash"},
+         &x.light_hacks);
+  v.bind({.name = "cl_muzzlelight_time",
+          .fallback = "16",
+          .flags = con::kArchive,
+          .help = "How long a gun's flash lights the room, in milliseconds.",
+          .min = 0,
+          .max = 1000,
+          .values = "16: the default; 0: no light; 1..1000: that long, the light fading over it"},
+         &x.muzzle_light_ms);
+  v.bind({.name = "cl_muzzleflashes",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether fire shows at the guns of other players and monsters as they shoot.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: it shows (the default); 0: only their light"},
+         &x.muzzle_models);
+  v.bind({.name = "cl_footsteps",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether you hear the players' footsteps.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: you do (the default); 0: none; 2: the same as 1, the game's own four "
+                    "steps"},
+         &x.footsteps);
+  v.bind({.name = "s_ambient",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Which of the sounds that go round and round as things move are heard.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 3,
+          .values = "1: all of them (the default); 0: none; 2: only those of a thing you can "
+                    "see; 3: only your own"},
+         &x.ambient);
+  v.bind({.name = "cl_railtrail_type",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "How a railgun's shot is drawn.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "0: the game's own trail of specks (the default); 1: a beam; 2: a beam with a "
+                    "line spiralling round it"},
+         &x.rail_type);
+  v.bind({.name = "cl_railtrail_time",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Seconds a railgun's beam takes to fade.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 10,
+          .values = "0..10: seconds (1 the default)"},
+         &x.rail_time);
+  v.bind({.name = "cl_railcore_color",
+          .fallback = "red",
+          .flags = con::kArchive,
+          .help = "The colour of a railgun's beam.",
+          .kind = con::CvarKind::text,
+          .values = "a colour's name (red the default; black, green, yellow, blue, cyan, "
+                    "magenta, white) or #rgb or #rrggbb"},
+         &x.core_colour);
+  v.bind({.name = "cl_railcore_width",
+          .fallback = "2",
+          .flags = con::kArchive,
+          .help = "How wide a railgun's beam is.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 64,
+          .values = "0..64: the game's units (2 the default)"},
+         &x.core_width);
+  v.bind({.name = "cl_railspiral_color",
+          .fallback = "blue",
+          .flags = con::kArchive,
+          .help = "The colour of the line spiralling round a railgun's beam.",
+          .kind = con::CvarKind::text,
+          .values = "a colour's name (blue the default; black, red, green, yellow, cyan, "
+                    "magenta, white) or #rgb or #rrggbb"},
+         &x.spiral_colour);
+  v.bind({.name = "cl_railspiral_radius",
+          .fallback = "3",
+          .flags = con::kArchive,
+          .help = "How far the spiralling line keeps from a railgun's beam.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 64,
+          .values = "0..64: the game's units (3 the default)"},
+         &x.spiral_radius);
+}
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
 // in the game (its crosshair: 0 none, 1 its own +, 2 a dot, as the engine's marks begin), so it has
@@ -47,7 +169,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.light_lift != nullptr) *b.light_lift = 0;
   if (b.gibs != nullptr) *b.gibs = true;
   if (b.no_glow != nullptr) *b.no_glow = false;
-  if (b.view != nullptr) {  // Quake's weapon is always drawn, at its own place and lens
+  if (b.q2fx != nullptr) *b.q2fx = {};  // Quake II's effect switches set aside
+  if (b.view != nullptr) {              // Quake's weapon is always drawn, at its own place and lens
     b.view->hand = 0;
     b.view->gun = 1;
     b.view->gun_units[0] = b.view->gun_units[1] = b.view->gun_units[2] = 0;
@@ -156,6 +279,7 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   `cl_vwep` (`r_drawvweps`: the weapon a figure carries, 1 in both), and its crosshair's `ch_x`,
 //   `ch_y` (`cl_crossx`, `cl_crossy`), `ch_scale` (`crosshairsize`) and `ch_alpha`
 //   (`crosshairalpha`); its own `ch_red`, `ch_green`, `ch_blue` and `ch_health` colour it;
+//   `scr_showpause` (`showpause`) and `netgraph` (`r_netgraph`);
 // - the move keys' speeds are the same settings, 200 walking by default where Quake's
 //   are 400 (Quake II has no back speed of its own: `cl_backspeed` keeps the forward's 200);
 // - its player's user info: `hand`, `gender` and `gender_auto`; its own `m_accel` (per frame);
@@ -261,6 +385,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .kind = con::CvarKind::boolean,
             .values = "0: they pulse as r_itempulse says (the default); 1: never"},
            b.no_glow);
+  if (b.q2fx != nullptr) add_q2_fx_cvars(v, *b.q2fx);
   c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
   v.add({.name = "scr_centertime",
          .fallback = "2.5",
@@ -277,7 +402,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
         std::pair{"ch_scale", "crosshairsize"}, std::pair{"ch_alpha", "crosshairalpha"},
         std::pair{"cl_vwep", "r_drawvweps"}, std::pair{"con_alpha", "con_bgalpha"},
         std::pair{"cl_entities", "r_drawentities"}, std::pair{"cl_particles", "r_particles"},
-        std::pair{"cl_lights", "r_dynamic"}, std::pair{"cl_blend", "gl_polyblend"}})
+        std::pair{"cl_lights", "r_dynamic"}, std::pair{"cl_blend", "gl_polyblend"},
+        std::pair{"scr_showpause", "showpause"}, std::pair{"netgraph", "r_netgraph"}})
     v.add_synonym(name, ours);
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.

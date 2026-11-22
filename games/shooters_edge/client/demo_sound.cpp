@@ -174,7 +174,7 @@ void DemoSounds::stop_entity_loops() {
   entity_loop_.assign(entity_loop_.size(), 0);
 }
 
-void DemoSounds::entity_loops(const DemoState& s) {
+void DemoSounds::entity_loops(const DemoState& s, int listener) {
   if (entity_loop_.size() < s.entities.size()) {
     entity_loop_.resize(s.entities.size(), 0);
     loop_heard_.resize(s.entities.size(), 0);
@@ -187,7 +187,10 @@ void DemoSounds::entity_loops(const DemoState& s) {
       loop_heard_[static_cast<size_t>(slot.entity)] = 1;
   for (size_t n = 1; n < entity_loop_.size(); n++) {
     const DemoEntity* d = n < s.entities.size() ? &s.entities[n] : nullptr;
-    const int want = d != nullptr && d->present ? d->loop : 0;
+    const int ambient = q2_ != nullptr ? q2_->ambient : 1;  // s_ambient
+    const bool kept = ambient == 1 || (ambient == 2 && d != nullptr && d->model != 0) ||
+                      (ambient == 3 && static_cast<int>(n) == listener);
+    const int want = d != nullptr && d->present && kept ? d->loop : 0;
     const au::Pcm* pcm = want > 0 ? recording(want) : nullptr;
     if (pcm == nullptr) {  // gone, quiet now, or a sound no pack holds
       if (entity_loop_[n] != 0) channels_.stop(static_cast<int>(n), kLoopChannel);
@@ -269,6 +272,13 @@ void RetiredSounds::prune() {
 }
 
 void DemoSounds::start(const DemoState& s, const DemoSound& d) {
+  if (q2_ != nullptr && q2_->footsteps == 0) {  // cl_footsteps 0
+    const bool listed = d.sound >= 0 && static_cast<size_t>(d.sound) < names_.size();
+    const std::string_view name = d.name != nullptr ? std::string_view(d.name)
+                                  : listed          ? std::string_view(names_[size_t(d.sound)])
+                                                    : std::string_view();
+    if (name.starts_with("player/step")) return;
+  }
   const au::Pcm* pcm = d.name != nullptr ? by_name(s, d) : recording(d.sound);
   if (!pcm && d.name == nullptr) pcm = own(s, d);
   if (!pcm) return;
@@ -306,7 +316,7 @@ void DemoSounds::frame(const DemoState& s, std::span<const DemoSound> started,
     }
     start(s, d);
   }
-  entity_loops(s);
+  entity_loops(s, listener);
   // Sounds ride their entities: a door grinding as it opens, a rocket's roar in flight.
   for (const au::Channels::Slot& slot : channels_.slots()) {
     const int n = slot.entity;

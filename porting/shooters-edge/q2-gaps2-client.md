@@ -276,7 +276,7 @@ an `own` row): [R]
 - `cl_footsteps` 1: 0 no footsteps, also telling the server not to send them; 2 only the classic
   four steps and the one classic landing (C34).
 Ours: the shells, the glow pulse, gibs and trails are landed (`q2-render-fx.md`,
-`q2-client-effects.md`); the switches are not. [R ours] **Done (M18k4 round 34)**: `cl_kickangles` (a cheat), on a joined server, in a recording and hosted (`client/q2_view.cpp`). **Done (M18k4 round 35)**: `cl_gibs`, `cl_noglow`, `cl_entities`, `cl_particles`, `cl_lights`, `cl_blend`.
+`q2-client-effects.md`); the switches are not. [R ours] **Done (M18k4 round 34)**: `cl_kickangles` (a cheat), on a joined server, in a recording and hosted (`client/q2_view.cpp`). **Done (M18k4 round 35)**: `cl_gibs`, `cl_noglow`, `cl_entities`, `cl_particles`, `cl_lights`, `cl_blend`. **Done (M18k4 round 36)**: `cl_disable_particles`, `cl_disable_explosions`, `cl_muzzleflashes` (others' guns), `cl_dlight_hacks` (2 and 4).
 
 **C17. Rank 3, effects: the railgun's trail settings.** `cl_railtrail_type` 0 (the classic spiral and
 core of particles), 1 a solid beam core only, 2 the core and a spiral; `cl_railtrail_time` 1.0 s; `cl_railcore_color` red, `cl_railcore_width` 2; `cl_railspiral_color` blue, `cl_railspiral_radius`

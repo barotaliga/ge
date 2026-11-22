@@ -8,10 +8,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <utility>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "shooter/map_spec.hpp"
 #include "shooter/world.hpp"
 #include "shooterbots/entities.hpp"
@@ -269,7 +272,15 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
     const ModelBox bm = model_box(spec, m);
     sh::Solid& so = world.solids[world.count++];
     so = model_solid(spec, tracer, m, s.sv.edicts[static_cast<size_t>(e)].origin);
-    if (plate(bm)) {
+    // A pillar that sinks to open and rises to shut, with room to stand on its top where the map
+    // drew it: a bridge raised out of a pit (e2m6's, raised by the trigger round the start room's
+    // pillar), as a plate slid out is.
+    const char* angle = sb::block_value(b, "angle");
+    const sh::Vec3f size = bm.maxs - bm.mins;
+    const bool pillar = angle && std::atof(angle) == -2 && size.x >= 48 && size.y >= 48 &&
+                        sh::box_free(world, {(bm.mins.x + bm.maxs.x) * 0.5f,
+                                             (bm.mins.y + bm.maxs.y) * 0.5f, bm.maxs.z + 25});
+    if (plate(bm) || pillar) {
       NavBridge br;
       br.ent = e;
       br.spawn = so.origin;
@@ -400,8 +411,7 @@ bool teleport_dest(const std::vector<sb::EntityBlock>& blocks, const char* targe
   return false;
 }
 
-std::vector<sb::NavExtraLink> teleport_links(const sb::NavGraph& g,
-                                             const ge::shooter::MapSpec& spec,
+std::vector<sb::NavExtraLink> teleport_links(sb::NavGraph& g, const ge::shooter::MapSpec& spec,
                                              const std::vector<sb::EntityBlock>& blocks) {
   std::vector<sb::NavExtraLink> out;
   for (const sb::EntityBlock& b : blocks) {
@@ -429,6 +439,7 @@ std::vector<sb::NavExtraLink> teleport_links(const sb::NavGraph& g,
     if (!teleport_dest(blocks, target, dest)) continue;
     const int32_t to = sb::nav_nearest(g, dest);
     if (to < 0) continue;
+    const size_t had = out.size();
     for (size_t a = 0; a < g.nodes.size(); a++) {
       const sh::Vec3f o = g.nodes[a].origin;
       if (o.x + 16 < box.mins.x || o.x - 16 > box.maxs.x || o.y + 16 < box.mins.y ||
@@ -436,6 +447,111 @@ std::vector<sb::NavExtraLink> teleport_links(const sb::NavGraph& g,
         continue;
       sb::NavExtraLink e{static_cast<int32_t>(a), to, sb::NavKind::walk, 0.1f};
       e.teleport = true;
+      out.push_back(e);
+    }
+    if (out.size() > had) continue;
+    // None touches it (a thin one on a pit's end wall, the last node a step short: e1m6's spike
+    // pit held him for the whole map): a node of its own where the nearest node within
+    // kTeleportReach, walked toward it, first touches it, linked both ways to that node.
+    constexpr float kTeleportReach = 64;
+    int32_t near = -1;
+    float near_d = kTeleportReach;
+    sh::Vec3f at;
+    for (size_t a = 0; a < g.nodes.size(); a++) {
+      const sh::Vec3f o = g.nodes[a].origin;
+      if (o.z + 32 < box.mins.z || o.z - 24 > box.maxs.z) continue;
+      const sh::Vec3f p{std::clamp(o.x, box.mins.x - 15, box.maxs.x + 15),
+                        std::clamp(o.y, box.mins.y - 15, box.maxs.y + 15), o.z};
+      const float dx = p.x - o.x, dy = p.y - o.y;
+      const float d = std::sqrt(dx * dx + dy * dy);
+      if (d < near_d) {
+        near = static_cast<int32_t>(a);
+        near_d = d;
+        at = p;
+      }
+    }
+    if (near < 0) continue;
+    sb::NavNode pad = g.nodes[static_cast<size_t>(near)];
+    pad.origin = at;
+    pad.first_link = pad.links = 0;
+    const auto id = static_cast<int32_t>(g.nodes.size());
+    g.nodes.push_back(pad);
+    out.push_back({near, id, sb::NavKind::walk, near_d / 320 + 0.05f});
+    out.push_back({id, near, sb::NavKind::walk, near_d / 320 + 0.05f});
+    sb::NavExtraLink e{id, to, sb::NavKind::walk, 0.1f};
+    e.teleport = true;
+    out.push_back(e);
+  }
+  return out;
+}
+
+// A push's ways (`trigger_push`): from each node in its brush (walked into, as a teleporter's) to
+// the node where it throws him: up (angle -1), the nearest node standing over its top within
+// kPushLand across; across (a heading), the nearest beyond its far face. e3m5 starts under one
+// ("Jump up here"), the only way out of its first room.
+std::vector<sb::NavExtraLink> push_links(const sb::NavGraph& g, const ge::shooter::MapSpec& spec,
+                                         const std::vector<sb::EntityBlock>& blocks) {
+  constexpr float kPushLand = 256;
+  constexpr float kPushOver = 160;  // its landing at most this far over its top, units
+  constexpr float kPushJump = 44;   // a standing jump's rise (its apex near 45), near enough
+  std::vector<sb::NavExtraLink> out;
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    if (!cn || std::strcmp(cn, "trigger_push") != 0 || sb::block_value(b, "targetname")) continue;
+    const char* model = sb::block_value(b, "model");
+    if (!model || model[0] != '*' || std::atoi(model + 1) <= 0) continue;
+    const ModelBox box = model_box(spec, std::atoi(model + 1));
+    if (!box.ok) continue;
+    const char* av = sb::block_value(b, "angle");
+    const double angle = av ? std::atof(av) : 0;
+    if (angle == -2) continue;  // down: no way anywhere new
+    const bool up = angle == -1;
+    const double a = angle * ge::core::kPi / 180;
+    const float dx = up ? 0.0f : static_cast<float>(ge::core::libm::cos(a));
+    const float dy = up ? 0.0f : static_cast<float>(ge::core::libm::sin(a));
+    const sh::Vec3f mid = (box.mins + box.maxs) * 0.5f;
+    // Where he leaves it.
+    const sh::Vec3f exit = up ? sh::Vec3f{mid.x, mid.y, box.maxs.z}
+                              : sh::Vec3f{mid.x + dx * (box.maxs.x - box.mins.x) * 0.5f,
+                                          mid.y + dy * (box.maxs.y - box.mins.y) * 0.5f, mid.z};
+    int32_t land = -1;
+    float land_d = kPushLand;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      if (g.nodes[n].swim) continue;
+      const bool inside = o.x + 16 > box.mins.x && o.x - 16 < box.maxs.x && o.y + 16 > box.mins.y &&
+                          o.y - 16 < box.maxs.y && o.z + 32 > box.mins.z && o.z - 24 < box.maxs.z;
+      if (inside) continue;
+      // A floor up at its top: not one beside it below, nor one far over it (e3m5's air tube's
+      // landing is the ledge at its top, not the roof a floor above).
+      if (up && (o.z < box.maxs.z - 64 || o.z > box.maxs.z + kPushOver)) continue;
+      const float ex = o.x - exit.x, ey = o.y - exit.y, ez = o.z - exit.z;
+      const float d = std::sqrt(ex * ex + ey * ey + ez * ez);
+      if (!up && ex * dx + ey * dy < 0) continue;  // ahead of its face only
+      if (d < land_d) {
+        land = static_cast<int32_t>(n);
+        land_d = d;
+      }
+    }
+    if (land < 0) continue;
+    const float height = up ? box.maxs.z - box.mins.z : 0.0f;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      if (g.nodes[n].swim || static_cast<int32_t>(n) == land) continue;
+      if (o.x + 16 < box.mins.x || o.x - 16 > box.maxs.x || o.y + 16 < box.mins.y ||
+          o.y - 16 > box.maxs.y || o.z - 24 > box.maxs.z)
+        continue;
+      if (o.z + 32 < box.mins.z) {
+        // Under it, out of reach standing: a standing jump into it from a node well inside its
+        // plan (e3m5's "Jump up here"), the push carrying him on to the landing.
+        if (!up || o.z + 32 + kPushJump < box.mins.z || o.x < box.mins.x + 8 ||
+            o.x > box.maxs.x - 8 || o.y < box.mins.y + 8 || o.y > box.maxs.y - 8)
+          continue;
+        out.push_back({static_cast<int32_t>(n), land, sb::NavKind::jump, 1.5f + height / 400});
+        continue;
+      }
+      sb::NavExtraLink e{static_cast<int32_t>(n), land, sb::NavKind::walk, 1.0f + height / 400};
+      e.teleport = true;  // walked into, then carried
       out.push_back(e);
     }
   }
@@ -629,7 +745,9 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
   sb::build_nav(out.world, out.movers, out.move, set, out.graph);
-  const std::vector<sb::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
+  std::vector<sb::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
+  const std::vector<sb::NavExtraLink> pushes = push_links(out.graph, spec, blocks);
+  teleports.insert(teleports.end(), pushes.begin(), pushes.end());
   sb::nav_add_links(out.graph, teleports);
   if (spec.brushes) {
     const std::vector<sb::NavExtraLink> ladders = ladder_links(s, out.graph, *spec.brushes);

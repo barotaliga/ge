@@ -35,6 +35,7 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 | The endpoint | `net/qw_server.hpp`, its own settings `net/qw_endpoint_cfg.hpp` | `net/q2_net_server.hpp` | its own |
 | Admin words | `net/qw_admin.hpp` | `net/q2_admin.hpp`: the modern server's `status` and its letters, kick, kickban, dumpuser, stuff, stuffcvar, printall, killserver, pickclient; `dumpents` and `listmasters` in `net/q2_game.cpp` | its own, over `engine/server/operator.hpp` |
 | A player's queries | (the mod's) | `info`, `sinfo`, `lag`, `packetdup`, `stopdl`, `nogamedata` in `net/q2_net_server.cpp` | its own |
+| Later protocols | (none) | 35 and 36: the connect's tail (`sv_maxmsglen`), the newer channel, the packed frame, the streamed and compressed signon, batched moves, the client's settings (`net/q2_net_ext.hpp`, `server/q2_wire_ext.cpp`) | its own |
 | Connect checks | the endpoint's | the strict user info, a name to show, the name cut to 15, the version probe, the forced reconnect (`sv_forcereconnect`) | its own |
 | Logins | `net/qw_login.hpp` | `net/q2_login.hpp` | its own |
 | Match rules | `net/qw_match_rules.hpp` (overtime over the mod's clock, prewar, the lock) | the engine's rules over its runner | the engine's |
@@ -93,9 +94,18 @@ our server never stops on a fault, since a mod's error is caught and the game go
 
 Quake II's ledger (`porting/shooters-edge/q2-ledger-server.md`) is the checklist; the facts of the
 operator's words, the player's queries and the connect checks are in
-`porting/shooters-edge/q2-operator.md`. Still to come there: `quit` and `recycle` with the lines
-players read (over the dedicated process's `quit`), the extended protocols 35 and 36, the game
-library's extended interface, the multi-view recorder's words and its relay protocol.
+`porting/shooters-edge/q2-operator.md`; those of the later protocols 35 and 36 in
+`porting/shooters-edge/q2-proto36-server.md`. Still to come there: `quit` and `recycle` with the
+lines players read (over the dedicated process's `quit`), the extended limits, compressed downloads
+and layouts, the game library's extended interface, the multi-view recorder's words and its relay
+protocol.
+
+Quake II's later protocols are the endpoint's (`net/q2_net_server.cpp`, the connect's tail and the
+later moves in `net/q2_net_ext.hpp`, the frame's top and the streamed signon in
+`server/q2_wire_ext.cpp`); the newer channel (30-bit sequences, a message in pieces, a one-byte
+qport) is the classic layer's channel behind fields that default to the older form
+(`plugins/classic/protocol/channel.hpp`), and the deflater that packs the signon is the engine's
+(`engine/core/deflate.hpp`).
 
 ## Labs and tests
 
