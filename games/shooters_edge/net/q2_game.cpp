@@ -405,7 +405,6 @@ struct Game {
   std::string ent_path;
   std::vector<std::string> said;
   std::string mode;        // `gamemode`'s choice for the next map ("": as it is)
-  bool drop_told = false;  // the stopped map's error handed to the core (drop_error)
   // CINEMATIC AND PICTURE LEVELS (show_level): the files still to show after the one on now, the
   // map that follows them ("" none), the `nextserver` text we set (run as ours when unchanged),
   // whether this show's `nextserver` was taken; `sv_cinematics` (0: a movie with something after it
@@ -413,6 +412,7 @@ struct Game {
   std::vector<std::string> shows;
   std::string show_map, show_next;
   bool show_taken = false, show_new_game = false, cinematics = true;
+  bool drop_told = false;  // the stopped map's error handed to the core (drop_error)
   // What the console printed and was handed on (console_lines): the rules' lines told so far.
   const sv::RulesCommon* told_rules = nullptr;
   size_t told = 0;
