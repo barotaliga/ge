@@ -350,7 +350,11 @@ void touch(const Q2Relay& r, uint64_t key, int chan, uint8_t& type, uint8_t& fla
   if (it == r.viewers.end()) return;
   const Q2RelayViewer& rec = it->second;
   if (rec.layout != Q2Layout::none || rec.target >= 0) stats[kStatLayouts] |= 1;
-  (void)chan;
+  // mvd_stats_score: the frags shown are none, the channel's number, or the followed player's own.
+  if (r.cfg.stats_score == 0)
+    stats[kStatFrags] = 0;
+  else if (r.cfg.stats_score == 1)
+    stats[kStatFrags] = static_cast<int16_t>(chan);
 }
 
 // A view of `c` for the viewer `key`, following `target` (-1: the view's own choice).

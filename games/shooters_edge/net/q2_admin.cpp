@@ -258,6 +258,10 @@ bool q2_admin(Q2NetServer& s, const std::string& line, std::string& out) {
     return true;
   }
   if (cmd == "killserver") {
+    if (s.killed) {
+      out = "No server running.\n";
+      return true;
+    }
     q2_net_shutdown(s, "Server was killed.\n", false);
     s.killed = true;
     return true;

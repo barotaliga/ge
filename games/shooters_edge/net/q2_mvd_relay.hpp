@@ -73,6 +73,7 @@ struct Q2RelayConfig {
   int snaps = 10;                            // mvd_snaps, s
   std::string admin_password;                // mvd_admin_password
   int part_filter = 0;                       // mvd_part_filter
+  int stats_score = 0;                       // mvd_stats_score: 0 none, 1 the channel, else frags
   bool filter_version = false;               // mvd_filter_version
   std::string default_map = "q2dm1";         // mvd_default_map
   std::string chase_prefix = "xv 0 yb -64";  // mvd_chase_prefix
@@ -218,6 +219,9 @@ void q2_relay_spawn(Q2Relay& r, ge::net::Transport& port, double now);
 void q2_relay_frame(Q2Relay& r, int64_t now_us);
 // Every viewer told the relay is going, every connection and channel ended.
 void q2_relay_stop(Q2Relay& r);
+// The server going away while it relays: every viewer told `text` with the disconnect (or the
+// reconnect), then the relay stopped.
+void q2_relay_farewell(Q2Relay& r, const std::string& text, bool reconnect);
 // An operator's word (`w` its words); false when it is not the relay's. `port` is where relay mode
 // starts when the word starts it.
 bool q2_relay_command(Q2Relay& r, const std::vector<std::string>& w, const std::string& line,

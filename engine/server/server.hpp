@@ -54,6 +54,7 @@
 #include <map>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "console/cvar.hpp"
@@ -232,6 +233,16 @@ struct ServerGame {
   // `map`, `changelevel`, a mod's commands); false when the game does not take it either. May be
   // null.
   bool (*console)(void* game, const std::string& line) = nullptr;
+  // The game's farewell as `quit [reason]` or `recycle [reason]` ends the server (`reason` the
+  // words after it; `restart`: recycle's, the players told to reconnect), before `destroy`. Null:
+  // `destroy` alone says goodbye.
+  void (*quit)(void* game, const std::string& reason, bool restart) = nullptr;
+  // The maps the game can load, by name (`$com_maplist`); may be null.
+  void (*maps)(const void* game, std::vector<std::string>& out) = nullptr;
+  // The game's own listening sockets for `showip` ("Server TCP" and where it is bound), appended
+  // to `out`; may be null.
+  void (*sockets)(const void* game,
+                  std::vector<std::pair<std::string, net::Address>>& out) = nullptr;
   // The game's part of a status line (`players=8 commands=…`); may be null.
   std::string (*status)(const void* game) = nullptr;
   // The game's part of the public status record (net/status.hpp) a hub or a browser asks for: its
