@@ -280,4 +280,21 @@ void add_q2_download_command(ge::console::Console& con, Remote& r) {
                   });
 }
 
+void add_q2_skins_command(ge::console::Console& con, Remote& r) {
+  con.add_command("skins", "skins: every player's model and skin read again",
+                  [&r](ge::console::Console& c, const ge::console::Args&) {
+                    const client::DemoState& st = r.demo.state;
+                    if (!r.active || r.watch || !r.q2 || st.map.empty()) {
+                      c.print("Must be in a level to load skins.");
+                      return;
+                    }
+                    r.kept = true;  // the level read again: every figure and skin drawn anew
+                    for (size_t i = 0; i < st.looks.size(); i++) {
+                      if (st.looks[i].empty()) continue;
+                      c.print("client " + std::to_string(i) + ": " + st.names[i] + "\\" +
+                              st.looks[i] + " --> " + st.looks[i]);
+                    }
+                  });
+}
+
 }  // namespace shooters_edge::net

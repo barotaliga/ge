@@ -3,12 +3,14 @@
 // the mean round trip of the last packets, whole milliseconds; `$cl_lag` the packets lost over
 // those that came, a percentage with two decimals ("1.25%", "0.00%" with nothing come); `$cl_pps`
 // the packets sent a second and `$cl_mps` the moves; `$net_uprate` and `$net_dnrate` the bytes
-// sent and received a second. The rates are the last whole second's (net/rates.hpp), stepped by
-// `remote_step`; nothing joined, each reads 0.
+// sent and received a second; `$cl_fps` the client's frames a second (one move a frame, so
+// `$cl_mps`'s figure); `$cl_numentities` the entities in the newest frame and `$cl_weaponmodel` the
+// held weapon's model (Quake II's servers). The rates are the last whole second's (net/rates.hpp),
+// stepped by `remote_step`; nothing joined, each reads 0.
 //
 // ge:summary The connection's macros: $cl_ping, $cl_lag, $cl_pps, $cl_mps, $net_uprate, $net_dnrate
 // ge:keywords cl_ping cl_lag cl_pps cl_mps net_uprate net_dnrate cl_server macros rates
-// ge:keywords remote-macros
+// ge:keywords remote-macros cl_fps cl_numentities cl_weaponmodel
 // ge:skill net console
 // ge:test tests/shooters_edge_qw_remote_macros_test.cpp
 #pragma once
