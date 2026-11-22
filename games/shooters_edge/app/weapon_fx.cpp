@@ -867,6 +867,12 @@ gr::BeamLook q2_rail_trail_look(float width_m, float radius_m, const float rgb[3
   return a;
 }
 
+void round_beam(gr::BeamLook& look) {
+  look.glow_m = 0.01f;  // the least a sheath may be, unseen at no light
+  look.glow_keys = 0;
+  look.glow_cd = 0;
+}
+
 const gr::BeamLook& rail_look() {
   static const gr::BeamLook l = [] {
     gr::BeamLook a;

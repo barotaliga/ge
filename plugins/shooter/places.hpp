@@ -47,4 +47,13 @@ const Loc* nearest_loc(const Locs& locs, Vec3f p, float range = 0, const LocSigh
 // The name of the place `p` is in: its nearest point's (within `range`, as above), or "" with none.
 std::string loc_name_at(const Locs& locs, Vec3f p, float range = 0, const LocSight& seen = {});
 
+// THE POINTS PRUNED: every point taken out whose going changes the place named at none of `spots`
+// (where a player can be: the map's open space sampled), with `range` and `seen` as above, so a
+// room marked by fifty points of one name keeps the few its edges need. A point goes only when
+// each spot it named still gets the same name from another (a spot it alone reached keeps it).
+// Tried name by name, the most-pointed name first, each name's points last to first, until a
+// pass takes none. The points kept stay in their order; the number taken out.
+int prune_locs(Locs& locs, const std::vector<Vec3f>& spots, float range = 0,
+               const LocSight& seen = {});
+
 }  // namespace ge::shooter

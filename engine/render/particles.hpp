@@ -44,6 +44,7 @@
 //   classic palette speck: its colour drifts toward its `albedo`'s grey as it ages).
 //
 // ge:summary GPU particles: a ring pool, births, the compute flight, streaks softened by depth
+// ge:keywords particle-shape additive-particles soft-dot
 // ge:keywords render particles spray particle-pool ring births compute streak soft-particles
 // ge:keywords premultiplied reactive emit_particles prepare_particles encode_particles_sim
 // ge:keywords encode_particles step_particle create_particles read_particles glow spark kelvin
@@ -121,11 +122,21 @@ void collide_particle(Particle& p, const float at[3], const float normal[3]);
 // How many hops `p` makes at most: kMaxHops, or one more for about a third (particle_types.wgsl's).
 float max_hops(const Particle& p);
 
+// A particle's shape on its quad (a streak's quad stretched along its way): a soft capsule, full
+// on its axis and gone at its rim and ends (the engine's own); a soft round dot, falling straight
+// from its middle to nothing at its rim; a hard square, the middle 5/8 of its quad at 60 %; a
+// sharp round dot, a flat disc at 60 % with a narrow soft rim. A game's classic specks name one.
+enum class ParticleShape : uint8_t { capsule, soft_dot, square, sharp_dot };
+
 struct ParticleSettings {
   uint32_t capacity = 16384;  // slots in the ring
   bool collide = false;       // particles that fall meet what the last frame drew (its depth)
   float soft_m = 0.4f;        // the depth over which a particle fades into what is behind it
   float glow = 1;             // the glowing particles' light, a share of kSparkEmissivity's
+  ParticleShape shape = ParticleShape::capsule;  // live: read each frame
+  // Live: each particle's light added to what is behind it (it glows; a dark one all but
+  // vanishes), not laid over it.
+  bool additive = false;
 };
 
 struct Particles {

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <span>
 #include <string>
@@ -23,6 +24,17 @@ namespace {
 constexpr int kNetTroubleMoves = 128;  // moves unanswered before the `net` picture shows
 
 constexpr int kClear = 255;  // the pictures' see-through colour
+
+// gl_gamma_scale_pics: each colour of `image` raised to `gamma` (its sRGB value 0..1), as the
+// world's brightness grades the 3D picture; 1 leaves it.
+void gamma_picture(ge::ui::Image& image, double gamma) {
+  if (gamma == 1 || gamma <= 0) return;
+  uint8_t table[256];
+  for (int v = 0; v < 256; v++)
+    table[v] = static_cast<uint8_t>(std::lround(255 * std::pow(v / 255.0, gamma)));
+  for (size_t i = 0; i + 3 < image.rgba.size(); i += 4)
+    for (size_t c = 0; c < 3; c++) image.rgba[i + c] = table[image.rgba[i + c]];
+}
 
 const BarPicture* picture(Q2Bar& bar, const std::string& path) {
   auto it = bar.pictures.find(path);
@@ -52,6 +64,7 @@ const BarPicture* picture(Q2Bar& bar, const std::string& path) {
         out.image.rgba = std::move(big.rgba);
         out.k = static_cast<int>(k);
       }
+      gamma_picture(out.image, bar.pics_gamma);
     }
     it = bar.pictures.emplace(path, std::move(out)).first;
   }
@@ -505,6 +518,19 @@ bool draw_graph(ge::ui::DrawList& dl, Q2Bar& bar, float f, float alpha) {
 
 bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
   const auto f = static_cast<float>(scale);
+  // gl_gamma_scale_pics: the pictures read again when the brightness laid on them changes.
+  const double gamma =
+      bar.screen != nullptr && bar.screen->gamma_pics && bar.gamma != nullptr ? *bar.gamma : 1;
+  if (gamma != bar.pics_gamma) {
+    bar.pictures.clear();
+    bar.pics_gamma = gamma;
+  }
+  // gl_bilerp_pics: 0 every picture sharp, 1 the large ones smoothed (the icons and digits under
+  // 64 x 64 kept sharp), 2 all of them.
+  const int bilerp = bar.screen != nullptr ? bar.screen->bilerp_pics : 0;
+  const auto smooth_picture = [bilerp](const BarPicture& img) {
+    return bilerp >= 2 || (bilerp == 1 && (img.width() >= 64 || img.height() >= 64));
+  };
   const float alpha =
       bar.screen != nullptr ? static_cast<float>(std::clamp(bar.screen->alpha, 0.0, 1.0)) : 1;
   bool drew = draw_lag(dl, bar, f, alpha);
@@ -549,7 +575,7 @@ bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
           op.w > 0 ? static_cast<float>(op.w) : img->width(),
           op.h > 0 ? static_cast<float>(op.h) : img->height(),
           {0, 0, static_cast<float>(img->image.width), static_cast<float>(img->image.height)},
-          op.rgba);
+          op.rgba, smooth_picture(*img));
       continue;
     }
     if (glyphs == nullptr) glyphs = picture(bar, "pics/conchars.pcx");
