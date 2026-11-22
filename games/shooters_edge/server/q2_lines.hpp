@@ -50,6 +50,15 @@ void q2_combat_point_missing(Q2Server& s, int at);
 // The first entity of class `classname` carrying `targetname` `name`, or -1.
 int q2_find_named(const Q2Server& s, const std::string& name, const char* classname);
 
+// A light ramp's first use: its light (the last `light` its target names), each other entity its
+// target names said not to be a light; none found, that is said too and the ramp left out (-1).
+int q2_ramp_light(Q2Server& s, int i);
+
+// The lines a frame after the load: each elevator's set-up (no target, a target that names
+// nothing, one that is no train) and each monster's start (a target naming both combat points and
+// others, a combattarget naming what is no combat point, a target naming nothing, placed in solid).
+void q2_start_lines(Q2Server& s);
+
 // Whether any entity on the map carries `targetname` `name`.
 bool q2_named(const Q2Server& s, const std::string& name);
 

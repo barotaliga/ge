@@ -1132,6 +1132,13 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.q2_downloads.pics = kind("allow_download_pics", "1");
     cfg.q2_downloads.others = kind("allow_download_others", "0");
     cfg.q2_nodelta = cvar("cl_nodelta", "0") != "0";
+    // Quake II's downloads over HTTP (q2_http.hpp), registered while it is the game.
+    cfg.q2_http.downloads = cvar("cl_http_downloads", "1") != "0";
+    cfg.q2_http.filelists = cvar("cl_http_filelists", "1") != "0";
+    cfg.q2_http.max_connections = std::atoi(cvar("cl_http_max_connections", "2").c_str());
+    cfg.q2_http.proxy = cvar("cl_http_proxy", "");
+    cfg.q2_http.default_url = cvar("cl_http_default_url", "");
+    cfg.q2_http.debug = cvar("cl_http_debug", "0") != "0";
     cfg.rate = std::atoi(cvar("rate", "25000").c_str());  // the loaded game's default (classic)
     cfg.msg = std::atoi(cvar("msg", "1").c_str());
     cfg.noaim = cvar("noaim", "0") == "1";

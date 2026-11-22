@@ -55,6 +55,11 @@ std::shared_ptr<const br::Map> faulty() {
       entity({{"classname", "info_null"}, {"Bogus", "x"}, {"_color", "1 0 0"}, {"ORIGIN", "1 2"}}));
   w.entities.push_back(
       entity({{"classname", "target_laser"}, {"origin", "-20 0 40"}, {"target", "nowhere"}}));
+  w.entities.push_back(entity({{"classname", "trigger_elevator"}, {"origin", "0 0 0"}}));
+  w.entities.push_back(entity({{"classname", "monster_soldier"},
+                               {"origin", "300 0 40"},
+                               {"item", "item_no_such"},
+                               {"target", "lost"}}));
   std::vector<uint8_t> bytes;
   std::string error;
   auto map = std::make_shared<br::Map>();
@@ -157,4 +162,17 @@ TEST(a_combat_point_leading_nowhere_is_said_once_and_forgotten) {
   const size_t lines = s.console.size();
   sv::q2_combat_point_missing(s, at);
   CHECK(s.console.size() == lines);
+}
+
+TEST(a_frame_on_the_elevators_and_monsters_say_what_they_lack) {
+  sv::RulesRunner r = open("0");
+  const sv::Q2Server& s = *sv::q2_of(r);
+  CHECK(said(s, "monster_soldier at (300 0 40) has bad item: item_no_such"));
+  CHECK(said(s, "trigger_elevator has no target"));
+  CHECK(said(s, "G_PickTarget: target lost not found"));
+  const auto counted = std::find(s.console.begin(), s.console.end(), "1 teams with 2 entities");
+  const auto lost = std::find_if(s.console.begin(), s.console.end(), [](const std::string& l) {
+    return l.rfind("monster_soldier can't find target lost at (300 0 ", 0) == 0;
+  });
+  CHECK(lost != s.console.end() && counted < lost);  // after the load's counts
 }
