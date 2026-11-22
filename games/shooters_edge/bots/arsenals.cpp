@@ -111,7 +111,7 @@ float first_keep_off(std::string_view model) {
   static constexpr Reach kReach[] = {
       {"progs/dog.mdl", 192},     {"progs/demon.mdl", 320},  {"progs/knight.mdl", 160},
       {"progs/hknight.mdl", 192}, {"progs/ogre.mdl", 160},   {"progs/shambler.mdl", 192},
-      {"progs/tarbaby.mdl", 224}, {"progs/zombie.mdl", 128}, {"progs/fish.mdl", 128},
+      {"progs/tarbaby.mdl", 224}, {"progs/zombie.mdl", 128},
   };
   for (const Reach& r : kReach)
     if (model == r.model) return r.keep;

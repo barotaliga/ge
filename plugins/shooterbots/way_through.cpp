@@ -225,6 +225,7 @@ void shut_crossings(WayThrough& w, const std::vector<int32_t>& barred, size_t li
   for (const WayThrough::Crossing& c : w.crossings)
     for (const int32_t b : barred)
       if (b == c.door) w.link_shut[static_cast<size_t>(c.link)] = 1;
+  for (const int32_t li : w.hatch_shut) w.link_shut[static_cast<size_t>(li)] = 1;
 }
 
 bool is_wall(const WayThrough& w, int32_t e) {
@@ -1065,6 +1066,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (const int p : w.plats) plat = plat || p == w.locked[k];
     if (plat && locked_moved(w, s, k)) w.locked_at[k] = {1e9f, 1e9f, 1e9f};
   }
+  // The drops through a floor door still resting over its hole.
+  w.hatch_shut.clear();
+  for (const MapNav::Hatch& h : nav.hatches)
+    if (dist(s.sv.edicts[static_cast<size_t>(h.door)].origin, h.rest) < 1)
+      w.hatch_shut.push_back(h.link);
   // The doors shut now that only something else opens.
   w.barred.clear();
   for (size_t k = 0; k < w.locked.size(); k++) {
@@ -1072,7 +1078,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     bool held = false;  // a key door with its key held opens to his touch
     for (const WayThrough::KeyDoor& kd : w.key_doors)
       held = held || (kd.door == w.locked[k] && (items & kd.bit) != 0);
-    if (!held) w.barred.push_back(w.locked[k]);
+    if (!held && t >= w.hopeful_until) w.barred.push_back(w.locked[k]);
   }
   // His own routes never through them either (a secret wall by its crossings, below: its sweep's
   // movers stood him still in front of it).
@@ -1080,8 +1086,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   for (const int32_t b : w.barred)
     if (!is_wall(w, b) && !is_lift(w, f, b)) f.bot.pilot.pilot.shut.push_back(b);
   f.bot.pilot.pilot.hollow = w.cars;  // and a car at rest is walked through
-  if (w.barred != w.barred_was) {     // nor onto a bridge still in
+  if (w.barred != w.barred_was || w.hatch_shut != w.hatch_shut_was) {  // nor onto a bridge still in
     w.barred_was = w.barred;
+    w.hatch_shut_was = w.hatch_shut;
     std::vector<sb::NavExtraLink>& sl = f.bot.pilot.pilot.shut_links;
     sl.clear();
     for (size_t a = 0; a < g.nodes.size(); a++) {
@@ -1099,6 +1106,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         if (b == c.door) {
           const sb::NavLink& l = g.links[static_cast<size_t>(c.link)];
           sl.push_back({c.from, l.to, l.kind, l.time_s});
+        }
+    for (const MapNav::Hatch& h : nav.hatches)  // nor through a floor door still resting
+      for (const int32_t li : w.hatch_shut)
+        if (li == h.link) {
+          const sb::NavLink& l = g.links[static_cast<size_t>(li)];
+          sl.push_back({h.from, l.to, l.kind, l.time_s});
         }
   }
   int32_t from = sb::nav_nearest(g, self);
@@ -1469,6 +1482,38 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     w.prey = -1;
     w.plan_at = -1;
   }
+  // (`complete`) STOOD STILL: no further than kWayStill in kWayStill_s with a step or a monster to
+  // go to (a ledge his route cannot leave, a pack of monsters behind bars he keeps switching
+  // between, each new one restarting its own clock): what he is on is left like any step, and
+  // the tour is worked out again without it.
+  // The clock runs on through a plan with nothing chosen (a fish out of reach of every node a
+  // moment, then back): only moving off sets it again.
+  if (w.complete && (w.still_since < 0 || dist(self, w.still_at) > kWayStill)) {
+    w.still_at = self;
+    w.still_since = t;
+  } else if (w.complete &&
+             (chase || (pick >= 0 && !way_exit(w.steps[static_cast<size_t>(pick)])))) {
+    if (t - w.still_since > kWayStill_s) {
+      w.still_since = t;
+      w.stats.left++;
+      w.stats.stood++;
+      if (chase) {
+        const size_t e = static_cast<size_t>(prey);
+        w.prey_tries[e]++;
+        w.prey_left[e] = w.prey_tries[e] >= kWayTries ? kWayForever : t + kWayRetry_s;
+        if (w.prey_tries[e] >= kWayTries) w.stats.given_up++;
+        w.prey = -1;
+      } else {
+        WayStep& st = w.steps[static_cast<size_t>(pick)];
+        st.left_until = ++st.tries >= kWayTries ? kWayForever : t + kWayRetry_s;
+        if (st.tries >= kWayTries) w.stats.given_up++;
+        if (w.log) say_way(w, f, g, s, me, self, st.node, "stood still: left");
+        pick = -1;
+      }
+      w.tour.order.clear();
+      w.plan_at = -1;
+    }
+  }
   // An exit the pilot finds no way to (one his way search takes that his routes do not) is left
   // like any other step, but after kWayNoRoute_s with no route rather than kWayGiveUp_s: the walk
   // to an exit is often longer than that.
@@ -1557,6 +1602,34 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     // doors only open from the other side): back into the water, where the swim field leads him
     // out to the map's main part.
     if (far >= 0 || w.idle_since < 0) w.idle_since = far >= 0 ? -1 : t;
+    // (`complete`) Nothing at all to do for kWayIdle_s: what was left for a while is tried again
+    // now rather than at its time (e1m1's lift button, pressed once, left while its car stood at
+    // the top: the rest of the map lay below it, and he stood up there for a minute and a half).
+    if (w.complete && far < 0 && w.idle_since >= 0 && t - w.idle_since > kWayIdle_s) {
+      bool any = false;
+      for (WayStep& st : w.steps)
+        if (st.left_until > t && st.left_until < kWayForever) {
+          st.left_until = -1;
+          any = true;
+        }
+      for (double& until : w.prey_left)
+        if (until > t && until < kWayForever) {
+          until = -1;
+          any = true;
+        }
+      for (WayStep& st : w.steps)  // and a lift's button, pressed once, again
+        if (st.kind == WayKind::button && st.ever && !st.done) {
+          st.ever = false;
+          any = true;
+        }
+      // And for a while the doors are taken as open (a plat or a lift he rode that the plan holds
+      // shut at rest, the way back down past it): his routes find out whether they are.
+      w.hopeful_until = t + kWayHopeful_s;
+      w.idle_since = -1;
+      w.plan_at = -1;
+      w.stats.retried += any ? 1 : 0;
+      w.stats.hopeful++;
+    }
     // Out of the water on the far side: the swim back is over.
     if (w.out >= 0 && !w.trapped[static_cast<size_t>(from >= 0 ? from : 0)] &&
         s.world.entities[static_cast<size_t>(me)].waterlevel == 0) {

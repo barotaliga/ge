@@ -90,6 +90,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   }
   const sv::RulesCommon& s = *c.server;
   m.nav = std::make_unique<MapNav>();
+  m.nav->hatch_drops = true;  // the campaign's floor doors open drops (map_nav.hpp)
   if (!build_map_nav(*q, c.map, quake_maps(), "info_player_start", *m.nav, error)) return false;
   MapNav& nav = *m.nav;
   em.name = c.map.name;
