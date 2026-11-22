@@ -29,6 +29,7 @@
 #include "golden.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
+#include "net/tcp_socket.hpp"
 #include "progs/file.hpp"
 #include "shooters_edge/net/qw_admin.hpp"
 #include "shooters_edge/net/qw_trial.hpp"
@@ -756,4 +757,66 @@ TEST(a_downloaded_file_is_told_the_archive_it_came_out_of) {
   }
   CHECK(told[2] == 0 && untold[2] == 3);
   std::filesystem::remove_all(root);
+}
+
+TEST(a_client_fetches_skins_from_the_server_web_address) {
+  // sv_downloadserver: the server info says `*dlserver`; our client fetches a skin it lacks from
+  // that web address (`<game folder>/skins/<skin>.pcx`) before it begins.
+  gn::TcpListener web;
+  std::string error;
+  if (!gn::tcp_listen(web, gn::loopback_v4(0), &error)) {
+    ge::test::skip("no loopback TCP socket here: " + error);
+    return;
+  }
+  const std::string base = "http://127.0.0.1:" + std::to_string(web.local.port) + "/";
+  cn::ServerConfig cfg;
+  cfg.download_server = base;
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cfg));
+  gn::Transport ct;
+  gn::open_sim_transport(ct, rig.net, gn::sim_address(1, cn::kPortClient));
+  cn::ClientConfig cc;
+  cc.name = "web";
+  cc.qport = 300;
+  std::vector<std::string> kept;
+  cc.keep_file = [&kept](const std::string&, const std::string& path,
+                         const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin*) {
+    kept.push_back(path + ":" + std::to_string(bytes.size()));
+  };
+  cn::QwClientEnd c;
+  cc.skin = "blue";
+  cn::client_start(c, ct, gn::sim_address(0, cn::kPortServer), cc, 0);
+  std::vector<gn::TcpStream> streams;
+  std::vector<std::string> asked;
+  for (int f = 0; f < 900; f++) {
+    for (gn::TcpStream in; gn::tcp_accept(web, in); in = {}) streams.push_back(in);
+    for (gn::TcpStream& t : streams) {
+      if (t.handle == -1) continue;
+      gn::tcp_pump(t);
+      std::vector<uint8_t> got;
+      gn::tcp_take_bytes(t, got);
+      const std::string req(got.begin(), got.end());
+      if (req.find("\r\n\r\n") == std::string::npos) continue;
+      const std::string path = req.substr(4, req.find(' ', 4) - 4);
+      asked.push_back(path);
+      const bool has = path.ends_with("/skins/blue.pcx");
+      std::string reply = has ? "HTTP/1.1 200 OK\r\nContent-Length: 300\r\n\r\n"
+                              : "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+      if (has) reply.append(300, 'b');
+      gn::tcp_send_bytes(t, reinterpret_cast<const uint8_t*>(reply.data()), reply.size());
+      for (int k = 0; k < 100000 && !t.out.empty(); ++k) gn::tcp_pump(t);
+      gn::tcp_close(t);
+    }
+    rig.frame();
+    cn::client_tick(c, rig.now);
+  }
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+  CHECK(std::find(kept.begin(), kept.end(), "skins/blue.pcx:300") != kept.end());
+  CHECK(std::find(asked.begin(), asked.end(), "/" + c.gamedir + ".filelist") != asked.end());
+  CHECK(c.downloaded.count("skins/blue.pcx") == 1);
+  CHECK(std::find(c.web.said.begin(), c.web.said.end(), "[HTTP] Download server at " + base) !=
+        c.web.said.end());
+  for (gn::TcpStream& t : streams) gn::tcp_close(t);
+  gn::tcp_close_listener(web);
 }
