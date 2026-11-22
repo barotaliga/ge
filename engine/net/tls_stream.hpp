@@ -19,7 +19,7 @@
 // - A SERVER for a test or a lab on loopback (`tls_server`), with a certificate made on the spot
 //   (`tls_self_signed`): the same calls carry its bytes.
 //
-// ge:summary TLS 1.2 and 1.3 over caller-carried bytes (Mbed TLS): the system's roots, a test server
+// ge:summary TLS 1.2 and 1.3 over caller-carried bytes (Mbed TLS), the system roots, a test server
 // ge:keywords tls https ssl mbedtls certificate trusted-roots ca-bundle ssl_cert_file handshake
 // ge:keywords tls_client tls_server tls_self_signed insecure
 // ge:skill net

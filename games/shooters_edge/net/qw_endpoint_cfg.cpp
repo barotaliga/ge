@@ -72,7 +72,7 @@ constexpr gs::GameRule kEndpointRules[] = {
     {"sv_downloadchunks", "The 1 KB chunks a downloading client gets a frame.", nullptr,
      "1..30: that many (30 the default)"},
     {"sv_downloadserver", "A web address clients may fetch the server's files from instead.",
-     nullptr, "empty: none (the default); a URL ending in /, or github:<owner>/<repo>"},
+     nullptr, "\"\": none (the default); TEXT: a URL ending in /, or github:<owner>/<repo>"},
     {"sv_watervis", "Whether clients are told they may see through water.", nullptr,
      "0: not told (the default); 1: told"},
     {"sv_fullspectate",
