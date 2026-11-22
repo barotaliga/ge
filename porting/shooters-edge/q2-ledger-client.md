@@ -11,8 +11,8 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 128 | 13 | 5 | 10 | 156 |
-| Client settings (cvars) | 195 | 51 | 42 | 62 | 350 |
-| Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
+| Client settings (cvars) | 196 | 51 | 41 | 62 | 350 |
+| Macros ($name in typed and bound text) | 25 | 3 | 0 | 2 | 30 |
 | Menu pages and rows | 93 | 64 | 4 | 1 | 162 |
 | Server messages the client parses (svc) | 15 | 6 | 6 | 0 | 27 |
 | Temporary entities (svc_temp_entity) | 15 | 50 | 0 | 0 | 65 |
@@ -22,14 +22,14 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Entity render bits (RF_) and view bits (RDF_) | 19 | 5 | 8 | 0 | 32 |
 | Configstrings | 8 | 8 | 0 | 0 | 16 |
 | The layout language (status bar and layouts) | 26 | 1 | 0 | 0 | 27 |
-| HUD and screen elements | 16 | 10 | 2 | 1 | 29 |
+| HUD and screen elements | 17 | 10 | 1 | 1 | 29 |
 | Messages printed to the player | 68 | 57 | 15 | 7 | 147 |
 | Demo playback and recording features | 10 | 10 | 1 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 6 | 4 | 1 | 0 | 11 |
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 12 | 6 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 7 | 6 | 4 | 0 | 17 |
-| **all** | 733 | 301 | 92 | 85 | 1211 |
+| **all** | 736 | 301 | 89 | 85 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 195, partial 51, missing 42, not-taken 62
+done 196, partial 51, missing 41, not-taken 62
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -259,7 +259,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.m_accel | `m_accel` | mouse acceleration (default 0) | done | `plugins/shooter/mouse_feel.cpp` (Quake II's meaning, `client-gaps.md` round 6) |
 | cvar.m_autosens | `m_autosens` | scale the mouse by the field of view (default 0) | done | `plugins/shooter/controls.cpp` |
 | cvar.loc_trace | `loc_trace` | 1 picks the nearest place that can be seen (default 0) | done | `games/shooters_edge/client/place_names.cpp` |
-| cvar.loc_draw | `loc_draw` | draws each place point as a marker (default 0) | missing | C45 |
+| cvar.loc_draw | `loc_draw` | draws each place point as a marker (default 0) | done | `games/shooters_edge/client/place_names.cpp` (`place_markers`), drawn by `client/world_fx.cpp`; every game (Quake's marker the player's head) |
 | cvar.loc_dist | `loc_dist` | the farthest a place counts, units (default 500) | done | `games/shooters_edge/client/place_names.cpp` |
 | cvar.cl_gun | `cl_gun` | 0 hides the held gun, 2 right, 3 left (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_gunalpha | `cl_gunalpha` | the held gun's opacity (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` into `view/hand.hpp`'s `alpha`, the hand's opacity (`view/hand.cpp`), drawn see-through by the view model pass |
@@ -557,7 +557,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 
 ## Macros ($name in typed and bound text)
 
-done 24, partial 3, missing 1, not-taken 2
+done 25, partial 3, missing 0, not-taken 2
 
 A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's value.
 
@@ -581,7 +581,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 | macro.cl_armor | `$cl_armor` | the armour stat | done | `games/shooters_edge/client/team_chat.cpp` |
 | macro.cl_weaponmodel | `$cl_weaponmodel` | the held weapon's model name | partial | `games/shooters_edge/net/qw_remote_macros.cpp`: on a Quake II server joined; a game played in the window reads "" |
 | macro.cl_numentities | `$cl_numentities` | entities in the frame | partial | `games/shooters_edge/net/qw_remote_macros.cpp`: on a server joined; a game played in the window reads 0 |
-| macro.cl_surface | `$cl_surface` | the texture name and flags in the line of sight | missing | C44 |
+| macro.cl_surface | `$cl_surface` | the texture name and flags in the line of sight | done | `games/shooters_edge/client/face_hit.cpp` (`surface_ahead`), `client/place_seen.cpp`; every game |
 | macro.gl_viewcluster | `$gl_viewcluster` | the view's visibility cluster number | not-taken | `client-gaps.md`: developer tools left out |
 | macro.gl_viewleaf | `$gl_viewleaf` | the view's leaf number (a debug build's) | not-taken | `client-gaps.md`: developer tools left out |
 | macro.com_date | `$com_date` | today's date by `com_date_format` | done | `engine/console/clock_macros.cpp` |
@@ -1092,7 +1092,7 @@ The words of the status-bar and layout programs the client runs every frame on a
 
 ## HUD and screen elements
 
-done 16, partial 10, missing 2, not-taken 1
+done 17, partial 10, missing 1, not-taken 1
 
 What the client draws in 2D over the view, in its drawing order, and the settings that govern each (the settings themselves are rows of the settings table).
 
@@ -1119,7 +1119,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 | hud.chatinput | the chat input line | "say:" or "say_team:" and the typed text at the top | done | `engine/console/talk.cpp` |
 | hud.blend | the screen tint | the player state's blend (damage red, pickup yellow, water), off by `cl_blend`/`gl_polyblend`; the extended protocol's damage tint as a frame `gl_damageblend_frac` wide | partial | the tint landed (`q2-gaps2-client.md` checked); the damage frame missing (C21) |
 | hud.viewsize | the screen-size border | a view under 100 % centred with the `backtile` picture round it | missing | C8 |
-| hud.locdraw | place markers | `loc_draw` draws each place point in the world | missing | C45 |
+| hud.locdraw | place markers | `loc_draw` draws each place point in the world | done | `games/shooters_edge/client/world_fx.cpp` (`place_markers`): the ancient head, the nearest bobbing under a white light |
 | hud.cinematic | cinematics | a `.cin` (or `.ogv`, `.mkv`, `.mp4`) full-screen with its sound, the known releases' letterbox cropped; any key skips | partial | `.cin` from the packs (`client/cinematic.cpp`); other formats and the crop missing (C25) |
 | hud.endpic | the end pictures | a cinematic name ending `.pcx` shows a still picture until a key | done | `games/shooters_edge/client/cinematic.cpp` (`q2-gaps2-client.md` checked) |
 | hud.console | the console | slides down to `con_height` at `scr_conspeed` over `conback`, `con_alpha`, `con_scale`; the program's version at the lower right; a yellow arrow prompt (`#` in `remotemode`) | done | `engine/console/view.cpp`: `con_height`, `con_speed`, `con_scale`, `remotemode`'s `#` prompt; `con_alpha` our `con_bgalpha` (`client/cvar_layers.cpp`) |
