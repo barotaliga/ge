@@ -311,6 +311,7 @@ struct DemoState {
   std::string layout;
   std::vector<int16_t> inventory;
   std::array<std::string, 32> looks;  // Quake II: each slot's model and skin ("male/grunt")
+  std::string map_checksum;           // Quake II: the level's map checksum as stated ("" none)
   float air_accelerate = 0;           // Quake II: the air acceleration the server states (0: none)
   std::vector<DemoEntity> entities;   // by number
   std::vector<DemoEntity> players;    // client, multiview: by slot (32)

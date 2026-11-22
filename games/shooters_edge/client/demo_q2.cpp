@@ -268,6 +268,8 @@ void set_string(Demo& d, int index, std::string text) {
     // Entities 1 to this are the players: kept by slot, so the rest number past `players`.
     d.max_clients = std::clamp(std::atoi(text.c_str()), 1, 32);
     s.players.assign(static_cast<size_t>(d.max_clients), DemoEntity{});
+  } else if (index == cs.max_clients + 1) {  // the map's checksum, just after the slots
+    s.map_checksum = std::move(text);
   } else if (index >= cs.models && index < cs.sounds) {
     // The world is model 1; a recording that puts it elsewhere is read by the first map named.
     const std::string map = map_of_model(text);

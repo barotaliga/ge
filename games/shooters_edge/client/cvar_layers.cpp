@@ -7,7 +7,7 @@
 // ge:keywords cl_gibs cl_noglow logfile cl_disable_particles cl_disable_explosions
 // ge:keywords cl_dlight_hacks cl_muzzlelight_time cl_muzzleflashes
 // ge:keywords sshot_format sshot_dir image_jpeg_quality_level gl_screenshot_format
-// ge:keywords gl_screenshot_quality
+// ge:keywords gl_screenshot_quality gl_screenshot_template gl_screenshot_compression
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -506,6 +506,14 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .max = 30,
          .values = "0..30: that many seconds (2.5 the default)",
          .overlap = con::Overlap::same});
+  v.add({.name = "scr_template",  // its screenshots are numbered, quake000 up
+         .fallback = "quakeXXX",
+         .flags = con::kArchive,
+         .help = "The screenshot's file name, its X's numbered.",
+         .kind = con::CvarKind::text,
+         .values = "quakeXXX: quake000, quake001 ... (the default); \"\": named by the time; "
+                   "NAME: that name, its last run of X's the first free number",
+         .overlap = con::Overlap::same});
   for (const auto& [name, ours] : {std::pair{"vid_gamma", "gamma"},
                                    std::pair{"s_volume", "volume"},
                                    std::pair{"gl_dynamic", "r_dynamic"},
@@ -523,6 +531,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
                                    std::pair{"cl_blend", "gl_polyblend"},
                                    std::pair{"gl_screenshot_format", "scr_format"},
                                    std::pair{"gl_screenshot_quality", "scr_quality"},
+                                   std::pair{"gl_screenshot_template", "scr_template"},
+                                   std::pair{"gl_screenshot_compression", "scr_compression"},
                                    std::pair{"scr_showpause", "showpause"},
                                    std::pair{"netgraph", "r_netgraph"},
                                    std::pair{"ogg_volume", "bgmvolume"},
