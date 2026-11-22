@@ -4,7 +4,8 @@
 // (the list of commands, chat among the channel's viewers and its flood rule, admin, follow, the
 // switch rules) and the operator's words list, pause, skip and end it. A relay dials our live
 // server's recorder over TCP (`mvdconnect`), says hello, starts the stream and lists its channel;
-// a wrong password destroys the connection in the server's words.
+// a wrong password destroys the connection in the server's words. A viewer's new name and leaving
+// are told to the channel, and `mvd_filter_version` hides the version trigger in the players' chat.
 //
 // ge:summary Test: Quake II's multiview relay: mvdplay, mvdconnect, the Waiting Room, viewers
 // ge:keywords test mvd-relay mvdplay mvdconnect waiting-room channel viewer chat flood follow
@@ -196,7 +197,9 @@ std::filesystem::path record(const std::filesystem::path& dir) {
   run(*r, 100);
   CHECK(r->server.clients[0].stage == cn::Q2Slot::active);
   admin(*r, "mvdrecord duel");
-  run(*r, 1200);  // about 15 s
+  run(*r, 100);
+  cn::q2_client_command(r->player, "say !version please");
+  run(*r, 1100);  // about 15 s in all
   admin(*r, "mvdstop");
   return dir / "duel.mvd2";
 }
@@ -284,6 +287,30 @@ TEST(a_recording_plays_on_a_channel_and_a_stock_client_watches_it) {
   CHECK(logged(*r, "[match] =X= Channel was killed."));
   run(*r, 300, false);
   CHECK_MSG(v.demo.state.map == "q2dm1", v.demo.state.map);  // sent to the Waiting Room
+  cn::q2_relay_stop(r->relay);
+  std::filesystem::remove_all(dir);
+}
+
+TEST(a_viewers_new_name_and_leaving_are_told_and_the_version_trigger_hidden) {
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge_q2_relay_names";
+  record(dir);
+  auto r = rig({}, dir);
+  r->relay.cfg.filter_version = true;
+  word(*r, "mvdplay -l 0 duel");
+  cn::Q2ClientEnd& v = watch(*r, "watcher");
+  cn::Q2ClientEnd& w = watch(*r, "second");
+  run(*r, 600, false);
+  CHECK_MSG(w.demo.state.map == "hall", w.demo.state.map);
+  w.cfg.name = "third";
+  cn::q2_client_userinfo(w);
+  run(*r, 40, false);
+  CHECK(printed(v, "[MVD] second changed name to third"));
+  cn::q2_client_stop(w);
+  run(*r, 40, false);
+  CHECK(printed(v, "[MVD] third disconnected"));
+  run(*r, 800, false);  // the recording's chat, its trigger made inert
+  CHECK(printed(v, "!versi0n please"));
+  CHECK(!printed(v, "!version please"));
   cn::q2_relay_stop(r->relay);
   std::filesystem::remove_all(dir);
 }

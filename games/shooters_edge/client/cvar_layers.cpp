@@ -7,7 +7,7 @@
 // ge:keywords cl_gibs cl_noglow logfile cl_disable_particles cl_disable_explosions
 // ge:keywords cl_dlight_hacks cl_muzzlelight_time cl_muzzleflashes
 // ge:keywords sshot_format sshot_dir image_jpeg_quality_level gl_screenshot_format
-// ge:keywords gl_screenshot_quality
+// ge:keywords gl_screenshot_quality gl_screenshot_template gl_screenshot_compression
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -347,7 +347,9 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   typed line to the team, where our `con_chat` 2 tells a command by its first word);
 // - its view and 2D (q2_view.hpp): `scr_scale`, `scr_draw2d`, `scr_alpha`, the lag graph's
 //   `scr_lag_*`, `cl_adjustfov`, `uf`, `cl_kickangles`; and `s_underwater` the same setting as
-//   Quake's (room_ear.hpp), on by default where Quake's is off.
+//   Quake's (room_ear.hpp), on by default where Quake's is off;
+// - its browsers: `ui_sortdemos` (`menu_demo_sort`, by name by default where ours lists the newest
+//   first) and `ui_colorservers` (`sb_colorservers`).
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its `m_accel` adds the frame's counts times the setting (held within 0..1), no time in it.
@@ -478,6 +480,24 @@ void add_q2(con::Console& c, const GameBindings& b) {
   }
   c.add_command_synonym("ogg", "music");       // its music player (engine/audio/music_console.hpp)
   c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
+  v.add({.name = "menu_demo_sort",             // its demo browser lists by name (demos_page.hpp)
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "The order DEMOS lists the recordings in.",
+         .kind = con::CvarKind::integer,
+         .min = -3,
+         .max = 3,
+         .values = "1: by name, A to Z (the default); -1: Z to A; 2: oldest first; -2: newest "
+                   "first; 3: smallest first; -3: largest first; 0: by name",
+         .overlap = con::Overlap::same});
+  v.add_synonym("ui_sortdemos", "menu_demo_sort");
+  for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)
+    v.add({.name = "adr" + std::to_string(k),
+           .fallback = "",
+           .flags = con::kArchive,
+           .help = "A server in your address book, asked whenever the server list refreshes.",
+           .kind = con::CvarKind::text,
+           .values = "\"\": none (the default); TEXT: a server's address, host:port"});
   v.add({.name = "scr_centertime",
          .fallback = "2.5",
          .flags = con::kArchive,
@@ -485,6 +505,14 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .min = 0,
          .max = 30,
          .values = "0..30: that many seconds (2.5 the default)",
+         .overlap = con::Overlap::same});
+  v.add({.name = "scr_template",  // its screenshots are numbered, quake000 up
+         .fallback = "quakeXXX",
+         .flags = con::kArchive,
+         .help = "The screenshot's file name, its X's numbered.",
+         .kind = con::CvarKind::text,
+         .values = "quakeXXX: quake000, quake001 ... (the default); \"\": named by the time; "
+                   "NAME: that name, its last run of X's the first free number",
          .overlap = con::Overlap::same});
   for (const auto& [name, ours] : {std::pair{"vid_gamma", "gamma"},
                                    std::pair{"s_volume", "volume"},
@@ -503,9 +531,12 @@ void add_q2(con::Console& c, const GameBindings& b) {
                                    std::pair{"cl_blend", "gl_polyblend"},
                                    std::pair{"gl_screenshot_format", "scr_format"},
                                    std::pair{"gl_screenshot_quality", "scr_quality"},
+                                   std::pair{"gl_screenshot_template", "scr_template"},
+                                   std::pair{"gl_screenshot_compression", "scr_compression"},
                                    std::pair{"scr_showpause", "showpause"},
                                    std::pair{"netgraph", "r_netgraph"},
-                                   std::pair{"ogg_volume", "bgmvolume"}})
+                                   std::pair{"ogg_volume", "bgmvolume"},
+                                   std::pair{"ui_colorservers", "sb_colorservers"}})
     v.add_synonym(name, ours);
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.
@@ -703,6 +734,21 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(moves, b.moves);
   else
     v.add(moves);
+  const con::CvarSpec stuff{
+      .name = "cl_ignore_stufftext",
+      .fallback = "0",
+      .flags = con::kArchive,
+      .help = "Which console lines a server you join may run on your client.",
+      .kind = con::CvarKind::integer,
+      .min = 0,
+      .max = 2,
+      .values =
+          "0: every one (the default); 1: only those stufftext-whitelist.txt names; 2: the "
+          "same, each one refused said"};
+  if (b.stuff_level != nullptr)
+    v.bind(stuff, b.stuff_level);
+  else
+    v.add(stuff);
   const std::string cap = b.frame_cap != nullptr ? ge::core::num::to_string(*b.frame_cap) : "0";
   const con::CvarSpec frames{
       .name = "r_maxfps",

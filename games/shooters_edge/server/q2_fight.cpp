@@ -141,6 +141,31 @@ void event(Q2Server& s, NetEvent ev) {
   s.out.events_total++;
 }
 
+}  // namespace
+
+void fight_dealt(Q2Server& s, int attacker, int target_entity, int points) {
+  if (attacker < 0 || attacker >= sh::kMaxClients || points <= 0) return;
+  if (target_entity == attacker + 1) return;  // his own blow on himself reports nothing
+  // One report a frame per attacker: this frame's, summed into, or a new one.
+  for (size_t i = s.out.events.size(); i-- > 0;) {
+    NetEvent& e = s.out.events[i];
+    if (e.time != s.level_time) break;
+    if (e.text == "te_damage_dealt" && e.ent == attacker + 1) {
+      e.values[0] = std::min(32767.0f, e.values[0] + float(points));
+      return;
+    }
+  }
+  NetEvent ev;
+  ev.kind = EventKind::point_effect;
+  ev.to = 1u << attacker;
+  ev.ent = attacker + 1;
+  ev.values[0] = std::min(32767.0f, float(points));
+  ev.text = "te_damage_dealt";
+  event(s, std::move(ev));
+}
+
+namespace {
+
 void sound(Q2Server& s, int ent, sh::Vec3f at, const char* sample, float volume = 1) {
   NetEvent ev;
   ev.kind = EventKind::sound;
@@ -453,6 +478,7 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
     if (armour > 0) mark_hit(s, p, 2, armour);
   }
   if (damage - saved > 0) mark_hit(s, p, 1, damage - saved);
+  fight_dealt(s, attacker, target + 1, damage);
   p.health -= float(damage - saved);
   if (p.health <= 0) {
     p.health = std::max(p.health, -999.0f);
@@ -1468,6 +1494,7 @@ void fight_kill(Q2Server& s, int slot, int killer, int weapon) {
   p.alive = false;
   p.health = std::min(p.health, 0.0f);
   p.died_at = s.level_time;
+  p.respawn_time = s.level_time + 1;  // the respawn mark: a switch to watching waits 6 s
   p.killer = killer;
   p.move.type = ge::classic::Q2Type::dead;
   screens_died(s, slot);

@@ -71,6 +71,7 @@ struct Q2Session {
   uint32_t fps_seen = 0;       // cl_maxfps's revision when it was last checked
   bool fps_told = false;       // how to turn the warning off said once
   int grab = 1;                // in_grab: 0 never in a window, 1 and 2 as ours
+  bool remap_tracks = false;   // ogg_remap_tracks (1 once Quake II registers it): take_in.hpp
   // What the last frame saw: in a game, its map ("" while it loads), the state cvars' values.
   bool joined = false;
   std::string map;

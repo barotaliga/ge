@@ -50,6 +50,7 @@ struct StillOptions {
   StillFormat format = StillFormat::kJpg;
   int quality = 90;        // 1..100, for the lossy formats
   bool subsample = false;  // JPEG's chroma halved each way (AVIF and HEIC always halve it)
+  bool stored = false;     // PNG's rows kept unpacked: the largest file, the fastest to write
 };
 
 // `rgba` (`width` x `height`, rows top to bottom) packed as `o.format`, or as the format it falls

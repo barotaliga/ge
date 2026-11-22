@@ -186,6 +186,11 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   bind("sv_mapcmd", mapcmd, cn::kServer, "A console line the server runs after each map loads.",
        CvarKind::text, -kAny, kAny,
        "\"\": none (the default); TEXT: the line, as typed at the server's console", &c.mapcmd);
+  bind("console_prefix", "", cn::kServer,
+       "The text put before each line the server's terminal prints.", CvarKind::text, -kAny, kAny,
+       "\"\": none (the default); TEXT: that text, <?> first the syslog level, @ the level's "
+       "letter, %H:%M and the rest the local time",
+       &c.console_prefix);
   bind("sv_maxspectators", spectators, latched_info,
        "How many spectator slots the server has beside the players'.", CvarKind::integer, 0,
        static_cast<double>(kMaxClients),

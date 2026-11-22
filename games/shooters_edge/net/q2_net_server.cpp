@@ -489,6 +489,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   c.told_back = (ext & kGeItemBack) != 0;
   c.told_voice = s.cfg.voice && (ext & kGeVoice) != 0;
   c.told_frames = (ext & kGeEveryFrame) != 0;
+  c.told_hits = (ext & kGeHitReports) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
   c.rate = rate_of(s, userinfo, from);
@@ -625,6 +626,7 @@ void start_signon(Q2NetServer& s, int slot) {
   opt.attract_loop = 0;
   opt.protocol = c.protocol;
   opt.minor = c.minor;
+  opt.hit_reports = c.told_hits;  // our own client draws the hit marker from it
   if (s.native != nullptr)
     sv::q2_signon_raw(c.wire, s.native->raw, slot, opt, c.signon);
   else
@@ -1739,8 +1741,15 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
     }
     if (c.stage == Q2Slot::zombie && s.now - c.heard > s.cfg.zombie_time) c = Q2NetClient{};
   }
-  if (s.killed) return;  // `killserver`: no game runs until the next map
+  if (s.killed) return;   // `killserver`: no game runs until the next map
+  if (s.game != nullptr)  // what the rules check a switch to or from watching against
+    s.game->gate = {s.cfg.password, s.cfg.spectator_password,
+                    s.cfg.max_spectators > 0 ? s.cfg.max_spectators : sh::kMaxClients};
   s.rules->frame(packets.data(), static_cast<int>(packets.size()));
+  if (s.game != nullptr)  // a seat watches as the rules say: a switch mid-match lands here
+    for (int i = 0; i < sh::kMaxClients; i++)
+      if (s.clients[i].stage == Q2Slot::active)
+        s.clients[i].spectator = s.game->clients[i].spectator;
   if (s.game != nullptr && s.cfg.antilag)  // where each player stands now, for the rewinds
     for (int i = 0; i < sh::kMaxClients; i++) {
       if (s.clients[i].stage != Q2Slot::active) {

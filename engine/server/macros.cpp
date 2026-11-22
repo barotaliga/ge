@@ -1,13 +1,14 @@
 // The dedicated server's macro list and map list (macros.hpp).
 //
 // ge:summary A dedicated server's macro list and $com_maplist
-// ge:keywords macrolist com_maplist wildcard_match
+// ge:keywords macrolist com_maplist wildcard_match console_prefix terminal_prefix
 // ge:skill net console
 // ge:test tests/server_macros_test.cpp
 #include "server/macros.hpp"
 
 #include <algorithm>
 #include <cstdio>
+#include <ctime>
 
 namespace ge::server {
 
@@ -22,6 +23,23 @@ std::string folded(std::string_view s) {
 }
 
 }  // namespace
+
+std::string terminal_prefix(std::string_view prefix, LineLevel level, const std::tm& now) {
+  if (prefix.empty()) return {};
+  std::string text(prefix);
+  const char digit = level == LineLevel::error ? '3' : level == LineLevel::warning ? '4' : '6';
+  const char letter = level == LineLevel::error ? 'E' : level == LineLevel::warning ? 'W' : 'A';
+#if !defined(_WIN32)
+  if (text.size() >= 3 && text[0] == '<' && text[1] == '?' && text[2] == '>') text[1] = digit;
+#else
+  (void)digit;
+#endif
+  if (const size_t at = text.find('@'); at != std::string::npos) text[at] = letter;
+  if (text.find('%') == std::string::npos) return text;
+  char out[256] = {};
+  if (std::strftime(out, sizeof out, text.c_str(), &now) == 0) return {};
+  return out;
+}
 
 bool wildcard_match(std::string_view pattern, std::string_view text) {
   size_t p = 0, t = 0, star = std::string_view::npos, back = 0;

@@ -56,7 +56,7 @@ std::string userinfo_of(const Q2ClientEnd& c) {
       (c.cfg.ask_moves ? kGeOtherMoves : 0u) | (c.cfg.speedjump ? kGeSpeedJumpShare : 0u) |
       (c.cfg.ask_login ? kGeAccountKey : 0u) | (c.cfg.ask_feel ? kGeMoveFeel : 0u) |
       (c.cfg.voice ? kGeVoice : 0u) | (c.cfg.ask_frames ? kGeEveryFrame : 0u) |
-      (c.cfg.ask_back ? kGeItemBack : 0u);
+      (c.cfg.ask_back ? kGeItemBack : 0u) | (c.cfg.ask_hits ? kGeHitReports : 0u);
   if (ext != 0) info_set(u, "*ge_ext", std::to_string(ext));
   return u;
 }
@@ -221,6 +221,11 @@ void run_stuffed(Q2ClientEnd& c) {
       from = end + 1;
       if (raw.empty()) continue;
       if (c.stuffed.size() < kKept) c.stuffed.push_back(raw);
+      if (c.cfg.stuff != nullptr && !ge::classic::stuff_allowed(*c.cfg.stuff, raw)) {
+        if (std::string said = ge::classic::stuff_ignored_line(*c.cfg.stuff, raw); !said.empty())
+          c.ignored.push_back(std::move(said));
+        continue;
+      }
       const std::string line = expand_settings(c, raw);  // as a console runs it
       const std::vector<std::string> w = q2_words(line);
       if (w.empty()) continue;

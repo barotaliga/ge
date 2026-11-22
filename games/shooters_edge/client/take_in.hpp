@@ -61,9 +61,11 @@ bool take_in_basedir(std::string* basedir, const std::string& root);
 
 // The console's `basedir <folder>` (no folder: the one playing, `*basedir`) and `import <folder or
 // disc image>`: each sets `*ask`, which the window takes in and opens. With `music`, its tracks
-// read from the game playing's folder (`*basedir`).
+// read from the game playing's folder (`*basedir`); with `remap` true (Quake II's
+// `ogg_remap_tracks`), the mission pack in `*game` asks the digital release's numbers.
 void add_take_in_commands(ge::console::Console& con, std::string* ask, const std::string* basedir,
-                          ge::audio::MusicConsole* music = nullptr);
+                          ge::audio::MusicConsole* music = nullptr,
+                          const std::string* game = nullptr, const bool* remap = nullptr);
 
 // A level started: the track its world's `sounds` names (`entities`, the map's entity text) loops.
 void level_music(ge::audio::MusicConsole& music, std::string_view entities);

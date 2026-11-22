@@ -169,6 +169,8 @@ TEST(the_download_switches_are_quake_iis_settings) {
     const ge::console::Cvar* v = r.c.cvars().find(std::string("allow_download_") + kind);
     CHECK_MSG(v != nullptr && v->value == "1", kind);
   }
+  // ogg_remap_tracks: on once Quake II registers it (off for every other game: q2_session.hpp).
+  CHECK(r.s.remap_tracks && r.c.cvars().find("ogg_remap_tracks")->value == "1");
   const ge::console::Cvar* others = r.c.cvars().find("allow_download_others");
   CHECK(others != nullptr && others->value == "0");
   r.c.execute("allow_download -1");

@@ -63,10 +63,11 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // every rules frame of Quake II's server (`sv_fps` past 10), numbered by the frames the level has
 // run, where a stock client gets the tenths alone (net/q2_net_server.hpp); an item taken and
 // when it comes back, svc id 119 to a spawned client when it is taken and again as it changes (the
-// client draws it coming back ahead of time, classicenhance/hologram.hpp), on either server.
+// client draws it coming back ahead of time, classicenhance/hologram.hpp), on either server; the
+// damage the player dealt (Quake II's temporary entity 128, the hit marker's) on Quake II's server.
 constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,
                    kGeSpeedJumpShare = 16, kGeAccountKey = 32, kGeMoveFeel = 64, kGeVoice = 128,
-                   kGeEveryFrame = 256, kGeItemBack = 512;
+                   kGeEveryFrame = 256, kGeItemBack = 512, kGeHitReports = 1024;
 
 struct ExtBit {
   ExtFamily family;

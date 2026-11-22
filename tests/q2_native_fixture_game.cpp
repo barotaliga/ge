@@ -19,6 +19,12 @@
 //   prints the spawn point, the box's health, `deathmatch` and how the player came in; its level
 //   file keeps the box's health and each player's body (used or not, and where), its game file
 //   whether it was an autosave.
+// - the extended interface, when the setting `fixture_ex` is 1 before it loads: it asks for the
+//   proper in-use and extra user info features; its own end of frame clears the events and counts;
+//   `hide` hides the box from every player and the box's skin is the viewer's entity number;
+//   `nosave` refuses saving; `extra` prints the connection's extra user info, `cs <n>` a
+//   configstring, `clip` the box clipped alone, `vis` the visibility kinds, `files` a file
+//   written, read back and listed, `grow` a block grown, `beep` a sound to the player alone.
 //
 // ge:summary A game library of Quake II's interface for the native host's test
 // ge:keywords game-library fixture native-host test-library m18v10
@@ -69,6 +75,13 @@ const char* came_in = "none";  // how the last player came in: "spot" or "body"
 int autosaved = 0;             // the game file read said so
 NativeCvar* deathmatch = nullptr;
 
+const NativeImportsEx* gix = nullptr;  // the extended interface, when it is on
+NativeExportsEx gex;
+int prep_frames = 0;
+bool hide_box = false;
+bool may_save = true;
+char extra_info[512] = "";
+
 NativeTrace trace_cb(const float* a, const float* lo, const float* hi, const float* b) {
   return gi.trace(a, lo, hi, b, mover, kMaskPlayer);
 }
@@ -85,6 +98,12 @@ void init() {
   game.max_edicts = kMostEntities;
   game.num_edicts = max_clients + 1;
   for (int i = 0; i < max_clients; i++) entities[i + 1].head.client = &clients[i].head;
+  if (gix != nullptr) {
+    const int offered = static_cast<int>(gi.cvar("sv_features", "0", 0)->value);
+    char want[16];
+    std::snprintf(want, sizeof want, "%d", offered & (kGmfProperInUse | kGmfExtraUserInfo));
+    gi.cvar_forceset("g_features", want);
+  }
 }
 
 void shutdown() { gi.free_tags(kTagGame); }
@@ -134,6 +153,7 @@ void spawn_entities(const char*, char* text, const char* point) {
 }
 
 int client_connect(NativeEntityHead*, char* userinfo) {
+  std::snprintf(extra_info, sizeof extra_info, "%s", userinfo + std::strlen(userinfo) + 1);
   if (std::strstr(userinfo, "\\name\\refuse") != nullptr) {
     const size_t used = std::strlen(userinfo);
     std::snprintf(userinfo + used, 512 - used, "\\rejmsg\\Go away");
@@ -244,6 +264,53 @@ void client_command(NativeEntityHead* ent) {
   } else if (std::strcmp(w, "die") == 0) {
     reinterpret_cast<Client*>(ent->client)->health = 0;
     gi.add_command_string("menu_loadgame\n");
+  } else if (gix != nullptr && std::strcmp(w, "extra") == 0) {
+    gi.cprintf(ent, 2, "extra '%s'\n", extra_info);
+  } else if (gix != nullptr && std::strcmp(w, "cs") == 0) {
+    gi.cprintf(ent, 2, "cs '%s'\n", gix->get_configstring(std::atoi(gi.argv(1))));
+  } else if (gix != nullptr && std::strcmp(w, "hide") == 0) {
+    hide_box = !hide_box;
+  } else if (gix != nullptr && std::strcmp(w, "nosave") == 0) {
+    may_save = false;
+  } else if (gix != nullptr && std::strcmp(w, "clip") == 0) {  // from the spot toward the box
+    NativeEntityHead* box = &entities[max_clients + 2].head;
+    const float a[3] = {spot[0], spot[1], spot[2]}, b[3] = {spot[0] + 200, spot[1], spot[2]};
+    const NativeTrace t = gix->clip(a, nullptr, nullptr, b, box, kMaskPlayer);
+    const NativeTrace w0 = gix->clip(a, nullptr, nullptr, b, &entities[0].head, kMaskPlayer);
+    gi.cprintf(ent, 2, "clip %d box %d world %d\n", static_cast<int>(t.fraction * 200),
+               t.ent == box ? 1 : 0, static_cast<int>(w0.fraction * 200));
+  } else if (gix != nullptr && std::strcmp(w, "vis") == 0) {
+    const float a[3] = {spot[0], spot[1], spot[2]}, far[3] = {spot[0] + 100, spot[1], spot[2]};
+    gi.cprintf(ent, 2, "vis %d %d %d\n", gix->in_vis(a, far, kVisPvs), gix->in_vis(a, far, kVisPhs),
+               gix->in_vis(a, far, kVisPvs | kVisNoAreas));
+  } else if (gix != nullptr && std::strcmp(w, "files") == 0) {
+    const auto* fsx = static_cast<const NativeFilesApi*>(gix->get_extension(kNativeFilesApi));
+    const bool unknown = gix->get_extension("NO_SUCH_API") == nullptr;
+    int32_t f = 0;
+    fsx->open_file("notes/../notes/a.txt", &f, kFsModeWrite);
+    fsx->write_file("line one\nline two\n", 18, f);
+    fsx->close_file(f);
+    const int64_t size = fsx->open_file("notes/a.txt", &f, kFsModeRead);
+    char line[64] = "";
+    fsx->read_line(f, line, sizeof line);
+    line[std::strcspn(line, "\n")] = 0;
+    const int wrong = fsx->write_file("x", 1, f);
+    fsx->close_file(f);
+    int count = 0;
+    void** list = fsx->list_files("notes", ".txt", 0, &count);
+    const char* first = list != nullptr ? static_cast<const char*>(list[0]) : "";
+    gi.cprintf(ent, 2, "files %d '%s' %d '%s' unknown %d bad '%s' missing '%s'\n",
+               static_cast<int>(size), line, count, first, unknown ? 1 : 0,
+               fsx->error_string(wrong), fsx->error_string(fsx->open_file("none.txt", &f, 0)));
+    fsx->free_file_list(list);
+  } else if (gix != nullptr && std::strcmp(w, "grow") == 0) {
+    auto* p = static_cast<char*>(gi.tag_malloc(4, kTagGame));
+    std::memcpy(p, "abc", 4);
+    p = static_cast<char*>(gix->tag_realloc(p, 4096));
+    gi.cprintf(ent, 2, "grow '%s'\n", p);
+    gi.tag_free(p);
+  } else if (gix != nullptr && std::strcmp(w, "beep") == 0) {
+    gix->local_sound(ent, nullptr, ent, 16, spark_sound, 1, 1, 0);
   } else if (std::strcmp(w, "where") == 0) {
     gi.cprintf(ent, 2, "where '%s' box %d dm %d came %s autosaved %d\n", spawn_point,
                entities[max_clients + 2].health, static_cast<int>(deathmatch->value), came_in,
@@ -324,10 +391,46 @@ void read_level(const char* file) {
   gi.linkentity(&entities[max_clients + 2].head);
 }
 
+int can_save() { return may_save ? 1 : 0; }
+
+void prep_frame() {
+  prep_frames++;
+  for (int n = 0; n < game.num_edicts; n++) entities[n].head.s.event = 0;
+}
+
+int visible_to(NativeEntityHead*, NativeEntityHead* e) {
+  return hide_box && e == &entities[max_clients + 2].head ? 0 : 1;
+}
+
+int customize_to(NativeEntityHead* viewer, NativeEntityHead* e, NativeCustomize* out) {
+  if (e != &entities[max_clients + 2].head) return 0;
+  out->s = e->s;
+  out->s.skin = static_cast<int32_t>(reinterpret_cast<Entity*>(viewer) - entities);
+  return 1;
+}
+
 }  // namespace
+
+// The extended interface, offered only when `fixture_ex` is 1 (the other tests' game has none).
+FIXTURE_EXPORT const NativeExportsEx* GetGameAPIEx(const NativeImportsEx* imports) {
+  if (gi.cvar("fixture_ex", "0", 0)->value == 0) return nullptr;
+  gix = imports;
+  gex = NativeExportsEx{};
+  gex.apiversion = 3;
+  gex.structsize = sizeof gex;
+  gex.can_save = can_save;
+  gex.prep_frame = prep_frame;
+  gex.entity_visible_to_client = visible_to;
+  gex.customize_entity_to_client = customize_to;
+  return &gex;
+}
 
 FIXTURE_EXPORT NativeExports* GetGameAPI(NativeImports* imports) {
   gi = *imports;
+  gix = nullptr;  // until the extended entry says otherwise
+  prep_frames = 0;
+  hide_box = false;
+  may_save = true;
   game = NativeExports{};
   game.apiversion = kNativeVersion;
   game.init = init;

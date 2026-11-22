@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "brush/areas.hpp"
+#include "net/address.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_native_host.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -252,10 +253,12 @@ void take_view(NativeQ2& s) {
   raw.entities.assign(kQ2Entities, Q2EntityState{});
   raw.owners.assign(kQ2Entities, 0);
   q2_sight_reset(raw.sight, h.map.get());
+  const bool proper = (native_features(h) & native::kGmfProperInUse) != 0;
   const int count = std::min(h.game->num_edicts, kQ2Entities);
   for (int n = 1; n < count; n++) {
     NativeEntityHead* e = h.entity(n);
     if ((e->svflags & native::kSvfNoClient) != 0) continue;
+    if (proper && e->inuse == 0) continue;  // the game keeps it right: one not in use is gone
     if (e->s.model[0] == 0 && e->s.effects == 0 && e->s.sound == 0 && e->s.event == 0) continue;
     if (n <= h.max_clients && !h.begun[n - 1]) continue;
     e->s.number = n;
@@ -270,13 +273,44 @@ void take_view(NativeQ2& s) {
     const NativeEntityHead* e = h.entity(i + 1);
     raw.players[i] = e->client != nullptr ? wire_player(e->client->ps) : Q2PlayerState{};
   }
-  for (int n = 0; n < h.game->num_edicts; n++) h.entity(n)->s.event = 0;
+  // The events last one frame: the game clears them itself when it has its own end of frame.
+  if (h.ex != nullptr && h.ex->prep_frame != nullptr)
+    guarded(h, [&] { h.ex->prep_frame(); });
+  else
+    for (int n = 0; n < h.game->num_edicts; n++) h.entity(n)->s.event = 0;
   for (int i = 0; i < h.max_clients && i < sh::kMaxClients; i++) {
     const NativeEntityHead* e = h.entity(i + 1);
     if (e->client == nullptr) continue;
     s.world.clients[i].numbers.frags = e->client->ps.stats[14];  // the score's stat
   }
   fill_world(s);
+}
+
+// A game's per-client calls (the extended interface at version 3), as each slot's frame is
+// written: whether the slot sees entity `n`, then the state it is to see in place of the real one.
+bool per_client(void* ctx, int slot, int n, Q2EntityState& st) {
+  NativeHost& h = *static_cast<NativeQ2*>(ctx)->host;
+  if (h.dead || h.ex == nullptr || slot >= h.max_clients) return true;
+  NativeEntityHead* viewer = h.entity(slot + 1);
+  NativeEntityHead* e = h.entity(n);
+  int keep = 1;
+  if (h.ex->entity_visible_to_client != nullptr &&
+      !guarded(h, [&] { keep = h.ex->entity_visible_to_client(viewer, e); }))
+    return true;
+  if (keep == 0) return false;
+  if (h.ex->customize_entity_to_client == nullptr) return true;
+  native::NativeCustomize rec{};
+  int yes = 0;
+  if (!guarded(h, [&] { yes = h.ex->customize_entity_to_client(viewer, e, &rec); }) || yes == 0)
+    return true;
+  if (rec.s.number != n) {  // a record of another entity: the real one is sent
+    h.s->console.push_back("the game customized entity " + std::to_string(n) +
+                           " for a client with entity " + std::to_string(rec.s.number) +
+                           "'s state");
+    return true;
+  }
+  st = wire_state(rec.s);
+  return true;
 }
 
 // The level's baselines, once its entities have settled.
@@ -362,7 +396,21 @@ void run_frame(NativeQ2& s) {
   s.frame_number++;
 }
 
-std::string userinfo_text(const NativeQ2& s, int slot, const std::string& name) {
+// An address an IPv6-blind game can read: an IPv6 client's as 198.51.100.X:PORT, X the bytes of its
+// /48 prefix folded by exclusive or.
+std::string ipv4_for_game(const std::string& address) {
+  ge::net::Address a;
+  if (!ge::net::parse_address(address, a) || a.family != ge::net::Family::ipv6) return address;
+  uint8_t x = 0;
+  for (int k = 0; k < 6; k++) x ^= a.bytes[k];
+  return "198.51.100." + std::to_string(x) + ":" + std::to_string(a.port);
+}
+
+// The user info a game's connect reads; with the extra user info (`wants` it), the connection's
+// own keys apart in `extra` (challenge, ip, major, minor, netchan, packetlen, qport, zlib) and no
+// `ip` added to the user info.
+std::string userinfo_text(const NativeQ2& s, int slot, const std::string& name, int32_t wants,
+                          std::string& extra) {
   std::string out;
   bool named = false;
   for (const auto& [k, v] : s.clients[slot].userinfo) {
@@ -381,7 +429,15 @@ std::string userinfo_text(const NativeQ2& s, int slot, const std::string& name) 
   for (const auto& [k, v] : kDefaults)
     if (out.find("\\" + std::string(k) + "\\") == std::string::npos)
       out.append("\\").append(k).append("\\").append(v);
-  if (out.find("\\ip\\") == std::string::npos) out += "\\ip\\" + s.clients[slot].address;
+  const std::string& address = s.clients[slot].address;
+  const std::string ip = (wants & native::kGmfIpv6) != 0 ? address : ipv4_for_game(address);
+  extra.clear();
+  if ((wants & native::kGmfExtraUserInfo) != 0) {
+    extra = "\\challenge\\0\\ip\\" + ip +
+            "\\major\\34\\minor\\0\\netchan\\1\\packetlen\\1390\\qport\\0\\zlib\\0";
+    return out;
+  }
+  if (out.find("\\ip\\") == std::string::npos) out += "\\ip\\" + ip;
   return out;
 }
 
@@ -499,9 +555,12 @@ void nv_connect(void* r, int slot, const std::string& name, bool, bool, const fl
     guarded(h, [&] { h.game->client_begin(e); });
     return;
   }
-  const std::string info = userinfo_text(s, slot, name);
-  char buf[512] = {};
-  std::strncpy(buf, info.c_str(), sizeof buf - 1);
+  const int32_t wants = native_features(h);
+  std::string extra;
+  const std::string info = userinfo_text(s, slot, name, wants, extra);
+  char buf[1024] = {};  // the user info, then the extra one after its zero
+  std::strncpy(buf, info.c_str(), 511);
+  std::strncpy(buf + std::strlen(buf) + 1, extra.c_str(), 511);
   int yes = 0;
   if (!guarded(h, [&] { yes = h.game->client_connect(e, buf); })) return;
   if (yes == 0) {
@@ -529,7 +588,9 @@ void nv_drop(void* r, int slot) {
   if (slot < 0 || slot >= h.max_clients) return;
   s.clients[slot].active = false;
   if (h.carried[slot]) return;  // signing on again after a level change: still in the game
-  if (h.begun[slot]) guarded(h, [&] { h.game->client_disconnect(h.entity(slot + 1)); });
+  const bool told = h.begun[slot] ||
+                    (h.connected[slot] && (native_features(h) & native::kGmfAllDisconnects) != 0);
+  if (told) guarded(h, [&] { h.game->client_disconnect(h.entity(slot + 1)); });
   h.begun[slot] = h.connected[slot] = false;
   s.raw.reliable[slot].clear();
   s.raw.datagram[slot].clear();
@@ -619,7 +680,8 @@ void nv_user_info(void* r, int slot, const std::string& key, const std::string& 
     }
   if (!found) info.emplace_back(key, value);
   if (!h.connected[slot]) return;
-  const std::string text = userinfo_text(s, slot, value);
+  std::string extra;
+  const std::string text = userinfo_text(s, slot, value, native_features(h), extra);
   char buf[512] = {};
   std::strncpy(buf, text.c_str(), sizeof buf - 1);
   guarded(h, [&] { h.game->client_userinfo_changed(h.entity(slot + 1), buf); });
@@ -687,6 +749,7 @@ NativeQ2::~NativeQ2() {
   native_forget(h);
   for (auto& [p, tag] : h.blocks) std::free(p);
   h.blocks.clear();
+  native_close_files(h);
   h.library.close();
 }
 
@@ -750,6 +813,13 @@ std::unique_ptr<NativeQ2> load_native_q2(const NativeQ2Options& opt, std::string
   for (const auto& [name, value] : own) native_setting(h, name, value, 0);
   native_setting(h, "maxclients", std::to_string(h.max_clients), native::kCvarServerInfo);
   native_setting(h, "game", opt.game, native::kCvarServerInfo | native::kCvarLatch);
+  native_setting(h, "sv_features", std::to_string(kNativeServerFeatures), native::kCvarNoSet);
+  native_setting(h, "g_features", "0", native::kCvarNoSet);
+  // The files the extended interface reads: the library's folder, then the base folder beside it.
+  h.write_dir = opt.library.parent_path();
+  h.base_dir = h.write_dir.parent_path() / "baseq2";
+  h.folders = {h.write_dir};
+  if (h.base_dir != h.write_dir) h.folders.push_back(h.base_dir);
   for (const auto& [name, value] : opt.settings)
     native_set(h, native_setting(h, name, value, 0), value, true);
   native_make_current(&h);
@@ -761,9 +831,21 @@ std::unique_ptr<NativeQ2> load_native_q2(const NativeQ2Options& opt, std::string
     h.game = nullptr;
     return nullptr;
   }
+  // The extended interface, when the library has one, before its start.
+  if (auto entry_ex =
+          reinterpret_cast<native::NativeEntryExFn>(h.library.symbol(native::kNativeEntryEx))) {
+    native_fill_imports_ex(h.imports_ex);
+    const native::NativeExportsEx* ex = entry_ex(&h.imports_ex);
+    h.ex = ex != nullptr && ex->apiversion >= 1 ? ex : nullptr;
+  }
   if (!guarded(h, [&] { h.game->init(); })) {
     error = "the game library " + file + " stopped in its start: " + h.error_text;
     return nullptr;
+  }
+  if (h.ex != nullptr && h.ex->apiversion >= 3 &&
+      (h.ex->entity_visible_to_client != nullptr || h.ex->customize_entity_to_client != nullptr)) {
+    s->raw.touch = per_client;
+    s->raw.touch_ctx = s.get();
   }
   if (h.game->edicts == nullptr || h.game->edict_size < int32_t(sizeof(NativeEntityHead)) ||
       h.game->num_edicts <= h.max_clients) {

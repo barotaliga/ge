@@ -118,6 +118,9 @@ float first_keep_off(std::string_view model) {
   return 0;
 }
 
+// Quake's zombie: only a blast puts it down for good (a lesser hit knocks it down to rise again).
+bool first_blast_only(std::string_view model) { return model == "progs/zombie.mdl"; }
+
 // Quake II's roster: every kind that hunts (not a good guy, not a figure that only answers a
 // use) is one any weapon puts down.
 int q2_monster(std::string_view model) {
@@ -165,6 +168,7 @@ BotArsenal make_first() {
   a.tables = &shooters_edge::profiles::kQ1Tables;
   a.monster = first_monster;
   a.keep_off = first_keep_off;
+  a.blast_only = first_blast_only;
   a.short_of[0] = 40;  // shells
   a.short_of[1] = 60;  // nails
   a.short_of[2] = 20;  // rockets

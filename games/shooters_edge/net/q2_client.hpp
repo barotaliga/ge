@@ -32,6 +32,7 @@
 #include <string>
 #include <vector>
 
+#include "classic/protocol/stuff_filter.hpp"
 #include "forward/forward.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -67,6 +68,9 @@ struct Q2ClientConfig {
   // How long the server may send nothing once connected before the client gives it up, s: a
   // server that quit or crashed, or a link gone, ends the game with a reason (0: never).
   double timeout = 60;
+  // What the server's stuffed lines may run (`cl_ignore_stufftext`, classic/protocol/
+  // stuff_filter.hpp); null: every one. A line dropped is said in `ignored`.
+  const ge::classic::StuffFilter* stuff = nullptr;
   // The packets shown (`showpackets`, `showdrop`): the channel prints through it (null: none).
   sp::ChannelTrace* trace = nullptr;
   // DOWNLOADS: with `fetch` on, at `precache` and before `begin` it asks the server, one file at a
@@ -104,6 +108,9 @@ struct Q2ClientConfig {
   // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 512),
   // so the window draws one coming back ahead of time (classicenhance/hologram.hpp).
   bool ask_back = false;
+  // `ask_hits`: asks our server for the damage the player dealt (`*ge_ext` bit 1024), the hit
+  // marker's (`cl_hit_markers`); a stock client is sent none of it.
+  bool ask_hits = false;
   // `cl_nodelta`: no frame is ever acknowledged, so the server sends each one whole (more bytes,
   // nothing lost to a dropped packet's delta); a server that forbids it (`sv_allow_nodelta 0`)
   // may refuse.
@@ -173,6 +180,7 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   size_t level_from = 0;
   bool recording = true;
   std::vector<std::string> stuffed;          // every line stuffed, in order (the first 256)
+  std::vector<std::string> ignored;          // the lines said for stuffed commands dropped
   std::vector<std::string> prints;           // every print's text, in order (the first 256)
   int signon_steps = 0;                      // signon commands answered
   int levels = 0;                            // server data read

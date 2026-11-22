@@ -1028,6 +1028,29 @@ TEST(join_a_game_lists_a_server_and_connects_to_it) {
   CHECK(!menu.open());
 }
 
+TEST(join_a_game_s_colours_grey_a_locked_server_and_green_a_near_one) {
+  ge::net::ServerInfo in;
+  ge::ui::Color c;
+  CHECK(!sm::ServersPage::row_colour(in, 80, c));  // far and open: the usual colour
+  CHECK(sm::ServersPage::row_colour(in, 12, c) && c.g == 1.0f && c.r == 0.0f);
+  CHECK(!sm::ServersPage::row_colour(in, -1, c));  // never answered
+  in.keys = {{"NoFake", "enabled"}};
+  CHECK(sm::ServersPage::row_colour(in, 12, c) && c.r == c.g && c.r < 0.6f);  // grey wins
+  in.keys = {{"anticheat", "1"}};
+  CHECK(sm::ServersPage::row_colour(in, 80, c) == false);
+  in.keys = {{"AntiCheat", "2"}};
+  CHECK(sm::ServersPage::row_colour(in, 80, c) && c.r == c.b);
+  in.keys = {{"needpass", "1"}};
+  CHECK(sm::ServersPage::row_colour(in, 80, c));
+  in.keys.clear();
+  in.locked = true;
+  CHECK(sm::ServersPage::row_colour(in, 80, c));
+  ge::console::Console con;
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  CHECK(con.cvars().find("sb_colorservers")->value == "0");
+}
+
 TEST(join_a_game_s_filters_hide_full_and_empty_servers_a_mode_and_a_ping_kept_as_cvars) {
   namespace gn = ge::net;
   gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});

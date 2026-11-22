@@ -1019,7 +1019,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     if (!w.seen[n] && dist(g.nodes[n].origin, self) < kWaySeen) w.seen[n] = 1;
 
   // What is done.
-  const int items = read_stats(s, me, *f.arsenal).items;
+  const sb::Stats stats_now = read_stats(s, me, *f.arsenal);
+  const int items = stats_now.items;
+  const bool blasts = sb::can_blast(stats_now);
   const auto door_open = [&](int ent) {
     for (size_t k = 0; k < w.locked.size(); k++)
       if (w.locked[k] == ent) return locked_moved(w, s, k);
@@ -1293,6 +1295,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       if (d.free || (d.flags & sh::kFlagMonster) == 0 || d.health <= 0 ||
           d.solid == sh::kSolidNot || static_cast<size_t>(e) >= w.prey_left.size() ||
           t < w.prey_left[static_cast<size_t>(e)])
+        continue;
+      // One only a blast puts down (a zombie) waits until he carries one: before that he stood
+      // knocking e1m3's down again and again for the rest of the map.
+      if (!blasts && f.arsenal->blast_only != nullptr && d.modelindex > 0 &&
+          static_cast<size_t>(d.modelindex) < s.models.size() &&
+          f.arsenal->blast_only(s.models[static_cast<size_t>(d.modelindex)]))
         continue;
       int32_t n = sb::nav_nearest(g, d.origin);
       if (n >= 0 && static_cast<size_t>(n) < nav.wet.size() && nav.wet[static_cast<size_t>(n)]) {
@@ -1808,7 +1816,8 @@ namespace {
 // A body that blocks as a box (a monster, a barrel; not a player) alive against him: its box within
 // kWayAgainst of his.
 constexpr float kWayAgainst = 8;
-bool body_against(const ge::shooterbots::BotView& s, int me) {
+// The body's edict number, or -1: none.
+int body_against(const ge::shooterbots::BotView& s, int me) {
   const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
   for (int k = s.sv.set.maxclients + 1; k < s.sv.num_edicts; k++) {
     const sh::Edict& o = s.sv.edicts[static_cast<size_t>(k)];
@@ -1818,9 +1827,9 @@ bool body_against(const ge::shooterbots::BotView& s, int me) {
     const sh::Vec3f mlo = e.origin + e.mins, mhi = e.origin + e.maxs;
     if (lo.x < mhi.x + kWayAgainst && hi.x > mlo.x - kWayAgainst && lo.y < mhi.y + kWayAgainst &&
         hi.y > mlo.y - kWayAgainst && lo.z < mhi.z + kWayAgainst && hi.z > mlo.z - kWayAgainst)
-      return true;
+      return k;
   }
-  return false;
+  return -1;
 }
 
 }  // namespace
@@ -1838,8 +1847,21 @@ void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::
   cmd.side = static_cast<int16_t>((phase & 1) ? 400 : -400);
   // Held up by a body (a monster, a barrel), he steps round it but never jumps onto it: a jump
   // there left him standing on a pack of soldiers' heads in base1, as no person would.
-  if (!body_against(s, me) && static_cast<int>((t - w.still_since) * 4) % 4 == 0)
+  const int body = body_against(s, me);
+  if (body < 0 && static_cast<int>((t - w.still_since) * 4) % 4 == 0)
     cmd.buttons |= sh::kButtonJump;
+  // Held up by a monster that is no fight of his (a zombie walking its beat in e1m3's corridor,
+  // never his target): shot down out of the way, as a person would, while he steps round it.
+  if (body >= 0 && (s.sv.edicts[static_cast<size_t>(body)].flags & sh::kFlagMonster) != 0) {
+    const sh::Edict& b = s.sv.edicts[static_cast<size_t>(body)];
+    const double dx = b.origin.x - e.origin.x, dy = b.origin.y - e.origin.y;
+    const double dz = (b.origin.z + (b.mins.z + b.maxs.z) * 0.5) - (e.origin.z + 22);
+    const double flat = std::sqrt(dx * dx + dy * dy);
+    cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
+    cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(dz, flat) * (180.0 / ge::core::kPi));
+    cmd.buttons |= sh::kButtonAttack;
+    w.shots++;
+  }
 }
 
 bool way_touch(const WayThrough& w, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd) {

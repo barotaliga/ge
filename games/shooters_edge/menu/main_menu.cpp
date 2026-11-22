@@ -1148,8 +1148,8 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
           if (it.choices[i] == was) it.choice = static_cast<int>(i);
         continue;
       }
-      if (e->id == "name") {
-        const std::string name = host_value(host, "name");
+      if (e->id == "name" || e->page == "addresses") {  // a text cvar shown beside its row
+        const std::string name = host_value(host, e->needs);
         it.text = name.empty() ? std::string(e->text) : std::string(e->text) + "  " + name;
         continue;
       }

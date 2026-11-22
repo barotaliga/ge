@@ -911,6 +911,12 @@ bool info_safe(const std::string& v) { return v.find_first_of("\\\";") == std::s
 native::NativeCvar* c_cvar(const char* name, const char* value, int flags) {
   NativeHost& h = *g_host;
   if (name == nullptr || value == nullptr) return nullptr;
+  if ((flags & ~31) !=
+      0) {  // only archive, user info, server info, no-set and latch are the game's
+    h.s->console.push_back(std::string("Game attempted to set extended flags on '") + name +
+                           "', masked out.");
+    flags &= 31;
+  }
   const bool info = (flags & (native::kCvarUserInfo | native::kCvarServerInfo)) != 0;
   if (info && (!info_safe(name) || !info_safe(value))) return nullptr;
   return &native_setting(h, name, value, flags).rec;
@@ -944,7 +950,137 @@ void c_add_command_string(const char* text) {
 
 void c_debug_graph(float, int) {}
 
+// --- the extended interface ---
+
+// A sound to one client alone, on its own entity: the place, the source, the volume, the
+// attenuation and the delay are not sent (the client hears it as its own).
+void x_local_sound(NativeEntityHead* target, const float*, NativeEntityHead*, int channel,
+                   int index, float, float, float) {
+  NativeHost& h = *g_host;
+  const int slot = slot_of(h, target);
+  if (slot < 0 || !h.connected[slot]) return;
+  const int entchan = ((slot + 1) << 3) | (channel & 7);
+  const std::vector<uint8_t> b = {kSvcSound, 8, static_cast<uint8_t>(index),
+                                  static_cast<uint8_t>(entchan & 0xFF),
+                                  static_cast<uint8_t>((entchan >> 8) & 0xFF)};
+  put((channel & kChanReliable) != 0 ? h.s->raw.reliable[slot] : h.s->raw.datagram[slot], b);
+}
+
+const char* x_get_configstring(int index) {
+  NativeHost& h = *g_host;
+  if (index < 0 || index >= kQ2ConfigStrings || size_t(index) >= h.s->raw.config.size()) {
+    h.error_text = "PF_GetConfigstring: bad index: " + std::to_string(index);
+    leave(h);
+  }
+  return h.s->raw.config[size_t(index)].c_str();
+}
+
+// A trace against `ent` alone: the world's model for entity 0; a brush or trigger entity's own
+// model by its shape (turned with it); anything else its box, whatever its solidity. The mask goes
+// to the brushes as it is; the answer always names `ent`.
+NativeTrace x_clip(const float* start, const float* mins_in, const float* maxs_in, const float* end,
+                   NativeEntityHead* ent, int mask) {
+  NativeHost& h = *g_host;
+  static const float kZero[3] = {0, 0, 0};
+  const float* mins = mins_in != nullptr ? mins_in : kZero;
+  const float* maxs = maxs_in != nullptr ? maxs_in : kZero;
+  NativeTrace t{};
+  const int n = h.number_of(ent);
+  const uint32_t model =
+      n > 0 && (ent->solid == native::kSolidBsp || ent->solid == native::kSolidTrigger)
+          ? brush_model(h, ent)
+          : 0;
+  if (n <= 0) {
+    t = brush_trace(h, 0, kZero, start, mins, maxs, end, mask);
+  } else if (model != 0) {
+    sh::Vec3f angles;
+    t = turned_angles(ent, angles)
+            ? turned_trace(h, model, ent->s.origin, angles, start, mins, maxs, end, mask)
+            : brush_trace(h, model, ent->s.origin, start, mins, maxs, end, mask);
+  } else {
+    t.fraction = 1;
+    std::memcpy(t.endpos, end, sizeof t.endpos);
+    t.surface = &h.no_surface;
+    const sh::Vec3f o = vec(ent->s.origin);
+    const sh::Vec3f bl = {o.x + ent->mins[0], o.y + ent->mins[1], o.z + ent->mins[2]};
+    const sh::Vec3f bh = {o.x + ent->maxs[0], o.y + ent->maxs[1], o.z + ent->maxs[2]};
+    sh::Vec3f normal;
+    const float f = sweep_box(vec(start), vec(end), vec(mins), vec(maxs), bl, bh, normal);
+    if (f >= 0) {
+      t.fraction = f;
+      if (f == 0) {
+        t.startsolid = 1;
+        sh::Vec3f n2;
+        t.allsolid = sweep_box(vec(end), vec(end), vec(mins), vec(maxs), bl, bh, n2) == 0 ? 1 : 0;
+      }
+      for (int k = 0; k < 3; k++) t.endpos[k] = start[k] + f * (end[k] - start[k]);
+      const float nn[3] = {normal.x, normal.y, normal.z};
+      fill_plane(t.plane, nn, nn[0] * t.endpos[0] + nn[1] * t.endpos[1] + nn[2] * t.endpos[2]);
+      t.contents =
+          (ent->svflags & native::kSvfDeadMonster) != 0 ? kContentsDeadMonster : kContentsMonster;
+    }
+  }
+  t.ent = ent != nullptr ? ent : h.entity(0);
+  return t;
+}
+
+// Whether `b` is in the visible (kind 0) or hearable (kind 1) set of `a`, the doors' areas asked
+// too unless `kVisNoAreas` is added.
+int x_in_vis(const float* a, const float* b, int kind) {
+  NativeHost& h = *g_host;
+  if (!h.map) return 1;  // a map of clip hulls: every point in every set
+  const int32_t x = cluster_at(h, a), y = cluster_at(h, b);
+  if (x < 0 || y < 0) return 0;
+  const bool in = (kind & native::kVisPhs) != 0 ? br::cluster_hears(*h.map, x, y)
+                                                : br::cluster_sees(*h.map, x, y);
+  if (!in) return 0;
+  return (kind & native::kVisNoAreas) != 0 || area_joined(h, a, b) ? 1 : 0;
+}
+
+const void* x_get_extension(const char* name) {
+  if (name != nullptr && std::strcmp(name, native::kNativeFilesApi) == 0) return native_files_api();
+  return nullptr;
+}
+
+// A block grown or shrunk, its tag kept (what it grows by is not cleared); 0 bytes frees it. A new
+// block must come from `tag_malloc`, which gives it its tag.
+void* x_tag_realloc(void* p, size_t size) {
+  NativeHost& h = *g_host;
+  if (p == nullptr) {
+    if (size == 0) return nullptr;
+    fail(h, "PF_TagRealloc: untagged allocation not allowed");
+  }
+  const auto at = h.blocks.find(p);
+  if (at == h.blocks.end()) fail(h, "the game resized memory it was never given");
+  if (size == 0) {
+    c_tag_free(p);
+    return nullptr;
+  }
+  const int tag = at->second;
+  h.blocks.erase(at);
+  void* q = std::realloc(p, size);
+  if (q == nullptr) fail(h, "out of memory for the game");
+  h.blocks[q] = tag;
+  return q;
+}
+
 }  // namespace
+
+int32_t native_features(NativeHost& h) {
+  const NativeSetting* c = h.find_setting("g_features");
+  return c != nullptr ? static_cast<int32_t>(std::atoi(c->value.c_str())) : 0;
+}
+
+void native_fill_imports_ex(native::NativeImportsEx& t) {
+  t.apiversion = native::kNativeVersionEx;
+  t.structsize = sizeof(native::NativeImportsEx);
+  t.local_sound = x_local_sound;
+  t.get_configstring = x_get_configstring;
+  t.clip = x_clip;
+  t.in_vis = x_in_vis;
+  t.get_extension = x_get_extension;
+  t.tag_realloc = x_tag_realloc;
+}
 
 NativeSetting* NativeHost::find_setting(const std::string& name) {
   for (NativeSetting& c : settings)
@@ -1031,6 +1167,7 @@ void native_split(NativeHost& h, const std::string& line) {
 }
 
 void native_make_current(NativeHost* h) { g_host = h; }
+NativeHost* native_current() { return g_host; }
 
 void native_fill_imports(native::NativeImports& t) {
   t.bprintf = c_bprintf;

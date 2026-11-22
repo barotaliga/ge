@@ -1423,6 +1423,25 @@ TEST(at_sv_fps_40_our_client_gets_every_frame_and_a_stock_one_the_tenths) {
   CHECK(o.stage == cn::ClientStage::active && k.stage == cn::ClientStage::active);
 }
 
+// Our client asks for the damage it dealt (`*ge_ext` bit 1024) and its frames carry the hit
+// report; a stock client's never do.
+TEST(our_client_is_sent_the_hit_report_and_a_stock_one_is_not) {
+  auto r = rig({});
+  cn::Q2ClientConfig ours, stock;
+  ours.name = "eve";
+  ours.ask_hits = true;
+  stock = ours;
+  stock.name = "bob";
+  stock.ask_hits = false;
+  cn::Q2ClientEnd& o = join(*r, ours);
+  cn::Q2ClientEnd& k = join(*r, stock);
+  run(*r, 60);
+  CHECK_MSG(o.stage == cn::ClientStage::active && k.stage == cn::ClientStage::active,
+            o.refused + k.refused);
+  CHECK(r->server.clients[0].told_hits && !r->server.clients[1].told_hits);
+  CHECK(r->server.clients[0].wire.opt.hit_reports && !r->server.clients[1].wire.opt.hit_reports);
+}
+
 TEST(a_frame_carries_the_count_held_back_before_it) {
   auto r = rig({});
   run(*r, 20);

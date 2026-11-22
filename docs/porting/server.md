@@ -111,8 +111,10 @@ Quake II's ledger (`porting/shooters-edge/q2-ledger-server.md`) is the checklist
 operator's words, the player's queries and the connect checks are in
 `porting/shooters-edge/q2-operator.md`; those of the later protocols 35 and 36 in
 `porting/shooters-edge/q2-proto36-server.md`; those of the general console words and the
-shutdown in `porting/shooters-edge/q2-console-words-facts.md`. Still to come there: the extended
-limits, compressed downloads and layouts, the game library's extended interface.
+shutdown in `porting/shooters-edge/q2-console-words-facts.md`; those of the game library's extended
+interface in `porting/shooters-edge/q2-game-api-ex-facts.md`; those of the recorder's dummy and the
+relay's lines in `porting/shooters-edge/q2-mvd-dummy-facts.md`. Still to come there: the extended
+limits, compressed downloads and the recorder's dummy.
 
 The dedicated process (`engine/server/main.cpp`) gives every game `quit [reason]` and `recycle
 [reason]` (the words joined by spaces, handed to the game's `ServerGame::quit` before it closes;
@@ -130,6 +132,20 @@ kind by its own setting (`sv_download_textures` for textures and skies, `sv_down
 the end that the file size differs, and send a downloading client reliable data alone. The connect
 answer names `sv_downloadserver`'s web copy and the map. A long rcon answer comes in packets of
 1384 bytes, whole lines where they fit; a wrong password is noted without the guess.
+
+A hosted game library with the extended interface (`server/q2_native.cpp`, the calls in
+`q2_native_calls.cpp` and `q2_native_files.cpp`) is found by its second entry point and handed our
+table at version 3: a sound to one client, a configstring read, a trace against one entity, the
+visibility test of a chosen kind, a block grown under its tag, and the file extension (loose files
+under the game's folder then the base folder; packs and compressed files are not offered). Its
+answers are taken: whether it may be saved, its own end of frame in place of the server's event
+clearing, and at version 3 what each client sees of each entity, through `Q2Raw::touch` as each
+client's frame is written. `sv_features` offers what our server honours (proper in-use, every
+disconnect, enhanced saves, the extra user info, IPv6 addresses, the index lists' overflow); the
+client number, the recorder's dummy, a variable frame rate and the protocol extensions are not
+offered. The dedicated terminal prints `console_prefix` before each line; a relay tells a channel a
+viewer's new name and leaving, and with `mvd_filter_version` hides the version trigger in the
+players' chat.
 
 What exists only in the reference's debug builds (`fs_stats`, `sv_debug`, `sv_pad_packets`,
 `mvd_shownet`, `com_debug_break`, the file fuzzing settings, the library's debug drawing) is not
