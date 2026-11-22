@@ -20,6 +20,7 @@
 #include "shooters_edge/net/q2_remote.hpp"
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/net/qw_login.hpp"
+#include "shooters_edge/net/qw_remote_macros.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
 
 namespace shooters_edge::net {
@@ -835,6 +836,7 @@ void user_info_step(Remote& r) {
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
   if (r.watch) return watch_step(r, said);
+  remote_rates_step(r, wall_s);  // $cl_pps and the other rates (qw_remote_macros.hpp)
   user_info_step(r);
   if (r.q2) {
     const RemoteStep step = q2_remote_step(r, wall_s, said);
@@ -1029,8 +1031,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   using Con = ge::console::Console;
   using Args = ge::console::Args;
   client::add_qw_ignore(con, r.ignore, r.demo.state);
-  // $cl_server: the server joined as it was asked for ("" when none is).
-  con.add_macro("cl_server", [&r] { return r.active ? r.server_name : std::string(); });
+  add_remote_macros(con, r);  // $cl_server, $cl_ping, $cl_lag and the rates
   r.setting = [&con](const std::string& name) {
     if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;
     if (const ge::console::Synonym* s = con.cvars().synonym(name))

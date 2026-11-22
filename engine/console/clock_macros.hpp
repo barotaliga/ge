@@ -7,7 +7,7 @@
 //
 // ge:summary The clock's macros: $com_date, $com_time, $com_uptime, $com_uptime_long, $random
 // ge:keywords macros com_date com_time com_date_format com_time_format com_uptime uptime
-// ge:keywords com_uptime_long random clock time-of-day
+// ge:keywords com_uptime_long random clock time-of-day level_clock tenths_clock
 // ge:skill console
 // ge:test tests/console_more_test.cpp
 #pragma once
@@ -32,5 +32,10 @@ void add_clock_macros(Console& con, Clock clock);
 // How long `seconds` is in the two uptime forms.
 std::string uptime_short(double seconds);
 std::string uptime_long(double seconds);
+// A level's time as a macro says it (`$cl_timer`): `M:SS` under an hour, else `H:M:SS`, the
+// minutes never padded ("4:05", "1:4:05").
+std::string level_clock(double seconds);
+// A position to the tenth (`$cl_demopos`): `M:SS.T` ("3:07.4"), the minutes running past 59.
+std::string tenths_clock(double seconds);
 
 }  // namespace ge::console

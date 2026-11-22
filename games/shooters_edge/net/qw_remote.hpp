@@ -74,6 +74,7 @@
 #include "console/console.hpp"
 #include "console/talk.hpp"
 #include "input/state.hpp"
+#include "net/rates.hpp"
 #include "net/transport.hpp"
 #include "shooter/aim_turn.hpp"
 #include "shooter/predict.hpp"
@@ -171,6 +172,7 @@ struct Remote {
   // The window's `topcolor` and `bottomcolor` last seen: a change of them is told the server.
   std::string seen_top, seen_bottom;
   sp::ChannelTrace trace;  // showpackets, showdrop: the channel's lines (add_remote_commands)
+  ge::net::Rates rates;    // $cl_pps, $cl_mps, $net_uprate, $net_dnrate (qw_remote_macros.hpp)
   // Lerp: the last two frames' entities as read (by number), before anything drawn moved them.
   std::vector<client::DemoEntity> ents_old, ents_new;
   std::vector<client::DemoEntity> players_old, players_new;  // Quake II's players, the same way
