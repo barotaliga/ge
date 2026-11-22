@@ -812,8 +812,7 @@ int run_main(int argc, char** argv) {
   bool attract_asked = false;  // one was asked for and has not started yet
   size_t attract_next = 0;     // the next one's place in the list
   bool attract_waits = false;  // one ended under the menu: the next once the menu closes
-  // Until the world is the demo's own level the last frame stays; the start's console waits for the
-  // demo to be seen (`demo_shown`).
+  // The last frame stays until the world is the demo's level; the console waits for `demo_shown`.
   bool demo_world = false;
   bool demo_shown = false;
   // A demo's first frames come before it places the player: seen only kDemoSettle s into its level,
@@ -916,7 +915,8 @@ int run_main(int argc, char** argv) {
   std::string folder_ask;
   cl::InstallAsk install_ask =
       cl::ask_install(*window, args, measured);  // -classic <id>, none kept
-  cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music);
+  cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music, &args.game,
+                           &game_cvars.q2.remap_tracks);
   cl::add_games_command(console, installs, folder_ask);  // `games`: the installs found, `games <n>`
   // A GAME SWITCHED SHOWS ITS LOADING: a console line and a frame before each long step of
   // `open_folder`, so the window never looks hung; the new game's look once its pictures are in.
