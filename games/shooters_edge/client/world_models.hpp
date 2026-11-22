@@ -355,6 +355,12 @@ struct InPlace {
   bool power_shells = false, item_pulse = false;
   // cl_nobob: an item the game marks to float (Quake II's bob bit) drawn still.
   bool items_still = false;
+  // Quake II's model light (classic/q2_fx_switches.hpp; the look's `model_light`): every model's
+  // light times `light`; `flat` (gl_dotshading 0) lit evenly, no side brighter; `roll_hack`
+  // (cl_rollhack) every other player's figure (not `self`, the player's own) leaning the other way.
+  double light = 1;
+  bool flat = false, roll_hack = false;
+  int self = 0;
 };
 
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a

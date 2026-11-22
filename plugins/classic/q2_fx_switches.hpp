@@ -43,6 +43,17 @@
 //   - `gl_waterwarp` 1: the whole 3D view rippled while the eye is under a liquid
 //     (render/post.hpp's PostRipple), the HUD not;
 //   - `gl_fog` 0: no fog at all, neither the map's nor the `fog` command's.
+//   - THE LIGHT: `gl_modulate_world` and `gl_modulate_entities` each times `gl_modulate`, the
+//     first on the walls' light, the second on the models' (the held weapon's too);
+//     `gl_doublelight_entities` 1 lays the models' share on them twice (nothing at the defaults);
+//     `gl_coloredlightmaps` the walls' light's colour (1 as baked, 0 grey by its luminance);
+//     `gl_dotshading` 0 lights a model evenly, 1 from its fixed direction (up to twice the light
+//     on the side facing it); `cl_lerp_lightstyles` 1 glides a flickering light from letter to
+//     letter, 0 steps it ten times a second; `gl_dlight_falloff` 1 fades a dynamic light on
+//     the walls to nothing 51.2 units short of its reach, 0 cuts it off 64 short (another game's
+//     -1: straight to its reach);
+//   - `cl_rollhack` 1: the other players' figures lean the other way as they strafe (the
+//     game's own renderer's sign), never the player's own.
 //
 // ge:summary Quake II's effect switches: specks, explosions, lights and muzzle flashes left out
 // ge:keywords q2 cl_disable_particles cl_disable_explosions cl_dlight_hacks cl_muzzlelight_time
@@ -50,7 +61,9 @@
 // ge:keywords cl_railtrail_type cl_railtrail_time cl_railcore_color cl_railspiral_color q2_colour
 // ge:keywords cl_hit_markers scr_hit_marker_time hit-marker q2_hit_marker_alpha q2_speck_scale
 // ge:keywords gl_partscale gl_partstyle gl_partshape gl_beamstyle gl_drawsky gl_bilerp_skies
-// ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog
+// ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_modulate_world
+// ge:keywords gl_modulate_entities gl_doublelight_entities gl_coloredlightmaps gl_dotshading
+// ge:keywords cl_lerp_lightstyles cl_rollhack
 // ge:skill classic shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #pragma once
@@ -89,6 +102,14 @@ struct Q2FxSwitches {
   double anisotropy = 0;                     // gl_anisotropy (0: the renderer's own)
   bool water_warp = false;                   // gl_waterwarp
   bool fog = true;                           // gl_fog
+  double modulate_world = 1;                 // gl_modulate_world
+  double modulate_entities = 1;              // gl_modulate_entities
+  bool double_light = false;                 // gl_doublelight_entities (Quake II's 1)
+  bool dot_shading = true;                   // gl_dotshading
+  double lightmap_saturation = 1;            // gl_coloredlightmaps
+  bool lerp_styles = false;                  // cl_lerp_lightstyles
+  bool roll_hack = false;                    // cl_rollhack (Quake II's 1)
+  int dlight_falloff = -1;                   // gl_dlight_falloff (-1: the renderer's own)
 };
 
 // gl_partscale's share of a speck's own size `depth_units` in front of the eye: 1 at the default

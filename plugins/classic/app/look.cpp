@@ -833,6 +833,9 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   base.saturation = q2.saturation;
   base.invert = q2.invert;
   if (q2.anisotropy > 0) base.anisotropy = static_cast<int>(std::lround(q2.anisotropy));
+  base.lightmap_saturation = q2.lightmap_saturation;  // gl_coloredlightmaps
+  base.lerp_styles = q2.lerp_styles;                  // cl_lerp_lightstyles
+  if (q2.dlight_falloff >= 0) base.dlight_falloff = q2.dlight_falloff == 0 ? 2 : 1;
   base.picmip = std::clamp(picture.picmip, 0, 4);  // gl_picmip
   base.fullbright = picture.fullbright;            // r_fullbright
   if (picture.lightmap_only) {                     // r_lightmap: grey faces, the light alone
@@ -841,7 +844,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   }
   if (look == Look::classic) {
     base.mode = ba::Mode::classic;
-    base.classic_light = light_scale(picture);                      // intensity, gl_modulate
+    base.classic_light = world_light_scale(picture);  // intensity, gl_modulate (_world)
     base.classic_lift = std::clamp(picture.light_lift, -1.0, 1.0);  // gl_brightness
     if (!picture.dynamic) base.dynamic_strength = 0;  // r_dynamic 0: no moment's light
     base.lighting = ba::Lighting::lightmaps;
@@ -851,8 +854,8 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   } else {
     base.mode = ba::Mode::v2;
     base.lighting = ba::Lighting::lights;
-    base.brightness *= light_scale(picture);  // intensity, gl_modulate: the map's light
-    base.strength *= light_scale(picture);
+    base.brightness *= world_light_scale(picture);  // intensity, gl_modulate: the map's light
+    base.strength *= world_light_scale(picture);
     base.crisp = crisp_textures(picture, look);  // gl_texturemode, else filtered
     base.dynamic_strength = picture.dynamic ? picture.fx_lights : 0;
     base.lava_glow = picture.lava_glow;
@@ -899,6 +902,21 @@ gr::PostSettings post_settings(Look look, const Picture& picture) {
   // painted dark, and the toe took their blues and greys to brown.
   s.toe = false;
   return s;
+}
+
+double world_light_scale(const Picture& picture) {
+  return light_scale(picture) * std::max(picture.q2fx.modulate_world, 0.0);
+}
+
+double model_light(const Picture& picture, Look look) {
+  const ge::classic::Q2FxSwitches& q2 = picture.q2fx;
+  const double mod = std::max(picture.light_modulate, 0.0);
+  const double once = mod * std::max(q2.modulate_entities, 0.0);
+  const double total = q2.double_light ? once * once : once;
+  if (look == Look::classic) return total;  // the classic models take no other modulate
+  // The modern look's models are lit at the world's brightness, its modulate in it already.
+  const double world = mod * std::max(q2.modulate_world, 0.0);
+  return world > 0 ? total / world : 0;
 }
 
 double light_scale(const Picture& picture) {

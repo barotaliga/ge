@@ -667,6 +667,13 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("gl_fog", "0", con::Source::local);
   CHECK(fx.part_shape == 2 && fx.additive_parts && fx.round_beams && !fx.draw_sky);
   CHECK(fx.saturation == 1 && fx.anisotropy == 16 && fx.water_warp && !fx.fog);
+  // The light's switches, Quake II's defaults: the models lit twice, shaded, the other players'
+  // lean the game's own, the soft falloff.
+  CHECK(fx.double_light && fx.dot_shading && fx.roll_hack && fx.dlight_falloff == 1);
+  CHECK(fx.modulate_world == 1 && fx.modulate_entities == 1 && !fx.lerp_styles);
+  v.set("gl_coloredlightmaps", "0.25", con::Source::local);
+  v.set("cl_lerp_lightstyles", "1", con::Source::local);
+  CHECK(fx.lightmap_saturation == 0.25 && fx.lerp_styles);
   v.set("cl_beginmapcmd", "record", con::Source::local);
   v.set("cl_autopause", "0", con::Source::local);
   CHECK(w.game.q2.begin_cmd == "record" && !w.game.q2.autopause);
@@ -680,6 +687,8 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(w.picture.q2fx.rail_type == 0 && w.picture.q2fx.core_colour == "red");
   CHECK(w.picture.q2fx.part_scale == 0 && w.picture.q2fx.part_shape == -1);  // the engine's own
   CHECK(w.picture.q2fx.draw_sky && w.picture.q2fx.fog && w.picture.q2fx.anisotropy == 0);
+  CHECK(!w.picture.q2fx.double_light && !w.picture.q2fx.roll_hack);
+  CHECK(w.picture.q2fx.dlight_falloff == -1 && w.picture.q2fx.lightmap_saturation == 1);
   CHECK(w.game.q2.begin_cmd == "record" && w.game.q2.autopause && w.game.q2.timescale == 1);
   CHECK(v.find("cl_beginmapcmd") != nullptr && v.find("sv_running") == nullptr);
   CHECK(v.clashes().empty());

@@ -978,7 +978,11 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .bubbles_share = f.picture->bubbles_share,
                            .power_shells = f.picture->power_shells,
                            .item_pulse = f.picture->item_pulse && !f.picture->no_glow,
-                           .items_still = f.picture->items_still};
+                           .items_still = f.picture->items_still,
+                           .light = look::model_light(*f.picture, lk),
+                           .flat = !f.picture->q2fx.dot_shading,
+                           .roll_hack = f.picture->q2fx.roll_hack,
+                           .self = fx.has_self ? fx.self.entity : 0};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,
