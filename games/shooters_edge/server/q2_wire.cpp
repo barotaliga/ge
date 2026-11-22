@@ -1038,4 +1038,12 @@ void q2_write_player(std::vector<uint8_t>& out, const Q2PlayerState& from,
   write_player(o, from, to);
 }
 
+bool q2_write_effect(std::vector<uint8_t>& out, const NetEvent& e) {
+  if (e.kind != EventKind::point_effect && e.kind != EventKind::trail_effect) return false;
+  Out o{out};
+  const size_t before = out.size();
+  if (!write_flash(o, e)) write_temp_entity(o, e);
+  return out.size() > before;
+}
+
 }  // namespace shooters_edge::server

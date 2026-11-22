@@ -19,8 +19,9 @@
 // the reliable channel, in order: the frames delta against the ones before them, so a viewer must
 // hold every one, and a lost packet is resent rather than leaving the viewer on a frame it cannot
 // read. The server data says the stream is a recording played (attract loop 1), so the viewer's
-// client neither predicts nor moves. What a viewer sends besides is ignored; a viewer silent for
-// `timeout` seconds, or that falls behind by more than `most_behind` blocks, is dropped.
+// client neither predicts nor moves. What a viewer sends besides is ignored (or handed to a relay's
+// hook, `on_command`); a viewer silent for `timeout` seconds, or that falls behind by more than
+// `most_behind` blocks, is dropped.
 //
 // A NEW LEVEL (the server data again, after a `reconnect`): the face starts over and every viewer
 // is sent `reconnect`, so its client asks for the new signon.
@@ -38,6 +39,7 @@
 #include <array>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
 #include <span>
 #include <string>
@@ -57,6 +59,9 @@ struct Q2TvConfig {
   std::string password;      // "": none asked
   double timeout = 30;       // s of silence before a viewer is dropped
   size_t most_behind = 600;  // blocks waiting for a viewer before it is dropped
+  // The server data's attract loop: 1 a recording played (the client neither predicts nor takes
+  // keys), 0 a game (a relay's viewers type their words; their views are frozen instead).
+  uint8_t attract_loop = 1;
 };
 
 enum class Q2ViewerStage : uint8_t { free, signon, active };
@@ -97,6 +102,10 @@ struct Q2TvFace {
   int64_t bytes_out = 0;
   std::string error;             // a block that did not read (the face keeps serving the rest)
   std::vector<std::string> log;  // what it would print on its console (the first 256)
+  // A RELAY'S HOOKS (q2_mvd_relay.hpp): a viewer's command the face does not know itself (null:
+  // ignored), and a viewer begun (it now has the frames).
+  std::function<void(Q2Viewer&, const std::string& line)> on_command;
+  std::function<void(Q2Viewer&)> on_begin;
 };
 
 void q2_tv_start(Q2TvFace& f, gn::Transport& t, const Q2TvConfig& cfg);
@@ -107,5 +116,13 @@ void q2_tv_frame(Q2TvFace& f, int64_t now_us);
 // Every viewer sent the disconnect.
 void q2_tv_stop(Q2TvFace& f);
 int q2_tv_viewers(const Q2TvFace& f);
+// A message queued to one viewer alone, after what it was sent already (a print, a layout).
+void q2_tv_send(Q2Viewer& v, std::span<const uint8_t> msg);
+// Viewer `v` of `from` moved to `to` (a relay's channel, or another player's view), as a server
+// changing levels moves a client: its connection kept, told `changing` and `reconnect`, so its
+// client asks `to` for the signon. False when `to` is full (the viewer stays).
+bool q2_tv_move(Q2TvFace& from, Q2TvFace& to, Q2Viewer& v);
+// The viewer at `host` with `qport`; null when none is.
+Q2Viewer* q2_tv_find(Q2TvFace& f, const gn::Address& host, uint16_t qport);
 
 }  // namespace shooters_edge::net
