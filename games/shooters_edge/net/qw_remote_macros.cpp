@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <vector>
 
 #include "core/num_text.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
@@ -50,6 +51,23 @@ void add_remote_macros(ge::console::Console& con, Remote& r) {
       return std::to_string(joined ? std::lround(r.rates.*field) : 0);
     };
   };
+  // $cl_fps: the client's frames a second; ours builds one move a frame, so the moves' rate.
+  con.add_macro("cl_fps", rate(&ge::net::Rates::counted));
+  // $cl_numentities: the entities in the newest frame read; $cl_weaponmodel: the held weapon's
+  // model as the server names it ("models/weapons/v_rail/tris.md2"; "" when none or not joined).
+  con.add_macro("cl_numentities", [&r] {
+    int n = 0;
+    if (r.active && !r.watch)
+      for (const client::DemoEntity& e : r.demo.state.entities) n += e.present ? 1 : 0;
+    return std::to_string(n);
+  });
+  con.add_macro("cl_weaponmodel", [&r] {
+    if (!r.active || r.watch || !r.q2 || r.demo.last_frame < 0) return std::string();
+    const int gun = r.demo.views[static_cast<size_t>(r.demo.last_frame & 15)].gun_model;
+    const std::vector<std::string>& models = r.demo.state.models;
+    return gun > 0 && static_cast<size_t>(gun) < models.size() ? models[static_cast<size_t>(gun)]
+                                                               : std::string();
+  });
   con.add_macro("cl_pps", rate(&ge::net::Rates::sent_packets));
   con.add_macro("cl_mps", rate(&ge::net::Rates::counted));
   con.add_macro("net_uprate", rate(&ge::net::Rates::sent_bytes));

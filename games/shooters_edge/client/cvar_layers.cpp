@@ -15,6 +15,7 @@
 #include "classicenhance/profile.hpp"
 #include "core/num_text.hpp"
 #include "shooters_edge/client/picture_files.hpp"
+#include "shooters_edge/sound/ambience.hpp"
 
 #include <ctime>
 #include <utility>
@@ -145,6 +146,25 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .max = 64,
           .values = "0..64: the game's units (3 the default)"},
          &x.spiral_radius);
+  v.bind({.name = "cl_hit_markers",
+          .fallback = "2",
+          .flags = con::kArchive,
+          .help = "What shows when your shot hurts someone, on servers that tell.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "2: a red mark at the centre and a sound (the default); 1: the mark alone; "
+                    "0: nothing"},
+         &x.hit_markers);
+  v.bind({.name = "scr_hit_marker_time",
+          .fallback = "500",
+          .flags = con::kArchive,
+          .help = "Milliseconds the hit mark takes to fade.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 10000,
+          .values = "500: the default; 0: no mark; 1..10000: that many milliseconds"},
+         &x.hit_marker_ms);
 }
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
@@ -224,6 +244,24 @@ void add_first(con::Console& c, const GameBindings& b) {
     c.cvars().add(offset);
     c.cvars().add(last_fired);
   }
+  // Its ambience of water and sky (sound/ambience.hpp): how loud, and how fast it swells and fades.
+  c.cvars().bind({.name = "ambient_level",
+                  .fallback = "0.3",
+                  .help = "How loud the water and wind around you sound.",
+                  .kind = con::CvarKind::number,
+                  .min = 0,
+                  .max = 1,
+                  .values = "0: silent; 0..1: that share of full (0.3 the default)"},
+                 &ambient_settings().level);
+  c.cvars().bind({.name = "ambient_fade",
+                  .fallback = "100",
+                  .help = "How fast the water and wind swell and fade as you move, in 255ths of "
+                          "full a second.",
+                  .kind = con::CvarKind::number,
+                  .min = 1,
+                  .max = 10000,
+                  .values = "1..10000: that fast (100 the default: silence to full in 2.55 s)"},
+                 &ambient_settings().fade);
   if (b.noskins != nullptr) *b.noskins = 0;         // its figures are its own (choose_figure)
   if (b.screen != nullptr) *b.screen = Q2Screen{};  // Quake II's view and 2D settings set aside
   c.cvars().add_synonym("fov", "cl_fov");
@@ -234,6 +272,7 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("image_jpeg_quality_level", "scr_quality");
   c.add_command_synonym("cvar_reset", "reset");  // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
+  c.add_command_synonym("togglechat", "toggleconsole");  // QuakeWorld's second name for it
   c.cvars().add({.name = "cl_novweps",
                  .fallback = "0",
                  .flags = con::kArchive,

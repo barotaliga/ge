@@ -18,6 +18,7 @@
 #include "net/udp_socket.hpp"
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q1_remote.hpp"
 #include "shooters_edge/net/q2_remote.hpp"
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/net/qw_login.hpp"
@@ -114,7 +115,10 @@ void presence_close(RemoteLogin& l) {
 }
 
 // The stage of whichever client the window joined with.
-ClientStage stage_of(const Remote& r) { return r.q2 ? r.q2->stage : r.end.stage; }
+ClientStage stage_of(const Remote& r) {
+  if (r.nq) return r.nq->stage;
+  return r.q2 ? r.q2->stage : r.end.stage;
+}
 
 // While in the game, with the account file's ticket: friends see the player on this server and
 // its map, and their invites are said on the console. A file that does not load says nothing
@@ -375,7 +379,7 @@ std::string coming(const std::string& name, int percent, size_t bytes, double& p
 }  // namespace
 
 const ge::hud::NetHistory* remote_net(const Remote& r) {
-  if (!r.active || r.watch) return nullptr;
+  if (!r.active || r.watch || r.nq) return nullptr;
   return r.q2 ? &r.q2->net : &r.end.net;
 }
 
@@ -389,6 +393,7 @@ std::string remote_foot(const Remote& r, double& progress) {
   if (!r.active || r.watch) return {};
   const std::string& map = r.demo.state.map;
   const std::string loading = map.empty() ? "Loading..." : "Loading " + map + "...";
+  if (r.nq) return r.nq->stage == ClientStage::signon ? loading : std::string();
   if (r.q2) {
     const Q2ClientEnd& c = *r.q2;
     if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
@@ -435,6 +440,8 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   r.trace.where = text;
   if (q2)
     q2_remote_start(r, cfg);
+  else if (to.port == kPortNetQuake)
+    nq_remote_start(r, cfg);
   else
     start(r, cfg);
   return true;
@@ -604,6 +611,8 @@ void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const 
   r.trace.where = r.server_name;
   if (r.q2_game && r.q2_game())
     q2_remote_start(r, cfg);
+  else if (server.port == kPortNetQuake)
+    nq_remote_start(r, cfg);
   else
     start(r, cfg);
 }
@@ -621,6 +630,14 @@ void remote_disconnect(Remote& r) {
   if (r.watch) {
     watch_close(*r.watch);
     r.watch.reset();
+    r.active = false;
+    return;
+  }
+  if (r.nq) {
+    nq_stop(*r.nq, r.now_us);  // the disconnect byte, once
+    r.nq.reset();
+    if (r.transport == &r.own) gn::close_transport(r.own);
+    r.transport = nullptr;
     r.active = false;
     return;
   }
@@ -650,7 +667,7 @@ void remote_disconnect(Remote& r) {
 }
 
 void remote_mic(Remote& r, std::span<const float> samples) {
-  if (!r.active) return;
+  if (!r.active || r.nq) return;
   if (r.q2 ? !r.q2->cfg.live_mic || !r.q2->voice_on
            : !r.end.cfg.live_mic || !r.end.ext.has(ExtFamily::x2, kX2Voice))
     return;
@@ -668,6 +685,11 @@ bool remote_lobby(Remote& r, const std::string& line) {
 
 bool remote_rules_word(Remote& r, const std::string& line) {
   if (!r.active || r.watch) return false;
+  if (r.nq) {  // a server of protocol 15: the words it takes from a player
+    if (!nq_server_word(line.substr(0, line.find_first_of(" \t")))) return false;
+    nq_command(*r.nq, line);
+    return true;
+  }
   if (!r.q2) {  // Quake's client sends on only its server's own words, never any unknown one
     const std::string word = line.substr(0, line.find_first_of(" \t"));
     if (word != "kill" && word != "pause" && word != "serverinfo") return false;
@@ -677,14 +699,16 @@ bool remote_rules_word(Remote& r, const std::string& line) {
 }
 
 void remote_command(Remote& r, const std::string& line) {
-  if (r.q2)
+  if (r.nq)
+    nq_command(*r.nq, line);
+  else if (r.q2)
     q2_client_command(*r.q2, line);
   else
     client_command(r.end, line);
 }
 
 bool remote_talking(const Remote& r) {
-  if (!r.active) return false;
+  if (!r.active || r.nq) return false;
   if (r.q2 ? !r.q2->voice_on : !r.end.cfg.voice) return false;  // our server's only
   if (r.talk != nullptr && ge::console::talk_voice(*r.talk).on) return true;
   return r.voip_key != nullptr && r.voip_key->down();
@@ -831,6 +855,15 @@ void user_info_step(Remote& r) {
     client_command(r.end, std::string("setinfo ") + key + " " + std::to_string(*held));
   }
   if (password_moved) client_command(r.end, "setinfo password \"" + password + "\"");
+  // `msg` and `noaim` as they now are.
+  if (const std::string m = r.setting("msg"); !m.empty() && std::atoi(m.c_str()) != c.msg) {
+    c.msg = std::atoi(m.c_str());
+    client_command(r.end, "setinfo msg " + std::to_string(c.msg));
+  }
+  if (const std::string n = r.setting("noaim"); !n.empty() && (n == "1") != c.noaim) {
+    c.noaim = n == "1";
+    client_command(r.end, std::string("setinfo noaim ") + (c.noaim ? "1" : "0"));
+  }
 }
 
 }  // namespace
@@ -838,6 +871,7 @@ void user_info_step(Remote& r) {
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
   if (r.watch) return watch_step(r, said);
+  if (r.nq) return nq_remote_step(r, wall_s, said);
   remote_rates_step(r, wall_s);  // $cl_pps and the other rates (qw_remote_macros.hpp)
   user_info_step(r);
   if (r.q2) {
@@ -1004,7 +1038,7 @@ std::string remote_status(const Remote& r) {
   if (r.watch)
     return (r.watch->state == WatchState::watching ? "watching " : "asking to watch ") +
            r.server_name;
-  return remote_stage_words(r.q2 ? r.q2->stage : r.end.stage) + r.server_name;
+  return remote_stage_words(stage_of(r)) + r.server_name;
 }
 
 void remote_hands(Remote& r, const client::Moves& m, const ge::input::InputState& in,
@@ -1036,6 +1070,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   add_remote_macros(con, r);  // $cl_server, $cl_ping, $cl_lag and the rates
   add_serverstatus_command(con, r);
   add_q2_download_command(con, r);  // download <file> (q2_remote.hpp)
+  add_q2_skins_command(con, r);     // skins
   gn::add_net_commands(con, [&r]() -> const gn::Transport* { return r.transport; });  // dns
   r.setting = [&con](const std::string& name) {
     if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;
@@ -1064,9 +1099,11 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
     cfg.speedjump = cvar("cl_speedjump", "0") == "1";
     cfg.rate = std::atoi(cvar("rate", "25000").c_str());  // the loaded game's default (classic)
-    cfg.password = cvar("password", "");                  // a closed server's password
-    cfg.spectator = cvar("spectator", "0") == "1";        // `set spectator 1`: join to watch
-    cfg.w_switch = cvar("w_switch", "");                  // Quake's switch rules on a pickup
+    cfg.msg = std::atoi(cvar("msg", "1").c_str());
+    cfg.noaim = cvar("noaim", "0") == "1";
+    cfg.password = cvar("password", "");            // a closed server's password
+    cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
+    cfg.w_switch = cvar("w_switch", "");            // Quake's switch rules on a pickup
     cfg.b_switch = cvar("b_switch", "");
     // cl_novweps 1: the visible weapons not asked for, so the server sends neither list nor index.
     if (cvar("cl_novweps", "0") != "0") cfg.ask[ExtFamily::z] &= ~kZVwep;
@@ -1102,7 +1139,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   };
   con.add_command(
       "connect",
-      "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in Quake II)",
+      "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in Quake II; "
+      "port 26000 is a server of Quake's own protocol)",
       [join](Con& c, const Args& a) {
         if (a.size() < 2)
           c.print("connect: name a server (connect 192.168.1.20)");
@@ -1142,6 +1180,38 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
         remote_ranked(r, kGameFolder, a[1], a.size() > 2 ? a[2] : "", said);
         c.print(said);
       });
+  // `user <name|id>`: one player's user info on the QuakeWorld server joined, as the server last
+  // told it, a key a line in a column of 20; the first by user id or exact name.
+  con.add_command("user", "user <name|id>: one player's user info on the server you joined",
+                  [&r](Con& c, const Args& a) {
+                    if (a.size() != 2) {
+                      c.print("user <name|id>: one player's user info on the server you joined");
+                      return;
+                    }
+                    if (!r.active || r.q2 || r.nq) {
+                      c.print("You aren't on a QuakeWorld server.");
+                      return;
+                    }
+                    const int id = std::atoi(a[1].c_str());
+                    for (int i = 0; i < 32; i++) {
+                      const std::string& info = r.end.userinfos[i];
+                      const std::string name = info_get(info, "name");
+                      if (name.empty() || (r.end.userids[i] != id && name != a[1])) continue;
+                      std::vector<std::pair<std::string, std::string>> pairs;
+                      info_pairs(info, pairs);
+                      for (const auto& [k, v] : pairs) {
+                        std::string line = k;
+                        line.append(k.size() < 20 ? 20 - k.size() : 0, ' ');
+                        line += v;
+                        c.print(line);
+                      }
+                      return;
+                    }
+                    c.print("No player by that name or id is on the server.");
+                  });
+  // `version`: the build's own, printed in the window; never asked of a server.
+  con.add_command("version", "version: the game's version",
+                  [](Con& c, const Args&) { c.print(std::string("Version ") + kProgramVersion); });
   con.add_command("reconnect", "reconnect: join the last server again",
                   [&r, join](Con& c, const Args&) {
                     if (r.server_name.empty())

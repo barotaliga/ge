@@ -47,6 +47,8 @@ class AmbientBed {
   void step(Synth& synth, float dt);
   // Stop every voice at once (a map change).
   void silence(Synth& synth);
+  // A new most a level moves a second (a player's setting).
+  void set_rate(float rate) { rate_ = rate; }
 
   const std::vector<AmbientLayer>& layers() const { return layers_; }
 

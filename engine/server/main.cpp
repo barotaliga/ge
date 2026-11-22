@@ -437,6 +437,12 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   // told by the game as it closes (a classic server's "server shutdown"), the masters too.
   // `recycle [reason]` ends it the same way but tells the players to come back: whatever keeps
   // the process running (a script, a service) starts it again. Both exit with success.
+  // `version`: the game's own build version.
+  con.add_command(
+      "version", "version: the server's version",
+      [&game](console::Console& cn, const console::Args&) {
+        cn.print(std::string("Version ") + (*game.version_text ? game.version_text : "unknown"));
+      });
   bool quit_asked = false;
   bool quit_restart = false;
   std::string quit_reason;  // the words after the command, joined by single spaces

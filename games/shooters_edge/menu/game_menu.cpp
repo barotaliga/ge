@@ -90,6 +90,19 @@ void GameMenu::add_cvars(ge::console::Console& con) {
   con.add_command("menu_options", "menu_options: the main menu opened at OPTIONS",
                   opener("options"));
   con.add_command("menu_quit", "menu_quit: the main menu opened at QUIT", opener("quit"));
+  // Quake's own words for the other pages (and Quake II's where they share one).
+  con.add_command("menu_singleplayer", "menu_singleplayer: the main menu opened at SINGLE PLAYER",
+                  opener("single"));
+  con.add_command("menu_load", "menu_load: the main menu opened at LOAD", opener("load"));
+  con.add_command("menu_save", "menu_save: the main menu opened at SAVE", opener("save"));
+  con.add_command("menu_multiplayer", "menu_multiplayer: the main menu opened at MULTIPLAYER",
+                  opener("multi"));
+  con.add_command("menu_setup", "menu_setup: the main menu opened at MULTIPLAYER > SETUP",
+                  opener("setup"));
+  con.add_command("menu_keys", "menu_keys: the main menu opened at OPTIONS > CUSTOMIZE CONTROLS",
+                  opener("controls"));
+  con.add_command("menu_video", "menu_video: the main menu opened at OPTIONS > VIDEO",
+                  opener("video"));
   con.add_command("menu_screenshots",
                   "menu_screenshots: the main menu opened at OPTIONS > SCREENSHOTS (the "
                   "screenshots F12 took)",
@@ -465,11 +478,17 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
     toggle_open_ = false;
     if (open_ && toggle_page_ == "main" && !push)
       hide();
+    else if (toggle_page_ == "controls" && main_.page("keys") != nullptr)
+      show(host, "keys");  // a game whose menu has its own key page (Quake II's)
     else
       show(host, toggle_page_);
     return;
   }
   if (!open_) {
+    if (escape && host.in_level && host.screen_up && host.console != nullptr) {
+      host.console->execute("putaway");  // the rules' screen taken down, no menu
+      return;
+    }
     if (escape) {  // in a level, the game's in-game page when it has one
       const std::string_view in_level = table_of(host).in_level;
       show(host, host.in_level && !in_level.empty() && main_.page(in_level) != nullptr

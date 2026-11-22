@@ -628,6 +628,13 @@ void string_command(QwServer& s, int slot, const std::string& line) {
         client_print(s, slot, 2, "Minimum ping set to " + std::to_string(v) + " ms.\n");
       }
     }
+  } else if (cmd == "msg") {  // the lowest print level this player gets; no range, as the game
+    if (w.count != 2) {
+      client_print(s, slot, 2, "Current msg level is " + std::to_string(c.msg_level) + "\n");
+    } else {
+      c.msg_level = std::atoi(pg::word(w, 1));
+      client_print(s, slot, 2, "Msg level set to " + std::to_string(c.msg_level) + "\n");
+    }
   } else if (cmd == "users") {
     client_print(s, slot, 2, qw_users(s));  // who is on, by user id (qw_admin.hpp)
   } else if (cmd == "listskins") {          // the skins and player figures offered (qw_looks.hpp)

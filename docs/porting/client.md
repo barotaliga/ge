@@ -45,6 +45,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Rail trail beams | the game's own specks | `cl_railtrail_*`, `cl_railcore_*`, `cl_railspiral_*` (`client/world_fx.cpp`'s `q2_rail_trail`) | its own | its own |
 | Sound out of focus | always heard | `s_auto_focus` (`platform/window_cvars.hpp`, every game) | the engine's | the engine's |
 | Music | `cd`, `bgmvolume` | `ogg_enable`, `ogg_volume`, `ogg_shuffle`, `ogg_menu_track` over the engine's music (`audio/music_console.hpp`) | its own | its own |
+| Hit markers | none | `cl_hit_markers`, `scr_hit_marker_time` on temporary entity 128 (`client/q2_bar.cpp`'s `draw_q2_hit_marker`) | its own | its own |
 
 ## Adding a game
 
@@ -90,6 +91,14 @@ the game's own letters, and the text a player reads. Settings and commands are t
   field), 16 load and 15 save slots with the autosave, and the rows whose settings are not
   registered yet (dimmed until they are).
 - The third game's client half (its HUD and prediction in bytecode).
+- `version` prints the game's version alone, not the build's time and date as the classic clients
+  do: a build stamp would make every build differ and empty the compiler cache. The menu words
+  (`menu_singleplayer`, `menu_load`, `menu_save`, `menu_multiplayer`, `menu_setup`, `menu_keys`,
+  `menu_video`) open the shell's pages; `menu_keys` opens a game's own key page where its menu has
+  one. `user` prints a joined QuakeWorld player's user info from what the server last told;
+  `msg` and `noaim` go in the user info; `ambient_level` and `ambient_fade` set the water and
+  wind's loudness and how fast they swell (the fade in 255ths of full a second); `m_side` scales
+  the mouse's sidestep in every shooter; `+use` is held but never sent, as in the classic games.
 
 ## Labs and tests
 

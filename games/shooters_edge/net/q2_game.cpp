@@ -1058,6 +1058,7 @@ const gs::ServerGame& make() {
     gs::ServerGame s;
     s.binary = "sesv";
     s.title = "Shooter's Edge on Quake II's protocol";
+    s.version_text = kProgramVersion;
     s.default_port = kPortQ2;
     s.max_clients = 32;
     s.default_map = "q2dm1";

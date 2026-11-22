@@ -39,8 +39,9 @@ void fight_missiles(Q2Server& s);
 // Weapon `w` chosen by a number key or `use`; ignored when not held.
 void fight_choose(Q2Server& s, int slot, int w);
 // A weapon taken from the floor (`item` its row): chosen at once when the blaster is in hand in
-// deathmatch, always outside it.
-void fight_took(Q2Server& s, int slot, int item);
+// deathmatch, always outside it; grenades with none held before (`grenades_before`, -1 unknown:
+// the count now a box's own) take the hand grenade the same way.
+void fight_took(Q2Server& s, int slot, int item, int grenades_before = -1);
 // The player's `use`, `weapnext` and `weapprev` commands; false when `cmd` is none of them.
 bool fight_command(Q2Server& s, int slot, const std::string& cmd, const std::string& arg);
 
@@ -50,8 +51,8 @@ inline constexpr int kSqByFall = 100, kSqByLava = 101, kSqBySlime = 102, kSqByWa
 inline constexpr int kSqByHeldGrenade = 104;
 // A mover's crush, a hurting trigger, a teleport onto someone, a map's explosion.
 inline constexpr int kSqByCrush = 105, kSqByHurt = 106, kSqByTelefrag = 107, kSqByExplosion = 108;
-// A map's laser, an exploding barrel.
-inline constexpr int kSqByLaser = 109, kSqByBarrel = 110;
+// A map's laser, an exploding barrel, a deathmatch exit taken without allow-exit (`dmflags` 4096).
+inline constexpr int kSqByLaser = 109, kSqByBarrel = 110, kSqByExit = 111;
 // A monster's attack: this plus its row in the roster (q2_monsters.cpp).
 inline constexpr int kSqByMonster = 200;
 
@@ -86,9 +87,18 @@ std::vector<std::string> fight_midair_report(const Q2Server& s);
 // `weapon` (-1 none, or a `kSqBy*`); the obituary is scored and printed.
 void fight_kill(Q2Server& s, int slot, int killer, int weapon);
 
-// Item `item` (a weapon, an ammo or a powerup, by `drop <its name>`) thrown from player `slot`;
-// false, with a line to him, when it cannot be.
+// Item `item` (a weapon, an ammo, a powerup, a key or power armour, by `drop <its name>`) thrown
+// from player `slot` (q2_drops.cpp): a weapon thrown so gives no ammunition; under weapons stay
+// (`dmflags` 4) a weapon is not thrown and nothing is said; false, with a line to him, when it
+// cannot be.
 bool fight_drop(Q2Server& s, int slot, int item);
+// Whether item `item` may be dropped at all: weapons, ammo, powerups, keys and power armour,
+// but in co-op not the items that stay (every weapon and key, the rebreather and the suit).
+bool fight_droppable(const Q2Server& s, int item);
+// A dying player's drops (q2_drops.cpp; deathmatch only): the weapon in hand (not the blaster,
+// only with its ammo) and each powerup running with more than 1 s left whose drop setting is on
+// (`dmflags` 16384 or `sv_dropquad` the quad's), thrown 45 degrees apart, the weapon to his right.
+void fight_death_drops(Q2Server& s, int slot);
 
 // Item `item` used from the inventory (a powerup or power armour; `use <its name>`); false when
 // it is not one or none is held.
@@ -125,6 +135,12 @@ void fight_drops(Q2Server& s);
 void fight_touch_drops(Q2Server& s, int slot);
 // Whether `dmflags` bit `bit` is set in deathmatch.
 bool fight_dmflag(const Q2Server& s, int bit);
+// Whether `dmflags` bit `bit` is set, in every mode: the bits co-op and single player read too
+// (4 weapons stay, 64 and 128 the teams, 256 no friendly fire, 8192 infinite ammunition).
+bool fight_anyflag(const Q2Server& s, int bit);
+// Whether players `a` and `b` are on one team by `dmflags` 64 (the skin) or 128 (the model), in
+// any mode: a skin with no slash is a team by its whole name, an empty one no team.
+bool fight_skin_mates(const Q2Server& s, int a, int b);
 
 // The world's rows the fight writes: each live missile and dropped item, and every player's held
 // weapon numbers.

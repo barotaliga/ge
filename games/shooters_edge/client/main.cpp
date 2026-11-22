@@ -384,7 +384,8 @@ int run_main(int argc, char** argv) {
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
   cl::Q2Bar q2_bar{.files = &files,
                    .binds = &console.binds().table(ge::console::BindMode::game),
-                   .screen = &q2_screen};
+                   .screen = &q2_screen,
+                   .fx = &picture.q2fx};
   cl::add_q2_bar_commands(console, q2_bar);  // dumpstatusbar, dumplayout, aashot, aadump
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
@@ -520,8 +521,8 @@ int run_main(int argc, char** argv) {
   // The install's game's adapter, copied: LOAD GAME of another install swaps it for every reader.
   cl::GameAdapter adapter = cl::adapter_of(game_row(args.profile));
   remote.q2_game = [&adapter] { return adapter.game->id == "q2"; };
-  shooters_edge::menu::Host menu_host{.console = &console,
-                                      .maps = adapter.list_maps(adapter, files)};
+  shooters_edge::menu::Host menu_host{
+      .console = &console, .maps = adapter.list_maps(adapter, files), .files = &files.vfs};
   cl::add_adapter_commands(console, adapter, files, args.basedir);
   cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
   // The map's place names, read as it starts and made in the game (client/place_names.hpp).
@@ -1236,6 +1237,7 @@ int run_main(int argc, char** argv) {
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
       menu_host.in_level = (listen.server || remote.active) && !attract;  // ESCAPE's in-game page
+      menu_host.screen_up = q2_bar.layout_up;  // ESCAPE puts the help computer away first
       // A benchmark's Escape stops the run (below) and opens nothing.
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
                             input.tapped(Key::escape)) ||
@@ -1284,10 +1286,11 @@ int run_main(int argc, char** argv) {
     // menu keeps it and is driven by the keys unless the menu's bit is set.
     if (input.focus_lost) focused = false;
     if (input.focus_gained) focused = true;
-    const ge::input::CaptureFacts facts{.focused = focused,
-                                        .console = con_view.open(),
-                                        .menu = game_menu.open(),
-                                        .watching = bench.active && bench.paced};
+    const ge::input::CaptureFacts facts{
+        .focused = focused && cl::q2_takes_mouse(game_cvars.q2, win.fullscreen),
+        .console = con_view.open(),
+        .menu = game_menu.open(),
+        .watching = bench.active && bench.paced};
     switch (ge::input::follow_capture(mouse, facts, controls.mouse_release)) {
       case ge::input::CaptureStep::take:
         ge::platform::set_relative_mouse(*window, true, controls.mouse.raw);
@@ -1402,7 +1405,6 @@ int run_main(int argc, char** argv) {
       place_seen.on = false;
       cl::map_started(places, adapter, files, listen.map->name);
     }
-
     // Co-op as the window's mode: `sv_coop` turned on, the friendly-fire settings, the episodes.
     cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
                    next_map);
@@ -1693,7 +1695,8 @@ int run_main(int argc, char** argv) {
         playback.bar_bottom_px = cl::hud_inset(
             hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look()), h);
       }
-      if (drawn_remote) cl::draw_joined_level_end(overlay, ds, game_menu.art(), w, h);  // co-op
+      if (drawn_remote)
+        cl::draw_joined_level_end(overlay, ds, game_menu.art(), w, h, win.print_speed);
       if (bench.paced && !attract && !game_menu.open())
         cl::playback_draw(overlay, playback, bench, w, h, t);
       cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(nullptr, t),
@@ -1940,7 +1943,7 @@ int run_main(int argc, char** argv) {
     const bool scores_on = !con_keys.held && !was_open;  // the score keys (TAB: +showscores)
     cl::draw_scores(overlay, listen, game_menu.art(), w, h, scores_on && cl::scores_held(controls),
                     win.level_stats, board_view, scores_on && cl::team_scores_held(controls),
-                    win.show_pause);
+                    win.show_pause, win.print_speed);
     cl::draw_corners(overlay, w, h, pacing, hud.readouts, cl::corner_readings(&listen));
     cl::draw_cinematic(overlay, cine, w, h);
     game_menu.draw(overlay, w, h, t);

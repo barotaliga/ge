@@ -123,3 +123,12 @@ TEST(cl_thirdperson_stops_short_of_a_wall) {
   const double went = cl::view_behind(view, 60, 0, &world);
   CHECK(std::abs(went - 26) < 0.1);  // the trace stops a hair short
 }
+
+TEST(in_grab_0_takes_the_mouse_only_while_the_game_covers_the_screen) {
+  Rig r;
+  CHECK(cl::q2_takes_mouse(r.s, false) && cl::q2_takes_mouse(r.s, true));  // 1, the default
+  r.c.execute("in_grab 0");
+  CHECK(!cl::q2_takes_mouse(r.s, false) && cl::q2_takes_mouse(r.s, true));
+  r.c.execute("in_grab 2");
+  CHECK(cl::q2_takes_mouse(r.s, false));
+}

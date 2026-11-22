@@ -269,6 +269,9 @@ struct DemoState {
   // and how many in all since the demo was opened, so a look after several frames misses none.
   std::vector<DemoBlow> blows;
   int64_t blows_taken = 0;
+  // Quake II's damage the player dealt, as the server reports it (temporary entity 128): hits
+  // counted (each with damage over 0), for the hit marker (q2_bar.hpp).
+  int64_t hits = 0;
   // The server's kicks on the view (client, multiview: its small and big kick messages to the
   // player): how many since the demo was opened and the last one's size (2 small, 4 big).
   int64_t kicks_taken = 0;

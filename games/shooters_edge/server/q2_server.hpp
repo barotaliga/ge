@@ -252,9 +252,13 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   float health = 0;
   float frags = 0;
   double spawned_at = 0, died_at = 0;  // level time, s
-  uint8_t buttons = 0;                 // the last command's
-  int16_t cmd_angles[3] = {};          // the last command's view, 65536ths of a turn
-  bool changed = false;                // placed by the rules since its last move (a spawn)
+  // The time `kill` (and a change to spectating) counts 5 s from: his last respawn's, 0 (the map's
+  // start) after a first placing.
+  double respawn_time = 0;
+  uint8_t buttons = 0;  // the last command's
+  uint8_t pressed = 0;  // the buttons pressed afresh since he died (a respawn wants a new press)
+  int16_t cmd_angles[3] = {};  // the last command's view, 65536ths of a turn
+  bool changed = false;        // placed by the rules since its last move (a spawn)
   // The view the rules turned him to (a spawn), 65536ths of a turn, until his client sends it back
   // as its own (with `Q2ServerOptions::clients_take_view`): the delta angles that turned him
   // are then spent (zeroed), so the turn is not added twice.
@@ -387,6 +391,7 @@ struct Q2Drop {
   double power_left = 0;  // a dropped timed powerup's time left, s
   int shots = 0;          // a dropped silencer's shots left
   bool resting = false;   // come to rest on a floor
+  bool bare = false;      // a weapon thrown by `drop`: taking it gives no ammunition
 };
 inline constexpr int kQ2Drops = 32;  // the rows the world keeps for dropped items
 

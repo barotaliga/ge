@@ -54,8 +54,8 @@ constexpr uint8_t kRespawnHold = 14;  // the deathmatch respawn's teleport hold,
 constexpr int kSqItemBackEvent = 1;   // the entity event an item that shows again carries
 constexpr float kSpawnHealth = 100;
 constexpr double kIntermissionHold = 5;  // the intermission's least time before a button leaves, s
-// Its most in deathmatch: a match nobody presses a button on (everyone away, a dedicated server)
-// still moves on, s. Single player and coop wait for a button as long as it takes.
+// Its most in a deathmatch of bots alone (no person to press a button), s. A match with a person
+// in it, single player and coop wait for a button as long as it takes.
 constexpr double kIntermissionMost = 20;
 
 Q2Server& sq(void* rules) { return *static_cast<Q2Server*>(rules); }
@@ -277,8 +277,10 @@ double nearest_player(const Q2Server& s, sh::Vec3f p, int skip) {
   return best;
 }
 
-// The spot a player spawns at: in deathmatch a random `info_player_deathmatch` that is not one of
-// the two nearest to a living player (any of them with two or fewer); else, or with none, the
+// The spot a player spawns at: in deathmatch a random `info_player_deathmatch` not among a pair
+// near a living player (any of them with two or fewer): walking the spots in map order, one
+// nearer than the nearest so far takes its place, one nearer only than the second the second's;
+// else, or with none, the
 // first `info_player_start`; else the map's origin.
 const Q2Entity* spawn_spot(Q2Server& s, int slot) {
   if (deathmatch(s)) {
@@ -304,10 +306,8 @@ const Q2Entity* spawn_spot(Q2Server& s, int slot) {
         double d1 = 1e31, d2 = 1e31;
         for (const Q2Entity* e : spots) {
           const double d = nearest_player(s, e->origin, slot);
-          if (d < d1) {
-            d2 = d1;
-            near2 = near1;
-            d1 = d;
+          if (d < d1) {  // the old nearest is not moved to second: the pair left out is
+            d1 = d;      // not always the two nearest
             near1 = e;
           } else if (d < d2) {
             d2 = d;
@@ -343,7 +343,7 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   for (int i = 0; i < 3; i++) st.delta_angles[i] = int16_t(want[i] - p.cmd_angles[i]);
   p.forced = true;
   for (int i = 0; i < 3; i++) p.forced_angles[i] = want[i];
-  if (respawn && deathmatch(s)) {
+  if (respawn && (deathmatch(s) || coop(s))) {
     st.flags |= ge::classic::kSqTimeTeleport;
     st.time = kRespawnHold;
     // The teleport's burst where he comes back, at his box's middle.
@@ -354,6 +354,8 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   p.alive = !s.clients[slot].spectator;
   p.health = p.alive ? kSpawnHealth : 0;
   p.spawned_at = s.level_time;
+  p.respawn_time = respawn ? s.level_time : 0;  // a first placing counts from the map's start
+  p.pressed = 0;
   p.view_angles = {0, yaw, 0};
   p.body = sq_new_body();
   p.body.health = static_cast<int>(p.health);
@@ -374,6 +376,7 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   fight_midair_kit(s, slot);
   q2_mods_spawn(s, slot);
   commands_spawn(s, slot);
+  if (p.alive) targets_telefrag(s, slot);  // whatever stands where he appears dies
 }
 
 int skill(const Q2Server& s) {
@@ -483,8 +486,10 @@ void touch_items(Q2Server& s, int slot) {
     // A weapon that stays (`dmflags` 4; always in coop) is refused to one who holds it, and stays
     // when taken; in coop with `coop_pickup_weapons` a holder may take a copy nobody has yet.
     const bool coop = !deathmatch(s) && s.cvars.find("coop")->on();
-    const bool stays = (it.kind == SqKind::weapon && (fight_dmflag(s, 4) || coop)) ||
-                       (it.kind == SqKind::key && coop);
+    const std::string_view cn = it.classname;
+    const bool stays =
+        (it.kind == SqKind::weapon && (fight_anyflag(s, 4) || coop)) ||
+        (coop && (it.kind == SqKind::key || cn == "item_breather" || cn == "item_enviro"));
     const int cube = (item.spawnflags >> 8) & 0xff;  // a coop power cube's bit, once a player
     if (coop && it.kind == SqKind::key && item.classname == "key_power_cube") {
       if ((p.body.cubes & cube) != 0) continue;
@@ -497,15 +502,16 @@ void touch_items(Q2Server& s, int slot) {
     int count = 0;  // ammo the map gives a `count` of
     if (it.kind == SqKind::ammo && item.block >= 0 && size_t(item.block) < s.map->entities.size())
       count = std::atoi(s.map->entities[size_t(item.block)].get_any_case("count").c_str());
+    const int grenades = p.body.ammo[static_cast<int>(SqAmmo::grenades)];
     if (!sq_pick_up(item.item, p.body, deathmatch(s), skill(s), s.level_time, count)) continue;
     p.health = static_cast<float>(p.body.health);
-    if (it.kind == SqKind::weapon && fight_dmflag(s, 8192)) {  // infinite ammo: a full stock
+    if (it.kind == SqKind::weapon && fight_anyflag(s, 8192)) {  // infinite ammo: a full stock
       const int k = static_cast<int>(it.ammo);
       p.body.ammo[k] = std::max(p.body.ammo[k], std::min(1000, p.body.max_ammo[k]));
     }
     if (coop && item.classname == "key_power_cube") p.body.cubes |= cube;
     p.taken.push_back(item.item);
-    fight_took(s, slot, item.item);
+    fight_took(s, slot, item.item, grenades);
     if (stays && coop) item.coop_taken = true;
     if (stays) continue;
     if (std::string_view(it.classname) == "item_health_mega") {
@@ -575,6 +581,7 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   p.move = pm.s;
   p.changed = false;
   for (int i = 0; i < 3; i++) p.cmd_angles[i] = pm.cmd.angles[i];
+  if (!p.alive) p.pressed = static_cast<uint8_t>(p.pressed | (c.buttons & ~p.buttons));
   p.buttons = c.buttons;
   p.view_angles = pm.view_angles;
   p.mins = pm.mins;
@@ -636,8 +643,6 @@ void take_packet(Q2Server& s, const sh::Packet& pk) {
 void start_intermission(Q2Server& s) {
   s.intermission_at = s.level_time;
   screens_intermission(s);
-  if (deathmatch(s) || s.cvars.find("coop")->on())  // the scores, for everyone
-    for (const std::string& l : fight_scores(s)) fight_print(s, -1, l + "\n");
   for (const std::string& l : fight_midair_report(s)) fight_print(s, -1, l);
   // One of the first four intermission spots: 0..3 steps on from the first, wrapping round
   // (so with three, the first twice as often); none, the first start.
@@ -675,13 +680,16 @@ void start_intermission(Q2Server& s) {
   }
 }
 
-// The intermission's frame: past 5 s, any button pressed leaves for the next map; in deathmatch,
-// after 20 s it leaves by itself.
+// The intermission's frame: past 5 s, any button pressed leaves for the next map, however long
+// it takes; a deathmatch with no person in it (bots alone) leaves by itself after 20 s.
 void intermission_frame(Q2Server& s) {
   if (s.game_over || !s.pending_map.empty() ||
       s.level_time <= s.intermission_at + kIntermissionHold + 0.001)
     return;
-  const bool over = deathmatch(s) && s.level_time + 0.001 >= s.intermission_at + kIntermissionMost;
+  bool people = false;
+  for (const ClientInfo& c : s.clients) people = people || (c.active && !c.bot);
+  const bool over =
+      deathmatch(s) && !people && s.level_time + 0.001 >= s.intermission_at + kIntermissionMost;
   for (int i = 0; i < sh::kMaxClients; i++)
     if (over || (s.clients[i].active && s.players[i].buttons != 0)) {
       s.pending_map = s.next_map;
@@ -737,19 +745,21 @@ void view_frame(Q2Server& s, int slot) {
   p.dead_angles = {ge::classic::kQ2DeadPitch, yaw, ge::classic::kQ2DeadRoll};
 }
 
-// The dead who may respawn: by pressing attack (deathmatch and co-op), or at once with `dmflags`
-// 1024 (forced respawn, deathmatch only); by himself after 2 s in midair.
+// The dead who may respawn, on the first frame past 1 s after dying: by a fresh press of attack
+// since he died (deathmatch; holding it through the death does not count) or of any button
+// (co-op), or at once with `dmflags` 1024 (forced respawn, deathmatch only); by himself after 2 s
+// in midair.
 void respawn_frame(Q2Server& s) {
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2Player& p = s.players[i];
     if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
-    if (s.level_time < p.died_at + kRespawnAfter - 0.001) continue;
+    if (s.level_time <= p.died_at + kRespawnAfter + 0.001) continue;
     const bool by_himself =
         fight_midair(s) && s.level_time >= p.died_at + sh::kMidairRespawn - 0.001;
-    // Co-op respawns by attack too (single player asks for the load menu, q2_save.hpp).
-    const bool attack = (p.buttons & sh::kButtonAttack) != 0;
+    // Single player asks for the load menu instead (q2_save.hpp).
+    const bool attack = (p.pressed & sh::kButtonAttack) != 0;
     if ((deathmatch(s) && (attack || fight_dmflag(s, 1024) || by_himself)) ||
-        (!deathmatch(s) && coop(s) && attack))
+        (coop(s) && p.pressed != 0))
       spawn_player(s, i, true);
   }
 }
@@ -1354,7 +1364,7 @@ CommandResult sq_client_command(void* r, int slot, const std::string& line) {
   }
   if (!between && cmd == "kill") {
     Q2Player& p = s.players[slot];
-    if (p.alive && s.level_time >= p.spawned_at + kKillAfter) {
+    if (p.alive && s.level_time >= p.respawn_time + kKillAfter) {
       p.god = false;
       fight_kill(s, slot, slot, -1);
     }
@@ -1607,14 +1617,15 @@ bool sq_give(Q2Server& s, int slot, int item) {
   if (!p.alive) return false;
   const SqItem& it = kSqItems[item];
   p.body.health = static_cast<int>(p.health);
+  const int grenades = p.body.ammo[static_cast<int>(SqAmmo::grenades)];
   if (!sq_pick_up(item, p.body, deathmatch(s), skill(s), s.level_time)) return false;
   p.health = static_cast<float>(p.body.health);
-  if (it.kind == SqKind::weapon && fight_dmflag(s, 8192)) {  // infinite ammo: a full stock
+  if (it.kind == SqKind::weapon && fight_anyflag(s, 8192)) {  // infinite ammo: a full stock
     const int k = static_cast<int>(it.ammo);
     p.body.ammo[k] = std::max(p.body.ammo[k], std::min(1000, p.body.max_ammo[k]));
   }
   p.taken.push_back(item);
-  fight_took(s, slot, item);
+  fight_took(s, slot, item, grenades);
   return true;
 }
 

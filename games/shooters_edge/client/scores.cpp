@@ -102,7 +102,7 @@ ScoresScreen scores_screen(const Listen& l, bool held, bool teams_held) {
 
 void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::menu::ClassicArt& art,
                  int w, int h, bool held, bool level_stats, shooters_edge::menu::BoardView& board,
-                 bool teams_held, bool show_pause) {
+                 bool teams_held, bool show_pause, double print_speed) {
   const CampaignView& c = l.campaign;
   // The game paused (`pause`): its picture, over whatever else is drawn below.
   if (show_pause && l.campaign_host && l.server != nullptr && l.server->paused)
@@ -112,7 +112,7 @@ void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::men
     return;
   }
   if (l.campaign_host && c.end != LevelEnd::none) {
-    menu::draw_level_text(dl, art, w, h, c.text, typed_chars(c, l.server->sv.time),
+    menu::draw_level_text(dl, art, w, h, c.text, typed_chars(c, l.server->sv.time, print_speed),
                           c.end == LevelEnd::finale);
     return;
   }
@@ -143,12 +143,12 @@ void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::men
 }
 
 bool draw_joined_level_end(ge::ui::DrawList& dl, const DemoState& ds, const menu::ClassicArt& art,
-                           int w, int h) {
+                           int w, int h, double print_speed) {
   if (!ds.intermission || ds.ended_at < 0) return false;
   for (const auto& [key, value] : ds.serverinfo)  // a match's end is its scoreboard's
     if (key == "deathmatch" && number_of(value) != 0) return false;
   if (!ds.finale.empty() && ds.finale_at >= 0) {
-    const double typed = std::max(0.0, (ds.time - ds.finale_at) * kPrintSpeed);
+    const double typed = std::max(0.0, (ds.time - ds.finale_at) * print_speed);
     menu::draw_level_text(dl, art, w, h, ds.finale, static_cast<size_t>(typed), true);
     return true;
   }

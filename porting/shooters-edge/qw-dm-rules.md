@@ -1383,4 +1383,4 @@ The player gains nothing in their inventory from it [R].
 Building the stock QuakeWorld game program's source with our QC compiler (`ge qc build`) fails:
 the source calls a function declared with two parameters with none, and our compiler refuses a
 call with fewer arguments than declared, where the source's own compiler evidently accepted it
-[D]. A mod source written that way does not build with ours until our compiler accepts it.
+[D]. A mod source written that way does not build with ours until our compiler accepts it. Our compiler now accepts it with a warning (2026-11-21, ledger row T1).

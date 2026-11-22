@@ -201,6 +201,15 @@ void add_control_cvars(console::Console& con, Controls& c) {
                     .max = 10,
                     .values = "-10..10: units a count at sensitivity 1 (1 the default)"},
                    &c.m_forward);
+  con.cvars().bind({.name = "m_side",
+                    .fallback = "0.8",
+                    .flags = console::kArchive,
+                    .help = "How far the mouse's sideways moves sidestep you when they do (+strafe "
+                            "held, or lookstrafe with +mlook).",
+                    .min = -10,
+                    .max = 10,
+                    .values = "-10..10: units a count at sensitivity 1 (0.8 the default)"},
+                   &c.m_side);
   // The keys' speeds: what each asks the server for, walking; running times cl_movespeedkey.
   struct Speed {
     const char* name;
@@ -258,6 +267,9 @@ void add_control_cvars(console::Console& con, Controls& c) {
   b.lookdown = &con.add_button("lookdown", "+lookdown: look down while held (cl_pitchspeed)");
   b.klook = &con.add_button("klook", "+klook: the forward and back keys look up and down instead");
   b.mlook = &con.add_button("mlook", "+mlook: the mouse looks up and down while held (freelook 0)");
+  // The classic games' use key: held, as a config binds it, but never sent; no classic game reads
+  // it from a move.
+  con.add_button("use", "+use: the classic use key; the classic games do nothing with it");
   for (const char* name : {"centerview", "force_centerview"})
     con.add_command(name, std::string(name) + ": level the view",
                     [&b](console::Console&, const console::Args&) { b.center = true; });
@@ -439,7 +451,7 @@ MoveCmd read_controls(const Moves& m, const input::InputState& in, const Control
     if (m.left) s -= ss;
   }
   if (m.strafe || c.lookstrafe) {
-    const double side = in.mouse.dx * yaw_per_count(c) * c.strafe_scale;
+    const double side = in.mouse.dx * c.sensitivity * c.m_side;
     s = std::clamp(s + static_cast<int>(side), -ss, ss);
   }
   // freelook off and +mlook not held: the mouse's up and down move you.
