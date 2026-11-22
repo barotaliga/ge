@@ -31,4 +31,5 @@ TEST(macros_read_nothing_with_nothing_joined) {
   CHECK(con.expand_text("$cl_ping $cl_lag $cl_pps $cl_mps $net_uprate $net_dnrate") ==
         "0 0.00% 0 0 0 0");
   CHECK(con.expand_text("[$cl_server]") == "[]");
+  CHECK(con.expand_text("$cl_fps $cl_numentities [$cl_weaponmodel]") == "0 0 []");
 }
