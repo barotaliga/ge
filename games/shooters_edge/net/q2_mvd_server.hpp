@@ -88,6 +88,15 @@ struct Q2MvdConfig {
   int iplimit = 3;
   double timeout = 90, ghost = 6, zombie = 2;  // s
   std::string demos;                           // the demos folder (empty: "demos")
+  // The dummy spectator (q2_mvd_dummy.hpp): sv_mvd_spawn_dummy (0 never, 1 when the rules know
+  // it, which ours do, 2 always), sv_mvd_begincmd, sv_mvd_scorecmd, sv_mvd_capture_flags,
+  // sv_mvd_nomsgs and sv_mvd_autorecord (the dummy made at every level and its `record` and
+  // `stop` taken).
+  int spawn_dummy = 1;
+  std::string begincmd = "wait 50; putaway; wait 10; help;";
+  std::string scorecmd = "putaway; wait 10; help;";
+  int capture_flags = 5;
+  bool nomsgs = true, autorecord = false;
 };
 
 struct Q2MvdViewer {
@@ -102,7 +111,7 @@ struct Q2MvdViewer {
   bool magic = false;
 };
 
-struct Q2Mvd {
+struct Q2Mvd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a server
   Q2MvdConfig cfg;
   ge::net::TcpListener listener;
   bool listening = false;
@@ -124,6 +133,13 @@ struct Q2Mvd {
   ge::core::DeflateStream gz;
   int64_t written = 0, frames = 0;
   int maps = 0;
+  // The dummy spectator (q2_mvd_dummy.hpp).
+  int dummy = -1;                            // its slot; -1 none
+  std::string dummy_cmds;                    // its command buffer
+  int dummy_wait = 0;                        // the 10 Hz frames its `wait` still holds the buffer
+  double dummy_layout_at = 0;                // the last time its scoreboard was seen, s
+  std::vector<std::string> dummy_forwarded;  // relays' commands for it (allow_stufftext below 0)
+  bool dummy_failed = false;                 // the last switch-on could not make one
   std::function<void(const std::string&)> log;  // the console's lines
   std::function<int64_t()> unix_time;           // the access lists' clock (null: 0)
 };
@@ -141,6 +157,16 @@ void q2_mvd_frame(Q2Mvd& m, const sv::RulesCommon& c, const sv::Q2WireOptions& o
                   const sv::Mvd2Capture& cap, double now);
 // The server stops (`restart`: the viewers told to come back) or the recorder is torn down.
 void q2_mvd_shutdown(Q2Mvd& m, bool restart);
+// The recorder switched on at `now` (a relay's stream start, a recording, an auto-recording level).
+void q2_mvd_switch_on(Q2Mvd& m, double now);
+// The dummy could not be made: the recording closed, each streaming relay sent an error and
+// dropped (`couldn't create MVD dummy`), the recorder off.
+void q2_mvd_dummy_refused(Q2Mvd& m);
+// A local recording `name` (in the demos folder, `.mvd2` added; `.gz` with `gzip`) started; its
+// path, or false with the line that refuses it in `out`.
+bool q2_mvd_record(Q2Mvd& m, std::string name, bool gzip, std::string& path, std::string& out);
+// The local recording stopped (false when there was none).
+bool q2_mvd_stop(Q2Mvd& m);
 // An operator's word (`w` its words, `line` whole); false when it is not the recorder's.
 bool q2_mvd_command(Q2Mvd& m, const std::vector<std::string>& w, const std::string& line,
                     bool in_game, std::string& out);

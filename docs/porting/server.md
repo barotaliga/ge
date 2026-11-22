@@ -108,7 +108,7 @@ operator's words, the player's queries and the connect checks are in
 shutdown in `porting/shooters-edge/q2-console-words-facts.md`; those of the game library's extended
 interface in `porting/shooters-edge/q2-game-api-ex-facts.md`; those of the recorder's dummy and the
 relay's lines in `porting/shooters-edge/q2-mvd-dummy-facts.md`. Still to come there: the extended
-limits, compressed downloads and the recorder's dummy.
+limits and compressed downloads.
 
 The dedicated process (`engine/server/main.cpp`) gives every game `quit [reason]` and `recycle
 [reason]` (the words joined by spaces, handed to the game's `ServerGame::quit` before it closes;
@@ -136,8 +136,8 @@ answers are taken: whether it may be saved, its own end of frame in place of the
 clearing, and at version 3 what each client sees of each entity, through `Q2Raw::touch` as each
 client's frame is written. `sv_features` offers what our server honours (proper in-use, every
 disconnect, enhanced saves, the extra user info, IPv6 addresses, the index lists' overflow); the
-client number, the recorder's dummy, a variable frame rate and the protocol extensions are not
-offered. The dedicated terminal prints `console_prefix` before each line; a relay tells a channel a
+client number, the recorder's dummy (the recorder records our rules only), a variable frame rate
+and the protocol extensions are not offered. The dedicated terminal prints `console_prefix` before each line; a relay tells a channel a
 viewer's new name and leaving, and with `mvd_filter_version` hides the version trigger in the
 players' chat.
 
@@ -158,8 +158,19 @@ Quake II's multiview recorder (`net/q2_mvd_server.hpp`, facts in
 same blocks live to relays over TCP, deflated as one zlib stream with the engine's streaming
 deflater. Its access lists are the classic layer's address list (`plugins/classic/protocol/
 addr_list.hpp`: masks, comments, hits and the last hit), ready for any modern classic server's
-lists. Still to come: the recorder's dummy spectator (and with it `mvdstuff`, the begin and score
-commands, auto-recording).
+lists. Its own spectator `[MVDSPEC]` (`net/q2_mvd_dummy.hpp`) is a slot the endpoint marks
+`Q2Slot::dummy`: in the rules as a spectator, past the players' seats, never sent a packet, left
+out of `status` and the browser's count; it runs a command buffer each 10 Hz frame before the
+recorder's block, and the capture (`server/q2_mvd2_live.cpp`) names it the observer, keeps its
+layouts and prints alone and tells its scoreboard's state back. A relay (below) treats it as no one
+to chase, copies `mvd_stats_hack`'s stats from it and takes it frozen as the intermission
+(`mvd_freeze_hack`), through the converter's `touch_observer`.
+
+A movie or picture between maps (`.cin`, `.pcx` in a level string) is a level of its own on the
+network (`net/q2_game.cpp`'s shows): the rules wait on the map that follows while the endpoint's
+signon is the server data alone, naming no slot and the file (`Q2WireOptions::show`); a client's
+`nextserver <count>` runs the `nextserver` setting. The window plays the same chain itself
+(`client/cinematic.hpp`).
 
 The relay side (`net/q2_mvd_relay.hpp`) is the same server switched into relay mode: it takes the
 game's port, dials other servers' recorders (`mvdconnect`) or plays `.mvd2` files (`mvdplay`), and

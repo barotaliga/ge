@@ -69,7 +69,9 @@ void q2_server_data_tail(std::vector<uint8_t>& out, const Q2WireOptions& opt) {
     o.u8(0);  // no strafe-jump hack: the move runs as protocol 34's
   } else if (opt.protocol == 36) {
     o.i16(opt.minor);
-    o.u8(2);  // the server's state: a game
+    // The server's state: a game, a picture, or a cinematic for a client that knows the state.
+    const bool movie = opt.show.size() > 4 && opt.show.compare(opt.show.size() - 4, 4, ".cin") == 0;
+    o.u8(opt.show.empty() ? 2 : movie && opt.minor >= 1023 ? 5 : 3);
     if (opt.minor >= 1024) {
       o.i16(0);  // no movement hacks, no extended limits
     } else {

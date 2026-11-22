@@ -226,8 +226,9 @@ struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
 
 // A slot's stage. A ZOMBIE is a client dropped: for `zombie_time` seconds after the last packet
 // from it the slot still resends what it owes (the disconnect) and reads nothing it sends, then
-// it is free. Only `signon` and `active` hold a client (`q2_held`).
-enum class Q2Slot : uint8_t { free, signon, active, zombie };
+// it is free. Only `signon` and `active` hold a client (`q2_held`). A DUMMY is the multiview
+// recorder's own spectator (q2_mvd_dummy.hpp): in the rules, with no connection, sent nothing.
+enum class Q2Slot : uint8_t { free, signon, active, zombie, dummy };
 
 struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a slot
   Q2Slot stage = Q2Slot::free;
@@ -364,6 +365,9 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   double now = 0;
   int next_userid = 1;
   std::vector<std::string> log;  // what the server would print on its console (the first 512)
+  // A client's `nextserver <count>` (a cinematic or picture level watched to its end, while
+  // `cfg.wire.show` names one): the game decides (q2_game.cpp); null: ignored.
+  std::function<void(int32_t count)> nextserver;
   // The tag of the key the logins' tickets are signed with (q2_login.hpp), once known: told to
   // each client that agreed it (`*ge_ext` bit 32) as svc 127, so our client logs itself in.
   std::string account_tag;
