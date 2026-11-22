@@ -44,6 +44,7 @@
 #include "shooters_edge/client/q2_session.hpp"
 #include "shooters_edge/client/q2_view.hpp"
 #include "shooters_edge/menu/classic_console.hpp"
+#include "shooters_edge/menu/servers_page.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/hand.hpp"
 
@@ -106,6 +107,9 @@ struct GameBindings {
   // The console's look: Quake II's `con_background` (its picture under `pics/`, read from `files`);
   // the game's own `conback` in every other game.
   shooters_edge::menu::ClassicConsole* console = nullptr;
+  // The server browser: Quake II's `ui_sortservers` and `ui_pingrate` (servers_page.hpp's
+  // game_sort and game_ping_rate); `sb_sortservers` and `sb_infospersec` in every other game.
+  shooters_edge::menu::ServersPage* servers = nullptr;
 };
 
 // Quake II's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,

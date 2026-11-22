@@ -90,6 +90,16 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   ServersPage& operator=(const ServersPage&) = delete;
   ~ServersPage();
 
+  // Quake II's browser settings, bound by its layer (client/cvar_layers.cpp) and set aside for every
+  // other game: `ui_sortservers` sorts by one column in place of `sb_sortservers` (kNoGameSort
+  // off; 0 the order the servers were found; 1 name, 2 game folder, 3 map, 4 players (most
+  // first), 5 ping; minus the other way; ties by name the same way, then by address), and
+  // `ui_pingrate` paces the asks in place of `sb_infospersec` (-1 off; 0 the player's `rate`
+  // / 450, 1..100; 1..100 that many a second).
+  static constexpr int32_t kNoGameSort = 99;
+  int32_t game_sort = kNoGameSort;
+  int32_t game_ping_rate = -1;
+
   // Registers `sb_lan`, `sb_masters`, `sb_servers` and the filters' cvars on `con`; the filter
   // keys then set the cvars, so a filter the player picks is kept with the config.
   void add_cvars(ge::console::Console& con);
@@ -158,6 +168,7 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   void sort_step(int dir);
   bool sorted_by(ge::net::ServerColumn c) const;
   int effective_ping() const;  // sb_maxping, or sb_pinglimit when sb_hidehighping is lower
+  int32_t ping_rate() const;  // the servers asked a second
   void read_settings();  // the sort's codes and the info filter's words, when their text changed
   void route_frame();
   bool read_list_cache();  // sb_listcache's file into the list; false: none read
@@ -191,6 +202,7 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   int first_ = 0;  // the first row shown
   std::vector<ge::net::ServerSortKey> sort_keys_;
   std::string sort_seen_ = "\x01";  // the sb_sortservers text `sort_keys_` was read from
+  int32_t game_sort_seen_ = kNoGameSort;  // the game_sort `sort_keys_` was read from
   std::string info_seen_ = "\x01";  // the sb_info_filter text `info_rules_` was read from
   std::vector<ge::net::InfoRule> info_rules_;
   std::string info_problem_;  // the first word the info filter could not read
