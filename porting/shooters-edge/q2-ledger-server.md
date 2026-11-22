@@ -55,10 +55,10 @@ part differs; `missing` not in our tree; `not-taken` a note or doc of ours decid
 | Server-to-client messages (svc) and protocol extensions the server writes | 37 | 9 | 7 | 0 | 53 |
 | What the server accepts from clients | 41 | 13 | 1 | 2 | 57 |
 | The game library interface | 41 | 24 | 23 | 0 | 88 |
-| Messages a player sees (refusals, drops, prints), quoted exactly | 43 | 15 | 12 | 2 | 72 |
+| Messages a player sees (refusals, drops, prints), quoted exactly | 48 | 15 | 7 | 2 | 72 |
 | Messages an admin sees on the server console, quoted exactly | 9 | 24 | 1 | 2 | 36 |
-| Server features beyond single words | 28 | 16 | 9 | 2 | 55 |
-| **all** | 344 | 139 | 135 | 46 | 664 |
+| Server features beyond single words | 29 | 16 | 8 | 2 | 55 |
+| **all** | 350 | 139 | 129 | 46 | 664 |
 
 ## 1. Server console commands (the operator's words)
 
@@ -616,7 +616,7 @@ done 41, partial 24, missing 23, not-taken 0
 
 `<x>` marks a filled-in value. Ours quoted where it differs.
 
-done 43, partial 15, missing 12, not-taken 2
+done 48, partial 15, missing 7, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -685,11 +685,11 @@ done 43, partial 15, missing 12, not-taken 2
 | msg.mvd.stream | `[MVD] Streaming resumed.`, `[MVD] Buffering data, please wait...`, `[MVD] Restored connection to the game server!`, `[MVD] Delay buffer overflowed!`, `[MVD] Disconnected from the game server!`, `[MVD] Lost connection to the game server!` | Relay state to viewers. | done | games/shooters_edge/net/q2_mvd_relay.cpp |
 | msg.mvd.fwd | `[MVD] Not connected to the game server.`, `[MVD] Game server does not allow command forwarding.`, `[MVD] Send buffer not empty, please wait.`, `[MVD] This channel does not support command forwarding.` | `fwd` answers. | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
 | msg.mvd.channel | `[MVD] You are already <where>.`, `[MVD] This channel is not compatible with your client version.`, `[MVD] You may not switch channels too soon.`, `[MVD] <name> left the channel`, `[MVD] <name> entered the channel`, `[MVD] Please enter a channel first.`, `[MVD] This channel is not ready yet.`, `[MVD] GTV server doesn't have this map!` | Channels. | partial | games/shooters_edge/net/q2_mvd_relay_viewers.cpp: all but the version check and the missing map |
-| msg.mvd.admin | `[MVD] Lost admin status.`, `[MVD] Invalid password.`, `[MVD] Granted admin status.`, `[MVD] You don't have admin status.` | | missing | |
-| msg.mvd.talk | `[MVD] Spectators may not talk on this server.`, `[MVD] Please turn off ignore mode first.`, `[MVD] You can't talk for <n> more seconds.`, `[MVD] You can't talk for <n> seconds.` | | missing | |
-| msg.mvd.chase | `[MVD] Chasing <name>.`, `[MVD] No players to chase.`, `[MVD] Player slot number <n> is invalid.`, `[MVD] Player slot number <n> is not active.`, `[MVD] No players matching '<x>' found.`, `[MVD] '<x>' matches multiple players.`, `[MVD] Previous chase target is not active.`, `[MVD] You have no previous chase target.`, `[MVD] Unknown chase target '<x>'. Valid targets are: ...`, `[MVD] Chasing players with '<x>' powerup.` | | missing | |
-| msg.mvd.autochase | `[MVD] Auto chasing is <ON/OFF> (<n> target(s)).`, `[MVD] Auto chasing <list>`, `[MVD] Auto chase list is empty.`, `[MVD] Please add auto chase targets first.`, `[MVD] Usage: ...` | | missing | |
-| msg.mvd.lists | the `channels` table and the `commands` help text | | missing | |
+| msg.mvd.admin | `[MVD] Lost admin status.`, `[MVD] Invalid password.`, `[MVD] Granted admin status.`, `[MVD] You don't have admin status.` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| msg.mvd.talk | `[MVD] Spectators may not talk on this server.`, `[MVD] Please turn off ignore mode first.`, `[MVD] You can't talk for <n> more seconds.`, `[MVD] You can't talk for <n> seconds.` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| msg.mvd.chase | `[MVD] Chasing <name>.`, `[MVD] No players to chase.`, `[MVD] Player slot number <n> is invalid.`, `[MVD] Player slot number <n> is not active.`, `[MVD] No players matching '<x>' found.`, `[MVD] '<x>' matches multiple players.`, `[MVD] Previous chase target is not active.`, `[MVD] You have no previous chase target.`, `[MVD] Unknown chase target '<x>'. Valid targets are: ...`, `[MVD] Chasing players with '<x>' powerup.` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| msg.mvd.autochase | `[MVD] Auto chasing is <ON/OFF> (<n> target(s)).`, `[MVD] Auto chasing <list>`, `[MVD] Auto chase list is empty.`, `[MVD] Please add auto chase targets first.`, `[MVD] Usage: ...` | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
+| msg.mvd.lists | the `channels` table and the `commands` help text | | done | games/shooters_edge/net/q2_mvd_relay_viewers.cpp |
 | msg.mvd.names | `[MVD] <old> changed name to <new>`, `[MVD] <name> disconnected` | | missing | |
 | msg.ac | anticheat lines to players (lost service, modified file, unable to take connections, exempt, failed file checks, not using anticheat) | Anticheat lines. | not-taken | `q2-gaps2-server.md` B1 |
 
@@ -741,7 +741,7 @@ done 9, partial 24, missing 1, not-taken 2
 
 ## 9. Server features beyond single words: downloads, rates, floods, bans, filters, recording, status
 
-done 28, partial 16, missing 9, not-taken 2
+done 29, partial 16, missing 8, not-taken 2
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -784,7 +784,7 @@ done 28, partial 16, missing 9, not-taken 2
 | feat.status.uptime | `uptime` key short or long form | | done | `engine/server/status.hpp` |
 | feat.recording.mvd2 | multi-view recording file (`MVD2`, length-led blocks, ends with 0; gzip) | | done | games/shooters_edge/net/q2_mvd_server.cpp: `mvdrecord`, gzip with `-z`, the limits; frames from games/shooters_edge/server/q2_mvd2_live.hpp |
 | feat.recording.dummy | the recorder's dummy client `[MVDSPEC]` holding the scoreboard (begin and score commands) | | missing | S40 |
-| feat.recording.limits | stop by size, time, map count | | missing | S40 |
+| feat.recording.limits | stop by size, time, map count | | done | games/shooters_edge/net/q2_mvd_server.cpp: `sv_mvd_maxsize`, `sv_mvd_maxtime`, `sv_mvd_maxmaps`, each with its line |
 | feat.recording.capture | which players are recorded (in game, invisible, visible) | | missing | |
 | feat.relay.tcp | viewers over TCP on the game port (`MVD2` magic, hello, deflate; access by allow list, ban list, password) | | done | games/shooters_edge/net/q2_mvd_server.cpp: the magic, hello, deflate as one zlib stream, the allow list, the ban list, the password, stream start and stop, ping |
 | feat.relay.channels | the relay's channels, waiting room, chase cameras, menus, scoreboard, `[MVD]` chat | | partial | games/shooters_edge/net/q2_mvd_relay.hpp: channels, the Waiting Room and its chooser, a view a viewer, the menus, chat, admin; no free flight, no stats rewrites |

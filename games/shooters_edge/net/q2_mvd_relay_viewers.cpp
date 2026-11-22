@@ -1066,8 +1066,8 @@ void viewers_frame(Q2Relay& r, int64_t now_us) {
                            : rec.powerup == 'r' ? kEfFlag1
                                                 : kEfFlag2;
       const auto has = [&](int s) {
-        return playing(level, s) && size_t(s + 1) < level.base.entities.size() &&
-               (level.base.entities[size_t(s + 1)].effects & bit) != 0;
+        return playing(level, s) && size_t(s) + 1 < level.base.entities.size() &&
+               (level.base.entities[size_t(s) + 1].effects & bit) != 0;
       };
       if (!has(rec.target))
         for (int s = 0; s < static_cast<int>(level.base.players.size()); s++)
