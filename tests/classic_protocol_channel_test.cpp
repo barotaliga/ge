@@ -171,6 +171,13 @@ TEST(the_trace_shows_each_packet_and_each_loss) {
   got.drop = false;
   deliver(b, p3, 2);
   CHECK(lines.size() == 4);  // off: nothing
+  // Quake II's cl_showpackets shows each packet sent with showpackets 0 or 3.
+  sent.packets = 3;
+  send(a, "4", 3);
+  CHECK(lines.size() == 4);
+  sent.sent = true;
+  send(a, "5", 3);
+  CHECK(lines.size() == 5 && lines[4].find("3000.0 --> s=5") == 0);
 }
 
 namespace {

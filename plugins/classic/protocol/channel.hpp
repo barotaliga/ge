@@ -70,6 +70,7 @@ constexpr double kRateBurstBytes = 400;
 struct ChannelTrace {
   int packets = 0;    // showpackets: 0 none, 1 both ways, 2 sent, 3 received
   bool drop = false;  // showdrop
+  bool sent = false;  // each packet sent shown whatever `packets` says (Quake II's cl_showpackets)
   std::string where;  // the peer's address, for the drop lines
   std::function<void(const std::string&)> print;
 };
