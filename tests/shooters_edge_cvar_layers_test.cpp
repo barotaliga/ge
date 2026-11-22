@@ -59,14 +59,15 @@ struct Window {
   ge::audio::MusicConsole music;  // bgmvolume and cd, the window's before the game's
   cl::GameStart start;
   cl::GameCvarValues game;
-  bool predict = true;     // the remote's cl_predict
-  int crouch = 1;          // the remote's cl_predict_crouch
-  int noskins = 0;         // the picture's stock_figures (Quake II's cl_noskins)
-  int moves = 62;          // the remote's q2_maxfps (Quake II's cl_maxfps)
-  double frame_cap = 0;    // the pacing's frame cap (our cl_maxfps, Quake II's r_maxfps)
-  cl::ChatExtras chat;     // the chat's extras (Quake II's cl_chat_sound)
-  int auto_chat = -1;      // the console view's game_chat (Quake II's con_auto_chat)
-  bool show_pause = true;  // window_cvars.cpp's showpause (Quake II's scr_showpause)
+  bool predict = true;       // the remote's cl_predict
+  int crouch = 1;            // the remote's cl_predict_crouch
+  int noskins = 0;           // the picture's stock_figures (Quake II's cl_noskins)
+  bool items_still = false;  // the picture's items_still (Quake II's cl_nobob)
+  int moves = 62;            // the remote's q2_maxfps (Quake II's cl_maxfps)
+  double frame_cap = 0;      // the pacing's frame cap (our cl_maxfps, Quake II's r_maxfps)
+  cl::ChatExtras chat;       // the chat's extras (Quake II's cl_chat_sound)
+  int auto_chat = -1;        // the console view's game_chat (Quake II's con_auto_chat)
+  bool show_pause = true;    // window_cvars.cpp's showpause (Quake II's scr_showpause)
 
   explicit Window(const pr::GameProfile& g) {
     cl::add_coop_cvars(console, coop);
@@ -108,6 +109,7 @@ struct Window {
                         .predict = &predict,
                         .crouch = &crouch,
                         .noskins = &noskins,
+                        .items_still = &items_still,
                         .view = &view,
                         .moves = &moves,
                         .frame_cap = &frame_cap,
@@ -193,6 +195,7 @@ TEST(each_games_fov_and_move_speeds) {
                          .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
+                         .items_still = &w.items_still,
                          .view = &w.view});
   for (const char* name : {"cl_forwardspeed", "cl_backspeed", "cl_sidespeed", "cl_upspeed"})
     CHECK_MSG(v.find(name)->value == "200", name);  // Quake II's walk
@@ -219,6 +222,8 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(w.crouch == 2);
   v.set("cl_noskins", "2", con::Source::local);  // its own, beside the shared noskins
   CHECK(w.noskins == 2 && v.find("noskins")->value == "0");
+  v.set("cl_nobob", "1", con::Source::local);  // its floating items lie still
+  CHECK(w.items_still && v.find("fs_autoexec")->value == "1");
   v.set("fov", "100", con::Source::local);
   CHECK(v.find("cl_fov")->value == "100");
   v.set("cl_sidespeed", "300", con::Source::local);  // the player's own stays across the switch
@@ -228,6 +233,7 @@ TEST(each_games_fov_and_move_speeds) {
                          .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
+                         .items_still = &w.items_still,
                          .view = &w.view});
   CHECK(v.find("cl_forwardspeed")->value == "400");
   CHECK(v.find("rate")->value == "2500");  // Quake's default again
@@ -235,7 +241,9 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(w.predict && v.find("cl_predict") == nullptr);       // Quake always predicts
   CHECK(v.find("cl_predict_crouch") == nullptr);             // and never ducks
   CHECK(v.find("cl_noskins") == nullptr && w.noskins == 0);  // its figures its own
-  CHECK(w.view.hand == 0 && w.view.gun == 1);                // its weapon always drawn
+  CHECK(v.find("cl_nobob") == nullptr && !w.items_still);    // nothing floats in Quake
+  CHECK(v.find("fs_autoexec") == nullptr);
+  CHECK(w.view.hand == 0 && w.view.gun == 1);  // its weapon always drawn
   CHECK(v.find("cl_gun") == nullptr && v.find("ch_red") == nullptr);
   CHECK(w.hud.crosshair.shade[1] == 1 && !w.hud.crosshair.by_health);  // Quake II's set aside
   CHECK(v.find("cl_sidespeed")->value == "300");

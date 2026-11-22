@@ -42,6 +42,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/q2_session.hpp"
 #include "shooters_edge/client/q2_view.hpp"
+#include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/hand.hpp"
 
@@ -70,7 +71,9 @@ struct GameBindings {
   int* crouch = nullptr;        // Quake II's `cl_predict_crouch` (the eye's height predicted)
   bool* show_misses = nullptr;  // Quake II's `cl_showmiss` (each prediction miss printed)
   int* shownet = nullptr;       // Quake II's `cl_shownet` (each message's size printed)
+  bool* showpackets = nullptr;  // Quake II's `cl_showpackets` (each packet sent shown)
   int* noskins = nullptr;       // Quake II's `cl_noskins` (the picture's stock_figures)
+  bool* items_still = nullptr;  // Quake II's `cl_nobob` (the picture's items_still)
   // The held weapon's settings: Quake II's `hand` (2 draws no weapon), `cl_gun_x/y/z` and
   // `cl_gunfov`; Quake's `r_viewmodelsize` and `r_viewmodeloffset`.
   shooters_edge::view::ViewSettings* view = nullptr;
@@ -98,6 +101,9 @@ struct GameBindings {
   // The music (audio/music_console.hpp): Quake II's `ogg_enable` (its switch, `cd on|off`),
   // `ogg_shuffle` and `ogg_menu_track`; on, unshuffled and no menu track in every other game.
   ge::audio::MusicConsole* music = nullptr;
+  // The console's look: Quake II's `con_background` (its picture under `pics/`, read from `files`);
+  // the game's own `conback` in every other game.
+  shooters_edge::menu::ClassicConsole* console = nullptr;
 };
 
 // Quake II's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,

@@ -234,13 +234,16 @@ void add_q2_turtle(Q2Bar& bar, uint8_t trouble, int width, int height) {
   if (turtle <= 0 || trouble == 0 || (bar.screen != nullptr && bar.screen->draw2d == 0)) return;
   const int scale = q2_bar_scale(bar, width, height);
   int y = height / scale - 11 * 8;  // one word a line, eleven lines over the bottom
-  const std::pair<uint8_t, const char*> words[] = {{kQ2FrameBad, "BADFRAME"},
+  // In the game's order. The words for packets lost each way and a move re-run come only with
+  // the newer protocols' frame bits, and an entity base can't be overwritten here (every frame
+  // keeps its own), so those never show.
+  const std::pair<uint8_t, const char*> words[] = {{kQ2FrameSuppressed, "SUPPRESSED"},
+                                                   {kQ2FrameBad, "BADFRAME"},
                                                    {kQ2FrameOld, "OLDFRAME"},
-                                                   {kQ2FrameNoDelta, "NODELTA"},
-                                                   {kQ2FrameSuppressed, "SUPPRESSED"}};
+                                                   {kQ2FrameNoDelta, "NODELTA"}};
   for (const auto& [bit, word] : words) {
     if ((trouble & bit) == 0 || (bit == kQ2FrameSuppressed && turtle < 2)) continue;
-    add_text(bar.ops, 0, y, word, true);
+    add_text(bar.ops, 8, y, word, true);  // one letter in
     y += 8;
   }
 }

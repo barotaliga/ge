@@ -607,22 +607,25 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   const auto start = std::chrono::steady_clock::now();
   std::vector<std::string> printed;  // the game's console lines of one frame
   std::string map_seen;              // the map sv_mapcmd last ran after
+  // The game's console lines since the last call, printed and logged.
+  const auto print_lines = [&] {
+    if (game.console_lines == nullptr || s.state == nullptr) return;
+    printed.clear();
+    game.console_lines(s.state, printed);
+    for (std::string& line : printed) {
+      while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+      std::printf("%s\n", line.c_str());
+      features_log(features, line);
+    }
+    if (!printed.empty()) std::fflush(stdout);
+  };
   for (int64_t n = 0; c.seconds == 0 || n < frames; n++) {
     if (c.realtime) {
       const auto due = start + std::chrono::duration<double>(static_cast<double>(n) * step);
       std::this_thread::sleep_until(due);
     }
     server_frame(s);
-    if (game.console_lines != nullptr && s.state != nullptr) {
-      printed.clear();
-      game.console_lines(s.state, printed);
-      for (std::string& line : printed) {
-        while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
-        std::printf("%s\n", line.c_str());
-        features_log(features, line);
-      }
-      if (!printed.empty()) std::fflush(stdout);
-    }
+    print_lines();
     // sv_mapcmd once after each map loads, the change seen within a quarter of a second.
     if (n % poll_frames == 0 && server_map_loaded(s, map_seen) && !c.mapcmd.empty()) {
       con.execute(c.mapcmd);
@@ -651,6 +654,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     match_frame();
     if (quit_asked) {
       if (game.quit != nullptr && s.state != nullptr) game.quit(s.state, quit_reason, quit_restart);
+      print_lines();  // what the game said as it ended
       break;
     }
     server_accounts_update(accounts, wall_unix_us());

@@ -52,6 +52,14 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Network trouble words | the turtle (`showturtle`) and the net picture in the view's corner (`client/trouble_icons.hpp`) | `scr_showturtle` (`client/q2_bar.cpp`'s `add_q2_turtle`) | its own | its own |
 | The window's style | always a usual window | `win_noborder`, `win_notitle`, `win_alwaysontop`, `win_noresize` (`platform/window_cvars.hpp`) | the engine's | the engine's |
 | The window's size and place | as the game opens it | `vid_geometry`, `WxH+X+Y` (`platform/window_cvars.hpp`) | the engine's | the engine's |
+| Console scroll-back | stays where scrolled | `con_scroll` (`console/view.hpp`, every game) | the engine's | the engine's |
+| Packets sent shown | `showpackets` | `cl_showpackets` over the channel's trace (`classic/protocol/channel.hpp`) | its own | its own |
+| Held weapon's sway | ours (`cl_gunsway`) | the server's gun angles and place (`client/held.cpp`'s `q2_gun_sway` over `viewmodel/place.hpp`'s `game_turn`, `game_shift_m`), ours set aside | its own | its own |
+| Configs on a game change | `fs_default`'s default.cfg, the game's own settings | the same, then `fs_autoexec`'s autoexecs and postexec.cfg (`client/install_configs.cpp`) | the game's own settings | the engine's |
+| The connection's number | `qport` (from the name) | `qport` (from the name) | `qport`, 0 from the name (`net/qw_remote.cpp`) | the classic layer's |
+| Floating items still | none | `cl_nobob` (the picture's `items_still`, `client/world_models.cpp`) | its own | its own |
+| The client's own port | any free port | `net_clientport`, moved at once (`net/qw_remote.cpp`'s `own_port`) | its own | its own |
+| The console's picture | the pack's `conback` | `con_background`, a picture under `pics/` (`menu/classic_console.hpp`) | its own | its own |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Command packets | `localid`: a server browser on this machine sends commands that carry it (`net/qw_client.cpp`) | none | its own | its own |
 | Setup figure | the pack's figure in the chosen shirt and pants (`menu/classic_art.cpp`'s `player_in`) | its figure rows (`menu/q2_pages.cpp`) | its own | its own |

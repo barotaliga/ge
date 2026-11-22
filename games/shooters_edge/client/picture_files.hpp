@@ -9,6 +9,7 @@
 //
 // ge:summary Pictures read by their file type, and the crosshair picture under crosshairs/
 // ge:keywords decode_picture tga png jpeg pcx crosshairimage read_crosshair_image crosshairs-folder
+// ge:keywords con_background read_console_back console-background
 // ge:skill ui
 // ge:test tests/shooters_edge_picture_files_test.cpp
 #pragma once
@@ -36,6 +37,10 @@ std::optional<ge::assets::Image> decode_picture(std::span<const uint8_t> bytes,
 
 // The crosshair picture `name` from `files` into `out`; false (and one console line) when none.
 bool read_crosshair_image(const SearchPath& files, std::string_view name, ge::ui::Image* out);
+
+// The console's background `name` (Quake II's `con_background`) from `files` under `pics/`, as
+// the crosshair's is read; false (and one console line) when none.
+bool read_console_back(const SearchPath& files, std::string_view name, ge::ui::Image* out);
 
 // `s.read_image` reading from `files` (which must outlive `s`).
 void add_crosshair_reader(ge::hud::CrosshairSettings& s, const SearchPath& files);

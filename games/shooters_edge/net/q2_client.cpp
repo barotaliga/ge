@@ -95,6 +95,8 @@ void read_oob(Q2ClientEnd& c, const uint8_t* data, size_t size) {
     c.last_ask = c.now;
     send_connect(c);
   } else if (w[0] == "client_connect" && c.stage == ClientStage::connect) {
+    q2_http_connect(c.http, c.cfg.http, q2_http_dlserver(w), c.cfg.allow.all,
+                    gn::to_string(c.server));
     connected(c);
   }
 }
@@ -105,6 +107,12 @@ void next_fetch(Q2ClientEnd& c) {
   c.fetched_bytes.clear();
   c.fetched_percent = 0;
   c.fetched_origin = false;
+  if (c.http.on) {                               // over HTTP first: `begin` held until it is done
+    c.cfg.http.gamedir = q2_demo(c).state.game;  // the server's game folder ("": baseq2)
+    for (const std::string& path : std::exchange(c.fetch_queue, {}))
+      if (q2_http_queue(c.http, c.cfg.http, path)) q2_client_command(c, "download http");
+    if (q2_http_busy(c.http)) return;
+  }
   if (!c.fetch_queue.empty()) {
     c.fetching = c.fetch_queue.front();
     c.fetch_queue.erase(c.fetch_queue.begin());
@@ -158,6 +166,12 @@ void start_fetch(Q2ClientEnd& c, const std::string& begin) {
   next_fetch(c);
 }
 
+// "[3 remaining files]": the files still to ask for over the channel.
+std::string files_left(const Q2ClientEnd& c) {
+  const size_t n = c.fetch_queue.size();
+  return "[" + std::to_string(n) + " remaining file" + (n == 1 ? "]" : "s]");
+}
+
 // The download pieces and archives the reader took off this payload.
 void take_downloads(Q2ClientEnd& c) {
   for (auto& [path, origin] : q2_demo(c).download_origins)
@@ -170,6 +184,8 @@ void take_downloads(Q2ClientEnd& c) {
     if (c.fetching.empty()) continue;
     if (p.size < 0) {
       c.downloads_refused++;
+      c.http.said.push_back("[UDP] " + c.fetching +
+                            (c.fetched_percent > 0 ? " [STOP] " : " [FAIL] ") + files_left(c));
       next_fetch(c);
       continue;
     }
@@ -180,11 +196,30 @@ void take_downloads(Q2ClientEnd& c) {
       continue;
     }
     c.downloaded[c.fetching] = c.fetched_bytes;
+    c.http.said.push_back("[UDP] " + c.fetching + " [DONE] " + files_left(c));
     if (c.cfg.keep_file)
       c.cfg.keep_file(c.fetching, c.fetched_bytes, c.fetched_origin ? &c.fetching_origin : nullptr);
     next_fetch(c);
   }
   q2_demo(c).download_pieces.clear();
+}
+
+// The HTTP downloads moved on: each file fetched kept as one over the channel; once none is left
+// (or HTTP gave its files back), the channel's turn.
+void step_http(Q2ClientEnd& c) {
+  Q2HttpDone done;
+  q2_http_step(
+      c.http, c.cfg.http, c.now,
+      [&c](const std::string& path, bool) {
+        return q2_download_allowed(c.cfg.allow, path) && lacks(c, path);
+      },
+      done);
+  for (auto& [path, bytes] : done.files) {
+    if (c.cfg.keep_file) c.cfg.keep_file(path, bytes, nullptr);
+    c.downloaded[path] = std::move(bytes);
+  }
+  c.fetch_queue.insert(c.fetch_queue.begin(), done.back.begin(), done.back.end());
+  if (!q2_http_busy(c.http) && c.fetching.empty()) next_fetch(c);
 }
 
 // `line` with each `$<name>` outside quotes made the setting's value, as a console expands it.
@@ -489,6 +524,7 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
       return;
     }
   }
+  if (q2_http_busy(c.http)) step_http(c);
   // A connected server that has gone quiet: given up, so the game can say so and leave.
   if ((c.stage == ClientStage::signon || c.stage == ClientStage::active) && c.cfg.timeout > 0 &&
       c.now - c.ch.last_received > c.cfg.timeout) {
@@ -548,6 +584,7 @@ std::string q2_download(Q2ClientEnd& c, const std::string& file) {
 }
 
 void q2_client_stop(Q2ClientEnd& c) {
+  q2_http_stop(c.http);
   if (c.stage == ClientStage::signon || c.stage == ClientStage::active) {
     const uint8_t bye[] = {kClcStringCmd, 'd', 'i', 's', 'c', 'o', 'n', 'n', 'e', 'c', 't', 0};
     for (int k = 0; k < 3; k++) {

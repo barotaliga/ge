@@ -34,6 +34,21 @@ namespace shooters_edge::menu {
 
 namespace {
 
+// Whether `w` is a web address (`http://` or `https://`, any case).
+bool web_address(std::string_view w) {
+  const auto starts = [&w](std::string_view p) {
+    if (w.size() < p.size()) return false;
+    for (size_t i = 0; i < p.size(); ++i)
+      if (std::tolower(static_cast<unsigned char>(w[i])) != p[i]) return false;
+    return true;
+  };
+  return starts("http://") || starts("https://");
+}
+
+}  // namespace
+
+namespace {
+
 namespace ui = ge::ui;
 namespace gn = ge::net;
 
@@ -500,7 +515,32 @@ bool ServersPage::open(std::string* why) {
     }
     if (std::find(into.begin(), into.end(), a) == into.end()) into.push_back(a);
   };
-  for (const std::string& m : masters) resolve(m, 27000, config_.masters);
+  web_lists_.clear();
+  for (const std::string& m : masters) {
+    // A web list: `http://...`, `+http://...` (6-byte records) or `+<n>http://...`.
+    std::string_view w = m;
+    int record = 0;
+    if (!w.empty() && (w[0] == '+' || w[0] == '-')) {
+      w.remove_prefix(1);
+      int n = 0;
+      bool digits = false;
+      while (!w.empty() && w[0] >= '0' && w[0] <= '9' && n < 100000) {
+        n = n * 10 + (w[0] - '0');
+        digits = true;
+        w.remove_prefix(1);
+      }
+      record = digits ? n : 6;
+      if (record < 6 || !web_address(w)) {
+        if (con_ != nullptr) con_->print("Ignoring invalid master URL: " + m);
+        continue;
+      }
+    }
+    if (web_address(w)) {
+      web_lists_.push_back({.url = std::string(w), .record = record, .fetch = {}, .over = true});
+      continue;
+    }
+    resolve(m, 27000, config_.masters);
+  }
   if (query_.protocol != 0)
     for (const std::string& m : split_words(hub_masters_))
       resolve(m, gn::kMasterPort, config_.own_masters);
@@ -606,6 +646,21 @@ void ServersPage::write_caches() {
 
 void ServersPage::refresh() {
   gn::server_list_refresh(list_, now_us_);
+  // The web lists asked again: no redirect followed, given up after `cl_http_blocking_timeout` s
+  // of silence (15 when the game has none).
+  double wait_s = 15;
+  if (con_ != nullptr)
+    if (const ge::console::Cvar* v = con_->cvars().find("cl_http_blocking_timeout"))
+      wait_s = std::max(1.0, std::atof(v->value.c_str()));
+  for (WebList& l : web_lists_) {
+    gn::HttpOptions o;
+    o.user_agent = "shooters_edge";
+    o.redirects = 0;
+    o.stall_s = wait_s;
+    o.most_bytes = 1024 * 1024 - 1;
+    gn::http_start(l.fetch, l.url, o, static_cast<double>(now_us_) / 1e6);
+    l.over = false;
+  }
   add_cached();
   cache_written_ = false;
   routing_ = routes_ready_ = false;
@@ -629,6 +684,7 @@ void ServersPage::frame(double dt) {
     gn::server_list_requery(list_, rows_[static_cast<size_t>(selected_)]);
     live_s_ = 0;
   }
+  web_frame();
   gn::server_list_update(list_, now_us_);
   write_caches();
   route_frame();
@@ -640,6 +696,34 @@ void ServersPage::frame(double dt) {
   if (was >= 0) {
     const auto it = std::find(rows_.begin(), rows_.end(), was);
     if (it != rows_.end()) selected_ = static_cast<int>(it - rows_.begin());
+  }
+}
+
+// The web lists moved on; each that came read into the list, each that failed said.
+void ServersPage::web_frame() {
+  for (WebList& l : web_lists_) {
+    if (l.over || !gn::http_step(l.fetch, static_cast<double>(now_us_) / 1e6)) continue;
+    l.over = true;
+    const gn::HttpFetch& f = l.fetch;
+    if (f.state != gn::HttpState::done || f.status >= 400) {
+      if (con_ != nullptr)
+        con_->print("[HTTP] Failed to fetch '" + l.url + "': " +
+                    (f.state == gn::HttpState::done ? gn::http_status_text(f.status) : f.error));
+      continue;
+    }
+    std::vector<gn::Address> found;
+    if (l.record == 0) {
+      found = gn::parse_address_lines(
+          std::string_view(reinterpret_cast<const char*>(f.body.data()), f.body.size()));
+    } else {
+      const auto n = static_cast<size_t>(l.record);
+      for (size_t at = 0; at + n <= f.body.size(); at += n) {
+        const uint8_t* b = f.body.data() + at;
+        found.push_back(gn::ipv4(b[0], b[1], b[2], b[3], static_cast<uint16_t>(b[4] << 8 | b[5])));
+      }
+    }
+    for (const gn::Address& a : found)
+      gn::server_list_add(list_, a, gn::kServerFromMaster, now_us_);
   }
 }
 

@@ -30,6 +30,7 @@
 #include "forward/routes.hpp"
 #include "lab/png.hpp"
 #include "net/sim_network.hpp"
+#include "net/tcp_socket.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/menu/carved_letters.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
@@ -556,6 +557,24 @@ TEST(a_classic_game_s_console_is_in_its_letters_over_its_background) {
   int backs = 0;
   for (const auto& c : dl.cmds()) backs += c.box.image == look.back ? 1 : 0;
   CHECK(backs == 1);
+  // con_background: another picture, read once and drawn in its place; one that does not read
+  // leaves the game's own.
+  int reads = 0;
+  look.read_back = [&reads](std::string_view name, ge::ui::Image* out) {
+    ++reads;
+    if (name != "inter") return false;
+    out->width = out->height = 2;
+    out->rgba.assign(16, 255);
+    return true;
+  };
+  look.back_name = "inter";
+  const ge::ui::Image* other = look.background();
+  CHECK(other != nullptr && other != look.back && other->width == 2);
+  CHECK(look.background() == other && reads == 1);
+  look.back_name = "missing";
+  CHECK(look.background() == look.back && reads == 2);
+  look.back_name = "conback";
+  CHECK(look.background() == look.back && reads == 2);
   // No pictures read: the engine's own look, no background.
   sm::ClassicConsole none;
   sm::classic_console(sm::ClassicArt{}, none);
@@ -1552,4 +1571,70 @@ TEST(setup_shows_the_figure_in_the_chosen_colours) {
   dl.begin(640, 400);
   g.draw(dl, 640, 400, 0.25);
   CHECK(g.problems().empty());
+// A web list of servers in sb_masters: the binary list's 6-byte records and the text list's lines
+// read into the browser's list; one that fails said in the game's words.
+TEST(servers_page_reads_web_lists) {
+  namespace gn = ge::net;
+  gn::TcpListener web;
+  std::string err;
+  if (!gn::tcp_listen(web, gn::loopback_v4(0), &err)) {
+    ge::test::skip("no loopback TCP socket here: " + err);
+    return;
+  }
+  const std::string base = "http://127.0.0.1:" + std::to_string(web.local.port);
+  gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
+  gn::Transport browser;
+  gn::open_sim_transport(browser, net, gn::sim_address(1, 27001));
+  ge::console::Console con;
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  sm::Host host{.console = &con};
+  menu.servers().set_query({toy_status, toy_reply, nullptr, nullptr});
+  menu.servers().use_transport(&browser);
+  menu.servers().set_lan_ports(27500, 27500);
+  con.execute("sb_lan 0");
+  con.execute("sb_masters \"+" + base + "/bin " + base + "/text " + base + "/gone +3" + base +
+              "/bad\"");
+  con.execute("menu_servers");
+  const auto printed = [&con](const std::string& line) {
+    return std::find(con.output().begin(), con.output().end(), line) != con.output().end();
+  };
+  std::vector<gn::TcpStream> streams;
+  std::vector<std::string> asked;
+  const std::string bin("\x0a\x00\x00\x01\x6d\x46\x0a\x00\x00\x02\x6d\x47\x0a", 13);
+  int64_t now = 0;
+  for (int i = 0; i < 2000; i++) {
+    for (gn::TcpStream in; gn::tcp_accept(web, in); in = {}) streams.push_back(in);
+    for (gn::TcpStream& t : streams) {
+      if (t.handle == -1) continue;
+      gn::tcp_pump(t);
+      std::vector<uint8_t> got;
+      gn::tcp_take_bytes(t, got);
+      const std::string req(got.begin(), got.end());
+      if (req.find("\r\n\r\n") == std::string::npos) continue;
+      const std::string path = req.substr(4, req.find(' ', 4) - 4);
+      asked.push_back(path);
+      const std::string body = path == "/bin" ? bin : path == "/text" ? "10.0.0.3:27910\n\n" : "";
+      const std::string reply = (path == "/gone" ? std::string("HTTP/1.1 404 Not Found\r\n")
+                                                 : std::string("HTTP/1.1 200 OK\r\n")) +
+                                "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n" +
+                                body;
+      gn::tcp_send_bytes(t, reinterpret_cast<const uint8_t*>(reply.data()), reply.size());
+      for (int k = 0; k < 100000 && !t.out.empty(); ++k) gn::tcp_pump(t);
+      gn::tcp_close(t);
+    }
+    now += 16000;
+    gn::sim_advance(net, now);
+    menu.update({}, false, host, 0.016);
+  }
+  CHECK(asked.size() == 3);
+  std::vector<std::string> listed;
+  for (const gn::ServerEntry& e : menu.servers().list().entries)
+    listed.push_back(gn::to_string(e.address));
+  std::sort(listed.begin(), listed.end());
+  CHECK(listed == (std::vector<std::string>{"10.0.0.1:27974", "10.0.0.2:27975", "10.0.0.3:27910"}));
+  CHECK(printed("[HTTP] Failed to fetch '" + base + "/gone': 404 Not Found"));
+  CHECK(printed("Ignoring invalid master URL: +3" + base + "/bad"));
+  for (gn::TcpStream& t : streams) gn::tcp_close(t);
+  gn::tcp_close_listener(web);
 }

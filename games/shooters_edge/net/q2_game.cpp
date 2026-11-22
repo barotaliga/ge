@@ -870,6 +870,9 @@ void quit(void* g, const std::string& reason, bool restart) {
     if (!game.relay.conns.empty()) q2_relay_stop(game.relay);
     if (game.net && !game.net->killed) q2_net_shutdown(*game.net, text, restart);
   }
+  // Our rules end with the game's closing line (a hosted library says its own when unloaded).
+  if (sv::Q2Server* q = sv::q2_of(game.rules); q != nullptr && !game.relay.spawned)
+    q->console.emplace_back("==== ShutdownGame ====");
 }
 
 // `$com_maplist`'s maps: those the search path holds.

@@ -4,11 +4,11 @@
 //
 // - WHERE IT LOOKS: the LAN (`sb_lan` 1: the status query broadcast to the ports the game's
 //   servers use), the masters (`sb_masters`, host:port words, and the masters the loaded install
-//   lists, `set_masters`), the community masters our own servers beat to (`sb_hubmasters`, the
-//   engine's masters, net/master.hpp, asked for the query's `protocol`), and the player's own
-//   servers (`sb_servers`, and the address book a game keeps, Quake II's `adr0` to `adr15`). The
-//   game hands it its protocol (`set_query`); with none, the page says
-//   so and lists nothing.
+//   lists, `set_masters`; a web address there is a list over HTTP, `WebList`), the community
+//   masters our own servers beat to (`sb_hubmasters`, the engine's masters, net/master.hpp,
+//   asked for the query's `protocol`), and the player's own servers (`sb_servers`, and the
+//   address book a game keeps, Quake II's `adr0` to `adr15`). The game hands it its protocol
+//   (`set_query`); with none, the page says so and lists nothing.
 // - THE TABLE: one row a server: its name (a padlock's `*` when it wants a password), the mode
 //   (ffa, team, duel, coop or a match mod's own word), the map, players over slots, the ping and
 //   the skill when the server says it; the selection ringed in the accent. The title row says how
@@ -48,7 +48,7 @@
 //
 // ge:summary Shooter's Edge's server browser page: LAN, masters and own servers listed, joined
 // ge:keywords server-browser servers page join-a-game menu_servers sb_masters sb_servers sb_lan
-// ge:keywords sb_hubmasters hub-master sv-master address-book adr0
+// ge:keywords sb_hubmasters hub-master sv-master address-book adr0 web-list
 // ge:keywords connect refresh sort ping players mode map skill coop shooters-edge
 // ge:keywords filter sb_hidefull sb_hideempty sb_mode sb_maxping hide-full hide-empty
 // ge:keywords sb_hidenotempty sb_hidedead sb_hidehighping sb_pinglimit sb_info_filter sb_status
@@ -67,6 +67,7 @@
 #include <vector>
 
 #include "forward/routes.hpp"
+#include "net/http_fetch.hpp"
 #include "net/server_list.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
@@ -229,6 +230,16 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   ge::console::Console* con_ = nullptr;  // the filter keys set the cvars through it
   ge::net::ServerFilter filter_;
   int hidden_ = 0;
+  // Lists of servers on the web (`sb_masters` words `http://...`; `+http://...` the binary list
+  // of 6-byte records, `+<n>http://...` of n-byte records), fetched at each refresh.
+  struct WebList {
+    std::string url;
+    int record = 0;  // 0: text, an address a line
+    ge::net::HttpFetch fetch;
+    bool over = true;
+  };
+  std::vector<WebList> web_lists_;
+  void web_frame();
 };
 
 }  // namespace shooters_edge::menu

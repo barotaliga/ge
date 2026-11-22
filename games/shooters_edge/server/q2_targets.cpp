@@ -89,6 +89,7 @@ Kind kind_of(std::string_view c) {
       {"misc_satellite_dish", kFigure},
       {"light_mine1", kFigure},
       {"light_mine2", kFigure},
+      {"viewthing", kFigure},
       {"misc_gib_arm", kGibPart},
       {"misc_gib_leg", kGibPart},
       {"misc_gib_head", kGibPart},
@@ -159,6 +160,8 @@ constexpr Figure kFigures[] = {
      true},
     {"light_mine1", "models/objects/minelite/light1/tris.md2", {}, {}, 0, 0, true},
     {"light_mine2", "models/objects/minelite/light2/tris.md2", {}, {}, 0, 0, true},
+    // A developer's model on show: the banner's first 7 frames, from half a second in.
+    {"viewthing", "models/objects/banner/tris.md2", {-16, -16, -24}, {16, 16, 32}, 0, 6, true},
 };
 constexpr int kDishLast = 38;
 const Figure* figure_of(std::string_view c) {
@@ -507,7 +510,8 @@ void clock_think(Q2Server& s, int i) {
       const std::string target = e.target, text_was = e.message;
       e.target = e.pathtarget;
       e.message.clear();
-      map_use_targets(s, i, e.activator);
+      // A clock that started itself has no user at all to hand on.
+      map_use_targets(s, i, (e.spawnflags & 4) != 0 ? e.activator : kNoActivator);
       s.entities[size_t(i)].target = target;
       s.entities[size_t(i)].message = text_was;
     }
@@ -758,6 +762,7 @@ bool targets_spawn(Q2Server& s, int i) {
       e.frame = fig->first;
       if (e.classname == "misc_banner") e.state = static_cast<int>(ge::core::next(s.rng) * 16) % 16;
       if (e.classname == "misc_satellite_dish") e.state = -1;  // still until used
+      if (e.classname == "viewthing") e.state = -4 - static_cast<int>(s.frame_number);
       return true;
     }
     case kGibPart:  // a body part placed on the map: it falls when the level starts
@@ -937,6 +942,8 @@ bool targets_use(Q2Server& s, int i, int activator) {
       }
       return true;
     case kLightRamp:
+      if (e.aim < 0) e.aim = q2_ramp_light(s, i);  // its light, found at the first use
+      if (e.aim < 0) return true;
       e.until = s.level_time;  // the ramp starts now
       e.tick_at = s.level_time;
       e.activator = activator;
@@ -1118,10 +1125,7 @@ void targets_frame(Q2Server& s) {
         break;
       case kLightRamp: {
         if (e.tick_at <= 0 || s.level_time + 0.001 < e.tick_at) break;
-        int light = -1;
-        for (size_t t = 0; t < s.entities.size(); t++)
-          if (s.entities[t].targetname == e.target && s.entities[t].classname == "light")
-            light = static_cast<int>(t);
+        const int light = e.aim;
         if (light < 0) {
           e.gone = true;
           break;
@@ -1266,7 +1270,8 @@ void targets_rows(Q2Server& s) {
     if (k == kFigure) {  // its frames on a loop
       const Figure* f = figure_of(e.classname);
       const int count = f->last - f->first + 1;
-      r.frame = f->first + static_cast<int>((s.frame_number + e.state) % count);
+      const int64_t at = static_cast<int64_t>(s.frame_number) + e.state;
+      r.frame = f->first + static_cast<int>(std::max<int64_t>(at, 0) % count);
       if (e.classname == "misc_satellite_dish")
         r.frame = e.state < 0 ? 0 : std::min(kDishLast, int(s.frame_number) - e.state);
     }
