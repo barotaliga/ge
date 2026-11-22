@@ -989,12 +989,7 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
       for (size_t t = 0; t < s.entities.size() && train < 0; t++)
         if (s.entities[t].targetname == e.target && class_of(s.entities[t]) == kTrain)
           train = static_cast<int>(t);
-      if (train < 0) {
-        s.console.push_back(e.target.empty()
-                                ? std::string("trigger_elevator has no target")
-                                : "trigger_elevator target " + e.target + " is not a train");
-        return;
-      }
+      if (train < 0) return;  // said once, a frame after the load (q2_lines.cpp)
       Q2Entity& t = s.entities[size_t(train)];
       if (t.think_at > 0 || t.arrive != kNoAct) return;  // busy
       const std::string floor =
@@ -1147,7 +1142,7 @@ void fire_targets(Q2Server& s, int ent, int activator, int depth, bool late) {
     if (activator >= 0 && !own)
       sound_at(s, activator + 1, unpack(s.players[activator].move.origin), sample);
   }
-  if (!e.killtarget.empty())
+  if (!e.killtarget.empty()) {
     for (Q2Entity& k : s.entities)
       if (k.targetname == e.killtarget) {
         k.gone = true;
@@ -1156,6 +1151,9 @@ void fire_targets(Q2Server& s, int ent, int activator, int depth, bool late) {
         k.arrive = kNoAct;
         k.think_at = 0;
       }
+    if (s.entities[size_t(ent)].gone)
+      return s.console.push_back("entity was removed while using killtargets");
+  }
   const std::string target = e.target;
   if (target.empty() || depth >= kMaxUseDepth) return;
   const bool door = !late && is_door(class_of(e));
@@ -1165,6 +1163,8 @@ void fire_targets(Q2Server& s, int ent, int activator, int depth, bool late) {
     if (int(i) == ent) continue;
     if (door && class_of(s.entities[i]) == kAreaPortal) continue;  // the door sets those itself
     use(s, static_cast<int>(i), activator, depth + 1, ent);
+    if (s.entities[size_t(ent)].gone)
+      return s.console.push_back("entity was removed while using targets");
   }
 }
 
