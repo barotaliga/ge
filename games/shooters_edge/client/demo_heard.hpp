@@ -61,6 +61,8 @@ class DemoHearing {
   // The demo over: everything it plays stopped (its recordings freed once their fades end, at a
   // later `frame` or `stop`).
   void stop();
+  // The sounds read (`soundlist`); null before the first.
+  const DemoSounds* sounds() const { return sounds_.get(); }
   // Sounds stopped whose voices are still fading, for a test.
   size_t retired() const { return retired_.kept(); }
 

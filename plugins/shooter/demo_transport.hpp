@@ -14,7 +14,7 @@
 // ge:keywords demo playback transport cl_demospeed demo_track demo_pause demo_seek demo_skip
 // ge:keywords demo_next demo_prev demo_highlights demo_skip_forward demo_skip_back demo_bar
 // ge:keywords demo_lerp parse_clock add_demo_transport kdemospeeds demo_jump seek demo_jump_end
-// ge:keywords demo_jump_skip_messages parse_tenths_clock seek-percent
+// ge:keywords demo_jump_skip_messages parse_tenths_clock seek-percent demo_snapshots
 // ge:skill shooter replay console
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #pragma once
@@ -40,6 +40,7 @@ struct DemoTransport {
   int track = -1;              // demo_track
   int lerp = 1;                // demo_lerp: drawn between frames
   int skip_messages = 1;       // demo_jump_skip_messages: what a jump reads past is not printed
+  double snap_every_s = 10;    // demo_snapshots: a seek snapshot every so many seconds (0 none)
   bool paused = false;
   // What a key, the bar or the console asked of the next step:
   double seek_ask = -1;       // a timeline time
