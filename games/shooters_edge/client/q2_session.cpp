@@ -137,6 +137,58 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
        .help = "Whether the server sends every frame whole, never as changes (read when you join).",
        .kind = con::CvarKind::boolean,
        .values = "0: changes (the default); 1: whole frames"});
+  // The later protocols (net/q2_proto_in.hpp), read at each `connect`.
+  v.add({.name = "cl_protocol",
+         .fallback = "0",
+         .help = "Which protocol joining a server speaks.",
+         .kind = con::CvarKind::integer,
+         .values = "0: the newest the server offers (the default); 36, 35: that one, or the next "
+                   "one down the server offers; 34: the original"});
+  v.add({.name = "net_maxmsglen",
+         .fallback = "1390",
+         .flags = con::kArchive,
+         .help = "The largest packet a server speaking a later protocol may send you, in bytes.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 4086,
+         .values = "512..4086: that many bytes (1390 the default); 0: the most, 4086"});
+  v.add({.name = "net_chantype",
+         .fallback = "1",
+         .help = "Which packet format joining a server on protocol 36 asks for.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 1,
+         .values = "1: the newer, which splits a big message over packets (the default); 0: the "
+                   "original"});
+  v.add({.name = "cl_batchcmds",
+         .fallback = "1",
+         .help = "Whether moves on protocol 36 go several to a packet.",
+         .kind = con::CvarKind::boolean,
+         .values = "1: they do (the default); 0: one packet a move, as the original"});
+  v.add({.name = "cl_packetdup",
+         .fallback = "1",
+         .help =
+             "How many earlier packets' moves each packet on protocol 36 carries again, against "
+             "losses.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 3,
+         .values = "0..3: that many (1 the default)"});
+  v.add({.name = "cl_maxpackets",
+         .fallback = "30",
+         .flags = con::kArchive,
+         .help = "How many packets a second you send a server on protocol 36.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 1000,
+         .values = "0: one a move; 10..1000: at most that many (30 the default; under 10 taken as "
+                   "10)"});
+  v.add({.name = "cl_instantpacket",
+         .fallback = "1",
+         .help = "Whether pressing attack or use on protocol 36 sends a packet at once, past "
+                 "cl_maxpackets.",
+         .kind = con::CvarKind::boolean,
+         .values = "1: it does (the default); 0: it waits its turn"});
   // What joining a server fetches (net/q2_downloads.hpp), read at each `connect`.
   v.add({.name = "allow_download",
          .fallback = "1",

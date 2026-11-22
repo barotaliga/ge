@@ -659,7 +659,7 @@ void q2_signon_parts(Q2Wire& w, const RulesCommon& c, int slot, const Q2WireOpti
   {
     Out o{out.server_data};
     o.u8(kServerData);
-    o.i32(kQ2Protocol);
+    o.i32(opt.protocol);  // the viewer's: 34, or a later one with its tail below
     o.i32(0x10000 + opt.server_count);
     o.u8(opt.attract_loop);
     o.str("");
@@ -882,7 +882,7 @@ void q2_signon_raw(Q2Wire& w, const Q2Raw& raw, int slot, const Q2WireOptions& o
   {
     Out o{out.server_data};
     o.u8(kServerData);
-    o.i32(kQ2Protocol);
+    o.i32(opt.protocol);  // the viewer's: 34, or a later one with its tail below
     o.i32(0x10000 + opt.server_count);
     o.u8(opt.attract_loop);
     o.str("");

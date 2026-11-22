@@ -40,6 +40,8 @@
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_downloads.hpp"
 #include "shooters_edge/net/q2_net.hpp"
+#include "shooters_edge/net/q2_net_ext.hpp"
+#include "shooters_edge/net/q2_proto_in.hpp"
 #include "shooters_edge/net/qw_client.hpp"
 #include "vfs/partial.hpp"
 
@@ -123,6 +125,22 @@ struct Q2ClientConfig {
   // nothing lost to a dropped packet's delta); a server that forbids it (`sv_allow_nodelta 0`)
   // may refuse.
   bool nodelta = false;
+  // QUAKE II'S LATER PROTOCOLS (q2_proto_in.hpp; porting/shooters-edge/q2-client-proto36.md):
+  // `protocol` (`cl_protocol`) the one asked: 0 the best the server's challenge offers (36), 36 or
+  // 35 taken when offered and falling to the next one down when not, anything else 34. A scripted
+  // client asks 34. `msglen` (`net_maxmsglen`) the largest packet the server may send it (0: the
+  // most, 4086; 512..4086), `chantype` (`net_chantype`) 1 the newer channel on 36; on 36 the moves
+  // go batched (`batch`, `cl_batchcmds`), `packetdup` (`cl_packetdup`, 0..3) earlier packets'
+  // moves again in each, at most `maxpackets` packets a second (`cl_maxpackets`, 0: no cap, else
+  // 10 or more).
+  bool batch = true;
+  bool instantpacket =
+      true;  // `cl_instantpacket`: attack or use pressed sent at once, past the cap
+  int protocol = 34;
+  int msglen = 1390;
+  int chantype = 1;
+  int packetdup = 1;
+  int maxpackets = 30;
   // `cl_shownet` 1 or more: each message the server sends printed as its size in bytes (through
   // `trace`'s print).
   int shownet = 0;
@@ -210,11 +228,21 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   // files]"; [FAIL] a file refused, [STOP] one cut off part way).
   ge::classic::content::WebDownloads http;
 
+  // The protocol chosen (34, 35, 36) and the later protocols' reading (q2_proto_in.hpp).
+  int protocol = 34;
+  Q2ProtoIn in;
   Q2Cmd cmds[3];  // the three newest, oldest first
-  // Every move sent, by its packet's outgoing sequence (its low 6 bits), as the player's hands made
-  // it: what a prediction runs again past the move the server acknowledged (q2_predict.hpp).
+  // Every move made, by its count (its low 6 bits), as the player's hands made it, and for each
+  // packet (by its outgoing sequence's low 6 bits) the count of moves made when it was sent: what a
+  // prediction runs again past the packet the server acknowledged (q2_predict.hpp).
   sh::MoveCmd sent[64] = {};
-  double sent_at[64] = {};  // the network's time each was sent, s
+  uint32_t made = 0;
+  uint32_t made_at[64] = {};
+  double sent_at[64] = {};  // the network's time each packet was sent, s
+  // 36's batched moves: the moves of the last packets sent (oldest first) and those made since.
+  std::vector<std::vector<Q2Cmd>> batch_sent;
+  std::vector<Q2Cmd> batch_now;
+  double last_packet = -1;
   double latency = 0;       // the newest acknowledged move's round trip, s
   ge::hud::NetHistory net;  // each packet as it came, or not (scr_lag_draw, r_netgraph)
   double moves_at = -1;     // the network's time the newest other players' moves came (-1: none)

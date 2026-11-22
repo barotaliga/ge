@@ -219,6 +219,13 @@ std::optional<std::vector<uint8_t>> inflate_raw(std::span<const uint8_t> stream,
   return out;
 }
 
+std::optional<std::vector<uint8_t>> inflate_raw_any(std::span<const uint8_t> stream, size_t most) {
+  Bits bits{stream};
+  std::vector<uint8_t> out;
+  if (!inflate_blocks(bits, out) || out.size() > most) return std::nullopt;
+  return out;
+}
+
 std::optional<std::vector<uint8_t>> inflate_gzip(std::span<const uint8_t> file) {
   // The header (RFC 1952): magic, deflate, flags, time, extra flags, OS; then the optional
   // fields the flags name. The trailer: the CRC-32 and the size mod 2^32.
