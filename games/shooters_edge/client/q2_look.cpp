@@ -120,6 +120,11 @@ Q2Look q2_look(uint32_t effects, uint32_t render_fx) {
   return look;
 }
 
+bool q2_infra_red(int rdflags, uint32_t render_fx, bool shell, bool full_bright) {
+  return (rdflags & kQ2RdIrGoggles) != 0 && (render_fx & kRfIrVisible) != 0 && !shell &&
+         !full_bright;
+}
+
 void q2_pulse(float rgb[3], double t) {
   const float gain = static_cast<float>(0.1 * std::sin(7 * t));
   for (int c = 0; c < 3; c++) rgb[c] = std::max(rgb[c] * 0.8f, rgb[c] + gain);

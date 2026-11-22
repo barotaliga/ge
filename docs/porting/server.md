@@ -27,6 +27,16 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 | Shell | `games/shooters_edge/server/lobby.hpp`, `announce.hpp`, `chat_rules.hpp`, `commands.hpp` | The lobby's words, the server's chat for every runner, client commands to the rules |
 | Shell | `games/shooters_edge/net/qw_cheats.hpp` | The speed check's cuts scored by the guard, named in the match report |
 
+### The settings sheet (every ported game owes it)
+
+OPTIONS ▸ SERVER SETTINGS (`docs/servers.md` § The settings sheet) works for a game once it gives
+three things: its server's `ServerGame::sheet` (the rows from its rules, each rule's group and words,
+the vote's lists; Shooter's Edge's `net/qw_sheet.hpp` is the pattern), a wire for its own clients
+(a bit in its extension set and one message carrying `sheet_row_text`, paced on the reliable
+channel), and readers for the stock servers of that game in `plugins/classic/server_sheet.hpp`
+(what a joined client can ask without a word the server would echo as chat). The menu page is the
+shell's and needs nothing from the game.
+
 ## Each game's
 
 | | Quake | Quake II | Next |
@@ -116,11 +126,22 @@ interface in `porting/shooters-edge/q2-game-api-ex-facts.md`; those of the recor
 relay's lines in `porting/shooters-edge/q2-mvd-dummy-facts.md`. Still to come there: the extended
 limits and compressed downloads.
 
+Every classic game's search path answers the file words in the classic layer
+(`plugins/classic/content/fs_words.hpp`): `dir`, `fdir`, `whereis` and the read-only links (`link`,
+`softlink` and their `unlink`s, kept in the search path's `FileLinks` and applied by `find_file`),
+and gives `fs_restart` its banner; Quake II's server wires them with `path` and the game folder's
+name check. A game whose own words are another game's wires the same calls. Quake II's `sv addip`
+and its other filter words are the engine's ban list under the game's words
+(`net/q2_admin.cpp`, `sv_filter`), and its status answer's keys come from the rules' live settings,
+the build and the administrator's `sets` keys (`q2_status_keys`, through `ServerConfig::admin_info`).
+
 The dedicated process (`engine/server/main.cpp`) gives every game `quit [reason]` and `recycle
 [reason]` (the words joined by spaces, handed to the game's `ServerGame::quit` before it closes;
 both exit with success, a recycle's players told to reconnect for whatever supervises the process
 to start it again), `showip` (the machine's addresses, `engine/net/udp_socket.hpp`, then the
-sockets the core and the game listen on), `macrolist` and `$com_maplist` (`engine/server/
+sockets the core and the game listen on), `net_restart` (`engine/server/net_restart.hpp`: the socket
+opened again, the last good port when the new one fails, the game's own listeners reopened through
+`ServerGame::reopened`), `macrolist` and `$com_maplist` (`engine/server/
 macros.hpp`) beside the console's clock macros. Quake II's farewell is "Server quit" or "Server
 restarted", with the reason, to every player and relay viewer; after `killserver` its endpoint
 answers only rcon and runs no frame until the next map.

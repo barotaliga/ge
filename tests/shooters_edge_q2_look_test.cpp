@@ -198,3 +198,12 @@ TEST(full_bright_min_light_and_bob_by_their_bits) {
 }
 
 }  // namespace
+
+TEST(through_infra_red_goggles_a_marked_model_is_drawn_red_and_unlit) {
+  const uint32_t warm = cl::kRfIrVisible;
+  CHECK(!cl::q2_infra_red(0, warm, false, false));  // no goggles on
+  CHECK(cl::q2_infra_red(cl::kQ2RdIrGoggles, warm, false, false));
+  CHECK(!cl::q2_infra_red(cl::kQ2RdIrGoggles, 0, false, false));    // not marked
+  CHECK(!cl::q2_infra_red(cl::kQ2RdIrGoggles, warm, true, false));  // a shell holds it
+  CHECK(!cl::q2_infra_red(cl::kQ2RdIrGoggles, warm, false, true));  // full light holds it
+}

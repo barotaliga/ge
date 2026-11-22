@@ -31,7 +31,7 @@ namespace pg = ge::progs;
 namespace sv = shooters_edge::server;
 
 constexpr int kMsec = 14;         // a command's length on the 1/72 s host
-constexpr int kSampleEvery = 36;  // frames between the pictures' points (half a second)
+constexpr int kSampleEvery = 14;  // frames between the pictures' points (a fifth of a second)
 constexpr double kHz = 1000.0 / kMsec;
 constexpr int kFlagGodmode = 64;  // the program's `flags` bit for `god`
 
@@ -90,11 +90,15 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   }
   const sv::RulesCommon& s = *c.server;
   m.nav = std::make_unique<MapNav>();
-  m.nav->hatch_drops = true;  // the campaign's floor doors open drops (map_nav.hpp)
+  m.nav->hatch_drops = true;     // the campaign's floor doors open drops (map_nav.hpp)
+  m.nav->one_way_tricks = true;  // the record runs' blast jumps lead on (map_nav.hpp)
   if (!build_map_nav(*q, c.map, quake_maps(), "info_player_start", *m.nav, error)) return false;
   MapNav& nav = *m.nav;
   em.name = c.map.name;
   em.nav_nodes = static_cast<int64_t>(nav.graph.nodes.size());
+  em.nav_rockets = nav.tricks_made.held;
+  em.nav_grenades = nav.tricks_made.grenades;
+  em.nav_combos = nav.tricks_made.combos;
   em.movers = static_cast<int64_t>(nav.movers.size());
   em.nav_ms = nav.build_ms;
   em.lo = nav.graph.lo;
@@ -206,6 +210,9 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
     const int frames = static_cast<int>(opt.map_seconds * 72);
     int frame = 0;
     bool changed = false;
+    std::vector<sh::Vec3f> blast;  // the leader's blast jump in the air (empty: none)
+    int blast_frame = 0;
+    bool in_grenade = false;
     for (; frame < frames && !changed; frame++) {
       const sv::RulesCommon& now = *c.server;
       const double t = now.sv.time;
@@ -250,6 +257,17 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         p.sequence = ++rc.sequence;
         for (int i = 0; i < 3; i++) p.cmds[i] = rc.cmds[i];
       }
+      // The leader's blast jump starts with the pilot's shot under him (a rocket jump) or the
+      // first command of a grenade trick.
+      {
+        const sb::Pilot& lp = m.players[0].bot.pilot.pilot;
+        const bool grenade = lp.mode == sb::PilotMode::grenade;
+        if (blast.empty() && (lp.shot_now || (grenade && !in_grenade))) {
+          blast.push_back(now.world.entities[1].origin);
+          blast_frame = frame;
+        }
+        in_grenade = grenade;
+      }
       if (!sv::campaign_frame(c, packets.data(), mates + 1, r.error)) {
         r.error = "run_coop_episode: " + em.name + ": " + r.error;
         return r;
@@ -290,6 +308,18 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
             em.far_by_mode[static_cast<int>(m.players[static_cast<size_t>(k)].escort.mode)]++;
             if (d.waterlevel >= 2 || L.waterlevel >= 2) em.far_in_water++;
           }
+        }
+      }
+      if (!blast.empty()) {
+        // Followed until he stands again (a short hop's landing counts after 0.15 s in the air),
+        // dies or 4 s have passed.
+        if (frame % 6 == 0) blast.push_back(L.origin);
+        const int flown = frame - blast_frame;
+        if ((flown > 11 && (after.sv.edicts[1].flags & sh::kFlagOnGround) != 0) || !leader_live ||
+            flown > 288) {
+          blast.push_back(L.origin);
+          em.blasts.push_back(std::move(blast));
+          blast.clear();
         }
       }
       if (frame % kSampleEvery == 0) {

@@ -57,7 +57,7 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   s.fetch = true;
   s.fetch_level = true;
   s.allow = cfg.q2_downloads;  // allow_download and its kinds
-  s.http = cfg.q2_http;        // cl_http_*: the files over HTTP first
+  s.http = cfg.web;            // cl_http_*: the files over HTTP first
   s.nodelta = cfg.q2_nodelta;  // cl_nodelta
   s.ask_moves = true;          // the other players' moves, to run them forward (q2_predict.hpp)
   s.ask_back = true;           // the items coming back, drawn ahead of time (ce_respawns)
@@ -205,7 +205,8 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   c.news = Q2News{};
   const double now_s = static_cast<double>(r.now_us) * 1e-6 + r.owed_s;
   // The ignore lists, the team tags and the regex triggers (chat_ignore.hpp).
-  r.ignore.chat.relay = false;  // a game joined: Quake II's message triggers run
+  r.ignore.chat.relay = false;                  // a game joined: Quake II's message triggers run
+  remote_sheet_step(r, d.state.prints, now_s);  // `info` asked for the settings page
   client::drop_ignored(r.ignore, d.state, d.state.prints, now_s, &d.state.centre);
   const bool fresh = c.frames != r.q2_frames;
   client::DemoState& st = d.state;

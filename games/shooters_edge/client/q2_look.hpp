@@ -45,12 +45,18 @@ inline constexpr uint32_t kSqRotate = 1u, kSqGib = 2u, kSqBob = 4u, kSqBlaster =
 inline constexpr uint32_t kRfMinLight = 1u, kRfFullBright = 8u, kRfTranslucent = 32u,
                           kRfBeam = 128u, kRfGlow = 512u, kRfShellRed = 1024u,
                           kRfShellGreen = 2048u, kRfShellBlue = 4096u, kRfShellDouble = 65536u,
-                          kRfShellHalf = 131072u, kRfShellLiteGreen = 1u << 19;
+                          kRfShellHalf = 131072u, kRfShellLiteGreen = 1u << 19,
+                          kRfIrVisible = 32768u;
+// The view's bit for infra-red goggles: an `kRfIrVisible` model drawn red, lit by nothing.
+inline constexpr int kQ2RdIrGoggles = 4;
 
 inline constexpr const char* kSqPowerScreenModel = "models/items/armor/effect/tris.md2";
 inline constexpr float kSqShellPushUnits = 4;  // a shell's points out along their normals
 inline constexpr float kSqShellAlpha = 0.3f;
 inline constexpr double kSqSpinDegPerS = 500;  // spinning lights' turn
+// Seen through infra-red goggles (the view's `kQ2RdIrGoggles`): a model marked `kRfIrVisible`
+// is drawn as its skin times pure red, lit by nothing, unless a shell or full light holds it.
+bool q2_infra_red(int rdflags, uint32_t render_fx, bool shell, bool full_bright);
 // The bob bit's lift at `t` s, units.
 double q2_bob_units(double t);
 

@@ -1,7 +1,7 @@
 // A bot's route on the live map (route.hpp).
 //
 // ge:summary The route picture: the plate copied, the track, kills, secrets and exits painted
-// ge:keywords draw_route route track kills secrets exits plate
+// ge:keywords draw_route route track kills secrets exits plate rocket-jump blast-jump
 // ge:skill map-design bots labs
 // ge:test tests/shooters_edge_live_map_test.cpp
 #include "shooters_edge/livemap/route.hpp"
@@ -96,6 +96,20 @@ ge::ui::Image draw_route(const Plate& plate, const RouteMarks& m) {
       const float half = s - std::fabs(d);
       line(img, x - half, y + d, x + half, y + d, 0.6f, {255, 215, 0});
     }
+  }
+  // Blast jumps over the track: the flight orange, the take-off a dark-ringed orange disc, the
+  // landing a dark-ringed white one; a combo (a grenade and a rocket together) violet.
+  for (size_t b = 0; b < m.blasts.size(); b++) {
+    const std::vector<std::array<float, 3>>& arc = m.blasts[b];
+    if (arc.size() < 2) continue;
+    const bool combo = b < m.combos.size() && m.combos[b];
+    const Rgb hue = combo ? Rgb{190, 70, 255} : Rgb{255, 120, 0};
+    for (size_t i = 0; i + 1 < arc.size(); i++)
+      line(img, px(arc[i]), py(arc[i]), px(arc[i + 1]), py(arc[i + 1]), w * 0.9f, hue);
+    disc(img, px(arc.front()), py(arc.front()), 3.2f * w, {20, 20, 20});
+    disc(img, px(arc.front()), py(arc.front()), 2.4f * w, hue);
+    disc(img, px(arc.back()), py(arc.back()), 2.4f * w, {20, 20, 20});
+    disc(img, px(arc.back()), py(arc.back()), 1.6f * w, {255, 255, 255});
   }
   if (n > 0) {
     const float x = px(m.track[0]), y = py(m.track[0]), s = 3.5f * w;

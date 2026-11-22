@@ -27,6 +27,8 @@ namespace cl = shooters_edge::client;
 
 namespace pg = ge::progs;
 
+namespace wd = ge::classic::content;
+
 namespace {
 
 constexpr double kRetry = 1.0;       // s between connectionless retries
@@ -102,7 +104,24 @@ bool plain_name(const std::string& n, bool slash = false) {
          n.find_first_of(slash ? "\\:" : "/\\:") == std::string::npos;
 }
 
+// The game's settings for the web downloads: Quake's kinds of file, its base folder, its scheme;
+// our own server is never told `download http`.
+wd::WebConfig web_config(const QwClientEnd& c) {
+  wd::WebConfig w = c.cfg.web;
+  w.gamedir = c.gamedir == "qw" ? std::string() : c.gamedir;
+  w.base_folder = "qw";
+  w.referer_scheme = "quake";
+  w.kinds = wd::quake_web_kinds();
+  return w;
+}
+
 void next_skin_or_begin(QwClientEnd& c) {
+  if (c.web.on) {  // from the web first: `begin` held until it is done
+    const wd::WebConfig w = web_config(c);
+    for (const std::string& path : std::exchange(c.wanted_skins, {}))
+      if (!has_file(c, path)) wd::web_queue(c.web, w, path);
+    if (wd::web_busy(c.web)) return;
+  }
   while (!c.wanted_skins.empty()) {
     const std::string path = c.wanted_skins.front();
     c.wanted_skins.erase(c.wanted_skins.begin());
@@ -163,6 +182,21 @@ void start_skins(QwClientEnd& c) {
     }
   }
   next_skin_or_begin(c);
+}
+
+// The web downloads moved on: each file fetched kept as one over the channel; once none is left
+// (or the web gave its files back), the channel's turn.
+void step_web(QwClientEnd& c) {
+  wd::WebDone done;
+  wd::web_step(
+      c.web, web_config(c), c.now,
+      [&c](const std::string& path, bool) { return !has_file(c, path); }, done);
+  for (auto& [path, bytes] : done.files) {
+    if (c.cfg.keep_file) c.cfg.keep_file(c.gamedir, path, bytes, nullptr);
+    c.downloaded[path] = std::move(bytes);
+  }
+  c.wanted_skins.insert(c.wanted_skins.begin(), done.back.begin(), done.back.end());
+  if (!wd::web_busy(c.web) && !c.dl.active) next_skin_or_begin(c);
 }
 
 void finish_download(QwClientEnd& c, bool ok) {
@@ -292,6 +326,9 @@ void on_stufftext(QwClientEnd& c, const std::string& text) {
       c.bytes_out += static_cast<int64_t>(b.size());
     } else if (cmd == "fullserverinfo") {
       c.serverinfo = pg::word(w, 1);
+      // The web address files are fetched from: the server's, else the player's own.
+      wd::web_connect(c.web, web_config(c), info_get(c.serverinfo, "*dlserver"),
+                      c.cfg.fetch_looks ? 1 : 0, gn::to_string(c.server));
       const std::string z = info_get(c.serverinfo, "*z_ext");
       c.ext[ExtFamily::z] = c.cfg.ask[ExtFamily::z] & static_cast<uint32_t>(std::atoi(z.c_str()));
       const std::string ge = info_get(c.serverinfo, "*ge_ext");
@@ -549,6 +586,10 @@ void apply(QwClientEnd& c, const SvcMsg& m) {
                        static_cast<uint32_t>(m.ints[3]),
                        static_cast<uint32_t>(m.ints[4])};
       }
+      break;
+    case svc::ge_sheet:  // the server's settings sheet, a part at a time (qw_sheet.hpp)
+      if (!m.ints.empty() && !m.strings.empty())
+        ge::server::sheet_take(c.sheet, m.ints[0], m.strings[0]);
       break;
     case svc::serverinfo:  // one key changed (a match's `status`, a new limit)
       if (m.strings.size() == 2)
@@ -850,6 +891,7 @@ void client_tick(QwClientEnd& c, int64_t now_us) {
     c.redirects = sent;
     return;
   }
+  if (wd::web_busy(c.web)) step_web(c);
   // A connected server that has gone quiet: given up, so the game can say so and leave.
   if ((c.stage == ClientStage::signon || c.stage == ClientStage::active) && c.cfg.timeout > 0 &&
       c.now - c.ch.last_received > c.cfg.timeout) {

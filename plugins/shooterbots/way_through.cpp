@@ -747,16 +747,25 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       // base2's start: a hollow car the button on its inner wall sends along its shaft): it keeps
       // no one out, and barring it kept him from the button that moves it.
       bool holds = false, bars_one = true;
-      for (const sb::NavNode& n : g.nodes) holds = holds || n.mover == e;
       const sh::Edict& de = s.sv.edicts[static_cast<size_t>(e)];
+      for (const sb::NavNode& n : g.nodes) holds = holds || n.mover == e;
       for (const ButtonSpot& bs : f.button_spots) {
         bool its = false;
         for (const int d : bs.doors) its = its || d == e;
         constexpr float kIn = 16;  // the button's middle this near the car's box counts as in it
         if (its && bs.at.x > de.absmin.x - kIn && bs.at.x < de.absmax.x + kIn &&
             bs.at.y > de.absmin.y - kIn && bs.at.y < de.absmax.y + kIn &&
-            bs.at.z > de.absmin.z - kIn && bs.at.z < de.absmax.z + kIn)
+            bs.at.z > de.absmin.z - kIn && bs.at.z < de.absmax.z + kIn) {
           bars_one = false;
+          // A car with no node in it (base2's lift down to bunk1: its button is pressed from
+          // the node at its doors) holds the one its button is pressed from.
+          if (bs.node >= 0) {
+            const sh::Vec3f o = g.nodes[static_cast<size_t>(bs.node)].origin;
+            holds =
+                holds || (o.x > de.absmin.x - kButtonClose && o.x < de.absmax.x + kButtonClose &&
+                          o.y > de.absmin.y - kButtonClose && o.y < de.absmax.y + kButtonClose);
+          }
+        }
       }
       if (holds && !bars_one) {
         // Still watched: the button that sends it is pressed only once it has moved.
@@ -1283,6 +1292,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       for (const int32_t x : exits) any = any || w.search.reached(x);
       if (!any) needed.push_back(w.cars[k]);
     }
+    // The search (and the crossings shut) back to the doors as they are: a car's test left them
+    // with the car shut, and base2's lift down to bunk1, its button on it, was never reached.
+    if (!w.cars.empty() && !exits.empty())
+      reach_past(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w.search, &w);
     // A hatch shut over an exit (base2's first: a fall down a shaft under two turning leaves): its
     // button first, then the exit.
     for (const int h : w.hatches)
@@ -1547,8 +1560,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       }
       const WayStep& st = w.steps[static_cast<size_t>(stop)];
       if (way_exit(st)) return st.node >= 0 && reach(st.node) ? st.node : -1;
+      // A car's button is the way out (pressed on the way to the exit, after the rest): a tour
+      // that took it with monsters left rode him out of base2 on his way back through it.
       if (st.done || st.ever || t < st.left_until || st.node < 0 || !reach(st.node) ||
-          (st.keyed && !key_held) || st.drains || (!me_trapped && trapped_in(st.node)))
+          (st.keyed && !key_held) || st.drains || (!me_trapped && trapped_in(st.node)) ||
+          carries(st))
         return -1;
       for (const int c : st.covers)
         if (!locked_moved(w, s, static_cast<size_t>(c))) return -1;

@@ -58,7 +58,7 @@ inline constexpr int kLayoutSkins = 1312;    // the first player's `name\model/s
 
 // One thing the program draws, its top left in screen pixels.
 struct LayoutOp {
-  enum class Kind : uint8_t { picture, text };
+  enum class Kind : uint8_t { picture, text, fill };
   Kind kind = Kind::picture;
   int x = 0, y = 0;
   // A picture by the program's name for it (`num_3`, `i_health`, `/players/male/grunt_i.pcx`; see
@@ -68,6 +68,9 @@ struct LayoutOp {
   bool alt = false;  // the text's coloured set (each letter + 128)
   // The colour it is drawn in, multiplied over its pixels (`color`; white: as it is), RGBA.
   uint8_t rgba[4] = {255, 255, 255, 255};
+  // A picture stretched to this size (0: its own); a fill's rectangle, solid `rgba` (a boss's
+  // health bar: neither `color` nor the HUD's alpha reaches it).
+  int w = 0, h = 0;
 };
 
 struct LayoutInput {
@@ -80,6 +83,10 @@ struct LayoutInput {
   std::string_view (*string)(const void* ctx, int index) = nullptr;
   const void* ctx = nullptr;
   bool text_numbers = false;  // numbers as text ops, right-aligned in their field (layout_text)
+  // A scope's picture (`pic` of `scope?x` at `xv 0 yv 0`): 320 by 240 times `ch_scale`, centred
+  // on the screen and moved by `ch_x` and `ch_y`.
+  float scope_scale = 1;
+  int scope_x = 0, scope_y = 0;
 };
 
 // Runs `in.program` into `out` (cleared first), in drawing order.

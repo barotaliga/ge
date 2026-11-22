@@ -11,6 +11,7 @@
 #include <cstdint>
 
 #include "brush/trace.hpp"
+#include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
@@ -39,10 +40,10 @@ void blend_frame(Q2Server& s, int slot) {
     b[3] = now;
   };
   // What is at the eye.
-  const float eye[3] = {float(p.move.origin[0]) * 0.125f + p.seen.offset.x,
-                        float(p.move.origin[1]) * 0.125f + p.seen.offset.y,
-                        float(p.move.origin[2]) * 0.125f + p.seen.offset.z};
-  const int32_t at = s.tracer != nullptr ? s.tracer->contents(eye) : 0;
+  const sh::Vec3f eye{float(p.move.origin[0]) * 0.125f + p.seen.offset.x,
+                      float(p.move.origin[1]) * 0.125f + p.seen.offset.y,
+                      float(p.move.origin[2]) * 0.125f + p.seen.offset.z};
+  const int32_t at = map_contents(s, eye);  // a mover's water too
   if ((at & (kSolid | kLava)) != 0)
     lay(1, 0.3f, 0, 0.6f);
   else if ((at & kSlime) != 0)

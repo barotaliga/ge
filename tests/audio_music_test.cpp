@@ -183,6 +183,10 @@ TEST(the_music_command_plays_a_track_by_hand_then_the_levels_again) {
   CHECK(con.output().back() == "No such track: 9");
   con.execute("music play foo");
   CHECK(con.output().back() == "No such track: foo");
+  m.held = true;  // a game's movie plays
+  con.execute("music play 4");
+  CHECK(con.output().back() == "Can't play music in cinematic mode." && m.manual == 0);
+  m.held = false;
   audio::play_level_music(m, 3);
   con.execute("music play 4");
   CHECK(m.manual == 4 && m.track == 3 && !m.player.loops());

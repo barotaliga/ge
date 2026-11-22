@@ -40,6 +40,10 @@ void music_command(console::Console& c, MusicConsole& m, const console::Args& a)
             std::to_string(n) + " (" + m.player.playing() + ")" +
             (m.player.loops() ? ", looping." : "."));
   } else if (what == "play") {
+    if (m.held) {
+      c.print("Can't play music in cinematic mode.");
+      return;
+    }
     if (a.size() < 3) {
       c.print("Usage: " + a[0] + " play <track>");
       return;

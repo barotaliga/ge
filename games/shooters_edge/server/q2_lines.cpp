@@ -315,6 +315,12 @@ void q2_spawn_lines(Q2Server& s, const std::vector<char>& inhibited) {
                  .append(at)
                  .append(" has bad item: ")
                  .append(b.get_any_case("item")));
+    } else if (c == "misc_actor" && !dm(s) && (e.targetname.empty() || e.target.empty())) {
+      say(s, e.targetname.empty() ? "untargeted misc_actor at " + at
+                                  : "misc_actor with no target at " + at);
+      e.gone = true;
+    } else if (c == "target_actor" && e.targetname.empty()) {
+      say(s, "target_actor with no targetname at " + at);
     } else if (c == "path_corner" && e.targetname.empty()) {
       say(s, "path_corner with no targetname at " + at);
       e.gone = true;
