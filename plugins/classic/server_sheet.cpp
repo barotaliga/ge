@@ -59,7 +59,8 @@ std::string strip_high(std::string_view line) {
 
 std::string trim(std::string_view s) {
   while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) s.remove_prefix(1);
-  while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\n' || s.back() == '\r'))
+  while (!s.empty() &&
+         (s.back() == ' ' || s.back() == '\t' || s.back() == '\n' || s.back() == '\r'))
     s.remove_suffix(1);
   return std::string(s);
 }
@@ -145,15 +146,17 @@ void qw_sheet_from_info(gs::SettingsSheet& sheet, const std::string& info) {
   if (match) {
     const std::string mode = get("mode");
     const auto suffix = [&mode](std::string_view s) { return qw_mode_has(mode, s) ? "on" : "off"; };
-    put(row("overtime", "Overtime", "", "", "0: off; 1: time based; 2: sudden death; 3: tie-break; "
-                                            "4: golden frag",
+    put(row("overtime", "Overtime", "", "",
+            "0: off; 1: time based; 2: sudden death; 3: tie-break; "
+            "4: golden frag",
             SheetHow::direct, "overtime|", "What follows a tied match."));
     put(row("powerups", "Powerups", "", "", kOnOff, SheetHow::direct, "powerups|",
             "Whether the quad, the pentagram, the ring and the suit are on the map."));
     put(row("midair", "Midair", kGroupRules, suffix("midair"), kOnOff, SheetHow::direct, "midair|",
             "Rockets count only on a player in the air."));
     put(row("instagib", "Instagib", kGroupRules, suffix("instagib"), kOnOff));
-    put(row("arena", "Rocket arena", kGroupRules, suffix("ra"), kOnOff, SheetHow::direct, "arena|"));
+    put(row("arena", "Rocket arena", kGroupRules, suffix("ra"), kOnOff, SheetHow::direct,
+            "arena|"));
     put(row("spawn", "Spawns", kGroupRules, "",
             "0: fixed order; 1: normal; 2: spawn safety; 3: team spawns; 4: weighted; 5: "
             "weighted, far from foes",
@@ -161,8 +164,8 @@ void qw_sheet_from_info(gs::SettingsSheet& sheet, const std::string& info) {
     put(row("discharge", "Discharge", kGroupRules, "", kOnOff, SheetHow::direct, "discharge|",
             "Whether the lightning gun discharges in water."));
     put(row("fairpacks", "Fair backpacks", kGroupRules, "",
-            "off: the weapon in hand; on: the best weapon; lst: the last fired",
-            SheetHow::direct, "fairpacks|", "What a dead player's backpack holds."));
+            "off: the weapon in hand; on: the best weapon; lst: the last fired", SheetHow::direct,
+            "fairpacks|", "What a dead player's backpack holds."));
     put(row("dropquad", "Drop quad", kGroupRules, "", kOnOff, SheetHow::direct, "dropquad|"));
     put(row("dropring", "Drop ring", kGroupRules, "", kOnOff, SheetHow::direct, "dropring|"));
     put(row("droppack", "Drop backpacks", kGroupRules, "", kOnOff, SheetHow::direct, "droppack|"));
@@ -189,8 +192,8 @@ void qw_sheet_from_info(gs::SettingsSheet& sheet, const std::string& info) {
   put(row("hostname", "Name", kGroupServer, get("hostname"), "TEXT: the server's name"));
   put(row("*version", "Server", kGroupServer, get("*version"), "TEXT: its program"));
   if (match) put(row("ktxver", "Match mod", kGroupServer, get("ktxver"), "TEXT: its version"));
-  for (const char* pm : {"pm_ktjump", "pm_bunnyspeedcap", "pm_slidefix", "pm_airstep",
-                         "pm_pground", "pm_rampjump", "sv_safestrafe"})
+  for (const char* pm : {"pm_ktjump", "pm_bunnyspeedcap", "pm_slidefix", "pm_airstep", "pm_pground",
+                         "pm_rampjump", "sv_safestrafe"})
     put(row(pm, gs::sheet_words_of(pm), kGroupMoves, or_zero(get(pm)), "0: off; N: on",
             match && std::string_view(pm) == "pm_airstep" ? SheetHow::direct : SheetHow::fixed,
             match && std::string_view(pm) == "pm_airstep" ? "airstep" : ""));
@@ -218,31 +221,38 @@ bool qw_match_listing_read(gs::SettingsSheet& sheet, std::string_view raw) {
       return true;
     }
     if (label == "Overtime") {
-      const char* v = value == "off"                                ? "0"
-                      : value.find("sudden") != std::string::npos   ? "2"
+      const char* v = value == "off"                                 ? "0"
+                      : value.find("sudden") != std::string::npos    ? "2"
                       : value.find("tie-break") != std::string::npos ? "3"
-                      : value.find("golden") != std::string::npos   ? "4"
-                                                                    : "1";
+                      : value.find("golden") != std::string::npos    ? "4"
+                                                                     : "1";
       set_value(sheet, "overtime", v);
       return true;
     }
     if (label == "Server mode" || label == "Prewar" || label == "Admin election" ||
-        label == "Check frametimes" || label == "Command floodprot" ||
-        label.starts_with("QiZmo") || label.starts_with("CTF settings") ||
-        label.starts_with("Teaminfo"))
+        label == "Check frametimes" || label == "Command floodprot" || label.starts_with("QiZmo") ||
+        label.starts_with("CTF settings") || label.starts_with("Teaminfo"))
       return true;
   }
   // status1: labels padded to 14 columns, two pairs on a line.
   struct Label {
     std::string_view label, row;
   };
-  static constexpr Label kLabels[] = {
-      {"Maxspeed", ""},           {"Deathmatch", "deathmatch"}, {"Teamplay", "teamplay"},
-      {"Timelimit", "timelimit"}, {"Fraglimit", "fraglimit"},   {"Powerups", "powerups"},
-      {"Discharge", "discharge"}, {"Drop Quad", "dropquad"},    {"Drop Ring", "dropring"},
-      {"Fair Backpacks", "fairpacks"}, {"Drop Backpacks", "droppack"},
-      {"spec info perm", ""},     {"more spec info", ""},       {"teleteam", ""},
-      {"Berzerk", ""}};
+  static constexpr Label kLabels[] = {{"Maxspeed", ""},
+                                      {"Deathmatch", "deathmatch"},
+                                      {"Teamplay", "teamplay"},
+                                      {"Timelimit", "timelimit"},
+                                      {"Fraglimit", "fraglimit"},
+                                      {"Powerups", "powerups"},
+                                      {"Discharge", "discharge"},
+                                      {"Drop Quad", "dropquad"},
+                                      {"Drop Ring", "dropring"},
+                                      {"Fair Backpacks", "fairpacks"},
+                                      {"Drop Backpacks", "droppack"},
+                                      {"spec info perm", ""},
+                                      {"more spec info", ""},
+                                      {"teleteam", ""},
+                                      {"Berzerk", ""}};
   bool any = false;
   for (const Label& l : kLabels) {
     size_t at = line.find(l.label);
@@ -300,7 +310,10 @@ void q2_sheet_from_info(gs::SettingsSheet& sheet,
           "The map being played."));
   if (match) {
     const std::string type = get("match_type");
-    put(row("mode", "Mode", "", type == "TDM" ? "tdm" : type == "ITDM" ? "itdm" : "1v1",
+    put(row("mode", "Mode", "",
+            type == "TDM"    ? "tdm"
+            : type == "ITDM" ? "itdm"
+                             : "1v1",
             "tdm: team deathmatch; itdm: instagib team deathmatch; 1v1: a duel", SheetHow::vote,
             "vote mode %v", "The kind of match the server is set up for."));
     put(row("timelimit", "Time limit", "", "", "1..1440: that many minutes", SheetHow::vote,
@@ -333,13 +346,14 @@ void q2_sheet_from_info(gs::SettingsSheet& sheet,
     int bit;
     std::string_view words;
   };
-  static constexpr Flag kFlags[] = {
-      {1, "No health"},          {2, "No powerups"},      {4, "Weapons stay"},
-      {8, "No falling damage"},  {16, "Instant powerups"}, {32, "Same map"},
-      {64, "Teams by skin"},     {128, "Teams by model"},  {256, "No friendly fire"},
-      {512, "Spawn farthest"},   {1024, "Force respawn"},  {2048, "No armor"},
-      {4096, "Allow exit"},      {8192, "Infinite ammo"},  {16384, "Quad drop"},
-      {32768, "Fixed field of view"}};
+  static constexpr Flag kFlags[] = {{1, "No health"},          {2, "No powerups"},
+                                    {4, "Weapons stay"},       {8, "No falling damage"},
+                                    {16, "Instant powerups"},  {32, "Same map"},
+                                    {64, "Teams by skin"},     {128, "Teams by model"},
+                                    {256, "No friendly fire"}, {512, "Spawn farthest"},
+                                    {1024, "Force respawn"},   {2048, "No armor"},
+                                    {4096, "Allow exit"},      {8192, "Infinite ammo"},
+                                    {16384, "Quad drop"},      {32768, "Fixed field of view"}};
   const long flags = std::strtol(get("dmflags").c_str(), nullptr, 10);
   for (const Flag& f : kFlags)
     put(row("dmflags:" + std::to_string(f.bit), f.words, kGroupFlags,
@@ -357,9 +371,10 @@ bool q2_match_listing_read(gs::SettingsSheet& sheet, std::string_view raw) {
     return std::to_string(std::strtol(v.c_str(), nullptr, 10));
   };
   if (label == "Game mode:") {
-    set_value(sheet, "mode", value.find("Instagib") != std::string::npos ? "itdm"
-                             : value.find("Team") != std::string::npos   ? "tdm"
-                                                                         : "1v1");
+    set_value(sheet, "mode",
+              value.find("Instagib") != std::string::npos ? "itdm"
+              : value.find("Team") != std::string::npos   ? "tdm"
+                                                          : "1v1");
   } else if (label == "Timelimit:") {
     set_value(sheet, "timelimit", minutes(value));
   } else if (label == "Overtime:") {

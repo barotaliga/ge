@@ -13,8 +13,9 @@
 //
 // THE WIRE: a client that agreed the `ge` set's `settings-sheet` bit asks with the word `ge_sheet`
 // (`ge_sheet stop`: no more); the server answers with svc `ge_sheet` (a part number and a text:
-// begin, a row a message, end, a few each frame) and, while he keeps it, the sheet again whenever a vote changes a
-// setting or the map puts one back. A stock QuakeWorld client never agrees the bit, so never asks.
+// begin, a row a message, end, a few each frame) and, while he keeps it, the sheet again whenever a
+// vote changes a setting or the map puts one back. A stock QuakeWorld client never agrees the bit,
+// so never asks.
 //
 // ge:summary Shooter's Edge's QuakeWorld server's settings sheet: the rows and the svc that sends them
 // ge:keywords server-settings settings-sheet ge_sheet votable player-help qw_sheet_rows

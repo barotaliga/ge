@@ -40,7 +40,6 @@
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/qw_admin.hpp"
 #include "shooters_edge/net/qw_cheats.hpp"
-#include "shooters_edge/net/qw_sheet.hpp"
 #include "shooters_edge/net/qw_coop.hpp"
 #include "shooters_edge/net/qw_coop_game.hpp"
 #include "shooters_edge/net/qw_endpoint_cfg.hpp"
@@ -50,6 +49,7 @@
 #include "shooters_edge/net/qw_qtv.hpp"
 #include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/net/qw_server.hpp"
+#include "shooters_edge/net/qw_sheet.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -886,7 +886,8 @@ void sheet_resend(Game& g) {
   gs::SettingsSheet sheet;
   sheet_rows(g, sheet);
   for (int i = 0; i < sh::kMaxClients && i < 32; i++)
-    if ((g.sheet_watchers >> i & 1u) != 0) qw_send_sheet(*g.qw, i, sheet, g.sheet_out[static_cast<size_t>(i)]);
+    if ((g.sheet_watchers >> i & 1u) != 0)
+      qw_send_sheet(*g.qw, i, sheet, g.sheet_out[static_cast<size_t>(i)]);
 }
 
 // The vote's lines printed (each to everyone, or to the one player), and its passed changes made.

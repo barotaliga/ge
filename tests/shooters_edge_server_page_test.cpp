@@ -39,15 +39,23 @@ gs::SettingsSheet sheet() {
   s.revision = 1;
   gs::SheetRow map{.name = "map", .words = "Map", .value = "dm3", .values = "TEXT: a map"};
   map.how = gs::SheetHow::vote;
-  gs::SheetRow frags{.name = "fraglimit", .words = "Frag limit", .value = "20",
+  gs::SheetRow frags{.name = "fraglimit",
+                     .words = "Frag limit",
+                     .value = "20",
                      .values = "0: no limit; 1..N: that many frags"};
   frags.how = gs::SheetHow::vote;
-  gs::SheetRow dm{.name = "deathmatch", .words = "Deathmatch mode", .value = "3",
-                  .values = "1: one; 2: two; 3: three; 4: four; 5: five", .line = "dmm%v"};
+  gs::SheetRow dm{.name = "deathmatch",
+                  .words = "Deathmatch mode",
+                  .value = "3",
+                  .values = "1: one; 2: two; 3: three; 4: four; 5: five",
+                  .line = "dmm%v"};
   dm.how = gs::SheetHow::direct;
   gs::SheetRow fps{.name = "maxfps", .words = "Packets a second", .group = "Server", .value = "77"};
-  gs::SheetRow jump{.name = "speedjump:3", .words = "Easy jump for Ann", .group = "Player help",
-                    .value = "off", .values = "off: not granted; on: granted",
+  gs::SheetRow jump{.name = "speedjump:3",
+                    .words = "Easy jump for Ann",
+                    .group = "Player help",
+                    .value = "off",
+                    .values = "off: not granted; on: granted",
                     .line = "vote speedjump 3 %v"};
   jump.how = gs::SheetHow::vote;
   for (gs::SheetRow r : {map, frags, dm, fps, jump}) gs::sheet_put(s, std::move(r));
@@ -152,4 +160,18 @@ TEST(leaving_a_row_turned_for_a_vote_asks_first) {
   page.after(m, m.top().id, "", w.con);
   CHECK_MSG(w.sent("serversheet close"), m.top().id);
   CHECK(!page.open());
+}
+
+TEST(the_window_opens_a_page_of_it_directly) {
+  World w;
+  const gs::SettingsSheet s = sheet();
+  sm::GameMenu menu;
+  menu.add_cvars(w.con);  // as the window does: the menu knows its console
+  sm::Host host{.console = &w.con, .sheet = &s};
+  menu.show(host, "server/Player help");
+  CHECK_MSG(menu.main().top().id == "server/Player help", menu.main().top().id);
+  CHECK(w.sent("serversheet open"));
+  CHECK(menu.main().top().find("speedjump:3") != nullptr);
+  menu.hide();
+  CHECK(w.sent("serversheet close"));
 }

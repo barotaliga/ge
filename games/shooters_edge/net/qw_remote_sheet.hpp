@@ -45,7 +45,7 @@ struct RemoteSheet {
   ge::classic::SheetSource source = ge::classic::SheetSource::none;
   // The window's own server's sheet, filled in process; false when no listen server runs.
   std::function<bool(ge::server::SettingsSheet&)> local;
-  bool open = false;        // the page is up
+  bool open = false;         // the page is up
   double listen_until = -1;  // listing lines are taken until then (the window's clock, s)
   double ask_at = -1;        // the listings are asked again then (after a change; -1 none)
   uint32_t ours_seen = 0;    // our server's sheet's revision last copied

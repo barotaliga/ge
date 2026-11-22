@@ -53,12 +53,14 @@ TEST(the_match_mod_shows_its_mode_and_its_words) {
   const gs::SheetRow* mode = gs::sheet_find(s, "mode");
   CHECK(gs::sheet_change_lines(*mode, "1on1") == std::vector<std::string>({"1on1"}));
   const gs::SheetRow* map = gs::sheet_find(s, "map");
-  CHECK(map->how == gs::SheetHow::vote && gs::sheet_change_lines(*map, "e1m2")[0] == "votemap e1m2");
+  CHECK(map->how == gs::SheetHow::vote &&
+        gs::sheet_change_lines(*map, "e1m2")[0] == "votemap e1m2");
   const gs::SheetRow* lag = gs::sheet_find(s, "antilag");
   CHECK(lag->how == gs::SheetHow::vote && gs::sheet_change_lines(*lag, "off")[0] == "antilag");
   // A switch not yet read turns with one press.
   const gs::SheetRow* dis = gs::sheet_find(s, "discharge");
-  CHECK(dis->value.empty() && gs::sheet_change_lines(*dis, "on") == std::vector<std::string>({"discharge"}));
+  CHECK(dis->value.empty() &&
+        gs::sheet_change_lines(*dis, "on") == std::vector<std::string>({"discharge"}));
 }
 
 TEST(the_match_mods_listings_fill_the_rest) {
@@ -83,11 +85,14 @@ TEST(the_match_mods_listings_fill_the_rest) {
 
 TEST(a_quake_ii_server_shows_its_info_and_flags) {
   std::pair<std::string, std::string> kv;
-  CHECK(q2_info_read("dmflags             1040\n", kv) && kv.first == "dmflags" && kv.second == "1040");
+  CHECK(q2_info_read("dmflags             1040\n", kv) && kv.first == "dmflags" &&
+        kv.second == "1040");
   CHECK(!q2_info_read("Ann: hello", kv) && !q2_info_read("   indented            x", kv));
-  std::vector<std::pair<std::string, std::string>> info = {
-      {"mapname", "q2dm1"}, {"deathmatch", "1"}, {"dmflags", "1040"}, {"fraglimit", "25"},
-      {"gamename", "baseq2"}};
+  std::vector<std::pair<std::string, std::string>> info = {{"mapname", "q2dm1"},
+                                                           {"deathmatch", "1"},
+                                                           {"dmflags", "1040"},
+                                                           {"fraglimit", "25"},
+                                                           {"gamename", "baseq2"}};
   CHECK(q2_sheet_source(info) == SheetSource::q2_plain);
   gs::SettingsSheet s;
   q2_sheet_from_info(s, info);
@@ -108,7 +113,8 @@ TEST(quake_iis_match_mod_votes_and_lists_its_settings) {
   CHECK(q2_match_listing_read(s, "Timelimit: 15 minutes"));
   CHECK(value_of(s, "timelimit") == "15");
   const gs::SheetRow* tl = gs::sheet_find(s, "timelimit");
-  CHECK(tl->how == gs::SheetHow::vote && gs::sheet_change_lines(*tl, "20")[0] == "vote timelimit 20");
+  CHECK(tl->how == gs::SheetHow::vote &&
+        gs::sheet_change_lines(*tl, "20")[0] == "vote timelimit 20");
   CHECK(q2_match_listing_read(s, "Weapon switch: faster") && value_of(s, "switchmode") == "fast");
   CHECK(!q2_match_listing_read(s, "Ann: gg"));
 }

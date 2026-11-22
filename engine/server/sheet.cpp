@@ -21,7 +21,7 @@ namespace {
 
 struct Field {
   char key;
-  std::string SheetRow::* member;
+  std::string SheetRow::*member;
 };
 // The row's fields as the wire's keys, help and values last (the ones dropped to fit).
 constexpr std::array<Field, 7> kFields = {{{'n', &SheetRow::name},
@@ -63,7 +63,7 @@ std::string plain_meaning(std::string_view m) {
   return s;
 }
 
-constexpr double kLadder[] = {1,  2,  3,  4,  5,   10,  15,  20,  25,  30,  40,
+constexpr double kLadder[] = {1,  2,  3,  4,   5,   10,  15,  20,  25,  30,  40,
                               50, 60, 75, 100, 150, 200, 250, 300, 500, 1000};
 
 }  // namespace
@@ -169,7 +169,8 @@ std::string sheet_change_line(const SheetRow& row, std::string_view value) {
   std::string v(value);
   if (v.empty() || v.find(' ') != std::string::npos) v = "\"" + v + "\"";
   std::string line = row.line;
-  if (line.empty()) line = row.how == SheetHow::vote ? "vote " + row.name + " %v" : row.name + " %v";
+  if (line.empty())
+    line = row.how == SheetHow::vote ? "vote " + row.name + " %v" : row.name + " %v";
   if (const size_t at = line.find("%v"); at != std::string::npos) line.replace(at, 2, v);
   return line;  // a line with no `%v` is a word that turns the setting on its own
 }
@@ -237,8 +238,8 @@ std::vector<SheetChoice> sheet_choices(const SheetRow& row) {
     size_t at = out.size();
     if (ge::console::parse_number(row.value, now))
       for (size_t i = 0; i < out.size(); i++)
-        if (double v = 0; out[i].meaning.empty() && ge::console::parse_number(out[i].value, v) &&
-                          v > now) {
+        if (double v = 0;
+            out[i].meaning.empty() && ge::console::parse_number(out[i].value, v) && v > now) {
           at = i;
           break;
         }
@@ -266,10 +267,17 @@ std::string sheet_words_of(std::string_view name) {
     std::string_view name, words;
   };
   static constexpr Known kKnown[] = {
-      {"map", "Map"},           {"mode", "Mode"},           {"timelimit", "Time limit"},
-      {"fraglimit", "Frag limit"}, {"teamplay", "Teamplay"}, {"deathmatch", "Deathmatch mode"},
-      {"maxclients", "Players"}, {"maxspectators", "Spectators"}, {"dmflags", "Deathmatch flags"},
-      {"capturelimit", "Capture limit"}, {"samelevel", "Same map again"},
+      {"map", "Map"},
+      {"mode", "Mode"},
+      {"timelimit", "Time limit"},
+      {"fraglimit", "Frag limit"},
+      {"teamplay", "Teamplay"},
+      {"deathmatch", "Deathmatch mode"},
+      {"maxclients", "Players"},
+      {"maxspectators", "Spectators"},
+      {"dmflags", "Deathmatch flags"},
+      {"capturelimit", "Capture limit"},
+      {"samelevel", "Same map again"},
   };
   for (const Known& k : kKnown)
     if (k.name == name) return std::string(k.words);

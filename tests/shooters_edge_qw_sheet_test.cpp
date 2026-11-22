@@ -69,14 +69,15 @@ TEST(our_server_sends_its_sheet_to_a_client_that_asks) {
   CHECK(r.client.ext.has(se::ExtFamily::ge, se::kGeSettings));
   const SettingsSheet& before = r.at_200;
   std::string names;
-  for (const SheetRow& row : before.rows) names += row.name + "(" + row.group + "," + sheet_how_name(row.how) + ") ";
+  for (const SheetRow& row : before.rows)
+    names += row.name + "(" + row.group + "," + sheet_how_name(row.how) + ") ";
   CHECK_MSG(before.whole && before.rows.size() > 5, names);
   CHECK(before.rows[0].name == "map" && before.rows[0].value == "arena");
   CHECK(before.rows[0].how == SheetHow::vote);
   const SheetRow* frags = sheet_find(before, "fraglimit");
   CHECK(frags != nullptr && frags->group.empty() && frags->how == SheetHow::vote);
   CHECK(frags != nullptr && frags->words == "Frag limit" && !frags->values.empty());
-  CHECK(sheet_find(before, "hostname") == nullptr);   // the owner's, never voted on
+  CHECK(sheet_find(before, "hostname") == nullptr);  // the owner's, never voted on
   CHECK(sheet_find(before, "sv_password") == nullptr);
   bool help = false;
   for (const SheetRow& row : before.rows) help = help || row.group == "Player help";
@@ -109,7 +110,8 @@ TEST(the_window_takes_a_listing_s_lines_and_leaves_the_rest) {
   s.source = ge::classic::SheetSource::qw_match;
   ge::classic::qw_sheet_from_info(s.sheet, "\\ktxver\\1.48\\mode\\2on2\\map\\dm4");
   std::string keep;
-  CHECK(se::remote_sheet_take_print(s, false, "Drop Quad     off Drop Ring     on\nAnn: hi\n", keep));
+  CHECK(
+      se::remote_sheet_take_print(s, false, "Drop Quad     off Drop Ring     on\nAnn: hi\n", keep));
   CHECK(keep == "Ann: hi\n");
   const SheetRow* ring = sheet_find(s.sheet, "dropring");
   CHECK(ring != nullptr && ring->value == "on");

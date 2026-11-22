@@ -73,6 +73,7 @@ class ServerPage {
 
   const ge::server::SettingsSheet* sheet_ = nullptr;
   std::map<std::string, std::vector<std::string>> values_;  // each row's choices' values
+  size_t meaning_chars_ = 20;  // the longest meaning a choice shows in the look filled
   std::optional<Pending> pending_;
   bool open_ = false;
   bool lower_ = false;

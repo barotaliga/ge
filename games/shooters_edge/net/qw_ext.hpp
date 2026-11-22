@@ -9,12 +9,12 @@
 // and server info (`*z_ext`), with no handshake, and the game's own `ge` set likewise (`*ge_ext`):
 // a QuakeWorld client never asks for it, so never gets a message it does not know.
 //
-// THE FIRST TIER we offer: every z bit (511), the ge set's named effects, aim bend, download origin,
-// item back and the settings sheet; x scale, transparency,
-// colour-mod, sound-double, model-double, entity-double and entity-double2, spawnstatic2, 256
-// packet entities and chunked downloads; mvd float coords and the teleport kind on setangle.
-// Everything else is refused. x float coords (only with sv_bigcoords) and the rest exist in the
-// table so they can be named, never offered.
+// THE FIRST TIER we offer: every z bit (511), the ge set's named effects, aim bend, download
+// origin, item back and the settings sheet; x scale, transparency, colour-mod, sound-double,
+// model-double, entity-double and entity-double2, spawnstatic2, 256 packet entities and chunked
+// downloads; mvd float coords and the teleport kind on setangle. Everything else is refused. x
+// float coords (only with sv_bigcoords) and the rest exist in the table so they can be named, never
+// offered.
 //
 // ge:summary The QuakeWorld protocol's extension families and bits as a table; the first tier
 // ge:keywords extensions pext z_ext fte-bits mvd-bits negotiate offered first-tier transparency
@@ -69,8 +69,7 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // (net/qw_sheet.hpp).
 constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,
                    kGeSpeedJumpShare = 16, kGeAccountKey = 32, kGeMoveFeel = 64, kGeVoice = 128,
-                   kGeEveryFrame = 256, kGeItemBack = 512, kGeHitReports = 1024,
-                   kGeSettings = 2048;
+                   kGeEveryFrame = 256, kGeItemBack = 512, kGeHitReports = 1024, kGeSettings = 2048;
 
 struct ExtBit {
   ExtFamily family;

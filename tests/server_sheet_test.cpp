@@ -118,7 +118,8 @@ TEST(the_change_line_is_a_vote_by_default_or_the_rows_own) {
   CHECK(sheet_change_line(r, "a b") == "cmd timelimit \"a b\"");
   r.line = "antilag";  // a word that turns it by itself
   CHECK(sheet_change_line(r, "5") == "antilag");
-  CHECK(std::string(sheet_mark(SheetHow::vote)) == "*" && std::string(sheet_mark(SheetHow::fixed)).empty());
+  CHECK(std::string(sheet_mark(SheetHow::vote)) == "*" &&
+        std::string(sheet_mark(SheetHow::fixed)).empty());
 }
 
 TEST(words_come_from_the_name_when_none_are_given) {

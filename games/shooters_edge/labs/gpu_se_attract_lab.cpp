@@ -44,6 +44,8 @@
 #include "lab/labs/liquid_scene.hpp"
 #include "net/sim_network.hpp"
 #include "net/transport.hpp"
+#include "server/server.hpp"
+#include "server/sheet.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
@@ -65,6 +67,8 @@
 #include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/plate_letters.hpp"
+#include "shooters_edge/menu/server_page.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "ui/raster.hpp"
 #include "vfs/pak.hpp"
@@ -169,7 +173,26 @@ void run(gl::Lab& lab) {
   lab.metric("classic-menu", menu.classic() ? 1 : 0, "bool", det);
   lab.metric("classic-console", con_look.on() ? 1 : 0, "bool", det);
   lab.metric("console-background", con_look.back != nullptr ? 1 : 0, "bool", det);
-  sm::Host host{.console = &con, .maps = {"start", "dm4"}};
+  // OPTIONS > SERVER SETTINGS: the sheet of our own QuakeWorld server, started in the lab on its
+  // test arena and read as the window reads its listen server's (ServerGame::sheet).
+  ge::server::SettingsSheet sheet;
+  {
+    ge::server::ServerConfig sc;
+    sc.hostname = "Arena Night";
+    sc.map = "arena";
+    sc.maxclients = 8;
+    sc.seed = 1;
+    ge::server::Server sv;
+    if (!ge::server::server_open(sv, shooters_edge::net::qw_game(), sc, nullptr, nullptr, error) ||
+        sv.game->sheet == nullptr) {
+      lab.fail(error, "Our QuakeWorld server did not start; read the reason above. Skill: net.");
+      return;
+    }
+    sv.game->sheet(sv.state, 0, sheet);
+    ge::server::server_close(sv);
+  }
+  lab.metric("sheet-rows", static_cast<double>(sheet.rows.size()), "count", det);
+  sm::Host host{.console = &con, .maps = {"start", "dm4"}, .sheet = &sheet};
   menu.set_game(real ? install : "/games/classic");
   menu.games().set_games({{.id = std::string(content->id),
                            .install = real ? install : "/games/classic",
@@ -240,6 +263,42 @@ void run(gl::Lab& lab) {
          "screen's top), its rows in the game's glyph sheet.",
          "the title picture centred at the top; the rows' labels right-aligned to the cursor",
          [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    // SERVER SETTINGS: the first page, a subpage of the votes, and the question a turned vote asks.
+    menu.show(host, "server");
+    menu.update(none, false, host, 1 / 60.0);
+    menu.settle();
+    shot("server", "SERVER SETTINGS",
+         "OPTIONS > SERVER SETTINGS on a server of ours: the map and the match's rules with their "
+         "values now, a rule a vote decides marked with an asterisk, the settings the player "
+         "cannot change dimmed, and a row for each page of the rest.",
+         "MAP*, the limits with their values; the pages PLAYER HELP, MOVEMENT, RULES; the legend",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    menu.show(host, "server/Player help");
+    menu.update(none, false, host, 1 / 60.0);
+    menu.settle();
+    shot("server-help", "SERVER SETTINGS: PLAYER HELP",
+         "A page of the votes: the rocket jump helpers and the aim help, each with its value now "
+         "and its asterisk.",
+         "the player aids, each starred, each with its value",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    menu.show(host, "server");
+    menu.update(none, false, host, 1 / 60.0);
+    if (menu.main().focus("fraglimit")) {
+      ge::ui::MenuInput right;
+      right.right = true;
+      menu.update(right, false, host, 1 / 60.0);
+      ge::ui::MenuInput down;
+      down.down = true;
+      menu.update(down, false, host, 1 / 60.0);
+      menu.settle();
+      lab.metric("vote-asked", menu.main().top().id == sm::kVotePage ? 1 : 0, "bool", det);
+      shot("server-vote", "CALL A VOTE?",
+           "A rule a vote decides, turned and left: the page asks before it calls the vote, the "
+           "setting's words and its value now and asked for; YES calls it, NO leaves it.",
+           "CALL A VOTE? over FRAG LIMIT's old and new values; YES focused",
+           [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    }
+    menu.hide();
     if (menu.art().plates()) {
       // A page Quake II's pack has no banner for: its title written on one of its own.
       menu.show(host, "enhanced");

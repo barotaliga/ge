@@ -196,7 +196,14 @@ void GameMenu::show(Host& host, std::string_view page) {
   if (demos) page = "main";
   const bool games = page == "games";
   if (games) page = "main";
-  if (page != "main") main_.open(page);
+  if (ServerPage::owns(page) && host.console != nullptr) {
+    // SERVER SETTINGS opened directly (a bind, the console): its pages filled and the sheet asked
+    // for first, as when the player opens it from OPTIONS; a subpage over its first page.
+    fill_server(host);
+    main_.open(kServerPage);
+    server_page_.event({ui::EventKind::opened, std::string(kServerPage), ""}, main_, *host.console);
+  }
+  if (page != "main" && main_.top().id != page) main_.open(page);
   refresh_main(host);
   main_.top().focus = -1;
   main_.move_focus(0);

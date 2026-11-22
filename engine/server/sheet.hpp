@@ -19,10 +19,10 @@
 // for the value (`sheet_change_line`): by default `vote <name> %v` for a vote and `<name> %v` for
 // the rest; a game or a reader of another server's words names its own (`vote speedjump 3 %v`,
 // a match mod's `timelimit %v`); a line with no `%v` is sent as it is (a word that turns a
-// setting, or casts a vote on it, by itself: `antilag`). A server whose words only STEP a setting (a match mod's
-// `fragsup` and `fragsdown`, or a `tp` that cycles) gives `<up>|<down>` (`<up>|` for one that
-// cycles): `sheet_change_lines` sends the up line once a choice from the value now to the one
-// asked, or the down line once a choice back (a cycle wraps round forward).
+// setting, or casts a vote on it, by itself: `antilag`). A server whose words only STEP a setting
+// (a match mod's `fragsup` and `fragsdown`, or a `tp` that cycles) gives `<up>|<down>` (`<up>|` for
+// one that cycles): `sheet_change_lines` sends the up line once a choice from the value now to the
+// one asked, or the down line once a choice back (a cycle wraps round forward).
 //
 // THE WIRE (any game's own message carrying a part number and a text): `begin` drops the rows
 // held and starts a new sheet, each `row` puts one (a row of a name held replaces it, so a change

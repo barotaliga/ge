@@ -22,14 +22,37 @@ namespace {
 
 // The match's own rules, on the first page in this order.
 constexpr std::array<std::string_view, 8> kFirstPage = {
-    "deathmatch", "teamplay", "timelimit", "fraglimit", "sv_overtime", "sv_overtime_minutes",
-    "k_midair",   "samelevel"};
+    "deathmatch",          "teamplay", "timelimit", "fraglimit", "sv_overtime",
+    "sv_overtime_minutes", "k_midair", "samelevel"};
 
 constexpr std::string_view kHelp = "Player help", kMoves = "Movement", kRules = "Rules";
 
 constexpr size_t kRowBytes = 700;  // a row's text at most: two fit a reliable message
 // The channel's waiting messages below which a sheet's next parts are sent (of kBackBuffers).
 constexpr int kSheetQueue = 3;
+
+// Our own rules' words on the pages; any other rule's come from its name (sheet_words_of).
+std::string words_of(std::string_view name) {
+  struct Known {
+    std::string_view name, words;
+  };
+  static constexpr Known kKnown[] = {
+      {"sv_rjump", "Rocket jump helper"},
+      {"sv_rrjump", "Reverse jump helper"},
+      {"sv_aimhelp_allow", "Aim help weapons"},
+      {"sv_aimhelp_deny", "Aim help never on"},
+      {"sv_aimhelp_x", "Aim help across"},
+      {"sv_aimhelp_y", "Aim help up"},
+      {"pm_speedjump", "Easy jump share"},
+      {"sv_overtime", "Overtime"},
+      {"sv_overtime_minutes", "Overtime minutes"},
+      {"k_midair", "Midair"},
+      {"k_midair_minheight", "Midair least height"},
+  };
+  for (const Known& k : kKnown)
+    if (k.name == name) return std::string(k.words);
+  return gs::sheet_words_of(name);
+}
 
 }  // namespace
 
@@ -71,7 +94,7 @@ void qw_sheet_rows(const QwSheetFacts& f, gs::SettingsSheet& out) {
     if (how == gs::SheetHow::fixed && !group.empty()) return;  // only what may change
     gs::SheetRow row;
     row.name = name;
-    row.words = gs::sheet_words_of(name);
+    row.words = words_of(name);
     row.group = group;
     row.value = f.value ? f.value(name) : std::string();
     if (row.value.empty() && r.fallback != nullptr) row.value = r.fallback;
@@ -96,7 +119,8 @@ void qw_sheet_rows(const QwSheetFacts& f, gs::SettingsSheet& out) {
       gs::SheetRow row;
       row.name = gs::aid_vote_key(kind, c.userid);
       std::string words = kind.words;
-      if (!words.empty()) words[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(words[0])));
+      if (!words.empty())
+        words[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(words[0])));
       row.words = words + " for " + c.name;
       row.group = std::string(kHelp);
       row.value = gs::aid_vote_word(kind, qw_aid_granted(*f.players, i, kind));
