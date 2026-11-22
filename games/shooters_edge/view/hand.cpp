@@ -20,7 +20,8 @@ namespace con = ge::console;
 // shot before the weapon goes back to rest (the classic weapon falls back a frame after the last).
 constexpr double kShotFrameHold = 1.5;
 
-void add_gun_commands(con::Console& con, ViewSettings& out, std::span<const std::string_view> held) {
+void add_gun_commands(con::Console& con, ViewSettings& out,
+                      std::span<const std::string_view> held) {
   con.add_command("gun_next", "gun_next: the held weapon's next frame shown (a developer's look)",
                   [&out](con::Console& c, const con::Args&) {
                     out.gun_frame++;

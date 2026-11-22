@@ -107,8 +107,8 @@ view::HandFrame step_native_held(const server::NativeQ2& ns, const PlayerState& 
   const int frame = static_cast<int>(nb.weapon_frame);
   view::HandInput in;
   in.weapon = static_cast<view::Weapon>(settings.gun_model >= 0 ? settings.gun_model
-                                         : w < 0                  ? 0
-                                                                  : w);
+                                        : w < 0                 ? 0
+                                                                : w);
   in.q2 = true;
   in.dead = p.dead || w < 0;
   in.place.look_yaw = v.pose.yaw;

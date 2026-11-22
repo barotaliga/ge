@@ -35,7 +35,8 @@
 // ge:summary Any shooter's keys and mouse: the move buttons, mouse look, cl_run, lookspring
 // ge:keywords controls keys mouse-look raw-mouse sensitivity invert wasd jump fire read_controls
 // ge:keywords turn_view move-cmd m_invert lookspring spring_view ideal-pitch always-run cl_run
-// ge:keywords use-button +use lookstrafe attack2 buttons forward attack speed strafe key_moves movedown moveup
+// ge:keywords use-button lookstrafe attack2 buttons forward attack speed strafe key_moves
+// ge:keywords movedown moveup
 // ge:keywords in_mouse_release mouse-capture cl_yawspeed add_control_cvars cl_forwardspeed
 // ge:keywords cl_backspeed cl_sidespeed cl_upspeed cl_movespeedkey cl_anglespeedkey cl_pitchspeed
 // ge:keywords freelook mlook klook lookup lookdown centerview force_centerview m_forward

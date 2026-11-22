@@ -12,7 +12,8 @@
 // at least 10), as whole milliseconds between moves (`q2_move_ms`: 62 a second is 16 ms apart).
 // THE HANDS: a move a tick with the window's view angles (`+use` as Quake II's use button, the
 // buttons byte's second bit). Quake II's game draws the view as those angles plus the turn the
-// server holds for the player (its delta angles: a spawn's facing, a teleport's), so the drawn view is the hands' plus that turn, never a tick behind. A weapon key
+// server holds for the player (its delta angles: a spawn's facing, a teleport's), so the drawn view
+// is the hands' plus that turn, never a tick behind. A weapon key
 // (`impulse 1` .. `impulse 11`: the weapon groups and the quick weapon ask the same way) goes as
 // Quake II's `use <weapon>` command, which a stock server takes and an impulse it does not.
 //

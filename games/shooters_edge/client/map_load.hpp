@@ -16,7 +16,7 @@
 //
 // ge:summary A map loaded behind the window: read and decoded on a thread, compiled while drawing
 // ge:keywords map-load background-load async loading spinner load_map load_world step_load
-// ge:keywords cancel_load take_load freeze hitch title warm-up no-visibility kNoVisibility
+// ge:keywords cancel_load take_load freeze hitch title warm-up no-visibility no_visibility
 // ge:skill render shooter
 #pragma once
 

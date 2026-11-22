@@ -402,7 +402,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
   } else {
     v.add(music_on), v.add(shuffle), v.add(menu_track);
   }
-  c.add_command_synonym("ogg", "music");  // its music player (engine/audio/music_console.hpp)
+  c.add_command_synonym("ogg", "music");       // its music player (engine/audio/music_console.hpp)
   c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
   v.add({.name = "scr_centertime",
          .fallback = "2.5",

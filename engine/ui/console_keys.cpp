@@ -19,8 +19,8 @@ namespace con = ge::console;
 constexpr uint16_t kGrave = 53;   // the key under the tilde
 constexpr uint16_t kNonUs = 100;  // the ISO key, the key under Escape on some Macs (binds.cpp)
 constexpr uint16_t kF1 = 58, kF12 = 69;  // the function keys run their binds over a menu
-constexpr uint16_t kC = 6;        // C: with Command or Ctrl, a copy
-constexpr uint16_t kV = 25;       // V: with Command or Ctrl, a paste
+constexpr uint16_t kC = 6;               // C: with Command or Ctrl, a copy
+constexpr uint16_t kV = 25;              // V: with Command or Ctrl, a paste
 constexpr uint16_t kLeftGui = 227, kRightGui = 231;  // the Command keys
 
 // The code point as UTF-8.

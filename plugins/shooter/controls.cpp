@@ -303,9 +303,10 @@ Moves button_moves(Controls& c) {
 
 void release_buttons(Controls& c) {
   ControlButtons& b = c.buttons;
-  for (console::Button* p : {b.forward, b.back, b.moveleft, b.moveright, b.moveup, b.movedown,
-                             b.jump, b.attack, b.speed, b.strafe, b.left, b.right, b.attack2,
-                             b.rjump, b.rrjump, b.lookup, b.lookdown, b.klook, b.mlook, b.use})
+  for (console::Button* p :
+       {b.forward, b.back,   b.moveleft, b.moveright, b.moveup, b.movedown, b.jump,
+        b.attack,  b.speed,  b.strafe,   b.left,      b.right,  b.attack2,  b.rjump,
+        b.rrjump,  b.lookup, b.lookdown, b.klook,     b.mlook,  b.use})
     if (p != nullptr) p->held = 0, p->pressed = false;
   b.impulse = 0;
 }
