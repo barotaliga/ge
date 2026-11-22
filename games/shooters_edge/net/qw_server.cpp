@@ -840,6 +840,8 @@ bool bind_map(QwServer& s, const sv::RulesRunner& rules, std::string& error) {
     if (const ge::console::Cvar* c = qc.cvars.find(rule); c != nullptr && !c->value.empty())
       info_set(s.serverinfo, rule, c->value, kServerInfoBytes);
   if (!s.cfg.progs_crc.empty()) info_set(s.serverinfo, "*progs", s.cfg.progs_crc, kServerInfoBytes);
+  if (!s.cfg.download_server.empty())
+    info_set(s.serverinfo, "*dlserver", s.cfg.download_server, kServerInfoBytes);
   if (s.cfg.cheats) {  // the rules' sv_cheats with it: god, give, noclip and fly
     info_set(s.serverinfo, "*cheats", "ON", kServerInfoBytes);
     qc.cvars.set("sv_cheats", "1", ge::console::Source::local, true);

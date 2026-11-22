@@ -32,7 +32,8 @@
 // `--say="vote fraglimit 30;vote rules"` has the player type those lines at the console first,
 // what the server prints back shown in the HUD's feed (a vote on the settings, say).
 // `--point=1` writes what the player points at from each view, as team chat's `%t` says it, in the
-// feed and the caption.
+// feed and the caption; `--teamsay="$health $bestweapon at %l"` a team line from each view, its
+// macros and codes filled (`--locs="x,y,z,name;..."` the places it names).
 // `--server="coop 1"` gives the server those lines before the map starts: with the packs' own
 // program, a coop game in which `--say="addbot"` seats a companion beside the player.
 //
@@ -846,22 +847,44 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
     }
     // `--point=1`: what the player points at from here as team chat's `%t` says it, in the feed.
+    // `--teamsay=<line>`: the line as say_team sends it from here, its `$` macros and percent
+    // codes filled from the player's state and `--locs`' places.
     std::string pointed;
-    if (lab.arg("point") == "1" && l.map) {
+    const std::string teamsay = lab.arg("teamsay");
+    if ((lab.arg("point") == "1" || !teamsay.empty()) && l.map) {
       ge::console::Console words{false};
       cl::TeamChat chat;
       cl::add_team_chat(words, chat);
       chat.scene = [&l] { return cl::point_scene(l); };
-      cl::PlaceNames no_places;
-      no_places.clear_line = [&l](sh::Vec3f a, sh::Vec3f b) {
+      cl::PlaceNames places_named;
+      places_named.clear_line = [&l](sh::Vec3f a, sh::Vec3f b) {
         const sh::Vec3f e = cl::line_end(l.map->bsp, a, b);
         return e.x == b.x && e.y == b.y && e.z == b.z;
       };
-      chat.places = &no_places;
+      const std::string locs = lab.arg("locs");
+      for (size_t a = 0; a < locs.size();) {
+        const size_t b = std::min(locs.find(';', a), locs.size());
+        float x = 0, y = 0, z = 0;
+        int used = 0;
+        if (std::sscanf(locs.substr(a, b - a).c_str(), "%f,%f,%f,%n", &x, &y, &z, &used) >= 3)
+          ge::classic::add_loc(places_named.locs, {x, y, z}, locs.substr(a + used, b - a - used));
+        a = b + 1;
+      }
+      const auto& me = l.server->sv.edicts[1].origin;
+      places_named.where = [me](sh::Vec3f& at) {
+        at = {me[0], me[1], me[2]};
+        return true;
+      };
+      chat.places = &places_named;
+      chat.status = cl::status_of(l, t);
       chat.status.t = t;
-      pointed = cl::fill_team_codes(words, chat, "%t");
-      hud.notify.push("(Sailor): " + pointed, se::hud_style().ink, t);
-      lab.note("view " + std::to_string(v) + " points at: " + pointed);
+      pointed = teamsay.empty()
+                    ? cl::fill_team_codes(words, chat, "%t")
+                    : cl::fun_characters(
+                          cl::fill_team_codes(words, chat, words.expand_text(teamsay)), true);
+      hud.notify.push("(Sailor): " + pointed, se::hud_style().ink, t - 0.05);  // shown from now
+      lab.note("view " + std::to_string(v) + (teamsay.empty() ? " points at: " : " says: ") +
+               pointed);
     }
     ge::render::FrameView view;
     cl::Q2Bar worn_bar, own_bar;
@@ -913,7 +936,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                   id,
                   "View " + std::to_string(v) + " in the " + kLooks[k] + " look" +
                       (tag.empty() ? std::string(".") : ", after the player fired.") +
-                      (pointed.empty() ? std::string() : " %t says: " + pointed),
+                      (pointed.empty()
+                           ? std::string()
+                           : (teamsay.empty() ? " %t says: " : " The team hears: ") + pointed),
                   "the map from the player's eyes",
                   {{"map", lab.arg("map")}, {"views", views}}},
                  gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
@@ -1288,6 +1313,11 @@ const gl::LabSpec kSpec{
      {"say", "",
       "with --game: console lines the player types first, ';' between (`vote fraglimit 30`), "
       "the server's answers in the HUD's feed"},
+     {"teamsay", "",
+      "with --game: a team line from each view, its $ macros and % codes filled from the "
+      "player's state (`$health $armortype $bestweapon at %l`), in the feed and the caption"},
+     {"locs", "",
+      "with --teamsay: place names, 'x,y,z,name' and ';' between, for $location and %l"},
      {"point", "",
       "with --game: 1 writes what the player points at from each view (team chat's %t) in the "
       "feed and the caption"},

@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <system_error>
@@ -76,12 +77,30 @@ std::string save_log(MatchAuto& m) {
 }
 
 // The file closed, nothing said.
+// `n` bytes into the recording's file: as they are, or through gzip for a `.gz` file.
+void put(JoinedFile& f, const uint8_t* bytes, size_t n) {
+  if (!f.gzip) {
+    f.out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(n));
+    return;
+  }
+  std::vector<uint8_t> packed;
+  ge::core::deflate_sync(f.zip, std::span<const uint8_t>(bytes, n), packed);
+  f.out.write(reinterpret_cast<const char*>(packed.data()),
+              static_cast<std::streamsize>(packed.size()));
+}
+
 void close_file(Remote& r) {
   if (r.file.path.empty()) return;
   remote_record_flush(r);
   if (r.file.q2) {  // Quake II's recording ends with a block of length -1
     const char end[4] = {'\xff', '\xff', '\xff', '\xff'};
-    r.file.out.write(end, 4);
+    put(r.file, reinterpret_cast<const uint8_t*>(end), 4);
+  }
+  if (r.file.gzip) {
+    std::vector<uint8_t> tail;
+    ge::core::deflate_finish(r.file.zip, tail);
+    r.file.out.write(reinterpret_cast<const char*>(tail.data()),
+                     static_cast<std::streamsize>(tail.size()));
   }
   r.file.out.close();
   r.file.path.clear();
@@ -238,6 +257,9 @@ bool remote_record_open(Remote& r, const fs::path& file, std::string& error) {
     return false;
   }
   r.file.path = file;
+  r.file.gzip = file.extension() == ".gz";
+  r.file.zip = {};
+  r.file.zip.wrap = ge::core::DeflateWrap::gzip;
   r.file.written = 0;  // the level so far goes first
   r.file.bytes = 0;
   remote_record_flush(r);
@@ -251,7 +273,9 @@ std::string remote_record_close(Remote& r, con::Console& c, double now_s) {
   }
   if (r.file.path.empty()) return "";
   const std::string path = r.file.path.string();
+  const bool q2 = r.file.q2;
   close_file(r);
+  if (q2) return "Stopped demo (" + client::q2_demo_size(r.file.bytes) + ").";
   const long kib = std::lround(static_cast<double>(r.file.bytes) / 1024);
   return "Recorded " + path + " (" + std::to_string(kib) + " KiB). Play it with playdemo " + path +
          ".";
@@ -278,8 +302,7 @@ void remote_record_flush(Remote& r) {
   JoinedFile& f = r.file;
   std::vector<uint8_t>& b = f.level.bytes;
   if (!f.path.empty() && f.written < b.size()) {
-    f.out.write(reinterpret_cast<const char*>(b.data() + f.written),
-                static_cast<std::streamsize>(b.size() - f.written));
+    put(f, b.data() + f.written, b.size() - f.written);
     f.out.flush();
     f.bytes += static_cast<int64_t>(b.size() - f.written);
     f.written = b.size();
@@ -372,6 +395,7 @@ void add_match_record_commands(con::Console& c, Remote& r) {
     return line == " " ? std::string() : line;
   };
   j.path = [&r] { return r.file.path.string(); };
+  j.bytes = [&r] { return r.file.bytes; };
   j.automatic = [&r] { return r.match.recording; };
   j.match_name = [&r, &c] {
     return client::match_name(match_facts(r), client::match_words(c.cvars()),

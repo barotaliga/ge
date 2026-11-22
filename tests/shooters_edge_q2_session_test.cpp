@@ -28,6 +28,7 @@ struct Rig {
   cl::Q2Session s;
   std::vector<std::string> said;
   Rig() {
+    cl::add_map_command_cvars(c.cvars(), s);
     cl::add_q2_session_cvars(c.cvars(), s);
     c.add_command("said", "keeps its word",
                   [this](con::Console&, const con::Args& a) { said.push_back(a[1]); });
@@ -169,6 +170,8 @@ TEST(in_grab_0_takes_the_mouse_only_while_the_game_covers_the_screen) {
   CHECK(!cl::q2_takes_mouse(r.s, false) && cl::q2_takes_mouse(r.s, true));
   r.c.execute("in_grab 2");
   CHECK(cl::q2_takes_mouse(r.s, false));
+  r.c.execute("in_enable 0");  // the mouse left alone, whatever in_grab says
+  CHECK(!cl::q2_takes_mouse(r.s, false) && !cl::q2_takes_mouse(r.s, true));
 }
 
 TEST(the_download_switches_are_quake_iis_settings) {

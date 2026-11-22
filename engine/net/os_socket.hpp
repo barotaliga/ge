@@ -1,4 +1,5 @@
-// THE OS'S SOCKET API, shared by the UDP and the TCP sockets and included by nothing else: BSD
+// THE OS'S SOCKET API, shared by the UDP and the TCP sockets (and TLS, for the system's trusted
+// roots) and included by nothing else: BSD
 // sockets on macOS, Linux, iOS and Android, Winsock on Windows (started once, on the first open).
 // The platform's headers stay behind this file, so no engine header pulls them in; it is not
 // installed with the engine's headers.
@@ -9,8 +10,10 @@
 // ge:test tests/net_udp_socket_test.cpp tests/net_tcp_socket_test.cpp
 #pragma once
 
+#include <cstdint>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -21,6 +24,8 @@
 #endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
+// After winsock2.h, which brings windows.h: the trusted roots (`root_certificates`).
+#include <wincrypt.h>
 #else
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -144,6 +149,21 @@ inline void allow_broadcast(Handle h, const sockaddr_storage& sa) {
   if (sa.ss_family != AF_INET) return;
   int on = 1;
   setsockopt(h, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&on), sizeof on);
+}
+
+// The system's trusted roots as DER certificates, for TLS (tls_stream.cpp): Windows' ROOT store;
+// elsewhere none, as the roots there are a bundle file.
+inline std::vector<std::vector<uint8_t>> root_certificates() {
+  std::vector<std::vector<uint8_t>> out;
+#if defined(_WIN32)
+  HCERTSTORE store = CertOpenSystemStoreW(0, L"ROOT");
+  if (store == nullptr) return out;
+  for (PCCERT_CONTEXT c = CertEnumCertificatesInStore(store, nullptr); c != nullptr;
+       c = CertEnumCertificatesInStore(store, c))
+    out.emplace_back(c->pbCertEncoded, c->pbCertEncoded + c->cbCertEncoded);
+  CertCloseStore(store, 0);
+#endif
+  return out;
 }
 
 }  // namespace ge::net::os

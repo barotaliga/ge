@@ -39,7 +39,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Save slots' word | "--- UNUSED SLOT ---" (`kUnusedSlot`) | `kEmptySlot` (`menu::q2_menu()`) | its own | its own |
 | Field of view | the player's own `fov` | the server's, drawn between frames (`client/q2_view.hpp`: `cl_adjustfov`, `uf`) | its own | its own |
 | Plaques | the pack's pause and loading pictures (`menu::draw_plaque`, `showpause`) | its own | its own | its own |
-| Map commands, game clock, console log | none | `client/q2_session.hpp` (`cl_beginmapcmd`, `timescale`, `cl_autopause`, the read-only state), `client/console_log.hpp` (`logfile`) | its own | its own |
+| Map commands, game clock, console log | the map commands (every game's) | `client/q2_session.hpp` (`cl_beginmapcmd`, `timescale`, `cl_autopause`, the read-only state), `client/console_log.hpp` (`logfile`) | its own | its own |
 | Own view from behind | `cam_thirdperson` over demos and watching | `cl_thirdperson` (a cheat), its angle and range, joined and hosted (`client/q2_session.hpp`'s `view_behind`) | its own | its own |
 | Effect switches | `cl_gibfilter`, `cl_muzzleflash`, `r_rocketlight` ... | `classic/q2_fx_switches.hpp` (`cl_disable_particles`, `cl_disable_explosions`, `cl_dlight_hacks`, `cl_muzzlelight_time`, `cl_muzzleflashes`) | its own | its own |
 | Footsteps and loops heard | the sounds as sent | `cl_footsteps` 0 and `s_ambient` (`client/demo_sound.hpp`'s `switches_from`) | its own | its own |
@@ -60,6 +60,10 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Floating items still | none | `cl_nobob` (the picture's `items_still`, `client/world_models.cpp`) | its own | its own |
 | The client's own port | any free port | `net_clientport`, moved at once (`net/qw_remote.cpp`'s `own_port`) | its own | its own |
 | The console's picture | the pack's `conback` | `con_background`, a picture under `pics/` (`menu/classic_console.hpp`) | its own | its own |
+| The console's stamps | `con_timestamps` on chat lines (`client/chat_lines.hpp`) | its own `con_timestamps` on every line, `con_timestampsformat`, `con_timestampscolor` (`console/view.hpp`'s stamps) | its own | its own |
+| Tab in the console | ours: the top suggestion | `com_completion_mode`, `com_completion_treshold`: the shared part, the matches listed (`console/view.hpp`'s `list_mode`) | its own | its own |
+| The server browser's sort and pace | `sb_sortservers` (codes), `sb_infospersec` | `ui_sortservers` (one column either way), `ui_pingrate` (from `rate`) in their place (`menu/servers_page.hpp`'s `game_sort`, `game_ping_rate`) | its own | its own |
+| The menus' size | the largest whole number that fits | `ui_scale` 1..10 that many times (`menu/classic_art.hpp`'s `scale`) | its own | its own |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Command packets | `localid`: a server browser on this machine sends commands that carry it (`net/qw_client.cpp`) | none | its own | its own |
 | Setup figure | the pack's figure in the chosen shirt and pants (`menu/classic_art.cpp`'s `player_in`) | its figure rows (`menu/q2_pages.cpp`) | its own | its own |
@@ -94,6 +98,10 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Sound muffled under water (`s_underwater`, off in Quake) | Quake II's client | `engine/audio/synth.hpp`'s muffle, `client/room_ear.hpp` |
 | Speakers swapped (`s_swapstereo`) | both games' later clients | `engine/audio/synth.hpp`'s `swap_stereo`, `client/room_ear.hpp` |
 | Typed history kept to a length (`con_history`) | Quake II's client | `engine/console/view.hpp` |
+| The string commands (`alias_in`, `cvar_in`, `set_bind_str`, `hash` ...), `msg_trigger` levels, `$triggermatch` | Quake's later clients | `engine/console/script_strings.cpp`, `script.cpp` |
+| Alias arguments `$0`, `$@`, `${1-3}`, `%1`; `if ... eq/ne/isin` | Quake II's later client | `engine/console/lex.cpp`, `script.cpp` |
+| The team's `$` macros, `$ledpoint`, `$ledstatus`, the match's `f_` hooks, fake names, flood protection, `cl_nofake`, the sound trigger, `f_version` answers | Quake's later clients | `client/team_macros.hpp`, `team_chat.hpp`, `chat_lines.hpp` (the classic layer) |
+| Map commands (`cl_beginmapcmd`, `cl_changemapcmd`, `cl_disconnectcmd`), `$loc_here`, `$loc_there` | Quake II's later client | `client/q2_session.hpp` (`add_map_command_cvars`), `place_names.hpp` |
 
 | Drawback left behind | How |
 | --- | --- |

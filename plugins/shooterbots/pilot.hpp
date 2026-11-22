@@ -457,6 +457,7 @@ struct PilotStats {
   int32_t rocket_jumps = 0;         // rocket jumps fired
   int32_t flips = 0;                // of them, taken as the flip
   int32_t grenade_jumps = 0;        // grenades fired for a grenade jump
+  int32_t combos = 0;               // rockets fired on a grenade for a combo
   int32_t escapes = 0;              // rockets fired out of a pit's liquid (escape.hpp)
   int32_t escapes_out = 0;          // and of them, landed on their ledge
   int32_t gap_jumps = 0;            // gap tricks jumped out of a hop (nav_gaps.hpp)

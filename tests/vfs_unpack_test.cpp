@@ -205,3 +205,23 @@ TEST(read_7z_lists_names_and_sizes) {
   CHECK(list.size() == 1 && list[0].name == "demos/match.mvd" && list[0].size == demo().size());
   CHECK(!vfs::read_7z(demo(), list, error));
 }
+
+TEST(unpack_layer_peels_one_packing_and_never_an_archive) {
+  std::vector<uint8_t> out;
+  std::string error;
+  for (const auto& packed : {vfs::write_gzip(demo()), vfs::zstd_pack(demo()),
+                             vfs::xz_pack(demo(), 6), vfs::bzip2_pack(demo())}) {
+    CHECK_MSG(vfs::unpack_layer(packed, out, error), error);
+    CHECK(out == demo());
+  }
+  // A zip (a pack such as a .pkz) is not a packing: it stays whole for its reader.
+  CHECK(!vfs::unpack_layer(vfs::write_stored_zip({{"a.txt", text("x")}}), out, error));
+  CHECK(error.find("opens as zip") != std::string::npos);
+  CHECK(!vfs::unpack_layer(text("plain"), out, error));
+  CHECK(!vfs::unpack_layer(vfs::zstd_pack(demo()), out, error, 10));  // past the limit
+  vfs::ZstdStream s;
+  vfs::zstd_begin(s, {3, 0, false});
+  vfs::zstd_write(s, demo());
+  vfs::zstd_flush(s);
+  CHECK(!vfs::unpack_layer(s.out, out, error) && error == "the zstd file is cut short");
+}

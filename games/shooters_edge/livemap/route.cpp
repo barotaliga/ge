@@ -98,13 +98,16 @@ ge::ui::Image draw_route(const Plate& plate, const RouteMarks& m) {
     }
   }
   // Blast jumps over the track: the flight orange, the take-off a dark-ringed orange disc, the
-  // landing a dark-ringed white one.
-  for (const std::vector<std::array<float, 3>>& arc : m.blasts) {
+  // landing a dark-ringed white one; a combo (a grenade and a rocket together) violet.
+  for (size_t b = 0; b < m.blasts.size(); b++) {
+    const std::vector<std::array<float, 3>>& arc = m.blasts[b];
     if (arc.size() < 2) continue;
+    const bool combo = b < m.combos.size() && m.combos[b];
+    const Rgb hue = combo ? Rgb{190, 70, 255} : Rgb{255, 120, 0};
     for (size_t i = 0; i + 1 < arc.size(); i++)
-      line(img, px(arc[i]), py(arc[i]), px(arc[i + 1]), py(arc[i + 1]), w * 0.9f, {255, 120, 0});
+      line(img, px(arc[i]), py(arc[i]), px(arc[i + 1]), py(arc[i + 1]), w * 0.9f, hue);
     disc(img, px(arc.front()), py(arc.front()), 3.2f * w, {20, 20, 20});
-    disc(img, px(arc.front()), py(arc.front()), 2.4f * w, {255, 120, 0});
+    disc(img, px(arc.front()), py(arc.front()), 2.4f * w, hue);
     disc(img, px(arc.back()), py(arc.back()), 2.4f * w, {20, 20, 20});
     disc(img, px(arc.back()), py(arc.back()), 1.6f * w, {255, 255, 255});
   }

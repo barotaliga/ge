@@ -84,4 +84,11 @@ void add_local_sound_commands(ge::console::Console& con, MenuSounds& sounds,
                               const GameAdapter& game, const SearchPath& files,
                               ge::audio::Synth& synth, int music_bus);
 
+// The sound device said at start (its driver, or none), and the sound system's own words:
+// `soundinfo` (the device's driver, the rate and the sounds playing on `synth`, or "Sound system
+// not started." with no device: `driver` null) and `snd_restart` (typed, it says why no restart is
+// needed: sound settings apply as they change).
+void add_sound_status_commands(ge::console::Console& con, const char* driver,
+                               const ge::audio::Synth& synth);
+
 }  // namespace shooters_edge::client

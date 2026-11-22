@@ -35,6 +35,7 @@ std::vector<NavTrick> nav_tricks(std::span<const RocketTrick> tricks) {
     n.pitch = t.pitch;
     n.run = t.run;
     n.level = t.level;
+    n.combo = t.combo;
     out.push_back(n);
   }
   return out;

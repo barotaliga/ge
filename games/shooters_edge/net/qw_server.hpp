@@ -190,8 +190,12 @@ struct ServerConfig {
   int maxfps = 77;             // maxfps: the moves a second clients are told they may send
   int info_flood_count = 300;  // sv_infoflood's first word
   int chunks_per_frame = 30;   // sv_downloadchunks
-  int safe_strafe = 0;         // sv_safestrafe
-  uint32_t seed = 1;           // the challenges' stream
+  // sv_downloadserver: the web address (or `github:<owner>/<repo>`) a client may fetch the
+  // server's files from instead, said in the server info as `*dlserver` (classic/content/
+  // web_downloads.hpp); "": none.
+  std::string download_server;
+  int safe_strafe = 0;  // sv_safestrafe
+  uint32_t seed = 1;    // the challenges' stream
   // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
   int most_players = 0;
   int max_spectators = 0;      // sv_maxspectators

@@ -49,6 +49,7 @@
 #include "shooters_edge/net/qw_qtv.hpp"
 #include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/net/qw_server.hpp"
+#include "shooters_edge/net/qw_sheet.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -119,6 +120,8 @@ struct Game {
   // The players' votes on the settings for this map (engine/server/vote.hpp): a passed one is
   // written into `settings.rules`, so a restart keeps it, and put back when the map changes.
   gs::VoteBook vote;
+  uint32_t sheet_watchers = 0;  // the slots that asked for the settings sheet (qw_sheet.hpp)
+  std::array<QwSheetOut, 32> sheet_out;  // each slot's sheet still going out
   // Timeouts in the match (engine/server/timeout.hpp): the rules paused while one is on, by the
   // server's clock (`now_s`, which runs on through the pause).
   gs::TimeoutBook timeout;
@@ -869,6 +872,31 @@ bool vote_check(void* ctx, std::string_view name, std::string_view value, gs::Vo
   return true;
 }
 
+// The settings sheet (qw_sheet.hpp) as the server stands now, and sent to everyone keeping it.
+void sheet_rows(const Game& g, gs::SettingsSheet& out) {
+  QwSheetFacts f;
+  f.rules = all_rules();
+  f.value = [&g](std::string_view name) {
+    if (const auto it = g.settings.rules.find(std::string(name)); it != g.settings.rules.end())
+      return it->second;
+    const ge::console::Cvar* c = g.rules ? g.rules->cvars.find(std::string(name)) : nullptr;
+    return c != nullptr ? c->value : std::string();
+  };
+  f.fixed = [](std::string_view name) { return is_endpoint_rule(std::string(name)); };
+  f.vote = &g.vote.settings;
+  f.map = g.map ? g.map->name : std::string();
+  f.players = g.qw.get();
+  qw_sheet_rows(f, out);
+}
+void sheet_resend(Game& g) {
+  if (g.sheet_watchers == 0 || !g.qw) return;
+  gs::SettingsSheet sheet;
+  sheet_rows(g, sheet);
+  for (int i = 0; i < sh::kMaxClients && i < 32; i++)
+    if ((g.sheet_watchers >> i & 1u) != 0)
+      qw_send_sheet(*g.qw, i, sheet, g.sheet_out[static_cast<size_t>(i)]);
+}
+
 // The vote's lines printed (each to everyone, or to the one player), and its passed changes made.
 void vote_turn(Game& g) {
   gs::VoteBook& b = g.vote;
@@ -884,9 +912,11 @@ void vote_turn(Game& g) {
   b.said.clear();
   b.notes.clear();
   bool restart = false;
+  bool changed = false;
   std::string to_map;  // a map vote passed
   const char* why = "The map restarts so everyone moves by the new setting\n";
   for (const gs::VoteChange& c : gs::vote_take(b)) {
+    changed = true;
     if (const gs::AidKind* aid = vote_aid(c.name)) {
       aid_vote_apply(g, *aid, c);
       continue;
@@ -915,6 +945,7 @@ void vote_turn(Game& g) {
     if (c.name == "k_midair_minheight" && g.qw)
       qw_print_all(*g.qw, sh::midair_level_line(sh::midair_level(c.value)));
   }
+  if (changed) sheet_resend(g);
   if (!to_map.empty()) {
     if (g.qw) qw_print_all(*g.qw, "The vote moves the server to " + to_map + "\n");
     g.rules->pending_map = to_map;
@@ -937,6 +968,8 @@ void vote_sync(Game& g) {
     const bool person =
         c.state == ConnState::spawned && (!c.local || (i == 0 && g.host != nullptr));
     gs::vote_seat(g.vote, i, person ? std::string_view(c.name) : std::string_view(), now);
+    if (c.state != ConnState::spawned) g.sheet_watchers &= ~(1u << i);  // a new client asks anew
+    qw_sheet_pump(*g.qw, i, g.sheet_out[static_cast<size_t>(i)]);
   }
   gs::vote_tick(g.vote, now);
   vote_turn(g);
@@ -1403,6 +1436,16 @@ bool mate_words(Game& g, int slot, const std::string& line) {
 // and with sv_lobby the lobby's own (ready, break, team, start, lobby).
 bool room_words(void* ctx, int slot, const std::string& line) {
   Game& g = *static_cast<Game*>(ctx);
+  if (g.qw && line.starts_with("ge_sheet") && slot >= 0 && slot < 32) {  // qw_sheet.hpp
+    const uint32_t bit = 1u << slot;
+    g.sheet_watchers = line == "ge_sheet stop" ? g.sheet_watchers & ~bit : g.sheet_watchers | bit;
+    if (line != "ge_sheet stop") {
+      gs::SettingsSheet sheet;
+      sheet_rows(g, sheet);
+      qw_send_sheet(*g.qw, slot, sheet, g.sheet_out[static_cast<size_t>(slot)]);
+    }
+    return true;
+  }
   if (g.qw) {
     const gs::VoteTarget target{&g, vote_check};
     if (gs::vote_command(g.vote, target, slot, line, g.rules->sv.time)) {
@@ -1876,6 +1919,9 @@ gs::ServerGame make() {
   g.net_frame = net_frame;
   g.match_report = match_report;
   g.phase = phase;
+  g.sheet = [](const void* game, int, gs::SettingsSheet& out) {
+    sheet_rows(*static_cast<const Game*>(game), out);
+  };
   g.tv_frame = tv_frame;
   g.tv_keyframe = tv_keyframe;
   g.player_view = player_view;

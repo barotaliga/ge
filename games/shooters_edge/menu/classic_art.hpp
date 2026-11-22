@@ -49,6 +49,9 @@ struct ClassicArt {
   ge::ui::Image glyphs;  // the 128 x 128 glyph sheet, 16 x 16 cells of 8 px; index 0 see-through
   std::array<uint8_t, 768> palette{};  // the pack's palette, RGB a colour (the scoreboard's fills)
   float density = 1;  // picture pixels a classic pixel: 1 the pack's own, 4 enhanced
+  // The menus' size the game sets (Quake II's `ui_scale`): 0 by the window, the largest whole
+  // number of screen px a classic px that fits; 1..10 that many (a fraction too).
+  float scale = 0;
   // FNV-1a (64-bit) over the palette indices of the pictures words are cut from, as the pack has
   // them (`mainmenu` then `sp_menu`; Quake II's five main plates, its adapter): which pictures
   // these are, so a word cut from their letters (classic_view.cpp) is cut only from the pictures it

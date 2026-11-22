@@ -19,6 +19,16 @@ namespace con = ge::console;
 namespace {
 
 constexpr int kChatLevel = 3, kHighLevel = 2;
+// What a version query is answered with: the game and the system it runs on.
+#if defined(_WIN32)
+constexpr const char* kVersionLine = "Shooter's Edge (Windows)";
+#elif defined(__APPLE__)
+constexpr const char* kVersionLine = "Shooter's Edge (macOS)";
+#elif defined(__linux__)
+constexpr const char* kVersionLine = "Shooter's Edge (Linux)";
+#else
+constexpr const char* kVersionLine = "Shooter's Edge";
+#endif
 
 std::string info(const DemoState& s, const char* key) {
   for (const auto& [k, v] : s.serverinfo)
@@ -119,6 +129,7 @@ void drop_ignored(QwIgnore& g, DemoState& s, std::vector<DemoPrint>& prints, dou
   if (g.levels != s.levels) {  // a new map: the players' flags and the flood's memory go
     g.levels = s.levels;
     con::chat_new_level(g.lists);
+    if (g.con != nullptr) g.con->clear_trigger_match();  // $triggermatch is the map's
   }
   g.triggers.now = now_s;
   if (centre != nullptr && !centre->empty() && g.con != nullptr &&
@@ -146,9 +157,13 @@ void drop_ignored(QwIgnore& g, DemoState& s, std::vector<DemoPrint>& prints, dou
                                             : con::kReChat;
     gone[i] = con::re_trigger_line(*g.con, g.triggers, prints[i].text, kind, now_s).remove;
   }
-  for (size_t i = 0; i < prints.size(); ++i)
-    if (!gone[i])
-      gone[i] = !chat_line_extras(g.chat, s, chat_line_of(s, prints[i]), prints[i], clock);
+  for (size_t i = 0; i < prints.size(); ++i) {
+    if (gone[i]) continue;
+    const con::ChatLine line = chat_line_of(s, prints[i]);
+    gone[i] = !chat_line_extras(g.chat, s, line, prints[i], clock);
+    if (!gone[i])  // cl_nofake, tp_soundtrigger, the queries, msg_trigger
+      chat_line_teamplay(g.chat, s, line, prints[i], now_s, g.triggers.on, kVersionLine);
+  }
   for (size_t i = 0; i < prints.size(); ++i)  // Quake II's message triggers: not on chat
     if (!gone[i] && prints[i].level < kChatLevel) run_triggers(g.chat, prints[i].text);
   size_t kept = 0;

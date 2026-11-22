@@ -112,6 +112,7 @@ struct JoinedRecord {
   std::function<bool(const std::filesystem::path& file, std::string& error)> open;
   std::function<std::string()> close;      // the line to print ("" when not recording)
   std::function<std::string()> path;       // the file being written ("" when none)
+  std::function<int64_t()> bytes;          // what has gone into it so far (before any gzip)
   std::function<std::string()> extension;  // the joined game's recording: qwd, or Quake II's dm2
   std::function<bool()> automatic;         // the match is being recorded on its own
   std::function<std::string()> match_name;
@@ -119,6 +120,9 @@ struct JoinedRecord {
   // A screenshot of the next frame named `name` (the window's screenshots); false with `why`.
   std::function<bool(const std::string& name, std::string& why)> screenshot;
 };
+
+// A recording's size in Quake II's words: "1.2 MB", "345 kB", "12 bytes" (decimal units).
+std::string q2_demo_size(int64_t bytes);
 
 // `record <name>`, `stop` and `easyrecord`, on `listen`'s server or the server `joined` says, the
 // file in `files`' game folder, packed as `s` says.

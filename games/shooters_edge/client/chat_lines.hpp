@@ -38,7 +38,8 @@
 // ge:keywords chat-sound s_chat_custom s_mm1_file s_mm2_file s_spec_file s_otherchat_file
 // ge:keywords s_mm1_volume msg_filter con_timestamps con_highlight con_highlight_mark talk-wav
 // ge:keywords cl_chatsound chat_line_extras cl_chat_notify cl_chat_filter cl_chat_sound
-// ge:keywords followip trigger untrigger
+// ge:keywords followip trigger untrigger cl_nofake tp_soundtrigger cl_queries f_version f_server
+// ge:keywords version-query msg_trigger lastip sound-trigger fake-name chat_line_teamplay
 // ge:keywords scr_chathud scr_chathud_lines scr_chathud_time clearchathud chat-hud
 // ge:skill net shooter
 // ge:test tests/shooters_edge_chat_ignore_test.cpp
@@ -83,6 +84,14 @@ struct ChatExtras {
   std::vector<Trigger> triggers;        // trigger
   bool relay = false;                   // watching through a relay: the triggers wait
   ge::console::Console* con = nullptr;  // where followip and the triggers run their commands
+  // The team's extras (chat_teamplay): cl_nofake, tp_soundtrigger, cl_queries, msg_trigger's
+  // switch (tp_msgtriggers, bound by the regex triggers), when each query was last answered.
+  int nofake = 2;
+  std::string sound_trigger = "~";
+  bool queries = true;
+  std::array<double, 2> answered_at{-1e9, -1e9};
+  std::array<std::string, 8> sound_names;  // the sound words played, kept while they sound
+  size_t sound_next = 0;
 };
 
 // Quake II's own `cl_chat_sound` on `x` (its layer: cvar_layers.cpp's add_q2).
@@ -120,5 +129,24 @@ ChatClock chat_clock_now();
 // added to `s.started`.
 bool chat_line_extras(ChatExtras& x, DemoState& s, const ge::console::ChatLine& line, DemoPrint& p,
                       const ChatClock& now);
+
+// THE TEAM'S EXTRAS on a kept line `p` (every classic game), after chat_line_extras:
+// - **`cl_nofake`** (2: the default): a received chat line's carriage returns, and its line feeds
+//   but the last, become blanks, so a line cannot pass for another player's or start a second
+//   line; 1 on every chat line, 2 on every one but your own team's, 0 none.
+// - **`tp_soundtrigger`** (`~`; "" off): a team line from your own team that ends in one of its
+//   characters and a sound's name (`quad up ~misc/gong`) plays that sound (`.wav` added when it
+//   has no extension; under the game's `sound/`; a name with `..` none) in place of the chat
+//   sound, and the word is taken off the line.
+// - **The queries** (`cl_queries` 1, the default): a line to everyone (not a team line, not your
+//   own, not while you watch) that is `f_version` or `!version`, or `f_server` (each optionally
+//   followed by digits and blanks), is answered with `say`: the game's name and version, or the
+//   server's address. Each kind at most once in 20 seconds.
+// - **`msg_trigger`** (console/console.hpp): every kept line, a chat line's words after its
+//   speaker, fires the triggers of its level (0 low .. 3 chat; `t` your team's chat) while
+//   `tp_msgtriggers` is 1; a chat line that asks a query fires none.
+// `version` is what `f_version` answers; `now_s` the wall clock.
+void chat_line_teamplay(ChatExtras& x, DemoState& s, const ge::console::ChatLine& line,
+                        DemoPrint& p, double now_s, bool triggers_on, std::string_view version);
 
 }  // namespace shooters_edge::client

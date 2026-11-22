@@ -1,7 +1,8 @@
 // The joined server's macros (qw_remote_macros.hpp).
 //
 // ge:summary The connection's macros and the rates stepped while joined
-// ge:keywords cl_ping cl_lag cl_pps cl_mps net_uprate net_dnrate remote_rates_step
+// ge:keywords cl_ping cl_lag cl_pps cl_mps net_uprate net_dnrate remote_rates_step serverip
+// ge:keywords connectiontype latency ping
 // ge:skill net console
 // ge:test tests/shooters_edge_qw_remote_macros_test.cpp
 #include "shooters_edge/net/qw_remote_macros.hpp"
@@ -36,10 +37,26 @@ void remote_rates_step(Remote& r, double wall_s) {
 
 void add_remote_macros(ge::console::Console& con, Remote& r) {
   con.add_macro("cl_server", [&r] { return r.active ? r.server_name : std::string(); });
+  // The older clients' names: $serverip (the server joined), $connectiontype (disconnected,
+  // spectator or player), $latency and $ping (the round trip, ms).
+  con.add_macro("serverip", [&r] { return r.active ? r.server_name : std::string(); });
+  con.add_macro("connectiontype", [&r] {
+    if (!r.active) return std::string("disconnected");
+    const client::DemoState& s = r.demo.state;
+    const bool watching = r.watch != nullptr ||
+                          (s.player >= 0 && static_cast<size_t>(s.player) < s.spectator.size() &&
+                           s.spectator[static_cast<size_t>(s.player)]);
+    return std::string(watching ? "spectator" : "player");
+  });
   con.add_macro("cl_ping", [&r] {
     const ge::hud::NetHistory* h = remote_net(r);
     return std::to_string(h != nullptr ? std::lround(ge::hud::net_ping_ms(*h)) : 0);
   });
+  for (const char* name : {"latency", "ping"})
+    con.add_macro(name, [&r] {
+      const ge::hud::NetHistory* h = remote_net(r);
+      return std::to_string(h != nullptr ? std::lround(ge::hud::net_ping_ms(*h)) : 0);
+    });
   con.add_macro("cl_lag", [&r] {
     const ge::hud::NetHistory* h = remote_net(r);
     return h != nullptr ? lag_text(*h) : std::string("0.00%");

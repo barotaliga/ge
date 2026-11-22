@@ -201,3 +201,35 @@ TEST(color_tints_what_follows_until_the_next_one) {
   CHECK(hud::layout_colour("YELLOW", c) == false && c[0] == 1);
   CHECK(hud::layout_colour("#ABCDEF", c) && c[0] == 0xab && c[2] == 0xef && c[3] == 255);
 }
+
+TEST(health_bars_draws_a_boss_s_name_and_its_two_bars_from_a_stat_s_bytes) {
+  Fixture f;  // 640 x 480: the bars a third of it, 213 px, centred on the cursor's x + 160
+  f.strings[700] = "Makron";
+  f.stats[20] = static_cast<int16_t>((0 << 8) | 128);  // the first bar half full, the second hidden
+  const auto ops = f.run("xv 0 yv 0 health_bars 20 700");
+  CHECK(ops.size() == 3);
+  CHECK(ops[0].kind == Op::Kind::text && ops[0].text == "Makron" && ops[0].x == 160 + 136);
+  const int left = 160 + 160 - 213 / 2;
+  CHECK(ops[1].kind == Op::Kind::fill && ops[1].x == left && ops[1].y == 120 + 12);
+  CHECK(ops[1].w == 107 && ops[1].h == 4 && ops[1].rgba[0] == 239 && ops[1].rgba[1] == 0);
+  CHECK(ops[2].x == left + 107 && ops[2].w == 213 - 107 && ops[2].rgba[0] == 63);
+  f.stats[20] = static_cast<int16_t>((255 << 8) | 1);  // the first empty, the second full
+  const auto both = f.run("xv 0 yv 0 health_bars 20 700");
+  CHECK(both.size() == 3);  // an empty bar's red and a full bar's grey are not drawn
+  CHECK(both[1].w == 213 && both[1].rgba[0] == 63 && both[1].y == 132);
+  CHECK(both[2].w == 213 && both[2].rgba[0] == 239 && both[2].y == 140);
+}
+
+TEST(a_scope_picture_at_the_centred_box_fills_the_screen_s_middle_scaled_by_ch_scale) {
+  Fixture f;
+  f.strings[hud::kLayoutImages + 3] = "scope4x";
+  f.stats[16] = 3;
+  auto ops = f.run("xv 0 yv 0 pic 16");
+  CHECK(ops.size() == 1 && ops[0].w == 320 && ops[0].h == 240 && ops[0].x == 160 &&
+        ops[0].y == 120);
+  ops = f.run("xv 8 yv 0 pic 16");  // off the box: drawn as it is
+  CHECK(ops.size() == 1 && ops[0].w == 0 && ops[0].x == 168);
+  f.strings[hud::kLayoutImages + 3] = "scope10x";  // not one letter between: as it is
+  ops = f.run("xv 0 yv 0 pic 16");
+  CHECK(ops.size() == 1 && ops[0].w == 0);
+}

@@ -96,7 +96,8 @@ std::optional<con::TextSpot> console_spot(const con::ConsoleView& view, const Co
   if (y < p.top) return con::TextSpot{l.n, 0};
   // The letter under the point: the text that fits up to half a letter past it.
   const float half = 0.5f * p.font->advance("M", p.text);
-  const size_t col = p.font->fit(l.text, p.text, std::max(0.0f, x - p.margin + half));
+  const float stamp_w = l.stamp.empty() ? 0.0f : p.font->advance(l.stamp, p.text);
+  const size_t col = p.font->fit(l.text, p.text, std::max(0.0f, x - p.margin - stamp_w + half));
   return con::TextSpot{l.n, std::min(col, l.text.size())};
 }
 
@@ -220,18 +221,24 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
   float y = lines_bottom - static_cast<float>(page.size()) * row;
   const bool has_sel = view.has_selection();
   const con::TextSpot sel_a = view.selection_first(), sel_b = view.selection_last();
+  Color stamp_colour = hex(0xaaaaaa);  // a line's time (console/view.hpp's stamps)
+  colour_from_text(view.stamp_colour, stamp_colour);
   for (const con::ViewLine* l : page) {
+    // A stamped line: its time first, the text after it.
+    const float sx = l->stamp.empty() ? 0.0f : font.advance(l->stamp, text);
+    if (sx > 0) list.text(font, text, margin, y + ascent, l->stamp, stamp_colour);
     if (has_sel && l->n >= sel_a.line && l->n <= sel_b.line) {
       // The selection behind its letters; a line it runs past ends a letter's width beyond.
       const size_t from = l->n == sel_a.line ? std::min(sel_a.column, l->text.size()) : 0;
       const size_t to =
           l->n == sel_b.line ? std::min(sel_b.column, l->text.size()) : l->text.size();
-      const float x0 = margin + font.advance(std::string_view(l->text).substr(0, from), text);
-      float x1 = margin + font.advance(std::string_view(l->text).substr(0, to), text);
+      const float x0 = margin + sx + font.advance(std::string_view(l->text).substr(0, from), text);
+      float x1 = margin + sx + font.advance(std::string_view(l->text).substr(0, to), text);
       if (l->n != sel_b.line) x1 += 0.5f * font.advance("M", text);
       if (x1 > x0) list.rect({x0, y, x1 - x0, row}, style.selection);
     }
-    list.text(font, text, margin, y + ascent, l->text, style.kinds[static_cast<size_t>(l->kind)]);
+    list.text(font, text, margin + sx, y + ascent, l->text,
+              style.kinds[static_cast<size_t>(l->kind)]);
     y += row;
   }
 

@@ -1,11 +1,13 @@
 // QUAKE II'S SESSION SETTINGS: what its own cvars do round the game being played, while it is the
 // game loaded (client/cvar_layers.cpp registers them in its layer; another game's window keeps the
-// defaults below and never runs the commands).
+// defaults below), and the map commands every classic game shares.
 //
-// THE MAP COMMANDS: `cl_beginmapcmd` runs on entering each map, `cl_changemapcmd` as a map is left
+// THE MAP COMMANDS, in every game (the classic layer, `add_map_command_cvars`; Quake II's client
+// brought them): `cl_beginmapcmd` runs on entering each map, `cl_changemapcmd` as a map is left
 // for the next, `cl_disconnectcmd` on leaving the game (each empty by default: nothing run). They
 // are how a player records every map (`cl_beginmapcmd "record demo"`). A game is joined while a
-// server is joined or this window hosts one; its map is the one the server names.
+// server is joined or this window hosts one; its map is the one the server names. They keep their
+// text when another game is loaded.
 //
 // THE CLOCK: `timescale` speeds or slows a game this window runs (2 twice as fast) and `fixedtime`
 // moves it a fixed number of milliseconds each frame; both are cheats (only while sv_cheats is 1),
@@ -33,14 +35,15 @@
 // recording's only warns and plays on.
 //
 // THE MOUSE: `in_grab` 0 never takes the mouse while the game is in a window (only covering the
-// screen); 1 and 2 take it as ours does (`q2_takes_mouse`).
+// screen); 1 and 2 take it as ours does (`q2_takes_mouse`). `in_enable` 0 never takes it, so the
+// mouse never turns the view; the keys work either way.
 //
 // ge:summary Quake II's session settings: the map commands, the game clock, the state cvars
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd auto-record map-change timescale
 // ge:keywords fixedtime cl_running cl_paused sv_running sv_paused read-only q2_session_step
 // ge:keywords cl_warn_on_fps_rounding fps-rounding inexact map-version map-checksum
 // ge:keywords cl_autopause cl_thirdperson cl_thirdperson_angle cl_thirdperson_range
-// ge:keywords third-person chase-camera view_behind in_grab q2_takes_mouse
+// ge:keywords third-person chase-camera view_behind in_grab in_enable q2_takes_mouse
 // ge:skill console shooter
 // ge:test tests/shooters_edge_q2_session_test.cpp
 #pragma once
@@ -76,6 +79,7 @@ struct Q2Session {
   uint32_t fps_seen = 0;       // cl_maxfps's revision when it was last checked
   bool fps_told = false;       // how to turn the warning off said once
   int grab = 1;                // in_grab: 0 never in a window, 1 and 2 as ours
+  bool mouse = true;           // in_enable: 0 the mouse never taken, so it never looks
   bool remap_tracks = false;   // ogg_remap_tracks (1 once Quake II registers it): take_in.hpp
   // What the last frame saw: in a game, its map ("" while it loads), the state cvars' values.
   bool joined = false;
@@ -83,6 +87,8 @@ struct Q2Session {
   int state = -1;  // the read-only cvars' bits as last set (-1: never)
 };
 
+// The map commands on `v`, bound to `s`'s, for every game (the caller holds the classic layer).
+void add_map_command_cvars(ge::console::Cvars& v, Q2Session& s);
 // Quake II's session cvars on `v`, bound to `s` (the read-only ones added, set by the frames).
 void add_q2_session_cvars(ge::console::Cvars& v, Q2Session& s);
 
@@ -123,9 +129,10 @@ double view_behind(ge::render::FrameView& view, double units, double angle_deg,
 double q2_third_person(const Q2Session& s, ge::render::FrameView& view,
                        const ge::shooter::BrushModel* world);
 
-// Whether the look may take the mouse under `in_grab`: never in a window at 0.
+// Whether the look may take the mouse under `in_grab` (never in a window at 0) and `in_enable`
+// (never at 0).
 inline bool q2_takes_mouse(const Q2Session& s, bool fullscreen) {
-  return s.grab != 0 || fullscreen;
+  return s.mouse && (s.grab != 0 || fullscreen);
 }
 
 }  // namespace shooters_edge::client

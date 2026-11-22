@@ -61,6 +61,12 @@ std::vector<std::string> run_fixture(const Fixture& f) {
   c.cvars().add({.name = "cl_fov", .fallback = "90", .flags = kArchive, .min = 10, .max = 140});
   c.add_command("game_say", "a line from the game",
                 [](Console& con, const Args& a) { con.message(a.rest(0)); });
+  // `game_print <level> <text>`: a line of that print level (t: the team's chat).
+  c.add_command("game_print", "a line from the game at a level", [](Console& con, const Args& a) {
+    const bool team = a[1] == "t";
+    con.print(a.rest(1));
+    con.fire_triggers(a.rest(1), team ? kTriggerChat : std::atoi(a[1].c_str()), team);
+  });
   // Files live in memory: a write prints the file, a read finds what was written.
   auto files = std::make_shared<std::map<std::string, std::string>>();
   c.set_files(
