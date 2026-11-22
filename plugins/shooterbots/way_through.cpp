@@ -5,6 +5,7 @@
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooterbots/way_through.hpp"
+#include "shooterbots/way_bosses.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -33,10 +34,9 @@ constexpr int kKeySilver = 131072, kKeyGold = 262144;  // the keys' item bits
 constexpr float kButtonClose = 320;  // at a button's spot this near, he presses it, units
 constexpr double kPressFor_s = 4;    // and gives the press this long
 constexpr float kWayShotFrom = 600;  // (`complete`) a secret wall is shot from this near, units
-constexpr float kWayShotTriggerFrom = 1200;  // (`complete`) a shot trigger from this near, units
-constexpr float kWayDryShot = 700;  // (`complete`) a monster in the water is shot from this near
-constexpr double kWayRide_s = 12;   // the longest ride a plan holds through, s
-constexpr float kWayAfloat = 768;   // how far the plan looks for a node to start from in the air
+constexpr float kWayDryShot = 700;   // (`complete`) a monster in the water is shot from this near
+constexpr double kWayRide_s = 12;    // the longest ride a plan holds through, s
+constexpr float kWayAfloat = 768;    // how far the plan looks for a node to start from in the air
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
@@ -909,6 +909,9 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     if (!car_back) w.steps.push_back(st);
   }
+  // (`complete`) Quake's boss the lightning kills: the electrodes, the buttons that move them, the
+  // button that fires the bolt and the doors his death opens.
+  if (w.complete) way_bolt_init(w, f, s, blocks);
   // The turning doors a step opens that lie over an exit, within kHatchOver above it.
   for (const int h : w.turners) {
     const sh::Edict& he = s.sv.edicts[static_cast<size_t>(h)];
@@ -1063,66 +1066,7 @@ void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::Bot
     if (bs.node < 0) continue;  // seen from nowhere he stands
     f.button_spots.push_back(bs);
   }
-  // Quake's trigger with health answers only a shot (e4m3's window, far across the start room, is
-  // the only way out of it; he waited by the shut doors for the whole map). The rules keep no
-  // model on a trigger's edict: it is found by its box.
-  for (const sb::EntityBlock& b : blocks) {
-    const char* cn = sb::block_value(b, "classname");
-    const char* model = sb::block_value(b, "model");
-    const char* health = sb::block_value(b, "health");
-    const char* target = sb::block_value(b, "target");
-    if (!cn || !model || model[0] != '*' || !health || std::atof(health) <= 0 || !target ||
-        (std::strcmp(cn, "trigger_once") != 0 && std::strcmp(cn, "trigger_multiple") != 0))
-      continue;
-    const int m = std::atoi(model + 1);
-    sh::Vec3f lo, hi;
-    if (spec.brushes) {
-      if (m <= 0 || static_cast<size_t>(m) >= spec.brushes->models.size()) continue;
-      const ge::brush::Model& bm = spec.brushes->models[static_cast<size_t>(m)];
-      lo = {bm.mins[0], bm.mins[1], bm.mins[2]};
-      hi = {bm.maxs[0], bm.maxs[1], bm.maxs[2]};
-    } else {
-      if (m <= 0 || static_cast<size_t>(m) >= spec.models.size()) continue;
-      lo = spec.models[static_cast<size_t>(m)].mins;
-      hi = spec.models[static_cast<size_t>(m)].maxs;
-    }
-    int e = -1;
-    for (int k = s.sv.set.maxclients + 1; k < s.sv.num_edicts && e < 0; k++) {
-      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(k)];
-      if (!d.free && d.solid != sh::kSolidNot && dist(d.absmin, lo) < 4 && dist(d.absmax, hi) < 4)
-        e = k;
-    }
-    if (e < 0) continue;
-    const std::vector<std::string> fired = button_fires(blocks, target);
-    ButtonSpot bs;
-    bs.ent = e;
-    bs.at = (lo + hi) * 0.5f;
-    bs.shoot = true;
-    bs.model = model;
-    for (const sb::EntityBlock& d : blocks) {
-      const char* dc = sb::block_value(d, "classname");
-      const char* dn = sb::block_value(d, "targetname");
-      const char* dm = sb::block_value(d, "model");
-      if (!dc || !dn || !dm || std::strcmp(dc, "func_door") != 0) continue;
-      for (const std::string& n : fired)
-        if (n == dn)
-          if (const int door = edict_of(s, dm); door >= 0) bs.doors.push_back(door);
-    }
-    if (bs.doors.empty()) continue;
-    // Shot from the nearest node whose eye line reaches it (a window is shot through the room).
-    float best_d = kWayShotTriggerFrom;
-    for (size_t n = 0; n < g.nodes.size(); n++) {
-      const sh::Vec3f o = g.nodes[n].origin;
-      const float dd = dist(o, bs.at);
-      if (dd >= best_d) continue;
-      const sh::HullTrace tr =
-          sh::trace_move(s.sv, {o.x, o.y, o.z + 22}, {}, {}, bs.at, sh::kTraceNoMonsters, -1);
-      if (tr.fraction < 1 && tr.ent != e) continue;
-      bs.node = static_cast<int32_t>(n);
-      best_d = dd;
-    }
-    if (bs.node >= 0) f.button_spots.push_back(std::move(bs));
-  }
+  way_shot_triggers(f, nav, s, spec, blocks);
 }
 
 void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
@@ -1786,6 +1730,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       pick = -1;
     }
   }
+  // (`complete`) The lightning boss's buttons before anything else while he lives.
+  if (w.complete && t < w.complete_until)
+    if (const int b = way_bolt_pick(w, s); b >= 0) {
+      pick = b;
+      w.steps[static_cast<size_t>(b)].done = false;
+    }
   if (pick != w.step) {
     w.step = pick;
     w.step_since = t;
