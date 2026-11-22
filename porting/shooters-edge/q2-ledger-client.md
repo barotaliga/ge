@@ -10,7 +10,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client console commands | 116 | 13 | 17 | 10 | 156 |
+| Client console commands | 118 | 13 | 15 | 10 | 156 |
 | Client settings (cvars) | 159 | 46 | 105 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 88 | 68 | 5 | 1 | 162 |
@@ -23,17 +23,17 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 7 | 7 | 2 | 0 | 16 |
 | The layout language (status bar and layouts) | 24 | 1 | 2 | 0 | 27 |
 | HUD and screen elements | 11 | 10 | 7 | 1 | 29 |
-| Messages printed to the player | 50 | 59 | 33 | 5 | 147 |
+| Messages printed to the player | 53 | 59 | 30 | 5 | 147 |
 | Demo playback and recording features | 4 | 10 | 7 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 6 | 4 | 1 | 0 | 11 |
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 620 | 309 | 221 | 61 | 1211 |
+| **all** | 625 | 309 | 216 | 61 | 1211 |
 
 ## Client console commands
 
-done 116, partial 13, missing 17, not-taken 10
+done 118, partial 13, missing 15, not-taken 10
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -76,9 +76,9 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.disconnect | `disconnect` | leaves the server, or stops a demo | done | `games/shooters_edge/net/qw_remote.cpp` |
 | cmd.reconnect | `reconnect` | reconnects to the last server; "No server to reconnect to." | done | `games/shooters_edge/net/qw_remote.cpp` |
 | cmd.followip | `followip [n]` | connects to the n-th last address seen in chat | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
-| cmd.passive | `passive` | toggles waiting for a server to connect to us (through a NAT) | missing | C42 |
+| cmd.passive | `passive` | toggles waiting for a server to connect to us (through a NAT) | done | `games/shooters_edge/net/q2_pingservers.cpp` (`add_passive_command`): leaves any game, listens on a socket of its own, joins the server whose `passive_connect` comes |
 | cmd.rcon | `rcon <command>` | sends a remote-console command with `rcon_password` to the server or `rcon_address` | done | `games/shooters_edge/net/qw_admin.cpp` |
-| cmd.pingservers | `pingservers` | pings the address book `adr0`..`adr15` and the LAN | missing | C41 |
+| cmd.pingservers | `pingservers` | pings the address book `adr0`..`adr15` and the LAN | done | `games/shooters_edge/net/q2_pingservers.cpp`: `info 34` to the LAN broadcast and each address book entry, each answer printed (3 s broadcast, 6 s direct) |
 | cmd.serverstatus | `serverstatus [address]` | asks a server for its info and players and prints them by frags | done | `games/shooters_edge/net/qw_serverstatus.cpp`: its own socket, joined or not; both games' answers |
 | cmd.pause | `pause` | pauses a single-player game or a demo | partial | a word of the window's own game (`client/listen.cpp`); not found to pause a demo or a joined single-player server (C24) |
 | cmd.skins | `skins` | reloads every client's skin and prints "client n: name --> model/skin" | partial | `games/shooters_edge/net/q2_remote.cpp`: on a Quake II server joined, the level read again and a line a player; the right side is the look asked, not the stand-in drawn when it is missing |
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 50, partial 59, missing 33, not-taken 5
+done 53, partial 59, missing 30, not-taken 5
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1145,12 +1145,12 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.connect.anticheat | "Loading anticheat, this may take a few moments..." | the server asked for anticheat | missing | the feature is missing |
 | msg.connect.noanticheat | "Trying to connect without anticheat." | anticheat could not load | missing | the feature is missing |
 | msg.connect.anticheatreq | "Anticheat required by server, but no anticheat support linked in." | the server insists on anticheat | missing | the feature is missing |
-| msg.connect.passiverecv | "Received passive connect from %s." | a server connected to us in passive mode | missing | the feature is missing |
+| msg.connect.passiverecv | "Received passive connect from %s." | a server connected to us in passive mode | done | `games/shooters_edge/net/q2_pingservers.cpp` (`passive_step`) |
 | msg.connect.notconnected | "Can't "%s", not connected" | a forwarded word typed while not connected | done | `engine/console/console_more.cpp` (`complete`): the same words |
 | msg.follow | "Following %s..." | `followip` | done | `games/shooters_edge/client/chat_lines.cpp`: `followip` says it |
 | msg.follow.none | "No IP address to follow." | `followip` with nothing seen | partial | `games/shooters_edge/client/chat_lines.cpp`: ours says "No address has been seen in chat yet." (sixteen kept, counted from 1) |
-| msg.passive.off | "No longer listening for passive connections." | `passive` off | missing | the feature is missing |
-| msg.passive.on | "Listening for passive connections at %s." | `passive` on | missing | the feature is missing |
+| msg.passive.off | "No longer listening for passive connections." | `passive` off | done | `games/shooters_edge/net/q2_pingservers.cpp` |
+| msg.passive.on | "Listening for passive connections at %s." | `passive` on | done | `games/shooters_edge/net/q2_pingservers.cpp` |
 | msg.reconnect.none | "No server to reconnect to." | `reconnect` with no last server | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.reconnect.loop | "Can not reconnect to loopback." | `reconnect` to the local server | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.reconnect | "Reconnecting..." | `reconnect` | partial | ours does it but says it in its own words (the exact line not found) |
