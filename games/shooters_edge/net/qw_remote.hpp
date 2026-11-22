@@ -87,6 +87,7 @@
 #include "shooters_edge/net/qw_client.hpp"
 #include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_record.hpp"
+#include "shooters_edge/net/qw_serverstatus.hpp"
 #include "shooters_edge/net/qw_watch.hpp"
 
 namespace shooters_edge::net {
@@ -155,6 +156,7 @@ struct Remote {
   std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
   std::unique_ptr<RemoteLogin> login;             // logging in by the account file, when named
   std::unique_ptr<RconAway> away;                 // rcon to `rcon_address`, not joined
+  std::unique_ptr<StatusAsk> status_ask;          // `serverstatus` waiting for its answer
   JoinedFile file;  // `record` while joined: the level kept and the file (qw_match_record.hpp)
   MatchAuto match;  // the match recorded on its own (match_auto_record)
   client::JoinedRecord joined_record;  // the window's record commands reach the join through it

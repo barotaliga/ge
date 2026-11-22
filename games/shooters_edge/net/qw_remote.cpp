@@ -502,8 +502,8 @@ void remote_queue_frame(Remote& r, ge::console::Console& con) {
   const double wall =  // the wall clock: the match's recording and the rcon answers run on it
       std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
   remote_match_frame(r, con, wall);
-  if (!r.away) return;
-  said.clear();  // the answers to an rcon sent while not joined
+  if (!r.away && !r.status_ask) return;
+  said.clear();  // the answers to an rcon sent while not joined, and to `serverstatus`
   remote_rcon_step(r, wall, said);
   for (const std::string& line : said) con.print(line);
 }
@@ -564,6 +564,7 @@ bool remote_rcon(Remote& r, const std::string& address, const std::string& text,
 }
 
 void remote_rcon_step(Remote& r, double now_s, std::vector<std::string>& said) {
+  serverstatus_step(r, now_s, said);  // `serverstatus`'s answer (qw_serverstatus.hpp)
   if (!r.away || r.away->until_s < 0) return;
   RconAway& a = *r.away;
   gn::Transport& link = a.link != nullptr ? *a.link : a.own;
@@ -1032,6 +1033,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   using Args = ge::console::Args;
   client::add_qw_ignore(con, r.ignore, r.demo.state);
   add_remote_macros(con, r);  // $cl_server, $cl_ping, $cl_lag and the rates
+  add_serverstatus_command(con, r);
   r.setting = [&con](const std::string& name) {
     if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;
     if (const ge::console::Synonym* s = con.cvars().synonym(name))
