@@ -140,6 +140,10 @@ struct MapNav {
   // button at its end). Each node that walks onto one gets a drop link through it to the node under
   // it, open only while the door is away from where it rests: those links (`hatches`).
   bool hatch_drops = false;
+  // ONE-WAY TRICKS (`one_way_tricks`, set before `build_map_nav`): a trick's landing needs no way
+  // back on foot to the main part (a single-player map is run forward: a ledge a rocket jump
+  // reaches leads on, and nobody comes back for it).
+  bool one_way_tricks = false;
   struct Hatch {
     int32_t link = -1, from = -1, to = -1;
     int door = -1;            // the floor door's edict

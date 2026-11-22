@@ -90,11 +90,14 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   }
   const sv::RulesCommon& s = *c.server;
   m.nav = std::make_unique<MapNav>();
-  m.nav->hatch_drops = true;  // the campaign's floor doors open drops (map_nav.hpp)
+  m.nav->hatch_drops = true;     // the campaign's floor doors open drops (map_nav.hpp)
+  m.nav->one_way_tricks = true;  // the record runs' blast jumps lead on (map_nav.hpp)
   if (!build_map_nav(*q, c.map, quake_maps(), "info_player_start", *m.nav, error)) return false;
   MapNav& nav = *m.nav;
   em.name = c.map.name;
   em.nav_nodes = static_cast<int64_t>(nav.graph.nodes.size());
+  em.nav_rockets = nav.tricks_made.held;
+  em.nav_grenades = nav.tricks_made.grenades;
   em.movers = static_cast<int64_t>(nav.movers.size());
   em.nav_ms = nav.build_ms;
   em.lo = nav.graph.lo;

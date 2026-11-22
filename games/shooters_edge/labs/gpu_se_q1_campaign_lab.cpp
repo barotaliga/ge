@@ -263,7 +263,8 @@ void run(gl::Lab& lab) {
                  {"complete", o.complete ? "on" : "off"}};
   gl::LabTable t{"each map at 100%",
                  {"map", "out", "exit s", "kills", "secrets", "100%", "ended", "deaths", "given up",
-                  "plans: exit/button/key/trigger/explore/monster/secret", "nodes", "faults"},
+                  "plans: exit/button/key/trigger/explore/monster/secret", "nodes",
+                  "tricks: rocket/grenade", "blast jumps", "faults"},
                  {}};
   std::vector<fb::EpisodeMap> maps;
   uint64_t digest = 1469598103934665603ull;
@@ -303,12 +304,13 @@ void run(gl::Lab& lab) {
                       of(m.killed_monsters, m.total_monsters), of(m.found_secrets, m.total_secrets),
                       full ? "yes" : "no", m.end, std::to_string(m.leader_deaths),
                       std::to_string(m.way.given_up), plans, std::to_string(m.nav_nodes),
-                      std::to_string(m.faults)});
+                      std::to_string(m.nav_rockets) + "/" + std::to_string(m.nav_grenades),
+                      std::to_string(m.blasts.size()), std::to_string(m.faults)});
   }
   t.rows.push_back({"all", std::to_string(finished) + "/" + std::to_string(maps.size()),
                     to_fixed(exit_sum, 0), of(kills, monsters), of(found, secrets),
                     std::to_string(cleared) + "/" + std::to_string(maps.size()), "", "", "", "", "",
-                    std::to_string(faults)});
+                    "", "", std::to_string(faults)});
   lab.table(t);
   lab.metric("maps.played", static_cast<double>(maps.size()), "count");
   lab.metric("maps.finished", finished, "count");
