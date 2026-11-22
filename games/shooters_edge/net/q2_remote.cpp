@@ -174,6 +174,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   int ticks = 0;
   const int tick_us = q2_move_ms(r.q2_maxfps) * 1000;  // its own cl_maxfps, live
   c.cfg.shownet = r.q2_shownet;                        // cl_shownet, live
+  r.trace.sent = r.q2_showpackets;                     // cl_showpackets, live
   while (r.owed_s >= tick_us * 1e-6) {
     r.owed_s -= tick_us * 1e-6;
     if (ticks++ >= kMostTicks) continue;  // a stall: the time is dropped, not paid down

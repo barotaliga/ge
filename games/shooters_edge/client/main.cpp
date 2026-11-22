@@ -350,6 +350,7 @@ int run_main(int argc, char** argv) {
                                   .crouch = &remote.q2_ahead.crouch,
                                   .show_misses = &remote.q2_ahead.show_misses,
                                   .shownet = &remote.q2_shownet,
+                                  .showpackets = &remote.q2_showpackets,
                                   .noskins = &picture.stock_figures,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,

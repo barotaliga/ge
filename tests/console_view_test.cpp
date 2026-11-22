@@ -450,3 +450,28 @@ TEST(con_notify_hides_the_notify_lines_and_toggling_lets_them_go) {
   v.add(LineKind::server, "four");
   CHECK(v.notify().size() == 1 && v.notify()[0]->text == "four");
 }
+
+TEST(con_scroll_brings_the_newest_lines_back_on_a_new_line_or_a_key) {
+  Console c;
+  ConsoleView v(c);
+  for (int i = 0; i < 40; ++i) v.add(LineKind::output, "line " + std::to_string(i));
+  v.key(EditKey::page_up);
+  v.add(LineKind::output, "new");
+  CHECK(v.scroll() == 8);  // 0: a new line leaves the view where it was scrolled
+  v.type("x");
+  CHECK(v.scroll() == 8);
+  c.execute("con_scroll 1");
+  v.add(LineKind::output, "newer");
+  CHECK(v.scroll() == 0 && v.page(1).back()->text == "newer");
+  c.execute("con_scroll 2");
+  v.key(EditKey::page_up);
+  v.add(LineKind::output, "newest");
+  CHECK(v.scroll() == 8);
+  v.key(EditKey::page_up);  // the page keys scroll still
+  CHECK(v.scroll() == 16);
+  v.type("y");
+  CHECK(v.scroll() == 0);
+  v.key(EditKey::page_up);
+  v.key(EditKey::left);
+  CHECK(v.scroll() == 0);
+}

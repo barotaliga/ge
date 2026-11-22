@@ -257,6 +257,7 @@ struct Remote {
   ge::classic::StuffFilter stuff;
   std::filesystem::path stuff_file;
   int q2_shownet = 0;  // Quake II's cl_shownet: each message's size printed (q2_client.hpp)
+  bool q2_showpackets = false;  // Quake II's cl_showpackets: each packet sent shown (`trace.sent`)
   double tick_frac_us = 0;
 };
 

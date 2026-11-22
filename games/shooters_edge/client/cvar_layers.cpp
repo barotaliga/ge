@@ -188,6 +188,7 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
   if (b.show_misses != nullptr) *b.show_misses = false;      // Quake II's cl_showmiss
   if (b.shownet != nullptr) *b.shownet = 0;                  // and cl_shownet
+  if (b.showpackets != nullptr) *b.showpackets = false;      // and cl_showpackets
   if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
   if (b.light_modulate != nullptr) *b.light_modulate = 1;
   if (b.light_lift != nullptr) *b.light_lift = 0;
@@ -576,6 +577,13 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .max = 3,
             .values = "0: none (the default); 1..3: each message's size in bytes"},
            b.shownet);
+  if (b.showpackets != nullptr)
+    v.bind({.name = "cl_showpackets",
+            .fallback = "0",
+            .help = "Whether each packet you send to the server you joined is printed.",
+            .kind = con::CvarKind::boolean,
+            .values = "0: none (the default); 1: each one, its sequences and size"},
+           b.showpackets);
   if (b.crouch != nullptr)
     v.bind({.name = "cl_predict_crouch",
             .fallback = "1",
