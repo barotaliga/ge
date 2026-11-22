@@ -19,7 +19,7 @@ constexpr std::string_view kConnectedOwner = "ruleset-connected";
 std::string bound_text(double x) { return number_text(x); }
 
 std::string lock_words(const RuleLock& l) {
-  const std::string n(l.name);
+  std::string n(l.name);
   if (!l.value.empty()) return n + " " + std::string(l.value);
   constexpr double kInf = std::numeric_limits<double>::infinity();
   const bool low = l.min > -kInf, high = l.max < kInf;
@@ -117,10 +117,16 @@ void Rulesets::apply(const Ruleset* r) {
     CommandGate gate;
     gate.owner = std::string(kOwner);
     if (f.match_only) {
-      gate.why = cmd + " is not allowed during a match under the " + rname + " ruleset.";
+      gate.why = cmd;
+      gate.why += " is not allowed during a match under the ";
+      gate.why += rname;
+      gate.why += " ruleset.";
       gate.when = [this] { return match_ && match_(); };
     } else {
-      gate.why = cmd + " is not allowed under the " + rname + " ruleset.";
+      gate.why = cmd;
+      gate.why += " is not allowed under the ";
+      gate.why += rname;
+      gate.why += " ruleset.";
     }
     console_.gate_command(cmd, std::move(gate));
   }
