@@ -85,6 +85,22 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
           .max = 2,
           .values = "0: none (the default); 1: the graph; 2: the graph on a dark box"},
          &s.lag_draw);
+  v.bind({.name = "gl_fontshadow",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "A black shadow under the screen's letters, this many units down and right.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "0: none (the default); 1..2: that far"},
+         &s.font_shadow);
+  v.bind({.name = "gl_bilerp_chars",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Whether the screen's letters are smoothed when drawn larger.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: sharp pixels (the default); 1: smoothed"},
+         &s.bilerp_chars);
   v.bind({.name = "scr_showturtle",
           .fallback = "1",
           .flags = con::kArchive,

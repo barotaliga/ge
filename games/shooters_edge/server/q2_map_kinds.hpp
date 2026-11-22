@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -88,6 +89,47 @@ struct Mover {
   Class cls = kNone;
   int corner = -1;  // a train's current corner
 };
+
+// The kind a class name is; kNone for any other.
+inline Class class_of_name(std::string_view c) {
+  constexpr std::pair<std::string_view, Class> kClasses[] = {
+      {"func_door", kDoor},
+      {"func_door_secret", kSecretDoor},
+      {"func_water", kDoor},  // a door of water
+      {"func_button", kButton},
+      {"func_plat", kPlat},
+      {"func_train", kTrain},
+      {"trigger_elevator", kElevator},
+      {"misc_viper", kTrain},  // the fly-by ships run their path as a train
+      {"misc_strogg_ship", kTrain},
+      {"func_wall", kWall},
+      {"func_timer", kTimer},
+      {"trigger_once", kTriggerOnce},
+      {"trigger_multiple", kTriggerMultiple},
+      {"trigger_relay", kRelay},
+      {"trigger_always", kAlways},
+      {"trigger_push", kPush},
+      {"trigger_hurt", kHurt},
+      {"misc_teleporter", kTeleporter},
+      {"target_changelevel", kChangeLevel},
+      {"target_speaker", kSpeaker},
+      {"target_explosion", kExplosion},
+      {"target_secret", kSecret},
+      {"target_goal", kGoal},
+      {"door_field", kDoorField},
+      {"plat_field", kPlatField},
+      {"func_door_rotating", kDoorRotating},
+      {"func_rotating", kRotating},
+      {"func_areaportal", kAreaPortal},
+      {"light", kLight},
+      {"target_help", kHelp},
+      {"target_crosslevel_trigger", kCrossTrigger},
+      {"target_crosslevel_target", kCrossTarget},
+  };
+  for (const auto& [name, cls] : kClasses)
+    if (c == name) return cls;
+  return kNone;
+}
 
 // A team of movers (doors or trains sharing `team`) moves as one: a frame one part is blocked
 // undoes every part's move and all they carried, delays every part's next think by a frame, and

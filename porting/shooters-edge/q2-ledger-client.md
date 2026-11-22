@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 115 | 13 | 18 | 10 | 156 |
-| Client settings (cvars) | 143 | 43 | 124 | 40 | 350 |
+| Client settings (cvars) | 144 | 45 | 121 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 88 | 68 | 5 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 600 | 305 | 245 | 61 | 1211 |
+| **all** | 601 | 307 | 242 | 61 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 143, partial 43, missing 124, not-taken 40
+done 144, partial 45, missing 121, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -408,7 +408,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.ogg_volume | `ogg_volume` | the music volume (default 1) | done | a synonym of our `bgmvolume` (`games/shooters_edge/client/cvar_layers.cpp`) |
 | cvar.ogg_shuffle | `ogg_shuffle` | shuffle every track in `music/` (default 0) | done | Quake II's own, bound to the music's `shuffle` (`engine/audio/music_console.hpp`: every track the game has, in a random order, each once through) |
 | cvar.ogg_menu_track | `ogg_menu_track` | the track played while disconnected, 0 none (default 0) | done | Quake II's own, bound to the music's `menu_track`, started on the title by `play_menu_music` (`engine/audio/music_console.hpp`, `games/shooters_edge/client/main.cpp`) |
-| cvar.ogg_remap_tracks | `ogg_remap_tracks` | remap the mission packs' track numbers to the digital release's file names (default 1) | missing | C29 |
+| cvar.ogg_remap_tracks | `ogg_remap_tracks` | remap the mission packs' track numbers to the digital release's file names (default 1) | done | `plugins/classic/content/soundtrack.hpp`'s `q2_remap_track` (rogue 2..11 as 12..21, xatrix by its table) in the music's track lookup (`games/shooters_edge/client/take_in.cpp`), bound in `client/q2_session.cpp` |
 | cvar.al_device | `al_device` | the OpenAL output device, empty the default; `?` lists the devices ("Available devices:") (default empty) | missing | C32 |
 | cvar.al_merge_looping | `al_merge_looping` | OpenAL: merge copies of one looped sound so they play as loud as on the software mixer; 0 off, 1 auto (only in plain stereo), 2 on (default 1) | missing | ours one mixer, which merges loops itself (`client/demo_sound.cpp`); no OpenAL (C32) |
 | cvar.al_hrtf | `al_hrtf` | OpenAL head-related sound (default 0) | missing | C32 |
@@ -439,7 +439,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_doublelight_entities | `gl_doublelight_entities` | models lit twice as bright, as the classic renderer did (default 1) | missing | not found |
 | cvar.gl_glowmap_intensity | `gl_glowmap_intensity` | glow map strength (default 0.75) | missing | C21 |
 | cvar.gl_flarespeed | `gl_flarespeed` | how fast flares fade in and out (default 8) | missing | not found |
-| cvar.gl_fontshadow | `gl_fontshadow` | shadows under 2D text (default 0) | missing | not found |
+| cvar.gl_fontshadow | `gl_fontshadow` | shadows under 2D text (default 0) | partial | `games/shooters_edge/client/q2_bar.cpp`: the status bar's and the screen's letters drawn first in black, 1 or 2 units down and right (`client/q2_view.cpp`); the console's letters not yet |
 | cvar.gl_shaders | `gl_shaders` | 1 the shader backend, 0 legacy (default 1) | not-taken | `client-gaps.md`: the window's renderer is its own |
 | cvar.gl_md5_load | `gl_md5_load` | load MD5 replacement models (default 1) | missing | not found |
 | cvar.gl_md5_use | `gl_md5_use` | draw MD5 replacements (default 1) | missing | not found |
@@ -467,7 +467,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_invert | `gl_invert` | inverts texture colours (default 0) | missing | not found |
 | cvar.vid_gamma | `vid_gamma` | gamma (default 1, saved) | done | synonym of `gamma` (`client/cvar_layers.cpp`) |
 | cvar.gl_gamma_scale_pics | `gl_gamma_scale_pics` | apply gamma to 2D pictures (default 0) | missing | not found |
-| cvar.gl_bilerp_chars | `gl_bilerp_chars` | smooth the font (default 0) | missing | not found |
+| cvar.gl_bilerp_chars | `gl_bilerp_chars` | smooth the font (default 0) | partial | `games/shooters_edge/client/q2_bar.cpp`: the status bar's and the screen's letters smoothed; the console's not yet |
 | cvar.gl_bilerp_pics | `gl_bilerp_pics` | smooth 2D pictures (default 1) | missing | not found |
 | cvar.gl_bilerp_skies | `gl_bilerp_skies` | smooth the sky (default 1) | missing | not found |
 | cvar.gl_upscale_pcx | `gl_upscale_pcx` | upscale 8-bit pictures by hq2x/hq4x (default 0) | partial | ours upscales by classic enhance's trained upscaler; no switch by this name |

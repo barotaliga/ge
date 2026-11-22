@@ -12,19 +12,19 @@ q2-sp-gaps.md).
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client commands (what a player types; the game library answers them) | 33 | 1 | 3 | 0 | 37 |
-| Server commands (`sv <word>` typed at the server console) | 0 | 4 | 2 | 0 | 6 |
-| Cvars the game library registers or reads | 31 | 9 | 6 | 0 | 46 |
-| User info keys the game reads | 7 | 2 | 0 | 0 | 9 |
+| Client commands (what a player types; the game library answers them) | 34 | 1 | 2 | 0 | 37 |
+| Server commands (`sv <word>` typed at the server console) | 2 | 4 | 0 | 0 | 6 |
+| Cvars the game library registers or reads | 33 | 7 | 6 | 0 | 46 |
+| User info keys the game reads | 9 | 0 | 0 | 0 | 9 |
 | dmflags bits | 16 | 0 | 0 | 0 | 16 |
-| Items (the item list, in its order; each is also a spawnable classname) | 41 | 1 | 0 | 0 | 42 |
-| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 80 | 0 | 1 | 0 | 81 |
+| Items (the item list, in its order; each is also a spawnable classname) | 42 | 0 | 0 | 0 | 42 |
+| Spawnable entities (the spawn table; items above and monsters below are spawnable too) | 80 | 1 | 0 | 0 | 81 |
 | Monsters | 26 | 0 | 0 | 0 | 26 |
-| Player messages (printed, broadcast and centre-printed) | 72 | 1 | 8 | 0 | 81 |
-| Server console lines (what an admin reads; `dprintf`) | 3 | 1 | 32 | 0 | 36 |
-| Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 16 | 0 | 1 | 0 | 17 |
-| Rules a player sees (behaviour not in a row above) | 41 | 0 | 3 | 0 | 44 |
-| **all** | 366 | 19 | 56 | 0 | 441 |
+| Player messages (printed, broadcast and centre-printed) | 78 | 1 | 2 | 0 | 81 |
+| Server console lines (what an admin reads; `dprintf`) | 22 | 6 | 8 | 0 | 36 |
+| Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 17 | 0 | 0 | 0 | 17 |
+| Rules a player sees (behaviour not in a row above) | 44 | 0 | 0 | 0 | 44 |
+| **all** | 403 | 20 | 18 | 0 | 441 |
 
 ## Client commands (what a player types; the game library answers them)
 
@@ -73,7 +73,7 @@ count: done 17, partial 13, missing 7, not-taken 0
 | cmd.chat-fallback | any other word | the whole line said as chat (not during the intermission) | done | q2_commands.cpp |
 | cmd.intermission-gate | the intermission's five | only players, say, say_team, score, help answered during the intermission | done | q2_commands.cpp `commands_in_intermission` |
 | cmd.cheat-gate | the cheat gate | give, god, notarget, noclip, teleport, spawnentity, spawnonstart, listentities refused in deathmatch AND co-op unless `cheats` | partial | q2_commands.cpp gates deathmatch and co-op with the game's line; teleport, spawnentity, spawnonstart, listentities missing (R28) |
-| cmd.spectator-jump | jump / attack as a spectator | attack starts/stops chasing, jump steps the chase target | missing | R16 (see rule.chase) |
+| cmd.spectator-jump | jump / attack as a spectator | attack starts/stops chasing, jump steps the chase target | done | q2_spectate.cpp, q2_screens.cpp |
 
 ## Server commands (`sv <word>` typed at the server console)
 
@@ -81,12 +81,12 @@ count: done 0, partial 4, missing 2, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| svcmd.test | `sv test` | developer test, prints `Svcmd_Test_f()` | missing | rank 3, harmless |
+| svcmd.test | `sv test` | developer test, prints `Svcmd_Test_f()` | done | q2_server.cpp sq_console |
 | svcmd.addip | `sv addip <mask>` | adds an address mask to the filter list (a 0 octet or a short mask is a wildcard); `Usage:  addip <ip-mask>`, `IP filter list is full`, `Bad filter address: <text>` | partial | engine/server/bans.cpp answers `addip` with its own words and `*` wildcards; the `sv` form does not reach it (S30) |
 | svcmd.removeip | `sv removeip <mask>` | removes an entry typed the same way: `Removed.` / `Didn't find <mask>.`; `Usage:  sv removeip <ip-mask>` | partial | engine/server/bans.cpp, own wording (S30) |
 | svcmd.listip | `sv listip` | `Filter list:` then one `%3i.%3i.%3i.%3i` per entry | partial | engine/server/bans.cpp, own format (S30) |
 | svcmd.writeip | `sv writeip` | writes `set filterban N` and one `sv addip` per entry to `<game>/listip.cfg`: `Writing <file>.` / `Couldn't open <file>` | partial | engine/server/bans.cpp writes `addip` lines (S30) |
-| svcmd.unknown | any other `sv` word | `Unknown server command "<word>"` | missing | S30 |
+| svcmd.unknown | any other `sv` word | `Unknown server command "<word>"` | done | q2_server.cpp sq_console; addip and its kin left to the network server |
 
 ## Cvars the game library registers or reads
 
@@ -123,8 +123,8 @@ count: done 29, partial 10, missing 7, not-taken 0
 | cvar.dmflags | `dmflags` 0 (SI) | deathmatch rule bits (table below) | partial | q2_server.cpp; not in our server info (S27); bits: dmf table |
 | cvar.fraglimit | `fraglimit` 0 (SI) | frags that end the level, `Fraglimit hit.` | partial | q2_server.cpp, q2_fight.cpp; not in our server info (S27) |
 | cvar.timelimit | `timelimit` 0 (SI) | minutes that end the level, `Timelimit hit.` | partial | q2_server.cpp; not in our server info (S27) |
-| cvar.password | `password` "" (U flag) | a player's password to join and to return from spectating (`none` = none) | partial | net/q2_net_server.cpp at connect; not asked on a spectator's return (R15) |
-| cvar.spectator_password | `spectator_password` "" | a spectator's password (`none` = none) | partial | net/q2_game.cpp synonym `sv_spectatorpassword`; only at connect (R15) |
+| cvar.password | `password` "" (U flag) | a player's password to join and to return from spectating (`none` = none) | done | net/q2_net_server.cpp at connect; q2_spectate.cpp on returning (the gate) |
+| cvar.spectator_password | `spectator_password` "" | a spectator's password (`none` = none) | done | net/q2_game.cpp; q2_spectate.cpp mid-match |
 | cvar.needpass | `needpass` 0 (SI) | set by the game every frame: 1 player password asked, 2 spectator password asked | done | net/q2_net_server.cpp `status_text` |
 | cvar.filterban | `filterban` 1 | 1: the filter list bans; 0: only listed addresses may enter | done | net/q2_game.cpp synonym `sv_banmode`, net/q2_admin.hpp |
 | cvar.g_select_empty | `g_select_empty` 0 (A) | allows choosing a weapon with no ammo | done | q2_commands.cpp |
@@ -155,8 +155,8 @@ count: done 4, partial 5, missing 0, not-taken 0
 | ui.hand | `hand` | 0 right, 1 left, 2 centre: shots' start offset; 2 also allows the help-slot weapon icon | done | q2_fight.cpp offsets; q2_bar.cpp help-slot weapon icon |
 | ui.fov | `fov` | field of view, 1..160, forced 90 by dmflags 32768 and during the intermission | done | q2_fight.cpp: 90 during the intermission |
 | ui.gender | `gender` | f/F or `crakhor` = her/herself, m/M = his/himself, else its/itself, in obituaries | done | q2_fight.cpp, q2_combat.cpp (R1 landed) |
-| ui.spectator | `spectator` | deathmatch only: become/leave a spectator (checked at connect and when changed) | partial | net/q2_net_server.cpp at connect only, any mode (R15, R46) |
-| ui.password | `password` | checked against `password` at connect and on returning from spectating | partial | net/q2_net_server.cpp at connect only (R15) |
+| ui.spectator | `spectator` | deathmatch only: become/leave a spectator (checked at connect and when changed) | done | q2_server.cpp sq_user_info, q2_spectate.cpp; net/q2_net_server.cpp keeps the seat in step |
+| ui.password | `password` | checked against `password` at connect and on returning from spectating | done | q2_spectate.cpp on the way back to play; net/q2_net_server.cpp at connect |
 | ui.ip | `ip` | the address the filter list checks; refusal `Banned.` | done | net/q2_net_server.cpp (S10 notes the client can supply it) |
 | ui.rejmsg | `rejmsg` (set) | the refusal text a connect gets: `Banned.`, `Spectator password required or incorrect.`, `Server spectator limit is full.`, `Password required or incorrect.` | done | net/q2_net_server.cpp (texts carry an extra `Connection refused.` line, S22) |
 
@@ -240,7 +240,7 @@ count: done 16, partial 26, missing 0, not-taken 0
 | item.key_commander_head | Commander's Head | key, shown with the gib effect instead of rotating | done | q2_drops.cpp |
 | item.key_airstrike_target | Airstrike Marker | key | done | q2_drops.cpp |
 | item.health | Health (no classname) | the item behind `give health`, and the four item_health* spawns: health 10 (small 2, large 25, mega 100 past max) | done | q2_items.hpp, q2_server.cpp |
-| item.spawnflags-check | item spawnflags | any spawnflags on an item other than a power cube are cleared, with a console line `<class> at <pos> has invalid spawnflags set` | partial | q2_server.cpp clears them; the console line is missing |
+| item.spawnflags-check | item spawnflags | any spawnflags on an item other than a power cube are cleared, with a console line `<class> at <pos> has invalid spawnflags set` | done | q2_server.cpp: cleared with the console line |
 
 ## Spawnable entities (the spawn table; items above and monsters below are spawnable too)
 
@@ -307,7 +307,7 @@ count: done 73, partial 7, missing 1, not-taken 0
 | ent.target_character | target_character | one digit of a target_string | done | q2_targets.cpp |
 | ent.target_string | target_string | shows text on target_characters | done | q2_targets.cpp |
 | ent.worldspawn | worldspawn | sky, skyaxis, skyrotate, sounds/music (CD track), gravity, message (level name), nextmap; the status bar; precaches | done | `games/shooters_edge/server/q2_server.cpp` |
-| ent.viewthing | viewthing | developer: an animating model, `viewthing spawned` on the console | missing | rank 3, a developer entity no stock map uses |
+| ent.viewthing | viewthing | developer: an animating model, `viewthing spawned` on the console | partial | q2_lines.cpp says `viewthing spawned`; no model drawn |
 | ent.light | light | toggled light styles (start off) | done | q2_targets.cpp (world 23) |
 | ent.light_mine1 | light_mine1 | mine lamp model | done | q2_targets.cpp (world 25) |
 | ent.light_mine2 | light_mine2 | mine lamp model | done | q2_targets.cpp |
@@ -425,12 +425,12 @@ count: done 50, partial 16, missing 15, not-taken 0
 | msg.timelimit | `Timelimit hit.` | | done | q2_fight.cpp (R4 landed) |
 | msg.fraglimit | `Fraglimit hit.` | | done | q2_fight.cpp (R4 landed) |
 | msg.exited | `<name> exited the level.` | deathmatch exit with dmflags 4096 | done | q2_map.cpp |
-| msg.sidelines | `<name> has moved to the sidelines` | becoming a spectator | missing | R15 |
-| msg.joined | `<name> joined the game` | a spectator coming back | missing | R15 |
-| msg.spec-password | `Spectator password incorrect.` | changing to spectator with the wrong password | missing | R15 |
-| msg.spec-full | `Server spectator limit is full.` (no line end) | changing to spectator when full | missing | R15 (ours has it only as a connect refusal) |
-| msg.password | `Password incorrect.` | returning to play with the wrong password | missing | R15 |
-| msg.chase-none | `No other players to chase.` (centre) | a spectator's attack with nobody to follow | missing | R16 |
+| msg.sidelines | `<name> has moved to the sidelines` | becoming a spectator | done | q2_spectate.cpp |
+| msg.joined | `<name> joined the game` | a spectator coming back | done | q2_spectate.cpp |
+| msg.spec-password | `Spectator password incorrect.` | changing to spectator with the wrong password | done | q2_spectate.cpp, `spectator 0` stuffed |
+| msg.spec-full | `Server spectator limit is full.` (no line end) | changing to spectator when full | done | q2_spectate.cpp, no line end, `spectator 0` stuffed |
+| msg.password | `Password incorrect.` | returning to play with the wrong password | done | q2_spectate.cpp, `spectator 1` stuffed |
+| msg.chase-none | `No other players to chase.` (centre) | a spectator's attack with nobody to follow | done | q2_spectate.cpp (centre) |
 | msg.need-key | `You need the <item>` (centre) | trigger_key without its item | done | q2_targets.cpp |
 | msg.counter | `<n> more to go...` (centre) | trigger_counter | done | q2_targets.cpp |
 | msg.counter-done | `Sequence completed!` (centre) | trigger_counter's last | done | q2_targets.cpp |
@@ -473,41 +473,41 @@ count: done 1, partial 1, missing 34, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| con.startup | `Game is starting up.` / `Game is <name> built on <date>.` / `==== ShutdownGame ====` | library start and end | missing | rank 3; ours logs its own lines |
+| con.startup | `Game is starting up.` / `Game is <name> built on <date>.` / `==== ShutdownGame ====` | library start and end | partial | q2_server.cpp `==== InitGame ====` when the rules are made; no ShutdownGame line |
 | con.no-spawn | `<class> doesn't have a spawn function` | unknown classname | missing | ours drops it silently |
 | con.not-field | `'<key>' is not a field. Value is '<value>'` | unknown entity key | missing | |
 | con.incomplete-field | `<func>: entity <n>: incomplete '<key>' field` | a vector key with fewer than three numbers | missing | |
-| con.teams | `<n> teams with <m> entities.` | mover teams found | missing | |
-| con.inhibited | `<n> entities inhibited.` | entities left out by skill or mode | missing | |
-| con.invalid-spawnflags | `<class> at <pos> has invalid spawnflags set` | item spawnflags cleared | missing | |
-| con.path-corner | `path_corner with no targetname at <pos>` | | missing | |
+| con.teams | `<n> teams with <m> entities.` | mover teams found | done | q2_lines.cpp (the Q2PRO wording, no full stop) |
+| con.inhibited | `<n> entities inhibited.` | entities left out by skill or mode | done | q2_lines.cpp (the Q2PRO wording), skill and deathmatch flags only |
+| con.invalid-spawnflags | `<class> at <pos> has invalid spawnflags set` | item spawnflags cleared | done | q2_server.cpp with q2_pos |
+| con.path-corner | `path_corner with no targetname at <pos>` | done | q2_lines.cpp; left out |
 | con.target-missing | `<class> at <pos> target <name> does not exist` | a path's target | missing | |
-| con.viewthing | `viewthing spawned` | | missing | with ent.viewthing |
-| con.func-wall | `func_wall START_ON without TOGGLE` | | missing | |
-| con.viper | `misc_viper without a target at <pos>` / `<class> without a target at <pos>` | ships | missing | |
-| con.no-target-count | `<class> with no target at <pos>`, `<class> with no count at <pos>` | | missing | |
-| con.teleporter | `Couldn't find destination` / `teleporter without a target.` | | missing | |
-| con.turret | `<class> at <pos> needs a target` / `<class> at <pos> has bad item: <item>` | | missing | |
-| con.no-distance | `<class> at <pos> with no distance set` | a rotating door or a button | missing | |
-| con.train | `train_next: bad target <t>`, `connected teleport path_corners, see <class> at <pos>`, `train_find: no target`, `train_find: target <t> not found`, `func_train without a target at <pos>` | | missing | |
-| con.elevator | `elevator used with no pathtarget`, `elevator used with bad pathtarget: <t>`, `trigger_elevator has no target`, `trigger_elevator unable to find target <t>`, `trigger_elevator target <t> is not a train` | | missing | |
-| con.timer | `func_timer at <pos> has random >= wait` | | missing | |
+| con.viewthing | `viewthing spawned` | done | q2_lines.cpp |
+| con.func-wall | `func_wall START_ON without TOGGLE` | done | q2_lines.cpp; the toggle added |
+| con.viper | `misc_viper without a target at <pos>` / `<class> without a target at <pos>` | ships | done | q2_map.cpp, `(0 0 0)` |
+| con.no-target-count | `<class> with no target at <pos>`, `<class> with no count at <pos>` | done | q2_targets.cpp |
+| con.teleporter | `Couldn't find destination` / `teleporter without a target.` | done | q2_lines.cpp at spawn; q2_map.cpp each touch |
+| con.turret | `<class> at <pos> needs a target` / `<class> at <pos> has bad item: <item>` | partial | q2_targets.cpp needs a target and the pick line; no turret_driver bad item |
+| con.no-distance | `<class> at <pos> with no distance set` | a rotating door or a button | done | q2_map.cpp |
+| con.train | `train_next: bad target <t>`, `connected teleport path_corners, see <class> at <pos>`, `train_find: no target`, `train_find: target <t> not found`, `func_train without a target at <pos>` | done | q2_map.cpp train_find, train_next, connected teleports; q2_lines.cpp the lower corner less 1 |
+| con.elevator | `elevator used with no pathtarget`, `elevator used with bad pathtarget: <t>`, `trigger_elevator has no target`, `trigger_elevator unable to find target <t>`, `trigger_elevator target <t> is not a train` | partial | q2_map.cpp wording; said at each use, not once at set-up |
+| con.timer | `func_timer at <pos> has random >= wait` | done | q2_lines.cpp |
 | con.combattarget | `<class> at <pos>, combattarget <t> not found` | | missing | |
-| con.picktarget | `G_PickTarget called with NULL targetname`, `G_PickTarget: target <t> not found` | | missing | |
-| con.usetargets | `Think_Delay with no activator`, `entity was removed while using killtargets`, `WARNING: <class> used itself.`, `entity was removed while using targets` | | missing | |
-| con.speaker | `target_speaker with no noise set at <pos>` | | missing | |
-| con.no-message | `<class> with no message at <pos>` | target_help | missing | |
-| con.no-map | `target_changelevel with no map at <pos>` | | missing | |
+| con.picktarget | `G_PickTarget called with NULL targetname`, `G_PickTarget: target <t> not found` | partial | q2_lines.cpp q2_pick_missing before the train, elevator and turret lines; not yet before combattarget and monster targets |
+| con.usetargets | `Think_Delay with no activator`, `entity was removed while using killtargets`, `WARNING: <class> used itself.`, `entity was removed while using targets` | partial | q2_map.cpp `WARNING: Entity used itself.`; the removed-while-using and Think_Delay lines not yet |
+| con.speaker | `target_speaker with no noise set at <pos>` | done | q2_lines.cpp |
+| con.no-message | `<class> with no message at <pos>` | target_help | done | q2_map.cpp |
+| con.no-map | `target_changelevel with no map at <pos>` | done | q2_lines.cpp |
 | con.bad-target | `<class> at <pos>: <t> is a bad target` | target_laser | missing | |
-| con.lightramp | `<class> at <pos> target <t> (<class> at <pos>) is not a light`, `<class> target <t> not found at <pos>`, `target_lightramp has bad ramp (<r>) at <pos>`, `<class> with no target at <pos>` | | missing | |
-| con.untargeted | `untargeted <class> at <pos>` | target_earthquake etc. | missing | |
+| con.lightramp | `<class> at <pos> target <t> (<class> at <pos>) is not a light`, `<class> target <t> not found at <pos>`, `target_lightramp has bad ramp (<r>) at <pos>`, `<class> with no target at <pos>` | partial | q2_lines.cpp the bad ramp and no target at spawn; the first use's lines not yet |
+| con.untargeted | `untargeted <class> at <pos>` | target_earthquake etc. | done | q2_lines.cpp target_earthquake |
 | con.flood-clamp | `flood_msgs lowered to max: 10` | done | q2_commands.cpp |
 | con.spawned | `Spawned entity at <x> <y> <z>` | spawnonstart | missing | R28 |
 | con.listentities | `<class>: <x> <y> <z>` | listentities | done | `games/shooters_edge/server/q2_commands.cpp` |
 | con.bad-movetype | `<class>:<n> has bad movetype: <n>` | | missing | |
-| con.connected | `<name> connected` | a client connects | partial | net/q2_net_server.cpp logs its own line |
-| con.fixed-triggered | `fixed TRIGGERED flag on <class> at <pos>` | g_fix_triggered | missing | |
-| con.trigger-key | `no key item for trigger_key at <pos>`, `item <i> not found for trigger_key at <pos>`, `<class> at <pos> has no target` | | missing | |
+| con.connected | `<name> connected` | a client connects | done | q2_server.cpp sq_connect when maxclients is above 1 |
+| con.fixed-triggered | `fixed TRIGGERED flag on <class> at <pos>` | g_fix_triggered | done | q2_lines.cpp `(0 0 0)` |
+| con.trigger-key | `no key item for trigger_key at <pos>`, `item <i> not found for trigger_key at <pos>`, `<class> at <pos> has no target` | done | q2_lines.cpp |
 | con.say-echo | `Name: text` on the dedicated console | chat echoed to the server | done | q2_commands.cpp (verify it reaches the dedicated console) |
 
 ## Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats
@@ -527,7 +527,7 @@ count: done 8, partial 8, missing 1, not-taken 0
 | layout.stat-help | help slot | the help icon blinking while unread; otherwise, with hand 2 or fov > 91 and the server's `cl_gun` not 2, the weapon icon | done | q2_bar.cpp: the weapon icon with hand 2 or fov over 91 and cl_gun not 2 |
 | layout.stat-layouts | layouts bits | bit 1 a layout shown (scoreboard/help, and always when dead or intermission in deathmatch), bit 2 inventory (alive only) | done | q2_bar.cpp |
 | layout.stat-frags | frags stat | the score | done | q2_bar.cpp |
-| layout.stat-chase | chase stat (16) and spectator stat (17) | the followed player's name configstring, and the spectator flag | missing | R16 |
+| layout.stat-chase | chase stat (16) and spectator stat (17) | the followed player's name configstring, and the spectator flag | done | q2_spectate.cpp spectate_stats: the target's bar, 16 the skin configstring, 17 the flag |
 | layout.help | the help computer | `help` picture background; skill name `easy`/`medium`/`hard`/`hard+` top right; level name; the two help lines; ` kills     goals    secrets` and the counts | done | q2_campaign.cpp, q2_screens.cpp refresh |
 | layout.scoreboard | the deathmatch/co-op scoreboard | up to 12 players by score, two columns of 6, `tag1` on the viewer, `tag2` on his killer, `client x y n score ping minutes`, refreshed every 32 frames, spectators left off | done | q2_screens.cpp `q2_scoreboard` (ping capped at 9999 in ours: harmless) |
 | layout.inventory | the inventory | the server sends every item's count; the client lists held items with the selection | done | q2_screens.cpp |
@@ -549,9 +549,9 @@ count: done 18, partial 15, missing 11, not-taken 0
 | rule.next-map | the next map | dmflags 32, sv_maplist (case ignored, wrap), the world's nextmap, the first changelevel, the same map | done | q2_fight.cpp (R13 landed) |
 | rule.limits | fraglimit / timelimit tests | any client's score reaches the limit; level time ≥ minutes × 60 | done | q2_fight.cpp (R4 landed) |
 | rule.dm-exit | deathmatch exits | without 4096 a changelevel kills its toucher (10 × max health, cause exit, −1) | done | q2_map.cpp |
-| rule.spectator-change | spectating mid-match | the `spectator` setting applied 5 s after the last respawn, passwords and the limit checked, score reset, announced | missing | R15, S8 |
-| rule.spectator-sp | spectator outside deathmatch | ignored in co-op and single player | missing | R46 |
-| rule.chase | the chase camera | spectators follow players: attack starts/stops, jump and invnext/invprev step; the camera's place; the bar shows `Chasing <name>` | missing | R16 |
+| rule.spectator-change | spectating mid-match | the `spectator` setting applied 5 s after the last respawn, passwords and the limit checked, score reset, announced | done | q2_spectate.cpp: 5 s from the respawn mark (death + 1 s, a respawn, a switch), the spectators' password then the limit (every wish counted, his own too), score reset, said to all; a respawn takes the wish unchecked |
+| rule.spectator-sp | spectator outside deathmatch | ignored in co-op and single player | done | q2_spectate.cpp spectate_wish: deathmatch only |
+| rule.chase | the chase camera | spectators follow players: attack starts/stops, jump and invnext/invprev step; the camera's place; the bar shows `Chasing <name>` | done | q2_spectate.cpp: attack starts/ends, the up move starts or steps, invnext/invprev step; 30 back, 20 up (16 more in the air), off walls, ceiling and floor; dead target lying at roll 40 |
 | rule.item-teams | item teams | items sharing `team` show one random member at a time | done | `games/shooters_edge/server/q2_server.cpp` (`show_item`) |
 | rule.drop-weapon-ammo | dropped weapons | a `drop`ped weapon gives no ammo; one dropped at death gives its usual | done | q2_drops.cpp |
 | rule.coop-score | co-op score | +1 a monster killed, carried across levels, kept over respawn; deaths change nothing | done | q2_monsters.cpp: +1 a monster |

@@ -112,6 +112,14 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
           .max = 2,
           .values = "1: it does (the default), as 2; 0: only while it covers the screen"},
          &s.grab);
+  v.bind(
+      {.name = "ogg_remap_tracks",
+       .fallback = "1",
+       .flags = con::kArchive,
+       .help = "Whether a mission pack's music tracks are found by the digital release's numbers.",
+       .kind = con::CvarKind::boolean,
+       .values = "1: by the digital release's numbers (the default); 0: by the disc's"},
+      &s.remap_tracks);
   v.add(
       {.name = "cl_nodelta",
        .fallback = "0",

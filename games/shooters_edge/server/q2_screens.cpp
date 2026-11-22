@@ -15,6 +15,7 @@
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_server.hpp"
+#include "shooters_edge/server/q2_spectate.hpp"
 
 namespace shooters_edge::server {
 
@@ -130,6 +131,7 @@ bool screens_command(Q2Server& s, int slot, const std::string& cmd) {
                 {"invnextp", 1, Steps::powerups}, {"invprevp", -1, Steps::powerups}};
   for (const auto& st : kSteps)
     if (cmd == st.name) {
+      if (spectate_step(s, slot, st.way)) return true;  // a chaser steps to another player
       step_selection(p, st.way, st.steps);
       return true;
     }
