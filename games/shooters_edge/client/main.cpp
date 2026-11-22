@@ -384,7 +384,8 @@ int run_main(int argc, char** argv) {
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
   cl::Q2Bar q2_bar{.files = &files,
                    .binds = &console.binds().table(ge::console::BindMode::game),
-                   .screen = &q2_screen};
+                   .screen = &q2_screen,
+                   .fx = &picture.q2fx};
   cl::add_q2_bar_commands(console, q2_bar);  // dumpstatusbar, dumplayout, aashot, aadump
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
@@ -1194,8 +1195,7 @@ int run_main(int argc, char** argv) {
       full_applied = win.fullscreen;
     }
     ge::input::update(held, queue);
-    // What the console and the menu ask for this frame, against what was asked before it: a
-    // played demo paused behind the menu gives the window up to it (below).
+    // What the console and menu ask this frame, against before (a demo held behind it, below).
     const std::string map_before = next_map;
     const bool joined_before = remote.active;
     con_keys.menu = game_menu.open();  // a menu has the keys: only F1..F12 run their binds
@@ -1286,10 +1286,11 @@ int run_main(int argc, char** argv) {
     // menu keeps it and is driven by the keys unless the menu's bit is set.
     if (input.focus_lost) focused = false;
     if (input.focus_gained) focused = true;
-    const ge::input::CaptureFacts facts{.focused = focused,
-                                        .console = con_view.open(),
-                                        .menu = game_menu.open(),
-                                        .watching = bench.active && bench.paced};
+    const ge::input::CaptureFacts facts{
+        .focused = focused && cl::q2_takes_mouse(game_cvars.q2, win.fullscreen),
+        .console = con_view.open(),
+        .menu = game_menu.open(),
+        .watching = bench.active && bench.paced};
     switch (ge::input::follow_capture(mouse, facts, controls.mouse_release)) {
       case ge::input::CaptureStep::take:
         ge::platform::set_relative_mouse(*window, true, controls.mouse.raw);

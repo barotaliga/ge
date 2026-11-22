@@ -21,11 +21,16 @@
 //   width in units (`cl_railcore_color`, `cl_railcore_width`), the spiral's colour and radius
 //   (`cl_railspiral_color`, `cl_railspiral_radius`). A colour is a name (black, red, green,
 //   yellow, blue, cyan, magenta, white) or #rgb or #rrggbb (`q2_colour`).
+// - The hit markers, on the damage the server reports the player dealt: `cl_hit_markers` 0 none,
+//   1 the pack's `marker` picture in red at the screen's centre, 2 the picture and
+//   `weapons/marker.wav`; the picture fades over `scr_hit_marker_time` ms (500) by the square of
+//   the time gone (`q2_hit_marker_alpha`), a new hit starting it over.
 //
 // ge:summary Quake II's effect switches: specks, explosions, lights and muzzle flashes left out
 // ge:keywords q2 cl_disable_particles cl_disable_explosions cl_dlight_hacks cl_muzzlelight_time
 // ge:keywords cl_muzzleflashes cl_footsteps s_ambient effect-switches q2_fx_switches
 // ge:keywords cl_railtrail_type cl_railtrail_time cl_railcore_color cl_railspiral_color q2_colour
+// ge:keywords cl_hit_markers scr_hit_marker_time hit-marker q2_hit_marker_alpha
 // ge:skill classic shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #pragma once
@@ -51,7 +56,17 @@ struct Q2FxSwitches {
   double rail_time = 1;                                     // cl_railtrail_time, seconds
   std::string core_colour = "red", spiral_colour = "blue";  // cl_railcore_color, _spiral_
   double core_width = 2, spiral_radius = 3;  // cl_railcore_width, cl_railspiral_radius: units
+  int hit_markers = 2;                       // cl_hit_markers
+  double hit_marker_ms = 500;                // scr_hit_marker_time
 };
+
+// The hit marker's opacity `age_s` after the last hit: 1 at the hit, 1 - f*f with f the share of
+// `scr_hit_marker_time` gone, 0 past it (or with the markers off).
+inline float q2_hit_marker_alpha(const Q2FxSwitches& s, double age_s) {
+  if (s.hit_markers <= 0 || s.hit_marker_ms <= 0 || age_s < 0) return 0;
+  const double f = age_s * 1000 / s.hit_marker_ms;
+  return f > 1 ? 0.0f : static_cast<float>(1 - f * f);
+}
 
 // A colour as Quake II's settings write one, 0..1 each: a name or #rgb or #rrggbb (false and
 // `rgb` untouched when it is neither).

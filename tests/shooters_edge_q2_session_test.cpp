@@ -149,3 +149,12 @@ TEST(an_inexact_cl_maxfps_is_told_rounded_once_per_change) {
   r.step(true, "base1");
   CHECK(r.c.output().size() == 3);
 }
+
+TEST(in_grab_0_takes_the_mouse_only_while_the_game_covers_the_screen) {
+  Rig r;
+  CHECK(cl::q2_takes_mouse(r.s, false) && cl::q2_takes_mouse(r.s, true));  // 1, the default
+  r.c.execute("in_grab 0");
+  CHECK(!cl::q2_takes_mouse(r.s, false) && cl::q2_takes_mouse(r.s, true));
+  r.c.execute("in_grab 2");
+  CHECK(cl::q2_takes_mouse(r.s, false));
+}
