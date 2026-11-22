@@ -214,6 +214,12 @@ inline const GameProfile* find_game(std::string_view id) {
   return nullptr;
 }
 
+// The row of `id`, or Quake's when there is none (a profile named on the command line).
+inline const GameProfile& game_or_quake(std::string_view id) {
+  const GameProfile* g = find_game(id);
+  return g != nullptr ? *g : q1_game();
+}
+
 // The game row's content row (every game row has one: the test holds it).
 inline const ge::classicenhance::Profile& content_of(const GameProfile& g) {
   const ge::classicenhance::Profile* p = ge::classicenhance::find_profile(g.id);

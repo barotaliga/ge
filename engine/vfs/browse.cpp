@@ -145,6 +145,19 @@ bool list_folder(const std::string& dir, std::span<const std::string> extensions
   return true;
 }
 
+void sort_files(std::vector<FolderEntry>& entries, int order) {
+  const auto first =
+      std::find_if(entries.begin(), entries.end(), [](const FolderEntry& e) { return !e.folder; });
+  const int key = order < 0 ? -order : order;
+  const bool down = order < 0;
+  std::stable_sort(first, entries.end(), [&](const FolderEntry& a, const FolderEntry& b) {
+    if (key == 2 && a.age_s != b.age_s) return down ? a.age_s < b.age_s : a.age_s > b.age_s;
+    if (key == 3 && a.bytes != b.bytes) return down ? a.bytes > b.bytes : a.bytes < b.bytes;
+    if (key == 1 && down) return name_less(b.name, a.name);
+    return name_less(a.name, b.name);
+  });
+}
+
 std::vector<Place> user_places() {
   std::vector<Place> out;
   const std::string home = home_dir();
@@ -206,6 +219,7 @@ bool FolderBrowser::open(const std::string& dir, std::string_view select) {
     note_ = error;
     return false;
   }
+  if (order_ != -2) sort_files(list, order_);
   dir_ = dir;
   entries_ = std::move(list);
   note_.clear();

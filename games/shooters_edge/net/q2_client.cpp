@@ -221,6 +221,11 @@ void run_stuffed(Q2ClientEnd& c) {
       from = end + 1;
       if (raw.empty()) continue;
       if (c.stuffed.size() < kKept) c.stuffed.push_back(raw);
+      if (c.cfg.stuff != nullptr && !ge::classic::stuff_allowed(*c.cfg.stuff, raw)) {
+        if (std::string said = ge::classic::stuff_ignored_line(*c.cfg.stuff, raw); !said.empty())
+          c.ignored.push_back(std::move(said));
+        continue;
+      }
       const std::string line = expand_settings(c, raw);  // as a console runs it
       const std::vector<std::string> w = q2_words(line);
       if (w.empty()) continue;

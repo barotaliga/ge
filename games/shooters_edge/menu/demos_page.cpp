@@ -2,7 +2,7 @@
 // (demos_page.hpp).
 //
 // ge:summary The demos page: its opening folder, keys, check, places, list, footer, empty folder
-// ge:keywords demos page browse places rows footer check draw menu_demo_dir
+// ge:keywords demos page browse places rows footer check draw menu_demo_dir menu_demo_sort
 // ge:skill ui
 // ge:test tests/shooters_edge_menu_test.cpp
 #include "shooters_edge/menu/demos_page.hpp"
@@ -51,6 +51,17 @@ void DemosPage::add_cvars(ge::console::Console& con) {
                     .kind = ge::console::CvarKind::text,
                     .values = "\"\": the game's folder (the default); TEXT: that folder"},
                    &last_dir_);
+  con.cvars().bind({.name = "menu_demo_sort",
+                    .fallback = "-2",
+                    .flags = ge::console::kArchive,
+                    .help = "The order DEMOS lists the recordings in.",
+                    .kind = ge::console::CvarKind::integer,
+                    .min = -3,
+                    .max = 3,
+                    .values = "1: by name; 2: oldest first; 3: smallest first; -1, -2, -3: the "
+                              "same the other way round (-2, newest first, the default); 0: by "
+                              "name"},
+                   &order_);
 }
 
 void DemosPage::open() {
@@ -58,6 +69,7 @@ void DemosPage::open() {
   for (gv::Place& p : player_places_.empty() ? gv::user_places() : player_places_)
     places.push_back(std::move(p));
   browser_.set_places(places);
+  browser_.set_order(order_);
   facts_.clear();
   refused_ = false;
   first_ = 0;
@@ -80,6 +92,7 @@ int DemosPage::hit_place(float x, float y) const {
 
 DemosAction DemosPage::input(const ui::MenuInput& in) {
   if (in.refresh) {
+    browser_.set_order(order_);
     browser_.rescan();
     return DemosAction::none;
   }

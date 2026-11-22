@@ -73,6 +73,7 @@ struct GameBindings {
   // `cl_gunfov`; Quake's `r_viewmodelsize` and `r_viewmodeloffset`.
   shooters_edge::view::ViewSettings* view = nullptr;
   int* moves = nullptr;         // Quake II's own `cl_maxfps`: its moves a second
+  int* stuff_level = nullptr;   // Quake II's `cl_ignore_stufftext` (classic/protocol/stuff_filter)
   double* frame_cap = nullptr;  // the window's frame cap (our `cl_maxfps`), Quake II's `r_maxfps`
   // The maps' light: Quake II's `intensity`, `gl_modulate` and `gl_brightness` (the picture's
   // light_intensity, light_modulate and light_lift: classic/app/look.hpp); Quake keeps 2, 1, 0.

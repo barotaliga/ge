@@ -229,6 +229,34 @@ TEST(the_window_draws_the_scoreboard_over_the_bar_only_while_it_is_up) {
   CHECK(bar.ops.size() == bare);
 }
 
+// F1 in a recording played back shows the last layout sent, though its flag has it down; in a
+// game it does not, and with scr_draw2d 3 it shows the layout that setting hides.
+TEST(f1_shows_the_last_layout_in_a_recording_and_past_scr_draw2d_3) {
+  auto g = game("1");
+  run(*g, 20);
+  cl::Q2Bar bar;
+  cl::run_q2_bar(bar, g->r->world, 0, g->s().frame_number, 640, 480);
+  const size_t bare = bar.ops.size();
+  CHECK(g->r.client_command(0, "score") == sv::CommandResult::mod);
+  CHECK(g->r.client_command(0, "score") == sv::CommandResult::mod);  // down again, kept
+  bar.f1 = 1;
+  cl::run_q2_bar(bar, g->r->world, 0, g->s().frame_number, 640, 480);
+  CHECK(bar.ops.size() == bare);
+  bar.f1 = 2;
+  cl::run_q2_bar(bar, g->r->world, 0, g->s().frame_number, 640, 480);
+  CHECK(bar.ops.size() > bare);
+  cl::Q2Screen screen;
+  screen.draw2d = 3;
+  bar.screen = &screen;
+  CHECK(g->r.client_command(0, "score") == sv::CommandResult::mod);  // up
+  bar.f1 = 0;
+  cl::run_q2_bar(bar, g->r->world, 0, g->s().frame_number, 640, 480);
+  const size_t hidden = bar.ops.size();
+  bar.f1 = 1;
+  cl::run_q2_bar(bar, g->r->world, 0, g->s().frame_number, 640, 480);
+  CHECK(bar.ops.size() > hidden);
+}
+
 TEST(inven_sends_the_counts_and_shows_while_alive) {
   auto g = game("0", 1);
   run(*g, 20);

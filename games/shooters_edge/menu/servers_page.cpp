@@ -20,6 +20,7 @@
 #include "shooters_edge/menu/servers_page.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -270,6 +271,10 @@ void ServersPage::add_cvars(ge::console::Console& con) {
       &live_update_);
   number("sb_autohide", "1", "Whether joining a server from JOIN A GAME closes the menu.",
          "0: the menu stays open; 1: it closes (the default); 2: it closes too", 0, 2, &autohide_);
+  flag("sb_colorservers", "0",
+       "Whether JOIN A GAME colours each server: grey when locked, green when very near.",
+       "0: no (the default); 1: grey for a password or a cheat guard, green under 30 ms",
+       &colour_servers_);
   flag("sb_findroutes", "0",
        "Whether JOIN A GAME looks for faster routes to the servers through forwarders.",
        "0: no (the default); 1: yes, and joining goes the fastest way", &find_routes_);
@@ -500,6 +505,13 @@ bool ServersPage::open(std::string* why) {
     for (const std::string& m : split_words(hub_masters_))
       resolve(m, gn::kMasterPort, config_.own_masters);
   for (const std::string& s : split_words(servers_)) resolve(s, lan_first_, config_.servers);
+  // The address book a game keeps (Quake II's `adr0`, `adr1`, ...): read in order until one is
+  // not registered, the empty ones skipped.
+  for (int k = 0; con_ != nullptr; k++) {
+    const ge::console::Cvar* adr = con_->cvars().find("adr" + std::to_string(k));
+    if (adr == nullptr) break;
+    for (const std::string& s : split_words(adr->value)) resolve(s, lan_first_, config_.servers);
+  }
   config_.tries = info_retries_;
   config_.timeout_us = int64_t{info_timeout_} * 1000;
   config_.gap_us = 1000000 / std::max(1, infos_per_s_);
@@ -863,8 +875,9 @@ void ServersPage::draw(ui::DrawList& list, int width, int height, const ui::Menu
     list.rect(cell, sel ? style.accent : style.slab, style.radius * s);
     const float base = cell.y + cell.h * 0.5f + word * 0.36f;
     const bool full = in.max_players > 0 && in.players >= in.max_players;
-    const ui::Color tc = sel ? style.text_focus : style.text;
-    const ui::Color dim = sel ? style.text_focus : style.text_dim;
+    ui::Color tc = sel ? style.text_focus : style.text;
+    ui::Color dim = sel ? style.text_focus : style.text_dim;
+    if (ui::Color c; colour_servers_ && row_colour(in, se.ping_ms, c)) tc = dim = c;
     const std::string name = (in.locked ? "* " : "") + printable(in.name);
     const auto key = [&](const char* k) {
       for (const auto& [kk, v] : in.keys)
@@ -941,6 +954,30 @@ void ServersPage::route_frame() {
     table_ = ge::forward::route_finder_table(finder_, list_);
     routes_ready_ = true;
   }
+}
+
+bool ServersPage::row_colour(const gn::ServerInfo& in, int ping_ms, ui::Color& out) {
+  const auto key = [&](std::string_view k) {
+    for (const auto& [kk, v] : in.keys)
+      if (kk.size() == k.size() && std::equal(kk.begin(), kk.end(), k.begin(), [](char a, char b) {
+            return std::tolower(static_cast<unsigned char>(a)) ==
+                   std::tolower(static_cast<unsigned char>(b));
+          }))
+        return v;
+    return std::string();
+  };
+  std::string nofake = key("nofake");
+  for (char& ch : nofake) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+  if (in.locked || std::atoi(key("needpass").c_str()) >= 1 ||
+      std::atoi(key("anticheat").c_str()) >= 2 || nofake == "ENABLED") {
+    out = ui::hex(0x7f7f7f);
+    return true;
+  }
+  if (ping_ms >= 0 && ping_ms < 30) {
+    out = ui::hex(0x00ff00);
+    return true;
+  }
+  return false;
 }
 
 std::string ServersPage::ping_words(int index, int ping_ms) const {
