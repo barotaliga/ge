@@ -110,6 +110,14 @@ macros.hpp`) beside the console's clock macros. Quake II's farewell is "Server q
 restarted", with the reason, to every player and relay viewer; after `killserver` its endpoint
 answers only rcon and runs no frame until the next map.
 
+Quake II's downloads (`net/q2_net_server.cpp`, facts in `porting/shooters-edge/
+q2-downloads-facts.md`) make the asked name plain first (slashes, `.` and `..`), then offer each
+kind by its own setting (`sv_download_textures` for textures and skies, `sv_download_pics`,
+`sv_download_others` off by default), refuse a file past `sv_max_download_size`, tell a resume past
+the end that the file size differs, and send a downloading client reliable data alone. The connect
+answer names `sv_downloadserver`'s web copy and the map. A long rcon answer comes in packets of
+1384 bytes, whole lines where they fit; a wrong password is noted without the guess.
+
 What exists only in the reference's debug builds (`fs_stats`, `sv_debug`, `sv_pad_packets`,
 `mvd_shownet`, `com_debug_break`, the file fuzzing settings, the library's debug drawing) is not
 taken: our servers are debugged with the log channels and the labs (`docs/debugging.md`), never a

@@ -262,6 +262,8 @@ TEST(cl_nodelta_has_every_frame_sent_whole) {
   const cn::Q2NetClient& sc = r->server.clients[0];
   CHECK_MSG(sc.full_frames >= c.frames - 1,
             std::to_string(sc.full_frames) + " whole of " + std::to_string(c.frames));
+  // scr_showturtle's NODELTA: the frame read came whole.
+  CHECK(c.demo.state.q2_trouble == shooters_edge::client::kQ2FrameNoDelta);
 }
 
 TEST(out_of_band_words_keep_a_quoted_word_whole) {
@@ -327,6 +329,48 @@ TEST(a_map_with_no_sky_gets_the_default_and_a_download_is_refused) {
   for (const std::string& line : r->server.log)
     noted = noted || line.find("asked for env/rt.tga") != std::string::npos;
   CHECK(noted);
+}
+
+// Which files are offered: each kind by its own setting (textures/ and env/, pics/, anything else
+// off by default), none past sv_max_download_size, a resume past the end told the size differs;
+// the connect answer names the web address and the map.
+TEST(downloads_are_offered_by_kind_and_size_and_a_bad_resume_is_told) {
+  cn::Q2NetConfig cfg;
+  cfg.allow_pics = false;
+  cfg.max_download_size = 50;
+  cfg.download_server = "http://files.example/q2/";
+  cfg.read_file = [](const std::string& path, std::vector<uint8_t>* out) {
+    out->assign(path.rfind("models/big", 0) == 0 ? 100 : 10, uint8_t{7});
+    return true;
+  };
+  auto r = rig(cfg);
+  cn::Q2ClientConfig cc;
+  cn::Q2ClientEnd& c = join(*r, cc);
+  run(*r, 120);
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+  const auto why = [&](const std::string& asked) -> std::string {
+    const size_t before = r->server.log.size();
+    cn::q2_client_command(c, "download " + asked);
+    run(*r, 10);
+    for (size_t i = before; i < r->server.log.size(); i++) {
+      const std::string& l = r->server.log[i];
+      if (const size_t at = l.find(": refused, "); at != std::string::npos)
+        return l.substr(at + 11);
+    }
+    return "sent";
+  };
+  CHECK(why("env/unit1_up.tga") == "sent");
+  CHECK(why("sprites/s_bfg1.sp2") == "sent");
+  CHECK(why("pics/colormap.pcx") == "that kind of file is not offered");
+  CHECK(why("docs/readme.txt") == "that kind of file is not offered");
+  CHECK(why("models/big/tris.md2") == "larger than sv_max_download_size");
+  CHECK(why("/models/./a/../b/tris.md2") == "sent");  // made plain first
+  CHECK(why("../models/x.md2") == "not a file the server offers");
+  CHECK(why("models/x.md2.") == "not a file the server offers");
+  CHECK(why("models/x.md2 20") == "a resume past its end");
+  CHECK(std::find(c.prints.begin(), c.prints.end(),
+                  "File size differs from server.\nPlease delete the corresponding .tmp file "
+                  "from your system.\n") != c.prints.end());
 }
 
 TEST(a_level_change_keeps_every_connection_and_seats_each_client_again) {

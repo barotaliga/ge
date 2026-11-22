@@ -144,6 +144,11 @@ void add_q2_screen(Q2Bar& bar, int crosshair, std::string_view centre, int width
 // takes the colour of `health` when ch_health asks.
 // The hit marker over `dl`: `hits` (DemoState::hits) more than last seen starts its fade at
 // `bar.now`; drawn while `bar.fx`'s cl_hit_markers and scr_hit_marker_time keep it.
+// scr_showturtle (the screen's `turtle`): a frame's troubles (`DemoState::q2_trouble`) as words
+// in the alternate colour, one a line from eleven lines over the bottom at the left: BADFRAME,
+// OLDFRAME, NODELTA, and at 2 SUPPRESSED. Into `bar.ops`, after `run_q2_bar`.
+void add_q2_turtle(Q2Bar& bar, uint8_t trouble, int width, int height);
+
 void draw_q2_hit_marker(ge::ui::DrawList& dl, Q2Bar& bar, int64_t hits, int width, int height);
 void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::CrosshairSettings& s,
                        int width, int height, int health = 100);

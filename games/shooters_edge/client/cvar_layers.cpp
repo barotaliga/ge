@@ -390,6 +390,15 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .max = 86400,
          .values = "0: never; 1..86400: that many seconds (120 the default)",
          .overlap = con::Overlap::same});
+  v.add({.name = "m_side",  // the same sidestep as Quake's, a whole unit a count
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "How far the mouse's sideways moves sidestep you when they do (+strafe held, or "
+                 "lookstrafe with +mlook).",
+         .min = -10,
+         .max = 10,
+         .values = "-10..10: units a count at sensitivity 1 (1 the default)",
+         .overlap = con::Overlap::same});
   v.add({.name = "s_underwater",  // its own client muffles the world under water; Quake's never
          .fallback = "1",
          .flags = con::kArchive,

@@ -75,6 +75,16 @@ constexpr gs::GameRule kRules[] = {
      "0: not offered; 1: offered (the default)", false},
     {"sv_download_maps", "Whether files in maps/ are offered.", nullptr,
      "0: not offered; 1: offered (the default)", false},
+    {"sv_download_textures", "Whether files in textures/ and env/ (the skies) are offered.",
+     nullptr, "0: not offered; 1: offered (the default)", false},
+    {"sv_download_pics", "Whether files in pics/ are offered.", nullptr,
+     "0: not offered; 1: offered (the default)", false},
+    {"sv_download_others", "Whether files in any other folder are offered.", "0",
+     "0: not offered (the default); 1: offered", false},
+    {"sv_max_download_size", "The largest file offered, in bytes.", "8388608",
+     "N: that many bytes (8388608 the default); 0: the most, 128 MiB and 4 KiB", false},
+    {"sv_downloadserver", "A web address clients may fetch the server's files from instead.",
+     nullptr, "empty: none (the default); a URL ending in /", false},
     {"sv_speedcheck", "Whether a player whose moves add up to more time than passed is held back.",
      nullptr, "0: not checked; 1: a move past his time budget is not run (the default)"},
     {"sv_fps",
@@ -257,6 +267,9 @@ constexpr gs::SettingName kSettingNames[] = {
     {"allow_download_models", "sv_download_models"},
     {"allow_download_sounds", "sv_download_sounds"},
     {"allow_download_maps", "sv_download_maps"},
+    {"allow_download_textures", "sv_download_textures"},
+    {"allow_download_pics", "sv_download_pics"},
+    {"allow_download_others", "sv_download_others"},
     {"filterban", "sv_banmode"},
     {"map_override_path", "sv_entpath"},
     {"map_visibility_patch", "sv_vispatch"},
@@ -613,6 +626,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->cfg.allow_models = switch_on(c, "sv_download_models");
   g->cfg.allow_sounds = switch_on(c, "sv_download_sounds");
   g->cfg.allow_maps = switch_on(c, "sv_download_maps");
+  g->cfg.allow_textures = switch_on(c, "sv_download_textures");
+  g->cfg.allow_pics = switch_on(c, "sv_download_pics");
+  g->cfg.allow_others = switch_on(c, "sv_download_others");
+  if (const auto it = c.rules.find("sv_max_download_size"); it != c.rules.end())
+    g->cfg.max_download_size = std::atoll(it->second.c_str());
+  if (const auto it = c.rules.find("sv_downloadserver"); it != c.rules.end())
+    g->cfg.download_server = it->second;
   Game* gp = g.get();
   g->cfg.read_file = [gp](const std::string& path, std::vector<uint8_t>* out) {
     std::vector<uint8_t> store;

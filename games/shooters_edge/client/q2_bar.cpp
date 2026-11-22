@@ -229,11 +229,28 @@ void draw_q2_hit_marker(ge::ui::DrawList& dl, Q2Bar& bar, int64_t hits, int widt
   dl.box(b);
 }
 
+void add_q2_turtle(Q2Bar& bar, uint8_t trouble, int width, int height) {
+  const int turtle = bar.screen != nullptr ? bar.screen->turtle : 1;
+  if (turtle <= 0 || trouble == 0 || (bar.screen != nullptr && bar.screen->draw2d == 0)) return;
+  const int scale = q2_bar_scale(bar, width, height);
+  int y = height / scale - 11 * 8;  // one word a line, eleven lines over the bottom
+  const std::pair<uint8_t, const char*> words[] = {{kQ2FrameBad, "BADFRAME"},
+                                                   {kQ2FrameOld, "OLDFRAME"},
+                                                   {kQ2FrameNoDelta, "NODELTA"},
+                                                   {kQ2FrameSuppressed, "SUPPRESSED"}};
+  for (const auto& [bit, word] : words) {
+    if ((trouble & bit) == 0 || (bit == kQ2FrameSuppressed && turtle < 2)) continue;
+    add_text(bar.ops, 0, y, word, true);
+    y += 8;
+  }
+}
+
 bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds, int width,
                           int height) {
   if (!bar.recorded) bar.recorded = std::make_shared<server::RulesWorld>();
   if (!q2_world_of(ds, *bar.recorded)) return false;
   run_q2_bar(bar, *bar.recorded, ds.player, ds.frames, width, height);
+  add_q2_turtle(bar, ds.q2_trouble, width, height);
   draw_q2_bar(dl, bar, q2_bar_scale(bar, width, height));
   draw_q2_hit_marker(dl, bar, ds.hits, width, height);
   return true;
