@@ -1564,6 +1564,32 @@ int q2_net_clients(const Q2NetServer& s) {
   return n;
 }
 
+namespace {
+
+// The multiview recorder's turn (q2_mvd_server.hpp): its viewers each tick, a level's game state
+// and a block each 10 Hz rules frame (our rules only: a hosted library's world is its own).
+void record_multiview(Q2NetServer& s) {
+  if (s.mvd.cfg.enable <= 0) return;
+  q2_mvd_pump(s.mvd, s.now);
+  if (s.game == nullptr) return;
+  sv::Mvd2Capture cap;
+  cap.no_blend = s.mvd.cfg.noblend;
+  cap.no_gun = s.mvd.cfg.nogun;
+  for (int i = 0; i < sh::kMaxClients; i++) cap.moves[i] = &s.game->players[i].move;
+  const int64_t frame = frame_of(s);
+  if (s.mvd_level) {
+    s.mvd_level = false;
+    s.mvd_frame = frame;
+    q2_mvd_level(s.mvd, **s.rules, s.cfg.wire, cap, s.now);
+    return;
+  }
+  if (frame == s.mvd_frame) return;
+  s.mvd_frame = frame;
+  q2_mvd_frame(s.mvd, **s.rules, s.cfg.wire, cap, s.now);
+}
+
+}  // namespace
+
 bool q2_net_start(Q2NetServer& s, const sv::RulesRunner& rules, gn::Transport& t,
                   const Q2NetConfig& cfg, std::string& error) {
   s.cfg = cfg;
@@ -1577,6 +1603,8 @@ bool q2_net_start(Q2NetServer& s, const sv::RulesRunner& rules, gn::Transport& t
   }
   s.count = 0x10000 + cfg.wire.server_count;
   s.force_reconnect = cfg.force_reconnect;
+  s.mvd.cfg = cfg.mvd;
+  s.mvd.unix_time = cfg.unix_time;
   s.written_frame = frame_of(s);
   if (s.game != nullptr && cfg.antilag > 0) {
     s.game->lag_place = &lag_place;
@@ -1671,6 +1699,7 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
                      p.maxs);
     }
   send_frames(s);
+  record_multiview(s);
   for (Q2NetClient& c : s.clients) {  // the voices relayed this tick: a frame late is lost
     if (c.voice_out.empty()) continue;
     if (c.stage == Q2Slot::active) transmit(s, c, c.voice_out.data(), c.voice_out.size());
@@ -1688,6 +1717,7 @@ void q2_net_level(Q2NetServer& s, const sv::Q2WireOptions& wire) {
   s.count = 0x10000 + count;
   s.written_frame = frame_of(s);
   s.written_fast = fast_of(s);
+  s.mvd_level = true;
   for (Q2NetClient& c : s.clients) {
     std::fill(std::begin(c.frame_sizes), std::end(c.frame_sizes), 0);  // the numbers start again
     for (Q2NetClient::SentFrame& f : c.sent_frames) f.number = -1;
@@ -1857,6 +1887,7 @@ void q2_net_ask_setting(Q2NetServer& s, int slot, const std::string& name) {
 }
 
 void q2_net_shutdown(Q2NetServer& s, const std::string& text, bool reconnect) {
+  q2_mvd_shutdown(s.mvd, reconnect);
   std::vector<uint8_t> b = {kSvcPrint, 2};
   b.insert(b.end(), text.begin(), text.end());
   b.push_back(0);

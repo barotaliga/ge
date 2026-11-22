@@ -59,6 +59,7 @@ struct EpisodeOptions {
   bool registered = false;         // the content is the full game
   bool single = false;             // single player (coop 0), the leader alone
   bool complete = false;           // the 100% run (way_through.hpp)
+  bool tour = true;                // and its stops taken in the tour's order (tour.hpp)
   bool god = false;                // the leader's `god` on every map
   std::vector<std::string> avoid;  // exits to these maps are not taken (a secret level)
   std::vector<std::string> stop;   // an exit to one of these ends the run (the episode's end)

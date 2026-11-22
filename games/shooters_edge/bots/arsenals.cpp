@@ -100,6 +100,24 @@ int first_monster(std::string_view model) {
   return 0;
 }
 
+// How far a Quake player keeps from a monster in a fight, by the reach of its bite or leap: the
+// dog's and the fiend's leaps, the knights' swords, the ogre's chainsaw, the shambler's claws, the
+// spawn's bounce; none for the ones that shoot (a soldier, an enforcer, a scrag, a vore).
+float first_keep_off(std::string_view model) {
+  struct Reach {
+    std::string_view model;
+    float keep;
+  };
+  static constexpr Reach kReach[] = {
+      {"progs/dog.mdl", 192},     {"progs/demon.mdl", 320},  {"progs/knight.mdl", 160},
+      {"progs/hknight.mdl", 192}, {"progs/ogre.mdl", 160},   {"progs/shambler.mdl", 192},
+      {"progs/tarbaby.mdl", 224}, {"progs/zombie.mdl", 128},
+  };
+  for (const Reach& r : kReach)
+    if (model == r.model) return r.keep;
+  return 0;
+}
+
 // Quake II's roster: every kind that hunts (not a good guy, not a figure that only answers a
 // use) is one any weapon puts down.
 int q2_monster(std::string_view model) {
@@ -146,6 +164,7 @@ BotArsenal make_first() {
   a.ammo_max[3] = 100;  // cells
   a.tables = &shooters_edge::profiles::kQ1Tables;
   a.monster = first_monster;
+  a.keep_off = first_keep_off;
   a.short_of[0] = 40;  // shells
   a.short_of[1] = 60;  // nails
   a.short_of[2] = 20;  // rockets

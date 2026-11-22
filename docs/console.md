@@ -284,7 +284,13 @@ by default.
 **Clock macros** (`engine/console/clock_macros.hpp`, a game adds them with its clock):
 `$com_date` and `$com_time` by `com_date_format` (`%Y-%m-%d`) and `com_time_format` (`%H:%M`),
 the date letters of the C library; `$com_uptime` (`MM.SS`, `H:MM.SS`, `D+H:MM.SS`),
-`$com_uptime_long` ("1 day, 2 hours, 5 secs") and `$random` (a digit from the console's seed).
+`$com_uptime_long` ("1 day, 2 hours, 5 secs") and `$random` (a digit from the console's seed);
+`level_clock` (`$cl_timer`, "4:05", "1:4:05") and `tenths_clock` (`$cl_demopos`, "3:07.4") are the
+forms a game's own clocks print in. A joined server's macros (Shooter's Edge,
+`net/qw_remote_macros.hpp`): `$cl_ping`, `$cl_lag` ("1.25%"), and the last whole second's
+`$cl_pps`, `$cl_mps`, `$net_uprate`, `$net_dnrate` (`engine/net/rates.hpp` over the transport's
+counts). **The files and the network** (`engine/vfs/search_commands.hpp`, `engine/net/net_commands.hpp`):
+`path`, `dir <folder> [ext]`, `fdir <pattern>`, `whereis <file> [all]`, `dns <name>` and `net_stats`.
 **Draw strings** (`engine/hud/draw_strings.hpp`): `draw <name> <x> <y> [colour]` keeps a cvar's or a
 macro's value on the screen (a negative place counts from the right or bottom), `draw` alone
 lists them, `undraw <name>|all` takes them off.
