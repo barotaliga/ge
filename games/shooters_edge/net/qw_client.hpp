@@ -56,6 +56,7 @@
 #include "shooters_edge/client/voice_out.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_downloads.hpp"
+#include "shooters_edge/net/q2_http.hpp"
 #include "shooters_edge/net/qw_svc.hpp"
 #include "vfs/partial.hpp"
 
@@ -146,6 +147,7 @@ struct ClientConfig {
   // Who its voice goes to (`voicetarg`: all, team, near or a slot), told to the server at its
   // `begin`; "" leaves the server's own (team). `qw_voice_target` changes it later.
   std::string voice_to;
+  Q2HttpConfig q2_http;  // Quake II's `cl_http_*` downloads over HTTP (q2_http.hpp)
   int seed = 1;
   uint16_t qport = 1;
   // How long the server may send nothing once connected before the client gives it up, s: a
