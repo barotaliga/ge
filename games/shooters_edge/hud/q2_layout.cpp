@@ -7,6 +7,7 @@
 #include "shooters_edge/hud/q2_layout.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 
 namespace shooters_edge::hud {
@@ -107,6 +108,17 @@ struct Run {
     op.text = std::string(t);
     op.alt = alt;
     std::copy(rgba, rgba + 4, op.rgba);
+    out.push_back(std::move(op));
+  }
+  void fill(int px, int py, int w, int h, std::array<uint8_t, 4> c) {
+    if (w <= 0 || h <= 0) return;
+    LayoutOp op;
+    op.kind = LayoutOp::Kind::fill;
+    op.x = px;
+    op.y = py;
+    op.w = w;
+    op.h = h;
+    std::copy(c.begin(), c.end(), op.rgba);
     out.push_back(std::move(op));
   }
   // Each line of `t` centred in 320 px from the cursor's x, 8 px apart.
@@ -239,7 +251,33 @@ void run_layout(const LayoutInput& in, std::vector<LayoutOp>& out) {
       const int v = r.stat(w.number());
       if (v > 0 && v < 256) {
         const std::string_view name = r.string(kLayoutImages + v);
-        if (!name.empty()) r.picture(r.x, r.y, std::string(name));
+        if (name.empty()) continue;
+        // A scope (`scope2x`, `scope4x`...) placed at the centred box fills it, scaled by ch_scale.
+        const bool scope = r.x == half_w && r.y == half_h && name.size() == 7 &&
+                           name.starts_with("scope") && name.back() == 'x';
+        if (!scope) {
+          r.picture(r.x, r.y, std::string(name));
+          continue;
+        }
+        const float s = std::clamp(in.scope_scale, 0.1f, 9.0f);
+        const int sw = static_cast<int>(320 * s), sh = static_cast<int>(240 * s);
+        r.picture((in.width - sw) / 2 + in.scope_x, (in.height - sh) / 2 + in.scope_y,
+                  std::string(name));
+        r.out.back().w = sw;
+        r.out.back().h = sh;
+      }
+    } else if (k == "health_bars") {  // a boss's name and its two health bars
+      const int v = r.stat(w.number());
+      const int index = w.number();
+      r.centred(r.string(index), false);
+      const int bw = in.width / 3, left = r.x + 160 - bw / 2;
+      for (int bar = 0; bar < 2; bar++) {
+        const int byte = (v >> (8 * bar)) & 0xff;
+        if (byte == 0) continue;  // that bar hidden
+        // bw * (byte - 1) / 254, rounded to the nearest pixel (halves up).
+        const int full = (2 * bw * (byte - 1) + 254) / 508;
+        r.fill(left, r.y + 12 + 8 * bar, full, 4, {239, 0, 0, 255});
+        r.fill(left + full, r.y + 12 + 8 * bar, bw - full, 4, {63, 63, 63, 255});
       }
     } else if (k == "picn") {
       w.next();

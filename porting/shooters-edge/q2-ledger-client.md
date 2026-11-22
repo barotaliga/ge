@@ -21,7 +21,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Entity effect bits (EF_) | 31 | 2 | 0 | 0 | 33 |
 | Entity render bits (RF_) and view bits (RDF_) | 19 | 5 | 8 | 0 | 32 |
 | Configstrings | 8 | 8 | 0 | 0 | 16 |
-| The layout language (status bar and layouts) | 24 | 1 | 2 | 0 | 27 |
+| The layout language (status bar and layouts) | 26 | 1 | 0 | 0 | 27 |
 | HUD and screen elements | 16 | 10 | 2 | 1 | 29 |
 | Messages printed to the player | 59 | 58 | 23 | 7 | 147 |
 | Demo playback and recording features | 10 | 10 | 1 | 2 | 23 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 11 | 7 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 7 | 6 | 4 | 0 | 17 |
-| **all** | 684 | 303 | 161 | 63 | 1211 |
+| **all** | 686 | 303 | 159 | 63 | 1211 |
 
 ## Client console commands
 
@@ -1056,7 +1056,7 @@ The indexed strings a server sets (stock protocol 34 indices; the extended proto
 
 ## The layout language (status bar and layouts)
 
-done 24, partial 1, missing 2, not-taken 0
+done 26, partial 1, missing 0, not-taken 0
 
 The words of the status-bar and layout programs the client runs every frame on a virtual 320-wide screen anchored to the window. Ours: `games/shooters_edge/hud/q2_layout.cpp`.
 
@@ -1085,9 +1085,9 @@ The words of the status-bar and layout programs the client runs every frame on a
 | lay.stat | `stat_string`, `stat_string2`, `stat_cstring`, `stat_cstring2`, `stat_rstring`, `stat_rstring2` `<stat>` | the configstring whose index a stat holds, in each of the six text forms | done | all six forms (`hud/q2_layout.cpp`) |
 | lay.if | `if <stat>` ... `endif` | runs the words between only when the stat is not 0 | done | `games/shooters_edge/hud/q2_layout.cpp` |
 | lay.color | `color <colour>` | sets the colour of the text that follows | done | every form, tinting what follows to the program's end, its alpha under `scr_alpha`'s (`hud/q2_layout.cpp`, `client/q2_bar.cpp`) |
-| lay.health_bars | `health_bars <stat> <string>` | a boss's name centred and two health bars from the stat's two bytes (the newer game's) | missing | not in `q2_layout.cpp` |
+| lay.health_bars | `health_bars <stat> <string>` | a boss's name centred and two health bars from the stat's two bytes (the newer game's) | done | hud/q2_layout.cpp `health_bars <stat> <string>`: the name centred, two bars a third of the screen wide and 4 high at the cursor's y + 12 and + 20 from the stat's two bytes (0 hidden, 1 empty, 255 full), red over grey, solid (`LayoutOp::Kind::fill`, drawn by client/q2_bar.cpp) |
 | lay.flash | stat-flashes field | the field picture behind a number while its flash bit is set | done | `games/shooters_edge/hud/q2_layout.cpp` |
-| lay.scope | scope pictures | a `scope?x` picture placed at the centred 320 by 240 box is drawn stretched to 320 by 240 times `ch_scale`, centred and moved by `ch_x`/`ch_y` | missing | not in `q2_layout.cpp` |
+| lay.scope | scope pictures | a `scope?x` picture placed at the centred 320 by 240 box is drawn stretched to 320 by 240 times `ch_scale`, centred and moved by `ch_x`/`ch_y` | done | hud/q2_layout.cpp: `pic` of `scope?x` at the centred box drawn 320 by 240 times `ch_scale`, centred on the screen and moved by `ch_x`/`ch_y` (client/q2_bar.cpp passes the crosshair's settings) |
 | lay.errors | a bad index in a layout | drops the connection: "invalid stat index for pic", "invalid client index" and the like | partial | ours refuses or skips by its own words; verify |
 
 ## HUD and screen elements

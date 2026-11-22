@@ -399,6 +399,11 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
   in.height = height / scale;
   in.frame = frame;
   in.self = slot;
+  if (bar.cross != nullptr) {
+    in.scope_scale = static_cast<float>(bar.cross->size);
+    in.scope_x = static_cast<int>(bar.cross->offset[0]);
+    in.scope_y = static_cast<int>(bar.cross->offset[1]);
+  }
   in.ctx = &strings;
   in.string = [](const void* ctx, int index) {
     const auto& s = *static_cast<const Strings*>(ctx);
@@ -453,6 +458,7 @@ void add_q2_screen(Q2Bar& bar, int crosshair, std::string_view centre, int width
 
 void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::CrosshairSettings& s,
                        int width, int height, int health) {
+  bar.cross = &s;  // the next layout's scope follows the same settings
   // Quake II's own `crosshair` numbers its pictures (client/cvar_layers.hpp); Quake's
   // over Quake II's bar (remix) takes its first picture as the game's own mark.
   const int32_t number = s.pictures ? std::clamp(s.mark, 1, 3) : 1;
@@ -523,12 +529,25 @@ bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
   };
   const BarPicture* glyphs = nullptr;
   for (const hud::LayoutOp& op : bar.ops) {
+    if (op.kind == hud::LayoutOp::Kind::fill) {  // solid, whatever the HUD's alpha
+      ge::ui::Box b;
+      b.fill = ge::ui::solid(
+          {op.rgba[0] / 255.0f, op.rgba[1] / 255.0f, op.rgba[2] / 255.0f, op.rgba[3] / 255.0f});
+      b.rect = {static_cast<float>(op.x) * f, static_cast<float>(op.y) * f,
+                static_cast<float>(op.w) * f, static_cast<float>(op.h) * f};
+      b.feather = 0;
+      dl.box(b);
+      drew = true;
+      continue;
+    }
     if (op.kind == hud::LayoutOp::Kind::picture) {
       const BarPicture* img = picture(bar, hud::layout_picture_path(op.name));
       if (img == nullptr && !op.fallback.empty())
         img = picture(bar, hud::layout_picture_path(op.fallback));
       if (img == nullptr) continue;
-      box(img, static_cast<float>(op.x), static_cast<float>(op.y), img->width(), img->height(),
+      box(img, static_cast<float>(op.x), static_cast<float>(op.y),
+          op.w > 0 ? static_cast<float>(op.w) : img->width(),
+          op.h > 0 ? static_cast<float>(op.h) : img->height(),
           {0, 0, static_cast<float>(img->image.width), static_cast<float>(img->image.height)},
           op.rgba);
       continue;
