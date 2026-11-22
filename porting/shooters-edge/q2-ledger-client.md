@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 118 | 13 | 15 | 10 | 156 |
-| Client settings (cvars) | 178 | 48 | 84 | 40 | 350 |
+| Client settings (cvars) | 180 | 48 | 78 | 44 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 89 | 67 | 5 | 1 | 162 |
 | Server messages the client parses (svc) | 15 | 6 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 11 | 7 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 7 | 6 | 4 | 0 | 17 |
-| **all** | 692 | 303 | 153 | 63 | 1211 |
+| **all** | 694 | 303 | 147 | 67 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 178, partial 48, missing 84, not-taken 40
+done 180, partial 48, missing 78, not-taken 44
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -384,10 +384,10 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_blend | `cl_blend` | 0 drops the full-screen tints (default 1) | done | a synonym of `gl_polyblend` (M18k4 round 35) |
 | cvar.cl_adjustfov | `cl_adjustfov` | 1 hor+ on wide screens, 0 vert- (default 1) | done | `games/shooters_edge/client/q2_view.cpp` (M18k4 round 34) |
 | cvar.ui_sortdemos | `ui_sortdemos` | the demo browser's sort column, negative descending (default 1) | done | a synonym of ours `menu_demo_sort` (`games/shooters_edge/client/cvar_layers.cpp`) |
-| cvar.ui_listalldemos | `ui_listalldemos` | the demo browser lists every folder (default 0) | missing | C40 |
-| cvar.ui_sortservers | `ui_sortservers` | the server browser's sort column (default 0) | missing | C41 |
+| cvar.ui_listalldemos | `ui_listalldemos` | the demo browser lists every folder (default 0) | not-taken | ours browses any folder on the machine for recordings (`menu/demos_page.hpp`), the game's folder among them; a recording inside a pack is not offered |
+| cvar.ui_sortservers | `ui_sortservers` | the server browser's sort column (default 0) | done | Quake II's own (`menu/servers_page.hpp`'s `game_sort`, bound by `client/cvar_layers.cpp`) in place of our `sb_sortservers`: 0 the order found, 1 name, 2 game, 3 map, 4 players (the busiest first), 5 ping, minus the other way, ties by name the same way then by address, the silent last; LEFT, RIGHT and D move the sort without writing the setting |
 | cvar.ui_colorservers | `ui_colorservers` | colour the server list: grey for a password, anticheat 2 or a no-fake server, green under 30 ms, white otherwise (default 0) | done | a synonym of ours `sb_colorservers` (`games/shooters_edge/client/cvar_layers.cpp`) |
-| cvar.ui_pingrate | `ui_pingrate` | server pings a second, 0 from `rate` (default 0) | missing | C41 |
+| cvar.ui_pingrate | `ui_pingrate` | server pings a second, 0 from `rate` (default 0) | done | Quake II's own (`menu/servers_page.hpp`'s `game_ping_rate`) in place of our `sb_infospersec`: 0 the player's `rate` / 450 held to 1..100 (33 at 15000), 1..100 that many a second; ours asks at that pace on every try, where its second and third passes slow to two thirds and a third |
 | cvar.ui_scale | `ui_scale` | the menus' scale, 0 auto (default 0) | missing | C4 |
 | cvar.ui_debug | `ui_debug` | debug: outlines menu items (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.ui_open | `ui_open` | 1 opens the main menu at start-up (default 0) | missing | ours opens its own title menu always |
@@ -489,7 +489,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.basedir | `basedir` | the install folder; command line only | partial | ours finds the install itself; `basedir` is a word of the take-in (`client/take_in.cpp`) |
 | cvar.homedir | `homedir` | the writable folder; command line only | missing | not found |
 | cvar.libdir | `libdir` | the game-library folder; command line only | missing | not found |
-| cvar.sys_console | `sys_console` | Unix: the terminal console's mode | missing | not found |
+| cvar.sys_console | `sys_console` | Unix: the terminal console's mode | not-taken | ours writes the client's console to no terminal; the dedicated server's terminal is its own |
 | cvar.win_noalttab | `win_noalttab` | Windows: disable Alt+Tab (default 0) | missing | Windows only |
 | cvar.win_disablewinkey | `win_disablewinkey` | Windows: disable the Windows key (default 0) | missing | Windows only |
 | cvar.win_noresize | `win_noresize` | Windows: a window that cannot be resized (default 0) | done | `engine/platform/window_cvars.hpp` (every game, every desktop), applied by `follow_window_cvars` through `platform::set_window_style`: the edges no longer resize it |
@@ -512,7 +512,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.logfile_flush | `logfile_flush` | flush the log each line (default 0) | done | `client/console_log.cpp` (M18k4 round 35) |
 | cvar.logfile_name | `logfile_name` | the log's name (default `console`) | done | `client/console_log.cpp`, `logs/<name>.log` beside the settings (M18k4 round 35) |
 | cvar.logfile_prefix | `logfile_prefix` | each log line's time prefix (default `[%Y-%m-%d %H:%M] `) | done | `client/console_log.cpp` (M18k4 round 35) |
-| cvar.console_prefix | `console_prefix` | a prefix on the system console's lines (default empty) | missing | not found |
+| cvar.console_prefix | `console_prefix` | a prefix on the system console's lines (default empty) | not-taken | ours writes the client's console to no terminal; the dedicated server has it (`engine/server/macros.hpp`'s `terminal_prefix`) |
 | cvar.dedicated | `dedicated` | read-only: a dedicated server | done | `engine/server/spawn.cpp` |
 | cvar.cl_running | `cl_running` | read-only: the client is running | done | `client/q2_session.cpp`, read-only (M18k4 round 35) |
 | cvar.cl_paused | `cl_paused` | read-only: the client is paused | done | `client/q2_session.cpp`, read-only (M18k4 round 35) |
@@ -534,7 +534,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.rcon_password | `rcon_password` | the password `rcon` sends | done | `games/shooters_edge/net/qw_admin.cpp` |
 | cvar.sys_forcegamelib | `sys_forcegamelib` | a game library path forced; command line only | missing | not found |
 | cvar.sys_allow_unsafe_savegames | `sys_allow_unsafe_savegames` | load saves of another build; command line only (default 0) | missing | not found |
-| cvar.sys_history | `sys_history` | lines of the terminal's history kept | missing | not found |
+| cvar.sys_history | `sys_history` | lines of the terminal's history kept | not-taken | ours writes the client's console to no terminal; the in-game console keeps its own history |
 | cvar.fs_autoexec | `fs_autoexec` | run `autoexec.cfg` on a game change (default 1) | done | Quake II's `fs_autoexec` (default 1): on a game change default.cfg (with `fs_default`, ours, in both games), the game's own settings, each game folder's autoexec.cfg (the base's, then the mod's) and postexec.cfg run in that order (`client/install_configs.cpp`'s `run_game_settings`); ours keeps each game's settings in its own file, run whatever `fs_autoexec` says |
 | cvar.fs_debug | `fs_debug` | debug: prints file opens | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.fs_fuzz | `fs_fuzz_factor`, `fs_fuzz_filter` | debug: fail file reads at random | not-taken | `client-gaps.md`: developer tools left out |

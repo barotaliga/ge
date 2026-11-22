@@ -190,6 +190,10 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.shownet != nullptr) *b.shownet = 0;              // and cl_shownet
   if (b.showpackets != nullptr) *b.showpackets = false;  // and cl_showpackets
   if (b.items_still != nullptr) *b.items_still = false;  // and cl_nobob
+  if (b.servers != nullptr) {  // and ui_sortservers, ui_pingrate: sb_sortservers, sb_infospersec
+    b.servers->game_sort = shooters_edge::menu::ServersPage::kNoGameSort;
+    b.servers->game_ping_rate = -1;
+  }
   if (b.console != nullptr) {  // and con_background: the game's own picture
     b.console->back_name = "conback";
     b.console->read_back = nullptr;
@@ -355,7 +359,9 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   `scr_lag_*`, `cl_adjustfov`, `uf`, `cl_kickangles`; and `s_underwater` the same setting as
 //   Quake's (room_ear.hpp), on by default where Quake's is off;
 // - its browsers: `ui_sortdemos` (`menu_demo_sort`, by name by default where ours lists the newest
-//   first) and `ui_colorservers` (`sb_colorservers`).
+//   first) and `ui_colorservers` (`sb_colorservers`); its own `ui_sortservers` (one column either
+//   way, in place of `sb_sortservers`) and `ui_pingrate` (from `rate`, in place of
+//   `sb_infospersec`).
 void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its whole set of configs run again on a game change (client/install_configs.cpp's
@@ -656,6 +662,25 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .values = "conback: the game's own (the default); NAME: that picture, the game's own "
                       "when it is not there"},
            &b.console->back_name);
+  }
+  if (b.servers != nullptr) {
+    v.bind({.name = "ui_sortservers",
+            .fallback = "0",
+            .help = "How JOIN A GAME sorts its servers: by one column, either way.",
+            .kind = con::CvarKind::integer,
+            .min = -5,
+            .max = 5,
+            .values = "0: as they are found (the default); 1 name, 2 game, 3 map, 4 players (the "
+                      "busiest first), 5 ping; -1..-5: the same the other way"},
+           &b.servers->game_sort);
+    v.bind({.name = "ui_pingrate",
+            .fallback = "0",
+            .help = "How many servers JOIN A GAME asks a second.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 100,
+            .values = "0: from your rate (the default; 33 at 15000); 1..100: that many a second"},
+           &b.servers->game_ping_rate);
   }
   if (b.items_still != nullptr)
     v.bind({.name = "cl_nobob",

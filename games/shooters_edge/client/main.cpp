@@ -367,7 +367,8 @@ int run_main(int argc, char** argv) {
                                   .chat = &remote.ignore.chat,
                                   .console_view = &con_view,
                                   .music = &music,
-                                  .console = &con_look};
+                                  .console = &con_look,
+                                  .servers = &game_menu.servers()};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
   remote.stuff_file =
       cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";

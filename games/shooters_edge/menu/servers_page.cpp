@@ -337,12 +337,44 @@ void ServersPage::add_cvars(ge::console::Console& con) {
   con_ = &con;
 }
 
+namespace {
+
+// Quake II's `ui_sortservers` as keys: one column either way, ties by the name the same way.
+std::vector<gn::ServerSortKey> game_sort_keys(int32_t v) {
+  if (v == 0) return {};  // the order found: `update` puts the rows back in the list's order
+  constexpr gn::ServerColumn kColumn[] = {gn::ServerColumn::name, gn::ServerColumn::game,
+                                          gn::ServerColumn::map, gn::ServerColumn::players,
+                                          gn::ServerColumn::ping};
+  const bool back = v < 0;
+  const gn::ServerColumn c = kColumn[std::clamp(std::abs(v), 1, 5) - 1];
+  std::vector<gn::ServerSortKey> keys = {
+      {c, c == gn::ServerColumn::players ? !back : back, {}}};  // its players run most first
+  if (c != gn::ServerColumn::name) keys.push_back({gn::ServerColumn::name, back, {}});
+  return keys;
+}
+
+}  // namespace
+
+// The servers asked a second: `sb_infospersec`, or Quake II's `ui_pingrate` while it is bound.
+int32_t ServersPage::ping_rate() const {
+  if (game_ping_rate < 0) return infos_per_s_;
+  if (game_ping_rate > 0) return std::min(game_ping_rate, 100);
+  const ge::console::Cvar* rate = con_ != nullptr ? con_->cvars().find("rate") : nullptr;
+  const int32_t bytes = rate != nullptr ? std::atoi(rate->value.c_str()) : 15000;
+  return std::clamp(bytes / 450, 1, 100);  // a reply's 450 bytes in the player's rate
+}
+
 void ServersPage::read_settings() {
+  if (game_sort != game_sort_seen_) {
+    game_sort_seen_ = game_sort;
+    sort_seen_ = "\x01";  // read again below
+  }
   if (sort_servers_ != sort_seen_) {
     sort_seen_ = sort_servers_;
     sort_keys_.clear();
+    if (game_sort != kNoGameSort) sort_keys_ = game_sort_keys(game_sort);
     bool down = false;
-    for (const char c : sort_servers_) {
+    for (const char c : game_sort != kNoGameSort ? std::string() : sort_servers_) {
       if (c == '-') {
         down = true;
         continue;
@@ -365,6 +397,7 @@ bool ServersPage::sorted_by(gn::ServerColumn c) const {
 }
 
 std::string ServersPage::sort_words() const {
+  if (game_sort == 0) return "as found";  // Quake II's ui_sortservers 0
   if (sort_keys_.empty()) return "busy first";
   std::string out;
   for (size_t i = 0; i < sort_keys_.size() && i < 2; i++) {
@@ -380,6 +413,11 @@ std::string ServersPage::sort_words() const {
 }
 
 void ServersPage::sort_step(int dir) {
+  if (game_sort != kNoGameSort) {  // Quake II's columns in turn, its setting left as it is
+    const int32_t at = std::abs(game_sort);
+    game_sort = ((at == 0 ? (dir > 0 ? 0 : 1) : at) - 1 + dir + 5) % 5 + 1;
+    return;
+  }
   // The code in front now, and the next or last in LEFT and RIGHT's order.
   const std::string& text = sort_servers_;
   const size_t lead = !text.empty() && text[0] == '-' ? 1 : 0;
@@ -428,6 +466,8 @@ bool ServersPage::filter_key(char letter) {
     set_cvar("sb_mode", mode_.empty()       ? (modes.empty() ? "" : modes.front())
                         : it == modes.end() ? ""
                                             : *it);
+  } else if (letter == 'd' && game_sort != kNoGameSort) {
+    game_sort = -game_sort;  // Quake II's sort turned round, its setting left as it is
   } else if (letter == 'd') {
     // The sort turned round: a - in front, or the one there taken away.
     std::string t = sort_servers_;
@@ -554,7 +594,7 @@ bool ServersPage::open(std::string* why) {
   }
   config_.tries = info_retries_;
   config_.timeout_us = int64_t{info_timeout_} * 1000;
-  config_.gap_us = 1000000 / std::max(1, infos_per_s_);
+  config_.gap_us = 1000000 / std::max(1, ping_rate());
   config_.master_tries = master_retries_;
   config_.master_timeout_us = int64_t{master_timeout_} * 1000;
   const bool first = !inited_ || list_.transport != t;
@@ -738,6 +778,12 @@ void ServersPage::build_rows() {
   filter_.max_ping_ms = effective_ping();
   filter_.info = info_rules_;
   gn::server_list_view(list_, filter_, sort_keys_, rows_);
+  if (game_sort == 0)  // Quake II's 0: the order the servers were found, the silent last
+    std::stable_sort(rows_.begin(), rows_.end(), [&](int a, int b) {
+      const bool sa = list_.entries[static_cast<size_t>(a)].ping_ms < 0;
+      const bool sb = list_.entries[static_cast<size_t>(b)].ping_ms < 0;
+      return sa != sb ? sb : a < b;
+    });
   if (show_proxies_ != 1)  // sb_showproxies: the forwarders hidden (0) or alone (2)
     rows_.erase(std::remove_if(rows_.begin(), rows_.end(),
                                [&](int i) {
