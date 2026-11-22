@@ -1903,8 +1903,9 @@ void way_reach_in(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotVi
   const auto next_on = [&](const std::vector<sh::Vec3f>& way, size_t& k) {
     float best = 0;
     for (size_t i = 0; i < way.size(); i++) {
-      const float dx = way[i].x - self.x, dy = way[i].y - self.y;
-      const float d = dx * dx + dy * dy;
+      // In three dimensions: the floor over a nook is not the nook.
+      const float dx = way[i].x - self.x, dy = way[i].y - self.y, dz = way[i].z - self.z;
+      const float d = dx * dx + dy * dy + dz * dz;
       if (i == 0 || d < best) {
         best = d;
         k = i;
