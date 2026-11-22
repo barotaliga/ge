@@ -117,4 +117,29 @@ void add_local_sound_commands(ge::console::Console& con, MenuSounds& sounds,
                   });
 }
 
+void add_sound_status_commands(ge::console::Console& con, const char* driver,
+                               const ge::audio::Synth& synth) {
+  const std::string name = driver != nullptr ? driver : "";
+  con.add_command(
+      "soundinfo", "soundinfo: the sound device and what is playing on it",
+      [name, &synth, on = driver != nullptr](ge::console::Console& c, const ge::console::Args&) {
+        if (!on) {
+          c.print("Sound system not started.");
+          return;
+        }
+        const au::Stats st = synth.stats();
+        c.print("Sound device: " + name);
+        c.print(std::to_string(au::kRate) + " Hz, stereo, 32-bit float");
+        c.print("Sounds playing: " + std::to_string(st.voices + st.samples));
+        if (st.stolen > 0) c.print("Sounds cut short for newer ones: " + std::to_string(st.stolen));
+      });
+  con.add_command("snd_restart", "snd_restart: not needed; sound settings apply at once",
+                  [](ge::console::Console& c, const ge::console::Args& a) {
+                    if (a.source != ge::console::Source::local) return;
+                    c.print(
+                        "Sound settings are applied as soon as you change them, so a sound "
+                        "restart is never needed.");
+                  });
+}
+
 }  // namespace shooters_edge::client

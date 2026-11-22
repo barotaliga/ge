@@ -741,6 +741,7 @@ int run_main(int argc, char** argv) {
   cl::hear_worlds_on(&synth, &under_ear);  // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
+  cl::add_sound_status_commands(console, speaker ? speaker->driver() : nullptr, synth);
   out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
                       : std::string("shooters_edge: no audio device; a demo plays silent"));
   // The microphone, opened the first time a talk key is held on a server joined (the system asks
@@ -1149,6 +1150,7 @@ int run_main(int argc, char** argv) {
   while ((args.frames == 0 || presented < args.frames) && !quit) {
     cl::start_apply_speed(console, game_start);
     shooters_edge::look::apply_ce_enabled(picture, console.cvars());  // ce_enabled 0: none of it
+    music.held = cl::cinematic_on(cine);  // a movie's own sound: `ogg play` refused meanwhile
     ge::audio::music_frame(music, synth, console);
     cl::hear_swap(synth, under_ear);  // s_swapstereo
     if (std::exchange(attract_at_start, false) && !start_attract())
