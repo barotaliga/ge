@@ -6,7 +6,8 @@
 // ge:keywords intensity gl_modulate gl_brightness cl_blend cl_entities cl_particles cl_lights
 // ge:keywords cl_gibs cl_noglow logfile cl_disable_particles cl_disable_explosions
 // ge:keywords cl_dlight_hacks cl_muzzlelight_time cl_muzzleflashes
-// ge:keywords sshot_format sshot_dir image_jpeg_quality_level
+// ge:keywords sshot_format sshot_dir image_jpeg_quality_level gl_screenshot_format
+// ge:keywords gl_screenshot_quality
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -91,6 +92,59 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .values = "1: all of them (the default); 0: none; 2: only those of a thing you can "
                     "see; 3: only your own"},
          &x.ambient);
+  v.bind({.name = "cl_railtrail_type",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "How a railgun's shot is drawn.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "0: the game's own trail of specks (the default); 1: a beam; 2: a beam with a "
+                    "line spiralling round it"},
+         &x.rail_type);
+  v.bind({.name = "cl_railtrail_time",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Seconds a railgun's beam takes to fade.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 10,
+          .values = "0..10: seconds (1 the default)"},
+         &x.rail_time);
+  v.bind({.name = "cl_railcore_color",
+          .fallback = "red",
+          .flags = con::kArchive,
+          .help = "The colour of a railgun's beam.",
+          .kind = con::CvarKind::text,
+          .values = "a colour's name (red the default; black, green, yellow, blue, cyan, "
+                    "magenta, white) or #rgb or #rrggbb"},
+         &x.core_colour);
+  v.bind({.name = "cl_railcore_width",
+          .fallback = "2",
+          .flags = con::kArchive,
+          .help = "How wide a railgun's beam is.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 64,
+          .values = "0..64: the game's units (2 the default)"},
+         &x.core_width);
+  v.bind({.name = "cl_railspiral_color",
+          .fallback = "blue",
+          .flags = con::kArchive,
+          .help = "The colour of the line spiralling round a railgun's beam.",
+          .kind = con::CvarKind::text,
+          .values = "a colour's name (blue the default; black, red, green, yellow, cyan, "
+                    "magenta, white) or #rgb or #rrggbb"},
+         &x.spiral_colour);
+  v.bind({.name = "cl_railspiral_radius",
+          .fallback = "3",
+          .flags = con::kArchive,
+          .help = "How far the spiralling line keeps from a railgun's beam.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 64,
+          .values = "0..64: the game's units (3 the default)"},
+         &x.spiral_radius);
 }
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
@@ -330,7 +384,9 @@ void add_q2(con::Console& c, const GameBindings& b) {
         std::pair{"cl_vwep", "r_drawvweps"}, std::pair{"con_alpha", "con_bgalpha"},
         std::pair{"cl_entities", "r_drawentities"}, std::pair{"cl_particles", "r_particles"},
         std::pair{"cl_lights", "r_dynamic"}, std::pair{"cl_blend", "gl_polyblend"},
-        std::pair{"scr_showpause", "showpause"}, std::pair{"netgraph", "r_netgraph"}})
+        std::pair{"gl_screenshot_format", "scr_format"},
+        std::pair{"gl_screenshot_quality", "scr_quality"}, std::pair{"scr_showpause", "showpause"},
+        std::pair{"netgraph", "r_netgraph"}})
     v.add_synonym(name, ours);
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.

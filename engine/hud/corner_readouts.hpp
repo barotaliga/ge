@@ -18,6 +18,7 @@
 #include <string>
 
 #include "console/cvar.hpp"
+#include "hud/draw_strings.hpp"
 #include "hud/hud.hpp"
 #include "ui/draw.hpp"
 
@@ -27,6 +28,10 @@ struct ReadoutSettings {
   int32_t speed = 0;  // show_speed: 0 off, 1 over the ground, 2 the whole speed
   int32_t clock = 0;  // scr_clock: 0 off, 1 the time of day, 2 the game's time
   int32_t net = 0;    // r_netgraph: 0 off, 1 the net graph (net_graph.hpp)
+  // The player's draw strings (draw_strings.hpp) and the console whose values they show (null:
+  // none drawn); a game drawing its corners draws them too.
+  DrawStrings draws;
+  const console::Console* console = nullptr;
 };
 
 // Registers show_speed, scr_clock and r_netgraph over `s` (it must outlive `cvars`), archived,

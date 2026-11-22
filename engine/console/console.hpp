@@ -316,5 +316,6 @@ void register_builtin_commands(Console& c);  // console_builtins.cpp
 void register_script(Console& c);            // script.cpp
 void register_bind_commands(Console& c);     // console_binds.cpp
 void register_pattern_commands(Console& c);  // console_patterns.cpp
+void register_more_commands(Console& c);     // console_more.cpp
 
 }  // namespace ge::console

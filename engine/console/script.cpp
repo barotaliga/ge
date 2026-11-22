@@ -358,28 +358,47 @@ void register_script(Console& con) {
                   [](Console& c, const Args& a) { scale(c, a, false); });
   con.add_command("div", "div <name> [<by>]: a cvar over a number",
                   [](Console& c, const Args& a) { scale(c, a, true); });
-  con.add_command("toggle", "toggle <name>: a cvar between 0 and 1", [](Console& c, const Args& a) {
-    if (a.size() < 2) {
-      c.error("toggle needs a cvar", "usage: toggle <name>");
-      return;
+  // The value after the cvar's own among a[2..]; the first when its own is none of them.
+  const auto cycle = [](Console& c, const Args& a) {
+    const std::string now = value_of(c, a[1]);
+    size_t next = 2;
+    for (size_t i = 2; i < a.size(); ++i) {
+      if (compare(now, "==", a[i]) == 1) {
+        next = i + 1 < a.size() ? i + 1 : 2;
+        break;
+      }
     }
-    store(c, a, a[1], truthy(value_of(c, a[1])) ? "0" : "1");
-  });
+    store(c, a, a[1], a[next]);
+  };
+  con.add_command(
+      "toggle",
+      "toggle <name> [<v1> <v2> ...]: a cvar between 0 and 1, or to the value after "
+      "its own",
+      [](Console& c, const Args& a) {
+        if (a.size() < 2) {
+          c.error("toggle needs a cvar", "usage: toggle <name> [<v1> <v2> ...]");
+          return;
+        }
+        if (a.size() > 2) {  // the value after its own; none moves when it is none
+          const std::string now = lower(value_of(c, a[1]));
+          for (size_t i = 2; i < a.size(); ++i) {
+            if (lower(a[i]) == now) {
+              store(c, a, a[1], a[i + 1 < a.size() ? i + 1 : 2]);
+              return;
+            }
+          }
+          c.print("\"" + lower(a[1]) + "\" is \"" + value_of(c, a[1]) + "\", can't cycle");
+          return;
+        }
+        store(c, a, a[1], truthy(value_of(c, a[1])) ? "0" : "1");
+      });
   con.add_command("cycle", "cycle <name> <v1> <v2> ...: a cvar to the value after its own",
-                  [](Console& c, const Args& a) {
+                  [cycle](Console& c, const Args& a) {
                     if (a.size() < 3) {
                       c.error("cycle needs a cvar and values", "usage: cycle <name> <v1> <v2>");
                       return;
                     }
-                    const std::string now = value_of(c, a[1]);
-                    size_t next = 2;
-                    for (size_t i = 2; i < a.size(); ++i) {
-                      if (compare(now, "==", a[i]) == 1) {
-                        next = i + 1 < a.size() ? i + 1 : 2;
-                        break;
-                      }
-                    }
-                    store(c, a, a[1], a[next]);
+                    cycle(c, a);
                   });
   con.add_command(
       "msg_trigger", "msg_trigger <alias> <match>: a game line holding match runs the alias",

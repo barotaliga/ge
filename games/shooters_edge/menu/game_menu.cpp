@@ -3,6 +3,7 @@
 //
 // ge:summary The main menu over the game: open, close, presses, the looks, classic enhance
 // ge:keywords menu game-menu escape togglemenu menu_look draw update enhance job pointer
+// ge:keywords pushmenu popmenu forcemenuoff
 // ge:keywords load-game enhance_game take_ended ce_auto screenshots gallery
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
@@ -16,6 +17,7 @@
 
 #include "classicenhance/cache.hpp"
 #include "classicenhance/source.hpp"
+#include "console/cvar.hpp"
 #include "core/output.hpp"
 
 namespace shooters_edge::menu {
@@ -103,6 +105,40 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                   "menu_games: the main menu opened at SELECT GAME (the classic games and their "
                   "installs)",
                   opener("games"));
+  // pushmenu <name>: a page by its name, ours or Quake II's; popmenu one page back; forcemenuoff
+  // every page closed.
+  con.add_command("pushmenu", "pushmenu <page>: the main menu opened at that page",
+                  [this](Con& c, const CArgs& a) {
+                    if (a.size() < 2) {
+                      c.print("Usage: " + a[0] + " <menu>");
+                      return;
+                    }
+                    // A page the game's table has by that name first, then Quake II's names
+                    // for ours.
+                    static constexpr std::pair<std::string_view, std::string_view> kNames[] = {
+                        {"singleplayer", "single"}, {"game", "single"},
+                        {"loadgame", "load"},       {"savegame", "save"},
+                        {"multiplayer", "multi"},   {"startserver", "host"},
+                        {"players", "setup"},       {"keys", "controls"},
+                        {"dmflags", "gameflags"},   {"legacy", "legacykeys"}};
+                    std::string page = ge::console::lower(a[1]);
+                    if (main_.page(page) == nullptr)
+                      for (const auto& [name, ours] : kNames)
+                        if (page == name) page = ours;
+                    const bool special = page == "servers" || page == "demos" ||
+                                         page == "screenshots" || page == "games";
+                    if (!special && main_.page(page) == nullptr) {
+                      c.print("No such menu: " + a[1]);
+                      return;
+                    }
+                    toggle_ = true;
+                    toggle_open_ = true;
+                    toggle_page_ = page;
+                  });
+  con.add_command("popmenu", "popmenu: the main menu one page back (closed from its root)",
+                  [this](Con&, const CArgs&) { pending_ = 1; });
+  con.add_command("forcemenuoff", "forcemenuoff: the main menu closed, whatever page is up",
+                  [this](Con&, const CArgs&) { pending_ = 2; });
   servers_.add_cvars(con);
   demos_.add_cvars(con);
 }
@@ -397,13 +433,13 @@ void GameMenu::apply_enhance(const ui::MenuEvent& e, Host& host) {
 
 void GameMenu::press_key(std::string_view key, Host& host) {
   if (waiting_.empty() || waiting_fresh_ || host.console == nullptr) return;
-  const Control* c = control_of(waiting_);
+  const std::string command(bind_command(*table_, waiting_page_, waiting_));
   waiting_.clear();
   cue(key == "escape" ? ui::MenuCue::back : ui::MenuCue::change);
-  if (c != nullptr && (key == "backspace" || key == "del")) {
-    unbind_control(*host.console, c->command);
-  } else if (c != nullptr && key != "escape") {
-    if (!bind_control(*host.console, c->command, key))
+  if (!command.empty() && (key == "backspace" || key == "del")) {
+    unbind_control(*host.console, command);
+  } else if (!command.empty() && key != "escape") {
+    if (!bind_control(*host.console, command, key))
       host.console->print("controls: '" + std::string(key) + "' names no key to bind");
   }
   refresh_main(host);
@@ -413,16 +449,33 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
   dt_ = dt;
   waiting_fresh_ = false;
   if (!waiting_.empty()) return;  // the keys are press_key's until one comes
+  if (pending_ != 0) {
+    const int p = pending_;
+    pending_ = 0;
+    if (p == 2 || !open_) {
+      if (open_) hide();
+      return;
+    }
+    update(ui::MenuInput{.back = true}, false, host, dt);
+    return;
+  }
   if (toggle_) {
     toggle_ = false;
-    if (open_ && toggle_page_ == "main")
+    const bool push = toggle_open_;
+    toggle_open_ = false;
+    if (open_ && toggle_page_ == "main" && !push)
       hide();
     else
       show(host, toggle_page_);
     return;
   }
   if (!open_) {
-    if (escape) show(host);
+    if (escape) {  // in a level, the game's in-game page when it has one
+      const std::string_view in_level = table_of(host).in_level;
+      show(host, host.in_level && !in_level.empty() && main_.page(in_level) != nullptr
+                     ? in_level
+                     : std::string_view("main"));
+    }
     return;
   }
   if (in_gallery_) {
@@ -476,9 +529,11 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
         return;
       case Outcome::bind_key:
         waiting_ = e.item;
+        waiting_page_ = e.page;
         waiting_fresh_ = true;
         if (ui::Item* it = main_.top().find(e.item); it != nullptr) {
           it->choices = {"PRESS A KEY"};
+          if (e.page != "controls") it->hint = "Press the desired key, Escape to cancel";
           it->choice = 0;
         }
         return;
