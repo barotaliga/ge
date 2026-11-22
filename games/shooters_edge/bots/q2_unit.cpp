@@ -9,7 +9,6 @@
 // ge:test tests/shooters_edge_q2_unit_test.cpp
 #include "shooters_edge/bots/q2_unit.hpp"
 
-#include <cstdio>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -119,43 +118,6 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   spec.entities = entities;
   m.way = WayThrough();
   m.way.been = been;
-  if (map.name == std::string("base1")) {  // DBG
-    ge::ai::Search a;
-    const int32_t st = sb::nav_nearest(nav.graph, s.world.entities[1].origin);
-    sb::nav_reach(nav.graph, st, a);
-    for (const sh::Vec3f q : {sh::Vec3f{867, 398, -168}}) {
-      ge::ai::Search c;
-      const int32_t qn = sb::nav_nearest(nav.graph, q);
-      const int32_t nq = sb::nav_reach(nav.graph, qn, c);
-      const sh::Vec3f o = qn >= 0 ? nav.graph.nodes[static_cast<size_t>(qn)].origin : sh::Vec3f{};
-      float bd = 1e18f; int32_t bx = -1, by = -1;
-      for (size_t x = 0; x < nav.graph.nodes.size(); x++) {
-        if (!c.reached(static_cast<int32_t>(x))) continue;
-        for (size_t y = 0; y < nav.graph.nodes.size(); y++) {
-          if (!a.reached(static_cast<int32_t>(y)) || c.reached(static_cast<int32_t>(y))) continue;
-          const auto d = nav.graph.nodes[x].origin - nav.graph.nodes[y].origin;
-          const float dd = d.x * d.x + d.y * d.y + d.z * d.z;
-          if (dd < bd) { bd = dd; bx = static_cast<int32_t>(x); by = static_cast<int32_t>(y); }
-        }
-      }
-      std::fprintf(stderr, "DBG q %.0f %.0f %.0f node %d at %.0f %.0f %.0f reaches %d from start %d back %d", double(q.x), double(q.y), double(q.z), qn, double(o.x), double(o.y), double(o.z), nq, int(a.reached(qn)), int(c.reached(st)));
-      if (bx >= 0) { const auto& X = nav.graph.nodes[size_t(bx)].origin; const auto& Y = nav.graph.nodes[size_t(by)].origin; std::fprintf(stderr, " gap it %.0f %.0f %.0f start %.0f %.0f %.0f d %.0f", double(X.x), double(X.y), double(X.z), double(Y.x), double(Y.y), double(Y.z), double(std::sqrt(bd))); }
-      std::fprintf(stderr, "\n");
-    }
-    {
-      std::vector<sh::Vec3f> path;
-      const sb::NavProof pr = sb::prove_link(nav.world, nav.graph.move, {800, -271, -1}, {800, -303, -18}, sb::NavKind::walk, 0, nav.graph.set, &path);
-      std::fprintf(stderr, "DBG prove reached %d t %.2f end %.1f %.1f %.1f cmds %d\n", int(pr.reached), double(pr.time_s), double(pr.end.x), double(pr.end.y), double(pr.end.z), pr.commands);
-      for (size_t k = 0; k < path.size() && k < 40; k++) std::fprintf(stderr, "DBG   %.1f %.1f %.2f\n", double(path[k].x), double(path[k].y), double(path[k].z));
-    }
-    for (const sh::Vec3f q : {sh::Vec3f{1056, 785, -280}, sh::Vec3f{1056, 785, -248}, sh::Vec3f{1056, 817, -280}}) {
-      const int32_t qn = sb::nav_nearest(nav.graph, q);
-      const sb::NavNode& nn = nav.graph.nodes[size_t(qn)];
-      std::fprintf(stderr, "DBG node %d at %.0f %.0f %.0f links:", qn, double(nn.origin.x), double(nn.origin.y), double(nn.origin.z));
-      for (int32_t k = nn.first_link; k < nn.first_link + nn.links; k++) { const auto& L = nav.graph.links[size_t(k)]; const auto& t = nav.graph.nodes[size_t(L.to)].origin; std::fprintf(stderr, " ->(%.0f %.0f %.0f k%d)", double(t.x), double(t.y), double(t.z), int(L.kind)); }
-      std::fprintf(stderr, "\n");
-    }
-  }
   m.way.complete = opt.complete;
   m.way.complete_until = s.sv.time + opt.map_seconds * 0.75;
   if (opt.complete) way_complete_init(f, nav, s, spec);
@@ -342,7 +304,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       m.cmds[2] = fighter_command(m.leader, s, 0, kPilotMsec);
       if (forced) m.cmds[2].angles = s.sv.edicts[1].v_angle;
       way_dive(m.way, *m.nav, s, 1, m.cmds[2]);
-      way_touch(m.way, *m.nav, s, 1, m.cmds[2]);
+      way_reach_in(m.way, *m.nav, s, 1, m.cmds[2]);
       if (way_break(*q, s, m.breaking, t, m.cmds[2])) {
         um.breaks++;
         m.leader.bot.yaw = m.cmds[2].angles.y;  // he turned to it: his keys follow his view
@@ -381,18 +343,6 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
     um.shoves = m.wedge.shoves;
     um.helps = q->help_changed - helped;
     count(*q, um);
-    {  // DBG
-      const sv::RulesCommon& ss = *rules;
-      for (int e = 1; e < ss.sv.num_edicts; e++) {
-        const sh::Edict& d = ss.sv.edicts[static_cast<size_t>(e)];
-        if (!d.free && d.health > 0 && e > 1)
-          std::fprintf(stderr, "DBG alive %d at %.0f %.0f %.0f flags %d mt %d model %d solid %d left %.0f\n", e, double(d.origin.x), double(d.origin.y), double(d.origin.z), d.flags, d.movetype, d.modelindex, int(d.solid), e < int(m.way.prey_left.size()) ? m.way.prey_left[size_t(e)] : -1.0);
-      }
-      for (const sv::Q2Monster& mo : q->monsters)
-        if (!mo.dead) { const auto& be = q->entities[size_t(mo.entity)]; std::fprintf(stderr, "DBG monster kind %d at %.0f %.0f %.0f waiting %d hidden %d\n", mo.kind, double(be.origin.x), double(be.origin.y), double(be.origin.z), int(mo.waiting), int(be.hidden)); }
-      for (const WayStep& st : m.way.steps)
-        if (!st.done) std::fprintf(stderr, "DBG undone %s at %.0f %.0f %.0f node %d tries %d left %.0f\n", st.name.c_str(), double(st.lo.x), double(st.lo.y), double(st.lo.z), st.node, st.tries, st.left_until);
-    }
     if (!changed) {
       um.end = "the time ran out";
       r.maps.push_back(std::move(um));

@@ -11,8 +11,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
-#include <unordered_map>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 
 #include "core/libm/libm.hpp"
@@ -317,9 +317,9 @@ sh::Vec3f origin_of(const char* org);  // below
 
 // (`add_crawlways`) A ducked box swept through the world's brushes.
 constexpr sh::Vec3f kDuckMins{-16, -16, -24}, kDuckMaxs{16, 16, 4};
-constexpr float kCrawlCell = 16;      // the crawl's grid, units
-constexpr int kCrawlCells = 1500;     // cells one crawl visits at most
-constexpr float kCrawlSpeed = 100;    // ducked, units/s (the move's own crawl, less a little)
+constexpr float kCrawlCell = 16;    // the crawl's grid, units
+constexpr int kCrawlCells = 1500;   // cells one crawl visits at most
+constexpr float kCrawlSpeed = 100;  // ducked, units/s (the move's own crawl, less a little)
 
 sh::HullTrace duck_trace(const sh::Solid& w, sh::Vec3f a, sh::Vec3f b, sh::Vec3f mn, sh::Vec3f mx) {
   return sh::solid_box_trace(w, a, mn, mx, b);
@@ -364,7 +364,8 @@ std::vector<sh::Vec3f> crawl_path(const MapCrawl& cr, int a, int b) {
   }
   std::vector<sh::Vec3f> out;
   for (const int k : up_a) out.push_back(cr.cells[static_cast<size_t>(k)].at);
-  for (size_t k = up_b.size() - 1; k-- > 0;) out.push_back(cr.cells[static_cast<size_t>(up_b[k])].at);
+  for (size_t k = up_b.size() - 1; k-- > 0;)
+    out.push_back(cr.cells[static_cast<size_t>(up_b[k])].at);
   return out;
 }
 
@@ -382,7 +383,8 @@ int add_crawlways(const sh::Solid& w, sb::NavGraph& g, std::vector<MapCrawl>* ke
   std::unordered_map<uint64_t, std::pair<int, int>> where;  // cell -> (crawl, cell)
   std::vector<sb::NavExtraLink> links;
   std::vector<std::pair<int32_t, int32_t>> made;
-  constexpr float kDirs[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+  constexpr float kDirs[8][2] = {{1, 0}, {-1, 0}, {0, 1},  {0, -1},
+                                 {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
   const auto search = [&](sh::Vec3f entry) {
     Crawl cr;
     cr.cells.push_back({entry, -1});
@@ -483,7 +485,8 @@ int add_crawlways(const sh::Solid& w, sb::NavGraph& g, std::vector<MapCrawl>* ke
         if (pa == pb) continue;
         const size_t len = crawl_path(cr, cell, c).size();
         const auto k = std::make_tuple(id, pa, pb);
-        auto it = std::find_if(best.begin(), best.end(), [&](const auto& e) { return e.first == k; });
+        auto it =
+            std::find_if(best.begin(), best.end(), [&](const auto& e) { return e.first == k; });
         if (it == best.end())
           best.push_back({k, {static_cast<int32_t>(n), end, cell, c, len}});
         else if (len < it->second.len)

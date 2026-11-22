@@ -131,9 +131,9 @@ struct MapNav {
     int32_t from = -1, to = -1, mover = -1;
   };
   std::vector<ScriptMade> scripts_made;
-  int crawlways = 0;  // scripted ways ducked under a low roof (Quake II's maps)
+  int crawlways = 0;             // scripted ways ducked under a low roof (Quake II's maps)
   std::vector<MapCrawl> crawls;  // the crawls searched for them
-  ge::ai::Search main;  // what the map's main part reaches (the most a start spot reaches)
+  ge::ai::Search main;           // what the map's main part reaches (the most a start spot reaches)
   int32_t main_n = 0;
   int64_t teleport_links = 0, closed_links = 0, harm_links = 0;
   int64_t ladder_links = 0;      // climbs up a ladder (Quake II's, `NavLink::ladder`)

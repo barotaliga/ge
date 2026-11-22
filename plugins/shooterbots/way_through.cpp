@@ -439,6 +439,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.prey_since = 0;
   w.prey_left.assign(s.sv.edicts.size(), -1);
   w.prey_tries.assign(s.sv.edicts.size(), 0);
+  w.prey_until.assign(s.sv.edicts.size(), -1);
   const sb::NavGraph& g = nav.graph;
   w.seen.assign(g.nodes.size(), 0);
   w.node_door.assign(g.nodes.size(), -1);
@@ -980,9 +981,8 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     // One no node stands by, in a crawl's cell (a nook under a floor): crawled to from the end of
     // that crawl he reaches, the nearest way.
     for (WayStep& st : w.steps) {
-      if ((st.kind != WayKind::trigger && st.kind != WayKind::secret) || st.reach_in ||
-          start < 0 || (st.node >= 0 && touches(g.nodes[static_cast<size_t>(st.node)].origin,
-                                                 st.lo, st.hi)))
+      if ((st.kind != WayKind::trigger && st.kind != WayKind::secret) || st.reach_in || start < 0 ||
+          (st.node >= 0 && touches(g.nodes[static_cast<size_t>(st.node)].origin, st.lo, st.hi)))
         continue;
       for (const MapCrawl& cr : nav.crawls) {
         for (size_t c = 0; c < cr.cells.size(); c++) {
@@ -1354,11 +1354,9 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
       const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
       // A monster: Quake's by its flag, Quake II's (no such flag in its view) by its live box.
-      const bool monster =
-          (d.flags & sh::kFlagMonster) != 0 || d.solid == sh::kSolidSlidebox;
-      if (d.free || !monster || d.health <= 0 ||
-          d.solid == sh::kSolidNot || static_cast<size_t>(e) >= w.prey_left.size() ||
-          t < w.prey_left[static_cast<size_t>(e)])
+      const bool monster = (d.flags & sh::kFlagMonster) != 0 || d.solid == sh::kSolidSlidebox;
+      if (d.free || !monster || d.health <= 0 || d.solid == sh::kSolidNot ||
+          static_cast<size_t>(e) >= w.prey_left.size() || t < w.prey_left[static_cast<size_t>(e)])
         continue;
       int32_t n = sb::nav_nearest(g, d.origin);
       if (n >= 0 && static_cast<size_t>(n) < nav.wet.size() && nav.wet[static_cast<size_t>(n)]) {
@@ -1375,6 +1373,13 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         }
       }
       if (n < 0 || !reach(n)) continue;
+      // One in a trap (a pool he cannot climb out of) waits, as a step there does, until he is in
+      // it himself.
+      const auto trap_at = [&](int32_t x) {
+        return x >= 0 && static_cast<size_t>(x) < nav.trap.size() &&
+               nav.trap[static_cast<size_t>(x)];
+      };
+      if (trap_at(n) && !trap_at(from)) continue;
       const double c = w.search.cost(n);
       if (prey < 0 || c < prey_c) {
         prey = e;
@@ -1499,25 +1504,22 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       }
     }
   }
-  if (pick >= 0 && w.steps[static_cast<size_t>(pick)].kind == WayKind::button && pick != w.step) {  // DBG
-    const WayStep& ps = w.steps[static_cast<size_t>(pick)];
-    std::fprintf(stderr, "DBG pick button %d t %.1f left_to_do %d prey %d carries %d calling %d cars %zu doors", pick, t, int(left_to_do), prey, int(carries(ps)), w.calling, w.cars.size());
-    for (const int d : ps.doors) std::fprintf(stderr, " %d", d);
-    for (const int c : w.cars) std::fprintf(stderr, " car %d", c);
-    std::fprintf(stderr, "\n");
-  }
   // (`complete`) The nearest monster alive when it is nearer than the step.
   const bool chase = w.complete && prey >= 0 &&
                      (pick < 0 || way_exit(w.steps[static_cast<size_t>(pick)]) || prey_c < best);
   if (chase) pick = -1;
+  // The time a monster is given counts from when it was first chased, so two chased by turns (each
+  // the nearer as he goes) are both left in time.
+  if (chase && w.prey_until[static_cast<size_t>(prey)] < 0)  // as a step: past twice the walk
+    w.prey_until[static_cast<size_t>(prey)] = t + kWayGiveUp_s + 2 * prey_c;
   if (!chase || prey != w.prey) {
     w.prey = chase ? prey : -1;
     w.prey_since = t;
-    w.prey_for = kWayGiveUp_s + (chase ? 2 * prey_c : 0);  // as a step: past twice the walk
-  } else if (t - w.prey_since > w.prey_for) {
+  } else if (t > w.prey_until[static_cast<size_t>(prey)]) {
     // Gone for this long and still alive: left for a while, and for good after kWayTries.
     const size_t e = static_cast<size_t>(prey);
     w.prey_tries[e]++;
+    w.prey_until[e] = -1;
     w.prey_left[e] = w.prey_tries[e] >= kWayTries ? kWayForever : t + kWayRetry_s;
     w.stats.left++;
     if (w.prey_tries[e] >= kWayTries) w.stats.given_up++;
@@ -1709,8 +1711,8 @@ void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooterbots::Bot
   if (self_e.waterlevel > 0 && dz > 8) cmd.buttons |= sh::kButtonJump;
 }
 
-void way_touch(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
-               sh::MoveCmd& cmd) {
+void way_reach_in(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
+                  sh::MoveCmd& cmd) {
   const ge::shooter::WorldEntity& self_e = s.world.entities[static_cast<size_t>(me)];
   const sh::Vec3f self = self_e.origin;
   const double t = s.sv.time;
@@ -1768,9 +1770,10 @@ void way_touch(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView&
   const double dx = to.x - self.x, dy = to.y - self.y, dz = to.z - self.z;
   const double flat = std::sqrt(dx * dx + dy * dy);
   cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
-  cmd.angles.x = self_e.waterlevel > 0 ? static_cast<float>(-ge::core::libm::atan2(dz, flat) *
-                                                            (180.0 / ge::core::kPi))
-                                       : 0.0f;
+  cmd.angles.x =
+      self_e.waterlevel > 0
+          ? static_cast<float>(-ge::core::libm::atan2(dz, flat) * (180.0 / ge::core::kPi))
+          : 0.0f;
   cmd.forward = sh::quantize_axis(320);
   cmd.side = 0;
   if (self_e.waterlevel > 0 && dz > 8) cmd.buttons |= sh::kButtonJump;
