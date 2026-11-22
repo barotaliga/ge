@@ -38,6 +38,7 @@
 #include "server/autorecord.hpp"
 #include "server/hand_record.hpp"
 #include "server/macros.hpp"
+#include "server/net_restart.hpp"
 #include "server/record.hpp"
 #include "server/spectators.hpp"
 
@@ -300,6 +301,20 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   Server s;
   s.features = &features;
   take_created(con, c);
+  c.admin_info = [&con] {
+    std::string out;
+    const std::string all = con.cvars().info_string(console::kServerInfo);
+    size_t at = 0;
+    while (at < all.size()) {  // each pair kept when `sets` made it
+      const size_t k = all.find('\\', at + 1), v = all.find('\\', k + 1);
+      const std::string key = all.substr(at + 1, k - at - 1);
+      const console::Cvar* cv = con.cvars().find(key);
+      if (cv != nullptr && (cv->flags & console::kCreated) != 0)
+        out += all.substr(at, (v == std::string::npos ? all.size() : v) - at);
+      at = v == std::string::npos ? all.size() : v;
+    }
+    return out;
+  };
   if (!server_open(s, game, c, c.offline ? nullptr : &sock, have_lan ? &lan : nullptr, error)) {
     std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());
     close_all();
@@ -513,6 +528,36 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     if (game.maps != nullptr && s.state != nullptr) game.maps(s.state, maps);
     return server_map_list(maps);
   });
+  // `net_restart`: the server's socket closed and opened again on net_ip and net_port, a value
+  // waiting on either (latched) taken now; when that cannot be had, the last port that opened.
+  std::string good_ip = c.ip;
+  int good_port = c.port;
+  con.add_command("net_restart",
+                  "net_restart: open the server's socket again on net_ip and net_port",
+                  [&](console::Console& cn, const console::Args&) {
+                    if (c.offline) return;
+                    for (const char* name : {"net_ip", "net_port"}) {
+                      console::Cvar* v = con.cvars().find(name);
+                      if (v == nullptr || !v->has_latched) continue;
+                      const std::string to = v->latched;
+                      con.cvars().set(*v, to, console::Source::code);
+                      v->has_latched = false;
+                      v->latched.clear();
+                    }
+                    int port = c.port;
+                    std::string said;
+                    const bool open = net_restart(sock, c.ip, port, good_ip, good_port, said);
+                    if (port != c.port)
+                      if (console::Cvar* v = con.cvars().find("net_port"))
+                        con.cvars().set(*v, std::to_string(port), console::Source::code);
+                    c.port = port;
+                    if (!said.empty()) cn.print(said.substr(0, said.size() - 1));
+                    if (!open) return;
+                    good_ip = c.ip;
+                    good_port = c.port;
+                    if (game.reopened != nullptr && s.state != nullptr)
+                      game.reopened(s.state, sock);
+                  });
   // `showip`: this machine's name and addresses, then the sockets the server listens on.
   con.add_command(
       "showip", "showip: this machine's addresses and the sockets the server listens on",

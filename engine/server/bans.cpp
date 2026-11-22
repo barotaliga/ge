@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
 
 namespace ge::server {
@@ -205,12 +207,21 @@ bool blackholed(const BanList& list, const net::Address& a, int64_t now) {
   return !list.entries.empty() && ban_refuses(list, 1, a, now);
 }
 
-void ban_file_read(BanList& list, const std::string& path, int64_t now) {
+void ban_file_read(BanList& list, const std::string& path, int64_t now, int* mode) {
   if (path.empty()) return;
   std::ifstream f(path);
   std::string line, out;
-  while (std::getline(f, line))
-    if (line.rfind("addip ", 0) == 0) ban_command(list, line, now, out);
+  while (std::getline(f, line)) {
+    while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+    if (line.rfind("sv addip ", 0) == 0) line.erase(0, 3);  // a classic game's own form
+    if (line.rfind("addip ", 0) == 0) {
+      ban_command(list, line, now, out);
+    } else if (mode != nullptr) {
+      for (const char* set : {"set filterban ", "filterban "})
+        if (line.rfind(set, 0) == 0)
+          *mode = std::atoi(line.c_str() + std::strlen(set)) != 0 ? 1 : 0;
+    }
+  }
 }
 
 std::string ban_file_write(const BanList& list, const std::string& path, const std::string& text) {

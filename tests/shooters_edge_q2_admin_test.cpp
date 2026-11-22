@@ -5,12 +5,14 @@
 // connect ("Banned."); `writeip` saves the list and the server reads it back; a banned address's
 // remote console is not answered. Spectators: their password is the `spectator` key, their own
 // slots under `max_spectators` (or players' slots when 0), and `status` tells both in its info.
+// The game's own `sv addip`, `sv removeip`, `sv listip` and `sv writeip` in its words; the status
+// info's rules keys, the build's, the port and an administrator's own.
 //
 // ge:summary Test: Quake II server's rcon, status, kick, dumpuser, bans and spectator seats
 // ge:keywords test q2 admin rcon rcon_password status kick dumpuser addip writeip listip
 // ge:keywords banned filterban sv_banmode ban_file_read spectator maxspectators needpass
 // ge:keywords spectator_password sv_maxspectators sv_spectatorpassword zombie zombietime
-// ge:keywords sv_zombietime
+// ge:keywords sv_zombietime sv_filter q2_status_keys gamedir
 // ge:skill net shooter
 #include <algorithm>
 #include <cstdio>
@@ -342,6 +344,58 @@ TEST(a_banned_address_is_dropped_refused_and_not_answered) {
   CHECK_MSG(listed.stage == cn::ClientStage::active, listed.refused);
   CHECK(unlisted.refused == "Banned.\n");
   std::filesystem::remove(file);
+}
+
+// The game's own filter words: `sv addip` with a short or zero mask as a wildcard, `sv listip` in
+// the game's columns, `sv removeip` by the same mask, `sv writeip` as the game's cfg (the mode and
+// `sv addip` lines), read back with its mode.
+TEST(the_game_s_sv_filter_words_reach_the_ban_list) {
+  const std::filesystem::path file =
+      std::filesystem::temp_directory_path() / "ge_q2_admin_sv_listip.cfg";
+  std::filesystem::remove(file);
+  cn::Q2NetConfig cfg;
+  cfg.rcon_password = "letmein";
+  cfg.ban_file = file.string();
+  auto r = rig(cfg);
+  CHECK(rcon(*r, "rcon letmein sv addip") == "print\nUsage:  addip <ip-mask>\n");
+  CHECK(rcon(*r, "rcon letmein sv addip 10.x") == "print\nBad filter address: 10.x\n");
+  CHECK(rcon(*r, "rcon letmein sv addip 10.0") == "print\n");
+  CHECK(rcon(*r, "rcon letmein sv addip 192.168.4.7") == "print\n");
+  CHECK(r->server.bans.entries.size() == 2 && r->server.bans.entries[0].text == "10.*.*.*");
+  CHECK_MSG(rcon(*r, "rcon letmein sv listip") ==
+                "print\nFilter list:\n 10.  0.  0.  0\n192.168.  4.  7\n",
+            rcon(*r, "rcon letmein sv listip"));
+  CHECK(rcon(*r, "rcon letmein sv removeip") == "print\nUsage:  sv removeip <ip-mask>\n");
+  CHECK(rcon(*r, "rcon letmein sv removeip 10.0.0.0") == "print\nRemoved.\n");
+  CHECK(rcon(*r, "rcon letmein sv removeip 10.0.0.0") == "print\nDidn't find 10.0.0.0.\n");
+  CHECK(rcon(*r, "rcon letmein sv writeip") == "print\nWriting " + file.string() + ".\n");
+  CHECK(rcon(*r, "rcon letmein sv test") == "print\nSvcmd_Test_f()\n");  // the rules' own
+  r->server.cfg.ban_mode = 0;  // only the list joins (the administrator's address too: no rcon)
+  std::string wrote;
+  CHECK(cn::q2_admin(r->server, "sv writeip", wrote) && has(wrote, "Writing"));
+  int mode = 1;
+  gs::BanList back;
+  gs::ban_file_read(back, file.string(), 0, &mode);
+  CHECK(back.entries.size() == 1 && mode == 0);
+  CHECK(back.entries[0].text == "192.168.4.7");
+  std::filesystem::remove(file);
+}
+
+// The status info carries the rules' live settings and the build's keys.
+TEST(the_status_info_carries_the_rules_keys) {
+  cn::Q2NetConfig cfg;
+  cfg.version = "ShootersEdge 0.1";
+  cfg.admin_info = [] { return std::string("\\owner\\the clan\\league\\spring"); };
+  auto r = rig(cfg);
+  r->rules.console("fraglimit 25");
+  r->rules.console("timelimit 10");
+  r->rules.console("dmflags 16");
+  const std::string info = rcon(*r, "status");
+  for (const char* part :
+       {"\\deathmatch\\1", "\\coop\\0", "\\dmflags\\16", "\\fraglimit\\25", "\\timelimit\\10",
+        "\\gamename\\baseq2", "\\gamedir\\baseq2", "\\version\\ShootersEdge 0.1",
+        "\\owner\\the clan", "\\league\\spring", "\\port\\27910"})
+    CHECK_MSG(has(info, part), part + std::string(" in ") + info);
 }
 
 TEST(spectators_give_their_password_and_take_their_own_slots) {
