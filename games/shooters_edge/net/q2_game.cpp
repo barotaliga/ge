@@ -45,6 +45,7 @@
 #include "shooters_edge/net/q2_mvd_relay.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
+#include "shooters_edge/net/q2_votes.hpp"
 #include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/server/q2_mapfix.hpp"
 #include "shooters_edge/server/q2_native.hpp"
@@ -405,6 +406,7 @@ struct Game {
   // What the console printed and was handed on (console_lines): the rules' lines told so far.
   const sv::RulesCommon* told_rules = nullptr;
   size_t told = 0;
+  Q2Votes votes;  // the players' votes and the settings sheet (q2_votes.hpp)
 };
 
 // `m` mended as it loads (server/q2_mapfix.hpp): the visibility patch, then an entity file.
@@ -519,6 +521,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->rules.console(line);
   }
   if (!g->rules.start(g->map->spec, error)) return nullptr;
+  q2_votes_rules(g->votes, g->rules, gs::vote_settings(c));
+  Game* game = g.get();
+  g->votes.map = [game] { return game->map ? game->map->name : std::string(); };
+  g->votes.has_map = [game](const std::string& wanted) {
+    std::string why;
+    return cl::load_named_map(game->files, wanted, why) != nullptr;
+  };
   g->cfg.hostname = c.hostname;
   g->cfg.version = kProgramVersion;
   g->cfg.game_dir = mod;
@@ -835,6 +844,8 @@ void change_level(Game& g) {
     error = "maps/" + asked + ".bsp is not a map of Quake II's family";
     next.reset();
   }
+  if (s.pending_change != sv::MapChange::restart)
+    q2_votes_map_over(g.votes);  // a vote's restart keeps them
   g.rules.carry();
   if (sv::NativeQ2* ns = sv::native_q2_of(g.rules); ns != nullptr && next)
     ns->map_checksum = sv::q2_map_checksum(next->file);
@@ -1006,13 +1017,15 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
     }
     return true;
   };
-  if (!game.logins_wanted) return true;
-  game.login = std::make_unique<Q2Login>();
-  game.login->game = game.base;
-  if (!q2_login_open(*game.login, *game.net, game.login_set, game.accounts, game.account_link,
-                     game.unix_us, error))
-    return false;
-  game.login->logins.signer = game.signer;
+  if (game.logins_wanted) {
+    game.login = std::make_unique<Q2Login>();
+    game.login->game = game.base;
+    if (!q2_login_open(*game.login, *game.net, game.login_set, game.accounts, game.account_link,
+                       game.unix_us, error))
+      return false;
+    game.login->logins.signer = game.signer;
+  }
+  q2_votes_open(game.votes, *game.net);  // after the logins: their hook runs first
   return true;
 }
 
@@ -1040,6 +1053,7 @@ void net_frame(void* g, int64_t now_us) {
     cp::masters_frame(game.masters, now_s, 0, q2_status_text(*game.net), true, out, game.net->log);
     masters_send(game, out);
   }
+  q2_votes_frame(game.votes);
   change_level(game);
   if (game.login) q2_login_frame(*game.login);
 }
@@ -1323,6 +1337,9 @@ const gs::ServerGame& make() {
     s.quit = quit;
     s.sockets = sockets;
     s.maps = maps;
+    s.sheet = [](const void* game, int, gs::SettingsSheet& out) {
+      q2_votes_sheet(static_cast<const Game*>(game)->votes, out);
+    };
     q2_watch_hooks(s);
     return s;
   }();

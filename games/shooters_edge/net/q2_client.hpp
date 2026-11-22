@@ -116,6 +116,9 @@ struct Q2ClientConfig {
   // `ask_hits`: asks our server for the damage the player dealt (`*ge_ext` bit 1024), the hit
   // marker's (`cl_hit_markers`); a stock client is sent none of it.
   bool ask_hits = false;
+  // `ask_sheet`: asks our server for its settings sheet (`*ge_ext` bit 2048, net/q2_votes.hpp),
+  // the server settings page's; a stock client is offered none.
+  bool ask_sheet = false;
   // `cl_nodelta`: no frame is ever acknowledged, so the server sends each one whole (more bytes,
   // nothing lost to a dropped packet's delta); a server that forbids it (`sv_allow_nodelta 0`)
   // may refuse.

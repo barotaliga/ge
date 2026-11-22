@@ -34,8 +34,10 @@ three things: its server's `ServerGame::sheet` (the rows from its rules, each ru
 the vote's lists; Shooter's Edge's `net/qw_sheet.hpp` is the pattern), a wire for its own clients
 (a bit in its extension set and one message carrying `sheet_row_text`, paced on the reliable
 channel), and readers for the stock servers of that game in `plugins/classic/server_sheet.hpp`
-(what a joined client can ask without a word the server would echo as chat). The menu page is the
-shell's and needs nothing from the game.
+(what a joined client can ask without a word the server would echo as chat). A protocol whose
+server never answers the client's extension bits offers the sheet instead, as Quake II's does
+(`net/q2_votes.hpp`: an empty sheet as the player enters, then `ge_sheet`), and keeps each packet
+within what that game's client reads. The menu page is the shell's and needs nothing from the game.
 
 ## Each game's
 
