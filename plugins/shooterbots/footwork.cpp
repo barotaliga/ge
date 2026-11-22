@@ -7,6 +7,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/prng.hpp"
+#include "shooter/trace.hpp"
 #include "shooterbots/dodge.hpp"
 
 namespace sb = ge::shooterbots;
@@ -32,6 +33,29 @@ constexpr float kStandChasing = 100;
 // (`goalfeet`) The route's side key this share of its forward or more: the route runs across the
 // line to him (past about 35 degrees off it), and the side key is the route's.
 constexpr float kGoalAcross = 0.7f;
+// (`ledge_guard`) A heading is looked down this far ahead, and this much of the run more (the
+// box goes on that far before the keys turn it), units and s; a floor more than kLedgeDrop below
+// the box there is a ledge.
+constexpr float kLedgeLook = 40;
+constexpr float kLedgeRun_s = 0.2f;
+constexpr float kLedgeDrop = 40;
+constexpr float kLedgeSlow = 60;  // a run slower than this carries him off no ledge, units/s
+
+// Whether the box at `origin` going `look` units along `heading` (degrees) meets a ledge: no
+// floor within kLedgeDrop under it where it stops (a wall first: the floor at the wall).
+bool ledge_ahead(const sh::Server& sv, sh::Vec3f origin, float heading, float look, int me) {
+  const double h = static_cast<double>(heading) * (ge::core::kPi / 180.0);
+  const sh::Vec3f to{origin.x + static_cast<float>(ge::core::libm::cos(h)) * look,
+                     origin.y + static_cast<float>(ge::core::libm::sin(h)) * look, origin.z};
+  const sh::HullTrace go =
+      sh::trace_move(sv, origin, sh::kPlayerMins, sh::kPlayerMaxs, to, sh::kTraceNoMonsters, me);
+  if (go.startsolid) return false;
+  const sh::Vec3f end = go.endpos;
+  const sh::HullTrace down =
+      sh::trace_move(sv, end, sh::kPlayerMins, sh::kPlayerMaxs, {end.x, end.y, end.z - kLedgeDrop},
+                     sh::kTraceNoMonsters, me);
+  return down.fraction >= 1;
+}
 
 }  // namespace
 
@@ -203,6 +227,46 @@ void fighter_dodge(Fighter& f, const ge::shooterbots::BotView& s, int me, double
           cmd.forward = route_f;
           cmd.side = route_s;
           f.press_note = "past";
+        }
+      }
+      // (`ledge_guard`) The fight's keys with the route's under them, and the run he has: one that
+      // takes him off a ledge gives way to the route's own (e2m5's walkway over its pool, left by
+      // a dodge to the right at a run and fallen into a pit with no way out).
+      if (f.ledge_guard && (cmd.forward != route_f || cmd.side != route_s) &&
+          (cmd.forward != 0 || cmd.side != 0)) {
+        const sh::Vec3f v = s.world.entities[static_cast<size_t>(me)].velocity;
+        const float run = std::sqrt(v.x * v.x + v.y * v.y);
+        const double keys =
+            ge::core::libm::atan2(static_cast<double>(cmd.side), static_cast<double>(cmd.forward));
+        const float heading = yaw - static_cast<float>(keys * (180.0 / ge::core::kPi));
+        if (ledge_ahead(s.sv, me_at, heading, kLedgeLook + run * kLedgeRun_s, me)) {
+          cmd.forward = route_f;
+          cmd.side = route_s;
+          f.stats.ledge_kept++;
+          f.press_note = "ledge";
+        }
+      }
+      // And the run he has toward a ledge the route does not drop off (the route's keys under a
+      // view held on a monster are eight ways at best: at a wall they slid him along it and off
+      // the walkway's end): the keys straight at the route's next node instead.
+      const sb::Pilot& pl = f.bot.pilot.pilot;
+      if (f.ledge_guard && routing && pl.g != nullptr && pl.k + 1 < pl.route.size()) {
+        const sh::Vec3f v = s.world.entities[static_cast<size_t>(me)].velocity;
+        const float run = std::sqrt(v.x * v.x + v.y * v.y);
+        const sh::Vec3f next = pl.g->nodes[static_cast<size_t>(pl.route[pl.k + 1])].origin;
+        if (run > kLedgeSlow && next.z > me_at.z - kLedgeDrop) {
+          const double vh =
+              ge::core::libm::atan2(static_cast<double>(v.y), static_cast<double>(v.x));
+          const float vdeg = static_cast<float>(vh * (180.0 / ge::core::kPi));
+          if (ledge_ahead(s.sv, me_at, vdeg, kLedgeLook + run * kLedgeRun_s, me)) {
+            const double to = ge::core::libm::atan2(static_cast<double>(next.y - me_at.y),
+                                                    static_cast<double>(next.x - me_at.x));
+            const double rel = to - static_cast<double>(yaw) * (ge::core::kPi / 180.0);
+            cmd.forward = sh::quantize_axis(static_cast<float>(ge::core::libm::cos(rel)) * 400);
+            cmd.side = sh::quantize_axis(static_cast<float>(-ge::core::libm::sin(rel)) * 400);
+            f.stats.ledge_kept++;
+            f.press_note = "ledge-run";
+          }
         }
       }
       if (why) {
