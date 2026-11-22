@@ -41,6 +41,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Map commands, game clock, console log | none | `client/q2_session.hpp` (`cl_beginmapcmd`, `timescale`, `cl_autopause`, the read-only state), `client/console_log.hpp` (`logfile`) | its own | its own |
 | Own view from behind | `cam_thirdperson` over demos and watching | `cl_thirdperson` (a cheat), its angle and range, joined and hosted (`client/q2_session.hpp`'s `view_behind`) | its own | its own |
 | Effect switches | `cl_gibfilter`, `cl_muzzleflash`, `r_rocketlight` ... | `classic/q2_fx_switches.hpp` (`cl_disable_particles`, `cl_disable_explosions`, `cl_dlight_hacks`, `cl_muzzlelight_time`, `cl_muzzleflashes`) | its own | its own |
+| Footsteps and loops heard | the sounds as sent | `cl_footsteps` 0 and `s_ambient` (`client/demo_sound.hpp`'s `switches_from`) | its own | its own |
 
 ## Adding a game
 

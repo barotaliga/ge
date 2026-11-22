@@ -13,10 +13,13 @@
 // - `cl_muzzlelight_time`: how long a gun's flash lights the room, milliseconds (16 as drawn; the
 //   light's whole fade scales with it, 0 none).
 // - `cl_muzzleflashes` 0: no fire drawn at another player's or a monster's gun (the light stays).
+// - `cl_footsteps` 0: no footstep heard (1 and 2 the same: the game's own four steps).
+// - `s_ambient`, the loops an entity carries that are heard: 0 none, 1 all, 2 only those of an
+//   entity with a model (a speaker on its own is silent), 3 only the listener's own.
 //
 // ge:summary Quake II's effect switches: specks, explosions, lights and muzzle flashes left out
 // ge:keywords q2 cl_disable_particles cl_disable_explosions cl_dlight_hacks cl_muzzlelight_time
-// ge:keywords cl_muzzleflashes effect-switches q2_fx_switches
+// ge:keywords cl_muzzleflashes cl_footsteps s_ambient effect-switches q2_fx_switches
 // ge:skill classic shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #pragma once
@@ -33,6 +36,8 @@ struct Q2FxSwitches {
   int light_hacks = 0;          // cl_dlight_hacks
   double muzzle_light_ms = 16;  // cl_muzzlelight_time
   bool muzzle_models = true;    // cl_muzzleflashes
+  int footsteps = 1;            // cl_footsteps
+  int ambient = 1;              // s_ambient
 };
 
 // The specks of an explosion of `kind` are left out.

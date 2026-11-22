@@ -724,9 +724,11 @@ int run_main(int argc, char** argv) {
     static_cast<ge::audio::Synth*>(user)->render(out, frames);
   };
   // The hearings before the device (closed first: its thread never reads what they free).
-  cl::DemoHearing hearing(synth, &picture.ce.sounds);       // a demo's sounds, voices, lines
-  cl::ListenHearing heard_here(synth, &picture.ce.sounds);  // the window's own game's sounds
-  cl::Cinematic cine;                                       // Quake II's movies (cinematic.hpp)
+  // A demo's sounds, voices and lines; the window's own game's sounds (cl_footsteps and s_ambient
+  // over both).
+  cl::DemoHearing hearing(synth, &picture.ce.sounds, &picture.q2fx);
+  cl::ListenHearing heard_here(synth, &picture.ce.sounds, &picture.q2fx);
+  cl::Cinematic cine;                      // Quake II's movies (cinematic.hpp)
   cl::MenuSounds menu_sounds(synth);       // the main menu's clicks (menu_sound.hpp)
   cl::hear_worlds_on(&synth, &under_ear);  // each world's room on it (ce_acoustics)
   const std::unique_ptr<ge::platform::AudioOut> speaker =

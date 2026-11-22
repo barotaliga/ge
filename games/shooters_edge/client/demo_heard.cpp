@@ -63,14 +63,16 @@ std::vector<std::string> print_lines(const std::string& text) {
   return out;
 }
 
-DemoHearing::DemoHearing(ge::audio::Synth& synth, const bool* enhanced)
-    : synth_(synth), enhanced_(enhanced) {}
+DemoHearing::DemoHearing(ge::audio::Synth& synth, const bool* enhanced,
+                         const ge::classic::Q2FxSwitches* q2)
+    : synth_(synth), enhanced_(enhanced), q2_(q2) {}
 
 void DemoHearing::level(const DemoState& s, const SearchPath& files, const ge::brush::Map* map) {
   if (!sounds_ || files_ != &files) {
     retired_.retire(std::move(sounds_));  // kept until its voices have faded
     sounds_ = std::make_unique<DemoSounds>(synth_, files);
     sounds_->enhance_from(enhanced_);
+    sounds_->switches_from(q2_);
     files_ = &files;
   }
   if (!voices_) voices_ = std::make_unique<DemoVoices>(synth_);
