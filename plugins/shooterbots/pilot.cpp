@@ -163,6 +163,10 @@ constexpr float kBrake = 0.25f;  // the least share of maxspeed walked into the 
 constexpr float kAirCorner = 64, kAirPast = 24, kAirSlow = 100;
 constexpr float kAirGiveUp = 100, kAirHold = 2, kAirFull = 12;
 constexpr float kGrenadeStill = 30;  // a grenade jump fires only this slow, units/s
+// A combo (nav.hpp `NavLink::combo`): the view this far down for the rocket on the jump, turned
+// down this long before it.
+constexpr float kComboPitch = 89;
+constexpr float kComboLook_s = 0.5f;
 constexpr float kGrenadeAim = 4;     // and with the view this near the target's way, deg
 constexpr float kGrenadeNear = 32;   // and within this of its start, units
 constexpr float kGrenadeSlow = 160;  // slowing into the start from this far, units
@@ -1326,6 +1330,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           // The view kept on the target, stepped to the stand with the keys in its frame (a
           // person does not turn to walk a few units; late hands turning to a point circle it).
           w.yaw = unwrap(p.grenade_yaw, p.yaw);
+          // A combo's view down at the grenade in time for the rocket on the jump.
+          if (l.combo && p.grenade_s >= gj.fuse - kComboLook_s) w.pitch = kComboPitch;
           const ViewAxes ax = angle_vectors({0, p.yaw, 0});
           const Vec3f d{p.grenade_stand.x - s.origin.x, p.grenade_stand.y - s.origin.y, 0};
           const auto key = [&](float along) {
@@ -1342,6 +1348,15 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           p.leap_s = p.clock_s;
           p.stats.jumps++;
           because = "the grenade jump: jump as the fuse runs out";
+          if (l.combo) {
+            // The combo's rocket down at the grenade as it bursts (the launcher in hand by now,
+            // or the jump goes on without it and lands short: missed, the way round planned).
+            w.pitch = kComboPitch;
+            w.attack = s.rocket_ready;
+            p.stats.combos += s.rocket_ready;
+            because = s.rocket_ready ? "the combo: jump and the rocket on the grenade"
+                                     : "the combo: jump, the launcher not yet in hand";
+          }
         }
       }
     } else if (flies(l.kind) && p.airborne) {

@@ -264,7 +264,7 @@ void run(gl::Lab& lab) {
   gl::LabTable t{"each map at 100%",
                  {"map", "out", "exit s", "kills", "secrets", "100%", "ended", "deaths", "given up",
                   "plans: exit/button/key/trigger/explore/monster/secret", "nodes",
-                  "tricks: rocket/grenade", "blast jumps", "faults"},
+                  "tricks: rocket/grenade/combo", "blast jumps", "faults"},
                  {}};
   std::vector<fb::EpisodeMap> maps;
   uint64_t digest = 1469598103934665603ull;
@@ -304,7 +304,8 @@ void run(gl::Lab& lab) {
                       of(m.killed_monsters, m.total_monsters), of(m.found_secrets, m.total_secrets),
                       full ? "yes" : "no", m.end, std::to_string(m.leader_deaths),
                       std::to_string(m.way.given_up), plans, std::to_string(m.nav_nodes),
-                      std::to_string(m.nav_rockets) + "/" + std::to_string(m.nav_grenades),
+                      std::to_string(m.nav_rockets) + "/" + std::to_string(m.nav_grenades) + "/" +
+                          std::to_string(m.nav_combos),
                       std::to_string(m.blasts.size()), std::to_string(m.faults)});
   }
   t.rows.push_back({"all", std::to_string(finished) + "/" + std::to_string(maps.size()),
