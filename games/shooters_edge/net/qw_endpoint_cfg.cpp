@@ -71,6 +71,8 @@ constexpr gs::GameRule kEndpointRules[] = {
      "0: not offered (the default); 1: offered"},
     {"sv_downloadchunks", "The 1 KB chunks a downloading client gets a frame.", nullptr,
      "1..30: that many (30 the default)"},
+    {"sv_downloadserver", "A web address clients may fetch the server's files from instead.",
+     nullptr, "\"\": none (the default); TEXT: a URL ending in /, or github:<owner>/<repo>"},
     {"sv_watervis", "Whether clients are told they may see through water.", nullptr,
      "0: not told (the default); 1: told"},
     {"sv_fullspectate",
@@ -320,6 +322,8 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
     cfg.default_name = n->second;
   }
   cfg.reconnect_wait_s = reconnect_wait;
+  if (const auto it = c.rules.find("sv_downloadserver"); it != c.rules.end())
+    cfg.download_server = it->second;
   cfg.locked = locked != 0;
   if (const auto it = c.rules.find("lrcon_password"); it != c.rules.end())
     cfg.lrcon.password = it->second;

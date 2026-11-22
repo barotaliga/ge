@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 118 | 13 | 15 | 10 | 156 |
-| Client settings (cvars) | 172 | 48 | 90 | 40 | 350 |
+| Client settings (cvars) | 175 | 47 | 88 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 89 | 67 | 5 | 1 | 162 |
 | Server messages the client parses (svc) | 15 | 6 | 6 | 0 | 27 |
@@ -24,12 +24,12 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | The layout language (status bar and layouts) | 24 | 1 | 2 | 0 | 27 |
 | HUD and screen elements | 16 | 10 | 2 | 1 | 29 |
 | Messages printed to the player | 59 | 58 | 23 | 7 | 147 |
-| Demo playback and recording features | 9 | 9 | 3 | 2 | 23 |
+| Demo playback and recording features | 10 | 10 | 1 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 6 | 4 | 1 | 0 | 11 |
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 11 | 7 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 7 | 6 | 4 | 0 | 17 |
-| **all** | 683 | 302 | 163 | 63 | 1211 |
+| **all** | 687 | 302 | 159 | 63 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 172, partial 48, missing 90, not-taken 40
+done 175, partial 47, missing 88, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -215,9 +215,9 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.con_background | `con_background` | the console's backdrop picture (default `conback`) | partial | Quake II's `con_background` (default conback): a picture under `pics/` (tga, png, jpg or pcx) drawn behind the console from the next frame, read once (`menu/classic_console.hpp`'s `background`, `client/picture_files.hpp`'s `read_console_back`); a missing one says so and the game's own is drawn, but the setting is not put back to conback and a leading slash (a path from the root) is refused |
 | cvar.con_scroll | `con_scroll` | bit sum: a new line or a key press scrolls the console to the bottom (default 0) | done | ours the engine's `con_scroll` (`engine/console/view.hpp`): scrolled back, 1 a new line and 2 a key typed bring the newest lines back |
 | cvar.con_history | `con_history` | lines of typed history kept (default 128) | done | `engine/console/view.cpp` (M18k4 round 35) |
-| cvar.con_timestamps | `con_timestamps` | stamps every console line with the time (default 0) | partial | `client/chat_lines.cpp` stamps chat lines (the first game's meaning); verify every line |
-| cvar.con_timestampsformat | `con_timestampsformat` | the stamp's strftime format (default `%H:%M:%S `) | missing | C23 |
-| cvar.con_timestampscolor | `con_timestampscolor` | the stamp's colour (default `#aaa`) | missing | C23 |
+| cvar.con_timestamps | `con_timestamps` | stamps every console line with the time (default 0) | done | Quake II's own (`client/cvar_layers.cpp`, over the classic layer's chat-only one): every console line keeps the local time beside its text (`console/view.hpp`'s `ViewLine::stamp`), drawn before it on the console, not on the notify lines, written by condump, never searched; ours does not wrap lines, so one stamp a line |
+| cvar.con_timestampsformat | `con_timestampsformat` | the stamp's strftime format (default `%H:%M:%S `) | done | `console/view.hpp`'s `stamp_format` (strftime's words, default `%H:%M:%S `; empty: no stamp) |
+| cvar.con_timestampscolor | `con_timestampscolor` | the stamp's colour (default `#aaa`) | partial | `console/view.hpp`'s `stamp_colour`, read by `ui/paint.hpp`'s `colour_from_text` (#rgb, #rrggbb, #rrggbbaa, the eight names or 0..7); a value that does not read draws light grey without the warning and without putting the setting back |
 | cvar.con_auto_chat | `con_auto_chat` | a typed line without a slash: 0 a command, 1 say, 2 say_team (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` (M18k4 round 32) |
 | cvar.cl_demosnaps | `cl_demosnaps` | seconds between seek snapshots while a demo plays (default 10) | partial | ours keeps its own keyframes (`engine/replay`); no setting |
 | cvar.cl_demomsglen | `cl_demomsglen` | the largest message a recorded demo frame holds (default 1390) | not-taken | `client-gaps.md` (C38): not taken |
@@ -228,7 +228,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_http_max_connections | `cl_http_max_connections` | parallel HTTP fetches (default 2) | done | `net/q2_http`: up to that many files at once (#1305) |
 | cvar.cl_http_proxy | `cl_http_proxy` | an HTTP proxy for downloads (default empty) | done | `engine/net/http_fetch`'s proxy (#1305) |
 | cvar.cl_http_default_url | `cl_http_default_url` | a download URL used when the server names none (default empty) | done | `net/q2_http`: the address when the server names none (#1305) |
-| cvar.cl_http_insecure | `cl_http_insecure` | 1 skips TLS certificate checks (default 0) | partial | registered (#1305); secure addresses are not fetched by ours, so their files come over the game's connection |
+| cvar.cl_http_insecure | `cl_http_insecure` | 1 skips TLS certificate checks (default 0) | done | the classic layer's (`net/qw_remote.cpp`): a secure address's certificate unchecked (`classic/content/web_downloads.hpp`, `net/tls_stream.hpp`, #1309) |
 | cvar.cl_http_debug | `cl_http_debug` | prints HTTP transfer details (default 0) | done | `net/q2_http`: each download's address said as it starts (#1305) |
 | cvar.cl_http_blocking_timeout | `cl_http_blocking_timeout` | seconds before a stalled HTTP fetch is dropped (default 15) | done | the stall timeout of a web list of servers (`menu/servers_page.hpp`, #1305) |
 | cvar.in_enable | `in_enable` | use the input layer at all (default 1) | missing | C35 |
@@ -1038,7 +1038,7 @@ The indexed strings a server sets (stock protocol 34 indices; the extended proto
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | cs.name | `CS_NAME` (0) | the level's title: printed with the server data, shown on the loading screen | partial | ours takes the title from the server data; index 0 not kept |
-| cs.cdtrack | `CS_CDTRACK` (1) | the music: empty or 0 stops, N plays `music/trackNN` (or `NN`), the mission packs' numbers remapped by `ogg_remap_tracks`, text plays `music/<text>` | partial | the level's track from its world entity's `sounds` (`client/take_in.cpp` `level_music`, `plugins/classic/content/soundtrack.cpp`), remapped by `ogg_remap_tracks`; configstring 1 from a server or a recording not kept, a text name not played (C29) |
+| cs.cdtrack | `CS_CDTRACK` (1) | the music: empty or 0 stops, N plays `music/trackNN` (or `NN`), the mission packs' numbers remapped by `ogg_remap_tracks`, text plays `music/<text>` | partial | client/demo_q2.cpp `q2_music_track`: empty or 0 stops, a number plays that track (`client/take_in.cpp` `demo_music`, a joined server or a recording); a file's name and the mission packs' remap of the server's number missing |
 | cs.sky | `CS_SKY` (2) | the sky box's name; changing it changes the sky | partial | ours reads the sky from the map's world entity (`client/demo_content.cpp`); index 2 not kept |
 | cs.skyaxis | `CS_SKYAXIS` (3) | the sky's turning axis | partial | the map's own `skyaxis` turns the sky (`client/world_draw.cpp`); a server's differing configstring is not kept |
 | cs.skyrotate | `CS_SKYROTATE` (4) | the sky's turning speed, degrees a second | partial | the map's own `skyrotate` turns the sky (`client/world_draw.cpp`); a server's differing configstring is not kept |
@@ -1286,7 +1286,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 
 ## Demo playback and recording features
 
-done 9, partial 9, missing 3, not-taken 2
+done 10, partial 10, missing 1, not-taken 2
 
 What a player can do with client recordings (`.dm2`) and multi-view recordings (`.mvd2`) in the client.
 
@@ -1307,8 +1307,8 @@ What a player can do with client recordings (`.dm2`) and multi-view recordings (
 | demo.play.browser | the demo browser | the menu's demo page (table "Menu pages and rows") | partial | C40 |
 | demo.play.compat | old recordings | a recording of an older kind (protocol 34 without the extended frames) plays; the bar is not drawn for it | partial | ours plays protocol 34 and the extended layouts (`demo_q2.cpp`); verify the bar rule |
 | demo.rec.start | `record <name>` | records into `demos/<name>.dm2` from the current state (a late start plays); can record while playing another demo | partial | `client/listen_record.cpp`, `net/q2_client.cpp`; recording while playing a demo not found |
-| demo.rec.stats | statistics | `record` while recording and `stop` print the frames, size and dropped messages | missing | C38 |
-| demo.rec.gzip | `record -z` | gzip-compressed recording | missing | C38 |
+| demo.rec.stats | statistics | `record` while recording and `stop` print the frames, size and dropped messages | partial | client/listen_record.cpp: `record` while recording says `Already recording (<size>).`, `stop` says `Stopped demo (<size>).` in decimal units (`q2_demo_size`); the time recorded and the dropped counts missing (ours drops nothing: it copies the server's messages whole) |
+| demo.rec.gzip | `record -z` | gzip-compressed recording | done | client/listen_record.cpp `record -z` adds `.gz`; net/qw_match_record.cpp writes the file through gzip (engine/core/deflate.hpp's stream), the size said what went in |
 | demo.rec.size | `record -e` / `-s` | the extended 4086-byte or standard 1390-byte frames | not-taken | `client-gaps.md` (C38): `cl_demomsglen` not taken |
 | demo.rec.downgrade | protocol downgrade | a recording made on a modern protocol is written as protocol 34; too-large frames dropped, reliable messages kept first | partial | ours speaks 34 only, so nothing to downgrade |
 | demo.rec.suspend | `suspend` / `resume` | pause and resume a recording | not-taken | `client-gaps.md` round 27 |
@@ -1353,7 +1353,7 @@ How the client makes sound, beyond the settings themselves.
 | snd.backends | the sound back-ends | the software mixer (any rate, `s_khz`) or OpenAL (HRTF) | partial | ours one mixer at 48 kHz (`engine/audio`) (C32) |
 | snd.focus | sound and the window | `s_auto_focus` mutes when minimised or unfocused | done | `s_auto_focus` (`engine/platform/window_cvars.hpp` `heard_volume`), every game |
 | snd.figure | a figure's own sounds | a `*name` sound plays the figure's own `players/<model>/name`, else the male one | done | `client/demo_sound.cpp` `DemoSounds::own`: a `*name` plays `players/<model>/name`, else the male one |
-| snd.music.track | the level's music | configstring 1: empty or 0 stops, N `music/trackNN` or `music/NN` (remapped for the mission packs), text `music/<text>`, tried as `.flac`, `.opus`, `.ogg`, `.mp3`, `.wav`, loose files in the search path and the install and home folders; repeats | partial | ours plays the world's `sounds` track in its own game (`engine/audio/music_console.cpp`); a joined server's or a recording's track missing (C29) |
+| snd.music.track | the level's music | configstring 1: empty or 0 stops, N `music/trackNN` or `music/NN` (remapped for the mission packs), text `music/<text>`, tried as `.flac`, `.opus`, `.ogg`, `.mp3`, `.wav`, loose files in the search path and the install and home folders; repeats | partial | ours plays the world's `sounds` track in its own game (`engine/audio/music_console.cpp`) and the track a joined server or a recording names (`client/take_in.cpp` `demo_music`); a track named by its file missing |
 | snd.music.shuffle | shuffle | `ogg_shuffle` plays every file in `music/` shuffled | done | `ogg_shuffle` bound to the music player's shuffle (`client/cvar_layers.cpp`, `engine/audio/music_console.hpp`): every kept track in a random order |
 | snd.music.stop | when music stops | at a map change, the loading plaque and a cinematic; while disconnected the `ogg_menu_track` plays (none by default) | partial | verify (C29) |
 | snd.cinematic | cinematic sound | a cinematic's own audio track | done | `games/shooters_edge/client/cinematic.cpp` |

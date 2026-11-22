@@ -365,7 +365,7 @@ int run_main(int argc, char** argv) {
                                   .no_glow = &picture.no_glow,
                                   .q2fx = &picture.q2fx,
                                   .chat = &remote.ignore.chat,
-                                  .auto_chat = &con_view.game_chat,
+                                  .console_view = &con_view,
                                   .music = &music,
                                   .console = &con_look};
   cl::add_game_cvars(console, game_cvars, started_game, bindings);
@@ -1574,6 +1574,7 @@ int run_main(int argc, char** argv) {
       if (std::exchange(playback.jumped, false)) con_view.clear_notify();  // as a jump does
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
+      cl::demo_music(music, ds);  // the track its server names
       place_seen.on = !ds.map.empty();
       place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
       place_seen.angles = ds.angles;

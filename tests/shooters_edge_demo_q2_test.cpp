@@ -2,9 +2,10 @@
 // window plays: the map off the settings strings, the eye off the player's state, the players by
 // slot and the other entities by number, each a delta from the frame before; sounds, prints and
 // effects for their frame alone; a cut recording ending at its last whole block, damage refused
-// with its place, each game's adapter opening only its own recordings, a recording packed as a
-// replay file version 2 read the same, and an extended recording (protocol 3436: the longer
-// settings lists, wide entity numbers and models, int23 points, alpha and scale, 64 stats, fog).
+// with its place, a stuffed command before the server data, each game's adapter opening only its
+// own recordings, a recording packed as a replay file version 2 read the same, and an extended
+// recording (protocol 3436: the longer settings lists, wide entity numbers and models, int23
+// points, alpha and scale, 64 stats, fog).
 //
 // ge:summary Test: Quake II's .dm2 recording read frame by frame into the demo state
 // ge:keywords test q2 dm2 demo playback frame delta configstring adapter replay-v2
@@ -77,6 +78,28 @@ TEST(a_q2_recording_plays_frame_by_frame) {
   int things = 0;
   for (size_t n = 33; n < s.entities.size(); n++) things += s.entities[n].present ? 1 : 0;
   CHECK(things > 4);
+}
+
+TEST(a_recording_with_a_stuffed_command_before_its_server_data_plays) {
+  // A recording tool can put a short block first (a stuffed "hand 3"): the server data follows.
+  const std::vector<uint8_t> plain = cl::q2_fixture(4, 7);
+  const std::string cmd = "hand 3\n";
+  std::vector<uint8_t> file = {static_cast<uint8_t>(cmd.size() + 2), 0, 0, 0, 11};
+  file.insert(file.end(), cmd.begin(), cmd.end());
+  file.push_back(0);
+  file.insert(file.end(), plain.begin(), plain.end());
+  CHECK(cl::is_q2_demo(file));
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(file, d, error), error);
+  cl::DemoRead end{};
+  const Read r = read_all(d, end, error);
+  CHECK_MSG(end == cl::DemoRead::end, error);
+  CHECK(r.frames == 40);
+  CHECK(d.state.map == "yard");
+  // A block that is not whole before the server data is no recording.
+  std::vector<uint8_t> cut(file.begin(), file.begin() + 6);
+  CHECK(!cl::is_q2_demo(cut));
 }
 
 TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
@@ -262,4 +285,12 @@ TEST(an_extended_entity_past_the_limit_is_refused_with_its_place) {
   CHECK_MSG(
       error.find("entity 9000") != std::string::npos && error.find("8191") != std::string::npos,
       error);
+}
+
+TEST(the_music_a_q2_server_names_is_a_track_number_or_none) {
+  CHECK(cl::q2_music_track("", 5) == 0);  // empty: the music stops
+  CHECK(cl::q2_music_track("0", 5) == 0);
+  CHECK(cl::q2_music_track("7", -1) == 7);
+  CHECK(cl::q2_music_track("ambient", 7) == 7);  // a file's name: not played, the last kept
+  CHECK(cl::q2_music_track("100", 3) == 3);
 }

@@ -1,14 +1,17 @@
 // engine/net/http_fetch.hpp: a GET against a loopback server that answers with canned replies
 // (a body by length, by chunks and to the close; a redirect; a 404; too many redirects; a stall;
-// a partial body), the URL read and escaped, the status words, and https refused at once. A
-// machine with no loopback socket (a sandbox) skips the served cases.
+// a partial body), the URL read and escaped, the status words; https against a loopback TLS
+// server on a certificate made on the spot (trusted, not trusted, not checked, and through a
+// proxy's tunnel). A machine with no loopback socket (a sandbox) skips the served cases.
 //
 // ge:summary Test: HTTP GET over loopback: lengths, chunks, redirects, 404, failures, URLs
-// ge:keywords test net http http-get fetch chunked redirect url_escape loopback
+// ge:keywords test net http http-get fetch chunked redirect url_escape loopback https tls connect
 // ge:skill net testing
 #include "net/http_fetch.hpp"
 
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "check.hpp"
@@ -80,6 +83,67 @@ void close(Server& s) {
   tcp_close_listener(s.listener);
 }
 
+// A TLS server on loopback answering every request with `reply`; with `proxy` set, each
+// connection first asks for a tunnel (`CONNECT`), answered before the TLS starts.
+struct TlsServer {
+  TcpListener listener;
+  std::string cert, key, reply;
+  bool proxy = false;
+  struct Conn {
+    TcpStream tcp;
+    std::shared_ptr<TlsStream> tls;
+    std::string head, plain;
+    bool answered = false;
+  };
+  std::vector<Conn> conns;
+};
+
+void serve(TlsServer& s) {
+  for (TcpStream in; tcp_accept(s.listener, in); in = {}) {
+    TlsServer::Conn c;
+    c.tcp = in;
+    if (!s.proxy) c.tls = tls_server(s.cert, s.key, nullptr);
+    s.conns.push_back(std::move(c));
+  }
+  for (TlsServer::Conn& c : s.conns) {
+    if (c.tcp.handle == -1) continue;
+    tcp_pump(c.tcp);
+    std::vector<uint8_t> wire;
+    tcp_take_bytes(c.tcp, wire);
+    if (!c.tls) {
+      c.head.append(wire.begin(), wire.end());
+      wire.clear();
+      if (c.head.find("\r\n\r\n") == std::string::npos) continue;
+      const std::string ok = "HTTP/1.1 200 Connection established\r\n\r\n";
+      tcp_send_bytes(c.tcp, reinterpret_cast<const uint8_t*>(ok.data()), ok.size());
+      c.tls = tls_server(s.cert, s.key, nullptr);
+    }
+    tls_put_wire(*c.tls, wire.data(), wire.size());
+    std::vector<uint8_t> plain;
+    tls_step(*c.tls, plain);
+    c.plain.append(plain.begin(), plain.end());
+    if (!c.answered && c.plain.find("\r\n\r\n") != std::string::npos) {
+      c.answered = true;
+      tls_write(*c.tls, reinterpret_cast<const uint8_t*>(s.reply.data()), s.reply.size());
+      tls_step(*c.tls, plain);
+    }
+    wire.clear();
+    tls_take_wire(*c.tls, wire);
+    tcp_send_bytes(c.tcp, wire.data(), wire.size());
+    for (int k = 0; k < 100000 && !c.tcp.out.empty(); ++k) tcp_pump(c.tcp);
+    if (c.answered && c.tcp.out.empty()) tcp_close(c.tcp);
+  }
+}
+
+bool run(HttpFetch& f, TlsServer& s, double& now, int spins = 200000) {
+  for (int i = 0; i < spins; ++i) {
+    serve(s);
+    now += 0.001;
+    if (http_step(f, now)) return true;
+  }
+  return false;
+}
+
 }  // namespace
 
 TEST(http_url_read_escape_and_status_words) {
@@ -101,8 +165,8 @@ TEST(http_url_read_escape_and_status_words) {
 
 TEST(http_refuses_what_it_cannot_fetch_at_once) {
   HttpFetch f;
-  http_start(f, "https://example.org/x", {}, 0);
-  CHECK(f.state == HttpState::failed && f.error == "Unsupported protocol");
+  http_start(f, "ftp://example.org/x", {}, 0);
+  CHECK(f.state == HttpState::failed);
   CHECK(http_step(f, 0));
   http_start(f, "not a url", {}, 0);
   CHECK(f.state == HttpState::failed);
@@ -226,4 +290,60 @@ TEST(http_two_at_once) {
   CHECK_MSG(a.state == HttpState::done, a.error);
   CHECK_MSG(b.state == HttpState::done, b.error);
   close(s);
+}
+
+TEST(https_trusted_untrusted_unchecked_and_through_a_proxy) {
+  TlsServer s;
+  std::string err;
+  if (!tcp_listen(s.listener, loopback_v4(0), &err)) {
+    ge::test::skip("no loopback TCP socket here: " + err);
+    return;
+  }
+  std::string other, other_key;
+  CHECK(tls_self_signed("localhost", s.cert, s.key));
+  CHECK(tls_self_signed("localhost", other, other_key));
+  s.reply = "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecret";
+  const std::string port = std::to_string(s.listener.local.port);
+  double now = 0;
+  HttpFetch f;
+  HttpOptions o;
+  o.ca_pem = s.cert;
+  http_start(f, "https://localhost:" + port + "/baseq2/maps/a.bsp", o, now);
+  CHECK(run(f, s, now));
+  CHECK_MSG(f.state == HttpState::done, f.error);
+  CHECK(f.status == 200 && text(f.body) == "secret");
+  CHECK(s.conns[0].plain.rfind("GET /baseq2/maps/a.bsp HTTP/1.1\r\nHost: localhost:" + port, 0) ==
+        0);
+
+  o.ca_pem = other;  // a certificate it does not trust
+  http_start(f, "https://localhost:" + port + "/a", o, now);
+  CHECK(run(f, s, now));
+  CHECK(f.state == HttpState::failed);
+  CHECK(f.error == "SSL peer certificate or SSH remote key was not OK");
+
+  HttpOptions insecure;  // nothing checked: the name is not the certificate's either
+  insecure.verify = false;
+  http_start(f, "https://127.0.0.1:" + port + "/a", insecure, now);
+  CHECK(run(f, s, now));
+  CHECK_MSG(f.state == HttpState::done, f.error);
+  CHECK(text(f.body) == "secret");
+
+  TlsServer p;  // a proxy that opens a tunnel, the TLS server behind it
+  if (!tcp_listen(p.listener, loopback_v4(0), &err)) return;
+  p.cert = s.cert;
+  p.key = s.key;
+  p.reply = s.reply;
+  p.proxy = true;
+  o.ca_pem = s.cert;
+  o.proxy = "127.0.0.1:" + std::to_string(p.listener.local.port);
+  http_start(f, "https://localhost/raw/a.bsp", o, now);
+  CHECK(run(f, p, now));
+  CHECK_MSG(f.state == HttpState::done, f.error);
+  CHECK(text(f.body) == "secret");
+  CHECK(p.conns[0].head.rfind("CONNECT localhost:443 HTTP/1.1\r\n", 0) == 0);
+  CHECK(p.conns[0].plain.rfind("GET /raw/a.bsp HTTP/1.1\r\nHost: localhost\r\n", 0) == 0);
+  for (TlsServer* t : {&s, &p}) {
+    for (TlsServer::Conn& c : t->conns) tcp_close(c.tcp);
+    tcp_close_listener(t->listener);
+  }
 }

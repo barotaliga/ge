@@ -1,13 +1,14 @@
-// games/shooters_edge/net/q2_http.hpp: Quake II's downloads over HTTP. The size words, the
-// server's `dlserver` word, the address turned on or refused at connect, and against a loopback
+// plugins/classic/content/web_downloads.hpp: a classic game's downloads from a web address. The
+// size words, a GitHub repository read as its raw files' address, the server's `dlserver` word,
+// the address turned on or refused at connect, and against a loopback
 // web server: files fetched and said, a file list followed (packs first, bad lines said), a 404
 // from the server's address leaving the file lacking, and a failure that turns HTTP off handing
 // the files back to the game's channel. A machine with no loopback socket skips the served cases.
 //
-// ge:summary Test: Quake II's HTTP downloads: dlserver, sizes, file lists, 404, fall back to UDP
-// ge:keywords test q2-http dlserver filelist http-download fallback
-// ge:skill net shooter testing
-#include "shooters_edge/net/q2_http.hpp"
+// ge:summary Test: web downloads: GitHub, dlserver, sizes, file lists, 404, fall back to UDP
+// ge:keywords test web-downloads dlserver filelist http-download fallback github
+// ge:skill classic net testing
+#include "classic/content/web_downloads.hpp"
 
 #include <map>
 #include <string>
@@ -16,7 +17,7 @@
 #include "check.hpp"
 #include "net/tcp_socket.hpp"
 
-using namespace shooters_edge::net;
+using namespace ge::classic::content;
 namespace gn = ge::net;
 
 namespace {
@@ -43,6 +44,13 @@ void serve(Web& w) {
     gn::tcp_take_bytes(t, got);
     w.requests[i].append(got.begin(), got.end());
     const std::string& r = w.requests[i];
+    if (!r.empty() && r[0] == '\x16') {  // a TLS hello: this server speaks plain HTTP alone
+      const std::string no = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+      gn::tcp_send_bytes(t, reinterpret_cast<const uint8_t*>(no.data()), no.size());
+      for (int k = 0; k < 100000 && !t.out.empty(); ++k) gn::tcp_pump(t);
+      gn::tcp_close(t);
+      continue;
+    }
     if (r.find("\r\n\r\n") == std::string::npos) continue;
     const size_t sp = r.find(' ');
     const std::string path = r.substr(sp + 1, r.find(' ', sp + 1) - sp - 1);
@@ -73,14 +81,14 @@ std::string base_of(const Web& w) {
 }
 
 // Steps `h` until it is idle, gathering what it finished.
-void run(Q2Http& h, const Q2HttpConfig& cfg, Web& w, Q2HttpDone& all,
+void run(WebDownloads& h, const WebConfig& cfg, Web& w, WebDone& all,
          const std::function<bool(const std::string&, bool)>& wanted) {
   double now = 0;
-  for (int i = 0; i < 400000 && q2_http_busy(h); ++i) {
+  for (int i = 0; i < 400000 && web_busy(h); ++i) {
     serve(w);
     now += 0.0001;
-    Q2HttpDone d;
-    q2_http_step(h, cfg, now, wanted, d);
+    WebDone d;
+    web_step(h, cfg, now, wanted, d);
     for (auto& f : d.files) all.files.push_back(std::move(f));
     for (auto& b : d.back) all.back.push_back(std::move(b));
   }
@@ -94,47 +102,91 @@ bool has(const std::vector<std::string>& lines, const std::string& prefix) {
 
 }  // namespace
 
-TEST(q2_http_size_words) {
-  CHECK(q2_size_text(-1) == "unknown size");
-  CHECK(q2_size_text(0) == "0 bytes");
-  CHECK(q2_size_text(1) == "1 byte");
-  CHECK(q2_size_text(999) == "999 bytes");
-  CHECK(q2_size_text(1000) == "1 kB");
-  CHECK(q2_size_text(340500) == "340 kB");
-  CHECK(q2_size_text(1500000) == "1.5 MB");
-  CHECK(q2_size_text(34900000) == "34 MB");
-  CHECK(q2_size_text(1200000000) == "1.2 GB");
+TEST(web_size_words) {
+  CHECK(web_size_text(-1) == "unknown size");
+  CHECK(web_size_text(0) == "0 bytes");
+  CHECK(web_size_text(1) == "1 byte");
+  CHECK(web_size_text(999) == "999 bytes");
+  CHECK(web_size_text(1000) == "1 kB");
+  CHECK(web_size_text(340500) == "340 kB");
+  CHECK(web_size_text(1500000) == "1.5 MB");
+  CHECK(web_size_text(34900000) == "34 MB");
+  CHECK(web_size_text(1200000000) == "1.2 GB");
 }
 
-TEST(q2_http_address_at_connect) {
-  CHECK(q2_http_dlserver({"client_connect", "dlserver=http://a/", "dlserver=http://b/",
-                          "map=q2dm1"}) == "http://a/");
-  CHECK(q2_http_dlserver({"client_connect", "map=q2dm1"}).empty());
-  Q2Http h;
-  Q2HttpConfig cfg;
-  q2_http_connect(h, cfg, "http://dl.example/q2/", 1, "10.0.0.1:27910");
+TEST(web_github_repositories_read_as_raw_files) {
+  CHECK(web_base("github:quakers/maps") == "https://raw.githubusercontent.com/quakers/maps/HEAD/");
+  CHECK(web_base("github:quakers/maps@v2/q2") ==
+        "https://raw.githubusercontent.com/quakers/maps/v2/q2/");
+  CHECK(web_base("https://github.com/quakers/maps") ==
+        "https://raw.githubusercontent.com/quakers/maps/HEAD/");
+  CHECK(web_base("https://github.com/quakers/maps.git/") ==
+        "https://raw.githubusercontent.com/quakers/maps/HEAD/");
+  CHECK(web_base("https://github.com/quakers/maps/tree/main/files/q2") ==
+        "https://raw.githubusercontent.com/quakers/maps/main/files/q2/");
+  CHECK(web_base("http://dl.example/q2/") == "http://dl.example/q2/");
+  CHECK(web_base("github:alone") == "github:alone");
+  {
+    // The game folder is added to every path; a folder that names it is read as its parent.
+    WebConfig qw;
+    qw.gamedir = "qw";
+    WebDownloads h;
+    web_connect(h, qw, "github:quakers/maps/quakeworld", 1, "s");
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/HEAD/quakeworld/");
+    web_connect(h, qw, "github:quakers/maps/quakeworld/QW", 1, "s");
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/HEAD/quakeworld/");
+    web_connect(h, qw, "github:quakers/maps/qw", 1, "s");
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/HEAD/");
+    web_connect(h, qw, "github:quakers/maps@qw", 1, "s");  // a branch named qw stays
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/qw/");
+    web_connect(h, qw, "http://dl.example/qw/", 1, "s");  // a server's own address stays as named
+    CHECK(h.base == "http://dl.example/qw/");
+    CHECK(!h.game_in_base);
+    // Set by hand, for a repository laid out otherwise: the game folder not added again.
+    web_connect(h, qw, "github:quakers/maps/{game}/files", 1, "s");
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/HEAD/qw/files/");
+    CHECK(h.game_in_base);
+    web_connect(h, qw, "github:quakers/maps/odd/place#", 1, "s");
+    CHECK(h.base == "https://raw.githubusercontent.com/quakers/maps/HEAD/odd/place/");
+    CHECK(h.game_in_base);
+  }
+  WebDownloads h;
+  web_connect(h, {}, "github:quakers/maps@main", 1, "s");
+  CHECK(h.on && h.base == "https://raw.githubusercontent.com/quakers/maps/main/");
+  CHECK(h.said.size() == 1 &&
+        h.said[0] ==
+            "[HTTP] Download server at https://raw.githubusercontent.com/quakers/maps/main/");
+}
+
+TEST(web_address_at_connect) {
+  CHECK(web_dlserver({"client_connect", "dlserver=http://a/", "dlserver=http://b/", "map=q2dm1"}) ==
+        "http://a/");
+  CHECK(web_dlserver({"client_connect", "map=q2dm1"}).empty());
+  WebDownloads h;
+  WebConfig cfg;
+  web_connect(h, cfg, "http://dl.example/q2/", 1, "10.0.0.1:27910");
   CHECK(h.on && !h.default_repo && h.base == "http://dl.example/q2/");
   CHECK(h.referer == "quake2://10.0.0.1:27910");
   CHECK(h.said.size() == 1 && h.said[0] == "[HTTP] Download server at http://dl.example/q2/");
-  q2_http_connect(h, cfg, "ftp://x/", 1, "s");
+  web_connect(h, cfg, "ftp://x/", 1, "s");
   CHECK(!h.on && h.said.size() == 1 &&
         h.said[0] == "[HTTP] Ignoring download server URL with non-HTTP schema.");
-  q2_http_connect(h, cfg, "http://" + std::string(600, 'a'), 1, "s");
+  web_connect(h, cfg, "http://" + std::string(600, 'a'), 1, "s");
   CHECK(!h.on && h.said[0] == "[HTTP] Ignoring oversize download server URL.");
-  q2_http_connect(h, cfg, "http://dl.example/", -1, "s");  // allow_download -1
+  web_connect(h, cfg, "http://dl.example/", -1, "s");  // allow_download -1
   CHECK(!h.on && h.said.empty());
-  q2_http_connect(h, cfg, "", 1, "s");  // none named and no repository of your own
+  web_connect(h, cfg, "", 1, "s");  // none named and no repository of your own
   CHECK(!h.on && h.said.empty());
   cfg.default_url = "http://mine.example/";
-  q2_http_connect(h, cfg, "", 1, "s");
+  web_connect(h, cfg, "", 1, "s");
   CHECK(h.on && h.default_repo && h.base == "http://mine.example/");
-  CHECK(!q2_http_queue(h, cfg, "maps/a.bsp"));  // your own: the server is not told
+  CHECK(!web_queue(h, cfg, "maps/a.bsp"));  // your own: the server is not told
   cfg.downloads = false;
-  q2_http_connect(h, cfg, "http://dl.example/", 1, "s");
+  web_connect(h, cfg, "http://dl.example/", 1, "s");
   CHECK(!h.on);
 }
 
-TEST(q2_http_files_and_file_lists) {
+TEST(web_files_and_file_lists) {
   Web w;
   if (!open(w)) return;
   w.files["/q2/baseq2/maps/q2dm1.bsp"] = std::string(1500, 'm');
@@ -145,14 +197,14 @@ TEST(q2_http_files_and_file_lists) {
   w.files["/q2/baseq2/sound/own.wav"] = "wav";
   w.files["/q2/baseq2/big.pak"] = "PACK";
   w.files["/q2/baseq2/textures/e1/wall.wal"] = "wal";
-  Q2Http h;
-  Q2HttpConfig cfg;
+  WebDownloads h;
+  WebConfig cfg;
   cfg.user_agent = "test-agent";
-  q2_http_connect(h, cfg, base_of(w), 1, "127.0.0.1:27910");
-  CHECK(q2_http_queue(h, cfg, "maps/q2dm1.bsp"));  // the first file tells the server
-  CHECK(!q2_http_queue(h, cfg, "players/male/tris.md2"));
+  web_connect(h, cfg, base_of(w), 1, "127.0.0.1:27910");
+  CHECK(web_queue(h, cfg, "maps/q2dm1.bsp"));  // the first file tells the server
+  CHECK(!web_queue(h, cfg, "players/male/tris.md2"));
   std::vector<std::pair<std::string, bool>> checked;
-  Q2HttpDone all;
+  WebDone all;
   run(h, cfg, w, all, [&checked](const std::string& path, bool game_only) {
     checked.emplace_back(path, game_only);
     return true;
@@ -191,33 +243,34 @@ TEST(q2_http_files_and_file_lists) {
   gn::tcp_close_listener(w.listener);
 }
 
-TEST(q2_http_falls_back_to_the_channel) {
+TEST(web_falls_back_to_the_channel) {
   Web w;
   if (!open(w)) return;
   // The player's own repository lacks the map: a 404 there turns HTTP off, every file handed back.
-  Q2Http h;
-  Q2HttpConfig cfg;
+  WebDownloads h;
+  WebConfig cfg;
   cfg.filelists = false;
   cfg.max_connections = 1;
   cfg.default_url = base_of(w);
-  q2_http_connect(h, cfg, "", 1, "s");
+  web_connect(h, cfg, "", 1, "s");
   CHECK(h.on && h.default_repo);
-  CHECK(!q2_http_queue(h, cfg, "maps/q2dm9.bsp"));
-  q2_http_queue(h, cfg, "sound/a.wav");
-  q2_http_queue(h, cfg, "sound/b.wav");
-  Q2HttpDone all;
+  CHECK(!web_queue(h, cfg, "maps/q2dm9.bsp"));
+  web_queue(h, cfg, "sound/a.wav");
+  web_queue(h, cfg, "sound/b.wav");
+  WebDone all;
   run(h, cfg, w, all, [](const std::string&, bool) { return true; });
   CHECK(!h.on && all.files.empty());
   CHECK(all.back == (std::vector<std::string>{"maps/q2dm9.bsp", "sound/a.wav", "sound/b.wav"}));
   CHECK(has(h.said, "[HTTP] maps/q2dm9.bsp [404 Not Found] [2 remaining files]"));
-  // A secure address cannot be fetched here: off at the first file, the file handed back.
-  Q2Http s;
-  q2_http_connect(s, cfg, "https://secure.example/", 1, "s");
-  q2_http_queue(s, cfg, "maps/q2dm1.bsp");
-  Q2HttpDone back;
+  // A secure address whose server speaks no TLS: off at the first file, the file handed back.
+  WebDownloads s;
+  web_connect(s, cfg, "https://127.0.0.1:" + std::to_string(w.listener.local.port) + "/q2/", 1,
+              "s");
+  web_queue(s, cfg, "maps/q2dm1.bsp");
+  WebDone back;
   run(s, cfg, w, back, [](const std::string&, bool) { return true; });
   CHECK(!s.on && back.back == std::vector<std::string>{"maps/q2dm1.bsp"});
-  CHECK(has(s.said, "[HTTP] maps/q2dm1.bsp [Unsupported protocol]"));
+  CHECK(has(s.said, "[HTTP] maps/q2dm1.bsp [SSL connect error]"));
   for (gn::TcpStream& t : w.streams) gn::tcp_close(t);
   gn::tcp_close_listener(w.listener);
 }

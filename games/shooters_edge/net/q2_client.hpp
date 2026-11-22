@@ -32,13 +32,13 @@
 #include <string>
 #include <vector>
 
+#include "classic/content/web_downloads.hpp"
 #include "classic/protocol/stuff_filter.hpp"
 #include "forward/forward.hpp"
 #include "net/transport.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_downloads.hpp"
-#include "shooters_edge/net/q2_http.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/qw_client.hpp"
 #include "vfs/partial.hpp"
@@ -82,9 +82,10 @@ struct Q2ClientConfig {
   // info, so our server tells each file's archive.
   bool fetch = false;
   bool ask_origins = true;
-  // HTTP (q2_http.hpp): with a web address from the server (`dlserver=`) or the player's own, the
-  // files lacked are fetched from it first, the channel taking those HTTP gives back.
-  Q2HttpConfig http;
+  // HTTP (classic/content/web_downloads.hpp): with a web address from the server (`dlserver=`) or
+  // the player's own, the files lacked are fetched from it first, the channel taking those HTTP
+  // gives back.
+  ge::classic::content::WebConfig http;
   // With `fetch_level` on (the window's), every model, sound and player figure the level names
   // that `read_file` lacks is fetched too, as a player's client fetches them.
   bool fetch_level = false;
@@ -201,10 +202,10 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::string held_begin;
   std::map<std::string, std::vector<uint8_t>> downloaded;
   int downloads_refused = 0;
-  // The HTTP downloads (q2_http.hpp). `http.said` holds every download's line for the player,
-  // over HTTP and over the channel ("[UDP] maps/q2dm1.bsp [DONE] [2 remaining files]"; [FAIL] a
-  // file refused, [STOP] one cut off part way).
-  Q2Http http;
+  // The HTTP downloads (classic/content/web_downloads.hpp). `http.said` holds every download's line
+  // for the player, over HTTP and over the channel ("[UDP] maps/q2dm1.bsp [DONE] [2 remaining
+  // files]"; [FAIL] a file refused, [STOP] one cut off part way).
+  ge::classic::content::WebDownloads http;
 
   Q2Cmd cmds[3];  // the three newest, oldest first
   // Every move sent, by its packet's outgoing sequence (its low 6 bits), as the player's hands made

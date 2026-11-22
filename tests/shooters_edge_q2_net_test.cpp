@@ -29,6 +29,7 @@
 #include "net/sim_network.hpp"
 #include "net/tcp_socket.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_game.hpp"
@@ -42,6 +43,7 @@
 #include "vfs/pak.hpp"
 #include "vfs/partial.hpp"
 #include "vfs/search.hpp"
+#include "vfs/unpack.hpp"
 
 namespace {
 
@@ -765,6 +767,15 @@ TEST(the_window_joins_a_server_of_q2_and_plays) {
   CHECK(cn::q2_net_clients(r->server) == 0);
 }
 
+TEST(a_q2_recording_s_size_is_said_in_decimal_units) {
+  CHECK(cl::q2_demo_size(1) == "1 byte");
+  CHECK(cl::q2_demo_size(999) == "999 bytes");
+  CHECK(cl::q2_demo_size(12345) == "12 kB");
+  CHECK(cl::q2_demo_size(1250000) == "1.2 MB");
+  CHECK(cl::q2_demo_size(45600000) == "45 MB");
+  CHECK(cl::q2_demo_size(2500000000) == "2.5 GB");
+}
+
 TEST(a_recording_of_a_q2_server_joined_late_plays_from_its_server_data) {
   // Recording begun well into the level still opens with the level's server data (the client
   // keeps the level from its start), and the file ends with Quake II's end block (length -1).
@@ -795,7 +806,24 @@ TEST(a_recording_of_a_q2_server_joined_late_plays_from_its_server_data) {
   steps(60);
   ge::console::Console con{false};
   const std::string line = cn::remote_record_close(remote, con, 0);
-  CHECK_MSG(line.starts_with("Recorded "), line);
+  CHECK_MSG(
+      line.starts_with("Stopped demo (") && line.ends_with(").") && !line.ends_with("(0 bytes)."),
+      line);
+  // The same through gzip (`record -z`): the file a gzip stream of the same kind of recording.
+  const std::filesystem::path packed = file.string() + ".gz";
+  CHECK_MSG(cn::remote_record_open(remote, packed, error), error);
+  steps(30);
+  CHECK(cn::remote_record_close(remote, con, 0).starts_with("Stopped demo ("));
+  {
+    std::ifstream zin(packed, std::ios::binary);
+    std::vector<uint8_t> zbytes((std::istreambuf_iterator<char>(zin)), {});
+    zin.close();
+    std::filesystem::remove(packed);
+    CHECK(ge::vfs::wrapping_of(zbytes) == ge::vfs::Wrapping::gzip);
+    ge::vfs::Unpacked plain;
+    CHECK_MSG(ge::vfs::unpack_one(zbytes, plain, error), error);
+    CHECK(plain.bytes.size() > 8 && plain.bytes.back() == 0xff);
+  }
   std::ifstream in(file, std::ios::binary);
   std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), {});
   in.close();
