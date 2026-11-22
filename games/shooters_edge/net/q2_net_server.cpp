@@ -492,6 +492,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   c.told_back = (ext & kGeItemBack) != 0;
   c.told_voice = s.cfg.voice && (ext & kGeVoice) != 0;
   c.told_frames = (ext & kGeEveryFrame) != 0;
+  c.told_hits = (ext & kGeHitReports) != 0;
   c.userid = s.next_userid++;
   c.spectator = spectator;
   c.rate = rate_of(s, userinfo, from);
@@ -628,6 +629,7 @@ void start_signon(Q2NetServer& s, int slot) {
   opt.attract_loop = 0;
   opt.protocol = c.protocol;
   opt.minor = c.minor;
+  opt.hit_reports = c.told_hits;  // our own client draws the hit marker from it
   if (s.native != nullptr)
     sv::q2_signon_raw(c.wire, s.native->raw, slot, opt, c.signon);
   else

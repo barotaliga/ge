@@ -1607,6 +1607,11 @@ int run_main(int argc, char** argv) {
           if (!end_bench("the demo's map " + ds.map + ": " + error, t)) return 1;
           continue;
         }
+        if (std::string v = cl::q2_map_version(ds.map_checksum, bench_map->file, drawn_remote);
+            !v.empty()) {  // a server's other map drops the game; a recording's plays on
+          console.print(v);
+          if (drawn_remote) console.append("disconnect");
+        }
         if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from)) return 1;
         demo_world = true;
         demo_level_t = t;

@@ -486,8 +486,7 @@ void clock_think(Q2Server& s, int i) {
   if (e.aim < 0) {
     for (size_t t = 0; t < s.entities.size() && e.aim < 0; t++)
       if (s.entities[t].targetname == e.target) e.aim = static_cast<int>(t);
-    if (e.aim < 0) {
-      s.console.push_back("A clock's target '" + e.target + "' is not on the map; it stops.");
+    if (e.aim < 0) {  // silently stopped
       e.on = false;
       return;
     }
@@ -643,12 +642,7 @@ bool targets_spawn(Q2Server& s, int i) {
     }
     case kKey:
       e.needs = sq_item(key(s, e, "item"));
-      if (e.needs < 0 || e.target.empty()) {
-        s.console.push_back("A key lock at " + std::to_string(int(e.origin.x)) + " " +
-                            std::to_string(int(e.origin.y)) +
-                            " has no item it knows or no target; it does nothing.");
-        e.gone = true;
-      }
+      if (e.needs < 0 || e.target.empty()) e.gone = true;  // said at load (q2_lines.cpp)
       add_sound(s, "misc/keytry.wav");
       add_sound(s, "misc/keyuse.wav");
       e.touched_at = -100;
@@ -662,10 +656,7 @@ bool targets_spawn(Q2Server& s, int i) {
       if (e.angles.y == 0) e.angles.y = 360;
       return true;
     case kGravity:
-      if (key(s, e, "gravity").empty()) {
-        s.console.push_back("A gravity trigger has no gravity; it is left out.");
-        e.gone = true;
-      }
+      if (key(s, e, "gravity").empty()) e.gone = true;  // said at load (q2_lines.cpp)
       e.random = static_cast<float>(std::atoi(key(s, e, "gravity").c_str()));  // whole numbers
       return true;
     case kTempEntity:
@@ -732,12 +723,8 @@ bool targets_spawn(Q2Server& s, int i) {
         return true;
       }
       if (e.message.size() != 2 || e.message[0] < 'a' || e.message[0] > 'z' || e.message[1] < 'a' ||
-          e.message[1] > 'z' || e.message[0] == e.message[1] || e.speed <= 0) {
-        s.console.push_back(
-            "A light ramp has no two different letters or no time; it is left "
-            "out.");
-        e.gone = true;
-      }
+          e.message[1] > 'z' || e.message[0] == e.message[1] || e.speed <= 0)
+        e.gone = true;  // said at load (q2_lines.cpp)
       return true;
     case kConveyor:
       e.solid = true;
@@ -807,10 +794,7 @@ bool targets_spawn(Q2Server& s, int i) {
         gibs_part_model(s, gib_part(made));
         return true;
       }
-      if (sq_item(made) < 0)
-        s.console.push_back("A spawner makes '" + made +
-                            "', which is no monster or item it can make; it makes nothing.");
-      return true;
+      return true;  // a class it cannot make: it makes nothing
     }
     case kBomb:
       add_model(s, e, kBombModel);
@@ -832,9 +816,7 @@ bool targets_spawn(Q2Server& s, int i) {
       e.open = e.angles;  // where it aims
       e.until = s.level_time + kStep;
       e.count = -1;  // its driver
-      if (e.target.empty())
-        s.console.push_back("A turret's breach has no muzzle marker; it fires from its middle.");
-      return true;
+      return true;   // with no target, said a frame on and firing from its middle
     }
     case kTurretBase:
       e.solid = true;
@@ -1113,7 +1095,8 @@ void targets_frame(Q2Server& s) {
             for (size_t t = 0; t < s.entities.size(); t++)
               if (s.entities[t].targetname == e.target) e.aim = static_cast<int>(t);
             if (e.aim < 0)
-              s.console.push_back("A laser's target '" + e.target + "' is not on the map.");
+              s.console.push_back(e.classname + " at " + q2_pos(e.origin) + ": " + e.target +
+                                  " is a bad target");
           }
           e.dir = way_of(e);
           if ((e.spawnflags & 1) != 0) {

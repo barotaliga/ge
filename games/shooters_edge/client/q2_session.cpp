@@ -9,12 +9,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <utility>
 
 #include "brush/map.hpp"
 #include "shooter/hull.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 
 namespace shooters_edge::client {
 
@@ -175,6 +177,15 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
          &s.warn_fps);
   s.state = -1;
   s.fps_seen = 0;
+}
+
+std::string q2_map_version(std::string_view stated, std::span<const uint8_t> file, bool server) {
+  if (stated.empty() || file.empty()) return {};
+  const int32_t ours = shooters_edge::server::q2_map_checksum(file);
+  const std::string theirs(stated);
+  if (static_cast<int32_t>(std::strtoll(theirs.c_str(), nullptr, 10)) == ours) return {};
+  return std::string("Local map version differs from ") + (server ? "server: " : "demo: ") +
+         std::to_string(ours) + " != " + theirs;
 }
 
 int q2_fps_rounded(int fps) {

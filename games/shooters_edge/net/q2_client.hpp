@@ -108,6 +108,9 @@ struct Q2ClientConfig {
   // `ask_back`: asks our server for the items taken and when each comes back (`*ge_ext` bit 512),
   // so the window draws one coming back ahead of time (classicenhance/hologram.hpp).
   bool ask_back = false;
+  // `ask_hits`: asks our server for the damage the player dealt (`*ge_ext` bit 1024), the hit
+  // marker's (`cl_hit_markers`); a stock client is sent none of it.
+  bool ask_hits = false;
   // `cl_nodelta`: no frame is ever acknowledged, so the server sends each one whole (more bytes,
   // nothing lost to a dropped packet's delta); a server that forbids it (`sv_allow_nodelta 0`)
   // may refuse.

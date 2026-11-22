@@ -79,6 +79,7 @@ struct Want {
   float yaw = 0, forward = 0, side = 0;  // degrees; shares of maxspeed
   float pitch = 0;                       // the view's pitch, down positive (not on the hands)
   bool jump = false, attack = false;
+  bool duck = false;  // held down (a crawlway's scripted way)
 };
 
 // A leap off the ground at its start: a jump, or a rocket jump played the same way.

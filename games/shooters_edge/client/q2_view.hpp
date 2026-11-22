@@ -42,6 +42,11 @@ struct Q2Screen {
   int adjust_fov = 1;                 // cl_adjustfov: 1 the 4:3 view's height kept, 0 its width
   std::string uf;                     // uf: the user info flags (4 own fov, 32 recorded fov)
   bool kick_angles = true;            // cl_kickangles: the server's kick on the view
+  // The graph along the bottom (hud/bottom_graph.hpp): timegraph each frame's time in ms,
+  // debuggraph the graph drawn though nothing feeds it; graphheight, graphscale, graphshift.
+  bool time_graph = false, debug_graph = false;
+  int graph_height = 32;
+  double graph_scale = 1, graph_shift = 0;
 };
 
 // The field of view shown, degrees: the server's `sent` (0: none sent, the player's `own`); in a

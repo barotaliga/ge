@@ -1,7 +1,7 @@
 // The window's own settings (window_cvars.hpp).
 //
 // ge:summary The window's settings for any game: vid_fullscreen, vid_display, volume, s_auto_focus
-// ge:keywords add_window_cvars vid_displays follow_window_cvars window_style
+// ge:keywords add_window_cvars vid_displays follow_window_cvars window_style window_place_of
 // ge:skill platform console
 // ge:test tests/platform_window_cvars_test.cpp
 #include "platform/window_cvars.hpp"
@@ -69,6 +69,15 @@ void add_window_cvars(console::Console& con, WindowCvars& w) {
                       .kind = console::CvarKind::boolean,
                       .values = s.values},
                      s.field);
+  con.cvars().bind({.name = "vid_geometry",
+                    .fallback = "",
+                    .flags = console::kArchive,
+                    .help = "The window's size and place on the desktop.",
+                    .kind = console::CvarKind::text,
+                    .values = "\"\": as the game opens it (the default); WxH: that size; "
+                              "WxH+X+Y: that size, X and Y from the desktop's top left; +X+Y: "
+                              "that place alone"},
+                   &w.geometry);
   con.add_command("vid_displays", "list the displays vid_display numbers",
                   [](console::Console& c, const console::Args&) {
                     const std::vector<Display> all = displays();
@@ -77,6 +86,45 @@ void add_window_cvars(console::Console& con, WindowCvars& w) {
                       c.print(std::to_string(d.number) + ": " + d.name + ", " +
                               std::to_string(d.width_px) + "x" + std::to_string(d.height_px));
                   });
+}
+
+namespace {
+
+// A whole number with an optional sign at `text[i]`, `i` moved past it; false when none is there.
+bool take_int(std::string_view text, size_t& i, bool sign, int& out) {
+  bool minus = false;
+  if (sign) {
+    if (i >= text.size() || (text[i] != '+' && text[i] != '-')) return false;
+    minus = text[i++] == '-';
+  }
+  const size_t start = i;
+  long v = 0;
+  while (i < text.size() && text[i] >= '0' && text[i] <= '9' && v < 100000)
+    v = v * 10 + (text[i++] - '0');
+  if (i == start || (i < text.size() && text[i] >= '0' && text[i] <= '9')) return false;
+  out = static_cast<int>(minus ? -v : v);
+  return true;
+}
+
+}  // namespace
+
+bool window_place_of(std::string_view text, WindowPlace& out) {
+  WindowPlace p;
+  size_t i = 0;
+  if (!text.empty() && text[0] != '+' && text[0] != '-') {
+    if (!take_int(text, i, false, p.width) || i >= text.size() ||
+        (text[i] != 'x' && text[i] != 'X'))
+      return false;
+    ++i;
+    if (!take_int(text, i, false, p.height) || p.width <= 0 || p.height <= 0) return false;
+  }
+  if (i < text.size()) {
+    if (!take_int(text, i, true, p.x) || !take_int(text, i, true, p.y)) return false;
+    p.has_place = true;
+  }
+  if (i != text.size() || (p.width == 0 && !p.has_place)) return false;
+  out = p;
+  return true;
 }
 
 WindowStyle window_style(const WindowCvars& w) {
@@ -94,6 +142,11 @@ void follow_window_cvars(Window& window, WindowCvars& w) {
        want.resizable != w.style_applied.resizable)) {
     set_window_style(window, want);  // a refusal is said once: it is not asked again
     w.style_applied = want;
+  }
+  if (!w.fullscreen && w.geometry != w.geometry_applied) {
+    WindowPlace place;
+    if (window_place_of(w.geometry, place)) set_window_place(window, place);  // else left as it is
+    w.geometry_applied = w.geometry;
   }
 }
 

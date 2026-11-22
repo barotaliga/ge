@@ -431,6 +431,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
   w.step_for = kWayGiveUp_s;
   w.step = -1;
   w.calling = -1;
+  w.busy_at = -kWayForever;
   w.explore = -1;
   w.explore_since = 0;
   w.idle_since = -1;
@@ -628,6 +629,23 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       st.lo = {o.x - 16, o.y - 16, o.z};
       st.hi = {o.x + 16, o.y + 16, o.z + 32};
       st.node = node_in(g, st.lo, st.hi);
+      st.name = cn;
+      w.steps.push_back(st);
+      continue;
+    } else if (w.complete && target &&
+               (std::strncmp(cn, "weapon_", 7) == 0 || std::strncmp(cn, "ammo_", 5) == 0 ||
+                std::strncmp(cn, "item_", 5) == 0)) {
+      // (`complete`) A thing that fires its target when taken (base1's shotgun in the east wing:
+      // two soldiers come for it): walked over, like a trigger.
+      const char* org = sb::block_value(b, "origin");
+      if (!org) continue;
+      st.kind = WayKind::trigger;
+      st.target = target;
+      st.opens = opens(target, st.doors);
+      const sh::Vec3f o = origin_of(org);
+      st.lo = {o.x - 8, o.y - 8, o.z - 8};
+      st.hi = {o.x + 8, o.y + 8, o.z + 24};
+      st.node = node_in(g, {o.x - 16, o.y - 16, o.z}, {o.x + 16, o.y + 16, o.z + 32});
       st.name = cn;
       w.steps.push_back(st);
       continue;
@@ -938,6 +956,55 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     w.walls.push_back(e);
   }
+  // (`complete`) A trigger or a secret whose node the start does not reach (a strip at the foot of
+  // a ledge over water, its node on the ledge): a node he reaches that stands by its box instead.
+  if (w.complete) {
+    const int32_t start = sb::nav_nearest(g, s.sv.edicts[1].origin);
+    ge::ai::Search reach;
+    if (start >= 0) sb::nav_reach(g, start, reach);
+    for (WayStep& st : w.steps) {
+      if ((st.kind != WayKind::trigger && st.kind != WayKind::secret) || start < 0 ||
+          (st.node >= 0 && reach.reached(st.node)))
+        continue;
+      const sh::Vec3f mid = (st.lo + st.hi) * 0.5f, grow{kWayTouchBy, kWayTouchBy, kWayTouchBy};
+      int32_t best = -1;
+      float best_d = 0;
+      for (size_t n = 0; n < g.nodes.size(); n++) {
+        const sh::Vec3f o = g.nodes[n].origin;
+        if (!reach.reached(static_cast<int32_t>(n)) || !touches(o, st.lo - grow, st.hi + grow))
+          continue;
+        const float d = dist(o, mid);
+        if (best < 0 || d < best_d) {
+          best = static_cast<int32_t>(n);
+          best_d = d;
+        }
+      }
+      if (best < 0) continue;
+      st.node = best;
+      st.reach_in = true;
+    }
+    // One no node stands by, in a crawl's cell (a nook under a floor): crawled to from the end of
+    // that crawl he reaches, the nearest way.
+    for (WayStep& st : w.steps) {
+      if ((st.kind != WayKind::trigger && st.kind != WayKind::secret) || st.reach_in || start < 0 ||
+          (st.node >= 0 && touches(g.nodes[static_cast<size_t>(st.node)].origin, st.lo, st.hi)))
+        continue;
+      for (const MapCrawl& cr : nav.crawls) {
+        for (size_t c = 0; c < cr.cells.size(); c++) {
+          if (!touches(cr.cells[c].at, st.lo, st.hi)) continue;
+          for (const auto& [e, n] : cr.ends) {
+            if (!reach.reached(n)) continue;
+            std::vector<sh::Vec3f> way = crawl_path(cr, e, static_cast<int>(c));
+            if (!st.crawl.empty() && way.size() >= st.crawl.size()) continue;
+            st.crawl = std::move(way);
+            st.node = n;
+          }
+          break;
+        }
+      }
+      st.reach_in = !st.crawl.empty();
+    }
+  }
 }
 
 void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
@@ -1081,6 +1148,11 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         break;
     }
     if (st.done && !was_done) w.stats.steps_done++;
+    if (st.done && !was_done && !st.crawl.empty()) {  // back the way he crawled in
+      w.crawl_out.assign(st.crawl.rbegin(), st.crawl.rend());
+      if (st.node >= 0) w.crawl_out.push_back(g.nodes[static_cast<size_t>(st.node)].origin);
+      w.crawl_out_at = t;
+    }
   }
   // A waiting plat once moved runs for good: never locked again (where it stood is put out of
   // reach).
@@ -1255,8 +1327,17 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   for (size_t n = 0; n < g.nodes.size() && !strict_work && !w.complete; n++)
     strict_work = !w.seen[n] && w.search.reached(static_cast<int32_t>(n)) && !no_place(n) &&
                   round_trip(static_cast<int32_t>(n));
+  // A car's button (base1's: the car drops him to the exit) is a way out like the exit itself.
+  const auto carries = [&](const WayStep& st) {
+    if (st.kind != WayKind::button) return false;
+    for (const int d : st.doors)
+      for (const int c : w.cars)
+        if (c == d) return true;
+    return false;
+  };
   for (const WayStep& st : w.steps)
-    strict_work = strict_work || (!st.done && st.kind != WayKind::exit && t >= st.left_until &&
+    strict_work = strict_work || (!st.done && st.kind != WayKind::exit &&
+                                  !(w.complete && carries(st)) && t >= st.left_until &&
                                   st.node >= 0 && w.search.reached(st.node) && round_trip(st.node));
   const auto reach = [&](int32_t n) {
     return w.search.reached(n) && (!strict_work || round_trip(n));
@@ -1280,8 +1361,8 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // alive whose place is reached; the exit waits for all of them.
   for (WayStep& st : w.steps) st.ever = st.ever || st.done;
   const auto open_step = [&](const WayStep& st) {
-    return st.kind != WayKind::exit && !st.ever && t >= st.left_until && st.node >= 0 &&
-           reach(st.node);
+    return st.kind != WayKind::exit && !carries(st) && !st.ever && t >= st.left_until &&
+           st.node >= 0 && reach(st.node);
   };
   int prey = -1;
   std::vector<std::pair<int, int32_t>> preys;  // (`complete`) every monster reached: its node
@@ -1292,9 +1373,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (const WayStep& st : w.steps) left_to_do = left_to_do || open_step(st);
     for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
       const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
-      if (d.free || (d.flags & sh::kFlagMonster) == 0 || d.health <= 0 ||
-          d.solid == sh::kSolidNot || static_cast<size_t>(e) >= w.prey_left.size() ||
-          t < w.prey_left[static_cast<size_t>(e)])
+      // A monster: Quake's by its flag, Quake II's (no such flag in its view) by its live box.
+      const bool monster = (d.flags & sh::kFlagMonster) != 0 || d.solid == sh::kSolidSlidebox;
+      if (d.free || !monster || d.health <= 0 || d.solid == sh::kSolidNot ||
+          static_cast<size_t>(e) >= w.prey_left.size() || t < w.prey_left[static_cast<size_t>(e)])
         continue;
       // One only a blast puts down (a zombie) waits until he carries one: before that he stood
       // knocking e1m3's down again and again for the rest of the map.
@@ -1317,6 +1399,13 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         }
       }
       if (n < 0 || !reach(n)) continue;
+      // One in a trap (a pool he cannot climb out of) waits, as a step there does, until he is in
+      // it himself.
+      const auto trap_at = [&](int32_t x) {
+        return x >= 0 && static_cast<size_t>(x) < nav.trap.size() &&
+               nav.trap[static_cast<size_t>(x)];
+      };
+      if (trap_at(n) && !trap_at(from)) continue;
       const double c = w.search.cost(n);
       preys.push_back({e, n});
       if (prey < 0 || c < prey_c) {
@@ -1326,6 +1415,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       }
     }
     left_to_do = left_to_do || prey >= 0;
+    // Nothing reached for a moment (a door the last trigger opens still on its way) is not yet
+    // the end: the exit waits kWayDone_s past the last thing left to do.
+    if (left_to_do) w.busy_at = t;
+    left_to_do = left_to_do || t - w.busy_at < kWayDone_s;
   }
   // The exit; else the nearest step not done; else the nearest place not seen.
   int pick = -1;
@@ -1416,7 +1509,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (size_t k = 0; k < w.steps.size(); k++) {
       const WayStep& st = w.steps[k];
       if (way_exit(st) || st.done || t < st.left_until || st.node < 0 || !reach(st.node) ||
-          (st.keyed && !key_held))
+          (st.keyed && !key_held) || (left_to_do && carries(st)))
         continue;
       bool covered = false;
       for (const int c : st.covers)
@@ -1782,151 +1875,6 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     w.log->push_back(line);
   }
   w.stats.by_kind[static_cast<int>(w.kind)]++;
-}
-
-void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
-              sh::MoveCmd& cmd) {
-  if (w.out < 0) return;
-  const ge::shooter::WorldEntity& self_e = s.world.entities[static_cast<size_t>(me)];
-  const sh::Vec3f self = self_e.origin;
-  const sb::NavExtraLink& in = nav.entries[static_cast<size_t>(w.dive)];
-  const sb::NavExtraLink& out = nav.entries[static_cast<size_t>(w.out)];
-  const auto at = [&](int32_t n) { return nav.graph.nodes[static_cast<size_t>(n)].origin; };
-  sh::Vec3f to;
-  if (self_e.waterlevel == 0) {
-    if (dist(self, at(in.from)) > 160) return;  // the pilot takes him near the edge first
-    to = at(in.to);
-  } else {
-    // Swimming: to the far side's water, then up onto its land.
-    const sh::Vec3f wet = at(out.to);
-    const float dx = wet.x - self.x, dy = wet.y - self.y;
-    to = dx * dx + dy * dy > 48 * 48 ? wet : at(out.from);
-  }
-  const double dx = to.x - self.x, dy = to.y - self.y, dz = to.z - self.z;
-  const double flat = std::sqrt(dx * dx + dy * dy);
-  cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
-  cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(dz, flat) * (180.0 / ge::core::kPi));
-  cmd.forward = sh::quantize_axis(320);
-  cmd.side = 0;
-  if (self_e.waterlevel > 0 && dz > 8) cmd.buttons |= sh::kButtonJump;
-}
-
-namespace {
-
-// A body that blocks as a box (a monster, a barrel; not a player) alive against him: its box within
-// kWayAgainst of his.
-constexpr float kWayAgainst = 8;
-// The body's edict number, or -1: none.
-int body_against(const ge::shooterbots::BotView& s, int me) {
-  const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
-  for (int k = s.sv.set.maxclients + 1; k < s.sv.num_edicts; k++) {
-    const sh::Edict& o = s.sv.edicts[static_cast<size_t>(k)];
-    if (o.free || o.health <= 0 || (o.solid != sh::kSolidBbox && o.solid != sh::kSolidSlidebox))
-      continue;
-    const sh::Vec3f lo = o.origin + o.mins, hi = o.origin + o.maxs;
-    const sh::Vec3f mlo = e.origin + e.mins, mhi = e.origin + e.maxs;
-    if (lo.x < mhi.x + kWayAgainst && hi.x > mlo.x - kWayAgainst && lo.y < mhi.y + kWayAgainst &&
-        hi.y > mlo.y - kWayAgainst && lo.z < mhi.z + kWayAgainst && hi.z > mlo.z - kWayAgainst)
-      return k;
-  }
-  return -1;
-}
-
-}  // namespace
-
-void unwedge(Wedge& w, const ge::shooterbots::BotView& s, int me, double t, sh::MoveCmd& cmd) {
-  const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
-  if (e.health <= 0 || dist(e.origin, w.still_at) > kWayStuck) {
-    w.still_at = e.origin;
-    w.still_since = t;
-    return;
-  }
-  if (t - w.still_since < kWayStuck_s || (cmd.forward == 0 && cmd.side == 0)) return;
-  w.shoves++;
-  const int phase = static_cast<int>(t - w.still_since);  // a side a second
-  cmd.side = static_cast<int16_t>((phase & 1) ? 400 : -400);
-  // Held up by a body (a monster, a barrel), he steps round it but never jumps onto it: a jump
-  // there left him standing on a pack of soldiers' heads in base1, as no person would.
-  const int body = body_against(s, me);
-  if (body < 0 && static_cast<int>((t - w.still_since) * 4) % 4 == 0)
-    cmd.buttons |= sh::kButtonJump;
-  // Held up by a monster that is no fight of his (a zombie walking its beat in e1m3's corridor,
-  // never his target): shot down out of the way, as a person would, while he steps round it.
-  if (body >= 0 && (s.sv.edicts[static_cast<size_t>(body)].flags & sh::kFlagMonster) != 0) {
-    const sh::Edict& b = s.sv.edicts[static_cast<size_t>(body)];
-    const double dx = b.origin.x - e.origin.x, dy = b.origin.y - e.origin.y;
-    const double dz = (b.origin.z + (b.mins.z + b.maxs.z) * 0.5) - (e.origin.z + 22);
-    const double flat = std::sqrt(dx * dx + dy * dy);
-    cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
-    cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(dz, flat) * (180.0 / ge::core::kPi));
-    cmd.buttons |= sh::kButtonAttack;
-    w.shots++;
-  }
-}
-
-bool way_touch(const WayThrough& w, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd) {
-  if (w.step < 0) return false;
-  const WayStep& st = w.steps[static_cast<size_t>(w.step)];
-  if (w.out >= 0 || st.done ||
-      !(st.kind == WayKind::exit || st.kind == WayKind::trigger || st.kind == WayKind::secret))
-    return false;
-  const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
-  const sh::Vec3f self = e.origin;
-  if (e.health <= 0 || touches(self, st.lo, st.hi)) return false;
-  if (self.z - 24 > st.hi.z || self.z + 32 < st.lo.z) return false;  // above or under it
-  const sh::Vec3f p{std::clamp(self.x, st.lo.x, st.hi.x), std::clamp(self.y, st.lo.y, st.hi.y),
-                    self.z};
-  const float dx = p.x - self.x, dy = p.y - self.y;
-  const float d2 = dx * dx + dy * dy;
-  if (d2 < 1 || d2 > kTouchNear * kTouchNear) return false;
-  // Past kTouchReach, only straight at it over open floor: a wall between leaves it to the route.
-  if (d2 > kTouchReach * kTouchReach &&
-      sh::trace_move(s.sv, self, {}, {}, p, sh::kTraceNoMonsters, me).fraction < 1)
-    return false;
-  float yaw = 0, pitch = 0;
-  sh::aim_angles(self, p, yaw, pitch);
-  cmd.angles = {0, yaw, 0};
-  cmd.forward = 400;
-  cmd.side = 0;
-  return true;
-}
-
-bool way_edge(const MapNav& nav, const Fighter& f, const ge::shooterbots::BotView& s, int me,
-              sh::MoveCmd& cmd) {
-  const sh::Edict& e = s.sv.edicts[static_cast<size_t>(me)];
-  if (e.health <= 0 || (e.flags & sh::kFlagOnGround) == 0 || e.waterlevel > 0 ||
-      (cmd.forward == 0 && cmd.side == 0))
-    return false;
-  const sb::NavGraph& g = nav.graph;
-  const auto trap = [&](int32_t n) {
-    return n >= 0 && static_cast<size_t>(n) < nav.trap.size() && nav.trap[static_cast<size_t>(n)];
-  };
-  if (trap(sb::nav_nearest(g, e.origin))) return false;  // in it already: the way leads out
-  // A route of his own that goes down there (an exit in a pit) is taken.
-  const sb::Pilot& p = f.bot.pilot.pilot;
-  for (size_t k = p.k; k < p.route.size() && k < p.k + 3; k++)
-    if (trap(p.route[k])) return false;
-  // The wish's heading under the view, and the floor a stride along it.
-  const double yaw = cmd.angles.y * (ge::core::kPi / 180.0);
-  const double c = ge::core::libm::cos(yaw), sn = ge::core::libm::sin(yaw);
-  const double wx = c * cmd.forward + sn * cmd.side, wy = sn * cmd.forward - c * cmd.side;
-  const double len = std::sqrt(wx * wx + wy * wy);
-  if (len <= 0) return false;
-  const sh::Vec3f dir{static_cast<float>(wx / len), static_cast<float>(wy / len), 0};
-  const sh::Vec3f ahead = e.origin + dir * kEdgeLook;
-  const sh::HullTrace side = sh::trace_move(s.sv, e.origin, sh::kPlayerMins, sh::kPlayerMaxs, ahead,
-                                            sh::kTraceNoMonsters, me);
-  if (side.fraction < 1) return false;  // a wall that way, not an edge
-  const sh::HullTrace down =
-      sh::trace_move(s.sv, ahead, sh::kPlayerMins, sh::kPlayerMaxs,
-                     ahead - sh::Vec3f{0, 0, kEdgeDrop}, sh::kTraceNoMonsters, me);
-  if (down.fraction < 1 && !trap(sb::nav_nearest(g, down.endpos))) return false;
-  // Over the lip of a pit he could not climb back out of: the keys let go, and a run into it
-  // braked by the wish turned back along it.
-  cmd.forward = static_cast<int16_t>(-cmd.forward);
-  cmd.side = static_cast<int16_t>(-cmd.side);
-  cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
-  return true;
 }
 
 }  // namespace ge::shooterbots

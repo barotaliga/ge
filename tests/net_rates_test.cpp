@@ -95,3 +95,18 @@ TEST(dns_and_net_stats_on_the_console) {
   CHECK(out[out.size() - 3] == "Sent:     1 packets, 3 bytes");
   CHECK(out[out.size() - 2] == "Received: 0 packets, 0 bytes");
 }
+
+TEST(a_clients_showip_names_its_socket) {
+  ge::console::Console con{false};
+  SimNetwork net = make_sim_network(1, {});
+  Transport t;
+  CHECK(open_sim_transport(t, net, sim_address(0, 27901)));
+  const Transport* open = &t;
+  add_client_showip(con, [&open] { return open; });
+  con.execute("showip");
+  const std::string& last = con.output().back();
+  // The resolver may have no name for a container; either answer is the machine's own.
+  CHECK_MSG(last.find("Client UDP socket bound to ") != std::string::npos ||
+                last.find("host name") != std::string::npos,
+            last);
+}

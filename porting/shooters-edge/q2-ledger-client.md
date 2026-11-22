@@ -10,8 +10,8 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client console commands | 115 | 13 | 18 | 10 | 156 |
-| Client settings (cvars) | 148 | 45 | 117 | 40 | 350 |
+| Client console commands | 118 | 13 | 15 | 10 | 156 |
+| Client settings (cvars) | 159 | 46 | 105 | 40 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 88 | 68 | 5 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -23,17 +23,17 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 7 | 7 | 2 | 0 | 16 |
 | The layout language (status bar and layouts) | 24 | 1 | 2 | 0 | 27 |
 | HUD and screen elements | 11 | 10 | 7 | 1 | 29 |
-| Messages printed to the player | 47 | 58 | 37 | 5 | 147 |
+| Messages printed to the player | 53 | 59 | 30 | 5 | 147 |
 | Demo playback and recording features | 4 | 10 | 7 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 6 | 4 | 1 | 0 | 11 |
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 605 | 307 | 238 | 61 | 1211 |
+| **all** | 625 | 309 | 216 | 61 | 1211 |
 
 ## Client console commands
 
-done 115, partial 13, missing 18, not-taken 10
+done 118, partial 13, missing 15, not-taken 10
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -76,9 +76,9 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.disconnect | `disconnect` | leaves the server, or stops a demo | done | `games/shooters_edge/net/qw_remote.cpp` |
 | cmd.reconnect | `reconnect` | reconnects to the last server; "No server to reconnect to." | done | `games/shooters_edge/net/qw_remote.cpp` |
 | cmd.followip | `followip [n]` | connects to the n-th last address seen in chat | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
-| cmd.passive | `passive` | toggles waiting for a server to connect to us (through a NAT) | missing | C42 |
+| cmd.passive | `passive` | toggles waiting for a server to connect to us (through a NAT) | done | `games/shooters_edge/net/q2_pingservers.cpp` (`add_passive_command`): leaves any game, listens on a socket of its own, joins the server whose `passive_connect` comes |
 | cmd.rcon | `rcon <command>` | sends a remote-console command with `rcon_password` to the server or `rcon_address` | done | `games/shooters_edge/net/qw_admin.cpp` |
-| cmd.pingservers | `pingservers` | pings the address book `adr0`..`adr15` and the LAN | missing | C41 |
+| cmd.pingservers | `pingservers` | pings the address book `adr0`..`adr15` and the LAN | done | `games/shooters_edge/net/q2_pingservers.cpp`: `info 34` to the LAN broadcast and each address book entry, each answer printed (3 s broadcast, 6 s direct) |
 | cmd.serverstatus | `serverstatus [address]` | asks a server for its info and players and prints them by frags | done | `games/shooters_edge/net/qw_serverstatus.cpp`: its own socket, joined or not; both games' answers |
 | cmd.pause | `pause` | pauses a single-player game or a demo | partial | a word of the window's own game (`client/listen.cpp`); not found to pause a demo or a joined single-player server (C24) |
 | cmd.skins | `skins` | reloads every client's skin and prints "client n: name --> model/skin" | partial | `games/shooters_edge/net/q2_remote.cpp`: on a Quake II server joined, the level read again and a line a player; the right side is the look asked, not the stand-in drawn when it is missing |
@@ -192,13 +192,13 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.z_stats | `z_stats` | memory statistics | not-taken | `client-gaps.md`: developer tools left out |
 | cmd.net_restart | `net_restart` | restarts networking | missing | not found |
 | cmd.net_stats | `net_stats` | prints network counters | done | `engine/net/net_commands.cpp`: packets and bytes each way since the socket opened (`engine/net/transport.cpp` counts them) |
-| cmd.showip | `showip` | prints the local addresses | missing | not found |
+| cmd.showip | `showip` | prints the local addresses | done | `engine/net/net_commands.cpp` (`add_client_showip`): the host name and addresses, then "Client UDP socket bound to <address>" while joined |
 | cmd.dns | `dns <name>` | resolves a host name | done | `engine/net/net_commands.cpp` |
 | cmd.tests | `error`, `errordrop`, `freeze`, `crash`, `doublefree`, `printjunk`, `bsptest`, `wildtest`, `normtest`, `infotest`, `snprintftest`, `modeltest`, `imagetest`, `soundtest`, `activate`, `mdfourtest`, `mdfoursum`, `extcmptest`, `nextpathtest`, `extract`, `utf8test` | the test build's self-tests and fault triggers | not-taken | `client-gaps.md`: developer tools left out |
 
 ## Client settings (cvars)
 
-done 148, partial 45, missing 117, not-taken 40
+done 159, partial 46, missing 105, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -302,7 +302,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_disconnectcmd | `cl_disconnectcmd` | a command run at each disconnect (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
 | cvar.cl_changemapcmd | `cl_changemapcmd` | a command run at each map change (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
 | cvar.cl_beginmapcmd | `cl_beginmapcmd` | a command run on entering each map (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
-| cvar.cl_ignore_stufftext | `cl_ignore_stufftext` | 1 refuses server-pushed commands not on a whitelist file (default 0) | missing | C33 |
+| cvar.cl_ignore_stufftext | `cl_ignore_stufftext` | 1 refuses server-pushed commands not on a whitelist file (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` over `plugins/classic/protocol/stuff_filter`: 1 runs only what `stufftext-whitelist.txt` names, 2 says each refusal too |
 | cvar.cl_allow_vid_restart | `cl_allow_vid_restart` | 1 lets a typed `vid_restart` run (default 0) | missing | C33 |
 | cvar.cl_protocol | `cl_protocol` | 0 the best the server offers; 34, 35, 36 forced (default 0) | missing | ours speaks 34 only (C42) |
 | cvar.gender_auto | `gender_auto` | set `gender` from the skin's model (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
@@ -322,7 +322,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.vid_driver | `vid_driver` | the video driver to use | not-taken | `client-gaps.md`: the window's renderer is its own |
 | cvar.vid_fullscreen | `vid_fullscreen` | 0 windowed, else the mode number from `vid_modelist` (default 0) | partial | `engine/platform/window_cvars.cpp` (on/off); no mode list |
 | cvar._vid_fullscreen | `_vid_fullscreen` | the mode Alt+Enter goes back to (default 1) | missing | not found |
-| cvar.vid_geometry | `vid_geometry` | the window's size and place, `WxH+X+Y` (default 640x480) | missing | not found |
+| cvar.vid_geometry | `vid_geometry` | the window's size and place, `WxH+X+Y` (default 640x480) | done | ours the engine's `vid_geometry` (`engine/platform/window_cvars.hpp`): `WxH`, `WxH+X+Y` or `+X+Y`; its default "" keeps the window the game opens (not 640x480) |
 | cvar.vid_modelist | `vid_modelist` | the full-screen modes offered (default `modelist`, the desktop's) | missing | not found |
 | cvar.vid_hwgamma | `vid_hwgamma` | gamma by the display hardware (default 0) | missing | not found |
 | cvar.vid_flip_on_switch | `vid_flip_on_switch` | Windows: switch to the desktop mode when the window loses focus (default 0) | missing | Windows only |
@@ -335,11 +335,11 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.scr_scale | `scr_scale` | the 2D scale, 0 auto by window height (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` `q2_bar_scale` (M18k4 round 34) |
 | cvar.crosshair | `crosshair` | 0 none, N the `chN` picture (default 0) | done | `engine/hud/crosshair.hpp` (Quake II's layer `same`) |
 | cvar.netgraph | `netgraph` | 1 latency bars, 2 packet sizes (default 0) | partial | a synonym of our `r_netgraph` (`games/shooters_edge/client/cvar_layers.cpp`): 2's packet sizes are not drawn |
-| cvar.timegraph | `timegraph` | a frame-time graph (default 0) | missing | C13 |
-| cvar.debuggraph | `debuggraph` | a development graph (default 0) | missing | C13 |
-| cvar.graphheight | `graphheight` | the graph's height (default 32) | missing | C13 |
-| cvar.graphscale | `graphscale` | the graph's vertical scale (default 1) | missing | C13 |
-| cvar.graphshift | `graphshift` | the graph's vertical offset (default 0) | missing | C13 |
+| cvar.timegraph | `timegraph` | a frame-time graph (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp`: a column a frame along the bottom, a unit tall a millisecond |
+| cvar.debuggraph | `debuggraph` | a development graph (default 0) | partial | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp`: the graph drawn; ours feeds it no development values of its own |
+| cvar.graphheight | `graphheight` | the graph's height (default 32) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp` |
+| cvar.graphscale | `graphscale` | the graph's vertical scale (default 1) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp` |
+| cvar.graphshift | `graphshift` | the graph's vertical offset (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp` |
 | cvar.scr_chathud | `scr_chathud` | 0 off, 1 last chat lines on screen, 2 in the alternate colour (default 0) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
 | cvar.scr_chathud_lines | `scr_chathud_lines` | chat lines shown (default 4) | done | (M18k4 round 32) |
 | cvar.scr_chathud_time | `scr_chathud_time` | seconds a chat line stays, 0 for ever (default 0) | done | (M18k4 round 32) |
@@ -383,15 +383,15 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_entities | `cl_entities` | 0 adds no entities (default 1) | done | a synonym of `r_drawentities` (M18k4 round 35) |
 | cvar.cl_blend | `cl_blend` | 0 drops the full-screen tints (default 1) | done | a synonym of `gl_polyblend` (M18k4 round 35) |
 | cvar.cl_adjustfov | `cl_adjustfov` | 1 hor+ on wide screens, 0 vert- (default 1) | done | `games/shooters_edge/client/q2_view.cpp` (M18k4 round 34) |
-| cvar.ui_sortdemos | `ui_sortdemos` | the demo browser's sort column, negative descending (default 1) | missing | C40 |
+| cvar.ui_sortdemos | `ui_sortdemos` | the demo browser's sort column, negative descending (default 1) | done | a synonym of ours `menu_demo_sort` (`games/shooters_edge/client/cvar_layers.cpp`) |
 | cvar.ui_listalldemos | `ui_listalldemos` | the demo browser lists every folder (default 0) | missing | C40 |
 | cvar.ui_sortservers | `ui_sortservers` | the server browser's sort column (default 0) | missing | C41 |
-| cvar.ui_colorservers | `ui_colorservers` | colour the server list: grey for a password, anticheat 2 or a no-fake server, green under 30 ms, white otherwise (default 0) | missing | C41 |
+| cvar.ui_colorservers | `ui_colorservers` | colour the server list: grey for a password, anticheat 2 or a no-fake server, green under 30 ms, white otherwise (default 0) | done | a synonym of ours `sb_colorservers` (`games/shooters_edge/client/cvar_layers.cpp`) |
 | cvar.ui_pingrate | `ui_pingrate` | server pings a second, 0 from `rate` (default 0) | missing | C41 |
 | cvar.ui_scale | `ui_scale` | the menus' scale, 0 auto (default 0) | missing | C4 |
 | cvar.ui_debug | `ui_debug` | debug: outlines menu items (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.ui_open | `ui_open` | 1 opens the main menu at start-up (default 0) | missing | ours opens its own title menu always |
-| cvar.adr | `adr0` .. `adr15` | the address book: 16 saved server addresses (saved) | missing | C41 |
+| cvar.adr | `adr0` .. `adr15` | the address book: 16 saved server addresses (saved) | done | `adr0` .. `adr15` (`games/shooters_edge/client/cvar_layers.cpp`), archived, the address book's rows (`menu/q2_pages.cpp`) |
 | cvar.s_khz | `s_khz` | the mixing rate in kHz (default 44, saved) | missing | ours mixes at 48 kHz always (`engine/audio/voice.hpp`) (C32) |
 | cvar.s_mixahead | `s_mixahead` | seconds the mixer runs ahead (default 0.1, saved) | missing | C32 |
 | cvar.s_testsound | `s_testsound` | debug: a test tone (default 0) | not-taken | `client-gaps.md`: developer tools left out |
@@ -415,8 +415,8 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_screenshot_format | `gl_screenshot_format` | jpg, png or tga (default jpg) | done | a synonym of ours `scr_format` (`games/shooters_edge/client/cvar_layers.cpp`), the same default |
 | cvar.gl_screenshot_async | `gl_screenshot_async` | write screenshots off the main thread (default 1) | missing | C22 |
 | cvar.gl_screenshot_quality | `gl_screenshot_quality` | JPEG quality (default 90) | done | a synonym of ours `scr_quality`, the same default |
-| cvar.gl_screenshot_compression | `gl_screenshot_compression` | PNG compression (default 6) | missing | C22 |
-| cvar.gl_screenshot_template | `gl_screenshot_template` | the file name, X's numbered (default `quakeXXX`) | missing | C22 |
+| cvar.gl_screenshot_compression | `gl_screenshot_compression` | PNG compression (default 6) | done | a synonym of ours `scr_compression` (`engine/capture/screenshot.hpp`): 0 stores a png's rows, 1..9 packed; the same default |
+| cvar.gl_screenshot_template | `gl_screenshot_template` | the file name, X's numbered (default `quakeXXX`) | done | a synonym of ours `scr_template` (`engine/capture/screenshot.hpp`), declared `same` with Quake II's default `quakeXXX`: the first free number in its X's |
 | cvar.r_override_textures | `r_override_textures` | load replacement textures (default 1) | partial | ours replaces by classic enhance (`plugins/classicenhance`), not this switch |
 | cvar.r_texture_overrides | `r_texture_overrides` | bit sum of which kinds may be replaced (default -1) | missing | not found |
 | cvar.r_glowmaps | `r_glowmaps` | load glow maps (default 1) | partial | ours has glow maps from classic enhance; no switch by this name |
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 47, partial 58, missing 37, not-taken 5
+done 53, partial 59, missing 30, not-taken 5
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1145,12 +1145,12 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.connect.anticheat | "Loading anticheat, this may take a few moments..." | the server asked for anticheat | missing | the feature is missing |
 | msg.connect.noanticheat | "Trying to connect without anticheat." | anticheat could not load | missing | the feature is missing |
 | msg.connect.anticheatreq | "Anticheat required by server, but no anticheat support linked in." | the server insists on anticheat | missing | the feature is missing |
-| msg.connect.passiverecv | "Received passive connect from %s." | a server connected to us in passive mode | missing | the feature is missing |
+| msg.connect.passiverecv | "Received passive connect from %s." | a server connected to us in passive mode | done | `games/shooters_edge/net/q2_pingservers.cpp` (`passive_step`) |
 | msg.connect.notconnected | "Can't "%s", not connected" | a forwarded word typed while not connected | done | `engine/console/console_more.cpp` (`complete`): the same words |
-| msg.follow | "Following %s..." | `followip` | missing | the feature is missing |
-| msg.follow.none | "No IP address to follow." | `followip` with nothing seen | missing | the feature is missing |
-| msg.passive.off | "No longer listening for passive connections." | `passive` off | missing | the feature is missing |
-| msg.passive.on | "Listening for passive connections at %s." | `passive` on | missing | the feature is missing |
+| msg.follow | "Following %s..." | `followip` | done | `games/shooters_edge/client/chat_lines.cpp`: `followip` says it |
+| msg.follow.none | "No IP address to follow." | `followip` with nothing seen | partial | `games/shooters_edge/client/chat_lines.cpp`: ours says "No address has been seen in chat yet." (sixteen kept, counted from 1) |
+| msg.passive.off | "No longer listening for passive connections." | `passive` off | done | `games/shooters_edge/net/q2_pingservers.cpp` |
+| msg.passive.on | "Listening for passive connections at %s." | `passive` on | done | `games/shooters_edge/net/q2_pingservers.cpp` |
 | msg.reconnect.none | "No server to reconnect to." | `reconnect` with no last server | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.reconnect.loop | "Can not reconnect to loopback." | `reconnect` to the local server | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.reconnect | "Reconnecting..." | `reconnect` | partial | ours does it but says it in its own words (the exact line not found) |
@@ -1179,8 +1179,8 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.dl.usage | "Usage: download <filename>" | `download` alone | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
 | msg.dl.fail | "Couldn't download %s: %s" | the server refused a file | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.dl.mapload | "Couldn't load %s: %s" | the map cannot be loaded (missing or damaged): the connection drops | partial | ours does it but says it in its own words (the exact line not found) |
-| msg.dl.mapversion | "Local map version differs from server: %i != %s" | the map on disk is not the server's: the connection drops | missing | the feature is missing (C36) |
-| msg.dl.demomapversion | "Local map version differs from demo: %i != %s" | the map on disk is not the recording's: a warning, playback goes on | missing | the feature is missing |
+| msg.dl.mapversion | "Local map version differs from server: %i != %s" | the map on disk is not the server's: the connection drops | done | `games/shooters_edge/client/q2_session.cpp` (`q2_map_version`), checked as the level loads: the game is left |
+| msg.dl.demomapversion | "Local map version differs from demo: %i != %s" | the map on disk is not the recording's: a warning, playback goes on | done | `games/shooters_edge/client/q2_session.cpp` (`q2_map_version`), checked as the level loads: the recording plays on |
 | msg.map.novis | "Map has no Visibility, expect bugs and bad performance!" | a map loaded with no visibility data (a warning) | done | `games/shooters_edge/client/map_load.cpp` (`kNoVisibility`): a Quake II map this window loads |
 | msg.http.server | "[HTTP] Download server at %s" | the server named an HTTP download URL | missing | the feature is missing |
 | msg.http.progress | "[HTTP] %s [%s, %s/sec] [%d remaining file%s]" | an HTTP download finished | missing | the feature is missing |

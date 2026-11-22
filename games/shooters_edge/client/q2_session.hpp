@@ -28,13 +28,17 @@
 // short of the world's walls, and his own figure, drawn while the camera is off him, is hidden
 // once a wall pushes it within kOwnFigureUnits. Joined or hosted, never while he watches another.
 //
+// THE MAP'S VERSION: a level that states its map's checksum (configstring 31) is checked against
+// the map on disk as it loads (`q2_map_version`): a server's different map drops the game, a
+// recording's only warns and plays on.
+//
 // THE MOUSE: `in_grab` 0 never takes the mouse while the game is in a window (only covering the
 // screen); 1 and 2 take it as ours does (`q2_takes_mouse`).
 //
 // ge:summary Quake II's session settings: the map commands, the game clock, the state cvars
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd auto-record map-change timescale
 // ge:keywords fixedtime cl_running cl_paused sv_running sv_paused read-only q2_session_step
-// ge:keywords cl_warn_on_fps_rounding fps-rounding inexact
+// ge:keywords cl_warn_on_fps_rounding fps-rounding inexact map-version map-checksum
 // ge:keywords cl_autopause cl_thirdperson cl_thirdperson_angle cl_thirdperson_range
 // ge:keywords third-person chase-camera view_behind in_grab q2_takes_mouse
 // ge:skill console shooter
@@ -42,6 +46,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -80,6 +85,11 @@ struct Q2Session {
 
 // Quake II's session cvars on `v`, bound to `s` (the read-only ones added, set by the frames).
 void add_q2_session_cvars(ge::console::Cvars& v, Q2Session& s);
+
+// "Local map version differs from server: <ours> != <stated>" (`server`; "from demo" else) when
+// the map file `file`'s checksum is not the level's `stated` one; "" when they match or it
+// states none.
+std::string q2_map_version(std::string_view stated, std::span<const uint8_t> file, bool server);
 
 // The moves a second `cl_maxfps` `fps` gives (held to 10..125, whole milliseconds apart); 0: 0.
 int q2_fps_rounded(int fps);

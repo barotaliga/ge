@@ -46,11 +46,14 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Rail trail beams | the game's own specks | `cl_railtrail_*`, `cl_railcore_*`, `cl_railspiral_*` (`client/world_fx.cpp`'s `q2_rail_trail`) | its own | its own |
 | Sound out of focus | always heard | `s_auto_focus` (`platform/window_cvars.hpp`, every game) | the engine's | the engine's |
 | Music | `cd`, `bgmvolume` | `ogg_enable`, `ogg_volume`, `ogg_shuffle`, `ogg_menu_track` over the engine's music (`audio/music_console.hpp`) | its own | its own |
-| Hit markers | none | `cl_hit_markers`, `scr_hit_marker_time` on temporary entity 128 (`client/q2_bar.cpp`'s `draw_q2_hit_marker`) | its own | its own |
+| Hit markers | none | `cl_hit_markers`, `scr_hit_marker_time` on temporary entity 128 (`client/q2_bar.cpp`'s `draw_q2_hit_marker`), sent by our server to a client that asks (`*ge_ext` bit 1024) | its own | its own |
 | Download switches | the server's `sv_download_*` | `allow_download` and its kinds gate what joining fetches (`net/q2_downloads.hpp`), `cl_nodelta` | its own | its own |
 | See-through weapon | none | `cl_gunalpha` (`view/hand.hpp`'s `alpha`) | its own | its own |
 | Network trouble words | none | `scr_showturtle` (`client/q2_bar.cpp`'s `add_q2_turtle`) | its own | its own |
 | The window's style | always a usual window | `win_noborder`, `win_notitle`, `win_alwaysontop`, `win_noresize` (`platform/window_cvars.hpp`) | the engine's | the engine's |
+| The window's size and place | as the game opens it | `vid_geometry`, `WxH+X+Y` (`platform/window_cvars.hpp`) | the engine's | the engine's |
+| Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
+| Screenshot names | by the time | `gl_screenshot_template` (`quakeXXX`) and `gl_screenshot_compression` over `scr_template` and `scr_compression` (`capture/screenshot.hpp`) | by the time | the engine's |
 
 ## Adding a game
 

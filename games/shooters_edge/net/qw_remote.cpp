@@ -511,6 +511,11 @@ void remote_queue_frame(Remote& r, ge::console::Console& con) {
   const double wall =  // the wall clock: the match's recording and the rcon answers run on it
       std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
   remote_match_frame(r, con, wall);
+  said.clear();  // `pingservers`' answers (q2_pingservers.hpp)
+  pingservers_step(r.ping, wall, r.now_us, said);
+  const std::string called = passive_step(r.passive, r.active, r.now_us, said);  // `passive`
+  for (const std::string& line : said) con.print(line);
+  if (!called.empty()) con.execute("connect " + called);
   if (!r.away && !r.status_ask) return;
   said.clear();  // the answers to an rcon sent while not joined, and to `serverstatus`
   remote_rcon_step(r, wall, said);
@@ -1073,6 +1078,9 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   add_q2_download_command(con, r);  // download <file> (q2_remote.hpp)
   add_q2_skins_command(con, r);     // skins
   gn::add_net_commands(con, [&r]() -> const gn::Transport* { return r.transport; });  // dns
+  gn::add_client_showip(con, [&r]() -> const gn::Transport* { return r.transport; });
+  add_pingservers_command(con, r.ping, steady_now_s);  // pingservers (q2_pingservers.hpp)
+  add_passive_command(con, r.passive);                 // passive (the same)
   r.setting = [&con](const std::string& name) {
     if (const ge::console::Cvar* v = con.cvars().find(name)) return v->value;
     if (const ge::console::Synonym* s = con.cvars().synonym(name))

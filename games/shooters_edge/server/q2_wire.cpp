@@ -417,6 +417,8 @@ Q2PlayerState player_state(const RulesCommon& c, int slot, const ge::classic::Q2
     for (int k = 0; k < 3; k++) {
       p.view_offset[k] = quarter(wc.numbers.view_offset[k]);
       p.kick[k] = quarter(wc.numbers.kick[k]);
+      p.gun_offset[k] = quarter(wc.numbers.gun_offset[k]);
+      p.gun_angles[k] = quarter(wc.numbers.gun_angles[k]);
     }
   const float va[3] = {e.view_angles.x, e.view_angles.y, e.view_angles.z};
   for (int k = 0; k < 3; k++) p.view_angles[k] = angle16(va[k]);

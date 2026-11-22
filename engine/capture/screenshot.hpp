@@ -22,7 +22,8 @@
 //   time's name, never written over another.
 // - THE NAME: `<prefix>-YYYY-MM-DD-HHMMSS.<ext>` in local time (`screenshot_stem`), then `-2`, `-3`
 //   ... when that second already has one, so the folder lists in the order they were taken and no
-//   screenshot is ever written over another.
+//   screenshot is ever written over another. A template (`scr_template`, `quakeXXX`) names it
+//   instead: the first free number in its X's, the time's name once every number is taken.
 // - THE REPORT: each file written, or why it was not, comes back from `poll` on the game's thread
 //   as a line for its console.
 //
@@ -30,6 +31,7 @@
 // ge:keywords screenshot f12 print-screen png still picture frame worker no-stall request due
 // ge:keywords write poll flush screenshot_stem screenshots-folder scr_format scr_quality scr_chroma
 // ge:keywords add_screenshot_cvars add_screenshot_command still_options jpeg-quality scr_folder
+// ge:keywords scr_template scr_compression screenshot_template_name name-template
 // ge:keywords named-screenshot screenshot-name grab take_grab remote-screenshot screenshotpng
 // ge:keywords screenshotjpg screenshottga
 // ge:skill replay
@@ -61,9 +63,12 @@ struct ScreenshotSettings {
   int32_t quality = 90;        // scr_quality: 1..100
   int32_t chroma = 444;        // scr_chroma: 444 full, 420 halved (JPEG)
   std::string folder;          // scr_folder: "" the writer's own; a name beside it; a whole path
+  std::string name_template;   // scr_template: "" by the time; X's numbered ("quakeXXX")
+  int32_t compression = 6;     // scr_compression: 0 a PNG's rows stored, 1..9 packed
 };
 
-// scr_format, scr_quality and scr_chroma bound to `s`, archived (the player's to keep).
+// scr_format, scr_quality, scr_chroma, scr_folder, scr_template and scr_compression bound to `s`,
+// archived (the player's to keep).
 void add_screenshot_cvars(console::Cvars& cvars, ScreenshotSettings& s);
 // The settings as the writer's options; an unknown format is JPEG, said in `note`.
 StillOptions still_options(const ScreenshotSettings& s, std::string& note);
@@ -78,6 +83,11 @@ void add_screenshot_format_commands(console::Console& console, Screenshots& writ
 
 // `<prefix>-YYYY-MM-DD-HHMMSS` for the local time `t`.
 std::string screenshot_stem(std::string_view prefix, const std::tm& t);
+
+// A screenshot's name by the player's template (`scr_template`): its last run of X's replaced by
+// `n`, zero-padded to the run's length ("quakeXXX" and 7: "quake007"); the template itself when it
+// has no X; "" when `n` does not fit the run.
+std::string screenshot_template_name(std::string_view tpl, int n);
 
 class Screenshots {
  public:
@@ -132,7 +142,7 @@ class Screenshots {
     std::string note;  // why the format is not the one asked for
   };
   void work();
-  std::string next_path(std::string_view ext, const std::string& named);
+  std::string next_path(std::string_view ext, const std::string& named, const std::string& tpl);
   std::string folder() const;                 // `dir_`, or the settings' folder beside it
   bool taken(const std::string& path) const;  // handed out already (`handed_`)
 

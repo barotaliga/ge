@@ -322,6 +322,17 @@ bool set_window_style(Window& window, const WindowStyle& style) {
   return ok;
 }
 
+bool set_window_place(Window& window, const WindowPlace& place) {
+  SDL_Window* w = window.impl_->window;
+  bool ok = true;
+  if (place.width > 0 && place.height > 0) ok = SDL_SetWindowSize(w, place.width, place.height);
+  if (place.has_place) ok = SDL_SetWindowPosition(w, place.x, place.y) && ok;
+  if (!ok)
+    out::error(std::string("platform: the window's size or place could not be set (") +
+               SDL_GetError() + "); the window keeps what it had; skill: platform.");
+  return ok;
+}
+
 bool set_fullscreen(Window& window, bool on, int display) {
   SDL_Window* w = window.impl_->window;
   if (on && display > 0) {

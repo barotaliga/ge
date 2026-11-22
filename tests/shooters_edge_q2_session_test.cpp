@@ -15,6 +15,7 @@
 #include "console/console.hpp"
 #include "shooter/brush_hull.hpp"
 #include "shooter_loop_bench.hpp"
+#include "shooters_edge/server/q2_wire.hpp"
 
 namespace cl = shooters_edge::client;
 namespace con = ge::console;
@@ -57,6 +58,17 @@ TEST(the_map_commands_run_as_the_game_moves_on) {
   CHECK(r.step(true, "base3") == "change begin");  // straight to another
   CHECK(r.step(false, "") == "gone");              // left the game
   CHECK(r.step(false, "") == "");
+}
+
+TEST(a_map_that_is_not_the_levels_is_told_by_its_checksum) {
+  const std::vector<uint8_t> file = {'I', 'B', 'S', 'P', 38, 0, 0, 0, 1, 2, 3};
+  const std::string ours = std::to_string(shooters_edge::server::q2_map_checksum(file));
+  CHECK(cl::q2_map_version(ours, file, true).empty());
+  CHECK(cl::q2_map_version("", file, true).empty());  // a level that states none
+  CHECK(cl::q2_map_version("12345", file, true) ==
+        "Local map version differs from server: " + ours + " != 12345");
+  CHECK(cl::q2_map_version("12345", file, false) ==
+        "Local map version differs from demo: " + ours + " != 12345");
 }
 
 TEST(empty_map_commands_run_nothing) {
