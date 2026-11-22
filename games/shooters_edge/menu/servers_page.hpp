@@ -6,7 +6,8 @@
 //   servers use), the masters (`sb_masters`, host:port words, and the masters the loaded install
 //   lists, `set_masters`), the community masters our own servers beat to (`sb_hubmasters`, the
 //   engine's masters, net/master.hpp, asked for the query's `protocol`), and the player's own
-//   servers (`sb_servers`). The game hands it its protocol (`set_query`); with none, the page says
+//   servers (`sb_servers`, and the address book a game keeps, Quake II's `adr0` to `adr15`). The
+//   game hands it its protocol (`set_query`); with none, the page says
 //   so and lists nothing.
 // - THE TABLE: one row a server: its name (a padlock's `*` when it wants a password), the mode
 //   (ffa, team, duel, coop or a match mod's own word), the map, players over slots, the ping and
@@ -27,6 +28,9 @@
 //   their name, `-*gamedir=fortress` hides one game; net/server_list.hpp's `parse_info_filter`),
 //   a word it cannot read said in the footer. The title row says which are on and how many
 //   servers they hide; a list they empty says so, not "no servers found".
+// - THE COLOURS (`sb_colorservers` 1; Quake II spells it `ui_colorservers`): a row's words grey
+//   when the server wants a password, says `anticheat` 2 or more or `NoFake` ENABLED, green when
+//   it answered in under 30 ms, the usual colour otherwise (`row_colour`).
 // - THE COLUMNS (`sb_show*`, `sb_status`) and THE SORT (`sb_sortservers`): servers_page.cpp.
 // - ROUTES (`sb_findroutes` 1): once the refresh is done, each forwarder listed is asked for the
 //   servers it reaches (engine/forward/routes.hpp, `sb_proxinfopersec` 10, `sb_proxretries` 3,
@@ -44,7 +48,7 @@
 //
 // ge:summary Shooter's Edge's server browser page: LAN, masters and own servers listed, joined
 // ge:keywords server-browser servers page join-a-game menu_servers sb_masters sb_servers sb_lan
-// ge:keywords sb_hubmasters hub-master sv-master
+// ge:keywords sb_hubmasters hub-master sv-master address-book adr0
 // ge:keywords connect refresh sort ping players mode map skill coop shooters-edge
 // ge:keywords filter sb_hidefull sb_hideempty sb_mode sb_maxping hide-full hide-empty
 // ge:keywords sb_hidenotempty sb_hidedead sb_hidehighping sb_pinglimit sb_info_filter sb_status
@@ -143,6 +147,8 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   std::string filter_words() const;
   int hidden() const { return hidden_; }
   const ge::net::ServerFilter& filter() const { return filter_; }
+  // sb_colorservers' colour for a server's row (`answered` in `ping_ms`); false: the usual one.
+  static bool row_colour(const ge::net::ServerInfo& in, int ping_ms, ge::ui::Color& out);
 
  private:
   void refresh();
@@ -213,6 +219,7 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   int32_t autohide_ = 1;                                                // sb_autohide
   bool autoupdate_ = true;                                              // sb_autoupdate
   bool find_routes_ = false;                                            // sb_findroutes
+  bool colour_servers_ = false;                                         // sb_colorservers
   std::filesystem::path cache_dir_;
   bool list_cache_ = false, master_cache_ = true;  // sb_listcache, sb_mastercache
   bool cache_written_ = false;                     // this refresh's caches written

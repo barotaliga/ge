@@ -20,7 +20,7 @@
 // ge:keywords q2-menu quake-ii menu pages dmflags gameflags key-bindings weapon-bindings
 // ge:keywords legacy-keys
 // ge:keywords input-setup sound-setup effects-setup railtrail screen-setup crosshair-setup
-// ge:keywords downloads
+// ge:keywords downloads address-book adr0
 // ge:keywords in-game-page skill easy medium hard nightmare
 // ge:skill ui console
 // ge:test tests/shooters_edge_menu_test.cpp
@@ -122,6 +122,17 @@ constexpr Entry skill(std::string_view id, std::string_view text, std::string_vi
   return {
       .page = "single", .id = id, .text = text, .line = line, .needs = "newgame", .closes = true};
 }
+// A row of the address book: server `id` (`adr0`..`adr15`), its address shown beside it
+// (main_menu.cpp), typed in the console.
+constexpr Entry book(std::string_view id) {
+  return {.page = "addresses",
+          .id = id,
+          .text = id,
+          .hint = "A server JOIN A GAME always asks. Type it in the console: adr0 host:port.",
+          .line = "toggleconsole",
+          .needs = id,
+          .closes = true};
+}
 constexpr Entry back(std::string_view page) {
   return {.page = page, .id = "back", .text = "back", .kind = ItemKind::back};
 }
@@ -155,6 +166,7 @@ constexpr Entry kQ2[] = {
      .hint = "Servers on the LAN, the masters and the hub.",
      .needs = "connect"},
     {.page = "multi", .id = "demos", .text = "browse demos", .needs = "playdemo"},
+    opens("multi", "addresses", "address book", "addresses", "adr0"),
     opens("multi", "host", "start server", "host", "sv"),
     {.page = "multi",
      .id = "ranked",
@@ -163,6 +175,25 @@ constexpr Entry kQ2[] = {
      .opens = "ranked",
      .needs = "ranked"},
     back("multi"),
+
+    // The address book: the servers JOIN A GAME asks besides the LAN and the masters.
+    book("adr0"),
+    book("adr1"),
+    book("adr2"),
+    book("adr3"),
+    book("adr4"),
+    book("adr5"),
+    book("adr6"),
+    book("adr7"),
+    book("adr8"),
+    book("adr9"),
+    book("adr10"),
+    book("adr11"),
+    book("adr12"),
+    book("adr13"),
+    book("adr14"),
+    book("adr15"),
+    back("addresses"),
 
     // The deathmatch flags.
     flag("falling", "falling damage", 3, true),
@@ -376,6 +407,7 @@ constexpr PageTitle kQ2Pages[] = {
     {"main", ""},
     {"single", "Game"},
     {"multi", "Multiplayer"},
+    {"addresses", "Address Book"},
     {"host", "Start Server"},
     {"gameflags", "Deathmatch Flags"},
     {"setup", "Player Setup"},

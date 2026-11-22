@@ -71,6 +71,10 @@ struct Q2Bar {
   // The last frame had a screen of the rules up (the help computer, a scoreboard or the
   // inventory): ESCAPE puts it away rather than opening the menu (menu/main_menu.hpp's Host).
   bool layout_up = false;
+  // F1 held this frame: 1 in a game, 2 in a recording played back. In a recording it shows the
+  // last layout the rules sent whether or not the recorded flag has it up; with scr_draw2d 3 it
+  // shows the layouts that setting hides.
+  int f1 = 0;
   // A console command waiting for the next frame's world (`add_q2_bar_commands`): its words, and
   // the console it prints to (null: none asked).
   std::vector<std::string> asked{};

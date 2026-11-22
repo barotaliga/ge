@@ -405,7 +405,8 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
   if (bar.asked_by != nullptr && !bar.asked.empty()) answer(bar, world, slot, in);
   const server::WorldClient& me = world.clients[slot];
   bar.layout_up = (in.stats[13] & 3) != 0;
-  if ((in.stats[13] & 1) != 0 && !me.layout.empty() && draw2d != 3) {
+  const bool shown = (in.stats[13] & 1) != 0 || bar.f1 == 2;  // F1 in a recording: the last one
+  if (shown && !me.layout.empty() && (draw2d != 3 || bar.f1 != 0)) {
     std::vector<hud::LayoutOp> over;  // the screen the rules sent him, over the bar
     in.program = me.layout;
     hud::run_layout(in, over);
