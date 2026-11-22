@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 103 | 11 | 32 | 10 | 156 |
-| Client settings (cvars) | 122 | 36 | 152 | 40 | 350 |
+| Client settings (cvars) | 129 | 36 | 145 | 40 | 350 |
 | Macros ($name in typed and bound text) | 14 | 1 | 13 | 2 | 30 |
 | Menu pages and rows | 77 | 72 | 12 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 5 | 6 | 2 | 0 | 13 |
 | Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 529 | 295 | 326 | 61 | 1211 |
+| **all** | 536 | 295 | 319 | 61 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 122, partial 36, missing 152, not-taken 40
+done 129, partial 36, missing 145, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -367,12 +367,12 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_muzzleflashes | `cl_muzzleflashes` | 0 hides the newer game's muzzle flash models (the flash lights stay) (default 1) | partial | `plugins/classic/q2_fx_switches.hpp`: others' and monsters' gun fire; the held weapon's own flash still drawn |
 | cvar.cl_muzzlelight_time | `cl_muzzlelight_time` | how long a muzzle flash light lasts, 0 to 1000 ms (default 16) | done | `plugins/classic/q2_fx_switches.hpp`: our flash light's fade stretched by it (16 as drawn) |
 | cvar.cl_hit_markers | `cl_hit_markers` | 0 off, 1 a hit marker, 2 a marker and a sound (default 2) | missing | C26 |
-| cvar.cl_railtrail_type | `cl_railtrail_type` | 0 classic, 1 core beam, 2 core and spiral (default 0) | missing | C17 |
-| cvar.cl_railtrail_time | `cl_railtrail_time` | seconds the rail trail lasts (default 1.0) | missing | C17 |
-| cvar.cl_railcore_color | `cl_railcore_color` | the rail core's colour (default red) | missing | C17 |
-| cvar.cl_railcore_width | `cl_railcore_width` | the rail core's width (default 2) | missing | C17 |
-| cvar.cl_railspiral_color | `cl_railspiral_color` | the rail spiral's colour (default blue) | missing | C17 |
-| cvar.cl_railspiral_radius | `cl_railspiral_radius` | the rail spiral's radius (default 3) | missing | C17 |
+| cvar.cl_railtrail_type | `cl_railtrail_type` | 0 classic, 1 core beam, 2 core and spiral (default 0) | done | `plugins/classic/q2_fx_switches.hpp`, drawn in either look by `games/shooters_edge/client/world_fx.cpp` (`q2_rail_trail`) and `app/weapon_fx.cpp` (`q2_rail_trail_look`) |
+| cvar.cl_railtrail_time | `cl_railtrail_time` | seconds the rail trail lasts (default 1.0) | done | `plugins/classic/q2_fx_switches.hpp`, drawn in either look by `games/shooters_edge/client/world_fx.cpp` (`q2_rail_trail`) and `app/weapon_fx.cpp` (`q2_rail_trail_look`) |
+| cvar.cl_railcore_color | `cl_railcore_color` | the rail core's colour (default red) | done | `plugins/classic/q2_fx_switches.hpp`, drawn in either look by `games/shooters_edge/client/world_fx.cpp` (`q2_rail_trail`) and `app/weapon_fx.cpp` (`q2_rail_trail_look`) |
+| cvar.cl_railcore_width | `cl_railcore_width` | the rail core's width (default 2) | done | `plugins/classic/q2_fx_switches.hpp`, drawn in either look by `games/shooters_edge/client/world_fx.cpp` (`q2_rail_trail`) and `app/weapon_fx.cpp` (`q2_rail_trail_look`) |
+| cvar.cl_railspiral_color | `cl_railspiral_color` | the rail spiral's colour (default blue) | done | `plugins/classic/q2_fx_switches.hpp`, drawn in either look by `games/shooters_edge/client/world_fx.cpp` (`q2_rail_trail`) and `app/weapon_fx.cpp` (`q2_rail_trail_look`) |
+| cvar.cl_railspiral_radius | `cl_railspiral_radius` | the rail spiral's radius (default 3) | done | `plugins/classic/q2_fx_switches.hpp`, drawn in either look by `games/shooters_edge/client/world_fx.cpp` (`q2_rail_trail`) and `app/weapon_fx.cpp` (`q2_rail_trail_look`) |
 | cvar.cl_testblend | `cl_testblend` | debug: a fixed test tint (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.cl_testparticles | `cl_testparticles` | debug: a field of test particles (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.cl_testentities | `cl_testentities` | debug: a ring of test models (default 0) | not-taken | `client-gaps.md`: developer tools left out |
@@ -401,7 +401,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.s_volume | `s_volume` | the effects volume (default 0.7, saved) | done | synonym of `volume` (`client/cvar_layers.cpp`) |
 | cvar.s_ambient | `s_ambient` | 0 no loops, 1 all, 2 only loops with a model, 3 only the player's own (default 1) | done | `plugins/classic/q2_fx_switches.hpp` (`ambient`), heard in `games/shooters_edge/client/demo_sound.cpp` (`entity_loops`) |
 | cvar.s_show | `s_show` | debug: lists the sounds playing (default 0) | not-taken | `client-gaps.md`: developer tools left out |
-| cvar.s_auto_focus | `s_auto_focus` | 0 always play, 1 not minimised, 2 only focused (default 0) | missing | C32 |
+| cvar.s_auto_focus | `s_auto_focus` | 0 always play, 1 not minimised, 2 only focused (default 0) | done | the engine's `engine/platform/window_cvars.hpp` (`heard_volume`), every game |
 | cvar.s_underwater | `s_underwater` | muffle sound under water (default 1) | done | `games/shooters_edge/client/room_ear.cpp` over the synth's muffle (M18k4 round 34) |
 | cvar.s_underwater_gain_hf | `s_underwater_gain_hf` | the muffle's treble gain (default 0.25) | done | (M18k4 round 34) |
 | cvar.ogg_enable | `ogg_enable` | play background music in any of the supported formats (`.flac`, `.opus`, `.ogg`, `.mp3`, `.wav`) (default 1) | missing | C29 |

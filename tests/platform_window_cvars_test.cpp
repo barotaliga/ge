@@ -32,3 +32,16 @@ TEST(alt_enter_flips_full_screen) {
   CHECK(ge::platform::alt_enter(in, con) && w.fullscreen);
   CHECK(ge::platform::alt_enter(in, con) && !w.fullscreen);
 }
+
+TEST(s_auto_focus_silences_a_window_minimised_or_out_of_focus) {
+  ge::console::Console con;
+  ge::platform::WindowCvars w;
+  ge::platform::add_window_cvars(con, w);
+  CHECK(ge::platform::heard_volume(w, false, true) == 0.7);  // 0: always heard
+  con.execute("s_auto_focus 1");
+  CHECK(ge::platform::heard_volume(w, false, false) == 0.7);
+  CHECK(ge::platform::heard_volume(w, true, true) == 0);
+  con.execute("s_auto_focus 2");
+  CHECK(ge::platform::heard_volume(w, false, false) == 0);
+  CHECK(ge::platform::heard_volume(w, true, false) == 0.7);
+}

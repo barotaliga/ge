@@ -1,6 +1,6 @@
 // The window's own settings (window_cvars.hpp).
 //
-// ge:summary The window's console settings for any game: vid_fullscreen, vid_display, volume
+// ge:summary The window's settings for any game: vid_fullscreen, vid_display, volume, s_auto_focus
 // ge:keywords add_window_cvars vid_displays
 // ge:skill platform console
 // ge:test tests/platform_window_cvars_test.cpp
@@ -36,6 +36,16 @@ void add_window_cvars(console::Console& con, WindowCvars& w) {
                     .max = 1,
                     .values = "0: silent; 0..1: that loudness (0.7 the default)"},
                    &w.volume);
+  con.cvars().bind({.name = "s_auto_focus",
+                    .fallback = "0",
+                    .flags = console::kArchive,
+                    .help = "When the game is heard while you are in another window.",
+                    .kind = console::CvarKind::integer,
+                    .min = 0,
+                    .max = 2,
+                    .values = "0: always (the default); 1: not while the game is minimised; 2: "
+                              "only while the game's window is the one you are in"},
+                   &w.auto_focus);
   con.add_command("vid_displays", "list the displays vid_display numbers",
                   [](console::Console& c, const console::Args&) {
                     const std::vector<Display> all = displays();
@@ -52,6 +62,11 @@ bool alt_enter(const InputSnapshot& in, console::Console& con) {
   const console::Cvar* v = con.cvars().find("vid_fullscreen");
   con.execute(std::string("vid_fullscreen ") + (v != nullptr && v->value != "0" ? "0" : "1"));
   return true;
+}
+
+double heard_volume(const WindowCvars& w, bool focused, bool minimised) {
+  const bool silent = (w.auto_focus >= 1 && minimised) || (w.auto_focus >= 2 && !focused);
+  return silent ? 0 : w.volume;
 }
 
 }  // namespace ge::platform
