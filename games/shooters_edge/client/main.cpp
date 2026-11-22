@@ -1677,7 +1677,7 @@ int run_main(int argc, char** argv) {
         slm::watch_frame(live_map, bench_folder.path ? *bench_folder.path : files, bench_map->file,
                          ds, overlay, w, h, playback.bar_bottom_px);
       se::Status hud_status = cl::demo_status(ds, t);
-      if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map, ds.bonuses);  // f_ events
+      if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map, ds.bonuses, &ds);
       if (drawn_remote) cl::group_status(controls.groups, hud_status, t);  // the weapon group
       cl::q2_bar_net(q2_bar, drawn_remote ? sn::remote_net(remote) : nullptr,
                      sn::remote_unanswered(remote), t);                 // scr_lag_draw's packets

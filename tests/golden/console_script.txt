@@ -28,7 +28,7 @@ found
 same
 truthy
 falsy
-if: '~' is not a comparison (use == = != <> < <= > >= isin !isin =~ or !~)
+if: '~' is not a comparison (use == = != <> < <= > >= isin !isin isini !isini eq ne =~ or !~)
 x
 
 === set-calc
@@ -368,4 +368,87 @@ meta f: level 1 has no sets (give each level its sets in quotes, "" for none)
 a "0" (default "0", text, flags .......*)
   a meta-cvar: each level sets the others below unless something set them
   level 1: b 1
+
+=== classic-scripting
+alias greet "echo $0 says $1 to ${2-} ($@)"
+greet hi you two
+alias old "echo %1 and %2, %0 %% %h"
+old a b
+if Quake eq quake then echo eq yes else echo eq no
+if Quake ne quake then echo ne yes else echo ne no
+if AKE isini Quake then echo isini yes
+if AKE isin Quake then echo isin yes else echo isin no
+set part " rl"
+set weapons "lg"
+cvar_in weapons part 1
+echo $weapons
+cvar_in weapons part 6
+cvar_in weapons part 7
+cvar_out weapons part
+echo $weapons
+alias list "echo"
+alias_in list part 1
+list
+alias_out list part
+alias_out list part
+alias_in nolist part
+alias_in made part 8
+made
+set_alias_str copied greet
+echo $copied
+bind q "say hello"
+set_bind_str qbind q
+echo $qbind
+hash quad
+hash QUAD
+alias on_low "echo low line"
+alias on_chat "echo chat line: $triggermatch"
+alias on_team "echo team line"
+msg_trigger on_low "took" -l 0
+msg_trigger on_chat "hello"
+msg_trigger on_chat "hello" -l 3
+msg_trigger on_team "help" -l t
+msg_trigger nobody "nobody"
+msg_trigger
+game_print 0 You took the rockets
+game_print 2 You took the cells
+game_print 3 Bob: hello all
+game_print 2 hello from the server
+game_print t help at ra
+game_print 3 help at ya
+game_print 2 nobody home
+---
+greet says hi to you two (hi you two)
+a and b, a b % %h
+eq yes
+ne no
+isini yes
+isin no
+lg rl
+cvar_in: already inserted
+cvar_in: already inserted
+lg
+rl
+alias_out: not found
+alias_in: unknown alias "nolist"
+unknown command 'rl' (did you mean 'if'?)
+echo $0 says $1 to ${2-} ($@)
+say hello
+3804512903
+3804512903
+on_low : "took" -l 0
+on_chat : "hello" -l 3
+on_team : "help" -l t
+nobody : "nobody"
+You took the rockets
+low line
+You took the cells
+Bob: hello all
+chat line: Bob: hello all
+hello from the server
+help at ra
+team line
+help at ya
+nobody home
+trigger "nobody" has no matching alias
 

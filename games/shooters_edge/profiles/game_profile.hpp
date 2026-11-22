@@ -116,8 +116,6 @@ struct GameProfile {
   // farther from the player than this is no place they are in (500 in every classic game); 0, no
   // limit.
   std::string_view place_range = "500";
-  // Its client's place macros, `$loc_here` and `$loc_there` (client/place_names.hpp).
-  bool place_macros = false;
   // Its classic look picks every colour of the picture from its palette's 256, as its own drawing
   // did (client/world_draw.cpp's grade); false, full colour (Quake II's renderer drew the
   // textures' colours times their light with nothing picked).
@@ -197,7 +195,6 @@ inline constexpr GameProfile kGameProfiles[] = {
      .rules_campaign = true,
      .attract = "q2demo1",
      .arena_rules = "",
-     .place_macros = true,
      .palette_look = false,
      .conspeed = "3",
      .conspeed_screen = 1},

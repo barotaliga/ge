@@ -109,8 +109,8 @@ std::string auto_gender(std::string_view skin);
 // The loaded game's layer.
 struct GameCvarValues {
   std::string layer;  // "game:<id>", or "" before a game is loaded
-  // Quake II's map commands, clock, cl_autopause and state cvars (q2_session.hpp); their defaults
-  // in every other game.
+  // Every game's map commands (classic layer); Quake II's clock, cl_autopause and state cvars
+  // (q2_session.hpp), their defaults in every other game.
   Q2Session q2;
   Q2Screen screen;  // Quake II's view and 2D settings (q2_view.hpp), bound as GameBindings::screen
   // Quake II's console log (console_log.hpp): written by the console's sink, wrapped once (when it

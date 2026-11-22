@@ -202,3 +202,40 @@ TEST(quake2s_chat_settings_clean_follow_trigger_and_feed) {
   c.run();
   CHECK(g.chat.feed.lines().empty());
 }
+
+// The team's extras on a kept line: cl_nofake, tp_soundtrigger, the queries and msg_trigger.
+TEST(the_teams_extras_on_a_kept_line) {
+  con::Console c;
+  cl::QwIgnore g;
+  cl::DemoState s = room();
+  cl::add_qw_ignore(c, g, s);
+  g.con = &c;
+  g.chat.con = &c;
+  c.execute("alias got \"echo got: $triggermatch\"; msg_trigger got \"quad\" -l 3");
+  c.run();
+  std::vector<cl::DemoPrint> prints{{3, "bob: fake\rme: x\n"},
+                                    {3, "(bob): quad up ~misc/gong\n"},
+                                    {3, "bobby: f_version\n"},
+                                    {3, "bobby: quad?\n"}};
+  c.clear_output();
+  cl::drop_ignored(g, s, prints, 100);
+  CHECK(prints.size() == 4);
+  CHECK(prints[0].text == "bob: fake me: x\n");  // cl_nofake 2: another's line shown plain
+  CHECK(prints[1].text == "(bob): quad up \n");  // the sound word taken off
+  bool gong = false;
+  for (const cl::DemoSound& d : s.started)
+    gong = gong || (d.name != nullptr && std::string(d.name) == "misc/gong.wav");
+  CHECK(gong);
+  c.run();
+  std::string got;
+  for (const std::string& l : c.output()) got += l + "|";
+  // Both chat lines fired (the team's too); the aliases run after, reading the last line.
+  CHECK_MSG(got.find("got: quad?\n|got: quad?\n|") != std::string::npos, "fired twice: " + got);
+  CHECK(c.expand_text("$triggermatch").starts_with("quad"));
+  std::vector<cl::DemoPrint> again{{3, "bobby: f_version\n"}};
+  cl::drop_ignored(g, s, again, 105);  // answered once in 20 seconds
+  s.levels = 7;                        // a new map: $triggermatch goes
+  std::vector<cl::DemoPrint> none;
+  cl::drop_ignored(g, s, none, 106);
+  CHECK(c.expand_text("$triggermatch").empty());
+}
