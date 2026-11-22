@@ -284,7 +284,7 @@ if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
                         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
   target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_classic
                                               shooters_edge_menu
-                                              ge_platform ge_hud ge_console)
+                                              ge_platform ge_hud ge_console ge_build_info)
   # The held weapons' models and the game's own content (its sounds for the built-in arena)
   # where the tree is, for a game run from somewhere else (-models wins).
   target_compile_definitions(shooters_edge

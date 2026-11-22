@@ -200,13 +200,15 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
     const auto share = static_cast<float>(std::clamp(view.foot_progress(), 0.0, 1.0));
     if (view.foot_progress() >= 0 && style.bar_glyphs) {  // the sheet's own bar and its knob
       constexpr int kMiddle = 16;
-      std::string bar = "\u0080";
-      for (int i = 0; i < kMiddle; ++i) bar += "\u0081";
-      bar += "\u0082";
-      const float cell = font.advance("\u0081", text);
+      // U+0080..U+0083 (the bar's ends, its middle, its knob) as their UTF-8 bytes: a "\u0080"
+      // is read through MSVC's narrow code page, which has no such characters.
+      std::string bar = "\xC2\x80";
+      for (int i = 0; i < kMiddle; ++i) bar += "\xC2\x81";
+      bar += "\xC2\x82";
+      const float cell = font.advance("\xC2\x81", text);
       const float base = input_top - row + ascent;
       list.text(font, text, fx, base, bar, style.input);
-      list.text(font, text, fx + cell * (1 + share * (kMiddle - 1)), base, "\u0083", style.input);
+      list.text(font, text, fx + cell * (1 + share * (kMiddle - 1)), base, "\xC2\x83", style.input);
       fx += cell * (kMiddle + 3);
     } else if (view.foot_progress() >= 0) {
       const float bw = std::min(w * 0.3f, 240 * s), bh = row * 0.5f, by = input_top - row * 0.75f;

@@ -43,7 +43,9 @@ struct BirthsCut {
   BirthsCut(const BirthsCut&) = delete;
   BirthsCut& operator=(const BirthsCut&) = delete;
   ~BirthsCut() {
-    if (on && births.size() > keep) births.resize(keep);
+    // Shrinking never allocates; erase, unlike resize, is not one that may grow.
+    if (on && births.size() > keep)
+      births.erase(births.begin() + static_cast<std::ptrdiff_t>(keep), births.end());
   }
 };
 

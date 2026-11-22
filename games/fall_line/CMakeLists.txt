@@ -88,7 +88,7 @@ if(GE_PLATFORM AND GE_GPU)
   add_executable(fall_line app/main.cpp)
   ge_app_bundle(fall_line NAME "Fall Line" ID fall-line)
   target_link_libraries(fall_line PRIVATE ge_platform fall_line_app fall_line_sound fall_line_cfg
-                                          fall_line_controls)
+                                          fall_line_controls ge_build_info)
 endif()
 
 # The hub (hub/), named `fall_line_hub` on disk at the build's root: the engine's hub (engine/hub,

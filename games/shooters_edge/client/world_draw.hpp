@@ -32,6 +32,7 @@
 
 #include "console/console.hpp"
 #include "gpu/device.hpp"
+#include "render/frame.hpp"
 #include "render/morph.hpp"
 #include "render/view.hpp"
 #include "shooters_edge/app/look.hpp"
@@ -131,23 +132,9 @@ void world_sun(const WorldDraw& w, ge::render::FrameView view, double out[3]);
 // The last GPU reading of the frame's span (a frame or more late) into `p`; nothing when the GPU
 // has no timestamp queries.
 void record_span(const WorldDraw& w, PassTimes& p);
-
-// `gpustats [frames]`: what the next frames cost on the GPU, the dearest passes first, printed once
-// they are drawn (60 frames by default): what to look at when a view is slow.
-// With the CPU's side beside it: the frame's whole time (wall clock), the world's preparing and
-// encoding, and the rest (the game, the effects, the HUD, waiting for the display), so a frame
-// held up by the CPU shows as such.
-struct GpuWatch {
-  PassTimes times;
-  std::vector<double> frame_ms, world_cpu_ms;
-  int left = 0;     // frames still to read
-  size_t read = 0;  // frames read
-};
-void add_gpustats(ge::console::Console& con, GpuWatch& watch);
-// After each frame drawn (`frame_s` the whole frame's wall time): its times read while a
-// `gpustats` runs, the report printed at its end.
-void gpu_watch_frame(GpuWatch& watch, const WorldDraw& w, double frame_s,
-                     ge::console::Console& con);
+// The last frame's stats (its passes, their CPU and GPU times): what gpustats reads
+// (render/gpu_watch.hpp).
+const ge::render::FrameStats& world_stats(const WorldDraw& w);
 
 // The burn entity `entity` shows this frame (client/burning.hpp; all 0 when none).
 ge::render::MorphBurn world_burn(const WorldDraw& w, int entity);
