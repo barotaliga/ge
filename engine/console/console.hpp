@@ -131,6 +131,8 @@ class Console {
   // `name` runs our command `target`: a game's own spelling of it, in the cvars' current layer
   // (cvar.hpp § LAYERS), so it goes with that layer (`drop_layer`).
   void add_command_synonym(std::string_view name, std::string_view target);
+  // Every command synonym as (its name, the command it runs), sorted by name.
+  std::vector<std::pair<std::string, std::string>> command_synonyms() const;
   // A layer taken away: its cvars and setting synonyms (`Cvars::drop_layer`) and its command
   // synonyms. Returns how many moved.
   int drop_layer(std::string_view layer);

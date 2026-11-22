@@ -379,6 +379,13 @@ void Console::add_command_synonym(std::string_view name, std::string_view target
   command_synonyms_[lower(name)] = {lower(target), cvars_.layer()};
 }
 
+std::vector<std::pair<std::string, std::string>> Console::command_synonyms() const {
+  std::vector<std::pair<std::string, std::string>> out;
+  out.reserve(command_synonyms_.size());
+  for (const auto& [name, s] : command_synonyms_) out.emplace_back(name, s.target);
+  return out;
+}
+
 int Console::drop_layer(std::string_view layer) {
   const std::string key = lower(layer);
   const size_t names = command_synonyms_.size();

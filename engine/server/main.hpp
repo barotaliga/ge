@@ -66,7 +66,8 @@ bool server_configure(console::Console& console, const std::vector<std::string>&
 // `sv_mod` set, and the layers read again with the command line kept in `cfg`, so a mod's
 // server.cfg takes over what it sets and the command line still wins. The running match is the
 // caller's to restart under `config`. False with `error` when a layer refuses; the mods before
-// are then read again and kept.
+// are then read again and kept. With `fs_autoexec` 0 only the search path and `sv_mod` change:
+// no value is reset and no layer read.
 bool server_switch_mods(console::Console& console, ServerCfg& cfg, const ServerConfig& config,
                         const std::vector<std::string>& mods, std::string& error);
 

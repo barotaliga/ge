@@ -388,12 +388,12 @@ int run_main(int argc, char** argv) {
                 "passed over");
   console.cvars().apply_latched();
 
-  // The game the install is (args.profile, found by its folders: client/game_folder.hpp).
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
   cl::Q2Bar q2_bar{.files = &files,
                    .binds = &console.binds().table(ge::console::BindMode::game),
                    .screen = &q2_screen,
-                   .fx = &picture.q2fx};
+                   .fx = &picture.q2fx,
+                   .gamma = &picture.gamma};
   cl::add_q2_bar_commands(console, q2_bar);  // dumpstatusbar, dumplayout, aashot, aadump
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
@@ -772,9 +772,9 @@ int run_main(int argc, char** argv) {
   };
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
   cl::DemoFolder bench_folder;               // the demo's game folder (timedemo.hpp's demo_folder)
-  size_t bench_models = 0;         // the model list's length the demo's world was made with
-  cl::FxFrame bench_fx;            // the demo's entities, players and effects this frame
-  cl::FxState bench_fx_state;      // the demo's effects as they live (world_fx.hpp)
+  size_t bench_models = 0;  // the model list's length the demo's world was made with
+  cl::FxFrame bench_fx;     // the demo's entities, players and effects this frame
+  cl::FxState bench_fx_state = cl::fx_state_for(&places);  // the demo's effects
   cl::DemoFx bench_demo_fx;        // its temporary entities this level (demo_fx.hpp)
   ge::gpu::Target bench_off;       // the benchmark's frames that are not shown
   uint64_t bench_shown_ns = 0;     // when the benchmark last showed a frame
@@ -894,7 +894,7 @@ int run_main(int argc, char** argv) {
   shown.q2 = &q2_screen;  // Quake II's cl_adjustfov and cl_kickangles
   cl::DemoEyes demo_eyes{.gun_kick = &remote.gunkick, .view_kick = &q2_screen.kick_angles};
   ge::ui::Vec2 last_pointer;
-  cl::FxState fx_state;
+  cl::FxState fx_state = cl::fx_state_for(&places);  // loc_draw's markers among the effects
   cl::FxFrame fx;
   // The pack's palette for the classic effects' specks, read again when the game folder changes.
   // and the effects the game's files define (particles/*.fx, world_fx.hpp), read with it.
@@ -1005,7 +1005,7 @@ int run_main(int argc, char** argv) {
   // A new map's or a new server's: what was seen of the last one let go, the user info sent again.
   const auto forget_seen = [&] {
     shown = {};
-    fx_state = {};
+    fx_state = cl::fx_state_for(&places);
     const bool at_eye = in_hand.hand.at_eye;  // the loaded set's, not the level's
     in_hand = {};
     in_hand.hand.at_eye = at_eye;
@@ -1500,7 +1500,7 @@ int run_main(int argc, char** argv) {
         demo_world = true;
         demo_level_t = t;
         bench_models = ds.models.size();
-        bench_fx_state = {};  // a new level: what burned on the last one is gone
+        bench_fx_state = cl::fx_state_for(&places);  // a new level: nothing burning
         bench_demo_fx = {};
         if (drawn_remote)
           sn::remote_world(remote, &bench_map->spec.models, bench_map->spec.brushes.get());

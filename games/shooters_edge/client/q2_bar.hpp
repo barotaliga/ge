@@ -86,6 +86,11 @@ struct Q2Bar {
   // The hit marker (classic/q2_fx_switches.hpp's `cl_hit_markers`): the switches (null: none
   // drawn), the recording's hits last seen and the real time of the last new one, s.
   const ge::classic::Q2FxSwitches* fx = nullptr;
+  // The picture's brightness (`gamma`, below 1 brighter), laid on the pictures under
+  // gl_gamma_scale_pics (q2_view.hpp's Q2Screen::gamma_pics); null: 1. `pics_gamma` the one the
+  // loaded pictures carry: a change reads them again.
+  const double* gamma = nullptr;
+  double pics_gamma = 1;
   // The crosshair's settings the last draw_q2_crosshair was given (ch_scale, ch_x, ch_y: a
   // scope's picture follows them); null: their defaults.
   const ge::hud::CrosshairSettings* cross = nullptr;

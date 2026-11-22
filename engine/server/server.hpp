@@ -106,9 +106,14 @@ struct ServerConfig {
   int32_t con_tab_threshold = 50;   // con_completion_threshold: matches listed before asking
   int32_t con_logfile = 0;          // con_logfile: the console log (console_log.hpp) 0 off, 1, 2
   int32_t con_logfile_flush = 0;    // con_logfile_flush: 0 buffered, 1 each line, 2 unbuffered
-  int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
   std::string con_logfile_name = "console";              // con_logfile_name: logs/<name>.log
   std::string con_logfile_prefix = "[%Y-%m-%d %H:%M] ";  // con_logfile_prefix: before each line
+  int32_t fs_autoexec = 1;    // fs_autoexec: a mod switch runs the configs again
+  int32_t fatal_errors = 0;   // com_fatal_error: a game's recoverable error ends the process
+  int32_t net_log = 0;        // net_log: the packet log (net/packet_log.hpp) 0 off, 1, 2
+  int32_t net_log_flush = 0;  // net_log_flush: 0 buffered, 1 each entry, 2 unbuffered
+  std::string net_log_name = "network";  // net_log_name: logs/<name>.log
+  int32_t max_spectators = 0;            // sv_maxspectators: spectators beside the players
   int32_t vote = 1;                // sv_vote: 1 lets players vote on settings for a map (vote.hpp)
   int32_t timeouts = 1;            // sv_timeouts: each side's timeouts a map (timeout.hpp)
   std::string spectator_password;  // sv_spectatorpassword: watching takes it
@@ -252,6 +257,14 @@ struct ServerGame {
   // words after it; `restart`: recycle's, the players told to reconnect), before `destroy`. Null:
   // `destroy` alone says goodbye.
   void (*quit)(void* game, const std::string& reason, bool restart) = nullptr;
+  // A RECOVERABLE ERROR the game raised since the last call (a hosted library's own error call):
+  // its text, once ("" none), read after each frame. The core prints it between two lines of
+  // stars ("ERROR: <text>") and calls `crash` with "Server crashed: <text>", the game left idle
+  // until the next map; with `com_fatal_error` it calls `crash` with "Server fatal crashed:
+  // <text>", prints the stars on the error stream ("FATAL: <text>") and the process ends with 1.
+  // Both may be null: the game raises none.
+  std::string (*drop_error)(void* game) = nullptr;
+  void (*crash)(void* game, const std::string& text) = nullptr;
   // The maps the game can load, by name (`$com_maplist`); may be null.
   void (*maps)(const void* game, std::vector<std::string>& out) = nullptr;
   // The game's own listening sockets for `showip` ("Server TCP" and where it is bound), appended

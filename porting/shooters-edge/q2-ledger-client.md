@@ -11,9 +11,9 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 128 | 13 | 5 | 10 | 156 |
-| Client settings (cvars) | 188 | 49 | 53 | 60 | 350 |
-| Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
-| Menu pages and rows | 90 | 67 | 4 | 1 | 162 |
+| Client settings (cvars) | 203 | 51 | 34 | 62 | 350 |
+| Macros ($name in typed and bound text) | 25 | 3 | 0 | 2 | 30 |
+| Menu pages and rows | 93 | 64 | 4 | 1 | 162 |
 | Server messages the client parses (svc) | 21 | 6 | 0 | 0 | 27 |
 | Temporary entities (svc_temp_entity) | 15 | 50 | 0 | 0 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 0 | 20 |
@@ -22,14 +22,14 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Entity render bits (RF_) and view bits (RDF_) | 19 | 5 | 8 | 0 | 32 |
 | Configstrings | 8 | 8 | 0 | 0 | 16 |
 | The layout language (status bar and layouts) | 26 | 1 | 0 | 0 | 27 |
-| HUD and screen elements | 16 | 10 | 2 | 1 | 29 |
+| HUD and screen elements | 17 | 10 | 1 | 1 | 29 |
 | Messages printed to the player | 69 | 57 | 14 | 7 | 147 |
 | Demo playback and recording features | 10 | 10 | 1 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 6 | 4 | 1 | 0 | 11 |
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
-| Picture and video | 11 | 7 | 2 | 0 | 20 |
+| Picture and video | 12 | 6 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 8 | 5 | 4 | 0 | 17 |
-| **all** | 730 | 302 | 96 | 83 | 1211 |
+| **all** | 751 | 300 | 75 | 85 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 188, partial 49, missing 53, not-taken 60
+done 203, partial 51, missing 34, not-taken 62
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -259,7 +259,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.m_accel | `m_accel` | mouse acceleration (default 0) | done | `plugins/shooter/mouse_feel.cpp` (Quake II's meaning, `client-gaps.md` round 6) |
 | cvar.m_autosens | `m_autosens` | scale the mouse by the field of view (default 0) | done | `plugins/shooter/controls.cpp` |
 | cvar.loc_trace | `loc_trace` | 1 picks the nearest place that can be seen (default 0) | done | `games/shooters_edge/client/place_names.cpp` |
-| cvar.loc_draw | `loc_draw` | draws each place point as a marker (default 0) | missing | C45 |
+| cvar.loc_draw | `loc_draw` | draws each place point as a marker (default 0) | done | `games/shooters_edge/client/place_names.cpp` (`place_markers`), drawn by `client/world_fx.cpp`; every game (Quake's marker the player's head) |
 | cvar.loc_dist | `loc_dist` | the farthest a place counts, units (default 500) | done | `games/shooters_edge/client/place_names.cpp` |
 | cvar.cl_gun | `cl_gun` | 0 hides the held gun, 2 right, 3 left (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_gunalpha | `cl_gunalpha` | the held gun's opacity (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` into `view/hand.hpp`'s `alpha`, the hand's opacity (`view/hand.cpp`), drawn see-through by the view model pass |
@@ -397,7 +397,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.s_testsound | `s_testsound` | debug: a test tone (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.s_swapstereo | `s_swapstereo` | swap left and right (default 0) | done | `client/room_ear.cpp` in the classic layer (Quake's too), `engine/audio/synth.cpp` swaps (M18k4 round 35) |
 | cvar.s_driver | `s_driver` | the sound driver | not-taken | the platform picks the system's sound driver (SDL's `SDL_AUDIO_DRIVER` names another); `soundinfo` says which |
-| cvar.s_enable | `s_enable` | 0 none, 1 software, 2 OpenAL (default 1) | missing | C32 |
+| cvar.s_enable | `s_enable` | 0 none, 1 software, 2 OpenAL (default 1) | done | the engine's `s_enable` (`platform/window_cvars.hpp`, every game): 0 no sound at all (the heard volume 0), 1 the sound on, 2 the same (its OpenAL mixer is our one mixer) |
 | cvar.s_volume | `s_volume` | the effects volume (default 0.7, saved) | done | synonym of `volume` (`client/cvar_layers.cpp`) |
 | cvar.s_ambient | `s_ambient` | 0 no loops, 1 all, 2 only loops with a model, 3 only the player's own (default 1) | done | `plugins/classic/q2_fx_switches.hpp` (`ambient`), heard in `games/shooters_edge/client/demo_sound.cpp` (`entity_loops`) |
 | cvar.s_show | `s_show` | debug: lists the sounds playing (default 0) | not-taken | `client-gaps.md`: developer tools left out |
@@ -420,10 +420,10 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.r_override_textures | `r_override_textures` | load replacement textures (default 1) | partial | ours replaces by classic enhance (`plugins/classicenhance`), not this switch |
 | cvar.r_texture_overrides | `r_texture_overrides` | bit sum of which kinds may be replaced (default -1) | missing | not found |
 | cvar.r_glowmaps | `r_glowmaps` | load glow maps (default 1) | partial | ours has glow maps from classic enhance; no switch by this name |
-| cvar.gl_partscale | `gl_partscale` | particle size (default 2) | missing | C18 |
-| cvar.gl_partstyle | `gl_partstyle` | 0 blended, 1 additive particles (default 0) | missing | C18 |
-| cvar.gl_partshape | `gl_partshape` | 0 soft dot, 1 square, 2 sharp dot (default 0) | missing | C18 |
-| cvar.gl_beamstyle | `gl_beamstyle` | 0 flat beams, 1 another look (default 0) | missing | C18 |
+| cvar.gl_partscale | `gl_partscale` | particle size (default 2) | done | Quake II's (`classic/q2_fx_switches.hpp`, `client/world_draw.cpp`): each speck's size times `q2_speck_scale`, 1 within 20 units and 1 + 0.004 a unit of its depth past them (5 at 1000), times the setting / 2; a puff of smoke keeps its own; another game's 0 leaves every speck as made |
+| cvar.gl_partstyle | `gl_partstyle` | 0 blended, 1 additive particles (default 0) | done | Quake II's: 1 adds the specks' light to what is behind them (`render/particles.hpp`'s ParticleSettings::additive), 0 lays them over it |
+| cvar.gl_partshape | `gl_partshape` | 0 soft dot, 1 square, 2 sharp dot (default 0) | done | Quake II's: the specks' shape on their quad (`render/particles.hpp`'s ParticleShape: 0 a soft round dot, 1 a hard square of the middle 5/8 at 60 %, 2 a flat disc at 60 % with a narrow soft rim); another game's the engine's soft capsule |
+| cvar.gl_beamstyle | `gl_beamstyle` | 0 flat beams, 1 another look (default 0) | done | Quake II's: 1 draws a laser and the rail trail's core as their core alone, as wide as their width, with no glowing sheath (`app/weapon_fx.hpp`'s round_beam); 0 the soft strip with its glow; the core's own edge stays a pixel soft |
 | cvar.gl_celshading | `gl_celshading` | outlines on models, width (default 0) | missing | C19 |
 | cvar.gl_dotshading | `gl_dotshading` | models shaded by precomputed directions (default 1) | missing | C19 |
 | cvar.gl_shadows | `gl_shadows` | 1 blob shadows under models, 2 fading with height (default 0) | missing | C19 |
@@ -433,7 +433,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_brightness | `gl_brightness` | adds to lightmaps (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.gl_dynamic | `gl_dynamic` | 0 no dynamic lights, 1 all, 2 only switchable styles (default 1) | done | synonym of `r_dynamic` (`client/cvar_layers.cpp`) |
 | cvar.gl_draworder | `gl_draworder` | the alpha below which translucent entities are drawn after the rest, sorted back to front (default 1) | missing | ours sorts its own translucent passes (`engine/render`); not this switch (C21) |
-| cvar.gl_clearcolor | `gl_clearcolor` | the colour behind the world where nothing is drawn (with `gl_clear`) (default black) | missing | not found (C21) |
+| cvar.gl_clearcolor | `gl_clearcolor` | the colour behind the world where nothing is drawn (with `gl_clear`) (default black) | not-taken | only read with `gl_clear`, which is not taken: our frame is cleared and every pixel drawn each frame, so no colour shows where nothing is drawn |
 | cvar.gl_dlight_falloff | `gl_dlight_falloff` | softer dynamic-light edges (default 1) | missing | not found |
 | cvar.gl_modulate_entities | `gl_modulate_entities` | the models' share of `gl_modulate` (default 1) | missing | not found |
 | cvar.gl_doublelight_entities | `gl_doublelight_entities` | models lit twice as bright, as the classic renderer did (default 1) | missing | not found |
@@ -445,12 +445,12 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_md5_use | `gl_md5_use` | draw MD5 replacements (default 1) | missing | not found |
 | cvar.gl_md5_distance | `gl_md5_distance` | beyond this distance the MD2 is drawn (default 2048) | missing | not found |
 | cvar.gl_damageblend_frac | `gl_damageblend_frac` | the damage tint drawn as a frame this wide (extended protocol) (default 0.2) | missing | C21 |
-| cvar.gl_waterwarp | `gl_waterwarp` | warp the view under water (default 0) | missing | C21 |
-| cvar.gl_fog | `gl_fog` | draw the fog the game sets (default 1) | missing | C21 (ours has `fog`, the command) |
+| cvar.gl_waterwarp | `gl_waterwarp` | warp the view under water (default 0) | done | Quake II's: under a liquid the whole 3D view ripples in the post pass (`render/post.hpp`'s PostRipple: 0.25 % of the screen, five waves, a radian a second), the HUD not |
+| cvar.gl_fog | `gl_fog` | draw the fog the game sets (default 1) | done | Quake II's: 0 draws no fog, neither the map's nor the `fog` command's (`client/world_draw.cpp`'s world_fog); the newer protocol's fog is the protocol rows' |
 | cvar.gl_bloom | `gl_bloom` | bloom (default 0) | partial | ours `ce_bloom`/`r_bloom`; Quake II's spelling missing (C21) |
 | cvar.gl_bloom_sigma | `gl_bloom_sigma` | bloom blur width (default 4) | missing | not found |
 | cvar.gl_swapinterval | `gl_swapinterval` | vertical sync (default 1, saved) | partial | ours `vid_vsync` (`engine/platform/pacing.cpp`); no synonym (C21) |
-| cvar.gl_drawsky | `gl_drawsky` | 0 skips the sky (default 1) | missing | not found |
+| cvar.gl_drawsky | `gl_drawsky` | 0 skips the sky (default 1) | done | Quake II's: 0 draws the sky's faces solid black (the world's fast sky in black, `classic/app/look.cpp`'s world_options), either look |
 | cvar.gl_clear | `gl_clear` | clear the screen each frame (default 0) | not-taken | `client-gaps.md`: rendering internals left out |
 | cvar.gl_novis | `gl_novis` | 0 uses visibility, 1 draws every leaf (default 0) | not-taken | `client-gaps.md`: rendering internals left out |
 | cvar.gl_lockpvs | `gl_lockpvs` | keeps the last visibility; cheat-protected (default 0) | not-taken | `client-gaps.md`: rendering internals left out |
@@ -460,16 +460,16 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_lightgrid | `gl_lightgrid` | light models from the map's light grid (default 1) | not-taken | `client-gaps.md`: rendering internals left out |
 | cvar.gl_polyblend | `gl_polyblend` | draw the screen tints (default 1) | done | `plugins/classic/app/look.cpp` |
 | cvar.gl_texturemode | `gl_texturemode` | nearest, linear, bilinear, trilinear filtering (default trilinear, saved) | done | `plugins/classic/app/look.cpp` |
-| cvar.gl_anisotropy | `gl_anisotropy` | anisotropic filtering (default 1) | missing | C21 |
+| cvar.gl_anisotropy | `gl_anisotropy` | anisotropic filtering (default 1) | done | Quake II's: the most taps along a slanted surface's long axis when the textures are filtered (1 none, up to 16; `brush/app/bsp.wgsl`'s filtered), the world's textures alone; another game keeps the renderer's own 4 |
 | cvar.gl_picmip | `gl_picmip` | texture size halvings (default 0) | done | `plugins/classic/app/look.cpp` |
-| cvar.gl_saturation | `gl_saturation` | texture saturation (default 1) | missing | C21 |
+| cvar.gl_saturation | `gl_saturation` | texture saturation (default 1) | done | Quake II's: the walls' and floors' texels moved toward their luminance (0.2126, 0.7152, 0.0722) in the world's shader (`brush/app/bsp.wgsl`'s repainted), never the liquids, sky, models or light; at once, no texture reload |
 | cvar.intensity | `intensity` | texture brightness factor (default 2) | done | `games/shooters_edge/client/cvar_layers.cpp` |
-| cvar.gl_invert | `gl_invert` | inverts texture colours (default 0) | missing | not found |
+| cvar.gl_invert | `gl_invert` | inverts texture colours (default 0) | done | Quake II's: the walls' and floors' texels a negative of their sRGB colour, after the saturation, the same faces alone |
 | cvar.vid_gamma | `vid_gamma` | gamma (default 1, saved) | done | synonym of `gamma` (`client/cvar_layers.cpp`) |
-| cvar.gl_gamma_scale_pics | `gl_gamma_scale_pics` | apply gamma to 2D pictures (default 0) | missing | not found |
+| cvar.gl_gamma_scale_pics | `gl_gamma_scale_pics` | apply gamma to 2D pictures (default 0) | done | Quake II's (`client/q2_view.hpp`'s Q2Screen::gamma_pics): the status bar's and the layouts' pictures read again with `gamma` (vid_gamma) laid on their colours, as the world's grade lays it on the 3D picture; 0 they keep their own |
 | cvar.gl_bilerp_chars | `gl_bilerp_chars` | smooth the font (default 0) | partial | `games/shooters_edge/client/q2_bar.cpp`: the status bar's and the screen's letters smoothed; the console's not yet |
-| cvar.gl_bilerp_pics | `gl_bilerp_pics` | smooth 2D pictures (default 1) | missing | not found |
-| cvar.gl_bilerp_skies | `gl_bilerp_skies` | smooth the sky (default 1) | missing | not found |
+| cvar.gl_bilerp_pics | `gl_bilerp_pics` | smooth 2D pictures (default 1) | done | Quake II's: the status bar's and the layouts' pictures, 0 all sharp, 1 those of 64 units and up across or down smoothed (the icons and digits sharp), 2 all smoothed (`client/q2_bar.cpp`); the menus' pictures keep their own |
+| cvar.gl_bilerp_skies | `gl_bilerp_skies` | smooth the sky (default 1) | done | Quake II's: 0 reads the map's sky box sharp, each texel a square (`brush/app/bsp.wgsl`'s sky_box_at); 1 smoothed |
 | cvar.gl_upscale_pcx | `gl_upscale_pcx` | upscale 8-bit pictures by hq2x/hq4x (default 0) | partial | ours upscales by classic enhance's trained upscaler; no switch by this name |
 | cvar.hqx | `hqx_y`, `hqx_cb`, `hqx_cr` | the hq2x upscaler's colour thresholds (48, 7, 6) | not-taken | `client-gaps.md`: rendering internals left out |
 | cvar.gl_downsample_skins | `gl_downsample_skins` | halve big skins (default 1) | not-taken | `client-gaps.md`: rendering internals left out |
@@ -547,17 +547,17 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.net_maxmsglen | `net_maxmsglen` | the largest packet asked of the server (default 1390) | done | `client/q2_session.cpp`; sent in the connect line on 35 and 36 (0 as 0, else 512..4086) |
 | cvar.net_chantype | `net_chantype` | 1 the newer net channel on modern protocols (default 1) | done | `client/q2_session.cpp`; asked on 36; the server's `nc=` answer decides (plugins/classic/protocol/channel.hpp's newer channel) |
 | cvar.net_ip | `net_ip` | the local address to bind | partial | ours has it for the server (`engine/server/main.cpp`), not the client |
-| cvar.net_ip6 | `net_ip6` | the local IPv6 address | missing | not found |
+| cvar.net_ip6 | `net_ip6` | the local IPv6 address | partial | Quake II's: the IPv6 address the client's IPv6 socket is bound to ("" any), read at each join, not at once |
 | cvar.net_port | `net_port` | the server's port (default 27910) | partial | ours has it for the server (`engine/server/main.cpp`) |
 | cvar.net_clientport | `net_clientport` | the client's own port (default any) | done | Quake II's `net_clientport` (default -1, any free port): the client's socket on that port, opened again the frame it moves with the connection carrying on; a port that will not open says so and any free port is used (`net/qw_remote.cpp`'s `own_port`); ours keeps the setting's value rather than putting it back to -1 |
 | cvar.net_dropsim | `net_dropsim` | debug: drop this share of packets (default 0) | partial | ours simulates networks in `engine/net` (labs), not by this setting |
 | cvar.net_log | `net_log_enable`, `net_log_name`, `net_log_flush` | write a network log | not-taken | a debug build's packet log only (absent from a release); ours keeps no settings that only a debug build has, and its own captures cover the need (`engine/net`'s pcap captures) |
-| cvar.net_enable_ipv6 | `net_enable_ipv6` | IPv6 networking | missing | not found |
-| cvar.net_ignore_icmp | `net_ignore_icmp` | ignore ICMP errors (default 0) | missing | not found |
+| cvar.net_enable_ipv6 | `net_enable_ipv6` | IPv6 networking | partial | Quake II's (`client/cvar_layers.cpp`, read by `net/qw_remote.cpp`): 0 refuses to join an IPv6 address ("IPv6 is turned off; set net_enable_ipv6 to 1 to join ..."), 1 and 2 join one from an IPv6 socket (`own_v6`), every game's `connect` reading `[addr]:port` and a bare IPv6 address; names resolve to IPv4 only, and a listen server never listens on IPv6 (2's half) |
+| cvar.net_ignore_icmp | `net_ignore_icmp` | ignore ICMP errors (default 0) | not-taken | ours always passes over the system's unreachable errors (`engine/net/udp_socket.cpp`), as its 1 does; a server that went away is found by `cl_timeout` instead |
 
 ## Macros ($name in typed and bound text)
 
-done 24, partial 3, missing 1, not-taken 2
+done 25, partial 3, missing 0, not-taken 2
 
 A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's value.
 
@@ -581,7 +581,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 | macro.cl_armor | `$cl_armor` | the armour stat | done | `games/shooters_edge/client/team_chat.cpp` |
 | macro.cl_weaponmodel | `$cl_weaponmodel` | the held weapon's model name | partial | `games/shooters_edge/net/qw_remote_macros.cpp`: on a Quake II server joined; a game played in the window reads "" |
 | macro.cl_numentities | `$cl_numentities` | entities in the frame | partial | `games/shooters_edge/net/qw_remote_macros.cpp`: on a server joined; a game played in the window reads 0 |
-| macro.cl_surface | `$cl_surface` | the texture name and flags in the line of sight | missing | C44 |
+| macro.cl_surface | `$cl_surface` | the texture name and flags in the line of sight | done | `games/shooters_edge/client/face_hit.cpp` (`surface_ahead`), `client/place_seen.cpp`; every game |
 | macro.gl_viewcluster | `$gl_viewcluster` | the view's visibility cluster number | not-taken | `client-gaps.md`: developer tools left out |
 | macro.gl_viewleaf | `$gl_viewleaf` | the view's leaf number (a debug build's) | not-taken | `client-gaps.md`: developer tools left out |
 | macro.com_date | `$com_date` | today's date by `com_date_format` | done | `engine/console/clock_macros.cpp` |
@@ -596,7 +596,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 90, partial 67, missing 4, not-taken 1
+done 93, partial 64, missing 4, not-taken 1
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
@@ -705,8 +705,8 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.vid.hwgamma | video: hardware gamma | `vid_hwgamma` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.vid.picmip | video: texture quality | `gl_picmip` 3 to 0 | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.vid.filter | video: texture filter | nearest, linear, bilinear, trilinear | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.vid.aniso | video: anisotropic filter | no to 16x | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.vid.saturation | video: texture saturation | `gl_saturation` 0 to 1 | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
+| menu.vid.aniso | video: anisotropic filter | no to 16x | done | `games/shooters_edge/menu/q2_pages.cpp`: the row is live, `gl_anisotropy` registered |
+| menu.vid.saturation | video: texture saturation | `gl_saturation` 0 to 1 | done | `games/shooters_edge/menu/q2_pages.cpp`: the row is live, `gl_saturation` registered |
 | menu.vid.intensity | video: texture intensity | `intensity` 1x, 2x, 3x | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.vid.lmsat | video: lightmap saturation | `gl_coloredlightmaps` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.vid.lmbright | video: lightmap brightness | `gl_brightness` 0 to 0.3 | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
@@ -725,7 +725,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.fx.glow | effects: entity glowing | `cl_noglow` inverted | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.fx.shadows | effects: ground shadows | no, yes, fade | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.fx.blend | effects: screen blending | `gl_polyblend` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.fx.warp | effects: screen warping | `gl_waterwarp` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
+| menu.fx.warp | effects: screen warping | `gl_waterwarp` | done | `games/shooters_edge/menu/q2_pages.cpp`: the row is live, `gl_waterwarp` registered |
 | menu.fx.grenade | effects: grenade explosions | `cl_disable_explosions` bit 0 inverted | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.fx.rocket | effects: rocket explosions | `cl_disable_explosions` bit 1 inverted | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.fx.rail | effects: railgun trail setup... | opens the rail page | done | `games/shooters_edge/menu/q2_pages.cpp` |
@@ -1092,7 +1092,7 @@ The words of the status-bar and layout programs the client runs every frame on a
 
 ## HUD and screen elements
 
-done 16, partial 10, missing 2, not-taken 1
+done 17, partial 10, missing 1, not-taken 1
 
 What the client draws in 2D over the view, in its drawing order, and the settings that govern each (the settings themselves are rows of the settings table).
 
@@ -1119,7 +1119,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 | hud.chatinput | the chat input line | "say:" or "say_team:" and the typed text at the top | done | `engine/console/talk.cpp` |
 | hud.blend | the screen tint | the player state's blend (damage red, pickup yellow, water), off by `cl_blend`/`gl_polyblend`; the extended protocol's damage tint as a frame `gl_damageblend_frac` wide | partial | the tint landed (`q2-gaps2-client.md` checked); the damage frame missing (C21) |
 | hud.viewsize | the screen-size border | a view under 100 % centred with the `backtile` picture round it | missing | C8 |
-| hud.locdraw | place markers | `loc_draw` draws each place point in the world | missing | C45 |
+| hud.locdraw | place markers | `loc_draw` draws each place point in the world | done | `games/shooters_edge/client/world_fx.cpp` (`place_markers`): the ancient head, the nearest bobbing under a white light |
 | hud.cinematic | cinematics | a `.cin` (or `.ogv`, `.mkv`, `.mp4`) full-screen with its sound, the known releases' letterbox cropped; any key skips | partial | `.cin` from the packs (`client/cinematic.cpp`); other formats and the crop missing (C25) |
 | hud.endpic | the end pictures | a cinematic name ending `.pcx` shows a still picture until a key | done | `games/shooters_edge/client/cinematic.cpp` (`q2-gaps2-client.md` checked) |
 | hud.console | the console | slides down to `con_height` at `scr_conspeed` over `conback`, `con_alpha`, `con_scale`; the program's version at the lower right; a yellow arrow prompt (`#` in `remotemode`) | done | `engine/console/view.cpp`: `con_height`, `con_speed`, `con_scale`, `remotemode`'s `#` prompt; `con_alpha` our `con_bgalpha` (`client/cvar_layers.cpp`) |
@@ -1360,7 +1360,7 @@ How the client makes sound, beyond the settings themselves.
 
 ## Picture and video
 
-done 11, partial 7, missing 2, not-taken 0
+done 12, partial 6, missing 2, not-taken 0
 
 How the client sets up and draws the picture, beyond the settings themselves. Ours draws with its own renderer (`engine/render`, `plugins/classic/app/look.cpp`); the GL driver's internals are not taken (`client-gaps.md`).
 
@@ -1372,7 +1372,7 @@ How the client sets up and draws the picture, beyond the settings themselves. Ou
 | vid.fov.server | the server's field of view | the player state's field drawn, interpolated (zoom, fixed FOV) | done | `client/present.cpp`: the player state's field of view eased between frames (`q2_fov_y`, `cl_adjustfov`) |
 | vid.areas | areas behind shut doors | a leaf whose area is not joined is not drawn | done | a leaf in an area the frame does not show draws nothing: off a recording or a joined server's frame, and from the listen server's open portals (`brush/map.cpp` `potentially_visible`, `client/demo_q2.cpp`, `server/q2_areas.cpp`) |
 | vid.pvs2 | the second PVS point | the PVS joined with that of a point 16 units below (above in water) | missing | C2 |
-| vid.particles | particles | squares facing the view, grown with distance, `gl_partscale`, `gl_partstyle`, `gl_partshape` | partial | ours draws the classic particles (landed); the settings and size rule not compared (C18) |
+| vid.particles | particles | squares facing the view, grown with distance, `gl_partscale`, `gl_partstyle`, `gl_partshape` | done | ours draws the classic particles facing the view, sized by `gl_partscale`'s rule with depth, blended or added by `gl_partstyle`, shaped by `gl_partshape` |
 | vid.shadows | blob shadows | `gl_shadows` | missing | C19 |
 | vid.shells | colour shells | a second copy pushed out, flat colour, 0.3 | done | `games/shooters_edge/client/q2_look.hpp` |
 | vid.ir | infra-red goggles | IR-visible models drawn flat red | done | client/q2_look.cpp `q2_infra_red`, client/world_models.cpp (red, no light, no minimum light) |

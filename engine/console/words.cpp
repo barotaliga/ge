@@ -6,6 +6,7 @@
 // ge:test tests/console_words_test.cpp
 #include "console/words.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <limits>
 
@@ -187,6 +188,42 @@ std::string values_for_default(std::string_view values, std::string_view fallbac
     at = out.find("the default", from);
   }
   return out;
+}
+
+std::vector<std::string> value_choices(const Cvar& c, size_t most) {
+  std::vector<std::string> out;
+  const bool whole = c.kind == CvarKind::integer || c.kind == CvarKind::boolean;
+  const auto spell = [&](double lo, double hi) {
+    constexpr double kInf = std::numeric_limits<double>::infinity();
+    if (!whole || lo == -kInf || hi == kInf || hi - lo + 1 > static_cast<double>(most))
+      return false;
+    auto v = static_cast<long long>(lo);
+    if (static_cast<double>(v) < lo) ++v;  // up to the first whole number in the range
+    for (; static_cast<double>(v) <= hi; ++v) out.push_back(std::to_string(v));
+    return true;
+  };
+  if (!c.values.empty()) {
+    std::vector<ValueEntry> entries;
+    if (!parse_values(c.values, entries)) return {};
+    for (const ValueEntry& e : entries) {
+      const std::string& p = e.pattern;
+      if (p == "TEXT" || p == "N" || p.find(' ') != std::string::npos) return {};
+      if (double lo = 0, hi = 0; range_of(p, lo, hi)) {
+        if (!spell(lo, hi)) return {};
+        continue;
+      }
+      out.push_back(p);
+    }
+  } else if (c.kind == CvarKind::boolean) {
+    out = {"0", "1"};
+  } else if (c.kind != CvarKind::integer || !(c.max > c.min) || !spell(c.min, c.max)) {
+    return {};
+  }
+  std::vector<std::string> kept;
+  for (std::string& v : out)
+    if (std::find(kept.begin(), kept.end(), v) == kept.end()) kept.push_back(std::move(v));
+  if (kept.size() < 2 || kept.size() > most) return {};
+  return kept;
 }
 
 }  // namespace ge::console
