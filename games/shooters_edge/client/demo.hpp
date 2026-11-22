@@ -70,6 +70,7 @@
 
 #include "classic/locs.hpp"
 #include "classic/q2_move.hpp"
+#include "server/sheet.hpp"
 #include "shooter/vec.hpp"
 #include "vfs/partial.hpp"
 #include "vfs/unpack.hpp"
@@ -459,6 +460,10 @@ struct Demo {
   float speedjump_share = -1;
   // The tag of our server's logins' key (svc 127; "" none told).
   std::string account_tag;
+  // The settings sheet our server of Quake II sends (svc 120, net/q2_votes.hpp), and whether it
+  // offered one (any part came): the server settings page asks it only then.
+  ge::server::SettingsSheet sheet;
+  bool sheet_offered = false;
   // The feel our server of Quake II runs every move on (svc 122), when it told one; the
   // stock move's (with the server's stated air acceleration) until then.
   bool feel_told = false;

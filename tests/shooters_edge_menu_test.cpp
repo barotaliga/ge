@@ -1616,3 +1616,17 @@ TEST(servers_page_reads_web_lists) {
   for (gn::TcpStream& t : streams) gn::tcp_close(t);
   gn::tcp_close_listener(web);
 }
+
+TEST(the_game_sets_the_menus_size) {
+  sm::ClassicArt art;  // by the window: the largest whole number that fits 1920 x 1080
+  CHECK(sm::classic_screen(art, 1920, 1080).scale == 5);
+  art.scale = 2;  // Quake II's ui_scale 2: twice the game's own size, centred
+  const sm::ClassicLayout l = sm::classic_screen(art, 1920, 1080);
+  CHECK(l.scale == 2 && l.x == 640 && l.y == 340);
+  art.scale = 0.5f;  // never smaller than the game's own
+  CHECK(sm::classic_screen(art, 1920, 1080).scale == 1);
+  sm::GameMenu menu;  // the setting outlives the game's pictures
+  menu.menu_scale() = 3;
+  menu.set_art(sm::ClassicArt{});
+  CHECK(menu.menu_scale() == 3);
+}

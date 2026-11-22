@@ -101,6 +101,8 @@ class GameMenu {
   const std::string& attract() const { return attract_; }
   // The classic pictures (empty: the classic look is not offered).
   void set_art(ClassicArt art);
+  // The menus' size the loaded game sets (ClassicArt::scale, kept across set_art).
+  float& menu_scale() { return art_.scale; }
   const ClassicArt& art() const { return art_; }
   // LOAD GAME was pressed since the last call: the window shows the desktop's folder chooser.
   bool take_load() { return std::exchange(load_asked_, false); }

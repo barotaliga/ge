@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 128 | 13 | 5 | 10 | 156 |
-| Client settings (cvars) | 180 | 48 | 78 | 44 | 350 |
+| Client settings (cvars) | 180 | 49 | 75 | 46 | 350 |
 | Macros ($name in typed and bound text) | 24 | 3 | 1 | 2 | 30 |
 | Menu pages and rows | 90 | 67 | 4 | 1 | 162 |
 | Server messages the client parses (svc) | 15 | 6 | 6 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 11 | 7 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 7 | 6 | 4 | 0 | 17 |
-| **all** | 714 | 302 | 128 | 67 | 1211 |
+| **all** | 714 | 303 | 125 | 69 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 180, partial 48, missing 78, not-taken 44
+done 180, partial 49, missing 75, not-taken 46
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -282,7 +282,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_nolerp | `cl_nolerp` | 1 draws entities at the newest frame without interpolation (default 0) | partial | `games/shooters_edge/net/qw_remote.cpp` (the first game's: missiles and movers only); verify on a Quake II server |
 | cvar.cl_shownet | `cl_shownet` | prints received messages: 1 sizes, 2 kinds, 3 entities (default 0) | partial | `net/q2_client.cpp`'s `read_payload` prints each message's size at 1 and above; the kinds (2) and entities (3) not listed |
 | cvar.cl_showmiss | `cl_showmiss` | prints each prediction miss (default 0) | done | `net/q2_predict.cpp` counts a miss (a new frame puts the newest move elsewhere than the last base did) and `net/q2_remote.cpp` prints "prediction miss on <frame>: <units>"; bound in `client/cvar_layers.cpp` |
-| cvar.showclamp | `showclamp` | prints when the client's time is clamped to the frames it has (default 0) | missing | not found |
+| cvar.showclamp | `showclamp` | prints when the client's time is clamped to the frames it has (default 0) | not-taken | a debug build's report only (absent from a release); ours keeps no settings that only a debug build has |
 | cvar.cl_timeout | `cl_timeout` | seconds of silence before the connection is dropped (default 120) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.rcon_address | `rcon_address` | where `rcon` goes when not connected (default empty) | done | `games/shooters_edge/net/qw_remote.cpp` |
 | cvar.cl_thirdperson | `cl_thirdperson` | draws the view from behind the player; the camera stops at walls and at moving doors and platforms (traced where they are drawn), and the player's own model fades as the camera is pushed close; cheat-protected (default 0) | partial | `games/shooters_edge/client/q2_session.cpp` (`view_behind`, a cheat; joined and hosted): stops at the world's walls, not at moving doors and platforms; the own figure is hidden rather than faded when a wall pushes the camera close |
@@ -303,7 +303,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_changemapcmd | `cl_changemapcmd` | a command run at each map change (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
 | cvar.cl_beginmapcmd | `cl_beginmapcmd` | a command run on entering each map (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
 | cvar.cl_ignore_stufftext | `cl_ignore_stufftext` | 1 refuses server-pushed commands not on a whitelist file (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` over `plugins/classic/protocol/stuff_filter`: 1 runs only what `stufftext-whitelist.txt` names, 2 says each refusal too |
-| cvar.cl_allow_vid_restart | `cl_allow_vid_restart` | 1 lets a typed `vid_restart` run (default 0) | missing | C33 |
+| cvar.cl_allow_vid_restart | `cl_allow_vid_restart` | 1 lets a typed `vid_restart` run (default 0) | not-taken | ours applies every video setting the moment it changes, so a typed `vid_restart` is always refused as Quake II's 0 refuses it ("Manual 'vid_restart' command ignored." and the reason once, `client/window_cvars.cpp`); a server's is dropped quietly |
 | cvar.cl_protocol | `cl_protocol` | 0 the best the server offers; 34, 35, 36 forced (default 0) | missing | ours speaks 34 only (C42) |
 | cvar.gender_auto | `gender_auto` | set `gender` from the skin's model (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_vwep | `cl_vwep` | draw other players' weapons (default 1) | done | synonym of `r_drawvweps` (`client/cvar_layers.cpp`) |
@@ -388,7 +388,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.ui_sortservers | `ui_sortservers` | the server browser's sort column (default 0) | done | Quake II's own (`menu/servers_page.hpp`'s `game_sort`, bound by `client/cvar_layers.cpp`) in place of our `sb_sortservers`: 0 the order found, 1 name, 2 game, 3 map, 4 players (the busiest first), 5 ping, minus the other way, ties by name the same way then by address, the silent last; LEFT, RIGHT and D move the sort without writing the setting |
 | cvar.ui_colorservers | `ui_colorservers` | colour the server list: grey for a password, anticheat 2 or a no-fake server, green under 30 ms, white otherwise (default 0) | done | a synonym of ours `sb_colorservers` (`games/shooters_edge/client/cvar_layers.cpp`) |
 | cvar.ui_pingrate | `ui_pingrate` | server pings a second, 0 from `rate` (default 0) | done | Quake II's own (`menu/servers_page.hpp`'s `game_ping_rate`) in place of our `sb_infospersec`: 0 the player's `rate` / 450 held to 1..100 (33 at 15000), 1..100 that many a second; ours asks at that pace on every try, where its second and third passes slow to two thirds and a third |
-| cvar.ui_scale | `ui_scale` | the menus' scale, 0 auto (default 0) | missing | C4 |
+| cvar.ui_scale | `ui_scale` | the menus' scale, 0 auto (default 0) | partial | Quake II's own (`menu/classic_art.hpp`'s `scale`, kept by `GameMenu::set_art`, bound by `client/cvar_layers.cpp`): 1..10 that many screen px a classic px, the menus centred; 0 fills the window by whole numbers where Quake II steps 1, 2, 4 by its height (or the desktop's DPI) |
 | cvar.ui_debug | `ui_debug` | debug: outlines menu items (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.ui_open | `ui_open` | 1 opens the main menu at start-up (default 0) | missing | ours opens its own title menu always |
 | cvar.adr | `adr0` .. `adr15` | the address book: 16 saved server addresses (saved) | done | `adr0` .. `adr15` (`games/shooters_edge/client/cvar_layers.cpp`), archived, the address book's rows (`menu/q2_pages.cpp`) |

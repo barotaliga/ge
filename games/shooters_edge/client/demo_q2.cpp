@@ -66,6 +66,7 @@ enum : uint8_t {
   kGeShare = 126,       // and the easy jump's share (net/q2_net_server.hpp)
   kGeAccountKey = 127,  // and the tag of its logins' key
   kGeBack = 119,        // and an item taken and when it comes back
+  kGeSheet = 120,       // and a part of the settings sheet (net/q2_votes.hpp)
 };
 
 // The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
@@ -1105,6 +1106,13 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
           d.voice_taken = true;
         else if (!v.data.empty())
           d.state.voice.push_back(std::move(v));
+        break;
+      }
+      case kGeSheet: {  // a part of the settings sheet: offered, or sent as asked
+        const int part = m.u8();
+        const std::string text = m.str();
+        d.sheet_offered = true;
+        ge::server::sheet_take(d.sheet, part, text);
         break;
       }
       case kGeShare: {  // the easy jump's share, thousandths
