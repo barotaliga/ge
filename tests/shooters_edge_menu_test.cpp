@@ -1571,6 +1571,8 @@ TEST(setup_shows_the_figure_in_the_chosen_colours) {
   dl.begin(640, 400);
   g.draw(dl, 640, 400, 0.25);
   CHECK(g.problems().empty());
+}
+
 // A web list of servers in sb_masters: the binary list's 6-byte records and the text list's lines
 // read into the browser's list; one that fails said in the game's words.
 TEST(servers_page_reads_web_lists) {
