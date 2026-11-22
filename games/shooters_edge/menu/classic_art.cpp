@@ -190,6 +190,36 @@ std::vector<uint8_t> lmp(const ui::Image& img) { return vfs::write_picture(quant
 
 }  // namespace
 
+const std::map<char, ui::Image>& toned(const std::map<char, ui::Image>& set, Tone tone) {
+  if (tone == Tone::full || set.empty()) return set;
+  // Kept by the set's address and tone, made again when its first letter's pixels moved (the
+  // letters cut again).
+  struct Kept {
+    const void* pixels = nullptr;
+    std::map<char, ui::Image> letters;
+  };
+  static std::map<std::pair<const void*, Tone>, Kept> kept;
+  Kept& k = kept[{&set, tone}];
+  const void* pixels = set.begin()->second.rgba.data();
+  if (k.pixels == pixels && k.letters.size() == set.size()) return k.letters;
+  k.pixels = pixels;
+  k.letters.clear();
+  const float keep = tone == Tone::half ? 0.5f : 0.0f;  // the colour's share kept
+  for (const auto& [ch, img] : set) {
+    ui::Image out = img;
+    for (size_t i = 0; i + 3 < out.rgba.size(); i += 4) {
+      const float luma =
+          0.2126f * out.rgba[i] + 0.7152f * out.rgba[i + 1] + 0.0722f * out.rgba[i + 2];
+      for (size_t c = 0; c < 3; ++c) {
+        const float v = luma + keep * (static_cast<float>(out.rgba[i + c]) - luma);
+        out.rgba[i + c] = static_cast<uint8_t>(std::lround(std::clamp(v, 0.0f, 255.0f)));
+      }
+    }
+    k.letters.emplace(ch, std::move(out));
+  }
+  return k.letters;
+}
+
 const ui::Image* ClassicArt::find(std::string_view name) const {
   const auto it = pictures.find(name);
   return it == pictures.end() ? nullptr : &it->second;

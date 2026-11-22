@@ -609,6 +609,7 @@ void connect(QcServer& s, int slot, const std::string& name, bool spectator, boo
     }
   }
   sh::connect_client(s.sv, slot, spectator, bot, parms == nullptr);
+  if (!bot) tell_paused(s, slot);
   fill_world(s, s.world, false);
 }
 

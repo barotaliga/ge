@@ -263,6 +263,28 @@ TEST(ce_skies_picks_our_sky_or_the_packs_in_the_modern_look) {
   CHECK(!lk::world_options(lk::Look::classic, {}, pic).pack_sky);  // the classic's own already
 }
 
+TEST(ce_enabled_0_turns_every_switch_off_and_1_gives_each_its_own_back) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  con.execute("ce_decals 0");
+  con.run();
+  con.execute("ce_enabled 0");
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(!pic.ce.skies && !pic.ce.textures && !pic.ce.flames && !pic.ce.decals);
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).pack_sky);  // the pack's sky
+  CHECK(con.cvars().find("ce_skies")->on());                     // the player's switch kept as set
+  con.execute("ce_flames 0");  // set while it is off: kept for when it is on again
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(!pic.ce.skies);
+  con.execute("ce_enabled 1");
+  con.run();
+  lk::apply_ce_enabled(pic, con.cvars());
+  CHECK(pic.ce.skies && pic.ce.textures && !pic.ce.decals && !pic.ce.flames);
+}
+
 TEST(ce_relief_and_ce_parallax_light_the_enhanced_textures_in_the_modern_look) {
   ge::console::Console con;
   lk::Picture pic;
@@ -683,6 +705,42 @@ TEST(quake2_bursts_throw_their_counts_and_lights) {
   const double still[3] = {0, 0, 0};
   fx::q2_steam(at, still, 10, 8, 40, 5, {}, &none);
   CHECK(none.empty());
+}
+
+// The trap's glow: 13 rising specks in a column and 8 thrown out that fall; the disruptor's
+// strands a speck every 3 units, black, rising; a tracker's dark shell of 300 black specks.
+TEST(quake2_trap_and_tracker_marks) {
+  const double at[3] = {1, 2, 3}, b[3] = {1 + 30 * 0.025, 2, 3};
+  fx::Particles trap, strands, shell;
+  fx::q2_trap(at, 4, {}, &trap);
+  fx::q2_tracker_trail(at, b, 4, {}, &strands);
+  fx::q2_tracker_shell(at, 40, 4, {}, &shell);
+  CHECK(trap.size() == 21);
+  for (size_t i = 0; i < 13; ++i) CHECK(trap[i].fall < 0);   // the column rises
+  for (size_t i = 13; i < 21; ++i) CHECK(trap[i].fall > 0);  // the thrown ones fall
+  CHECK_MSG(strands.size() == 10, std::to_string(strands.size()));
+  for (const auto& p : strands) CHECK(p.v[1] > 0 && p.tint[0] == 0);
+  CHECK((strands[0].p[1] > at[1]) != (strands[1].p[1] > at[1]));  // one strand each side
+  CHECK(shell.size() == 300);
+  for (const auto& p : shell)
+    CHECK(std::abs(std::sqrt((p.p[0] - at[0]) * (p.p[0] - at[0]) +
+                             (p.p[1] - at[1]) * (p.p[1] - at[1]) +
+                             (p.p[2] - at[2]) * (p.p[2] - at[2])) -
+                   1.0) < 1e-3);
+}
+
+// A power splash: 256 green specks round the box moving out; the widow's beam-out: 300 on a
+// sphere that grows to 45 units, still (none of them moving).
+TEST(quake2_power_splash_and_beam_out) {
+  const double at[3] = {0, 0, 0};
+  fx::Particles splash, half, none;
+  fx::q2_power_splash(at, 20, 3, {}, &splash);
+  fx::q2_beam_out(at, 0.5, 3, {}, &half);
+  CHECK(splash.size() == 256 && half.size() == 300);
+  for (const auto& p : half) {
+    const double r = std::sqrt(p.p[0] * p.p[0] + p.p[1] * p.p[1] + p.p[2] * p.p[2]);
+    CHECK(std::abs(r - 22.5 * 0.025) < 1e-3 && p.v[0] == 0 && p.v[1] == 0);
+  }
 }
 
 TEST(quake2_flies_swarm_up_hold_and_thin_over_a_minute) {

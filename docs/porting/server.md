@@ -77,7 +77,13 @@ what clients send. The design is `docs/servers.md`; this page places a game's pi
 The ranked gap lists in `porting/shooters-edge/server-gaps.md` and `q2-server-gaps.md`;
 spectator slots and team locks in Quake. The classic masters (`setmaster`, `heartbeat`, the
 shutdown) are one model for both games in `plugins/classic/protocol/masters.hpp`, each game's
-server sending its own form; Quake II's `public` setting is still to come (its ledger).
+server sending its own form; Quake II's `public` setting is still to come (its ledger). The
+lines a Quake server's players read are each game's own (`server/commands.cpp`): the operator's
+`say` ("console: " in QuakeWorld, "<hostname> " in Quake), the pause told by name in both (worded
+by the state before it in QuakeWorld, so a pause reads "unpaused", as that game does), "Server is
+paused." to one who joins a paused game and the release when the last player leaves, the refused
+suicide of the dead and of spectators, "<name> overflowed", and `quit` (`engine/server`): every
+QuakeWorld player told "server shutdown" in the datagram that drops it, then the masters.
 
 Quake II's ledger (`porting/shooters-edge/q2-ledger-server.md`) is the checklist; the facts of the
 operator's words, the player's queries and the connect checks are in

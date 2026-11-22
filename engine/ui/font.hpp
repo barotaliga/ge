@@ -35,6 +35,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "ui/image.hpp"
+
 namespace ge::ui {
 
 // One glyph's coverage at one size and phase: `alpha` is w x h, 0..255, its top-left at
@@ -43,6 +45,9 @@ struct GlyphMask {
   int w = 0, h = 0;
   int x0 = 0, y0 = 0;
   std::vector<uint8_t> alpha;
+  // Which mask this is (ui/image.hpp's `next_ui_serial`): a GPU pass keeps a mask's place in its
+  // atlas by the mask's address, and a font made again may put a new mask at an old one's.
+  uint64_t serial = next_ui_serial();
 };
 
 struct VMetrics {

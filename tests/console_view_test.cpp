@@ -33,6 +33,20 @@ TEST(slides_at_its_speed_and_the_tilde_toggles_it) {
   CHECK(!v.open() && v.drop() == 0);
 }
 
+TEST(escape_clears_the_text_first_and_the_tilde_keeps_it) {
+  Console c;
+  ConsoleView v(c);
+  v.set_open(true);
+  v.type("map e1m1");
+  v.toggle();  // the console's own key: closed, the text kept
+  CHECK(!v.open() && v.input() == "map e1m1");
+  v.toggle();
+  v.key(EditKey::escape);  // text typed: cleared, still open
+  CHECK(v.open() && v.input().empty());
+  v.key(EditKey::escape);  // nothing typed: closed
+  CHECK(!v.open());
+}
+
 TEST(full_covers_the_screen_at_once_then_slides_up_at_its_speed) {
   Console c;
   ConsoleView v(c);
@@ -259,6 +273,18 @@ TEST(editing_and_history) {
   CHECK(v.input().empty());
 }
 
+// con_history: only the newest typed lines are walked back through.
+TEST(con_history_keeps_the_newest_lines) {
+  Console c;
+  ConsoleView v(c);
+  c.execute("con_history 2");
+  for (const char* line : {"echo a", "echo b", "echo c"}) {
+    v.type(line);
+    v.key(EditKey::enter);
+  }
+  CHECK(v.history().size() == 2 && v.history().front() == "echo b");
+}
+
 // The list under the input line: every name the typed word starts, the most submitted first.
 TEST(suggestions_rank_by_use_then_length) {
   Console c;
@@ -350,6 +376,53 @@ TEST(scrollback_notify_and_triggers_on_game_lines) {
   CHECK(n.size() == 2 && n[0]->kind == LineKind::server && n[1]->text == "player: gg");
   v.frame(5);
   CHECK(v.notify().empty());
+}
+
+TEST(a_print_ending_in_its_newline_is_one_line_not_two) {
+  Console c;
+  ConsoleView v(c);
+  v.add(LineKind::output, "You got the shells\n");
+  v.add(LineKind::output, "You got the nails\n");
+  CHECK(v.lines().size() == 2 && v.lines()[0].text == "You got the shells" &&
+        v.lines()[1].text == "You got the nails");
+  v.add(LineKind::output, "\n");  // a blank line asked for stays one
+  v.add(LineKind::output, "a\n\nb\n");
+  CHECK(v.lines().size() == 6 && v.lines()[2].text.empty() && v.lines()[4].text.empty() &&
+        v.lines()[5].text == "b");
+}
+
+TEST(a_selection_copies_the_text_between_its_ends_either_way_round) {
+  Console c;
+  ConsoleView v(c);
+  v.add(LineKind::output, "first line");
+  v.add(LineKind::output, "second line");
+  v.add(LineKind::output, "third line");
+  const uint64_t n0 = v.lines()[0].n;
+  CHECK(!v.has_selection());
+  v.select_begin({n0 + 2, 5});  // dragged up from "third|"
+  v.select_to({n0, 6});         // to "first |line"
+  CHECK(v.has_selection());
+  CHECK(v.selected_text() == "line\nsecond line\nthird");
+  v.select_begin({n0 + 1, 3});  // a press that does not move selects nothing
+  CHECK(!v.has_selection() && v.selected_text().empty());
+  v.select_to({n0 + 1, 99});  // past a line's end: to its end
+  CHECK(v.selected_text() == "ond line");
+  v.select_clear();
+  CHECK(!v.has_selection());
+}
+
+TEST(a_line_is_rewritten_in_place_while_it_is_kept) {
+  Console c;
+  ConsoleView v(c);
+  c.print("Loading base1... 0.1s");
+  const uint64_t n = v.newest();
+  c.print("Added packfile baseq2/pak0.pak");
+  CHECK(v.rewrite(n, "Loading base1... 2.4s"));
+  CHECK(v.lines().size() == 2 && v.lines()[0].text == "Loading base1... 2.4s" &&
+        v.lines()[1].text == "Added packfile baseq2/pak0.pak");
+  CHECK(!v.rewrite(n + 5, "nothing there"));
+  v.clear();
+  CHECK(!v.rewrite(n, "scrolled out"));
 }
 
 TEST(con_notify_hides_the_notify_lines_and_toggling_lets_them_go) {

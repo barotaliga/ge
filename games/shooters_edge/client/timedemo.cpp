@@ -424,16 +424,17 @@ void timedemo_mark(Timedemo& t, uint64_t now_ns) {
   t.last_ns = now_ns;
 }
 
-ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s) {
+ge::render::FrameView demo_view(const DemoState& s, double fov_y, double time_s, bool kick) {
   ge::render::FrameView v;
+  const sh::Vec3f k = kick ? s.kick : sh::Vec3f{};
   const ge::camera::Vec3 eye = engine_point(s.eye);
   v.eye[0] = eye.x;
   v.eye[1] = eye.y;
   v.eye[2] = eye.z;
   // The server's kick angles on the view (Quake II's bob, tilts and kicks; 0 in Quake).
-  v.heading = engine_heading(s.angles.y + s.kick.y);
-  v.pitch = engine_pitch(s.angles.x + s.kick.x);
-  v.roll = s.kick.z * 3.14159265358979323846 / 180;
+  v.heading = engine_heading(s.angles.y + k.y);
+  v.pitch = engine_pitch(s.angles.x + k.x);
+  v.roll = k.z * 3.14159265358979323846 / 180;
   v.fov_y = fov_y;
   v.time_s = time_s;
   return v;
@@ -520,6 +521,30 @@ hud::Status demo_status(const DemoState& s, double t) {
   h.key_silver = (items & kKeySilver) != 0;
   h.key_gold = (items & kKeyGold) != 0;
   return h;
+}
+
+bool bench_end_report(ge::console::Console& c, const Timedemo& bench, const std::string& why,
+                      bool by_player, const std::string& setup, int dumps,
+                      const std::filesystem::path& dump_log,
+                      const std::function<void(const std::string&)>& say) {
+  // A run stopped before a frame was timed has no report, only its reason; playback times none.
+  if (bench.paced) {
+    c.print("playdemo: " + bench.name + (why.empty() ? " ended" : " stopped: " + why));
+    return !by_player && !why.empty();
+  }
+  if (why.empty() || !bench.frame_s.empty()) {
+    const BenchStats stats = bench_stats(bench.frame_s);
+    for (const std::string& line : bench_report(bench.name, setup, stats)) say(line);
+    std::string dump_error;  // demo_benchmarkdumps: the result kept in the game's timedemo.log
+    if (dumps != 0 &&
+        !bench_dump(dump_log, bench_dump_record(bench.name, setup, stats, local_date_now()),
+                    dump_error))
+      c.print(dump_error);
+    c.print(span_report(bench.passes));
+  }
+  if (why.empty()) return false;
+  c.print("timedemo: stopped early: " + why);
+  return true;
 }
 
 }  // namespace shooters_edge::client

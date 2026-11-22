@@ -24,6 +24,8 @@
 #include "render/view.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/world_draw.hpp"
+#include "shooters_edge/menu/classic_console.hpp"
+#include "ui/draw.hpp"
 
 namespace shooters_edge::client {
 
@@ -38,5 +40,11 @@ ge::render::FrameView title_view(double t_s);
 WorldDrawPtr make_title_world(ge::gpu::Device& device, uint32_t width, uint32_t height,
                               wgpu::TextureFormat format, const look::Picture& picture,
                               std::string& error);
+
+// A CLASSIC GAME'S TITLE is its own console background over the screen, not Shooter's Edge's night
+// and moon: drawn into `dl` (a `w` x `h` screen) when `look` has one; else black when `black` (a
+// map loading in the console), else nothing (the night shows).
+void draw_title_backdrop(ge::ui::DrawList& dl, const menu::ClassicConsole& look, int w, int h,
+                         bool black);
 
 }  // namespace shooters_edge::client

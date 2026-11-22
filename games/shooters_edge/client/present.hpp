@@ -38,6 +38,7 @@
 #include "camera/first_person.hpp"
 #include "render/view.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/q2_view.hpp"
 
 namespace shooters_edge::client {
 
@@ -74,6 +75,14 @@ struct ViewState {
   double eye_prev_s = -1, eye_now_s = -1;
   // The rules' own view (PlayerState::rules_view) at their last two frames and as drawn between.
   sh::Vec3f offset_prev, offset_now, kick_prev, kick_now, offset, kick;
+  float fov_prev = 0, fov_now = 0;  // the rules' field of view (Quake II's) at those frames
+  // Quake II's view settings (q2_view.hpp: cl_adjustfov, cl_kickangles; null their defaults) and
+  // the window's width over its height, which the field of view across is kept on with the first
+  // off.
+  const Q2Screen* q2 = nullptr;
+  double aspect = 4.0 / 3.0;
+  // The idle sway's shape (v_ipitch_*, v_iyaw_*, v_iroll_*): pitch, yaw, roll; rad/s, degrees.
+  double idle_cycle[3] = {1, 2, 0.5}, idle_level[3] = {0.3, 0.3, 0.1};
   int64_t rules_frame = -1;   // Quake II's rules frame the kick and offset were last taken at
   double rules_frame_s = -1;  // the server's time it was taken at
 };

@@ -10,30 +10,30 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client console commands | 67 | 14 | 65 | 10 | 156 |
-| Client settings (cvars) | 67 | 32 | 211 | 40 | 350 |
+| Client console commands | 74 | 13 | 59 | 10 | 156 |
+| Client settings (cvars) | 112 | 30 | 168 | 40 | 350 |
 | Macros ($name in typed and bound text) | 2 | 1 | 25 | 2 | 30 |
 | Menu pages and rows | 25 | 25 | 111 | 1 | 162 |
 | Server messages the client parses (svc) | 13 | 8 | 6 | 0 | 27 |
-| Temporary entities (svc_temp_entity) | 12 | 50 | 3 | 0 | 65 |
+| Temporary entities (svc_temp_entity) | 14 | 50 | 1 | 0 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 18 | 0 | 2 | 0 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 1 | 0 | 0 | 33 |
-| Entity effect bits (EF_) | 27 | 1 | 5 | 0 | 33 |
-| Entity render bits (RF_) and view bits (RDF_) | 8 | 5 | 19 | 0 | 32 |
-| Configstrings | 7 | 5 | 4 | 0 | 16 |
-| The layout language (status bar and layouts) | 20 | 2 | 5 | 0 | 27 |
-| HUD and screen elements | 6 | 9 | 13 | 1 | 29 |
+| Entity effect bits (EF_) | 30 | 3 | 0 | 0 | 33 |
+| Entity render bits (RF_) and view bits (RDF_) | 11 | 5 | 16 | 0 | 32 |
+| Configstrings | 7 | 7 | 2 | 0 | 16 |
+| The layout language (status bar and layouts) | 24 | 1 | 2 | 0 | 27 |
+| HUD and screen elements | 11 | 10 | 7 | 1 | 29 |
 | Messages printed to the player | 11 | 60 | 71 | 5 | 147 |
 | Demo playback and recording features | 4 | 10 | 7 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 2 | 4 | 5 | 0 | 11 |
-| Sound and music | 3 | 7 | 3 | 0 | 13 |
-| Picture and video | 5 | 9 | 6 | 0 | 20 |
+| Sound and music | 5 | 6 | 2 | 0 | 13 |
+| Picture and video | 6 | 9 | 5 | 0 | 20 |
 | Connection, network, downloads and the rest | 2 | 6 | 9 | 0 | 17 |
-| **all** | 260 | 294 | 596 | 61 | 1211 |
+| **all** | 390 | 246 | 514 | 61 | 1211 |
 
 ## Client console commands
 
-done 67, partial 14, missing 65, not-taken 10
+done 74, partial 13, missing 59, not-taken 10
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -65,17 +65,17 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.toggleconsole | `toggleconsole` | opens or closes the console | done | `engine/console/view.cpp` |
 | cmd.messagemode | `messagemode` | opens the chat line to everyone | done | `engine/console/talk.cpp` |
 | cmd.messagemode2 | `messagemode2` | opens the chat line to the team | done | `engine/console/talk.cpp` |
-| cmd.remotemode | `remotemode <address> <password>` | turns the console's typed lines into rcon commands to that server (prompt changes) | missing | C23 |
+| cmd.remotemode | `remotemode <address> <password>` | turns the console's typed lines into rcon commands to that server (prompt changes) | done | `engine/console/view.cpp` (M18k4 round 33) |
 | cmd.clear | `clear` | clears the console's text | done | `engine/console/view.cpp` |
-| cmd.clearnotify | `clearnotify` | clears the notify lines at the top | partial | ours is `con_clearnotify` (`engine/console/view.cpp`); Quake II's spelling missing (C23) |
-| cmd.condump | `condump <file>` | writes the console's text to a file; "Dumped console text to x." | missing | C23 |
+| cmd.clearnotify | `clearnotify` | clears the notify lines at the top | done | `engine/console/view.cpp` (M18k4 round 33) |
+| cmd.condump | `condump <file>` | writes the console's text to a file; "Dumped console text to x." | done | `engine/console/view.cpp` (M18k4 round 32) |
 | cmd.cmd | `cmd <line>` | sends the line to the server as a client command | done | `games/shooters_edge/net/game_commands.cpp` |
 | cmd.say | `say <text>` | chat to everyone (macros expanded) | done | `engine/console/talk.cpp` |
 | cmd.say_team | `say_team <text>` | chat to the team | done | `engine/console/talk.cpp` |
 | cmd.connect | `connect <address>` | connects to a server (a second argument is ignored; protocol from `cl_protocol`) | done | `games/shooters_edge/net/q2_remote.cpp` via `net/qw_remote.cpp` |
 | cmd.disconnect | `disconnect` | leaves the server, or stops a demo | done | `games/shooters_edge/net/qw_remote.cpp` |
 | cmd.reconnect | `reconnect` | reconnects to the last server; "No server to reconnect to." | done | `games/shooters_edge/net/qw_remote.cpp` |
-| cmd.followip | `followip [n]` | connects to the n-th last address seen in chat | missing | C31, C42 |
+| cmd.followip | `followip [n]` | connects to the n-th last address seen in chat | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
 | cmd.passive | `passive` | toggles waiting for a server to connect to us (through a NAT) | missing | C42 |
 | cmd.rcon | `rcon <command>` | sends a remote-console command with `rcon_password` to the server or `rcon_address` | done | `games/shooters_edge/net/qw_admin.cpp` |
 | cmd.pingservers | `pingservers` | pings the address book `adr0`..`adr15` and the LAN | missing | C41 |
@@ -134,7 +134,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.sky | `sky <name> [speed] [axis]` | changes the sky box and its rotation | missing | not found as a command (only the map's `sky` key is read); C33 |
 | cmd.draw | `draw <name> <x> <y> [color]` | puts a setting's or macro's value on screen | missing | C14 |
 | cmd.undraw | `undraw <name/all>` | removes a drawn value | missing | C14 |
-| cmd.clearchathud | `clearchathud` | clears the chat lines on screen | missing | C10 |
+| cmd.clearchathud | `clearchathud` | clears the chat lines on screen | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
 | cmd.viewpos | `viewpos` | prints the view's position and yaw | missing | C33 |
 | cmd.gun_next | `gun_next` | debug: show the next view model | missing | C33 |
 | cmd.gun_prev | `gun_prev` | debug: show the previous view model | missing | C33 |
@@ -162,8 +162,8 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.wait | `wait [n]` | delays the rest of the buffer by frames | done | `engine/console/console_builtins.cpp` |
 | cmd.text | `text <str>` | adds text to the command buffer | missing | not found |
 | cmd.complete | `complete <partial>` | prints completions | missing | not found (ours completes on Tab) |
-| cmd.trigger | `trigger <cmd> <match>` | runs a command when a server line matches | missing | C31 (ours has the first game's `re_trigger`) |
-| cmd.untrigger | `untrigger [all/cmd match]` | removes triggers | missing | C31 |
+| cmd.trigger | `trigger <cmd> <match>` | runs a command when a server line matches | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
+| cmd.untrigger | `untrigger [all/cmd match]` | removes triggers | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
 | cmd.if | `if <a> <op> <b> then ... [else ...]` | conditional | done | `engine/console/script.cpp` |
 | cmd.set | `set <cvar> <value> [u/s]` | sets or creates a setting | done | `engine/console/console_builtins.cpp` |
 | cmd.setu | `setu <cvar> <value>` | set as user info | missing | C33 |
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 67, partial 32, missing 211, not-taken 40
+done 112, partial 30, missing 168, not-taken 40
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -206,19 +206,19 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | --- | --- | --- | --- | --- |
 | cvar.con_notifytime | `con_notifytime` | seconds a printed line stays in the notify lines (default 3) | done | `engine/console/view.cpp` |
 | cvar.con_notifylines | `con_notifylines` | how many notify lines are shown (default 4) | done | `engine/console/view.cpp` |
-| cvar.con_clock | `con_clock` | a clock in the console's corner (default 0) | missing | C23 |
+| cvar.con_clock | `con_clock` | a clock in the console's corner (default 0) | done | `engine/console/view.cpp` (M18k4 round 32) |
 | cvar.con_height | `con_height` | the console's share of the screen height (default 0.5) | done | `engine/console/view.cpp` |
 | cvar.scr_conspeed | `scr_conspeed` | how fast the console slides (default 3) | done | `games/shooters_edge/client/game_start.cpp` |
-| cvar.con_alpha | `con_alpha` | the console's opacity (default 1) | missing | C23 |
-| cvar.con_scale | `con_scale` | the console text's scale, 0 auto by window size (default 0) | missing | C23, C4 |
+| cvar.con_alpha | `con_alpha` | the console's opacity (default 1) | done | a synonym of `con_bgalpha` (M18k4 round 33) |
+| cvar.con_scale | `con_scale` | the console text's scale, 0 auto by window size (default 0) | done | `engine/console/view.cpp` (M18k4 round 33) |
 | cvar.con_font | `con_font` | the console's font picture (default `conchars`) | partial | `engine/console/view.cpp` (ours names our charsets; verify a pack picture name is taken) |
 | cvar.con_background | `con_background` | the console's backdrop picture (default `conback`) | missing | ours always draws the pack's `conback` (C23) |
 | cvar.con_scroll | `con_scroll` | bit sum: a new line or a key press scrolls the console to the bottom (default 0) | missing | C23 |
-| cvar.con_history | `con_history` | lines of typed history kept (default 128) | missing | C23 |
+| cvar.con_history | `con_history` | lines of typed history kept (default 128) | done | `engine/console/view.cpp` (M18k4 round 35) |
 | cvar.con_timestamps | `con_timestamps` | stamps every console line with the time (default 0) | partial | `client/chat_lines.cpp` stamps chat lines (the first game's meaning); verify every line |
 | cvar.con_timestampsformat | `con_timestampsformat` | the stamp's strftime format (default `%H:%M:%S `) | missing | C23 |
 | cvar.con_timestampscolor | `con_timestampscolor` | the stamp's colour (default `#aaa`) | missing | C23 |
-| cvar.con_auto_chat | `con_auto_chat` | a typed line without a slash: 0 a command, 1 say, 2 say_team (default 0) | partial | ours `con_chat` (engine) with other values; no Quake II spelling (C31) |
+| cvar.con_auto_chat | `con_auto_chat` | a typed line without a slash: 0 a command, 1 say, 2 say_team (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` (M18k4 round 32) |
 | cvar.cl_demosnaps | `cl_demosnaps` | seconds between seek snapshots while a demo plays (default 10) | partial | ours keeps its own keyframes (`engine/replay`); no setting |
 | cvar.cl_demomsglen | `cl_demomsglen` | the largest message a recorded demo frame holds (default 1390) | not-taken | `client-gaps.md` (C38): not taken |
 | cvar.cl_demowait | `cl_demowait` | 1 holds a finished demo on its last frame (default 0) | done | `games/shooters_edge/client/demo_playback.cpp` |
@@ -270,14 +270,14 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_footsteps | `cl_footsteps` | 0 no footsteps (and tells the server, on the modern protocol), 1 each surface's own step set when one is found, 2 always the default step sound (default 1) | missing | C16, C34 |
 | cvar.cl_noskins | `cl_noskins` | 1 every player the stock male, 2 female figures the stock female (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_predict | `cl_predict` | predict the player's own move (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
-| cvar.cl_kickangles | `cl_kickangles` | 0 drops the view kick the server sends; cheat-protected (default 1) | missing | C16 |
+| cvar.cl_kickangles | `cl_kickangles` | 0 drops the view kick the server sends; cheat-protected (default 1) | done | `games/shooters_edge/client/q2_view.cpp` (M18k4 round 34) |
 | cvar.cl_warn_on_fps_rounding | `cl_warn_on_fps_rounding` | warns when `cl_maxfps` will be rounded to whole milliseconds (default 1) | missing | not found |
 | cvar.cl_maxfps | `cl_maxfps` | moves (packets) a second on the asynchronous client, held between 10 and 125 (default 62) | done | `games/shooters_edge/net/q2_remote.cpp` (`own` row, `client-gaps.md` round 12); verify the 125 cap |
 | cvar.cl_async | `cl_async` | 0 one rate for moves and frames, 1 frames drawn apart from the move rate, 2 the display's buffer swaps pace the drawing (needs a newer OpenGL) (default 1) | partial | ours is always asynchronous; no setting (`client-gaps.md` round 12) |
 | cvar.r_maxfps | `r_maxfps` | caps drawn frames a second, 0 none (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
-| cvar.cl_autopause | `cl_autopause` | pause single player and demos while the console or a menu is up (default 1) | missing | C24 |
+| cvar.cl_autopause | `cl_autopause` | pause single player and demos while the console or a menu is up (default 1) | partial | `client/q2_session.cpp`, a game played alone (M18k4 round 35); a demo is not held under the menu |
 | cvar.cl_rollhack | `cl_rollhack` | other players' models lean the classic renderer's (wrong) way (default 1) | missing | C16 |
-| cvar.cl_noglow | `cl_noglow` | 1 stops items' light pulsing (default 0) | partial | ours `r_itempulse` (Quake II's layer 1) does the same inverted; no `cl_noglow` spelling (C16) |
+| cvar.cl_noglow | `cl_noglow` | 1 stops items' light pulsing (default 0) | done | `client/cvar_layers.cpp`, over `r_itempulse` (M18k4 round 35) |
 | cvar.cl_nobob | `cl_nobob` | 1 stops the view bobbing (default 0) | missing | ours has `cl_bob` (`engine/camera/cvars.cpp`); no `cl_nobob` spelling |
 | cvar.cl_nolerp | `cl_nolerp` | 1 draws entities at the newest frame without interpolation (default 0) | partial | `games/shooters_edge/net/qw_remote.cpp` (the first game's: missiles and movers only); verify on a Quake II server |
 | cvar.cl_shownet | `cl_shownet` | prints received messages: 1 sizes, 2 kinds, 3 entities (default 0) | missing | C43 |
@@ -293,15 +293,15 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_dlight_hacks | `cl_dlight_hacks` | bit sum: 1 rocket light recoloured, 2 smaller blast lights, 4 no muzzle light (default 0) | missing | C16 |
 | cvar.cl_smooth_explosions | `cl_smooth_explosions` | explosions fade smoothly over their whole life, which also fixes some explosions' length (default 1) | missing | ours draws its own explosions; not this switch (C16) |
 | cvar.cl_lerp_lightstyles | `cl_lerp_lightstyles` | 1 blends light styles between their letters instead of stepping (default 0) | missing | not found (C21) |
-| cvar.cl_gibs | `cl_gibs` | 0 draws no gibs and tells the server (default 1) | missing | ours `cl_gibfilter` is the first game's (C16) |
+| cvar.cl_gibs | `cl_gibs` | 0 draws no gibs and tells the server (default 1) | done | `client/cvar_layers.cpp`, our `cl_gibfilter` the other way round (M18k4 round 35); the server is told nothing on protocol 34 |
 | cvar.cl_flares | `cl_flares` | 0 hides the flares the game sends (extended protocol) (default 1) | missing | C16 |
 | cvar.cl_updaterate | `cl_updaterate` | asks the server for this many frames a second (extended protocol) (default 0) | partial | `engine/net/net_cvars.cpp` is our own protocol's; not sent to a Quake II server |
-| cvar.cl_chat_notify | `cl_chat_notify` | 0 keeps chat out of the notify lines (default 1) | missing | C31 |
-| cvar.cl_chat_sound | `cl_chat_sound` | 0 none, 1 `misc/talk.wav`, 2 `misc/talk1.wav`, or a sound's name (default 1) | partial | ours plays `misc/talk.wav` always; the setting missing (C31) |
-| cvar.cl_chat_filter | `cl_chat_filter` | 1 strips unprintable characters from chat (default 0) | missing | C31 |
-| cvar.cl_disconnectcmd | `cl_disconnectcmd` | a command run at each disconnect (default empty) | missing | C33 |
-| cvar.cl_changemapcmd | `cl_changemapcmd` | a command run at each map change (default empty) | missing | C33 |
-| cvar.cl_beginmapcmd | `cl_beginmapcmd` | a command run on entering each map (default empty) | missing | C33 |
+| cvar.cl_chat_notify | `cl_chat_notify` | 0 keeps chat out of the notify lines (default 1) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
+| cvar.cl_chat_sound | `cl_chat_sound` | 0 none, 1 `misc/talk.wav`, 2 `misc/talk1.wav`, or a sound's name (default 1) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
+| cvar.cl_chat_filter | `cl_chat_filter` | 1 strips unprintable characters from chat (default 0) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
+| cvar.cl_disconnectcmd | `cl_disconnectcmd` | a command run at each disconnect (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
+| cvar.cl_changemapcmd | `cl_changemapcmd` | a command run at each map change (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
+| cvar.cl_beginmapcmd | `cl_beginmapcmd` | a command run on entering each map (default empty) | done | `client/q2_session.cpp` (M18k4 round 35) |
 | cvar.cl_ignore_stufftext | `cl_ignore_stufftext` | 1 refuses server-pushed commands not on a whitelist file (default 0) | missing | C33 |
 | cvar.cl_allow_vid_restart | `cl_allow_vid_restart` | 1 lets a typed `vid_restart` run (default 0) | missing | C33 |
 | cvar.cl_protocol | `cl_protocol` | 0 the best the server offers; 34, 35, 36 forced (default 0) | missing | ours speaks 34 only (C42) |
@@ -316,7 +316,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.hand | `hand` | user info: 0 right, 1 left, 2 centre (default 0) | partial | `client/cvar_layers.cpp`; sent at the connect only (C30) |
 | cvar.fov | `fov` | user info: the field of view (default 90) | partial | synonym of `cl_fov`; the field the server sends back is not drawn (C3), sent at the connect only (C30) |
 | cvar.gender | `gender` | user info: male, female, none (default male) | done | `games/shooters_edge/client/cvar_layers.cpp` |
-| cvar.uf | `uf` | user info: flags (4 own FOV in demos, 32 recorded FOV, others for the server) (default empty) | missing | C3 |
+| cvar.uf | `uf` | user info: flags (4 own FOV in demos, 32 recorded FOV, others for the server) (default empty) | done | flags 4 and 32 read for recordings, `client/q2_view.cpp` (M18k4 round 34); not sent in the user info |
 | cvar.version | `version` | the program's name and version, read-only; part of a hosted server's info, not of the user info | partial | ours sends a version in the user info (`games/shooters_edge/net/q2_client.cpp`), which the original does not |
 | cvar.vid_ref | `vid_ref` | read-only: the renderer (gl) | not-taken | `client-gaps.md`: the window's renderer is its own |
 | cvar.vid_driver | `vid_driver` | the video driver to use | not-taken | `client-gaps.md`: the window's renderer is its own |
@@ -332,7 +332,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.scr_printspeed | `scr_printspeed` | letters a second of a typewriter centre print (extended protocol) (default 16) | missing | not found |
 | cvar.scr_demobar | `scr_demobar` | 1 a progress bar while a demo plays, 2 also the time (default 1) | partial | ours `demo_bar` (C39) |
 | cvar.scr_font | `scr_font` | the HUD's font picture (default `conchars`) | missing | not found |
-| cvar.scr_scale | `scr_scale` | the 2D scale, 0 auto by window height (default 0) | missing | C4 |
+| cvar.scr_scale | `scr_scale` | the 2D scale, 0 auto by window height (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` `q2_bar_scale` (M18k4 round 34) |
 | cvar.crosshair | `crosshair` | 0 none, N the `chN` picture (default 0) | done | `engine/hud/crosshair.hpp` (Quake II's layer `same`) |
 | cvar.netgraph | `netgraph` | 1 latency bars, 2 packet sizes (default 0) | missing | ours `r_netgraph` (C13) |
 | cvar.timegraph | `timegraph` | a frame-time graph (default 0) | missing | C13 |
@@ -340,11 +340,11 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.graphheight | `graphheight` | the graph's height (default 32) | missing | C13 |
 | cvar.graphscale | `graphscale` | the graph's vertical scale (default 1) | missing | C13 |
 | cvar.graphshift | `graphshift` | the graph's vertical offset (default 0) | missing | C13 |
-| cvar.scr_chathud | `scr_chathud` | 0 off, 1 last chat lines on screen, 2 in the alternate colour (default 0) | missing | C10 |
-| cvar.scr_chathud_lines | `scr_chathud_lines` | chat lines shown (default 4) | missing | C10 |
-| cvar.scr_chathud_time | `scr_chathud_time` | seconds a chat line stays, 0 for ever (default 0) | missing | C10 |
-| cvar.scr_chathud_x | `scr_chathud_x` | the chat lines' x (default 8) | missing | C10 |
-| cvar.scr_chathud_y | `scr_chathud_y` | the chat lines' y, negative from the bottom (default -64) | missing | C10 |
+| cvar.scr_chathud | `scr_chathud` | 0 off, 1 last chat lines on screen, 2 in the alternate colour (default 0) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
+| cvar.scr_chathud_lines | `scr_chathud_lines` | chat lines shown (default 4) | done | (M18k4 round 32) |
+| cvar.scr_chathud_time | `scr_chathud_time` | seconds a chat line stays, 0 for ever (default 0) | done | (M18k4 round 32) |
+| cvar.scr_chathud_x | `scr_chathud_x` | the chat lines' x (default 8) | done | (M18k4 round 32) |
+| cvar.scr_chathud_y | `scr_chathud_y` | the chat lines' y, negative from the bottom (default -64) | done | (M18k4 round 32) |
 | cvar.ch_health | `ch_health` | crosshair coloured by health: red full, green rising from 33 to 66, blue from 66 to 99, black when dead (default 0) | partial | `client/cvar_layers.cpp`; ours steps, the original ramps smoothly (C27) |
 | cvar.ch_red | `ch_red` | crosshair red (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.ch_green | `ch_green` | crosshair green (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
@@ -353,14 +353,14 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.ch_scale | `ch_scale` | crosshair picture scale, 0.1 to 9 (default 1) | done | synonym of `crosshairsize` (`client/cvar_layers.cpp`); verify the 0.1 to 9 clamp |
 | cvar.ch_x | `ch_x` | crosshair x offset (default 0) | done | synonym of `cl_crossx` (`client/cvar_layers.cpp`) |
 | cvar.ch_y | `ch_y` | crosshair y offset (default 0) | done | synonym of `cl_crossy` (`client/cvar_layers.cpp`) |
-| cvar.scr_draw2d | `scr_draw2d` | 0 no 2D, 1 no status bar, 2 all, 3 layouts only with F1 (default 2) | missing | C15 |
+| cvar.scr_draw2d | `scr_draw2d` | 0 no 2D, 1 no status bar, 2 all, 3 layouts only with F1 (default 2) | partial | 0, 1, 2 and 3 (M18k4 round 34); F1 held does not bring the layouts back at 3 |
 | cvar.scr_showturtle | `scr_showturtle` | network trouble words, 2 more of them (default 1) | missing | C12 |
-| cvar.scr_lag_x | `scr_lag_x` | the lag graph's x (default -1) | missing | C11 |
-| cvar.scr_lag_y | `scr_lag_y` | the lag graph's y (default -1) | missing | C11 |
-| cvar.scr_lag_draw | `scr_lag_draw` | 1 the lag graph, 2 on a dark box (default 0) | missing | C11 |
-| cvar.scr_lag_min | `scr_lag_min` | the lag graph's bottom, ms (default 0) | missing | C11 |
-| cvar.scr_lag_max | `scr_lag_max` | the lag graph's top, ms (default 200) | missing | C11 |
-| cvar.scr_alpha | `scr_alpha` | the opacity of every 2D element but the crosshair (default 1) | missing | C15 |
+| cvar.scr_lag_x | `scr_lag_x` | the lag graph's x (default -1) | done | `client/q2_bar.cpp` (M18k4 round 34) |
+| cvar.scr_lag_y | `scr_lag_y` | the lag graph's y (default -1) | done | `client/q2_bar.cpp` (M18k4 round 34) |
+| cvar.scr_lag_draw | `scr_lag_draw` | 1 the lag graph, 2 on a dark box (default 0) | done | `engine/hud/net_graph.cpp` `draw_lag_graph` (M18k4 round 34) |
+| cvar.scr_lag_min | `scr_lag_min` | the lag graph's bottom, ms (default 0) | done | (M18k4 round 34) |
+| cvar.scr_lag_max | `scr_lag_max` | the lag graph's top, ms (default 200) | done | (M18k4 round 34) |
+| cvar.scr_alpha | `scr_alpha` | the opacity of every 2D element but the crosshair (default 1) | done | `client/q2_bar.cpp` (M18k4 round 34) |
 | cvar.scr_showstats | `scr_showstats` | debug: prints the player's stats on screen (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.scr_showpmove | `scr_showpmove` | debug: the move state on screen (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.scr_hit_marker_time | `scr_hit_marker_time` | ms a hit marker shows (default 500) | missing | C26 |
@@ -378,11 +378,11 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_testentities | `cl_testentities` | debug: a ring of test models (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.cl_testlights | `cl_testlights` | debug: test lights; cheat-protected (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.cl_stats | `cl_stats` | debug: prints the view's entity, light and particle counts (default 0) | not-taken | `client-gaps.md`: developer tools left out |
-| cvar.cl_lights | `cl_lights` | 0 adds no dynamic lights (default 1) | missing | C16 |
-| cvar.cl_particles | `cl_particles` | 0 adds no particles (default 1) | missing | C16 |
-| cvar.cl_entities | `cl_entities` | 0 adds no entities (default 1) | missing | C16 |
-| cvar.cl_blend | `cl_blend` | 0 drops the full-screen tints (default 1) | missing | C16 |
-| cvar.cl_adjustfov | `cl_adjustfov` | 1 hor+ on wide screens, 0 vert- (default 1) | partial | ours is always hor+ (`q2-gaps2-client.md` checked); no setting |
+| cvar.cl_lights | `cl_lights` | 0 adds no dynamic lights (default 1) | done | a synonym of `r_dynamic` (M18k4 round 35) |
+| cvar.cl_particles | `cl_particles` | 0 adds no particles (default 1) | done | a synonym of `r_particles` (M18k4 round 35) |
+| cvar.cl_entities | `cl_entities` | 0 adds no entities (default 1) | done | a synonym of `r_drawentities` (M18k4 round 35) |
+| cvar.cl_blend | `cl_blend` | 0 drops the full-screen tints (default 1) | done | a synonym of `gl_polyblend` (M18k4 round 35) |
+| cvar.cl_adjustfov | `cl_adjustfov` | 1 hor+ on wide screens, 0 vert- (default 1) | done | `games/shooters_edge/client/q2_view.cpp` (M18k4 round 34) |
 | cvar.ui_sortdemos | `ui_sortdemos` | the demo browser's sort column, negative descending (default 1) | missing | C40 |
 | cvar.ui_listalldemos | `ui_listalldemos` | the demo browser lists every folder (default 0) | missing | C40 |
 | cvar.ui_sortservers | `ui_sortservers` | the server browser's sort column (default 0) | missing | C41 |
@@ -395,15 +395,15 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.s_khz | `s_khz` | the mixing rate in kHz (default 44, saved) | missing | ours mixes at 48 kHz always (`engine/audio/voice.hpp`) (C32) |
 | cvar.s_mixahead | `s_mixahead` | seconds the mixer runs ahead (default 0.1, saved) | missing | C32 |
 | cvar.s_testsound | `s_testsound` | debug: a test tone (default 0) | not-taken | `client-gaps.md`: developer tools left out |
-| cvar.s_swapstereo | `s_swapstereo` | swap left and right (default 0) | missing | C32 |
+| cvar.s_swapstereo | `s_swapstereo` | swap left and right (default 0) | done | `client/room_ear.cpp` in the classic layer (Quake's too), `engine/audio/synth.cpp` swaps (M18k4 round 35) |
 | cvar.s_driver | `s_driver` | the sound driver | missing | not found |
 | cvar.s_enable | `s_enable` | 0 none, 1 software, 2 OpenAL (default 1) | missing | C32 |
 | cvar.s_volume | `s_volume` | the effects volume (default 0.7, saved) | done | synonym of `volume` (`client/cvar_layers.cpp`) |
 | cvar.s_ambient | `s_ambient` | 0 no loops, 1 all, 2 only loops with a model, 3 only the player's own (default 1) | missing | C32 |
 | cvar.s_show | `s_show` | debug: lists the sounds playing (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.s_auto_focus | `s_auto_focus` | 0 always play, 1 not minimised, 2 only focused (default 0) | missing | C32 |
-| cvar.s_underwater | `s_underwater` | muffle sound under water (default 1) | missing | C28 |
-| cvar.s_underwater_gain_hf | `s_underwater_gain_hf` | the muffle's treble gain (default 0.25) | missing | C28 |
+| cvar.s_underwater | `s_underwater` | muffle sound under water (default 1) | done | `games/shooters_edge/client/room_ear.cpp` over the synth's muffle (M18k4 round 34) |
+| cvar.s_underwater_gain_hf | `s_underwater_gain_hf` | the muffle's treble gain (default 0.25) | done | (M18k4 round 34) |
 | cvar.ogg_enable | `ogg_enable` | play background music in any of the supported formats (`.flac`, `.opus`, `.ogg`, `.mp3`, `.wav`) (default 1) | missing | C29 |
 | cvar.ogg_volume | `ogg_volume` | the music volume (default 1) | missing | ours `bgmvolume` (C29) |
 | cvar.ogg_shuffle | `ogg_shuffle` | shuffle every track in `music/` (default 0) | missing | C29 |
@@ -506,18 +506,18 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.z_perturb | `z_perturb` | debug: fills freed memory (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.host_speeds | `host_speeds` | debug: prints frame timings (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.developer | `developer` | prints developer messages (default 0) | partial | ours has `developer` for the game library (`server/qvm_server.cpp`); verify the client's prints |
-| cvar.timescale | `timescale` | game speed; cheat-protected (default 1) | missing | not found |
-| cvar.fixedtime | `fixedtime` | fixed frame time; cheat-protected (default 0) | missing | not found |
-| cvar.logfile | `logfile` | 1 writes the console to a log file, 2 flushed each line (default 0) | missing | ours logs by a command-line flag (`engine/play/session_flags.cpp`), not this setting |
-| cvar.logfile_flush | `logfile_flush` | flush the log each line (default 0) | missing | not found |
-| cvar.logfile_name | `logfile_name` | the log's name (default `console`) | missing | not found |
-| cvar.logfile_prefix | `logfile_prefix` | each log line's time prefix (default `[%Y-%m-%d %H:%M] `) | missing | not found |
+| cvar.timescale | `timescale` | game speed; cheat-protected (default 1) | done | `client/q2_session.cpp`, a cheat, on a game this window runs (M18k4 round 35) |
+| cvar.fixedtime | `fixedtime` | fixed frame time; cheat-protected (default 0) | done | `client/q2_session.cpp`, a cheat, on a game this window runs (M18k4 round 35) |
+| cvar.logfile | `logfile` | 1 writes the console to a log file, 2 flushed each line (default 0) | done | `client/console_log.cpp`, in Quake II's layer (M18k4 round 35) |
+| cvar.logfile_flush | `logfile_flush` | flush the log each line (default 0) | done | `client/console_log.cpp` (M18k4 round 35) |
+| cvar.logfile_name | `logfile_name` | the log's name (default `console`) | done | `client/console_log.cpp`, `logs/<name>.log` beside the settings (M18k4 round 35) |
+| cvar.logfile_prefix | `logfile_prefix` | each log line's time prefix (default `[%Y-%m-%d %H:%M] `) | done | `client/console_log.cpp` (M18k4 round 35) |
 | cvar.console_prefix | `console_prefix` | a prefix on the system console's lines (default empty) | missing | not found |
 | cvar.dedicated | `dedicated` | read-only: a dedicated server | done | `engine/server/spawn.cpp` |
-| cvar.cl_running | `cl_running` | read-only: the client is running | missing | not found |
-| cvar.cl_paused | `cl_paused` | read-only: the client is paused | missing | not found |
-| cvar.sv_running | `sv_running` | read-only: a server is running | missing | not found |
-| cvar.sv_paused | `sv_paused` | read-only: the server is paused | missing | not found |
+| cvar.cl_running | `cl_running` | read-only: the client is running | done | `client/q2_session.cpp`, read-only (M18k4 round 35) |
+| cvar.cl_paused | `cl_paused` | read-only: the client is paused | done | `client/q2_session.cpp`, read-only (M18k4 round 35) |
+| cvar.sv_running | `sv_running` | read-only: a server is running | done | `client/q2_session.cpp`, read-only (M18k4 round 35) |
+| cvar.sv_paused | `sv_paused` | read-only: the server is paused | done | `client/q2_session.cpp`, read-only (M18k4 round 35) |
 | cvar.timedemo | `timedemo` | play a demo as fast as possible and print frames per second; cheat-protected (default 0) | done | `games/shooters_edge/client/demo_playback.cpp` |
 | cvar.com_date_format | `com_date_format` | the `$com_date` format (default `%Y-%m-%d`) | missing | C44 |
 | cvar.com_time_format | `com_time_format` | the `$com_time` format (default `%H.%M`) | missing | C44 |
@@ -803,7 +803,7 @@ Every message a server (or a recording) sends the client, and what the client do
 
 ## Temporary entities (svc_temp_entity)
 
-done 12, partial 50, missing 3, not-taken 0
+done 14, partial 50, missing 1, not-taken 0
 
 Each one-off effect a server sends, what the client draws and plays for it. The window's own game draws its own effects from its rules' events (`app/weapon_fx.hpp`, `app/monster_fx.hpp`, `client/world_fx.cpp`); the status here is for a joined server and a recording, where the original's effect must come from the message.
 
@@ -859,7 +859,7 @@ Each one-off effect a server sends, what the client draws and plays for it. The 
 | te.tracker_explosion | `TE_TRACKER_EXPLOSION` (47) | the disruptor's dark burst and a dark light | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.teleport_effect | `TE_TELEPORT_EFFECT` (48) | a teleport burst | done | named `sq_teleport` (`client/demo_q2.cpp`) |
 | te.dball_goal | `TE_DBALL_GOAL` (49) | the dodgeball goal's burst | done | the teleport burst; `client/world_fx_q2.cpp`, `app/effects.hpp` |
-| te.widowbeamout | `TE_WIDOWBEAMOUT` (50) | the widow's beam-out effect with an id | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
+| te.widowbeamout | `TE_WIDOWBEAMOUT` (50) | the widow's beam-out effect with an id | done | 300 specks a frame on a sphere growing to 45 units over 2.1 s, one per id; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.nukeblast | `TE_NUKEBLAST` (51) | the nuke's expanding blast | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.widowsplash | `TE_WIDOWSPLASH` (52) | the widow's splash | done | 256 specks in a sphere round it; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.explosion1_big | `TE_EXPLOSION1_BIG` (53) | a bigger explosion model | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
@@ -869,7 +869,7 @@ Each one-off effect a server sends, what the client draws and plays for it. The 
 | te.bfg_zap | `TE_BFG_ZAP` (57) | the newer game's BFG zap line | partial | read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.berserk_slam | `TE_BERSERK_SLAM` (58) | the berserker's ground slam | partial | read; drawn as our generic spike (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.grapple_cable_2 | `TE_GRAPPLE_CABLE_2` (59) | the newer game's grapple cable | partial | read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
-| te.power_splash | `TE_POWER_SPLASH` (60) | a power armour's splash round an entity | missing | read and dropped from a joined server or a recording (`client/demo_q2.cpp`); not drawn |
+| te.power_splash | `TE_POWER_SPLASH` (60) | a power armour's splash round an entity | done | 256 green specks round the entity's box as it stands, moving out; `client/demo_q2.cpp`, `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.lightning_beam | `TE_LIGHTNING_BEAM` (61) | the newer game's lightning beam | partial | read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.explosion1_nl | `TE_EXPLOSION1_NL` (62) | an explosion with no light | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.explosion2_nl | `TE_EXPLOSION2_NL` (63) | a grenade explosion with no light | partial | read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
@@ -948,7 +948,7 @@ A monster fired: the client places a light at the gun (the monster's per-flash o
 
 ## Entity effect bits (EF_)
 
-done 27, partial 1, missing 5, not-taken 0
+done 30, partial 3, missing 0, not-taken 0
 
 Bits of an entity's effects field a server sends; the client draws trails, lights, shells and frame cycles from them. Ours: `games/shooters_edge/client/q2_look.hpp` reads them for Quake II's entities.
 
@@ -956,7 +956,7 @@ Bits of an entity's effects field a server sends; the client draws trails, light
 | --- | --- | --- | --- | --- |
 | ef.rotate | `EF_ROTATE` (1) | turns the model about its yaw on the client's clock (items) | done | `games/shooters_edge/client/q2_look.hpp` |
 | ef.gib | `EF_GIB` (2) | a blood trail behind it (green with `EF_GREENGIB`) | done | `games/shooters_edge/client/q2_look.hpp` |
-| ef.bob | `EF_BOB` (4) | the newer game's item bob | missing | not read |
+| ef.bob | `EF_BOB` (4) | the newer game's item bob | partial | rises and sinks 5 units every 2.5 s (`client/q2_look.cpp`, `client/world_models.cpp`); `cl_nobob` not ours yet |
 | ef.blaster | `EF_BLASTER` (8) | a blaster bolt: yellow light and a particle trail (green with `EF_TRACKER`; the trail off by `cl_disable_particles` 32) | done | `games/shooters_edge/client/q2_look.hpp`; the 32 switch is a row of the settings table |
 | ef.rocket | `EF_ROCKET` (16) | a rocket: orange light and the smoke-and-fire trail (`cl_disable_particles` 8) | done | `games/shooters_edge/client/q2_look.hpp` |
 | ef.grenade | `EF_GRENADE` (32) | a grenade: smoke trail (`cl_disable_particles` 2) | done | `games/shooters_edge/client/q2_look.hpp` |
@@ -977,29 +977,29 @@ Bits of an entity's effects field a server sends; the client draws trails, light
 | ef.ionripper | `EF_IONRIPPER` (1<<20) | ion ripper bolt: red light and trail (mission pack) | done | red specks shaken across and a pink light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | ef.greengib | `EF_GREENGIB` (1<<21) | green blood trail | done | a green blood trail when no earlier branch takes it (`client/q2_look.cpp`) |
 | ef.bluehyperblaster | `EF_BLUEHYPERBLASTER` (1<<22) | blue light (mission pack) | done | a blue light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
-| ef.spinninglights | `EF_SPINNINGLIGHTS` (1<<23) | a spinning red light at the front (mission pack) | missing | not found |
+| ef.spinninglights | `EF_SPINNINGLIGHTS` (1<<23) | a spinning red light at the front (mission pack) | done | upside down, 500 degrees a second, a red light 64 units ahead (`client/world_models.cpp`, `client/world_fx_q2.cpp`, `app/effects.hpp`) |
 | ef.plasma | `EF_PLASMA` (1<<24) | plasma bolt: orange light (mission pack) | done | a pink light, drawn at 0.6 (`client/q2_look.cpp`, `client/world_fx_q2.cpp`, `app/effects.hpp`) |
-| ef.trap | `EF_TRAP` (1<<25) | the trap's light and particles (mission pack) | missing | not found |
-| ef.tracker | `EF_TRACKER` (1<<26) | disruptor bolt: a dark light and the tracker trail (mission pack) | missing | not found |
+| ef.trap | `EF_TRAP` (1<<25) | the trap's light and particles (mission pack) | done | a rising column and 8 thrown specks 32 units over it, a flickering yellow light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
+| ef.tracker | `EF_TRACKER` (1<<26) | disruptor bolt: a dark light and the tracker trail (mission pack) | done | two black strands woven about its line and a darkening light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | ef.double | `EF_DOUBLE` (1<<27) | double damage: a yellow shell | done | `games/shooters_edge/client/q2_look.hpp` |
 | ef.spheretrans | `EF_SPHERETRANS` (1<<28) | a see-through sphere (mission pack) | done | drawn at 0.3, 0.6 with the tracker trail (`client/q2_look.cpp`) |
 | ef.tagtrail | `EF_TAGTRAIL` (1<<29) | the tag token's trail (mission pack) | done | a yellow column of specks and a yellow light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | ef.half_damage | `EF_HALF_DAMAGE` (1<<30) | half damage: a shell | done | `games/shooters_edge/client/q2_look.hpp` |
-| ef.trackertrail | `EF_TRACKERTRAIL` (1<<31) | a tracker's dark trail and pulsing light (mission pack) | missing | not found |
+| ef.trackertrail | `EF_TRACKERTRAIL` (1<<31) | a tracker's dark trail and pulsing light (mission pack) | partial | with the tracker a pulsing darkening light, alone a black shell of 300 specks and a darkening light (`client/world_fx_q2.cpp`, `app/effects.hpp`); the model is not yet drawn black |
 | ef.lights | the lights per bit | each bit's light radius and colour, added to the view's dynamic lights (`cl_lights`) | partial | `q2_look.hpp` lights the missiles; verify radius and colour per bit against `q2-client-effects.md` § 6 |
 
 ## Entity render bits (RF_) and view bits (RDF_)
 
-done 8, partial 5, missing 19, not-taken 0
+done 11, partial 5, missing 16, not-taken 0
 
 Bits of an entity's render field, and of the player state's view flags.
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| rf.minlight | `RF_MINLIGHT` (1) | always some light (the view weapon) | missing | not read from the wire |
+| rf.minlight | `RF_MINLIGHT` (1) | always some light (the view weapon) | done | never darker than a tenth (`client/world_models.cpp`) |
 | rf.viewermodel | `RF_VIEWERMODEL` (2) | not drawn from the player's own eyes | partial | ours hides the viewer's own body by its own rule; the bit not read |
 | rf.weaponmodel | `RF_WEAPONMODEL` (4) | drawn only from the eyes | partial | ours draws its own view weapon; the bit not read |
-| rf.fullbright | `RF_FULLBRIGHT` (8) | drawn at full brightness | missing | not read |
+| rf.fullbright | `RF_FULLBRIGHT` (8) | drawn at full brightness | done | full light whatever the room (`client/world_models.cpp`) |
 | rf.depthhack | `RF_DEPTHHACK` (16) | depth squeezed so it never enters walls (the view weapon) | partial | ours draws the view weapon on top by its own pass |
 | rf.translucent | `RF_TRANSLUCENT` (32) | drawn at 0.7 | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.framelerp | `RF_FRAMELERP` (64) | blend between the old and new frame | partial | ours interpolates frames always; verify |
@@ -1015,7 +1015,7 @@ Bits of an entity's render field, and of the player state's view flags.
 | rf.shell_double | `RF_SHELL_DOUBLE` (65536) | double damage's shell | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.shell_half | `RF_SHELL_HALF_DAM` (131072) | half damage's shell | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.use_disguise | `RF_USE_DISGUISE` (1<<18) | drawn with the disguise skin (mission pack) | missing | not read |
-| rf.shell_lite_green | `RF_SHELL_LITE_GREEN` (1<<19) | a light green shell | missing | not read |
+| rf.shell_lite_green | `RF_SHELL_LITE_GREEN` (1<<19) | a light green shell | done | (0.56, 0.93, 0.56); the shell bits now mix in turn (`client/q2_look.cpp`) |
 | rf.custom_light | `RF_CUSTOM_LIGHT` (1<<20) | a light of the entity's own colour | missing | not read |
 | rf.flare | `RF_FLARE` (1<<21) | a flare sprite that fades by sight (`cl_flares`, `gl_flarespeed`) | missing | C16 |
 | rf.old_frame_lerp | `RF_OLD_FRAME_LERP` (1<<22) | the old frame is sent, not guessed | missing | not read |
@@ -1031,7 +1031,7 @@ Bits of an entity's render field, and of the player state's view flags.
 
 ## Configstrings
 
-done 7, partial 5, missing 4, not-taken 0
+done 7, partial 7, missing 2, not-taken 0
 
 The indexed strings a server sets (stock protocol 34 indices; the extended protocols move every range further on). Ours keeps them in `games/shooters_edge/client/demo_q2.cpp` (`set_string`) for a joined server and a recording; both layouts are read.
 
@@ -1040,8 +1040,8 @@ The indexed strings a server sets (stock protocol 34 indices; the extended proto
 | cs.name | `CS_NAME` (0) | the level's title: printed with the server data, shown on the loading screen | partial | ours takes the title from the server data; index 0 not kept |
 | cs.cdtrack | `CS_CDTRACK` (1) | the music: empty or 0 stops, N plays `music/trackNN` (or `NN`), the mission packs' numbers remapped by `ogg_remap_tracks`, text plays `music/<text>` | missing | not kept (C29) |
 | cs.sky | `CS_SKY` (2) | the sky box's name; changing it changes the sky | partial | ours reads the sky from the map's world entity (`client/demo_content.cpp`); index 2 not kept |
-| cs.skyaxis | `CS_SKYAXIS` (3) | the sky's turning axis | missing | not kept |
-| cs.skyrotate | `CS_SKYROTATE` (4) | the sky's turning speed, degrees a second | missing | not kept |
+| cs.skyaxis | `CS_SKYAXIS` (3) | the sky's turning axis | partial | the map's own `skyaxis` turns the sky (`client/world_draw.cpp`); a server's differing configstring is not kept |
+| cs.skyrotate | `CS_SKYROTATE` (4) | the sky's turning speed, degrees a second | partial | the map's own `skyrotate` turns the sky (`client/world_draw.cpp`); a server's differing configstring is not kept |
 | cs.statusbar | `CS_STATUSBAR` (5) | the status bar's layout program (strings 5 to 28 joined) | done | `games/shooters_edge/client/demo_q2.cpp`, `client/q2_bar.cpp` |
 | cs.airaccel | `CS_AIRACCEL` (29) | the server's air acceleration, used by prediction | done | `games/shooters_edge/client/demo_q2.cpp` (`air_accelerate`) |
 | cs.maxclients | `CS_MAXCLIENTS` (30) | the player slots; above 1 also turns the cheat settings off | partial | kept (`demo_q2.cpp`); the cheat lock not found |
@@ -1056,7 +1056,7 @@ The indexed strings a server sets (stock protocol 34 indices; the extended proto
 
 ## The layout language (status bar and layouts)
 
-done 20, partial 2, missing 5, not-taken 0
+done 24, partial 1, missing 2, not-taken 0
 
 The words of the status-bar and layout programs the client runs every frame on a virtual 320-wide screen anchored to the window. Ours: `games/shooters_edge/hud/q2_layout.cpp`.
 
@@ -1080,11 +1080,11 @@ The words of the status-bar and layout programs the client runs every frame on a
 | lay.string2 | `string2 <text>` | text in the alternate colour | done | `games/shooters_edge/hud/q2_layout.cpp` |
 | lay.cstring | `cstring <text>` | text centred | done | `games/shooters_edge/hud/q2_layout.cpp` |
 | lay.cstring2 | `cstring2 <text>` | text centred, alternate colour | done | `games/shooters_edge/hud/q2_layout.cpp` |
-| lay.rstring | `rstring <text>` | text right-aligned | missing | not in `q2_layout.cpp` |
-| lay.rstring2 | `rstring2 <text>` | text right-aligned, alternate colour | missing | not in `q2_layout.cpp` |
-| lay.stat | `stat_string`, `stat_string2`, `stat_cstring`, `stat_cstring2`, `stat_rstring`, `stat_rstring2` `<stat>` | the configstring whose index a stat holds, in each of the six text forms | partial | ours `stat_string` only (`q2_layout.cpp`) |
+| lay.rstring | `rstring <text>` | text right-aligned | done | ends at the cursor (`hud/q2_layout.cpp`) |
+| lay.rstring2 | `rstring2 <text>` | text right-aligned, alternate colour | done | ends at the cursor, each letter's top bit flipped (`hud/q2_layout.cpp`) |
+| lay.stat | `stat_string`, `stat_string2`, `stat_cstring`, `stat_cstring2`, `stat_rstring`, `stat_rstring2` `<stat>` | the configstring whose index a stat holds, in each of the six text forms | done | all six forms (`hud/q2_layout.cpp`) |
 | lay.if | `if <stat>` ... `endif` | runs the words between only when the stat is not 0 | done | `games/shooters_edge/hud/q2_layout.cpp` |
-| lay.color | `color <colour>` | sets the colour of the text that follows | missing | not in `q2_layout.cpp` |
+| lay.color | `color <colour>` | sets the colour of the text that follows | done | every form, tinting what follows to the program's end, its alpha under `scr_alpha`'s (`hud/q2_layout.cpp`, `client/q2_bar.cpp`) |
 | lay.health_bars | `health_bars <stat> <string>` | a boss's name centred and two health bars from the stat's two bytes (the newer game's) | missing | not in `q2_layout.cpp` |
 | lay.flash | stat-flashes field | the field picture behind a number while its flash bit is set | done | `games/shooters_edge/hud/q2_layout.cpp` |
 | lay.scope | scope pictures | a `scope?x` picture placed at the centred 320 by 240 box is drawn stretched to 320 by 240 times `ch_scale`, centred and moved by `ch_x`/`ch_y` | missing | not in `q2_layout.cpp` |
@@ -1092,14 +1092,14 @@ The words of the status-bar and layout programs the client runs every frame on a
 
 ## HUD and screen elements
 
-done 6, partial 9, missing 13, not-taken 1
+done 11, partial 10, missing 7, not-taken 1
 
 What the client draws in 2D over the view, in its drawing order, and the settings that govern each (the settings themselves are rows of the settings table).
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| hud.scale | the 2D scale | every 2D element drawn on a virtual screen: the window divided by `scr_scale` (auto 1, 2 or 4 by height) | partial | ours `q2_bar_scale` = height / 400 (C4) |
-| hud.draw2d | hiding the 2D | `scr_draw2d` 0 none, 1 no status bar, 3 layouts only while F1 is held | missing | C15 |
+| hud.scale | the 2D scale | every 2D element drawn on a virtual screen: the window divided by `scr_scale` (auto 1, 2 or 4 by height) | done | `q2_bar_scale` by the window, `scr_scale` (M18k4 round 34); the desktop's DPI floor not read |
+| hud.draw2d | hiding the 2D | `scr_draw2d` 0 none, 1 no status bar, 3 layouts only while F1 is held | partial | `scr_draw2d` (M18k4 round 34); F1 held at 3 not read |
 | hud.crosshair | the crosshair picture | `chN` at the centre plus `ch_x`/`ch_y`, scaled by `ch_scale`, its colour and alpha its own, hidden by the status flags' hide-crosshair bit (extended protocol) | partial | `engine/hud/crosshair.hpp`; the hide bit missing (C27) |
 | hud.hitmarker | the hit marker | the `marker` picture, red, fading over `scr_hit_marker_time`; on by default | missing | C26 |
 | hud.graphs | net, time and debug graphs | bars along the bottom (`netgraph`, `timegraph`, `debuggraph`) | missing | C13 |
@@ -1107,10 +1107,10 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 | hud.layout | the layout | the server's layout (scoreboard, help computer) while the layout bit is up; in a demo, F1 shows it whenever held | partial | `hud/q2_layout.cpp`; the F1 hold in demos missing (C15) |
 | hud.inventory | the inventory screen | the item list with counts, the selected one marked, while the inventory bit is up | done | `games/shooters_edge/server/q2_screens.cpp` (the rules' screen) and `client/q2_bar.cpp` |
 | hud.centerprint | the centre print | centred on a quarter of the height, `scr_centertime`, faded over 300 ms, a queue of 4 on the extended protocol, typewriter prints at `scr_printspeed` | partial | ours the stock client's cut and place, no fade (C9) |
-| hud.net | the lost-connection picture | the `net` picture blinking in the lag graph's box when 128 moves are unanswered | missing | C11 |
-| hud.laggraph | the lag graph | 48 columns of round trips, lost and held frames coloured (`scr_lag_*`) | missing | C11 |
+| hud.net | the lost-connection picture | the `net` picture blinking in the lag graph's box when 128 moves are unanswered | done | `client/q2_bar.cpp` (M18k4 round 34) |
+| hud.laggraph | the lag graph | 48 columns of round trips, lost and held frames coloured (`scr_lag_*`) | partial | `engine/hud/net_graph.cpp` (M18k4 round 34); a frame held back for the rate not told apart |
 | hud.draw | drawn values | `draw` objects: a setting or macro at a place, every frame | missing | C14 |
-| hud.chathud | chat lines on screen | the last `scr_chathud_lines` chat lines (`scr_chathud*`) | missing | C10 |
+| hud.chathud | chat lines on screen | the last `scr_chathud_lines` chat lines (`scr_chathud*`) | done | `games/shooters_edge/hud/layout.cpp` chat feed (M18k4 round 32) |
 | hud.turtle | network trouble words | CLIENTPRED, BADFRAME, OLDFRAME, OLDENT, NODELTA (and 3 more at 2) | missing | C12 |
 | hud.pause | the pause picture | the pack's `pause` centred while paused (`scr_showpause`) | done | `games/shooters_edge/client/scores.cpp` (the plaque) |
 | hud.loading | the loading plaque | the pack's `loading` centred while a level loads, unless the console or a menu is up; the sounds stop; gives up after 120 s ("Loading plaque timed out.") | partial | the plaque is drawn; the stop of the music and the timeout missing (C24) |
@@ -1124,8 +1124,8 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 | hud.endpic | the end pictures | a cinematic name ending `.pcx` shows a still picture until a key | done | `games/shooters_edge/client/cinematic.cpp` (`q2-gaps2-client.md` checked) |
 | hud.console | the console | slides down to `con_height` at `scr_conspeed` over `conback`, `con_alpha`, `con_scale`; the program's version at the lower right; a yellow arrow prompt (`#` in `remotemode`) | partial | the look landed; `con_alpha`, `con_scale`, the remote prompt missing (C23) |
 | hud.consoleload | the console's loading lines | while connecting: the file downloading with a bar and "nn% (size)", or "Loading <map>...", models, images, clients, sounds in turn | missing | C23 |
-| hud.conclock | the console's clock | `con_clock` | missing | C23 |
-| hud.alpha | 2D opacity | `scr_alpha` for every 2D element but the crosshair | missing | C15 |
+| hud.conclock | the console's clock | `con_clock` | done | `engine/ui/console.cpp` (M18k4 round 32) |
+| hud.alpha | 2D opacity | `scr_alpha` for every 2D element but the crosshair | done | `client/q2_bar.cpp` (M18k4 round 34) |
 | hud.debugstats | debug overlays | `scr_showstats` (the stats as numbers), `scr_showpmove` (the move state) | not-taken | `client-gaps.md`: developer tools left out |
 
 ## Messages printed to the player
@@ -1338,7 +1338,7 @@ Keys the client handles itself (a player cannot unbind them) and where the defau
 
 ## Sound and music
 
-done 3, partial 7, missing 3, not-taken 0
+done 5, partial 6, missing 2, not-taken 0
 
 How the client makes sound, beyond the settings themselves.
 
@@ -1346,10 +1346,10 @@ How the client makes sound, beyond the settings themselves.
 | --- | --- | --- | --- | --- |
 | snd.spatial | positioned sounds | each sound placed by its entity (moving with it) or a point, by volume and attenuation, on 8 channels a entity; the listener at the view | done | `games/shooters_edge/client/demo_sound.cpp`, `client/demo_heard.cpp` |
 | snd.loops | entity loop sounds | an entity's sound field loops while it is in the frame, merged by sound | partial | landed (`q2-gaps2-client.md` checked); `s_ambient`'s choices missing (C32) |
-| snd.underwater | under water | every sound high-shelf filtered at 5 kHz (`s_underwater`) | missing | C28 |
+| snd.underwater | under water | every sound high-shelf filtered at 5 kHz (`s_underwater`) | done | the eye in a liquid, `engine/audio/synth.cpp` `muffle` (M18k4 round 34) |
 | snd.footsteps | footsteps | a step set by the surface under the entity (`.mat` files, up to 15 steps), never the same twice in a row | partial | ours the four classic steps (C34) |
 | snd.landing | landings | `player/land1.wav` on a short fall | done | `games/shooters_edge/client/demo_q2.cpp` |
-| snd.chat | the chat beep | `misc/talk.wav` (or `talk1.wav`) on a chat line | partial | `misc/talk.wav` plays; the setting missing (C31) |
+| snd.chat | the chat beep | `misc/talk.wav` (or `talk1.wav`) on a chat line | done | `cl_chat_sound` (M18k4 round 32) |
 | snd.backends | the sound back-ends | the software mixer (any rate, `s_khz`) or OpenAL (HRTF) | partial | ours one mixer at 48 kHz (`engine/audio`) (C32) |
 | snd.focus | sound and the window | `s_auto_focus` mutes when minimised or unfocused | missing | C32 |
 | snd.figure | a figure's own sounds | a `*name` sound plays the figure's own `players/<model>/name`, else the male one | partial | verify (`client/demo_sound.cpp`) |
@@ -1360,7 +1360,7 @@ How the client makes sound, beyond the settings themselves.
 
 ## Picture and video
 
-done 5, partial 9, missing 6, not-taken 0
+done 6, partial 9, missing 5, not-taken 0
 
 How the client sets up and draws the picture, beyond the settings themselves. Ours draws with its own renderer (`engine/render`, `plugins/classic/app/look.cpp`); the GL driver's internals are not taken (`client-gaps.md`).
 
@@ -1370,7 +1370,7 @@ How the client sets up and draws the picture, beyond the settings themselves. Ou
 | vid.gamma | gamma | `vid_gamma` applied to textures, or by the display (`vid_hwgamma`) | partial | ours `gamma` (synonym `vid_gamma`); no hardware gamma |
 | vid.hor | wide screens | the 4:3 field kept vertically (hor+) by `cl_adjustfov` | done | `q2-gaps2-client.md` checked (hor+) |
 | vid.fov.server | the server's field of view | the player state's field drawn, interpolated (zoom, fixed FOV) | missing | C3 |
-| vid.areas | areas behind shut doors | a leaf whose area is not joined is not drawn | missing | C1 |
+| vid.areas | areas behind shut doors | a leaf whose area is not joined is not drawn | done | a leaf in an area the frame does not show draws nothing: off a recording or a joined server's frame, and from the listen server's open portals (`brush/map.cpp` `potentially_visible`, `client/demo_q2.cpp`, `server/q2_areas.cpp`) |
 | vid.pvs2 | the second PVS point | the PVS joined with that of a point 16 units below (above in water) | missing | C2 |
 | vid.particles | particles | squares facing the view, grown with distance, `gl_partscale`, `gl_partstyle`, `gl_partshape` | partial | ours draws the classic particles (landed); the settings and size rule not compared (C18) |
 | vid.shadows | blob shadows | `gl_shadows` | missing | C19 |

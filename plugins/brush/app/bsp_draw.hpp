@@ -102,7 +102,8 @@ struct Options {
   // Which lights throw a figure's shadow: false those whose source the player can see alone
   // (draw_data.hpp's PointLight::seen: a flame, a globe, a lamp at its glowing fitting; and the
   // dynamic lights), so no shadow falls from a fill light hanging unseen in the air, nor from a
-  // pool's or a teleporter's glow, and the light bounced round the room is never shadowed by him.
+  // pool's glow, and the light bounced round the room is never shadowed by him; a teleporter's
+  // light is seen (its panel glows), so he throws a shadow standing before one.
   // True: every light's, and the bounce dimmed by the share of their light he hides (the look
   // before). The walls' own shadows are every shadowed light's either way: they keep its light in
   // its room, as the map's own lightmaps do.
@@ -415,7 +416,8 @@ struct BspDraw {
   std::vector<GpuMover> mover_rows;
   bool movers_dirty = false;
   BspCull cull;
-  std::vector<DynamicLight> dynamic;       // this frame's (set_dynamic_lights)
+  std::vector<DynamicLight> dynamic;  // this frame's (set_dynamic_lights)
+  std::vector<uint8_t> areas;  // the areas shown, one bit each (set_areas); empty: every area
   std::vector<PointLight> dynamic_points;  // the same as v2's point lights
   uint64_t culled_frames = 0;  // frames culled since the targets were made (0: no pyramid yet)
   // The scene's lava lights and teleporters' lights (made once).
@@ -433,6 +435,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& draw, const render::FrameView& vi
 // This frame's dynamic lights (before `prepare_bsp`); the classic draws at most kMaxDynamic.
 inline constexpr int kMaxDynamic = 32;
 void set_dynamic_lights(BspDraw& draw, std::span<const DynamicLight> lights);
+// The areas this frame shows (a version 38 map's, one bit an area: brush/map.hpp's
+// `potentially_visible`); empty, every area. A leaf in an unshown area draws none of its faces.
+void set_areas(BspDraw& draw, std::span<const uint8_t> areas);
 // This frame's moving casters (before `prepare_bsp`): their triangles, world m, nine floats a
 // triangle (kMaxCasterVerts vertices at most; past them, the rest cast nothing), and each one's box
 // (the lights that light one of them most get the cubes).
@@ -481,8 +486,9 @@ render::PrecipShelter bsp_shelter(const BspDraw& draw);
 std::vector<PointLight> lava_lights(const Scene& scene, double core_c = 1150, double cover = 0.75);
 // The lights the scene's slime gives off: the same grid, a faint green of `luminance` cd/m^2.
 std::vector<PointLight> slime_lights(const Scene& scene, double luminance = 3);
-// The lights the teleporters give off: one half a metre before each panel, a cool grey-white,
-// breathing slowly, its brightness by the panel's area.
+// The lights the teleporters give off: one 0.8 m before each panel, a cool grey-white, breathing
+// slowly, its brightness by the panel's area; `seen` (its panel glows), so it throws a figure's
+// shadow.
 std::vector<PointLight> portal_lights(const Scene& scene);
 
 }  // namespace ge::brush::app

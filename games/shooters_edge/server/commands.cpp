@@ -24,10 +24,10 @@ constexpr int kFlagGodmode = 64, kFlagNotarget = 128;  // the program's `flags` 
 constexpr const char* kFixed[] = {
     "new",     "modellist",  "soundlist", "prespawn", "spawn",  "begin", "drop",         "pings",
     "setinfo", "serverinfo", "download",  "nextdl",   "ptrack", "snap",  "stopdownload", "upload"};
-constexpr const char* kOverridable[] = {"rate",    "kill",    "pause",   "say",      "say_team",
-                                        "minping", "airstep", "maps",    "ban",      "banip",
-                                        "banrem",  "join",    "observe", "qtvusers", "god",
-                                        "give",    "noclip",  "fly",     "notarget"};
+constexpr const char* kOverridable[] = {"setpos",   "rate",    "kill",    "pause",   "say",
+                                        "say_team", "minping", "airstep", "maps",    "ban",
+                                        "banip",    "banrem",  "join",    "observe", "qtvusers",
+                                        "god",      "give",    "noclip",  "fly",     "notarget"};
 
 template <size_t N>
 bool listed(const char* const (&list)[N], const char* w) {
@@ -124,8 +124,10 @@ void run_server_command(QcServer& s, int slot, const pg::Words& w) {
   const int e = slot + 1;
   ClientInfo& c = s.clients[slot];
   if (std::strcmp(cmd, "kill") == 0) {
-    if (s.sv.set.single_player_clock && s.sv.edicts[static_cast<size_t>(e)].health <= 0)
-      print_to(s, me, 2, "Can't suicide -- allready dead!\n");  // the original's own words
+    // Both games refuse the dead (spectators too, whose health is never set); the misspelling
+    // is theirs.
+    if (c.spectator || s.sv.edicts[static_cast<size_t>(e)].health <= 0)
+      print_to(s, me, 2, "Can't suicide -- allready dead!\n");
     else if (!c.spectator)
       call_hook(s, HookId::client_kill, s.q.hooks.client_kill, e, {});
   } else if (std::strcmp(cmd, "say") == 0 || std::strcmp(cmd, "say_team") == 0) {
@@ -147,6 +149,24 @@ void run_server_command(QcServer& s, int slot, const pg::Words& w) {
     c.drop = true;
   } else if (s.sv.set.single_player_clock && single_player_cheat(s, slot, w)) {
     // done: a single-player program's cheats (no sv_cheats; refused in deathmatch)
+  } else if (std::strcmp(cmd, "setpos") == 0) {
+    // setpos X Y Z: the player stood with his eye there, in the metres (y up) `viewfrom` prints;
+    // a cheat (sv_cheats 1), for a picture taken where a player stood.
+    if (!s.cvars.cheats()) {
+      print_to(s, me, 2, "Cheats are not enabled on this server\n");
+      return;
+    }
+    if (w.count < 4) {
+      print_to(s, me, 2, "setpos X Y Z: metres, as viewfrom prints them\n");
+      return;
+    }
+    constexpr float kUnitM = 0.025f;   // a map unit in metres (brush/map.hpp)
+    constexpr float kEyeOver = 22.0f;  // units from a player's origin up to his eye
+    sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
+    const auto metres = [&](int i) { return static_cast<float>(std::atof(pg::word(w, i))); };
+    ed.origin = {metres(1) / kUnitM, metres(3) / kUnitM, metres(2) / kUnitM - kEyeOver};
+    ed.velocity = {0, 0, 0};
+    sh::link_edict(s.sv, e, false);
   } else if (std::strcmp(cmd, "god") == 0 || std::strcmp(cmd, "give") == 0 ||
              std::strcmp(cmd, "noclip") == 0 || std::strcmp(cmd, "fly") == 0) {
     if (!s.cvars.cheats()) {
@@ -261,6 +281,19 @@ static bool run_console_line(QcServer& s, const std::string& line) {
     s.pending_change = cmd == "map" ? MapChange::new_game : MapChange::change_level;
     return true;
   }
+  // The operator's chat: QuakeWorld's "console: " at chat level; the single-player server's
+  // game names its host instead, as "<hostname> ".
+  if ((cmd == "say" || cmd == "say_team") && w.count >= 2) {
+    const std::string text = chat_text(w);
+    const ge::console::Cvar* host = s.cvars.find("hostname");
+    const std::string from =
+        s.sv.set.single_player_clock
+            ? "<" + (host != nullptr ? host->value : std::string("UNNAMED")) + "> "
+            : std::string("console: ");
+    print_to(s, all_clients(s), 3, from + text + "\n");
+    if (s.sv.set.single_player_clock) console_print(s, from + text);
+    return true;
+  }
   if (cmd == "restart") {
     s.pending_map = s.map_name;
     s.pending_change = MapChange::restart;
@@ -305,11 +338,20 @@ bool request_pause(QcServer& s, int slot, bool pause) {
   }
   s.paused = pause;
   if (pause) s.paused_seconds = 0;
-  // A single-player program's game tells everyone who paused it, as the original does.
-  if (s.sv.set.single_player_clock && slot >= 0)
-    print_to(s, all_clients(s), 2,
-             info_value(s.clients[slot].userinfo, "name") +
-                 (pause ? " paused the game\n" : " unpaused the game\n"));
+  // Everyone is told who paused. A single-player program's game words it as it happened; a
+  // multiplayer one, as QuakeWorld does, by the state before the toggle, so the words come out
+  // the other way round ("unpaused" for a pause), and the console hears it too.
+  if (slot >= 0) {
+    const bool says_paused = s.sv.set.single_player_clock ? pause : !pause;
+    const std::string line = info_value(s.clients[slot].userinfo, "name") +
+                             (says_paused ? " paused the game\n" : " unpaused the game\n");
+    print_to(s, all_clients(s), 2, line);
+    if (!s.sv.set.single_player_clock) console_print(s, line.substr(0, line.size() - 1));
+  } else if (!pause && slot != kPauseByServer && !s.sv.set.single_player_clock) {
+    const std::string line = "Pause released since no players are left.\n";
+    print_to(s, all_clients(s), 2, line);
+    console_print(s, line.substr(0, line.size() - 1));
+  }
   NetEvent ev;
   ev.kind = EventKind::pause;
   ev.to = all_clients(s);
@@ -319,6 +361,19 @@ bool request_pause(QcServer& s, int slot, bool pause) {
   s.out.events.push_back(std::move(ev));
   s.out.events_total++;
   return true;
+}
+
+void tell_paused(QcServer& s, int slot) {
+  if (!s.paused || s.sv.set.single_player_clock) return;
+  NetEvent ev;
+  ev.kind = EventKind::pause;
+  ev.to = 1u << slot;
+  ev.reliable = true;
+  ev.time = s.sv.time;
+  ev.level = 1;
+  s.out.events.push_back(std::move(ev));
+  s.out.events_total++;
+  print_to(s, 1u << slot, 2, "Server is paused.\n");
 }
 
 // The entry points: each leaves the rules' world as the command left the server.

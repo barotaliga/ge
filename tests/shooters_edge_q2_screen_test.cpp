@@ -31,11 +31,34 @@ std::string placed(const cl::Q2Bar& bar) {
 
 }  // namespace
 
-TEST(the_bar_is_drawn_a_whole_number_larger_for_every_400_px_of_height) {
-  CHECK(cl::q2_bar_scale(300) == 1);
-  CHECK(cl::q2_bar_scale(480) == 1);
-  CHECK(cl::q2_bar_scale(800) == 2);
-  CHECK(cl::q2_bar_scale(1440) == 3);
+TEST(the_2d_scale_is_picked_by_the_window_as_quake_ii_picks_it) {
+  CHECK(cl::q2_bar_scale(640, 480) == 1);
+  CHECK(cl::q2_bar_scale(1280, 1079) == 1);
+  CHECK(cl::q2_bar_scale(1920, 1080) == 2);
+  CHECK(cl::q2_bar_scale(2560, 1440) == 2);  // was 3 by 400 px a step
+  CHECK(cl::q2_bar_scale(3840, 2160) == 4);
+  CHECK(cl::q2_bar_scale(1920, 2400) == 2);  // a tall window: by its width
+  CHECK(cl::q2_bar_scale(1080, 1920) == 1);
+  CHECK(cl::q2_bar_scale(640, 480, 3) == 3);  // scr_scale as given
+  CHECK(cl::q2_bar_scale(640, 480, 40) == 10);
+  cl::Q2Screen s;
+  s.scale = 2;
+  cl::Q2Bar bar;
+  CHECK(cl::q2_bar_scale(bar, 640, 480) == 1);
+  bar.screen = &s;
+  CHECK(cl::q2_bar_scale(bar, 640, 480) == 2);
+}
+
+TEST(scr_draw2d_0_draws_no_centre_print_and_1_keeps_it) {
+  cl::Q2Screen s;
+  cl::Q2Bar bar;
+  bar.screen = &s;
+  s.draw2d = 0;
+  cl::add_q2_screen(bar, 0, "Hidden", 640, 480);
+  CHECK(bar.ops.empty());
+  s.draw2d = 1;
+  cl::add_q2_screen(bar, 0, "Shown", 640, 480);
+  CHECK(bar.ops.size() == 1);
 }
 
 TEST(a_centre_print_centres_each_line_at_35_percent_of_the_screen) {
@@ -54,10 +77,10 @@ TEST(a_long_centre_print_starts_at_48_and_a_line_is_cut_at_40_letters) {
   CHECK(bar.ops[4].x == 160);
 }
 
-TEST(on_a_tall_window_the_centre_print_is_placed_on_the_smaller_screen) {
+TEST(on_a_large_window_the_centre_print_is_placed_on_the_smaller_screen) {
   cl::Q2Bar bar;
-  cl::add_q2_screen(bar, 0, "hi", 1600, 1000);  // drawn twice over: an 800 x 500 screen
-  CHECK(placed(bar) == "'hi'@392,175 ");
+  cl::add_q2_screen(bar, 0, "hi", 1920, 1200);  // drawn twice over: a 960 x 600 screen
+  CHECK(placed(bar) == "'hi'@472,210 ");
 }
 
 TEST(no_crosshair_is_drawn_when_the_packs_hold_no_picture_of_it) {

@@ -252,10 +252,11 @@ inline std::array<double, 32> never_flashed() {
 
 struct DemoState {
   DemoFormat format = DemoFormat::single;
-  bool voice_format = false;  // a `.qwdv` or `.mvdv` (the voice header)
-  int protocol = 0;           // 15 single, 28 client and multiview, 34 Quake II
-  std::string map;            // "e1m1" off `maps/e1m1.bsp`; "" before the first level
-  int levels = 0;             // level starts read so far (a new level: load its map)
+  bool voice_format = false;   // a `.qwdv` or `.mvdv` (the voice header)
+  int protocol = 0;            // 15 single, 28 client and multiview, 34 Quake II
+  std::string map;             // "e1m1" off `maps/e1m1.bsp`; "" before the first level
+  std::vector<uint8_t> areas;  // Quake II: the last frame's areas shown (a bit each); empty, all
+  int levels = 0;              // level starts read so far (a new level: load its map)
   // The level's place names as the recording kept them (`//loc` lines, plugins/classic/locs.hpp);
   // empty when it kept none.
   ge::classic::Locs places;
@@ -263,6 +264,7 @@ struct DemoState {
   sh::Vec3f eye;     // the view's eye, units
   sh::Vec3f angles;  // the view's angles, degrees
   sh::Vec3f kick;    // Quake II: the server's kick angles on the view, degrees
+  float fov = 0;     // Quake II: the field of view the server sends, degrees (0: none sent)
   // The blows the view's player took (single, client, multiview): the last `kKeptBlows` of them
   // and how many in all since the demo was opened, so a look after several frames misses none.
   std::vector<DemoBlow> blows;

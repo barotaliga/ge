@@ -216,6 +216,8 @@ std::vector<PointLight> portal_lights(const Scene& scene) {
     l.colour[1] = 0.82;
     l.colour[2] = 1.0;
     l.flicker = Flicker::pulse;
+    // Its source is the panel glowing in plain sight: a figure in its way throws a shadow.
+    l.seen = true;
     l.seed = seed;
     seed = seed * 1664525u + 1013904223u;
     out.push_back(l);
@@ -994,8 +996,8 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   }
   if (o.cull) {
     GE_ZONE("bsp.cull");
-    prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0,
-                     o.pvs && !see_through_any(o));
+    prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0, o.pvs && !see_through_any(o),
+                     d.areas);
     ++d.culled_frames;
   } else {
     d.culled_frames = 0;
@@ -1065,6 +1067,10 @@ void set_texture_rate(BspDraw& d, double frames_per_second) {
 
 void set_dynamic_lights(BspDraw& d, std::span<const DynamicLight> lights) {
   d.dynamic.assign(lights.begin(), lights.end());
+}
+
+void set_areas(BspDraw& d, std::span<const uint8_t> areas) {
+  d.areas.assign(areas.begin(), areas.end());
 }
 
 void set_shadow_casters(BspDraw& d, std::span<const float> triangles,

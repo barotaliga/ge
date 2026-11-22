@@ -12,7 +12,10 @@
 #include <cstdio>
 #include <ctime>
 #include <string>
+#include <string_view>
+#include <vector>
 
+#include "charset/charset.hpp"
 #include "ui/background.hpp"
 #include "ui/charset_font.hpp"
 #include "ui/font.hpp"
@@ -39,13 +42,90 @@ std::string fitted(const Font& f, float size, const std::string& text, float wid
   return text.substr(0, f.fit(text, size, std::max(0.0f, width - dots))) + "...";
 }
 
+// The cursor at `x` on the row from `top` (`row` tall, the text's baseline at `base`): the font's
+// box glyph when it has one (ConsoleStyle::cursor_glyph), else a thin bar.
+void draw_cursor(DrawList& list, const Font& font, int glyph, float size, float x, float top,
+                 float row, float base, float s, Color color) {
+  if (glyph > 0) {
+    list.text(font, size, x, base, std::string(1, static_cast<char>(glyph)), color);
+    return;
+  }
+  list.rect({x, top + 2 * s, 2 * s, row - 4 * s}, color);
+}
+
+// The scrollback's page as drawn: the font, its size, where its rows are and which lines are on
+// them. `draw_console` draws by it and `console_spot` reads a point by it, so a click lands on the
+// letter drawn there.
+struct Page {
+  const Font* font = nullptr;
+  float text = 0, margin = 0, row = 0, ascent = 0, top = 0, bottom = 0;
+  std::vector<const con::ViewLine*> lines;
+};
+
+Page page_of(const con::ConsoleView& view, const ConsoleStyle& style, float h) {
+  Page p;
+  const Font* named = style.font ? nullptr : charset_font(view.font());
+  p.font = style.font ? style.font : named ? named : &ui_font(Weight::medium);
+  const float s = h / 720.0f * static_cast<float>(view.text_scale());  // con_scale
+  p.text = style.text_px * s;
+  p.margin = style.margin_px * s;
+  const VMetrics m = p.font->metrics(p.text);
+  p.ascent = m.ascent;
+  p.row = style.row_px * s * std::max(1.0f, (m.ascent + m.descent) / p.text);
+  const float cover = std::round(static_cast<float>(view.cover()) * h);
+  const float input_top = cover - p.margin - p.row;
+  p.bottom = view.foot().empty() ? input_top : input_top - p.row;
+  const int rows = std::max(1, static_cast<int>((p.bottom - p.margin) / p.row));
+  p.lines = view.page(rows);
+  p.top = p.bottom - static_cast<float>(p.lines.size()) * p.row;
+  return p;
+}
+
 }  // namespace
+
+std::optional<con::TextSpot> console_spot(const con::ConsoleView& view, const ConsoleStyle& style,
+                                          int height, float x, float y) {
+  if (view.cover() <= 0) return std::nullopt;
+  const Page p = page_of(view, style, static_cast<float>(height));
+  if (p.lines.empty()) return std::nullopt;
+  // Above the page: its first line; below it (the input line): its last, to its end.
+  const int last = static_cast<int>(p.lines.size()) - 1;
+  const int i = std::clamp(static_cast<int>(std::floor((y - p.top) / p.row)), 0, last);
+  const con::ViewLine& l = *p.lines[static_cast<size_t>(i)];
+  if (y >= p.bottom) return con::TextSpot{l.n, l.text.size()};
+  if (y < p.top) return con::TextSpot{l.n, 0};
+  // The letter under the point: the text that fits up to half a letter past it.
+  const float half = 0.5f * p.font->advance("M", p.text);
+  const size_t col = p.font->fit(l.text, p.text, std::max(0.0f, x - p.margin + half));
+  return con::TextSpot{l.n, std::min(col, l.text.size())};
+}
+
+void select_with_pointer(con::ConsoleView& view, const ConsoleStyle& style, int height, float x,
+                         float y, bool down, bool& held) {
+  if (down) {
+    if (const auto at = console_spot(view, style, height, x, y)) {
+      if (!held) {
+        if (y < static_cast<float>(view.cover()) * static_cast<float>(height))
+          view.select_begin(*at);
+        else
+          view.select_clear();
+      } else {
+        view.select_to(*at);
+      }
+    }
+  }
+  held = down;
+}
 
 void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleStyle& style,
                   const Image* image, double time_s) {
   // The style's font, else con_font's charset, else the UI font.
   const Font* named = style.font ? nullptr : charset_font(view.font());
   const Font& font = style.font ? *style.font : named ? *named : ui_font(Weight::medium);
+  // The cursor's box: the style's glyph, else a charset's block (the UI font has none: a bar).
+  const int cursor_glyph = style.cursor_glyph > 0 ? style.cursor_glyph
+                           : named != nullptr     ? static_cast<int>(charset::Sym::block)
+                                                  : 0;
   const auto w = static_cast<float>(list.width());
   const auto h = static_cast<float>(list.height());
   const float s = h / 720.0f * static_cast<float>(view.text_scale());  // con_scale
@@ -85,7 +165,7 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
                        static_cast<long long>(std::floor(time_s / style.cursor_blink_s)) % 2 == 0;
       if (lit) {
         const float cx = margin + pw + font.advance(typed.substr(0, view.chat_cursor()), text);
-        list.rect({cx, y + 2 * s, 2 * s, row - 4 * s}, style.cursor);
+        draw_cursor(list, font, cursor_glyph, text, cx, y, row, base, s, style.cursor);
       }
     }
     return;
@@ -138,7 +218,19 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
   const int rows = std::max(1, static_cast<int>((lines_bottom - margin) / row));
   const auto page = view.page(rows);
   float y = lines_bottom - static_cast<float>(page.size()) * row;
+  const bool has_sel = view.has_selection();
+  const con::TextSpot sel_a = view.selection_first(), sel_b = view.selection_last();
   for (const con::ViewLine* l : page) {
+    if (has_sel && l->n >= sel_a.line && l->n <= sel_b.line) {
+      // The selection behind its letters; a line it runs past ends a letter's width beyond.
+      const size_t from = l->n == sel_a.line ? std::min(sel_a.column, l->text.size()) : 0;
+      const size_t to =
+          l->n == sel_b.line ? std::min(sel_b.column, l->text.size()) : l->text.size();
+      const float x0 = margin + font.advance(std::string_view(l->text).substr(0, from), text);
+      float x1 = margin + font.advance(std::string_view(l->text).substr(0, to), text);
+      if (l->n != sel_b.line) x1 += 0.5f * font.advance("M", text);
+      if (x1 > x0) list.rect({x0, y, x1 - x0, row}, style.selection);
+    }
     list.text(font, text, margin, y + ascent, l->text, style.kinds[static_cast<size_t>(l->kind)]);
     y += row;
   }
@@ -155,7 +247,7 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
   if (lit) {
     const std::string before = prompt + view.input().substr(0, view.cursor());
     const float cx = margin + font.advance(before, text);
-    list.rect({cx, input_top + 2 * s, 2 * s, row - 4 * s}, style.cursor);
+    draw_cursor(list, font, cursor_glyph, text, cx, input_top, row, base, s, style.cursor);
   }
   // con_clock: the local time at the input line's right, the scroll marker a row above it.
   if (view.clock_shown()) {

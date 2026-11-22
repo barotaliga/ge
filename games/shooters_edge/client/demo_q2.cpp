@@ -20,6 +20,7 @@
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_demo_q2_test.cpp
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -543,8 +544,17 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   DemoState& s = d.state;
   const int32_t number = m.i32();
   const int32_t delta = m.i32();
-  if (s.protocol != 26) m.u8();         // the packets held back
-  m.skip(static_cast<size_t>(m.u8()));  // the areas seen
+  if (s.protocol != 26) m.u8();  // the packets held back
+  {  // the areas the eye's room joins (one bit an area); drawn only these
+    const size_t n = m.u8();
+    if (n > 32) {
+      error = "the frame" + at_byte(m) + " names " + std::to_string(n) +
+              " bytes of areas, past the 32 the game allows: the recording is damaged";
+      return false;
+    }
+    s.areas.resize(n);
+    for (uint8_t& b : s.areas) b = static_cast<uint8_t>(m.u8());
+  }
   if (m.u8() != kPlayerInfo) {
     error = "the frame" + at_byte(m) +
             " is not followed by the player's state: the recording is damaged";
@@ -588,6 +598,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   s.angles = {angle16(v.angles[0]), angle16(v.angles[1]), angle16(v.angles[2])};
   s.kick = {static_cast<float>(v.kick[0]) * 0.25f, static_cast<float>(v.kick[1]) * 0.25f,
             static_cast<float>(v.kick[2]) * 0.25f};
+  s.fov = static_cast<float>(v.fov);
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;
@@ -817,10 +828,10 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       e.way = e.way * static_cast<float>(magnitude);  // the jet: its way times its speed
       break;
     }
-    case 50:  // an id and a point
-      m.i16();
-      point(DemoEffectKind::spike);
-      keep = false;
+    case 50:  // the widow's beam-out: an id and a point, a sphere growing for 2.1 s
+      e.entity = m.i16();
+      point(DemoEffectKind::named);
+      e.name = "sq_widow_beam";
       break;
     // The kinds a newer game's server sends, in any protocol's recording.
     case 31:  // a lighter rail's line
@@ -839,11 +850,26 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       e.entity = m.i16();
       line(DemoEffectKind::beam);
       break;
-    case 60:  // a power splash: entity, size
-      m.i16();
+    case 60: {  // a power splash: entity, a count not drawn; round the entity's box as it stands
+      const int n = m.i16();
       m.u8();
       keep = false;
+      if (n < 1 || static_cast<size_t>(n) >= s.entities.size() || !s.entities[size_t(n)].present)
+        break;
+      const DemoEntity& d = s.entities[size_t(n)];
+      // The packed box: half width, depth below and height above, in units.
+      const float x = 8.0f * float(d.solid & 31), below = 8.0f * float((d.solid >> 5) & 31),
+                  above = 8.0f * float((d.solid >> 10) & 63) - 32;
+      const bool boxed = d.solid != 0 && d.solid != 31;
+      e.kind = DemoEffectKind::named;
+      e.name = "sq_power_splash";
+      e.at = d.origin + sh::Vec3f{0, 0, boxed ? (above - below) / 2 : 0.0f};
+      e.end = e.at;
+      const float h = above + below;
+      e.way = {boxed ? 0.5f * std::sqrt(8 * x * x + h * h) : 0.0f, 0, 0};  // its reach, units
+      keep = true;
       break;
+    }
     case 62:
     case 63:  // explosions that give no light
       point(DemoEffectKind::explosion);

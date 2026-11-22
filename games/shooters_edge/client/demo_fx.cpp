@@ -50,6 +50,7 @@ Effect effect_of(const DemoEffect& d) {
       break;
     case DemoEffectKind::blood:
       e.kind = EffectKind::blood;
+      e.way = d.way;  // a program's burst's way (code -1)
       break;
   }
   return e;
@@ -69,8 +70,10 @@ bool missile_model(std::string_view name, Missile& kind) {
 
 bool q2_missile(int effects, Missile& m) {
   using Kind = Q2Look::Missile;
-  const Kind kind = q2_look(static_cast<uint32_t>(effects), 0).missile;
-  if (kind == Kind::none) return false;
+  const Q2Look look = q2_look(static_cast<uint32_t>(effects), 0);
+  const Kind kind = look.missile;
+  m.q2_spin = look.spinning;
+  if (kind == Kind::none) return m.q2_spin;
   m.rocket = kind == Kind::rocket || kind == Kind::grenade;
   m.grenade = kind == Kind::grenade;
   m.bolt = kind == Kind::bolt;
@@ -105,6 +108,7 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
     }
     m.entity = static_cast<int>(n);
     m.origin = d.origin;
+    m.yaw = d.angles.y;
     fx.missiles.push_back(m);
   }
 }

@@ -11,6 +11,9 @@
 //   fronts out. Normals are the frame's own smooth ones (`morph::frame_normals`).
 // - **The skin**: the palette indices through the pack's palette, and the GLOW mask from the
 //   palette's fullbright range (`kFullbrightFirst` up): a sight or a nail gun's lamp lights itself.
+//   The SHINE mask from each texel's colour (`skin_shine`): the greys and the steel blues are metal
+//   and take the highlight; a warm, saturated texel (a stock's wood, leather, a hand) does not, so
+//   it only grows lighter in the light.
 // - **The flash and the muzzle**: a held weapon's file draws its muzzle flash as glowing triangles
 //   parked behind the eye between shots and brought in front of the barrel on the firing frames.
 //   Those are marked as the model's `flame` (a game whose engine draws the flash hides them); the
@@ -79,6 +82,11 @@ viewmodel::HeldModel held_from_morph(const morph::Model& model, const Palette& p
 // The classic placement: the weapon at the eye (no offset), riding forward with the bob, a little
 // lag on a turn, the classic kick.
 viewmodel::PlaceRow classic_weapon_row();
+
+// How far a skin's texel of sRGB colour `r, g, b` shines (0..255, viewmodel::Skin::shine): 255
+// for a grey or a cool colour (metal), falling to 0 as a warm hue (red through yellow: wood,
+// leather, skin) grows saturated.
+uint8_t skin_shine(uint8_t r, uint8_t g, uint8_t b);
 
 // The light under `at` (map units, z up): the lightmap of the first surface straight below it,
 // within kProbeDepth, as a probe in the engine's frame. `found` (optional) says whether a lit

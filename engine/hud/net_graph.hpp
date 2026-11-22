@@ -6,6 +6,12 @@
 // mean round trip of the packets that came) and the loss (the share that never came), over the
 // last `kNetPackets`.
 //
+// THE LAG GRAPH (a smaller square of the same history, as Quake II's `scr_lag_draw` draws it): the
+// last `kLagColumns` packets one column each, newest on the right, a column's height the round
+// trip between the look's `min_ms` and `max_ms`; a packet lost a whole column in the critical
+// colour, a stale one in the warning colour; on a dark box when the look asks. The game places and
+// scales it (in its 2D screen's pixels) and sets it.
+//
 // ANY GAME'S CLIENT records into a `NetHistory` as it reads its packets (`net_arrived`,
 // `net_lost`) and the kit draws it; the setting is registered with the corner readouts
 // (corner_readouts.hpp's `add_readout_cvars`).
@@ -13,6 +19,7 @@
 // ge:summary The net graph (r_netgraph): each packet's round trip, the lost ones, ping and loss
 // ge:keywords hud net-graph netgraph r_netgraph ping packet-loss lost-packets round-trip
 // ge:keywords net-history net_arrived net_lost net_ping_ms net_loss_percent draw_net_graph
+// ge:keywords lag-graph draw_lag_graph scr_lag_draw
 // ge:skill ui net
 // ge:test tests/hud_net_graph_test.cpp
 #pragma once
@@ -62,5 +69,19 @@ std::string net_words(const NetHistory& h);
 // returns its box's height in px (0 when off).
 float draw_net_graph(ui::DrawList& dl, const Frame& frame, const Style& style, const NetHistory& h,
                      int mode, float top = 0);
+
+inline constexpr int kLagColumns = 48;  // the lag graph's columns (and its height, in its pixels)
+
+struct LagGraphLook {
+  float min_ms = 0, max_ms = 200;  // the round trips at the bottom and the top
+  bool box = false;                // on a dark box
+  float alpha = 1;                 // every colour's opacity times this
+  ui::Color ok = ui::hex(0xe0e0e0), warn = ui::hex(0xf2c94c), lost = ui::hex(0xeb5757);
+  ui::Color back = {0, 0, 0, 0.4f};
+};
+
+// Draws the lag graph of `h` in `at` (its columns `at.w / kLagColumns` wide). Nothing before a
+// packet is recorded but the box.
+void draw_lag_graph(ui::DrawList& dl, const NetHistory& h, ui::Rect at, const LagGraphLook& look);
 
 }  // namespace ge::hud

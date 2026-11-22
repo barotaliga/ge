@@ -160,3 +160,44 @@ TEST(unknown_words_are_skipped_and_long_words_read_empty) {
   CHECK(names(f.run("face 3 picn a endif")) == "a@0,0 ");
   CHECK(f.run("picn " + std::string(130, 'x')).empty());
 }
+
+// `rstring` ends its line at the cursor; `rstring2` flips each letter's top bit (plain text into
+// the coloured set); the stat_ forms draw the string a stat names in each of the six forms.
+TEST(right_aligned_text_and_every_stat_form) {
+  Fixture f;
+  f.stats[7] = 40;
+  f.strings[40] = "ab";
+  const auto ops = f.run(
+      "xl 100 yt 10 rstring \"hello\" rstring2 hi stat_rstring 7 "
+      "stat_cstring2 7 stat_string2 7");
+  CHECK_MSG(ops.size() == 5, names(ops));
+  CHECK(ops[0].x == 60 && ops[0].text == "hello" && !ops[0].alt);
+  CHECK(ops[1].x == 84 && ops[1].text == std::string("\xe8\xe9"));
+  CHECK(ops[2].x == 84 && ops[2].text == "ab");
+  CHECK(ops[3].x == 100 + (320 - 16) / 2 && ops[3].alt);
+  CHECK(ops[4].x == 100 && ops[4].alt && ops[4].text == "ab");
+}
+
+// `color` tints everything after it in that program, in each of its forms; a colour it does not
+// name leaves the last one; each program starts white.
+TEST(color_tints_what_follows_until_the_next_one) {
+  Fixture f;
+  const auto ops = f.run(
+      "string a color red string b color #f80 picn c color #10203040 string d "
+      "color alt string e color 4 string f color #12 string g");
+  CHECK_MSG(ops.size() == 7, names(ops));
+  const auto is = [](const Op& o, int r, int g, int b, int a) {
+    return o.rgba[0] == r && o.rgba[1] == g && o.rgba[2] == b && o.rgba[3] == a;
+  };
+  CHECK(is(ops[0], 255, 255, 255, 255));
+  CHECK(is(ops[1], 255, 0, 0, 255));
+  CHECK(is(ops[2], 255, 136, 0, 255));
+  CHECK(is(ops[3], 16, 32, 48, 64));
+  CHECK(is(ops[4], 16, 32, 48, 64));  // `alt` is refused
+  CHECK(is(ops[5], 0, 0, 255, 255));  // 4: blue
+  CHECK(is(ops[6], 0, 0, 255, 255));  // two digits refused
+  CHECK(is(f.run("string z")[0], 255, 255, 255, 255));
+  uint8_t c[4] = {1, 2, 3, 4};
+  CHECK(hud::layout_colour("YELLOW", c) == false && c[0] == 1);
+  CHECK(hud::layout_colour("#ABCDEF", c) && c[0] == 0xab && c[2] == 0xef && c[3] == 255);
+}

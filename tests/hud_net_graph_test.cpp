@@ -64,3 +64,22 @@ TEST(r_netgraph_takes_the_games_default_and_draws_only_when_on) {
   on.begin(1280, 720);
   CHECK(gh::draw_net_graph(on, frame, style, h, s.net, 40) > 0);
 }
+
+TEST(the_lag_graph_draws_a_column_a_packet_on_its_box) {
+  gh::NetHistory h;
+  ge::ui::DrawList none;
+  none.begin(320, 240);
+  gh::draw_lag_graph(none, h, {200, 100, 48, 48}, {});
+  CHECK(none.size() == 0);  // nothing recorded, no box asked
+  gh::net_arrived(h, 100);  // half way up 0..200 ms
+  gh::net_lost(h, 1);       // a whole column
+  gh::net_arrived(h, 500);  // held to the top
+  ge::ui::DrawList dl;
+  dl.begin(320, 240);
+  gh::draw_lag_graph(dl, h, {200, 100, 48, 48}, {.box = true});
+  CHECK(dl.size() == 4);  // the box and three columns
+  const auto& c = dl.cmds();
+  CHECK(c[1].box.rect.x == 247 && c[1].box.rect.h == 48);  // the newest on the right, at the top
+  CHECK(c[2].box.rect.h == 48);                            // the lost one, all the way
+  CHECK(c[3].box.rect.x == 245 && c[3].box.rect.h == 24);  // 100 of 200 ms: half
+}

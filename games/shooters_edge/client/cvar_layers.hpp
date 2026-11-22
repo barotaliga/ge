@@ -28,6 +28,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <string_view>
 
@@ -35,7 +36,10 @@
 #include "hud/crosshair.hpp"
 #include "shooter/mouse_feel.hpp"
 #include "shooters_edge/client/chat_lines.hpp"
+#include "shooters_edge/client/console_log.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/q2_session.hpp"
+#include "shooters_edge/client/q2_view.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/view/hand.hpp"
 
@@ -73,11 +77,17 @@ struct GameBindings {
   double* light_intensity = nullptr;
   double* light_modulate = nullptr;
   double* light_lift = nullptr;
+  bool* gibs = nullptr;     // Quake II's `cl_gibs` (the picture's gibs); true in Quake
+  bool* no_glow = nullptr;  // Quake II's `cl_noglow` (the picture's no_glow); false in Quake
   // The chat's extras: Quake II's own `cl_chat_sound` (chat_lines.hpp), "" in every other game.
   ChatExtras* chat = nullptr;
   // The console's typed line: Quake II's `con_auto_chat` (console/view.hpp's game_chat), -1 in
   // every other game (our `con_chat` rules).
   int* auto_chat = nullptr;
+  // Quake II's view and 2D settings (q2_view.hpp: scr_scale, scr_draw2d, scr_alpha, scr_lag_*,
+  // cl_adjustfov, uf, cl_kickangles); their defaults in every other game. add_game_cvars binds its
+  // own GameCvarValues::screen when this is null.
+  Q2Screen* screen = nullptr;
 };
 
 // Quake II's gender for a skin ("male/grunt"): its figure's folder, male for male and cyborg,
@@ -87,6 +97,14 @@ std::string auto_gender(std::string_view skin);
 // The loaded game's layer.
 struct GameCvarValues {
   std::string layer;  // "game:<id>", or "" before a game is loaded
+  // Quake II's map commands, clock, cl_autopause and state cvars (q2_session.hpp); their defaults
+  // in every other game.
+  Q2Session q2;
+  Q2Screen screen;  // Quake II's view and 2D settings (q2_view.hpp), bound as GameBindings::screen
+  // Quake II's console log (console_log.hpp): written by the console's sink, wrapped once (when it
+  // has one) by the first add_game_cvars, which shares it; off in every other game.
+  std::shared_ptr<ConsoleLog> log;
+  bool log_hooked = false;
 };
 // The loaded game's own settings on `con`, in its layer (`kGameCvars` in cvar_layers.cpp says
 // what each game gives each name).
