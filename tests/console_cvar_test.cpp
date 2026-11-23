@@ -198,7 +198,9 @@ TEST(a_mapped_synonym_sets_and_reads_its_own_values) {
   CHECK(cv.add_mapped_synonym("r_drawhud", "scr_draw2d", {{"0", "0"}, {"1", "2"}}));
   CHECK(cv.find("r_drawhud") == nullptr);  // not the setting under another name
   const Synonym* s = cv.synonym("r_drawhud");
-  CHECK(s != nullptr && cv.synonym_value(*s) == "1");  // ours 2 read back as its 1
+  CHECK(s != nullptr);
+  if (s == nullptr) return;
+  CHECK(cv.synonym_value(*s) == "1");  // ours 2 read back as its 1
   CHECK(cv.set("r_drawhud", "0", Source::local) == SetResult::changed && draw2d == 0);
   CHECK(cv.synonym_value(*s) == "0");
   CHECK(cv.set("r_drawhud", "1.0", Source::local) == SetResult::changed && draw2d == 2);

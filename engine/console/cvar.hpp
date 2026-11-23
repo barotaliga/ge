@@ -33,12 +33,8 @@
 // such as a classic mod's `maxclients` for the server's `sv_maxclients`. A WHOLE synonym is the
 // cvar under a second name: `find` answers the target, so a cfg line, the console and a program's
 // reads and writes all reach it. A PART synonym is one word of a target that holds several ("N S
-// T"): `set` by its name replaces that word and `synonym_value` reads it. A MAPPED synonym
-// (`add_mapped_synonym`) is a game's spelling whose values differ from ours: each of its values
-// names one of the target's (QuakeWorld's `r_drawhud 1` is `scr_draw2d 2`); `set` by its name
-// writes the mapped value, refusing one the map lacks (`SetResult::unmapped`), and `synonym_value`
-// maps the target's value back. Like a part synonym, `find` does not answer it. Synonyms are not
-// listed by `sorted`, so a saved cfg writes each setting once, under its own name.
+// T"): `set` by its name replaces that word and `synonym_value` reads it. A MAPPED synonym is a
+// game's spelling with its own values (`add_mapped_synonym`). Synonyms are not listed by `sorted`.
 //
 // META-CVARS (`add_meta`, docs/servers.md § Meta-cvars): a cvar whose value names a LEVEL that
 // sets a group of others, declared as data beside the feature that owns it (`sv_modern 1`: the
@@ -54,13 +50,12 @@
 //
 // ge:summary Console variables: named, typed, flagged settings, owned or bound to a struct field
 // ge:keywords cvar cvars console-variable setting settings config cfg flag archive server-info
-// ge:keywords user-info cheat latch read-only bind tier sv_ cl_ r_ info-string apply_info
-// ge:keywords revision clamp sv_cheats set_watch watch synonym add_synonym other-name setting-alias
-// ge:keywords add_mapped_synonym mapped-synonym value-map
-// ge:keywords meta-cvar meta add_meta level implied explicit restore include cycle meta_members
-// ge:keywords cvar-layer layer drop_layer overlap clash same-name one-name-one-meaning own same
-// ge:keywords game-scope per-game-cvar shadow set-aside retired
-// ge:keywords lock unlock locked held-value clamp-range ruleset competition-lock
+// ge:keywords user-info cheat latch read-only bind tier sv_ cl_ r_ info-string apply_info revision
+// ge:keywords clamp sv_cheats set_watch watch synonym add_synonym other-name setting-alias
+// ge:keywords add_mapped_synonym mapped-synonym value-map meta-cvar meta add_meta level implied
+// ge:keywords explicit restore include cycle meta_members cvar-layer layer drop_layer overlap clash
+// ge:keywords same-name one-name-one-meaning own same game-scope per-game-cvar shadow set-aside
+// ge:keywords retired lock unlock locked held-value clamp-range ruleset competition-lock
 // ge:skill console
 // ge:test tests/console_cvar_test.cpp
 #pragma once
@@ -336,7 +331,9 @@ class Cvars {
   // when `name` already names something else; true again for the same synonym.
   bool add_synonym(std::string_view name, std::string_view target, int part = -1);
   // A game's spelling whose values differ from the target's: each of `values` one of its values
-  // and the target's it sets (SYNONYMS above). False as add_synonym, or for no values.
+  // and the target's it names (QuakeWorld's `r_drawhud 1` is `scr_draw2d 2`). `set` by its name
+  // writes the mapped value, refusing one the map lacks (`SetResult::unmapped`); `synonym_value`
+  // maps the target's back; `find` does not answer it. False as add_synonym, or for no values.
   bool add_mapped_synonym(std::string_view name, std::string_view target,
                           std::vector<SynonymValue> values);
   // A mapped synonym's value as the target's ("" when its map lacks it).
