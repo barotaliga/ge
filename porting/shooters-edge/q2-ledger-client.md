@@ -13,7 +13,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | missing | not-taken | rows |
 | --- | --- | --- | --- | --- |
 | Client console commands | 139 | 0 | 17 | 156 |
-| Client settings (cvars) | 234 | 6 | 110 | 350 |
+| Client settings (cvars) | 239 | 0 | 111 | 350 |
 | Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
 | Menu pages and rows | 147 | 3 | 12 | 162 |
 | Server messages the client parses (svc) | 26 | 0 | 1 | 27 |
@@ -24,14 +24,14 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Entity render bits (RF_) and view bits (RDF_) | 23 | 2 | 7 | 32 |
 | Configstrings | 10 | 0 | 6 | 16 |
 | The layout language (status bar and layouts) | 27 | 0 | 0 | 27 |
-| HUD and screen elements | 18 | 0 | 11 | 29 |
+| HUD and screen elements | 19 | 0 | 10 | 29 |
 | Messages printed to the player | 130 | 0 | 17 | 147 |
 | Demo playback and recording features | 13 | 0 | 10 | 23 |
 | Keys: the fixed keys and the default bindings | 10 | 0 | 1 | 11 |
 | Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 16 | 0 | 4 | 20 |
-| Connection, network, downloads and the rest | 15 | 1 | 2 | 18 |
-| **all** | 952 | 29 | 231 | 1212 |
+| Connection, network, downloads and the rest | 16 | 0 | 2 | 18 |
+| **all** | 959 | 22 | 231 | 1212 |
 
 ## Client console commands
 
@@ -311,12 +311,12 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_vwep | `cl_vwep` | draw other players' weapons (default 1) | done | synonym of `r_drawvweps` (`client/cvar_layers.cpp`) |
 | cvar.password | `password` | user info: the join password | done | `games/shooters_edge/net/q2_client.cpp` |
 | cvar.spectator | `spectator` | user info: join as spectator (or its password) | done | `games/shooters_edge/net/q2_client.cpp` |
-| cvar.name | `name` | user info: the player's name (default `unnamed`) | missing | Missing, rank 1 (gameplay, daily use): `net/q2_client.cpp` sends it at the connect only; a change while joined not sent (C30) LIFT: Quake's remote already resends `setinfo` when rate or password moves (`net/qw_remote.cpp`, `user_info_step`); extend it there for both games. |
-| cvar.skin | `skin` | user info: model/skin (default `male/grunt`) | missing | Missing, rank 1 (gameplay, daily use): sent at the connect only (C30) LIFT: same `user_info_step` as `name`. |
+| cvar.name | `name` | user info: the player's name (default `unnamed`) | done | sent to a joined server the moment it changes, in Quake II's user info (`net/q2_remote.hpp`'s q2_user_info_moved, called by `net/qw_remote.cpp`'s user_info_step) and as Quake's `setinfo name` |
+| cvar.skin | `skin` | user info: model/skin (default `male/grunt`) | done | sent to a joined server the moment it changes: Quake II's figure and skin as one word as at the join (`skin` with a slash, else `model`/`skin`; `net/q2_remote.hpp`'s q2_user_info_moved), Quake's as `setinfo skin`; gender_auto picks the gender again from the new figure |
 | cvar.rate | `rate` | user info: bytes a second the server may send (default 15000) | done | `plugins/classic` shared user info; a change while joined resends it (`q2_client_userinfo`) |
-| cvar.msg | `msg` | user info: the lowest print level wanted (default 1) | missing | Missing, rank 1 (gameplay, daily use): always sent as 1 (C30) LIFT: same `user_info_step` as `name`; Quake's server already honours `msg`. |
-| cvar.hand | `hand` | user info: 0 right, 1 left, 2 centre (default 0) | missing | Missing, rank 1 (gameplay, daily use): `client/cvar_layers.cpp`; sent at the connect only (C30) LIFT: same `user_info_step` as `name`. |
-| cvar.fov | `fov` | user info: the field of view (default 90) | missing | Missing, rank 1 (gameplay, daily use): synonym of `cl_fov`; the field the server sends back is not drawn (C3), sent at the connect only (C30) LIFT: same `user_info_step` as `name`. |
+| cvar.msg | `msg` | user info: the lowest print level wanted (default 1) | done | the setting's value sent at the join and the moment it changes (`net/q2_client.cpp`'s userinfo_of, `net/q2_remote.hpp`'s q2_user_info_moved), no longer always 1 |
+| cvar.hand | `hand` | user info: 0 right, 1 left, 2 centre (default 0) | done | sent to a joined server the moment it changes (`net/q2_remote.hpp`'s q2_user_info_moved) |
+| cvar.fov | `fov` | user info: the field of view (default 90) | done | cl_fov rounded (0 its 90) sent to a joined server the moment it changes (`net/q2_remote.hpp`'s q2_user_info_moved); the field the server sends back is drawn (`client/q2_view.cpp`'s q2_shown_fov) |
 | cvar.gender | `gender` | user info: male, female, none (default male) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.uf | `uf` | user info: flags (4 own FOV in demos, 32 recorded FOV, others for the server) (default empty) | done | flags 4 and 32 read for recordings, `client/q2_view.cpp` (M18k4 round 34); not sent in the user info |
 | cvar.version | `version` | the program's name and version, read-only; part of a hosted server's info, not of the user info | not-taken | Our design: ours sends a version in the user info (`games/shooters_edge/net/q2_client.cpp`), which the original does not |
@@ -426,7 +426,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_partstyle | `gl_partstyle` | 0 blended, 1 additive particles (default 0) | done | Quake II's: 1 adds the specks' light to what is behind them (`render/particles.hpp`'s ParticleSettings::additive), 0 lays them over it |
 | cvar.gl_partshape | `gl_partshape` | 0 soft dot, 1 square, 2 sharp dot (default 0) | done | Quake II's: the specks' shape on their quad (`render/particles.hpp`'s ParticleShape: 0 a soft round dot, 1 a hard square of the middle 5/8 at 60 %, 2 a flat disc at 60 % with a narrow soft rim); another game's the engine's soft capsule |
 | cvar.gl_beamstyle | `gl_beamstyle` | 0 flat beams, 1 another look (default 0) | done | Quake II's: 1 draws a laser and the rail trail's core as their core alone, as wide as their width, with no glowing sheath (`app/weapon_fx.hpp`'s round_beam); 0 the soft strip with its glow; the core's own edge stays a pixel soft |
-| cvar.gl_celshading | `gl_celshading` | outlines on models, width (default 0) | not-taken | Tail (decided 2026-11-23), cosmetic: quake II's (`classic/q2_fx_switches.hpp`'s q2_outline_px): a black ink line round each solid model (not see-through, no power shell), the setting's pixels (0..10) times 1 - distance / 700, fading with it and gone past about 693 units; drawn as the model's back faces pushed out by half the width (`render/morph.hpp`'s MorphDraw::outline, `client/world_models.cpp`); the held weapon is not outlined |
+| cvar.gl_celshading | `gl_celshading` | outlines on models, width (default 0) | not-taken | Visuals come from classic enhance: ink lines round models were built in round 61 and taken out again in round 64 |
 | cvar.gl_dotshading | `gl_dotshading` | models shaded by precomputed directions (default 1) | done | Quake II's: 0 lights a model evenly (no shade toward its fixed direction, `client/world_models.cpp`), 1 the game's shading from the fixed direction over the map's +x |
 | cvar.gl_shadows | `gl_shadows` | 1 blob shadows under models, 2 fading with height (default 0) | done | `client/model_shadow.hpp` (`shadow_of`), drawn by `client/world_models.cpp` as `render/morph.hpp`'s flat shadow (`MorphDraw::flat`): each animated model's black copy squashed a unit above the floor under it at half strength, leaning along its facing; 2 fades it out by four of its radii above the floor; none under sprites, brush models, see-through models, shells, the held weapon, or a floor steeper than sixty degrees; saved |
 | cvar.gl_modulate | `gl_modulate` | brightens lightmaps and models (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
@@ -439,17 +439,17 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_dlight_falloff | `gl_dlight_falloff` | softer dynamic-light edges (default 1) | done | Quake II's: 1 fades a dynamic light on the walls to nothing 51.2 units short of its reach, 0 cuts it off where less than 64 units are left (`brush/app/bsp_draw.hpp`'s Options::dlight_falloff); another game's straight to its reach |
 | cvar.gl_modulate_entities | `gl_modulate_entities` | the models' share of `gl_modulate` (default 1) | not-taken | Tail (decided 2026-11-23), cosmetic: quake II's: times `gl_modulate` on the models' light (`look.cpp`'s model_light, `client/world_models.cpp`), either look; the held weapon keeps its own light |
 | cvar.gl_doublelight_entities | `gl_doublelight_entities` | models lit twice as bright, as the classic renderer did (default 1) | done | Quake II's: 1 lays the models' gl_modulate x gl_modulate_entities on them twice (`model_light`); nothing at the defaults |
-| cvar.gl_glowmap_intensity | `gl_glowmap_intensity` | glow map strength (default 0.75) | done | Quake II's (`classic/q2_fx_switches.hpp`'s q2_glow_map_gain): a model's skin `<skin>_glow.png` or `.tga` beside its picture is its glow map (`classic/content/open.cpp`), each texel lighting itself by the glow's brightness over its own (`app/classic_models.hpp`'s glow_map_marks, `render/morph.hpp`'s glow_mark), times twice the setting (default 0.75), whatever the light; a full-colour picture of the skin's name stands in for the skin too. The held weapon's glow map is not read |
+| cvar.gl_glowmap_intensity | `gl_glowmap_intensity` | glow map strength (default 0.75) | not-taken | Visuals come from classic enhance: glow maps on model skins were built in round 63 and taken out again in round 64 |
 | cvar.gl_flarespeed | `gl_flarespeed` | how fast flares fade in and out (default 8) | not-taken | Visuals come from classic enhance (decided 2026-11-23): the remaster's flares |
 | cvar.gl_fontshadow | `gl_fontshadow` | shadows under 2D text (default 0) | not-taken | Tail (decided 2026-11-23), cosmetic: `games/shooters_edge/client/q2_bar.cpp`: the status bar's and the screen's letters drawn first in black, 1 or 2 units down and right (`client/q2_view.cpp`); the console's letters not yet |
 | cvar.gl_shaders | `gl_shaders` | 1 the shader backend, 0 legacy (default 1) | not-taken | `client-gaps.md`: the window's renderer is its own |
 | cvar.gl_md5_load | `gl_md5_load` | load MD5 replacement models (default 1) | not-taken | replacement models come from classic enhance's cache as glTF (`plugins/classicenhance`), not `md5/` files beside the pack's |
 | cvar.gl_md5_use | `gl_md5_use` | draw MD5 replacements (default 1) | not-taken | as `gl_md5_load`: no `md5/` replacements are read |
 | cvar.gl_md5_distance | `gl_md5_distance` | beyond this distance the MD2 is drawn (default 2048) | not-taken | as `gl_md5_load`: no `md5/` replacements are read |
-| cvar.gl_damageblend_frac | `gl_damageblend_frac` | the damage tint drawn as a frame this wide (extended protocol) (default 0.2) | missing | C21; a competitive adjustment (the damage tint kept to the screen's edge), so taken under the rule of 2026-11-23 |
+| cvar.gl_damageblend_frac | `gl_damageblend_frac` | the damage tint drawn as a frame this wide (extended protocol) (default 0.2) | done | every classic game's setting (`classic/app/look.cpp`, `Picture::damage_frac`), Quake II's default 0.2, Quake's 0 (its flat flash kept): the damage flash drawn as a frame round the view's edge that share of its shorter side deep, fading inward (`render/post.hpp`'s set_post_edge_blend, `app/look.hpp`'s toned_tints); our server keeps the flash apart (`server/q2_blend.hpp`'s damage_blend, blend_apart), an extended recording's damage blend is read, a stock server's tint stays flat |
 | cvar.gl_waterwarp | `gl_waterwarp` | warp the view under water (default 0) | done | Quake II's: under a liquid the whole 3D view ripples in the post pass (`render/post.hpp`'s PostRipple: 0.25 % of the screen, five waves, a radian a second), the HUD not |
 | cvar.gl_fog | `gl_fog` | draw the fog the game sets (default 1) | done | Quake II's: 0 draws no fog, neither the map's nor the `fog` command's (`client/world_draw.cpp`'s world_fog); the newer protocol's fog is the protocol rows' |
-| cvar.gl_bloom | `gl_bloom` | bloom (default 0) | not-taken | Visuals come from classic enhance (decided 2026-11-23): a modern client's bloom switch; ours is `ce_bloom`/`r_bloom` |
+| cvar.gl_bloom | `gl_bloom` | bloom (default 0) | not-taken | Visuals come from classic enhance: its own bloom switch is `ce_bloom`, its amount `r_bloom` |
 | cvar.gl_bloom_sigma | `gl_bloom_sigma` | bloom blur width (default 4) | not-taken | ours blooms through its mip chain (`render/bloom.hpp`, `r_bloom` the share), with no blur width to set |
 | cvar.gl_swapinterval | `gl_swapinterval` | vertical sync (default 1, saved) | done | Settings lift (2026-11-23): a synonym of our `vid_vsync` in its layer (`client/cvar_layers.cpp`) |
 | cvar.gl_drawsky | `gl_drawsky` | 0 skips the sky (default 1) | done | Quake II's: 0 draws the sky's faces solid black (the world's fast sky in black, `classic/app/look.cpp`'s world_options), either look |
@@ -1119,7 +1119,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 | hud.demobar | the demo bar | the share of the file read as a bar and a percentage, with `scr_demobar 2` the time; "[PAUSED]" | not-taken | Our design: ours `demo_bar` and the timeline (C39) |
 | hud.notify | the notify lines | the last `con_notifylines` printed lines at the top for `con_notifytime` | done | `engine/console/view.cpp` |
 | hud.chatinput | the chat input line | "say:" or "say_team:" and the typed text at the top | done | `engine/console/talk.cpp` |
-| hud.blend | the screen tint | the player state's blend (damage red, pickup yellow, water), off by `cl_blend`/`gl_polyblend`; the extended protocol's damage tint as a frame `gl_damageblend_frac` wide | not-taken | Tail (decided 2026-11-23), cosmetic: the tint landed (`q2-gaps2-client.md` checked); the damage frame missing (C21) |
+| hud.blend | the screen tint | the player state's blend (damage red, pickup yellow, water), off by `cl_blend`/`gl_polyblend`; the extended protocol's damage tint as a frame `gl_damageblend_frac` wide | done | the rules' own tint is now drawn, joined, local and in recordings (it had been replaced by Quake's tint worked from the health lost: `client/world_fx_screen.cpp`'s rules_tint, `app/look.hpp`'s toned_tints); the damage frame is gl_damageblend_frac |
 | hud.viewsize | the screen-size border | a view under 100 % centred with the `backtile` picture round it | done | `client/q2_bar.cpp`'s `draw_tile_clear`: the border round the smaller view tiled with pics/backtile, a tile its own size in the window's pixels |
 | hud.locdraw | place markers | `loc_draw` draws each place point in the world | done | `games/shooters_edge/client/world_fx.cpp` (`place_markers`): the ancient head, the nearest bobbing under a white light |
 | hud.cinematic | cinematics | a `.cin` (or `.ogv`, `.mkv`, `.mp4`) full-screen with its sound, the known releases' letterbox cropped; any key skips | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `.cin` from the packs (`client/cinematic.cpp`); other formats and the crop missing (C25) |
@@ -1400,7 +1400,7 @@ Behaviour the client offers outside the screen.
 | net.protocols | protocols | 34 (stock), 35 (R1Q2), 36 (Q2PRO) by `cl_protocol` | done | `net/q2_client.cpp` + `net/q2_proto_in.cpp`: 35 and 36 joined, read as protocol 34 by the one reader, recordings written as 34; the server is told the client records, so it leaves nothing out |
 | net.extended-limits | protocol extensions while joined | an extended server's flags (36, minor 1024 on) read: the extended configstrings and limits, the wider entity fields, 23-bit coordinates, 64 stats, word gun index, the centred print levels; recordings at 3434 to 3436 | done | `net/q2_proto_in.cpp` (`Q2ProtoIn::ext`): the stream written as the recording of its level (3434, or 3435 for extensions 2 and the fog level, whose fog is read past: the look is ours), entities and baselines carried as they are, the player state through `server/q2_wire.hpp`'s `q2_write_player_ext`; `client/demo_q2.cpp` shows print levels 4 and 5 centred; prediction reads the timer in milliseconds (`net/q2_predict.cpp`) |
 | net.predict | prediction | the player's move predicted from the last frame by the shared move code; misses smoothed | done | `games/shooters_edge/net/q2_predict.cpp` |
-| net.userinfo | user info while joined | a changed name, skin, hand, fov, rate sent at once | missing | Missing, rank 1 (gameplay, daily use): `net/qw_remote.cpp` `user_info_step`: a changed `rate` or `password` sends the user info at once; a changed name, skin, hand or fov not (C30) LIFT: Quake's `user_info_step` (`net/qw_remote.cpp`) is the shared place. |
+| net.userinfo | user info while joined | a changed name, skin, hand, fov, rate sent at once | done | `net/qw_remote.cpp`'s user_info_step each frame: on a server of Quake II a changed name, skin, hand, fov, msg, gender, rate or password sends the whole user info again (`net/q2_remote.hpp`'s q2_user_info_moved); on Quake's a changed name, skin, colour, rate, password, msg or noaim goes as `setinfo` |
 | net.cheatlock | the cheat lock | with more than one player slot, cheat-protected settings forced back each frame | done | `engine/console/cvar.hpp`'s `hold_cheats` (any game), held by `net/q2_remote.cpp` while a joined Quake II server has more than one player slot: every cheat back to its default and each set refused whatever the local sv_cheats says; let go when the game is left (`remote_disconnect`); held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (the window joined to an 8-slot server) |
 | net.stufftext | server-pushed commands | run in the client's console, refused unless whitelisted with `cl_ignore_stufftext` | done | as svc.stufftext: a stuffed `rate`, `set name`, `spectator 0`, a mod's binds run as typed, refused only by `cl_ignore_stufftext`'s whitelist |
 | net.triggers | message triggers | `trigger` runs a command when a server line matches; never in demos or on a relay | done | `client/chat_lines.cpp`: `trigger`, `untrigger`, on the lines that are not chat and the centre message; never through a relay |

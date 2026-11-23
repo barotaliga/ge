@@ -405,7 +405,7 @@ void player_info(DemoMsg& m, Q2View& v, int ext) {
       for (int i = 0; i < 4; i++)
         if ((which >> i & 1) != 0) v.blend[i] = static_cast<uint8_t>(m.u8());
       for (int i = 4; i < 8; i++)
-        if ((which >> i & 1) != 0) m.u8();
+        if ((which >> i & 1) != 0) v.damage_blend[i - 4] = static_cast<uint8_t>(m.u8());
     } else {
       for (uint8_t& c : v.blend) c = static_cast<uint8_t>(m.u8());
     }
@@ -642,6 +642,8 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
                   static_cast<float>(v.gun_offset[2]) * 0.25f};
   s.fov = static_cast<float>(v.fov);
   s.rdflags = v.rdflags;
+  std::copy(std::begin(v.blend), std::end(v.blend), std::begin(s.q2_blend));
+  std::copy(std::begin(v.damage_blend), std::end(v.damage_blend), std::begin(s.q2_damage));
   s.teleport_bit = ext_of(s.protocol) > 0 ? (v.rdflags & 16) != 0 : (v.pm_flags & 128) != 0;
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];

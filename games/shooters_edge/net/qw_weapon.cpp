@@ -5,6 +5,7 @@
 // ge:skill net shooter
 // ge:test tests/shooters_edge_qw_weapon_test.cpp
 #include "shooters_edge/net/qw_weapon.hpp"
+#include "shooters_edge/net/weapon_shown.hpp"
 
 #include <algorithm>
 #include <string_view>
@@ -49,9 +50,12 @@ bool predicted_copy(const RemoteWeapon& w, const dc::DemoState& d, const dc::Dem
   return bit == 0 || (w.sound_mask & bit) == 0;
 }
 
-// Played by the prediction: on, and its weapon's bit not left to the server.
+// Played by the prediction: on, and its weapon's bit not left to the server (weapon_shown.hpp).
 bool plays(const RemoteWeapon& w, cl::WeaponSound s) {
-  return w.sound_mask == 1 || (w.sound_mask > 1 && (w.sound_mask & cl::weapon_sound_bit(s)) == 0);
+  const int bit = cl::weapon_sound_bit(s);
+  int key = 0;
+  while (key < 30 && (1 << key) != bit) key++;
+  return weapon_sound_plays(w.sound_mask, key);
 }
 
 }  // namespace
@@ -82,8 +86,7 @@ void weapon_predict(RemoteWeapon& w, const QwClientEnd& c, dc::DemoState& d, int
   // The server's copies of what the prediction plays, dropped before its own are added.
   std::erase_if(d.started, [&](const dc::DemoSound& snd) { return predicted_copy(w, d, snd, me); });
   // The shown command: `buffer` + 1 before the next to send, within the commands in flight.
-  uint32_t shown = next - 1 - static_cast<uint32_t>(std::max(w.buffer, 0));
-  if (static_cast<int32_t>(shown - (acked + 2)) < 0) shown = next - 1;
+  const uint32_t shown = weapon_shown_command(acked, next, w.buffer);
   if (static_cast<int32_t>(w.played_to - acked) < 0) w.played_to = acked;
   cl::WeaponState s = own.weapon;
   s.frame = own.weaponframe;
@@ -104,17 +107,12 @@ void weapon_predict(RemoteWeapon& w, const QwClientEnd& c, dc::DemoState& d, int
     const int n = cl::weapon_command(s, cmd, world, ev, 8);
     if (static_cast<int32_t>(q - w.played_to) <= 0) continue;  // played by an earlier pass
     for (int i = 0; i < n; i++) {
-      const auto k = static_cast<size_t>(ev[i].sound);
       const float gap = ev[i].sound == cl::WeaponSound::lightning_hit ? kHitEvery : kSameShot;
-      if (k < std::size(w.last_shot) && w.last_shot[k] != 0 && ev[i].clock < w.last_shot[k] + gap &&
-          ev[i].clock > w.last_shot[k] - gap)
+      if (!weapon_shot_fresh(w.last_shot, static_cast<int>(std::size(w.last_shot)),
+                             static_cast<int>(ev[i].sound), ev[i].clock, gap))
         continue;
-      if (k < std::size(w.last_shot)) w.last_shot[k] = ev[i].clock;
       w.fired.push_back({ev[i], q, (s.flags & 1) != 0});
-      if (ev[i].sound != cl::WeaponSound::lightning_hit) {
-        d.own_shots++;
-        d.own_shot_frame = s.frame;
-      }
+      if (ev[i].sound != cl::WeaponSound::lightning_hit) weapon_shot_fired(d, s.frame);
       if (!plays(w, ev[i].sound)) continue;
       dc::DemoSound snd;
       snd.entity = me + 1;
