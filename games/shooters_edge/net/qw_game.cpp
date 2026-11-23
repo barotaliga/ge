@@ -893,6 +893,7 @@ void sheet_rows(const Game& g, gs::SettingsSheet& out) {
   f.vote = &g.vote.settings;
   f.map = g.map ? g.map->name : std::string();
   f.players = g.qw.get();
+  if (g.qw) f.ruleset = g.qw->cfg.ruleset;
   qw_sheet_rows(f, out);
 }
 void sheet_resend(Game& g) {

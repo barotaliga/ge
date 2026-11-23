@@ -45,6 +45,7 @@ struct QwSheetFacts {
   std::function<bool(std::string_view name)> fixed;  // set when the server starts
   const ge::server::VoteSettings* vote = nullptr;
   std::string map;
+  std::string ruleset;  // sv_ruleset: the ruleset a player keeps to ("" any), a fixed row
   const QwServer* players = nullptr;
 };
 

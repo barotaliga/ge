@@ -177,6 +177,7 @@ struct ServerConfig {
   int ip_limit = 0;      // sv_iplimit: the most seats one address holds (0: none; server/admission)
   bool locked = false;   // sv_locked: no new clients but one taking back its seat (admission)
   std::string redirect;  // sv_redirect: where a newcomer is sent when full ("!" first: everyone)
+  std::string ruleset;   // sv_ruleset: the ruleset a player keeps to ("" any; server/admission)
   int vip_slots = 0;     // sv_vipslots: the players' last slots only a VIP takes (server/admission)
   int idle_time = 0;     // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
   ge::server::SkewRule skew;   // sv_speedwindow, sv_speedwarn, sv_speedkick (server/skew.hpp)

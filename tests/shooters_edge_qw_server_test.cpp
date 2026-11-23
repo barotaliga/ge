@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "classic/protocol/info.hpp"
 #include "golden.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
@@ -283,6 +284,32 @@ TEST(the_last_slot_is_kept_for_a_vip) {
     }
     CHECK(cn::qw_count(rig.server, cn::ConnState::connected) == (vip ? 2 : 1));
   }
+}
+
+// sv_ruleset: a newcomer on another ruleset is refused a player's seat, one on it and a spectator
+// are let in, and the server info names it.
+TEST(a_competition_server_refuses_a_player_on_another_ruleset) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  rig.second_node = 9;
+  cn::ServerConfig cfg;
+  cfg.reconnect_wait_s = 0;
+  cfg.ruleset = "smackdown";
+  CHECK(rig.start(cfg));
+  auto connect = [&](int i, const std::string& info) {
+    rig.oob("getchallenge\n", i);
+    std::string challenge;
+    for (const std::string& s : rig.answers(i))
+      if (!s.empty() && s[0] == 'c') challenge = std::string(s.c_str() + 1);
+    rig.oob("connect 28 " + std::to_string(10 + i) + " " + challenge + " \"" + info + "\"\n", i);
+    return rig.answers(i);
+  };
+  CHECK(any_has(connect(0, "\\name\\p0"), "This server requires the smackdown ruleset."));
+  CHECK(any_has(connect(0, "\\name\\p0\\*rsn\\qcon"), "requires the smackdown ruleset"));
+  CHECK(!any_has(connect(0, "\\name\\p0\\*rsn\\smackdown"), "requires"));
+  CHECK(!any_has(connect(1, "\\name\\w1\\spectator\\1"), "requires"));
+  CHECK(cn::qw_count(rig.server, cn::ConnState::connected) == 2);
+  CHECK(ge::classic::protocol::info_get(rig.server.serverinfo, "ruleset") == "smackdown");
 }
 
 // sv_locked, set by the admin while the server runs: a newcomer is refused, a client taking back

@@ -300,6 +300,14 @@ void handle_connect(QwServer& s, const gn::Address& from, const std::string& tex
     reject(s, from, "server is locked");
     return;
   }
+  // A competition server's ruleset (sv_ruleset, server/admission.hpp): a player keeps to it, as
+  // the client's `*rsn` says (classic/rulesets.hpp's ruleset_info_key).
+  if (const std::string why =
+          ge::server::ruleset_refusal(s.cfg.ruleset, info_get(userinfo, "*rsn"), spectator);
+      !why.empty()) {
+    reject(s, from, why);
+    return;
+  }
   // One address's seats held to sv_iplimit (server/admission.hpp).
   if (s.cfg.ip_limit > 0) {
     std::vector<ge::server::HeldSeat> held;
@@ -825,6 +833,7 @@ bool bind_map(QwServer& s, const sv::RulesRunner& rules, std::string& error) {
   info_set(s.serverinfo, "hostname", s.cfg.hostname, kServerInfoBytes);
   info_set(s.serverinfo, "maxclients", std::to_string(qc.sv.set.maxclients), kServerInfoBytes);
   info_set(s.serverinfo, "maxfps", std::to_string(s.cfg.maxfps), kServerInfoBytes);
+  if (!s.cfg.ruleset.empty()) info_set(s.serverinfo, "ruleset", s.cfg.ruleset, kServerInfoBytes);
   info_set(s.serverinfo, "sv_antilag", std::to_string(s.cfg.antilag), kServerInfoBytes);
   if (s.cfg.antilag_projectiles)
     info_set(s.serverinfo, "sv_antilag_projectiles", "1", kServerInfoBytes);
