@@ -774,8 +774,9 @@ std::vector<sb::NavExtraLink> teleport_links(sb::NavGraph& g, const ge::shooter:
 std::vector<sb::NavExtraLink> push_links(const sb::NavGraph& g, const ge::shooter::MapSpec& spec,
                                          const std::vector<sb::EntityBlock>& blocks) {
   constexpr float kPushLand = 256;
-  constexpr float kPushOver = 160;  // its landing at most this far over its top, units
-  constexpr float kPushJump = 44;   // a standing jump's rise (its apex near 45), near enough
+  constexpr float kPushOver = 160;   // its landing at most this far over its top, units
+  constexpr float kPushJump = 44;    // a standing jump's rise (its apex near 45), near enough
+  constexpr float kPushMiddle = 20;  // an updraft's middle: this far in from its sides, units
   std::vector<sb::NavExtraLink> out;
   for (const sb::EntityBlock& b : blocks) {
     const char* cn = sb::block_value(b, "classname");
@@ -817,19 +818,35 @@ std::vector<sb::NavExtraLink> push_links(const sb::NavGraph& g, const ge::shoote
     }
     if (land < 0) continue;
     const float height = up ? box.maxs.z - box.mins.z : 0.0f;
+    // An updraft is walked into from its middle: the walk's end is what he steers for on the way
+    // up, and one by its edge held him under the lip of e3m5's tube top, the draft pinning him to
+    // the roof beside the opening for the whole map. Its edge only when its middle holds none.
+    const auto middle = [&](sh::Vec3f o) {
+      return o.x >= box.mins.x + kPushMiddle && o.x <= box.maxs.x - kPushMiddle &&
+             o.y >= box.mins.y + kPushMiddle && o.y <= box.maxs.y - kPushMiddle;
+    };
+    bool any_middle = false;
+    for (size_t n = 0; up && n < g.nodes.size() && !any_middle; n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      any_middle = !g.nodes[n].swim && static_cast<int32_t>(n) != land && middle(o) &&
+                   o.z + 32 >= box.mins.z && o.z - 24 <= box.maxs.z;
+    }
     for (size_t n = 0; n < g.nodes.size(); n++) {
       const sh::Vec3f o = g.nodes[n].origin;
       if (g.nodes[n].swim || static_cast<int32_t>(n) == land) continue;
       if (o.x + 16 < box.mins.x || o.x - 16 > box.maxs.x || o.y + 16 < box.mins.y ||
           o.y - 16 > box.maxs.y || o.z - 24 > box.maxs.z)
         continue;
+      if (any_middle && o.z + 32 >= box.mins.z && !middle(o)) continue;
       if (o.z + 32 < box.mins.z) {
         // Under it, out of reach standing: a standing jump into it from a node well inside its
         // plan (e3m5's "Jump up here"), the push carrying him on to the landing.
         if (!up || o.z + 32 + kPushJump < box.mins.z || o.x < box.mins.x + 8 ||
             o.x > box.maxs.x - 8 || o.y < box.mins.y + 8 || o.y > box.maxs.y - 8)
           continue;
-        out.push_back({static_cast<int32_t>(n), land, sb::NavKind::jump, 1.5f + height / 400});
+        sb::NavExtraLink e{static_cast<int32_t>(n), land, sb::NavKind::jump, 1.5f + height / 400};
+        e.updraft = true;
+        out.push_back(e);
         continue;
       }
       sb::NavExtraLink e{static_cast<int32_t>(n), land, sb::NavKind::walk, 1.0f + height / 400};
