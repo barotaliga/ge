@@ -134,8 +134,9 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
   bind(cv,
        {.name = "r_arrival",
         .flags = gc::kArchive,
-        .help = "How strongly your own arrival, at a spawn or a teleporter's far end, sweeps "
-                "the view in a flash and a warp, with ce_warps on in the modern look.",
+        .help = "How strongly your own arrival, at a spawn or a teleporter's far end, tints "
+                "and streaks the edges of the view for a moment, with ce_warps on in the "
+                "modern look.",
         .min = 0,
         .max = 1,
         .values = "0: none; 0..1: that strength (1 the default)"},

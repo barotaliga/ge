@@ -61,6 +61,9 @@ constexpr Choice kChScale[] = {{"0.5x", "0.5"}, {"1x", "1"}, {"2x", "2"}};
 constexpr Choice kHand[] = {{"right", "0"}, {"left", "1"}, {"center", "2"}};
 // The competition rulesets (classic/rulesets.hpp's Quake II book, in its order).
 constexpr Choice kRulesets[] = {{"none", "default"}, {"duel", "duel"}};
+// Whose a part of classic remix is (client/remix.hpp's cr_ settings).
+constexpr Choice kRemixWhose[] = {{"own", ""}, {"Quake", "q1"}, {"Quake II", "q2"}};
+constexpr Choice kRemixOnOff[] = {{"no", "0"}, {"yes", "1"}};
 
 // A toggle of client cvar `id`.
 constexpr Entry toggle(std::string_view page, std::string_view id, std::string_view text,
@@ -246,6 +249,7 @@ constexpr Entry kQ2[] = {
     opens("options", "screen", "screen setup", "screen"),
     opens("options", "downloads", "download options", "downloads"),
     {.page = "options", .id = "screenshots", .text = "screenshots", .needs = "screenshot"},
+    opens("options", "remix", "CLASSIC REMIX", "remix", "cr_enabled"),
     opens("options", "classic", "CLASSIC ENHANCED", "enhanced", "ce_textures"),
     spin("options", "ruleset", "ruleset", kRulesets),         // changed only while not on a server
     opens("options", "server", "server settings", "server"),  // server_page.hpp
@@ -439,6 +443,22 @@ constexpr Entry kQ2[] = {
      .needs = "disconnect",
      .closes = true},
     {.page = "game", .id = "quit", .text = "quit", .line = "quit", .needs = "quit"},
+    spin("remix", "cr_enabled", "remix", kRemixOnOff),
+    spin("remix", "cr_expansions", "mission packs", kRemixOnOff),
+    spin("remix", "cr_items", "items", kRemixWhose),
+    spin("remix", "cr_monsters", "monsters", kRemixWhose),
+    spin("remix", "cr_models", "player figures", kRemixWhose),
+    spin("remix", "cr_physics", "movement", kRemixWhose),
+    spin("remix", "cr_sounds", "sounds", kRemixWhose),
+    spin("remix", "cr_menu", "menu", kRemixWhose),
+    spin("remix", "cr_charset", "letters", kRemixWhose),
+    spin("remix", "cr_over_mods", "over mods", kRemixOnOff),
+    slide("remix", "cr_strong_min", "strong at least", 0, 8, 1),
+    slide("remix", "cr_strong_share", "strong at most", 0, 1, 0.1),
+    slide("remix", "cr_strong_same", "same strong", 0, 8, 1),
+    slide("remix", "cr_weak_same", "same weak", 0, 16, 1),
+    slide("remix", "cr_pool_radius", "gather within", 0, 512, 32),
+    back("remix"),
 };
 
 constexpr PageTitle kQ2Pages[] = {
@@ -463,6 +483,7 @@ constexpr PageTitle kQ2Pages[] = {
     {"screen", "Screen Setup"},
     {"crosshair", "Crosshair Setup"},
     {"downloads", "Download Options"},
+    {"remix", "CLASSIC REMIX"},
     {"enhanced", "CLASSIC ENHANCED"},
     {"ce_art", "TEXTURES, MODELS"},
     {"ce_light", "LIGHT AND SHADOW"},

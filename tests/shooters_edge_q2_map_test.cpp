@@ -9,9 +9,10 @@
 // ge:summary Tests: Quake II's movers and triggers: plat's curve, riders, doors, push, teleport
 // ge:keywords coop_elevator_delay coop_pickup_weapons
 // ge:keywords test q2 func-plat func-door accelerated-move riders trigger-push trigger-hurt
-// ge:keywords teleporter target-changelevel use-targets
+// ge:keywords teleporter target-changelevel use-targets g_teleporter_nofreeze
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_q2_map_test.cpp
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <vector>
@@ -310,6 +311,28 @@ TEST(a_push_sets_the_velocity_a_hurt_takes_health_and_a_pad_teleports) {
   CHECK_MSG(bursts == 2, std::to_string(bursts));
   CHECK(h->p().move.origin[0] == 300 * 8 && h->p().move.origin[1] == -150 * 8);
   CHECK(h->p().view_angles.y == 90);
+}
+
+// g_teleporter_nofreeze 1, a match server's: the player leaves the exit at the speed he came in
+// along the ground, turned the exit's way (90: along +y), with no hold.
+TEST(a_teleporter_without_the_freeze_keeps_the_speed_along_the_exits_way) {
+  auto h = open_hall();
+  run(*h, 40);
+  h->r.console("g_teleporter_nofreeze 1");
+  place(*h, -800, 150, 24);
+  h->p().move.velocity[0] = 300 * 8;  // running east into the pad
+  run(*h, 1);
+  CHECK(h->p().move.origin[1] / 8 > -160 && h->p().move.origin[1] / 8 < -100);  // at the exit
+  CHECK_MSG(h->p().move.velocity[1] > 250 * 8,
+            std::to_string(h->p().move.velocity[1] / 8));  // less a frame of friction
+  CHECK(std::abs(h->p().move.velocity[0]) < 8 * 8);
+  CHECK((h->p().move.flags & ge::classic::kSqTimeTeleport) == 0);
+  // 0, the game as it was made: stopped dead and held.
+  h->r.console("g_teleporter_nofreeze 0");
+  place(*h, -800, 150, 24);
+  h->p().move.velocity[0] = 300 * 8;
+  run(*h, 1);
+  CHECK(h->p().move.velocity[0] == 0 && h->p().move.velocity[1] == 0);
 }
 
 TEST(a_trigger_once_fires_the_level_change_outside_deathmatch) {

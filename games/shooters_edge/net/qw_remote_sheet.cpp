@@ -73,7 +73,9 @@ void remote_sheet_command(Remote& r, const std::string& word, double now_s) {
   }
   const bool opening = word == "open" || !s.open;
   s.open = true;
-  if (s.local && s.local(s.sheet)) {  // the window's own server
+  // The window's own server, unless a joined server is up: the window keeps its listen game (the
+  // demo behind the menu) while it plays elsewhere, and the page is the joined server's then.
+  if (!r.active && s.local && s.local(s.sheet)) {
     s.source = gc::SheetSource::ours;
     return;
   }

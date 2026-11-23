@@ -134,6 +134,7 @@ struct Run {
   bool agreed = false;
   double round_trip_ms = 0;  // the client's own measure, smoothed
   int presses = 0, heard = 0;
+  uint32_t late = 0;  // the server's copies of the prediction's sounds that matched none
   double first_heard_ms = 0, first_ammo_ms = 0;  // means over the presses
   std::vector<double> t, button, shots, nails;   // the chart's press
 };
@@ -198,6 +199,7 @@ Run run_session(double latency_ms, bool on, int fps, int presses) {
     }
   }
   out.round_trip_ms = s.remote.end.latency_avg * 1000;
+  out.late = s.remote.weapon.filled_late;
   out.first_heard_ms /= out.presses;
   out.first_ammo_ms /= out.presses;
   out.ok = true;
@@ -251,6 +253,7 @@ void run(gl::Lab& lab) {
       lab.metric(key + ".shot-heard", r.first_heard_ms, "ms");
       lab.metric(key + ".ammo-drawn", r.first_ammo_ms, "ms");
       lab.metric(key + ".shots-a-press", per_press, "shots");
+      if (k == 1) lab.metric(key + ".copies-late", static_cast<double>(r.late), "sounds");
     }
     // On, the shot is heard within two commands of the press whatever the latency.
     if (runs[1].first_heard_ms >= runs[0].first_heard_ms)

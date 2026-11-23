@@ -30,6 +30,7 @@
 // ge:summary A box swept through a version 38 map's brushes, and the contents at a point
 // ge:keywords trace sweep box brush clip position-test start-solid all-solid fraction epsilon
 // ge:keywords point-contents mask contents surface plane head-node leaf-brushes collision
+// ge:keywords extended-contents extended-limits
 // ge:skill brush
 // ge:test tests/brush_trace_test.cpp
 #pragma once
@@ -69,6 +70,13 @@ class BrushTracer {
   // The contents of the leaf `p` falls in, through model `model`'s tree (0 for a map with no
   // brushes in that leaf: the leaf's contents are the OR of the brushes that fill it).
   int32_t contents(const float p[3], uint32_t model = 0) const;
+  // THE EXTENDED MODE (a Quake II game with the protocol extensions; off by default): each leaf
+  // but leaf 0 also holds the OR of its brushes' contents, so a trace walks into a solid leaf
+  // whose brushes the mask asks for (a player clip inside a wall's leaf) and `contents` answers
+  // that wider value; and a sweep that starts and ends inside one brush stops at fraction 0 with
+  // that brush's contents, the walk ending there.
+  void set_extended(bool on);
+  bool extended() const { return !wide_.empty(); }
 
   const Map& map() const { return *map_; }
 
@@ -78,6 +86,10 @@ class BrushTracer {
   std::vector<uint32_t> stamp_;  // a brush's last trace
   uint32_t pass_ = 0;
   std::vector<int32_t> stack_;  // the position test's nodes
+  std::vector<int32_t> wide_;   // each leaf's extended contents (empty: the ordinary mode)
+  int32_t leaf_contents(uint32_t leaf) const {
+    return wide_.empty() ? map_->leaves[leaf].contents : wide_[leaf];
+  }
 };
 
 }  // namespace ge::brush
