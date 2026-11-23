@@ -479,17 +479,9 @@ const char* remote_stage_words(ClientStage s) {
 
 namespace {
 
-std::string size_words(size_t bytes) {
-  constexpr size_t kKb = 1024, kMb = kKb * kKb;
-  if (bytes < 10 * kKb) return std::to_string(bytes) + " bytes";
-  if (bytes < 10 * kMb) return std::to_string(bytes / kKb) + " KB";
-  return std::to_string(bytes / kMb) + " MB";
-}
-
-std::string coming(const std::string& name, int percent, size_t bytes, double& progress) {
-  percent = std::clamp(percent, 0, 100);
-  progress = percent / 100.0;
-  return name + " " + std::to_string(percent) + "% (" + size_words(bytes) + ")";
+std::string coming(const std::string& name, int percent, double& progress) {
+  progress = std::clamp(percent, 0, 100) / 100.0;
+  return name;  // the console draws the bar and the percentage after it
 }
 
 }  // namespace
@@ -523,8 +515,7 @@ std::string remote_foot(const Remote& r, double& progress) {
   if (r.q2) {
     const Q2ClientEnd& c = *r.q2;
     if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
-    if (!c.fetching.empty())
-      return coming(c.fetching, c.fetched_percent, c.fetched_bytes.size(), progress);
+    if (!c.fetching.empty()) return coming(c.fetching, c.fetched_percent, progress);
     return c.stage == ClientStage::signon ? loading : std::string();
   }
   const QwClientEnd& c = r.end;
@@ -534,10 +525,19 @@ std::string remote_foot(const Remote& r, double& progress) {
     if (c.dl.chunked && !c.dl.have.empty())
       percent = static_cast<int>(std::count(c.dl.have.begin(), c.dl.have.end(), true) * 100 /
                                  static_cast<std::ptrdiff_t>(c.dl.have.size()));
-    return coming(c.dl.name, percent,
-                  c.dl.size > 0 ? static_cast<size_t>(c.dl.size) : c.dl.bytes.size(), progress);
+    return coming(c.dl.name, percent, progress);
   }
   return c.stage == ClientStage::signon ? loading : std::string();
+}
+
+void remote_console_foot(Remote& r, ge::console::ConsoleView& view) {
+  double share = -1;
+  std::string foot = remote_foot(r, share);  // first: it sets the share the call below reads
+  view.set_foot(std::move(foot), share);
+  if (const bool joining = r.active && !view.foot().empty(); joining != r.console_held) {
+    r.console_held = joining;
+    view.set_full(joining);
+  }
 }
 
 namespace {
@@ -1274,6 +1274,9 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   if (!r.predicted) r.ahead_count = 0;
   own_ahead(r, d.state, draw_s);
   if (!any || d.state.map.empty()) return RemoteStep::waiting;
+  // The level is loaded once the files it needs are here: while its map or models still come
+  // (the content fetched before prespawn) the window shows the console and the download's bar.
+  if (r.end.prespawn_held) return RemoteStep::waiting;
   if (d.state.levels != r.levels || (r.kept && r.end.begun)) {
     r.levels = d.state.levels;
     if (r.end.begun) r.kept = false;  // what was fetched joining is read with the level
