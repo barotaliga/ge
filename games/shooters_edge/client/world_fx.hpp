@@ -510,8 +510,8 @@ struct FxScene {
   PlayerState me;
   int me_effects = 0;
   float waterlevel = 0, watertype = 0;
-  // A single-player program's (`campaign`): the player's item bits and the contents at the eye
-  // (0: not known; take the water level).
+  // The player's item bits (the items stat: the powers' tints) and a single-player program's
+  // (`campaign`) contents at the eye (0: not known; take the water level).
   int me_items = 0;
   int eye_contents = 0;
   // A staged fight's blows (a lab): every blood message taken as `by` struck from `from` (map
@@ -599,8 +599,9 @@ void glow_mark(FxState& s, const double at[3], const double n[3], const ge::rend
                double t);
 void step_fx(const FxScene& scene, FxState& s, double t, double dt, FxFrame& out);
 // The screen's tints this frame into `out.blend` and `out.blend_dry` (client/world_fx_screen.cpp):
-// the classic's for a single-player program's player, ours in a match; `mine` the viewer's effects.
-void step_screen(const FxScene& scene, FxState& s, double dt, int mine, FxFrame& out);
+// the classic's for a single-player program's player, ours in a match; the powers by the items
+// stat.
+void step_screen(const FxScene& scene, FxState& s, double dt, FxFrame& out);
 // The same off the listen server, after frame_view brought `v` up to date.
 void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double dt, FxFrame& out);
 

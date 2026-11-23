@@ -508,6 +508,29 @@ TEST(an_item_taken_flashes_the_view_gold_for_half_a_second_unless_cl_bonusflash_
   CHECK(a[3] == 0);
 }
 
+TEST(the_powers_tint_by_the_items_held_never_by_the_own_glow) {
+  // A match's prewar: the server lights the player's own figure blue (effects 64) with no quad
+  // held; the items stat holds none, so no tint.
+  fx::Screen prewar;
+  fx::take_powers(prewar, 0);
+  CHECK(!prewar.power && !prewar.shield && !prewar.suit && !prewar.stealth);
+  CHECK(prewar.powerup == fx::Powerup::none);
+  double a[4];
+  fx::screen_blend(prewar, a);
+  CHECK(a[3] == 0);
+  fx::Screen quad;
+  fx::take_powers(quad, fx::kItemQuad | fx::kItemPent);
+  CHECK(quad.power && quad.shield && !quad.suit && quad.powerup == fx::Powerup::quad);
+  fx::screen_blend(quad, a);
+  CHECK(a[3] > 0 && a[2] > a[0]);
+  fx::Screen pent;
+  fx::take_powers(pent, fx::kItemPent);
+  CHECK(pent.powerup == fx::Powerup::pent && !pent.power);
+  fx::Screen suit;
+  fx::take_powers(suit, fx::kItemSuit | fx::kItemRing);  // the suit before the ring
+  CHECK(suit.powerup == fx::Powerup::suit && suit.stealth);
+}
+
 TEST(gl_damageblend_frac_moves_a_hit_s_flash_to_a_frame_round_the_view) {
   ge::console::Console con;
   lk::Picture pic;

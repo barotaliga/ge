@@ -294,6 +294,13 @@ struct Screen {
   double air = 0;
   double air_rgb[3] = {130, 80, 50};
 };
+// THE POWERS HELD, from the player's item bits (the items stat the server sends: ring, pentagram,
+// suit, quad), never from the glow bits on his own figure, which a server may set for other
+// reasons (a match's prewar): the classic tint (`powerup`, the first held of quad, suit, ring,
+// pentagram) and ours (`power`, `shield`, `suit`, `stealth`).
+inline constexpr int kItemRing = 524288, kItemPent = 1048576, kItemSuit = 2097152,
+                     kItemQuad = 4194304;
+void take_powers(Screen& s, int items);
 // The classic damage tint: a blow of `armour` and `blood` points adds 3 x its count (half of
 // each, at least kHurtCountMin) to `strength`, kept at most kClassicHurtMost, and takes the
 // blow's colour into `rgb`: (200, 100, 100) when the armour took more than the blood, (220, 50,
