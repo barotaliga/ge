@@ -238,8 +238,8 @@ void key_lines(Q2Server& s, const ge::brush::Entity& b) {
 
 // The game's own, or one the remix brings in from another game (Quake's monsters, its items).
 bool spawnable(const Q2Server& s, std::string_view c) {
-  return std::binary_search(std::begin(kSpawnable), std::end(kSpawnable), c) || monster_class(c) ||
-         sq_item(c, s.opt.pack) >= 0;
+  return std::binary_search(std::begin(kSpawnable), std::end(kSpawnable), c) ||
+         monster_class(c, s.opt.pack) || sq_item(c, s.opt.pack) >= 0;
 }
 
 }  // namespace
@@ -308,7 +308,7 @@ void q2_spawn_lines(Q2Server& s, const std::vector<char>& inhibited) {
       say(s, c.empty() ? std::string("ED_CallSpawn: NULL classname")
                        : c + " doesn't have a spawn function");
       e.gone = true;
-    } else if ((monster_class(c) || c == "turret_driver") && !dm(s) && has("item") &&
+    } else if ((monster_class(c, s.opt.pack) || c == "turret_driver") && !dm(s) && has("item") &&
                sq_item(b.get_any_case("item"), s.opt.pack) < 0) {
       say(s, std::string(c)
                  .append(" at ")

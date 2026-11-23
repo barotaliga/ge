@@ -75,6 +75,9 @@ struct SqWeaponRow {
   int damage_dm, damage_sp;  // a hit's damage, in deathmatch and outside it
   int kick;                  // a hit's knockback
   float forward, right;      // the shot's start from the eye, units
+  // The rules it belongs to (q2_pack.hpp): its view model, sound and shots are registered only
+  // under its pack, so the base game's lists do not move.
+  Q2Pack pack = Q2Pack::base;
 };
 
 inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
@@ -105,6 +108,13 @@ inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
     {"Grenades", "ammo_grenades", "models/weapons/v_handgr/tris.md2", "weapons/hgrent1a.wav",
      SqAmmo::grenades, 1, 0, 15, 48, 48, 11, 12, SqShot::hand_grenade, 125, 125, 0, 8, 8},
 };
+
+// The pack each shot kind belongs to, by `SqShot` (its missile model registered only under it).
+inline constexpr Q2Pack kSqShotPacks[kSqShotKinds] = {};
+// Whether weapon `w` plays under `pack` (the base game's always, a pack's under it).
+constexpr bool sq_weapon_plays(int w, Q2Pack pack) {
+  return w >= 0 && w < kSqWeaponCount && q2_pack_has(pack, kSqWeapons[w].pack);
+}
 
 // The hand grenade's fuse, s, lit at frame 11; its throw's speed runs from the least (let go at
 // once) to the most (held 3 s), units/s.

@@ -152,8 +152,8 @@ inline constexpr SqItem kSqItems[] = {
 };
 inline constexpr int kSqItemCount = static_cast<int>(sizeof(kSqItems) / sizeof(kSqItems[0]));
 
-// The row of `classname` among the rows `pack` plays (the base game's and that pack's), or -1 when
-// it is no item there.
+// The row of `classname` among the rows `pack` plays: the pack's own row first (one may replace a
+// base item), then the base game's; -1 when it is no item there.
 int sq_item(std::string_view classname, Q2Pack pack = Q2Pack::base);
 
 // Quake II's own effect bit that turns an entity about its yaw on the client's clock, 100° a

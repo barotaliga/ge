@@ -1026,17 +1026,20 @@ void fight_precache(Q2Server& s) {
     s.models.emplace_back(name);
     return static_cast<int>(s.models.size()) - 1;
   };
-  for (int w = 0; w < kSqWeaponCount; w++) s.weapon_models[w] = model(kSqWeapons[w].view_model);
+  for (int w = 0; w < kSqWeaponCount; w++)
+    if (sq_weapon_plays(w, s.opt.pack)) s.weapon_models[w] = model(kSqWeapons[w].view_model);
   // The weapons as others see them carried: names a client takes from the player's own model
   // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
   for (const auto& [w, name] : kCarried) s.carried_models[static_cast<int>(w)] = model(name);
-  for (int k = 0; k < kSqShotKinds; k++) s.missile_models[k] = model(kMissileModels[k]);
+  for (int k = 0; k < kSqShotKinds; k++)
+    if (q2_pack_has(s.opt.pack, kSqShotPacks[k])) s.missile_models[k] = model(kMissileModels[k]);
   gibs_precache(s);
   const auto add_sound = [&s](const char* name) {
     if (std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
       s.sounds.emplace_back(name);
   };
-  for (const SqWeaponRow& r : kSqWeapons) add_sound(r.sound);
+  for (const SqWeaponRow& r : kSqWeapons)
+    if (q2_pack_has(s.opt.pack, r.pack)) add_sound(r.sound);
   for (const char* name : {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib,
                            kHandSounds[0], kHandSounds[1], kHandSounds[2], kHandSounds[3]})
     add_sound(name);
