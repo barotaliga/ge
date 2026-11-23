@@ -866,8 +866,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .flags = con::kArchive,
             .help = "Whether the crosshair takes the colour of your health.",
             .kind = con::CvarKind::boolean,
-            .values = "0: its own colour (the default); 1: white at full health, yellow at two "
-                      "thirds, red at a third and below"},
+            .values = "0: its own colour (the default); 1: red, green rising from 33 health to "
+                      "66 and blue from 66 to 99 (white at full health), black when dead"},
            &b.crosshair->by_health);
   }
   // Its own `cl_gun`, not our `r_drawviewmodel`: its 2 and 3 force the side, where Quake's 2 hides

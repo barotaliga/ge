@@ -50,6 +50,7 @@
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/burning.hpp"
 #include "shooters_edge/client/picture_files.hpp"
+#include "shooters_edge/client/q2_view.hpp"
 #include "shooters_edge/client/room_ear.hpp"
 #include "shooters_edge/client/world_extras.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
@@ -1018,6 +1019,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     ripple.phase = view.time_s;
   }
   gr::set_post_ripple(d, f.post[p], ripple);
+  // Quake II's viewsize under 100: the whole view drawn smaller in the middle.
+  const Q2ViewRect vr = q2_view_rect(f.w, f.h, f.picture->view_size);
+  gr::set_post_view(d, f.post[p], {vr.x, vr.y, vr.w, vr.h}, f.w, f.h);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
     // The engine's fire burns in place of the file's flash, and its arc across a lightning gun's
