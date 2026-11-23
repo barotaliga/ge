@@ -885,8 +885,12 @@ int run_main(int argc, char** argv) {
   bool demo_hold = false;
   constexpr double kDemoSettle = 0.5;
   const auto start_attract = [&] {
-    const std::string list =
-        game_menu.attract() == "auto" ? std::string(adapter.game->attract) : game_menu.attract();
+    std::string list = game_menu.attract();
+    if (list ==
+        "auto") {  // a mod's own quake.rc list first (a mission pack's demos), else the game's
+      list = cl::mod_startdemos(args.basedir, args.game, content_row());
+      if (list.empty()) list = adapter.game->attract;
+    }
     const std::vector<std::string> words = ge::console::tokenize(list);
     if (words.empty() || cl::archive_paths(files).empty()) return false;
     bench_ask = words[attract_next++ % words.size()];
