@@ -115,8 +115,9 @@ bool load(void* ctx, const std::string& name, sv::MapSpec& out, std::string& err
   return true;
 }
 
-bt::UnitReport play(std::map<std::string, std::shared_ptr<const br::Map>>& maps) {
+bt::UnitReport play(std::map<std::string, std::shared_ptr<const br::Map>>& maps, int partners = 0) {
   bt::UnitOptions opt;
+  opt.partners.assign(static_cast<size_t>(partners), ge::shooterbots::AimSkill::expert);
   opt.load = &load;
   opt.load_ctx = &maps;
   opt.first = "first";
@@ -139,6 +140,24 @@ TEST(the_script_takes_the_key_opens_its_door_and_leaves_the_unit) {
   const bt::UnitMap& b = r.maps[1];
   CHECK(b.finished && b.goals == 1 && b.goals_found == 1);
   CHECK(b.way.steps_done >= 1);  // the button
+}
+
+TEST(a_party_of_two_plays_the_unit_in_coop_and_leaves_it) {
+  // Two bots in co-op, the work split between them (party.hpp): the key's door opened, the button
+  // pressed, the unit left; and the party's run replays to the bit. (In co-op a key stays where it
+  // lay, every player taking his own, so it is not counted taken by its going.)
+  auto maps = unit();
+  const bt::UnitReport r = play(maps, 1);
+  CHECK_MSG(r.ok, r.error);
+  CHECK(r.unit_done && r.out_to == "after");
+  CHECK(r.maps.size() == 2);
+  if (r.maps.size() != 2) return;
+  CHECK_MSG(r.maps[0].finished && r.maps[0].next == "second", r.maps[0].end);
+  CHECK(r.maps[0].party.size() == 1 && !r.maps[0].party[0].empty());
+  CHECK(r.maps[0].shares > 0);
+  CHECK(r.maps[1].finished && r.maps[1].goals_found == 1);
+  const bt::UnitReport again = play(maps, 1);
+  CHECK(again.ok && again.digest == r.digest);
 }
 
 TEST(the_same_unit_plays_to_the_same_bits) {
