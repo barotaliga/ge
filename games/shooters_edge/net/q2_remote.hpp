@@ -64,8 +64,9 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
 // `allow_download -1`, "Usage: download <filename>" without exactly one file, and "Couldn't
 // download <file>: <reason>" when it is refused.
 void add_q2_download_command(ge::console::Console& con, Remote& r);
-// `skins`: every player's figure and skin read again ("Must be in a level to load skins." when
-// none is joined), a line each, "client <n>: <name>\<model>/<skin> --> <model>/<skin>".
+// `skins`, every game's: every player's figure and skin read again ("Must be in a level to load
+// skins." when none is joined), a line each, "client <n>: <name>\<look> --> <look>" (Quake II's
+// model/skin, QuakeWorld's skin).
 void add_q2_skins_command(ge::console::Console& con, Remote& r);
 
 }  // namespace shooters_edge::net

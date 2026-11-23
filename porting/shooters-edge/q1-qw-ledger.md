@@ -177,7 +177,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C128 | `flush` (both) | empty the model cache | not-taken | a developer or profiling tool: ours are framestats, the labs and ge |  |
 | C129 | `changing` (qw) | the server's word before a map change: stop drawing, keep the connection | done | games/shooters_edge/net/qw_client.cpp |  |
 | C130 | `rerecord` (qw) | reconnect and record from the start | done | net/qw_match_record.cpp: the recording stopped, the last server joined again and recorded from the start of the join | 3 |
-| C131 | `skins` (qw) | fetch every player's skin again | done | games/shooters_edge/net/qw_client.cpp (as the server stuffs it) |  |
+| C131 | `skins` (qw) | fetch every player's skin again | done | games/shooters_edge/net/qw_client.cpp (as the server stuffs it); typed, the shared `skins` (net/q2_remote.cpp) reads every skin again |  |
 | C132 | `allskins` (qw) | one skin on everyone, or each their own | done | plugins/classic/app/look.cpp |  |
 | C133 | `rcon` (qw) | a command to the server's console by password | done | games/shooters_edge/net/qw_admin.cpp |  |
 | C134 | `packet` (qw) | send a connectionless packet to an address | done | games/shooters_edge/net/qw_client.cpp (as stuffed); not a typed word |  |

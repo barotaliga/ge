@@ -370,18 +370,23 @@ void add_q2_download_command(ge::console::Console& con, Remote& r) {
 }
 
 void add_q2_skins_command(ge::console::Console& con, Remote& r) {
+  // Every game's (QuakeWorld's and Quake II's word alike): the level read again, so every figure
+  // and skin fetched since is drawn; each player's look listed as it is now.
   con.add_command("skins", "skins: every player's model and skin read again",
                   [&r](ge::console::Console& c, const ge::console::Args&) {
                     const client::DemoState& st = r.demo.state;
-                    if (!r.active || r.watch || !r.q2 || st.map.empty()) {
+                    if (!r.active || r.watch || st.map.empty()) {
                       c.print("Must be in a level to load skins.");
                       return;
                     }
                     r.kept = true;  // the level read again: every figure and skin drawn anew
-                    for (size_t i = 0; i < st.looks.size(); i++) {
-                      if (st.looks[i].empty()) continue;
+                    for (size_t i = 0; i < st.names.size(); i++) {
+                      const std::string& look = r.q2 ? st.looks[i] : st.skins[i];
+                      if (st.names[i].empty() && look.empty()) continue;
+                      if (r.q2 && look.empty()) continue;
                       c.print("client " + std::to_string(i) + ": " + st.names[i] + "\\" +
-                              st.looks[i] + " --> " + st.looks[i]);
+                              (look.empty() ? std::string("base") : look) + " --> " +
+                              (look.empty() ? std::string("base") : look));
                     }
                   });
 }

@@ -63,6 +63,13 @@ TEST(download_checks_the_path_and_queues_it) {
   CHECK(con.output().back() == "Must be connected to a server.");
   con.execute("skins");
   CHECK(con.output().back() == "Must be in a level to load skins.");
+  r.active = true;  // a QuakeWorld game joined (no Quake II client): its skins read again too
+  r.demo.state.map = "maps/dm2.bsp";
+  r.demo.state.names[1] = "bob";
+  r.demo.state.skins[1] = "red";
+  con.execute("skins");
+  CHECK(r.kept && con.output().back() == "client 1: bob\\red --> red");
+  r.active = false;
   cn::Q2ClientEnd c;
   c.fetching = "maps/q2dm8.bsp";  // a fetch under way: the next waits behind it
   CHECK(cn::q2_download(c, "pics/colormap.pcx") == "");

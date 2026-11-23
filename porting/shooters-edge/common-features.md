@@ -42,6 +42,13 @@ better. Rank 3 is code only, with no player-visible change.
 | A3 | 3 | A face's datagram out, its out-of-band text and its refusal (`send_to`, `send_oob`, `refuse`) | 4: both servers and both TV faces | The refusal text differs by game (`print` against `n`). It stays each game's, and only the framing would be shared. | kept apart: three lines each over the shared transport and channel; the framing and words are each game's, so a shared one would only add a parameter for every difference |
 | A4 | 3 | A viewer's reliable queue (`queue`, `transmit`, `drop`) | 2: the TV node's two faces | Quake II's holds back the signon until echoed (`go`); QuakeWorld's sends a datagram with it | kept apart: two mechanisms around the shared channel (`plugins/classic/protocol/channel.hpp`) |
 | A5 | 2 | A player's own voice in the client's recording | QuakeWorld has it (`record_own_voice`); Quake II's client does not | Quake II's recordings missed your own voice | done: a block of its own in the level's recording, the server's voice message (`net/q2_client.cpp`), so `record` while joined keeps the whole talk |
+| A6 | 2 | `skins` typed | 1: Quake II's, registered for every game | QuakeWorld's typed `skins` was refused ("Must be in a level") while joined, because the command only knew Quake II | done: the one command reads every game's skins again and lists QuakeWorld's skins too (`net/q2_remote.cpp`) |
+
+A second pass (2026-11-23, after #1412) read every pair of `q2_`/`qw_` files under `net/` and
+`server/` (admin, login, the TV recorders, the remotes, the saves, the weapons). Each pair is game
+glue over code already shared (`engine/server`'s logins, rcon and status, the TV recorder), except
+`skins` (A6). The weapon pair's matching belongs to the smooth weapon thread. No rank 1 or 2 is
+left.
 
 ## The spellings the verification sweep found
 
