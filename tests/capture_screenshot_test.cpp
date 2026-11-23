@@ -277,3 +277,21 @@ TEST(a_grab_is_kept_in_memory_scaled_and_packed_as_jpeg_with_no_file) {
   CHECK(shots.take_grab(out) && !out.empty());
   CHECK(pngs(dir).size() == 1);
 }
+
+TEST(screenshotjpg_png_and_tga_write_the_next_frame_in_their_format_by_name) {
+  // Whatever scr_format says (png here): screenshotjpg writes a jpg, screenshotpng a png,
+  // screenshottga a png too (no TGA writer: the old word's picture is a png).
+  const fs::path dir = fresh_dir("ge_screenshot_formats") / "screenshots";
+  gc::ScreenshotSettings set = kPng;
+  gc::Screenshots shots(dir.string(), "game", &set);
+  ge::console::Console con(false);
+  gc::add_screenshot_format_commands(con, shots);
+  const std::vector<uint8_t> rgba = frame(8, 8);
+  for (const char* line : {"screenshotjpg a 80", "screenshotpng b 9", "screenshottga c"}) {
+    con.execute(line);
+    CHECK_MSG(shots.due(), line);
+    CHECK(shots.write(8, 8, rgba));
+    shots.flush();
+  }
+  CHECK(fs::exists(dir / "a.jpg") && fs::exists(dir / "b.png") && fs::exists(dir / "c.png"));
+}
