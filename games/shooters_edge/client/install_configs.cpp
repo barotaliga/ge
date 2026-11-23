@@ -121,8 +121,10 @@ bool run_path(con::Console& c, const fs::path& path) {
 bool run_named(con::Console& c, std::string_view name, ConfigsRun& out) {
   std::string text;
   if (!c.read_file(name, text)) return false;
-  c.exec_file(name);
-  for (int n = 0; n < con::kMaxFrames && c.pending(); ++n) c.run();
+  c.past_sleep([&c, name] {  // ahead of a recipe that sleeps (`+exec` before postinit, Quake II)
+    c.exec_file(name);
+    for (int n = 0; n < con::kMaxFrames && c.pending(); ++n) c.run();
+  });
   out.files.emplace_back(name);
   return true;
 }
