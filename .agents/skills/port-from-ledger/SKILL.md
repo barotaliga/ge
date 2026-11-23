@@ -29,6 +29,7 @@ you build. Read the lessons first: `make lessons ARGS=port-from-ledger`.
 | Quake II, the game rules | `porting/shooters-edge/q2-ledger-game.md` |
 | Quake II, the server | `porting/shooters-edge/q2-ledger-server.md` |
 | Quake II, the client | `porting/shooters-edge/q2-ledger-client.md` |
+| The mission packs (Scourge of Armagon, Dissolution of Eternity, The Reckoning, Ground Zero) | `porting/shooters-edge/mission-packs-ledger.md` (rows `imp`, `hip`, `rog1`, `xat`, `gz`) |
 | A game with no ledger yet (Quake III Arena, Doom, any later one) | write it first: § 5 |
 
 The row ids are stable (`cmd.give`, `cvar.sv_gravity`, `ent.func_door`, `msg.obit.rocket`,
