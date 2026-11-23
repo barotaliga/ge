@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -25,8 +26,10 @@
 #include "brush/app/draw_data.hpp"
 #include "brush/app/sky_box.hpp"
 #include "brush/light_probe.hpp"
+#include "brush/map.hpp"
 #include "brush/survey.hpp"
 #include "camera/pose.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "prof/zones.hpp"
@@ -736,6 +739,7 @@ ba::SkyPick dress_world_sky(const WorldDraw& f, gr::FrameView& view) {
 // was typed (or sent) since the world was made, else the map's own; its sky share the map's
 // `skyfog`, else r_skyfog. A new map is its own fog again.
 gr::FlatFog world_fog(const WorldDraw& f) {
+  if (!f.picture->q2fx.fog) return {};  // Quake II's gl_fog 0: none at all
   ge::brush::MapFog fog = f.fog;
   if (f.picture->fog_serial != f.made.fog_serial) ge::brush::parse_fog(f.picture->fog, &fog);
   return ba::map_flat_fog(fog, f.picture->sky_fog);
@@ -886,6 +890,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     GE_ZONE("world.extras");
     // The players wading in lava or slime part its surface (ce_wade).
     wade_extras(*f.extras, fx.models, fx.has_self ? &fx.self : nullptr, view.time_s);
+    burn_extras(*f.extras, fx.fires);  // the hot marks' flames (ce_decals)
     prepare_extras(d, *f.extras, f.bsp, view, o, f.staged);
   }
   {
@@ -894,6 +899,19 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // where it was born, the blasts' and the flames' smoke the light where they are.
     f.lit_births.assign(fx.births.begin(), fx.births.end());
     f.lit_births.insert(f.lit_births.end(), f.burning.births.begin(), f.burning.births.end());
+    // Quake II's gl_partscale: each speck sized by its depth in front of the eye.
+    if (f.picture->q2fx.part_scale > 0) {
+      const double forward[3] = {std::sin(view.heading) * std::cos(view.pitch),
+                                 std::sin(view.pitch),
+                                 std::cos(view.heading) * std::cos(view.pitch)};
+      for (gr::Particle& q : f.lit_births) {
+        if (q.grow > 0) continue;  // a puff of smoke keeps its own
+        double depth = 0;
+        for (int k = 0; k < 3; ++k) depth += (q.p[k] - view.eye[k]) * forward[k];
+        q.size *= static_cast<float>(
+            ge::classic::q2_speck_scale(f.picture->q2fx, depth / ge::brush::kUnitM));
+      }
+    }
     for (gr::Particle& q : f.lit_births) {
       if (q.grow <= 0 || q.kelvin != 0) continue;
       const double at[3] = {q.p[0], q.p[1], q.p[2]};
@@ -916,6 +934,12 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       gr::emit_particles(f.particles, f.fire_births);
     }
     f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
+    // Quake II's gl_partshape and gl_partstyle (-1 and 0 in another game: the engine's own).
+    f.particles.settings.shape =
+        f.picture->q2fx.part_shape < 0
+            ? gr::ParticleShape::capsule
+            : static_cast<gr::ParticleShape>(f.picture->q2fx.part_shape + 1);
+    f.particles.settings.additive = f.picture->q2fx.additive_parts;
     gr::prepare_particles(d, f.particles, dt, view, f.w, f.h);
     gr::prepare_explosions(d, f.explosions, f.lit_puffs, view, f.w, f.h, f.lit_flames);
     f.beam_draws.clear();
@@ -926,6 +950,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       if (b.q2_trail)
         f.beam_looks[f.beam_draws.size()] =
             effects::q2_rail_trail_look(b.trail_m, b.trail_radius_m, b.trail_rgb, b.trail_fade_s);
+      // Quake II's gl_beamstyle 1: a laser or the rail's core a plain solid tube, no glow.
+      if ((b.laser || b.q2_trail) && f.picture->q2fx.round_beams)
+        effects::round_beam(f.beam_looks[f.beam_draws.size()]);
       const gr::BeamLook* look = b.laser || b.q2_trail ? &f.beam_looks[f.beam_draws.size()]
                                  : b.coil              ? &effects::rail_coil_look()
                                  : b.rail              ? &effects::rail_look()
@@ -983,6 +1010,14 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::set_post_warp(
       d, f.post[p],
       gr::arrival_warp(fx.arrival_s, fx_switches(*f.picture).arrival, fx.arrival_tint));
+  // Quake II's gl_waterwarp: under a liquid the whole view ripples, 0.25 % of the screen, five
+  // waves, a radian a second.
+  gr::PostRipple ripple;
+  if (f.picture->q2fx.water_warp && fx.screen.medium != effects::Medium::air) {
+    ripple.share = 0.0025;
+    ripple.phase = view.time_s;
+  }
+  gr::set_post_ripple(d, f.post[p], ripple);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
     // The engine's fire burns in place of the file's flash, and its arc across a lightning gun's
@@ -1047,43 +1082,7 @@ void set_air_draws(WorldDraw& f, int n) {
   if (f.extras) set_extras_air_draws(*f.extras, n);
 }
 
-void add_gpustats(ge::console::Console& con, GpuWatch& watch) {
-  con.add_command(
-      "gpustats",
-      "gpustats [frames]: what the next frames cost on the GPU (60 by default), the "
-      "dearest passes first",
-      [&watch](ge::console::Console& c, const ge::console::Args& a) {
-        watch = {};
-        watch.left = a.size() > 1 ? std::clamp(std::atoi(a[1].c_str()), 1, 6000) : 60;
-        c.print("gpustats: reading the next " + std::to_string(watch.left) + " frames...");
-      });
-}
-
-void gpu_watch_frame(GpuWatch& watch, const WorldDraw& w, double frame_s,
-                     ge::console::Console& con) {
-  if (watch.left <= 0) return;
-  record_span(w, watch.times);
-  watch.frame_ms.push_back(frame_s * 1000);
-  double world_cpu = w.rec.stats.prepare_ms;  // the frame's decisions, then each pass's encoding
-  for (int i = 0; i < w.rec.stats.count; ++i) world_cpu += w.rec.stats.passes[size_t(i)].cpu_ms;
-  watch.world_cpu_ms.push_back(world_cpu);
-  ++watch.read;
-  if (--watch.left > 0) return;
-  const auto median = [](std::vector<double> v) {
-    std::sort(v.begin(), v.end());
-    return v.empty() ? 0.0 : v[v.size() / 2];
-  };
-  const double frame = median(watch.frame_ms), cpu = median(watch.world_cpu_ms);
-  char line[200];
-  std::snprintf(line, sizeof line,
-                "gpustats: frame %.2f ms (%.0f fps) median; the world's CPU %.2f ms; the rest "
-                "(game, effects, HUD, waiting for the display) %.2f ms",
-                frame, frame > 0 ? 1000 / frame : 0.0, cpu, std::max(0.0, frame - cpu));
-  con.print(line);
-  con.print("gpustats: " + span_report(watch.times));
-  const std::vector<std::string> lines = pass_report(watch.times, watch.read);
-  for (size_t i = 0; i < lines.size() && i < 12; ++i) con.print("  " + lines[i]);
-}
+const gr::FrameStats& world_stats(const WorldDraw& f) { return f.rec.stats; }
 
 void record_span(const WorldDraw& f, PassTimes& p) {
   span_add(p, f.rec.stats.gpu_span_ms());

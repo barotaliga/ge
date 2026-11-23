@@ -67,6 +67,7 @@
 #include <utility>
 #include <vector>
 
+#include "capture/build_info.hpp"
 #include "capture/screenshot.hpp"
 #include "classic/content/downloads.hpp"
 #include "console/cfg.hpp"
@@ -87,7 +88,7 @@
 #include "platform/window.hpp"
 #include "play/session_flags.hpp"
 #include "play/window_output.hpp"
-#include "render/screenshot_copy.hpp"
+#include "render/gpu_debug.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/bot_client.hpp"
 #include "shooters_edge/client/cinematic.hpp"
@@ -106,6 +107,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/game_start.hpp"
+#include "shooters_edge/client/gpu_debug.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/host_dedicated.hpp"
 #include "shooters_edge/client/install_ask.hpp"
@@ -227,8 +229,7 @@ int run_main(int argc, char** argv) {
   console.cvars().set_layer(cl::kLayerClassic);
   shooters_edge::look::add_cvars(console, picture);
   cl::ViewFrom view_from;  // r_viewfrom and viewfrom: a picture of one spot (client/view_from.hpp)
-  cl::GpuWatch gpu_watch;  // `gpustats`: the GPU's dearest passes over the next frames
-  cl::add_gpustats(console, gpu_watch);
+  ge::render::GpuDebug gpu_debug;  // gpustats and gpudebug (render/gpu_debug.hpp)
   cl::add_view_from(console, view_from);
   cl::RenderWords render_words;  // `sky` and `timerefresh` (client/render_words.hpp)
   cl::add_render_words(console, render_words, picture.sky_typed, [&] {
@@ -388,12 +389,12 @@ int run_main(int argc, char** argv) {
                 "passed over");
   console.cvars().apply_latched();
 
-  // The game the install is (args.profile, found by its folders: client/game_folder.hpp).
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
   cl::Q2Bar q2_bar{.files = &files,
                    .binds = &console.binds().table(ge::console::BindMode::game),
                    .screen = &q2_screen,
-                   .fx = &picture.q2fx};
+                   .fx = &picture.q2fx,
+                   .gamma = &picture.gamma};
   cl::add_q2_bar_commands(console, q2_bar);  // dumpstatusbar, dumplayout, aashot, aadump
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
@@ -451,7 +452,7 @@ int run_main(int argc, char** argv) {
   if (!device) return 1;
   ge::gpu::Surface surface;
   if (!surface.create(*device, window->native())) return 1;
-  ge::render::ScreenshotCopy shot_copy;  // the frames `screenshot` takes, copied back
+  ge::render::WindowShots shot_copy(gpu_debug.shot);  // screenshot's and gpudebug's frames
   int w = 0, h = 0;
   window->pixel_size(w, h);
   // The pointer comes in the window's logical units; the menu is laid out in pixels.
@@ -512,7 +513,7 @@ int run_main(int argc, char** argv) {
     }
     game_menu.draw(overlay, w, h, t);
     con_view.frame(dt);
-    shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);
+    cl::draw_console_shown(gpu_debug.shot.hiding(), overlay, con_view, con_look, t);
     if (!caption.empty())
       ge::hud::draw_spinner(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(), t,
                             caption, t - since);
@@ -541,6 +542,11 @@ int run_main(int argc, char** argv) {
   playback.places = &places;       // the demo's players' table names their places
   recorder.places = &places.locs;  // a recording keeps the place names it is played with
   cl::add_place_queries(console, places, listen, place_seen, adapter, files);
+  ge::render::add_gpu_debug(console, gpu_debug, device.get(), [&] {
+    return cl::gpu_debug_notes({&view_from, &listen, &place_seen, &picture.look, &w, &h});
+  });
+  gpu_debug.shot.build = ge::capture::build_info_line(ge::capture::build_info());
+  gpu_debug.shot.to_clipboard = ge::platform::set_clipboard_png;
   // CHAT: the player's line to everyone or to the team, its codes and glyphs filled in first,
   // and the f_ aliases the game's events run (client/team_chat.hpp).
   cl::TeamChat chat;
@@ -646,8 +652,8 @@ int run_main(int argc, char** argv) {
   cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
                  next_map);
 
-  // The held weapons: a classic game's own, else ours from the folder given, the tree's from here
-  // or from where it was built (client/held.hpp).
+  // The held weapons: a classic game's own, else ours (the folder given, else the tree's;
+  // held.hpp).
   std::vector<ge::viewmodel::HeldModel> weapons;
   std::vector<std::string> model_dirs;
   if (!args.models.empty()) model_dirs.push_back(args.models);
@@ -656,8 +662,7 @@ int run_main(int argc, char** argv) {
   model_dirs.emplace_back(SE_MODELS_DIR);
 #endif
   const bool weapons_at_eye = cl::load_held_set(adapter, files, model_dirs, weapons);
-  // Each weapon's muzzle fire (world_fx.hpp), at the size its gun is drawn: a classic game's own
-  // weapons fire the classic table's.
+  // Each weapon's muzzle fire (world_fx.hpp) at its gun's size; a classic game's, its table's.
   const auto held_names = [&](bool at_eye) {
     return at_eye && adapter.game != nullptr ? adapter.game->held_weapons
                                              : std::span<const std::string_view>{};
@@ -1058,8 +1063,7 @@ int run_main(int argc, char** argv) {
       input.pressed[static_cast<size_t>(ge::platform::Key::enter)] = false;
     const uint64_t now = ge::platform::now_ns();
     const double frame_s = static_cast<double>(now - last) * 1e-9;
-    // The game's time: at vsync whole refreshes (vid_steady), so the motion is even whenever the
-    // frame started; a timedemo's as measured.
+    // The game's time: whole refreshes at vsync (vid_steady: even motion); a timedemo's measured.
     const double wall = vsync ? ge::platform::game_dt(pacing, frame_s) : frame_s;
     game_t += wall;
     const double t = game_t;
@@ -1325,8 +1329,7 @@ int run_main(int argc, char** argv) {
     if (!load_ask.empty())
       console.print(cl::load_save_asked(listen, game_content, files, load_ask));
 
-    // A benchmark asked for: vsync off, the listen server waits until it is done. A demo played
-    // at its pace keeps vsync.
+    // A benchmark: vsync off, the listen server waits until it is done (a demo at pace keeps it).
     if (!bench_ask.empty()) {
       const bool quit_after = bench_ask == args.timedemo || bench_ask == args.playdemo;
       const bool for_attract = std::exchange(attract_asked, false);
@@ -1583,7 +1586,7 @@ int run_main(int argc, char** argv) {
       if (paced) {  // a demo watched or a game joined: the menu and the console over it
         game_menu.draw(overlay, w, h, t);
         con_view.frame(wall);
-        shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);
+        cl::draw_console_shown(gpu_debug.shot.hiding(), overlay, con_view, con_look, t);
       }
       // Every frame is drawn, but only one in kBenchShowNs is shown: the rest go to an offscreen
       // target of the surface's format. A window's present waits for the display however its
@@ -1641,8 +1644,7 @@ int run_main(int argc, char** argv) {
         ++presented;
         continue;
       }
-      // At most one frame in flight, as a swap chain of two images would allow: the GPU's time
-      // is in the frame rate, not queued behind it.
+      // At most one frame in flight (a swap chain of two): the GPU's time is in the frame rate.
       const wgpu::Future done = device->queue.OnSubmittedWorkDone(
           wgpu::CallbackMode::WaitAnyOnly, [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
       if (bench_in_flight.id != 0) ge::gpu::wait(*device, bench_in_flight);
@@ -1830,7 +1832,7 @@ int run_main(int argc, char** argv) {
     cl::draw_cinematic(overlay, cine, w, h);
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
-    shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);
+    cl::draw_console_shown(gpu_debug.shot.hiding(), overlay, con_view, con_look, t);
     cl::draw_loading(overlay, loader, listen, game_menu.art(), w, h, t);  // the next world made
 
     wgpu::TextureView target = acquire_frame();
@@ -1838,7 +1840,7 @@ int run_main(int argc, char** argv) {
     cl::apply_view_from(view_from, view,
                         std::string(adapter.game->id) + " " + (listen.map ? listen.map->name : ""));
     cl::draw_world(*device, *world, view, fx, behind > 0 ? nullptr : &hand, wall, overlay, target);
-    cl::gpu_watch_frame(gpu_watch, *world, wall, console);
+    ge::render::gpu_watch_frame(gpu_debug.watch, cl::world_stats(*world), wall, console);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
     present_frame();
     ++presented;
@@ -1865,8 +1867,7 @@ int run_main(int argc, char** argv) {
   return device->errors.load() == 0 && !device->lost.load() && bench_failed == 0 ? 0 : 1;
 }
 
-// What nothing else caught ends the program here, with a line that says so, rather than in
-// std::terminate's bare abort.
+// What nothing else caught ends the program here with a line saying so, not std::terminate's.
 int main(int argc, char** argv) {
   try {
     return run_main(argc, argv);

@@ -13,6 +13,7 @@
 #include <cstring>
 #include <utility>
 
+#include "classic/rulesets.hpp"
 #include "net/voice_trial.hpp"
 #include "progs/text.hpp"
 #include "shooter/usercmd.hpp"
@@ -71,6 +72,8 @@ std::string userinfo_of(const QwClientEnd& c) {
     info_set(u, "cl_speedjump", "1");  // a server that does not know it ignores it
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
   if (!c.cfg.prx.empty()) info_set(u, "prx", c.cfg.prx);
+  if (!c.cfg.ruleset.empty() && c.cfg.ruleset != "default")
+    info_set(u, std::string(ge::classic::ruleset_info_key(false)), c.cfg.ruleset);
   for (const auto& [k, v] : c.cfg.extra_info)
     if (info_get(u, k).empty()) info_set(u, k, v);
   if (c.cfg.ask[ExtFamily::z]) info_set(u, "*z_ext", std::to_string(c.cfg.ask[ExtFamily::z]));

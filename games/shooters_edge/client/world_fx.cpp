@@ -44,7 +44,9 @@ struct BirthsCut {
   BirthsCut(const BirthsCut&) = delete;
   BirthsCut& operator=(const BirthsCut&) = delete;
   ~BirthsCut() {
-    if (on && births.size() > keep) births.resize(keep);
+    // Shrinking never allocates; erase, unlike resize, is not one that may grow.
+    if (on && births.size() > keep)
+      births.erase(births.begin() + static_cast<std::ptrdiff_t>(keep), births.end());
   }
 };
 
@@ -1444,6 +1446,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         }
         if (e.name == "te_blaster") {  // Quake II's bolt landing: yellow sparks
           fx::blaster_hit(p, s.seed++, &out.births);
+          // On a wall: a small glowing mark, the bolt's heat left in it.
+          double normal[3], dir[3];
+          const ge::detail::SurfaceClass sc = face(eye_map, normal, dir);
+          if (on_face && sc != ge::detail::SurfaceClass::sky &&
+              sc != ge::detail::SurfaceClass::liquid)
+            glow_mark(s, p, normal, fx::kBoltMark, t);
           break;
         }
         if (e.name == "te_bfg_bigexplosion") {  // the BFG's burst (its blast is an explosion's)
@@ -1663,6 +1671,13 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       g.radius = glows[i].reach_m;
       out.lights.push_back(g);
     }
+  }
+  // The hot marks burn a little and then smoke as they cool (render/mark_fire.hpp).
+  out.fires.clear();
+  if (s.on.decals && s.receivers) {
+    ge::render::mark_flames(ge::render::mark_fire_look(), s.marks, t, out.fires);
+    ge::render::mark_fire_births(s.mark_fire, ge::render::mark_fire_look(), s.marks, t, dt,
+                                 out.births);
   }
   heal_wounds(l, s);
   if (s.on.decals) draw_wounds(s, out.models, l.pose.eye, t, dt, out.births);

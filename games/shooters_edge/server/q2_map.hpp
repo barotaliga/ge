@@ -134,6 +134,9 @@ bool map_hears(const Q2Server& s, sh::Vec3f from, sh::Vec3f to);
 // joined to its own; every area when it stands in none (outside or in solid); empty when the map
 // has no areas (every area shown).
 void map_area_bits(const Q2Server& s, sh::Vec3f eye, std::vector<uint8_t>& out);
+// Each area's group over the open portals (brush/areas.hpp's flood_areas), flooded again when a
+// portal changed; empty when the map has no areas.
+const std::vector<int32_t>& map_area_groups(const Q2Server& s);
 
 // A kept level read back (q2_save.hpp): every cross-level target not yet fired checks again
 // its `delay` from now.

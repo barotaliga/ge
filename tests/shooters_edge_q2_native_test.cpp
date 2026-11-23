@@ -257,6 +257,9 @@ TEST(attack_sends_a_spark_and_a_sound_to_the_player) {
   CHECK(std::find(d.begin(), d.end(), uint8_t{9}) != d.end());  // then the sound
   // The spark's way (straight up) as its index into the protocol's table of directions.
   CHECK(d.size() > 8 && ge::classic::protocol::directions()[d[8]][2] == 1.0f);
+  // The sound comes from the player's own entity, which his frame holds: no place (flag 4), so it
+  // is played on him as he moves.
+  CHECK(d.size() > 10 && d[9] == 9 && (d[10] & 8) != 0 && (d[10] & 4) == 0);
 }
 
 // A brush entity turned by its angles is traced and tested in its own frame: the platform at

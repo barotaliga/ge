@@ -66,7 +66,7 @@ fn on_floor(q: Particle) -> Particle {
 
 struct ParticleParams {
   step: vec4f,  // x: this frame's step, s; y: the near plane, m; z: the soft depth, m
-  info: vec4u,  // x: slots
+  info: vec4u,  // x: slots; y: the shape (ParticleShape); z: 1 added to what is behind
   air: vec4f,   // xyz: the air's velocity, m/s, which a particle's drag pulls it toward
   glow: vec4f,  // x: a perfect radiator's luminance at the table's last row times the
                 // emissivity, cd/m^2

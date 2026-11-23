@@ -317,10 +317,14 @@ void walk(const fs::path& dir, const std::string& below, int depth, bool deep, b
     Found f;
     f.name = name;
     if (!folder) f.size = static_cast<int64_t>(it->file_size(ec));
-    const auto when = it->last_write_time(ec);
+    // Unix seconds: the file's age on its own clock taken from the system clock's now (no
+    // clock_cast: Apple's standard library has none).
+    const auto age = fs::file_time_type::clock::now() - it->last_write_time(ec);
     f.mtime = static_cast<int64_t>(
         std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::clock_cast<std::chrono::system_clock>(when).time_since_epoch())
+            (std::chrono::system_clock::now() -
+             std::chrono::duration_cast<std::chrono::system_clock::duration>(age))
+                .time_since_epoch())
             .count());
     out.push_back(std::move(f));
   }

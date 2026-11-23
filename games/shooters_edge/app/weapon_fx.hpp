@@ -117,10 +117,12 @@ inline constexpr double kNozzleM = 0.3, kMotorLightM = 6.5, kMotorLevel = 1.7;
 Light motor_light(const double at[3], const double dir[3], uint32_t seed, double now_s);
 // THE GLOWING HIT MARKS (ce_decals; render/marks.hpp's `press_glow`): a slug gun's hit melts a
 // small round mark into the wall that glows white-hot and cools to black in a few seconds; a big
-// energy ball's burst leaves a large one that cools slowly. Both light the room while they glow
-// (`mark_glows`), as the bolt's burnt line and melt do.
+// energy ball's burst leaves a large one that cools slowly; a blaster's bolt a smaller one that
+// cools quickly. All light the room while they glow (`mark_glows`), as the bolt's burnt line and
+// melt do, and burn a little and then smoke as they cool (render/mark_fire.hpp).
 inline constexpr ge::render::GlowMark kSlugMark{0.32, 3.0};
 inline constexpr ge::render::GlowMark kEnergyBallMark{1.9, 7.0};
+inline constexpr ge::render::GlowMark kBoltMark{0.18, 1.8};
 
 // A grenade's painted ends glowing (ce_trails; a classic grenade gives no light): `rgb` the colour
 // its skin's glowing texels paint (world_models' ModelKind::glow_rgb), at kGrenadeGlowLevel,
@@ -250,6 +252,9 @@ gr::BeamLook laser_look(float width_m, const float rgb[3]);
 // look: the core, straight and `width_m` across, or (`radius_m` > 0) the line spiralling round it
 // that far off the axis; in `rgb`, fading over `fade_s`, no light of its own.
 gr::BeamLook q2_rail_trail_look(float width_m, float radius_m, const float rgb[3], float fade_s);
+// Quake II's gl_beamstyle 1 on a laser's or a rail trail's look: its core alone, as wide as its
+// width, no glowing sheath round it.
+void round_beam(gr::BeamLook& look);
 // The one glowing line that circles the rail's beam, fading with it.
 const gr::BeamLook& rail_coil_look();
 // The rail's soft lights along its line at `t_s` (up to kRailLights into `out`); the count.

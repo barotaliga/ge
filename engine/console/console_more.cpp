@@ -161,7 +161,9 @@ void info_set(Console& c, const Args& a, uint32_t flag) {
     v->flags = (v->flags & ~(kUserInfo | kServerInfo)) | flag;
     ++v->revision;  // the info is sent again even when the value is the same
   }
-  const std::string why = set_result_text(r, lower(a[1]));
+  const std::string why =
+      (c.cvars().find(a[1]) != nullptr ? set_result_text(r, *c.cvars().find(a[1]))
+                                       : set_result_text(r, lower(a[1])));
   if (!why.empty()) c.error(why, "");
 }
 

@@ -67,6 +67,10 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | The sound device | `s_device`, `s_devices` lists them (`platform/window_cvars.hpp`, every game) | `al_device` its spelling | the engine's | the engine's |
 | No sound | `s_enable` 0 (`platform/window_cvars.hpp`, every game) | the same | the engine's | the engine's |
 | IPv6 servers | `connect [addr]:port` from an IPv6 socket (`net/qw_remote.cpp`) | `net_enable_ipv6` 0 refuses one, `net_ip6` the socket's address | the same join | the same join |
+| Particles' size, shape, blend | each as made, a soft capsule, laid over | `gl_partscale` (grown with depth), `gl_partshape`, `gl_partstyle` (`render/particles.hpp`'s ParticleShape, `additive`) | as made | as made |
+| Beams, sky, textures, fog | the look's own | `gl_beamstyle`, `gl_drawsky`, `gl_bilerp_skies`, `gl_saturation`, `gl_invert`, `gl_anisotropy`, `gl_fog` (`classic/q2_fx_switches.hpp`) | the look's own | the look's own |
+| Under water | the view breathes (`r_waterwarp`) | also `gl_waterwarp`, the view rippled (`render/post.hpp`'s PostRipple) | `r_waterwarp` | `r_waterwarp` |
+| Status bar pictures | sharp | `gl_bilerp_pics`, `gl_gamma_scale_pics` (`client/q2_bar.cpp`) | sharp | sharp |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Command packets | `localid`: a server browser on this machine sends commands that carry it (`net/qw_client.cpp`) | none | its own | its own |
 | Setup figure | the pack's figure in the chosen shirt and pants (`menu/classic_art.cpp`'s `player_in`) | its figure rows (`menu/q2_pages.cpp`) | its own | its own |

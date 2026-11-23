@@ -10,10 +10,10 @@
 //   starts a new block past 1400 bytes with a 32-byte margin, a baseline with a 64-byte one).
 // - **A frame** (`q2_frame`): the reliable messages first (changed configstrings, prints,
 //   centred prints, stuffed lines, the viewer's layout program and inventory when they changed),
-//   then the frame (its number, the one it deltas from, area bits that show every area), the player
-//   state as a delta from the last frame's, the entities as a delta list against the last frame's
-//   (an entity new to the list from its baseline, a player always with its old origin, a gone one
-//   removed), then the frame's sounds.
+//   then the frame (its number, the one it deltas from, area bits of the areas joined to the
+//   viewer's), the player state as a delta from the last frame's, the entities as a delta list
+//   against the last frame's (an entity new to the list from its baseline, a player always with its
+//   old origin, a gone one removed), then the frame's sounds.
 //
 // The configstrings: 0 the map's title, 30 the most clients, 31 the map's checksum (the caller's:
 // the MD4 of the whole map file, its four little-endian words XORed, as signed decimal, measured
@@ -121,18 +121,23 @@ void q2_sky(const ge::brush::Map& map, Q2WireOptions& opt);
 // and any other entity with a cluster in the union of the visible rows of every leaf within 8
 // units of its eye (the player state's origin and view offset); an entity with no model (a sound
 // or an effect alone) only within 400 units of the eye. An entity touching more than
-// `kSightClusters` clusters is sent wherever the viewer is. Every area counts as connected (the
-// net server keeps no area portals, porting/shooters-edge/q2-game-library.md § 17), so
-// closed doors cut nothing. A recording keeps every entity (no cut set).
+// `kSightClusters` clusters is sent wherever the viewer is. THE AREAS: on a map with area data an
+// entity is kept only when the viewer's area is joined (through the open area portals, `groups`)
+// to its first area or, for one spanning a portal (a door), its second; area 0 (solid, outside)
+// is joined to nothing. The frame's area bits mark the areas joined to the viewer's (every area
+// for a viewer in area 0), so a client leaves the rooms behind a shut door undrawn. A recording
+// keeps every entity (no cut set).
 inline constexpr int kSightClusters = 16;
 struct Q2SightLinks {
   int32_t clusters[kSightClusters] = {};
-  uint8_t count = 0;        // clusters held
-  bool everywhere = false;  // more than kSightClusters touched
+  uint8_t count = 0;             // clusters held
+  bool everywhere = false;       // more than kSightClusters touched
+  int32_t area1 = 0, area2 = 0;  // the areas its leaves lie in (0 none; a second when it spans two)
 };
 struct Q2Sight {
   const ge::brush::Map* map = nullptr;  // null: no cut, every entity sent
   std::vector<Q2SightLinks> links;      // by entity number (kQ2Entities)
+  std::vector<int32_t> groups;          // each area's group over the open portals (empty: no areas)
 };
 // Starts a frame's links over `map` (null: no cut); every entity unlinked.
 void q2_sight_reset(Q2Sight& s, const ge::brush::Map* map);
@@ -147,6 +152,14 @@ struct Q2Wire;
 // then whether entity `n`, shown as `s`, is kept.
 bool q2_sight_view(Q2Wire& w, const float eye[3]);
 bool q2_sight_keeps(const Q2Wire& w, int n, const Q2EntityState& s, const float eye[3]);
+// The frame's area bits as the viewer's cut found them: their count, then the bytes (32 bytes of
+// every area when the map has none or nothing is cut).
+void q2_write_area_bits(std::vector<uint8_t>& out, const Q2Wire& w);
+// Whether a sound or an effect at `at` reaches a viewer standing at `ear` (his origin, not his
+// eye; map units) on a cut frame: the point's hearing set holds his cluster and their areas are
+// joined through the open portals (area 0 joined to nothing). The frame sends the rules' effects
+// and sounds by it, a sound of no attenuation to everyone.
+bool q2_sight_hears(const Q2Wire& w, const float ear[3], sh::Vec3f at);
 
 // What the encoder keeps between frames for one viewpoint.
 struct Q2Wire {
@@ -162,6 +175,8 @@ struct Q2Wire {
   // The cut the next frame applies (null or no map: none); the caller's, linked for this frame.
   const Q2Sight* sight = nullptr;
   std::vector<uint8_t> seen, heard;  // the viewer's cluster bits, this frame
+  int32_t area = 0;                  // the viewer's area, this frame
+  std::vector<uint8_t> area_bits;    // the frame's area bits (empty: 32 bytes of every area)
   int64_t cut = 0;                   // entities the cut kept out, every frame summed
   int64_t capped = 0;                // entities the cap kept out (sv_maxents), every frame summed
   // The frames held back for the viewer's rate since the last one written: the next frame's
@@ -177,6 +192,12 @@ struct Q2Wire {
          no_predict = false;
   } asked;
   uint8_t frame_flags = 0;
+  // The room the packet carrying the next frame has after the reliable data it carries (0: the
+  // block's own 1400 bytes), and whether the reliable data this frame writes joins it (the
+  // channel's `channel_unreliable_room`). A frame sized to it loses its last entities and its
+  // effects and sounds before the whole frame is lost to a long reliable message.
+  bool room_grows = false;
+  size_t room = 0;
 };
 
 // What the runner shows, in the wire's terms (the pieces every writer of Quake II's messages

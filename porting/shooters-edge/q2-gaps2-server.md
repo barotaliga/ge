@@ -201,8 +201,9 @@ Original: an entity in the potentially visible set is still left out when the vi
 joined to either of the entity's two areas through open portals (§ B2.6 has the whole rule). So a
 monster, a player or an item in the next room behind a shut door is not sent, and neither is its
 looping sound, which the client plays only for entities in its frame. (R)
-Ours: the frame is cut by the visible set alone; areas are not consulted, for our rules and for a
-hosted library alike. Entities behind a shut door within the visible set are sent, so their looping
+Ours (2026-11-22, batch 12): `q2_sight_keeps` adds the area test for our rules and a hosted
+library. Before: the frame was cut by the visible set alone; areas were not consulted, for our rules
+and for a hosted library alike. Entities behind a shut door within the visible set are sent, so their looping
 sounds (a generator's hum, a lift's drone, a monster's idle loop that is a looping sound) are heard
 through the shut door, and a modified client sees players behind it. (R ours, D the effect)
 
@@ -210,7 +211,8 @@ through the shut door, and a modified client sees players behind it. (R ours, D 
 Original: each frame carries one bit per area (the area count rounded up to whole bytes), set for
 the areas joined to the viewer's area; a viewer inside a solid or in area 0 gets every bit. The
 stock client skips world leaves whose area bit is clear, so rooms behind a shut door are not drawn. (R)
-Ours: every frame writes 32 bytes, all ones, for our rules and a hosted library. The client draws
+Ours (2026-11-22, batch 12): `q2_write_area_bits` writes the joined areas' bits. Before: every
+frame wrote 32 bytes, all ones, for our rules and a hosted library. The client draws
 what lies behind shut doors; doors are opaque, so the player sees nothing different, only the cost
 and the length (32 bytes against a few). (R ours, D the effect)
 
@@ -219,13 +221,17 @@ Original: a positioned sound goes to the clients whose hearing set holds the sou
 whose area is joined to the sound's area; a sound with no attenuation, or with the channel bit
 that asks for no hearing test, goes to all. Temporary effects are multicast to the visible or the
 hearing set of their point, with the same area test, or to all. (R)
-Ours: every sound and effect event of our rules goes to everyone; no hearing set and no area test.
+Ours (2026-11-22, batch 12): `q2_sight_hears` sends our rules' sounds and effects to a viewer whose
+origin is in the point's hearing set with the areas joined; a sound of no attenuation to everyone.
+Effects use the hearing set, the wider one, as their multicast kind is not kept (D). Before: every
+sound and effect event of our rules went to everyone; no hearing set and no area test.
 A client hears sounds through walls up to their attenuation range (normal attenuation reaches about
 1000 units) and is sent every explosion and trail on the map. (R ours, D the range)
 
 **S4 (rank 3, frame). A hosted library's multicast and sounds skip the area test.**
 Original: as S3, the area test applies to multicast to the visible or hearing set and to sounds. (R)
-Ours: a hosted library's multicast and sound calls test the visible or hearing set by cluster, but
+Ours (2026-11-22, batch 12): `send_to` adds the area test, and area 0 is joined to nothing.
+Before: a hosted library's multicast and sound calls tested the visible or hearing set by cluster, but
 not the area. Its point tests (in-visible-set, in-hearing-set, areas-joined) do apply the areas.
 Our area test treats an area number out of range as joined, so a point in area 0 counts as joined
 to everything, where the original never joins area 0. (R)
@@ -235,7 +241,8 @@ Original: a sound from an entity carries the entity number; the position is left
 entity is in the client's frame (the extended server) or when the sound was given no explicit
 origin and the entity is not a brush model (stock), so the client places it on the entity as it
 moves. (R)
-Ours: every sound carries a fixed position. A sound from a moving entity (a rocket's fly-by, a
+Ours (2026-11-22, batch 12): the position is left out when the client's frame holds the entity (not
+a brush model, no explicit point), per client. Before: every sound carried a fixed position. A sound from a moving entity (a rocket's fly-by, a
 train) stays where it began. (R ours, D the effect)
 
 **S6 (rank 3, frame). The client's message level is ignored.**
@@ -345,7 +352,10 @@ stock library's. (R ours)
 Original: when the reliable data and the frame do not fit, the stock server writes the frame
 anyway up to the buffer (overflowing clients are dropped); the extended server first drops sounds
 and effects of low priority, then entities in order of priority, and sends what fits. (R)
-Ours: the unreliable part is dropped whole when the packet would pass 1450 bytes, so a frame is
+Ours (2026-11-22, batch 12): the frame is sized to the packet's room after the reliable part;
+entities fill first in number order, then effects and sounds; a hosted library's datagram whole or
+not at all; no per-sound priority. Before: the unreliable part was dropped whole when the packet
+would pass 1450 bytes, so a frame was
 lost (D: a stutter when a long configstring or print arrives). (R ours)
 
 **S24 (rank 3, net). Packets may pass the stock client's buffer.**

@@ -75,6 +75,7 @@
 
 #include "audio/synth.hpp"
 #include "camera/to_view.hpp"
+#include "capture/build_info.hpp"
 #include "capture/live.hpp"
 #include "capture/screenshot.hpp"
 #include "console/cfg.hpp"
@@ -114,7 +115,7 @@
 #include "play/inputs.hpp"
 #include "play/session_flags.hpp"
 #include "play/window_output.hpp"
-#include "render/screenshot_copy.hpp"
+#include "render/gpu_debug.hpp"
 #include "save/store.hpp"
 #include "ui/console.hpp"
 #include "ui/console_keys.hpp"
@@ -457,7 +458,8 @@ static int run_main(int argc, char** argv) {
     out::status("fall_line: capturing the window to " + args.capture +
                 (capture.encoder().empty() ? "" : " (" + capture.encoder() + ")"));
   }
-  ge::render::ScreenshotCopy shot_copy;  // the frames `screenshot` takes, copied back
+  ge::render::GpuDebug gpu_debug;  // gpustats and gpudebug (render/gpu_debug.hpp)
+  ge::render::WindowShots shot_copy(gpu_debug.shot);  // screenshot's and gpudebug's frames
   Pull puller{&synth, capture.is_open() ? &capture : nullptr};
   std::unique_ptr<ge::platform::AudioOut> speaker;
   if (!set.mute) {
@@ -498,6 +500,32 @@ static int run_main(int argc, char** argv) {
   uint64_t script_last_ns = 0;  // its last frame's time
   std::vector<ge::skier::SkierState> skiers;
   skiers.reserve(fall_line::controls::hand_state(*hand).racers.size());
+  // gpudebug's notes: the run, the skier and the camera, as an agent needs them to find the spot.
+  ge::render::add_gpu_debug(console, gpu_debug, device.get(), [&] {
+    char line[200];
+    std::snprintf(line, sizeof line, "fall_line, seed %s, run time %.2f s",
+                  ge::core::num::to_string(set.seed).c_str(), view.time_s);
+    std::vector<std::string> n = {"# where", line};
+    if (!skiers.empty()) {
+      const ge::skier::SkierState& s = skiers[0];
+      std::snprintf(line, sizeof line,
+                    "skier at (%.2f %.2f %.2f) m (y up), heading %.1f degrees, %.1f m/s", s.x, s.y,
+                    s.z, s.heading * 180 / 3.14159265358979323846, s.speed);
+      n.push_back(line);
+    }
+    std::snprintf(
+        line, sizeof line, "camera %s: eye (%.2f %.2f %.2f) m, heading %.1f, pitch %.1f degrees",
+        set.view.c_str(), view.eye[0], view.eye[1], view.eye[2],
+        view.heading * 180 / 3.14159265358979323846, view.pitch * 180 / 3.14159265358979323846);
+    n.push_back(line);
+    n.push_back("# look");
+    std::snprintf(line, sizeof line, "window %dx%d px, sv_hour %s", w, h,
+                  set.hour < 0 ? "-1 (the map's own hour)" : std::to_string(set.hour).c_str());
+    n.push_back(line);
+    return n;
+  });
+  gpu_debug.shot.build = ge::capture::build_info_line(ge::capture::build_info());
+  gpu_debug.shot.to_clipboard = ge::platform::set_clipboard_png;
   bool heard_out = false;
   bool fresh = true;  // the next frame starts the figures settled and cuts the camera
   // The run's camera: the ladder kept warm, walked by the camera key (camera/rungs.hpp), and
@@ -767,7 +795,7 @@ static int run_main(int argc, char** argv) {
                                fresh ? 0 : view.time_s - last_frame_s, view.time_s);
     last_frame_s = view.time_s;
     con_view.frame(wall);
-    ge::ui::draw_console(overlay, con_view, {}, nullptr, view.time_s);
+    if (!gpu_debug.shot.hiding()) ge::ui::draw_console(overlay, con_view, {}, nullptr, view.time_s);
     // The figures' lags run over the steps this frame took; a new run starts them settled.
     fall_line::app::draw(*device, *frame, view,
                          {.skiers = skiers,
@@ -788,6 +816,7 @@ static int run_main(int argc, char** argv) {
         hand_in(capture, img, handed, static_cast<int64_t>(ms));
       });
     }
+    ge::render::gpu_watch_frame(gpu_debug.watch, frame->recorder.stats, wall, console);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
     surface.present();
     ++presented;
