@@ -105,6 +105,7 @@
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
+#include "shooters_edge/client/entity_debug.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
@@ -304,7 +305,7 @@ int run_main(int argc, char** argv) {
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   console.cvars().set_layer(cl::kLayerShell);  // the menus and the attract loop (menu_attract)
-  game_menu.add_cvars(console);
+  game_menu.add_cvars(console, args.recipes);  // -recipes: a recipe's commands too
   // The console in the loaded classic game's own letters and background (menu/classic_console.hpp).
   shooters_edge::menu::ClassicConsole con_look;
   console.cvars().set_layer(cl::kLayerEngine);  // the engine's again (screenshots, the console)
@@ -407,6 +408,13 @@ int run_main(int argc, char** argv) {
   const auto outside = [&](const std::function<void()>& run) {
     cl::without_game_cvars(console, game_cvars, started_game, bindings, run);
   };
+  const uint64_t first_ns = ge::platform::now_ns();
+  ge::console::add_clock_macros(
+      console, {.local = [] { return cl::local_time(); },
+                .uptime_s =
+                    [first_ns] {
+                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
+                    }});  // $com_date, $com_time, $com_uptime, $random
   if (const cl::ConfigsRun ran = cl::start_configs(console, args.basedir, args.game, content_row(),
                                                    args.plus, {series, outside});
       ran.passed_over > 0)
@@ -518,13 +526,6 @@ int run_main(int argc, char** argv) {
     return 1;
   }
   ge::ui::DrawList overlay;
-  const uint64_t first_ns = ge::platform::now_ns();
-  ge::console::add_clock_macros(
-      console, {.local = [] { return cl::local_time(); },
-                .uptime_s =
-                    [first_ns] {
-                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
-                    }});  // $com_date, $com_time, $com_uptime, $random
   // The title with the spinner in its corner: the first frame, and a map's frames with no world.
   // The title's night with the menu over it; `lobby` puts the lobby's screen between them.
   const auto title_frame = [&](double t, double dt, std::string_view caption, double since,
@@ -570,6 +571,7 @@ int run_main(int argc, char** argv) {
   playback.places = &places;       // the demo's players' table names their places
   recorder.places = &places.locs;  // a recording keeps the place names it is played with
   cl::add_place_queries(console, places, listen, place_seen, adapter, files);
+  if (args.recipes) cl::add_entity_debug_commands(console, place_seen);  // entlist, enthide
   ge::render::add_gpu_debug(console, gpu_debug, device.get(), [&] {
     return cl::gpu_debug_notes({&view_from, &listen, &place_seen, &picture.look, &w, &h});
   });
@@ -1546,10 +1548,8 @@ int run_main(int argc, char** argv) {
       if (std::exchange(playback.jumped, false)) con_view.clear_notify();  // as a jump does
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
-      cl::demo_music(music, ds);  // the track its server names
-      place_seen.on = !ds.map.empty();
-      place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
-      place_seen.angles = ds.angles;
+      cl::demo_music(music, ds);     // the track its server names
+      cl::see_from(place_seen, ds);  // where it stands, looks, and what it draws
       place_seen.map = bench_map ? &bench_map->bsp : nullptr;
       // The place names the recording kept (or the server stuffed) are the ones it played with:
       // they stand in for any file while its level lasts.

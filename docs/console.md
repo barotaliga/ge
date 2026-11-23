@@ -483,6 +483,28 @@ console over the run, the skier coasts on with no hands while it is down, Escape
 (rather than quitting), and the 2D pass draws it after post. The `world` lab's `console` still
 (`--console=1`, the default) photographs it over the game's own frame.
 
+## Recipes
+
+A RECIPE is a cfg an agent writes to drive a game's window with no one at the keyboard: join a
+server, open a page, press keys, read the page back, take a picture, quit. It is the console
+language run with `+exec`; the `window-recipes` skill is the procedure and keeps recipes to start
+from. Its commands exist only in a window started with `-recipes` (`se -recipes ... +exec r.cfg`):
+a player's console has none of them, so no cfg, bind or server can press the menu or sleep past a
+ruleset's wait limit (`add_recipe_commands`, `GameMenu::add_cvars(con, true)`).
+
+| Command | Home | What it does |
+| --- | --- | --- |
+| `sleep <seconds>` | engine (`console_builtins.cpp`) | The rest of the buffer runs once that many seconds of the host's clock have passed. A host with a clock hands it in with `Console::set_time` each frame (a window's wall time); with none, `sleep` is a `wait`. A host's own line (`execute`) runs past a sleep and leaves the held commands where they were |
+| `menu_press <key>...` | Shooter's Edge's menu (`engine/ui` `menu_key` names the keys) | Keys pressed on the menu, one a frame: `up` `down` `left` `right` `enter` `escape` `del` `refresh` or a letter. `escape` on a closed menu opens it, as the key does |
+| `menu_select <item>` | Shooter's Edge's menu | The item with that id on the page up focused and pressed |
+| `menu_list` | Shooter's Edge's menu (`engine/ui` `describe_page`) | The page up printed: its id and title, then a line an item: `>` the focus, `-` disabled, the id, the words, `= value`, `-> page` it opens |
+| `entlist [radius]`, `enthide <number\|model>...`, `entshow [...]` | Shooter's Edge's window (`client/entity_debug.hpp`) | The entities in view listed nearest first (model, origin, effects, alpha, scale); those named left out of the picture, or drawn again |
+| `screenshot <name>`, `condump <name>` | engine | The next frame as a picture; the console's lines as a text file |
+
+A recipe takes its arguments as cvars set before it (`+set recipe_server 127.0.0.1:27500 +exec
+my.cfg`, read as `$recipe_server`). `sleep` is wall time, so a recipe never feeds a digest: a lab
+is the deterministic tool, a recipe the window's.
+
 ## Tooling
 
 ```sh

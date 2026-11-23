@@ -59,6 +59,7 @@ std::string uptime_long(double seconds) {
 void add_clock_macros(Console& con, Clock clock) {
   auto c = std::make_shared<Clock>(std::move(clock));
   con.keep(c);
+  if (c->uptime_s) con.set_clock(c->uptime_s);  // a recipe's `sleep` counts on it too
   auto date = std::make_shared<std::string>();
   auto time = std::make_shared<std::string>();
   con.keep(date);

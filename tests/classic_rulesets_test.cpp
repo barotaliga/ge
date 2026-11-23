@@ -43,6 +43,12 @@ void check_book(std::span<const gc::Ruleset> book) {
       CHECK(l != nullptr && l->value == "0");
     }
     CHECK(refuses(r, "+rjump") && refuses(r, "+rrjump"));
+    // The recipe commands drive a window by themselves: never under a ruleset, match or not.
+    for (const char* recipe : {"sleep", "menu_press", "menu_select", "menu_list", "entlist"}) {
+      CHECK(refuses(r, recipe));
+      for (const gc::RuleRefusal& f : r.refused)
+        if (f.command == recipe) CHECK(!f.match_only);
+    }
     CHECK(!r.title.empty() && r.title.back() == '.');
     for (char c : r.name) CHECK(c >= 'a' && c <= 'z');
   }
