@@ -92,6 +92,19 @@ POOL is made once (`make_pool(capacity, verts_per_decal)`): a decal takes a free
 oldest one's; one that needs more vertices than a slot holds keeps the triangles nearest its
 centre. `expire` frees what is past its life. Every number of a kind is in `decal_spec`.
 
+A HOT MARK BURNS A LITTLE, THEN SMOKES (`engine/render/mark_fire.hpp`, presentation only): a
+`burn_line` or a `melt` (a beam's line and melt, a slug's, a blaster bolt's or an energy ball's
+glowing mark) burns in a few small flames of burning gas (`mark_flames`: render/flame.hpp's
+marched flames, so they lick, puff and snake as a torch's do) for the first 70 % of its glow. A
+flame for every 0.035 m² of mark, at most five on one, each on its own spot where the mask glows,
+fixed by the mark's serial; each spot has its own strength, so the weak flames are shorter and go
+out first and the strongest last, every flame shrinking and cooling (1800 K to 1350 K) with what is
+left of the fire; 12 cm tall on a slug's mark, up to 30 cm on a big one; none on a ceiling. Thin
+grey smoke (`mark_fire_births`, particles) starts at 30 % of the glow, is thickest at 75 % and is
+gone at 160 %, a little after the glow. A scorch's embers are out in 0.6 s under the blast's own
+smoke, so it does neither. Shooter's Edge draws them under `ce_decals`, the flames in the flames
+pass beside the map's fires.
+
 ## Marks from a game's events
 
 `detail/hits.hpp` is what a game calls when a fight happens; the game owns the event (its round,

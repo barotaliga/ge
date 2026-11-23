@@ -128,6 +128,25 @@ The charts go to a `graphs/` directory beside the first file (`--out=` to choose
 an SVG, and the answer lists them in `written`, a summary of each series in `text` and
 `result.charts`, and every ringed value as a `note` finding with where to look next.
 
+## A window's picture for an agent: `gpustats` and `gpudebug`
+
+When a person sees something wrong in a game's window, the fastest report to an agent is the
+picture itself with what the agent needs to find it again. Every game window gets two console
+commands from `engine/render/gpu_debug.hpp` (a few lines of wiring; both games have them):
+
+- `gpustats [frames]` (`engine/render/gpu_watch.hpp`): the next frames (60) read off the frame's
+  recorder and reported in the console: the frame's and the CPU's medians, the GPU's span, the
+  dearest passes first.
+- `gpudebug [frames]` (`engine/capture/debug_shot.hpp`): the console hidden, the next frames (30)
+  measured as `gpustats` measures them, then the next frame taken and copied to the clipboard as
+  ONE picture, nothing saved: the frame as the player saw it, with a band below it
+  (`engine/ui/debug_sheet.hpp`) holding the notes: the time; the build (`build_info.hpp`: the
+  commit, how many files were changed and not committed with the diff's hash, the branch, the
+  build type, the compiler, the system); the frame's size; the game's own lines (`# where`: the
+  map, the player's place and view, a line that draws the same view again, such as Shooter's
+  Edge's `r_viewfrom`; `# look`); and `# gpu`: the adapter and the GPU report. The same notes are
+  the copy's plain text, for a field that takes no picture. Paste it to the agent.
+
 ## The labs
 
 - `charts` (engine): every chart form over seeded data with outliers planted at known places;

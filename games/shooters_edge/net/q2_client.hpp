@@ -48,6 +48,7 @@
 namespace shooters_edge::net {
 
 struct Q2ClientConfig {
+  std::string ruleset;  // the competition ruleset (classic/rulesets.hpp): `rsn` unless "default"
   std::string name = "player";
   std::string skin = "male/grunt";
   int rate = 15000;

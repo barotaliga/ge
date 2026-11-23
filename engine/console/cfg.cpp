@@ -68,6 +68,7 @@ bool value_in(const Cvar& v, const std::function<bool(std::string_view)>& keep,
   const auto live = [&v, scope] {
     // Under the loaded scope's own value, the common one is the setting's (cvar.hpp § SCOPES).
     if (!v.scoped.empty() && v.scoped.count(scope) != 0) return v.common;
+    if (v.lock) return v.lock->wanted;  // the player's own value under a lock (cvar.hpp § LOCKS)
     if ((v.flags & kUserInfo) != 0) return v.value;
     return !v.implied_by.empty() ? v.below : v.has_latched ? v.latched : v.value;
   };

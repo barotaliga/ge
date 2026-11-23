@@ -13,6 +13,7 @@
 #include <iterator>
 #include <utility>
 
+#include "classic/rulesets.hpp"
 #include "net/voice_trial.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/qw_ext.hpp"
@@ -49,6 +50,8 @@ std::string userinfo_of(const Q2ClientEnd& c) {
   if (!c.cfg.gender.empty()) info_set(u, "gender", c.cfg.gender);
   info_set(u, "version", kProgramVersion);  // what the server's players and admins see us as
   if (c.cfg.speedjump) info_set(u, "cl_speedjump", "1");
+  if (!c.cfg.ruleset.empty() && c.cfg.ruleset != "default")
+    info_set(u, std::string(ge::classic::ruleset_info_key(true)), c.cfg.ruleset);
   if (c.cfg.spectator)
     info_set(u, "spectator", c.cfg.spectator_password.empty() ? "1" : c.cfg.spectator_password);
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);

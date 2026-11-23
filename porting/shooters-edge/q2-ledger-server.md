@@ -52,13 +52,13 @@ part differs; `missing` not in our tree; `not-taken` a note or doc of ours decid
 | Server console commands (the operator's words) | 59 | 6 | 0 | 11 | 76 |
 | General console commands and macros the server's console has (common) | 46 | 8 | 0 | 3 | 57 |
 | Server settings (cvars) with their defaults | 109 | 20 | 2 | 39 | 170 |
-| Server-to-client messages (svc) and protocol extensions the server writes | 39 | 8 | 6 | 0 | 53 |
+| Server-to-client messages (svc) and protocol extensions the server writes | 43 | 7 | 3 | 0 | 53 |
 | What the server accepts from clients | 44 | 11 | 0 | 2 | 57 |
-| The game library interface | 55 | 29 | 3 | 1 | 88 |
+| The game library interface | 57 | 27 | 3 | 1 | 88 |
 | Messages a player sees (refusals, drops, prints), quoted exactly | 53 | 13 | 3 | 3 | 72 |
 | Messages an admin sees on the server console, quoted exactly | 9 | 25 | 0 | 2 | 36 |
 | Server features beyond single words | 39 | 12 | 2 | 2 | 55 |
-| **all** | 453 | 132 | 16 | 63 | 664 |
+| **all** | 459 | 129 | 13 | 63 | 664 |
 
 ## 1. Server console commands (the operator's words)
 
@@ -392,7 +392,7 @@ done 109, partial 20, missing 2, not-taken 39
 
 ## 4. Server-to-client messages (svc) and protocol extensions the server writes
 
-done 39, partial 8, missing 6, not-taken 0
+done 43, partial 7, missing 3, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -415,7 +415,7 @@ done 39, partial 8, missing 6, not-taken 0
 | svc.playerinfo | message 17 | The player state delta. | done | `games/shooters_edge/server/q2_wire.cpp` |
 | svc.packetentities | message 18 | The entity deltas of a frame. | partial | 35 and 36 send the list with no id byte and long solids (games/shooters_edge/server/q2_wire_ext.cpp); the extended limits (512 entities and up) absent (proto.extended-limits) |
 | svc.deltapacketentities | message 19 | Unused by the server (defined only). | done | Not sent by either |
-| svc.frame | message 20 | Frame number, delta frame, suppress count, area bits. | partial | 34 and the later frame top (games/shooters_edge/server/q2_wire_ext.cpp, `q2_write_frame_top_ext`: extra flags, the 27-bit number and back offset, frame flags); area bits always all ones (S2) |
+| svc.frame | message 20 | Frame number, delta frame, suppress count, area bits. | done | 34 and the later frame top (games/shooters_edge/server/q2_wire_ext.cpp, `q2_write_frame_top_ext`: extra flags, the 27-bit number and back offset, frame flags); the area bits mark the areas joined to the viewer's (`q2_write_area_bits`, every area from area 0) |
 | svc.zpacket | message 21 | A deflate-compressed block of messages (35 and 36 with zlib). | done | games/shooters_edge/net/q2_net_server.cpp (`packed`, engine/core/deflate.hpp): a signon message deflated when it comes out smaller |
 | svc.zdownload | message 22 | A compressed download piece straight from a pack (36 minor 1021 and up). | missing | S18 |
 | svc.gamestate | message 23 | The whole game state at once (36). | done | games/shooters_edge/server/q2_wire_ext.cpp (`q2_signon_streams`), for 36 below minor 1024 |
@@ -435,11 +435,11 @@ done 39, partial 8, missing 6, not-taken 0
 | proto.extended-limits | protocol extensions (36 minor 1024 and up) | When the library sets the protocol-extensions bit: `protocol` key 36, up to 8192 entities and more configstrings, a 16-bit sound index; old clients refused. | missing | S17, S18 |
 | proto.version-probe | version probe at `new` | The client is made to report its `version`; one that has not by `begin` is dropped silently; the console logs it. | done | games/shooters_edge/net/q2_net_server.cpp (`probe`): asked after the server data, so a recording still opens with it |
 | proto.force-reconnect | forced reconnect | Random values the client must bring back from a reconnect (`sv_force_reconnect`). | done | games/shooters_edge/net/q2_net_server.cpp (`first_new`); our client runs the stuffed settings (`q2_client.cpp`) |
-| proto.areabits-cull | areas cut the frame | An entity behind a shut door (areas not joined) is not sent. | missing | S1 |
+| proto.areabits-cull | areas cut the frame | An entity behind a shut door (areas not joined) is not sent. | done | `q2_sight_keeps`: the viewer's area joined to the entity's first or second area (`Q2SightLinks::area1`, `area2`), for our rules (`map_area_groups`) and a hosted library (`NativeHost::area_groups`); area 0 joined to nothing |
 | proto.pvs-cull | the visible set cuts the frame | Entities outside the fat visible set skipped; beams by the hearing set; sound-only entities beyond a distance cut. | done | `cut_to_view` (`games/shooters_edge/server/q2_wire.hpp`) |
-| proto.phs-sounds | sounds by the hearing set and areas | Positioned sounds and multicasts only to clients that can hear them. | partial | Hosted library: by cluster without the area test (S4); our rules: to everyone (S3) |
-| proto.entity-follow | a sound follows its entity | Position left out so the client places it on the moving entity. | missing | S5 |
-| proto.overflow-priority | frame overflow | Low-priority sounds and effects then entities dropped to fit. | missing | S23 |
+| proto.phs-sounds | sounds by the hearing set and areas | Positioned sounds and multicasts only to clients that can hear them. | done | Hosted library: `send_to` tests the client's origin in the point's set and the areas; our rules: `q2_sight_hears` cuts the frame's effects and sounds (no attenuation: everyone); effects by the hearing set, the wider one (D) |
+| proto.entity-follow | a sound follows its entity | Position left out so the client places it on the moving entity. | done | The position is left out when the client's frame holds the entity (not a brush model, no explicit point): `c_positioned_sound` per client by its visible set and areas, our rules by the frame just written (`follows`) |
+| proto.overflow-priority | frame overflow | Low-priority sounds and effects then entities dropped to fit. | partial | The frame is sized to the packet's room after the reliable part (`channel_unreliable_room`, `Q2Wire::room`): entities fill first in number order (players first), then effects and sounds while they fit; a hosted library's datagram whole or not at all; no per-sound priority |
 | proto.move-repeat | lost moves repeated | With some packets lost, the oldest move is run again for each. | done | games/shooters_edge/net/q2_net_server.cpp: the last command run again for each lost packet (frame flag 4 past what the packet repeats) |
 | proto.rate-hold | rate holds frames | A frame is held when recent messages pass the rate; suppress count. | done | `games/shooters_edge/net/q2_net_server.cpp` |
 | proto.client-setting-msg | client settings (message 5) | A client's index and value: no gun, no blend, recording, player updates, frame rate, no gibs, no footsteps, no prediction, no flares. | done | games/shooters_edge/net/q2_net_server.cpp: every index read and kept (`asked`), `status s` shows them; no gun, no blend, recording, no gibs, no footsteps and no prediction shape the frames (games/shooters_edge/server/q2_wire_ext.cpp) |
@@ -519,7 +519,7 @@ done 44, partial 11, missing 0, not-taken 2
 Ours: the native host (`games/shooters_edge/server/q2_native.hpp`, `q2_native_calls.cpp`,
 `q2_native_abi.hpp`, `q2_native_save.cpp`).
 
-done 55, partial 29, missing 3, not-taken 1
+done 57, partial 27, missing 3, not-taken 1
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -527,7 +527,7 @@ done 55, partial 29, missing 3, not-taken 1
 | api.dprintf | `dprintf(fmt)` | Print to the server console. | done | `c_dprintf` |
 | api.cprintf | `cprintf(ent, level, fmt)` | Print to one client (or the console when no entity). | partial | `c_cprintf`; `msg` level not honoured (S6) |
 | api.centerprintf | `centerprintf(ent, fmt)` | Centred print to one client. | done | `c_centerprintf` |
-| api.sound | `sound(ent, channel, index, vol, atten, timeofs)` | A sound from an entity. | partial | `c_sound`: fixed position (S5), no area test (S4), bad values clamped not refused (S16) |
+| api.sound | `sound(ent, channel, index, vol, atten, timeofs)` | A sound from an entity. | partial | `c_sound`: the hearing set and areas (`send_to`), the position left out for a client whose frame holds the entity; bad values clamped not refused (S16) |
 | api.positioned_sound | `positioned_sound(origin, ent, ...)` | A sound at a point. | partial | same |
 | api.configstring | `configstring(index, text)` | Sets a configstring. | done | `c_configstring` |
 | api.error | `error(fmt)` | Stops the level with `Game Error: <text>`. | partial | Our host fails the level with its own words: verify the console line |
@@ -537,15 +537,15 @@ done 55, partial 29, missing 3, not-taken 1
 | api.setmodel | `setmodel(ent, name)` | Sets an entity's model and its box for a brush model. | done | `c_setmodel` |
 | api.trace | `trace(start, mins, maxs, end, pass, mask)` | Box trace through the world and entities. | done | `c_trace` |
 | api.pointcontents | `pointcontents(p)` | Contents at a point. | done | `c_pointcontents` |
-| api.inPVS | `inPVS(a, b)` | Visible-set test with areas. | done | `c_in_pvs` (area out of range counts as joined, S4) |
+| api.inPVS | `inPVS(a, b)` | Visible-set test with areas. | done | `c_in_pvs` (area 0 joined to nothing) |
 | api.inPHS | `inPHS(a, b)` | Hearing-set test with areas. | done | `c_in_phs` |
 | api.SetAreaPortalState | `SetAreaPortalState(portal, open)` | Opens or shuts an area portal. | done | `c_set_area_portal` (the frame does not use it, S1) |
-| api.AreasConnected | `AreasConnected(a, b)` | Whether two areas are joined. | partial | `c_areas_connected`; area 0 joined to everything (S4) |
+| api.AreasConnected | `AreasConnected(a, b)` | Whether two areas are joined. | done | `c_areas_connected`; area 0 joined to nothing, as the extended server |
 | api.linkentity | `linkentity(ent)` | Places an entity in the world's tree. | done | `c_linkentity` |
 | api.unlinkentity | `unlinkentity(ent)` | Removes it. | done | `c_unlinkentity` |
 | api.BoxEdicts | `BoxEdicts(mins, maxs, list, max, type)` | Entities in a box. | partial | Entity-number order, not the tree's (S15) |
 | api.Pmove | `Pmove(pm)` | The player move (the old or the new move by the library's version). | done | `c_pmove` (Quake II's move, `plugins/classic`) for version 3 |
-| api.multicast | `multicast(origin, to)` | Sends the built message to all, the visible set or the hearing set (reliable or not). | partial | `c_multicast`: by cluster without the area test (S4) |
+| api.multicast | `multicast(origin, to)` | Sends the built message to all, the visible set or the hearing set (reliable or not). | done | `c_multicast`: to all, or by the client's origin in the point's visible or hearing set with the areas joined (`send_to`) |
 | api.unicast | `unicast(ent, reliable)` | Sends the built message to one client. | done | `c_unicast` |
 | api.WriteChar | `WriteChar` | Message byte, signed. | done | |
 | api.WriteByte | `WriteByte` | | done | |

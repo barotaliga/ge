@@ -16,6 +16,9 @@ procedure.
 | Engine | `engine/console/cfg.hpp`, `cfg_tidy.hpp`, `catalog.hpp`, `words.hpp` | Startup order, saving one part, scopes (`<game>:name`), tidy configs, the catalog, each setting's words |
 | Engine | `engine/server/config.hpp` | The server's settings in layers (`server.md`) |
 | Shooter kit | `plugins/shooter/settings.hpp`, `controls.hpp`, `mouse_feel.hpp` | The shooter's shared settings |
+| Engine | `engine/console/ruleset.hpp` | Rulesets: settings locked or kept in a range and commands refused under a named ruleset (`Cvars::lock`, `Console::gate_command`) |
+| Classic | `plugins/classic/rulesets.hpp` | Each classic game's book of competition rulesets, the ruleset in user info (`*rsn`, `rsn`), the `f_ruleset` answer |
+| Shell | `games/shooters_edge/net/qw_remote_rulesets.hpp` | The ruleset on a server joined: the book by game, locked while joined, the answers said |
 | Shell | `games/shooters_edge/client/cvar_layers.cpp` | `add_first`, `add_q2`: each game's layer and `GameBindings` |
 | Test | `tests/shooters_edge_cvar_layers_test.cpp` | Fails on any undeclared meeting of two layers, for every game |
 

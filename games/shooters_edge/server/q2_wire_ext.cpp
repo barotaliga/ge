@@ -160,8 +160,7 @@ void q2_write_frame_top_ext(std::vector<uint8_t>& out, Q2Wire& w, int32_t number
   o.u8(low | (x & 15u) << 4);
   w.suppress = 0;
   w.frame_flags = 0;
-  o.u8(32);
-  for (int k = 0; k < 32; k++) o.u8(0xFF);
+  q2_write_area_bits(out, w);
   o.i16(f);
   if (f & kPmType) o.u8(b.type);
   if (f & kPmOrigin) {

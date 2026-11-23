@@ -128,6 +128,12 @@ void channel_set_rate(Channel& c, int bytes_per_second, int dupe = 0);
 bool channel_reliable(Channel& c, const uint8_t* data, size_t size);
 // Bytes of reliable data waiting or in flight.
 size_t channel_reliable_backlog(const Channel& c);
+// The room the next packet has for unreliable data after its header and the reliable data it
+// carries (a resend that is due, or the first waiting message), so a server sizes a frame to fit
+// rather than lose it whole. `grows`: reliable data queued before that packet joins what it
+// carries, and takes from the room too. A newer channel cuts what does not fit into pieces, so
+// its room is a whole packet's.
+size_t channel_unreliable_room(const Channel& c, bool* grows);
 
 bool channel_can_packet(const Channel& c, double now);
 

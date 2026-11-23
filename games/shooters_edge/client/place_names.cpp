@@ -104,7 +104,9 @@ bool place_markers(const PlaceNames& p, double t, std::vector<PlaceMarker>& out)
   if (near == nullptr) return false;
   for (const ge::classic::Loc& c : p.locs.points) {
     const float dx = c.at.x - me.x, dy = c.at.y - me.y, dz = c.at.z - me.z;
-    if (range > 0 && static_cast<int>(std::sqrt(dx * dx + dy * dy + dz * dz)) > range) continue;
+    if (range > 0 &&
+        static_cast<float>(static_cast<int>(std::sqrt(dx * dx + dy * dy + dz * dz))) > range)
+      continue;
     PlaceMarker m{.at = c.at, .light = c.at, .nearest = &c == near};
     if (m.nearest) m.at.z += static_cast<float>(10 * std::sin(t * 10));
     out.push_back(m);
