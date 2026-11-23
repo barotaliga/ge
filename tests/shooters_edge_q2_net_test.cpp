@@ -1729,9 +1729,19 @@ TEST(voice_on_our_server_of_q2_reaches_whom_the_first_games_rules_say) {
   cn::Q2ClientEnd& cb = join(*r, b);
   cn::Q2ClientEnd& cc = join(*r, c);
   cn::Q2ClientEnd& cd = join(*r, d);
+  std::vector<uint8_t> level;  // the level as a `record` keeps it
+  ca.level_record = &level;
   run(*r, 300);
   CHECK(ca.stage == cn::ClientStage::active && cd.stage == cn::ClientStage::active);
   CHECK(ca.voice_on && cb.voice_on && cc.voice_on && !cd.voice_on);
+  int own = 0;  // the talker's own voice in his recording, a block of its own each time
+  for (size_t at = 0; at + 4 < level.size();) {
+    const uint32_t len = level[at] | level[at + 1] << 8 | level[at + 2] << 16 |
+                         static_cast<uint32_t>(level[at + 3]) << 24;
+    if (len > 0 && at + 4 < level.size() && level[at + 4] == cn::kSvcGeVoice) own++;
+    at += 4 + len;
+  }
+  CHECK_MSG(own > 0, "the talker's recording kept none of his own voice");
   const int sa = slot_named(*r, "a");
   CHECK(sa >= 0);
   if (sa < 0) return;

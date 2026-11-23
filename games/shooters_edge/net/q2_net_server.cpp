@@ -49,7 +49,6 @@ constexpr uint8_t kSvcGeShare = 126;       // the game's own: the easy jump's sh
 constexpr uint8_t kSvcGeAccountKey = 127;  // the game's own: the logins' key tag
 constexpr uint8_t kSvcGeFeel = 122;        // the game's own: the move's feel
 constexpr uint8_t kSvcGeBack = 119;        // the game's own: an item taken and when it comes back
-constexpr uint8_t kSvcGeVoice = 121;       // the game's own: a voice (qw_voice_route.hpp)
 constexpr size_t kVoiceTickBytes = 1200;   // the voices one client is sent a tick, at most
 constexpr size_t kMovesBlockMost = 1200;   // the frame with the moves, at most (under a datagram)
 constexpr size_t kLogKept = 512;

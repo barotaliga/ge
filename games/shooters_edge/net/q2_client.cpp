@@ -518,6 +518,15 @@ void speak(Q2ClientEnd& c, gn::Writer& w, int samples) {
   gn::write_u16(w, static_cast<uint16_t>(frames.size()));
   gn::write_bytes(w, frames.data(), frames.size());
   c.voice_sent += n;
+  // A `record` keeps your own voice too, as the server relays everyone else's (it echoes no
+  // one's back to its talker): one block of its own, so the recording plays the whole talk.
+  if (c.level_record != nullptr) {
+    std::vector<uint8_t> b = {kSvcGeVoice};
+    write_voice_down(b, q2_demo(c).state.player, cl::kVoiceOpus << 4, seq, frames);
+    const auto len = static_cast<uint32_t>(b.size());
+    for (int k = 0; k < 4; k++) c.level_record->push_back(static_cast<uint8_t>(len >> (8 * k)));
+    c.level_record->insert(c.level_record->end(), b.begin(), b.end());
+  }
 }
 
 // 36's batched moves: whether a packet is due (`cl_maxpackets`'s gap, rounded down to a whole

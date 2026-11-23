@@ -41,7 +41,7 @@ better. Rank 3 is code only, with no player-visible change.
 | A2 | 3 | The host part of an address compared (`same_host`) | 6: `engine/net/master.cpp`, QuakeWorld's server, Quake II's server, both TV faces, `q2_pingservers` | none | lifted (`engine/net/address.hpp`) |
 | A3 | 3 | A face's datagram out, its out-of-band text and its refusal (`send_to`, `send_oob`, `refuse`) | 4: both servers and both TV faces | The refusal text differs by game (`print` against `n`). It stays each game's, and only the framing would be shared. | to judge: small gain |
 | A4 | 3 | A viewer's reliable queue (`queue`, `transmit`, `drop`) | 2: the TV node's two faces | Quake II's holds back the signon until echoed (`go`); QuakeWorld's sends a datagram with it | to judge |
-| A5 | 2 | A player's own voice in the client's recording | QuakeWorld has it (`record_own_voice`); Quake II's client does not | Quake II's recordings miss your own voice | gap: to build on the shared recorder |
+| A5 | 2 | A player's own voice in the client's recording | QuakeWorld has it (`record_own_voice`); Quake II's client does not | Quake II's recordings missed your own voice | done: a block of its own in the level's recording, the server's voice message (`net/q2_client.cpp`), so `record` while joined keeps the whole talk |
 
 ## The mission packs' settings
 
