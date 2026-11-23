@@ -262,11 +262,12 @@ void add_q2_turtle(Q2Bar& bar, uint8_t trouble, int width, int height) {
 }
 
 bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds, int width,
-                          int height) {
+                          int height, std::string_view centre) {
   if (!bar.recorded) bar.recorded = std::make_shared<server::RulesWorld>();
   if (!q2_world_of(ds, *bar.recorded)) return false;
   run_q2_bar(bar, *bar.recorded, ds.player, ds.frames, width, height);
   add_q2_turtle(bar, ds.q2_trouble, width, height);
+  add_q2_screen(bar, 0, centre, width, height);
   draw_q2_bar(dl, bar, q2_bar_scale(bar, width, height));
   draw_q2_hit_marker(dl, bar, ds.hits, width, height);
   return true;
@@ -571,6 +572,11 @@ bool draw_graph(ge::ui::DrawList& dl, Q2Bar& bar, float f, float alpha) {
 }
 
 }  // namespace
+
+const ge::ui::Image* q2_font_image(Q2Bar& bar) {
+  const BarPicture* p = font_picture(bar);
+  return p != nullptr ? &p->image : nullptr;
+}
 
 bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
   const auto f = static_cast<float>(scale);

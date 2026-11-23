@@ -116,9 +116,10 @@ void add_q2_bar_commands(ge::console::Console& con, Q2Bar& bar);
 bool q2_world_of(const DemoState& ds, server::RulesWorld& out);
 // A recording's (or a joined server's) Quake II bar run and drawn on `dl` over a `width` x
 // `height` window, and its hit marker (`DemoState::hits`) at the centre in red, fading; false when
-// `ds` has none to draw (`q2_world_of`).
+// `ds` has none to draw (`q2_world_of`). `centre`: the centre print shown now ("" none), written
+// over it in the bar's letters (`add_q2_screen`).
 bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds, int width,
-                          int height);
+                          int height, std::string_view centre = {});
 
 // The whole number every 2D element is drawn larger by on a `width` x `height` window: `setting`
 // (scr_scale) 1..10 as given, past 10 held to it; 0 by the window, as Quake II picks it: by the
@@ -148,6 +149,10 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
 // the centre print `centre` over it (its lines in the plain letters, each centred, at most 40
 // letters; the first at 35% of the screen's height, or at 48 for more than 4 lines, 8 apart).
 void add_q2_screen(Q2Bar& bar, int crosshair, std::string_view centre, int width, int height);
+
+// The letters' picture the bar writes in (scr_font's, else conchars; null when the packs have
+// neither): what the chat lines on screen are written in too.
+const ge::ui::Image* q2_font_image(Q2Bar& bar);
 
 // Draws the crosshair as the player sets it (hud/crosshair.hpp: `crosshair`, `crosshaircolor`,
 // `crosshairsize`, `crosshairalpha`) centred on a `width` x `height` screen, at the bar's scale:

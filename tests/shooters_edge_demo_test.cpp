@@ -1063,3 +1063,17 @@ TEST(a_demo_keeps_explosion2_s_colours_bursts_of_any_colour_and_the_grappling_be
     CHECK(fx.effects[2].kind == cl::EffectKind::burst && fx.effects[2].colour == 100);
   }
 }
+
+TEST(a_multiview_recording_counts_its_match_starts) {
+  cl::DemoScript s = script();
+  s.stuffed = {{1, "//ktx matchstart\n"}, {2, "//other line\n"}};
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(cl::write_multiview_demo(s), d, error), error);
+  CHECK(d.state.match_starts == 0);
+  cl::DemoRead end;
+  while ((end = cl::next_frame(d, error)) == cl::DemoRead::frame) {
+  }
+  CHECK_MSG(end == cl::DemoRead::end, error);
+  CHECK_MSG(d.state.match_starts == 1, "one start marker read, the other line not one");
+}

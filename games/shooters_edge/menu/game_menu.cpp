@@ -10,6 +10,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -64,6 +65,15 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                     .values = "auto: the pack's own pictures when the packs have them (the "
                               "default); classic: the pack's; modern: ours"},
                    &look_);
+  con.cvars().bind({.name = "menu_script",
+                    .fallback = "1",
+                    .flags = ge::console::kArchive,
+                    .help = "Whether a game's menu script (Quake II's q2pro.menu) changes its "
+                            "pages, read when the game loads.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: the game's own pages; 1: the script's pages over them (the "
+                              "default)"},
+                   &use_script_);
   con.cvars().bind({.name = "ce_auto",
                     .fallback = "1",
                     .flags = ge::console::kArchive,
@@ -120,40 +130,77 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                   opener("games"));
   // pushmenu <name>: a page by its name, ours or Quake II's; popmenu one page back; forcemenuoff
   // every page closed.
-  con.add_command("pushmenu", "pushmenu <page>: the main menu opened at that page",
-                  [this](Con& c, const CArgs& a) {
-                    if (a.size() < 2) {
-                      c.print("Usage: " + a[0] + " <menu>");
-                      return;
-                    }
-                    // A page the game's table has by that name first, then Quake II's names
-                    // for ours.
-                    static constexpr std::pair<std::string_view, std::string_view> kNames[] = {
-                        {"singleplayer", "single"}, {"game", "single"},
-                        {"loadgame", "load"},       {"savegame", "save"},
-                        {"multiplayer", "multi"},   {"startserver", "host"},
-                        {"players", "setup"},       {"keys", "controls"},
-                        {"dmflags", "gameflags"},   {"legacy", "legacykeys"}};
-                    std::string page = ge::console::lower(a[1]);
-                    if (main_.page(page) == nullptr)
-                      for (const auto& [name, ours] : kNames)
-                        if (page == name) page = ours;
-                    const bool special = page == "servers" || page == "demos" ||
-                                         page == "screenshots" || page == "games";
-                    if (!special && main_.page(page) == nullptr) {
-                      c.print("No such menu: " + a[1]);
-                      return;
-                    }
-                    toggle_ = true;
-                    toggle_open_ = true;
-                    toggle_page_ = page;
-                  });
+  con.add_command(
+      "pushmenu", "pushmenu <page>: the main menu opened at that page",
+      [this](Con& c, const CArgs& a) {
+        if (a.size() < 2) {
+          c.print("Usage: " + a[0] + " <menu>");
+          return;
+        }
+        // A page the game's table has by that name first, then Quake II's names
+        // for ours.
+        static constexpr std::pair<std::string_view, std::string_view> kNames[] = {
+            {"singleplayer", "single"}, {"game", "single"},       {"loadgame", "load"},
+            {"savegame", "save"},       {"multiplayer", "multi"}, {"startserver", "host"},
+            {"players", "setup"},       {"keys", "controls"},     {"dmflags", "gameflags"},
+            {"legacy", "legacykeys"}};
+        std::string page = ge::console::lower(a[1]);
+        if (main_.page(page) == nullptr)
+          for (const auto& [name, ours] : kNames)
+            if (page == name) page = ours;
+        const bool special =
+            page == "servers" || page == "demos" || page == "screenshots" || page == "games";
+        if (!special && main_.page(page) == nullptr) {
+          c.print("No such menu: " + a[1]);
+          return;
+        }
+        // Quake II's browser sources after its name: that open's lists.
+        if (page == "servers")
+          servers_.use_sources(std::vector<std::string>(a.words.begin() + 2, a.words.end()));
+        toggle_ = true;
+        toggle_open_ = true;
+        toggle_page_ = page;
+      });
   con.add_command("popmenu", "popmenu: the main menu one page back (closed from its root)",
                   [this](Con&, const CArgs&) { pending_ = 1; });
   con.add_command("forcemenuoff", "forcemenuoff: the main menu closed, whatever page is up",
                   [this](Con&, const CArgs&) { pending_ = 2; });
   servers_.add_cvars(con);
   demos_.add_cvars(con);
+}
+
+const MenuTable& GameMenu::set_table(const MenuTable& table, const ge::vfs::SearchPath* files) {
+  table_ = &table;
+  script_.reset();
+  // The browser's `file:///` lists read from the game's files.
+  const auto read = [files](std::string_view name) -> std::optional<std::string> {
+    const ge::vfs::FileRef* f = files != nullptr ? ge::vfs::find(*files, name) : nullptr;
+    std::vector<uint8_t> bytes;
+    std::string why;
+    if (f == nullptr || !ge::vfs::read(*files, *f, &bytes, &why)) return std::nullopt;
+    return std::string(bytes.begin(), bytes.end());
+  };
+  servers_.set_files(read);
+  const ge::vfs::FileRef* file = files != nullptr && use_script_ && !table.script.empty()
+                                     ? ge::vfs::find(*files, table.script)
+                                     : nullptr;
+  if (file != nullptr) {
+    const auto lookup = [this](std::string_view name, std::string& value) {
+      if (con_ == nullptr) return false;
+      const std::string asked = "${" + std::string(name) + "}";
+      value = con_->expand_text(asked);
+      return value != asked;
+    };
+    if (std::optional<std::string> text = read(table.script)) {
+      script_ = std::make_unique<ScriptMenu>();
+      script_->read(table.script, *text, table, read, lookup);
+      table_ = &script_->table();
+      if (con_ != nullptr)
+        for (const std::string& w : script_->warnings()) con_->print(w);
+    }
+  }
+  main_ = build_menu(*table_);
+  return *table_;
 }
 
 void GameMenu::set_art(ClassicArt art) {
@@ -238,7 +285,7 @@ void GameMenu::show(Host& host, std::string_view page) {
 
 void GameMenu::fill_server(const Host& host) {
   sheet_seen_ = host.sheet != nullptr ? host.sheet->revision : 0;
-  server_page_.fill(main_, host.sheet, host.maps, table_ == &q2_menu(), classic());
+  server_page_.fill(main_, host.sheet, host.maps, &game_table(*table_) == &q2_menu(), classic());
 }
 
 void GameMenu::hide() {
@@ -633,7 +680,7 @@ void GameMenu::update_figure(const ui::MenuInput& in, const Host& host, double d
     return;
   }
   FigureLook look;
-  look.q2 = &table_of(host) == &q2_menu();
+  look.q2 = &game_table(table_of(host)) == &q2_menu();
   look.skin = host_value(host, "skin");
   double x = 0;
   look.top = ge::console::parse_number(host_value(host, "topcolor"), x) ? static_cast<int>(x) : 0;

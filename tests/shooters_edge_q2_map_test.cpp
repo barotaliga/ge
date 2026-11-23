@@ -20,6 +20,7 @@
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "classic/q2_move.hpp"
+#include "shooters_edge/server/q2_commands.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -196,6 +197,15 @@ TEST(a_shut_area_portal_cuts_hearing_between_rooms) {
   CHECK(sv::map_areas_connected(s, hall, side) && sv::map_hears(s, hall, side));
   s.portals[1] = 0;  // and shuts
   CHECK(!sv::map_areas_connected(s, side, hall));
+  std::vector<uint8_t> bits;
+  sv::map_area_bits(s, hall, bits);
+  CHECK(!bits.empty() && (bits[0] & 4) == 0 && !sv::map_area_groups(s).empty());
+  // map_noareas: the portals ignored, every area joined and every bit set.
+  sv::commands_cvars(s);
+  s.cvars.set("map_noareas", "1", ge::console::Source::local);
+  CHECK(sv::map_areas_connected(s, side, hall) && sv::map_hears(s, hall, side));
+  sv::map_area_bits(s, hall, bits);
+  CHECK(!bits.empty() && bits[0] == 0xff && sv::map_area_groups(s).empty());
 }
 
 }  // namespace

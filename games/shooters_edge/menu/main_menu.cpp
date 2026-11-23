@@ -987,6 +987,7 @@ std::string item_text(const Entry& e, const ge::ui::Item& it) {
     case ItemKind::toggle:
       return it.on != e.inverted ? "1" : "0";
     case ItemKind::choice:
+      if (!e.modes_from.empty()) return std::to_string(std::max(it.choice, 0));  // mode N
       if (it.choice >= 0 && static_cast<size_t>(it.choice) < e.choices.size())
         return std::string(e.choices[static_cast<size_t>(it.choice)].value);
       return {};
@@ -1193,7 +1194,7 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
       if (e->page == "setup" && e->id == "figweapon") {  // the choice kept across refreshes
         const int was = it.choice;
         it.choices.clear();
-        for (const std::string_view w : figure_weapons(&table_of(host) == &q2_menu()))
+        for (const std::string_view w : figure_weapons(&game_table(table_of(host)) == &q2_menu()))
           it.choices.emplace_back(w);
         it.choice = std::clamp(was, 0, static_cast<int>(it.choices.size()) - 1);
         continue;
@@ -1212,7 +1213,23 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
           if (it.choices[i] == was) it.choice = static_cast<int>(i);
         continue;
       }
-      if (e->id == "name" || e->id == "hostname" || e->page == "addresses") {  // a text cvar
+      if (!e->modes_from.empty()) {  // windowed, then the full-screen modes the list offers
+        it.choices.clear();
+        for (const Choice& c : e->choices) it.choices.emplace_back(c.text);
+        const std::string list = host_value(host, e->modes_from);
+        for (size_t at = 0; at < list.size();) {
+          const size_t end = std::min(list.find(' ', at), list.size());
+          if (end > at) it.choices.push_back(list.substr(at, end - at));
+          at = end + 1;
+        }
+        double x = 0;
+        const int n =
+            ge::console::parse_number(host_value(host, cvar_of(*e)), x) ? static_cast<int>(x) : 0;
+        it.choice = n >= 0 && static_cast<size_t>(n) < it.choices.size() ? n : 0;
+        continue;
+      }
+      if (e->field || e->id == "name" || e->id == "hostname" ||
+          e->page == "addresses") {  // a text cvar
         const std::string name = host_value(host, e->needs);
         it.text = name.empty() ? std::string(e->text) : std::string(e->text) + "  " + name;
         continue;
@@ -1282,8 +1299,9 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (host.console == nullptr) return Outcome::none;
   ge::console::Console& con = *host.console;
   // Quake II's player page needs a figure to show: with none in the packs it does not open.
-  if (e.kind == ge::ui::EventKind::opened && e.page == "setup" && &table_of(host) == &q2_menu() &&
-      host.files != nullptr && player_figures(*host.files).empty()) {
+  if (e.kind == ge::ui::EventKind::opened && e.page == "setup" &&
+      &game_table(table_of(host)) == &q2_menu() && host.files != nullptr &&
+      player_figures(*host.files).empty()) {
     con.print("No player models found.");
     menu.close();
     return Outcome::none;
@@ -1330,6 +1348,8 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (e.kind == ge::ui::EventKind::changed) {
     if (entry->target == Target::client)
       con.execute(std::string(entry->id) + " " + item_text(*entry, *it));
+    else if (entry->target == Target::server && e.page != "host")  // START sets the host page's
+      con.execute("sv " + std::string(entry->id) + " " + item_text(*entry, *it));
     return Outcome::none;
   }
   if (e.kind != ge::ui::EventKind::activated) return Outcome::none;

@@ -159,8 +159,14 @@ void read_oob(Q2ClientEnd& c, const uint8_t* data, size_t size) {
   } else if (w[0] == "client_connect" && c.stage == ClientStage::connect) {
     // The channel: the server's ` nc=` answer, else the newer one on 36.
     int chan = c.protocol == kQ2Protocol36 ? 1 : 0;
-    for (size_t k = 1; k < w.size(); k++)
+    int anticheat = 0;  // the server's ` ac=` ask: 2 and up insists on it
+    for (size_t k = 1; k < w.size(); k++) {
       if (w[k].rfind("nc=", 0) == 0) chan = std::atoi(w[k].c_str() + 3);
+      if (w[k].rfind("ac=", 0) == 0) anticheat = std::atoi(w[k].c_str() + 3);
+    }
+    if (anticheat >= 2 && c.prints.size() < kKept)  // none here: said, and the game goes on
+      c.prints.emplace_back(
+          "The server asks for anticheat, which this game does not have; joining without it.\n");
     if (chan != 0 && chan != 1) {
       c.refused = "Server returned invalid netchan type";
       c.stage = ClientStage::dropped;

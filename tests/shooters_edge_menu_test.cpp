@@ -1507,6 +1507,37 @@ TEST(q2_menu_has_its_own_pages_flags_keys_and_in_game_page) {
   CHECK(!g.open() && !w.ran.empty() && w.ran.back() == "putaway");
 }
 
+// The video mode row: windowed, then each mode vid_modelist offers; a mode picked writes its
+// number.
+TEST(q2_video_mode_lists_the_modes_and_writes_the_number) {
+  World w;
+  w.con.cvars().add({.name = "vid_fullscreen", .fallback = "0"});
+  w.con.cvars().add({.name = "vid_modelist",
+                     .fallback = "desktop 1280x720@60 1920x1080@144",
+                     .kind = ge::console::CvarKind::text});
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .table = &sm::q2_menu()};
+  g.set_table(sm::q2_menu());
+  w.con.execute("vid_fullscreen 2");
+  g.show(host, "video");
+  const ge::ui::Item* row = item(g.main(), "video", "vid_fullscreen");
+  CHECK(row != nullptr);
+  if (row == nullptr) return;
+  CHECK(row->choices.size() == 4);
+  CHECK(row->choices[0] == "windowed" && row->choices[1] == "desktop" &&
+        row->choices[3] == "1920x1080@144");
+  CHECK(row->choice == 2);
+  g.main().page("video")->find("vid_fullscreen")->choice = 3;
+  sm::apply_event({.kind = EventKind::changed, .page = "video", .item = "vid_fullscreen"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("vid_fullscreen")->value == "3");
+  g.main().page("video")->find("vid_fullscreen")->choice = 0;
+  sm::apply_event({.kind = EventKind::changed, .page = "video", .item = "vid_fullscreen"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("vid_fullscreen")->value == "0");
+}
+
 TEST(q2_player_page_lists_figures_and_writes_the_skin) {
   // Figures as Quake II's packs hold them: a skin counts only with its icon beside it.
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
@@ -1681,4 +1712,78 @@ TEST(the_game_sets_the_menus_size) {
   menu.menu_scale() = 3;
   menu.set_art(sm::ClassicArt{});
   CHECK(menu.menu_scale() == 3);
+}
+
+TEST(q2_browse_rows_open_the_browser_on_their_own_sources) {
+  namespace gn = ge::net;
+  gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
+  // Three servers: one in the address book, one in the game's servers.lst, one only in sb_servers.
+  gn::Transport server[3], browser;
+  for (uint32_t k = 0; k < 3; k++)
+    gn::open_sim_transport(server[k], net, gn::sim_address(5 + k, 27500));
+  gn::open_sim_transport(browser, net, gn::sim_address(1, 27001));
+  const std::string listed = gn::to_string(gn::sim_address(6, 27500)) + "\n";
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
+      {"servers.lst", std::vector<uint8_t>(listed.begin(), listed.end())}};
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak(files, &pak, &error), error);
+  ge::vfs::SearchPath sp;
+  CHECK_MSG(ge::vfs::add_archive(&sp, "pak0.pak", pak, "baseq2", &error), error);
+
+  ge::console::Console con;
+  con.add_command("connect", "", [](ge::console::Console&, const ge::console::Args&) {});
+  con.cvars().add({.name = "adr0",
+                   .fallback = gn::to_string(gn::sim_address(5, 27500)),
+                   .kind = ge::console::CvarKind::text});
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  const sm::MenuTable& table = menu.set_table(sm::q2_menu(), &sp);
+  sm::Host host{.console = &con, .table = &table};
+  menu.servers().set_query({toy_status, toy_reply, nullptr, nullptr});
+  menu.servers().use_transport(&browser);
+  menu.servers().set_lan_ports(27500, 27500);
+  con.execute("sb_servers " + gn::to_string(gn::sim_address(7, 27500)));
+  con.run();
+  int64_t now = 0;
+  uint8_t buf[64];
+  gn::Address from;
+  const auto run = [&] {
+    now += 16000;
+    gn::sim_advance(net, now);
+    for (int k = 0; k < 3; k++)
+      while (gn::transport_receive(server[k], buf, sizeof buf, from, now) >= 0) {
+        const char* names[] = {"!book", "!listed", "!mine"};
+        gn::transport_send(server[k], from, reinterpret_cast<const uint8_t*>(names[k]),
+                           std::strlen(names[k]), now);
+      }
+    menu.update({}, false, host, 0.016);
+  };
+  const auto shown = [&] {
+    std::vector<std::string> out;
+    for (int r : menu.servers().rows())
+      out.push_back(menu.servers().list().entries[static_cast<size_t>(r)].info.name);
+    std::sort(out.begin(), out.end());
+    return out;
+  };
+  // The page's rows: the web list, and the address book, servers.lst and the LAN.
+  const sm::Entry* book = sm::find_entry("multi", "book", table);
+  CHECK(book != nullptr && sm::find_entry("multi", "q2servers", table) != nullptr &&
+        sm::find_entry("game", "q2servers", table) != nullptr);
+  if (book == nullptr) return;
+  CHECK(book->line == R"(pushmenu servers "favorites://" "file:///servers.lst" "broadcast://")");
+  // Those sources without the LAN (every server here would answer it), and a word it cannot use.
+  con.execute("sb_lan 0");
+  con.execute(R"(pushmenu servers "favorites://" "file:///servers.lst" nowhere)");
+  con.run();
+  for (int i = 0; i < 90; i++) run();
+  CHECK(shown() == (std::vector<std::string>{"book", "listed"}));
+  CHECK(std::find(con.output().begin(), con.output().end(),
+                  "Ignoring invalid master URL: nowhere") != con.output().end());
+  // The menu's own row afterwards: the configured places again.
+  menu.hide();
+  con.execute("menu_servers");
+  con.run();
+  for (int i = 0; i < 90; i++) run();
+  CHECK(shown() == (std::vector<std::string>{"book", "mine"}));
 }

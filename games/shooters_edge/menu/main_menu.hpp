@@ -80,6 +80,11 @@ struct Entry {                 // NOLINT(clang-analyzer-optin.performance.Paddin
   int bit = -1;           // toggle: the one bit of the cvar's number it reads and writes (-1 none)
   bool inverted = false;  // toggle: on writes 0 (or clears the bit)
   std::string_view bind = {};  // a key row: the command a key is bound to (shown as its keys)
+  // A choice of video modes: `choices` (one: the windowed row) then each mode of the cvar this
+  // names (`vid_modelist`, words apart), and the choice's number written (0 windowed, N mode N).
+  std::string_view modes_from = {};
+  // A text setting (`needs`): its value shown beside its words, typed in the console.
+  bool field = false;
 };
 
 // A page of a menu: its id and its title ("" for the root, which shows the game's own picture).
@@ -95,9 +100,13 @@ struct PageTitle {
 struct MenuTable {
   std::span<const PageTitle> pages;
   std::span<const Entry> entries;
-  std::string_view empty_slot;     // the words of an empty save slot on LOAD and SAVE
-  std::string_view in_level = {};  // the page ESCAPE opens in a level ("" the root)
+  std::string_view empty_slot;      // the words of an empty save slot on LOAD and SAVE
+  std::string_view in_level = {};   // the page ESCAPE opens in a level ("" the root)
+  std::string_view script = {};     // the menu script the game reads over it (menu_script.hpp)
+  const MenuTable* over = nullptr;  // a script's table: the game's table it was read over
 };
+// The game's own table `t` is, or was read over.
+inline const MenuTable& game_table(const MenuTable& t) { return t.over != nullptr ? *t.over : t; }
 // Quake's (an empty slot "--- UNUSED SLOT ---", as the original's), and the same pages for
 // Quake II with our own words for an empty slot.
 const MenuTable& classic_menu();

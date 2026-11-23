@@ -1108,6 +1108,12 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   at(classic_centre).on &= !hud.centre.empty() && s.t < hud.centre_until;
 }
 
+void keep_chat_only(Hud& hud) {
+  gh::Layout& L = hud.layout;
+  for (size_t i = 0; i < L.size(); ++i)
+    if (i != chat) L[i].content.on = false;
+}
+
 float status_lift(const Hud& hud, int height) {
   if (hud.sbar == 0 || height <= 0) return 0;
   const gh::Layout& L = hud.layout;

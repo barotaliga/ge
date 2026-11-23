@@ -11,6 +11,7 @@
 
 #include "check.hpp"
 #include "console/console.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/team_chat.hpp"
 
 namespace cl = shooters_edge::client;
@@ -306,4 +307,52 @@ TEST(a_made_up_name_and_flood_protection) {
   f.con.execute("say a; say b; say c");
   CHECK_MSG(f.sent.size() == 3, "the third line in ten seconds is held back");
   CHECK(!f.con.output().empty() && f.con.output().back() == "Flood Protection");
+}
+
+TEST(a_death_with_the_flag_runs_f_flagdeath_in_f_deaths_place) {
+  Fixture f;
+  f.con.execute(
+      "alias f_death \"echo dead\"; alias f_flagdeath \"echo flag\"; tp_forceTriggers 1;"
+      "alias f_trackspectate \"echo track\"");
+  cl::DemoState s;
+  s.format = cl::DemoFormat::client;
+  s.protocol = 28;
+  s.player = 2;
+  s.players.resize(32);
+  s.names[2] = "me";
+  hud::Status st = rocketeer();
+  cl::team_frame(f.con, f.chat, st, "ctf1", 0, &s);
+  s.players[2].effects = 16;  // the red flag's glow on the player
+  cl::team_frame(f.con, f.chat, st, "ctf1", 0, &s);
+  CHECK(cl::carries_flag(s));
+  s.players[2].effects = 0;  // dropped in the frame he died in
+  st.health = 0;
+  cl::team_frame(f.con, f.chat, st, "ctf1", 0, &s);
+  st.health = 100;
+  cl::team_frame(f.con, f.chat, st, "ctf1", 0, &s);
+  st.health = 0;  // a death with no flag
+  cl::team_frame(f.con, f.chat, st, "ctf1", 0, &s);
+  f.con.clear_output();
+  f.con.run();
+  f.con.execute("tp_triggers 0");
+  cl::spectate_event(f.con, "f_trackspectate");  // the camera's hooks have no gate
+  f.con.run();
+  std::string got;
+  for (const std::string& l : f.con.output()) got += l + "|";
+  expect(got, "flag|dead|track|");
+  // Quake II's flag on the player's entity, and a Team Fortress key among the items.
+  cl::DemoState q2;
+  q2.protocol = 34;
+  q2.player = 0;
+  q2.entities.resize(4);
+  q2.entities[1].effects = 1 << 19;
+  CHECK(cl::carries_flag(q2));
+  cl::DemoState tf;
+  tf.format = cl::DemoFormat::client;
+  tf.players.resize(32);
+  tf.game = "fortress";
+  tf.stats[cl::kStatItems] = 131072;
+  CHECK(cl::carries_flag(tf));
+  tf.game = "qw";
+  CHECK(!cl::carries_flag(tf));
 }
