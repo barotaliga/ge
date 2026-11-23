@@ -576,7 +576,15 @@ struct Mvd2ToQ2 final : ConvertStream {
         case server::SqShot::bfg:
           return 64;
         case server::SqShot::bolt:
+        case server::SqShot::ripper:
+        case server::SqShot::blue_bolt:
+        case server::SqShot::spit:
           return k == 0 ? 0 : 64;  // the blaster none; the hyperblaster a beam gun
+        case server::SqShot::plasma:
+        case server::SqShot::heat_rocket:
+          return 32;
+        case server::SqShot::trap:
+          return 16;
       }
     }
     return 0;

@@ -35,8 +35,9 @@ namespace shooters_edge::server {
 enum class SqKind : uint8_t { armour, power_armour, weapon, ammo, health, powerup, key, pack };
 
 // The ammo kinds, in the HUD's order.
-enum class SqAmmo : uint8_t { none, shells, bullets, grenades, rockets, cells, slugs };
-inline constexpr int kSqAmmoKinds = 7;  // `none` included, so an `SqAmmo` indexes an array
+// The Reckoning's two (q2_pack.hpp) after the base game's: its mag slugs and its traps.
+enum class SqAmmo : uint8_t { none, shells, bullets, grenades, rockets, cells, slugs, magslugs, traps };
+inline constexpr int kSqAmmoKinds = 9;  // `none` included, so an `SqAmmo` indexes an array
 
 // The armours, worse to better (0 none).
 enum class SqArmour : uint8_t { none, jacket, combat, body };
@@ -149,6 +150,22 @@ inline constexpr SqItem kSqItems[] = {
      "items/pkup.wav", SqKind::key},
     {"key_airstrike_target", "Airstrike Marker", "models/items/keys/target/tris.md2",
      "items/pkup.wav", SqKind::key},
+    // The Reckoning's (porting note: q2-reckoning-rules.md §§ 1, 3, 5, 8, 10, 11).
+    {"weapon_boomer", "Ionripper", "models/weapons/g_boom/tris.md2", "misc/w_pkup.wav",
+     SqKind::weapon, 50, SqAmmo::cells, 30, Q2Pack::reckoning},
+    {"weapon_phalanx", "Phalanx", "models/weapons/g_shotx/tris.md2", "misc/w_pkup.wav",
+     SqKind::weapon, 10, SqAmmo::magslugs, 30, Q2Pack::reckoning},
+    {"ammo_magslug", "Mag Slug", "models/objects/ammo/tris.md2", "misc/am_pkup.wav", SqKind::ammo,
+     10, SqAmmo::magslugs, 30, Q2Pack::reckoning},
+    {"ammo_trap", "Trap", "models/weapons/g_trap/tris.md2", "misc/am_pkup.wav", SqKind::ammo, 1,
+     SqAmmo::traps, 30, Q2Pack::reckoning},
+    {"item_quadfire", "DualFire Damage", "models/items/quadfire/tris.md2", "items/pkup.wav",
+     SqKind::powerup, 30, SqAmmo::none, 60, Q2Pack::reckoning},
+    {"key_green_key", "Green Key", "models/items/keys/green_key/tris.md2", "items/pkup.wav",
+     SqKind::key, 0, SqAmmo::none, 0, Q2Pack::reckoning},
+    // What a fed trap leaves: health of its drop's count, past the maximum.
+    {"foodcube", "Health", "models/objects/trapfx/tris.md2", "items/m_health.wav", SqKind::health,
+     0, SqAmmo::none, 0, Q2Pack::reckoning},
 };
 inline constexpr int kSqItemCount = static_cast<int>(sizeof(kSqItems) / sizeof(kSqItems[0]));
 
@@ -205,7 +222,7 @@ struct SqBody {
 };
 
 // A fresh body: health 100 of 100, the blaster, the starting carry limits.
-SqBody sq_new_body();
+SqBody sq_new_body(Q2Pack pack = Q2Pack::base);
 
 // Takes item row `item` into `body` by its kind's rule (`skill` 0..3; adrenaline raises the
 // maximum only outside `deathmatch`); true when it is taken (the item hides or goes), false when

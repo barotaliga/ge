@@ -17,6 +17,16 @@
 // - **The viper's missile** (`misc_viper_missile`): a use fires a monster's rocket (500 units/s,
 //   `dmg` 250, its splash `dmg` within `dmg` + 20) at its target's place, the rocket's flash 57,
 //   and it goes a frame later.
+// - **The shots** (q2_reckoning_shots.cpp): the ion ripper's bolt sparks (welding sparks, none
+//   drawn, palette 228..231) where its 3 s end; the beta maiden's heat rocket re-aims at 500 units/s
+//   every 0.1 s at the nearest living player in front of it it sees within 1024.
+// - **The trap**: thrown as a hand grenade (400 to 800 units/s), it thinks from 1 s on, every 0.1 s
+//   on the ground: opens over frames 0..4 (then glows), pulls the nearest living player or monster
+//   it sees within 256 (the thrower too: a player +250 units/s toward it a think, a monster at 256);
+//   one within 32 under 400 mass dies past invulnerability (100 000, its words "caught in trap"),
+//   one heavier bursts it (explosion 1, no harm). Fed, it counts down from 62 by 2 a think, shows
+//   frames 6..8 from 18 on and leaves a food cube (Health: the mass / 4 in deathmatch, / 10
+//   otherwise, past the maximum), going a second later. Unfed, it bursts quietly at 30 s.
 //
 // ge:summary The Reckoning's rules beside Quake II's: map things, weapons, items, monsters
 // ge:keywords q2 reckoning mission-pack xatrix object-repair rotating-light misc-nuke amb4
@@ -27,8 +37,11 @@
 
 #include <string_view>
 
+#include "shooter/vec.hpp"
+
 namespace shooters_edge::server {
 
+namespace sh = ge::shooter;
 struct Q2Server;
 
 // The nuke's blow: no words of its own ("<victim> died.").
@@ -50,5 +63,15 @@ bool reckoning_damage(Q2Server& s, int i, int damage);
 void reckoning_frame(Q2Server& s);
 // Their world rows.
 void reckoning_rows(Q2Server& s);
+
+struct Q2Missile;
+// A thrown trap's flight from its owner's `forward`, `right` and `up` at `speed`.
+void reckoning_trap_launch(Q2Server& s, Q2Missile& m, sh::Vec3f forward, sh::Vec3f right,
+                           sh::Vec3f up, float speed);
+// A shot at the end of its life: the ion ripper's sparks, the trap's burst (the rest leave none).
+void reckoning_missile_end(Q2Server& s, Q2Missile& m);
+// A shot's own think before it moves: the heat rocket's aim, the trap's pull; true when it does
+// not move this frame (a trap on the ground).
+bool reckoning_missile_think(Q2Server& s, Q2Missile& m);
 
 }  // namespace shooters_edge::server

@@ -195,8 +195,9 @@ void fight_effect(Q2Server& s, const char* name, sh::Vec3f at, sh::Vec3f way = {
 // wire sends it as the protocol's monster flash, the window plays its gun's sound by it.
 void fight_monster_line(Q2Server& s, const char* name, int from, sh::Vec3f a, sh::Vec3f b,
                         int flash = 0);
-// An item (`classname`) thrown up from `at`, as a monster drops it at death.
-void fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname);
+// An item (`classname`) thrown up from `at`, as a monster drops it at death: its row, or null
+// when the item does not play here or every row is in use.
+Q2Drop* fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname);
 // A body thrown apart at `at`: entity row `ent`'s sound, the blood and the pieces `t` names.
 void fight_gib(Q2Server& s, int ent, sh::Vec3f at, const SqGibThrow& t);
 // A line printed to player `slot`, or to everyone with -1.

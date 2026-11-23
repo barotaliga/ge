@@ -244,7 +244,7 @@ void fight_touch_drops(Q2Server& s, int slot) {
       continue;
     const SqItem& it = kSqItems[d.item];
     const bool power = d.power_left > 0 || d.shots > 0;
-    const int grenades = p.body.ammo[static_cast<int>(SqAmmo::grenades)];
+    const int grenades = p.body.ammo[static_cast<int>(it.ammo)];  // its kind's before
     if (power) {  // a dropped powerup is used at once with the time (or shots) it had left
       const auto add = [&](double& until) { until = std::max(until, s.level_time) + d.power_left; };
       if (const SqPower* pw = sq_power(it.classname)) add(p.*pw->until);
@@ -257,7 +257,7 @@ void fight_touch_drops(Q2Server& s, int slot) {
       p.body.counts[d.item]++;
     } else {
       p.body.health = static_cast<int>(p.health);
-      if (!sq_pick_up(d.item, p.body, deathmatch(s), skill(s), s.level_time)) continue;
+      if (!sq_pick_up(d.item, p.body, deathmatch(s), skill(s), s.level_time, d.count)) continue;
       p.health = static_cast<float>(p.body.health);
       if (it.kind == SqKind::weapon && fight_anyflag(s, 8192)) {  // infinite ammo: a full stock
         const int k = static_cast<int>(it.ammo);
@@ -271,9 +271,9 @@ void fight_touch_drops(Q2Server& s, int slot) {
   }
 }
 
-void fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname) {
+Q2Drop* fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname) {
   const int item = sq_item(classname, s.opt.pack);
-  if (item < 0) return;
+  if (item < 0) return nullptr;
   for (Q2Drop& d : s.drops) {
     if (d.live) continue;
     d = Q2Drop{};
@@ -281,8 +281,9 @@ void fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname) {
     d.item = item;
     d.origin = at;
     d.velocity = {0, 0, 300};
-    return;
+    return &d;
   }
+  return nullptr;
 }
 
 }  // namespace shooters_edge::server

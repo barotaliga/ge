@@ -53,6 +53,9 @@ SqStep fight_hand_step(Q2Server& s, int slot, bool attack, bool infinite, int sw
     case SqWeapon::hand_grenade:  // the pin pulled
       if (now == 5) hand_sound(s, slot, kHandSounds[0], 1, 1);
       break;
+    case SqWeapon::trap:  // The Reckoning's trap cocked
+      if (now == 5) hand_sound(s, slot, kSqWeapons[weapon].sound, 1, 1);
+      break;
     case SqWeapon::chaingun:  // spun up from its first fire frame (5, shown with the first shots);
                               // spun down at the burst's end (not when let go early)
       if (!was_firing && p.hand.state == SqHandState::firing)

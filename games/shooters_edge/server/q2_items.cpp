@@ -74,11 +74,14 @@ bool take_pack(const SqItem& it, SqBody& b) {
   const auto raise = [&](SqAmmo a, int limit) {
     b.max_ammo[at(a)] = std::max(b.max_ammo[at(a)], limit);
   };
+  // The Reckoning's mag slugs are carried only under it (a limit of 0 elsewhere): raised there too.
+  const bool magslugs = b.max_ammo[at(SqAmmo::magslugs)] > 0;
   if (it.amount == 1) {  // the bandolier
     raise(SqAmmo::bullets, 250);
     raise(SqAmmo::shells, 150);
     raise(SqAmmo::cells, 250);
     raise(SqAmmo::slugs, 75);
+    if (magslugs) raise(SqAmmo::magslugs, 75);
     add_ammo(b, SqAmmo::bullets, 50);
     add_ammo(b, SqAmmo::shells, 10);
     return true;
@@ -89,8 +92,10 @@ bool take_pack(const SqItem& it, SqBody& b) {
   raise(SqAmmo::grenades, 100);
   raise(SqAmmo::cells, 300);
   raise(SqAmmo::slugs, 100);
-  for (const SqItem& ammo : kSqItems)
-    if (ammo.kind == SqKind::ammo) add_ammo(b, ammo.ammo, ammo.amount);
+  if (magslugs) raise(SqAmmo::magslugs, 100);
+  for (const SqItem& ammo : kSqItems)  // every kind but the traps (a limit of 0 gives none)
+    if (ammo.kind == SqKind::ammo && ammo.ammo != SqAmmo::traps)
+      add_ammo(b, ammo.ammo, ammo.amount);
   return true;
 }
 
@@ -121,8 +126,12 @@ bool sq_turns(int item) {
   }
 }
 
-SqBody sq_new_body() {
+SqBody sq_new_body(Q2Pack pack) {
   SqBody b;
+  if (q2_pack_has(pack, Q2Pack::reckoning)) {
+    b.max_ammo[at(SqAmmo::magslugs)] = 50;
+    b.max_ammo[at(SqAmmo::traps)] = 5;  // nothing raises it
+  }
   b.max_ammo[at(SqAmmo::bullets)] = 200;
   b.max_ammo[at(SqAmmo::shells)] = 100;
   b.max_ammo[at(SqAmmo::rockets)] = 50;
@@ -150,6 +159,10 @@ bool sq_pick_up(int item, SqBody& b, bool deathmatch, int skill, double now, int
     case SqKind::ammo:  // a map's `count` on ammo gives that many in place of the box's own
       return add_ammo(b, it.ammo, count > 0 ? count : it.amount);
     case SqKind::health:
+      if (std::string_view(it.classname) == "foodcube") {  // The Reckoning's: its count, past all
+        b.health += count;
+        return true;
+      }
       return take_health(it, item, b, deathmatch, now);
     case SqKind::powerup: {
       const int hold = skill <= 1 ? 2 : 1;

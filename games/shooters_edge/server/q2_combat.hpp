@@ -51,15 +51,42 @@ enum class SqWeapon : uint8_t {
   railgun,
   bfg,
   hand_grenade,
+  // The Reckoning's (q2_pack.hpp): the ion ripper, the phalanx and the trap (thrown as the hand
+  // grenade is).
+  ion_ripper,
+  phalanx,
+  trap,
 };
-inline constexpr int kSqWeaponCount = 11;
+inline constexpr int kSqWeaponCount = 14;
 
-// What one shot is.
-enum class SqShot : uint8_t { bolt, pellets, bullet, grenade, rocket, rail, bfg, hand_grenade };
-inline constexpr int kSqShotKinds = 8;
+// What one shot is. The Reckoning's after the base game's: the ion ripper's bouncing bolt, the
+// hyper guard's blue bolt, the phalanx's plasma ball, the beta maiden's homing rocket, the gekk's
+// spit and the thrown trap.
+enum class SqShot : uint8_t {
+  bolt,
+  pellets,
+  bullet,
+  grenade,
+  rocket,
+  rail,
+  bfg,
+  hand_grenade,
+  ripper,
+  blue_bolt,
+  plasma,
+  heat_rocket,
+  spit,
+  trap,
+};
+inline constexpr int kSqShotKinds = 14;
 // Each kind's effect bits in flight (its trail and light on a client): a bolt the blaster's (8), a
-// grenade's smoke (32), a rocket's (16), the BFG's ball (128) with its frames run fast (0x2000).
-inline constexpr int kSqShotEffects[kSqShotKinds] = {8, 0, 0, 32, 16, 0, 128 | 0x2000, 32};
+// grenade's smoke (32), a rocket's (16), the BFG's ball (128) with its frames run fast (0x2000);
+// the ion ripper's trail (0x00100000), the blue bolt's (0x00400000), the plasma's (0x01000000,
+// its frames fast), the spit the blaster's.
+inline constexpr int kSqShotEffects[kSqShotKinds] = {
+    8, 0, 0, 32, 16, 0, 128 | 0x2000, 32, 0x00100000, 0x00400000, 0x01000000 | 0x2000, 16, 8, 0};
+// The render flag each kind is drawn with (8 full bright: the ion ripper's bolt).
+inline constexpr int kSqShotRender[kSqShotKinds] = {0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0};
 
 struct SqWeaponRow {
   const char* name;        // the name a player reads and `use` takes
@@ -107,10 +134,23 @@ inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
      50, 8, 32, 55, 58, 17, 17, SqShot::bfg, 200, 500, 0, 8, 8},
     {"Grenades", "ammo_grenades", "models/weapons/v_handgr/tris.md2", "weapons/hgrent1a.wav",
      SqAmmo::grenades, 1, 0, 15, 48, 48, 11, 12, SqShot::hand_grenade, 125, 125, 0, 8, 8},
+    // The Reckoning's (porting note: q2-reckoning-rules.md §§ 1 to 5). The phalanx takes its mag
+    // slug with the second ball (a pull's), the trap steps as the hand grenade does.
+    {"Ionripper", "weapon_boomer", "models/weapons/v_boomer/tris.md2", "weapons/rippfire.wav",
+     SqAmmo::cells, 2, 4, 6, 36, 39, 5, 5, SqShot::ripper, 30, 50, 1, 16, 7, Q2Pack::reckoning},
+    {"Phalanx", "weapon_phalanx", "models/weapons/v_shotx/tris.md2", "weapons/plasshot.wav",
+     SqAmmo::magslugs, 1, 5, 20, 58, 63, 7, 8, SqShot::plasma, 70, 70, 0, 0, 8, Q2Pack::reckoning},
+    {"Trap", "ammo_trap", "models/weapons/v_trap/tris.md2", "weapons/trapcock.wav", SqAmmo::traps,
+     1, 0, 15, 48, 48, 11, 12, SqShot::trap, 125, 125, 0, 8, 8, Q2Pack::reckoning},
 };
 
 // The pack each shot kind belongs to, by `SqShot` (its missile model registered only under it).
-inline constexpr Q2Pack kSqShotPacks[kSqShotKinds] = {};
+inline constexpr Q2Pack kSqShotPacks[kSqShotKinds] = {
+    Q2Pack::base,      Q2Pack::base,      Q2Pack::base,      Q2Pack::base,      Q2Pack::base,
+    Q2Pack::base,      Q2Pack::base,      Q2Pack::base,      Q2Pack::reckoning, Q2Pack::reckoning,
+    Q2Pack::reckoning, Q2Pack::reckoning, Q2Pack::reckoning, Q2Pack::reckoning};
+// Whether a weapon steps and throws as the hand grenade does (the grenades and the trap).
+constexpr bool sq_thrown(int w) { return w == int(SqWeapon::hand_grenade) || w == int(SqWeapon::trap); }
 // Whether weapon `w` plays under `pack` (the base game's always, a pack's under it).
 constexpr bool sq_weapon_plays(int w, Q2Pack pack) {
   return w >= 0 && w < kSqWeaponCount && q2_pack_has(pack, kSqWeapons[w].pack);

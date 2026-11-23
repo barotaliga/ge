@@ -14,6 +14,7 @@
 #include <string>
 #include <string_view>
 
+#include "brush/map.hpp"
 #include "core/prng.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_flash.hpp"

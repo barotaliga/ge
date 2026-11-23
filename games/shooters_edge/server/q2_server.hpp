@@ -365,9 +365,22 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
 // The loops a shot in flight or a player carries (q2_fight.cpp): a blaster bolt's hiss, a
 // rocket's roar, a hand grenade's fuse (thrown or held), the BFG's ball, the railgun's and the
 // BFG's hum while held, the hyperblaster's and the chaingun's spin while firing, a body in lava or
-// slime frying.
-enum class SqLoop : uint8_t { bolt, rocket, fuse, bfg_ball, rail_hum, bfg_hum, hyper, chain, fry };
-inline constexpr int kSqLoops = 9;
+// slime frying; The Reckoning's trap (thrown, or lit in the hand) and the phalanx's hum while held.
+enum class SqLoop : uint8_t {
+  bolt,
+  rocket,
+  fuse,
+  bfg_ball,
+  rail_hum,
+  bfg_hum,
+  hyper,
+  chain,
+  fry,
+  trap,
+  phalanx,
+};
+inline constexpr int kSqLoops = 11;
+inline constexpr int kSqBaseLoops = 9;  // the base game's, registered in every game
 
 struct Q2Missile {
   bool live = false;
@@ -385,6 +398,15 @@ struct Q2Missile {
   float reach = 1000;    // and its reach
   float fired_z = 0;     // a rocket's: the height its shooter stood at when he fired (midair)
   int effects = -1;      // its effect bits on the wire (its trail and light); -1: by its kind
+  // The Reckoning's trap (q2_reckoning.hpp): its frame, its next think, what it pulls (a slot, or
+  // an entity as -2 - its index; -1 none), and once it has caught: the feeding's count down (62,
+  // less 2 a think), the prey's mass and whether it was a gekk.
+  int frame = 0;
+  double think_at = 0;
+  int prey = -1;
+  int feed = 0;
+  int prey_mass = 0;
+  bool prey_gekk = false;
 };
 inline constexpr int kQ2Missiles = 64;  // the rows the world keeps for shots in flight
 
