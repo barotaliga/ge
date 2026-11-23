@@ -21,6 +21,7 @@
 namespace shooters_edge::client {
 
 struct Listen;
+struct DemoState;
 
 // The view watched (a server joined, a demo), when `on`; else the window's own game is asked.
 struct PlaceSeen {
@@ -30,7 +31,11 @@ struct PlaceSeen {
   const server::BspMap* map = nullptr;  // its map's world (null: none read)
   int kept_level = -1;                  // the recording's level whose kept place names are in use
   size_t kept_count = 0;                // how many of them
+  const DemoState* drawn = nullptr;     // the state drawn (a recipe's entlist reads it)
 };
+
+// `seen` set off the state drawn this frame: on when it has a map, at its eye less its height.
+void see_from(PlaceSeen& seen, const DemoState& drawn);
 
 // Where the view looks: 8,192 units along it from where the player stands, or the first solid.
 inline constexpr float kLookReach = 8192;

@@ -5,7 +5,8 @@
 // each part only when not zero, "0 secs" at zero), `$random` (a digit 0..9), and the older
 // clients' fixed forms `$time` (14:05), `$date` (22.11.26), `$timestamp` (20261122-1405),
 // `$dateiso` (2026-11-22_14-05) and `$rand` (0 to 1, six decimals). The console reads
-// no clock: the host hands over its own (the wall clock in a window, a fixed one in a test).
+// no clock: the host hands over its own (the wall clock in a window, a fixed one in a test), and
+// its uptime becomes the console's clock, the one `sleep` counts on (console.hpp).
 //
 // ge:summary The clock's macros: $com_date, $com_time, $com_uptime, $com_uptime_long, $random
 // ge:keywords macros com_date com_time com_date_format com_time_format com_uptime uptime

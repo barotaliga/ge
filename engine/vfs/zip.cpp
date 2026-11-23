@@ -9,6 +9,8 @@
 // ge:test tests/vfs_zip_test.cpp
 #include "vfs/zip.hpp"
 
+#include <fstream>
+
 #include "core/inflate.hpp"
 #include "vfs/bzip2.hpp"
 #include "vfs/lzma.hpp"
@@ -129,6 +131,76 @@ bool read_zip(std::span<const uint8_t> bytes, Zip* out, std::string* error) {
     e.data = uint32_t(data);
     out->entries.push_back(std::move(e));
     at += 46 + name_len + extra_len + comment_len;
+  }
+  return true;
+}
+
+bool list_zip_file(const std::string& path, std::vector<ZipEntry>* out, std::string* error) {
+  out->clear();
+  std::ifstream f(path, std::ios::binary);
+  if (!f) {
+    *error = "zip: cannot open " + path;
+    return false;
+  }
+  f.seekg(0, std::ios::end);
+  const uint64_t size = uint64_t(f.tellg());
+  const uint64_t tail_at = size > 22 + 65535 ? size - 22 - 65535 : 0;
+  std::vector<uint8_t> tail(size_t(size - tail_at));
+  f.seekg(std::streamoff(tail_at));
+  if (tail.size() < 22 ||
+      !f.read(reinterpret_cast<char*>(tail.data()), std::streamsize(tail.size()))) {
+    *error = "zip: " + path + " is too short for an end record";
+    return false;
+  }
+  size_t end = tail.size();
+  for (size_t at = tail.size() - 22;; at--) {
+    if (u32(tail, at) == 0x06054b50) {
+      end = at;
+      break;
+    }
+    if (at == 0) break;
+  }
+  if (end == tail.size()) {
+    *error = "zip: no end-of-central-directory record in the last 64 KB of " + path;
+    return false;
+  }
+  const uint32_t count = u16(tail, end + 10), dir_size = u32(tail, end + 12),
+                 dir_at = u32(tail, end + 16);
+  if (count == 0xffff || dir_at == 0xffffffff) {
+    *error = "zip: " + path + " is a zip64 archive, which this reader does not take";
+    return false;
+  }
+  if (uint64_t(dir_at) + dir_size > tail_at + end) {
+    *error = "zip: the central directory of " + path + " runs past its end record";
+    return false;
+  }
+  std::vector<uint8_t> dir(dir_size);
+  f.seekg(std::streamoff(dir_at));
+  if (!f.read(reinterpret_cast<char*>(dir.data()), std::streamsize(dir.size()))) {
+    *error = "zip: the central directory of " + path + " could not be read";
+    return false;
+  }
+  out->reserve(count);
+  size_t at = 0;
+  for (uint32_t i = 0; i < count; i++) {
+    if (at + 46 > dir.size() || u32(dir, at) != 0x02014b50) {
+      *error = "zip: central record " + std::to_string(i) + " of " + path + " is damaged";
+      return false;
+    }
+    ZipEntry e;
+    e.method = u16(dir, at + 10);
+    e.crc = u32(dir, at + 16);
+    e.packed = u32(dir, at + 20);
+    e.size = u32(dir, at + 24);
+    const size_t name_len = u16(dir, at + 28),
+                 rest = name_len + u16(dir, at + 30) + u16(dir, at + 32);
+    if (at + 46 + rest > dir.size()) {
+      *error = "zip: central record " + std::to_string(i) + " of " + path + " runs past it";
+      return false;
+    }
+    e.name.assign(reinterpret_cast<const char*>(dir.data() + at + 46), name_len);
+    out->push_back(std::move(e));
+    at += 46 + rest;
   }
   return true;
 }

@@ -458,6 +458,7 @@ void HudArt::finish() {
   sheet.density = density;
   count_face = glyphs.empty() ? ge::hud::Face::bitmap(count_font)
                               : ge::hud::Face::glyph_sheet(glyphs, digits_at);
+  plain_face = glyphs.empty() ? count_face : ge::hud::Face::glyph_sheet(glyphs, '0');
 }
 
 HudArt free_art() {
