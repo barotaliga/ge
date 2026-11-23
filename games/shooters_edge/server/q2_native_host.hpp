@@ -80,6 +80,7 @@ struct NativeHost {
   native::NativeSurface no_surface{};           // what a trace that hits nothing reports
   std::vector<uint8_t> linked;  // by entity number: 0 not linked, 1 solid, 2 trigger
   bool loading = false;         // the map's spawn and its settling frames
+  int thinking = -1;            // the slot whose command the game is running (-1 none)
   float air_accelerate = 0;
   // `sv_physics q1` (classic remix's `cr_physics q1`, also over a mod under `cr_over_mods`):
   // the players move with Quake's ground and air (profiles/remix_arsenal.hpp's
@@ -133,6 +134,10 @@ int32_t native_features(NativeHost& h);
 inline constexpr int32_t kNativeServerFeatures =
     native::kGmfProperInUse | native::kGmfAllDisconnects | native::kGmfEnhancedSaves |
     native::kGmfExtraUserInfo | native::kGmfIpv6 | native::kGmfIndexOverflow;
+// `sys_allow_unsafe_savegames`: 1 lets a library without enhanced saves (`g_features` lacking
+// kGmfEnhancedSaves) be saved, loaded and kept level to level anyway. Set at start only (the
+// command line, server.cfg): a later set is refused with a line saying so.
+inline constexpr const char* kUnsafeSavesSetting = "sys_allow_unsafe_savegames";
 // The file calls (q2_native_files.cpp) and the files left open closed.
 const native::NativeFilesApi* native_files_api();
 void native_close_files(NativeHost& h);

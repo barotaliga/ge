@@ -88,4 +88,19 @@ bool served_origin(const SearchPath& files, const std::string& path, ge::vfs::Ar
   return f != nullptr && ge::vfs::archive_origin(files.vfs, *f, out);
 }
 
+bool served_deflated(const SearchPath& files, const std::string& path, std::vector<uint8_t>* out) {
+  if (files.loose_first && !files.folder.empty() && !on_disk_any_case(files.folder, path).empty())
+    return false;
+  const ge::vfs::FileRef* f = ge::vfs::find(files.vfs, path);
+  std::span<const uint8_t> packed;
+  if (f == nullptr || !ge::vfs::deflated(files.vfs, *f, &packed)) return false;
+  const std::string& archive = files.vfs.sources[f->source].path;
+  if (archive.size() < 4) return false;
+  std::string end = archive.substr(archive.size() - 4);
+  for (char& ch : end) ch = static_cast<char>(ch >= 'A' && ch <= 'Z' ? ch - 'A' + 'a' : ch);
+  if (end != ".pkz") return false;
+  out->assign(packed.begin(), packed.end());
+  return true;
+}
+
 }  // namespace ge::classic::content

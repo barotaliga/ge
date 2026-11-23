@@ -54,5 +54,8 @@ bool keep_download(SearchPath& files, const std::string& basedir, const std::str
 // The archive the server's `files` found `path` in, for the client to keep it there; false for a
 // loose file (one on disk in the game folder wins when `files.loose_first`) or a file not found.
 bool served_origin(const SearchPath& files, const std::string& path, ge::vfs::ArchiveOrigin* out);
+// The file `path` as the deflate stream it is stored as in a `.pkz` (a zip the game reads), for a
+// client that inflates a download itself; false for any other file (loose, a pack's, stored).
+bool served_deflated(const SearchPath& files, const std::string& path, std::vector<uint8_t>* out);
 
 }  // namespace ge::classic::content

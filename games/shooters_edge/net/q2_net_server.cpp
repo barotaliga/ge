@@ -40,8 +40,9 @@ namespace pg = ge::progs;
 
 constexpr size_t kSignonShare = 700;  // bytes of the signon one answer adds before its prompt
 constexpr int kStringCmdsPerPacket = 7;
-constexpr uint8_t kSvcZPacket = 21;   // a compressed block of messages (35 and 36)
-constexpr uint8_t kSvcReconnect = 8;  // a full restart: connect again (`recycle`)
+constexpr uint8_t kSvcZPacket = 21;    // a compressed block of messages (35 and 36)
+constexpr uint8_t kSvcZDownload = 22;  // a download's piece of a deflate stream (36, minor 1021)
+constexpr uint8_t kSvcReconnect = 8;   // a full restart: connect again (`recycle`)
 constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
 constexpr uint8_t kSvcGeOrigin = 123;      // the game's own: a download's archive (qw_svc.hpp)
 constexpr uint8_t kSvcGeMoves = 124;       // the game's own: the other players' moves
@@ -150,8 +151,9 @@ void download_piece(Q2NetClient& c) {
   c.download_at += n;
   const int percent =
       c.download.empty() ? 100 : static_cast<int>(c.download_at * 100 / c.download.size());
-  std::vector<uint8_t> b = {kSvcDownload, static_cast<uint8_t>(n & 0xff),
-                            static_cast<uint8_t>(n >> 8), static_cast<uint8_t>(percent)};
+  std::vector<uint8_t> b = {c.download_deflated ? kSvcZDownload : kSvcDownload,
+                            static_cast<uint8_t>(n & 0xff), static_cast<uint8_t>(n >> 8),
+                            static_cast<uint8_t>(percent)};
   b.insert(b.end(), c.download.begin() + static_cast<std::ptrdiff_t>(c.download_at - n),
            c.download.begin() + static_cast<std::ptrdiff_t>(c.download_at));
   reliable(c, b);
@@ -189,6 +191,7 @@ std::string plain_download_path(std::string path) {
 
 void start_download(Q2NetServer& s, Q2NetClient& c, const std::string& asked, int offset) {
   c.downloading = false;
+  c.download_deflated = false;
   c.download.clear();
   const std::string path = asked.size() >= 64 ? std::string() : plain_download_path(asked);
   const auto under = [&path](const char* dir) { return path.rfind(dir, 0) == 0; };
@@ -218,6 +221,11 @@ void start_download(Q2NetServer& s, Q2NetClient& c, const std::string& asked, in
     why = "that kind of file is not offered";
   } else if (!s.cfg.read_file(path, &c.download) || c.download.empty()) {
     why = "not found";
+  } else if (offset == 0 && c.protocol == 36 && c.minor >= 1021 && c.zlib && !c.told_origins &&
+             s.cfg.read_deflated && s.cfg.read_deflated(path, &c.download)) {
+    // A `.pkz`'s deflated file goes as it lies; its size and the limit are the stream's.
+    c.download_deflated = true;
+    if (static_cast<int64_t>(c.download.size()) > most) why = "larger than sv_max_download_size";
   } else if (static_cast<int64_t>(c.download.size()) > most) {
     why = "larger than sv_max_download_size";
   } else {
@@ -980,6 +988,8 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
       ge::classic::protocol::info_pairs(c.userinfo, info);
     }
     s.rules->connect(slot, c.name, c.spectator, false);
+    // A stock client's protocol, for the moves it predicts (a spectator's flight); ours is told.
+    (**s.rules).clients[slot].protocol = c.told_feel ? 0 : c.protocol;
     if (s.native == nullptr) {  // the rest of its user info (its skin: the teams by skin)
       std::vector<std::pair<std::string, std::string>> pairs;
       ge::classic::protocol::info_pairs(c.userinfo, pairs);

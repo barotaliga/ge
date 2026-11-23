@@ -33,4 +33,24 @@ bool net_restart(net::Transport& sock, std::string& ip, int& port, const std::st
   return false;
 }
 
+bool open_ipv6(net::Transport& sock, int ipv6, const std::string& ip6, int port,
+               std::string& said) {
+  if (ipv6 < 2 || sock.kind != net::TransportKind::udp) return false;
+  const std::string where =
+      "[" + (ip6.empty() ? std::string("::") : ip6) + "]:" + std::to_string(port);
+  net::Address bind;
+  std::string why;
+  if (!net::parse_address(where, bind) || bind.family != net::Family::ipv6) {
+    said += where +
+            ": bad interface address: net_ip6 is not an IPv6 address; listening on IPv4 "
+            "alone\n";
+    return false;
+  }
+  if (!net::open_udp6_beside(sock, bind, &why)) {
+    said += where + ": can't bind socket: " + why + "; listening on IPv4 alone\n";
+    return false;
+  }
+  return true;
+}
+
 }  // namespace ge::server
