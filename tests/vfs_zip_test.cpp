@@ -1,11 +1,14 @@
 // The zip archive (engine/vfs/zip.hpp): stored entries written by the fixture writer read back
 // by name in any case and with either separator, a deflated entry (its blocks written by a stock
 // zlib) unpacked and checked, and damage refused naming what is wrong: no end record, a central
-// record cut short, a method this reader does not take, a flipped byte under the CRC-32.
+// record cut short, a method this reader does not take, a flipped byte under the CRC-32; a zip file
+// listed by its directory alone.
 //
 // ge:summary Tests the zip reader: stored and deflated entries, names, and the damage it refuses
 // ge:keywords test vfs zip archive stored deflate crc32 refuse damaged
 // ge:skill vfs testing
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -99,4 +102,23 @@ TEST(zip_refuses_damage) {
   std::vector<uint8_t> out;
   CHECK(!vfs::zip_unpack(flipped, dir.entries[0], &out, &error) &&
         error.find("CRC-32") != std::string::npos);
+}
+
+TEST(zip_file_listed_by_its_directory_alone) {
+  const auto zip = sample();
+  const auto path = std::filesystem::temp_directory_path() / "ge_vfs_zip_list_test.zip";
+  {
+    std::ofstream out(path, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(zip.data()), std::streamsize(zip.size()));
+  }
+  std::vector<vfs::ZipEntry> names;
+  std::string error;
+  CHECK_MSG(vfs::list_zip_file(path.string(), &names, &error), error);
+  CHECK(names.size() == 3 && names[1].name == "maps/start.bsp" && names[1].size == 5);
+  std::filesystem::resize_file(path, 10);  // cut short: no end record
+  CHECK(!vfs::list_zip_file(path.string(), &names, &error) &&
+        error.find("short") != std::string::npos);
+  std::filesystem::remove(path);
+  CHECK(!vfs::list_zip_file(path.string(), &names, &error) &&
+        error.find("cannot open") != std::string::npos);
 }
