@@ -124,13 +124,22 @@ constexpr PainRule kPains[] = {
     {.classname = "monster_hover",
      .bands = {{25, 1, {{S(153, 161), "hover/hovpain1.wav"}, {S(141, 152), "hover/hovpain2.wav"}}},
                {kAny, 1, {{S(113, 140), "hover/hovpain1.wav"}}}}},
+    // Ground Zero's hover: a heavy blow's long flinch less likely as the skill rises, else the
+    // middle one (gz-monsters.md § 2.15); read under the pack (q2_gz_base_monsters.cpp).
+    {.classname = "gz/monster_hover",
+     .bands = {{25, 1, {{S(153, 161), "hover/hovpain1.wav"}, {S(141, 152), "hover/hovpain2.wav"}}},
+               {kAny,
+                1,
+                {{S(113, 140), "hover/hovpain1.wav"}, {S(141, 152), "hover/hovpain2.wav"}},
+                0.45f,
+                0,
+                -0.1f}}},
     // Ground Zero's daedalus: the hover's runs with its own cries, a heavy blow's long flinch
     // less likely as the skill rises (gz-monsters.md § 2.15, § 7.3).
     {.classname = "monster_daedalus",
      .bands = {{25,
                 1,
-                {{S(153, 161), "daedalus/daedpain1.wav"},
-                 {S(141, 152), "daedalus/daedpain2.wav"}}},
+                {{S(153, 161), "daedalus/daedpain1.wav"}, {S(141, 152), "daedalus/daedpain2.wav"}}},
                {kAny,
                 1,
                 {{S(113, 140), "daedalus/daedpain1.wav"}, {S(141, 152), "daedalus/daedpain2.wav"}},
@@ -254,7 +263,9 @@ constexpr DeathRule kDeaths[] = {
     {.classname = "monster_daedalus",
      .sounds = {"daedalus/daeddeth1.wav", "daedalus/daeddeth2.wav"},
      .runs = {{0}}},
-    {.classname = "monster_medic_commander", .sounds = {"medic_commander/meddeth.wav"}, .runs = {{0}}},
+    {.classname = "monster_medic_commander",
+     .sounds = {"medic_commander/meddeth.wav"},
+     .runs = {{0}}},
     {.classname = "monster_boss2",
      .sounds = {"bosshovr/bhvdeth1.wav"},
      .everywhere = true,
@@ -321,9 +332,9 @@ PainChoice monster_pain(std::string_view classname, int damage, int skill, float
     return c;
   }
   if (band->first_odds >= 0 && n > 1) {
-    const float odds = std::min(band->first_odds + band->per_point * float(damage) +
-                                    band->per_skill * float(skill),
-                                band->first_cap);
+    const float odds = std::min(
+        band->first_odds + band->per_point * float(damage) + band->per_skill * float(skill),
+        band->first_cap);
     pick = draw(rng) < odds ? 0 : 1;
   } else if (n > 1) {
     pick = static_cast<int>(draw(rng) * n);

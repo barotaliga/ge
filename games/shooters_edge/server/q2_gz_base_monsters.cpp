@@ -11,6 +11,7 @@
 // ge:keywords blind-fire
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_gz_base_monsters_test.cpp
+#include <cmath>
 #include <string_view>
 
 #include "shooters_edge/server/q2_fight.hpp"
@@ -96,6 +97,41 @@ void hornet(Q2Server& s, Q2Monster& m, const Attack& a, sh::Vec3f from) {
   }
 }
 
+// Whether the parasite's tongue reaches its enemy: from 24 ahead and 6 up, within 256 and 30
+// degrees of level, at his origin, 8 below his box's top or 8 above its bottom.
+bool drain_reaches(Q2Server& s, const Q2Monster& m) {
+  const Q2Entity& e = body(s, m);
+  const sh::Vec3f from = e.origin + forward_of(e.angles.y) * 24.0f + sh::Vec3f{0, 0, 6};
+  sh::Vec3f lo, hi;
+  foe_box(s, m.enemy, lo, hi);
+  const sh::Vec3f at = foe_at(s, m.enemy);
+  for (const float z : {0.0f, hi.z - 8, lo.z + 8}) {
+    const sh::Vec3f d = at + sh::Vec3f{0, 0, z} - from;
+    const float flat = sh::length(sh::Vec3f{d.x, d.y, 0});
+    if (sh::length(d) <= 256 && std::abs(d.z) <= 0.57735f * flat) return true;  // tan 30°
+  }
+  return false;
+}
+
+// Whether the gunner's grenades may go: he is not above its head, 100 or more off, and the line
+// from its gun reaches him (or the place he stands).
+bool lob_clear(Q2Server& s, const Q2Monster& m) {
+  const Q2Entity& e = body(s, m);
+  sh::Vec3f lo, hi;
+  foe_box(s, m.enemy, lo, hi);
+  const sh::Vec3f at = foe_at(s, m.enemy);
+  if (at.z + lo.z >= e.origin.z + e.maxs.z) return false;
+  const sh::Vec3f from = eye(e, kind(m));
+  if (sh::length(at - from) < 100) return false;
+  const Line l = fight_line(s, from, at, 0, m.entity);
+  if (l.fraction >= 1) return true;
+  if (l.player >= 0) return l.player == m.enemy;
+  return l.mover >= 0 && l.mover == foe_entity(m.enemy);
+}
+
+// The running fire's steps a frame (frames 109 to 122).
+constexpr float kRunSteps[14] = {10, 4, 12, 11, 13, 18, 15, 14, 11, 8, 11, 12, 12, 17};
+
 }  // namespace
 
 bool gz_base_shoot(Q2Server& s, Q2Monster& m, const Attack& a, sh::Vec3f from) {
@@ -166,6 +202,11 @@ bool gz_base_think(Q2Server& s, Q2Monster& m) {
     }
     return true;
   }
+  // A soldier with spawn flag 8 stands blind (frames 146 to 175) until it has an enemy.
+  if (soldier(m) && m.enemy == -1 && (body(s, m).spawnflags & 8) != 0) {
+    m.pose.shown = 146 + static_cast<int>(s.frame_number % 30);
+    m.pose.shown_run = {146, 175};
+  }
   // A strafing burst slides 10 a frame to its side while it fires.
   if (m.strafe != 0 && m.busy_until > s.level_time && m.attack >= 2 &&
       s.level_time + 0.001 >= m.fire_at && s.level_time <= m.burst_until + 0.001) {
@@ -180,6 +221,65 @@ bool gz_base_pain(Q2Server& s, Q2Monster& m) {
   if (named(m, "monster_kamikaze")) return true;  // it feels none
   // The infantry and the gunner feel none in the air.
   return (named(m, "monster_infantry") || named(m, "monster_gunner")) && !m.on_ground;
+}
+
+const char* gz_base_pain_class(const Q2Server& s, const Q2Monster& m, const char* usual) {
+  return gz(s) && named(m, "monster_hover") ? "gz/monster_hover" : usual;
+}
+
+int gz_base_sight_run(Q2Server& s, Q2Monster& m, float dist) {
+  if (!gz(s)) return -1;
+  if (!soldier(m) || named(m, "monster_soldier_ss") || skill(s) < 1 || dist < kMelee) return 0;
+  return random01(s) < 0.25 ? 1 : 0;
+}
+
+bool gz_base_run_and_shoot(Q2Server& s, Q2Monster& m) {
+  if (!gz(s)) return false;
+  const int at = m.run_shoot;
+  if (!foe_alive(s, m.enemy)) {
+    m.run_shoot = -1;
+    return true;
+  }
+  Q2Entity& e = body(s, m);
+  m.pose.shown = 109 + at;
+  const sh::Vec3f foe = foe_at(s, m.enemy);
+  go_to(s, m, foe, kRunSteps[at] / float(kStep));
+  if (at == 2) {  // the shot, when he is within about 25 degrees of its facing
+    sh::Vec3f d = foe - e.origin;
+    if (sh::normalize(d) > 0 && sh::dot(d, forward_of(e.angles.y)) >= 0.9f)
+      shoot(s, m, kind(m).missile[0], 0);
+  }
+  if (at < 13) {
+    m.run_shoot = at + 1;
+    return true;
+  }
+  const bool again = foe_alive(s, m.enemy) &&
+                     range_to(e.origin, foe_at(s, m.enemy)) != Range::melee &&
+                     (skill(s) == 3 || random01(s) < 0.25 * double(skill(s)));
+  m.run_shoot = again ? 2 : -1;
+  return true;
+}
+
+int gz_base_pick(Q2Server& s, Q2Monster& m, int i, Range r) {
+  if (!gz(s) || i < 2) return i;
+  const Attack& a = attack_at(m, i);
+  if (soldier(m) && !named(m, "monster_soldier_ss") && !m.hold && r != Range::melee &&
+      random01(s) < 0.25 * double(skill(s))) {
+    m.run_shoot = 0;  // it runs and fires instead
+    return -1;
+  }
+  if (named(m, "monster_gunner") && a.fire == Fire::grenade && !lob_clear(s, m)) return 2;
+  if (a.fire == Fire::drain && !drain_reaches(s, m)) return -1;
+  return i;
+}
+
+bool gz_base_blocked(Q2Server& s, Q2Monster& m) {
+  if (!gz(s) || !named(m, "monster_parasite") || m.enemy < 0) return false;
+  if (s.level_time + 0.001 < m.busy_until) return false;
+  if (random01(s) >= 1.0 - (0.25 + 0.05 * double(skill(s)))) return false;
+  if (!drain_reaches(s, m) || !sees(s, m, m.enemy)) return false;
+  begin_attack(s, m, 2);
+  return true;
 }
 
 const GzLedge* gz_ledge(std::string_view classname) {

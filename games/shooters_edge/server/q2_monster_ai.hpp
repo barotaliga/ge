@@ -181,6 +181,22 @@ void gz_base_begin(Q2Server& s, Q2Monster& m, const Attack& a);
 bool gz_base_think(Q2Server& s, Q2Monster& m);
 // No pain (the kamikaze's never, the infantry's and gunner's in the air); true when none.
 bool gz_base_pain(Q2Server& s, Q2Monster& m);
+// The pain rule's name: the hover's own under the pack ("gz/monster_hover"), else `usual`.
+const char* gz_base_pain_class(const Q2Server& s, const Q2Monster& m, const char* usual);
+// A soldier's running fire at first sight under the pack (above easy, not within melee range,
+// a time in four, never the machinegun soldier): 1 it runs and fires, 0 not, −1 the base rule.
+int gz_base_sight_run(Q2Server& s, Q2Monster& m, float dist);
+// Ground Zero's running fire frame by frame (true when it took the frame): the run's own steps,
+// the shot on the third frame when he is within about 25 degrees of its facing, and round again
+// from there at the last at near range or farther (always on nightmare, else 0.25 a skill).
+bool gz_base_run_and_shoot(Q2Server& s, Q2Monster& m);
+// The ranged attack `i` chosen, checked under the pack: a blaster or shotgun soldier runs and
+// fires instead (0.25 a skill); the gunner's grenades only with a clear lob, else its chaingun;
+// the parasite's drain only within its reach. −1 holds the shot (or the running fire took it).
+int gz_base_pick(Q2Server& s, Q2Monster& m, int i, Range r);
+// A move blocked: the parasite drains its player instead, 0.75 − 0.05 a skill of the time,
+// when he is within its reach and in sight (true when it did).
+bool gz_base_blocked(Q2Server& s, Q2Monster& m);
 // For the shared monster AI the pack changes (q2_gz_monsters.cpp): each kind's ledge jump (the
 // drop and the climb it takes, the jump up's and down's speeds forward and up), its dodge (ducks,
 // side-steps, holds still for its attacks above easy) and its blind fire (the delay growing each

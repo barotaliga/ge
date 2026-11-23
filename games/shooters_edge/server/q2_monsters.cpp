@@ -334,6 +334,7 @@ void go_to(Q2Server& s, Q2Monster& m, sh::Vec3f goal, float speed) {
   const float len = std::min(speed * kStep, dist);
   if (step(s, m, way * len)) return;
   if (gz_ledge_jump(s, m)) return;  // Ground Zero's: down or up a ledge toward its enemy
+  if (gz_base_blocked(s, m)) return;  // Ground Zero's parasite drains instead
   // Blocked: a step to one side, then the other.
   const sh::Vec3f side = sh::angle_vectors({0, m.ideal_yaw, 0}).right;
   const float sign = random01(s) < 0.5 ? 1.0f : -1.0f;
@@ -360,11 +361,14 @@ void found(Q2Server& s, Q2Monster& m, int foe, bool saw) {
     const bool soldier_kind =
         kind(m).sight != nullptr && std::string_view(kind(m).sight) == "soldier/solsght1.wav";
     sound(s, m.entity, soldier_kind && random01(s) < 0.5 ? "soldier/solsrch1.wav" : kind(m).sight);
-    // A soldier 500 or more off, above the easiest skill: half the time it fires on the run.
-    if (soldier_kind && skill(s) >= 1 &&
-        sh::length(foe_at(s, foe) - s.entities[size_t(m.entity)].origin) >= kNear &&
-        random01(s) < 0.5)
+    // A soldier 500 or more off, above the easiest skill: half the time it fires on the run
+    // (Ground Zero's rule in q2_gz_base_monsters.cpp).
+    const float off = sh::length(foe_at(s, foe) - s.entities[size_t(m.entity)].origin);
+    if (const int gz = gz_base_sight_run(s, m, off); gz >= 0) {
+      if (gz == 1) m.run_shoot = 0;
+    } else if (soldier_kind && skill(s) >= 1 && off >= kNear && random01(s) < 0.5) {
       m.run_shoot = 0;
+    }
   }
 }
 
@@ -612,8 +616,8 @@ void choose(Q2Server& s, Q2Monster& m) {
       return;
     }
     if (has_missile) {  // no blow: the ranged attack, always
-      const int i = pick_ranged(s, m, dist);
-      if (dist >= attack_at(m, i).closest) begin_attack(s, m, i);
+      const int i = gz_base_pick(s, m, pick_ranged(s, m, dist), r);
+      if (i >= 0 && dist >= attack_at(m, i).closest) begin_attack(s, m, i);
       return;
     }
   }
@@ -641,7 +645,8 @@ void choose(Q2Server& s, Q2Monster& m) {
   m.attack_finished = s.level_time + 2 * random01(s);
   if (dist < attack_at(m, i).closest) return;            // too near for it: keeps closing
   if (gz_call_instead(s, m, r == Range::melee)) return;  // a medic commander's reinforcements
-  begin_attack(s, m, i);
+  const int gz = gz_base_pick(s, m, i, r);               // Ground Zero's checks before the shot
+  if (gz >= 0) begin_attack(s, m, gz);
 }
 
 // ---- Dodging (q2-monsters-full.md § Dodging and ducking) ----
@@ -791,6 +796,7 @@ void dying_shot(Q2Server& s, Q2Monster& m) {
 // facing him, fires at the fourth, and at the last, at skill 3 while he lives 500 or more off,
 // goes round again from the third; else it runs on as ever.
 void run_and_shoot(Q2Server& s, Q2Monster& m) {
+  if (gz_base_run_and_shoot(s, m)) return;  // Ground Zero's (q2_gz_base_monsters.cpp)
   const int at = m.run_shoot;
   if (!foe_alive(s, m.enemy)) {
     m.run_shoot = -1;
@@ -1610,9 +1616,9 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
   const bool waiting = s.level_time + 0.001 < m.pain_at + kPainEvery;
   if (named(m, "misc_actor") && actor_pain(s, m, attacker, waiting)) return true;
   if (monster_pain_known(pain_class(k))) {  // its pains as data (q2_monster_pain.cpp)
-    const PainChoice c =
-        monster_pain(pain_class(k), damage, skill(s), m.velocity.z, m.pose.frame, m.pose.span.first,
-                     m.pose.act == SqMonsterPose::Act::pain, waiting, s.rng);
+    const PainChoice c = monster_pain(gz_base_pain_class(s, m, pain_class(k)), damage, skill(s),
+                                      m.velocity.z, m.pose.frame, m.pose.span.first,
+                                      m.pose.act == SqMonsterPose::Act::pain, waiting, s.rng);
     if (c.spent) m.pain_at = s.level_time;
     if (c.sound != nullptr) sound(s, e, c.sound, c.everywhere ? 0 : 1);
     if (!c.run.none()) {  // the flinch cuts what it was doing

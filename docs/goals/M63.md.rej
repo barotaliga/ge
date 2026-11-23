@@ -1,0 +1,10 @@
+diff a/docs/goals/M63.md b/docs/goals/M63.md	(rejected hunks)
+@@ -70,6 +70,8 @@ rockets faster by skill, aimed at the feet or the eye, led and held when the lin
+ the hornet's volley bracketing a player's path; the soldiers' tighter spread on hard; the fliers'
+ strafing bursts; the kamikaze flyer; no pain in the air for the infantry and the gunner. Each
+ kind's ledge jump, dodge and blind fire are data for the shared AI the pack changes.
++Then the soldiers' running fire and blind stand, the gunner's clear lob, the parasite's reach
++and its drain when blocked, the hover's flinch by skill and the maiden's own model.
+ `tests/shooters_edge_q2_gz_base_monsters_test.cpp` holds them; `gz.ai` stays missing until the
+ shared AI lands.
+ 

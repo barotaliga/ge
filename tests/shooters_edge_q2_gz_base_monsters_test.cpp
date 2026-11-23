@@ -8,6 +8,7 @@
 // ge:keywords soldier spread ledge-jump
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_q2_gz_base_monsters_test.cpp
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -18,6 +19,7 @@
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monster_ai.hpp"
+#include "shooters_edge/server/q2_monster_pain.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -109,6 +111,12 @@ int find(const Hall& h, const char* classname) {
         !h.s().monsters[i].spare)
       return static_cast<int>(i);
   return -1;
+}
+
+int bolts(const Hall& h) {
+  int n = 0;
+  for (const sv::Q2Missile& m : h.s().missiles) n += m.live;
+  return n;
 }
 
 // The speed of the first rocket in flight (0 none).
@@ -238,4 +246,101 @@ TEST(the_shared_ai_reads_each_kinds_ledge_dodge_and_blind_fire) {
   const ai::GzBlind* b = ai::gz_blind_of("monster_tank");
   CHECK(b != nullptr && b->wait_lo == 3 && b->wait_hi == 5);
   CHECK(ai::gz_blind_of("monster_soldier") == nullptr);
+}
+
+TEST(the_maiden_wears_the_packs_model_and_the_hover_flinches_long_less_by_skill) {
+  auto h = open_hall({thing("monster_chick", "300 0 24", "180")});
+  run(*h, 2);
+  const int c = find(*h, "monster_chick");
+  CHECK(c >= 0);
+  CHECK(h->s().models[size_t(h->e(c).modelindex)] == "models/monsters/bitch2/tris.md2");
+  auto base = open_hall({thing("monster_chick", "300 0 24", "180")}, "1", sv::Q2Pack::base);
+  run(*base, 2);
+  const int b = find(*base, "monster_chick");
+  CHECK(base->s().models[size_t(base->e(b).modelindex)] == "models/monsters/bitch/tris.md2");
+  // The hover's heavy blow: the long flinch 0.45 − 0.1 a skill of the time, else the middle one.
+  auto v = open_hall({thing("monster_hover", "300 0 96", "180")});
+  run(*v, 2);
+  CHECK(std::string(ai::gz_base_pain_class(v->s(), v->m(find(*v, "monster_hover")), "x")) ==
+        "gz/monster_hover");
+  for (int k = 0; k < 3; k++) {
+    ge::core::Rng rng = ge::core::make_rng(uint32_t(7 + k));
+    int longs = 0, mids = 0;
+    for (int i = 0; i < 4000; i++) {
+      const sv::PainChoice p =
+          sv::monster_pain("gz/monster_hover", 30, k, 0, 0, 0, false, false, rng);
+      longs += p.run.first == 113;
+      mids += p.run.first == 141;
+    }
+    const float want = 0.45f - 0.1f * float(k);
+    CHECK_MSG(longs + mids == 4000, std::to_string(longs + mids));
+    CHECK_MSG(std::abs(float(longs) / 4000 - want) < 0.03f, std::to_string(longs));
+  }
+}
+
+TEST(the_gunner_lobs_only_with_a_clear_line_and_the_parasite_drains_only_within_reach) {
+  // Ana at -600: a gunner 60 off keeps to its chaingun, one 400 off may lob.
+  auto h = open_hall(
+      {thing("monster_gunner", "-540 0 24", "180"), thing("monster_parasite", "-200 0 24", "180")});
+  run(*h, 2);
+  const int g = find(*h, "monster_gunner");
+  CHECK(g >= 0 && ai::attack_at(h->m(g), 3).fire == ai::Fire::grenade);
+  h->m(g).enemy = 0;
+  CHECK(ai::gz_base_pick(h->s(), h->m(g), 3, ai::Range::near) == 2);
+  const int p = find(*h, "monster_parasite");
+  h->m(p).enemy = 0;
+  CHECK(ai::gz_base_pick(h->s(), h->m(p), 2, ai::Range::near) == -1);  // 400 off
+  auto f = open_hall({thing("monster_gunner", "-200 0 24", "180"),
+                      thing("monster_parasite", "-450 120 24", "180")});
+  run(*f, 2);
+  const int g2 = find(*f, "monster_gunner");
+  f->m(g2).enemy = 0;
+  CHECK(ai::gz_base_pick(f->s(), f->m(g2), 3, ai::Range::near) == 3);
+  const int p2 = find(*f, "monster_parasite");
+  f->m(p2).enemy = 0;
+  CHECK(ai::gz_base_pick(f->s(), f->m(p2), 2, ai::Range::near) == 2);  // 150 off
+  // Not under the pack: the pick stands.
+  auto b = open_hall({thing("monster_gunner", "-540 0 24", "180")}, "1", sv::Q2Pack::base);
+  run(*b, 2);
+  const int g3 = find(*b, "monster_gunner");
+  b->m(g3).enemy = 0;
+  CHECK(ai::gz_base_pick(b->s(), b->m(g3), 3, ai::Range::near) == 3);
+}
+
+TEST(soldiers_run_and_fire_a_time_in_four_and_a_blind_one_stands_till_it_has_an_enemy) {
+  auto h = open_hall({thing("monster_soldier_light", "0 0 24", "180"),
+                      thing("monster_soldier_ss", "100 0 24", "180")},
+                     "2");
+  run(*h, 2);
+  const int l = find(*h, "monster_soldier_light"), ss = find(*h, "monster_soldier_ss");
+  CHECK(l >= 0 && ss >= 0);
+  int runs = 0;
+  for (int i = 0; i < 2000; i++) {
+    runs += ai::gz_base_sight_run(h->s(), h->m(l), 600);
+    CHECK(ai::gz_base_sight_run(h->s(), h->m(ss), 600) == 0);
+  }
+  CHECK_MSG(runs > 420 && runs < 580, std::to_string(runs));
+  CHECK(ai::gz_base_sight_run(h->s(), h->m(l), 40) == 0);  // within melee range
+  // The running fire's shot on its third frame, at Ana ahead of it.
+  h->m(l).enemy = 0;
+  h->e(l).angles.y = 180;
+  h->m(l).run_shoot = 2;
+  const int before = bolts(*h);
+  CHECK(ai::gz_base_run_and_shoot(h->s(), h->m(l)));
+  CHECK(bolts(*h) == before + 1);
+  CHECK(h->m(l).run_shoot == 3);
+  // Facing away, no shot.
+  h->e(l).angles.y = 0;
+  h->m(l).run_shoot = 2;
+  CHECK(ai::gz_base_run_and_shoot(h->s(), h->m(l)));
+  CHECK(bolts(*h) == before + 1);
+  // Spawn flag 8: it stands blind, facing away from Ana.
+  Pairs blind = thing("monster_soldier", "600 0 24", "0");
+  blind.push_back({"spawnflags", "8"});
+  auto g = open_hall({blind});
+  run(*g, 5);
+  const int b = find(*g, "monster_soldier");
+  CHECK(g->m(b).enemy == -1);
+  CHECK_MSG(g->m(b).pose.frame >= 146 && g->m(b).pose.frame <= 175,
+            std::to_string(g->m(b).pose.frame));
 }
