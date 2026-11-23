@@ -289,7 +289,9 @@ void run(gl::Lab& lab) {
     lab.fail("the demo stands " + std::to_string(behind_after) +
                  " s off where it would be after the catch-up",
              "Check fly_demo_rate's catch-up against the time the dive held. Skill: map-design.");
-  if (!gif.empty()) lab.attach("fly.gif", gl::encode_gif_frames(gif, int(std::lround(200 / fps))));
+  if (!gif.empty())
+    lab.attach("fly.gif", gl::encode_gif_frames(gif, int(std::lround(200 / fps))),
+               gl::Det::measured);
   const auto curve = [&](const char* id, const char* title, const char* y_label,
                          const std::vector<double>& ys, const char* caption) {
     gl::LineChart c;

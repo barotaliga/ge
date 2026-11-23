@@ -91,6 +91,7 @@ struct PlayerNumbers {
   float attack_finished = 0, next_think = 0;
   int impulse = 0;
   float items = 0;   // the program's item bits
+  float items2 = 0;  // its second word (`items2`, RulesWorld::items2), sent above bit 23
   float view_z = 0;  // the eye above the origin
   // The view as the rules work it out (Quake II's: its bob, tilts and kicks), when `view_set`:
   // the eye's offset from the origin (units) and the angles added to the view (degrees).
@@ -150,6 +151,9 @@ struct RulesWorld {
   std::vector<WorldStatic> statics;
   int max_clients = kMaxClients;
   bool weapon_frames = false;  // the rules animate the held weapon (`weapon_frame` is live)
+  // The program defines `items2` (a mission pack's, an extended mod's): the items word a client
+  // is sent carries it from bit 23 up, in place of the runes from bit 28.
+  bool items2 = false;
   // A layout game's status bar: its program (the layout language a client runs every frame), the
   // pictures its stats name by index ([0] "": none) and the item names they name (the pickup's).
   std::string status_bar;
