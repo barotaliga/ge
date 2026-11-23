@@ -51,10 +51,12 @@ struct DemoTransport {
 };
 
 // What the words ask of the game: `tracked` hears a new `demo_track`, `highlights` lists the
-// demo's highlights (everyone's with `all`). Either may be empty.
+// demo's highlights (everyone's with `all`), `playing` says whether a demo plays (Quake II's
+// `seek` without one answers "Not playing a demo."). Any may be empty.
 struct DemoCalls {
   std::function<void(int track)> tracked;
   std::function<std::vector<std::string>(bool all)> highlights;
+  std::function<bool()> playing;
 };
 
 // The words and cvars over `t` (both must outlive `console`).

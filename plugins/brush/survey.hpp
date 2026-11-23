@@ -26,6 +26,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -42,6 +43,10 @@ Cell leaf_cell(const Map& map, const Leaf& leaf);
 // window's view of a liquid (a body burning, a player wading) asks this, never a leaf's raw code.
 Cell cell_at(const Map& map, const float p[3]);
 const char* cell_name(Cell c);
+// THE OPEN SPOTS: points `step` units apart across the world model's box (from its corner plus half
+// a step) that lie in an empty, water, slime or lava cell, at most `most`, x fastest, then y, then
+// z: where a player can be, to ask a question of every place (pruning place names).
+std::vector<std::array<float, 3>> open_spots(const Map& map, float step, size_t most = 400000);
 // `.` empty, `#` solid, `~` water, `%` slime, `!` lava, `^` sky.
 char cell_char(Cell c);
 

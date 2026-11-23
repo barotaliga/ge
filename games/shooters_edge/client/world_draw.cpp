@@ -10,9 +10,12 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <numbers>
 #include <sstream>
 #include <vector>
 
@@ -23,8 +26,10 @@
 #include "brush/app/draw_data.hpp"
 #include "brush/app/sky_box.hpp"
 #include "brush/light_probe.hpp"
+#include "brush/map.hpp"
 #include "brush/survey.hpp"
 #include "camera/pose.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "prof/zones.hpp"
@@ -332,8 +337,8 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   return g;
 }
 
-// THE MAP'S OWN SKY BOX: `r_skyname` (`chosen`), else the worldspawn's `sky` (or `_sky`, or
-// `skyname`), names six pictures
+// THE MAP'S OWN SKY BOX: the one `sky` typed for this map (classic/sky_typed.hpp, turned as typed),
+// else `r_skyname`, else the worldspawn's `sky` (or `_sky`, or `skyname`), names six pictures
 // (files.hpp's `sky_box_files`), read and built into the scene's box (brush/app/sky_box.hpp),
 // drawn where the pack's sky is drawn. A box with a picture missing or unreadable is not drawn:
 // the sky texture's layers are, with a status line saying why. A Quake II map's sky is the one its
@@ -341,8 +346,9 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
 // and `skyrotate`. A map in a sky group (`skygroup`, classic/content/map_groups.hpp) draws the box
 // named after its group in place of any other.
 void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba::Scene& scene,
-                  const std::string& chosen, std::string_view map) {
-  std::string name = chosen;
+                  const look::Picture& picture, std::string_view map) {
+  const bool typed = picture.sky_typed.for_map(map);
+  std::string name = typed ? picture.sky_typed.name : picture.sky_name;
   if (scene.map.family == ge::brush::Family::v38) {
     sv::Q2WireOptions sent;
     sv::q2_sky(scene.map, sent);
@@ -358,7 +364,11 @@ void read_sky_box(const SearchPath& files, std::span<const uint8_t> palette, ba:
     if (name.empty()) name = world.get("_sky");
     if (name.empty()) name = world.get("skyname");
   }
-  if (files.groups)
+  if (typed) {
+    std::copy(picture.sky_typed.axis.begin(), picture.sky_typed.axis.end(), scene.sky_axis);
+    scene.sky_rotate = picture.sky_typed.rotate;
+  }
+  if (files.groups && !typed)
     if (std::string group = ge::classic::content::group_of(files.groups->skies, map);
         !group.empty())
       name = std::move(group);
@@ -490,7 +500,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
             : "shooters_edge: " + lit_path + " was made for another build of " + map.name +
                   "; drawn with the map's own light");
   }
-  read_sky_box(files, map_palette, r->scene, picture.sky_name, map.name);
+  read_sky_box(files, map_palette, r->scene, picture, map.name);
   // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
   // adds its bounce under the live lights (look.cpp).
   if (picture.ce.rebake && !cache.empty()) {
@@ -685,6 +695,26 @@ void own_sky(WorldDraw& f, bool own) { f.own_sky = own; }
 
 void from_above(WorldDraw& f, bool on) { f.from_above = on; }
 
+double time_refresh(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFrame& fx,
+                    int frames, bool one_frame, int width, int height,
+                    const std::function<wgpu::TextureView()>& acquire,
+                    const std::function<void()>& present) {
+  ge::ui::DrawList none;
+  none.begin(width, height);
+  const double heading = view.heading;
+  const auto from = std::chrono::steady_clock::now();
+  wgpu::TextureView target;
+  for (int i = 0; i < frames; ++i) {
+    if (!one_frame || !target) target = acquire();
+    if (!target) return 0;
+    view.heading = heading + 2 * std::numbers::pi * i / frames;
+    draw_world(d, f, view, fx, nullptr, 0, none, target);
+    if (!one_frame) present();
+  }
+  if (one_frame) present();
+  return std::chrono::duration<double>(std::chrono::steady_clock::now() - from).count();
+}
+
 bool world_stale(const WorldDraw& f) {
   const look::Picture& a = f.made;
   const look::Picture& b = *f.picture;
@@ -709,6 +739,7 @@ ba::SkyPick dress_world_sky(const WorldDraw& f, gr::FrameView& view) {
 // was typed (or sent) since the world was made, else the map's own; its sky share the map's
 // `skyfog`, else r_skyfog. A new map is its own fog again.
 gr::FlatFog world_fog(const WorldDraw& f) {
+  if (!f.picture->q2fx.fog) return {};  // Quake II's gl_fog 0: none at all
   ge::brush::MapFog fog = f.fog;
   if (f.picture->fog_serial != f.made.fog_serial) ge::brush::parse_fog(f.picture->fog, &fog);
   return ba::map_flat_fog(fog, f.picture->sky_fog);
@@ -867,6 +898,19 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // where it was born, the blasts' and the flames' smoke the light where they are.
     f.lit_births.assign(fx.births.begin(), fx.births.end());
     f.lit_births.insert(f.lit_births.end(), f.burning.births.begin(), f.burning.births.end());
+    // Quake II's gl_partscale: each speck sized by its depth in front of the eye.
+    if (f.picture->q2fx.part_scale > 0) {
+      const double forward[3] = {std::sin(view.heading) * std::cos(view.pitch),
+                                 std::sin(view.pitch),
+                                 std::cos(view.heading) * std::cos(view.pitch)};
+      for (gr::Particle& q : f.lit_births) {
+        if (q.grow > 0) continue;  // a puff of smoke keeps its own
+        double depth = 0;
+        for (int k = 0; k < 3; ++k) depth += (q.p[k] - view.eye[k]) * forward[k];
+        q.size *= static_cast<float>(
+            ge::classic::q2_speck_scale(f.picture->q2fx, depth / ge::brush::kUnitM));
+      }
+    }
     for (gr::Particle& q : f.lit_births) {
       if (q.grow <= 0 || q.kelvin != 0) continue;
       const double at[3] = {q.p[0], q.p[1], q.p[2]};
@@ -889,6 +933,12 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       gr::emit_particles(f.particles, f.fire_births);
     }
     f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
+    // Quake II's gl_partshape and gl_partstyle (-1 and 0 in another game: the engine's own).
+    f.particles.settings.shape =
+        f.picture->q2fx.part_shape < 0
+            ? gr::ParticleShape::capsule
+            : static_cast<gr::ParticleShape>(f.picture->q2fx.part_shape + 1);
+    f.particles.settings.additive = f.picture->q2fx.additive_parts;
     gr::prepare_particles(d, f.particles, dt, view, f.w, f.h);
     gr::prepare_explosions(d, f.explosions, f.lit_puffs, view, f.w, f.h, f.lit_flames);
     f.beam_draws.clear();
@@ -899,6 +949,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       if (b.q2_trail)
         f.beam_looks[f.beam_draws.size()] =
             effects::q2_rail_trail_look(b.trail_m, b.trail_radius_m, b.trail_rgb, b.trail_fade_s);
+      // Quake II's gl_beamstyle 1: a laser or the rail's core a plain solid tube, no glow.
+      if ((b.laser || b.q2_trail) && f.picture->q2fx.round_beams)
+        effects::round_beam(f.beam_looks[f.beam_draws.size()]);
       const gr::BeamLook* look = b.laser || b.q2_trail ? &f.beam_looks[f.beam_draws.size()]
                                  : b.coil              ? &effects::rail_coil_look()
                                  : b.rail              ? &effects::rail_look()
@@ -956,6 +1009,14 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::set_post_warp(
       d, f.post[p],
       gr::arrival_warp(fx.arrival_s, fx_switches(*f.picture).arrival, fx.arrival_tint));
+  // Quake II's gl_waterwarp: under a liquid the whole view ripples, 0.25 % of the screen, five
+  // waves, a radian a second.
+  gr::PostRipple ripple;
+  if (f.picture->q2fx.water_warp && fx.screen.medium != effects::Medium::air) {
+    ripple.share = 0.0025;
+    ripple.phase = view.time_s;
+  }
+  gr::set_post_ripple(d, f.post[p], ripple);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
     // The engine's fire burns in place of the file's flash, and its arc across a lightning gun's

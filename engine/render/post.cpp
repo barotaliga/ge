@@ -9,6 +9,7 @@
 #include "render/sky.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <string>
 
@@ -34,6 +35,7 @@ struct LookBlock {
   float d[4];
   float e[4];
   float f[4];
+  float g[4];
 };
 
 }  // namespace
@@ -156,6 +158,7 @@ void set_post_look(gpu::Device& device, const Post& post, const PostLook& look) 
                         {20, 0.15f, 0, 0},
                         {0, 0, 0, 0},
                         {0, 0, 0, 0},
+                        {0, 0, 0, 0},
                         {0, 0, 0, 0}};
   // The lens's and the film's strengths and the focus; the blend is the game's (set_post_blend).
   device.queue.WriteBuffer(post.look, 0, &block, offsetof(LookBlock, d));
@@ -189,6 +192,13 @@ void set_post_warp(gpu::Device& device, const Post& post, const PostWarp& warp) 
   const float ef[8] = {f(warp.share, 1),   f(warp.reveal, 2),  f(warp.zoom, 1),    f(warp.flash, 1),
                        f(warp.tint[0], 1), f(warp.tint[1], 1), f(warp.tint[2], 1), 0};
   device.queue.WriteBuffer(post.look, offsetof(LookBlock, e), ef, sizeof ef);
+}
+
+void set_post_ripple(gpu::Device& device, const Post& post, const PostRipple& ripple) {
+  const float g[4] = {static_cast<float>(std::clamp(ripple.share, 0.0, 0.05)),
+                      static_cast<float>(std::max(ripple.waves, 0.0)),
+                      static_cast<float>(std::fmod(ripple.phase, 6.283185307179586)), 0};
+  device.queue.WriteBuffer(post.look, offsetof(LookBlock, g), g, sizeof g);
 }
 
 void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& dof) {

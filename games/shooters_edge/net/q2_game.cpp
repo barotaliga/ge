@@ -348,6 +348,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"logfile_flush", "con_logfile_flush"},
     {"logfile_name", "con_logfile_name"},
     {"logfile_prefix", "con_logfile_prefix"},
+    {"net_log_enable", "net_log"},
 };
 
 // A download switch from the rules (`sv_download...`): "0" off, anything else (or unset) on.
@@ -411,6 +412,7 @@ struct Game {
   std::vector<std::string> shows;
   std::string show_map, show_next;
   bool show_taken = false, show_new_game = false, cinematics = true;
+  bool drop_told = false;  // the stopped map's error handed to the core (drop_error)
   // What the console printed and was handed on (console_lines): the rules' lines told so far.
   const sv::RulesCommon* told_rules = nullptr;
   size_t told = 0;
@@ -1015,6 +1017,32 @@ void reopened(void* g, ge::net::Transport& port) {
 
 double frame_seconds(const void* g) { return static_cast<const Game*>(g)->rules->sv.set.mintic; }
 
+// A RECOVERABLE ERROR (ServerGame::drop_error): the rules stopped the map (a hosted library's
+// error call: "Game Error: <its text>"), told once a map.
+std::string drop_error(void* g) {
+  Game& game = *static_cast<Game*>(g);
+  const sv::RulesCommon& r = *game.rules;
+  if (!r.map_stopped) {
+    game.drop_told = false;
+    return {};
+  }
+  if (game.drop_told || (game.net && game.net->killed)) return {};
+  game.drop_told = true;
+  if (const sv::NativeQ2* nq = sv::native_q2_of(game.rules); nq != nullptr) {
+    const std::string e = sv::native_q2_error(*nq);
+    if (!e.empty()) return "Game Error: " + e;
+  }
+  return r.stop_reason;
+}
+
+// Every client told `text` and dropped; the server answers nothing but rcon until the next map.
+void crash(void* g, const std::string& text) {
+  Game& game = *static_cast<Game*>(g);
+  if (!game.net || game.net->killed) return;
+  q2_net_shutdown(*game.net, text, false);
+  game.net->killed = true;
+}
+
 void frame(void* g) {
   Game& game = *static_cast<Game*>(g);
   if (game.relay.spawned) return;  // no game while it relays
@@ -1419,6 +1447,8 @@ const gs::ServerGame& make() {
     s.player_view = player_view;
     s.console_lines = console_lines;
     s.console = console_line;
+    s.drop_error = drop_error;
+    s.crash = crash;
     s.quit = quit;
     s.sockets = sockets;
     s.maps = maps;

@@ -653,6 +653,20 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(!ge::classic::q2_no_blast_ball(fx, ge::classic::kQ2Grenade));
   CHECK(!ge::classic::q2_no_blast_specks(fx, ge::classic::kQ2Rocket));  // 4 is not in 24
   CHECK(ge::classic::q2_muzzle_age(fx, 0.02) == 0.01);  // twice as long: half as old
+  // The picture's switches, Quake II's defaults while it is loaded.
+  CHECK(fx.part_scale == 2 && fx.part_shape == 0 && !fx.additive_parts && !fx.round_beams);
+  CHECK(fx.draw_sky && fx.smooth_sky && fx.saturation == 1 && fx.anisotropy == 1 && fx.fog);
+  CHECK(!fx.water_warp && !fx.invert && (v.find("gl_drawsky")->flags & con::kArchive) == 0);
+  v.set("gl_partshape", "2", con::Source::local);
+  v.set("gl_partstyle", "1", con::Source::local);
+  v.set("gl_beamstyle", "1", con::Source::local);
+  v.set("gl_drawsky", "0", con::Source::local);
+  v.set("gl_saturation", "3", con::Source::local);  // held to 0..1
+  v.set("gl_anisotropy", "16", con::Source::local);
+  v.set("gl_waterwarp", "1", con::Source::local);
+  v.set("gl_fog", "0", con::Source::local);
+  CHECK(fx.part_shape == 2 && fx.additive_parts && fx.round_beams && !fx.draw_sky);
+  CHECK(fx.saturation == 1 && fx.anisotropy == 16 && fx.water_warp && !fx.fog);
   v.set("cl_beginmapcmd", "record", con::Source::local);
   v.set("cl_autopause", "0", con::Source::local);
   CHECK(w.game.q2.begin_cmd == "record" && !w.game.q2.autopause);
@@ -664,6 +678,8 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(w.picture.q2fx.footsteps == 1 && w.picture.q2fx.ambient == 1 && w.music.enabled);
   CHECK(!w.music.shuffle && w.music.menu_track == 0);
   CHECK(w.picture.q2fx.rail_type == 0 && w.picture.q2fx.core_colour == "red");
+  CHECK(w.picture.q2fx.part_scale == 0 && w.picture.q2fx.part_shape == -1);  // the engine's own
+  CHECK(w.picture.q2fx.draw_sky && w.picture.q2fx.fog && w.picture.q2fx.anisotropy == 0);
   CHECK(w.game.q2.begin_cmd == "record" && w.game.q2.autopause && w.game.q2.timescale == 1);
   CHECK(v.find("cl_beginmapcmd") != nullptr && v.find("sv_running") == nullptr);
   CHECK(v.clashes().empty());
@@ -683,12 +699,16 @@ TEST(q2s_logfile_keeps_what_the_console_prints) {
   cl::add_game_cvars(c, v, *q2, {});
   c.execute("logfile 2; logfile_prefix \"\"");
   c.print("kept");
-  CHECK(shown.size() == 1 && shown[0] == "kept");  // the console's own sink still sees it
+  const std::string opened =
+      "Logging console to " + (dir / "logs" / "console.log").generic_string();
+  // The console's own sink still sees it, after the log's opening.
+  CHECK(shown.size() == 2 && shown[0] == opened && shown[1] == "kept");
   c.execute("logfile 0");
   c.print("not kept");
+  CHECK(shown.size() == 4 && shown[2] == "Closing console log." && shown[3] == "not kept");
   std::ifstream in(dir / "logs" / "console.log");
   std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  CHECK(text == "kept\n");
+  CHECK_MSG(text == opened + "\nkept\nClosing console log.\n", text);
   std::filesystem::remove_all(dir);
 }
 

@@ -16,7 +16,7 @@
 // ge:keywords alt-enter alt_enter win_noborder win_notitle win_alwaysontop win_noresize
 // ge:keywords follow_window_cvars window_style borderless always-on-top vid_geometry
 // ge:keywords window_place_of window-size window-position geometry s_device s_devices
-// ge:keywords sound-device follow_sound_device al_device
+// ge:keywords sound-device follow_sound_device al_device s_enable no-sound
 // ge:skill platform console
 // ge:test tests/platform_window_cvars_test.cpp
 #pragma once
@@ -34,6 +34,7 @@ struct WindowCvars {
   bool fullscreen = false;  // the window follows it each frame
   int display = 0;          // read when the window goes fullscreen
   double volume = 0.7;
+  int sound = 1;       // s_enable: 0 no sound at all, 1 and 2 the sound on
   int auto_focus = 0;  // s_auto_focus
   // win_noborder, win_notitle (either drops the border and title bar), win_alwaysontop,
   // win_noresize: the window's style (`window_style`), followed each frame.
@@ -55,8 +56,8 @@ bool window_place_of(std::string_view text, WindowPlace& out);
 
 // The cvars over `w` (it must outlive `con`), and `vid_displays`.
 void add_window_cvars(console::Console& con, WindowCvars& w);
-// The loudness heard now: `volume`, or 0 while `s_auto_focus` silences a window that is minimised
-// (1 or 2) or has not the focus (2).
+// The loudness heard now: `volume`, or 0 while `s_enable` is 0 or `s_auto_focus` silences a
+// window that is minimised (1 or 2) or has not the focus (2).
 double heard_volume(const WindowCvars& w, bool focused, bool minimised);
 
 // The style the settings ask of the window.

@@ -8,6 +8,9 @@
 // ge:keywords cl_dlight_hacks cl_muzzlelight_time cl_muzzleflashes
 // ge:keywords sshot_format sshot_dir image_jpeg_quality_level gl_screenshot_format
 // ge:keywords gl_screenshot_quality gl_screenshot_template gl_screenshot_compression
+// ge:keywords gl_partscale gl_partstyle gl_partshape gl_beamstyle gl_drawsky gl_bilerp_skies
+// ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_bilerp_pics
+// ge:keywords gl_gamma_scale_pics
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -168,6 +171,82 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .max = 10000,
           .values = "500: the default; 0: no mark; 1..10000: that many milliseconds"},
          &x.hit_marker_ms);
+  // The picture's switches: none saved in the config, as the game keeps them.
+  v.bind({.name = "gl_partscale",
+          .fallback = "2",
+          .help = "How big the specks are; the far ones are drawn larger, so they still show.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 100,
+          .values = "2: the default; a number: that size, twice the default at 4"},
+         &x.part_scale);
+  v.bind({.name = "gl_partstyle",
+          .fallback = "0",
+          .help = "How the specks lie over what is behind them.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: laid over it (the default); 1: added to it, so they glow"},
+         &x.additive_parts);
+  v.bind({.name = "gl_partshape",
+          .fallback = "0",
+          .help = "The specks' shape.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "0: a soft round dot (the default); 1: a hard square; 2: a sharp round dot"},
+         &x.part_shape);
+  v.bind({.name = "gl_beamstyle",
+          .fallback = "0",
+          .help = "How the lasers and the railgun's beam are drawn.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: a soft glowing strip (the default); 1: a plain solid tube"},
+         &x.round_beams);
+  v.bind({.name = "gl_drawsky",
+          .fallback = "1",
+          .help = "Whether the sky is drawn.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: the sky (the default); 0: solid black"},
+         &x.draw_sky);
+  v.bind({.name = "gl_bilerp_skies",
+          .fallback = "1",
+          .help = "Whether the sky is smoothed.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: smoothed (the default); 0: sharp pixels"},
+         &x.smooth_sky);
+  v.bind({.name = "gl_saturation",
+          .fallback = "1",
+          .help = "How much colour the walls and floors keep.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 1,
+          .values = "1: as painted (the default); 0..1: that share of it; 0: grey"},
+         &x.saturation);
+  v.bind({.name = "gl_invert",
+          .fallback = "0",
+          .help = "Whether the walls and floors are drawn as a negative.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: as painted (the default); 1: their colours inverted"},
+         &x.invert);
+  v.bind(
+      {.name = "gl_anisotropy",
+       .fallback = "1",
+       .help = "How sharp the textures stay on surfaces seen at a slant, when they are smoothed.",
+       .kind = con::CvarKind::number,
+       .min = 1,
+       .max = 16,
+       .values = "1: off (the default); 2..16: that many samples, sharper"},
+      &x.anisotropy);
+  v.bind({.name = "gl_waterwarp",
+          .fallback = "0",
+          .help = "Whether the view ripples while you are under water, slime or lava.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: still (the default); 1: it ripples"},
+         &x.water_warp);
+  v.bind({.name = "gl_fog",
+          .fallback = "1",
+          .help = "Whether fog is drawn.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: the fog the map or the fog command sets (the default); 0: none at all"},
+         &x.fog);
 }
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
@@ -376,6 +455,19 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .min = -1,
          .max = 65535,
          .values = "-1: any free port (the default); 1..65535: that port"});
+  // Joining an IPv6 server (net/qw_remote.cpp's `own_v6`), the socket on `net_ip6`'s address.
+  v.add({.name = "net_enable_ipv6",
+         .fallback = "1",
+         .help = "Whether the client may join a server by an IPv6 address.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 2,
+         .values = "0: IPv4 only; 1: IPv6 too (the default); 2: the same"});
+  v.add({.name = "net_ip6",
+         .fallback = "",
+         .help = "The IPv6 address on this computer the client sends from when it joins by IPv6.",
+         .kind = con::CvarKind::text,
+         .values = "\"\": any of them (the default); ADDRESS: that one"});
   v.add({.name = "fs_autoexec",
          .fallback = "1",
          .help = "Whether autoexec.cfg runs again after config.cfg when another game is loaded.",
@@ -989,15 +1081,15 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
   }
   if (!v.log) v.log = std::make_shared<ConsoleLog>();
   v.log->mode = 0;  // Quake II's logfile and the rest; its file closed by the next line printed
-  v.log->flush = false;
+  v.log->flush = 0;
   if (game.id == "q2") add_console_log_cvars(c.cvars(), *v.log);
   if (!v.log_hooked && c.sink()) {
     v.log_hooked = true;
     c.set_sink([&c, log = v.log, before = c.sink()](std::string_view line) {
-      before(line);
-      if (log->mode > 0 || log->file)
+      if (log->mode > 0 || log->file->file != nullptr)  // its opening or closing shown first
         console_log_line(*log, c.search_path().empty() ? "." : c.search_path().front(), line,
-                         std::time(nullptr));
+                         std::time(nullptr), before);
+      before(line);
     });
   }
   GameBindings bound = b;

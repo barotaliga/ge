@@ -442,13 +442,35 @@ int wanted_port(const Remote& r) {
 bool open_own(Remote& r, int port, std::string& error) {
   r.own_port = port;
   r.port_note.clear();
+  // The address the socket is bound to: any of this machine's, or the one Quake II's `net_ip6`
+  // names for an IPv6 server.
+  gn::Address any = gn::ipv4(0, 0, 0, 0, 0);
+  if (r.own_v6) {
+    any = {};
+    any.family = gn::Family::ipv6;
+    const std::string ip = r.setting ? r.setting("net_ip6") : std::string();
+    if (gn::Address named; !ip.empty() && gn::parse_address("[" + ip + "]:0", named)) any = named;
+  }
   if (port > 0) {
-    if (gn::open_udp_transport(r.own, gn::ipv4(0, 0, 0, 0, static_cast<uint16_t>(port)), &error))
-      return true;
+    gn::Address at = any;
+    at.port = static_cast<uint16_t>(port);
+    if (gn::open_udp_transport(r.own, at, &error)) return true;
     r.port_note = "Couldn't open port " + std::to_string(port) +
                   " for the client; another program may be using it. Using any free port.";
   }
-  return gn::open_udp_transport(r.own, gn::ipv4(0, 0, 0, 0, 0), &error);
+  any.port = 0;
+  return gn::open_udp_transport(r.own, any, &error);
+}
+
+// "host", "host:port", "1.2.3.4", "[::1]:port", or a bare IPv6 address ("::1"), with the game's
+// port added where the text names none.
+std::string with_port(const std::string& text, uint16_t port) {
+  const std::string p = ":" + std::to_string(port);
+  if (!text.empty() && text[0] == '[')
+    return text.find("]:") == std::string::npos ? text + p : text;
+  const size_t colons = static_cast<size_t>(std::count(text.begin(), text.end(), ':'));
+  if (colons == 0) return text + p;
+  return colons == 1 ? text : "[" + text + "]" + p;
 }
 
 }  // namespace
@@ -460,14 +482,22 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   if (text.rfind("localhost", 0) == 0) text = "127.0.0.1" + text.substr(9);
   const bool q2 = r.q2_game && r.q2_game();
   const uint16_t port = q2 ? kPortQ2 : kPortServer;
-  if (text.find(':') == std::string::npos) text += ":" + std::to_string(port);
+  text = with_port(text, port);
   gn::Address to;
   if (std::string why; !gn::parse_address(text, to) && !gn::resolve_ipv4(text, port, to, &why)) {
     error = "'" + address + "' is not an address the client reads (" + why +
-            "). Give a host name or an IPv4 address with an optional port (connect "
-            "192.168.1.20, connect 192.168.1.20:27500, connect example.org:27500) or localhost.";
+            "). Give a host name or an IPv4 or IPv6 address with an optional port (connect "
+            "192.168.1.20, connect 192.168.1.20:27500, connect [2001:db8::7]:27500, connect "
+            "example.org:27500) or localhost.";
     return false;
   }
+  // Quake II's `net_enable_ipv6` 0 keeps the client on IPv4 (unset: allowed in every game).
+  const std::string v6 = r.setting ? r.setting("net_enable_ipv6") : std::string();
+  if (to.family == gn::Family::ipv6 && !v6.empty() && std::atoi(v6.c_str()) == 0) {
+    error = "IPv6 is turned off; set net_enable_ipv6 to 1 to join " + address + ".";
+    return false;
+  }
+  r.own_v6 = to.family == gn::Family::ipv6;
   if (!open_own(r, q2 ? wanted_port(r) : -1, error)) {
     error =
         "the client's socket did not open: " + error + ". Check that the computer is on a network.";
@@ -1171,6 +1201,13 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.q2_downloads.pics = kind("allow_download_pics", "1");
     cfg.q2_downloads.others = kind("allow_download_others", "0");
     cfg.q2_nodelta = cvar("cl_nodelta", "0") != "0";
+    cfg.q2_protocol = std::atoi(cvar("cl_protocol", "0").c_str());
+    cfg.q2_msglen = std::atoi(cvar("net_maxmsglen", "1390").c_str());
+    cfg.q2_chantype = std::atoi(cvar("net_chantype", "1").c_str());
+    cfg.q2_batch = cvar("cl_batchcmds", "1") != "0";
+    cfg.q2_packetdup = std::atoi(cvar("cl_packetdup", "1").c_str());
+    cfg.q2_maxpackets = std::atoi(cvar("cl_maxpackets", "30").c_str());
+    cfg.q2_instantpacket = cvar("cl_instantpacket", "1") != "0";
     // Quake II's downloads over HTTP (classic/content/web_downloads.hpp), registered while it is
     // the game.
     cfg.web.downloads = cvar("cl_http_downloads", "1") != "0";
@@ -1230,12 +1267,15 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
       "connect",
       "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in Quake II; "
       "port 26000 is a server of Quake's own protocol)",
-      [join](Con& c, const Args& a) {
+      [join, &r](Con& c, const Args& a) {
         if (a.size() < 2) {
           c.print("connect: name a server (connect 192.168.1.20)");
           return;
         }
-        if (a.size() > 2) c.print("Second argument to connect is ignored.");
+        if (a.size() > 2 && r.q2_game && r.q2_game())  // Quake II's protocol is a setting
+          c.print("The second argument to connect is ignored. Set the protocol with cl_protocol.");
+        else if (a.size() > 2)
+          c.print("Second argument to connect is ignored.");
         join(c, a[1]);
       });
   con.add_command(

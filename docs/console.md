@@ -399,7 +399,19 @@ Each row shows a cvar's value after `=`, an alias's body after `:` or a command'
 of the top name is drawn dim after the cursor, and Tab takes it: `/sv_dea` and Tab gives
 `/sv_deathmatch `, ready for `1`. Up and Down move through the list (the hint follows the
 selected row), Tab takes the selected one, and Enter on it fills in a cvar's name for its value
-or runs a command or an alias. A blank after the word ends the list.
+or runs a command or an alias. A blank after the word ends the list, unless the word is a setting
+of a few values.
+
+**A setting's few values.** A cvar that takes at most eight values (literal words in its values
+text, a whole-number range of an integer cvar spelled out, a boolean's 0 and 1; `value_choices` in
+`console/words.hpp`) lists them in its row, `r_look = modern  (classic, modern)`. Typed with a blank
+after it, `/r_look `, the list becomes its values in their own order, each with what it does and the
+one it has now marked `(now)`; the typed text narrows them, Tab takes one and Enter runs the line.
+
+**A game's spellings.** A game's own name for one of ours (a cvar synonym or a command synonym, §
+Layers) is listed too, with the setting's value and its few values, and says whose it is: `gl_look
+= modern  (classic, modern)  alias of r_look`. Our name says the game's: `r_look = modern  alias
+gl_look`.
 
 Enter submits the line:
 

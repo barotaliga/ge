@@ -138,6 +138,9 @@ struct ButtonSpot {
   float open_s =
       0;  // how long its doors stay open once fired (their shortest wait), s; 0: for good
   std::vector<int> way_doors;  // (`fields`) of `doors`, those that are a way once fired
+  // A shot trigger's inline model ("*N"): the rules keep no model on a trigger's edict, so the
+  // plan finds its entity text by this. Empty for a button or a wall.
+  std::string model;
 };
 
 // A floor over lava or slime a touch button slides away (floor_trap.hpp, `floortrap`): the button
@@ -334,6 +337,7 @@ struct FighterStats {
   int64_t outmatched = 0;         // commands spent turned from a fight it believed it loses
   int64_t sound_chases = 0;       // commands spent going at an enemy it only heard
   int64_t kept_off = 0;     // commands backing off a monster that bites (BotArsenal::keep_off)
+  int64_t ledge_kept = 0;   // a fight's keys given up for the route's at a ledge (`ledge_guard`)
   int64_t dodging = 0;      // commands spent stepping across an enemy's line (dodge.hpp)
   int64_t brink = 0;        // commands whose keys the brink changed (shooterbots/brink.hpp)
   int64_t dodge_turns = 0;  // and the times it turned the step back
@@ -674,6 +678,9 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
   // Its status bar at the last think (knowledge.hpp: a gain there is its own pickup).
   Stats bar;
   bool unlocking = false;  // on the way to the goal item's button
+  // A fight's own keys (the dodge, the press, the back-off) never walk him off a ledge: a
+  // campaign's leader, whose fall into a pit with no way out ends his map (`ledge_ahead`).
+  bool ledge_guard = false;
   bool swimming = false;   // in water no route leaves: following the swim field
   bool surfacing = false;  // short of air under open water: up for a breath (water.hpp)
   int8_t side_was = 0;     // the side key's sign last sent (footwork.hpp `fighter_keys`)

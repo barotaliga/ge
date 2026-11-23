@@ -106,11 +106,14 @@ bool run_ahead(gc::Q2State& s, uint32_t acked, const Q2ClientEnd& c, const gc::Q
                int* water_level = nullptr, float* view_height = nullptr) {
   const uint32_t newest = c.ch.outgoing_sequence;  // the next packet's: not yet sent
   if (newest - acked >= static_cast<uint32_t>(kSqSentRing)) return false;
+  // The moves made after the acknowledged packet's, sent or still waiting for the next packet.
+  const uint32_t first = c.made_at[acked & (kSqSentRing - 1)];
+  if (c.made - first >= static_cast<uint32_t>(kSqSentRing)) return false;
   replayed = 0;
-  for (uint32_t seq = acked + 1; seq != newest; seq++) {
+  for (uint32_t k = first; k != c.made; k++) {
     gc::Q2Move pm;
     pm.s = s;
-    pm.cmd = gc::q2_command(c.sent[seq & (kSqSentRing - 1)]);
+    pm.cmd = gc::q2_command(c.sent[k & (kSqSentRing - 1)]);
     gc::q2_feel(pm, feel);
     gc::q2_move(pm, world);
     s = pm.s;
@@ -158,6 +161,7 @@ gc::Q2Feel q2_feel_of(const client::Demo& d) {
   if (d.feel_told) return d.feel;
   gc::Q2Feel f;
   f.air_accelerate = d.state.air_accelerate;
+  f.land_pause = !d.strafe_hack;  // a later protocol's server data may say it takes no pause
   return f;
 }
 

@@ -159,6 +159,12 @@ printed meanwhile goes above the one being typed. Every printed line can be kept
 Quake II's dedicated server saves a single player's or co-op game (`save <dir>`, `autosave`,
 `load <dir>`, net/q2_game.cpp's `save_words`) where the window keeps it, `saves/<dir>.save`, and
 keeps each level's autosave as `save0`.
+Every dedicated server can write its traffic as text (`engine/net/packet_log.hpp`, `net_log`,
+`net_log_name`, `net_log_flush`; a transport's `log`, beside its capture and tap). A game's
+recoverable error (`ServerGame::drop_error`, Quake II's hosted library calling its error) drops
+every player with `Server crashed:` and leaves the server idle until the next map; with
+`com_fatal_error` the process ends with a failure instead, for its supervisor to start again.
+`fs_autoexec` 0 makes a mod switch change the folders alone.
 
 Quake II's downloads (`net/q2_net_server.cpp`, facts in `porting/shooters-edge/
 q2-downloads-facts.md`) make the asked name plain first (slashes, `.` and `..`), then offer each

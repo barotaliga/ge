@@ -89,7 +89,7 @@
 #include "play/window_output.hpp"
 #include "render/screenshot_copy.hpp"
 #include "shooters_edge/client/args.hpp"
-#include "shooters_edge/client/bot_view.hpp"
+#include "shooters_edge/client/bot_client.hpp"
 #include "shooters_edge/client/cinematic.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/controls.hpp"
@@ -125,6 +125,7 @@
 #include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/remix_bar.hpp"
 #include "shooters_edge/client/remix_pictures.hpp"
+#include "shooters_edge/client/render_words.hpp"
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/take_in.hpp"
@@ -147,12 +148,9 @@
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
 #include "shooters_edge/net/game_commands.hpp"
-#include "shooters_edge/net/qw_bot_team.hpp"
 #include "shooters_edge/net/qw_browse.hpp"
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
-#include "shooters_edge/net/qw_team_areas.hpp"
-#include "shooters_edge/net/qw_team_view.hpp"
 #include "shooters_edge/net/window_words.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -232,6 +230,10 @@ int run_main(int argc, char** argv) {
   cl::GpuWatch gpu_watch;  // `gpustats`: the GPU's dearest passes over the next frames
   cl::add_gpustats(console, gpu_watch);
   cl::add_view_from(console, view_from);
+  cl::RenderWords render_words;  // `sky` and `timerefresh` (client/render_words.hpp)
+  cl::add_render_words(console, render_words, picture.sky_typed, [&] {
+    return listen.server != nullptr && listen.map ? listen.map->name : std::string();
+  });
   console.cvars().set_layer(cl::kLayerEngine);
   shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::add_view_cvars(console.cvars(), view_settings);
@@ -386,12 +388,12 @@ int run_main(int argc, char** argv) {
                 "passed over");
   console.cvars().apply_latched();
 
-  // The game the install is (args.profile, found by its folders: client/game_folder.hpp).
   // Quake II's status bar, drawn from its rules' own program (q2_bar.hpp).
   cl::Q2Bar q2_bar{.files = &files,
                    .binds = &console.binds().table(ge::console::BindMode::game),
                    .screen = &q2_screen,
-                   .fx = &picture.q2fx};
+                   .fx = &picture.q2fx,
+                   .gamma = &picture.gamma};
   cl::add_q2_bar_commands(console, q2_bar);  // dumpstatusbar, dumplayout, aashot, aadump
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
@@ -770,9 +772,9 @@ int run_main(int argc, char** argv) {
   };
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
   cl::DemoFolder bench_folder;               // the demo's game folder (timedemo.hpp's demo_folder)
-  size_t bench_models = 0;         // the model list's length the demo's world was made with
-  cl::FxFrame bench_fx;            // the demo's entities, players and effects this frame
-  cl::FxState bench_fx_state;      // the demo's effects as they live (world_fx.hpp)
+  size_t bench_models = 0;  // the model list's length the demo's world was made with
+  cl::FxFrame bench_fx;     // the demo's entities, players and effects this frame
+  cl::FxState bench_fx_state = cl::fx_state_for(&places);  // the demo's effects
   cl::DemoFx bench_demo_fx;        // its temporary entities this level (demo_fx.hpp)
   ge::gpu::Target bench_off;       // the benchmark's frames that are not shown
   uint64_t bench_shown_ns = 0;     // when the benchmark last showed a frame
@@ -892,7 +894,7 @@ int run_main(int argc, char** argv) {
   shown.q2 = &q2_screen;  // Quake II's cl_adjustfov and cl_kickangles
   cl::DemoEyes demo_eyes{.gun_kick = &remote.gunkick, .view_kick = &q2_screen.kick_angles};
   ge::ui::Vec2 last_pointer;
-  cl::FxState fx_state;
+  cl::FxState fx_state = cl::fx_state_for(&places);  // loc_draw's markers among the effects
   cl::FxFrame fx;
   // The pack's palette for the classic effects' specks, read again when the game folder changes.
   // and the effects the game's files define (particles/*.fx, world_fx.hpp), read with it.
@@ -1003,7 +1005,7 @@ int run_main(int argc, char** argv) {
   // A new map's or a new server's: what was seen of the last one let go, the user info sent again.
   const auto forget_seen = [&] {
     shown = {};
-    fx_state = {};
+    fx_state = cl::fx_state_for(&places);
     const bool at_eye = in_hand.hand.at_eye;  // the loaded set's, not the level's
     in_hand = {};
     in_hand.hand.at_eye = at_eye;
@@ -1017,131 +1019,14 @@ int run_main(int argc, char** argv) {
     synth.bus_gain(0, static_cast<float>(heard()) / cl::kDemoVolume);
     heard_here.frame(listen, remix.heard_from(files), static_cast<float>(dt), remix.heard);
   };
-  // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
-  // server (net/qw_bot_team.hpp) and the window shows the team's world as its bots believe it
-  // (net/qw_team_view.hpp). The console drives them: a line no command names goes to every
-  // bot, `bot<N> <line>` to one (`bot1 skill expert`, `ready`, `status`).
+  // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): client/bot_client.hpp.
   if (args.bots > 0) {
-    const sn::BotTeamConfig bc = cl::bot_team_config(args);
-    sn::BotTeam bot_team;
-    if (!sn::bot_team_start(bot_team, bc, error)) {
-      out::error("shooters_edge: the bot client could not start its team (--bots=" +
-                 std::to_string(args.bots) + " --server=" + args.server + "): " + error +
-                 "; next: check the server answers (sebots --server=" + args.server +
-                 " --bots=1), then try again");
-      return 1;
-    }
-    console.set_unknown([&bot_team](const CArgs& a) {
-      sn::bot_team_command(bot_team, a.raw);
-      return true;
-    });
-    ge::platform::set_relative_mouse(*window, false);
-    // The map drawn from above (client/bot_view.hpp) once the team has loaded it; the flat
-    // picture (net/qw_team_view.hpp) until then, and for the recording.
-    sn::TeamView bot_flat;
-    sn::TeamAreas bot_areas;
-    cl::BotCam bot_cam;
-    cl::WorldDrawPtr bot_world;
-    std::string bot_world_map;
-    ge::ui::Image bot_image;
-    sn::TeamViewVideo bot_video;
-    if (!args.bots_view.empty() &&
-        !sn::team_view_video_open(bot_video, args.bots_view, w & ~1, h & ~1, 10, error)) {
-      out::error("shooters_edge: the team view's video " + args.bots_view + " did not open: " +
-                 error + "; next: pass --bots-view=<a .mp4 in a folder that exists>");
-      return 1;
-    }
-    const uint64_t bots_from = ge::platform::now_ns();
-    uint64_t bots_last = bots_from;
-    int64_t next_tick = 0;
-    double next_picture = 0;
-    bool shot_asked = false;
-    while (!quit) {
-      queue.clear();
-      ge::platform::poll_input(*window, input, *devices, queue);
-      if (input.quit) break;
-      const uint64_t now = ge::platform::now_ns();
-      const double dt = static_cast<double>(now - bots_last) * 1e-9;
-      const double t = static_cast<double>(now - bots_from) * 1e-9;
-      bots_last = now;
-      if (input.resized) {
-        w = input.width_px;
-        h = input.height_px;
-        surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), true);
-        cl::resize_world(*device, *title, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
-        if (bot_world)
-          cl::resize_world(*device, *bot_world, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
-      }
-      ge::input::update(held, queue);
-      ge::ui::feed_console(console, con_view, queue, con_keys);
-      console.run();
-      if (con_view.typing() != text_on) {
-        text_on = con_view.typing();
-        ge::platform::set_text_input(*window, text_on);
-      }
-      // The bots' ticks on the wall clock, 13 ms each; a stall drops ticks, never floods them.
-      const auto now_us = static_cast<int64_t>((now - bots_from) / 1000);
-      for (int k = 0; next_tick <= now_us && k < 8; k++, next_tick += 13000)
-        sn::bot_team_tick(bot_team, next_tick);
-      if (now_us - next_tick > 200000) next_tick = now_us;
-      for (; bot_team.log_read < bot_team.log.size(); bot_team.log_read++)
-        console.print(bot_team.log[bot_team.log_read]);
-      sn::team_areas_update(bot_areas, bot_team);
-      // The map's world, made once the team is on it (again on a new map).
-      if (bot_team.loaded && bot_world_map != bot_team.map && !bot_team.seats.empty()) {
-        bot_world = cl::create_world_draw(
-            *device, files, *bot_team.loaded, static_cast<uint32_t>(w), static_cast<uint32_t>(h),
-            surface.format(), picture, {}, error, {bot_team.seats[0]->c.models, {}, {}});
-        if (!bot_world)
-          out::error("shooters_edge: the bots' map " + bot_team.map + " did not draw: " + error +
-                     "; next: the flat team view stands in; check the packs under -basedir");
-        bot_world_map = bot_team.map;
-        bot_cam.fitted = false;
-      }
-      if (bot_video.open && t >= next_picture) {
-        next_picture += 0.1;
-        if (!sn::team_view_video_frame(bot_video, sn::team_view(bot_flat, bot_team, w & ~1, h & ~1),
-                                       error))
-          out::error(error);
-      }
-      overlay.begin(w, h);
-      ge::render::FrameView view = cl::title_view(t);
-      if (bot_world) {
-        cl::bot_cam_input(bot_cam, bot_team, input, !con_view.open(), dt, h, px_per_unit);
-        view = cl::bot_cam_view(bot_cam, bot_team, w, h, t);
-        cl::draw_bot_view(overlay, view, w, h, bot_team, bot_areas);
-      } else {
-        ge::lab::Picture pic = sn::team_view(bot_flat, bot_team, w, h);
-        bot_image.width = pic.width;
-        bot_image.height = pic.height;
-        bot_image.rgba = std::move(pic.rgba);
-        bot_image.revision++;
-        ge::ui::Box b;
-        b.rect = {0, 0, static_cast<float>(w), static_cast<float>(h)};
-        b.image = &bot_image;
-        b.uv = {0, 0, static_cast<float>(bot_image.width), static_cast<float>(bot_image.height)};
-        b.feather = 0;
-        overlay.box(b);
-      }
-      con_view.frame(dt);
-      shooters_edge::menu::draw_game_console(overlay, con_view, con_look, t);
-      const wgpu::TextureView target = acquire_frame();
-      if (!target) continue;
-      cl::draw_world(*device, bot_world ? *bot_world : *title, view, {}, nullptr, dt, overlay,
-                     target);
-      shot_copy.frame(*device, surface.frame_target(), shots, console);
-      present_frame();
-      // `--seconds=N`: a screenshot a second before the end, then quit (a run that leaves a
-      // picture behind).
-      if (args.seconds > 0 && t >= args.seconds - 1 && !shot_asked) {
-        shot_asked = true;
-        console.execute("screenshot");
-      }
-      if (args.seconds > 0 && t >= args.seconds) break;
-    }
-    if (!sn::team_view_video_close(bot_video, error)) out::error(error);
-    if (!sn::bot_team_stop(bot_team, error)) out::error(error);
-    return 0;
+    cl::BotClientRun bots{args,    *window,     *devices,  input,         queue,
+                          held,    console,     con_view,  con_keys,      text_on,
+                          *device, surface,     *title,    files,         picture,
+                          overlay, con_look,    shot_copy, shots,         w,
+                          h,       px_per_unit, quit,      acquire_frame, present_frame};
+    return cl::run_bot_client(bots);
   }
   size_t printed = 0, centred = 0;
   uint64_t last = first_ns;
@@ -1615,7 +1500,7 @@ int run_main(int argc, char** argv) {
         demo_world = true;
         demo_level_t = t;
         bench_models = ds.models.size();
-        bench_fx_state = {};  // a new level: what burned on the last one is gone
+        bench_fx_state = cl::fx_state_for(&places);  // a new level: nothing burning
         bench_demo_fx = {};
         if (drawn_remote)
           sn::remote_world(remote, &bench_map->spec.models, bench_map->spec.brushes.get());
@@ -1861,6 +1746,7 @@ int run_main(int argc, char** argv) {
       continue;  // the title from the next frame, not the last map from the new one's eyes
     }
     if (std::exchange(listen.restarted, false)) forget_seen();  // the lobby's match restarted
+    if (std::exchange(render_words.sky_asked, false)) load_listen_world(t);  // `sky`'s box
     if (listen.campaign.sellscreen) {  // the shareware episode's end: the help pages
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");
@@ -1960,6 +1846,11 @@ int run_main(int argc, char** argv) {
     shot_copy.frame(*device, surface.frame_target(), shots, console);
     present_frame();
     ++presented;
+    if (const int asked = std::exchange(render_words.refresh_asked, 0); asked > 0)
+      console.print(
+          cl::refresh_line(cl::time_refresh(*device, *world, view, fx, cl::kTimeRefreshFrames,
+                                            asked == 2, w, h, acquire_frame, present_frame),
+                           cl::kTimeRefreshFrames));
   }
   if (quit) {  // the player's f_exit first, run at once
     cl::team_event(console, "f_exit");

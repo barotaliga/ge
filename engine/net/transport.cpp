@@ -6,6 +6,7 @@
 // ge:test tests/net_node_test.cpp
 #include "net/transport.hpp"
 
+#include "net/packet_log.hpp"
 #include "net/tap.hpp"
 
 #include <cstring>
@@ -154,6 +155,8 @@ bool send_now(Transport& t, const Address& to, const uint8_t* data, size_t size,
   t.sent_bytes += size;
   if (t.capture) capture_datagram(*t.capture, now_us, t.local, to, data, size);
   if (t.tap) tap_datagram(*t.tap, now_us, t.local, to, data, size);
+  if (t.log)
+    packet_log_datagram(*t.log, now_us, t.kind == TransportKind::tcp, true, to, data, size);
   return true;
 }
 
@@ -247,6 +250,9 @@ int receive_one(Transport& t, uint8_t* buffer, size_t capacity, Address& from, i
     t.received_bytes += static_cast<uint64_t>(n);
   }
   if (n >= 0 && t.tap) tap_datagram(*t.tap, now_us, from, t.local, buffer, static_cast<size_t>(n));
+  if (n >= 0 && t.log)
+    packet_log_datagram(*t.log, now_us, t.kind == TransportKind::tcp, false, from, buffer,
+                        static_cast<size_t>(n));
   if (n >= 0 && t.capture) {
     capture_datagram(*t.capture, now_us, from, t.local, buffer, static_cast<size_t>(n));
   }

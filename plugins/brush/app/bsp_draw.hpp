@@ -162,6 +162,16 @@ struct Options {
   // gl_picmip: the map's textures drawn from this mip at the nearest (0 their own detail; each
   // step halves it), as a texture that many times smaller would be. Either mode.
   int picmip = 0;
+  // The most taps along a slanted surface's long axis when the textures are filtered (1 none: a
+  // pixel's footprint read at its long axis's mip; 16 the most). Either mode.
+  int anisotropy = 4;
+  // The solid faces' textures alone (never the liquids, the sky, the models or the light): how
+  // much of their colour shows (1 as painted, 0 grey by its luminance) and then inverted, a
+  // negative. Either mode.
+  double saturation = 1;
+  bool invert = false;
+  // The map's sky box read sharp, each texel a square (else smoothed). Either mode.
+  bool crisp_sky = false;
   // r_fullbright: every solid face drawn as its texture is painted, with no light or shade on it
   // (the lightmaps, the lights, the sun and the shadows all left out). Either mode.
   bool fullbright = false;
@@ -344,8 +354,11 @@ struct GpuBsp {
   // the faces as painted (Options::fullbright), zw unused.
   float detail[4];
   // The classic look's light: its scale (Options::classic_light), the light added to every luxel
-  // (Options::classic_lift), zw unused.
+  // (Options::classic_lift); z the filtered textures' most taps (Options::anisotropy), w 1 for
+  // the sky box sharp (Options::crisp_sky).
   float classic[4];
+  // The solid faces' textures: x their saturation, y 1 inverted (Options::saturation, invert).
+  float paint[4];
 };
 
 struct BspDraw {
