@@ -61,6 +61,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -75,6 +76,7 @@
 #include "brush/light_probe.hpp"
 #include "camera/subject.hpp"
 #include "classic/q2_fx_switches.hpp"
+#include "core/prng.hpp"
 #include "detail/decals.hpp"
 #include "particles/effect.hpp"
 #include "render/beam.hpp"
@@ -88,6 +90,7 @@
 #include "shooters_edge/app/monster_fx.hpp"
 #include "shooters_edge/app/muzzle.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
+#include "shooters_edge/client/chain.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/model_lerp.hpp"
 #include "shooters_edge/client/place_names.hpp"
@@ -163,6 +166,11 @@ struct HeldBeam {
   float laser_rgb[3] = {1, 0, 0};
   double seen = 0;
 };
+
+// A chain's links placed (client/chain.hpp): the links from `from` to `to` (map units) into `out`,
+// numbered down from `entity`.
+void place_chain(const sh::Vec3f& from, const sh::Vec3f& to, const Chain& c, ge::core::Rng& roll,
+                 int& entity, std::vector<Placed>& out);
 
 // A beam entity the rules show this frame (Quake II's beam render bit: a laser): from its origin
 // to its far end in map units, its width in units and four palette indices, low byte first.

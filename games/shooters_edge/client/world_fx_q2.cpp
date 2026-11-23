@@ -153,24 +153,11 @@ void q2_draw_model_fx(FxState& s, int effect_models, const PlayerState& me, int 
     sh::Vec3f from = c.from;
     if (me_entity > 0 && c.entity == me_entity)  // the player's own: from him as drawn
       from = {me.origin.x + c.offset.x, me.origin.y + c.offset.y, me.origin.z + c.offset.z};
-    const sh::Vec3f d = {c.to.x - from.x, c.to.y - from.y, c.to.z - from.z};
-    const double len = ge::core::hypot3(d.x, d.y, d.z);
-    const int n = q2_cable_segments(len);
-    if (n == 0) continue;
-    const float yaw = static_cast<float>(std::atan2(d.y, d.x) * 180 / ge::core::kPi);
-    const float pitch =
-        static_cast<float>(std::atan2(d.z, std::sqrt(d.x * d.x + d.y * d.y)) * 180 / ge::core::kPi);
-    for (int i = 0; i < n; ++i) {
-      Placed seg;
-      seg.entity = entity--;
-      seg.modelindex =
-          first + static_cast<int>(c.ctf ? Q2FxModel::ctf_segment : Q2FxModel::segment);
-      const auto k = static_cast<float>(q2_cable_segment(i, n, len));
-      seg.origin = {from.x + d.x * k, from.y + d.y * k, from.z + d.z * k};
-      seg.angles = {pitch, yaw, static_cast<float>(ge::core::range(roll, 0, 360))};
-      seg.no_shadow = true;
-      out.models.push_back(seg);
-    }
+    Chain chain;
+    chain.modelindex =
+        first + static_cast<int>(c.ctf ? Q2FxModel::ctf_segment : Q2FxModel::segment);
+    chain.fit = chain.no_shadow = true;
+    place_chain(from, c.to, chain, roll, entity, out.models);
   }
   // The BFG's lasers: a strip 4 units wide in their shade, a tenth of a second each.
   std::erase_if(s.q2_lasers, [&](const FxState::Q2Laser& z) { return t - z.born >= kQ2BfgLaserS; });

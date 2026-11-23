@@ -6,7 +6,7 @@
 //
 // ge:summary Test: Quake II's model effects by age and kind, cables, splash and laser sparks
 // ge:keywords test q2 temp-entity model-effect explosion-model explosion-skins smoke flash
-// ge:keywords blaster-flare cable segment splash laser-sparks grapple cl_smooth_explosions
+// ge:keywords blaster-flare cable segment chain chain_share splash laser-sparks grapple cl_smooth_explosions
 // ge:skill shooter render testing
 #include "shooters_edge/client/q2_model_fx.hpp"
 
@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "shooters_edge/client/chain.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/q2_temp_fx.hpp"
 
@@ -109,13 +110,15 @@ TEST(a_hit_leaves_its_smoke_and_flash_a_bolt_its_flare_turned_to_the_face) {
   CHECK(cl::q2_model_fx_of(10, 0, at, wall, 2, {}, m) == 0);
 }
 
-TEST(a_cable_is_a_segment_every_30_units_the_last_30_short_of_its_end) {
-  CHECK(cl::q2_cable_segments(0) == 0);
-  CHECK(cl::q2_cable_segments(10) == 1 && cl::q2_cable_segment(0, 1, 10) == 0);
-  CHECK(cl::q2_cable_segments(100) == 4);
-  CHECK(cl::q2_cable_segment(0, 4, 100) == 0);
-  CHECK(near(cl::q2_cable_segment(3, 4, 100) * 100, 70));
-  CHECK(near(cl::q2_cable_segment(1, 4, 100) * 100, 70.0 / 3));
+TEST(a_chain_is_a_link_every_30_units_fitted_or_loose) {
+  // Quake II's cables fitted: the last link 30 short of the end; Quake's bolts loose.
+  CHECK(cl::chain_links(0) == 0);
+  CHECK(cl::chain_links(10) == 1 && cl::chain_share(0, 1, 10, true) == 0);
+  CHECK(cl::chain_links(100) == 4);
+  CHECK(cl::chain_share(0, 4, 100, true) == 0);
+  CHECK(near(cl::chain_share(3, 4, 100, true) * 100, 70));
+  CHECK(near(cl::chain_share(1, 4, 100, true) * 100, 70.0 / 3));
+  CHECK(near(cl::chain_share(3, 4, 100, false) * 100, 90));
 }
 
 TEST(a_splash_of_sparks_crackles_and_a_lasers_sparks_keep_their_colour) {

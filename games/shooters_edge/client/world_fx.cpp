@@ -87,10 +87,9 @@ std::array<double, 3> toward(const double p[3], const ge::camera::Vec3& eye) {
   return {d[0] / len, d[1] / len, d[2] / len};
 }
 
-// The classic explosion sprite's frames and their rate, and the classic bolt's segment, units.
+// The classic explosion sprite's frames and their rate.
 constexpr int kSpriteFrames = 6;
 constexpr double kSpriteFps = 10;
-constexpr double kBoltSegment = 30;
 // The placed effects' entity numbers (below every static's): the sprites', then the bolts'.
 constexpr int kSpriteEntities = -(1 << 20), kBoltEntities = -(1 << 21);
 constexpr int kPlaceEntities = -(1 << 22);  // loc_draw's markers
@@ -1647,7 +1646,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   if (!l.beams.empty())
     laser_beams(l.beams, s.seed++, s.palette, t, out.beams);  // seed: lasers only
   ge::core::Rng roll = ge::core::make_rng(s.seed++);          // the classic bolt's segments' roll
-  int segment = 0;
+  int segment = kBoltEntities;
   for (HeldBeam& b : s.beams) {
     if (b.q2_trail) {  // Quake II's cl_railtrail_type beam: drawn in either look
       out.beams.push_back(b);
@@ -1677,24 +1676,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       out.lights.insert(out.lights.end(), ll, ll + n);
       continue;
     }
-    // The classic bolt: its model every kBoltSegment units from the root to the end, each turned
-    // to a fresh roll every frame (the bolt's crackle).
-    const sh::Vec3f d = {b.map_to.x - b.map_from.x, b.map_to.y - b.map_from.y,
-                         b.map_to.z - b.map_from.z};
-    const double len = ge::core::hypot3(d.x, d.y, d.z);
-    if (len < 1) continue;
-    const float yaw = static_cast<float>(std::atan2(d.y, d.x) * 180 / ge::core::kPi);
-    const float pitch =
-        static_cast<float>(std::atan2(d.z, std::sqrt(d.x * d.x + d.y * d.y)) * 180 / ge::core::kPi);
-    for (int i = 0; i * kBoltSegment < len; ++i) {
-      Placed seg;
-      seg.entity = kBoltEntities - segment++;
-      seg.modelindex = b.listed >= 0 ? b.listed : l.effect_models + static_cast<int>(b.model);
-      const float k = static_cast<float>(i * kBoltSegment / len);
-      seg.origin = {b.map_from.x + d.x * k, b.map_from.y + d.y * k, b.map_from.z + d.z * k};
-      seg.angles = {pitch, yaw, static_cast<float>(ge::core::range(roll, 0, 360))};
-      out.models.push_back(seg);
-    }
+    // The classic bolt: its model every 30 units from the root while short of the end, each
+    // turned to a fresh roll every frame (the bolt's crackle).
+    Chain c;
+    c.modelindex = b.listed >= 0 ? b.listed : l.effect_models + static_cast<int>(b.model);
+    place_chain(b.map_from, b.map_to, c, roll, segment, out.models);
   }
   burns_of(s, t, out.burns);
   // The marks still glowing light the room round them (render/marks.hpp's mark_glows).
@@ -1821,6 +1807,27 @@ void fire_held(HeldFire& f, const view::HandFrame& hand, bool on, double now_s, 
     }
     out.beams.push_back(across);
     return;
+  }
+}
+
+void place_chain(const sh::Vec3f& from, const sh::Vec3f& to, const Chain& c, ge::core::Rng& roll,
+                 int& entity, std::vector<Placed>& out) {
+  const sh::Vec3f d = {to.x - from.x, to.y - from.y, to.z - from.z};
+  const double len = ge::core::hypot3(d.x, d.y, d.z);
+  if (len < (c.fit ? 1e-6 : 1)) return;
+  const float yaw = static_cast<float>(std::atan2(d.y, d.x) * 180 / ge::core::kPi);
+  const float pitch =
+      static_cast<float>(std::atan2(d.z, std::sqrt(d.x * d.x + d.y * d.y)) * 180 / ge::core::kPi);
+  const int n = chain_links(len);
+  for (int i = 0; i < n; ++i) {
+    Placed seg;
+    seg.entity = entity--;
+    seg.modelindex = c.modelindex;
+    const auto k = static_cast<float>(chain_share(i, n, len, c.fit));
+    seg.origin = {from.x + d.x * k, from.y + d.y * k, from.z + d.z * k};
+    seg.angles = {pitch, yaw, static_cast<float>(ge::core::range(roll, 0, 360))};
+    seg.no_shadow = c.no_shadow;
+    out.push_back(seg);
   }
 }
 

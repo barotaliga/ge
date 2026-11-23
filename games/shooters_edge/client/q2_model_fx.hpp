@@ -23,16 +23,16 @@
 //   frames and a green light of 350.
 // - THE PLAYER'S SAY: `cl_disable_explosions` leaves a rocket's or a grenade's ball out but keeps
 //   its light; `cl_dlight_hacks` 2 starts those lights at 200.
-// - CABLES (`q2_cable_segment`): a parasite's drain, a medic's line and the grapple are a segment
-//   model laid every 30 units from the start, the last one 30 units short of the end, each at a
-//   new roll every frame; one lives 0.2 s unless sent again.
+// - CABLES: a parasite's drain, a medic's line and the grapple are a segment model laid as a
+//   fitted chain (world_fx.hpp's `place_chain`, the one Quake's bolts are laid by loose), each
+//   link at a new roll every frame; one lives 0.2 s unless sent again.
 //
 // Facts: porting/shooters-edge/q2-client-te.md.
 //
 // ge:summary Quake II's model effects: explosions' balls, puffs, flashes, flares and cables by age
 // ge:keywords q2 temp-entity model-effect explosion-model r_explode smoke-puff flash-model
 // ge:keywords blaster-flare bfg-explosion s_bfg2 cable segment parasite medic grapple
-// ge:keywords q2_model_fx q2_model_fx_of q2_model_fx_pose q2_cable_segment explosion-skins
+// ge:keywords q2_model_fx q2_model_fx_of q2_model_fx_pose explosion-skins
 // ge:keywords cl_smooth_explosions cl_disable_explosions cl_dlight_hacks
 // ge:skill shooter render
 // ge:test tests/shooters_edge_q2_model_fx_test.cpp
@@ -232,18 +232,6 @@ constexpr uint8_t q2_blast_kind(int code) {
                                    : 0;
 }
 
-// A cable's segments from `from` to `to` (map units): how many (the length over 30, rounded up; 0
-// for none), and where segment `i` starts as a share of the way: the first at the start, the rest
-// spread so the last starts 30 units short of the end (one alone at the start).
-inline constexpr double kQ2CableSegment = 30;
-inline int q2_cable_segments(double length) {
-  if (length <= 0) return 0;
-  return static_cast<int>(std::ceil(length / kQ2CableSegment));
-}
-inline double q2_cable_segment(int i, int count, double length) {
-  if (count < 2 || length <= 0) return 0;
-  return (length - kQ2CableSegment) * i / (count - 1) / length;
-}
 // A cable lives this long unless sent again.
 inline constexpr double kQ2CableS = 0.2;
 // The BFG's laser lives this long; its colour one of palette 0xd0..0xd3.
