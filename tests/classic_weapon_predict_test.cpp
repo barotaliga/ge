@@ -214,3 +214,14 @@ TEST(the_sound_table) {
   CHECK(cl::weapon_sound_channel(cl::WeaponSound::lightning_start) == 0);
   CHECK(cl::weapon_view_model(cl::kItSuperNailgun) == std::string_view("progs/v_nail2.mdl"));
 }
+
+TEST(the_nailgun_s_nails_leave_its_barrels_in_turn_the_super_nailgun_s_the_middle) {
+  cl::WeaponState s = holding(cl::kItNailgun);
+  const cl::WeaponWorld w{kAll, ""};
+  const Run r = run(s, 50, 10, 50, w);
+  CHECK(r.events.size() == 5);
+  for (size_t i = 0; i < r.events.size(); i++) CHECK(r.events[i].side == (i % 2 == 0 ? 1 : -1));
+  cl::WeaponState sn = holding(cl::kItSuperNailgun);
+  const Run rs = run(sn, 25, 10, 25, w);
+  for (const cl::WeaponEvent& e : rs.events) CHECK(e.side == 0);
+}

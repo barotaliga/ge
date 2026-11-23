@@ -28,7 +28,8 @@ void hand_sound(Q2Server& s, int slot, const char* sample, int channel, int atte
   ev.to = 0xffffffffu;
   ev.ent = slot + 1;
   ev.level = channel;
-  ev.origin = {p.move.origin[0] / 8.0f, p.move.origin[1] / 8.0f, p.move.origin[2] / 8.0f};
+  ev.origin = {float(p.move.origin[0]) / 8.0f, float(p.move.origin[1]) / 8.0f,
+               float(p.move.origin[2]) / 8.0f};
   ev.values[0] = 255;
   ev.values[1] = float(attenuation);
   ev.text = sample;

@@ -97,8 +97,12 @@ struct Particle {
   // a fleck over a fire swirls and zig-zags instead of rising on a line; 0: the still air or the
   // wind alone.
   float swirl = 0;
+  // m/s²: AN ACCELERATION OF ITS OWN on top of gravity's share (world axes), steady for its life:
+  // a speck pulled back toward where it was thrown from, or pushed up.
+  float accel[3] = {0.0f, 0.0f, 0.0f};
+  float spare = 0;  // the slot's 16-byte rounding, unused
 };
-static_assert(sizeof(Particle) == 96, "match particles.wgsl's Particle");
+static_assert(sizeof(Particle) == 112, "match particles.wgsl's Particle");
 inline constexpr float kFloorRest = 0.35f;   // m/s: slower than this down, it lies still
 inline constexpr float kFloorSlide = 0.55f;  // its way along the floor kept at a hop
 // A thrown thing hops twice at most, a third of them three times (`max_hops`, by the particle's own

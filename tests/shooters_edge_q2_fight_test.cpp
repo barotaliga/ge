@@ -111,10 +111,10 @@ void run(Arena& a, int ticks, uint8_t buttons = 0, float pitch = 0, uint8_t impu
 }
 
 void place(Arena& a, int i, float x) {
-  int16_t* o = a.p(i).move.origin;
+  int32_t* o = a.p(i).move.origin;
   o[0] = static_cast<int16_t>(x * 8);
   o[1] = 0;
-  for (int16_t& v : a.p(i).move.velocity) v = 0;
+  for (int32_t& v : a.p(i).move.velocity) v = 0;
 }
 
 // Both landed, Ana at x −300 looking down the hall at Ben at x `ben`.
@@ -228,7 +228,7 @@ bool shown_aside(void* ctx, int shooter, int target, sh::Vec3f& at, sh::Vec3f& m
                  sh::Vec3f& maxs) {
   const auto& s = *static_cast<const sv::Q2Server*>(ctx);
   if (shooter != 0 || target != 1) return false;
-  const int16_t* o = s.players[1].move.origin;
+  const int32_t* o = s.players[1].move.origin;
   at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f + 200, float(o[2]) * 0.125f};
   mins = s.players[1].mins;
   maxs = s.players[1].maxs;
@@ -239,7 +239,7 @@ bool shown_crouched(void* ctx, int shooter, int target, sh::Vec3f& at, sh::Vec3f
                     sh::Vec3f& maxs) {
   const auto& s = *static_cast<const sv::Q2Server*>(ctx);
   if (shooter != 0 || target != 1) return false;
-  const int16_t* o = s.players[1].move.origin;
+  const int32_t* o = s.players[1].move.origin;
   at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
   mins = s.players[1].mins;
   maxs = s.players[1].maxs;
@@ -712,7 +712,7 @@ TEST(the_powerup_drop_settings_leave_each_with_its_time) {
     for (int k = 0; k < sv::kQ2Drops; k++) {
       const sv::Q2Drop& d = a->s().drops[k];
       if (!d.live) continue;
-      int16_t* o = ana.move.origin;
+      int32_t* o = ana.move.origin;
       o[0] = static_cast<int16_t>(d.origin.x * 8);
       o[1] = static_cast<int16_t>(d.origin.y * 8);
       run(*a, 2);
@@ -756,7 +756,7 @@ TEST(a_death_drops_the_weapon_and_the_quad_and_a_big_blow_gibs) {
   CHECK(w.origin.y < d.origin.y);
   // Ana walks onto them: the quad is used at once with the time it had left.
   for (int k : {weapon, quad}) {
-    int16_t* o = a->p(0).move.origin;
+    int32_t* o = a->p(0).move.origin;
     o[0] = static_cast<int16_t>(a->s().drops[k].origin.x * 8);
     o[1] = static_cast<int16_t>(a->s().drops[k].origin.y * 8);
     run(*a, 2);
@@ -1173,6 +1173,22 @@ TEST(entering_and_leaving_are_said_to_everyone) {
     g->r.connect(0, "Ana", false, false);
     CHECK(said_to_all(g->s(), "Ana entered the game\n") == (most > 1));
   }
+}
+
+// A new map says each player entered once: at its load, not again when his client begins on it.
+TEST(a_new_map_says_each_player_entered_once) {
+  auto a = arena("1");
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = hall();
+  std::string error;
+  a->s().out.events.clear();
+  CHECK_MSG(a->r.start(map, error), error);
+  a->r.connect(0, "Ana", false, false);  // his client's `begin` on the new map
+  int told = 0;
+  for (const sv::NetEvent& e : a->s().out.events)
+    told += e.kind == sv::EventKind::print && e.text == "Ana entered the game\n";
+  CHECK_MSG(told == 1, "said " + std::to_string(told) + " times");
 }
 
 TEST(a_blow_reports_its_points_to_the_attacker_once_a_frame_and_not_his_own) {

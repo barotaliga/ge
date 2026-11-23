@@ -73,7 +73,7 @@ sh::Vec3f parse_vec(const std::string& s) {
   return v;
 }
 
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
 
@@ -1173,7 +1173,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     if (q2_same_name(s.map_name, "fact2") && e.classname == "target_spawner" &&
         e.origin.x == -1504 && e.origin.y == 512 && e.origin.z == 72)
       e.origin.z = 64;
-    e.item = sq_item(e.classname);
+    e.item = sq_item(e.classname, s.opt.pack);
     if (e.item >= 0) e.team = b.get_any_case("team");
     inhibited.push_back(left_out(s, e.spawnflags) ? 1 : 0);
     e.gone = inhibited.back() != 0 || dm_left_out(s, e.item);
@@ -1251,8 +1251,12 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   }
   if (s.loading && !q2_load_end(s, error)) return false;  // the save's players in their bodies
   fill_rows(s);
+  s.entered_told = 0;
   for (int i = 0; i < sh::kMaxClients; i++)  // every player entered again on the new map
-    if (s.clients[i].active) announce_entry(s, i);
+    if (s.clients[i].active) {
+      announce_entry(s, i);
+      s.entered_told |= 1u << i;
+    }
   return true;
 }
 
@@ -1314,7 +1318,8 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   if (c.active && c.spectator == spectator && c.bot == bot && s.map != nullptr) {
     set_info(c.userinfo, "name", name);
     fill_rows(s);
-    announce_entry(s, slot);
+    if ((s.entered_told & (1u << slot)) == 0) announce_entry(s, slot);  // said at the load
+    s.entered_told &= ~(1u << slot);
     return;
   }
   c = ClientInfo{};

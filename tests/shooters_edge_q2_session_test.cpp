@@ -107,6 +107,13 @@ TEST(the_state_cvars_follow_the_game_and_refuse_the_player) {
   CHECK(r.value("sv_running") == "0" && r.value("sv_paused") == "0");
 }
 
+TEST(cl_maxpackets_is_its_spelling_of_the_packets_a_second) {
+  Rig r;
+  CHECK(r.c.cvars().find("cl_c2spps")->value == "30");  // its default, a same row
+  r.c.execute("cl_maxpackets 60");
+  CHECK(r.c.cvars().find("cl_c2spps")->value == "60");
+}
+
 TEST(cl_autopause_is_on_by_default) {
   Rig r;
   CHECK(r.s.autopause);

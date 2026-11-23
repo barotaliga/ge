@@ -217,7 +217,7 @@ struct Player {
       ge::classic::Q2State& st = sq->players[0].move;
       st.origin[0] = int16_t(best_at.x * 8), st.origin[1] = int16_t(best_at.y * 8);
       st.origin[2] = int16_t(best_at.z * 8);
-      for (int16_t& v : st.velocity) v = 0;
+      for (int32_t& v : st.velocity) v = 0;
     } else {
       sh::Edict& me = l.server->sv.edicts[1];
       me.origin = best_at;

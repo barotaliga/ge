@@ -590,6 +590,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
             " is not followed by the player's state: the recording is damaged";
     return false;
   }
+  d.q2_read[kPlayerInfo]++;
   const size_t slot = static_cast<size_t>(number) & 15;
   const size_t base_slot = static_cast<size_t>(delta) & 15;
   const bool have_base = delta > 0 && d.views[base_slot].frame == delta;
@@ -605,6 +606,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
         "the frame" + at_byte(m) + " is not followed by its entity list: the recording is damaged";
     return false;
   }
+  d.q2_read[kPacketEntities]++;
   Frame to;
   std::vector<std::pair<int, int>> events;
   if (!packet_entities(d, m, have_base ? &d.ring[base_slot] : nullptr, to, events, error))
@@ -640,6 +642,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
                   static_cast<float>(v.gun_offset[2]) * 0.25f};
   s.fov = static_cast<float>(v.fov);
   s.rdflags = v.rdflags;
+  s.teleport_bit = ext_of(s.protocol) > 0 ? (v.rdflags & 16) != 0 : (v.pm_flags & 128) != 0;
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;
@@ -785,7 +788,10 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       if (!m.bad) s.effects.push_back(std::move(burst));
       break;
     }
-    case 22:  // a boss's teleport: Quake II's own burst, as our own game draws it
+    case 22:  // a boss teleporting out: its swirl (its sound is q2_temp_sound's)
+      point(DemoEffectKind::named);
+      e.name = "sq_boss_teleport";
+      break;
     case 48:  // Quake II's teleport burst (the base game sends none; a mod may)
       point(DemoEffectKind::named);
       e.name = "sq_teleport";
@@ -987,6 +993,7 @@ bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
     const size_t at = m.at;
     m.int23 = ext_of(s.protocol) >= 2;  // set again after a server data
     const int id = m.u8();
+    d.q2_read[id]++;
     switch (id) {
       case kMuzzleFlash: {  // a player entering (9), leaving (10) or respawned (11): its burst
         const int n = m.i16(), value = m.u8(), flash = value & 127;
@@ -1035,6 +1042,10 @@ bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         DemoPrint p;
         p.level = m.u8();
         p.text = m.str();
+        if (ext_of(s.protocol) > 0 && p.level >= 4) {  // the extended levels 4 and 5: centred
+          s.centre = std::move(p.text);
+          break;
+        }
         s.prints.push_back(std::move(p));
         break;
       }
@@ -1099,8 +1110,8 @@ bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
           o.slot = m.u8();
           o.msec = m.u8();
           o.state.type = static_cast<ge::classic::Q2Type>(std::min(m.u8(), 4));
-          for (int16_t& v : o.state.origin) v = static_cast<int16_t>(m.i16());
-          for (int16_t& v : o.state.velocity) v = static_cast<int16_t>(m.i16());
+          for (int32_t& v : o.state.origin) v = m.i16();
+          for (int32_t& v : o.state.velocity) v = m.i16();
           o.state.flags = static_cast<uint8_t>(m.u8());
           o.state.time = static_cast<uint8_t>(m.u8());
           o.state.gravity = static_cast<int16_t>(m.i16());

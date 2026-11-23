@@ -51,6 +51,7 @@ void eddy(const Particle& p, float out[3]) {
 
 void step_particle(Particle& p, float dt, const float air[3]) {
   p.v[1] -= static_cast<float>(kGravity) * p.fall * dt;
+  for (int k = 0; k < 3; ++k) p.v[k] += p.accel[k] * dt;
   const float keep = std::exp(-p.drag * dt);
   float swirl[3];
   eddy(p, swirl);

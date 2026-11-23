@@ -15,7 +15,8 @@
 // THE FLAGS (each a cvar, server.hpp): --name --description --ip --port --maxclients --map --bots
 // --seed --password --visibility --motd --admin; where the settings are read: --root --base --mod
 // --cfg --explain; and how the process runs: --for --status --realtime --offline --log --replay
-// --record --commands --help.
+// --record --commands --manual --help (`--manual=PATH`: every setting, command and flag written
+// for the reference manual, console/manual.hpp, then quit).
 //
 // THE CONSOLE AT RUN TIME: with `--commands=PATH` the server runs each line added to that file
 // (a launcher's way in: spawn.hpp's hosted_command), a few times a second. `mod <dirs>` there
@@ -73,8 +74,13 @@ bool server_switch_mods(console::Console& console, ServerCfg& cfg, const ServerC
 
 // The flags' help, for `game`.
 std::string server_help(const ServerGame& game);
+// The flags as the reference manual lists them (console/manual.hpp).
+std::vector<console::FlagDoc> server_flag_docs(const ServerGame& game);
 
 // The whole process: 0 done, 1 refused (a flag, a cfg, a socket), 2 a replay that left its log.
-int server_main(int argc, char** argv, const ServerGame& game);
+// `manual`: what `--manual` writes about the program (its id and name, the game it serves and the
+// pass, the flags its own main takes before these); empty, the binary and the game's title.
+int server_main(int argc, char** argv, const ServerGame& game,
+                const console::ManualInfo& manual = {});
 
 }  // namespace ge::server
