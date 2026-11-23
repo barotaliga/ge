@@ -157,12 +157,6 @@ std::vector<std::string> list_demos(const GameAdapter& self, const SearchPath& f
 
 bool find_demo(const GameAdapter& self, const SearchPath& files, const std::string& name,
                std::vector<uint8_t>& out, std::string& found, std::string& error) {
-  std::error_code ec;
-  // A game with a demo folder takes `/<name>` as the game's folder's top, not the disk's root
-  // (Quake II's `demo /x`), unless a file of that path is on the disk.
-  if (!self.game->demo_folder.empty() && name.size() > 1 && name[0] == '/' &&
-      !std::filesystem::exists(name, ec))
-    return client::find_demo(files, name.substr(1), self.game->demo_extensions, out, found, error);
   if (client::find_demo(files, name, self.game->demo_extensions, out, found, error)) return true;
   // A game that keeps its recordings in a folder of their own finds a bare name there too.
   if (self.game->demo_folder.empty() || name.find('/') != std::string::npos) return false;

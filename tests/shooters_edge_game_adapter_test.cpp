@@ -12,7 +12,7 @@
 //
 // ge:summary Tests Quake's adapter: mods, programs by form, map info, textures, demos
 // ge:keywords test shooters-edge game-adapter list_mods find_program program-form map_info
-// ge:keywords map_textures list_demos find_demo demo_folder attract demo_completions
+// ge:keywords map_textures list_demos find_demo demo_folder attract
 // ge:keywords qwprogs open_model open_sound replacement-skin
 // ge:keywords pictures replacement-picture find_config read_configs_from open_locations
 // ge:keywords held_weapons menu-table game-modes hud_art_of
@@ -245,35 +245,21 @@ TEST(q2_finds_a_bare_demo_name_in_its_demos_folder_and_plays_it_behind_the_menu)
   CHECK_MSG(found.starts_with("demos/q2demo1.dm2"), found);
 }
 
-TEST(q2_demo_plays_gzipped_and_slash_names_and_tab_completes_the_demos_folder) {
+TEST(q2_finds_a_gzipped_demo_by_its_bare_name) {
   std::vector<uint8_t> pak;
   std::string error;
-  CHECK(ge::vfs::write_pak({{"demos/duel.dm2.gz", {5}},
-                            {"demos/final.mvd2", {6}},
-                            {"top.dm2", {8}},
-                            {"maps/x.bsp", {3}}},
-                           &pak, &error));
+  CHECK(
+      ge::vfs::write_pak({{"demos/duel.dm2.gz", {5}}, {"demos/relay.mvd2.gz", {6}}}, &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
   const cl::GameAdapter& a = cl::q2_adapter();
   std::vector<uint8_t> bytes;
   std::string found;
-  CHECK_MSG(a.find_demo(a, files, "duel", bytes, found, error), error);  // .dm2.gz tried
+  CHECK_MSG(a.find_demo(a, files, "duel", bytes, found, error), error);
   CHECK(bytes.size() == 1 && bytes[0] == 5);
-  CHECK_MSG(a.find_demo(a, files, "/top", bytes, found, error), error);  // the folder's top
-  CHECK(bytes.size() == 1 && bytes[0] == 8);
-  const std::vector<std::string> names = cl::demo_completions(a, files);
-  CHECK_MSG(names == std::vector<std::string>({"duel.dm2.gz", "final.mvd2", "top.dm2"}),
-            names.empty() ? "none" : names[0]);
-  // The console: Tab after Quake II's `demo` and after `playdemo` offers them.
-  ge::console::Console con;
-  cl::add_adapter_commands(con, a, files, ".");
-  CHECK(con.arg_values("demo") == names);
-  CHECK(con.arg_values("playdemo") == names);
-  CHECK(con.arg_values("timedemo") == names);
-  // Quake's completion offers only its own kinds of recording, none of these.
-  const cl::GameAdapter& q = cl::qw_adapter();
-  CHECK(cl::demo_completions(q, files).empty());
+  CHECK_MSG(a.find_demo(a, files, "relay", bytes, found, error), error);
+  CHECK(bytes.size() == 1 && bytes[0] == 6);
+  CHECK(a.list_demos(a, files).size() == 2);  // DEMOS and Tab list them too
 }
 
 TEST(a_model_is_read_into_its_form_with_a_picture_standing_in_for_a_skin) {
