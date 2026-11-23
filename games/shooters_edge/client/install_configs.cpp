@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_install_configs_test.cpp
 #include "shooters_edge/client/install_configs.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
@@ -14,6 +15,7 @@
 #include <system_error>
 
 #include "console/cfg.hpp"
+#include "console/lex.hpp"
 #include "shooters_edge/client/load_order.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "vfs/search.hpp"
@@ -217,6 +219,56 @@ void split_plus(const std::vector<std::string>& plus, std::vector<std::string>& 
   flush();
 }
 
+// The text of `name` in the packs of the game folder `folder` (the winner first); false when none
+// holds it.
+bool folder_pack_text(const fs::path& root, std::string_view folder, const LoadOrder& order,
+                      std::string_view name, std::string& text, std::string& from) {
+  const fs::path dir = entry_named(root, folder);
+  if (dir.empty()) return false;
+  const std::vector<std::string> archives =
+      ge::vfs::game_archives(root.string(), dir.filename().string(), order.layout);
+  for (const std::string& pack : archives | std::views::reverse) {
+    std::vector<uint8_t> bytes;
+    if (!ge::vfs::read_from_pack(pack, name, &bytes, nullptr)) continue;
+    text.assign(bytes.begin(), bytes.end());
+    from = pack + "/" + std::string(name);
+    return true;
+  }
+  return false;
+}
+
+// A command as words in lower case, so two files' copies of one line match across spacing.
+std::string command_key(std::string_view command) {
+  std::string key;
+  for (const std::string& w : con::tokenize(command)) key += (key.empty() ? "" : " ") + lower(w);
+  return key;
+}
+
+// What a mod's own default.cfg, inside its packs, adds to the base game's (Quake's order, where
+// the base's copy in its packs is the game's own and does not run): the mod's lines the base's
+// file lacks (a mission pack's keys for its new weapons, its aliases), run over the window's own
+// layout, which stands. Nothing when the folder played is the base or the mod's packs hold none.
+void run_mod_default_additions(con::Console& c, const fs::path& root, const std::string& game,
+                               const ge::classicenhance::Profile& content, const LoadOrder& order,
+                               ConfigsRun& out) {
+  const std::vector<std::string_view> folders = game_folders(game, content);
+  if (folders.size() < 2) return;
+  std::string mod_text, mod_from, base_text, base_from;
+  if (!folder_pack_text(root, folders.front(), order, con::kDefaultFile, mod_text, mod_from))
+    return;
+  folder_pack_text(root, folders.back(), order, con::kDefaultFile, base_text, base_from);
+  std::vector<std::string> base_keys;
+  for (const con::Line& line : con::split_commands(base_text))
+    base_keys.push_back(command_key(line.text));
+  std::string added;
+  for (const con::Line& line : con::split_commands(mod_text))
+    if (std::ranges::find(base_keys, command_key(line.text)) == base_keys.end())
+      added += line.text + "\n";
+  if (added.empty()) return;
+  run_text(c, added, mod_from);
+  out.files.push_back(mod_from);
+}
+
 // The game's default.cfg: from its packs where its order reads it there (keeping the console's
 // keys, the move keys and the window's settings over its `unbindall`), else on the search path.
 void run_defaults(con::Console& c, const fs::path& root, const std::string& game,
@@ -234,6 +286,7 @@ void run_defaults(con::Console& c, const fs::path& root, const std::string& game
     out.files.push_back(from);
   } else {
     run_named(c, con::kDefaultFile, out);
+    if (!order.defaults_in_packs) run_mod_default_additions(c, root, game, content, order, out);
   }
 }
 
@@ -371,6 +424,40 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
   }
   counting(false);
   return out;
+}
+
+std::string mod_startdemos(const std::string& basedir, const std::string& game,
+                           const ge::classicenhance::Profile& content, std::string_view fallback) {
+  const std::vector<std::string_view> folders = game_folders(game, content);
+  if (folders.size() < 2)
+    return std::string(fallback);  // the base folder: the game's own list stands
+  const fs::path root = basedir.empty() ? fs::path(".") : fs::path(basedir);
+  const fs::path dir = entry_named(root, folders.front());
+  if (dir.empty()) return std::string(fallback);
+  constexpr std::string_view kStartFile = "quake.rc";
+  std::string text;
+  const std::vector<std::string> archives =
+      ge::vfs::game_archives(root.string(), dir.filename().string(), load_order_of(content).layout);
+  for (const std::string& pack : archives | std::views::reverse) {  // the winner first
+    std::vector<uint8_t> bytes;
+    if (!ge::vfs::read_from_pack(pack, kStartFile, &bytes, nullptr)) continue;
+    text.assign(bytes.begin(), bytes.end());
+    break;
+  }
+  if (text.empty()) {
+    const fs::path loose = entry_named(dir, kStartFile);
+    if (loose.empty()) return std::string(fallback);
+    std::ifstream f(loose, std::ios::binary);
+    text.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+  }
+  std::string list;
+  for (const con::Line& line : con::split_commands(text)) {
+    const std::vector<std::string> words = con::tokenize(line.text);
+    if (words.size() < 2 || lower(words.front()) != "startdemos") continue;
+    list.clear();  // the last one wins, as it would run last
+    for (size_t i = 1; i < words.size(); ++i) list += (i > 1 ? " " : "") + words[i];
+  }
+  return list.empty() ? std::string(fallback) : list;
 }
 
 }  // namespace shooters_edge::client

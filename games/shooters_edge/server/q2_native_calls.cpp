@@ -568,6 +568,14 @@ uint32_t brush_model(const NativeHost& h, const NativeEntityHead* e) {
   return n > 0 && size_t(n) < h.model_count() ? uint32_t(n) : 0;
 }
 
+// With the extensions: a player or a projectile the game flagged is passed through unless the
+// mask asks for the player's or the projectile's contents bit.
+bool clips_flagged(int32_t svflags, int mask) {
+  if ((svflags & native::kSvfProjectile) != 0 && (mask & native::kContentsProjectile) == 0)
+    return false;
+  return (svflags & native::kSvfPlayer) == 0 || (mask & native::kContentsPlayer) != 0;
+}
+
 NativeTrace c_trace(const float* start, const float* mins_in, const float* maxs_in,
                     const float* end, NativeEntityHead* pass, int mask) {
   NativeHost& h = *g_host;
@@ -589,6 +597,7 @@ NativeTrace c_trace(const float* start, const float* mins_in, const float* maxs_
     if (pass != nullptr && (e->owner == pass || pass->owner == e)) continue;
     const bool dead = (e->svflags & native::kSvfDeadMonster) != 0;
     if (dead && (mask & kContentsDeadMonster) == 0) continue;
+    if (h.ext > 0 && !clips_flagged(e->svflags, mask)) continue;
     NativeTrace t{};
     if (e->solid == native::kSolidBsp) {
       const uint32_t model = brush_model(h, e);
