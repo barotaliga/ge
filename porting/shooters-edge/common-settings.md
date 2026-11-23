@@ -20,7 +20,7 @@ is added to the table first, then lifted.
 
 Statuses: **one setting** every game's spelling reaches one setting of ours already; **lifted** made
 one by this work, its batch named; **to lift** one thing on two settings, or one game's
-alone in ours, with its batch (B2 to B6 below); **kept apart** two settings on purpose: another
+alone in ours, with its batch (B2 to B5 below); **kept apart** two settings on purpose: another
 meaning, unit, value set or the opposite direction (the note says which); **sound thread** the
 sound settings, which the OpenAL thread lifts with its own work; **neither has it** a debug knob
 neither client takes.
@@ -31,13 +31,13 @@ neither client takes.
 | --- | --- | --- | --- |
 | one setting | 84 | 53 | 137 |
 | lifted | 11 | 1 | 12 |
-| to lift | 14 | 0 | 14 |
+| to lift | 12 | 0 | 12 |
 | sound thread | 2 | 1 | 3 |
-| kept apart | 16 | 0 | 16 |
+| kept apart | 18 | 0 | 18 |
 | neither has it | 8 | 0 | 8 |
 | **common to Quake and Quake II** | **135** | **55** | **190** |
 
-**Left to lift: 14.**
+**Left to lift: 12.**
 
 ## The batches
 
@@ -53,7 +53,8 @@ neither client takes.
 - **B4, the screen:** the graphs, the 2D switch, the server browser's sort and ping rate (with the
   menus thread).
 - **B5, the server's names:** `cheats`, the recording's size, the port (with the Quake II server thread).
-- **B6, values one game lacks:** the outlines and square specks, drawn for the game that lacks them.
+- **B6 dropped (Niclas, 2026-11-23):** the outlines and square specks are other clients' visuals,
+  which are never ported: visuals come from classic enhance. Both rows are kept apart.
 
 ## Every name the games share
 
@@ -212,8 +213,8 @@ neither client takes.
 | setting | `cl_packetdup` |  | `cl_c2sdupe` | `cl_packetdup` | shell | to lift B3 | each move sent again: Quake II's cl_packetdup (in the next packet), QuakeWorld's cl_c2sdupe (the packet twice) |
 | setting | `cl_shownet` | `cl_shownet` | `cl_shownet` | `cl_shownet` | classic | to lift B3 | Quake II's alone in ours; Quake's too (each message's size) |
 | setting | `gender` |  | `gender` | `gender` | classic | to lift B3 | Quake II's user info alone in ours; QuakeWorld's modern client sends it too |
-| setting | `gl_outline` |  | `gl_outline` | `gl_celshading` | classic | to lift B6 | outlines: Quake II's gl_celshading a width, QuakeWorld 0..3 models and world; Quake's needs the outline drawn |
-| setting | `gl_partshape` |  | `gl_squareparticles` | `gl_partshape` | classic | to lift B6 | square specks: Quake II 0..2 a shape, QuakeWorld's 0/1 its 1 |
+| setting | `gl_outline` |  | `gl_outline` | `gl_celshading` | classic | kept apart | outlines: Quake II's gl_celshading a width, QuakeWorld 0..3 models and world; another client's visual, not lifted: visuals come from classic enhance |
+| setting | `gl_partshape` |  | `gl_squareparticles` | `gl_partshape` | classic | kept apart | square specks: Quake II 0..2 a shape, QuakeWorld's 0/1 its 1; another client's visual, not lifted: visuals come from classic enhance |
 | setting | `r_graphheight` | `r_graphheight` | `r_graphheight` | `graphheight` | classic | to lift B4 | Quake II's graphheight alone in ours; Quake's r_graphheight its spelling |
 | setting | `r_timegraph` | `r_timegraph` | `r_timegraph` | `timegraph` | classic | to lift B4 | Quake II's timegraph alone in ours; Quake's r_timegraph its spelling |
 | setting | `sb_infospersec` |  | `sb_infospersec` | `ui_pingrate` | shell | to lift B4 | server browser pings a second: Quake II's ui_pingrate (0 from rate) on its own field |
