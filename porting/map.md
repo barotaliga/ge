@@ -122,6 +122,7 @@ the row when the file moves.
 | `plugins/classic/protocol/channel.cpp` | `porting/shooters-edge/protocol.md` (clean room) | the net channel, reliable bit, qport, rate, clear time, dupe (§ The net channel) |
 | `plugins/classic/protocol/info.cpp` | `porting/shooters-edge/protocol.md` (clean room) | info strings, star keys, names (§ User info) |
 | `plugins/classic/protocol/wire.cpp` | `porting/shooters-edge/protocol.md` (clean room), `vectors/quantize.txt` | coords angles angle16 fields CRC-16 (§ Quantization) |
+| `plugins/classic/rulesets.cpp` | `porting/shooters-edge/rulesets.md` (clean room) | the QuakeWorld rulesets' locks and match refusals, `*rsn`, the `f_ruleset` question, answer and 20 s pace (Part A) |
 | `plugins/helicopter/heli.cpp` | `game5/engine/game/heli.ts`, `heli-rotor.ts` | stepHeli crashHeli heliDown heliWithin freshHeli thrustMost inducedFlow |
 | `plugins/helicopter/heli.hpp` | `game5/engine/game/heli-state.ts`, `heli.ts` | HeliState HeliControls heliQuat discQuat heliPoint heliMass |
 | `plugins/helicopter/pilot.cpp` | `game5/engine/game/heli-pilot.ts` | pilotControls pilotInput |

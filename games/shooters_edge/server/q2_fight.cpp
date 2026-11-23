@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -110,10 +111,10 @@ int skill(const Q2Server& s) {
   return std::clamp(static_cast<int>(s.cvars.find("skill")->number), 0, 3);
 }
 
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
-void pack(int16_t out[3], sh::Vec3f v) {
+void pack(int32_t out[3], sh::Vec3f v) {
   const float in[3] = {v.x, v.y, v.z};
   for (int i = 0; i < 3; i++)
     out[i] = static_cast<int16_t>(std::clamp(num::to_int32(double(in[i]) * 8), -32768, 32767));
@@ -189,44 +190,6 @@ void muzzle_flash(Q2Server& s, int slot, sh::Vec3f origin, int value) {
   ev.values[0] = static_cast<float>(value);
   ev.text = "q2_flash";
   event(s, std::move(ev));
-}
-
-// The flash value a shot of weapon `w` sends (`shots` the chain gun's bullets this frame); -1 for
-// a weapon with none (the hand grenade).
-int flash_value(int w, int shots) {
-  switch (static_cast<SqWeapon>(w)) {
-    case SqWeapon::blaster:
-      return 0;
-    case SqWeapon::machinegun:
-      return 1;
-    case SqWeapon::shotgun:
-      return 2;
-    case SqWeapon::chaingun:
-      return 3 + std::clamp(shots, 1, 3) - 1;
-    case SqWeapon::railgun:
-      return 6;
-    case SqWeapon::rocket_launcher:
-      return 7;
-    case SqWeapon::grenade_launcher:
-      return 8;
-    case SqWeapon::bfg:
-      return 12;
-    case SqWeapon::super_shotgun:
-      return 13;
-    case SqWeapon::hyperblaster:
-      return 14;
-    default:
-      return -1;
-  }
-}
-
-// Whether flash `value` plays `sample` (a remixed weapon's own sound is sent as a sound instead).
-bool flash_plays(int value, const char* sample) {
-  const Q2Flash* f = q2_player_flash(value);
-  if (f == nullptr || f->sounds[0].name == nullptr || sample == nullptr) return false;
-  const std::string_view shot = f->sounds[0].name, own = sample;
-  const size_t wild = shot.find('%');
-  return wild == std::string_view::npos ? shot == own : own.substr(0, wild) == shot.substr(0, wild);
 }
 
 // A sound from player `slot`'s body on `channel`.
@@ -964,8 +927,8 @@ void fire(Q2Server& s, int slot, int shots) {
   const int kick = r.kick * quad;
   // The shot's sound: in its muzzle flash (the light and the tails a client plays by the value),
   // or as a sound alone for a gun with none (a remix's own sound, the hand grenade's).
-  const int flash = flash_value(w, shots);
-  if (flash >= 0 && flash_plays(flash, r.sound))
+  const int flash = sq_flash_value(w, shots);
+  if (flash >= 0 && sq_flash_plays(flash, r.sound))
     muzzle_flash(s, slot, origin, flash | (p.silencer_shots > 0 ? kQ2FlashSilenced : 0));
   else
     sound(s, slot + 1, origin, r.sound, p.silencer_shots > 0 ? 0.2f : 1.0f);  // silenced: quieter
@@ -1026,19 +989,23 @@ void fight_precache(Q2Server& s) {
     s.models.emplace_back(name);
     return static_cast<int>(s.models.size()) - 1;
   };
-  for (int w = 0; w < kSqWeaponCount; w++) s.weapon_models[w] = model(kSqWeapons[w].view_model);
+  for (int w = 0; w < kSqWeaponCount; w++)
+    if (sq_weapon_plays(w, s.opt.pack)) s.weapon_models[w] = model(kSqWeapons[w].view_model);
   // The weapons as others see them carried: names a client takes from the player's own model
   // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
   for (const auto& [w, name] : kCarried) s.carried_models[static_cast<int>(w)] = model(name);
-  for (int k = 0; k < kSqShotKinds; k++) s.missile_models[k] = model(kMissileModels[k]);
+  for (int k = 0; k < kSqShotKinds; k++)
+    if (q2_pack_has(s.opt.pack, kSqShotPacks[k])) s.missile_models[k] = model(kMissileModels[k]);
   gibs_precache(s);
   const auto add_sound = [&s](const char* name) {
     if (std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
       s.sounds.emplace_back(name);
   };
-  for (const SqWeaponRow& r : kSqWeapons) add_sound(r.sound);
-  for (const char* name : {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib,
-                           kHandSounds[0], kHandSounds[1], kHandSounds[2], kHandSounds[3]})
+  for (const SqWeaponRow& r : kSqWeapons)
+    if (q2_pack_has(s.opt.pack, r.pack)) add_sound(r.sound);
+  for (const char* name :
+       {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib, kSqHandSound[0].sample,
+        kSqHandSound[1].sample, kSqHandSound[2].sample, kSqHandSound[3].sample})
     add_sound(name);
   for (const char* name : kOwnSounds) add_sound(name);
   for (const char* name : kBodySounds) add_sound(name);
@@ -1424,9 +1391,9 @@ void fight_took(Q2Server& s, int slot, int item, int grenades_before) {
   const SqItem& it = kSqItems[item];
   const bool dm = deathmatch(s);
   // The status bar's pickup (3 s), and the item selected when it has a use.
-  p.picked = sq_item_number(item);
+  p.picked = sq_item_number(item, s.opt.pack);
   p.picked_at = s.level_time;
-  if (sq_selects(p.picked)) p.body.selected = p.picked;
+  if (sq_selects(p.picked, s.opt.pack)) p.body.selected = p.picked;
   if (it.kind == SqKind::power_armour && dm && p.body.counts[item] == 1) p.power_on = true;
   if (it.kind == SqKind::powerup && dm && (s.cvars.find("dmflags")->integer() & 16) != 0)
     fight_use(s, slot, item);  // instant items
@@ -1479,7 +1446,7 @@ bool fight_command(Q2Server& s, int slot, const std::string& cmd, const std::str
     if (sq_can_fire(p.body, w)) {
       fight_choose(s, slot, w);
       if (quick && p.hand.pending == w && kSqWeapons[w].item != nullptr) {
-        p.picked = sq_item_number(sq_item(kSqWeapons[w].item));
+        p.picked = sq_item_number(sq_item(kSqWeapons[w].item, s.opt.pack), s.opt.pack);
         p.picked_at = s.level_time - 2.1;
       }
       break;
@@ -1630,14 +1597,10 @@ int player_loop(const Q2Server& s, const Q2Player& p) {
   if (!p.alive || s.intermission_at > 0) return 0;
   if (p.water_level > 0 && (p.water_type & (sh::kSqLava | sh::kSqSlime)) != 0)
     return loop_of(s, SqLoop::fry);
-  const auto w = static_cast<SqWeapon>(p.hand.weapon);
-  const bool firing = p.hand.state == SqHandState::firing;
-  if (w == SqWeapon::railgun) return loop_of(s, SqLoop::rail_hum);
-  if (w == SqWeapon::bfg) return loop_of(s, SqLoop::bfg_hum);
-  if (w == SqWeapon::hyperblaster && firing) return loop_of(s, SqLoop::hyper);
-  if (w == SqWeapon::chaingun && firing) return loop_of(s, SqLoop::chain);
-  if (w == SqWeapon::hand_grenade && p.hand.fuse_at > 0 && p.hand.frame == 11)
-    return loop_of(s, SqLoop::fuse);  // lit and still in the hand
+  const char* hand = sq_hand_loop(p.hand);  // the rules' (q2_combat.hpp), the prediction's too
+  if (hand == nullptr) return 0;
+  for (int k = 0; k < kSqLoops; k++)
+    if (std::strcmp(kLoops[k], hand) == 0) return s.loop_sounds[k];
   return 0;
 }
 

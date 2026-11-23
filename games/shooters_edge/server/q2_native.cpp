@@ -10,9 +10,12 @@
 
 #include <algorithm>
 #include <csetjmp>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iterator>
+#include <type_traits>
 #include <utility>
 
 #include "brush/areas.hpp"
@@ -30,8 +33,7 @@ namespace br = ge::brush;
 using native::NativeEntityHead;
 
 constexpr double kFrameSeconds = 0.1;
-constexpr int kCsName = 0, kCsAirAccel = 29, kCsMaxClients = 30, kCsChecksum = 31, kCsModels = 32;
-constexpr int kCsStatusBar = 5, kCsSounds = 288, kCsImages = 544, kCsItems = 1056;
+constexpr int kCsName = 0, kCsStatusBar = 5;  // the same in either layout
 
 int16_t coord(float v) { return static_cast<int16_t>(static_cast<int32_t>(v * 8.0f)); }
 uint8_t angle8(float deg) {
@@ -80,7 +82,29 @@ Q2EntityState wire_state(const native::NativeState& s) {
   return w;
 }
 
-Q2PlayerState wire_player(const native::NativePlayer& p) {
+// The state with the extended fields from the entity's extension block, when the library keeps
+// one (the extended limits on).
+Q2EntityState wire_state(const NativeHost& h, const NativeEntityHead* e,
+                         const native::NativeState& s) {
+  Q2EntityState w = wire_state(s);
+  if (h.ext == 0 || e == nullptr) return w;
+  namespace cp = ge::classic::protocol;
+  native::NativeEntityExt x;
+  std::memcpy(&x, reinterpret_cast<const uint8_t*>(e) + sizeof(NativeEntityHead), sizeof x);
+  w.more_effects = static_cast<uint32_t>(x.more_effects);
+  w.alpha = x.alpha > 0 && x.alpha < 1 ? cp::q2_alpha_to_wire(x.alpha) : 0;
+  w.scale = x.scale > 0 ? cp::q2_scale_to_wire(x.scale) : 0;
+  w.loop_volume = x.loop_volume > 0 ? cp::q2_loop_volume_to_wire(x.loop_volume) : 0;
+  w.loop_attenuation =
+      x.loop_attenuation != 0 ? cp::q2_loop_attenuation_to_wire(x.loop_attenuation) : 0;
+  return w;
+}
+
+// A player's state for the wire, from either interface's record: the newer one's 32-bit move
+// state, gun index word, damage blend and 64 stats into the wire's wider fields.
+template <class Player>
+Q2PlayerState wire_player(const Player& p) {
+  constexpr bool kNew = std::is_same_v<Player, native::NativePlayerNew>;
   Q2PlayerState w;
   w.type = static_cast<uint8_t>(p.move.type);
   for (int k = 0; k < 3; k++) {
@@ -96,13 +120,16 @@ Q2PlayerState wire_player(const native::NativePlayer& p) {
   w.time = p.move.time;
   w.flags = p.move.flags;
   w.gravity = p.move.gravity;
-  w.gun_index = static_cast<uint8_t>(p.gun_index);
+  w.gun_index = static_cast<uint16_t>(kNew ? p.gun_index : p.gun_index & 255);
   w.gun_frame = static_cast<uint8_t>(p.gun_frame);
   for (int k = 0; k < 4; k++)
     w.blend[k] = static_cast<uint8_t>(std::clamp(p.blend[k], 0.0f, 1.0f) * 255.0f);
+  if constexpr (kNew)
+    for (int k = 0; k < 4; k++)
+      w.damage_blend[k] = static_cast<uint8_t>(std::clamp(p.damage_blend[k], 0.0f, 1.0f) * 255.0f);
   w.fov = static_cast<uint8_t>(std::clamp(p.fov, 0.0f, 255.0f));
   w.rdflags = static_cast<uint8_t>(p.rdflags);
-  for (int k = 0; k < 32; k++) w.stats[k] = p.stats[k];
+  for (size_t k = 0; k < std::size(p.stats); k++) w.stats[k] = p.stats[k];
   return w;
 }
 
@@ -117,6 +144,9 @@ int row_model(const NativeQ2& s, int wire) {
 
 void fill_lists(NativeQ2& s) {
   const std::vector<std::string>& cs = s.raw.config;
+  const ge::classic::protocol::Q2CsLayout& at = s.host->cs();
+  const int kCsModels = at.models, kCsSounds = at.sounds, kCsImages = at.images,
+            kCsItems = at.items;
   s.models.assign(1, std::string());
   for (int m = 2; m < 255; m++) s.models.push_back(cs[size_t(kCsModels) + size_t(m)]);
   while (s.models.size() > 1 && s.models.back().empty()) s.models.pop_back();
@@ -169,12 +199,13 @@ void fill_world(NativeQ2& s) {
     row.render_fx = e->s.renderfx;
     row.loop = e->s.sound > 0 && size_t(e->s.sound) < s.sounds.size() ? e->s.sound : 0;
     if (!player || e->client == nullptr) continue;
-    const native::NativePlayer& ps = e->client->ps;
-    row.view_angles = vec3(ps.view_angles);
-    row.velocity = {ps.move.velocity[0] * 0.125f, ps.move.velocity[1] * 0.125f,
-                    ps.move.velocity[2] * 0.125f};
-    row.flags = (ps.move.flags & 4) != 0 ? sh::kFlagOnGround : 0;  // the move's on-ground bit
-    row.health = ps.stats[1];
+    h.with_player(e, [&row](const auto& ps) {
+      row.view_angles = vec3(ps.view_angles);
+      row.velocity = {float(ps.move.velocity[0]) * 0.125f, float(ps.move.velocity[1]) * 0.125f,
+                      float(ps.move.velocity[2]) * 0.125f};
+      row.flags = (ps.move.flags & 4) != 0 ? sh::kFlagOnGround : 0;  // the move's on-ground bit
+      row.health = ps.stats[1];
+    });
   }
   for (int i = 0; i < sh::kMaxClients; i++) {
     const ClientInfo& c = s.clients[i];
@@ -196,22 +227,23 @@ void fill_world(NativeQ2& s) {
       wc.inventory = in ? h.inventory[i] : std::vector<int16_t>();
     const NativeEntityHead* e = in ? h.entity(i + 1) : nullptr;
     if (e == nullptr || e->client == nullptr) continue;
-    const native::NativePlayer& ps = e->client->ps;
-    PlayerNumbers& nb = wc.numbers;
-    nb.health = ps.stats[1];
-    nb.current_ammo = ps.stats[3];
-    nb.armour = ps.stats[5];
-    nb.frags = ps.stats[14];
-    for (int k = 0; k < 32; k++) nb.stats[k] = ps.stats[k];
-    nb.weapon_model = row_model(s, ps.gun_index);
-    nb.weapon_frame = static_cast<float>(ps.gun_frame);
-    nb.view_z = ps.view_offset[2];
-    nb.view_set = true;
-    for (int k = 0; k < 3; k++) {
-      nb.view_offset[k] = ps.view_offset[k];
-      nb.kick[k] = ps.kick_angles[k];
-    }
-    nb.fov = ps.fov;
+    h.with_player(e, [&](const auto& ps) {
+      PlayerNumbers& nb = wc.numbers;
+      nb.health = ps.stats[1];
+      nb.current_ammo = ps.stats[3];
+      nb.armour = ps.stats[5];
+      nb.frags = ps.stats[14];
+      for (int k = 0; k < 32; k++) nb.stats[k] = ps.stats[k];
+      nb.weapon_model = row_model(s, ps.gun_index);
+      nb.weapon_frame = static_cast<float>(ps.gun_frame);
+      nb.view_z = ps.view_offset[2];
+      nb.view_set = true;
+      for (int k = 0; k < 3; k++) {
+        nb.view_offset[k] = ps.view_offset[k];
+        nb.kick[k] = ps.kick_angles[k];
+      }
+      nb.fov = ps.fov;
+    });
   }
   // The QuakeWorld server's entities, for what reads them (the window's view, the bots).
   if (s.sv.edicts.size() < w.entities.size()) return;
@@ -250,11 +282,14 @@ void fill_world(NativeQ2& s) {
 void take_view(NativeQ2& s) {
   NativeHost& h = *s.host;
   Q2Raw& raw = s.raw;
-  raw.entities.assign(kQ2Entities, Q2EntityState{});
-  raw.owners.assign(kQ2Entities, 0);
-  q2_sight_reset(raw.sight, h.map.get());
+  const int most = h.limits().entities;
+  raw.entities.assign(size_t(most), Q2EntityState{});
+  raw.owners.assign(size_t(most), 0);
+  q2_sight_reset(raw.sight, h.map.get(), most);
+  raw.sight.groups = h.map && !h.map->areas.empty() && !native_no_areas(h) ? h.area_groups
+                                                                           : std::vector<int32_t>{};
   const bool proper = (native_features(h) & native::kGmfProperInUse) != 0;
-  const int count = std::min(h.game->num_edicts, kQ2Entities);
+  const int count = std::min(h.game->num_edicts, most);
   for (int n = 1; n < count; n++) {
     NativeEntityHead* e = h.entity(n);
     if ((e->svflags & native::kSvfNoClient) != 0) continue;
@@ -262,7 +297,7 @@ void take_view(NativeQ2& s) {
     if (e->s.model[0] == 0 && e->s.effects == 0 && e->s.sound == 0 && e->s.event == 0) continue;
     if (n <= h.max_clients && !h.begun[n - 1]) continue;
     e->s.number = n;
-    raw.entities[size_t(n)] = wire_state(e->s);
+    raw.entities[size_t(n)] = wire_state(h, e, e->s);
     if (e->linkcount > 0)
       q2_sight_link(raw.sight, n, e->absmin, e->absmax);
     else
@@ -271,7 +306,9 @@ void take_view(NativeQ2& s) {
   }
   for (int i = 0; i < h.max_clients && i < 32; i++) {
     const NativeEntityHead* e = h.entity(i + 1);
-    raw.players[i] = e->client != nullptr ? wire_player(e->client->ps) : Q2PlayerState{};
+    raw.players[i] = e->client != nullptr
+                         ? h.with_player(e, [](const auto& ps) { return wire_player(ps); })
+                         : Q2PlayerState{};
   }
   // The events last one frame: the game clears them itself when it has its own end of frame.
   if (h.ex != nullptr && h.ex->prep_frame != nullptr)
@@ -281,7 +318,8 @@ void take_view(NativeQ2& s) {
   for (int i = 0; i < h.max_clients && i < sh::kMaxClients; i++) {
     const NativeEntityHead* e = h.entity(i + 1);
     if (e->client == nullptr) continue;
-    s.world.clients[i].numbers.frags = e->client->ps.stats[14];  // the score's stat
+    s.world.clients[i].numbers.frags =  // the score's stat
+        h.with_player(e, [](const auto& ps) { return ps.stats[14]; });
   }
   fill_world(s);
 }
@@ -309,22 +347,22 @@ bool per_client(void* ctx, int slot, int n, Q2EntityState& st) {
                            "'s state");
     return true;
   }
-  st = wire_state(rec.s);
+  st = wire_state(h, e, rec.s);
   return true;
 }
 
 // The level's baselines, once its entities have settled.
 void take_baselines(NativeQ2& s) {
   NativeHost& h = *s.host;
-  s.raw.baselines.assign(kQ2Entities, Q2EntityState{});
-  const int count = std::min(h.game->num_edicts, kQ2Entities);
+  s.raw.baselines.assign(size_t(h.limits().entities), Q2EntityState{});
+  const int count = std::min(h.game->num_edicts, h.limits().entities);
   for (int n = 1; n < count; n++) {
     NativeEntityHead* e = h.entity(n);
     if (e->inuse == 0) continue;
     if (e->s.model[0] == 0 && e->s.sound == 0 && e->s.effects == 0) continue;
     e->s.number = n;
     std::memcpy(e->s.old_origin, e->s.origin, sizeof e->s.old_origin);
-    s.raw.baselines[size_t(n)] = wire_state(e->s);
+    s.raw.baselines[size_t(n)] = wire_state(h, e, e->s);
     s.raw.baselines[size_t(n)].event = 0;
   }
 }
@@ -388,7 +426,7 @@ void run_frame(NativeQ2& s) {
   NativeHost& h = *s.host;
   for (int i = 0; i < h.max_clients; i++) {
     NativeEntityHead* e = h.entity(i + 1);
-    if (h.begun[i] && e->client != nullptr) e->client->ping = s.clients[i].ping_ms;  // measured
+    if (h.begun[i] && e->client != nullptr) h.set_ping(e, s.clients[i].ping_ms);  // measured
   }
   if (!guarded(h, [&] { h.game->run_frame(); })) return;
   run_commands(s);
@@ -487,16 +525,18 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
   } else {
     h.hulls = spec.models;  // a Quake map: its clip hulls (q2_native_host.hpp)
   }
-  h.linked.assign(size_t(std::max(h.game->max_edicts, kQ2Entities)), 0);
-  s.world.entities.assign(size_t(std::max(1, std::min(h.game->max_edicts, kQ2Entities))),
-                          WorldEntity{});
+  const int most = h.limits().entities;
+  h.linked.assign(size_t(std::max(h.game->max_edicts, most)), 0);
+  s.world.entities.assign(size_t(std::max(1, std::min(h.game->max_edicts, most))), WorldEntity{});
   s.sv.set.max_edicts = std::max(s.sv.set.max_edicts, int(s.world.entities.size()) + 8);
   s.sv.edicts.assign(size_t(s.sv.set.max_edicts), sh::Edict{});
   s.map_name = spec.name;
   s.map_stopped = false;
   s.pending_map.clear();
   Q2Raw& raw = s.raw;
-  raw.config.assign(kQ2ConfigStrings, std::string());
+  const ge::classic::protocol::Q2CsLayout& at = h.cs();
+  raw.config.assign(size_t(at.end), std::string());
+  raw.ext = h.ext;
   for (int i = 0; i < 32; i++) {
     raw.reliable[i].clear();
     raw.datagram[i].clear();
@@ -506,12 +546,12 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
       h.find_setting("deathmatch") != nullptr && h.find_setting("deathmatch")->rec.value != 0;
   const NativeSetting* air = h.find_setting("sv_airaccelerate");
   h.air_accelerate = dm && air != nullptr ? air->rec.value : 0;
-  raw.config[kCsAirAccel] = std::to_string(static_cast<int>(h.air_accelerate));
-  raw.config[kCsMaxClients] = std::to_string(h.max_clients);
-  raw.config[kCsChecksum] = std::to_string(s.map_checksum);
-  raw.config[kCsModels + 1] = "maps/" + spec.name + ".bsp";
-  for (size_t m = 1; m < h.model_count() && m + 1 < 256; m++)
-    raw.config[size_t(kCsModels) + m + 1] = "*" + std::to_string(m);
+  raw.config[size_t(at.air_accel)] = std::to_string(static_cast<int>(h.air_accelerate));
+  raw.config[size_t(at.max_clients)] = std::to_string(h.max_clients);
+  raw.config[size_t(at.map_checksum)] = std::to_string(s.map_checksum);
+  raw.config[size_t(at.models) + 1] = "maps/" + spec.name + ".bsp";
+  for (size_t m = 1; m < h.model_count() && m + 1 < size_t(h.limits().models); m++)
+    raw.config[size_t(at.models) + m + 1] = "*" + std::to_string(m);
   for (int i = 0; i < h.max_clients; i++) h.entity(i + 1)->s.number = i + 1;
   h.clock = 0;
   h.next_frame = kFrameSeconds;
@@ -526,8 +566,9 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
     error = s.stop_reason;
     return false;
   }
-  if (raw.config[kCsChecksum] != std::to_string(s.map_checksum)) {
-    error = "the game library changed the map's checksum (configstring 31): it cannot be hosted";
+  if (raw.config[size_t(at.map_checksum)] != std::to_string(s.map_checksum)) {
+    error = "the game library changed the map's checksum (configstring " +
+            std::to_string(at.map_checksum) + "): it cannot be hosted";
     h.dead = true;
     return false;
   }
@@ -613,7 +654,10 @@ void nv_frame(void* r, const sh::Packet* packets, int count) {
     for (int k = 0; k < 3; k++) {
       if ((k == 0 && gap < 3) || (k == 1 && gap < 2)) continue;  // only what a loss held back
       native::NativeCmd c = native_cmd(p.cmds[k]);
-      if (!guarded(h, [&] { h.game->client_think(e, &c); })) return;
+      h.thinking = p.client;  // its move as its client predicts it (a spectator's flight)
+      const bool ran = guarded(h, [&] { h.game->client_think(e, &c); });
+      h.thinking = -1;
+      if (!ran) return;
     }
   }
   run_commands(s);
@@ -741,15 +785,24 @@ constexpr RunnerCalls kNativeCalls = {"native",
 
 NativeQ2::NativeQ2() = default;
 
+// The library's end and the host's memory let go. A destructor must not throw: what the library's
+// shutdown or the clean-up throws is reported and the library closed regardless.
 NativeQ2::~NativeQ2() {
   if (!host) return;
   NativeHost& h = *host;
-  if (!h.dead) guarded(h, [&] { h.game->shutdown(); });
-  native_make_current(nullptr);
-  native_forget(h);
-  for (auto& [p, tag] : h.blocks) std::free(p);
-  h.blocks.clear();
-  native_close_files(h);
+  try {
+    if (!h.dead) guarded(h, [&] { h.game->shutdown(); });
+    native_make_current(nullptr);
+    native_forget(h);
+    for (auto& [p, tag] : h.blocks) std::free(p);
+    h.blocks.clear();
+    native_close_files(h);
+  } catch (...) {
+    std::fputs(
+        "Quake II's game library failed while shutting down; its memory and files may be"
+        " left open.\n",
+        stderr);
+  }
   h.library.close();
 }
 
@@ -815,6 +868,8 @@ std::unique_ptr<NativeQ2> load_native_q2(const NativeQ2Options& opt, std::string
   native_setting(h, "game", opt.game, native::kCvarServerInfo | native::kCvarLatch);
   native_setting(h, "sv_features", std::to_string(kNativeServerFeatures), native::kCvarNoSet);
   native_setting(h, "g_features", "0", native::kCvarNoSet);
+  native_setting(h, kUnsafeSavesSetting, "0", 0);
+  native_setting(h, "map_noareas", "0", 0);  // the engine's: every area joined while set
   // The files the extended interface reads: the library's folder, then the base folder beside it.
   h.write_dir = opt.library.parent_path();
   h.base_dir = h.write_dir.parent_path() / "baseq2";
@@ -824,13 +879,16 @@ std::unique_ptr<NativeQ2> load_native_q2(const NativeQ2Options& opt, std::string
     native_set(h, native_setting(h, name, value, 0), value, true);
   native_make_current(&h);
   h.game = entry(&h.imports);
-  if (h.game == nullptr || h.game->apiversion != native::kNativeVersion) {
+  if (h.game == nullptr || (h.game->apiversion != native::kNativeVersion &&
+                            h.game->apiversion != native::kNativeVersionNew)) {
     error = "the game library " + file + " is version " +
             (h.game != nullptr ? std::to_string(h.game->apiversion) : std::string("unknown")) +
-            ", not " + std::to_string(native::kNativeVersion) + ": it is not one this server hosts";
+            ", not " + std::to_string(native::kNativeVersion) + " or " +
+            std::to_string(native::kNativeVersionNew) + ": it is not one this server hosts";
     h.game = nullptr;
     return nullptr;
   }
+  h.new_interface = h.game->apiversion == native::kNativeVersionNew;
   // The extended interface, when the library has one, before its start.
   if (auto entry_ex =
           reinterpret_cast<native::NativeEntryExFn>(h.library.symbol(native::kNativeEntryEx))) {
@@ -847,8 +905,28 @@ std::unique_ptr<NativeQ2> load_native_q2(const NativeQ2Options& opt, std::string
     s->raw.touch = per_client;
     s->raw.touch_ctx = s.get();
   }
-  if (h.game->edicts == nullptr || h.game->edict_size < int32_t(sizeof(NativeEntityHead)) ||
-      h.game->num_edicts <= h.max_clients) {
+  // THE EXTENDED LIMITS: the library turns them on with its feature bit, read as its start
+  // returns; it must then keep the extension block after each head and may make up to 8192
+  // entities (1024 without).
+  if ((native_features(h) & native::kGmfProtocolExtensions) != 0) {
+    h.ext = h.new_interface ? 2 : 1;
+    s->console.push_back("Game supports protocol extensions.");
+    native_set(h, native_setting(h, "protocol", "34", 0), "36", true);
+  }
+  const int32_t least = int32_t(sizeof(NativeEntityHead)) +
+                        (h.ext > 0 ? int32_t(sizeof(native::NativeEntityExt)) : 0);
+  if (h.game->edict_size < least || h.game->edict_size > INT32_MAX / h.limits().entities ||
+      h.game->edict_size % int32_t(alignof(NativeEntityHead)) != 0) {
+    error = "Game library returned bad size of edict_t";
+    h.dead = true;
+    return nullptr;
+  }
+  if (h.game->max_edicts <= h.max_clients || h.game->max_edicts > h.limits().entities) {
+    error = "Game library returned bad number of max_edicts";
+    h.dead = true;
+    return nullptr;
+  }
+  if (h.game->edicts == nullptr || h.game->num_edicts <= h.max_clients) {
     error = "the game library " + file + " made no entities for " + std::to_string(h.max_clients) +
             " players";
     h.dead = true;
@@ -864,15 +942,20 @@ uint64_t native_q2_hash(const NativeQ2& s) {
     for (size_t i = 0; i < n; i++) h = (h ^ b[i]) * 1099511628211ull;
   };
   mix(&s.frame_number, sizeof s.frame_number);
+  // As 16-bit origins and 32 stats, the wire's ordinary widths, so the hash outlives a wider state.
+  const auto mix16 = [&mix](const int32_t(&v)[3]) {
+    const int16_t n[3] = {int16_t(v[0]), int16_t(v[1]), int16_t(v[2])};
+    mix(n, sizeof n);
+  };
   for (const Q2EntityState& e : s.raw.entities) {
-    mix(e.origin, sizeof e.origin);
+    mix16(e.origin);
     mix(e.angles, sizeof e.angles);
     mix(&e.frame, sizeof e.frame);
     mix(e.model, sizeof e.model);
   }
   for (const Q2PlayerState& p : s.raw.players) {
-    mix(p.origin, sizeof p.origin);
-    mix(p.stats, sizeof p.stats);
+    mix16(p.origin);
+    mix(p.stats, 32 * sizeof p.stats[0]);
   }
   return h;
 }

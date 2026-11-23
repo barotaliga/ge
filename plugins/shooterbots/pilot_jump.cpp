@@ -16,12 +16,16 @@ namespace ge::shooterbots::pilot_parts {
 
 namespace {
 
-constexpr float kJumpAlong = 0.9f;      // a jump goes moving at least this share of its speed
-constexpr float kJumpOver = 1.15f;      // and at most this share (and 16 u/s) of it
-constexpr float kJumpAim = 0.95f;       // with the velocity within this cosine of the jump's way
-constexpr float kPastStart = 24;        // past a jump's start this far without its speed: run up
-constexpr float kFlyFrom = 24;          // `jumpfly`: a jump flown from this far before its start
-constexpr float kAcrossOn = 3;          // `strafe_across`: on the crossing within this, degrees
+constexpr float kJumpAlong = 0.9f;  // a jump goes moving at least this share of its speed
+constexpr float kJumpOver = 1.15f;  // and at most this share (and 16 u/s) of it
+constexpr float kJumpAim = 0.95f;   // with the velocity within this cosine of the jump's way
+constexpr float kPastStart = 24;    // past a jump's start this far without its speed: run up
+constexpr float kFlyFrom = 24;      // `jumpfly`: a jump flown from this far before its start
+constexpr float kStillJump = 20;    // a standing jump up into an updraft: slower than this, units/s
+constexpr float kStillAt = 12;      // and this near its foot, units
+constexpr float kStillKeys =
+    160;                        // a velocity this far off the wished one: keys held full, units/s
+constexpr float kAcrossOn = 3;  // `strafe_across`: on the crossing within this, degrees
 constexpr float kAcrossBeat_s = 0.04f;  // and on it the side keys swapped this often, s
 // `lip_crossing`: the headings tried, degrees
 constexpr int kCrossFan = 60, kCrossStep = 5;
@@ -69,6 +73,10 @@ bool jump_flies(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
 // A jump missed (landed short, or no nearer its start): the second miss of the same one is not a
 // jump this player makes, and it is never planned again.
 void missed_jump(Pilot& p, NavExtraLink j) {
+  // An updraft's jump is never missed: the draft lifts whoever is in it, and where it sets him down
+  // (off the landing node, by the tube's top) is no fault of the jump. Cut, it shut off e3m5's
+  // upper floors from below for the rest of the map.
+  if (const NavLink* l = link_of(*p.g, j.from, j.to); l != nullptr && l->updraft) return;
   int times = 0;
   for (const NavExtraLink& e : p.short_jumps) times += e.from == j.from && e.to == j.to ? 1 : 0;
   if (p.short_jumps.size() < 256) p.short_jumps.push_back(j);
@@ -237,7 +245,7 @@ bool lip_ahead(const MoveWorld& world, Vec3f o, Vec3f v, int msec) {
 // into the jump from `rocket_flip_lead_s` before its start, strafing through the turn (the keys a
 // hand presses nearest the way, `flip_keys`), and the shot only with the view behind.
 bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Want& w, Vec3f& target,
-                   const char*& because, bool flip, int msec, bool plain) {
+                   const char*& because, bool flip, int msec, bool plain, bool still) {
   Vec3f dir{T.x - S.x, T.y - S.y, 0};
   normalize(dir);
   const Vec3f rel{s.origin.x - S.x, s.origin.y - S.y, 0};
@@ -263,7 +271,25 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
     // A standing flip: turned round on the spot, then the back key with the jump.
     const float up = heading(dir.x, dir.y) + (flip ? 180 : 0);
     w.yaw = unwrap(up, p.yaw);
-    w.forward = flip ? 0.0f : 1.0f;
+    w.forward = flip || still ? 0.0f : 1.0f;
+    // Up into an updraft: from a stand (a step's way on and the draft takes him by its side, where
+    // e3m5's tube top held him under its lip).
+    const float to_s = across(s.origin, S);
+    if (still && (speed > kStillJump || to_s > kStillAt)) {
+      // Held to its foot (the run in carries him on past it): the keys ask for the velocity that
+      // closes on it in a quarter second, so the way on is braked rather than circled.
+      const float gain = 4;
+      float wx = (S.x - s.origin.x) * gain - s.velocity.x;
+      float wy = (S.y - s.origin.y) * gain - s.velocity.y;
+      const float wl = across({}, {wx, wy, 0});
+      const float k = wl > kStillKeys ? 1.0f : wl / kStillKeys;
+      if (wl > 0) wx /= wl, wy /= wl;
+      const double rs = static_cast<double>(heading(wx, wy) - p.yaw) * (core::kPi / 180);
+      w.forward = static_cast<float>(core::libm::cos(rs)) * k;
+      w.side = static_cast<float>(-core::libm::sin(rs)) * k;
+      because = "stopping under an updraft";
+      return false;
+    }
     const float off = wrap(p.yaw - up);
     // The shot when the turn is done: the rest of it at about a hand's about-face.
     p.shot_yaw = up;

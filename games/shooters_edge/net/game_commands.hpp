@@ -5,8 +5,8 @@
 // - Quake II's screens and inventory (server/q2_screens.hpp): `score`, `inven`, `putaway`,
 //   `invnext`, `invprev`, `invnextw`, `invprevw`, `invnextp`, `invprevp`, `invuse` and `invdrop`.
 //   They go to Quake II's rules only; in another game they do nothing, so a key Quake II's
-//   own config binds to one (TAB to `inven`) costs Quake nothing. The help computer is
-//   `cmd help` (the console's `help` explains its words).
+//   own config binds to one (TAB to `inven`) costs Quake nothing. `help` alone in a Quake II
+//   game is the help computer, sent to its rules; `help <name>` explains the console's words.
 //
 // `add_server_commands` adds these and the administrator's words (qw_admin.hpp).
 //

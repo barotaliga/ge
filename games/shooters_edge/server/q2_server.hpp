@@ -77,6 +77,7 @@
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 #include "shooters_edge/server/q2_poses.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
@@ -342,6 +343,7 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   float damage_rgb[3] = {};
   size_t taken_seen = 0;
   float blend[4] = {};
+  float blend_apart[4] = {}, damage_blend[4] = {};  // the tint without the flash, the flash alone
   // His view (plugins/classic/q2_view.hpp): its state, this frame's offset and kick, and the
   // angles the dead view lies at.
   ge::classic::Q2ViewState view;
@@ -439,6 +441,9 @@ struct Q2ServerOptions {
   // the classic runners do; it reads a command's jump button as the up move
   // (`ge::classic::q2_command`).
   float speedjump = 0;
+  // The rules played (q2_pack.hpp): the base game's, or a mission pack's on top, by the game
+  // folder the server starts on (`q2_pack_of_folder`).
+  Q2Pack pack = Q2Pack::base;
 };
 
 // The player's model, last in the model list.
@@ -583,6 +588,9 @@ struct Q2Server : RulesCommon {
   std::string load_name;
   // The slots a load put back in their bodies (by bit): the player connecting to one takes it over.
   uint32_t restored = 0;
+  // The players already told entered on this map (at its load): their `begin` on it says it
+  // no more, so each arrival is said once.
+  uint32_t entered_told = 0;
   // The autosave the rules made as this level was entered (empty: none), for the host to keep.
   std::vector<uint8_t> autosave;
 

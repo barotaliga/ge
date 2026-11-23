@@ -23,7 +23,9 @@
 // STUFFED LINES: `cmd ...` is sent on; `color`, `team`, `skin`, `name`, `topcolor`, `bottomcolor`
 // and `setinfo` change the user info and tell the server (a team mod sets the player's colours
 // and drops a player who does not take them); the first `kStuffedKept` lines are kept in
-// `stuffed`.
+// `stuffed`. Every other line (an alias, a bind, a setting, `echo`) goes to `to_run` for the
+// window's console to run as the server's, but `bf` and the `//` lines, which the picture reads
+// from the stream itself (the pickup flash, places, visible weapons, a match's start).
 //
 // RECORDING (`record`, set after `client_start`): every packet it reads and every command it sends
 // go into a ClientRecorder (qw_record.hpp), and its own voice with them in the voice format.
@@ -45,7 +47,9 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "classic/content/web_downloads.hpp"
@@ -87,6 +91,8 @@ inline constexpr size_t kStuffedKept = 256;
 struct ClientConfig {
   // Keys the player set by `fullinfo` that no setting of the window holds, sent as given.
   std::vector<std::pair<std::string, std::string>> extra_info;
+  // The competition ruleset in force (classic/rulesets.hpp), sent as `*rsn` unless "default".
+  std::string ruleset;
   std::string name = "player";
   std::string skin = "base";
   std::string model;  // the user info's `model`: the player figure in players/<model>/ ("": none)
@@ -114,12 +120,34 @@ struct ClientConfig {
   // named figure (`players/<model>/tris.md2`, else `tris.mdl`, and its `<skin>.pcx`) that it
   // lacks (`files`, `read_file`, what it fetched). Off (`noskins 2`): nothing is asked for.
   bool fetch_looks = true;
+  // THE CONTENT FETCHED before `prespawn`: the map and every model and sound of the lists the game
+  // lacks (`read_file`, `files`), asked for one at a time; one the server refuses is passed over.
+  bool fetch_content = true;
+  // THE MAP'S VERSIONS (classic/content/map_versions.hpp): the other versions of a map kept from
+  // servers before (path in the game, bytes), and the one the first `prespawn` sends: the version
+  // this server took last (`remembered`), else the player's own copy, else the next kept one; a
+  // version whose checksum is in `refused` (a server that said its map does not match) is passed
+  // over, and with none left the server's own is fetched (`keep_version` keeps it hidden beside
+  // the player's and returns its path) and sent. `use_map` tells the window which version to draw
+  // ("" the player's own copy).
+  std::function<std::vector<std::pair<std::string, std::vector<uint8_t>>>(const std::string& map)>
+      map_versions;
+  std::function<std::string(const std::string& map, uint32_t sum,
+                            const std::vector<uint8_t>& bytes)>
+      keep_version;
+  std::function<void(const std::string& map, const std::string& version)> use_map;
+  std::vector<uint32_t> refused;
+  // The checksum of the version of `map` this server took last (none: never joined it with one),
+  // and the version it took this time, remembered once the client is in the game.
+  std::function<std::optional<uint32_t>(const std::string& map)> remembered;
+  std::function<void(const std::string& server, const std::string& map, uint32_t sum)> keep_choice;
   // THE MAP'S EXTRAS FETCHED, after the looks, only when lacking and only while what they serve is
   // on: its coloured light (`lits/<map>.lit`; none when `maps/<map>.lit` or `maps/lits/<map>.lit`
   // is there; the window's `r_loadlit`) and its place names (`locs/<map>.loc`; `tp_loadlocs`).
   // Off unless asked (the window's join turns them on by those settings).
   bool fetch_lit = false;
   bool fetch_locs = false;
+  bool q2_batch = true, q2_instantpacket = true;  // cl_batchcmds, cl_instantpacket (below)
   // A file fetched, handed on to be kept (the window writes it into the game's folder, or into a
   // partial of the archive `origin` names when the server told it: engine/vfs/partial.hpp);
   // `downloaded` holds it either way. `origin` is null for a loose file or a server that did not.
@@ -137,6 +165,7 @@ struct ClientConfig {
   // `script`. It may read anything its owner gives it; the client sends what it returns.
   std::function<sh::MoveCmd(int tick)> brain;
   bool voice = false;                          // ask for voice and speak while `talk` says so
+  int q2_maxpackets = 30;                      // Quake II's cl_maxpackets (below)
   ClientTalk talk = nullptr;                   // null: never speaks
   const std::vector<float>* speech = nullptr;  // 48 kHz mono to speak (null: a voice of its own)
   // A player's own microphone in place of `talk` and `speech`: the samples the window hands in
@@ -166,6 +195,9 @@ struct ClientConfig {
   // (`cl_c2sImpulseBackup`: 1 the new move, 2 the one before too, 3 the one before that; 0 none).
   int c2spps = 0;
   int c2s_impulse_backup = 3;
+  // Quake II's later protocols (q2_client.hpp): cl_protocol, net_maxmsglen, net_chantype,
+  // cl_packetdup (cl_maxpackets beside `voice`).
+  int q2_protocol = 0, q2_msglen = 1390, q2_chantype = 1, q2_packetdup = 1;
 };
 
 // A SCREENSHOT THE SERVER ASKED FOR (a stuffed "cmd snap"): `asked` until the window hands the
@@ -242,11 +274,26 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int sound_last = 0, model_last = 0;
   int stufftexts = 0;
   std::vector<std::string> stuffed;  // the first kStuffedKept console lines stuffed, as sent
+  // The stuffed lines the client does not answer itself, for the window's console to run as the
+  // server's (qw_remote.hpp `stuffed_run`): taken each frame, at most kStuffedKept held.
+  std::vector<std::string> to_run;
   ClientStage stage = ClientStage::challenge;
   bool begun = false;
   double connected_at = -1, active_at = -1;  // the network's times, s
   std::vector<std::string> wanted_skins;     // skins left to fetch before begin
-  ClientUpload up;                           // a screenshot the server asked for
+  // The map, models and sounds the lists named that the game lacks, fetched before `prespawn`
+  // (held while `prespawn_held`), so a server's map the player has not got is played.
+  std::vector<std::string> wanted_content;
+  bool prespawn_held = false;
+  // The map's version sent: its path ("" the player's own copy), its checksum; `fetch_version`
+  // while the server's own is being fetched. `map_refused`: the server dropped the client because
+  // its map did not match (the window joins again with another version, ClientConfig::refused).
+  std::string map_version;
+  uint32_t map_sum = 0;
+  bool fetch_version = false;
+  bool version_unfetched = false;  // the server would not hand out its version
+  bool map_refused = false;
+  ClientUpload up;  // a screenshot the server asked for
 
   // Play.
   sh::MoveCmd cmds[3];
@@ -265,9 +312,17 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int frags[32] = {};
   int32_t stats[kStats] = {};
   std::vector<std::string> prints, centerprints;
+  size_t packet_prints = 0;             // `prints` before the packet being read: its own are after
   std::vector<std::string> oob_prints;  // out-of-band prints after the connect (rcon's answers)
-  std::vector<ClientSound> heard;       // the sounds read this tick (cleared as the tick starts)
-  float set_angles[3] = {};             // the server's last turn of the player (setangle), degrees
+  // A server browser's command packets from this machine (`localid`): the id they must carry
+  // (the caller sets it each frame), whether one may still run without it (until the first
+  // accept), and the commands accepted, for the caller to run.
+  std::string localid;
+  bool commands_unchecked = true;
+  bool localid_refused = false;  // a wrong id cleared `localid` (the caller clears its setting)
+  std::vector<std::string> local_commands;
+  std::vector<ClientSound> heard;  // the sounds read this tick (cleared as the tick starts)
+  float set_angles[3] = {};        // the server's last turn of the player (setangle), degrees
   float movevars[10] = {800, 100, 320, 500, 10, 10, 10, 4, 4, 1};  // serverdata's, in its order
   sh::MoveCmd sent[64];        // each move's newest command, by its packet's sequence mod 64
   uint32_t sent_seq[64] = {};  // the sequence each `sent` slot holds (0: none)
@@ -281,6 +336,8 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   ge::hud::NetHistory net;  // each packet as it came, or not (the net graph, r_netgraph)
 
   ClientDownload dl;
+  int downloads_started =
+      0;  // the download number of the last one asked for (each starts one more)
   std::map<std::string, std::vector<uint8_t>> downloaded;
   // From a web address (classic/content/web_downloads.hpp): with the server's `*dlserver` or the
   // player's `cl_http_default_url`, the files lacked are fetched from it first, `begin` held, the

@@ -78,6 +78,8 @@
 #include "shooters_edge/menu/gallery_page.hpp"
 #include "shooters_edge/menu/games_page.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
+#include "shooters_edge/menu/menu_script.hpp"
+#include "shooters_edge/menu/player_view.hpp"
 #include "shooters_edge/menu/server_page.hpp"
 #include "shooters_edge/menu/servers_page.hpp"
 #include "ui/draw.hpp"
@@ -163,6 +165,7 @@ class GameMenu {
     bool browse = false;
     std::string id;       // the game picked, "" for FIND ANOTHER INSTALL
     std::string install;  // the install to open
+    std::string pack;     // a mission pack's folder to play over it, "" the game itself
   };
   GamesPage& games() { return games_; }
   bool in_games() const { return in_games_; }
@@ -178,13 +181,16 @@ class GameMenu {
   // Whether classic-enhance's menu is the one up.
   bool in_enhance() const { return in_enhance_; }
   ge::ui::Menu& main() { return main_; }
-  // The game's own menu (its adapter's `menu`) in place of Quake's: the pages rebuilt.
-  // The host's `table` must name the same table.
-  void set_table(const MenuTable& table) {
-    table_ = &table;
-    main_ = build_menu(table);
-  }
+  // The game's own menu (its adapter's `menu`) in place of Quake's: the pages rebuilt. With
+  // `files` and `menu_script` on, the table's menu script found there is read over it
+  // (menu_script.hpp) and what it could not use told in the console. The host's `table` must
+  // name the table returned.
+  const MenuTable& set_table(const MenuTable& table, const ge::vfs::SearchPath* files = nullptr);
   ge::ui::Menu& enhance() { return enhance_; }
+  // The setup page's live figure (player_view.hpp) and where it was drawn last (screen px).
+  PlayerView& figure() { return figure_; }
+  const ge::ui::Rect& figure_box() const { return figure_box_; }
+  const ge::ui::Rect& swatches() const { return swatches_; }
   int help_page() const { return help_page_; }
   // What the layout drawn last found wrong (layout_problems or classic_problems).
   const std::vector<std::string>& problems() const { return problems_; }
@@ -195,6 +201,8 @@ class GameMenu {
   void watch_enhancing();
   void refresh_main(const Host& host);
   void apply_enhance(const ge::ui::MenuEvent& e, Host& host);
+  void update_figure(const ge::ui::MenuInput& in, const Host& host, double dt);
+  void draw_figure(ge::ui::DrawList& list);
   void show_gallery();
   void update_gallery(const ge::ui::MenuInput& in, Host& host);
   void show_servers();
@@ -211,6 +219,8 @@ class GameMenu {
   ge::ui::MenuView view_;
   ge::ui::MenuStyle style_;
   std::vector<ge::ui::Rect> hits_;  // the last layout's rows, for the pointer
+  PlayerView figure_;
+  ge::ui::Rect figure_box_, swatches_;  // the setup page's figure and colour picker, last drawn
   std::vector<std::string> problems_;
   bool open_ = false;
   ge::ui::MenuCue cue_ = ge::ui::MenuCue::none;  // the sound not yet taken
@@ -221,9 +231,21 @@ class GameMenu {
   bool toggle_open_ = false;          // pushmenu: opened even when the menu is up at the root
   int pending_ = 0;                   // 1: popmenu (one page back), 2: forcemenuoff
   int help_page_ = 0;
+  // Quake's quit box (main_menu.hpp's quit_joke): whether it was up last frame, the joke it shows
+  // (-1: the shell's own question) and the stream that picks one each time it opens.
+  bool quit_up_ = false;
+  int quit_joke_ = -1;
+  uint32_t quit_seed_ = 0;
+  void dress_quit(const Host& host);
   double dt_ = 1.0 / 60;  // the last frame's, s
+  // How long ESCAPE has been held since it put a screen of the rules away, s (-1: not held): at
+  // kEscapeHold, a key's first repeat, the in-game page opens.
+  double escape_hold_ = -1;
+  static constexpr double kEscapeHold = 0.5;
 
   const MenuTable* table_ = &classic_menu();  // the pages built (set_table)
+  std::unique_ptr<ScriptMenu> script_;        // the game's menu script read over it
+  bool use_script_ = true;                    // menu_script
   std::string waiting_page_;                  // the page of the key row waiting
   std::string waiting_;                       // the CUSTOMIZE CONTROLS row waiting for a key, or ""
   bool waiting_fresh_ = false;                // it started this frame

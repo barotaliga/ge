@@ -111,10 +111,10 @@ void run(Arena& a, int ticks, uint8_t buttons = 0, float pitch = 0, uint8_t impu
 }
 
 void place(Arena& a, int i, float x) {
-  int16_t* o = a.p(i).move.origin;
+  int32_t* o = a.p(i).move.origin;
   o[0] = static_cast<int16_t>(x * 8);
   o[1] = 0;
-  for (int16_t& v : a.p(i).move.velocity) v = 0;
+  for (int32_t& v : a.p(i).move.velocity) v = 0;
 }
 
 // Both landed, Ana at x −300 looking down the hall at Ben at x `ben`.
@@ -228,7 +228,7 @@ bool shown_aside(void* ctx, int shooter, int target, sh::Vec3f& at, sh::Vec3f& m
                  sh::Vec3f& maxs) {
   const auto& s = *static_cast<const sv::Q2Server*>(ctx);
   if (shooter != 0 || target != 1) return false;
-  const int16_t* o = s.players[1].move.origin;
+  const int32_t* o = s.players[1].move.origin;
   at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f + 200, float(o[2]) * 0.125f};
   mins = s.players[1].mins;
   maxs = s.players[1].maxs;
@@ -239,7 +239,7 @@ bool shown_crouched(void* ctx, int shooter, int target, sh::Vec3f& at, sh::Vec3f
                     sh::Vec3f& maxs) {
   const auto& s = *static_cast<const sv::Q2Server*>(ctx);
   if (shooter != 0 || target != 1) return false;
-  const int16_t* o = s.players[1].move.origin;
+  const int32_t* o = s.players[1].move.origin;
   at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
   mins = s.players[1].mins;
   maxs = s.players[1].maxs;
@@ -712,7 +712,7 @@ TEST(the_powerup_drop_settings_leave_each_with_its_time) {
     for (int k = 0; k < sv::kQ2Drops; k++) {
       const sv::Q2Drop& d = a->s().drops[k];
       if (!d.live) continue;
-      int16_t* o = ana.move.origin;
+      int32_t* o = ana.move.origin;
       o[0] = static_cast<int16_t>(d.origin.x * 8);
       o[1] = static_cast<int16_t>(d.origin.y * 8);
       run(*a, 2);
@@ -756,7 +756,7 @@ TEST(a_death_drops_the_weapon_and_the_quad_and_a_big_blow_gibs) {
   CHECK(w.origin.y < d.origin.y);
   // Ana walks onto them: the quad is used at once with the time it had left.
   for (int k : {weapon, quad}) {
-    int16_t* o = a->p(0).move.origin;
+    int32_t* o = a->p(0).move.origin;
     o[0] = static_cast<int16_t>(a->s().drops[k].origin.x * 8);
     o[1] = static_cast<int16_t>(a->s().drops[k].origin.y * 8);
     run(*a, 2);
@@ -1071,6 +1071,25 @@ TEST(the_screen_takes_the_quad_tint_and_a_blow_flashes_red_then_fades) {
   CHECK(n.blend[3] == 0);
 }
 
+TEST(the_damage_flash_comes_apart_from_the_rest_of_the_tint) {
+  auto a = arena();
+  run(*a, 10);
+  sv::Q2Player& ana = a->p(0);
+  ana.quad_until = a->s().level_time + 20;
+  sv::fight_hurt(a->s(), 0, 1, {1, 0, 0}, 30, 0, 0);
+  run(*a, 8);
+  // The whole tint holds the quad's blue under the red flash; the rest is the quad's alone, the
+  // flash red at its own share, the whole the rest with the flash laid over it.
+  CHECK(ana.blend_apart[2] == 1 && ana.blend_apart[3] > 0.079f && ana.blend_apart[3] < 0.081f);
+  CHECK(ana.damage_blend[0] == 1 && ana.damage_blend[2] == 0 && ana.damage_blend[3] >= 0.2f);
+  const float whole = ana.blend_apart[3] + (1 - ana.blend_apart[3]) * ana.damage_blend[3];
+  CHECK_MSG(std::fabs(ana.blend[3] - whole) < 1e-6f, std::to_string(ana.blend[3]));
+  const auto& n = a->s().world.clients[0].numbers;
+  CHECK(n.damage_blend[3] == ana.damage_blend[3] && n.blend_apart[3] == ana.blend_apart[3]);
+  run(*a, 8 * 20);
+  CHECK(ana.damage_blend[3] == 0);
+}
+
 TEST(using_quad_says_so_and_power_armour_with_no_cells_says_why) {
   auto a = arena("0");
   run(*a, 10);
@@ -1175,6 +1194,22 @@ TEST(entering_and_leaving_are_said_to_everyone) {
   }
 }
 
+// A new map says each player entered once: at its load, not again when his client begins on it.
+TEST(a_new_map_says_each_player_entered_once) {
+  auto a = arena("1");
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = hall();
+  std::string error;
+  a->s().out.events.clear();
+  CHECK_MSG(a->r.start(map, error), error);
+  a->r.connect(0, "Ana", false, false);  // his client's `begin` on the new map
+  int told = 0;
+  for (const sv::NetEvent& e : a->s().out.events)
+    told += e.kind == sv::EventKind::print && e.text == "Ana entered the game\n";
+  CHECK_MSG(told == 1, "said " + std::to_string(told) + " times");
+}
+
 TEST(a_blow_reports_its_points_to_the_attacker_once_a_frame_and_not_his_own) {
   auto a = arena();
   run(*a, 10);
@@ -1191,4 +1226,26 @@ TEST(a_blow_reports_its_points_to_the_attacker_once_a_frame_and_not_his_own) {
     CHECK_MSG(e.values[0] == 25, std::to_string(e.values[0]));
   }
   CHECK(reports == 1);
+}
+
+TEST(dmflags_8_takes_the_harm_out_of_a_long_fall) {
+  auto a = facing(300);
+  a->r.console("dmflags 8");
+  a->p(0).move.origin[2] = static_cast<int16_t>((24 + 600) * 8);
+  run(*a, 8 * 20);
+  CHECK_MSG(a->p(0).health == 100, std::to_string(a->p(0).health));  // 83 without it
+}
+
+TEST(dmflags_32_plays_the_same_level_again_whatever_comes_next) {
+  for (const char* flags : {"0", "32"}) {
+    auto a = facing(300);
+    a->r.console(std::string("dmflags ") + flags);
+    a->r.console("sv_maplist \"hall base1\"");
+    a->r.console("fraglimit 1");
+    give(*a, sv::SqWeapon::railgun, 10);
+    a->p(1).health = 50;
+    run(*a, 8, sh::kButtonAttack);
+    CHECK(a->s().intermission_at > 0);
+    CHECK_MSG(a->s().next_map == (flags[0] == '3' ? "hall" : "base1"), a->s().next_map);
+  }
 }

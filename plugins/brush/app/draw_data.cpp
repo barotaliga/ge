@@ -164,6 +164,26 @@ double style_level(std::string_view pattern, double t) {
   return double(std::clamp(pattern[at], 'a', 'z') - 'a') / double('m' - 'a');
 }
 
+namespace {
+
+// `pattern`'s level from letter `whole` toward the next by `f` (0..1).
+double style_between(std::string_view pattern, double whole, double f) {
+  const auto letter = [&](double k) {
+    const auto i = size_t(k) % pattern.size();
+    return double(std::clamp(pattern[i], 'a', 'z') - 'a') / double('m' - 'a');
+  };
+  return letter(whole) + (letter(whole + 1) - letter(whole)) * f;
+}
+
+}  // namespace
+
+double style_level_lerped(std::string_view pattern, double t) {
+  if (pattern.empty()) return 1;
+  const double at = std::max(t, 0.0) * kStyleRate;
+  const double whole = std::floor(at);
+  return style_between(pattern, whole, at - whole);
+}
+
 double style_level_glided(std::string_view pattern, double t) {
   if (pattern.empty()) return 1;
   const double at = std::max(t, 0.0) * kStyleRate;

@@ -100,8 +100,13 @@ struct Bsp {
   detail: vec4f,
   // the classic look's light: x its scale (Options::classic_light: 1 the lightmap's 128 shows a
   // texel as painted, 255 twice as bright), y the light added to every luxel (Options::
-  // classic_lift, the lightmap's 0 .. 1 units)
+  // classic_lift, the lightmap's 0 .. 1 units), z the filtered textures' most taps along a slant
+  // (Options::anisotropy), w 1 the sky box read sharp (Options::crisp_sky)
   classic: vec4f,
+  // the solid faces' textures: x their saturation (1 as painted), y 1 inverted; z the lightmaps'
+  // saturation (1 as baked); w the dynamic lights' edge (Options::dlight_falloff: 0 straight to
+  // their reach, 1 to 1.28 m short of it, 2 cut off 1.6 m short)
+  paint: vec4f,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -288,6 +293,16 @@ fn finite2(v: vec2f) -> bool {
   return all((bitcast<vec2u>(v) & e) != e);
 }
 
+// A solid face's texel (linear) as Options::saturation and invert repaint it: toward its
+// luminance, then a negative of its sRGB value.
+fn repainted(c: vec3f) -> vec3f {
+  var o = mix(vec3f(dot(c, vec3f(0.2126, 0.7152, 0.0722))), c, bsp.paint.x);
+  if (bsp.paint.y > 0.5) {
+    o = srgb_to_linear(vec3f(1.0) - linear_to_srgb(clamp(o, vec3f(0.0), vec3f(1.0))));
+  }
+  return o;
+}
+
 // The texel at `st` (texels of mip 0) of the texture at `rect`, at mip `lod`, wrapped.
 fn texel(st: vec2f, rect: vec4f, lod: f32) -> vec4f {
   let k = u32(clamp(lod, 0.0, f32(textureNumLevels(atlas) - 1u)));
@@ -349,7 +364,7 @@ fn filtered(st: vec2f, rect: vec4f, dx: vec2f, dy: vec2f) -> vec4f {
   let major = select(dy, dx, lx > ly);
   let big = max(lx, ly);
   let small = max(min(lx, ly), 1e-6);
-  let taps = clamp(ceil(big / small), 1.0, 4.0);
+  let taps = clamp(ceil(big / small), 1.0, clamp(bsp.classic.z, 1.0, 16.0));
   // 3, or 5 when a texture is upscaled
   let top = textureNumLevels(atlas) - 1u;
   let lod = clamp(max(log2(max(big / taps, 1e-6)), bsp.detail.x), 0.0, f32(top));
@@ -496,7 +511,13 @@ fn dynamic_light(p: vec3f) -> vec3f {
       continue;
     }
     let d = length(p - l.pos.xyz);
-    e += l.colour.rgb * max(1.0 - d / l.pos.w, 0.0);
+    var f = max(1.0 - d / l.pos.w, 0.0);
+    if (bsp.paint.w > 1.5) {  // Options::dlight_falloff 2: cut off kDlightHardM short of its reach
+      f = select(0.0, f, l.pos.w - d >= 1.6);
+    } else if (bsp.paint.w > 0.5) {  // 1: nothing kDlightSoftM short of it
+      f = max(1.0 - d / max(l.pos.w - 1.28, 1e-3), 0.0);
+    }
+    e += l.colour.rgb * f;
   }
   return e;
 }
@@ -522,7 +543,9 @@ fn lightmap(lm: vec2f, styles: u32) -> vec3f {
       e += textureSampleLevel(light_atlas, light_sampler, at, 0.0).rgb * style_level(id);
     }
   }
-  return e * (255.0 / 128.0);
+  // Options::lightmap_saturation: toward its luminance, 1 as baked
+  let l = e * (255.0 / 128.0);
+  return mix(vec3f(dot(l, vec3f(0.2126, 0.7152, 0.0722))), l, bsp.paint.z);
 }
 
 // THE DIRECTIONAL SHADE (engine/bake/bake.hpp, `directional_scale`, restated): the rebaked
@@ -581,8 +604,12 @@ fn sky_box_at(eye_d: vec3f) -> vec3f {
   f += u32(m < 0);
   let i = bsp.sky_box.yz;
   let st = clamp(vec2f(dot(d, cross(u, sign(l))), -dot(d, u)) / abs(m) * 0.5 + 0.5, i, 1 - i);
-  return textureSampleLevel(sky_box, light_sampler, (vec2f(vec2u(f % 3, f / 3)) + st) / vec2f(3, 2),
-                            0).rgb;
+  let uv = (vec2f(vec2u(f % 3, f / 3)) + st) / vec2f(3, 2);
+  if (bsp.classic.w > 0.5) {  // sharp: the texel it falls in
+    let size = vec2f(textureDimensions(sky_box));
+    return textureLoad(sky_box, vec2i(min(floor(uv * size), size - 1.0)), 0).rgb;
+  }
+  return textureSampleLevel(sky_box, light_sampler, uv, 0).rgb;
 }
 
 // The classic sky: a far layer and a near one over it (its texel 0 clear), scrolling.
@@ -1198,6 +1225,7 @@ fn shade(in: VsOut) -> FsOut {
   var glow = smoothstep(0.1, 0.9, tx.a);
   // r_drawflat: a solid face in its one colour, a floor's or a wall's, under the same light.
   if (in.kind == kSolid) {
+    albedo = repainted(albedo);
     let is_floor = normalize(in.nrm).y > 0.70710678;
     let fc = select(bsp.flat_wall, bsp.flat_floor, is_floor);
     if (fc.w > 0.5) {

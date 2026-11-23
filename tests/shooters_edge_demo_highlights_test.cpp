@@ -10,7 +10,7 @@
 // ge:summary Tests: a demo's kills and highlights found, the timeline's seek, the playback controls
 // ge:keywords test demo highlights scan kills multi-kill long-shot air-kill annihilation telefrag
 // ge:keywords streak seek timeline playback skip jump speed pause parse_clock flights shooter
-// ge:keywords demo_jump
+// ge:keywords demo_jump demo_snapshots cl_demosnaps seek-snapshot
 // ge:skill shooter replay testing
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #include <algorithm>
@@ -25,6 +25,7 @@
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_write.hpp"
+#include "shooters_edge/client/timedemo.hpp"
 
 namespace cl = shooters_edge::client;
 namespace gr = ge::replay;
@@ -157,6 +158,54 @@ TEST(a_seek_lands_on_the_straight_read_forward_and_back) {
   CHECK(cl::demo_seek(t, 99, error) == cl::TimedemoStep::end);
 }
 
+TEST(a_seek_back_starts_from_the_last_snapshot_and_lands_as_the_straight_read) {
+  cl::Timedemo straight = opened();
+  std::string error;
+  while (straight.timeline.t < 17.0) cl::timedemo_step(straight, error);
+  cl::Timedemo t = opened();
+  t.snap_every_s = 5;
+  CHECK(cl::demo_seek(t, 26, error) == cl::TimedemoStep::new_level);
+  // One at the level's first frame, then one each 5 s of the timeline after the last.
+  CHECK_MSG(t.snaps.size() >= 5, "snapshots kept: " + std::to_string(t.snaps.size()));
+  for (size_t i = 1; i < t.snaps.size(); i++) {
+    CHECK(t.snaps[i].timeline.t >= t.snaps[i - 1].timeline.t + 5);
+    CHECK(t.snaps[i].demo.bytes.empty());  // the bytes are the demo's own, never copied
+  }
+  CHECK(t.demo.bytes.size() == t.start.bytes.size());
+  CHECK(cl::demo_seek(t, 17, error) == cl::TimedemoStep::frame);  // back: from a snapshot
+  CHECK(!t.snaps.empty() && t.snaps.back().timeline.t <= 17.0);   // the later ones let go
+  CHECK(t.timeline.t == straight.timeline.t);
+  CHECK(t.demo.state.frags == straight.demo.state.frags);
+  CHECK(t.demo.pos == straight.demo.pos);
+  for (size_t k = 0; k < 4; k++)
+    CHECK(t.demo.state.players[k].origin.x == straight.demo.state.players[k].origin.x);
+  const double at17 = straight.timeline.t;
+  const size_t pos17 = straight.demo.pos;
+  // Read on from there, it is the straight read still.
+  while (straight.timeline.t < 22.0) cl::timedemo_step(straight, error);
+  CHECK(cl::demo_seek(t, straight.timeline.t, error) == cl::TimedemoStep::frame);
+  CHECK(t.demo.pos == straight.demo.pos && t.demo.state.frags == straight.demo.state.frags);
+  // None kept (demo_snapshots 0): a seek back reads from the start, to the same place.
+  cl::Timedemo none = opened();
+  CHECK(cl::demo_seek(none, 26, error) == cl::TimedemoStep::new_level);
+  CHECK(none.snaps.empty());
+  CHECK(cl::demo_seek(none, 17, error) == cl::TimedemoStep::frame);
+  CHECK(none.timeline.t == at17 && none.demo.pos == pos17);
+}
+
+TEST(a_share_seek_with_no_known_length_says_so) {
+  cl::DemoPlayback p;
+  cl::Timedemo t = opened();
+  std::string error;
+  CHECK(cl::playback_begin(p, t, error));
+  p.scan.length_s = 0;  // as when the demo could not be scanned
+  p.share_ask = 0.5;
+  std::vector<std::string> said;
+  cl::playback_step(p, t, {}, 1280, 720, 0, 0, said, error);
+  CHECK(said.size() == 1 && said[0].find("length is not known") != std::string::npos);
+  CHECK(t.timeline.t < 1);  // not moved
+}
+
 TEST(the_playback_keys_skip_jump_speed_and_pause) {
   cl::DemoPlayback p;
   cl::Timedemo t = opened();
@@ -268,6 +317,15 @@ TEST(cl_demowait_holds_the_last_frame_paused_and_a_seek_back_plays_again) {
   cl::TimedemoStep got = cl::TimedemoStep::frame;
   for (int i = 0; i < 400 && got != cl::TimedemoStep::end; i++) got = step(0.05);
   CHECK(got == cl::TimedemoStep::end);  // 0: the demo ends
+  {  // and the end is told in the console: the demo ended, no failure
+    ge::console::Console con{false};
+    std::vector<std::string> printed;
+    con.set_sink([&printed](std::string_view l) { printed.emplace_back(l); });
+    t.name = "duel.dm2";
+    t.paced = true;
+    CHECK(!cl::bench_end_report(con, t, "", false, "", 0, {}, [](const std::string&) {}));
+    CHECK(std::find(printed.begin(), printed.end(), "playdemo: duel.dm2 ended") != printed.end());
+  }
   cl::Timedemo held = opened();
   CHECK(cl::playback_begin(p, held, error));
   p.hold_end = 1;

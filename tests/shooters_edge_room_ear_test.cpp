@@ -86,4 +86,15 @@ TEST(under_water_the_mix_is_muffled_once_and_dry_again_out_of_it) {
   CHECK(!bound.on && bound.treble == 0.25);  // the classic layer's: off
   c.execute("s_underwater 1; s_underwater_gain_hf 0.5");
   CHECK(bound.on && bound.treble == 0.5);
+  // s_hrtf: 1 is the device's choice, which names no headphones (off); 2 the two ears.
+  CHECK(bound.hrtf == 0 && !cl::hrtf_on(bound));
+  c.execute("s_hrtf 1");
+  CHECK(!cl::hrtf_on(bound));
+  cl::hear_ears(synth, bound);
+  CHECK(bound.hrtf_sent == 0);
+  c.execute("s_hrtf 2");
+  cl::hear_ears(synth, bound);
+  CHECK(cl::hrtf_on(bound) && bound.hrtf_sent == 1);
+  c.execute("s_hrtf 7");  // held to 0..2
+  CHECK(bound.hrtf == 2);
 }

@@ -29,7 +29,7 @@ constexpr std::string_view kNames[] = {
     "menudot6", "ttl_sgl",  "sp_menu",  "p_multi",  "mp_menu",  "p_option", "help0",    "help1",
     "help2",    "help3",    "help4",    "help5",    "box_tl",   "box_tm",   "box_tr",   "box_ml",
     "box_mm",   "box_mr",   "box_bl",   "box_bm",   "box_br",   "complete", "inter",    "ranking",
-    "conback",  "finale",   "pause",    "loading"};
+    "conback",  "finale",   "pause",    "loading",  "bigbox"};
 
 // The big figures the level's end is drawn in, pictures of the glyph sheet's wad.
 constexpr std::string_view kWadNames[] = {"num_0",     "num_1",     "num_2",    "num_3", "num_4",
@@ -225,6 +225,34 @@ const ui::Image* ClassicArt::find(std::string_view name) const {
   return it == pictures.end() ? nullptr : &it->second;
 }
 
+const ui::Image* ClassicArt::player_in(int top, int bottom) const {
+  if (player_indices.empty()) return nullptr;
+  top = std::clamp(top, 0, 13);
+  bottom = std::clamp(bottom, 0, 13);
+  if (player_colours == top * 16 + bottom) return &player_dressed;
+  vfs::IndexedPicture p;
+  p.width = player_width;
+  p.height = player_height;
+  p.indices = player_indices;
+  // A range of 16 laid over a palette row: a row from 128 up runs bright to dark the other way.
+  const auto row = [](int k, int from, int colour) {
+    const int start = colour * 16, step = k - from;
+    return start < 128 ? start + step : start + 15 - step;
+  };
+  for (uint8_t& k : p.indices) {
+    if (k >= 16 && k < 32)
+      k = static_cast<uint8_t>(row(k, 16, top));
+    else if (k >= 96 && k < 112)
+      k = static_cast<uint8_t>(row(k, 96, bottom));
+  }
+  const uint64_t revision = player_dressed.revision + 1;  // a GPU copy is uploaded again
+  player_dressed =
+      ui::scaled_nearest(menu::colour(p, palette, 255), std::max(1, static_cast<int>(density)));
+  player_dressed.revision = revision;
+  player_colours = top * 16 + bottom;
+  return &player_dressed;
+}
+
 ui::Color ClassicArt::colour(int index) const {
   const size_t at = static_cast<size_t>(std::clamp(index, 0, 255)) * 3;
   return {static_cast<float>(palette[at]) / 255, static_cast<float>(palette[at + 1]) / 255,
@@ -277,6 +305,16 @@ bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error,
     const std::span<const uint8_t> bytes = find(path, store);
     vfs::IndexedPicture p;
     if (bytes.empty() || !vfs::read_picture(bytes, &p, &why)) continue;
+    if (name == "mainmenu" && out->player_indices.empty()) {  // the setup page's figure, once
+      std::vector<uint8_t> fig_store;
+      vfs::IndexedPicture fig;
+      const std::span<const uint8_t> fig_bytes = find("gfx/menuplyr.lmp", fig_store);
+      if (!fig_bytes.empty() && vfs::read_picture(fig_bytes, &fig, &why)) {
+        out->player_indices = fig.indices;
+        out->player_width = fig.width;
+        out->player_height = fig.height;
+      }
+    }
     if (name == "mainmenu" || name == "sp_menu") {  // kNames has mainmenu before sp_menu
       for (const uint8_t k : p.indices) print = (print ^ k) * 0x100000001b3ULL;
       printed++;
@@ -388,6 +426,21 @@ std::map<std::string, std::vector<uint8_t>, std::less<>> fixture_files() {
   put("box_bl", piece(8, false, true, true, false));
   put("box_bm", piece(16, false, true, false, false));
   put("box_br", piece(8, false, true, false, true));
+  put("bigbox", canvas(72, 72, [](ui::DrawList& dl) {
+        dl.rect({0, 0, 72, 72}, kBronze, 3);
+        dl.rect({3, 3, 66, 66}, kDark, 2);
+      }));
+  // The setup page's figure: a see-through ground, the shirt's range over its top half and the
+  // pants' over its bottom, each a column per shade.
+  vfs::IndexedPicture fig;
+  fig.width = 48;
+  fig.height = 56;
+  fig.indices.assign(size_t{48} * 56, 255);
+  for (int y = 4; y < 52; y++)
+    for (int x = 8; x < 40; x++)
+      fig.indices[(static_cast<size_t>(y) * 48) + static_cast<size_t>(x)] =
+          static_cast<uint8_t>((y < 28 ? 16 : 96) + (x - 8) / 2);
+  files["gfx/menuplyr.lmp"] = vfs::write_picture(fig);
   return files;
 }
 

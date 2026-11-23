@@ -7,9 +7,11 @@
 #include "shooters_edge/client/chat_lines.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 
+#include "classic/rulesets.hpp"
 #include "console/cvar.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
 
@@ -403,8 +405,8 @@ bool chat_line_extras(ChatExtras& x, DemoState& s, const con::ChatLine& line, De
 
 namespace {
 
-// The query a chat line's words ask: 0 f_version or !version, 1 f_server, -1 none. The word, then
-// only digits and blanks.
+// The query a chat line's words ask: 0 f_version or !version, 1 f_server, 2 f_fakeshaft, -1 none.
+// The word, then only digits and blanks.
 int query_of(std::string_view words) {
   std::string plain;
   for (const char ch : words) plain += static_cast<char>(static_cast<unsigned char>(ch) & 0x7f);
@@ -416,7 +418,8 @@ int query_of(std::string_view words) {
   };
   for (const auto& [word, kind] :
        {std::pair<const char*, int>{"f_version", 0}, std::pair<const char*, int>{"!version", 0},
-        std::pair<const char*, int>{"f_server", 1}}) {
+        std::pair<const char*, int>{"f_server", 1},
+        std::pair<const char*, int>{"f_fakeshaft", 2}}) {
     const std::string_view w = word;
     if (plain.starts_with(w) && only_after(w.size())) return kind;
   }
@@ -445,7 +448,8 @@ void chat_line_teamplay(ChatExtras& x, DemoState& s, const con::ChatLine& line, 
     for (size_t i = words_at; i < p.text.size(); ++i)
       if (p.text[i] == '\r' || (p.text[i] == '\n' && i + 1 < p.text.size())) p.text[i] = ' ';
   }
-  if (chat && own_team && !x.sound_trigger.empty()) {
+  const bool sounds_quiet = x.con != nullptr && x.con->sound_triggers_quiet();  // a ruleset's
+  if (chat && own_team && !x.sound_trigger.empty() && !sounds_quiet) {
     // The sound word: the line's last run of name characters after a trigger character.
     size_t end = p.text.size();
     while (end > words_at && (p.text[end - 1] == '\n' || p.text[end - 1] == '\r')) --end;
@@ -484,14 +488,33 @@ void chat_line_teamplay(ChatExtras& x, DemoState& s, const con::ChatLine& line, 
   const bool watching = s.player >= 0 && static_cast<size_t>(s.player) < s.spectator.size() &&
                         s.spectator[static_cast<size_t>(s.player)];
   const bool spoken = line.kind == con::ChatKind::everyone || line.kind == con::ChatKind::spectator;
-  if (chat && x.queries && x.con != nullptr && spoken && line.place != s.player && !watching) {
+  const bool q2 = s.format == DemoFormat::q2;
+  if (q2 && chat && x.queries && x.con != nullptr && line.place != s.player && x.reply_due < 0 &&
+      now_s - x.answered_at[0] >= kQ2ReplyEveryS) {
+    std::string plain;  // the words' end, high bits off, newlines and blanks after dropped
+    for (const char ch : words) plain += static_cast<char>(static_cast<unsigned char>(ch) & 0x7f);
+    while (!plain.empty() && (plain.back() == '\n' || plain.back() == '\r' || plain.back() == ' '))
+      plain.pop_back();
+    if (plain.ends_with("!version")) {
+      x.answered_at[0] = now_s;
+      // 1 to 2 s on, spread by the moment it was asked (no two clients answer as one).
+      const double spread = now_s * 1000 - std::floor(now_s * 1000 / 997) * 997;
+      x.reply_due = now_s + kQ2ReplyLeastS + (kQ2ReplyMostS - kQ2ReplyLeastS) * spread / 997;
+    }
+  }
+  if (!q2 && chat && x.queries && x.con != nullptr && spoken && line.place != s.player &&
+      !watching) {
     const int q = query_of(words);
     if (q >= 0 && now_s - x.answered_at[static_cast<size_t>(q)] >= 20) {
       x.answered_at[static_cast<size_t>(q)] = now_s;
       const std::string server = x.con->expand_text("$cl_server");
+      const ge::console::Cvar* shaft = x.con->cvars().find("cl_fakeshaft");
       if (q == 0)
         x.con->append("say \"" + std::string(version) + "\"");
-      else if (server != "$cl_server" && !server.empty())
+      else if (q == 2 && shaft != nullptr)  // the beam's smoothing, as the setting has it
+        x.con->append("say \"" + ge::classic::fakeshaft_words(std::atof(shaft->value.c_str())) +
+                      "\"");
+      else if (q == 1 && server != "$cl_server" && !server.empty())
         x.con->append("say \"f_server response: " + server + "\"");
     }
   }
@@ -499,6 +522,12 @@ void chat_line_teamplay(ChatExtras& x, DemoState& s, const con::ChatLine& line, 
     const int level = p.level < 0 ? 0 : p.level > kChatLevel ? kChatLevel : p.level;
     x.con->fire_triggers(words, level, own_team);
   }
+}
+
+void chat_reply_due(ChatExtras& x, double now_s, std::string_view version) {
+  if (x.reply_due < 0 || now_s < x.reply_due) return;
+  x.reply_due = -1;
+  if (x.con != nullptr) x.con->append("say \"" + std::string(version) + "\"");
 }
 
 }  // namespace shooters_edge::client

@@ -15,7 +15,9 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -23,6 +25,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/content/downloads.hpp"
 #include "console/cvar.hpp"
 #include "forward/forward.hpp"
 #include "net/conditions.hpp"
@@ -35,6 +38,7 @@
 #include "shooters_edge/net/q2_game.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
+#include "shooters_edge/net/q2_remote.hpp"
 #include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
@@ -321,6 +325,51 @@ TEST(a_client_joins_through_the_signon_and_plays_on_deltas) {
   CHECK(frames == c.frames);
 }
 
+// Protocols 35 and 36 (net/q2_proto_in.hpp): each joins, walks on deltas and keeps a recording
+// of protocol 34 that reads whole; 36 on either channel, its moves batched or one a packet.
+TEST(a_client_of_each_later_protocol_joins_and_plays) {
+  struct Case {
+    int protocol, chantype;
+    bool batch;
+  };
+  for (const Case k : {Case{35, 0, false}, Case{36, 1, true}, Case{36, 0, false},
+                       Case{36, 1, false}, Case{0, 1, true}}) {
+    const std::string name =
+        std::to_string(k.protocol) + "/" + std::to_string(k.chantype) + (k.batch ? " batched" : "");
+    auto r = rig({});
+    cn::Q2ClientConfig cfg;
+    cfg.name = "eve";
+    cfg.brain = forward;
+    cfg.protocol = k.protocol;
+    cfg.chantype = k.chantype;
+    cfg.batch = k.batch;
+    cn::Q2ClientEnd& c = join(*r, cfg);
+    run(*r, 120);
+    CHECK_MSG(c.stage == cn::ClientStage::active, name + ": " + c.refused);
+    CHECK_MSG(c.protocol == (k.protocol == 0 ? 36 : k.protocol), name);
+    CHECK(c.demo.state.map == "hall");
+    const float x0 = c.demo.state.eye.x, y0 = c.demo.state.eye.y;
+    run(*r, 200);
+    CHECK_MSG(c.frames >= 20, name);
+    const cn::Q2NetClient& sc = r->server.clients[0];
+    CHECK_MSG(sc.moves > 30, name + ": " + std::to_string(sc.moves) + " moves");
+    CHECK_MSG(sc.full_frames <= 3, name + ": " + std::to_string(sc.full_frames) + " whole frames");
+    const float dx = c.demo.state.eye.x - x0, dy = c.demo.state.eye.y - y0;
+    CHECK_MSG(dx * dx + dy * dy > 100.0f * 100.0f, name + ": walked " + std::to_string(dx));
+    cn::q2_client_stop(c);
+    run(*r, 10);
+    cl::Demo d;
+    std::string error;
+    CHECK_MSG(cl::open_demo(c.demo.bytes, d, error), name + ": " += error);
+    CHECK(d.state.protocol == 34 || d.state.protocol == 0);
+    int frames = 0;
+    cl::DemoRead got;
+    while ((got = cl::next_frame(d, error)) == cl::DemoRead::frame) frames++;
+    CHECK_MSG(got == cl::DemoRead::end, name + ": " += error);
+    CHECK_MSG(frames == c.frames, name);
+  }
+}
+
 TEST(a_map_with_no_sky_gets_the_default_and_a_download_is_refused) {
   // A client that finds no sky asks for one to download; it is refused and plays on.
   cn::Q2NetConfig cfg;
@@ -453,6 +502,53 @@ TEST(sv_idlekick_is_the_idle_drop_not_the_lobbys_unready_kick) {
   CHECK(c.idle_kick_s == 0);  // the core's setting of that name is set aside
   const ge::console::Cvar* v = cvars.find("sv_idlekick");
   CHECK(v != nullptr && v->name == "sv_idletime");
+}
+
+// A server that insists on anticheat (` ac=2` in its connect answer): this game has none, so the
+// player is told so and the game is joined without it; ` ac=1` (wanted, not needed) says nothing.
+TEST(a_server_insisting_on_anticheat_is_told_and_joined_without_it) {
+  for (int ask : {1, 2}) {
+    gn::SimNetwork net = gn::make_sim_network(3, {});
+    gn::Transport server, client;
+    gn::open_sim_transport(server, net, gn::sim_address(0, cn::kPortQ2));
+    gn::open_sim_transport(client, net, gn::sim_address(1, 27901));
+    cn::Q2ClientEnd c;
+    cn::Q2ClientConfig cfg;
+    cfg.qport = 7;
+    cn::q2_client_start(c, client, gn::sim_address(0, cn::kPortQ2), cfg, 0);
+    int64_t now = 0;
+    bool answered = false;
+    for (int i = 0; i < 40 && !answered; i++) {
+      now += 13000;
+      gn::sim_advance(net, now);
+      cn::q2_client_tick(c, now);
+      uint8_t buf[gn::kMaxDatagram];
+      gn::Address from;
+      for (int n; (n = gn::transport_receive(server, buf, sizeof buf, from, now)) > 0;) {
+        const std::vector<std::string> w =
+            cn::q2_words(cn::q2_oob_text(buf, static_cast<size_t>(n)));
+        std::string reply;
+        if (!w.empty() && w[0] == "getchallenge") reply = "challenge 4242 p=34";
+        if (!w.empty() && w[0] == "connect") {
+          reply = "client_connect ac=" + std::to_string(ask);
+          answered = true;
+        }
+        if (reply.empty()) continue;
+        const std::vector<uint8_t> b = cn::q2_oob(reply);
+        gn::transport_send(server, from, b.data(), b.size(), now);
+      }
+    }
+    for (int i = 0; i < 4; i++) {
+      now += 13000;
+      gn::sim_advance(net, now);
+      cn::q2_client_tick(c, now);
+    }
+    CHECK(answered && c.refused.empty());
+    bool told = false;
+    for (const std::string& line : c.prints)
+      told = told || line.find("asks for anticheat") != std::string::npos;
+    CHECK_MSG(told == (ask == 2), "ac=" + std::to_string(ask));
+  }
 }
 
 TEST(refusals_read_as_a_players_words) {
@@ -613,6 +709,29 @@ TEST(a_locked_server_refuses_newcomers) {
   cn::Q2ClientEnd& c = join(*r, {});
   run(*r, 80);
   CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+}
+
+// sv_ruleset: a player on another ruleset is refused, one on it and a spectator come in, and the
+// status record names it.
+TEST(a_competition_server_refuses_a_player_on_another_ruleset) {
+  cn::Q2NetConfig cfg;
+  cfg.ruleset = "duel";
+  auto r = rig(cfg);
+  cn::Q2ClientConfig plain;
+  cn::Q2ClientEnd& a = join(*r, plain);
+  cn::Q2ClientConfig dueller;
+  dueller.ruleset = "duel";
+  cn::Q2ClientEnd& b = join(*r, dueller);
+  cn::Q2ClientConfig watcher;
+  watcher.spectator = true;
+  cn::Q2ClientEnd& c = join(*r, watcher);
+  run(*r, 80);
+  CHECK(a.refused ==
+        "This server requires the duel ruleset. Pick it in OPTIONS or type ruleset duel, then "
+        "join again.\n");
+  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+  CHECK_MSG(c.refused.empty(), c.refused);
+  CHECK(cn::q2_status_text(r->server).find("\\ruleset\\duel") != std::string::npos);
 }
 
 TEST(renames_past_the_limit_are_refused_and_the_rest_told) {
@@ -922,24 +1041,59 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
   std::filesystem::remove_all(dir);
 }
 
-TEST(the_download_switches_gate_each_kind_of_file) {
-  // allow_download and its kinds (net/q2_downloads.hpp): each folder its switch, the rest
-  // `others` (off by default), and nothing at all once `allow_download` is 0 or -1.
-  cn::Q2Downloads d;
-  CHECK(cn::q2_download_allowed(d, "maps/q2dm1.bsp"));
-  CHECK(cn::q2_download_allowed(d, "players/male/grunt.pcx"));
-  CHECK(cn::q2_download_allowed(d, "sprites/s_bfg1.sp2"));
-  CHECK(cn::q2_download_allowed(d, "env/unit1_up.pcx"));
-  CHECK(!cn::q2_download_allowed(d, "locs/q2dm1.loc"));
-  d.textures = false;
-  CHECK(!cn::q2_download_allowed(d, "textures/e1u1/floor1_1.wal"));
-  CHECK(!cn::q2_download_allowed(d, "env/unit1_up.pcx"));
-  d.others = true;
-  CHECK(cn::q2_download_allowed(d, "locs/q2dm1.loc"));
-  for (const int all : {0, -1}) {
-    d.all = all;
-    CHECK(!cn::q2_download_allowed(d, "maps/q2dm1.bsp"));
+TEST(a_download_cut_short_is_resumed_from_what_is_held) {
+  // A skin's first 1000 bytes held from before (as `<path>.tmp`): the client asks for the rest
+  // from there, so it ends as the held bytes then the server's from 1000 on, and the held file
+  // goes once it is whole. A client holding nothing gets every piece added as it comes (two of
+  // them: pieces fill the packet), the first one begun afresh.
+  const std::vector<uint8_t> red(2500, 7);
+  cn::Q2NetConfig cfg;
+  cfg.read_file = [&red](const std::string& path, std::vector<uint8_t>* out) {
+    if (path != "players/male/red.pcx") return false;
+    *out = red;
+    return true;
+  };
+  auto r = rig(cfg);
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge_q2_resume";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir / "players/male");
+  {
+    std::ofstream held(dir / "players/male/red.pcx.tmp", std::ios::binary);
+    const std::vector<char> first(1000, 5);
+    held.write(first.data(), std::streamsize(first.size()));
   }
+  cn::Q2ClientConfig resumed;
+  resumed.name = "resumed";
+  resumed.fetch = true;
+  resumed.want = {"players/male/red.pcx"};
+  resumed.read_file = [](const std::string& path) {
+    return path.starts_with("maps/") ? std::vector<uint8_t>(1, 1) : std::vector<uint8_t>{};
+  };
+  resumed.held = ge::classic::content::held_in_folder([dir] { return dir.string(); });
+  cn::Q2ClientConfig fresh = resumed;
+  fresh.name = "fresh";
+  int adds = 0, fresh_adds = 0;
+  size_t added = 0;
+  fresh.held.read = nullptr;
+  fresh.held.add = [&](const std::string&, std::span<const uint8_t> bytes, bool first) {
+    adds++;
+    fresh_adds += first ? 1 : 0;
+    added += bytes.size();
+  };
+  fresh.held.drop = nullptr;
+  cn::Q2ClientEnd& a = join(*r, resumed);
+  cn::Q2ClientEnd& b = join(*r, fresh);
+  run(*r, 300);
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  std::vector<uint8_t> want(1000, 5);
+  want.insert(want.end(), red.begin() + 1000, red.end());
+  CHECK(a.downloaded["players/male/red.pcx"] == want);
+  CHECK(!std::filesystem::exists(dir / "players/male/red.pcx.tmp"));
+  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+  CHECK(b.downloaded["players/male/red.pcx"] == red);
+  CHECK_MSG(adds == 2 && fresh_adds == 1 && added == red.size(),
+            std::to_string(adds) + " adds, " + std::to_string(fresh_adds) + " fresh");
+  std::filesystem::remove_all(dir);
 }
 
 TEST(each_client_is_sent_only_what_it_may_see) {
@@ -1399,6 +1553,45 @@ TEST(the_easy_jump_strafes_on_our_server_of_q2_at_its_share) {
   CHECK_MSG(off.fastest <= plain.fastest + 20, "share 0: " + std::to_string(off.fastest));
 }
 
+TEST(a_joined_server_hears_a_new_name_skin_hand_fov_and_msg_at_once) {
+  // Joined to our server: a rename reaches the server's own user info for the player.
+  auto r = rig({}, "broadband");
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.q2_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortQ2), cfg);
+  std::map<std::string, std::string> live{{"name", "eve"}};
+  remote.setting = [&live](const std::string& k) {
+    const auto at = live.find(k);
+    return at == live.end() ? std::string() : at->second;
+  };
+  std::vector<std::string> said;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      if (cn::remote_step(remote, 0.0131, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());
+      cn::q2_net_frame(r->server, r->now);
+    }
+  };
+  steps(200);
+  CHECK_MSG(remote.q2->stage == cn::ClientStage::active, remote.q2->refused);
+  live["name"] = "zed";
+  live["msg"] = "2";
+  steps(20);
+  bool renamed = false;
+  for (const cn::Q2NetClient& c : r->server.clients)
+    if (c.stage != cn::Q2Slot::free)
+      renamed = c.userinfo.find("name\\zed") != std::string::npos &&
+                c.userinfo.find("msg\\2") != std::string::npos;
+  CHECK(renamed);
+}
+
 TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {
   cn::Q2NetConfig open;  // no floor or cap: the rate each client asks for
   open.min_rate = 0;
@@ -1504,7 +1697,9 @@ TEST(a_rate_out_of_the_servers_bounds_is_set_back_and_the_player_told) {
     bool p = false, st = false;
     for (const std::string& t : c.prints) p = p || t.find(said) != std::string::npos;
     for (const std::string& t : c.stuffed) st = st || t == line;
-    return p && st;
+    // Not a line the client answers itself: it goes on to the player's console, run as typed.
+    const bool run = std::find(c.to_run.begin(), c.to_run.end(), line) != c.to_run.end();
+    return p && st && run;
   };
   CHECK(told(h, "Your rate setting is too high for this server.", "rate 3000"));
   CHECK(told(l, "Your rate setting is too low for this server.", "rate 2000"));
@@ -1649,7 +1844,7 @@ TEST(lag_compensation_on_our_server_of_q2_rewinds_to_the_shooters_frame) {
   CHECK(r->server.clients[sa].acked > 0);
   sh::Vec3f at, lo, hi;
   CHECK(game.lag_place(game.lag_ctx, sa, sb, at, lo, hi));
-  const int16_t* o = game.players[sb].move.origin;
+  const int32_t* o = game.players[sb].move.origin;
   const sh::Vec3f now{float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
   CHECK_MSG(sh::length(at - now) < 1, "a standing player was rewound away from where he stands");
   CHECK(lo.z == game.players[sb].mins.z && hi.z == game.players[sb].maxs.z);  // his box then

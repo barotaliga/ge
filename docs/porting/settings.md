@@ -16,6 +16,9 @@ procedure.
 | Engine | `engine/console/cfg.hpp`, `cfg_tidy.hpp`, `catalog.hpp`, `words.hpp` | Startup order, saving one part, scopes (`<game>:name`), tidy configs, the catalog, each setting's words |
 | Engine | `engine/server/config.hpp` | The server's settings in layers (`server.md`) |
 | Shooter kit | `plugins/shooter/settings.hpp`, `controls.hpp`, `mouse_feel.hpp` | The shooter's shared settings |
+| Engine | `engine/console/ruleset.hpp` | Rulesets: settings locked or kept in a range and commands refused under a named ruleset (`Cvars::lock`, `Console::gate_command`) |
+| Classic | `plugins/classic/rulesets.hpp` | Each classic game's book of competition rulesets, the ruleset in user info (`*rsn`, `rsn`), the `f_ruleset` answer |
+| Shell | `games/shooters_edge/net/qw_remote_rulesets.hpp` | The ruleset on a server joined: the book by game, locked while joined, the answers said |
 | Shell | `games/shooters_edge/client/cvar_layers.cpp` | `add_first`, `add_q2`: each game's layer and `GameBindings` |
 | Test | `tests/shooters_edge_cvar_layers_test.cpp` | Fails on any undeclared meeting of two layers, for every game |
 
@@ -52,8 +55,19 @@ procedure.
   (`cl_predict_crouch`, `cl_noskins`, `hand` in Quake II's).
 - A feature one game had and another did not: on in its game, off in the other (`ledger.md`).
 
+## The common names across the games
+
+Once a game's own rounds are done, its names are checked against every other game's for the ONE
+THING two games keep under two settings: `porting/shooters-edge/common-settings.md` is that audit
+for Quake, QuakeWorld and Quake II (every name of the five reference sources, the 190 the games
+share, each with our name, its layer and its status). A lift moves the setting to the lowest layer
+its games share (bound to one field every game's code reads), makes each game's spelling a synonym
+in its layer and its default a `same` row, and flips the audit's row.
+
 ## Gaps
 
+- The common names left to lift, by batch: the graphs and the 2D switch (B4), the server's
+  `cheats`, recording size and port (B5).
 - `toggle` (flips in one game, cycles in the other): a per-game command layer.
 - The move rate: Quake II's `cl_maxfps` as `own`.
 - No census yet of the third game's settings.
@@ -70,6 +84,17 @@ procedure.
   server at the next frame (Quake's `setinfo`, Quake II's whole user info again).
 - A meta-cvar sets values under the explicit ones.
 - Player text has no backticks and no `next:`.
+- A ruleset locks a setting by the name its game's clients know (`r_drawparticles`): when ours is
+  another name, the lock does nothing until that name is a synonym of ours (`Cvars::find` follows
+  whole synonyms). Check every locked name resolves after a lift.
+- A setting registered by only one game's layer and moved to a shared one must leave the game's
+  "set aside" resets (`add_first`'s) and its `GameBindings` pointer with it, or loading the other
+  game puts the player's value back to a default.
+- A setting registered twice in ONE layer keeps the first registration's field: the second
+  `bind` is ignored, not merged. To read a setting another file of the same layer owns, keep its
+  `Cvar*` (`Q2Session::dist` reads `cam_dist`) instead of binding it again.
+- Matching names across games by spelling finds only part of the pairs: Quake II's `con_height`
+  is QuakeWorld's `scr_consize`. Pair by what each does, from both ledgers' descriptions.
 
 ## Wish
 

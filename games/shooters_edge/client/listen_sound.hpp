@@ -51,6 +51,8 @@ class ListenHearing {
   void frame(Listen& l, const SearchPath& files, float dt, std::string_view heard = {});
   // Every sound stopped (the game ended, or another took the window).
   void stop();
+  // The sounds read (`soundlist`); null before the first.
+  const DemoSounds* sounds() const { return sounds_.get(); }
 
   // The players' counts (null before Quake).
   const DemoSoundStats* stats() const { return sounds_ ? &sounds_->stats() : nullptr; }

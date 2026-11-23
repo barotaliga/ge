@@ -24,6 +24,7 @@
 
 #include "audio/meter.hpp"
 #include "audio/rack.hpp"
+#include "audio/sample_voice.hpp"
 #include "audio/synth.hpp"
 #include "check.hpp"
 #include "golden.hpp"
@@ -276,6 +277,47 @@ TEST(swap_stereo_trades_the_channels) {
   s.swap_stereo(false);
   const auto [l2, r2] = sides(s);
   CHECK(l2 > 0.05f && r2 < l2 * 0.01f);
+}
+
+TEST(two_ears_hear_a_click_to_the_right_later_and_softer_on_the_left) {
+  // A click at 48 kHz: one frame at 1, then silence.
+  static const Pcm click = [] {
+    Pcm p;
+    p.rate = kRate;
+    p.samples.assign(400, 0.0f);
+    p.samples[0] = 1;
+    return p;
+  }();
+  const auto first_and_peak = [](const std::vector<float>& v, size_t side) {
+    size_t first = v.size();
+    float peak = 0;
+    for (size_t i = side; i < v.size(); i += 2) {
+      const float a = std::abs(v[i]);
+      if (a > 1e-4f && first == v.size()) first = i / 2;
+      peak = std::max(peak, a);
+    }
+    return std::pair{first, peak};
+  };
+  Synth ears;
+  ears.binaural(true);
+  ears.sample(click, {.gain = 0.5f, .pan = 1});
+  const std::vector<float> v = render(ears, 0.02);
+  const auto [right_at, right_peak] = first_and_peak(v, 1);
+  const auto [left_at, left_peak] = first_and_peak(v, 0);
+  CHECK_MSG(left_at >= right_at + 30 && left_at <= right_at + 33,
+            "the far ear " + std::to_string(left_at - right_at) + " frames late, not about 32");
+  CHECK(left_peak > 0 && left_peak < right_peak * 0.5f);  // quieter and duller
+  // Centred, the two ears hear what the level pan does, to the bit.
+  Synth plain, centred;
+  centred.binaural(true);
+  plain.sample(saw_recording(), {.gain = 0.2f});
+  centred.sample(saw_recording(), {.gain = 0.2f});
+  CHECK(render(plain, 0.1) == render(centred, 0.1));
+  float delay = 0, gain = 0, coeff = 0;
+  ge::audio::far_ear(-1, delay, gain, coeff);
+  CHECK(delay == ge::audio::kItdFrames && gain == 1 - ge::audio::kFarShade);
+  ge::audio::far_ear(0, delay, gain, coeff);
+  CHECK(delay == 0 && gain == 1 && coeff == 1);
 }
 
 TEST(the_echo_answers_after_its_delay) {

@@ -2,6 +2,7 @@
 // and the palette grade
 // ge:keywords look classic modern palette grade quantize r_look r_fx_lights r_fx_glow r_bloom
 // ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles ce_water_specks
+// ge:keywords gl_damageblend_frac damage-frame
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
 // ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash r_drawflame
@@ -80,6 +81,25 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .max = 4,
         .values = "0: unlit; 0..4: that many times the classic's (0.15 the default)"},
        &picture.fx_glow);
+  // Every game's (docs/porting-games.md § One name, one meaning): the lightmaps' scale (Quake II's
+  // gl_modulate and QuakeWorld's, 1 in both) and the textures' slant taps (QuakeWorld's and Quake
+  // II's gl_anisotropy; Quake II's layer gives its 1).
+  bind(cv,
+       {.name = "gl_modulate",
+        .flags = gc::kArchive,
+        .help = "How strongly the maps' light shows: their light times this.",
+        .min = 0,
+        .max = 1000000,
+        .values = "1: as the maps were lit; 2: twice as bright"},
+       &picture.light_modulate);
+  bind(cv,
+       {.name = "gl_anisotropy",
+        .flags = gc::kArchive,
+        .help = "How sharp the textures stay on surfaces seen at a slant, when they are smoothed.",
+        .min = 0,
+        .max = 16,
+        .values = "0: the renderer's own; 1: off; 2..16: that many samples, sharper"},
+       &picture.anisotropy);
   bind(cv,
        {.name = "r_bloom",
         .help = "The modern look's bloom, read when the picture is built.",
@@ -293,6 +313,16 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .values = "1: every gun's (the default); 2: the others' alone, not your own; 0: none"},
        &picture.muzzle_flash);
   bind(cv,
+       {.name = "cl_fakeshaft",
+        .flags = gc::kArchive,
+        .help = "How closely your own lightning beam follows your aim between the server's "
+                "updates.",
+        .min = 0,
+        .max = 1,
+        .values = "1: it follows your view every frame (the default); 0: the server's line; "
+                  "between: part of the way"},
+       &picture.fake_shaft);
+  bind(cv,
        {.name = "gl_picmip",
         .flags = gc::kArchive,
         .help = "How much detail the walls' textures lose.",
@@ -424,6 +454,17 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .kind = gc::CvarKind::boolean,
         .values = "1: it is (the default); 0: never"},
        &picture.poly_blend);
+  bind(cv,
+       {.name = "gl_damageblend_frac",
+        .flags = gc::kArchive,
+        .help = "How deep a hit's flash reaches in from the screen's edges, so the middle stays "
+                "clear.",
+        .kind = gc::CvarKind::number,
+        .min = 0,
+        .max = 0.5,
+        .values = "0: over the whole view (the default); 0..0.5: a frame that share of the "
+                  "screen's shorter side deep, fading inward"},
+       &picture.damage_frac);
   bind(cv,
        {.name = "r_lightmap",
         .flags = gc::kArchive,
@@ -826,6 +867,22 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   rgb_words(picture.wall_colour, base.wall_colour);
   rgb_words(picture.floor_colour, base.floor_colour);
   rgb_words(picture.sky_colour, base.sky_colour);
+  // Quake II's own (classic/q2_fx_switches.hpp; another game's defaults change nothing):
+  // gl_drawsky 0 a black sky, gl_bilerp_skies 0 a sharp one, gl_saturation and gl_invert on the
+  // walls' and floors' textures.
+  const ge::classic::Q2FxSwitches& q2 = picture.q2fx;
+  if (!q2.draw_sky) {
+    base.fast_sky = true;
+    base.sky_colour[0] = base.sky_colour[1] = base.sky_colour[2] = 0;
+  }
+  base.crisp_sky = !q2.smooth_sky;
+  base.saturation = q2.saturation;
+  base.invert = q2.invert;
+  // gl_anisotropy (every game's) the filtered textures' taps.
+  if (picture.anisotropy > 0) base.anisotropy = static_cast<int>(std::lround(picture.anisotropy));
+  base.lightmap_saturation = q2.lightmap_saturation;  // gl_coloredlightmaps
+  base.lerp_styles = q2.lerp_styles;                  // cl_lerp_lightstyles
+  if (q2.dlight_falloff >= 0) base.dlight_falloff = q2.dlight_falloff == 0 ? 2 : 1;
   base.picmip = std::clamp(picture.picmip, 0, 4);  // gl_picmip
   base.fullbright = picture.fullbright;            // r_fullbright
   if (picture.lightmap_only) {                     // r_lightmap: grey faces, the light alone
@@ -834,7 +891,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   }
   if (look == Look::classic) {
     base.mode = ba::Mode::classic;
-    base.classic_light = light_scale(picture);                      // intensity, gl_modulate
+    base.classic_light = world_light_scale(picture);  // intensity, gl_modulate (_world)
     base.classic_lift = std::clamp(picture.light_lift, -1.0, 1.0);  // gl_brightness
     if (!picture.dynamic) base.dynamic_strength = 0;  // r_dynamic 0: no moment's light
     base.lighting = ba::Lighting::lightmaps;
@@ -844,8 +901,8 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   } else {
     base.mode = ba::Mode::v2;
     base.lighting = ba::Lighting::lights;
-    base.brightness *= light_scale(picture);  // intensity, gl_modulate: the map's light
-    base.strength *= light_scale(picture);
+    base.brightness *= world_light_scale(picture);  // intensity, gl_modulate: the map's light
+    base.strength *= world_light_scale(picture);
     base.crisp = crisp_textures(picture, look);  // gl_texturemode, else filtered
     base.dynamic_strength = picture.dynamic ? picture.fx_lights : 0;
     base.lava_glow = picture.lava_glow;
@@ -893,6 +950,21 @@ gr::PostSettings post_settings(Look look, const Picture& picture) {
   // painted dark, and the toe took their blues and greys to brown.
   s.toe = false;
   return s;
+}
+
+double world_light_scale(const Picture& picture) {
+  return light_scale(picture) * std::max(picture.q2fx.modulate_world, 0.0);
+}
+
+double model_light(const Picture& picture, Look look) {
+  const ge::classic::Q2FxSwitches& q2 = picture.q2fx;
+  const double mod = std::max(picture.light_modulate, 0.0);
+  const double once = mod * std::max(q2.modulate_entities, 0.0);
+  const double total = q2.double_light ? once * once : once;
+  if (look == Look::classic) return total;  // the classic models take no other modulate
+  // The modern look's models are lit at the world's brightness, its modulate in it already.
+  const double world = mod * std::max(q2.modulate_world, 0.0);
+  return world > 0 ? total / world : 0;
 }
 
 double light_scale(const Picture& picture) {

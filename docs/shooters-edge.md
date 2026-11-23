@@ -100,8 +100,10 @@ fixtures we write (`tests/golden/console_*.txt`):
 - **Built for team chat** (`games/shooters_edge/client/team_chat.hpp`): the percent codes from
   the player's own state, the fun characters as the classic font's glyphs, the `tp_name_*` words
   as plain words by default (a receiving client here draws no colour markup), and the `f_newmap`,
-  `f_spawn`, `f_weaponchange`, `f_death`, `f_respawn`, `f_bonusflash`, `f_demostart`,
-  `f_demoend`, `f_exit` and `f_cfgload` aliases run on their events. The canned `tp_msg*` messages (report, lost, need,
+  `f_spawn`, `f_weaponchange`, `f_death` (`f_flagdeath` with a flag carried), `f_respawn`,
+  `f_bonusflash`, `f_demostart`, `f_demomatchstart`, `f_demoend`, `f_trackspectate`,
+  `f_freeflyspectate`, `f_focusgained`, `f_sbrefreshdone`, `f_exit` and `f_cfgload` aliases run
+  on their events. The canned `tp_msg*` messages (report, lost, need,
   safe, help and the rest) say the player's state behind their short name; a received one shows
   that name in place of the sender's. `echo` fills in the codes too. A pickup, read from the
   state's change, feeds `%i`, `%Y`, `tp_msgtook` and `f_took`.
@@ -517,6 +519,7 @@ a marker names it.
 | Page Down, N / Page Up, P | `demo_next`, `demo_prev` | the next or last highlight (a few seconds before it) |
 | Home, End | | the start, the end |
 | | `demo_highlights [all]` | the tracked player's highlights (or everyone's) in the console |
+| SHIFT held | | free look: the mouse turns the view away from the recorded one until SHIFT is let go |
 
 A HIGHLIGHT is a moment of the tracked player's (`client/demo_highlights.hpp`): a MULTI KILL (two
 or more kills within 0.2 s: one rocket, one blast), a LONG ROCKET (a rocket kill whose rocket flew
@@ -528,8 +531,11 @@ other player whose frags went up then is the killer, the rockets are followed fr
 appear to where they go. No obituary text is read. `make lab LAB=se-highlights
 ARGS="--file=<demo>"` lists a demo's highlights and kills and pictures every player's bar.
 
-A seek back reads the demo again from its start without drawing (a 10 minute match in a fraction
-of a second); the times on the bar are the demo's TIMELINE, its frames' steps added up with a long
+A seek back starts from the last SNAPSHOT before it (the demo as read, kept every
+`demo_snapshots` seconds of the timeline, 10 by default; Quake II spells it `cl_demosnaps`) and
+reads on from there without drawing; with none kept (`demo_snapshots 0`) it reads the demo again
+from its start (a 10 minute match in a fraction of a second). A seek by a share of the demo
+(`seek 50%`) needs its length, so a demo that could not be scanned says it cannot. The times on the bar are the demo's TIMELINE, its frames' steps added up with a long
 pause in the recording counted as a quarter second, the clock `-demovideo` runs on.
 
 **A multiview recording** holds every player, so the view rides one of them: the lowest slot
@@ -560,10 +566,22 @@ your own game the places are drawn too: every model one server frame behind, bet
 states the window saw (the server's 72 or 77 frames a second fall unevenly on 50, 60 or 144
 pictures), and a walking monster, which the program moves a stride at a time, drawn over each
 stride's time rather than jumping. A first sight, a new model, a warp, a move over 128 units and a
-gap over a quarter second are not drawn across. The held weapon's frames flow too: a nailgun's shot
-frame from the last, and a played fire clip back to rest over a frame's time; in a demo or on a
-joined server a classic set's weapon plays the weapon frame the server sends, blended between its
-changes. Your own eye rides the same clock as the models: drawn one server frame behind, between
+gap over a quarter second are not drawn across. The held weapon's frames flow too: each of a nailgun's shot
+frames is turned to from the last over the frame's 0.1 s (the barrels turn every picture instead of
+ten times a second), and a played fire clip goes back to rest over a frame's time; in a demo or on a
+joined server a classic set's weapon (and Quake II's) plays the weapon frame the server sends,
+each change blended over a fixed 0.1 s however unevenly the updates bring it. The weapon's own
+flash comes out of the gun whole on a shot, never stretched across the picture
+(`viewmodel/held.hpp`'s `pose_frames`). `r_lerpframes` is `r_lerpmodels`'s other name. On a
+QuakeWorld server that sends the weapon's state (our server always does; the demo family's bit
+0x80), the window predicts its own weapon (`net/qw_weapon.hpp`, Quake's rules in
+`classic/weapon_predict.hpp`): the shot is heard, the hand fires and the bar's ammunition counts
+down when the button goes down instead of a round trip later, the weapon switched by a key shows
+at once, and each server frame corrects the prediction. `cl_nopred_weapon 1` turns it off,
+`cl_predict_weaponsound` chooses which weapons' sounds are played ahead (0 none, 1 all, above 1 a
+mask of those left to the server), `cl_predict_buffer` how many commands behind the newest the
+weapon is shown, `cl_pext_weaponprediction 0` stops asking for the state. `make lab
+LAB=se-weapon-predict` measures the press to the first shot heard, off and on. On a Quake II server, any server, the window predicts the same way from the gun the frames show (`net/q2_weapon.hpp`: the shot's flash heard, the gun's frame and the ammunition drawn at the press) under the same three settings; `make lab LAB=se-q2-weapon-predict` measures it. Your own eye rides the same clock as the models: drawn one server frame behind, between
 the server's last two states. A played demo's walking monster glides over its strides too
 (`demo_lerp.hpp`'s stride rule). `r_lerpmodels 0` and `r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
 films a monster walking up to the player both ways side by side (a GIF) and measures the judder

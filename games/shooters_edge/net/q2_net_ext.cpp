@@ -172,6 +172,16 @@ int q2_msglen(const Q2ConnectAsk& ask, int net_maxmsglen, bool local) {
   return std::max(len, kQ2MsgLenLeast);
 }
 
+std::string q2_extended_refusal(int ext, const Q2ConnectAsk& ask) {
+  if (ext <= 0) return "";
+  const int least = ext >= 2 ? kQ2MinorExtended2 : kQ2MinorExtended;
+  if (ask.protocol == kQ2Protocol36 && ask.minor >= least) return "";
+  return "This is a protocol limit removing enhanced server.\nYour client version is not "
+         "compatible. Make sure you are running the latest client version.";
+}
+
+int q2_status_protocol(int ext) { return ext > 0 ? kQ2Protocol36 : kQ2NetProtocol; }
+
 bool read_q2_move_ext(gn::Reader& r, int protocol, int minor, Q2Move& out) {
   out.frame = read_long(r);
   const bool compact = protocol == kQ2Protocol35 && minor >= 1904;

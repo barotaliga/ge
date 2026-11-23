@@ -65,6 +65,7 @@ enum class Cmd : uint8_t {
   room,
   muffle,
   swap,
+  binaural,
   sample_new,
   sample_set,
   sample_stop,
@@ -207,7 +208,8 @@ struct Synth::Impl {
   std::array<float, kBlock> room_l{}, room_r{};
   // the muffle: a high shelf on the mix (`Synth::muffle`), off (and skipped) while its gain is 1
   bool muffling = false;
-  bool swapped = false;  // the channels swapped at the output (`Synth::swap_stereo`)
+  bool swapped = false;   // the channels swapped at the output (`Synth::swap_stereo`)
+  bool two_ears = false;  // the sampled voices heard by two ears (`Synth::binaural`)
   float muffle_gain = 1, muffle_target = 1, muffle_coeff = 1;
   Svf shelf_l, shelf_r;
   // the limiter
@@ -317,6 +319,9 @@ struct Synth::Impl {
       }
       case Cmd::swap:
         swapped = c.gain != 0;
+        break;
+      case Cmd::binaural:
+        two_ears = c.gain != 0;
         break;
       case Cmd::sample_new:
         start_sample(c);
@@ -733,7 +738,7 @@ struct Synth::Impl {
       SampleVoice& s = samples[k];
       if (s.live && s.start < frame + count) {
         render_sample(s, frame, count, bus_gain[s.bus].data(), mix_l.data(), mix_r.data(),
-                      mix_e.data());
+                      mix_e.data(), two_ears);
       }
       sounding += s.live;
       sample_ids[k].store(s.live ? s.id : 0, std::memory_order_relaxed);
@@ -900,6 +905,13 @@ void Synth::muffle(float treble, float corner_hz, float glide_s) {
 void Synth::swap_stereo(bool on) {
   Command c;
   c.kind = Cmd::swap;
+  c.gain = on ? 1.0f : 0.0f;
+  impl_->push(c);
+}
+
+void Synth::binaural(bool on) {
+  Command c;
+  c.kind = Cmd::binaural;
   c.gain = on ? 1.0f : 0.0f;
   impl_->push(c);
 }

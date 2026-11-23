@@ -64,17 +64,23 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "account/client_login.hpp"
 #include "account/client_presence.hpp"
 #include "account/client_queue.hpp"
+#include "classic/content/downloads.hpp"
 #include "classic/predict_original.hpp"
 #include "classic/protocol/stuff_filter.hpp"
+#include "classic/rulesets.hpp"
 #include "console/console.hpp"
+#include "console/ruleset.hpp"
 #include "console/talk.hpp"
+#include "console/view.hpp"
 #include "input/state.hpp"
 #include "net/rates.hpp"
 #include "net/transport.hpp"
@@ -84,16 +90,19 @@
 #include "shooters_edge/client/chat_ignore.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/own_missiles.hpp"
 #include "shooters_edge/net/q1_end.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_pingservers.hpp"
 #include "shooters_edge/net/q2_predict.hpp"
+#include "shooters_edge/net/q2_weapon.hpp"
 #include "shooters_edge/net/qw_client.hpp"
 #include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_record.hpp"
 #include "shooters_edge/net/qw_remote_sheet.hpp"
 #include "shooters_edge/net/qw_serverstatus.hpp"
 #include "shooters_edge/net/qw_watch.hpp"
+#include "shooters_edge/net/qw_weapon.hpp"
 
 namespace shooters_edge::net {
 
@@ -101,6 +110,8 @@ inline constexpr int kTickUs = 13000;                         // a move's length
 inline constexpr int kQ2LeastMoves = 10, kQ2MostMoves = 125;  // Quake II's cl_maxfps range
 inline constexpr int kMostTicks = 8;     // ticks a call may run; a longer stall drops the rest
 inline constexpr float kLerpMost = 200;  // units: an entity moved further between two frames snaps
+// units/s: a correction of the predicted place left smaller than this times the step is dropped.
+inline constexpr float kSmoothDropU = 220;
 inline constexpr float kStockShare = 0.8f;         // the easy jump's share on a server without it
 inline constexpr int kMicMostSamples = 48000 / 4;  // the microphone's samples a frame may hold
 
@@ -155,15 +166,16 @@ struct RconAway {
 
 struct Remote {
   // In the order that packs it (the lint holds the padding).
-  gn::Transport* transport = nullptr;             // what it talks over (`own`, or remote_start's)
-  const ge::console::Button* voip_key = nullptr;  // `+voip` (add_remote_commands)
-  const ge::console::Talk* talk = nullptr;        // the window's +voice keys (console/talk.hpp)
-  std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
-  std::unique_ptr<RemoteLogin> login;             // logging in by the account file, when named
-  std::unique_ptr<RconAway> away;                 // rcon to `rcon_address`, not joined
-  std::unique_ptr<StatusAsk> status_ask;          // `serverstatus` waiting for its answer
-  PingSweep ping;                                 // `pingservers`' asks (q2_pingservers.hpp)
-  PassiveListen passive;                          // `passive` waiting for a server's call
+  gn::Transport* transport = nullptr;               // what it talks over (`own`, or remote_start's)
+  const ge::console::Button* voip_key = nullptr;    // `+voip` (add_remote_commands)
+  const ge::console::Talk* talk = nullptr;          // the window's +voice keys (console/talk.hpp)
+  std::unique_ptr<StreamWatch> watch;               // watching a broadcast (`watch`), not playing
+  std::unique_ptr<RemoteLogin> login;               // logging in by the account file, when named
+  std::unique_ptr<RconAway> away;                   // rcon to `rcon_address`, not joined
+  std::unique_ptr<StatusAsk> status_ask;            // `serverstatus` waiting for its answer
+  std::unique_ptr<ge::console::Rulesets> rulesets;  // the competition ruleset (qw_remote_rulesets)
+  PingSweep ping;                                   // `pingservers`' asks (q2_pingservers.hpp)
+  PassiveListen passive;                            // `passive` waiting for a server's call
   JoinedFile file;  // `record` while joined: the level kept and the file (qw_match_record.hpp)
   MatchAuto match;  // the match recorded on its own (match_auto_record)
   client::JoinedRecord joined_record;  // the window's record commands reach the join through it
@@ -183,6 +195,9 @@ struct Remote {
   const std::vector<sh::BrushModel>* world = nullptr;  // prediction: the level's models ([0] world)
   std::string server_name;                             // as asked ("host:port")
   std::string why;                                     // why it dropped
+  ge::classic::FairFacts fair_facts;  // what an f_ruleset answer says (qw_remote_rulesets.hpp)
+  ge::classic::FairReplies fair;      // when the last answer was said
+  std::string fakeshaft_seen;         // cl_fakeshaft as last seen: a change in a match is said
   // The window's `topcolor` and `bottomcolor` last seen: a change of them is told the server.
   std::string seen_top, seen_bottom;
   sp::ChannelTrace trace;  // showpackets, showdrop: the channel's lines (add_remote_commands)
@@ -201,6 +216,7 @@ struct Remote {
   int others = 0;             // other players predicted the last step
   int others_msec = 0;        // the most milliseconds one of them was run forward the last step
   int lerped = 0;             // entities drawn between two frames the last step
+  int map_tries = 0;          // joins again with another version of the server's map
   sh::Vec3f view;             // the player's angles, degrees (sent with every move)
   sh::AimTurn aim_turn;       // the aim help's turn of the view (shooter/aim_turn.hpp)
   sh::Vec3f prediction;       // the player's predicted origin, the correction not added
@@ -208,6 +224,22 @@ struct Remote {
   sh::SpeedJumpAid jump_aid;  // the easy jump's memory (shooter/speedjump_assist.hpp)
   float speedjump_view = 0.5f;  // cl_speedjump_view: the share of its swing drawn
   sh::Smoothing smooth;         // the prediction's correction
+  double smoothview = 1;        // cl_predict_smoothview: 0 snapped, 1 the decay's own rate, 2 slow
+  RemoteWeapon weapon;          // the held weapon predicted (qw_weapon.hpp)
+  Q2Weapon q2_weapon;           // Quake II's held weapon predicted (q2_weapon.hpp)
+  // The moves the last prediction ran past the acknowledged one: each one's command and the state
+  // after it (`ahead_count` of them), for the missiles' launch places and the jump's sound.
+  uint32_t ahead_seq[64] = {};
+  sh::MoveState ahead_each[64];
+  int ahead_count = 0;
+  bool console_held =
+      false;  // the console held over the screen while joining (remote_console_foot)
+  bool ahead_from_held = false;  // the acknowledged state's jump button was held
+  client::OwnMissiles missiles;  // cl_predict_projectiles (client/own_missiles.hpp)
+  int missiles_level = -1;       // the level they fly in (DemoState::levels)
+  bool predict_jump = true;      // cl_predict_jump: the jump's sound played as predicted
+  uint32_t jump_played_to = 0;   // the newest command whose jump has played
+  int jumps_played = 0;          // jumps whose sound the prediction played (for the labs)
   // Prediction on the original move (the server's `sv_playermove original`): the stand-in
   // server, built for the level `original_level` counts and the models `original_for` points at.
   ge::classic::OriginalPrediction original;
@@ -228,6 +260,23 @@ struct Remote {
   std::function<void(const std::string& gamedir, const std::string& path,
                      const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
+  // A map's other versions (ClientConfig::map_versions, classic/content/map_versions.hpp): those
+  // kept, one kept, the one drawn, and which this server took (by its name as asked).
+  std::function<std::vector<std::pair<std::string, std::vector<uint8_t>>>(const std::string& map)>
+      map_versions;
+  std::function<std::string(const std::string& map, uint32_t sum,
+                            const std::vector<uint8_t>& bytes)>
+      keep_version;
+  std::function<void(const std::string& map, const std::string& version)> use_map;
+  std::function<std::optional<uint32_t>(const std::string& server, const std::string& map)>
+      remembered;
+  std::function<void(const std::string& server, const std::string& map, uint32_t sum)> keep_choice;
+  // A Quake II download cut short, held in the game's folder to be resumed (Q2ClientConfig::held).
+  ge::classic::content::HeldDownloads held;
+  // What a server stuffed that the client does not answer itself (net/q2_client.hpp's and
+  // net/qw_client.hpp's `to_run`), for the window's console to run as the server's; taken each
+  // frame.
+  std::vector<std::string> stuffed_run;
   bool kept = false;
   // A screenshot the server asked for (qw_client.hpp `ClientUpload`): the window's frame grabbed
   // in memory, scaled and packed (`snap_grab(width, height, quality)`, false when it can't) and
@@ -241,7 +290,6 @@ struct Remote {
   bool left = false;  // a server was left (dropped or let go) since the window last took this
   ClientStage said = ClientStage::challenge;  // the stage last reported
   bool nopred = false;                        // cl_nopred: draw the server's place
-  bool predict = true;                        // Quake II's cl_predict (0: as cl_nopred 1)
   bool predicted = false;                     // the last step drew a prediction
   bool predict_players = true;                // cl_predict_players: the other players run ahead
   bool nolerp = false;                        // cl_nolerp: entities at the newest frame's places
@@ -267,6 +315,7 @@ struct Remote {
   int own_port = -1;
   bool own_v6 = false;  // the client's socket is IPv6's (an IPv6 server joined)
   std::string port_note;
+  std::string localid;  // localid: the id a server browser's command packets carry (qw_client.hpp)
 };
 
 // Watches the broadcast at `address` ("host:port": a stream port, our TV node's or a relay's;
@@ -300,6 +349,10 @@ std::string remote_queue_step(Remote& r, std::vector<std::string>& said);
 // The window's frame of it: its news printed on the console, and `connect` run once found; then the
 // match recorded on its own (qw_match_record.hpp) and the answers to an rcon sent while not joined.
 void remote_queue_frame(Remote& r, ge::console::Console& con);
+// What the server stuffed (`stuffed_run`) run in `con`: a Quake II server's as typed
+// (cl_ignore_stufftext filtered it), a QuakeWorld server's as the server's (console.hpp: only the
+// commands a game lets a server run, and only the server's own settings).
+void remote_run_stuffed(Remote& r, ge::console::Console& con);
 
 void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
                        gn::Transport* link = nullptr);
@@ -328,9 +381,13 @@ std::string remote_status(const Remote& r);
 // The words before the server's name for a stage ("playing on ").
 const char* remote_stage_words(ClientStage s);
 // The console's foot while a game is joined but not yet played (console/view.hpp's set_foot): the
-// file coming, its share and size ("maps/dm2.bsp 40% (88 KB)", `progress` 0.4), or "Loading
-// dm2..." while signing on; "" (and `progress` -1) once playing, watching or not joined.
+// file coming and its share ("maps/dm2.bsp", `progress` 0.4: the console draws the charset's bar
+// and "40%" after the name), or "Loading dm2..." while signing on; "" (and `progress` -1) once
+// playing, watching or not joined.
 std::string remote_foot(const Remote& r, double& progress);
+// The foot set on the console's view each frame, and the console held over the whole screen while
+// a server is joined and not yet played, as the classic client showed a connection; let go once in.
+void remote_console_foot(Remote& r, ge::console::ConsoleView& view);
 // The joined server's packets as they came (the net graph and Quake II's lag graph), whichever
 // protocol it speaks; null when nothing is joined or a broadcast is watched.
 const ge::hud::NetHistory* remote_net(const Remote& r);

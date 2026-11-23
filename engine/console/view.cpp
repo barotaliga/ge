@@ -182,9 +182,10 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           .flags = kArchive,
           .help = "how many typed lines Up and Down walk back through",
           .kind = CvarKind::integer,
-          .min = 1,
+          .min = 0,
           .max = 4096,
-          .values = "1..4096: that many, the oldest dropped first (128 the default)"},
+          .values = "0: only the last line, none kept across runs; 1..4096: that many, the "
+                    "oldest dropped first, kept across runs (128 the default)"},
          &history_max_);
   v.bind({.name = "con_scroll",
           .fallback = "0",
@@ -519,10 +520,7 @@ void ConsoleView::submit() {
   selected_ = -1;
   scroll_ = 0;
   if (line.find_first_not_of(" \t") == std::string::npos) return;
-  if (history_.empty() || history_.back() != line) history_.push_back(line);
-  if (history_.size() > static_cast<size_t>(std::max(1, history_max_)))  // con_history
-    history_.erase(history_.begin(),
-                   history_.end() - static_cast<std::ptrdiff_t>(std::max(1, history_max_)));
+  remember(line);
   if (line.starts_with("//")) {  // a note to oneself: shown, never run or said
     add(LineKind::command, line);
     return;
@@ -564,6 +562,13 @@ std::string ConsoleView::head() const {
 
 namespace {
 
+// Whether value `v` starts with the typed `part`, any case, a leading quote on either let be.
+bool value_starts(std::string_view v, std::string_view part) {
+  if (!v.empty() && v[0] == '"') v.remove_prefix(1);
+  if (!part.empty() && part[0] == '"') part.remove_prefix(1);
+  return lower(v).starts_with(lower(part));
+}
+
 std::string joined(const std::vector<std::string>& words, std::string_view between) {
   std::string out;
   for (const std::string& w : words) {
@@ -594,12 +599,17 @@ bool ConsoleView::value_typed(const Cvar*& cvar, std::vector<std::string>& choic
   if (space == std::string::npos || space == from) return false;
   const std::string name = input_.substr(from, space - from);
   const std::string rest = input_.substr(space + 1);
-  if (name.find_first_of("\t;") != std::string::npos ||
-      rest.find_first_of(" \t;") != std::string::npos)
+  if (name.find_first_of("\t;") != std::string::npos || rest.find(';') != std::string::npos)
     return false;
   cvar = c_.cvars().find(name);
-  if (cvar == nullptr) return false;
-  choices = value_choices(*cvar);
+  if (cvar != nullptr) {
+    if (rest.find_first_of(" \t") != std::string::npos) return false;
+    choices = value_choices(*cvar);
+  } else {  // a word's own values (an item's name), quoted when it has a space
+    choices = c_.arg_values(name);
+    for (std::string& v : choices)
+      if (v.find(' ') != std::string::npos) v.insert(0, 1, '"').push_back('"');
+  }
   if (choices.empty()) return false;
   part = rest;
   at = space + 1;
@@ -622,15 +632,16 @@ std::vector<Suggestion> ConsoleView::suggestions() const {
   std::vector<std::string> choices;
   std::string part;
   size_t at = 0;
-  if (value_typed(typed, choices, part, at)) {  // the cvar's values, in their own order
-    const std::string p = lower(part);
+  if (value_typed(typed, choices, part, at)) {  // the values, in their own order
     for (const std::string& v : choices) {
-      if (lower(v).compare(0, p.size(), p) != 0) continue;
+      if (!value_starts(v, part)) continue;
       Suggestion s;
       s.name = v;
       s.kind = Suggestion::Kind::value;
-      s.detail = value_meaning(*typed, v);
-      if (v == typed->value) s.detail = s.detail.empty() ? "now" : s.detail + " (now)";
+      if (typed != nullptr) {
+        s.detail = value_meaning(*typed, v);
+        if (v == typed->value) s.detail = s.detail.empty() ? "now" : s.detail + " (now)";
+      }
       out.push_back(std::move(s));
     }
     if (static_cast<int32_t>(out.size()) > suggest_) out.resize(static_cast<size_t>(suggest_));
@@ -814,6 +825,34 @@ void ConsoleView::chat_key(EditKey k) {
     default:  // Tab, the arrows up and down, the pages: nothing on one line
       break;
   }
+}
+
+void ConsoleView::remember(const std::string& line) {
+  if (line.find_first_not_of(" \t") == std::string::npos) return;
+  if (history_.empty() || history_.back() != line) history_.push_back(line);
+  if (history_.size() > static_cast<size_t>(std::max(1, history_max_)))  // con_history
+    history_.erase(history_.begin(),
+                   history_.end() - static_cast<std::ptrdiff_t>(std::max(1, history_max_)));
+}
+
+void ConsoleView::load_history() {
+  std::string text;
+  if (history_max_ <= 0 || !c_.read_file(kHistoryFile, text)) return;
+  for (size_t at = 0; at < text.size();) {
+    size_t end = text.find('\n', at);
+    if (end == std::string::npos) end = text.size();
+    std::string line = text.substr(at, end - at);
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    remember(line);
+    at = end + 1;
+  }
+}
+
+bool ConsoleView::save_history() const {
+  if (history_max_ <= 0) return true;
+  std::string text;
+  for (const std::string& line : history_) text += line + "\n";
+  return c_.write_file(kHistoryFile, text);
 }
 
 }  // namespace ge::console

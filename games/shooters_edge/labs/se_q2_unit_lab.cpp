@@ -209,6 +209,15 @@ gl::Picture overhead(const br::Map& map, const bt::UnitMap& um) {
     const auto [x, y] = px(n.x, n.y);
     gl::set_pixel(p, static_cast<int>(x), static_cast<int>(y), {70, 75, 90});
   }
+  // His track yellow; a party's partners (`--partners`) each in a colour of their own.
+  static const gl::Rgba kPartner[3] = {
+      {90, 170, 255, 255}, {240, 90, 220, 255}, {120, 230, 120, 255}};
+  for (size_t k = 0; k < um.party.size(); k++)
+    for (size_t i = 1; i < um.party[k].size(); i++) {
+      const auto [x0, y0] = px(um.party[k][i - 1].x, um.party[k][i - 1].y);
+      const auto [x1, y1] = px(um.party[k][i].x, um.party[k][i].y);
+      gl::draw_line(p, x0, y0, x1, y1, kPartner[k % 3], 1.5);
+    }
   for (size_t i = 1; i < um.track.size(); i++) {
     const auto [x0, y0] = px(um.track[i - 1].x, um.track[i - 1].y);
     const auto [x1, y1] = px(um.track[i].x, um.track[i].y);
@@ -275,6 +284,9 @@ void run(gl::Lab& lab) {
   opt.map_seconds = lab.arg_num("seconds");
   opt.plan = !lab.arg("plan").empty();
   opt.complete = !lab.arg("complete").empty();
+  opt.partners.assign(
+      static_cast<size_t>(std::clamp(static_cast<int>(lab.arg_num("partners")), 0, 3)),
+      ge::shooterbots::AimSkill::expert);
   const bt::UnitReport r = bt::run_q2_unit(opt);
   if (!r.ok) {
     lab.fail(r.error, "Read the reason above. Skill: bots.");
@@ -347,7 +359,10 @@ const gl::LabSpec kSpec{
      {"maps", "12", "at most this many maps entered"},
      {"seconds", "600", "a map's time before it is called unfinished, s"},
      {"plan", "", "any value: note every change of the script's plan"},
-     {"complete", "", "any value: the 100% run (every monster and secret, then the exit)"}},
+     {"complete", "", "any value: the 100% run (every monster and secret, then the exit)"},
+     {"partners", "0",
+      "0..3 partners beside him in co-op, the map's work split among them "
+      "(plugins/shooterbots/party.hpp); each partner's track in its own colour"}},
     "",
     run,
 };

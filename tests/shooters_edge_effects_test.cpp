@@ -508,6 +508,68 @@ TEST(an_item_taken_flashes_the_view_gold_for_half_a_second_unless_cl_bonusflash_
   CHECK(a[3] == 0);
 }
 
+TEST(the_powers_tint_by_the_items_held_never_by_the_own_glow) {
+  // A match's prewar: the server lights the player's own figure blue (effects 64) with no quad
+  // held; the items stat holds none, so no tint.
+  fx::Screen prewar;
+  fx::take_powers(prewar, 0);
+  CHECK(!prewar.power && !prewar.shield && !prewar.suit && !prewar.stealth);
+  CHECK(prewar.powerup == fx::Powerup::none);
+  double a[4];
+  fx::screen_blend(prewar, a);
+  CHECK(a[3] == 0);
+  fx::Screen quad;
+  fx::take_powers(quad, fx::kItemQuad | fx::kItemPent);
+  CHECK(quad.power && quad.shield && !quad.suit && quad.powerup == fx::Powerup::quad);
+  fx::screen_blend(quad, a);
+  CHECK(a[3] > 0 && a[2] > a[0]);
+  fx::Screen pent;
+  fx::take_powers(pent, fx::kItemPent);
+  CHECK(pent.powerup == fx::Powerup::pent && !pent.power);
+  fx::Screen suit;
+  fx::take_powers(suit, fx::kItemSuit | fx::kItemRing);  // the suit before the ring
+  CHECK(suit.powerup == fx::Powerup::suit && suit.stealth);
+}
+
+TEST(gl_damageblend_frac_moves_a_hit_s_flash_to_a_frame_round_the_view) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(pic.damage_frac == 0);  // the classic look's own: Quake's flash over the whole view
+  fx::Screen hit;
+  hit.hurt = 100;
+  hit.medium = fx::Medium::water;
+  const double none[4] = {0, 0, 0, 0};
+  double whole[4];
+  lk::toned_blend(pic, hit, whole);
+  lk::Tints t = lk::toned_tints(pic, hit, false, none, none, none);
+  for (int k = 0; k < 4; k++) CHECK(t.flat[k] == whole[k] && t.edge[k] == 0);  // as it was
+  con.execute("gl_damageblend_frac 0.2");
+  CHECK(pic.damage_frac == 0.2);
+  t = lk::toned_tints(pic, hit, false, none, none, none);
+  fx::Screen water;
+  water.medium = fx::Medium::water;
+  double wet[4];
+  lk::toned_blend(pic, water, wet);
+  for (int k = 0; k < 4; k++) CHECK(std::fabs(t.flat[k] - wet[k]) < 1e-12);  // the water alone
+  CHECK(t.edge[3] > 0 && t.edge[0] > t.edge[1]);                             // the red flash
+  con.execute("gl_polyblend 0");
+  t = lk::toned_tints(pic, hit, false, none, none, none);
+  CHECK(t.flat[3] == 0 && t.edge[3] == 0);
+  con.execute("gl_polyblend 1");
+  // Quake II's: the rules' own tint as it came, split where the flash came apart.
+  const double q2_whole[4] = {0.5, 0.1, 0.1, 0.4}, q2_rest[4] = {0, 0, 1, 0.08},
+               q2_hit[4] = {1, 0, 0, 0.3};
+  t = lk::toned_tints(pic, hit, true, q2_whole, q2_rest, q2_hit);
+  for (int k = 0; k < 4; k++) CHECK(t.flat[k] == q2_rest[k] && t.edge[k] == q2_hit[k]);
+  t = lk::toned_tints(pic, hit, true, q2_whole, q2_whole, none);  // a stock server's: flat
+  for (int k = 0; k < 4; k++) CHECK(t.flat[k] == q2_whole[k] && t.edge[k] == 0);
+  con.execute("gl_damageblend_frac 0; gl_cshiftpercent 50");
+  t = lk::toned_tints(pic, hit, true, q2_whole, q2_rest, q2_hit);
+  for (int k = 0; k < 3; k++) CHECK(t.flat[k] == q2_whole[k]);
+  CHECK(t.flat[3] == 0.2 && t.edge[3] == 0);
+}
+
 TEST(r_lightmap_draws_every_solid_face_grey_under_its_light) {
   namespace lk = shooters_edge::look;
   ge::console::Console con;
@@ -623,6 +685,29 @@ TEST(q2_arrivals_throw_their_own_counts_and_colours) {
   for (const auto& p : burst) wrong += (p.p[1] - at[1]) * p.v[1] < 0 ? 1 : 0;
   CHECK_MSG(wrong == 0, std::to_string(wrong));
   for (const auto& p : fountain) CHECK(p.v[1] > 1.9f && p.p[1] < at[1]);  // up, from under it
+}
+
+// A boss teleporting out: 4096 specks in its four colours that fly out and down, then are pulled
+// back in and pushed up (their own acceleration), living 1.67 to 2.67 s.
+TEST(q2_boss_teleport_swirls_in_and_rises) {
+  const double at[3] = {1, 2, 3};
+  fx::Particles swirl;
+  fx::q2_boss_teleport(at, 5, {}, &swirl);
+  CHECK(swirl.size() == 4096);
+  int wrong = 0;
+  for (ge::render::Particle p : swirl) {
+    const double out[2] = {p.p[0] - at[0], p.p[2] - at[2]};
+    const double going = out[0] * p.v[0] + out[1] * p.v[2];           // outward at first
+    const double pulled = p.v[0] * p.accel[0] + p.v[2] * p.accel[2];  // against it
+    wrong += (going < 0 || pulled > 0 || p.v[1] >= 0 || p.accel[1] <= 0 || p.life < 1.66f ||
+              p.life > 2.67f || p.p[1] <= at[1])
+                 ? 1
+                 : 0;
+    p.drag = 0;
+    for (int k = 0; k < 120; ++k) ge::render::step_particle(p, 1.0f / 60);  // 2 s on: rising
+    wrong += p.v[1] > 0 ? 0 : 1;
+  }
+  CHECK_MSG(wrong == 0, std::to_string(wrong));
 }
 
 // A player's entry, exit and respawn flashes light the room for their frame: green, red and
@@ -773,5 +858,39 @@ TEST(v_cshift_tints_the_view_in_open_air_and_not_under_water) {
     clear.classic = classic;
     fx::screen_blend(clear, rgba);
     CHECK(rgba[3] == 0);
+  }
+}
+
+// The mission packs' explosion2: 512 specks taking the colour run in turn, 0.3 s each, flung out
+// faster and faster; a program's burst: its count of specks in its colour's row of 8, all thrown
+// along its way.
+TEST(explosion2_takes_its_colours_in_turn_and_a_burst_its_colours_row) {
+  const std::vector<uint8_t> pal = test_palette();
+  const double at[3] = {0, 0, 0};
+  fx::Particles blast;
+  fx::explosion2(at, 224, 8, 1, pal, &blast);
+  CHECK(blast.size() == 512);
+  for (size_t i = 0; i < blast.size(); ++i) {
+    float c[3];
+    fx::palette_rgb(pal, 224 + static_cast<int>(i % 8), c);
+    CHECK(blast[i].tint[0] == c[0] && blast[i].tint[1] == c[1]);
+    CHECK(blast[i].life == 0.3f && blast[i].drag < 0);
+  }
+  fx::Particles none;
+  fx::explosion2(at, 224, 0, 1, pal, &none);  // a run of no colours throws nothing
+  CHECK(none.empty());
+  fx::Particles burst;
+  const double way[3] = {0.5, 0, 0};
+  fx::burst(at, 30, 101, way, 2, pal, &burst);
+  CHECK(burst.size() == 30);
+  for (const auto& p : burst) {
+    bool row = false;
+    for (int k = 96; k < 104; ++k) {
+      float c[3];
+      fx::palette_rgb(pal, k, c);
+      row = row || (p.tint[0] == c[0] && p.tint[1] == c[1]);
+    }
+    CHECK(row);
+    CHECK(p.v[0] == 0.5f && p.life <= 0.43f);
   }
 }

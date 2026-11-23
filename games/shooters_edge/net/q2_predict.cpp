@@ -80,8 +80,10 @@ int32_t mover_contents(void* ctx, sh::Vec3f p) {
   return w->tracer->contents(q);
 }
 
-// The server's newest state of the player, as the move carries it.
-gc::Q2State state_of(const client::Q2View& v) {
+// The server's newest state of the player, as the move carries it. `ms`: the extended limits'
+// second level (a recording of 3435 on) counts the move's timer in milliseconds; the move's is in
+// 8 ms.
+gc::Q2State state_of(const client::Q2View& v, bool ms = false) {
   gc::Q2State s;
   s.type = static_cast<gc::Q2Type>(std::clamp(v.pm_type, 0, 4));
   for (int i = 0; i < 3; i++) {
@@ -90,7 +92,7 @@ gc::Q2State state_of(const client::Q2View& v) {
     s.delta_angles[i] = v.delta[i];
   }
   s.flags = static_cast<uint8_t>(v.pm_flags);
-  s.time = static_cast<uint8_t>(v.pm_time);
+  s.time = static_cast<uint8_t>(std::min(ms ? v.pm_time / 8 : v.pm_time, 255));
   s.gravity = static_cast<int16_t>(v.gravity);
   return s;
 }
@@ -106,11 +108,14 @@ bool run_ahead(gc::Q2State& s, uint32_t acked, const Q2ClientEnd& c, const gc::Q
                int* water_level = nullptr, float* view_height = nullptr) {
   const uint32_t newest = c.ch.outgoing_sequence;  // the next packet's: not yet sent
   if (newest - acked >= static_cast<uint32_t>(kSqSentRing)) return false;
+  // The moves made after the acknowledged packet's, sent or still waiting for the next packet.
+  const uint32_t first = c.made_at[acked & (kSqSentRing - 1)];
+  if (c.made - first >= static_cast<uint32_t>(kSqSentRing)) return false;
   replayed = 0;
-  for (uint32_t seq = acked + 1; seq != newest; seq++) {
+  for (uint32_t k = first; k != c.made; k++) {
     gc::Q2Move pm;
     pm.s = s;
-    pm.cmd = gc::q2_command(c.sent[seq & (kSqSentRing - 1)]);
+    pm.cmd = gc::q2_command(c.sent[k & (kSqSentRing - 1)]);
     gc::q2_feel(pm, feel);
     gc::q2_move(pm, world);
     s = pm.s;
@@ -158,6 +163,7 @@ gc::Q2Feel q2_feel_of(const client::Demo& d) {
   if (d.feel_told) return d.feel;
   gc::Q2Feel f;
   f.air_accelerate = d.state.air_accelerate;
+  f.land_pause = !d.strafe_hack;  // a later protocol's server data may say it takes no pause
   return f;
 }
 
@@ -171,6 +177,7 @@ bool q2_predict_step(Q2Predict& p, const Q2ClientEnd& c, const client::Demo& d, 
     return false;
   }
   const client::Q2View& v = d.views[static_cast<size_t>(d.last_frame & 15)];
+  const bool ms = st.protocol >= 3435 && st.protocol <= 3436;  // the timer in milliseconds
   if ((v.pm_flags & gc::kSqNoPrediction) != 0 || v.pm_type != 0) {
     p.have_base = false;
     return false;
@@ -187,7 +194,7 @@ bool q2_predict_step(Q2Predict& p, const Q2ClientEnd& c, const client::Demo& d, 
     gc::Q2State old = p.base;
     int n = 0;
     if (run_ahead(old, p.base_acked, c, feel, world, n)) {
-      gc::Q2State now = state_of(v);
+      gc::Q2State now = state_of(v, ms);
       if (run_ahead(now, acked, c, feel, world, n)) {
         ge::shooter::smoothing_frame(p.smooth, origin_of(old), origin_of(now));
         const float miss = ge::shooter::length(origin_of(old) - origin_of(now));
@@ -200,7 +207,7 @@ bool q2_predict_step(Q2Predict& p, const Q2ClientEnd& c, const client::Demo& d, 
     }
   }
   if (fresh) {
-    p.base = state_of(v);
+    p.base = state_of(v, ms);
     p.base_acked = acked;
     p.base_frames = c.frames;
     p.have_base = true;

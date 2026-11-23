@@ -78,6 +78,15 @@ void grenade_trail(const double from[3], const double to[3], uint32_t seed, Pale
 
 // An explosion at `at`: 1024 specks thrown out.
 void explosion(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// The mission packs' blast (explosion2) at `at`: 512 specks of the palette's run `start` ..
+// `start + length - 1`, taken in turn, flung out at up to 256 units/s on each axis and speeding
+// out (x e^4t) for 0.3 s. A length of 0 throws nothing.
+void explosion2(const double at[3], int start, int length, uint32_t seed, Palette palette,
+                Particles* out);
+// A program's burst at `at` in any colour: `specks` specks, each a random shade of the colour's
+// row of 8, all thrown at `way` (engine m/s), alive 0 to 0.4 s.
+void burst(const double at[3], int specks, int colour, const double way[3], uint32_t seed,
+           Palette palette, Particles* out);
 // A shot's or a nail's hit at `at`: `specks` dark grey specks (20 a pellet, 10 a nail, 20 a big
 // nail's).
 void impact(const double at[3], int specks, uint32_t seed, Palette palette, Particles* out);
@@ -108,7 +117,12 @@ void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particl
 //   drifting at up to 20 units/s, living 1..1.3 s.
 // - A teleporter pad's fountain, each server frame: 8 specks (219) within 16 across and 1..8 below,
 //   rising at 80..87 units/s, living 2 s.
+// - A boss teleporting out: 4096 specks (16, 104, 168 or 144), each at an angle round the point
+//   and 0..31 units out, 8..97 units above it, flying out at 70..133 units/s along its angle and
+//   down at 69..100 units/s, pulled back in at 100 units/s^2 and pushed up at 160 (`Particle::
+//   accel`), so the cloud swirls in and rises; living 1.67..2.67 s.
 enum Q2Arrival : uint8_t { kSqLogin = 0, kSqLogout = 1, kSqRespawn = 2 };
+void q2_boss_teleport(const double at[3], uint32_t seed, Palette palette, Particles* out);
 void q2_teleport_burst(const double at[3], uint32_t seed, Palette palette, Particles* out);
 void q2_item_back(const double at[3], uint32_t seed, Palette palette, Particles* out);
 // A burst of `count` specks of palette `colour` (each `colour` + 0..7 with `vary`) off a face along
@@ -119,6 +133,16 @@ void q2_item_back(const double at[3], uint32_t seed, Palette palette, Particles*
 // sparks).
 void q2_specks(const double at[3], const double normal[3], int count, int colour, int reach,
                bool vary, uint32_t seed, Palette palette, Particles* out, double fall = 80);
+// Quake II's blaster bolt's hit: 40 specks of palette 0xe0..0xe7 off the face along `normal` (map
+// units' axes), each 0..15 units out along it and -4..3 across, pushed off at 30 units/s with up to
+// 40 more on each axis, falling, living 0.5..0.8 s.
+void q2_blaster_specks(const double at[3], const double normal[3], uint32_t seed, Palette palette,
+                       Particles* out);
+// Quake II's explosion's specks: 256 of palette `colour` + 0..7 (0xe0 a rocket's or a grenade's,
+// 0xd0 the BFG's big burst), each within -16..15 units of the point on every axis, flung at
+// -192..191 units/s on each axis and falling, living 0.625..1 s.
+void q2_blast_specks(const double at[3], int colour, uint32_t seed, Palette palette,
+                     Particles* out);
 // QUAKE II'S OTHER EFFECTS OFF THE WIRE (map units, its own numbers):
 // - BUBBLES along a line, the first at its start: grey (4..11), within 2 units, rising at 6
 //   units/s and drifting at up to 5, a bubble every 32 units, living 1..1.2 s; the second kind
@@ -280,6 +304,13 @@ struct Screen {
   double air = 0;
   double air_rgb[3] = {130, 80, 50};
 };
+// THE POWERS HELD, from the player's item bits (the items stat the server sends: ring, pentagram,
+// suit, quad), never from the glow bits on his own figure, which a server may set for other
+// reasons (a match's prewar): the classic tint (`powerup`, the first held of quad, suit, ring,
+// pentagram) and ours (`power`, `shield`, `suit`, `stealth`).
+inline constexpr int kItemRing = 524288, kItemPent = 1048576, kItemSuit = 2097152,
+                     kItemQuad = 4194304;
+void take_powers(Screen& s, int items);
 // The classic damage tint: a blow of `armour` and `blood` points adds 3 x its count (half of
 // each, at least kHurtCountMin) to `strength`, kept at most kClassicHurtMost, and takes the
 // blow's colour into `rgb`: (200, 100, 100) when the armour took more than the blood, (220, 50,

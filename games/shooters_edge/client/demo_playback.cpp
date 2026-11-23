@@ -17,6 +17,7 @@
 #include "shooters_edge/client/demo_eyes.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/mvd_info.hpp"
+#include "shooters_edge/client/team_chat.hpp"
 #include "shooters_edge/hud/layout.hpp"
 
 namespace shooters_edge::client {
@@ -34,6 +35,19 @@ gu::Color color_of(uint32_t rgba) {
   return {static_cast<float>(rgba >> 24 & 0xff) / 255.0f,
           static_cast<float>(rgba >> 16 & 0xff) / 255.0f,
           static_cast<float>(rgba >> 8 & 0xff) / 255.0f, static_cast<float>(rgba & 0xff) / 255.0f};
+}
+
+// Quake II's `scr_demobar` (q2_view.hpp's Q2Screen::demo_bar, in its layer alone): 0 no bar, 1
+// the bar always with the share played, 2 also the clock; -1 while another game is loaded.
+int game_bar(const DemoPlayback& p) {
+  const ge::console::Cvar* c = p.hooks ? p.hooks->cvars().find("scr_demobar") : nullptr;
+  return c ? static_cast<int>(c->number) : -1;
+}
+
+// The bar's mode by `demo_bar`'s numbers: Quake II's `scr_demobar` shows it always or never.
+int bar_mode(const DemoPlayback& p) {
+  const int g = game_bar(p);
+  return g < 0 ? p.bar : (g == 0 ? 0 : 2);
 }
 
 double length_of(const DemoPlayback& p, const Timedemo& t) {
@@ -111,7 +125,14 @@ float hud_inset(std::span<const ge::hud::Placed> placed, int height) {
   return h - top;
 }
 
+bool playback_pause_word(DemoPlayback& p, const Timedemo& bench, const std::string& line) {
+  if (line.substr(0, line.find(' ')) != "pause" || !bench.active || !bench.paced) return false;
+  p.paused = !p.paused;
+  return true;
+}
+
 void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench) {
+  p.hooks = &console;
   // $cl_demopos: how far the demo playing is, to the tenth ("3:07.4"; "0:00.0" with none).
   console.add_macro("cl_demopos", [&bench] {
     return ge::console::tenths_clock(bench.active ? bench.timeline.t : 0);
@@ -343,6 +364,7 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
       {.tracked =
            [&bench, &console, &p](int track) {
              bench.demo.track = track;
+             spectate_event(console, "f_trackspectate");  // the camera locked on a player
              if (p.autotrack != 0)
                console.cvars().set("mvd_autotrack", "0", ge::console::Source::code);
              if (p.hightrack != 0)
@@ -367,6 +389,7 @@ bool playback_begin(DemoPlayback& p, const Timedemo& t, std::string& error) {
   p.plan = {};
   p.plan_state = 0;
   p.track_name_done = false;
+  p.match_starts = 0;
   p.watched = MvdStatus{};
   const bool ok = scan_demo(t.start, p.scan, error);
   if (!ok) p.scan = DemoScan{};
@@ -377,13 +400,15 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
                            double wall_dt_s, double now_s, std::vector<std::string>& say,
                            std::string& error) {
   t.smooth = p.lerp != 0;
+  t.snap_every_s = p.snap_every_s;
   zoom_third_person(p, in.zoom, wall_dt_s);
   const float x = in.x, y = in.y;
   if (x != p.pointer_x || y != p.pointer_y) p.shown_until = now_s + kBarShowS;
   p.pointer_x = x;
   p.pointer_y = y;
   const double length = length_of(p, t);
-  const bool bar_on = p.bar == 2 || (p.bar == 1 && (now_s <= p.shown_until || p.paused));
+  const int bar = bar_mode(p);
+  const bool bar_on = bar == 2 || (bar == 1 && (now_s <= p.shown_until || p.paused));
   if (bar_on || p.pointer.dragging) {
     const gu::PlayBarLayout l = gu::play_bar_layout(w, h, p.bar_bottom_px);
     const gu::PlayBarAct act = gu::play_bar_pointer(p.pointer, l, length, x, y, in.button);
@@ -419,10 +444,19 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
   }
   follow(p, t, say);
   mark(p, t);
+  // The match server's start marker read: the player's f_demomatchstart (a seek back reads the
+  // recording again from its start, so only a count that grew runs it).
+  if (t.demo.state.match_starts > p.match_starts && p.hooks != nullptr)
+    team_event(*p.hooks, "f_demomatchstart");
+  p.match_starts = t.demo.state.match_starts;
   // A skip and a jump become a seek from where the playhead stands.
   const double here = t.timeline.t;
-  if (p.share_ask >= 0) p.seek_ask = std::clamp(p.share_ask, 0.0, 1.0) * length;
-  if (p.share_skip_ask != 0) p.skip_ask += p.share_skip_ask * length;
+  if ((p.share_ask >= 0 || p.share_skip_ask != 0) && p.scan.length_s <= 0) {
+    say.push_back("The demo's length is not known, so it cannot jump by a share of it.");
+  } else {
+    if (p.share_ask >= 0) p.seek_ask = std::clamp(p.share_ask, 0.0, 1.0) * length;
+    if (p.share_skip_ask != 0) p.skip_ask += p.share_skip_ask * length;
+  }
   p.share_ask = -1;
   p.share_skip_ask = 0;
   if (std::exchange(p.end_ask, false)) {  // two seconds before the end, rounded up
@@ -557,9 +591,14 @@ void playback_draw(gu::DrawList& overlay, const DemoPlayback& p, const Timedemo&
       top += cell;
     }
   }
-  if (p.bar == 0) return;
-  if (p.bar == 1 && now_s > p.shown_until && !p.paused && !p.pointer.dragging) return;
+  const int bar = bar_mode(p);
+  if (bar == 0) return;
+  if (bar == 1 && now_s > p.shown_until && !p.paused && !p.pointer.dragging) return;
   gu::PlayBarView v;
+  if (const int g = game_bar(p); g >= 0) {  // Quake II's: the share played, the clock at 2
+    v.percent = true;
+    v.clock = g == 2;
+  }
   v.length_s = length_of(p, t);
   v.position_s = t.timeline.t;
   v.playing = !p.paused;

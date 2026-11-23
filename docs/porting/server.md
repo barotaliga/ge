@@ -117,7 +117,11 @@ with cheats the operator's `god <id>` and `give <id> <item> <count>` reach the p
 rules take `sv_cheats` with it. `fraglogfile` writes the frag lines to `frag_<n>.log` and the
 out-of-band `log` query answers with the last ten-minute buffer of them (`net/qw_fraglog.hpp`).
 Every dedicated server runs the lines typed on its own terminal in the foreground
-(`engine/server/main.cpp`).
+(`engine/server/main.cpp`). A player dropped (not timed out) keeps a goodbye list by his address
+for `zombietime` seconds, his packets answered with the disconnect and his slot shown as ZOMBIE in
+`status`, while the slot itself is free at once; the match's settings (`maxspectators`,
+`teamplay`, `fraglimit`, `timelimit`, `samelevel`, `watervis`) are in the server info from the
+start (`net/qw_server.cpp`).
 
 Quake II's ledger (`porting/shooters-edge/q2-ledger-server.md`) is the checklist; the facts of the
 operator's words, the player's queries and the connect checks are in
@@ -166,11 +170,45 @@ every player with `Server crashed:` and leaves the server idle until the next ma
 `com_fatal_error` the process ends with a failure instead, for its supervisor to start again.
 `fs_autoexec` 0 makes a mod switch change the folders alone.
 
-Quake II's downloads (`net/q2_net_server.cpp`, facts in `porting/shooters-edge/
-q2-downloads-facts.md`) make the asked name plain first (slashes, `.` and `..`), then offer each
+Quake II's frame is cut by the areas as well as the sets (`server/q2_wire.hpp`'s cut): an entity
+is sent only when the viewer's area is joined through the open area portals to one of its two
+areas, so a shut door hides the room behind it, and the frame's area bits mark the joined areas
+for the client to leave the rest undrawn. Area 0 (a solid, outside) is joined to nothing. Sounds
+and effects, our rules' (`q2_sight_hears`) and a hosted library's (`send_to`), go to a client whose
+origin is in the point's set with the areas joined; a sound with no attenuation to everyone. A
+sound leaves its position out for a client whose frame holds its entity, so it is played on the
+entity as it moves. The frame is sized to the room the packet has after the reliable data it
+carries (`channel_unreliable_room`), so a long reliable message costs a frame its last entities,
+effects and sounds rather than the whole frame.
+
+A dedicated server listens on IPv6 as well with `net_enable_ipv6` 2: a second socket on `net_ip6`
+and the same port, IPv6 only, read and written through the one transport (`open_udp6_beside`,
+`open_ipv6`); when it cannot be had the server says why and runs on IPv4. A Quake II client of
+protocol 36 at minor 1021 or later with zlib gets a file stored deflated in a `.pkz` as the stream
+it lies as (message 22, `served_deflated`). A hosted game library that does not ask for enhanced
+saves is never saved, loaded or kept level to level unless `sys_allow_unsafe_savegames` 1 was set
+at start (a later set is refused); each new game outside deathmatch says which. A stock client's
+spectator flies as its client predicts it (`q2_fly_for_protocol`): 35 and 36 at twice the time, 36
+with friction 4 and gliding on, 34 with the original step.
+
+THE EXTENDED LIMITS. A hosted game library that sets the protocol-extensions feature after its start
+gets the extended limits: the configstring layout of 13630 strings, up to 8192 entities, 8192
+models, 2048 sounds and images, its entities' extension block read (more effects, alpha, scale, the
+loop's volume and attenuation), and every client the extended forms (the server data's flags word,
+the wider entity and player deltas, the streams ended by the longer count). One table holds the
+levels, layouts, limits and codings for the server and the client alike
+(`plugins/classic/protocol/q2_limits.hpp`); the wire's writers are `q2_wire_limits.cpp`. The
+second level (23-bit coordinates, 64 stats, the damage blend) comes with a library of the newer
+interface. Only clients that read the extended forms are admitted.
+
+Quake II's downloads (`net/q2_net_download.cpp`, facts in `porting/shooters-edge/
+q2-downloads-facts.md` and `q2-downloads-pace.md`) make the asked name plain first (slashes, `.` and `..`), then offer each
 kind by its own setting (`sv_download_textures` for textures and skies, `sv_download_pics`,
 `sv_download_others` off by default), refuse a file past `sv_max_download_size`, tell a resume past
-the end that the file size differs, and send a downloading client reliable data alone. The connect
+the end that the file size differs, and send a downloading client reliable data alone. Each piece
+fills the packet less its 4 bytes (1386 on 1390), one for each `nextdl`, the next held for the last
+packet's bytes over the rate; the piece rule is the classic layer's (`plugins/classic/protocol/
+download_pace.hpp`), shared with Quake's server, which keeps its own pieces of the rate over 25. The connect
 answer names `sv_downloadserver`'s web copy and the map. A long rcon answer comes in packets of
 1384 bytes, whole lines where they fit; a wrong password is noted without the guess.
 

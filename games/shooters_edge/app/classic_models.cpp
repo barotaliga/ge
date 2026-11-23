@@ -525,7 +525,7 @@ LightProbe make_probe(const br::Map& map) {
 }
 
 bool light_under(const LightProbe& probe, const br::Map& map, const float at[3], float rgb[3],
-                 float depth) {
+                 float depth, FloorUnder* floor) {
   rgb[0] = rgb[1] = rgb[2] = 1;
   if (probe.start.empty()) return false;
   const int32_t cx = int32_t(std::floor(at[0] / probe.cell)) - probe.x0;
@@ -554,6 +554,17 @@ bool light_under(const LightProbe& probe, const br::Map& map, const float at[3],
     if (z > at[2] + 1 || z <= best) continue;
     best = z;
     hit = true;
+    if (floor != nullptr) {  // the face's upward share: its normal's z
+      const double e1[3] = {double(b.pos[0]) - a.pos[0], double(b.pos[1]) - a.pos[1],
+                            double(b.pos[2]) - a.pos[2]};
+      const double e2[3] = {double(c.pos[0]) - a.pos[0], double(c.pos[1]) - a.pos[1],
+                            double(c.pos[2]) - a.pos[2]};
+      const double n[3] = {e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2],
+                           e1[0] * e2[1] - e1[1] * e2[0]};
+      const double len = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+      floor->z = float(z);
+      floor->up = len > 0 ? float(std::abs(n[2]) / len) : 1.0f;
+    }
     luxel_rgb(map, probe.lightmap[i], w0 * a.lm[0] + w1 * b.lm[0] + w2 * c.lm[0],
               w0 * a.lm[1] + w1 * b.lm[1] + w2 * c.lm[1], rgb);
   }

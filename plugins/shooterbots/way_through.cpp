@@ -5,6 +5,7 @@
 // ge:skill shooterbots bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #include "shooterbots/way_through.hpp"
+#include "shooterbots/way_bosses.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -849,8 +850,9 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     const char* target = nullptr;
     for (const sb::EntityBlock& b : blocks) {
       const char* model = sb::block_value(b, "model");
-      if (model && be.modelindex > 0 && static_cast<size_t>(be.modelindex) < s.models.size() &&
-          s.models[static_cast<size_t>(be.modelindex)] == model) {
+      if (model && ((be.modelindex > 0 && static_cast<size_t>(be.modelindex) < s.models.size() &&
+                     s.models[static_cast<size_t>(be.modelindex)] == model) ||
+                    (!bs.model.empty() && bs.model == model))) {
         st.lo = st.hi = spawned_at(b);  // a level kept from before may have it pressed already
         target = sb::block_value(b, "target");
         st.opens = opens(target, st.doors);
@@ -907,6 +909,9 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     if (!car_back) w.steps.push_back(st);
   }
+  // (`complete`) Quake's boss the lightning kills: the electrodes, the buttons that move them, the
+  // button that fires the bolt and the doors his death opens.
+  if (w.complete) way_bolt_init(w, f, s, blocks);
   // The turning doors a step opens that lie over an exit, within kHatchOver above it.
   for (const int h : w.turners) {
     const sh::Edict& he = s.sv.edicts[static_cast<size_t>(h)];
@@ -1061,6 +1066,7 @@ void way_complete_init(Fighter& f, const MapNav& nav, const ge::shooterbots::Bot
     if (bs.node < 0) continue;  // seen from nowhere he stands
     f.button_spots.push_back(bs);
   }
+  way_shot_triggers(f, nav, s, spec, blocks);
 }
 
 void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbots::BotView& s,
@@ -1373,9 +1379,32 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // (`complete`) A step is open while not done once, not left and reached; the nearest monster
   // alive whose place is reached; the exit waits for all of them.
   for (WayStep& st : w.steps) st.ever = st.ever || st.done;
+  // (A party: party.hpp) what a mate holds is not his while he has work of his own.
+  const auto mate_has = [&](const WayStep& st) {
+    const size_t k = static_cast<size_t>(&st - w.steps.data());
+    return k < w.mates_steps.size() && w.mates_steps[k] != 0;
+  };
+  const auto mate_has_prey = [&](int e) {
+    return static_cast<size_t>(e) < w.mates_prey.size() &&
+           w.mates_prey[static_cast<size_t>(e)] != 0;
+  };
+  // 1 a mate's (his to help with once he has none of his own), 2 no one's (too far from the
+  // people playing: never his).
+  const auto held_step = [&](const WayStep& st) {
+    const size_t k = static_cast<size_t>(&st - w.steps.data());
+    return mate_has(st) && (!w.mates_help || w.mates_steps[k] > 1);
+  };
+  bool held_left = false, own_left = false;  // something open a mate holds; and of his own
   const auto open_step = [&](const WayStep& st) {
-    return st.kind != WayKind::exit && !carries(st) && !st.ever && t >= st.left_until &&
-           st.node >= 0 && reach(st.node);
+    if (st.kind == WayKind::exit || carries(st) || st.ever || t < st.left_until || st.node < 0 ||
+        !reach(st.node))
+      return false;
+    if (!mate_has(st)) {
+      own_left = true;
+      return true;
+    }
+    held_left = true;
+    return !held_step(st);
   };
   int prey = -1;
   std::vector<std::pair<int, int32_t>> preys;  // (`complete`) every monster reached: its node
@@ -1383,7 +1412,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   double prey_c = 0;
   bool left_to_do = false;
   if (w.complete && t < w.complete_until) {
-    for (const WayStep& st : w.steps) left_to_do = left_to_do || open_step(st);
+    for (const WayStep& st : w.steps) left_to_do = open_step(st) || left_to_do;
     for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
       const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
       // A monster: Quake's by its flag, Quake II's (no such flag in its view) by its live box.
@@ -1419,6 +1448,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
                nav.trap[static_cast<size_t>(x)];
       };
       if (trap_at(n) && !trap_at(from)) continue;
+      if (mate_has_prey(e)) {
+        held_left = true;
+        if (!w.mates_help || w.mates_prey[static_cast<size_t>(e)] > 1) continue;
+      } else {
+        own_left = true;
+      }
       const double c = w.search.cost(n);
       preys.push_back({e, n});
       if (prey < 0 || c < prey_c) {
@@ -1428,6 +1463,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       }
     }
     left_to_do = left_to_do || prey >= 0;
+    // None of his own and some a mate holds: the exit waits, and the next plan helps with it.
+    if (held_left) w.mates_skipped++;
+    w.mates_help = !own_left && held_left;
+    left_to_do = left_to_do || held_left;
     // Nothing reached for a moment (a door the last trigger opens still on its way) is not yet
     // the end: the exit waits kWayDone_s past the last thing left to do.
     if (left_to_do) w.busy_at = t;
@@ -1522,7 +1561,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
     for (size_t k = 0; k < w.steps.size(); k++) {
       const WayStep& st = w.steps[k];
       if (way_exit(st) || st.done || t < st.left_until || st.node < 0 || !reach(st.node) ||
-          (st.keyed && !key_held) || (left_to_do && carries(st)))
+          (st.keyed && !key_held) || (left_to_do && carries(st)) || (w.complete && held_step(st)))
         continue;
       bool covered = false;
       for (const int c : st.covers)
@@ -1564,7 +1603,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       // that took it with monsters left rode him out of base2 on his way back through it.
       if (st.done || st.ever || t < st.left_until || st.node < 0 || !reach(st.node) ||
           (st.keyed && !key_held) || st.drains || (!me_trapped && trapped_in(st.node)) ||
-          carries(st))
+          carries(st) || held_step(st))
         return -1;
       for (const int c : st.covers)
         if (!locked_moved(w, s, static_cast<size_t>(c))) return -1;
@@ -1706,6 +1745,24 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       w.plan_at = -1;
     }
   }
+  // (`complete`) A jump missed twice is never planned again by the pilot, but the way search
+  // still counts on it: on e3m5 the one jump up to the top floor's far side, missed twice early,
+  // left every place there a goal with no route and him standing still for minutes. With no
+  // route to what he is on for kWayNoRoute_s, the jumps he gave up on are given another try.
+  if (w.complete) {
+    sb::Pilot& pp = f.bot.pilot.pilot;
+    const bool no_route = pp.mode == sb::PilotMode::idle && pp.route.size() < 2;
+    if (!no_route || pp.failed.empty()) {
+      w.stuck_since = -1;
+    } else if (w.stuck_since < 0) {
+      w.stuck_since = t;
+    } else if (t - w.stuck_since > kWayNoRoute_s) {
+      pp.failed.clear();
+      pp.short_jumps.clear();
+      w.stats.forgiven++;
+      w.stuck_since = -1;
+    }
+  }
   // An exit the pilot finds no way to (one his way search takes that his routes do not) is left
   // like any other step, but after kWayNoRoute_s with no route rather than kWayGiveUp_s: the walk
   // to an exit is often longer than that.
@@ -1724,6 +1781,12 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       pick = -1;
     }
   }
+  // (`complete`) The lightning boss's buttons before anything else while he lives.
+  if (w.complete && t < w.complete_until)
+    if (const int b = way_bolt_pick(w, s); b >= 0) {
+      pick = b;
+      w.steps[static_cast<size_t>(b)].done = false;
+    }
   if (pick != w.step) {
     w.step = pick;
     w.step_since = t;

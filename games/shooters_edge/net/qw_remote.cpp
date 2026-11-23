@@ -25,6 +25,7 @@
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/net/qw_login.hpp"
 #include "shooters_edge/net/qw_remote_macros.hpp"
+#include "shooters_edge/net/qw_remote_rulesets.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
 
 namespace shooters_edge::net {
@@ -45,6 +46,19 @@ void open_live(client::Demo& d) {
   d.ring.resize(64);
   d.cmd_size = 24;
   d.named_effects = true;  // ids 120 and 121 the game's own (the server sends them only if agreed)
+}
+
+// The most joins again with another version of a server's map (map_versions.hpp): the player's
+// copy, one kept, the server's own.
+constexpr int kMostMapTries = 3;
+
+// The server's map as a player names it ("dm3").
+std::string map_shown(const QwClientEnd& c) {
+  if (c.models.size() < 2) return "its map";
+  std::string m = c.models[1];
+  if (m.starts_with("maps/")) m.erase(0, 5);
+  if (m.ends_with(".bsp")) m.resize(m.size() - 4);
+  return m;
 }
 
 void start(Remote& r, const ClientConfig& cfg) {
@@ -258,9 +272,15 @@ bool predict_from(Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& 
   if (!can_predict(r) || !c.player_seen[c.playernum] || acked == 0) return false;
   const sh::NetPlayer n = net_of(own);
   sh::MoveCmd cmds[64];
+  uint32_t seqs[64];
   int count = 0;
   for (uint32_t q = acked + 1; q < c.ch.outgoing_sequence && count < 64; q++)
-    if (c.sent_seq[q & 63] == q) cmds[count++] = c.sent[q & 63];
+    if (c.sent_seq[q & 63] == q) {
+      seqs[count] = q;
+      cmds[count++] = c.sent[q & 63];
+    }
+  // The main pass keeps the state after each move (the missiles' places, the jump's sound).
+  sh::MoveState* each = full != nullptr ? r.ahead_each : nullptr;
   // The solids where the last frame put them: the movers, then the other players.
   const client::DemoState& st = r.demo.state;
   const std::vector<sh::ClientModel> movers = movers_of(r);
@@ -284,15 +304,20 @@ bool predict_from(Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& 
       at.push_back({static_cast<int>(m.model - r.world->data()), m.origin});
     ge::classic::original_prediction_place(r.original, at.data(), static_cast<int>(at.size()),
                                            others.data(), static_cast<int>(others.size()));
-    ahead = ge::classic::predict_player_original(r.original, n, cmds, count);
+    ahead = ge::classic::predict_player_original(r.original, n, cmds, count, each);
   } else {
     sh::MoveWorld world;
     sh::client_world((*r.world)[0], movers.data(), static_cast<int>(movers.size()), others.data(),
                      static_cast<int>(others.size()), world);
-    ahead = sh::predict_player(n, cmds, count, settings_of(c), world);
+    ahead = sh::predict_player(n, cmds, count, settings_of(c), world, each);
   }
   out = ahead.origin;
-  if (full != nullptr) *full = ahead;
+  if (full != nullptr) {
+    *full = ahead;
+    std::copy(seqs, seqs + count, r.ahead_seq);
+    r.ahead_count = count;
+    r.ahead_from_held = n.jump_held;
+  }
   replayed = count;
   return true;
 }
@@ -322,6 +347,95 @@ void predict_others(Remote& r, double now_s) {
     r.others++;
     if (msec > r.others_msec) r.others_msec = msec;
   }
+}
+
+// THE PLAYER'S OWN JUMP AND MISSILES, at the weapon prediction's shown command: a jump the
+// predicted move took on a command shown for the first time plays its sound at once (the server's
+// copy on the player dropped, `cl_predict_jump`); each nail, rocket or grenade the weapon pass
+// fired is thrown ahead of the server (client/own_missiles.hpp, `cl_predict_projectiles`) from
+// the player's predicted place and view on its command; then every stand-in flies to `now_s`, is
+// handed to the server's copy near it and is drawn into the demo's state.
+void own_ahead(Remote& r, client::DemoState& d, double now_s) {
+  const QwClientEnd& c = r.end;
+  const int me = c.playernum;
+  const uint32_t acked = c.ch.incoming_acknowledged, next = c.ch.outgoing_sequence;
+  if (r.missiles_level != d.levels) {
+    client::own_missiles_clear(r.missiles);
+    r.missiles_level = d.levels;
+  }
+  if (static_cast<int32_t>(r.jump_played_to - acked) < 0) r.jump_played_to = acked;
+  if (r.weapon.on && r.predict_jump && me >= 0) {
+    constexpr std::string_view kJump = "player/plyrjmp8.wav";
+    std::erase_if(d.started, [&](const client::DemoSound& s) {
+      return s.entity == me + 1 && s.channel == 4 && s.name == nullptr && s.sound > 0 &&
+             static_cast<size_t>(s.sound) < d.sounds.size() &&
+             d.sounds[static_cast<size_t>(s.sound)] == kJump;
+    });
+    uint32_t shown = next - 1 - static_cast<uint32_t>(std::max(r.weapon.buffer, 0));
+    if (static_cast<int32_t>(shown - (acked + 2)) < 0) shown = next - 1;
+    bool held = r.ahead_from_held;
+    for (int i = 0; i < r.ahead_count; i++) {
+      const uint32_t q = r.ahead_seq[i];
+      const bool jumped = !held && r.ahead_each[i].jump_held;
+      held = r.ahead_each[i].jump_held;
+      if (!jumped || static_cast<int32_t>(q - r.jump_played_to) <= 0 ||
+          static_cast<int32_t>(q - shown) > 0)
+        continue;
+      client::DemoSound snd;
+      snd.entity = me + 1;
+      snd.channel = 4;
+      for (size_t k = 1; k < d.sounds.size() && snd.sound == 0; k++)
+        if (d.sounds[k] == kJump) snd.sound = static_cast<int>(k);
+      if (snd.sound == 0) snd.name = "player/plyrjmp8.wav";
+      snd.attenuation = 0;
+      snd.origin = r.ahead_each[i].origin;
+      d.started.push_back(snd);
+      r.jumps_played++;
+    }
+    if (static_cast<int32_t>(shown - r.jump_played_to) > 0) r.jump_played_to = shown;
+  }
+  const int ping = me >= 0 && me < 32 ? c.players[me].weapon.ping_ms : 0;
+  for (const RemoteWeapon::Fired& f : r.weapon.fired) {
+    client::OwnShot shot;
+    switch (f.shot.sound) {
+      case ge::classic::WeaponSound::nailgun:
+        shot.kind = client::OwnMissileKind::nail;
+        break;
+      case ge::classic::WeaponSound::super_nailgun:
+        shot.kind = client::OwnMissileKind::super_nail;
+        break;
+      case ge::classic::WeaponSound::rocket:
+        shot.kind = client::OwnMissileKind::rocket;
+        break;
+      case ge::classic::WeaponSound::grenade:
+        shot.kind = client::OwnMissileKind::grenade;
+        break;
+      default:
+        continue;
+    }
+    shot.origin = r.prediction;
+    for (int i = 0; i < r.ahead_count; i++)
+      if (r.ahead_seq[i] == f.command) shot.origin = r.ahead_each[i].origin;
+    shot.angles = c.sent[f.command & 63].angles;
+    shot.side = f.shot.side;
+    shot.midair = f.midair;
+    for (uint32_t q = f.command + 1; static_cast<int32_t>(q - next) < 0; q++)
+      if (c.sent_seq[q & 63] == q) shot.age_s += c.sent[q & 63].msec * 0.001;
+    client::own_missile_fire(r.missiles, shot, now_s, c.latency, ping, r.prediction);
+  }
+  const sh::Hull* world =
+      r.world != nullptr && !r.world->empty() ? &(*r.world)[0].hulls[0] : nullptr;
+  client::own_missiles_step(r.missiles, world, settings_of(c).gravity, now_s);
+  // The copies hidden last step shown as the newest frame has them before they are matched again.
+  const auto restore = [&](int n) {
+    if (n > 0 && static_cast<size_t>(n) < r.ents_new.size() &&
+        static_cast<size_t>(n) < d.entities.size())
+      d.entities[static_cast<size_t>(n)].present = r.ents_new[static_cast<size_t>(n)].present;
+  };
+  for (const client::OwnMissile& o : r.missiles.flying) restore(o.adopted);
+  for (const int n : r.missiles.hidden) restore(n);
+  client::own_missiles_handover(r.missiles, d);
+  client::own_missiles_draw(r.missiles, d, now_s);
 }
 
 // The entities drawn between the last two frames read, at the drawn time `now_s`.
@@ -365,17 +479,9 @@ const char* remote_stage_words(ClientStage s) {
 
 namespace {
 
-std::string size_words(size_t bytes) {
-  constexpr size_t kKb = 1024, kMb = kKb * kKb;
-  if (bytes < 10 * kKb) return std::to_string(bytes) + " bytes";
-  if (bytes < 10 * kMb) return std::to_string(bytes / kKb) + " KB";
-  return std::to_string(bytes / kMb) + " MB";
-}
-
-std::string coming(const std::string& name, int percent, size_t bytes, double& progress) {
-  percent = std::clamp(percent, 0, 100);
-  progress = percent / 100.0;
-  return name + " " + std::to_string(percent) + "% (" + size_words(bytes) + ")";
+std::string coming(const std::string& name, int percent, double& progress) {
+  progress = std::clamp(percent, 0, 100) / 100.0;
+  return name;  // the console draws the bar and the percentage after it
 }
 
 }  // namespace
@@ -409,8 +515,7 @@ std::string remote_foot(const Remote& r, double& progress) {
   if (r.q2) {
     const Q2ClientEnd& c = *r.q2;
     if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
-    if (!c.fetching.empty())
-      return coming(c.fetching, c.fetched_percent, c.fetched_bytes.size(), progress);
+    if (!c.fetching.empty()) return coming(c.fetching, c.fetched_percent, progress);
     return c.stage == ClientStage::signon ? loading : std::string();
   }
   const QwClientEnd& c = r.end;
@@ -420,17 +525,26 @@ std::string remote_foot(const Remote& r, double& progress) {
     if (c.dl.chunked && !c.dl.have.empty())
       percent = static_cast<int>(std::count(c.dl.have.begin(), c.dl.have.end(), true) * 100 /
                                  static_cast<std::ptrdiff_t>(c.dl.have.size()));
-    return coming(c.dl.name, percent,
-                  c.dl.size > 0 ? static_cast<size_t>(c.dl.size) : c.dl.bytes.size(), progress);
+    return coming(c.dl.name, percent, progress);
   }
   return c.stage == ClientStage::signon ? loading : std::string();
 }
 
+void remote_console_foot(Remote& r, ge::console::ConsoleView& view) {
+  double share = -1;
+  std::string foot = remote_foot(r, share);  // first: it sets the share the call below reads
+  view.set_foot(std::move(foot), share);
+  if (const bool joining = r.active && !view.foot().empty(); joining != r.console_held) {
+    r.console_held = joining;
+    view.set_full(joining);
+  }
+}
+
 namespace {
 
-// The port Quake II's `net_clientport` asks for (-1 any free one; never in Quake).
+// The port `net_clientport` asks for (-1 any free one), in every game.
 int wanted_port(const Remote& r) {
-  if (!r.setting || !(r.q2_game && r.q2_game())) return -1;
+  if (!r.setting) return -1;
   const std::string v = r.setting("net_clientport");
   const int port = v.empty() ? -1 : std::atoi(v.c_str());
   return port > 0 && port <= 65535 ? port : -1;
@@ -505,6 +619,7 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   r.transport = &r.own;
   r.server = to;
   r.server_name = text;
+  r.map_tries = 0;
   r.trace.where = text;
   if (q2)
     q2_remote_start(r, cfg);
@@ -570,7 +685,16 @@ std::string remote_queue_step(Remote& r, std::vector<std::string>& said) {
   return q.view.address;
 }
 
+void remote_run_stuffed(Remote& r, ge::console::Console& con) {
+  const auto source = r.q2 ? ge::console::Source::local : ge::console::Source::server;
+  for (const std::string& line : std::exchange(r.stuffed_run, {})) con.execute(line, source);
+}
+
 void remote_queue_frame(Remote& r, ge::console::Console& con) {
+  // A server browser's commands from this machine (`localid`), and the id it got wrong cleared.
+  if (std::exchange(r.end.localid_refused, false)) con.execute("localid \"\"");
+  for (const std::string& line : std::exchange(r.end.local_commands, {})) con.execute(line);
+  remote_rulesets_frame(r, con);  // the ruleset: its book, locked while joined
   std::vector<std::string> said;
   const std::string found = remote_queue_step(r, said);
   for (const std::string& line : said) con.print(line);
@@ -700,6 +824,9 @@ void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
 void remote_disconnect(Remote& r) {
   if (!r.active) return;
   r.left = true;
+  // The player's own copy of the map read again (another version was drawn while joined).
+  if (r.use_map && r.end.models.size() >= 2) r.use_map(r.end.models[1], "");
+  if (r.ignore.con != nullptr) r.ignore.con->cvars().hold_cheats(false);  // Quake II's cheat lock
   if (r.watch) {
     watch_close(*r.watch);
     r.watch.reset();
@@ -801,6 +928,7 @@ RemoteStep watch_step(Remote& r, std::vector<std::string>& said) {
   std::vector<client::DemoPrint> prints;
   std::vector<client::DemoEffect> effects;
   std::string centre;
+  weapon_restore(r.weapon, d.state);  // the server's stats and frame back before its news
   for (;;) {
     const client::DemoRead got = client::next_frame(d, error);
     if (got == client::DemoRead::error) {
@@ -900,12 +1028,13 @@ void user_info_step(Remote& r) {
   const std::string rate_text = r.setting("rate");
   const int rate = rate_text.empty() ? 0 : std::atoi(rate_text.c_str());
   const std::string password = r.setting("password");
-  if (r.q2) {
+  if (r.q2) {  // name, skin, hand, fov, msg, gender, rate and password (q2_remote.hpp)
     Q2ClientConfig& q = r.q2->cfg;
-    if ((rate <= 0 || rate == q.rate) && password == q.password) return;
-    if (rate > 0) q.rate = rate;
-    q.password = password;
-    q2_client_userinfo(*r.q2);
+    if (const std::string f = r.setting("cl_footsteps"); !f.empty()) {  // told on protocol 36
+      q.no_footsteps = std::atoi(f.c_str()) == 0;
+      q2_client_settings(*r.q2);
+    }
+    if (q2_user_info_moved(q, r.setting)) q2_client_userinfo(*r.q2);
     return;
   }
   ClientConfig& c = r.end.cfg;
@@ -928,6 +1057,13 @@ void user_info_step(Remote& r) {
     client_command(r.end, std::string("setinfo ") + key + " " + std::to_string(*held));
   }
   if (password_moved) client_command(r.end, "setinfo password \"" + password + "\"");
+  // A new name or skin: the server shows it at once.
+  for (const auto& [key, held] : {std::pair{"name", &c.name}, std::pair{"skin", &c.skin}}) {
+    const std::string now = r.setting(key);
+    if (now.empty() || now == *held) continue;
+    *held = now;
+    client_command(r.end, std::string("setinfo ") + key + " \"" + now + "\"");
+  }
   // `msg` and `noaim` as they now are.
   if (const std::string m = r.setting("msg"); !m.empty() && std::atoi(m.c_str()) != c.msg) {
     c.msg = std::atoi(m.c_str());
@@ -975,6 +1111,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   const uint32_t acked_before = r.end.ch.incoming_acknowledged;
   int ticks = 0;
   r.end.cfg.physfps = r.physfps;  // cl_physfps, live
+  r.end.localid = r.localid;      // a command packet with the wrong id clears it
   r.end.cfg.physfps_spectator = r.physfps_spectator;
   r.end.cfg.c2spps = r.c2spps;  // cl_c2spps, live
   r.end.cfg.c2s_impulse_backup = r.c2s_impulse_backup;
@@ -1001,6 +1138,23 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   }
   r.end.oob_prints.clear();
   for (std::string& line : std::exchange(r.end.web.said, {})) said.push_back(std::move(line));
+  for (std::string& line : std::exchange(r.end.to_run, {}))
+    r.stuffed_run.push_back(std::move(line));
+  // The server refused this version of its map: joined again at once with another (the next one
+  // kept, else the server's own fetched; classic/content/map_versions.hpp), while there is one.
+  if (r.end.stage == ClientStage::dropped && r.end.map_refused && !r.end.version_unfetched &&
+      r.map_tries < kMostMapTries) {
+    ClientConfig cfg = r.end.cfg;
+    cfg.refused.push_back(r.end.map_sum);
+    r.map_tries++;
+    said.push_back("The server plays another version of " + map_shown(r.end) +
+                   ". Joining again with its version.");
+    start(r, cfg);
+    return RemoteStep::waiting;
+  }
+  if (r.end.stage == ClientStage::active && r.said != ClientStage::active &&
+      r.end.models.size() >= 2 && r.end.cfg.keep_choice)  // the version this server took
+    r.end.cfg.keep_choice(r.server_name, r.end.models[1], r.end.map_sum);
   if (r.end.stage != r.said) {
     r.said = r.end.stage;
     std::string line = remote_stage_words(r.said) + r.server_name;
@@ -1032,6 +1186,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   std::vector<client::DemoPrint> prints;
   std::vector<client::DemoEffect> effects;
   std::string centre;
+  weapon_restore(r.weapon, d.state);  // the server's stats and frame back before its news
   for (;;) {
     const client::DemoRead got = client::next_frame(d, error);
     if (got == client::DemoRead::error) {
@@ -1066,6 +1221,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   r.ignore.chat.relay = false;
   // A listing asked for the settings page (qw_remote_sheet.hpp), on the tick clock its asks keep.
   remote_sheet_step(r, prints, static_cast<double>(r.now_us) * 1e-6 + r.owed_s);
+  remote_fair_step(r, prints, wall_s);  // f_ruleset answered (qw_remote_rulesets.hpp)
   client::drop_ignored(r.ignore, d.state, prints, wall_s, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
@@ -1096,18 +1252,42 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   if (r.predicted) {
     sh::Vec3f before;
     int unused = 0;
+    // cl_predict_smoothview: 0 snapped; above, the decay's pace by 2 less it (at least 0.1).
+    r.smooth.off = r.smoothview <= 0;
+    r.smooth.scale = static_cast<float>(std::clamp(2 - r.smoothview, 0.1, 2.0));
+    r.smooth.drop = kSmoothDropU;
     if (r.end.ch.incoming_acknowledged != acked_before &&
         predict_from(r, own_before, acked_before, before, unused))
-      sh::smoothing_frame(r.smooth, before, now);
+      sh::smoothing_frame(r.smooth, before, now, r.end.latency);
     sh::smoothing_decay(r.smooth, wall_s);
     r.prediction = now;
-    const sh::Vec3f drawn = sh::smoothed(r.smooth, now);
+    sh::Vec3f drawn = sh::smoothed(r.smooth, now);
+    // The eased place never inside a wall: the player's box swept from the prediction to it.
+    if (r.world != nullptr && !r.world->empty() && sh::length(r.smooth.correction) > 0) {
+      const sh::HullTrace tr = sh::trace_hull((*r.world)[0].hulls[1], now, drawn);
+      if (!tr.allsolid && !tr.startsolid) drawn = tr.endpos;
+    }
     if (static_cast<size_t>(me) < d.state.players.size())
       d.state.players[static_cast<size_t>(me)].origin = drawn;
     if (!d.state.intermission) d.state.eye = {drawn.x, drawn.y, drawn.z + d.state.view_height};
   }
+  if (r.predicted) {
+    std::string w_rank;
+    for (const auto& [k, v] : r.extra_info)
+      if (k == "w_rank") w_rank = v;
+    weapon_predict(r.weapon, r.end, d.state, r.ahead.waterlevel, r.prediction, w_rank);
+  } else {
+    r.weapon.on = false;
+    r.weapon.played_to = r.end.ch.incoming_acknowledged;
+    r.weapon.fired.clear();
+  }
   lerp_entities(r, draw_s);
+  if (!r.predicted) r.ahead_count = 0;
+  own_ahead(r, d.state, draw_s);
   if (!any || d.state.map.empty()) return RemoteStep::waiting;
+  // The level is loaded once the files it needs are here: while its map or models still come
+  // (the content fetched before prespawn) the window shows the console and the download's bar.
+  if (r.end.prespawn_held) return RemoteStep::waiting;
   if (d.state.levels != r.levels || (r.kept && r.end.begun)) {
     r.levels = d.state.levels;
     if (r.end.begun) r.kept = false;  // what was fetched joining is read with the level
@@ -1150,7 +1330,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   using Con = ge::console::Console;
   using Args = ge::console::Args;
   client::add_qw_ignore(con, r.ignore, r.demo.state);
-  add_remote_macros(con, r);  // $cl_server, $cl_ping, $cl_lag and the rates
+  add_remote_macros(con, r);    // $cl_server, $cl_ping, $cl_lag and the rates
+  add_remote_rulesets(con, r);  // ruleset, rulesets, f_ruleset (qw_remote_rulesets.hpp)
   add_serverstatus_command(con, r);
   add_q2_download_command(con, r);  // download <file> (q2_remote.hpp)
   add_q2_skins_command(con, r);     // skins
@@ -1197,6 +1378,13 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.q2_downloads.pics = kind("allow_download_pics", "1");
     cfg.q2_downloads.others = kind("allow_download_others", "0");
     cfg.q2_nodelta = cvar("cl_nodelta", "0") != "0";
+    cfg.q2_protocol = std::atoi(cvar("cl_protocol", "0").c_str());
+    cfg.q2_msglen = std::atoi(cvar("net_maxmsglen", "1390").c_str());
+    cfg.q2_chantype = std::atoi(cvar("net_chantype", "1").c_str());
+    cfg.q2_batch = cvar("cl_batchcmds", "1") != "0";
+    cfg.q2_packetdup = std::atoi(cvar("cl_packetdup", "1").c_str());
+    cfg.q2_maxpackets = std::atoi(cvar("cl_c2spps", "30").c_str());  // its cl_maxpackets
+    cfg.q2_instantpacket = cvar("cl_instantpacket", "1") != "0";
     // Quake II's downloads over HTTP (classic/content/web_downloads.hpp), registered while it is
     // the game.
     cfg.web.downloads = cvar("cl_http_downloads", "1") != "0";
@@ -1210,12 +1398,15 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.msg = std::atoi(cvar("msg", "1").c_str());
     cfg.noaim = cvar("noaim", "0") == "1";
     cfg.extra_info = r.extra_info;
-    cfg.password = cvar("password", "");            // a closed server's password
+    cfg.ruleset = cvar("ruleset", "default");  // the competition ruleset (qw_remote_rulesets.hpp)
+    cfg.password = cvar("password", "");       // a closed server's password
     cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
     cfg.w_switch = cvar("w_switch", "");            // Quake's switch rules on a pickup
     cfg.b_switch = cvar("b_switch", "");
     // cl_novweps 1: the visible weapons not asked for, so the server sends neither list nor index.
     if (cvar("cl_novweps", "0") != "0") cfg.ask[ExtFamily::z] &= ~kZVwep;
+    // cl_pext_weaponprediction 0: the weapon's state not asked for (qw_weapon.hpp).
+    if (cvar("cl_pext_weaponprediction", "1") == "0") cfg.ask[ExtFamily::mvd] &= ~kMvdWeaponPred;
     // The lens Quake II's user info carries (`fov`): cl_fov rounded, 0 (the rig's own) its 90.
     const double fov = std::atof(cvar("cl_fov", "0").c_str());
     cfg.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;
@@ -1232,7 +1423,27 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                           : static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
     cfg.timeout = std::atof(cvar("cl_timeout", "60").c_str());  // 0: never
     cfg.trace = &r.trace;                                       // showpackets, showdrop
-    cfg.read_file = r.read_file;
+    // Read at call time: a `+connect` on the command line joins before the window wires the files.
+    cfg.read_file = [&r](const std::string& gamedir, const std::string& path) {
+      return r.read_file ? r.read_file(gamedir, path) : std::vector<uint8_t>{};
+    };
+    cfg.map_versions = [&r](const std::string& map) {
+      return r.map_versions ? r.map_versions(map)
+                            : std::vector<std::pair<std::string, std::vector<uint8_t>>>{};
+    };
+    cfg.keep_version = [&r](const std::string& map, uint32_t sum,
+                            const std::vector<uint8_t>& bytes) {
+      return r.keep_version ? r.keep_version(map, sum, bytes) : std::string();
+    };
+    cfg.use_map = [&r](const std::string& map, const std::string& version) {
+      if (r.use_map) r.use_map(map, version);
+    };
+    cfg.remembered = [&r](const std::string& map) {
+      return r.remembered ? r.remembered(r.server_name, map) : std::optional<uint32_t>();
+    };
+    cfg.keep_choice = [&r](const std::string& server, const std::string& map, uint32_t sum) {
+      if (r.keep_choice) r.keep_choice(server, map, sum);
+    };
     // Through forwarders (cl_proxyaddr, "fwd1:port@fwd2:port"): the packets to the first, the
     // rest and the server in `prx`, each hop taking its own off the front.
     const std::string chain = cvar("cl_proxyaddr", "");
@@ -1255,12 +1466,15 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
       "connect",
       "connect <host>[:port]: join a server (port 27500 when none is given, 27910 in Quake II; "
       "port 26000 is a server of Quake's own protocol)",
-      [join](Con& c, const Args& a) {
+      [join, &r](Con& c, const Args& a) {
         if (a.size() < 2) {
           c.print("connect: name a server (connect 192.168.1.20)");
           return;
         }
-        if (a.size() > 2) c.print("Second argument to connect is ignored.");
+        if (a.size() > 2 && r.q2_game && r.q2_game())  // Quake II's protocol is a setting
+          c.print("The second argument to connect is ignored. Set the protocol with cl_protocol.");
+        else if (a.size() > 2)
+          c.print("Second argument to connect is ignored.");
         join(c, a[1]);
       });
   con.add_command(
@@ -1391,6 +1605,50 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                             "(a round trip late); 0: his own moves predicted",
                     .kind = ge::console::CvarKind::boolean},
                    &r.nopred);
+  // The held weapon predicted (qw_weapon.hpp).
+  con.cvars().bind({.name = "cl_nopred_weapon",
+                    .fallback = "0",
+                    .help = "1: on a server joined, your weapon's shots, frames and ammunition "
+                            "shown as the server sends them (a round trip late); 0: predicted",
+                    .kind = ge::console::CvarKind::boolean},
+                   &r.weapon.off);
+  con.cvars().bind({.name = "cl_predict_weaponsound",
+                    .fallback = "1",
+                    .help = "0: your weapon's sounds heard from the server; 1: every one played "
+                            "as you fire; above 1, the weapons left to the server, 2 to the power "
+                            "of the weapon's key (Quake: 2 axe, 4 shotgun, 8 super shotgun, 16 "
+                            "nailgun, 32 super nailgun, 64 grenade launcher, 128 rocket "
+                            "launcher, 256 lightning gun; Quake II: 2 blaster .. 512 railgun, "
+                            "1024 BFG10K)",
+                    .min = 0,
+                    .max = 2047},
+                   &r.weapon.sound_mask);
+  con.cvars().bind({.name = "cl_predict_buffer",
+                    .fallback = "1",
+                    .help = "How many commands behind the newest your predicted weapon is shown "
+                            "(0 the newest)",
+                    .min = 0,
+                    .max = 10},
+                   &r.weapon.buffer);
+  con.cvars().bind({.name = "cl_predict_projectiles",
+                    .fallback = "1",
+                    .help = "1: on a server joined, your own nails, rockets and grenades fly as "
+                            "you fire, before the server's arrive; 0: only the server's",
+                    .kind = ge::console::CvarKind::boolean},
+                   &r.missiles.on);
+  con.cvars().bind({.name = "cl_predict_jump",
+                    .fallback = "1",
+                    .help = "1: on a server joined, your jump heard as you jump; 0: when the "
+                            "server's sound arrives",
+                    .kind = ge::console::CvarKind::boolean},
+                   &r.predict_jump);
+  con.cvars().bind({.name = "cl_predict_smoothview",
+                    .fallback = "1",
+                    .help = "How a correction of your predicted place is eased out on a server "
+                            "joined: 0 snapped at once, 1 the usual pace, up to 2 slower",
+                    .min = 0,
+                    .max = 2},
+                   &r.smoothview);
   con.cvars().bind({.name = "cl_predict_players",
                     .fallback = "1",
                     .help = "1: on a server joined, the other players run ahead from their last "
@@ -1526,6 +1784,12 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                  "server.",
          .kind = ge::console::CvarKind::boolean},
         &r.solid_players);
+    con.cvars().bind({.name = "localid",
+                      .fallback = "",
+                      .help = "The id a server browser on this computer puts on the commands it "
+                              "sends the game; one with another id is refused.",
+                      .kind = ge::console::CvarKind::text},
+                     &r.localid);
     con.cvars().bind({.name = "cl_physfps",
                       .fallback = "0",
                       .flags = ge::console::kArchive,

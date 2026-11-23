@@ -10,10 +10,10 @@
 //   starts a new block past 1400 bytes with a 32-byte margin, a baseline with a 64-byte one).
 // - **A frame** (`q2_frame`): the reliable messages first (changed configstrings, prints,
 //   centred prints, stuffed lines, the viewer's layout program and inventory when they changed),
-//   then the frame (its number, the one it deltas from, area bits that show every area), the player
-//   state as a delta from the last frame's, the entities as a delta list against the last frame's
-//   (an entity new to the list from its baseline, a player always with its old origin, a gone one
-//   removed), then the frame's sounds.
+//   then the frame (its number, the one it deltas from, area bits of the areas joined to the
+//   viewer's), the player state as a delta from the last frame's, the entities as a delta list
+//   against the last frame's (an entity new to the list from its baseline, a player always with its
+//   old origin, a gone one removed), then the frame's sounds.
 //
 // The configstrings: 0 the map's title, 30 the most clients, 31 the map's checksum (the caller's:
 // the MD4 of the whole map file, its four little-endian words XORed, as signed decimal, measured
@@ -55,33 +55,41 @@ inline constexpr int kQ2MaxBlock = 1400;
 inline constexpr int kQ2Entities = 1024;
 inline constexpr int kQ2ConfigStrings = 2080;
 
-// One entity as the wire holds it: whole 1/8 units, angles in 256ths of a turn, the wire's
-// model numbers.
+// One entity as the wire holds it: whole 1/8 units (16 bits on the ordinary wire, 23 under the
+// extended limits' second level), angles in 256ths of a turn, the wire's model numbers. The
+// extended limits' own fields (plugins/classic/protocol/q2_limits.hpp) as their wire bytes, 0
+// each one's default: more effects, alpha, scale, and the looping sound's volume and attenuation.
 struct Q2EntityState {
   bool present = false;
-  int16_t origin[3] = {}, old_origin[3] = {};
+  int32_t origin[3] = {}, old_origin[3] = {};
   uint8_t angles[3] = {};
   int model[4] = {};
   int frame = 0;
   uint32_t skin = 0, effects = 0, renderfx = 0;
   int sound = 0, event = 0, solid = 0;
+  uint32_t more_effects = 0;
+  uint8_t alpha = 0, scale = 0, loop_volume = 0, loop_attenuation = 0;
 };
 
-// The player's state as the wire holds it.
+// The player's state as the wire holds it. Under the extended limits the gun's index is a word
+// (its model in the low 13 bits, a skin in the top 3); their second level carries the origin and
+// velocity in 23 bits, the move's time and flags in 16, a damage blend and 64 stats. The ordinary
+// wire sends the low bits of each and the first 32 stats.
 struct Q2PlayerState {
   uint8_t type = 0;
-  int16_t origin[3] = {}, velocity[3] = {};
-  uint8_t time = 0, flags = 0;
+  int32_t origin[3] = {}, velocity[3] = {};
+  uint16_t time = 0, flags = 0;
   int16_t gravity = 0;
   int16_t delta_angles[3] = {};
   int8_t view_offset[3] = {};
   int16_t view_angles[3] = {};
   int8_t kick[3] = {};
-  uint8_t gun_index = 0, gun_frame = 0;
+  uint16_t gun_index = 0;
+  uint8_t gun_frame = 0;
   int8_t gun_offset[3] = {}, gun_angles[3] = {};
-  uint8_t blend[4] = {};
+  uint8_t blend[4] = {}, damage_blend[4] = {};
   uint8_t fov = 0, rdflags = 0;
-  int16_t stats[32] = {};
+  int16_t stats[64] = {};
 };
 
 struct Q2WireOptions {
@@ -106,6 +114,11 @@ struct Q2WireOptions {
   // is the server data alone, naming no player slot (-1) and the file as the level; protocol 36
   // says the state 5 (a cinematic, minor 1023 on) or 3 (a picture). Empty: a game.
   std::string show;
+  // The extended limits' level the viewer is sent at (q2_wire_limits.cpp; a hosted library's,
+  // `Q2Raw::ext`): 0 the ordinary wire; 1 and 2 the extended entity and player forms, the server
+  // data's flags saying so (36), or a recording's protocol 3434 or 3435 (34's form). Every viewer
+  // of an extended game gets its level: the server admits no other.
+  int ext = 0;
   // The viewer reads the hit report (temporary entity 128, `fight_dealt`): our own client does,
   // a stock client does not, so it is sent nothing of it.
   bool hit_reports = false;
@@ -121,21 +134,27 @@ void q2_sky(const ge::brush::Map& map, Q2WireOptions& opt);
 // and any other entity with a cluster in the union of the visible rows of every leaf within 8
 // units of its eye (the player state's origin and view offset); an entity with no model (a sound
 // or an effect alone) only within 400 units of the eye. An entity touching more than
-// `kSightClusters` clusters is sent wherever the viewer is. Every area counts as connected (the
-// net server keeps no area portals, porting/shooters-edge/q2-game-library.md § 17), so
-// closed doors cut nothing. A recording keeps every entity (no cut set).
+// `kSightClusters` clusters is sent wherever the viewer is. THE AREAS: on a map with area data an
+// entity is kept only when the viewer's area is joined (through the open area portals, `groups`)
+// to its first area or, for one spanning a portal (a door), its second; area 0 (solid, outside)
+// is joined to nothing. The frame's area bits mark the areas joined to the viewer's (every area
+// for a viewer in area 0), so a client leaves the rooms behind a shut door undrawn. A recording
+// keeps every entity (no cut set).
 inline constexpr int kSightClusters = 16;
 struct Q2SightLinks {
   int32_t clusters[kSightClusters] = {};
-  uint8_t count = 0;        // clusters held
-  bool everywhere = false;  // more than kSightClusters touched
+  uint8_t count = 0;             // clusters held
+  bool everywhere = false;       // more than kSightClusters touched
+  int32_t area1 = 0, area2 = 0;  // the areas its leaves lie in (0 none; a second when it spans two)
 };
 struct Q2Sight {
   const ge::brush::Map* map = nullptr;  // null: no cut, every entity sent
   std::vector<Q2SightLinks> links;      // by entity number (kQ2Entities)
+  std::vector<int32_t> groups;          // each area's group over the open portals (empty: no areas)
 };
-// Starts a frame's links over `map` (null: no cut); every entity unlinked.
-void q2_sight_reset(Q2Sight& s, const ge::brush::Map* map);
+// Starts a frame's links over `map` (null: no cut) for `entities` (an extended game's 8192);
+// every entity unlinked.
+void q2_sight_reset(Q2Sight& s, const ge::brush::Map* map, int entities = kQ2Entities);
 // Entity `number` linked by its box in the world (`lo`..`hi`, map units).
 void q2_sight_link(Q2Sight& s, int number, const float lo[3], const float hi[3]);
 // Every entity of a runner's world linked by its box (its absolute box, else origin + its size).
@@ -147,6 +166,14 @@ struct Q2Wire;
 // then whether entity `n`, shown as `s`, is kept.
 bool q2_sight_view(Q2Wire& w, const float eye[3]);
 bool q2_sight_keeps(const Q2Wire& w, int n, const Q2EntityState& s, const float eye[3]);
+// The frame's area bits as the viewer's cut found them: their count, then the bytes (32 bytes of
+// every area when the map has none or nothing is cut).
+void q2_write_area_bits(std::vector<uint8_t>& out, const Q2Wire& w);
+// Whether a sound or an effect at `at` reaches a viewer standing at `ear` (his origin, not his
+// eye; map units) on a cut frame: the point's hearing set holds his cluster and their areas are
+// joined through the open portals (area 0 joined to nothing). The frame sends the rules' effects
+// and sounds by it, a sound of no attenuation to everyone.
+bool q2_sight_hears(const Q2Wire& w, const float ear[3], sh::Vec3f at);
 
 // What the encoder keeps between frames for one viewpoint.
 struct Q2Wire {
@@ -162,6 +189,8 @@ struct Q2Wire {
   // The cut the next frame applies (null or no map: none); the caller's, linked for this frame.
   const Q2Sight* sight = nullptr;
   std::vector<uint8_t> seen, heard;  // the viewer's cluster bits, this frame
+  int32_t area = 0;                  // the viewer's area, this frame
+  std::vector<uint8_t> area_bits;    // the frame's area bits (empty: 32 bytes of every area)
   int64_t cut = 0;                   // entities the cut kept out, every frame summed
   int64_t capped = 0;                // entities the cap kept out (sv_maxents), every frame summed
   // The frames held back for the viewer's rate since the last one written: the next frame's
@@ -177,6 +206,12 @@ struct Q2Wire {
          no_predict = false;
   } asked;
   uint8_t frame_flags = 0;
+  // The room the packet carrying the next frame has after the reliable data it carries (0: the
+  // block's own 1400 bytes), and whether the reliable data this frame writes joins it (the
+  // channel's `channel_unreliable_room`). A frame sized to it loses its last entities and its
+  // effects and sounds before the whole frame is lost to a long reliable message.
+  bool room_grows = false;
+  size_t room = 0;
 };
 
 // What the runner shows, in the wire's terms (the pieces every writer of Quake II's messages
@@ -210,6 +245,7 @@ std::string q2_temp_entity_name(int code);
 // baseline (by entity number), each message whole with its id. A live server sends them as a
 // client asks for them (net/q2_net_server.hpp); a recording cuts them into blocks.
 struct Q2Signon {
+  int config_end = kQ2ConfigStrings;  // the configstring count: the streams' end word
   std::vector<uint8_t> server_data;
   std::vector<std::pair<int, std::vector<uint8_t>>> config_strings, baselines;
 };
@@ -246,6 +282,8 @@ struct Q2Raw {
   // the same.
   bool (*touch)(void* ctx, int slot, int number, Q2EntityState& s) = nullptr;
   void* touch_ctx = nullptr;
+  // The wider limits the game asked for: 0 none, 1 extended, 2 extended with the newer interface.
+  int ext = 0;
 };
 
 // The signon from a raw game, as `q2_signon_parts`.
@@ -286,6 +324,26 @@ int32_t q2_long_solid(int solid);
 // configstring then baseline streams, each message at most kQ2BigMessage bytes.
 inline constexpr size_t kQ2BigMessage = 32768;
 void q2_signon_streams(const Q2Signon& parts, int minor, std::vector<std::vector<uint8_t>>& out);
+// THE EXTENDED LIMITS (q2_wire_limits.cpp; plugins/classic/protocol/q2_limits.hpp holds the
+// levels, layouts, limits and codings): an entity's and the player's delta at `level` 0 (the
+// ordinary wire, as `q2_entity_flags`, `q2_write_entity` and `q2_write_player`), 1 (extensions:
+// a fifth flags byte, every model index a word when one passes 255, the looping sound a word with
+// its volume and attenuation bytes, more effects, alpha and scale, the solid in the extended
+// packing, the corrected width rule, the gun's index a word) or 2 (extensions 2: origins and the
+// player's origin and velocity as 23-bit coordinates against `from`, an old origin absolute, the
+// move's time and flags words, the blend a byte of which parts follow with the damage blend, 64
+// stats under a variable-length mask). The player is the protocol 34 form (its id, every stat
+// mask): a recording's (3434 to 3436) and the reader's, which turns a later form into it.
+uint64_t q2_entity_flags_ext(const Q2EntityState& from, const Q2EntityState& to, int number,
+                             bool old, int level);
+void q2_write_entity_ext(std::vector<uint8_t>& out, uint64_t flags, int number,
+                         const Q2EntityState& from, const Q2EntityState& to, int level);
+void q2_write_player_ext(std::vector<uint8_t>& out, const Q2PlayerState& from,
+                         const Q2PlayerState& to, int level);
+// The solid in the extended packing from protocol 34's packed short: bytes x and y half-widths,
+// the depth below and the height above + 32 (31, a brush model, and 0 kept).
+int32_t q2_ext_solid(int solid);
+
 // A RECORDING (`.dm2`): blocks of a 32-bit length and the block, ended by a length of -1.
 struct Q2Recorder {
   Q2Wire wire;

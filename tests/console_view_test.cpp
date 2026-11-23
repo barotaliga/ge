@@ -217,8 +217,8 @@ TEST(remotemode_clearnotify_scale_and_the_foot) {
   c.execute("con_scale 2");
   c.run();
   CHECK(v.text_scale() == 2);
-  v.set_foot("maps/dm2.bsp 40% (90 KB)", 0.4);
-  CHECK(v.foot() == "maps/dm2.bsp 40% (90 KB)" && v.foot_progress() == 0.4);
+  v.set_foot("maps/dm2.bsp", 0.4);
+  CHECK(v.foot() == "maps/dm2.bsp" && v.foot_progress() == 0.4);
 }
 
 // A game's held key: `+duck` crouches while the key is down.
@@ -604,4 +604,72 @@ TEST(a_games_tab_completes_the_shared_part_and_lists_the_matches) {
   v.type("b");
   v.key(EditKey::tab);
   CHECK(v.input() == "zfoo_bb ");
+}
+
+// After a word with argument values (Quake II's `use` and the item names), Tab completes the
+// value: a name with a space quoted, more than one listed; the suggestions offer them too.
+TEST(tab_completes_a_words_argument_values) {
+  Console c;
+  ConsoleView v(c);
+  c.set_arg_values(
+      "use", [] { return std::vector<std::string>{"Rocket Launcher", "Rockets", "Shotgun"}; });
+  v.list_mode = 1;
+  v.set_open(true);
+  for (const char ch : std::string("use sh")) v.type(std::string(1, ch));
+  v.key(EditKey::tab);
+  CHECK(v.input() == "use Shotgun ");
+  v.key(EditKey::escape);  // the text cleared
+  for (const char ch : std::string("use rock")) v.type(std::string(1, ch));
+  v.key(EditKey::tab);
+  CHECK(v.input() == "use Rocket");  // what both share
+  CHECK(v.lines().back().text.find("\"Rocket Launcher\"") != std::string::npos);
+  for (const char ch : std::string(" l")) v.type(std::string(1, ch));
+  v.list_mode = -1;  // ours: the top suggestion taken
+  CHECK(v.suggestions().size() == 1);
+  v.key(EditKey::tab);
+  CHECK(v.input() == "use \"Rocket Launcher\"");
+  c.set_arg_values("use", nullptr);
+  CHECK(c.arg_values("use").empty());
+}
+
+// The typed lines are kept across runs beside the config, oldest first, without blanks or a line
+// repeated; con_history 0 keeps none.
+TEST(the_typed_lines_are_kept_across_runs) {
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge_conhistory_test";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+  {
+    Console c;
+    c.set_search_path({dir});
+    ConsoleView v(c);
+    for (const char* line : {"echo one", "echo one", "echo two", "echo three"}) {
+      v.type(line);
+      v.key(EditKey::enter);
+    }
+    CHECK(v.save_history());
+  }
+  std::ifstream in(dir / std::string(kHistoryFile));
+  std::string all((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  CHECK(all == "echo one\necho two\necho three\n");
+  {
+    Console c;
+    c.set_search_path({dir});
+    ConsoleView v(c);
+    c.execute("con_history 2");
+    c.run();
+    v.load_history();
+    CHECK(v.history() == (std::vector<std::string>{"echo two", "echo three"}));
+    v.key(EditKey::up);
+    CHECK(v.input() == "echo three");
+  }
+  {
+    Console c;
+    c.set_search_path({dir});
+    ConsoleView v(c);
+    c.execute("con_history 0");
+    c.run();
+    v.load_history();
+    CHECK(v.history().empty());
+  }
+  std::filesystem::remove_all(dir);
 }

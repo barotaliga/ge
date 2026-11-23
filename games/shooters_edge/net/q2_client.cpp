@@ -11,12 +11,16 @@
 #include <cctype>
 #include <cstdlib>
 #include <iterator>
+#include <string_view>
 #include <utility>
 
+#include "classic/rulesets.hpp"
 #include "net/voice_trial.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q2_fetch.hpp"
 #include "shooters_edge/net/qw_ext.hpp"
 #include "shooters_edge/net/qw_voice_route.hpp"
+#include "shooters_edge/server/q2_combat.hpp"
 
 namespace shooters_edge::net {
 
@@ -43,12 +47,14 @@ std::string userinfo_of(const Q2ClientEnd& c) {
   info_set(u, "name", c.cfg.name);
   info_set(u, "skin", c.cfg.skin);
   info_set(u, "rate", std::to_string(c.cfg.rate));
-  info_set(u, "msg", "1");
+  info_set(u, "msg", std::to_string(c.cfg.msg));
   info_set(u, "hand", std::to_string(c.cfg.hand));
   info_set(u, "fov", std::to_string(c.cfg.fov));
   if (!c.cfg.gender.empty()) info_set(u, "gender", c.cfg.gender);
   info_set(u, "version", kProgramVersion);  // what the server's players and admins see us as
   if (c.cfg.speedjump) info_set(u, "cl_speedjump", "1");
+  if (!c.cfg.ruleset.empty() && c.cfg.ruleset != "default")
+    info_set(u, std::string(ge::classic::ruleset_info_key(true)), c.cfg.ruleset);
   if (c.cfg.spectator)
     info_set(u, "spectator", c.cfg.spectator_password.empty() ? "1" : c.cfg.spectator_password);
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
@@ -58,23 +64,79 @@ std::string userinfo_of(const Q2ClientEnd& c) {
       (c.cfg.ask_login ? kGeAccountKey : 0u) | (c.cfg.ask_feel ? kGeMoveFeel : 0u) |
       (c.cfg.voice ? kGeVoice : 0u) | (c.cfg.ask_frames ? kGeEveryFrame : 0u) |
       (c.cfg.ask_back ? kGeItemBack : 0u) | (c.cfg.ask_hits ? kGeHitReports : 0u) |
-      (c.cfg.ask_sheet ? kGeSettings : 0u);
+      (c.cfg.ask_sheet ? kGeSettings : 0u) | (c.cfg.ask_arsenal ? kGeArsenal : 0u);
   if (ext != 0) info_set(u, "*ge_ext", std::to_string(ext));
   return u;
 }
 
-void send_connect(Q2ClientEnd& c) {
-  send_oob(c, "connect " + std::to_string(kQ2NetProtocol) + " " + std::to_string(c.cfg.qport) +
-                  " " + std::to_string(c.challenge) + " \"" + userinfo_of(c) + "\"\n");
+// The later protocols' qport: its low byte alone.
+uint16_t qport_of(const Q2ClientEnd& c) {
+  return c.protocol == kQ2NetProtocol ? c.cfg.qport : static_cast<uint16_t>(c.cfg.qport & 0xFFu);
 }
 
-void connected(Q2ClientEnd& c) {
+// The protocol taken from the challenge's `p=` lists (`w` after the challenge number): the asked
+// one when offered, else the next one down; 34 when nothing later is offered or asked.
+int choose_protocol(int asked, const std::vector<std::string>& w) {
+  bool has35 = false, has36 = false;
+  for (size_t k = 2; k < w.size(); k++) {
+    if (w[k].rfind("p=", 0) != 0) continue;
+    const std::string list = w[k].substr(2);
+    for (size_t at = 0; at <= list.size();) {
+      const size_t comma = std::min(list.find(',', at), list.size());
+      const int v = std::atoi(list.substr(at, comma - at).c_str());
+      has35 = has35 || v == kQ2Protocol35;
+      has36 = has36 || v == kQ2Protocol36;
+      at = comma + 1;
+    }
+  }
+  if (asked == 0) asked = kQ2Protocol36;
+  if (asked == kQ2Protocol36) {
+    if (has36) return kQ2Protocol36;
+    asked = kQ2Protocol35;
+  }
+  if (asked == kQ2Protocol35 && has35) return kQ2Protocol35;
+  return kQ2NetProtocol;
+}
+
+// The largest packet asked of the server: `net_maxmsglen`, 0 sent as it is.
+int msglen_of(const Q2ClientConfig& cfg) {
+  return cfg.msglen == 0 ? 0 : std::clamp(cfg.msglen, kQ2MsgLenLeast, kQ2MsgLenMost);
+}
+
+void send_connect(Q2ClientEnd& c) {
+  std::string tail;
+  if (c.protocol == kQ2Protocol35)
+    tail = " " + std::to_string(msglen_of(c.cfg)) + " " + std::to_string(kQ2MinorLast35);
+  else if (c.protocol == kQ2Protocol36)
+    tail = " " + std::to_string(msglen_of(c.cfg)) + " " + std::to_string(c.cfg.chantype) + " 1 " +
+           std::to_string(kQ2MinorLast36);
+  send_oob(c, "connect " + std::to_string(c.protocol) + " " + std::to_string(qport_of(c)) + " " +
+                  std::to_string(c.challenge) + " \"" + userinfo_of(c) + "\"" + tail + "\n");
+}
+
+// A client setting (clc 5) on the reliable channel: the later protocols' only.
+void send_setting(Q2ClientEnd& c, int index, int value) {
+  const uint8_t b[5] = {
+      kClcSetting, static_cast<uint8_t>(index & 0xFF), static_cast<uint8_t>((index >> 8) & 0xFF),
+      static_cast<uint8_t>(value & 0xFF), static_cast<uint8_t>((value >> 8) & 0xFF)};
+  channel_reliable(c.ch, b, sizeof b);
+}
+
+void connected(Q2ClientEnd& c, int chan) {
   c.stage = ClientStage::signon;
   c.connected_at = c.now;
   c.ch.trace = c.cfg.trace;
-  channel_setup(c.ch, true, c.cfg.qport, c.now);
+  channel_setup(c.ch, true, qport_of(c), c.now);
+  if (c.protocol != kQ2NetProtocol) {  // a byte of qport (none when 0), the newer channel on 36
+    c.ch.qport_bytes = qport_of(c) != 0 ? 1 : 0;
+    c.ch.fragments = chan == 1;
+    q2_demo(c).wide_blocks = true;
+  }
   channel_set_rate(c.ch, 0);
   q2_client_command(c, "new");
+  // The server is told the client records whatever it does, so it leaves out nothing the client
+  // could work out itself: every recording of a later protocol's server is whole.
+  if (c.protocol != kQ2NetProtocol) send_setting(c, kQ2SetRecording, 1);
 }
 
 void read_oob(Q2ClientEnd& c, const uint8_t* data, size_t size) {
@@ -93,13 +155,65 @@ void read_oob(Q2ClientEnd& c, const uint8_t* data, size_t size) {
   if (w.empty()) return;
   if (w[0] == "challenge" && w.size() >= 2 && c.stage == ClientStage::challenge) {
     c.challenge = static_cast<int32_t>(std::strtol(w[1].c_str(), nullptr, 10));
+    c.protocol = choose_protocol(c.cfg.protocol, w);
     c.stage = ClientStage::connect;
     c.last_ask = c.now;
     send_connect(c);
   } else if (w[0] == "client_connect" && c.stage == ClientStage::connect) {
+    // The channel: the server's ` nc=` answer, else the newer one on 36.
+    int chan = c.protocol == kQ2Protocol36 ? 1 : 0;
+    int anticheat = 0;  // the server's ` ac=` ask: 2 and up insists on it
+    for (size_t k = 1; k < w.size(); k++) {
+      if (w[k].rfind("nc=", 0) == 0) chan = std::atoi(w[k].c_str() + 3);
+      if (w[k].rfind("ac=", 0) == 0) anticheat = std::atoi(w[k].c_str() + 3);
+    }
+    if (anticheat >= 2 && c.prints.size() < kKept)  // none here: said, and the game goes on
+      c.prints.emplace_back(
+          "The server asks for anticheat, which this game does not have; joining without it.\n");
+    if (chan != 0 && chan != 1) {
+      c.refused = "Server returned invalid netchan type";
+      c.stage = ClientStage::dropped;
+      return;
+    }
     wd::web_connect(c.http, c.cfg.http, wd::web_dlserver(w), c.cfg.allow.all,
                     gn::to_string(c.server));
-    connected(c);
+    connected(c, chan);
+  }
+}
+
+bool lacks(const Q2ClientEnd& c, const std::string& path) {
+  return c.downloaded.count(path) == 0 && (!c.cfg.read_file || c.cfg.read_file(path).empty());
+}
+
+// Lacked, never asked for on this connection, and let through by the player's download switches.
+bool wanted(const Q2ClientEnd& c, const std::string& path) {
+  return c.asked.count(path) == 0 && q2_download_allowed(c.cfg.allow, path) && lacks(c, path);
+}
+
+void queue_fetch(Q2ClientEnd& c, const std::string& path) {
+  if (!wanted(c, path)) return;
+  c.asked.insert(path);
+  c.fetch_queue.push_back(path);
+}
+
+// A file as held now: fetched on this connection, else the player's own.
+std::vector<uint8_t> held_file(const Q2ClientEnd& c, const std::string& path) {
+  if (const auto it = c.downloaded.find(path); it != c.downloaded.end()) return it->second;
+  return c.cfg.read_file ? c.cfg.read_file(path) : std::vector<uint8_t>{};
+}
+
+// The level's next stage queued (net/q2_fetch.hpp), once the one before has come: what the models
+// and the level name, then the map's wall textures.
+void queue_next_stage(Q2ClientEnd& c) {
+  while (c.fetch_queue.empty() && c.cfg.fetch_level && c.fetch_stage >= 1 && c.fetch_stage < 3) {
+    const cl::DemoState& st = q2_demo(c).state;
+    const Q2FetchRead read = [&c](const std::string& path) { return held_file(c, path); };
+    if (++c.fetch_stage == 2) {
+      for (const std::string& path : q2_fetch_level(st, read, c.cfg.vweps)) queue_fetch(c, path);
+    } else if (st.models.size() > 1) {
+      for (const std::string& path : q2_fetch_textures(held_file(c, q2_fetch_path(st.models[1]))))
+        queue_fetch(c, path);
+    }
   }
 }
 
@@ -108,62 +222,46 @@ void next_fetch(Q2ClientEnd& c) {
   c.fetching.clear();
   c.fetched_bytes.clear();
   c.fetched_percent = 0;
+  c.fetched_from = 0;
   c.fetched_origin = false;
-  if (c.http.on) {                               // over HTTP first: `begin` held until it is done
-    c.cfg.http.gamedir = q2_demo(c).state.game;  // the server's game folder ("": baseq2)
-    for (const std::string& path : std::exchange(c.fetch_queue, {}))
-      if (wd::web_queue(c.http, c.cfg.http, path)) q2_client_command(c, "download http");
-    if (wd::web_busy(c.http)) return;
+  for (;;) {
+    if (c.http.on) {                               // over HTTP first: `begin` held until it is done
+      c.cfg.http.gamedir = q2_demo(c).state.game;  // the server's game folder ("": baseq2)
+      for (const std::string& path : std::exchange(c.fetch_queue, {}))
+        if (wd::web_queue(c.http, c.cfg.http, path)) q2_client_command(c, "download http");
+      if (wd::web_busy(c.http)) return;
+    }
+    if (!c.fetch_queue.empty()) break;
+    if (c.fetch_stage < 1 || c.fetch_stage >= 3 || !c.cfg.fetch_level) {
+      if (!c.held_begin.empty()) q2_client_command(c, c.held_begin);
+      c.held_begin.clear();
+      return;
+    }
+    queue_next_stage(c);
   }
-  if (!c.fetch_queue.empty()) {
-    c.fetching = c.fetch_queue.front();
-    c.fetch_queue.erase(c.fetch_queue.begin());
-    q2_client_command(c, "download " + c.fetching);
-    return;
-  }
-  if (!c.held_begin.empty()) q2_client_command(c, c.held_begin);
-  c.held_begin.clear();
+  c.fetching = c.fetch_queue.front();
+  c.fetch_queue.erase(c.fetch_queue.begin());
+  // A download cut short before: the rest asked for from what is held.
+  if (c.cfg.held.read) c.fetched_bytes = c.cfg.held.read(c.fetching);
+  c.fetched_from = c.fetched_bytes.size();
+  q2_client_command(
+      c,
+      "download " + c.fetching +
+          (c.fetched_bytes.empty() ? std::string() : " " + std::to_string(c.fetched_bytes.size())));
 }
 
-bool lacks(const Q2ClientEnd& c, const std::string& path) {
-  return c.downloaded.count(path) == 0 && (!c.cfg.read_file || c.cfg.read_file(path).empty());
-}
-
-// Lacked and let through by the player's download switches: fetched on joining.
-bool wanted(const Q2ClientEnd& c, const std::string& path) {
-  return q2_download_allowed(c.cfg.allow, path) && lacks(c, path);
-}
-
-// `precache`: the files lacked queued, `begin` held until they are fetched.
+// `precache`: the files lacked queued, `begin` held until they are fetched; with `fetch_level`
+// the level's stages after the map and its models follow (net/q2_fetch.hpp).
 void start_fetch(Q2ClientEnd& c, const std::string& begin) {
   c.fetch_queue.clear();
+  c.fetch_stage = 1;
   const std::vector<std::string>& models = q2_demo(c).state.models;
-  if (models.size() > 1 && models[1].rfind("maps/", 0) == 0 && wanted(c, models[1]))
-    c.fetch_queue.push_back(models[1]);
-  if (c.cfg.fetch_level) {  // what the level names: models, sounds and the players' figures
-    const auto queue = [&c](const std::string& path) {
-      if (path.empty() || path[0] == '*' || path[0] == '#' || path.find('/') == std::string::npos)
-        return;
-      if (wanted(c, path) &&
-          std::find(c.fetch_queue.begin(), c.fetch_queue.end(), path) == c.fetch_queue.end())
-        c.fetch_queue.push_back(path);
-    };
-    const cl::DemoState& st = q2_demo(c).state;
-    for (size_t i = 2; i < models.size(); i++) queue(models[i]);
-    for (size_t i = 1; i < st.sounds.size(); i++)
-      if (!st.sounds[i].empty() && st.sounds[i][0] != '*') queue("sound/" + st.sounds[i]);
-    for (const std::string& look : st.looks) {
-      const size_t slash = look.find('/');
-      if (slash == std::string::npos || slash == 0 || slash + 1 >= look.size()) continue;
-      const std::string figure = look.substr(0, slash);
-      queue("players/" + figure + "/tris.md2");
-      queue("players/" + figure + "/" + look.substr(slash + 1) + ".pcx");
-    }
+  if (c.cfg.fetch_level) {
+    for (const std::string& path : q2_fetch_models(q2_demo(c).state)) queue_fetch(c, path);
+  } else if (models.size() > 1 && models[1].rfind("maps/", 0) == 0) {
+    queue_fetch(c, models[1]);
   }
-  for (const std::string& w : c.cfg.want)
-    if (wanted(c, w) &&
-        std::find(c.fetch_queue.begin(), c.fetch_queue.end(), w) == c.fetch_queue.end())
-      c.fetch_queue.push_back(w);
+  for (const std::string& w : c.cfg.want) queue_fetch(c, w);
   c.held_begin = begin;
   next_fetch(c);
 }
@@ -190,13 +288,22 @@ void take_downloads(Q2ClientEnd& c) {
       next_fetch(c);
       continue;
     }
+    if (c.cfg.held.add && !p.bytes.empty())
+      c.cfg.held.add(c.fetching, p.bytes, c.fetched_bytes.empty());
     c.fetched_bytes.insert(c.fetched_bytes.end(), p.bytes.begin(), p.bytes.end());
+    if (p.percent == 100 && c.in.download_ready) {  // 36's compressed download, inflated whole
+      c.fetched_bytes.resize(c.fetched_from);       // the rest after what was held
+      c.fetched_bytes.insert(c.fetched_bytes.end(), c.in.download.begin(), c.in.download.end());
+      c.in.download.clear();
+      c.in.download_ready = false;
+    }
     c.fetched_percent = p.percent;
     if (p.percent < 100) {
       q2_client_command(c, "nextdl");
       continue;
     }
     c.downloaded[c.fetching] = c.fetched_bytes;
+    if (c.cfg.held.drop) c.cfg.held.drop(c.fetching);
     c.http.said.push_back("[UDP] " + c.fetching + " [DONE] " + files_left(c));
     if (c.cfg.keep_file)
       c.cfg.keep_file(c.fetching, c.fetched_bytes, c.fetched_origin ? &c.fetching_origin : nullptr);
@@ -267,6 +374,8 @@ void run_stuffed(Q2ClientEnd& c) {
       if (w.empty()) continue;
       if (w[0] == "set" && w.size() > 1) {  // the server's own settings (the forced reconnect)
         c.stuffed_set[w[1]] = w.size() > 2 ? w[2] : std::string();
+        if (c.to_run.size() < kKept) c.to_run.push_back(raw);
+      } else if (w[0] == "changing") {  // the level changes: the next `reconnect` follows
       } else if (w[0] == "cmd" && line.size() > 4) {
         q2_client_command(c, line.substr(4));
         c.signon_steps++;
@@ -276,12 +385,16 @@ void run_stuffed(Q2ClientEnd& c) {
           start_fetch(c, begin);
         else
           q2_client_command(c, begin);
+        c.no_footsteps_told = -1;  // told again with each `begin`
+        q2_client_settings(c);
         c.signon_steps++;
       } else if (w[0] == "reconnect") {
         c.stage = ClientStage::signon;
         q2_client_command(c, "new");
       } else if (w[0] == "connect" && w.size() > 1) {  // sent elsewhere (sv_redirect)
         c.sent_on = w[1];
+      } else if (c.to_run.size() < kKept) {  // the rest runs in the console as if typed
+        c.to_run.push_back(raw);
       }
     }
   }
@@ -294,13 +407,35 @@ void read_payload(Q2ClientEnd& c, const uint8_t* data, size_t size) {
     c.cfg.trace->print(std::to_string(size));  // cl_shownet
   if (size == 0) return;                       // a keep-alive
   const int levels = q2_demo(c).state.levels;
-  const auto len = static_cast<uint32_t>(size);
-  for (int k = 0; k < 4; k++) q2_demo(c).bytes.push_back(static_cast<uint8_t>(len >> (8 * k)));
-  q2_demo(c).bytes.insert(q2_demo(c).bytes.end(), data, data + size);
   const size_t block_at = c.level_record != nullptr ? c.level_record->size() : 0;
-  if (c.level_record != nullptr) {
-    for (int k = 0; k < 4; k++) c.level_record->push_back(static_cast<uint8_t>(len >> (8 * k)));
-    c.level_record->insert(c.level_record->end(), data, data + size);
+  const auto keep = [&c](const uint8_t* bytes, size_t n) {  // one block, read and recorded
+    const auto len = static_cast<uint32_t>(n);
+    for (int k = 0; k < 4; k++) q2_demo(c).bytes.push_back(static_cast<uint8_t>(len >> (8 * k)));
+    q2_demo(c).bytes.insert(q2_demo(c).bytes.end(), bytes, bytes + n);
+    if (c.level_record != nullptr) {
+      for (int k = 0; k < 4; k++) c.level_record->push_back(static_cast<uint8_t>(len >> (8 * k)));
+      c.level_record->insert(c.level_record->end(), bytes, bytes + n);
+    }
+  };
+  if (c.protocol == kQ2NetProtocol) {
+    keep(data, size);
+  } else {  // a later protocol's, as protocol 34's blocks (q2_proto_in.hpp)
+    std::vector<std::vector<uint8_t>> blocks;
+    if (!q2_proto_in(c.in, std::span<const uint8_t>(data, size), blocks, c.error)) {
+      c.stage = ClientStage::dropped;
+      c.refused = c.error;
+      return;
+    }
+    if (c.in.has_server_data && c.in.protocol != c.protocol) {
+      c.stage = ClientStage::dropped;
+      c.refused = "Requested protocol version " + std::to_string(c.protocol) +
+                  ", but server returned " + std::to_string(c.in.protocol) + ".";
+      return;
+    }
+    for (std::string& line : std::exchange(c.in.warnings, {}))
+      if (c.prints.size() < kKept) c.prints.push_back(std::move(line));
+    for (const std::vector<uint8_t>& b : blocks) keep(b.data(), b.size());
+    q2_demo(c).strafe_hack = c.in.strafe_hack;
   }
   for (;;) {
     const cl::DemoRead got = cl::next_q2(q2_demo(c), c.error);
@@ -387,6 +522,19 @@ void speak(Q2ClientEnd& c, gn::Writer& w, int samples) {
   c.voice_sent += n;
 }
 
+// 36's batched moves: whether a packet is due (`cl_maxpackets`'s gap, rounded down to a whole
+// share of 100 ms, or reliable data waiting).
+bool batch_due(const Q2ClientEnd& c) {
+  if (c.cfg.maxpackets <= 0 || c.last_packet < 0 || c.voice_on ||
+      channel_reliable_backlog(c.ch) > 0)
+    return true;
+  // cl_instantpacket: attack or use just pressed goes out at once.
+  if (c.cfg.instantpacket && (c.cmds[2].buttons & 3 & ~c.cmds[1].buttons) != 0) return true;
+  const int ms = 1000 / std::max(c.cfg.maxpackets, 10);
+  const int gap = 100 / std::max(1, 100 / std::max(ms, 1));
+  return (c.now - c.last_packet) * 1000.0 >= gap - 0.5;
+}
+
 void send_packet(Q2ClientEnd& c, int64_t now_us) {
   const bool active = c.stage == ClientStage::active;
   if (active && c.cfg.send_every > 1 && c.tick % c.cfg.send_every != 0) return;
@@ -401,18 +549,40 @@ void send_packet(Q2ClientEnd& c, int64_t now_us) {
     c.cmds[0] = c.cmds[1];
     c.cmds[1] = c.cmds[2];
     c.cmds[2] = q2_cmd(m);
-    c.sent[c.ch.outgoing_sequence & 63] = m;
-    c.sent_at[c.ch.outgoing_sequence & 63] = c.now;
+    c.sent[c.made & 63] = m;
+    c.made++;
     int32_t acked = q2_demo(c).last_frame;
     if (c.cfg.whole_every > 0 && c.now - c.last_whole >= c.cfg.whole_every) c.last_whole = c.now;
     // For 150 ms (past the server's next 10 Hz frame, whatever moves come between) no frame is
     // acknowledged, so the server's next one is whole.
     if (c.cfg.whole_every > 0 && c.now - c.last_whole < 0.15) acked = -1;
     if (c.cfg.nodelta) acked = -1;  // cl_nodelta: every frame asked for whole
-    write_q2_move(w, acked, c.cmds, c.ch.outgoing_sequence);
+    if (c.protocol == kQ2Protocol36 && c.cfg.batch) {
+      c.batch_now.push_back(c.cmds[2]);
+      if (!batch_due(c)) return;  // held for the next packet
+      Q2Batch b;
+      b.frame = acked;
+      const size_t dup = static_cast<size_t>(std::clamp(c.cfg.packetdup, 0, 3));
+      const size_t from = c.batch_sent.size() > dup ? c.batch_sent.size() - dup : 0;
+      b.frames.assign(c.batch_sent.begin() + static_cast<std::ptrdiff_t>(from), c.batch_sent.end());
+      b.frames.push_back(c.batch_now);
+      bool full = false;
+      for (const auto& f : b.frames) full = full || f.size() >= 32;
+      if (!full) write_q2_batch(w, b);  // a frame of 32 moves or more: the packet goes without
+      c.batch_sent.push_back(std::move(c.batch_now));
+      c.batch_now.clear();
+      if (c.batch_sent.size() > 3) c.batch_sent.erase(c.batch_sent.begin());
+    } else if (c.protocol != kQ2NetProtocol) {
+      write_q2_move_ext(w, c.protocol, c.in.minor, acked, c.cmds);
+    } else {
+      write_q2_move(w, acked, c.cmds, c.ch.outgoing_sequence);
+    }
     c.moves++;
     speak(c, w, m.msec * gn::kVoiceRate / 1000);
   }
+  c.made_at[c.ch.outgoing_sequence & 63] = c.made;
+  c.sent_at[c.ch.outgoing_sequence & 63] = c.now;
+  c.last_packet = c.now;
   uint8_t out[kMaxPacket];
   const size_t n = channel_transmit(c.ch, payload, w.overflow ? 0 : w.size, c.now, out);
   gn::transport_send(*c.transport, c.server, out, n, now_us);
@@ -452,10 +622,37 @@ void q2_voice_target(Q2ClientEnd& c, const std::string& word) {
 }
 
 void q2_client_command(Q2ClientEnd& c, const std::string& line) {
+  // A weapon change, kept for the weapon prediction: its command word, then a weapon's name.
+  const std::string_view l(line);
+  const size_t cut = l.find(' ');
+  const std::string_view word = l.substr(0, cut);
+  Q2ClientEnd::WeaponAsk ask;
+  ask.move = c.made;
+  ask.kind = word == "use" ? 0 : word == "weapnext" ? 1 : word == "weapprev" ? 2 : 3;
+  if (ask.kind == 0 && cut != std::string_view::npos) {
+    std::string_view name = l.substr(cut + 1);
+    while (!name.empty() && (name.back() == '\n' || name.back() == ' ')) name.remove_suffix(1);
+    const int w = server::sq_weapon_named(name);
+    ask.weapon = static_cast<int16_t>(w);
+    if (w >= 0) c.weapon_asks[c.weapon_asked++ & 7] = ask;
+  } else if (ask.kind > 0 && word == (ask.kind == 1   ? "weapnext"
+                                      : ask.kind == 2 ? "weapprev"
+                                                      : "weaplast")) {
+    c.weapon_asks[c.weapon_asked++ & 7] = ask;
+  }
   std::vector<uint8_t> b = {kClcStringCmd};
   b.insert(b.end(), line.begin(), line.end());
   b.push_back(0);
   channel_reliable(c.ch, b.data(), b.size());
+}
+
+void q2_client_settings(Q2ClientEnd& c) {
+  if (c.protocol != kQ2Protocol36) return;
+  if (c.stage != ClientStage::signon && c.stage != ClientStage::active) return;
+  const int nf = c.cfg.no_footsteps ? 1 : 0;
+  if (nf == c.no_footsteps_told) return;
+  c.no_footsteps_told = nf;
+  send_setting(c, kQ2SetNoFootsteps, nf);
 }
 
 void q2_client_userinfo(Q2ClientEnd& c) {
@@ -485,11 +682,11 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
       continue;
     }
     if (c.stage != ClientStage::signon && c.stage != ClientStage::active) continue;
-    size_t at = 0;
-    if (!channel_process(c.ch, buf, size, c.now, at)) continue;
+    std::span<const uint8_t> payload;
+    if (!channel_read(c.ch, buf, size, c.now, payload)) continue;
     if (c.stage == ClientStage::active && c.moves > 0)
       c.latency = c.now - c.sent_at[c.ch.incoming_acknowledged & 63];
-    read_payload(c, buf + at, size - at);
+    read_payload(c, payload.data(), payload.size());
     ge::hud::net_lost(c.net, c.ch.last_drop);  // the lag graph's (scr_lag_draw) and r_netgraph's
     ge::hud::net_arrived(c.net,
                          c.stage == ClientStage::active && c.moves > 0 ? c.latency * 1e3 : -1);
@@ -504,7 +701,10 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
       c.sent_on.clear();
     } else {
       const Q2ClientConfig cfg = c.cfg;
+      // The settings the server stuffed go along: a forced reconnect's are what it asks back.
+      std::map<std::string, std::string> kept = std::move(c.stuffed_set);
       q2_client_start(c, *c.transport, to, cfg, c.now);
+      c.stuffed_set = std::move(kept);
       c.redirects = sent;
       return;
     }

@@ -130,6 +130,26 @@ TEST(pending_reliable_data_goes_in_order_and_overflows) {
   CHECK(refused && s.overflow);
 }
 
+// A server sizes its frame to the room the packet has after the reliable data it carries: a long
+// message waiting takes its share, and the frame that fits rides with it rather than being lost.
+TEST(the_room_for_a_frame_is_what_the_reliable_part_leaves) {
+  sp::Channel s;
+  sp::channel_setup(s, false, 0, 0);
+  sp::channel_set_rate(s, 0);
+  const size_t whole = sp::kMaxPacket - sp::kServerHeader;
+  bool grows = false;
+  CHECK(sp::channel_unreliable_room(s, &grows) == whole && grows);
+  std::vector<uint8_t> long_one(1000, 'r');
+  CHECK(sp::channel_reliable(s, long_one.data(), long_one.size()));
+  const size_t room = sp::channel_unreliable_room(s, &grows);
+  CHECK(room == whole - 1000 && grows);
+  const std::string frame(room, 'f');
+  const Wire w = send(s, frame, 0);
+  CHECK(w.size == sp::kMaxPacket);  // the reliable part and the whole frame in one packet
+  // In flight and not yet due again: the next packet carries no reliable part.
+  CHECK(sp::channel_unreliable_room(s, &grows) == whole && !grows);
+}
+
 TEST(the_rate_holds_a_packet_back) {
   sp::Channel s;
   sp::channel_setup(s, false, 0, 0);

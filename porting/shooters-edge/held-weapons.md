@@ -25,3 +25,93 @@ source, by the reader) or `measured` (a lab run here).
 Built: `ClassicFire::takes` (plugins/classicenhance/weapons.hpp) splits the axe's firing frames
 into two `fire` takes; the hand (games/shooters_edge/view/hand.hpp) plays the take holding the
 `weaponframe` the shot starts on, or picks one at random when the program sets none.
+
+## The blend between frames, the nailguns and the flash
+
+From a second reader round (the modern client, its master branch as of 2026-11-22) and the
+shareware pack's view models measured by the reader. Ours: `view/hand.cpp` (the listen game),
+`client/held.cpp` (a joined server, a recording, Quake II's hand), `viewmodel/held.cpp`'s
+`pose_frames` and `render/viewmodel.wgsl` (the flash rule).
+
+- `read` Every change of the view model's frame is blended, in every game (joined, listen, demo),
+  over a FIXED 0.1 s from the client clock at the first rendered frame the new number is seen;
+  never a measured gap between updates. The share is capped at 1; a clock run back draws the new
+  frame alone. Settings: `r_lerpframes` (default 1, all models; there is none for the view model
+  alone). Ours: `r_lerpmodels`, with `r_lerpframes` its synonym.
+- `read` The blend is from the previous TARGET frame to the current one, one frame late, never
+  predicted toward a next frame; a change before 0.1 s is up starts over from the full previous
+  target. A wrap (nailgun 8 to 1) and the drop to rest are ordinary blends. A change of weapon
+  model, or the gun hidden and shown, draws the new frame alone until its next change.
+- `read` The nailgun and super nailgun step frames 1 to 8 and wrap, one per 0.1 s while fire is
+  held, back to 0 at the first 0.1 s step after release. Lightning gun 1 to 4 and wrap; shotguns
+  and launchers 1 to 6 once a shot.
+- `read` THE FLASH (`r_lerpmuzzlehack`, default 1, view models `progs/v_*` except the axe and a few
+  mod tools): a vertex is not blended when its forward coordinate in the model's space changes
+  sign between the two frames (one path), or moves 6.3 units or more (an older path); it is drawn
+  at the NEW frame for any share above 0. Nothing is hidden or faded. Ours: a vertex of the
+  model's own flash triangles (`HeldModel::flame`) on opposite sides of the eye's plane in the two
+  frames is frame b's; always on.
+- `measured` v_nail: 109 vertices, 9 frames; v_nail2: 107, 9. Twelve vertices each are the flash:
+  behind the muzzle inside the gun at rest (forward -4 to -10, v_nail2 -12 to -24), at the muzzle
+  on frames 1 to 8 (+30 to +38, v_nail2 +39 to +51), so rest to firing crosses the plane. Between
+  firing frames they move 7.7 to 8.0 (6.4 to 6.9) units and stay in front: blended with the barrel.
+  Every other vertex moves at most 1.6 (4.9) units between firing frames.
+- `read` The view model's place has no smoothing of its own: rebuilt each rendered frame from the
+  final eye and angles. Positions blend linearly per vertex; on its default renderer the normal is
+  the old frame's alone (ours blends normals and renormalises).
+- `read` Recordings: the same fixed 0.1 s on the demo's clock. A recording written 30 times a
+  second sees a frame change up to about 33 ms late, and every blend is still 0.1 s long.
+- `read` Weapon prediction (an extension of the modern server, `cl_pext_weaponprediction`,
+  `cl_nopred_weapon`, `cl_predict_buffer`, `cl_predict_weaponsound`): the client runs the weapon
+  with its own commands, so the frame steps at once on fire instead of after the round trip; the
+  frame shown is held back `cl_predict_buffer` commands. The common server does not offer it at
+  the release the antilag note read (antilag.md § 4); built since: § Weapon prediction below.
+
+## Weapon prediction (MVD1 bit 7, 0x80)
+
+Read by a clean-room reader from ezQuake (master 2026-11-22), mvdsv (master 2026-11-18), KTX
+(master 2026-11-08) and qwprot (master 2026-11-22). Built in `net/qw_weapon.cpp`,
+`classic/weapon_predict.cpp`, `net/qw_delta.cpp`, `net/qw_frame.cpp`.
+
+- Only ezQuake reads it (its default build's "antilag 1 prototype" option, which also turns on MVD1
+  bit 8, simple projectiles, and FTE 0x40, accurate timings). Neither mvdsv nor KTX offers it, and
+  qwprot lists it commented out. So our client agrees it only with our server.
+- The wire: once agreed, every svc_playerinfo with PF_WEAPONFRAME has one more byte after the
+  weapon frame; nonzero, then impulse (byte), weapon item bit (signed short), the weapon clock,
+  attack_finished and the next think (floats on that clock; next think 0 none), the think step
+  (byte), ping ms (byte), flags (byte: 1 midair, 2 coilgun, 255 force off), shells, nails,
+  rockets, cells (bytes). 22 bytes after the state byte. A spectator still gets the 0 byte. No
+  client-to-server data. Items come from STAT_ITEMS. ezQuake's own .qwd keeps the block.
+- The clock: each re-run command adds its msec (split in halves over 50 ms); frozen (dead, none,
+  lock) it stands, attack_finished = clock + 0.05, the impulse cleared. A due think runs as if at
+  its own time, one per part. Order a part: clock, impulse replaced, empty switch (clock strictly
+  past attack_finished), think, then at or past attack_finished the impulse (1-8, 10, 12, 22) and
+  the attack.
+- The step: 0 rests; the axe a counter to 4; the shotguns and launchers the next frame (to 6, then
+  0); the nailguns and the lightning gun the next barrel (0 or 1 right then 2, 2 left then 1).
+  Ours derives it from the frame on the server (`weapon_step_of`), so it needs no field.
+- The rules ezQuake predicts: axe 0.5 s, frames 1-4 or 5-8 by a fixed hash of the clock; shotgun
+  0.5 s; super shotgun 0.7 s, 1 shell (Quake's rules take 2: ours predicts 2); nailguns a nail a
+  0.1 s think, attack_finished think + 0.2, frames 1-8 (the super nailgun 1 nail: ours 2, 1 when
+  1 is left); grenade 0.6 s; rocket 0.8 s; lightning a cell a think, frames 1-4, lstart on
+  channel 0, lhit at most every 0.6 s. A nail or beam think stops on release or a pending impulse.
+  The best weapon: lightning (waterlevel <= 1), super nailgun (2 nails), super shotgun (2 shells),
+  nailgun, shotgun, axe; or `w_rank`'s digits.
+- The replay: from the newest accepted frame's state over every command after it (at most 62);
+  every pass rebuilt. The shown command is `cl_predict_buffer` + 1 before the next to send (1 by
+  default), not past the newest, not before the second after the ack; sounds, the view model and
+  the frame come from it. Sounds play at full volume, attenuation 0, on the player.
+- Suppression: on the player's own entity, channel 1 everything but player/axhit2.wav
+  (`cl_predict_weaponsound` 1), or with a mask above 1 everything but the masked weapons' samples;
+  channel 0 weapons/lstart.wav unless bit 256; channel 4 player/plyrjmp8.wav with
+  `cl_predict_jump` 1.
+- Off when: `cl_nopred_weapon` 1, flags 255, a spectator, the bit not agreed; `cl_nopred` too.
+- Left for later here: predicted projectiles (nails 1000 u/s from 8 forward and 16 up, the
+  nailgun's ±4 barrel; rockets 1000, 2000 midair; grenades 600 forward + 200 up, gravity, bounce
+  0.5; handed over to a server rocket or grenade within 24 units in its last 0.08 s), the beam
+  (16 up, 600 along the view, the server's own beam ignored), the jump's sound, and the view's
+  smoothing after a correction (a 4..64 unit nudge decaying at 200..1400 u/s).
+- Ours differs on purpose: our arena's rules leave the weapon frame 0 and refire by the clock, so
+  the frame is drawn from the prediction only once a server sends one other than 0; a shot fires
+  the hand (`DemoState::own_shots`) whatever the rules. A shot a correction moves by a command is
+  played once (the same sound within 0.05 s of weapon clock).

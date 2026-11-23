@@ -2,7 +2,7 @@
 //
 // ge:summary Quake II's field of view as shown and its view and 2D cvars
 // ge:keywords q2 fov cl_adjustfov uf scr_scale scr_draw2d scr_alpha scr_lag_draw cl_kickangles
-// ge:keywords timegraph debuggraph graphheight graphscale graphshift
+// ge:keywords scr_demobar
 // ge:skill shooter ui camera
 // ge:test tests/shooters_edge_q2_view_test.cpp
 #include "shooters_edge/client/q2_view.hpp"
@@ -48,6 +48,13 @@ double q2_demo_fov_y(const DemoState& ds, double own, bool recording, const Q2Sc
   return q2_fov_y(q2_shown_fov(ds.fov, own, recording, uf), s.adjust_fov != 0, aspect);
 }
 
+Q2ViewRect q2_view_rect(int width, int height, int percent) {
+  if (percent >= 100) return {0, 0, width, height};
+  const int p = std::max(percent, 1);
+  const int w = width * p / 100, h = height * p / 100;
+  return {(width - w) / 2, (height - h) / 2, w, h};
+}
+
 void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
   v.bind(
       {.name = "scr_scale",
@@ -59,16 +66,6 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
        .max = 10,
        .values = "0: by the window's size (the default); 1..10: that many times"},
       &s.scale);
-  v.bind({.name = "scr_draw2d",
-          .fallback = "2",
-          .flags = con::kArchive,
-          .help = "What is drawn over the view: the status bar, the scoreboard, the messages.",
-          .kind = con::CvarKind::integer,
-          .min = 0,
-          .max = 3,
-          .values = "0: nothing (for screenshots); 1: all but the status bar; 2: everything (the "
-                    "default); 3: everything but the scoreboard and the help computer"},
-         &s.draw2d);
   v.bind({.name = "scr_alpha",
           .fallback = "1",
           .flags = con::kArchive,
@@ -86,6 +83,25 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
           .max = 2,
           .values = "0: none (the default); 1: the graph; 2: the graph on a dark box"},
          &s.lag_draw);
+  v.bind({.name = "viewsize",
+          .fallback = "100",
+          .flags = con::kArchive,
+          .help = "How much of the screen the view of the world fills, the border round it "
+                  "tiled.",
+          .kind = con::CvarKind::integer,
+          .min = 40,
+          .max = 100,
+          .values = "40..100: that share of the screen's width and height, centred (100 the "
+                    "default: all of it)",
+          .overlap = con::Overlap::own},
+         &s.viewsize);
+  v.bind({.name = "scr_font",
+          .fallback = "conchars",
+          .help = "The picture of letters the status bar, the scoreboard and the inventory are "
+                  "written in.",
+          .kind = con::CvarKind::text,
+          .values = "NAME: pics/NAME.pcx, a sheet of 16 by 16 letters (conchars the default)"},
+         &s.font);
   v.bind({.name = "gl_fontshadow",
           .fallback = "0",
           .flags = con::kArchive,
@@ -102,6 +118,31 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
           .kind = con::CvarKind::boolean,
           .values = "0: sharp pixels (the default); 1: smoothed"},
          &s.bilerp_chars);
+  v.bind({.name = "gl_bilerp_pics",
+          .fallback = "1",
+          .help = "Whether the status bar's pictures are smoothed when drawn larger.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: the large ones, the small icons and digits sharp (the default); 0: none, "
+                    "sharp pixels; 2: all of them"},
+         &s.bilerp_pics);
+  v.bind({.name = "gl_gamma_scale_pics",
+          .fallback = "0",
+          .help = "Whether the brightness setting brightens the status bar's pictures too.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: they keep their own brightness (the default); 1: brightened with the "
+                    "world"},
+         &s.gamma_pics);
+  v.bind({.name = "scr_demobar",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "The bar along the bottom while a demo plays, with how far it has got.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: the bar with the share played (the default); 2: also the time; 0: none"},
+         &s.demo_bar);
   v.bind({.name = "scr_showturtle",
           .fallback = "1",
           .flags = con::kArchive,
@@ -143,40 +184,6 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
           .max = 10000,
           .values = "1 and up: 200 the default"},
          &s.lag_max);
-  v.bind({.name = "timegraph",
-          .fallback = "0",
-          .help = "Whether each frame's time is drawn as a column along the bottom of the screen.",
-          .kind = con::CvarKind::boolean,
-          .values = "0: not drawn (the default); 1: a column a frame, a unit tall a millisecond"},
-         &s.time_graph);
-  v.bind({.name = "debuggraph",
-          .fallback = "0",
-          .help = "Whether the graph along the bottom of the screen is drawn.",
-          .kind = con::CvarKind::boolean,
-          .values = "0: only with timegraph (the default); 1: always"},
-         &s.debug_graph);
-  v.bind({.name = "graphheight",
-          .fallback = "32",
-          .help = "The graph's height along the bottom of the screen.",
-          .kind = con::CvarKind::integer,
-          .min = 0,
-          .max = 1000,
-          .values = "0..1000: that many units of the screen (32 the default)"},
-         &s.graph_height);
-  v.bind({.name = "graphscale",
-          .fallback = "1",
-          .help = "The graph's units a unit of value.",
-          .min = 0,
-          .max = 100,
-          .values = "0..100: 1 the default"},
-         &s.graph_scale);
-  v.bind({.name = "graphshift",
-          .fallback = "0",
-          .help = "The units added to every column of the graph.",
-          .min = -1000,
-          .max = 1000,
-          .values = "-1000..1000: 0 the default"},
-         &s.graph_shift);
   v.bind(
       {.name = "cl_adjustfov",
        .fallback = "1",

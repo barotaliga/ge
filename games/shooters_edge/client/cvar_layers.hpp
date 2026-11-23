@@ -72,25 +72,24 @@ struct GameBindings {
   const SearchPath* files = nullptr;
   ge::hud::CrosshairSettings* crosshair = nullptr;  // Quake II's own `crosshair`
   ge::shooter::MouseFeel* mouse = nullptr;          // Quake II's own `m_accel` (per frame)
-  bool* predict = nullptr;      // Quake II's `cl_predict` (a server joined); true in Quake
-  int* crouch = nullptr;        // Quake II's `cl_predict_crouch` (the eye's height predicted)
-  bool* show_misses = nullptr;  // Quake II's `cl_showmiss` (each prediction miss printed)
-  int* shownet = nullptr;       // Quake II's `cl_shownet` (each message's size printed)
-  bool* showpackets = nullptr;  // Quake II's `cl_showpackets` (each packet sent shown)
-  int* noskins = nullptr;       // Quake II's `cl_noskins` (the picture's stock_figures)
-  bool* items_still = nullptr;  // Quake II's `cl_nobob` (the picture's items_still)
+  int* crouch = nullptr;         // Quake II's `cl_predict_crouch` (the eye's height predicted)
+  bool* show_misses = nullptr;   // Quake II's `cl_showmiss` (each prediction miss printed)
+  int* shownet = nullptr;        // Quake II's `cl_shownet` (each message's size printed)
+  bool* showpackets = nullptr;   // Quake II's `cl_showpackets` (each packet sent shown)
+  int* noskins = nullptr;        // Quake II's `cl_noskins` (the picture's stock_figures)
+  bool* items_still = nullptr;   // Quake II's `cl_nobob` (the picture's items_still)
+  int* model_shadows = nullptr;  // Quake II's `gl_shadows` (the picture's model_shadows)
+  bool* flash_blend = nullptr;   // Quake's `gl_flashblend` (the picture's flash_blend); off in II
   // The held weapon's settings: Quake II's `hand` (2 draws no weapon), `cl_gun_x/y/z` and
   // `cl_gunfov`; Quake's `r_viewmodelsize` and `r_viewmodeloffset`.
   shooters_edge::view::ViewSettings* view = nullptr;
   int* moves = nullptr;         // Quake II's own `cl_maxfps`: its moves a second
   int* stuff_level = nullptr;   // Quake II's `cl_ignore_stufftext` (classic/protocol/stuff_filter)
   double* frame_cap = nullptr;  // the window's frame cap (our `cl_maxfps`), Quake II's `r_maxfps`
-  // The maps' light: Quake II's `intensity`, `gl_modulate` and `gl_brightness` (the picture's
-  // light_intensity, light_modulate and light_lift: classic/app/look.hpp); Quake keeps 2, 1, 0.
+  // The maps' light: Quake II's `intensity` and `gl_brightness` (the picture's light_intensity and
+  // light_lift: classic/app/look.hpp); Quake keeps 2 and 0. `gl_modulate` is every game's.
   double* light_intensity = nullptr;
-  double* light_modulate = nullptr;
   double* light_lift = nullptr;
-  bool* gibs = nullptr;     // Quake II's `cl_gibs` (the picture's gibs); true in Quake
   bool* no_glow = nullptr;  // Quake II's `cl_noglow` (the picture's no_glow); false in Quake
   // Quake II's effect switches (the picture's q2fx: classic/q2_fx_switches.hpp); off in Quake.
   ge::classic::Q2FxSwitches* q2fx = nullptr;
@@ -100,7 +99,7 @@ struct GameBindings {
   // game, our `con_chat` rules) and its stamps on every line (`con_timestamps`,
   // `con_timestampsformat`, `con_timestampscolor`; off in every other game).
   ge::console::ConsoleView* console_view = nullptr;
-  // Quake II's view and 2D settings (q2_view.hpp: scr_scale, scr_draw2d, scr_alpha, scr_lag_*,
+  // Quake II's view and 2D settings (q2_view.hpp: scr_scale, scr_alpha, scr_lag_*,
   // cl_adjustfov, uf, cl_kickangles); their defaults in every other game. add_game_cvars binds its
   // own GameCvarValues::screen when this is null.
   Q2Screen* screen = nullptr;

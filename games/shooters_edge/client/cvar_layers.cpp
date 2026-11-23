@@ -8,6 +8,13 @@
 // ge:keywords cl_dlight_hacks cl_muzzlelight_time cl_muzzleflashes
 // ge:keywords sshot_format sshot_dir image_jpeg_quality_level gl_screenshot_format
 // ge:keywords gl_screenshot_quality gl_screenshot_template gl_screenshot_compression
+// ge:keywords gl_partscale gl_partstyle gl_partshape gl_beamstyle gl_drawsky gl_bilerp_skies
+// ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_bilerp_pics
+// ge:keywords gl_gamma_scale_pics gl_modulate_world gl_modulate_entities gl_doublelight_entities
+// ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack
+// ge:keywords cl_smooth_explosions common-settings scr_consize scr_conalpha gl_consolefont
+// ge:keywords r_drawparticles in_grab_windowed_mouse cl_net_clientport vid_reload gl_swapinterval
+// ge:keywords chase_active chase_back vid_flip_on_switch gl_damageblend_frac
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -21,6 +28,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -96,6 +104,16 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .values = "1: all of them (the default); 0: none; 2: only those of a thing you can "
                     "see; 3: only your own"},
          &x.ambient);
+  v.bind({.name = "al_merge_looping",
+          .fallback = "1",
+          .help = "Whether many things making the same looping sound are heard as one sound, so "
+                  "they are not louder together than the game meant.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: merged, except with headphone sound (the default); 0: each heard on its "
+                    "own; 2: always merged"},
+         &x.merge_looping);
   v.bind({.name = "cl_railtrail_type",
           .fallback = "0",
           .flags = con::kArchive,
@@ -168,6 +186,135 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .max = 10000,
           .values = "500: the default; 0: no mark; 1..10000: that many milliseconds"},
          &x.hit_marker_ms);
+  // The picture's switches: none saved in the config, as the game keeps them.
+  v.bind({.name = "gl_partscale",
+          .fallback = "2",
+          .help = "How big the specks are; the far ones are drawn larger, so they still show.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 100,
+          .values = "2: the default; a number: that size, twice the default at 4"},
+         &x.part_scale);
+  v.bind({.name = "gl_partstyle",
+          .fallback = "0",
+          .help = "How the specks lie over what is behind them.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: laid over it (the default); 1: added to it, so they glow"},
+         &x.additive_parts);
+  v.bind({.name = "gl_partshape",
+          .fallback = "0",
+          .help = "The specks' shape.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "0: a soft round dot (the default); 1: a hard square; 2: a sharp round dot"},
+         &x.part_shape);
+  v.bind({.name = "gl_beamstyle",
+          .fallback = "0",
+          .help = "How the lasers and the railgun's beam are drawn.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: a soft glowing strip (the default); 1: a plain solid tube"},
+         &x.round_beams);
+  v.bind({.name = "gl_drawsky",
+          .fallback = "1",
+          .help = "Whether the sky is drawn.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: the sky (the default); 0: solid black"},
+         &x.draw_sky);
+  v.bind({.name = "gl_bilerp_skies",
+          .fallback = "1",
+          .help = "Whether the sky is smoothed.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: smoothed (the default); 0: sharp pixels"},
+         &x.smooth_sky);
+  v.bind({.name = "gl_saturation",
+          .fallback = "1",
+          .help = "How much colour the walls and floors keep.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 1,
+          .values = "1: as painted (the default); 0..1: that share of it; 0: grey"},
+         &x.saturation);
+  v.bind({.name = "gl_invert",
+          .fallback = "0",
+          .help = "Whether the walls and floors are drawn as a negative.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: as painted (the default); 1: their colours inverted"},
+         &x.invert);
+  v.bind({.name = "gl_waterwarp",
+          .fallback = "0",
+          .help = "Whether the view ripples while you are under water, slime or lava.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: still (the default); 1: it ripples"},
+         &x.water_warp);
+  v.bind({.name = "gl_fog",
+          .fallback = "1",
+          .help = "Whether fog is drawn.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: the fog the map or the fog command sets (the default); 0: none at all"},
+         &x.fog);
+  // The light on the walls and the models.
+  for (const auto& [name, help, field] :
+       {std::tuple{"gl_modulate_world", "How bright the walls' light is, times gl_modulate.",
+                   &x.modulate_world},
+        std::tuple{"gl_modulate_entities",
+                   "How bright the light on the players, monsters and items is, times gl_modulate.",
+                   &x.modulate_entities}})
+    v.bind({.name = name,
+            .fallback = "1",
+            .help = help,
+            .kind = con::CvarKind::number,
+            .min = 0,
+            .max = 1000000,
+            .values = "1: the default; a number: that many times as bright"},
+           field);
+  v.bind({.name = "gl_doublelight_entities",
+          .fallback = "1",
+          .help = "Whether the players, monsters and items take gl_modulate's light twice.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: twice, as the game always drew them (the default); 0: once"},
+         &x.double_light);
+  v.bind({.name = "gl_dotshading",
+          .fallback = "1",
+          .help = "Whether the players, monsters and items are shaded brighter on one side.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: shaded (the default); 0: lit evenly all round"},
+         &x.dot_shading);
+  v.bind({.name = "gl_coloredlightmaps",
+          .fallback = "1",
+          .help = "How much colour the walls' light keeps.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 1,
+          .values = "1: its colours (the default); 0..1: that share; 0: white light"},
+         &x.lightmap_saturation);
+  v.bind({.name = "cl_lerp_lightstyles",
+          .fallback = "0",
+          .help = "Whether flickering and pulsing lights change smoothly.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: in steps, ten a second (the default); 1: smoothly"},
+         &x.lerp_styles);
+  v.bind({.name = "cl_rollhack",
+          .fallback = "1",
+          .help = "Which way the other players lean as they run sideways.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: away from the way they move, as the game always drew it (the default); "
+                    "0: into it"},
+         &x.roll_hack);
+  v.bind({.name = "gl_dlight_falloff",
+          .fallback = "1",
+          .help = "Whether the edge of a flash's or a rocket's light on the walls is soft.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 1,
+          .values = "1: it fades out (the default); 0: a hard edge"},
+         &x.dlight_falloff);
+  v.bind({.name = "cl_smooth_explosions",
+          .fallback = "1",
+          .help = "Whether explosions fade smoothly, or move on frame by frame, ten a second.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: smoothly (the default); 0: frame by frame"},
+         &x.smooth_explosions);
 }
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
@@ -178,47 +325,14 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
 // visible weapons' bit out: net/qw_remote.cpp). Its
 // servers' switch rules, `w_switch` and `b_switch`, are user info a server reads on a pickup (the
 // Quake II has none). Its weapon's `r_viewmodelsize` and `r_viewmodeloffset` (units, added to
-// ours), and `r_viewmodellastfired` (a recording's weapon the one that last fired).
-void add_first(con::Console& c, const GameBindings& b) {
-  if (b.crosshair != nullptr) {  // Quake II's own shares and health colour set aside
-    b.crosshair->pictures = false;
-    b.crosshair->shade[0] = b.crosshair->shade[1] = b.crosshair->shade[2] = 1;
-    b.crosshair->by_health = false;
-  }
-  if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
-  if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
-  if (b.show_misses != nullptr) *b.show_misses = false;  // Quake II's cl_showmiss
-  if (b.shownet != nullptr) *b.shownet = 0;              // and cl_shownet
-  if (b.showpackets != nullptr) *b.showpackets = false;  // and cl_showpackets
-  if (b.items_still != nullptr) *b.items_still = false;  // and cl_nobob
-  if (b.menu != nullptr) {  // and ui_scale, ui_sortservers, ui_pingrate: the menus by the window
-    b.menu->menu_scale() = 0;
-    b.menu->servers().game_sort = shooters_edge::menu::ServersPage::kNoGameSort;
-    b.menu->servers().game_ping_rate = -1;
-  }
-  if (b.console != nullptr) {  // and con_background: the game's own picture
-    b.console->back_name = "conback";
-    b.console->read_back = nullptr;
-  }
-  if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
-  if (b.light_modulate != nullptr) *b.light_modulate = 1;
-  if (b.light_lift != nullptr) *b.light_lift = 0;
-  if (b.gibs != nullptr) *b.gibs = true;
-  if (b.no_glow != nullptr) *b.no_glow = false;
-  if (b.q2fx != nullptr) *b.q2fx = {};  // Quake II's effect switches set aside
-  if (b.music != nullptr) {             // its ogg_enable, ogg_shuffle and ogg_menu_track set aside
-    b.music->enabled = true;
-    b.music->shuffle = false;
-    b.music->menu_track = 0;
-  }
-  if (b.view != nullptr) {  // Quake's weapon is always drawn, at its own place and lens
-    b.view->hand = 0;
-    b.view->gun = 1;
-    b.view->gun_units[0] = b.view->gun_units[1] = b.view->gun_units[2] = 0;
-    b.view->gun_fov_h = 0;
-    b.view->alpha = 1;
-  }
-  // Its weapon's depth and offset, in its units; the offset adds to our cl_gunx/y/z.
+// ours), and `r_viewmodellastfired` (a recording's weapon the one that last fired). Its
+// `r_lerpframes` (the models' and the held weapon's frames blended) is `r_lerpmodels`.
+// The held weapon's place, size, lens and see-through, every classic game's
+// (docs/porting/settings.md § The common names): QuakeWorld's and Quake II's settings for it, both
+// kept, both added up.
+void add_shared_gun_cvars(con::Cvars& v, const GameBindings& b) {
+  // The weapon's depth and offset in game units (QuakeWorld's spellings); the offset adds to
+  // cl_gunx/y/z.
   const con::CvarSpec size{
       .name = "r_viewmodelsize",
       .fallback = "1",
@@ -253,14 +367,119 @@ void add_first(con::Console& c, const GameBindings& b) {
           "0: the weapon held (the default); 1: the weapon that last fired, until another "
           "one fires"};
   if (b.view != nullptr) {
-    c.cvars().bind(size, &b.view->size);
-    c.cvars().bind(offset, &b.view->offset_text);
-    c.cvars().bind(last_fired, &b.view->last_fired);
+    v.bind(size, &b.view->size);
+    v.bind(offset, &b.view->offset_text);
+    v.bind(last_fired, &b.view->last_fired);
   } else {
-    c.cvars().add(size);
-    c.cvars().add(offset);
-    c.cvars().add(last_fired);
+    v.add(size);
+    v.add(offset);
+    v.add(last_fired);
   }
+  // The weapon's place and lens in game units (Quake II's spellings), added to the same.
+  const char* gun_names[3] = {"cl_gun_x", "cl_gun_y", "cl_gun_z"};
+  const char* gun_helps[3] = {"Moves the held weapon right, in game units; added to cl_gunx.",
+                              "Moves the held weapon forward, in game units; added to cl_gunz.",
+                              "Moves the held weapon up, in game units; added to cl_guny."};
+  for (int k = 0; k < 3; ++k) {
+    const con::CvarSpec gun{
+        .name = gun_names[k],
+        .fallback = "0",
+        .flags = con::kArchive,
+        .help = gun_helps[k],
+        .min = -20,
+        .max = 20,
+        .values = "-20..20: that many units, negative the other way (0 the default)"};
+    if (b.view != nullptr)
+      v.bind(gun, &b.view->gun_units[k]);
+    else
+      v.add(gun);
+  }
+  const con::CvarSpec gun_fov{
+      .name = "cl_gunfov",
+      .fallback = "0",
+      .flags = con::kArchive,
+      .help = "The held weapon's own lens, in degrees across; r_viewmodel_fov wins when set.",
+      .min = 0,
+      .max = 160,
+      .values =
+          "0: the view's (the default); 30..160: that many degrees across at 4:3, less held "
+          "at 30"};
+  if (b.view != nullptr)
+    v.bind(gun_fov, &b.view->gun_fov_h);
+  else
+    v.add(gun_fov);
+  const con::CvarSpec gun_alpha{
+      .name = "cl_gunalpha",
+      .fallback = "1",
+      .flags = con::kArchive,
+      .help = "How solid the held weapon is drawn.",
+      .min = 0,
+      .max = 1,
+      .values = "1: solid (the default); 0.1..0.9: see-through; 0: not seen"};
+  if (b.view != nullptr)
+    v.bind(gun_alpha, &b.view->alpha);
+  else
+    v.add(gun_alpha);
+}
+
+void add_first(con::Console& c, const GameBindings& b) {
+  if (b.crosshair != nullptr) {  // Quake II's own shares and health colour set aside
+    b.crosshair->pictures = false;
+    b.crosshair->shade[0] = b.crosshair->shade[1] = b.crosshair->shade[2] = 1;
+    b.crosshair->by_health = false;
+  }
+  if (b.mouse != nullptr) b.mouse->per_frame = false;    // m_accel: counts a millisecond
+  if (b.show_misses != nullptr) *b.show_misses = false;  // Quake II's cl_showmiss
+  if (b.shownet != nullptr) *b.shownet = 0;              // and cl_shownet
+  if (b.showpackets != nullptr) *b.showpackets = false;  // and cl_showpackets
+  if (b.items_still != nullptr) *b.items_still = false;  // and cl_nobob
+  if (b.model_shadows != nullptr) *b.model_shadows = 0;  // and gl_shadows
+  if (b.menu != nullptr) {  // and ui_scale, ui_sortservers, ui_pingrate: the menus by the window
+    b.menu->menu_scale() = 0;
+    b.menu->servers().game_sort = shooters_edge::menu::ServersPage::kNoGameSort;
+    b.menu->servers().game_ping_rate = -1;
+  }
+  if (b.console != nullptr) {  // and con_background: the game's own picture
+    b.console->back_name = "conback";
+    b.console->read_back = nullptr;
+  }
+  if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
+  if (b.light_lift != nullptr) *b.light_lift = 0;
+  if (b.no_glow != nullptr) *b.no_glow = false;
+  if (b.q2fx != nullptr) *b.q2fx = {};  // Quake II's effect switches set aside
+  if (b.music != nullptr) {             // its ogg_enable, ogg_shuffle and ogg_menu_track set aside
+    b.music->enabled = true;
+    b.music->shuffle = false;
+    b.music->menu_track = 0;
+    b.music->off_pauses = false;  // `cd off` stops the music
+  }
+  if (b.view != nullptr) {  // Quake's weapon is always drawn, in the right hand
+    b.view->hand = 0;
+    b.view->gun = 1;
+  }
+  // Its models' ground shadows (client/model_shadow.hpp): Quake II's `gl_shadows` 1 by its own
+  // name, each shadow leaning one way for every model (the window's world_models.cpp); never saved.
+  if (b.model_shadows != nullptr)
+    c.cvars().bind({.name = "r_shadows",
+                    .fallback = "0",
+                    .help = "Dark shadows on the floor under the figures, monsters and items.",
+                    .kind = con::CvarKind::integer,
+                    .min = 0,
+                    .max = 1,
+                    .values = "0: none (the default); 1: under each, half dark"},
+                   b.model_shadows);
+  // Its glow discs for the moment's lights (classic/flash_blend.hpp). Off by default, where the
+  // game's GL client had them on: the moment's lights light the walls here, as the game's own
+  // software picture lit them; never saved.
+  if (b.flash_blend != nullptr)
+    c.cvars().bind({.name = "gl_flashblend",
+                    .fallback = "0",
+                    .help = "Whether the flashes of guns and blasts are drawn as glowing discs "
+                            "instead of lighting the walls.",
+                    .kind = con::CvarKind::boolean,
+                    .values = "0: they light the walls (the default); 1: glowing discs, the walls "
+                              "left unlit by them"},
+                   b.flash_blend);
   // Its ambience of water and sky (sound/ambience.hpp): how loud, and how fast it swells and fades.
   c.cvars().bind({.name = "ambient_level",
                   .fallback = "0.3",
@@ -279,22 +498,44 @@ void add_first(con::Console& c, const GameBindings& b) {
                   .max = 10000,
                   .values = "1..10000: that fast (100 the default: silence to full in 2.55 s)"},
                  &ambient_settings().fade);
-  if (b.noskins != nullptr) *b.noskins = 0;         // its figures are its own (choose_figure)
-  if (b.screen != nullptr) *b.screen = Q2Screen{};  // Quake II's view and 2D settings set aside
+  if (b.noskins != nullptr) *b.noskins = 0;  // its figures are its own (choose_figure)
+  if (b.screen != nullptr) {  // Quake II's view and 2D settings set aside, the shared ones kept
+    const Screen2D shared = *b.screen;
+    *b.screen = Q2Screen{};
+    static_cast<Screen2D&>(*b.screen) = shared;
+  }
   c.cvars().add_synonym("fov", "cl_fov");
-  c.cvars().add_synonym("ignore_qtv", "ignore_tv");     // its spelling of the TV viewers' chat
-  c.cvars().add_synonym("cl_chatmode", "con_chat");     // what a typed line is: command or chat
-  c.cvars().add_synonym("sshot_format", "scr_format");  // its spellings of the screenshot's
-  c.cvars().add_synonym("sshot_dir", "scr_folder");     // format, folder and JPEG quality
+  c.cvars().add_synonym("_snd_mixahead", "s_mixahead");  // its spelling (client/room_ear.hpp)
+  c.cvars().add_synonym("ignore_qtv", "ignore_tv");      // its spelling of the TV viewers' chat
+  c.cvars().add_synonym("cl_chatmode", "con_chat");      // what a typed line is: command or chat
+  c.cvars().add_synonym("sshot_format", "scr_format");   // its spellings of the screenshot's
+  c.cvars().add_synonym("sshot_dir", "scr_folder");      // format, folder and JPEG quality
   c.cvars().add_synonym("image_jpeg_quality_level", "scr_quality");
   c.add_command_synonym("cvar_reset", "reset");  // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
   c.add_command_synonym("togglechat", "toggleconsole");  // QuakeWorld's second name for it
-  c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left
+  c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left,
+  c.cvars().add_synonym("chase_back", "cam_dist");       // its distance behind and its switch
+  c.cvars().add_synonym("chase_active", "cl_thirdperson");
+  c.cvars().add_synonym("cl_sbar", "hud_sbar");     // QuakeWorld's old bar (1) or see-through (0)
+  c.cvars().add_synonym("cl_hudswap", "hud_swap");  // and the see-through bar's column on the left
+  if (c.cvars().find("r_lerpmodels") != nullptr)    // the models' and the held weapon's frames
+    c.cvars().add_synonym("r_lerpframes", "r_lerpmodels");
   // An old Quake config's saved name and colours: `_cl_name` is the name, `_cl_color` both
   // colours as one number (shirt times 16 plus pants), so its config dresses you as it did.
   c.cvars().add_synonym("_cl_name", "name");
-  c.cvars().add_synonym("port", "sv_port");  // the port the next game is served on
+  c.cvars().add_synonym("port", "sv_port");          // the port the next game is served on
+  c.cvars().add_synonym("hostname", "sv_hostname");  // the name the next game is served under
+  // QuakeWorld's spellings of what every game shares (docs/porting-games.md § One name):
+  c.cvars().add_synonym("scr_consize", "con_height");       // the console's share of the screen
+  c.cvars().add_synonym("scr_conalpha", "con_bgalpha");     // its backdrop's opacity
+  c.cvars().add_synonym("gl_consolefont", "con_font");      // its charset
+  c.cvars().add_synonym("r_drawparticles", "r_particles");  // the specks (its rulesets lock it)
+  c.cvars().add_synonym("cl_net_clientport", "net_clientport");  // the client's own port
+  c.cvars().add_synonym("in_grab_windowed_mouse", "in_grab");    // the mouse kept in a window
+  if (c.cvars().find("scr_showfps") != nullptr)                  // the frame rate in a corner
+    c.cvars().add_synonym("show_fps", "scr_showfps");
+  c.add_command_synonym("vid_reload", "r_reload");  // the textures and models read again
   c.add_command(
       "_cl_color", "_cl_color <shirt*16+pants>: both your colours as one number",
       [](con::Console& k, const con::Args& a) {
@@ -317,6 +558,13 @@ void add_first(con::Console& c, const GameBindings& b) {
                  .help = "Whether you tell servers not to show the weapons players carry.",
                  .kind = con::CvarKind::boolean,
                  .values = "0: they may (the default); 1: they show none, from the next connect"});
+  c.cvars().add({.name = "cl_pext_weaponprediction",
+                 .fallback = "1",
+                 .flags = con::kArchive,
+                 .help = "Whether you ask servers for your weapon's state, so your shots show "
+                         "as you fire.",
+                 .kind = con::CvarKind::boolean,
+                 .values = "1: ask (the default); 0: don't, from the next connect"});
   for (const auto& [name, help] :
        {std::pair{"w_switch", "The best weapon a server may switch you to on picking one up."},
         std::pair{"b_switch",
@@ -354,10 +602,13 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   its side (`hand` 1 or `cl_gun` 3 draw it mirrored on the left);
 // - its own `cl_maxfps`, the moves a second (ours, the frame cap, set aside while it is loaded),
 //   and `r_maxfps`, the frame cap, kept with its own settings;
-// - the maps' light: `intensity`, `gl_modulate` and `gl_brightness` (Quake's stay 2, 1 and 0);
+// - the maps' light: `intensity` and `gl_brightness` (Quake's stay 2 and 0; `gl_modulate`, the
+//   lightmaps' scale, is every game's: the classic look's);
+// - `gl_anisotropy` the classic look's, 1 (none) by default where Quake's is 0 (the renderer's
+//   own); `gl_swapinterval` its spelling of `vid_vsync`, `demo` its spelling of `playdemo`;
 // - its chat: its own `cl_chat_sound` (one sound by number or name) and `con_auto_chat` (2 says a
 //   typed line to the team, where our `con_chat` 2 tells a command by its first word);
-// - its view and 2D (q2_view.hpp): `scr_scale`, `scr_draw2d`, `scr_alpha`, the lag graph's
+// - its view and 2D (q2_view.hpp): `scr_scale`, `scr_alpha`, the lag graph's
 //   `scr_lag_*`, `cl_adjustfov`, `uf`, `cl_kickangles`; and `s_underwater` the same setting as
 //   Quake's (room_ear.hpp), on by default where Quake's is off;
 // - its browsers: `ui_sortdemos` (`menu_demo_sort`, by name by default where ours lists the newest
@@ -368,14 +619,6 @@ void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its whole set of configs run again on a game change (client/install_configs.cpp's
   // run_game_settings), autoexec.cfg after config.cfg.
-  // The client's own port (net/qw_remote.cpp's `own_port`), its socket opened again when it moves.
-  v.add({.name = "net_clientport",
-         .fallback = "-1",
-         .help = "The network port your client sends from; a change applies at once.",
-         .kind = con::CvarKind::integer,
-         .min = -1,
-         .max = 65535,
-         .values = "-1: any free port (the default); 1..65535: that port"});
   // Joining an IPv6 server (net/qw_remote.cpp's `own_v6`), the socket on `net_ip6`'s address.
   v.add({.name = "net_enable_ipv6",
          .fallback = "1",
@@ -410,8 +653,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
            &b.crosshair->mark);
   }
   // The maps' light, as its own renderer works it out: a wall shows its painted colour times its
-  // light / 255 plus gl_brightness, times gl_modulate, times intensity (2: a light of 128 shows the
-  // colour as painted).
+  // light / 255 plus gl_brightness, times gl_modulate (the classic look's), times intensity (2: a
+  // light of 128 shows the colour as painted).
   if (b.light_intensity != nullptr)
     v.bind({.name = "intensity",
             .fallback = "2",
@@ -421,15 +664,6 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .max = 5,
             .values = "1..5: 2 the default, as the maps were lit; 3 a third brighter again"},
            b.light_intensity);
-  if (b.light_modulate != nullptr)
-    v.bind({.name = "gl_modulate",
-            .fallback = "1",
-            .flags = con::kArchive,
-            .help = "How strongly the maps' light shows: their light times this.",
-            .min = 0,
-            .max = 1000000,
-            .values = "0 and up: 1 the default, as the maps were lit; 2 twice as bright"},
-           b.light_modulate);
   if (b.light_lift != nullptr)
     v.bind({.name = "gl_brightness",
             .fallback = "0",
@@ -439,6 +673,28 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .max = 1,
             .values = "-1..1: 0 the default; 0.1 to 0.3 lifts the dark corners"},
            b.light_lift);
+  v.add({.name = "gl_anisotropy",  // the classic look's (classic/app/look.cpp): none by default
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "How sharp the textures stay on surfaces seen at a slant, when they are smoothed.",
+         .min = 0,
+         .max = 16,
+         .values = "1: off (the default); 2..16: that many samples, sharper; 0: the renderer's own",
+         .overlap = con::Overlap::same});
+  v.add({.name = "gl_damageblend_frac",  // the classic look's: a frame here, flat in Quake
+         .fallback = "0.2",
+         .flags = con::kArchive,
+         .help = "How deep a hit's flash reaches in from the screen's edges, so the middle stays "
+                 "clear.",
+         .kind = con::CvarKind::number,
+         .min = 0,
+         .max = 0.5,
+         .values = "0.2: a frame a fifth of the screen's shorter side deep (the default); "
+                   "0..0.5: that share, fading inward; 0: over the whole view",
+         .overlap = con::Overlap::same});
+  if (v.find("vid_vsync") != nullptr)  // the window's (platform/pacing.cpp)
+    v.add_synonym("gl_swapinterval", "vid_vsync");
+  if (c.has_command("playdemo")) c.add_command_synonym("demo", "playdemo");  // its demo's name
   v.add({.name = "rate",  // the bytes a second its servers may send: more than Quake's
          .fallback = "15000",
          .flags = con::kArchive | con::kUserInfo,
@@ -474,14 +730,9 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .values = "1: muffled (the default); 0: as in the air",
          .overlap = con::Overlap::same});
   if (b.screen != nullptr) add_q2_screen_cvars(v, *b.screen);
-  if (b.gibs != nullptr)  // our cl_gibfilter, the other way round
-    v.bind({.name = "cl_gibs",
-            .fallback = "1",
-            .flags = con::kArchive,
-            .help = "Whether the pieces a body bursts into are drawn.",
-            .kind = con::CvarKind::boolean,
-            .values = "1: they fly and lie about (the default); 0: none is drawn"},
-           b.gibs);
+  // Its cl_gibs, our cl_gibfilter the other way round: its 1 (drawn) is our 0.
+  if (v.find("cl_gibfilter") != nullptr)
+    v.add_mapped_synonym("cl_gibs", "cl_gibfilter", {{"1", "0"}, {"0", "1"}});
   if (b.no_glow != nullptr)  // over r_itempulse
     v.bind({.name = "cl_noglow",
             .fallback = "0",
@@ -517,6 +768,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(music_on, &b.music->enabled);
     v.bind(shuffle, &b.music->shuffle);
     v.bind(menu_track, &b.music->menu_track);
+    b.music->off_pauses = true;  // ogg_enable 0 pauses the music where it is, 1 resumes it
   } else {
     v.add(music_on), v.add(shuffle), v.add(menu_track);
   }
@@ -533,8 +785,24 @@ void add_q2(con::Console& c, const GameBindings& b) {
                    "first; 3: smallest first; -3: largest first; 0: by name",
          .overlap = con::Overlap::same});
   v.add_synonym("ui_sortdemos", "menu_demo_sort");
+  if (v.find("demo_snapshots") != nullptr)  // the demo transport's (shooter/demo_transport.hpp)
+    v.add_synonym("cl_demosnaps", "demo_snapshots");
   if (v.find("s_device") != nullptr)  // the window's (platform/window_cvars.hpp)
     v.add_synonym("al_device", "s_device");
+  if (v.find("s_hrtf") != nullptr)  // the classic games' (client/room_ear.hpp)
+    v.add_synonym("al_hrtf", "s_hrtf");
+  if (v.find("vid_minimize_on_focus_loss") != nullptr) {  // the window's (platform/window_cvars)
+    // Its full screen stays when another window takes the focus, unless asked to flip back.
+    v.add({.name = "vid_minimize_on_focus_loss",
+           .fallback = "0",
+           .flags = con::kArchive,
+           .help = "Whether the full-screen game minimises when you switch to another window, the "
+                   "screen going back to the desktop's own mode.",
+           .kind = con::CvarKind::boolean,
+           .values = "0: it stays full screen behind the other window (the default); 1: minimised",
+           .overlap = con::Overlap::same});
+    v.add_synonym("vid_flip_on_switch", "vid_minimize_on_focus_loss");
+  }
   for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)
     v.add({.name = "adr" + std::to_string(k),
            .fallback = "",
@@ -635,15 +903,9 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .values = "50: fifty (the default); a number: that many"},
            &b.console_view->list_threshold);
   }
-  // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
-  if (b.predict != nullptr)
-    v.bind({.name = "cl_predict",
-            .fallback = "1",
-            .help = "Whether your own moves are predicted on a server joined.",
-            .kind = con::CvarKind::boolean,
-            .values = "1: predicted, drawn where you will be (the default); 0: drawn where the "
-                      "server last put you, a round trip late"},
-           b.predict);
+  // Its cl_predict, our `cl_nopred` the other way round: its 0 (the server's place) is our 1.
+  if (v.find("cl_nopred") != nullptr)
+    v.add_mapped_synonym("cl_predict", "cl_nopred", {{"1", "0"}, {"0", "1"}});
   if (b.show_misses != nullptr)
     v.bind({.name = "cl_showmiss",
             .fallback = "0",
@@ -715,6 +977,17 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .kind = con::CvarKind::boolean,
             .values = "0: they float (the default); 1: they lie still"},
            b.items_still);
+  if (b.model_shadows != nullptr)
+    v.bind({.name = "gl_shadows",
+            .fallback = "0",
+            .flags = con::kArchive,
+            .help = "Dark shadows on the floor under the figures, monsters and items.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 2,
+            .values = "0: none (the default); 1: under each, half dark; 2: the same, fading as "
+                      "it rises off the floor"},
+           b.model_shadows);
   if (b.crouch != nullptr)
     v.bind({.name = "cl_predict_crouch",
             .fallback = "1",
@@ -785,8 +1058,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .flags = con::kArchive,
             .help = "Whether the crosshair takes the colour of your health.",
             .kind = con::CvarKind::boolean,
-            .values = "0: its own colour (the default); 1: white at full health, yellow at two "
-                      "thirds, red at a third and below"},
+            .values = "0: its own colour (the default); 1: red, green rising from 33 health to "
+                      "66 and blue from 66 to 99 (white at full health), black when dead"},
            &b.crosshair->by_health);
   }
   // Its own `cl_gun`, not our `r_drawviewmodel`: its 2 and 3 force the side, where Quake's 2 hides
@@ -806,56 +1079,17 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(gun_drawn, &b.view->gun);
   else
     v.add(gun_drawn);
-  if (b.view != nullptr) {  // Quake's place and size for the weapon set aside
-    b.view->size = 1;
-    b.view->offset_text.clear();
-    b.view->last_fired = false;
-  }
-  // Its own place and lens for the weapon, in its units.
-  const char* gun_names[3] = {"cl_gun_x", "cl_gun_y", "cl_gun_z"};
-  const char* gun_helps[3] = {"Moves the held weapon right, in game units; added to cl_gunx.",
-                              "Moves the held weapon forward, in game units; added to cl_gunz.",
-                              "Moves the held weapon up, in game units; added to cl_guny."};
-  for (int k = 0; k < 3; ++k) {
-    const con::CvarSpec gun{
-        .name = gun_names[k],
-        .fallback = "0",
-        .flags = con::kArchive,
-        .help = gun_helps[k],
-        .min = -20,
-        .max = 20,
-        .values = "-20..20: that many units, negative the other way (0 the default)"};
-    if (b.view != nullptr)
-      v.bind(gun, &b.view->gun_units[k]);
-    else
-      v.add(gun);
-  }
-  const con::CvarSpec gun_fov{
-      .name = "cl_gunfov",
-      .fallback = "90",
-      .flags = con::kArchive,
-      .help = "The held weapon's own lens, in degrees across; r_viewmodel_fov wins when set.",
-      .min = 0,
-      .max = 160,
-      .values =
-          "0: the view's; 30..160: that many degrees across at 4:3 (90 the default), less "
-          "held at 30"};
-  if (b.view != nullptr)
-    v.bind(gun_fov, &b.view->gun_fov_h);
-  else
-    v.add(gun_fov);
-  const con::CvarSpec gun_alpha{
-      .name = "cl_gunalpha",
-      .fallback = "1",
-      .flags = con::kArchive,
-      .help = "How solid the held weapon is drawn.",
-      .min = 0,
-      .max = 1,
-      .values = "1: solid (the default); 0.1..0.9: see-through; 0: not seen"};
-  if (b.view != nullptr)
-    v.bind(gun_alpha, &b.view->alpha);
-  else
-    v.add(gun_alpha);
+  if (b.flash_blend != nullptr) *b.flash_blend = false;  // Quake's glow discs set aside
+  // Its weapon's own lens, 90 degrees across, where Quake's takes the view's (the classic layer's).
+  v.add({.name = "cl_gunfov",
+         .fallback = "90",
+         .flags = con::kArchive,
+         .help = "The held weapon's own lens, in degrees across; r_viewmodel_fov wins when set.",
+         .min = 0,
+         .max = 160,
+         .values = "90: the default; 30..160: that many degrees across at 4:3, less held at 30; 0: "
+                   "the view's",
+         .overlap = con::Overlap::same});
   // Its move rate and its frame cap: its `cl_maxfps` is the moves a second (ours, the frame cap, is
   // set aside while it is loaded and comes back with its value after), its `r_maxfps` the frame
   // cap, starting at the cap in force when the game loads and kept with the game's own settings.
@@ -974,9 +1208,12 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
                     const GameBindings& b) {
   v.layer = game_layer(game.id);
   c.cvars().set_scope(game_scope(game));  // its own values over the common ones (cvar.hpp)
-  if (c.cvars().find("cl_beginmapcmd") == nullptr) {  // every game's map commands, once
+  if (c.cvars().find("cl_beginmapcmd") == nullptr) {  // every game's session cvars, once
     con::CvarLayer classic(c.cvars(), kLayerClassic);
-    add_map_command_cvars(c.cvars(), v.q2);
+    add_shared_session_cvars(c.cvars(), v.q2);
+    add_shared_gun_cvars(c.cvars(), b);
+    // the 2D switch and the graph along the bottom (screen_2d.hpp)
+    add_screen_2d_cvars(c.cvars(), b.screen != nullptr ? *b.screen : v.screen);
   }
   con::CvarLayer layer(c.cvars(), v.layer);
   if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it
@@ -992,6 +1229,11 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
     fresh.begin_cmd = v.q2.begin_cmd;  // the map commands are every game's (classic layer)
     fresh.change_cmd = v.q2.change_cmd;
     fresh.disconnect_cmd = v.q2.disconnect_cmd;
+    fresh.grab = v.q2.grab;  // in_grab is every game's too, and the camera behind you
+    fresh.third_person = v.q2.third_person;
+    fresh.third_angle = v.q2.third_angle;
+    fresh.third_range = v.q2.third_range;
+    fresh.dist = v.q2.dist;
     v.q2 = fresh;
   }
   if (game.id == "q2") add_q2_session_cvars(c.cvars(), v.q2);

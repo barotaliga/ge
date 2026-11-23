@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "classic/protocol/info.hpp"
 #include "golden.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
@@ -281,6 +282,32 @@ TEST(the_last_slot_is_kept_for_a_vip) {
     }
     CHECK(cn::qw_count(rig.server, cn::ConnState::connected) == (vip ? 2 : 1));
   }
+}
+
+// sv_ruleset: a newcomer on another ruleset is refused a player's seat, one on it and a spectator
+// are let in, and the server info names it.
+TEST(a_competition_server_refuses_a_player_on_another_ruleset) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  rig.second_node = 9;
+  cn::ServerConfig cfg;
+  cfg.reconnect_wait_s = 0;
+  cfg.ruleset = "smackdown";
+  CHECK(rig.start(cfg));
+  auto connect = [&](int i, const std::string& info) {
+    rig.oob("getchallenge\n", i);
+    std::string challenge;
+    for (const std::string& s : rig.answers(i))
+      if (!s.empty() && s[0] == 'c') challenge = std::string(s.c_str() + 1);
+    rig.oob("connect 28 " + std::to_string(10 + i) + " " + challenge + " \"" + info + "\"\n", i);
+    return rig.answers(i);
+  };
+  CHECK(any_has(connect(0, "\\name\\p0"), "This server requires the smackdown ruleset."));
+  CHECK(any_has(connect(0, "\\name\\p0\\*rsn\\qcon"), "requires the smackdown ruleset"));
+  CHECK(!any_has(connect(0, "\\name\\p0\\*rsn\\smackdown"), "requires"));
+  CHECK(!any_has(connect(1, "\\name\\w1\\spectator\\1"), "requires"));
+  CHECK(cn::qw_count(rig.server, cn::ConnState::connected) == 2);
+  CHECK(ge::classic::protocol::info_get(rig.server.serverinfo, "ruleset") == "smackdown");
 }
 
 // sv_locked, set by the admin while the server runs: a newcomer is refused, a client taking back
@@ -725,6 +752,7 @@ TEST(a_downloaded_file_is_told_the_archive_it_came_out_of) {
     cc.seed = i + 1;
     if (i == 2) cc.ask[cn::ExtFamily::ge] &= ~cn::kGeDownloadOrigin;
     const std::string dir = (root / std::to_string(i) / "id1").string();
+    // NOLINTNEXTLINE(bugprone-exception-escape)
     cc.keep_file = [&, i, dir](const std::string&, const std::string& path,
                                const std::vector<uint8_t>& bytes,
                                const ge::vfs::ArchiveOrigin* origin) {
@@ -819,4 +847,66 @@ TEST(a_client_fetches_skins_from_the_server_web_address) {
         c.web.said.end());
   for (gn::TcpStream& t : streams) gn::tcp_close(t);
   gn::tcp_close_listener(web);
+}
+
+TEST(a_chunk_out_of_band_is_taken_in_the_stock_layout_and_never_printed) {
+  // A stock server sends a download's chunks beyond the first out of band: 0xffffffff, a print
+  // ('n') whose text starts `\chunk`, the download's number, the download message's id (41), the
+  // chunk's number and its 1024 bytes. The client keeps the chunk of the download it is on, drops
+  // one of an earlier download (late, it would land in this file's bytes), and prints neither.
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  gn::Transport ct[1];
+  cn::QwClientEnd c[1];
+  CHECK(play(rig, ct, c, 1));
+  c[0].dl = cn::ClientDownload{};
+  c[0].dl.name = "maps/far.bsp";
+  c[0].dl.active = c[0].dl.chunked = true;
+  c[0].dl.number = 5;
+  c[0].dl.size = 3 * 1024;
+  c[0].dl.bytes.assign(size_t{3} * 1024, 0);
+  c[0].dl.have.assign(3, false);
+  c[0].dl.asked.assign(3, c[0].now + 100);  // asked for already: the tick asks for nothing more
+  const auto send_chunk = [&](int32_t number, int32_t chunk, uint8_t fill) {
+    std::vector<uint8_t> b = {0xff, 0xff, 0xff, 0xff, 'n', '\\', 'c', 'h', 'u', 'n', 'k'};
+    for (int i = 0; i < 4; i++) b.push_back(static_cast<uint8_t>(number >> (8 * i)));
+    b.push_back(41);
+    for (int i = 0; i < 4; i++) b.push_back(static_cast<uint8_t>(chunk >> (8 * i)));
+    b.insert(b.end(), 1024, fill);
+    CHECK(b.size() == 1044);
+    gn::transport_send(rig.st, ct[0].local, b.data(), b.size(), rig.now);
+  };
+  send_chunk(4, 0, 0xee);  // an earlier download's
+  send_chunk(5, 1, 0x11);
+  for (int f = 0; f < 10; f++) {
+    rig.frame();
+    cn::client_tick(c[0], rig.now);
+  }
+  CHECK(!c[0].dl.have[0] && c[0].dl.have[1] && !c[0].dl.have[2]);
+  CHECK(c[0].dl.bytes[0] == 0 && c[0].dl.bytes[1024] == 0x11);
+  CHECK(c[0].chunks_oob == 1);
+  CHECK(c[0].oob_prints.empty());
+  for (const std::string& p : c[0].prints) CHECK_MSG(p.find("chunk") == std::string::npos, p);
+}
+
+// What a server stuffs that the client does not answer itself waits in `to_run` for the window's
+// console (as the server's); `bf` and the `//` lines, which the picture reads from the stream, and
+// the client's own answers (skins) do not.
+TEST(stuffed_lines_the_client_does_not_answer_wait_for_the_console) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  gn::Transport ct[1];
+  auto c = std::make_unique<cn::QwClientEnd[]>(1);
+  CHECK(play(rig, ct, c.get(), 1));
+  c[0].to_run.clear();  // what the signon stuffed
+  cn::stuff(rig.server, 0, "alias hi \"say hi\"\nbf\n//loc 1 2 3 door\nskins\necho hello\n");
+  for (int f = 0; f < 30; f++) {
+    rig.frame();
+    cn::client_tick(c[0], rig.now);
+  }
+  CHECK_MSG(c[0].to_run.size() == 2, std::to_string(c[0].to_run.size()));
+  CHECK(c[0].to_run.size() == 2 && c[0].to_run[0] == "alias hi \"say hi\"" &&
+        c[0].to_run[1] == "echo hello");
 }

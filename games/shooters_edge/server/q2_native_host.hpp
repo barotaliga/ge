@@ -19,6 +19,7 @@
 
 #include "brush/map.hpp"
 #include "brush/trace.hpp"
+#include "classic/protocol/q2_limits.hpp"
 #include "mod/library.hpp"
 #include "shooter/brush_hull.hpp"
 #include "shooters_edge/server/q2_native.hpp"
@@ -80,11 +81,27 @@ struct NativeHost {
   native::NativeSurface no_surface{};           // what a trace that hits nothing reports
   std::vector<uint8_t> linked;  // by entity number: 0 not linked, 1 solid, 2 trigger
   bool loading = false;         // the map's spawn and its settling frames
+  int thinking = -1;            // the slot whose command the game is running (-1 none)
+  // THE EXTENDED LIMITS (plugins/classic/protocol/q2_limits.hpp): 0 the ordinary ones; 1 the
+  // library set the protocol-extensions feature after its start (8192 entities, the extended
+  // configstring layout, its entities' extension block read); 2 that, and the library is the
+  // newer interface (`new_interface`), so clients get the second level. Every index and limit
+  // below goes through `cs()` and `limits()`.
+  int ext = 0;
+  const ge::classic::protocol::Q2CsLayout& cs() const {
+    return ge::classic::protocol::q2_cs_layout(ext > 0);
+  }
+  const ge::classic::protocol::Q2Limits& limits() const {
+    return ge::classic::protocol::q2_limits(ext > 0);
+  }
   float air_accelerate = 0;
   // `sv_physics q1` (classic remix's `cr_physics q1`, also over a mod under `cr_over_mods`):
   // the players move with Quake's ground and air (profiles/remix_arsenal.hpp's
   // `kQ1Feel`). Kept by `native_set` as the setting changes.
   bool q1_physics = false;
+  // The library is the newer interface (version 3302, q2_native_abi.hpp): its client records, its
+  // player state and its move record are the newer ones. Set as the library loads, before `init`.
+  bool new_interface = false;
 
   double clock = 0;  // host time since the level started, s
   double next_frame = 0;
@@ -117,6 +134,20 @@ struct NativeHost {
     return static_cast<int>((reinterpret_cast<const uint8_t*>(e) - game->edicts) /
                             game->edict_size);
   }
+  // A player's state as the library lays it out: `f` takes a `NativePlayer&` or, for the newer
+  // interface, a `NativePlayerNew&` (the two share their fields' names). `e` has a client.
+  template <class F>
+  decltype(auto) with_player(const native::NativeEntityHead* e, F&& f) const {
+    if (new_interface) return f(reinterpret_cast<native::NativeClientHeadNew*>(e->client)->ps);
+    return f(e->client->ps);
+  }
+  // The ping the server writes into a client's record before each frame, in ms.
+  void set_ping(native::NativeEntityHead* e, int ms) const {
+    if (new_interface)
+      reinterpret_cast<native::NativeClientHeadNew*>(e->client)->ping = ms;
+    else
+      e->client->ping = ms;
+  }
   NativeSetting* find_setting(const std::string& name);
   // The map's models, the world's included (either form).
   size_t model_count() const { return map ? map->models.size() : hulls.size(); }
@@ -128,11 +159,16 @@ void native_fill_imports(native::NativeImports& t);
 void native_fill_imports_ex(native::NativeImportsEx& t);
 // The game's feature bits as it set them (`g_features`), and the server's it reads
 // (`kNativeServerFeatures`: proper in-use, every disconnect, enhanced saves, the extra user info,
-// IPv6 addresses, the index lists' overflow answered with 0).
+// IPv6 addresses, the index lists' overflow answered with 0, the extended limits).
 int32_t native_features(NativeHost& h);
 inline constexpr int32_t kNativeServerFeatures =
     native::kGmfProperInUse | native::kGmfAllDisconnects | native::kGmfEnhancedSaves |
-    native::kGmfExtraUserInfo | native::kGmfIpv6 | native::kGmfIndexOverflow;
+    native::kGmfExtraUserInfo | native::kGmfIpv6 | native::kGmfIndexOverflow |
+    native::kGmfProtocolExtensions;
+// `sys_allow_unsafe_savegames`: 1 lets a library without enhanced saves (`g_features` lacking
+// kGmfEnhancedSaves) be saved, loaded and kept level to level anyway. Set at start only (the
+// command line, server.cfg): a later set is refused with a line saying so.
+inline constexpr const char* kUnsafeSavesSetting = "sys_allow_unsafe_savegames";
 // The file calls (q2_native_files.cpp) and the files left open closed.
 const native::NativeFilesApi* native_files_api();
 void native_close_files(NativeHost& h);
@@ -141,6 +177,8 @@ NativeHost* native_current();
 NativeSetting& native_setting(NativeHost& h, const std::string& name, const std::string& value,
                               int flags);
 void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool force);
+// map_noareas set: every area joined to every other, the portals ignored.
+bool native_no_areas(const NativeHost& h);
 // A slot's bytes (a print to slot `slot`, reliable).
 void native_print(NativeHost& h, int slot, int level, const std::string& text);
 // Splits `line` into the arguments the library reads (`argc`, `argv`, `args`).

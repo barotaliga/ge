@@ -45,9 +45,10 @@ struct GpuDraw {
   float warp[16];                 // render/wgsl/warp.wgsl's Warp
   float burn[4];                  // charred, embers, etched, seed
   uint32_t skin[4];               // the model whose skin it wears
+  float flat[4];                  // a shadow: the floor's height from the eye, the lean, 1
   float blood[kMorphWounds * 8];  // a wound two vec4: at, size; run, wet, seed, 0
 };
-static_assert(sizeof(GpuDraw) == 256 + kMorphWounds * 32, "match morph.wgsl's Draw");
+static_assert(sizeof(GpuDraw) == 272 + kMorphWounds * 32, "match morph.wgsl's Draw");
 
 float srgb_to_linear(uint8_t v) {
   const double c = v / 255.0;
@@ -456,14 +457,21 @@ void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw>
     }
     g.skin[0] = d.skin < morph.index_counts.size() ? d.skin : d.model;
     g.skin[1] = d.slot < morph.slot_count ? d.slot + 1 : 0;
-    if (d.shell_push > 0) {  // the shell: its colour in bytes (bit 24 set), its push's bits
+    if (d.shell_push > 0 || d.flat) {  // a shell: its colour in bytes (bit 24 set), its push's bits
       uint32_t rgb = 1u << 24;
       for (int k = 0; k < 3; ++k) {
         const float c = d.shell[k] < 0 ? 0 : d.shell[k] > 1 ? 1 : d.shell[k];
         rgb |= static_cast<uint32_t>(std::lround(c * 255.0f)) << (8 * k);
       }
       g.skin[2] = rgb;
-      std::memcpy(&g.skin[3], &d.shell_push, sizeof(float));
+      const float push = d.shell_push > 0 ? d.shell_push : 0.0f;
+      std::memcpy(&g.skin[3], &push, sizeof(float));
+    }
+    if (d.flat) {  // a shadow: squashed onto the floor, which is relative to this frame's eye
+      g.flat[0] = static_cast<float>(double(d.flat_y) - view.eye[1]);
+      g.flat[1] = d.flat_lean[0];
+      g.flat[2] = d.flat_lean[1];
+      g.flat[3] = 1;
     }
     std::memcpy(&morph.staged[morph.drawn * sizeof(GpuDraw)], &g, sizeof g);
     morph.staged_models[morph.drawn] = d.model;

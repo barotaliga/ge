@@ -9,7 +9,8 @@
 // alpha under 1, `shade_dir.w` the share left out) drops that share of its pixels by a 4x4
 // ordered pattern shifted every frame (`see_through_gone`), which the temporal resolve blends.
 // A SHELL (MorphDraw::shell_push, `skin.z` set) is the model pushed out along its normals and one
-// flat colour, no skin and no light.
+// flat colour, no skin and no light. A SHADOW (MorphDraw::flat, `flat.w` 1) is a shell squashed
+// onto a level floor, each point moved across by the lean for its height above the floor.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/warp.wgsl"
 
@@ -37,6 +38,9 @@ struct Draw {
   // x: the model whose skin it wears (MorphDraw::skin); y: its slot + 1 (0: none); z: a shell's
   // colour, a byte a channel from bit 0, bit 24 set (0: not a shell); w: its push's bits, m
   skin: vec4u,
+  // A SHADOW (MorphDraw::flat, w 1): x the floor's height from the eye, m; yz the lean (x, z) a
+  // m above it
+  flat: vec4f,
   blood: array<vec4f, 12>,  // MorphBlood: a wound two: at (rest frame, m), size; run, wet, seed
 }
 
@@ -94,6 +98,12 @@ fn posed(m: Model, a: u32, b: u32, t: f32, idx: u32) -> Posed {
   return p;
 }
 
+// A point (relative to the eye) laid on the shadow's floor, moved across by its height above it.
+fn flatten(f: vec4f, p: vec3f) -> vec3f {
+  let h = max(p.y - f.x, 0.0);
+  return vec3f(p.x + f.y * h, f.x, p.z + f.z * h);
+}
+
 struct VertexOut {
   @builtin(position) position: vec4f,
   @location(0) rel: vec3f,
@@ -124,6 +134,10 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> 
   out.last_rel = d.last_place.xyz + warp_vertex(d.warp, frame.time.x, last_off);
   out.local = vec4f(now.position * d.now_place.w, dot(off, d.warp.b.xyz));
   out.rest = vertices[2u * (m.first_vertex + idx)].xyz * d.now_place.w;
+  if (d.flat.w > 0.0) {  // squashed onto the floor, leaning
+    out.rel = flatten(d.flat, out.rel);
+    out.last_rel = flatten(d.flat, out.last_rel);
+  }
   out.position = frame.view_proj * vec4f(out.rel, 1.0);
   out.normal = rotate(d.now_rotation, now.normal);
   out.uv = uvs[m.first_uv + idx];

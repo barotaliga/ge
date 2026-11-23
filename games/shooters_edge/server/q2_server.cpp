@@ -73,7 +73,7 @@ sh::Vec3f parse_vec(const std::string& s) {
   return v;
 }
 
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
 
@@ -582,6 +582,8 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   }
   pm.changed = p.changed;
   ge::classic::q2_feel(pm, q2_move_feel(s, slot));
+  if (s.clients[slot].protocol != 0)  // a stock client's flight, as it predicts it
+    ge::classic::q2_fly_for_protocol(pm, s.clients[slot].protocol);
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
   const bool was_on_ground = p.on_ground;
   ge::classic::q2_move(pm, mw.world());
@@ -921,7 +923,12 @@ void fill_rows(Q2Server& s) {
       wc.numbers.gun_angles[k] = still ? 0 : guns[k + 3];
     }
     wc.numbers.fov = fight_fov(s, i);
-    for (int k = 0; k < 4; k++) wc.numbers.blend[k] = s.intermission_at > 0 ? 0 : p.blend[k];
+    for (int k = 0; k < 4; k++) {
+      const bool none = s.intermission_at > 0;
+      wc.numbers.blend[k] = none ? 0 : p.blend[k];
+      wc.numbers.blend_apart[k] = none ? 0 : p.blend_apart[k];
+      wc.numbers.damage_blend[k] = none ? 0 : p.damage_blend[k];
+    }
     e.free = false;
     e.origin = unpack(p.move.origin);
     e.velocity = unpack(p.move.velocity);
@@ -1171,7 +1178,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     if (q2_same_name(s.map_name, "fact2") && e.classname == "target_spawner" &&
         e.origin.x == -1504 && e.origin.y == 512 && e.origin.z == 72)
       e.origin.z = 64;
-    e.item = sq_item(e.classname);
+    e.item = sq_item(e.classname, s.opt.pack);
     if (e.item >= 0) e.team = b.get_any_case("team");
     inhibited.push_back(left_out(s, e.spawnflags) ? 1 : 0);
     e.gone = inhibited.back() != 0 || dm_left_out(s, e.item);
@@ -1249,8 +1256,12 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   }
   if (s.loading && !q2_load_end(s, error)) return false;  // the save's players in their bodies
   fill_rows(s);
+  s.entered_told = 0;
   for (int i = 0; i < sh::kMaxClients; i++)  // every player entered again on the new map
-    if (s.clients[i].active) announce_entry(s, i);
+    if (s.clients[i].active) {
+      announce_entry(s, i);
+      s.entered_told |= 1u << i;
+    }
   return true;
 }
 
@@ -1312,7 +1323,8 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   if (c.active && c.spectator == spectator && c.bot == bot && s.map != nullptr) {
     set_info(c.userinfo, "name", name);
     fill_rows(s);
-    announce_entry(s, slot);
+    if ((s.entered_told & (1u << slot)) == 0) announce_entry(s, slot);  // said at the load
+    s.entered_told &= ~(1u << slot);
     return;
   }
   c = ClientInfo{};

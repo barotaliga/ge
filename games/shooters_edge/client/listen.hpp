@@ -143,7 +143,7 @@ struct ListenHost {
   // The player's side of every frame: the rules' frame before the endpoint routes it (prints,
   // effects, blows), and a line printed to him (the lobby's and the room's answers).
   void (*tap)(void* ctx, const sv::RulesCommon& game) = nullptr;
-  void (*print)(void* ctx, const std::string& text) = nullptr;
+  void (*print)(void* ctx, int level, const std::string& text) = nullptr;  // the print's level
   // A voice the server relayed to him (the match's `sv_voip`): the talker's slot, the protocol's
   // generation and first sequence, the frames (demo.hpp's `DemoVoice`).
   void (*heard)(void* ctx, int talker, int gen, int seq,
@@ -267,6 +267,17 @@ struct ListenOptions {
   bool new_game = false;
 };
 
+// What the console set on the window's listen (`from`: the lobby, its settings, sv_port,
+// maxclients, sv_hostname, sv_login and the rest) copied onto the options a new game opens with.
+inline void take_console_settings(ListenOptions& to, const ListenOptions& from) {
+  to.lobby = from.lobby;
+  to.lobby_settings = from.lobby_settings;
+  to.port = from.port;
+  to.maxclients = from.maxclients;
+  to.hostname = from.hostname;
+  to.login = from.login;
+}
+
 // A blow the player took (a single-player program's damage record, client_data.hpp): its armour
 // and blood, 0..255 each, and where it came from, map units.
 struct Blow {
@@ -305,13 +316,16 @@ struct Listen {
   // The easy jump (shooter/speedjump_assist.hpp): the aid strafing for him while his slot asks
   // (`cl_speedjump 1`), at the server's pm_speedjump; `speedjump_view` of its swing is drawn.
   sh::SpeedJumpAid jump_aid;
-  float speedjump_view = 0.5f;       // cl_speedjump_view
-  bool forced = false;               // the server turned the view in the last frame
-  bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
-  int impulse = 0;                   // waiting for a frame
-  std::string pending_map;           // the mod or the console asked for this map
-  std::string cinematic;             // Quake II's movies before it (cinematic.hpp), for the window
-  std::vector<std::string> prints;   // what the server printed to the player, in order
+  float speedjump_view = 0.5f;      // cl_speedjump_view
+  bool forced = false;              // the server turned the view in the last frame
+  bool load_menu_asked = false;     // the rules asked his client for the load menu (a death)
+  int impulse = 0;                  // waiting for a frame
+  std::string pending_map;          // the mod or the console asked for this map
+  std::string cinematic;            // Quake II's movies before it (cinematic.hpp), for the window
+  std::vector<std::string> prints;  // what the server printed to the player, in order
+  // Each print's level (0 low .. 3 chat) by its index; past the end, or a line of the window's
+  // own, 2 (high).
+  std::vector<int> print_levels;
   std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
   // The lines a single-player program stuffed into his console other than `bf` (counted in
   // `bonuses`) and the load menu's, for the window's console to run.
@@ -322,9 +336,9 @@ struct Listen {
   // Where the mod's explosions went off on this map (its temporary-entity message), map units,
   // in order.
   std::vector<sh::Vec3f> explosions;
-  // Quake II's: each one's kind by index (classic/q2_fx_switches.hpp; 0 any other), as long as
-  // the last one with a kind (the rest are 0).
-  std::vector<uint8_t> explosion_kinds;
+  // Quake II's: each one's kind byte by index (q2_model_fx.hpp; 0 any other), as long as the last
+  // one with a kind (the rest are 0).
+  std::vector<uint8_t> explosion_codes;
   std::vector<Blow> blows;  // the blows the player took on this map, in order
   int64_t bonuses = 0;      // the items he took (the server's `bf`), since the window opened
   double cshift[4] = {130, 80, 50, 0};  // v_cshift: the tint in open air (red, green, blue, of 255)
@@ -369,6 +383,16 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
 // The game ended and let go (its servers, then the maps they view, then the program), the options
 // kept: another game folder may be opened, and the next start is `listen_start`'s.
 void listen_stop(Listen& l);
+// `quit [reason]` and `recycle [reason]` in the window while it hosts a match: each player who
+// joined over the network told "Server quit" or "Server restarted" (": <reason>" after it when
+// one was given) and dropped, or told to reconnect (`restart`), by the match's game
+// (ServerGame::quit). Nothing when no match is hosted.
+void listen_farewell(Listen& l, const std::string& reason, bool restart);
+// `net_restart` in the window: a hosted match's socket opened again on `port` (sv_port) on every
+// interface, else on the port it had (`port` set back to it), the game told
+// (ServerGame::reopened); what went wrong in `said`. False when no match takes players over the
+// network (nothing to open) or no port opened.
+bool listen_net_restart(Listen& l, int& port, std::string& said);
 // A new game of the single-player program `progs` (which must outlive the listen) on `map`, the
 // match before it (if any) ended. `opt.console`'s lines are the campaign's settings.
 bool listen_campaign(Listen& l, const ge::progs::Progs& progs, std::unique_ptr<LoadedMap> map,
@@ -440,6 +464,8 @@ bool listen_rules_word(Listen& l, const std::string& line);
 // command, its level commands (restart, changelevel) to the server's console; false for any other
 // line or game. On any Quake server (deathmatch too), `tell` and `ping` go to it as slot 0's.
 bool listen_campaign_word(Listen& l, const std::string& line);
+// A line the server printed to the player at `level` (0 low .. 3 chat), its level kept beside it.
+void listen_print(Listen& l, int level, const std::string& text);
 // The people playing in the game the window hosts (its own player and those who joined; never
 // a bot, so a game with companions alone still pauses under the menu).
 int listen_players(const Listen& l);

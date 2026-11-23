@@ -15,8 +15,10 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 #include "classic/q2_move.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 
 namespace shooters_edge::server::roster {
 
@@ -116,6 +118,9 @@ struct Kind {  // NOLINT(clang-analyzer-optin.performance.Padding): rows read by
   float search_odds = 1;
   int8_t search_reach = 1;
   const char* loop = nullptr;
+  // The rules it belongs to (q2_pack.hpp). A pack's row of a base class name replaces the base
+  // row under that pack (`kind_named`).
+  Q2Pack pack = Q2Pack::base;
 };
 
 constexpr int kNoGib = -100000;  // a kind that is never thrown apart
@@ -1155,6 +1160,17 @@ inline constexpr Kind kKinds[] = {
      .good = true},
 };
 inline constexpr int kKindCount = int(sizeof(kKinds) / sizeof(kKinds[0]));
+
+// The roster's row of `classname` under `pack`: the pack's own row first (one that replaces a base
+// monster), then the base game's; -1 when there is none.
+constexpr int kind_named(std::string_view classname, Q2Pack pack) {
+  if (pack != Q2Pack::base)
+    for (int k = 0; k < kKindCount; k++)
+      if (kKinds[k].pack == pack && classname == kKinds[k].classname) return k;
+  for (int k = 0; k < kKindCount; k++)
+    if (kKinds[k].pack == Q2Pack::base && classname == kKinds[k].classname) return k;
+  return -1;
+}
 
 // ---- Dodging: each kind's duck as data (q2_monsters.cpp's ducking) ----
 

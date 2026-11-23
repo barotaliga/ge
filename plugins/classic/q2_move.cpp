@@ -27,7 +27,10 @@ constexpr float kWaterSpeed = 400;
 constexpr double kStopEpsilon = 0.1;
 constexpr double kMinStepNormal = 0.7;
 constexpr int kMaxClipPlanes = 5;
-constexpr uint8_t kTimeFlags = kSqTimeWaterJump | kSqTimeLand | kSqTimeTeleport;
+// A packed coordinate in units: exact, every packed value fits a float's 24 bits.
+float eighths(int32_t v) { return static_cast<float>(v) * 0.125f; }
+
+constexpr uint16_t kTimeFlags = kSqTimeWaterJump | kSqTimeLand | kSqTimeTeleport;
 
 float fabs_f(float x) { return x < 0 ? -x : x; }
 
@@ -41,10 +44,17 @@ struct Move {
   Vec3f ground_normal;
   int32_t ground_surface = 0;
   int32_t ground_contents = 0;
-  int16_t previous[3] = {};
+  int32_t previous[3] = {};
   bool ladder = false;
 
   Q2Trace trace(Vec3f a, Vec3f b) const { return w.trace(w.ctx, a, pm.mins, pm.maxs, b); }
+  // A packed coordinate kept in `coord_bits` bits, sign-extended (16: the original's wrap).
+  int32_t pack(int v) const {
+    const int shift = 32 - pm.coord_bits;
+    return shift <= 0 ? v : static_cast<int32_t>(static_cast<uint32_t>(v) << shift) >> shift;
+  }
+  // A time given in ms in the timer's units.
+  uint16_t ticks(int ms) const { return static_cast<uint16_t>(ms >> pm.time_shift); }
   int32_t contents(Vec3f p) const { return w.contents(w.ctx, p); }
 
   void touch(int entity) {
@@ -290,8 +300,9 @@ struct Move {
   void categorise() {
     Vec3f below = origin;
     below.z = float(double(origin.z) - 0.25);
+    pm.ground_plane = {};
     if (velocity.z > 180) {
-      pm.s.flags &= uint8_t(~kSqOnGround);
+      pm.s.flags &= uint16_t(~kSqOnGround);
       pm.ground_entity = -1;
     } else {
       const Q2Trace t = trace(origin, below);
@@ -300,18 +311,19 @@ struct Move {
       ground_contents = t.contents;
       if (t.entity < 0 || (t.normal.z < kMinStepNormal && !t.start_solid)) {
         pm.ground_entity = -1;
-        pm.s.flags &= uint8_t(~kSqOnGround);
+        pm.s.flags &= uint16_t(~kSqOnGround);
       } else {
         pm.ground_entity = t.entity;
+        pm.ground_plane = {t.normal, t.plane_dist, t.plane_type, t.plane_signbits};
         if (pm.s.flags & kSqTimeWaterJump) {
-          pm.s.flags &= uint8_t(~kTimeFlags);
+          pm.s.flags &= uint16_t(~kTimeFlags);
           pm.s.time = 0;
         }
         if (!(pm.s.flags & kSqOnGround)) {
           pm.s.flags |= kSqOnGround;
           if (pm.land_pause && velocity.z < -200) {  // a long fall: no jump until the pause
             pm.s.flags |= kSqTimeLand;
-            pm.s.time = velocity.z < -400 ? 25 : 18;
+            pm.s.time = ticks(velocity.z < -400 ? 200 : 144);  // 25 or 18 eighths
           }
         }
       }
@@ -342,7 +354,9 @@ struct Move {
     Vec3f flat{forward.x, forward.y, 0};
     normalize(flat);
     const Vec3f spot = mad(origin, 1.0f, flat);
-    const Q2Trace t = trace(origin, spot);
+    const Q2Trace t = pm.ladder_mask && w.trace_mask != nullptr
+                          ? w.trace_mask(w.ctx, origin, pm.mins, pm.maxs, spot, kSqLadder)
+                          : trace(origin, spot);
     if (t.fraction < 1 && (t.contents & kSqLadder)) ladder = true;
     if (pm.water_level != 2) return;
     Vec3f s = mad(origin, 30.0f, flat);
@@ -353,13 +367,13 @@ struct Move {
     velocity = flat * 50;
     velocity.z = pm.water_jump;
     pm.s.flags |= kSqTimeWaterJump;
-    pm.s.time = 255;
+    pm.s.time = ticks(2040);  // 255 eighths
   }
 
   void jump() {
     if (pm.s.flags & kSqTimeLand) return;
     if (pm.cmd.up < 10) {
-      pm.s.flags &= uint8_t(~kSqJumpHeld);
+      pm.s.flags &= uint16_t(~kSqJumpHeld);
       return;
     }
     if (pm.s.flags & kSqJumpHeld) return;
@@ -395,14 +409,15 @@ struct Move {
     }
   }
 
-  // The spectator: its own friction (6 × 1.5), a three-axis wish, no collision.
+  // The spectator: its own friction (6 × 1.5, or `fly_friction`), a three-axis wish, no collision;
+  // with no speed to add, it glides on (`fly_glide`) or stays put for the command.
   void fly() {
     pm.view_height = 22;
     const float speed = length(velocity);
     if (speed < 1) {
       velocity = {};
     } else {
-      const auto fric = float(double(pm.friction) * 1.5);
+      const auto fric = pm.fly_friction > 0 ? pm.fly_friction : float(double(pm.friction) * 1.5);
       const float control = speed < kStopSpeed ? kStopSpeed : speed;
       const float drop = control * fric * seconds;
       float scale = speed - drop;
@@ -419,29 +434,30 @@ struct Move {
     Vec3f dir = wish;
     float wspeed = normalize(dir);
     if (wspeed > pm.max_speed) wspeed = pm.max_speed;
+    if (!pm.fly_glide && wspeed - dot(velocity, dir) <= 0) return;  // the original step: put
     accelerate(dir, wspeed, kAccelerate);
     origin = mad(origin, seconds, velocity);
   }
 
-  bool good_at(const int16_t at[3]) const {
+  bool good_at(const int32_t at[3]) const {
     if (pm.s.type == Q2Type::spectator) return true;
-    const Vec3f p{at[0] * 0.125f, at[1] * 0.125f, at[2] * 0.125f};
+    const Vec3f p{eighths(at[0]), eighths(at[1]), eighths(at[2])};
     return !trace(p, p).all_solid;
   }
 
   void snap() {
-    for (int i = 0; i < 3; ++i) pm.s.velocity[i] = int16_t(int(velocity[i] * 8));
+    for (int i = 0; i < 3; ++i) pm.s.velocity[i] = pack(int(velocity[i] * 8));
     int sign[3];
-    int16_t base[3];
+    int32_t base[3];
     for (int i = 0; i < 3; ++i) {
       sign[i] = origin[i] >= 0 ? 1 : -1;
-      base[i] = int16_t(int(origin[i] * 8));
+      base[i] = pack(int(origin[i] * 8));
       if (double(base[i]) * 0.125 == double(origin[i])) sign[i] = 0;
     }
     static constexpr int kJitter[8] = {0, 4, 1, 2, 3, 5, 6, 7};  // bit 0 x, 1 y, 2 z
     for (const int bits : kJitter) {
-      int16_t at[3];
-      for (int i = 0; i < 3; ++i) at[i] = int16_t(base[i] + ((bits & (1 << i)) ? sign[i] : 0));
+      int32_t at[3];
+      for (int i = 0; i < 3; ++i) at[i] = pack(base[i] + ((bits & (1 << i)) ? sign[i] : 0));
       if (good_at(at)) {
         for (int i = 0; i < 3; ++i) pm.s.origin[i] = at[i];
         return;
@@ -452,17 +468,16 @@ struct Move {
 
   void initial_snap() {
     static constexpr int kOffset[3] = {0, -1, 1};
-    const int16_t* base = pm.s.origin;
+    const int32_t* base = pm.s.origin;
     for (const int dz : kOffset) {
       for (const int dy : kOffset) {
         for (const int dx : kOffset) {
-          const int16_t at[3] = {int16_t(base[0] + dx), int16_t(base[1] + dy),
-                                 int16_t(base[2] + dz)};
+          const int32_t at[3] = {pack(base[0] + dx), pack(base[1] + dy), pack(base[2] + dz)};
           if (good_at(at)) {
             for (int i = 0; i < 3; ++i) {
               pm.s.origin[i] = at[i];
               previous[i] = at[i];
-              origin[i] = at[i] * 0.125f;
+              origin[i] = eighths(at[i]);
             }
             return;
           }
@@ -483,7 +498,7 @@ struct Move {
     if (pm.s.type == Q2Type::dead || (pm.cmd.up < 0 && (pm.s.flags & kSqOnGround))) {
       pm.s.flags |= kSqDucked;            // the dead always, the living when ducking on the ground
     } else if (pm.s.flags & kSqDucked) {  // stand up where the standing box fits
-      if (!trace(origin, origin).all_solid) pm.s.flags &= uint8_t(~kSqDucked);
+      if (!trace(origin, origin).all_solid) pm.s.flags &= uint16_t(~kSqDucked);
     }
     if (pm.s.flags & kSqDucked) {
       pm.maxs.z = 4;
@@ -521,13 +536,14 @@ struct Move {
     pm.view_angles = {};
     pm.view_height = 0;
     pm.ground_entity = -1;
+    pm.ground_plane = {};
     pm.water_type = 0;
     pm.water_level = 0;
     pm.mins = {};
     pm.maxs = {};
     for (int i = 0; i < 3; ++i) {
-      origin[i] = pm.s.origin[i] * 0.125f;
-      velocity[i] = pm.s.velocity[i] * 0.125f;
+      origin[i] = eighths(pm.s.origin[i]);
+      velocity[i] = eighths(pm.s.velocity[i]);
       previous[i] = pm.s.origin[i];
     }
     seconds = float(double(pm.cmd.msec) * 0.001);
@@ -536,6 +552,7 @@ struct Move {
     if (pm.s.type == Q2Type::spectator) {
       pm.mins = {-16, -16, -24};
       pm.maxs = {16, 16, 32};
+      seconds = float(double(pm.fly_time) * double(pm.cmd.msec) * 0.001);
       fly();
       snap();
       return;
@@ -554,13 +571,13 @@ struct Move {
     special();
 
     if (pm.s.time) {
-      int step = pm.cmd.msec >> 3;
+      int step = pm.cmd.msec >> pm.time_shift;
       if (!step) step = 1;
       if (step >= pm.s.time) {
-        pm.s.flags &= uint8_t(~kTimeFlags);
+        pm.s.flags &= uint16_t(~kTimeFlags);
         pm.s.time = 0;
       } else {
-        pm.s.time = uint8_t(pm.s.time - step);
+        pm.s.time = uint16_t(pm.s.time - step);
       }
     }
 
@@ -569,7 +586,7 @@ struct Move {
     } else if (pm.s.flags & kSqTimeWaterJump) {
       velocity.z -= float(pm.s.gravity) * seconds;
       if (velocity.z < 0) {
-        pm.s.flags &= uint8_t(~kTimeFlags);
+        pm.s.flags &= uint16_t(~kTimeFlags);
         pm.s.time = 0;
       }
       step_slide();
@@ -591,24 +608,36 @@ struct Move {
     }
     categorise();
     snap();
+    if (pm.ladder_flag) {  // the newer interface: the ladder's flag for the game and the client
+      pm.s.flags =
+          ladder ? uint16_t(pm.s.flags | kSqOnLadder) : uint16_t(pm.s.flags & ~kSqOnLadder);
+    }
   }
 };
 
-Q2Trace brush_trace(void* ctx, Vec3f start, Vec3f mins, Vec3f maxs, Vec3f end) {
+Q2Trace brush_trace_mask(void* ctx, Vec3f start, Vec3f mins, Vec3f maxs, Vec3f end, int32_t mask) {
   auto* w = static_cast<Q2BrushWorld*>(ctx);
   const float a[3] = {start.x, start.y, start.z}, b[3] = {end.x, end.y, end.z};
   const float lo[3] = {mins.x, mins.y, mins.z}, hi[3] = {maxs.x, maxs.y, maxs.z};
-  const brush::Trace t = w->tracer->trace(a, b, lo, hi, w->mask);
+  const brush::Trace t = w->tracer->trace(a, b, lo, hi, mask);
   Q2Trace r;
   r.all_solid = t.all_solid;
   r.start_solid = t.start_solid;
   r.fraction = t.fraction;
   r.end = {t.end[0], t.end[1], t.end[2]};
   r.normal = {t.plane.n[0], t.plane.n[1], t.plane.n[2]};
+  r.plane_dist = t.plane.d;
+  r.plane_type = t.plane.type;
+  for (int i = 0; i < 3; ++i)
+    if (t.plane.n[i] < 0) r.plane_signbits = uint8_t(r.plane_signbits | (1 << i));
   r.surface_flags = t.flags;
   r.contents = t.contents;
   r.entity = 0;  // the world, hit or not
   return r;
+}
+
+Q2Trace brush_trace(void* ctx, Vec3f start, Vec3f mins, Vec3f maxs, Vec3f end) {
+  return brush_trace_mask(ctx, start, mins, maxs, end, static_cast<Q2BrushWorld*>(ctx)->mask);
 }
 
 int32_t brush_contents(void* ctx, Vec3f p) {
@@ -641,6 +670,6 @@ void q2_move(Q2Move& pm, const Q2World& world) {
   m.run();
 }
 
-Q2World Q2BrushWorld::world() { return {this, brush_trace, brush_contents}; }
+Q2World Q2BrushWorld::world() { return {this, brush_trace, brush_contents, brush_trace_mask}; }
 
 }  // namespace ge::classic

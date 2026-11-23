@@ -161,7 +161,9 @@ void info_set(Console& c, const Args& a, uint32_t flag) {
     v->flags = (v->flags & ~(kUserInfo | kServerInfo)) | flag;
     ++v->revision;  // the info is sent again even when the value is the same
   }
-  const std::string why = set_result_text(r, lower(a[1]));
+  const std::string why =
+      (c.cvars().find(a[1]) != nullptr ? set_result_text(r, *c.cvars().find(a[1]))
+                                       : set_result_text(r, lower(a[1])));
   if (!why.empty()) c.error(why, "");
 }
 
@@ -314,6 +316,17 @@ void register_more_commands(Console& con) {
           if (!why.empty()) c.print(why);
         }
       });
+  con.add_command("writemanual",
+                  "writemanual <file>: every setting, command and flag written for the reference "
+                  "manual (console/manual.hpp)",
+                  [](Console& c, const Args& a) {
+                    if (a.size() != 2) {
+                      c.error("writemanual needs a file name.", "writemanual <file>");
+                      return;
+                    }
+                    std::string error;
+                    if (!write_manual(a[1], manual_of(c), error)) c.error(error, "");
+                  });
   con.add_command("writeconfig",
                   "writeconfig [-a] [-b] [-c] [-m] <file>: the binds and saved settings (or the "
                   "aliases, -a; every changed setting, -m) written to a cfg of your own",

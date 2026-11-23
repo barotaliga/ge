@@ -17,8 +17,8 @@ with sound. Each game's format is its own; what a player DOES with a demo is the
 | Engine | `engine/capture/` (`video_cfg.hpp`, `av_export.hpp`, `mux.hpp`, `video.hpp`) | Video with sound: `video.cfg`, the A/V clock, Matroska, WebM, MP4 |
 | Engine | `engine/overview/` | The map from above for the live map (`features.md`) |
 | Engine | `engine/vfs/zstd.hpp` | Recordings packed as they are written |
-| Shooter kit | `plugins/shooter/demo_transport.hpp` | What a player does with a demo in any shooter: `cl_demospeed`, `demo_seek`, `demo_skip`, `demo_next`, `demo_bar`, `demo_lerp` |
-| Shell | `games/shooters_edge/client/demo_playback.hpp`, `demo_scan.hpp`, `demo_highlights.hpp`, `demo_autotrack.hpp`, `demo_lerp.hpp`, `demo_eyes.hpp` | Watched like a video with highlight markers; kills scanned; multi-kills and air shots; autotrack; frames interpolated; the classic eye |
+| Shooter kit | `plugins/shooter/demo_transport.hpp` | What a player does with a demo in any shooter: `cl_demospeed`, `demo_seek`, `demo_skip`, `demo_next`, `demo_bar`, `demo_lerp`, `demo_snapshots` |
+| Shell | `games/shooters_edge/client/demo_playback.hpp`, `demo_scan.hpp`, `demo_highlights.hpp`, `demo_autotrack.hpp`, `demo_lerp.hpp`, `demo_eyes.hpp`, `demo_free_look.hpp` | Watched like a video with highlight markers; kills scanned; multi-kills and air shots; autotrack; frames interpolated; the classic eye; SHIFT's free look |
 | Shell | `games/shooters_edge/client/demo_convert.hpp`, `demo_convert_client.hpp`, `demo_convert_single_out.hpp`, `demo_v2.hpp`, `demo_pack.hpp`, `demo_dzip.hpp` | Conversion as a stream; the client recording for the oldest clients; recordings packed in replay file v2 and back exactly; dzip archives |
 | Shell | `games/shooters_edge/client/demo_video.hpp`, `demo_caption.hpp`, `demo_voice.hpp`, `demo_sound.hpp`, `timedemo.hpp` | A demo as a video with captions, voices and sounds; the demo benchmark |
 | Shell | `games/shooters_edge/client/recording_tv.hpp`, `tv_live.hpp`, `listen_record.hpp` | A recording still being written broadcast in one-second blocks; a live broadcast played as a growing demo; `record` on the listen game |
@@ -60,7 +60,7 @@ with sound. Each game's format is its own; what a player DOES with a demo is the
 
 | Drawback left behind | How |
 | --- | --- |
-| A demo played only from the start, at one speed | keyframes and seek in any game |
+| A demo played only from the start, at one speed | keyframes and seek in any game; a seek back starts from the last snapshot (`demo_snapshots`, every 10 s), and with none kept reads again from the start rather than refusing |
 | One format a game, unreadable elsewhere | converted as read; replay file v2 as the shared form |
 | Recordings as large files | packed by zstd as they are written |
 

@@ -95,6 +95,8 @@ bool finish_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_
 void resize_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_t height);
 // The models it draws (world_models.hpp): their shapes, for where a warp's ash lands.
 const WorldModels& world_models(const WorldDraw& w);
+// Where the map's own brush models (doors, platforms) stood at the last frame drawn (engine m).
+std::span<const ge::brush::app::Mover> world_movers(const WorldDraw& w);
 // The map's light entities as it draws them (brush/app/draw_data.hpp's PointLight), each one's
 // `seen` set: for a lab to stand by a light whose source shows.
 std::span<const ge::brush::app::PointLight> world_lights(const WorldDraw& w);

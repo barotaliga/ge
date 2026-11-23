@@ -17,7 +17,8 @@
 // replays to the bit (the `server-core` lab); a dedicated server only waits between frames.
 //
 // THE SETTINGS are `ServerConfig`, every field a cvar on the server's tier (`add_server_cvars`):
-// `sv_hostname`, `sv_description`, `net_ip`, `net_port`, `sv_maxclients`, `sv_map`, `sv_bots`,
+// `sv_hostname`, `sv_description`, `net_ip`, `net_port` (and `net_ip6` with `net_enable_ipv6` 2:
+// an IPv6 socket on the same port beside the IPv4 one), `sv_maxclients`, `sv_map`, `sv_bots`,
 // `sv_lobby` (the engine's lobby, match.hpp, before every match) and its timers `sv_countdown`
 // and `sv_intermission`, `sv_seed`, `sv_password`,
 // `sv_visibility`; and those kept for what reads them as it lands:
@@ -84,6 +85,8 @@ struct ServerConfig {
   std::string description;          // sv_description: a line under the name
   std::string ip;                   // net_ip: the address to listen on (empty: every interface)
   int32_t port = 0;                 // net_port: the game's port (0: the game's default)
+  std::string ip6;                  // net_ip6: the IPv6 address to listen on (empty: every one)
+  int32_t ipv6 = 1;                 // net_enable_ipv6: 2 opens an IPv6 socket too
   int32_t maxclients = 8;           // sv_maxclients: 1..32
   std::string map;                  // sv_map (empty: the game's default)
   int32_t bots = 0;                 // sv_bots: slots the game's bots fill at the start
@@ -163,6 +166,7 @@ struct ServerConfig {
   // A file of console lines the server runs as they are added (`--commands`; spawn.hpp writes
   // one beside each server it starts): `mod arena` switches the mods. "" none.
   std::string commands;
+  std::string manual;          // --manual: the reference manual's source written here, then quit
   std::string explain_prefix;  // only the cvars starting with this
   // A LISTEN server's content, prepared by the game's own client in its process (the program, the
   // map it already read, its player): the game's own type, read by its `create`; null for a
@@ -218,6 +222,18 @@ struct SettingName {
   bool own = false;
 };
 
+// A console word the GAME takes through `ServerGame::console` (its rules' `map`, its admin's
+// `kick`), declared so the server's console registers it: Tab completes it, `cmdlist` and the
+// reference manual list it, and running it hands the whole line to `console`. `also` is the game's
+// other spelling of the same word (a synonym; null none). A word the core has already is the
+// core's and is skipped. A word the game takes but does not declare still runs (the console's
+// unknown-word hook); it is only missing from the lists.
+struct GameWord {
+  const char* name;
+  const char* help;  // "<word> <args>: what it does", in a player's words
+  const char* also = nullptr;
+};
+
 // A game's server, as functions over its own state (`void*`, made by `create`). Called once a
 // frame, so the indirection costs nothing that matters; nothing is registered at run time.
 struct ServerGame {
@@ -234,6 +250,8 @@ struct ServerGame {
   int rule_count = 0;
   const SettingName* names = nullptr;  // the game's names for the core's settings, `name_count`
   int name_count = 0;
+  const GameWord* words = nullptr;  // the game's own console words (GameWord), `word_count`
+  int word_count = 0;
 
   // The game on `config`'s map with its bots; null with `error` (what and the next action).
   void* (*create)(const ServerConfig& config, std::string& error) = nullptr;

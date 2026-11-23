@@ -239,3 +239,86 @@ TEST(the_teams_extras_on_a_kept_line) {
   cl::drop_ignored(g, s, none, 106);
   CHECK(c.expand_text("$triggermatch").empty());
 }
+
+// f_fakeshaft: answered with the beam's smoothing as cl_fakeshaft has it.
+TEST(f_fakeshaft_is_answered_with_the_beams_smoothing) {
+  con::Console c;
+  cl::QwIgnore g;
+  cl::DemoState s = room();
+  cl::add_qw_ignore(c, g, s);
+  g.con = &c;
+  g.chat.con = &c;
+  c.cvars().add({.name = "cl_fakeshaft", .fallback = "1"});
+  std::vector<std::string> said;
+  c.add_command("say", "", [&said](con::Console&, const con::Args& a) { said.push_back(a[1]); });
+  c.execute("cl_fakeshaft 0.25");
+  std::vector<cl::DemoPrint> prints{{3, "bobby: f_fakeshaft\n"}};
+  cl::drop_ignored(g, s, prints, 100);
+  c.run();
+  CHECK_MSG(said.size() == 1 && said[0] == "fakeshaft 25.0%",
+            said.empty() ? std::string("nothing said") : said[0]);
+}
+
+// Quake II's version reply: a line ENDING in !version, answered 1 to 2 s on, once in two minutes.
+TEST(quake_ii_answers_a_line_ending_in_version_after_a_second) {
+  con::Console c;
+  cl::QwIgnore g;
+  cl::DemoState s = room();
+  s.format = cl::DemoFormat::q2;
+  cl::add_qw_ignore(c, g, s);
+  g.con = &c;
+  g.chat.con = &c;
+  std::vector<std::string> said;
+  c.add_command("say", "",
+                [&said](con::Console&, const con::Args& a) { said.push_back(a.rest(0)); });
+  std::vector<cl::DemoPrint> asked{{3, "bobby: which client? !version\n"}};
+  cl::drop_ignored(g, s, asked, 100);
+  c.run();
+  CHECK(said.empty());  // not at once
+  std::vector<cl::DemoPrint> none;
+  cl::drop_ignored(g, s, none, 100.9);
+  c.run();
+  CHECK(said.empty());
+  cl::drop_ignored(g, s, none, 102.01);
+  c.run();
+  CHECK(said.size() == 1 && said[0].find("Shooter's Edge") != std::string::npos);
+  std::vector<cl::DemoPrint> again{{3, "bobby: !version\n"}};
+  cl::drop_ignored(g, s, again, 150);
+  cl::drop_ignored(g, s, none, 153);
+  c.run();
+  CHECK(said.size() == 1);  // once in two minutes
+  std::vector<cl::DemoPrint> start{{3, "bobby: !version please\n"}};
+  cl::drop_ignored(g, s, start, 300);
+  cl::drop_ignored(g, s, none, 303);
+  c.run();
+  CHECK(said.size() == 1);  // only a line that ends in it
+}
+
+// The window's own game: its lines go through the regex triggers and msg_trigger by their level.
+TEST(the_windows_own_game_lines_fire_the_triggers) {
+  con::Console c;
+  cl::QwIgnore g;
+  cl::DemoState s = room();
+  cl::add_qw_ignore(c, g, s);
+  g.con = &c;
+  g.chat.con = &c;
+  c.execute(
+      "alias got \"echo got: $triggermatch\"; msg_trigger got \"quad\" -l 3;"
+      "alias hide \"\"; re_trigger hide \"secret\"; re_trigger_options hide remove");
+  c.run();
+  c.clear_output();
+  std::vector<std::string> shown;
+  const std::vector<std::string> lines{"bob: quad up\n", "a secret area\n", "the quad is here\n",
+                                       "You got the shells\n"};
+  const size_t next =
+      cl::game_lines(g, lines, {3, 2, 2}, 0, 50, [&](const std::string& l) { shown.push_back(l); });
+  CHECK(next == lines.size());
+  CHECK_MSG(shown.size() == 3 && shown[1] == "the quad is here\n", "the secret line taken away");
+  c.run();
+  std::string got;
+  for (const std::string& l : c.output()) got += l + "|";
+  // Only the chat line fires the chat level's trigger; the high print of quad does not.
+  CHECK_MSG(got == "got: bob: quad up\n|", "fired: " + got);
+  CHECK(cl::game_lines(g, lines, {}, next, 51, [&](const std::string&) { CHECK(false); }) ==
+        lines.size());
+}

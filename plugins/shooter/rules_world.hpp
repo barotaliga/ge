@@ -85,7 +85,13 @@ struct PlayerNumbers {
   float weapon = 0;      // the program's weapon bit
   int weapon_model = 0;  // the model list's index of the held weapon; 0 none
   float weapon_frame = 0;
+  // The weapon's clock for a client that predicts it (QuakeWorld's weapon prediction), on the
+  // server's clock (`RulesWorld::time`): the refire's end, the player's next think (0 none) and
+  // the impulse still pending.
+  float attack_finished = 0, next_think = 0;
+  int impulse = 0;
   float items = 0;   // the program's item bits
+  float items2 = 0;  // its second word (`items2`, RulesWorld::items2), sent above bit 23
   float view_z = 0;  // the eye above the origin
   // The view as the rules work it out (Quake II's: its bob, tilts and kicks), when `view_set`:
   // the eye's offset from the origin (units) and the angles added to the view (degrees).
@@ -93,7 +99,10 @@ struct PlayerNumbers {
   float view_offset[3] = {}, kick[3] = {};
   float gun_offset[3] = {}, gun_angles[3] = {};  // the held weapon's own shift and sway
   float blend[4] = {};  // the tint over his view the rules lay (Quake II's), r g b a in 0..1
-  float fov = 0;        // the field of view the rules hold him to, degrees; 0 his own
+  // The same without the damage flash, and the flash alone, for a window that draws the flash
+  // apart (as a frame round the view's edge); a rules that keeps none apart leaves both 0.
+  float blend_apart[4] = {}, damage_blend[4] = {};
+  float fov = 0;  // the field of view the rules hold him to, degrees; 0 his own
   float frags = 0;
   // A runner's own weapons and ammunition, for the bots (shooterbots/bot_arsenal.hpp), where
   // Quake's bits above do not fit (Quake II's): the weapon held and those carried as bits of the
@@ -141,6 +150,9 @@ struct RulesWorld {
   std::vector<WorldStatic> statics;
   int max_clients = kMaxClients;
   bool weapon_frames = false;  // the rules animate the held weapon (`weapon_frame` is live)
+  // The program defines `items2` (a mission pack's, an extended mod's): the items word a client
+  // is sent carries it from bit 23 up, in place of the runes from bit 28.
+  bool items2 = false;
   // A layout game's status bar: its program (the layout language a client runs every frame), the
   // pictures its stats name by index ([0] "": none) and the item names they name (the pickup's).
   std::string status_bar;

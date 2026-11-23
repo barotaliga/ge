@@ -1,7 +1,8 @@
-// `sky` and `timerefresh` (render_words.hpp): the typed sky box read, the refresh asked, its line.
+// `sky`, `r_reload` and `timerefresh` (render_words.hpp): the typed sky box read, the refresh
+// asked, its line.
 //
 // ge:summary sky and timerefresh read: the typed sky box and its turn, the refresh ask, its line
-// ge:keywords sky timerefresh sky_typed refresh_line
+// ge:keywords sky timerefresh sky_typed refresh_line r_reload
 // ge:skill render console
 // ge:test tests/shooters_edge_render_words_test.cpp
 #include "shooters_edge/client/render_words.hpp"
@@ -35,6 +36,14 @@ void add_render_words(gc::Console& c, RenderWords& words, ge::classic::SkyTyped&
                     for (size_t i = 0; i < 3; ++i) sky.axis[i] = std::atof(a[3 + i].c_str());
                   ++sky.serial;
                   words.sky_asked = true;
+                });
+  c.add_command("r_reload", "r_reload: the level's textures and models read again from the files",
+                [&words, map](gc::Console& k, const gc::Args&) {
+                  if (!map || map().empty()) {
+                    k.print("No map loaded.");
+                    return;
+                  }
+                  words.reload_asked = true;
                 });
   c.add_command("timerefresh",
                 "timerefresh [one]: the view drawn 128 times turning a circle, timed",

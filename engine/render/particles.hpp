@@ -44,6 +44,7 @@
 //   classic palette speck: its colour drifts toward its `albedo`'s grey as it ages).
 //
 // ge:summary GPU particles: a ring pool, births, the compute flight, streaks softened by depth
+// ge:keywords particle-shape additive-particles soft-dot
 // ge:keywords render particles spray particle-pool ring births compute streak soft-particles
 // ge:keywords premultiplied reactive emit_particles prepare_particles encode_particles_sim
 // ge:keywords encode_particles step_particle create_particles read_particles glow spark kelvin
@@ -96,8 +97,12 @@ struct Particle {
   // a fleck over a fire swirls and zig-zags instead of rising on a line; 0: the still air or the
   // wind alone.
   float swirl = 0;
+  // m/s²: AN ACCELERATION OF ITS OWN on top of gravity's share (world axes), steady for its life:
+  // a speck pulled back toward where it was thrown from, or pushed up.
+  float accel[3] = {0.0f, 0.0f, 0.0f};
+  float spare = 0;  // the slot's 16-byte rounding, unused
 };
-static_assert(sizeof(Particle) == 96, "match particles.wgsl's Particle");
+static_assert(sizeof(Particle) == 112, "match particles.wgsl's Particle");
 inline constexpr float kFloorRest = 0.35f;   // m/s: slower than this down, it lies still
 inline constexpr float kFloorSlide = 0.55f;  // its way along the floor kept at a hop
 // A thrown thing hops twice at most, a third of them three times (`max_hops`, by the particle's own
@@ -121,11 +126,21 @@ void collide_particle(Particle& p, const float at[3], const float normal[3]);
 // How many hops `p` makes at most: kMaxHops, or one more for about a third (particle_types.wgsl's).
 float max_hops(const Particle& p);
 
+// A particle's shape on its quad (a streak's quad stretched along its way): a soft capsule, full
+// on its axis and gone at its rim and ends (the engine's own); a soft round dot, falling straight
+// from its middle to nothing at its rim; a hard square, the middle 5/8 of its quad at 60 %; a
+// sharp round dot, a flat disc at 60 % with a narrow soft rim. A game's classic specks name one.
+enum class ParticleShape : uint8_t { capsule, soft_dot, square, sharp_dot };
+
 struct ParticleSettings {
   uint32_t capacity = 16384;  // slots in the ring
   bool collide = false;       // particles that fall meet what the last frame drew (its depth)
   float soft_m = 0.4f;        // the depth over which a particle fades into what is behind it
   float glow = 1;             // the glowing particles' light, a share of kSparkEmissivity's
+  ParticleShape shape = ParticleShape::capsule;  // live: read each frame
+  // Live: each particle's light added to what is behind it (it glows; a dark one all but
+  // vanishes), not laid over it.
+  bool additive = false;
 };
 
 struct Particles {

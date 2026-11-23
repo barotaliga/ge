@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <span>
 #include <string>
@@ -23,6 +24,17 @@ namespace {
 constexpr int kNetTroubleMoves = 128;  // moves unanswered before the `net` picture shows
 
 constexpr int kClear = 255;  // the pictures' see-through colour
+
+// gl_gamma_scale_pics: each colour of `image` raised to `gamma` (its sRGB value 0..1), as the
+// world's brightness grades the 3D picture; 1 leaves it.
+void gamma_picture(ge::ui::Image& image, double gamma) {
+  if (gamma == 1 || gamma <= 0) return;
+  uint8_t table[256];
+  for (int v = 0; v < 256; v++)
+    table[v] = static_cast<uint8_t>(std::lround(255 * std::pow(v / 255.0, gamma)));
+  for (size_t i = 0; i + 3 < image.rgba.size(); i += 4)
+    for (size_t c = 0; c < 3; c++) image.rgba[i + c] = table[image.rgba[i + c]];
+}
 
 const BarPicture* picture(Q2Bar& bar, const std::string& path) {
   auto it = bar.pictures.find(path);
@@ -52,6 +64,7 @@ const BarPicture* picture(Q2Bar& bar, const std::string& path) {
         out.image.rgba = std::move(big.rgba);
         out.k = static_cast<int>(k);
       }
+      gamma_picture(out.image, bar.pics_gamma);
     }
     it = bar.pictures.emplace(path, std::move(out)).first;
   }
@@ -249,11 +262,12 @@ void add_q2_turtle(Q2Bar& bar, uint8_t trouble, int width, int height) {
 }
 
 bool draw_recorded_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, const DemoState& ds, int width,
-                          int height) {
+                          int height, std::string_view centre) {
   if (!bar.recorded) bar.recorded = std::make_shared<server::RulesWorld>();
   if (!q2_world_of(ds, *bar.recorded)) return false;
   run_q2_bar(bar, *bar.recorded, ds.player, ds.frames, width, height);
   add_q2_turtle(bar, ds.q2_trouble, width, height);
+  add_q2_screen(bar, 0, centre, width, height);
   draw_q2_bar(dl, bar, q2_bar_scale(bar, width, height));
   draw_q2_hit_marker(dl, bar, ds.hits, width, height);
   return true;
@@ -279,11 +293,8 @@ int q2_bar_scale(const Q2Bar& bar, int width, int height) {
 namespace {
 
 // A console command's look at the world, now that a frame has it.
-void answer(Q2Bar& bar, const server::RulesWorld& world, int slot, const hud::LayoutInput& in) {
-  ge::console::Console& c = *bar.asked_by;
-  const std::vector<std::string> a = std::move(bar.asked);
-  bar.asked.clear();
-  bar.asked_by = nullptr;
+void answer(ge::console::Console& c, const std::vector<std::string>& a,
+            const server::RulesWorld& world, int slot, const hud::LayoutInput& in) {
   const std::string& word = a[0];
   const server::WorldClient& me = world.clients[slot];
   // A name made a file's under `folder`: no folder of its own, `.txt` added.
@@ -358,7 +369,7 @@ void add_q2_bar_commands(ge::console::Console& con, Q2Bar& bar) {
                                                    : "Must be in a level to dump.");
       return;
     }
-    bar.asked = a.words;
+    bar.asked.push_back(a.words);
     bar.asked_by = &c;
   };
   con.add_command("dumpclients", "dumpclients: each player's slot and name", ask);
@@ -378,6 +389,14 @@ void add_q2_bar_commands(ge::console::Console& con, Q2Bar& bar) {
                   "aashot [name]: the status bar and the scores as text, to scoreshots/<name>.txt",
                   ask);
   con.add_command("aadump", "aadump: the status bar and the scores as text, in the console", ask);
+  const auto items = [&bar] {
+    std::vector<std::string> out;
+    for (const std::string& name : bar.item_names)
+      if (!name.empty() && std::ranges::find(out, name) == out.end()) out.push_back(name);
+    std::ranges::sort(out);
+    return out;
+  };
+  for (const char* word : {"use", "drop", "give"}) con.set_arg_values(word, items);
 }
 
 void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t frame, int width,
@@ -386,6 +405,7 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
   bar.width = width;
   bar.height = height;
   bar.layout_up = false;
+  if (bar.item_names != world.item_names) bar.item_names = world.item_names;
   if (world.status_bar.empty() || slot < 0 || slot >= ge::shooter::kMaxClients) return;
   // scr_draw2d: 0 none of it; 1 no status bar; 3 no layouts (the scoreboard, the help computer).
   const int draw2d = bar.screen != nullptr ? bar.screen->draw2d : 2;
@@ -410,7 +430,11 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
     return q2_world_string(s.world, index, s.scratch);
   };
   if (draw2d != 1) hud::run_layout(in, bar.ops);  // its text copied out of the strings as read
-  if (bar.asked_by != nullptr && !bar.asked.empty()) answer(bar, world, slot, in);
+  if (bar.asked_by != nullptr) {
+    ge::console::Console& c = *std::exchange(bar.asked_by, nullptr);
+    for (const std::vector<std::string>& a : std::exchange(bar.asked, {}))
+      answer(c, a, world, slot, in);
+  }
   const server::WorldClient& me = world.clients[slot];
   bar.layout_up = (in.stats[13] & 3) != 0;
   const bool shown = (in.stats[13] & 1) != 0 || bar.f1 == 2;  // F1 in a recording: the last one
@@ -479,35 +503,94 @@ void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::Crosshai
 
 namespace {
 
-// The graph along the bottom of the bar's screen (timegraph, debuggraph): each frame's time fed
-// from the real time, a unit of the screen a millisecond before graphscale and graphshift.
-bool draw_graph(ge::ui::DrawList& dl, Q2Bar& bar, float f, float alpha) {
-  const Q2Screen* s = bar.screen;
-  const bool on = s != nullptr && (s->time_graph || s->debug_graph) && s->draw2d != 0;
-  if (s != nullptr && s->time_graph && bar.graph_at >= 0 && bar.now > bar.graph_at)
-    ge::hud::bottom_graph_add(*bar.graph, static_cast<float>((bar.now - bar.graph_at) * 1000),
-                              ge::ui::hex(0xe0e0e0));
-  bar.graph_at = s != nullptr && s->time_graph ? bar.now : -1;
-  if (!on || f <= 0) return false;
-  const int k = static_cast<int>(f);
-  ge::hud::BottomGraphLook look;
-  look.height = static_cast<float>(s->graph_height);
-  look.scale = static_cast<float>(s->graph_scale);
-  look.shift = static_cast<float>(s->graph_shift);
-  look.alpha = alpha;
-  const int whole_w = bar.width / k * k, whole_h = bar.height / k * k;  // the smaller screen's
-  ge::hud::draw_bottom_graph(dl, *bar.graph, static_cast<float>(whole_w),
-                             static_cast<float>(whole_h), f, look);
+// The letters' picture scr_font names (pics/<name>, .pcx added when it has none); one that is not
+// in the packs is said once and the setting set back to conchars.
+const BarPicture* font_picture(Q2Bar& bar) {
+  const std::string name = bar.screen != nullptr ? bar.screen->font : "conchars";
+  if (name != "conchars") {
+    const std::string path =
+        "pics/" + name + (name.find('.') == std::string::npos ? ".pcx" : std::string());
+    if (const BarPicture* p = picture(bar, path)) return p;
+    if (bar.console != nullptr) {
+      bar.console->print("Couldn't load " + path + ": not found");
+      bar.console->cvars().set("scr_font", "conchars", ge::console::Source::local);
+    }
+  }
+  return picture(bar, "pics/conchars.pcx");
+}
+
+// viewsize under 100: the border round the smaller view (q2_view.hpp's `q2_view_rect`)
+// tiled with pics/backtile, a tile its own size in the window's pixels from the top left.
+bool draw_tile_clear(ge::ui::DrawList& dl, Q2Bar& bar) {
+  const int size = bar.screen != nullptr ? bar.screen->viewsize : 100;
+  if (size >= 100 || bar.width <= 0 || bar.height <= 0) return false;
+  const BarPicture* tile = picture(bar, "pics/backtile.pcx");
+  if (tile == nullptr || tile->width() <= 0 || tile->height() <= 0) return false;
+  const Q2ViewRect r = q2_view_rect(bar.width, bar.height, size);
+  const float tw = tile->width(), th = tile->height();
+  const float sx = static_cast<float>(tile->image.width) / tw;
+  const float sy = static_cast<float>(tile->image.height) / th;
+  const auto fill = [&](float x0, float y0, float x1, float y1) {
+    const auto rows = static_cast<int>(std::ceil(y1 / th)),
+               cols = static_cast<int>(std::ceil(x1 / tw));
+    for (auto j = static_cast<int>(std::floor(y0 / th)); j < rows; ++j)
+      for (auto i = static_cast<int>(std::floor(x0 / tw)); i < cols; ++i) {
+        const float tx = static_cast<float>(i) * tw, ty = static_cast<float>(j) * th;
+        const float ax = std::max(tx, x0), ay = std::max(ty, y0);
+        const float bx = std::min(tx + tw, x1), by = std::min(ty + th, y1);
+        if (bx <= ax || by <= ay) continue;
+        ge::ui::Box b;
+        b.fill = ge::ui::solid({1, 1, 1, 1});
+        b.rect = {ax, ay, bx - ax, by - ay};
+        b.image = &tile->image;
+        b.uv = {(ax - tx) * sx, (ay - ty) * sy, (bx - ax) * sx, (by - ay) * sy};
+        b.nearest = tile->k == 1;
+        b.feather = 0;
+        dl.box(b);
+      }
+  };
+  const auto W = static_cast<float>(bar.width), H = static_cast<float>(bar.height);
+  const auto x = static_cast<float>(r.x), y = static_cast<float>(r.y);
+  const auto x1 = static_cast<float>(r.x + r.w), y1 = static_cast<float>(r.y + r.h);
+  fill(0, 0, W, y);    // above
+  fill(0, y1, W, H);   // below
+  fill(0, y, x, y1);   // left
+  fill(x1, y, W, y1);  // right
   return true;
+}
+
+// The graph along the bottom of the bar's screen (timegraph, debuggraph; screen_2d.hpp).
+bool draw_graph(ge::ui::DrawList& dl, Q2Bar& bar, float f, float alpha) {
+  return draw_screen_graph(dl, bar.graph, bar.screen, bar.now, bar.width, bar.height,
+                           static_cast<int>(f), alpha);
 }
 
 }  // namespace
 
+const ge::ui::Image* q2_font_image(Q2Bar& bar) {
+  const BarPicture* p = font_picture(bar);
+  return p != nullptr ? &p->image : nullptr;
+}
+
 bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
   const auto f = static_cast<float>(scale);
+  // gl_gamma_scale_pics: the pictures read again when the brightness laid on them changes.
+  const double gamma =
+      bar.screen != nullptr && bar.screen->gamma_pics && bar.gamma != nullptr ? *bar.gamma : 1;
+  if (gamma != bar.pics_gamma) {
+    bar.pictures.clear();
+    bar.pics_gamma = gamma;
+  }
+  // gl_bilerp_pics: 0 every picture sharp, 1 the large ones smoothed (the icons and digits under
+  // 64 x 64 kept sharp), 2 all of them.
+  const int bilerp = bar.screen != nullptr ? bar.screen->bilerp_pics : 0;
+  const auto smooth_picture = [bilerp](const BarPicture& img) {
+    return bilerp >= 2 || (bilerp == 1 && (img.width() >= 64 || img.height() >= 64));
+  };
   const float alpha =
       bar.screen != nullptr ? static_cast<float>(std::clamp(bar.screen->alpha, 0.0, 1.0)) : 1;
-  bool drew = draw_lag(dl, bar, f, alpha);
+  bool drew = draw_tile_clear(dl, bar);
+  drew = draw_lag(dl, bar, f, alpha) || drew;
   drew = draw_graph(dl, bar, f, alpha) || drew;
   // gl_fontshadow: each letter drawn first in black that many units down and right; and
   // gl_bilerp_chars: the letters smoothed.
@@ -549,10 +632,10 @@ bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
           op.w > 0 ? static_cast<float>(op.w) : img->width(),
           op.h > 0 ? static_cast<float>(op.h) : img->height(),
           {0, 0, static_cast<float>(img->image.width), static_cast<float>(img->image.height)},
-          op.rgba);
+          op.rgba, smooth_picture(*img));
       continue;
     }
-    if (glyphs == nullptr) glyphs = picture(bar, "pics/conchars.pcx");
+    if (glyphs == nullptr) glyphs = font_picture(bar);
     if (glyphs == nullptr) return drew;
     const float cell = static_cast<float>(glyphs->image.width) / 16;
     for (size_t i = 0; i < op.text.size(); i++) {

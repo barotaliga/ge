@@ -8,6 +8,7 @@
 #include "server/main.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -18,6 +19,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <utility>
@@ -54,28 +56,69 @@ namespace {
 
 namespace gn = ge::net;
 
-// A flag that sets a cvar.
-struct CvarFlag {
+// THE FLAGS, as data: `server_configure` refuses a flag no row names, and `--help` and the
+// reference manual list every one. A row with a cvar sets that cvar (`--name=Arena` is `+set
+// sv_hostname Arena`); `group` splits `--help` into its paragraphs.
+struct ServerFlag {
   const char* flag;
-  const char* cvar;
+  const char* arg;   // "" a switch
+  const char* cvar;  // the cvar it sets, or nullptr
+  const char* help;
+  int group;
 };
-constexpr CvarFlag kCvarFlags[] = {
-    {"--name", "sv_hostname"},
-    {"--description", "sv_description"},
-    {"--ip", "net_ip"},
-    {"--port", "net_port"},
-    {"--maxclients", "sv_maxclients"},
-    {"--map", "sv_map"},
-    {"--bots", "sv_bots"},
-    {"--lobby", "sv_lobby"},
-    {"--seed", "sv_seed"},
-    {"--password", "sv_password"},
-    {"--visibility", "sv_visibility"},
-    {"--motd", "sv_motd"},
-    {"--admin", "sv_admin"},
-    {"--tvport", "sv_tvport"},
-    {"--tvdelay", "sv_tvdelay"},
+constexpr ServerFlag kServerFlags[] = {
+    {"--name", "TEXT", "sv_hostname", "the name in the browser and the lobby", 0},
+    {"--description", "TEXT", "sv_description", "a line under the name", 0},
+    {"--ip", "ADDR", "net_ip", "the address to listen on (default every interface)", 0},
+    {"--port", "N", "net_port", "the UDP port", 0},
+    {"--maxclients", "N", "sv_maxclients", "player slots", 0},
+    {"--map", "NAME", "sv_map", "the map", 0},
+    {"--bots", "N", "sv_bots", "slots the game's bots fill", 0},
+    {"--lobby", "1", "sv_lobby", "warm up every map until everyone is ready", 0},
+    {"--seed", "N", "sv_seed", "the run's seed", 0},
+    {"--password", "TEXT", "sv_password", "joining takes it", 0},
+    {"--visibility", "V", "sv_visibility", "lan, invite or listed", 0},
+    {"--motd", "TEXT", "sv_motd", "the message a player sees on joining", 0},
+    {"--admin", "TEXT", "sv_admin", "how to reach the server's owner", 0},
+    {"--tvport", "N", "sv_tvport", "spectators watch on this port, behind a delay (default none)",
+     0},
+    {"--tvdelay", "S", "sv_tvdelay", "how far behind the match they see it (default 10 s)", 0},
+    {"--root", "PATH", nullptr, "where the game directories are (default here)", 1},
+    {"--base", "DIR", nullptr, "the base game directory, its server.cfg read first", 1},
+    {"--mod", "A,B", nullptr, "mods over the base, lowest first: each one's server.cfg after it",
+     1},
+    {"--cfg", "NAME", nullptr, "a profile: NAME.cfg from the highest directory that has one", 1},
+    {"--explain", "[=PREFIX]", nullptr,
+     "print each server value, where it was set and what it overrode", 1},
+    {"--for", "S", nullptr,
+     "seconds of server time to run, as fast as it can unless --realtime (none: paced to the "
+     "wall clock until stopped; 0 runs until stopped)",
+     2},
+    {"--status", "S", nullptr, "a status line every S seconds of server time (default 5; 0 none)",
+     2},
+    {"--realtime", "", nullptr, "pace the frames to the wall clock (a server people play on)", 2},
+    {"--offline", "", nullptr, "no socket: the game alone", 2},
+    {"--log", "PATH", nullptr, "write the run's input log here", 2},
+    {"--record", "PATH", nullptr, "record the match, every player's part, as it runs (a .ged file)",
+     2},
+    {"--replay", "PATH", nullptr, "replay an input log and name the first frame that leaves it", 2},
+    {"--commands", "PATH", nullptr,
+     "run each console line added to this file (mod NAME switches mods)", 2},
+    {"--manual", "PATH", nullptr,
+     "write every setting, command and flag for the reference manual, then quit", 2},
+    {"--help", "", nullptr, "this", 2},
 };
+
+// The game's own default a flag's help adds ("" none).
+std::string flag_default(const ServerFlag& f, const ServerGame& game) {
+  const std::string_view name = f.flag;
+  if (name == "--port") return "default " + std::to_string(game.default_port);
+  if (name == "--maxclients")
+    return "1.." + std::to_string(game.max_clients < kMaxClients ? game.max_clients : kMaxClients);
+  if (name == "--map") return "default " + std::string(game.default_map);
+  if (name == "--base") return "default " + std::string(game.base_dir);
+  return "";
+}
 
 std::vector<std::string> split_commas(const std::string& s) {
   std::vector<std::string> out;
@@ -347,6 +390,9 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
                    game.binary, where.c_str(), error.c_str());
       return 1;
     }
+    std::string said6;
+    open_ipv6(sock, c.ipv6, c.ip6, c.port, said6);
+    if (!said6.empty()) std::fprintf(stderr, "%s: %s", game.binary, said6.c_str());
     if (game.discovery_port) {
       gn::Address disc = bind;
       disc.port = game.discovery_port;
@@ -394,15 +440,25 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   };
   if (!server_open(s, game, c, c.offline ? nullptr : &sock, have_lan ? &lan : nullptr, error)) {
     std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());
-    close_all();
-    return 1;
+    // The manual needs the console, not a match: a machine with no game's files still writes it,
+    // less what the game registers only once its map is up.
+    if (c.manual.empty()) {
+      close_all();
+      return 1;
+    }
   }
   // A console line the server does not know goes to the game (its rules' own `map`, a mod's
-  // words), while there is one.
-  if (game.console != nullptr)
+  // words), while there is one; the words it declares are registered (add_game_words).
+  if (game.console != nullptr) {
     con.set_unknown([&s, &game](const console::Args& a) {
       return s.state != nullptr && game.console(s.state, a.raw);
     });
+    add_game_words(con, game, [&s, &game](const std::string& line) {
+      return s.state == nullptr            ? GameWordRun::no_game
+             : game.console(s.state, line) ? GameWordRun::taken
+                                           : GameWordRun::refused;
+    });
+  }
   // THE RECORDING: the stream's bytes written as each block closes, so a server stopped hard
   // keeps every whole second before it; the same bytes feed the server's own TV (spectators.hpp).
   Recording rec;
@@ -613,7 +669,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
                   "net_restart: open the server's socket again on net_ip and net_port",
                   [&](console::Console& cn, const console::Args&) {
                     if (c.offline) return;
-                    for (const char* name : {"net_ip", "net_port"}) {
+                    for (const char* name : {"net_ip", "net_port", "net_ip6", "net_enable_ipv6"}) {
                       console::Cvar* v = con.cvars().find(name);
                       if (v == nullptr || !v->has_latched) continue;
                       const std::string to = v->latched;
@@ -624,6 +680,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
                     int port = c.port;
                     std::string said;
                     const bool open = net_restart(sock, c.ip, port, good_ip, good_port, said);
+                    if (open) open_ipv6(sock, c.ipv6, c.ip6, port, said);
                     if (port != c.port)
                       if (console::Cvar* v = con.cvars().find("net_port"))
                         con.cvars().set(*v, std::to_string(port), console::Source::code);
@@ -650,6 +707,8 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
           return std::string(a.family == gn::Family::ipv6 ? "Server UDP6" : "Server UDP");
         };
         if (!c.offline) sockets.emplace_back(udp(sock.local), sock.local);
+        if (!c.offline && sock.udp6.handle != -1)
+          sockets.emplace_back("Server UDP6", sock.udp6.local);
         if (tv_sock.kind != gn::TransportKind::none) sockets.emplace_back("TV UDP", tv_sock.local);
         if (game.sockets != nullptr && s.state != nullptr) game.sockets(s.state, sockets);
         std::string text = gn::showip_text(canonical, addresses, sockets);
@@ -664,6 +723,17 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     std::string said;
     if (hand_record_stop(hand, s, said)) std::printf("%s\n", said.c_str());
   };
+  if (!c.manual.empty()) {  // every command and setting registered: the manual's source
+    const bool wrote = console::write_manual(c.manual, console::manual_of(con), error);
+    if (wrote)
+      std::printf("the reference manual's source written to %s\n", c.manual.c_str());
+    else
+      std::fprintf(stderr, "%s: %s Name a file in a folder you can write.\n", game.binary,
+                   error.c_str());
+    server_close(s);
+    close_all();
+    return wrote ? 0 : 1;
+  }
   CommandsFile commands{c.commands, c.commands.empty() ? 0 : file_size(c.commands)};
   TerminalLines* terminal = c.offline || !terminal_ours() ? nullptr : &terminal_lines();
   // The editor over a raw terminal, its history read from the base game folder.
@@ -941,7 +1011,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
   return code;
 }
 
-int main_body(int argc, char** argv, const ServerGame& game) {
+int main_body(int argc, char** argv, const ServerGame& game, const console::ManualInfo& manual) {
   std::vector<std::string> args;
   for (int i = 1; i < argc; i++) {
     if (std::strcmp(argv[i], "--help") == 0) {
@@ -951,6 +1021,12 @@ int main_body(int argc, char** argv, const ServerGame& game) {
     args.emplace_back(argv[i]);
   }
   console::Console con(true);
+  // THE MANUAL (`--manual`): the program, its game and every flag, its own main's first.
+  console::ManualInfo info = manual;
+  if (info.program.id.empty())
+    info.program = {game.binary, std::string(game.title) + " server", {}};
+  for (console::FlagDoc& f : server_flag_docs(game)) info.flags.push_back(std::move(f));
+  con.set_manual(std::move(info));
   con.set_sink([](std::string_view line) {
     std::printf("%.*s\n", static_cast<int>(line.size()), line.data());
   });
@@ -1040,8 +1116,15 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
     const std::string val = eq == std::string::npos ? "" : a.substr(eq + 1);
     const bool has_val = eq != std::string::npos;
     bool known = false;
-    for (const CvarFlag& f : kCvarFlags) {
-      if (key != f.flag) continue;
+    const ServerFlag* flag = nullptr;
+    for (const ServerFlag& f : kServerFlags)
+      if (key == f.flag) flag = &f;
+    if (flag == nullptr) {
+      error = "unknown flag '" + a + "'; see " + game.binary + " --help";
+      return false;
+    }
+    for (const ServerFlag& f : kServerFlags) {
+      if (key != f.flag || f.cvar == nullptr) continue;
       known = true;
       if (!has_val) {
         error = "flag ";
@@ -1081,6 +1164,8 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
     } else if (key == "--explain") {
       c.explain = true;
       c.explain_prefix = val;
+    } else if (key == "--manual") {
+      c.manual = val;
     } else {
       error = "unknown flag '" + a + "'; see " + game.binary + " --help";
       return false;
@@ -1126,57 +1211,46 @@ std::string server_help(const ServerGame& game) {
   out +=
       "Settings come from the base game directory's server.cfg, then each mod's, then a\n"
       "profile, then these flags, then any commands, a + before each after the first\n"
-      "(map dm2 +set sv_hostname \"Arena\"). Each flag sets the cvar beside it.\n\n"
-      "  --name=TEXT        sv_hostname: the name in the browser and the lobby\n"
-      "  --description=TEXT sv_description: a line under the name\n"
-      "  --ip=ADDR          net_ip: the address to listen on (default every interface)\n"
-      "  --port=N           net_port: the UDP port (default " +
-      std::to_string(game.default_port) +
-      ")\n"
-      "  --maxclients=N     sv_maxclients: player slots, 1.." +
-      std::to_string(game.max_clients < kMaxClients ? game.max_clients : kMaxClients) +
-      "\n"
-      "  --map=NAME         sv_map: the map (default " +
-      std::string(game.default_map) +
-      ")\n"
-      "  --bots=N           sv_bots: slots the game's bots fill\n"
-      "  --lobby=1          sv_lobby: warm up every map until everyone is ready\n"
-      "  --seed=N           sv_seed: the run's seed\n"
-      "  --password=TEXT    sv_password: joining takes it\n"
-      "  --visibility=V     sv_visibility: lan, invite or listed\n"
-      "  --motd=TEXT        sv_motd: the message a player sees on joining\n"
-      "  --admin=TEXT       sv_admin: how to reach the server's owner\n"
-      "  --tvport=N         sv_tvport: spectators watch on this port, behind a delay (default "
-      "none)\n"
-      "  --tvdelay=S        sv_tvdelay: how far behind the match they see it (default 10 s)\n\n"
-      "  --root=PATH        where the game directories are (default here)\n"
-      "  --base=DIR         the base game directory (default " +
-      std::string(game.base_dir) +
-      "), its server.cfg read first\n"
-      "  --mod=A,B          mods over the base, lowest first: each one's server.cfg after it\n"
-      "  --cfg=NAME         a profile: NAME.cfg from the highest directory that has one\n"
-      "  --explain[=PREFIX] print each server value, where it was set and what it overrode\n\n"
-      "  --for=S            seconds of server time to run, as fast as it can unless --realtime\n"
-      "                     (none: paced to the wall clock until stopped; 0 runs until stopped)\n"
-      "  --status=S         a status line every S seconds of server time (default 5; 0 none)\n"
-      "  --realtime         pace the frames to the wall clock (a server people play on)\n"
-      "  --offline          no socket: the game alone\n"
-      "  --log=PATH         write the run's input log here\n"
-      "  --record=PATH      record the match, every player's part, as it runs (a .ged file)\n"
-      "  --replay=PATH      replay an input log and name the first frame that leaves it\n"
-      "  --commands=PATH    run each console line added to this file (mod NAME switches mods)\n"
-      "  --help             this\n";
+      "(map dm2 +set sv_hostname \"Arena\"). Each flag sets the cvar beside it.\n";
+  int group = -1;
+  for (const ServerFlag& f : kServerFlags) {
+    if (f.group != group) out += '\n';
+    group = f.group;
+    std::string lead = std::string("  ") + f.flag;
+    if (*f.arg != '\0') lead += (f.arg[0] == '[' ? "" : "=") + std::string(f.arg);
+    if (lead.size() < 21) lead.resize(21, ' ');
+    out += lead;
+    if (f.cvar != nullptr) out += std::string(f.cvar) + ": ";
+    out += f.help;
+    if (const std::string d = flag_default(f, game); !d.empty()) out += " (" + d + ")";
+    out += '\n';
+  }
   return out;
 }
 
-int server_main(int argc, char** argv, const ServerGame& game) {
+std::vector<console::FlagDoc> server_flag_docs(const ServerGame& game) {
+  std::vector<console::FlagDoc> out;
+  for (const ServerFlag& f : kServerFlags) {
+    std::string help = f.help;
+    if (!help.empty())
+      help[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(help[0])));
+    if (const std::string d = flag_default(f, game); !d.empty()) help += " (" + d + ")";
+    help += '.';
+    if (f.cvar != nullptr) help += " Sets " + std::string(f.cvar) + ".";
+    std::string arg = f.arg;
+    out.push_back({std::string(f.flag) + (arg.empty() || arg[0] == '[' ? "" : "="), arg, help});
+  }
+  return out;
+}
+
+int server_main(int argc, char** argv, const ServerGame& game, const console::ManualInfo& manual) {
   // A line at a time even into a file or a pipe (a server started detached writes its log there),
   // so the log reads as the server runs and a crash loses nothing printed before it.
   std::setvbuf(stdout, nullptr, _IOLBF, 0);
   // What nothing else caught ends the program here, with a line that says so, rather than in
   // std::terminate's bare abort.
   try {
-    return main_body(argc, argv, game);
+    return main_body(argc, argv, game, manual);
   } catch (const std::exception& e) {
     std::fprintf(stderr,
                  "%s: stopped by an uncaught exception: %s. This is a bug: run the same command "
@@ -1190,6 +1264,33 @@ int server_main(int argc, char** argv, const ServerGame& game) {
                  game.binary);
   }
   return 1;
+}
+
+void add_game_words(console::Console& con, const ServerGame& game,
+                    std::function<GameWordRun(const std::string& line)> run) {
+  const std::string& pass = con.manual().pass;
+  const console::CvarLayer layer(con.cvars(),
+                                 pass.empty() ? "game" : "game:" + pass.substr(0, pass.find(',')));
+  const auto shared =
+      std::make_shared<std::function<GameWordRun(const std::string&)>>(std::move(run));
+  for (int i = 0; i < game.word_count; i++) {
+    const GameWord& w = game.words[i];
+    if (con.commands().count(w.name) != 0) continue;
+    con.add_command(w.name, w.help, [shared](console::Console& c, const console::Args& a) {
+      switch ((*shared)(a.raw)) {
+        case GameWordRun::taken:
+          break;
+        case GameWordRun::no_game:
+          c.print(a[0] + ": no map is running");
+          break;
+        case GameWordRun::refused:
+          c.print(a[0] + ": the game did not take that line");
+          break;
+      }
+    });
+    if (w.also != nullptr && con.commands().count(w.also) == 0)
+      con.add_command_synonym(w.also, w.name);
+  }
 }
 
 }  // namespace ge::server

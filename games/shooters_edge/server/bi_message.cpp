@@ -412,7 +412,8 @@ void bi_particle(pg::Vm& vm) {
   } else if (colour == 225) {
     effect = "lightning blood";
   } else {
-    return;  // nothing the protocol can carry
+    effect =
+        "particle";  // a burst of the colour's shades (Quake's own message; QuakeWorld has none)
   }
   NetEvent ev;
   ev.kind = EventKind::particle;

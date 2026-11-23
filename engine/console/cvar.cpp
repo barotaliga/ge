@@ -96,8 +96,17 @@ std::string set_result_text(SetResult r, std::string_view name) {
       return "the server may not set " + n + ": it is this player's own setting";
     case SetResult::bad_name:
       return "'" + n + "' is not a cvar name: use 1-63 of a-z 0-9 _ + - . , no leading digit";
+    case SetResult::locked:
+      return n + " is locked";
+    case SetResult::unmapped:
+      return n + " takes only the values its help lists (type " + n + " to see them)";
   }
   return {};
+}
+
+std::string set_result_text(SetResult r, const Cvar& cvar) {
+  if (r == SetResult::locked && cvar.lock && !cvar.lock->why.empty()) return cvar.lock->why;
+  return set_result_text(r, cvar.name);
 }
 
 Cvars::Cvars(bool is_server) : is_server_(is_server) {
@@ -115,7 +124,7 @@ Cvar* Cvars::find(std::string_view name) {
   for (auto& c : all_)
     if (c->name == key) return c->retired ? nullptr : c.get();
   for (const Synonym& s : synonyms_)
-    if (s.part < 0 && s.name == key) return s.target->retired ? nullptr : s.target;
+    if (s.whole() && s.name == key) return s.target->retired ? nullptr : s.target;
   return nullptr;
 }
 
@@ -144,8 +153,43 @@ bool Cvars::add_synonym(std::string_view name, std::string_view target, int part
   if (t == nullptr) return false;
   for (const Synonym& s : synonyms_)
     if (s.name == key) return s.target == t && s.part == part;
-  synonyms_.push_back({key, t, part < 0 ? -1 : part, layer_});
+  synonyms_.push_back({key, t, part < 0 ? -1 : part, layer_, {}});
   return true;
+}
+
+namespace {
+
+// Two values the same: as numbers when both are ("1" and "1.0"), else as lower-case text.
+bool same_value(std::string_view a, std::string_view b) {
+  double x = 0, y = 0;
+  if (parse_number(a, x) && parse_number(b, y)) return x == y;
+  return lower(a) == lower(b);
+}
+
+}  // namespace
+
+bool Cvars::add_mapped_synonym(std::string_view name, std::string_view target,
+                               std::vector<SynonymValue> values) {
+  if (values.empty() || !add_synonym(name, target)) return false;
+  Synonym& s = synonyms_.back();
+  if (s.name != lower(name)) return false;  // named before, unmapped
+  for (SynonymValue& v : values) v.theirs = lower(v.theirs);
+  s.values = std::move(values);
+  return true;
+}
+
+std::string Cvars::mapped_value(const Synonym& s, std::string_view theirs) const {
+  for (const SynonymValue& v : s.values)
+    if (same_value(v.theirs, theirs)) return v.ours;
+  return {};
+}
+
+std::string Cvars::mapped_words(const Synonym& s) {
+  std::string out;
+  for (const SynonymValue& v : s.values)
+    out.append(out.empty() ? "" : "; ")
+        .append(v.theirs + " (" + (s.target != nullptr ? s.target->name : "") + " " + v.ours + ")");
+  return out;
 }
 
 const Synonym* Cvars::synonym(std::string_view name) const {
@@ -173,6 +217,8 @@ std::vector<std::string> words_of(std::string_view v) {
 }  // namespace
 
 std::string Cvars::synonym_value(const Synonym& s) const {
+  for (const SynonymValue& v : s.values)  // mapped: the first of its values naming the target's
+    if (same_value(v.ours, s.target->value)) return v.theirs;
   if (s.part < 0) return s.target->value;
   const std::vector<std::string> w = words_of(s.target->value);
   return static_cast<size_t>(s.part) < w.size() ? w[static_cast<size_t>(s.part)] : std::string();
@@ -182,7 +228,18 @@ const Cvar* Cvars::find(std::string_view name) const {
   return const_cast<Cvars*>(this)->find(name);
 }
 
-bool Cvars::cheats() const { return sv_cheats_ != nullptr && sv_cheats_->on(); }
+bool Cvars::cheats() const { return !cheats_held_ && sv_cheats_ != nullptr && sv_cheats_->on(); }
+
+void Cvars::hold_cheats(bool held) {
+  if (held == cheats_held_) return;
+  cheats_held_ = held;
+  if (!held) return;
+  for (auto& k : all_)  // every cheat back to its default, as sv_cheats 0 puts them
+    if ((k->flags & kCheat) != 0 && k->value != k->fallback) {
+      store(*k, k->fallback);
+      k->below = k->value;
+    }
+}
 
 Cvar& Cvars::make(const CvarSpec& spec, CvarTarget target) {
   Cvar* c = find_any(spec.name);
@@ -306,6 +363,42 @@ void Cvars::store(Cvar& c, std::string_view text) {
     if (const Meta* m = meta(c.name)) apply_meta(*m);
 }
 
+bool Cvars::lock(std::string_view name, CvarLock lock) {
+  Cvar* c = find(name);
+  if (c == nullptr) return false;
+  lock.wanted = c->lock ? c->lock->wanted : (c->has_latched ? c->latched : c->value);
+  c->lock = std::make_shared<CvarLock>(std::move(lock));
+  const CvarLock& l = *c->lock;
+  std::string value = l.value;
+  if (!l.fixed) {
+    double v = 0;
+    parse_number(l.wanted, v);
+    value = number_text(std::clamp(v, l.min, l.max));
+  }
+  locking_ = true;
+  const bool explicit_set = c->explicit_set;
+  c->has_latched = false;  // a value waiting is the player's: kept as `wanted`
+  c->latched.clear();
+  set(*c, value, Source::code);
+  c->explicit_set = explicit_set;
+  locking_ = false;
+  return true;
+}
+
+int Cvars::unlock(std::string_view owner) {
+  int n = 0;
+  for (auto& c : all_) {
+    if (!c->lock || c->lock->owner != owner) continue;
+    const std::string wanted = c->lock->wanted;
+    c->lock.reset();
+    const bool explicit_set = c->explicit_set;
+    set(*c, wanted, Source::code);
+    c->explicit_set = explicit_set;
+    ++n;
+  }
+  return n;
+}
+
 SetResult Cvars::set(std::string_view name, std::string_view value, Source source, bool create,
                      uint32_t extra_flags) {
   if (std::string scope, base; split_scoped(name, scope, base))
@@ -314,7 +407,7 @@ SetResult Cvars::set(std::string_view name, std::string_view value, Source sourc
   Cvar* c = find(name);
   if (c != nullptr && config_ && source != Source::code) {
     // A config: a game's spelling is that game's value; our name under it the common one.
-    if (const Synonym* syn = synonym(name); syn != nullptr && syn->part < 0)
+    if (const Synonym* syn = synonym(name); syn != nullptr && syn->whole())
       return set_scoped(scope_, c->name, value, source);
     if (!scope_.empty() && c->scoped.count(scope_) != 0) {
       c->common = std::string(value);
@@ -323,6 +416,10 @@ SetResult Cvars::set(std::string_view name, std::string_view value, Source sourc
     }
   }
   if (c == nullptr) {
+    if (const Synonym* s = synonym(name); s != nullptr && !s->values.empty()) {
+      const std::string ours = mapped_value(*s, value);  // a mapped synonym: its value as ours
+      return ours.empty() ? SetResult::unmapped : set(*s->target, ours, source);
+    }
     if (const Synonym* s = synonym(name)) {  // a part synonym: its word of the target replaced
       std::vector<std::string> w = words_of(s->target->value);
       if (w.size() <= static_cast<size_t>(s->part)) w.resize(static_cast<size_t>(s->part) + 1, "0");
@@ -342,6 +439,18 @@ SetResult Cvars::set(std::string_view name, std::string_view value, Source sourc
 }
 
 SetResult Cvars::set(Cvar& c, std::string_view value, Source source) {
+  std::string kept;  // a value clamped into a lock's range
+  if (c.lock && !locking_) {
+    // LOCKS: whatever asks, the lock decides; the value asked for is the player's, kept for later.
+    c.lock->wanted = std::string(value);
+    if (c.lock->fixed)
+      return same_value(value, c.lock->value) ? SetResult::same : SetResult::locked;
+    double v = 0;
+    if (parse_number(value, v) && (v < c.lock->min || v > c.lock->max)) {
+      kept = number_text(std::clamp(v, c.lock->min, c.lock->max));
+      value = kept;
+    }
+  }
   if (source != Source::code) {
     if ((c.flags & kReadOnly) != 0) return SetResult::read_only;
     if (source == Source::server) {
@@ -383,6 +492,7 @@ SetResult Cvars::set(Cvar& c, std::string_view value, Source source) {
         store(*k, k->fallback);
         k->below = k->value;
       }
+  if (!kept.empty()) return SetResult::locked;  // kept inside a lock's range: its words say so
   return c.revision != before ? SetResult::changed : SetResult::same;
 }
 

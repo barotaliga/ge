@@ -445,3 +445,23 @@ TEST(teleport_and_listentities_are_cheats_for_finding_things) {
     named = named || g->s().console[i].find(": ") != std::string::npos;
   CHECK(named);
 }
+
+TEST(weapprev_steps_back_to_the_weapon_before_and_weapnext_forward_again) {
+  auto g = game("0", 1);
+  g->r.console("g_quick_weap 0");
+  run(*g, 10);
+  sv::Q2Player& p = g->p(0);
+  g->r.client_command(0, "give all");
+  run(*g, 40);
+  g->r.client_command(0, "weapprev");
+  const int back = p.hand.pending;
+  CHECK(back >= 0 && back != p.hand.weapon);
+  run(*g, 100);  // lowered and the other raised
+  CHECK(p.hand.weapon == back);
+  const int before = p.hand.weapon;
+  g->r.client_command(0, "weapnext");
+  run(*g, 100);
+  g->r.client_command(0, "weapprev");
+  run(*g, 100);
+  CHECK_MSG(p.hand.weapon == before, std::to_string(p.hand.weapon) + " " + std::to_string(before));
+}

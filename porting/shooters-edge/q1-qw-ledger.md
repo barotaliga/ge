@@ -15,11 +15,11 @@ and a row found later is added here first. Progress is reported as the missing c
 
 | Section | Rows | Done | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- |
-| Client | 508 | 333 | 12 (0 / 0 / 12) | 163 |
-| Server | 316 | 279 | 2 (0 / 0 / 2) | 35 |
-| Game | 245 | 226 | 1 (0 / 0 / 1) | 18 |
+| Client | 510 | 349 | 0 (0 / 0 / 0) | 161 |
+| Server | 316 | 281 | 0 (0 / 0 / 0) | 35 |
+| Game | 246 | 228 | 0 (0 / 0 / 0) | 18 |
 | Tools | 1 | 1 | 0 (0 / 0 / 0) | 0 |
-| **All** | **1070** | **839** | **15 (0 / 0 / 15)** | **216** |
+| **All** | **1073** | **859** | **0 (0 / 0 / 0)** | **214** |
 
 (Built 2026-11-21 against main at #1237 with 217 missing (9 / 49 / 159); the first fill, Quake's
 deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.
@@ -31,7 +31,12 @@ II's console fill (sizeup, sizedown, play, playvol, stopsound, built once for ev
 the fifth, the QuakeWorld server's star keys and checks and the client's path, rerecord, fullinfo,
 chase_right and old config names, to 25; the sixth, sv_mapcheck, god and give by id, the
 server's terminal, the frag log and its `log` query, the look keys, the turtle and net icons
-and the download bar, to 15.)
+and the download bar, to 15; the seventh, zombietime, the match settings in the server info,
+the setup page's hostname and figure, the old ammunition box (and one row found filling it: the
+big boxes' models), localid, and a recorded demo's coloured bursts, explosion2 and grappling beam,
+to 6, and `cl_sbar` found only partly done makes 7. The last seven (`r_shadows`, `gl_flashblend`,
+`cl_sbar`, `cl_hudswap`, the episode and level rows, QuakeWorld's status bar rows, the quit box)
+took it to 0.)
 
 ## CLIENT: the Quake and QuakeWorld clients, item by item
 
@@ -240,7 +245,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C185 | `r_speeds` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
 | C186 | `r_fullbright` (both, 0) | draw the world with no lightmaps (cheat) | done | plugins/classic/app/look.cpp |  |
 | C187 | `r_lightmap` (both, 0) | draw the lightmaps alone | done | plugins/classic/app/look.cpp |  |
-| C188 | `r_shadows` (both, 0) | blob shadows under models | missing | no model blob shadows (ours: lights' shadows, ce_shadows) | 3 |
+| C188 | `r_shadows` (both, 0) | blob shadows under models | done | games/shooters_edge/client/cvar_layers.cpp (Quake's own, never saved) over client/model_shadow.hpp's fixed light (`fixed_light`: every shadow slides toward -x by 0.707 a unit of height, half dark, a unit above the floor, on any floor); drawn by world_models.cpp as Quake II's `gl_shadows` is. The held weapon casts none (q1-qw-console-facts.md § 27.4 marks its shadow derived) | 3 |
 | C189 | `r_mirroralpha` (both, 1) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
 | C190 | `r_wateralpha` (both, 1) | see-through water | done | plugins/classic/app/look.cpp |  |
 | C191 | `r_dynamic` (both, 1) | dynamic lights on the world | done | plugins/classic/app/look.cpp |  |
@@ -252,7 +257,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C197 | `gl_smoothmodels` (both, 1) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
 | C198 | `gl_affinemodels` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
 | C199 | `gl_polyblend` (both, 1) | the screen tints drawn at all | done | plugins/classic/app/look.cpp |  |
-| C200 | `gl_flashblend` (both, 1) | dynamic lights drawn as glowing spheres instead of lighting | missing | no glow spheres (client-gaps.md: waits for them) | 3 |
+| C200 | `gl_flashblend` (both, 1) | dynamic lights drawn as glowing spheres instead of lighting | done | plugins/classic/flash_blend.hpp (the disc, QuakeWorld's four colours, the eye inside tinting orange, the player's own lights none), drawn by games/shooters_edge/client/world_models.cpp as added sprites (render/sprite_shapes.hpp's `glow_disc_frame`); the walls, doors and lifts unlit by them (world_draw.cpp). Default 0, where the GL client's was 1: our walls take the moment's light as the software client's did (cvar_layers.cpp) | 3 |
 | C201 | `gl_playermip` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
 | C202 | `gl_nocolors` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
 | C203 | `gl_keeptjunctions` (both, 0/1) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
@@ -331,8 +336,8 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C276 | `_config_modem_hangup` (q1, AT H) | the serial or modem link's settings | not-taken | platform: DOS serial and modem play |  |
 | C277 | `idgods` (q1, 0) | id staff god mode | not-taken | not in the stock build |  |
 | C278 | `r_draworder` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
-| C279 | `r_timegraph` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
-| C280 | `r_graphheight` (both, 10/15) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
+| C279 | `r_timegraph` (both, 0) | each frame's time as columns along the bottom | done | a synonym of every game's `timegraph` (`games/shooters_edge/client/screen_2d.cpp`), a unit of the screen a millisecond |  |
+| C280 | `r_graphheight` (both, 10/15) | the time graph's height in 10 ms steps of two rows | not-taken | every game's `graphheight` holds the graph in units of the screen (`client/screen_2d.hpp`); a spelling in 10 ms steps would mean another thing by one name |  |
 | C281 | `r_clearcolor` (both, 2) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
 | C282 | `r_waterwarp` (both, 1) | the view sways under water | done | plugins/classic/app/look.cpp |  |
 | C283 | `r_polymodelstats` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
@@ -357,7 +362,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C302 | `ambient_fade` (both, 100) | how fast the ambience swells and fades | done | client/cvar_layers.cpp, sound/ambience.cpp (the level moves fade/255 of full a second) | 3 |
 | C303 | `snd_noextraupdate` (both, 0) | mix sound only once a frame | not-taken | platform: our mixer runs on its own thread |  |
 | C304 | `snd_show` (both, 0) | print the sounds playing | not-taken | a developer or profiling tool: ours are framestats, the labs and ge |  |
-| C305 | `_snd_mixahead` (both, 0.1) | how far ahead sound is mixed | not-taken | platform |  |
+| C305 | `_snd_mixahead` (both, 0.1) | how far ahead sound is mixed | done | client/room_ear.cpp (`s_mixahead` in the classic layer, `_snd_mixahead` its spelling; the device's lead) |  |
 | C306 | `sys_linerefresh` (both, 0) | Linux refresh test | not-taken | a developer or profiling tool: ours are framestats, the labs and ge |  |
 | C307 | `vid_fullscreen_mode` (both, 3) | a video mode or window setting | not-taken | platform video modes: the window, its size and its display are engine/platform (vid_fullscreen, vid_displays) |  |
 | C308 | `vid_windowed_mode` (both, 0) | a video mode or window setting | not-taken | platform video modes: the window, its size and its display are engine/platform (vid_fullscreen, vid_displays) |  |
@@ -400,14 +405,14 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C345 | `rcon_password` (qw, empty) | the password rcon sends | done | games/shooters_edge/net/qw_remote.cpp |  |
 | C346 | `rcon_address` (qw, empty) | where rcon goes when not joined | done | games/shooters_edge/net/qw_remote.cpp |  |
 | C347 | `cl_timeout` (qw, 60) | drop the server after this silence | done | games/shooters_edge/net/qw_remote.cpp |  |
-| C348 | `cl_sbar` (qw, 0) | the old opaque status bar instead of the overlay | done | hud_sbar in the same meaning (games/shooters_edge/hud) |  |
-| C349 | `cl_hudswap` (qw, 0) | the status bar's side panels on the left | missing | none | 3 |
+| C348 | `cl_sbar` (qw, 0) | the old opaque status bar instead of the overlay | done | its spelling of `hud_sbar` (games/shooters_edge/client/cvar_layers.cpp, the first game's layer): 0 the bar's pieces over the world with no panels, the guns owned and the four ammunition counts out of the inventory row into a column standing on its right end, where QuakeWorld stood it at the screen's right edge over its left-aligned bar (games/shooters_edge/hud/layout.cpp, `sbar_column`: seven 24 x 16 gun slots, each a gap when not owned, flashing on pickup; four 42 x 11 boxes cut from the inventory bar with their counts; q1-qw-console-facts.md § 28.8-28.9); 1 the bar on its panels. Default 1 (Quake's bar) where QuakeWorld's was 0; the bar stays centred where QuakeWorld's stood at the left edge | 3 |
+| C349 | `cl_hudswap` (qw, 0) | the status bar's side panels on the left | done | its spelling of `hud_swap` (games/shooters_edge/hud/layout.cpp): the see-through bar's column on the inventory row's left end (`sbar_column_left`); nothing else moves | 3 |
 | C350 | `cl_maxfps` (qw, 0) | the frame cap (and the moves a second) | done | engine/platform/pacing.cpp; the moves are cl_physfps (client-gaps.md) |  |
 | C351 | `entlatency` (qw, 20) | assumed entity lag | not-taken | our interpolation has its own rule (net/qw_remote.cpp) |  |
 | C352 | `cl_predict_players` (qw, 1) | predict the other players' moves | done | games/shooters_edge/net/qw_remote.cpp |  |
 | C353 | `cl_predict_players2` (qw, 1) | a second variant of the other players' prediction | not-taken | one rule, cl_predict_players |  |
 | C354 | `cl_solid_players` (qw, 1) | other players block your predicted move | done | games/shooters_edge/net/qw_remote.cpp |  |
-| C355 | `localid` (qw, empty) | an id a local server matches to trust the client | missing | none | 3 |
+| C355 | `localid` (qw, empty) | an id a local server matches to trust the client | done | a command packet ('B') from this machine runs only with the id `localid` holds once the first accept came; a wrong id clears it; one from elsewhere is ignored; the lines as the game's (net/qw_client.cpp, net/qw_remote.cpp; tests/shooters_edge_qw_admin_test.cpp) | 3 |
 | C356 | `password` (qw, empty) | the server password sent in the user info | done | client/settings.cpp (`password`, user info, the classic layer), net/qw_remote.cpp (sent at the join and again when changed) |  |
 | C357 | `spectator` (qw, empty) | join as a spectator (or the spectator password) | done | games/shooters_edge/net/qw_remote.cpp (1 only; a spectator password is not sent) |  |
 | C358 | `name` (qw, unnamed) | your name (user info) | done | engine/console/view.cpp, net/qw_client.cpp |  |
@@ -418,7 +423,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C363 | `rate` (qw, 2500) | bytes a second the server may send (user info) | done | client/settings.cpp (`rate`, the classic layer, 2500; Quake II says 15000), net/qw_remote.cpp (setinfo rate when changed) |  |
 | C364 | `noaim` (qw, 0) | ask the server for no aim help (user info) | done | client/settings.cpp, net/qw_client.cpp (`noaim` in the user info, told again when it changes) | 3 |
 | C365 | `msg` (qw, 1) | the lowest print level you want (user info) | done | client/settings.cpp, net/qw_client.cpp (`msg` 0..3, default 1, in the user info) | 3 |
-| C366 | `show_fps` (qw, 0) | the frame rate in a corner | done | scr_showfps in the same meaning |  |
+| C366 | `show_fps` (qw, 0) | the frame rate in a corner | done | its spelling of scr_showfps (games/shooters_edge/client/cvar_layers.cpp), held by tests/shooters_edge_cvar_layers_test.cpp |  |
 | C367 | `cl_nopred` (qw, 0) | no prediction of your own move | done | games/shooters_edge/net/qw_remote.cpp |  |
 | C368 | `pushlatency` (qw, -999) | how far ahead the prediction runs | not-taken | our prediction runs to the newest move by its own rule |  |
 | C369 | `cl_warncmd` (qw, 0) | warn about unknown commands in configs | not-taken | our console always names an unknown word |  |
@@ -447,24 +452,24 @@ SINGLE PLAYER and MULTIPLAYER pages are only notices that it plays on the Intern
 | C384 | Multiplayer: JOIN A GAME (q1) | the transport page, then the LAN or serial page, then the found games | done | menu/servers_page.cpp (LAN, masters and named servers) |  |
 | C385 | Multiplayer: NEW GAME (q1) | host a game | done | menu/main_menu.cpp host page |  |
 | C386 | Multiplayer: SETUP (q1) | Hostname, Your name, Shirt color, Pants color with the player picture, Accept Changes | done | menu/main_menu.cpp setup page (name, colours; applied at once) |  |
-| C387 | Setup: Hostname row (q1) | the server name typed in setup | missing | no hostname row on the setup page | 3 |
-| C388 | Setup: the coloured player picture (q1) | the figure in the chosen shirt and pants beside the rows | missing | not drawn: the setup page has no figure in the chosen colours | 3 |
+| C387 | Setup: Hostname row (q1) | the server name typed in setup | done | the setup page's first row shows sv_hostname (Quake's `hostname`, a synonym) beside it and opens the console (menu/main_menu.cpp; tests/shooters_edge_menu_test.cpp) | 3 |
+| C388 | Setup: the coloured player picture (q1) | the figure in the chosen shirt and pants beside the rows | done | the figure (`gfx/menuplyr.lmp`) in its box (`gfx/bigbox.lmp`) under the rows, its shirt and pants ranges in the rows' colours as they change (menu/classic_art.cpp `player_in`, menu/classic_view.cpp; tests/shooters_edge_menu_test.cpp) | 3 |
 | C389 | Net page: serial, modem, IPX, TCP/IP (q1) | choose a transport | not-taken | platform: one transport (UDP) |  |
 | C390 | Serial and modem config pages (q1) | port, IRQ, baud, dial | not-taken | platform: DOS serial and modem |  |
 | C391 | LAN config page (q1) | the port, search for local games, join a game at an address | done | menu/servers_page.cpp, connect |  |
 | C392 | Game options: begin game, max players (q1) | start the hosted game, its size | done | host page START, MAX PLAYERS |  |
 | C393 | Game options: game type, teamplay, skill (q1) | cooperative or deathmatch, team rule, difficulty names | done | host page GAME TYPE, TEAMPLAY, SKILL |  |
 | C394 | Game options: frag limit, time limit (q1) | in steps, none at 0 | done | host page FRAG LIMIT, TIME LIMIT |  |
-| C395 | Game options: episode and level (q1) | the map chosen by episode then level name, mission packs' lists too | missing | ours: one MAP row by name; no episode step | 3 |
+| C395 | Game options: episode and level (q1) | the map chosen by episode then level name, mission packs' lists too | done | games/shooters_edge/menu/episodes.hpp (the base game's seven, both mission packs' lists, long names; the list and its episodes by the maps the packs hold) and main_menu.cpp (EPISODE and LEVEL over the host page's MAP row, kept together: a new episode at its first level, a level sets the map, a map in a list sets them) | 3 |
 | C396 | Search and server list (q1) | searching for LAN games, then the list to pick | done | menu/servers_page.cpp |  |
 | C397 | Options (q1, qw) | Customize controls, Go to console, Reset to defaults, Screen size, Brightness, Mouse Speed, CD Music Volume, Sound Volume, Always Run, Invert Mouse, Lookspring, Lookstrafe, Video Options, Use Mouse | done | menu/main_menu.cpp options page (every row but Use Mouse) |  |
 | C398 | Options: Use Mouse (q1, qw) | take the mouse in a window | not-taken | platform: the window always takes the mouse in play |  |
-| C399 | Options: Use old status bar, HUD on left side (qw) | cl_sbar and cl_hudswap | missing | ours: hud_sbar on the video page; no left-side row (cl_hudswap missing) | 3 |
+| C399 | Options: Use old status bar, HUD on left side (qw) | cl_sbar and cl_hudswap | done | games/shooters_edge/menu/main_menu.cpp: USE OLD STATUS BAR (`hud_sbar`) and HUD ON LEFT SIDE (`hud_swap`) toggles after LOOKSTRAFE on the options page; the side row toggles the column alone (docs/porting/client.md § Brought and left behind) | 3 |
 | C400 | Keys (q1, qw) | attack, change weapon, jump / swim up, walk forward, backpedal, turn left, turn right, run, step left, step right, sidestep, swim up, swim down; two keys each, Enter to set, Backspace to clear | done | menu/controls_page.cpp |  |
 | C401 | Keys: look up, look down, center view, mouse look, keyboard look (q1, qw) | five more rows of the classic page | done | menu/controls_page.cpp: LOOK UP, LOOK DOWN, CENTER VIEW, MOUSE LOOK, KEYBOARD LOOK; the classic look scrolls a page longer than the screen (menu/classic_view.cpp) | 3 |
 | C402 | Video (q1, qw) | the mode list and test | not-taken | platform video modes: the window, its size and its display are engine/platform (vid_fullscreen, vid_displays); our video page holds the looks |  |
 | C403 | Help (q1, qw) | the help pictures page by page, and the ordering screens | done | menu/classic_view.cpp (help0 to help5 from the pack) |  |
-| C404 | Quit (q1, qw) | a box with one of the joke lines and y or n; the shareware ordering screen | missing | ours asks LEAVE SHOOTER'S EDGE? (the classic box, not the game's own lines) | 3 |
+| C404 | Quit (q1, qw) | a box with one of the joke lines and y or n; the shareware ordering screen | done | games/shooters_edge/menu/main_menu.hpp (`quit_joke`: the eight jokes word for word), game_menu.cpp (one picked at random each time the box opens with a game loaded in its own look, Y quits, N or ESCAPE back), classic_view.cpp (the 24 x 4 box at 56, 76, the lines gold at x 64); the credits box and the text-mode ordering screen left behind (docs/porting/client.md § Brought and left behind) | 3 |
 
 ### 4. Server-to-client messages
 
@@ -486,13 +491,13 @@ and the campaign on our own host hands the client the same events without the wi
 | C414 | stufftext (9) (both) | a console line to run | done | net/qw_client.cpp |  |
 | C415 | setangle (10) (both) | the server sets your view | done | net/qw_svc.cpp |  |
 | C416 | serverinfo (11, q1) / serverdata (11, qw) (both) | q1: protocol, players, game type, level name, models, sounds; qw: protocol, server count, game folder, your slot, level name, movement numbers | done | net/qw_signon.cpp, demo_convert_single.cpp |  |
-| C417 | lightstyle (12) (both) | a light style's pattern of letters | done | net/qw_svc.cpp |  |
+| C417 | lightstyle (12) (both) | a light style's pattern of letters | done | net/qw_svc.cpp; kept from a server or a demo (`client/demo_client.cpp`) and stepped in the window (`client/world_draw.cpp`) |  |
 | C418 | updatename (13) (q1) | a player's name | done | demo_convert_single.cpp (into the slot's user info) |  |
 | C419 | updatefrags (14) (both) | a player's frags | done | net/qw_svc.cpp |  |
 | C420 | clientdata (15) (q1) | your view height, ideal pitch, punch, velocity, items, ground and water bits, weapon frame and model, armour, health, ammo counts, active weapon | done | demo_convert_single.cpp |  |
 | C421 | stopsound (16) (both) | stop an entity's channel | done | net/qw_svc.cpp |  |
 | C422 | updatecolors (17) (q1) | a player's shirt and pants | done | demo_convert_single.cpp |  |
-| C423 | particle (18) (q1) | a burst of particles of a colour with a direction | missing | the campaign draws the program's particles; a recorded .dem keeps only the blood colours and drops the rest | 3 |
+| C423 | particle (18) (q1) | a burst of particles of a colour with a direction | done | a recorded .dem keeps every colour: blood's two as before, any other a burst of the colour's row of 8 along its way, a count of 255 an explosion; the campaign's program asks the same (client/demo_single.cpp, app/effects.cpp `burst`, server/bi_message.cpp; tests/shooters_edge_demo_test.cpp, tests/shooters_edge_effects_test.cpp) | 3 |
 | C424 | damage (19) (both) | armour and blood taken and where from (the hurt tint and kick) | done | net/qw_svc.cpp, demo_convert_single.cpp |  |
 | C425 | spawnstatic (20) (both) | a fixed model with no number | done | net/qw_svc.cpp |  |
 | C426 | spawnbaseline (22) (both) | an entity's first state | done | net/qw_svc.cpp |  |
@@ -538,8 +543,8 @@ and the campaign on our own host hands the client the same events without the wi
 | C461 | wizspike, knightspike (7, 8) (both) | the scrag's and the death knight's hits | done | client/world_draw.cpp |  |
 | C462 | lavasplash (10) (both) | Chthon's lava splash | done | client/world_draw.cpp |  |
 | C463 | teleport (11) (both) | the teleport sparkle | done | client/world_draw.cpp |  |
-| C464 | explosion2 (12) (q1) | a blast in a range of palette colours (mission packs) | missing | drawn as a plain explosion; the colours are lost | 3 |
-| C465 | beam (13) (q1) | a grappling beam between two points | missing | dropped from a recorded .dem; not drawn | 3 |
+| C464 | explosion2 (12) (q1) | a blast in a range of palette colours (mission packs) | done | 512 specks taking the colour run in turn for 0.3 s and the blast's light, no sprite; in a .dem and the campaign (app/effects.cpp `explosion2`, client/world_fx.cpp; tests as C423) | 3 |
+| C465 | beam (13) (q1) | a grappling beam between two points | done | read in a .dem and the campaign and drawn as a bolt of the game's own `progs/beam.mdl` when its model list has it (a mission pack's), else the lightning's (client/world_fx.cpp) | 3 |
 | C466 | implosion, railtrail (14, 15) (q1) | effects behind a build switch the stock release leaves off | not-taken | not in the stock build |  |
 | C467 | blood (12) (qw) | blood with a count | done | net/qw_client.cpp |  |
 | C468 | lightningblood (13) (qw) | blood where the bolt hits | done | net/qw_client.cpp |  |
@@ -588,8 +593,10 @@ and the campaign on our own host hands the client the same events without the wi
 | C506 | Demos: .dem recorded and played (q1) | a single-player recording with its signon | done | client/demo_convert_single.cpp, demo_convert_single_out.cpp |  |
 | C507 | Demos: .qwd recorded and played (qw) | a client recording of a QuakeWorld game | done | net/qw_match_record.hpp, client/demo_playback.cpp |  |
 | C508 | Screenshot files (both) | quakeNN.pcx (GL: .tga) in the game folder | done | engine/capture/screenshot.cpp (our own format and folder) |  |
+| C509 | Static loops of one file merged (both) | every torch or hum of one sound heard as one voice, its ears summed and each held to full | done | client/demo_sound.cpp, plugins/classic/q2_loop_merge.hpp (classic_static_merge) |  |
+| C510 | Stuffed lines run in the console (qw) | what a server stuffs that the client does not answer itself (an alias, `echo`, a setting) runs in the console as the server's: only the commands a game lets a server run and the server's own settings; found while C414 read done with the lines dropped | done | net/qw_client.cpp (`to_run`), net/qw_remote.cpp (`remote_run_stuffed`) |  |
 
-Count: 508 rows, 333 done, 12 missing (rank 3 12), 163 not-taken.
+Count: 510 rows, 349 done, 0 missing, 161 not-taken.
 
 ## SERVER: the Quake and QuakeWorld servers, row by row
 
@@ -693,7 +700,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S67 | `sv_maxtic` (qw, 0.1) | the longest physics frame | done | `plugins/shooter/settings.cpp` | |
 | S68 | `developer` (both, 0) | extra console messages; q1's `dprint` only shows with it | done | server/qc_server.cpp developer: a Quake single-player program's dprint only with it on; a multiplayer program's always | 3 |
 | S69 | `timeout` (qw, 65) | seconds without a packet before a client is dropped, everyone told "<name> timed out" | done | `sv_timeout` (synonym), `net/qw_server.cpp` | |
-| S70 | `zombietime` (qw, 2) | seconds a dropped slot stays taken so the last reliable message is resent | missing | a dropped slot is freed at once; the disconnect is sent twice instead (`net/qw_server.cpp`) | 3 |
+| S70 | `zombietime` (qw, 2) | seconds a dropped slot stays taken so the last reliable message is resent | done | a dropped slot is freed at once, as ours always was, but its address keeps a goodbye list for `zombietime` seconds (default 2; 0 none): packets from it are answered with the disconnect over its own channel, and `status` lists it as ZOMBIE; a timed-out drop keeps none (`net/qw_server.cpp`, `net/qw_admin.cpp`; tests/shooters_edge_qw_admin_test.cpp) | 3 |
 | S71 | `rcon_password` (qw) | the remote console's password; empty: no rcon | done | `engine/server/server.cpp`, `net/qw_admin.cpp` | |
 | S72 | `password` (qw) | the players' join password ("none" or empty: none) | done | `sv_password` (synonym), `net/qw_server.cpp` | |
 | S73 | `spectator_password` (qw) | the spectators' join password | done | `sv_spectatorpassword` (synonym) | |
@@ -718,14 +725,14 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S92 | `filterban` (qw, 1) | 1: the filters ban; 0: only filtered addresses may enter | done | `sv_banmode` (synonym), `engine/server/admin.cpp` | |
 | S93 | `sv_maxvelocity` (both, 2000) | the speed cap per axis | done | `plugins/shooter/settings.cpp` | |
 | S94 | `sv_gravity` (both, 800) | gravity | done | `plugins/shooter/settings.cpp` | |
-| S95 | `sv_stopspeed` (both, 100) | the friction's floor speed | done | `plugins/shooter/settings.cpp` | |
-| S96 | `sv_maxspeed` (both, 320) | the run speed | done | `plugins/shooter/settings.cpp` | |
-| S97 | `sv_spectatormaxspeed` (qw, 500) | a spectator's speed | done | `plugins/shooter/settings.cpp` | |
-| S98 | `sv_accelerate` (both, 10) | ground acceleration | done | `plugins/shooter/settings.cpp` | |
+| S95 | `sv_stopspeed` (both, 100) | the friction's floor speed | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
+| S96 | `sv_maxspeed` (both, 320) | the run speed | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
+| S97 | `sv_spectatormaxspeed` (qw, 500) | a spectator's speed | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
+| S98 | `sv_accelerate` (both, 10) | ground acceleration | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
 | S99 | `sv_airaccelerate` (qw, 0.7) | air acceleration | done | `plugins/shooter/settings.cpp` | |
-| S100 | `sv_wateraccelerate` (qw, 10) | water acceleration | done | `plugins/shooter/settings.cpp` | |
-| S101 | `sv_friction` (both, 4) | ground friction | done | `plugins/shooter/settings.cpp` | |
-| S102 | `sv_waterfriction` (qw, 4) | water friction | done | `plugins/shooter/settings.cpp` | |
+| S100 | `sv_wateraccelerate` (qw, 10) | water acceleration | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
+| S101 | `sv_friction` (both, 4) | ground friction | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
+| S102 | `sv_waterfriction` (qw, 4) | water friction | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
 | S103 | `cl_rollspeed` (qw server, 200) | the sideways speed at which a player's model leans fully | done | fixed at the default, not a setting (`plugins/shooter/server.hpp`, `framemove.hpp`) | |
 | S104 | `cl_rollangle` (qw server, 2) | the lean's angle (the model shows four times it) | done | fixed at the default, as S103 | |
 | S105 | `sv_spectalk` (qw, 1) | 0: a spectator's chat reaches only spectators | done | `engine/server/chat.cpp`; ours mutes only during a match | |
@@ -855,7 +862,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S199 | `*cheats` (server info) | "ON" when started with cheats | done | net/qw_server.cpp: ON with the game rule cheats 1 | 3 |
 | S200 | `map` (server info) | the map's name | done | `net/qw_server.cpp` | |
 | S201 | `needpass` (server info) | 1 a player password, 2 a spectator password, 3 both ("Updated needpass.") | done | `net/qw_server.cpp` | |
-| S202 | server settings in the server info (`hostname`, `maxclients`, `maxspectators`, `fraglimit`, `timelimit`, `teamplay`, `deathmatch`, `samelevel`, `spawn`, `watervis`) | each copied into the server info when set | missing | the rules keys appear only when not zero (net/qw_server.cpp); copying them from the start moves every server info and the recordings that carry it, kept for its own PR | 3 |
+| S202 | server settings in the server info (`hostname`, `maxclients`, `maxspectators`, `fraglimit`, `timelimit`, `teamplay`, `deathmatch`, `samelevel`, `spawn`, `watervis`) | each copied into the server info when set | done | maxspectators, teamplay, fraglimit, timelimit, samelevel and watervis copied into the server info from the start, zero or not (net/qw_server.cpp; goldens shooters_edge_qw_server, shooters_edge_team moved by these keys alone) | 3 |
 | S203 | `name` (user info) | trimmed of spaces and line ends; empty or "console" becomes "unnamed"; a taken name gets "(N)" in front; more than four changes inside 5 s kicks ("<name> was kicked for name spam", "You were kicked from the game for name spamming"); a change in play is announced "<old> changed name to <new>" | done | `net/qw_server.cpp`, `qw_signon.cpp`, `engine/server/names.hpp` (`sv_namelimit` refuses the change instead of kicking) | |
 | S204 | `rate` (user info) | the rate, held to 500..10000 | done | `net/qw_signon.cpp` (`sv_minrate`, `sv_maxrate`) | |
 | S205 | `msg` (user info) | the lowest print level sent to the player | done | `net/qw_signon.cpp` | |
@@ -990,7 +997,7 @@ program's form.
 | S315 | the address filter's check (qw) | every packet from a filtered address is refused before anything else | done | `engine/server/admin.cpp` | |
 | S316 | the server's statistics (qw) | CPU use, response time and packets a frame, measured over a run of frames, shown by `status` | done | `engine/server/admin.cpp` (our own counters) | |
 
-Rows: 316 (some rows hold a group of names). Done: 279. Missing: 2 (rank 1: 0, rank 2: 0, rank 3: 2). Not-taken: 35.
+Rows: 316 (some rows hold a group of names). Done: 281. Missing: 0 (rank 1: 0, rank 2: 0, rank 3: 0). Not-taken: 35.
 
 ## GAME: the QuakeWorld game program and Quake's monsters, row by row
 
@@ -1123,7 +1130,7 @@ All at medium level. V the victim, K the killer.
 | G91 | Weapon pickup lines | "You got the Double-barrelled Shotgun" / "nailgun" / "Super Nailgun" / "Grenade Launcher" / "Rocket Launcher" / "Thunderbolt" | done | profiles/items.hpp | - |
 | G92 | Weapon respawn | 30 s in deathmatch 0 and 1 | done | rules/common_items.cpp | - |
 | G93 | Weapon stay | deathmatch 2, 3 and 5: a weapon stays; one already owned cannot be touched | done | rules/arena_glue.cpp (weapon_may_take, weapon_stays) | - |
-| G94 | `item_weapon` | an old ammo box picked by spawnflags | missing | no such class in the arena; no stock DM map is known to carry it | 3 |
+| G94 | `item_weapon` | an old ammo box picked by spawnflags | done | spawnflags 1 shells, 4 nails, 2 rockets (the last set wins), 8 big; lies in deathmatch 4 too; with no kind gives nothing and says 'You got the ' (rules/common_items.cpp; tests/shooters_edge_arena_quake_test.cpp) | 3 |
 | G95 | Powerup durations | all four 30 s | done | rules/common_items.cpp | - |
 | G96 | Quad and biosuit respawn | 60 s | done | rules/common_items.cpp | - |
 | G97 | Pentagram and Ring respawn | 300 s | done | rules/common_quake.cpp (quake_item_respawn) | - |
@@ -1304,10 +1311,11 @@ se-coop-sweep lab plays every map with no program fault.
 | G243 | `monster_enforcer` | the enforcer | done | as G230 | - |
 | G244 | `monster_boss` | Chthon | done | as G230 | - |
 | G245 | `monster_oldone` | Shub-Niggurath | done | as G230 | - |
+| G246 | The big ammunition boxes' models (spawnflags 1) | a big box lies as `maps/b_shell1.bsp`, `b_nail1`, `b_rock1`, `b_batt1` | done | found while filling G94: the big boxes lay as the small model; rules/common_items.cpp `ammo_start`; tests/shooters_edge_arena_quake_test.cpp | - |
 
 ### Count
 
-Rows 245: done 226, missing 1 (rank 3), not-taken 18.
+Rows 246: done 228, missing 0, not-taken 18.
 
 ## TOOLS: what building the stock sources with ours shows
 

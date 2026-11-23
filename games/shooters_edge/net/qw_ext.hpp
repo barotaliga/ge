@@ -12,14 +12,14 @@
 // THE FIRST TIER we offer: every z bit (511), the ge set's named effects, aim bend, download
 // origin, item back and the settings sheet; x scale, transparency, colour-mod, sound-double,
 // model-double, entity-double and entity-double2, spawnstatic2, 256 packet entities and chunked
-// downloads; mvd float coords and the teleport kind on setangle. Everything else is refused. x
-// float coords (only with sv_bigcoords) and the rest exist in the table so they can be named, never
-// offered.
+// downloads; mvd float coords, the teleport kind on setangle and weapon prediction. Everything else
+// is refused. x float coords (only with sv_bigcoords) and the rest exist in the table so they can
+// be named, never offered.
 //
 // ge:summary The QuakeWorld protocol's extension families and bits as a table; the first tier
 // ge:keywords extensions pext z_ext fte-bits mvd-bits negotiate offered first-tier transparency
 // ge:keywords model-double entity-double chunked-downloads float-coords spawnstatic2 sound-double
-// ge:keywords scale colour-mod item-back
+// ge:keywords scale colour-mod item-back weapon-prediction
 // ge:skill net shooter
 // ge:test tests/shooters_edge_qw_wire_test.cpp
 #pragma once
@@ -42,8 +42,10 @@ constexpr uint32_t kXSpawnStatic2 = 0x400000, kX256Entities = 0x1000000;
 constexpr uint32_t kXChunkedDl = 0x20000000, kXClientProgs = 0x40000000;
 // The x2 family's.
 constexpr uint32_t kX2Voice = 0x2;
-// The demo family's.
-constexpr uint32_t kMvdFloatCoords = 0x1, kMvdTeleport = 0x2;
+// The demo family's. Weapon prediction: every playerinfo with the weapon frame carries a byte after
+// it, and the player's own the weapon's state when that byte is nonzero (net/qw_delta.hpp); the
+// client runs the weapon forward from it (classic/weapon_predict.hpp).
+constexpr uint32_t kMvdFloatCoords = 0x1, kMvdTeleport = 0x2, kMvdWeaponPred = 0x80;
 // The z set's.
 constexpr uint32_t kZPmType = 1, kZPmTypeNew = 2, kZViewHeight = 4, kZServerTime = 8;
 constexpr uint32_t kZPitchLimits = 0x10, kZJoinObserve = 0x20, kZOnGround = 0x40;
@@ -66,10 +68,13 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // client draws it coming back ahead of time, classicenhance/hologram.hpp), on either server; the
 // damage the player dealt (Quake II's temporary entity 128, the hit marker's) on Quake II's server;
 // the server's settings sheet (engine/server/sheet.hpp), svc id 125 in answer to `ge_sheet`
-// (net/qw_sheet.hpp).
+// (net/qw_sheet.hpp); the weapons the player holds and his ammunition of each kind on Quake II's
+// server, svc id 118 when they change (the window predicts a weapon change on them:
+// net/q2_weapon.hpp).
 constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,
                    kGeSpeedJumpShare = 16, kGeAccountKey = 32, kGeMoveFeel = 64, kGeVoice = 128,
-                   kGeEveryFrame = 256, kGeItemBack = 512, kGeHitReports = 1024, kGeSettings = 2048;
+                   kGeEveryFrame = 256, kGeItemBack = 512, kGeHitReports = 1024, kGeSettings = 2048,
+                   kGeArsenal = 4096;
 
 struct ExtBit {
   ExtFamily family;

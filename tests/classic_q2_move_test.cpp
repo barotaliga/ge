@@ -103,11 +103,11 @@ struct Run {
       pm.changed = false;
     }
   }
-  float x() const { return pm.s.origin[0] * 0.125f; }
-  float y() const { return pm.s.origin[1] * 0.125f; }
-  float z() const { return pm.s.origin[2] * 0.125f; }
-  float vx() const { return pm.s.velocity[0] * 0.125f; }
-  float vz() const { return pm.s.velocity[2] * 0.125f; }
+  float x() const { return float(pm.s.origin[0]) * 0.125f; }
+  float y() const { return float(pm.s.origin[1]) * 0.125f; }
+  float z() const { return float(pm.s.origin[2]) * 0.125f; }
+  float vx() const { return float(pm.s.velocity[0]) * 0.125f; }
+  float vz() const { return float(pm.s.velocity[2]) * 0.125f; }
 };
 
 ge::classic::Q2Cmd cmd(int16_t forward = 0, int16_t side = 0, int16_t up = 0, int16_t yaw_ = 0,
@@ -281,6 +281,40 @@ TEST(a_ladder_is_climbed) {
   CHECK(r.z() > 100);
 }
 
+// The newer interface's move: the timer in milliseconds (`time_shift` 0), the state's 23 bits
+// past the original's 16 (which wrap), the ladder found through the masked trace and flagged, and
+// the ground plane under the player.
+TEST(the_newer_interfaces_move_times_in_ms_reaches_far_and_flags_the_ladder) {
+  World w;
+  ge::classic::Q2State s = at(0, 0, 24.25f);
+  s.velocity[2] = -500 * 8;
+  Run land(w, s);
+  land.pm.time_shift = 0;
+  land.step(cmd());
+  CHECK(land.pm.s.time == 184);  // 200 ms, less this command's 16
+  CHECK(land.pm.ground_plane.normal.z == 1.0f && land.pm.ground_plane.dist == 0.0f);
+  for (const int bits : {16, 23}) {
+    ge::classic::Q2State f;
+    f.type = ge::classic::Q2Type::spectator;
+    f.origin[0] = 4090 * 8;
+    Run fly(w, f);
+    fly.pm.coord_bits = bits;
+    fly.step(cmd(400), 30);
+    if (bits == 16)
+      CHECK_MSG(fly.x() < 0, "wrapped: x " + std::to_string(fly.x()));
+    else
+      CHECK_MSG(fly.x() > 4096, "kept: x " + std::to_string(fly.x()));
+  }
+  Run climb(w, at(0, -200, 24));
+  climb.pm.ladder_mask = true;
+  climb.pm.ladder_flag = true;
+  climb.step(cmd(400, 0, 0, yaw(-90), int16_t(-30 * 65536 / 360)), 80);
+  CHECK(climb.z() > 100);
+  CHECK(climb.pm.s.flags & ge::classic::kSqOnLadder);
+  climb.step(cmd(-400, 0, 0, yaw(-90)), 30);  // backed off the ladder
+  CHECK(!(climb.pm.s.flags & ge::classic::kSqOnLadder));
+}
+
 TEST(a_spectator_flies_through_a_wall) {
   World w;
   ge::classic::Q2State s = at(-200, 400, 60);  // the steep ramp's solid is ahead along +x
@@ -288,6 +322,33 @@ TEST(a_spectator_flies_through_a_wall) {
   Run r(w, s);
   r.step(cmd(400), 90);
   CHECK(r.x() > 150 && r.z() == 60);
+}
+
+// A spectator's flight by the client's protocol: the original step leaves a glide where it was
+// once no speed is wanted; 36 glides on, with its friction of 4; 35 and 36 fly at twice the time.
+TEST(a_spectators_flight_follows_its_clients_protocol) {
+  World w;
+  ge::classic::Q2State s = at(-200, 400, 300);
+  s.type = ge::classic::Q2Type::spectator;
+  const auto glide = [&](int protocol) {
+    Run r(w, s);
+    ge::classic::q2_fly_for_protocol(r.pm, protocol);
+    r.step(cmd(400), 20);  // up to speed
+    const float x = r.x();
+    r.step(cmd(), 3);  // keys let go: gliding, slowing
+    return r.x() - x;
+  };
+  CHECK(glide(34) == 0);  // put for each command
+  CHECK(glide(35) == 0);
+  CHECK(glide(36) > 10);
+  const auto ahead = [&](int protocol) {
+    Run r(w, s);
+    ge::classic::q2_fly_for_protocol(r.pm, protocol);
+    r.step(cmd(400), 10);
+    return r.x() + 200;
+  };
+  CHECK_MSG(ahead(35) > 1.8f * ahead(34),
+            std::to_string(ahead(34)) + " " + std::to_string(ahead(35)));
 }
 
 TEST(a_changed_state_finds_a_free_start) {

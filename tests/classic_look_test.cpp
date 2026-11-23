@@ -5,6 +5,7 @@
 // ge:summary Tests a shooter's picture cvars: a game's own defaults, the shared ones, colours
 // ge:keywords test look picture-settings game-defaults r_look r_fx_lights values_for_default
 // ge:skill shooter testing
+#include <cmath>
 #include <string>
 
 #include "check.hpp"
@@ -137,4 +138,58 @@ TEST(the_classic_look_is_shown_as_worked_out_and_neither_has_the_toe) {
   CHECK(look::light_scale(p) == 1);  // intensity 2, gl_modulate 1
   const ge::brush::app::Options o = look::world_options(look::Look::classic, {}, p);
   CHECK(o.classic_light == 1 && o.classic_lift == 0);
+}
+
+TEST(quake_iis_picture_switches_reach_the_world_and_another_games_change_nothing) {
+  // Another game's defaults: the sky drawn and smoothed, the textures as painted, the renderer's
+  // own four taps, every speck its own size.
+  lk::Picture p;
+  ge::brush::app::Options o = lk::world_options(lk::Look::modern, {}, p);
+  CHECK(!o.fast_sky && !o.crisp_sky && o.saturation == 1 && !o.invert && o.anisotropy == 4);
+  CHECK(ge::classic::q2_speck_scale(p.q2fx, 1000) == 1);
+  // gl_drawsky 0: a black sky; gl_bilerp_skies 0: a sharp one; gl_saturation, gl_invert and
+  // gl_anisotropy (every game's) on the walls' and floors' textures, in either look.
+  p.q2fx.draw_sky = false;
+  p.q2fx.smooth_sky = false;
+  p.q2fx.saturation = 0.25;
+  p.q2fx.invert = true;
+  p.anisotropy = 8;
+  for (const lk::Look look : {lk::Look::classic, lk::Look::modern}) {
+    o = lk::world_options(look, {}, p);
+    CHECK(o.fast_sky && o.sky_colour[0] == 0 && o.sky_colour[1] == 0 && o.sky_colour[2] == 0);
+    CHECK(o.crisp_sky && o.saturation == 0.25 && o.invert && o.anisotropy == 8);
+  }
+  // gl_partscale 2 (Quake II's default): as made within 20 units, 5 times at 1000; 4 twice that.
+  p.q2fx.part_scale = 2;
+  CHECK(ge::classic::q2_speck_scale(p.q2fx, 10) == 1);
+  CHECK(std::abs(ge::classic::q2_speck_scale(p.q2fx, 1000) - 5) < 1e-12);
+  p.q2fx.part_scale = 4;
+  CHECK(std::abs(ge::classic::q2_speck_scale(p.q2fx, 1000) - 10) < 1e-12);
+}
+
+TEST(quake_iis_light_switches_split_the_walls_light_from_the_models) {
+  // Every other game: the walls at light_scale, the models at 1, the renderer's own falloff and
+  // stepped styles.
+  lk::Picture p;
+  CHECK(lk::world_light_scale(p) == 1 && lk::model_light(p, lk::Look::classic) == 1);
+  ge::brush::app::Options o = lk::world_options(lk::Look::classic, {}, p);
+  CHECK(o.dlight_falloff == 0 && !o.lerp_styles && o.lightmap_saturation == 1);
+  // gl_modulate 2 with gl_modulate_world 0.5: the walls as before, the models twice as bright,
+  // four times with gl_doublelight_entities; in the modern look over the world's own modulate.
+  p.light_modulate = 2;
+  p.q2fx.modulate_world = 0.5;
+  CHECK(lk::world_light_scale(p) == 1 &&
+        lk::world_options(lk::Look::classic, {}, p).classic_light == 1);
+  CHECK(lk::model_light(p, lk::Look::classic) == 2);
+  p.q2fx.double_light = true;
+  CHECK(lk::model_light(p, lk::Look::classic) == 4);
+  CHECK(lk::model_light(p, lk::Look::modern) == 4);  // over a world modulate of 2 x 0.5
+  // gl_dlight_falloff 1 the soft edge, 0 the hard; gl_coloredlightmaps and cl_lerp_lightstyles.
+  p.q2fx.dlight_falloff = 1;
+  p.q2fx.lightmap_saturation = 0.5;
+  p.q2fx.lerp_styles = true;
+  o = lk::world_options(lk::Look::modern, {}, p);
+  CHECK(o.dlight_falloff == 1 && o.lightmap_saturation == 0.5 && o.lerp_styles);
+  p.q2fx.dlight_falloff = 0;
+  CHECK(lk::world_options(lk::Look::classic, {}, p).dlight_falloff == 2);
 }

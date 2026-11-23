@@ -9,6 +9,8 @@
 // ge:test tests/shooters_edge_q2_wire_ext_test.cpp
 #include <cstring>
 
+#include "classic/protocol/q2_limits.hpp"
+#include "net/wire.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
 
 namespace shooters_edge::server {
@@ -72,8 +74,10 @@ void q2_server_data_tail(std::vector<uint8_t>& out, const Q2WireOptions& opt) {
     // The server's state: a game, a picture, or a cinematic for a client that knows the state.
     const bool movie = opt.show.size() > 4 && opt.show.compare(opt.show.size() - 4, 4, ".cin") == 0;
     o.u8(opt.show.empty() ? 2 : movie && opt.minor >= 1023 ? 5 : 3);
-    if (opt.minor >= 1024) {
-      o.i16(0);  // no movement hacks, no extended limits
+    if (opt.minor >= 1024) {  // no movement hacks; the extended limits' levels when on
+      namespace cp = ge::classic::protocol;
+      o.i16((opt.ext >= 1 ? cp::kQ2ServerFlagExtensions : 0) |
+            (opt.ext >= 2 ? cp::kQ2ServerFlagExtensions2 : 0));
     } else {
       o.u8(0);
       o.u8(0);
@@ -140,12 +144,20 @@ void q2_write_frame_top_ext(std::vector<uint8_t>& out, Q2Wire& w, int32_t number
   if (b.gun_frame != a.gun_frame) f |= kGunFrame;
   if (std::memcmp(b.gun_offset, a.gun_offset, sizeof b.gun_offset) != 0) x |= kXGunOffset;
   if (std::memcmp(b.gun_angles, a.gun_angles, sizeof b.gun_angles) != 0) x |= kXGunAngles;
-  if (std::memcmp(b.blend, a.blend, sizeof b.blend) != 0) f |= kBlend;
+  // The extended limits: the gun's index a word (1); the second level (2) the origin and velocity
+  // 23-bit coordinates against the last, the move's time and flags words, the blend with the
+  // damage blend under a byte of which parts follow, 64 stats under a variable-length mask.
+  const int level = w.opt.ext;
+  const bool v2 = level >= 2;
+  if (std::memcmp(b.blend, a.blend, sizeof b.blend) != 0 ||
+      (v2 && std::memcmp(b.damage_blend, a.damage_blend, sizeof b.damage_blend) != 0))
+    f |= kBlend;
   if (b.fov != a.fov) f |= kFov;
   if (b.rdflags != a.rdflags) f |= kRdFlags;
-  uint32_t mask = 0;
-  for (int i = 0; i < 32; i++)
-    if (b.stats[i] != a.stats[i]) mask |= 1u << i;
+  const int stats = v2 ? 64 : 32;
+  uint64_t mask = 0;
+  for (int i = 0; i < stats; i++)
+    if (b.stats[i] != a.stats[i]) mask |= 1ull << i;
   if (mask != 0) x |= kXStats;
   // The viewer's own slot as the client number: sent when no frame it holds says it already.
   const bool client = w.opt.protocol == 36 && !delta && w.slot != 0;
@@ -160,22 +172,28 @@ void q2_write_frame_top_ext(std::vector<uint8_t>& out, Q2Wire& w, int32_t number
   o.u8(low | (x & 15u) << 4);
   w.suppress = 0;
   w.frame_flags = 0;
-  o.u8(32);
-  for (int k = 0; k < 32; k++) o.u8(0xFF);
+  q2_write_area_bits(out, w);
   o.i16(f);
   if (f & kPmType) o.u8(b.type);
+  const auto coord = [&](int32_t v, int32_t from) {
+    if (!v2) return o.i16(v);
+    uint8_t c[3];
+    ge::net::Writer cw = ge::net::make_writer(c, sizeof c);
+    ge::classic::protocol::write_q2_coord23(cw, v, from);
+    out.insert(out.end(), c, c + cw.size);
+  };
   if (f & kPmOrigin) {
-    o.i16(b.origin[0]);
-    o.i16(b.origin[1]);
+    coord(b.origin[0], a.origin[0]);
+    coord(b.origin[1], a.origin[1]);
   }
-  if (x & kXOriginZ) o.i16(b.origin[2]);
+  if (x & kXOriginZ) coord(b.origin[2], a.origin[2]);
   if (f & kPmVelocity) {
-    o.i16(b.velocity[0]);
-    o.i16(b.velocity[1]);
+    coord(b.velocity[0], a.velocity[0]);
+    coord(b.velocity[1], a.velocity[1]);
   }
-  if (x & kXVelocityZ) o.i16(b.velocity[2]);
-  if (f & kPmTime) o.u8(b.time);
-  if (f & kPmFlags) o.u8(b.flags);
+  if (x & kXVelocityZ) coord(b.velocity[2], a.velocity[2]);
+  if (f & kPmTime) v2 ? o.i16(b.time) : o.u8(b.time);
+  if (f & kPmFlags) v2 ? o.i16(b.flags) : o.u8(b.flags);
   if (f & kPmGravity) o.i16(b.gravity);
   if (f & kPmDelta)
     for (const int16_t v : b.delta_angles) o.i16(v);
@@ -188,20 +206,39 @@ void q2_write_frame_top_ext(std::vector<uint8_t>& out, Q2Wire& w, int32_t number
   if (x & kXRoll) o.i16(b.view_angles[2]);
   if (f & kKick)
     for (const int8_t v : b.kick) o.u8(static_cast<uint8_t>(v));
-  if (f & kGunIndex) o.u8(b.gun_index);
+  if (f & kGunIndex) level >= 1 ? o.i16(b.gun_index) : o.u8(b.gun_index);
   if (f & kGunFrame) o.u8(b.gun_frame);
   if (x & kXGunOffset)
     for (const int8_t v : b.gun_offset) o.u8(static_cast<uint8_t>(v));
   if (x & kXGunAngles)
     for (const int8_t v : b.gun_angles) o.u8(static_cast<uint8_t>(v));
-  if (f & kBlend)
+  if ((f & kBlend) && v2) {
+    uint32_t which = 0;
+    for (int k = 0; k < 4; k++) {
+      if (b.blend[k] != a.blend[k]) which |= 1u << k;
+      if (b.damage_blend[k] != a.damage_blend[k]) which |= 16u << k;
+    }
+    o.u8(which);
+    for (int k = 0; k < 4; k++)
+      if (which & (1u << k)) o.u8(b.blend[k]);
+    for (int k = 0; k < 4; k++)
+      if (which & (16u << k)) o.u8(b.damage_blend[k]);
+  } else if (f & kBlend) {
     for (const uint8_t v : b.blend) o.u8(v);
+  }
   if (f & kFov) o.u8(b.fov);
   if (f & kRdFlags) o.u8(b.rdflags);
   if (x & kXStats) {
-    o.i32(static_cast<int64_t>(mask));
-    for (int i = 0; i < 32; i++)
-      if (mask & (1u << i)) o.i16(b.stats[i]);
+    if (v2) {
+      uint8_t m[10];
+      ge::net::Writer mw = ge::net::make_writer(m, sizeof m);
+      ge::net::write_varint(mw, mask);
+      out.insert(out.end(), m, m + mw.size);
+    } else {
+      o.i32(static_cast<int64_t>(mask));
+    }
+    for (int i = 0; i < stats; i++)
+      if (mask & (1ull << i)) o.i16(b.stats[i]);
   }
   if (client) {
     if (w.opt.minor >= 1022)
@@ -228,12 +265,12 @@ void q2_signon_streams(const Q2Signon& parts, int minor, std::vector<std::vector
   start(streams ? kConfigStream : kGameState);
   for (const auto& [index, one] : parts.config_strings) {
     if (streams && out.back().size() + one.size() + 2 > kQ2BigMessage) {
-      word(kQ2ConfigStrings);
+      word(parts.config_end);
       start(kConfigStream);
     }
     out.back().insert(out.back().end(), one.begin() + 1, one.end());
   }
-  word(kQ2ConfigStrings);
+  word(parts.config_end);
   if (streams) start(kBaselineStream);
   for (const auto& [n, one] : parts.baselines) {
     if (out.back().size() + one.size() + 2 > kQ2BigMessage) {

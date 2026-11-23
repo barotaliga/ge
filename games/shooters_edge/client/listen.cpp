@@ -23,8 +23,11 @@
 #include "core/num.hpp"
 #include "progs/layout.hpp"
 #include "progs/vm.hpp"
+#include "server/net_restart.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/client/q2_flash_fx.hpp"
+#include "shooters_edge/client/q2_model_fx.hpp"
+#include "shooters_edge/client/q2_temp_fx.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
@@ -41,6 +44,12 @@ namespace sb = ge::shooterbots;
 namespace shooters_edge::client {
 
 namespace pg = ge::progs;
+
+void listen_print(Listen& l, int level, const std::string& text) {
+  l.print_levels.resize(l.prints.size(), 2);
+  l.print_levels.push_back(level);
+  l.prints.push_back(text);
+}
 
 namespace {
 
@@ -164,7 +173,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   const std::string_view name = ev.text;
   if ((name == "te_teleport" || name == "te_boss_teleport") && listen_is_q2(l)) {  // its own burst
     e.kind = EffectKind::named;
-    e.name = "sq_teleport";
+    e.name = name == "te_boss_teleport" ? "sq_boss_teleport" : "sq_teleport";
     e.at = e.end = ev.origin;
     l.effects.push_back(std::move(e));
     return;
@@ -193,10 +202,10 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
                      name == "te_plasma_explosion";
   if (blast) {
     l.explosions.push_back(ev.origin);
-    l.explosion_kinds.resize(l.explosions.size());  // cl_disable_explosions reads which
-    l.explosion_kinds.back() = name == "te_rocket_explosion"    ? ge::classic::kQ2Rocket
-                               : name == "te_grenade_explosion" ? ge::classic::kQ2Grenade
-                                                                : 0;
+    if (const int code = q2_blast_code(name); code > 0 && listen_is_q2(l)) {
+      l.explosion_codes.resize(l.explosions.size());  // its ball, light and specks
+      l.explosion_codes.back() = static_cast<uint8_t>(code);
+    }
   }
   if (blast && name != "te_bfg_bigexplosion") return;
   const bool sparks = name == "te_sparks" || name == "te_bullet_sparks" ||
@@ -205,13 +214,25 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   if (uint8_t kind = 0; sv::qw_temp_entity(sparks ? "te_gunshot" : ev.text, kind)) {
     if (kind == kExplosion || kind == 4) {
       l.explosions.push_back(ev.origin);
+      if (listen_is_q2(l)) {  // our rules' plain blast in Quake II: a rocket's
+        l.explosion_codes.resize(l.explosions.size());
+        l.explosion_codes.back() = 7;
+      }
       return;
     }
     std::vector<uint8_t> b = {kTempEntity, kind};
     if (kind == 2 || kind == 12) b.push_back(static_cast<uint8_t>(count));
     for (float c : {ev.origin.x, ev.origin.y, ev.origin.z})
       sv::encode(b, sv::WriteKind::coord, c, "");
-    if (Effect classic; arena_effect(b, classic)) l.effects.push_back(classic);
+    if (Effect classic; arena_effect(b, classic)) {
+      if (const Q2Puff* puff = listen_is_q2(l) ? q2_puff(name) : nullptr) {  // Quake II's specks
+        classic.q2_specks = puff->count;
+        classic.colour = puff->colour;
+        classic.code = puff->code;  // its smoke and flash (q2_model_fx.hpp) by the kind byte
+        classic.way = {ev.values[0], ev.values[1], ev.values[2]};
+      }
+      l.effects.push_back(classic);
+    }
     return;
   }
   e.kind = EffectKind::named;
@@ -263,7 +284,7 @@ void entered(Listen& l) {
   l.owed = 0;
   l.pending_map.clear();
   l.explosions.clear();
-  l.explosion_kinds.clear();
+  l.explosion_codes.clear();
   l.blows.clear();
   l.effects.clear();
   l.entries++;
@@ -289,7 +310,8 @@ void entered(Listen& l) {
 void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
   for (const sv::NetEvent& ev : s.out.events) {
     take_sound(l, s, ev);
-    if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
+    if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0)
+      listen_print(l, ev.level, ev.text);
     if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
     if (ev.kind == sv::EventKind::stuffcmd && (ev.to & 1u) != 0) {
       if (ev.text == "menu_loadgame\n")
@@ -345,8 +367,8 @@ void host_heard(void* ctx, int talker, int gen, int seq, const std::vector<uint8
 void host_tap(void* ctx, const sv::RulesCommon& s) {
   take_events(*static_cast<Listen*>(ctx), s, false);
 }
-void host_print(void* ctx, const std::string& text) {
-  static_cast<Listen*>(ctx)->prints.push_back(text);
+void host_print(void* ctx, int level, const std::string& text) {
+  listen_print(*static_cast<Listen*>(ctx), level, text);
 }
 
 void close_door(Listen& l);
@@ -627,7 +649,10 @@ void read_streams(Listen& l, const sv::RulesCommon& s, bool clear = true) {
       if (ev.kind != sv::EventKind::particle || (ev.to & 1u) == 0) continue;
       Effect e;
       e.code = -1;
-      e.kind = ev.text == "explosion" ? EffectKind::explosion : EffectKind::blood;
+      e.colour = static_cast<int>(ev.values[0]);
+      e.kind = ev.text == "explosion"  ? EffectKind::explosion
+               : ev.text == "particle" ? EffectKind::burst
+                                       : EffectKind::blood;
       e.at = e.end = ev.origin;
       // A burst's drops and its way as the wire would carry them: the count a byte, each axis of
       // the way in sixteenths from -8 to 7.94.
@@ -639,7 +664,8 @@ void read_streams(Listen& l, const sv::RulesCommon& s, bool clear = true) {
       l.effects.push_back(e);
     }
     for (size_t i = first; i < l.effects.size(); i++)
-      if (l.effects[i].kind == EffectKind::explosion) l.explosions.push_back(l.effects[i].at);
+      if (l.effects[i].kind == EffectKind::explosion && l.effects[i].code != 12)  // 12: its own
+        l.explosions.push_back(l.effects[i].at);
     for (const sv::NetEvent& ev : out.events) take_named(l, ev);
   }
   if (!clear) return;  // the door routes them to the clients, then empties them
@@ -762,6 +788,25 @@ void listen_stop(Listen& l) {
   l.map.reset();
   l = Listen{};
   l.opt = std::move(opt);
+}
+
+void listen_farewell(Listen& l, const std::string& reason, bool restart) {
+  if (!l.match || l.match->game == nullptr || l.match->game->quit == nullptr) return;
+  if (l.match->state != nullptr) l.match->game->quit(l.match->state, reason, restart);
+}
+
+bool listen_net_restart(Listen& l, int& port, std::string& said) {
+  if (!l.match || !l.port || l.opt.transport != nullptr || l.port->local.port == 0) {
+    said = "No game is hosted for others here, so there is no connection to open again.\n";
+    return false;
+  }
+  const int good = l.port->local.port;
+  std::string ip;
+  if (!ge::server::net_restart(*l.port, ip, port, "", good, said)) return false;
+  const ge::server::ServerGame* game = l.match->game;
+  if (game != nullptr && game->reopened != nullptr && l.match->state != nullptr)
+    game->reopened(l.match->state, *l.port);
+  return true;
 }
 
 bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error) {

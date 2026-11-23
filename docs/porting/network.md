@@ -15,6 +15,7 @@ server's behaviour is [`server.md`](server.md); recordings and TV are [`demos.md
 | Engine | `engine/net/replicate.hpp`, `session.hpp`, `node.hpp` | The engine's OWN protocol (replication, sessions, up to 32 peers) for a game that needs no stock interop |
 | Classic plugin | `plugins/classic/protocol/channel.hpp` | The classic net channel: sequences, reliable bit and resend, qport, rate, choke |
 | Classic plugin | `plugins/classic/protocol/info.hpp` | Info strings: get, set, remove, star keys, names cleaned and unique |
+| Classic plugin | `plugins/classic/protocol/download_pace.hpp` | A server's download pieces: by the rate (Quake's) or filling the packet (Quake II's), and the pause after each |
 | Classic plugin | `plugins/classic/protocol/wire.hpp`, `directions.hpp` | Sizes, quantization, fields, CRC-16; Quake II's 162 directions |
 | Engine | `engine/net/http_fetch.hpp` | An HTTP GET for any game: https, proxy (a tunnel for https), redirects, chunks, failure words |
 | Engine | `engine/net/tls_stream.hpp` | TLS 1.2 and 1.3 over caller-carried bytes (Mbed TLS): the system's roots, the name checked, a test server |
@@ -31,7 +32,7 @@ server's behaviour is [`server.md`](server.md); recordings and TV are [`demos.md
 | --- | --- | --- | --- | --- |
 | Wire, version, ports | `net/qw_wire.hpp`, `qw_svc.hpp`, `qw_delta.hpp` | `net/q2_net.hpp`, `server/q2_wire.hpp` (protocol 34) | its own (Huffman-coded, delta snapshots: a reader's facts first) | its own (peer-to-peer lockstep in the original: `engine/net/lockstep.hpp` exists) |
 | Server end | `net/qw_server.hpp` | `net/q2_net_server.hpp` | its own | its own |
-| Client end | `net/qw_client.hpp`, `qw_remote.hpp`; Quake's own protocol 15 (a server on port 26000) by `net/q1_remote.hpp` | `net/q2_client.hpp`, `q2_remote.hpp` | its own | its own |
+| Client end | `net/qw_client.hpp`, `qw_remote.hpp`; Quake's own protocol 15 (a server on port 26000) by `net/q1_remote.hpp` | `net/q2_client.hpp`, `q2_remote.hpp`; protocols 35 and 36 read by `net/q2_proto_in.hpp`, which rewrites each message into protocol 34 so one reader (`client/demo_q2.cpp`) serves every server and a recording stays 34 | its own | its own |
 | Extensions | `net/qw_ext.hpp`: the `x`, `x2`, `z` families and our `ge` set in `*ge_ext` | the `ge` set in `*ge_ext`, its own message ids in the unused range | the `ge` set by its own carrier | ours |
 
 ## Our extensions

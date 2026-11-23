@@ -173,9 +173,18 @@ std::vector<std::string> classic_problems(const ge::ui::Menu& menu, const Classi
                                           int width, int height);
 
 // The page drawn over a darkened game: `t` the seconds the cursor turns by, `help_page` the help
-// picture shown.
+// picture shown. `live_figure`: the setup page's figure is drawn live over it (player_view.hpp),
+// so the pack's still figure is left out.
 void draw_classic(ge::ui::DrawList& list, const ge::ui::Menu& menu, const ClassicArt& art,
-                  const ClassicLayout& layout, double t, int help_page);
+                  const ClassicLayout& layout, double t, int help_page, bool live_figure = false);
+
+// THE SETUP PAGE'S FIGURE on the classic screen (screen px): its box under the rows, and the
+// colour swatches under the box (empty when the page has no colour rows: Quake II's).
+struct SetupFigureBox {
+  ge::ui::Rect figure, swatches;
+};
+SetupFigureBox setup_figure_box(const ge::ui::Page& page, const ClassicLayout& layout,
+                                const ClassicArt& art);
 
 // How many help pictures the art has (0: HELP is drawn as words).
 int help_pages(const ClassicArt& art);

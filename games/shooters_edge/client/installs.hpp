@@ -12,7 +12,7 @@
 //
 // ge:summary Each classic game's install kept by game, and whether it is the shareware or the full
 // ge:keywords installs select-game remember_install remembered_installs edition shareware
-// ge:keywords registered full-game installs-txt game_rows
+// ge:keywords registered full-game installs-txt game_rows mission-pack packs_of pack-row
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #pragma once
@@ -45,10 +45,22 @@ std::string_view edition_words(Edition e, const ge::classicenhance::Profile& con
 // SELECT GAME's rows: each classic game added on this computer (its install kept here, the folder
 // still holding it), in the profiles' order; the game `playing` (a profile id, "" none) is one of
 // them, from `playing_install`; `remixed` the one classic remix plays it with ("" none). Each with
-// its edition. A game never added is not listed: ADD GAME adds it.
+// its edition. A game never added is not listed: ADD GAME adds it. Under a game's row, a row for
+// each of its mission packs that install holds (`<install>/<pack folder>/` with its first pack),
+// the one playing when `playing_folder` (the game folder playing over the install) is the pack's.
 std::vector<shooters_edge::menu::GameRow> game_rows(const std::string& prefs,
                                                     std::string_view playing,
                                                     const std::string& playing_install,
-                                                    std::string_view remixed = {});
+                                                    std::string_view remixed = {},
+                                                    std::string_view playing_folder = {});
+
+// The game folder to play over the install at `basedir`: the mission pack `*pack` names when it is
+// one of `content`'s, else the game's own (`game_of`); `*pack` is cleared either way.
+std::string folder_over(const std::string& basedir, const ge::classicenhance::Profile& content,
+                        std::string* pack);
+
+// The mission packs of `content` the install at `basedir` holds, in the profile's order.
+std::vector<const ge::classicenhance::MissionPack*> packs_of(
+    const std::string& basedir, const ge::classicenhance::Profile& content);
 
 }  // namespace shooters_edge::client

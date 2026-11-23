@@ -35,7 +35,7 @@ namespace {
 
 using ge::ui::ItemKind;
 
-constexpr Choice kWindow[] = {{"windowed", "0"}, {"full screen", "1"}};
+constexpr Choice kWindowed[] = {{"windowed", "0"}};  // then each mode of vid_modelist
 constexpr Choice kFovScale[] = {{"vert-", "0"}, {"hor+", "1"}};
 constexpr Choice kMsaa[] = {{"no", "0"}, {"2x MSAA", "2"}, {"4x MSAA", "4"}, {"8x MSAA", "8"}};
 constexpr Choice kFilter[] = {{"nearest", "GL_NEAREST"},
@@ -59,6 +59,8 @@ constexpr Choice kScale[] = {{"auto", "0"}, {"1x", "1"}, {"2x", "2"}, {"4x", "4"
 constexpr Choice kCrosshair[] = {{"none", "0"}, {"cross", "1"}, {"dot", "2"}, {"angle", "3"}};
 constexpr Choice kChScale[] = {{"0.5x", "0.5"}, {"1x", "1"}, {"2x", "2"}};
 constexpr Choice kHand[] = {{"right", "0"}, {"left", "1"}, {"center", "2"}};
+// The competition rulesets (classic/rulesets.hpp's Quake II book, in its order).
+constexpr Choice kRulesets[] = {{"none", "default"}, {"duel", "duel"}};
 
 // A toggle of client cvar `id`.
 constexpr Entry toggle(std::string_view page, std::string_view id, std::string_view text,
@@ -165,6 +167,18 @@ constexpr Entry kQ2[] = {
      .text = "browse servers",
      .hint = "Servers on the LAN, the masters and the hub.",
      .needs = "connect"},
+    {.page = "multi",
+     .id = "q2servers",
+     .text = "browse q2servers.com",
+     .hint = "The servers q2servers.com lists.",
+     .line = "pushmenu servers \"+http://q2servers.com/?raw=2\"",
+     .needs = "connect"},
+    {.page = "multi",
+     .id = "book",
+     .text = "browse address book",
+     .hint = "The address book, servers.lst and the LAN.",
+     .line = "pushmenu servers \"favorites://\" \"file:///servers.lst\" \"broadcast://\"",
+     .needs = "connect"},
     {.page = "multi", .id = "demos", .text = "browse demos", .needs = "playdemo"},
     opens("multi", "addresses", "address book", "addresses", "adr0"),
     opens("multi", "host", "start server", "host", "sv"),
@@ -216,6 +230,9 @@ constexpr Entry kQ2[] = {
     {.page = "setup", .id = "model", .text = "model", .kind = ItemKind::choice, .needs = "skin"},
     {.page = "setup", .id = "figskin", .text = "skin", .kind = ItemKind::choice, .needs = "skin"},
     spin("setup", "hand", "handedness", kHand),
+    // The weapon the figure beside the rows holds (menu/player_view.hpp): the page's own, no
+    // setting.
+    {.page = "setup", .id = "figweapon", .text = "weapon", .kind = ItemKind::choice},
     back("setup"),
 
     // options.
@@ -230,6 +247,7 @@ constexpr Entry kQ2[] = {
     opens("options", "downloads", "download options", "downloads"),
     {.page = "options", .id = "screenshots", .text = "screenshots", .needs = "screenshot"},
     opens("options", "classic", "CLASSIC ENHANCED", "enhanced", "ce_textures"),
+    spin("options", "ruleset", "ruleset", kRulesets),         // changed only while not on a server
     opens("options", "server", "server settings", "server"),  // server_page.hpp
     {.page = "options",
      .id = "console",
@@ -296,7 +314,14 @@ constexpr Entry kQ2[] = {
     back("weapons"),
 
     // video setup, then Shooter's Edge's own looks.
-    spin("video", "vid_fullscreen", "video mode", kWindow),
+    {.page = "video",
+     .id = "vid_fullscreen",
+     .text = "video mode",
+     .kind = ItemKind::choice,
+     .needs = "vid_fullscreen",
+     .target = Target::client,
+     .choices = kWindowed,
+     .modes_from = "vid_modelist"},
     spin("video", "cl_adjustfov", "fov scaling", kFovScale),
     toggle("video", "gl_swapinterval", "vertical sync"),
     spin("video", "gl_multisamples", "anti-aliasing", kMsaa),
@@ -391,6 +416,18 @@ constexpr Entry kQ2[] = {
     back("downloads"),
 
     // The in-game page ESCAPE opens in a level.
+    {.page = "game",
+     .id = "q2servers",
+     .text = "browse q2servers.com",
+     .hint = "The servers q2servers.com lists.",
+     .line = "pushmenu servers \"+http://q2servers.com/?raw=2\"",
+     .needs = "connect"},
+    {.page = "game",
+     .id = "book",
+     .text = "browse address book",
+     .hint = "The address book, servers.lst and the LAN.",
+     .line = "pushmenu servers \"favorites://\" \"file:///servers.lst\" \"broadcast://\"",
+     .needs = "connect"},
     {.page = "game", .id = "join", .text = "browse servers", .needs = "connect"},
     {.page = "game", .id = "demos", .text = "browse demos", .needs = "playdemo"},
     opens("game", "single", "single player", "single"),
@@ -446,6 +483,13 @@ bool own_page(std::string_view page) {
   return false;
 }
 
+// LOAD: the autosave a level start writes, a gap, then the fifteen a player saves to; SAVE: those
+// fifteen.
+constexpr std::string_view kQ2Load[] = {"save0",  "",       "save1",  "save2",  "save3", "save4",
+                                        "save5",  "save6",  "save7",  "save8",  "save9", "save10",
+                                        "save11", "save12", "save13", "save14", "save15"};
+constexpr std::span<const std::string_view> kQ2Save = std::span(kQ2Load).subspan(2);
+
 }  // namespace
 
 const MenuTable& q2_menu() {
@@ -459,7 +503,13 @@ const MenuTable& q2_menu() {
     }
     return out;
   }();
-  static const MenuTable table{kQ2Pages, rows, kEmptySlot, "game"};
+  static const MenuTable table{.pages = kQ2Pages,
+                               .entries = rows,
+                               .empty_slot = kEmptySlot,
+                               .in_level = "game",
+                               .script = "q2pro.menu",
+                               .load_slots = kQ2Load,
+                               .save_slots = kQ2Save};
   return table;
 }
 

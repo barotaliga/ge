@@ -626,7 +626,7 @@ frame a list of `MorphDraw`s.
 - **Upload once.** Every frame of every model goes into one storage buffer, two `vec4` a vertex.
   The triangles and the coordinates go into two more. The skins are shelf-packed into one
   2048-wide atlas, tallest first, a texel apart (`pack_morph_atlas`). A frame writes only its
-  draws: 256 bytes each, at most `kMaxMorphDraws`.
+  draws: 464 bytes each (272 and six wounds of 32), at most `kMaxMorphDraws`.
 - **A skin to wear.** A model may be skin-only (a skin, no frames), packed into the atlas with
   the rest. A draw's `skin` names the model whose skin it wears over its own coordinates: one
   shared figure, each player in their own picture.
@@ -684,6 +684,13 @@ frame a list of `MorphDraw`s.
   colour goes from a wet near-black red to a dried brown-black by `wet`. The CPU twin is
   `wound_cover`. A game moves the patch out, the run down and the wet toward dry over time
   (Shooter's Edge: `client/world_fx.cpp`'s `body_blood`). No wound: the shader skips it.
+- **The ground shadow** (`MorphDraw::flat`): a second draw of the same pose squashed onto a level
+  floor at `flat_y`, each point moved across by `flat_lean` for each metre it stood above the
+  floor, in the shell's one flat colour (black) and see-through by `alpha`. It is the classic games'
+  blob shadow: one more draw a model, no shadow map. The game finds the floor and sets the floor a
+  hair above it, so the two never fight for depth (Shooter's Edge's `client/model_shadow.hpp`,
+  Quake II's `gl_shadows`). The squashed copy covers the silhouette once, since the dither drops
+  the same pixels from every overlapping triangle, so it never darkens twice.
 - The draws go into the HDR and motion targets after the opaque world. Depth is tested and
   written (reversed z) and back faces are culled.
 
@@ -2183,7 +2190,7 @@ A pool over no ground (the second `create_particles`: a world of brushes or room
 stand-ins for the terrain's heights and horizon, so nothing lands and the sun is not shaded by a
 horizon.
 
-**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 96 bytes, a
+**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 112 bytes, a
 ring: the game hands each frame's births (`emit_particles`) and `prepare_particles` writes
 them into the next slots, so a full pool lets its oldest go first. There is no compaction or
 indirect count yet: `particles.sim` (one thread a slot) skips a dead slot, and `particles`
@@ -2215,7 +2222,7 @@ FLOOR of its own (`floor_y`, world y) for a world the pool has no ground for: co
 hops back up at `bounce` of its speed while it falls faster than `kFloorRest`, else it lies there
 and fades (a chip knocked off a wall hops on the floor below). It hops twice at most, a third of
 them three times (`max_hops`, off the particle's own size and life), then lies where it came down,
-off its own floor and off a drawn surface alike. A slot is 96 bytes.
+off its own floor and off a drawn surface alike. A slot is 112 bytes; a speck may carry a steady acceleration of its own (`accel`, m/s²) on top of gravity's share, as Quake II's boss teleport swirl pulls its specks back in and up.
 
 **What was drawn (M47c).** A pool made with `ParticleSettings::collide` lets what falls (a grain,
 a spark, debris) meet whatever the last frame drew, in a world of brushes or models with no

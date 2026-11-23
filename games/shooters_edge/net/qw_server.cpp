@@ -16,6 +16,7 @@
 #include <iterator>
 #include <string_view>
 
+#include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
@@ -298,6 +299,14 @@ void handle_connect(QwServer& s, const gn::Address& from, const std::string& tex
     reject(s, from, "server is locked");
     return;
   }
+  // A competition server's ruleset (sv_ruleset, server/admission.hpp): a player keeps to it, as
+  // the client's `*rsn` says (classic/rulesets.hpp's ruleset_info_key).
+  if (const std::string why =
+          ge::server::ruleset_refusal(s.cfg.ruleset, info_get(userinfo, "*rsn"), spectator);
+      !why.empty()) {
+    reject(s, from, why);
+    return;
+  }
   // One address's seats held to sv_iplimit (server/admission.hpp).
   if (s.cfg.ip_limit > 0) {
     std::vector<ge::server::HeldSeat> held;
@@ -541,6 +550,9 @@ void handle_packet(QwServer& s, int slot, const uint8_t* data, size_t size) {
     c.ping_s = c.ping_samples == 0 ? ping : c.ping_s + (ping - c.ping_s) / 16.0;
     c.ping_samples++;
     acked.sent = -acked.sent;  // counted once
+    // The rules read it too (the weapon state's ping byte, a program's `ping` info).
+    if (slot >= 0 && slot < ge::shooter::kMaxClients)
+      s.game->clients[slot].ping_ms = static_cast<int>(ge::core::num::round(c.ping_s * 1000));
   }
   // The hold toward the minimum ping (sv_minping), 1 ms a packet; never for a spectator.
   if (s.cfg.min_ping_ms > 0 && !c.spectator && !s.game->paused && c.ping_samples > 0) {
@@ -698,10 +710,10 @@ void stuff(QwServer& s, int slot, const std::string& text) {
 
 void client_print(QwServer& s, int slot, int level, const std::string& text) {
   if (s.clients[slot].local) {
-    if (s.local_print != nullptr) s.local_print(s.local_ctx, slot, text);
+    if (s.local_print != nullptr) s.local_print(s.local_ctx, slot, level, text);
     return;
   }
-  if (level < s.clients[slot].msg_level && level < 3) return;
+  if (!ge::classic::protocol::print_reaches(level, s.clients[slot].msg_level, true)) return;
   SvcMsg m;
   m.id = svc::print;
   m.ints = {level};
@@ -820,6 +832,7 @@ bool bind_map(QwServer& s, const sv::RulesRunner& rules, std::string& error) {
   info_set(s.serverinfo, "hostname", s.cfg.hostname, kServerInfoBytes);
   info_set(s.serverinfo, "maxclients", std::to_string(qc.sv.set.maxclients), kServerInfoBytes);
   info_set(s.serverinfo, "maxfps", std::to_string(s.cfg.maxfps), kServerInfoBytes);
+  if (!s.cfg.ruleset.empty()) info_set(s.serverinfo, "ruleset", s.cfg.ruleset, kServerInfoBytes);
   info_set(s.serverinfo, "sv_antilag", std::to_string(s.cfg.antilag), kServerInfoBytes);
   if (s.cfg.antilag_projectiles)
     info_set(s.serverinfo, "sv_antilag_projectiles", "1", kServerInfoBytes);
@@ -834,6 +847,11 @@ bool bind_map(QwServer& s, const sv::RulesRunner& rules, std::string& error) {
     info_set(s.serverinfo, rule, c->value, kServerInfoBytes);
     if (std::string_view(rule) == "deathmatch") monsters = false;
   }
+  // The match's settings every QuakeWorld server publishes, zero or not.
+  info_set(s.serverinfo, "maxspectators", std::to_string(s.cfg.max_spectators), kServerInfoBytes);
+  for (const char* rule : {"teamplay", "fraglimit", "timelimit", "samelevel", "watervis"})
+    if (const ge::console::Cvar* c = qc.cvars.find(rule); c != nullptr && !c->value.empty())
+      info_set(s.serverinfo, rule, c->value, kServerInfoBytes);
   if (!s.cfg.progs_crc.empty()) info_set(s.serverinfo, "*progs", s.cfg.progs_crc, kServerInfoBytes);
   if (!s.cfg.download_server.empty())
     info_set(s.serverinfo, "*dlserver", s.cfg.download_server, kServerInfoBytes);
@@ -943,6 +961,8 @@ void qw_drop(QwServer& s, int slot, const std::string& why) {
   line += why;
   s.log.push_back(line);
   s.counts.drops++;
+  if (!c.local && why != "timed out" && s.cfg.zombie_s > 0)
+    s.zombies.push_back({c.address, c.ch, slot, c.userid, s.now + s.cfg.zombie_s});
   c = QwClient{};
   full_client_update(s, slot, -1);
 }
@@ -1169,8 +1189,32 @@ void tell_frags(QwServer& s) {
 
 }  // namespace
 
+namespace {
+
+// A packet from a zombie's address and port (QwServer::zombies): taken on his channel, its
+// commands never run, answered with the goodbye alone.
+void answer_zombie(QwServer& s, const gn::Address& from, uint16_t qport, const uint8_t* buf,
+                   size_t size) {
+  for (QwServer::Zombie& z : s.zombies) {
+    if (!same_host(z.address, from) || z.ch.qport != qport) continue;
+    z.address = from;
+    size_t at = 0;
+    if (!channel_process(z.ch, buf, size, s.now, at)) return;
+    uint8_t out[kMaxPacket];
+    const uint8_t bye = svc::disconnect;
+    const size_t n = channel_transmit(z.ch, &bye, 1, s.now, out);
+    gn::transport_send(*s.transport, z.address, out, n, static_cast<int64_t>(s.now * 1e6));
+    s.counts.datagrams_out++;
+    s.counts.bytes_out += static_cast<int64_t>(n);
+    return;
+  }
+}
+
+}  // namespace
+
 void qw_frame(QwServer& s, int64_t now_us) {
   s.now = static_cast<double>(now_us) / 1e6;
+  std::erase_if(s.zombies, [&s](const QwServer::Zombie& z) { return s.now > z.until; });
   if (s.started < 0) s.started = s.now;
   s.frames++;
   s.packets.clear();
@@ -1202,7 +1246,10 @@ void qw_frame(QwServer& s, int64_t now_us) {
       slot = i;
       break;
     }
-    if (slot < 0) continue;
+    if (slot < 0) {
+      answer_zombie(s, from, qport, buf, size);
+      continue;
+    }
     QwClient& c = s.clients[slot];
     if (c.hold_s > 0 || !c.held.empty()) {  // held back for the minimum ping
       c.held.push_back({s.now + c.hold_s, std::vector<uint8_t>(buf, buf + size)});

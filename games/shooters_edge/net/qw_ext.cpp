@@ -24,6 +24,7 @@ const ExtBit kExtBits[] = {
     {ExtFamily::x2, false, kX2Voice, "voice"},
     {ExtFamily::mvd, true, kMvdFloatCoords, "origin-floats"},
     {ExtFamily::mvd, true, kMvdTeleport, "teleport-kind"},
+    {ExtFamily::mvd, true, kMvdWeaponPred, "weapon-prediction"},
     {ExtFamily::z, true, kZPmType, "pm-type"},
     {ExtFamily::z, true, kZPmTypeNew, "pm-type-new"},
     {ExtFamily::z, true, kZViewHeight, "view-height"},
@@ -45,6 +46,7 @@ const ExtBit kExtBits[] = {
     {ExtFamily::ge, false, kGeVoice, "voice"},                     // Quake II's server only
     {ExtFamily::ge, false, kGeEveryFrame, "every-frame"},          // Quake II's server only
     {ExtFamily::ge, false, kGeHitReports, "hit-reports"},          // Quake II's server only
+    {ExtFamily::ge, false, kGeArsenal, "arsenal"},                 // Quake II's server only
 };
 const int kExtBitCount = static_cast<int>(sizeof kExtBits / sizeof kExtBits[0]);
 

@@ -24,12 +24,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "classic/protocol/directions.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/q2_flash_fx.hpp"
+#include "shooters_edge/client/q2_temp_fx.hpp"
 
 namespace shooters_edge::client {
 
@@ -67,6 +69,7 @@ enum : uint8_t {
   kGeAccountKey = 127,  // and the tag of its logins' key
   kGeBack = 119,        // and an item taken and when it comes back
   kGeSheet = 120,       // and a part of the settings sheet (net/q2_votes.hpp)
+  kGeArsenal = 118,     // and the weapons held and the ammunition (net/q2_net_server.hpp)
 };
 
 // The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
@@ -205,9 +208,9 @@ void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext, int* event 
   const bool wide_model = ext > 0 && (bits & kModel16) != 0;
   const auto model = [&] { return wide_model ? m.u16() : m.u8(); };
   if ((bits & kModel) != 0) e.model = model();
-  if ((bits & kModel2) != 0) model();
-  if ((bits & kModel3) != 0) model();
-  if ((bits & kModel4) != 0) model();
+  if ((bits & kModel2) != 0) e.more[0] = model();
+  if ((bits & kModel3) != 0) e.more[1] = model();
+  if ((bits & kModel4) != 0) e.more[2] = model();
   if ((bits & kFrame8) != 0) e.frame = m.u8();
   if ((bits & kFrame16) != 0) e.frame = m.i16();
   if ((bits & (kSkinLow | kSkinHigh)) != 0) e.skin = sized64(m, bits, kSkinLow, kSkinHigh);
@@ -278,6 +281,12 @@ void set_string(Demo& d, int index, std::string text) {
   };
   if (index == 1) {
     s.cdtrack = q2_music_track(text, s.cdtrack);
+    // A name rather than a number: `music/<name>` (q2_music_track keeps the last number for it).
+    const bool number = !text.empty() && text.find_first_not_of("0123456789") == std::string::npos;
+    s.cdname = text.empty() || number ? std::string{} : text;
+    if (!s.cdname.empty()) s.cdtrack = -1;
+  } else if (index == 2) {
+    s.sky = std::move(text);
   } else if (index == cs.max_clients) {
     // Entities 1 to this are the players: kept by slot, so the rest number past `players`.
     d.max_clients = std::clamp(std::atoi(text.c_str()), 1, 32);
@@ -291,6 +300,9 @@ void set_string(Demo& d, int index, std::string text) {
     put(s.models, index - cs.models, std::move(text));
   } else if (index >= cs.sounds && index < cs.images) {
     put(s.sounds, index - cs.sounds, std::move(text));
+  } else if (index >= cs.skins - 512 && index < cs.skins - 512 + int(kDemoLightStyles)) {
+    s.light_styles[static_cast<size_t>(index - (cs.skins - 512))] =
+        std::move(text);  // the first 64 of 256
   } else if (index >= cs.images && index < cs.images + (cs.sounds - cs.models)) {
     put(s.images, index - cs.images, std::move(text));
   } else if (index == cs.max_clients - 1) {  // the air acceleration, just before the slots
@@ -317,11 +329,13 @@ void server_data(Demo& d, DemoMsg& m) {
   s.player = std::max(0, m.i16());
   m.str();  // the level's full name
   s.levels++;
+  s.light_styles = {};
   s.places = {};
   s.map.clear();
   s.models.assign(1, "");
   s.sounds.assign(1, "");
   s.images.assign(1, "");
+  s.sky.clear();
   s.item_names.assign(1, "");
   s.status_bar.clear();
   s.air_accelerate = 0;
@@ -392,7 +406,7 @@ void player_info(DemoMsg& m, Q2View& v, int ext) {
       for (int i = 0; i < 4; i++)
         if ((which >> i & 1) != 0) v.blend[i] = static_cast<uint8_t>(m.u8());
       for (int i = 4; i < 8; i++)
-        if ((which >> i & 1) != 0) m.u8();
+        if ((which >> i & 1) != 0) v.damage_blend[i - 4] = static_cast<uint8_t>(m.u8());
     } else {
       for (uint8_t& c : v.blend) c = static_cast<uint8_t>(m.u8());
     }
@@ -526,6 +540,7 @@ void event_sound(DemoState& s, int n, int event, int32_t number) {
                        (static_cast<uint32_t>(n) * 40503u)) >>
                       30];
       o.channel = kChanBody;
+      o.step = true;
       break;
     case kEvFallShort:
       o.name = "player/land1.wav";
@@ -576,6 +591,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
             " is not followed by the player's state: the recording is damaged";
     return false;
   }
+  d.q2_read[kPlayerInfo]++;
   const size_t slot = static_cast<size_t>(number) & 15;
   const size_t base_slot = static_cast<size_t>(delta) & 15;
   const bool have_base = delta > 0 && d.views[base_slot].frame == delta;
@@ -591,6 +607,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
         "the frame" + at_byte(m) + " is not followed by its entity list: the recording is damaged";
     return false;
   }
+  d.q2_read[kPacketEntities]++;
   Frame to;
   std::vector<std::pair<int, int>> events;
   if (!packet_entities(d, m, have_base ? &d.ring[base_slot] : nullptr, to, events, error))
@@ -626,6 +643,9 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
                   static_cast<float>(v.gun_offset[2]) * 0.25f};
   s.fov = static_cast<float>(v.fov);
   s.rdflags = v.rdflags;
+  std::copy(std::begin(v.blend), std::end(v.blend), std::begin(s.q2_blend));
+  std::copy(std::begin(v.damage_blend), std::end(v.damage_blend), std::begin(s.q2_damage));
+  s.teleport_bit = ext_of(s.protocol) > 0 ? (v.rdflags & 16) != 0 : (v.pm_flags & 128) != 0;
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;
@@ -678,6 +698,13 @@ void sound(DemoState& s, DemoMsg& m) {
   } else {
     o.origin = s.eye;  // the listener's own
   }
+  // A server that sends a hit's or a blast's sound beside its temporary entity (ours does) is
+  // heard once: the client already plays that sound for the entity (q2_temp_fx.hpp).
+  std::string_view name;
+  if (o.sound > 0 && static_cast<size_t>(o.sound) < s.sounds.size())
+    name = s.sounds[size_t(o.sound)];
+  for (const DemoSound& t : s.started)
+    if (t.entity == -1 && t.name != nullptr && !name.empty() && name == t.name) return;
   s.started.push_back(o);
 }
 
@@ -702,6 +729,7 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
   DemoEffect e;
   e.code = kind;
   bool keep = true;
+  int splash = -1;  // a splash's kind byte (its sound)
   const auto point_dir = [&](DemoEffectKind k) {
     e.kind = k;
     e.at = e.end = pos(m);
@@ -727,7 +755,10 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
     case 42:  // more blood
       if (!point_dir(DemoEffectKind::blood)) return false;
       break;
-    case 2:
+    case 2:  // the blaster's bolt landing: its yellow sparks and the mark, as our own game's
+      if (!point_dir(DemoEffectKind::named)) return false;
+      e.name = "te_blaster";
+      break;
     case 9:
     case 12:
     case 13:
@@ -745,7 +776,6 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
     case 17:
     case 18:
     case 20:
-    case 21:
     case 28:
     case 35:
     case 47:
@@ -754,8 +784,17 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
     case 54:
       point(DemoEffectKind::explosion);
       break;
-    case 22:
-      point(DemoEffectKind::teleport);
+    case 21: {  // the BFG's big burst: an explosion, and its green burst and mark beside it
+      point(DemoEffectKind::explosion);
+      DemoEffect burst = e;
+      burst.kind = DemoEffectKind::named;
+      burst.name = "te_bfg_bigexplosion";
+      if (!m.bad) s.effects.push_back(std::move(burst));
+      break;
+    }
+    case 22:  // a boss teleporting out: its swirl (its sound is q2_temp_sound's)
+      point(DemoEffectKind::named);
+      e.name = "sq_boss_teleport";
       break;
     case 48:  // Quake II's teleport burst (the base game sends none; a mod may)
       point(DemoEffectKind::named);
@@ -773,9 +812,12 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       point(DemoEffectKind::named);
       e.name = "sq_widow_splash";
       break;
-    case 3:
+    case 3:  // the rail's line: its core and spiral as cl_railtrail_type asks, as our own game's
+      line(DemoEffectKind::named_trail);
+      e.name = "te_railtrail";
+      break;
     case 23:
-    case 34:  // the rail's line, a laser, a trail
+    case 34:  // a laser, a trail
       line(DemoEffectKind::beam);
       break;
     case 11:
@@ -802,6 +844,7 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       const int count = m.u8();
       if (!point_dir(DemoEffectKind::named)) return false;
       const int c = m.u8();
+      if (kind == 10) splash = c;
       e.name = kind == 10 ? "sq_splash" : "sq_laser_sparks";
       e.count = count;
       e.colour = kind == 15 ? c : c < 7 ? kSplashColour[c] : 0;
@@ -817,17 +860,24 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       break;
     }
     case 16:
-    case 19:
+    case 19:  // a parasite's tongue, a medic's cable: entity, start, end, as our own game's
+      e.entity = m.i16();
+      line(DemoEffectKind::named_trail);
+      e.name = kind == 16 ? "te_parasite_attack" : "te_medic_cable_attack";
+      break;
     case 38:
     case 39:  // entity, start, end
       e.entity = m.i16();
       line(DemoEffectKind::beam);
       break;
-    case 24:  // the grapple: entity, start, end, offset
+    case 24: {  // the grapple: entity, start, end, offset; its cable from the start plus the offset
       e.entity = m.i16();
-      line(DemoEffectKind::beam);
-      pos(m);
+      line(DemoEffectKind::named_trail);
+      e.name = "te_grapple_cable";
+      e.way = pos(m);
+      e.at = e.at + e.way;
       break;
+    }
     case 33:  // lightning: two entities, start, end
       e.entity = m.i16();
       m.i16();
@@ -918,18 +968,40 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
               " that this game's recordings do not carry: the recording is damaged";
       return false;
   }
+  // Quake II's puff for a hit (its specks' count and colours), and the sound the client itself
+  // plays for one (the server sends none: q2_temp_fx.hpp).
+  if (const Q2Puff* puff = q2_puff(kind); puff != nullptr) {
+    e.q2_specks = puff->count;
+    e.colour = puff->colour;
+  }
+  const auto pick = static_cast<uint32_t>(static_cast<int>(s.time * 1000) * 7919 +
+                                          static_cast<int>(e.at.x) * 31 + static_cast<int>(e.at.y));
+  if (const Q2TempSound ts = q2_temp_sound(kind, pick, splash); ts.name != nullptr && !m.bad) {
+    const bool busy =
+        ts.alone && std::any_of(s.started.begin(), s.started.end(), [&](const DemoSound& o) {
+          return o.name != nullptr && std::string_view(o.name) == ts.name;
+        });
+    if (!busy) {
+      DemoSound o;
+      o.entity = -1;
+      o.name = ts.name;
+      o.attenuation = ts.attenuation;
+      o.origin = ts.at_end ? e.end : e.at;
+      s.started.push_back(o);
+    }
+  }
   if (keep && !m.bad) s.effects.push_back(e);
   return true;
 }
 
-// One block's messages into the state.
-bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
+// One message into the state (its id first); false with the reason. A disconnect sets `ended`.
+bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
   DemoState& s = d.state;
-  if (d.spans != nullptr) d.spans->clear();
-  while (!m.done()) {
+  {
     const size_t at = m.at;
     m.int23 = ext_of(s.protocol) >= 2;  // set again after a server data
     const int id = m.u8();
+    d.q2_read[id]++;
     switch (id) {
       case kMuzzleFlash: {  // a player entering (9), leaving (10) or respawned (11): its burst
         const int n = m.i16(), value = m.u8(), flash = value & 127;
@@ -978,6 +1050,10 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         DemoPrint p;
         p.level = m.u8();
         p.text = m.str();
+        if (ext_of(s.protocol) > 0 && p.level >= 4) {  // the extended levels 4 and 5: centred
+          s.centre = std::move(p.text);
+          break;
+        }
         s.prints.push_back(std::move(p));
         break;
       }
@@ -1042,8 +1118,8 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
           o.slot = m.u8();
           o.msec = m.u8();
           o.state.type = static_cast<ge::classic::Q2Type>(std::min(m.u8(), 4));
-          for (int16_t& v : o.state.origin) v = static_cast<int16_t>(m.i16());
-          for (int16_t& v : o.state.velocity) v = static_cast<int16_t>(m.i16());
+          for (int32_t& v : o.state.origin) v = m.i16();
+          for (int32_t& v : o.state.velocity) v = m.i16();
           o.state.flags = static_cast<uint8_t>(m.u8());
           o.state.time = static_cast<uint8_t>(m.u8());
           o.state.gravity = static_cast<int16_t>(m.i16());
@@ -1070,6 +1146,16 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         b.yaw = static_cast<float>(static_cast<int16_t>(m.i16())) * (360.0f / 65536);
         b.at = s.time + static_cast<double>(static_cast<uint32_t>(m.i32())) * 0.001;
         if (!m.bad) take_item_back(s, b);
+        break;
+      }
+      case kGeArsenal: {  // the weapons held (a mask by row), then each ammunition's count
+        const int held = m.u16();
+        int16_t ammo[7] = {};
+        for (int k = 1; k < 7; k++) ammo[k] = static_cast<int16_t>(m.i16());
+        if (m.bad) break;
+        d.arsenal_told = true;
+        d.arsenal_weapons = static_cast<uint16_t>(held);
+        std::copy(std::begin(ammo), std::end(ammo), std::begin(d.arsenal_ammo));
         break;
       }
       case kGeAccountKey:  // the logins' key tag
@@ -1167,6 +1253,16 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
   return true;
 }
 
+// One block's messages into the state.
+bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
+  if (d.spans != nullptr) d.spans->clear();
+  while (!m.done()) {
+    if (!read_message(d, m, framed, error)) return false;
+    if (d.ended) return true;
+  }
+  return true;
+}
+
 int32_t i32_at(std::span<const uint8_t> b, size_t at) {
   uint32_t v = 0;
   std::memcpy(&v, b.data() + at, 4);  // little-endian on every platform the game runs on
@@ -1180,6 +1276,33 @@ void q2_stream_begin(Demo& d) {
   d.state.protocol = 34;
   d.ring.resize(16);
   d.baselines.resize(kMostEntitiesExt);
+}
+
+bool q2_message_end(Demo& scratch, std::span<const uint8_t> b, size_t at, size_t& end,
+                    std::string& error) {
+  DemoMsg m{b};
+  m.at = at;
+  bool framed = false;
+  scratch.spans = nullptr;
+  scratch.ended = false;
+  const bool ok = read_message(scratch, m, framed, error);
+  end = m.at;
+  return ok;
+}
+
+void q2_scratch_clear(Demo& d) {
+  DemoState& s = d.state;
+  s.effects.clear();
+  s.prints.clear();
+  s.started.clear();
+  s.stopped.clear();
+  s.voice.clear();
+  s.centre.clear();
+  d.stuffed.clear();
+  d.download_pieces.clear();
+  d.download_origins.clear();
+  d.ended = false;
+  d.reconnect = false;
 }
 
 bool is_q2_demo(std::span<const uint8_t> bytes) {
@@ -1215,7 +1338,7 @@ DemoRead next_q2(Demo& d, std::string& error) {
     }
     // An extended recording's blocks run to 32768 bytes (its first, the server data, says so).
     const bool extended =
-        ext_of(d.state.protocol) > 0 ||
+        d.wide_blocks || ext_of(d.state.protocol) > 0 ||
         (block + 9 <= b.size() && b[block + 4] == kServerData && ext_of(i32_at(b, block + 5)) > 0);
     const int32_t most = extended ? kMostBlockExt : kMostBlock;
     if (len <= 0 || len > most) {

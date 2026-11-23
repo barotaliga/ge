@@ -20,6 +20,7 @@
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "classic/q2_move.hpp"
+#include "shooters_edge/server/q2_commands.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -166,11 +167,11 @@ void frames(Hall& h, int n) {
 }
 
 void place(Hall& h, float x, float y, float z) {
-  int16_t* o = h.p().move.origin;
+  int32_t* o = h.p().move.origin;
   o[0] = static_cast<int16_t>(x * 8);
   o[1] = static_cast<int16_t>(y * 8);
   o[2] = static_cast<int16_t>(z * 8);
-  for (int16_t& v : h.p().move.velocity) v = 0;
+  for (int32_t& v : h.p().move.velocity) v = 0;
 }
 
 float z_of(const sv::Q2Player& p) { return float(p.move.origin[2]) / 8; }
@@ -196,6 +197,15 @@ TEST(a_shut_area_portal_cuts_hearing_between_rooms) {
   CHECK(sv::map_areas_connected(s, hall, side) && sv::map_hears(s, hall, side));
   s.portals[1] = 0;  // and shuts
   CHECK(!sv::map_areas_connected(s, side, hall));
+  std::vector<uint8_t> bits;
+  sv::map_area_bits(s, hall, bits);
+  CHECK(!bits.empty() && (bits[0] & 4) == 0 && !sv::map_area_groups(s).empty());
+  // map_noareas: the portals ignored, every area joined and every bit set.
+  sv::commands_cvars(s);
+  s.cvars.set("map_noareas", "1", ge::console::Source::local);
+  CHECK(sv::map_areas_connected(s, side, hall) && sv::map_hears(s, hall, side));
+  sv::map_area_bits(s, hall, bits);
+  CHECK(!bits.empty() && bits[0] == 0xff && sv::map_area_groups(s).empty());
 }
 
 }  // namespace

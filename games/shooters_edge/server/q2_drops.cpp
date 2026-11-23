@@ -34,7 +34,7 @@ int skill(const Q2Server& s) {
 bool fightable(const Q2Server& s, int i) {
   return s.clients[i].active && !s.clients[i].spectator && s.players[i].alive;
 }
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
 
@@ -274,7 +274,7 @@ void fight_touch_drops(Q2Server& s, int slot) {
 }
 
 void fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname) {
-  const int item = sq_item(classname);
+  const int item = sq_item(classname, s.opt.pack);
   if (item < 0) return;
   for (Q2Drop& d : s.drops) {
     if (d.live) continue;

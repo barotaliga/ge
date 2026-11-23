@@ -19,6 +19,8 @@
 #include <objc/runtime.h>
 #endif
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <mutex>
 #include <span>
@@ -355,6 +357,10 @@ std::vector<Display> displays() {
   return out;
 }
 
+void set_minimize_on_focus_loss(bool on) {
+  SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, on ? "1" : "0");
+}
+
 bool set_window_style(Window& window, const WindowStyle& style) {
   SDL_Window* w = window.impl_->window;
   const bool ok = SDL_SetWindowBordered(w, style.border) &&
@@ -378,7 +384,22 @@ bool set_window_place(Window& window, const WindowPlace& place) {
   return ok;
 }
 
-bool set_fullscreen(Window& window, bool on, int display) {
+std::vector<std::string> display_modes() {
+  std::vector<std::string> out;
+  int count = 0;
+  SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(SDL_GetPrimaryDisplay(), &count);
+  if (modes == nullptr) return out;
+  for (int i = 0; i < count; i++) {
+    const SDL_DisplayMode& m = *modes[i];
+    const std::string one = std::to_string(m.w) + "x" + std::to_string(m.h) + "@" +
+                            std::to_string(std::lround(m.refresh_rate));
+    if (std::find(out.begin(), out.end(), one) == out.end()) out.push_back(one);
+  }
+  SDL_free(reinterpret_cast<void*>(modes));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+  return out;
+}
+
+bool set_fullscreen(Window& window, bool on, int display, const FullMode* mode) {
   SDL_Window* w = window.impl_->window;
   if (on && display > 0) {
     // The window moved onto that display first: the fullscreen covers the display it stands on.
@@ -398,8 +419,15 @@ bool set_fullscreen(Window& window, bool on, int display) {
       SDL_SyncWindow(w);
     }
   }
-  // A null mode is the borderless desktop fullscreen: the display keeps its mode.
-  if (!SDL_SetWindowFullscreenMode(w, nullptr) || !SDL_SetWindowFullscreen(w, on)) {
+  // A null mode is the borderless desktop fullscreen: the display keeps its mode; else the
+  // display's mode closest to the one asked (a depth is not the platform's to choose).
+  SDL_DisplayMode closest{};
+  const SDL_DisplayMode* use = nullptr;
+  if (on && mode != nullptr &&
+      SDL_GetClosestFullscreenDisplayMode(SDL_GetDisplayForWindow(w), mode->width, mode->height,
+                                          static_cast<float>(mode->hz), false, &closest))
+    use = &closest;
+  if (!SDL_SetWindowFullscreenMode(w, use) || !SDL_SetWindowFullscreen(w, on)) {
     out::error(std::string("platform: the window could not go ") +
                (on ? "fullscreen" : "back to a window") + " (" + SDL_GetError() +
                "); the window stays as it was; skill: platform.");

@@ -506,7 +506,15 @@ reliable channel can take it this frame.
    asks with unreliable `nextdl <chunk> <percent> <download number>` for up to
    `cl_chunksperframe` chunks a frame (1..30); the server sends at most
    `sv_downloadchunksperframe` (default 30) a frame, the first inside the datagram and the rest as
-   out-of-band packets whose text is `\chunk`, a long download number, then the svc 41 body.
+   out-of-band packets. Such a packet (read, both servers) is 1044 bytes: 0xffffffff, the print
+   command `n`, the six characters `\chunk` with no NUL, a long download number (the one the
+   client's `nextdl` named), the svc byte 41, a long chunk number and 1024 bytes (the last chunk
+   zero-padded). A client takes an `n` packet over 100 bytes starting `\chunk` as a chunk, drops
+   one whose number is not its current download's or whose next byte is not 41, and never prints
+   either; any other `n` packet is printed. A client asks again by cycling through the chunks it
+   lacks, with no timer. One server caps requests at 30 per client packet and does not rate-limit
+   the out-of-band chunks; the other sends one chunk per request, charges out-of-band chunks to
+   `drate` (default cap 500000 bytes/s) and drops a request while choked (read).
    The client ends with `nextdl -1 <percent> <num>` or `stopdownload`.
 4. A finished file is written under a temporary name and renamed. Skins are fetched during
    signon (§ 5, step 7), maps and models when the lists name a missing one. The client refuses

@@ -50,6 +50,7 @@
 #include "shooters_edge/view/hand.hpp"
 #include "ui/raster.hpp"
 #include "vfs/pak.hpp"
+#include "vfs/search.hpp"
 
 namespace {
 
@@ -176,7 +177,7 @@ constexpr std::pair<const char*, const char*> kWindowCvars[] = {
     {"r_lava_glow", "0.2"}, {"r_slime_glow", "1"},  {"gamma", "1"},        {"vid_fullscreen", "0"},
     {"sv_weather", "0"},    {"sv_rain", "1"},       {"sv_precip", "0.5"},  {"sv_wind", "4"},
     {"r_lightning", "1"},   {"r_snowcover", "1"},   {"r_wet", "1"},        {"topcolor", "4"},
-    {"bottomcolor", "12"},
+    {"bottomcolor", "12"},  {"ruleset", "default"},
 };
 
 // The window's console: what the menu's rows read and run.
@@ -360,6 +361,16 @@ void run(ge::lab::Lab& lab) {
       sets.push_back({"enhanced", std::move(enhanced), ge::lab::Det::measured});
   }
 
+  // The pack as the menu's files too: the setup page's live figure is read from them.
+  ge::vfs::SearchPath pack_files;
+  if (!pack.src.content().empty()) {
+    std::string error;
+    if (!ge::vfs::add_archive(&pack_files, "pak0.pak", pack.src.content(), "id1", &error))
+      lab.note("the pack is not the menu's files (" + error +
+               "): the setup page's figure is the "
+               "pack's still one");
+  }
+
   int problems = 0;
   const auto snap = [&](Game& g, const Viewport& v, const std::string& id, const std::string& title,
                         const std::string& caption, const std::string& look, const std::string& art,
@@ -399,6 +410,7 @@ void run(ge::lab::Lab& lab) {
       if (classic && v.h > v.w) continue;  // the classic screen is landscape
       Game g;
       if (classic) g.menu.set_art(sets[static_cast<size_t>(pass)].art);
+      if (classic && art != "fixture") g.host.files = &pack_files;
       int dimmed = 0, rows = 0;
       for (const PageShot& ps : kPages) {
         if (std::string_view(ps.page) == "games")
@@ -412,6 +424,7 @@ void run(ge::lab::Lab& lab) {
         g.menu.show(g.host, asked ? "single" : ps.page);
         if (asked) g.menu.main().open("newgame");
         if (*ps.focus) g.menu.main().focus(ps.focus);
+        if (std::string_view(ps.page) == "setup") g.menu.update({}, false, g.host, 0);  // figure
         for (const ui::Item& it : g.menu.main().top().items) {
           if (it.kind == ui::ItemKind::label || it.kind == ui::ItemKind::back) continue;
           rows++;
@@ -421,6 +434,21 @@ void run(ge::lab::Lab& lab) {
             cat({look, classic ? "-" : "", classic ? art : "", "-", ps.page, "-", v.name()});
         snap(g, v, id, cat({"THE ", look, " MENU, ", ps.page, ", AT ", v.name()}), ps.caption, look,
              art, det);
+      }
+      if (classic && g.menu.figure().ready()) {
+        // The setup page's figure turned by a drag, firing the rocket launcher.
+        g.menu.show(g.host, "setup");
+        g.menu.main().focus("figweapon");
+        if (ui::Item* w = g.menu.main().top().find("figweapon"); w != nullptr) w->choice = 6;
+        g.menu.update({}, false, g.host, 0);
+        g.menu.figure().hold(150, 0);
+        g.menu.figure().fire();
+        g.menu.update({}, false, g.host, 0.25);
+        snap(g, v, cat({look, "-", art, "-setup-turned-", v.name()}),
+             "THE SETUP PAGE'S FIGURE, TURNED AND FIRING",
+             "The player's model drawn live in the chosen colours, turned by a drag and playing "
+             "the rocket launcher's attack frames.",
+             look, art, det);
       }
       if (classic) {
         // Two more help pages, as the arrows turn them.

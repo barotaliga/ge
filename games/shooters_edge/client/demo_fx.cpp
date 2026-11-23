@@ -9,6 +9,7 @@
 #include <cstddef>
 
 #include "classic/q2_fx_switches.hpp"
+#include "shooters_edge/client/own_missiles.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 
 namespace shooters_edge::client {
@@ -21,6 +22,8 @@ Effect effect_of(const DemoEffect& d) {
   e.colour = d.colour;
   e.at = d.at;
   e.end = d.end;
+  e.q2_specks = d.q2_specks;
+  if (d.q2_specks > 0) e.way = d.way;  // the face's normal the puff leaves
   switch (d.kind) {
     case DemoEffectKind::spike:
       e.kind = EffectKind::spike;
@@ -48,6 +51,10 @@ Effect effect_of(const DemoEffect& d) {
     case DemoEffectKind::named_trail:
       e.kind = EffectKind::named_trail;
       e.name = d.name;
+      break;
+    case DemoEffectKind::burst:
+      e.kind = EffectKind::burst;
+      e.way = d.way;
       break;
     case DemoEffectKind::blood:
       e.kind = EffectKind::blood;
@@ -87,21 +94,19 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
   if (s.levels != fx.levels) {  // a new level: the effects start again
     fx.levels = s.levels;
     fx.explosions.clear();
-    fx.explosion_kinds.clear();
+    fx.explosion_codes.clear();
     fx.effects.clear();
   }
   for (const DemoEffect& e : s.effects) {
-    if (e.kind == DemoEffectKind::explosion) {
+    // Quake's explosion2 (12) is drawn in its own colours, with the other effects.
+    const bool q2 = s.format == DemoFormat::q2 || s.format == DemoFormat::q2_multiview;
+    if (e.kind == DemoEffectKind::explosion && (q2 || e.code != 12)) {
       fx.explosions.push_back(e.at);
-      // Quake II's rocket's and grenade's (in the air and in water), for cl_disable_explosions.
-      const bool q2 = s.format == DemoFormat::q2 || s.format == DemoFormat::q2_multiview;
-      const uint8_t kind = !q2                           ? 0
-                           : e.code == 7 || e.code == 17 ? ge::classic::kQ2Rocket
-                           : e.code == 8 || e.code == 18 ? ge::classic::kQ2Grenade
-                                                         : 0;
-      if (kind != 0) {
-        fx.explosion_kinds.resize(fx.explosions.size());
-        fx.explosion_kinds.back() = kind;
+      // Quake II's kind byte: its model, light and specks (q2_model_fx.hpp), and which of
+      // cl_disable_explosions' bits reach it.
+      if (q2 && e.code > 0 && e.code < 256) {
+        fx.explosion_codes.resize(fx.explosions.size());
+        fx.explosion_codes.back() = static_cast<uint8_t>(e.code);
       }
     } else
       fx.effects.push_back(effect_of(e));
@@ -119,6 +124,18 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
       continue;
     }
     m.entity = static_cast<int>(n);
+    m.origin = d.origin;
+    m.yaw = d.angles.y;
+    fx.missiles.push_back(m);
+  }
+  // The player's own missiles thrown ahead of the server (own_missiles.hpp), by their own numbers.
+  for (std::size_t k = 0; k < s.own_missiles.size() && k < s.own_missile_ids.size(); k++) {
+    const DemoEntity& d = s.own_missiles[k];
+    Missile m;
+    if (d.model <= 0 || static_cast<std::size_t>(d.model) >= s.models.size() ||
+        !missile_model(s.models[static_cast<std::size_t>(d.model)], m))
+      continue;
+    m.entity = kOwnMissileEntity + s.own_missile_ids[k];
     m.origin = d.origin;
     m.yaw = d.angles.y;
     fx.missiles.push_back(m);

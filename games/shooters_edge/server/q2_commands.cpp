@@ -272,7 +272,7 @@ void weapon_list(Q2Server& s, int slot, const std::vector<std::string>& w, bool 
   if (n == p.hand.weapon) return;  // prefweap: the one in hand already
   fight_command(s, slot, "use", kSqWeapons[n].name);
   if (cycle && list.size() > 2 && p.hand.pending == n && kSqWeapons[n].item != nullptr) {
-    p.picked = sq_item_number(sq_item(kSqWeapons[n].item));
+    p.picked = sq_item_number(sq_item(kSqWeapons[n].item, s.opt.pack), s.opt.pack);
     p.picked_at = s.level_time - (3.0 - 0.7);  // the bar's pickup line shows 3 s
   }
 }
@@ -422,6 +422,12 @@ void commands_cvars(Q2Server& s) {
                .help = "When players' footsteps sound.",
                .values = "0: never; 1: running on the ground faster than 225 units a second (the "
                          "default); 2: on the ground at any pace; 3: always, in the air too"});
+  s.cvars.add({.name = "map_noareas",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether the doors that close parts of the map off are ignored: every part "
+                       "sees and hears every other (for finding faults in a map).",
+               .values = "0: the doors close parts off (the default); 1: every part joined"});
   s.cvars.add({.name = "sv_maxvelocity",
                .fallback = "2000",
                .flags = con::kServer,

@@ -135,6 +135,8 @@ struct WindowPlace {
   int x = 0, y = 0;
 };
 
+struct FullMode;
+
 class Window {
  public:
   ~Window();
@@ -156,7 +158,7 @@ class Window {
   friend bool has_focus(const Window& window);
   friend bool minimised(const Window& window);
   friend void set_text_input(Window& window, bool on);
-  friend bool set_fullscreen(Window& window, bool on, int display);
+  friend bool set_fullscreen(Window& window, bool on, int display, const FullMode* mode);
   friend bool set_window_style(Window& window, const WindowStyle& style);
   friend bool set_window_place(Window& window, const WindowPlace& place);
   friend bool pick_folder(Window& window, std::string_view title, std::string_view start);
@@ -169,6 +171,11 @@ class Window {
 // Open a window. Returns nullptr after an agent-actionable error line when it cannot.
 std::unique_ptr<Window> open_window(const WindowDesc& desc);
 
+// A full-screen mode asked for: its size, and its refresh rate and colour depth (0: any).
+struct FullMode {
+  int width = 0, height = 0, hz = 0, bpp = 0;
+};
+
 // A display the desktop has, numbered from 1 in the platform's order, at its desktop mode's pixel
 // size.
 struct Display {
@@ -178,12 +185,22 @@ struct Display {
 };
 std::vector<Display> displays();
 
-// The window over the whole of a display (the desktop's own mode: no mode change, the drawable at
-// the display's pixel size) or back to its windowed size. `display` 0 is the one the window stands
-// on, n the n-th of `displays()` (the window is moved there first). The pixel size changes a frame
-// or more later, through `InputSnapshot::resized`. False after an agent-actionable error line when
-// the platform refuses.
-bool set_fullscreen(Window& window, bool on, int display = 0);
+// The full-screen modes the primary display offers, each as `WxH@Hz` (whole hertz), largest
+// first; empty with no display (headless).
+std::vector<std::string> display_modes();
+
+// The window over the whole of a display or back to its windowed size. `mode` null (or one the
+// display has nothing near) keeps the desktop's own mode: no mode change, the drawable at the
+// display's pixel size; else the display's mode closest to it. `display` 0 is the one the window
+// stands on, n the n-th of `displays()` (the window is moved there first). The pixel size changes a
+// frame or more later, through `InputSnapshot::resized`. False after an agent-actionable error line
+// when the platform refuses.
+bool set_fullscreen(Window& window, bool on, int display = 0, const FullMode* mode = nullptr);
+
+// Whether a full-screen window minimises (and the display goes back to the desktop's own mode)
+// when another window takes the focus; a window that is not full screen is never minimised by it.
+// Set at any time, read by the platform each time the focus is lost.
+void set_minimize_on_focus_loss(bool on);
 
 // The window's border, its place above the others and its edges, as `style` says. False after an
 // agent-actionable error line when the platform refuses one of them (the rest still applied).

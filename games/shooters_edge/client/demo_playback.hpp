@@ -47,6 +47,7 @@
 // ge:keywords demo playback playdemo play-bar seek scrub pause resume speed cl_demospeed skip
 // ge:keywords demo_skip demo_skip_forward demo_skip_back demo_next demo_prev demo_seek
 // ge:keywords demo_pause demo_highlights demo_bar demo_track highlights markers video-player
+// ge:keywords scr_demobar demo-bar-percent
 // ge:keywords add_demo_commands timedemo playdemo demo_lerp cl_democlock demo-clock cl_demowait
 // ge:keywords cl_startupdemo startup-demo cam_thirdperson cam_dist demo_jump_end mvd_autotrack
 // ge:keywords autotrack cl_hightrack top-fragger demo_jump_skip_messages cam_lockpos
@@ -129,6 +130,10 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   AutotrackPlan plan;   // autotrack's, worked out the first time it is on
   int plan_state = 0;   // 0 not tried, 1 made, -1 refused (the reason said once)
   bool jumped = false;  // a jump was made this step: the window clears the notify lines
+  // The player's f_demomatchstart, run on `hooks` when the recording's match starts (its
+  // `DemoState::match_starts` grows).
+  ge::console::Console* hooks = nullptr;
+  int64_t match_starts = 0;
 };
 
 // The slot `cl_hightrack` rides in `s`: the playing player (no spectator) with the most frags, kept
@@ -168,6 +173,9 @@ struct PlaybackInput {
 // The console's demo commands and cvars (the table above), bound to `p`; `demo_track` also sets
 // `bench`'s tracked player; the recording's `demo_pack` cvars bind to `p.record`.
 void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench);
+// `pause` typed over a demo played (`line` the console's unknown line): it stops where it is or
+// plays on (a timed one runs on). True when it took the line.
+bool playback_pause_word(DemoPlayback& p, const Timedemo& bench, const std::string& line);
 // `timedemo <demo>` (into `ask`) and `playdemo <demo>` (into `ask`, with `paced` set); the window
 // starts what they ask for at its next frame. Both must outlive `console`.
 void add_demo_commands(ge::console::Console& console, std::string& ask, bool& paced);

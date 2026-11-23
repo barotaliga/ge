@@ -10,8 +10,10 @@
 // - THE PLACE: the eye's look, the speed along the ground and whether the player stands on it (the
 //   stride's clock runs while he walks), from the view and the player's state.
 // - A RECORDING OR A JOINED SERVER (`step_demo_held`): a classic set's frame is the one the server
-//   sent (the player's weapon frame), drawn from the last over the time its frames last
-//   (model_lerp.hpp's `track_frame`) under `ViewSettings::lerp`; a frame the model lacks is rest.
+//   sent (the player's weapon frame), drawn from the last over a classic frame's fixed tenth of
+//   a second (model_lerp.hpp's `track_frame` with `kFrameSpan`, never the measured gap between
+//   updates, which a recording's own rate makes uneven) under `ViewSettings::lerp`; a frame the
+//   model lacks is rest. Quake II's hand is drawn the same way.
 //
 // ge:summary The weapon in hand: whose set, which one, a shot, the look, the stride
 // ge:keywords held-weapon hand step_held attack_finished shot weapon-switch viewmodel stride
@@ -50,6 +52,11 @@ struct HeldState {
   // A recording's or a joined server's weapon frame (a classic set's), drawn between its changes.
   FrameTrack recorded;
   int recorded_weapon = -1;  // the weapon `recorded` is of
+  // A frame other than 0 has come: the frames rule the drawn weapon (until then the hand plays
+  // its own shots, as under rules that never animate it).
+  bool frames_live = false;
+  int own_shots = -1;        // DemoState::own_shots last step (-1: not yet seen)
+  int64_t frames_read = -1;  // DemoState::frames last step: its sounds are new only once
   int q2_frame = -1;         // Quake II's hand's frame last step (a shot on stepping onto one)
   // A weapon the hand holds in place of the game's (a `view::Weapon` index; -1 the game's): the
   // quick weapon's preview (quick_fire.hpp). Its shots are the game's weapon's only when the two

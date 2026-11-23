@@ -29,9 +29,11 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
+#include "classic/content/downloads.hpp"
 #include "classic/content/web_downloads.hpp"
 #include "classic/protocol/stuff_filter.hpp"
 #include "forward/forward.hpp"
@@ -40,12 +42,15 @@
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_downloads.hpp"
 #include "shooters_edge/net/q2_net.hpp"
+#include "shooters_edge/net/q2_net_ext.hpp"
+#include "shooters_edge/net/q2_proto_in.hpp"
 #include "shooters_edge/net/qw_client.hpp"
 #include "vfs/partial.hpp"
 
 namespace shooters_edge::net {
 
 struct Q2ClientConfig {
+  std::string ruleset;  // the competition ruleset (classic/rulesets.hpp): `rsn` unless "default"
   std::string name = "player";
   std::string skin = "male/grunt";
   int rate = 15000;
@@ -82,6 +87,9 @@ struct Q2ClientConfig {
   // info, so our server tells each file's archive.
   bool fetch = false;
   bool ask_origins = true;
+  // `cl_footsteps` 0: on the later protocol (36) the server is told (client setting 11) and sends
+  // no footstep, at each `begin` and whenever it changes (q2_client_settings).
+  bool no_footsteps = false;
   // HTTP (classic/content/web_downloads.hpp): with a web address from the server (`dlserver=`) or
   // the player's own, the files lacked are fetched from it first, the channel taking those HTTP
   // gives back.
@@ -89,12 +97,14 @@ struct Q2ClientConfig {
   // With `fetch_level` on (the window's), every model, sound and player figure the level names
   // that `read_file` lacks is fetched too, as a player's client fetches them.
   bool fetch_level = false;
+  bool vweps = true;  // `cl_vwep`: the figures' view weapons fetched too
   // `ask_moves` asks our server for the other players' moves after each frame (`*ge_ext` bit 8),
   // which the window runs them forward by (q2_predict.hpp); a stock server ignores it.
   bool ask_moves = false;
   // The view's width in degrees and the hand the weapon is held in (0 right, 1 left, 2 centred),
   // as the user info carries them (`fov`, `hand`): the window fills them from its settings.
   int fov = 90, hand = 0;
+  int msg = 1;  // the least important messages it is sent (0..3)
   // The user info's `gender` (male, female or none: how the server words his own deaths; "": not
   // sent).
   std::string gender;
@@ -119,10 +129,29 @@ struct Q2ClientConfig {
   // `ask_sheet`: asks our server for its settings sheet (`*ge_ext` bit 2048, net/q2_votes.hpp),
   // the server settings page's; a stock client is offered none.
   bool ask_sheet = false;
+  // `ask_arsenal`: asks our server for the weapons the player holds and his ammunition (`*ge_ext`
+  // bit 4096), the weapon prediction's knowledge of a change (net/q2_weapon.hpp).
+  bool ask_arsenal = false;
   // `cl_nodelta`: no frame is ever acknowledged, so the server sends each one whole (more bytes,
   // nothing lost to a dropped packet's delta); a server that forbids it (`sv_allow_nodelta 0`)
   // may refuse.
   bool nodelta = false;
+  // QUAKE II'S LATER PROTOCOLS (q2_proto_in.hpp; porting/shooters-edge/q2-client-proto36.md):
+  // `protocol` (`cl_protocol`) the one asked: 0 the best the server's challenge offers (36), 36 or
+  // 35 taken when offered and falling to the next one down when not, anything else 34. A scripted
+  // client asks 34. `msglen` (`net_maxmsglen`) the largest packet the server may send it (0: the
+  // most, 4086; 512..4086), `chantype` (`net_chantype`) 1 the newer channel on 36; on 36 the moves
+  // go batched (`batch`, `cl_batchcmds`), `packetdup` (`cl_packetdup`, 0..3) earlier packets'
+  // moves again in each, at most `maxpackets` packets a second (`cl_maxpackets`, 0: no cap, else
+  // 10 or more).
+  bool batch = true;
+  bool instantpacket =
+      true;  // `cl_instantpacket`: attack or use pressed sent at once, past the cap
+  int protocol = 34;
+  int msglen = 1390;
+  int chantype = 1;
+  int packetdup = 1;
+  int maxpackets = 30;
   // `cl_shownet` 1 or more: each message the server sends printed as its size in bytes (through
   // `trace`'s print).
   int shownet = 0;
@@ -145,6 +174,9 @@ struct Q2ClientConfig {
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,
                      const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
+  // A download cut short is held (classic/content/downloads.hpp), each piece added as it comes, and
+  // the next time the file is asked for, the rest asked from the held length; dropped once whole.
+  ge::classic::content::HeldDownloads held;
   // THE WINDOW'S JOIN (qw_remote.hpp): what the server sends is read into `into` (the
   // window's drawn recording) in place of the client's own `demo`, the read bytes dropped as they
   // are read, and each payload's prints, effects and sounds kept in `news` until the window takes
@@ -187,10 +219,15 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<uint8_t>* level_record = nullptr;
   size_t level_from = 0;
   bool recording = true;
-  std::vector<std::string> stuffed;          // every line stuffed, in order (the first 256)
-  std::vector<std::string> ignored;          // the lines said for stuffed commands dropped
+  std::vector<std::string> stuffed;  // every line stuffed, in order (the first 256)
+  std::vector<std::string> ignored;  // the lines said for stuffed commands dropped
+  // The stuffed lines the client does not answer itself (`cmd`, `precache`, `changing`,
+  // `reconnect`, `connect`), let through by the filter, for the player's console to run as if
+  // typed, in order: a setting put back (`set name`, `spectator 0`), a mod's binds and aliases.
+  std::vector<std::string> to_run;
   std::vector<std::string> prints;           // every print's text, in order (the first 256)
   int signon_steps = 0;                      // signon commands answered
+  int no_footsteps_told = -1;                // what the server was last told (-1: not yet)
   int levels = 0;                            // server data read
   double connected_at = -1, active_at = -1;  // the network's times, s
 
@@ -200,9 +237,15 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::string fetching;
   std::vector<uint8_t> fetched_bytes;
   int fetched_percent = 0;  // the server's share of it sent so far
+  size_t fetched_from = 0;  // the bytes held from before when it was resumed (Q2ClientConfig::held)
   bool fetched_origin = false;
   ge::vfs::ArchiveOrigin fetching_origin;
   std::string held_begin;
+  // The stage the level's fetch is at (net/q2_fetch.hpp: 1 the map and models, 2 what they and
+  // the level name, 3 the map's textures; 0 none begun) and every path asked for this connection,
+  // each asked once.
+  int fetch_stage = 0;
+  std::set<std::string> asked;
   std::map<std::string, std::vector<uint8_t>> downloaded;
   int downloads_refused = 0;
   // The HTTP downloads (classic/content/web_downloads.hpp). `http.said` holds every download's line
@@ -210,11 +253,31 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   // files]"; [FAIL] a file refused, [STOP] one cut off part way).
   ge::classic::content::WebDownloads http;
 
+  // The protocol chosen (34, 35, 36) and the later protocols' reading (q2_proto_in.hpp).
+  int protocol = 34;
+  Q2ProtoIn in;
   Q2Cmd cmds[3];  // the three newest, oldest first
-  // Every move sent, by its packet's outgoing sequence (its low 6 bits), as the player's hands made
-  // it: what a prediction runs again past the move the server acknowledged (q2_predict.hpp).
+  // Every move made, by its count (its low 6 bits), as the player's hands made it, and for each
+  // packet (by its outgoing sequence's low 6 bits) the count of moves made when it was sent: what a
+  // prediction runs again past the packet the server acknowledged (q2_predict.hpp).
   sh::MoveCmd sent[64] = {};
-  double sent_at[64] = {};  // the network's time each was sent, s
+  uint32_t made = 0;
+  uint32_t made_at[64] = {};
+  double sent_at[64] = {};  // the network's time each packet was sent, s
+  // The weapon changes asked for (`use <weapon>`, `weapnext`, `weapprev`, `weaplast`), the newest
+  // 8 by their count: each the move count when it was sent (the server runs it before the moves of
+  // the packet that carries it) and what it asks, for the weapon prediction (q2_weapon.hpp).
+  struct WeaponAsk {
+    uint32_t move = 0;
+    int8_t kind = 0;     // 0 use, 1 next, 2 previous, 3 the last
+    int16_t weapon = 0;  // `use`'s: the weapon's row
+  };
+  WeaponAsk weapon_asks[8] = {};
+  uint32_t weapon_asked = 0;
+  // 36's batched moves: the moves of the last packets sent (oldest first) and those made since.
+  std::vector<std::vector<Q2Cmd>> batch_sent;
+  std::vector<Q2Cmd> batch_now;
+  double last_packet = -1;
   double latency = 0;       // the newest acknowledged move's round trip, s
   ge::hud::NetHistory net;  // each packet as it came, or not (scr_lag_draw, r_netgraph)
   double moves_at = -1;     // the network's time the newest other players' moves came (-1: none)
@@ -255,6 +318,9 @@ void q2_client_command(Q2ClientEnd& c, const std::string& line);
 std::string q2_download(Q2ClientEnd& c, const std::string& file);
 // The user info sent again as it stands in `c.cfg` (a setting in it changed while joined).
 void q2_client_userinfo(Q2ClientEnd& c);
+// The client settings `c.cfg` holds told to a server of the later protocol (36) where they moved
+// since it was last told (`no_footsteps`); nothing on another protocol.
+void q2_client_settings(Q2ClientEnd& c);
 // Its voice's target (`voicetarg <word>`: all, team, near, a slot), told to the server when it
 // changes once the server takes its voice.
 void q2_voice_target(Q2ClientEnd& c, const std::string& word);

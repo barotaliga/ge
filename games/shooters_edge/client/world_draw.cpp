@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -25,8 +26,11 @@
 #include "brush/app/draw_data.hpp"
 #include "brush/app/sky_box.hpp"
 #include "brush/light_probe.hpp"
+#include "brush/map.hpp"
 #include "brush/survey.hpp"
 #include "camera/pose.hpp"
+#include "classic/flash_blend.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "prof/zones.hpp"
@@ -47,6 +51,7 @@
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/burning.hpp"
 #include "shooters_edge/client/picture_files.hpp"
+#include "shooters_edge/client/q2_view.hpp"
 #include "shooters_edge/client/room_ear.hpp"
 #include "shooters_edge/client/world_extras.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
@@ -675,6 +680,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
 
 const WorldModels& world_models(const WorldDraw& w) { return w.models; }
 
+std::span<const ba::Mover> world_movers(const WorldDraw& w) { return w.movers; }
+
 std::span<const ba::PointLight> world_lights(const WorldDraw& w) { return w.scene.lights; }
 
 std::vector<gr::Particle> world_particles(ge::gpu::Device& d, const WorldDraw& w) {
@@ -735,6 +742,7 @@ ba::SkyPick dress_world_sky(const WorldDraw& f, gr::FrameView& view) {
 // was typed (or sent) since the world was made, else the map's own; its sky share the map's
 // `skyfog`, else r_skyfog. A new map is its own fog again.
 gr::FlatFog world_fog(const WorldDraw& f) {
+  if (!f.picture->q2fx.fog) return {};  // Quake II's gl_fog 0: none at all
   ge::brush::MapFog fog = f.fog;
   if (f.picture->fog_serial != f.made.fog_serial) ge::brush::parse_fog(f.picture->fog, &fog);
   return ba::map_flat_fog(fog, f.picture->sky_fog);
@@ -841,7 +849,14 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
           : std::span<const Placed>(fx.models);
   if (f.has_map) {
     GE_ZONE("world.bsp");
-    ba::set_dynamic_lights(f.bsp, lights);
+    // gl_flashblend: the moment's lights glow as discs (prepare_models) and light no wall, door or
+    // lift; the figures still take them.
+    ba::set_dynamic_lights(
+        f.bsp, f.picture && f.picture->flash_blend ? std::span<const effects::Light>() : lights);
+    for (size_t k = 0; k < fx.light_styles.size();
+         k++)  // the server's flicker, pulses and switches
+      if (f.bsp.light_styles[k] != fx.light_styles[k])
+        ba::set_light_style(f.bsp, static_cast<int>(k), fx.light_styles[k]);
     ba::set_areas(f.bsp,
                   f.from_above ? std::span<const uint8_t>() : std::span<const uint8_t>(fx.areas));
     // The moving models' shadows (M54): every model near the eye and the player himself.
@@ -897,6 +912,19 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     if (speck != 1)
       for (gr::Particle& q : f.lit_births)
         if (q.grow <= 0) q.size *= speck;
+    // Quake II's gl_partscale: each speck sized by its depth in front of the eye.
+    if (f.picture->q2fx.part_scale > 0) {
+      const double forward[3] = {std::sin(view.heading) * std::cos(view.pitch),
+                                 std::sin(view.pitch),
+                                 std::cos(view.heading) * std::cos(view.pitch)};
+      for (gr::Particle& q : f.lit_births) {
+        if (q.grow > 0) continue;  // a puff of smoke keeps its own
+        double depth = 0;
+        for (int k = 0; k < 3; ++k) depth += (q.p[k] - view.eye[k]) * forward[k];
+        q.size *= static_cast<float>(
+            ge::classic::q2_speck_scale(f.picture->q2fx, depth / ge::brush::kUnitM));
+      }
+    }
     for (gr::Particle& q : f.lit_births) {
       if (q.grow <= 0 || q.kelvin != 0) continue;
       const double at[3] = {q.p[0], q.p[1], q.p[2]};
@@ -919,6 +947,12 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       gr::emit_particles(f.particles, f.fire_births);
     }
     f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
+    // Quake II's gl_partshape and gl_partstyle (-1 and 0 in another game: the engine's own).
+    f.particles.settings.shape =
+        f.picture->q2fx.part_shape < 0
+            ? gr::ParticleShape::capsule
+            : static_cast<gr::ParticleShape>(f.picture->q2fx.part_shape + 1);
+    f.particles.settings.additive = f.picture->q2fx.additive_parts;
     gr::prepare_particles(d, f.particles, dt, view, f.w, f.h);
     gr::prepare_explosions(d, f.explosions, f.lit_puffs, view, f.w, f.h, f.lit_flames);
     f.beam_draws.clear();
@@ -929,6 +963,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       if (b.q2_trail)
         f.beam_looks[f.beam_draws.size()] =
             effects::q2_rail_trail_look(b.trail_m, b.trail_radius_m, b.trail_rgb, b.trail_fade_s);
+      // Quake II's gl_beamstyle 1: a laser or the rail's core a plain solid tube, no glow.
+      if ((b.laser || b.q2_trail) && f.picture->q2fx.round_beams)
+        effects::round_beam(f.beam_looks[f.beam_draws.size()]);
       const gr::BeamLook* look = b.laser || b.q2_trail ? &f.beam_looks[f.beam_draws.size()]
                                  : b.coil              ? &effects::rail_coil_look()
                                  : b.rail              ? &effects::rail_look()
@@ -955,7 +992,13 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .bubbles_share = f.picture->bubbles_share,
                            .power_shells = f.picture->power_shells,
                            .item_pulse = f.picture->item_pulse && !f.picture->no_glow,
-                           .items_still = f.picture->items_still};
+                           .items_still = f.picture->items_still,
+                           .light = look::model_light(*f.picture, lk),
+                           .flat = !f.picture->q2fx.dot_shading,
+                           .roll_hack = f.picture->q2fx.roll_hack,
+                           .self = fx.has_self ? fx.self.entity : 0,
+                           .shadows = f.picture->model_shadows,
+                           .flash_blend = f.picture->flash_blend};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,
@@ -977,15 +1020,32 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   const bool round = f.extras && liquid_round_eye(*f.extras);
   {
     // The screen's tint toned by the player (v_contentblend and kin, gl_cshiftpercent,
-    // gl_polyblend).
-    double blend[4];
-    look::toned_blend(*f.picture, round ? fx.screen_dry : fx.screen, blend);
-    gr::set_post_blend(d, f.post[p], blend);
+    // gl_polyblend; Quake II's the rules' own), a hit's flash round the edge at
+    // gl_damageblend_frac.
+    look::Tints tints = look::toned_tints(*f.picture, round ? fx.screen_dry : fx.screen,
+                                          fx.rules_blend, fx.blend, fx.apart, fx.damage);
+    // An eye inside one of gl_flashblend's glows: the screen tinted orange, as the other tints
+    // (gl_polyblend 0 none).
+    if (f.has_map && f.picture->poly_blend)
+      ge::classic::flash_tint(f.models.flash_tint, tints.flat);
+    gr::set_post_blend(d, f.post[p], tints.flat);
+    gr::set_post_edge_blend(d, f.post[p], tints.edge, f.picture->damage_frac);
   }
   // The local player's own arrival opens the whole view out of a flash and a warp (r_arrival).
   gr::set_post_warp(
       d, f.post[p],
       gr::arrival_warp(fx.arrival_s, fx_switches(*f.picture).arrival, fx.arrival_tint));
+  // Quake II's gl_waterwarp: under a liquid the whole view ripples, 0.25 % of the screen, five
+  // waves, a radian a second.
+  gr::PostRipple ripple;
+  if (f.picture->q2fx.water_warp && fx.screen.medium != effects::Medium::air) {
+    ripple.share = 0.0025;
+    ripple.phase = view.time_s;
+  }
+  gr::set_post_ripple(d, f.post[p], ripple);
+  // Quake II's viewsize under 100: the whole view drawn smaller in the middle.
+  const Q2ViewRect vr = q2_view_rect(f.w, f.h, f.picture->view_size);
+  gr::set_post_view(d, f.post[p], {vr.x, vr.y, vr.w, vr.h}, f.w, f.h);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
     // The engine's fire burns in place of the file's flash, and its arc across a lightning gun's

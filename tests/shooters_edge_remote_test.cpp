@@ -29,10 +29,13 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "check.hpp"
@@ -41,6 +44,7 @@
 #include "net/sim_network.hpp"
 #include "progs/file.hpp"
 #include "shooter/server.hpp"
+#include "shooters_edge/net/qw_mapsum.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
 #include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/server/messages.hpp"
@@ -69,6 +73,9 @@ struct Rig {
   bool with_other = false;
   bool voice = false;  // the server relays voice to everyone; the window and the other ask for it
   std::string rcon;    // the server's rcon_password ("": none)
+  // Each config made as the test asks, before the server starts and the window joins.
+  std::function<void(cn::ServerConfig&)> serve;
+  std::function<void(cn::ClientConfig&)> join_with;
   cn::QwServer server;
   cn::Remote remote;
   std::vector<std::string> said;
@@ -99,11 +106,13 @@ struct Rig {
     sc.voice = voice;
     sc.rcon_password = rcon;
     sc.voice_route = cn::VoiceRoute::all;
+    if (serve) serve(sc);
     if (!cn::qw_start(server, rules, st, sc, error)) return false;
     cn::ClientConfig cc;
     cc.name = "window";
     cc.voice = voice;
     cc.live_mic = true;  // as the window joins: its microphone, while +voip is held
+    if (join_with) join_with(cc);
     cn::remote_start(remote, ct, gn::sim_address(0, cn::kPortServer), cc);
     if (with_other) {
       gn::open_sim_transport(bt, net, gn::sim_address(2, cn::kPortClient));
@@ -132,6 +141,25 @@ struct Rig {
     return level && remote.end.stage == cn::ClientStage::active;
   }
 };
+
+// A map file of the version-29 layout whose lumps are filled from `seed`: two seeds, two versions
+// of one map, with other checksums.
+std::vector<uint8_t> map_version(int seed) {
+  std::vector<uint8_t> v(4 + 15 * 8, 0);
+  const auto put32 = [&v](size_t at, uint32_t x) {
+    for (int i = 0; i < 4; i++) v[at + static_cast<size_t>(i)] = static_cast<uint8_t>(x >> (8 * i));
+  };
+  put32(0, 29);
+  for (uint32_t i = 0; i < 15; i++) {
+    const auto ofs = static_cast<uint32_t>(v.size());
+    const uint32_t len = 12 + 4 * i;
+    for (uint32_t k = 0; k < len; k++)
+      v.push_back(static_cast<uint8_t>((i * 31 + k + static_cast<uint32_t>(seed) * 7) & 255));
+    put32(4 + 8 * i, ofs);
+    put32(8 + 8 * i, len);
+  }
+  return v;
+}
 
 bool said_has(const std::vector<std::string>& said, const std::string& what) {
   for (const std::string& s : said)
@@ -693,6 +721,7 @@ TEST(record_while_joined_keeps_the_level_from_its_start_and_a_match_records_itse
   ge::console::Console con{false};
   cn::Remote& r = rig.remote;
   cn::add_remote_commands(con, r);
+  // NOLINTNEXTLINE(bugprone-exception-escape)
   r.joined_record.folder = [dir] { return dir.string(); };
   CHECK(rig.join());
   for (int f = 0; f < 60; f++) rig.frame();
@@ -814,15 +843,36 @@ TEST(the_consoles_foot_says_what_is_coming_while_a_game_is_joined) {
   r.end.dl.name = "maps/dm2.bsp";
   r.end.dl.percent = 40;
   r.end.dl.size = 90 * 1024;
-  CHECK(cn::remote_foot(r, share) == "maps/dm2.bsp 40% (90 KB)" && share == 0.4);
+  CHECK(cn::remote_foot(r, share) == "maps/dm2.bsp" && share == 0.4);
   r.end.dl.chunked = true;  // chunked: the share of the chunks held
   r.end.dl.have = {true, false, false, false};
-  CHECK(cn::remote_foot(r, share).starts_with("maps/dm2.bsp 25% ") && share == 0.25);
+  CHECK(cn::remote_foot(r, share) == "maps/dm2.bsp" && share == 0.25);
   r.end.dl.active = false;
   r.demo.state.map = "dm2";
   CHECK(cn::remote_foot(r, share) == "Loading dm2..." && share < 0);
   r.end.stage = cn::ClientStage::active;
   CHECK(cn::remote_foot(r, share).empty());
+}
+
+// While a server is joined and a file comes, the console covers the screen with the file and its
+// share on the foot (the bar and the percentage drawn after the name); once in, it lets go.
+TEST(the_console_covers_the_screen_while_a_joined_server_s_files_come) {
+  ge::console::Console con;
+  ge::console::ConsoleView view(con);
+  cn::Remote r;
+  r.active = true;
+  r.end.stage = cn::ClientStage::signon;
+  r.end.dl.active = r.end.dl.chunked = true;
+  r.end.dl.name = "maps/aerowalk.bsp";
+  r.end.dl.have = {true, true, false, false, false};
+  cn::remote_console_foot(r, view);
+  CHECK_MSG(
+      view.full() && view.foot() == "maps/aerowalk.bsp" && view.foot_progress() == 0.4,
+      view.foot() + " " + std::to_string(view.foot_progress()) + " " + std::to_string(view.full()));
+  r.end.dl.active = false;
+  r.end.stage = cn::ClientStage::active;
+  cn::remote_console_foot(r, view);
+  CHECK(!view.full() && view.foot().empty() && view.foot_progress() < 0);
 }
 
 TEST(net_clientport_binds_the_client_s_socket_and_moves_it_at_once) {
@@ -893,4 +943,131 @@ TEST(an_ipv6_server_is_joined_from_an_ipv6_socket) {
   CHECK_MSG(cn::remote_connect(remote, "127.0.0.1:9", {}, error), error);  // IPv4 again
   CHECK(!remote.own_v6 && remote.own.local.family == gn::Family::ipv4);
   cn::remote_disconnect(remote);
+}
+
+TEST(a_server_with_another_version_of_its_map_is_joined_with_its_version_kept_beside_ours) {
+  // The server plays version 1 of arena and checks the map; the window holds version 2. It is
+  // dropped with the server's reason, joins again at once, fetches the server's version, keeps it
+  // hidden beside its own (never over it), draws it and plays. The next join to that server sends
+  // the kept version first and is let in at once.
+  const std::vector<uint8_t> theirs = map_version(1), ours = map_version(2);
+  const std::string map = "maps/arena.bsp";
+  std::map<std::string, std::vector<uint8_t>> kept;  // the window's hidden versions
+  std::string drawn = "-";
+  std::optional<uint32_t> took;
+  const auto setup = [&](Rig& rig) {
+    rig.serve = [&](cn::ServerConfig& sc) {
+      sc.map_check = true;
+      sc.read_file = [&](const std::string& path, std::vector<uint8_t>* out) {
+        if (path != map) return false;
+        *out = theirs;
+        return true;
+      };
+    };
+    rig.join_with = [&](cn::ClientConfig& cc) {
+      cc.read_file = [&](const std::string&, const std::string& path) {
+        return path == map ? ours : std::vector<uint8_t>{};
+      };
+      cc.fetch_content = false;  // only the map's versions here
+      cc.map_versions = [&](const std::string&) {
+        return std::vector<std::pair<std::string, std::vector<uint8_t>>>(kept.begin(), kept.end());
+      };
+      cc.keep_version = [&](const std::string& m, uint32_t sum, const std::vector<uint8_t>& b) {
+        const std::string path = "maps/versions/arena." + std::to_string(sum) + ".bsp";
+        CHECK(m == map);
+        kept[path] = b;
+        return path;
+      };
+      cc.use_map = [&](const std::string&, const std::string& version) { drawn = version; };
+      cc.remembered = [&](const std::string&) { return took; };
+      cc.keep_choice = [&](const std::string&, const std::string&, uint32_t sum) { took = sum; };
+    };
+  };
+  {
+    Rig rig;
+    setup(rig);
+    CHECK(rig.start());
+    CHECK_MSG(rig.join(), "the window never played on the server");
+    CHECK_MSG(said_has(rig.said, "plays another version of arena"), "no word of the version");
+    CHECK(kept.size() == 1 && kept.begin()->second == theirs);
+    CHECK(!kept.empty() && drawn == kept.begin()->first);
+    const cn::MapChecksums sums = cn::map_checksums(theirs);
+    CHECK(took && *took == cn::sent_checksum(map, sums));
+  }
+  {
+    Rig rig;
+    setup(rig);
+    CHECK(rig.start());
+    CHECK_MSG(rig.join(), "the window never played on the server the second time");
+    CHECK_MSG(!said_has(rig.said, "plays another version"), "joined again a second time");
+    CHECK(kept.size() == 1 && drawn == kept.begin()->first);  // size first: never read empty
+  }
+}
+
+TEST(a_refused_map_with_no_other_version_to_fetch_is_told_in_plain_words) {
+  // The server will not hand out its map (none to read for a download): the window stops after the
+  // refusal and says why in a player's words, the server's own reason kept.
+  Rig rig;
+  rig.serve = [&](cn::ServerConfig& sc) {
+    sc.map_check = true;
+    sc.allow_download = false;
+    sc.read_file = [&](const std::string& path, std::vector<uint8_t>* out) {
+      if (path != "maps/arena.bsp") return false;
+      *out = map_version(1);
+      return true;
+    };
+  };
+  rig.join_with = [&](cn::ClientConfig& cc) {
+    cc.read_file = [](const std::string&, const std::string& path) {
+      return path == "maps/arena.bsp" ? map_version(2) : std::vector<uint8_t>{};
+    };
+    cc.fetch_content = false;
+  };
+  CHECK(rig.start());
+  for (int f = 0; f < 800 && rig.remote.active; f++) rig.frame();
+  CHECK(!rig.remote.active);
+  CHECK_MSG(said_has(rig.said, "plays another version of arena than yours"), "no plain words");
+}
+
+TEST(connect_reads_the_windows_files_as_they_are_when_the_join_needs_them) {
+  // `+connect` on the command line joins before the window has wired its files: the join reads
+  // them at the moment it needs them, not as they were when it began.
+  ge::console::Console con;
+  cn::Remote r;
+  cn::add_remote_commands(con, r);
+  con.execute("connect 127.0.0.1:27599", ge::console::Source::local);
+  CHECK(r.active);
+  r.read_file = [](const std::string&, const std::string& path) {
+    return path == "progs/player.mdl" ? std::vector<uint8_t>{1, 2, 3} : std::vector<uint8_t>{};
+  };
+  CHECK(r.end.cfg.read_file && r.end.cfg.read_file("", "progs/player.mdl").size() == 3);
+  cn::remote_disconnect(r);
+}
+
+TEST(a_map_the_window_lacks_is_fetched_before_it_asks_to_spawn) {
+  // The server's map is not in the window's files: the window fetches it after the lists and
+  // before `prespawn`, so the map's checksum it sends is the server's and it is let in.
+  Rig rig;
+  rig.serve = [](cn::ServerConfig& sc) {
+    sc.map_check = true;
+    sc.read_file = [](const std::string& path, std::vector<uint8_t>* out) {
+      if (path != "maps/arena.bsp") return false;
+      *out = map_version(1);
+      return true;
+    };
+  };
+  std::vector<std::string> fetched;
+  rig.join_with = [&](cn::ClientConfig& cc) {
+    cc.read_file = [&](const std::string&, const std::string& path) {
+      for (const std::string& f : fetched)
+        if (f == path) return map_version(1);
+      return std::vector<uint8_t>{};
+    };
+    cc.keep_file = [&](const std::string&, const std::string& path, const std::vector<uint8_t>&,
+                       const ge::vfs::ArchiveOrigin*) { fetched.push_back(path); };
+  };
+  CHECK(rig.start());
+  CHECK_MSG(rig.join(), "the window never played on the server");
+  CHECK(rig.remote.end.downloaded.count("maps/arena.bsp") == 1);
+  CHECK(!said_has(rig.said, "another version"));
 }

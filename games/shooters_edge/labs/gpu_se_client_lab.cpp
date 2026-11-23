@@ -56,7 +56,7 @@
 // ge:keywords axe-swing swings two-swings weaponframe film_swings breath exertion film-hand
 // ge:keywords fire explobox film_death death jump-sound film_switch weapon-change cl_gunswitch
 // ge:keywords say vote notify-feed episodes bars sv_episodes_done start-map point-at
-// ge:keywords coop-server-lines addbot remix classic-remix other-game-map
+// ge:keywords coop-server-lines addbot remix classic-remix other-game-map ruleset smackdown
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -65,17 +65,20 @@
 #include <filesystem>
 #include <memory>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "assets/sha256.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
+#include "classic/rulesets.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/pipeline.hpp"
 #include "classicenhance/profile.hpp"
 #include "classicenhance/texture.hpp"
 #include "console/console.hpp"
+#include "console/ruleset.hpp"
 #include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "gpu/device.hpp"
@@ -659,8 +662,27 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   }
   const std::string before = lab.arg("before");
   con[0].execute(before.empty() ? "r_look classic" : before);
+  // `--ruleset=<name>`: the right side under that competition ruleset (classic/rulesets.hpp),
+  // chosen before the cvars, so a held one refuses them as the console would.
+  std::unique_ptr<ge::console::Rulesets> rules;
+  if (const std::string rs = lab.arg("ruleset"); !rs.empty()) {
+    rules = std::make_unique<ge::console::Rulesets>(con[1]);
+    const bool q2 =
+        folder.ends_with("/" + std::string(ge::classicenhance::find_profile("q2")->base_dir));
+    rules->set_book(q2 ? ge::classic::q2_rulesets() : ge::classic::qw_rulesets());
+    con[1].execute("ruleset " + rs);
+    rules->update();
+  }
   con[1].execute(lab.arg("cvars"));
   con[1].execute(lab.cvars());  // the runner's --cvars on the modern side (`ge lab pair`)
+  if (rules) {
+    int held = 0;
+    for (const std::string& line : con[1].output()) {
+      lab.note(line);
+      held += line.find(" is locked by the ") != std::string::npos;
+    }
+    lab.metric("ruleset.refused_sets", held, "sets the ruleset refused on the right side");
+  }
   // `--warp`: another player stood there warping, and the local player's own arrival through his
   // eyes with the weapon in hand (the enhanced side alone draws them).
   float warp_at[4] = {0, 0, 0, 0};
@@ -834,6 +856,25 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       p.yaw = l.view.y + static_cast<float>(90 * turn);
       p.pitch = l.view.x;
       places.push_back(p);
+    }
+  }
+  // `--fields="items 8388735; weapon 8388608"`: the player's fields set by name before the views
+  // (a mission pack's weapons and items, its `items2`), then a second and a half run so the
+  // pickups' flash is over.
+  if (const std::string fields = lab.arg("fields"); !fields.empty()) {
+    for (size_t a = 0; a < fields.size();) {
+      const size_t b = std::min(fields.find(';', a), fields.size());
+      std::istringstream one(fields.substr(a, b - a));
+      std::string name;
+      double value = 0;
+      if (one >> name >> value) cl::set_field_named(l, 1, name.c_str(), static_cast<float>(value));
+      a = b + 1;
+    }
+    se::fill_hud(hud, cl::status_of(l, t), art);  // the HUD sees the pickups now
+    for (int i = 0; i < 120; i++) {
+      cl::listen_frame(l, {});
+      t += 0.013;
+      cl::frame_view(l, shown, 1, t, 0.013);
     }
   }
   // `--weapon=<impulse>`: every weapon and ammunition given, that one taken in hand and raised.
@@ -1276,6 +1317,8 @@ const gl::LabSpec kSpec{
       "with --remix: 1 dresses this game's rules in the other game's things: weapons, armour, "
       "ammunition and health (cr_items)"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
+     {"ruleset", "",
+      "with --game: the right side under that competition ruleset (smackdown, duel)"},
      {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
      {"hud", "auto", "with --game: the HUD's art: auto, classic or free"},
      {"hudcvars", "",
@@ -1288,6 +1331,9 @@ const gl::LabSpec kSpec{
      {"fire-after", "15",
       "with --fire: frames after attack is let go that the -fired views are drawn (0: as it is let "
       "go, the shot in the air)"},
+     {"fields", "",
+      "with --game: the player's fields set by name first, ';' between (`items 8388735; weapon "
+      "8388608`): a mission pack's weapons and items on the status bar"},
      {"weapon", "0",
       "with --game: every weapon and its ammunition given and this impulse's taken in hand first "
       "(7: the rocket launcher)"},

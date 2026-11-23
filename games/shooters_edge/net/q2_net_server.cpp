@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "classic/content/web_downloads.hpp"
+#include "classic/rulesets.hpp"
 #include "core/deflate.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
@@ -27,8 +28,11 @@
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_mvd_dummy.hpp"
+#include "shooters_edge/net/q2_net_download.hpp"
 #include "shooters_edge/net/qw_ext.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_map.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::net {
 
@@ -41,12 +45,12 @@ constexpr int kStringCmdsPerPacket = 7;
 constexpr uint8_t kSvcZPacket = 21;   // a compressed block of messages (35 and 36)
 constexpr uint8_t kSvcReconnect = 8;  // a full restart: connect again (`recycle`)
 constexpr uint8_t kSvcDisconnect = 7, kSvcPrint = 10, kSvcStuffText = 11, kSvcDownload = 16;
-constexpr uint8_t kSvcGeOrigin = 123;      // the game's own: a download's archive (qw_svc.hpp)
 constexpr uint8_t kSvcGeMoves = 124;       // the game's own: the other players' moves
 constexpr uint8_t kSvcGeShare = 126;       // the game's own: the easy jump's share
 constexpr uint8_t kSvcGeAccountKey = 127;  // the game's own: the logins' key tag
 constexpr uint8_t kSvcGeFeel = 122;        // the game's own: the move's feel
 constexpr uint8_t kSvcGeBack = 119;        // the game's own: an item taken and when it comes back
+constexpr uint8_t kSvcGeArsenal = 118;     // the game's own: the weapons held, the ammunition
 constexpr uint8_t kSvcGeVoice = 121;       // the game's own: a voice (qw_voice_route.hpp)
 constexpr size_t kVoiceTickBytes = 1200;   // the voices one client is sent a tick, at most
 constexpr size_t kMovesBlockMost = 1200;   // the frame with the moves, at most (under a datagram)
@@ -138,118 +142,6 @@ void rate_check(Q2NetServer& s, int slot) {
   stuff(c, "rate " + std::to_string(v.rate) + "\n");
 }
 
-// The most `sv_max_download_size` may allow: 128 MiB and 4 KiB.
-constexpr int64_t kQ2DownloadCap = 134221824;
-
-// THE DOWNLOADS (Q2NetConfig): the next piece of the file being sent, up to 1024 bytes: size,
-// percent, the bytes; percent 100 ends it.
-void download_piece(Q2NetClient& c) {
-  const size_t n = std::min<size_t>(1024, c.download.size() - c.download_at);
-  c.download_at += n;
-  const int percent =
-      c.download.empty() ? 100 : static_cast<int>(c.download_at * 100 / c.download.size());
-  std::vector<uint8_t> b = {kSvcDownload, static_cast<uint8_t>(n & 0xff),
-                            static_cast<uint8_t>(n >> 8), static_cast<uint8_t>(percent)};
-  b.insert(b.end(), c.download.begin() + static_cast<std::ptrdiff_t>(c.download_at - n),
-           c.download.begin() + static_cast<std::ptrdiff_t>(c.download_at));
-  reliable(c, b);
-  if (c.download_at >= c.download.size()) {
-    c.downloading = false;
-    c.downloads++;
-    c.download.clear();
-  }
-}
-
-// A download's name made plain: `\` as `/`, lower case, leading slashes and `.` parts dropped,
-// `..` taking the part before it away; "" when it climbs out of the game's folders.
-std::string plain_download_path(std::string path) {
-  for (char& ch : path) {
-    if (ch == '\\') ch = '/';
-    if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
-  }
-  std::vector<std::string> parts;
-  size_t at = 0;
-  while (at <= path.size()) {
-    const size_t end = std::min(path.find('/', at), path.size());
-    const std::string part = path.substr(at, end - at);
-    if (part == "..") {
-      if (parts.empty()) return "";
-      parts.pop_back();
-    } else if (!part.empty() && part != ".") {
-      parts.push_back(part);
-    }
-    at = end + 1;
-  }
-  std::string out;
-  for (const std::string& p : parts) out += (out.empty() ? "" : "/") + p;
-  return out;
-}
-
-void start_download(Q2NetServer& s, Q2NetClient& c, const std::string& asked, int offset) {
-  c.downloading = false;
-  c.download.clear();
-  const std::string path = asked.size() >= 64 ? std::string() : plain_download_path(asked);
-  const auto under = [&path](const char* dir) { return path.rfind(dir, 0) == 0; };
-  const auto plain_end = [](char ch) {
-    return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-';
-  };
-  // The kind a file is by its first folder, each switched on or off by its own setting.
-  const bool kind_on = under("players/")                       ? s.cfg.allow_players
-                       : under("models/") || under("sprites/") ? s.cfg.allow_models
-                       : under("sound/")                       ? s.cfg.allow_sounds
-                       : under("maps/")                        ? s.cfg.allow_maps
-                       : under("textures/") || under("env/")   ? s.cfg.allow_textures
-                       : under("pics/")                        ? s.cfg.allow_pics
-                                                               : s.cfg.allow_others;
-  const int64_t most = s.cfg.max_download_size <= 0 || s.cfg.max_download_size > kQ2DownloadCap
-                           ? kQ2DownloadCap
-                           : s.cfg.max_download_size;
-  std::string why;
-  ge::vfs::ArchiveOrigin origin;
-  bool packed = false;
-  if (!s.cfg.allow_download || !s.cfg.read_file) {
-    why = "downloads are off";
-  } else if (path.empty() || offset < 0 || !plain_end(path.front()) || !plain_end(path.back()) ||
-             path.find('/') == std::string::npos) {
-    why = "not a file the server offers";
-  } else if (!kind_on) {
-    why = "that kind of file is not offered";
-  } else if (!s.cfg.read_file(path, &c.download) || c.download.empty()) {
-    why = "not found";
-  } else if (static_cast<int64_t>(c.download.size()) > most) {
-    why = "larger than sv_max_download_size";
-  } else {
-    packed = s.cfg.file_origin && s.cfg.file_origin(path, &origin);
-    if (packed && under("maps/") && !c.told_origins) why = "the map is in an archive";
-  }
-  if (why.empty() && static_cast<size_t>(offset) > c.download.size()) {
-    const std::string told =
-        "File size differs from server.\nPlease delete the corresponding .tmp file from your "
-        "system.\n";
-    std::vector<uint8_t> b = {kSvcPrint, 2};  // the high print level
-    b.insert(b.end(), told.begin(), told.end());
-    b.push_back(0);
-    reliable(c, b);
-    why = "a resume past its end";
-  }
-  if (!why.empty()) {
-    c.download.clear();
-    const uint8_t refused[4] = {kSvcDownload, 0xff, 0xff, 0};
-    reliable(c, std::vector<uint8_t>(refused, refused + 4));
-    note(s, c.name + " asked for " + asked + ": refused, " + why);
-    return;
-  }
-  if (packed && c.told_origins) {  // the archive the file comes out of, before its first piece
-    std::vector<uint8_t> b = {kSvcGeOrigin};
-    ge::vfs::write_origin(path, origin, &b);
-    reliable(c, b);
-  }
-  c.downloading = true;
-  c.download_name = path;
-  c.download_at = static_cast<size_t>(offset);
-  download_piece(c);
-}
-
 void transmit(Q2NetServer& s, Q2NetClient& c, const uint8_t* data, size_t size) {
   uint8_t out[kMaxPacket];
   const size_t n = channel_transmit(c.ch, data, size, s.now, out);
@@ -329,6 +221,9 @@ std::string cut_name(const std::string& name) {
   return out;
 }
 
+// The wider limits the hosted game asked for (Q2Raw::ext): 0 for our own rules.
+int ext_of(const Q2NetServer& s) { return s.native != nullptr ? s.native->raw.ext : 0; }
+
 // A password setting that asks for one: neither empty nor `none`.
 bool set(const std::string& password) { return !password.empty() && password != "none"; }
 
@@ -345,11 +240,12 @@ std::string status_text(const Q2NetServer& s) {
   info_set(info, "mapname", (*s.rules)->map_name);
   info_set(info, "maxclients", std::to_string(q2_public_slots(s)));
   info_set(info, "maxspectators", std::to_string(s.cfg.max_spectators));
+  if (!s.cfg.ruleset.empty()) info_set(info, "ruleset", s.cfg.ruleset);
   // `needpass`: 1 a player's password asked, 2 a spectator's.
   info_set(info, "needpass",
            std::to_string((set(s.cfg.password) ? 1 : 0) | (set(s.cfg.spectator_password) ? 2 : 0)));
   q2_status_keys(s, info);
-  info_set(info, "protocol", std::to_string(kQ2NetProtocol));
+  info_set(info, "protocol", std::to_string(q2_status_protocol(ext_of(s))));
   if (s.cfg.status.uptime > 0)
     info_set(info, "uptime", ge::server::uptime_text(s.now - s.started, s.cfg.status.uptime));
   std::string t = info + "\n";
@@ -369,6 +265,8 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   std::string unsupported;
   if (!q2_connect_ask(w, ask, unsupported)) return refuse(s, from, unsupported);
   if (w.size() < 5) return;
+  if (const std::string old = q2_extended_refusal(ext_of(s), ask); !old.empty())
+    return refuse(s, from, old);
   const auto qport = static_cast<uint16_t>(std::atoi(w[2].c_str()));
   const auto at = s.challenges.find(challenge_key(from));
   if (at == s.challenges.end()) return refuse(s, from, "No challenge for address.");
@@ -431,6 +329,12 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   if (!vip && !spectator && set(s.cfg.password) && given != s.cfg.password)
     return wrong("Password required or incorrect.\nConnection refused.");
   vip = vip || (set(s.cfg.password) && given == s.cfg.password);
+  // A competition server's ruleset (sv_ruleset, server/admission.hpp): a player keeps to it.
+  if (const std::string why = ge::server::ruleset_refusal(
+          s.cfg.ruleset, info_get(userinfo, std::string(ge::classic::ruleset_info_key(true))),
+          spectator);
+      !why.empty())
+    return refuse(s, from, why);
   // What the rules never see: the recorder's mark and the password (when one is asked); the
   // address the server saw, always.
   info_remove(userinfo, "mvdspec");
@@ -491,6 +395,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   c.told_tag = (ext & kGeAccountKey) != 0;
   c.told_feel = (ext & kGeMoveFeel) != 0;
   c.told_back = (ext & kGeItemBack) != 0;
+  c.told_arsenal = (ext & kGeArsenal) != 0;
   c.told_voice = s.cfg.voice && (ext & kGeVoice) != 0;
   c.told_frames = (ext & kGeEveryFrame) != 0;
   c.told_hits = (ext & kGeHitReports) != 0;
@@ -633,9 +538,10 @@ void start_signon(Q2NetServer& s, int slot) {
   opt.protocol = c.protocol;
   opt.minor = c.minor;
   opt.hit_reports = c.told_hits;  // our own client draws the hit marker from it
-  if (s.native != nullptr)
+  if (s.native != nullptr) {      // an extended game's level (sv::Q2Raw::ext) goes on the wire
+    opt.ext = s.native->raw.ext;
     sv::q2_signon_raw(c.wire, s.native->raw, slot, opt, c.signon);
-  else
+  } else
     sv::q2_signon_parts(c.wire, **s.rules, slot, opt, c.signon);
   ask_settings(s, c);  // setting bans and user info bans at every `new` (server/settingban.hpp)
   if (judge_userinfo(s, slot)) return;
@@ -978,6 +884,8 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
       ge::classic::protocol::info_pairs(c.userinfo, info);
     }
     s.rules->connect(slot, c.name, c.spectator, false);
+    // A stock client's protocol, for the moves it predicts (a spectator's flight); ours is told.
+    (**s.rules).clients[slot].protocol = c.told_feel ? 0 : c.protocol;
     if (s.native == nullptr) {  // the rest of its user info (its skin: the teams by skin)
       std::vector<std::pair<std::string, std::string>> pairs;
       ge::classic::protocol::info_pairs(c.userinfo, pairs);
@@ -1000,9 +908,12 @@ void string_command(Q2NetServer& s, int slot, const std::string& line) {
     for (const std::string& text : s.stuff_lists.begin) stuff(c, text + "\n");
     rate_check(s, slot);
   } else if (cmd == "download") {
-    start_download(s, c, w.size() > 1 ? w[1] : std::string(), at);
+    const std::string refused = q2_start_download(s, c, w.size() > 1 ? w[1] : std::string(), at);
+    if (!refused.empty()) note(s, refused);
+    q2_download_piece(s, c);
   } else if (cmd == "nextdl") {
-    if (c.downloading) download_piece(c);
+    c.download_owed = c.downloading;
+    q2_download_piece(s, c);
   } else if (cmd == "disconnect") {
     drop(s, slot, "left");
   } else if (c.stage == Q2Slot::active) {
@@ -1378,6 +1289,25 @@ void write_items_back(const Q2NetServer& s, Q2NetClient& c, std::vector<uint8_t>
   }
 }
 
+}  // namespace
+
+std::vector<uint8_t> q2_arsenal_message(const sv::SqBody& body) {
+  std::vector<uint8_t> out;
+  uint32_t held = 0;
+  for (int w = 0; w < sv::kSqWeaponCount; w++)
+    if (sv::sq_holds(body, w)) held |= 1u << w;
+  out.push_back(static_cast<uint8_t>(held & 255));
+  out.push_back(static_cast<uint8_t>(held >> 8));
+  for (int k = 1; k < sv::kSqAmmoKinds; k++) {
+    const int n = std::clamp(body.ammo[k], 0, 32767);
+    out.push_back(static_cast<uint8_t>(n & 255));
+    out.push_back(static_cast<uint8_t>(n >> 8));
+  }
+  return out;
+}
+
+namespace {
+
 // Every rules frame, counted from the level's start (a hosted library's are its tenths).
 int64_t fast_of(const Q2NetServer& s) {
   return s.native != nullptr ? s.native->frame_number : s.game->fast_number;
@@ -1413,8 +1343,8 @@ void write_moves(const Q2NetServer& s, int i, std::vector<uint8_t>& b) {
     u8(j);
     u8(static_cast<int>(std::clamp(ms + 0.5, 0.0, 255.0)));
     u8(static_cast<int>(m.type));
-    for (int16_t v : m.origin) i16(v);
-    for (int16_t v : m.velocity) i16(v);
+    for (int32_t v : m.origin) i16(v);
+    for (int32_t v : m.velocity) i16(v);
     u8(m.flags);
     u8(m.time);
     i16(m.gravity);
@@ -1458,6 +1388,8 @@ void send_frames(Q2NetServer& s) {
     } else {
       sv::q2_sight_reset(s.sight, s.game->map.get());
       sv::q2_sight_link_rules(s.sight, **s.rules);
+      const sv::Q2Server* q = sv::q2_of(*s.rules);
+      s.sight.groups = q != nullptr ? sv::map_area_groups(*q) : std::vector<int32_t>{};
       sight = &s.sight;
     }
   }
@@ -1476,6 +1408,7 @@ void send_frames(Q2NetServer& s) {
     if (!c.signon_queue.empty()) feed_signon(c);
     // Reliable data alone: in the signon, after `nogamedata`, and while a file comes down.
     if (c.stage == Q2Slot::signon || c.no_game_data || c.downloading) {
+      q2_download_piece(s, c);
       if (channel_reliable_backlog(c.ch) > 0 || s.now - c.sent >= 1.0) transmit(s, c, nullptr, 0);
       continue;
     }
@@ -1536,6 +1469,13 @@ void send_frames(Q2NetServer& s) {
       c.wire.frame_flags = c.frame_flags;
       c.frame_flags = 0;
     }
+    // The frame sized to the packet's room after the reliable data it carries, so a long
+    // reliable message costs the frame its last entities, effects and sounds, not the frame.
+    // A Quake II client reads at most 1400 bytes after the header, whatever the channel allows;
+    // a newer channel cuts a long packet into pieces, so its frame keeps the block's own cap.
+    const size_t room = channel_unreliable_room(c.ch, &c.wire.room_grows);
+    const size_t over = kMaxPacket - kServerHeader - sv::kQ2MaxBlock;
+    c.wire.room = c.ch.fragments ? 0 : std::max<size_t>(1, room > over ? room - over : 0);
     if (s.native != nullptr)
       sv::q2_frame_raw(c.wire, s.native->raw, static_cast<int32_t>(frame), block, rel);
     else
@@ -1560,6 +1500,14 @@ void send_frames(Q2NetServer& s) {
       }
     }
     if (c.told_back) write_items_back(s, c, rel);
+    if (c.told_arsenal && s.game != nullptr) {  // the weapons held and the ammunition, when changed
+      const std::vector<uint8_t> a = q2_arsenal_message(s.game->players[i].body);
+      if (a != c.arsenal_sent) {
+        rel.push_back(kSvcGeArsenal);
+        rel.insert(rel.end(), a.begin(), a.end());
+        c.arsenal_sent = a;
+      }
+    }
     if (c.told_tag && !c.tag_sent && !s.account_tag.empty()) {  // the logins' key, once known
       rel.push_back(kSvcGeAccountKey);
       rel.insert(rel.end(), s.account_tag.begin(), s.account_tag.end());
@@ -1605,7 +1553,7 @@ bool lag_place(void* ctx, int shooter, int target, sh::Vec3f& at, sh::Vec3f& min
   const double when =
       antilag_target(acked, sc.ping_s, 77, s.now, s.cfg.antilag_exact,
                      s.cfg.antilag_max_ms / 1000.0, s.cfg.antilag_interp ? s.game->step : 0.0);
-  const int16_t* v = s.game->players[target].move.velocity;
+  const int32_t* v = s.game->players[target].move.velocity;
   const sh::Vec3f velocity{float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
   AntilagPlace p;
   if (!antilag_place(s.antilag.players[target], when, velocity, p)) return false;
@@ -1767,7 +1715,7 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
         continue;
       }
       const sv::Q2Player& p = s.game->players[i];
-      const int16_t* o = p.move.origin;
+      const int32_t* o = p.move.origin;
       antilag_record(s.antilag, i, s.now,
                      {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f}, p.mins,
                      p.maxs);

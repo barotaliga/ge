@@ -122,6 +122,32 @@ void explosion(const double p[3], uint32_t seed, Palette pal, Particles* out) {
   }
 }
 
+void explosion2(const double p[3], int start, int length, uint32_t seed, Palette pal,
+                Particles* out) {
+  if (length <= 0) return;
+  Rng r = ge::core::make_rng(seed);
+  for (int i = 0; i < 512; ++i) {
+    double q[3];
+    jitter(r, p, 16, q);
+    Particle s = speck(q, pal, (start + i % length) & 255, 0, 0, 0.3);
+    for (int k = 0; k < 3; ++k) s.v[k] = float(rnd(r, -256, 256) * kUnit);
+    s.drag = -4.0f;
+    out->push_back(s);
+  }
+}
+
+void burst(const double p[3], int specks, int colour, const double way[3], uint32_t seed,
+           Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int i = 0; i < specks; ++i) {
+    double q[3];
+    jitter(r, p, 8, q);
+    Particle s = speck(q, pal, (colour & ~7) + pick(r, 8), 0, 0, 0.1 * pick(r, 5) + 0.02);
+    for (int k = 0; k < 3; ++k) s.v[k] = float(way[k]);
+    out->push_back(s);
+  }
+}
+
 void impact(const double p[3], int specks, uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   const double spread = specks > 130 ? 24 : specks > 20 ? 16 : 8;
@@ -213,6 +239,22 @@ void q2_teleport_burst(const double p[3], uint32_t seed, Palette pal, Particles*
       }
 }
 
+void q2_boss_teleport(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+  constexpr int kColours[4] = {16, 104, 168, 144};
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < 4096; ++n) {
+    const double a = 2 * 3.14159265358979 * pick(r, 1024) / 1023, c = std::cos(a), sn = std::sin(a);
+    const double d = pick(r, 32), out_v = 70 + pick(r, 64);
+    const double v[3] = {c * out_v, sn * out_v, -100.0 + pick(r, 32)};
+    const double life = (0.5 + 0.3 * rnd(r, 0, 1)) / 0.3;
+    Particle s = q2_speck(p, c * d, sn * d, 8 + pick(r, 90), v, 0, pal, kColours[pick(r, 4)], life);
+    s.accel[0] = float(-c * 100 * kUnit);  // the plan is x/z, y up
+    s.accel[1] = float(160 * kUnit);
+    s.accel[2] = float(-sn * 100 * kUnit);
+    out->push_back(s);
+  }
+}
+
 void q2_item_back(const double p[3], uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   for (int n = 0; n < 64; ++n) {
@@ -252,6 +294,29 @@ void q2_fountain(const double p[3], uint32_t seed, Palette pal, Particles* out) 
     const double x = rnd(r, -16, 16), y = rnd(r, -16, 16), z = -1 - pick(r, 8);
     const double v[3] = {0, 0, 80.0 + pick(r, 8)};
     out->push_back(q2_speck(p, x, y, z, v, 80, pal, 219, 2));
+  }
+}
+
+void q2_blaster_specks(const double p[3], const double normal[3], uint32_t seed, Palette pal,
+                       Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < 40; ++n) {
+    const double d = pick(r, 16);  // out along the face, the same on every axis
+    const double x = pick(r, 8) - 4 + d * normal[0], y = pick(r, 8) - 4 + d * normal[1],
+                 z = pick(r, 8) - 4 + d * normal[2];
+    const double v[3] = {normal[0] * 30 + rnd(r, -40, 40), normal[1] * 30 + rnd(r, -40, 40),
+                         normal[2] * 30 + rnd(r, -40, 40)};
+    out->push_back(q2_speck(p, x, y, z, v, 80, pal, (0xe0 + pick(r, 8)) & 0xff, rnd(r, 0.5, 0.8)));
+  }
+}
+
+void q2_blast_specks(const double p[3], int colour, uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < 256; ++n) {
+    const double x = pick(r, 32) - 16, y = pick(r, 32) - 16, z = pick(r, 32) - 16;
+    const double v[3] = {pick(r, 384) - 192.0, pick(r, 384) - 192.0, pick(r, 384) - 192.0};
+    out->push_back(
+        q2_speck(p, x, y, z, v, 80, pal, (colour + pick(r, 8)) & 0xff, rnd(r, 0.625, 1.0)));
   }
 }
 
@@ -657,6 +722,18 @@ void dynamic_light_at(std::span<const Light> lights, const double w[3], double s
 double fade_hurt(double hurt, double dt) { return std::max(hurt - kHurtFade * dt, 0.0); }
 
 double take_hurt(double hurt, double damage) { return std::min(hurt + 3 * damage, 150.0); }
+
+void take_powers(Screen& s, int items) {
+  s.power = (items & kItemQuad) != 0;
+  s.shield = (items & kItemPent) != 0;
+  s.suit = (items & kItemSuit) != 0;
+  s.stealth = (items & kItemRing) != 0;
+  s.powerup = s.power     ? Powerup::quad
+              : s.suit    ? Powerup::suit
+              : s.stealth ? Powerup::ring
+              : s.shield  ? Powerup::pent
+                          : Powerup::none;
+}
 
 void take_classic_hurt(double& strength, double rgb[3], double armour, double blood) {
   const double count = std::max(kHurtCountMin, 0.5 * armour + 0.5 * blood);

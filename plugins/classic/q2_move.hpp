@@ -60,16 +60,21 @@ enum class Q2Type : uint8_t { normal = 0, spectator = 1, dead = 2, gib = 3, free
 
 // The packed state's flags.
 inline constexpr float kSqViewStand = 22, kSqViewDucked = -2;  // the eye over the origin
-inline constexpr uint8_t kSqDucked = 1, kSqJumpHeld = 2, kSqOnGround = 4, kSqTimeWaterJump = 8,
-                         kSqTimeLand = 16, kSqTimeTeleport = 32, kSqNoPrediction = 64;
+inline constexpr uint16_t kSqDucked = 1, kSqJumpHeld = 2, kSqOnGround = 4, kSqTimeWaterJump = 8,
+                          kSqTimeLand = 16, kSqTimeTeleport = 32, kSqNoPrediction = 64;
+// The newer game interface's (version 3302) two more: players pass through one another, and the
+// player is on a ladder (set or cleared by every move that is not a spectator's, `ladder_flag`).
+inline constexpr uint16_t kSqIgnorePlayers = 128, kSqOnLadder = 256;
 
-// What a player carries from command to command, and what a predicting client is sent.
+// What a player carries from command to command, and what a predicting client is sent. The
+// original interface keeps the origin and velocity in 16 bits and the flags and timer in 8; the
+// newer one widens them (`Q2Move::coord_bits`, `time_shift` say how much of the width is used).
 struct Q2State {
   Q2Type type = Q2Type::normal;
-  int16_t origin[3] = {};    // eighths of a unit
-  int16_t velocity[3] = {};  // eighths of a unit/s
-  uint8_t flags = 0;         // kSq*
-  uint8_t time = 0;          // the flags' timer, in 8 ms
+  int32_t origin[3] = {};    // eighths of a unit
+  int32_t velocity[3] = {};  // eighths of a unit/s
+  uint16_t flags = 0;        // kSq*
+  uint16_t time = 0;         // the flags' timer, in 8 ms (`time_shift` 3) or in ms (0)
   int16_t gravity = 800;     // units/s², down
   int16_t delta_angles[3] = {};
 
@@ -102,7 +107,16 @@ struct Q2Trace {
   Vec3f normal;  // the plane hit
   int32_t surface_flags = 0;
   int32_t contents = 0;
-  int entity = -1;  // the entity hit, or -1 for none
+  int entity = -1;       // the entity hit, or -1 for none
+  float plane_dist = 0;  // the plane hit's distance, kind and sign bits (the ground plane's)
+  uint8_t plane_type = 0, plane_signbits = 0;
+};
+
+// The plane a move stood on (the newer interface's ground plane): all zero when in the air.
+struct Q2Plane {
+  Vec3f normal;
+  float dist = 0;
+  uint8_t type = 0, signbits = 0;
 };
 
 // The world a move collides through. The trace's mask (a living or a dead player's) is the
@@ -111,6 +125,10 @@ struct Q2World {
   void* ctx = nullptr;
   Q2Trace (*trace)(void* ctx, Vec3f start, Vec3f mins, Vec3f maxs, Vec3f end) = nullptr;
   int32_t (*contents)(void* ctx, Vec3f p) = nullptr;
+  // A trace with the caller's content mask (the newer interface's): the ladder probe uses it with
+  // kSqLadder when `ladder_mask` is set. Null: the probe takes the plain trace.
+  Q2Trace (*trace_mask)(void* ctx, Vec3f start, Vec3f mins, Vec3f maxs, Vec3f end,
+                        int32_t mask) = nullptr;
 };
 
 inline constexpr int kSqMaxTouch = 32;
@@ -138,6 +156,23 @@ struct Q2Move {
   // still rising lands on it carrying the rise, and a jump from there adds to it: the stair's
   // double jump. False: the air's plain slide, the ledge climbed only by rising past it.
   bool air_step = true;
+  // A spectator's flight: its step's time scaled (a later protocol's clients fly at twice the
+  // time: twice as far, friction and acceleration twice as hard), its friction (0: 1.5 times
+  // `friction`, 9), and whether it glides on when no more speed is wanted. False: the original
+  // step, which then leaves the position where it was for that command.
+  float fly_time = 1;
+  float fly_friction = 0;
+  bool fly_glide = true;
+  // The packed state's width (the newer interface on an extended server): the origin and
+  // velocity kept in `coord_bits` bits (16 wraps as the original does; 23 reaches ±524288 units)
+  // and the timer in units of 2^`time_shift` ms (3: 8 ms, the original's; 0: milliseconds).
+  int coord_bits = 16;
+  int time_shift = 3;
+  // The newer interface's move: the ladder probe traces with the ladder's mask (`trace_mask`),
+  // kSqOnLadder is set or cleared at the end of each move that is not a spectator's, and
+  // `ground_plane` is filled from the ground trace.
+  bool ladder_mask = false;
+  bool ladder_flag = false;
   // Out.
   int touch[kSqMaxTouch] = {};
   int touches = 0;
@@ -145,6 +180,7 @@ struct Q2Move {
   float view_height = 0;
   Vec3f mins, maxs;
   int ground_entity = -1;
+  Q2Plane ground_plane;
   int32_t water_type = 0;
   int water_level = 0;
 };
@@ -159,6 +195,14 @@ struct Q2Feel {
   bool air_step = true;      // false: no step climbed in the air, so no stair's double jump
   bool surface_lift = true;  // false: no fixed lift for jump held under water
 };
+
+// A spectator's flight as a client of `protocol` predicts it: 34 the original step (no glide), 35
+// at twice the time, 36 at twice the time with friction 4, gliding on.
+inline void q2_fly_for_protocol(Q2Move& pm, int protocol) {
+  pm.fly_time = protocol >= 35 ? 2.0f : 1.0f;
+  pm.fly_friction = protocol >= 36 ? 4.0f : 0.0f;
+  pm.fly_glide = protocol >= 36;
+}
 
 // `f` onto a move about to run.
 inline void q2_feel(Q2Move& pm, const Q2Feel& f) {

@@ -28,6 +28,9 @@
 //   `scr_chathud_lines` chat lines (4, at most 32) in a feed of their own at the screen's lower
 //   left (the HUD's `chat` element, placed by its `hud_chat_*` settings), each fading over the
 //   last second of `scr_chathud_time` (0: never); `clearchathud` empties it.
+// - **Quake II's version reply**: there a chat line from another player that ENDS in `!version`
+//   is answered with the version 1 to 2 s later, at most once in two minutes (`cl_queries` 0:
+//   never).
 // - **`followip [n]`**: the n-th last address a chat line named (1 the newest; 16 are kept)
 //   joined.
 // - **`trigger <command> <match>`**: the command run when a line that is not chat, or the centre
@@ -89,10 +92,18 @@ struct ChatExtras {
   int nofake = 2;
   std::string sound_trigger = "~";
   bool queries = true;
-  std::array<double, 2> answered_at{-1e9, -1e9};
+  std::array<double, 3> answered_at{-1e9, -1e9, -1e9};
+  // Quake II's version reply: a chat line ending in `!version` answered once in kQ2ReplyEveryS,
+  // 1 to 2 s after it (`reply_due`, -1 none; said by `chat_reply_due`).
+  double reply_due = -1;
   std::array<std::string, 8> sound_names;  // the sound words played, kept while they sound
   size_t sound_next = 0;
 };
+
+// Quake II's version reply: its wait after the question (the least and the most) and how seldom.
+inline constexpr double kQ2ReplyLeastS = 1, kQ2ReplyMostS = 2, kQ2ReplyEveryS = 120;
+// Says the version reply that is due at `now_s` (`ChatExtras::reply_due`), once.
+void chat_reply_due(ChatExtras& x, double now_s, std::string_view version);
 
 // Quake II's own `cl_chat_sound` on `x` (its layer: cvar_layers.cpp's add_q2).
 void add_q2_chat_sound(ge::console::Console& con, ChatExtras& x);

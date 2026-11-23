@@ -16,6 +16,11 @@
 // still played where it is (client/install_search.hpp): that install is the game's home, its
 // configs and place names with it.
 //
+// A MISSION PACK comes in with its game (beside its base folder) or alone (its disc, its folder):
+// the line says which, how to start it (`-game <folder>`), and when the game itself is still to be
+// added. A pack's own music (its disc's tracks, `<basedir>/<pack>/music/`) plays before the
+// game's when the pack is the game folder playing.
+//
 // THE KEPT MUSIC plays from there too: `add_take_in_commands` points the engine's music console
 // (engine/audio/music_console.hpp: `bgmvolume`, `cd`, bound by the window before the game's own
 // settings) at `<basedir>/music/trackNN.flac`, and
@@ -24,7 +29,8 @@
 // ge:summary The window's games taken in: a folder, volume or disc image copied into data/ first
 // ge:keywords import take-in data-folder copy iso cue disc volume basedir load-game data_root
 // ge:keywords take_in import-command soundtrack take_in_basedir take_in_ask add_take_in_commands
-// ge:keywords level_music cd bgmvolume prefs taken-once adopt_placed_settings
+// ge:keywords level_music cd bgmvolume prefs taken-once adopt_placed_settings homedir home-dir
+// ge:keywords mission-pack take_in_words pack-music offer_words find_offers offered
 // ge:skill shooter
 // ge:test tests/shooters_edge_take_in_test.cpp
 #pragma once
@@ -32,16 +38,29 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "audio/music_console.hpp"
+#include "classic/content/import.hpp"
 #include "console/console.hpp"
 
 namespace shooters_edge::client {
 
 struct DemoState;
 
-// `<prefs>/data` when it can be written, else `<placed>/data`; "" when neither can.
-std::string data_root(const std::string& placed, const std::string& prefs);
+// `<prefs>/data` when it can be written, else `<placed>/data`; "" when neither can. With `home`
+// (`homedir`, below) the player's own folder, when it can be written, before both.
+std::string data_root(const std::string& placed, const std::string& prefs,
+                      const std::string& home = "");
+
+// THE PLAYER'S OWN DATA FOLDER, `homedir` (Quake II's spelling, any game's here): `+set homedir
+// <folder>` on the command line puts everything the game writes there (the games taken in, the
+// settings, screenshots, recordings, downloads), in place of the settings folder above. Read from
+// `*plus` and taken out of it (the setting is read only once the game runs); "" when not given.
+std::string take_home_dir(std::vector<std::string>* plus);
+
+// `homedir` in the console: the data folder in use (`root`), read only.
+void add_home_dir(ge::console::Console& con, const std::string& root);
 
 // The series' settings (settings.hpp) a build that kept its data beside the game wrote there,
 // copied into `root` when `root` has none yet; true when one was copied.
@@ -56,6 +75,19 @@ bool inside(const std::string& path, const std::string& root);
 bool take_in(const std::string& from, const std::string& root, std::string* basedir,
              std::string* summary, std::string* error,
              const std::function<void(const std::string&)>& progress = {});
+
+// The console line saying what `take_in` did (`r`, from the source `from`): the game, the game
+// with its mission packs, or the packs alone; how a pack is started (`-game <folder>`); and, for
+// packs taken in without their game, that the game must be added too.
+std::string take_in_words(const ge::classic::content::ImportReport& r, const std::string& from);
+
+// A mission pack found on this machine and not yet taken in (`find_offers`), offered in the
+// console at the start: "Found The Reckoning, a mission pack for Quake II, in <folder>. Type
+// import "<folder>" to take it in."
+std::string offer_words(const ge::classic::content::Offer& o);
+// Each pack `find_offers` finds in the stores' libraries and on the mounted volumes, printed in
+// `con` (none when `data_root` is empty).
+void offer_packs(ge::console::Console& con, const std::string& data_root);
 
 // `-basedir` taken in before the window chooses its install: `*basedir` becomes the copy (left as
 // it is when empty or already in `root`); false, said on the error stream, when it cannot be.

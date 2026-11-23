@@ -28,7 +28,11 @@ struct Rig {
   cl::Q2Session s;
   std::vector<std::string> said;
   Rig() {
-    cl::add_map_command_cvars(c.cvars(), s);
+    {
+      con::CvarLayer classic(c.cvars(), "classic");  // every game's, then Quake II's over them
+      cl::add_shared_session_cvars(c.cvars(), s);
+    }
+    con::CvarLayer q2(c.cvars(), "game:q2");
     cl::add_q2_session_cvars(c.cvars(), s);
     c.add_command("said", "keeps its word",
                   [this](con::Console&, const con::Args& a) { said.push_back(a[1]); });
@@ -103,6 +107,13 @@ TEST(the_state_cvars_follow_the_game_and_refuse_the_player) {
   CHECK(r.value("sv_running") == "0" && r.value("sv_paused") == "0");
 }
 
+TEST(cl_maxpackets_is_its_spelling_of_the_packets_a_second) {
+  Rig r;
+  CHECK(r.c.cvars().find("cl_c2spps")->value == "30");  // its default, a same row
+  r.c.execute("cl_maxpackets 60");
+  CHECK(r.c.cvars().find("cl_c2spps")->value == "60");
+}
+
 TEST(cl_autopause_is_on_by_default) {
   Rig r;
   CHECK(r.s.autopause);
@@ -135,6 +146,35 @@ TEST(cl_thirdperson_stops_short_of_a_wall) {
   ge::render::FrameView view;  // map +y is the engine's +z: looking down map +y
   const double went = cl::view_behind(view, 60, 0, &world);
   CHECK(std::abs(went - 26) < 0.1);  // the trace stops a hair short
+}
+
+TEST(cl_thirdperson_stops_short_of_a_door_where_it_stands) {
+  // A door's model built round its own origin, standing 30 units behind the eye (map -y): the
+  // camera stops 4 units off it; moved away, it no longer stops it.
+  const ge::shooter::ModelData open = ge::shooter::build_brush_model(
+      {ge::test::loop::box({-100, -300, -100}, {100, -200, 100})});  // the world: far off
+  const ge::shooter::BrushModel world = open.model();
+  const ge::shooter::ModelData door_data =
+      ge::shooter::build_brush_model({ge::test::loop::box({-50, -10, -50}, {50, 10, 50})});
+  const ge::shooter::BrushModel door = door_data.model();
+  cl::BehindMover mover{.model = &door};
+  mover.offset[1] = -40;  // its near face 30 units behind the eye
+  ge::render::FrameView view;
+  const double went = cl::view_behind(view, 60, 0, &world, std::span(&mover, 1));
+  CHECK(std::abs(went - 26) < 0.1);
+  mover.offset[1] = -400;
+  ge::render::FrameView clear;
+  CHECK(std::abs(cl::view_behind(clear, 60, 0, &world, std::span(&mover, 1)) - 60) < 0.1);
+}
+
+// The player's own figure fades as a wall pushes the camera in: gone within 20 units, half at
+// 40, solid from 60 (the default range).
+TEST(cl_thirdperson_fades_the_own_figure_as_the_camera_is_pushed_close) {
+  CHECK(cl::own_figure_alpha(10) == 0);
+  CHECK(cl::own_figure_alpha(cl::kOwnFigureUnits) == 0);
+  CHECK(std::abs(cl::own_figure_alpha(40) - 0.5) < 1e-9);
+  CHECK(cl::own_figure_alpha(60) == 1);
+  CHECK(cl::own_figure_alpha(200) == 1);
 }
 
 // cl_maxfps is whole milliseconds apart: 120 is 8 ms, so 125, and the player is told once per

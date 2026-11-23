@@ -14,7 +14,7 @@ q2-sp-gaps.md).
 | --- | --- | --- | --- | --- | --- |
 | Client commands (what a player types; the game library answers them) | 35 | 0 | 0 | 2 | 37 |
 | Server commands (`sv <word>` typed at the server console) | 6 | 0 | 0 | 0 | 6 |
-| Cvars the game library registers or reads | 43 | 3 | 0 | 0 | 46 |
+| Cvars the game library registers or reads | 43 | 0 | 0 | 3 | 46 |
 | User info keys the game reads | 9 | 0 | 0 | 0 | 9 |
 | dmflags bits | 16 | 0 | 0 | 0 | 16 |
 | Items (the item list, in its order; each is also a spawnable classname) | 42 | 0 | 0 | 0 | 42 |
@@ -24,7 +24,7 @@ q2-sp-gaps.md).
 | Server console lines (what an admin reads; `dprintf`) | 36 | 0 | 0 | 2 | 38 |
 | Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 17 | 0 | 0 | 0 | 17 |
 | Rules a player sees (behaviour not in a row above) | 44 | 0 | 0 | 0 | 44 |
-| **all** | 436 | 3 | 0 | 6 | 445 |
+| **all** | 436 | 0 | 0 | 9 | 445 |
 
 ## Client commands (what a player types; the game library answers them)
 
@@ -51,13 +51,13 @@ count: done 17, partial 13, missing 7, not-taken 0
 | cmd.inven | `inven` | toggles the inventory screen (closes score and help); the server sends the item counts | done | q2_screens.cpp: counts refreshed every frame while open |
 | cmd.invnext | `invnext` | selects the next held item | done | q2_screens.cpp; also steps the chase camera for a spectator (missing, see rule.chase) |
 | cmd.invprev | `invprev` | selects the previous held item | done | q2_screens.cpp |
-| cmd.invnextw | `invnextw` | next held weapon | done | q2_screens.cpp |
+| cmd.invnextw | `invnextw` | next held weapon | done | q2_screens.cpp; held by `tests/shooters_edge_q2_screens_test.cpp` |
 | cmd.invprevw | `invprevw` | previous held weapon | done | q2_screens.cpp |
 | cmd.invnextp | `invnextp` | next held powerup | done | q2_screens.cpp |
-| cmd.invprevp | `invprevp` | previous held powerup | done | q2_screens.cpp |
+| cmd.invprevp | `invprevp` | previous held powerup | done | q2_screens.cpp; held by `tests/shooters_edge_q2_screens_test.cpp` |
 | cmd.invuse | `invuse` | uses the selected item; `No item to use.`, `Item is not usable.` | done | q2_screens.cpp |
-| cmd.invdrop | `invdrop` | drops the selected item; `No item to drop.`, `Item is not dropable.` | done | q2_screens.cpp (the drop rules behind it: cmd.drop) |
-| cmd.weapprev | `weapprev` | switches to the previous usable weapon (from the one being switched to under g_quick_weap) | done | q2_fight.cpp |
+| cmd.invdrop | `invdrop` | drops the selected item; `No item to drop.`, `Item is not dropable.` | done | q2_screens.cpp (the drop rules behind it: cmd.drop); held by `tests/shooters_edge_q2_screens_test.cpp` |
+| cmd.weapprev | `weapprev` | switches to the previous usable weapon (from the one being switched to under g_quick_weap) | done | q2_fight.cpp; held by `tests/shooters_edge_q2_commands_test.cpp` |
 | cmd.weapnext | `weapnext` | the next usable weapon | done | q2_fight.cpp |
 | cmd.weaplast | `weaplast` | switches back to the last weapon | done | q2_commands.cpp |
 | cmd.kill | `kill` | suicide, refused under 5 s after the respawn time and for spectators; obituary `suicides` | done | q2_server.cpp: respawn_time 0 on a first placing (the map start) |
@@ -108,14 +108,14 @@ count: done 29, partial 10, missing 7, not-taken 0
 | cvar.cheats | `cheats` 0 (SI, L) | allows the cheat commands in deathmatch and co-op | done | q2_commands.cpp: server info, latched; q2_server.cpp applies latched settings as each map starts |
 | cvar.gamename | `gamename` baseq2 (SI, L) | the game's name in the server info, for browsers | done | q2_commands.cpp: baseq2, server info, latched |
 | cvar.gamedate | `gamedate` build date (SI, L) | the build date in the server info | done | q2_commands.cpp: server info, latched; a fixed date so every build serves the same info |
-| cvar.maxclients | `maxclients` 4 (SI, L) | player slots; forced to at least 1 | partial | net/q2_net_server.hpp default 8 (S35); q2_native.cpp passes it to a library |
-| cvar.maxspectators | `maxspectators` 4 (SI) | the most spectators at once (a separate count, players' slots shared) | partial | net/q2_game.cpp synonym of `sv_maxspectators`, default 0 meaning "spectators take free slots" (differs in default and meaning) |
+| cvar.maxclients | `maxclients` 4 (SI, L) | player slots; forced to at least 1 | not-taken | Our design (regraded 2026-11-23, no `partial` grade): net/q2_net_server.hpp default 8 (S35); q2_native.cpp passes it to a library |
+| cvar.maxspectators | `maxspectators` 4 (SI) | the most spectators at once (a separate count, players' slots shared) | not-taken | Our design (regraded 2026-11-23, no `partial` grade): net/q2_game.cpp synonym of `sv_maxspectators`, default 0 meaning "spectators take free slots" (differs in default and meaning) |
 | cvar.deathmatch | `deathmatch` 0 (L) | deathmatch rules | done | q2_monsters.cpp, q2_server.cpp |
 | cvar.coop | `coop` 0 (L) | co-op rules (ignored when deathmatch is on) | done | q2_targets.cpp |
 | cvar.coop_pickup_weapons | `coop_pickup_weapons` 1 (A) | co-op: a weapon already held may be picked up again for its ammo | done | q2_server.cpp |
 | cvar.coop_elevator_delay | `coop_elevator_delay` 1.0 (A) | co-op: a plat waits this long before rising | done | q2_map.cpp |
 | cvar.skill | `skill` 1 (L) | 0 easy .. 3 hard+; clamped and forced back at each map | done | q2_server.cpp, q2_monsters.cpp |
-| cvar.maxentities | `maxentities` 1024 (L) | the entity slots | partial | q2_commands.cpp: 1024, latched, kept for configs; this server sizes itself to the map and caps nothing |
+| cvar.maxentities | `maxentities` 1024 (L) | the entity slots | not-taken | Our design (regraded 2026-11-23, no `partial` grade): q2_commands.cpp: 1024, latched, kept for configs; this server sizes itself to the map and caps nothing |
 | cvar.g_footsteps | `g_footsteps` 1 (A) | when players' footsteps sound | done | q2_commands.cpp |
 | cvar.g_monsterfootsteps | `g_monsterfootsteps` 0 (A) | monsters' footsteps | done | q2_commands.cpp, q2_monster_steps.cpp |
 | cvar.g_fix_triggered | `g_fix_triggered` 0 | a monster waiting for a trigger nothing names stands from the start (and the console note `fixed TRIGGERED flag on ...`) | done | q2_commands.cpp, q2_monsters.cpp; the reference game has neither this setting nor a line for it, so ours prints none (the trigger_once line is con.fixed-triggered) |
@@ -169,20 +169,20 @@ count: done 10, partial 6, missing 0, not-taken 0
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| dmf.1 | no health | health items, adrenaline and the ancient head removed from the map | done | q2_server.cpp |
-| dmf.2 | no powerups | powerups removed from the map | done | q2_server.cpp |
+| dmf.1 | no health | health items, adrenaline and the ancient head removed from the map | done | q2_server.cpp; held by `tests/shooters_edge_q2_pickups_test.cpp` |
+| dmf.2 | no powerups | powerups removed from the map | done | q2_server.cpp; held by `tests/shooters_edge_q2_pickups_test.cpp` |
 | dmf.4 | weapons stay | a taken weapon stays for others (a holder cannot take it again); `drop` of a weapon silently ignored; every mode | done | q2_drops.cpp, q2_server.cpp: read in every mode |
-| dmf.8 | no falling damage | | done | q2_fight.cpp |
-| dmf.16 | instant powerups | powerups used on pickup | done | q2_server.cpp |
-| dmf.32 | same map | the level's end reloads the same map | done | q2_fight.cpp (R13) |
+| dmf.8 | no falling damage | | done | q2_fight.cpp; held by `tests/shooters_edge_q2_fight_test.cpp` |
+| dmf.16 | instant powerups | powerups used on pickup | done | q2_server.cpp; held by `tests/shooters_edge_q2_pickups_test.cpp` |
+| dmf.32 | same map | the level's end reloads the same map | done | q2_fight.cpp (R13); held by `tests/shooters_edge_q2_fight_test.cpp` |
 | dmf.64 | skin teams | teams by the whole skin string | done | q2_fight.cpp: every mode; slashless skin a team |
 | dmf.128 | model teams | teams by the model part before `/` | done | q2_fight.cpp: every mode |
 | dmf.256 | no friendly fire | teammates take no damage (with 64 or 128) | done | q2_fight.cpp: every mode (co-op with 64/128) |
-| dmf.512 | spawn farthest | the spot farthest from the nearest living player | done | q2_server.cpp |
+| dmf.512 | spawn farthest | the spot farthest from the nearest living player | done | q2_server.cpp; held by `tests/shooters_edge_q2_pickups_test.cpp` |
 | dmf.1024 | force respawn | a dead player respawns without a press | done | q2_server.cpp; the press rule without it differs (R9) |
-| dmf.2048 | no armour | armour and power armour removed | done | q2_server.cpp |
+| dmf.2048 | no armour | armour and power armour removed | done | q2_server.cpp; held by `tests/shooters_edge_q2_pickups_test.cpp` |
 | dmf.4096 | allow exit | a changelevel in deathmatch ends the level with `<name> exited the level.`; without it the exit kills (`found a way out`) | done | q2_map.cpp: without it the exit strikes 10 x max health, cause exit |
-| dmf.8192 | infinite ammo | no ammo spent, weapons give 1000, ammo and the BFG removed in deathmatch | done | q2_fight.cpp, q2_server.cpp, q2_drops.cpp: every mode; the map's ammo and BFG removed in deathmatch only |
+| dmf.8192 | infinite ammo | no ammo spent, weapons give 1000, ammo and the BFG removed in deathmatch | done | q2_fight.cpp, q2_server.cpp, q2_drops.cpp: every mode; the map's ammo and BFG removed in deathmatch only; held by `tests/shooters_edge_q2_pickups_test.cpp` |
 | dmf.16384 | quad drop | the quad dropped at death | done | q2_fight.cpp; the spread of the two drops differs (R29) |
 | dmf.32768 | fixed fov | every player's fov forced to 90 | done | q2_fight.cpp |
 
@@ -275,7 +275,7 @@ count: done 73, partial 7, missing 1, not-taken 0
 | ent.func_clock | func_clock | counting clock into a target_string (timer up/down, time of day) | done | q2_targets.cpp (world 3) |
 | ent.func_wall | func_wall | brush toggled in and out of existence; `func_wall START_ON without TOGGLE` console line | done | q2_map.cpp (the console line: msg table) |
 | ent.func_object | func_object | brush that falls under gravity when triggered | done | q2_targets.cpp |
-| ent.func_timer | func_timer | fires its targets every wait ± random | done | q2_map.cpp |
+| ent.func_timer | func_timer | fires its targets every wait ± random | done | q2_map.cpp; held by `tests/shooters_edge_q2_targets_test.cpp` |
 | ent.func_explosive | func_explosive | breakable brush, debris, explosion; obituary `blew up` | done | q2_targets.cpp (world 6) |
 | ent.func_killbox | func_killbox | kills everything inside when used | done | q2_targets.cpp |
 | ent.trigger_always | trigger_always | fires its targets at map start | done | q2_map.cpp |
@@ -297,7 +297,7 @@ count: done 73, partial 7, missing 1, not-taken 0
 | ent.target_goal | target_goal | counts a goal; the last goal stops the music | done | q2_map.cpp (world 24) |
 | ent.target_splash | target_splash | sparks, water, blood etc.; may hurt | done | q2_targets.cpp (world 21) |
 | ent.target_spawner | target_spawner | spawns an entity on use (monster spawns); fact2's moved 8 units down | done | `games/shooters_edge/server/q2_targets.cpp`, `games/shooters_edge/server/q2_server.cpp` (fact2's spot) |
-| ent.target_blaster | target_blaster | fires a blaster bolt on use | done | q2_targets.cpp |
+| ent.target_blaster | target_blaster | fires a blaster bolt on use | done | q2_targets.cpp; held by `tests/shooters_edge_q2_targets_test.cpp` |
 | ent.target_crosslevel_trigger | target_crosslevel_trigger | sets a unit-wide flag | done | q2_map.cpp |
 | ent.target_crosslevel_target | target_crosslevel_target | fires when the unit's flags match | done | q2_map.cpp |
 | ent.target_laser | target_laser | a damaging laser beam; obituary `saw the light` | done | q2_targets.cpp (world 5) |

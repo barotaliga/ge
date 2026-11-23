@@ -17,6 +17,7 @@
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/net/q2_client.hpp"
+#include "shooters_edge/net/qw_remote_rulesets.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 
 namespace shooters_edge::net {
@@ -27,19 +28,26 @@ constexpr uint8_t kQ2ButtonUse = 2;  // Quake II's use button in a move's button
 
 float angle16(int16_t a) { return static_cast<float>(a) * (360.0f / 65536.0f); }
 
-// The player's settings as Quake II's user info: its figure and skin are one word
-// ("male/grunt"); a classic skin alone names none of its figures, so the stock one.
+// Quake II's figure and skin as one word ("male/grunt"): a skin with a slash as it is, else the
+// model's folder and the skin; a classic skin alone names none of its figures, so the stock one.
+std::string q2_skin_word(const std::string& model, const std::string& skin) {
+  if (skin.find('/') != std::string::npos) return skin;
+  return !model.empty() ? model + "/" + skin : "male/grunt";
+}
+
+// The player's settings as Quake II's user info.
 Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   Q2ClientConfig s;
   s.name = cfg.name;
-  s.skin = !cfg.model.empty() ? cfg.model + "/" + cfg.skin : "male/grunt";
+  s.skin = q2_skin_word(cfg.model, cfg.skin);
   s.stuff = &r.stuff;
-  if (cfg.skin.find('/') != std::string::npos) s.skin = cfg.skin;
+  s.msg = cfg.msg;
   s.rate = cfg.rate;
   s.fov = cfg.fov;
   s.hand = cfg.hand;
   s.gender = cfg.gender_auto ? client::auto_gender(s.skin) : cfg.gender;
   s.speedjump = cfg.speedjump;
+  s.ruleset = cfg.ruleset;
   s.ask_login = true;   // our server's logins' key, to log in by an account file
   s.ask_feel = true;    // the feel our server runs the move on, to predict the same
   s.ask_frames = true;  // every frame our server's rules run (`sv_fps`), not only the tenths
@@ -56,13 +64,21 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   // in the archive the server says each came out of (the window's `keep_file`).
   s.fetch = true;
   s.fetch_level = true;
-  s.allow = cfg.q2_downloads;  // allow_download and its kinds
-  s.http = cfg.web;            // cl_http_*: the files over HTTP first
-  s.nodelta = cfg.q2_nodelta;  // cl_nodelta
-  s.ask_moves = true;          // the other players' moves, to run them forward (q2_predict.hpp)
-  s.ask_back = true;           // the items coming back, drawn ahead of time (ce_respawns)
-  s.ask_hits = true;           // the damage dealt, the hit marker's (cl_hit_markers)
-  s.ask_sheet = true;          // the settings sheet, the server settings page's
+  s.allow = cfg.q2_downloads;    // allow_download and its kinds
+  s.http = cfg.web;              // cl_http_*: the files over HTTP first
+  s.nodelta = cfg.q2_nodelta;    // cl_nodelta
+  s.protocol = cfg.q2_protocol;  // cl_protocol and the later protocols' settings
+  s.msglen = cfg.q2_msglen;
+  s.chantype = cfg.q2_chantype;
+  s.batch = cfg.q2_batch;
+  s.packetdup = cfg.q2_packetdup;
+  s.maxpackets = cfg.q2_maxpackets;
+  s.instantpacket = cfg.q2_instantpacket;
+  s.ask_moves = true;    // the other players' moves, to run them forward (q2_predict.hpp)
+  s.ask_back = true;     // the items coming back, drawn ahead of time (ce_respawns)
+  s.ask_hits = true;     // the damage dealt, the hit marker's (cl_hit_markers)
+  s.ask_sheet = true;    // the settings sheet, the server settings page's
+  s.ask_arsenal = true;  // the weapons held and the ammunition, a weapon change predicted
   s.read_file = [&r](const std::string& path) {
     return r.read_file ? r.read_file("", path) : std::vector<uint8_t>{};
   };
@@ -71,6 +87,7 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
                      const ge::vfs::ArchiveOrigin* origin) {
     if (r.keep_file) r.keep_file("", path, bytes, origin);
   };
+  s.held = r.held;  // a download cut short resumed
   s.brain = [&r](int) {
     sh::MoveCmd m = r.hands;
     m.angles = r.view;
@@ -124,6 +141,28 @@ int lerp_list(std::vector<client::DemoEntity>& drawn, const std::vector<client::
 
 }  // namespace
 
+bool q2_user_info_moved(Q2ClientConfig& q,
+                        const std::function<std::string(const std::string&)>& setting) {
+  Q2ClientConfig was = q;
+  const auto text = [&setting](const char* name) { return setting(name); };
+  if (const std::string n = text("name"); !n.empty()) q.name = n;
+  if (const std::string s = text("skin"); !s.empty()) q.skin = q2_skin_word(text("model"), s);
+  if (const std::string h = text("hand"); !h.empty()) q.hand = std::atoi(h.c_str());
+  if (const std::string f = text("cl_fov"); !f.empty()) {
+    const double fov = std::atof(f.c_str());
+    q.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;
+  }
+  if (const std::string m = text("msg"); !m.empty()) q.msg = std::atoi(m.c_str());
+  if (const std::string g = text("gender"); !g.empty())
+    q.gender = text("gender_auto") == "1" ? client::auto_gender(q.skin) : g;
+  if (const std::string rate = text("rate"); std::atoi(rate.c_str()) > 0)
+    q.rate = std::atoi(rate.c_str());
+  q.password = text("password");
+  return q.name != was.name || q.skin != was.skin || q.hand != was.hand || q.fov != was.fov ||
+         q.msg != was.msg || q.gender != was.gender || q.rate != was.rate ||
+         q.password != was.password;
+}
+
 void q2_remote_start(Remote& r, const ClientConfig& cfg) {
   r.q2 = std::make_unique<Q2ClientEnd>();
   if (!r.stuff_file.empty()) {  // the whitelist read again at each join
@@ -151,6 +190,7 @@ void q2_remote_start(Remote& r, const ClientConfig& cfg) {
   r.frame_old_s = r.frame_new_s = -1;
   r.q2_frames = 0;
   q2_predict_map(r.q2_ahead, nullptr);  // the level's, when the window loads it
+  r.q2_weapon = Q2Weapon{};
 }
 
 int q2_move_ms(int rate) {
@@ -184,6 +224,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
     q2_client_tick(c, r.now_us);
   }
   for (std::string& line : std::exchange(c.ignored, {})) said.push_back(std::move(line));
+  for (std::string& line : std::exchange(c.to_run, {})) r.stuffed_run.push_back(std::move(line));
   for (std::string& line : std::exchange(c.http.said, {})) said.push_back(std::move(line));
   if (c.stage != r.said) {
     r.said = c.stage;
@@ -208,7 +249,12 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   // The ignore lists, the team tags and the regex triggers (chat_ignore.hpp).
   r.ignore.chat.relay = false;                  // a game joined: Quake II's message triggers run
   remote_sheet_step(r, d.state.prints, now_s);  // `info` asked for the settings page
+  remote_fair_step(r, d.state.prints, now_s);   // f_ruleset answered (qw_remote_rulesets.hpp)
   client::drop_ignored(r.ignore, d.state, d.state.prints, now_s, &d.state.centre);
+  // The cheat lock: in a game of more than one player slot no cheat holds, whatever the local
+  // sv_cheats says (let go by remote_disconnect).
+  if (r.ignore.con != nullptr)
+    r.ignore.con->cvars().hold_cheats(c.stage == ClientStage::active && d.max_clients > 1);
   const bool fresh = c.frames != r.q2_frames;
   client::DemoState& st = d.state;
   if (fresh) {  // a frame came: the last two kept, as read, for drawing between them
@@ -243,7 +289,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
                                       static_cast<float>(v.origin[2]) * 0.125f};
   }
   sh::Vec3f drawn;
-  const bool predicted = !r.nopred && r.predict && q2_predict_step(ahead, c, d, wall_s, drawn);
+  const bool predicted = !r.nopred && q2_predict_step(ahead, c, d, wall_s, drawn);
   if (!predicted) ahead.predicted = false;
   if (ahead.misses != ahead.misses_told) {  // cl_showmiss
     if (ahead.show_misses && r.trace.print)
@@ -274,6 +320,10 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
     r.ahead.type = sh::MoveType::normal;
   }
   r.predicted = predicted;
+  // The held weapon run ahead of the newest frame (q2_weapon.hpp): its frame, shots and ammo.
+  if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size())
+    q2_weapon_predict(r.q2_weapon, r.weapon, r.nopred, c, d,
+                      st.players[static_cast<size_t>(st.player)].origin);
   // The other players run forward from the moves our server sent (none from a stock server).
   // A stock server's run on from its last two frames instead.
   r.others = r.predict_players ? q2_predict_others(ahead, c, d, now_s, &r.others_msec) : 0;

@@ -41,12 +41,15 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "console/binds.hpp"
 #include "console/cvar.hpp"
+#include "console/manual.hpp"
 
 namespace ge::console {
 
@@ -110,6 +113,38 @@ struct SaveScope {
   std::function<bool(std::string_view scope)> scopes = {};
 };
 
+// A COMMAND GATE (console/ruleset.hpp): a command refused while `when` holds (always when
+// empty), `why` printed in its place; `owner` names who set it, for `ungate`. What a server
+// stuffs is never gated: a gate is about what the player does.
+struct CommandGate {
+  std::string owner;
+  std::string why;
+  std::function<bool()> when = {};
+};
+
+// A `$` macro's kind: a TEAM macro tells what a player holds or where they are (health, armour,
+// weapons, powerups, places), the words a strict ruleset keeps scripts from acting on.
+enum class MacroKind : uint8_t { plain, team };
+
+// A TEAM MACRO LIMIT (console/ruleset.hpp): while `when` holds (always when empty), a command line
+// that expanded a team macro may run only the `allowed` commands; any other command or setting
+// prints its name followed by `why`. `owner` names who set it, for `ungate`.
+struct TeamMacroLimit {
+  std::string owner;
+  std::string why;
+  std::vector<std::string> allowed;
+  std::function<bool()> when = {};
+};
+
+// QUIET TRIGGERS (console/ruleset.hpp): while `when` holds, no game line fires a trigger
+// (`msg_trigger`, `re_trigger`) and a game's event triggers ask `triggers_quiet` before they run;
+// `sounds`: a game's sound triggers (a team line's sound word) keep quiet at all times.
+struct TriggerQuiet {
+  std::string owner;
+  std::function<bool()> when = {};
+  bool sounds = false;
+};
+
 class Console {
  public:
   // `is_server`: the console of a dedicated server or a listen host (cvar.hpp's tiers).
@@ -126,20 +161,54 @@ class Console {
   // A command; a second registration of a name replaces the first.
   void add_command(std::string_view name, std::string_view help, CommandFn fn, uint32_t flags = 0);
   bool has_command(std::string_view name) const;
+  // COMMAND GATES (above): `name` refused while the gate holds; a second gate replaces the first.
+  void gate_command(std::string_view name, CommandGate gate);
+  // Every gate `owner` set taken away; returns how many.
+  int ungate(std::string_view owner);
+  // The gate refusing `name` now, or null.
+  const CommandGate* gate_of(std::string_view name) const;
   // The command taken away (a game's own that only some content has); false when there was none.
   bool remove_command(std::string_view name);
   // `name` runs our command `target`: a game's own spelling of it, in the cvars' current layer
   // (cvar.hpp § LAYERS), so it goes with that layer (`drop_layer`).
   void add_command_synonym(std::string_view name, std::string_view target);
+  // THE MANUAL (manual.hpp): what the program says about itself (its name, games and flags) for
+  // `writemanual` and the generated reference manual.
+  void set_manual(ManualInfo info) { manual_ = std::move(info); }
+  ManualInfo& manual() { return manual_; }
+  const ManualInfo& manual() const { return manual_; }
   // Every command synonym as (its name, the command it runs), sorted by name.
   std::vector<std::pair<std::string, std::string>> command_synonyms() const;
   // A layer taken away: its cvars and setting synonyms (`Cvars::drop_layer`) and its command
   // synonyms. Returns how many moved.
   int drop_layer(std::string_view layer);
   // `$name` expands to `fn()` at run time (a team message's $health), ahead of a cvar's value.
-  void add_macro(std::string_view name, std::function<std::string()> fn);
+  void add_macro(std::string_view name, std::function<std::string()> fn,
+                 MacroKind kind = MacroKind::plain);
+  // Whether `$name` is a team macro (`MacroKind::team`).
+  bool is_team_macro(std::string_view name) const;
+  // TEAM MACRO LIMIT (above): a second replaces the first; `ungate(owner)` takes it away.
+  void limit_team_macros(TeamMacroLimit limit);
+  // The limit in force now, or null.
+  const TeamMacroLimit* team_macro_limit() const;
+  // QUIET TRIGGERS (above): a second replaces the first; `ungate(owner)` takes it away.
+  void quiet_triggers(TriggerQuiet quiet);
+  // Whether triggers keep quiet now; whether sound triggers do.
+  bool triggers_quiet() const;
+  bool sound_triggers_quiet() const { return trigger_quiet_ && trigger_quiet_->sounds; }
+  // At most `n` frames in a row may end on a `wait` with commands still waiting (0: no limit);
+  // past it the buffer is emptied and `why` printed. `ungate(owner)` takes it away.
+  void limit_waits(std::string owner, int n, std::string why);
   // Every `$` macro's name, sorted.
   std::vector<std::string> macro_names() const;
+  // Fixed widths for `$` words (a team line's columns): with `length_prefix` set ("tp_length_"), a
+  // `$word` whose cvar `<length_prefix><word>` the player made is padded or cut to that many
+  // letters (1..40; `fit_width`), set left, or right or centred by `<align_prefix><word>`
+  // starting with r or c. Empty prefixes (the default) leave every value as it is.
+  void set_macro_widths(std::string length_prefix, std::string align_prefix) {
+    width_prefix_ = std::move(length_prefix);
+    align_prefix_ = std::move(align_prefix);
+  }
   // A settings block bound cvars write into, kept alive as long as the console (a game's
   // registration hook that has nowhere else to keep its struct).
   void keep(std::shared_ptr<void> block) { kept_.push_back(std::move(block)); }
@@ -239,6 +308,13 @@ class Console {
   std::vector<std::string> complete(std::string_view prefix) const;
   // The nearest name to `name` (edit distance at most 2), or "".
   std::string suggest(std::string_view name) const;
+  // A word's argument values (Quake II's `use`, `drop` and `give` complete the item names the
+  // server listed), asked when a line `<word> <part>` is completed; the word need not be a
+  // command here (a server's own words are forwarded by `set_unknown`). Null removes it.
+  using ArgValues = std::function<std::vector<std::string>()>;
+  void set_arg_values(std::string_view word, ArgValues values);
+  // The values `word`'s argument completes to, in their own order; empty when none.
+  std::vector<std::string> arg_values(std::string_view word) const;
 
   // The whole player config cfg_save writes (cfg.hpp's format).
   std::string save_text() const;
@@ -249,6 +325,7 @@ class Console {
     std::string help;
     CommandFn fn;
     uint32_t flags = 0;
+    std::string layer;  // the cvars' layer when it was added (cvar.hpp § LAYERS)
   };
   const std::map<std::string, Command>& commands() const { return commands_; }
 
@@ -279,7 +356,8 @@ class Console {
     Source source;
     Origin where;
     int depth;
-    std::string via;  // the alias or file it came from, for a depth problem
+    std::string via;    // the alias or file it came from, for a depth problem
+    bool team = false;  // queued by a line under a team macro limit: held to it too
   };
   void dispatch(Entry& e);
   // A command or an alias of that (lower-case) name.
@@ -294,12 +372,19 @@ class Console {
   Cvars cvars_;
   Binds binds_;
   std::map<std::string, Command> commands_;
+  std::map<std::string, CommandGate> gates_;
   struct CommandSynonym {
     std::string target, layer;
   };
   std::map<std::string, CommandSynonym> command_synonyms_;
+  ManualInfo manual_;
   std::map<std::string, Alias> aliases_;
   std::map<std::string, std::function<std::string()>> macros_;
+  std::string width_prefix_, align_prefix_;  // set_macro_widths
+  std::set<std::string> team_macros_;        // MacroKind::team
+  std::optional<TeamMacroLimit> macro_limit_;
+  std::optional<TriggerQuiet> trigger_quiet_;
+  std::string wait_owner_, wait_why_;  // limit_waits
   std::map<std::string, std::unique_ptr<Button>> buttons_;
   std::map<std::string, std::string> held_;  // key → the + command it went down with
   std::vector<Trigger> triggers_;
@@ -312,15 +397,21 @@ class Console {
   Reader reader_;
   Reader fallback_;
   std::function<bool(const Args&)> unknown_;
+  std::map<std::string, ArgValues, std::less<>> arg_values_;
   Writer writer_;
   std::function<void(std::string_view)> sink_;
   std::function<void(std::string_view)> tap_;
   std::vector<std::string> output_;
   std::vector<Problem> problems_;
   const Args* current_ = nullptr;
-  int current_depth_ = 0;
   std::string current_via_;
+  // Whether what the running command queues is held by the team macro limit.
+  bool held_by_team() const;
+  int current_depth_ = 0;
+  int wait_limit_ = 0, waits_in_row_ = 0;  // limit_waits
   bool waiting_ = false;
+  mutable bool expanded_team_ = false;  // the last expansion used a team macro
+  bool current_team_ = false;           // the running line is held by a team macro limit
 };
 
 // The game `scope`'s own file beside a cfg file: "empezar.cfg" under "baseq2" is

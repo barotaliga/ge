@@ -208,7 +208,9 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
     // Walked down a ramp (base1's east stair, 28 degrees): the move leaves the ground on a slope
     // that steep and comes down again further on, so he can pass over the target in the air. Down
     // on the slope past it, no lower than the slope's run, he is there.
-    if (!jump && !grounded && h <= set.arrive && dz <= kArriveUp && dz >= -kArriveUp) over = true;
+    // Off the slope's crest (e3m1's ramp down from the yard) he passes over it higher than that,
+    // a few units over the slope: a step over it counts.
+    if (!jump && !grounded && h <= set.arrive && dz <= kStepHeight && dz >= -kArriveUp) over = true;
     if (grounded && s.origin.z < floor_z) {
       p.reached = over && dz >= -h;
       return p;  // fell below both ends: missed, unless down the slope past it
@@ -924,6 +926,7 @@ void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra) {
       l.level = e.level;
       l.lead = e.lead;
       l.combo = e.combo;
+      l.updraft = e.updraft;
       l.mover = e.mover;
       l.script = e.script;
       l.teleport = e.teleport;

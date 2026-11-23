@@ -982,7 +982,10 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // w: 1 the figures' shadows over the lightmaps by the picked lights.
   set4(d.staged.detail, std::max(o.picmip, 0), o.fullbright ? 1 : 0, o.from_above ? 1 : 0,
        lightmap_overlay(o) && d.caster_lights > 0 ? 1 : 0);
-  set4(d.staged.classic, o.classic_light, o.classic_lift, 0, 0);
+  set4(d.staged.classic, o.classic_light, o.classic_lift, std::clamp(o.anisotropy, 1, 16),
+       o.crisp_sky ? 1 : 0);
+  set4(d.staged.paint, std::clamp(o.saturation, 0.0, 1.0), o.invert ? 1 : 0,
+       std::clamp(o.lightmap_saturation, 0.0, 1.0), std::clamp(o.dlight_falloff, 0, 2));
   set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, parallax > 0 ? o.parallax_reach : 0,
        relief ? o.specular : 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,
@@ -1003,9 +1006,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     d.culled_frames = 0;
   }
   for (int k = 0; k < kLightStyles; ++k)
-    d.staged.styles[k] = float(o.flicker && o.mode == Mode::v2
-                                   ? style_level_glided(d.light_styles[size_t(k)], view.time_s)
-                                   : style_level(d.light_styles[size_t(k)], view.time_s));
+    d.staged.styles[k] =
+        float(o.lerp_styles ? style_level_lerped(d.light_styles[size_t(k)], view.time_s)
+              : o.flicker && o.mode == Mode::v2
+                  ? style_level_glided(d.light_styles[size_t(k)], view.time_s)
+                  : style_level(d.light_styles[size_t(k)], view.time_s));
   const double veil = o.sky_light * o.sky_seen;
   set4(d.staged.veil, veil * o.sky_tint[0], veil * o.sky_tint[1], veil * o.sky_tint[2], 1);
   if (s.sky_texture < s.map.textures.size()) {

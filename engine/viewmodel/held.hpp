@@ -42,6 +42,7 @@
 // ge:keywords barrels multi-barrel alternating-barrels frame_barrel barrel_of_frame arc_ends arc_at
 // ge:keywords prongs lightning-gun-arc
 // ge:keywords hide-hands mark_hands hidden_triangles hands-off arms
+// ge:keywords flash-not-blended muzzle-hack frame-blend
 // ge:skill render assets
 // ge:test tests/viewmodel_held_test.cpp
 #pragma once
@@ -184,7 +185,10 @@ void held_clip_frames(const HeldModel& model, int clip, double t_s, bool loop, i
                       double& t);
 
 // Frames `a` and `b` blended by `t` (0..1) into `positions` and `normals` (xyz a vertex each,
-// sized by the caller); the normals are renormalised.
+// sized by the caller); the normals are renormalised. A vertex of the model's own flash (`flame`)
+// behind the eye (z below 0) in one frame and in front of it in the other is frame b's, never
+// blended: a flash parked behind the eye between shots would otherwise be drawn as a streak across
+// the picture as it comes out. Between two frames that both show it, it blends with the barrel.
 void pose_frames(const HeldModel& model, int a, int b, double t, std::vector<float>& positions,
                  std::vector<float>& normals);
 

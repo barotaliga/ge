@@ -105,6 +105,7 @@ inline bool way_exit(const WayStep& st) { return st.kind == WayKind::exit || st.
 struct WayStats {
   int64_t plans = 0, by_kind[kWayKinds] = {}, steps_done = 0, left = 0;
   int64_t given_up = 0;  // (`complete`) steps and monsters given up for good
+  int64_t forgiven = 0;  // (`complete`) times the jumps he gave up on were given another try
   int64_t retried = 0;   // (`complete`) times nothing was left to do and the left was tried again
   int64_t hopeful = 0;   // (`complete`) times every door was taken as open with nothing to do
   int64_t stood = 0;     // (`complete`) steps and monsters left for standing still on the way
@@ -169,8 +170,22 @@ struct WayThrough {
   double step_for = kWayGiveUp_s;  // how long the step he is on is given (its walk's worth more)
   int step = -1;                   // the step he is on, -1 none (exploring)
   int calling = -1;                // a button step pressed to call the lift he waited for, -1
-  double idle_since = -1;          // nothing to do since then, -1 something
-  double no_route_since = -1;      // the exit chosen and his pilot with no route to it since then
+  // (`complete`) A boss only the map's lightning hurts (Quake's Chthon): the electrodes (the
+  // doors whose target is `lightning`) and where each rests, the button steps that move each, the
+  // button step that fires the bolt, and the doors the boss's death opens and where they rest.
+  // While those stand shut he moves both electrodes, then fires the bolt, again and again.
+  struct Bolt {
+    std::vector<int> electrodes;
+    std::vector<sh::Vec3f> electrodes_at;
+    std::vector<std::vector<int>> plates;  // per electrode, the step indices
+    int fire = -1;                         // the step index
+    std::vector<int> wake;                 // the steps that wake the boss (its rune), first
+    std::vector<int> after;                // the doors the boss's death opens
+    std::vector<sh::Vec3f> after_at;
+  } bolt;
+  double idle_since = -1;        // nothing to do since then, -1 something
+  double no_route_since = -1;    // the exit chosen and his pilot with no route to it since then
+  double stuck_since = -1;       // (`complete`) his pilot with no route to what he is on since then
   int dive = -1;                 // the water's entry (MapNav::entries) he goes back in by, -1 none
   int out = -1;                  // and the one on the far side he swims to and climbs out by
   std::vector<uint8_t> trapped;  // the nodes he could walk to when he went back in
@@ -198,6 +213,13 @@ struct WayThrough {
   ge::ai::Search tour_search;
   double tour_at = -1;
   int64_t tours = 0;
+  // (`complete`, a party of bots: party.hpp) The steps (by index) and the monsters (by entity)
+  // another bot of the party holds (1): not his while he has work of his own. With none of his
+  // own left and some held (`mates_help`, set by his last plan), he holds off the exit and helps.
+  // 2: no one's (too far from the people playing): never his, and the exit waits for it.
+  std::vector<uint8_t> mates_steps, mates_prey;
+  bool mates_help = false;
+  int64_t mates_skipped = 0;  // plans with a stop left to a mate
 };
 
 // The steps off `spec`'s entities (the fighter's buttons already read by `fighter_init`), the

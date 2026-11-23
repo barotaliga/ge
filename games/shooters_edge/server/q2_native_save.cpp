@@ -93,6 +93,13 @@ const fs::path& folder(NativeHost& h) {
   return h.dir;
 }
 
+// Whether the game may be saved, loaded and kept level to level: it asked for enhanced saves, or
+// `sys_allow_unsafe_savegames` 1 was set at start.
+bool saves_safe(NativeHost& h) {
+  return (native_features(h) & native::kGmfEnhancedSaves) != 0 ||
+         setting_on(h, kUnsafeSavesSetting);
+}
+
 void wipe(NativeHost& h) {
   if (h.dir.empty()) return;
   std::error_code ec;
@@ -276,6 +283,7 @@ void native_leave(NativeQ2& s, MapChange change) {
   }
   // A level of the unit left outside deathmatch: kept for its return.
   if (s.map_name.empty() || s.map_stopped || deathmatch(h) || h.model_count() == 0) return;
+  if (!saves_safe(h)) return;  // not kept: its return starts it afresh
   write_level(s, false);
 }
 
@@ -290,7 +298,16 @@ bool native_new_game(NativeQ2& s, std::string& error) {
     }
   bool anyone = false;
   for (int i = 0; i < h.max_clients; i++) anyone = anyone || h.begun[i];
-  return !latched || anyone || native_restart(h, error);
+  if (latched && !anyone && !native_restart(h, error)) return false;
+  if (!deathmatch(h)) {  // whether this game's saves will work
+    const bool asked = (native_features(h) & native::kGmfEnhancedSaves) != 0;
+    h.s->console.push_back(
+        asked ? "Game supports enhanced savegames."
+        : setting_on(h, kUnsafeSavesSetting)
+            ? "Use of unsafe savegames forced from command line."
+            : "Game does not support enhanced savegames. Savegames will not work.");
+  }
+  return true;
 }
 
 bool native_load_begin(NativeQ2& s, std::string& error) {
@@ -325,7 +342,8 @@ bool native_enter(NativeQ2& s, std::string& error, void (*frame)(NativeQ2&)) {
   const fs::path dir = h.dir.empty() ? fs::path() : folder(h);
   std::error_code ec;
   const fs::path sav = dir / (s.map_name + ".sav");
-  if (!dir.empty() && !dm && !setting_on(h, "sv_noreload") && fs::is_regular_file(sav, ec)) {
+  if (!dir.empty() && !dm && !setting_on(h, "sv_noreload") && saves_safe(h) &&
+      fs::is_regular_file(sav, ec)) {
     std::vector<uint8_t> ours;
     std::vector<std::string> config;
     std::vector<uint8_t> portals;
@@ -352,7 +370,7 @@ bool native_enter(NativeQ2& s, std::string& error, void (*frame)(NativeQ2&)) {
       h.loading = false;
     }
   }
-  if (!load && !dm) {
+  if (!load && !dm && saves_safe(h)) {
     h.autosave.clear();
     if (!pack(s, true, h.autosave, error, 0)) h.autosave.clear();
     error.clear();
@@ -365,6 +383,7 @@ std::string native_save_problem(const NativeQ2& s) {
   if (h.dead || h.game == nullptr || s.map_name.empty() || s.map_stopped)
     return "You must be in a game to save.";
   if (deathmatch(h)) return "Can't savegame in a deathmatch";
+  if (!saves_safe(const_cast<NativeHost&>(h))) return "Game does not support enhanced savegames.";
   if (h.ex != nullptr && h.ex->can_save != nullptr) {  // the game's own word, in place of the
     int yes = 0;                                       // dead player's (it says why itself)
     NativeHost& m = const_cast<NativeHost&>(h);
@@ -373,7 +392,7 @@ std::string native_save_problem(const NativeQ2& s) {
   }
   const bool coop = setting_on(const_cast<NativeHost&>(h), "coop");
   if (!coop && h.begun[0] && h.entity(1)->client != nullptr &&
-      h.entity(1)->client->ps.stats[kStatHealth] <= 0)
+      h.with_player(h.entity(1), [](const auto& ps) { return ps.stats[kStatHealth]; }) <= 0)
     return "Can't savegame while dead!";
   return "";
 }
@@ -397,6 +416,10 @@ std::string native_q2_save_map(std::span<const uint8_t> bytes, std::string_view 
 
 std::string native_q2_load_ask(NativeQ2& s, std::span<const uint8_t> bytes, std::string_view name,
                                std::string& error) {
+  if (!saves_safe(*s.host)) {
+    error = "Game does not support enhanced savegames";
+    return "";
+  }
   GameRecord g;
   if (!unpack(bytes, name, g, error)) return "";
   s.host->load.assign(bytes.begin(), bytes.end());

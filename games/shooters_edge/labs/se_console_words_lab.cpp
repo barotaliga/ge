@@ -7,11 +7,11 @@
 // GAME starts it, so the lines answer from inside a game; `--backdrop=<png>` (a se-client shot of
 // that map) is the game drawn behind the console. Each answer is held to the player-text rule
 // (docs/architecture.md § Player text): a game's words, never an agent's prompt ("next:",
-// "skill:", backticks).
+// "skill:", backticks). `--rulesets=1` adds the competition rulesets' console.
 //
 // ge:summary Lab: the console's refusals as a player reads them, over a real map, held to the rule
 // ge:keywords lab se-console-words console refusal player-text error-message addbot coopgame
-// ge:keywords agent-syntax next-hint wording
+// ge:keywords agent-syntax next-hint wording ruleset rulesets smackdown duel
 // ge:skill agent-interface shooter labs
 // ge:test tests/cli_diagnostics_test.cpp
 #include <algorithm>
@@ -34,6 +34,7 @@
 #include "shooters_edge/net/qw_admin.hpp"
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
+#include "shooters_edge/net/qw_remote_rulesets.hpp"
 #include "ui/console.hpp"
 #include "ui/raster.hpp"
 
@@ -101,6 +102,8 @@ gl::Picture backdrop(gl::Lab& lab, int w, int h) {
     }
   return p;
 }
+
+void rulesets_shot(gl::Lab& lab, gl::Picture shot);  // `--rulesets=1` (below)
 
 void run(gl::Lab& lab) {
   cl::SearchPath files;
@@ -192,6 +195,85 @@ void run(gl::Lab& lab) {
             "carries next:, skill: or backtick marks (lines_in_agent_syntax)",
             {{"map", lab.arg("map")}}},
            shot);
+  if (lab.arg("rulesets") == "1") rulesets_shot(lab, backdrop(lab, w, h));
+}
+
+// `--rulesets=1`: a second console, the competition rulesets (classic/rulesets.hpp) as a player
+// meets them: the book listed, one picked, what it holds refusing a set, the rocket jump helper
+// and a command on a team macro refused, the choice refused while joined, the f_ruleset answer;
+// QuakeWorld's book, then Quake II's (`q2=1` on a line: the window's game is Quake II from there
+// on).
+struct RulesetLine {
+  const char* typed;
+  bool joined = false, q2 = false;
+};
+constexpr RulesetLine kRulesetLines[] = {
+    {"rulesets"},
+    {"ruleset smackdown"},
+    {"ce_enabled 1"},
+    {"cl_rollangle 20"},
+    {"+rjump"},
+    {"impulse $health"},
+    {"ruleset qcon", true},
+    {"f_ruleset"},
+    {"rulesets", false, true},
+    {"ruleset duel", false, true},
+    {"cr_enabled 1", false, true},
+};
+
+void rulesets_shot(gl::Lab& lab, gl::Picture shot) {
+  con::Console console;
+  std::vector<std::string> printed;
+  console.set_sink([&printed](std::string_view line) { printed.emplace_back(line); });
+  console.cvars().add({.name = "ce_enabled", .fallback = "1", .flags = con::kArchive});
+  console.cvars().add({.name = "cr_enabled", .fallback = "0", .flags = con::kArchive});
+  console.cvars().add({.name = "cl_rollangle", .fallback = "0", .flags = con::kArchive});
+  console.add_macro("health", [] { return std::string("34"); }, con::MacroKind::team);
+  console.add_command("impulse", "impulse <n>", [](con::Console&, const con::Args&) {});
+  sn::Remote remote;
+  bool q2 = false;
+  remote.q2_game = [&q2] { return q2; };
+  sn::add_remote_commands(console, remote);
+  console.add_command("+rjump", "", [](con::Console&, const con::Args&) {});
+  con::Console shown;
+  con::ConsoleView v(shown);
+  shown.execute("con_height 0.95");
+  int agent = 0, lines = 0;
+  for (const RulesetLine& l : kRulesetLines) {
+    q2 = l.q2;
+    remote.active = l.joined;
+    sn::remote_rulesets_frame(remote, console);
+    printed.clear();
+    console.execute(l.typed);
+    sn::remote_rulesets_frame(remote, console);
+    v.add(con::LineKind::command, std::string("]") + l.typed);
+    for (const std::string& line : printed) {
+      for (size_t a = 0, b = 0; a <= line.size(); a = b + 1) {  // one console line a printed line
+        b = line.find('\n', a);
+        if (b == std::string::npos) b = line.size();
+        v.add(con::LineKind::output, line.substr(a, b - a));
+      }
+      lines++;
+      if (agent_syntax(line)) agent++;
+    }
+  }
+  remote.active = false;
+  lab.metric("rulesets.lines_answered", lines, "lines");
+  lab.metric("rulesets.lines_in_agent_syntax", agent, "lines");
+  v.set_open(true);
+  for (int f = 0; f < 600 && v.drop() < 1; f++) v.frame(1.0 / 60);
+  draw(shot, v);
+  lab.shot({"rulesets",
+            "THE RULESET HOLDS",
+            "A player lists the competition rulesets, picks smackdown, and tries to turn classic "
+            "enhance back on, to roll the view past the league's limit, to use the rocket jump "
+            "helper and to act on a team macro; joined to a server, the choice itself holds. Then "
+            "Quake II's book and its duel "
+            "ruleset.",
+            "Each refusal names the ruleset that holds it; the roll is kept to 5; none carries "
+            "next:, skill: or backtick marks (rulesets.lines_in_agent_syntax)",
+            {{"map", lab.arg("map")}}},
+           shot);
 }
 
 const gl::LabSpec kSpec{
@@ -208,6 +290,7 @@ const gl::LabSpec kSpec{
         {"backdrop", "", "a PNG of the game behind the console (a se-client shot); empty: none"},
         {"width", "1280", "the picture's width, px"},
         {"height", "720", "the picture's height, px"},
+        {"rulesets", "0", "1: a second console, the competition rulesets as a player meets them"},
     },
     "--width=640 --height=360",
     run,

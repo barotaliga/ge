@@ -162,6 +162,7 @@ struct ServerConfig {
   std::string password, spectator_password;
   std::string rcon_password;  // the remote console's (qw_admin.hpp; empty: none offered)
   std::string ban_file;
+  double zombie_s = 2;   // zombietime: s a dropped player's address is still answered
   std::string frag_dir;  // where `fraglogfile` writes frag_<n>.log ("": nowhere)
   // Where `snap` keeps the screenshots players send, as <userid>-<nn>.<ext> ("": none asked).
   std::string snap_dir;
@@ -175,6 +176,7 @@ struct ServerConfig {
   int ip_limit = 0;      // sv_iplimit: the most seats one address holds (0: none; server/admission)
   bool locked = false;   // sv_locked: no new clients but one taking back its seat (admission)
   std::string redirect;  // sv_redirect: where a newcomer is sent when full ("!" first: everyone)
+  std::string ruleset;   // sv_ruleset: the ruleset a player keeps to ("" any; server/admission)
   int vip_slots = 0;     // sv_vipslots: the players' last slots only a VIP takes (server/admission)
   int idle_time = 0;     // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
   ge::server::SkewRule skew;   // sv_speedwindow, sv_speedwarn, sv_speedkick (server/skew.hpp)
@@ -419,7 +421,7 @@ struct QwServer {
   // endpoint routes its events (what the player sees and hears), and the lines printed to a local
   // seat (the lobby's answers), which no packet carries.
   void (*local_tap)(void* ctx, const sv::RulesCommon& game) = nullptr;
-  void (*local_print)(void* ctx, int slot, const std::string& text) = nullptr;
+  void (*local_print)(void* ctx, int slot, int level, const std::string& text) = nullptr;
   // A voice relayed to a listen server's own player (`slot`, a local seat that is no bot), which
   // no packet carries: `v` the voice message as a client would read it (its talker in ints[0]).
   void (*local_voice)(void* ctx, int slot, const SvcMsg& v) = nullptr;
@@ -434,6 +436,16 @@ struct QwServer {
   // the client reads nothing yet.
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* name_ctx = nullptr;
+  // ZOMBIES: a player dropped (but not by a time-out) whose packets, for `cfg.zombie_s` seconds,
+  // are still taken on his channel and answered with the goodbye alone, so a client that missed
+  // it learns it was dropped. His slot is free at once for whoever joins next.
+  struct Zombie {
+    gn::Address address;
+    Channel ch;
+    int slot = 0, userid = 0;
+    double until = 0;  // the network's time it ends, s
+  };
+  std::vector<Zombie> zombies;
   FragLog frags;  // the frag log, its file and the buffer the `log` query reads (qw_fraglog.hpp)
 };
 
@@ -504,5 +516,9 @@ EntityState entity_state(const QwServer& s, int e);
 void entity_look(EntityState& st, float alpha, float scale, const float colormod[3]);
 // A player's stats as the server sends them (`view_height`: the z set's view height in 16).
 void player_stats(const QwServer& s, int slot, int32_t out[kStats], bool view_height);
+// The items word a client is sent (its stat 15): the program's item bits, with its `items2` from
+// bit 23 up when it defines one (a mission pack's new weapons and items), else the runes from bit
+// 28.
+int32_t items_word(const sv::RulesWorld& w, const sv::PlayerNumbers& n);
 
 }  // namespace shooters_edge::net

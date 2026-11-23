@@ -2,7 +2,7 @@
 // game loaded (client/cvar_layers.cpp registers them in its layer; another game's window keeps the
 // defaults below), and the map commands every classic game shares.
 //
-// THE MAP COMMANDS, in every game (the classic layer, `add_map_command_cvars`; Quake II's client
+// THE MAP COMMANDS, in every game (the classic layer, `add_shared_session_cvars`; Quake II's client
 // brought them): `cl_beginmapcmd` runs on entering each map, `cl_changemapcmd` as a map is left
 // for the next, `cl_disconnectcmd` on leaving the game (each empty by default: nothing run). They
 // are how a player records every map (`cl_beginmapcmd "record demo"`). A game is joined while a
@@ -24,19 +24,26 @@
 // THE STATE, read-only: `cl_running` 1 (the client is up), `cl_paused` 1 while the game this
 // window runs is paused, `sv_running` 1 while it runs a server, `sv_paused` 1 while that is paused.
 //
-// THE THIRD PERSON, a cheat: `cl_thirdperson` 1 puts the player's own view `cl_thirdperson_range`
-// units (60) behind his eye, turned `cl_thirdperson_angle` degrees round him the way a yaw turns
-// (0 behind, 180 in front looking back at him), looking the way he would from there; it stops
-// short of the world's walls, and his own figure, drawn while the camera is off him, is hidden
-// once a wall pushes it within kOwnFigureUnits. Joined or hosted, never while he watches another.
+// THE THIRD PERSON, every game's and a cheat: `cl_thirdperson` 1 (Quake's `chase_active`) puts the
+// player's own view `cam_dist` units (Quake II's 60, ours 100; its `cl_thirdperson_range`, Quake's
+// `chase_back`, the distance a watched player is seen from too) behind his eye, turned
+// `cl_thirdperson_angle` degrees round him the way a yaw turns (0 behind, 180 in front looking back
+// at him), looking the way he would from there; it stops short of the world's walls and of its
+// doors and platforms where they stand, and his own figure, drawn while the camera is off him,
+// fades as a wall pushes the camera in (`own_figure_alpha`: solid from kOwnSolidUnits, gone within
+// kOwnFigureUnits). Joined or hosted, never while he watches another.
 //
 // THE MAP'S VERSION: a level that states its map's checksum (configstring 31) is checked against
 // the map on disk as it loads (`q2_map_version`): a server's different map drops the game, a
 // recording's only warns and plays on.
 //
-// THE MOUSE: `in_grab` 0 never takes the mouse while the game is in a window (only covering the
-// screen); 1 and 2 take it as ours does (`q2_takes_mouse`). `in_enable` 0 never takes it, so the
-// mouse never turns the view; the keys work either way.
+// THE MOUSE: `in_grab`, every game's (the classic layer; QuakeWorld's `in_grab_windowed_mouse`),
+// 0 never takes the mouse while the game is in a window (only covering the screen); 1 and 2 take
+// it as ours does (`q2_takes_mouse`). Quake II's own `in_enable` 0 never takes it, so the mouse
+// never turns the view; the keys work either way.
+//
+// THE CLIENT'S PORT: `net_clientport`, every game's (QuakeWorld's `cl_net_clientport`), the port
+// the client sends from (-1 any free one; net/qw_remote.cpp opens the socket again when it moves).
 //
 // ge:summary Quake II's session settings: the map commands, the game clock, the state cvars
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd auto-record map-change timescale
@@ -74,21 +81,23 @@ struct Q2Session {
   bool autopause = true;       // cl_autopause: a game played alone waits under the menu
   bool third_person = false;   // cl_thirdperson (a cheat)
   double third_angle = 0;      // cl_thirdperson_angle, degrees round the player
-  double third_range = 60;     // cl_thirdperson_range, units behind him
-  bool warn_fps = true;        // cl_warn_on_fps_rounding
-  uint32_t fps_seen = 0;       // cl_maxfps's revision when it was last checked
-  bool fps_told = false;       // how to turn the warning off said once
-  int grab = 1;                // in_grab: 0 never in a window, 1 and 2 as ours
-  bool mouse = true;           // in_enable: 0 the mouse never taken, so it never looks
-  bool remap_tracks = false;   // ogg_remap_tracks (1 once Quake II registers it): take_in.hpp
+  double third_range = 100;    // cam_dist, units behind him (Quake II 60), when `dist` is none
+  const ge::console::Cvar* dist = nullptr;  // cam_dist, where the window registered it
+  bool warn_fps = true;                     // cl_warn_on_fps_rounding
+  uint32_t fps_seen = 0;                    // cl_maxfps's revision when it was last checked
+  bool fps_told = false;                    // how to turn the warning off said once
+  int grab = 1;                             // in_grab: 0 never in a window, 1 and 2 as ours
+  bool mouse = true;                        // in_enable: 0 the mouse never taken, so it never looks
+  bool remap_tracks = false;  // ogg_remap_tracks (1 once Quake II registers it): take_in.hpp
   // What the last frame saw: in a game, its map ("" while it loads), the state cvars' values.
   bool joined = false;
   std::string map;
   int state = -1;  // the read-only cvars' bits as last set (-1: never)
 };
 
-// The map commands on `v`, bound to `s`'s, for every game (the caller holds the classic layer).
-void add_map_command_cvars(ge::console::Cvars& v, Q2Session& s);
+// The map commands, `in_grab` and `net_clientport` on `v`, bound to `s`'s, for every game (the
+// caller holds the classic layer).
+void add_shared_session_cvars(ge::console::Cvars& v, Q2Session& s);
 // Quake II's session cvars on `v`, bound to `s` (the read-only ones added, set by the frames).
 void add_q2_session_cvars(ge::console::Cvars& v, Q2Session& s);
 
@@ -118,16 +127,27 @@ void q2_session_frame(ge::console::Console& con, Q2Session& s, const net::Remote
 
 // Closer than this (units) the camera is in the player's own head: his figure is not drawn.
 inline constexpr double kOwnFigureUnits = 20;
+// From this far (units) his figure is drawn solid; nearer it fades out to kOwnFigureUnits.
+inline constexpr double kOwnSolidUnits = 60;
+// The share of the player's own figure drawn with the camera `behind` units back (0..1).
+double own_figure_alpha(double behind);
 
 // `view` moved `units` back from its eye, its heading turned `angle_deg` the way a map yaw turns
 // (counter-clockwise from above) first; traced against `world`'s point hull (map units), stopping
 // short of a wall. The distance it went back, units (0: `units` not above 0, or a wall at once).
+// `movers` (the doors and platforms where they stand this frame, each its brush model and its
+// offset, map units) stop it too.
+struct BehindMover {
+  const ge::shooter::BrushModel* model = nullptr;
+  double offset[3] = {0, 0, 0};  // map units
+};
 double view_behind(ge::render::FrameView& view, double units, double angle_deg,
-                   const ge::shooter::BrushModel* world);
+                   const ge::shooter::BrushModel* world, std::span<const BehindMover> movers = {});
 // cl_thirdperson on `view`: view_behind by the range and the angle while it is on; the distance
 // the camera went back (0: off).
 double q2_third_person(const Q2Session& s, ge::render::FrameView& view,
-                       const ge::shooter::BrushModel* world);
+                       const ge::shooter::BrushModel* world,
+                       std::span<const BehindMover> movers = {});
 
 // Whether the look may take the mouse under `in_grab` (never in a window at 0) and `in_enable`
 // (never at 0).

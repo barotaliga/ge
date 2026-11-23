@@ -1,7 +1,8 @@
 // Quake II's session settings: the map commands, the clock and the state (q2_session.hpp).
 //
 // ge:summary Quake II's map commands run on a change, its game clock, its read-only state cvars
-// ge:keywords cl_thirdperson cl_thirdperson_angle cl_thirdperson_range third-person view_behind
+// ge:keywords cl_thirdperson cl_thirdperson_angle cl_thirdperson_range cam_dist chase_active
+// ge:keywords third-person view_behind
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd timescale fixedtime cl_paused
 // ge:skill console shooter
 // ge:test tests/shooters_edge_q2_session_test.cpp
@@ -34,7 +35,7 @@ void run(con::Console& c, const std::string& text) {
 
 }  // namespace
 
-void add_map_command_cvars(con::Cvars& v, Q2Session& s) {
+void add_shared_session_cvars(con::Cvars& v, Q2Session& s) {
   const struct {
     const char* name;
     const char* help;
@@ -56,9 +57,58 @@ void add_map_command_cvars(con::Cvars& v, Q2Session& s) {
             .kind = con::CvarKind::text,
             .values = r.values},
            r.field);
+  v.bind({.name = "in_grab",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether the game takes the mouse while it is in a window.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: it does (the default), as 2; 0: only while it covers the screen"},
+         &s.grab);
+  // Yourself seen from behind, in every game (Quake's chase_active, Quake II's cl_thirdperson):
+  // a cheat, so a server that allows none keeps you in your own eyes.
+  v.bind({.name = "cl_thirdperson",
+          .fallback = "0",
+          .flags = con::kCheat,
+          .help = "Whether you see yourself from behind, only while the server allows cheats.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: through your own eyes (the default); 1: from behind you"},
+         &s.third_person);
+  v.bind({.name = "cl_thirdperson_angle",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Where round you the camera sits with cl_thirdperson 1, in degrees.",
+          .min = -360,
+          .max = 360,
+          .values = "0: behind you (the default); 90: to your right; 180: in front, looking back "
+                    "at you; -360..360: any angle between"},
+         &s.third_angle);
+  // The camera's distance behind the player is ours, `cam_dist`, the one a player watched in a
+  // demo is seen from too (demo_playback.cpp registers it first, in this layer).
+  s.dist = v.find("cam_dist");
+  v.add({.name = "net_clientport",
+         .fallback = "-1",
+         .help = "The network port your client sends from; a change applies at once.",
+         .kind = con::CvarKind::integer,
+         .min = -1,
+         .max = 65535,
+         .values = "-1: any free port (the default); 1..65535: that port"});
 }
 
 void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
+  // Its camera behind you nearer than ours (`cam_dist`), and its spelling of it.
+  v.bind({.name = "cam_dist",
+          .fallback = "60",
+          .flags = con::kArchive,
+          .help = "How far behind the player the camera sits when he is seen from behind, in "
+                  "units.",
+          .min = 0,
+          .max = 1000,
+          .values = "60: the default; 0..1000: that many units, nearer where a wall is in the way",
+          .overlap = con::Overlap::same},
+         &s.third_range);
+  v.add_synonym("cl_thirdperson_range", "cam_dist");
   v.bind({.name = "timescale",
           .fallback = "1",
           .flags = con::kCheat,
@@ -84,39 +134,6 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
           .kind = con::CvarKind::boolean,
           .values = "1: it waits (the default); 0: it runs on"},
          &s.autopause);
-  v.bind({.name = "cl_thirdperson",
-          .fallback = "0",
-          .flags = con::kCheat,
-          .help = "Whether you see yourself from behind, only while the server allows cheats.",
-          .kind = con::CvarKind::boolean,
-          .values = "0: through your own eyes (the default); 1: from behind you"},
-         &s.third_person);
-  v.bind({.name = "cl_thirdperson_angle",
-          .fallback = "0",
-          .flags = con::kArchive,
-          .help = "Where round you the camera sits with cl_thirdperson 1, in degrees.",
-          .min = -360,
-          .max = 360,
-          .values = "0: behind you (the default); 90: to your right; 180: in front, looking back "
-                    "at you; -360..360: any angle between"},
-         &s.third_angle);
-  v.bind({.name = "cl_thirdperson_range",
-          .fallback = "60",
-          .flags = con::kArchive,
-          .help = "How far from you the camera sits with cl_thirdperson 1.",
-          .min = 0,
-          .max = 1000,
-          .values = "60: the default; 0..1000: that many units, nearer where a wall is in the way"},
-         &s.third_range);
-  v.bind({.name = "in_grab",
-          .fallback = "1",
-          .flags = con::kArchive,
-          .help = "Whether the game takes the mouse while it is in a window.",
-          .kind = con::CvarKind::integer,
-          .min = 0,
-          .max = 2,
-          .values = "1: it does (the default), as 2; 0: only while it covers the screen"},
-         &s.grab);
   v.bind({.name = "in_enable",
           .fallback = "1",
           .help = "Whether the mouse turns your view; the keys work either way.",
@@ -137,6 +154,63 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
        .help = "Whether the server sends every frame whole, never as changes (read when you join).",
        .kind = con::CvarKind::boolean,
        .values = "0: changes (the default); 1: whole frames"});
+  // The later protocols (net/q2_proto_in.hpp), read at each `connect`.
+  v.add({.name = "cl_protocol",
+         .fallback = "0",
+         .help = "Which protocol joining a server speaks.",
+         .kind = con::CvarKind::integer,
+         .values = "0: the newest the server offers (the default); 36, 35: that one, or the next "
+                   "one down the server offers; 34: the original"});
+  v.add({.name = "net_maxmsglen",
+         .fallback = "1390",
+         .flags = con::kArchive,
+         .help = "The largest packet a server speaking a later protocol may send you, in bytes.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 4086,
+         .values = "512..4086: that many bytes (1390 the default); 0: the most, 4086"});
+  v.add({.name = "net_chantype",
+         .fallback = "1",
+         .help = "Which packet format joining a server on protocol 36 asks for.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 1,
+         .values = "1: the newer, which splits a big message over packets (the default); 0: the "
+                   "original"});
+  v.add({.name = "cl_batchcmds",
+         .fallback = "1",
+         .help = "Whether moves on protocol 36 go several to a packet.",
+         .kind = con::CvarKind::boolean,
+         .values = "1: they do (the default); 0: one packet a move, as the original"});
+  v.add({.name = "cl_packetdup",
+         .fallback = "1",
+         .help =
+             "How many earlier packets' moves each packet on protocol 36 carries again, against "
+             "losses.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 3,
+         .values = "0..3: that many (1 the default)"});
+  // The packets a second, our `cl_c2spps` (net/qw_remote.cpp), its `cl_maxpackets` the same
+  // setting: 0 one a move, else at most that many; its 30 by default, and room for more.
+  v.add({.name = "cl_c2spps",
+         .fallback = "30",
+         .flags = con::kArchive,
+         .help = "How many packets a second you send a server; the moves between ride in the next "
+                 "one.",
+         .kind = con::CvarKind::integer,
+         .min = 0,
+         .max = 1000,
+         .values = "0: one a move; 10..1000: at most that many (30 the default; under 10 taken as "
+                   "10)",
+         .overlap = con::Overlap::same});
+  v.add_synonym("cl_maxpackets", "cl_c2spps");
+  v.add({.name = "cl_instantpacket",
+         .fallback = "1",
+         .help = "Whether pressing attack or use on protocol 36 sends a packet at once, past "
+                 "cl_maxpackets.",
+         .kind = con::CvarKind::boolean,
+         .values = "1: it does (the default); 0: it waits its turn"});
   // What joining a server fetches (net/q2_downloads.hpp), read at each `connect`.
   v.add({.name = "allow_download",
          .fallback = "1",
@@ -256,7 +330,7 @@ void q2_session_frame(con::Console& c, Q2Session& s, const net::Remote& remote,
 }
 
 double view_behind(ge::render::FrameView& view, double units, double angle_deg,
-                   const ge::shooter::BrushModel* world) {
+                   const ge::shooter::BrushModel* world, std::span<const BehindMover> movers) {
   if (!(units > 0)) return 0;
   constexpr double kWallGap = 4;  // units the camera keeps off a wall
   const double heading = view.heading - angle_deg * kDeg;
@@ -276,7 +350,19 @@ double view_behind(ge::render::FrameView& view, double units, double angle_deg,
                                   float(from.z + back[1] * far)};
       const ge::shooter::HullTrace tr = ge::shooter::trace_hull(hull, from, to);
       if (tr.startsolid) return 0;
-      if (tr.fraction < 1) reach = std::max(0.0, double(tr.fraction) * far - kWallGap);
+      double fraction = tr.fraction;
+      for (const BehindMover& m : movers) {  // a door or a platform where it stands
+        if (m.model == nullptr) continue;
+        const ge::shooter::Hull& mh = m.model->hulls[0];
+        if (mh.nodes == nullptr || mh.planes == nullptr) continue;
+        const ge::shooter::Vec3f off{float(m.offset[0]), float(m.offset[1]), float(m.offset[2])};
+        const ge::shooter::HullTrace mt =
+            ge::shooter::trace_hull(mh, {from.x - off.x, from.y - off.y, from.z - off.z},
+                                    {to.x - off.x, to.y - off.y, to.z - off.z});
+        if (mt.startsolid) continue;  // the eye inside it (riding it): it does not stop the camera
+        fraction = std::min(fraction, double(mt.fraction));
+      }
+      if (fraction < 1) reach = std::max(0.0, fraction * far - kWallGap);
     }
   }
   for (int k = 0; k < 3; ++k) view.eye[k] += back[k] * reach * unit;
@@ -284,9 +370,15 @@ double view_behind(ge::render::FrameView& view, double units, double angle_deg,
   return reach;
 }
 
+double own_figure_alpha(double behind) {
+  if (!(behind > kOwnFigureUnits)) return 0;
+  return std::min(1.0, (behind - kOwnFigureUnits) / (kOwnSolidUnits - kOwnFigureUnits));
+}
+
 double q2_third_person(const Q2Session& s, ge::render::FrameView& view,
-                       const ge::shooter::BrushModel* world) {
-  return s.third_person ? view_behind(view, s.third_range, s.third_angle, world) : 0;
+                       const ge::shooter::BrushModel* world, std::span<const BehindMover> movers) {
+  const double range = s.dist != nullptr ? s.dist->number : s.third_range;  // cam_dist
+  return s.third_person ? view_behind(view, range, s.third_angle, world, movers) : 0;
 }
 
 }  // namespace shooters_edge::client

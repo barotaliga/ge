@@ -36,7 +36,7 @@
 // is drawn on: con_bgtop and con_bgbottom (a gradient's colours, "rrggbb"), con_bgalpha and
 // con_bgimage (a picture over the gradient); and con_font, the charset its text is written in
 // (docs/charsets.md: terminal, mono, ...; "" the 2D layer's own UI font); con_clock (1: the
-// local time in the panel's lower right corner); con_history (the typed lines kept, 128);
+// local time in the panel's lower right corner); con_history (typed lines kept, in .conhistory);
 // con_scroll (scrolled back, 1 a new line and 2 a key typed bring the newest lines back).
 //
 // `clearnotify` lets the notify lines so far go. `remotemode [address [password]]` sends each line
@@ -164,6 +164,9 @@ enum class EditKey : uint8_t {
   escape
 };
 
+// The file the typed lines are kept in across runs (beside the config).
+inline constexpr std::string_view kHistoryFile = ".conhistory";
+
 class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by subject
  public:
   // Registers the view's cvars and commands on `c` (toggleconsole, clear) and takes `c`'s printing
@@ -234,6 +237,11 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   const std::string& input() const { return input_; }
   size_t cursor() const { return cursor_; }
   const std::vector<std::string>& history() const { return history_; }
+  // KEPT ACROSS RUNS: the typed lines in `kHistoryFile` (one a line, oldest first) beside the
+  // config. `load_history` once the player's config has run, `save_history` whenever the
+  // settings are saved; neither with con_history 0. False: the file could not be written.
+  void load_history();
+  bool save_history() const;
 
   // AUTOCOMPLETE. While the first word is typed (after a `/`, or bare when con_chat is 0), every
   // command, cvar, alias and game spelling (a synonym) it starts is a suggestion, the most
@@ -282,8 +290,8 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   // con_scale: the text's size against the console's own (0, the default: 1).
   double text_scale() const { return scale_ > 0 ? scale_ : 1; }
   // THE FOOT: a line the game shows under the scrollback while it joins a game (the file coming
-  // and its share, what is loading); `progress` 0..1 draws a bar before it, below 0 none; ""
-  // takes it away.
+  // and its share, what is loading); `progress` 0..1 draws a bar and its percentage after it,
+  // below 0 none; "" takes it away.
   void set_foot(std::string text, double progress = -1) {
     foot_ = std::move(text);
     foot_progress_ = progress;
@@ -332,6 +340,7 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   TextSpot select_from_, select_to_;  // select_begin's and select_to's
   bool selecting_ = false;
   std::vector<std::string> history_;
+  void remember(const std::string& line);  // a typed line kept (con_history)
   std::string input_;
   size_t cursor_ = 0;
   int history_at_ = -1;  // -1: the line being typed; else an index into history_

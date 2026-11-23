@@ -124,6 +124,28 @@ con::ChatLine chat_line_of(const DemoState& s, const DemoPrint& p) {
   return line;
 }
 
+bool game_line(QwIgnore& g, std::string_view text, int level, double now_s) {
+  if (g.con == nullptr) return true;
+  const int at = level < 0 ? 0 : level > kChatLevel ? kChatLevel : level;
+  const int kind = at == 0   ? con::kReLow
+                   : at == 1 ? con::kReMedium
+                   : at == 2 ? con::kReHigh
+                             : con::kReChat;
+  g.triggers.now = now_s;
+  if (con::re_trigger_line(*g.con, g.triggers, text, kind, now_s).remove) return false;
+  if (g.triggers.on) g.con->fire_triggers(text, at, false);
+  if (at < kChatLevel) run_triggers(g.chat, text);
+  return true;
+}
+
+size_t game_lines(QwIgnore& g, const std::vector<std::string>& lines,
+                  const std::vector<int>& levels, size_t from, double now_s,
+                  const std::function<void(const std::string&)>& show) {
+  for (size_t i = from; i < lines.size(); ++i)
+    if (game_line(g, lines[i], i < levels.size() ? levels[i] : kHighLevel, now_s)) show(lines[i]);
+  return lines.size();
+}
+
 void drop_ignored(QwIgnore& g, DemoState& s, std::vector<DemoPrint>& prints, double now_s,
                   std::string* centre, const ChatClock& clock) {
   if (g.levels != s.levels) {  // a new map: the players' flags and the flood's memory go
@@ -136,6 +158,7 @@ void drop_ignored(QwIgnore& g, DemoState& s, std::vector<DemoPrint>& prints, dou
       con::re_trigger_line(*g.con, g.triggers, *centre, con::kReCentre, now_s).remove)
     centre->clear();
   if (centre != nullptr && !centre->empty()) run_triggers(g.chat, *centre);  // Quake II's
+  chat_reply_due(g.chat, now_s, kVersionLine);  // Quake II's version reply, when it is due
   if (prints.empty()) return;
   const con::ChatRoster r = roster_of(s);
   std::vector<bool> gone(prints.size(), false);

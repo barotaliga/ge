@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "brush/areas.hpp"
 #include "brush/map.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
@@ -535,16 +536,26 @@ TEST(the_rules_effects_go_out_as_temporary_entities) {
   std::string error;
   CHECK_MSG(cl::open_demo(rec.bytes, d, error), error);
   std::vector<cl::DemoEffect> seen;
-  while (cl::next_frame(d, error) == cl::DemoRead::frame)
+  bool blast_heard = false;  // the client plays an explosion's sound itself
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) {
     seen.insert(seen.end(), d.state.effects.begin(), d.state.effects.end());
+    for (const cl::DemoSound& h : d.state.started)
+      blast_heard =
+          blast_heard || (h.name != nullptr && std::string_view(h.name) == "weapons/rocklx1a.wav");
+  }
+  CHECK(blast_heard);
+  CHECK(!d.state.light_styles[0].empty());  // the map's styles, kept for the window
   CHECK_MSG(seen.size() == 4, std::to_string(seen.size()));
   if (seen.size() != 4) return;
   CHECK(seen[0].kind == cl::DemoEffectKind::explosion && seen[0].code == 7);
   CHECK(seen[0].at.x == 100 && seen[0].at.y == 50 && seen[0].at.z == 30);
   CHECK(seen[1].kind == cl::DemoEffectKind::named && seen[1].name == "sq_teleport");
   CHECK(seen[2].kind == cl::DemoEffectKind::blood);
-  CHECK(seen[2].way.z > 0.99f);  // its way, by the direction table
-  CHECK(seen[3].kind == cl::DemoEffectKind::beam && seen[3].end.x == 300);
+  CHECK(seen[2].way.z > 0.99f);                              // its way, by the direction table
+  CHECK(seen[2].q2_specks == 60 && seen[2].colour == 0xe8);  // the client's puff of blood
+  // The rail's line, drawn by its name as our own game draws it (world_fx.cpp).
+  CHECK(seen[3].kind == cl::DemoEffectKind::named_trail && seen[3].name == "te_railtrail");
+  CHECK(seen[3].end.x == 300);
 }
 
 // A shot that strikes a wall throws its sparks off the wall: the temporary entity carries the
@@ -658,4 +669,135 @@ TEST(the_hit_report_goes_only_to_a_viewer_that_reads_it) {
                                      std::end(report)) != rec.bytes.end();
     CHECK_MSG(carried == reads, reads ? "the report is missing" : "a stock stream carried it");
   }
+}
+
+// A SHUT DOOR CUTS THE FRAME: two rooms (areas 1 and 2, split at x = 0) and the portal between
+// them. Shut, a viewer in room 1 is sent what is in room 1 and the door spanning both, not what
+// is in room 2, and its area bits mark room 1 alone; open, both rooms.
+TEST(a_shut_door_cuts_the_entities_and_the_area_bits) {
+  br::Map m;
+  m.planes.push_back(br::Plane{{1, 0, 0}, 0, 0});
+  m.nodes.push_back(br::Node{0, {-1, -2}});  // in front: leaf 0; behind: leaf 1
+  m.models.emplace_back();
+  m.leaves.resize(2);
+  m.leaves[0].cluster = 0;
+  m.leaves[0].area = 1;
+  m.leaves[1].cluster = 1;
+  m.leaves[1].area = 2;
+  m.clusters = 2;
+  m.row_bytes = 1;
+  m.pvs = {0x03, 0x03};
+  m.area_portals = {{1, 2}, {1, 1}};
+  m.areas = {{0, 0}, {1, 0}, {1, 1}};
+  sv::Q2Sight sight;
+  sv::q2_sight_reset(sight, &m);
+  const auto link = [&](int n, float x0, float x1) {
+    const float lo[3] = {x0, -8, -8}, hi[3] = {x1, 8, 8};
+    sv::q2_sight_link(sight, n, lo, hi);
+  };
+  link(5, 10, 20);    // in room 1
+  link(6, -20, -10);  // in room 2
+  link(7, -4, 4);     // the door: both
+  sv::Q2Wire w;
+  w.slot = 0;
+  w.sight = &sight;
+  sv::Q2EntityState s;
+  s.present = true;
+  s.model[0] = 1;
+  const float eye[3] = {30, 0, 0};
+  std::vector<uint8_t> shut(2, 0), open(2, 0);
+  open[1] = 1;
+  br::flood_areas(m, shut, &sight.groups);
+  CHECK(sv::q2_sight_view(w, eye));
+  CHECK(w.area == 1);
+  CHECK(sv::q2_sight_keeps(w, 5, s, eye) && !sv::q2_sight_keeps(w, 6, s, eye) &&
+        sv::q2_sight_keeps(w, 7, s, eye));
+  std::vector<uint8_t> bits;
+  sv::q2_write_area_bits(bits, w);
+  CHECK(bits == std::vector<uint8_t>({1, 0x02}));
+  br::flood_areas(m, open, &sight.groups);
+  CHECK(sv::q2_sight_view(w, eye));
+  CHECK(sv::q2_sight_keeps(w, 6, s, eye));
+  bits.clear();
+  sv::q2_write_area_bits(bits, w);
+  CHECK(bits == std::vector<uint8_t>({1, 0x06}));
+  // A sound or an effect beyond the door is heard only while it stands open; one in a solid's
+  // area 0 never (no leaf of this map is one, so the shut door alone is shown).
+  const float ear[3] = {30, 0, 0};
+  CHECK(sv::q2_sight_hears(w, ear, {-15, 0, 0}) && sv::q2_sight_hears(w, ear, {15, 0, 0}));
+  br::flood_areas(m, shut, &sight.groups);
+  CHECK(sv::q2_sight_view(w, eye));
+  CHECK(!sv::q2_sight_hears(w, ear, {-15, 0, 0}) && sv::q2_sight_hears(w, ear, {15, 0, 0}));
+  // A map with no area data: every entity by its clusters, the 32 bytes of every area.
+  sight.groups.clear();
+  CHECK(sv::q2_sight_view(w, eye));
+  bits.clear();
+  sv::q2_write_area_bits(bits, w);
+  CHECK(bits.size() == 33 && bits[0] == 32 && bits[32] == 0xFF);
+}
+
+// A frame sized to the packet's room after a long reliable message keeps its head, the player and
+// what fits; it does not grow past the room and lose itself whole.
+TEST(a_frame_short_of_room_sends_what_fits) {
+  sv::RulesRunner r = start();
+  sv::Q2Server& s = *sv::q2_of(r);
+  r.connect(0, "eve", false, false);
+  sh::Packet p;
+  p.client = 0;
+  p.sequence = 1;
+  p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
+  r.frame(&p, 1);
+  sv::Q2Wire w;
+  std::vector<std::vector<uint8_t>> blocks;
+  sv::q2_signon(w, *r, 0, {}, blocks);
+  for (int i = 0; i < 120; i++) {  // more effects than the room holds
+    sv::NetEvent ev;
+    ev.kind = sv::EventKind::point_effect;
+    ev.to = 0xFFFFFFFFu;
+    ev.origin = {float(i), 0, 30};
+    ev.text = "te_explosion";
+    r->out.events.push_back(ev);
+    r->out.events_total++;
+  }
+  w.room = 400;
+  w.room_grows = false;
+  std::vector<uint8_t> block, rel;
+  sv::q2_frame(w, *r, static_cast<int32_t>(s.frame_number), &s.players[0].move, block, &rel);
+  CHECK_MSG(block.size() <= 400 && block.size() > 200, std::to_string(block.size()));
+  CHECK(!block.empty() && block[0] == 20);  // the frame's head kept
+}
+
+// A player's `msg` level holds back the prints below it: at 2 the pickup line (level 0) and the
+// obituary (1) stay home and the high print (2) and the chat line (3) are sent.
+TEST(a_players_msg_level_holds_back_the_prints_below_it) {
+  sv::RulesRunner r = start();
+  sv::Q2Server& s = *sv::q2_of(r);
+  r.connect(0, "eve", false, false);
+  r.user_info(0, "msg", "2");
+  sh::Packet p;
+  p.client = 0;
+  p.sequence = 1;
+  p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
+  r.frame(&p, 1);
+  sv::Q2Wire w;
+  w.slot = 0;
+  std::vector<std::vector<uint8_t>> blocks;
+  sv::q2_signon(w, *r, 0, {}, blocks);
+  const char* lines[] = {"pickup-line", "obituary-line", "high-line", "chat-line"};
+  for (int level = 0; level < 4; level++) {
+    sv::NetEvent ev;
+    ev.kind = sv::EventKind::print;
+    ev.to = 1;
+    ev.level = level;
+    ev.text = lines[level];
+    r->out.events.push_back(ev);
+    r->out.events_total++;
+  }
+  std::vector<uint8_t> block, rel;
+  sv::q2_frame(w, *r, static_cast<int32_t>(s.frame_number), &s.players[0].move, block, &rel);
+  const std::string sent(rel.begin(), rel.end());
+  CHECK(sent.find("pickup-line") == std::string::npos);
+  CHECK(sent.find("obituary-line") == std::string::npos);
+  CHECK(sent.find("high-line") != std::string::npos);
+  CHECK(sent.find("chat-line") != std::string::npos);
 }

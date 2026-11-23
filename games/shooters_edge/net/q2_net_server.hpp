@@ -113,6 +113,7 @@ struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int ip_limit = 3;      // sv_iplimit: the most slots one address holds (0: none; server/admission)
   bool locked = false;   // sv_locked: no new clients but one taking back its slot (admission)
   std::string redirect;  // sv_redirect: where a newcomer is sent when full ("!" first: everyone)
+  std::string ruleset;   // sv_ruleset: the ruleset a player keeps to ("" any; server/admission)
   // SLOTS KEPT FOR VIPS (server/admission.hpp): the players' last `vip_slots` (sv_vipslots, the
   // modern server's `sv_reserved_slots`) only for a client whose `password` is one of
   // `vip_passwords` (sv_vippassword, `sv_reserved_password`; it is asked no other password) or the
@@ -154,8 +155,9 @@ struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   bool verify_checksum = true;
   sv::Q2WireOptions wire;  // the map's checksum, the sky; the count and the loop set here
   // DOWNLOADS: a file a client asks for (`download <path> [offset]`, then `nextdl` for each next
-  // piece of up to 1024 bytes) read from the game's files (`read_file`; unset: every download
-  // refused). Refused, as size -1 and percent 0: downloads off, a path holding `..`, starting with
+  // piece, each filling the packet, paced by the rate: q2_net_download.hpp) read from the game's
+  // files (`read_file`; unset: every download refused). Refused, as size -1 and percent 0:
+  // downloads off, a path holding `..`, starting with
   // `.` or `/` or with no `/`, a file missing, a kind switched off (`players/` skins and figures,
   // `models/` and `sprites/`, `sound/`, `maps/`, `textures/` and `env/`, `pics/`, anything else),
   // a file past `max_download_size`, and a map out of an archive to a client that would keep it
@@ -226,6 +228,9 @@ struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::string force_reconnect;
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
   std::function<bool(const std::string& path, ge::vfs::ArchiveOrigin* out)> file_origin;
+  // The file as the raw deflate stream it is stored as in a `.pkz`, false for any other: sent as
+  // it lies (message 22) to a 36 client at minor 1021 or later that has zlib, from its start.
+  std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_deflated;
 };
 
 // A slot's stage. A ZOMBIE is a client dropped: for `zombie_time` seconds after the last packet
@@ -288,6 +293,8 @@ struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<uint8_t> voice_out;  // voices relayed to it this tick (svc 121 each), unreliable
   int64_t voice_in = 0, voice_heard = 0;  // its voice messages taken; voices relayed to it
   bool told_back = false;                 // agreed the items coming back (`*ge_ext` bit 512)
+  bool told_arsenal = false;              // agreed its weapons and ammunition (`*ge_ext` bit 4096)
+  std::vector<uint8_t> arsenal_sent;      // the arsenal's message last sent (empty: none yet)
   std::vector<double> back_told;          // the rules' time each item told of comes back; -1 none
   ge::classic::Q2Cmd last_cmd;    // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;        // the network's time it came, s (-1: none yet)
@@ -298,9 +305,13 @@ struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<uint8_t> download;  // the file being sent
   size_t download_at = 0;         // its bytes sent so far
   bool downloading = false;
-  int64_t downloads = 0;          // files sent whole
-  std::string download_name;      // the file being sent, as asked for
-  std::vector<uint8_t> last_out;  // the last datagram sent it (`packetdup` sends it again)
+  bool download_deflated = false;  // `download` is a deflate stream the client inflates (22)
+  int64_t downloads = 0;           // files sent whole
+  bool download_owed = false;      // a piece asked for and not yet sent (q2_net_download.hpp)
+  double download_wait = 0;        // the network's time the pause after the last piece ends, s
+  int64_t download_pieces = 0;     // pieces sent
+  std::string download_name;       // the file being sent, as asked for
+  std::vector<uint8_t> last_out;   // the last datagram sent it (`packetdup` sends it again)
   // THE PROBES AND QUERIES (q2_admin.hpp): its first `new` sent (an assigned slot before), when;
   // its answer to the version probe; `download http` said; `nogamedata`; `packetdup`; the settings
   // `stuffcvar` asked it and it has not answered yet.
@@ -407,6 +418,11 @@ bool q2_net_start(Q2NetServer& s, const sv::RulesRunner& rules, gn::Transport& t
                   const Q2NetConfig& cfg, std::string& error);
 // One host tick at the network's time.
 void q2_net_frame(Q2NetServer& s, int64_t now_us);
+
+// The arsenal's message (svc 118 after its id, to a client that agreed `*ge_ext` bit 4096): the
+// weapons `body` holds as a 16-bit mask by kSqWeapons' row, then its ammunition of each kind
+// (shells, bullets, grenades, rockets, cells, slugs) as 16-bit counts, little-endian.
+std::vector<uint8_t> q2_arsenal_message(const sv::SqBody& body);
 // Every client told the server is going, and dropped.
 void q2_net_stop(Q2NetServer& s);
 int q2_net_clients(const Q2NetServer& s);

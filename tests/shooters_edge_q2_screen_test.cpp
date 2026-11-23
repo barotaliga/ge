@@ -1,12 +1,13 @@
 // Tests: what the window draws round Quake II's bar (games/shooters_edge/client/q2_bar.cpp):
 // the bar's whole-number scale, the centre print's lines (centred, cut at 40 letters, placed at
 // 35% of the screen or at 48 for a long message) and the crosshair left out when the packs hold
-// no picture of it.
+// no picture of it; `aadump` and `dumpclients`, two asked in one frame, both answered.
 //
 // ge:summary Tests: Quake II's centre print and crosshair round its bar, and the bar's scale
-// ge:keywords test q2 centre-print crosshair status-bar scale add_q2_screen
+// ge:keywords test q2 centre-print crosshair status-bar scale add_q2_screen aadump dumpclients
 // ge:skill ui testing
 // ge:test tests/shooters_edge_q2_screen_test.cpp
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <string>
@@ -14,6 +15,7 @@
 
 #include "assets/pcx.hpp"
 #include "check.hpp"
+#include "console/console.hpp"
 #include "lab/png.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/q2_bar.hpp"
@@ -209,6 +211,72 @@ TEST(gl_fontshadow_draws_each_letter_first_in_black_and_gl_bilerp_chars_smooths_
   CHECK_MSG(dl.cmds().size() == 14, std::to_string(dl.cmds().size()));
 }
 
+TEST(scr_font_writes_the_bars_text_in_its_own_letters_and_falls_back_to_conchars) {
+  cl::Q2Screen screen;
+  ge::console::Console con;
+  ge::console::Cvars& v = con.cvars();
+  v.bind({.name = "scr_font", .fallback = "conchars", .kind = ge::console::CvarKind::text},
+         &screen.font);
+  cl::Q2Bar bar;
+  bar.screen = &screen;
+  bar.console = &con;
+  cl::BarPicture glyphs, mine;
+  glyphs.image.width = glyphs.image.height = 128;
+  glyphs.image.rgba.assign(size_t{128} * 128 * 4, 255);
+  mine = glyphs;
+  mine.image.width = mine.image.height = 256;  // told apart by its size
+  mine.image.rgba.assign(size_t{256} * 256 * 4, 255);
+  bar.pictures["pics/conchars.pcx"] = glyphs;
+  bar.pictures["pics/mine.pcx"] = mine;
+  cl::add_q2_turtle(bar, cl::kQ2FrameNoDelta, 320, 240);
+  ge::ui::DrawList dl;
+  con.execute("scr_font mine");
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  CHECK(!dl.cmds().empty() && dl.cmds()[0].box.image == &bar.pictures["pics/mine.pcx"].image);
+  con.execute("scr_font gone");  // not in the packs: said, and set back
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  CHECK(!dl.cmds().empty() && dl.cmds()[0].box.image == &bar.pictures["pics/conchars.pcx"].image);
+  CHECK(screen.font == "conchars");
+  CHECK_MSG(
+      !con.output().empty() && con.output().back() == "Couldn't load pics/gone.pcx: not found",
+      con.output().empty() ? "" : con.output().back());
+}
+
+TEST(viewsize_under_100_tiles_backtile_round_the_smaller_view) {
+  CHECK(cl::q2_view_rect(320, 240, 100).w == 320);
+  const cl::Q2ViewRect r = cl::q2_view_rect(320, 240, 50);
+  CHECK(r.x == 80 && r.y == 60 && r.w == 160 && r.h == 120);
+  cl::Q2Screen screen;
+  cl::Q2Bar bar;
+  bar.screen = &screen;
+  bar.width = 320;
+  bar.height = 240;
+  cl::BarPicture tile;
+  tile.image.width = tile.image.height = 64;
+  tile.image.rgba.assign(size_t{64} * 64 * 4, 255);
+  bar.pictures["pics/backtile.pcx"] = tile;
+  ge::ui::DrawList dl;
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  CHECK(dl.cmds().empty());  // 100: no border
+  screen.viewsize = 50;
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  float area = 0;
+  for (const auto& c : dl.cmds()) {
+    const ge::ui::Rect b = c.box.rect;
+    area += b.w * b.h;
+    const auto x0 = static_cast<float>(r.x), y0 = static_cast<float>(r.y);
+    const auto x1 = static_cast<float>(r.x + r.w), y1 = static_cast<float>(r.y + r.h);
+    const bool inside = b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0;
+    CHECK(!inside);
+    CHECK(c.box.uv.x >= 0 && c.box.uv.x + c.box.uv.w <= 64.01f);  // within one tile
+  }
+  CHECK_MSG(area == 320.0f * 240 - 160.0f * 120, std::to_string(area));  // the border, once
+}
+
 TEST(timegraph_draws_each_frames_time_along_the_bottom_held_to_graphheight) {
   // A column a frame, a unit tall a millisecond (graphscale 1, graphshift 0), held to graphheight;
   // the newest at the bottom right of the bar's screen. debuggraph draws it without feeding it.
@@ -238,4 +306,113 @@ TEST(timegraph_draws_each_frames_time_along_the_bottom_held_to_graphheight) {
   dl.begin(640, 480);
   cl::draw_q2_bar(dl, bar, 2);
   CHECK(dl.cmds().empty());
+}
+
+TEST(gl_bilerp_pics_smooths_the_large_pictures_and_gl_gamma_scale_pics_brightens_them) {
+  // The pack's health icon (24 x 24) and help screen (160 x 128), a colour of 90 each: 1 (its
+  // default) smooths the help screen alone, 0 neither, 2 both; under gl_gamma_scale_pics they are
+  // read again at the brightness `gamma` gives the world, and back at 1 without it.
+  const auto pcx = [](int w, int h) {
+    ge::assets::IndexedImage img;
+    img.width = w;
+    img.height = h;
+    img.indices.assign(size_t(w) * size_t(h), 7);
+    img.palette.assign(768, 90);
+    return ge::assets::encode_pcx(img);
+  };
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"pics/i_health.pcx", pcx(24, 24)}, {"pics/help.pcx", pcx(160, 128)}},
+                           &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  cl::Q2Screen screen;
+  screen.bilerp_pics = 1;
+  double gamma = 0.5;
+  cl::Q2Bar bar;
+  bar.files = &files;
+  bar.screen = &screen;
+  bar.gamma = &gamma;
+  for (const char* name : {"i_health", "help"}) {
+    shooters_edge::hud::LayoutOp op;
+    op.name = name;
+    bar.ops.push_back(op);
+  }
+  const auto smooth = [&](size_t i) {
+    ge::ui::DrawList dl;
+    dl.begin(640, 480);
+    cl::draw_q2_bar(dl, bar, 1);
+    CHECK(dl.cmds().size() == 2);
+    return dl.cmds().size() == 2 && !dl.cmds()[i].box.nearest;
+  };
+  CHECK(!smooth(0) && smooth(1));
+  screen.bilerp_pics = 0;
+  CHECK(!smooth(0) && !smooth(1));
+  screen.bilerp_pics = 2;
+  CHECK(smooth(0) && smooth(1));
+  const auto red = [&] { return bar.pictures["pics/help.pcx"].image.rgba[0]; };
+  CHECK(red() == 90);
+  screen.gamma_pics = true;  // 255 x (90 / 255)^0.5
+  smooth(0);
+  CHECK_MSG(red() == 151, std::to_string(red()));
+  screen.gamma_pics = false;
+  smooth(0);
+  CHECK(red() == 90);
+}
+
+TEST(scr_demobar_is_quake_iis_play_bar_setting_one_by_default) {
+  // Every other game leaves it at -1 (demo_bar rules); Quake II's layer binds it to 1, 0..2.
+  CHECK(cl::Q2Screen{}.demo_bar == -1);
+  cl::Q2Screen screen;
+  ge::console::Console con;
+  cl::add_q2_screen_cvars(con.cvars(), screen);
+  CHECK(screen.demo_bar == 1);
+  con.execute("scr_demobar 2");
+  CHECK(screen.demo_bar == 2);
+  con.execute("scr_demobar 0");
+  CHECK(screen.demo_bar == 0);
+}
+
+TEST(use_drop_and_give_complete_the_item_names_the_world_listed) {
+  // The names the last frame's world listed, sorted, each once; none before a frame ran.
+  ge::console::Console con(false);
+  cl::Q2Bar bar;
+  cl::add_q2_bar_commands(con, bar);
+  CHECK(con.arg_values("use").empty());
+  shooters_edge::server::RulesWorld world;
+  world.item_names = {"", "Shotgun", "Blaster", "Shotgun", "Rocket Launcher"};
+  cl::run_q2_bar(bar, world, 0, 0, 320, 240);
+  for (const char* word : {"use", "drop", "give"}) {
+    const std::vector<std::string> names = con.arg_values(word);
+    CHECK(names == (std::vector<std::string>{"Blaster", "Rocket Launcher", "Shotgun"}));
+  }
+}
+
+TEST(aadump_prints_the_bar_and_the_scores_up_as_letters_and_dumpclients_each_player) {
+  ge::console::Console con(false);
+  std::vector<std::string> printed;
+  con.set_sink([&printed](std::string_view l) { printed.emplace_back(l); });
+  cl::Q2Bar bar;
+  cl::add_q2_bar_commands(con, bar);
+  con.execute("aadump");  // no level up yet
+  CHECK(printed.size() == 1 && printed[0] == "Must be in a level.");
+  shooters_edge::server::RulesWorld world;
+  world.status_bar = "xv 0 yv 0 string \"FRAGS\"";
+  world.clients[0].name = "left";
+  world.clients[2].name = "right";
+  world.clients[0].layout = "xv 0 yv 16 string \"left 3 right 1\"";
+  world.clients[0].numbers.stats[13] = 1;  // the layout is up
+  cl::run_q2_bar(bar, world, 0, 0, 320, 240);
+  printed.clear();
+  con.execute("aadump");
+  con.execute("dumpclients");
+  cl::run_q2_bar(bar, world, 0, 1, 320, 240);  // the next frame answers
+  const auto has = [&printed](std::string_view text) {
+    return std::ranges::any_of(
+        printed, [text](const std::string& l) { return l.find(text) != std::string::npos; });
+  };
+  std::string all;
+  for (const std::string& l : printed) all += l + " | ";
+  CHECK_MSG(has("FRAGS") && has("left 3 right 1"), all);
+  CHECK_MSG(has("  0: left") && has("  2: right"), all);
 }

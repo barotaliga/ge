@@ -50,6 +50,7 @@
 #include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/net/qw_sheet.hpp"
+#include "shooters_edge/net/server_words.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -155,9 +156,9 @@ struct Game {
 
 void host_bind(Game& g);
 // A line printed to a listen server's local seat: its own player's (slot 0) goes to the window.
-void host_print(void* ctx, int slot, const std::string& text) {
+void host_print(void* ctx, int slot, int level, const std::string& text) {
   const cl::ListenHost& h = *static_cast<const cl::ListenHost*>(ctx);
-  if (slot == 0 && h.print != nullptr) h.print(h.ctx, text);
+  if (slot == 0 && h.print != nullptr) h.print(h.ctx, level, text);
 }
 
 // A voice the endpoint relayed to a listen server's own player (slot 0), to the window.
@@ -221,6 +222,11 @@ constexpr gs::GameRule kModRules[] = {
      nullptr, "0: anyone joins; 1: only the server's map (the default)"},
     {"sv_highchars", "Whether a joining player's name and info may hold coloured characters.",
      nullptr, "0: only plain letters, digits and signs are kept; 1: any (the default)"},
+    {"zombietime",
+     "Seconds a dropped player's packets are still answered with the goodbye, so his game learns "
+     "it "
+     "was dropped.",
+     nullptr, "0: none; 2: two seconds (the default)"},
 };
 
 // Every rule, in the order `--explain` lists them: built once.
@@ -414,6 +420,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     so.seed = c.seed;
     so.clients_take_view = true;  // the QuakeWorld protocol's clients take the server's view
     so.speedjump = speedjump;
+    so.pack = sv::q2_pack_of_folder(g.files.folder);  // a mission pack's folder plays its rules
     std::unique_ptr<sv::Q2Server> sq = sv::make_q2_server(so);
     sq->sv.set.maxclients = slots(c);
     rules = sv::q2_runner(std::move(sq));
@@ -680,6 +687,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->cfg.high_chars = false;
   if (const auto w = c.rules.find("sv_mapcheck"); w != c.rules.end() && w->second == "0")
     g->cfg.map_check = false;
+  if (const auto z = c.rules.find("zombietime"); z != c.rules.end())
+    g->cfg.zombie_s = std::max(0.0, std::atof(z->second.c_str()));
   g->cfg.progs_crc = g->progs_crc;
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
@@ -879,6 +888,7 @@ void sheet_rows(const Game& g, gs::SettingsSheet& out) {
   f.vote = &g.vote.settings;
   f.map = g.map ? g.map->name : std::string();
   f.players = g.qw.get();
+  if (g.qw) f.ruleset = g.qw->cfg.ruleset;
   qw_sheet_rows(f, out);
 }
 void sheet_resend(Game& g) {
@@ -1910,6 +1920,8 @@ gs::ServerGame make() {
   g.status = status;
   g.console_lines = console_lines;
   g.console = console_line;
+  g.words = kQwServerWords;
+  g.word_count = static_cast<int>(std::size(kQwServerWords));
   g.fill_status = fill_status;
   g.version = 1;
   g.serve = serve;

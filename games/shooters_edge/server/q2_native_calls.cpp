@@ -12,9 +12,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <type_traits>
 
 #include "brush/areas.hpp"
 #include "classic/protocol/directions.hpp"
+#include "classic/protocol/info.hpp"
 #include "classic/q2_move.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/q2_map.hpp"
@@ -34,7 +36,6 @@ using native::NativeTrace;
 NativeHost* g_host = nullptr;  // the host whose library is being called
 
 constexpr uint8_t kSvcSound = 9, kSvcPrint = 10, kSvcCenterPrint = 15;
-constexpr int kCsModels = 32, kCsSounds = 288, kCsImages = 544;
 constexpr int32_t kContentsMonster = 0x2000000, kContentsDeadMonster = 0x4000000;
 constexpr size_t kMostMessage = 1400;
 constexpr int kChanNoHearing = 8, kChanReliable = 16;
@@ -100,13 +101,19 @@ int32_t cluster_at(const NativeHost& h, const float* p) {
   return leaf < h.map->leaves.size() ? h.map->leaves[leaf].cluster : -1;
 }
 
-// Whether a message at `origin` reaches slot `slot` (`see`: the visible set, else the hearable).
-bool reaches(const NativeHost& h, int32_t from, int slot, bool see) {
+bool area_joined(const NativeHost& h, const float* a, const float* b);
+
+// Whether a message at `origin` (in cluster `from`) reaches slot `slot` (`see`: the visible set,
+// else the hearable): the slot's entity's origin, not its eye, in the set, and its area joined to
+// the point's through the open portals.
+bool reaches(const NativeHost& h, const float* origin, int32_t from, int slot, bool see) {
   const NativeEntityHead* e = h.entity(slot + 1);
   const int32_t to = cluster_at(h, e->s.origin);
   if (from < 0 || to < 0) return false;
   if (!h.map) return true;  // a map of clip hulls: every point in every set
-  return see ? br::cluster_sees(*h.map, from, to) : br::cluster_hears(*h.map, from, to);
+  if (!(see ? br::cluster_sees(*h.map, from, to) : br::cluster_hears(*h.map, from, to)))
+    return false;
+  return area_joined(h, origin, e->s.origin);
 }
 
 // The bytes to every slot `to` reaches (0 all, 1 hearable, 2 visible; reliable or not).
@@ -115,7 +122,7 @@ void send_to(NativeHost& h, const float* origin, int to, bool reliable,
   const int32_t from = to == 0 ? 0 : cluster_at(h, origin);
   for (int i = 0; i < h.max_clients; i++) {
     if (!h.connected[i] || (!reliable && !h.begun[i])) continue;
-    if (to != 0 && !reaches(h, from, i, to == 2)) continue;
+    if (to != 0 && !reaches(h, origin, from, i, to == 2)) continue;
     put(reliable ? h.s->raw.reliable[i] : h.s->raw.datagram[i], bytes);
   }
 }
@@ -129,6 +136,14 @@ void text_message(std::vector<uint8_t>& b, uint8_t id, int level, const std::str
 
 // --- prints ---
 
+// Whether a print of `level` reaches the player in `slot` by the `msg` level in its user info.
+bool print_reaches_slot(const NativeHost& h, int slot, int level) {
+  int msg = 0;
+  for (const auto& [k, v] : h.s->clients[slot].userinfo)
+    if (k == "msg") msg = cp::msg_level_of(v);
+  return cp::print_reaches(level, msg, false);
+}
+
 void c_bprintf(int level, const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -137,8 +152,9 @@ void c_bprintf(int level, const char* fmt, ...) {
   NativeHost& h = *g_host;
   std::vector<uint8_t> b;
   text_message(b, kSvcPrint, level, text);
-  for (int i = 0; i < h.max_clients; i++)
-    if (h.begun[i]) put(h.s->raw.reliable[i], b);
+  for (int i = 0; i < h.max_clients; i++)  // a player gets only what its msg level lets through
+    if (h.begun[i] && print_reaches_slot(h, i, level)) put(h.s->raw.reliable[i], b);
+  // The event goes to every player (a recording keeps it); each one's wire filters it again.
   NetEvent& ev = add_event(h, EventKind::print, begun_bits(h), true, text);
   ev.level = level;
   h.s->console.push_back(text);
@@ -194,7 +210,8 @@ void c_positioned_sound(const float* origin, NativeEntityHead* ent, int channel,
   NativeHost& h = *g_host;
   if (ent == nullptr) return;
   const int n = h.number_of(ent);
-  if (n < 0 || n > 4095) return;
+  if (n < 0 || n >= h.limits().entities) return;
+  if (index < 0 || index >= h.limits().sounds) return;
   if (volume < 0 || volume > 1) volume = 1;
   if (attenuation < 0 || attenuation > 4) attenuation = 0;
   if (offset < 0 || offset > 0.255f) offset = 0;
@@ -204,27 +221,51 @@ void c_positioned_sound(const float* origin, NativeEntityHead* ent, int channel,
   } else if (ent->solid == native::kSolidBsp) {
     for (int k = 0; k < 3; k++) at[k] += 0.5f * (ent->mins[k] + ent->maxs[k]);
   }
-  uint8_t flags = 8 | 4;  // the entity and its channel, the place
+  // The position is left out for a client whose frame holds the entity, so its client plays the
+  // sound on the entity as it moves (a rocket's fly-by); an explicit point keeps it, and so does a
+  // brush model, whose sound is placed at its middle, not at its origin.
+  const bool follow = origin == nullptr && (ent->svflags & native::kSvfNoClient) == 0 &&
+                      ent->solid != native::kSolidBsp && ent->s.model[0] != 0;
+  uint8_t flags = 8;  // the entity and its channel
   if (volume != 1.0f) flags |= 1;
   if (attenuation != 1.0f) flags |= 2;
   if (offset != 0) flags |= 16;
+  if (index > 255) flags |= ge::classic::protocol::kQ2SoundIndex16;  // only extended reaches it
   std::vector<uint8_t> b = {kSvcSound, flags, static_cast<uint8_t>(index)};
+  if (index > 255) b.push_back(static_cast<uint8_t>(index >> 8));
   if (flags & 1) b.push_back(static_cast<uint8_t>(volume * 255));
   if (flags & 2) b.push_back(static_cast<uint8_t>(attenuation * 64));
   if (flags & 16) b.push_back(static_cast<uint8_t>(offset * 1000));
   const int entchan = (n << 3) | (channel & 7);
   b.push_back(static_cast<uint8_t>(entchan & 0xFF));
   b.push_back(static_cast<uint8_t>((entchan >> 8) & 0xFF));
+  std::vector<uint8_t> placed = b;  // the same with the place (flag 4)
+  placed[1] |= 4;
   for (const float v : at) {
+    if (h.ext >= 2) {  // the second level's clients read a 23-bit coordinate
+      uint8_t c[3];
+      ge::net::Writer w = ge::net::make_writer(c, sizeof c);
+      ge::classic::protocol::write_q2_coord23(w, static_cast<int32_t>(v * 8), 0);
+      placed.insert(placed.end(), c, c + w.size);
+      continue;
+    }
     const auto c = static_cast<uint16_t>(static_cast<int16_t>(static_cast<int32_t>(v * 8)));
-    b.push_back(static_cast<uint8_t>(c & 0xFF));
-    b.push_back(static_cast<uint8_t>(c >> 8));
+    placed.push_back(static_cast<uint8_t>(c & 0xFF));
+    placed.push_back(static_cast<uint8_t>(c >> 8));
   }
   const bool all = (channel & kChanNoHearing) != 0 || attenuation == 0;
-  send_to(h, at, all ? 0 : 1, (channel & kChanReliable) != 0, b);
+  const bool reliable = (channel & kChanReliable) != 0;
+  const int32_t from = all ? 0 : cluster_at(h, at);
+  const int32_t seen_from = follow ? cluster_at(h, ent->s.origin) : -1;
+  for (int i = 0; i < h.max_clients; i++) {
+    if (!h.connected[i] || (!reliable && !h.begun[i])) continue;
+    if (!all && !reaches(h, at, from, i, false)) continue;
+    const bool in_frame = follow && (n == i + 1 || reaches(h, ent->s.origin, seen_from, i, true));
+    put(reliable ? h.s->raw.reliable[i] : h.s->raw.datagram[i], in_frame ? b : placed);
+  }
   if (index > 0 && index < 256) {  // the window's game hears it by the sound's name
     NetEvent& ev = add_event(h, EventKind::sound, begun_bits(h), (channel & kChanReliable) != 0,
-                             h.s->raw.config[size_t(kCsSounds) + size_t(index)]);
+                             h.s->raw.config[size_t(h.cs().sounds) + size_t(index)]);
     ev.ent = n;
     ev.level = channel & 7;
     ev.origin = vec(at);
@@ -242,23 +283,29 @@ void c_sound(NativeEntityHead* ent, int channel, int index, float volume, float 
 
 void c_configstring(int index, const char* text) {
   NativeHost& h = *g_host;
-  if (index < 0 || index >= kQ2ConfigStrings) return h.s->console.push_back("bad index");
+  const ge::classic::protocol::Q2CsLayout& at = h.cs();
+  if (index < 0 || index >= at.end) return h.s->console.push_back("bad index");
   h.buf.clear();
   const std::string t = text != nullptr ? text : "";
-  const size_t room = index >= 5 && index <= 28 ? size_t(29 - index) * 64 : 64;
+  // The status bar may run on to the next block, a general string to the list's end.
+  const size_t room = index >= 5 && index < at.air_accel ? size_t(at.air_accel - index) * 64
+                      : index >= at.general              ? size_t(at.end - index) * 64
+                                                         : 64;
   if (t.size() + 1 > room) return h.s->console.push_back("a configstring too long: " + t);
   h.s->raw.config[size_t(index)] = t;
 }
 
-int find_index(NativeHost& h, const char* name, int base) {
+// A name's index in a list of `count` (the layout's); 0 when the list is full. Under the extended
+// limits model 255 is never handed out: it stays the players' model.
+int find_index(NativeHost& h, const char* name, int base, int count, bool models = false) {
   if (name == nullptr || name[0] == 0) return 0;
   const std::string n = name;
   if (n.size() >= 64) return 0;
   std::vector<std::string>& cs = h.s->raw.config;
-  for (int i = 1; i < 256; i++)
+  for (int i = 1; i < count; i++)
     if (cs[size_t(base) + size_t(i)] == n) return i;
-  for (int i = 1; i < 256; i++)
-    if (cs[size_t(base) + size_t(i)].empty()) {
+  for (int i = 1; i < count; i++)
+    if (cs[size_t(base) + size_t(i)].empty() && !(models && h.ext > 0 && i == 255)) {
       cs[size_t(base) + size_t(i)] = n;
       return i;
     }
@@ -266,9 +313,18 @@ int find_index(NativeHost& h, const char* name, int base) {
   return 0;
 }
 
-int c_modelindex(const char* name) { return find_index(*g_host, name, kCsModels); }
-int c_soundindex(const char* name) { return find_index(*g_host, name, kCsSounds); }
-int c_imageindex(const char* name) { return find_index(*g_host, name, kCsImages); }
+int c_modelindex(const char* name) {
+  NativeHost& h = *g_host;
+  return find_index(h, name, h.cs().models, h.limits().models, true);
+}
+int c_soundindex(const char* name) {
+  NativeHost& h = *g_host;
+  return find_index(h, name, h.cs().sounds, h.limits().sounds);
+}
+int c_imageindex(const char* name) {
+  NativeHost& h = *g_host;
+  return find_index(h, name, h.cs().images, h.limits().images);
+}
 
 // --- links ---
 
@@ -505,8 +561,8 @@ NativeTrace turned_trace(NativeHost& h, uint32_t model, const float* origin, sh:
 
 uint32_t brush_model(const NativeHost& h, const NativeEntityHead* e) {
   const int m = e->s.model[0];
-  if (m <= 0 || m >= 256) return 0;
-  const std::string& name = h.s->raw.config[size_t(kCsModels) + size_t(m)];
+  if (m <= 0 || m >= h.limits().models) return 0;
+  const std::string& name = h.s->raw.config[size_t(h.cs().models) + size_t(m)];
   if (name.size() < 2 || name[0] != '*') return 0;
   const int n = std::atoi(name.c_str() + 1);
   return n > 0 && size_t(n) < h.model_count() ? uint32_t(n) : 0;
@@ -601,10 +657,19 @@ int c_pointcontents(const float* p) {
   return c;
 }
 
+// Whether areas `a` and `b` are joined through the open portals; area 0 (outside, in a solid) is
+// joined to nothing, itself included.
+bool areas_joined(const NativeHost& h, int32_t a, int32_t b) {
+  if (!h.map || h.map->areas.empty()) return true;  // a map with no areas: one space
+  if (native_no_areas(h)) return true;              // map_noareas: every area joined
+  if (a == 0 || b == 0) return false;
+  return br::areas_connected(h.area_groups, a, b);
+}
+
 // Whether the areas of points `a` and `b` are joined through the open portals.
 bool area_joined(const NativeHost& h, const float* a, const float* b) {
-  if (!h.map || h.map->areas.empty()) return true;
-  return br::areas_connected(h.area_groups, br::area_at(*h.map, a), br::area_at(*h.map, b));
+  if (!h.map || h.map->areas.empty() || native_no_areas(h)) return true;
+  return areas_joined(h, br::area_at(*h.map, a), br::area_at(*h.map, b));
 }
 
 int c_in_pvs(const float* a, const float* b) {
@@ -630,39 +695,66 @@ void c_set_area_portal(int portal, int open) {
   if (h.map) br::flood_areas(*h.map, h.portals, &h.area_groups);  // the last set wins
 }
 
-int c_areas_connected(int a, int b) {
-  const NativeHost& h = *g_host;
-  if (!h.map || h.map->areas.empty()) return 1;  // a map with no areas: one space
-  return br::areas_connected(h.area_groups, a, b) ? 1 : 0;
-}
+int c_areas_connected(int a, int b) { return areas_joined(*g_host, a, b) ? 1 : 0; }
 
 // --- the move ---
 
-ge::classic::Q2Trace move_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
-                                sh::Vec3f end) {
-  const auto* pm = static_cast<const NativeMoveBlock*>(ctx);
-  const float a[3] = {start.x, start.y, start.z}, lo[3] = {mins.x, mins.y, mins.z};
-  const float hi[3] = {maxs.x, maxs.y, maxs.z}, b[3] = {end.x, end.y, end.z};
-  const NativeTrace t = pm->trace(a, lo, hi, b);
+// A trace's answer as the move reads it.
+ge::classic::Q2Trace move_answer(const NativeTrace& t) {
   ge::classic::Q2Trace r;
   r.all_solid = t.allsolid != 0;
   r.start_solid = t.startsolid != 0;
   r.fraction = t.fraction;
   r.end = vec(t.endpos);
   r.normal = vec(t.plane.normal);
+  r.plane_dist = t.plane.dist;
+  r.plane_type = t.plane.type;
+  r.plane_signbits = t.plane.signbits;
   r.surface_flags = t.surface != nullptr ? t.surface->flags : 0;
   r.contents = t.contents;
   r.entity = g_host->number_of(t.ent);
   return r;
 }
 
-int32_t move_contents(void* ctx, sh::Vec3f p) {
+ge::classic::Q2Trace move_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
+                                sh::Vec3f end) {
   const auto* pm = static_cast<const NativeMoveBlock*>(ctx);
+  const float a[3] = {start.x, start.y, start.z}, lo[3] = {mins.x, mins.y, mins.z};
+  const float hi[3] = {maxs.x, maxs.y, maxs.z}, b[3] = {end.x, end.y, end.z};
+  return move_answer(pm->trace(a, lo, hi, b));
+}
+
+// The newer interface's trace takes the content mask: the ladder probe's, else the player's own
+// (a dead player's passes through monsters, as the original game's trace chooses for itself).
+ge::classic::Q2Trace move_trace_mask(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
+                                     sh::Vec3f end, int32_t mask) {
+  const auto* pm = static_cast<const native::NativeMoveBlockNew*>(ctx);
+  const float a[3] = {start.x, start.y, start.z}, lo[3] = {mins.x, mins.y, mins.z};
+  const float hi[3] = {maxs.x, maxs.y, maxs.z}, b[3] = {end.x, end.y, end.z};
+  return move_answer(pm->trace(a, lo, hi, b, mask));
+}
+
+ge::classic::Q2Trace move_trace_new(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
+                                    sh::Vec3f end) {
+  const auto* pm = static_cast<const native::NativeMoveBlockNew*>(ctx);
+  const int32_t mask = pm->s.type >= static_cast<int32_t>(ge::classic::Q2Type::dead)
+                           ? ge::shooter::kSqMaskDeadSolid
+                           : ge::shooter::kSqMaskPlayerSolid;
+  return move_trace_mask(ctx, start, mins, maxs, end, mask);
+}
+
+template <class Block>
+int32_t move_contents(void* ctx, sh::Vec3f p) {
+  const auto* pm = static_cast<const Block*>(ctx);
   const float q[3] = {p.x, p.y, p.z};
   return pm->pointcontents(q);
 }
 
-void c_pmove(NativeMoveBlock* pm) {
+// One command through Quake II's move, for either interface's move record: the original's 16-bit
+// state, or the newer one's 32-bit state, its ladder mask and flag and its ground plane.
+template <class Block>
+void run_pmove(Block* pm) {
+  constexpr bool kNew = std::is_same_v<Block, native::NativeMoveBlockNew>;
   NativeHost& h = *g_host;
   ge::classic::Q2Move m;
   m.s.type = static_cast<ge::classic::Q2Type>(pm->s.type);
@@ -684,6 +776,14 @@ void c_pmove(NativeMoveBlock* pm) {
   m.cmd.light = pm->cmd.light;
   m.changed = pm->snapinitial != 0;
   m.air_accelerate = h.air_accelerate;
+  if constexpr (kNew) {
+    m.ladder_mask = true;
+    m.ladder_flag = true;
+  }
+  if (h.thinking >= 0 && h.thinking < h.max_clients) {  // the server's defaults when none thinks
+    const int protocol = h.s->clients[size_t(h.thinking)].protocol;
+    if (protocol != 0) ge::classic::q2_fly_for_protocol(m, protocol);
+  }
   if (h.q1_physics) {  // Quake's ground and air, as Quake II runner moves them
     const shooters_edge::profiles::MoveFeel& f = shooters_edge::profiles::kQ1Feel;
     m.max_speed = f.max_speed;
@@ -695,16 +795,22 @@ void c_pmove(NativeMoveBlock* pm) {
     m.water_jump = f.water_jump;
     m.air_step = f.air_step;
   }
-  const ge::classic::Q2World world{pm, move_trace, move_contents};
+  ge::classic::Q2World world{pm, move_trace, move_contents<Block>};
+  if constexpr (kNew) {
+    world.trace = move_trace_new;
+    world.trace_mask = move_trace_mask;
+  }
   ge::classic::q2_move(m, world);
+  using Packed = std::remove_reference_t<decltype(pm->s.origin[0])>;
+  using Bits = std::remove_reference_t<decltype(pm->s.flags)>;
   pm->s.type = static_cast<int32_t>(m.s.type);
   for (int k = 0; k < 3; k++) {
-    pm->s.origin[k] = m.s.origin[k];
-    pm->s.velocity[k] = m.s.velocity[k];
+    pm->s.origin[k] = static_cast<Packed>(m.s.origin[k]);
+    pm->s.velocity[k] = static_cast<Packed>(m.s.velocity[k]);
     pm->s.delta_angles[k] = m.s.delta_angles[k];
   }
-  pm->s.flags = m.s.flags;
-  pm->s.time = m.s.time;
+  pm->s.flags = static_cast<Bits>(m.s.flags);
+  pm->s.time = static_cast<Bits>(m.s.time);
   pm->s.gravity = m.s.gravity;
   pm->numtouch = std::min(m.touches, native::kNativeTouch);
   for (int i = 0; i < pm->numtouch; i++) pm->touchents[i] = h.entity(std::max(0, m.touch[i]));
@@ -716,8 +822,20 @@ void c_pmove(NativeMoveBlock* pm) {
   std::memcpy(pm->mins, lo, sizeof lo);
   std::memcpy(pm->maxs, hi, sizeof hi);
   pm->groundentity = m.ground_entity >= 0 ? h.entity(m.ground_entity) : nullptr;
+  if constexpr (kNew) {
+    const ge::classic::Q2Plane& g = m.ground_plane;
+    pm->groundplane = {{g.normal.x, g.normal.y, g.normal.z}, g.dist, g.type, g.signbits, {0, 0}};
+  }
   pm->watertype = m.water_type;
   pm->waterlevel = m.water_level;
+}
+
+// The game's move call: the record is the newer interface's when the library is.
+void c_pmove(NativeMoveBlock* pm) {
+  if (g_host->new_interface)
+    run_pmove(reinterpret_cast<native::NativeMoveBlockNew*>(pm));
+  else
+    run_pmove(pm);
 }
 
 // --- messages ---
@@ -859,9 +977,21 @@ void c_write_string(const char* s) {
   for (const char* p = s; p != nullptr && *p != 0; p++) write(h, static_cast<uint8_t>(*p), 1);
   write(h, 0, 1);
 }
+// A position: three words of eighths, or under the extended limits' second level three 23-bit
+// coordinates (absolute), as that level's clients read every position.
 void c_write_position(const float* p) {
-  for (int k = 0; k < 3; k++)
-    write(*g_host, static_cast<uint32_t>(static_cast<int32_t>(p[k] * 8)), 2);
+  NativeHost& h = *g_host;
+  for (int k = 0; k < 3; k++) {
+    const auto v = static_cast<int32_t>(p[k] * 8);
+    if (h.ext < 2) {
+      write(h, static_cast<uint32_t>(v), 2);
+      continue;
+    }
+    uint8_t b[3];
+    ge::net::Writer w = ge::net::make_writer(b, sizeof b);
+    ge::classic::protocol::write_q2_coord23(w, v, 0);
+    for (size_t i = 0; i < w.size; i++) write(h, b[i], 1);
+  }
 }
 // The direction's index into the protocol's table of 162 directions (a missing one: 0).
 void c_write_dir(const float* d) {
@@ -968,7 +1098,7 @@ void x_local_sound(NativeEntityHead* target, const float*, NativeEntityHead*, in
 
 const char* x_get_configstring(int index) {
   NativeHost& h = *g_host;
-  if (index < 0 || index >= kQ2ConfigStrings || size_t(index) >= h.s->raw.config.size()) {
+  if (index < 0 || index >= h.cs().end || size_t(index) >= h.s->raw.config.size()) {
     h.error_text = "PF_GetConfigstring: bad index: " + std::to_string(index);
     leave(h);
   }
@@ -1088,6 +1218,11 @@ NativeSetting* NativeHost::find_setting(const std::string& name) {
   return nullptr;
 }
 
+bool native_no_areas(const NativeHost& h) {
+  const NativeSetting* c = const_cast<NativeHost&>(h).find_setting("map_noareas");
+  return c != nullptr && c->rec.value != 0;
+}
+
 NativeSetting& native_setting(NativeHost& h, const std::string& name, const std::string& value,
                               int flags) {
   if (NativeSetting* c = h.find_setting(name)) {
@@ -1114,6 +1249,10 @@ void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool 
     h.s->console.push_back(c.name + " is write protected");
     return;
   }
+  if (!force && c.name == kUnsafeSavesSetting) {  // the start's value holds
+    h.s->console.push_back(c.name + " may be set from command line only.");
+    return;
+  }
   if (!force && (c.rec.flags & native::kCvarLatch) != 0 && h.game != nullptr) {
     if (value == c.value || (c.has_latched && value == c.latched)) return;
     c.latched = value;
@@ -1133,6 +1272,7 @@ void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool 
 }
 
 void native_print(NativeHost& h, int slot, int level, const std::string& text) {
+  if (slot >= 0 && !print_reaches_slot(h, slot, level)) return;
   std::vector<uint8_t> b;
   text_message(b, kSvcPrint, level, text);
   put(h.s->raw.reliable[slot], b);

@@ -39,6 +39,10 @@ struct Look {
   d: vec4f,  // the screen's blend: an sRGB-encoded colour, its share (`set_post_blend`)
   e: vec4f,  // the arrival (`set_post_warp`): share, reveal, zoom, flash
   f: vec4f,  // the arrival's tint, sRGB-encoded
+  g: vec4f,  // the ripple (`set_post_ripple`): its reach (a share of the screen), waves, phase
+  h: vec4f,  // the view's rectangle (`set_post_view`): its corner, 1 - its size; 0 all of it
+  i: vec4f,  // the edge blend (`set_post_edge_blend`): an sRGB-encoded colour, its share at the edge
+  j: vec4f,  // the edge blend's depth: a share of the view's shorter side (0: flat), -, -, -
 }
 @group(1) @binding(6) var<uniform> look: Look;
 // Motion blur's inputs at the render size (render/motion_blur.hpp): the motion target (rg the
@@ -291,10 +295,27 @@ fn arrived(uv: vec2f, c: vec3f, size: vec2f, e: f32) -> vec3f {
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
   let size = vec2f(textureDimensions(hdr));
-  let uv = in.position.xy / size;
-  let p = vec2i(in.position.xy);
+  var uv = in.position.xy / size;
+  var p = vec2i(in.position.xy);
+  var whole = true;
+  if (look.h.z > 0.0 || look.h.w > 0.0) {  // THE VIEW IN A SMALLER RECTANGLE, black round it
+    uv = (uv - look.h.xy) / (vec2f(1.0) - look.h.zw);
+    if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) {
+      return vec4f(0.0, 0.0, 0.0, 1.0);
+    }
+    p = clamp(vec2i(uv * size), vec2i(0), vec2i(size) - vec2i(1));
+    whole = false;
+  }
   let e = exposure();
-  let base = textureLoad(hdr, p, 0).rgb;
+  var base = textureLoad(hdr, p, 0).rgb;
+  if (!whole) {  // the whole picture shrunk: read between its pixels
+    base = textureSampleLevel(hdr, lin, uv, 0.0).rgb;
+  }
+  if (look.g.x > 0.0) {  // THE RIPPLE: across by the height, down by the width, `g.y` waves
+    let w = 6.2831853 * look.g.y;
+    let at = uv + look.g.x * vec2f(sin(uv.y * w + look.g.z), sin(uv.x * w + look.g.z));
+    base = textureSampleLevel(hdr, lin, clamp(at, vec2f(0.0), vec2f(1.0)), 0.0).rgb;
+  }
   var c = base;
   if (kSharpen) {
     c = sharpened(p, base, e);
@@ -336,6 +357,16 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   }
   var o = graded(linear_to_srgb(t));
   o = mix(o, look.d.rgb, look.d.a);
+  if (look.i.a > 0.0) {  // THE EDGE BLEND: a frame round the view, fading inward (edge_blend_share)
+    var share = look.i.a;
+    if (look.j.x > 0.0) {
+      let px = size * (vec2f(1.0) - look.h.zw);  // the view's own size
+      let edge = min(uv, vec2f(1.0) - uv) * px;
+      let inward = max(min(edge.x, edge.y), 0.0) / (look.j.x * min(px.x, px.y));
+      share = select(look.i.a * (1.0 - inward), 0.0, inward >= 1.0);
+    }
+    o = mix(o, look.i.rgb, share);
+  }
   if (kGrain) {
     o = clamp(grained(o, in.position.xy), vec3f(0.0), vec3f(1.0));
   }
