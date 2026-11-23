@@ -148,7 +148,8 @@ void q2_draw_model_fx(FxState& s, int effect_models, const PlayerState& me, int 
   }
   // The cables: a segment every 30 units, each at a new roll this frame.
   std::erase_if(s.q2_cables, [&](const FxState::Q2Cable& c) { return t > c.until; });
-  ge::core::Rng roll = ge::core::make_rng(s.seed++);
+  // Their roll's seed taken only while one is up: another game's effects keep their own seeds.
+  ge::core::Rng roll = ge::core::make_rng(s.q2_cables.empty() ? 0 : s.seed++);
   for (const FxState::Q2Cable& c : s.q2_cables) {
     sh::Vec3f from = c.from;
     if (me_entity > 0 && c.entity == me_entity)  // the player's own: from him as drawn

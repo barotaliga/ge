@@ -6,7 +6,8 @@
 //
 // ge:summary Test: Quake II's model effects by age and kind, cables, splash and laser sparks
 // ge:keywords test q2 temp-entity model-effect explosion-model explosion-skins smoke flash
-// ge:keywords blaster-flare cable segment chain chain_share splash laser-sparks grapple cl_smooth_explosions
+// ge:keywords blaster-flare cable segment chain chain_share splash laser-sparks grapple
+// ge:keywords cl_smooth_explosions
 // ge:skill shooter render testing
 #include "shooters_edge/client/q2_model_fx.hpp"
 
@@ -26,7 +27,7 @@ namespace {
 
 bool near(double a, double b) { return std::fabs(a - b) < 1e-5; }
 
-cl::Q2ModelFx one(int code, uint32_t pick = 0, ge::classic::Q2FxSwitches q = {}) {
+cl::Q2ModelFx one(int code, uint32_t pick = 0, const ge::classic::Q2FxSwitches& q = {}) {
   cl::Q2ModelFx m[2];
   const float at[3] = {0, 0, 0}, up[3] = {0, 0, 1};
   CHECK(cl::q2_model_fx_of(code, pick, at, up, 10, q, m) >= 1);
