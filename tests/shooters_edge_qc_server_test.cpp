@@ -9,6 +9,7 @@
 //
 // ge:summary Tests: spawning from entity text, the inhibit rules, and the extension fields
 // ge:keywords test qc server load_map entity-text spawnflags inhibit skill deathmatch classname
+// ge:keywords spawned_as
 // ge:keywords maxspeed gravity movement visclients hideentity trackent extension-fields
 // ge:skill progs shooter testing
 #include <cmath>
@@ -123,6 +124,28 @@ TEST(blocks_without_a_classname_or_spawn_function_are_skipped) {
     if (m == "no spawn function for monster_nothing") no_fn = true;
   }
   CHECK(no_class && no_fn);
+}
+
+TEST(each_entity_keeps_the_class_name_the_map_spawned_it_as) {
+  // A program may rename what it spawns; the map's own name stays by entity number.
+  Fixture fx;
+  CHECK_MSG(fx.loaded, fx.error);
+  CHECK(fx.s->spawned_as.size() > 33);
+  CHECK(fx.s->spawned_as[33] == "info_player_deathmatch");
+  for (int e = 1; e <= sh::kMaxClients; e++)
+    CHECK(static_cast<size_t>(e) >= fx.s->spawned_as.size() ||
+          fx.s->spawned_as[static_cast<size_t>(e)].empty());
+  const pg::Progs mod = spawn_mod();
+  Fixture skipped("{ \"classname\" \"worldspawn\" }\n{ \"classname\" \"monster_nothing\" }\n"
+                  "{ \"classname\" \"thing\" }",
+                  {}, &mod);
+  CHECK_MSG(skipped.loaded, skipped.error);
+  int things_named = 0;
+  for (const std::string& n : skipped.s->spawned_as) {
+    CHECK(n != "monster_nothing");  // no spawn function: never spawned
+    things_named += n == "thing" ? 1 : 0;
+  }
+  CHECK(things_named == 1);
 }
 
 TEST(an_error_in_a_spawn_function_stops_the_load) {
