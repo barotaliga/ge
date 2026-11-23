@@ -268,7 +268,6 @@ struct Remote {
   bool left = false;  // a server was left (dropped or let go) since the window last took this
   ClientStage said = ClientStage::challenge;  // the stage last reported
   bool nopred = false;                        // cl_nopred: draw the server's place
-  bool predict = true;                        // Quake II's cl_predict (0: as cl_nopred 1)
   bool predicted = false;                     // the last step drew a prediction
   bool predict_players = true;                // cl_predict_players: the other players run ahead
   bool nolerp = false;                        // cl_nolerp: entities at the newest frame's places

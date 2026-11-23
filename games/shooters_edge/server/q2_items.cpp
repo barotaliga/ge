@@ -96,9 +96,12 @@ bool take_pack(const SqItem& it, SqBody& b) {
 
 }  // namespace
 
-int sq_item(std::string_view classname) {
+int sq_item(std::string_view classname, Q2Pack pack) {
+  if (pack != Q2Pack::base)  // the pack's own row first: one may replace a base item
+    for (int i = 0; i < kSqItemCount; i++)
+      if (kSqItems[i].pack == pack && classname == kSqItems[i].classname) return i;
   for (int i = 0; i < kSqItemCount; i++)
-    if (classname == kSqItems[i].classname) return i;
+    if (kSqItems[i].pack == Q2Pack::base && classname == kSqItems[i].classname) return i;
   return -1;
 }
 

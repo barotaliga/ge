@@ -467,7 +467,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   FxSwitches s;
   s.lerp.frames = picture.lerp_models;
   s.lerp.moves = picture.lerp_move;
-  s.gibs_hidden = picture.gib_filter || !picture.gibs;  // cl_gibfilter, Quake II's cl_gibs
+  s.gibs_hidden = picture.gib_filter;  // cl_gibfilter (Quake II's cl_gibs 0)
   s.muzzle_flash = picture.muzzle_flash;
   s.q2 = picture.q2fx;  // Quake II's cl_disable_particles, cl_dlight_hacks ...
   s.fake_shaft = std::clamp(picture.fake_shaft, 0.0, 1.0);
