@@ -65,6 +65,7 @@ std::string power_words(const con::Console& c, const hud::Status& s, const std::
 
 void add_team_macros(con::Console& con, TeamChat& chat) {
   con::Cvars& v = con.cvars();
+  con.set_macro_widths("tp_length_", "tp_align_");  // `set tp_length_health 3`: a fixed column
   for (const Light& l : kLights)
     if (v.find(l.name) == nullptr)
       v.add({.name = l.name,
