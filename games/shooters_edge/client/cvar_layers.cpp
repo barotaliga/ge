@@ -491,7 +491,7 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left
   c.cvars().add_synonym("cl_sbar", "hud_sbar");     // QuakeWorld's old bar (1) or see-through (0)
   c.cvars().add_synonym("cl_hudswap", "hud_swap");  // and the see-through bar's column on the left
-  if (c.cvars().find("r_lerpmodels") != nullptr)         // the models' and the held weapon's frames
+  if (c.cvars().find("r_lerpmodels") != nullptr)    // the models' and the held weapon's frames
     c.cvars().add_synonym("r_lerpframes", "r_lerpmodels");
   // An old Quake config's saved name and colours: `_cl_name` is the name, `_cl_color` both
   // colours as one number (shirt times 16 plus pants), so its config dresses you as it did.
