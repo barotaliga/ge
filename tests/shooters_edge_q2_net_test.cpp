@@ -500,6 +500,53 @@ TEST(sv_idlekick_is_the_idle_drop_not_the_lobbys_unready_kick) {
   CHECK(v != nullptr && v->name == "sv_idletime");
 }
 
+// A server that insists on anticheat (` ac=2` in its connect answer): this game has none, so the
+// player is told so and the game is joined without it; ` ac=1` (wanted, not needed) says nothing.
+TEST(a_server_insisting_on_anticheat_is_told_and_joined_without_it) {
+  for (int ask : {1, 2}) {
+    gn::SimNetwork net = gn::make_sim_network(3, {});
+    gn::Transport server, client;
+    gn::open_sim_transport(server, net, gn::sim_address(0, cn::kPortQ2));
+    gn::open_sim_transport(client, net, gn::sim_address(1, 27901));
+    cn::Q2ClientEnd c;
+    cn::Q2ClientConfig cfg;
+    cfg.qport = 7;
+    cn::q2_client_start(c, client, gn::sim_address(0, cn::kPortQ2), cfg, 0);
+    int64_t now = 0;
+    bool answered = false;
+    for (int i = 0; i < 40 && !answered; i++) {
+      now += 13000;
+      gn::sim_advance(net, now);
+      cn::q2_client_tick(c, now);
+      uint8_t buf[gn::kMaxDatagram];
+      gn::Address from;
+      for (int n; (n = gn::transport_receive(server, buf, sizeof buf, from, now)) > 0;) {
+        const std::vector<std::string> w =
+            cn::q2_words(cn::q2_oob_text(buf, static_cast<size_t>(n)));
+        std::string reply;
+        if (!w.empty() && w[0] == "getchallenge") reply = "challenge 4242 p=34";
+        if (!w.empty() && w[0] == "connect") {
+          reply = "client_connect ac=" + std::to_string(ask);
+          answered = true;
+        }
+        if (reply.empty()) continue;
+        const std::vector<uint8_t> b = cn::q2_oob(reply);
+        gn::transport_send(server, from, b.data(), b.size(), now);
+      }
+    }
+    for (int i = 0; i < 4; i++) {
+      now += 13000;
+      gn::sim_advance(net, now);
+      cn::q2_client_tick(c, now);
+    }
+    CHECK(answered && c.refused.empty());
+    bool told = false;
+    for (const std::string& line : c.prints)
+      told = told || line.find("asks for anticheat") != std::string::npos;
+    CHECK_MSG(told == (ask == 2), "ac=" + std::to_string(ask));
+  }
+}
+
 TEST(refusals_read_as_a_players_words) {
   cn::Q2NetConfig cfg;
   cfg.password = "secret";
