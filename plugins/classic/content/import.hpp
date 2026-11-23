@@ -184,8 +184,14 @@ struct Offer {
 // as the folder under the root that holds it; its digest is read only when taken in). A pack
 // already in `<data_root>/<id>/<pack folder>/` is not offered; each pack once, the first found.
 // The folders games were taken in from (their taken files' `source`) are looked in too, so a pack
-// beside a game taken in before packs were known is offered.
+// beside a game taken in before packs were known is offered. A disc image (.iso, .cue, .bin,
+// .img, .mdf) or a .zip of at least `kOfferImageBytes`, at most `kOfferImages` of them, is listed
+// by seeks (never read whole) and offered as itself when it holds a first pack of a known pack's
+// size or one in a folder named after a pack (another game's base folder beside it and not its
+// own: not that game's pack). A 7z is not looked in: its listing needs the whole archive.
 inline constexpr int kOfferFolders = 4000;
+inline constexpr int kOfferImages = 64;
+inline constexpr uint64_t kOfferImageBytes = uint64_t(1) << 20;
 std::vector<Offer> find_offers(const std::vector<std::string>& roots, const std::string& data_root);
 
 }  // namespace ge::classic::content
