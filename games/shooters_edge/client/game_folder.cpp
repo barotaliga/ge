@@ -373,28 +373,38 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
 }
 
 bool new_game_level(const std::string& cfg, std::string& map, std::string& shows) {
+  // The words of `text` from `at` on, split at blanks; a `"` starts or ends a quoted word.
+  const auto word = [](const std::string& text, size_t& at) {
+    at = std::min(text.find_first_not_of(" \t\r", at), text.size());
+    const bool quoted = at < text.size() && text[at] == '"';
+    const size_t start = at + (quoted ? 1 : 0);
+    const size_t stop =
+        std::min(text.find_first_of(quoted ? "\"" : " \t\r;\"", start), text.size());
+    at = stop + (quoted && stop < text.size() ? 1 : 0);
+    return text.substr(start, stop - start);
+  };
   size_t from = 0;
   while (from < cfg.size()) {
     const size_t end = std::min(cfg.find('\n', from), cfg.size());
     std::string line = cfg.substr(from, end - from);
     from = end + 1;
     for (char& c : line) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    const size_t at = line.find_first_not_of(" \t");
-    if (at == std::string::npos || line.compare(at, 13, "alias newgame") != 0 ||
-        line.find_first_of(" \t\"", at + 13) != at + 13)
-      continue;
-    std::string body = line.substr(at + 13);
-    std::erase(body, '"');
-    const size_t word = body.find_first_not_of(" \t");
-    if (word == std::string::npos || body.compare(word, 4, "map ") != 0) return false;
-    const size_t level = body.find_first_not_of(" \t", word + 4);
-    if (level == std::string::npos) return false;
-    const size_t stop = std::min(body.find_first_of(" \t\r;", level), body.size());
-    const sv::LevelString ls = sv::level_string(body.substr(level, stop - level));
-    if (ls.map.empty()) return false;
-    map = ls.map;
-    shows = ls.shows;
-    return true;
+    size_t at = 0;
+    if (word(line, at) != "alias" || word(line, at) != "newgame") continue;
+    const std::string body = word(line, at);  // its commands, `;` between them
+    for (size_t part = 0; part < body.size();) {
+      const size_t semi = std::min(body.find(';', part), body.size());
+      const std::string command = body.substr(part, semi - part);
+      part = semi + 1;
+      size_t w = 0;
+      if (word(command, w) != "map") continue;
+      const sv::LevelString ls = sv::level_string(word(command, w));
+      if (ls.map.empty()) return false;
+      map = ls.map;
+      shows = ls.shows;
+      return true;
+    }
+    return false;
   }
   return false;
 }

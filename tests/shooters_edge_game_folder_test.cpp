@@ -414,7 +414,10 @@ TEST(new_game_takes_the_map_and_movies_the_default_cfg_names) {
   CHECK(map == "base1" && shows == "ntro.cin");
   CHECK(cl::new_game_level("  ALIAS NewGame \"map *logo.cin+xin.cin+xswamp\"\r\n", map, shows));
   CHECK(map == "xswamp" && shows == "logo.cin+xin.cin");
-  CHECK(cl::new_game_level("alias newgame \"map *rintro.cin+rmine1\"", map, shows));
+  CHECK(cl::new_game_level(
+      "// newgame command\nalias\tnewgame \" killserver ; maxclients 1 ; deathmatch 0 ; map "
+      "*rintro.cin+rmine1\"\n",
+      map, shows));
   CHECK(map == "rmine1" && shows == "rintro.cin");
   CHECK(!cl::new_game_level("alias newgamex \"map e1m1\"\nbind x y\n", map, shows));
   CHECK(cl::new_game_level("alias newgamex \"map e1m1\"\nalias newgame \"map e1m2\"", map, shows));
