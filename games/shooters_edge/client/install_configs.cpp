@@ -425,12 +425,13 @@ ConfigsRun start_configs(con::Console& c, const std::string& basedir, const std:
 }
 
 std::string mod_startdemos(const std::string& basedir, const std::string& game,
-                           const ge::classicenhance::Profile& content) {
+                           const ge::classicenhance::Profile& content, std::string_view fallback) {
   const std::vector<std::string_view> folders = game_folders(game, content);
-  if (folders.size() < 2) return {};  // the base folder: the game's own list stands
+  if (folders.size() < 2)
+    return std::string(fallback);  // the base folder: the game's own list stands
   const fs::path root = basedir.empty() ? fs::path(".") : fs::path(basedir);
   const fs::path dir = entry_named(root, folders.front());
-  if (dir.empty()) return {};
+  if (dir.empty()) return std::string(fallback);
   constexpr std::string_view kStartFile = "quake.rc";
   std::string text;
   const std::vector<std::string> archives =
@@ -443,7 +444,7 @@ std::string mod_startdemos(const std::string& basedir, const std::string& game,
   }
   if (text.empty()) {
     const fs::path loose = entry_named(dir, kStartFile);
-    if (loose.empty()) return {};
+    if (loose.empty()) return std::string(fallback);
     std::ifstream f(loose, std::ios::binary);
     text.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
   }
@@ -454,7 +455,7 @@ std::string mod_startdemos(const std::string& basedir, const std::string& game,
     list.clear();  // the last one wins, as it would run last
     for (size_t i = 1; i < words.size(); ++i) list += (i > 1 ? " " : "") + words[i];
   }
-  return list;
+  return list.empty() ? std::string(fallback) : list;
 }
 
 }  // namespace shooters_edge::client

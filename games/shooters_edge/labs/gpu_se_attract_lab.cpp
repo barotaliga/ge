@@ -507,8 +507,9 @@ void run(gl::Lab& lab) {
   // `menu_attract auto`, client/main.cpp).
   std::string demo = lab.arg("demo");
   if (demo == "title") {
-    std::string list = real ? cl::mod_startdemos(install, game, *content) : std::string();
-    if (list.empty()) list = adapter.game->attract;
+    const std::string list =
+        real ? cl::mod_startdemos(install, game, *content, adapter.game->attract)
+             : std::string(adapter.game->attract);
     const std::vector<std::string> words = ge::console::tokenize(list);
     demo = words.empty() ? "demo1" : words.front();
   }

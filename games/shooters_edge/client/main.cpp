@@ -760,8 +760,7 @@ int run_main(int argc, char** argv) {
     picture.all_figures = remix.figure != nullptr ? std::string(remix.figure->folder) : "";
     console.print(cl::worn_line(remix));
   };
-  bool remix_enabled = false;
-  bool remix_expansions = true;  // cr_expansions as the files were opened
+  bool remix_enabled = false, remix_expansions = true;  // cr_enabled, cr_expansions as opened
   std::string remix_for;
   cl::RemixParts remix_items{};  // remix.hpp's `remix_parts`
   const auto remix_sync = [&] {
@@ -887,12 +886,11 @@ int run_main(int argc, char** argv) {
   bool demo_hold = false;
   constexpr double kDemoSettle = 0.5;
   const auto start_attract = [&] {
-    std::string list = game_menu.attract();
-    if (list ==
-        "auto") {  // a mod's own quake.rc list first (a mission pack's demos), else the game's
-      list = cl::mod_startdemos(args.basedir, args.game, content_row());
-      if (list.empty()) list = adapter.game->attract;
-    }
+    // `auto`: a mod's own quake.rc list (a mission pack's demos), else the game's.
+    const std::string list =
+        game_menu.attract() != "auto"
+            ? game_menu.attract()
+            : cl::mod_startdemos(args.basedir, args.game, content_row(), adapter.game->attract);
     const std::vector<std::string> words = ge::console::tokenize(list);
     if (words.empty() || cl::archive_paths(files).empty()) return false;
     bench_ask = words[attract_next++ % words.size()];
