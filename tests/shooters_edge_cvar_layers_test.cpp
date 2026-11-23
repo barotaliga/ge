@@ -59,7 +59,6 @@ struct Window {
   ge::audio::MusicConsole music;  // bgmvolume and cd, the window's before the game's
   cl::GameStart start;
   cl::GameCvarValues game;
-  bool predict = true;       // the remote's cl_predict
   int crouch = 1;            // the remote's cl_predict_crouch
   int noskins = 0;           // the picture's stock_figures (Quake II's cl_noskins)
   bool items_still = false;  // the picture's items_still (Quake II's cl_nobob)
@@ -72,6 +71,8 @@ struct Window {
   explicit Window(const pr::GameProfile& g) {
     cl::add_coop_cvars(console, coop);
     cl::add_cvars(console, controls);
+    // The remote's cl_nopred as net/qw_remote.cpp registers it (Quake II's cl_predict maps on it).
+    console.cvars().add({.name = "cl_nopred", .fallback = "0", .kind = con::CvarKind::boolean});
     console.cvars().set_layer(cl::kLayerClassic);
     shooters_edge::look::add_cvars(console, picture);
     console.cvars().set_layer(cl::kLayerEngine);
@@ -118,7 +119,6 @@ struct Window {
     cl::add_game_cvars(console, game, g,
                        {.crosshair = &hud.crosshair,
                         .mouse = &controls.mouse,
-                        .predict = &predict,
                         .crouch = &crouch,
                         .noskins = &noskins,
                         .items_still = &items_still,
@@ -127,7 +127,6 @@ struct Window {
                         .frame_cap = &frame_cap,
                         .light_intensity = &picture.light_intensity,
                         .light_lift = &picture.light_lift,
-                        .gibs = &picture.gibs,
                         .no_glow = &picture.no_glow,
                         .chat = &chat});
   }
@@ -160,7 +159,6 @@ TEST(q2_crosshair_is_its_own_and_the_first_games_comes_back) {
   cl::switch_game_cvars(w.console, w.game, *q2,
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
-                         .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
                          .view = &w.view});
@@ -206,7 +204,6 @@ TEST(each_games_fov_and_move_speeds) {
   cl::switch_game_cvars(w.console, w.game, *q2,
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
-                         .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
                          .items_still = &w.items_still,
@@ -232,7 +229,9 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(cl::auto_gender("crakhor/x") == "none" && cl::auto_gender("crackhor") == "female");
   CHECK(w.controls.mouse.per_frame);             // its own m_accel
   v.set("cl_predict", "0", con::Source::local);  // our cl_nopred the other way round
-  CHECK(!w.predict);
+  CHECK(v.find("cl_nopred")->value == "1");
+  v.set("cl_predict", "1", con::Source::local);
+  CHECK(v.find("cl_nopred")->value == "0");
   v.set("cl_predict_crouch", "2", con::Source::local);  // the eye's height on every server
   CHECK(w.crouch == 2);
   v.set("cl_noskins", "2", con::Source::local);  // its own, beside the shared noskins
@@ -250,7 +249,6 @@ TEST(each_games_fov_and_move_speeds) {
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0],
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
-                         .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
                          .items_still = &w.items_still,
@@ -259,7 +257,7 @@ TEST(each_games_fov_and_move_speeds) {
   CHECK(v.find("cl_forwardspeed")->value == "400");
   CHECK(v.find("rate")->value == "2500");  // Quake's default again
   CHECK(!w.controls.mouse.per_frame && v.find("hand") == nullptr);
-  CHECK(w.predict && v.find("cl_predict") == nullptr);               // Quake always predicts
+  CHECK(v.find("cl_predict") == nullptr);                            // its spelling gone
   CHECK(v.find("cl_predict_crouch") == nullptr);                     // and never ducks
   CHECK(v.find("cl_noskins") == nullptr && w.noskins == 0);          // its figures its own
   CHECK(v.find("cl_nobob") == nullptr && !w.items_still);            // nothing floats in Quake
@@ -315,7 +313,6 @@ TEST(the_series_config_keeps_our_names_and_the_game_file_its_own_meanings) {
   cl::switch_game_cvars(w.console, w.game, *q2,
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
-                         .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
                          .view = &w.view});
@@ -364,7 +361,6 @@ TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
   cl::switch_game_cvars(w.console, w.game, *q2,
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
-                         .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
                          .view = &w.view});
@@ -388,7 +384,6 @@ TEST(a_games_spelling_in_a_config_is_its_own_value_over_the_common_one) {
   cl::switch_game_cvars(w.console, w.game, *q2,
                         {.crosshair = &w.hud.crosshair,
                          .mouse = &w.controls.mouse,
-                         .predict = &w.predict,
                          .crouch = &w.crouch,
                          .noskins = &w.noskins,
                          .view = &w.view});
@@ -580,6 +575,8 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   con::Cvars& v = w.console.cvars();
   con::ConsoleView view(w.console);  // con_height, con_bgalpha, con_font: the console's own
   v.add({.name = "vid_vsync", .fallback = "0"});  // the window's (platform/pacing.cpp)
+  w.console.add_command("playdemo", "the window's (client/demo_playback.cpp)",
+                        [](con::Console&, const con::Args&) {});
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});  // read again with them
   v.set("scr_consize", "0.3", con::Source::local);
   v.set("scr_conalpha", "0.6", con::Source::local);
@@ -607,8 +604,10 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   CHECK(v.find("gl_damageblend_frac")->value == "0.2" && w.picture.damage_frac == 0.2);
   v.set("gl_swapinterval", "1", con::Source::local);  // its spelling of the window's vsync
   CHECK(v.find("vid_vsync")->value == "1");
+  CHECK(w.console.has_command("demo"));  // its spelling of playdemo
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
   CHECK(v.find("gl_swapinterval") == nullptr && v.find("in_grab")->value == "0");
+  CHECK(!w.console.has_command("demo"));
   CHECK(v.clashes().empty());
 }
 
@@ -736,14 +735,12 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("cl_blend", "0", con::Source::local);      // our gl_polyblend
   CHECK(!w.picture.draw_entities && !w.picture.particles && !w.picture.dynamic);
   CHECK(!w.picture.poly_blend);
-  const cl::GameBindings gibs{.gibs = &w.picture.gibs,
-                              .no_glow = &w.picture.no_glow,
-                              .q2fx = &w.picture.q2fx,
-                              .music = &w.music};
+  const cl::GameBindings gibs{
+      .no_glow = &w.picture.no_glow, .q2fx = &w.picture.q2fx, .music = &w.music};
   cl::switch_game_cvars(w.console, w.game, *q2, gibs);
   v.set("cl_gibs", "0", con::Source::local);  // our cl_gibfilter the other way round
   v.set("cl_noglow", "1", con::Source::local);
-  CHECK(!w.picture.gibs && w.picture.no_glow);
+  CHECK(w.picture.gib_filter && w.picture.no_glow);
   v.set("cl_disable_particles", "24", con::Source::local);  // a rocket's trail, blood
   v.set("cl_disable_explosions", "2", con::Source::local);
   v.set("cl_dlight_hacks", "6", con::Source::local);
@@ -808,7 +805,7 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(w.game.q2.begin_cmd == "record" && !w.game.q2.autopause);
   CHECK(v.find("sv_running") != nullptr && v.find("cl_running")->value == "1");
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], gibs);
-  CHECK(w.picture.gibs && !w.picture.no_glow);
+  CHECK(w.picture.gib_filter && !w.picture.no_glow);  // one setting: the player's kept
   CHECK(w.picture.q2fx.no_particles == 0 && w.picture.q2fx.muzzle_models);  // set aside
   CHECK(v.find("cl_disable_particles") == nullptr && v.find("scr_showpause") == nullptr);
   CHECK(w.picture.q2fx.footsteps == 1 && w.picture.q2fx.ambient == 1 && w.music.enabled);

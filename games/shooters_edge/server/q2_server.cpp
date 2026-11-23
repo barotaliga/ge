@@ -73,7 +73,7 @@ sh::Vec3f parse_vec(const std::string& s) {
   return v;
 }
 
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
 
@@ -1178,7 +1178,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     if (q2_same_name(s.map_name, "fact2") && e.classname == "target_spawner" &&
         e.origin.x == -1504 && e.origin.y == 512 && e.origin.z == 72)
       e.origin.z = 64;
-    e.item = sq_item(e.classname);
+    e.item = sq_item(e.classname, s.opt.pack);
     if (e.item >= 0) e.team = b.get_any_case("team");
     inhibited.push_back(left_out(s, e.spawnflags) ? 1 : 0);
     e.gone = inhibited.back() != 0 || dm_left_out(s, e.item);

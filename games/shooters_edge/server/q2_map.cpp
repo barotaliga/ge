@@ -72,11 +72,11 @@ float number(const Q2Server& s, const Q2Entity& e, const char* name, float fallb
   return v.empty() ? fallback : std::strtof(v.c_str(), nullptr);
 }
 
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
 
-void pack(int16_t out[3], sh::Vec3f v) {
+void pack(int32_t out[3], sh::Vec3f v) {
   const float in[3] = {v.x, v.y, v.z};
   for (int i = 0; i < 3; i++)
     out[i] = static_cast<int16_t>(std::clamp(num::to_int32(double(in[i]) * 8), -32768, 32767));
@@ -332,7 +332,7 @@ int push(Q2Server& s, Q2Entity& e, sh::Vec3f move, sh::Vec3f turn, bool stop_typ
   e.angles = from_angles + turn;
   const sh::Vec3f lo = abs_min(e), hi = abs_max(e);
   const int row = map_row(index_of(s, e));
-  int16_t before[sh::kMaxClients][3];
+  int32_t before[sh::kMaxClients][3];
   bool moved[sh::kMaxClients] = {}, turned[sh::kMaxClients] = {};
   int16_t was_yaw[sh::kMaxClients] = {};
   const float yaw = turn.y;  // a rider's yaw delta gains the turn's degrees as its own units
@@ -781,7 +781,7 @@ void trigger_fire(Q2Server& s, Q2Entity& e, int activator) {
 void place_player(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f angles) {
   Q2Player& p = s.players[slot];
   pack(p.move.origin, origin + sh::Vec3f{0, 0, 10});
-  for (int16_t& v : p.move.velocity) v = 0;
+  for (int32_t& v : p.move.velocity) v = 0;
   p.move.flags |= ge::classic::kSqTimeTeleport;
   p.move.time = 20;  // 160 ms
   const int16_t want[3] = {

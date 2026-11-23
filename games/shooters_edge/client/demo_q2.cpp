@@ -590,6 +590,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
             " is not followed by the player's state: the recording is damaged";
     return false;
   }
+  d.q2_read[kPlayerInfo]++;
   const size_t slot = static_cast<size_t>(number) & 15;
   const size_t base_slot = static_cast<size_t>(delta) & 15;
   const bool have_base = delta > 0 && d.views[base_slot].frame == delta;
@@ -605,6 +606,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
         "the frame" + at_byte(m) + " is not followed by its entity list: the recording is damaged";
     return false;
   }
+  d.q2_read[kPacketEntities]++;
   Frame to;
   std::vector<std::pair<int, int>> events;
   if (!packet_entities(d, m, have_base ? &d.ring[base_slot] : nullptr, to, events, error))
@@ -993,6 +995,7 @@ bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
     const size_t at = m.at;
     m.int23 = ext_of(s.protocol) >= 2;  // set again after a server data
     const int id = m.u8();
+    d.q2_read[id]++;
     switch (id) {
       case kMuzzleFlash: {  // a player entering (9), leaving (10) or respawned (11): its burst
         const int n = m.i16(), value = m.u8(), flash = value & 127;
@@ -1109,8 +1112,8 @@ bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
           o.slot = m.u8();
           o.msec = m.u8();
           o.state.type = static_cast<ge::classic::Q2Type>(std::min(m.u8(), 4));
-          for (int16_t& v : o.state.origin) v = static_cast<int16_t>(m.i16());
-          for (int16_t& v : o.state.velocity) v = static_cast<int16_t>(m.i16());
+          for (int32_t& v : o.state.origin) v = m.i16();
+          for (int32_t& v : o.state.velocity) v = m.i16();
           o.state.flags = static_cast<uint8_t>(m.u8());
           o.state.time = static_cast<uint8_t>(m.u8());
           o.state.gravity = static_cast<int16_t>(m.i16());

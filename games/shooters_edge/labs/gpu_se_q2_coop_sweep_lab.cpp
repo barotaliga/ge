@@ -33,6 +33,7 @@
 #include <set>
 #include <span>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -161,7 +162,7 @@ const ge::progs::Progs& progs() {
 
 sh::Vec3f where(const sv::Q2Server& s, int slot) {
   const auto& o = s.players[size_t(slot)].move.origin;
-  return {o[0] * 0.125f, o[1] * 0.125f, o[2] * 0.125f};
+  return {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
 }
 
 void put_at(sv::Q2Server& s, int slot, sh::Vec3f at) {
@@ -169,7 +170,7 @@ void put_at(sv::Q2Server& s, int slot, sh::Vec3f at) {
   m.origin[0] = static_cast<int16_t>(at.x * 8);
   m.origin[1] = static_cast<int16_t>(at.y * 8);
   m.origin[2] = static_cast<int16_t>(at.z * 8);
-  for (int16_t& v : m.velocity) v = 0;
+  for (int32_t& v : m.velocity) v = 0;
 }
 
 bool alive(const cl::Listen& l, int slot) {
@@ -285,7 +286,7 @@ sv::native::NativeEntityHead* player(Native& n, int slot) { return n.s->host->en
 bool native_alive(Native& n, int slot) {
   const sv::native::NativeEntityHead* e = player(n, slot);
   return n.s->clients[size_t(slot)].active && e->inuse != 0 && e->client != nullptr &&
-         e->client->ps.stats[1] > 0;
+         n.s->host->with_player(e, [](const auto& ps) { return ps.stats[1]; }) > 0;
 }
 
 void native_frames(Native& n, int count) {
@@ -309,11 +310,14 @@ void native_put(Native& n, int slot, sh::Vec3f at) {
   e->s.origin[0] = at.x;  // a game's move starts from the entity's own place
   e->s.origin[1] = at.y;
   e->s.origin[2] = at.z;
-  auto& m = e->client->ps.move;
-  m.origin[0] = static_cast<int16_t>(at.x * 8);
-  m.origin[1] = static_cast<int16_t>(at.y * 8);
-  m.origin[2] = static_cast<int16_t>(at.z * 8);
-  for (int16_t& v : m.velocity) v = 0;
+  n.s->host->with_player(e, [&at](auto& ps) {  // either interface's record
+    auto& m = ps.move;
+    using Packed = std::remove_reference_t<decltype(m.origin[0])>;
+    m.origin[0] = static_cast<Packed>(at.x * 8);
+    m.origin[1] = static_cast<Packed>(at.y * 8);
+    m.origin[2] = static_cast<Packed>(at.z * 8);
+    for (auto& v : m.velocity) v = 0;
+  });
 }
 
 // How many of the item the game holds for the slot, by its pickup name (the inventory it sends).
@@ -409,7 +413,8 @@ Row sweep_native(const std::filesystem::path& library, const cl::SearchPath& fil
   for (int i = 0; i < 1500 && n.s->pending_map.empty(); i++) {
     if (native_alive(n, 0)) {
       native_put(n, 0, exit->at);
-      const int16_t delta = player(n, 0)->client->ps.move.delta_angles[1];
+      const int16_t delta = n.s->host->with_player(
+          player(n, 0), [](const auto& ps) { return ps.move.delta_angles[1]; });
       n.cmd[0].angles.y = exit->yaw - static_cast<float>(delta) * (360.0f / 65536.0f);
     }
     n.cmd[0].buttons = n.cmd[1].buttons = (i / 8) % 2 == 0 ? sh::kButtonAttack : 0;
@@ -435,8 +440,10 @@ Row sweep_native(const std::filesystem::path& library, const cl::SearchPath& fil
   native_frames(n, 40);
   r.carried = native_alive(n, 0) && native_alive(n, 1);
   for (int slot = 0; slot < 2; slot++) {
-    const auto& at = player(n, slot)->client->ps.move.origin;
-    r.came_in[slot] = {at[0] * 0.125f, at[1] * 0.125f, at[2] * 0.125f};
+    r.came_in[slot] = n.s->host->with_player(player(n, slot), [](const auto& ps) {
+      const auto& at = ps.move.origin;
+      return sh::Vec3f{float(at[0]) * 0.125f, float(at[1]) * 0.125f, float(at[2]) * 0.125f};
+    });
   }
   return r;
 }

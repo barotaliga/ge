@@ -32,25 +32,26 @@ bool coop(const Q2Server& s) { return !deathmatch(s) && s.cvars.find("coop")->on
 // or the power-ups with a use.
 enum class Steps : uint8_t { usable, weapons, powerups };
 
-bool in_steps(int n, Steps k) {
+bool in_steps(int n, Steps k, Q2Pack pack) {
   switch (k) {
     case Steps::usable:
-      return sq_selects(n);
+      return sq_selects(n, pack);
     case Steps::weapons:
-      return n >= kSqBlasterNumber && n <= 17;
+      return sq_weapon_numbered(n, pack);
     case Steps::powerups:
-      return n >= 23 && n <= 27;
+      return sq_powerup_numbered(n, pack);
   }
   return false;
 }
 
 // The selection stepped `way` (1 or -1) from where it is to the next held item of kind `k`,
 // wrapping through the numbers; -1 when none is held.
-void step_selection(Q2Player& p, int way, Steps k) {
+void step_selection(Q2Player& p, int way, Steps k, Q2Pack pack) {
   const int from = std::max(p.body.selected, 0);
-  for (int i = 1; i <= kSqItemNumbers; i++) {
-    const int n = ((from + way * i) % kSqItemNumbers + kSqItemNumbers) % kSqItemNumbers;
-    if (in_steps(n, k) && sq_count(p.body, n) > 0) {
+  const int numbers = sq_numbers(pack);
+  for (int i = 1; i <= numbers; i++) {
+    const int n = ((from + way * i) % numbers + numbers) % numbers;
+    if (in_steps(n, k, pack) && sq_count(p.body, n, pack) > 0) {
       p.body.selected = n;
       return;
     }
@@ -59,17 +60,18 @@ void step_selection(Q2Player& p, int way, Steps k) {
 }
 
 // The check before using or dropping: the selection kept while he holds one, else stepped on.
-void check_selection(Q2Player& p) {
-  if (p.body.selected > 0 && sq_count(p.body, p.body.selected) > 0) return;
+void check_selection(Q2Player& p, Q2Pack pack) {
+  if (p.body.selected > 0 && sq_count(p.body, p.body.selected, pack) > 0) return;
   if (p.body.selected < 0) return;
-  step_selection(p, 1, Steps::usable);
+  step_selection(p, 1, Steps::usable, pack);
 }
 
 // The counts the inventory message carries, by item number.
-std::vector<int16_t> counts_of(const SqBody& b) {
+std::vector<int16_t> counts_of(const SqBody& b, Q2Pack pack) {
   std::vector<int16_t> out(kSqInventorySlots, 0);
-  for (int n = 1; n < kSqItemNumbers; n++)
-    out[static_cast<size_t>(n)] = static_cast<int16_t>(std::min(sq_count(b, n), 32767));
+  const int numbers = std::min(sq_numbers(pack), kSqInventorySlots);
+  for (int n = 1; n < numbers; n++)
+    out[static_cast<size_t>(n)] = static_cast<int16_t>(std::min(sq_count(b, n, pack), 32767));
   return out;
 }
 
@@ -119,7 +121,7 @@ bool screens_command(Q2Server& s, int slot, const std::string& cmd) {
   if (cmd == "inven") {
     p.screen = kScreenNone;
     p.inven_open = !p.inven_open;
-    if (p.inven_open) p.inventory = counts_of(p.body);
+    if (p.inven_open) p.inventory = counts_of(p.body, s.opt.pack);
     return true;
   }
   static constexpr struct {
@@ -132,16 +134,17 @@ bool screens_command(Q2Server& s, int slot, const std::string& cmd) {
   for (const auto& st : kSteps)
     if (cmd == st.name) {
       if (spectate_step(s, slot, st.way)) return true;  // a chaser steps to another player
-      step_selection(p, st.way, st.steps);
+      step_selection(p, st.way, st.steps, s.opt.pack);
       return true;
     }
   if (cmd == "invuse" || cmd == "invdrop") {
     const bool use = cmd == "invuse";
-    check_selection(p);
+    check_selection(p, s.opt.pack);
     if (p.body.selected < 0)
       fight_print(s, slot, use ? "No item to use.\n" : "No item to drop.\n");
     else
-      fight_command(s, slot, use ? "use" : "drop", std::string(sq_item_name(p.body.selected)));
+      fight_command(s, slot, use ? "use" : "drop",
+                    std::string(sq_item_name(p.body.selected, s.opt.pack)));
     return true;
   }
   if (cmd == "score" || cmd == "help") p.inven_open = false;
@@ -171,7 +174,7 @@ bool screens_command(Q2Server& s, int slot, const std::string& cmd) {
 void screens_frame(Q2Server& s) {
   for (int i = 0; i < sh::kMaxClients; i++)  // an open inventory's counts, every frame
     if (s.clients[i].active && s.players[i].inven_open)
-      s.players[i].inventory = counts_of(s.players[i].body);
+      s.players[i].inventory = counts_of(s.players[i].body, s.opt.pack);
   if (s.frame_number % kRefresh != 0) return;
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2Player& p = s.players[i];

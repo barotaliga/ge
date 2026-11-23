@@ -83,7 +83,8 @@ int16_t short_angle(float degrees) {
 }
 
 sh::Vec3f origin_of(const Q2Player& p) {
-  return {p.move.origin[0] * 0.125f, p.move.origin[1] * 0.125f, p.move.origin[2] * 0.125f};
+  return {float(p.move.origin[0]) * 0.125f, float(p.move.origin[1]) * 0.125f,
+          float(p.move.origin[2]) * 0.125f};
 }
 
 void stop_chase(Q2Player& p) {
