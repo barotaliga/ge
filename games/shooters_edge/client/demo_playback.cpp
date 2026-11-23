@@ -112,6 +112,12 @@ float hud_inset(std::span<const ge::hud::Placed> placed, int height) {
   return h - top;
 }
 
+bool playback_pause_word(DemoPlayback& p, const Timedemo& bench, const std::string& line) {
+  if (line.substr(0, line.find(' ')) != "pause" || !bench.active || !bench.paced) return false;
+  p.paused = !p.paused;
+  return true;
+}
+
 void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench) {
   p.hooks = &console;
   // $cl_demopos: how far the demo playing is, to the tenth ("3:07.4"; "0:00.0" with none).

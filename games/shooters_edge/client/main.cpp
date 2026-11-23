@@ -290,11 +290,7 @@ int run_main(int argc, char** argv) {
   sn::add_window_words(console, con_view, listen, remote, next_map,
                        &word_first);  // map, sv, chat ...
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
-  word_first = [&](const std::string& line) {  // stops and starts it; a timed one runs on
-    if (line.substr(0, line.find(' ')) != "pause" || !bench.active || !bench.paced) return false;
-    playback.paused = !playback.paused;
-    return true;
-  };
+  word_first = [&](const std::string& l) { return cl::playback_pause_word(playback, bench, l); };
   cl::add_playback_commands(console, playback, bench);
   slm::Watch live_map;  // a match from above on TV and in demos (demo_map, livemap/watch.hpp)
   slm::add_live_map_cvars(console.cvars(), live_map.settings);
