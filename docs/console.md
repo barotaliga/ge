@@ -525,8 +525,8 @@ programs' own registrations, never kept by hand, so it cannot fall behind the co
 `make manual` runs all three into `build/manual/` (`tools/manual.sh`). The window needs one game to
 start: Quake's shareware release, fetched once and checked by the classicenhance tool
 (`GE_MANUAL_GAME` names another source); every other game's own layer is loaded without its
-files. The `manual` workflow
-publishes it to the repository's pages once a day. A new setting, command or flag needs nothing
+files. Each release carries the page as one of its files
+(`shooters-edge-<version>-user-manual.html`, the `release` workflow's `manual` job). A new setting, command or flag needs nothing
 more than its registration, its help and, for a flag, its row in the program's flag table; a
 dedicated server's game word, its row in the game's words.
 
