@@ -142,6 +142,10 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // rocket's glow in flight, an explosion's, a power's round its carrier); off, that kind lights
   // nothing (`kept_lights`). Either look.
   bool rocket_light = true, explosion_light = true, power_glow = true;
+  // gl_flashblend (Quake's own, classic/flash_blend.hpp): each of the moment's lights drawn as a
+  // glowing disc turned to the eye, the walls, doors and lifts left unlit by it (the figures still
+  // take it). Either look.
+  bool flash_blend = false;
   // r_powershells: a power's carrier wears a coloured shell (quad damage blue, the pentagram or
   // invulnerability red); r_itempulse: an item's light pulses as it lies. Quake II's own look:
   // on in it, off in Quake, which never drew them (each game's default its own: the
