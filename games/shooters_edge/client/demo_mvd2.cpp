@@ -584,7 +584,17 @@ struct Mvd2ToQ2 final : ConvertStream {
         case server::SqShot::heat_rocket:
           return 32;
         case server::SqShot::trap:
+        case server::SqShot::prox:
+        case server::SqShot::tesla:
+        case server::SqShot::nuke:
           return 16;
+        case server::SqShot::flechette:  // Ground Zero's: the nailguns' and the beam gun's
+          return 4;
+        case server::SqShot::tracker:
+        case server::SqShot::heat_beam:
+          return 64;
+        case server::SqShot::chainfist:
+          return 1;
       }
     }
     return 0;
