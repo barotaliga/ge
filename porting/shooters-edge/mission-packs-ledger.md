@@ -44,13 +44,13 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Section | Rows | Done | Verify | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- | --- |
 | Taking the packs in (shared by all four) | 17 | 12 | 3 | 2 (0 / 2 / 0) | 0 |
-| Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 8 | 64 | 2 (0 / 1 / 1) | 0 |
-| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 10 | 47 | 4 (0 / 2 / 2) | 0 |
+| Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 8 | 64 | 1 (0 / 1 / 0) | 1 |
+| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 10 | 47 | 3 (0 / 2 / 1) | 1 |
 | The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
 | Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **274** | **36** | **124** | **114 (56 / 48 / 10)** | **0** |
+| **All** | **274** | **36** | **124** | **112 (56 / 48 / 8)** | **2** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **114 missing, 124 to verify, of 274 rows** (M63a taking the packs in: 10 fewer; M63b the Quake packs' status bars: 6 fewer; Scourge of Armagon's remix roles: 1 fewer).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **112 missing, 124 to verify, of 274 rows** (M63a taking the packs in: 10 fewer; M63b the Quake packs' status bars: 6 fewer; Scourge of Armagon's remix roles: 1 fewer; the end screens not taken: 2 fewer).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
@@ -93,7 +93,7 @@ count: done 4, verify 67, missing 3 (0 / 1 / 2), not-taken 0
 | hip.cfg | the pack's `quake.rc` and `default.cfg` run at start | done |  | its `default.cfg` (in its pack) runs as what it adds to the base game's: 9 the laser cannon (impulse 225), 0 Mjolnir (impulse 226), the zoom aliases; the window's layout stands (client/install_configs.cpp, tests/shooters_edge_install_configs_test.cpp); its `quake.rc` adds only the demo list (hip.demos) |
 | hip.demos | the attract loop plays the pack's four demos | done |  | `menu_attract auto` takes the list from the pack's own `quake.rc` (hipdemo1..4); the se-attract lab with `--game=hipnotic` plays hipdemo1 on hip1m5 (2026-11-23) |
 | hip.conback | the pack's console background | done |  | the pack's own `gfx/conback.lmp` (the scratched one) drawn by the se-attract lab with `--game=hipnotic` (2026-11-23) |
-| hip.endtext | `end2.bin`, the text screen shown on quitting | missing | 3 | the owner decides whether it is taken |
+| hip.endtext | `end2.bin`, the text screen shown on quitting | not taken |  | the DOS build alone showed one; the Windows and Linux builds, which base Quake here follows, quit with nothing shown, so the packs do the same (decided 2026-11-23; printing it to the terminal on quit is the way back if wanted) |
 | hip.dm | `hipdm1` played by bots on the pack's program | verify | 2 |  |
 | hip.coop | co-op on the pack's program, a companion beside the player | verify | 2 |  |
 | hip.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots' campaign module learns its monsters, weapons, items and traps |
@@ -230,7 +230,7 @@ count: done 7, verify 50, missing 4 (0 / 2 / 2), not-taken 0
 | rog1.cfg | the pack's configs run at start | done |  | the pack ships no `default.cfg` or `quake.rc` (its pack read 2026-11-23), so the base game's start runs, as it does |
 | rog1.demos | the attract loop plays the pack's three demos | done |  | the pack's own demo1..3 win over the base's by the search path; the se-attract lab with `--game=rogue` plays its demo1 on r1m5 (2026-11-23) |
 | rog1.conback | the pack's console background | done |  | the pack's own `gfx/conback.lmp` (its logo at the right) drawn by the se-attract lab with `--game=rogue` (2026-11-23) |
-| rog1.endtext | `end1.bin`, `end2.bin`, the text screens on quitting | missing | 3 | the owner decides whether it is taken |
+| rog1.endtext | `end1.bin`, `end2.bin`, the text screens on quitting | not taken |  | as hip.endtext |
 | rog1.dm | `ctf1` and the team modes played by bots | verify | 2 |  |
 | rog1.coop | co-op on the pack's program | verify | 2 |  |
 | rog1.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
