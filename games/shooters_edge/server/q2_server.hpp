@@ -313,6 +313,11 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   double patient_since = 0;
   int bad_medic[2] = {-1, -1};
   bool revived = false;
+  // Hint paths: its last look for one (level time), the node it heads for and the chain's node it
+  // leaves the path at (entities; -1 none), and a node's wait held till then (level time).
+  double hint_check = -100;
+  int hint_node = -1, hint_goal = -1;
+  double hint_wait = 0;
 };
 
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name

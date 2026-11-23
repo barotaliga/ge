@@ -92,6 +92,8 @@ bool monster_bring_spare(Q2Server& s, int block, sh::Vec3f at, sh::Vec3f angles,
 // Ground Zero's hidden brain that drives a turret_breach (q2_gz_monsters.cpp): set up, used
 // (false when entity `i` is not one), and its frame.
 bool gz_brain_spawn(Q2Server& s, int i);
+// Ground Zero's `hint_path` set up as the map spawns (q2_gz_ai.cpp); false for any other entity.
+bool gz_hint_spawn(Q2Server& s, int i);
 bool gz_brain_use(Q2Server& s, int i, int activator);
 void gz_brains(Q2Server& s);
 // The words of a death by a monster's attack (`cause` from `kSqByMonster`), or null.

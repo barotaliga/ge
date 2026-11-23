@@ -11,9 +11,14 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_gz_ai_test.cpp
 #include <algorithm>
+#include <cstdlib>
+#include <string>
 #include <string_view>
+#include <vector>
 
+#include "brush/map.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monster_ai.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
@@ -119,6 +124,7 @@ void gz_seen(Q2Server& s, Q2Monster& m) {
   if (!gz_ai(s) || m.enemy == -1) return;
   m.blind_at = foe_at(s, m.enemy);
   m.blind_delay = 0;
+  m.hint_node = m.hint_goal = -1;  // seen: off any hint path, at him
 }
 
 bool gz_blind_fire(Q2Server& s, Q2Monster& m) {
@@ -232,4 +238,161 @@ bool gz_patient_keep(Q2Server& s, Q2Monster& medic, Q2Monster& c) {
   return true;
 }
 
+// ---- Hint paths (gz-monsters.md § 1.5) ----
+
+namespace {
+
+constexpr std::string_view kHint = "hint_path";
+constexpr int kHintEnd = 1;          // spawnflag: either end of a chain
+constexpr size_t kHintChains = 100;  // chains at most
+constexpr float kHintNear = 512;     // a node's reach from the monster, and from its enemy
+
+bool hint(const Q2Server& s, int e) {
+  return e >= 0 && size_t(e) < s.entities.size() && !s.entities[size_t(e)].gone &&
+         s.entities[size_t(e)].classname == kHint;
+}
+
+// The hint nodes `name` names (two or more: a fork).
+int named_hints(const Q2Server& s, const std::string& name, int& first) {
+  int n = 0;
+  first = -1;
+  if (name.empty()) return 0;
+  for (size_t i = 0; i < s.entities.size(); i++)
+    if (hint(s, int(i)) && s.entities[i].targetname == name && n++ == 0) first = int(i);
+  return n;
+}
+
+// Every chain, in order from its starting end: each END node with a target and no name starts one,
+// followed by targets; a fork or a node already on a chain ends it (a fork's chain is cut after
+// its start).
+std::vector<std::vector<int>> hint_chains(const Q2Server& s) {
+  std::vector<std::vector<int>> chains;
+  std::vector<bool> taken(s.entities.size(), false);
+  for (size_t i = 0; i < s.entities.size() && chains.size() < kHintChains; i++) {
+    const Q2Entity& e = s.entities[i];
+    if (!hint(s, int(i)) || (e.spawnflags & kHintEnd) == 0 || e.target.empty() ||
+        !e.targetname.empty())
+      continue;
+    std::vector<int> chain{int(i)};
+    taken[i] = true;
+    for (int at = int(i);;) {
+      int next = -1;
+      if (named_hints(s, s.entities[size_t(at)].target, next) != 1 || taken[size_t(next)]) break;
+      chain.push_back(next);
+      taken[size_t(next)] = true;
+      at = next;
+    }
+    chains.push_back(std::move(chain));
+  }
+  return chains;
+}
+
+// Whether the line from `from` to node `n` is clear of the world.
+bool clear_to_node(const Q2Server& s, sh::Vec3f from, int n, int skip) {
+  return map_trace(s, from, {}, {}, s.entities[size_t(n)].origin, kOpaque, skip).fraction >= 1;
+}
+
+// The chain node `n` is on (empty none).
+std::vector<int> chain_of(const Q2Server& s, int n) {
+  for (std::vector<int>& c : hint_chains(s))
+    if (std::find(c.begin(), c.end(), n) != c.end()) return c;
+  return {};
+}
+
+// The path chosen toward `m`'s enemy: a node it sees within 512 starting a chain that holds one
+// its enemy sees within 512; false when there is none.
+bool choose_hint(const Q2Server& s, Q2Monster& m) {
+  const Q2Entity& e = s.entities[size_t(m.entity)];
+  const sh::Vec3f me = eye(e, kind(m)), him = foe_eye(s, m.enemy);
+  int start = -1, goal = -1;
+  float best = 0;
+  for (const std::vector<int>& c : hint_chains(s)) {
+    int end = -1;
+    for (const int n : c)  // the last of the chain in its order that qualifies
+      if (sh::length(s.entities[size_t(n)].origin - him) <= kHintNear &&
+          clear_to_node(s, him, n, -1))
+        end = n;
+    if (end < 0) continue;
+    for (const int n : c) {
+      const float d = sh::length(s.entities[size_t(n)].origin - e.origin);
+      if (d > kHintNear || !clear_to_node(s, me, n, m.entity)) continue;
+      if (start < 0 || d < best) {
+        start = n;
+        goal = end;
+        best = d;
+      }
+    }
+  }
+  if (start < 0) return false;
+  m.hint_node = start;
+  m.hint_goal = goal;
+  return true;
+}
+
+}  // namespace
+
+bool gz_hints(Q2Server& s, Q2Monster& m) {
+  if (!gz_ai(s) || m.enemy == -1 || m.hold || kind(m).turret) return false;
+  if (m.hint_node < 0) {
+    if (s.level_time < m.seen_at + 5 || s.level_time < m.hint_check + 10) return false;
+    m.hint_check = s.level_time;
+    if (!choose_hint(s, m)) return false;
+  }
+  if (!hint(s, m.hint_node) || !hint(s, m.hint_goal)) {
+    m.hint_node = m.hint_goal = -1;
+    return false;
+  }
+  if (s.level_time + 0.001 < m.hint_wait) return true;  // held at a node (a plat's ride)
+  Q2Entity& e = body(s, m);
+  const Q2Entity& node = s.entities[size_t(m.hint_node)];
+  sh::Vec3f d = node.origin - e.origin;
+  d.z = 0;
+  if (sh::length(d) > e.maxs.x + 8 || std::abs(node.origin.z - e.origin.z) > 64) {
+    go_to(s, m, node.origin, kind(m).run);
+    return true;
+  }
+  // Touched: a node's wait held; at the goal the path ends, else one node on toward it.
+  if (node.wait > 0) m.hint_wait = s.level_time + double(node.wait);
+  if (m.hint_node == m.hint_goal) {
+    m.hint_node = m.hint_goal = -1;
+    return false;
+  }
+  const std::vector<int> c = chain_of(s, m.hint_node);
+  const auto at = std::find(c.begin(), c.end(), m.hint_node);
+  const auto to = std::find(c.begin(), c.end(), m.hint_goal);
+  if (at == c.end() || to == c.end()) {
+    m.hint_node = m.hint_goal = -1;
+    return false;
+  }
+  m.hint_node = to > at ? *(at + 1) : *(at - 1);
+  return true;
+}
+
 }  // namespace shooters_edge::server::monster_ai
+
+namespace shooters_edge::server {
+
+bool gz_hint_spawn(Q2Server& s, int i) {
+  Q2Entity& e = s.entities[size_t(i)];
+  if (e.classname != "hint_path" || s.opt.pack != Q2Pack::ground_zero) return false;
+  if (monster_ai::deathmatch(s)) {
+    e.gone = true;
+    return true;
+  }
+  if (e.target.empty() && e.targetname.empty()) {
+    s.console.push_back("hint_path with no target and no targetname at " + q2_pos(e.origin));
+    e.gone = true;
+    return true;
+  }
+  e.hidden = true;
+  e.box = false;
+  e.mins = {-8, -8, -8};
+  e.maxs = {8, 8, 8};
+  if (e.block >= 0 && size_t(e.block) < s.map->entities.size()) {
+    const std::string& wait = s.map->entities[size_t(e.block)].get_any_case("wait");
+    e.wait = wait.empty() ? 0 : std::strtof(wait.c_str(), nullptr);
+  }
+  return true;
+}
+
+}  // namespace shooters_edge::server

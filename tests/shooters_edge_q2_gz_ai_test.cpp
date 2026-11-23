@@ -37,8 +37,9 @@ br::Entity entity(Pairs pairs) {
 }
 
 // A long hall floored at 0 and roofed at 256 with a wall at x 512, the player's start at its west
-// end; `ledge` raises the floor east of x -100 to 64 (and the wall's west face stays at 512).
-std::shared_ptr<const br::Map> hall(const std::vector<Pairs>& things, bool ledge) {
+// end; `ledge` raises the floor east of x -100 to 64 (and the wall's west face stays at 512);
+// `split` walls it across at x 0 but for a gap at its north side (y 128 to 256).
+std::shared_ptr<const br::Map> hall(const std::vector<Pairs>& things, bool ledge, bool split) {
   br::BrushWorld w;
   w.models.resize(1);
   const float lo[3] = {-1024, -256, -16}, hi[3] = {1024, 256, 0};
@@ -48,7 +49,9 @@ std::shared_ptr<const br::Map> hall(const std::vector<Pairs>& things, bool ledge
   w.models[0].push_back(br::box_brush(lo, hi, sh::kSqSolid, "world/floor"));
   w.models[0].push_back(br::box_brush(roof_lo, roof_hi, sh::kSqSolid, "world/roof"));
   w.models[0].push_back(br::box_brush(wall_lo, wall_hi, sh::kSqSolid, "world/wall"));
+  const float split_lo[3] = {-8, -256, 0}, split_hi[3] = {8, 128, 256};
   if (ledge) w.models[0].push_back(br::box_brush(step_lo, step_hi, sh::kSqSolid, "world/ledge"));
+  if (split) w.models[0].push_back(br::box_brush(split_lo, split_hi, sh::kSqSolid, "world/split"));
   w.entities.push_back(
       entity({{"classname", "info_player_start"}, {"origin", "-600 0 24"}, {"angle", "0"}}));
   for (const Pairs& m : things) w.entities.push_back(entity(m));
@@ -69,7 +72,7 @@ struct Hall {
 };
 
 std::unique_ptr<Hall> open_hall(const std::vector<Pairs>& things, bool pack = true,
-                                const char* skill = "3", bool ledge = false) {
+                                const char* skill = "3", bool ledge = false, bool split = false) {
   auto h = std::make_unique<Hall>();
   sv::Q2ServerOptions o;
   if (pack) o.pack = sv::Q2Pack::ground_zero;
@@ -78,7 +81,7 @@ std::unique_ptr<Hall> open_hall(const std::vector<Pairs>& things, bool pack = tr
   h->r.console(std::string("skill ") + skill);
   sv::MapSpec map;
   map.name = "hall";
-  map.brushes = hall(things, ledge);
+  map.brushes = hall(things, ledge, split);
   std::string error;
   CHECK_MSG(h->r.start(map, error), error);
   h->r.connect(0, "Ana", false, false);
@@ -210,4 +213,32 @@ TEST(a_medics_shot_starts_no_fight_and_its_raised_dead_are_not_counted) {
   for (int i = 0; i < 10 && h->m(0).dead; i++) run(*h, kSecond);
   CHECK_MSG(!h->m(0).dead, "the medic never raised the guard");
   CHECK(h->m(0).revived && h->s().monsters_total == 2);
+}
+
+TEST(out_of_sight_a_gunner_takes_the_hint_path_round_the_wall_to_ana) {
+  const auto node = [](const char* origin, const char* name, const char* target, bool end) {
+    Pairs p{{"classname", "hint_path"}, {"origin", origin}};
+    if (*name != 0) p.push_back({"targetname", name});
+    if (*target != 0) p.push_back({"target", target});
+    if (end) p.push_back({"spawnflags", "1"});
+    return p;
+  };
+  for (const bool pack : {true, false}) {
+    auto h = open_hall(
+        {thing("monster_gunner", "300 -200 24", "180"), node("300 200 24", "", "h1", true),
+         node("0 200 24", "h1", "h2", false), node("-300 200 24", "h2", "", true)},
+        pack, "1", false, true);
+    run(*h, 2);
+    sv::Q2Monster& m = h->m();
+    m.enemy = 0;
+    m.seen_at = h->s().level_time - 6;  // out of sight for six seconds
+    bool took = false;
+    for (int i = 0; i < 12 * kSecond && h->e().origin.x > -200; i++) {
+      m.attack_finished = 1e9;
+      run(*h, 1);
+      took = took || m.hint_node >= 0;
+    }
+    CHECK(took == pack);
+    if (pack) CHECK_MSG(h->e().origin.x <= -200, std::to_string(h->e().origin.x));
+  }
 }

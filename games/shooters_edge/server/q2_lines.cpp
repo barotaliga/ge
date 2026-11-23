@@ -240,7 +240,7 @@ void key_lines(Q2Server& s, const ge::brush::Entity& b) {
 constexpr std::string_view kReckoningSpawnable[] = {
     "func_object_repair", "misc_amb4",          "misc_crashviper", "misc_nuke",
     "misc_transport",     "misc_viper_missile", "rotating_light",  "target_mal_laser"};
-constexpr std::string_view kGroundZeroSpawnable[] = {"turret_invisible_brain"};
+constexpr std::string_view kGroundZeroSpawnable[] = {"hint_path", "turret_invisible_brain"};
 
 // The game's own, or one the remix brings in from another game (Quake's monsters, its items), or
 // the pack's that plays.

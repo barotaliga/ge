@@ -610,7 +610,7 @@ void turn_breach(Q2Server& s, int i) {
 }  // namespace
 
 bool targets_spawn(Q2Server& s, int i) {
-  if (reckoning_spawn(s, i) || gz_brain_spawn(s, i)) return true;
+  if (reckoning_spawn(s, i) || gz_brain_spawn(s, i) || gz_hint_spawn(s, i)) return true;
   Q2Entity& e = s.entities[size_t(i)];
   const Kind k = kind_of(e);
   if (k == kNone) return false;

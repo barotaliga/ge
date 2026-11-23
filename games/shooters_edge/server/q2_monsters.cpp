@@ -1046,6 +1046,7 @@ void think(Q2Server& s, Q2Monster& m) {
     m.lost = m.on_trail = false;
     gz_seen(s, m);  // blind fire's mark
   } else {
+    if (gz_hints(s, m)) return;  // Ground Zero's hint paths toward him
     pursue(s, m);  // out of sight: the last sighting, then his trail; it never gives him up
   }
   if (s.level_time + 0.001 < m.pain_hold) return;  // flinching

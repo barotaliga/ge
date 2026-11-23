@@ -227,6 +227,9 @@ bool gz_jumping(Q2Server& s, Q2Monster& m);
 // Whether shots between it and another start no fight (the pack's flag: the tanks, the medics,
 // the turret, a revived monster).
 bool gz_ignores_shots(const Q2Server& s, const Q2Monster& m);
+// Its enemy out of sight 5 s or more: a hint path's chain to near him taken, and followed; true
+// when the path took the frame.
+bool gz_hints(Q2Server& s, Q2Monster& m);
 // A medic's search: whether corpse `c` may be its patient, and its reach (1024, 400 holding).
 bool gz_patient_ok(const Q2Server& s, const Q2Monster& medic, const Q2Monster& c);
 float gz_patient_reach(const Q2Server& s, const Q2Monster& medic);
