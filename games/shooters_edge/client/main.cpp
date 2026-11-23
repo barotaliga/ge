@@ -285,9 +285,12 @@ int run_main(int argc, char** argv) {
   ge::console::Talk talk;
   ge::console::add_talk(console, con_view, talk);
   remote.talk = &talk;
-  sn::add_server_commands(console, listen, remote);  // users, status, rcon, cmd, score, inven
-  sn::add_window_words(console, con_view, listen, remote, next_map);  // map, sv, chat, vote, ...
+  sn::add_server_commands(console, listen, remote);    // users, status, rcon, cmd, score, inven
+  std::function<bool(const std::string&)> word_first;  // `pause` over a played demo (below)
+  sn::add_window_words(console, con_view, listen, remote, next_map,
+                       &word_first);  // map, sv, chat ...
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
+  word_first = [&](const std::string& l) { return cl::playback_pause_word(playback, bench, l); };
   cl::add_playback_commands(console, playback, bench);
   slm::Watch live_map;  // a match from above on TV and in demos (demo_map, livemap/watch.hpp)
   slm::add_live_map_cvars(console.cvars(), live_map.settings);
@@ -383,6 +386,7 @@ int run_main(int argc, char** argv) {
                                   .noskins = &picture.stock_figures,
                                   .items_still = &picture.items_still,
                                   .model_shadows = &picture.model_shadows,
+                                  .flash_blend = &picture.flash_blend,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,
                                   .stuff_level = &remote.stuff.level,
@@ -1176,7 +1180,7 @@ int run_main(int argc, char** argv) {
         mi.back = input.tapped(Key::escape);
         mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
         mi.refresh = input.tapped(Key::r) || input.tapped(Key::f5);
-        mi.letter = input.tapped_letter("efmp");  // the server browser's filters
+        mi.letter = input.tapped_letter("efmnpy");  // the browser's filters, the quit box's Y and N
         if (mouse.pointer()) {  // a held pointer is frozen: the menu then reads only the keys
           mi.pointer_x = input.pointer_x * px_per_unit;
           mi.pointer_y = input.pointer_y * px_per_unit;
@@ -1493,6 +1497,8 @@ int run_main(int argc, char** argv) {
       std::vector<std::string> lines;
       joined = sn::remote_step(remote, wall, lines);
       for (const std::string& line : lines) tell(line, t);
+      // What a Quake II server stuffed runs as if typed (cl_ignore_stufftext filtered it).
+      for (const std::string& line : std::exchange(remote.stuffed_run, {})) console.execute(line);
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined

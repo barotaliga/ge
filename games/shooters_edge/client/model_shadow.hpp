@@ -1,7 +1,9 @@
-// THE MODELS' GROUND SHADOWS (Quake II's `gl_shadows`; any classic game may bind its own switch to
-// the same mode): each animated model's dark copy squashed flat onto the floor under it, half see
-// through, leaning along the way the model faces. The window draws it as render/morph.hpp's flat
-// shadow (`MorphDraw::flat`); this file holds the rule alone, with no GPU.
+// THE MODELS' GROUND SHADOWS (Quake II's `gl_shadows`, Quake's and QuakeWorld's `r_shadows`): each
+// animated model's dark copy squashed flat onto the floor under it, half see through. Quake II's
+// leans along the way the model faces; Quake's (`fixed_light`) all lean the same way, as if lit
+// from the map's +x at 45 degrees, whichever way the model faces, and lie on any floor however
+// steep. The window draws it as render/morph.hpp's flat shadow (`MorphDraw::flat`); this file holds
+// the rule alone, with no GPU.
 //
 // | Mode | What is drawn |
 // | --- | --- |
@@ -16,7 +18,7 @@
 //
 // ge:summary The models' ground shadows: the mode, the floor, the fade with height, the lean
 // ge:keywords shadow gl_shadows ground-shadows blob-shadow flat-shadow model-shadow no-shadow
-// ge:keywords rf_noshadow shadow_of shadow-fade shadow-lean
+// ge:keywords rf_noshadow shadow_of shadow-fade shadow-lean r_shadows fixed-light
 // ge:skill render shooter
 // ge:test tests/shooters_edge_model_shadow_test.cpp
 #pragma once
@@ -28,6 +30,9 @@ inline constexpr float kShadowLean = 0.7f;     // across the floor for each unit
 inline constexpr float kShadowSteepUp = 0.5f;  // a floor's upward share under which none is cast
 inline constexpr float kShadowFadeRadii = 4;   // mode 2: gone this many radii above the floor
 inline constexpr float kShadowLiftUnits = 1;   // the shadow above its floor
+// Quake's fixed light: from the map's +x at 45 degrees, so every point slides toward -x by its
+// height times the cosine of 45 degrees.
+inline constexpr float kShadowFixedLean = 0.70710678f;
 
 struct ShadowIn {
   int mode = 0;              // 0, 1, 2 (the table above)
@@ -39,6 +44,7 @@ struct ShadowIn {
   float height_units = 0;    // its origin above the floor
   float radius_units = 0;    // its model's radius
   float yaw_deg = 0;         // the way it faces, about the map's up
+  bool fixed_light = false;  // Quake's rule: the lean toward -x whatever the yaw, any floor
 };
 
 struct Shadow {
