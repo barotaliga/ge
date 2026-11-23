@@ -71,6 +71,12 @@ std::string track_file(int track);
 // when it is not there (the game was taken in without its music, or the track is not on the
 // disc).
 std::string track_path(const std::string& game_dir, int track);
+// The kept file a track's NAME asks for (`music play <name>`, a server naming its level's music by
+// text): a path under `<game_dir>/music` (`\` read as `/`), its extension optional (.flac, .opus,
+// .ogg, .mp3 or .wav, dropped), matched without case against every file below that folder that the
+// music player decodes (FLAC); among files of one name the first in an A-to-Z walk wins. "" when
+// none matches. Files whose names start with a dot are skipped.
+std::string music_file(const std::string& game_dir, std::string_view name);
 // The track a level plays: its first entity's (the world's) `sounds` key, 0 when it names none.
 int level_track(std::string_view entities);
 // Quake II's mission packs' disc tracks as the digital release numbers them (`ogg_remap_tracks`):

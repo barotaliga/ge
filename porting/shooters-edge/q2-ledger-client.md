@@ -12,30 +12,30 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | missing | not-taken | rows |
 | --- | --- | --- | --- | --- |
-| Client console commands | 132 | 7 | 17 | 156 |
-| Client settings (cvars) | 225 | 16 | 109 | 350 |
+| Client console commands | 133 | 6 | 17 | 156 |
+| Client settings (cvars) | 229 | 15 | 106 | 350 |
 | Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
-| Menu pages and rows | 139 | 10 | 13 | 162 |
+| Menu pages and rows | 142 | 9 | 11 | 162 |
 | Server messages the client parses (svc) | 23 | 3 | 1 | 27 |
 | Temporary entities (svc_temp_entity) | 15 | 24 | 26 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 1 | 0 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 1 | 0 | 33 |
 | Entity effect bits (EF_) | 32 | 0 | 1 | 33 |
 | Entity render bits (RF_) and view bits (RDF_) | 21 | 6 | 5 | 32 |
-| Configstrings | 8 | 1 | 7 | 16 |
+| Configstrings | 9 | 1 | 6 | 16 |
 | The layout language (status bar and layouts) | 27 | 0 | 0 | 27 |
 | HUD and screen elements | 18 | 0 | 11 | 29 |
-| Messages printed to the player | 130 | 2 | 15 | 147 |
-| Demo playback and recording features | 13 | 1 | 9 | 23 |
+| Messages printed to the player | 130 | 0 | 17 | 147 |
+| Demo playback and recording features | 13 | 0 | 10 | 23 |
 | Keys: the fixed keys and the default bindings | 9 | 1 | 1 | 11 |
-| Sound and music | 10 | 0 | 3 | 13 |
+| Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 14 | 2 | 4 | 20 |
 | Connection, network, downloads and the rest | 11 | 4 | 2 | 17 |
-| **all** | 905 | 0 | 74 | 232 | 1211 |
+| **all** | 916 | 73 | 222 | 1211 |
 
 ## Client console commands
 
-done 132, missing 7, not-taken 17
+done 133, missing 6, not-taken 17
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -97,7 +97,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.stopsound | `stopsound` | stops every sound playing | done | `games/shooters_edge/client/menu_sound.cpp`: every sampled voice stopped, the music bus kept (`engine/audio/synth.cpp` `sample_stop_all`) |
 | cmd.soundlist | `soundlist` | lists loaded sounds | done | each sound read with its length, rate and loop, the ones not found, then the count and memory (`DemoSounds::list_lines`, `games/shooters_edge/client/demo_sound.cpp`) |
 | cmd.soundinfo | `soundinfo` | prints the sound device's state | done | `games/shooters_edge/client/menu_sound.cpp` (`add_sound_status_commands`): the device's driver, the rate and format, the sounds playing and cut short |
-| cmd.ogg | `ogg info/play/stop/next/pause` | the music player: `info` describes the playing stream's format (or "Playback stopped."), `play <track> [soft]` plays a track number or a file under `music/`, `stop`, `next` (the next shuffled track, or restarts the automatic track), `pause` or `toggle` pauses and resumes | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `engine/audio/music_console.cpp` (`music`, `ogg` its Quake II spelling in `client/cvar_layers.cpp`): info names the track (not the decoder's dump), play takes a track number (a file name under `music/` is not looked up), soft lets the old fade, stop, next, pause and toggle |
+| cmd.ogg | `ogg info/play/stop/next/pause` | the music player: `info` describes the playing stream's format (or "Playback stopped."), `play <track> [soft]` plays a track number or a file under `music/`, `stop`, `next` (the next shuffled track, or restarts the automatic track), `pause` or `toggle` pauses and resumes | done | `engine/audio/music_console.cpp` (`music`, `ogg` its Quake II spelling in `client/cvar_layers.cpp`): info names the track ("Playback stopped." when none; ours, not the decoder's dump), play takes a track number or a name under `music/` (its extension and case ignored, subfolders too: `classic/content/soundtrack.hpp`'s `music_file`), soft lets the old fade, stop, next, pause and toggle (M18v, sound slice) |
 | cmd.wave | `wave <n>` | forwarded: plays a gesture | done | forwarded to the rules (`games/shooters_edge/client/main.cpp` unknown-word hook; `server/q2_commands.cpp`) |
 | cmd.inven | `inven` | forwarded: opens/closes the inventory | done | `games/shooters_edge/net/game_commands.hpp` |
 | cmd.kill | `kill` | forwarded: suicide | done | forwarded (`server/q2_server.cpp`) |
@@ -200,7 +200,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 225, missing 16, not-taken 109
+done 229, missing 15, not-taken 106
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -269,7 +269,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.cl_gun_x | `cl_gun_x` | moves the gun right, units (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_gun_y | `cl_gun_y` | moves the gun forward (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_gun_z | `cl_gun_z` | moves the gun up (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
-| cvar.cl_footsteps | `cl_footsteps` | 0 no footsteps (and tells the server, on the modern protocol), 1 each surface's own step set when one is found, 2 always the default step sound (default 1) | not-taken | Tail (decided 2026-11-23), cosmetic: `plugins/classic/q2_fx_switches.hpp` (`footsteps`), heard in `games/shooters_edge/client/demo_sound.cpp`: 0 starts no `player/step` sound, joined, hosted and in demos; 2 plays the same four steps as 1 (no surface step sets), and the server is not told |
+| cvar.cl_footsteps | `cl_footsteps` | 0 no footsteps (and tells the server, on the modern protocol), 1 each surface's own step set when one is found, 2 always the default step sound (default 1) | done | `plugins/classic/q2_footsteps.hpp` (the level's `.mat` materials and step sets, the surface under the stepper), heard in `games/shooters_edge/client/demo_sound.cpp` (`step_sound`), joined, hosted and in demos: 0 starts no `player/step` sound and, on protocol 36, tells the server (client setting 11, at each `begin` and when it changes: `net/q2_client.cpp`'s `q2_client_settings`); 1 each surface's own set; 2 always the default set (M18v, sound slice) |
 | cvar.cl_noskins | `cl_noskins` | 1 every player the stock male, 2 female figures the stock female (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_predict | `cl_predict` | predict the player's own move (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.cl_kickangles | `cl_kickangles` | 0 drops the view kick the server sends; cheat-protected (default 1) | done | `games/shooters_edge/client/q2_view.cpp` (M18k4 round 34) |
@@ -395,7 +395,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.ui_open | `ui_open` | 1 opens the main menu at start-up (default 0) | not-taken | Shooter's Edge's shell opens its own title menu at start-up whatever game is loaded; Quake II's 0, the bare console, would leave a new player at a prompt; the console is one key away |
 | cvar.adr | `adr0` .. `adr15` | the address book: 16 saved server addresses (saved) | done | `adr0` .. `adr15` (`games/shooters_edge/client/cvar_layers.cpp`), archived, the address book's rows (`menu/q2_pages.cpp`) |
 | cvar.s_khz | `s_khz` | the mixing rate in kHz (default 44, saved) | not-taken | ours mixes at 48 kHz always and the platform converts to whatever the device runs at (`engine/audio/voice.hpp`'s `kRate`), so a sound's bits never depend on the device |
-| cvar.s_mixahead | `s_mixahead` | seconds the mixer runs ahead (default 0.1, saved) | not-taken | ours is pulled by the device's own thread a chunk at a time (`platform/audio.hpp`), so there is no lead to set |
+| cvar.s_mixahead | `s_mixahead` | seconds the mixer runs ahead (default 0.1, saved) | done | Quake II's own in `client/cvar_layers.cpp`, saved, for its sound page and configs; nothing reads it, as its OpenAL path never does: the device pulls the sound a chunk at a time (`platform/audio.hpp`) (M18v, sound slice) |
 | cvar.s_testsound | `s_testsound` | debug: a test tone (default 0) | not-taken | `client-gaps.md`: developer tools left out |
 | cvar.s_swapstereo | `s_swapstereo` | swap left and right (default 0) | done | `client/room_ear.cpp` in the classic layer (Quake's too), `engine/audio/synth.cpp` swaps (M18k4 round 35) |
 | cvar.s_driver | `s_driver` | the sound driver | not-taken | the platform picks the system's sound driver (SDL's `SDL_AUDIO_DRIVER` names another); `soundinfo` says which |
@@ -412,7 +412,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.ogg_menu_track | `ogg_menu_track` | the track played while disconnected, 0 none (default 0) | done | Quake II's own, bound to the music's `menu_track`, started on the title by `play_menu_music` (`engine/audio/music_console.hpp`, `games/shooters_edge/client/main.cpp`) |
 | cvar.ogg_remap_tracks | `ogg_remap_tracks` | remap the mission packs' track numbers to the digital release's file names (default 1) | done | `plugins/classic/content/soundtrack.hpp`'s `q2_remap_track` (rogue 2..11 as 12..21, xatrix by its table) in the music's track lookup (`games/shooters_edge/client/take_in.cpp`), bound in `client/q2_session.cpp` |
 | cvar.al_device | `al_device` | the OpenAL output device, empty the default; `?` lists the devices ("Available devices:") (default empty) | done | its spelling of the engine's `s_device` (`platform/window_cvars.hpp`, every game): "" the system's default, a name moves the sound there at once (`platform/audio.hpp`'s `move_audio`), `?` lists "Available devices:" and puts the setting back, a name not there is said once and the sound stays; `s_devices` lists them too |
-| cvar.al_merge_looping | `al_merge_looping` | OpenAL: merge copies of one looped sound so they play as loud as on the software mixer; 0 off, 1 auto (only in plain stereo), 2 on (default 1) | not-taken | an OpenAL mixer's fix; ours has one mixer, which plays copies of a looped sound as the software mixer does |
+| cvar.al_merge_looping | `al_merge_looping` | OpenAL: merge copies of one looped sound so they play as loud as on the software mixer; 0 off, 1 auto (only in plain stereo), 2 on (default 1) | done | `plugins/classic/q2_loop_merge.hpp`, heard in `client/demo_sound.cpp` (`merged_loops`): the entities carrying one looped sound heard as one voice, each ear's shares summed and held to 1, the gain their total held to 1 and the pan their balance; 0 each its own voice, 1 merged while the output is plain stereo (not under `s_hrtf` 2's two ears), 2 always (M18v, sound slice) |
 | cvar.al_hrtf | `al_hrtf` | OpenAL head-related sound (default 0) | done | Quake II's spelling of s_hrtf (`client/room_ear.hpp`), not kept: 0 (the default) off; 1 as the sound device chooses, off, as it names no headphones; 2 on: each sound heard by two ears (`audio/synth.hpp`'s Synth::binaural), the far ear about 0.66 ms later, softer and duller through the head's shadow; the player's own sounds and the music sit in the middle and are heard as before |
 | cvar.gl_screenshot_format | `gl_screenshot_format` | jpg, png or tga (default jpg) | done | a synonym of ours `scr_format` (`games/shooters_edge/client/cvar_layers.cpp`), the same default |
 | cvar.gl_screenshot_async | `gl_screenshot_async` | write screenshots off the main thread (default 1) | not-taken | ours always packs and writes every format off the game's thread (`engine/capture/screenshot.hpp`), its 2 |
@@ -598,7 +598,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 139, missing 10, not-taken 13
+done 142, missing 9, not-taken 11
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
@@ -713,15 +713,15 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.vid.lmsat | video: lightmap saturation | `gl_coloredlightmaps` | done | `games/shooters_edge/menu/q2_pages.cpp`: the row is live, `gl_coloredlightmaps` registered |
 | menu.vid.lmbright | video: lightmap brightness | `gl_brightness` 0 to 0.3 | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.vid.backend | video: rendering backend | legacy or shaders | not-taken | `client-gaps.md`: the window's renderer is its own |
-| menu.snd.engine | sound: sound engine | no sound, software, OpenAL | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.snd.latency | sound: sound latency | `s_mixahead` 0.05 to 0.2 | missing | Missing, rank 2 (a Quake II name for a setting ours has; the settings lift): `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.snd.volume | sound: sound volume | `s_volume` 0 to 1 | not-taken | Our design: ours SOUND VOLUME on OPTIONS |
-| menu.snd.music | sound: music volume | `ogg_volume` | not-taken | Our design: ours MUSIC VOLUME (`bgmvolume`) on OPTIONS |
-| menu.snd.enable | sound: enable music | `ogg_enable` | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.snd.shuffle | sound: shuffle tracks | `ogg_shuffle` | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.snd.underwater | sound: underwater effect | `s_underwater` | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.snd.ambient | sound: ambient sounds | no, yes, only player's own (writes 2) | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.snd.chatbeep | sound: chat beep | disabled, default, alternative | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
+| menu.snd.engine | sound: sound engine | no sound, software, OpenAL | done | `games/shooters_edge/menu/q2_pages.cpp` over the engine's `s_enable` (`platform/window_cvars.hpp`): no sound, software, OpenAL (2 the same one mixer) |
+| menu.snd.latency | sound: sound latency | `s_mixahead` 0.05 to 0.2 | done | `games/shooters_edge/menu/q2_pages.cpp`: `s_mixahead` 0.05 to 0.2, the setting kept (cvar.s_mixahead) |
+| menu.snd.volume | sound: sound volume | `s_volume` 0 to 1 | done | `games/shooters_edge/menu/q2_pages.cpp`: `s_volume`, Quake II's spelling of `volume` |
+| menu.snd.music | sound: music volume | `ogg_volume` | done | `games/shooters_edge/menu/q2_pages.cpp`: `ogg_volume`, Quake II's spelling of `bgmvolume` |
+| menu.snd.enable | sound: enable music | `ogg_enable` | done | `games/shooters_edge/menu/q2_pages.cpp`: `ogg_enable` (off pauses the music, on resumes it) |
+| menu.snd.shuffle | sound: shuffle tracks | `ogg_shuffle` | done | `games/shooters_edge/menu/q2_pages.cpp`: `ogg_shuffle` |
+| menu.snd.underwater | sound: underwater effect | `s_underwater` | done | `games/shooters_edge/menu/q2_pages.cpp`: `s_underwater` (`client/room_ear.hpp`) |
+| menu.snd.ambient | sound: ambient sounds | no, yes, only player's own (writes 2) | done | `games/shooters_edge/menu/q2_pages.cpp`: `s_ambient` no, yes, "only player's own" (writing 2, as its page does) |
+| menu.snd.chatbeep | sound: chat beep | disabled, default, alternative | done | `games/shooters_edge/menu/q2_pages.cpp`: `cl_chat_sound` disabled, default, alternative |
 | menu.fx.dlight | effects: dynamic lighting | no, yes, only switchable | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.fx.cel | effects: entity cel-shading | no, 1x, 2x, 3x | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.fx.glow | effects: entity glowing | `cl_noglow` inverted | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
@@ -1033,14 +1033,14 @@ Bits of an entity's render field, and of the player state's view flags.
 
 ## Configstrings
 
-done 8, missing 1, not-taken 7
+done 9, missing 1, not-taken 6
 
 The indexed strings a server sets (stock protocol 34 indices; the extended protocols move every range further on). Ours keeps them in `games/shooters_edge/client/demo_q2.cpp` (`set_string`) for a joined server and a recording; both layouts are read.
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | cs.name | `CS_NAME` (0) | the level's title: printed with the server data, shown on the loading screen | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: ours takes the title from the server data; index 0 not kept |
-| cs.cdtrack | `CS_CDTRACK` (1) | the music: empty or 0 stops, N plays `music/trackNN` (or `NN`), the mission packs' numbers remapped by `ogg_remap_tracks`, text plays `music/<text>` | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: client/demo_q2.cpp `q2_music_track`: empty or 0 stops, a number plays that track (`client/take_in.cpp` `demo_music`, a joined server or a recording); a file's name and the mission packs' remap of the server's number missing |
+| cs.cdtrack | `CS_CDTRACK` (1) | the music: empty or 0 stops, N plays `music/trackNN` (or `NN`), the mission packs' numbers remapped by `ogg_remap_tracks`, text plays `music/<text>` | done | client/demo_q2.cpp: empty or 0 stops, a number plays that track (remapped for the mission packs by `ogg_remap_tracks`), text plays `music/<text>` (`DemoState::cdname`, `client/take_in.cpp` `demo_music` over `play_level_named`); the same name without case plays on (M18v, sound slice) |
 | cs.sky | `CS_SKY` (2) | the sky box's name; changing it changes the sky | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: ours reads the sky from the map's world entity (`client/demo_content.cpp`); index 2 not kept |
 | cs.skyaxis | `CS_SKYAXIS` (3) | the sky's turning axis | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: the map's own `skyaxis` turns the sky (`client/world_draw.cpp`); a server's differing configstring is not kept |
 | cs.skyrotate | `CS_SKYROTATE` (4) | the sky's turning speed, degrees a second | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: the map's own `skyrotate` turns the sky (`client/world_draw.cpp`); a server's differing configstring is not kept |
@@ -1132,7 +1132,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 130, missing 2, not-taken 15
+done 130, missing 0, not-taken 17
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; since the regrade of 2026-11-23 a line with the same meaning in our words is done. Internal protocol faults are one row at the end.
 
@@ -1288,7 +1288,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 
 ## Demo playback and recording features
 
-done 13, missing 1, not-taken 9
+done 13, missing 0, not-taken 10
 
 What a player can do with client recordings (`.dm2`) and multi-view recordings (`.mvd2`) in the client.
 
@@ -1340,7 +1340,7 @@ Keys the client handles itself (a player cannot unbind them) and where the defau
 
 ## Sound and music
 
-done 10, missing 0, not-taken 3
+done 13, missing 0, not-taken 0
 
 How the client makes sound, beyond the settings themselves.
 
@@ -1349,15 +1349,15 @@ How the client makes sound, beyond the settings themselves.
 | snd.spatial | positioned sounds | each sound placed by its entity (moving with it) or a point, by volume and attenuation, on 8 channels a entity; the listener at the view | done | `games/shooters_edge/client/demo_sound.cpp`, `client/demo_heard.cpp` |
 | snd.loops | entity loop sounds | an entity's sound field loops while it is in the frame, merged by sound | done | landed; `s_ambient` 0 to 3 chooses which loops are heard (`client/demo_sound.cpp`, `plugins/classic/q2_fx_switches.hpp`) |
 | snd.underwater | under water | every sound high-shelf filtered at 5 kHz (`s_underwater`) | done | the eye in a liquid, `engine/audio/synth.cpp` `muffle` (M18k4 round 34) |
-| snd.footsteps | footsteps | a step set by the surface under the entity (`.mat` files, up to 15 steps), never the same twice in a row | not-taken | Tail (decided 2026-11-23), cosmetic: ours the four classic steps (C34) |
+| snd.footsteps | footsteps | a step set by the surface under the entity (`.mat` files, up to 15 steps), never the same twice in a row | done | `plugins/classic/q2_footsteps.hpp`: `textures/<name>.mat` names a material (15 characters, letters, digits, `_`, `-`; else "Bad material"), `player/steps/<material>N.wav` up to 15, the ladder's own set, the default's fallback; the surface found by a flat box swept down (9 under the box, 75 with none), shallow water over its floor; never the step heard last (M18v, sound slice) |
 | snd.landing | landings | `player/land1.wav` on a short fall | done | `games/shooters_edge/client/demo_q2.cpp` |
 | snd.chat | the chat beep | `misc/talk.wav` (or `talk1.wav`) on a chat line | done | `cl_chat_sound` (M18k4 round 32) |
-| snd.backends | the sound back-ends | the software mixer (any rate, `s_khz`) or OpenAL (HRTF) | not-taken | Our design: ours one mixer at 48 kHz (`engine/audio`) (C32) |
+| snd.backends | the sound back-ends | the software mixer (any rate, `s_khz`) or OpenAL (HRTF) | done | one mixer (`engine/audio`, 48 kHz) that does what the OpenAL path adds: the output device (`al_device`), the two ears (`al_hrtf`), the muffle under water, the looped sounds merged (`al_merge_looping`); `s_khz` not taken (cvar.s_khz) |
 | snd.focus | sound and the window | `s_auto_focus` mutes when minimised or unfocused | done | `s_auto_focus` (`engine/platform/window_cvars.hpp` `heard_volume`), every game |
 | snd.figure | a figure's own sounds | a `*name` sound plays the figure's own `players/<model>/name`, else the male one | done | `client/demo_sound.cpp` `DemoSounds::own`: a `*name` plays `players/<model>/name`, else the male one |
-| snd.music.track | the level's music | configstring 1: empty or 0 stops, N `music/trackNN` or `music/NN` (remapped for the mission packs), text `music/<text>`, tried as `.flac`, `.opus`, `.ogg`, `.mp3`, `.wav`, loose files in the search path and the install and home folders; repeats | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: ours plays the world's `sounds` track in its own game (`engine/audio/music_console.cpp`) and the track a joined server or a recording names (`client/take_in.cpp` `demo_music`); a track named by its file missing |
+| snd.music.track | the level's music | configstring 1: empty or 0 stops, N `music/trackNN` or `music/NN` (remapped for the mission packs), text `music/<text>`, tried as `.flac`, `.opus`, `.ogg`, `.mp3`, `.wav`, loose files in the search path and the install and home folders; repeats | done | ours plays the world's `sounds` track in its own game (`engine/audio/music_console.cpp`) and the track a joined server or a recording names (`client/take_in.cpp` `demo_music`), a number or a file's name (`play_level_named` over `classic/content/soundtrack.hpp`'s `music_file`: under the game's `music/` folder, any case, extension optional; FLAC, the one format the music is kept in) |
 | snd.music.shuffle | shuffle | `ogg_shuffle` plays every file in `music/` shuffled | done | `ogg_shuffle` bound to the music player's shuffle (`client/cvar_layers.cpp`, `engine/audio/music_console.hpp`): every kept track in a random order |
-| snd.music.stop | when music stops | at a map change, the loading plaque and a cinematic; while disconnected the `ogg_menu_track` plays (none by default) | done | Checked 2026-11-23: the music stops by `music stop` / `ogg stop` (`engine/audio/music_console.cpp`). |
+| snd.music.stop | when music stops | at a map change, the loading plaque and a cinematic; while disconnected the `ogg_menu_track` plays (none by default) | done | `engine/audio/music_console.cpp`: a level's track changes only when its name does; a movie stops the music and forgets it, the next level's track starting afresh; `ogg_enable` 0 pauses it where it is and 1 resumes it (`off_pauses`); while disconnected `ogg_menu_track` plays (0 none) (M18v, sound slice) |
 | snd.cinematic | cinematic sound | a cinematic's own audio track | done | `games/shooters_edge/client/cinematic.cpp` |
 
 ## Picture and video

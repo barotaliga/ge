@@ -390,7 +390,10 @@ stop`, `ogg next`. [R] Ours: the first game's music console (`bgmvolume`, `cd pl
 resume|info`), the track from the world's `sounds` key when the window's own game loads a level and
 the track the program asks for at the intermission, played from the kept `music/trackNN.flac`. A
 joined Quake II server's or a recording's configstring 1 was not found to reach it, nor the text
-names, the shuffle, the `ogg` command or Quake II's spellings. [R ours]
+names, the shuffle, the `ogg` command or Quake II's spellings. [R ours] **Done (M18v, sound slice; facts in
+`q2-sound-facts.md`)**: a joined server's or a recording's configstring 1 as a number or a name
+(`play_level_named`, `classic/content/soundtrack.hpp`'s `music_file`), `ogg play <name>`, a movie
+stopping and forgetting the music, `ogg_enable` 0 pausing it where it is.
 
 **C30. Rank 2, the user info while joined.** The original sends its user info (`name`, `skin`,
 `rate`, `msg`, `hand`, `fov`, `gender`, `spectator`, `password`, `version`, `uf`, and any setting
@@ -420,7 +423,9 @@ sounds at all, also none while paused; 1 all; 2 only the loops of entities that 
 the player's own), `s_auto_focus` 0 (0 sound always plays; 1 not while the window is minimized; 2
 only while it has the focus), `al_device`, `al_hrtf` (OpenAL); commands `play <sound>` (a local
 sound, the extension optional), `snd_restart`, `soundinfo`. [R] Ours: `s_volume` and `volume` are
-had; the rest not found. [R ours]
+had; the rest not found. [R ours] **Done (M18k4 rounds 34 and 35, M18v sound slice)**: every one of
+them but `s_khz` (one mixer at 48 kHz); `s_mixahead` kept for configs and the sound page, read by
+nothing, as the OpenAL path never reads it; `al_merge_looping` merges copies of one looped sound.
 
 **C33. Rank 3, the client's own commands.** Not found in ours: `writeconfig <file> [-a -b -c -m]`
 (aliases, binds, saved settings, changed settings), `vid_restart`, `r_reload`, `in_restart`,
@@ -442,7 +447,10 @@ most 9), the default set `sound/player/step1.wav` upwards. A step is picked at r
 steps (extended protocol) play at half volume with idle falloff; ladder steps use the ladder set.
 A short fall plays one of `player/land1.wav` to `land8.wav` at random (`land1` only with
 `cl_footsteps 2`); the stock packs hold only `land1`, so 7 times in 8 nothing is heard on them. [R; the last clause D] Ours: one of the four classic steps picked by the frame and the entity; materials
-and the landing set not found. Rank 3: the stock packs carry no `.mat` files. [R ours]
+and the landing set not found. Rank 3: the stock packs carry no `.mat` files. [R ours] **Done (M18v, sound slice)**: footsteps by
+surface as `q2-sound-facts.md` § 6 has them (up to 15 a set, the sweep 9 under the box or 75 with
+none, water over its floor, never the same twice running; `cl_footsteps` 0 told to a protocol 36
+server); the landing set is the fork's, not upstream's (one landing sound), so not taken.
 
 **C35. Rank 3, input.** `in_grab` 1 (0 never take the mouse in a window, 1 in a game, 2 also let it go
 while a demo plays or while chasing), `in_enable` 1, `m_side` 1 (the sideways mouse move's scale
