@@ -725,6 +725,7 @@ TEST(a_downloaded_file_is_told_the_archive_it_came_out_of) {
     cc.seed = i + 1;
     if (i == 2) cc.ask[cn::ExtFamily::ge] &= ~cn::kGeDownloadOrigin;
     const std::string dir = (root / std::to_string(i) / "id1").string();
+    // NOLINTNEXTLINE(bugprone-exception-escape)
     cc.keep_file = [&, i, dir](const std::string&, const std::string& path,
                                const std::vector<uint8_t>& bytes,
                                const ge::vfs::ArchiveOrigin* origin) {
@@ -837,7 +838,7 @@ TEST(a_chunk_out_of_band_is_taken_in_the_stock_layout_and_never_printed) {
   c[0].dl.active = c[0].dl.chunked = true;
   c[0].dl.number = 5;
   c[0].dl.size = 3 * 1024;
-  c[0].dl.bytes.assign(3 * 1024, 0);
+  c[0].dl.bytes.assign(size_t{3} * 1024, 0);
   c[0].dl.have.assign(3, false);
   c[0].dl.asked.assign(3, c[0].now + 100);  // asked for already: the tick asks for nothing more
   const auto send_chunk = [&](int32_t number, int32_t chunk, uint8_t fill) {
