@@ -232,11 +232,11 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
       point(e.origin);
       point(end);
       break;
-    case TeBody::lightning:
-      o.i16(std::clamp(e.ent, 0, kQ2Entities - 1));
+    case TeBody::lightning:  // the source (the tesla), the target, then from and to
       o.i16(std::clamp(e.level, 0, kQ2Entities - 1));
-      point(end);
+      o.i16(std::clamp(e.ent, 0, kQ2Entities - 1));
       point(e.origin);
+      point(end);
       break;
   }
   return true;
