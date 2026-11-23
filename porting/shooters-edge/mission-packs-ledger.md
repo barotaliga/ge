@@ -47,10 +47,10 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 8 | 64 | 1 (0 / 1 / 0) | 1 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 10 | 47 | 3 (0 / 2 / 1) | 1 |
 | The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
-| Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **274** | **36** | **124** | **112 (56 / 48 / 8)** | **2** |
+| Ground Zero (Quake II, folder `rogue`) | 82 | 4 | 7 | 71 (36 / 31 / 4) | 0 |
+| **All** | **274** | **37** | **124** | **111 (56 / 48 / 7)** | **2** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **112 missing, 124 to verify, of 274 rows** (M63a taking the packs in: 10 fewer; M63b the Quake packs' status bars: 6 fewer; Scourge of Armagon's remix roles: 1 fewer; the end screens not taken: 2 fewer).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **111 missing, 124 to verify, of 274 rows** (M63a taking the packs in: 10 fewer; M63b the Quake packs' status bars: 6 fewer; Scourge of Armagon's and Ground Zero's remix roles: 2 fewer; the end screens not taken: 2 fewer).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
@@ -430,7 +430,7 @@ count: done 3, verify 7, missing 72 (36 / 31 / 5), not-taken 0
 | gz.coop | co-op through the units (`info_player_coop_lava`) | missing | 2 |  |
 | gz.save | saves of the pack's campaign | missing | 2 | server/q2_save.hpp |
 | gz.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
-| gz.remix | the pack's weapons and items as roles for remix | missing | 3 |  |
+| gz.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the ETF rifle as rapid, the plasma beam (both names) as beam, the prox launcher as lobber, the disruptor as launcher, their ammunition beside them, double damage as damage; the chainfist, the tesla, the A-M bomb, the spheres, the decoy and the goggles drop (tests/shooters_edge_remix_test.cpp) |
 
 ### What the maps place that the base game's maps never do
 

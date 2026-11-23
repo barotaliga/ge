@@ -131,6 +131,20 @@ inline constexpr ItemReading kQ2Reads[] = {
     {"weapon_hyperblaster", 0, ItemRole::energy},
     {"weapon_railgun", 0, ItemRole::beam},
     {"weapon_bfg", 0, ItemRole::blast},
+    // Ground Zero's weapons: the ETF rifle's flechettes are the light rapid-fire weapon, the plasma
+    // beam (by either of its names) the beam, the prox launcher's waiting grenades the lobber, the
+    // disruptor's slow tracking bolt the heavy single shot a rocket launcher is. The chainfist
+    // (a fist), the tesla and the A-M bomb (thrown from the inventory) have no part in another set
+    // and drop, as do the spheres, the decoy and the goggles; double damage is the damage powerup.
+    {"weapon_etf_rifle", 0, ItemRole::rapid},
+    {"weapon_heatbeam", 0, ItemRole::beam},
+    {"weapon_plasmabeam", 0, ItemRole::beam},
+    {"weapon_proxlauncher", 0, ItemRole::lobber},
+    {"weapon_disintegrator", 0, ItemRole::launcher},
+    {"ammo_flechettes", 0, ItemRole::ammo_rapid},
+    {"ammo_prox", 0, ItemRole::ammo_lobber},
+    {"ammo_disruptor", 0, ItemRole::ammo_explosive},
+    {"item_double", 0, ItemRole::damage},
     {"ammo_shells", 0, ItemRole::ammo_scatter},
     {"ammo_bullets", 0, ItemRole::ammo_rapid},
     {"ammo_grenades", 0, ItemRole::ammo_lobber},

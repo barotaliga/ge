@@ -100,6 +100,18 @@ TEST(the_classic_games_weapons_take_q2_by_role) {
   CHECK(to_classic("item_quad") == "item_artifact_super_damage");
   CHECK(to_classic("item_armor_shard").empty());  // a row that drops it
   CHECK(to_classic("item_no_such") == "none");
+  // Ground Zero's, read by Quake II's table (its library runs on Quake II's).
+  CHECK(to_classic("weapon_etf_rifle") == "weapon_nailgun");
+  CHECK(to_classic("weapon_heatbeam") == "weapon_lightning");
+  CHECK(to_classic("weapon_plasmabeam") == "weapon_lightning");
+  CHECK(to_classic("weapon_proxlauncher") == "weapon_grenadelauncher");
+  CHECK(to_classic("weapon_disintegrator") == "weapon_rocketlauncher");
+  CHECK(to_classic("ammo_flechettes") == "item_spikes");
+  CHECK(to_classic("ammo_prox") == "item_rockets");
+  CHECK(to_classic("item_double") == "item_artifact_super_damage");
+  CHECK(to_classic("weapon_chainfist") == "none");    // a fist: dropped
+  CHECK(to_classic("ammo_tesla") == "none");          // thrown: dropped
+  CHECK(to_classic("item_sphere_hunter") == "none");  // no part in another set
 }
 
 TEST(a_map_rewritten_keeps_what_is_not_an_item_and_the_mode_bits) {
