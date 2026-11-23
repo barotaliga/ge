@@ -403,7 +403,10 @@ int run_main(int argc, char** argv) {
       cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
-  const auto save_settings = [&console, &series] { cl::save_settings(console, series); };
+  const auto save_settings = [&console, &series, &con_view] {
+    cl::save_settings(console, series);
+    con_view.save_history();  // the typed lines, beside the config
+  };
   const auto outside = [&](const std::function<void()>& run) {
     cl::without_game_cvars(console, game_cvars, started_game, bindings, run);
   };
@@ -561,6 +564,7 @@ int run_main(int argc, char** argv) {
                                       .sheet = &remote.sheet.sheet};  // SERVER SETTINGS
   cl::add_adapter_commands(console, adapter, files, args.basedir);
   cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
+  con_view.load_history();                         // the lines typed in the last run
   // The map's place names, read as it starts and made in the game (client/place_names.hpp).
   cl::PlaceNames places;
   places.game_dir = std::filesystem::path(args.basedir) / args.game;
@@ -594,8 +598,7 @@ int run_main(int argc, char** argv) {
     return cl::check_demo_line(p, adapter, f, why);
   });
   menu_host.maps.emplace_back("arena");
-  menu_host.table = &adapter.menu(adapter);  // the game's own pages
-  game_menu.set_table(*menu_host.table);
+  menu_host.table = &game_menu.set_table(adapter.menu(adapter), &files.vfs);  // the game's pages
   // ce_pictures: the menu's and the status bar's pictures enhanced from the packs' cache; read
   // again when it flips and when an enhance run ends (client/classic_pictures.hpp). The first read
   // is on a thread, behind the title; the menu opens once they are in.
@@ -1034,8 +1037,7 @@ int run_main(int argc, char** argv) {
     cl::start_switch_game(console, game_start, was_game, *adapter.game);
     cl::switch_game_cvars(console, game_cvars, *adapter.game, bindings);
     game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
-    menu_host.table = &adapter.menu(adapter);
-    game_menu.set_table(*menu_host.table);
+    menu_host.table = &game_menu.set_table(adapter.menu(adapter), &files.vfs);
     console.set_search_path(cl::config_dirs(args.basedir, args.game, *content));
     cl::run_game_settings(console, args.basedir, args.game, *content);  // its own meanings
     switch_step("Loading the game's rules...");
@@ -1236,6 +1238,7 @@ int run_main(int argc, char** argv) {
     // menu keeps it and is driven by the keys unless the menu's bit is set.
     if (input.focus_lost) focused = false;
     if (input.focus_gained) focused = true;
+    if (input.focus_gained) cl::team_event(console, "f_focusgained");
     // SHIFT held over a demo playing at its pace takes the mouse for free look (demo_free_look).
     const bool shift_look = bench.active && bench.paced && !remote.active && !con_view.open() &&
                             !game_menu.open() &&
@@ -1633,8 +1636,11 @@ int run_main(int argc, char** argv) {
           : bench.clock < 0 ? ds.time
                             : bench.clock,
           t);
+      const bool was_free = free_look.held;  // SHIFT lets go of the player and takes him back
       cl::free_look_step(free_look, shift_look && mouse.held, held.mouse.dx, held.mouse.dy,
                          controls);
+      if (free_look.held != was_free)
+        cl::spectate_event(console, free_look.held ? "f_freeflyspectate" : "f_trackspectate");
       cl::free_look_apply(free_look, view);
       const double own_behind =  // cl_thirdperson: the player's own view from behind him
           demo_eyes.behind > 0

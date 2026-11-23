@@ -885,6 +885,26 @@ void team_event(con::Console& c, std::string_view alias) {
   if (on(c, "tp_triggers")) run_alias(c, alias);
 }
 
+void spectate_event(con::Console& c, std::string_view alias) { run_alias(c, alias); }
+
+bool carries_flag(const DemoState& s) {
+  constexpr int kQ1Flags = 16 | 32;                // the red and the blue flag's glow
+  constexpr int kQ2Flags = (1 << 18) | (1 << 19);  // Quake II's two (q2_look.hpp kSqFlag*)
+  constexpr int32_t kKeys = 131072 | 262144;       // the two keys among the items
+  const int self = s.player;
+  if (s.game == "fortress" && (s.stats[kStatItems] & kKeys) != 0) return true;
+  if (s.protocol == 34) {  // Quake II: the player is entity slot + 1
+    const auto n = static_cast<size_t>(self) + 1;
+    return self >= 0 && n < s.entities.size() && (s.entities[n].effects & kQ2Flags) != 0;
+  }
+  if (s.format == DemoFormat::single) {
+    const auto n = static_cast<size_t>(s.view_entity);
+    return n < s.entities.size() && (s.entities[n].effects & kQ1Flags) != 0;
+  }
+  const auto n = static_cast<size_t>(self);
+  return self >= 0 && n < s.players.size() && (s.players[n].effects & kQ1Flags) != 0;
+}
+
 void add_team_chat(con::Console& c, TeamChat& chat) {
   add_team_macros(c, chat);  // $health, $bestweapon, $location and the rest (team_macros.hpp)
   add_item_commands(c, chat.items);
@@ -1056,6 +1076,7 @@ void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std:
     chat.last_weapon = -1;
     chat.died_at.clear();
     chat.died_t = -1e9;
+    chat.flag = false;
     chat.reported.clear();
     chat.took.clear();
     chat.intermission = false;
@@ -1095,6 +1116,12 @@ void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std:
   }
   const bool first = !chat.known;
   const int was_health = chat.last_health;
+  // A flag carried now or in the last frame: the server may drop it in the frame of the death.
+  const bool flag_now = state != nullptr && carries_flag(*state);
+  const bool had_flag = chat.flag || flag_now;
+  const bool watching = state != nullptr && state->player >= 0 && state->player < 32 &&
+                        state->spectator[static_cast<size_t>(state->player)];
+  chat.flag = flag_now;
   const std::string took = first || was_health <= 0 || status.health <= 0
                                ? std::string()
                                : picked_up(chat.status, status);
@@ -1116,7 +1143,8 @@ void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std:
     chat.died_at = here(c, chat);
     chat.died_t = status.t;
     chat.reported = chat.died_at;
-    if (team()) run_alias(c, "f_death");
+    // f_flagdeath in f_death's place when a flag went down with the player (never a spectator's).
+    if (team()) run_alias(c, had_flag && !watching ? "f_flagdeath" : "f_death");
   } else if (was_health <= 0 && status.health > 0) {
     if (team()) run_alias(c, "f_respawn");
   }

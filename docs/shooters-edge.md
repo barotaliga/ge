@@ -100,8 +100,10 @@ fixtures we write (`tests/golden/console_*.txt`):
 - **Built for team chat** (`games/shooters_edge/client/team_chat.hpp`): the percent codes from
   the player's own state, the fun characters as the classic font's glyphs, the `tp_name_*` words
   as plain words by default (a receiving client here draws no colour markup), and the `f_newmap`,
-  `f_spawn`, `f_weaponchange`, `f_death`, `f_respawn`, `f_bonusflash`, `f_demostart`,
-  `f_demoend`, `f_exit` and `f_cfgload` aliases run on their events. The canned `tp_msg*` messages (report, lost, need,
+  `f_spawn`, `f_weaponchange`, `f_death` (`f_flagdeath` with a flag carried), `f_respawn`,
+  `f_bonusflash`, `f_demostart`, `f_demomatchstart`, `f_demoend`, `f_trackspectate`,
+  `f_freeflyspectate`, `f_focusgained`, `f_sbrefreshdone`, `f_exit` and `f_cfgload` aliases run
+  on their events. The canned `tp_msg*` messages (report, lost, need,
   safe, help and the rest) say the player's state behind their short name; a received one shows
   that name in place of the sender's. `echo` fills in the codes too. A pickup, read from the
   state's change, feeds `%i`, `%Y`, `tp_msgtook` and `f_took`.
@@ -564,10 +566,13 @@ your own game the places are drawn too: every model one server frame behind, bet
 states the window saw (the server's 72 or 77 frames a second fall unevenly on 50, 60 or 144
 pictures), and a walking monster, which the program moves a stride at a time, drawn over each
 stride's time rather than jumping. A first sight, a new model, a warp, a move over 128 units and a
-gap over a quarter second are not drawn across. The held weapon's frames flow too: a nailgun's shot
-frame from the last, and a played fire clip back to rest over a frame's time; in a demo or on a
-joined server a classic set's weapon plays the weapon frame the server sends, blended between its
-changes. Your own eye rides the same clock as the models: drawn one server frame behind, between
+gap over a quarter second are not drawn across. The held weapon's frames flow too: each of a nailgun's shot
+frames is turned to from the last over the frame's 0.1 s (the barrels turn every picture instead of
+ten times a second), and a played fire clip goes back to rest over a frame's time; in a demo or on a
+joined server a classic set's weapon (and Quake II's) plays the weapon frame the server sends,
+each change blended over a fixed 0.1 s however unevenly the updates bring it. The weapon's own
+flash comes out of the gun whole on a shot, never stretched across the picture
+(`viewmodel/held.hpp`'s `pose_frames`). `r_lerpframes` is `r_lerpmodels`'s other name. Your own eye rides the same clock as the models: drawn one server frame behind, between
 the server's last two states. A played demo's walking monster glides over its strides too
 (`demo_lerp.hpp`'s stride rule). `r_lerpmodels 0` and `r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
 films a monster walking up to the player both ways side by side (a GIF) and measures the judder

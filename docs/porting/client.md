@@ -35,7 +35,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Layer | `add_first` in `client/cvar_layers.cpp` | `add_q2` | `add_<game>` | `add_<game>` |
 | Status bar | its pictures in fixed places | a layout program from the server (`hud/q2_layout.hpp`, `client/q2_bar.hpp`, `server/q2_bar.hpp`), its scale, switches and lag graph (`client/q2_view.hpp`) | its client half's HUD (bytecode or native) | its own bar |
 | Menu letters | carved letters cut from its strips (`menu/carved_letters.hpp`) | plate letters cut as ink (`menu/plate_letters.hpp`) | its own font pictures | its own font lumps |
-| Menu pages | `menu::classic_menu()` | its own pages (`menu/q2_pages.cpp`: its setup pages, key rows, deathmatch flags by bit, the in-game page ESCAPE opens in a level) | its own (multiplayer only) | its own |
+| Menu pages | `menu::classic_menu()` | its own pages (`menu/q2_pages.cpp`: its setup pages, key rows, deathmatch flags by bit, the in-game page ESCAPE opens in a level), with `q2pro.menu` read over them (`menu/menu_script.hpp`, `menu_script`) | its own (multiplayer only) | its own |
 | Save slots' word | "--- UNUSED SLOT ---" (`kUnusedSlot`) | `kEmptySlot` (`menu::q2_menu()`) | its own | its own |
 | Field of view | the player's own `fov` | the server's, drawn between frames (`client/q2_view.hpp`: `cl_adjustfov`, `uf`) | its own | its own |
 | Plaques | the pack's pause and loading pictures (`menu::draw_plaque`, `showpause`) | its own | its own | its own |

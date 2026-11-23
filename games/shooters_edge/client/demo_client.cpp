@@ -519,11 +519,13 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.prints.push_back({level, m.str()});
         break;
       }
-      case 9: {  // stufftext: the signon's `fullserverinfo "\\key\\value..."` and `//loc` read, the
-                 // rest skipped
+      case 9: {  // stufftext: the signon's `fullserverinfo "\\key\\value..."`, `//loc` and the
+                 // match's start read, the rest skipped
         const std::string text = m.str();
         const std::string word = "fullserverinfo \"";
         s.bonuses += bonus_lines(text);
+        if (s.format == DemoFormat::multiview && text.rfind("//ktx matchstart", 0) == 0)
+          s.match_starts++;  // the match began (the f_demomatchstart hook)
         if (ge::classic::read_recorded_loc(text, s.places))
           break;                                                // a place name the recording kept
         if (ge::classic::read_vwep_line(text, s.vweps)) break;  // the visible weapons' list
