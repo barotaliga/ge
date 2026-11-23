@@ -309,8 +309,23 @@ void DemoSounds::static_loops(const DemoState& s) {
   // The level's loops (the signon sends them after the level starts), each on an entity of its
   // own. The first try may take the quietest slot; a loop that lost its slot or found none
   // starts again once a slot is free, so two loops never take a slot from each other in turn.
+  // Quake's (no Quake II switches): the looped statics of one file are one voice, played by the
+  // first of them (its lead) and steered to the merged ears (classic/q2_loop_merge.hpp).
   const size_t n = s.static_sounds.size();
   if (static_ever_.size() < n) static_ever_.resize(n, 0);
+  const bool merge = q2_ == nullptr;
+  static_lead_.resize(n);
+  for (size_t i = 0; i < n; i++) {
+    static_lead_[i] = static_cast<int>(i);
+    const int snd = s.static_sounds[i].sound;
+    const au::Pcm* pcm = merge ? recording(snd) : nullptr;
+    if (pcm == nullptr || !pcm->loops()) continue;
+    for (size_t j = 0; j < i; j++)
+      if (static_lead_[j] == static_cast<int>(j) && s.static_sounds[j].sound == snd) {
+        static_lead_[i] = static_cast<int>(j);
+        break;
+      }
+  }
   static_heard_.assign(n, 0);
   int free = 0;
   for (const au::Channels::Slot& slot : channels_.slots()) {
@@ -320,6 +335,11 @@ void DemoSounds::static_loops(const DemoState& s) {
     if (i < n) static_heard_[i] = 1;
   }
   for (size_t i = 0; i < n; i++) {
+    if (static_lead_[i] != static_cast<int>(i)) {  // heard through its lead
+      if (static_heard_[i] != 0) channels_.stop(static_entity(i));
+      static_ever_[i] = kStaticDone;
+      continue;
+    }
     if (static_heard_[i] != 0 || static_ever_[i] == kStaticDone ||
         (static_ever_[i] == kStaticTried && free == 0))
       continue;
@@ -334,6 +354,11 @@ void DemoSounds::static_loops(const DemoState& s) {
     e.at = at_of(st.origin);
     e.volume = st.volume * volume_;
     e.attenuation = st.attenuation / kUnitsPerAttenuation;
+    if (merge && pcm->loops()) {  // steered to the merged ears each frame
+      e.at = merged_static_at(s, i);
+      e.volume = volume_;
+      e.attenuation = 1 / kUnitsPerAttenuation;
+    }
     e.loop = au::Loop::file;
     const bool retry = static_ever_[i] != 0;
     static_ever_[i] = pcm->loops() ? kStaticTried : kStaticDone;  // a one-shot plays once
@@ -343,6 +368,32 @@ void DemoSounds::static_loops(const DemoState& s) {
     else
       stats_.loops++;
   }
+  if (!merge) return;
+  for (size_t i = 0; i < n; i++)
+    if (static_heard_[i] != 0 && static_lead_[i] == static_cast<int>(i))
+      channels_.move(static_entity(i), merged_static_at(s, i));
+}
+
+ge::core::Vec3 DemoSounds::merged_static_at(const DemoState& s, size_t lead) const {
+  const double yaw = s.angles.y * (3.14159265358979323846 / 180.0);
+  const double right[3] = {std::sin(yaw), -std::cos(yaw), 0};
+  ge::classic::Q2Ears sum;
+  for (size_t m = lead; m < s.static_sounds.size(); m++) {
+    if (static_lead_[m] != static_cast<int>(lead)) continue;
+    const DemoStaticSound& st = s.static_sounds[m];
+    const double dx = st.origin.x - s.eye.x, dy = st.origin.y - s.eye.y, dz = st.origin.z - s.eye.z;
+    const double dist = ge::core::hypot3(dx, dy, dz);
+    const double side = dist > 0 ? (dx * right[0] + dy * right[1] + dz * right[2]) / dist : 0;
+    const ge::classic::Q2Ears e =
+        ge::classic::classic_static_ear(st.volume, dist, side, st.attenuation);
+    sum.left += e.left;
+    sum.right += e.right;
+  }
+  const ge::classic::Q2Merged m = ge::classic::classic_static_merge(sum);
+  // Where the channels hear that gain and pan at a thousandth a unit (audio skill's lesson).
+  const double far = (1 - m.gain) * kUnitsPerAttenuation;
+  const double up = std::sqrt(std::max(0.0, 1 - m.pan * m.pan));
+  return {s.eye.x + right[0] * m.pan * far, s.eye.y + right[1] * m.pan * far, s.eye.z + up * far};
 }
 
 std::vector<std::string> DemoSounds::list_lines() const {

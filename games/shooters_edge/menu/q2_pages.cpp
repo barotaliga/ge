@@ -477,6 +477,13 @@ bool own_page(std::string_view page) {
   return false;
 }
 
+// LOAD: the autosave a level start writes, a gap, then the fifteen a player saves to; SAVE: those
+// fifteen.
+constexpr std::string_view kQ2Load[] = {"save0",  "",       "save1",  "save2",  "save3", "save4",
+                                        "save5",  "save6",  "save7",  "save8",  "save9", "save10",
+                                        "save11", "save12", "save13", "save14", "save15"};
+constexpr std::span<const std::string_view> kQ2Save = std::span(kQ2Load).subspan(2);
+
 }  // namespace
 
 const MenuTable& q2_menu() {
@@ -490,7 +497,13 @@ const MenuTable& q2_menu() {
     }
     return out;
   }();
-  static const MenuTable table{kQ2Pages, rows, kEmptySlot, "game", "q2pro.menu"};
+  static const MenuTable table{.pages = kQ2Pages,
+                               .entries = rows,
+                               .empty_slot = kEmptySlot,
+                               .in_level = "game",
+                               .script = "q2pro.menu",
+                               .load_slots = kQ2Load,
+                               .save_slots = kQ2Save};
   return table;
 }
 

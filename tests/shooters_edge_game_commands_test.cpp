@@ -192,3 +192,19 @@ TEST(q2_game_saves_from_the_window_and_its_autosave_is_taken_once) {
   CHECK_MSG(error.find("deathmatch") != std::string::npos, error);
   CHECK(cl::listen_take_autosave(match.l).empty());  // none in deathmatch
 }
+
+TEST(help_alone_is_q2_help_computer_and_help_a_name_stays_the_consoles) {
+  Window w(false, "0");
+  w.g = game("0", 1);
+  run(*w.g, 20);
+  w.l.rules = &w.g->r;
+  w.l.server = w.g->r.common;
+  w.con.run_now("help");
+  CHECK(w.g->p(0).screen == sv::kScreenHelp);
+  w.con.clear_output();
+  w.con.run_now("help cmd");
+  CHECK(printed(w.con, "cmd <line>"));
+  Window quake(false);
+  quake.con.run_now("help");  // no Quake II game: the console's own help
+  CHECK(!quake.con.output().empty());
+}

@@ -392,6 +392,14 @@ void add_q2_bar_commands(ge::console::Console& con, Q2Bar& bar) {
                   "aashot [name]: the status bar and the scores as text, to scoreshots/<name>.txt",
                   ask);
   con.add_command("aadump", "aadump: the status bar and the scores as text, in the console", ask);
+  const auto items = [&bar] {
+    std::vector<std::string> out;
+    for (const std::string& name : bar.item_names)
+      if (!name.empty() && std::ranges::find(out, name) == out.end()) out.push_back(name);
+    std::ranges::sort(out);
+    return out;
+  };
+  for (const char* word : {"use", "drop", "give"}) con.set_arg_values(word, items);
 }
 
 void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t frame, int width,
@@ -400,6 +408,7 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
   bar.width = width;
   bar.height = height;
   bar.layout_up = false;
+  if (bar.item_names != world.item_names) bar.item_names = world.item_names;
   if (world.status_bar.empty() || slot < 0 || slot >= ge::shooter::kMaxClients) return;
   // scr_draw2d: 0 none of it; 1 no status bar; 3 no layouts (the scoreboard, the help computer).
   const int draw2d = bar.screen != nullptr ? bar.screen->draw2d : 2;

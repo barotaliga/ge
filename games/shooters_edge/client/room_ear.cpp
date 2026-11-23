@@ -135,6 +135,17 @@ void add_under_cvars(ge::console::Console& c, UnderEar& s) {
                   .values = "0: off (the default); 1: as the sound device chooses (off, as it "
                             "names no headphones); 2: on"},
                  &s.hrtf);
+  // The software mixer's lead in both games (Quake's `_snd_mixahead`, Quake II's `s_mixahead`):
+  // kept and saved for configs and Quake II's sound page; nothing reads it, as the device pulls
+  // the sound a chunk at a time (platform/audio.hpp), as Quake II's OpenAL path never reads it.
+  c.cvars().add({.name = "s_mixahead",
+                 .fallback = "0.1",
+                 .flags = ge::console::kArchive,
+                 .help = "How far ahead of time the sound is mixed, in seconds. Kept for your "
+                         "settings; this sound device keeps its own short lead.",
+                 .min = 0,
+                 .max = 1,
+                 .values = "0.1: the default; 0..1: that many seconds"});
 }
 
 void hear_under(RoomEar& ear, ge::audio::Synth& synth, const UnderEar& s, bool under) {

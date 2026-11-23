@@ -147,7 +147,7 @@ void entity_fields(DemoMsg& m, uint32_t f, Q2EntityState& s) {
   if (f & kAngleYaw) s.angles[1] = static_cast<uint8_t>(m.u8());
   if (f & kAngleRoll) s.angles[2] = static_cast<uint8_t>(m.u8());
   if (f & kOldOrigin) {
-    for (int16_t& v : s.old_origin) v = static_cast<int16_t>(m.i16());
+    for (int32_t& v : s.old_origin) v = static_cast<int16_t>(m.i16());
   } else if ((s.renderfx & kBeam) == 0) {
     std::memcpy(s.old_origin, base.origin, sizeof s.old_origin);
   }

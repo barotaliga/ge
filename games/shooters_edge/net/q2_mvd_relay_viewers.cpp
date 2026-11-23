@@ -343,7 +343,7 @@ void draw(Q2Relay& r, Q2RelayViewer& rec) {
 
 // --- views ---
 
-void touch(const Q2Relay& r, uint64_t key, int chan, uint8_t& type, uint8_t& flags,
+void touch(const Q2Relay& r, uint64_t key, int chan, uint8_t& type, uint16_t& flags,
            int16_t* stats) {
   type = kPmFreeze;  // the view is the player's: the viewer's client must not move it
   flags |= kPmfNoPrediction;
@@ -379,7 +379,7 @@ std::unique_ptr<Q2RelayView> view_of(Q2Relay& r, Q2Channel& c, uint64_t key, int
   auto v = make_view(r, 1);
   v->pov = target;
   client::convert_fork(c.base, v->conv);
-  v->conv.options.touch_player = [&r, key, id = c.id](int, uint8_t& type, uint8_t& flags,
+  v->conv.options.touch_player = [&r, key, id = c.id](int, uint8_t& type, uint16_t& flags,
                                                       int16_t* stats) {
     touch(r, key, id, type, flags, stats);
   };
