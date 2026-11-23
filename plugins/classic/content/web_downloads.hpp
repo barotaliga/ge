@@ -8,17 +8,7 @@
 //   with `cl_http_downloads 0`, `allow_download -1` or no address; an address not `http://`,
 //   `https://` or a GitHub repository is ignored, as is one of 512 characters or more. Each is
 //   said ("[HTTP] Download server at <url>").
-// - A GITHUB REPOSITORY (`web_base`): `github:<owner>/<repo>[@<branch or tag>][/<folder>]`, or the
-//   repository's page `https://github.com/<owner>/<repo>[/tree/<ref>[/<folder>]]`, is read as its
-//   raw files' address (`https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<folder>/`; the
-//   default branch when no ref is named), so a community keeps a game's maps and skins in a
-//   repository and names it. The game folder being played is added to every path, so one address
-//   serves every mod (`github:o/r/quakeworld` asks `quakeworld/qw/...` or `quakeworld/ktx/...`);
-//   a folder whose last name is that game folder (`github:o/r/quakeworld/qw`) is read as its
-//   parent, the same files. For a repository laid out otherwise the place is set by hand:
-//   `{game}` where the game folder goes (`github:o/r/{game}/files`), or `#` at the end for an
-//   address that holds the game's files already (`github:o/r/odd/place#`); then the game
-//   folder is not added again and the game folder's own list is not asked (each map's is).
+// - A GITHUB REPOSITORY (`web_base`, which says how its address is read) is read as its raw files.
 // - A FILE'S ADDRESS: the address, then `<game folder>/<path>` escaped (`WebConfig::base_folder`
 //   when no mod is played: `baseq2`, `id1`); asked with the player's agent and `Referer:
 //   <referer_scheme>://<server>`. The first file queued tells the server `download http` (when
@@ -35,14 +25,25 @@
 //   missing. A server may also pack a file as it sends it (`Content-Encoding` gzip, zstd, xz or
 //   bzip2, all asked for). Either way the file is unpacked and checked by its format's checksum
 //   before it is kept; one that does not unpack is said and left lacking.
-// - THE ENDS: a file comes whole on `200 OK` and is kept as one fetched over the channel; each
-//   is said with its size, its speed and the files left ("[HTTP] maps/q2dm1.bsp [1.2 MB,
-//   340 kB/sec] [3 remaining files]"). A `404` from the server's address leaves that file
-//   lacking; any other status, a `404` from the player's own repository, an address that does not
-//   resolve or connect, or a secure one whose certificate is not trusted (`cl_http_insecure 1`
-//   leaves it unchecked) or whose TLS fails turns HTTP off until the next connect and
-//   hands every file not yet fetched back to the game's channel. Any other failure (a stall, a
-//   short file) is said and leaves that file lacking.
+// - THE ENDS: a file comes whole on `200 OK`, kept as one fetched over the channel and said with
+//   its size, speed and the files left ("[HTTP] maps/q2dm1.bsp [1.2 MB, 340 kB/sec] [3 remaining
+//   files]"). A `404` from the server's address leaves that file lacking; any other status, a
+//   `404` from the player's own repository, an address that does not resolve or connect, or an
+//   untrusted certificate (`cl_http_insecure 1` leaves it unchecked) or failed TLS turns HTTP off
+//   until the next connect and hands every file not yet fetched back to the game's channel.
+// - THE SERVER'S OWN WEB FILES (engine/server/web_files.hpp): an address with `{server}` in it is
+//   read with the host of the server joined in its place, and a certificate digest the server told
+//   beside it (QuakeWorld's `*dlpin`, Quake II's ` dlpin=`; 64 hex digits) is the one certificate
+//   its connection trusts, whatever signed it (net/tls_stream.hpp's pin); such a server keeps its
+//   files as they are, so no packed form is asked of it.
+// - CHECKED BEFORE KEPT: a file whose answer named its SHA-256 (`Repr-Digest`) is kept only when
+//   the bytes match it; one that does not is said ("checksum mismatch") and handed back to the
+//   game's channel.
+// - RESUMED: a fetch cut short (a partial file, a stall) asks again for the rest (`Range`) from the
+//   bytes it holds, up to three times (`kWebTries`), then fails as above.
+// - HELD TO A SPEED (`cl_http_max_rate`, kB a second, 0 none): shared evenly by the fetches
+//   running; a file larger than `cl_http_max_size` (MB) is refused ("Maximum file size exceeded").
+// - THE PROGRESS (`web_progress`): the file, its bytes so far, its size, the files left (the bar).
 //
 // The window's own game (a listen server) never joins through here, so its files are never asked.
 //
@@ -51,7 +52,8 @@
 // ge:keywords cl_http_max_connections cl_http_proxy cl_http_default_url cl_http_insecure
 // ge:keywords cl_http_debug cl_http_blocking_timeout download-http web_size_text github
 // ge:keywords github-repository raw-githubusercontent web_base packed-download xz zstd gzip bzip2
-// ge:keywords content-encoding accept-encoding kwebpackings
+// ge:keywords content-encoding accept-encoding kwebpackings dlpin cl_http_max_rate
+// ge:keywords cl_http_max_size web_progress resume repr-digest checksum-mismatch
 // ge:skill classic net
 // ge:test tests/classic_content_web_downloads_test.cpp
 #pragma once
@@ -78,12 +80,16 @@ struct WebConfig {
   // The kinds of file a file list may name (its packs aside), lower case.
   std::vector<std::string> kinds = {"bsp", "dm2", "ent", "jpg", "loc", "md2", "md3", "ogg",
                                     "pcx", "png", "sp2", "tga", "txt", "wal", "wav"};
-  int max_connections = 2;  // cl_http_max_connections, held to 1..4
-  bool downloads = true;    // cl_http_downloads
-  bool filelists = true;    // cl_http_filelists
-  bool debug = false;       // cl_http_debug: each fetch's address said as it starts
-  bool insecure = false;    // cl_http_insecure: a secure address's certificate unchecked
+  int max_connections = 2;    // cl_http_max_connections, held to 1..4
+  bool downloads = true;      // cl_http_downloads
+  bool filelists = true;      // cl_http_filelists
+  bool debug = false;         // cl_http_debug: each fetch's address said as it starts
+  bool insecure = false;      // cl_http_insecure: a secure address's certificate unchecked
+  int64_t max_rate_kb = 0;    // cl_http_max_rate: kB a second for every fetch together (0: no cap)
+  int64_t max_size_mb = 512;  // cl_http_max_size: the largest file taken, MB
 };
+
+inline constexpr int kWebTries = 3;  // a file cut short asked again for its rest this often
 
 // Quake's kinds of file (a file list's on a Quake or QuakeWorld server).
 std::vector<std::string> quake_web_kinds();
@@ -108,6 +114,8 @@ struct WebSlot {
   WebFile file;
   ge::net::HttpFetch fetch;
   double started_s = 0;
+  std::vector<uint8_t> held;  // a resume's bytes from before
+  int tries = 0;
 };
 
 struct WebDownloads {
@@ -121,6 +129,7 @@ struct WebDownloads {
   bool game_in_base = false;  // the address is the game folder's own (`{game}` or `#`)
   bool told_server = false;   // `download http` sent
   bool asked_list = false;    // the mod's file list queued
+  std::vector<uint8_t> pin;   // the server's certificate's SHA-256 (32 bytes; empty: none told)
   std::vector<WebFile> queue;
   std::vector<WebSlot> slots;
   std::set<std::string> asked;  // every path queued this connection, each tried once
@@ -135,14 +144,38 @@ struct WebDone {
   std::vector<std::string> back;
 };
 
+// A GITHUB REPOSITORY: `github:<owner>/<repo>[@<branch or tag>][/<folder>]`, or the
+// repository's page `https://github.com/<owner>/<repo>[/tree/<ref>[/<folder>]]`, is read as its
+// raw files' address (`https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<folder>/`; the
+// default branch when no ref is named), so a community keeps a game's maps and skins in a
+// repository and names it. The game folder being played is added to every path, so one address
+// serves every mod (`github:o/r/quakeworld` asks `quakeworld/qw/...` or `quakeworld/ktx/...`);
+// a folder whose last name is that game folder (`github:o/r/quakeworld/qw`) is read as its
+// parent, the same files. For a repository laid out otherwise the place is set by hand:
+// `{game}` where the game folder goes (`github:o/r/{game}/files`), or `#` at the end for an
+// address that holds the game's files already (`github:o/r/odd/place#`); then the game
+// folder is not added again and the game folder's own list is not asked (each map's is).
+//
 // The address files are asked under: a GitHub repository's raw files' (above), any other as it is.
 std::string web_base(const std::string& text);
 // The first `dlserver=` word's value ("" when none).
 std::string web_dlserver(const std::vector<std::string>& words);
 // At connect: HTTP on or off for this connection, by the server's address ("" none),
-// `allow_download` (`all`) and the settings; `server` the game server's address as text.
+// `allow_download` (`all`) and the settings; `server` the game server's address as text; `pin`
+// the certificate digest the server told in hex ("" none).
 void web_connect(WebDownloads& h, const WebConfig& cfg, const std::string& dlserver, int all,
-                 const std::string& server);
+                 const std::string& server, const std::string& pin = {});
+// The first `dlpin=` word's value ("" when none).
+std::string web_dlpin(const std::vector<std::string>& words);
+
+struct WebProgress {
+  std::string path;    // the file coming
+  int64_t got = 0;     // its bytes so far
+  int64_t total = -1;  // its size (-1: not known yet)
+  int files_left = 0;  // queued or coming, this one with them
+};
+// The file coming now (a file list's not counted); false when none is.
+bool web_progress(const WebDownloads& h, WebProgress& out);
 // A file lacked queued (with the file lists it brings); true when the server is to be told
 // `download http` now.
 bool web_queue(WebDownloads& h, const WebConfig& cfg, const std::string& path);

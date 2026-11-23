@@ -508,6 +508,68 @@ TEST(an_item_taken_flashes_the_view_gold_for_half_a_second_unless_cl_bonusflash_
   CHECK(a[3] == 0);
 }
 
+TEST(the_powers_tint_by_the_items_held_never_by_the_own_glow) {
+  // A match's prewar: the server lights the player's own figure blue (effects 64) with no quad
+  // held; the items stat holds none, so no tint.
+  fx::Screen prewar;
+  fx::take_powers(prewar, 0);
+  CHECK(!prewar.power && !prewar.shield && !prewar.suit && !prewar.stealth);
+  CHECK(prewar.powerup == fx::Powerup::none);
+  double a[4];
+  fx::screen_blend(prewar, a);
+  CHECK(a[3] == 0);
+  fx::Screen quad;
+  fx::take_powers(quad, fx::kItemQuad | fx::kItemPent);
+  CHECK(quad.power && quad.shield && !quad.suit && quad.powerup == fx::Powerup::quad);
+  fx::screen_blend(quad, a);
+  CHECK(a[3] > 0 && a[2] > a[0]);
+  fx::Screen pent;
+  fx::take_powers(pent, fx::kItemPent);
+  CHECK(pent.powerup == fx::Powerup::pent && !pent.power);
+  fx::Screen suit;
+  fx::take_powers(suit, fx::kItemSuit | fx::kItemRing);  // the suit before the ring
+  CHECK(suit.powerup == fx::Powerup::suit && suit.stealth);
+}
+
+TEST(gl_damageblend_frac_moves_a_hit_s_flash_to_a_frame_round_the_view) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(pic.damage_frac == 0);  // the classic look's own: Quake's flash over the whole view
+  fx::Screen hit;
+  hit.hurt = 100;
+  hit.medium = fx::Medium::water;
+  const double none[4] = {0, 0, 0, 0};
+  double whole[4];
+  lk::toned_blend(pic, hit, whole);
+  lk::Tints t = lk::toned_tints(pic, hit, false, none, none, none);
+  for (int k = 0; k < 4; k++) CHECK(t.flat[k] == whole[k] && t.edge[k] == 0);  // as it was
+  con.execute("gl_damageblend_frac 0.2");
+  CHECK(pic.damage_frac == 0.2);
+  t = lk::toned_tints(pic, hit, false, none, none, none);
+  fx::Screen water;
+  water.medium = fx::Medium::water;
+  double wet[4];
+  lk::toned_blend(pic, water, wet);
+  for (int k = 0; k < 4; k++) CHECK(std::fabs(t.flat[k] - wet[k]) < 1e-12);  // the water alone
+  CHECK(t.edge[3] > 0 && t.edge[0] > t.edge[1]);                             // the red flash
+  con.execute("gl_polyblend 0");
+  t = lk::toned_tints(pic, hit, false, none, none, none);
+  CHECK(t.flat[3] == 0 && t.edge[3] == 0);
+  con.execute("gl_polyblend 1");
+  // Quake II's: the rules' own tint as it came, split where the flash came apart.
+  const double q2_whole[4] = {0.5, 0.1, 0.1, 0.4}, q2_rest[4] = {0, 0, 1, 0.08},
+               q2_hit[4] = {1, 0, 0, 0.3};
+  t = lk::toned_tints(pic, hit, true, q2_whole, q2_rest, q2_hit);
+  for (int k = 0; k < 4; k++) CHECK(t.flat[k] == q2_rest[k] && t.edge[k] == q2_hit[k]);
+  t = lk::toned_tints(pic, hit, true, q2_whole, q2_whole, none);  // a stock server's: flat
+  for (int k = 0; k < 4; k++) CHECK(t.flat[k] == q2_whole[k] && t.edge[k] == 0);
+  con.execute("gl_damageblend_frac 0; gl_cshiftpercent 50");
+  t = lk::toned_tints(pic, hit, true, q2_whole, q2_rest, q2_hit);
+  for (int k = 0; k < 3; k++) CHECK(t.flat[k] == q2_whole[k]);
+  CHECK(t.flat[3] == 0.2 && t.edge[3] == 0);
+}
+
 TEST(r_lightmap_draws_every_solid_face_grey_under_its_light) {
   namespace lk = shooters_edge::look;
   ge::console::Console con;

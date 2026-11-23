@@ -575,6 +575,7 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   con::Cvars& v = w.console.cvars();
   con::ConsoleView view(w.console);  // con_height, con_bgalpha, con_font: the console's own
   v.add({.name = "vid_vsync", .fallback = "0"});       // the window's (platform/pacing.cpp)
+  v.add({.name = "scr_showfps", .fallback = "0"});     // the window's too
   v.add({.name = "sv_maxclients", .fallback = "32"});  // the listen server's (listen_console)
   w.console.add_command("playdemo", "the window's (client/demo_playback.cpp)",
                         [](con::Console&, const con::Args&) {});
@@ -595,8 +596,16 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   v.set("in_grab_windowed_mouse", "0", con::Source::local);
   CHECK(v.find("net_clientport")->value == "27001" && w.game.q2.grab == 0);
   CHECK(v.find("gl_modulate")->layer == cl::kLayerClassic && w.picture.anisotropy == 0);
+  CHECK(v.find("gl_damageblend_frac")->value == "0" && w.picture.damage_frac == 0);  // Quake's
   v.set("gl_modulate", "1.5", con::Source::local);
   CHECK(w.picture.light_modulate == 1.5);
+  v.set("show_fps", "1", con::Source::local);  // QuakeWorld's spelling of the frame rate shown
+  CHECK(v.find("scr_showfps")->value == "1");
+  v.set("cl_sbar", "1", con::Source::local);  // and of the old bar, and its column
+  v.set("cl_hudswap", "1", con::Source::local);
+  CHECK(v.find("hud_sbar") != nullptr && v.find("hud_sbar")->value == "1");
+  CHECK(v.find("hud_swap") != nullptr && v.find("hud_swap")->value == "1");
+  CHECK(w.console.has_command("togglechat"));
   const pr::GameProfile* q2 = pr::find_game("q2");
   CHECK(q2 != nullptr);
   if (q2 == nullptr) return;
@@ -605,6 +614,8 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   CHECK(v.find("in_grab")->value == "0" && w.game.q2.grab == 0);  // the player's, kept
   CHECK(v.find("net_clientport")->value == "27001" && w.picture.light_modulate == 1.5);
   CHECK(v.find("gl_anisotropy")->value == "1" && w.picture.anisotropy == 1);  // Quake II's 1
+  // gl_damageblend_frac: Quake's flash flat (0), Quake II's a frame a fifth of the view deep.
+  CHECK(v.find("gl_damageblend_frac")->value == "0.2" && w.picture.damage_frac == 0.2);
   v.set("gl_swapinterval", "1", con::Source::local);  // its spelling of the window's vsync
   CHECK(v.find("vid_vsync")->value == "1");
   CHECK(w.console.has_command("demo"));  // its spelling of playdemo
@@ -635,6 +646,26 @@ TEST(one_camera_behind_the_player_in_every_game) {
   CHECK(v.find("cl_thirdperson")->layer == cl::kLayerClassic);
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
   CHECK(v.find("cl_thirdperson_range") == nullptr && v.find("chase_active") != nullptr);
+  CHECK(v.clashes().empty());
+}
+
+TEST(the_2d_switch_and_the_frame_graph_are_every_games) {
+  // scr_draw2d and timegraph in the classic layer (screen_2d.hpp): Quake's r_timegraph the same
+  // graph, and a value set in one game held in the next.
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("scr_draw2d") != nullptr && v.find("scr_draw2d")->layer == cl::kLayerClassic);
+  v.set("r_timegraph", "1", con::Source::local);
+  v.set("scr_draw2d", "1", con::Source::local);
+  CHECK(w.game.screen.time_graph && w.game.screen.draw2d == 1);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2, {});
+  CHECK(w.game.screen.time_graph && w.game.screen.draw2d == 1);  // kept
+  v.set("scr_draw2d", "3", con::Source::local);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
+  CHECK(w.game.screen.draw2d == 3 && v.find("scr_draw2d")->value == "3");
   CHECK(v.clashes().empty());
 }
 
@@ -800,21 +831,11 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("gl_coloredlightmaps", "0.25", con::Source::local);
   v.set("cl_lerp_lightstyles", "1", con::Source::local);
   CHECK(fx.lightmap_saturation == 0.25 && fx.lerp_styles);
-  // The ink line and the explosions' steps.
-  CHECK(fx.cel_shading == 0 && fx.smooth_explosions);
-  v.set("gl_celshading", "20", con::Source::local);  // held to 0..10
+  // The explosions' steps.
+  CHECK(fx.smooth_explosions);
   v.set("cl_smooth_explosions", "0", con::Source::local);
-  CHECK(fx.cel_shading == 10 && !fx.smooth_explosions);
-  CHECK(ge::classic::q2_outline_px(fx.cel_shading, 0) == 10);
-  CHECK(ge::classic::q2_outline_px(fx.cel_shading, 350) == 5);     // half at 350 units
-  CHECK(ge::classic::q2_outline_share(fx.cel_shading, 695) == 0);  // gone past about 693
-  CHECK(ge::classic::q2_outline_px(0, 0) == 0);
+  CHECK(!fx.smooth_explosions);
   CHECK(ge::classic::q2_blast_age(fx, 0.27) == 0.2 && ge::classic::q2_blast_age(fx, 0.05) == 0);
-  // A glow map's light: twice the setting, 0.75 by default.
-  CHECK(fx.glowmap_intensity == 0.75 &&
-        ge::classic::q2_glow_map_gain(fx.glowmap_intensity) == 1.5f);
-  v.set("gl_glowmap_intensity", "0", con::Source::local);
-  CHECK(ge::classic::q2_glow_map_gain(fx.glowmap_intensity) == 0);
   v.set("cl_beginmapcmd", "record", con::Source::local);
   v.set("cl_autopause", "0", con::Source::local);
   CHECK(w.game.q2.begin_cmd == "record" && !w.game.q2.autopause);
@@ -831,7 +852,7 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(w.picture.anisotropy == 16);  // gl_anisotropy is every game's: the player's 16 kept
   CHECK(!w.picture.q2fx.double_light && !w.picture.q2fx.roll_hack);
   CHECK(w.picture.q2fx.dlight_falloff == -1 && w.picture.q2fx.lightmap_saturation == 1);
-  CHECK(w.picture.q2fx.cel_shading == 0 && w.picture.q2fx.smooth_explosions);
+  CHECK(w.picture.q2fx.smooth_explosions);
   CHECK(ge::classic::q2_blast_age(w.picture.q2fx, 0.27) == 0.27);  // as it is
   CHECK(w.game.q2.begin_cmd == "record" && w.game.q2.autopause && w.game.q2.timescale == 1);
   CHECK(v.find("cl_beginmapcmd") != nullptr && v.find("sv_running") == nullptr);

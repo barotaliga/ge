@@ -43,51 +43,53 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 
 | Section | Rows | Done | Verify | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- | --- |
-| Taking the packs in (shared by all four) | 15 | 0 | 3 | 12 (9 / 3 / 0) | 0 |
-| Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 2 | 67 | 5 (2 / 1 / 2) | 0 |
-| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 2 | 51 | 8 (3 / 3 / 2) | 0 |
+| Taking the packs in (shared by all four) | 17 | 12 | 3 | 2 (0 / 2 / 0) | 0 |
+| Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 4 | 67 | 3 (0 / 1 / 2) | 0 |
+| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 7 | 50 | 4 (0 / 2 / 2) | 0 |
 | The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
 | Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **272** | **10** | **131** | **131 (70 / 50 / 11)** | **0** |
+| **All** | **274** | **29** | **130** | **115 (56 / 48 / 11)** | **0** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.**
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **115 missing, 130 to verify, of 274 rows** (M63a taking the packs in: 10 fewer; M63b the Quake packs' status bars: 6 fewer).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
 
 ## Taking the packs in (shared by all four)
 
-count: done 0, verify 3, missing 12 (9 / 3 / 0), not-taken 0
+count: done 12, verify 3, missing 2 (0 / 2 / 0), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
-| imp.q1_folder | a Quake pack's folder (`hipnotic`, `rogue`) taken in beside `id1` | missing | 1 | plugins/classic/content/import.hpp copies the base and the multiplayer folder only |
-| imp.q2_folder | a Quake II pack's folder (`xatrix`, `rogue`) taken in beside `baseq2` | missing | 1 | same |
-| imp.known | each pack's `pak0.pak` named by its SHA-256 and size (the four digests are in `/mnt/project-files/paks/README.md`) | missing | 1 | the known packs (plugins/classicenhance/source.hpp) and the content profiles |
-| imp.release_zip | a release zip holding an installed tree (Scourge of Armagon's and Dissolution of Eternity's archives: `Quake/HIPNOTIC/PAK0.PAK` in capitals, the base game's packs beside it) | missing | 1 | engine/vfs zips are read; the tree inside is not walked as an install |
+| imp.q1_folder | a Quake pack's folder (`hipnotic`, `rogue`) taken in beside `id1` | done | 1 | plugins/classic/content/import.hpp § Mission packs (`find_packs`, by the folder's name); tests/classic_content_import_test.cpp; real: Quake with both packs taken in by `secli import` |
+| imp.q2_folder | a Quake II pack's folder (`xatrix`, `rogue`) taken in beside `baseq2` | done | 1 | same; a name both games use (`rogue`) told by the base folder beside it; real: Quake II with both packs |
+| imp.known | each pack's `pak0.pak` named by its SHA-256 and size (the four digests are in `/mnt/project-files/paks/README.md`) | done | 1 | plugins/classicenhance/profile.hpp `MissionPack`, `known_pack` (the four digests); tests/classicenhance_profile_test.cpp |
+| imp.release_zip | a release zip holding an installed tree (Scourge of Armagon's and Dissolution of Eternity's archives: `Quake/HIPNOTIC/PAK0.PAK` in capitals, the base game's packs beside it) | done | 1 | import.hpp § Release archives (`open_tree` reads a `.zip` whole, its tree walked as an install); tests/classic_content_import_test.cpp |
 | imp.q1_cd | the Quake packs' CD image (`QPacks.BIN` with its sheet, in both archives) | verify | 2 | engine/vfs/disc.hpp reads BIN/CUE |
-| imp.cd_layout | the Quake II packs' CD layout: the pack at `Data/all/pak0.pak`, the movies under `Data/max/<folder>/video`, the patch under `Data/patch`; known by the pack's digest, not by a game folder | missing | 1 | `find_game` looks for a base folder with its first pack |
+| imp.cd_layout | the Quake II packs' CD layout: the pack at `Data/all/pak0.pak`, the movies under `Data/max/<folder>/video`, the patch under `Data/patch`; known by the pack's digest, not by a game folder | done | 1 | import.hpp § Mission packs, by digest: the pack, the shallowest folder named after it, `patch/<base>/`; real: The Reckoning's CD layout told by its digest |
 | imp.mode2 | a BIN/CUE whose data track is `MODE2/2352` (The Reckoning's) | verify | 1 | engine/vfs/disc.hpp reads it; held once imp.cd_layout lands |
-| imp.raw2448 | a raw image of 2448-byte sectors (2352 and 96 of subchannel) with its `.mds` sheet (Ground Zero's MDF) | missing | 1 | engine/vfs/disc.hpp reads 2048 and 2352 |
-| imp.7z | a 7z holding the image (Ground Zero's, a 643 MB MDF) read without the whole file in memory | verify | 1 | engine/vfs's 7z reader; its size limit to check |
-| imp.movies | the Quake II packs' movies copied into `<folder>/video/` | missing | 1 |  |
-| imp.vwep | Ground Zero's patch: the player models' weapons for its guns (`players/*/w_*.md2`, `a_grenades.md2`) | missing | 2 |  |
-| imp.tracks | each pack's CD audio tracks into its own `music/`, numbered as the digital release (`ogg_remap_tracks` is done) | missing | 2 | the soundtrack import reads a disc's audio into the base game's `music/` |
-| imp.detect | found without being asked (Niclas, 2026-11-23): a pack in a store's library, on a mounted volume, as a disc image or archive in the folders the games page searches, or beside a base game being taken in, is offered and taken in | missing | 1 | client/take_in.hpp, plugins/classic/content/import.hpp's `store_folders` |
-| imp.games_page | each pack its own row on the games page (Quake: Scourge of Armagon, ...) starting the base game with the pack's folder | missing | 1 | menu/select_game |
-| imp.needs_base | a pack taken in without its base game: said in the game's words (it needs the full game) | missing | 2 |  |
+| imp.raw2448 | a raw image of 2448-byte sectors (2352 and 96 of subchannel) with its `.mds` sheet (Ground Zero's MDF) | done | 1 | engine/vfs/disc.hpp: a `.mdf` alone, 2448-byte sectors told by the second sector's sync; tests/vfs_disc_test.cpp. Its `.mds` sheet: imp.mds |
+| imp.mds | an `.mdf`'s `.mds` sheet read for its audio tracks (Ground Zero's disc music) | missing | 2 | the data track is read without it (imp.raw2448) |
+| imp.7z | a 7z holding the image (Ground Zero's, a 643 MB MDF) read without the whole file in memory | verify | 1 | import.hpp § Release archives: a 7z's one disc image unpacked into `<data>/.unpacking/` (read whole, 2 GiB limit; fixture tested); Ground Zero's real 643 MB archive still to measure |
+| imp.movies | the Quake II packs' movies copied into `<folder>/video/` | done | 1 | copied with the pack (its `video/`, from its own folder or the disc's `Data/max/<pack>/`) |
+| imp.vwep | Ground Zero's patch: the player models' weapons for its guns (`players/*/w_*.md2`, `a_grenades.md2`) | done | 2 | a `patch/<base folder>/` folder's content folders copied into the base folder |
+| imp.tracks | each pack's CD audio tracks into its own `music/`, numbered as the digital release (`ogg_remap_tracks` is done) | done | 2 | a pack's own disc: its audio tracks kept in `<data>/<id>/<pack>/music/`, played before the game's when the pack plays (client/take_in.hpp) |
+| imp.detect | found without being asked (Niclas, 2026-11-23): a pack in a store's library, on a mounted volume, as a disc image or archive in the folders the games page searches, or beside a base game being taken in, is offered and taken in | done | 1 | import.hpp `find_offers` over `store_folders` (stores' libraries, mounted volumes): a pack's folder, or a known pack's size on a disc, offered in the console at the start (client/take_in.hpp `offer_words`) and by `secli import`; beside a base game taken in: taken with it. Image and archive files: imp.detect_files |
+| imp.detect_files | a pack's disc image or release archive lying in those folders (a `.cue`, `.mdf`, `.zip`, `.7z`) offered too | missing | 2 | the folders are walked; files are not opened while looking |
+| imp.games_page | each pack its own row on the games page (Quake: Scourge of Armagon, ...) starting the base game with the pack's folder | done | 1 | SELECT GAME: a row a pack under its game (client/installs.hpp `game_rows`, `packs_of`), opening the install with the pack's folder; the console's `games` names them |
+| imp.needs_base | a pack taken in without its base game: said in the game's words (it needs the full game) | done | 2 | client/take_in.hpp `take_in_words`: the packs kept, "add Quake II too", the game playing left as it is |
 
 ## Scourge of Armagon (Quake, folder `hipnotic`)
 
-count: done 2, verify 67, missing 5 (2 / 1 / 2), not-taken 0
+count: done 4, verify 67, missing 3 (0 / 1 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
 | hip.program | the pack's `progs.dat` read and run: the base game's header checksum (5927), no builtin the base game's lacks, 52 fields of its own (checked from the file) | done |  | loads and runs hip1m1 (`se-client --game=<folder>/hipnotic --map=hip1m1 --progs=pack`, 2026-11-23) |
 | hip.campaign | NEW GAME from `start` through the five episodes to `hipend` (18 maps) | verify | 1 | a playthrough lab on the pack |
 | hip.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395) |
-| hip.hud.weapons | the status bar's laser cannon, Mjolnir and proximity gun, plain, lit and flashing, from the pack's `gfx.wad` (`INV_LASER`, `INV_MJOLNIR`, `INV_PROX_GREN`, `INV_GREN_PROX`, `INV_PROX` and their `INV2_` and `INVA1_`..`INVA5_` sets) | missing | 1 | hud/classic_art.cpp loads the base game's set only; which item bits light them: reader question |
-| hip.hud.items | the wetsuit's and the empathy shields' icons (`SB_WSUIT`, `SB_ESHLD`) | missing | 1 | same |
+| hip.hud.weapons | the status bar's laser cannon, Mjolnir and proximity gun, plain, lit and flashing, from the pack's `gfx.wad` (`INV_LASER`, `INV_MJOLNIR`, `INV_PROX_GREN`, `INV_GREN_PROX`, `INV_PROX` and their `INV2_` and `INVA1_`..`INVA5_` sets) | done | 1 | hud/classic_art.cpp loads the pack's set by name (`pack_art`), hud/layout.cpp draws it off the items word (`armagon_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on hip1m1 (`--fields`) |
+| hip.hud.items | the wetsuit's and the empathy shields' icons (`SB_WSUIT`, `SB_ESHLD`) | done | 1 | hud/classic_art.cpp loads the pack's set by name (`pack_art`), hud/layout.cpp draws it off the items word (`armagon_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on hip1m1 (`--fields`); the keys move to the main bar (`sbar_keys`) |
 | hip.cfg | the pack's `quake.rc` and `default.cfg` run at start | verify | 2 |  |
 | hip.demos | the attract loop plays the pack's four demos | verify | 3 |  |
 | hip.conback | the pack's console background | verify | 3 |  |
@@ -208,20 +210,20 @@ count: done 0, verify 17, missing 0, not-taken 0
 
 ## Dissolution of Eternity (Quake, folder `rogue`)
 
-count: done 2, verify 51, missing 8 (3 / 3 / 2), not-taken 0
+count: done 7, verify 50, missing 4 (0 / 2 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
 | rog1.program | the pack's `progs.dat`: the base game's checksum, no new builtin, 63 fields of its own (`items2` among them) | done |  | loads and runs r1m1 (`se-client --game=<folder>/rogue --map=r1m1 --progs=pack`, 2026-11-23) |
 | rog1.campaign | NEW GAME from `start` through both episodes to the end (23 maps with `ctf1` and the six ammo box maps) | verify | 1 | a playthrough lab on the pack |
 | rog1.ammo_maps | the six `b_` maps (lava nails, multi rockets and plasma boxes, big and small) loaded as brush models | verify | 1 | the base game's `b_` boxes load the same way |
-| rog1.items2 | the program's `items2` reaching the player's HUD (the new weapons and powerups) | verify | 1 | the catalogue knows the field (server/catalogue.cpp's ZQ_ITEMS2); which bits the client gets: reader question |
+| rog1.items2 | the program's `items2` reaching the player's HUD (the new weapons and powerups) | done | 1 | net/qw_frame.cpp's `items_word` (`items2` from bit 23, in place of the runes), client/view.cpp's and client/timedemo.cpp's status; the se-client lab on r1m1 |
 | rog1.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395) |
 | rog1.menu.modes | MULTIPLAYER ▸ NEW GAME's teamplay row with the pack: Tag, Capture the Flag, One Flag CTF, Three Team CTF | missing | 2 | facts in porting/shooters-edge/q1-qw-console-facts.md |
-| rog1.hud.weapons | the lava nailguns, the multi launchers and the plasma gun on the status bar (`R_LAVA`, `R_SUPERLAVA`, `R_GREN`, `R_MULTIROCK`, `R_PLASMA`, the bars `R_INVBAR1`, `R_INVBAR2`) | missing | 1 | hud/classic_art.cpp |
-| rog1.hud.ammo | their ammunition (`R_AMMOLAVA`, `R_AMMOMULTI`, `R_AMMOPLASMA`) | missing | 1 | same |
-| rog1.hud.items | the power shield and the anti-grav belt (`R_SHIELD1`..`5`, `R_AGRAV1`..`5`) | missing | 1 | same |
-| rog1.hud.team | the team colour's border in team games (`R_TEAMBORD`) | missing | 2 | same |
+| rog1.hud.weapons | the lava nailguns, the multi launchers and the plasma gun on the status bar (`R_LAVA`, `R_SUPERLAVA`, `R_GREN`, `R_MULTIROCK`, `R_PLASMA`, the bars `R_INVBAR1`, `R_INVBAR2`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`) |
+| rog1.hud.ammo | their ammunition (`R_AMMOLAVA`, `R_AMMOMULTI`, `R_AMMOPLASMA`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`); the main bar's icon off bits 26-28 |
+| rog1.hud.items | the power shield and the anti-grav belt (`R_SHIELD1`..`5`, `R_AGRAV1`..`5`) | done | 1 | hud/classic_art.cpp (`pack_art`), hud/layout.cpp (`eternity_bar`); tests/shooters_edge_hud_test.cpp; the se-client lab on r1m1 (`--fields`); only `R_SHIELD1` and `R_AGRAV1` are drawn, as the pack drew them |
+| rog1.hud.team | the team colour's border in team games (`R_TEAMBORD`) | done | 2 | hud/layout.cpp (`sbar_team`, `sbar_team_frags`): teamplay 4 to 6 in a game of more than one; the colours by the palette; tests/shooters_edge_hud_test.cpp |
 | rog1.runes | deathmatch's runes | verify | 2 |  |
 | rog1.grapple | the grappling hook in team games, its chain drawn | verify | 2 | the beam model is drawn (C465) |
 | rog1.motd | the pack's message of the day on joining | verify | 3 |  |

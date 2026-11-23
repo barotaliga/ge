@@ -148,7 +148,8 @@ void GamesPage::draw(ui::DrawList& list, int width, int height, const ui::MenuSt
   float y = title_base + line * 1.4f;
   for (int i = 0; i < count(); i++) {
     const bool game = i < static_cast<int>(rows_.size());
-    const float ch = game ? card_h : std::max(word * 2.6f, 52 * s);
+    const bool pack = game && !rows_[static_cast<size_t>(i)].pack.empty();
+    const float ch = game && !pack ? card_h : std::max(word * 2.6f, 52 * s);
     const ui::Rect cell{margin, y, inner, ch};
     cells_.push_back(cell);
     const bool on = i == selected_;
@@ -161,6 +162,15 @@ void GamesPage::draw(ui::DrawList& list, int width, int height, const ui::MenuSt
       continue;
     }
     const GameRow& g = rows_[static_cast<size_t>(i)];
+    if (pack) {  // a mission pack: its title, set in under its game's card
+      list.text(bold, word * 1.1f, cell.x + pad * 2, cell.y + ch * 0.5f + word * 0.4f, g.pack_name,
+                on          ? style.text_focus
+                : g.playing ? style.accent_hi
+                            : style.text,
+                ui::Align::left, style.tracking);
+      y += ch + 10 * s;
+      continue;
+    }
     const ui::Image& name = game_name_picture(g.id);
     const ui::Color grey{0.62f, 0.62f, 0.62f, 1};
     const ui::Color c = style.accent_hi;
@@ -204,14 +214,20 @@ void GamesPage::draw_classic(ui::DrawList& list, const ClassicArt& art, int widt
   float y = kListTop;
   for (int i = 0; i < count(); i++) {
     const bool game = i < static_cast<int>(rows_.size());
-    const float tall = game ? name_h + (art.plates() ? 12 : 14) : 12;
+    const bool pack = game && !rows_[static_cast<size_t>(i)].pack.empty();
+    const float tall = game && !pack ? name_h + (art.plates() ? 12 : 14) : 12;
     cells_.push_back(pen.at(kListLeft, y, kListRight - kListLeft, tall));
-    if (i == selected_) classic_cursor(pen, game ? y + name_h / 2 - 4 : y, t);
+    if (i == selected_) classic_cursor(pen, game && !pack ? y + name_h / 2 - 4 : y, t);
     if (!game) {
       pen.text("Add game", x, y, true);
       break;
     }
     const GameRow& g = rows_[static_cast<size_t>(i)];
+    if (pack) {  // a mission pack: its title in the glyphs, set in under its game
+      pen.text(glyph_safe(g.pack_name), x + 16, y, g.playing);
+      y += tall + 4;
+      continue;
+    }
     // The name cut from the menu strips' own carved letters where they were measured, else its
     // picture.
     const ui::Image& name = game_name_picture(g.id);

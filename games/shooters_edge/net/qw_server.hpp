@@ -80,6 +80,7 @@
 #include "server/names.hpp"
 #include "server/skew.hpp"
 #include "server/status.hpp"
+#include "server/web_files.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/qw_antilag.hpp"
 #include "shooters_edge/net/qw_svc.hpp"
@@ -177,6 +178,7 @@ struct ServerConfig {
   int ip_limit = 0;      // sv_iplimit: the most seats one address holds (0: none; server/admission)
   bool locked = false;   // sv_locked: no new clients but one taking back its seat (admission)
   std::string redirect;  // sv_redirect: where a newcomer is sent when full ("!" first: everyone)
+  std::string ruleset;   // sv_ruleset: the ruleset a player keeps to ("" any; server/admission)
   int vip_slots = 0;     // sv_vipslots: the players' last slots only a VIP takes (server/admission)
   int idle_time = 0;     // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
   ge::server::SkewRule skew;   // sv_speedwindow, sv_speedwarn, sv_speedkick (server/skew.hpp)
@@ -195,6 +197,11 @@ struct ServerConfig {
   // server's files from instead, said in the server info as `*dlserver` (classic/content/
   // web_downloads.hpp); "": none.
   std::string download_server;
+  // The server's own web files (engine/server/web_files.hpp, sv_http_*): their settings, and once
+  // they are served the address told (`*dlserver` when sv_downloadserver is not set; `{server}`
+  // for the host the client joined) and their certificate's digest (`*dlpin`, "": none).
+  ge::server::WebFilesConfig web;
+  std::string web_url, web_pin;
   int safe_strafe = 0;  // sv_safestrafe
   uint32_t seed = 1;    // the challenges' stream
   // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
@@ -483,6 +490,9 @@ std::string status_text(const QwServer& s, int opt);
 // Every connected client as a hub's status record's players (net/status.hpp): name, team, frags,
 // ping, minutes; a local seat as a bot, a spectator as one.
 void status_players(const QwServer& s, std::vector<ge::net::StatusPlayer>& out);
+// Whether the download switches (sv_download, sv_download_skins ...) let a client have the file at
+// `path`; false with the reason. The game's channel and its web files are held to it alike.
+bool qw_download_allowed(const QwServer& s, const std::string& path, std::string& why);
 
 // ---- Shared by the endpoint's files (qw_server.cpp, qw_signon.cpp,
 //      qw_frame.cpp); not an API for a caller. ----
@@ -509,5 +519,9 @@ EntityState entity_state(const QwServer& s, int e);
 void entity_look(EntityState& st, float alpha, float scale, const float colormod[3]);
 // A player's stats as the server sends them (`view_height`: the z set's view height in 16).
 void player_stats(const QwServer& s, int slot, int32_t out[kStats], bool view_height);
+// The items word a client is sent (its stat 15): the program's item bits, with its `items2` from
+// bit 23 up when it defines one (a mission pack's new weapons and items), else the runes from bit
+// 28.
+int32_t items_word(const sv::RulesWorld& w, const sv::PlayerNumbers& n);
 
 }  // namespace shooters_edge::net

@@ -1015,3 +1015,27 @@ TEST(classic_game_setmaster_pings_and_beats_to_the_master) {
   listen();
   CHECK(!heard.empty() && heard.back() == "C\n");
 }
+
+// The move's server settings reach a joined client as the server set them (its server data's move
+// values: gravity, stop speed, top speed, a spectator's speed, the accelerations on the ground and
+// in water, friction and water friction), so its prediction moves as the server does.
+TEST(classic_game_the_moves_settings_reach_the_joined_client) {
+  ServerConfig c = arena();
+  c.rules["sv_gravity"] = "700";
+  c.rules["sv_stopspeed"] = "50";
+  c.rules["sv_maxspeed"] = "300";
+  c.rules["sv_spectatormaxspeed"] = "400";
+  c.rules["sv_accelerate"] = "7";
+  c.rules["sv_wateraccelerate"] = "6";
+  c.rules["sv_friction"] = "3";
+  c.rules["sv_waterfriction"] = "2";
+  Session r;
+  run_session(r, c, 200);
+  CHECK_MSG(r.opened, r.error);
+  CHECK(r.client.stage == se::ClientStage::active);
+  const float want[10] = {700, 50, 300, 400, 7, 0, 6, 3, 2, 0};
+  for (int i = 0; i < 10; i++)
+    if (i != 5 && i != 9)  // the air's acceleration and the entity gravity are not set here
+      CHECK_MSG(r.client.movevars[i] == want[i],
+                "move value " + std::to_string(i) + " is " + std::to_string(r.client.movevars[i]));
+}

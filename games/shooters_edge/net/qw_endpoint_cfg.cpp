@@ -18,6 +18,7 @@
 #include "server/rate.hpp"
 #include "server/skew.hpp"
 #include "server/status.hpp"
+#include "server/web_files.hpp"
 
 namespace shooters_edge::net {
 
@@ -145,6 +146,7 @@ std::span<const gs::GameRule> endpoint_rules() {
                                             std::span<const gs::GameRule>(gs::kLimitRules),
                                             std::span<const gs::GameRule>(gs::kStatusRules),
                                             std::span<const gs::GameRule>(gs::kLrconRules),
+                                            std::span<const gs::GameRule>(gs::kWebFilesRules),
                                             std::span<const gs::GameRule>(kEndpointRules)})
       for (const gs::GameRule& r : t) out.push_back(r);
     return out;
@@ -244,6 +246,7 @@ bool vip_words(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error)
   if (const auto p = c.rules.find("sv_vippassword"); p != c.rules.end())
     cfg.vip_passwords = words(p->second);
   if (const auto p = c.rules.find("sv_redirect"); p != c.rules.end()) cfg.redirect = p->second;
+  if (const auto p = c.rules.find("sv_ruleset"); p != c.rules.end()) cfg.ruleset = p->second;
   if (const auto v = c.rules.find("sv_vipvalues"); v != c.rules.end()) {
     cfg.vip_values.clear();
     for (const std::string& n : words(v->second)) {
@@ -324,6 +327,7 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
   cfg.reconnect_wait_s = reconnect_wait;
   if (const auto it = c.rules.find("sv_downloadserver"); it != c.rules.end())
     cfg.download_server = it->second;
+  if (!gs::web_files_config(c, cfg.web, error)) return false;
   cfg.locked = locked != 0;
   if (const auto it = c.rules.find("lrcon_password"); it != c.rules.end())
     cfg.lrcon.password = it->second;

@@ -37,6 +37,8 @@ struct LookBlock {
   float f[4];
   float g[4];
   float h[4];  // the view's rectangle: its corner and 1 - its size, shares (0, 0, 0, 0: all)
+  float i[4];  // the edge blend: an sRGB-encoded colour, its share at the edge
+  float j[4];  // the edge blend's depth (a share of the shorter side; 0 flat), -, -, -
 };
 
 }  // namespace
@@ -161,6 +163,8 @@ void set_post_look(gpu::Device& device, const Post& post, const PostLook& look) 
                         {0, 0, 0, 0},
                         {0, 0, 0, 0},
                         {0, 0, 0, 0},
+                        {0, 0, 0, 0},
+                        {0, 0, 0, 0},
                         {0, 0, 0, 0}};
   // The lens's and the film's strengths and the focus; the blend is the game's (set_post_blend).
   device.queue.WriteBuffer(post.look, 0, &block, offsetof(LookBlock, d));
@@ -170,6 +174,22 @@ void set_post_blend(gpu::Device& device, const Post& post, const double rgba[4])
   const auto f = [](double v) { return static_cast<float>(std::clamp(v, 0.0, 1.0)); };
   const float d[4] = {f(rgba[0]), f(rgba[1]), f(rgba[2]), f(rgba[3])};
   device.queue.WriteBuffer(post.look, offsetof(LookBlock, d), d, sizeof d);
+}
+
+void set_post_edge_blend(gpu::Device& device, const Post& post, const double rgba[4], double frac) {
+  const auto f = [](double v, double hi) { return static_cast<float>(std::clamp(v, 0.0, hi)); };
+  const float ij[8] = {
+      f(rgba[0], 1), f(rgba[1], 1), f(rgba[2], 1), f(rgba[3], 1), f(frac, 0.5), 0, 0, 0};
+  device.queue.WriteBuffer(post.look, offsetof(LookBlock, i), ij, sizeof ij);
+}
+
+double edge_blend_share(double u, double v, double w, double h, double alpha, double frac) {
+  alpha = std::clamp(alpha, 0.0, 1.0);
+  frac = std::clamp(frac, 0.0, 0.5);
+  if (frac <= 0 || !(w > 0) || !(h > 0)) return alpha;
+  const double across = std::min(u, 1 - u) * w, down = std::min(v, 1 - v) * h;
+  const double in = std::max(std::min(across, down), 0.0) / (frac * std::min(w, h));
+  return in >= 1 ? 0 : alpha * (1 - in);
 }
 
 PostWarp arrival_warp(double age_s, double strength, const double tint[3]) {

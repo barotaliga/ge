@@ -8,6 +8,7 @@
 // ge:keywords test hud shooter looks hud_style classic modern compact free-art classic-art
 // ge:keywords portrait flash low-figures shield layout-problems
 // ge:skill ui testing
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <span>
@@ -512,4 +513,153 @@ TEST(the_crosshair_cvars_pick_its_mark_colour_size_and_opacity) {
   se::fill_hud(hud, armed(), pal);
   const gh::Content& red = content(hud, "crosshair");
   CHECK(red.on && red.color.r == 1 && red.color.g == 0 && red.color.b == 0);
+}
+
+namespace {
+
+// A classic set from pictures of the sizes the packs' are, with one mission pack's own pictures
+// too (`pack`: "armagon", "eternity" or none), each a solid colour by its name's length.
+se::HudArt pack_set(std::string_view pack) {
+  std::vector<std::string> names = classic_names();
+  if (pack == "armagon") {
+    for (const char* g : {"laser", "mjolnir", "gren_prox", "prox_gren", "prox"}) {
+      names.push_back(std::string("inv_") + g);
+      names.push_back(std::string("inv2_") + g);
+      for (int f = 1; f <= 5; ++f) names.push_back("inva" + std::to_string(f) + "_" + g);
+    }
+    names.insert(names.end(), {"sb_wsuit", "sb_eshld"});
+  }
+  if (pack == "eternity")
+    names.insert(names.end(), {"r_invbar1", "r_invbar2", "r_teambord", "r_lava", "r_superlava",
+                               "r_gren", "r_multirock", "r_plasma", "r_ammolava", "r_ammomulti",
+                               "r_ammoplasma", "r_shield1", "r_agrav1"});
+  const se::PictureFind find = [names](std::string_view name, ui::Image* out) {
+    if (std::find(names.begin(), names.end(), name) == names.end()) return false;
+    const int w = name == "conchars"                                                 ? 128
+                  : name == "sbar" || name == "ibar" || name.starts_with("r_invbar") ? 320
+                  : name.ends_with("lightng") || name == "r_plasma"                  ? 48
+                                                                                     : 24;
+    const int h = name == "conchars" ? 128 : 24;
+    *out = ui::make_image(w, h, {static_cast<float>(name.size()) / 16, 0.5f, 0.5f, 1});
+    return true;
+  };
+  se::HudArt a;
+  std::string error;
+  CHECK_MSG(se::classic_art(find, "the test's pictures", &a, &error), error);
+  a.palette.assign(768, 0);
+  for (size_t k = 0; k < 768; ++k) a.palette[k] = static_cast<uint8_t>(k / 3);  // grey by index
+  a.finish();
+  return a;
+}
+
+}  // namespace
+
+TEST(a_mission_packs_set_loads_only_whole_and_says_which_pack) {
+  CHECK(pack_set("").pack == se::Pack::none);
+  CHECK(pack_set("armagon").pack == se::Pack::armagon);
+  CHECK(pack_set("eternity").pack == se::Pack::eternity);
+}
+
+TEST(scourge_of_armagon_draws_its_guns_items_and_keys_off_the_items_word) {
+  const se::HudArt a = pack_set("armagon");
+  se::Hud hud = se::make_hud();
+  se::Status s = armed();
+  s.t = 50;
+  // Every base gun, the laser cannon (bit 23) in hand, Mjolnir (7), the launcher (4) with the
+  // proximity gun (16), the wetsuit (bit 24), the silver key.
+  s.items = 0x7fu | 1u << 23 | 1u << 7 | 1u << 16 | 1u << 24 | 1u << 17;
+  s.in_hand = 1u << 23;
+  s.weapon = se::Weapon::melee;
+  s.key_silver = true, s.key_gold = false;
+  se::fill_hud(hud, s, a);  // the first word: every bit rose now, every gun flashing
+  s.t = 52;
+  se::fill_hud(hud, s, a);
+  const auto& gun = [&](size_t k) { return content(hud, "ibar_guns").cells[k]; };
+  CHECK(content(hud, "ibar_guns").cells.size() == 9);
+  CHECK(gun(7).show && gun(7).image == &a.armagon_gun[0].lit);    // the laser cannon in hand
+  CHECK(gun(8).show && gun(8).image == &a.armagon_gun[1].plain);  // Mjolnir
+  CHECK(gun(4).image == &a.armagon_gun[3].plain);  // the launcher and the prox gun, neither out
+  s.in_hand = 1u << 16;
+  se::fill_hud(hud, s, a);
+  CHECK(gun(4).image == &a.armagon_gun[3].lit);  // the prox gun out over the launcher
+  s.in_hand = 16;
+  se::fill_hud(hud, s, a);
+  CHECK(gun(4).image == &a.armagon_gun[2].lit);  // the launcher out over the prox gun
+  const auto& items = content(hud, "ibar_items").cells;
+  CHECK(items.size() == 8 && items[6].show && !items[7].show);  // the wetsuit, no shields
+  CHECK(!items[0].show);                                        // the keys left the inventory bar
+  const gh::Content& keys = content(hud, "sbar_keys");
+  CHECK(keys.on && keys.cells.size() == 2 && keys.cells[0].show && !keys.cells[1].show);
+  CHECK(!content(hud, "sbar_team").on);
+  // A pickup flashes off its bit's rise: Mjolnir's taken away and picked up again.
+  s.items &= ~(1u << 7);
+  se::fill_hud(hud, s, a);
+  s.items |= 1u << 7;
+  s.t = 52.25;
+  se::fill_hud(hud, s, a);
+  s.t = 52.5;
+  se::fill_hud(hud, s, a);
+  CHECK(gun(8).image == &a.armagon_gun[1].flash[2]);
+}
+
+TEST(dissolution_of_eternity_draws_its_guns_bars_ammo_items_and_team_border) {
+  const se::HudArt a = pack_set("eternity");
+  se::Hud hud = se::make_hud();
+  se::Status s = armed();
+  s.t = 50;
+  // The base guns, the lava nailgun (4096) in hand, armour 2 (bit 24), lava nails (bit 26) and no
+  // base ammunition bit, the power shield (bit 29).
+  s.items = 0x7fu | 4096u | 1u << 24 | 1u << 26 | 1u << 29;
+  s.in_hand = 4096;
+  s.weapon = se::Weapon::melee;
+  s.armour_class = se::ArmourClass::none;
+  s.current_ammo = 7;
+  se::fill_hud(hud, s, a);
+  CHECK(content(hud, "ibar").image == &a.eternity_bar[0]);
+  CHECK(content(hud, "ibar_guns").cells.size() == 7);
+  CHECK(content(hud, "ibar_guns").cells[2].image == &a.eternity_gun[0]);
+  CHECK(content(hud, "sbar_armour_icon").image == &a.armour[1]);
+  CHECK(content(hud, "sbar_ammo_icon").image == &a.eternity_ammo[0]);
+  CHECK(content(hud, "sbar_ammo").value == "7" && content(hud, "sbar_ammo").alt);
+  const auto& items = content(hud, "ibar_items").cells;
+  CHECK(items.size() == 8 && items[6].show && !items[7].show);
+  CHECK(items[6].image == &a.eternity_item[0]);
+  CHECK(!content(hud, "sbar_keys").on && !content(hud, "sbar_team").on);
+  // A base gun in hand: the other bar, the base slot's own picture.
+  s.in_hand = 2;
+  s.weapon = se::Weapon::double_shotgun;
+  se::fill_hud(hud, s, a);
+  CHECK(content(hud, "ibar").image == &a.eternity_bar[1]);
+  CHECK(content(hud, "ibar_guns").cells[2].image != &a.eternity_gun[0]);
+  // Capture the flag: the border in the portrait's place, the colours and the frags on it.
+  s.multiplayer = true, s.teamplay = 4, s.shirt = 4, s.pants = 12, s.frags = 17;
+  se::fill_hud(hud, s, a);
+  CHECK(content(hud, "sbar_team").on && !content(hud, "sbar_face").on);
+  const gh::Content& f = content(hud, "sbar_team_frags");
+  CHECK(f.on && f.cells.size() == 1 && f.cells[0].text == "17");
+  CHECK(f.face == &a.plain_face);
+  CHECK(std::fabs(f.cells[0].plate.r - 72.0f / 255) < 1e-6f);  // palette 16 x 4 + 8
+  CHECK(std::fabs(f.cells[0].plate_low.r - 200.0f / 255) < 1e-6f);
+  s.teamplay = 1;
+  se::fill_hud(hud, s, a);
+  CHECK(!content(hud, "sbar_team").on && content(hud, "sbar_face").on);
+}
+
+TEST(the_base_game_flashes_a_gun_off_its_bits_rise_and_ignores_a_packs_bits) {
+  se::Hud hud = se::make_hud();
+  se::Status s = armed();
+  s.items = 0x7fu;
+  s.in_hand = 32;
+  se::fill_hud(hud, s, art());
+  s.t += 2;
+  s.items = 0x7fu | 1u << 23;  // a pack's bit with the base pictures: nothing new drawn
+  se::fill_hud(hud, s, art());
+  CHECK(content(hud, "ibar_guns").cells.size() == 7);
+  CHECK(content(hud, "ibar_guns").cells[2].image == &art().gun[2]);
+  s.items &= ~4u;
+  se::fill_hud(hud, s, art());
+  s.items |= 4u;
+  se::fill_hud(hud, s, art());
+  CHECK(content(hud, "ibar_guns").cells[2].image == &art().gun_flash[2][0]);
+  CHECK(content(hud, "ibar_items").cells.size() == 6);
 }

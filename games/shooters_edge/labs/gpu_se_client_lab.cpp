@@ -65,6 +65,7 @@
 #include <filesystem>
 #include <memory>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -857,6 +858,25 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       places.push_back(p);
     }
   }
+  // `--fields="items 8388735; weapon 8388608"`: the player's fields set by name before the views
+  // (a mission pack's weapons and items, its `items2`), then a second and a half run so the
+  // pickups' flash is over.
+  if (const std::string fields = lab.arg("fields"); !fields.empty()) {
+    for (size_t a = 0; a < fields.size();) {
+      const size_t b = std::min(fields.find(';', a), fields.size());
+      std::istringstream one(fields.substr(a, b - a));
+      std::string name;
+      double value = 0;
+      if (one >> name >> value) cl::set_field_named(l, 1, name.c_str(), static_cast<float>(value));
+      a = b + 1;
+    }
+    se::fill_hud(hud, cl::status_of(l, t), art);  // the HUD sees the pickups now
+    for (int i = 0; i < 120; i++) {
+      cl::listen_frame(l, {});
+      t += 0.013;
+      cl::frame_view(l, shown, 1, t, 0.013);
+    }
+  }
   // `--weapon=<impulse>`: every weapon and ammunition given, that one taken in hand and raised.
   if (const int impulse = static_cast<int>(lab.arg_num("weapon")); impulse > 0) {
     cl::set_field_named(l, 1, "items", 1 + 2 + 4 + 8 + 16 + 32 + 64 + 4096);
@@ -1311,6 +1331,9 @@ const gl::LabSpec kSpec{
      {"fire-after", "15",
       "with --fire: frames after attack is let go that the -fired views are drawn (0: as it is let "
       "go, the shot in the air)"},
+     {"fields", "",
+      "with --game: the player's fields set by name first, ';' between (`items 8388735; weapon "
+      "8388608`): a mission pack's weapons and items on the status bar"},
      {"weapon", "0",
       "with --game: every weapon and its ammunition given and this impulse's taken in hand first "
       "(7: the rocket launcher)"},
