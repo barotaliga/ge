@@ -152,6 +152,9 @@ float carved_width(const ClassicArt& art, std::string_view id);
 ClassicLayout classic_screen(int width, int height);
 // The same for the art's own screen: Quake II's plates' 320 x 240 (above), else 320 x 200.
 ClassicLayout classic_screen(const ClassicArt& art, int width, int height);
+// A screen `tall` classic px high (its 320 x 200 middle drawn on) at `want` screen px a classic
+// px, or with `want` 0 at `share` of the largest whole number that fits (rounded, at least 1).
+ClassicLayout classic_screen(int width, int height, float tall, float want, float share);
 // Quake II's banner for a page (`m_banner_options`), or empty.
 std::string_view banner_of(std::string_view page);
 // A page's title written on a banner of Quake II's (plate_letters.hpp), centred on the 320 px

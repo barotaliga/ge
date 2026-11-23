@@ -279,6 +279,25 @@ int run_main(int argc, char** argv) {
     if (!line.starts_with('\n'))  // not a banner: the feeds (cl_chat_notify, scr_chathud)
       cl::tell_feeds(remote.ignore.chat, hud.notify, line, chat, se::hud_style().ink, at, &ns);
   };
+  // The listen server's prints to the player: a line may come in several (a backpack's "You get ",
+  // "25 shells", ", ", "5 rockets", the newline), so the frame's prints are joined and told a whole
+  // line at a time; what is left without its newline at the frame's end is told as it stands.
+  const auto tell_prints = [&](size_t& from, double at) {
+    std::string part;
+    for (; from < listen.prints.size(); from++) {
+      const std::string& piece = listen.prints[from];
+      if (part.empty() && (piece.empty() || piece.back() == '\n')) {
+        tell(piece, at);  // a whole line (a banner's leading newline kept)
+        continue;
+      }
+      part += piece;
+      if (const size_t end = part.rfind('\n'); end != std::string::npos) {
+        tell(part.substr(0, end + 1), at);
+        part.erase(0, end + 1);
+      }
+    }
+    if (!part.empty()) tell(part, at);
+  };
   hud.chat = &remote.ignore.chat.feed;  // the chat lines on screen (scr_chathud)
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
@@ -506,7 +525,7 @@ int run_main(int argc, char** argv) {
     cl::draw_title_backdrop(overlay, con_look, w, h, no_night);  // a classic game's own
     if (lobby) {
       const se::LobbyView lv = cl::listen_lobby_view(listen);
-      if (game_menu.art().loaded())
+      if (game_menu.classic())  // the game's own look: Quake's strips or Quake II's letters
         shooters_edge::menu::draw_lobby_page_classic(overlay, game_menu.art(), lv, w, h);
       else
         se::draw_lobby_page(overlay, lv, w, h);
@@ -1083,6 +1102,17 @@ int run_main(int argc, char** argv) {
     const std::string map_before = next_map;
     const bool joined_before = remote.active;
     con_keys.menu = game_menu.open();  // a menu has the keys: only F1..F12 run their binds
+    // While a lobby runs its keys are its own (lobby_keys, below), not the pack's binds on them
+    // (Quake II's F4 opens the controls).
+    con_keys.taken.clear();
+    if (listen.room && listen.room->lobby.phase != cl::sv::LobbyPhase::match) {
+      using ge::platform::Key;
+      for (const Key k : {Key::f1, Key::f2, Key::f4})
+        con_keys.taken.push_back(static_cast<uint16_t>(k));
+      if (cl::on_lobby_screen(listen))
+        for (const Key k : {Key::f5, Key::f6, Key::enter})
+          con_keys.taken.push_back(static_cast<uint16_t>(k));
+    }
     ge::ui::feed_console(console, con_view, queue, con_keys);
     if (con_view.typing() != text_on) {
       text_on = con_view.typing();
@@ -1090,7 +1120,7 @@ int run_main(int argc, char** argv) {
     }
     // The console's text selected with the mouse (Command-C copies it, ui/console_keys.hpp).
     ge::ui::select_with_pointer(
-        con_view, con_look.on() ? con_look.style : ge::ui::ConsoleStyle{}, h,
+        con_view, con_look.on() ? con_look.style : ge::ui::ConsoleStyle{}, w, h,
         input.pointer_x * px_per_unit, input.pointer_y * px_per_unit,
         (input.pointer_buttons & 1u) != 0 && con_view.open() && !game_menu.open(), selecting_text);
     // The main menu: Escape opens it and goes back out of it; while it is up it has the keys and
@@ -1687,7 +1717,7 @@ int run_main(int argc, char** argv) {
       cl::record_tick(recorder, listen, frames, console);
       hear_here(wall);
       if (std::exchange(listen.restarted, false)) forget_seen();
-      for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+      tell_prints(printed, t);
       title_frame(t, wall, {}, 0, true);
       ++presented;
       continue;
@@ -1753,7 +1783,7 @@ int run_main(int argc, char** argv) {
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");
     }
-    for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+    tell_prints(printed, t);
     if (centred > listen.centres.size()) centred = 0;     // a new listen
     for (; centred < listen.centres.size(); centred++) {  // a centre print: the last one shows
       hud.centre = listen.centres[centred];
@@ -1821,7 +1851,7 @@ int run_main(int argc, char** argv) {
       se::LobbyView lv = cl::listen_lobby_view(listen);
       // A classic game counts down in its own centre print (server/announce.hpp).
       lv.count = shooters_edge::server::words_of(listen.server->localinfo, "count_head").empty();
-      if (game_menu.art().loaded())
+      if (game_menu.classic())  // the game's own look: Quake's strips or Quake II's letters
         shooters_edge::menu::draw_lobby_classic(overlay, game_menu.art(), lv, w, h);
       else
         se::draw_lobby(overlay, lv, w, h);

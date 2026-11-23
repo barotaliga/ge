@@ -56,6 +56,25 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                     .values = "auto: the game's own (the default); \"\": none, the title's night "
                               "sky; TEXT: these recordings, by name"},
                    &attract_);
+  con.cvars().bind({.name = "lobby_scale",
+                    .fallback = "0",
+                    .flags = ge::console::kArchive,
+                    .help = "How large the lobby is drawn in the game's own look.",
+                    .min = 0,
+                    .max = 10,
+                    .values = "0: by the window, a quarter smaller than the menu (the default); "
+                              "1..10: that many times the game's own size"},
+                   &art_.lobby_scale);
+  con.cvars().bind({.name = "scores_scale",
+                    .fallback = "0",
+                    .flags = ge::console::kArchive,
+                    .help = "How large the scoreboard and the level's end are drawn in the "
+                            "game's own look.",
+                    .min = 0,
+                    .max = 10,
+                    .values = "0: as large as fits the window (the default); 1..10: that many "
+                              "times the game's own size"},
+                   &art_.scores_scale);
   con.cvars().bind({.name = "menu_look",
                     .fallback = "auto",
                     .flags = ge::console::kArchive,
@@ -157,9 +176,12 @@ void GameMenu::add_cvars(ge::console::Console& con) {
 }
 
 void GameMenu::set_art(ClassicArt art) {
-  const float scale = art_.scale;  // the game's setting outlives the pictures
+  // The player's sizes outlive the pictures.
+  const float scale = art_.scale, lobby = art_.lobby_scale, scores = art_.scores_scale;
   art_ = std::move(art);
   art_.scale = scale;
+  art_.lobby_scale = lobby;
+  art_.scores_scale = scores;
 }
 
 void GameMenu::load_refused(std::string why) {

@@ -159,6 +159,16 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
                   "stains (1 the default)"},
        &picture.blood_amount);
   bind(cv,
+       {.name = "r_particle_scale",
+        .flags = gc::kArchive,
+        .help = "How large the specks the effects throw are: blood, sparks, where a shot or a "
+                "nail hits, trails.",
+        .min = 0.25,
+        .max = 8,
+        .values = "1: their own size (the default); 0.25..8: that many times it (2 or 3 shows "
+                  "plainly where a shot lands)"},
+       &picture.particle_scale);
+  bind(cv,
        {.name = "ce_water_specks",
         .flags = gc::kArchive,
         .help = "How many specks float in the water round you while you swim under it in the "
@@ -328,7 +338,7 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
              "1: it does (the default); 0: it does not", &picture.explosion_light},
         Kind{"r_powerupglow", "Whether a player with a power glows.",
              "1: they do (the default); 0: they do not", &picture.power_glow},
-        Kind{"r_waterwarp", "Whether the view sways while you are under water.",
+        Kind{"r_waterwarp", "Whether the picture wobbles while you are under water.",
              "1: it does (the default); 0: it holds still", &picture.water_warp},
         Kind{"r_drawentities", "Whether players, monsters and items are drawn.",
              "1: they are (the default); 0: only the map is", &picture.draw_entities},
@@ -752,11 +762,6 @@ bool crisp_textures(const Picture& picture, Look look) {
   return look == Look::classic;
 }
 
-double warped_fov(const Picture& picture, bool in_liquid, double fov_y, double t) {
-  if (!picture.water_warp || !in_liquid) return fov_y;
-  return fov_y * (1 + kWaterWarp * ge::core::libm::sin(2 * 3.14159265358979 * kWaterWarpHz * t));
-}
-
 bool rgb_words(std::string_view text, double out[3]) {
   double v[3];
   size_t n = 0, i = 0;
@@ -849,6 +854,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.fire_pace = picture.fire_pace;
     base.water_pace = picture.water_pace;
     base.water_specks = picture.water_specks;
+    base.water_warp = picture.water_warp;
     base.fill_shadows = picture.fill_shadows > 0.5;
     base.glow =
         picture.ce.glow ? picture.glow : 1;  // ce_glow off: the bright texels as the classic's

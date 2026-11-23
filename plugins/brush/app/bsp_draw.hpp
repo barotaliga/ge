@@ -140,6 +140,9 @@ struct Options {
   // The specks suspended in the water seen from under it (render/underwater.hpp's `motes`), a
   // share of the look's own: 0 none, 1 as the look has them.
   double water_specks = 1;
+  // The picture's wobble seen from under the water (render/underwater.hpp's `warp`): the look's
+  // own, or none.
+  bool water_warp = true;
   // The glowing texels' light under the real-time lights (a window's, a lamp's panel), a share of
   // a white face's as the map lights it (the classic's fullbright: 1; the lightmaps' paths keep 1).
   double glow = 1;

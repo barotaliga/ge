@@ -103,14 +103,11 @@ TEST(a_forced_colour_is_off_one_colour_or_top_and_bottom) {
   CHECK(lk::parse_forced_colours("off", "", &top, &bottom) && top == -1 && bottom == -1);
 }
 
-TEST(the_view_breathes_only_in_a_liquid_and_only_with_r_waterwarp) {
+TEST(r_waterwarp_switches_the_wobble_under_water) {
   lk::Picture p;
-  const double fov = 1.2;
-  CHECK(lk::warped_fov(p, false, fov, 0.7) == fov);
-  CHECK(lk::warped_fov(p, true, fov, 0) == fov);  // from rest
-  CHECK(lk::warped_fov(p, true, fov, 0.5) != fov);
+  CHECK(lk::world_options(lk::Look::modern, {}, p).water_warp);
   p.water_warp = false;
-  CHECK(lk::warped_fov(p, true, fov, 0.5) == fov);
+  CHECK(!lk::world_options(lk::Look::modern, {}, p).water_warp);
 }
 
 TEST(the_last_classic_enhance_switches_reach_the_modern_looks_options) {

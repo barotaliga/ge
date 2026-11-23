@@ -32,7 +32,8 @@
 // ge:keywords look classic modern r_look r_fx_lights r_fx_glow r_bloom r_lava_glow ce-switches
 // ge:keywords stops quality-stop ce_shadows_quality ce_water_quality ce_skies_quality custom_stops
 // r_slime_glow cvars palette grade quantize gamma brightness gamma_grade
-// crisp bloom shooter picture picture-settings game-defaults r_waterwarp warped_fov
+// crisp bloom shooter picture picture-settings game-defaults r_waterwarp water-wobble
+// r_particle_scale
 // ge:skill classic shooter render
 // ge:test tests/classic_look_test.cpp
 #pragma once
@@ -148,7 +149,8 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // cl_muzzleflash: the light a gun throws on the walls as it fires: 1 every gun's (the default),
   // 2 the others' alone (the own gun's flash still shows in the hand, unlit), 0 none. Either look.
   int muzzle_flash = 1;
-  // r_waterwarp: the view breathes while the eye is in a liquid (`warped_fov`); 0 it holds still.
+  // r_waterwarp: the picture wobbles while the eye is under water (render/underwater.hpp's `warp`);
+  // 0 it holds still. The view's own field and the held weapon never move with it.
   bool water_warp = true;
   // r_drawentities: the players, monsters, items and missiles drawn; 0 none of them, the map's
   // walls, doors and lifts alone (`drawn_models`). Either look.
@@ -172,6 +174,10 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_particles: the specks the effects throw (sparks, blood, smoke, trails, splashes); 0 none
   // thrown, the explosions' fire and the beams still drawn. Either look.
   bool particles = true;
+  // r_particle_scale: how large the specks are (sparks, blood, a shot's and a nail's hits, trails),
+  // a share of their own size; the smoke's puffs keep theirs. Bigger reads where a shot lands with
+  // every enhancement off. Either look.
+  double particle_scale = 1;
   // scr_centertime: how long a centre message stays on the screen, s.
   double centre_time = 2;
   // gl_polyblend: 0 the view never tinted (below).
@@ -267,13 +273,6 @@ std::span<const T> drawn_models(const Picture& picture, std::span<const T> place
 // Whether the map's textures are drawn crisp in `look` under gl_texturemode: its first filter
 // (NEAREST or LINEAR, any case, the GL_ prefix optional), else the look's own (classic crisp).
 bool crisp_textures(const Picture& picture, Look look);
-// r_waterwarp's breath: the view's height swells and shrinks by kWaterWarp of itself, kWaterWarpHz
-// times a second, while the eye is in water, slime or lava, so the liquid reads as a lens round it.
-inline constexpr double kWaterWarp = 0.035, kWaterWarpHz = 0.45;
-// The field of view `fov_y` (rad) `t` s after the eye went into a liquid (`in_liquid`): as it is
-// out of one or with r_waterwarp 0, breathing by kWaterWarp at kWaterWarpHz in one, from rest at
-// t = 0.
-double warped_fov(const Picture& picture, bool in_liquid, double fov_y, double t);
 // r_lightmap's faces: a middle grey (sRGB), so the light reads as it falls, neither burnt white
 // nor lost in the dark.
 inline constexpr double kLightmapGrey = 0.5;

@@ -32,6 +32,13 @@ constexpr int kPageCols = 38, kNameCells = 12, kRosterLines = 14;
 // them near enough.
 constexpr ui::Color kRedLit = ui::hex(0xc04b2b), kBlueLit = ui::hex(0x3b5fa7);
 
+// The lobby's screen: the art's own (Quake II's 240 tall), at `lobby_scale` or, by the window, a
+// quarter smaller than the menu so the roster leaves the map round it.
+constexpr float kLobbyShare = 0.75f;
+ClassicLayout lobby_screen(const ClassicArt& art, int width, int height) {
+  return classic_screen(width, height, art.screen_height(), art.lobby_scale, kLobbyShare);
+}
+
 // `s` centred in a box of `cols` cells whose left edge is at `x`.
 void centred(const ClassicPen& pen, std::string_view s, float x, int cols, float y, bool alt) {
   const auto n = static_cast<int>(std::min(s.size(), static_cast<size_t>(cols)));
@@ -131,7 +138,7 @@ int lobby_classic_rows() {
 void draw_lobby_classic(ui::DrawList& dl, const ClassicArt& art, const hd::LobbyView& v, int width,
                         int height) {
   if (v.phase == hd::LobbyShown::match) return;
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = lobby_screen(art, width, height);
   const ClassicPen pen{dl, art, l};
   int seated = 0, ready = 0;
   bool me_ready = false;
@@ -155,7 +162,7 @@ void draw_lobby_classic(ui::DrawList& dl, const ClassicArt& art, const hd::Lobby
 void draw_lobby_page_classic(ui::DrawList& dl, const ClassicArt& art, const hd::LobbyView& v,
                              int width, int height) {
   if (v.phase == hd::LobbyShown::match) return;
-  const ClassicLayout l = classic_screen(width, height);
+  const ClassicLayout l = lobby_screen(art, width, height);
   const ClassicPen pen{dl, art, l};
   dl.rect({0, 0, static_cast<float>(width), static_cast<float>(height)}, ui::hex(0x050608, 0.4f));
   int seated = 0, ready = 0;
