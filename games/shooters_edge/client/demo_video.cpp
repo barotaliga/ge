@@ -237,6 +237,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
                    const ge::render::FrameView& view, FxScene& out) {
   out.map = map;
   out.areas = s.areas;
+  out.light_styles = s.light_styles;
   out.server = nullptr;
   out.pose.eye = {view.eye[0], view.eye[1], view.eye[2]};
   out.pose.yaw = view.heading;

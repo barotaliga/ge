@@ -123,6 +123,9 @@ bool add_file(SearchPath* sp, const std::string& dir, const std::string& name,
 const FileRef* find(const SearchPath& sp, std::string_view path);
 // The file's bytes; false with the reason.
 bool read(const SearchPath& sp, const FileRef& file, std::vector<uint8_t>* out, std::string* error);
+// A zip entry's packed bytes as they lie in its archive when they are a raw deflate stream
+// (method 8), for a peer that inflates them itself; false for any other file.
+bool deflated(const SearchPath& sp, const FileRef& file, std::span<const uint8_t>* out);
 // The file's bytes without a copy (a pack's file, a stored zip entry); empty for the others.
 std::span<const uint8_t> view(const SearchPath& sp, const FileRef& file);
 // The name the file is stored under in its source (its case kept).

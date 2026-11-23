@@ -857,6 +857,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // lift; the figures still take them.
     ba::set_dynamic_lights(
         f.bsp, f.picture && f.picture->flash_blend ? std::span<const effects::Light>() : lights);
+    for (size_t k = 0; k < fx.light_styles.size();
+         k++)  // the server's flicker, pulses and switches
+      if (f.bsp.light_styles[k] != fx.light_styles[k])
+        ba::set_light_style(f.bsp, static_cast<int>(k), fx.light_styles[k]);
     ba::set_areas(f.bsp,
                   f.from_above ? std::span<const uint8_t>() : std::span<const uint8_t>(fx.areas));
     // The moving models' shadows (M54): every model near the eye and the player himself.

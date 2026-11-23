@@ -582,6 +582,8 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   }
   pm.changed = p.changed;
   ge::classic::q2_feel(pm, q2_move_feel(s, slot));
+  if (s.clients[slot].protocol != 0)  // a stock client's flight, as it predicts it
+    ge::classic::q2_fly_for_protocol(pm, s.clients[slot].protocol);
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
   const bool was_on_ground = p.on_ground;
   ge::classic::q2_move(pm, mw.world());
