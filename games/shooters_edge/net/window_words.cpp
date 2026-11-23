@@ -148,6 +148,7 @@ void wire_remote_files(Remote& remote, ge::classic::content::SearchPath& files,
         const std::span<const uint8_t> got = ge::classic::content::find_file(*from, path, store);
         return std::vector<uint8_t>(got.begin(), got.end());
       };
+  remote.held = ge::classic::content::held_in_folder([&files] { return files.folder; });
   remote.keep_file = [&files, &basedir, &game, content, &locs_fetched](
                          const std::string& gamedir, const std::string& path,
                          const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin) {

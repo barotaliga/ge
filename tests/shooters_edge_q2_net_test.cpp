@@ -17,6 +17,7 @@
 #include <fstream>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/content/downloads.hpp"
 #include "console/cvar.hpp"
 #include "forward/forward.hpp"
 #include "net/conditions.hpp"
@@ -1013,6 +1015,61 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
   CHECK(!std::filesystem::exists(dir / "pak1.partial.pak"));
   CHECK(b.downloaded.size() == 2 && b.downloads_refused == 1 && stock_told == 0);
   CHECK(b.downloaded.count("maps/hall.bsp") == 0);
+  std::filesystem::remove_all(dir);
+}
+
+TEST(a_download_cut_short_is_resumed_from_what_is_held) {
+  // A skin's first 1000 bytes held from before (as `<path>.tmp`): the client asks for the rest
+  // from there, so it ends as the held bytes then the server's from 1000 on, and the held file
+  // goes once it is whole. A client holding nothing gets every piece added as it comes, the first
+  // one begun afresh.
+  const std::vector<uint8_t> red(2500, 7);
+  cn::Q2NetConfig cfg;
+  cfg.read_file = [&red](const std::string& path, std::vector<uint8_t>* out) {
+    if (path != "players/male/red.pcx") return false;
+    *out = red;
+    return true;
+  };
+  auto r = rig(cfg);
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge_q2_resume";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir / "players/male");
+  {
+    std::ofstream held(dir / "players/male/red.pcx.tmp", std::ios::binary);
+    const std::vector<char> first(1000, 5);
+    held.write(first.data(), std::streamsize(first.size()));
+  }
+  cn::Q2ClientConfig resumed;
+  resumed.name = "resumed";
+  resumed.fetch = true;
+  resumed.want = {"players/male/red.pcx"};
+  resumed.read_file = [](const std::string& path) {
+    return path.starts_with("maps/") ? std::vector<uint8_t>(1, 1) : std::vector<uint8_t>{};
+  };
+  resumed.held = ge::classic::content::held_in_folder([dir] { return dir.string(); });
+  cn::Q2ClientConfig fresh = resumed;
+  fresh.name = "fresh";
+  int adds = 0, fresh_adds = 0;
+  size_t added = 0;
+  fresh.held.read = nullptr;
+  fresh.held.add = [&](const std::string&, std::span<const uint8_t> bytes, bool first) {
+    adds++;
+    fresh_adds += first ? 1 : 0;
+    added += bytes.size();
+  };
+  fresh.held.drop = nullptr;
+  cn::Q2ClientEnd& a = join(*r, resumed);
+  cn::Q2ClientEnd& b = join(*r, fresh);
+  run(*r, 300);
+  CHECK_MSG(a.stage == cn::ClientStage::active, a.refused);
+  std::vector<uint8_t> want(1000, 5);
+  want.insert(want.end(), red.begin() + 1000, red.end());
+  CHECK(a.downloaded["players/male/red.pcx"] == want);
+  CHECK(!std::filesystem::exists(dir / "players/male/red.pcx.tmp"));
+  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+  CHECK(b.downloaded["players/male/red.pcx"] == red);
+  CHECK_MSG(adds >= 3 && fresh_adds == 1 && added == red.size(),
+            std::to_string(adds) + " adds, " + std::to_string(fresh_adds) + " fresh");
   std::filesystem::remove_all(dir);
 }
 

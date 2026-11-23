@@ -32,6 +32,7 @@
 #include <string>
 #include <vector>
 
+#include "classic/content/downloads.hpp"
 #include "classic/content/web_downloads.hpp"
 #include "classic/protocol/stuff_filter.hpp"
 #include "forward/forward.hpp"
@@ -85,6 +86,9 @@ struct Q2ClientConfig {
   // info, so our server tells each file's archive.
   bool fetch = false;
   bool ask_origins = true;
+  // `cl_footsteps` 0: on the later protocol (36) the server is told (client setting 11) and sends
+  // no footstep, at each `begin` and whenever it changes (q2_client_settings).
+  bool no_footsteps = false;
   // HTTP (classic/content/web_downloads.hpp): with a web address from the server (`dlserver=`) or
   // the player's own, the files lacked are fetched from it first, the channel taking those HTTP
   // gives back.
@@ -165,6 +169,9 @@ struct Q2ClientConfig {
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,
                      const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
+  // A download cut short is held (classic/content/downloads.hpp), each piece added as it comes, and
+  // the next time the file is asked for, the rest asked from the held length; dropped once whole.
+  ge::classic::content::HeldDownloads held;
   // THE WINDOW'S JOIN (qw_remote.hpp): what the server sends is read into `into` (the
   // window's drawn recording) in place of the client's own `demo`, the read bytes dropped as they
   // are read, and each payload's prints, effects and sounds kept in `news` until the window takes
@@ -211,6 +218,7 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<std::string> ignored;          // the lines said for stuffed commands dropped
   std::vector<std::string> prints;           // every print's text, in order (the first 256)
   int signon_steps = 0;                      // signon commands answered
+  int no_footsteps_told = -1;                // what the server was last told (-1: not yet)
   int levels = 0;                            // server data read
   double connected_at = -1, active_at = -1;  // the network's times, s
 
@@ -220,6 +228,7 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::string fetching;
   std::vector<uint8_t> fetched_bytes;
   int fetched_percent = 0;  // the server's share of it sent so far
+  size_t fetched_from = 0;  // the bytes held from before when it was resumed (Q2ClientConfig::held)
   bool fetched_origin = false;
   ge::vfs::ArchiveOrigin fetching_origin;
   std::string held_begin;
@@ -285,6 +294,9 @@ void q2_client_command(Q2ClientEnd& c, const std::string& line);
 std::string q2_download(Q2ClientEnd& c, const std::string& file);
 // The user info sent again as it stands in `c.cfg` (a setting in it changed while joined).
 void q2_client_userinfo(Q2ClientEnd& c);
+// The client settings `c.cfg` holds told to a server of the later protocol (36) where they moved
+// since it was last told (`no_footsteps`); nothing on another protocol.
+void q2_client_settings(Q2ClientEnd& c);
 // Its voice's target (`voicetarg <word>`: all, team, near, a slot), told to the server when it
 // changes once the server takes its voice.
 void q2_voice_target(Q2ClientEnd& c, const std::string& word);

@@ -395,14 +395,15 @@ struct Move {
     }
   }
 
-  // The spectator: its own friction (6 × 1.5), a three-axis wish, no collision.
+  // The spectator: its own friction (6 × 1.5, or `fly_friction`), a three-axis wish, no collision;
+  // with no speed to add, it glides on (`fly_glide`) or stays put for the command.
   void fly() {
     pm.view_height = 22;
     const float speed = length(velocity);
     if (speed < 1) {
       velocity = {};
     } else {
-      const auto fric = float(double(pm.friction) * 1.5);
+      const auto fric = pm.fly_friction > 0 ? pm.fly_friction : float(double(pm.friction) * 1.5);
       const float control = speed < kStopSpeed ? kStopSpeed : speed;
       const float drop = control * fric * seconds;
       float scale = speed - drop;
@@ -419,6 +420,7 @@ struct Move {
     Vec3f dir = wish;
     float wspeed = normalize(dir);
     if (wspeed > pm.max_speed) wspeed = pm.max_speed;
+    if (!pm.fly_glide && wspeed - dot(velocity, dir) <= 0) return;  // the original step: put
     accelerate(dir, wspeed, kAccelerate);
     origin = mad(origin, seconds, velocity);
   }
@@ -536,6 +538,7 @@ struct Move {
     if (pm.s.type == Q2Type::spectator) {
       pm.mins = {-16, -16, -24};
       pm.maxs = {16, 16, 32};
+      seconds = float(double(pm.fly_time) * double(pm.cmd.msec) * 0.001);
       fly();
       snap();
       return;

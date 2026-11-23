@@ -907,7 +907,12 @@ void user_info_step(Remote& r) {
   const int rate = rate_text.empty() ? 0 : std::atoi(rate_text.c_str());
   const std::string password = r.setting("password");
   if (r.q2) {  // name, skin, hand, fov, msg, gender, rate and password (q2_remote.hpp)
-    if (q2_user_info_moved(r.q2->cfg, r.setting)) q2_client_userinfo(*r.q2);
+    Q2ClientConfig& q = r.q2->cfg;
+    if (const std::string f = r.setting("cl_footsteps"); !f.empty()) {  // told on protocol 36
+      q.no_footsteps = std::atoi(f.c_str()) == 0;
+      q2_client_settings(*r.q2);
+    }
+    if (q2_user_info_moved(q, r.setting)) q2_client_userinfo(*r.q2);
     return;
   }
   ClientConfig& c = r.end.cfg;

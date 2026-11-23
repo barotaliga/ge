@@ -42,7 +42,9 @@
 #include "audio/pcm.hpp"
 #include "audio/synth.hpp"
 #include "brush/map.hpp"
+#include "classic/q2_footsteps.hpp"
 #include "classic/q2_fx_switches.hpp"
+#include "classic/q2_loop_merge.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
@@ -93,8 +95,10 @@ class DemoSounds {
   // `heard_as`; "" each as it is named), the sound list read again at once.
   void hear_as(std::string_view game);
   // Quake II's sound switches (null: Quake's, all on): `cl_footsteps` 0 starts no footstep
-  // (`player/step*`); `s_ambient` 0 no entity's loop, 2 only one with a model, 3 only the
-  // listener's own; `cl_hit_markers` under 2 no `weapons/marker.wav` (the hit's sound).
+  // (`player/step*`), 1 a step by the surface under it (classic/q2_footsteps.hpp: the level's
+  // `.mat` materials and step sets, read with the level), 2 the default set's; `s_ambient` 0 no
+  // entity's loop, 2 only one with a model, 3 only the listener's own; `cl_hit_markers` under 2 no
+  // `weapons/marker.wav` (the hit's sound).
   void switches_from(const ge::classic::Q2FxSwitches* q2) { q2_ = q2; }
 
  private:
@@ -112,6 +116,13 @@ class DemoSounds {
   // The loops the entities carry (DemoEntity::loop): each started, changed or stopped with them.
   void entity_loops(const DemoState& s, int listener);
   void stop_entity_loops();
+  // Quake II's loops merged (al_merge_looping: classic/q2_loop_merge.hpp): each sound's copies
+  // one voice, on the pseudo-entity kMergedEntity0 - its index, below the static loops'.
+  void merged_loops(const DemoState& s, int listener);
+  void stop_merged_loops();
+  static constexpr int kMergedEntity0 = -1000000;
+  std::vector<ge::classic::Q2Ears> merged_sum_;  // by sound index: the ears' summed shares
+  std::vector<uint8_t> merged_on_;               // by sound index: its merged voice plays
 
   ge::audio::Synth& synth_;
   const SearchPath& files_;
@@ -139,6 +150,13 @@ class DemoSounds {
   DemoSoundStats stats_;
   const bool* enhanced_ = nullptr;
   const ge::classic::Q2FxSwitches* q2_ = nullptr;
+  // Quake II's footsteps (a version 38 level): its step sets, its tracer, the step heard last and
+  // the steps heard, which roll the next variant (the same frames give the same steps).
+  std::optional<ge::classic::Q2StepSets> steps_;
+  std::unique_ptr<ge::brush::BrushTracer> step_tracer_;
+  std::string last_step_;
+  uint32_t steps_heard_ = 0;
+  const ge::audio::Pcm* step_sound(const DemoState& s, const DemoSound& d);
   bool listed_enhanced_ = false;  // the switch as the list was read
   std::filesystem::path cache_;   // the packs' cache folder ("" none)
   bool cache_known_ = false;      // looked for (or given)

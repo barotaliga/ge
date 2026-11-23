@@ -18,6 +18,7 @@
 #include "check.hpp"
 #include "classic/protocol/channel.hpp"
 #include "classic/protocol/wire.hpp"
+#include "core/deflate.hpp"
 #include "core/inflate.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
@@ -75,6 +76,8 @@ struct Raw {
   int config_strings = 0, baselines = 0, zpackets = 0, streams = 0;
   int frames = 0;
   int32_t last_frame = -1;
+  std::vector<uint8_t> download;  // the pieces' data as they came
+  int plain_pieces = 0, deflated_pieces = 0;
   int16_t origin[3] = {};
   bool saw_gun_index = false, saw_view_angles = false;
   std::vector<std::string> reliable_lines;  // string commands to send
@@ -212,6 +215,16 @@ void messages(Raw& c, gn::Reader& r) {
       c.zpackets++;
       gn::Reader inner = gn::make_reader(plain->data(), plain->size());
       messages(c, inner);
+    } else if (id == 16 || id == 22) {  // a download's piece: plain, or of a deflate stream
+      const int size = static_cast<int16_t>(sp::read_short(r));
+      sp::read_byte(r);
+      if (size > 0) {
+        const uint8_t* d = gn::read_view(r, static_cast<size_t>(size));
+        CHECK(d != nullptr);
+        if (d == nullptr) return;
+        c.download.insert(c.download.end(), d, d + size);
+      }
+      (id == 22 ? c.deflated_pieces : c.plain_pieces)++;
     } else if (id == 10) {
       sp::read_byte(r);
       c.prints.push_back(sp::read_string(r));
@@ -479,4 +492,38 @@ TEST(status_shows_the_later_protocols_numbers) {
   CHECK(misc.find("new") != std::string::npos);
   const std::string misc35 = cn::q2_misc_lines(r->server, 1);
   CHECK(misc35.find("35/1904") != std::string::npos);
+}
+
+// A file stored deflated in a `.pkz` goes to a 36 client from minor 1021 as the deflate stream it
+// lies as (message 22), which inflates to the file; an older minor gets the file itself (16).
+TEST(a_deflated_file_goes_to_a_later_client_as_its_deflate_stream) {
+  std::vector<uint8_t> file(3000);
+  for (size_t i = 0; i < file.size(); i++) file[i] = static_cast<uint8_t>((i * 7) % 13);
+  const std::vector<uint8_t> stream = ge::core::deflate_raw(file);
+  cn::Q2NetConfig cfg;
+  cfg.read_file = [&file](const std::string&, std::vector<uint8_t>* out) {
+    *out = file;
+    return true;
+  };
+  cfg.read_deflated = [&stream](const std::string&, std::vector<uint8_t>* out) {
+    *out = stream;
+    return true;
+  };
+  auto r = rig(cfg);
+  Raw& later = join(*r, 36, 1026, 1);
+  Raw& older = join(*r, 36, 1020, 1);
+  run(*r, 120);
+  CHECK(later.begun && older.begun);
+  later.reliable_lines.push_back("download models/box/tris.md2");
+  older.reliable_lines.push_back("download models/box/tris.md2");
+  for (int i = 0; i < 40; i++) {
+    run(*r, 2);
+    later.reliable_lines.push_back("nextdl");
+    older.reliable_lines.push_back("nextdl");
+  }
+  CHECK(later.deflated_pieces > 0 && later.plain_pieces == 0);
+  CHECK(later.download == stream);
+  const auto plain = ge::core::inflate_raw(later.download, file.size());
+  CHECK(plain.has_value() && *plain == file);
+  CHECK(older.plain_pieces > 0 && older.deflated_pieces == 0 && older.download == file);
 }

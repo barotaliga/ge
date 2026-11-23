@@ -26,6 +26,7 @@
 #include "server/net_restart.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/client/q2_flash_fx.hpp"
+#include "shooters_edge/client/q2_temp_fx.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
@@ -212,7 +213,14 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
     if (kind == 2 || kind == 12) b.push_back(static_cast<uint8_t>(count));
     for (float c : {ev.origin.x, ev.origin.y, ev.origin.z})
       sv::encode(b, sv::WriteKind::coord, c, "");
-    if (Effect classic; arena_effect(b, classic)) l.effects.push_back(classic);
+    if (Effect classic; arena_effect(b, classic)) {
+      if (const Q2Puff* puff = listen_is_q2(l) ? q2_puff(name) : nullptr) {  // Quake II's specks
+        classic.q2_specks = puff->count;
+        classic.colour = puff->colour;
+        classic.way = {ev.values[0], ev.values[1], ev.values[2]};
+      }
+      l.effects.push_back(classic);
+    }
     return;
   }
   e.kind = EffectKind::named;
