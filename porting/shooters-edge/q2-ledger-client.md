@@ -35,7 +35,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 ## Client console commands
 
-done 138, missing 1, not-taken 17
+done 139, missing 0, not-taken 17
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -200,7 +200,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 231, missing 9, not-taken 110
+done 232, missing 8, not-taken 110
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -598,7 +598,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 146, missing 4, not-taken 12
+done 147, missing 3, not-taken 12
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
