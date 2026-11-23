@@ -481,8 +481,10 @@ console over the run, the skier coasts on with no hands while it is down, Escape
 
 A RECIPE is a cfg an agent writes to drive a game's window with no one at the keyboard: join a
 server, open a page, press keys, read the page back, take a picture, quit. It is the console
-language and nothing more, run with `+exec`, so every game on the engine has it; the
-`window-recipes` skill is the procedure and keeps recipes to start from.
+language run with `+exec`; the `window-recipes` skill is the procedure and keeps recipes to start
+from. Its commands exist only in a window started with `-recipes` (`se -recipes ... +exec r.cfg`):
+a player's console has none of them, so no cfg, bind or server can press the menu or sleep past a
+ruleset's wait limit (`add_recipe_commands`, `GameMenu::add_cvars(con, true)`).
 
 | Command | Home | What it does |
 | --- | --- | --- |

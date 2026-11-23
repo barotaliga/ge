@@ -35,15 +35,15 @@ done
 root="$(git rev-parse --show-toplevel)"
 exe="$root/build/$preset/se"
 [[ -x "$exe" ]] || { echo "run.sh: no $exe; next: cmake --build --preset $preset --target se" >&2; exit 2; }
-args=(-classic "$game")
+args=(-classic "$game" -recipes)  # the recipe commands exist only with -recipes
 [[ -n "$basedir" ]] && args+=(-basedir "$basedir")
 log="$(mktemp -t recipe.XXXXXX)"
 status=0
 if command -v timeout >/dev/null; then
-  timeout "$limit" "$exe" "${args[@]}" "${sets[@]}" +set recipe_out "$out" \
+  timeout "$limit" "$exe" "${args[@]}" ${sets[@]+"${sets[@]}"} +set recipe_out "$out" \
     +exec "$(cd "$(dirname "$recipe")" && pwd)/$(basename "$recipe")" >"$log" 2>&1 || status=$?
 else
-  "$exe" "${args[@]}" "${sets[@]}" +set recipe_out "$out" \
+  "$exe" "${args[@]}" ${sets[@]+"${sets[@]}"} +set recipe_out "$out" \
     +exec "$(cd "$(dirname "$recipe")" && pwd)/$(basename "$recipe")" >"$log" 2>&1 || status=$?
 fi
 dump="$(sed -n 's/^console: Dumped console text to \(.*\)\.$/\1/p' "$log" | tail -1)"

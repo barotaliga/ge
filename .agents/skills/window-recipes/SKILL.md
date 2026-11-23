@@ -24,6 +24,8 @@ or look only when a recipe cannot answer (sound, feel, a GPU fault the picture d
 | `connect`, `disconnect`, `quit` | As a player types them |
 
 Arguments are cvars set before the recipe (`+set recipe_server host:port`), read as `$name`.
+`sleep` and the `menu_` recipe commands exist only when the window starts with `-recipes`
+(`run.sh` passes it); without it each is an unknown command, so a player's cfg never reaches them.
 
 ## The loop
 

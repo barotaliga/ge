@@ -11,8 +11,8 @@
 // calls within one `run`, with a problem naming the alias; a loop that waits is a loop on
 // purpose and runs on. Nothing here reads a clock: a frame is one `run`. A host that has a clock
 // (a game's window) hands it in with `set_clock` (clock_macros.hpp's `add_clock_macros` does), and
-// `sleep <seconds>` then holds the rest of the buffer until that time has passed; with no clock
-// handed in, `sleep` is a `wait`.
+// a recipe's `sleep <seconds>` (add_recipe_commands, only in a window started to run recipes)
+// then holds the rest of the buffer until that time has passed; with no clock, it is a `wait`.
 // That is what a RECIPE runs on: a cfg an agent writes to drive a window step by step (docs/
 // console.md § Recipes).
 //
@@ -307,6 +307,9 @@ class Console {
   void sleep(double seconds);
   // Whether a `sleep` holds the buffer now.
   bool sleeping() const { return clock_ && clock_() < wake_s_; }
+  // `work` (a host's own commands: a config it runs at startup) run with the held commands set
+  // aside, then put back behind whatever `work` left; the sleep holds on as it was.
+  void past_sleep(const std::function<void()>& work);
 
   // COMPLETION: every command, alias and cvar starting with `prefix`, sorted.
   std::vector<std::string> complete(std::string_view prefix) const;
@@ -425,8 +428,12 @@ std::string game_file(std::string_view file, std::string_view scope);
 
 // The built-in command sets, each registered by the Console's constructor.
 void register_builtin_commands(Console& c);  // console_builtins.cpp
-void register_script(Console& c);            // script.cpp
-void register_script_strings(Console& c);    // script_strings.cpp
+// A RECIPE's commands (`sleep`; docs/console.md § Recipes), registered only by a host started to
+// run recipes (a window's `-recipes`), never in a player's console: a cfg, a bind or a server
+// cannot reach them.
+void add_recipe_commands(Console& c);      // console_builtins.cpp
+void register_script(Console& c);          // script.cpp
+void register_script_strings(Console& c);  // script_strings.cpp
 // `hash`'s number: each byte with bit 5 cleared (letters in either case alike), h = c + 64h +
 // 65536h - h, wrapping at 2^32.
 uint32_t text_hash(std::string_view text);

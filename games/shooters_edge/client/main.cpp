@@ -196,7 +196,7 @@ int run_main(int argc, char** argv) {
     out::error("shooters_edge: the command line was refused: " + why +
                " Usage: se [-classic q1|q2] [-basedir <dir>] [-game <folder>] "
                "[-config <file>] [-logfile <file>] [-progs <file>] [-models <dir>] [-timedemo "
-               "<demo>] [-playdemo <demo>] "
+               "<demo>] [-playdemo <demo>] [-recipes] "
                "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
                "[--resolution=<WxH|720p|1080p|1440p|4k>] [--from=m:ss] [--to=m:ss] [--highlight=N] "
                "[--gif-width=N] [--codec=<c>] [--seconds=S]] "
@@ -309,7 +309,7 @@ int run_main(int argc, char** argv) {
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   console.cvars().set_layer(cl::kLayerShell);  // the menus and the attract loop (menu_attract)
-  game_menu.add_cvars(console);
+  game_menu.add_cvars(console, args.recipes);  // -recipes: a recipe's commands too
   // The console in the loaded classic game's own letters and background (menu/classic_console.hpp).
   shooters_edge::menu::ClassicConsole con_look;
   console.cvars().set_layer(cl::kLayerEngine);  // the engine's again (screenshots, the console)

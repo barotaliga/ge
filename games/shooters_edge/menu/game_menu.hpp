@@ -97,7 +97,14 @@ class GameMenu {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by
 
   // Registers `menu_look`, the menu's commands and the `ce_` switches on `con`, which must outlive
   // the menu.
-  void add_cvars(ge::console::Console& con);
+  // `recipes` (the window's -recipes): a recipe's commands too, `menu_press`, `menu_select`,
+  // `menu_list` and the console's `sleep` (docs/console.md § Recipes); a player's window has none.
+  void add_cvars(ge::console::Console& con, bool recipes = false);
+  // A page that draws and reads its own rows is up (the server browser, the gallery, the demos,
+  // the games, classic enhance): a recipe's `menu_select` and `menu_list` refuse it.
+  bool on_own_page() const {
+    return in_gallery_ || in_servers_ || in_demos_ || in_games_ || in_enhance_;
+  }
   // `menu_attract`: the recordings a classic game plays behind its main menu ("auto" the game's
   // own, "" none).
   const std::string& attract() const { return attract_; }

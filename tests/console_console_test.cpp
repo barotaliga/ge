@@ -52,21 +52,31 @@ TEST(wait_splits_frames) {
 }
 
 TEST(sleep_holds_the_buffer_until_the_hosts_time_passes) {
+  Console plain;  // a player's console: no recipe commands at all
+  plain.execute("sleep 1");
+  CHECK(!plain.problems().empty() && plain.commands().count("sleep") == 0);
   Console c;
+  add_recipe_commands(c);
   double now = 10.0;
   c.set_clock([&now] { return now; });
   c.append("echo a; sleep 1.5; echo b");
   CHECK(c.run() == 2);
   CHECK(c.sleeping());
   now = 11.0;
-  CHECK(c.run() == 0);    // half a second still to go
+  CHECK(c.run() == 0);  // half a second still to go
+  c.past_sleep([&c] {
+    c.append("echo startup");
+    c.run();
+  });  // a host's config, ahead of it
+  CHECK(c.output().back() == "startup" && c.sleeping());
   c.execute("echo now");  // the host's own line runs past the sleep; the held one waits on
-  CHECK(c.output().size() == 2 && c.output()[1] == "now" && c.sleeping() && c.pending());
+  CHECK(c.output().size() == 3 && c.output()[2] == "now" && c.sleeping() && c.pending());
   now = 11.5;
   c.run();
-  CHECK(!c.sleeping() && c.output().size() == 3 && c.output()[2] == "b" && !c.pending());
+  CHECK(!c.sleeping() && c.output().size() == 4 && c.output()[3] == "b" && !c.pending());
   // No clock handed in: one frame, like wait.
   Console w;
+  add_recipe_commands(w);
   w.append("echo a; sleep 3; echo b");
   w.run();
   CHECK(w.output().size() == 1 && w.pending());
@@ -74,7 +84,11 @@ TEST(sleep_holds_the_buffer_until_the_hosts_time_passes) {
   CHECK(w.output().size() == 2);
   // A word that is no number is refused with the usage.
   Console bad;
+  add_recipe_commands(bad);
   bad.execute("sleep soon");
+  CHECK(!bad.problems().empty());
+  bad.clear_problems();
+  bad.execute("sleep inf");  // never a sleep that never ends
   CHECK(!bad.problems().empty());
 }
 

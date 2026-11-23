@@ -49,7 +49,7 @@ GameMenu::GameMenu() : main_(build_menu()), style_(modern_style()) {
 
 GameMenu::~GameMenu() = default;
 
-void GameMenu::add_cvars(ge::console::Console& con) {
+void GameMenu::add_cvars(ge::console::Console& con, bool recipes) {
   con_ = &con;
   con.cvars().bind({.name = "menu_attract",
                     .fallback = "auto",
@@ -167,8 +167,12 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                   [this](Con&, const CArgs&) { pending_ = 1; });
   con.add_command("forcemenuoff", "forcemenuoff: the main menu closed, whatever page is up",
                   [this](Con&, const CArgs&) { pending_ = 2; });
+  servers_.add_cvars(con);
+  demos_.add_cvars(con);
+  if (!recipes) return;
   // A RECIPE's hands (docs/console.md § Recipes): keys pressed by name, an item chosen by its id,
   // the page up read back, so a script drives the menu with no one at the keyboard.
+  ge::console::add_recipe_commands(con);
   con.add_command(
       "menu_press",
       "menu_press <key> [<key> ...]: keys pressed on the menu, one a frame (up down left right "
@@ -185,6 +189,13 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                     "use up, down, left, right, enter, escape, del, refresh or a letter a..z");
             return;
           }
+          // A closed menu takes only escape (it opens it); nothing is opening it either.
+          const bool opening = open_ || toggle_ || (pressed_.empty() ? in.back : true);
+          if (!opening) {
+            c.error("menu_press: the menu is closed, so '" + a[i] + "' would press nothing",
+                    "open it first: menu_press escape, or menu_options");
+            return;
+          }
           pressed_.push_back(in);
         }
       });
@@ -195,7 +206,7 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                       c.print("Usage: menu_select <item>");
                       return;
                     }
-                    if (!open_ || !main_.focus(a[1])) {
+                    if (!open_ || on_own_page() || !main_.focus(a[1])) {
                       c.error("menu_select: no item '" + a[1] + "' on the page up",
                               "menu_list names the page's items");
                       return;
@@ -205,10 +216,10 @@ void GameMenu::add_cvars(ge::console::Console& con) {
   con.add_command("menu_list",
                   "menu_list: the page up and its items (focus '>', disabled '-') printed",
                   [this](Con& c, const CArgs&) {
-                    c.print(open_ ? ui::describe_page(main_) : std::string("menu closed"));
+                    c.print(!open_          ? std::string("menu closed")
+                            : on_own_page() ? std::string("a page of its own is up (no rows)")
+                                            : ui::describe_page(main_));
                   });
-  servers_.add_cvars(con);
-  demos_.add_cvars(con);
 }
 
 const MenuTable& GameMenu::set_table(const MenuTable& table, const ge::vfs::SearchPath* files) {
@@ -599,10 +610,13 @@ void GameMenu::dress_quit(const Host& host) {
 
 void GameMenu::update(const ui::MenuInput& real, bool escape, Host& host, double dt) {
   ui::MenuInput in = real;
-  if (!pressed_.empty() && !toggle_ && pending_ == 0) {  // a recipe's key, after its page opens
+  // A recipe's key, after a page it opened is up, never while a key is being bound; on a closed
+  // menu only escape counts (it opens it, as the key does), and the rest wait for it to open.
+  if (!pressed_.empty() && !toggle_ && pending_ == 0 && waiting_.empty() &&
+      (open_ || pressed_.front().back)) {
     in = pressed_.front();
     pressed_.pop_front();
-    if (in.back && !open_) escape = true;  // escape on a closed menu opens it, as the key does
+    escape = in.back && !open_;
   }
   dt_ = dt;
   waiting_fresh_ = false;

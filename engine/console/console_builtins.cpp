@@ -1,7 +1,7 @@
 // The console's built-in commands for variables, aliases, files and listing: echo, set, seta,
 // setinfo, serverinfo, reset, cvarlist, cmdlist, aliaslist, alias, tempalias, unalias,
-// unaliasall, exec, cfg_load, cfg_save, wait, sleep, help. Each command's syntax is
-// docs/console.md's.
+// unaliasall, exec, cfg_load, cfg_save, wait, help; and a recipe's `sleep` (add_recipe_commands).
+// Each command's syntax is docs/console.md's.
 //
 // ge:summary The console's built-ins: set, seta, setinfo, alias, exec, cfg_save, cvarlist, help
 // ge:keywords console builtins echo set seta setinfo serverinfo reset cvarlist cmdlist aliaslist
@@ -9,6 +9,7 @@
 // ge:keywords flags_text
 // ge:skill console
 // ge:test tests/console_console_test.cpp
+#include <cmath>
 #include <cstdlib>
 
 #include "console/cfg.hpp"
@@ -308,6 +309,15 @@ void register_builtin_commands(Console& con) {
   con.add_command(
       "wait", "wait: the rest of the buffer runs on the next frame",
       [](Console& c, const Args&) { c.wait(); }, kStuffable);
+  con.add_command("meta",
+                  "meta <name> <level> \"<name> <value>; ...\" ...: a cvar whose levels set "
+                  "others",
+                  meta_cmd);
+  con.add_command("help", "help <name>: what a cvar, command or alias is",
+                  [](Console& c, const Args& a) { c.print(describe(c, a[1])); });
+}
+
+void add_recipe_commands(Console& con) {
   con.add_command(
       "sleep",
       "sleep <seconds>: the rest of the buffer runs once that many seconds have passed (a "
@@ -319,19 +329,13 @@ void register_builtin_commands(Console& con) {
         }
         char* end = nullptr;
         const double s = std::strtod(a[1].c_str(), &end);
-        if (end == a[1].c_str() || *end != '\0' || !(s >= 0)) {
+        if (end == a[1].c_str() || *end != '\0' || !std::isfinite(s) || s < 0) {
           c.error("sleep takes seconds, not '" + a[1] + "'",
                   "usage: sleep <seconds>, such as sleep 2.5");
           return;
         }
         c.sleep(s);
       });
-  con.add_command("meta",
-                  "meta <name> <level> \"<name> <value>; ...\" ...: a cvar whose levels set "
-                  "others",
-                  meta_cmd);
-  con.add_command("help", "help <name>: what a cvar, command or alias is",
-                  [](Console& c, const Args& a) { c.print(describe(c, a[1])); });
 }
 
 }  // namespace ge::console

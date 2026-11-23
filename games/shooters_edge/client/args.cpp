@@ -102,6 +102,8 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       a.basedir_set = true;
     } else if (arg == "-hidden" || arg == "--hidden") {
       a.hidden = true;
+    } else if (arg == "-recipes" || arg == "--recipes") {
+      a.recipes = true;
     } else if ((arg == "-progs" || arg == "--progs") && i + 1 < argc) {
       a.progs = expand_home(argv[++i]);
     } else if ((arg == "-models" || arg == "--models") && i + 1 < argc) {

@@ -180,13 +180,18 @@ int Console::run() {
   return n;
 }
 
+void Console::past_sleep(const std::function<void()>& work) {
+  std::deque<Entry> held = std::exchange(buffer_, {});
+  const double wake = std::exchange(wake_s_, -1e300);
+  work();
+  for (Entry& e : held) buffer_.push_back(std::move(e));  // after what the work left, if any
+  wake_s_ = std::max(wake, wake_s_);
+}
+
 int Console::execute(std::string_view text, Source source) {
   if (sleeping()) {  // a recipe's `sleep` holds the buffer: the host's line runs now, past it
-    std::deque<Entry> held = std::exchange(buffer_, {});
-    const double wake = std::exchange(wake_s_, -1e300);
-    const int n = execute(text, source);
-    for (Entry& e : held) buffer_.push_back(std::move(e));  // after what the line left, if any
-    wake_s_ = std::max(wake, wake_s_);
+    int n = 0;
+    past_sleep([&] { n = execute(text, source); });
     return n;
   }
   append(text, source);
