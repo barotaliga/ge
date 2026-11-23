@@ -171,6 +171,14 @@ SqStep sq_hand_step(SqHand& hand, SqBody& body, bool attack, double now, bool in
 // Chooses weapon `w` for the hand (when held and not already in hand); true when chosen.
 bool sq_choose(SqHand& hand, const SqBody& body, int w);
 
+// The muzzle flash value (server/q2_flash.hpp) a shot of weapon `w` sends, `shots` the chain gun's
+// bullets this frame; -1 for a weapon with none (the hand grenade). The server sends it and the
+// client's weapon prediction plays it (net/q2_weapon.hpp).
+int sq_flash_value(int w, int shots);
+// Whether flash `value` plays `sample` as its shot (a remixed weapon's own sound is sent as a sound
+// instead).
+bool sq_flash_plays(int value, const char* sample);
+
 // The armour's part of a blow of `damage` (taken off its count): the share (the energy share for
 // an energy hit) × damage, rounded up, at most the count.
 int sq_armour_save(SqBody& body, int damage, bool energy);
