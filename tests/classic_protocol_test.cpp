@@ -160,3 +160,14 @@ TEST(a_user_info_passes_the_strict_rule_only_when_every_pair_is_clean) {
   while (big.size() < 520) big += "\\k" + std::to_string(big.size()) + "\\value";
   CHECK(!sp::info_strict(big));
 }
+
+// The message level: `msg` read as a number held to 0..256, and a print sent when its level is
+// not below it; Quake's servers send chat whatever the level.
+TEST(the_msg_level_lets_through_the_prints_at_and_above_it) {
+  using ge::classic::protocol::msg_level_of;
+  using ge::classic::protocol::print_reaches;
+  CHECK(msg_level_of("") == 0 && msg_level_of("2") == 2);
+  CHECK(msg_level_of("-4") == 0 && msg_level_of("9999") == 256);
+  CHECK(!print_reaches(1, 2, false) && print_reaches(2, 2, false) && print_reaches(3, 2, false));
+  CHECK(!print_reaches(3, 4, false) && print_reaches(3, 4, true));
+}

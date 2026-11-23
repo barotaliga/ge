@@ -175,20 +175,27 @@ void add_place_commands(con::Console& con, PlaceNames& p, const GameAdapter& ada
                            "bobbing in a white light",
                    .kind = con::CvarKind::boolean});
   // The place macros, in every game (Quake II's client brought them): where the player is and
-  // where the view looks, `unknown` when no place is within reach or no game is playing.
+  // where the view looks, `unknown` when no place is within reach or no game is playing. Team
+  // macros (console.hpp): a strict ruleset keeps scripts from acting on them.
   {
-    con.add_macro("loc_here", [&p, where] {
-      sh::Vec3f at;
-      if (!where || !where(at)) return std::string("unknown");
-      const std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
-      return name.empty() ? std::string("unknown") : name;
-    });
-    con.add_macro("loc_there", [&p] {
-      sh::Vec3f at;
-      if (!p.looked_at || !p.looked_at(at)) return std::string("unknown");
-      const std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
-      return name.empty() ? std::string("unknown") : name;
-    });
+    con.add_macro(
+        "loc_here",
+        [&p, where] {
+          sh::Vec3f at;
+          if (!where || !where(at)) return std::string("unknown");
+          const std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+          return name.empty() ? std::string("unknown") : name;
+        },
+        con::MacroKind::team);
+    con.add_macro(
+        "loc_there",
+        [&p] {
+          sh::Vec3f at;
+          if (!p.looked_at || !p.looked_at(at)) return std::string("unknown");
+          const std::string name = ge::classic::loc_name_at(p.locs, at, range_of(p), sight_of(p));
+          return name.empty() ? std::string("unknown") : name;
+        },
+        con::MacroKind::team);
   }
   // Each command under its name and its older short name, the same command either way.
   const auto both = [&con](const char* name, const char* old_name, const std::string& help,

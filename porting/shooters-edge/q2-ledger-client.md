@@ -12,11 +12,11 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | missing | not-taken | rows |
 | --- | --- | --- | --- | --- |
-| Client console commands | 138 | 1 | 17 | 156 |
-| Client settings (cvars) | 230 | 10 | 110 | 350 |
+| Client console commands | 139 | 0 | 17 | 156 |
+| Client settings (cvars) | 234 | 6 | 110 | 350 |
 | Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
-| Menu pages and rows | 146 | 4 | 12 | 162 |
-| Server messages the client parses (svc) | 24 | 2 | 1 | 27 |
+| Menu pages and rows | 147 | 3 | 12 | 162 |
+| Server messages the client parses (svc) | 26 | 0 | 1 | 27 |
 | Temporary entities (svc_temp_entity) | 21 | 18 | 26 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 0 | 1 | 33 |
@@ -30,12 +30,12 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Keys: the fixed keys and the default bindings | 10 | 0 | 1 | 11 |
 | Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 16 | 0 | 4 | 20 |
-| Connection, network, downloads and the rest | 12 | 3 | 2 | 17 |
-| **all** | 939 | 41 | 231 | 1211 |
+| Connection, network, downloads and the rest | 14 | 1 | 2 | 17 |
+| **all** | 949 | 31 | 231 | 1211 |
 
 ## Client console commands
 
-done 133, missing 6, not-taken 17
+done 138, missing 1, not-taken 17
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -82,7 +82,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.rcon | `rcon <command>` | sends a remote-console command with `rcon_password` to the server or `rcon_address` | done | `games/shooters_edge/net/qw_admin.cpp` |
 | cmd.pingservers | `pingservers` | pings the address book `adr0`..`adr15` and the LAN | done | `games/shooters_edge/net/q2_pingservers.cpp`: `info 34` to the LAN broadcast and each address book entry, each answer printed (3 s broadcast, 6 s direct) |
 | cmd.serverstatus | `serverstatus [address]` | asks a server for its info and players and prints them by frags | done | `games/shooters_edge/net/qw_serverstatus.cpp`: its own socket, joined or not; both games' answers |
-| cmd.pause | `pause` | pauses a single-player game or a demo | missing | Missing, rank 1 (gameplay, daily use): a word of the window's own game (`client/listen.cpp`); not found to pause a demo or a joined single-player server (C24) LIFT: the demo transport is already shared (`plugins/shooter/demo_transport.cpp`). |
+| cmd.pause | `pause` | pauses a single-player game or a demo | done | a game played alone on the window's own server (`client/listen.cpp`); over a played demo it stops and starts the demo where it is (`client/main.cpp` through `net/window_words.hpp`'s `first`, any game's demo; a timed demo runs on); on a joined server nothing stops, as on the original |
 | cmd.skins | `skins` | reloads every client's skin and prints "client n: name --> model/skin" | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `games/shooters_edge/net/q2_remote.cpp`: on a Quake II server joined, the level read again and a line a player; the right side is the look asked, not the stand-in drawn when it is missing |
 | cmd.userinfo | `userinfo` | prints the user info being sent | done | `engine/console/console_more.cpp`: "User info settings:" then each key padded to 20 |
 | cmd.download | `download <file>` | asks the server for a file over the connection | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
@@ -200,7 +200,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 229, missing 11, not-taken 110
+done 233, missing 7, not-taken 110
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -327,12 +327,12 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.vid_geometry | `vid_geometry` | the window's size and place, `WxH+X+Y` (default 640x480) | done | ours the engine's `vid_geometry` (`engine/platform/window_cvars.hpp`): `WxH`, `WxH+X+Y` or `+X+Y`; its default "" keeps the window the game opens (not 640x480) |
 | cvar.vid_modelist | `vid_modelist` | the full-screen modes offered (default `modelist`, the desktop's) | done | `engine/platform/window_cvars.hpp` (`full_mode_of`): `desktop`, WxH, WxH@Hz, WxH@Hz:bpp, WxH:bpp@Hz; the default `desktop` and the display's own modes (`display_modes`); a bad entry is the desktop's mode, said as a debug line; a new list takes effect at once while full-screen |
 | cvar.vid_hwgamma | `vid_hwgamma` | gamma by the display hardware (default 0) | done | `engine/platform/window_cvars.hpp`: the window's platform layer has no gamma ramp, so 1 prints "...hardware gamma not supported" and is set back to 0, as on a display without one; `vid_gamma` stays in the picture |
-| cvar.vid_flip_on_switch | `vid_flip_on_switch` | Windows: switch to the desktop mode when the window loses focus (default 0) | missing | Windows only |
+| cvar.vid_flip_on_switch | `vid_flip_on_switch` | Windows: switch to the desktop mode when the window loses focus (default 0) | done | Quake II's spelling of the engine's `vid_minimize_on_focus_loss` (`platform/window_cvars.hpp`, every platform), its default 0 (`client/cvar_layers.cpp`) |
 | cvar.viewsize | `viewsize` | the 3D view's size 40..100 percent, border tiled (default 100) | done | Quake II's own (`client/q2_view.cpp`, `own` over the HUD's 100..120): 40..100, the world drawn in `q2_view_rect`'s centred rectangle by the post pass (`render/post.hpp`'s `set_post_view`, from `client/world_draw.cpp`); `sizeup` and `sizedown` step it by 10 in its range |
 | cvar.scr_showpause | `scr_showpause` | 1 draws the pause picture, 2 "[PAUSED]" on the demo bar (default 1) | not-taken | Tail (decided 2026-11-23), cosmetic: a synonym of our `showpause` (`games/shooters_edge/client/cvar_layers.cpp`): 2's "[PAUSED]" on the demo bar is not taken |
 | cvar.scr_centertime | `scr_centertime` | seconds a centre print stays, faded 300 ms (default 2.5) | not-taken | Tail (decided 2026-11-23), cosmetic: `client/cvar_layers.cpp`; no fade, line cut differs (C9) |
 | cvar.scr_printspeed | `scr_printspeed` | letters a second of a typewriter centre print (extended protocol) (default 16) | not-taken | Visuals come from classic enhance (decided 2026-11-23): the remaster's typewriter centre print |
-| cvar.scr_demobar | `scr_demobar` | 1 a progress bar while a demo plays, 2 also the time (default 1) | missing | Missing, rank 2 (a Quake II name for a setting ours has; the settings lift): ours `demo_bar` (C39) |
+| cvar.scr_demobar | `scr_demobar` | 1 a progress bar while a demo plays, 2 also the time (default 1) | done | Quake II's own setting over the play bar: 0 none, 1 always with the share played, 2 also the clock; stands in for `demo_bar` while Quake II is loaded (`games/shooters_edge/client/q2_view.cpp`, `demo_playback.cpp`; the bar's look is ours) |
 | cvar.scr_font | `scr_font` | the HUD's font picture (default `conchars`) | done | `client/q2_view.cpp` (Q2Screen::font), drawn by `client/q2_bar.cpp`'s `font_picture`: the status bar's and the layouts' text, the inventory and the centre prints (hosted, joined and recorded: `draw_recorded_q2_bar`'s centre) in pics/<name>.pcx at once, and the chat lines on screen in the same letters (`q2_font_image`); a missing one prints "Couldn't load pics/<name>.pcx: not found" and is set back to conchars |
 | cvar.scr_scale | `scr_scale` | the 2D scale, 0 auto by window height (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` `q2_bar_scale` (M18k4 round 34) |
 | cvar.crosshair | `crosshair` | 0 none, N the `chN` picture (default 0) | done | `engine/hud/crosshair.hpp` (Quake II's layer `same`) |
@@ -530,8 +530,8 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.allow_download_models | `allow_download_models` | client: fetch models (default 1) | done | `net/q2_downloads.hpp`: `models/` and `sprites/` |
 | cvar.allow_download_sounds | `allow_download_sounds` | client: fetch sounds (default 1) | done | `net/q2_downloads.hpp`: `sound/` |
 | cvar.allow_download_maps | `allow_download_maps` | client: fetch maps (default 1) | done | `net/q2_downloads.hpp`: `maps/` |
-| cvar.allow_download_textures | `allow_download_textures` | client: fetch wall textures and skies (default 1) | missing | Missing, rank 1 (gameplay, daily use): `net/q2_downloads.hpp` gates `textures/` and `env/`; joining does not fetch a map's wall textures or sky yet LIFT: as svc.download. |
-| cvar.allow_download_pics | `allow_download_pics` | client: fetch pictures (default 1) | missing | Missing, rank 1 (gameplay, daily use): `net/q2_downloads.hpp` gates `pics/`; joining does not fetch the level's pictures yet LIFT: as svc.download. |
+| cvar.allow_download_textures | `allow_download_textures` | client: fetch wall textures and skies (default 1) | done | `net/q2_downloads.hpp` gates `textures/` and `env/`; joining fetches the sky's six sides and the map's wall textures (`net/q2_fetch.hpp`) |
+| cvar.allow_download_pics | `allow_download_pics` | client: fetch pictures (default 1) | done | `net/q2_downloads.hpp` gates `pics/`; joining fetches the level's pictures (`net/q2_fetch.hpp` `q2_fetch_level`) |
 | cvar.allow_download_others | `allow_download_others` | fetch any other file (default 0) | done | `net/q2_downloads.hpp`: every other folder, off by default |
 | cvar.rcon_password | `rcon_password` | the password `rcon` sends | done | `games/shooters_edge/net/qw_admin.cpp` |
 | cvar.sys_forcegamelib | `sys_forcegamelib` | a game library path forced; command line only | not-taken | ours loads no native game library (as `libdir`) |
@@ -598,7 +598,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 142, missing 8, not-taken 12
+done 146, missing 4, not-taken 12
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
@@ -739,7 +739,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.rail.spiralcolor | rail: spiral color | the same eight | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.scr.size | screen: screen size | `viewsize` 40 to 100 by 10 | done | `games/shooters_edge/menu/q2_pages.cpp`: SCREEN SIZE 40 to 100 by 10 on Quake II's own `viewsize` |
 | menu.scr.pinggraph | screen: ping graph | `scr_lag_draw` | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.scr.demobar | screen: demo bar | no, yes, verbose | missing | Missing, rank 2 (a Quake II name for a setting ours has; the settings lift): `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
+| menu.scr.demobar | screen: demo bar | no, yes, verbose | done | `games/shooters_edge/menu/q2_pages.cpp`: the row turns `scr_demobar` through 0, 1, 2 |
 | menu.scr.hudalpha | screen: HUD opacity | `scr_alpha` | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.scr.conalpha | screen: console opacity | `con_alpha` | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.scr.hudscale | screen: HUD scale | auto, 1x, 2x, 4x | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
@@ -769,7 +769,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 
 ## Server messages the client parses (svc)
 
-done 24, missing 2, not-taken 1
+done 26, missing 0, not-taken 1
 
 Every message a server (or a recording) sends the client, and what the client does with it. Ours reads Quake II's protocol 34 in `games/shooters_edge/client/demo_q2.cpp` for both a joined server and a recording; the protocols above 34 (35, 36) are not spoken (C42).
 
@@ -786,12 +786,12 @@ Every message a server (or a recording) sends the client, and what the client do
 | svc.reconnect | `svc_reconnect` (8) | the server changes level: "Server disconnected, reconnecting", then connects again at once | done | Checked 2026-11-23: `net/q2_client.cpp` takes a stuffed `reconnect` and connects again when the server restarts. |
 | svc.sound | `svc_sound` (9) | a positioned sound: index, volume, attenuation, time offset, entity and channel, place | done | `games/shooters_edge/client/demo_q2.cpp` |
 | svc.print | `svc_print` (10) | a line at a level (pickup, medium, high, chat); chat filtered, kept out of notify by `cl_chat_notify`, played with the chat sound, scanned for addresses (`followip`) and triggers | done | printed; a chat line through `client/chat_lines.cpp`: `cl_chat_filter`, `cl_chat_notify`, `cl_chat_sound`, the addresses kept for `followip`, and `trigger` on the other lines (`tests/shooters_edge_chat_ignore_test.cpp`) |
-| svc.stufftext | `svc_stufftext` (11) | console text the server runs on the client | missing | Missing, rank 1 (gameplay, daily use): ours runs the signon's and keeps place names (`client/demo_q2.cpp`); verify other stuffed commands run; `cl_ignore_stufftext` missing (C33) |
+| svc.stufftext | `svc_stufftext` (11) | console text the server runs on the client | done | the signon's lines answered by the client (`net/q2_client.cpp` `run_stuffed`: `cmd`, `precache`, `changing`, `reconnect`, `connect`); every other line the filter lets through (`cl_ignore_stufftext`) runs in the player's console as if typed (`Q2ClientEnd::to_run`, `Remote::stuffed_run`, `client/main.cpp`); `tests/shooters_edge_q2_net_test.cpp` |
 | svc.serverdata | `svc_serverdata` (12) | the protocol, the server's count, attract-loop flag, game folder, player number, map title; prints the map title between rule lines | done | `games/shooters_edge/client/demo_q2.cpp` |
 | svc.configstring | `svc_configstring` (13) | one configstring changed (table "Configstrings") | done | `games/shooters_edge/client/demo_q2.cpp` |
 | svc.spawnbaseline | `svc_spawnbaseline` (14) | an entity's baseline for later deltas | done | `games/shooters_edge/client/demo_q2.cpp` |
 | svc.centerprint | `svc_centerprint` (15) | a centre print; also printed in the console and run past triggers | not-taken | Tail (decided 2026-11-23), cosmetic: C9 (no fade, line cut differs) |
-| svc.download | `svc_download` (16) | a piece of a requested file with the percent done | missing | Missing, rank 1 (gameplay, daily use): ours fetches the map, models, sounds, figures; other kinds missing (C36) LIFT: Quake's downloads (`net/qw_remote.cpp`) are the place to share kinds and piece sizes. |
+| svc.download | `svc_download` (16) | a piece of a requested file with the percent done | done | every kind the level names is fetched in stages (`net/q2_fetch.hpp`, `net/q2_client.cpp` `queue_next_stage`), each path once a connection |
 | svc.playerinfo | `svc_playerinfo` (17) | the player state, inside a frame | done | `games/shooters_edge/client/demo_q2.cpp` |
 | svc.packetentities | `svc_packetentities` (18) | the frame's entities, inside a frame | done | `games/shooters_edge/client/demo_q2.cpp` |
 | svc.deltapacketentities | `svc_deltapacketentities` (19) | the stock protocol's delta entities | done | `games/shooters_edge/client/demo_q2.cpp` |
@@ -1320,7 +1320,7 @@ What a player can do with client recordings (`.dm2`) and multi-view recordings (
 
 ## Keys: the fixed keys and the default bindings
 
-done 9, missing 1, not-taken 1
+done 10, missing 0, not-taken 1
 
 Keys the client handles itself (a player cannot unbind them) and where the default bindings come from.
 
@@ -1391,7 +1391,7 @@ How the client sets up and draws the picture, beyond the settings themselves. Ou
 
 ## Connection, network, downloads and the rest
 
-done 12, missing 3, not-taken 2
+done 14, missing 1, not-taken 2
 
 Behaviour the client offers outside the screen.
 
@@ -1401,11 +1401,11 @@ Behaviour the client offers outside the screen.
 | net.predict | prediction | the player's move predicted from the last frame by the shared move code; misses smoothed | done | `games/shooters_edge/net/q2_predict.cpp` |
 | net.userinfo | user info while joined | a changed name, skin, hand, fov, rate sent at once | missing | Missing, rank 1 (gameplay, daily use): `net/qw_remote.cpp` `user_info_step`: a changed `rate` or `password` sends the user info at once; a changed name, skin, hand or fov not (C30) LIFT: Quake's `user_info_step` (`net/qw_remote.cpp`) is the shared place. |
 | net.cheatlock | the cheat lock | with more than one player slot, cheat-protected settings forced back each frame | done | `engine/console/cvar.hpp`'s `hold_cheats` (any game), held by `net/q2_remote.cpp` while a joined Quake II server has more than one player slot: every cheat back to its default and each set refused whatever the local sv_cheats says; let go when the game is left (`remote_disconnect`) |
-| net.stufftext | server-pushed commands | run in the client's console, refused unless whitelisted with `cl_ignore_stufftext` | missing | Missing, rank 1 (gameplay, daily use): verify which run (table "Server messages"); C33 |
+| net.stufftext | server-pushed commands | run in the client's console, refused unless whitelisted with `cl_ignore_stufftext` | done | as svc.stufftext: a stuffed `rate`, `set name`, `spectator 0`, a mod's binds run as typed, refused only by `cl_ignore_stufftext`'s whitelist |
 | net.triggers | message triggers | `trigger` runs a command when a server line matches; never in demos or on a relay | done | `client/chat_lines.cpp`: `trigger`, `untrigger`, on the lines that are not chat and the centre message; never through a relay |
 | net.autoreply | version reply | a chat line ending "!version" makes the client say its version after 1 to 2 s, at most once in 2 minutes | done | `client/chat_lines.cpp` (`chat_line_teamplay`, `chat_reply_due`): on a Quake II server another player's chat line ending in `!version` is answered with the version 1 to 2 s later, at most once in two minutes; `cl_queries` 0 answers none |
 | net.recentaddr | addresses in chat | addresses seen in chat remembered for `followip` | done | `client/chat_lines.cpp`: the last 16 addresses chat lines named, joined by `followip [n]` |
-| net.download.order | what is fetched | the map, its models (and their skins and frames), sounds, pictures, figures (models, weapons, skins, icons, sounds), the sky, then the wall textures | missing | Missing, rank 1 (gameplay, daily use): ours the map, models, sounds and figures' models and skins (`net/q2_client.cpp`) (C36) LIFT: as svc.download. |
+| net.download.order | what is fetched | the map, its models (and their skins and frames), sounds, pictures, figures (models, weapons, skins, icons, sounds), the sky, then the wall textures | done | `net/q2_fetch.hpp`: the map and models; then the models' skins and frames, sounds, pictures, figures (model, `weapon.md2` and the level's view weapons, `weapon.pcx`, skin, icon, sounds), the sky; then the map's wall textures; `tests/shooters_edge_q2_net_test.cpp` (`joining_fetches_the_level_stage_by_stage`) |
 | net.download.resume | resuming | a `.tmp` resumed from its length, renamed when whole | done | `plugins/classic/content/downloads.hpp` (`HeldDownloads`, `held_in_folder`, any classic game): each piece added to `<path>.tmp` in the game's folder as it comes; asked for again, the rest from its length (`download <file> <offset>`, `net/q2_client.cpp`); dropped once the file is whole and kept; `tests/shooters_edge_q2_net_test.cpp` |
 | net.download.http | HTTP downloads | from the server's URL, with filelists, two at once, falling back to UDP | done | `net/q2_http.cpp`: the server's `dlserver`, `cl_http_filelists`, up to 4 at once, back to the channel on failure (`tests/shooters_edge_q2_http_test.cpp`) |
 | net.passive | passive connections | wait for a server to connect to us | done | `net/q2_pingservers.cpp` `passive` (`net/qw_remote.cpp`): a server's `passive_connect` joined (`tests/shooters_edge_q2_pingservers_test.cpp`) |

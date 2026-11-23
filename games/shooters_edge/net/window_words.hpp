@@ -15,6 +15,8 @@
 // ge:test tests/shooters_edge_game_commands_test.cpp
 #pragma once
 
+#include <functional>
+
 #include <string>
 
 #include "classic/content/files.hpp"
@@ -33,9 +35,12 @@ namespace shooters_edge::net {
 struct Remote;
 
 // The words above on `con` and the chat line on `view`, over `listen`, `remote` and the map asked
-// for next (`next_map`); each must outlive `con`.
+// for next (`next_map`); each must outlive `con`. `first`, when set, sees a line the console does
+// not know before the games do (the window's own: `pause` over a demo played), true when it took
+// it.
 void add_window_words(ge::console::Console& con, ge::console::ConsoleView& view,
-                      client::Listen& listen, Remote& remote, std::string& next_map);
+                      client::Listen& listen, Remote& remote, std::string& next_map,
+                      const std::function<bool(const std::string& line)>* first = nullptr);
 
 // The team chat's lines (client/team_chat.hpp) to the server joined, else to the match hosted: its
 // sending, whether a teammate is in the game, and the scene its %-codes read.

@@ -206,9 +206,12 @@ struct BurnTrail {
 // The burn `shot` leaves this frame, if it leaves one: true and `out` filled when one is due at
 // `t_s` (held and landing: a piece of line once the hit has moved `line_piece_m` along its face,
 // a melt pressed again while it stays). `trail` is the shot's own and is advanced; ask again
-// until false (a few times at most) to lay a fast sweep's pieces.
+// until false (a few times at most) to lay a fast sweep's pieces. `finish`: the hit is where the
+// line must END (the edge of its face, the sweep about to cross onto another): the piece on to it
+// is laid however short, so the line reaches the edge instead of stopping up to `line_piece_m`
+// short.
 bool beam_burns(const BeamLook& look, const BeamShot& shot, double t_s, BurnTrail& trail,
-                BeamBurn& out);
+                BeamBurn& out, bool finish = false);
 // A burn's glow at `age_s`, cd/m^2: `ember_cd` at once, cooling to nothing over `ember_s`.
 float ember_level(const BeamLook& look, double age_s);
 
