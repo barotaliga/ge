@@ -13,7 +13,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | missing | not-taken | rows |
 | --- | --- | --- | --- | --- |
 | Client console commands | 139 | 0 | 17 | 156 |
-| Client settings (cvars) | 232 | 8 | 110 | 350 |
+| Client settings (cvars) | 239 | 0 | 111 | 350 |
 | Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
 | Menu pages and rows | 147 | 3 | 12 | 162 |
 | Server messages the client parses (svc) | 26 | 0 | 1 | 27 |
@@ -24,14 +24,14 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Entity render bits (RF_) and view bits (RDF_) | 24 | 1 | 7 | 32 |
 | Configstrings | 10 | 0 | 6 | 16 |
 | The layout language (status bar and layouts) | 27 | 0 | 0 | 27 |
-| HUD and screen elements | 18 | 0 | 11 | 29 |
+| HUD and screen elements | 19 | 0 | 10 | 29 |
 | Messages printed to the player | 130 | 0 | 17 | 147 |
 | Demo playback and recording features | 13 | 0 | 10 | 23 |
 | Keys: the fixed keys and the default bindings | 10 | 0 | 1 | 11 |
 | Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 16 | 0 | 4 | 20 |
-| Connection, network, downloads and the rest | 15 | 1 | 2 | 18 |
-| **all** | 968 | 13 | 231 | 1212 |
+| Connection, network, downloads and the rest | 16 | 0 | 2 | 18 |
+| **all** | 976 | 5 | 231 | 1212 |
 
 ## Client console commands
 
@@ -345,8 +345,8 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.scr_chathud | `scr_chathud` | 0 off, 1 last chat lines on screen, 2 in the alternate colour (default 0) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
 | cvar.scr_chathud_lines | `scr_chathud_lines` | chat lines shown (default 4) | done | (M18k4 round 32) |
 | cvar.scr_chathud_time | `scr_chathud_time` | seconds a chat line stays, 0 for ever (default 0) | done | (M18k4 round 32) |
-| cvar.scr_chathud_x | `scr_chathud_x` | the chat lines' x (default 8) | missing | Missing, rank 2 (found by the verification sweep, 2026-11-23: no such setting is registered; the chat lines' place is our `hud_chat_x`/`hud_chat_y` in shares of the screen, so this needs Quake II's pixels mapped onto them) |
-| cvar.scr_chathud_y | `scr_chathud_y` | the chat lines' y, negative from the bottom (default -64) | missing | Missing, rank 2 (found by the verification sweep, 2026-11-23: no such setting is registered; the chat lines' place is our `hud_chat_x`/`hud_chat_y` in shares of the screen, so this needs Quake II's pixels mapped onto them) |
+| cvar.scr_chathud_x | `scr_chathud_x` | the chat lines' x (default 8) | done | Quake II's own, in its layer (`client/chat_lines.cpp` `add_q2_chat_place`): pixels of its 2D drawing at `scr_scale`, from the left; its bar's chat lines are placed there (`hud/layout.cpp` `place_chat_px`), other games keep our `hud_chat_x`; held by `tests/shooters_edge_hud_test.cpp` and `tests/shooters_edge_cvar_layers_test.cpp` |
+| cvar.scr_chathud_y | `scr_chathud_y` | the chat lines' y, negative from the bottom (default -64) | done | Quake II's own, as `scr_chathud_x`: negative the lines' foot that far up from the bottom, else their top that far down; other games keep our `hud_chat_y`; same tests |
 | cvar.ch_health | `ch_health` | crosshair coloured by health: red full, green rising from 33 to 66, blue from 66 to 99, black when dead (default 0) | done | `engine/hud/crosshair.cpp`'s `crosshair_health` (red, green from 33 to 66, blue from 66 to 99, black when dead), bound in `client/cvar_layers.cpp` |
 | cvar.ch_red | `ch_red` | crosshair red (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.ch_green | `ch_green` | crosshair green (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
