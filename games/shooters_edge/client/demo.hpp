@@ -297,6 +297,8 @@ struct DemoState {
   // The items the view's player took (the server's stuffed `bf`; single: its bonus flash too),
   // since the demo was opened: each flashes the view gold.
   int64_t bonuses = 0;
+  // Multiview: the match server's start markers read (its stuffed `//ktx matchstart`).
+  int64_t match_starts = 0;
   sh::Vec3f velocity;          // client: the recording's player's, units/s (`velocity_read`)
   bool velocity_read = false;  // client: the player's velocity came in his last player state
   // Quake II: what went wrong with the last frame read (kQ2Frame* bits; `scr_showturtle` writes

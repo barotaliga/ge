@@ -24,7 +24,7 @@
 // ge:summary The window's games taken in: a folder, volume or disc image copied into data/ first
 // ge:keywords import take-in data-folder copy iso cue disc volume basedir load-game data_root
 // ge:keywords take_in import-command soundtrack take_in_basedir take_in_ask add_take_in_commands
-// ge:keywords level_music cd bgmvolume prefs taken-once adopt_placed_settings
+// ge:keywords level_music cd bgmvolume prefs taken-once adopt_placed_settings homedir home-dir
 // ge:skill shooter
 // ge:test tests/shooters_edge_take_in_test.cpp
 #pragma once
@@ -32,6 +32,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "audio/music_console.hpp"
 #include "console/console.hpp"
@@ -40,8 +41,19 @@ namespace shooters_edge::client {
 
 struct DemoState;
 
-// `<prefs>/data` when it can be written, else `<placed>/data`; "" when neither can.
-std::string data_root(const std::string& placed, const std::string& prefs);
+// `<prefs>/data` when it can be written, else `<placed>/data`; "" when neither can. With `home`
+// (`homedir`, below) the player's own folder, when it can be written, before both.
+std::string data_root(const std::string& placed, const std::string& prefs,
+                      const std::string& home = "");
+
+// THE PLAYER'S OWN DATA FOLDER, `homedir` (Quake II's spelling, any game's here): `+set homedir
+// <folder>` on the command line puts everything the game writes there (the games taken in, the
+// settings, screenshots, recordings, downloads), in place of the settings folder above. Read from
+// `*plus` and taken out of it (the setting is read only once the game runs); "" when not given.
+std::string take_home_dir(std::vector<std::string>* plus);
+
+// `homedir` in the console: the data folder in use (`root`), read only.
+void add_home_dir(ge::console::Console& con, const std::string& root);
 
 // The series' settings (settings.hpp) a build that kept its data beside the game wrote there,
 // copied into `root` when `root` has none yet; true when one was copied.

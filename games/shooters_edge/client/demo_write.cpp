@@ -400,6 +400,13 @@ std::vector<uint8_t> write_multiview_demo(const DemoScript& s) {
     m.coord(o.x + static_cast<float>(i));
     m.i16(0);
     multiview_record(file, i == 0 ? 0 : ms, kAll, 0, m);
+    for (const auto& [at_frame, line] : s.stuffed) {
+      if (at_frame != i) continue;
+      Out st;
+      st.u8(9);  // stufftext
+      st.str(line);
+      multiview_record(file, 0, kAll, 0, st);
+    }
     Out fx;
     if (i % 10 == 5) {
       fx.u8(23);  // temp entity: an explosion

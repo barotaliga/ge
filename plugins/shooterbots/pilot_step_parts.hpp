@@ -30,8 +30,10 @@
 
 namespace ge::shooterbots::pilot_parts {
 
-inline constexpr float kSlow = 50;       // under this a velocity's way is not read, units/s
-inline constexpr float kLipSpeed = 200;  // `lipjump`: a hop at this speed or more jumps at a lip
+inline constexpr float kSlow = 50;        // under this a velocity's way is not read, units/s
+inline constexpr float kLipSpeed = 200;   // `lipjump`: a hop at this speed or more jumps at a lip
+inline constexpr float kUpdraft = 400;    // rising faster than this on a walk or a jump: an updraft
+inline constexpr float kUpdraftHeld = 6;  // and held within this of the link's start across, units
 inline constexpr float kPlatformBrake = 120;  // faster than this on a moving platform: keys let go
 
 // How much of a run toward `want` the view at `now` already faces: all of it within 60 degrees
@@ -155,7 +157,8 @@ float lip_crossing(const MoveWorld& world, Vec3f o, float vh, float way);
 void strafe_across(Pilot& p, float vh, float off, Want& w, float dt);
 bool lip_ahead(const MoveWorld& world, Vec3f o, Vec3f v, int msec);
 bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Want& w, Vec3f& target,
-                   const char*& because, bool flip = false, int msec = 13, bool plain = false);
+                   const char*& because, bool flip = false, int msec = 13, bool plain = false,
+                   bool still = false);
 
 // THE PLAN MADE, RESTARTED AND ADVANCED (pilot_plan.cpp).
 bool landed_out(const Pilot& p, const PilotSense& s);

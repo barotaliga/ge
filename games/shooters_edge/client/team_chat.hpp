@@ -1,6 +1,4 @@
-// TEAM CHAT AND THE GAME'S EVENTS IN A PLAYER'S CONFIG: what makes a teamplay config written for
-// Quake's clients work here (docs/shooters-edge.md § Configs).
-//
+// TEAM CHAT AND THE GAME'S EVENTS IN A PLAYER'S CONFIG (docs/shooters-edge.md § Configs).
 // - **say and say_team** (`add_team_chat`): the line's PERCENT CODES are filled in from the
 //   player's own state, then its FUN CHARACTERS become the classic font's glyphs, then it is quoted
 //   and sent. `cl_parseSay 0` and `cl_parseFunChars 0` turn either pass off. With `cl_fakename`
@@ -11,11 +9,11 @@
 // - **The percent codes** (`fill_team_codes`): `%h` health, `%a` armour, `%A` its class word, `%c`
 //   cells, `%w` the weapon in hand and its ammunition (`rl:23`), `%b` the best weapon owned by
 //   `tp_weapon_order` and its ammunition (Quake II's by its own words, `rg`, `bfg`, best first),
-//   `%p` and `%P` the powerups held, `%R` the rune, `%u` what the player needs (by the `tp_need_*`
-//   thresholds), `%l` the place the player is in, `%d` where they last died this map, `%L` that
-//   place for five seconds after a death and the place now after, `%r` the last place named, `%S`
-//   the skin. `%[a]`, `%[h]`, `%[p]` add gold brackets when low (armour under 30, health under 50,
-//   a powerup held). `%%` is a `%`; `%<width>X` with `l`, `r` or `c` before the `>` pads or cuts
+//   `%p` `%P` the powerups, `%R` the rune, `%u` what the player needs (`tp_need_*`), `%l` the place
+//   the player is in, `%d` where they last died this map, `%L` that place for five seconds after a
+//   death and the place now after, `%r` the last place named, `%S` the skin. `%[a]`, `%[h]`, `%[p]`
+//   add gold brackets when low (armour under 30, health under 50, a powerup held). `%%` is a `%`;
+//   `%<width>X` with `l`, `r` or `c` before the `>` pads or cuts
 //   (`%<5r>h`). `%i` the last pickup and where (`ra at quad`), `%X` the pickup, `%Y` its place, all
 //   for `tp_tooktimeout` seconds; `%k` and `%m` the same for five. What the player points at
 //   (client/team_point.hpp): `%t` the thing and its place (`quaded enemy at ra`), `%x` the thing,
@@ -32,10 +30,13 @@
 //   `f_weaponchange` (the weapon in hand changed), `f_death` and `f_respawn` (health crossing 0),
 //   `f_took` (a pickup) and `f_bonusflash` run when the event happens. On a server joined or a
 //   recording watched also `f_mapend` (the level's end), `f_countdownstart` (the server's `status`
-//   turned to countdown) and `f_countdownbreak` (back to standby from it). `tp_triggers 0` stops
-//   them all; `f_death`, `f_respawn` and `f_took` are a team's, run only with a teammate in the
-//   game or `tp_forceTriggers 1`. The game runs `f_demostart`, `f_demoend` and `f_exit` through
-//   `team_event`; `cfg_load` runs `f_cfgload` after the config it read.
+//   turned to countdown), `f_countdownbreak` (back to standby from it) and `f_flagdeath` in
+//   `f_death`'s place when the player died carrying a flag (`carries_flag`). `tp_triggers 0` stops
+//   them all; the deaths, `f_respawn` and `f_took` are a team's, run only with a teammate in the
+//   game or `tp_forceTriggers 1`. The game runs `f_demostart`, `f_demoend`, `f_demomatchstart`,
+//   `f_focusgained` and `f_exit` through `team_event`, the server list `f_sbrefreshdone`, and the
+//   spectator's camera `f_trackspectate` and `f_freeflyspectate` (`spectate_event`, no gate);
+//   `cfg_load` runs `f_cfgload` after the config it read.
 // - **The canned messages** (`team_message`, the `tp_msg*` commands): `tp_msgreport`, `lost`,
 //   `need`, `safe`, `killme`, `help`, `utake`, `enemypwr`, `quaddead`, `getquad`, `getpent` and the
 //   one-line set (`yesok`, `nocancel`, `itemsoon`, `waiting`, `slipped`, `replace`, `trick`,
@@ -43,10 +44,8 @@
 //   first three letters, then `cl_fakename_suffix`); `tp_msgtook` the last pickup. `tp_msgpoint`
 //   names what the player points at; seven others read it too.
 // - **`echo`** and `set_ex` fill in the codes and fun characters (`set_ex2` codes only).
-// - **The `$` macros** (`$health`, `$bestweapon`, `$location`, `$ledstatus`...) are
-//   team_macros.hpp's, added here.
+// - **The `$` macros** (`$health`, `$location`...) are team_macros.hpp's, added here.
 // The lines it prints are a player's: plain words, no next steps.
-//
 // ge:summary Team chat in a player's config: percent codes, fun characters, f_ event triggers
 // ge:keywords say say_team percent-codes team-message fun-characters f_newmap f_spawn f_death
 // ge:keywords f_respawn f_weaponchange tp_triggers tp_forcetriggers cl_parsesay cl_parsefunchars
@@ -55,7 +54,8 @@
 // ge:keywords nick f_took tp_msgtook pickup took tp_tooktimeout tp_msgpoint tp_pointtimeout
 // ge:keywords pointing set_ex set_ex2 set_tp macrolist f_bonusflash cl_fakename cl_floodprot
 // ge:keywords cl_fp_messages cl_fp_persecond flood-protection f_mapend f_countdownstart
-// ge:keywords f_countdownbreak
+// ge:keywords f_countdownbreak f_flagdeath f_focusgained f_trackspectate f_freeflyspectate
+// ge:keywords f_demomatchstart f_sbrefreshdone carries-flag
 // ge:skill shooter console
 // ge:test tests/shooters_edge_team_chat_test.cpp
 #pragma once
@@ -89,6 +89,7 @@ struct TeamChat {
   int last_health = 0;           // the health the last frame had
   int last_weapon = -1;          // the weapon in hand (-1: none yet this map)
   int64_t bonuses = 0;           // the items taken the server told of, as last seen
+  bool flag = false;             // the player carried a flag (or a key) in the last frame
   std::string died_at;           // where the player died this map ("": not yet)
   double died_t = -1e9;          // when, the state's clock
   mutable std::string reported;  // %r: the last place a code named
@@ -140,6 +141,14 @@ std::string hand_weapon_word(const ge::console::Console& con, const hud::Status&
 
 // The player's `alias` ("f_exit") queued, unless `tp_triggers` is 0.
 void team_event(ge::console::Console& con, std::string_view alias);
+
+// The player's `alias` queued whenever it exists, `tp_triggers` or not: the spectator's camera
+// locked on a player (`f_trackspectate`) or let go of one (`f_freeflyspectate`).
+void spectate_event(ge::console::Console& con, std::string_view alias);
+
+// Whether the player `state` is of carries a flag: a capture-the-flag flag's glow on him (Quake
+// and QuakeWorld's two flag effects, Quake II's two) or, in Team Fortress, a key among his items.
+bool carries_flag(const DemoState& state);
 
 // One frame of the player's state on `map` ("" when no level is up): kept for the codes, and
 // the events it makes run. `bonuses` counts the items taken the server told of (its `bf`): one
