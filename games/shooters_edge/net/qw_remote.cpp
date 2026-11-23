@@ -272,9 +272,15 @@ bool predict_from(Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& 
   if (!can_predict(r) || !c.player_seen[c.playernum] || acked == 0) return false;
   const sh::NetPlayer n = net_of(own);
   sh::MoveCmd cmds[64];
+  uint32_t seqs[64];
   int count = 0;
   for (uint32_t q = acked + 1; q < c.ch.outgoing_sequence && count < 64; q++)
-    if (c.sent_seq[q & 63] == q) cmds[count++] = c.sent[q & 63];
+    if (c.sent_seq[q & 63] == q) {
+      seqs[count] = q;
+      cmds[count++] = c.sent[q & 63];
+    }
+  // The main pass keeps the state after each move (the missiles' places, the jump's sound).
+  sh::MoveState* each = full != nullptr ? r.ahead_each : nullptr;
   // The solids where the last frame put them: the movers, then the other players.
   const client::DemoState& st = r.demo.state;
   const std::vector<sh::ClientModel> movers = movers_of(r);
@@ -298,15 +304,20 @@ bool predict_from(Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& 
       at.push_back({static_cast<int>(m.model - r.world->data()), m.origin});
     ge::classic::original_prediction_place(r.original, at.data(), static_cast<int>(at.size()),
                                            others.data(), static_cast<int>(others.size()));
-    ahead = ge::classic::predict_player_original(r.original, n, cmds, count);
+    ahead = ge::classic::predict_player_original(r.original, n, cmds, count, each);
   } else {
     sh::MoveWorld world;
     sh::client_world((*r.world)[0], movers.data(), static_cast<int>(movers.size()), others.data(),
                      static_cast<int>(others.size()), world);
-    ahead = sh::predict_player(n, cmds, count, settings_of(c), world);
+    ahead = sh::predict_player(n, cmds, count, settings_of(c), world, each);
   }
   out = ahead.origin;
-  if (full != nullptr) *full = ahead;
+  if (full != nullptr) {
+    *full = ahead;
+    std::copy(seqs, seqs + count, r.ahead_seq);
+    r.ahead_count = count;
+    r.ahead_from_held = n.jump_held;
+  }
   replayed = count;
   return true;
 }
@@ -336,6 +347,95 @@ void predict_others(Remote& r, double now_s) {
     r.others++;
     if (msec > r.others_msec) r.others_msec = msec;
   }
+}
+
+// THE PLAYER'S OWN JUMP AND MISSILES, at the weapon prediction's shown command: a jump the
+// predicted move took on a command shown for the first time plays its sound at once (the server's
+// copy on the player dropped, `cl_predict_jump`); each nail, rocket or grenade the weapon pass
+// fired is thrown ahead of the server (client/own_missiles.hpp, `cl_predict_projectiles`) from
+// the player's predicted place and view on its command; then every stand-in flies to `now_s`, is
+// handed to the server's copy near it and is drawn into the demo's state.
+void own_ahead(Remote& r, client::DemoState& d, double now_s) {
+  const QwClientEnd& c = r.end;
+  const int me = c.playernum;
+  const uint32_t acked = c.ch.incoming_acknowledged, next = c.ch.outgoing_sequence;
+  if (r.missiles_level != d.levels) {
+    client::own_missiles_clear(r.missiles);
+    r.missiles_level = d.levels;
+  }
+  if (static_cast<int32_t>(r.jump_played_to - acked) < 0) r.jump_played_to = acked;
+  if (r.weapon.on && r.predict_jump && me >= 0) {
+    constexpr std::string_view kJump = "player/plyrjmp8.wav";
+    std::erase_if(d.started, [&](const client::DemoSound& s) {
+      return s.entity == me + 1 && s.channel == 4 && s.name == nullptr && s.sound > 0 &&
+             static_cast<size_t>(s.sound) < d.sounds.size() &&
+             d.sounds[static_cast<size_t>(s.sound)] == kJump;
+    });
+    uint32_t shown = next - 1 - static_cast<uint32_t>(std::max(r.weapon.buffer, 0));
+    if (static_cast<int32_t>(shown - (acked + 2)) < 0) shown = next - 1;
+    bool held = r.ahead_from_held;
+    for (int i = 0; i < r.ahead_count; i++) {
+      const uint32_t q = r.ahead_seq[i];
+      const bool jumped = !held && r.ahead_each[i].jump_held;
+      held = r.ahead_each[i].jump_held;
+      if (!jumped || static_cast<int32_t>(q - r.jump_played_to) <= 0 ||
+          static_cast<int32_t>(q - shown) > 0)
+        continue;
+      client::DemoSound snd;
+      snd.entity = me + 1;
+      snd.channel = 4;
+      for (size_t k = 1; k < d.sounds.size() && snd.sound == 0; k++)
+        if (d.sounds[k] == kJump) snd.sound = static_cast<int>(k);
+      if (snd.sound == 0) snd.name = "player/plyrjmp8.wav";
+      snd.attenuation = 0;
+      snd.origin = r.ahead_each[i].origin;
+      d.started.push_back(snd);
+      r.jumps_played++;
+    }
+    if (static_cast<int32_t>(shown - r.jump_played_to) > 0) r.jump_played_to = shown;
+  }
+  const int ping = me >= 0 && me < 32 ? c.players[me].weapon.ping_ms : 0;
+  for (const RemoteWeapon::Fired& f : r.weapon.fired) {
+    client::OwnShot shot;
+    switch (f.shot.sound) {
+      case ge::classic::WeaponSound::nailgun:
+        shot.kind = client::OwnMissileKind::nail;
+        break;
+      case ge::classic::WeaponSound::super_nailgun:
+        shot.kind = client::OwnMissileKind::super_nail;
+        break;
+      case ge::classic::WeaponSound::rocket:
+        shot.kind = client::OwnMissileKind::rocket;
+        break;
+      case ge::classic::WeaponSound::grenade:
+        shot.kind = client::OwnMissileKind::grenade;
+        break;
+      default:
+        continue;
+    }
+    shot.origin = r.prediction;
+    for (int i = 0; i < r.ahead_count; i++)
+      if (r.ahead_seq[i] == f.command) shot.origin = r.ahead_each[i].origin;
+    shot.angles = c.sent[f.command & 63].angles;
+    shot.side = f.shot.side;
+    shot.midair = f.midair;
+    for (uint32_t q = f.command + 1; static_cast<int32_t>(q - next) < 0; q++)
+      if (c.sent_seq[q & 63] == q) shot.age_s += c.sent[q & 63].msec * 0.001;
+    client::own_missile_fire(r.missiles, shot, now_s, c.latency, ping, r.prediction);
+  }
+  const sh::Hull* world =
+      r.world != nullptr && !r.world->empty() ? &(*r.world)[0].hulls[0] : nullptr;
+  client::own_missiles_step(r.missiles, world, settings_of(c).gravity, now_s);
+  // The copies hidden last step shown as the newest frame has them before they are matched again.
+  const auto restore = [&](int n) {
+    if (n > 0 && static_cast<size_t>(n) < r.ents_new.size() &&
+        static_cast<size_t>(n) < d.entities.size())
+      d.entities[static_cast<size_t>(n)].present = r.ents_new[static_cast<size_t>(n)].present;
+  };
+  for (const client::OwnMissile& o : r.missiles.flying) restore(o.adopted);
+  for (const int n : r.missiles.hidden) restore(n);
+  client::own_missiles_handover(r.missiles, d);
+  client::own_missiles_draw(r.missiles, d, now_s);
 }
 
 // The entities drawn between the last two frames read, at the drawn time `now_s`.
@@ -1141,12 +1241,21 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   if (r.predicted) {
     sh::Vec3f before;
     int unused = 0;
+    // cl_predict_smoothview: 0 snapped; above, the decay's pace by 2 less it (at least 0.1).
+    r.smooth.off = r.smoothview <= 0;
+    r.smooth.scale = static_cast<float>(std::clamp(2 - r.smoothview, 0.1, 2.0));
+    r.smooth.drop = kSmoothDropU;
     if (r.end.ch.incoming_acknowledged != acked_before &&
         predict_from(r, own_before, acked_before, before, unused))
-      sh::smoothing_frame(r.smooth, before, now);
+      sh::smoothing_frame(r.smooth, before, now, r.end.latency);
     sh::smoothing_decay(r.smooth, wall_s);
     r.prediction = now;
-    const sh::Vec3f drawn = sh::smoothed(r.smooth, now);
+    sh::Vec3f drawn = sh::smoothed(r.smooth, now);
+    // The eased place never inside a wall: the player's box swept from the prediction to it.
+    if (r.world != nullptr && !r.world->empty() && sh::length(r.smooth.correction) > 0) {
+      const sh::HullTrace tr = sh::trace_hull((*r.world)[0].hulls[1], now, drawn);
+      if (!tr.allsolid && !tr.startsolid) drawn = tr.endpos;
+    }
     if (static_cast<size_t>(me) < d.state.players.size())
       d.state.players[static_cast<size_t>(me)].origin = drawn;
     if (!d.state.intermission) d.state.eye = {drawn.x, drawn.y, drawn.z + d.state.view_height};
@@ -1159,8 +1268,11 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   } else {
     r.weapon.on = false;
     r.weapon.played_to = r.end.ch.incoming_acknowledged;
+    r.weapon.fired.clear();
   }
   lerp_entities(r, draw_s);
+  if (!r.predicted) r.ahead_count = 0;
+  own_ahead(r, d.state, draw_s);
   if (!any || d.state.map.empty()) return RemoteStep::waiting;
   // The level is loaded once the files it needs are here: while its map or models still come
   // (the content fetched before prespawn) the window shows the console and the download's bar.
@@ -1260,7 +1372,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.q2_chantype = std::atoi(cvar("net_chantype", "1").c_str());
     cfg.q2_batch = cvar("cl_batchcmds", "1") != "0";
     cfg.q2_packetdup = std::atoi(cvar("cl_packetdup", "1").c_str());
-    cfg.q2_maxpackets = std::atoi(cvar("cl_maxpackets", "30").c_str());
+    cfg.q2_maxpackets = std::atoi(cvar("cl_c2spps", "30").c_str());  // its cl_maxpackets
     cfg.q2_instantpacket = cvar("cl_instantpacket", "1") != "0";
     // Quake II's downloads over HTTP (classic/content/web_downloads.hpp), registered while it is
     // the game.
@@ -1505,6 +1617,25 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                     .min = 0,
                     .max = 10},
                    &r.weapon.buffer);
+  con.cvars().bind({.name = "cl_predict_projectiles",
+                    .fallback = "1",
+                    .help = "1: on a server joined, your own nails, rockets and grenades fly as "
+                            "you fire, before the server's arrive; 0: only the server's",
+                    .kind = ge::console::CvarKind::boolean},
+                   &r.missiles.on);
+  con.cvars().bind({.name = "cl_predict_jump",
+                    .fallback = "1",
+                    .help = "1: on a server joined, your jump heard as you jump; 0: when the "
+                            "server's sound arrives",
+                    .kind = ge::console::CvarKind::boolean},
+                   &r.predict_jump);
+  con.cvars().bind({.name = "cl_predict_smoothview",
+                    .fallback = "1",
+                    .help = "How a correction of your predicted place is eased out on a server "
+                            "joined: 0 snapped at once, 1 the usual pace, up to 2 slower",
+                    .min = 0,
+                    .max = 2},
+                   &r.smoothview);
   con.cvars().bind({.name = "cl_predict_players",
                     .fallback = "1",
                     .help = "1: on a server joined, the other players run ahead from their last "

@@ -147,7 +147,7 @@ void put(sv::Q2Player& p, sh::Vec3f at) {
   p.move.origin[0] = static_cast<int16_t>(at.x * 8);
   p.move.origin[1] = static_cast<int16_t>(at.y * 8);
   p.move.origin[2] = static_cast<int16_t>(at.z * 8);
-  for (int16_t& v : p.move.velocity) v = 0;
+  for (int32_t& v : p.move.velocity) v = 0;
   for (int16_t& v : p.move.delta_angles) v = 0;  // the view his commands give, not a spawn's turn
   p.forced = false;
 }
@@ -175,8 +175,8 @@ constexpr int32_t kWorld = sh::kSqSolid | sh::kSqWindow;
 void step_off_start(Stage& d) {
   tick(d, 0, 0, 0);
   const sv::Q2Player& ana = d.p(0);
-  const sh::Vec3f at{ana.move.origin[0] / 8.0f, ana.move.origin[1] / 8.0f,
-                     ana.move.origin[2] / 8.0f};
+  const sh::Vec3f at{float(ana.move.origin[0]) / 8.0f, float(ana.move.origin[1]) / 8.0f,
+                     float(ana.move.origin[2]) / 8.0f};
   const sh::Vec3f lo{-16, -16, -24}, hi{16, 16, 32};
   const float ways[4][2] = {{-64, 0}, {64, 0}, {0, -64}, {0, 64}};
   for (const auto& w : ways) {
@@ -303,7 +303,7 @@ Shot fire_at(Stage& d, const Spot& sp, float height, bool feet) {
   for (int i = 0; i < 160 && target.alive; i++) {
     if (target.body.armour_count != armour) {
       out.landed = true;
-      out.up_speed = target.move.velocity[2] / 8.0f;
+      out.up_speed = float(target.move.velocity[2]) / 8.0f;
       break;
     }
     put(target, out.at);  // held there until the blow lands

@@ -6,7 +6,7 @@ SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.
 
 .PHONY: setup run build test fmt fmt-check lint agents-check index find lessons labs lab sim play labs-smoke \
 	bot-video bot-why \
-	labs-digests libm-check release-check mapsdk-check shaders-check precheck ge clean
+	labs-digests libm-check release-check manual mapsdk-check shaders-check precheck ge clean
 
 # A new machine, once: the platform's setup script installs every tool the build needs
 # (tools/setup-macos.sh, tools/setup-ubuntu.sh with sudo, tools/setup-windows.ps1); rerunning it
@@ -152,6 +152,12 @@ ge: build
 
 # The porting working area's targets (make golden, make golden-libm), while it exists.
 -include porting/porting.mk
+
+# The player's reference manual (docs/console.md § The reference manual): build/manual/user-manual.html
+# from the window's and the dedicated server's own registrations (tools/manual.sh: GE_MANUAL_GAME
+# the game the window loads, by default Quake's shareware release; MANUAL_OUT another folder).
+manual:
+	PRESET=$(PRESET) tools/manual.sh
 
 # The release plumbing (docs/publishing.md): fragments valid, tools tested,
 # and the version the next release would get (none right after a release).

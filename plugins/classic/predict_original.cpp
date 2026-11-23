@@ -92,7 +92,7 @@ void original_prediction_place(OriginalPrediction& p, const ModelAt* movers, int
 }
 
 MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
-                                  const MoveCmd* cmds, int count) {
+                                  const MoveCmd* cmds, int count, MoveState* each) {
   Server& sv = p.sv;
   const MoveState from = unquantize_player(acked, sv.set.move);
   unlink_edict(sv, kPlayer);
@@ -101,13 +101,19 @@ MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
   Edict& ed = sv.edicts[kPlayer];
   if (from.ground != -1) ed.flags |= kFlagOnGround;
   if (acked.jump_held) ed.flags &= ~kFlagJumpReleased;
-  for (int i = 0; i < count; i++) run_split(sv, cmds[i]);
-  MoveState out = from;
-  out.origin = ed.origin;
-  out.velocity = ed.velocity;
-  out.ground = (ed.flags & kFlagOnGround) != 0 ? 0 : -1;
-  out.jump_held = (ed.flags & kFlagJumpReleased) == 0;
-  return out;
+  const auto state = [&] {
+    MoveState out = from;
+    out.origin = ed.origin;
+    out.velocity = ed.velocity;
+    out.ground = (ed.flags & kFlagOnGround) != 0 ? 0 : -1;
+    out.jump_held = (ed.flags & kFlagJumpReleased) == 0;
+    return out;
+  };
+  for (int i = 0; i < count; i++) {
+    run_split(sv, cmds[i]);
+    if (each != nullptr) each[i] = state();
+  }
+  return state();
 }
 
 }  // namespace ge::classic

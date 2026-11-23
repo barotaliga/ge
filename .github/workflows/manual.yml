@@ -1,0 +1,73 @@
+name: manual
+
+# The player's reference manual published as the repository's pages (docs/console.md § The
+# reference manual): `make manual` builds the window and the dedicated server, has each write its
+# manual source from its own registrations (every game's layer in turn) and `ge manual` merges them
+# into user-manual.html and manual.json, which deploy to GitHub Pages. Once a day and when asked:
+# the page follows main within a day, and the shared runners are spared a build on every push.
+# The pages must be set to "GitHub Actions" as their source in the repository's settings.
+on:
+  schedule:
+    - cron: "30 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CXX: g++
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 800M
+    steps:
+      - uses: actions/checkout@v5
+      - name: The week, for the apt cache's key
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: .cache/apt
+          key: apt-ubuntu-24.04-${{ hashFiles('tools/setup-ubuntu.sh') }}-${{ steps.week.outputs.week }}
+          restore-keys: apt-ubuntu-24.04-
+      - name: Install the platform's and the GPU's Linux packages
+        timeout-minutes: 15
+        run: sudo tools/setup-ubuntu.sh --cache-dir=.cache/apt
+      - uses: actions/cache@v4
+        with:
+          path: .cache/deps
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake', 'cmake/Codecs.cmake') }}
+      # The GCC release row's objects, as main last saved them (ci.yml's linux-gcc).
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/ccache
+          key: ccache-ubuntu-24.04-g++-release-${{ github.sha }}
+          restore-keys: ccache-ubuntu-24.04-g++-release-
+      - run: cmake --preset release
+      - name: Write the manual
+        run: PRESET=release MANUAL_OUT=build/manual/site tools/manual.sh
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/manual/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

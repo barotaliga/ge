@@ -30,7 +30,7 @@ constexpr const char* kNames[8] = {"Hellrot",    "Tokay",   "Killme", "Disruptor
 constexpr const char* kWords[4] = {"Watch it", "#$@*&", "Idiot", "Check your targets"};
 constexpr int kChat = 3;  // the chat print level
 
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
 

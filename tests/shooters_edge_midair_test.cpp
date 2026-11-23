@@ -73,7 +73,7 @@ void put(sv::Q2Player& p, float x, float z) {
   p.move.origin[0] = static_cast<int16_t>(x * 8);
   p.move.origin[1] = 0;
   p.move.origin[2] = static_cast<int16_t>(z * 8);
-  for (int16_t& v : p.move.velocity) v = 0;
+  for (int32_t& v : p.move.velocity) v = 0;
   for (int16_t& v : p.move.delta_angles) v = 0;
   p.forced = false;
 }

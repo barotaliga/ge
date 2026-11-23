@@ -30,10 +30,10 @@ constexpr int kFirstEntity = 1 + sh::kMaxClients;
 
 int32_t row_of_slot(int slot) { return slot < 0 ? 0 : slot + 1; }
 
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
-void pack(int16_t out[3], const float v[3]) {
+void pack(int32_t out[3], const float v[3]) {
   for (int i = 0; i < 3; i++)
     out[i] = static_cast<int16_t>(num::to_int32(static_cast<double>(v[i]) * 8.0));
 }
