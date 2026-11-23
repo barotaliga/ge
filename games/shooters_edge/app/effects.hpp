@@ -133,11 +133,28 @@ void q2_item_back(const double at[3], uint32_t seed, Palette palette, Particles*
 // sparks).
 void q2_specks(const double at[3], const double normal[3], int count, int colour, int reach,
                bool vary, uint32_t seed, Palette palette, Particles* out, double fall = 80);
-// Quake II's blaster bolt's hit: 40 specks of palette 0xe0..0xe7 off the face along `normal` (map
-// units' axes), each 0..15 units out along it and -4..3 across, pushed off at 30 units/s with up to
-// 40 more on each axis, falling, living 0.5..0.8 s.
+// Quake II's blaster bolt's hit: 40 specks of palette `colour` + 0..7 (0xe0 the blaster's, 0xd0 a
+// green blaster's, 0x6f a flechette's) off the face along `normal` (map units' axes), each 0..15
+// units out along it and -4..3 across, pushed off at 30 units/s with up to 40 more on each axis,
+// falling, living 0.5..0.8 s.
 void q2_blaster_specks(const double at[3], const double normal[3], uint32_t seed, Palette palette,
-                       Particles* out);
+                       Particles* out, int colour = 0xe0);
+// THE MISSION PACKS' BURSTS (map units, Quake II's own numbers):
+// - The disruptor's dark burst: 128 black specks (palette 0) within 16 units, flung at up to 128
+//   units/s on each axis, falling, living 1.5..2 s.
+// - The A-M bomb's blast, `ratio` (0..1) of its second: 700 specks on a sphere of 200 × ratio units
+//   round `at` (palette 110, 112, 114 or 116), drawn for one frame.
+// - The plasma beam's rings (the player's own beam): a ring of 20 specks (palette 216..223) of
+//   radius 1.5 units round `at`, across the beam on the axes `right` and `up`, `scale` of its size
+//   (the rings within 10 units of the gun shrink), drawn for one frame.
+// - A monster's plasma beam's glow at its muzzle: 40 specks (palette 224) on a sphere of 10 units,
+//   drawn for one frame.
+void q2_tracker_burst(const double at[3], uint32_t seed, Palette palette, Particles* out);
+void q2_nuke_shell(const double at[3], double ratio, uint32_t seed, Palette palette,
+                   Particles* out);
+void q2_heat_ring(const double at[3], const double right[3], const double up[3], double scale,
+                  uint32_t seed, Palette palette, Particles* out);
+void q2_heat_glow(const double at[3], uint32_t seed, Palette palette, Particles* out);
 // Quake II's explosion's specks: 256 of palette `colour` + 0..7 (0xe0 a rocket's or a grenade's,
 // 0xd0 the BFG's big burst), each within -16..15 units of the point on every axis, flung at
 // -192..191 units/s on each axis and falling, living 0.625..1 s.

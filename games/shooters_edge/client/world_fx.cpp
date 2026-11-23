@@ -1171,6 +1171,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     s.q2_models.clear();
     s.q2_models_next = 0;
     s.q2_cables.clear();
+    s.q2_heat_beams.clear();
+    s.nukes.clear();
     s.q2_lasers.clear();
   }
   for (; s.explosions_seen < l.explosions.size(); s.explosions_seen++) {
@@ -1183,7 +1185,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     const uint8_t kind = q2_blast_kind(code);
     const bool no_specks = ge::classic::q2_no_blast_specks(s.on.q2, kind);
     const bool no_ball = ge::classic::q2_no_blast_ball(s.on.q2, kind);
-    if (s.on.explosions) {
+    // The disruptor's dark burst and the A-M bomb's blast are always Quake II's own.
+    if (s.on.explosions && code != 47 && code != 51) {
       // The surface it went off against, if one is within a ball's reach of it: the nearest hit
       // of six lines out of it.
       double normal[3] = {0, 1, 0}, off = 0;
@@ -1439,7 +1442,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         const bool burst = e.code == -1;
         const ge::camera::Vec3 way = engine_point(e.way * 15);
         const double v[3] = {way.x, way.y, way.z};
-        if ((s.on.q2.no_particles & 16) != 0) break;  // Quake II's cl_disable_particles 16
+        // Quake II's cl_disable_particles 16: the plain blood alone (not green, not the big burst).
+        if ((s.on.q2.no_particles & 16) != 0 && e.code != 26 && e.code != 42) break;
         if (s.on.blood) {
           bleed_fx(l, s, e, p, eye_map, l.map ? floor_under(*l.map, e.at, eye_map) : -1e9, t, out);
         } else if (e.q2_specks > 0) {  // Quake II's puff of blood off the hit (q2_temp_fx.hpp)
@@ -1534,6 +1538,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           q2_named_fx(s, e, p, s.on.warps && near_warp(s.warps, e.at, t), t, out);
           break;
         }
+        if (l.q2 && q2_pack_hit(s, e, p, t, out)) break;  // the mission packs' hits, Quake II's own
         if (e.name == "te_blaster" && l.q2 && !s.on.hits) {  // the classic: its specks, its flare
           const double off_face[3] = {e.way.x, e.way.y, e.way.z};
           fx::q2_blaster_specks(p, off_face, s.seed++, s.palette, &out.births);
@@ -1571,6 +1576,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         put(engine_point(e.end), to);
         // Quake II's bubbles and force walls along their lines (client/world_fx_q2.cpp).
         if (q2_named_trail(s, e, from, to, out)) break;
+        // The mission packs' beams (the tesla's lightning, the plasma beams), Quake II's own.
+        if (l.q2 && (e.name == "te_lightning" || e.name == "te_heatbeam" ||
+                     e.name == "te_monster_heatbeam") &&
+            q2_cable(s, e, t))
+          break;
         // Quake II's cables in the classic look: a segment model every 30 units (q2_model_fx.hpp).
         if (l.q2 && !s.on.monsters && q2_cable(s, e, t)) break;
         // Quake II's monsters' cables (a parasite's tongue, a medic's line) and shots leaving.
@@ -1815,7 +1825,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     spr.origin = b.map_at;
     out.models.push_back(spr);
   }
-  q2_draw_model_fx(s, l.effect_models, l.me, l.own > 0 ? l.me.entity : 0, t, out);
+  q2_draw_model_fx(s, l, t, out);
 
   // The powers held: a glow round each holder (blue the quad's, red the shield's), the local
   // player's own among them.
@@ -1897,15 +1907,19 @@ void place_chain(const sh::Vec3f& from, const sh::Vec3f& to, const Chain& c, ge:
   const float yaw = static_cast<float>(std::atan2(d.y, d.x) * 180 / ge::core::kPi);
   const float pitch =
       static_cast<float>(std::atan2(d.z, std::sqrt(d.x * d.x + d.y * d.y)) * 180 / ge::core::kPi);
-  const int n = chain_links(len);
+  const int n = chain_links(len, c.step);
   for (int i = 0; i < n; ++i) {
     Placed seg;
     seg.entity = entity--;
     seg.modelindex = c.modelindex;
-    const auto k = static_cast<float>(chain_share(i, n, len, c.fit));
+    const auto k = static_cast<float>(chain_share(i, n, len, c.fit, c.step));
     seg.origin = {from.x + d.x * k, from.y + d.y * k, from.z + d.z * k};
-    seg.angles = {pitch, yaw, static_cast<float>(ge::core::range(roll, 0, 360))};
+    const float spin =
+        static_cast<float>(c.roll >= 0 ? c.roll : ge::core::range(roll, 0, 360));
+    seg.angles = c.back ? sh::Vec3f{-pitch, yaw + 180, spin} : sh::Vec3f{pitch, yaw, spin};
     seg.no_shadow = c.no_shadow;
+    seg.full_bright = c.full_bright;
+    seg.frame = c.frame;
     out.push_back(seg);
   }
 }

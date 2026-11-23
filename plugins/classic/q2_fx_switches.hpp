@@ -101,6 +101,7 @@ struct Q2FxSwitches {
   int dlight_falloff = -1;                   // gl_dlight_falloff (-1: the renderer's own)
   double cel_shading = 0;                    // gl_celshading, pixels (0: none)
   bool smooth_explosions = true;             // cl_smooth_explosions
+  int hand = 0;  // not a setting of its own: `hand`, the side the player's plasma beam leaves from
   double glowmap_intensity = 0.75;           // gl_glowmap_intensity
 };
 

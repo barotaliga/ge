@@ -161,7 +161,9 @@ inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
                                                 "models/objects/flash/tris.md2",
                                                 "models/monsters/parasite/segment/tris.md2",
                                                 "models/ctf/segment/tris.md2",
-                                                "sprites/s_bfg2.sp2"};
+                                                "sprites/s_bfg2.sp2",
+                                                "models/proj/lightning/tris.md2",
+                                                "models/proj/beam/tris.md2"};
 inline int effect_model(int listed, EffectModel m) { return listed + static_cast<int>(m); }
 inline int effect_model(const Listen& l, EffectModel m) {
   return effect_model(l.server ? static_cast<int>(l.server->models.size()) : 0, m);

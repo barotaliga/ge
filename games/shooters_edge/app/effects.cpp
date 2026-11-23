@@ -298,7 +298,7 @@ void q2_fountain(const double p[3], uint32_t seed, Palette pal, Particles* out) 
 }
 
 void q2_blaster_specks(const double p[3], const double normal[3], uint32_t seed, Palette pal,
-                       Particles* out) {
+                       Particles* out, int colour) {
   Rng r = ge::core::make_rng(seed);
   for (int n = 0; n < 40; ++n) {
     const double d = pick(r, 16);  // out along the face, the same on every axis
@@ -306,7 +306,8 @@ void q2_blaster_specks(const double p[3], const double normal[3], uint32_t seed,
                  z = pick(r, 8) - 4 + d * normal[2];
     const double v[3] = {normal[0] * 30 + rnd(r, -40, 40), normal[1] * 30 + rnd(r, -40, 40),
                          normal[2] * 30 + rnd(r, -40, 40)};
-    out->push_back(q2_speck(p, x, y, z, v, 80, pal, (0xe0 + pick(r, 8)) & 0xff, rnd(r, 0.5, 0.8)));
+    out->push_back(
+        q2_speck(p, x, y, z, v, 80, pal, (colour + pick(r, 8)) & 0xff, rnd(r, 0.5, 0.8)));
   }
 }
 
@@ -531,6 +532,42 @@ void q2_beam_out(const double p[3], double ratio, uint32_t seed, Palette pal, Pa
   q2_sphere(
       p, 300, 45 * ratio, 0, seed, pal, out, [&](Rng& r) { return kColours[pick(r, 4)]; },
       [](Rng&) { return kOneFrameS; });
+}
+
+void q2_nuke_shell(const double p[3], double ratio, uint32_t seed, Palette pal, Particles* out) {
+  constexpr int kColours[4] = {110, 112, 114, 116};
+  q2_sphere(
+      p, 700, 200 * ratio, 0, seed, pal, out, [&](Rng& r) { return kColours[pick(r, 4)]; },
+      [](Rng&) { return kOneFrameS; });
+}
+
+void q2_heat_glow(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+  q2_sphere(
+      p, 40, 10, 0, seed, pal, out, [](Rng&) { return 224; }, [](Rng&) { return kOneFrameS; });
+}
+
+void q2_tracker_burst(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < 128; ++n) {
+    const double x = pick(r, 32) - 16, y = pick(r, 32) - 16, z = pick(r, 32) - 16;
+    const double v[3] = {double(pick(r, 256) - 128), double(pick(r, 256) - 128),
+                         double(pick(r, 256) - 128)};
+    out->push_back(q2_speck(p, x, y, z, v, 80, pal, 0, rnd(r, 1.5, 2.0)));
+  }
+}
+
+void q2_heat_ring(const double p[3], const double right[3], const double up[3], double scale,
+                  uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  const double zero[3] = {0, 0, 0};
+  const double radius = 1.5 * scale;
+  for (int n = 0; n < 20; ++n) {
+    const double a = n * (2 * 3.14159265358979323846 / 20);
+    const double c = std::cos(a) * radius, sn = std::sin(a) * radius;
+    out->push_back(q2_speck(p, c * right[0] + sn * up[0], c * right[1] + sn * up[1],
+                            c * right[2] + sn * up[2], zero, 0, pal, 223 - pick(r, 8),
+                            kOneFrameS));
+  }
 }
 
 Light q2_point_light(const double p[3], double radius_u, double red, double green, double blue) {

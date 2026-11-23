@@ -2,12 +2,12 @@
 // share shown and light, smooth and stepped; a puff; a flash; the BFG's burst), each kind's
 // effects and the player's say over them, the cables' segments; and off the wire (demo_q2.cpp): a
 // splash's sparks heard, a laser's sparks in their exact colour, the grapple's cable from its
-// start plus its offset.
+// start plus its offset; the mission packs' bolts, blasts, beams and lightning, and their sounds.
 //
 // ge:summary Test: Quake II's model effects by age and kind, cables, splash and laser sparks
 // ge:keywords test q2 temp-entity model-effect explosion-model explosion-skins smoke flash
 // ge:keywords blaster-flare cable segment chain chain_share splash laser-sparks grapple
-// ge:keywords cl_smooth_explosions
+// ge:keywords cl_smooth_explosions mission-packs heat-beam lightning flechette nuke tracker
 // ge:skill shooter render testing
 #include "shooters_edge/client/q2_model_fx.hpp"
 
@@ -165,4 +165,57 @@ TEST(the_grapples_cable_starts_at_its_start_plus_its_offset) {
   const cl::DemoEffect& e = d.state.effects[0];
   CHECK(e.name == "te_grapple_cable" && e.entity == 2);
   CHECK(e.at.x == 8 && e.at.z == 16 && e.end.x == 80 && e.way.z == 16);
+}
+
+TEST(the_mission_packs_bolts_flare_green_and_blue_and_their_blasts_keep_their_own_light) {
+  cl::Q2ModelFx m[2];
+  const float at[3] = {0, 0, 0}, up[3] = {0, 0, 1};
+  // The ion bolt (30) and the flechette (55): the blaster's flare on skins 1 and 2, light 150.
+  CHECK(cl::q2_model_fx_of(30, 0, at, up, 2, {}, m) == 1);
+  CHECK(m[0].model == cl::Q2FxModel::flare && m[0].skin == 1 && m[0].light == 150);
+  CHECK(m[0].rgb[0] == 0 && m[0].rgb[1] == 1 && m[0].rgb[2] == 0);
+  CHECK(cl::q2_model_fx_pose(m[0], 2.05, true).skin == 1);
+  CHECK(cl::q2_model_fx_of(55, 0, at, up, 2, {}, m) == 1);
+  CHECK(m[0].skin == 2 && near(m[0].rgb[2], 0.75));
+  // The big blast (53) twice the size; the plain and no-specks blasts lit; 62 and 63 dark.
+  CHECK(one(53).scale == 2 && one(53).light == 350 && one(35).scale == 1);
+  CHECK(one(35).light == 350 && one(54).light == 350);
+  CHECK(one(62).light == 0 && one(63).light == 0 && one(63).base == 30);
+  CHECK(cl::q2_blast_code("te_nukeblast") == 51 && cl::q2_blast_code("te_explosion1_np") == 54);
+  // The plasma beam's side: the hand, the centre gun drawn on the right, a hidden gun centred.
+  CHECK(cl::beam_hand(1, 1) == 1 && cl::beam_hand(0, 3) == 1 && cl::beam_hand(2, 2) == 0);
+  // Their sounds, played by the client: the bolts' hit, the tracker's, the big blasts'.
+  CHECK(std::string(cl::q2_temp_sound(30, 0, -1).name) == "weapons/lashit.wav");
+  CHECK(std::string(cl::q2_temp_sound(47, 0, -1).name) == "weapons/disrupthit.wav");
+  CHECK(std::string(cl::q2_temp_sound(53, 0, -1).name) == "weapons/rocklx1a.wav");
+  CHECK(cl::q2_puff(42) != nullptr && cl::q2_puff(42)->count == 250);
+}
+
+TEST(the_lightnings_links_are_35_units_and_face_back_to_the_start) {
+  CHECK(cl::chain_links(70, cl::kQ2LightningStep) == 2);
+  CHECK(near(cl::chain_share(1, 2, 70, true, cl::kQ2LightningStep) * 70, 35));
+  CHECK(cl::chain_links(64, cl::kQ2HeatBeamStep) == 2);
+}
+
+TEST(the_packs_bolts_beams_and_lightning_read_off_the_wire_by_name) {
+  // The ion bolt (30): point (8, 16, 24), direction 5; its hit heard.
+  cl::Demo d = read_one({3, 30, 64, 0, 128, 0, 192, 0, 5});
+  CHECK(d.state.effects.size() == 1 && d.state.effects[0].name == "te_blaster2");
+  CHECK(d.state.started.size() == 1);
+  CHECK(std::string(d.state.started[0].name) == "weapons/lashit.wav");
+  CHECK(read_one({3, 55, 64, 0, 128, 0, 192, 0, 5}).state.effects[0].name == "te_flechette");
+  CHECK(read_one({3, 44, 64, 0, 128, 0, 192, 0, 5}).state.effects[0].name ==
+        "te_heatbeam_steam");
+  // The heat beam (38): entity 3, start, end.
+  d = read_one({3, 38, 3, 0, 64, 0, 0, 0, 0, 0, 128, 2, 0, 0, 0, 0});
+  CHECK(d.state.effects.size() == 1 && d.state.effects[0].name == "te_heatbeam");
+  CHECK(d.state.effects[0].entity == 3 && d.state.effects[0].end.x == 80);
+  // The tesla's lightning (33): source 5, target 7, start, end; its crackle on the source.
+  d = read_one({3, 33, 5, 0, 7, 0, 64, 0, 0, 0, 0, 0, 128, 2, 0, 0, 0, 0});
+  CHECK(d.state.effects.size() == 1);
+  const cl::DemoEffect& e = d.state.effects[0];
+  CHECK(e.name == "te_lightning" && e.entity == 5 && e.count == 7 && e.end.x == 80);
+  CHECK(d.state.started.size() == 1 && d.state.started[0].entity == 5);
+  CHECK(d.state.started[0].channel == 2);
+  CHECK(std::string(d.state.started[0].name) == "weapons/tesla.wav");
 }

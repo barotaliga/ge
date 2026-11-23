@@ -199,7 +199,9 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   const bool blast = name == "te_bfg_bigexplosion" || name == "te_bfg_explosion" ||
                      name == "te_rocket_explosion" || name == "te_grenade_explosion" ||
                      name == "te_explosion1" || name == "te_explosion2" ||
-                     name == "te_plasma_explosion";
+                     name == "te_plasma_explosion" || name == "te_plain_explosion" ||
+                     name == "te_tracker_explosion" || name == "te_nukeblast" ||
+                     name == "te_explosion1_big" || name == "te_explosion1_np";
   if (blast) {
     l.explosions.push_back(ev.origin);
     if (const int code = q2_blast_code(name); code > 0 && listen_is_q2(l)) {

@@ -47,10 +47,11 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 2 | 67 | 5 (2 / 1 / 2) | 0 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 2 | 51 | 8 (3 / 3 / 2) | 0 |
 | The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
-| Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **272** | **10** | **131** | **131 (70 / 50 / 11)** | **0** |
+| Ground Zero (Quake II, folder `rogue`) | 82 | 17 | 7 | 58 (30 / 23 / 5) | 0 |
+| **All** | **272** | **24** | **131** | **117 (64 / 42 / 11)** | **0** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.**
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** After Ground Zero's
+temporary entities (2026-11-23): **117 missing.**
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
@@ -383,7 +384,7 @@ count: done 0, verify 0, missing 7, not-taken 0
 
 ## Ground Zero (Quake II, folder `rogue`)
 
-count: done 3, verify 7, missing 72 (36 / 31 / 5), not-taken 0
+count: done 17, verify 7, missing 58 (30 / 23 / 5), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -410,20 +411,20 @@ count: done 3, verify 7, missing 72 (36 / 31 / 5), not-taken 0
 | gz.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp |
 | gz.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp |
 | gz.effects | the tracker's and the other entity effects, the disguise's figure, infra-red goggles' view | done |  | client/world_fx_q2.cpp, client/q2_look.hpp |
-| gz.te.blaster2 | a green blaster's hit (temporary entity 30) | missing | 2 | client ledger `te.blaster2`, not taken for the base game |
-| gz.te.lightning | a lightning beam between two things (33; the tesla) | missing | 1 | `te.lightning`; LIFT: Quake's lightning beam drawing |
-| gz.te.plain_explosion | an explosion with no specks (35) | missing | 2 | `te.plain_explosion` |
-| gz.te.heatbeam | the player's heat beam (38) | missing | 1 | `te.heatbeam`; LIFT: our own lightning beam (the smooth weapon thread's `cl_fakeshaft`) |
-| gz.te.monster_heatbeam | a monster's heat beam (39) | missing | 1 | `te.monster_heatbeam`; same LIFT |
-| gz.te.moreblood | a bigger burst of blood (42; the chainfist) | missing | 2 | `te.moreblood` |
-| gz.te.heatbeam_sparks | the heat beam's sparks (43) | missing | 2 | `te.heatbeam_sparks` |
-| gz.te.heatbeam_steam | the heat beam's steam (44) | missing | 2 | `te.heatbeam_steam` |
-| gz.te.electric_sparks | blue electric sparks (46) | missing | 2 | `te.electric_sparks` |
-| gz.te.tracker_explosion | the disruptor's dark burst (47) | missing | 1 | `te.tracker_explosion` |
-| gz.te.nukeblast | the A-M bomb's growing blast (51) | missing | 1 | `te.nukeblast` |
-| gz.te.explosion1_big | a bigger explosion (53; the bosses) | missing | 2 | `te.explosion1_big` |
-| gz.te.explosion1_np | an explosion with no specks (54) | missing | 2 | `te.explosion1_np` |
-| gz.te.flechette | a flechette's hit (55) | missing | 1 | `te.flechette` |
+| gz.te.blaster2 | a green blaster's hit (temporary entity 30) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.lightning | a lightning beam between two things (33; the tesla) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.plain_explosion | an explosion with no specks (35) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.heatbeam | the player's heat beam (38) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.monster_heatbeam | a monster's heat beam (39) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.moreblood | a bigger burst of blood (42; the chainfist) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.heatbeam_sparks | the heat beam's sparks (43) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.heatbeam_steam | the heat beam's steam (44) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.electric_sparks | blue electric sparks (46) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.tracker_explosion | the disruptor's dark burst (47) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.nukeblast | the A-M bomb's growing blast (51) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.explosion1_big | a bigger explosion (53; the bosses) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.explosion1_np | an explosion with no specks (54) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
+| gz.te.flechette | a flechette's hit (55) | done |  | client/world_fx_q2.cpp, client/demo_q2.cpp (facts: `q2-client-te-packs.md`) |
 | gz.dm | the fourteen deathmatch maps played by bots | missing | 2 |  |
 | gz.coop | co-op through the units (`info_player_coop_lava`) | missing | 2 |  |
 | gz.save | saves of the pack's campaign | missing | 2 | server/q2_save.hpp |

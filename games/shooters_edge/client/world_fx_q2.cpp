@@ -10,6 +10,8 @@
 // ge:keywords te_flashlight te_bosstport boss-teleport ef_trap ef_tracker ef_trackertrail
 // ge:keywords ef_spinninglights
 // ge:keywords ef_flag1 ef_flag2 ef_ionripper ef_tagtrail ef_plasma q2_mark
+// ge:keywords te_heatbeam te_monster_heatbeam te_lightning tesla nuke-blast tracker-explosion
+// ge:keywords negative-light q2_pack_hit heat-beam-rings
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
 #include <algorithm>
@@ -23,6 +25,7 @@
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 #include "shooters_edge/client/q2_model_fx.hpp"
+#include "shooters_edge/client/q2_temp_fx.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 
@@ -32,6 +35,7 @@ namespace fx = shooters_edge::effects;
 
 namespace {
 constexpr double kSqBeamOutS = 2.1;  // a widow beam-out's life
+constexpr double kSqNukeS = 1;       // an A-M bomb's blast's
 // The placed model effects' entity numbers (below every other effect's).
 constexpr int kQ2FxEntities = -(1 << 23);
 
@@ -48,6 +52,121 @@ void q2_light(const float at[3], float reach, const float rgb[3], FxFrame& out) 
   double p[3];
   put_point({at[0], at[1], at[2]}, p);
   out.lights.push_back(fx::q2_point_light(p, reach, rgb[0], rgb[1], rgb[2]));
+}
+// The tesla's lightning from `from` to `to` (map units): 35-unit links over the line less 20
+// units, each facing back toward the start; one link alone at the end when that is 35 or less.
+void q2_lightning(const sh::Vec3f& from, const sh::Vec3f& to, int modelindex, ge::core::Rng& roll,
+                  int& entity, std::vector<Placed>& out) {
+  const sh::Vec3f d = {to.x - from.x, to.y - from.y, to.z - from.z};
+  const double len = ge::core::hypot3(d.x, d.y, d.z);
+  const double reach = len - kQ2LightningShort;
+  Chain chain;
+  chain.modelindex = modelindex;
+  chain.no_shadow = chain.full_bright = true;
+  chain.step = kQ2LightningStep;
+  if (reach <= kQ2LightningStep || len <= 0) {  // one link, at the end, along the line
+    const size_t first = out.size();
+    place_chain(to, {to.x + d.x, to.y + d.y, to.z + d.z}, chain, roll, entity, out);
+    if (out.size() > first + 1) out.resize(first + 1);
+    return;
+  }
+  const auto k = static_cast<float>(reach / len);
+  chain.fit = chain.back = true;
+  place_chain(from, {from.x + d.x * k, from.y + d.y * k, from.z + d.z * k}, chain, roll, entity,
+              out);
+}
+
+// The view's forward, right and up axes (map units' axes) from the eye's yaw and pitch.
+void view_axes(const FxScene& l, sh::Vec3f& fwd, sh::Vec3f& right, sh::Vec3f& up) {
+  const ge::camera::Vec3 f = ge::camera::look_forward(l.pose.yaw, l.pose.pitch);
+  fwd = {static_cast<float>(f.x), static_cast<float>(f.z), static_cast<float>(f.y)};
+  // Right: level, across the forward; up: the third axis.
+  const double h = std::sqrt(double(fwd.x) * fwd.x + double(fwd.y) * fwd.y);
+  right = h > 1e-6 ? sh::Vec3f{static_cast<float>(fwd.y / h), static_cast<float>(-fwd.x / h), 0}
+                   : sh::Vec3f{0, -1, 0};
+  up = {right.y * fwd.z - right.z * fwd.y, right.z * fwd.x - right.x * fwd.z,
+        right.x * fwd.y - right.y * fwd.x};
+}
+
+// THE PLASMA BEAMS: each a chain of the beam model in 32-unit links all at one roll that turns
+// 1000 degrees a second. The player's own (or a monster's sent from him) leaves his gun, 2 units
+// to the hand's side, 7 forward and 3 down (`kQ2HeatBeamGun`; the centre hand's 1 lower still, his
+// own sent as a monster's from the eye itself), runs along his view as far as the server's end, or
+// to what his aim meets with cl_fakeshaft on (`beam_trace`), wears frame 1 and is ringed by specks
+// sliding forward at 96 units a second, a ring every 32 units, shrunk within 10 units of the gun.
+// Another player's leaves his start 1 unit right, 7 along and 7 down; a monster's leaves its start
+// with a glow of specks round it; both frame 2, to the server's end.
+void q2_heat_beams(FxState& s, const FxScene& l, int modelindex, double t, int& entity,
+                   FxFrame& out) {
+  std::erase_if(s.q2_heat_beams, [&](const FxState::Q2HeatBeam& h) { return t > h.until; });
+  if (s.q2_heat_beams.empty()) return;
+  const int own = l.own > 0 ? l.me.entity : 0;
+  ge::core::Rng unused = ge::core::make_rng(0);
+  Chain chain;
+  chain.modelindex = modelindex;
+  chain.fit = chain.back = chain.no_shadow = chain.full_bright = true;
+  chain.step = kQ2HeatBeamStep;
+  chain.roll = std::fmod(t * 1000, 360);
+  for (const FxState::Q2HeatBeam& h : s.q2_heat_beams) {
+    if (own > 0 && h.entity == own) {
+      sh::Vec3f fwd, right, up;
+      view_axes(l, fwd, right, up);
+      const ge::camera::Vec3 eye = l.pose.eye;
+      const double u = 1 / ge::brush::kUnitM;
+      sh::Vec3f from = {static_cast<float>(eye.x * u), static_cast<float>(eye.z * u),
+                        static_cast<float>(eye.y * u)};
+      const float side = s.on.q2.hand == 2 ? 0.0f : s.on.q2.hand == 1 ? -1.0f : 1.0f;
+      const float off[3] = {h.monster ? 0.0f : 2 * side, h.monster ? 0.0f : 7.0f,
+                            (h.monster ? 0.0f : -3.0f) - (s.on.q2.hand == 2 ? 1.0f : 0.0f)};
+      for (int k = 0; k < 3; ++k) {
+        const float r = k == 0 ? right.x : k == 1 ? right.y : right.z;
+        const float f = k == 0 ? fwd.x : k == 1 ? fwd.y : fwd.z;
+        const float v = k == 0 ? up.x : k == 1 ? up.y : up.z;
+        (k == 0 ? from.x : k == 1 ? from.y : from.z) += off[0] * r + off[1] * f + off[2] * v;
+      }
+      float len = static_cast<float>(
+          ge::core::hypot3(h.to.x - from.x, h.to.y - from.y, h.to.z - from.z));
+      sh::Vec3f hit, normal;
+      if (s.on.fake_shaft > 0 && l.map != nullptr &&
+          beam_trace(l.map, from, fwd, l.bodies, own, hit, normal))
+        len = static_cast<float>(ge::core::hypot3(hit.x - from.x, hit.y - from.y, hit.z - from.z));
+      const sh::Vec3f to = {from.x + fwd.x * len, from.y + fwd.y * len, from.z + fwd.z * len};
+      chain.frame = 1;
+      place_chain(from, to, chain, unused, entity, out.models);
+      // The rings, sliding forward at 96 units a second.
+      const double r[3] = {right.x, right.y, right.z}, v[3] = {up.x, up.y, up.z};
+      for (double d = std::fmod(t * 96, 32); d < len; d += 32) {
+        const double whole = std::floor(d);
+        const double scale = whole < 10 ? whole / 10 : 1;
+        double p[3];
+        put_point({from.x + fwd.x * float(d), from.y + fwd.y * float(d), from.z + fwd.z * float(d)},
+                  p);
+        fx::q2_heat_ring(p, r, v, scale, s.seed++, s.palette, &out.births);
+      }
+      continue;
+    }
+    sh::Vec3f from = h.from;
+    if (!h.monster) {  // another player's: off his start, 1 right, 7 along, 7 down the line
+      const sh::Vec3f d = {h.to.x - h.from.x, h.to.y - h.from.y, h.to.z - h.from.z};
+      const float n = static_cast<float>(ge::core::hypot3(d.x, d.y, d.z));
+      if (n > 1e-6f) {
+        const sh::Vec3f f = {d.x / n, d.y / n, d.z / n};
+        const float flat = std::sqrt(f.x * f.x + f.y * f.y);
+        const sh::Vec3f rt =
+            flat > 1e-6f ? sh::Vec3f{f.y / flat, -f.x / flat, 0} : sh::Vec3f{0, -1, 0};
+        const sh::Vec3f upv = {rt.y * f.z - rt.z * f.y, rt.z * f.x - rt.x * f.z,
+                               rt.x * f.y - rt.y * f.x};
+        from = {from.x + rt.x + 7 * f.x - 7 * upv.x, from.y + rt.y + 7 * f.y - 7 * upv.y,
+                from.z + rt.z + 7 * f.z - 7 * upv.z};
+      }
+    } else {
+      double p[3];
+      put_point(h.from, p);
+      fx::q2_heat_glow(p, s.seed++, s.palette, &out.births);
+    }
+    chain.frame = 2;
+    place_chain(from, h.to, chain, unused, entity, out.models);
+  }
 }
 }  // namespace
 
@@ -77,9 +196,37 @@ bool q2_classic_blast(FxState& s, int code, const sh::Vec3f& at, const double p[
       if (!no_specks) fx::q2_blast_specks(p, 0xe0, s.seed++, s.palette, &out.births);
       q2_model_fx(s, code, at, {0, 0, 1}, t);
       return true;
-    case 20:  // the BFG ball's burst: its sprite and green light, no specks
+    case 62:  // explosion1 and 2 with no light
+    case 63:
+      if (!no_specks) fx::q2_blast_specks(p, 0xe0, s.seed++, s.palette, &out.births);
       q2_model_fx(s, code, at, {0, 0, 1}, t);
       return true;
+    case 20:  // the BFG ball's burst: its sprite and green light, no specks
+    case 35:  // a plain explosion, explosion1 without specks, a boss's big one: the ball alone
+    case 53:
+    case 54:
+      q2_model_fx(s, code, at, {0, 0, 1}, t);
+      return true;
+    case 47: {  // the disruptor's dark burst: black specks, a darkening light for a tenth
+      fx::q2_tracker_burst(p, s.seed++, s.palette, &out.births);
+      Q2ModelFx dark;
+      dark.cls = Q2FxClass::flash;
+      dark.drawn = false;
+      dark.born_s = t;
+      dark.at[0] = at.x, dark.at[1] = at.y, dark.at[2] = at.z;
+      dark.light = 150;
+      dark.rgb[0] = dark.rgb[1] = dark.rgb[2] = -1;
+      if (s.q2_models.size() < FxState::kQ2ModelFx) s.q2_models.push_back(dark);
+      return true;
+    }
+    case 51: {  // the A-M bomb's blast: a shell growing for a second (32 such at once at most)
+      if (s.nukes.size() + s.beam_outs.size() >= 32) return true;
+      FxState::Nuke n;
+      for (int k = 0; k < 3; ++k) n.at[k] = p[k];
+      n.born = t;
+      s.nukes.push_back(n);
+      return true;
+    }
     case 21:  // its big burst: specks alone
       fx::q2_blast_specks(p, 0xd0, s.seed++, s.palette, &out.births);
       return true;
@@ -89,10 +236,45 @@ bool q2_classic_blast(FxState& s, int code, const sh::Vec3f& at, const double p[
 }
 
 bool q2_cable(FxState& s, const Effect& e, double t) {
+  if (e.name == "te_heatbeam" || e.name == "te_monster_heatbeam") {  // kept by its source
+    auto h = std::find_if(s.q2_heat_beams.begin(), s.q2_heat_beams.end(),
+                          [&](const FxState::Q2HeatBeam& k) { return k.entity == e.entity; });
+    double life = kQ2HeatBeamS;
+    if (h == s.q2_heat_beams.end()) {
+      if (s.q2_heat_beams.size() >= 128) return true;  // the classic's 128: a new one dropped
+      s.q2_heat_beams.emplace_back();
+      h = s.q2_heat_beams.end() - 1;
+      life = kQ2HeatBeamNewS;
+    }
+    h->entity = e.entity;
+    h->from = e.at;
+    h->to = e.end;
+    h->monster = e.name == "te_monster_heatbeam";
+    h->until = t + life;
+    return true;
+  }
+  if (e.name == "te_lightning") {  // kept by the two it joins
+    auto c = std::find_if(s.q2_cables.begin(), s.q2_cables.end(), [&](const FxState::Q2Cable& k) {
+      return k.lightning && k.entity == e.entity && k.other == e.count;
+    });
+    if (c == s.q2_cables.end()) {
+      if (s.q2_cables.size() >= 128) return true;
+      s.q2_cables.emplace_back();
+      c = s.q2_cables.end() - 1;
+    }
+    c->entity = e.entity;
+    c->other = e.count;
+    c->from = e.at;
+    c->to = e.end;
+    c->lightning = true;
+    c->until = t + kQ2CableS;
+    return true;
+  }
   const bool ctf = e.name == "te_grapple_cable";
   if (!ctf && e.name != "te_parasite_attack" && e.name != "te_medic_cable_attack") return false;
-  auto c = std::find_if(s.q2_cables.begin(), s.q2_cables.end(),
-                        [&](const FxState::Q2Cable& k) { return k.entity == e.entity; });
+  auto c = std::find_if(s.q2_cables.begin(), s.q2_cables.end(), [&](const FxState::Q2Cable& k) {
+    return !k.lightning && k.entity == e.entity;
+  });
   if (c == s.q2_cables.end()) {
     if (s.q2_cables.size() >= 128) return true;  // the classic's 128: a new one dropped
     s.q2_cables.emplace_back();
@@ -121,9 +303,10 @@ void q2_laser(FxState& s, const Effect& e, double t) {
   if (s.q2_lasers.size() < 256) s.q2_lasers.push_back(z);  // the classic's 256: one more dropped
 }
 
-void q2_draw_model_fx(FxState& s, int effect_models, const PlayerState& me, int me_entity, double t,
-                      FxFrame& out) {
-  const int first = effect_models + static_cast<int>(EffectModel::q2_fx);
+void q2_draw_model_fx(FxState& s, const FxScene& l, double t, FxFrame& out) {
+  const PlayerState& me = l.me;
+  const int me_entity = l.own > 0 ? l.me.entity : 0;
+  const int first = l.effect_models + static_cast<int>(EffectModel::q2_fx);
   int entity = kQ2FxEntities;
   std::erase_if(s.q2_models, [&](const Q2ModelFx& m) {
     return !q2_model_fx_pose(m, t, s.on.q2.smooth_explosions).alive;
@@ -145,6 +328,7 @@ void q2_draw_model_fx(FxState& s, int effect_models, const PlayerState& me, int 
     d.no_shadow = true;
     d.origin = {m.at[0], m.at[1], m.at[2]};
     d.angles = {m.angles[0], m.angles[1], m.angles[2]};
+    d.scale = m.scale;
     out.models.push_back(d);
   }
   // The cables: a segment every 30 units, each at a new roll this frame.
@@ -155,12 +339,18 @@ void q2_draw_model_fx(FxState& s, int effect_models, const PlayerState& me, int 
     sh::Vec3f from = c.from;
     if (me_entity > 0 && c.entity == me_entity)  // the player's own: from him as drawn
       from = {me.origin.x + c.offset.x, me.origin.y + c.offset.y, me.origin.z + c.offset.z};
+    if (c.lightning) {
+      q2_lightning(from, c.to, first + static_cast<int>(Q2FxModel::lightning), roll, entity,
+                   out.models);
+      continue;
+    }
     Chain chain;
     chain.modelindex =
         first + static_cast<int>(c.ctf ? Q2FxModel::ctf_segment : Q2FxModel::segment);
     chain.fit = chain.no_shadow = true;
     place_chain(from, c.to, chain, roll, entity, out.models);
   }
+  q2_heat_beams(s, l, first + static_cast<int>(Q2FxModel::heat_beam), t, entity, out);
   // The BFG's lasers: a strip 4 units wide in their shade, a tenth of a second each.
   std::erase_if(s.q2_lasers, [&](const FxState::Q2Laser& z) { return t - z.born >= kQ2BfgLaserS; });
   for (const FxState::Q2Laser& z : s.q2_lasers) {
@@ -182,7 +372,7 @@ void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, doub
   const std::string_view n = e.name;
   if (n == "sq_widow_beam") {  // kept for 2.1 s, one per id (a later one takes its place)
     std::erase_if(s.beam_outs, [&](const FxState::BeamOut& b) { return b.id == e.entity; });
-    if (e.entity == 0 || s.beam_outs.size() >= 32) return;
+    if (e.entity == 0 || s.beam_outs.size() + s.nukes.size() >= 32) return;
     FxState::BeamOut b;
     b.id = e.entity;
     for (int k = 0; k < 3; ++k) b.at[k] = p[k];
@@ -240,7 +430,34 @@ void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, doub
   }
 }
 
+bool q2_pack_hit(FxState& s, const Effect& e, const double p[3], double t, FxFrame& out) {
+  const std::string_view n = e.name;
+  const double way[3] = {e.way.x, e.way.y, e.way.z};
+  if (n == "te_blaster2" || n == "te_flechette") {  // the blaster's hit in its own colours
+    const bool green = n == "te_blaster2";
+    fx::q2_blaster_specks(p, way, s.seed++, s.palette, &out.births, green ? 0xd0 : 0x6f);
+    q2_model_fx(s, green ? 30 : 55, e.at, e.way, t);
+    return true;
+  }
+  if (n == "te_heatbeam_sparks" || n == "te_heatbeam_steam") {  // steam off the face at 60
+    const bool sparks = n == "te_heatbeam_sparks";
+    const double jet[3] = {way[0] * 60, way[1] * 60, way[2] * 60};
+    fx::q2_steam(p, jet, sparks ? 50 : 20, sparks ? 8 : 0xe0, 40, s.seed++, s.palette,
+                 &out.births);
+    return true;
+  }
+  if (const Q2Puff* puff = q2_puff(n); puff != nullptr && (puff->code == 42 || puff->code == 46)) {
+    fx::q2_specks(p, way, puff->count, puff->colour, 32, true, s.seed++, s.palette, &out.births);
+    return true;
+  }
+  return false;
+}
+
 void q2_sustains(FxState& s, double t, FxFrame& out) {
+  std::erase_if(s.nukes, [&](const FxState::Nuke& n) { return t - n.born > kSqNukeS; });
+  for (const FxState::Nuke& n : s.nukes)
+    fx::q2_nuke_shell(n.at, std::clamp((t - n.born) / kSqNukeS, 0.0, 1.0), s.seed++, s.palette,
+                      &out.births);
   std::erase_if(s.beam_outs, [&](const FxState::BeamOut& b) { return t - b.born > kSqBeamOutS; });
   for (const FxState::BeamOut& b : s.beam_outs)
     fx::q2_beam_out(b.at, std::clamp((t - b.born) / kSqBeamOutS, 0.0, 1.0), s.seed++, s.palette,

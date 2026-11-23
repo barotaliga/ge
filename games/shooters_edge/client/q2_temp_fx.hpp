@@ -11,7 +11,7 @@
 //
 // ge:summary Quake II's temporary entities' puffs and sounds by kind byte or effect name
 // ge:keywords q2 temp-entity temporary-entity puff specks gunshot blood sparks ricochet
-// ge:keywords explosion-sound splash-sparks spark5 spark7
+// ge:keywords explosion-sound splash-sparks spark5 spark7 moreblood electric-sparks disrupthit
 // ge:keywords q2_puff q2_temp_sound te_gunshot te_blood te_sparks rocklx1a grenlx1a xpld_wat ric1
 // ge:skill shooter render
 // ge:test tests/shooters_edge_q2_wire_test.cpp
@@ -33,7 +33,8 @@ inline constexpr Q2Puff kQ2Puffs[] = {
     {0, "te_gunshot", 40, 0x00},        {1, "te_blood", 60, 0xe8},
     {4, "te_shotgun", 20, 0x00},        {9, "te_sparks", 6, 0xe0},
     {12, "te_screen_sparks", 40, 0xd0}, {13, "te_shield_sparks", 40, 0xb0},
-    {14, "te_bullet_sparks", 6, 0xe0},
+    {14, "te_bullet_sparks", 6, 0xe0},  {42, "te_moreblood", 250, 0xe8},
+    {46, "te_electric_sparks", 40, 0x75},
 };
 
 // The puff of kind byte `code`, or null.
@@ -88,8 +89,18 @@ constexpr Q2TempSound q2_temp_sound(int code, uint32_t pick, int splash = -1) {
         default:
           return {};
       }
-    case 2:  // a blaster bolt's hit
+    case 2:   // a blaster bolt's hit
+    case 30:  // a green blaster's
+    case 55:  // a flechette's
+    case 43:  // the plasma beam's sparks
+    case 44:  // and its steam
+    case 46:  // blue electric sparks (any number at once)
       return {"weapons/lashit.wav"};
+    case 47:  // the disruptor's dark burst
+      return {"weapons/disrupthit.wav"};
+    case 53:  // a boss's big explosion
+    case 54:  // explosion1 without specks (a plain one, 35, is silent)
+      return {"weapons/rocklx1a.wav"};
     case 3:  // the rail, heard where it ends
       return {"weapons/railgf1a.wav", 1, true};
     case 5:  // explosion1, a rocket's
