@@ -32,6 +32,7 @@
 #include <string>
 #include <vector>
 
+#include "classic/content/downloads.hpp"
 #include "classic/content/web_downloads.hpp"
 #include "classic/protocol/stuff_filter.hpp"
 #include "forward/forward.hpp"
@@ -164,6 +165,9 @@ struct Q2ClientConfig {
   std::function<void(const std::string& path, const std::vector<uint8_t>& bytes,
                      const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
+  // A download cut short is held (classic/content/downloads.hpp), each piece added as it comes, and
+  // the next time the file is asked for, the rest asked from the held length; dropped once whole.
+  ge::classic::content::HeldDownloads held;
   // THE WINDOW'S JOIN (qw_remote.hpp): what the server sends is read into `into` (the
   // window's drawn recording) in place of the client's own `demo`, the read bytes dropped as they
   // are read, and each payload's prints, effects and sounds kept in `news` until the window takes
@@ -219,6 +223,7 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::string fetching;
   std::vector<uint8_t> fetched_bytes;
   int fetched_percent = 0;  // the server's share of it sent so far
+  size_t fetched_from = 0;  // the bytes held from before when it was resumed (Q2ClientConfig::held)
   bool fetched_origin = false;
   ge::vfs::ArchiveOrigin fetching_origin;
   std::string held_begin;

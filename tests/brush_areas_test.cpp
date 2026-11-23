@@ -2,7 +2,8 @@
 // file, and the answers outside the data.
 //
 // ge:summary Test: areas flood over open portals only; a shut portal splits; area 0 is alone
-// ge:keywords test brush area area-portal flood_areas areas_connected area_at v38
+// ge:keywords test brush area area-portal flood_areas areas_connected area_at v38 second_view_leaf
+// ge:keywords water-surface second-pvs-point
 // ge:skill brush
 #include <string>
 #include <vector>
@@ -91,6 +92,41 @@ TEST(the_visible_set_leaves_out_unshown_areas) {
   CHECK(br::potentially_visible(m, 1, &seen, both) == 2 && seen[0] == 0);  // solid draws none
   const uint8_t none[1] = {0};
   CHECK(br::potentially_visible(m, 1, &seen, none) == 0);
+}
+
+// The second view point (38): an eye just over a water surface also sees what the water's cluster
+// sees, from 16 units below; in the water, from 16 units above; another family, the eye alone.
+TEST(the_view_sees_from_a_second_point_across_water) {
+  br::Map m;
+  m.family = br::Family::v38;
+  m.planes = {br::Plane{{0, 0, 1}, 0, 2}};  // the water's surface at z 0
+  m.nodes = {br::Node{0, {-2, -3}}};        // above: leaf 1, below: leaf 2
+  m.models.resize(1);
+  m.surfaces.resize(3);
+  m.marks = {0, 1, 2};
+  br::Leaf solid, air, water;
+  solid.solid = true;
+  air.cluster = 0;
+  air.first_mark = 1;
+  air.marks = 1;
+  water.cluster = 1;
+  water.contents = 32;  // water
+  water.first_mark = 2;
+  water.marks = 1;
+  m.leaves = {solid, air, water};
+  m.clusters = 2;
+  m.row_bytes = 1;
+  m.pvs = {0x01, 0x02};  // each cluster sees itself alone
+  const float near_over[3] = {0, 0, 8}, high[3] = {0, 0, 40}, near_under[3] = {0, 0, -8};
+  CHECK(br::second_view_leaf(m, near_over, 1) == 2);
+  CHECK(br::second_view_leaf(m, high, 1) == ~0u);  // 16 below is still the air
+  CHECK(br::second_view_leaf(m, near_under, 2) == 1);
+  std::vector<uint8_t> seen;
+  CHECK(br::potentially_visible(m, 1, &seen) == 1 && seen[2] == 0);
+  CHECK(br::potentially_visible(m, 1, &seen, {}, br::second_view_leaf(m, near_over, 1)) == 2 &&
+        seen[1] == 1 && seen[2] == 1);
+  m.family = br::Family::v29;
+  CHECK(br::second_view_leaf(m, near_over, 1) == ~0u);
 }
 
 }  // namespace

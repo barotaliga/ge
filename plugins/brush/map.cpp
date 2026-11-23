@@ -171,9 +171,20 @@ void clusters_heard_from(const Map& map, const float p[3], std::vector<uint8_t>&
                map.phs.begin() + std::ptrdiff_t(size_t(c + 1) * map.row_bytes));
 }
 
+uint32_t second_view_leaf(const Map& map, const float p[3], uint32_t eye_leaf) {
+  if (map.family != Family::v38 || eye_leaf >= map.leaves.size()) return ~0u;
+  const Leaf& eye = map.leaves[eye_leaf];
+  const float q[3] = {p[0], p[1], p[2] + (eye.contents != 0 ? 16.0f : -16.0f)};
+  const uint32_t l = leaf_at(map, q);
+  if (l >= map.leaves.size() || map.leaves[l].solid || map.leaves[l].cluster == eye.cluster)
+    return ~0u;
+  return l;
+}
+
 uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen,
-                             std::span<const uint8_t> areas) {
+                             std::span<const uint8_t> areas, uint32_t also) {
   const int32_t from = leaf < map.leaves.size() ? map.leaves[leaf].cluster : -1;
+  const int32_t from2 = also < map.leaves.size() ? map.leaves[also].cluster : -1;
   const bool every = from < 0 || map.pvs.empty();
   if (every && areas.empty()) {
     seen->assign(map.surfaces.size(), 1);
@@ -185,7 +196,9 @@ uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>
   seen->assign(map.surfaces.size(), 0);
   uint32_t n = 0;
   for (const Leaf& l : map.leaves) {
-    if (l.marks == 0 || (!every && !cluster_sees(map, from, l.cluster))) continue;
+    if (l.marks == 0 ||
+        (!every && !cluster_sees(map, from, l.cluster) && !cluster_sees(map, from2, l.cluster)))
+      continue;
     if (!areas.empty() && (l.solid || !area_open(l.area))) continue;
     for (uint32_t k = l.first_mark; k < l.first_mark + l.marks; ++k) {
       uint8_t& s = (*seen)[map.marks[k]];
