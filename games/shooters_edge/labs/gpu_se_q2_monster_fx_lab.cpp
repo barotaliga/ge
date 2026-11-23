@@ -10,12 +10,17 @@
 // and a sheet of moments.
 //
 // With `--game=<folder>` (the folder holding Quake II's base folder) it is the player's own
-// maps, for PRIVATE pictures only. Without it each cable and flash is thrown straight off
-// app/monster_fx.hpp and counted: deterministic numbers the smoke run checks everywhere.
+// maps, for PRIVATE pictures only. With `--mod=xatrix` (The Reckoning's folder beside the base
+// one) the pack's rules play and its kinds are filmed on its maps: the three guards, the gekk's
+// spit, the repair bot's bolt, the beta gladiator's phalanx, the beta brain's lasers, the heat
+// rockets of the iron maiden and of boss5; a kind whose shot carries no flash (spit, plasma) is
+// caught by the first missile it fires, a laser by the sparks where it lands. Without it each cable
+// and flash is thrown straight off app/monster_fx.hpp and counted: deterministic numbers the smoke
+// run checks everywhere.
 //
 // ge:summary Lab: Quake II's monsters' drain, cable and gun flashes filmed, classic beside modern
 // ge:keywords lab se-q2-monster-fx q2 monsters parasite drain medic cable monster-flash
-// ge:keywords classic-vs-enhanced gif side-view ce_monsters
+// ge:keywords classic-vs-enhanced gif side-view ce_monsters xatrix reckoning gekk fixbot gladb
 // ge:skill shooter labs render
 // ge:test tests/shooters_edge_monster_fx_test.cpp
 #include <algorithm>
@@ -73,8 +78,10 @@ struct Kind {
   const char* classname;
   const char* maps;
   const char* attack;
-  const char* effect;
+  const char* effect;   // nullptr: its first missile marks it (a shot with no flash)
   bool corpse = false;  // a medic: given a corpse to raise
+  bool far = false;     // the effect lands where the shot ends (a laser's sparks), not at the gun
+  bool pack = false;    // The Reckoning's (`--mod=xatrix`)
 };
 constexpr Kind kKinds[] = {
     {"parasite", "monster_parasite", "base3,train,jail2,ware2,fact2", "draining tongue",
@@ -87,6 +94,22 @@ constexpr Kind kKinds[] = {
     {"tank", "monster_tank", "jail2,jail3,jail4,security", "rockets' flash", "te_monster_flash"},
     {"gladiator", "monster_gladiator", "jail1,jail2,mine1,mine2", "rail's flash",
      "te_monster_flash"},
+    {"ripper-guard", "monster_soldier_ripper", "xware,xintell,xreactor,xmoon1",
+     "ion ripper's flash", "te_monster_flash", false, false, true},
+    {"hyper-guard", "monster_soldier_hypergun", "xhangar1,xhangar2,outbase,xcompnd1",
+     "blue hyperblaster's flash", "te_monster_flash", false, false, true},
+    {"laser-guard", "monster_soldier_lasergun", "xhangar2,outbase,xhangar1,industry",
+     "laser's sparks", "te_laser_sparks", false, true, true},
+    {"gekk", "monster_gekk", "xswamp,badlands,xcompnd2", "spit", nullptr, false, false, true},
+    {"fixbot", "monster_fixbot", "xcompnd1,xreactor", "bolt", nullptr, false, false, true},
+    {"gladb", "monster_gladb", "xmoon1,xmoon2,xship", "phalanx rounds", nullptr, false, false,
+     true},
+    {"brain-beta", "monster_brain", "xcompnd2", "eyes' lasers", "te_laser_sparks", false, true,
+     true},
+    {"chick-heat", "monster_chick_heat", "refinery", "heat rockets' flash", "te_monster_flash",
+     false, false, true},
+    {"boss5", "monster_boss5", "industry,xintell", "rockets' and guns' flash", "te_monster_flash",
+     false, false, true},
 };
 
 void pack(int32_t v[3], sh::Vec3f p) {
@@ -102,7 +125,8 @@ struct Setup {
   float range = 320;
   double before = 0.4, seconds = 2.2, wait = 10;
   uint32_t w = 400, h = 250;
-  std::string map;  // --map, over each kind's own
+  std::string map;    // --map, over each kind's own
+  bool pack = false;  // --mod=xatrix: the pack's rules play (its files the search path)
 };
 
 struct Staged {
@@ -166,6 +190,7 @@ bool stage(gl::Lab& lab, const Setup& s, const Kind& k, const std::string& map_n
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(*s.files, map_name, error);
   cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 0"};
+  if (s.pack) opt.files = s.files;  // the game folder: a mission pack's plays its rules
   if (!map || !cl::listen_start(g.l, progs(), std::move(map), opt, error)) {
     lab.note(std::string("se-q2-monster-fx: ") + k.name + ": " + error);
     return false;
@@ -226,15 +251,32 @@ int first_attack(const Setup& s, const Kind& k, Staged& g) {
   cmd.msec = 13;
   cmd.angles = {g.pitch, g.yaw, 0};
   sv::Q2Server* sq = sv::q2_of(*g.l.rules);
+  std::vector<uint8_t> was(std::size(sq->missiles));
   for (int i = 0; i < int(s.wait / kTic); i++) {
     const size_t first = g.l.effects.size();
+    for (size_t j = 0; j < was.size(); j++) was[j] = sq->missiles[j].live ? 1 : 0;
     hold(g);
     cl::listen_frame(g.l, cmd);
     const sh::Vec3f me = sq->entities[size_t(g.monster)].origin;
+    if (k.effect == nullptr) {  // no flash: its first missile, from it toward the player
+      for (size_t j = 0; j < was.size(); j++) {
+        const sv::Q2Missile& m = sq->missiles[j];
+        if (was[j] != 0 || !m.live || m.from != g.monster) continue;
+        g.shot_from = m.origin;
+        g.shot_to = {g.stand.x, g.stand.y, g.stand.z + 22};
+        return i;
+      }
+      continue;
+    }
     for (size_t j = std::min(first, g.l.effects.size()); j < g.l.effects.size(); j++) {
       const cl::Effect& e = g.l.effects[j];
-      if (e.kind != cl::EffectKind::named_trail || !e.name.starts_with(k.effect)) continue;
-      if (sh::length(e.at - me) >= 96) continue;
+      if (!e.name.starts_with(k.effect)) continue;
+      if (k.far) {  // sparks where the beam lands: the line from its gun to them
+        g.shot_from = {me.x, me.y, me.z + 16};
+        g.shot_to = e.at;
+        return i;
+      }
+      if (e.kind != cl::EffectKind::named_trail || sh::length(e.at - me) >= 96) continue;
       g.shot_from = e.at;
       g.shot_to = e.end;
       return i;
@@ -452,7 +494,15 @@ void run(gl::Lab& lab) {
   const pf::GameProfile& game = *pf::find_game("q2");
   const ge::classicenhance::Profile& content = pf::content_of(game);
   cl::SearchPath files;
-  if (!cl::open_game_dir(lab.arg("game"), std::string(content.base_dir), files, error, content)) {
+  const std::string mod = lab.arg("mod");
+  const bool pack = sv::q2_pack_of_folder(mod) == sv::Q2Pack::reckoning;
+  if (!mod.empty() && !pack) {
+    lab.fail("--mod=" + mod + " is not a pack this lab films",
+             "Pass --mod=xatrix (The Reckoning) or leave it out. Skill: shooter.");
+    return;
+  }
+  if (!cl::open_game_dir(lab.arg("game"), mod.empty() ? std::string(content.base_dir) : mod, files,
+                         error, content)) {
     lab.fail(error, "Pass --game=<the folder holding " + std::string(content.base_dir) +
                         "/pak0.pak>. Skill: shooter.");
     return;
@@ -467,6 +517,7 @@ void run(gl::Lab& lab) {
   s.adapter = &cl::adapter_of(game);
   s.device = device.get();
   s.map = lab.arg("map");
+  s.pack = pack;
   s.range = static_cast<float>(lab.arg_num("range"));
   s.seconds = lab.arg_num("seconds");
   s.wait = lab.arg_num("wait");
@@ -480,7 +531,11 @@ void run(gl::Lab& lab) {
       for (const ge::classicenhance::SwitchSpec& sw : ge::classicenhance::switches())
         s.looks[v].ce.*sw.field = false;
   }
-  const std::string list = lab.arg("kinds");
+  std::string list = lab.arg("kinds");
+  if (list.empty()) {  // every kind the game plays: the base's, and with the pack its own
+    for (const Kind& c : kKinds)
+      if (pack || !c.pack) list += (list.empty() ? "" : ",") + std::string(c.name);
+  }
   for (size_t a = 0; a < list.size();) {
     const size_t b = std::min(list.find(',', a), list.size());
     const std::string name = list.substr(a, b - a);
@@ -489,8 +544,14 @@ void run(gl::Lab& lab) {
     for (const Kind& c : kKinds)
       if (name == c.name) k = &c;
     if (k == nullptr) {
-      lab.note("se-q2-monster-fx: no kind " + name +
-               " (parasite, medic, soldier, infantry, tank, gladiator)");
+      std::string all;
+      for (const Kind& c : kKinds) all += (all.empty() ? "" : ", ") + std::string(c.name);
+      lab.note("se-q2-monster-fx: no kind " + name + " (" + all + ")");
+      continue;
+    }
+    if (k->pack && !pack) {
+      lab.note(std::string("se-q2-monster-fx: ") + k->name +
+               " is The Reckoning's: pass --mod=xatrix to film it");
       continue;
     }
     film(lab, s, *k);
@@ -509,8 +570,13 @@ const gl::LabSpec kSpec{
     {
         {"game", "", "the folder holding Quake II's base folder; empty: the numbers alone"},
         {"map", "", "with --game: the map for every kind; empty: each kind's own"},
-        {"kinds", "parasite,medic,soldier,infantry,tank,gladiator",
-         "with --game: the monsters by name"},
+        {"mod", "",
+         "with --game: a mission pack's folder beside the base one (xatrix: The Reckoning's "
+         "rules, and its kinds filmed on its maps)"},
+        {"kinds", "",
+         "with --game: the monsters by name (empty: every kind; parasite, medic, soldier, "
+         "infantry, tank, gladiator, and with --mod=xatrix ripper-guard, hyper-guard, "
+         "laser-guard, gekk, fixbot, gladb, brain-beta, chick-heat, boss5)"},
         {"range", "320", "units from the monster the player stands"},
         {"seconds", "2.2", "seconds filmed after the attack begins"},
         {"wait", "10", "seconds the monster is given to attack"},
