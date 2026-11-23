@@ -605,3 +605,45 @@ TEST(a_games_tab_completes_the_shared_part_and_lists_the_matches) {
   v.key(EditKey::tab);
   CHECK(v.input() == "zfoo_bb ");
 }
+
+// The typed lines are kept across runs beside the config, oldest first, without blanks or a line
+// repeated; con_history 0 keeps none.
+TEST(the_typed_lines_are_kept_across_runs) {
+  const std::filesystem::path dir = std::filesystem::temp_directory_path() / "ge_conhistory_test";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+  {
+    Console c;
+    c.set_search_path({dir});
+    ConsoleView v(c);
+    for (const char* line : {"echo one", "echo one", "echo two", "echo three"}) {
+      v.type(line);
+      v.key(EditKey::enter);
+    }
+    CHECK(v.save_history());
+  }
+  std::ifstream in(dir / std::string(kHistoryFile));
+  std::string all((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  CHECK(all == "echo one\necho two\necho three\n");
+  {
+    Console c;
+    c.set_search_path({dir});
+    ConsoleView v(c);
+    c.execute("con_history 2");
+    c.run();
+    v.load_history();
+    CHECK(v.history() == (std::vector<std::string>{"echo two", "echo three"}));
+    v.key(EditKey::up);
+    CHECK(v.input() == "echo three");
+  }
+  {
+    Console c;
+    c.set_search_path({dir});
+    ConsoleView v(c);
+    c.execute("con_history 0");
+    c.run();
+    v.load_history();
+    CHECK(v.history().empty());
+  }
+  std::filesystem::remove_all(dir);
+}
