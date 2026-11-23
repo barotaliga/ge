@@ -2,7 +2,7 @@
 // its own, the items its dmflags and `g_disruptor` leave off the map.
 //
 // ge:summary Ground Zero's cvars, class names spawned as its own, items its dmflags leave out
-// ge:keywords q2 ground-zero cvars strong-mines g-disruptor  dmflags
+// ge:keywords q2 ground-zero cvars strong-mines g-disruptor dmflags
 // ge:keywords no-mines no-nukes no-spheres classname-alias
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_gz_test.cpp
