@@ -645,7 +645,7 @@ bool targets_spawn(Q2Server& s, int i) {
       return true;
     }
     case kKey:
-      e.needs = sq_item(key(s, e, "item"));
+      e.needs = sq_item(key(s, e, "item"), s.opt.pack);
       if (e.needs < 0 || e.target.empty()) e.gone = true;  // said at load (q2_lines.cpp)
       add_sound(s, "misc/keytry.wav");
       add_sound(s, "misc/keyuse.wav");
@@ -785,7 +785,8 @@ bool targets_spawn(Q2Server& s, int i) {
       return true;
     case kSpawner: {
       const std::string made = e.target;
-      if (monster_class(made)) {  // its monsters wait unseen, each a map entity of its own
+      if (monster_class(made,
+                        s.opt.pack)) {  // its monsters wait unseen, each a map entity of its own
         if (deathmatch(s)) return true;
         Q2Entity spare;
         spare.classname = made;
@@ -989,13 +990,13 @@ bool targets_use(Q2Server& s, int i, int activator) {
         gibs_part(s, part, e.origin, facing, velocity);
         return true;
       }
-      if (monster_class(e.target)) {
+      if (monster_class(e.target, s.opt.pack)) {
         if (!monster_bring_spare(s, -2 - i, e.origin, facing, velocity, activator))
           s.console.push_back("A spawner of '" + e.target + "' has made all " +
                               std::to_string(kSpares) + " it can.");
         return true;
       }
-      if (sq_item(e.target) >= 0) fight_drop_at(s, e.origin, e.target);
+      if (sq_item(e.target, s.opt.pack) >= 0) fight_drop_at(s, e.origin, e.target);
       return true;
     }
     case kBomb: {

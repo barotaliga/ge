@@ -28,6 +28,8 @@
 #include <cstdint>
 #include <string_view>
 
+#include "shooters_edge/server/q2_pack.hpp"
+
 namespace shooters_edge::server {
 
 enum class SqKind : uint8_t { armour, power_armour, weapon, ammo, health, powerup, key, pack };
@@ -50,7 +52,7 @@ inline constexpr SqArmourRow kSqArmours[] = {
     {100, 200, 0.80f, 0.60f},  // body
 };
 
-struct SqItem {
+struct SqItem {           // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* classname;  // the map's name for it
   const char* pickup;     // the name a player reads
   const char* model;      // its world model
@@ -59,6 +61,8 @@ struct SqItem {
   int amount = 0;  // what it gives: armour's tier (SqArmour), ammo or health points, seconds
   SqAmmo ammo = SqAmmo::none;  // a weapon's or an ammo item's kind
   int respawn_s = 0;           // in deathmatch; 0 never
+  // The rules it belongs to (q2_pack.hpp): the base game's rows first, then each pack's.
+  Q2Pack pack = Q2Pack::base;
 };
 
 // Every item, by class name. A key's row is last: `sq_item` finds any of them.
@@ -148,8 +152,9 @@ inline constexpr SqItem kSqItems[] = {
 };
 inline constexpr int kSqItemCount = static_cast<int>(sizeof(kSqItems) / sizeof(kSqItems[0]));
 
-// The row of `classname`, or -1 when it is no item.
-int sq_item(std::string_view classname);
+// The row of `classname` among the rows `pack` plays: the pack's own row first (one may replace a
+// base item), then the base game's; -1 when it is no item there.
+int sq_item(std::string_view classname, Q2Pack pack = Q2Pack::base);
 
 // Quake II's own effect bit that turns an entity about its yaw on the client's clock, 100° a
 // second (an item lying about).
