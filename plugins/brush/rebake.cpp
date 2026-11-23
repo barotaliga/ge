@@ -47,6 +47,18 @@ double glow_of(Liquid l) {
   return 0;
 }
 
+// A lamp's panel (`Texture::lamp`, family 38's surface lights): it shows its texture's mean colour
+// scaled to a brightest channel of 1 and squared (a lamp's hue saturates), times its strength over
+// kLampUnit, and lights the room by that.
+constexpr double kLampUnit = 250.0;
+void lamp_emit(const std::array<float, 3>& albedo, int32_t lamp, float out[3]) {
+  const double top = std::max({double{albedo[0]}, double{albedo[1]}, double{albedo[2]}, 1e-6});
+  for (int k = 0; k < 3; k++) {
+    const double c = albedo[size_t(k)] / top;
+    out[k] = static_cast<float>(c * c * lamp / kLampUnit);
+  }
+}
+
 void put32(std::vector<uint8_t>& b, uint32_t v) {
   for (int k = 0; k < 4; k++) b.push_back(static_cast<uint8_t>(v >> (8 * k)));
 }
@@ -176,6 +188,10 @@ bool rebake_map(const Map& map, const RebakeInput& input, const RebakeOptions& o
       continue;
     }
     if (tris.empty() || s.kind != SurfaceKind::planar) continue;
+    if (mat < map.textures.size() && map.textures[mat].lamp > 0)
+      lamp_emit(
+          mat < input.albedo.size() ? input.albedo[mat] : std::array<float, 3>{0.5f, 0.5f, 0.5f},
+          map.textures[mat].lamp, m.emit);
     chart_of[si] = bake::add_chart(scene, tris, options.luxel_m);
   }
   scene.lights = input.lights;

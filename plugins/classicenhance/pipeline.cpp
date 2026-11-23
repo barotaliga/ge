@@ -59,8 +59,11 @@ std::string num(double v) {
 
 // Which upscaler made the pictures: none (the kernel) keeps the key a run without one always had.
 std::string network_key(const EnhanceOptions& e) {
-  if (e.network == nullptr) return "";
-  return " network " + e.network->digest + " on " + (e.device ? e.device->name() : "cpu");
+  std::string key = e.fullbright_first == kFullbrightFirst
+                        ? ""  // Quake's range keeps the key a run before the field had
+                        : " fullbright " + std::to_string(e.fullbright_first);
+  if (e.network == nullptr) return key;
+  return key + " network " + e.network->digest + " on " + (e.device ? e.device->name() : "cpu");
 }
 
 std::string stage_key(Stage s, const RunOptions& o) {
@@ -533,13 +536,16 @@ bool pack_textures(std::span<const uint8_t> pack_bytes, Palette* palette,
   return true;
 }
 
-bool run_pipeline(const Source& source, const fs::path& root_in, const RunOptions& opts,
+bool run_pipeline(const Source& source, const fs::path& root_in, const RunOptions& asked_for,
                   RunReport* report, std::string* error) {
   report->stages.clear();
   if (source.pack_sha256.empty()) {
     *error = "the source is not an opened pack; open it with open_source first";
     return false;
   }
+  // The game's fullbright range, from its profile (Quake's last 32 colours; none in Quake II).
+  RunOptions opts = asked_for;
+  if (source.profile != nullptr) opts.textures.fullbright_first = source.profile->fullbright_first;
   const fs::path root = root_in.empty() ? default_cache_root() : root_in;
   if (root.empty()) {
     *error = "no cache folder: set GE_CLASSIC_CACHE to a folder on this machine";
