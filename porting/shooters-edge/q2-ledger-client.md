@@ -12,25 +12,25 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | missing | not-taken | rows |
 | --- | --- | --- | --- | --- |
-| Client console commands | 139 | 0 | 17 | 156 |
-| Client settings (cvars) | 232 | 8 | 110 | 350 |
-| Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
-| Menu pages and rows | 147 | 3 | 12 | 162 |
-| Server messages the client parses (svc) | 26 | 0 | 1 | 27 |
-| Temporary entities (svc_temp_entity) | 22 | 17 | 26 | 65 |
-| Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 20 |
-| Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 0 | 1 | 33 |
-| Entity effect bits (EF_) | 32 | 0 | 1 | 33 |
-| Entity render bits (RF_) and view bits (RDF_) | 24 | 1 | 7 | 32 |
-| Configstrings | 10 | 0 | 6 | 16 |
-| The layout language (status bar and layouts) | 27 | 0 | 0 | 27 |
-| HUD and screen elements | 18 | 0 | 11 | 29 |
-| Messages printed to the player | 130 | 0 | 17 | 147 |
-| Demo playback and recording features | 13 | 0 | 10 | 23 |
-| Keys: the fixed keys and the default bindings | 10 | 0 | 1 | 11 |
-| Sound and music | 13 | 0 | 0 | 13 |
-| Picture and video | 16 | 0 | 4 | 20 |
-| Connection, network, downloads and the rest | 15 | 1 | 2 | 18 |
+| Client console commands | 139 | 0 | 0 | 17 | 156 |
+| Client settings (cvars) | 232 | 0 | 8 | 110 | 350 |
+| Macros ($name in typed and bound text) | 26 | 0 | 0 | 4 | 30 |
+| Menu pages and rows | 147 | 0 | 3 | 12 | 162 |
+| Server messages the client parses (svc) | 26 | 0 | 0 | 1 | 27 |
+| Temporary entities (svc_temp_entity) | 22 | 0 | 17 | 26 | 65 |
+| Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 0 | 1 | 20 |
+| Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 0 | 0 | 1 | 33 |
+| Entity effect bits (EF_) | 32 | 0 | 0 | 1 | 33 |
+| Entity render bits (RF_) and view bits (RDF_) | 24 | 0 | 1 | 7 | 32 |
+| Configstrings | 10 | 0 | 0 | 6 | 16 |
+| The layout language (status bar and layouts) | 27 | 0 | 0 | 0 | 27 |
+| HUD and screen elements | 18 | 0 | 0 | 11 | 29 |
+| Messages printed to the player | 130 | 0 | 0 | 17 | 147 |
+| Demo playback and recording features | 13 | 0 | 0 | 10 | 23 |
+| Keys: the fixed keys and the default bindings | 10 | 0 | 0 | 1 | 11 |
+| Sound and music | 13 | 0 | 0 | 0 | 13 |
+| Picture and video | 16 | 0 | 0 | 4 | 20 |
+| Connection, network, downloads and the rest | 15 | 0 | 1 | 2 | 18 |
 | **all** | 951 | 30 | 231 | 1212 |
 
 ## Client console commands
@@ -776,26 +776,26 @@ Every message a server (or a recording) sends the client, and what the client do
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | svc.bad | `svc_bad` (0) | never valid; the connection drops with an "illegible server message" error naming the byte | done | Same meaning in our words (the player-text rule makes our words the intended ones). ours refuses with its own words (`client/demo_q2.cpp`) |
-| svc.muzzleflash | `svc_muzzleflash` (1) | a player's weapon fired (or entered, left, respawned): a coloured light at the player for a moment and the weapon's sound; the silenced bit plays it at 0.2 volume | done | `client/demo_q2.cpp` reads every value (`q2_flash_fx`) |
-| svc.muzzleflash2 | `svc_muzzleflash2` (2) | a monster fired: a light at the monster's gun (offset from the monster's flash table) and the weapon's sound | done | `client/demo_q2.cpp` reads every value (`q2_flash_fx`) |
-| svc.temp_entity | `svc_temp_entity` (3) | a one-off effect (table "Temporary entities") | done | read; every base-game kind takes its own route (its puff, named effect, cable or explosion and the sound the client plays itself), `client/demo_q2.cpp`, `client/q2_temp_fx.hpp`, `client/world_fx.cpp`; what each kind still lacks is on its te. row (porting/shooters-edge/q2-client-te.md) |
-| svc.layout | `svc_layout` (4) | the layout program (scoreboard, help computer) shown while the layout bit is up | done | `games/shooters_edge/hud/q2_layout.cpp` |
-| svc.inventory | `svc_inventory` (5) | every item's count, drawn by the inventory screen | done | `games/shooters_edge/client/demo_q2.cpp` |
+| svc.muzzleflash | `svc_muzzleflash` (1) | a player's weapon fired (or entered, left, respawned): a coloured light at the player for a moment and the weapon's sound; the silenced bit plays it at 0.2 volume | done | `client/demo_q2.cpp` reads every value (`q2_flash_fx`); held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
+| svc.muzzleflash2 | `svc_muzzleflash2` (2) | a monster fired: a light at the monster's gun (offset from the monster's flash table) and the weapon's sound | done | `client/demo_q2.cpp` reads every value (`q2_flash_fx`); held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (a light soldier's flash reaches a joined client) |
+| svc.temp_entity | `svc_temp_entity` (3) | a one-off effect (table "Temporary entities") | done | read; every base-game kind takes its own route (its puff, named effect, cable or explosion and the sound the client plays itself), `client/demo_q2.cpp`, `client/q2_temp_fx.hpp`, `client/world_fx.cpp`; what each kind still lacks is on its te. row (porting/shooters-edge/q2-client-te.md); held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
+| svc.layout | `svc_layout` (4) | the layout program (scoreboard, help computer) shown while the layout bit is up | done | `games/shooters_edge/hud/q2_layout.cpp`; held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
+| svc.inventory | `svc_inventory` (5) | every item's count, drawn by the inventory screen | done | `games/shooters_edge/client/demo_q2.cpp`; held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
 | svc.nop | `svc_nop` (6) | nothing | done | `games/shooters_edge/client/demo_q2.cpp` |
-| svc.disconnect | `svc_disconnect` (7) | the server dropped us: "Server disconnected" | done | `games/shooters_edge/client/demo_q2.cpp` |
+| svc.disconnect | `svc_disconnect` (7) | the server dropped us: "Server disconnected" | done | `games/shooters_edge/client/demo_q2.cpp`; held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
 | svc.reconnect | `svc_reconnect` (8) | the server changes level: "Server disconnected, reconnecting", then connects again at once | done | Checked 2026-11-23: `net/q2_client.cpp` takes a stuffed `reconnect` and connects again when the server restarts. |
-| svc.sound | `svc_sound` (9) | a positioned sound: index, volume, attenuation, time offset, entity and channel, place | done | `games/shooters_edge/client/demo_q2.cpp` |
-| svc.print | `svc_print` (10) | a line at a level (pickup, medium, high, chat); chat filtered, kept out of notify by `cl_chat_notify`, played with the chat sound, scanned for addresses (`followip`) and triggers | done | printed; a chat line through `client/chat_lines.cpp`: `cl_chat_filter`, `cl_chat_notify`, `cl_chat_sound`, the addresses kept for `followip`, and `trigger` on the other lines (`tests/shooters_edge_chat_ignore_test.cpp`) |
-| svc.stufftext | `svc_stufftext` (11) | console text the server runs on the client | done | the signon's lines answered by the client (`net/q2_client.cpp` `run_stuffed`: `cmd`, `precache`, `changing`, `reconnect`, `connect`); every other line the filter lets through (`cl_ignore_stufftext`) runs in the player's console as if typed (`Q2ClientEnd::to_run`, `Remote::stuffed_run`, `client/main.cpp`); `tests/shooters_edge_q2_net_test.cpp` |
-| svc.serverdata | `svc_serverdata` (12) | the protocol, the server's count, attract-loop flag, game folder, player number, map title; prints the map title between rule lines | done | `games/shooters_edge/client/demo_q2.cpp` |
-| svc.configstring | `svc_configstring` (13) | one configstring changed (table "Configstrings") | done | `games/shooters_edge/client/demo_q2.cpp` |
-| svc.spawnbaseline | `svc_spawnbaseline` (14) | an entity's baseline for later deltas | done | `games/shooters_edge/client/demo_q2.cpp` |
+| svc.sound | `svc_sound` (9) | a positioned sound: index, volume, attenuation, time offset, entity and channel, place | done | `games/shooters_edge/client/demo_q2.cpp`; held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
+| svc.print | `svc_print` (10) | a line at a level (pickup, medium, high, chat); chat filtered, kept out of notify by `cl_chat_notify`, played with the chat sound, scanned for addresses (`followip`) and triggers | done | printed; a chat line through `client/chat_lines.cpp`: `cl_chat_filter`, `cl_chat_notify`, `cl_chat_sound`, the addresses kept for `followip`, and `trigger` on the other lines (`tests/shooters_edge_chat_ignore_test.cpp`); held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
+| svc.stufftext | `svc_stufftext` (11) | console text the server runs on the client | done | the signon's lines answered by the client (`net/q2_client.cpp` `run_stuffed`: `cmd`, `precache`, `changing`, `reconnect`, `connect`); every other line the filter lets through (`cl_ignore_stufftext`) runs in the player's console as if typed (`Q2ClientEnd::to_run`, `Remote::stuffed_run`, `client/main.cpp`); `tests/shooters_edge_q2_net_test.cpp`; held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
+| svc.serverdata | `svc_serverdata` (12) | the protocol, the server's count, attract-loop flag, game folder, player number, map title; prints the map title between rule lines | done | `games/shooters_edge/client/demo_q2.cpp`; held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
+| svc.configstring | `svc_configstring` (13) | one configstring changed (table "Configstrings") | done | `games/shooters_edge/client/demo_q2.cpp`; held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
+| svc.spawnbaseline | `svc_spawnbaseline` (14) | an entity's baseline for later deltas | done | `games/shooters_edge/client/demo_q2.cpp`; held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
 | svc.centerprint | `svc_centerprint` (15) | a centre print; also printed in the console and run past triggers | not-taken | Tail (decided 2026-11-23), cosmetic: C9 (no fade, line cut differs) |
 | svc.download | `svc_download` (16) | a piece of a requested file with the percent done | done | every kind the level names is fetched in stages (`net/q2_fetch.hpp`, `net/q2_client.cpp` `queue_next_stage`), each path once a connection |
-| svc.playerinfo | `svc_playerinfo` (17) | the player state, inside a frame | done | `games/shooters_edge/client/demo_q2.cpp` |
-| svc.packetentities | `svc_packetentities` (18) | the frame's entities, inside a frame | done | `games/shooters_edge/client/demo_q2.cpp` |
+| svc.playerinfo | `svc_playerinfo` (17) | the player state, inside a frame | done | `games/shooters_edge/client/demo_q2.cpp`; held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
+| svc.packetentities | `svc_packetentities` (18) | the frame's entities, inside a frame | done | `games/shooters_edge/client/demo_q2.cpp`; held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
 | svc.deltapacketentities | `svc_deltapacketentities` (19) | the stock protocol's delta entities | done | `games/shooters_edge/client/demo_q2.cpp` |
-| svc.frame | `svc_frame` (20) | a server frame: number, delta source, area bits, then the player state and entities | done | read (`client/demo_q2.cpp`); the area bits kept as `DemoState::areas` and handed to the world's draw (`client/world_draw.cpp` `set_areas`) |
+| svc.frame | `svc_frame` (20) | a server frame: number, delta source, area bits, then the player state and entities | done | read (`client/demo_q2.cpp`); the area bits kept as `DemoState::areas` and handed to the world's draw (`client/world_draw.cpp` `set_areas`); held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (arrives at a joined client and reads the same from its recording). |
 | svc.zpacket | `svc_zpacket` (21) | a deflate-compressed run of messages (protocols 35 and up) | done | `games/shooters_edge/net/q2_proto_in.cpp`: raw deflate inflated (at most 32768 bytes) and read again; one inside another refused |
 | svc.zdownload | `svc_zdownload` (22) | a compressed download piece (35 and up) | done | `net/q2_proto_in.cpp`: 35's pieces inflated each to its size; 36's one stream gathered and inflated whole at 100 % (net/q2_client.cpp keeps it) |
 | svc.gamestate | `svc_gamestate` (23) | every configstring and baseline in one go (36 and up) | done | `net/q2_proto_in.cpp`: configstrings to the end marker, then baselines, as protocol 34's messages |
@@ -1304,7 +1304,7 @@ What a player can do with client recordings (`.dm2`) and multi-view recordings (
 | demo.play.pause | pausing a demo | `pause` or the console/menu (`cl_autopause`) pauses playback; "[PAUSED]" on the bar | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: ours pauses by the transport (`plugins/shooter/demo_transport.cpp`); the auto-pause missing (C24) |
 | demo.play.seek | seeking | `seek` forward and back by frames, seconds, mm:ss.ff or percent, back from the snapshots every `cl_demosnaps` s | done | `seek` (`plugins/shooter/demo_transport.cpp`) with every form; a percent is of the demo's length, not its bytes; back from the last snapshot (`Timedemo::snaps`, every `cl_demosnaps` s) |
 | demo.play.bar | the progress bar | `scr_demobar` | not-taken | Our design: our demo bar and timeline (C39) |
-| demo.play.end | the end of a demo | prints "Demo finished" and disconnects, or holds the last frame with `cl_demowait` | done | `games/shooters_edge/client/demo_playback.cpp` |
+| demo.play.end | the end of a demo | prints "Demo finished" and disconnects, or holds the last frame with `cl_demowait` | done | `games/shooters_edge/client/demo_playback.cpp`: a paced demo's end prints "playdemo: <name> ended" (`bench_end_report`), held by `tests/shooters_edge_demo_highlights_test.cpp` |
 | demo.play.timedemo | timing a demo | `timedemo 1` plays as fast as frames draw and prints frames, seconds and frames a second | done | `games/shooters_edge/client/demo_playback.cpp` |
 | demo.play.browser | the demo browser | the menu's demo page (table "Menu pages and rows") | not-taken | Our design: the menu's demo page (C40) |
 | demo.play.compat | old recordings | a recording of an older kind (protocol 34 without the extended frames) plays; the bar is not drawn for it | done | Checked 2026-11-23: protocol 34 and the extended layouts play (`client/demo_q2.cpp`). |
@@ -1316,7 +1316,7 @@ What a player can do with client recordings (`.dm2`) and multi-view recordings (
 | demo.rec.suspend | `suspend` / `resume` | pause and resume a recording | not-taken | `client-gaps.md` round 27 |
 | demo.rec.auto | recording by a trigger | `cl_beginmapcmd "record ..."` starts a recording on each map | done | `client/q2_session.cpp`: `cl_beginmapcmd` (and `cl_changemapcmd`, `cl_disconnectcmd`) run on each map joined or hosted (`tests/shooters_edge_q2_session_test.cpp`) |
 | demo.gtv | the client's own TV relay | `gtv start` serves the player's own game to TV viewers over TCP (only in a build that asks for it) | not-taken | experimental and off in released builds (a build option, left out of the release packages); watching a match is ours through TV (`engine/tv`, `setv`) and the server's multiview stream (`net/q2_mvd_server.hpp`, `sv_mvd_enable 2`), so a playing client never serves its own game (decided by the owner, 2026-11-23) |
-| demo.aashot | text scoreboard shots | `aashot` writes the scoreboard as text; `aadump` prints it | done | `client/q2_bar.cpp`: `aashot [name]` writes the layout as text to `scoreshots/`, `aadump` prints it |
+| demo.aashot | text scoreboard shots | `aashot` writes the scoreboard as text; `aadump` prints it | done | `client/q2_bar.cpp`: `aashot [name]` writes the layout as text to `scoreshots/`, `aadump` prints it; several asked in one frame (a bind of `aadump; dumpclients`) each answered, fixed 2026-11-23 (only the last was); `tests/shooters_edge_q2_screen_test.cpp` |
 
 ## Keys: the fixed keys and the default bindings
 
@@ -1401,7 +1401,7 @@ Behaviour the client offers outside the screen.
 | net.extended-limits | protocol extensions while joined | an extended server's flags (36, minor 1024 on) read: the extended configstrings and limits, the wider entity fields, 23-bit coordinates, 64 stats, word gun index, the centred print levels; recordings at 3434 to 3436 | done | `net/q2_proto_in.cpp` (`Q2ProtoIn::ext`): the stream written as the recording of its level (3434, or 3435 for extensions 2 and the fog level, whose fog is read past: the look is ours), entities and baselines carried as they are, the player state through `server/q2_wire.hpp`'s `q2_write_player_ext`; `client/demo_q2.cpp` shows print levels 4 and 5 centred; prediction reads the timer in milliseconds (`net/q2_predict.cpp`) |
 | net.predict | prediction | the player's move predicted from the last frame by the shared move code; misses smoothed | done | `games/shooters_edge/net/q2_predict.cpp` |
 | net.userinfo | user info while joined | a changed name, skin, hand, fov, rate sent at once | missing | Missing, rank 1 (gameplay, daily use): `net/qw_remote.cpp` `user_info_step`: a changed `rate` or `password` sends the user info at once; a changed name, skin, hand or fov not (C30) LIFT: Quake's `user_info_step` (`net/qw_remote.cpp`) is the shared place. |
-| net.cheatlock | the cheat lock | with more than one player slot, cheat-protected settings forced back each frame | done | `engine/console/cvar.hpp`'s `hold_cheats` (any game), held by `net/q2_remote.cpp` while a joined Quake II server has more than one player slot: every cheat back to its default and each set refused whatever the local sv_cheats says; let go when the game is left (`remote_disconnect`) |
+| net.cheatlock | the cheat lock | with more than one player slot, cheat-protected settings forced back each frame | done | `engine/console/cvar.hpp`'s `hold_cheats` (any game), held by `net/q2_remote.cpp` while a joined Quake II server has more than one player slot: every cheat back to its default and each set refused whatever the local sv_cheats says; let go when the game is left (`remote_disconnect`); held end to end by `tests/shooters_edge_q2_wire_census_test.cpp` (the window joined to an 8-slot server) |
 | net.stufftext | server-pushed commands | run in the client's console, refused unless whitelisted with `cl_ignore_stufftext` | done | as svc.stufftext: a stuffed `rate`, `set name`, `spectator 0`, a mod's binds run as typed, refused only by `cl_ignore_stufftext`'s whitelist |
 | net.triggers | message triggers | `trigger` runs a command when a server line matches; never in demos or on a relay | done | `client/chat_lines.cpp`: `trigger`, `untrigger`, on the lines that are not chat and the centre message; never through a relay |
 | net.autoreply | version reply | a chat line ending "!version" makes the client say its version after 1 to 2 s, at most once in 2 minutes | done | `client/chat_lines.cpp` (`chat_line_teamplay`, `chat_reply_due`): on a Quake II server another player's chat line ending in `!version` is answered with the version 1 to 2 s later, at most once in two minutes; `cl_queries` 0 answers none |
