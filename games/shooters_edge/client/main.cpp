@@ -388,7 +388,6 @@ int run_main(int argc, char** argv) {
                                   .stuff_level = &remote.stuff.level,
                                   .frame_cap = &pacing.settings.max_fps,
                                   .light_intensity = &picture.light_intensity,
-                                  .light_modulate = &picture.light_modulate,
                                   .light_lift = &picture.light_lift,
                                   .gibs = &picture.gibs,
                                   .no_glow = &picture.no_glow,
