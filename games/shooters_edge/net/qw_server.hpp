@@ -79,6 +79,7 @@
 #include "server/names.hpp"
 #include "server/skew.hpp"
 #include "server/status.hpp"
+#include "server/web_files.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/qw_antilag.hpp"
 #include "shooters_edge/net/qw_svc.hpp"
@@ -195,6 +196,11 @@ struct ServerConfig {
   // server's files from instead, said in the server info as `*dlserver` (classic/content/
   // web_downloads.hpp); "": none.
   std::string download_server;
+  // The server's own web files (engine/server/web_files.hpp, sv_http_*): their settings, and once
+  // they are served the address told (`*dlserver` when sv_downloadserver is not set; `{server}`
+  // for the host the client joined) and their certificate's digest (`*dlpin`, "": none).
+  ge::server::WebFilesConfig web;
+  std::string web_url, web_pin;
   int safe_strafe = 0;  // sv_safestrafe
   uint32_t seed = 1;    // the challenges' stream
   // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
@@ -490,6 +496,9 @@ std::string status_text(const QwServer& s, int opt);
 // Every connected client as a hub's status record's players (net/status.hpp): name, team, frags,
 // ping, minutes; a local seat as a bot, a spectator as one.
 void status_players(const QwServer& s, std::vector<ge::net::StatusPlayer>& out);
+// Whether the download switches (sv_download, sv_download_skins ...) let a client have the file at
+// `path`; false with the reason. The game's channel and its web files are held to it alike.
+bool qw_download_allowed(const QwServer& s, const std::string& path, std::string& why);
 
 // ---- Shared by the endpoint's files (qw_server.cpp, qw_signon.cpp,
 //      qw_frame.cpp); not an API for a caller. ----
