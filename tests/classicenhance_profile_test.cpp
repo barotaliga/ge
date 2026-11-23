@@ -114,3 +114,18 @@ TEST(q2_s_palette_is_the_one_at_the_end_of_its_pcx_picture) {
   CHECK_MSG(ce::read_palette(*q, pak, bytes, &palette, &error), error);
   CHECK(palette.rgb[2] == 10);
 }
+
+TEST(each_game_knows_its_mission_packs_by_folder_and_by_digest) {
+  const auto* q2 = ce::find_profile("q2");
+  CHECK(q2 != nullptr);
+  const ce::MissionPack* xat = ce::find_pack(*q2, "XATRIX");
+  CHECK(xat != nullptr && xat->name == "The Reckoning");
+  CHECK(ce::find_pack(ce::q1_profile(), "xatrix") == nullptr);
+  CHECK(ce::find_pack(ce::q1_profile(), "Rogue")->name == "Dissolution of Eternity");
+  CHECK(ce::find_pack(*q2, "rogue")->name == "Ground Zero");
+  const ce::Profile* game = nullptr;
+  const ce::MissionPack* gz = ce::known_pack(
+      109117652, "9de07d2722c7667c681319163edfd8dcd58e0640f8a4aa0c5917a9b19d8be02e", &game);
+  CHECK(gz != nullptr && gz->folder == "rogue" && game == q2);
+  CHECK(ce::known_pack(109117652, std::string(64, '0'), &game) == nullptr);
+}

@@ -194,12 +194,20 @@ void run(gl::Lab& lab) {
   lab.metric("sheet-rows", static_cast<double>(sheet.rows.size()), "count", det);
   sm::Host host{.console = &con, .maps = {"start", "dm4"}, .sheet = &sheet};
   menu.set_game(real ? install : "/games/classic");
-  menu.games().set_games({{.id = std::string(content->id),
-                           .install = real ? install : "/games/classic",
-                           .playing = true},
-                          {.id = content->id == ge::classicenhance::q1_profile().id ? "q2" : "q1",
-                           .install = "/games/other",
-                           .playing = false}});
+  // The game playing, a row for each mission pack its install holds, then the other game.
+  std::vector<sm::GameRow> rows = {{.id = std::string(content->id),
+                                    .install = real ? install : "/games/classic",
+                                    .playing = true}};
+  if (real)
+    for (const ge::classicenhance::MissionPack* m : cl::packs_of(install, *content))
+      rows.push_back({.id = std::string(content->id),
+                      .install = install,
+                      .pack = std::string(m->folder),
+                      .pack_name = std::string(m->name)});
+  rows.push_back({.id = content->id == ge::classicenhance::q1_profile().id ? "q2" : "q1",
+                  .install = "/games/other",
+                  .playing = false});
+  menu.games().set_games(std::move(rows));
   // DEMOS on the install's own folder; on the fixture an empty folder of the lab's, never the
   // machine's own home (its files would move the picture from one machine to the next).
   std::string game_dir;

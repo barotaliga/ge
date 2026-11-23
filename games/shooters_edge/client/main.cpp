@@ -609,7 +609,7 @@ int run_main(int argc, char** argv) {
   // SELECT GAME: the games added here, the one remix plays with marked (client/installs.hpp).
   game_menu.games().set_lister([&] {
     return cl::game_rows(prefs, args.profile, game_menu.game(),
-                         remix.state.on ? std::string_view(remix.state.other) : std::string_view());
+                         remix.state.on ? remix.state.other : "", args.game);
   });
   const auto use_pictures = [&](cl::ClassicPictures pics, bool say) {
     cl::bar_pictures(q2_bar, pics);  // read again; its words in cr_charset's letters
@@ -985,12 +985,13 @@ int run_main(int argc, char** argv) {
   // LOAD GAME's folder and `basedir` (client/game_folder.hpp): the install opened in place of the
   // one playing (the old world and servers let go first), its first map started where the map
   // changes, enhanced in the background, kept. False, nothing changed, when it does not open.
-  std::string folder_ask;
-  cl::InstallAsk install_ask =
-      cl::ask_install(*window, args, measured);  // -classic <id>, none kept
+  // `pack_ask`: SELECT GAME's mission pack over it; `install_ask`: -classic <id>, none kept.
+  std::string folder_ask, pack_ask;
+  cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);
   cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music, &args.game,
                            &game_cvars.q2.remap_tracks);
   cl::add_home_dir(console, data_root);
+  if (!measured) cl::offer_packs(console, data_root);    // the packs here not yet taken in
   cl::add_games_command(console, installs, folder_ask);  // `games`: the installs found, `games <n>`
   // A GAME SWITCHED SHOWS ITS LOADING: a console line and a frame before each long step of
   // `open_folder`, so the window never looks hung; the new game's look once its pictures are in.
@@ -1018,8 +1019,8 @@ int run_main(int argc, char** argv) {
     const ge::classicenhance::Profile* content = cl::install_of(basedir, &root, &error);
     if (content == nullptr) return false;
     cl::SearchPath fresh;
-    if (!cl::open_game_dir(basedir, cl::game_of(basedir, *content), fresh, error, *content))
-      return false;
+    const std::string game_folder = cl::folder_over(basedir, *content, &pack_ask);
+    if (!cl::open_game_dir(basedir, game_folder, fresh, error, *content)) return false;
     cl::cancel_load(loader);  // its threads read the old packs
     if (first_pictures.valid()) first_pictures.wait();
     first_pictures = {};
@@ -1030,7 +1031,7 @@ int run_main(int argc, char** argv) {
     menu_sounds.forget();  // the new game's own clicks
     args.basedir = basedir;
     args.profile = std::string(content->id);
-    args.game = cl::game_of(basedir, *content);
+    args.game = game_folder;
     places.locs = {};
     places.map.clear();
     places.game_dir = std::filesystem::path(basedir) / args.game;
@@ -1309,10 +1310,9 @@ int run_main(int argc, char** argv) {
       ge::platform::pick_folder(*window, "Load game: the folder holding id1", args.basedir);
     // SELECT GAME: a game's install opened at once, or the folder chooser to find one.
     if (shooters_edge::menu::GameMenu::GameAsk ask = game_menu.take_game(); ask.asked) {
-      if (ask.browse)
-        ge::platform::pick_folder(*window, "Add game: a game's folder", args.basedir);
-      else
-        folder_ask = ask.install;
+      if (ask.browse) ge::platform::pick_folder(*window, "Add game: a game's folder", args.basedir);
+      folder_ask = ask.install;  // "" when browsing
+      pack_ask = ask.pack;
     }
     if (std::string picked, why; ge::platform::folder_picked(*window, &picked, &why)) {
       if (!why.empty())

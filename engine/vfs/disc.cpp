@@ -326,7 +326,13 @@ bool open_plain(const fs::path& path, Disc* d, Disc::Impl* im, std::string* erro
   DiscTrack t;
   t.number = 1;
   if (std::equal(kSync, kSync + 12, head)) {
-    t.sector = 2352;
+    // Raw sectors: 2352 bytes, or 2448 when each carries its 96 bytes of subchannel (an `.mdf`
+    // as a disc copier writes it), told by where the second sector's sync falls.
+    uint8_t next[12] = {};
+    f.clear();
+    f.seekg(2448);
+    f.read(reinterpret_cast<char*>(next), 12);
+    t.sector = f && size >= 2 * 2448 && std::equal(kSync, kSync + 12, next) ? 2448 : 2352;
     t.user = head[15] == 2 ? 24 : 16;
   }
   t.sectors = uint32_t(size / t.sector);
@@ -378,7 +384,7 @@ bool Disc::read_audio(const DiscTrack& t, std::vector<int16_t>* out, std::string
 
 bool is_disc_image(const std::string& path) {
   const std::string ext = lower(fs::path(path).extension().string());
-  return ext == ".iso" || ext == ".cue" || ext == ".bin" || ext == ".img";
+  return ext == ".iso" || ext == ".cue" || ext == ".bin" || ext == ".img" || ext == ".mdf";
 }
 
 bool open_disc(const std::string& path, Disc* out, std::string* error) {
