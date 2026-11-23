@@ -14,9 +14,9 @@
 // one) the pack's rules play and its kinds are filmed on its maps: the three guards, the gekk's
 // spit, the repair bot's bolt, the beta gladiator's phalanx, the beta brain's lasers, the heat
 // rockets of the iron maiden and of boss5; a kind whose shot carries no flash (spit, plasma) is
-// caught by the first missile it fires, a laser by the sparks where it lands. Without it each cable
-// and flash is thrown straight off app/monster_fx.hpp and counted: deterministic numbers the smoke
-// run checks everywhere.
+// caught by the first missile it fires, a laser by its first blow on the player. Without it each
+// cable and flash is thrown straight off app/monster_fx.hpp and counted: deterministic numbers the
+// smoke run checks everywhere.
 //
 // ge:summary Lab: Quake II's monsters' drain, cable and gun flashes filmed, classic beside modern
 // ge:keywords lab se-q2-monster-fx q2 monsters parasite drain medic cable monster-flash
@@ -78,9 +78,8 @@ struct Kind {
   const char* classname;
   const char* maps;
   const char* attack;
-  const char* effect;   // nullptr: its first missile marks it (a shot with no flash)
+  const char* effect;   // nullptr: its first missile, or its first blow on the player, marks it
   bool corpse = false;  // a medic: given a corpse to raise
-  bool far = false;     // the effect lands where the shot ends (a laser's sparks), not at the gun
   bool pack = false;    // The Reckoning's (`--mod=xatrix`)
 };
 constexpr Kind kKinds[] = {
@@ -95,21 +94,19 @@ constexpr Kind kKinds[] = {
     {"gladiator", "monster_gladiator", "jail1,jail2,mine1,mine2", "rail's flash",
      "te_monster_flash"},
     {"ripper-guard", "monster_soldier_ripper", "xware,xintell,xreactor,xmoon1",
-     "ion ripper's flash", "te_monster_flash", false, false, true},
+     "ion ripper's flash", "te_monster_flash", false, true},
     {"hyper-guard", "monster_soldier_hypergun", "xhangar1,xhangar2,outbase,xcompnd1",
-     "blue hyperblaster's flash", "te_monster_flash", false, false, true},
-    {"laser-guard", "monster_soldier_lasergun", "xhangar2,outbase,xhangar1,industry",
-     "laser's sparks", "te_laser_sparks", false, true, true},
-    {"gekk", "monster_gekk", "xswamp,badlands,xcompnd2", "spit", nullptr, false, false, true},
-    {"fixbot", "monster_fixbot", "xcompnd1,xreactor", "bolt", nullptr, false, false, true},
-    {"gladb", "monster_gladb", "xmoon1,xmoon2,xship", "phalanx rounds", nullptr, false, false,
-     true},
-    {"brain-beta", "monster_brain", "xcompnd2", "eyes' lasers", "te_laser_sparks", false, true,
-     true},
+     "blue hyperblaster's flash", "te_monster_flash", false, true},
+    {"laser-guard", "monster_soldier_lasergun", "xhangar2,outbase,xhangar1,industry", "laser beam",
+     nullptr, false, true},
+    {"gekk", "monster_gekk", "xswamp,badlands,xcompnd2", "spit", nullptr, false, true},
+    {"fixbot", "monster_fixbot", "xcompnd1,xreactor", "bolt", nullptr, false, true},
+    {"gladb", "monster_gladb", "xmoon1,xmoon2,xship", "phalanx rounds", nullptr, false, true},
+    {"brain-beta", "monster_brain", "xcompnd2", "eyes' lasers", nullptr, false, true},
     {"chick-heat", "monster_chick_heat", "refinery", "heat rockets' flash", "te_monster_flash",
-     false, false, true},
+     false, true},
     {"boss5", "monster_boss5", "industry,xintell", "rockets' and guns' flash", "te_monster_flash",
-     false, false, true},
+     false, true},
 };
 
 void pack(int32_t v[3], sh::Vec3f p) {
@@ -258,12 +255,25 @@ int first_attack(const Setup& s, const Kind& k, Staged& g) {
     hold(g);
     cl::listen_frame(g.l, cmd);
     const sh::Vec3f me = sq->entities[size_t(g.monster)].origin;
-    if (k.effect == nullptr) {  // no flash: its first missile, from it toward the player
+    if (i == int(3 / kTic))  // still asleep (an ambusher facing off, a repair bot at work): a
+      for (const sv::Q2Monster& m : sq->monsters)  // blow of 1 from the player wakes it
+        if (m.entity == g.monster && m.enemy < 0) sv::map_damage(*sq, g.monster, 0, 1);
+    if (k.effect == nullptr) {  // no flash: its first missile, or its first blow (a laser)
+      g.shot_to = {g.stand.x, g.stand.y, g.stand.z + 22};
       for (size_t j = 0; j < was.size(); j++) {
         const sv::Q2Missile& m = sq->missiles[j];
         if (was[j] != 0 || !m.live || m.from != g.monster) continue;
         g.shot_from = m.origin;
-        g.shot_to = {g.stand.x, g.stand.y, g.stand.z + 22};
+        return i;
+      }
+      for (const sv::Q2Monster& m : sq->monsters)  // a laser: its beam shown
+        if (m.entity == g.monster && !m.beam_heal && m.beam_until > sq->level_time) {
+          g.shot_from = m.beam_from[0];
+          g.shot_to = m.beam_to[0];
+          return i;
+        }
+      if (sq->players[0].body.health < 100) {
+        g.shot_from = {me.x, me.y, me.z + 16};
         return i;
       }
       continue;
@@ -271,11 +281,6 @@ int first_attack(const Setup& s, const Kind& k, Staged& g) {
     for (size_t j = std::min(first, g.l.effects.size()); j < g.l.effects.size(); j++) {
       const cl::Effect& e = g.l.effects[j];
       if (!e.name.starts_with(k.effect)) continue;
-      if (k.far) {  // sparks where the beam lands: the line from its gun to them
-        g.shot_from = {me.x, me.y, me.z + 16};
-        g.shot_to = e.at;
-        return i;
-      }
       if (e.kind != cl::EffectKind::named_trail || sh::length(e.at - me) >= 96) continue;
       g.shot_from = e.at;
       g.shot_to = e.end;
