@@ -820,3 +820,24 @@ TEST(a_client_fetches_skins_from_the_server_web_address) {
   for (gn::TcpStream& t : streams) gn::tcp_close(t);
   gn::tcp_close_listener(web);
 }
+
+// What a server stuffs that the client does not answer itself waits in `to_run` for the window's
+// console (as the server's); `bf` and the `//` lines, which the picture reads from the stream, and
+// the client's own answers (skins) do not.
+TEST(stuffed_lines_the_client_does_not_answer_wait_for_the_console) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  gn::Transport ct[1];
+  auto c = std::make_unique<cn::QwClientEnd[]>(1);
+  CHECK(play(rig, ct, c.get(), 1));
+  c[0].to_run.clear();  // what the signon stuffed
+  cn::stuff(rig.server, 0, "alias hi \"say hi\"\nbf\n//loc 1 2 3 door\nskins\necho hello\n");
+  for (int f = 0; f < 30; f++) {
+    rig.frame();
+    cn::client_tick(c[0], rig.now);
+  }
+  CHECK_MSG(c[0].to_run.size() == 2, std::to_string(c[0].to_run.size()));
+  CHECK(c[0].to_run.size() == 2 && c[0].to_run[0] == "alias hi \"say hi\"" &&
+        c[0].to_run[1] == "echo hello");
+}

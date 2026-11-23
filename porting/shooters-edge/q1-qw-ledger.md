@@ -15,11 +15,11 @@ and a row found later is added here first. Progress is reported as the missing c
 
 | Section | Rows | Done | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- |
-| Client | 509 | 347 | 0 (0 / 0 / 0) | 162 |
+| Client | 510 | 349 | 0 (0 / 0 / 0) | 161 |
 | Server | 316 | 281 | 0 (0 / 0 / 0) | 35 |
 | Game | 246 | 228 | 0 (0 / 0 / 0) | 18 |
 | Tools | 1 | 1 | 0 (0 / 0 / 0) | 0 |
-| **All** | **1072** | **857** | **0 (0 / 0 / 0)** | **215** |
+| **All** | **1073** | **859** | **0 (0 / 0 / 0)** | **214** |
 
 (Built 2026-11-21 against main at #1237 with 217 missing (9 / 49 / 159); the first fill, Quake's
 deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.
@@ -336,8 +336,8 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C276 | `_config_modem_hangup` (q1, AT H) | the serial or modem link's settings | not-taken | platform: DOS serial and modem play |  |
 | C277 | `idgods` (q1, 0) | id staff god mode | not-taken | not in the stock build |  |
 | C278 | `r_draworder` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
-| C279 | `r_timegraph` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
-| C280 | `r_graphheight` (both, 10/15) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
+| C279 | `r_timegraph` (both, 0) | each frame's time as columns along the bottom | done | a synonym of every game's `timegraph` (`games/shooters_edge/client/screen_2d.cpp`), a unit of the screen a millisecond |  |
+| C280 | `r_graphheight` (both, 10/15) | the time graph's height in 10 ms steps of two rows | not-taken | every game's `graphheight` holds the graph in units of the screen (`client/screen_2d.hpp`); a spelling in 10 ms steps would mean another thing by one name |  |
 | C281 | `r_clearcolor` (both, 2) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
 | C282 | `r_waterwarp` (both, 1) | the view sways under water | done | plugins/classic/app/look.cpp |  |
 | C283 | `r_polymodelstats` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
@@ -594,8 +594,9 @@ and the campaign on our own host hands the client the same events without the wi
 | C507 | Demos: .qwd recorded and played (qw) | a client recording of a QuakeWorld game | done | net/qw_match_record.hpp, client/demo_playback.cpp |  |
 | C508 | Screenshot files (both) | quakeNN.pcx (GL: .tga) in the game folder | done | engine/capture/screenshot.cpp (our own format and folder) |  |
 | C509 | Static loops of one file merged (both) | every torch or hum of one sound heard as one voice, its ears summed and each held to full | done | client/demo_sound.cpp, plugins/classic/q2_loop_merge.hpp (classic_static_merge) |  |
+| C510 | Stuffed lines run in the console (qw) | what a server stuffs that the client does not answer itself (an alias, `echo`, a setting) runs in the console as the server's: only the commands a game lets a server run and the server's own settings; found while C414 read done with the lines dropped | done | net/qw_client.cpp (`to_run`), net/qw_remote.cpp (`remote_run_stuffed`) |  |
 
-Count: 508 rows, 345 done, 0 missing, 163 not-taken.
+Count: 510 rows, 349 done, 0 missing, 161 not-taken.
 
 ## SERVER: the Quake and QuakeWorld servers, row by row
 

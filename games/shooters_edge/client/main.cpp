@@ -368,7 +368,8 @@ int run_main(int argc, char** argv) {
   cl::GameCvarValues game_cvars;
   cl::SearchPath files;
   cl::Q2Screen& q2_screen = game_cvars.screen;  // Quake II's view and 2D (client/q2_view.hpp)
-  cl::UnderEar under_ear;  // the muffle under water (s_underwater, client/room_ear.hpp)
+  cl::ScreenGraph screen_graph;  // timegraph in every other game (client/screen_2d.hpp)
+  cl::UnderEar under_ear;        // the muffle under water (s_underwater, client/room_ear.hpp)
   cl::add_under_cvars(console, under_ear);
   const cl::GameBindings bindings{.files = &files,
                                   .crosshair = &hud.crosshair,
@@ -1492,8 +1493,7 @@ int run_main(int argc, char** argv) {
       std::vector<std::string> lines;
       joined = sn::remote_step(remote, wall, lines);
       for (const std::string& line : lines) tell(line, t);
-      // What a Quake II server stuffed runs as if typed (cl_ignore_stufftext filtered it).
-      for (const std::string& line : std::exchange(remote.stuffed_run, {})) console.execute(line);
+      sn::remote_run_stuffed(remote, console);  // what the server stuffed, run in the console
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
@@ -1914,7 +1914,8 @@ int run_main(int argc, char** argv) {
         se::fill_hud(hud, hud_status,
                      q2 ? worn_hud.art : cl::hud_art_of(files, classic_art, free_art));
         const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
-        hud.layout.draw(overlay, hf, hud_look());
+        cl::draw_hud_2d(overlay, hud.layout, hf, hud_look(), q2_screen);  // scr_draw2d
+        cl::draw_screen_graph(overlay, screen_graph, &q2_screen, t, w, h, cl::q2_bar_scale(w, h));
         view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
       } else {
         q2_chat_lines(q2 ? q2_bar : worn_hud.bar, hud_status);
@@ -1930,7 +1931,8 @@ int run_main(int argc, char** argv) {
       else
         se::draw_lobby(overlay, lv, w, h);
     }
-    const bool scores_on = !con_keys.held && !was_open;  // the score keys (TAB: +showscores)
+    const bool scores_on =  // the score keys (TAB: +showscores), unless scr_draw2d hides them
+        !con_keys.held && !was_open && cl::shows_scores(q2_screen);
     cl::draw_scores(overlay, listen, game_menu.art(), w, h, scores_on && cl::scores_held(controls),
                     win.level_stats, board_view, scores_on && cl::team_scores_held(controls),
                     win.show_pause, win.print_speed);
