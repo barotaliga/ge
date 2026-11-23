@@ -554,6 +554,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->cfg.lrcon.password = it->second;
   if (const auto it = c.rules.find("sv_redirect"); it != c.rules.end())
     g->cfg.redirect = it->second;
+  if (const auto it = c.rules.find("sv_ruleset"); it != c.rules.end()) g->cfg.ruleset = it->second;
   if (const auto v = c.rules.find("sv_vippassword"); v != c.rules.end()) {  // its words
     std::string w;
     for (const char ch : v->second + ' ')

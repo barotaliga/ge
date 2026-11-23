@@ -113,6 +113,7 @@ struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int ip_limit = 3;      // sv_iplimit: the most slots one address holds (0: none; server/admission)
   bool locked = false;   // sv_locked: no new clients but one taking back its slot (admission)
   std::string redirect;  // sv_redirect: where a newcomer is sent when full ("!" first: everyone)
+  std::string ruleset;   // sv_ruleset: the ruleset a player keeps to ("" any; server/admission)
   // SLOTS KEPT FOR VIPS (server/admission.hpp): the players' last `vip_slots` (sv_vipslots, the
   // modern server's `sv_reserved_slots`) only for a client whose `password` is one of
   // `vip_passwords` (sv_vippassword, `sv_reserved_password`; it is asked no other password) or the

@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <ctime>
 
+#include "classic/rulesets.hpp"
 #include "console/cvar.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
 
@@ -404,8 +405,8 @@ bool chat_line_extras(ChatExtras& x, DemoState& s, const con::ChatLine& line, De
 
 namespace {
 
-// The query a chat line's words ask: 0 f_version or !version, 1 f_server, -1 none. The word, then
-// only digits and blanks.
+// The query a chat line's words ask: 0 f_version or !version, 1 f_server, 2 f_fakeshaft, -1 none.
+// The word, then only digits and blanks.
 int query_of(std::string_view words) {
   std::string plain;
   for (const char ch : words) plain += static_cast<char>(static_cast<unsigned char>(ch) & 0x7f);
@@ -417,7 +418,8 @@ int query_of(std::string_view words) {
   };
   for (const auto& [word, kind] :
        {std::pair<const char*, int>{"f_version", 0}, std::pair<const char*, int>{"!version", 0},
-        std::pair<const char*, int>{"f_server", 1}}) {
+        std::pair<const char*, int>{"f_server", 1},
+        std::pair<const char*, int>{"f_fakeshaft", 2}}) {
     const std::string_view w = word;
     if (plain.starts_with(w) && only_after(w.size())) return kind;
   }
@@ -506,9 +508,13 @@ void chat_line_teamplay(ChatExtras& x, DemoState& s, const con::ChatLine& line, 
     if (q >= 0 && now_s - x.answered_at[static_cast<size_t>(q)] >= 20) {
       x.answered_at[static_cast<size_t>(q)] = now_s;
       const std::string server = x.con->expand_text("$cl_server");
+      const ge::console::Cvar* shaft = x.con->cvars().find("cl_fakeshaft");
       if (q == 0)
         x.con->append("say \"" + std::string(version) + "\"");
-      else if (server != "$cl_server" && !server.empty())
+      else if (q == 2 && shaft != nullptr)  // the beam's smoothing, as the setting has it
+        x.con->append("say \"" + ge::classic::fakeshaft_words(std::atof(shaft->value.c_str())) +
+                      "\"");
+      else if (q == 1 && server != "$cl_server" && !server.empty())
         x.con->append("say \"f_server response: " + server + "\"");
     }
   }

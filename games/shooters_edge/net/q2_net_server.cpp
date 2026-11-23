@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "classic/content/web_downloads.hpp"
+#include "classic/rulesets.hpp"
 #include "core/deflate.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
@@ -355,6 +356,7 @@ std::string status_text(const Q2NetServer& s) {
   info_set(info, "mapname", (*s.rules)->map_name);
   info_set(info, "maxclients", std::to_string(q2_public_slots(s)));
   info_set(info, "maxspectators", std::to_string(s.cfg.max_spectators));
+  if (!s.cfg.ruleset.empty()) info_set(info, "ruleset", s.cfg.ruleset);
   // `needpass`: 1 a player's password asked, 2 a spectator's.
   info_set(info, "needpass",
            std::to_string((set(s.cfg.password) ? 1 : 0) | (set(s.cfg.spectator_password) ? 2 : 0)));
@@ -441,6 +443,12 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   if (!vip && !spectator && set(s.cfg.password) && given != s.cfg.password)
     return wrong("Password required or incorrect.\nConnection refused.");
   vip = vip || (set(s.cfg.password) && given == s.cfg.password);
+  // A competition server's ruleset (sv_ruleset, server/admission.hpp): a player keeps to it.
+  if (const std::string why = ge::server::ruleset_refusal(
+          s.cfg.ruleset, info_get(userinfo, std::string(ge::classic::ruleset_info_key(true))),
+          spectator);
+      !why.empty())
+    return refuse(s, from, why);
   // What the rules never see: the recorder's mark and the password (when one is asked); the
   // address the server saw, always.
   info_remove(userinfo, "mvdspec");
