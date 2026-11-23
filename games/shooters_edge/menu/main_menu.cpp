@@ -1185,7 +1185,8 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         it.choice = n >= 0 && static_cast<size_t>(n) < it.choices.size() ? n : 0;
         continue;
       }
-      if (e->id == "name" || e->id == "hostname" || e->page == "addresses") {  // a text cvar
+      if (e->field || e->id == "name" || e->id == "hostname" ||
+          e->page == "addresses") {  // a text cvar
         const std::string name = host_value(host, e->needs);
         it.text = name.empty() ? std::string(e->text) : std::string(e->text) + "  " + name;
         continue;
@@ -1255,8 +1256,9 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (host.console == nullptr) return Outcome::none;
   ge::console::Console& con = *host.console;
   // Quake II's player page needs a figure to show: with none in the packs it does not open.
-  if (e.kind == ge::ui::EventKind::opened && e.page == "setup" && &table_of(host) == &q2_menu() &&
-      host.files != nullptr && player_figures(*host.files).empty()) {
+  if (e.kind == ge::ui::EventKind::opened && e.page == "setup" &&
+      &game_table(table_of(host)) == &q2_menu() && host.files != nullptr &&
+      player_figures(*host.files).empty()) {
     con.print("No player models found.");
     menu.close();
     return Outcome::none;
@@ -1297,6 +1299,8 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (e.kind == ge::ui::EventKind::changed) {
     if (entry->target == Target::client)
       con.execute(std::string(entry->id) + " " + item_text(*entry, *it));
+    else if (entry->target == Target::server && e.page != "host")  // START sets the host page's
+      con.execute("sv " + std::string(entry->id) + " " + item_text(*entry, *it));
     return Outcome::none;
   }
   if (e.kind != ge::ui::EventKind::activated) return Outcome::none;
