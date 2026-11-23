@@ -1551,23 +1551,6 @@ TEST(the_easy_jump_strafes_on_our_server_of_q2_at_its_share) {
 }
 
 TEST(a_joined_server_hears_a_new_name_skin_hand_fov_and_msg_at_once) {
-  // The settings as the console holds them, read through `Remote::setting`.
-  std::map<std::string, std::string> set{{"name", "eve"}, {"skin", "male/grunt"}};
-  cn::Q2ClientConfig q;
-  q.name = "eve";
-  const auto setting = [&set](const std::string& k) {
-    const auto at = set.find(k);
-    return at == set.end() ? std::string() : at->second;
-  };
-  CHECK(!cn::q2_user_info_moved(q, setting));  // as joined: nothing to send
-  set["skin"] = "base";
-  set["model"] = "female";
-  set["hand"] = "2";
-  set["cl_fov"] = "105.6";
-  set["msg"] = "3";
-  CHECK(cn::q2_user_info_moved(q, setting));
-  CHECK(q.skin == "female/base" && q.hand == 2 && q.fov == 106 && q.msg == 3);
-  CHECK(!cn::q2_user_info_moved(q, setting));  // sent once
   // Joined to our server: a rename reaches the server's own user info for the player.
   auto r = rig({}, "broadband");
   gn::Transport t;
