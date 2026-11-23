@@ -92,6 +92,25 @@ TEST(texture_glow_only_where_fullbright) {
   CHECK(px(e.emissive, 4, 4, 0) == 0);     // the wall round it does not
 }
 
+TEST(texture_glow_by_the_game_s_fullbright_range) {
+  // Quake's palette glows from 224; Quake II's has no fullbright range (its lamps are its maps'
+  // surface lights), so the same texels stay lit only by the light.
+  const ce::Profile* q1 = ce::find_profile("q1");
+  const ce::Profile* q2 = ce::find_profile("q2");
+  CHECK(q1 && q2);
+  if (!q1 || !q2) return;
+  CHECK(q1->fullbright_first == ce::kFullbrightFirst);
+  CHECK(q2->fullbright_first == 256);
+  const std::vector<uint8_t> lamp(size_t{16} * 16, 230);
+  ce::EnhanceOptions o;
+  o.scale = 2;
+  o.fullbright_first = q2->fullbright_first;
+  const auto e = ce::enhance_texture("lights/lite1", lamp, 16, 16, palette(), o);
+  CHECK(!e.glows);
+  o.fullbright_first = q1->fullbright_first;
+  CHECK(ce::enhance_texture("lights/lite1", lamp, 16, 16, palette(), o).glows);
+}
+
 TEST(texture_sky_and_liquid) {
   const std::vector<uint8_t> pic(size_t{32} * 16, 90);
   const auto sky = ce::enhance_texture("sky4", pic, 32, 16, palette());

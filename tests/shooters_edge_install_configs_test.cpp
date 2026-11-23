@@ -254,3 +254,72 @@ TEST(the_host_s_own_words_come_back_after_the_configs_run) {
   m.con.execute("another_word");
   CHECK(host == 1);  // the host's handler is back
 }
+
+namespace {
+
+void write_pack(const fs::path& file,
+                const std::vector<std::pair<std::string, std::string>>& files) {
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> in;
+  in.reserve(files.size());
+  for (const auto& [name, text] : files)
+    in.emplace_back(name, std::vector<uint8_t>(text.begin(), text.end()));
+  std::vector<uint8_t> pack;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak(in, &pack, &error), error);
+  fs::create_directories(file.parent_path());
+  std::ofstream(file, std::ios::binary)
+      .write(reinterpret_cast<const char*>(pack.data()), std::streamsize(pack.size()));
+}
+
+}  // namespace
+
+// A Quake mission pack's own default.cfg, inside its pack, runs as what it adds to the base game's
+// (its keys for the new weapons, its aliases); the lines both share do not run again, and the
+// window's own layout stands.
+TEST(a_quake_mod_s_pack_default_cfg_runs_what_it_adds_to_the_base_s) {
+  const std::string base(first().base_dir);
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_mod";
+  fs::remove_all(root);
+  write_pack(root / base / "pak0.pak",
+             {{"default.cfg", "unbindall\nmark base\nbind 0 \"impulse 0\"\n"}});
+  write_pack(root / "hipnotic" / "pak0.pak",
+             {{"default.cfg",
+               "unbindall\nmark  base\nbind 9 \"impulse 225\"\nbind 0 \"impulse "
+               "226\"\nalias zoom \"fov 10\"\n"}});
+  Marks m;
+  m.con.binds().set(ge::console::BindMode::game, "w", "+forward");
+  m.con.set_search_path(cl::config_dirs(root.string(), "hipnotic", first()));
+  cl::start_configs(m.con, root.string(), "hipnotic", first(), {});
+  CHECK_MSG(m.seen.empty(), joined(m.seen));  // the shared lines did not run
+  CHECK(m.con.binds().get(ge::console::BindMode::game, "9") == "impulse 225");
+  CHECK(m.con.binds().get(ge::console::BindMode::game, "0") == "impulse 226");
+  CHECK(m.con.binds().get(ge::console::BindMode::game, "w") == "+forward");  // no unbindall
+  // The base folder played: nothing of the mod's.
+  Marks b;
+  b.con.set_search_path(cl::config_dirs(root.string(), base, first()));
+  cl::start_configs(b.con, root.string(), base, first(), {});
+  CHECK(b.con.binds().get(ge::console::BindMode::game, "9").empty());
+  fs::remove_all(root);
+}
+
+// A mission pack's own quake.rc names the recordings its title plays; the base folder's list is
+// the game's own.
+TEST(a_mod_s_quake_rc_names_the_title_s_demos) {
+  const std::string base(first().base_dir);
+  const fs::path root = fs::temp_directory_path() / "ge_se_install_configs_demos";
+  fs::remove_all(root);
+  write_pack(root / base / "pak0.pak", {{"quake.rc", "startdemos demo1 demo2 demo3\n"}});
+  write_pack(root / "hipnotic" / "pak0.pak",
+             {{"quake.rc",
+               "// Included\nteamplay 0?Hipnotic\nexec default.cfg\n"
+               "startdemos hipdemo1 hipdemo2 hipdemo3 hipdemo4\n"}});
+  fs::create_directories(root / "plain");
+  CHECK_MSG(cl::mod_startdemos(root.string(), "hipnotic", first()) ==
+                "hipdemo1 hipdemo2 hipdemo3 hipdemo4",
+            cl::mod_startdemos(root.string(), "hipnotic", first()));
+  CHECK(cl::mod_startdemos(root.string(), base, first()).empty());
+  CHECK(cl::mod_startdemos(root.string(), "plain", first()).empty());
+  write(root / "plain" / "quake.rc", "startdemos own1\n");
+  CHECK(cl::mod_startdemos(root.string(), "plain", first()) == "own1");
+  fs::remove_all(root);
+}

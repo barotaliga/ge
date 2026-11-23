@@ -269,7 +269,7 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
   o.nrm = v.nrm;
   o.rect = v.rect;
   // An animated texture: the sequence's frame now, from this texture's own place in it.
-  let count = (v.anim >> 16u) & 255u;
+  let count = (v.anim >> 16u) & 127u;
   if (count > 1u) {
     // On the map's clock at its rate (the world's row's w; 0: kFrameRate), or the model's frame.
     let rate = select(kFrameRate, movers[0].offset.w, arrayLength(&movers) > 0u && movers[0].offset.w > 0.0);
@@ -279,6 +279,14 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
     }
     let at = (step + (v.anim >> 24u)) % count;
     o.rect = frames[(v.anim & 0xffffu) + at];
+  }
+  // A flowing texture (draw_data.hpp's kAnimFlowing): it slides toward -s, a warped liquid's half
+  // a width a second, any other face's 1.6, a whole width at a time seamless.
+  if ((v.anim & 0x800000u) != 0u) {
+    let warp = v.kind == kWater || v.kind == kSlime || v.kind == kLava || v.kind == kWarp ||
+               v.kind == kTele;
+    let rate = select(1.6, 0.5, warp);
+    o.st.x = o.st.x - o.rect.z * fract(max(bsp.info2.x, 0.0) * rate);
   }
   o.kind = v.kind;
   o.lm2 = v.lm2;
