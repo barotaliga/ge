@@ -20,7 +20,8 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 | Shell | `games/shooters_edge/net/qw_talk.hpp`, `client/voice_out.hpp`, `client/demo_voice.hpp` | Who hears a chat line or a voice on our server (all, team, near by earshot and walls, a slot), the voice message, voices in recordings |
 | Shell | `games/shooters_edge/profiles/remix_sounds.hpp` | Remix's sound pairs by role |
 | Classic | `plugins/classic/q2_footsteps.hpp` | Footsteps by surface: a texture's `.mat` material, its step set, the surface under the stepper, never the same step twice running |
-| Classic | `plugins/classic/q2_loop_merge.hpp` | Copies of one looped sound merged into one voice (`al_merge_looping`), each ear held to full |
+| Classic | `plugins/classic/q2_loop_merge.hpp` | Copies of one looped sound merged into one voice, each ear held to full: Quake II's entity loops (`al_merge_looping`), Quake's level loops (always) |
+| Shell | `games/shooters_edge/client/room_ear.hpp` (`s_mixahead`) | How far ahead the device mixes, one setting for every classic game (Quake's spelling `_snd_mixahead`) |
 | Classic | `plugins/classic/content/soundtrack.hpp` (`music_file`) | A track by its file's name under `music/` (`ogg play <name>`, a server's music by text) |
 
 ## Each game's
@@ -30,7 +31,7 @@ place the player stands, the room's reverb, the soundtrack, the menu's clicks, a
 | Files | WAV under `sound/` | WAV under `sound/`; player sounds by figure | WAV and other formats | sound lumps in the archive (a new reader) |
 | Ambience | by the map's leaves | by the map's entities' loop sounds | entity loops | sector sounds |
 | Footsteps | none (remix carries Quake II's) | its own, by the surface's `.mat` material (`cl_footsteps`) | its own | none |
-| Looped sounds of one kind | each heard | merged into one (`al_merge_looping`) | merged | none |
+| Looped sounds of one kind | the level's loops of one file merged into one, always | entity loops merged into one (`al_merge_looping`) | merged | none |
 | The music switched off | stops (`cd off`) | pauses where it is (`ogg_enable`, the console's `off_pauses`) | | |
 | Voice on our server | `*ge_ext` voice bit, `sv_voip` off by default | the same route, its own message id | the same route | the same route |
 

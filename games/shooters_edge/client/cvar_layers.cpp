@@ -498,10 +498,11 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.noskins != nullptr) *b.noskins = 0;         // its figures are its own (choose_figure)
   if (b.screen != nullptr) *b.screen = Q2Screen{};  // Quake II's view and 2D settings set aside
   c.cvars().add_synonym("fov", "cl_fov");
-  c.cvars().add_synonym("ignore_qtv", "ignore_tv");     // its spelling of the TV viewers' chat
-  c.cvars().add_synonym("cl_chatmode", "con_chat");     // what a typed line is: command or chat
-  c.cvars().add_synonym("sshot_format", "scr_format");  // its spellings of the screenshot's
-  c.cvars().add_synonym("sshot_dir", "scr_folder");     // format, folder and JPEG quality
+  c.cvars().add_synonym("_snd_mixahead", "s_mixahead");  // its spelling (client/room_ear.hpp)
+  c.cvars().add_synonym("ignore_qtv", "ignore_tv");      // its spelling of the TV viewers' chat
+  c.cvars().add_synonym("cl_chatmode", "con_chat");      // what a typed line is: command or chat
+  c.cvars().add_synonym("sshot_format", "scr_format");   // its spellings of the screenshot's
+  c.cvars().add_synonym("sshot_dir", "scr_folder");      // format, folder and JPEG quality
   c.cvars().add_synonym("image_jpeg_quality_level", "scr_quality");
   c.add_command_synonym("cvar_reset", "reset");  // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
@@ -777,16 +778,6 @@ void add_q2(con::Console& c, const GameBindings& b) {
            .overlap = con::Overlap::same});
     v.add_synonym("vid_flip_on_switch", "vid_minimize_on_focus_loss");
   }
-  // Its software mixer's lead: kept and saved for its sound page and configs; the device here
-  // pulls the sound a chunk at a time, as its OpenAL path does, which never reads it either.
-  v.add({.name = "s_mixahead",
-         .fallback = "0.1",
-         .flags = con::kArchive,
-         .help = "How far ahead of time the sound is mixed, in seconds. Kept for your settings; "
-                 "this sound device keeps its own short lead.",
-         .min = 0,
-         .max = 1,
-         .values = "0.1: the default; 0..1: that many seconds"});
   for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)
     v.add({.name = "adr" + std::to_string(k),
            .fallback = "",

@@ -420,7 +420,7 @@ struct QwServer {
   // endpoint routes its events (what the player sees and hears), and the lines printed to a local
   // seat (the lobby's answers), which no packet carries.
   void (*local_tap)(void* ctx, const sv::RulesCommon& game) = nullptr;
-  void (*local_print)(void* ctx, int slot, const std::string& text) = nullptr;
+  void (*local_print)(void* ctx, int slot, int level, const std::string& text) = nullptr;
   // A voice relayed to a listen server's own player (`slot`, a local seat that is no bot), which
   // no packet carries: `v` the voice message as a client would read it (its talker in ints[0]).
   void (*local_voice)(void* ctx, int slot, const SvcMsg& v) = nullptr;
