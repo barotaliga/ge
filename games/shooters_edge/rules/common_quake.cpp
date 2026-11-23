@@ -412,7 +412,7 @@ float quake_item_respawn(A& q, float keep) {
   } else if (q.is(c, "item_armor1") | q.is(c, "item_armor2") | q.is(c, "item_armorInv")) {
     kind = 3;
   } else if (q.is(c, "item_shells") | q.is(c, "item_spikes") | q.is(c, "item_rockets") |
-             q.is(c, "item_cells")) {
+             q.is(c, "item_cells") | q.is(c, "item_weapon")) {
     kind = 5;
   } else if (q.is(c, "item_artifact_super_damage") | q.is(c, "item_artifact_envirosuit")) {
     kind = 6;

@@ -229,6 +229,14 @@ constexpr Entry kEntries[] = {
     {.page = "host", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
     {.page = "setup",
+     .id = "hostname",
+     .text = "HOSTNAME",
+     .hint = "The name the game you host shows others, from the next map. Type \"hostname "
+             "<name>\" in the console.",
+     .line = "toggleconsole",
+     .needs = "sv_hostname",
+     .closes = true},
+    {.page = "setup",
      .id = "name",
      .text = "NAME",
      .hint = "Your name, from the next map. Type \"name <yours>\" in the console.",

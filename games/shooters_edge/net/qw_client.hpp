@@ -273,8 +273,15 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int32_t stats[kStats] = {};
   std::vector<std::string> prints, centerprints;
   std::vector<std::string> oob_prints;  // out-of-band prints after the connect (rcon's answers)
-  std::vector<ClientSound> heard;       // the sounds read this tick (cleared as the tick starts)
-  float set_angles[3] = {};             // the server's last turn of the player (setangle), degrees
+  // A server browser's command packets from this machine (`localid`): the id they must carry
+  // (the caller sets it each frame), whether one may still run without it (until the first
+  // accept), and the commands accepted, for the caller to run.
+  std::string localid;
+  bool commands_unchecked = true;
+  bool localid_refused = false;  // a wrong id cleared `localid` (the caller clears its setting)
+  std::vector<std::string> local_commands;
+  std::vector<ClientSound> heard;  // the sounds read this tick (cleared as the tick starts)
+  float set_angles[3] = {};        // the server's last turn of the player (setangle), degrees
   float movevars[10] = {800, 100, 320, 500, 10, 10, 10, 4, 4, 1};  // serverdata's, in its order
   sh::MoveCmd sent[64];        // each move's newest command, by its packet's sequence mod 64
   uint32_t sent_seq[64] = {};  // the sequence each `sent` slot holds (0: none)

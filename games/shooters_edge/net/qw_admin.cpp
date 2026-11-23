@@ -185,6 +185,9 @@ std::string qw_status_table(const QwServer& s) {
          pad_left(std::to_string(minutes), 3) + " " + pad(address_column(c), 21) + " " +
          gsv::aids_column(user_row(s, i)) + "\n";
   }
+  for (const QwServer::Zombie& z : s.zombies)  // a dropped player still answered (zombietime)
+    t += pad_left(std::to_string(z.slot), 4) + " " + pad_left(std::to_string(z.userid), 3) + " " +
+         pad("", 16) + "     0 ZOMBIE " + gn::to_string(z.address) + "\n";
   return t;
 }
 

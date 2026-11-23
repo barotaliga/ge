@@ -117,7 +117,11 @@ with cheats the operator's `god <id>` and `give <id> <item> <count>` reach the p
 rules take `sv_cheats` with it. `fraglogfile` writes the frag lines to `frag_<n>.log` and the
 out-of-band `log` query answers with the last ten-minute buffer of them (`net/qw_fraglog.hpp`).
 Every dedicated server runs the lines typed on its own terminal in the foreground
-(`engine/server/main.cpp`).
+(`engine/server/main.cpp`). A player dropped (not timed out) keeps a goodbye list by his address
+for `zombietime` seconds, his packets answered with the disconnect and his slot shown as ZOMBIE in
+`status`, while the slot itself is free at once; the match's settings (`maxspectators`,
+`teamplay`, `fraglimit`, `timelimit`, `samelevel`, `watervis`) are in the server info from the
+start (`net/qw_server.cpp`).
 
 Quake II's ledger (`porting/shooters-edge/q2-ledger-server.md`) is the checklist; the facts of the
 operator's words, the player's queries and the connect checks are in

@@ -781,3 +781,37 @@ TEST(v_cshift_tints_the_view_in_open_air_and_not_under_water) {
     CHECK(rgba[3] == 0);
   }
 }
+
+// The mission packs' explosion2: 512 specks taking the colour run in turn, 0.3 s each, flung out
+// faster and faster; a program's burst: its count of specks in its colour's row of 8, all thrown
+// along its way.
+TEST(explosion2_takes_its_colours_in_turn_and_a_burst_its_colours_row) {
+  const std::vector<uint8_t> pal = test_palette();
+  const double at[3] = {0, 0, 0};
+  fx::Particles blast;
+  fx::explosion2(at, 224, 8, 1, pal, &blast);
+  CHECK(blast.size() == 512);
+  for (size_t i = 0; i < blast.size(); ++i) {
+    float c[3];
+    fx::palette_rgb(pal, 224 + static_cast<int>(i % 8), c);
+    CHECK(blast[i].tint[0] == c[0] && blast[i].tint[1] == c[1]);
+    CHECK(blast[i].life == 0.3f && blast[i].drag < 0);
+  }
+  fx::Particles none;
+  fx::explosion2(at, 224, 0, 1, pal, &none);  // a run of no colours throws nothing
+  CHECK(none.empty());
+  fx::Particles burst;
+  const double way[3] = {0.5, 0, 0};
+  fx::burst(at, 30, 101, way, 2, pal, &burst);
+  CHECK(burst.size() == 30);
+  for (const auto& p : burst) {
+    bool row = false;
+    for (int k = 96; k < 104; ++k) {
+      float c[3];
+      fx::palette_rgb(pal, k, c);
+      row = row || (p.tint[0] == c[0] && p.tint[1] == c[1]);
+    }
+    CHECK(row);
+    CHECK(p.v[0] == 0.5f && p.life <= 0.43f);
+  }
+}

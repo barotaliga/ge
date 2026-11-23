@@ -49,6 +49,10 @@ Effect effect_of(const DemoEffect& d) {
       e.kind = EffectKind::named_trail;
       e.name = d.name;
       break;
+    case DemoEffectKind::burst:
+      e.kind = EffectKind::burst;
+      e.way = d.way;
+      break;
     case DemoEffectKind::blood:
       e.kind = EffectKind::blood;
       e.way = d.way;  // a program's burst's way (code -1)
@@ -91,10 +95,11 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
     fx.effects.clear();
   }
   for (const DemoEffect& e : s.effects) {
-    if (e.kind == DemoEffectKind::explosion) {
+    // Quake's explosion2 (12) is drawn in its own colours, with the other effects.
+    const bool q2 = s.format == DemoFormat::q2 || s.format == DemoFormat::q2_multiview;
+    if (e.kind == DemoEffectKind::explosion && (q2 || e.code != 12)) {
       fx.explosions.push_back(e.at);
       // Quake II's rocket's and grenade's (in the air and in water), for cl_disable_explosions.
-      const bool q2 = s.format == DemoFormat::q2 || s.format == DemoFormat::q2_multiview;
       const uint8_t kind = !q2                           ? 0
                            : e.code == 7 || e.code == 17 ? ge::classic::kQ2Rocket
                            : e.code == 8 || e.code == 18 ? ge::classic::kQ2Grenade

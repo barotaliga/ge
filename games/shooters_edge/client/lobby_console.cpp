@@ -22,7 +22,8 @@ void add_lobby_commands(ge::console::Console& con, Listen& l, const LobbyElsewhe
                                              .lobby_settings = l.opt.lobby_settings,
                                              .port = l.opt.port,
                                              .maxclients = l.opt.maxclients,
-                                             .login = l.opt.login});
+                                             .login = l.opt.login,
+                                             .hostname = l.opt.hostname});
 }
 
 void lobby_keys(Listen& l, const LobbyKeys& k, const LobbyElsewhere& elsewhere) {

@@ -572,6 +572,9 @@ std::string remote_queue_step(Remote& r, std::vector<std::string>& said) {
 }
 
 void remote_queue_frame(Remote& r, ge::console::Console& con) {
+  // A server browser's commands from this machine (`localid`), and the id it got wrong cleared.
+  if (std::exchange(r.end.localid_refused, false)) con.execute("localid \"\"");
+  for (const std::string& line : std::exchange(r.end.local_commands, {})) con.execute(line);
   remote_rulesets_frame(r, con);  // the ruleset: its book, locked while joined
   std::vector<std::string> said;
   const std::string found = remote_queue_step(r, said);
@@ -977,6 +980,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   const uint32_t acked_before = r.end.ch.incoming_acknowledged;
   int ticks = 0;
   r.end.cfg.physfps = r.physfps;  // cl_physfps, live
+  r.end.localid = r.localid;      // a command packet with the wrong id clears it
   r.end.cfg.physfps_spectator = r.physfps_spectator;
   r.end.cfg.c2spps = r.c2spps;  // cl_c2spps, live
   r.end.cfg.c2s_impulse_backup = r.c2s_impulse_backup;
@@ -1541,6 +1545,12 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                  "server.",
          .kind = ge::console::CvarKind::boolean},
         &r.solid_players);
+    con.cvars().bind({.name = "localid",
+                      .fallback = "",
+                      .help = "The id a server browser on this computer puts on the commands it "
+                              "sends the game; one with another id is refused.",
+                      .kind = ge::console::CvarKind::text},
+                     &r.localid);
     con.cvars().bind({.name = "cl_physfps",
                       .fallback = "0",
                       .flags = ge::console::kArchive,

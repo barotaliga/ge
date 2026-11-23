@@ -73,6 +73,8 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | The light on walls and models | `gl_modulate` (the walls) | `gl_modulate_world`, `gl_modulate_entities`, `gl_doublelight_entities`, `gl_dotshading`, `gl_coloredlightmaps`, `gl_dlight_falloff`, `cl_lerp_lightstyles` (`classic/q2_fx_switches.hpp`) | the classic's | the classic's |
 | Status bar pictures | sharp | `gl_bilerp_pics`, `gl_gamma_scale_pics` (`client/q2_bar.cpp`) | sharp | sharp |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
+| Command packets | `localid`: a server browser on this machine sends commands that carry it (`net/qw_client.cpp`) | none | its own | its own |
+| Setup figure | the pack's figure in the chosen shirt and pants (`menu/classic_art.cpp`'s `player_in`) | its figure rows (`menu/q2_pages.cpp`) | its own | its own |
 | Screenshot names | by the time | `gl_screenshot_template` (`quakeXXX`) and `gl_screenshot_compression` over `scr_template` and `scr_compression` (`capture/screenshot.hpp`) | by the time | the engine's |
 
 ## Adding a game
