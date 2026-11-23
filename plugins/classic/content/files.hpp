@@ -47,6 +47,9 @@ namespace ge::classic::content {
 // links are tried only when the path itself is not found. The first link made that matches wins.
 struct FileLinks {
   std::vector<std::pair<std::string, std::string>> hard, soft;  // name, target
+  // A map read as another version of it while a server is joined (map_versions.hpp): the whole
+  // path rewritten, before the links.
+  std::vector<std::pair<std::string, std::string>> versions;
 };
 
 struct SearchPath {

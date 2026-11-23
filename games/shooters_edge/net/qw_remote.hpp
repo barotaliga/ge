@@ -64,8 +64,10 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "account/client_login.hpp"
@@ -211,6 +213,7 @@ struct Remote {
   int others = 0;             // other players predicted the last step
   int others_msec = 0;        // the most milliseconds one of them was run forward the last step
   int lerped = 0;             // entities drawn between two frames the last step
+  int map_tries = 0;          // joins again with another version of the server's map
   sh::Vec3f view;             // the player's angles, degrees (sent with every move)
   sh::AimTurn aim_turn;       // the aim help's turn of the view (shooter/aim_turn.hpp)
   sh::Vec3f prediction;       // the player's predicted origin, the correction not added
@@ -251,6 +254,17 @@ struct Remote {
   std::function<void(const std::string& gamedir, const std::string& path,
                      const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
+  // A map's other versions (ClientConfig::map_versions, classic/content/map_versions.hpp): those
+  // kept, one kept, the one drawn, and which this server took (by its name as asked).
+  std::function<std::vector<std::pair<std::string, std::vector<uint8_t>>>(const std::string& map)>
+      map_versions;
+  std::function<std::string(const std::string& map, uint32_t sum,
+                            const std::vector<uint8_t>& bytes)>
+      keep_version;
+  std::function<void(const std::string& map, const std::string& version)> use_map;
+  std::function<std::optional<uint32_t>(const std::string& server, const std::string& map)>
+      remembered;
+  std::function<void(const std::string& server, const std::string& map, uint32_t sum)> keep_choice;
   // A Quake II download cut short, held in the game's folder to be resumed (Q2ClientConfig::held).
   ge::classic::content::HeldDownloads held;
   // What a Quake II server stuffed that the client does not answer itself, for the window's console

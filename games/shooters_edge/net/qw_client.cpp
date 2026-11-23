@@ -199,19 +199,46 @@ void step_web(QwClientEnd& c) {
     c.downloaded[path] = std::move(bytes);
   }
   c.wanted_skins.insert(c.wanted_skins.begin(), done.back.begin(), done.back.end());
-  if (!wd::web_busy(c.web) && !c.dl.active) next_skin_or_begin(c);
+  if (!wd::web_busy(c.web) && !c.dl.active && !c.prespawn_held) next_skin_or_begin(c);
 }
 
+uint32_t version_sum(const std::string& map, const std::vector<uint8_t>& bsp);
+void next_content_or_prespawn(QwClientEnd& c);
+
 void finish_download(QwClientEnd& c, bool ok) {
+  if (c.fetch_version && c.dl.name == c.models[1]) {  // the server's version of the map
+    c.fetch_version = false;
+    if (ok) {
+      c.dl.bytes.resize(static_cast<size_t>(c.dl.size));
+      const uint32_t sum = version_sum(c.dl.name, c.dl.bytes);
+      const std::string path =
+          c.cfg.keep_version ? c.cfg.keep_version(c.dl.name, sum, c.dl.bytes) : std::string();
+      const std::string kept = path.empty() ? c.dl.name + "#" + std::to_string(sum) : path;
+      c.downloaded[kept] = c.dl.bytes;
+      if (c.dl.chunked) client_command(c, "nextdl -1 100 " + std::to_string(c.dl.number));
+      c.map_version = path;
+      c.map_sum = sum;
+    } else {
+      c.version_unfetched = true;
+    }
+    c.dl = ClientDownload{};
+    next_content_or_prespawn(c);
+    return;
+  }
+  const bool the_map = ok && c.prespawn_held && c.models.size() >= 2 && c.dl.name == c.models[1];
   if (ok) {
     c.dl.bytes.resize(static_cast<size_t>(c.dl.size));
+    if (the_map) c.map_sum = version_sum(c.dl.name, c.dl.bytes);  // a map the player lacked
     c.downloaded[c.dl.name] = c.dl.bytes;
     if (c.cfg.keep_file)
       c.cfg.keep_file(c.gamedir, c.dl.name, c.dl.bytes, c.dl.has_origin ? &c.dl.origin : nullptr);
     if (c.dl.chunked) client_command(c, "nextdl -1 100 " + std::to_string(c.dl.number));
   }
   c.dl = ClientDownload{};
-  next_skin_or_begin(c);
+  if (c.prespawn_held)
+    next_content_or_prespawn(c);
+  else
+    next_skin_or_begin(c);
 }
 
 void download_chunk(QwClientEnd& c, int chunk, const uint8_t* data) {
@@ -380,12 +407,134 @@ void on_stufftext(QwClientEnd& c, const std::string& text) {
   }
 }
 
+std::vector<uint8_t> game_file(const QwClientEnd& c, const std::string& path);
+
 // The map's second checksum as the first prespawn sends it (signed, as the server prints it).
 int32_t map_checksum(const QwClientEnd& c) {
-  if (!c.cfg.read_file || c.models.size() < 2) return 0;
-  const std::vector<uint8_t> bsp = c.cfg.read_file(c.gamedir, c.models[1]);
+  if (c.models.size() < 2) return 0;
+  return static_cast<int32_t>(c.map_sum);
+}
+
+// The checksum a version of the map sends (0: not a map that reads).
+uint32_t version_sum(const std::string& map, const std::vector<uint8_t>& bsp) {
   const MapChecksums sums = map_checksums(bsp);
-  return sums.ok ? static_cast<int32_t>(sent_checksum(c.models[1], sums)) : 0;
+  return sums.ok ? sent_checksum(map, sums) : 0;
+}
+
+// A server's reason for a drop in a player's words: a map whose checksum the server refused (its
+// copy and the player's are other versions of it, as a later release's maps are) said plainly. It
+// is the last word only when no other version was left to join with (map_versions.hpp).
+std::string refusal_words(const std::string& why) {
+  const size_t at = why.find("does not match (maps/");
+  if (at == std::string::npos) return why;
+  const size_t from = at + 21, end = why.find(".bsp", from);
+  const std::string map = why.substr(from, end == std::string::npos ? 0 : end - from);
+  return "the server plays another version of " + (map.empty() ? std::string("its map") : map) +
+         " than yours and does not hand its version out, so it would not let you in";
+}
+
+// A file of the game's, read from its files or fetched this join (empty: neither).
+std::vector<uint8_t> game_file(const QwClientEnd& c, const std::string& path) {
+  if (const auto it = c.downloaded.find(path); it != c.downloaded.end()) return it->second;
+  return c.cfg.read_file ? c.cfg.read_file(c.gamedir, path) : std::vector<uint8_t>{};
+}
+
+// The model checks (the player's and the eyes' whole files, CRC-16), then the map's checksum on
+// the first `prespawn`.
+void send_prespawn(QwClientEnd& c) {
+  if (c.cfg.use_map && c.models.size() >= 2) c.cfg.use_map(c.models[1], c.map_version);
+  for (const auto& [key, path] :
+       {std::pair{"pmodel", "progs/player.mdl"}, std::pair{"emodel", "progs/eyes.mdl"}}) {
+    const std::vector<uint8_t> mdl = game_file(c, path);
+    if (!mdl.empty())
+      client_command(
+          c, std::string("setinfo ") + key + " " + std::to_string(crc16(mdl.data(), mdl.size())));
+  }
+  client_command(
+      c, "prespawn " + std::to_string(c.spawncount) + " 0 " + std::to_string(map_checksum(c)));
+}
+
+// The next of the content lacked asked for, or, with none left, `prespawn`.
+void next_content_or_prespawn(QwClientEnd& c) {
+  if (c.fetch_version && !c.dl.active) {  // the server's version of the map, before the rest
+    c.dl = ClientDownload{};
+    c.dl.name = c.models[1];
+    c.dl.active = true;
+    c.dl.chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
+    c.dl.number = static_cast<int>(c.downloaded.size()) + 1;
+    client_command(c, "download " + c.dl.name);
+    return;
+  }
+  while (!c.wanted_content.empty()) {
+    const std::string path = c.wanted_content.front();
+    c.wanted_content.erase(c.wanted_content.begin());
+    if (has_file(c, path)) continue;
+    c.dl = ClientDownload{};
+    c.dl.name = path;
+    c.dl.active = true;
+    c.dl.chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
+    c.dl.number = static_cast<int>(c.downloaded.size()) + 1;
+    client_command(c, "download " + path);
+    return;
+  }
+  c.prespawn_held = false;
+  send_prespawn(c);
+}
+
+// The version of the map the first `prespawn` sends (ClientConfig::map_versions): the one this
+// server took last, else the player's own copy, else the next kept one, none whose checksum the
+// server refused; with none left, the server's own is wanted first (`fetch_version`).
+void choose_map_version(QwClientEnd& c) {
+  c.map_version.clear();
+  c.map_sum = 0;
+  c.fetch_version = false;
+  if (c.models.size() < 2 || c.models[1].empty()) return;
+  const std::string& map = c.models[1];
+  const auto refused = [&c](uint32_t sum) {
+    return std::find(c.cfg.refused.begin(), c.cfg.refused.end(), sum) != c.cfg.refused.end();
+  };
+  std::vector<std::pair<std::string, uint32_t>> have;  // path ("" own), checksum
+  if (const std::vector<uint8_t> own = game_file(c, map); !own.empty())
+    have.emplace_back("", version_sum(map, own));
+  if (c.cfg.map_versions)
+    for (const auto& [path, bytes] : c.cfg.map_versions(map))
+      have.emplace_back(path, version_sum(map, bytes));
+  const std::pair<std::string, uint32_t>* pick = nullptr;
+  const std::optional<uint32_t> last =
+      c.cfg.remembered ? c.cfg.remembered(map) : std::optional<uint32_t>();
+  for (const auto& h : have)
+    if (last && h.second == *last && !refused(h.second)) pick = &h;
+  for (const auto& h : have)
+    if (pick == nullptr && !refused(h.second)) pick = &h;
+  if (pick != nullptr) {
+    c.map_version = pick->first;
+    c.map_sum = pick->second;
+    return;
+  }
+  // None the server takes (or none at all): its own fetched, kept as a version when the player
+  // has a copy of his own.
+  c.fetch_version = !have.empty();
+  if (!have.empty()) c.map_sum = have.front().second;
+}
+
+// The lists complete: the map first, then every model and sound the game lacks, then `prespawn`.
+void start_content(QwClientEnd& c) {
+  c.wanted_content.clear();
+  c.prespawn_held = true;
+  choose_map_version(c);
+  if (c.cfg.fetch_content && c.cfg.read_file) {  // a client with no files cannot tell
+    const auto want = [&c](const std::string& path) {
+      if (!plain_name(path, true) || has_file(c, path)) return;
+      for (const std::string& w : c.wanted_content)
+        if (w == path) return;
+      c.wanted_content.push_back(path);
+    };
+    for (size_t i = 1; i < c.models.size(); i++)
+      if (!c.models[i].empty() && c.models[i][0] != '*') want(c.models[i]);
+    for (size_t i = 1; i < c.sounds.size(); i++)
+      if (!c.sounds[i].empty()) want("sound/" + c.sounds[i]);
+  }
+  next_content_or_prespawn(c);
 }
 
 void on_list(QwClientEnd& c, const SvcMsg& m, bool models) {
@@ -407,16 +556,7 @@ void on_list(QwClientEnd& c, const SvcMsg& m, bool models) {
   } else if (!models) {
     client_command(c, "modellist " + sc + " 0");
   } else {
-    // The model checks (the player's and the eyes' whole files, CRC-16), then the map's.
-    for (const auto& [key, path] :
-         {std::pair{"pmodel", "progs/player.mdl"}, std::pair{"emodel", "progs/eyes.mdl"}}) {
-      if (!c.cfg.read_file) break;
-      const std::vector<uint8_t> mdl = c.cfg.read_file(c.gamedir, path);
-      if (!mdl.empty())
-        client_command(
-            c, std::string("setinfo ") + key + " " + std::to_string(crc16(mdl.data(), mdl.size())));
-    }
-    client_command(c, "prespawn " + sc + " 0 " + std::to_string(map_checksum(c)));
+    start_content(c);
   }
 }
 
@@ -598,16 +738,25 @@ void apply(QwClientEnd& c, const SvcMsg& m) {
       if (m.strings.size() == 2)
         info_set(c.serverinfo, m.strings[0], m.strings[1], kServerInfoBytes);
       break;
-    case svc::disconnect:
+    case svc::disconnect: {
+      // The server's reason, printed in the same packet as the drop ("Map model file does not
+      // match"), else the drop alone.
+      std::string why;
+      for (size_t i = c.packet_prints; i < c.prints.size(); i++) why += c.prints[i];
+      while (!why.empty() && (why.back() == '\n' || why.back() == ' ')) why.pop_back();
+      for (char& ch : why) ch = ch == '\n' ? ' ' : ch;
       c.stage = ClientStage::dropped;
-      c.refused = "disconnected by the server";
+      c.map_refused = why.find("does not match (maps/") != std::string::npos;
+      c.refused = why.empty() ? "disconnected by the server" : refusal_words(why);
       break;
+    }
     default:
       break;
   }
 }
 
 void read_payload(QwClientEnd& c, const uint8_t* data, size_t size, size_t at) {
+  c.packet_prints = c.prints.size();
   gn::Reader r = gn::make_reader(data, size);
   r.at = at;
   WireCtx ctx;
