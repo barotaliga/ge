@@ -1780,7 +1780,7 @@ TEST(lag_compensation_on_our_server_of_q2_rewinds_to_the_shooters_frame) {
   CHECK(r->server.clients[sa].acked > 0);
   sh::Vec3f at, lo, hi;
   CHECK(game.lag_place(game.lag_ctx, sa, sb, at, lo, hi));
-  const int16_t* o = game.players[sb].move.origin;
+  const int32_t* o = game.players[sb].move.origin;
   const sh::Vec3f now{float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
   CHECK_MSG(sh::length(at - now) < 1, "a standing player was rewound away from where he stands");
   CHECK(lo.z == game.players[sb].mins.z && hi.z == game.players[sb].maxs.z);  // his box then

@@ -15,6 +15,7 @@
 // ge:summary Lab: Quake II's weapons fired, classic beside modern: bolts, smoke, rail, BFG
 // ge:keywords lab se-q2-weapon-fx q2 weapon-effects blaster hyperblaster railgun bfg
 // ge:keywords rocket grenade sparks glow-trail rail-beam modern-look screenshot
+// ge:keywords ground-zero etf-rifle plasma-beam disruptor prox-mine tesla
 // ge:skill render labs
 // ge:test tests/shooters_edge_listen_test.cpp
 #include <cmath>
@@ -48,6 +49,7 @@
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace {
@@ -74,7 +76,9 @@ struct Shot {
   bool held = false;
   // Fired, and the picture from the eye: the shot's flash, light and kick on the weapon in hand.
   bool eye = false;
-  int hold = 4;  // `wall`: the frames the trigger is held
+  int hold = 4;  // `wall` or `release`: the frames the trigger is held
+  // Let go after `hold` frames though not at a wall: a thrown mine, a single shot watched land.
+  bool release = false;
 };
 constexpr Shot kShots[] = {
     {"blaster", "a yellow bolt in flight, its glow on the walls", 14, sv::SqWeapon::blaster},
@@ -117,6 +121,20 @@ constexpr Shot kShots[] = {
      sv::SqWeapon::bfg, true, false, false, 2},
     {"bfg-marks-cool", "the flames out, thin smoke off the large mark as it cools", 420,
      sv::SqWeapon::bfg, true, false, false, 2},
+};
+// Ground Zero's weapons (`--pack=rogue`): the shots its own rules fire (server/q2_gz.hpp).
+constexpr Shot kGroundZeroShots[] = {
+    {"etf-rifle", "a stream of flechettes in flight down the line", 16, sv::SqWeapon::etf_rifle},
+    {"plasma-beam", "the beam's straight line from the gun to the wall", 16,
+     sv::SqWeapon::plasma_beam},
+    {"disruptor", "the disruptor's bolt in flight", 10, sv::SqWeapon::disruptor},
+    {"prox-launcher", "a prox mine arcing out of the launcher", 20, sv::SqWeapon::prox_launcher,
+     false, false, false, 2, true},
+    {"prox-mine-armed", "the mine stuck where it landed, opened and armed", 260,
+     sv::SqWeapon::prox_launcher, false, false, false, 2, true},
+    {"tesla", "the tesla thrown, tumbling", 40, sv::SqWeapon::tesla, false, false, false, 8, true},
+    {"tesla-open", "the tesla at rest, opened, its prongs up", 500, sv::SqWeapon::tesla, false,
+     false, false, 8, true},
 };
 constexpr const char* kLooks[] = {"classic", "modern"};
 
@@ -163,7 +181,7 @@ bool arm(cl::Listen& l, const Shot& shot) {
   if (s == nullptr) return false;
   const sv::SqWeaponRow& row = sv::kSqWeapons[static_cast<int>(shot.weapon)];
   sv::SqBody& body = s->players[0].body;
-  if (row.item != nullptr) body.counts[sv::sq_item(row.item)] = 1;
+  if (row.item != nullptr) body.counts[sv::sq_item(row.item, row.pack)] = 1;
   if (row.ammo != sv::SqAmmo::none) body.ammo[static_cast<int>(row.ammo)] = 200;
   if (shot.weapon != sv::SqWeapon::blaster)
     l.rules->client_command(0, std::string("use ") + row.name);
@@ -283,7 +301,11 @@ void run(gl::Lab& lab) {
   const cl::GameAdapter& adapter = cl::adapter_of(game);
   const ge::classicenhance::Profile& content = pf::content_of(game);
   cl::SearchPath files;
-  if (!cl::open_game_dir(lab.arg("game"), std::string(content.base_dir), files, error, content)) {
+  // `--pack`: a mission pack's folder over the base one, its rules played (the server's pack by
+  // the folder's name).
+  const std::string pack = lab.arg("pack");
+  const std::string folder = pack.empty() ? std::string(content.base_dir) : pack;
+  if (!cl::open_game_dir(lab.arg("game"), folder, files, error, content)) {
     lab.fail(error, "Pass --game=<the folder holding " + std::string(content.base_dir) +
                         "/pak0.pak>. Skill: shooter.");
     return;
@@ -321,6 +343,8 @@ void run(gl::Lab& lab) {
       shots.push_back({held_ids[size_t(k)].c_str(),
                        "the weapon at rest in the right hand, in its own skin, at the eye", 30,
                        static_cast<sv::SqWeapon>(k), false, true});
+  } else if (sv::q2_pack_of_folder(pack) == sv::Q2Pack::ground_zero) {
+    shots.assign(std::begin(kGroundZeroShots), std::end(kGroundZeroShots));
   } else {
     shots.assign(std::begin(kShots), std::end(kShots));
   }
@@ -330,6 +354,7 @@ void run(gl::Lab& lab) {
       if (shot.held && std::string_view(look_name) != "modern") continue;
       cl::ListenOptions opt = shooters_edge::net::listen_options();
       opt.console = {"deathmatch 1"};
+      opt.files = &files;  // the folder's name sets the server's pack
       cl::Listen l;
       std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
       if (!map || !cl::listen_start(l, progs(), std::move(map), opt, error)) {
@@ -408,7 +433,8 @@ void run(gl::Lab& lab) {
       int fired_at = -1;
       for (int i = 0; i < shot.ticks; i++) {
         sh::MoveCmd cmd = aim;
-        if (!shot.held && (!shot.wall || i < shot.hold)) cmd.buttons = sh::kButtonAttack;
+        if (!shot.held && ((!shot.wall && !shot.release) || i < shot.hold))
+          cmd.buttons = sh::kButtonAttack;
         cl::listen_frame(l, cmd);
         step(i);
         // From the eye: the picture a frame after the shot leaves the muzzle (the flash lasts a
@@ -471,6 +497,7 @@ const gl::LabSpec kSpec{
      {"held", "0", "1: every weapon at rest in hand from the eye, in place of the shots"},
      {"weapon", "", "only this weapon's pictures, by its id (blaster, railgun, ...; empty: all)"},
      {"map", "q2dm1", "the map to fire on (with --game)"},
+     {"pack", "", "a mission pack's folder over the base one (rogue: Ground Zero's weapons)"},
      {"aim", "", "the view's yaw and pitch, degrees (empty: the longest clear line, level)"},
      {"wall-at", "0", "the marks' shots at a wall about this far off, units (0: the floor ahead)"},
      {"wall-pitch", "5", "with --wall-at: the view's pitch, degrees down"}},

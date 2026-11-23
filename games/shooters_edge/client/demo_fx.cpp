@@ -9,6 +9,7 @@
 #include <cstddef>
 
 #include "classic/q2_fx_switches.hpp"
+#include "shooters_edge/client/own_missiles.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 
 namespace shooters_edge::client {
@@ -102,10 +103,10 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
     if (e.kind == DemoEffectKind::explosion && (q2 || e.code != 12)) {
       fx.explosions.push_back(e.at);
       // Quake II's rocket's and grenade's (in the air and in water), for cl_disable_explosions.
-      const uint8_t kind = !q2                           ? 0
+      const uint8_t kind = !q2                                           ? 0
                            : e.code == 7 || e.code == 17 || e.code == 28 ? ge::classic::kQ2Rocket
-                           : e.code == 8 || e.code == 18 ? ge::classic::kQ2Grenade
-                                                         : 0;
+                           : e.code == 8 || e.code == 18                 ? ge::classic::kQ2Grenade
+                                                                         : 0;
       if (kind != 0) {
         fx.explosion_kinds.resize(fx.explosions.size());
         fx.explosion_kinds.back() = kind;
@@ -126,6 +127,18 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
       continue;
     }
     m.entity = static_cast<int>(n);
+    m.origin = d.origin;
+    m.yaw = d.angles.y;
+    fx.missiles.push_back(m);
+  }
+  // The player's own missiles thrown ahead of the server (own_missiles.hpp), by their own numbers.
+  for (std::size_t k = 0; k < s.own_missiles.size() && k < s.own_missile_ids.size(); k++) {
+    const DemoEntity& d = s.own_missiles[k];
+    Missile m;
+    if (d.model <= 0 || static_cast<std::size_t>(d.model) >= s.models.size() ||
+        !missile_model(s.models[static_cast<std::size_t>(d.model)], m))
+      continue;
+    m.entity = kOwnMissileEntity + s.own_missile_ids[k];
     m.origin = d.origin;
     m.yaw = d.angles.y;
     fx.missiles.push_back(m);

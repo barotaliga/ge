@@ -12,16 +12,16 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | missing | not-taken | rows |
 | --- | --- | --- | --- | --- |
-| Client console commands | 138 | 1 | 17 | 156 |
-| Client settings (cvars) | 233 | 7 | 110 | 350 |
+| Client console commands | 139 | 0 | 17 | 156 |
+| Client settings (cvars) | 232 | 8 | 110 | 350 |
 | Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
-| Menu pages and rows | 146 | 4 | 12 | 162 |
+| Menu pages and rows | 147 | 3 | 12 | 162 |
 | Server messages the client parses (svc) | 26 | 0 | 1 | 27 |
-| Temporary entities (svc_temp_entity) | 21 | 18 | 26 | 65 |
+| Temporary entities (svc_temp_entity) | 22 | 17 | 26 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 0 | 1 | 33 |
 | Entity effect bits (EF_) | 32 | 0 | 1 | 33 |
-| Entity render bits (RF_) and view bits (RDF_) | 22 | 3 | 7 | 32 |
+| Entity render bits (RF_) and view bits (RDF_) | 23 | 2 | 7 | 32 |
 | Configstrings | 10 | 0 | 6 | 16 |
 | The layout language (status bar and layouts) | 27 | 0 | 0 | 27 |
 | HUD and screen elements | 18 | 0 | 11 | 29 |
@@ -30,12 +30,12 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Keys: the fixed keys and the default bindings | 10 | 0 | 1 | 11 |
 | Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 16 | 0 | 4 | 20 |
-| Connection, network, downloads and the rest | 14 | 1 | 2 | 17 |
-| **all** | 946 | 34 | 231 | 1211 |
+| Connection, network, downloads and the rest | 15 | 1 | 2 | 18 |
+| **all** | 950 | 31 | 231 | 1212 |
 
 ## Client console commands
 
-done 138, missing 1, not-taken 17
+done 139, missing 0, not-taken 17
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -45,7 +45,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.+back | `+back` / `-back` | move back while held | done | `plugins/shooter/controls.cpp` |
 | cmd.+moveleft | `+moveleft` / `-moveleft` | step left while held | done | `plugins/shooter/controls.cpp` |
 | cmd.+moveright | `+moveright` / `-moveright` | step right while held | done | `plugins/shooter/controls.cpp` |
-| cmd.+moveup | `+moveup` / `-moveup` | jump (swim up) while held: Quake II's only jump key | done | `plugins/shooter/controls.cpp` (ours also has `+jump`, which Quake II lacks; C7) |
+| cmd.+moveup | `+moveup` / `-moveup` | jump (swim up) while held: Quake II's only jump key | done | `plugins/shooter/controls.cpp` (ours also has `+jump`, which Quake II lacks; C7); held by `tests/shooters_edge_listen_test.cpp` (an up of 10 or more jumps) |
 | cmd.+movedown | `+movedown` / `-movedown` | crouch (swim down) while held | done | `plugins/shooter/controls.cpp` |
 | cmd.+left | `+left` / `-left` | turn left at `cl_yawspeed` while held | done | `plugins/shooter/controls.cpp` |
 | cmd.+right | `+right` / `-right` | turn right at `cl_yawspeed` while held | done | `plugins/shooter/controls.cpp` |
@@ -121,7 +121,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.unignoretext | `unignoretext [all/match ...]` | removes chat ignore patterns | done | `engine/console/chat_ignore.cpp` |
 | cmd.ignorenick | `ignorenick [nick]` | ignores chat from a nickname | done | `engine/console/chat_ignore.cpp` |
 | cmd.unignorenick | `unignorenick [all/nick]` | stops ignoring a nickname | done | `engine/console/chat_ignore.cpp` |
-| cmd.demo | `demo [/]<file[.ext]>` | plays `.dm2`, `.dm2.gz`, `.mvd2`, `.mvd2.gz` from `demos/`, extension optional, Tab completes | missing | Missing, rank 2 (a Quake II name for a setting ours has; the settings lift): ours `playdemo` and the demo page (`client/demo_playback.cpp`); the `demo` spelling and the `demos/`-relative completion not found |
+| cmd.demo | `demo [/]<file[.ext]>` | plays `.dm2`, `.dm2.gz`, `.mvd2`, `.mvd2.gz` from `demos/`, extension optional, Tab completes | done | Settings lift (2026-11-23): Quake II's `demo` a synonym of our `playdemo` in its layer (`client/cvar_layers.cpp`); the `demos/`-relative completion is `playdemo`'s |
 | cmd.record | `record [-hzes] <file>` | records a client demo; while recording prints statistics; `-z` gzip, `-e`/`-s` packet size | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `client/listen_record.cpp`, `net/q2_client.cpp`; switches and statistics missing (C38) |
 | cmd.stop | `stop` | stops recording, prints statistics | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `client/listen_record.cpp`; no statistics (C38) |
 | cmd.suspend | `suspend` | pauses (or toggles, `cl_demosuspendtoggle`) recording | not-taken | `client-gaps.md` round 27: not taken (C38) |
@@ -147,9 +147,9 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.popmenu | `popmenu` | closes the top menu page | done | `games/shooters_edge/menu/game_menu.cpp` |
 | cmd.forcemenuoff | `forcemenuoff` | closes every menu page | done | `games/shooters_edge/menu/game_menu.cpp` |
 | cmd.screenshot | `screenshot [format]` | writes a screenshot in `gl_screenshot_format` | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `engine/capture/screenshot.cpp`; `gl_screenshot_format` and `_quality` are synonyms of ours; the file name template missing |
-| cmd.screenshotpng | `screenshotpng [file] [compression]` | PNG screenshot | done | `engine/capture/screenshot.cpp` |
-| cmd.screenshotjpg | `screenshotjpg [file] [quality]` | JPEG screenshot | done | `engine/capture/screenshot.cpp` |
-| cmd.screenshottga | `screenshottga [file]` | TGA screenshot | done | `engine/capture/screenshot.cpp` |
+| cmd.screenshotpng | `screenshotpng [file] [compression]` | PNG screenshot | done | `engine/capture/screenshot.cpp`; held by `tests/capture_screenshot_test.cpp` |
+| cmd.screenshotjpg | `screenshotjpg [file] [quality]` | JPEG screenshot | done | `engine/capture/screenshot.cpp`; held by `tests/capture_screenshot_test.cpp` |
+| cmd.screenshottga | `screenshottga [file]` | TGA screenshot | done | `engine/capture/screenshot.cpp`; our design: written as a PNG (no TGA writer); held by `tests/capture_screenshot_test.cpp` |
 | cmd.imagelist | `imagelist` | lists loaded pictures | not-taken | `client-gaps.md`: rendering internals left out |
 | cmd.modellist | `modellist` | lists loaded models | not-taken | `client-gaps.md`: rendering internals left out |
 | cmd.strings | `strings` | prints the renderer's version strings | not-taken | `client-gaps.md`: rendering internals left out |
@@ -200,7 +200,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 233, missing 7, not-taken 110
+done 232, missing 8, not-taken 110
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -345,8 +345,8 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.scr_chathud | `scr_chathud` | 0 off, 1 last chat lines on screen, 2 in the alternate colour (default 0) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
 | cvar.scr_chathud_lines | `scr_chathud_lines` | chat lines shown (default 4) | done | (M18k4 round 32) |
 | cvar.scr_chathud_time | `scr_chathud_time` | seconds a chat line stays, 0 for ever (default 0) | done | (M18k4 round 32) |
-| cvar.scr_chathud_x | `scr_chathud_x` | the chat lines' x (default 8) | done | (M18k4 round 32) |
-| cvar.scr_chathud_y | `scr_chathud_y` | the chat lines' y, negative from the bottom (default -64) | done | (M18k4 round 32) |
+| cvar.scr_chathud_x | `scr_chathud_x` | the chat lines' x (default 8) | missing | Missing, rank 2 (found by the verification sweep, 2026-11-23: no such setting is registered; the chat lines' place is our `hud_chat_x`/`hud_chat_y` in shares of the screen, so this needs Quake II's pixels mapped onto them) |
+| cvar.scr_chathud_y | `scr_chathud_y` | the chat lines' y, negative from the bottom (default -64) | missing | Missing, rank 2 (found by the verification sweep, 2026-11-23: no such setting is registered; the chat lines' place is our `hud_chat_x`/`hud_chat_y` in shares of the screen, so this needs Quake II's pixels mapped onto them) |
 | cvar.ch_health | `ch_health` | crosshair coloured by health: red full, green rising from 33 to 66, blue from 66 to 99, black when dead (default 0) | done | `engine/hud/crosshair.cpp`'s `crosshair_health` (red, green from 33 to 66, blue from 66 to 99, black when dead), bound in `client/cvar_layers.cpp` |
 | cvar.ch_red | `ch_red` | crosshair red (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.ch_green | `ch_green` | crosshair green (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
@@ -451,7 +451,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_fog | `gl_fog` | draw the fog the game sets (default 1) | done | Quake II's: 0 draws no fog, neither the map's nor the `fog` command's (`client/world_draw.cpp`'s world_fog); the newer protocol's fog is the protocol rows' |
 | cvar.gl_bloom | `gl_bloom` | bloom (default 0) | not-taken | Visuals come from classic enhance (decided 2026-11-23): a modern client's bloom switch; ours is `ce_bloom`/`r_bloom` |
 | cvar.gl_bloom_sigma | `gl_bloom_sigma` | bloom blur width (default 4) | not-taken | ours blooms through its mip chain (`render/bloom.hpp`, `r_bloom` the share), with no blur width to set |
-| cvar.gl_swapinterval | `gl_swapinterval` | vertical sync (default 1, saved) | missing | Missing, rank 2 (a Quake II name for a setting ours has; the settings lift): ours `vid_vsync` (`engine/platform/pacing.cpp`); no synonym (C21) |
+| cvar.gl_swapinterval | `gl_swapinterval` | vertical sync (default 1, saved) | done | Settings lift (2026-11-23): a synonym of our `vid_vsync` in its layer (`client/cvar_layers.cpp`) |
 | cvar.gl_drawsky | `gl_drawsky` | 0 skips the sky (default 1) | done | Quake II's: 0 draws the sky's faces solid black (the world's fast sky in black, `classic/app/look.cpp`'s world_options), either look |
 | cvar.gl_clear | `gl_clear` | clear the screen each frame (default 0) | not-taken | `client-gaps.md`: rendering internals left out |
 | cvar.gl_novis | `gl_novis` | 0 uses visibility, 1 draws every leaf (default 0) | not-taken | `client-gaps.md`: rendering internals left out |
@@ -598,7 +598,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 146, missing 4, not-taken 12
+done 147, missing 3, not-taken 12
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
@@ -701,7 +701,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.wk.weapons | weapon keys: blaster, shotgun, super shotgun, machinegun, chaingun, grenade launcher, rocket launcher, hyperblaster, railgun, bfg10k, grenades | 11 rows binding `use <item>` | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.vid.mode | video: video mode | windowed or a listed full-screen mode | done | `games/shooters_edge/menu/q2_pages.cpp` (`Entry::modes_from`): windowed, then each mode `vid_modelist` offers (`desktop`, WxH@Hz), the choice's number written to `vid_fullscreen` |
 | menu.vid.fov | video: fov scaling | `cl_adjustfov` vert- or hor+ | done | Checked 2026-11-23: its setting is registered now, so the row is lit. `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.vid.vsync | video: vertical sync | `gl_swapinterval` | missing | Missing, rank 2 (a Quake II name for a setting ours has; the settings lift): `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
+| menu.vid.vsync | video: vertical sync | `gl_swapinterval` | done | Settings lift (2026-11-23): `games/shooters_edge/menu/q2_pages.cpp`'s row reaches `vid_vsync` through `gl_swapinterval` |
 | menu.vid.msaa | video: anti-aliasing | no, 2x, 4x, 8x MSAA | not-taken | Visuals come from classic enhance (decided 2026-11-23): a modern client's MSAA row (`gl_multisamples` not taken); ours smooths edges by TAA-U |
 | menu.vid.gamma | video: texture gamma | `vid_gamma` 1.3 to 0.3 | not-taken | Our design: ours BRIGHTNESS on OPTIONS (`gamma`) |
 | menu.vid.hwgamma | video: hardware gamma | `vid_hwgamma` | done | `games/shooters_edge/menu/q2_pages.cpp`: the row is live, `vid_hwgamma` registered |
@@ -833,7 +833,7 @@ Each one-off effect a server sends, what the client draws and plays for it. The 
 | te.medic_cable_attack | `TE_MEDIC_CABLE_ATTACK` (19) | the medic's healing cable beam | missing | Missing, rank 2 (seen on a joined server and in demos): named, drawn by our cable routine from the entity (`client/demo_q2.cpp`, `fx::monster_cable`); left: the segment model laid every 30 units with its random roll |
 | te.bfg_explosion | `TE_BFG_EXPLOSION` (20) | the BFG ball's burst sprite and green light | missing | Missing, rank 2 (seen on a joined server and in demos): read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.bfg_bigexplosion | `TE_BFG_BIGEXPLOSION` (21) | the BFG's big green particle burst | done | the explosion and the named `te_bfg_bigexplosion` green burst, no sound; `client/demo_q2.cpp`, `client/q2_temp_fx.hpp`, `client/world_fx.cpp` |
-| te.bosstport | `TE_BOSSTPORT` (22) | the boss's teleport: a particle swirl and `misc/bigtele.wav` | missing | Missing, rank 2 (seen on a joined server and in demos): the teleport burst and `misc/bigtele.wav` heard everywhere (`client/q2_temp_fx.hpp`); left: its own particle swirl |
+| te.bosstport | `TE_BOSSTPORT` (22) | the boss's teleport: a particle swirl and `misc/bigtele.wav` | done | `app/effects.cpp` `q2_boss_teleport`: 4096 specks in its four palette colours flying out and down, pulled back in at 100 units/s^2 and pushed up at 160 (`render::Particle::accel`, new: a speck's own steady acceleration), living 1.67 to 2.67 s; its sound heard everywhere (`client/q2_temp_fx.hpp`); our own game's boss too (`client/listen.cpp`); `tests/shooters_edge_effects_test.cpp` |
 | te.bfg_laser | `TE_BFG_LASER` (23) | the BFG's green laser line for a frame | missing | Missing, rank 2 (seen on a joined server and in demos): read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.grapple_cable | `TE_GRAPPLE_CABLE` (24) | the CTF grapple's cable from the player's hand | missing | Missing, rank 2 (seen on a joined server and in demos): read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.welding_sparks | `TE_WELDING_SPARKS` (25) | sparks with a flickering light (mission pack) | done | its count of specks in its colour and a flickering yellow-white light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
@@ -1029,7 +1029,7 @@ Bits of an entity's render field, and of the player state's view flags.
 | rdf.noworldmodel | `RDF_NOWORLDMODEL` (2) | a view with no world (the player-setup figure) | missing | no player figure page (C5) |
 | rdf.irgoggles | `RDF_IRGOGGLES` (4) | infra-red goggles on | done | client/demo_q2.cpp keeps the view's bits in `DemoState::rdflags`; `client/demo_video.cpp` marks the warm models |
 | rdf.uvgoggles | `RDF_UVGOGGLES` (8) | the other goggles bit | done | the game's client reads it nowhere; ours the same |
-| rdf.teleport | `RDF_TELEPORT_BIT` (16) | the extended protocol's teleport mark: no view interpolation this frame | missing | protocol 34 only (C42) |
+| rdf.teleport | `RDF_TELEPORT_BIT` (16) | the extended protocol's teleport mark: no view interpolation this frame | done | `client/demo_q2.cpp` keeps the toggle (`DemoState::teleport_bit`: the view bit 16 in the extended protocol, else movement flag 128) and a flip since the frame before draws the view at the new frame, its eye, angles and field of view not eased, the bodies still between (`client/demo_lerp.cpp`); `tests/shooters_edge_demo_lerp_test.cpp` |
 
 ## Configstrings
 
@@ -1391,13 +1391,14 @@ How the client sets up and draws the picture, beyond the settings themselves. Ou
 
 ## Connection, network, downloads and the rest
 
-done 14, missing 1, not-taken 2
+done 15, missing 1, not-taken 2
 
 Behaviour the client offers outside the screen.
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | net.protocols | protocols | 34 (stock), 35 (R1Q2), 36 (Q2PRO) by `cl_protocol` | done | `net/q2_client.cpp` + `net/q2_proto_in.cpp`: 35 and 36 joined, read as protocol 34 by the one reader, recordings written as 34; the server is told the client records, so it leaves nothing out |
+| net.extended-limits | protocol extensions while joined | an extended server's flags (36, minor 1024 on) read: the extended configstrings and limits, the wider entity fields, 23-bit coordinates, 64 stats, word gun index, the centred print levels; recordings at 3434 to 3436 | done | `net/q2_proto_in.cpp` (`Q2ProtoIn::ext`): the stream written as the recording of its level (3434, or 3435 for extensions 2 and the fog level, whose fog is read past: the look is ours), entities and baselines carried as they are, the player state through `server/q2_wire.hpp`'s `q2_write_player_ext`; `client/demo_q2.cpp` shows print levels 4 and 5 centred; prediction reads the timer in milliseconds (`net/q2_predict.cpp`) |
 | net.predict | prediction | the player's move predicted from the last frame by the shared move code; misses smoothed | done | `games/shooters_edge/net/q2_predict.cpp` |
 | net.userinfo | user info while joined | a changed name, skin, hand, fov, rate sent at once | missing | Missing, rank 1 (gameplay, daily use): `net/qw_remote.cpp` `user_info_step`: a changed `rate` or `password` sends the user info at once; a changed name, skin, hand or fov not (C30) LIFT: Quake's `user_info_step` (`net/qw_remote.cpp`) is the shared place. |
 | net.cheatlock | the cheat lock | with more than one player slot, cheat-protected settings forced back each frame | done | `engine/console/cvar.hpp`'s `hold_cheats` (any game), held by `net/q2_remote.cpp` while a joined Quake II server has more than one player slot: every cheat back to its default and each set refused whatever the local sv_cheats says; let go when the game is left (`remote_disconnect`) |

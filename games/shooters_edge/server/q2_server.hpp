@@ -312,6 +312,8 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   // switched on, and the body's state the frame reads: his air, the next drowning blow and its
   // size, and his fall speed at the last frame's end.
   double quad_until = 0, invulnerable_until = 0, breather_until = 0, suit_until = 0;
+  // Ground Zero's double damage and IR goggles (q2_powers.hpp).
+  double double_until = 0, ir_until = 0;
   double dual_fire_until = 0;  // a pack's dual fire (q2_powers.hpp): the hand steps twice a frame
   int silencer_shots = 0;
   bool power_on = false;
@@ -428,6 +430,13 @@ struct Q2Missile {
   int feed = 0;
   int prey_mass = 0;
   bool prey_gekk = false;
+  // Ground Zero's (q2_gz.hpp): its stage (0 in flight; a mine's 1 opening, 2 armed, 3 set off;
+  // a disruptor's 4 hurting what it struck, 5 the A-M bomb's quake), the multiplier it was fired
+  // with, the level time its stage ends, the face it stuck to.
+  int stage = 0;
+  int multiplier = 1;
+  double stage_at = 0;
+  sh::Vec3f stuck;
 };
 inline constexpr int kQ2Missiles = 64;  // the rows the world keeps for shots in flight
 
@@ -631,6 +640,9 @@ struct Q2Server : RulesCommon {
   std::string load_name;
   // The slots a load put back in their bodies (by bit): the player connecting to one takes it over.
   uint32_t restored = 0;
+  // The players already told entered on this map (at its load): their `begin` on it says it
+  // no more, so each arrival is said once.
+  uint32_t entered_told = 0;
   // The autosave the rules made as this level was entered (empty: none), for the host to keep.
   std::vector<uint8_t> autosave;
 

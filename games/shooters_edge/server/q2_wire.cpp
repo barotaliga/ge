@@ -80,8 +80,9 @@ int8_t quarter(float v) { return static_cast<int8_t>(std::clamp(v * 4.0f, -128.0
 
 // A named effect (a point or a line the rules threw) as the protocol's temporary entity: its kind
 // byte and payload. How each kind's bytes run: a point; a point and a direction byte; a count, a
-// point, a direction and a colour; two points (a line); an entity and two points.
-enum class TeBody : uint8_t { point, point_dir, splash, line, entity_line, count };
+// point, a direction and a colour; two points (a line); an entity and two points; two entities
+// (the struck, then the striker in the event's level) and two points (the end, then the start).
+enum class TeBody : uint8_t { point, point_dir, splash, line, entity_line, count, lightning };
 struct TeName {
   const char* name;
   uint8_t kind;
@@ -124,6 +125,25 @@ constexpr TeName kTeNames[] = {
     {"te_plasma_explosion", 28, TeBody::point, 0},
     {"te_tunnel_sparks", 29, TeBody::splash, 0},
     {"te_teleport", 48, TeBody::point, 0},
+    // Ground Zero's: the rocket and grenade bursts under water, the tesla's bolt, the plasma beam
+    // (a player's and a monster's), its bubbles, sparks and steam, more blood, the chainfist's
+    // smoke, electric sparks, the disruptor's burst, the A-M bomb's blast and its big explosion,
+    // the flechette's mark.
+    {"te_rocket_explosion_water", 17, TeBody::point, 0},
+    {"te_grenade_explosion_water", 18, TeBody::point, 0},
+    {"te_lightning", 33, TeBody::lightning, 0},
+    {"te_heatbeam", 38, TeBody::entity_line, 0},
+    {"te_monster_heatbeam", 39, TeBody::entity_line, 0},
+    {"te_bubbletrail2", 41, TeBody::line, 0},
+    {"te_moreblood", 42, TeBody::point_dir, 0},
+    {"te_heatbeam_sparks", 43, TeBody::point_dir, 0},
+    {"te_heatbeam_steam", 44, TeBody::point_dir, 0},
+    {"te_chainfist_smoke", 45, TeBody::point, 0},
+    {"te_electric_sparks", 46, TeBody::point_dir, 0},
+    {"te_tracker_explosion", 47, TeBody::point, 0},
+    {"te_nukeblast", 51, TeBody::point, 0},
+    {"te_explosion1_big", 53, TeBody::point, 0},
+    {"te_flechette", 55, TeBody::point_dir, 0},
 };
 
 }  // namespace
@@ -195,8 +215,9 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
       o.u8(n >= 1 ? static_cast<uint32_t>(std::min(n, 255.0f)) : 8u);
       point(e.origin);
       way();
-      o.u8(row->kind == 15 || row->kind == 25 || row->kind == 29 ? static_cast<uint32_t>(e.level & 0xff)
-                                                              : row->colour);  // its event's own
+      o.u8(row->kind == 15 || row->kind == 25 || row->kind == 29
+               ? static_cast<uint32_t>(e.level & 0xff)
+               : row->colour);  // its event's own
       break;
     }
     case TeBody::line:
@@ -210,6 +231,12 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
       o.i16(std::clamp(e.ent, 0, kQ2Entities - 1));
       point(e.origin);
       point(end);
+      break;
+    case TeBody::lightning:
+      o.i16(std::clamp(e.ent, 0, kQ2Entities - 1));
+      o.i16(std::clamp(e.level, 0, kQ2Entities - 1));
+      point(end);
+      point(e.origin);
       break;
   }
   return true;
@@ -434,6 +461,7 @@ Q2PlayerState player_state(const RulesCommon& c, int slot, const ge::classic::Q2
   p.gun_index = static_cast<uint8_t>(wire_model(wc.numbers.weapon_model));
   p.gun_frame = static_cast<uint8_t>(static_cast<int>(wc.numbers.weapon_frame));
   p.fov = 90;
+  p.rdflags = static_cast<uint8_t>(wc.numbers.rdflags);
   for (int k = 0; k < 4; k++)  // each part as a byte, cut down
     p.blend[k] = static_cast<uint8_t>(std::clamp(wc.numbers.blend[k], 0.0f, 1.0f) * 255.0f);
   if (!c.world.status_bar.empty()) {  // the rules' own stats for their own bar

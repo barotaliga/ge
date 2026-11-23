@@ -56,8 +56,16 @@ enum class SqWeapon : uint8_t {
   ion_ripper,
   phalanx,
   trap,
+  // Ground Zero's (q2_gz.hpp): the chainfist, the ETF rifle, the prox launcher, the plasma beam,
+  // the disruptor and the thrown tesla.
+  chainfist,
+  etf_rifle,
+  prox_launcher,
+  plasma_beam,
+  disruptor,
+  tesla,
 };
-inline constexpr int kSqWeaponCount = 14;
+inline constexpr int kSqWeaponCount = 20;
 
 // What one shot is. The Reckoning's after the base game's: the ion ripper's bouncing bolt, the
 // hyper guard's blue bolt, the phalanx's plasma ball, the beta maiden's homing rocket, the gekk's
@@ -77,18 +85,31 @@ enum class SqShot : uint8_t {
   heat_rocket,
   spit,
   trap,
+  // Ground Zero's: the flechette, the prox mine, the tesla, the disruptor's bolt, the A-M bomb, and
+  // the two that never fly (the plasma beam's line, the chainfist's reach).
+  flechette,
+  prox,
+  tesla,
+  tracker,
+  nuke,
+  heat_beam,
+  chainfist,
 };
-inline constexpr int kSqShotKinds = 14;
+inline constexpr int kSqShotKinds = 21;
 // Each kind's effect bits in flight (its trail and light on a client): a bolt the blaster's (8), a
 // grenade's smoke (32), a rocket's (16), the BFG's ball (128) with its frames run fast (0x2000);
 // the ion ripper's trail (0x00100000), the blue bolt's (0x00400000), the plasma's (0x01000000,
-// its frames fast), the spit the blaster's.
+// its frames fast), the spit the blaster's; Ground Zero's mines and bomb the grenade's smoke, the
+// disruptor's bolt the tracker's (0x04000000).
 inline constexpr int kSqShotEffects[kSqShotKinds] = {
-    8, 0, 0, 32, 16, 0, 128 | 0x2000, 32, 0x00100000, 0x00400000, 0x01000000 | 0x2000, 16, 8, 0};
-// The render flag each kind is drawn with (8 full bright: the ion ripper's bolt).
-inline constexpr int kSqShotRender[kSqShotKinds] = {0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0};
+    8,  0, 0, 32, 16, 0,  128 | 0x2000, 32, 0x00100000, 0x00400000, 0x01000000 | 0x2000,
+    16, 8, 0, 0,  32, 32, 0x04000000,   32, 0,          0};
+// The render flag each kind is drawn with (8 full bright: the ion ripper's bolt, the flechette;
+// 0x8000 seen through IR goggles: Ground Zero's mines and bomb).
+inline constexpr int kSqShotRender[kSqShotKinds] = {0, 0, 0, 0, 0,      0,      0, 0,      8, 0, 0,
+                                                    0, 0, 0, 8, 0x8000, 0x8000, 0, 0x8000, 0, 0};
 
-struct SqWeaponRow {
+struct SqWeaponRow {       // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* name;        // the name a player reads and `use` takes
   const char* item;        // the item that gives it (q2_items.hpp); null for the blaster
   const char* view_model;  // the first-person model
@@ -142,15 +163,39 @@ inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
      SqAmmo::magslugs, 1, 5, 20, 58, 63, 7, 8, SqShot::plasma, 70, 70, 0, 0, 8, Q2Pack::reckoning},
     {"Trap", "ammo_trap", "models/weapons/v_trap/tris.md2", "weapons/trapcock.wav", SqAmmo::traps,
      1, 0, 15, 48, 48, 11, 12, SqShot::trap, 125, 125, 0, 8, 8, Q2Pack::reckoning},
+    // Ground Zero's (q2_gz.hpp). The chainfist swings from frame 6 (its hits on 8, 9, 16 to 18, 30
+    // and 31), the ETF rifle and the plasma beam loop while held, the tesla is held on frame 1 and
+    // thrown on 2; their firing sounds are their muzzle flashes'.
+    {"Chainfist", "weapon_chainfist", "models/weapons/v_chainf/tris.md2", "weapons/sawhit.wav",
+     SqAmmo::none, 0, 4, 32, 57, 60, 6, 31, SqShot::chainfist, 30, 15, 0, 0, 8,
+     Q2Pack::ground_zero},
+    {"ETF Rifle", "weapon_etf_rifle", "models/weapons/v_etf_rifle/tris.md2", "weapons/nail1.wav",
+     SqAmmo::flechettes, 1, 4, 7, 37, 41, 6, 7, SqShot::flechette, 10, 10, 3, 15, 8,
+     Q2Pack::ground_zero},
+    {"Prox Launcher", "weapon_proxlauncher", "models/weapons/v_plaunch/tris.md2",
+     "weapons/grenlf1a.wav", SqAmmo::prox, 1, 5, 16, 59, 64, 6, 6, SqShot::prox, 90, 90, 0, 8, 8,
+     Q2Pack::ground_zero},
+    {"Plasma Beam", "weapon_plasmabeam", "models/weapons/v_beamer/tris.md2", "weapons/bfg__l1a.wav",
+     SqAmmo::cells, 2, 8, 12, 39, 44, 9, 12, SqShot::heat_beam, 15, 15, 75, 7, 2,
+     Q2Pack::ground_zero},
+    {"Disruptor", "weapon_disintegrator", "models/weapons/v_dist/tris.md2", "weapons/disrupt.wav",
+     SqAmmo::rounds, 1, 4, 9, 29, 34, 5, 5, SqShot::tracker, 30, 45, 0, 24, 8, Q2Pack::ground_zero},
+    {"Tesla", "ammo_tesla", "models/weapons/v_tesla/tris.md2", "weapons/hgrent1a.wav",
+     SqAmmo::tesla, 1, 0, 8, 32, 32, 1, 2, SqShot::tesla, 3, 3, 8, 0, -4, Q2Pack::ground_zero},
 };
 
 // The pack each shot kind belongs to, by `SqShot` (its missile model registered only under it).
 inline constexpr Q2Pack kSqShotPacks[kSqShotKinds] = {
-    Q2Pack::base,      Q2Pack::base,      Q2Pack::base,      Q2Pack::base,      Q2Pack::base,
-    Q2Pack::base,      Q2Pack::base,      Q2Pack::base,      Q2Pack::reckoning, Q2Pack::reckoning,
-    Q2Pack::reckoning, Q2Pack::reckoning, Q2Pack::reckoning, Q2Pack::reckoning};
+    Q2Pack::base,        Q2Pack::base,        Q2Pack::base,        Q2Pack::base,
+    Q2Pack::base,        Q2Pack::base,        Q2Pack::base,        Q2Pack::base,
+    Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::reckoning,
+    Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::ground_zero, Q2Pack::ground_zero,
+    Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero,
+    Q2Pack::ground_zero};
 // Whether a weapon steps and throws as the hand grenade does (the grenades and the trap).
-constexpr bool sq_thrown(int w) { return w == int(SqWeapon::hand_grenade) || w == int(SqWeapon::trap); }
+constexpr bool sq_thrown(int w) {
+  return w == int(SqWeapon::hand_grenade) || w == int(SqWeapon::trap);
+}
 // Whether weapon `w` plays under `pack` (the base game's always, a pack's under it).
 constexpr bool sq_weapon_plays(int w, Q2Pack pack) {
   return w >= 0 && w < kSqWeaponCount && q2_pack_has(pack, kSqWeapons[w].pack);
@@ -188,6 +233,8 @@ struct SqHand {
   double click_at = -10;  // level time of the last no-ammo click
   int held_shots = 0;     // the machinegun's shots in a row (its climbing kick)
   double fuse_at = 0;     // the hand grenade's: level time its fuse ends; 0 not lit
+  float throw_speed = 0;  // Ground Zero's tesla: the speed of the throw this step asks for
+  int swing = 0;          // Ground Zero's chainfist: the swing played last (0 A, 1 B, 2 C)
 };
 
 // What a step asks of the runner.

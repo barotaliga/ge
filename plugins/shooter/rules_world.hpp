@@ -99,12 +99,13 @@ struct PlayerNumbers {
   float gun_offset[3] = {}, gun_angles[3] = {};  // the held weapon's own shift and sway
   float blend[4] = {};  // the tint over his view the rules lay (Quake II's), r g b a in 0..1
   float fov = 0;        // the field of view the rules hold him to, degrees; 0 his own
+  int rdflags = 0;      // the view's refresh flags the rules lay (Quake II's: 4 infrared)
   float frags = 0;
   // A runner's own weapons and ammunition, for the bots (shooterbots/bot_arsenal.hpp), where
   // Quake's bits above do not fit (Quake II's): the weapon held and those carried as bits of the
   // runner's own weapon index, and every ammunition by its own index.
   int32_t held = 0, carried = 0;
-  float stock[8] = {};
+  float stock[16] = {};
   // A layout game's 32 stats, the numbers its status bar program reads (Quake II's: health,
   // ammo, armour, their icons as indices into `RulesWorld::images`, the pickup, the timer, ...).
   int16_t stats[32] = {};

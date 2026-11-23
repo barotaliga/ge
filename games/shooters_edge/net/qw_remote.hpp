@@ -64,8 +64,10 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "account/client_login.hpp"
@@ -87,6 +89,7 @@
 #include "shooters_edge/client/chat_ignore.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/own_missiles.hpp"
 #include "shooters_edge/net/q1_end.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_pingservers.hpp"
@@ -105,6 +108,8 @@ inline constexpr int kTickUs = 13000;                         // a move's length
 inline constexpr int kQ2LeastMoves = 10, kQ2MostMoves = 125;  // Quake II's cl_maxfps range
 inline constexpr int kMostTicks = 8;     // ticks a call may run; a longer stall drops the rest
 inline constexpr float kLerpMost = 200;  // units: an entity moved further between two frames snaps
+// units/s: a correction of the predicted place left smaller than this times the step is dropped.
+inline constexpr float kSmoothDropU = 220;
 inline constexpr float kStockShare = 0.8f;         // the easy jump's share on a server without it
 inline constexpr int kMicMostSamples = 48000 / 4;  // the microphone's samples a frame may hold
 
@@ -208,6 +213,7 @@ struct Remote {
   int others = 0;             // other players predicted the last step
   int others_msec = 0;        // the most milliseconds one of them was run forward the last step
   int lerped = 0;             // entities drawn between two frames the last step
+  int map_tries = 0;          // joins again with another version of the server's map
   sh::Vec3f view;             // the player's angles, degrees (sent with every move)
   sh::AimTurn aim_turn;       // the aim help's turn of the view (shooter/aim_turn.hpp)
   sh::Vec3f prediction;       // the player's predicted origin, the correction not added
@@ -215,7 +221,19 @@ struct Remote {
   sh::SpeedJumpAid jump_aid;  // the easy jump's memory (shooter/speedjump_assist.hpp)
   float speedjump_view = 0.5f;  // cl_speedjump_view: the share of its swing drawn
   sh::Smoothing smooth;         // the prediction's correction
+  double smoothview = 1;        // cl_predict_smoothview: 0 snapped, 1 the decay's own rate, 2 slow
   RemoteWeapon weapon;          // the held weapon predicted (qw_weapon.hpp)
+  // The moves the last prediction ran past the acknowledged one: each one's command and the state
+  // after it (`ahead_count` of them), for the missiles' launch places and the jump's sound.
+  uint32_t ahead_seq[64] = {};
+  sh::MoveState ahead_each[64];
+  int ahead_count = 0;
+  bool ahead_from_held = false;  // the acknowledged state's jump button was held
+  client::OwnMissiles missiles;  // cl_predict_projectiles (client/own_missiles.hpp)
+  int missiles_level = -1;       // the level they fly in (DemoState::levels)
+  bool predict_jump = true;      // cl_predict_jump: the jump's sound played as predicted
+  uint32_t jump_played_to = 0;   // the newest command whose jump has played
+  int jumps_played = 0;          // jumps whose sound the prediction played (for the labs)
   // Prediction on the original move (the server's `sv_playermove original`): the stand-in
   // server, built for the level `original_level` counts and the models `original_for` points at.
   ge::classic::OriginalPrediction original;
@@ -236,6 +254,17 @@ struct Remote {
   std::function<void(const std::string& gamedir, const std::string& path,
                      const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
+  // A map's other versions (ClientConfig::map_versions, classic/content/map_versions.hpp): those
+  // kept, one kept, the one drawn, and which this server took (by its name as asked).
+  std::function<std::vector<std::pair<std::string, std::vector<uint8_t>>>(const std::string& map)>
+      map_versions;
+  std::function<std::string(const std::string& map, uint32_t sum,
+                            const std::vector<uint8_t>& bytes)>
+      keep_version;
+  std::function<void(const std::string& map, const std::string& version)> use_map;
+  std::function<std::optional<uint32_t>(const std::string& server, const std::string& map)>
+      remembered;
+  std::function<void(const std::string& server, const std::string& map, uint32_t sum)> keep_choice;
   // A Quake II download cut short, held in the game's folder to be resumed (Q2ClientConfig::held).
   ge::classic::content::HeldDownloads held;
   // What a Quake II server stuffed that the client does not answer itself, for the window's console
@@ -254,7 +283,6 @@ struct Remote {
   bool left = false;  // a server was left (dropped or let go) since the window last took this
   ClientStage said = ClientStage::challenge;  // the stage last reported
   bool nopred = false;                        // cl_nopred: draw the server's place
-  bool predict = true;                        // Quake II's cl_predict (0: as cl_nopred 1)
   bool predicted = false;                     // the last step drew a prediction
   bool predict_players = true;                // cl_predict_players: the other players run ahead
   bool nolerp = false;                        // cl_nolerp: entities at the newest frame's places

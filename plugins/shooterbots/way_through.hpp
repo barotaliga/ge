@@ -213,6 +213,13 @@ struct WayThrough {
   ge::ai::Search tour_search;
   double tour_at = -1;
   int64_t tours = 0;
+  // (`complete`, a party of bots: party.hpp) The steps (by index) and the monsters (by entity)
+  // another bot of the party holds (1): not his while he has work of his own. With none of his
+  // own left and some held (`mates_help`, set by his last plan), he holds off the exit and helps.
+  // 2: no one's (too far from the people playing): never his, and the exit waits for it.
+  std::vector<uint8_t> mates_steps, mates_prey;
+  bool mates_help = false;
+  int64_t mates_skipped = 0;  // plans with a stop left to a mate
 };
 
 // The steps off `spec`'s entities (the fighter's buttons already read by `fighter_init`), the

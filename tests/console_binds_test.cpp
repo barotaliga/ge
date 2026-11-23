@@ -61,3 +61,18 @@ TEST(plus_binds_run_both_edges_once) {
   c.run();
   CHECK(c.output().empty());
 }
+
+TEST(setting_a_mapped_synonym_says_what_it_set_in_ours) {
+  Console c;
+  c.cvars().add({.name = "scr_draw2d", .fallback = "2", .kind = CvarKind::integer});
+  c.cvars().add_mapped_synonym("r_drawhud", "scr_draw2d", {{"0", "0"}, {"1", "2"}});
+  c.execute("r_drawhud 0");
+  CHECK(!c.output().empty() && c.output().back() == "r_drawhud 0 (scr_draw2d: 0)");
+  c.execute("r_drawhud");
+  CHECK_MSG(c.output().back() ==
+                "\"r_drawhud\" is \"0\" (scr_draw2d: 0); it takes 0 (scr_draw2d 0); 1 "
+                "(scr_draw2d 2)",
+            c.output().back());
+  c.execute("r_drawhud 5");  // a value its map lacks: refused, ours untouched
+  CHECK(c.cvars().find("scr_draw2d")->value == "0");
+}

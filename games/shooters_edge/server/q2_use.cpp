@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -29,7 +30,7 @@ void item_sound(Q2Server& s, int slot, const char* sample) {
   ev.to = kEveryone;
   ev.ent = slot + 1;
   ev.level = kItemChannel;
-  const int16_t* o = s.players[slot].move.origin;
+  const int32_t* o = s.players[slot].move.origin;
   ev.origin = {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
   ev.values[0] = 255;
   ev.values[1] = 1;
@@ -79,6 +80,8 @@ bool fight_use(Q2Server& s, int slot, int item) {
     if (pw->use_sound != nullptr) item_sound(s, slot, pw->use_sound);
   } else if (name == "item_silencer") {
     p.silencer_shots += it.amount;
+  } else if (name == "ammo_nuke") {  // Ground Zero's A-M bomb, thrown
+    gz_throw_nuke(s, slot);
   }
   return true;
 }
@@ -101,7 +104,7 @@ int fight_power_save(Q2Server& s, int slot, sh::Vec3f dir, int damage) {
   if (saved <= 0) return 0;
   cells -= saved / per_cell;
   p.blow_parts[2] += saved;  // the screen's green flash (q2_blend.hpp)
-  const int16_t* o = p.move.origin;
+  const int32_t* o = p.move.origin;
   const sh::Vec3f at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
   p.power_flash = fight_power_hit(s, at - dir * 16.0f, dir * -1.0f, shield > 0);
   return saved;
