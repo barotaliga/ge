@@ -197,6 +197,7 @@ struct Remote {
   std::string why;                                     // why it dropped
   ge::classic::FairFacts fair_facts;  // what an f_ruleset answer says (qw_remote_rulesets.hpp)
   ge::classic::FairReplies fair;      // when the last answer was said
+  std::string fakeshaft_seen;         // cl_fakeshaft as last seen: a change in a match is said
   // The window's `topcolor` and `bottomcolor` last seen: a change of them is told the server.
   std::string seen_top, seen_bottom;
   sp::ChannelTrace trace;  // showpackets, showdrop: the channel's lines (add_remote_commands)

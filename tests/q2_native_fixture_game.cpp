@@ -25,6 +25,8 @@
 //   `nosave` refuses saving; `extra` prints the connection's extra user info, `cs <n>` a
 //   configstring, `clip` the box clipped alone, `vis` the visibility kinds, `files` a file
 //   written, read back and listed, `grow` a block grown, `beep` a sound to the player alone.
+// - the extended limits, when `fixture_protoext` is 1: it asks for the protocol extensions, lists
+//   300 more models with the box on the last, and gives the box alpha, scale and a quieter loop.
 // - built a second time with `FIXTURE_NEW_INTERFACE` (into `fixture3302/`): the newer interface
 //   (version 3302), its client records, player state and move record; its trace keeps the masks
 //   the move asked for, and `plane` prints the last move's ground plane, the ladder mask's use,
@@ -72,7 +74,8 @@ struct Client {
 
 struct Entity {
   NativeEntityHead head;
-  int health;  // the game's own field after the head
+  NativeEntityExt ext;  // the extension block, read by the server only under the extended limits
+  int health;           // the game's own field after the head
 };
 
 constexpr int kMostEntities = 64;
@@ -134,6 +137,7 @@ void init() {
   const int offered = static_cast<int>(gi.cvar("sv_features", "0", 0)->value);
   int wants = gi.cvar("fixture_unsafe", "0", 0)->value != 0 ? 0 : kGmfEnhancedSaves;
   if (gix != nullptr) wants |= kGmfProperInUse | kGmfExtraUserInfo;
+  if (gi.cvar("fixture_protoext", "0", 0)->value != 0) wants |= kGmfProtocolExtensions;
   char want[16];
   std::snprintf(want, sizeof want, "%d", offered & wants);
   gi.cvar_forceset("g_features", want);
@@ -174,6 +178,19 @@ void spawn_entities(const char*, char* text, const char* point) {
   box.head.inuse = 1;
   box.head.solid = kSolidBox;
   box.head.s.model[0] = gi.modelindex("models/thing.md2");
+  if (gi.cvar("fixture_protoext", "0", 0)->value != 0) {
+    // Past the ordinary 256 models: 300 more listed, the box on the last; drawn half seen, twice
+    // the size, its loop at half volume.
+    char name[32];
+    for (int i = 0; i < 300; i++) {
+      std::snprintf(name, sizeof name, "models/n%d.md2", i);
+      box.head.s.model[0] = gi.modelindex(name);
+    }
+    box.ext.alpha = 0.5f;
+    box.ext.scale = 2.0f;
+    box.head.s.sound = gi.soundindex("misc/hum.wav");
+    box.ext.loop_volume = 0.5f;
+  }
   box.head.s.origin[0] = spot[0] + 96;
   box.head.s.origin[1] = spot[1];
   box.head.s.origin[2] = spot[2];

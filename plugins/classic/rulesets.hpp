@@ -22,6 +22,7 @@
 // ge:summary The classic games' competition rulesets, the ruleset in user info, f_ruleset replies
 // ge:keywords ruleset rulesets smackdown smackdrive qcon thunderdome mtfl duel competition
 // ge:keywords tournament official rsn f_ruleset fair-play fairness-reply q1_rulesets q2_rulesets
+// ge:keywords fakeshaft_words f_fakeshaft cl_fakeshaft
 // ge:keywords fair_query ruleset_reply fairreplies ce_enabled cr_enabled cl_speedjump rjump
 // ge:skill classic console
 // ge:test tests/classic_rulesets_test.cpp
@@ -59,6 +60,9 @@ struct FairFacts {
 std::string ruleset_reply(const FairFacts& f);
 // The answer to `f_ruleset` typed alone: what it is for and how to read the answers.
 std::string fair_help();
+// The answer to `f_fakeshaft` and the line said when `cl_fakeshaft` changes in a match, from its
+// value (0..1): "fakeshaft on" (1), "fakeshaft off" (0), else "fakeshaft 37.5%".
+std::string fakeshaft_words(double value);
 
 // At most one answer of each kind every kFairEveryS seconds; a question inside it is ignored.
 inline constexpr double kFairEveryS = 20;

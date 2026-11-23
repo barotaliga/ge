@@ -244,6 +244,7 @@ bool vip_words(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error)
   if (const auto p = c.rules.find("sv_vippassword"); p != c.rules.end())
     cfg.vip_passwords = words(p->second);
   if (const auto p = c.rules.find("sv_redirect"); p != c.rules.end()) cfg.redirect = p->second;
+  if (const auto p = c.rules.find("sv_ruleset"); p != c.rules.end()) cfg.ruleset = p->second;
   if (const auto v = c.rules.find("sv_vipvalues"); v != c.rules.end()) {
     cfg.vip_values.clear();
     for (const std::string& n : words(v->second)) {
