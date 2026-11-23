@@ -684,6 +684,17 @@ void ServersPage::write_caches() {
                    : "Couldn't write " + path.string() + ".");
 }
 
+void ServersPage::tell_done() {
+  // f_sbrefreshdone: the player's alias run once a refresh's sweep is over (tp_triggers 0 stops
+  // it, as it stops the other f_ hooks).
+  if (told_done_ || !gn::server_list_done(list_, now_us_)) return;
+  told_done_ = true;
+  if (con_ == nullptr || con_->aliases().count("f_sbrefreshdone") == 0) return;
+  const ge::console::Cvar* fire = con_->cvars().find("tp_triggers");
+  if (fire != nullptr && std::atof(fire->value.c_str()) == 0) return;
+  con_->append("f_sbrefreshdone");
+}
+
 void ServersPage::refresh() {
   gn::server_list_refresh(list_, now_us_);
   // The web lists asked again: no redirect followed, given up after `cl_http_blocking_timeout` s
@@ -703,6 +714,7 @@ void ServersPage::refresh() {
   }
   add_cached();
   cache_written_ = false;
+  told_done_ = false;
   routing_ = routes_ready_ = false;
   table_ = {};
   selected_ = 0;
@@ -727,6 +739,7 @@ void ServersPage::frame(double dt) {
   web_frame();
   gn::server_list_update(list_, now_us_);
   write_caches();
+  tell_done();
   route_frame();
   // The selection stays on its server as the rows sort themselves around it.
   const int was = selected_ >= 0 && selected_ < static_cast<int>(rows_.size())

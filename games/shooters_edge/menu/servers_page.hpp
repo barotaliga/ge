@@ -174,6 +174,7 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   bool read_list_cache();  // sb_listcache's file into the list; false: none read
   void add_cached();       // the masters' kept lists, asked beside them
   void write_caches();     // once a refresh is done: sb_listcache's file, sb_mastercache's
+  void tell_done();        // once a refresh is done: the player's f_sbrefreshdone
   std::filesystem::path master_cache_path(const ge::net::Address& master) const;
   bool proxy_row(const ge::net::ServerInfo& info) const;
   std::string route_words(int index) const;
@@ -236,6 +237,7 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   std::filesystem::path cache_dir_;
   bool list_cache_ = false, master_cache_ = true;  // sb_listcache, sb_mastercache
   bool cache_written_ = false;                     // this refresh's caches written
+  bool told_done_ = true;                          // this refresh's f_sbrefreshdone run
   int32_t show_proxies_ = 1;                       // sb_showproxies
   std::string ignore_proxy_;                       // sb_ignore_proxy
   int32_t prox_per_s_ = 10, prox_retries_ = 3, prox_timeout_ = 1000;  // sb_prox*

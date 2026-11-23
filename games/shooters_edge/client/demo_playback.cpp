@@ -17,6 +17,7 @@
 #include "shooters_edge/client/demo_eyes.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/mvd_info.hpp"
+#include "shooters_edge/client/team_chat.hpp"
 #include "shooters_edge/hud/layout.hpp"
 
 namespace shooters_edge::client {
@@ -112,6 +113,7 @@ float hud_inset(std::span<const ge::hud::Placed> placed, int height) {
 }
 
 void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench) {
+  p.hooks = &console;
   // $cl_demopos: how far the demo playing is, to the tenth ("3:07.4"; "0:00.0" with none).
   console.add_macro("cl_demopos", [&bench] {
     return ge::console::tenths_clock(bench.active ? bench.timeline.t : 0);
@@ -343,6 +345,7 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
       {.tracked =
            [&bench, &console, &p](int track) {
              bench.demo.track = track;
+             spectate_event(console, "f_trackspectate");  // the camera locked on a player
              if (p.autotrack != 0)
                console.cvars().set("mvd_autotrack", "0", ge::console::Source::code);
              if (p.hightrack != 0)
@@ -367,6 +370,7 @@ bool playback_begin(DemoPlayback& p, const Timedemo& t, std::string& error) {
   p.plan = {};
   p.plan_state = 0;
   p.track_name_done = false;
+  p.match_starts = 0;
   p.watched = MvdStatus{};
   const bool ok = scan_demo(t.start, p.scan, error);
   if (!ok) p.scan = DemoScan{};
@@ -420,6 +424,11 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
   }
   follow(p, t, say);
   mark(p, t);
+  // The match server's start marker read: the player's f_demomatchstart (a seek back reads the
+  // recording again from its start, so only a count that grew runs it).
+  if (t.demo.state.match_starts > p.match_starts && p.hooks != nullptr)
+    team_event(*p.hooks, "f_demomatchstart");
+  p.match_starts = t.demo.state.match_starts;
   // A skip and a jump become a seek from where the playhead stands.
   const double here = t.timeline.t;
   if ((p.share_ask >= 0 || p.share_skip_ask != 0) && p.scan.length_s <= 0) {

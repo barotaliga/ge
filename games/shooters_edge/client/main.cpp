@@ -1231,6 +1231,7 @@ int run_main(int argc, char** argv) {
     // menu keeps it and is driven by the keys unless the menu's bit is set.
     if (input.focus_lost) focused = false;
     if (input.focus_gained) focused = true;
+    if (input.focus_gained) cl::team_event(console, "f_focusgained");
     // SHIFT held over a demo playing at its pace takes the mouse for free look (demo_free_look).
     const bool shift_look = bench.active && bench.paced && !remote.active && !con_view.open() &&
                             !game_menu.open() &&
@@ -1626,8 +1627,11 @@ int run_main(int argc, char** argv) {
           : bench.clock < 0 ? ds.time
                             : bench.clock,
           t);
+      const bool was_free = free_look.held;  // SHIFT lets go of the player and takes him back
       cl::free_look_step(free_look, shift_look && mouse.held, held.mouse.dx, held.mouse.dy,
                          controls);
+      if (free_look.held != was_free)
+        cl::spectate_event(console, free_look.held ? "f_freeflyspectate" : "f_trackspectate");
       cl::free_look_apply(free_look, view);
       const double own_behind =  // cl_thirdperson: the player's own view from behind him
           demo_eyes.behind > 0
