@@ -98,8 +98,12 @@ enum class SqShot : uint8_t {
   // turret's blaster) and the defender sphere's: the blaster's and the tracker's light in flight,
   // its own mark where it lands.
   green_bolt,
+  // Ground Zero's three spheres (q2_gz_spheres.cpp), which float by their owner rather than fly.
+  defender_sphere,
+  hunter_sphere,
+  vengeance_sphere,
 };
-inline constexpr int kSqShotKinds = 22;
+inline constexpr int kSqShotKinds = 25;
 // Each kind's effect bits in flight (its trail and light on a client): a bolt the blaster's (8), a
 // grenade's smoke (32), a rocket's (16), the BFG's ball (128) with its frames run fast (0x2000);
 // the ion ripper's trail (0x00100000), the blue bolt's (0x00400000), the plasma's (0x01000000,
@@ -107,12 +111,13 @@ inline constexpr int kSqShotKinds = 22;
 // disruptor's bolt the tracker's (0x04000000), the green bolt the blaster's and the tracker's.
 inline constexpr int kSqShotEffects[kSqShotKinds] = {
     8,  0, 0, 32, 16, 0,  128 | 0x2000, 32, 0x00100000, 0x00400000, 0x01000000 | 0x2000,
-    16, 8, 0, 0,  32, 32, 0x04000000,   32, 0,          0,          8 | 0x04000000};
+    16, 8, 0, 0,  32, 32, 0x04000000,   32, 0,          0,          8 | 0x04000000,
+    0,  0, 0};
 // The render flag each kind is drawn with (8 full bright: the ion ripper's bolt, the flechette;
-// 0x8000 seen through IR goggles: Ground Zero's mines and bomb).
-inline constexpr int kSqShotRender[kSqShotKinds] = {0, 0, 0, 0, 0,      0,      0, 0,      8, 0, 0,
-                                                    0, 0, 0, 8, 0x8000, 0x8000, 0, 0x8000, 0, 0,
-                                                    0};
+// 0x8000 seen through IR goggles: Ground Zero's mines and bomb; its spheres both).
+inline constexpr int kSqShotRender[kSqShotKinds] = {
+    0, 0, 0,      0,      0, 0,      0, 0, 8, 0,          0,          0,         0,
+    0, 8, 0x8000, 0x8000, 0, 0x8000, 0, 0, 0, 8 | 0x8000, 8 | 0x8000, 8 | 0x8000};
 
 struct SqWeaponRow {       // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* name;        // the name a player reads and `use` takes
@@ -196,7 +201,8 @@ inline constexpr Q2Pack kSqShotPacks[kSqShotKinds] = {
     Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::reckoning,
     Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::ground_zero, Q2Pack::ground_zero,
     Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero,
-    Q2Pack::ground_zero, Q2Pack::ground_zero};
+    Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero,
+    Q2Pack::ground_zero};
 // Whether a weapon steps and throws as the hand grenade does (the grenades and the trap).
 constexpr bool sq_thrown(int w) {
   return w == int(SqWeapon::hand_grenade) || w == int(SqWeapon::trap);

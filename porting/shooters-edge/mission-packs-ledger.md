@@ -398,7 +398,7 @@ count: done 34, verify 4, missing 44 (15 / 25 / 4), not-taken 0
 | gz.dmflag.262144 | `dmflags` 262144: quad and double damage do not stack | done | 2 | server/q2_powers.cpp (`fight_multiplier`) |
 | gz.dmflag.524288 | `dmflags` 524288: no A-M bombs | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
 | gz.dmflag.1048576 | `dmflags` 1048576: no spheres | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
-| gz.cvar.huntercam | `huntercam` (1): the hunter sphere's chase camera | missing | 2 | a setting of the pack's rules |
+| gz.cvar.huntercam | `huntercam` (1): the hunter sphere's chase camera | done | 2 | server/q2_gz_rules.cpp (the setting), server/q2_gz_spheres.cpp (the camera: the corpse thrown apart, the view at the sphere, field of view 140, not with dmflags 1024) |
 | gz.cvar.strong_mines | `strong_mines` (0): mines laid under quad or double keep it their whole time | done | 3 | server/q2_gz_rules.cpp, server/q2_gz_weapons.cpp (the mine's time) |
 | gz.cvar.randomrespawn | `randomrespawn` (0): a deathmatch item comes back as another of its kind | missing | 3 |  |
 | gz.cvar.gamerules | `gamerules` (0; 2 is tag) | missing | 2 |  |
@@ -437,7 +437,7 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 
 #### Weapons and items
 
-count: done 16, verify 0, missing 5, not-taken 0
+count: done 19, verify 0, missing 2, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -450,9 +450,9 @@ count: done 16, verify 0, missing 5, not-taken 0
 | gz.ent.item_doppleganger | `item_doppleganger` | a decoy of the player that monsters attack | 21 / 23 | missing | 2 | not in our rules; LIFT: Scourge of Armagon's decoy |
 | gz.ent.item_double | `item_double` | double damage for a while | 24 / 28 | done | 1 | server/q2_powers.cpp (`fight_multiplier`, the quad's timer lifted) |
 | gz.ent.item_ir_goggles | `item_ir_goggles` | infra-red goggles: warm bodies glow (the client's view bit is done) | 11 / 11 | done | 2 | server/q2_powers.cpp, server/q2_server.cpp (the view bit) |
-| gz.ent.item_sphere_defender | `item_sphere_defender` | the defender sphere: floats by the player and shoots at enemies | 28 / 30 | missing | 2 | not in our rules |
-| gz.ent.item_sphere_hunter | `item_sphere_hunter` | the hunter sphere: hunts down the player's attacker (its chase camera `huntercam`) | 26 / 28 | missing | 2 | not in our rules |
-| gz.ent.item_sphere_vengeance | `item_sphere_vengeance` | the vengeance sphere: strikes whoever killed the player | 22 / 25 | missing | 2 | not in our rules; LIFT: Dissolution's sphere |
+| gz.ent.item_sphere_defender | `item_sphere_defender` | the defender sphere: floats by the player and shoots at enemies | 28 / 30 | done | 2 | server/q2_gz_spheres.cpp (the half before armour, the green bolt at the last attacker, the splash; one out at a time, the bar's timer); the second shell model not drawn |
+| gz.ent.item_sphere_hunter | `item_sphere_hunter` | the hunter sphere: hunts down the player's attacker (its chase camera `huntercam`) | 26 / 28 | done | 2 | server/q2_gz_spheres.cpp (the chase in sight, the lurk where it lost him, 10 000 past armour, the 512 blast; the doppleganger's `gz_release_sphere`) |
+| gz.ent.item_sphere_vengeance | `item_sphere_vengeance` | the vengeance sphere: strikes whoever killed the player | 22 / 25 | done | 2 | server/q2_gz_spheres.cpp (called by a blow leaving its owner under 25; Dissolution's runs in its own program, so nothing to lift) |
 | gz.ent.key_nuke | `key_nuke` | the nuke key | 2 / 2 | done | 1 | server/q2_items.cpp (a key row) |
 | gz.ent.key_nuke_container | `key_nuke_container` | the container the nuke key is taken from | 1 / 1 | missing | 1 | not in our rules |
 | gz.ent.weapon_chainfist | `weapon_chainfist` | the chainfist: a chainsaw fist | 25 / 33 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |

@@ -13,6 +13,7 @@
 
 #include "core/prng.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_fight_kit.hpp"
 #include "shooters_edge/server/q2_flash.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
@@ -56,6 +57,7 @@ int cause_of(const Q2Monster& m) { return kSqByMonster + m.kind; }
 // A blow of `dmg` from `m` on its foe: a player hurt as by a monster, a monster as by this one.
 void hurt_foe(Q2Server& s, const Q2Monster& m, int dmg, sh::Vec3f dir) {
   if (m.enemy >= 0) {
+    const FightBlowFrom by(s, m.entity);
     fight_hurt(s, m.enemy, -1, {}, dmg, 0, cause_of(m));
     return;
   }
@@ -206,7 +208,6 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
       return;
   }
 }
-
 
 SqShot shot_of(const Attack& a, SqShot usual) {
   switch (a.shot) {

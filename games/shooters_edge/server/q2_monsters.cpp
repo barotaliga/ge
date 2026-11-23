@@ -19,6 +19,7 @@
 #include "core/prng.hpp"
 #include "shooters_edge/server/q2_actor.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_fight_kit.hpp"
 #include "shooters_edge/server/q2_flash.hpp"
 #include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
@@ -292,6 +293,7 @@ void fall(Q2Server& s, Q2Monster& m) {
       sh::length(m.velocity) > 400) {  // the leap lands on someone
     const Attack& a = k.missile[0];
     const int dmg = a.damage + static_cast<int>(random01(s) * (a.damage_max - a.damage + 1));
+    const FightBlowFrom by(s, m.entity);
     fight_hurt(s, t.entity - 1, -1, m.velocity, dmg, dmg, kSqByMonster + m.kind);
     m.struck = true;
   }

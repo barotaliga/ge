@@ -351,6 +351,14 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   double quad_until = 0, invulnerable_until = 0, breather_until = 0, suit_until = 0;
   // Ground Zero's double damage and IR goggles (q2_powers.hpp).
   double double_until = 0, ir_until = 0;
+  // Ground Zero's spheres (q2_gz_spheres.cpp): his launched sphere's row in `missiles` (-1 none);
+  // who last hurt him, the defender's target (a slot, or a monster as -2 - its entity; -1 none);
+  // each sphere's end for the bar's timer (q2_powers.hpp); and the hunter's camera his view rides
+  // once he is dead (the sphere's row; -2 stopped where it was; -1 his own view).
+  int sphere = -1;
+  int hurt_by = -1;
+  double defender_until = 0, hunter_until = 0, vengeance_until = 0;
+  int hunter_cam = -1;
   double dual_fire_until = 0;  // a pack's dual fire (q2_powers.hpp): the hand steps twice a frame
   int silencer_shots = 0;
   bool power_on = false;
@@ -438,9 +446,17 @@ enum class SqLoop : uint8_t {
   fry,
   trap,
   phalanx,
+  // Ground Zero's spheres': the defender's, the hunter's idle, hunting and lurking, the
+  // vengeance's.
+  defender,
+  hunter_idle,
+  hunter_active,
+  hunter_lurk,
+  vengeance,
 };
-inline constexpr int kSqLoops = 11;
-inline constexpr int kSqBaseLoops = 9;  // the base game's, registered in every game
+inline constexpr int kSqLoops = 16;
+inline constexpr int kSqBaseLoops = 9;        // the base game's, registered in every game
+inline constexpr int kSqReckoningLoops = 11;  // then The Reckoning's two; Ground Zero's after
 
 struct Q2Missile {
   bool live = false;
@@ -474,6 +490,9 @@ struct Q2Missile {
   int multiplier = 1;
   double stage_at = 0;
   sh::Vec3f stuck;
+  // A sphere's (q2_gz_spheres.cpp): the angles it is drawn at, and where its hunter last saw its
+  // prey.
+  sh::Vec3f facing, last_seen;
 };
 inline constexpr int kQ2Missiles = 64;  // the rows the world keeps for shots in flight
 
@@ -662,6 +681,8 @@ struct Q2Server : RulesCommon {
   // How the blow being dealt landed (`kSqHow*`, q2_fight.hpp): an obituary's words tell a rocket's
   // direct hit from its blast.
   int blow_how = 0;
+  // The monster dealing the blow (a map entity; -1 none or a player): a defender sphere's target.
+  int blow_from = -1;
   int midair_frags = 0;
   float midair_rise = 0;
   // The C++ mods' `self` and `other` while a hook runs (q2_mods.hpp's rows; 0 none).

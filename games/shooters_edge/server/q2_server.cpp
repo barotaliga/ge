@@ -512,6 +512,7 @@ void touch_items(Q2Server& s, int slot) {
     if (it.kind == SqKind::ammo && item.block >= 0 && size_t(item.block) < s.map->entities.size())
       count = std::atoi(s.map->entities[size_t(item.block)].get_any_case("count").c_str());
     const int grenades = p.body.ammo[static_cast<int>(it.ammo)];  // its kind's before
+    if (s.opt.pack == Q2Pack::ground_zero && gz_sphere_refused(s, slot, item.item)) continue;
     if (!sq_pick_up(item.item, p.body, deathmatch(s), skill(s), s.level_time, count)) continue;
     p.health = static_cast<float>(p.body.health);
     if (it.kind == SqKind::weapon && fight_anyflag(s, 8192)) {  // infinite ammo: a full stock
@@ -568,7 +569,7 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   if (s.clients[slot].spectator && s.intermission_at <= 0 && spectate_command(s, slot, c)) return;
   ge::classic::Q2Move pm;
   pm.s = p.move;
-  if (s.intermission_at > 0)
+  if (s.intermission_at > 0 || (!p.alive && p.hunter_cam != -1))  // or riding a hunter sphere
     pm.s.type = ge::classic::Q2Type::freeze;
   else if (p.noclip && p.alive)  // `noclip` (q2_commands.hpp): the spectator's flight, no walls
     pm.s.type = ge::classic::Q2Type::spectator;
@@ -926,6 +927,12 @@ void fill_rows(Q2Server& s) {
       wc.numbers.gun_angles[k] = still ? 0 : guns[k + 3];
     }
     wc.numbers.fov = fight_fov(s, i);
+    if (gz_sphere_view(s, i)) {  // riding a hunter sphere: its wide eye, 8 up
+      wc.numbers.fov = 140;
+      wc.numbers.view_z = 8;
+      wc.numbers.view_offset[0] = wc.numbers.view_offset[1] = 0;
+      wc.numbers.view_offset[2] = 8;
+    }
     wc.numbers.rdflags = sq_power_shown(p.ir_until - s.level_time) ? 4 : 0;  // IR goggles
     for (int k = 0; k < 4; k++) wc.numbers.blend[k] = s.intermission_at > 0 ? 0 : p.blend[k];
     e.free = false;
@@ -952,6 +959,7 @@ void fill_rows(Q2Server& s) {
     } else if (p.gibbed) {
       e.modelindex = 0;
     }
+    if (!p.alive && p.hunter_cam != -1) e.modelindex = 0;          // his view rides a hunter sphere
     if (s.opt.pack == Q2Pack::ground_zero) e.render_fx |= 0x8000;  // seen through IR goggles
     if (p.alive && s.intermission_at <= 0) {  // the powers held, blinking as they run out
       for (const SqPower& pw : sq_powers())
@@ -1421,6 +1429,7 @@ CommandResult sq_client_command(void* r, int slot, const std::string& line) {
     Q2Player& p = s.players[slot];
     if (p.alive && s.level_time >= p.respawn_time + kKillAfter) {
       p.god = false;
+      if (s.opt.pack == Q2Pack::ground_zero) gz_sphere_remove(s, slot);  // his sphere goes too
       fight_kill(s, slot, slot, -1);
     }
     fill_rows(s);

@@ -55,6 +55,10 @@ inline constexpr int kSqByCrush = 105, kSqByHurt = 106, kSqByTelefrag = 107, kSq
 inline constexpr int kSqByLaser = 109, kSqByBarrel = 110, kSqByExit = 111;
 // Ground Zero's A-M bomb (q2_gz.hpp): its blast's own words.
 inline constexpr int kSqByAmBomb = 113;
+// Ground Zero's spheres (q2_gz_spheres.cpp): the vengeance's, the defender's bolt, the hunter's;
+// and the two a doppleganger releases.
+inline constexpr int kSqByVengeance = 114, kSqByDefender = 115, kSqByHunter = 116;
+inline constexpr int kSqByDoppleVengeance = 117, kSqByDoppleHunter = 118;
 // A monster's attack: this plus its row in the roster (q2_monsters.cpp).
 inline constexpr int kSqByMonster = 200;
 
@@ -77,9 +81,10 @@ void fight_hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage
                 int weapon, int flags = 0);
 // Radius damage at `at`: `damage` less half the distance, within `radius` (the attacker's half),
 // to the players and the map's shootable movers it reaches; player `ignore` left out, `energy` the
-// armour's energy share.
+// armour's energy share; map entity `ignore_entity` and the players in `skip` (a bit a slot) left
+// out too.
 void fight_blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int weapon,
-                 int ignore = -1, bool energy = false);
+                 int ignore = -1, bool energy = false, int ignore_entity = -1, uint32_t skip = 0);
 
 // Midair (`k_midair` in deathmatch; plugins/shooter/midair.hpp): whether it is on; a spawn's kit
 // (250 health, 200 body armour, the rocket launcher in hand, 255 rockets that never run out); the

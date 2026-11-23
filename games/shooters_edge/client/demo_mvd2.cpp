@@ -596,6 +596,10 @@ struct Mvd2ToQ2 final : ConvertStream {
           return 64;
         case server::SqShot::chainfist:
           return 1;
+        case server::SqShot::defender_sphere:  // spheres are no weapon's shot
+        case server::SqShot::hunter_sphere:
+        case server::SqShot::vengeance_sphere:
+          return 0;
       }
     }
     return 0;

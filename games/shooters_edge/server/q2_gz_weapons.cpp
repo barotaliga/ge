@@ -681,7 +681,7 @@ bool gz_missile(Q2Server& s, Q2Missile& m) {
       nuke(s, m, gravity);
       return true;
     default:
-      return false;
+      return gz_sphere_missile(s, m);
   }
 }
 
