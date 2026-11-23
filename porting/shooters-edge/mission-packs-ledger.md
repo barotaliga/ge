@@ -46,9 +46,9 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Taking the packs in (shared by all four) | 15 | 0 | 3 | 12 (9 / 3 / 0) | 0 |
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 2 | 67 | 5 (2 / 1 / 2) | 0 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 2 | 51 | 8 (3 / 3 / 2) | 0 |
-| The Reckoning (Quake II, folder `xatrix`) | 40 | 21 | 3 | 16 (11 / 4 / 1) | 0 |
+| The Reckoning (Quake II, folder `xatrix`) | 40 | 23 | 4 | 13 (10 / 3 / 0) | 0 |
 | Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **272** | **28** | **131** | **113 (61 / 42 / 10)** | **0** |
+| **All** | **272** | **30** | **132** | **110 (60 / 41 / 9)** | **0** |
 
 Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.**
 
@@ -319,7 +319,7 @@ count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 | xat.items_list | the item list grown by the pack's items, in its order (the inventory, the icons by name) | done |  | server/q2_bar.cpp (`kReckoning`, its 47 items); tests/shooters_edge_q2_reckoning_test.cpp |
 | xat.obits | the new weapons' and monsters' obituaries, word for word | missing | 1 | reader question |
 | xat.dmflag | `dmflags` 65536: dual fire dropped on death | done |  | server/q2_powers.cpp (dual fire's row: dmflags 65536) |
-| xat.campaign | the four units in order, the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp chains the units |
+| xat.campaign | the four units in order, the help computer's lines, the end | verify |  | NEW GAME in the pack's folder starts on `xswamp` (server/q2_pack.cpp `q2_pack_start_map`, client/game_folder.cpp); the maps' own level strings chain the six units through the base campaign (`xu1`..`xu4` between, `xout` and the victory picture at the end), help lines are the maps' `target_help`; `se-q2-unit --mod=xatrix` plays a unit by script; a full run on the release build settles it |
 | xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | verify | 2 | client/cinematic.hpp plays a chain |
 | xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | verify | 2 | pictures named by the rules' configstrings |
 | xat.menu | the pack's own pictures (console background, quit, victory) | verify | 3 |  |
@@ -330,9 +330,9 @@ count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 | xat.te.greenblood | the gekk's green blood (temporary entity 26) | done |  | server/q2_wire.cpp (26), client/q2_temp_fx.hpp (30 green specks) |
 | xat.dm | the seven deathmatch maps played by bots | missing | 2 |  |
 | xat.coop | co-op through the units | missing | 2 |  |
-| xat.save | saves of the pack's campaign | missing | 2 | server/q2_save.hpp |
+| xat.save | saves of the pack's campaign | done |  | server/q2_save.cpp (v12: the pack's rows, the trap's state, dual fire); tests/shooters_edge_q2_reckoning_test.cpp saves a pack game mid-trap and plays on bit for bit (an item's row now follows its drop to the floor, which a loaded game showed and a running one did not) |
 | xat.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
-| xat.remix | the pack's weapons and items as roles for remix | missing | 3 |  |
+| xat.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the Ionripper as the energy weapon, the Phalanx as the launcher, mag slugs its ammunition, traps as grenades, DualFire as damage |
 
 ### What the maps place that the base game's maps never do
 
