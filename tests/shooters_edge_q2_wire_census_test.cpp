@@ -4,6 +4,7 @@
 // the inventory, and the server quits; the client's reader (client/demo_q2.cpp) counts each
 // message it read by its id, and every kind the match makes arrived and read clean. The
 // recording the client kept, read again as a file, reads the same messages in the same counts.
+// Beside it: a monster's flash, the window's cheat lock, and `dumpents` on the dedicated server.
 //
 // ge:summary Tests: every Quake II server message kind at a joined client, live and recorded
 // ge:keywords test q2 protocol-34 svc census joined-client recording muzzleflash
@@ -301,4 +302,35 @@ TEST(a_window_joined_to_a_q2_server_of_many_slots_holds_its_cheats) {
   CHECK(!con.cvars().cheats_held() && con.cvars().cheats());
   CHECK(con.cvars().set("test_cheat", "1", ge::console::Source::local) ==
         ge::console::SetResult::changed);
+}
+
+// `dumpents <file>` on the dedicated server: the map's entity text as loaded, written to
+// entdumps/<file>.ent under the game's folder and said; with no name, the usage.
+TEST(dumpents_writes_the_maps_entity_text) {
+  sv::ServerConfig c;
+  c.root = hall_folder();
+  c.map = "hall";
+  gn::LinkConditions lan;
+  gn::SimNetwork net = gn::make_sim_network(15, lan);
+  gn::Transport port;
+  gn::open_sim_transport(port, net, gn::sim_address(0, cn::kPortQ2));
+  sv::Server s;
+  std::string error;
+  const sv::ServerGame& g = cn::q2_game();
+  CHECK_MSG(sv::server_open(s, g, c, &port, nullptr, error), error);
+  if (!s.state) return;
+  const std::filesystem::path out = std::filesystem::path(c.root) / "baseq2" / "entdumps";
+  std::filesystem::remove_all(out);
+  CHECK(g.console(s.state, "dumpents"));
+  CHECK(g.console(s.state, "dumpents hall"));
+  std::vector<std::string> lines;
+  g.console_lines(s.state, lines);
+  std::string said;
+  for (const std::string& l : lines) said += l + " | ";
+  CHECK_MSG(said.find("Usage: dumpents <filename>") != std::string::npos, said);
+  CHECK_MSG(said.find("Dumped entity string to ") != std::string::npos, said);
+  std::ifstream f(out / "hall.ent");
+  const std::string text((std::istreambuf_iterator<char>(f)), {});
+  CHECK_MSG(text.find("info_player_deathmatch") != std::string::npos, text);
+  sv::server_close(s);
 }

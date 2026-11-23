@@ -681,7 +681,10 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
       c.sent_on.clear();
     } else {
       const Q2ClientConfig cfg = c.cfg;
+      // The settings the server stuffed go along: a forced reconnect's are what it asks back.
+      std::map<std::string, std::string> kept = std::move(c.stuffed_set);
       q2_client_start(c, *c.transport, to, cfg, c.now);
+      c.stuffed_set = std::move(kept);
       c.redirects = sent;
       return;
     }
