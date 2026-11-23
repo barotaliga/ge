@@ -32,6 +32,7 @@
 // ge:test tests/shooters_edge_q2_gz_bosses_test.cpp
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <string_view>
 
 #include "core/libm/libm.hpp"
@@ -505,11 +506,9 @@ void carrier_choose(Q2Server& s, Q2Monster& m) {
       else
         begin(m, kLaunch);
     } else {
-      if (roll <= 0.3)
-        begin(m, kGunsIn);
-      else if (roll <= 0.65)
+      if (roll > 0.3 && roll <= 0.65)
         begin(m, kGrenadesIn);
-      else if (rail_ready(s, m))
+      else if (roll > 0.65 && rail_ready(s, m))
         start_rail(s, m, kRail);
       else
         begin(m, kGunsIn);
@@ -715,7 +714,7 @@ void widow_bolt(Q2Server& s, Q2Monster& m, sh::Vec3f from, sh::Vec3f d, int valu
 
 // The blaster's frame for a bearing (degrees right): 1 is 100 right, 11 straight ahead, 18 70 left.
 int blaster_frame(float right) {
-  const int k = 1 + static_cast<int>((100.0f - right) / 10.0f + 0.5f);
+  const int k = 1 + static_cast<int>(std::floor((100.0f - right) / 10.0f + 0.5f));
   return std::clamp(k, 1, 18);
 }
 float blaster_angle(int k) { return k == 0 ? 0.0f : 100.0f - 10.0f * float(k - 1); }
@@ -813,9 +812,7 @@ void widow_choose(Q2Server& s, Q2Monster& m, int run) {
       begin(m, kSpawn);
     return;
   }
-  if (!rail_ready(s, m))
-    begin(m, kBlasterIn);
-  else if (roll <= 0.5 || s.level_time - b.blaster_end < 2)
+  if (rail_ready(s, m) && (roll <= 0.5 || s.level_time - b.blaster_end < 2))
     begin(m, kRailIn);
   else
     begin(m, kBlasterIn);
@@ -1418,7 +1415,10 @@ bool gz_boss_think(Q2Server& s, Q2Monster& m) {
   const bool goes_on = w == Who::carrier ? carrier_frame(s, m, mv, i)
                        : w == Who::widow ? widow_frame(s, m, mv, i)
                                          : widow2_frame(s, m, mv, i);
-  if (goes_on && b.move == mv && b.frame == i && ++b.frame >= f.count) begin(m, kNone);
+  if (goes_on && b.move == mv && b.frame == i) {
+    b.frame++;
+    if (b.frame >= f.count) begin(m, kNone);
+  }
   return true;
 }
 
