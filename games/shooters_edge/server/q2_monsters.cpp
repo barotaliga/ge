@@ -66,7 +66,7 @@ int skill(const Q2Server& s) {
 double random01(Q2Server& s) { return ge::core::next(s.rng); }
 float crandom(Q2Server& s) { return float(2 * (ge::core::next(s.rng) - 0.5)); }
 
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
 

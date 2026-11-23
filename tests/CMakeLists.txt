@@ -47,6 +47,19 @@ foreach(config Debug Release RelWithDebInfo MinSizeRel)
     LIBRARY_OUTPUT_DIRECTORY_${upper} ${PROJECT_BINARY_DIR}/q2_native/fixturemod
     RUNTIME_OUTPUT_DIRECTORY_${upper} ${PROJECT_BINARY_DIR}/q2_native/fixturemod)
 endforeach()
+# The same game on the newer interface (version 3302), in its own mod folder.
+add_library(ge_test_q2_native_game_new MODULE q2_native_fixture_game.cpp)
+target_include_directories(ge_test_q2_native_game_new PRIVATE ${PROJECT_SOURCE_DIR}/games)
+target_compile_definitions(ge_test_q2_native_game_new PRIVATE FIXTURE_NEW_INTERFACE=1)
+set_target_properties(ge_test_q2_native_game_new PROPERTIES PREFIX "" OUTPUT_NAME game
+  SUFFIX ${ge_native_suffix} LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/q2_native/fixture3302
+  RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/q2_native/fixture3302)
+foreach(config Debug Release RelWithDebInfo MinSizeRel)
+  string(TOUPPER ${config} upper)
+  set_target_properties(ge_test_q2_native_game_new PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY_${upper} ${PROJECT_BINARY_DIR}/q2_native/fixture3302
+    RUNTIME_OUTPUT_DIRECTORY_${upper} ${PROJECT_BINARY_DIR}/q2_native/fixture3302)
+endforeach()
 foreach(src ${GE_TEST_SOURCES})
   get_filename_component(name ${src} NAME_WE)
   set(extra)
@@ -120,7 +133,7 @@ foreach(src ${GE_TEST_SOURCES})
     target_compile_definitions(${name} PRIVATE GE_MOD_DIR="${PROJECT_BINARY_DIR}/mods")
   endif()
   if(name STREQUAL "shooters_edge_q2_native_test" OR name STREQUAL "shooters_edge_listen_test")
-    add_dependencies(${name} ge_test_q2_native_game)
+    add_dependencies(${name} ge_test_q2_native_game ge_test_q2_native_game_new)
     target_compile_definitions(${name} PRIVATE GE_NATIVE_ROOT="${PROJECT_BINARY_DIR}/q2_native")
   endif()
   if(name MATCHES "^mountain_")
