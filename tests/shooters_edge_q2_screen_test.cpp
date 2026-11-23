@@ -14,6 +14,7 @@
 
 #include "assets/pcx.hpp"
 #include "check.hpp"
+#include "console/console.hpp"
 #include "lab/png.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/q2_bar.hpp"
@@ -207,6 +208,72 @@ TEST(gl_fontshadow_draws_each_letter_first_in_black_and_gl_bilerp_chars_smooths_
   dl.begin(320, 240);
   cl::draw_q2_bar(dl, bar, 1);
   CHECK_MSG(dl.cmds().size() == 14, std::to_string(dl.cmds().size()));
+}
+
+TEST(scr_font_writes_the_bars_text_in_its_own_letters_and_falls_back_to_conchars) {
+  cl::Q2Screen screen;
+  ge::console::Console con;
+  ge::console::Cvars& v = con.cvars();
+  v.bind({.name = "scr_font", .fallback = "conchars", .kind = ge::console::CvarKind::text},
+         &screen.font);
+  cl::Q2Bar bar;
+  bar.screen = &screen;
+  bar.console = &con;
+  cl::BarPicture glyphs, mine;
+  glyphs.image.width = glyphs.image.height = 128;
+  glyphs.image.rgba.assign(size_t{128} * 128 * 4, 255);
+  mine = glyphs;
+  mine.image.width = mine.image.height = 256;  // told apart by its size
+  mine.image.rgba.assign(size_t{256} * 256 * 4, 255);
+  bar.pictures["pics/conchars.pcx"] = glyphs;
+  bar.pictures["pics/mine.pcx"] = mine;
+  cl::add_q2_turtle(bar, cl::kQ2FrameNoDelta, 320, 240);
+  ge::ui::DrawList dl;
+  con.execute("scr_font mine");
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  CHECK(!dl.cmds().empty() && dl.cmds()[0].box.image == &bar.pictures["pics/mine.pcx"].image);
+  con.execute("scr_font gone");  // not in the packs: said, and set back
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  CHECK(!dl.cmds().empty() && dl.cmds()[0].box.image == &bar.pictures["pics/conchars.pcx"].image);
+  CHECK(screen.font == "conchars");
+  CHECK_MSG(
+      !con.output().empty() && con.output().back() == "Couldn't load pics/gone.pcx: not found",
+      con.output().empty() ? "" : con.output().back());
+}
+
+TEST(viewsize_under_100_tiles_backtile_round_the_smaller_view) {
+  CHECK(cl::q2_view_rect(320, 240, 100).w == 320);
+  const cl::Q2ViewRect r = cl::q2_view_rect(320, 240, 50);
+  CHECK(r.x == 80 && r.y == 60 && r.w == 160 && r.h == 120);
+  cl::Q2Screen screen;
+  cl::Q2Bar bar;
+  bar.screen = &screen;
+  bar.width = 320;
+  bar.height = 240;
+  cl::BarPicture tile;
+  tile.image.width = tile.image.height = 64;
+  tile.image.rgba.assign(size_t{64} * 64 * 4, 255);
+  bar.pictures["pics/backtile.pcx"] = tile;
+  ge::ui::DrawList dl;
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  CHECK(dl.cmds().empty());  // 100: no border
+  screen.viewsize = 50;
+  dl.begin(320, 240);
+  cl::draw_q2_bar(dl, bar, 1);
+  float area = 0;
+  for (const auto& c : dl.cmds()) {
+    const ge::ui::Rect b = c.box.rect;
+    area += b.w * b.h;
+    const auto x0 = static_cast<float>(r.x), y0 = static_cast<float>(r.y);
+    const auto x1 = static_cast<float>(r.x + r.w), y1 = static_cast<float>(r.y + r.h);
+    const bool inside = b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0;
+    CHECK(!inside);
+    CHECK(c.box.uv.x >= 0 && c.box.uv.x + c.box.uv.w <= 64.01f);  // within one tile
+  }
+  CHECK_MSG(area == 320.0f * 240 - 160.0f * 120, std::to_string(area));  // the border, once
 }
 
 TEST(timegraph_draws_each_frames_time_along_the_bottom_held_to_graphheight) {

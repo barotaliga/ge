@@ -60,7 +60,7 @@ TEST(the_flame_rides_the_muzzle_and_burns_out) {
   const r::Shot s{r::muzzle_look_by_id("muzzle.rocket"), 4, 1.0};
   const r::MuzzlePose a = pose_at(0, 1.5, 0), b = pose_at(0.1, 1.6, -0.05);
   CHECK(!r::flame_at(s, a, 0.99).alive);
-  const r::Flame f0 = r::flame_at(s, a, 1.004), f1 = r::flame_at(s, a, 1.05);
+  const r::MuzzleFlame f0 = r::flame_at(s, a, 1.004), f1 = r::flame_at(s, a, 1.05);
   CHECK(f0.alive && f1.alive);
   CHECK(f1.stretch > 2);                              // a rocket's jet is long
   CHECK(f1.centre[2] > f0.centre[2]);                 // it shoots out down the barrel
@@ -68,13 +68,13 @@ TEST(the_flame_rides_the_muzzle_and_burns_out) {
   CHECK(f0.fire > f1.fire && f0.core_k > f1.core_k);
   CHECK(!r::flame_at(s, a, 1.0 + r::look_of(s).life_s + 1e-3).alive);
   // The same moment on another pose: the flame is where the gun is now.
-  const r::Flame moved = r::flame_at(s, b, 1.05);
+  const r::MuzzleFlame moved = r::flame_at(s, b, 1.05);
   for (int i = 0; i < 3; ++i) {
     CHECK(std::fabs((moved.centre[i] - f1.centre[i]) - (b.at[i] - a.at[i])) < 1e-12);
   }
   // A shotgun's is wide and pronged, its first prong square to the barrel.
   const r::Shot g{r::muzzle_look_by_id("muzzle.shotgun"), 4, 0};
-  const r::Flame fg = r::flame_at(g, a, 0.03);
+  const r::MuzzleFlame fg = r::flame_at(g, a, 0.03);
   CHECK(fg.stretch < f1.stretch);
   CHECK(std::fabs(fg.side[2]) < 1e-12);
   CHECK_BITS(r::flame_at(g, a, 0.03).core_k, fg.core_k);  // pure

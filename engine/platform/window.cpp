@@ -19,8 +19,13 @@
 #include <objc/runtime.h>
 #endif
 
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <mutex>
+#include <span>
 #include <string>
+#include <vector>
 
 #include "core/output.hpp"
 
@@ -239,6 +244,48 @@ void set_clipboard_text(const std::string& text) {
               "); skill: platform.");
 }
 
+namespace {
+
+// What the clipboard offers while it holds a picture: SDL asks for each type when a paste reads it.
+struct ClipboardPicture {
+  std::vector<uint8_t> png;
+  std::string text;
+};
+const void* clipboard_data(void* user, const char* mime, size_t* size) {
+  const auto* c = static_cast<const ClipboardPicture*>(user);
+  if (std::strcmp(mime, "image/png") == 0) {
+    *size = c->png.size();
+    return c->png.data();
+  }
+  if (std::strncmp(mime, "text/plain", 10) == 0 && !c->text.empty()) {
+    *size = c->text.size();
+    return c->text.data();
+  }
+  *size = 0;
+  return nullptr;
+}
+
+void clipboard_cleanup(void* user) { delete static_cast<ClipboardPicture*>(user); }
+
+}  // namespace
+
+bool set_clipboard_png(std::span<const uint8_t> png, const std::string& text, std::string* why) {
+  if (png.empty() || SDL_WasInit(SDL_INIT_VIDEO) == 0) {
+    if (why != nullptr) *why = "there is no window to put the picture on the clipboard from";
+    return false;
+  }
+  auto* c = new ClipboardPicture{{png.begin(), png.end()}, text};
+  const char* types[] = {"image/png", "text/plain;charset=utf-8", "text/plain"};
+  const size_t n = text.empty() ? 1 : 3;
+  // SDL owns `c` from here (video is up): its cleanup runs when the clipboard changes.
+  if (!SDL_SetClipboardData(clipboard_data, clipboard_cleanup, c, types, n)) {
+    if (why != nullptr)
+      *why = std::string("the picture was not put on the clipboard (") + SDL_GetError() + ")";
+    return false;
+  }
+  return true;
+}
+
 void set_text_input(Window& window, bool on) {
   if (on) {
     SDL_StartTextInput(window.impl_->window);
@@ -333,7 +380,22 @@ bool set_window_place(Window& window, const WindowPlace& place) {
   return ok;
 }
 
-bool set_fullscreen(Window& window, bool on, int display) {
+std::vector<std::string> display_modes() {
+  std::vector<std::string> out;
+  int count = 0;
+  SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(SDL_GetPrimaryDisplay(), &count);
+  if (modes == nullptr) return out;
+  for (int i = 0; i < count; i++) {
+    const SDL_DisplayMode& m = *modes[i];
+    const std::string one = std::to_string(m.w) + "x" + std::to_string(m.h) + "@" +
+                            std::to_string(std::lround(m.refresh_rate));
+    if (std::find(out.begin(), out.end(), one) == out.end()) out.push_back(one);
+  }
+  SDL_free(reinterpret_cast<void*>(modes));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+  return out;
+}
+
+bool set_fullscreen(Window& window, bool on, int display, const FullMode* mode) {
   SDL_Window* w = window.impl_->window;
   if (on && display > 0) {
     // The window moved onto that display first: the fullscreen covers the display it stands on.
@@ -353,8 +415,15 @@ bool set_fullscreen(Window& window, bool on, int display) {
       SDL_SyncWindow(w);
     }
   }
-  // A null mode is the borderless desktop fullscreen: the display keeps its mode.
-  if (!SDL_SetWindowFullscreenMode(w, nullptr) || !SDL_SetWindowFullscreen(w, on)) {
+  // A null mode is the borderless desktop fullscreen: the display keeps its mode; else the
+  // display's mode closest to the one asked (a depth is not the platform's to choose).
+  SDL_DisplayMode closest{};
+  const SDL_DisplayMode* use = nullptr;
+  if (on && mode != nullptr &&
+      SDL_GetClosestFullscreenDisplayMode(SDL_GetDisplayForWindow(w), mode->width, mode->height,
+                                          static_cast<float>(mode->hz), false, &closest))
+    use = &closest;
+  if (!SDL_SetWindowFullscreenMode(w, use) || !SDL_SetWindowFullscreen(w, on)) {
     out::error(std::string("platform: the window could not go ") +
                (on ? "fullscreen" : "back to a window") + " (" + SDL_GetError() +
                "); the window stays as it was; skill: platform.");

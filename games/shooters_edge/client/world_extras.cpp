@@ -70,8 +70,9 @@ struct WorldExtras {
   std::vector<ba::Kind> liquid_kinds;  // each liquid slot's: kLava or kSlime
   gr::Flames flames;
   std::vector<gr::Flame> fires;
-  ba::FireLook fire_look;  // this frame's: bonfires or not, the wind
-  double sparks_t = -1;    // the time the last sparks were thrown to (< 0: none yet)
+  std::vector<gr::Flame> mark_fires;  // this frame's hot marks' (burn_extras)
+  ba::FireLook fire_look;             // this frame's: bonfires or not, the wind
+  double sparks_t = -1;               // the time the last sparks were thrown to (< 0: none yet)
   gr::Precip precip;
   ba::WeatherState state;
   ba::WeatherFrame now;
@@ -305,6 +306,11 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   if (v2 && on.flames && x.flames_drawn)
     ba::bsp_fires(*x.scene, view.time_s, options.brightness * options.fire_glow, x.fires,
                   x.fire_look);
+  // The hot marks' small flames (ce_decals: the modern look's already), in the map's fires' light.
+  for (gr::Flame f : x.mark_fires) {
+    f.relative = static_cast<float>(ba::kFireGlow * options.brightness * options.fire_glow);
+    x.fires.push_back(f);
+  }
   gr::prepare_flames(d, x.flames, x.fires, view);
   const gr::PrecipShelter shelter = ba::bsp_shelter(bsp);
   gr::bind_precip_shelter(d, x.precip, x.raining ? &shelter : nullptr);
@@ -382,6 +388,10 @@ void wade_extras(WorldExtras& x, std::span<const Placed> models, const Placed* s
 
 void set_extras_air_draws(WorldExtras& x, int n) { x.liquids.air_draws = n; }
 void set_extras_flames(WorldExtras& x, bool on) { x.flames_drawn = on; }
+
+void burn_extras(WorldExtras& x, std::span<const gr::Flame> fires) {
+  x.mark_fires.assign(fires.begin(), fires.end());
+}
 
 void stir_extras(WorldExtras& x, std::span<const gr::LiquidStir> stirs,
                  std::span<const gr::LiquidStir> fell_in, double t_s) {

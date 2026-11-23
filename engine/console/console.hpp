@@ -110,6 +110,15 @@ struct SaveScope {
   std::function<bool(std::string_view scope)> scopes = {};
 };
 
+// A COMMAND GATE (console/ruleset.hpp): a command refused while `when` holds (always when
+// empty), `why` printed in its place; `owner` names who set it, for `ungate`. What a server
+// stuffs is never gated: a gate is about what the player does.
+struct CommandGate {
+  std::string owner;
+  std::string why;
+  std::function<bool()> when = {};
+};
+
 class Console {
  public:
   // `is_server`: the console of a dedicated server or a listen host (cvar.hpp's tiers).
@@ -126,6 +135,12 @@ class Console {
   // A command; a second registration of a name replaces the first.
   void add_command(std::string_view name, std::string_view help, CommandFn fn, uint32_t flags = 0);
   bool has_command(std::string_view name) const;
+  // COMMAND GATES (above): `name` refused while the gate holds; a second gate replaces the first.
+  void gate_command(std::string_view name, CommandGate gate);
+  // Every gate `owner` set taken away; returns how many.
+  int ungate(std::string_view owner);
+  // The gate refusing `name` now, or null.
+  const CommandGate* gate_of(std::string_view name) const;
   // The command taken away (a game's own that only some content has); false when there was none.
   bool remove_command(std::string_view name);
   // `name` runs our command `target`: a game's own spelling of it, in the cvars' current layer
@@ -291,6 +306,7 @@ class Console {
   Cvars cvars_;
   Binds binds_;
   std::map<std::string, Command> commands_;
+  std::map<std::string, CommandGate> gates_;
   struct CommandSynonym {
     std::string target, layer;
   };

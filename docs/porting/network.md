@@ -31,7 +31,7 @@ server's behaviour is [`server.md`](server.md); recordings and TV are [`demos.md
 | --- | --- | --- | --- | --- |
 | Wire, version, ports | `net/qw_wire.hpp`, `qw_svc.hpp`, `qw_delta.hpp` | `net/q2_net.hpp`, `server/q2_wire.hpp` (protocol 34) | its own (Huffman-coded, delta snapshots: a reader's facts first) | its own (peer-to-peer lockstep in the original: `engine/net/lockstep.hpp` exists) |
 | Server end | `net/qw_server.hpp` | `net/q2_net_server.hpp` | its own | its own |
-| Client end | `net/qw_client.hpp`, `qw_remote.hpp`; Quake's own protocol 15 (a server on port 26000) by `net/q1_remote.hpp` | `net/q2_client.hpp`, `q2_remote.hpp` | its own | its own |
+| Client end | `net/qw_client.hpp`, `qw_remote.hpp`; Quake's own protocol 15 (a server on port 26000) by `net/q1_remote.hpp` | `net/q2_client.hpp`, `q2_remote.hpp`; protocols 35 and 36 read by `net/q2_proto_in.hpp`, which rewrites each message into protocol 34 so one reader (`client/demo_q2.cpp`) serves every server and a recording stays 34 | its own | its own |
 | Extensions | `net/qw_ext.hpp`: the `x`, `x2`, `z` families and our `ge` set in `*ge_ext` | the `ge` set in `*ge_ext`, its own message ids in the unused range | the `ge` set by its own carrier | ours |
 
 ## Our extensions

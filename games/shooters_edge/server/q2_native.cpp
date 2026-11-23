@@ -253,6 +253,7 @@ void take_view(NativeQ2& s) {
   raw.entities.assign(kQ2Entities, Q2EntityState{});
   raw.owners.assign(kQ2Entities, 0);
   q2_sight_reset(raw.sight, h.map.get());
+  raw.sight.groups = h.map && !h.map->areas.empty() ? h.area_groups : std::vector<int32_t>{};
   const bool proper = (native_features(h) & native::kGmfProperInUse) != 0;
   const int count = std::min(h.game->num_edicts, kQ2Entities);
   for (int n = 1; n < count; n++) {

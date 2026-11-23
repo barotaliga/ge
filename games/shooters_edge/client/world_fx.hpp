@@ -81,6 +81,7 @@
 #include "render/beams.hpp"
 #include "render/explosions.hpp"
 #include "render/haze.hpp"
+#include "render/mark_fire.hpp"
 #include "render/marks.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/look.hpp"
@@ -249,7 +250,9 @@ struct FxState {
   const ge::brush::Map* marked = nullptr;
   std::shared_ptr<const MarkFaces> receivers;
   ge::detail::DecalPool marks;
-  std::vector<std::array<float, 3>> mark_light;    // each slot's light, whites, as it was pressed
+  std::vector<std::array<float, 3>> mark_light;  // each slot's light, whites, as it was pressed
+  ge::render::MarkFire
+      mark_fire;  // the hot marks' flames and smoke as they cool (render/mark_fire.hpp)
   std::unordered_map<int, ge::camera::Vec3> last;  // each missile's place a frame ago, m
   std::unordered_map<int, ge::camera::Vec3> next;  // this frame's, swapped into `last`
   std::vector<ge::render::HazeTrail> haze;         // the flights' hot air still warm, oldest first
@@ -404,6 +407,9 @@ struct FxFrame {
   std::vector<HeldBeam> beams;
   // The marks on the walls this frame (ce_decals), three vertices a triangle, for the beams' pass.
   std::vector<ge::render::BurnVertex> burns;
+  // The small flames burning on the hot marks this frame (ce_decals, render/mark_fire.hpp), for
+  // the flames' pass.
+  std::vector<ge::render::Flame> fires;
   // The hot air a nail's or a rocket's flight left (ce_trails), a stretch a frame, for the haze.
   std::vector<ge::render::HazeTrail> haze;
   // The local player as the world would place him (never drawn in his own eyes, still casting his

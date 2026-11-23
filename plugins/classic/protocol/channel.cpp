@@ -173,6 +173,22 @@ size_t channel_reliable_backlog(const Channel& c) {
   return n;
 }
 
+size_t channel_unreliable_room(const Channel& c, bool* grows) {
+  const size_t whole = kMaxPacket - kServerHeader - (c.client ? 2 : 0);
+  *grows = false;
+  if (c.fragments) return whole;
+  size_t carried = 0;
+  if (c.reliable.size > 0) {
+    if (c.incoming_acknowledged > c.last_reliable_sequence &&
+        c.incoming_reliable_acknowledged != c.reliable_sequence)
+      carried = c.reliable.size;  // a resend
+  } else {
+    carried = c.pending_count > 0 ? c.pending[0].size : 0;
+    *grows = c.pending_count <= 1;  // a new message joins the first, or is the first
+  }
+  return carried < whole ? whole - carried : 0;
+}
+
 bool channel_can_packet(const Channel& c, double now) {
   if (c.rate_s_per_byte == 0) return true;
   return c.clear_time < now + kRateBurstBytes * c.rate_s_per_byte;

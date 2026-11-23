@@ -10,6 +10,7 @@
 // ge:skill agent-interface testing
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -40,8 +41,22 @@ fs::path fresh(const char* name) {
 
 const gc::Spec& se() { return shooters_edge::cli::spec(); }
 
+// The per-user folder (gc::prefs_dir: the series' shared settings, sb_masters among them) under
+// `root` too, so a machine's own settings never reach a test (a player's masters would make it ask
+// the internet).
+void own_home(const fs::path& root) {
+  const std::string home = (root / "home").string();
+#ifdef _WIN32
+  _putenv_s("APPDATA", home.c_str());
+#else
+  setenv("HOME", home.c_str(), 1);
+  setenv("XDG_DATA_HOME", home.c_str(), 1);
+#endif
+}
+
 // Every call names its own install and its own state and logs, never the machine's.
 int run(std::vector<std::string> args, std::string& out, const fs::path& root) {
+  own_home(root);
   args.insert(args.begin(), {"--basedir=" + root.string(), "--state=" + (root / "state").string(),
                              "--logs=" + (root / "logs").string()});
   return gc::run(se(), args, out, (root / "bin").string());

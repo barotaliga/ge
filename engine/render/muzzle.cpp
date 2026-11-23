@@ -286,10 +286,10 @@ void scale_muzzle(MuzzleLook& look, double s) {
   look.spark_speed *= s;
 }
 
-Flame flame_at(const Shot& s, const MuzzlePose& pose, double now_s) {
+MuzzleFlame flame_at(const Shot& s, const MuzzlePose& pose, double now_s) {
   const MuzzleLook& k = look_of(s);
   const double t = now_s - s.born_s, u = std::clamp(t / k.life_s, 0.0, 1.0);
-  Flame f{};
+  MuzzleFlame f{};
   f.age_s = t;
   f.alive = t >= 0 && t < k.life_s;
   double length = 0, width = 0;
@@ -329,7 +329,7 @@ Blast smoke_of(const Shot& s, const MuzzlePose& pose_at_shot) {
 
 Flash muzzle_flash_at(const Shot& s, const MuzzlePose& pose, double now_s) {
   const MuzzleLook& k = look_of(s);
-  const Flame f = flame_at(s, pose, now_s);
+  const MuzzleFlame f = flame_at(s, pose, now_s);
   Flash out{};
   for (int i = 0; i < 3; ++i) out.at[i] = f.centre[i];
   const Blackbody c = blackbody(f.core_k);
