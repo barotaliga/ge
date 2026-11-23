@@ -71,7 +71,7 @@ uint32_t player_flags(const Q2PlayerState& a, const Q2PlayerState& b) {
   if (!same3(b.gun_offset, a.gun_offset)) f |= kMv2GunOffset;
   if (!same3(b.gun_angles, a.gun_angles)) f |= kMv2GunAngles;
   if (b.rdflags != a.rdflags) f |= kMv2RdFlags;
-  if (std::memcmp(b.stats, a.stats, sizeof b.stats) != 0) f |= kMv2Stats;
+  if (std::memcmp(b.stats, a.stats, 32 * sizeof b.stats[0]) != 0) f |= kMv2Stats;
   return f;
 }
 

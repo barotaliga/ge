@@ -152,8 +152,8 @@ bool holds(const std::vector<uint8_t>& b, const std::string& text) {
   return std::search(b.begin(), b.end(), text.begin(), text.end()) != b.end();
 }
 
-float x_of(const sv::NativeQ2& s) { return s.raw.players[0].origin[0] * 0.125f; }
-float z_of(const sv::NativeQ2& s) { return s.raw.players[0].origin[2] * 0.125f; }
+float x_of(const sv::NativeQ2& s) { return float(s.raw.players[0].origin[0]) * 0.125f; }
+float z_of(const sv::NativeQ2& s) { return float(s.raw.players[0].origin[2]) * 0.125f; }
 
 TEST(the_library_is_found_in_the_mod_folder_then_the_base) {
   std::filesystem::path lib;
