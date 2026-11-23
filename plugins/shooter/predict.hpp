@@ -14,7 +14,8 @@
 // newest command's prediction before the frame against after it) is not snapped but folded into a
 // correction drawn on top of the prediction, which decays at 200 units/s below 8 units, 500 below
 // 16, 800 below 32 and 1400 above, times a smoothing setting. A smaller error is taken at once;
-// a larger one (a teleport) snaps and clears the correction.
+// a larger one (a teleport) snaps and clears the correction. A game's client may cut the error by
+// its latency, drop a correction too small to see, or turn it off (`Smoothing`'s fields).
 //
 // OTHER PLAYERS (`predict_other`): run forward from their last state by how long ago the server
 // last ran their command: the server sends each player's milliseconds since its last command
@@ -43,9 +44,10 @@
 
 namespace ge::shooter {
 
-constexpr float kSmoothMin = 4;      // units: a smaller error is taken at once
-constexpr float kSmoothMax = 64;     // units: a larger one snaps
-constexpr double kOtherLead = 0.02;  // s: other players drawn this much past now - latency
+constexpr float kSmoothMin = 4;         // units: a smaller error is taken at once
+constexpr float kSmoothMax = 64;        // units: a larger one snaps
+constexpr double kSmoothStepS = 0.013;  // s: the error a step's timing explains (the latency cut)
+constexpr double kOtherLead = 0.02;     // s: other players drawn this much past now - latency
 
 // A player's state as the protocol carries it.
 struct NetPlayer {
@@ -77,8 +79,18 @@ void client_world(const BrushModel& world, const ClientModel* models, int model_
                   const Vec3f* players, int player_count, MoveWorld& out);
 
 // Its own player: the acknowledged state with `count` later commands run through the move.
+// `each` (when given, `count` of them): the state after each command, in order (a jump's command
+// is the one whose `jump_held` turned on, `move_jumped`).
 MoveState predict_player(const NetPlayer& acked, const MoveCmd* cmds, int count,
-                         const MoveSettings& set, const MoveWorld& world);
+                         const MoveSettings& set, const MoveWorld& world,
+                         MoveState* each = nullptr);
+// The command that took the state from `before` to `after` jumped: the jump button, unheld since
+// the last jump, was taken on the ground (`jump_held` turned on from standing; a swim stroke or a
+// water jump leaves it off, a death holds it without a jump).
+inline bool move_jumped(const MoveState& before, const MoveState& after) {
+  return !before.jump_held && after.jump_held && before.ground != -1 &&
+         after.type != MoveType::dead;
+}
 
 // The milliseconds an other player is run forward (0..255).
 int other_msec(double arrival_s, int state_msec, double now_s, double latency_s);
@@ -89,9 +101,14 @@ MoveState predict_other(const NetPlayer& state, MoveCmd last_cmd, int msec, cons
 struct Smoothing {
   Vec3f correction;  // drawn on top of the prediction, units
   float scale = 1;   // the smoothing setting: how fast the correction decays
+  bool off = false;  // every error taken at once (no correction kept)
+  // units/s: a correction left smaller than this times `scale` and the step is dropped (0: never).
+  float drop = 0;
 };
-// A frame arrived: the newest command's prediction before it and after it.
-void smoothing_frame(Smoothing& s, Vec3f before, Vec3f after);
+// A frame arrived: the newest command's prediction before it and after it. With `latency_s` over
+// 0 the error folded in is cut by the share of it a frame of 0.013 s explains (1 - 0.013 /
+// latency, none at or under 0.013 s): the part a mere step's timing makes is taken at once.
+void smoothing_frame(Smoothing& s, Vec3f before, Vec3f after, double latency_s = 0);
 // The correction decays over `dt` seconds of render time.
 void smoothing_decay(Smoothing& s, double dt);
 inline Vec3f smoothed(const Smoothing& s, Vec3f predicted) { return predicted + s.correction; }

@@ -92,6 +92,7 @@ enum class WeaponSound : uint8_t {
 struct WeaponEvent {
   WeaponSound sound = WeaponSound::none;
   float clock = 0;  // when on the weapon clock
+  int side = 0;     // the nailgun's barrel its nail left from: 1 right, -1 left; 0 the middle
 };
 const char* weapon_sound_sample(WeaponSound s);  // "weapons/ax1.wav"; nullptr for none
 int weapon_sound_channel(WeaponSound s);         // 1, 0 for the lightning gun's start
