@@ -6,10 +6,11 @@
 // player standing in it. A thing counts once for each kind of act: moved, turned, shown, hidden,
 // animated (its frame stepped), removed, a sound started on it, an effect thrown within reach of
 // it, and, while its name was used or it was touched, the things the program made, the player
-// hurt and the player's gravity or speed changed. The program's faults are counted. A scripted look
-// at every thing, not a playthrough: it says the program's things work on our server, not that the
-// map can be got through (the census in `se-q1-campaign` and the campaign bot say that).
-// Header-only, beside the labs (a lab's helper never goes into a library: the labs skill).
+// hurt and the player's gravity or speed changed. Then each weapon is picked up by the player and
+// its attack held. The program's faults are counted. A scripted look at every thing, not a
+// playthrough: it says the program's things work on our server, not that the map can be got through
+// (the census in `se-q1-campaign` and the campaign bot say that). Header-only, beside the labs (a
+// lab's helper never goes into a library: the labs skill).
 //
 // ge:summary The campaign lab's things: every thing a map placed, used and touched, what it did
 // ge:keywords lab things census use-targets triggers rotate movers effects mission-pack
@@ -116,6 +117,18 @@ inline void things_table(ge::lab::Lab& lab, const ThingsWatch& w, server::Campai
   using namespace mv;
   if (!c.server) return;
   sv::QcServer& s = *sv::qc_of(c.server);
+  // The server the things live on; should it be replaced all the same, the watch stops there.
+  const auto same_map = [&] { return c.server && sv::qc_of(c.server) == &s; };
+  // A frame of the map's own server, the level kept: a change the program asks for (an exit used,
+  // a changelevel touched) is counted and set aside, so every thing is still looked at after it.
+  int held_back = 0;
+  const auto step = [&](const sh::Packet* packets, int count) {
+    c.server.frame(packets, count);
+    if (c.server->pending_map.empty()) return true;
+    held_back++;
+    c.server->pending_map.clear();
+    return true;
+  };
   Fields f;
   f.classname = field_of(progs, "classname");
   f.use = field_of(progs, "use");
@@ -161,8 +174,10 @@ inline void things_table(ge::lab::Lab& lab, const ThingsWatch& w, server::Campai
   for (size_t e = 0; e < things.size(); e++) was_live[e] = live(static_cast<int>(e));
 
   int64_t events_seen = s.out.events_total;
+  int64_t faults_now = s.q.faults;
   // One frame's look: what each thing did, and what the classes in `doing` caused.
   const auto look = [&](const std::set<int>& doing) {
+    faults_now = s.q.faults;
     for (size_t e = sh::kMaxClients + 1; e < things.size(); e++) {
       Thing& t = things[e];
       const bool is = live(static_cast<int>(e));
@@ -212,7 +227,6 @@ inline void things_table(ge::lab::Lab& lab, const ThingsWatch& w, server::Campai
       }
     }
   };
-  std::string error;
   const int frames = std::max(1, static_cast<int>(seconds / sv::kCampaignStep));
   // `seconds` of frames, the player kept alive and his hurt and push counted for `doing`.
   const sh::Vec3f start = s.sv.edicts[1].origin;
@@ -225,9 +239,9 @@ inline void things_table(ge::lab::Lab& lab, const ThingsWatch& w, server::Campai
     const sh::Vec3f v0 = s.sv.edicts[1].velocity;
     const float g0 = s.sv.edicts[1].gravity;
     bool hit = false, push = false;
-    for (int i = 0; i < frames && c.server; i++) {
+    for (int i = 0; i < frames && same_map(); i++) {
       if (health_f >= 0) *pg::entity_field(s.q.vm, 1, health_f) = pg::as_word(100.0f);
-      if (!sv::campaign_frame(c, nullptr, 0, error)) break;
+      if (!step(nullptr, 0) || !same_map()) break;
       look(doing);
       if (health_f >= 0 && float_at(s, 1, health_f) < 100) hit = true;
       const auto& p = s.sv.edicts[1];
@@ -244,6 +258,69 @@ inline void things_table(ge::lab::Lab& lab, const ThingsWatch& w, server::Campai
     *pg::entity_field(s.q.vm, 1, flags_f) = pg::as_word(static_cast<float>(fl));
   }
   run({});
+  // Each weapon picked up by the player where he joined, then its attack held: the shots it made,
+  // the sounds he played, the effects thrown and the ammunition spent.
+  gl::LabTable fired{"each weapon picked up and its attack held (a scripted look)",
+                     {"entity", "class (the map's)", "weapon then", "shots made", "sounds",
+                      "effects", "ammo spent"},
+                     {}};
+  const int weapon_f = field_of(progs, "weapon");
+  const int ammo_f = field_of(progs, "currentammo");
+  int fired_any = 0;
+  for (size_t e = sh::kMaxClients + 1; e < things.size() && same_map(); e++) {
+    const Thing& t = things[e];
+    const int ent = static_cast<int>(e);
+    if (t.cls < 0 || !live(ent) || word_at(s, ent, f.touch) <= 0 ||
+        rows[static_cast<size_t>(t.cls)].name.rfind("weapon_", 0) != 0)
+      continue;
+    home();
+    if (health_f >= 0) *pg::entity_field(s.q.vm, 1, health_f) = pg::as_word(100.0f);
+    call_as(s, f, word_at(s, ent, f.touch), ent);
+    const int weapon = static_cast<int>(float_at(s, 1, weapon_f));
+    const float ammo0 = float_at(s, 1, ammo_f);
+    std::vector<bool> before(static_cast<size_t>(s.sv.num_edicts));
+    for (int k = 0; k < s.sv.num_edicts; k++) before[static_cast<size_t>(k)] = live(k);
+    int shots = 0, sounds = 0, thrown = 0;
+    int64_t seen = s.out.events_total;
+    sh::Packet p;
+    for (int i = 0; i < frames * 3 && same_map(); i++) {
+      p.sequence = static_cast<uint32_t>(i + 1);
+      for (sh::MoveCmd& cmd : p.cmds) {
+        cmd.msec = 14;
+        cmd.buttons = (i & 1) ? 1 : 0;
+      }
+      if (health_f >= 0) *pg::entity_field(s.q.vm, 1, health_f) = pg::as_word(100.0f);
+      if (!step(&p, 1) || !same_map()) break;
+      for (int k = sh::kMaxClients + 1; k < s.sv.num_edicts; k++) {
+        const auto u = static_cast<size_t>(k);
+        const bool now = live(k), was = u < before.size() && before[u];
+        if (now && !was) shots++;
+        if (u >= before.size()) before.resize(u + 1);
+        before[u] = now;
+      }
+      for (int i2 = 0; i2 < s.sv.sound_count; i2++) sounds += s.sv.sounds[i2].ent == 1 ? 1 : 0;
+      const int64_t fresh =
+          std::min<int64_t>(s.out.events_total - seen, static_cast<int64_t>(s.out.events.size()));
+      seen = s.out.events_total;
+      for (size_t i2 = s.out.events.size() - static_cast<size_t>(fresh); i2 < s.out.events.size();
+           i2++) {
+        const sv::EventKind k = s.out.events[i2].kind;
+        thrown += k == sv::EventKind::multicast || k == sv::EventKind::particle ||
+                          k == sv::EventKind::point_effect || k == sv::EventKind::trail_effect
+                      ? 1
+                      : 0;
+      }
+    }
+    if (!same_map()) break;
+    fired_any += shots + thrown > 0 ? 1 : 0;
+    fired.rows.push_back({std::to_string(ent), rows[static_cast<size_t>(t.cls)].name,
+                          std::to_string(weapon), std::to_string(shots), std::to_string(sounds),
+                          std::to_string(thrown),
+                          ge::core::num::to_fixed(ammo0 - float_at(s, 1, ammo_f), 0)});
+  }
+  if (!fired.rows.empty()) lab.table(fired, gl::Det::measured);
+  lab.metric("things.weapons_fired", fired_any, "count");
+
   // Each name the map targets, used.
   std::map<std::string, std::vector<int>> named;
   for (size_t e = sh::kMaxClients + 1; e < things.size(); e++)
@@ -252,7 +329,7 @@ inline void things_table(ge::lab::Lab& lab, const ThingsWatch& w, server::Campai
         named[n].push_back(static_cast<int>(e));
   int used = 0, touched = 0;
   for (const auto& [name, ents] : named) {
-    if (!c.server) break;
+    if (!same_map()) break;
     std::set<int> doing;
     home();
     for (int e : ents) {
@@ -266,7 +343,7 @@ inline void things_table(ge::lab::Lab& lab, const ThingsWatch& w, server::Campai
     run(doing);
   }
   // Each trigger touched by the player standing in its middle.
-  for (size_t e = sh::kMaxClients + 1; e < things.size() && c.server; e++) {
+  for (size_t e = sh::kMaxClients + 1; e < things.size() && same_map(); e++) {
     const Thing& t = things[e];
     if (t.cls < 0 || !live(static_cast<int>(e)) || word_at(s, static_cast<int>(e), f.touch) <= 0 ||
         rows[static_cast<size_t>(t.cls)].name.rfind("trigger_", 0) != 0)
@@ -305,8 +382,13 @@ inline void things_table(ge::lab::Lab& lab, const ThingsWatch& w, server::Campai
   lab.metric("things.classes_idle", idle, "count");
   lab.metric("things.names_used", used, "count");
   lab.metric("things.triggers_touched", touched, "count");
-  lab.metric("things.faults", static_cast<double>(s.q.faults - faults_before), "count");
-  if (s.q.faults > faults_before) lab.note("the program's last fault: " + s.q.last_fault);
+  lab.metric("things.faults", static_cast<double>(faults_now - faults_before), "count");
+  lab.metric("things.level_changes_held", held_back, "count");
+  if (!same_map()) {
+    lab.note("the level ended while its things were used: the watch stopped there");
+  } else if (s.q.faults > faults_before) {
+    lab.note("the program's last fault: " + s.q.last_fault);
+  }
 }
 
 }  // namespace shooters_edge::labs

@@ -136,9 +136,10 @@ TEST(each_entity_keeps_the_class_name_the_map_spawned_it_as) {
     CHECK(static_cast<size_t>(e) >= fx.s->spawned_as.size() ||
           fx.s->spawned_as[static_cast<size_t>(e)].empty());
   const pg::Progs mod = spawn_mod();
-  Fixture skipped("{ \"classname\" \"worldspawn\" }\n{ \"classname\" \"monster_nothing\" }\n"
-                  "{ \"classname\" \"thing\" }",
-                  {}, &mod);
+  Fixture skipped(
+      "{ \"classname\" \"worldspawn\" }\n{ \"classname\" \"monster_nothing\" }\n"
+      "{ \"classname\" \"thing\" }",
+      {}, &mod);
   CHECK_MSG(skipped.loaded, skipped.error);
   int things_named = 0;
   for (const std::string& n : skipped.s->spawned_as) {
