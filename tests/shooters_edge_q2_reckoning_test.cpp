@@ -110,10 +110,10 @@ void run(Arena& a, int ticks, uint8_t buttons = 0) {
 }
 
 void place(Arena& a, int i, float x) {
-  int16_t* o = a.p(i).move.origin;
-  o[0] = static_cast<int16_t>(x * 8);
+  int32_t* o = a.p(i).move.origin;
+  o[0] = static_cast<int32_t>(x * 8);
   o[1] = 0;
-  for (int16_t& v : a.p(i).move.velocity) v = 0;
+  for (auto& v : a.p(i).move.velocity) v = 0;
 }
 
 // Ana at x −300 looking down the hall at Ben at x `ben`, under the pack (deathmatch).
