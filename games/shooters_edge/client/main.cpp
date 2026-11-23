@@ -761,17 +761,19 @@ int run_main(int argc, char** argv) {
     console.print(cl::worn_line(remix));
   };
   bool remix_enabled = false;
+  bool remix_expansions = true;  // cr_expansions as the files were opened
   std::string remix_for;
   cl::RemixParts remix_items{};  // remix.hpp's `remix_parts`
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
-    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
-        cl::remix_parts(remix_settings) == remix_items)
-      return;
+    const bool same_files = remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
+                            remix_settings.expansions == remix_expansions;
+    if (same_files && cl::remix_parts(remix_settings) == remix_items) return;
     if (cl::busy(loader)) return;  // its threads may read the other game's files: next frame
     remix_items = cl::remix_parts(remix_settings);
-    if (remix_settings.enabled == remix_enabled && remix_for == args.basedir) return remix_wear();
+    if (same_files) return remix_wear();
     remix_enabled = remix_settings.enabled;
+    remix_expansions = remix_settings.expansions;
     remix_for = args.basedir;
     const cl::RemixState st = cl::remix_check(remix_settings, args.profile,
                                               cl::known_games(prefs, args.profile, args.basedir));

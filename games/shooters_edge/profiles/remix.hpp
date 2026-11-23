@@ -372,6 +372,61 @@ inline const float* item_foot(std::string_view game, std::string_view class_name
   return by_prefix != nullptr ? by_prefix : fallback;
 }
 
+// THE MISSION PACKS' PART (`cr_expansions`): the items above that only a mission pack's maps
+// lay down, and the weapons a played pack lays down in its base game's place, by role. With the
+// setting off, a pack's items are not read (dropped, as any unknown item) and the played game's
+// own spawns stand; with it on, a map remixed for a played pack lays the pack's weapon where its
+// role has none of the base game's own (Quake's lightning gun stands in for both the rapid energy
+// weapon and the room-clearer; Scourge of Armagon has its own).
+struct PackItem {
+  std::string_view game, pack, class_name;
+};
+inline constexpr PackItem kPackItems[] = {
+    {"q1", "hipnotic", "weapon_laser_gun"},
+    {"q1", "hipnotic", "weapon_mjolnir"},
+    {"q1", "hipnotic", "weapon_proximity_gun"},
+    {"q1", "hipnotic", "item_artifact_wetsuit"},
+    {"q2", "rogue", "weapon_etf_rifle"},
+    {"q2", "rogue", "weapon_heatbeam"},
+    {"q2", "rogue", "weapon_plasmabeam"},
+    {"q2", "rogue", "weapon_proxlauncher"},
+    {"q2", "rogue", "weapon_disintegrator"},
+    {"q2", "rogue", "ammo_flechettes"},
+    {"q2", "rogue", "ammo_prox"},
+    {"q2", "rogue", "ammo_disruptor"},
+    {"q2", "rogue", "item_double"},
+};
+struct PackSpawn {
+  std::string_view game, pack;
+  ItemRole role;
+  std::string_view class_name;
+  int32_t bits = 0;
+};
+inline constexpr PackSpawn kPackSpawns[] = {
+    {"q1", "hipnotic", ItemRole::energy, "weapon_laser_gun", 0},
+    {"q1", "hipnotic", ItemRole::blast, "weapon_mjolnir", 0},
+};
+
+// What a remix may take from the mission packs: `on` the setting, `to_pack` the played game's
+// pack folder (lower case; "" the base game).
+struct RemixPacks {
+  bool on = true;
+  std::string_view to_pack;
+};
+
+// Whether `class_name` is an item only one of `game`'s mission packs lays down.
+inline bool is_pack_item(std::string_view game, std::string_view class_name) {
+  for (const PackItem& p : kPackItems)
+    if (p.game == game && p.class_name == class_name) return true;
+  return false;
+}
+
+// The weapon the played pack lays down for `class_name` read in `from`, or nullptr: only when the
+// packs are on and the played pack has its own for that item's role.
+inline const PackSpawn* pack_spawn(std::string_view from, std::string_view to,
+                                   std::string_view class_name, int32_t spawnflags,
+                                   const RemixPacks& packs);
+
 // Whether `class_name` is an item in either game (`kItemPrefixes`).
 inline bool is_item_class(std::string_view class_name) {
   for (std::string_view p : kItemPrefixes)
@@ -381,12 +436,27 @@ inline bool is_item_class(std::string_view class_name) {
 
 // `class_name` with `spawnflags` read in `from` and laid down in `to` (`ge::classic::swap_item`);
 // not known when either game has no list or `from` does not read it (an item then is dropped).
+// With the packs off (`packs.on` false), a mission pack's item is not read.
 inline ItemSwap remix_item(std::string_view from, std::string_view to, std::string_view class_name,
-                           int32_t spawnflags) {
+                           int32_t spawnflags, const RemixPacks& packs = {}) {
   const GameItems* f = game_items(from);
   const GameItems* t = game_items(to);
   if (f == nullptr || t == nullptr) return {};
+  if (!packs.on && is_pack_item(from, class_name)) return {};
   return ge::classic::swap_item(*f, *t, class_name, spawnflags);
+}
+
+inline const PackSpawn* pack_spawn(std::string_view from, std::string_view to,
+                                   std::string_view class_name, int32_t spawnflags,
+                                   const RemixPacks& packs) {
+  if (!packs.on || packs.to_pack.empty()) return nullptr;
+  const GameItems* f = game_items(from);
+  if (f == nullptr) return nullptr;
+  const ge::classic::ItemReading* r = ge::classic::read_item(*f, class_name, spawnflags);
+  if (r == nullptr) return nullptr;
+  for (const PackSpawn& p : kPackSpawns)
+    if (p.game == to && p.pack == packs.to_pack && p.role == r->role) return &p;
+  return nullptr;
 }
 
 }  // namespace shooters_edge::profiles

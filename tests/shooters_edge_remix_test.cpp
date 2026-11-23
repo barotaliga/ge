@@ -314,6 +314,65 @@ TEST(a_third_copy_of_a_weak_weapon_is_laid_down_as_its_ammunition) {
   CHECK(rep.to_ammo == 0 && value(blocks_of(out)[3], "classname") == "weapon_supershotgun");
 }
 
+// cr_expansions: with it on, a map remixed for a played mission pack gets the pack's own weapon
+// where its role has none of the base game's (Scourge of Armagon's laser cannon and Mjolnir in
+// the lightning gun's two places), after the balance; with it off, a pack's own items are not read.
+TEST(cr_expansions_lays_the_played_packs_weapons_and_reads_the_packs_items) {
+  namespace pf = shooters_edge::profiles;
+  const auto weapons = [](std::initializer_list<const char*> names) {
+    std::string t;
+    int x = 0;
+    for (const char* n : names) {
+      t += "{\n\"classname\" \"" + std::string(n) + "\"\n\"origin\" \"" + std::to_string(x) +
+           " 0 0\"\n}\n";
+      x += 1000;
+    }
+    return t;
+  };
+  const std::string map =
+      weapons({"weapon_hyperblaster", "weapon_bfg", "weapon_shotgun", "weapon_machinegun"});
+  std::string out, error;
+  cl::RemixReport rep;
+  // The base game: both become the lightning gun (the room-clearer kept strong).
+  CHECK(cl::remix_entities(map, "q2", "q1", out, &rep, error));
+  auto b = blocks_of(out);
+  CHECK(b.size() == 4 && value(b[0], "classname") == "weapon_lightning" &&
+        value(b[1], "classname") == "weapon_lightning");
+  // Scourge of Armagon played: its own two in their places.
+  CHECK(cl::remix_entities(map, "q2", "q1", out, &rep, error, {}, {true, "hipnotic"}));
+  b = blocks_of(out);
+  CHECK_MSG(b.size() == 4 && value(b[0], "classname") == "weapon_laser_gun" &&
+                value(b[1], "classname") == "weapon_mjolnir",
+            out);
+  // Off: the played pack's spawns are not used.
+  CHECK(cl::remix_entities(map, "q2", "q1", out, &rep, error, {}, {false, "hipnotic"}));
+  b = blocks_of(out);
+  CHECK(value(b[0], "classname") == "weapon_lightning");
+  // Off: a pack's own items in a map are not read (dropped); the base game's stand.
+  CHECK(pf::remix_item("q1", "q2", "weapon_laser_gun", 0).known);
+  CHECK(!pf::remix_item("q1", "q2", "weapon_laser_gun", 0, {false, {}}).known);
+  CHECK(!pf::remix_item("q2", "q1", "weapon_etf_rifle", 0, {false, {}}).known);
+  CHECK(pf::remix_item("q1", "q2", "weapon_nailgun", 0, {false, {}}).known);
+  // The setting: on by default, a player's word.
+  ge::console::Cvars cvars;
+  cl::RemixSettings s;
+  cl::bind_remix(cvars, &s);
+  CHECK(s.expansions);
+  cvars.set("cr_expansions", "0", ge::console::Source::local);
+  CHECK(!s.expansions);
+  s.enabled = true;
+  const std::vector<cl::KnownGame> both = {{"q1", "/games/one", cl::Edition::full},
+                                           {"q2", "/games/two", cl::Edition::full}};
+  CHECK(!cl::remix_check(s, "q1", both).expansions);
+  // Every pack item and pack spawn names a pack of its game.
+  for (const pf::PackItem& p : pf::kPackItems) {
+    const ge::classicenhance::Profile* g = ge::classicenhance::find_profile(p.game);
+    bool known = false;
+    for (const ge::classicenhance::MissionPack& m : g->packs) known = known || m.folder == p.pack;
+    CHECK_MSG(known, std::string(p.class_name));
+  }
+}
+
 TEST(the_remix_wants_two_full_games_and_cr_enabled) {
   cl::RemixSettings s;
   const std::vector<cl::KnownGame> both = {{"q1", "/games/one", cl::Edition::full},
