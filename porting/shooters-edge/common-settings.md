@@ -18,8 +18,8 @@ it). Per-element HUD settings of the modern client (1,405) are left out: no othe
 Pairs under two names are as good as the pairs found: a pair found later in the lists at the end
 is added to the table first, then lifted.
 
-Statuses: **one setting** every game's spelling reaches one setting of ours already; **lifted here**
-made one in the PR that wrote this audit; **to lift** one thing on two settings, or one game's
+Statuses: **one setting** every game's spelling reaches one setting of ours already; **lifted** made
+one by this work, its batch named; **to lift** one thing on two settings, or one game's
 alone in ours, with its batch (B2 to B6 below); **kept apart** two settings on purpose: another
 meaning, unit, value set or the opposite direction (the note says which); **sound thread** the
 sound settings, which the OpenAL thread lifts with its own work; **neither has it** a debug knob
@@ -30,14 +30,14 @@ neither client takes.
 | Status | Settings | Commands | All |
 | --- | --- | --- | --- |
 | one setting | 84 | 53 | 137 |
-| lifted here | 9 | 1 | 10 |
-| to lift | 16 | 0 | 16 |
+| lifted | 11 | 1 | 12 |
+| to lift | 14 | 0 | 14 |
 | sound thread | 2 | 1 | 3 |
 | kept apart | 16 | 0 | 16 |
 | neither has it | 8 | 0 | 8 |
 | **common to Quake and Quake II** | **135** | **55** | **190** |
 
-**Left to lift: 16.**
+**Left to lift: 14.**
 
 ## The batches
 
@@ -45,8 +45,10 @@ neither client takes.
   `gl_consolefont`, `r_drawparticles`, `vid_reload`, `cl_net_clientport`, `in_grab_windowed_mouse`),
   Quake II's `gl_swapinterval`, and `gl_modulate`, `gl_anisotropy`, `in_grab` and `net_clientport` made
   every game's.
-- **B2, the third-person camera:** Quake's `chase_active`/`chase_back`, ours `cam_thirdperson`/`cam_dist`
-  and Quake II's `cl_thirdperson`/`cl_thirdperson_range` on one camera.
+- **B2 (done):** the camera behind you every game's: `cl_thirdperson` and `cl_thirdperson_angle`
+  in the classic layer (a cheat; Quake's `chase_active` a synonym), its distance our `cam_dist`, the
+  one a watched player is seen from (Quake's `chase_back`, Quake II's `cl_thirdperson_range` with
+  its 60 a same row).
 - **B3, the client's network:** the move packets' rate and duplicates, `cl_shownet`, `gender`.
 - **B4, the screen:** the graphs, the 2D switch, the server browser's sort and ping rate (with the
   menus thread).
@@ -194,18 +196,18 @@ neither client takes.
 | setting | `vid_fullscreen` |  | `vid_fullscreen` | `vid_fullscreen` | engine | one |  |
 | setting | `viewsize` | `viewsize` | `viewsize` | `viewsize` | shell | one |  |
 | setting | `volume` | `volume` | `volume` | `s_volume` | engine | one |  |
-| command | `r_reload` |  | `vid_reload` | `r_reload` | shell | lifted here | QuakeWorld's vid_reload a synonym (command) |
-| setting | `con_bgalpha` |  | `scr_conalpha` | `con_alpha` | engine | lifted here | QuakeWorld's scr_conalpha and Quake II's con_alpha both synonyms |
-| setting | `con_font` |  | `gl_consolefont` | `con_font` | engine | lifted here | QuakeWorld's gl_consolefont a synonym of con_font, Quake II's own name |
-| setting | `con_height` |  | `scr_consize` | `con_height` | engine | lifted here | QuakeWorld's scr_consize a synonym of con_height, Quake II's own name |
-| setting | `gl_anisotropy` |  | `gl_anisotropy` | `gl_anisotropy` | classic | lifted here | was Quake II's alone; now every game's, Quake II's 1 (none) a same row, Quake 0 (the renderer's 4) |
-| setting | `gl_modulate` |  | `gl_modulate` | `gl_modulate` | classic | lifted here | was Quake II's alone; now the classic look's for every game (1 in both) |
-| setting | `in_grab` |  | `in_grab_windowed_mouse` | `in_grab` | classic | lifted here | was Quake II's alone; now every game's (2 the same as 1), QuakeWorld's spelling a synonym |
-| setting | `net_clientport` |  | `cl_net_clientport` | `net_clientport` | classic | lifted here | was Quake II's alone; now every game's, QuakeWorld's cl_net_clientport a synonym |
-| setting | `r_particles` |  | `r_drawparticles` | `cl_particles` | classic | lifted here | QuakeWorld's r_drawparticles a synonym (so its rulesets' lock now holds); Quake II's cl_particles one already |
-| setting | `vid_vsync` |  | `vid_vsync` | `gl_swapinterval` | engine | lifted here | Quake II's gl_swapinterval a synonym (its video page's row now reaches the window's vsync) |
-| setting | `cam_dist` | `chase_back` | `cam_dist` | `cl_thirdperson_range` | shell | to lift B2 | the camera's distance: Quake II 60, ours 100; one setting with a same row once the cameras are one |
-| setting | `cam_thirdperson` | `chase_active` | `cam_thirdperson` | `cl_thirdperson` | shell | to lift B2 | Quake II's cl_thirdperson (yourself, a cheat) and ours (the player watched) on two fields; Quake's chase_active too |
+| command | `r_reload` |  | `vid_reload` | `r_reload` | shell | lifted B1 | QuakeWorld's vid_reload a synonym (command) |
+| setting | `con_bgalpha` |  | `scr_conalpha` | `con_alpha` | engine | lifted B1 | QuakeWorld's scr_conalpha and Quake II's con_alpha both synonyms |
+| setting | `con_font` |  | `gl_consolefont` | `con_font` | engine | lifted B1 | QuakeWorld's gl_consolefont a synonym of con_font, Quake II's own name |
+| setting | `con_height` |  | `scr_consize` | `con_height` | engine | lifted B1 | QuakeWorld's scr_consize a synonym of con_height, Quake II's own name |
+| setting | `gl_anisotropy` |  | `gl_anisotropy` | `gl_anisotropy` | classic | lifted B1 | was Quake II's alone; now every game's, Quake II's 1 (none) a same row, Quake 0 (the renderer's 4) |
+| setting | `gl_modulate` |  | `gl_modulate` | `gl_modulate` | classic | lifted B1 | was Quake II's alone; now the classic look's for every game (1 in both) |
+| setting | `in_grab` |  | `in_grab_windowed_mouse` | `in_grab` | classic | lifted B1 | was Quake II's alone; now every game's (2 the same as 1), QuakeWorld's spelling a synonym |
+| setting | `net_clientport` |  | `cl_net_clientport` | `net_clientport` | classic | lifted B1 | was Quake II's alone; now every game's, QuakeWorld's cl_net_clientport a synonym |
+| setting | `r_particles` |  | `r_drawparticles` | `cl_particles` | classic | lifted B1 | QuakeWorld's r_drawparticles a synonym (so its rulesets' lock now holds); Quake II's cl_particles one already |
+| setting | `vid_vsync` |  | `vid_vsync` | `gl_swapinterval` | engine | lifted B1 | Quake II's gl_swapinterval a synonym (its video page's row now reaches the window's vsync) |
+| setting | `cam_dist` | `chase_back` | `cam_dist` | `cl_thirdperson_range` | classic | lifted B2 | the camera's distance behind the player, watched or yourself: Quake II's 60 a same row, ours 100 |
+| setting | `cl_thirdperson` | `chase_active` | `cam_thirdperson` | `cl_thirdperson` | classic | lifted B2 | yourself from behind, every game's and a cheat (with `cl_thirdperson_angle`); `cam_thirdperson` stays ours for the player watched in a demo or as a spectator, no cheat |
 | setting | `cl_c2spps` |  | `cl_c2spps` | `cl_maxpackets` | shell | to lift B3 | move packets a second: Quake II's cl_maxpackets (30) and QuakeWorld's cl_c2spps (0 no cap) on two remote fields |
 | setting | `cl_packetdup` |  | `cl_c2sdupe` | `cl_packetdup` | shell | to lift B3 | each move sent again: Quake II's cl_packetdup (in the next packet), QuakeWorld's cl_c2sdupe (the packet twice) |
 | setting | `cl_shownet` | `cl_shownet` | `cl_shownet` | `cl_shownet` | classic | to lift B3 | Quake II's alone in ours; Quake's too (each message's size) |

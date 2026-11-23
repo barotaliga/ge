@@ -1,7 +1,8 @@
 // Quake II's session settings: the map commands, the clock and the state (q2_session.hpp).
 //
 // ge:summary Quake II's map commands run on a change, its game clock, its read-only state cvars
-// ge:keywords cl_thirdperson cl_thirdperson_angle cl_thirdperson_range third-person view_behind
+// ge:keywords cl_thirdperson cl_thirdperson_angle cl_thirdperson_range cam_dist chase_active
+// ge:keywords third-person view_behind
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd timescale fixedtime cl_paused
 // ge:skill console shooter
 // ge:test tests/shooters_edge_q2_session_test.cpp
@@ -65,6 +66,27 @@ void add_shared_session_cvars(con::Cvars& v, Q2Session& s) {
           .max = 2,
           .values = "1: it does (the default), as 2; 0: only while it covers the screen"},
          &s.grab);
+  // Yourself seen from behind, in every game (Quake's chase_active, Quake II's cl_thirdperson):
+  // a cheat, so a server that allows none keeps you in your own eyes.
+  v.bind({.name = "cl_thirdperson",
+          .fallback = "0",
+          .flags = con::kCheat,
+          .help = "Whether you see yourself from behind, only while the server allows cheats.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: through your own eyes (the default); 1: from behind you"},
+         &s.third_person);
+  v.bind({.name = "cl_thirdperson_angle",
+          .fallback = "0",
+          .flags = con::kArchive,
+          .help = "Where round you the camera sits with cl_thirdperson 1, in degrees.",
+          .min = -360,
+          .max = 360,
+          .values = "0: behind you (the default); 90: to your right; 180: in front, looking back "
+                    "at you; -360..360: any angle between"},
+         &s.third_angle);
+  // The camera's distance behind the player is ours, `cam_dist`, the one a player watched in a
+  // demo is seen from too (demo_playback.cpp registers it first, in this layer).
+  s.dist = v.find("cam_dist");
   v.add({.name = "net_clientport",
          .fallback = "-1",
          .help = "The network port your client sends from; a change applies at once.",
@@ -75,6 +97,18 @@ void add_shared_session_cvars(con::Cvars& v, Q2Session& s) {
 }
 
 void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
+  // Its camera behind you nearer than ours (`cam_dist`), and its spelling of it.
+  v.bind({.name = "cam_dist",
+          .fallback = "60",
+          .flags = con::kArchive,
+          .help = "How far behind the player the camera sits when he is seen from behind, in "
+                  "units.",
+          .min = 0,
+          .max = 1000,
+          .values = "60: the default; 0..1000: that many units, nearer where a wall is in the way",
+          .overlap = con::Overlap::same},
+         &s.third_range);
+  v.add_synonym("cl_thirdperson_range", "cam_dist");
   v.bind({.name = "timescale",
           .fallback = "1",
           .flags = con::kCheat,
@@ -100,30 +134,6 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
           .kind = con::CvarKind::boolean,
           .values = "1: it waits (the default); 0: it runs on"},
          &s.autopause);
-  v.bind({.name = "cl_thirdperson",
-          .fallback = "0",
-          .flags = con::kCheat,
-          .help = "Whether you see yourself from behind, only while the server allows cheats.",
-          .kind = con::CvarKind::boolean,
-          .values = "0: through your own eyes (the default); 1: from behind you"},
-         &s.third_person);
-  v.bind({.name = "cl_thirdperson_angle",
-          .fallback = "0",
-          .flags = con::kArchive,
-          .help = "Where round you the camera sits with cl_thirdperson 1, in degrees.",
-          .min = -360,
-          .max = 360,
-          .values = "0: behind you (the default); 90: to your right; 180: in front, looking back "
-                    "at you; -360..360: any angle between"},
-         &s.third_angle);
-  v.bind({.name = "cl_thirdperson_range",
-          .fallback = "60",
-          .flags = con::kArchive,
-          .help = "How far from you the camera sits with cl_thirdperson 1.",
-          .min = 0,
-          .max = 1000,
-          .values = "60: the default; 0..1000: that many units, nearer where a wall is in the way"},
-         &s.third_range);
   v.bind({.name = "in_enable",
           .fallback = "1",
           .help = "Whether the mouse turns your view; the keys work either way.",
@@ -362,7 +372,8 @@ double own_figure_alpha(double behind) {
 
 double q2_third_person(const Q2Session& s, ge::render::FrameView& view,
                        const ge::shooter::BrushModel* world, std::span<const BehindMover> movers) {
-  return s.third_person ? view_behind(view, s.third_range, s.third_angle, world, movers) : 0;
+  const double range = s.dist != nullptr ? s.dist->number : s.third_range;  // cam_dist
+  return s.third_person ? view_behind(view, range, s.third_angle, world, movers) : 0;
 }
 
 }  // namespace shooters_edge::client

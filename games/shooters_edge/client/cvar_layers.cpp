@@ -14,6 +14,7 @@
 // ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack gl_celshading
 // ge:keywords cl_smooth_explosions common-settings scr_consize scr_conalpha gl_consolefont
 // ge:keywords r_drawparticles in_grab_windowed_mouse cl_net_clientport vid_reload gl_swapinterval
+// ge:keywords chase_active chase_back
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -436,8 +437,10 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.add_command_synonym("cvar_reset", "reset");  // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
   c.add_command_synonym("togglechat", "toggleconsole");  // QuakeWorld's second name for it
-  c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left
-  if (c.cvars().find("r_lerpmodels") != nullptr)         // the models' and the held weapon's frames
+  c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left,
+  c.cvars().add_synonym("chase_back", "cam_dist");       // its distance behind and its switch
+  c.cvars().add_synonym("chase_active", "cl_thirdperson");
+  if (c.cvars().find("r_lerpmodels") != nullptr)  // the models' and the held weapon's frames
     c.cvars().add_synonym("r_lerpframes", "r_lerpmodels");
   // An old Quake config's saved name and colours: `_cl_name` is the name, `_cl_color` both
   // colours as one number (shirt times 16 plus pants), so its config dresses you as it did.
@@ -1160,7 +1163,11 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
     fresh.begin_cmd = v.q2.begin_cmd;  // the map commands are every game's (classic layer)
     fresh.change_cmd = v.q2.change_cmd;
     fresh.disconnect_cmd = v.q2.disconnect_cmd;
-    fresh.grab = v.q2.grab;  // in_grab is every game's too
+    fresh.grab = v.q2.grab;  // in_grab is every game's too, and the camera behind you
+    fresh.third_person = v.q2.third_person;
+    fresh.third_angle = v.q2.third_angle;
+    fresh.third_range = v.q2.third_range;
+    fresh.dist = v.q2.dist;
     v.q2 = fresh;
   }
   if (game.id == "q2") add_q2_session_cvars(c.cvars(), v.q2);

@@ -24,13 +24,14 @@
 // THE STATE, read-only: `cl_running` 1 (the client is up), `cl_paused` 1 while the game this
 // window runs is paused, `sv_running` 1 while it runs a server, `sv_paused` 1 while that is paused.
 //
-// THE THIRD PERSON, a cheat: `cl_thirdperson` 1 puts the player's own view `cl_thirdperson_range`
-// units (60) behind his eye, turned `cl_thirdperson_angle` degrees round him the way a yaw turns
-// (0 behind, 180 in front looking back at him), looking the way he would from there; it stops
-// short of the world's walls and of its doors and platforms where they stand, and his own figure,
-// drawn while the camera is off him, fades as a wall pushes the camera in (`own_figure_alpha`:
-// solid from kOwnSolidUnits, gone within kOwnFigureUnits). Joined or hosted, never while he watches
-// another.
+// THE THIRD PERSON, every game's and a cheat: `cl_thirdperson` 1 (Quake's `chase_active`) puts the
+// player's own view `cam_dist` units (Quake II's 60, ours 100; its `cl_thirdperson_range`, Quake's
+// `chase_back`, the distance a watched player is seen from too) behind his eye, turned
+// `cl_thirdperson_angle` degrees round him the way a yaw turns (0 behind, 180 in front looking back
+// at him), looking the way he would from there; it stops short of the world's walls and of its
+// doors and platforms where they stand, and his own figure, drawn while the camera is off him,
+// fades as a wall pushes the camera in (`own_figure_alpha`: solid from kOwnSolidUnits, gone within
+// kOwnFigureUnits). Joined or hosted, never while he watches another.
 //
 // THE MAP'S VERSION: a level that states its map's checksum (configstring 31) is checked against
 // the map on disk as it loads (`q2_map_version`): a server's different map drops the game, a
@@ -80,13 +81,14 @@ struct Q2Session {
   bool autopause = true;       // cl_autopause: a game played alone waits under the menu
   bool third_person = false;   // cl_thirdperson (a cheat)
   double third_angle = 0;      // cl_thirdperson_angle, degrees round the player
-  double third_range = 60;     // cl_thirdperson_range, units behind him
-  bool warn_fps = true;        // cl_warn_on_fps_rounding
-  uint32_t fps_seen = 0;       // cl_maxfps's revision when it was last checked
-  bool fps_told = false;       // how to turn the warning off said once
-  int grab = 1;                // in_grab: 0 never in a window, 1 and 2 as ours
-  bool mouse = true;           // in_enable: 0 the mouse never taken, so it never looks
-  bool remap_tracks = false;   // ogg_remap_tracks (1 once Quake II registers it): take_in.hpp
+  double third_range = 100;    // cam_dist, units behind him (Quake II 60), when `dist` is none
+  const ge::console::Cvar* dist = nullptr;  // cam_dist, where the window registered it
+  bool warn_fps = true;                     // cl_warn_on_fps_rounding
+  uint32_t fps_seen = 0;                    // cl_maxfps's revision when it was last checked
+  bool fps_told = false;                    // how to turn the warning off said once
+  int grab = 1;                             // in_grab: 0 never in a window, 1 and 2 as ours
+  bool mouse = true;                        // in_enable: 0 the mouse never taken, so it never looks
+  bool remap_tracks = false;  // ogg_remap_tracks (1 once Quake II registers it): take_in.hpp
   // What the last frame saw: in a game, its map ("" while it loads), the state cvars' values.
   bool joined = false;
   std::string map;

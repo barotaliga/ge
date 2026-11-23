@@ -66,7 +66,7 @@ in its layer and its default a `same` row, and flips the audit's row.
 
 ## Gaps
 
-- The common names left to lift, by batch: the third-person camera (B2), the client's move packets,
+- The common names left to lift, by batch: the client's move packets,
   `cl_shownet` and `gender` (B3), the graphs, the 2D switch and the browser's sort (B4), the
   server's `cheats`, recording size and port (B5), the outlines and square specks (B6).
 - `toggle` (flips in one game, cycles in the other): a per-game command layer.
@@ -91,6 +91,9 @@ in its layer and its default a `same` row, and flips the audit's row.
 - A setting registered by only one game's layer and moved to a shared one must leave the game's
   "set aside" resets (`add_first`'s) and its `GameBindings` pointer with it, or loading the other
   game puts the player's value back to a default.
+- A setting registered twice in ONE layer keeps the first registration's field: the second
+  `bind` is ignored, not merged. To read a setting another file of the same layer owns, keep its
+  `Cvar*` (`Q2Session::dist` reads `cam_dist`) instead of binding it again.
 - Matching names across games by spelling finds only part of the pairs: Quake II's `con_height`
   is QuakeWorld's `scr_consize`. Pair by what each does, from both ledgers' descriptions.
 

@@ -576,6 +576,28 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   CHECK(v.clashes().empty());
 }
 
+TEST(one_camera_behind_the_player_in_every_game) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("cam_dist")->value == "100" && w.game.q2.dist == v.find("cam_dist"));
+  v.set("chase_back", "80", con::Source::local);  // Quake's spellings of the distance and switch
+  CHECK(v.find("cam_dist")->value == "80" && w.playback.behind == 80);
+  v.set("sv_cheats", "1", con::Source::server);  // the server allows cheats
+  v.set("chase_active", "1", con::Source::local);
+  CHECK(v.find("cl_thirdperson")->value == "1" && w.game.q2.third_person);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2, {});
+  CHECK(v.find("chase_back") == nullptr && w.game.q2.third_person);  // the switch is kept
+  v.set("cl_thirdperson_range", "40", con::Source::local);  // Quake II's spelling of the distance
+  CHECK(v.find("cam_dist")->value == "40" && w.game.q2.dist->number == 40);
+  CHECK(v.find("cl_thirdperson")->layer == cl::kLayerClassic);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
+  CHECK(v.find("cl_thirdperson_range") == nullptr && v.find("chase_active") != nullptr);
+  CHECK(v.clashes().empty());
+}
+
 TEST(color_sets_both_colours_as_quake_keeps_them) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();

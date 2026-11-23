@@ -28,7 +28,11 @@ struct Rig {
   cl::Q2Session s;
   std::vector<std::string> said;
   Rig() {
-    cl::add_shared_session_cvars(c.cvars(), s);
+    {
+      con::CvarLayer classic(c.cvars(), "classic");  // every game's, then Quake II's over them
+      cl::add_shared_session_cvars(c.cvars(), s);
+    }
+    con::CvarLayer q2(c.cvars(), "game:q2");
     cl::add_q2_session_cvars(c.cvars(), s);
     c.add_command("said", "keeps its word",
                   [this](con::Console&, const con::Args& a) { said.push_back(a[1]); });
