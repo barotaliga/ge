@@ -109,6 +109,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   if (c.port == 0) c.port = game.default_port;
   // The fallbacks copied first: binding writes each into the field it is read from.
   const std::string port = std::to_string(c.port), clients = std::to_string(c.maxclients);
+  const std::string ip6 = c.ip6, ipv6 = std::to_string(c.ipv6);
   const std::string bots = std::to_string(c.bots), seed = std::to_string(c.seed);
   const std::string lobby = std::to_string(c.lobby);
   const std::string name = c.hostname, about = c.description, ip = c.ip, map = c.map;
@@ -146,6 +147,13 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
        kAny, "\"\": every interface (the default); TEXT: that address only", &c.ip);
   bind("net_port", port, latched, "The UDP port the game listens on.", CvarKind::integer, 1, 65535,
        "1..65535: that port", &c.port);
+  bind("net_ip6", ip6, latched, "The local IPv6 address the server listens on as well.",
+       CvarKind::text, -kAny, kAny, "\"\": every interface (the default); TEXT: that address only",
+       &c.ip6);
+  bind("net_enable_ipv6", ipv6, latched, "Whether the server listens on IPv6 as well as IPv4.",
+       CvarKind::integer, 0, 2,
+       "0: IPv4 only; 1: IPv4 only (the default); 2: an IPv6 socket too, on net_ip6 and net_port",
+       &c.ipv6);
   bind("sv_maxclients", clients, latched_info, "The most players the server seats at once.",
        CvarKind::integer, 1, static_cast<double>(most), slots_values, &c.maxclients);
   bind("sv_map", map, info, "The map the server starts on.", CvarKind::text, -kAny, kAny,

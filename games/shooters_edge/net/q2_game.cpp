@@ -258,6 +258,9 @@ constexpr gs::GameRule kRules[] = {
     {"mvd_default_map", "The map of a relay's Waiting Room.", nullptr, "q2dm1 the default", false},
     {"mvd_chase_prefix", "Where a relay's chase line is drawn, as a layout's position.", nullptr,
      "xv 0 yb -64 the default", false},
+    {"sys_allow_unsafe_savegames",
+     "Lets a game library that cannot be saved safely be saved and loaded anyway; set at start.",
+     "0", "0: such a game is never saved (the default); 1: it is", false},
 };
 
 // The rules a server may set: the engine's rate bounds and per-address limit (server/rate.hpp,
@@ -737,6 +740,9 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   };
   g->cfg.file_origin = [gp](const std::string& path, ge::vfs::ArchiveOrigin* out) {
     return ge::classic::content::served_origin(gp->files, path, out);
+  };
+  g->cfg.read_deflated = [gp](const std::string& path, std::vector<uint8_t>* out) {
+    return ge::classic::content::served_deflated(gp->files, path, out);
   };
   g->cfg.wire.map_checksum = sv::q2_map_checksum(g->map->file);
   sv::q2_sky(*g->map->spec.brushes, g->cfg.wire);

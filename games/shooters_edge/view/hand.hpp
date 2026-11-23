@@ -83,16 +83,16 @@ struct ViewSettings {
   int hand = 0;      // Quake II's `hand` (user info): 1 left, 2 in the middle (no weapon drawn)
   int gun = 1;       // Quake II's `cl_gun`: 0 or -1 none, 1 by `hand`, 2 always right, 3 left
   double alpha = 1;  // Quake II's `cl_gunalpha`: how solid the weapon is drawn, 0..1
-  bool last_fired = false;  // r_viewmodellastfired (Quake's): a recording shows the last fired
+  bool last_fired = false;  // r_viewmodellastfired (every game's): a recording shows the last fired
   bool lerp = true;  // r_lerpmodels (bound with the picture's): a clip's end flows back to rest
   double switch_s = 0.2;   // cl_gunswitch, s a whole switch takes (0: at once)
   double switch_fire = 4;  // cl_gunswitch_fire, a shot's speed-up of the raise
   // The games' own spellings of the gun's place and lens, in their units (cvar_layers.cpp): each
   // adds to ours (`gun_m`) or stands in for ours unset (`fov_deg`).
   double size = 1;                  // r_viewmodelsize (Quake's): depth 0.5 + size / 2
-  std::string offset_text;          // r_viewmodeloffset (Quake's): "right down forward"
-  double gun_units[3] = {0, 0, 0};  // cl_gun_x, cl_gun_y, cl_gun_z (Quake II's): right, forward, up
-  double gun_fov_h = 0;             // cl_gunfov (Quake II's): degrees across at 4:3 (0: none)
+  std::string offset_text;          // r_viewmodeloffset: "right down forward"
+  double gun_units[3] = {0, 0, 0};  // cl_gun_x, cl_gun_y, cl_gun_z: right, forward, up
+  double gun_fov_h = 0;             // cl_gunfov: degrees across at 4:3 (0: none)
   double unit_m = 0.025;            // a game unit, m (the brush maps')
   // The developer's look at a weapon (`gun_next`, `gun_prev`, `gun_model`): a frame shown in place
   // of the one the game asks (0: the game's) and a weapon of the game's set shown in place of the

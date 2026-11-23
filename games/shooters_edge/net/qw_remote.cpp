@@ -429,9 +429,9 @@ std::string remote_foot(const Remote& r, double& progress) {
 
 namespace {
 
-// The port Quake II's `net_clientport` asks for (-1 any free one; never in Quake).
+// The port `net_clientport` asks for (-1 any free one), in every game.
 int wanted_port(const Remote& r) {
-  if (!r.setting || !(r.q2_game && r.q2_game())) return -1;
+  if (!r.setting) return -1;
   const std::string v = r.setting("net_clientport");
   const int port = v.empty() ? -1 : std::atoi(v.c_str());
   return port > 0 && port <= 65535 ? port : -1;
