@@ -34,7 +34,7 @@ int skill(const Q2Server& s) {
 bool fightable(const Q2Server& s, int i) {
   return s.clients[i].active && !s.clients[i].spectator && s.players[i].alive;
 }
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
 

@@ -88,7 +88,6 @@ struct NativeHost {
   // newer interface (`new_interface`), so clients get the second level. Every index and limit
   // below goes through `cs()` and `limits()`.
   int ext = 0;
-  bool new_interface = false;  // the library's interface is the newer one (version 3302)
   const ge::classic::protocol::Q2CsLayout& cs() const {
     return ge::classic::protocol::q2_cs_layout(ext > 0);
   }
@@ -100,6 +99,9 @@ struct NativeHost {
   // the players move with Quake's ground and air (profiles/remix_arsenal.hpp's
   // `kQ1Feel`). Kept by `native_set` as the setting changes.
   bool q1_physics = false;
+  // The library is the newer interface (version 3302, q2_native_abi.hpp): its client records, its
+  // player state and its move record are the newer ones. Set as the library loads, before `init`.
+  bool new_interface = false;
 
   double clock = 0;  // host time since the level started, s
   double next_frame = 0;
@@ -131,6 +133,20 @@ struct NativeHost {
     if (e == nullptr || game == nullptr || game->edict_size <= 0) return -1;
     return static_cast<int>((reinterpret_cast<const uint8_t*>(e) - game->edicts) /
                             game->edict_size);
+  }
+  // A player's state as the library lays it out: `f` takes a `NativePlayer&` or, for the newer
+  // interface, a `NativePlayerNew&` (the two share their fields' names). `e` has a client.
+  template <class F>
+  decltype(auto) with_player(const native::NativeEntityHead* e, F&& f) const {
+    if (new_interface) return f(reinterpret_cast<native::NativeClientHeadNew*>(e->client)->ps);
+    return f(e->client->ps);
+  }
+  // The ping the server writes into a client's record before each frame, in ms.
+  void set_ping(native::NativeEntityHead* e, int ms) const {
+    if (new_interface)
+      reinterpret_cast<native::NativeClientHeadNew*>(e->client)->ping = ms;
+    else
+      e->client->ping = ms;
   }
   NativeSetting* find_setting(const std::string& name);
   // The map's models, the world's included (either form).

@@ -163,8 +163,8 @@ TEST(attack_starts_and_ends_a_chase_behind_the_player_and_shows_his_bar) {
   run(*a, 2);
   CHECK(a->p(1).chase == 0);
   // Behind Ana's view: 30 back from her eye, 2 forward again, at least 20 over her origin.
-  const float ax = a->p(0).move.origin[0] / 8.0f, bx = a->p(1).move.origin[0] / 8.0f;
-  const float az = a->p(0).move.origin[2] / 8.0f, bz = a->p(1).move.origin[2] / 8.0f;
+  const float ax = float(a->p(0).move.origin[0]) / 8.0f, bx = float(a->p(1).move.origin[0]) / 8.0f;
+  const float az = float(a->p(0).move.origin[2]) / 8.0f, bz = float(a->p(1).move.origin[2]) / 8.0f;
   const float back = bx > ax ? bx - ax : ax - bx;  // she faces along x, one way or the other
   CHECK_MSG(back > 27 && back < 29, std::to_string(ax) + " " + std::to_string(bx));
   CHECK(bz >= az + 19.9f);

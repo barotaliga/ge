@@ -1314,8 +1314,8 @@ void write_moves(const Q2NetServer& s, int i, std::vector<uint8_t>& b) {
     u8(j);
     u8(static_cast<int>(std::clamp(ms + 0.5, 0.0, 255.0)));
     u8(static_cast<int>(m.type));
-    for (int16_t v : m.origin) i16(v);
-    for (int16_t v : m.velocity) i16(v);
+    for (int32_t v : m.origin) i16(v);
+    for (int32_t v : m.velocity) i16(v);
     u8(m.flags);
     u8(m.time);
     i16(m.gravity);
@@ -1516,7 +1516,7 @@ bool lag_place(void* ctx, int shooter, int target, sh::Vec3f& at, sh::Vec3f& min
   const double when =
       antilag_target(acked, sc.ping_s, 77, s.now, s.cfg.antilag_exact,
                      s.cfg.antilag_max_ms / 1000.0, s.cfg.antilag_interp ? s.game->step : 0.0);
-  const int16_t* v = s.game->players[target].move.velocity;
+  const int32_t* v = s.game->players[target].move.velocity;
   const sh::Vec3f velocity{float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
   AntilagPlace p;
   if (!antilag_place(s.antilag.players[target], when, velocity, p)) return false;
@@ -1678,7 +1678,7 @@ void q2_net_frame(Q2NetServer& s, int64_t now_us) {
         continue;
       }
       const sv::Q2Player& p = s.game->players[i];
-      const int16_t* o = p.move.origin;
+      const int32_t* o = p.move.origin;
       antilag_record(s.antilag, i, s.now,
                      {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f}, p.mins,
                      p.maxs);
