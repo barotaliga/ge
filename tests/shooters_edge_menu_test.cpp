@@ -36,6 +36,7 @@
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/menu/classic_console.hpp"
 #include "shooters_edge/menu/classic_view.hpp"
+#include "shooters_edge/menu/episodes.hpp"
 #include "shooters_edge/menu/figures.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
@@ -143,6 +144,61 @@ TEST(rows_dim_until_the_console_knows_what_they_need) {
   CHECK_MSG(!item(m, "host", "hostname")->disabled &&
                 item(m, "host", "hostname")->text == "HOST NAME  Frag Hall",
             item(m, "host", "hostname")->text);
+}
+
+TEST(quakes_episodes_follow_the_maps_the_packs_hold) {
+  std::vector<std::string> shareware = {"start"};
+  for (int i = 1; i <= 8; i++) shareware.push_back("e1m" + std::to_string(i));
+  std::vector<sm::Episode> eps = sm::episodes_for(shareware);
+  CHECK(eps.size() == 2 && eps[0].name == "Welcome to Quake" && eps[1].name == "Doomed Dimension");
+  CHECK(eps[1].levels.size() == 8 && eps[1].levels[0].name == "Slipgate Complex");
+  std::vector<std::string> full = shareware;
+  for (const char* m : {"e2m1", "e3m1", "e4m1", "end", "dm1"}) full.emplace_back(m);
+  eps = sm::episodes_for(full);
+  CHECK(eps.size() == 7 && eps[6].name == "Deathmatch Arena" && eps[6].levels.size() == 6);
+  int e = -1, l = -1;
+  CHECK(sm::level_of(eps, "e3m4", &e, &l) && e == 3 && l == 3);
+  CHECK(eps[3].levels[3].name == "Satan's Dark Delight");
+  CHECK(!sm::level_of(eps, "aerowalk", &e, &l));
+  eps = sm::episodes_for(std::vector<std::string>{"start", "hip1m1", "hip2m1", "hipdm1"});
+  CHECK(eps.size() == 4 && eps[0].name == "Scourge of Armagon" &&
+        eps[0].levels[0].name == "Command HQ");
+  eps = sm::episodes_for(std::vector<std::string>{"start", "r1m1", "ctf1"});
+  CHECK(eps.size() == 3 && eps[2].levels[0].map == "ctf1");
+  CHECK(sm::episodes_for(std::vector<std::string>{"q2dm1"}).empty());
+}
+
+TEST(the_host_page_keeps_episode_level_and_map_together) {
+  World w;
+  Menu m = sm::build_menu();
+  sm::Host host{.console = &w.con, .maps = {"start", "e1m1", "e1m2", "e2m1", "aerowalk"}};
+  sm::refresh(m, host);
+  CHECK(!item(m, "host", "episode")->disabled);
+  CHECK(item(m, "host", "episode")->choices.size() == 3);  // its first three episodes
+  m.open("host");
+  CHECK(m.focus("episode"));
+  MenuInput right;
+  right.right = true;
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  const Item* map = item(m, "host", "map");
+  CHECK(map->choices[static_cast<size_t>(map->choice)] == "e1m1");
+  CHECK(item(m, "host", "level")->choices[0] == "Slipgate Complex");
+  CHECK(m.focus("level"));
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(map->choices[static_cast<size_t>(map->choice)] == "e1m2");
+  // A map picked that a list holds sets its episode and level; another keeps them.
+  CHECK(m.focus("map"));
+  MenuInput left;
+  left.left = true;
+  for (const MenuEvent& e : m.input(left)) sm::apply_event(e, m, host);
+  CHECK(map->choices[static_cast<size_t>(map->choice)] == "e1m1");
+  CHECK(item(m, "host", "level")->choice == 0);
+}
+
+TEST(quakes_quit_box_holds_eight_jokes_of_four_lines_of_24) {
+  for (size_t i = 0; i < sm::kQuitJokes; i++)
+    for (const std::string_view line : sm::quit_joke(i)) CHECK(line.size() == 24);
+  CHECK(sm::quit_joke(4)[0] == " Press Y to quit like a ");
 }
 
 TEST(a_setting_is_its_cvar_read_and_written) {

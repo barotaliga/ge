@@ -151,3 +151,104 @@ TEST(rulesets_lists_the_book_and_describes_one) {
   CHECK(printed(c, "holds cl_maxfps 0 to 77"));
   CHECK(printed(c, "refuses timerefresh during a match"));
 }
+
+namespace {
+
+constexpr std::array<std::string_view, 3> kTeamCommands{"if", "echo", "say_team"};
+constexpr std::array kStrictBook{Ruleset{.name = "default", .title = "No rules."},
+                                 Ruleset{.name = "tight",
+                                         .title = "No scripts that act on the team's words.",
+                                         .team_macro_commands = kTeamCommands,
+                                         .quiet_triggers = true,
+                                         .wait_limit = 3}};
+
+}  // namespace
+
+TEST(a_line_with_a_team_macro_runs_only_the_team_commands) {
+  Console c(false);
+  int health = 30;
+  c.add_macro("health", [&health] { return std::to_string(health); }, MacroKind::team);
+  c.add_macro("plain", [] { return std::string("7"); });
+  int impulses = 0;
+  std::string said;
+  c.add_command("impulse", "", [&impulses](Console&, const Args&) { ++impulses; });
+  c.add_command("say_team", "", [&said](Console&, const Args& a) { said = a[1]; });
+  Rulesets r(c);
+  r.set_book(kStrictBook);
+  CHECK(c.is_team_macro("HEALTH") && !c.is_team_macro("plain"));
+  // Under default a script may act on the macro.
+  c.execute("impulse $health");
+  CHECK(impulses == 1);
+  c.execute("ruleset tight");
+  r.update();
+  c.execute("impulse $health");
+  CHECK(impulses == 1);
+  CHECK(printed(c, "impulse cannot be used with team macros under the tight ruleset."));
+  c.execute("impulse $plain");  // a plain macro: no limit
+  CHECK(impulses == 2);
+  c.execute("say_team $health");
+  CHECK(said == "30");
+  // A setting named on such a line is refused the same way.
+  c.cvars().add({.name = "sensitivity", .fallback = "3"});
+  c.execute("sensitivity $health");
+  CHECK(c.cvars().find("sensitivity")->value == "3");
+  CHECK(printed(c, "sensitivity cannot be used with team macros under the tight ruleset."));
+  // `if` is allowed, but what it runs is held to the limit too.
+  c.execute("if $health < 50 then impulse 7");
+  CHECK(impulses == 2);
+  c.execute("if $health < 50 then say_team low");
+  CHECK(said == "low");
+  // Back to default: the limit goes.
+  c.execute("ruleset default");
+  r.update();
+  CHECK(c.team_macro_limit() == nullptr);
+  c.execute("impulse $health");
+  CHECK(impulses == 3);
+}
+
+TEST(triggers_keep_quiet_during_a_match_under_a_strict_ruleset) {
+  Console c(false);
+  bool in_match = false;
+  Rulesets r(c, [&in_match] { return in_match; });
+  r.set_book(kStrictBook);
+  int ran = 0;
+  c.add_command("hit", "", [&ran](Console&, const Args&) { ++ran; });
+  c.set_alias("ontrigger", "hit", false);
+  c.execute("msg_trigger ontrigger \"quad\"");
+  c.fire_triggers("Bob got the quad");
+  c.run();
+  CHECK(ran == 1);
+  c.execute("ruleset tight");
+  r.update();
+  CHECK(!c.triggers_quiet() && c.sound_triggers_quiet());  // sound triggers: at all times
+  c.fire_triggers("Bob got the quad");
+  c.run();
+  CHECK(ran == 2);  // no match yet
+  in_match = true;
+  CHECK(c.triggers_quiet());
+  c.fire_triggers("Bob got the quad");
+  c.run();
+  CHECK(ran == 2);
+  c.execute("ruleset default");  // changed between matches in a real game; the console allows it
+  r.update();
+  CHECK(!c.triggers_quiet() && !c.sound_triggers_quiet());
+}
+
+TEST(a_wait_limit_drops_a_script_that_waits_too_long) {
+  Console c(false);
+  Rulesets r(c);
+  r.set_book(kStrictBook);
+  int ran = 0;
+  c.add_command("hit", "", [&ran](Console&, const Args&) { ++ran; });
+  c.execute("ruleset tight");
+  r.update();
+  c.append("wait; wait; wait; hit");  // three waits: allowed
+  for (int i = 0; i < 6; ++i) c.run();
+  CHECK(ran == 1);
+  c.append("wait; wait; wait; wait; hit");  // four in a row: dropped
+  for (int i = 0; i < 6; ++i) c.run();
+  CHECK(ran == 1);
+  CHECK(printed(c,
+                "The tight ruleset allows 3 waits in a row, so the rest of the script was "
+                "dropped."));
+}

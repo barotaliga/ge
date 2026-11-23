@@ -223,7 +223,7 @@ void add_re_triggers(Console& c, ReTriggers& t) {
 
 ReLine re_trigger_line(Console& c, ReTriggers& t, std::string_view line, int kind, double now_s) {
   ReLine out;
-  if (!t.on) return out;
+  if (!t.on || c.triggers_quiet()) return out;  // a ruleset's match: none run
   const std::string text(line);
   for (size_t i = 0; i < t.list.size(); ++i) {
     ReTrigger& r = t.list[i];
