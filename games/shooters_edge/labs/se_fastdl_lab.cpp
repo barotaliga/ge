@@ -28,12 +28,15 @@
 #include <vector>
 
 #include "classic/content/web_downloads.hpp"
+#include "console/view.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "net/file_server.hpp"
 #include "net/tls_stream.hpp"
 #include "shooters_edge/net/qw_trial.hpp"
+#include "ui/console.hpp"
+#include "ui/raster.hpp"
 
 namespace {
 
@@ -48,10 +51,13 @@ struct WebRun {
   std::string error;
   double seconds = 0;
   std::vector<double> t, pct;  // the bar's progress over time
+  std::string foot;            // the file the foot names at the first sample past 40%
+  double share = -1;           // and its share
 };
 
 // One fetch of `map` as `maps/<name>.bsp` from a web file server on loopback with these caps.
-WebRun fetch_over_https(const std::vector<uint8_t>& map, int64_t rate_kb, int64_t player_kb) {
+WebRun fetch_over_https(const std::vector<uint8_t>& map, const std::string& file, int64_t rate_kb,
+                        int64_t player_kb) {
   WebRun out;
   gn::FileServer server;
   gn::FileServeOptions o;
@@ -63,8 +69,8 @@ WebRun fetch_over_https(const std::vector<uint8_t>& map, int64_t rate_kb, int64_
   }
   if (!gn::file_server_open(
           server, gn::loopback_v4(0), o,
-          [&map](const std::string& path, std::vector<uint8_t>& bytes) {
-            if (path != "qw/maps/lab.bsp") return false;
+          [&map, &file](const std::string& path, std::vector<uint8_t>& bytes) {
+            if (path != "qw/maps/" + file) return false;
             bytes = map;
             return true;
           },
@@ -85,7 +91,7 @@ WebRun fetch_over_https(const std::vector<uint8_t>& map, int64_t rate_kb, int64_
   // The address as a server with no settings but its port tells it, and its certificate's digest.
   wd::web_connect(h, cfg, "https://{server}:" + std::to_string(server.listener.local.port) + "/", 1,
                   "127.0.0.1:27500", hex);
-  wd::web_queue(h, cfg, "maps/lab.bsp");
+  wd::web_queue(h, cfg, "maps/" + file);
   const auto t0 = std::chrono::steady_clock::now();
   const auto now = [&t0] {
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
@@ -102,6 +108,10 @@ WebRun fetch_over_https(const std::vector<uint8_t>& map, int64_t rate_kb, int64_
     if (t - last_sample > 0.002 && wd::web_progress(h, p) && p.total > 0) {
       out.t.push_back(t);
       out.pct.push_back(100.0 * static_cast<double>(p.got) / static_cast<double>(p.total));
+      if (out.share < 0 && out.pct.back() >= 40) {
+        out.foot = p.path;
+        out.share = out.pct.back() / 100;
+      }
       last_sample = t;
     }
   }
@@ -133,6 +143,7 @@ void run(gl::Lab& lab) {
     map.resize(static_cast<size_t>(lab.arg_num("size") * 1000));
     for (size_t i = 0; i < map.size(); i++) map[i] = static_cast<uint8_t>((i * 131 + 7) >> 3);
   }
+  const std::string file = lab.arg("map").empty() ? "lab.bsp" : name;
   const double kb = static_cast<double>(map.size()) / 1000;
   lab.metric("map-size", kb, "kB");
 
@@ -165,8 +176,8 @@ void run(gl::Lab& lab) {
   for (const auto& [mode, s] : channel) udp_s = std::max(udp_s, s);
 
   // Over HTTPS: the server's default caps, then none.
-  const WebRun capped = fetch_over_https(map, 20000, 5000);
-  const WebRun open = fetch_over_https(map, 0, 0);
+  const WebRun capped = fetch_over_https(map, file, 20000, 5000);
+  const WebRun open = fetch_over_https(map, file, 0, 0);
   for (const WebRun* r : {&capped, &open})
     if (!r->ok) {
       lab.fail("se-fastdl: over HTTPS: " + r->error,
@@ -207,6 +218,29 @@ void run(gl::Lab& lab) {
             "open one far steeper",
             {{"map", name}}},
            gl::to_picture(c.plot), gl::Det::measured);
+
+  // The console's foot as a player joining sees it mid-fetch: the file, the bar, the share.
+  ge::console::Console console;
+  ge::console::ConsoleView v(console);
+  v.set_full(true);
+  v.set_foot(capped.foot.empty() ? "maps/" + file : capped.foot, capped.share);
+  ge::ui::Image img;
+  img.width = 640, img.height = 400;
+  img.rgba.assign(static_cast<size_t>(img.width) * img.height * 4, 0);
+  for (size_t i = 3; i < img.rgba.size(); i += 4) img.rgba[i] = 255;
+  ge::ui::DrawList dl;
+  dl.begin(img.width, img.height);
+  ge::ui::draw_console(dl, v);
+  ge::ui::render(dl, img);
+  gl::Picture bar{img.width, img.height, std::move(img.rgba)};
+  lab.shot({"https-bar",
+            "THE DOWNLOAD BAR OVER HTTPS",
+            "The console while joining, its foot fed by the client's web downloads at the first "
+            "sample past 40% of the capped fetch: the file's name, the charset's bar, the share.",
+            "the console over the screen; on its foot the map's file, a bar 40-60% full and its "
+            "percentage",
+            {{"map", name}}},
+           bar, gl::Det::measured);
 }
 
 const gl::LabSpec kSpec{
