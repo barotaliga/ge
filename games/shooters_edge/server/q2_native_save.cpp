@@ -392,7 +392,7 @@ std::string native_save_problem(const NativeQ2& s) {
   }
   const bool coop = setting_on(const_cast<NativeHost&>(h), "coop");
   if (!coop && h.begun[0] && h.entity(1)->client != nullptr &&
-      h.entity(1)->client->ps.stats[kStatHealth] <= 0)
+      h.with_player(h.entity(1), [](const auto& ps) { return ps.stats[kStatHealth]; }) <= 0)
     return "Can't savegame while dead!";
   return "";
 }
