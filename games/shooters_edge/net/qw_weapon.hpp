@@ -37,6 +37,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "classic/weapon_predict.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -55,6 +56,14 @@ struct RemoteWeapon {
   uint32_t played_to = 0;          // the newest command whose shots have played
   float last_shot[10] = {};        // the weapon clock of each sound's last play
   bool frames_live = false;        // the server has sent a weapon frame other than 0
+  // The shots this pass played first, with the command each was fired on (own_missiles.hpp
+  // throws the nails, rockets and grenades among them).
+  struct Fired {
+    ge::classic::WeaponEvent shot;
+    uint32_t command = 0;
+    bool midair = false;  // the state's midair flag: the rocket flies at twice the speed
+  };
+  std::vector<Fired> fired;
   // What the drawn state held before the prediction drew over it (`applied`).
   bool applied = false;
   int32_t stats[client::kStatCount] = {};

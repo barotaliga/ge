@@ -126,7 +126,9 @@ int32_t floor_contents(void*, sh::Vec3f) { return 0; }
 struct SqRun {
   ge::classic::Q2Move pm;
   int jumps = 0;
-  float speed() const { return plan({pm.s.velocity[0] * 0.125f, pm.s.velocity[1] * 0.125f, 0}); }
+  float speed() const {
+    return plan({float(pm.s.velocity[0]) * 0.125f, float(pm.s.velocity[1]) * 0.125f, 0});
+  }
 };
 
 // A second's run east on Quake II's move, then `seconds` of forward and jump held: through the
@@ -143,8 +145,8 @@ SqRun sq_run(float share, int seconds, float air) {
   for (int i = 0; i < (1 + seconds) * kRate; i++) {
     if (i == kRate) cmd.buttons = sh::kButtonJump;
     sh::MoveState s;
-    s.velocity = {r.pm.s.velocity[0] * 0.125f, r.pm.s.velocity[1] * 0.125f,
-                  r.pm.s.velocity[2] * 0.125f};
+    s.velocity = {float(r.pm.s.velocity[0]) * 0.125f, float(r.pm.s.velocity[1]) * 0.125f,
+                  float(r.pm.s.velocity[2]) * 0.125f};
     s.ground = r.pm.ground_entity >= 0 ? 0 : -1;
     const bool down = s.ground == 0;
     const sh::MoveCmd sent =

@@ -66,9 +66,8 @@ in its layer and its default a `same` row, and flips the audit's row.
 
 ## Gaps
 
-- The common names left to lift, by batch: the client's move packets,
-  `cl_shownet` and `gender` (B3), the graphs, the 2D switch and the browser's sort (B4), the
-  server's `cheats`, recording size and port (B5).
+- The common names left to lift, by batch: the graphs and the 2D switch (B4), the server's
+  `cheats`, recording size and port (B5).
 - `toggle` (flips in one game, cycles in the other): a per-game command layer.
 - The move rate: Quake II's `cl_maxfps` as `own`.
 - No census yet of the third game's settings.

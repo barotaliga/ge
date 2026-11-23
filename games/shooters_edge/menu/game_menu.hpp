@@ -80,6 +80,7 @@
 #include "shooters_edge/menu/games_page.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
 #include "shooters_edge/menu/menu_script.hpp"
+#include "shooters_edge/menu/player_view.hpp"
 #include "shooters_edge/menu/server_page.hpp"
 #include "shooters_edge/menu/servers_page.hpp"
 #include "ui/draw.hpp"
@@ -193,6 +194,10 @@ class GameMenu {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by
   // name the table returned.
   const MenuTable& set_table(const MenuTable& table, const ge::vfs::SearchPath* files = nullptr);
   ge::ui::Menu& enhance() { return enhance_; }
+  // The setup page's live figure (player_view.hpp) and where it was drawn last (screen px).
+  PlayerView& figure() { return figure_; }
+  const ge::ui::Rect& figure_box() const { return figure_box_; }
+  const ge::ui::Rect& swatches() const { return swatches_; }
   int help_page() const { return help_page_; }
   // What the layout drawn last found wrong (layout_problems or classic_problems).
   const std::vector<std::string>& problems() const { return problems_; }
@@ -203,6 +208,8 @@ class GameMenu {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by
   void watch_enhancing();
   void refresh_main(const Host& host);
   void apply_enhance(const ge::ui::MenuEvent& e, Host& host);
+  void update_figure(const ge::ui::MenuInput& in, const Host& host, double dt);
+  void draw_figure(ge::ui::DrawList& list);
   void show_gallery();
   void update_gallery(const ge::ui::MenuInput& in, Host& host);
   void show_servers();
@@ -219,6 +226,8 @@ class GameMenu {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by
   ge::ui::MenuView view_;
   ge::ui::MenuStyle style_;
   std::vector<ge::ui::Rect> hits_;  // the last layout's rows, for the pointer
+  PlayerView figure_;
+  ge::ui::Rect figure_box_, swatches_;  // the setup page's figure and colour picker, last drawn
   std::vector<std::string> problems_;
   // A recipe's presses (`menu_press`, `menu_select`), one a frame, ahead of the real keys.
   std::deque<ge::ui::MenuInput> pressed_;

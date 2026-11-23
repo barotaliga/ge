@@ -419,6 +419,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
     so.seed = c.seed;
     so.clients_take_view = true;  // the QuakeWorld protocol's clients take the server's view
     so.speedjump = speedjump;
+    so.pack = sv::q2_pack_of_folder(g.files.folder);  // a mission pack's folder plays its rules
     std::unique_ptr<sv::Q2Server> sq = sv::make_q2_server(so);
     sq->sv.set.maxclients = slots(c);
     rules = sv::q2_runner(std::move(sq));

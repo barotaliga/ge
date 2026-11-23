@@ -254,6 +254,7 @@ make ge ARGS="asset build skier"  # a model rebuilt in headless Blender off the 
 make golden       # regenerate the golden tables (working area: porting/porting.mk, porting/README.md)
 make golden-libm  # the golden tables that reach a transcendental (same place)
 make libm-check   # no <cmath> transcendental in simulation code
+make manual       # the player's reference manual: build/manual/user-manual.html from every program's own registrations
 make release-check # the changeset fragments valid + tools/release.py's tests; prints the next version
 make shaders-check # every embedded WGSL shader compiled by Tint offline (needs GE_GPU)
 ```

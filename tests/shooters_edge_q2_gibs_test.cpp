@@ -61,7 +61,7 @@ std::unique_ptr<Arena> arena() {
   std::string error;
   CHECK_MSG(a->r.start(map, error), error);
   a->r.connect(0, "Ana", false, false);
-  int16_t& x = sv::q2_of(a->r)->players[0].move.origin[0];
+  int32_t& x = sv::q2_of(a->r)->players[0].move.origin[0];
   x = static_cast<int16_t>(x - 64 * 8);  // off the start, so Ben's arrival does not telefrag her
   a->r.connect(1, "Ben", false, false);
   return a;
