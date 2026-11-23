@@ -46,9 +46,9 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Taking the packs in (shared by all four) | 15 | 0 | 3 | 12 (9 / 3 / 0) | 0 |
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 2 | 67 | 5 (2 / 1 / 2) | 0 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 2 | 51 | 8 (3 / 3 / 2) | 0 |
-| The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
-| Ground Zero (Quake II, folder `rogue`) | 82 | 17 | 7 | 58 (30 / 23 / 5) | 0 |
-| **All** | **272** | **24** | **131** | **117 (64 / 42 / 11)** | **0** |
+| The Reckoning (Quake II, folder `xatrix`) | 40 | 4 | 2 | 34 (20 / 12 / 2) | 0 |
+| Ground Zero (Quake II, folder `rogue`) | 82 | 18 | 6 | 58 (30 / 23 / 5) | 0 |
+| **All** | **272** | **26** | **129** | **117 (64 / 42 / 11)** | **0** |
 
 Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** After Ground Zero's
 temporary entities (2026-11-23): **117 missing.**
@@ -311,7 +311,7 @@ count: done 0, verify 13, missing 0, not-taken 0
 
 ## The Reckoning (Quake II, folder `xatrix`)
 
-count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
+count: done 4, verify 2, missing 34 (20 / 12 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -322,8 +322,8 @@ count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 | xat.dmflag | `dmflags` 65536: dual fire dropped on death | missing | 2 |  |
 | xat.campaign | the four units in order, the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp chains the units |
 | xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | verify | 2 | client/cinematic.hpp plays a chain |
-| xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | verify | 2 | pictures named by the rules' configstrings |
-| xat.menu | the pack's own pictures (console background, quit, victory) | verify | 3 |  |
+| xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | verify | 2 | pictures named by the rules' configstrings; all six are in the pack's `pics/` and resolve by name over the base's like any picture the rules name: `done` once the pack's rules send them |
+| xat.menu | the pack's own pictures (console background, quit, victory) | done |  | the pack's folder over the base's (`open_game_dir`): its `conback`, `quit` and `victory` win, the rest are the base's (`tests/shooters_edge_game_adapter_test.cpp`); the pack ships only those three of the base's names |
 | xat.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp |
 | xat.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp |
 | xat.effects | the ion ripper's, blue hyperblaster's, spinning light's, plasma's and trap's entity effects | done |  | client/world_fx_q2.cpp (Quake II client ledger `ef.*`) |
@@ -384,7 +384,7 @@ count: done 0, verify 0, missing 7, not-taken 0
 
 ## Ground Zero (Quake II, folder `rogue`)
 
-count: done 17, verify 7, missing 58 (30 / 23 / 5), not-taken 0
+count: done 18, verify 6, missing 58 (30 / 23 / 5), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -405,8 +405,8 @@ count: done 17, verify 7, missing 58 (30 / 23 / 5), not-taken 0
 | gz.cvar.gamerules | `gamerules` (0; 2 is tag) | missing | 2 |  |
 | gz.campaign | the five units in order (the release's `runit2`..`runit5` configs start one), the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp |
 | gz.movies | the pack's movies (`rintro`, `reu1_`..`reu4_`, `rend`, the logo) | verify | 2 | client/cinematic.hpp |
-| gz.hud | the pack's icons on the HUD and in the inventory (`w_chainfist`, `w_etf_rifle`, `w_proxlaunch`, `w_disintegrator`, `w_heatbeam`, `w_tesla`, `p_double`, `p_ir`, the spheres, `p_doppleganger`, `p_nuke`, `a_flechettes`, `a_prox`, `a_tesla`, `a_disruptor`, `i_tagtoken`) | verify | 2 | pictures named by the rules' configstrings |
-| gz.menu | the pack's own menu pictures (the main menu, banners, the cursor), console background, `conchars_blue` | verify | 3 | pictures by name over the base pack's |
+| gz.hud | the pack's icons on the HUD and in the inventory (`w_chainfist`, `w_etf_rifle`, `w_proxlaunch`, `w_disintegrator`, `w_heatbeam`, `w_tesla`, `p_double`, `p_ir`, the spheres, `p_doppleganger`, `p_nuke`, `a_flechettes`, `a_prox`, `a_tesla`, `a_disruptor`, `i_tagtoken`) | verify | 2 | pictures named by the rules' configstrings; every one is in the pack's `pics/` and resolves by name over the base's: `done` once the pack's rules send them |
+| gz.menu | the pack's own menu pictures (the main menu, banners, the cursor), console background, `conchars_blue` | done |  | the pack's folder over the base's: its `conback`, `quit`, `victory` and `tag1`/`tag2` win (`tests/shooters_edge_game_adapter_test.cpp`); its menu plates, banners and cursor are byte for byte the base game's (SHA-1 of every `pics/` file compared); `conchars_blue` is shipped but no picture name of the client reads it |
 | gz.vwep | the new guns in other players' hands (the patch's `w_*.md2`) | verify | 2 | plugins/morph/carry.hpp; needs imp.vwep |
 | gz.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp |
 | gz.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp |

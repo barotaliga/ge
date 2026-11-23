@@ -12,7 +12,7 @@
 //
 // ge:summary Tests Quake's adapter: mods, programs by form, map info, textures, demos
 // ge:keywords test shooters-edge game-adapter list_mods find_program program-form map_info
-// ge:keywords map_textures list_demos find_demo demo_folder attract
+// ge:keywords map_textures list_demos find_demo demo_folder attract mission-pack pack-pictures
 // ge:keywords qwprogs open_model open_sound replacement-skin
 // ge:keywords pictures replacement-picture find_config read_configs_from open_locations
 // ge:keywords held_weapons menu-table game-modes hud_art_of
@@ -595,4 +595,45 @@ TEST(q2_s_row_has_its_own_adapter_which_names_its_native_rules_and_passes_them_o
   CHECK(maps.size() == 1 && maps[0] == "demo1");
   const cl::GameModes m = a.modes(a);
   CHECK(m.single && m.multi);
+}
+
+TEST(a_mission_packs_own_console_and_quit_pictures_win_over_the_base_games) {
+  // Quake II's base folder, then a pack's folder (`rogue`, `xatrix`) over it: the pack's
+  // `conback` and `quit` are its own art (both packs ship them), every other picture the base's.
+  const auto pcx = [](int w, int h) {
+    as::IndexedImage img;
+    img.width = w;
+    img.height = h;
+    img.indices.assign(size_t(w) * size_t(h), 7);
+    img.palette.assign(768, 90);
+    return as::encode_pcx(img);
+  };
+  const fs::path root = fs::temp_directory_path() / "ge_se_q2_pack_pictures";
+  fs::remove_all(root);
+  const ge::classicenhance::Profile& content = pf::content_of(*pf::find_game("q2"));
+  std::vector<uint8_t> base, pack;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"pics/conchars.pcx", pcx(128, 128)},
+                            {"pics/conback.pcx", pcx(320, 240)},
+                            {"pics/quit.pcx", pcx(100, 50)},
+                            {"pics/m_main_game.pcx", pcx(99, 32)}},
+                           &base, &error));
+  CHECK(ge::vfs::write_pak({{"pics/conback.pcx", pcx(640, 480)}, {"pics/quit.pcx", pcx(200, 60)}},
+                           &pack, &error));
+  write(root / std::string(content.base_dir) / "pak0.pak", base);
+  write(root / "rogue" / "pak0.pak", pack);
+  const cl::GameAdapter& a = cl::q2_adapter();
+  for (const bool packed : {false, true}) {
+    cl::SearchPath files;
+    CHECK_MSG(cl::open_game_dir(root.string(), packed ? "rogue" : std::string(content.base_dir),
+                                files, error, content),
+              error);
+    const shooters_edge::menu::ClassicArt art = a.pictures(a, files, false, {}).menu;
+    const ge::ui::Image* back = art.find("conback");
+    const ge::ui::Image* quit = art.find("quit");
+    CHECK(back != nullptr && quit != nullptr && art.find("m_main_game") != nullptr);
+    if (back == nullptr || quit == nullptr) continue;
+    CHECK(back->width == (packed ? 640 : 320) && quit->width == (packed ? 200 : 100));
+  }
+  fs::remove_all(root);
 }
