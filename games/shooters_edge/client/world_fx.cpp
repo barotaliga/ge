@@ -1586,10 +1586,16 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   std::erase_if(s.blasts, [&](const ge::render::Blast& b) {
     return t - b.born_s > ge::render::blast_life(b) || t < b.born_s - 1;
   });
+  const size_t puffs_from = out.puffs.size();
   out.puffs.insert(out.puffs.end(), s.blasts.begin(), s.blasts.end());
+  // cl_smooth_explosions 0: each drawn at its age in whole tenths, so it moves on by steps.
+  const bool stepped = !s.on.q2.smooth_explosions;
+  for (size_t i = puffs_from; stepped && i < out.puffs.size(); ++i)
+    out.puffs[i].born_s = t - ge::classic::q2_blast_age(s.on.q2, t - out.puffs[i].born_s);
   std::erase_if(s.mains, [&](const ge::render::Blast& b) {
     fx::Light light;
-    if (!fx::blast_light(b, t, &light)) return t - b.born_s > 0.1;
+    const double at = stepped ? b.born_s + ge::classic::q2_blast_age(s.on.q2, t - b.born_s) : t;
+    if (!fx::blast_light(b, at, &light)) return t - b.born_s > 0.1;
     out.lights.push_back(q2_blast_light(s, light));
     return false;
   });
@@ -1699,7 +1705,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     double p[3];
     put(b.at, p);
     fx::Light light;
-    if (fx::explosion_light(p, t - b.t, &light)) out.lights.push_back(q2_blast_light(s, light));
+    if (fx::explosion_light(p, ge::classic::q2_blast_age(s.on.q2, t - b.t), &light))
+      out.lights.push_back(q2_blast_light(s, light));
     // The pack's explosion sprite, its frames at ten a second.
     const int frame = static_cast<int>((t - b.t) * kSpriteFps);
     if (frame >= kSpriteFrames || b.no_sprite) continue;
