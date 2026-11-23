@@ -40,6 +40,7 @@
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/net/q2_remote.hpp"
+#include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
@@ -503,6 +504,39 @@ TEST(sv_idlekick_is_the_idle_drop_not_the_lobbys_unready_kick) {
   CHECK(c.idle_kick_s == 0);  // the core's setting of that name is set aside
   const ge::console::Cvar* v = cvars.find("sv_idlekick");
   CHECK(v != nullptr && v->name == "sv_idletime");
+}
+
+// `sv_modern 1`: a modern server in each game's own terms (engine/server's GameMeta). Quake II's
+// rewinds every shot, rocket and bolt to what its shooter drew; QuakeWorld's every shot's line and
+// its projectiles, and at 2 lifts the rate cap on a LAN. A setting named anywhere wins over it, and
+// turning it off puts back what it set.
+TEST(sv_modern_turns_on_each_games_own_modern_network) {
+  using ge::console::Source;
+  {
+    ge::console::Cvars cvars;
+    ge::server::ServerConfig c;
+    ge::server::add_server_cvars(cvars, c, cn::q2_game());
+    CHECK(c.metas["sv_modern"] == "0" && c.rules["sv_antilag"].empty());
+    cvars.set("sv_modern", "1", Source::local);
+    CHECK(c.rules["sv_antilag"] == "2" && c.rules["sv_antilag_projectiles"] == "1" &&
+          c.rules["sv_antilag_interp"] == "1");
+    cvars.set("sv_antilag_interp", "0", Source::local);  // the operator's own line wins
+    cvars.set("sv_modern", "0", Source::local);
+    cvars.set("sv_modern", "1", Source::local);
+    CHECK(c.rules["sv_antilag_interp"] == "0" && c.rules["sv_antilag"] == "2");
+    cvars.set("sv_modern", "0", Source::local);
+    CHECK(c.rules["sv_antilag"].empty());  // put back
+  }
+  {
+    ge::console::Cvars cvars;
+    ge::server::ServerConfig c;
+    ge::server::add_server_cvars(cvars, c, cn::qw_game());
+    cvars.set("sv_modern", "2", Source::local);
+    CHECK(c.rules["sv_antilag"] == "2" && c.rules["sv_antilag_projectiles"] == "1");
+    CHECK(c.rules["sv_lanrate"] == "1");
+    const ge::console::Cvar* m = cvars.find("sv_modern");
+    CHECK(m != nullptr && !m->help.empty());
+  }
 }
 
 // A server that insists on anticheat (` ac=2` in its connect answer): this game has none, so the
