@@ -75,8 +75,14 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> 
   let idx = indices[m.at.z + turned];
   let va = 2u * (m.at.x + d.info.x * m.at.y + idx);
   let vb = 2u * (m.at.x + d.info.y * m.at.y + idx);
-  let pos = mix(vertices[va].xyz, vertices[vb].xyz, d.mix.x);
-  let nb = mix(vertices[va + 1u].xyz, vertices[vb + 1u].xyz, d.mix.x);
+  // A vertex of the model's own flash (flag 1) behind the eye in one frame and in front in the
+  // other is frame b's, never slid out of the gun (viewmodel/held.hpp's pose_frames, the CPU's same
+  // rule); between two frames that both show it, it blends with the barrel.
+  let tri = flags[m.more.x + vid / 3u];
+  let crosses = (vertices[va].z < 0.0) != (vertices[vb].z < 0.0);
+  let share = select(d.mix.x, 1.0, (tri & 1u) != 0u && crosses && d.mix.x > 0.0);
+  let pos = mix(vertices[va].xyz, vertices[vb].xyz, share);
+  let nb = mix(vertices[va + 1u].xyz, vertices[vb + 1u].xyz, share);
   var out: VertexOut;
   out.view = place(d.now, pos, 1.0);
   out.last_view = place(d.last, pos, 1.0);
@@ -93,7 +99,6 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> 
   out.position = vec4f(p.xy * d.lens.xy + (jitter + lift) * p.z, d.lens.z, p.z);
   // The model's own flash (flag 1) and the hands holding it (flag 2), each clipped away when the
   // draw hides it (info.w 2 and 4).
-  let tri = flags[m.more.x + vid / 3u];
   if (((d.info.w >> 1u) & tri) != 0u) {
     out.position = vec4f(0.0, 0.0, -1.0, 1.0);
   }

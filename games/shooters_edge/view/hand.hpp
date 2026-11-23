@@ -23,8 +23,12 @@
 //   clip stepped a frame a shot (`HeldClip::frame_a_shot`, a nailgun held firing) goes one frame
 //   round on each shot and holds it, and the shot's muzzle, flash and fire are on the barrel that
 //   frame fires from: the nailgun's two in turn, the super nailgun's cluster one barrel at a time.
-//   Each shot's frame is held (its barrel fires); with `ViewSettings::lerp` a clip played or held
-//   ends by flowing back to the rest frame over a frame's time, never a jump.
+//   With `ViewSettings::lerp` each shot's frame is drawn FROM THE LAST SHOT'S (or from rest on the
+//   first) over the clip's frame time, so the barrels turn and the slide runs every display frame
+//   instead of jumping ten times a second, then held there until the next shot; the model's own
+//   flash is drawn at the shot's frame, never stretched between two frames (render/viewmodel.hpp).
+//   Without it each shot's frame is shown at once and held. A clip played or held ends by flowing
+//   back to the rest frame over a frame's time, never a jump.
 // - DEATH (`HandInput::dead`): the weapon sinks out of view (`kDeathLowerS`), up with a new life.
 // - A CLASSIC GAME'S OWN WEAPONS (`Hand::at_eye`): models authored at the eye, placed by the
 //   classic row (`eye_row`) with no offset of their own; the kick, the flash and the fire are
@@ -155,6 +159,7 @@ struct Hand {
   double flash_left = 0;  // s of the last shot's light still to fade
   double fire_t = -1;     // s into the `fire` clip (-1: at rest)
   int shot_frame = -1;  // a clip stepped a frame a shot: the frame of the clip the last shot is on
+  int shot_from = 0;    // ... and the model's frame it is drawn from while it turns (0: rest)
   int barrel = -1;      // the barrel the last shot left from (-1: the one muzzle)
   // Drawn between frames (ViewSettings::lerp): the frame a played or held clip ended on and the
   // time since, while it settles back to rest.
