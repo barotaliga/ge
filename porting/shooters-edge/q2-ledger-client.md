@@ -12,10 +12,10 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | missing | not-taken | rows |
 | --- | --- | --- | --- | --- |
-| Client console commands | 134 | 5 | 17 | 156 |
+| Client console commands | 138 | 1 | 17 | 156 |
 | Client settings (cvars) | 231 | 9 | 110 | 350 |
 | Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
-| Menu pages and rows | 142 | 8 | 12 | 162 |
+| Menu pages and rows | 145 | 5 | 12 | 162 |
 | Server messages the client parses (svc) | 26 | 0 | 1 | 27 |
 | Temporary entities (svc_temp_entity) | 21 | 18 | 26 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 20 |
@@ -27,11 +27,11 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | HUD and screen elements | 18 | 0 | 11 | 29 |
 | Messages printed to the player | 130 | 0 | 17 | 147 |
 | Demo playback and recording features | 13 | 0 | 10 | 23 |
-| Keys: the fixed keys and the default bindings | 9 | 1 | 1 | 11 |
+| Keys: the fixed keys and the default bindings | 10 | 0 | 1 | 11 |
 | Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 16 | 0 | 4 | 20 |
 | Connection, network, downloads and the rest | 14 | 1 | 2 | 17 |
-| **all** | 935 | 45 | 231 | 1211 |
+| **all** | 943 | 37 | 231 | 1211 |
 
 ## Client console commands
 
@@ -101,11 +101,11 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.wave | `wave <n>` | forwarded: plays a gesture | done | forwarded to the rules (`games/shooters_edge/client/main.cpp` unknown-word hook; `server/q2_commands.cpp`) |
 | cmd.inven | `inven` | forwarded: opens/closes the inventory | done | `games/shooters_edge/net/game_commands.hpp` |
 | cmd.kill | `kill` | forwarded: suicide | done | forwarded (`server/q2_server.cpp`) |
-| cmd.use | `use <item>` | forwarded: uses an item by name; Tab completes the item names the server listed | missing | Missing, rank 1 (gameplay, daily use): forwarded (`client/main.cpp`); the item-name completion not found |
-| cmd.drop | `drop <item>` | forwarded: drops an item by name; Tab completes item names | missing | Missing, rank 1 (gameplay, daily use): forwarded (`client/main.cpp`); the item-name completion not found |
+| cmd.use | `use <item>` | forwarded: uses an item by name; Tab completes the item names the server listed | done | `client/q2_bar.cpp` (`add_q2_bar_commands`): forwarded; Tab after `use` completes the item names the last frame's world listed, sorted, a name with a space quoted (`engine/console/tab_list.cpp`'s argument completion, `Console::arg_values`), and the suggestions offer them |
+| cmd.drop | `drop <item>` | forwarded: drops an item by name; Tab completes item names | done | `client/q2_bar.cpp`: forwarded; Tab after `drop` completes the item names as `use` does |
 | cmd.info | `info` | forwarded: a mod's info word | done | forwarded when not ours |
 | cmd.prog | `prog` | forwarded | done | forwarded when not ours |
-| cmd.give | `give <item>` | forwarded cheat; Tab completes item names | missing | Missing, rank 1 (gameplay, daily use): `games/shooters_edge/server/q2_commands.cpp`; the item-name completion not found |
+| cmd.give | `give <item>` | forwarded cheat; Tab completes item names | done | `games/shooters_edge/server/q2_commands.cpp`; Tab after `give` completes the item names as `use` does (`client/q2_bar.cpp`) |
 | cmd.god | `god` | forwarded cheat | done | `games/shooters_edge/server/q2_commands.cpp` |
 | cmd.notarget | `notarget` | forwarded cheat | done | `games/shooters_edge/server/q2_commands.cpp` |
 | cmd.noclip | `noclip` | forwarded cheat | done | `games/shooters_edge/server/q2_commands.cpp` |
@@ -115,7 +115,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.invdrop | `invdrop` | forwarded: drop the selected item | done | `games/shooters_edge/net/game_commands.hpp` |
 | cmd.weapnext | `weapnext` | forwarded: next weapon | done | forwarded (`server/q2_fight.cpp`) |
 | cmd.weapprev | `weapprev` | forwarded: previous weapon | done | forwarded (`server/q2_fight.cpp`) |
-| cmd.help | `help` (unregistered) | an unknown word, so forwarded: the help computer (the stock menu binds F1 to it) | missing | Missing, rank 1 (gameplay, daily use): ours has a console `help`, so `help` never reaches the rules; `cmd help` does (`net/game_commands.hpp`) |
+| cmd.help | `help` (unregistered) | an unknown word, so forwarded: the help computer (the stock menu binds F1 to it) | done | `net/game_commands.cpp`: `help` alone in a Quake II game (the window's own or a server joined) goes to the rules, the help computer; `help <name>` stays the console's explanation |
 | cmd.score | `score` / `putaway` (unregistered) | forwarded: scoreboard on/off, put away a screen | done | `games/shooters_edge/net/game_commands.hpp` |
 | cmd.ignoretext | `ignoretext [match ...]` | adds chat ignore patterns, or lists them with hit counts | done | `engine/console/chat_ignore.cpp` |
 | cmd.unignoretext | `unignoretext [all/match ...]` | removes chat ignore patterns | done | `engine/console/chat_ignore.cpp` |
@@ -610,7 +610,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.look.weapon | player-setup weapon | the figure on the player page holds the railgun's world model | missing | no figure drawn (C5) |
 | menu.esc.disconnected | ESCAPE while not in a game | opens the main page | done | `games/shooters_edge/menu/main_menu.cpp` |
 | menu.esc.ingame | ESCAPE in a game | opens the compact in-game page (below) over the world | done | `games/shooters_edge/menu/q2_pages.cpp` |
-| menu.esc.layout | ESCAPE with a layout up | sends `putaway` (closes the help computer or inventory); held, opens the in-game page | missing | Missing, rank 1 (gameplay, daily use): `games/shooters_edge/menu/game_menu.cpp` (`Host::screen_up`, set from `client/q2_bar.cpp`'s `layout_up`): ESCAPE sends `putaway`; held, opening the in-game page, missing |
+| menu.esc.layout | ESCAPE with a layout up | sends `putaway` (closes the help computer or inventory); held, opens the in-game page | done | `games/shooters_edge/menu/game_menu.cpp` (`Host::screen_up`, `Host::escape_held`): ESCAPE sends `putaway`; held on half a second (a key's first repeat), the in-game page opens |
 | menu.main.plaque | main: plaque and logo | the `m_main_plaque` and `m_main_logo` pictures beside the list | done | `menu/classic_art.cpp` (Quake II's plates) |
 | menu.main.game | main: game | picture row opening the single-player page | done | ours SINGLE PLAYER |
 | menu.main.multiplayer | main: multiplayer | picture row opening the multiplayer page | done | ours MULTIPLAYER |
@@ -623,8 +623,8 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.sp.nightmare | single player: nightmare | the same with `skill 3` | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.sp.load | single player: load game... | opens the load page | done | ours LOAD |
 | menu.sp.save | single player: save game... | opens the save page | done | ours SAVE |
-| menu.load.slots | load game | 16 slots: the autosave, a gap, then 15, each showing the save's name | missing | Missing, rank 1 (gameplay, daily use): ours 12 slots, no autosave slot (`menu/main_menu.hpp` `kSaveSlots`) |
-| menu.save.slots | save game | 15 slots (no autosave) | missing | Missing, rank 1 (gameplay, daily use): ours 12 slots |
+| menu.load.slots | load game | 16 slots: the autosave, a gap, then 15, each showing the save's name | done | `menu/q2_pages.cpp` (`MenuTable::load_slots`): the autosave `save0`, a gap, then `save1` to `save15`, each showing its save's title; an empty one dimmed |
+| menu.save.slots | save game | 15 slots (no autosave) | done | `menu/q2_pages.cpp` (`MenuTable::save_slots`): `save1` to `save15` |
 | menu.mp.q2servers | multiplayer: browse q2servers.com | the server browser filled from an HTTP list | done | `games/shooters_edge/menu/q2_pages.cpp`: the row opens the browser on `+http://q2servers.com/?raw=2` alone (`pushmenu servers` with sources, `menu/servers_page.hpp`'s `use_sources`; the list fetched as 6-byte records); the same row on the in-game page |
 | menu.mp.addressbook | multiplayer: browse address book | the browser over the address book, `servers.lst` and the LAN | done | `games/shooters_edge/menu/q2_pages.cpp`: the row opens the browser on `favorites://` (`adr0` on), `file:///servers.lst` (a list in the game's files) and `broadcast://` (the LAN) alone; a word it cannot use says "Ignoring invalid master URL: ..." |
 | menu.mp.demos | multiplayer: browse demos | the demo browser | done | `games/shooters_edge/menu/q2_pages.cpp` |
@@ -1329,7 +1329,7 @@ Keys the client handles itself (a player cannot unbind them) and where the defau
 | key.console | the console key | ` and ~ (without SHIFT) always toggle the console | done | Checked 2026-11-23: the key under ESCAPE toggles the console (`engine/console/view.cpp`). |
 | key.altenter | Alt+Enter | toggles full screen, always | done | `engine/platform/window_cvars.cpp` `alt_enter` |
 | key.escape.menu | ESCAPE | closes the console (or opens the main menu before a game), leaves chat, opens the in-game page in a game, the main page out of one | done | `games/shooters_edge/menu/game_menu.cpp`: in a level the in-game page (`MenuTable::in_level`) |
-| key.escape.putaway | ESCAPE with a screen up | puts away the help computer or inventory (`putaway`); held, opens the menu | missing | Missing, rank 1 (gameplay, daily use): `games/shooters_edge/menu/game_menu.cpp` (`Host::screen_up`, set from `client/q2_bar.cpp`'s `layout_up`): ESCAPE sends `putaway`; held, opening the menu, missing |
+| key.escape.putaway | ESCAPE with a screen up | puts away the help computer or inventory (`putaway`); held, opens the menu | done | `games/shooters_edge/menu/game_menu.cpp`: ESCAPE with a screen up sends `putaway`; held on half a second, the menu's in-game page opens |
 | key.fkeys.menu | F1 to F12 in a menu | still run their bindings | done | `engine/ui/console_keys.cpp` (`ConsoleKeys::menu`, set by the window while a menu is up): F1 to F12 and the console key alone run their binds; a key let go always releases |
 | key.cinematic | any button key in a cinematic | skips it | done | `games/shooters_edge/client/cinematic.cpp` |
 | key.shift.demo | SHIFT in a demo | takes the mouse for free look | done | `client/demo_free_look.cpp`, the capture in `client/main.cpp` |

@@ -49,6 +49,19 @@ void add_server_commands(ge::console::Console& con, client::Listen& l, Remote& r
                     remote_sheet_command(r, a.size() > 1 ? a[1] : std::string("refresh"),
                                          static_cast<double>(r.now_us) * 1e-6 + r.owed_s);
                   });
+  // Quake II's `help` alone is the help computer, a word its rules answer: with a Quake II game
+  // up it goes there; `help <name>` stays the console's.
+  if (const auto it = con.commands().find("help"); it != con.commands().end()) {
+    const Con::Command ours = it->second;
+    con.add_command(
+        "help", ours.help + "; alone in Quake II, the help computer",
+        [&l, &r, fn = ours.fn](Con& c, const Args& a) {
+          const bool q2 = r.active ? r.q2 != nullptr : client::listen_is_q2(l);
+          if (a.size() == 1 && q2 && send_game_command(l, r, "help")) return;
+          fn(c, a);
+        },
+        ours.flags);
+  }
   for (const char* word : kQ2Words)
     con.add_command(word,
                     std::string(word) + ": Quake II's " +

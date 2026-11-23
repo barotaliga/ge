@@ -19,7 +19,7 @@
 // ge:keywords ce_acoustics acoustics room-sound reverb echo room-probe bsp-acoustics listener
 // ge:keywords room_ear hear_room bsp_ray stone-hall corridor open-sky s_underwater
 // ge:keywords s_underwater_gain_hf underwater-muffle hear_under s_swapstereo hear_swap s_hrtf
-// ge:keywords al_hrtf hrtf binaural headphones hear_ears
+// ge:keywords al_hrtf hrtf binaural headphones hear_ears s_mixahead snd_mixahead
 // ge:skill audio shooter
 // ge:test tests/shooters_edge_room_ear_test.cpp
 #pragma once
@@ -64,7 +64,7 @@ struct UnderEar {
 inline constexpr float kUnderCornerHz = 5000;  // the muffle's corner
 
 // s_underwater, s_underwater_gain_hf, s_swapstereo and s_hrtf in the classic games' layer, bound
-// to `s`.
+// to `s`; and s_mixahead (Quake's `_snd_mixahead`), kept for configs and read by nothing.
 void add_under_cvars(ge::console::Console& c, UnderEar& s);
 // One frame: the synth muffled while `under` (the eye in a liquid) and `s.on`, dry otherwise; told
 // only when that changes (and on the ear's first frame).

@@ -569,6 +569,18 @@ size_t edit_distance(std::string_view a, std::string_view b) {
 
 }  // namespace
 
+void Console::set_arg_values(std::string_view word, ArgValues values) {
+  if (values)
+    arg_values_[lower(word)] = std::move(values);
+  else
+    arg_values_.erase(lower(word));
+}
+
+std::vector<std::string> Console::arg_values(std::string_view word) const {
+  const auto it = arg_values_.find(lower(word));
+  return it != arg_values_.end() ? it->second() : std::vector<std::string>();
+}
+
 std::string Console::suggest(std::string_view name) const {
   const std::string n = lower(name);
   std::string best;

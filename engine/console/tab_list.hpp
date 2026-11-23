@@ -6,9 +6,12 @@
 // 2 in columns under a heading for each kind ("<n> possible commands:", "variables", "aliases",
 // singular for one). Past `threshold` matches the first Tab only asks ("Press TAB again to display
 // all <n> possibilities."); the next on the same line lists them. A leading `/` or `\` is kept.
+// Past the command word, a word's argument values (Console::arg_values: Quake II's item names
+// after `use`) complete the same way, a value with a space quoted.
 //
 // ge:summary The listing Tab both consoles share: the common prefix, the matches in three forms
 // ge:keywords tab completion com_completion_mode com_completion_treshold possibilities columns
+// ge:keywords arg-values argument-completion
 // ge:skill console
 // ge:test tests/console_view_test.cpp
 #pragma once
