@@ -221,6 +221,12 @@ class GameMenu {
   bool toggle_open_ = false;          // pushmenu: opened even when the menu is up at the root
   int pending_ = 0;                   // 1: popmenu (one page back), 2: forcemenuoff
   int help_page_ = 0;
+  // Quake's quit box (main_menu.hpp's quit_joke): whether it was up last frame, the joke it shows
+  // (-1: the shell's own question) and the stream that picks one each time it opens.
+  bool quit_up_ = false;
+  int quit_joke_ = -1;
+  uint32_t quit_seed_ = 0;
+  void dress_quit(const Host& host);
   double dt_ = 1.0 / 60;  // the last frame's, s
   // How long ESCAPE has been held since it put a screen of the rules away, s (-1: not held): at
   // kEscapeHold, a key's first repeat, the in-game page opens.

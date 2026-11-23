@@ -303,6 +303,16 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .values = "1: every gun's (the default); 2: the others' alone, not your own; 0: none"},
        &picture.muzzle_flash);
   bind(cv,
+       {.name = "cl_fakeshaft",
+        .flags = gc::kArchive,
+        .help = "How closely your own lightning beam follows your aim between the server's "
+                "updates.",
+        .min = 0,
+        .max = 1,
+        .values = "1: it follows your view every frame (the default); 0: the server's line; "
+                  "between: part of the way"},
+       &picture.fake_shaft);
+  bind(cv,
        {.name = "gl_picmip",
         .flags = gc::kArchive,
         .help = "How much detail the walls' textures lose.",

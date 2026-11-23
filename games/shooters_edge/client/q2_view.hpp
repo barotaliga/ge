@@ -18,7 +18,7 @@
 // ge:summary Quake II's view and 2D settings: the server's field of view drawn, scale, HUD switches
 // ge:keywords q2 fov cl_adjustfov uf hor-plus field-of-view zoom scr_scale scr_draw2d scr_alpha
 // ge:keywords scr_lag_draw scr_lag_x scr_lag_y scr_lag_min scr_lag_max cl_kickangles q2_shown_fov
-// ge:keywords gl_bilerp_pics gl_gamma_scale_pics
+// ge:keywords gl_bilerp_pics gl_gamma_scale_pics scr_demobar
 // ge:skill shooter ui camera
 // ge:test tests/shooters_edge_q2_view_test.cpp
 #pragma once
@@ -44,6 +44,9 @@ struct Q2Screen {
   // viewsize: the 3D view's share of the screen, 40..100 percent, centred; the border round it
   // tiled with pics/backtile (the bar's `draw_q2_bar`).
   int viewsize = 100;
+  // scr_demobar: the play bar while a demo plays (demo_playback.cpp reads it): 0 none, 1 always
+  // with the percentage played (the default), 2 also the clock. -1, every other game's: `demo_bar`.
+  int demo_bar = -1;
   // gl_bilerp_pics: the status bar's and the layouts' pictures smoothed when drawn larger: 0 none
   // (every other game's), 1 those of 64 x 64 and up (Quake II's default), 2 all of them.
   int bilerp_pics = 0;

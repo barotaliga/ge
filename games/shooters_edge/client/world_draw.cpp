@@ -29,6 +29,7 @@
 #include "brush/map.hpp"
 #include "brush/survey.hpp"
 #include "camera/pose.hpp"
+#include "classic/flash_blend.hpp"
 #include "classic/q2_fx_switches.hpp"
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
@@ -852,7 +853,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
           : std::span<const Placed>(fx.models);
   if (f.has_map) {
     GE_ZONE("world.bsp");
-    ba::set_dynamic_lights(f.bsp, lights);
+    // gl_flashblend: the moment's lights glow as discs (prepare_models) and light no wall, door or
+    // lift; the figures still take them.
+    ba::set_dynamic_lights(
+        f.bsp, f.picture && f.picture->flash_blend ? std::span<const effects::Light>() : lights);
     for (size_t k = 0; k < fx.light_styles.size();
          k++)  // the server's flicker, pulses and switches
       if (f.bsp.light_styles[k] != fx.light_styles[k])
@@ -991,7 +995,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .flat = !f.picture->q2fx.dot_shading,
                            .roll_hack = f.picture->q2fx.roll_hack,
                            .self = fx.has_self ? fx.self.entity : 0,
-                           .shadows = f.picture->model_shadows};
+                           .shadows = f.picture->model_shadows,
+                           .flash_blend = f.picture->flash_blend};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,
@@ -1015,8 +1020,12 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // The screen's tint toned by the player (v_contentblend and kin, gl_cshiftpercent,
     // gl_polyblend; Quake II's the rules' own), a hit's flash round the edge at
     // gl_damageblend_frac.
-    const look::Tints tints = look::toned_tints(*f.picture, round ? fx.screen_dry : fx.screen,
-                                                fx.rules_blend, fx.blend, fx.apart, fx.damage);
+    look::Tints tints = look::toned_tints(*f.picture, round ? fx.screen_dry : fx.screen,
+                                          fx.rules_blend, fx.blend, fx.apart, fx.damage);
+    // An eye inside one of gl_flashblend's glows: the screen tinted orange, as the other tints
+    // (gl_polyblend 0 none).
+    if (f.has_map && f.picture->poly_blend)
+      ge::classic::flash_tint(f.models.flash_tint, tints.flat);
     gr::set_post_blend(d, f.post[p], tints.flat);
     gr::set_post_edge_blend(d, f.post[p], tints.edge, f.picture->damage_frac);
   }

@@ -14,7 +14,7 @@
 // ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack
 // ge:keywords cl_smooth_explosions common-settings scr_consize scr_conalpha gl_consolefont
 // ge:keywords r_drawparticles in_grab_windowed_mouse cl_net_clientport vid_reload gl_swapinterval
-// ge:keywords chase_active chase_back gl_damageblend_frac
+// ge:keywords chase_active chase_back vid_flip_on_switch gl_damageblend_frac
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -459,6 +459,29 @@ void add_first(con::Console& c, const GameBindings& b) {
     b.view->hand = 0;
     b.view->gun = 1;
   }
+  // Its models' ground shadows (client/model_shadow.hpp): Quake II's `gl_shadows` 1 by its own
+  // name, each shadow leaning one way for every model (the window's world_models.cpp); never saved.
+  if (b.model_shadows != nullptr)
+    c.cvars().bind({.name = "r_shadows",
+                    .fallback = "0",
+                    .help = "Dark shadows on the floor under the figures, monsters and items.",
+                    .kind = con::CvarKind::integer,
+                    .min = 0,
+                    .max = 1,
+                    .values = "0: none (the default); 1: under each, half dark"},
+                   b.model_shadows);
+  // Its glow discs for the moment's lights (classic/flash_blend.hpp). Off by default, where the
+  // game's GL client had them on: the moment's lights light the walls here, as the game's own
+  // software picture lit them; never saved.
+  if (b.flash_blend != nullptr)
+    c.cvars().bind({.name = "gl_flashblend",
+                    .fallback = "0",
+                    .help = "Whether the flashes of guns and blasts are drawn as glowing discs "
+                            "instead of lighting the walls.",
+                    .kind = con::CvarKind::boolean,
+                    .values = "0: they light the walls (the default); 1: glowing discs, the walls "
+                              "left unlit by them"},
+                   b.flash_blend);
   // Its ambience of water and sky (sound/ambience.hpp): how loud, and how fast it swells and fades.
   c.cvars().bind({.name = "ambient_level",
                   .fallback = "0.3",
@@ -492,7 +515,9 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left,
   c.cvars().add_synonym("chase_back", "cam_dist");       // its distance behind and its switch
   c.cvars().add_synonym("chase_active", "cl_thirdperson");
-  if (c.cvars().find("r_lerpmodels") != nullptr)  // the models' and the held weapon's frames
+  c.cvars().add_synonym("cl_sbar", "hud_sbar");     // QuakeWorld's old bar (1) or see-through (0)
+  c.cvars().add_synonym("cl_hudswap", "hud_swap");  // and the see-through bar's column on the left
+  if (c.cvars().find("r_lerpmodels") != nullptr)    // the models' and the held weapon's frames
     c.cvars().add_synonym("r_lerpframes", "r_lerpmodels");
   // An old Quake config's saved name and colours: `_cl_name` is the name, `_cl_color` both
   // colours as one number (shirt times 16 plus pants), so its config dresses you as it did.
@@ -766,6 +791,18 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.add_synonym("al_device", "s_device");
   if (v.find("s_hrtf") != nullptr)  // the classic games' (client/room_ear.hpp)
     v.add_synonym("al_hrtf", "s_hrtf");
+  if (v.find("vid_minimize_on_focus_loss") != nullptr) {  // the window's (platform/window_cvars)
+    // Its full screen stays when another window takes the focus, unless asked to flip back.
+    v.add({.name = "vid_minimize_on_focus_loss",
+           .fallback = "0",
+           .flags = con::kArchive,
+           .help = "Whether the full-screen game minimises when you switch to another window, the "
+                   "screen going back to the desktop's own mode.",
+           .kind = con::CvarKind::boolean,
+           .values = "0: it stays full screen behind the other window (the default); 1: minimised",
+           .overlap = con::Overlap::same});
+    v.add_synonym("vid_flip_on_switch", "vid_minimize_on_focus_loss");
+  }
   for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)
     v.add({.name = "adr" + std::to_string(k),
            .fallback = "",
@@ -1048,6 +1085,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(gun_drawn, &b.view->gun);
   else
     v.add(gun_drawn);
+  if (b.flash_blend != nullptr) *b.flash_blend = false;  // Quake's glow discs set aside
   // Its weapon's own lens, 90 degrees across, where Quake's takes the view's (the classic layer's).
   v.add({.name = "cl_gunfov",
          .fallback = "90",

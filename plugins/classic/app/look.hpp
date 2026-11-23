@@ -142,6 +142,10 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // rocket's glow in flight, an explosion's, a power's round its carrier); off, that kind lights
   // nothing (`kept_lights`). Either look.
   bool rocket_light = true, explosion_light = true, power_glow = true;
+  // gl_flashblend (Quake's own, classic/flash_blend.hpp): each of the moment's lights drawn as a
+  // glowing disc turned to the eye, the walls, doors and lifts left unlit by it (the figures still
+  // take it). Either look.
+  bool flash_blend = false;
   // r_powershells: a power's carrier wears a coloured shell (quad damage blue, the pentagram or
   // invulnerability red); r_itempulse: an item's light pulses as it lies. Quake II's own look:
   // on in it, off in Quake, which never drew them (each game's default its own: the
@@ -257,15 +261,20 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // r_lerpmodels, r_lerpmove: the models' animation drawn between frames, and (in the window's own
   // game) their places between the server's states (client/model_lerp.hpp); either look.
   bool lerp_models = true, lerp_move = true;
+  // cl_fakeshaft: how far the player's own lightning beam is turned from the server's line toward
+  // where the view looks this frame (0: the server's line; 1: the view's, traced every frame, so
+  // the beam and the marks it burns sweep with the mouse; shooters_edge's client/own_beam.hpp).
+  // Either look.
+  double fake_shaft = 1;
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
 // r_farland, r_farland_warm, r_skyname, r_skyfog, r_drawflat, r_wallcolor, r_floorcolor,
 // r_fastsky, r_skycolor, r_lightmap, r_fullbright, r_dynamic, r_rocketlight, r_explosionlight,
-// r_powerupglow, r_waterwarp, r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival, cl_gibfilter,
-// cl_deadbodyfilter, ce_bubbles_share, ce_water_specks, r_quality, r_budget, every ce_ switch, the
-// three ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the weather's cvars
-// over `picture` (it must outlive `con`), and the `fog` and `allskins` commands. Each cvar's
-// default is the value `picture` holds now (a game's own; above).
+// r_powerupglow, r_waterwarp, r_fullbrightskins, r_lerpmodels, r_lerpmove, r_arrival, cl_fakeshaft,
+// cl_gibfilter, cl_deadbodyfilter, ce_bubbles_share, ce_water_specks, r_quality, r_budget, every
+// ce_ switch, the three ce_<id>_quality levels, r_wateralpha and its kin, noskins, baseskin and the
+// weather's cvars over `picture` (it must outlive `con`), and the `fog` and `allskins` commands.
+// Each cvar's default is the value `picture` holds now (a game's own; above).
 void add_cvars(ge::console::Console& con, Picture& picture);
 // CE_ENABLED, once a frame: off, every ce_ switch in `picture.ce` reads off; turned on again,
 // each reads its ce_ cvar in `cvars` again (what the player set meanwhile too). The ce_ cvars
