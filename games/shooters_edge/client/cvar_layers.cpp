@@ -14,7 +14,7 @@
 // ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack
 // ge:keywords cl_smooth_explosions common-settings scr_consize scr_conalpha gl_consolefont
 // ge:keywords r_drawparticles in_grab_windowed_mouse cl_net_clientport vid_reload gl_swapinterval
-// ge:keywords chase_active chase_back
+// ge:keywords chase_active chase_back gl_damageblend_frac
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -643,6 +643,17 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .min = 0,
          .max = 16,
          .values = "1: off (the default); 2..16: that many samples, sharper; 0: the renderer's own",
+         .overlap = con::Overlap::same});
+  v.add({.name = "gl_damageblend_frac",  // the classic look's: a frame here, flat in Quake
+         .fallback = "0.2",
+         .flags = con::kArchive,
+         .help = "How deep a hit's flash reaches in from the screen's edges, so the middle stays "
+                 "clear.",
+         .kind = con::CvarKind::number,
+         .min = 0,
+         .max = 0.5,
+         .values = "0.2: a frame a fifth of the screen's shorter side deep (the default); "
+                   "0..0.5: that share, fading inward; 0: over the whole view",
          .overlap = con::Overlap::same});
   if (v.find("vid_vsync") != nullptr)  // the window's (platform/pacing.cpp)
     v.add_synonym("gl_swapinterval", "vid_vsync");

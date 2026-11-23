@@ -1071,6 +1071,25 @@ TEST(the_screen_takes_the_quad_tint_and_a_blow_flashes_red_then_fades) {
   CHECK(n.blend[3] == 0);
 }
 
+TEST(the_damage_flash_comes_apart_from_the_rest_of_the_tint) {
+  auto a = arena();
+  run(*a, 10);
+  sv::Q2Player& ana = a->p(0);
+  ana.quad_until = a->s().level_time + 20;
+  sv::fight_hurt(a->s(), 0, 1, {1, 0, 0}, 30, 0, 0);
+  run(*a, 8);
+  // The whole tint holds the quad's blue under the red flash; the rest is the quad's alone, the
+  // flash red at its own share, the whole the rest with the flash laid over it.
+  CHECK(ana.blend_apart[2] == 1 && ana.blend_apart[3] > 0.079f && ana.blend_apart[3] < 0.081f);
+  CHECK(ana.damage_blend[0] == 1 && ana.damage_blend[2] == 0 && ana.damage_blend[3] >= 0.2f);
+  const float whole = ana.blend_apart[3] + (1 - ana.blend_apart[3]) * ana.damage_blend[3];
+  CHECK_MSG(std::fabs(ana.blend[3] - whole) < 1e-6f, std::to_string(ana.blend[3]));
+  const auto& n = a->s().world.clients[0].numbers;
+  CHECK(n.damage_blend[3] == ana.damage_blend[3] && n.blend_apart[3] == ana.blend_apart[3]);
+  run(*a, 8 * 20);
+  CHECK(ana.damage_blend[3] == 0);
+}
+
 TEST(using_quad_says_so_and_power_armour_with_no_cells_says_why) {
   auto a = arena("0");
   run(*a, 10);

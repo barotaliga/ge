@@ -205,6 +205,10 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   // each, how much of it shows; gl_cshiftpercent (0..100) all of them together. Either look.
   double content_blend = 1, damage_blend = 1, quad_blend = 1, pent_blend = 1, suit_blend = 1,
          ring_blend = 1, cshift_percent = 100;
+  // gl_damageblend_frac: a hit's flash drawn as a frame round the view's edge this deep (a share
+  // of its shorter side, 0..0.5), fading to nothing inward, so the middle stays clear; 0 flat over
+  // the whole view, as Quake drew it (each game's own default: 0, Quake II's 0.2). Either look.
+  double damage_frac = 0;
   // cl_bonusflash: whether an item taken flashes the view gold. Either look.
   bool bonus_flash = true;
   // r_skyfog: the share of a map's fog laid over its sky, where the map's own `skyfog` does not

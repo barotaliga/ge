@@ -1013,10 +1013,12 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   const bool round = f.extras && liquid_round_eye(*f.extras);
   {
     // The screen's tint toned by the player (v_contentblend and kin, gl_cshiftpercent,
-    // gl_polyblend).
-    double blend[4];
-    look::toned_blend(*f.picture, round ? fx.screen_dry : fx.screen, blend);
-    gr::set_post_blend(d, f.post[p], blend);
+    // gl_polyblend; Quake II's the rules' own), a hit's flash round the edge at
+    // gl_damageblend_frac.
+    const look::Tints tints = look::toned_tints(*f.picture, round ? fx.screen_dry : fx.screen,
+                                                fx.rules_blend, fx.blend, fx.apart, fx.damage);
+    gr::set_post_blend(d, f.post[p], tints.flat);
+    gr::set_post_edge_blend(d, f.post[p], tints.edge, f.picture->damage_frac);
   }
   // The local player's own arrival opens the whole view out of a flash and a warp (r_arrival).
   gr::set_post_warp(

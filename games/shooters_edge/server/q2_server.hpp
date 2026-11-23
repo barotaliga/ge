@@ -342,6 +342,7 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   float damage_rgb[3] = {};
   size_t taken_seen = 0;
   float blend[4] = {};
+  float blend_apart[4] = {}, damage_blend[4] = {};  // the tint without the flash, the flash alone
   // His view (plugins/classic/q2_view.hpp): its state, this frame's offset and kick, and the
   // angles the dead view lies at.
   ge::classic::Q2ViewState view;

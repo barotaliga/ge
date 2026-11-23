@@ -233,6 +233,32 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own, fl
   for (size_t i = 0; i < s.statics.size(); i++) put(-1 - static_cast<int>(i), s.statics[i]);
 }
 
+namespace {
+
+// The stream's own Quake II tint into `out`: the whole of it, and where the damage flash came
+// apart (an extended recording's), the rest and the flash, the flash laid over the rest.
+void q2_stream_blend(const DemoState& s, FxScene& out) {
+  float whole[4], apart[4], hit[4];
+  for (int k = 0; k < 4; k++) {
+    apart[k] = static_cast<float>(s.q2_blend[k]) / 255.0f;
+    hit[k] = static_cast<float>(s.q2_damage[k]) / 255.0f;
+    whole[k] = apart[k];
+  }
+  if (hit[3] > 0) {  // laid over the rest: the alpha A + (1 - A) a, the colour keeping A / A'
+    const float now = apart[3] + (1 - apart[3]) * hit[3];
+    const float keep = apart[3] / now;
+    for (int k = 0; k < 3; k++) whole[k] = apart[k] * keep + hit[k] * (1 - keep);
+    whole[3] = now;
+  }
+  for (int k = 0; k < 4; k++) {
+    out.q2_blend[k] = s.protocol == 34 ? whole[k] : 0;
+    out.q2_apart[k] = s.protocol == 34 ? apart[k] : 0;
+    out.q2_damage[k] = s.protocol == 34 ? hit[k] : 0;
+  }
+}
+
+}  // namespace
+
 void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
                    const ge::render::FrameView& view, FxScene& out) {
   out.map = map;
@@ -252,6 +278,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.campaign = s.format == DemoFormat::single;  // the single protocol's codes (13: a beam)
   out.flash_bit = s.protocol != 34;               // Quake II's bit 2 is no gun's flash
   out.q2 = s.protocol == 34;                      // its own arrivals (its events)
+  q2_stream_blend(s, out);
   out.effect_models = static_cast<int>(s.models.size());
   out.beam_model = listed_model(s.models, "progs/beam.mdl");
   demo_placed(s, out.models, fx.draw_own, fx.own_alpha);

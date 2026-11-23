@@ -575,6 +575,7 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   v.set("in_grab_windowed_mouse", "0", con::Source::local);
   CHECK(v.find("net_clientport")->value == "27001" && w.game.q2.grab == 0);
   CHECK(v.find("gl_modulate")->layer == cl::kLayerClassic && w.picture.anisotropy == 0);
+  CHECK(v.find("gl_damageblend_frac")->value == "0" && w.picture.damage_frac == 0);  // Quake's
   v.set("gl_modulate", "1.5", con::Source::local);
   CHECK(w.picture.light_modulate == 1.5);
   const pr::GameProfile* q2 = pr::find_game("q2");
@@ -585,6 +586,8 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   CHECK(v.find("in_grab")->value == "0" && w.game.q2.grab == 0);  // the player's, kept
   CHECK(v.find("net_clientport")->value == "27001" && w.picture.light_modulate == 1.5);
   CHECK(v.find("gl_anisotropy")->value == "1" && w.picture.anisotropy == 1);  // Quake II's 1
+  // gl_damageblend_frac: Quake's flash flat (0), Quake II's a frame a fifth of the view deep.
+  CHECK(v.find("gl_damageblend_frac")->value == "0.2" && w.picture.damage_frac == 0.2);
   v.set("gl_swapinterval", "1", con::Source::local);  // its spelling of the window's vsync
   CHECK(v.find("vid_vsync")->value == "1");
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});

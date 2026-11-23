@@ -31,7 +31,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 16 | 0 | 4 | 20 |
 | Connection, network, downloads and the rest | 12 | 3 | 2 | 17 |
-| **all** | 933 | 0 | 46 | 232 | 1211 |
+| **all** | 935 | 0 | 45 | 231 | 1211 |
 
 ## Client console commands
 
@@ -446,7 +446,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_md5_load | `gl_md5_load` | load MD5 replacement models (default 1) | not-taken | replacement models come from classic enhance's cache as glTF (`plugins/classicenhance`), not `md5/` files beside the pack's |
 | cvar.gl_md5_use | `gl_md5_use` | draw MD5 replacements (default 1) | not-taken | as `gl_md5_load`: no `md5/` replacements are read |
 | cvar.gl_md5_distance | `gl_md5_distance` | beyond this distance the MD2 is drawn (default 2048) | not-taken | as `gl_md5_load`: no `md5/` replacements are read |
-| cvar.gl_damageblend_frac | `gl_damageblend_frac` | the damage tint drawn as a frame this wide (extended protocol) (default 0.2) | missing | C21; a competitive adjustment (the damage tint kept to the screen's edge), so taken under the rule of 2026-11-23 |
+| cvar.gl_damageblend_frac | `gl_damageblend_frac` | the damage tint drawn as a frame this wide (extended protocol) (default 0.2) | done | every classic game's setting (`classic/app/look.cpp`, `Picture::damage_frac`), Quake II's default 0.2, Quake's 0 (its flat flash kept): the damage flash drawn as a frame round the view's edge that share of its shorter side deep, fading inward (`render/post.hpp`'s set_post_edge_blend, `app/look.hpp`'s toned_tints); our server keeps the flash apart (`server/q2_blend.hpp`'s damage_blend, blend_apart), an extended recording's damage blend is read, a stock server's tint stays flat |
 | cvar.gl_waterwarp | `gl_waterwarp` | warp the view under water (default 0) | done | Quake II's: under a liquid the whole 3D view ripples in the post pass (`render/post.hpp`'s PostRipple: 0.25 % of the screen, five waves, a radian a second), the HUD not |
 | cvar.gl_fog | `gl_fog` | draw the fog the game sets (default 1) | done | Quake II's: 0 draws no fog, neither the map's nor the `fog` command's (`client/world_draw.cpp`'s world_fog); the newer protocol's fog is the protocol rows' |
 | cvar.gl_bloom | `gl_bloom` | bloom (default 0) | not-taken | Visuals come from classic enhance (decided 2026-11-23): a modern client's bloom switch; ours is `ce_bloom`/`r_bloom` |
@@ -1119,7 +1119,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 | hud.demobar | the demo bar | the share of the file read as a bar and a percentage, with `scr_demobar 2` the time; "[PAUSED]" | not-taken | Our design: ours `demo_bar` and the timeline (C39) |
 | hud.notify | the notify lines | the last `con_notifylines` printed lines at the top for `con_notifytime` | done | `engine/console/view.cpp` |
 | hud.chatinput | the chat input line | "say:" or "say_team:" and the typed text at the top | done | `engine/console/talk.cpp` |
-| hud.blend | the screen tint | the player state's blend (damage red, pickup yellow, water), off by `cl_blend`/`gl_polyblend`; the extended protocol's damage tint as a frame `gl_damageblend_frac` wide | not-taken | Tail (decided 2026-11-23), cosmetic: the tint landed (`q2-gaps2-client.md` checked); the damage frame missing (C21) |
+| hud.blend | the screen tint | the player state's blend (damage red, pickup yellow, water), off by `cl_blend`/`gl_polyblend`; the extended protocol's damage tint as a frame `gl_damageblend_frac` wide | done | the rules' own tint is now drawn, joined, local and in recordings (it had been replaced by Quake's tint worked from the health lost: `client/world_fx_screen.cpp`'s rules_tint, `app/look.hpp`'s toned_tints); the damage frame is gl_damageblend_frac |
 | hud.viewsize | the screen-size border | a view under 100 % centred with the `backtile` picture round it | done | `client/q2_bar.cpp`'s `draw_tile_clear`: the border round the smaller view tiled with pics/backtile, a tile its own size in the window's pixels |
 | hud.locdraw | place markers | `loc_draw` draws each place point in the world | done | `games/shooters_edge/client/world_fx.cpp` (`place_markers`): the ancient head, the nearest bobbing under a white light |
 | hud.cinematic | cinematics | a `.cin` (or `.ogv`, `.mkv`, `.mp4`) full-screen with its sound, the known releases' letterbox cropped; any key skips | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `.cin` from the packs (`client/cinematic.cpp`); other formats and the crop missing (C25) |
