@@ -122,6 +122,9 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | A setting named two ways in two games | one name of ours, each spelling a synonym while its game is loaded |
 | A newer game's look leaking into an older one by a shared name | the layers: `own` meanings, nothing merged |
 | Menus in a stand-in font | each game's own letters, cut from its pack |
+| Quake's two quit boxes (a joke on some builds, the program's credits on others) and the shareware's text-mode ordering screen on exit | Quake and QuakeWorld both show the joke box (Y or N); a box naming another program's authors and version is not ours to show, and the window has no text screen to leave behind |
+| The status bar's options toggling the mouse along with `cl_hudswap` (one row running into the next) | `HUD ON LEFT SIDE` toggles `hud_swap` alone |
+| `gl_flashblend` on by default, the walls dark under a rocket | off by default, the walls lit as the game's own software picture lit them; 1 draws the glow discs |
 
 ## Gaps
 

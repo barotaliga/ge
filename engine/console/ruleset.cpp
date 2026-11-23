@@ -69,10 +69,18 @@ const Ruleset* Rulesets::find(std::string_view name) const {
 
 std::string Rulesets::describe(const Ruleset& r) const {
   std::string out = std::string(r.name) + ": " + std::string(r.title);
-  if (r.locks.empty() && r.refused.empty()) return out + "\nNothing is held.";
+  if (r.locks.empty() && r.refused.empty() && r.team_macro_commands.empty() && !r.quiet_triggers &&
+      r.wait_limit == 0)
+    return out + "\nNothing is held.";
   for (const RuleLock& l : r.locks) out += "\n  holds " + lock_words(l);
   for (const RuleRefusal& f : r.refused)
     out += "\n  refuses " + std::string(f.command) + (f.match_only ? " during a match" : "");
+  if (!r.team_macro_commands.empty()) {
+    out += "\n  lets a line with team macros run only";
+    for (std::string_view c : r.team_macro_commands) out.append(" ").append(c);
+  }
+  if (r.quiet_triggers) out += "\n  runs no triggers during a match, and no sound triggers";
+  if (r.wait_limit > 0) out += "\n  allows " + std::to_string(r.wait_limit) + " waits in a row";
   return out;
 }
 
@@ -130,6 +138,24 @@ void Rulesets::apply(const Ruleset* r) {
     }
     console_.gate_command(cmd, std::move(gate));
   }
+  if (!r->team_macro_commands.empty()) {
+    TeamMacroLimit limit;
+    limit.owner = std::string(kOwner);
+    limit.why = " cannot be used with team macros under the " + rname + " ruleset.";
+    for (std::string_view c : r->team_macro_commands) limit.allowed.emplace_back(c);
+    console_.limit_team_macros(std::move(limit));
+  }
+  if (r->quiet_triggers) {
+    TriggerQuiet quiet;
+    quiet.owner = std::string(kOwner);
+    quiet.when = [this] { return match_ && match_(); };
+    quiet.sounds = true;
+    console_.quiet_triggers(std::move(quiet));
+  }
+  if (r->wait_limit > 0)
+    console_.limit_waits(std::string(kOwner), r->wait_limit,
+                         "The " + rname + " ruleset allows " + std::to_string(r->wait_limit) +
+                             " waits in a row, so the rest of the script was dropped.");
   // The setting names the ruleset in force, as the book spells it.
   if (cvar_->value != r->name) {
     const bool held = cvar_->lock != nullptr;
