@@ -38,9 +38,7 @@ gu::Color color_of(uint32_t rgba) {
 }
 
 // The bar's mode by `demo_bar`'s numbers: Quake II's `scr_demobar` shows it always or never.
-int bar_mode(const DemoPlayback& p) {
-  return p.game_bar < 0 ? p.bar : (p.game_bar == 0 ? 0 : 2);
-}
+int bar_mode(const DemoPlayback& p) { return p.game_bar < 0 ? p.bar : (p.game_bar == 0 ? 0 : 2); }
 
 double length_of(const DemoPlayback& p, const Timedemo& t) {
   return std::max(p.scan.length_s, t.timeline.t);

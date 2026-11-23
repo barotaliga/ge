@@ -46,8 +46,8 @@ struct PlayBarView {
   double speed = 1;
   std::span<const PlayBarMarker> markers;
   float pointer_x = -1, pointer_y = -1;  // the pointer, px (negative: none)
-  double drag_s = -1;  // a drag's landing, drawn as the playhead until the release (-1: none)
-  std::string title;   // at the right of the row under the track
+  double drag_s = -1;    // a drag's landing, drawn as the playhead until the release (-1: none)
+  std::string title;     // at the right of the row under the track
   bool clock = true;     // "1:02 / 4:10" after the button
   bool percent = false;  // "25%": the share played, after the clock
 };
