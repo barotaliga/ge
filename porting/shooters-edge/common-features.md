@@ -57,5 +57,7 @@ seen through his eyes, or from behind by `cam_thirdperson`).
 
 The mission pack threads check `common-settings.md` before naming a setting (told 2026-11-23). On
 Ground Zero, `strong_mines` and `g_disruptor` have no meaning in another game, and the `dmflags`
-bits are values of Quake II's own `dmflags`. Its tag mode (`gamerules 2`) is to be checked against
-Dissolution of Eternity's before it is named.
+bits are values of Quake II's own `dmflags`. Its tag mode (`gamerules 2`) and `randomrespawn` are
+Ground Zero's own (settled 2026-11-23): Dissolution of Eternity's tag runs in its own program on
+`teamplay` values with no setting of that name, and no other game has a random respawn, so neither
+has a second game meaning the same thing yet.
