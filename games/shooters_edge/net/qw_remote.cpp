@@ -1268,6 +1268,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.web.default_url = cvar("cl_http_default_url", "");
     cfg.web.debug = cvar("cl_http_debug", "0") != "0";
     cfg.web.insecure = cvar("cl_http_insecure", "0") != "0";
+    cfg.web.max_rate_kb = std::atoll(cvar("cl_http_max_rate", "0").c_str());
+    cfg.web.max_size_mb = std::atoll(cvar("cl_http_max_size", "512").c_str());
     cfg.rate = std::atoi(cvar("rate", "25000").c_str());  // the loaded game's default (classic)
     cfg.msg = std::atoi(cvar("msg", "1").c_str());
     cfg.noaim = cvar("noaim", "0") == "1";
@@ -1566,6 +1568,23 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                      .help = "Whether a secure web address's certificate goes unchecked.",
                      .kind = ge::console::CvarKind::boolean,
                      .values = "0: checked (the default); 1: not"});
+    con.cvars().add({.name = "cl_http_max_rate",
+                     .fallback = "0",
+                     .flags = ge::console::kArchive,
+                     .help = "The fastest web downloads come, in kilobytes a second, all together.",
+                     .kind = ge::console::CvarKind::integer,
+                     .min = 0,
+                     .max = 10000000,
+                     .values = "0: as fast as the server sends (the default); N: that many kB a "
+                               "second"});
+    con.cvars().add({.name = "cl_http_max_size",
+                     .fallback = "512",
+                     .flags = ge::console::kArchive,
+                     .help = "The largest file taken from the web, in megabytes.",
+                     .kind = ge::console::CvarKind::integer,
+                     .min = 1,
+                     .max = 100000,
+                     .values = "512: half a gigabyte (the default); N: that many megabytes"});
     con.cvars().add({.name = "cl_http_debug",
                      .fallback = "0",
                      .help = "Whether each web download's address is said as it starts.",

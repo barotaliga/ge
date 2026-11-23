@@ -174,7 +174,7 @@ void read_oob(Q2ClientEnd& c, const uint8_t* data, size_t size) {
       return;
     }
     wd::web_connect(c.http, c.cfg.http, wd::web_dlserver(w), c.cfg.allow.all,
-                    gn::to_string(c.server));
+                    gn::to_string(c.server), wd::web_dlpin(w));
     connected(c, chan);
   }
 }

@@ -41,9 +41,9 @@ void ask_again(WebDownloads& h, WebFile f, int packing) {
 }
 
 // A body's packing peeled: a packed form asked, then the server's own `Content-Encoding`.
-bool unpacked(const gn::HttpFetch& f, int packing, size_t most, std::vector<uint8_t>& out,
-              std::string& why) {
-  out = f.body;
+bool unpacked(const gn::HttpFetch& f, std::vector<uint8_t> sent, int packing, size_t most,
+              std::vector<uint8_t>& out, std::string& why) {
+  out = std::move(sent);
   std::vector<uint8_t> inner;
   const std::string& e = f.encoding;
   if (!e.empty() && e != "identity") {
@@ -60,6 +60,25 @@ bool unpacked(const gn::HttpFetch& f, int packing, size_t most, std::vector<uint
     out.swap(inner);
   }
   return true;
+}
+
+int hex_digit(char ch) {
+  if (ch >= '0' && ch <= '9') return ch - '0';
+  if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+  if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+  return -1;
+}
+
+// A certificate digest told as 64 hex digits, as its 32 bytes; empty when it is not one.
+std::vector<uint8_t> pin_bytes(const std::string& hex) {
+  std::vector<uint8_t> out;
+  if (hex.size() != 64) return out;
+  for (size_t i = 0; i < 64; i += 2) {
+    const int a = hex_digit(hex[i]), b = hex_digit(hex[i + 1]);
+    if (a < 0 || b < 0) return {};
+    out.push_back(static_cast<uint8_t>(a * 16 + b));
+  }
+  return out;
 }
 
 int remaining(const WebDownloads& h) { return static_cast<int>(h.queue.size() + h.slots.size()); }
@@ -218,12 +237,29 @@ std::string web_dlserver(const std::vector<std::string>& words) {
   return {};
 }
 
+std::string web_dlpin(const std::vector<std::string>& words) {
+  for (const std::string& w : words)
+    if (w.rfind("dlpin=", 0) == 0) return w.substr(6);
+  return {};
+}
+
 void web_connect(WebDownloads& h, const WebConfig& cfg, const std::string& dlserver, int all,
-                 const std::string& server) {
+                 const std::string& server, const std::string& pin) {
   web_stop(h);
   h = {};
   if (all < 0 || !cfg.downloads) return;
   std::string url = dlserver;
+  // The server's own web files: `{server}` the host joined (its port dropped), the certificate
+  // trusted by the digest it told.
+  if (const size_t at = url.find("{server}"); at != std::string::npos) {
+    std::string host = server;
+    const size_t colon = host.rfind(':');
+    if (colon != std::string::npos && host.find(':') == colon) host.resize(colon);
+    url.replace(at, 8, host);
+  }
+  if (!dlserver.empty()) h.pin = pin_bytes(pin);
+  // The server's own web files keep every file as it is: no packed form asked first.
+  if (!h.pin.empty()) h.packing = kWebPlain;
   h.default_repo = url.empty();
   if (url.empty()) url = cfg.default_url;
   if (url.empty()) return;
@@ -317,10 +353,19 @@ void web_step(WebDownloads& h, const WebConfig& cfg, double now_s,
     }
     if (f.state == gn::HttpState::done && f.status == 200) {
       if (h.packing < 0 && !ended.file.filelist) h.packing = packing;
+      // A resume's bytes before, then the rest; the whole checked against the digest told.
+      std::vector<uint8_t> sent;
+      if (f.offset > 0 && static_cast<size_t>(f.offset) == ended.held.size()) sent = ended.held;
+      sent.insert(sent.end(), f.body.begin(), f.body.end());
       std::vector<uint8_t> body;
       std::string bad;
-      if (!unpacked(f, packing, ended.file.filelist ? kMostList : ge::vfs::kUnpackLimit, body,
-                    bad)) {
+      if (!gn::http_digest_ok(f, sent)) {
+        h.said.push_back("[HTTP] " + path + " [checksum mismatch] " + web_files_left(remaining(h)));
+        if (!ended.file.filelist && !ended.file.pak) done.back.push_back(path);
+        continue;
+      }
+      if (!unpacked(f, std::move(sent), packing,
+                    ended.file.filelist ? kMostList : ge::vfs::kUnpackLimit, body, bad)) {
         std::string said = "[HTTP] " + path;
         said += " [";
         said += bad;
@@ -331,10 +376,10 @@ void web_step(WebDownloads& h, const WebConfig& cfg, double now_s,
       }
       const double took = std::max(now_s - ended.started_s, 1e-3);
       const auto size = static_cast<int64_t>(body.size());
-      const auto sent = static_cast<double>(f.body.size());
+      const auto moved = static_cast<double>(f.body.size() + static_cast<size_t>(f.offset));
       std::string said = "[HTTP] " + path + " [" + web_size_text(size);
       if (packed) said += std::string(" from ") + kWebPackings[packing].name;
-      said += ", " + web_size_text(static_cast<int64_t>(sent / took)) + "/sec] ";
+      said += ", " + web_size_text(static_cast<int64_t>(moved / took)) + "/sec] ";
       said += web_files_left(remaining(h));
       h.said.push_back(std::move(said));
       if (ended.file.filelist) {
@@ -345,6 +390,27 @@ void web_step(WebDownloads& h, const WebConfig& cfg, double now_s,
       continue;
     }
     const bool status = f.state == gn::HttpState::done;
+    // Cut short: asked again for the rest from what came, a few times.
+    if (!status && (f.error == "Transferred a partial file" || f.error == "Timeout was reached") &&
+        ended.tries + 1 < kWebTries) {
+      std::vector<uint8_t> more;
+      if (gn::http_partial(f, more) && f.offset == static_cast<int64_t>(ended.held.size())) {
+        WebSlot again;
+        again.file = ended.file;
+        again.held = std::move(ended.held);
+        again.held.insert(again.held.end(), more.begin(), more.end());
+        again.tries = ended.tries + 1;
+        again.started_s = ended.started_s;
+        gn::HttpOptions o = f.options;
+        o.from = static_cast<int64_t>(again.held.size());
+        o.accept_encoding.clear();  // the rest of the bytes as they lie
+        h.said.push_back("[HTTP] " + path + " [" + f.error + ", resuming at " +
+                         web_size_text(o.from) + "]");
+        gn::http_start(again.fetch, f.url, o, now_s);
+        h.slots.push_back(std::move(again));
+        continue;
+      }
+    }
     const std::string why = status ? gn::http_status_text(f.status) : f.error;
     std::string said = "[HTTP] " + path;
     said += " [";
@@ -390,11 +456,31 @@ void web_step(WebDownloads& h, const WebConfig& cfg, double now_s,
     o.referer = h.referer;
     o.proxy = cfg.proxy;
     o.verify = !cfg.insecure;
+    o.pin = h.pin;
     o.accept_encoding = kAcceptEncoding;
+    if (cfg.max_size_mb > 0) o.most_bytes = static_cast<size_t>(cfg.max_size_mb) * 1000000;
     if (s.file.filelist) o.most_bytes = kMostList;
     gn::http_start(s.fetch, url, o, now_s);
     h.slots.push_back(std::move(s));
   }
+  // The speed cap shared evenly by the fetches running.
+  if (cfg.max_rate_kb > 0 && !h.slots.empty())
+    for (WebSlot& s : h.slots)
+      s.fetch.options.rate = cfg.max_rate_kb * 1000 / static_cast<int64_t>(h.slots.size());
+}
+
+bool web_progress(const WebDownloads& h, WebProgress& out) {
+  for (const WebSlot& s : h.slots) {
+    if (s.file.filelist) continue;
+    out.path = s.file.path;
+    // A resume's bytes before count once the server took the range (its 206 said so).
+    const size_t before = s.fetch.offset > 0 ? s.held.size() : 0;
+    out.got = static_cast<int64_t>(before + gn::http_received(s.fetch));
+    out.total = s.fetch.total;
+    out.files_left = remaining(h);
+    return true;
+  }
+  return false;
 }
 
 void web_stop(WebDownloads& h) {

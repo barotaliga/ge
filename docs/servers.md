@@ -625,6 +625,53 @@ earlier than the delay, the one who came at 15 s starting at the keyframe of 10 
 
 The longest lags are the late spectator's catch-up from its keyframe.
 
+## Fast downloads: the server's files over HTTPS
+
+A player who lacks a map waits for it. Over the game's own channel a file comes in pieces paced by
+the client's rate: a base-protocol client at the classic 25000 bytes a second waits 25 s for
+aerowalk (632 kB) on a LAN, and a stock server on the internet took over 35 s for one map. So every
+dedicated server can also send its files over HTTPS from a TCP port beside its game port
+(`engine/server/web_files.hpp` over `engine/net/file_server.hpp`), and a client of any classic
+game takes them from there first (`plugins/classic/content/web_downloads.hpp`), the channel behind
+it for whatever the web gives back.
+
+| Setting | Default | What |
+| --- | --- | --- |
+| `sv_http_port` | 0 (off) | the TCP port the files are served on |
+| `sv_http_rate` | 20000 | kB a second to every player together, shared fairly among those fetching |
+| `sv_http_rate_player` | 5000 | kB a second to one player (one address: their parallel fetches share it) |
+| `sv_http_cert`, `sv_http_key` | none | PEM files of a certificate a public authority signed |
+| `sv_http_url` | none | the address told (a host name the certificate names, or a proxy in front) |
+| `sv_http_plain` | 0 | 1: plain HTTP behind the operator's own TLS proxy |
+
+**Secure with nothing set up.** With no certificate given the server makes its own when it starts
+and tells its clients that certificate's SHA-256 beside the address (QuakeWorld's server info
+`*dlpin`, Quake II's ` dlpin=` in the connect answer). Our client trusts that one certificate and
+nothing else on that connection: the same trust as the game connection the address came over, and
+nothing between them can change a byte. Each answer also names the file's SHA-256 (`Repr-Digest`,
+RFC 9530) and the client keeps a file only when the bytes match it; a map is then checked against
+the server's checksum as every map is.
+
+**What is served** is what the game's channel would send: the game folder played or its base
+folder, the kinds of file the game's servers send (never a pack), and the server's own
+`sv_download_*` switches (`plugins/classic/content/web_serve.hpp`). A path that climbs (`..`, a
+backslash, a colon, an empty part) is refused before the lookup sees it.
+
+**The address told.** `sv_http_url` when set; else `https://<sv_publicaddr's host>:<port>/`; else
+`https://{server}:<port>/`, which our client reads as the host it joined. When `sv_downloadserver`
+names an outside host (a CDN, a GitHub repository) that is told instead. A real address is also put
+in the server info as `sv_dlURL`, the key other QuakeWorld clients read, and Quake II's stock
+clients read ` dlserver=`; a client of another engine cannot check a pin, so to serve them too an
+operator sets a public certificate and `sv_http_url`.
+
+**The client** asks several files at once (`cl_http_max_connections`), resumes a file cut short
+from where it stopped (a `Range` request, three tries), holds every fetch together to
+`cl_http_max_rate` kB a second (0: no cap) and refuses a file larger than `cl_http_max_size` MB.
+The console's download bar follows the fetch (`web_progress`).
+
+The `se-fastdl` lab times both ways on a real map: `make lab LAB=se-fastdl
+ARGS=--map=<path>/aerowalk.bsp`.
+
 ## Open for extension
 
 What a server will grow is a lot: everything a mature classic server offers and match mods on top.

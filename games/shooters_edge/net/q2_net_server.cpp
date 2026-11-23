@@ -410,8 +410,12 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   std::string answer = "client_connect";
   if (c.protocol == kQ2Protocol36) answer += " nc=" + std::to_string(ask.chan);
   // A GitHub repository named as its raw files' address, which a stock client fetches as it is.
-  if (!s.cfg.download_server.empty())
+  if (!s.cfg.download_server.empty()) {
     answer += " dlserver=" + ge::classic::content::web_base(s.cfg.download_server);
+  } else if (!s.cfg.web_url.empty()) {  // the server's own web files, and how to trust them
+    answer += " dlserver=" + s.cfg.web_url;
+    if (!s.cfg.web_pin.empty()) answer += " dlpin=" + s.cfg.web_pin;
+  }
   answer += " map=" + (*s.rules)->map_name;
   send_oob(s, from, answer);
   note(s, c.name + " connected");
