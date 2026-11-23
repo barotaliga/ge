@@ -270,3 +270,95 @@ TEST(a_setting_is_kept_and_a_bad_message_refused) {
   CHECK(!cn::q2_proto_in(p, std::vector<uint8_t>{0x2A}, blocks, error));  // 10 with a top bit
   CHECK(!error.empty());
 }
+
+namespace {
+
+// A 23-bit coordinate in its absolute form (three bytes, low bit 1).
+void coord_abs(std::vector<uint8_t>& b, int v) {
+  const auto w = (static_cast<uint32_t>(v) << 1) | 1u;
+  u8(b, static_cast<int>(w & 0xFF));
+  u8(b, static_cast<int>((w >> 8) & 0xFF));
+  u8(b, static_cast<int>((w >> 16) & 0xFF));
+}
+
+}  // namespace
+
+// Under the extended limits (the server data's flags) the stream becomes the recording of that
+// level: the sounds' configstrings at their extended place, an entity past 1024 far out with its
+// alpha, the player's 23-bit origin, a word gun index and a stat under the varint mask.
+TEST(extended_limits_come_out_as_the_recording_of_their_level) {
+  for (const int minor : {1025, 1026}) {
+    std::vector<uint8_t> sd = server_data_36(minor);
+    sd[sd.size() - 2] = 1 | 8 | 16;  // the strafe hack, extensions and extensions 2
+    cn::Q2ProtoIn p;
+    std::vector<std::vector<uint8_t>> blocks;
+    std::string error;
+    CHECK_MSG(cn::q2_proto_in(p, sd, blocks, error), error);
+    CHECK(p.ext == (minor == 1026 ? 3 : 2) && p.strafe_hack);
+    std::vector<uint8_t> cs;  // the configstring stream: a sound, then the extended end
+    u8(cs, 25);
+    i16(cs, 8254 + 1);
+    str(cs, "misc/far.wav");
+    i16(cs, 13630);
+    CHECK_MSG(cn::q2_proto_in(p, cs, blocks, error), error);
+    std::vector<uint8_t> pr;  // a print at the extended centre level
+    u8(pr, 10);
+    u8(pr, 5);
+    str(pr, "Round two");
+    CHECK_MSG(cn::q2_proto_in(p, pr, blocks, error), error);
+    std::vector<uint8_t> f;   // a frame: origin (x, y) and the gun under the flags; z and stats
+    u8(f, 20 | (2 << 5));     // extra flags' bit 5 (stats) in the id's top bits
+    i32(f, 10 | (31 << 27));  // frame 10, no delta
+    u8(f, 0x80);              // extra flags' bit 3 (origin z) in the high nibble
+    u8(f, 0);                 // no areas
+    i16(f, (1 << 1) | (1 << 12) | (minor == 1026 ? (1 << 15) : 0));
+    if (minor == 1026) u8(f, 1);  // the fog level's third flags byte: fog
+    coord_abs(f, 80);             // origin x: 10 units
+    i16(f, 0);                    // origin y: no change
+    coord_abs(f, 70000);          // origin z: 8750 units, past the ordinary wire's reach
+    i16(f, 300);                  // the gun's index, a word
+    if (minor == 1026) {          // the fog after the blend's place: a colour, read past
+      u8(f, 1);
+      u8(f, 10);
+      u8(f, 20);
+      u8(f, 30);
+    }
+    u8(f, 1 << 3);  // the stats' mask as a varint: stat 3
+    i16(f, 77);
+    sv::Q2EntityState e;  // entity 1500 far out, half seen
+    e.model[0] = 2;
+    e.origin[0] = 72000;
+    e.alpha = 128;
+    sv::q2_write_entity_ext(f, sv::q2_entity_flags_ext({}, e, 1500, false, 2), 1500, {}, e, 2);
+    u8(f, 0);
+    u8(f, 0);
+    CHECK_MSG(cn::q2_proto_in(p, f, blocks, error), error);
+    CHECK(!blocks.empty() && blocks[0].size() > 5);
+    int32_t written = 0;
+    for (int k = 0; k < 4; k++) written |= blocks[0][1 + k] << (8 * k);
+    CHECK_MSG(written == 3435, std::to_string(written));
+    cl::Demo d;
+    cl::q2_stream_begin(d);
+    CHECK_MSG(read_all(d, blocks, error), error);
+    CHECK(d.state.sounds.size() > 1 && d.state.sounds[1] == "misc/far.wav");
+    CHECK(d.state.centre == "Round two");
+    const cl::DemoEntity& me = d.state.players[2];
+    CHECK_MSG(me.origin.x == 10.0f && me.origin.z == 8750.0f,
+              std::to_string(me.origin.x) + " " + std::to_string(me.origin.z));
+    CHECK(d.state.stats[cl::kStatWeapon] == 300);
+    CHECK(d.state.q2_stats[3] == 77);
+    CHECK(d.state.entities.size() > 1500);
+    if (d.state.entities.size() > 1500) {
+      const cl::DemoEntity& far = d.state.entities[1500];
+      CHECK(far.present && far.origin.x == 9000.0f && far.alpha < 0.6f);
+    }
+  }
+  // The second extensions without the first are refused.
+  std::vector<uint8_t> bad = server_data_36(1025);
+  bad[bad.size() - 2] = 16;
+  cn::Q2ProtoIn p;
+  std::vector<std::vector<uint8_t>> blocks;
+  std::string error;
+  CHECK(!cn::q2_proto_in(p, bad, blocks, error));
+  CHECK_MSG(error.find("second protocol extensions") != std::string::npos, error);
+}

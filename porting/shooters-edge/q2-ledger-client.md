@@ -30,8 +30,8 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Keys: the fixed keys and the default bindings | 10 | 0 | 1 | 11 |
 | Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 16 | 0 | 4 | 20 |
-| Connection, network, downloads and the rest | 12 | 3 | 2 | 17 |
-| **all** | 936 | 44 | 231 | 1211 |
+| Connection, network, downloads and the rest | 13 | 3 | 2 | 18 |
+| **all** | 937 | 44 | 231 | 1212 |
 
 ## Client console commands
 
@@ -1398,6 +1398,7 @@ Behaviour the client offers outside the screen.
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | net.protocols | protocols | 34 (stock), 35 (R1Q2), 36 (Q2PRO) by `cl_protocol` | done | `net/q2_client.cpp` + `net/q2_proto_in.cpp`: 35 and 36 joined, read as protocol 34 by the one reader, recordings written as 34; the server is told the client records, so it leaves nothing out |
+| net.extended-limits | protocol extensions while joined | an extended server's flags (36, minor 1024 on) read: the extended configstrings and limits, the wider entity fields, 23-bit coordinates, 64 stats, word gun index, the centred print levels; recordings at 3434 to 3436 | done | `net/q2_proto_in.cpp` (`Q2ProtoIn::ext`): the stream written as the recording of its level (3434, or 3435 for extensions 2 and the fog level, whose fog is read past: the look is ours), entities and baselines carried as they are, the player state through `server/q2_wire.hpp`'s `q2_write_player_ext`; `client/demo_q2.cpp` shows print levels 4 and 5 centred; prediction reads the timer in milliseconds (`net/q2_predict.cpp`) |
 | net.predict | prediction | the player's move predicted from the last frame by the shared move code; misses smoothed | done | `games/shooters_edge/net/q2_predict.cpp` |
 | net.userinfo | user info while joined | a changed name, skin, hand, fov, rate sent at once | missing | Missing, rank 1 (gameplay, daily use): `net/qw_remote.cpp` `user_info_step`: a changed `rate` or `password` sends the user info at once; a changed name, skin, hand or fov not (C30) LIFT: Quake's `user_info_step` (`net/qw_remote.cpp`) is the shared place. |
 | net.cheatlock | the cheat lock | with more than one player slot, cheat-protected settings forced back each frame | done | `engine/console/cvar.hpp`'s `hold_cheats` (any game), held by `net/q2_remote.cpp` while a joined Quake II server has more than one player slot: every cheat back to its default and each set refused whatever the local sv_cheats says; let go when the game is left (`remote_disconnect`) |

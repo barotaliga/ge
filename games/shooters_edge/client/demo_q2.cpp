@@ -1032,6 +1032,10 @@ bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         DemoPrint p;
         p.level = m.u8();
         p.text = m.str();
+        if (ext_of(s.protocol) > 0 && p.level >= 4) {  // the extended levels 4 and 5: centred
+          s.centre = std::move(p.text);
+          break;
+        }
         s.prints.push_back(std::move(p));
         break;
       }
