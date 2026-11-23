@@ -89,7 +89,7 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .help = "How strongly the maps' light shows: their light times this.",
         .min = 0,
         .max = 1000000,
-        .values = "0 and up: 1 as the maps were lit; 2 twice as bright"},
+        .values = "1: as the maps were lit; 2: twice as bright"},
        &picture.light_modulate);
   bind(cv,
        {.name = "gl_anisotropy",
