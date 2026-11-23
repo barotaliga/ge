@@ -39,6 +39,12 @@ whole language are [`docs/console.md`](../../../docs/console.md); the roadmap is
 6. Test it the way `tests/fall_line_cvars_test.cpp` does: a cfg line reaches the field (after
    `apply_latched` when latched), and a client refuses a server's cvar.
 
+## The reference manual
+
+Every setting, command and flag reaches the player's manual by itself (docs/console.md § The
+reference manual, `make manual`): give each a help phrase a player reads, register commands on the
+console (not in a game's own dispatcher), and add a launch flag to its program's flag table.
+
 ## Changing the language
 
 The fixtures in `tests/golden/console_script.txt` ARE the language's specification by example.

@@ -316,6 +316,17 @@ void register_more_commands(Console& con) {
           if (!why.empty()) c.print(why);
         }
       });
+  con.add_command("writemanual",
+                  "writemanual <file>: every setting, command and flag written for the reference "
+                  "manual (console/manual.hpp)",
+                  [](Console& c, const Args& a) {
+                    if (a.size() != 2) {
+                      c.error("writemanual needs a file name.", "writemanual <file>");
+                      return;
+                    }
+                    std::string error;
+                    if (!write_manual(a[1], manual_of(c), error)) c.error(error, "");
+                  });
   con.add_command("writeconfig",
                   "writeconfig [-a] [-b] [-c] [-m] <file>: the binds and saved settings (or the "
                   "aliases, -a; every changed setting, -m) written to a cfg of your own",

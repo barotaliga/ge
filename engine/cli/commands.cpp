@@ -24,6 +24,12 @@ constexpr FlagSpec kPreset{"preset", "<debug|release>",
                            "the CMake preset (default debug: sanitizers on)"};
 constexpr FlagSpec kDryRun{"dry-run", "", "say what would be written, write nothing"};
 
+constexpr FlagSpec kManualFlags[] = {
+    {"out", "<file>", "the page (default user-manual.html; manual.json is written beside it)"},
+    {"title", "<text>", "the page's title (default Reference manual)"},
+    {"intro", "<text>", "a line under the title"},
+    {"version", "<text>", "the build's version, at the page's foot"},
+};
 constexpr FlagSpec kNewFlags[] = {
     {"name", "<kebab>", "the game's name (default: the directory's)"},
     {"engine-sha256", "<hex>", "the release's -src.tar.gz checksum, pinned with it"},
@@ -866,6 +872,11 @@ const CommandSpec kCommands[] = {
      "ge content scan ~/classic/id1 --assetmap=games/shooters_edge/content/classic.assetmap "
      "--registry=games/shooters_edge/content",
      "assets"},
+    {"manual", "<source>...", 1, -1, "create",
+     "the player's reference manual: every setting, command and launch flag the programs' manual "
+     "sources list (se -manual <file>, sesv --manual=<file>), merged with each game's own "
+     "spellings and defaults, written as one searchable page with filters by game, kind and layer",
+     kManualFlags, "ge manual build/manual/*.txt --out=build/manual/user-manual.html", "play-test"},
     {"credits check",
      "[<dir>]",
      0,
