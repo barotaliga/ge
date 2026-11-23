@@ -263,6 +263,11 @@ TEST(quake_iis_mission_packs_ask_the_digital_releases_track_numbers) {
   CHECK(content::q2_remap_track("xatrix", 11) == 18);
   CHECK(content::q2_remap_track("baseq2", 5) == 5 && content::q2_remap_track("rogue", 12) == 12);
   CHECK(content::q2_remap_track("rogue", 1) == 1);
+  // The folder as `-game` may give it: any case, a path, a trailing slash.
+  CHECK(content::q2_remap_track("XATRIX", 2) == 9 && content::q2_remap_track("Rogue", 2) == 12);
+  CHECK(content::q2_remap_track("C:\\Quake2\\xatrix\\", 2) == 9);
+  CHECK(content::q2_remap_track("/games/quake2/rogue/", 11) == 21);
+  CHECK(content::q2_remap_track("/games/rogue/baseq2", 5) == 5);
 }
 
 TEST(import_takes_a_games_mission_packs_in_beside_it) {
