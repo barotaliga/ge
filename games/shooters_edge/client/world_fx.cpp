@@ -25,6 +25,7 @@
 #include "shooters_edge/app/monster_fx.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/face_hit.hpp"
+#include "shooters_edge/client/q2_enhance_fx.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -1195,7 +1196,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       if (!against) against = l.map && surface_near(*l.map, boom, normal, &off);
       const size_t first = s.blasts.size();
       const size_t thrown = out.births.size();
-      fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births);
+      fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births,
+                l.q2 ? q2_blast_of(code) : fx::BlastOf::common);
       if (no_specks) out.births.resize(thrown);
       // What it throws that falls meets what the frame draws (the pool collides); one flung out of
       // the view has the floor under the blast to come down on, and hops there.
@@ -1399,7 +1401,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                  (h >> 8) % 628 / 100.0, h >> 24, t);
           }
         }
-        if (s.on.hits) {
+        if (s.on.hits && l.q2 && q2_pack_hit(s, e.code, p, normal, t, out)) {
+          // a mission pack's hit in its own colour (world_fx_q2.cpp)
+        } else if (s.on.hits) {
           // A gunshot's count is its pellets (a match's); each its own hit.
           fx::WallHit w;
           for (int k = 0; k < 3; ++k) {
@@ -1475,6 +1479,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       case EffectKind::beam: {
         if (l.q2 && e.code == 23) {  // the BFG's laser: a strip for a tenth of a second
           q2_laser(s, e, t);
+          break;
+        }
+        if (l.q2 && s.on.beams && (e.code == 38 || e.code == 39)) {  // a heat beam: a hot strip
+          q2_heat_beam(s, e, t);
           break;
         }
         double normal[3], dir[3];

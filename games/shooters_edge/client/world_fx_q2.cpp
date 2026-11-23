@@ -22,6 +22,7 @@
 #include "core/prng.hpp"
 
 #include "shooters_edge/app/effects.hpp"
+#include "shooters_edge/client/q2_enhance_fx.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 #include "shooters_edge/client/q2_model_fx.hpp"
 #include "shooters_edge/client/view.hpp"
@@ -93,6 +94,17 @@ bool q2_classic_blast(FxState& s, int code, const sh::Vec3f& at, const double p[
   }
 }
 
+bool q2_pack_hit(FxState& s, int code, const double p[3], const double normal[3], double t,
+                 FxFrame& out) {
+  Q2PackHit h;
+  if (!q2_pack_hit_of(code, &h)) return false;
+  fx::tinted_hit(p, normal, h.hit, s.seed++, &out.births);
+  if (h.flick)
+    s.sparked.push_back(
+        {{p[0] + normal[0] * 0.1, p[1] + normal[1] * 0.1, p[2] + normal[2] * 0.1}, t, {}});
+  return true;
+}
+
 bool q2_cable(FxState& s, const Effect& e, double t) {
   const bool ctf = e.name == "te_grapple_cable";
   if (!ctf && e.name != "te_parasite_attack" && e.name != "te_medic_cable_attack") return false;
@@ -124,6 +136,16 @@ void q2_laser(FxState& s, const Effect& e, double t) {
                : k == 1 ? 1.0f
                         : 0.0f;
   if (s.q2_lasers.size() < 256) s.q2_lasers.push_back(z);  // the classic's 256: one more dropped
+}
+
+void q2_heat_beam(FxState& s, const Effect& e, double t) {
+  FxState::Q2Laser z;
+  z.from = e.at;
+  z.to = e.end;
+  z.born = t;
+  for (int k = 0; k < 3; ++k) z.rgb[k] = kQ2HeatBeamRgb[k];
+  z.width_u = kQ2HeatBeamU;
+  if (s.q2_lasers.size() < 256) s.q2_lasers.push_back(z);
 }
 
 void q2_place_bubbles(FxState& s, int effect_models, double t, FxFrame& out) {
@@ -186,7 +208,7 @@ void q2_draw_model_fx(FxState& s, int effect_models, const PlayerState& me, int 
     HeldBeam b;
     b.entity = entity--;
     b.laser = true;
-    b.laser_m = static_cast<float>(4 * ge::brush::kUnitM);
+    b.laser_m = static_cast<float>(z.width_u * ge::brush::kUnitM);
     for (int k = 0; k < 3; ++k) b.laser_rgb[k] = z.rgb[k];
     b.shot.born_s = t - 1;  // long on: no swell
     b.shot.seed = static_cast<uint32_t>(-b.entity);
