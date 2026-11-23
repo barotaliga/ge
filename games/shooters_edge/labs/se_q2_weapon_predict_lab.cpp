@@ -7,13 +7,19 @@
 // session runs once more as a stock server would, by its press rule (a press fires at once, a
 // held trigger steps with the server's frames), the rule the prediction uses on a server that does
 // not say it is ours. A table of the press to the first shot heard, to the gun's first fire frame
-// drawn and to the bullets counting down, and the shots heard a press against the server's own; a
-// chart of one press at the first latency (the trigger, the shots, the bullets on the bar, off and
-// on) and one of the press to the first shot heard by latency.
+// drawn and to the bullets counting down, the shots heard a press against the server's own, and
+// on, the shots the prediction placed in a frame the server made none in and the server's shots it
+// missed (played late); a chart of one press at the first latency (the trigger, the shots, the
+// bullets on the bar, off and on) and one of the press to the first shot heard by latency. A
+// second table, at the first latency in a hall with a shotgun, a chaingun and hand grenades too:
+// a weapon change (the key to the old weapon lowering, to the new one drawn), the chaingun held
+// (the press to its spin up heard, to its loop on) and a hand grenade held 0.5 s (the press to the
+// pin heard, the letting go to the throw heard), off and on.
 //
 // ge:summary Lab: Quake II's joined window's own shots predicted: press to shot heard, off and on
 // ge:keywords lab se-q2-weapon-predict weapon-prediction cl_nopred_weapon fire-delay latency q2
-// ge:keywords machinegun predicted-flash own_shots
+// ge:keywords machinegun predicted-flash own_shots misplaced-shot weapon-change chaingun-spin
+// ge:keywords hand-grenade
 // ge:skill net labs
 // ge:test tests/shooters_edge_q2_weapon_test.cpp
 #include <memory>
@@ -58,8 +64,9 @@ br::Entity entity(std::vector<std::pair<std::string, std::string>> pairs) {
   return e;
 }
 
-// A hall of 2048 units with one start, a machinegun and bullets on it.
-std::shared_ptr<const br::Map> hall(std::string& error) {
+// A hall of 2048 units with one start, a machinegun and bullets on it (`arsenal`: a shotgun, a
+// chaingun, shells, more bullets and hand grenades too).
+std::shared_ptr<const br::Map> hall(std::string& error, bool arsenal = false) {
   br::BrushWorld w;
   w.models.resize(1);
   auto& m = w.models[0];
@@ -72,6 +79,10 @@ std::shared_ptr<const br::Map> hall(std::string& error) {
       {{"classname", "info_player_deathmatch"}, {"origin", "-400 -400 24"}, {"angle", "0"}}));
   w.entities.push_back(entity({{"classname", "weapon_machinegun"}, {"origin", "-400 -400 16"}}));
   w.entities.push_back(entity({{"classname", "ammo_bullets"}, {"origin", "-390 -400 16"}}));
+  if (arsenal)
+    for (const char* name :
+         {"weapon_shotgun", "weapon_chaingun", "ammo_shells", "ammo_bullets", "ammo_grenades"})
+      w.entities.push_back(entity({{"classname", name}, {"origin", "-395 -395 16"}}));
   std::vector<uint8_t> bytes;
   if (!br::write_brush_world(w, &bytes, &error)) return nullptr;
   auto map = std::make_shared<br::Map>();
@@ -89,13 +100,13 @@ struct Session {
   int64_t now = 0, wall = 0;  // the server's host ticks, the window's clock
 };
 
-bool open_session(Session& s, double latency_ms, std::string& error) {
+bool open_session(Session& s, double latency_ms, std::string& error, bool arsenal = false) {
   s.rules = sv::q2_runner(sv::make_q2_server({}));
   s.rules.console("deathmatch 1");
   s.rules.console("sv_fps 10");
   sv::MapSpec map;
   map.name = "hall";
-  map.brushes = hall(error);
+  map.brushes = hall(error, arsenal);
   if (!map.brushes || !s.rules.start(map, error)) return false;
   gn::LinkConditions link;
   gn::conditions_preset("lan", link);
@@ -143,7 +154,28 @@ struct Run {
   int presses = 0, heard = 0;
   double first_heard_ms = 0, first_frame_ms = 0, first_ammo_ms = 0;  // means over the presses
   std::vector<double> t, button, shots, bullets;                     // the chart's press
+  // On: the predicted shots in a frame the server made none in, and the server's shots in a frame
+  // the prediction made none in (each over the shots both sides had seen by the end).
+  int misplaced = 0, unpredicted = 0, server_shots = 0;
+  int filled = 0;  // the server's shots the prediction missed, played late
 };
+
+// The frames' shots both sides saw: `pred` not in `serv` counts misplaced, `serv` not in `pred`
+// unpredicted, over the frames up to the server's last.
+void audit_shots(const std::vector<int32_t>& pred, const std::vector<int32_t>& serv, Run& out) {
+  if (serv.empty()) return;
+  const int32_t first = serv.front(), last = serv.back();
+  const auto has = [](const std::vector<int32_t>& v, int32_t f) {
+    for (const int32_t x : v)
+      if (x == f) return true;
+    return false;
+  };
+  for (const int32_t f : pred)
+    if (f >= first && f <= last && !has(serv, f)) out.misplaced++;
+  for (const int32_t f : serv)
+    if (!has(pred, f)) out.unpredicted++;
+  out.server_shots = static_cast<int>(serv.size());
+}
 
 constexpr double kPressS = 0.6, kCycleS = 1.2;
 
@@ -170,6 +202,9 @@ Run run_session(double latency_ms, bool on, bool latch, int fps, int presses) {
   bool heard_this = false, frame_this = false, ammo_this = false;
   int32_t bullets_at_press = 0;
   int predicted = 0;
+  std::vector<int32_t> pred_frames, serv_frames;
+  const cn::Q2ShotAudit& audit = s.remote.q2_weapon.audit;
+  uint32_t pred_seen = audit.predicted_n, serv_seen = audit.server_n;
   for (int i = 0; i < frames; i++) {
     const int in_cycle = i % cycle;
     if (in_cycle == 0) {
@@ -181,6 +216,10 @@ Run run_session(double latency_ms, bool on, bool latch, int fps, int presses) {
     s.remote.hands.buttons = in_cycle < held ? sh::kButtonAttack : 0;
     window_frame(s, window_us);
     if (s.remote.q2_weapon.on) predicted++;
+    for (; pred_seen != audit.predicted_n; pred_seen++)
+      pred_frames.push_back(audit.predicted[pred_seen & 31]);
+    for (; serv_seen != audit.server_n; serv_seen++)
+      serv_frames.push_back(audit.server[serv_seen & 31]);
     const int heard_now = shots_heard(d);
     out.heard += heard_now;
     const double since_ms = static_cast<double>(i - press_at) * 1000.0 / fps;
@@ -209,10 +248,117 @@ Run run_session(double latency_ms, bool on, bool latch, int fps, int presses) {
     }
   }
   out.predicted = predicted > frames / 2;
+  if (on) audit_shots(pred_frames, serv_frames, out);
+  out.filled = static_cast<int>(audit.filled);
   out.round_trip_ms = s.remote.q2->latency * 1000;
   out.first_heard_ms /= out.presses;
   out.first_frame_ms /= out.presses;
   out.first_ammo_ms /= out.presses;
+  out.ok = true;
+  return out;
+}
+
+// Whether the player's own sound named `sample` started this window frame.
+bool heard(const dc::DemoState& d, const char* sample) {
+  for (const dc::DemoSound& snd : d.started) {
+    if (snd.entity != d.player + 1) continue;
+    const char* name = snd.name;
+    if (name == nullptr && snd.sound > 0 && static_cast<size_t>(snd.sound) < d.sounds.size())
+      name = d.sounds[static_cast<size_t>(snd.sound)].c_str();
+    if (name != nullptr && std::string_view(name) == sample) return true;
+  }
+  return false;
+}
+
+// THE REST OF THE HAND: a weapon change, the chaingun's spin and the hand grenade. Each cue's
+// time to what it shows or plays, the mean over `cues`, off or on.
+enum class Act : uint8_t { change, spin, grenade };
+struct Times {
+  bool ok = false;
+  double a_ms = 0, b_ms = 0;  // the act's two times (change: the old weapon lowered, the new one
+                              // drawn; spin: the spin up heard, the spin's loop on; grenade: the
+                              // pin heard, the throw heard after letting go)
+  int a_n = 0, b_n = 0;       // the cues each was seen after
+};
+
+Times run_act(Act act, double latency_ms, bool on, int fps, int cues) {
+  Times out;
+  Session s;
+  std::string error;
+  if (!open_session(s, latency_ms, error, true)) return out;
+  const int64_t window_us = 1000000 / fps;
+  for (int i = 0; i < 6 * fps && (!s.remote.q2 || s.remote.q2->stage != cn::ClientStage::active);
+       i++)
+    window_frame(s, window_us);
+  if (!s.remote.q2 || s.remote.q2->stage != cn::ClientStage::active) return out;
+  const int key = act == Act::spin ? 5 : act == Act::grenade ? 11 : 4;  // `use` by number key
+  for (int i = 0; i < fps; i++) window_frame(s, window_us);             // everything picked up
+  s.remote.hands.impulse = static_cast<uint8_t>(key);
+  for (int i = 0; i < 3 * fps; i++) window_frame(s, window_us);  // chosen and raised
+  s.remote.weapon.off = !on;
+  const dc::DemoState& d = s.remote.demo.state;
+  const double cycle_s = act == Act::grenade ? 4.5 : act == Act::spin ? 3.6 : 2.4;
+  const double hold_s = act == Act::grenade ? 0.5 : 1.2;
+  const int cycle = static_cast<int>(cycle_s * fps), held = static_cast<int>(hold_s * fps);
+  const sv::SqWeaponRow& mg = sv::kSqWeapons[static_cast<int>(sv::SqWeapon::machinegun)];
+  const sv::SqWeaponRow& sg = sv::kSqWeapons[static_cast<int>(sv::SqWeapon::shotgun)];
+  int cue_at = 0, model_sg = 0;
+  for (size_t k = 1; k < d.models.size(); k++)
+    if (d.models[k] == sg.view_model) model_sg = static_cast<int>(k);
+  bool a_seen = false, b_seen = false, to_sg = true;
+  for (int i = 0; i < cycle * cues; i++) {
+    const int in_cycle = i % cycle;
+    if (in_cycle == 0) {
+      cue_at = i;
+      a_seen = b_seen = false;
+      if (act == Act::change) s.remote.hands.impulse = to_sg ? 2 : 4;
+    }
+    if (act != Act::change) s.remote.hands.buttons = in_cycle < held ? sh::kButtonAttack : 0;
+    window_frame(s, window_us);
+    const double since = static_cast<double>(i - cue_at) * 1000.0 / fps;
+    const int me = d.player;
+    const int gun = me >= 0 && static_cast<size_t>(me) < d.players.size()
+                        ? d.players[static_cast<size_t>(me)].weapon_frame
+                        : 0;
+    bool a = false, b = false;
+    double b_since = since;
+    switch (act) {
+      case Act::change: {
+        const sv::SqWeaponRow& from = to_sg ? mg : sg;
+        const bool sg_drawn = d.stats[dc::kStatWeapon] == model_sg;
+        b = to_sg == sg_drawn;           // the new one drawn
+        a = !b && gun > from.last_idle;  // the old one lowering
+        break;
+      }
+      case Act::spin: {
+        a = heard(d, sv::kSqHandSound[1].sample);
+        const int loop = me + 1 < static_cast<int>(d.entities.size())
+                             ? d.entities[static_cast<size_t>(me) + 1].loop
+                             : 0;
+        b = loop > 0 && static_cast<size_t>(loop) < d.sounds.size() &&
+            d.sounds[static_cast<size_t>(loop)] == "weapons/chngnl1a.wav";
+        break;
+      }
+      case Act::grenade:
+        a = heard(d, sv::kSqHandSound[0].sample);
+        b = in_cycle >= held && heard(d, "weapons/hgrent1a.wav");
+        b_since = since - hold_s * 1000;
+        break;
+    }
+    if (a && !a_seen) {
+      a_seen = true;
+      out.a_ms += since;
+      out.a_n++;
+    }
+    if (b && !b_seen) {
+      b_seen = true;
+      out.b_ms += b_since;
+      out.b_n++;
+    }
+    if (act == Act::change && in_cycle == cycle - 1) to_sg = !to_sg;
+  }
+  out.a_ms /= out.a_n > 0 ? out.a_n : 1;
+  out.b_ms /= out.b_n > 0 ? out.b_n : 1;
   out.ok = true;
   return out;
 }
@@ -243,7 +389,7 @@ void run(gl::Lab& lab) {
       "1.2 s, off and on",
       {"one way ms", "round trip ms", "weapon prediction", "press to first shot heard (ms)",
        "press to the fire frame drawn (ms)", "press to the bullets counting down (ms)",
-       "shots heard a press"},
+       "shots heard a press", "shots in the wrong frame / the server's"},
       {}};
   gl::Trace by_off{"prediction off", {}, {}}, by_on{"prediction on", {}, {}},
       by_stock{"prediction on, a stock server's press rule", {}, {}};
@@ -268,11 +414,19 @@ void run(gl::Lab& lab) {
       const double per_press = static_cast<double>(r.heard) / r.presses;
       t.rows.push_back({to_fixed(ms, 0), to_fixed(r.round_trip_ms, 1), names[k],
                         to_fixed(r.first_heard_ms, 1), to_fixed(r.first_frame_ms, 1),
-                        to_fixed(r.first_ammo_ms, 1), to_fixed(per_press, 2)});
+                        to_fixed(r.first_ammo_ms, 1), to_fixed(per_press, 2),
+                        k == 0 ? std::string("-")
+                               : std::to_string(r.misplaced) + "+" + std::to_string(r.unpredicted) +
+                                     " / " + std::to_string(r.server_shots)});
       lab.metric(key + ".shot-heard", r.first_heard_ms, "ms");
       lab.metric(key + ".fire-frame", r.first_frame_ms, "ms");
       lab.metric(key + ".ammo-drawn", r.first_ammo_ms, "ms");
       lab.metric(key + ".shots-a-press", per_press, "shots");
+      if (k >= 1) {
+        lab.metric(key + ".misplaced", r.misplaced, "shots");
+        lab.metric(key + ".unpredicted", r.unpredicted, "shots");
+        lab.metric(key + ".filled-late", r.filled, "shots");
+      }
     }
     by_off.x.push_back(ms);
     by_off.y.push_back(runs[0].first_heard_ms);
@@ -343,6 +497,42 @@ void run(gl::Lab& lab) {
               "the off line climbs with latency; both on lines stay flat near 0", in);
   }
   lab.table(t);
+  // The rest of the hand, at the first latency.
+  const double ms = latencies.front();
+  gl::LabTable rest{"the rest of the hand at " + to_fixed(ms, 0) + " ms each way, off and on",
+                    {"what", "weapon prediction", "first (ms)", "seen", "second (ms)", "seen"},
+                    {}};
+  struct {
+    Act act;
+    const char* key;
+    const char* what;
+  } acts[] = {
+      {Act::change, "change",
+       "a weapon change, machinegun and shotgun: the cue to the old one lowered, to the new one "
+       "drawn"},
+      {Act::spin, "spin", "the chaingun held: the press to the spin up heard, to its loop on"},
+      {Act::grenade, "grenade",
+       "a hand grenade, held 0.5 s: the press to the pin heard, the letting go to the throw "
+       "heard"},
+  };
+  for (const auto& a : acts)
+    for (const bool on : {false, true}) {
+      const Times r = run_act(a.act, ms, on, fps, presses);
+      if (!r.ok || r.a_n == 0 || r.b_n == 0) {
+        lab.fail(std::string("se-q2-weapon-predict: ") + a.key + (on ? " on" : " off") +
+                     ": the window never reached play, or a cue showed nothing",
+                 "next: build/debug/tests/shooters_edge_q2_weapon_test");
+        return;
+      }
+      const std::string key = std::string(a.key) + (on ? ".on" : ".off");
+      lab.metric(key + ".first", r.a_ms, "ms");
+      lab.metric(key + ".second", r.b_ms, "ms");
+      rest.rows.push_back({a.what, on ? "on" : "off", to_fixed(r.a_ms, 1),
+                           std::to_string(r.a_n) + "/" + std::to_string(presses),
+                           to_fixed(r.b_ms, 1),
+                           std::to_string(r.b_n) + "/" + std::to_string(presses)});
+    }
+  lab.table(rest);
 }
 
 const gl::LabSpec kSpec{

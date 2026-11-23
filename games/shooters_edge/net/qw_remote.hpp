@@ -211,19 +211,17 @@ struct Remote {
   client::Demo demo;        // the recording read back: what the window draws
   client::QwIgnore ignore;  // the chat ignore lists over its players (chat_ignore.hpp)
   QwClientEnd end;
-  int levels = 0;       // level starts drawn
-  int replayed = 0;     // prediction: the moves it ran past the acknowledged one
-  int others = 0;       // other players predicted the last step
-  int others_msec = 0;  // the most milliseconds one of them was run forward the last step
-  int lerped = 0;       // entities drawn between two frames the last step
-  int map_tries = 0;    // joins again with another version of the server's map
-  bool console_held =
-      false;             // the console held over the screen while joining (remote_console_foot)
-  sh::Vec3f view;        // the player's angles, degrees (sent with every move)
-  sh::AimTurn aim_turn;  // the aim help's turn of the view (shooter/aim_turn.hpp)
-  sh::Vec3f prediction;  // the player's predicted origin, the correction not added
-  sh::MoveState ahead;   // the player's whole predicted state (the easy jump's help reads it)
-  sh::SpeedJumpAid jump_aid;    // the easy jump's memory (shooter/speedjump_assist.hpp)
+  int levels = 0;             // level starts drawn
+  int replayed = 0;           // prediction: the moves it ran past the acknowledged one
+  int others = 0;             // other players predicted the last step
+  int others_msec = 0;        // the most milliseconds one of them was run forward the last step
+  int lerped = 0;             // entities drawn between two frames the last step
+  int map_tries = 0;          // joins again with another version of the server's map
+  sh::Vec3f view;             // the player's angles, degrees (sent with every move)
+  sh::AimTurn aim_turn;       // the aim help's turn of the view (shooter/aim_turn.hpp)
+  sh::Vec3f prediction;       // the player's predicted origin, the correction not added
+  sh::MoveState ahead;        // the player's whole predicted state (the easy jump's help reads it)
+  sh::SpeedJumpAid jump_aid;  // the easy jump's memory (shooter/speedjump_assist.hpp)
   float speedjump_view = 0.5f;  // cl_speedjump_view: the share of its swing drawn
   sh::Smoothing smooth;         // the prediction's correction
   double smoothview = 1;        // cl_predict_smoothview: 0 snapped, 1 the decay's own rate, 2 slow
@@ -234,6 +232,8 @@ struct Remote {
   uint32_t ahead_seq[64] = {};
   sh::MoveState ahead_each[64];
   int ahead_count = 0;
+  bool console_held =
+      false;  // the console held over the screen while joining (remote_console_foot)
   bool ahead_from_held = false;  // the acknowledged state's jump button was held
   client::OwnMissiles missiles;  // cl_predict_projectiles (client/own_missiles.hpp)
   int missiles_level = -1;       // the level they fly in (DemoState::levels)
@@ -273,8 +273,9 @@ struct Remote {
   std::function<void(const std::string& server, const std::string& map, uint32_t sum)> keep_choice;
   // A Quake II download cut short, held in the game's folder to be resumed (Q2ClientConfig::held).
   ge::classic::content::HeldDownloads held;
-  // What a Quake II server stuffed that the client does not answer itself, for the window's console
-  // to run as if typed (net/q2_client.hpp `to_run`); taken each frame.
+  // What a server stuffed that the client does not answer itself (net/q2_client.hpp's and
+  // net/qw_client.hpp's `to_run`), for the window's console to run as the server's; taken each
+  // frame.
   std::vector<std::string> stuffed_run;
   bool kept = false;
   // A screenshot the server asked for (qw_client.hpp `ClientUpload`): the window's frame grabbed
@@ -348,6 +349,10 @@ std::string remote_queue_step(Remote& r, std::vector<std::string>& said);
 // The window's frame of it: its news printed on the console, and `connect` run once found; then the
 // match recorded on its own (qw_match_record.hpp) and the answers to an rcon sent while not joined.
 void remote_queue_frame(Remote& r, ge::console::Console& con);
+// What the server stuffed (`stuffed_run`) run in `con`: a Quake II server's as typed
+// (cl_ignore_stufftext filtered it), a QuakeWorld server's as the server's (console.hpp: only the
+// commands a game lets a server run, and only the server's own settings).
+void remote_run_stuffed(Remote& r, ge::console::Console& con);
 
 void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
                        gn::Transport* link = nullptr);
