@@ -29,6 +29,8 @@
 #include "shooters_edge/net/q2_mvd_dummy.hpp"
 #include "shooters_edge/net/qw_ext.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_map.hpp"
+#include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::net {
 
@@ -1458,6 +1460,8 @@ void send_frames(Q2NetServer& s) {
     } else {
       sv::q2_sight_reset(s.sight, s.game->map.get());
       sv::q2_sight_link_rules(s.sight, **s.rules);
+      const sv::Q2Server* q = sv::q2_of(*s.rules);
+      s.sight.groups = q != nullptr ? sv::map_area_groups(*q) : std::vector<int32_t>{};
       sight = &s.sight;
     }
   }
@@ -1536,6 +1540,13 @@ void send_frames(Q2NetServer& s) {
       c.wire.frame_flags = c.frame_flags;
       c.frame_flags = 0;
     }
+    // The frame sized to the packet's room after the reliable data it carries, so a long
+    // reliable message costs the frame its last entities, effects and sounds, not the frame.
+    // A Quake II client reads at most 1400 bytes after the header, whatever the channel allows;
+    // a newer channel cuts a long packet into pieces, so its frame keeps the block's own cap.
+    const size_t room = channel_unreliable_room(c.ch, &c.wire.room_grows);
+    const size_t over = kMaxPacket - kServerHeader - sv::kQ2MaxBlock;
+    c.wire.room = c.ch.fragments ? 0 : std::max<size_t>(1, room > over ? room - over : 0);
     if (s.native != nullptr)
       sv::q2_frame_raw(c.wire, s.native->raw, static_cast<int32_t>(frame), block, rel);
     else

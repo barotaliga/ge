@@ -100,13 +100,19 @@ int32_t cluster_at(const NativeHost& h, const float* p) {
   return leaf < h.map->leaves.size() ? h.map->leaves[leaf].cluster : -1;
 }
 
-// Whether a message at `origin` reaches slot `slot` (`see`: the visible set, else the hearable).
-bool reaches(const NativeHost& h, int32_t from, int slot, bool see) {
+bool area_joined(const NativeHost& h, const float* a, const float* b);
+
+// Whether a message at `origin` (in cluster `from`) reaches slot `slot` (`see`: the visible set,
+// else the hearable): the slot's entity's origin, not its eye, in the set, and its area joined to
+// the point's through the open portals.
+bool reaches(const NativeHost& h, const float* origin, int32_t from, int slot, bool see) {
   const NativeEntityHead* e = h.entity(slot + 1);
   const int32_t to = cluster_at(h, e->s.origin);
   if (from < 0 || to < 0) return false;
   if (!h.map) return true;  // a map of clip hulls: every point in every set
-  return see ? br::cluster_sees(*h.map, from, to) : br::cluster_hears(*h.map, from, to);
+  if (!(see ? br::cluster_sees(*h.map, from, to) : br::cluster_hears(*h.map, from, to)))
+    return false;
+  return area_joined(h, origin, e->s.origin);
 }
 
 // The bytes to every slot `to` reaches (0 all, 1 hearable, 2 visible; reliable or not).
@@ -115,7 +121,7 @@ void send_to(NativeHost& h, const float* origin, int to, bool reliable,
   const int32_t from = to == 0 ? 0 : cluster_at(h, origin);
   for (int i = 0; i < h.max_clients; i++) {
     if (!h.connected[i] || (!reliable && !h.begun[i])) continue;
-    if (to != 0 && !reaches(h, from, i, to == 2)) continue;
+    if (to != 0 && !reaches(h, origin, from, i, to == 2)) continue;
     put(reliable ? h.s->raw.reliable[i] : h.s->raw.datagram[i], bytes);
   }
 }
@@ -204,7 +210,12 @@ void c_positioned_sound(const float* origin, NativeEntityHead* ent, int channel,
   } else if (ent->solid == native::kSolidBsp) {
     for (int k = 0; k < 3; k++) at[k] += 0.5f * (ent->mins[k] + ent->maxs[k]);
   }
-  uint8_t flags = 8 | 4;  // the entity and its channel, the place
+  // The position is left out for a client whose frame holds the entity, so its client plays the
+  // sound on the entity as it moves (a rocket's fly-by); an explicit point keeps it, and so does a
+  // brush model, whose sound is placed at its middle, not at its origin.
+  const bool follow = origin == nullptr && (ent->svflags & native::kSvfNoClient) == 0 &&
+                      ent->solid != native::kSolidBsp && ent->s.model[0] != 0;
+  uint8_t flags = 8;  // the entity and its channel
   if (volume != 1.0f) flags |= 1;
   if (attenuation != 1.0f) flags |= 2;
   if (offset != 0) flags |= 16;
@@ -215,13 +226,23 @@ void c_positioned_sound(const float* origin, NativeEntityHead* ent, int channel,
   const int entchan = (n << 3) | (channel & 7);
   b.push_back(static_cast<uint8_t>(entchan & 0xFF));
   b.push_back(static_cast<uint8_t>((entchan >> 8) & 0xFF));
+  std::vector<uint8_t> placed = b;  // the same with the place (flag 4)
+  placed[1] |= 4;
   for (const float v : at) {
     const auto c = static_cast<uint16_t>(static_cast<int16_t>(static_cast<int32_t>(v * 8)));
-    b.push_back(static_cast<uint8_t>(c & 0xFF));
-    b.push_back(static_cast<uint8_t>(c >> 8));
+    placed.push_back(static_cast<uint8_t>(c & 0xFF));
+    placed.push_back(static_cast<uint8_t>(c >> 8));
   }
   const bool all = (channel & kChanNoHearing) != 0 || attenuation == 0;
-  send_to(h, at, all ? 0 : 1, (channel & kChanReliable) != 0, b);
+  const bool reliable = (channel & kChanReliable) != 0;
+  const int32_t from = all ? 0 : cluster_at(h, at);
+  const int32_t seen_from = follow ? cluster_at(h, ent->s.origin) : -1;
+  for (int i = 0; i < h.max_clients; i++) {
+    if (!h.connected[i] || (!reliable && !h.begun[i])) continue;
+    if (!all && !reaches(h, at, from, i, false)) continue;
+    const bool in_frame = follow && (n == i + 1 || reaches(h, ent->s.origin, seen_from, i, true));
+    put(reliable ? h.s->raw.reliable[i] : h.s->raw.datagram[i], in_frame ? b : placed);
+  }
   if (index > 0 && index < 256) {  // the window's game hears it by the sound's name
     NetEvent& ev = add_event(h, EventKind::sound, begun_bits(h), (channel & kChanReliable) != 0,
                              h.s->raw.config[size_t(kCsSounds) + size_t(index)]);
@@ -601,10 +622,18 @@ int c_pointcontents(const float* p) {
   return c;
 }
 
+// Whether areas `a` and `b` are joined through the open portals; area 0 (outside, in a solid) is
+// joined to nothing, itself included.
+bool areas_joined(const NativeHost& h, int32_t a, int32_t b) {
+  if (!h.map || h.map->areas.empty()) return true;  // a map with no areas: one space
+  if (a == 0 || b == 0) return false;
+  return br::areas_connected(h.area_groups, a, b);
+}
+
 // Whether the areas of points `a` and `b` are joined through the open portals.
 bool area_joined(const NativeHost& h, const float* a, const float* b) {
   if (!h.map || h.map->areas.empty()) return true;
-  return br::areas_connected(h.area_groups, br::area_at(*h.map, a), br::area_at(*h.map, b));
+  return areas_joined(h, br::area_at(*h.map, a), br::area_at(*h.map, b));
 }
 
 int c_in_pvs(const float* a, const float* b) {
@@ -630,11 +659,7 @@ void c_set_area_portal(int portal, int open) {
   if (h.map) br::flood_areas(*h.map, h.portals, &h.area_groups);  // the last set wins
 }
 
-int c_areas_connected(int a, int b) {
-  const NativeHost& h = *g_host;
-  if (!h.map || h.map->areas.empty()) return 1;  // a map with no areas: one space
-  return br::areas_connected(h.area_groups, a, b) ? 1 : 0;
-}
+int c_areas_connected(int a, int b) { return areas_joined(*g_host, a, b) ? 1 : 0; }
 
 // --- the move ---
 
