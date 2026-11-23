@@ -44,6 +44,12 @@ namespace shooters_edge::client {
 
 namespace pg = ge::progs;
 
+void listen_print(Listen& l, int level, const std::string& text) {
+  l.print_levels.resize(l.prints.size(), 2);
+  l.print_levels.push_back(level);
+  l.prints.push_back(text);
+}
+
 namespace {
 
 // The message bytes of the baseline mod's temporary entities (rules/common_decl.hpp's
@@ -298,7 +304,8 @@ void entered(Listen& l) {
 void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
   for (const sv::NetEvent& ev : s.out.events) {
     take_sound(l, s, ev);
-    if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
+    if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0)
+      listen_print(l, ev.level, ev.text);
     if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
     if (ev.kind == sv::EventKind::stuffcmd && (ev.to & 1u) != 0) {
       if (ev.text == "menu_loadgame\n")
@@ -354,8 +361,8 @@ void host_heard(void* ctx, int talker, int gen, int seq, const std::vector<uint8
 void host_tap(void* ctx, const sv::RulesCommon& s) {
   take_events(*static_cast<Listen*>(ctx), s, false);
 }
-void host_print(void* ctx, const std::string& text) {
-  static_cast<Listen*>(ctx)->prints.push_back(text);
+void host_print(void* ctx, int level, const std::string& text) {
+  listen_print(*static_cast<Listen*>(ctx), level, text);
 }
 
 void close_door(Listen& l);

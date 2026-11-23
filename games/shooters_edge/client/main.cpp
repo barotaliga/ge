@@ -1776,7 +1776,8 @@ int run_main(int argc, char** argv) {
       cl::record_tick(recorder, listen, frames, console);
       hear_here(wall);
       if (std::exchange(listen.restarted, false)) forget_seen();
-      for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+      printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                               [&](const std::string& line) { tell(line, t); });
       title_frame(t, wall, {}, 0, true);
       ++presented;
       continue;
@@ -1843,7 +1844,8 @@ int run_main(int argc, char** argv) {
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");
     }
-    for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+    printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                             [&](const std::string& line) { tell(line, t); });
     if (centred > listen.centres.size()) centred = 0;     // a new listen
     for (; centred < listen.centres.size(); centred++) {  // a centre print: the last one shows
       hud.centre = listen.centres[centred];

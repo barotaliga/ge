@@ -356,3 +356,10 @@ TEST(a_death_with_the_flag_runs_f_flagdeath_in_f_deaths_place) {
   tf.game = "qw";
   CHECK(!cl::carries_flag(tf));
 }
+
+TEST(a_macro_the_player_gave_a_width_fills_its_column) {
+  Fixture f;
+  cl::team_frame(f.con, f.chat, rocketeer(), "dm6");
+  f.con.execute("set tp_length_health 4; set tp_align_health r; set tp_length_armor 1");
+  expect(f.con.expand_text("[$health][$armor]"), "[  34][2]");
+}
