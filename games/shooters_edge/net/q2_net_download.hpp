@@ -9,7 +9,7 @@
 // client is sent nothing more for the packet's bytes over its rate (in whole ms; none on this
 // machine). Every protocol alike. A resume at the file's very end gets one empty piece at 100.
 //
-// ge:summary Quake II's server downloads: the asked file checked and read, pieces filling the packet
+// ge:summary Quake II server downloads: the file checked and read, pieces filling the packet
 // ge:keywords q2-download download nextdl svc-download svc-zdownload piece-size download-pace
 // ge:keywords sv_max_download_size allow_download_maps file-size-differs plain-download-path
 // ge:skill net shooter

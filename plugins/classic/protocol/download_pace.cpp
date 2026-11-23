@@ -1,6 +1,6 @@
 // A classic server's download pace (download_pace.hpp).
 //
-// ge:summary A classic server's download pieces: their size by rate or by the packet's room, the pause
+// ge:summary A classic server's download pieces: sized by rate or by the packet, and the pause
 // ge:keywords download-pace download-piece nextdl
 // ge:skill classic net
 // ge:test tests/classic_download_pace_test.cpp
@@ -23,7 +23,8 @@ size_t download_piece_bytes(DownloadPiece rule, int rate, size_t room, size_t le
 
 double download_pause(size_t bytes, int rate) {
   if (rate <= 0) return 0;
-  return static_cast<double>(static_cast<int64_t>(bytes) * 1000 / rate) / 1000.0;
+  const int64_t ms = static_cast<int64_t>(bytes) * 1000 / rate;  // whole milliseconds
+  return static_cast<double>(ms) / 1000.0;
 }
 
 }  // namespace ge::classic::protocol

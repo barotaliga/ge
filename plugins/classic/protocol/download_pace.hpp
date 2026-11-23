@@ -12,7 +12,7 @@
 // The pause (`fill_room`): after a packet of `bytes`, nothing more for bytes / rate seconds in
 // whole milliseconds (a 1398-byte packet: 93 ms at 15000, 23 ms at 60000); rate 0 none.
 //
-// ge:summary A classic server's download pieces: their size by rate or by the packet's room, the pause
+// ge:summary A classic server's download pieces: sized by rate or by the packet, and the pause
 // ge:keywords download-pace download-piece nextdl piece-size fill-room rate-pause net_maxmsglen
 // ge:skill classic net
 // ge:test tests/classic_download_pace_test.cpp

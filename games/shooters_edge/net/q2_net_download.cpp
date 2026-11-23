@@ -1,6 +1,6 @@
 // Quake II's server downloads (q2_net_download.hpp).
 //
-// ge:summary Quake II's server downloads: the asked file checked and read, pieces filling the packet
+// ge:summary Quake II server downloads: the file checked and read, pieces filling the packet
 // ge:keywords q2-download download nextdl svc-download
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_download_pace_test.cpp
