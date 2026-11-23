@@ -228,6 +228,9 @@ constexpr Entry kQ2[] = {
     {.page = "setup", .id = "model", .text = "model", .kind = ItemKind::choice, .needs = "skin"},
     {.page = "setup", .id = "figskin", .text = "skin", .kind = ItemKind::choice, .needs = "skin"},
     spin("setup", "hand", "handedness", kHand),
+    // The weapon the figure beside the rows holds (menu/player_view.hpp): the page's own, no
+    // setting.
+    {.page = "setup", .id = "figweapon", .text = "weapon", .kind = ItemKind::choice},
     back("setup"),
 
     // options.
