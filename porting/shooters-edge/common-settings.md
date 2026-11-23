@@ -29,10 +29,10 @@ neither client takes.
 | Status | Settings | Commands | All |
 | --- | --- | --- | --- |
 | one setting | 84 | 53 | 137 |
-| lifted | 19 | 2 | 21 |
+| lifted | 20 | 2 | 22 |
 | to lift | 0 | 0 | 0 |
-| kept apart | 22 | 0 | 22 |
-| neither has it | 10 | 0 | 10 |
+| kept apart | 20 | 0 | 20 |
+| neither has it | 11 | 0 | 11 |
 | **common to Quake and Quake II** | **135** | **55** | **190** |
 
 **Left to lift: 0.** Every batch is done (B4 by the Quake gaps thread).
@@ -79,6 +79,11 @@ neither client takes.
   round. Every kept-apart row was checked again: the rest differ in meaning or mechanism, are
   other clients' visuals, or need a value map by scale (`fixedtime` in milliseconds against
   `host_framerate` in seconds).
+- **B9 (done, 2026-11-23): the relay password and the rows handed to the Quake II client UI
+  thread.** `qtv_password` is the one rule both classic servers read, Quake II's
+  `sv_mvd_password` its spelling there. The replacement-texture switches are neither game's
+  (classic enhance replaces textures). `crosshaircolor` against `ch_red`/`ch_green`/`ch_blue` and
+  `showturtle` against `scr_showturtle` stay apart, each note saying why.
 - **B6 dropped (Niclas, 2026-11-23):** the outlines and square specks are other clients' visuals,
   which are never ported: visuals come from classic enhance. Both rows are kept apart.
 
@@ -256,18 +261,17 @@ neither client takes.
 | setting | `cl_gibfilter` |  | `cl_gibfilter` | `cl_gibs` | classic | lifted B8 | gibs hidden: Quake II's cl_gibs a mapped synonym the other way round (its 1 our 0) |
 | setting | `cl_maxfps` |  | `cl_maxfps` | `cl_maxfps` | engine | apart | ours the frame cap; Quake II's its moves a second (own), its r_maxfps the cap |
 | setting | `cl_nopred` |  | `cl_nopred` | `cl_predict` | shell | lifted B8 | your own move predicted: Quake II's cl_predict a mapped synonym the other way round (its 1 our 0) |
+| setting | `qtv_password` |  | `qtv_password` | `sv_mvd_password` | game server | lifted B9 | the password a relay must give, one rule in both classic servers; Quake II's sv_mvd_password its spelling (`net/q2_game.cpp`) |
 | setting | `cl_rollangle` | `cl_rollangle` | `cl_rollangle` | `sv_rollangle` |  | apart | the roll's angle (Quake II the server's rule, Quake the client's view) |
 | setting | `cl_rollspeed` | `cl_rollspeed` | `cl_rollspeed` | `sv_rollspeed` |  | apart | the side speed of a full roll (Quake II the server's rule, Quake the client's view) |
 | setting | `con_timestamps` |  | `con_timestamps` | `con_timestamps` | shell | apart | the classic layer stamps chat lines; Quake II's stamps every line (own) |
 | setting | `crosshair` | `crosshair` | `crosshair` | `crosshair` | engine | apart | Quake 0..2 the engine's marks; Quake II 0..3 its own pictures (Quake II's layer, own) |
-| setting | `crosshaircolor` |  | `crosshaircolor` | `ch_blue`, `ch_green`, `ch_red` | engine | apart | the crosshair's colour |
-| setting | `gl_externaltextures_bmodels` |  | `gl_externaltextures_bmodels`, `gl_externaltextures_world` | `r_override_textures` |  | apart | replacement textures loaded |
+| setting | `crosshaircolor` |  | `crosshaircolor` | `ch_blue`, `ch_green`, `ch_red` | engine | apart | another mechanism: ours a colour for the engine's marks (a palette number or red, green and blue 0..255, "" their own); Quake II's three shares tint its own crosshair pictures (its `crosshair` is its own), with `ch_health` beside them |
 | setting | `host_framerate` | `host_framerate` |  | `fixedtime` | shell | apart | a fixed frame time (Quake II milliseconds, Quake seconds): the same thing in another unit; a value map by scale (not yet in the engine) would lift it |
-| setting | `qtv_password` |  | `qtv_password` | `sv_mvd_password` |  | apart | the password a relay viewer gives |
 | setting | `r_bloom` |  | `r_bloom` | `gl_bloom` | classic | apart | Quake II's gl_bloom a switch, ours a strength 0..1 of the modern look |
 | setting | `r_drawviewmodel` | `r_drawviewmodel` | `r_drawviewmodel` | `cl_gunalpha` | shell | apart | the held gun's opacity (QuakeWorld's r_drawviewmodel is an opacity; Quake's a switch) |
 | setting | `r_waterwarp` | `r_waterwarp` | `r_waterwarp` | `gl_waterwarp` | classic | apart | each game's own warp: Quake's lens breathes, Quake II's view ripples |
-| setting | `showturtle` | `showturtle` | `showturtle` | `scr_showturtle` | shell | apart | Quake II: network trouble words; Quake: a slow-frame picture; QuakeWorld: an fps threshold |
+| setting | `showturtle` | `showturtle` | `showturtle` | `scr_showturtle` | shell | apart | three meanings: Quake a slow-frame picture, QuakeWorld an fps threshold, Quake II network trouble words (not taken, the tail); checked 2026-11-23 |
 | setting | `gl_clear` | `gl_clear` | `gl_clear` | `gl_clear` |  | neither | a debug switch neither client takes |
 | setting | `gl_clearcolor` |  | `gl_clearcolor` | `gl_clearcolor` |  | neither | a debug colour neither client takes |
 | setting | `gl_multisamples` |  | `gl_multisamples` | `gl_multisamples` |  | neither | not taken in either game: edges are smoothed by the temporal upscale (docs/rendering.md) |
@@ -276,6 +280,7 @@ neither client takes.
 | setting | `r_drawworld` |  | `r_drawworld` | `gl_drawworld` |  | neither | a debug switch neither client takes |
 | setting | `r_nearclip` |  | `r_nearclip` | `gl_znear` |  | neither | a debug knob neither client takes |
 | setting | `r_novis` | `r_novis` | `r_novis` | `gl_novis` |  | neither | a debug switch neither client takes |
+| setting | `gl_externaltextures_bmodels` |  | `gl_externaltextures_bmodels`, `gl_externaltextures_world` | `r_override_textures` |  | neither | replacement textures are classic enhance's (`plugins/classicenhance`), not a switch in either game: the visuals rule (2026-11-23) |
 
 ## Names one game family has alone
 

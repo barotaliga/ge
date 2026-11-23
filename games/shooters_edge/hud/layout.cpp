@@ -1333,6 +1333,26 @@ void keep_chat_only(Hud& hud) {
     if (i != chat) L[i].content.on = false;
 }
 
+gh::ElementPlace place_chat_px(Hud& hud, const gh::Frame& f, double x, double y, int scale) {
+  gh::Element& e = hud.layout[chat];
+  const gh::ElementPlace kept = e.place;
+  const double px = std::max(scale, 1);
+  const double sw = std::max(f.safe.w, 1.0f), sh = std::max(f.safe.h, 1.0f);
+  e.place.parent.clear();
+  e.place.x = (x * px - f.safe.x) / sw;
+  if (y < 0) {  // the foot that far up from the screen's bottom
+    e.place.anchor = std::string(gh::anchor_name(gh::Anchor::bottom_left));
+    e.place.y = (f.height + y * px - (f.safe.y + f.safe.h)) / sh;
+  } else {  // the top that far down from the screen's top
+    e.place.anchor = std::string(gh::anchor_name(gh::Anchor::top_left));
+    e.place.y = (y * px - f.safe.y) / sh;
+  }
+  e.place.attach = e.place.anchor;
+  return kept;
+}
+
+void restore_chat(Hud& hud, const gh::ElementPlace& kept) { hud.layout[chat].place = kept; }
+
 float status_lift(const Hud& hud, int height) {
   if (hud.sbar == 0 || height <= 0) return 0;
   const gh::Layout& L = hud.layout;
