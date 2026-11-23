@@ -55,12 +55,13 @@
 // ge:keywords classic-enhance enhance job switches help-pages window shooters-edge press_key
 // ge:keywords waiting-key rebind customize-controls load-game take_load enhance_game ce_auto
 // ge:keywords background-enhance take_ended screenshots gallery menu_screenshots set_screenshots
-// ge:keywords server-browser join-a-game menu_servers servers demos menu_demos take_demo
+// ge:keywords server-browser join-a-game menu_servers servers demos menu_demos take_demo recipe
 // ge:keywords select-game menu_games take_game games-page menu-sound menu-cue take_cue click
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
 
+#include <deque>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -87,7 +88,7 @@
 
 namespace shooters_edge::menu {
 
-class GameMenu {
+class GameMenu {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by subject
  public:
   GameMenu();
   GameMenu(const GameMenu&) = delete;
@@ -212,6 +213,8 @@ class GameMenu {
   ge::ui::MenuStyle style_;
   std::vector<ge::ui::Rect> hits_;  // the last layout's rows, for the pointer
   std::vector<std::string> problems_;
+  // A recipe's presses (`menu_press`, `menu_select`), one a frame, ahead of the real keys.
+  std::deque<ge::ui::MenuInput> pressed_;
   bool open_ = false;
   ge::ui::MenuCue cue_ = ge::ui::MenuCue::none;  // the sound not yet taken
   void cue(ge::ui::MenuCue c) { cue_ = ge::ui::louder(cue_, c); }

@@ -413,6 +413,13 @@ int run_main(int argc, char** argv) {
   const auto outside = [&](const std::function<void()>& run) {
     cl::without_game_cvars(console, game_cvars, started_game, bindings, run);
   };
+  const uint64_t first_ns = ge::platform::now_ns();
+  ge::console::add_clock_macros(
+      console, {.local = [] { return cl::local_time(); },
+                .uptime_s =
+                    [first_ns] {
+                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
+                    }});  // $com_date, $com_time, $com_uptime, $random
   if (const cl::ConfigsRun ran = cl::start_configs(console, args.basedir, args.game, content_row(),
                                                    args.plus, {series, outside});
       ran.passed_over > 0)
@@ -524,13 +531,6 @@ int run_main(int argc, char** argv) {
     return 1;
   }
   ge::ui::DrawList overlay;
-  const uint64_t first_ns = ge::platform::now_ns();
-  ge::console::add_clock_macros(
-      console, {.local = [] { return cl::local_time(); },
-                .uptime_s =
-                    [first_ns] {
-                      return static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
-                    }});  // $com_date, $com_time, $com_uptime, $random
   // The title with the spinner in its corner: the first frame, and a map's frames with no world.
   // The title's night with the menu over it; `lobby` puts the lobby's screen between them.
   const auto title_frame = [&](double t, double dt, std::string_view caption, double since,

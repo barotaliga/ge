@@ -13,6 +13,7 @@
 #include "shooters_edge/net/qw_client.hpp"
 #include "shooters_edge/net/qw_ext.hpp"
 #include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/net/qw_remote.hpp"
 #include "shooters_edge/net/qw_remote_sheet.hpp"
 #include "shooters_edge/net/qw_sheet.hpp"
 
@@ -121,4 +122,25 @@ TEST(the_window_takes_a_listing_s_lines_and_leaves_the_rest) {
   CHECK(se::remote_sheet_take_print(q, true, "mapname             q2dm1\nfraglimit           25\n",
                                     keep));
   CHECK(keep.empty() && q.q2_info.size() == 2);
+}
+
+TEST(a_joined_server_s_sheet_wins_over_the_window_s_own_game) {
+  // The window keeps its own game (the demo behind the menu) while it plays on a stock server:
+  // the page reads the joined server, never the window's own game.
+  se::Remote r;
+  r.sheet.local = [](SettingsSheet& out) {
+    out.rows = {SheetRow{.name = "own"}};
+    return true;
+  };
+  r.active = true;
+  r.end.serverinfo = "\\map\\dm4\\deathmatch\\1\\timelimit\\10";
+  se::remote_sheet_command(r, "open", 0);
+  CHECK(r.sheet.source != ge::classic::SheetSource::ours);
+  CHECK(sheet_find(r.sheet.sheet, "own") == nullptr);
+  CHECK(sheet_find(r.sheet.sheet, "timelimit") != nullptr);
+  // Back off the server: the page is the window's own game's again.
+  r.active = false;
+  se::remote_sheet_command(r, "refresh", 1);
+  CHECK(r.sheet.source == ge::classic::SheetSource::ours &&
+        sheet_find(r.sheet.sheet, "own") != nullptr);
 }
