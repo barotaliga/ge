@@ -62,6 +62,14 @@ inline constexpr ItemReading kQ1Reads[] = {
     {"weapon_grenadelauncher", 0, ItemRole::lobber},
     {"weapon_rocketlauncher", 0, ItemRole::launcher},
     {"weapon_lightning", 0, ItemRole::beam},
+    // Scourge of Armagon's weapons: the laser cannon's bouncing bolts are the rapid energy weapon,
+    // Mjolnir's lightning across the floor the room-clearing one, the proximity gun's waiting
+    // grenades the lobber. Its empathy shields and horn of conjuring have no part in another set
+    // and drop; its wetsuit is the suit against the water.
+    {"weapon_laser_gun", 0, ItemRole::energy},
+    {"weapon_mjolnir", 0, ItemRole::blast},
+    {"weapon_proximity_gun", 0, ItemRole::lobber},
+    {"item_artifact_wetsuit", 0, ItemRole::protect},
     {"item_shells", 0, ItemRole::ammo_scatter},
     {"item_spikes", 0, ItemRole::ammo_rapid},
     {"item_rockets", 0, ItemRole::ammo_explosive},

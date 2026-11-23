@@ -85,6 +85,12 @@ TEST(the_classic_games_weapons_take_q2_by_role) {
   CHECK(to_q2("item_health", 1) == "item_health");
   CHECK(to_q2("item_health", 0) == "item_health_large");
   CHECK(to_q2("item_armorInv", 0) == "item_armor_body");
+  // Scourge of Armagon's, read by the same table (its program runs on Quake's).
+  CHECK(to_q2("weapon_laser_gun", 0) == "weapon_hyperblaster");
+  CHECK(to_q2("weapon_mjolnir", 0) == "weapon_bfg");
+  CHECK(to_q2("weapon_proximity_gun", 0) == "weapon_grenadelauncher");
+  CHECK(to_q2("item_artifact_wetsuit", 0) == "item_enviro");
+  CHECK(!pf::remix_item("q1", "q2", "item_artifact_empathy_shields", 0).known);  // dropped
   const auto to_classic = [](const char* cls) {
     const pf::ItemSwap r = pf::remix_item("q2", "q1", cls, 0);
     return r.known ? std::string(r.becomes) : std::string("none");
