@@ -1493,6 +1493,37 @@ TEST(q2_menu_has_its_own_pages_flags_keys_and_in_game_page) {
   CHECK(!g.open() && !w.ran.empty() && w.ran.back() == "putaway");
 }
 
+// The video mode row: windowed, then each mode vid_modelist offers; a mode picked writes its
+// number.
+TEST(q2_video_mode_lists_the_modes_and_writes_the_number) {
+  World w;
+  w.con.cvars().add({.name = "vid_fullscreen", .fallback = "0"});
+  w.con.cvars().add({.name = "vid_modelist",
+                     .fallback = "desktop 1280x720@60 1920x1080@144",
+                     .kind = ge::console::CvarKind::text});
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .table = &sm::q2_menu()};
+  g.set_table(sm::q2_menu());
+  w.con.execute("vid_fullscreen 2");
+  g.show(host, "video");
+  const ge::ui::Item* row = item(g.main(), "video", "vid_fullscreen");
+  CHECK(row != nullptr);
+  if (row == nullptr) return;
+  CHECK(row->choices.size() == 4);
+  CHECK(row->choices[0] == "windowed" && row->choices[1] == "desktop" &&
+        row->choices[3] == "1920x1080@144");
+  CHECK(row->choice == 2);
+  g.main().page("video")->find("vid_fullscreen")->choice = 3;
+  sm::apply_event({.kind = EventKind::changed, .page = "video", .item = "vid_fullscreen"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("vid_fullscreen")->value == "3");
+  g.main().page("video")->find("vid_fullscreen")->choice = 0;
+  sm::apply_event({.kind = EventKind::changed, .page = "video", .item = "vid_fullscreen"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("vid_fullscreen")->value == "0");
+}
+
 TEST(q2_player_page_lists_figures_and_writes_the_skin) {
   // Figures as Quake II's packs hold them: a skin counts only with its icon beside it.
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {

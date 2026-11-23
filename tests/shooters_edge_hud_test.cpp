@@ -132,6 +132,18 @@ TEST(hud_style_picks_a_look_and_only_its_elements_show) {
   CHECK(content(hud, "min_health").on && !content(hud, "frags").on && !content(hud, "guns").on);
 }
 
+// Under Quake II's own bar the HUD keeps only the chat lines on screen.
+TEST(keep_chat_only_leaves_the_chat_lines_alone_on) {
+  se::Hud hud = se::make_hud();
+  gh::Feed feed{4, -1, 1, 0.15};
+  feed.push("Ranger: hello", ui::Color{1, 1, 1, 1}, 0);
+  hud.chat = &feed;
+  se::fill_hud(hud, armed(), art());
+  CHECK(content(hud, "sbar").on && content(hud, "chat").on);
+  se::keep_chat_only(hud);
+  CHECK(!content(hud, "sbar").on && !content(hud, "crosshair").on && content(hud, "chat").on);
+}
+
 TEST(hud_sbar_0_draws_the_classic_pieces_without_either_panel) {
   se::Hud hud = se::make_hud();
   ge::console::Console con;

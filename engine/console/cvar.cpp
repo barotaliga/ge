@@ -189,7 +189,18 @@ const Cvar* Cvars::find(std::string_view name) const {
   return const_cast<Cvars*>(this)->find(name);
 }
 
-bool Cvars::cheats() const { return sv_cheats_ != nullptr && sv_cheats_->on(); }
+bool Cvars::cheats() const { return !cheats_held_ && sv_cheats_ != nullptr && sv_cheats_->on(); }
+
+void Cvars::hold_cheats(bool held) {
+  if (held == cheats_held_) return;
+  cheats_held_ = held;
+  if (!held) return;
+  for (auto& k : all_)  // every cheat back to its default, as sv_cheats 0 puts them
+    if ((k->flags & kCheat) != 0 && k->value != k->fallback) {
+      store(*k, k->fallback);
+      k->below = k->value;
+    }
+}
 
 Cvar& Cvars::make(const CvarSpec& spec, CvarTarget target) {
   Cvar* c = find_any(spec.name);

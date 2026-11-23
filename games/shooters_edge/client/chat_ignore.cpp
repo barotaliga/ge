@@ -136,6 +136,7 @@ void drop_ignored(QwIgnore& g, DemoState& s, std::vector<DemoPrint>& prints, dou
       con::re_trigger_line(*g.con, g.triggers, *centre, con::kReCentre, now_s).remove)
     centre->clear();
   if (centre != nullptr && !centre->empty()) run_triggers(g.chat, *centre);  // Quake II's
+  chat_reply_due(g.chat, now_s, kVersionLine);  // Quake II's version reply, when it is due
   if (prints.empty()) return;
   const con::ChatRoster r = roster_of(s);
   std::vector<bool> gone(prints.size(), false);

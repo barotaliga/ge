@@ -15,9 +15,9 @@
 //     follows it; a client's own `set` of it is refused with the reason;
 //   - everything else a game reads stays code (a constant), never a cvar.
 // `kCheat` cvars change only while the server's `sv_cheats` is 1 (turning it off puts each back to
-// its default); `kLatch` holds a new value until the game calls `apply_latched` (a new map, a
-// restart); `kReadOnly` only code sets; `kUserInfo` cvars ride in the user info a client sends the
-// server.
+// its default) and no joined game holds them off (`hold_cheats`); `kLatch` holds a new value until
+// the game calls `apply_latched` (a new map, a restart); `kReadOnly` only code sets; `kUserInfo`
+// cvars ride in the user info a client sends the server.
 //
 // BINDING: a cvar either owns its value or is BOUND to a field of a subsystem's settings struct
 // (`bind`): a set parses, clamps and writes straight into the field, so the subsystem reads its
@@ -309,7 +309,12 @@ class Cvars {
   void set_watch(Watch watch) { watch_ = std::move(watch); }
 
   bool is_server() const { return is_server_; }
-  bool cheats() const;  // sv_cheats is on
+  bool cheats() const;  // sv_cheats is on, and no game holds cheats off (`hold_cheats`)
+  // A game the client joined whose rules allow no cheats (Quake II's with more than one player
+  // slot): `held` true puts every cheat back to its default and refuses each set of one, whatever
+  // the local sv_cheats says, until it is let go (false: the game left).
+  void hold_cheats(bool held);
+  bool cheats_held() const { return cheats_held_; }
 
   // `name` as another name for the cvar `target` (`part` -1: its whole value; k: its word k).
   // False when `name` is not a valid name or is a cvar of its own, when `target` is unknown, or
@@ -388,6 +393,7 @@ class Cvars {
   std::vector<Synonym> synonyms_;
   bool is_server_;
   Cvar* sv_cheats_ = nullptr;
+  bool cheats_held_ = false;
   Watch watch_;
 };
 
