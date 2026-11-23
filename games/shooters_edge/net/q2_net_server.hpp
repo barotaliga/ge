@@ -62,10 +62,10 @@
 
 #include <cstdint>
 #include <functional>
-#include <map>
 #include <string>
 #include <vector>
 
+#include "classic/protocol/challenges.hpp"
 #include "net/transport.hpp"
 #include "server/bans.hpp"
 #include "server/cmdfilter.hpp"
@@ -365,10 +365,8 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   Q2Mvd mvd;               // the multiview recorder (sv_mvd_enable)
   int64_t mvd_frame = -1;  // the rules frame last recorded
   bool mvd_level = true;   // a level waits for its game state
-  // The challenges (1024 kept, one an address and port, each used once; the oldest
-  // replaced when full): by address, and the addresses oldest first.
-  std::map<uint64_t, int32_t> challenges;
-  std::vector<uint64_t> challenge_order;
+  // The challenges (classic/protocol/challenges.hpp), each used once.
+  ge::classic::ChallengeBook challenges;
   uint32_t next_challenge = 0;
   int32_t count = 0;           // the level's count, as the server data carries it
   int64_t written_frame = -1;  // the tenth last sent
