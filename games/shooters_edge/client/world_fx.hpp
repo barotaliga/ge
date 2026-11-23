@@ -61,6 +61,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -75,6 +76,7 @@
 #include "brush/light_probe.hpp"
 #include "camera/subject.hpp"
 #include "classic/q2_fx_switches.hpp"
+#include "core/prng.hpp"
 #include "detail/decals.hpp"
 #include "particles/effect.hpp"
 #include "render/beam.hpp"
@@ -88,11 +90,13 @@
 #include "shooters_edge/app/monster_fx.hpp"
 #include "shooters_edge/app/muzzle.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
+#include "shooters_edge/client/chain.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/model_lerp.hpp"
 #include "shooters_edge/client/own_beam.hpp"
 #include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/q2_model_fx.hpp"
 #include "shooters_edge/client/warps.hpp"
 #include "shooters_edge/client/world_models.hpp"
 #include "shooters_edge/view/hand.hpp"
@@ -179,6 +183,10 @@ struct HeldBeam {
   double edge_at[2][3] = {}, edge_n[2][3] = {};
 };
 
+// A chain's links placed (client/chain.hpp): the links from `from` to `to` (map units) into `out`,
+// numbered down from `entity`.
+void place_chain(const sh::Vec3f& from, const sh::Vec3f& to, const Chain& c, ge::core::Rng& roll,
+                 int& entity, std::vector<Placed>& out);
 // The own beam turned to the aim each frame: client/own_beam.hpp (cl_fakeshaft).
 
 // A beam entity the rules show this frame (Quake II's beam render bit: a laser): from its origin
@@ -313,6 +321,27 @@ struct FxState {
     double born = 0;
   };
   std::vector<BeamOut> beam_outs;
+  // QUAKE II'S MODEL EFFECTS in the classic look (q2_model_fx.hpp): the explosions' balls, the
+  // bolts' flares, the bullets' smoke and flashes, the BFG's bursts, at most kQ2ModelFx (the
+  // oldest taken by a new one); its cables (a monster's drain or line, the grapple) by their
+  // source, each until `until` (the picture's clock); the BFG's lasers until theirs.
+  static constexpr size_t kQ2ModelFx = 256;
+  std::vector<Q2ModelFx> q2_models;
+  size_t q2_models_next = 0;
+  struct Q2Cable {
+    int entity = 0;
+    sh::Vec3f from, to;  // map units
+    sh::Vec3f offset;    // the grapple's start off its holder (the player's own drawn origin)
+    bool ctf = false;    // the grapple's segment, else a monster's
+    double until = 0;
+  };
+  std::vector<Q2Cable> q2_cables;
+  struct Q2Laser {
+    sh::Vec3f from, to;
+    float rgb[3] = {0, 1, 0};
+    double born = 0;
+  };
+  std::vector<Q2Laser> q2_lasers;
   // THE MONSTERS' MISSILES (app/monster_fx.hpp: a model the replacement table or its trail flags
   // name): each in flight as it was a frame ago (m, and map units), the way it flew, its kind and
   // its classic trail's side; those gone this frame (where their spit lands); the splashes whose
@@ -475,9 +504,9 @@ struct FxScene {
   ge::camera::Pose pose;                  // the eye this frame
   std::span<const Missile> missiles;      // in flight now
   std::span<const sh::Vec3f> explosions;  // every one this map so far, in order
-  // Each one's kind where it is known (classic/q2_fx_switches.hpp's kQ2Grenade, kQ2Rocket; 0 any
-  // other), by index; shorter than `explosions` (or empty) where it is not.
-  std::span<const uint8_t> explosion_kinds;
+  // Quake II's: each one's kind byte (q2_model_fx.hpp: its ball, light and specks; 0 not Quake
+  // II's), by index; shorter than `explosions` (or empty) where it is not known.
+  std::span<const uint8_t> explosion_codes;
   std::span<const Effect> effects;        // every temporary entity this map so far, in order
   std::span<const Blow> blows;            // a campaign's blows to the player this map so far
   int64_t bonuses = 0;                    // the items the viewed player took, so far (bf)
@@ -552,6 +581,19 @@ void tread_blood(const FxScene& l, FxState& s, std::span<const Placed> placed, d
 void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, double t, FxFrame& out);
 bool q2_named_trail(FxState& s, const Effect& e, const double from[3], const double to[3],
                     FxFrame& out);
+// QUAKE II'S MODEL EFFECTS in the classic look (client/world_fx_q2.cpp, q2_model_fx.hpp): the
+// pool's effects of kind `code` at `at` off a face along `way` (map units); a blast of kind `code`
+// (its specks unless `no_specks`, its ball or burst and its light; false: not one of Quake II's
+// own, drawn as any game's); a monster's or the grapple's cable held for 0.2 s by its source (false
+// for any other effect); the BFG's laser; and each frame every live one placed as a model (the
+// cables' segments, `me` the player's own origin for his own) and lit, the lasers as strips.
+void q2_model_fx(FxState& s, int code, const sh::Vec3f& at, const sh::Vec3f& way, double t);
+bool q2_classic_blast(FxState& s, int code, const sh::Vec3f& at, const double p[3], bool no_specks,
+                      double t, FxFrame& out);
+bool q2_cable(FxState& s, const Effect& e, double t);
+void q2_laser(FxState& s, const Effect& e, double t);
+void q2_draw_model_fx(FxState& s, int effect_models, const PlayerState& me, int me_entity, double t,
+                      FxFrame& out);
 // The widow beam-outs still growing at `t`: a sphere of specks each frame (client/world_fx_q2.cpp).
 void q2_sustains(FxState& s, double t, FxFrame& out);
 void q2_mark_fx(FxState& s, const Missile& m, bool moved, const double from[3], const double to[3],
