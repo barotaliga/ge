@@ -413,6 +413,11 @@ TEST(the_pack_s_items_play_their_parts_in_another_game) {
   CHECK(like("item_quadfire", "item_quad"));
   // Laid down in Quake II, the base game's own (its spawns are the base game's).
   CHECK(ge::classic::swap_item(q2, q2, "weapon_boomer", 0).becomes == "weapon_hyperblaster");
+  // The pack's own items, which cr_expansions takes or leaves out.
+  for (const char* c :
+       {"weapon_boomer", "weapon_phalanx", "ammo_magslug", "ammo_trap", "item_quadfire"})
+    CHECK_MSG(pf::is_pack_item("q2", c), c);
+  CHECK(!pf::is_pack_item("q2", "weapon_hyperblaster"));
 }
 
 TEST(a_game_of_the_pack_saved_and_loaded_plays_on_as_the_game_never_saved) {

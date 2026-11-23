@@ -391,19 +391,15 @@ struct PackItem {
   std::string_view game, pack, class_name;
 };
 inline constexpr PackItem kPackItems[] = {
-    {"q1", "hipnotic", "weapon_laser_gun"},
-    {"q1", "hipnotic", "weapon_mjolnir"},
-    {"q1", "hipnotic", "weapon_proximity_gun"},
-    {"q1", "hipnotic", "item_artifact_wetsuit"},
-    {"q2", "rogue", "weapon_etf_rifle"},
-    {"q2", "rogue", "weapon_heatbeam"},
-    {"q2", "rogue", "weapon_plasmabeam"},
-    {"q2", "rogue", "weapon_proxlauncher"},
-    {"q2", "rogue", "weapon_disintegrator"},
-    {"q2", "rogue", "ammo_flechettes"},
-    {"q2", "rogue", "ammo_prox"},
-    {"q2", "rogue", "ammo_disruptor"},
-    {"q2", "rogue", "item_double"},
+    {"q1", "hipnotic", "weapon_laser_gun"},     {"q1", "hipnotic", "weapon_mjolnir"},
+    {"q1", "hipnotic", "weapon_proximity_gun"}, {"q1", "hipnotic", "item_artifact_wetsuit"},
+    {"q2", "xatrix", "weapon_boomer"},          {"q2", "xatrix", "weapon_phalanx"},
+    {"q2", "xatrix", "ammo_magslug"},           {"q2", "xatrix", "ammo_trap"},
+    {"q2", "xatrix", "item_quadfire"},          {"q2", "rogue", "weapon_etf_rifle"},
+    {"q2", "rogue", "weapon_heatbeam"},         {"q2", "rogue", "weapon_plasmabeam"},
+    {"q2", "rogue", "weapon_proxlauncher"},     {"q2", "rogue", "weapon_disintegrator"},
+    {"q2", "rogue", "ammo_flechettes"},         {"q2", "rogue", "ammo_prox"},
+    {"q2", "rogue", "ammo_disruptor"},          {"q2", "rogue", "item_double"},
 };
 struct PackSpawn {
   std::string_view game, pack;

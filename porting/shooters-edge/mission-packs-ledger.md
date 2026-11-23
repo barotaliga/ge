@@ -334,7 +334,7 @@ count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 | xat.coop | co-op through the units | missing | 2 |  |
 | xat.save | saves of the pack's campaign | done |  | server/q2_save.cpp (v12: the pack's rows, the trap's state, dual fire); tests/shooters_edge_q2_reckoning_test.cpp saves a pack game mid-trap and plays on bit for bit (an item's row now follows its drop to the floor, which a loaded game showed and a running one did not) |
 | xat.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
-| xat.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the Ionripper as the energy weapon, the Phalanx as the launcher, mag slugs its ammunition, traps as grenades, DualFire as damage |
+| xat.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: the Ionripper as the energy weapon, the Phalanx as the launcher, mag slugs its ammunition, traps as grenades, DualFire as damage; listed in kPackItems so cr_expansions takes or leaves them |
 
 ### What the maps place that the base game's maps never do
 
