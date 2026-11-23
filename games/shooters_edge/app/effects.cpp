@@ -281,6 +281,29 @@ void q2_fountain(const double p[3], uint32_t seed, Palette pal, Particles* out) 
   }
 }
 
+void q2_blaster_specks(const double p[3], const double normal[3], uint32_t seed, Palette pal,
+                       Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < 40; ++n) {
+    const double d = pick(r, 16);  // out along the face, the same on every axis
+    const double x = pick(r, 8) - 4 + d * normal[0], y = pick(r, 8) - 4 + d * normal[1],
+                 z = pick(r, 8) - 4 + d * normal[2];
+    const double v[3] = {normal[0] * 30 + rnd(r, -40, 40), normal[1] * 30 + rnd(r, -40, 40),
+                         normal[2] * 30 + rnd(r, -40, 40)};
+    out->push_back(q2_speck(p, x, y, z, v, 80, pal, (0xe0 + pick(r, 8)) & 0xff, rnd(r, 0.5, 0.8)));
+  }
+}
+
+void q2_blast_specks(const double p[3], int colour, uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < 256; ++n) {
+    const double x = pick(r, 32) - 16, y = pick(r, 32) - 16, z = pick(r, 32) - 16;
+    const double v[3] = {pick(r, 384) - 192.0, pick(r, 384) - 192.0, pick(r, 384) - 192.0};
+    out->push_back(
+        q2_speck(p, x, y, z, v, 80, pal, (colour + pick(r, 8)) & 0xff, rnd(r, 0.625, 1.0)));
+  }
+}
+
 namespace {
 
 // The stretch `from` .. `to` (engine metres) in map units' axes (x, y the plan, z up): its

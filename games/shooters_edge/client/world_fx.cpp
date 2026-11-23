@@ -695,7 +695,7 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.pose = v.pose;
   out.missiles = v.missiles;
   out.explosions = l.explosions;
-  out.explosion_kinds = l.explosion_kinds;
+  out.explosion_codes = l.explosion_codes;
   out.effects = l.effects;
   out.blows = l.blows;
   out.bonuses = l.bonuses;
@@ -1112,14 +1112,19 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     s.treads.clear();
     s.marked = nullptr;
     s.beams.clear();
+    s.q2_models.clear();
+    s.q2_models_next = 0;
+    s.q2_cables.clear();
+    s.q2_lasers.clear();
   }
   for (; s.explosions_seen < l.explosions.size(); s.explosions_seen++) {
     const ge::camera::Vec3 at = engine_point(l.explosions[s.explosions_seen]);
     double p[3];
     put(at, p);
     // Quake II's cl_disable_particles and cl_disable_explosions by the kind it is.
-    const uint8_t kind =
-        s.explosions_seen < l.explosion_kinds.size() ? l.explosion_kinds[s.explosions_seen] : 0;
+    const uint8_t code =
+        s.explosions_seen < l.explosion_codes.size() ? l.explosion_codes[s.explosions_seen] : 0;
+    const uint8_t kind = q2_blast_kind(code);
     const bool no_specks = ge::classic::q2_no_blast_specks(s.on.q2, kind);
     const bool no_ball = ge::classic::q2_no_blast_ball(s.on.q2, kind);
     if (s.on.explosions) {
@@ -1163,6 +1168,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       }
       s.mains.push_back(s.blasts[first]);   // its light
       if (no_ball) s.blasts.resize(first);  // and no ball of fire
+    } else if (q2_classic_blast(s, code, l.explosions[s.explosions_seen], p, no_specks, t, out)) {
+      // Quake II's own: its specks, its ball or burst and its light (q2_model_fx.hpp)
     } else if (no_specks || !throw_scripted(s, "explosion", p, kUpWay, 1, -1e9, t, out)) {
       if (!no_specks) fx::explosion(p, s.seed++, s.palette, &out.births);
       s.lit.push_back({at, t, l.explosions[s.explosions_seen], no_ball});  // its light, its sprite
@@ -1359,6 +1366,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           const double off_face[3] = {e.way.x, e.way.y, e.way.z};
           fx::q2_specks(p, off_face, e.q2_specks, e.colour, 32, true, s.seed++, s.palette,
                         &out.births);
+          if (l.q2) q2_model_fx(s, e.code, e.at, e.way, t);  // its smoke and flash
         } else {
           // 20 specks a pellet, 10 a nail, 20 a big nail.
           const int specks = e.kind == EffectKind::spike ? 10 * e.count : 20 * e.count;
@@ -1406,6 +1414,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           fx::lava_splash(p, s.seed++, s.palette, &out.births);
         break;
       case EffectKind::beam: {
+        if (l.q2 && e.code == 23) {  // the BFG's laser: a strip for a tenth of a second
+          q2_laser(s, e, t);
+          break;
+        }
         double normal[3], dir[3];
         face(e.at, normal, dir);
         const ge::camera::Vec3 root = engine_point(e.at);
@@ -1457,6 +1469,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           q2_named_fx(s, e, p, s.on.warps && near_warp(s.warps, e.at, t), t, out);
           break;
         }
+        if (e.name == "te_blaster" && l.q2 && !s.on.hits) {  // the classic: its specks, its flare
+          const double off_face[3] = {e.way.x, e.way.y, e.way.z};
+          fx::q2_blaster_specks(p, off_face, s.seed++, s.palette, &out.births);
+          q2_model_fx(s, 2, e.at, e.way, t);
+          break;
+        }
         if (e.name == "te_blaster") {  // Quake II's bolt landing: yellow sparks
           fx::blaster_hit(p, s.seed++, &out.births);
           // On a wall: a small glowing mark, the bolt's heat left in it.
@@ -1488,6 +1506,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         put(engine_point(e.end), to);
         // Quake II's bubbles and force walls along their lines (client/world_fx_q2.cpp).
         if (q2_named_trail(s, e, from, to, out)) break;
+        // Quake II's cables in the classic look: a segment model every 30 units (q2_model_fx.hpp).
+        if (l.q2 && !s.on.monsters && q2_cable(s, e, t)) break;
         // Quake II's monsters' cables (a parasite's tongue, a medic's line) and shots leaving.
         if (const fx::Cable c = fx::cable_of(e.name); c != fx::Cable::none) {
           if (s.on.monsters) {
@@ -1730,6 +1750,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     spr.origin = b.map_at;
     out.models.push_back(spr);
   }
+  q2_draw_model_fx(s, l.effect_models, l.me, l.own > 0 ? l.me.entity : 0, t, out);
 
   // The powers held: a glow round each holder (blue the quad's, red the shield's), the local
   // player's own among them.

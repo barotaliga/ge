@@ -720,6 +720,7 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
   DemoEffect e;
   e.code = kind;
   bool keep = true;
+  int splash = -1;  // a splash's kind byte (its sound)
   const auto point_dir = [&](DemoEffectKind k) {
     e.kind = k;
     e.at = e.end = pos(m);
@@ -831,6 +832,7 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       const int count = m.u8();
       if (!point_dir(DemoEffectKind::named)) return false;
       const int c = m.u8();
+      if (kind == 10) splash = c;
       e.name = kind == 10 ? "sq_splash" : "sq_laser_sparks";
       e.count = count;
       e.colour = kind == 15 ? c : c < 7 ? kSplashColour[c] : 0;
@@ -856,11 +858,14 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       e.entity = m.i16();
       line(DemoEffectKind::beam);
       break;
-    case 24:  // the grapple: entity, start, end, offset
+    case 24: {  // the grapple: entity, start, end, offset; its cable from the start plus the offset
       e.entity = m.i16();
-      line(DemoEffectKind::beam);
-      pos(m);
+      line(DemoEffectKind::named_trail);
+      e.name = "te_grapple_cable";
+      e.way = pos(m);
+      e.at = e.at + e.way;
       break;
+    }
     case 33:  // lightning: two entities, start, end
       e.entity = m.i16();
       m.i16();
@@ -959,7 +964,7 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
   }
   const auto pick = static_cast<uint32_t>(static_cast<int>(s.time * 1000) * 7919 +
                                           static_cast<int>(e.at.x) * 31 + static_cast<int>(e.at.y));
-  if (const Q2TempSound ts = q2_temp_sound(kind, pick); ts.name != nullptr && !m.bad) {
+  if (const Q2TempSound ts = q2_temp_sound(kind, pick, splash); ts.name != nullptr && !m.bad) {
     const bool busy =
         ts.alone && std::any_of(s.started.begin(), s.started.end(), [&](const DemoSound& o) {
           return o.name != nullptr && std::string_view(o.name) == ts.name;

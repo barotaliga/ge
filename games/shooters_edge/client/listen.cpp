@@ -26,6 +26,7 @@
 #include "server/net_restart.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/client/q2_flash_fx.hpp"
+#include "shooters_edge/client/q2_model_fx.hpp"
 #include "shooters_edge/client/q2_temp_fx.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
@@ -195,10 +196,10 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
                      name == "te_plasma_explosion";
   if (blast) {
     l.explosions.push_back(ev.origin);
-    l.explosion_kinds.resize(l.explosions.size());  // cl_disable_explosions reads which
-    l.explosion_kinds.back() = name == "te_rocket_explosion"    ? ge::classic::kQ2Rocket
-                               : name == "te_grenade_explosion" ? ge::classic::kQ2Grenade
-                                                                : 0;
+    if (const int code = q2_blast_code(name); code > 0 && listen_is_q2(l)) {
+      l.explosion_codes.resize(l.explosions.size());  // its ball, light and specks
+      l.explosion_codes.back() = static_cast<uint8_t>(code);
+    }
   }
   if (blast && name != "te_bfg_bigexplosion") return;
   const bool sparks = name == "te_sparks" || name == "te_bullet_sparks" ||
@@ -207,6 +208,10 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   if (uint8_t kind = 0; sv::qw_temp_entity(sparks ? "te_gunshot" : ev.text, kind)) {
     if (kind == kExplosion || kind == 4) {
       l.explosions.push_back(ev.origin);
+      if (listen_is_q2(l)) {  // our rules' plain blast in Quake II: a rocket's
+        l.explosion_codes.resize(l.explosions.size());
+        l.explosion_codes.back() = 7;
+      }
       return;
     }
     std::vector<uint8_t> b = {kTempEntity, kind};
@@ -217,6 +222,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
       if (const Q2Puff* puff = listen_is_q2(l) ? q2_puff(name) : nullptr) {  // Quake II's specks
         classic.q2_specks = puff->count;
         classic.colour = puff->colour;
+        classic.code = puff->code;  // its smoke and flash (q2_model_fx.hpp) by the kind byte
         classic.way = {ev.values[0], ev.values[1], ev.values[2]};
       }
       l.effects.push_back(classic);
@@ -272,7 +278,7 @@ void entered(Listen& l) {
   l.owed = 0;
   l.pending_map.clear();
   l.explosions.clear();
-  l.explosion_kinds.clear();
+  l.explosion_codes.clear();
   l.blows.clear();
   l.effects.clear();
   l.entries++;

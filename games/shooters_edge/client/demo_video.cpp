@@ -245,7 +245,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.pose.fov_y = view.fov_y;
   out.missiles = fx.missiles;
   out.explosions = fx.explosions;
-  out.explosion_kinds = fx.explosion_kinds;
+  out.explosion_codes = fx.explosion_codes;
   out.effects = fx.effects;
   out.blows = {};
   out.bonuses = s.bonuses;
