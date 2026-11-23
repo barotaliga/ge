@@ -62,6 +62,58 @@ void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooterbots::Bot
   if (self_e.waterlevel > 0 && dz > 8) cmd.buttons |= sh::kButtonJump;
 }
 
+void way_fall_steps(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s,
+                    const ge::ai::Search& reach) {
+  const sb::NavGraph& g = nav.graph;
+  // One hung over the floor (e3m5's in the pit under the top floor, t30 for the second tube):
+  // touched only falling through it, so reached from the floor beside the open air over it,
+  // walked off and steered into it on the way down.
+  for (WayStep& st : w.steps) {
+    if ((st.kind != WayKind::trigger && st.kind != WayKind::secret) || st.reach_in ||
+        (st.node >= 0 && touches(g.nodes[static_cast<size_t>(st.node)].origin, st.lo, st.hi)))
+      continue;
+    // Hung: no floor by it within a jump of its bottom (a trigger laid over a walk across a pit,
+    // e1m2's, has the walk's nodes beside it; e3m5's in the pit has floors only far under and
+    // far over it).
+    const sh::Vec3f mid = (st.lo + st.hi) * 0.5f;
+    bool hung = true;
+    for (size_t a = 0; a < g.nodes.size() && hung; a++) {
+      const sh::Vec3f o = g.nodes[a].origin;
+      hung = !(o.x > st.lo.x - kWayTouchBy && o.x < st.hi.x + kWayTouchBy &&
+               o.y > st.lo.y - kWayTouchBy && o.y < st.hi.y + kWayTouchBy &&
+               o.z > st.lo.z - kWayHung && o.z < st.hi.z + kWayHung);
+    }
+    if (!hung) continue;
+    // The open air over it: a fall from there passes through it.
+    int32_t best = -1;
+    float best_d = 0;
+    for (size_t a = 0; a < g.nodes.size(); a++) {
+      const sh::Vec3f o = g.nodes[a].origin;
+      if (g.nodes[a].swim || o.z - 24 < st.hi.z || o.z - 24 > st.hi.z + kWayFallFrom ||
+          o.x < st.lo.x - kWayFallBy || o.x > st.hi.x + kWayFallBy || o.y < st.lo.y - kWayFallBy ||
+          o.y > st.hi.y + kWayFallBy)
+        continue;
+      const sh::Vec3f over{mid.x, mid.y, o.z};
+      if (sh::trace_move(s.sv, over, {}, {}, {mid.x, mid.y, st.lo.z}, sh::kTraceNoMonsters, 1)
+              .fraction < 1)
+        continue;  // a floor over it: walked over, never fallen through
+      // One he reaches first (the floor round the pit's top), then the nearest.
+      const float d =
+          dist(o, over) + (reach.reached(static_cast<int32_t>(a)) ? 0.0f : kWayFallFrom);
+      if (best < 0 || d < best_d) {
+        best = static_cast<int32_t>(a);
+        best_d = d;
+      }
+    }
+    const sh::Vec3f under{mid.x, mid.y,
+                          best >= 0 ? g.nodes[static_cast<size_t>(best)].origin.z : 0};
+    if (best < 0) continue;
+    st.node = best;
+    st.crawl = {g.nodes[static_cast<size_t>(best)].origin, under};
+    st.reach_in = st.fall = true;
+  }
+}
+
 void way_reach_in(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
                   sh::MoveCmd& cmd) {
   const ge::shooter::WorldEntity& self_e = s.world.entities[static_cast<size_t>(me)];

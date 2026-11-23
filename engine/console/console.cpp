@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <utility>
 
 #include "console/cfg.hpp"
 #include "console/lex.hpp"
@@ -144,8 +145,14 @@ void Console::insert(std::string_view text, Source source, const Origin& where) 
   queue_front(text, source, where, current_depth_, current_via_, false);
 }
 
+void Console::sleep(double seconds) {
+  waiting_ = true;
+  if (clock_) wake_s_ = clock_() + (seconds > 0 ? seconds : 0);
+}
+
 int Console::run() {
   int n = 0;
+  if (sleeping()) return 0;  // a recipe's `sleep`: nothing runs until the host's time passes it
   waiting_ = false;
   for (Entry& e : buffer_) e.depth = 0;  // a loop across frames waits, so it is not runaway
   while (!buffer_.empty() && !waiting_) {
@@ -174,7 +181,20 @@ int Console::run() {
   return n;
 }
 
+void Console::past_sleep(const std::function<void()>& work) {
+  std::deque<Entry> held = std::exchange(buffer_, {});
+  const double wake = std::exchange(wake_s_, -1e300);
+  work();
+  for (Entry& e : held) buffer_.push_back(std::move(e));  // after what the work left, if any
+  wake_s_ = std::max(wake, wake_s_);
+}
+
 int Console::execute(std::string_view text, Source source) {
+  if (sleeping()) {  // a recipe's `sleep` holds the buffer: the host's line runs now, past it
+    int n = 0;
+    past_sleep([&] { n = execute(text, source); });
+    return n;
+  }
   append(text, source);
   int n = 0;
   int frames = 0;

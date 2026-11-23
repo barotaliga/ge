@@ -175,6 +175,18 @@ TEST(disc_reads_a_sheet_with_a_file_per_track) {
   CHECK(d.read_audio(d.tracks[1], &got, &error) && got == a);
 }
 
+TEST(disc_reads_a_sheet_renamed_with_its_image) {
+  // A download that names the sheet and its image after the release, the sheet still naming the
+  // disc's own file: the image with the sheet's name is read.
+  save(scratch("The Pack.BIN"), vfs::raw_sectors(vfs::write_iso(game_files(), true)));
+  std::ofstream(scratch("The Pack.CUE")) << "FILE \"Q2MP1.BIN\" BINARY\n  TRACK 01 MODE1/2352\n"
+                                         << "    INDEX 01 00:00:00\n";
+  vfs::Disc d;
+  std::string error;
+  CHECK_MSG(vfs::open_disc(scratch("The Pack.CUE").string(), &d, &error), error);
+  check_files(d, game_files(), false);
+}
+
 TEST(disc_refuses_damage) {
   std::string error;
   vfs::Disc d;
