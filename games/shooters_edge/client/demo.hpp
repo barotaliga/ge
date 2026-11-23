@@ -229,6 +229,8 @@ struct DemoBlow {
 };
 
 inline constexpr size_t kKeptBlows = 8;
+// The light styles a level keeps (the renderer's, plugins/brush/app/draw_data.hpp's kLightStyles).
+inline constexpr size_t kDemoLightStyles = 64;
 
 // An item taken and coming back, as a live stream of our server tells it (the ge set's `item-back`,
 // svc 119): where it will lie, as what, and the demo's clock it shows at.
@@ -248,7 +250,8 @@ struct DemoEffect {
   sh::Vec3f way;      // a named effect's way
   std::string name;   // a named effect's
   int colour = 0;     // a splash's or a laser's sparks' palette index; a burst's; explosion2's
-                      // first colour (`count` its run's length)
+                      // first colour (`count` its run's length); a Quake II puff's run's first
+  int q2_specks = 0;  // Quake II: a hit's puff of this many specks off `way` (q2_temp_fx.hpp)
 };
 
 inline constexpr double kNeverFlashed = -1e9;
@@ -270,6 +273,9 @@ struct DemoState {
   std::string map;             // "e1m1" off `maps/e1m1.bsp`; "" before the first level
   std::vector<uint8_t> areas;  // Quake II: the last frame's areas shown (a bit each); empty, all
   int levels = 0;              // level starts read so far (a new level: load its map)
+  // The level's light styles as the server set them (Quake's light-style message, Quake II's
+  // settings strings from 800): letters 'a' dark .. 'm' as baked .. 'z', ten a second; "" steady.
+  std::array<std::string, kDemoLightStyles> light_styles;
   // The level's place names as the recording kept them (`//loc` lines, plugins/classic/locs.hpp);
   // empty when it kept none.
   ge::classic::Locs places;

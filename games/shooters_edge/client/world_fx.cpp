@@ -689,6 +689,8 @@ bool monster_spit_hit(const FxScene& l, FxState& s, const Effect& e, const doubl
 void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.map = l.map.get();
   listen_area_bits(l, out.areas);
+  out.light_styles = {};
+  if (l.server != nullptr) out.light_styles = l.server->world.lightstyles;
   out.server = l.server ? &l.server->sv : nullptr;
   out.pose = v.pose;
   out.missiles = v.missiles;
@@ -821,6 +823,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         }
   out.births.clear();
   out.areas = l.areas;
+  for (size_t k = 0; k < out.light_styles.size();
+       k++)  // assigned in place: no allocation once warm
+    out.light_styles[k] = k < l.light_styles.size() ? std::string_view(l.light_styles[k]) : "";
   out.lights.clear();
   out.puffs.clear();
   out.flames.clear();
@@ -1350,6 +1355,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                                    p[2] + normal[2] * 0.1};
             s.sparked.push_back({{off[0], off[1], off[2]}, t, e.at});
           }
+        } else if (e.q2_specks > 0) {  // Quake II's puff off the face (q2_temp_fx.hpp)
+          const double off_face[3] = {e.way.x, e.way.y, e.way.z};
+          fx::q2_specks(p, off_face, e.q2_specks, e.colour, 32, true, s.seed++, s.palette,
+                        &out.births);
         } else {
           // 20 specks a pellet, 10 a nail, 20 a big nail.
           const int specks = e.kind == EffectKind::spike ? 10 * e.count : 20 * e.count;
@@ -1369,6 +1378,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         if ((s.on.q2.no_particles & 16) != 0) break;  // Quake II's cl_disable_particles 16
         if (s.on.blood) {
           bleed_fx(l, s, e, p, eye_map, l.map ? floor_under(*l.map, e.at, eye_map) : -1e9, t, out);
+        } else if (e.q2_specks > 0) {  // Quake II's puff of blood off the hit (q2_temp_fx.hpp)
+          const double off_face[3] = {e.way.x, e.way.y, e.way.z};
+          fx::q2_specks(p, off_face, e.q2_specks, e.colour, 32, true, s.seed++, s.palette,
+                        &out.births);
         } else if (!throw_scripted(s, "blood", p, toward(p, eye).data(), arc ? 1 : e.count, -1e9, t,
                                    out)) {
           fx::blood(p,

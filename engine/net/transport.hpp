@@ -76,7 +76,8 @@ struct Transport {
   TransportKind kind = TransportKind::none;
   Address local;
   UdpSocket udp;
-  TcpListener listener;            // a TCP host's
+  UdpSocket udp6;        // a UDP transport's IPv6 socket beside its IPv4 one (`open_udp6_beside`)
+  TcpListener listener;  // a TCP host's
   std::vector<TcpStream> streams;  // a TCP host's accepted streams, or a client's one
   size_t next_stream = 0;          // where the next receive starts looking, round the streams
   SimNetwork* sim = nullptr;
@@ -101,6 +102,10 @@ struct Transport {
 bool open_sim_transport(Transport& t, SimNetwork& net, const Address& local);
 // A real UDP socket bound at `bind`; false and `error` when the OS refuses it.
 bool open_udp_transport(Transport& t, const Address& bind, std::string* error);
+// An IPv6 socket at `bind` beside an open IPv4 UDP transport's (IPv6 only, no mapped addresses):
+// a datagram to an IPv6 peer leaves by it and both are read. False and `error` when the OS
+// refuses it or `t` is no IPv4 UDP transport; the transport is left as it was.
+bool open_udp6_beside(Transport& t, const Address& bind, std::string* error);
 // A TCP host listening at `bind`; a TCP client connecting to `host` (it sends once connected).
 bool open_tcp_host_transport(Transport& t, const Address& bind, std::string* error);
 bool open_tcp_client_transport(Transport& t, const Address& host, std::string* error);
