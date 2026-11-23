@@ -630,6 +630,9 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.top = colour_row(c, "topcolor", 0);
       p.bottom = colour_row(c, "bottomcolor", 0);
       p.skin_name = sv::info_value(c.userinfo, "skin");
+      if (q2 && size_t(e) < s.world.entities.size() &&
+          (uint32_t(s.world.entities[size_t(e)].render_fx) & kRfUseDisguise) != 0)
+        p.skin_name = q2_disguised(p.skin_name);
       p.model_name = sv::info_value(c.userinfo, "model");
       p.side = models::side_of(teamplay, mine, sv::info_value(c.userinfo, "team"));
     }

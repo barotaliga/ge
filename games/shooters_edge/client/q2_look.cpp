@@ -71,6 +71,7 @@ Q2Look q2_look(uint32_t effects, uint32_t render_fx) {
   look.full_bright = (render_fx & kRfFullBright) != 0;
   look.min_light = (render_fx & kRfMinLight) != 0;
   look.no_shadow = (render_fx & kRfNoShadow) != 0;
+  look.disguise = (render_fx & kRfUseDisguise) != 0;
   look.spinning = !look.turns && (effects & kSqSpinningLights) != 0;
   if (((effects & kSqColourShell) != 0 || powered) && (rf & shells) != 0) {
     look.shell = true;
@@ -147,6 +148,13 @@ PowerLook power_look(const PowerIn& in, bool power_shells, bool item_pulse) {
   }
   out.pulse = item_pulse && !out.shell && !in.player && (in.model_flags & kFirstRotates) != 0;
   return out;
+}
+
+std::string q2_disguised(std::string_view look) {
+  const size_t cut = look.find('/');
+  std::string folder(cut == std::string_view::npos || cut == 0 ? std::string_view("male")
+                                                               : look.substr(0, cut));
+  return folder + "/disguise";
 }
 
 }  // namespace shooters_edge::client

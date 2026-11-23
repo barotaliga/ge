@@ -197,6 +197,16 @@ TEST(full_bright_min_light_and_bob_by_their_bits) {
         std::abs(cl::q2_bob_units(0.4 * 3.14159265358979 / 2) - 5) < 1e-6);
 }
 
+// The mission pack's disguise: the render bit read, and a figure's look turned to its folder's
+// disguise skin (male when the look names no folder).
+TEST(the_disguise_wears_its_folders_disguise_skin) {
+  CHECK(cl::q2_look(0, cl::kRfUseDisguise).disguise);
+  CHECK(!cl::q2_look(0, 0).disguise);
+  CHECK(cl::q2_disguised("female/athena") == "female/disguise");
+  CHECK(cl::q2_disguised("cyborg/oni911") == "cyborg/disguise");
+  CHECK(cl::q2_disguised("") == "male/disguise");
+}
+
 }  // namespace
 
 TEST(through_infra_red_goggles_a_marked_model_is_drawn_red_and_unlit) {

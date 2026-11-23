@@ -127,7 +127,8 @@ void prepare_bsp_cull(gpu::Device& device, BspCull& c, const Scene& scene, const
   if (m.leaves.empty() || (!pvs && areas.empty()))
     c.seen.assign(m.surfaces.size(), 1);
   else
-    potentially_visible(m, pvs ? c.eye_leaf : ~0u, &c.seen, areas);
+    potentially_visible(m, pvs ? c.eye_leaf : ~0u, &c.seen, areas,
+                        pvs ? second_view_leaf(m, p, c.eye_leaf) : ~0u);
   std::fill(c.bits.begin(), c.bits.end(), 0u);
   c.in_set = 0;
   for (uint32_t i = 0; i < c.chunks; ++i) {

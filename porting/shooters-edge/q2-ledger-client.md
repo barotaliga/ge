@@ -21,7 +21,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 1 | 0 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 1 | 0 | 33 |
 | Entity effect bits (EF_) | 32 | 0 | 1 | 33 |
-| Entity render bits (RF_) and view bits (RDF_) | 21 | 6 | 5 | 32 |
+| Entity render bits (RF_) and view bits (RDF_) | 22 | 5 | 5 | 32 |
 | Configstrings | 9 | 1 | 6 | 16 |
 | The layout language (status bar and layouts) | 27 | 0 | 0 | 27 |
 | HUD and screen elements | 18 | 0 | 11 | 29 |
@@ -29,9 +29,9 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Demo playback and recording features | 13 | 0 | 10 | 23 |
 | Keys: the fixed keys and the default bindings | 9 | 1 | 1 | 11 |
 | Sound and music | 13 | 0 | 0 | 13 |
-| Picture and video | 14 | 2 | 4 | 20 |
-| Connection, network, downloads and the rest | 11 | 4 | 2 | 17 |
-| **all** | 916 | 73 | 222 | 1211 |
+| Picture and video | 15 | 1 | 4 | 20 |
+| Connection, network, downloads and the rest | 12 | 3 | 2 | 17 |
+| **all** | 919 | 70 | 222 | 1211 |
 
 ## Client console commands
 
@@ -1016,7 +1016,7 @@ Bits of an entity's render field, and of the player state's view flags.
 | rf.ir_visible | `RF_IR_VISIBLE` (32768) | drawn flat red while infra-red goggles are on | done | client/q2_look.cpp `q2_infra_red`: under the goggles the model is its skin times pure red, lit by nothing (`client/world_models.cpp`), unless a shell or full light holds it |
 | rf.shell_double | `RF_SHELL_DOUBLE` (65536) | double damage's shell | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.shell_half | `RF_SHELL_HALF_DAM` (131072) | half damage's shell | done | `games/shooters_edge/client/q2_look.hpp` |
-| rf.use_disguise | `RF_USE_DISGUISE` (1<<18) | drawn with the disguise skin (mission pack) | missing | not read |
+| rf.use_disguise | `RF_USE_DISGUISE` (1<<18) | drawn with the disguise skin (mission pack) | done | `client/q2_look.hpp` (`kRfUseDisguise`, `q2_disguised`): a player's figure in its folder's `disguise` skin, from a recording, a joined server or our own (`client/demo_video.cpp`, `client/world_models.cpp`); a folder without one wears its own |
 | rf.shell_lite_green | `RF_SHELL_LITE_GREEN` (1<<19) | a light green shell | done | (0.56, 0.93, 0.56); the shell bits now mix in turn (`client/q2_look.cpp`) |
 | rf.custom_light | `RF_CUSTOM_LIGHT` (1<<20) | a light of the entity's own colour | missing | not read |
 | rf.flare | `RF_FLARE` (1<<21) | a flare sprite that fades by sight (`cl_flares`, `gl_flarespeed`) | missing | C16 |
@@ -1175,7 +1175,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.status.usage | "Usage: %s [address]" | `serverstatus` misuse | done | `games/shooters_edge/net/qw_serverstatus.cpp` |
 | msg.dl.progress | "[UDP] %s [%s] [%d remaining file%s]" | a download finished, with how many remain | done | `games/shooters_edge/net/q2_client.cpp` (`take_downloads`): [DONE], [FAIL] (refused) and [STOP] (cut off) with the files left |
 | msg.dl.open | "[UDP] Couldn't open %s for writing: %s" | a download's file cannot be written | done | Same meaning in our words (the player-text rule makes our words the intended ones). ours does it but says it in its own words (the exact line not found) |
-| msg.dl.rename | "[UDP] Couldn't rename %s to %s: %s" | the finished `.tmp` cannot be renamed | not-taken | no `.tmp` file is written: a file fetched is kept whole in memory and then written once, into its archive or loose (`classic/content/downloads.hpp`) |
+| msg.dl.rename | "[UDP] Couldn't rename %s to %s: %s" | the finished `.tmp` cannot be renamed | not-taken | the `.tmp` is not renamed: a file fetched whole is kept in its archive or loose (`classic/content/downloads.hpp`), and its `.tmp` removed |
 | msg.dl.mustconnect | "Must be connected to a server." | `download` while not connected | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
 | msg.dl.disabled | "Downloads are permanently disabled." | `download` with `allow_download -1` | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
 | msg.dl.usage | "Usage: download <filename>" | `download` alone | done | `games/shooters_edge/net/q2_remote.cpp` (`net/q2_client.cpp` `q2_download`) |
@@ -1373,15 +1373,15 @@ How the client sets up and draws the picture, beyond the settings themselves. Ou
 | vid.hor | wide screens | the 4:3 field kept vertically (hor+) by `cl_adjustfov` | done | `q2-gaps2-client.md` checked (hor+) |
 | vid.fov.server | the server's field of view | the player state's field drawn, interpolated (zoom, fixed FOV) | done | `client/present.cpp`: the player state's field of view eased between frames (`q2_fov_y`, `cl_adjustfov`) |
 | vid.areas | areas behind shut doors | a leaf whose area is not joined is not drawn | done | a leaf in an area the frame does not show draws nothing: off a recording or a joined server's frame, and from the listen server's open portals (`brush/map.cpp` `potentially_visible`, `client/demo_q2.cpp`, `server/q2_areas.cpp`) |
-| vid.pvs2 | the second PVS point | the PVS joined with that of a point 16 units below (above in water) | missing | C2 |
+| vid.pvs2 | the second PVS point | the PVS joined with that of a point 16 units below (above in water) | done | `plugins/brush/map.cpp` `second_view_leaf` (a version 38 map: 16 units below the eye, above when its leaf holds contents; not solid, another cluster), joined in `potentially_visible` by the cull (`brush/app/bsp_cull.cpp`); `tests/brush_areas_test.cpp` |
 | vid.particles | particles | squares facing the view, grown with distance, `gl_partscale`, `gl_partstyle`, `gl_partshape` | done | ours draws the classic particles facing the view, sized by `gl_partscale`'s rule with depth, blended or added by `gl_partstyle`, shaped by `gl_partshape` |
 | vid.shadows | blob shadows | `gl_shadows` | done | `gl_shadows` (`client/model_shadow.hpp`), and the menu's ground shadows row (no, yes, fade) |
 | vid.shells | colour shells | a second copy pushed out, flat colour, 0.3 | done | `games/shooters_edge/client/q2_look.hpp` |
 | vid.ir | infra-red goggles | IR-visible models drawn flat red | done | client/q2_look.cpp `q2_infra_red`, client/world_models.cpp (red, no light, no minimum light) |
 | vid.lightstyles | light styles | each style's letters stepped at 10 a second, or blended between letters with `cl_lerp_lightstyles` | missing | Missing, rank 2 (seen on a joined server and in demos): the window's own game animates them; a server's styles not kept (table "Configstrings") LIFT: as cs.lights. |
 | vid.dlights | dynamic lights | effect and flash lights added each frame (`gl_dynamic`, `cl_lights`, `cl_muzzlelight_time`) | done | the wire's flashes read (`client/demo_q2.cpp`, `client/q2_flash_fx.cpp`) and lit with the effects' lights (`client/world_fx.cpp`, `cl_muzzlelight_time`); `gl_dynamic` and `cl_lights` our `r_dynamic` (`client/cvar_layers.cpp`) |
-| vid.vweps | other players' weapons | the weapon model from the figure's folder (`cl_vwep`) | done | `plugins/classic/vweps.cpp` |
-| vid.skins | player skins | `players/<model>/<skin>.pcx`, missing ones the stock figure (`cl_noskins`) | done | `games/shooters_edge/client/cvar_layers.cpp` (`cl_noskins`) |
+| vid.vweps | other players' weapons | the weapon model from the figure's folder (`cl_vwep`) | done | `plugins/classic/vweps.cpp`; from a recording or a joined server, a player's second model 255 is his weapon by the skin's high byte, and any other second, third and fourth model drawn at his place (`client/demo_video.cpp`, `DemoEntity::more`) |
+| vid.skins | player skins | `players/<model>/<skin>.pcx`, missing ones the stock figure (`cl_noskins`) | done | `games/shooters_edge/client/cvar_layers.cpp` (`cl_noskins`); a player's model 255 drawn as the figure and skin his slot's look names (`client/demo_video.cpp` `q2_own_look`, `EffectModel::figure_q2`), from a recording or a joined server too |
 | vid.gun | the view weapon | the gun model from the player state, its frame interpolated, by `hand`, `cl_gun`, `cl_gunfov`, `cl_gun_x/y/z`, `cl_gunalpha` | done | landed; `cl_gunalpha` (`view/hand.hpp`, `client/cvar_layers.cpp`) |
 | vid.bob | the view | bob, roll, kicks, falls from the player state | done | `plugins/classic/q2_view.cpp` |
 | vid.kick | the server's kick | the player state's kick angles added (`cl_kickangles`) | done | added; `cl_kickangles` 0 drops it (`client/present.cpp`, `client/q2_view.hpp`) |
@@ -1406,7 +1406,7 @@ Behaviour the client offers outside the screen.
 | net.autoreply | version reply | a chat line ending "!version" makes the client say its version after 1 to 2 s, at most once in 2 minutes | done | `client/chat_lines.cpp` (`chat_line_teamplay`, `chat_reply_due`): on a Quake II server another player's chat line ending in `!version` is answered with the version 1 to 2 s later, at most once in two minutes; `cl_queries` 0 answers none |
 | net.recentaddr | addresses in chat | addresses seen in chat remembered for `followip` | done | `client/chat_lines.cpp`: the last 16 addresses chat lines named, joined by `followip [n]` |
 | net.download.order | what is fetched | the map, its models (and their skins and frames), sounds, pictures, figures (models, weapons, skins, icons, sounds), the sky, then the wall textures | missing | Missing, rank 1 (gameplay, daily use): ours the map, models, sounds and figures' models and skins (`net/q2_client.cpp`) (C36) LIFT: as svc.download. |
-| net.download.resume | resuming | a `.tmp` resumed from its length, renamed when whole | missing | C36 |
+| net.download.resume | resuming | a `.tmp` resumed from its length, renamed when whole | done | `plugins/classic/content/downloads.hpp` (`HeldDownloads`, `held_in_folder`, any classic game): each piece added to `<path>.tmp` in the game's folder as it comes; asked for again, the rest from its length (`download <file> <offset>`, `net/q2_client.cpp`); dropped once the file is whole and kept; `tests/shooters_edge_q2_net_test.cpp` |
 | net.download.http | HTTP downloads | from the server's URL, with filelists, two at once, falling back to UDP | done | `net/q2_http.cpp`: the server's `dlserver`, `cl_http_filelists`, up to 4 at once, back to the channel on failure (`tests/shooters_edge_q2_http_test.cpp`) |
 | net.passive | passive connections | wait for a server to connect to us | done | `net/q2_pingservers.cpp` `passive` (`net/qw_remote.cpp`): a server's `passive_connect` joined (`tests/shooters_edge_q2_pingservers_test.cpp`) |
 | net.browser | the server list | HTTP list, address book, `servers.lst`, LAN broadcast; pinged at `ui_pingrate` | not-taken | Our design: ours LAN, masters, hub (C41) |
