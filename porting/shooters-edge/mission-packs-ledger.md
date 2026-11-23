@@ -45,12 +45,12 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | --- | --- | --- | --- | --- | --- |
 | Taking the packs in (shared by all four) | 17 | 15 | 1 | 1 (0 / 1 / 0) | 0 |
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 4 | 67 | 3 (0 / 1 / 2) | 0 |
-| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 10 | 49 | 2 (0 / 1 / 1) | 0 |
+| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 20 | 39 | 2 (0 / 1 / 1) | 0 |
 | The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
 | Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **274** | **35** | **127** | **112 (56 / 46 / 10)** | **0** |
+| **All** | **274** | **45** | **117** | **112 (56 / 46 / 10)** | **0** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **112 missing, 127 to verify, of 274 rows** (M63a taking the packs in: 12 fewer; M63b the Quake packs' status bars: 6 fewer; M63b Dissolution of Eternity's team games and remix: 2 fewer).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **112 missing, 117 to verify, of 274 rows** (M63a taking the packs in: 12 fewer; M63b the Quake packs' status bars: 6 fewer; M63b Dissolution of Eternity's team games and remix: 2 fewer).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
@@ -210,13 +210,13 @@ count: done 0, verify 17, missing 0, not-taken 0
 
 ## Dissolution of Eternity (Quake, folder `rogue`)
 
-count: done 10, verify 49, missing 2 (0 / 1 / 1), not-taken 0
+count: done 20, verify 39, missing 2 (0 / 1 / 1), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
 | rog1.program | the pack's `progs.dat`: the base game's checksum, no new builtin, 63 fields of its own (`items2` among them) | done |  | loads and runs r1m1 (`se-client --game=<folder>/rogue --map=r1m1 --progs=pack`, 2026-11-23) |
 | rog1.campaign | NEW GAME from `start` through both episodes to the end (23 maps with `ctf1` and the six ammo box maps) | verify | 1 | `labs se-q1-campaign --game=<dir> --mod=rogue --each=1 --episodes=start,r1m1,...` runs each map with its class census; r2m1 loads since a key's trailing spaces are dropped (its changelevel trigger spells `"map "`, plugins/progs/entity_text.cpp) |
-| rog1.ammo_maps | the six `b_` maps (lava nails, multi rockets and plasma boxes, big and small) loaded as brush models | verify | 1 | the base game's `b_` boxes load the same way |
+| rog1.ammo_maps | the six `b_` maps (lava nails, multi rockets and plasma boxes, big and small) loaded as brush models | done |  | the census: the pack's boxes stand as models on 15 maps and are taken |
 | rog1.items2 | the program's `items2` reaching the player's HUD (the new weapons and powerups) | done | 1 | net/qw_frame.cpp's `items_word` (`items2` from bit 23, in place of the runes), client/view.cpp's and client/timedemo.cpp's status; the se-client lab on r1m1 |
 | rog1.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395) |
 | rog1.menu.modes | MULTIPLAYER ▸ NEW GAME's teamplay row with the pack: Tag, Capture the Flag, One Flag CTF, Three Team CTF | done |  | menu/main_menu.cpp's TEAMPLAY shows the four past the base three while the pack's maps are in (`team_modes`, menu/episodes.cpp); held by tests/shooters_edge_menu_test.cpp |
@@ -245,32 +245,32 @@ program on our VM; a row turns `done` when a lab or a playthrough shows it as a 
 
 #### Monsters
 
-count: done 0, verify 10, missing 0, not-taken 0
+count: done 3, verify 7, missing 0, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.dragon_corner | `dragon_corner` | a corner of the dragon's flight | 1 / 36 | verify | 1 | runs in the pack's program |
+| rog1.ent.dragon_corner | `dragon_corner` | a corner of the dragon's flight | 1 / 36 | done |  | runs in the pack's program; the census: the dragon on r2m8 flew its 36 corners |
 | rog1.ent.info_overlord_destination | `info_overlord_destination` | a spot the Overlord teleports to | 4 / 25 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_dragon | `monster_dragon` | the dragon: flies a path of corners, breathes fire | 1 / 1 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_eel | `monster_eel` | the electric eel: swims and shocks | 6 / 58 | verify | 1 | runs in the pack's program |
+| rog1.ent.monster_dragon | `monster_dragon` | the dragon: flies a path of corners, breathes fire | 1 / 1 | done |  | runs in the pack's program; the census (`se-q1-campaign --mod=rogue`, 2026-11-23): spawned on r2m8 and flew its corners |
+| rog1.ent.monster_eel | `monster_eel` | the electric eel: swims and shocks | 6 / 58 | done |  | runs in the pack's program; the census: 43 spawned on 6 maps, 9 swam |
 | rog1.ent.monster_lava_man | `monster_lava_man` | Hephaestus, the lava man: throws lava balls | 1 / 4 | verify | 1 | runs in the pack's program |
 | rog1.ent.monster_morph | `monster_morph` | the guardian that takes three looks | 3 / 3 | verify | 1 | runs in the pack's program |
 | rog1.ent.monster_mummy | `monster_mummy` | the mummy: a tougher zombie | 1 / 5 | verify | 1 | runs in the pack's program |
 | rog1.ent.monster_super_wrath | `monster_super_wrath` | the Overlord: a big wrath that teleports and throws seeking balls | 2 / 2 | verify | 1 | runs in the pack's program |
 | rog1.ent.monster_sword | `monster_sword` | the phantom swordsman: a knight statue come alive | 3 / 20 | verify | 1 | runs in the pack's program |
-| rog1.ent.monster_wrath | `monster_wrath` | the wrath: floats and throws seeking balls | 8 / 56 | verify | 1 | runs in the pack's program |
+| rog1.ent.monster_wrath | `monster_wrath` | the wrath: floats and throws seeking balls | 8 / 56 | done |  | runs in the pack's program; the census: 32 spawned on 7 maps, 4 floated after the bot, 2 killed and removed |
 
 #### Weapons and items
 
-count: done 0, verify 9, missing 0, not-taken 0
+count: done 4, verify 5, missing 0, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.item_lava_spikes | `item_lava_spikes` | lava nails: the nailguns fire lava spikes | 17 / 154 | verify | 1 | runs in the pack's program; HUD row rog1.hud.weapons |
-| rog1.ent.item_multi_rockets | `item_multi_rockets` | multi rockets: the launchers fire clusters | 17 / 103 | verify | 1 | runs in the pack's program; HUD row rog1.hud.weapons |
-| rog1.ent.item_plasma | `item_plasma` | plasma cells: the lightning gun becomes the plasma gun | 16 / 71 | verify | 1 | runs in the pack's program; HUD row rog1.hud.weapons |
+| rog1.ent.item_lava_spikes | `item_lava_spikes` | lava nails: the nailguns fire lava spikes | 17 / 154 | done |  | runs in the pack's program; HUD row rog1.hud.weapons; the census: 129 placed on 15 maps, 7 taken by the bot |
+| rog1.ent.item_multi_rockets | `item_multi_rockets` | multi rockets: the launchers fire clusters | 17 / 103 | done |  | runs in the pack's program; HUD row rog1.hud.weapons; the census: 78 placed on 14 maps, 5 taken |
+| rog1.ent.item_plasma | `item_plasma` | plasma cells: the lightning gun becomes the plasma gun | 16 / 71 | done |  | runs in the pack's program; HUD row rog1.hud.weapons; the census: 41 placed on 10 maps, 1 taken |
 | rog1.ent.item_powerup_belt | `item_powerup_belt` | the anti-grav belt: low gravity for a while | 16 / 21 | verify | 1 | runs in the pack's program; HUD row rog1.hud.items; LIFT: the entity gravity factor |
-| rog1.ent.item_powerup_shield | `item_powerup_shield` | the power shield: takes damage in front | 17 / 24 | verify | 1 | runs in the pack's program; HUD row rog1.hud.items |
+| rog1.ent.item_powerup_shield | `item_powerup_shield` | the power shield: takes damage in front | 17 / 24 | done |  | runs in the pack's program; HUD row rog1.hud.items; the census: 13 placed on 11 maps, 1 taken |
 | rog1.ent.item_random_powerup | `item_random_powerup` | a powerup chosen at random each time it comes back (deathmatch) | 8 / 12 | verify | 2 | runs in the pack's program |
 | rog1.ent.item_sphere | `item_sphere` | the vengeance sphere: follows the player and strikes his killer | 15 / 27 | verify | 2 | runs in the pack's program; LIFT: Ground Zero's vengeance sphere |
 | rog1.ent.item_time_core | `item_time_core` | the time machine's core, carried to the finale | 1 / 1 | verify | 1 | runs in the pack's program |
@@ -292,11 +292,11 @@ count: done 0, verify 7, missing 0, not-taken 0
 
 #### Movers and traps
 
-count: done 0, verify 13, missing 0, not-taken 0
+count: done 1, verify 12, missing 0, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| rog1.ent.buzzsaw | `buzzsaw` | a saw blade running a path | 2 / 17 | verify | 1 | runs in the pack's program |
+| rog1.ent.buzzsaw | `buzzsaw` | a saw blade running a path | 2 / 17 | done |  | runs in the pack's program; the census: all 17 ran their paths |
 | rog1.ent.earthquake | `earthquake` | the earthquake a trigger starts | 2 / 2 | verify | 1 | runs in the pack's program; LIFT: one quake shake (hip.ent.func_earthquake) |
 | rog1.ent.func_elvtr_button | `func_elvtr_button` | an elevator's call button | 1 / 4 | verify | 1 | runs in the pack's program |
 | rog1.ent.func_new_plat | `func_new_plat` | a plat with more ways to move | 15 / 60 | verify | 1 | runs in the pack's program |

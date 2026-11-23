@@ -23,6 +23,7 @@
 #include "check.hpp"
 #include "classic/protocol/directions.hpp"
 #include "classic/protocol/q2_limits.hpp"
+#include "classic/q2_move.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/server/q2_native.hpp"
 #include "shooters_edge/server/q2_native_host.hpp"
@@ -256,6 +257,21 @@ TEST(a_library_of_the_newer_interface_moves_its_players_through_its_own_records)
   CHECK_MSG(line.starts_with("plane 0.00 0.00 1.00 0.0 type 2 ladder "), line);
   CHECK_MSG(line.find(" flags 4 ping 42") != std::string::npos, line);  // on the ground alone
   CHECK_MSG(line.find(" ladder 0 ") == std::string::npos, line);        // the probe asked its mask
+}
+
+// The move's ranges follow the limits: the second level (the extended limits on a library of the
+// newer interface) moves 23-bit coordinates and millisecond timers; below it, 16 bits and eighths.
+TEST(the_second_level_of_the_extended_limits_widens_the_move) {
+  sv::NativeHost h;
+  ge::classic::Q2Move m;
+  for (int ext : {0, 1}) {
+    h.ext = ext;
+    sv::native_move_ranges(h, m);
+    CHECK(m.coord_bits == 16 && m.time_shift == 3);
+  }
+  h.ext = 2;
+  sv::native_move_ranges(h, m);
+  CHECK(m.coord_bits == 23 && m.time_shift == 0);
 }
 
 // Classic remix's `cr_physics q1` over a mod (`cr_over_mods`): the window's line `set sv_physics
