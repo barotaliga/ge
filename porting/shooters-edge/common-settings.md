@@ -30,14 +30,15 @@ neither client takes.
 | Status | Settings | Commands | All |
 | --- | --- | --- | --- |
 | one setting | 84 | 53 | 137 |
-| lifted | 11 | 1 | 12 |
-| to lift | 12 | 0 | 12 |
+| lifted | 12 | 1 | 13 |
+| to lift | 6 | 0 | 6 |
 | sound thread | 2 | 1 | 3 |
-| kept apart | 18 | 0 | 18 |
+| kept apart | 23 | 0 | 23 |
 | neither has it | 8 | 0 | 8 |
 | **common to Quake and Quake II** | **135** | **55** | **190** |
 
-**Left to lift: 12.**
+**Left to lift: 6** (3 of them the screen rows the Quake gaps thread is building, 3 the server's
+names).
 
 ## The batches
 
@@ -49,9 +50,11 @@ neither client takes.
   in the classic layer (a cheat; Quake's `chase_active` a synonym), its distance our `cam_dist`, the
   one a watched player is seen from (Quake's `chase_back`, Quake II's `cl_thirdperson_range` with
   its 60 a same row).
-- **B3, the client's network:** the move packets' rate and duplicates, `cl_shownet`, `gender`.
-- **B4, the screen:** the graphs, the 2D switch, the server browser's sort and ping rate (with the
-  menus thread).
+- **B3 (done):** the move packets a second are one setting, our `cl_c2spps`, with Quake II's
+  `cl_maxpackets` a synonym and its 30 a same row. The duplicates (two mechanisms), `cl_shownet` (a
+  debug print in the tail not built) and `gender` (each game's servers' own words) are kept apart.
+- **B4, the screen:** the graphs and the 2D switch, built by the Quake gaps thread. The server
+  browser's sort and ping rate are kept apart (another value set each).
 - **B5, the server's names:** `cheats`, the recording's size, the port (with the Quake II server thread).
 - **B7 (done, Niclas 2026-11-23): what a competition player tunes, every classic game's.** One
   game's settings that every game now takes, in the classic layer, kept across a game change and
@@ -222,16 +225,16 @@ neither client takes.
 | setting | `vid_vsync` |  | `vid_vsync` | `gl_swapinterval` | engine | lifted B1 | Quake II's gl_swapinterval a synonym (its video page's row now reaches the window's vsync) |
 | setting | `cam_dist` | `chase_back` | `cam_dist` | `cl_thirdperson_range` | classic | lifted B2 | the camera's distance behind the player, watched or yourself: Quake II's 60 a same row, ours 100 |
 | setting | `cl_thirdperson` | `chase_active` | `cam_thirdperson` | `cl_thirdperson` | classic | lifted B2 | yourself from behind, every game's and a cheat (with `cl_thirdperson_angle`); `cam_thirdperson` stays ours for the player watched in a demo or as a spectator, no cheat |
-| setting | `cl_c2spps` |  | `cl_c2spps` | `cl_maxpackets` | shell | to lift B3 | move packets a second: Quake II's cl_maxpackets (30) and QuakeWorld's cl_c2spps (0 no cap) on two remote fields |
-| setting | `cl_packetdup` |  | `cl_c2sdupe` | `cl_packetdup` | shell | to lift B3 | each move sent again: Quake II's cl_packetdup (in the next packet), QuakeWorld's cl_c2sdupe (the packet twice) |
-| setting | `cl_shownet` | `cl_shownet` | `cl_shownet` | `cl_shownet` | classic | to lift B3 | Quake II's alone in ours; Quake's too (each message's size) |
-| setting | `gender` |  | `gender` | `gender` | classic | to lift B3 | Quake II's user info alone in ours; QuakeWorld's modern client sends it too |
+| setting | `cl_c2spps` |  | `cl_c2spps` | `cl_maxpackets` | shell | lifted B3 | move packets a second, 0 one a move: Quake II's cl_maxpackets a synonym of our cl_c2spps, its 30 a same row with room to 1000 |
+| setting | `cl_packetdup` |  | `cl_c2sdupe` | `cl_packetdup` | shell | kept apart | each move sent again: Quake II's cl_packetdup (earlier packets' moves in the next one, 0..3) and QuakeWorld's cl_c2sdupe (the same packet twice) are two mechanisms |
+| setting | `cl_shownet` | `cl_shownet` | `cl_shownet` | `cl_shownet` | classic | kept apart | a debug print, the tail Niclas chose not to build (2026-11-23): Quake II's stays its own, Quake's not taken |
+| setting | `gender` |  | `gender` | `gender` | classic | kept apart | user info each game's servers read in their own words (Quake II male, female, none; QuakeWorld's mods m, f, n or empty): another value set |
 | setting | `gl_outline` |  | `gl_outline` | `gl_celshading` | classic | kept apart | outlines: Quake II's gl_celshading a width, QuakeWorld 0..3 models and world; another client's visual, not lifted: visuals come from classic enhance |
 | setting | `gl_partshape` |  | `gl_squareparticles` | `gl_partshape` | classic | kept apart | square specks: Quake II 0..2 a shape, QuakeWorld's 0/1 its 1; another client's visual, not lifted: visuals come from classic enhance |
 | setting | `r_graphheight` | `r_graphheight` | `r_graphheight` | `graphheight` | classic | to lift B4 | Quake II's graphheight alone in ours; Quake's r_graphheight its spelling |
 | setting | `r_timegraph` | `r_timegraph` | `r_timegraph` | `timegraph` | classic | to lift B4 | Quake II's timegraph alone in ours; Quake's r_timegraph its spelling |
-| setting | `sb_infospersec` |  | `sb_infospersec` | `ui_pingrate` | shell | to lift B4 | server browser pings a second: Quake II's ui_pingrate (0 from rate) on its own field |
-| setting | `sb_sortservers` |  | `sb_sortservers` | `ui_sortservers` | shell | to lift B4 | server browser sort: Quake II's ui_sortservers numbers columns its own way |
+| setting | `sb_infospersec` |  | `sb_infospersec` | `ui_pingrate` | shell | kept apart | server browser pings a second: Quake II's ui_pingrate takes 0 as worked out from rate, which sb_infospersec has no value for: another value set |
+| setting | `sb_sortservers` |  | `sb_sortservers` | `ui_sortservers` | shell | kept apart | server browser sort: Quake II's ui_sortservers one column number, ours a string of column codes: another value set |
 | setting | `scr_draw2d` |  | `r_drawhud` | `scr_draw2d` | shell | to lift B4 | 2D drawn: Quake II 0..3, QuakeWorld's r_drawhud 0/1 (its 1 is Quake II's 2) |
 | setting | `sv_cheats` |  | `sv_cheats` | `cheats` | engine | to lift B5 | Quake II's server `cheats` a rules setting of its own |
 | setting | `sv_demomaxsize` |  | `sv_demomaxsize` | `sv_mvd_maxsize` | engine | to lift B5 | a recording's size limit: Quake II's sv_mvd_maxsize |
