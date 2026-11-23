@@ -470,7 +470,7 @@ bool Disc::read_audio(const DiscTrack& t, std::vector<int16_t>* out, std::string
     whole = impl_->read(t.file, t.start, bytes, raw.data());
   } else {
     for (uint32_t s = 0; s < t.sectors && whole; s++)
-      whole = impl_->read(t.file, t.start + uint64_t(s) * t.sector, 2352, raw.data() + s * 2352);
+      whole = impl_->read(t.file, t.start + uint64_t(s) * t.sector, 2352, raw.data() + size_t(s) * 2352);
   }
   if (!whole) {
     *error = "audio track " + std::to_string(t.number) + " runs past the end of " +
