@@ -277,7 +277,6 @@ struct Remote {
   // net/qw_client.hpp's `to_run`), for the window's console to run as the server's; taken each
   // frame.
   std::vector<std::string> stuffed_run;
-  bool kept = false;
   // A screenshot the server asked for (qw_client.hpp `ClientUpload`): the window's frame grabbed
   // in memory, scaled and packed (`snap_grab(width, height, quality)`, false when it can't) and
   // handed back later (`snap_take`). Unset: the server is told no, as with scr_allowsnap 0.
@@ -295,6 +294,7 @@ struct Remote {
   bool nolerp = false;                        // cl_nolerp: entities at the newest frame's places
   bool solid_players = true;                  // cl_solid_players: others block the prediction
   bool voip = true;                           // cl_voip: ask for voice when joining
+  bool kept = false;
   // cl_physfps, cl_physfps_spectator: the moves a second asked for (qw_client.hpp's
   // `client_move_rate`), taken by the client every step; the tick clock's fraction of a
   // microsecond.
