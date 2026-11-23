@@ -626,7 +626,7 @@ frame a list of `MorphDraw`s.
 - **Upload once.** Every frame of every model goes into one storage buffer, two `vec4` a vertex.
   The triangles and the coordinates go into two more. The skins are shelf-packed into one
   2048-wide atlas, tallest first, a texel apart (`pack_morph_atlas`). A frame writes only its
-  draws: 256 bytes each, at most `kMaxMorphDraws`.
+  draws: 464 bytes each (272 and six wounds of 32), at most `kMaxMorphDraws`.
 - **A skin to wear.** A model may be skin-only (a skin, no frames), packed into the atlas with
   the rest. A draw's `skin` names the model whose skin it wears over its own coordinates: one
   shared figure, each player in their own picture.
@@ -684,6 +684,13 @@ frame a list of `MorphDraw`s.
   colour goes from a wet near-black red to a dried brown-black by `wet`. The CPU twin is
   `wound_cover`. A game moves the patch out, the run down and the wet toward dry over time
   (Shooter's Edge: `client/world_fx.cpp`'s `body_blood`). No wound: the shader skips it.
+- **The ground shadow** (`MorphDraw::flat`): a second draw of the same pose squashed onto a level
+  floor at `flat_y`, each point moved across by `flat_lean` for each metre it stood above the
+  floor, in the shell's one flat colour (black) and see-through by `alpha`. It is the classic games'
+  blob shadow: one more draw a model, no shadow map. The game finds the floor and sets the floor a
+  hair above it, so the two never fight for depth (Shooter's Edge's `client/model_shadow.hpp`,
+  Quake II's `gl_shadows`). The squashed copy covers the silhouette once, since the dither drops
+  the same pixels from every overlapping triangle, so it never darkens twice.
 - The draws go into the HDR and motion targets after the opaque world. Depth is tested and
   written (reversed z) and back faces are culled.
 

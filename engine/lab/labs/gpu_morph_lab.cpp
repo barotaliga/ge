@@ -8,7 +8,8 @@
 // indoors by a game's own light (no sun or sky, an ambient and a shade from one side); and a
 // runner WARPING in (MorphWarp) at four shares, as dust (dissolving head first, the cut turned to
 // ash) and as a beam (pinched into a shimmering column, the cut burning); and a runner SEE-THROUGH
-// (MorphDraw::alpha) at four shares, one frame and sixteen averaged. Checks: each team's shirt
+// (MorphDraw::alpha) at four shares, one frame and sixteen averaged; and its ground SHADOW
+// (MorphDraw::flat). Checks: each team's shirt
 // reads as its colour, the eyes glow at dusk, the in-between frame lies between its two frames, a
 // warp gone draws nothing and one whole draws the plain runner, alpha 0 draws nothing and 1 the
 // plain runner, no GPU error, no pipeline after the
@@ -19,6 +20,7 @@
 // ge:keywords lab gpu morph morph-mesh vertex-animation frames blend tint team-colours
 // ge:keywords player-colours skin sharp smooth glow indoor-light runner picture
 // ge:keywords warp dissolve materialize spawn teleport burning-edge see-through alpha dither
+// ge:keywords shadow flat-shadow
 // ge:skill render labs
 // ge:test tests/render_morph_test.cpp
 #include <chrono>
@@ -573,6 +575,61 @@ void run(gl::Lab& lab) {
                    fixed(solid, 0) + " against the plain runner",
                "see_through_gone in morph.wgsl draws nothing at alpha 0 and everything at 1; "
                "check morph.cpp packs 1 - alpha into shade_dir[3]. Skill: render.");
+    }
+  }
+
+  // A shadow (MorphDraw::flat): the runner's black copy squashed onto the ground and leaning to
+  // the side, half see-through, sixteen frames averaged; it only darkens the ground it lies on.
+  {
+    const std::vector<gr::MorphDraw> plain = {runner_at(0, 3.2, 1.5707963267948966, 1.5, 3)};
+    std::vector<gr::MorphDraw> shaded = plain;
+    gr::MorphDraw flat = plain[0];
+    flat.flat = true;
+    flat.flat_y = 0.01f;
+    flat.flat_lean[0] = 0.7f;
+    flat.alpha = 0.5f;
+    shaded.push_back(flat);
+    gr::FrameView v = eye(0, 2.4, 0, 0, -0.45, 0.7);
+    const auto averaged = [&](const std::vector<gr::MorphDraw>& draws) {
+      std::vector<uint32_t> sum;
+      gl::Picture mean;
+      for (int k = 0; k < 16; ++k) {
+        v.frame = static_cast<uint64_t>(k);
+        const gl::Picture p = draw(*device, s, v, draws).pic;
+        if (sum.empty()) {
+          sum.assign(p.rgba.size(), 0);
+          mean = p;
+        }
+        for (size_t i = 0; i < p.rgba.size(); ++i) sum[i] += p.rgba[i];
+      }
+      for (size_t i = 0; i < sum.size(); ++i)
+        mean.rgba[i] = static_cast<uint8_t>((sum[i] + 8) / 16);
+      return mean;
+    };
+    const gl::Picture without = averaged(plain);
+    const gl::Picture with = averaged(shaded);
+    v.frame = 0;
+    lab.shot({"shadow",
+              "A RUNNER'S GROUND SHADOW",
+              "MorphDraw::flat: the runner's copy squashed onto the ground, leaning 0.7 m across "
+              "for each m of height, one flat black at half strength, sixteen frames averaged.",
+              "a dark smear on the ground from the runner's feet off to the side, the ground "
+              "showing through it, the runner itself unchanged",
+              {{"view", "3.2 m, from above"}}},
+             es::sheet_of({without, with}, {"NO SHADOW", "SHADOW"}, 2), Det::measured);
+    double changed = 0, lighter = 0;
+    for (size_t i = 0; i + 3 < with.rgba.size(); i += 4) {
+      const int was = without.rgba[i] + without.rgba[i + 1] + without.rgba[i + 2];
+      const int now = with.rgba[i] + with.rgba[i + 1] + with.rgba[i + 2];
+      changed += now != was ? 1 : 0;
+      lighter += now > was + 3 ? 1 : 0;
+    }
+    lab.metric("shadow.darkened", changed, "count", Det::measured);
+    if (changed == 0 || lighter > 0) {
+      lab.fail(
+          "the shadow changed " + fixed(changed, 0) + " pixels and lightened " + fixed(lighter, 0),
+          "flatten in morph.wgsl lays the copy on flat.x and the shell's colour draws it "
+          "black; check morph.cpp packs flat. Skill: render.");
     }
   }
 

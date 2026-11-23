@@ -380,6 +380,7 @@ int run_main(int argc, char** argv) {
                                   .showpackets = &remote.q2_showpackets,
                                   .noskins = &picture.stock_figures,
                                   .items_still = &picture.items_still,
+                                  .model_shadows = &picture.model_shadows,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,
                                   .stuff_level = &remote.stuff.level,
@@ -713,6 +714,22 @@ int run_main(int argc, char** argv) {
   cl::bind_remix(console.cvars(), &remix_settings);
   loader.remix = &remix;
   // Quake II's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
+  // cl_thirdperson's doors and platforms: the map's brush models where the last frame drew them.
+  std::vector<cl::BehindMover> behind_scratch;
+  const auto behind_movers = [&](const std::vector<ge::shooter::BrushModel>* models) {
+    behind_scratch.clear();
+    if (world == nullptr || models == nullptr) return std::span<const cl::BehindMover>();
+    for (const ge::brush::app::Mover& m : cl::world_movers(*world)) {
+      if (m.hidden || m.model >= models->size()) continue;
+      cl::BehindMover b{.model = &(*models)[m.model]};
+      const double unit = ge::brush::kUnitM;  // engine x, z, y to map x, y, z
+      b.offset[0] = m.offset[0] / unit;
+      b.offset[1] = m.offset[2] / unit;
+      b.offset[2] = m.offset[1] / unit;
+      behind_scratch.push_back(b);
+    }
+    return std::span<const cl::BehindMover>(behind_scratch);
+  };
   cl::WornHud worn_hud;
   worn_hud.bar.files = &remix.files;
   worn_hud.bar.screen = &q2_screen;
@@ -1603,8 +1620,12 @@ int run_main(int argc, char** argv) {
                          controls);
       cl::free_look_apply(free_look, view);
       const double own_behind =  // cl_thirdperson: the player's own view from behind him
-          demo_eyes.behind > 0 ? 0 : cl::q2_third_person(game_cvars.q2, view, ground);
+          demo_eyes.behind > 0
+              ? 0
+              : cl::q2_third_person(game_cvars.q2, view, ground,
+                                    behind_movers(bench_map ? &bench_map->spec.models : nullptr));
       bench_demo_fx.draw_own = demo_eyes.behind > 0 || own_behind > cl::kOwnFigureUnits;
+      bench_demo_fx.own_alpha = demo_eyes.behind > 0 ? 1 : float(cl::own_figure_alpha(own_behind));
       view.frame = static_cast<uint64_t>(presented);
       cl::from_above(*world, !drawn_remote &&
                                  slm::watch_fly_view(live_map, view, w, h, playback.bar_bottom_px));
@@ -1810,7 +1831,8 @@ int run_main(int argc, char** argv) {
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     const double behind = cl::q2_third_person(  // cl_thirdperson
         game_cvars.q2, view,
-        listen.map && !listen.map->spec.models.empty() ? &listen.map->spec.models[0] : nullptr);
+        listen.map && !listen.map->spec.models.empty() ? &listen.map->spec.models[0] : nullptr,
+        behind_movers(listen.map ? &listen.map->spec.models : nullptr));
     view.frame = static_cast<uint64_t>(presented);
     fx_state.models = world ? &cl::world_models(*world) : nullptr;
     if (!fx_palette_read) {
@@ -1821,7 +1843,10 @@ int run_main(int argc, char** argv) {
     fx_state.book = &fx_book;
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
-    if (behind > cl::kOwnFigureUnits && fx.has_self) fx.models.push_back(fx.self);
+    if (behind > cl::kOwnFigureUnits && fx.has_self) {  // fading as a wall pushes the camera in
+      fx.models.push_back(fx.self);
+      fx.models.back().alpha *= float(cl::own_figure_alpha(behind));
+    }
     // See-through liquids where the server allows them (its `watervis`).
     fx.see_through = listen.server == nullptr ||
                      shooters_edge::look::watervis_allowed(listen.server->serverinfo);

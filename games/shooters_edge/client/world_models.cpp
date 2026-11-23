@@ -29,6 +29,7 @@
 #include "render/sprite_shapes.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/figure_frames.hpp"
+#include "shooters_edge/client/model_shadow.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -610,6 +611,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
         p.bobs = look.bobs;
         p.full_bright = look.full_bright;
         p.min_light = look.min_light;
+        p.no_shadow = look.no_shadow;
         p.shell = look.shell;
         p.bleeds = look.bleeds;
         p.green_blood = look.green_blood;
@@ -1211,6 +1213,45 @@ void add_hologram_shell(WorldModels& m, const Placed& p, const gr::MorphDraw& pl
   m.morph_draws.push_back(shell);
 }
 
+// Its ground shadow (model_shadow.hpp) under the plain draw `plain`: the same model, pose and
+// motion squashed onto the floor `lit` found under it, black, see-through.
+void add_shadow(WorldModels& m, const Placed& p, const ModelKind& k, const WorldModels::Lit& lit,
+                int mode, const gr::MorphDraw& plain) {
+  if (m.morph_draws.size() >= gr::kMaxMorphDraws) return;
+  float radius = 0;
+  if (mode >= 2 && plain.model < m.shapes.size()) {
+    auto [found, fresh] = m.radius.try_emplace(plain.model, 0.0f);
+    if (fresh && !m.shapes[plain.model].positions.empty()) {
+      const std::vector<float>& f = m.shapes[plain.model].positions[0];
+      float most = 0;
+      for (size_t i = 0; i + 2 < f.size(); i += 3)
+        most = std::max(most, f[i] * f[i] + f[i + 1] * f[i + 1] + f[i + 2] * f[i + 2]);
+      found->second = std::sqrt(most);
+    }
+    radius = found->second * p.scale / float(br::kUnitM);
+  }
+  const Shadow s = shadow_of({.mode = mode,
+                              .animated = k.is == ModelKind::Is::alias,
+                              .see_through = p.alpha < 1,
+                              .no_shadow = p.no_shadow,
+                              .floor_found = lit.floor_found,
+                              .floor_up = lit.floor.up,
+                              .height_units = p.origin.z - lit.floor.z,
+                              .radius_units = radius,
+                              .yaw_deg = p.angles.y});
+  if (s.alpha <= 0) return;
+  gr::MorphDraw shadow = plain;
+  shadow.flat = true;
+  shadow.flat_y = float(double(lit.floor.z + kShadowLiftUnits) * br::kUnitM);
+  shadow.flat_lean[0] = s.lean_x;  // the map's x is the engine's x, its y the engine's z
+  shadow.flat_lean[1] = s.lean_y;
+  shadow.shell[0] = shadow.shell[1] = shadow.shell[2] = 0;
+  shadow.alpha = s.alpha;
+  shadow.burn = {};
+  shadow.blood = {};
+  m.morph_draws.push_back(shadow);
+}
+
 }  // namespace
 
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
@@ -1349,8 +1390,9 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                      std::abs(lit.at.z - p.origin.z);
     if (fresh || dm > kRelightUnits) {
       const float above[3] = {p.origin.x, p.origin.y, p.origin.z + 8};
-      if (!models::light_under(m.probe, map, above, lit.rgb, q2 ? kQ2Reach : 512))
-        lit.rgb[0] = lit.rgb[1] = lit.rgb[2] = 1;
+      lit.floor_found =
+          models::light_under(m.probe, map, above, lit.rgb, q2 ? kQ2Reach : 512, &lit.floor);
+      if (!lit.floor_found) lit.rgb[0] = lit.rgb[1] = lit.rgb[2] = 1;
       lit.at = p.origin;
     }
     // The frame's dynamic lights at its middle (a figure's chest, an item's top), added as they
@@ -1425,6 +1467,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     if (power.pulse && !power.shell) q2_pulse(g.ambient, t);  // an item's glow
     if (p.holo_blue > 0) hologram_light(g, p.holo_blue);
     if (!p.shell_only) m.morph_draws.push_back(g);
+    if (in_place.shadows > 0 && !p.shell_only) add_shadow(m, p, k, lit, in_place.shadows, g);
     if (power.shell) add_shell(m, p, power, g, t);
     if (p.holo_shell > 0) add_hologram_shell(m, p, g);
     // The weapon in a copied-in figure's hand: the same place, light and frame, its own picture.

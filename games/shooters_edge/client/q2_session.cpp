@@ -308,7 +308,7 @@ void q2_session_frame(con::Console& c, Q2Session& s, const net::Remote& remote,
 }
 
 double view_behind(ge::render::FrameView& view, double units, double angle_deg,
-                   const ge::shooter::BrushModel* world) {
+                   const ge::shooter::BrushModel* world, std::span<const BehindMover> movers) {
   if (!(units > 0)) return 0;
   constexpr double kWallGap = 4;  // units the camera keeps off a wall
   const double heading = view.heading - angle_deg * kDeg;
@@ -328,7 +328,19 @@ double view_behind(ge::render::FrameView& view, double units, double angle_deg,
                                   float(from.z + back[1] * far)};
       const ge::shooter::HullTrace tr = ge::shooter::trace_hull(hull, from, to);
       if (tr.startsolid) return 0;
-      if (tr.fraction < 1) reach = std::max(0.0, double(tr.fraction) * far - kWallGap);
+      double fraction = tr.fraction;
+      for (const BehindMover& m : movers) {  // a door or a platform where it stands
+        if (m.model == nullptr) continue;
+        const ge::shooter::Hull& mh = m.model->hulls[0];
+        if (mh.nodes == nullptr || mh.planes == nullptr) continue;
+        const ge::shooter::Vec3f off{float(m.offset[0]), float(m.offset[1]), float(m.offset[2])};
+        const ge::shooter::HullTrace mt =
+            ge::shooter::trace_hull(mh, {from.x - off.x, from.y - off.y, from.z - off.z},
+                                    {to.x - off.x, to.y - off.y, to.z - off.z});
+        if (mt.startsolid) continue;  // the eye inside it (riding it): it does not stop the camera
+        fraction = std::min(fraction, double(mt.fraction));
+      }
+      if (fraction < 1) reach = std::max(0.0, fraction * far - kWallGap);
     }
   }
   for (int k = 0; k < 3; ++k) view.eye[k] += back[k] * reach * unit;
@@ -336,9 +348,14 @@ double view_behind(ge::render::FrameView& view, double units, double angle_deg,
   return reach;
 }
 
+double own_figure_alpha(double behind) {
+  if (!(behind > kOwnFigureUnits)) return 0;
+  return std::min(1.0, (behind - kOwnFigureUnits) / (kOwnSolidUnits - kOwnFigureUnits));
+}
+
 double q2_third_person(const Q2Session& s, ge::render::FrameView& view,
-                       const ge::shooter::BrushModel* world) {
-  return s.third_person ? view_behind(view, s.third_range, s.third_angle, world) : 0;
+                       const ge::shooter::BrushModel* world, std::span<const BehindMover> movers) {
+  return s.third_person ? view_behind(view, s.third_range, s.third_angle, world, movers) : 0;
 }
 
 }  // namespace shooters_edge::client

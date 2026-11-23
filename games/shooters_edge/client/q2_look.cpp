@@ -70,6 +70,7 @@ Q2Look q2_look(uint32_t effects, uint32_t render_fx) {
   look.bobs = (effects & kSqBob) != 0;
   look.full_bright = (render_fx & kRfFullBright) != 0;
   look.min_light = (render_fx & kRfMinLight) != 0;
+  look.no_shadow = (render_fx & kRfNoShadow) != 0;
   look.spinning = !look.turns && (effects & kSqSpinningLights) != 0;
   if (((effects & kSqColourShell) != 0 || powered) && (rf & shells) != 0) {
     look.shell = true;
