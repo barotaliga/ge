@@ -105,6 +105,7 @@ inline bool way_exit(const WayStep& st) { return st.kind == WayKind::exit || st.
 struct WayStats {
   int64_t plans = 0, by_kind[kWayKinds] = {}, steps_done = 0, left = 0;
   int64_t given_up = 0;  // (`complete`) steps and monsters given up for good
+  int64_t forgiven = 0;  // (`complete`) times the jumps he gave up on were given another try
   int64_t retried = 0;   // (`complete`) times nothing was left to do and the left was tried again
   int64_t hopeful = 0;   // (`complete`) times every door was taken as open with nothing to do
   int64_t stood = 0;     // (`complete`) steps and monsters left for standing still on the way
@@ -184,6 +185,7 @@ struct WayThrough {
   } bolt;
   double idle_since = -1;        // nothing to do since then, -1 something
   double no_route_since = -1;    // the exit chosen and his pilot with no route to it since then
+  double stuck_since = -1;       // (`complete`) his pilot with no route to what he is on since then
   int dive = -1;                 // the water's entry (MapNav::entries) he goes back in by, -1 none
   int out = -1;                  // and the one on the far side he swims to and climbs out by
   std::vector<uint8_t> trapped;  // the nodes he could walk to when he went back in

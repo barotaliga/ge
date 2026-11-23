@@ -1,7 +1,7 @@
 # games/shooters_edge/net/qw_trial.hpp's digest by preset (index into preset_names): 3 clients, 20 s, seed 1 (tests/shooters_edge_qw_server_test.cpp)
-0 e9a467f32267ac30
-1 839f54db1d813fab
-2 7cb11075051d9565
-3 f9796771691c22d1
-4 f484a3a9475a62cd
-5 71c3d4244607936e
+0 ccae4ce2ed96c61c
+1 ef5e22c3534ac675
+2 62f7f74b1be7b818
+3 2b4662cb8823a3dd
+4 d9f1343cfdbcc8e0
+5 8c400581c3eebcfa

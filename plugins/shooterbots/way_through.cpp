@@ -1745,6 +1745,24 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
       w.plan_at = -1;
     }
   }
+  // (`complete`) A jump missed twice is never planned again by the pilot, but the way search
+  // still counts on it: on e3m5 the one jump up to the top floor's far side, missed twice early,
+  // left every place there a goal with no route and him standing still for minutes. With no
+  // route to what he is on for kWayNoRoute_s, the jumps he gave up on are given another try.
+  if (w.complete) {
+    sb::Pilot& pp = f.bot.pilot.pilot;
+    const bool no_route = pp.mode == sb::PilotMode::idle && pp.route.size() < 2;
+    if (!no_route || pp.failed.empty()) {
+      w.stuck_since = -1;
+    } else if (w.stuck_since < 0) {
+      w.stuck_since = t;
+    } else if (t - w.stuck_since > kWayNoRoute_s) {
+      pp.failed.clear();
+      pp.short_jumps.clear();
+      w.stats.forgiven++;
+      w.stuck_since = -1;
+    }
+  }
   // An exit the pilot finds no way to (one his way search takes that his routes do not) is left
   // like any other step, but after kWayNoRoute_s with no route rather than kWayGiveUp_s: the walk
   // to an exit is often longer than that.

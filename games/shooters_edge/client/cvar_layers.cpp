@@ -477,6 +477,29 @@ void add_first(con::Console& c, const GameBindings& b) {
     b.view->hand = 0;
     b.view->gun = 1;
   }
+  // Its models' ground shadows (client/model_shadow.hpp): Quake II's `gl_shadows` 1 by its own
+  // name, each shadow leaning one way for every model (the window's world_models.cpp); never saved.
+  if (b.model_shadows != nullptr)
+    c.cvars().bind({.name = "r_shadows",
+                    .fallback = "0",
+                    .help = "Dark shadows on the floor under the figures, monsters and items.",
+                    .kind = con::CvarKind::integer,
+                    .min = 0,
+                    .max = 1,
+                    .values = "0: none (the default); 1: under each, half dark"},
+                   b.model_shadows);
+  // Its glow discs for the moment's lights (classic/flash_blend.hpp). Off by default, where the
+  // game's GL client had them on: the moment's lights light the walls here, as the game's own
+  // software picture lit them; never saved.
+  if (b.flash_blend != nullptr)
+    c.cvars().bind({.name = "gl_flashblend",
+                    .fallback = "0",
+                    .help = "Whether the flashes of guns and blasts are drawn as glowing discs "
+                            "instead of lighting the walls.",
+                    .kind = con::CvarKind::boolean,
+                    .values = "0: they light the walls (the default); 1: glowing discs, the walls "
+                              "left unlit by them"},
+                   b.flash_blend);
   // Its ambience of water and sky (sound/ambience.hpp): how loud, and how fast it swells and fades.
   c.cvars().bind({.name = "ambient_level",
                   .fallback = "0.3",
@@ -510,7 +533,9 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left,
   c.cvars().add_synonym("chase_back", "cam_dist");       // its distance behind and its switch
   c.cvars().add_synonym("chase_active", "cl_thirdperson");
-  if (c.cvars().find("r_lerpmodels") != nullptr)  // the models' and the held weapon's frames
+  c.cvars().add_synonym("cl_sbar", "hud_sbar");     // QuakeWorld's old bar (1) or see-through (0)
+  c.cvars().add_synonym("cl_hudswap", "hud_swap");  // and the see-through bar's column on the left
+  if (c.cvars().find("r_lerpmodels") != nullptr)    // the models' and the held weapon's frames
     c.cvars().add_synonym("r_lerpframes", "r_lerpmodels");
   // An old Quake config's saved name and colours: `_cl_name` is the name, `_cl_color` both
   // colours as one number (shirt times 16 plus pants), so its config dresses you as it did.
@@ -547,6 +572,13 @@ void add_first(con::Console& c, const GameBindings& b) {
                  .help = "Whether you tell servers not to show the weapons players carry.",
                  .kind = con::CvarKind::boolean,
                  .values = "0: they may (the default); 1: they show none, from the next connect"});
+  c.cvars().add({.name = "cl_pext_weaponprediction",
+                 .fallback = "1",
+                 .flags = con::kArchive,
+                 .help = "Whether you ask servers for your weapon's state, so your shots show "
+                         "as you fire.",
+                 .kind = con::CvarKind::boolean,
+                 .values = "1: ask (the default); 0: don't, from the next connect"});
   for (const auto& [name, help] :
        {std::pair{"w_switch", "The best weapon a server may switch you to on picking one up."},
         std::pair{"b_switch",
@@ -1048,6 +1080,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(gun_drawn, &b.view->gun);
   else
     v.add(gun_drawn);
+  if (b.flash_blend != nullptr) *b.flash_blend = false;  // Quake's glow discs set aside
   // Its weapon's own lens, 90 degrees across, where Quake's takes the view's (the classic layer's).
   v.add({.name = "cl_gunfov",
          .fallback = "90",

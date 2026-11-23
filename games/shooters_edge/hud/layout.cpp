@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -54,6 +55,8 @@ enum Id : uint8_t {
   ibar_items,
   ibar_runes,
   ibar_frags,
+  sbar_column,
+  sbar_column_left,
   health_icon,
   health,
   health_bar,
@@ -134,6 +137,9 @@ gh::StripShape lined(int align, float gap = 3) {
 
 // The art px a count cell takes: three figures of the strip's type.
 constexpr float kCountW = 20;
+// The see-through bar's column: a gun's slot and an ammunition's box (cut from the inventory bar),
+// art px.
+constexpr float kColumnGunW = 24, kColumnGunH = 16, kColumnBoxW = 42, kColumnBoxH = 11;
 
 std::vector<Row> table() {
   std::vector<Row> t(kIdCount);
@@ -199,6 +205,23 @@ std::vector<Row> table() {
     c.strip.text_at = Anchor::center, c.strip.plate_h = 7;
     c.strip.frame = ui::hex(0xffffff);
     put(ibar_frags, c, kClassic);
+  }
+
+  // The see-through bar's columns (hud_sbar 0): the guns owned and the four ammunition counts
+  // stood over the inventory row at the bar's right end, or its left with hud_swap 1.
+  for (const auto& [id, name, side] :
+       {std::tuple{sbar_column, "sbar_column", Anchor::top_right},
+        std::tuple{sbar_column_left, "sbar_column_left", Anchor::top_left}}) {
+    gh::ElementSpec c =
+        on_bar(id, name, Kind::strip, 0,
+               "the see-through bar's column of guns and ammunition counts", "ibar");
+    c.anchor = side;
+    c.attach = side == Anchor::top_right ? Anchor::bottom_right : Anchor::bottom_left;
+    c.strip = strip(0, 0);
+    c.strip.vertical = true;
+    c.strip.cross_align = side == Anchor::top_right ? 2 : 0;
+    c.strip.text_at = Anchor::top_right, c.strip.text_dx = -11;
+    put(id, c, kClassic);
   }
 
   // MODERN: the corners.
@@ -803,6 +826,13 @@ void add_cvars(ge::console::Console& con, Hud& hud) {
        .values = "0: their pieces alone over the world; 1: the panels (the default)"},
       &hud.sbar);
   con.cvars().bind(
+      {.name = "hud_swap",
+       .fallback = "0",
+       .help = "The side the see-through classic bar's column of guns and ammunition stands on.",
+       .kind = ge::console::CvarKind::boolean,
+       .values = "0: the right edge (the default); 1: the left edge"},
+      &hud.swap);
+  con.cvars().bind(
       {.name = "hud_vitals",
        .fallback = "left",
        .help =
@@ -893,6 +923,29 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
       cell.image = gun_picture(s, art, k);
       cell.show = s.has(static_cast<Weapon>(k + 1));
     }
+  }
+  {
+    // The see-through bar's column, top to bottom: each gun's slot (owned or a gap), cut to 24
+    // art px; each ammunition's box cut from the inventory bar with its count.
+    gh::Content& c = at(sbar_column);
+    c.face = &art.count_face;
+    c.cells.clear();
+    for (int k = 0; k < kGuns; ++k) {
+      gh::Cell cell = cell_of(gun_picture(s, art, k), s.has(static_cast<Weapon>(k + 1)));
+      cell.w = kColumnGunW, cell.h = kColumnGunH;
+      cell.part = {0, 0, kColumnGunW, kColumnGunH};
+      c.cells.push_back(cell);
+    }
+    for (size_t k = 0; k < kAmmoKinds; ++k) {
+      gh::Cell cell = cell_of(&art.inventory_bar);
+      cell.w = kColumnBoxW, cell.h = kColumnBoxH;
+      cell.part = {3 + 48 * static_cast<float>(k), 0, kColumnBoxW, kColumnBoxH};
+      cell.text = std::to_string(std::min(s.ammo[k], 999));
+      cell.text_color = count_ink;
+      c.cells.push_back(cell);
+    }
+    at(sbar_column_left).face = c.face;
+    at(sbar_column_left).cells = c.cells;
   }
   {
     gh::Content& c = at(ibar_items);
@@ -1002,8 +1055,16 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
        {ring_health, ring_armour, ring_health_value, ring_armour_value, ring_ammo, ring_keys})
     at(id).on &= !s.dead;
 
-  // hud_sbar 0: the classic look's pieces with neither bar's panel under them.
-  if (hud.sbar == 0) at(sbar).color = at(ibar).color = ui::Color{1, 1, 1, 0};
+  // hud_sbar 0: the classic look's pieces with neither bar's panel under them, the guns and the
+  // ammunition counts out of the inventory row into a column up the right edge (hud_swap 1: the
+  // left); hud_sbar 1: the row, no column.
+  if (hud.sbar == 0) {
+    at(sbar).color = at(ibar).color = ui::Color{1, 1, 1, 0};
+    at(ibar_guns).on = at(ibar_ammo).on = false;
+    at(hud.swap != 0 ? sbar_column : sbar_column_left).on = false;
+  } else {
+    at(sbar_column).on = at(sbar_column_left).on = false;
+  }
 
   // ARENA.
   at(arena_face).image = face_of(s, art);
@@ -1084,7 +1145,8 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   at(chat).on &= hud.chat != nullptr && !hud.chat->lines().empty();
   // viewsize: 110 drops the inventory bar (its pieces hang from it), 120 every status element.
   if (hud.viewsize >= 110)
-    for (const Id id : {ibar, ibar_ammo, ibar_guns, ibar_items, ibar_runes, ibar_frags})
+    for (const Id id : {ibar, ibar_ammo, ibar_guns, ibar_items, ibar_runes, ibar_frags, sbar_column,
+                        sbar_column_left})
       at(id).on = false;
   if (hud.viewsize >= 120)
     for (size_t i = 0; i < L.size(); ++i)

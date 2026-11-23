@@ -96,6 +96,9 @@ struct Cell {
   bool breaks = false;  // this cell starts a new line
   float w = 0, h = 0;   // art px; > 0: this cell's own size (a count with no picture)
   int text_at = -1;     // an Anchor for this cell's count; -1: the strip's
+  // The part of the picture drawn, art px (w 0: all of it): a gun cut to its slot, a box cut out
+  // of a bar's picture.
+  ui::Rect part{0, 0, 0, 0};
 };
 
 // A strip's shape, in art px.
@@ -112,6 +115,7 @@ struct StripShape {
   float frame_w = 1;
   float line_gap = -1;  // art px between lines; < 0: `gap`
   int align = 0;        // the lines in the box: 0 start (left or top), 1 centre, 2 end
+  int cross_align = 1;  // each cell across its line: 0 start, 1 centre, 2 end (a column's edge)
 };
 
 struct Strip {
