@@ -267,6 +267,8 @@ struct Q2Raw {
   // the same.
   bool (*touch)(void* ctx, int slot, int number, Q2EntityState& s) = nullptr;
   void* touch_ctx = nullptr;
+  // The wider limits the game asked for: 0 none, 1 extended, 2 extended with the newer interface.
+  int ext = 0;
 };
 
 // The signon from a raw game, as `q2_signon_parts`.
