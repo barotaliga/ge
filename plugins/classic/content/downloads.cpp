@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <utility>
 
 #include "vfs/pak.hpp"
@@ -86,6 +87,40 @@ bool served_origin(const SearchPath& files, const std::string& path, ge::vfs::Ar
     return false;
   const ge::vfs::FileRef* f = ge::vfs::find(files.vfs, path);
   return f != nullptr && ge::vfs::archive_origin(files.vfs, *f, out);
+}
+
+HeldDownloads held_in_folder(std::function<std::string()> folder) {
+  const auto at = [folder = std::move(folder)](const std::string& path) {
+    const std::string dir = folder ? folder() : std::string();
+    if (dir.empty() || path.empty() || path[0] == '/' || path.find("..") != std::string::npos ||
+        path.find_first_of("\\:") != std::string::npos)
+      return fs::path();
+    return fs::path(dir) / (path + ".tmp");
+  };
+  HeldDownloads h;
+  h.read = [at](const std::string& path) {
+    std::vector<uint8_t> out;
+    const fs::path p = at(path);
+    if (p.empty()) return out;
+    std::ifstream file(p, std::ios::binary);
+    if (!file) return out;
+    out.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    return out;
+  };
+  h.add = [at](const std::string& path, std::span<const uint8_t> bytes, bool fresh) {
+    const fs::path p = at(path);
+    if (p.empty()) return;
+    std::error_code ec;
+    fs::create_directories(p.parent_path(), ec);
+    std::ofstream file(p, std::ios::binary | (fresh ? std::ios::trunc : std::ios::app));
+    file.write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
+  };
+  h.drop = [at](const std::string& path) {
+    const fs::path p = at(path);
+    std::error_code ec;
+    if (!p.empty()) fs::remove(p, ec);
+  };
+  return h;
 }
 
 }  // namespace ge::classic::content

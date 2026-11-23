@@ -207,9 +207,9 @@ void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext, int* event 
   const bool wide_model = ext > 0 && (bits & kModel16) != 0;
   const auto model = [&] { return wide_model ? m.u16() : m.u8(); };
   if ((bits & kModel) != 0) e.model = model();
-  if ((bits & kModel2) != 0) model();
-  if ((bits & kModel3) != 0) model();
-  if ((bits & kModel4) != 0) model();
+  if ((bits & kModel2) != 0) e.more[0] = model();
+  if ((bits & kModel3) != 0) e.more[1] = model();
+  if ((bits & kModel4) != 0) e.more[2] = model();
   if ((bits & kFrame8) != 0) e.frame = m.u8();
   if ((bits & kFrame16) != 0) e.frame = m.i16();
   if ((bits & (kSkinLow | kSkinHigh)) != 0) e.skin = sized64(m, bits, kSkinLow, kSkinHigh);
