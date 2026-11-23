@@ -340,7 +340,7 @@ level), so `sv_modern` means "a modern server" in every game and each says what 
 Only how the network judges play is in it, never a game's feel. Shooter's Edge's QuakeWorld: 1 is
 `sv_antilag 2; sv_antilag_projectiles 1` (every shot's line and every rocket, grenade and nail
 rewound to what the shooter saw), 2 adds `sv_lanrate 1`. Its Quake II: 1 is `sv_antilag 2;
-sv_antilag_projectiles 1; sv_antilag_interp 1`. Held by `tests/shooters_edge_q2_net_test.cpp`;
+sv_antilag_projectiles 1; sv_antilag_interp 1`. Held by `tests/shooters_edge_qw_game_test.cpp`;
 the `se-dedicated-lobby` lab plays its matches with `--modern=1`.
 
 ## The lobby and the match's phases
