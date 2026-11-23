@@ -113,6 +113,11 @@ constexpr gs::GameRule kEndpointRules[] = {
      "5..600: that many seconds (45 the default)"},
     {"qtv_sayenabled", "Whether a relay's viewers' chat reaches the players.", nullptr,
      "0: only the spectators (the default); 1: the players too"},
+    // The admin in the game (qw_referee.hpp): `admin <code>`, then forcestart, forcemap, kick.
+    {"k_admins", "Whether a player may become the match's admin in the game with the code.",
+     nullptr, "0: nobody; 1: whoever gives k_admincode (the default)"},
+    {"k_admincode", "The code a player gives in the game (admin <code>) to become the admin.",
+     nullptr, "\"\": nobody can (the default); none: nobody can; TEXT: that code, exactly", false},
     // The coop campaign in place of a match (qw_coop_game.hpp): the endpoint's, never a mod's.
     {"sv_coop", "Whether the server plays the game folder's campaign in coop, not a match.",
      nullptr, "0: a match (the default); 1: the campaign in coop"},

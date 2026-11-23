@@ -50,6 +50,7 @@
 #include "shooters_edge/net/qw_login.hpp"
 #include "shooters_edge/net/qw_match_rules.hpp"
 #include "shooters_edge/net/qw_qtv.hpp"
+#include "shooters_edge/net/qw_referee.hpp"
 #include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/net/qw_sheet.hpp"
@@ -130,6 +131,7 @@ struct Game {
   // server's clock (`now_s`, which runs on through the pause).
   gs::TimeoutBook timeout;
   bool timeout_held = false;  // the rules paused for it
+  QwReferee referee;  // the admin in the game (qw_referee.hpp), on a program of the server's own
   double now_s = 0;
   // The stream port for QuakeWorld relays (qw_qtv.hpp; qtv_streamport 0: none).
   int qtv_port = 0;
@@ -229,8 +231,7 @@ constexpr gs::GameRule kModRules[] = {
      nullptr, "0: only plain letters, digits and signs are kept; 1: any (the default)"},
     {"zombietime",
      "Seconds a dropped player's packets are still answered with the goodbye, so his game learns "
-     "it "
-     "was dropped.",
+     "it was dropped.",
      nullptr, "0: none; 2: two seconds (the default)"},
 };
 
@@ -1431,9 +1432,26 @@ bool mate_words(Game& g, int slot, const std::string& line) {
   return true;
 }
 
-// A client's words the server takes before the mod: the vote's (`vote ...`, and `yes` and `no`
-// while one is open) from anyone; with a room, `addbot [skill]` and `removebot` from the leader,
-// and with sv_lobby the lobby's own (ready, break, team, start, lobby).
+// The admin's view of the game (qw_referee.hpp); none (`qw` null) while a mod's program plays.
+QwRefereeGame referee_game(Game& g) {
+  if (!g.qw || !g.progs_crc.empty() || !g.module.empty() || !g.native_library.empty()) return {};
+  cl::Room* room = g.room && g.settings.lobby != 0 ? g.room.get() : nullptr;
+  QwRefereeGame f{g.qw.get(), &g.rules, room ? &room->lobby : nullptr};
+  f.announcer = room ? &room->announcer : nullptr;
+  f.overtime = &g.overtime;
+  f.settings = &g.settings;
+  f.in_match = !room || room->lobby.phase == gs::LobbyPhase::match;
+  f.now = g.now_s;
+  f.map_known = [](const void* c, std::string_view m) {
+    gs::VoteCheck out;
+    return act_vote_check(*static_cast<const Game*>(c), "map", m, out);
+  };
+  f.map_ctx = &g;
+  return f;
+}
+
+// A client's words before the mod: the admin's (qw_referee.hpp), the vote's (`vote`, `yes`, `no`);
+// with a room the leader's `addbot [skill]` and `removebot`, and with sv_lobby the lobby's own.
 bool room_words(void* ctx, int slot, const std::string& line) {
   Game& g = *static_cast<Game*>(ctx);
   if (g.qw && line.starts_with("ge_sheet") && slot >= 0 && slot < 32) {  // qw_sheet.hpp
@@ -1447,6 +1465,7 @@ bool room_words(void* ctx, int slot, const std::string& line) {
     return true;
   }
   if (g.qw) {
+    if (qw_referee_line(g.referee, referee_game(g), slot, line)) return true;
     const gs::VoteTarget target{&g, vote_check};
     if (gs::vote_command(g.vote, target, slot, line, g.rules->sv.time)) {
       vote_turn(g);
@@ -1563,7 +1582,8 @@ void load_bans(QwServer& s) {
 // The lobby's lock and prewar on a client (qw_match_rules.hpp).
 bool may_play(void* ctx, const std::string& name, std::string& why) {
   const Game& g = *static_cast<const Game*>(ctx);
-  if (g.room && g.settings.lobby != 0) why = lock_refusal(g.room->lobby, name);
+  why = qw_referee_lock(g.referee, g.now_s);
+  if (why.empty() && g.room && g.settings.lobby != 0) why = lock_refusal(g.room->lobby, name);
   return why.empty();
 }
 uint8_t move_buttons(void* ctx, int slot, uint8_t buttons) {
@@ -1714,6 +1734,7 @@ void net_frame(void* g, int64_t now_us) {
   gs::timeout_tick(game.timeout, game.now_s);
   home_turn(game);
   timeout_turn(game);
+  qw_referee_frame(game.referee, referee_game(game));
   lobby_turn(game);
   change_if_asked(game);
   lobby_words(game);

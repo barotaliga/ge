@@ -423,3 +423,36 @@ All read unless marked.
   admin-driven [read; details not examined].
 - **Practice mode**: `practice` (gated by `allow_toggle_practice`), during which forcestart is
   refused.
+
+## Rows: what our QuakeWorld server has of these
+
+The checklist for our own server (the engine's referee in QuakeWorld's words,
+`games/shooters_edge/net/qw_referee.hpp`, held by `tests/shooters_edge_qw_referee_test.cpp`).
+Statuses as in `q1-qw-ledger.md`: done, missing (rank 1 noticed at once, 2 sometimes, 3 rare),
+not-taken (why named). Our own program runs these; a mod's program keeps its own admin.
+
+| Id | Item | Status | Ours | Rank |
+| --- | --- | --- | --- | --- |
+| A1 | `admin <code>` against `k_admincode` (exact; empty or `none`: nobody) | done | the book's login, `k_admincode` an endpoint setting kept out of the server info | |
+| A2 | `k_admins 0`: "NO admins on this server!" | done | `k_admins` (unset: 1, the example config's) | |
+| A3 | a wrong code: "Access denied...", then "Wait N second(s)!" for 5 s | done | the book's wait after a wrong try alone | |
+| A4 | success and giving it up, the lines to everyone and to the admin | done | "gains admins status!", "is no longer an admin"; the admin is pointed at `acommands` | |
+| A5 | "You are not an admin" for an admin's word | done | | |
+| A6 | admin kept across a map change, lost on a reconnect | done | forgotten when the slot frees or another user id takes it | |
+| A7 | `admin` with no code: the code typed on the number keys | missing | the code is typed after the word | 3 |
+| A8 | `elect`: an admin by vote (`k_allowvoteadmin`, `k_vp_admin`), elected admins' limits | missing | | 2 |
+| A9 | `forcebreak`: "<name> forces a break!", silent outside a match | done | the book's `endmatch` | |
+| A10 | `forcemap <map>`: refused in a match, usage, an unknown map, the line | done | the book's `changemap`; without sv_lobby always taken | |
+| A11 | `kick <id or name> [reason]`: the lines, the reason, a 30-second ban | done | user id first, then the exact name; an admin is not kicked (ours) | |
+| A12 | `kick` alone: kick mode, `y`/`n` through every player | missing | | 3 |
+| A13 | `mkick <id> [id ...] [reason]` | missing | | 3 |
+| A14 | `forcestart`: the 10-second count, "Get ready!", the unready dropped, cancelled by the admin's break | done | needs sv_lobby; ours hands over to the lobby's countdown | |
+| A15 | `lock`: joins refused 15 seconds, the lines | done | a joining player watches instead (as sv_lockjoin) | |
+| A16 | `force_spec`: a player made a spectator or back | missing | | 2 |
+| A17 | `lockmap`, `prewar`, `exclusive`, `infolock` toggles | missing | `sv_prewar` and `sv_lockjoin` are settings already | 3 |
+| A18 | admins' votes as a veto | missing | | 3 |
+| A19 | captain mode: `captain` elections, numbered picks in turn A B B A, the lines | missing | next: the engine's teams book in QuakeWorld's words | 1 |
+| A20 | coaches | missing | | 3 |
+| A21 | the engine's other referee words (`tl`, `ban`, `mute`, `shuffle`, `readyall`) | not-taken | not QuakeWorld's: left to a mod | |
+
+Missing: 9 (1 / 2 / 6).

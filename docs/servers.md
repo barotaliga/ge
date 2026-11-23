@@ -511,6 +511,16 @@ default, 720 at most), `mute <player> [minutes]` (5 by default, 60 at most) and 
 `shuffle`, `readyall` and `unreadyall`; `acommands` lists them. A wrong password is refused and
 logged; a referee is never kicked, banned or muted. The book hands the game each act to do.
 
+A game keeps its own words (`RefereeWords`): its login word, its spellings of the book's words,
+the wait after a try, how a player is named, a kick's reason and ban, and every line said; a word
+its table leaves out is not the book's and reaches the mod. Our QuakeWorld server's admin is the
+book in QuakeWorld's words (`games/shooters_edge/net/qw_referee.hpp`): `admin <code>` against
+`k_admincode` (`k_admins 0`: no admins; a wrong code holds the next try 5 seconds), `forcebreak`,
+`forcemap <map>` (refused during a lobby's match and for a map the server lacks), `kick <id or
+name> [reason]` (the address kept out 30 seconds), and QuakeWorld's own `forcestart` (a 10-second
+count, then the unready dropped and the match counted down) and `lock` (joiners watch for 15
+seconds). A mod's own program keeps its own admin: the words go to it untouched.
+
 ## Player aids: help for one chosen player
 
 Some players need help the rest do not: a player with a disability that makes fast hand motion
