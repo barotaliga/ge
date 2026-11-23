@@ -204,10 +204,13 @@ bool reaches(const Q2Server& s, const Q2Monster& m, int foe, int32_t mask) {
   return t.fraction >= 1;
 }
 
+// Its floor under it, or, under a reversed gravity (Ground Zero's stalker on a ceiling), its
+// ceiling above it.
 bool on_floor(const Q2Server& s, const Q2Monster& m) {
   const Q2Entity& e = s.entities[size_t(m.entity)];
-  const ge::classic::Q2Trace t = sweep(s, m, e.origin, e.origin - sh::Vec3f{0, 0, 0.25f});
-  return t.fraction < 1 && t.normal.z > 0.7f;
+  const float up = m.gravity < 0 ? -1.0f : 1.0f;
+  const ge::classic::Q2Trace t = sweep(s, m, e.origin, e.origin - sh::Vec3f{0, 0, 0.25f * up});
+  return t.fraction < 1 && t.normal.z * up > 0.7f;
 }
 
 // A walker's step of `move` along the floor: up a step of 18 when blocked, never off a ledge
@@ -227,7 +230,8 @@ bool step(Q2Server& s, Q2Monster& m, sh::Vec3f move) {
     return true;
   }
   move.z = 0;
-  const sh::Vec3f up{0, 0, kStepUp};
+  const float sky = m.gravity < 0 ? -1.0f : 1.0f;  // down is up on a ceiling
+  const sh::Vec3f up{0, 0, kStepUp * sky};
   sh::Vec3f to;
   ge::classic::Q2Trace t = sweep(s, m, e.origin, e.origin + move);
   if (t.start_solid) return false;
@@ -238,11 +242,12 @@ bool step(Q2Server& s, Q2Monster& m, sh::Vec3f move) {
     const ge::classic::Q2Trace along = sweep(s, m, rise.end, rise.end + move);
     if (along.fraction < 1 || along.start_solid) return false;
     const ge::classic::Q2Trace down = sweep(s, m, along.end, along.end - up);
-    if (down.fraction >= 1 || down.normal.z <= 0.7f) return false;
+    if (down.fraction >= 1 || down.normal.z * sky <= 0.7f) return false;
     to = down.end;
   }
   if (m.on_ground) {  // never off a ledge
-    const ge::classic::Q2Trace below = sweep(s, m, to, to - sh::Vec3f{0, 0, kStepUp + 1});
+    const ge::classic::Q2Trace below =
+        sweep(s, m, to, to - sh::Vec3f{0, 0, (kStepUp + 1) * sky});
     if (below.fraction >= 1) return false;
     to = below.fraction > 0 ? below.end : to;
   }
@@ -275,7 +280,8 @@ void fall(Q2Server& s, Q2Monster& m) {
     m.velocity = {};
     return;
   }
-  m.on_ground = m.velocity.z <= 0 && on_floor(s, m);
+  const float sky = m.gravity < 0 ? -1.0f : 1.0f;  // a ceiling's walker falls up
+  m.on_ground = m.velocity.z * sky <= 0 && on_floor(s, m);
   if (m.on_ground) {
     m.velocity = {};
     return;
@@ -291,7 +297,7 @@ void fall(Q2Server& s, Q2Monster& m) {
     m.struck = true;
   }
   e.origin = t.end;
-  if (t.fraction < 1 && t.normal.z > 0.7f) {
+  if (t.fraction < 1 && t.normal.z * sky > 0.7f) {
     m.on_ground = true;
     m.velocity = {};
     if (m.leaping) {  // down again: the thud, and free to attack
@@ -619,6 +625,7 @@ void choose(Q2Server& s, Q2Monster& m) {
   const int i = pick_ranged(s, m, dist);
   m.attack_finished = s.level_time + 2 * random01(s);
   if (dist < attack_at(m, i).closest) return;  // too near for it: keeps closing
+  if (gz_call_instead(s, m, r == Range::melee)) return;  // a medic commander's reinforcements
   begin_attack(s, m, i);
 }
 
@@ -980,6 +987,7 @@ void think(Q2Server& s, Q2Monster& m) {
     targets_turret(s, m, m.enemy >= 0 && sees(s, m, m.enemy) ? m.enemy : -1);
     return;
   }
+  if (gz_think(s, m)) return;  // Ground Zero's kinds' own (q2_gz_monsters.cpp)
   if (k.medic && tend(s, m)) return;
   if (m.enemy == -1) notice(s, m);
   if (m.enemy == -1 && m.sound_target) {  // to the noise; within 64 it stands, 5 s on forgets it
@@ -1145,12 +1153,13 @@ void die(Q2Server& s, Q2Monster& m, int attacker, int damage) {
   m.ducked = m.leaping = false;
   m.screen = 0;
   e.corpse = true;  // shots meet a corpse, moves pass it
-  if (!k.good) s.monsters_killed++;
+  if (!k.good && gz_counted(m)) s.monsters_killed++;
+  gz_died(s, m);
   // Co-op scores each kill to the player who made it.
   if (!k.good && attacker >= 0 && attacker < sh::kMaxClients && s.cvars.find("coop")->on() &&
       !s.cvars.find("deathmatch")->on())
     s.players[attacker].frags += 1;
-  const DeathChoice dc = monster_death(looks_like(k), damage, s.rng);
+  const DeathChoice dc = monster_death(pain_class(k), damage, s.rng);
   m.death_run = dc.run;
   if (named(m, "misc_insane"))  // a prisoner dies with a man's cry, one of four, close by
     sound(s, m.entity, kInsaneDeaths[std::min(3, static_cast<int>(random01(s) * 4))], 2);
@@ -1197,6 +1206,8 @@ void die(Q2Server& s, Q2Monster& m, int attacker, int damage) {
   } else if (name == "monster_makron") {
     e.mins = {-60, -60, 0};
     e.maxs = {60, 60, 72};
+  } else if (name == "monster_stalker") {
+    e.maxs.z = -4;
   } else {
     e.maxs.z = std::min(e.maxs.z, -8.0f);
   }
@@ -1251,6 +1262,7 @@ void monster_spawn(Q2Server& s) {
     spare.spawnflags = 2;
     s.entities.push_back(spare);
   }
+  gz_spares(s);
   monster_torsos(s);
   for (size_t i = 0; i < s.entities.size(); i++) {
     Q2Entity& e = s.entities[i];
@@ -1311,14 +1323,17 @@ void monster_spawn(Q2Server& s) {
       e.maxs = {16, 8, 32};
       m.gravity = 0;
     }
+    gz_spawned(s, m);  // Ground Zero's kinds' own (q2_gz_monsters.cpp)
+    if (e.gone) continue;
     s.monsters.push_back(m);
     if (!kd.prop && !kd.good && !m.spare) s.monsters_total++;
   }
   for (Q2Monster& m : s.monsters) {  // walkers to the floor
     if (afloat(kKinds[m.kind]) || m.waiting || m.gravity == 0) continue;
     Q2Entity& e = s.entities[size_t(m.entity)];
+    const float sky = m.gravity < 0 ? -1.0f : 1.0f;  // a ceiling's walker up to its ceiling
     const ge::classic::Q2Trace t =
-        sweep(s, m, e.origin + sh::Vec3f{0, 0, 1}, e.origin - sh::Vec3f{0, 0, 256});
+        sweep(s, m, e.origin + sh::Vec3f{0, 0, sky}, e.origin - sh::Vec3f{0, 0, 256 * sky});
     m.start_solid = t.start_solid;
     if (t.start_solid) continue;
     e.origin = t.end;
@@ -1514,6 +1529,7 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
     return true;
   }
   if (ent.gone || m.waiting || damage <= 0) return false;
+  if (gz_untouchable(m)) return true;  // a wall turret still in its wall
   if (m.dead && k.end != End::corpse && k.end != End::crash) return true;  // a dying boss
   // A player's blow on a monster that has not yet noticed anyone: twice its points (not a blast's).
   if (!splash && !m.dead && m.enemy == -1 && hunted(s, attacker)) damage *= 2;
@@ -1551,11 +1567,12 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
   }
   react(s, m, attacker);
   if (m.leaping || m.ducked) return true;  // ducked (in the air from a leap too): no pain
+  if (gz_pain(s, m, damage)) return true;  // Ground Zero's kinds' own (a turret's none)
   const bool waiting = s.level_time + 0.001 < m.pain_at + kPainEvery;
   if (named(m, "misc_actor") && actor_pain(s, m, attacker, waiting)) return true;
-  if (monster_pain_known(looks_like(k))) {  // its pains as data (q2_monster_pain.cpp)
+  if (monster_pain_known(pain_class(k))) {  // its pains as data (q2_monster_pain.cpp)
     const PainChoice c =
-        monster_pain(looks_like(k), damage, skill(s), m.velocity.z, m.pose.frame, m.pose.span.first,
+        monster_pain(pain_class(k), damage, skill(s), m.velocity.z, m.pose.frame, m.pose.span.first,
                      m.pose.act == SqMonsterPose::Act::pain, waiting, s.rng);
     if (c.spent) m.pain_at = s.level_time;
     if (c.sound != nullptr) sound(s, e, c.sound, c.everywhere ? 0 : 1);
@@ -1610,6 +1627,7 @@ bool monster_use(Q2Server& s, int e, int activator) {
     return true;
   }
   if (m.spare) return true;
+  if (gz_use(s, m)) return true;  // a wall turret comes out
   if (!m.waiting && named(m, "misc_actor")) return actor_use(s, m);
   if (!m.waiting) {  // awake: a use with no enemy angers it at a player who used it
     if (!m.dead && m.enemy == -1 && targetable(s, activator)) found(s, m, activator, false);

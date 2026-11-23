@@ -47,8 +47,8 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 2 | 67 | 5 (2 / 1 / 2) | 0 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 2 | 51 | 8 (3 / 3 / 2) | 0 |
 | The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
-| Ground Zero (Quake II, folder `rogue`) | 82 | 29 | 4 | 49 (19 / 26 / 4) | 0 |
-| **All** | **272** | **36** | **128** | **108 (53 / 45 / 10)** | **0** |
+| Ground Zero (Quake II, folder `rogue`) | 82 | 34 | 4 | 44 (15 / 25 / 4) | 0 |
+| **All** | **272** | **41** | **128** | **103 (49 / 44 / 10)** | **0** |
 
 Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.**
 
@@ -383,7 +383,7 @@ count: done 0, verify 0, missing 7, not-taken 0
 
 ## Ground Zero (Quake II, folder `rogue`)
 
-count: done 29, verify 4, missing 49 (19 / 26 / 4), not-taken 0
+count: done 34, verify 4, missing 44 (15 / 25 / 4), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -465,18 +465,18 @@ count: done 16, verify 0, missing 5, not-taken 0
 
 #### Monsters
 
-count: done 0, verify 0, missing 8, not-taken 0
+count: done 5, verify 0, missing 3, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | gz.ent.monster_carrier | `monster_carrier` | the carrier: a flying boss that launches flyers | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.monster_daedalus | `monster_daedalus` | the daedalus: a faster hover with a shield | 10 / 96 | missing | 1 | not in our rules; LIFT: the base hover |
-| gz.ent.monster_medic_commander | `monster_medic_commander` | the medic commander: calls in reinforcements | 6 / 30 | missing | 1 | not in our rules; LIFT: the base medic |
-| gz.ent.monster_stalker | `monster_stalker` | the stalker: a spider that walks on ceilings | 8 / 96 | missing | 1 | not in our rules |
-| gz.ent.monster_turret | `monster_turret` | a wall turret: blaster, machine gun or rockets | 10 / 216 | missing | 1 | not in our rules |
+| gz.ent.monster_daedalus | `monster_daedalus` | the daedalus: a faster hover with a shield | 10 / 96 | done | 1 | server/q2_monster_kinds.hpp (the hover's body on skin 2, 450, mass 225, green bolts, the front screen of 100), server/q2_monster_pain.cpp (its cries; a heavy blow's long flinch 0.45 - 0.1 x skill) |
+| gz.ent.monster_medic_commander | `monster_medic_commander` | the medic commander: calls in reinforcements | 6 / 30 | done | 1 | server/q2_monster_kinds.hpp (the medic's body on skin 2, 600, green bolts), server/q2_gz_monsters.cpp (the call: strength roll, groups of 1, 3 or 5, five spots in front or behind, the grow, slots 3/4/6/6 given back at death, not counted), server/q2_monster_pain.cpp |
+| gz.ent.monster_stalker | `monster_stalker` | the stalker: a spider that walks on ceilings | 8 / 96 | done | 1 | server/q2_gz_monsters.cpp (ceilings by reversed gravity, the jump up and the pounce, firing in the air, the false death and its twitch; the floor and ceiling walk in server/q2_monsters.cpp); its dodge jump with gz.ai |
+| gz.ent.monster_turret | `monster_turret` | a wall turret: blaster, machine gun or rockets | 10 / 216 | done | 1 | server/q2_gz_monsters.cpp (floor, ceiling and wall mounts, arcs, 45 degrees a frame, blaster, machine gun and rockets with lead, the wall unit sliding out on use, no pain, the blast and debris); its blind fire with gz.ai; the wall unit's base piece not drawn yet |
 | gz.ent.monster_widow | `monster_widow` | the black widow, the last boss's first form | 1 / 1 | missing | 1 | not in our rules |
 | gz.ent.monster_widow2 | `monster_widow2` | the black widow's second form | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.turret_invisible_brain | `turret_invisible_brain` | the hidden brain that drives a turret | 1 / 1 | missing | 2 | not in our rules |
+| gz.ent.turret_invisible_brain | `turret_invisible_brain` | the hidden brain that drives a turret | 1 / 1 | done | 2 | server/q2_gz_monsters.cpp, server/q2_targets.cpp (the breach's aim and fire shared with the turret driver): `killtarget` its first enemy, `delay`, used on and off |
 
 #### Game modes
 

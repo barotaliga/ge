@@ -96,7 +96,8 @@ constexpr const char* kMissileModels[kSqShotKinds] = {"models/objects/laser/tris
                                                       "models/proj/disintegrator/tris.md2",
                                                       "models/weapons/g_nuke/tris.md2",
                                                       "",
-                                                      ""};
+                                                      "",
+                                                      "models/proj/laser2/tris.md2"};
 constexpr const char* kClick = "weapons/noammo.wav";
 constexpr const char* kBoom = "weapons/rocklx1a.wav";
 constexpr const char* kGrenadeBoom = "weapons/grenlx1a.wav";
@@ -134,7 +135,8 @@ constexpr float kGibHealth = -40;    // a death under this throws the body apart
 bool grenade(SqShot k) { return k == SqShot::grenade || k == SqShot::hand_grenade; }
 // A bolt's kinds: a blow on what it meets and gone (the ion ripper's bounces off a wall).
 bool bolt_like(SqShot k) {
-  return k == SqShot::bolt || k == SqShot::blue_bolt || k == SqShot::spit || k == SqShot::ripper;
+  return k == SqShot::bolt || k == SqShot::blue_bolt || k == SqShot::spit || k == SqShot::ripper ||
+         k == SqShot::green_bolt;
 }
 
 bool deathmatch(const Q2Server& s) { return s.cvars.find("deathmatch")->on(); }
@@ -1424,6 +1426,7 @@ void fight_missiles(Q2Server& s) {
       switch (m.kind) {
         case SqShot::bolt:
         case SqShot::blue_bolt:
+        case SqShot::green_bolt:
         case SqShot::spit:
         case SqShot::ripper:
           hurt(s, hit, m.owner, m.velocity, m.damage, 1, true, m.weapon);
@@ -1458,10 +1461,13 @@ void fight_missiles(Q2Server& s) {
       switch (m.kind) {
         case SqShot::bolt:  // a mover or a pane that takes blows takes the bolt's
         case SqShot::blue_bolt:
-        case SqShot::spit:  // the spit leaves no mark
+        case SqShot::green_bolt:  // its own green mark
+        case SqShot::spit:        // the spit leaves no mark
           if (l.mover >= 0 && monster_index(s, l.mover) < 0)
             map_damage(s, l.mover, m.owner, m.damage);
-          if (m.kind != SqShot::spit) effect(s, "te_blaster", l.end, l.normal);
+          if (m.kind != SqShot::spit)
+            effect(s, m.kind == SqShot::green_bolt ? "te_blaster2" : "te_blaster", l.end,
+                   l.normal);
           if (m.owner >= 0) monster_noise(s, m.owner, l.end, true);
           m.live = false;
           break;
@@ -1645,6 +1651,7 @@ WorldShot shot_kind(SqShot k) {
       return WorldShot::grenade;
     case SqShot::bolt:
     case SqShot::blue_bolt:
+    case SqShot::green_bolt:
     case SqShot::ripper:
     case SqShot::spit:
       return WorldShot::bolt;
@@ -1688,6 +1695,7 @@ int shot_loop(const Q2Server& s, const Q2Missile& m) {
   switch (m.kind) {
     case SqShot::bolt:
     case SqShot::blue_bolt:
+    case SqShot::green_bolt:
     case SqShot::ripper:
       return loop_of(s, SqLoop::bolt);
     case SqShot::rocket:

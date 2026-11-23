@@ -144,6 +144,7 @@ constexpr TeName kTeNames[] = {
     {"te_nukeblast", 51, TeBody::point, 0},
     {"te_explosion1_big", 53, TeBody::point, 0},
     {"te_flechette", 55, TeBody::point_dir, 0},
+    {"te_blaster2", 30, TeBody::point_dir, 0},
 };
 
 }  // namespace

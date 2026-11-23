@@ -69,6 +69,13 @@ void revive(Q2Server& s, Q2Monster& c, int enemy) {
   if (targetable(s, enemy)) found(s, c, enemy, false);
 }
 
+// A cable's sound, the launch (0) or the heal (1): the medic's, or Ground Zero's commander's own.
+static const char* cable_sound(const Q2Monster& m, int which) {
+  const bool commander = kind(m).classname == std::string_view("monster_medic_commander");
+  if (commander) return which == 0 ? "medic_commander/medatck2c.wav" : "medic_commander/medatck4a.wav";
+  return which == 0 ? "medic/medatck2.wav" : "medic/medatck4.wav";
+}
+
 // A medic's frame with a corpse to raise: the cable within 256, else toward it. True when it was
 // busy with one.
 bool tend(Q2Server& s, Q2Monster& m) {
@@ -100,7 +107,7 @@ bool tend(Q2Server& s, Q2Monster& m) {
     if (s.level_time + 0.001 < m.revive_at) return true;
     if (near) {
       fight_effect(s, "te_medic_cable", b.origin);
-      sound(s, m.entity, "medic/medatck4.wav");
+      sound(s, m.entity, cable_sound(m, 1));
       const int enemy = m.old_enemy;
       release();
       revive(s, c, enemy);
@@ -111,8 +118,9 @@ bool tend(Q2Server& s, Q2Monster& m) {
   }
   if (s.level_time + 0.001 < m.busy_until) return true;
   turn(e, kind(m), yaw_to(b.origin - e.origin));
+  if (near && gz_cable_instead(s, m)) return true;  // a commander calls its guards instead
   if (near) {  // the cable: launched, hooked, and 1.7 s on the corpse rises
-    sound(s, m.entity, "medic/medatck2.wav");
+    sound(s, m.entity, cable_sound(m, 0));
     m.revive_at = s.level_time + 1.7;
     m.busy_until = s.level_time + 2.8;
     return true;

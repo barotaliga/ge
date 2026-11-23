@@ -220,6 +220,8 @@ SqShot shot_of(const Attack& a, SqShot usual) {
       return SqShot::heat_rocket;
     case roster::Shot::spit:
       return SqShot::spit;
+    case roster::Shot::green_bolt:
+      return SqShot::green_bolt;
     case roster::Shot::usual:
       break;
   }

@@ -89,6 +89,11 @@ bool monster_class(std::string_view classname, Q2Pack pack = Q2Pack::base);
 // monster does. False when no spare is left.
 bool monster_bring_spare(Q2Server& s, int block, sh::Vec3f at, sh::Vec3f angles, sh::Vec3f velocity,
                          int activator);
+// Ground Zero's hidden brain that drives a turret_breach (q2_gz_monsters.cpp): set up, used
+// (false when entity `i` is not one), and its frame.
+bool gz_brain_spawn(Q2Server& s, int i);
+bool gz_brain_use(Q2Server& s, int i, int activator);
+void gz_brains(Q2Server& s);
 // The words of a death by a monster's attack (`cause` from `kSqByMonster`), or null.
 const char* monster_obituary(int cause);
 

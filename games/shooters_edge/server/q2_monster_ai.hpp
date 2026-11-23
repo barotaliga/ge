@@ -124,4 +124,39 @@ void revive(Q2Server& s, Q2Monster& c, int enemy);
 // A medic's frame with a corpse to raise; true when it was busy with one.
 bool tend(Q2Server& s, Q2Monster& m);
 
+// ---- Ground Zero's kinds (q2_gz_monsters.cpp) ----
+// The classes a medic commander's call makes, by strength, and the grow each shows first.
+inline constexpr const char* kCommanderGroup[7] = {
+    "monster_soldier_light", "monster_soldier", "monster_soldier_ss", "monster_infantry",
+    "monster_gunner",        "monster_medic",   "monster_gladiator"};
+inline constexpr const char* kSpawnGrow = "models/items/spawngro2/tris.md2";
+// Eight spare bodies, waiting unseen, for each medic commander on the map (with the map's load).
+void gz_spares(Q2Server& s);
+// A commander's call begun.
+void gz_begin_call(Q2Server& s, Q2Monster& m);
+// A Ground Zero kind about to fire (not in melee range): a commander's call instead, 80% of the
+// time with more than two slots left (true: it called); a stalker's jump first, a third of the
+// time on the ground (it still fires).
+bool gz_call_instead(Q2Server& s, Q2Monster& m, bool melee);
+// A commander about to cast its cable: a call instead, 20% of the time with more than two slots.
+bool gz_cable_instead(Q2Server& s, Q2Monster& m);
+// A Ground Zero kind's own think this frame (a commander's call); true when it took the frame.
+bool gz_think(Q2Server& s, Q2Monster& m);
+// A Ground Zero kind set up as the map spawns (a turret's mounting, a wall unit in its wall).
+void gz_spawned(Q2Server& s, Q2Monster& m);
+// A use of a Ground Zero kind that is its own (a wall turret coming out); true when taken.
+bool gz_use(Q2Server& s, Q2Monster& m);
+// Whether a blow passes it by (a wall turret not yet out).
+bool gz_untouchable(const Q2Monster& m);
+// A Ground Zero kind's own pain from a blow of `damage` (a turret's none, a stalker's jump or
+// false death); true when it took the blow's pain.
+bool gz_pain(Q2Server& s, Q2Monster& m, int damage);
+// A Ground Zero kind's death: a turret's debris, a stalker falling from its ceiling; a
+// reinforcement gives its commander a slot back.
+void gz_died(Q2Server& s, Q2Monster& m);
+// Whether a monster's death counts among the level's kills (a reinforcement's does not).
+bool gz_counted(const Q2Monster& m);
+// A Ground Zero kind's world row: a reinforcement growing shows the grow.
+void gz_row(const Q2Server& s, const Q2Monster& m, ge::shooter::WorldEntity& r);
+
 }  // namespace shooters_edge::server::monster_ai

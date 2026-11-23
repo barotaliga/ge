@@ -260,6 +260,20 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   double job_since = 0, job_until = 0, repair_rest = 0;
   int still = 0;
   sh::Vec3f still_at;
+  // Ground Zero's kinds (q2_gz_monsters.cpp): the reinforcements a medic commander has out, its
+  // call's step (-1 none) and whether it turned round for it; a reinforcement's commander (a
+  // monster row, -1 none) and the end of the grow it shows before it comes (level time; 0 none).
+  int called = 0;
+  int call = -1;
+  bool call_back = false;
+  int commander = -1;
+  double grow_until = 0;
+  // A turret's: its mounting (the facing's pitch and yaw), its stage (q2_gz_monsters.cpp's
+  // `Stage`, a stalker's `Stalk` too, till `stage_until` level time) and the model frame it shows.
+  sh::Vec3f mount;
+  int stage = 0;
+  double stage_until = 0;
+  int turret_frame = 0;
 };
 
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name

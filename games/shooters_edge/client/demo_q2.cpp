@@ -753,10 +753,13 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       if (!point_dir(DemoEffectKind::named)) return false;
       e.name = "te_blaster";
       break;
+    case 30:  // Ground Zero's green bolt landing: its green sparks and the mark
+      if (!point_dir(DemoEffectKind::named)) return false;
+      e.name = "te_blaster2";
+      break;
     case 9:
     case 12:
     case 13:
-    case 30:
     case 43:
     case 44:
     case 46:

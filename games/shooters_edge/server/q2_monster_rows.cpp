@@ -15,6 +15,7 @@
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monster_kinds.hpp"
+#include "shooters_edge/server/q2_monster_ai.hpp"
 #include "shooters_edge/server/q2_monster_pain.hpp"
 #include "shooters_edge/server/q2_monster_steps.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
@@ -63,7 +64,7 @@ void monster_precache(Q2Server& s) {
       if (std::find(list.begin(), list.end(), name) == list.end()) list.emplace_back(name);
     };
     monster_cue_sounds(looks_like(kKinds[k]), add_to, &s.sounds);
-    monster_pain_sounds(looks_like(kKinds[k]), add_to, &s.sounds);
+    monster_pain_sounds(pain_class(kKinds[k]), add_to, &s.sounds);
     const std::string_view name = kKinds[k].classname;
     if (name == "monster_infantry" || name == "monster_mutant") add_sound("infantry/inflies1.wav");
     if (name == "monster_jorg") add_sound("boss3/w_loop.wav");
@@ -75,8 +76,25 @@ void monster_precache(Q2Server& s) {
     if (k < 0 || e.gone || (deathmatch(s) && !kKinds[k].keep)) continue;
     e.modelindex = add_kind(k);
     if (kKinds[k].medic)
-      for (const char* name : {"medic/medatck2.wav", "medic/medatck4.wav"}) add_sound(name);
+      for (const char* name : {"medic/medatck2.wav", "medic/medatck4.wav",
+                               "medic_commander/medatck2c.wav", "medic_commander/medatck4a.wav"})
+        if (kKinds[k].pack == Q2Pack::ground_zero || std::string_view(name).starts_with("medic/"))
+          add_sound(name);
     if (kKinds[k].end == End::launch) add_kind(kind_of(s, "monster_makron"));
+    if (kKinds[k].classname == std::string_view("monster_medic_commander")) {  // its guards
+      for (const char* name : monster_ai::kCommanderGroup)
+        if (kind_of(s, name) >= 0) add_kind(kind_of(s, name));
+      model(monster_ai::kSpawnGrow);
+      model("models/items/spawngro/tris.md2");
+      add_sound("medic_commander/monsterspawn1.wav");
+    }
+    if (kKinds[k].classname == std::string_view("monster_turret")) {  // its guns' and its debris
+      for (const char* name : {"soldier/solatck2.wav", "misc/lasfly.wav", "infantry/infatck1.wav",
+                               "chick/chkatck2.wav", "weapons/rockfly.wav", "world/dr_short.wav"})
+        add_sound(name);
+      model("models/objects/debris1/tris.md2");
+      model("models/monsters/turretbase/tris.md2");
+    }
     if (kKinds[k].prop && kKinds[k].keep)
       for (const char* name : {"tank/pain.wav", "tank/thud.wav"}) add_sound(name);
   }
@@ -186,6 +204,7 @@ void monster_rows(Q2Server& s) {
       r.frame = std::clamp(static_cast<int>((s.level_time - m.used_at) / 0.1), 0, 24);
     else if (sq_monster_poses(looks_like(kKinds[m.kind])) != nullptr)
       r.frame = m.pose.frame;
+    monster_ai::gz_row(s, m, r);  // Ground Zero's grow before a guard comes
   }
 }
 
