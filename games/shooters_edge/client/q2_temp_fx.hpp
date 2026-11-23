@@ -30,10 +30,10 @@ struct Q2Puff {
 };
 
 inline constexpr Q2Puff kQ2Puffs[] = {
-    {0, "te_gunshot", 40, 0x00},        {1, "te_blood", 60, 0xe8},
-    {4, "te_shotgun", 20, 0x00},        {9, "te_sparks", 6, 0xe0},
-    {12, "te_screen_sparks", 40, 0xd0}, {13, "te_shield_sparks", 40, 0xb0},
-    {14, "te_bullet_sparks", 6, 0xe0},  {42, "te_moreblood", 250, 0xe8},
+    {0, "te_gunshot", 40, 0x00},          {1, "te_blood", 60, 0xe8},
+    {4, "te_shotgun", 20, 0x00},          {9, "te_sparks", 6, 0xe0},
+    {12, "te_screen_sparks", 40, 0xd0},   {13, "te_shield_sparks", 40, 0xb0},
+    {14, "te_bullet_sparks", 6, 0xe0},    {42, "te_moreblood", 250, 0xe8},
     {46, "te_electric_sparks", 40, 0x75},
 };
 

@@ -1577,8 +1577,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         // Quake II's bubbles and force walls along their lines (client/world_fx_q2.cpp).
         if (q2_named_trail(s, e, from, to, out)) break;
         // The mission packs' beams (the tesla's lightning, the plasma beams), Quake II's own.
-        if (l.q2 && (e.name == "te_lightning" || e.name == "te_heatbeam" ||
-                     e.name == "te_monster_heatbeam") &&
+        if (l.q2 &&
+            (e.name == "te_lightning" || e.name == "te_heatbeam" ||
+             e.name == "te_monster_heatbeam") &&
             q2_cable(s, e, t))
           break;
         // Quake II's cables in the classic look: a segment model every 30 units (q2_model_fx.hpp).
@@ -1914,8 +1915,7 @@ void place_chain(const sh::Vec3f& from, const sh::Vec3f& to, const Chain& c, ge:
     seg.modelindex = c.modelindex;
     const auto k = static_cast<float>(chain_share(i, n, len, c.fit, c.step));
     seg.origin = {from.x + d.x * k, from.y + d.y * k, from.z + d.z * k};
-    const float spin =
-        static_cast<float>(c.roll >= 0 ? c.roll : ge::core::range(roll, 0, 360));
+    const float spin = static_cast<float>(c.roll >= 0 ? c.roll : ge::core::range(roll, 0, 360));
     seg.angles = c.back ? sh::Vec3f{-pitch, yaw + 180, spin} : sh::Vec3f{pitch, yaw, spin};
     seg.no_shadow = c.no_shadow;
     seg.full_bright = c.full_bright;

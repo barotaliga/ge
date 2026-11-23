@@ -1109,7 +1109,8 @@ int run_main(int argc, char** argv) {
     cl::hear_swap(synth, under_ear);                      // s_swapstereo
     cl::hear_ears(synth, under_ear);                      // s_hrtf
     picture.q2fx.plain_stereo = !cl::hrtf_on(under_ear);  // al_merge_looping 1 merges only then
-    picture.q2fx.hand = cl::beam_hand(view_settings.hand, view_settings.gun);  // the own plasma beam's side
+    picture.q2fx.hand =
+        cl::beam_hand(view_settings.hand, view_settings.gun);  // the own plasma beam's side
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one

@@ -330,10 +330,10 @@ struct FxState {
   size_t q2_models_next = 0;
   struct Q2Cable {
     int entity = 0;
-    int other = 0;       // the tesla's lightning: the entity it strikes (kept by the two)
-    sh::Vec3f from, to;  // map units
-    sh::Vec3f offset;    // the grapple's start off its holder (the player's own drawn origin)
-    bool ctf = false;    // the grapple's segment, else a monster's
+    int other = 0;           // the tesla's lightning: the entity it strikes (kept by the two)
+    sh::Vec3f from, to;      // map units
+    sh::Vec3f offset;        // the grapple's start off its holder (the player's own drawn origin)
+    bool ctf = false;        // the grapple's segment, else a monster's
     bool lightning = false;  // the tesla's lightning (q2_model_fx.hpp's mission packs' beams)
     double until = 0;
   };

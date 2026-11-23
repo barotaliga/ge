@@ -124,8 +124,8 @@ void q2_heat_beams(FxState& s, const FxScene& l, int modelindex, double t, int& 
         const float v = k == 0 ? up.x : k == 1 ? up.y : up.z;
         (k == 0 ? from.x : k == 1 ? from.y : from.z) += off[0] * r + off[1] * f + off[2] * v;
       }
-      float len = static_cast<float>(
-          ge::core::hypot3(h.to.x - from.x, h.to.y - from.y, h.to.z - from.z));
+      float len =
+          static_cast<float>(ge::core::hypot3(h.to.x - from.x, h.to.y - from.y, h.to.z - from.z));
       sh::Vec3f hit, normal;
       if (s.on.fake_shaft > 0 && l.map != nullptr &&
           beam_trace(l.map, from, fwd, l.bodies, own, hit, normal))
@@ -135,7 +135,9 @@ void q2_heat_beams(FxState& s, const FxScene& l, int modelindex, double t, int& 
       place_chain(from, to, chain, unused, entity, out.models);
       // The rings, sliding forward at 96 units a second.
       const double r[3] = {right.x, right.y, right.z}, v[3] = {up.x, up.y, up.z};
-      for (double d = std::fmod(t * 96, 32); d < len; d += 32) {
+      const double first = std::fmod(t * 96, 32);
+      for (int i = 0; first + 32.0 * i < len; i++) {
+        const double d = first + 32.0 * i;
         const double whole = std::floor(d);
         const double scale = whole < 10 ? whole / 10 : 1;
         double p[3];
@@ -193,10 +195,7 @@ bool q2_classic_blast(FxState& s, int code, const sh::Vec3f& at, const double p[
     case 8:
     case 17:
     case 18:
-      if (!no_specks) fx::q2_blast_specks(p, 0xe0, s.seed++, s.palette, &out.births);
-      q2_model_fx(s, code, at, {0, 0, 1}, t);
-      return true;
-    case 62:  // explosion1 and 2 with no light
+    case 62:  // explosion1 and 2 with no light (q2_model_fx_of leaves them dark)
     case 63:
       if (!no_specks) fx::q2_blast_specks(p, 0xe0, s.seed++, s.palette, &out.births);
       q2_model_fx(s, code, at, {0, 0, 1}, t);
@@ -442,8 +441,7 @@ bool q2_pack_hit(FxState& s, const Effect& e, const double p[3], double t, FxFra
   if (n == "te_heatbeam_sparks" || n == "te_heatbeam_steam") {  // steam off the face at 60
     const bool sparks = n == "te_heatbeam_sparks";
     const double jet[3] = {way[0] * 60, way[1] * 60, way[2] * 60};
-    fx::q2_steam(p, jet, sparks ? 50 : 20, sparks ? 8 : 0xe0, 40, s.seed++, s.palette,
-                 &out.births);
+    fx::q2_steam(p, jet, sparks ? 50 : 20, sparks ? 8 : 0xe0, 40, s.seed++, s.palette, &out.births);
     return true;
   }
   if (const Q2Puff* puff = q2_puff(n); puff != nullptr && (puff->code == 42 || puff->code == 46)) {

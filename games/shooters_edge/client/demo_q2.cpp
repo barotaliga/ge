@@ -882,7 +882,8 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       e.at = e.at + e.way;
       break;
     }
-    case 33: {  // lightning: the source and the target entity, start, end; its crackle on the source
+    case 33: {  // lightning: the source and the target entity, start, end; its crackle on the
+                // source
       e.entity = m.i16();
       e.count = m.i16();
       line(DemoEffectKind::named_trail);

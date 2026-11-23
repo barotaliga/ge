@@ -565,8 +565,7 @@ void q2_heat_ring(const double p[3], const double right[3], const double up[3], 
     const double a = n * (2 * 3.14159265358979323846 / 20);
     const double c = std::cos(a) * radius, sn = std::sin(a) * radius;
     out->push_back(q2_speck(p, c * right[0] + sn * up[0], c * right[1] + sn * up[1],
-                            c * right[2] + sn * up[2], zero, 0, pal, 223 - pick(r, 8),
-                            kOneFrameS));
+                            c * right[2] + sn * up[2], zero, 0, pal, 223 - pick(r, 8), kOneFrameS));
   }
 }
 

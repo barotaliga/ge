@@ -204,8 +204,7 @@ TEST(the_packs_bolts_beams_and_lightning_read_off_the_wire_by_name) {
   CHECK(d.state.started.size() == 1);
   CHECK(std::string(d.state.started[0].name) == "weapons/lashit.wav");
   CHECK(read_one({3, 55, 64, 0, 128, 0, 192, 0, 5}).state.effects[0].name == "te_flechette");
-  CHECK(read_one({3, 44, 64, 0, 128, 0, 192, 0, 5}).state.effects[0].name ==
-        "te_heatbeam_steam");
+  CHECK(read_one({3, 44, 64, 0, 128, 0, 192, 0, 5}).state.effects[0].name == "te_heatbeam_steam");
   // The heat beam (38): entity 3, start, end.
   d = read_one({3, 38, 3, 0, 64, 0, 0, 0, 0, 0, 128, 2, 0, 0, 0, 0});
   CHECK(d.state.effects.size() == 1 && d.state.effects[0].name == "te_heatbeam");
