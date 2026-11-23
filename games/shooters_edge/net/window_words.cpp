@@ -17,6 +17,7 @@
 
 #include "classic/content/downloads.hpp"
 #include "classic/content/files.hpp"
+#include "classic/content/map_versions.hpp"
 #include "console/console.hpp"
 #include "console/view.hpp"
 #include "core/output.hpp"
@@ -30,7 +31,8 @@
 namespace shooters_edge::net {
 
 void add_window_words(ge::console::Console& con, ge::console::ConsoleView& view,
-                      client::Listen& listen, Remote& remote, std::string& next_map) {
+                      client::Listen& listen, Remote& remote, std::string& next_map,
+                      const std::function<bool(const std::string& line)>* first) {
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;
   con.add_command("map", "map <name>: play the map (\"map arena\" is built in)",
@@ -87,7 +89,8 @@ void add_window_words(ge::console::Console& con, ge::console::ConsoleView& view,
                   });
 
   // Any other line the window does not know goes to Quake II's rules (`use Railgun`, `drop`).
-  con.set_unknown([&](const CArgs& a) {
+  con.set_unknown([&, first](const CArgs& a) {
+    if (first != nullptr && *first && (*first)(a.raw)) return true;
     return remote_rules_word(remote, a.raw) || client::listen_rules_word(listen, a.raw) ||
            client::listen_campaign_word(listen, a.raw);
   });
@@ -149,6 +152,27 @@ void wire_remote_files(Remote& remote, ge::classic::content::SearchPath& files,
         return std::vector<uint8_t>(got.begin(), got.end());
       };
   remote.held = ge::classic::content::held_in_folder([&files] { return files.folder; });
+  // A map's other versions, kept hidden in the window's game folder (map_versions.hpp).
+  namespace cc = ge::classic::content;
+  remote.map_versions = [&files](const std::string& map) {
+    return cc::stored_versions(files.folder, map);
+  };
+  remote.keep_version = [&files](const std::string& map, uint32_t sum,
+                                 const std::vector<uint8_t>& bytes) {
+    std::string why;
+    const std::string path = cc::keep_version(files.folder, map, sum, bytes, why);
+    if (path.empty()) ge::core::output::status("shooters_edge: " + why);
+    return path;
+  };
+  remote.use_map = [&files](const std::string& map, const std::string& version) {
+    cc::choose_version(files, map, version);
+  };
+  remote.remembered = [&files](const std::string& server, const std::string& map) {
+    return cc::remembered_key(files.folder, server, map);
+  };
+  remote.keep_choice = [&files](const std::string& server, const std::string& map, uint32_t sum) {
+    cc::keep_choice(files.folder, server, map, sum);
+  };
   remote.keep_file = [&files, &basedir, &game, content, &locs_fetched](
                          const std::string& gamedir, const std::string& path,
                          const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin) {

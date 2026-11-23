@@ -70,6 +70,7 @@
 
 #include "classic/locs.hpp"
 #include "classic/q2_move.hpp"
+#include "classic/weapon_predict.hpp"
 #include "server/sheet.hpp"
 #include "shooter/vec.hpp"
 #include "vfs/partial.hpp"
@@ -229,6 +230,8 @@ struct DemoBlow {
 };
 
 inline constexpr size_t kKeptBlows = 8;
+// The light styles a level keeps (the renderer's, plugins/brush/app/draw_data.hpp's kLightStyles).
+inline constexpr size_t kDemoLightStyles = 64;
 
 // An item taken and coming back, as a live stream of our server tells it (the ge set's `item-back`,
 // svc 119): where it will lie, as what, and the demo's clock it shows at.
@@ -248,7 +251,8 @@ struct DemoEffect {
   sh::Vec3f way;      // a named effect's way
   std::string name;   // a named effect's
   int colour = 0;     // a splash's or a laser's sparks' palette index; a burst's; explosion2's
-                      // first colour (`count` its run's length)
+                      // first colour (`count` its run's length); a Quake II puff's run's first
+  int q2_specks = 0;  // Quake II: a hit's puff of this many specks off `way` (q2_temp_fx.hpp)
 };
 
 inline constexpr double kNeverFlashed = -1e9;
@@ -270,6 +274,9 @@ struct DemoState {
   std::string map;             // "e1m1" off `maps/e1m1.bsp`; "" before the first level
   std::vector<uint8_t> areas;  // Quake II: the last frame's areas shown (a bit each); empty, all
   int levels = 0;              // level starts read so far (a new level: load its map)
+  // The level's light styles as the server set them (Quake's light-style message, Quake II's
+  // settings strings from 800): letters 'a' dark .. 'm' as baked .. 'z', ten a second; "" steady.
+  std::array<std::string, kDemoLightStyles> light_styles;
   // The level's place names as the recording kept them (`//loc` lines, plugins/classic/locs.hpp);
   // empty when it kept none.
   ge::classic::Locs places;
@@ -302,7 +309,13 @@ struct DemoState {
   int64_t bonuses = 0;
   // Multiview: the match server's start markers read (its stuffed `//ktx matchstart`).
   int64_t match_starts = 0;
-  sh::Vec3f velocity;          // client: the recording's player's, units/s (`velocity_read`)
+  sh::Vec3f velocity;  // client: the recording's player's, units/s (`velocity_read`)
+  // Client, under weapon prediction: the player's weapon state from his last player state
+  // (`known` false when the server sent none); the client runs it forward (net/qw_weapon.hpp).
+  ge::classic::WeaponState own_weapon;
+  // Client: the shots the weapon prediction fired for the player so far, and the weapon frame the
+  // last one started on (the axe's swing); the window's hand fires on each (client/held.cpp).
+  int own_shots = 0, own_shot_frame = 0;
   bool velocity_read = false;  // client: the player's velocity came in his last player state
   // Quake II: what went wrong with the last frame read (kQ2Frame* bits; `scr_showturtle` writes
   // them on the screen, client/q2_bar.hpp's `add_q2_turtle`).
@@ -320,6 +333,7 @@ struct DemoState {
   // drawn with the fixed list (`demo_vweps`).
   std::vector<std::string> vweps;
   std::vector<std::string> images;  // Quake II: the pictures it names (`pics/<name>.pcx`)
+  std::string sky;                  // Quake II: the sky's name (its sides `env/<sky><side>`)
   // Quake II: what its own status bar runs (client/q2_bar.hpp): the bar's program, the item
   // names by number, the player state's 32 stats as sent, the last screen the server put up (a
   // scoreboard's or the help computer's program) and the last inventory's counts by item number.

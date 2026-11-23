@@ -22,12 +22,12 @@ float fh(const ui::Image* img) { return img != nullptr ? static_cast<float>(img-
 
 // `u` here is screen px per PICTURE pixel (the art's unit over its density).
 void picture_box(ui::DrawList& dl, const ui::Image* img, ui::Rect r, ui::Color tint, float u,
-                 float opacity = 1) {
+                 float opacity = 1, ui::Rect part = {0, 0, 0, 0}) {
   if (img == nullptr || img->empty() || opacity <= 0) return;
   ui::Box b;
   b.rect = r;
   b.image = img;
-  b.uv = {0, 0, fw(img), fh(img)};
+  b.uv = part.w > 0 ? part : ui::Rect{0, 0, fw(img), fh(img)};
   b.fill = ui::solid(tint);
   b.nearest = whole_unit(u);
   b.feather = 0.5f;
@@ -135,7 +135,8 @@ void draw(ui::DrawList& dl, const StripShape& s, const Strip& strip, ui::Rect at
       // Mirrored, a line runs from its far end: its last cell first.
       const Cell& c = cells[mirror && !s.vertical ? l.end - 1 - (k - l.first) : k];
       const Size z = cell_size(s, c, strip.density);
-      const float lift = (l.across - (s.vertical ? z.w : z.h)) / 2;  // centred across its line
+      const float room = l.across - (s.vertical ? z.w : z.h);  // across its line
+      const float lift = s.cross_align == 0 ? 0 : s.cross_align == 2 ? room : room / 2;
       const ui::Rect r =
           s.vertical ? ui::Rect{at.x + (cross + lift) * u, at.y + pos * u, z.w * u, z.h * u}
                      : ui::Rect{at.x + pos * u, at.y + (cross + lift) * u, z.w * u, z.h * u};
@@ -148,7 +149,9 @@ void draw(ui::DrawList& dl, const StripShape& s, const Strip& strip, ui::Rect at
         dl.rect({r.x, r.y + top, r.w, ph - top},
                 ui::with_alpha(c.plate_low, c.plate_low.a * c.alpha));
       }
-      picture_box(dl, c.image, r, c.tint, u / strip.density, c.alpha);
+      const float d = strip.density;  // the part in the picture's own px
+      picture_box(dl, c.image, r, c.tint, u / d, c.alpha,
+                  {c.part.x * d, c.part.y * d, c.part.w * d, c.part.h * d});
       if (c.framed) {
         ui::Box b;
         b.rect = r;

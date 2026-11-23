@@ -90,6 +90,7 @@
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/model_lerp.hpp"
+#include "shooters_edge/client/own_beam.hpp"
 #include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/warps.hpp"
@@ -127,6 +128,9 @@ struct FxSwitches {
   int muzzle_flash = 1;
   // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
   ModelLerpSwitches lerp;
+  // cl_fakeshaft (either look): the own lightning beam turned this share of the way from the
+  // server's line to the view's, traced again every frame (`own_beam`); 0 the server's line.
+  double fake_shaft = 0;
   // Quake II's own (either look): specks, explosions' balls, lights and guns' fire left out.
   ge::classic::Q2FxSwitches q2;
 };
@@ -161,7 +165,21 @@ struct HeldBeam {
   float laser_m = 0;
   float laser_rgb[3] = {1, 0, 0};
   double seen = 0;
+  // The line the server sent last (map units), the player's own beam turned from it each frame
+  // (`own_beam`); the grappling beam (never turned); the server's sparks owed at the turned end.
+  sh::Vec3f server_from{0, 0, 0}, server_to{0, 0, 0};
+  bool grapple = false;
+  bool sparks_due = false;
+  // The way it pointed last (map, from its root), and the edge it crossed since (own_beam.hpp's
+  // `beam_edge`): the last point on the face it left and the first on the next, engine metres,
+  // burnt before this frame's end so its line goes round the corner unbroken.
+  sh::Vec3f was_dir{0, 0, 0};
+  bool was = false;
+  int edges = 0;
+  double edge_at[2][3] = {}, edge_n[2][3] = {};
 };
+
+// The own beam turned to the aim each frame: client/own_beam.hpp (cl_fakeshaft).
 
 // A beam entity the rules show this frame (Quake II's beam render bit: a laser): from its origin
 // to its far end in map units, its width in units and four palette indices, low byte first.
@@ -384,6 +402,8 @@ inline FxState fx_state_for(const PlaceNames* places) {
 struct FxFrame {
   effects::Particles births;
   std::vector<uint8_t> areas;  // the areas the world draws (FxScene::areas); empty, all
+  // Each light style's pattern the world plays (FxScene::light_styles); "" steady.
+  std::array<std::string, kDemoLightStyles> light_styles;
   std::vector<effects::Light> lights;
   double blend[4] = {0, 0, 0, 0};  // the screen's: sRGB colour and share
   // The same without a lava's or a slime's tint, for a look that draws the liquid round the eye.
@@ -446,6 +466,9 @@ struct FxScene {
   // Quake II's areas the eye sees, a bit each (a recording's frame, the listen server's open
   // portals); empty, every area. Passed on in FxFrame::areas for the world's draw.
   std::vector<uint8_t> areas;
+  // The level's light styles (demo.hpp's DemoState::light_styles, the rules' world): passed on in
+  // FxFrame::light_styles for the world's draw. Empty: every style steady.
+  std::span<const std::string> light_styles;
   const LoadedMap* map = nullptr;         // the map's faces (marks, floors, what a blast hit)
   const sh::Server* server = nullptr;     // the brush entities an explosion's floor is traced
                                           // through too (null: the map's world alone)

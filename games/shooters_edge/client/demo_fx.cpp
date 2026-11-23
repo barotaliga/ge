@@ -21,6 +21,8 @@ Effect effect_of(const DemoEffect& d) {
   e.colour = d.colour;
   e.at = d.at;
   e.end = d.end;
+  e.q2_specks = d.q2_specks;
+  if (d.q2_specks > 0) e.way = d.way;  // the face's normal the puff leaves
   switch (d.kind) {
     case DemoEffectKind::spike:
       e.kind = EffectKind::spike;

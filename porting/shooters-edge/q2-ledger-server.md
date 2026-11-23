@@ -53,14 +53,14 @@ count); `missing` not in our tree or different where it matters (ranked in its n
 | --- | --- | --- | --- | --- |
 | Server console commands (the operator's words) | 59 | 0 | 17 | 76 |
 | General console commands and macros the server's console has (common) | 50 | 0 | 7 | 57 |
-| Server settings (cvars) with their defaults | 109 | 3 | 58 | 170 |
-| Server-to-client messages (svc) and protocol extensions the server writes | 43 | 5 | 5 | 53 |
-| What the server accepts from clients | 44 | 1 | 12 | 57 |
-| The game library interface | 60 | 5 | 23 | 88 |
-| Messages a player sees (refusals, drops, prints), quoted exactly | 61 | 3 | 8 | 72 |
+| Server settings (cvars) with their defaults | 113 | 0 | 57 | 170 |
+| Server-to-client messages (svc) and protocol extensions the server writes | 46 | 1 | 6 | 53 |
+| What the server accepts from clients | 45 | 0 | 12 | 57 |
+| The game library interface | 63 | 2 | 23 | 88 |
+| Messages a player sees (refusals, drops, prints), quoted exactly | 62 | 0 | 9 | 71 |
 | Messages an admin sees on the server console, quoted exactly | 30 | 0 | 6 | 36 |
-| Server features beyond single words | 41 | 3 | 11 | 55 |
-| **all** | 497 | 20 | 147 | 664 |
+| Server features beyond single words | 43 | 0 | 11 | 54 |
+| **all** | 511 | 3 | 148 | 662 |
 
 ## 1. Server console commands (the operator's words)
 
@@ -217,7 +217,7 @@ done 50, missing 0, not-taken 7
 Defaults are upstream's; flags as registered. Our Quake II spellings that are synonyms are listed in
 `games/shooters_edge/net/q2_game.cpp` (`kSettingNames`).
 
-done 109, missing 3, not-taken 58
+done 113, missing 0, not-taken 57
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -246,7 +246,7 @@ done 109, missing 3, not-taken 58
 | cvar.sv_show_name_changes | `sv_show_name_changes` = `0` | 1 announces renames of players in the game, 2 of everyone. | not-taken | Our design: `sv_shownames` (synonym); our line ends with a full stop (`engine/server/names.hpp`) |
 | cvar.sv_airaccelerate | `sv_airaccelerate` = `0` (latched) | Deathmatch air acceleration written into the map's value. | done | Rules setting |
 | cvar.sv_qwmod | `sv_qwmod` = `0` (latched) | The alternative move for extended clients. | not-taken | `q2-server-gaps.md` (names agreed 2026-11-19: the alternative move dropped, remix physics has it) |
-| cvar.public | `public` = `0` (latched) | Heartbeats to masters. | missing | Missing, rank 1 (gameplay, daily use): engine `sv_visibility` / `sv_master` (our own master protocol, `engine/net/master.hpp`); `public` not a synonym; no classic heartbeat (S28) |
+| cvar.public | `public` = `0` (latched) | Heartbeats to masters. | done | Quake II's spelling of `sv_public` (`net/q2_game.cpp`): 1 makes the server public from the map's start, beating to the `setmaster` list (`classic/protocol/masters.cpp`); the original's built-in default master is long offline, so none is named |
 | cvar.sv_password | `sv_password` = `` (private) | Server password (user info `password`); refusals `Please set your password before connecting.`, `Invalid password.` | not-taken | Our design: engine `sv_password` (`none` means none); refusal words are the stock library's `Password required or incorrect.` (msg.oob.password) |
 | cvar.sv_reserved_password | `sv_reserved_password` = `` (private) | Reserved slots' password. | done | `sv_vippassword` (synonym) |
 | cvar.sv_locked | `sv_locked` = `0` | Refuses new connections. | not-taken | Our design: engine `sv_locked`; refusal adds `Connection refused.` (msg.oob.locked) |
@@ -367,7 +367,7 @@ done 109, missing 3, not-taken 58
 | cvar.allow_download_others | `allow_download_others` = `0` | Anything else. | done | `sv_download_others` (synonym), off by default: any other folder |
 | cvar.rcon_password | `rcon_password` = `` (private) | Remote console password. | done | Engine `rcon_password`; `games/shooters_edge/net/q2_admin.cpp` |
 | cvar.sys_forcegamelib | `sys_forcegamelib` = `` (no-set) | Game library path tried first. | not-taken | Tail (decided 2026-11-23), hosted game libraries only: the library is loaded from a path the server is given (`server/q2_native.hpp`). |
-| cvar.sys_allow_unsafe_savegames | `sys_allow_unsafe_savegames` = `0` (no-set) | Allows saves with libraries lacking the enhanced-savegame bit. | missing | |
+| cvar.sys_allow_unsafe_savegames | `sys_allow_unsafe_savegames` = `0` (no-set) | Allows saves with libraries lacking the enhanced-savegame bit. | done | A rule (games/shooters_edge/net/q2_game.cpp) passed to the hosted library at start; a later set prints `sys_allow_unsafe_savegames may be set from command line only.` and is ignored (`native_set`, `kUnsafeSavesSetting`) |
 | cvar.sys_history | `sys_history` | Command history size. | done | engine/server/terminal.hpp (`con_history`, Quake II's spelling a synonym): the last 128 lines typed kept, that many saved to `.syshistory` in the base game folder and read back, 0 neither, empty lines left out; tests/server_terminal_test.cpp |
 | cvar.fs_autoexec | `fs_autoexec` = `1` | Rerun configs when `game` changes. | done | engine/server/main.cpp (`server_switch_mods`): a mod switch (our change of `game`) reads every layer's server.cfg again; 0 changes the folders alone |
 | cvar.fs_debug | `fs_debug` = `0` | File debug prints. | not-taken | `q2-server-gaps.md` "Not worth building" |
@@ -382,19 +382,19 @@ done 109, missing 3, not-taken 58
 | cvar.net_maxmsglen | `net_maxmsglen` = `1390` | Largest packet a client may ask for. | done | ours `sv_maxmsglen` (games/shooters_edge/net/q2_game.cpp), the reference's name a synonym; read by `q2_msglen` (`q2_msglen`, games/shooters_edge/net/q2_net_ext.cpp) |
 | cvar.net_chantype | `net_chantype` = `1` | Channel kind (new or old). | not-taken | A client's own setting the server never reads; the server's half (the client's choice taken for protocol 36, `Invalid netchan type.`, the ` nc=` answer) is games/shooters_edge/net/q2_net_ext.cpp |
 | cvar.net_ip | `net_ip` = `` | IPv4 bind address. | done | Engine `net_ip` |
-| cvar.net_ip6 | `net_ip6` = `` | IPv6 bind address. | missing | |
+| cvar.net_ip6 | `net_ip6` = `` | IPv6 bind address. | done | Engine `net_ip6` (engine/server/server.cpp): the IPv6 socket's address with `net_enable_ipv6` 2 (`open_ipv6`, engine/server/net_restart.hpp; `open_udp6_beside`, engine/net/transport.hpp); not fatal when it cannot be had; `showip` lists `Server UDP6` |
 | cvar.net_port | `net_port` = `27910` | Port. | done | Engine `net_port`, Quake II's default port |
 | cvar.net_clientport | `net_clientport` = any | Client's port. | not-taken | A client's own port; the dedicated server has no client (the client's ledger has it) |
 | cvar.net_dropsim | `net_dropsim` = `0` | Simulated loss. | not-taken | Loss is simulated by the engine's simulated network in tests and labs (engine/net, net-link lab), not by a setting on a live server |
 | cvar.net_log_enable | `net_log_enable` = `0` | Packet log. | done | engine/net/packet_log.hpp on every dedicated server (`net_log`, Quake II's spelling a synonym): each datagram in and out, `UDP`/`TCP` `recv`/`send`, the time in ms, the peer, the length, 16-byte hex rows with the letters; 1 a new file, 2 added to; the open, close and failure lines, a failure setting it back to 0; tests/net_packet_log_test.cpp |
 | cvar.net_log_name | `net_log_name` = `network` | Packet log file. | done | engine/net/packet_log.hpp: `logs/<name>.log` in the game's folder, `.log` added unless given, odd letters made `_` |
 | cvar.net_log_flush | `net_log_flush` = `0` | Packet log flush. | done | engine/net/packet_log.hpp: 0 buffered, 1 each entry flushed, 2 unbuffered; a change reopens the log |
-| cvar.net_enable_ipv6 | `net_enable_ipv6` = 1 when the system has IPv6 | 2 also listens on IPv6. | not-taken | Tail (decided 2026-11-23): engine addresses carry IPv6 (`engine/net/address.cpp`); this switch on the dedicated server is not taken. |
+| cvar.net_enable_ipv6 | `net_enable_ipv6` = 1 when the system has IPv6 | 2 also listens on IPv6. | done | Engine `net_enable_ipv6` 0..2 (default 1): 2 opens an IPv6 socket on `net_ip6` and `net_port` beside the IPv4 one, IPv6 only, both read by one transport; `net_restart` opens it again |
 | cvar.net_ignore_icmp | `net_ignore_icmp` = `0` | Ignores unreachable notices. | not-taken | `q2-server-gaps.md` row 17 (our transport hears no ICMP) |
 
 ## 4. Server-to-client messages (svc) and protocol extensions the server writes
 
-done 43, missing 5, not-taken 5
+done 46, missing 1, not-taken 6
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -407,21 +407,21 @@ done 43, missing 5, not-taken 5
 | svc.disconnect | message 7 | Tells the client to disconnect; at a drop, and twice to every client at shutdown. | done | games/shooters_edge/net/q2_net_server.cpp (`q2_net_shutdown`): twice to every client at shutdown, killserver and quit |
 | svc.reconnect | message 8 | Tells clients to reconnect, at a full restart (`Server restarted`) or `recycle`. | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: sent at `recycle` and when relay mode takes the port (`Server restarted`); a `map` restarting the game in place still moves clients by stuffed `changing` and `reconnect` (proto.mapchange) |
 | svc.sound | message 9 | A sound with optional volume, attenuation, time offset, entity and channel, and position; a 16-bit index under protocol extensions. | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `games/shooters_edge/server/q2_wire.cpp`: always carries a position (S5); our rules' sounds go to everyone (S3); a library's bad volume clamped (S16) |
-| svc.print | message 10 | A text line at a level (pickup, medium, high, chat). | missing | Missing, rank 1 (gameplay, daily use): sent; the client's `msg` level is not honoured (S6) LIFT: Quake's server already honours the `msg` level (`net/qw_server.cpp`); share it. |
+| svc.print | message 10 | A text line at a level (pickup, medium, high, chat). | done | the client's `msg` level honoured: a print below it is not sent (`server/q2_wire.cpp`), the rule shared with Quake's server (`classic/protocol/info.hpp`'s `print_reaches`, chat always reaching there) |
 | svc.stufftext | message 11 | Text the client runs. | done | `games/shooters_edge/net/q2_net_server.cpp`, `games/shooters_edge/server/q2_wire.cpp` |
 | svc.serverdata | message 12 | Protocol, server count, attract flag, game folder, player number (-1 on a cinematic or picture), level name; 35 adds an enhanced flag, the minor, an advanced-delta flag and the strafe-fix byte; 36 adds the minor, the server state, then a flag word (minor 1024 and up) or three move bytes. | done | games/shooters_edge/server/q2_wire.cpp; the 35 and 36 tails in games/shooters_edge/server/q2_wire_ext.cpp (`q2_server_data_tail`): no movement hacks, so a client predicts our move |
 | svc.configstring | message 13 | One configstring by index. | done | `games/shooters_edge/server/q2_wire.cpp`; index overflow is not an error (S14) |
 | svc.spawnbaseline | message 14 | One entity's baseline. | done | `games/shooters_edge/server/q2_wire.cpp` |
 | svc.centerprint | message 15 | Centred text. | done | `games/shooters_edge/server/q2_wire.cpp` |
-| svc.download | message 16 | A download piece with size and percent. | missing | Missing, rank 1 (gameplay, daily use): `games/shooters_edge/net/q2_net_server.cpp`: 1024-byte pieces, one a frame (S39) LIFT: Quake's downloads (`net/qw_remote.cpp`) are the place to share kinds and piece sizes. |
+| svc.download | message 16 | A download piece with size and percent. | done | games/shooters_edge/net/q2_net_download.cpp: pieces fill the packet (1386 bytes on 1390), one a `nextdl`, paced by the rate; the piece rule shared with Quake's server (classic/protocol/download_pace.hpp; Quake keeps its rate-sized pieces). Held by tests/shooters_edge_q2_download_pace_test.cpp |
 | svc.playerinfo | message 17 | The player state delta. | done | `games/shooters_edge/server/q2_wire.cpp` |
 | svc.packetentities | message 18 | The entity deltas of a frame. | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: 35 and 36 send the list with no id byte and long solids (games/shooters_edge/server/q2_wire_ext.cpp); the extended limits (512 entities and up) absent (proto.extended-limits) |
 | svc.deltapacketentities | message 19 | Unused by the server (defined only). | done | Not sent by either |
 | svc.frame | message 20 | Frame number, delta frame, suppress count, area bits. | done | 34 and the later frame top (games/shooters_edge/server/q2_wire_ext.cpp, `q2_write_frame_top_ext`: extra flags, the 27-bit number and back offset, frame flags); the area bits mark the areas joined to the viewer's (`q2_write_area_bits`, every area from area 0) |
 | svc.zpacket | message 21 | A deflate-compressed block of messages (35 and 36 with zlib). | done | games/shooters_edge/net/q2_net_server.cpp (`packed`, engine/core/deflate.hpp): a signon message deflated when it comes out smaller |
-| svc.zdownload | message 22 | A compressed download piece straight from a pack (36 minor 1021 and up). | missing | S18 |
+| svc.zdownload | message 22 | A compressed download piece straight from a pack (36 minor 1021 and up). | done | A `.pkz` file stored deflated goes from its start to a 36 client at minor 1021 or later with zlib as the entry's raw deflate stream in pieces of message 22 (`Q2NetConfig::read_deflated`, `served_deflated`, `vfs::deflated`); its size and `sv_max_download_size` are the stream's; pieces of 1024 bytes as for message 16 |
 | svc.gamestate | message 23 | The whole game state at once (36). | done | games/shooters_edge/server/q2_wire_ext.cpp (`q2_signon_streams`), for 36 below minor 1024 |
-| svc.setting | message 24 | A server setting: index and value; two kinds, 0 player updates and 1 frame rate. | missing | S18 (our own clients get the frame rate by the `*ge_ext` bit instead) |
+| svc.setting | message 24 | A server setting: index and value; two kinds, 0 player updates and 1 frame rate. | not-taken | Sent only by builds with the variable frame rate, which the reference's default build leaves out; our own clients get the frame rate by the `*ge_ext` bit |
 | svc.configstringstream | message 25 | Configstrings streamed (36). | done | games/shooters_edge/server/q2_wire_ext.cpp (`q2_signon_streams`), 36 from minor 1024 |
 | svc.baselinestream | message 26 | Baselines streamed (36). | done | games/shooters_edge/server/q2_wire_ext.cpp (`q2_signon_streams`), 36 from minor 1024 |
 | svc.ge-own | messages 119, 121 to 124, 126, 127 | Ours only, to our own clients that ask by `*ge_ext`: item back times, voice, move feel, download archive, others' moves, jump share, account key. | done | `games/shooters_edge/net/q2_net_server.cpp` (not in the reference; listed so the ledger accounts for every byte ours writes) |
@@ -454,7 +454,7 @@ done 43, missing 5, not-taken 5
 
 ## 5. What the server accepts from clients: clc messages, string commands, out-of-band words
 
-done 44, missing 1, not-taken 12
+done 45, missing 0, not-taken 12
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -474,7 +474,7 @@ done 44, missing 1, not-taken 12
 | ucmd.disconnect | `disconnect` | Leaves; the server's own drop line is silent, the library announces it (stock: `<name> disconnected`). | done | `string_command` drops; our rules say `<name> disconnected` (`games/shooters_edge/server/q2_server.cpp`) |
 | ucmd.info | `info` | The server info to the asking client. | done | games/shooters_edge/net/q2_net_server.cpp (`player_query`, `q2_info_lines`) |
 | ucmd.sinfo | `sinfo` | The client's own connection details (the miscinfo block). | done | games/shooters_edge/net/q2_net_server.cpp (`q2_misc_lines`) |
-| ucmd.download | `download <file> [offset]` | Starts or resumes a download. | missing | Missing, rank 1 (gameplay, daily use): games/shooters_edge/net/q2_net_server.cpp (`start_download`): the name made plain, every kind, the size limit, the size-differs message; pieces of 1024 bytes (feat.dl.pieces) LIFT: Quake's server downloads (`net/qw_server.cpp`) are the place to share piece sizes. |
+| ucmd.download | `download <file> [offset]` | Starts or resumes a download. | done | games/shooters_edge/net/q2_net_download.cpp (`q2_start_download`): the name made plain, every kind, the size limit, the size-differs message, a resume at the end one empty piece at 100; the first piece owed by the command itself |
 | ucmd.download-http | `download http` | Marks the client as fetching by HTTP, so `status` shows HTTP. | done | games/shooters_edge/net/q2_net_server.cpp; shown as HTTP in `status` and `status d` |
 | ucmd.nextdl | `nextdl` | Next piece (stock clients). | done | `string_command` |
 | ucmd.stopdl | `stopdl` | Stops a download. | done | games/shooters_edge/net/q2_net_server.cpp |
@@ -521,13 +521,13 @@ done 44, missing 1, not-taken 12
 Ours: the native host (`games/shooters_edge/server/q2_native.hpp`, `q2_native_calls.cpp`,
 `q2_native_abi.hpp`, `q2_native_save.cpp`).
 
-done 60, missing 5, not-taken 23
+done 63, missing 2, not-taken 23
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| api.bprintf | `bprintf(level, fmt)` | Print to everyone whose `msg` level allows it (and to the recorder). | missing | Missing, rank 1 (gameplay, daily use): `c_bprintf`; the clients' `msg` level not honoured (S6) LIFT: as svc.print. |
+| api.bprintf | `bprintf(level, fmt)` | Print to everyone whose `msg` level allows it (and to the recorder). | done | each player sent only what its `msg` level lets through, the event kept for a recording (`server/q2_native_calls.cpp`) |
 | api.dprintf | `dprintf(fmt)` | Print to the server console. | done | `c_dprintf` |
-| api.cprintf | `cprintf(ent, level, fmt)` | Print to one client (or the console when no entity). | missing | Missing, rank 1 (gameplay, daily use): `c_cprintf`; `msg` level not honoured (S6) LIFT: as svc.print. |
+| api.cprintf | `cprintf(ent, level, fmt)` | Print to one client (or the console when no entity). | done | held back below the player's `msg` level (`server/q2_native_calls.cpp`'s `native_print`) |
 | api.centerprintf | `centerprintf(ent, fmt)` | Centred print to one client. | done | `c_centerprintf` |
 | api.sound | `sound(ent, channel, index, vol, atten, timeofs)` | A sound from an entity. | not-taken | Tail (decided 2026-11-23), hosted game libraries only: `c_sound`: the hearing set and areas (`send_to`), the position left out for a client whose frame holds the entity; bad values clamped not refused (S16) |
 | api.positioned_sound | `positioned_sound(origin, ent, ...)` | A sound at a point. | not-taken | Tail (decided 2026-11-23), hosted game libraries only: same |
@@ -605,8 +605,8 @@ done 60, missing 5, not-taken 23
 | api.gmf.properinuse | feature bit 1: proper in-use | The library keeps the entity in-use flag right, so the server can rely on it. | done | games/shooters_edge/server/q2_native.cpp (`take_view`): an entity not in use is not sent |
 | api.gmf.mvdspec | feature bit 2: recorder-aware | The library knows the recorder's dummy spectator. | not-taken | Tail (decided 2026-11-23), hosted game libraries only: our own rules count as knowing the spectator (`sv_mvd_spawn_dummy` 1 makes it); the recorder records our rules only, so a hosted library's bit is not read |
 | api.gmf.alldisconnects | feature bit 3: all disconnects | The disconnect call also for clients that never entered. | done | games/shooters_edge/server/q2_native.cpp (`nv_drop`): the disconnect call for a client the game said yes to that never entered |
-| api.gmf.savegames | feature bit 10: enhanced savegames | Saves allowed only with this bit (or `sys_allow_unsafe_savegames`); `Game supports Q2PRO enhanced savegames.` | not-taken | Our design: added (upstream); ours saves any library, no bit check |
-| api.gmf.variablefps | feature bit 11: variable frame rate | `sv_fps` above 10 used only with this bit. | missing | Added (upstream); ours runs the hosted library at 10 Hz |
+| api.gmf.savegames | feature bit 10: enhanced savegames | Saves allowed only with this bit (or `sys_allow_unsafe_savegames`); `Game supports Q2PRO enhanced savegames.` | done | `saves_safe` (q2_native_save.cpp): without the bit (or `sys_allow_unsafe_savegames` 1) `save` and `load` are refused with `Game does not support enhanced savegames`, levels are not kept and no autosave is made; each new non-deathmatch game says which (our wording without the build's name) |
+| api.gmf.variablefps | feature bit 11: variable frame rate | `sv_fps` above 10 used only with this bit. | not-taken | The variable frame rate is left out of the reference's default build, so the bit is never acted on there either; ours runs the hosted library at 10 Hz and does not offer the bit |
 | api.gmf.extrauserinfo | feature bit 12: extra user info | The connect call gets a second info string: challenge, ip, major, minor, netchan, packetlen, qport, zlib. | not-taken | Tail (decided 2026-11-23), hosted game libraries only: games/shooters_edge/server/q2_native.cpp (`userinfo_text`): the second string in order; challenge, qport and the channel's numbers are fixed (0, 34/0, 1, 1390), as the hosted game sits behind our own server |
 | api.gmf.ipv6 | feature bit 13: IPv6-aware | The `ip` key may carry an IPv6 address. | done | games/shooters_edge/server/q2_native.cpp (`ipv4_for_game`): without the bit an IPv6 client's `ip` reads 198.51.100.X:PORT |
 | api.gmf.indexoverflow | feature bit 14: index overflow allowed | A full model, sound or image table returns 0 instead of stopping the level. | not-taken | Tail (decided 2026-11-23), hosted game libraries only: added (upstream); ours always returns 0, whatever the library asks (S14) |
@@ -618,7 +618,7 @@ done 60, missing 5, not-taken 23
 
 `<x>` marks a filled-in value. Ours quoted where it differs.
 
-done 61, missing 3, not-taken 8
+done 62, missing 0, not-taken 9
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -632,7 +632,7 @@ done 61, missing 3, not-taken 8
 | msg.oob.iplimit6 | `Too many connections from your IPv6 network.` | | done | games/shooters_edge/net/q2_net_server.cpp, engine/server/admission.cpp |
 | msg.oob.maxmsglen | `Invalid maximum message length.` | Extended connect. | done | games/shooters_edge/net/q2_net_ext.cpp (`q2_connect_ask`) |
 | msg.oob.netchan | `Invalid netchan type.` | Extended connect. | done | games/shooters_edge/net/q2_net_ext.cpp (`q2_connect_ask`) |
-| msg.oob.extended-limits | `This is a protocol limit removing enhanced server.` then `Your client version is not compatible. Make sure you are running the latest Q2PRO client version.` | Old client on an extended-limits server. | missing | S17, S18 |
+| msg.oob.extended-limits | `This is a protocol limit removing enhanced server.` then `Your client version is not compatible. Make sure you are running the latest Q2PRO client version.` | Old client on an extended-limits server. | done | games/shooters_edge/net/q2_net_ext.cpp (`q2_extended_refusal`): our words without the other program's name; the status `protocol` key 36 when extended. Held by tests/shooters_edge_q2_net_ext_test.cpp |
 | msg.oob.empty-userinfo | `Empty userinfo string.` | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.oob.malformed-userinfo | `Malformed userinfo string.` | | done | games/shooters_edge/net/q2_net_server.cpp (`info_strict`, plugins/classic/protocol/info.hpp) |
 | msg.oob.no-name | `Please set your name before connecting.` | | done | games/shooters_edge/net/q2_net_server.cpp |
@@ -659,9 +659,9 @@ done 61, missing 3, not-taken 8
 | msg.drop.sequence | `outgoing sequence too big` | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.drop.reset | `connection reset by peer` | Unreachable notices. | not-taken | `q2-server-gaps.md` row 17 |
 | msg.drop.multiple-moves | `multiple clc_move commands in packet` | | done | games/shooters_edge/net/q2_net_server.cpp (`read_messages`) |
-| msg.drop.too-many-frames | `too many frames in packet` | | missing | S18 (extended moves) |
+| msg.drop.too-many-frames | `too many frames in packet` | | done | `read_q2_batch` (games/shooters_edge/net/q2_net_ext.cpp): more extra frames than a packet holds drops the client with this reason |
 | msg.drop.read-past-end | `read past end of message` | | done | games/shooters_edge/net/q2_net_server.cpp (`read_messages`) |
-| msg.drop.too-many-usercmds | `too many usercmds in frame` | | missing | S18 |
+| msg.drop.too-many-usercmds | `too many usercmds in frame` | | not-taken | Cannot happen: a frame's move count is 5 bits (31 at most), so the reference never reaches 32 either |
 | msg.drop.unknown-byte | `unknown command byte` | | done | games/shooters_edge/net/q2_net_server.cpp (`read_messages`) |
 | msg.drop.empty-userinfo | `empty userinfo` | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.drop.malformed-userinfo | `malformed userinfo` | | done | games/shooters_edge/net/q2_net_server.cpp |
@@ -743,14 +743,14 @@ done 30, missing 0, not-taken 6
 
 ## 9. Server features beyond single words: downloads, rates, floods, bans, filters, recording, status
 
-done 41, missing 3, not-taken 11
+done 43, missing 0, not-taken 11
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | feat.dl.http | HTTP downloads | `dlserver=<url>` in the connect answer sends clients to a web copy. | done | games/shooters_edge/net/q2_net_server.cpp: the connect answer names the web copy (`sv_downloadserver`) |
-| feat.dl.pieces | piece size and pace | Pieces sized to the packet's room, several a frame within the rate (extended); 1024 a frame stock. | missing | Missing, rank 1 (gameplay, daily use): 1024 a piece (S39) LIFT: as ucmd.download. |
+| feat.dl.pieces | piece size and pace | Pieces sized to the packet's room, several a frame within the rate (extended); 1024 a frame stock. | done | classic/protocol/download_pace.hpp (`fill_room`) from games/shooters_edge/net/q2_net_download.cpp: the room less 4, one piece owed at a time, the pause of its bytes over the rate; facts porting/shooters-edge/q2-downloads-pace.md (the earlier note's "several a frame" corrected: one a `nextdl`) |
 | feat.dl.no-frames | no frames while downloading | Game frames are not sent to a downloading client. | done | games/shooters_edge/net/q2_net_server.cpp (`send_frames`): reliable data alone while a file comes down |
-| feat.dl.compressed | compressed downloads | Deflate pieces straight from compressed packs (36 minor 1021 and up, zlib, from offset 0). | missing | S18 |
+| feat.dl.compressed | compressed downloads | Deflate pieces straight from compressed packs (36 minor 1021 and up, zlib, from offset 0). | done | same (games/shooters_edge/net/q2_net_server.cpp `start_download`); tests/shooters_edge_q2_net36_test.cpp |
 | feat.dl.resume | resume by offset | A download restarts at the client's offset. | done | games/shooters_edge/net/q2_net_server.cpp: from the client's offset; past the end told the size differs and refused |
 | feat.dl.kinds | what may be downloaded | A path with a folder, no `..`, by folder: players, models and sprites, sounds, maps, textures and env, pics, others; empty files and files past the size limit refused. | done | games/shooters_edge/net/q2_net_server.cpp: a folder, no climbing out, a plain first and last letter; by folder players, models and sprites, sound, maps, textures and env, pics, others; empty files and files past the size limit refused |
 | feat.dl.refused | refused download | The empty download answer (size -1). | done | `start_download` sends the refusal piece |
@@ -799,6 +799,6 @@ done 41, missing 3, not-taken 11
 | feat.map.vispatch | three stock maps' visibility repaired | | done | `sv_vispatch` |
 | feat.save.dedicated | saves on a dedicated server | | done | games/shooters_edge/net/q2_game.cpp: save, autosave and load on the dedicated server, the level-start autosave kept as `save0` |
 | feat.save.autosave | level-start autosave into `save0` at each level change in a unit (not in deathmatch) | | not-taken | Our design: ours autosaves as a level is entered (`q2_native_save.cpp`, our rules too) in our own save format; the dedicated server keeps it as `saves/save0.save` (games/shooters_edge/net/q2_game.cpp, `keep_autosave`) |
-| feat.spectator-fly | extended clients' spectators fly faster, with the fly fix | | missing | S18 (extended clients only) |
+| feat.spectator-fly | extended clients' spectators fly faster, with the fly fix | | done | plugins/classic/q2_move (`fly_time`, `fly_friction`, `fly_glide`, `q2_fly_for_protocol`): a stock 35 or 36 client's spectator flies at twice the time, a 36 client's with friction 4 gliding on; a 34 client's keeps the original step; ours and bots fly as before. Our rules by `ClientInfo::protocol`, a hosted library by the thinking slot (`NativeHost::thinking`). Facts: porting/shooters-edge/q2-server-batch13-facts.md |
 | feat.recycle | quit telling clients to reconnect | | not-taken | `q2-server-gaps.md` row 15 |
 | feat.master | classic heartbeat (status text) every 300 s, first 5 s after a game starts; `shutdown` on quit | done | `plugins/classic/protocol/masters.cpp` (only while public and dedicated) |

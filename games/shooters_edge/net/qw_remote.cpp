@@ -48,6 +48,19 @@ void open_live(client::Demo& d) {
   d.named_effects = true;  // ids 120 and 121 the game's own (the server sends them only if agreed)
 }
 
+// The most joins again with another version of a server's map (map_versions.hpp): the player's
+// copy, one kept, the server's own.
+constexpr int kMostMapTries = 3;
+
+// The server's map as a player names it ("dm3").
+std::string map_shown(const QwClientEnd& c) {
+  if (c.models.size() < 2) return "its map";
+  std::string m = c.models[1];
+  if (m.starts_with("maps/")) m.erase(0, 5);
+  if (m.ends_with(".bsp")) m.resize(m.size() - 4);
+  return m;
+}
+
 void start(Remote& r, const ClientConfig& cfg) {
   r.kept = false;
   ClientConfig c = cfg;
@@ -429,9 +442,9 @@ std::string remote_foot(const Remote& r, double& progress) {
 
 namespace {
 
-// The port Quake II's `net_clientport` asks for (-1 any free one; never in Quake).
+// The port `net_clientport` asks for (-1 any free one), in every game.
 int wanted_port(const Remote& r) {
-  if (!r.setting || !(r.q2_game && r.q2_game())) return -1;
+  if (!r.setting) return -1;
   const std::string v = r.setting("net_clientport");
   const int port = v.empty() ? -1 : std::atoi(v.c_str());
   return port > 0 && port <= 65535 ? port : -1;
@@ -506,6 +519,7 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   r.transport = &r.own;
   r.server = to;
   r.server_name = text;
+  r.map_tries = 0;
   r.trace.where = text;
   if (q2)
     q2_remote_start(r, cfg);
@@ -705,6 +719,8 @@ void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
 void remote_disconnect(Remote& r) {
   if (!r.active) return;
   r.left = true;
+  // The player's own copy of the map read again (another version was drawn while joined).
+  if (r.use_map && r.end.models.size() >= 2) r.use_map(r.end.models[1], "");
   if (r.ignore.con != nullptr) r.ignore.con->cvars().hold_cheats(false);  // Quake II's cheat lock
   if (r.watch) {
     watch_close(*r.watch);
@@ -807,6 +823,7 @@ RemoteStep watch_step(Remote& r, std::vector<std::string>& said) {
   std::vector<client::DemoPrint> prints;
   std::vector<client::DemoEffect> effects;
   std::string centre;
+  weapon_restore(r.weapon, d.state);  // the server's stats and frame back before its news
   for (;;) {
     const client::DemoRead got = client::next_frame(d, error);
     if (got == client::DemoRead::error) {
@@ -1012,6 +1029,21 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   }
   r.end.oob_prints.clear();
   for (std::string& line : std::exchange(r.end.web.said, {})) said.push_back(std::move(line));
+  // The server refused this version of its map: joined again at once with another (the next one
+  // kept, else the server's own fetched; classic/content/map_versions.hpp), while there is one.
+  if (r.end.stage == ClientStage::dropped && r.end.map_refused && !r.end.version_unfetched &&
+      r.map_tries < kMostMapTries) {
+    ClientConfig cfg = r.end.cfg;
+    cfg.refused.push_back(r.end.map_sum);
+    r.map_tries++;
+    said.push_back("The server plays another version of " + map_shown(r.end) +
+                   ". Joining again with its version.");
+    start(r, cfg);
+    return RemoteStep::waiting;
+  }
+  if (r.end.stage == ClientStage::active && r.said != ClientStage::active &&
+      r.end.models.size() >= 2 && r.end.cfg.keep_choice)  // the version this server took
+    r.end.cfg.keep_choice(r.server_name, r.end.models[1], r.end.map_sum);
   if (r.end.stage != r.said) {
     r.said = r.end.stage;
     std::string line = remote_stage_words(r.said) + r.server_name;
@@ -1043,6 +1075,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   std::vector<client::DemoPrint> prints;
   std::vector<client::DemoEffect> effects;
   std::string centre;
+  weapon_restore(r.weapon, d.state);  // the server's stats and frame back before its news
   for (;;) {
     const client::DemoRead got = client::next_frame(d, error);
     if (got == client::DemoRead::error) {
@@ -1117,6 +1150,15 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     if (static_cast<size_t>(me) < d.state.players.size())
       d.state.players[static_cast<size_t>(me)].origin = drawn;
     if (!d.state.intermission) d.state.eye = {drawn.x, drawn.y, drawn.z + d.state.view_height};
+  }
+  if (r.predicted) {
+    std::string w_rank;
+    for (const auto& [k, v] : r.extra_info)
+      if (k == "w_rank") w_rank = v;
+    weapon_predict(r.weapon, r.end, d.state, r.ahead.waterlevel, r.prediction, w_rank);
+  } else {
+    r.weapon.on = false;
+    r.weapon.played_to = r.end.ch.incoming_acknowledged;
   }
   lerp_entities(r, draw_s);
   if (!any || d.state.map.empty()) return RemoteStep::waiting;
@@ -1237,6 +1279,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.b_switch = cvar("b_switch", "");
     // cl_novweps 1: the visible weapons not asked for, so the server sends neither list nor index.
     if (cvar("cl_novweps", "0") != "0") cfg.ask[ExtFamily::z] &= ~kZVwep;
+    // cl_pext_weaponprediction 0: the weapon's state not asked for (qw_weapon.hpp).
+    if (cvar("cl_pext_weaponprediction", "1") == "0") cfg.ask[ExtFamily::mvd] &= ~kMvdWeaponPred;
     // The lens Quake II's user info carries (`fov`): cl_fov rounded, 0 (the rig's own) its 90.
     const double fov = std::atof(cvar("cl_fov", "0").c_str());
     cfg.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;
@@ -1253,7 +1297,27 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                           : static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
     cfg.timeout = std::atof(cvar("cl_timeout", "60").c_str());  // 0: never
     cfg.trace = &r.trace;                                       // showpackets, showdrop
-    cfg.read_file = r.read_file;
+    // Read at call time: a `+connect` on the command line joins before the window wires the files.
+    cfg.read_file = [&r](const std::string& gamedir, const std::string& path) {
+      return r.read_file ? r.read_file(gamedir, path) : std::vector<uint8_t>{};
+    };
+    cfg.map_versions = [&r](const std::string& map) {
+      return r.map_versions ? r.map_versions(map)
+                            : std::vector<std::pair<std::string, std::vector<uint8_t>>>{};
+    };
+    cfg.keep_version = [&r](const std::string& map, uint32_t sum,
+                            const std::vector<uint8_t>& bytes) {
+      return r.keep_version ? r.keep_version(map, sum, bytes) : std::string();
+    };
+    cfg.use_map = [&r](const std::string& map, const std::string& version) {
+      if (r.use_map) r.use_map(map, version);
+    };
+    cfg.remembered = [&r](const std::string& map) {
+      return r.remembered ? r.remembered(r.server_name, map) : std::optional<uint32_t>();
+    };
+    cfg.keep_choice = [&r](const std::string& server, const std::string& map, uint32_t sum) {
+      if (r.keep_choice) r.keep_choice(server, map, sum);
+    };
     // Through forwarders (cl_proxyaddr, "fwd1:port@fwd2:port"): the packets to the first, the
     // rest and the server in `prx`, each hop taking its own off the front.
     const std::string chain = cvar("cl_proxyaddr", "");
@@ -1415,6 +1479,29 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                             "(a round trip late); 0: his own moves predicted",
                     .kind = ge::console::CvarKind::boolean},
                    &r.nopred);
+  // The held weapon predicted (qw_weapon.hpp).
+  con.cvars().bind({.name = "cl_nopred_weapon",
+                    .fallback = "0",
+                    .help = "1: on a server joined, your weapon's shots, frames and ammunition "
+                            "shown as the server sends them (a round trip late); 0: predicted",
+                    .kind = ge::console::CvarKind::boolean},
+                   &r.weapon.off);
+  con.cvars().bind({.name = "cl_predict_weaponsound",
+                    .fallback = "1",
+                    .help = "0: your weapon's sounds heard from the server; 1: every one played "
+                            "as you fire; above 1, the weapons left to the server (2 axe, 4 "
+                            "shotgun, 8 super shotgun, 16 nailgun, 32 super nailgun, 64 grenade "
+                            "launcher, 128 rocket launcher, 256 lightning gun)",
+                    .min = 0,
+                    .max = 511},
+                   &r.weapon.sound_mask);
+  con.cvars().bind({.name = "cl_predict_buffer",
+                    .fallback = "1",
+                    .help = "How many commands behind the newest your predicted weapon is shown "
+                            "(0 the newest)",
+                    .min = 0,
+                    .max = 10},
+                   &r.weapon.buffer);
   con.cvars().bind({.name = "cl_predict_players",
                     .fallback = "1",
                     .help = "1: on a server joined, the other players run ahead from their last "

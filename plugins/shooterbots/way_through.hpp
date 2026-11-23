@@ -105,6 +105,7 @@ inline bool way_exit(const WayStep& st) { return st.kind == WayKind::exit || st.
 struct WayStats {
   int64_t plans = 0, by_kind[kWayKinds] = {}, steps_done = 0, left = 0;
   int64_t given_up = 0;  // (`complete`) steps and monsters given up for good
+  int64_t forgiven = 0;  // (`complete`) times the jumps he gave up on were given another try
   int64_t retried = 0;   // (`complete`) times nothing was left to do and the left was tried again
   int64_t hopeful = 0;   // (`complete`) times every door was taken as open with nothing to do
   int64_t stood = 0;     // (`complete`) steps and monsters left for standing still on the way
@@ -184,6 +185,7 @@ struct WayThrough {
   } bolt;
   double idle_since = -1;        // nothing to do since then, -1 something
   double no_route_since = -1;    // the exit chosen and his pilot with no route to it since then
+  double stuck_since = -1;       // (`complete`) his pilot with no route to what he is on since then
   int dive = -1;                 // the water's entry (MapNav::entries) he goes back in by, -1 none
   int out = -1;                  // and the one on the far side he swims to and climbs out by
   std::vector<uint8_t> trapped;  // the nodes he could walk to when he went back in
@@ -211,6 +213,13 @@ struct WayThrough {
   ge::ai::Search tour_search;
   double tour_at = -1;
   int64_t tours = 0;
+  // (`complete`, a party of bots: party.hpp) The steps (by index) and the monsters (by entity)
+  // another bot of the party holds (1): not his while he has work of his own. With none of his
+  // own left and some held (`mates_help`, set by his last plan), he holds off the exit and helps.
+  // 2: no one's (too far from the people playing): never his, and the exit waits for it.
+  std::vector<uint8_t> mates_steps, mates_prey;
+  bool mates_help = false;
+  int64_t mates_skipped = 0;  // plans with a stop left to a mate
 };
 
 // The steps off `spec`'s entities (the fighter's buttons already read by `fighter_init`), the

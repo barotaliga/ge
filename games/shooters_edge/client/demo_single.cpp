@@ -298,6 +298,7 @@ bool server_info(Demo& d, DemoMsg& m, std::string& error) {
     s.sounds.push_back(name);
   s.map = s.models.size() > 1 ? map_of_model(s.models[1]) : "";
   s.levels++;
+  s.light_styles = {};
   s.intermission = false;
   s.stats[kStatMonsters] = s.stats[kStatSecrets] = 0;  // the new level's counts start over
   s.entities.clear();
@@ -441,7 +442,12 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         case kServerInfo:
           ok = server_info(d, m, error);
           break;
-        case kLightStyle:
+        case kLightStyle: {  // the style, its pattern
+          const size_t style = m.u8();
+          std::string pattern = m.str();
+          if (style < kDemoLightStyles) s.light_styles[style] = std::move(pattern);
+          break;
+        }
         case kUpdateName:
           m.u8();
           m.str();

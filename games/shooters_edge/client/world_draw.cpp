@@ -29,6 +29,7 @@
 #include "brush/map.hpp"
 #include "brush/survey.hpp"
 #include "camera/pose.hpp"
+#include "classic/flash_blend.hpp"
 #include "classic/q2_fx_switches.hpp"
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
@@ -852,7 +853,14 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
           : std::span<const Placed>(fx.models);
   if (f.has_map) {
     GE_ZONE("world.bsp");
-    ba::set_dynamic_lights(f.bsp, lights);
+    // gl_flashblend: the moment's lights glow as discs (prepare_models) and light no wall, door or
+    // lift; the figures still take them.
+    ba::set_dynamic_lights(
+        f.bsp, f.picture && f.picture->flash_blend ? std::span<const effects::Light>() : lights);
+    for (size_t k = 0; k < fx.light_styles.size();
+         k++)  // the server's flicker, pulses and switches
+      if (f.bsp.light_styles[k] != fx.light_styles[k])
+        ba::set_light_style(f.bsp, static_cast<int>(k), fx.light_styles[k]);
     ba::set_areas(f.bsp,
                   f.from_above ? std::span<const uint8_t>() : std::span<const uint8_t>(fx.areas));
     // The moving models' shadows (M54): every model near the eye and the player himself.
@@ -988,6 +996,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .roll_hack = f.picture->q2fx.roll_hack,
                            .self = fx.has_self ? fx.self.entity : 0,
                            .shadows = f.picture->model_shadows,
+                           .flash_blend = f.picture->flash_blend,
                            .cel_shading = f.picture->q2fx.cel_shading,
                            .view_px = static_cast<double>(f.h),
                            .glow_map = static_cast<float>(
@@ -1016,6 +1025,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     // gl_polyblend).
     double blend[4];
     look::toned_blend(*f.picture, round ? fx.screen_dry : fx.screen, blend);
+    // An eye inside one of gl_flashblend's glows: the screen tinted orange, as the other tints
+    // (gl_polyblend 0 none).
+    if (f.has_map && f.picture->poly_blend) ge::classic::flash_tint(f.models.flash_tint, blend);
     gr::set_post_blend(d, f.post[p], blend);
   }
   // The local player's own arrival opens the whole view out of a flash and a warp (r_arrival).

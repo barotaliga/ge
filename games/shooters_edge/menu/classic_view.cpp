@@ -30,10 +30,22 @@ constexpr float kLabelEnd = 192, kCursorX = 200, kValueX = 220;
 constexpr size_t kLabelChars = 22, kValueChars = 12;
 constexpr size_t kSlotChars = 39;  // a save slot's comment line, the whole width from x 16
 
-// The glyphs a row's label holds on a layout: right-aligned to kLabelEnd, clear of the plaque.
-size_t label_chars(const ClassicLayout& l) {
+// A row's columns: where its label ends, its cursor and its value stand, and the value's glyphs.
+// The host page's choices stand in Quake's own columns, so an episode's or a level's long name
+// fits (20 glyphs from x 160); every other row in the menu's.
+struct Columns {
+  float label_end = kLabelEnd, cursor_x = kCursorX, value_x = kValueX;
+  size_t value_chars = kValueChars;
+};
+Columns columns_of(const ui::Page& page, const ui::Item& it) {
+  if (page.id == "host" && it.kind == ui::ItemKind::choice) return {136, 144, 160, 20};
+  return {};
+}
+
+// The glyphs a row's label holds on a layout: right-aligned to `end`, clear of the plaque.
+size_t label_chars(const ClassicLayout& l, float end = kLabelEnd) {
   if (l.label_left <= 0) return kLabelChars;
-  const auto room = static_cast<size_t>(std::max(0.0f, (kLabelEnd - l.label_left) / 8));
+  const auto room = static_cast<size_t>(std::max(0.0f, (end - l.label_left) / 8));
   return std::min(kLabelChars, room);
 }
 constexpr int kSliderCells = 10;
@@ -197,6 +209,14 @@ std::string sentence(std::string_view s) {
     if (c != ' ') first = false;
   }
   return out;
+}
+
+// Whether `page` is the quit box showing one of Quake's jokes (a label of several lines).
+bool shows_joke(const ui::Page& page) {
+  if (page.id != "quit") return false;
+  for (const ui::Item& it : page.items)
+    if (it.kind == ui::ItemKind::label && it.text.find('\n') != std::string::npos) return true;
+  return false;
 }
 
 std::string lower(std::string_view s) {
@@ -433,6 +453,11 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
     }
     l.items[i] = rect(16, row, kScreenW - 32, 8);
     row += 8;
+    // Quake's quit joke: its four lines in the box, the answers a line under it.
+    if (quit && it.kind == ui::ItemKind::label && it.text.find('\n') != std::string::npos) {
+      l.items[i].h = 32 * l.scale;
+      row += 24 + 16;
+    }
   }
   if (!l.strip && !quit) scroll_rows(page, l, kRowTop * l.scale + l.y);
   const bool slots = page.id == "load" || page.id == "save";
@@ -455,15 +480,23 @@ std::vector<std::string> classic_problems(const ui::Menu& menu, const ClassicLay
       out.push_back("page '" + page.id + "', row '" + it.id + "' is off the screen");
     if (layout.strip || layout.plates) continue;
     const bool slot = (page.id == "load" || page.id == "save") && it.kind != ui::ItemKind::back;
+    const Columns cols = columns_of(page, it);
     const size_t cap = it.kind == ui::ItemKind::label ? 40
                        : slot                         ? kSlotChars
-                                                      : label_chars(layout);
-    if (it.text.size() > cap)
+                                                      : label_chars(layout, cols.label_end);
+    size_t widest = 0;  // a label of several lines (the quit joke): its widest
+    for (size_t at = 0; at <= it.text.size();) {
+      const size_t end = std::min(it.text.find('\n', at), it.text.size());
+      widest = std::max(widest, end - at);
+      at = end + 1;
+    }
+    if (widest > cap)
       out.push_back("page '" + page.id + "', row '" + it.id + "': the label \"" + it.text +
                     "\" is wider than its " + std::to_string(cap) + " glyphs; shorten it");
-    if (value_of(it).size() > kValueChars)
+    if (value_of(it).size() > cols.value_chars)
       out.push_back("page '" + page.id + "', row '" + it.id + "': the value \"" + value_of(it) +
-                    "\" is wider than its 12 glyphs; shorten its choice");
+                    "\" is wider than its " + std::to_string(cols.value_chars) +
+                    " glyphs; shorten its choice");
   }
   return out;
 }
@@ -572,6 +605,8 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
     b.nearest = art.density <= 1;
     b.feather = 0;
     pen.dl.box(b);
+  } else if (shows_joke(page)) {
+    pen.box(56, 76, 24, 4);  // the game's own box: 24 characters by four lines
   } else if (page.id == "quit" || page.id == "newgame") {
     pen.box(56, 68, 24, 5);
   }
@@ -599,7 +634,17 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
     const float y = local_y(r);
     const float alpha = it.disabled ? 0.3f : 1.0f;
     if (it.kind == ui::ItemKind::label) {
-      if (asked != nullptr) continue;  // the picture asks it
+      if (asked != nullptr) continue;                 // the picture asks it
+      if (it.text.find('\n') != std::string::npos) {  // the quit joke's lines, gold, as written
+        float line_y = y;
+        for (size_t at = 0; at <= it.text.size();) {
+          const size_t end = std::min(it.text.find('\n', at), it.text.size());
+          pen.text(it.text.substr(at, end - at), 64, line_y, true);
+          line_y += 8;
+          at = end + 1;
+        }
+        continue;
+      }
       const std::string s = sentence(it.text);
       pen.text(s, std::floor((kScreenW - 8 * static_cast<float>(s.size())) / 2), y, false);
       continue;
@@ -613,7 +658,8 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
         pen.glyph(static_cast<uint8_t>(12 + (static_cast<int>(std::floor(t * 4)) & 1)), 8, y);
       continue;
     }
-    if (const size_t most = label_chars(l); label.size() > most) label.resize(most);
+    const Columns cols = columns_of(page, it);
+    if (const size_t most = label_chars(l, cols.label_end); label.size() > most) label.resize(most);
     if (page.id == "quit" || page.id == "newgame") {
       // The answers centred in the box, the cursor before the focused one.
       const float x = std::floor((kScreenW - 8 * static_cast<float>(label.size())) / 2);
@@ -622,23 +668,24 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
         pen.glyph(static_cast<uint8_t>(12 + (static_cast<int>(std::floor(t * 4)) & 1)), x - 16, y);
       continue;
     }
-    pen.text(label, kLabelEnd - 8 * static_cast<float>(label.size()), y, true, alpha);
+    pen.text(label, cols.label_end - 8 * static_cast<float>(label.size()), y, true, alpha);
     if (it.kind == ui::ItemKind::slider) {
       const double span = it.max - it.min;
       const double f = span > 0 ? std::clamp((it.value - it.min) / span, 0.0, 1.0) : 0;
-      pen.glyph(128, kValueX, y, alpha);
+      pen.glyph(128, cols.value_x, y, alpha);
       for (int c = 0; c < kSliderCells; c++)
-        pen.glyph(129, kValueX + 8 * static_cast<float>(c + 1), y, alpha);
-      pen.glyph(130, kValueX + 8 * (kSliderCells + 1), y, alpha);
-      pen.glyph(131, kValueX + 8 + static_cast<float>(std::lround(f * (kSliderCells - 1) * 8)), y,
-                alpha);
+        pen.glyph(129, cols.value_x + 8 * static_cast<float>(c + 1), y, alpha);
+      pen.glyph(130, cols.value_x + 8 * (kSliderCells + 1), y, alpha);
+      pen.glyph(131, cols.value_x + 8 + static_cast<float>(std::lround(f * (kSliderCells - 1) * 8)),
+                y, alpha);
     } else {
       std::string v = value_of(it);
-      if (v.size() > kValueChars) v.resize(kValueChars);
-      pen.text(v, kValueX, y, false, alpha);
+      if (v.size() > cols.value_chars) v.resize(cols.value_chars);
+      pen.text(v, cols.value_x, y, false, alpha);
     }
     if (static_cast<int>(i) == page.focus)
-      pen.glyph(static_cast<uint8_t>(12 + (static_cast<int>(std::floor(t * 4)) & 1)), kCursorX, y);
+      pen.glyph(static_cast<uint8_t>(12 + (static_cast<int>(std::floor(t * 4)) & 1)), cols.cursor_x,
+                y);
   }
 }
 

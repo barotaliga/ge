@@ -64,8 +64,10 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "account/client_login.hpp"
@@ -97,6 +99,7 @@
 #include "shooters_edge/net/qw_remote_sheet.hpp"
 #include "shooters_edge/net/qw_serverstatus.hpp"
 #include "shooters_edge/net/qw_watch.hpp"
+#include "shooters_edge/net/qw_weapon.hpp"
 
 namespace shooters_edge::net {
 
@@ -207,6 +210,7 @@ struct Remote {
   int others = 0;             // other players predicted the last step
   int others_msec = 0;        // the most milliseconds one of them was run forward the last step
   int lerped = 0;             // entities drawn between two frames the last step
+  int map_tries = 0;          // joins again with another version of the server's map
   sh::Vec3f view;             // the player's angles, degrees (sent with every move)
   sh::AimTurn aim_turn;       // the aim help's turn of the view (shooter/aim_turn.hpp)
   sh::Vec3f prediction;       // the player's predicted origin, the correction not added
@@ -214,6 +218,7 @@ struct Remote {
   sh::SpeedJumpAid jump_aid;  // the easy jump's memory (shooter/speedjump_assist.hpp)
   float speedjump_view = 0.5f;  // cl_speedjump_view: the share of its swing drawn
   sh::Smoothing smooth;         // the prediction's correction
+  RemoteWeapon weapon;          // the held weapon predicted (qw_weapon.hpp)
   // Prediction on the original move (the server's `sv_playermove original`): the stand-in
   // server, built for the level `original_level` counts and the models `original_for` points at.
   ge::classic::OriginalPrediction original;
@@ -234,8 +239,22 @@ struct Remote {
   std::function<void(const std::string& gamedir, const std::string& path,
                      const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
+  // A map's other versions (ClientConfig::map_versions, classic/content/map_versions.hpp): those
+  // kept, one kept, the one drawn, and which this server took (by its name as asked).
+  std::function<std::vector<std::pair<std::string, std::vector<uint8_t>>>(const std::string& map)>
+      map_versions;
+  std::function<std::string(const std::string& map, uint32_t sum,
+                            const std::vector<uint8_t>& bytes)>
+      keep_version;
+  std::function<void(const std::string& map, const std::string& version)> use_map;
+  std::function<std::optional<uint32_t>(const std::string& server, const std::string& map)>
+      remembered;
+  std::function<void(const std::string& server, const std::string& map, uint32_t sum)> keep_choice;
   // A Quake II download cut short, held in the game's folder to be resumed (Q2ClientConfig::held).
   ge::classic::content::HeldDownloads held;
+  // What a Quake II server stuffed that the client does not answer itself, for the window's console
+  // to run as if typed (net/q2_client.hpp `to_run`); taken each frame.
+  std::vector<std::string> stuffed_run;
   bool kept = false;
   // A screenshot the server asked for (qw_client.hpp `ClientUpload`): the window's frame grabbed
   // in memory, scaled and packed (`snap_grab(width, height, quality)`, false when it can't) and

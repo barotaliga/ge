@@ -77,14 +77,21 @@ struct Breaking {
   std::vector<int> left;
 };
 
-struct OnMap {
-  std::unique_ptr<MapNav> nav;
-  Fighter leader;
+// A bot of the party: the leader first, then his partners (UnitOptions::partners).
+struct Bot {
+  Fighter f;
   WayThrough way;
   Wedge wedge;
   Breaking breaking;
   sh::MoveCmd cmds[3];
   double no_route_since = -1;  // the pilot with a goal and no way to it since, s
+};
+
+struct OnMap {
+  std::unique_ptr<MapNav> nav;
+  std::vector<Bot> bots;
+  sb::Party party;  // the map's work split among them (party.hpp)
+  std::vector<sb::PartyMember> members;
 };
 
 bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const UnitOptions& opt,
@@ -99,34 +106,41 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
   um.hi = nav.graph.hi;
   for (const sb::NavNode& n : nav.graph.nodes) um.nodes.push_back(n.origin);
   const std::string entities = map.entities.empty() ? map.brushes->entity_text : map.entities;
-  Fighter& f = m.leader;
-  f = Fighter();
-  f.features = sb::features_of(opt.skill);
-  fighter_init(f, nav.graph, s, 0, entities.c_str(), opt.skill,
-               sb::traits_of(opt.skill, sb::Temper::balanced), kHz,
-               opt.seed + 31u * static_cast<uint32_t>(entered), q2_arsenal());
-  f.bot.yaw = s.world.entities[1].view_angles.y;
-  f.bot.pilot.world = &nav.world;
-  if (nav.swim.leading > 0) f.swim = &nav.swim;
-  f.trap = &nav.trap;
-  f.wet = &nav.wet;
-  f.dry_pockets = false;                    // the way through leaves a pocket by its doors
-  f.bot.pilot.pilot.set.under_plat = true;  // a raised lift is waited for out from under it
-  // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
-  f.features.set(sb::Feature::locked, false);
-  hunt_init(f, s);
   sv::MapSpec spec = map;
   spec.entities = entities;
-  m.way = WayThrough();
-  m.way.been = been;
-  m.way.complete = opt.complete;
-  m.way.complete_until = s.sv.time + opt.map_seconds * 0.75;
-  if (opt.complete) way_complete_init(f, nav, s, spec);
-  way_init(m.way, f, nav, s, spec);
-  if (opt.plan) m.way.log = &um.plan;
-  m.wedge = Wedge();
-  m.no_route_since = -1;
-  for (const WayStep& st : m.way.steps) {
+  const int n = 1 + static_cast<int>(opt.partners.size());
+  m.bots.clear();
+  m.bots.resize(static_cast<size_t>(n));
+  m.party = {};
+  m.members.clear();
+  for (int k = 0; k < n; k++) {
+    Bot& b = m.bots[static_cast<size_t>(k)];
+    Fighter& f = b.f;
+    const sb::AimSkill skill = k == 0 ? opt.skill : opt.partners[static_cast<size_t>(k) - 1];
+    f.features = sb::features_of(skill);
+    fighter_init(f, nav.graph, s, k, entities.c_str(), skill,
+                 sb::traits_of(skill, sb::Temper::balanced), kHz,
+                 opt.seed + 31u * static_cast<uint32_t>(entered) + 7919u * static_cast<uint32_t>(k),
+                 q2_arsenal());
+    f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
+    f.bot.pilot.world = &nav.world;
+    if (nav.swim.leading > 0) f.swim = &nav.swim;
+    f.trap = &nav.trap;
+    f.wet = &nav.wet;
+    f.dry_pockets = false;                    // the way through leaves a pocket by its doors
+    f.bot.pilot.pilot.set.under_plat = true;  // a raised lift is waited for out from under it
+    // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
+    f.features.set(sb::Feature::locked, false);
+    hunt_init(f, s);
+    b.way.been = been;
+    b.way.complete = opt.complete;
+    b.way.complete_until = s.sv.time + opt.map_seconds * 0.75;
+    if (opt.complete) way_complete_init(f, nav, s, spec);
+    way_init(b.way, f, nav, s, spec);
+    if (opt.plan && k == 0) b.way.log = &um.plan;
+    m.members.push_back({&b.way, k + 1, true});
+  }
+  for (const WayStep& st : m.bots[0].way.steps) {
     if (way_exit(st)) um.exits.push_back((st.lo + st.hi) * 0.5f);
     if (st.kind == WayKind::key) {
       um.keys++;
@@ -151,9 +165,9 @@ constexpr float kBodyReach = 80;
 constexpr float kBodyAhead = 32;
 constexpr double kBreakGiveUp_s = 5;
 
-bool way_break(const sv::Q2Server& q, const sv::RulesCommon& s, Breaking& br, double now,
+bool way_break(const sv::Q2Server& q, const sv::RulesCommon& s, int ent, Breaking& br, double now,
                sh::MoveCmd& cmd) {
-  const sh::Vec3f me = s.world.entities[1].origin;
+  const sh::Vec3f me = s.world.entities[static_cast<size_t>(ent)].origin;
   const sh::Vec3f eye = me + sh::Vec3f{0, 0, 22};
   // Where the move he means carries his box (the keys on his view's yaw).
   const sh::ViewAxes ax = sh::angle_vectors({0, cmd.angles.y, 0});
@@ -241,7 +255,8 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
   so.clients_take_view = true;
   sv::RulesRunner rules = sv::q2_runner(sv::make_q2_server(so));
   rules.console("deathmatch 0");
-  rules.console("coop 0");
+  // A party plays co-op (the rules' `coop` 1), each bot a client of its own.
+  rules.console(opt.partners.empty() ? "coop 0" : "coop 1");
   rules.console("skill " + std::to_string(opt.game_skill));
   sv::MapSpec map;
   if (!opt.load(opt.load_ctx, bare(opt.first), map, r.error)) {
@@ -253,6 +268,10 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
     return r;
   }
   rules.connect(0, "player", false, false);
+  for (size_t k = 0; k < opt.partners.size(); k++)
+    rules.connect(static_cast<int>(k) + 1, "partner" + std::to_string(k + 1), false, false);
+  const int n = 1 + static_cast<int>(opt.partners.size());
+  std::vector<sh::Packet> packets(static_cast<size_t>(n));
   sv::Q2Server* q = sv::q2_of(rules);
   uint64_t h = 1469598103934665603ull;
   uint32_t sequence = 0;
@@ -268,80 +287,103 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       r.error = "run_q2_unit: " + map.name + ": " + r.error;
       return r;
     }
-    q->players[0].god = opt.god;
+    for (int k = 0; k < n; k++) q->players[static_cast<size_t>(k)].god = opt.god;
+    um.party.assign(static_cast<size_t>(n) - 1, {});
     const int helped = q->help_changed;
     const int frames = static_cast<int>(opt.map_seconds * kHz);
     int frame = 0;
     bool changed = false;
     int health =
         q->world.entities[1].health > 0 ? static_cast<int>(q->world.entities[1].health) : 0;
-    std::vector<bool> took(m.way.steps.size(), false);
+    std::vector<bool> took(m.bots[0].way.steps.size(), false);
     for (; frame < frames && !changed; frame++) {
       const sv::RulesCommon& s = *rules;
       const double t = s.sv.time;
-      way_plan(m.way, m.leader, *m.nav, s, 1, t);
-      m.cmds[0] = m.cmds[1];
-      m.cmds[1] = m.cmds[2];
-      // A view the rules turned (a spawn, a teleporter) is his to start from.
-      const bool forced = q->players[0].forced;
-      if (forced) m.leader.bot.yaw = s.sv.edicts[1].v_angle.y;
-      // A pilot with no way to the goal the way through found one to has given up on a link it
-      // needs (a jump missed twice, out of the water or under a monster): after a while those
-      // links are forgotten and tried again, as a person tries a jump once more.
-      {
-        sb::Pilot& pp = m.leader.bot.pilot.pilot;
-        if (pp.mode == sb::PilotMode::idle && pp.route.empty() && !pp.failed.empty()) {
-          if (m.no_route_since < 0) m.no_route_since = t;
-          if (t - m.no_route_since >= kForgetFailed_s) {
-            pp.failed.clear();
-            pp.cut.clear();
-            m.no_route_since = -1;
-            um.forgot++;
+      // The party splits the map's work between the bots (party.hpp).
+      if (n > 1) {
+        for (sb::PartyMember& pm : m.members)
+          pm.alive = s.world.entities[static_cast<size_t>(pm.ent)].health > 0;
+        sb::party_share(m.party, m.members, *m.nav, s, {});
+      }
+      for (int k = 0; k < n; k++) {
+        Bot& b = m.bots[static_cast<size_t>(k)];
+        const int me = k + 1;
+        way_plan(b.way, b.f, *m.nav, s, me, t);
+        b.cmds[0] = b.cmds[1];
+        b.cmds[1] = b.cmds[2];
+        // A view the rules turned (a spawn, a teleporter) is his to start from.
+        const bool forced = q->players[static_cast<size_t>(k)].forced;
+        if (forced) b.f.bot.yaw = s.sv.edicts[static_cast<size_t>(me)].v_angle.y;
+        // A pilot with no way to the goal the way through found one to has given up on a link it
+        // needs (a jump missed twice, out of the water or under a monster): after a while those
+        // links are forgotten and tried again, as a person tries a jump once more.
+        {
+          sb::Pilot& pp = b.f.bot.pilot.pilot;
+          if (pp.mode == sb::PilotMode::idle && pp.route.empty() && !pp.failed.empty()) {
+            if (b.no_route_since < 0) b.no_route_since = t;
+            if (t - b.no_route_since >= kForgetFailed_s) {
+              pp.failed.clear();
+              pp.cut.clear();
+              b.no_route_since = -1;
+              um.forgot++;
+            }
+          } else {
+            b.no_route_since = -1;
           }
-        } else {
-          m.no_route_since = -1;
         }
+        b.cmds[2] = fighter_command(b.f, s, k, kPilotMsec);
+        if (forced) b.cmds[2].angles = s.sv.edicts[static_cast<size_t>(me)].v_angle;
+        way_dive(b.way, *m.nav, s, me, b.cmds[2]);
+        way_reach_in(b.way, *m.nav, s, me, b.cmds[2]);
+        if (way_break(*q, s, me, b.breaking, t, b.cmds[2])) {
+          um.breaks++;
+          b.f.bot.yaw = b.cmds[2].angles.y;  // he turned to it: his keys follow his view
+        } else if (way_touch(b.way, s, me, b.cmds[2])) {
+          um.touches++;
+          b.f.bot.yaw = b.cmds[2].angles.y;  // he turned to it: his keys follow his view
+        } else {
+          // A climber is held to the ladder by his pilot: a shove aside takes him off it.
+          if (!b.f.bot.pilot.pilot.climbing) unwedge(b.wedge, s, me, t, b.cmds[2]);
+          if (way_edge(*m.nav, b.f, s, me, b.cmds[2])) um.edges++;
+        }
+        // The intermission: a button now and then leaves for the next map.
+        if (q->intermission_at > 0) b.cmds[2].buttons = (frame & 8) ? sh::kButtonAttack : 0;
+        sh::Packet& pk = packets[static_cast<size_t>(k)];
+        pk.client = k;
+        pk.sequence = ++sequence;
+        for (int i = 0; i < 3; i++) pk.cmds[i] = b.cmds[i];
       }
-      m.cmds[2] = fighter_command(m.leader, s, 0, kPilotMsec);
-      if (forced) m.cmds[2].angles = s.sv.edicts[1].v_angle;
-      way_dive(m.way, *m.nav, s, 1, m.cmds[2]);
-      way_reach_in(m.way, *m.nav, s, 1, m.cmds[2]);
-      if (way_break(*q, s, m.breaking, t, m.cmds[2])) {
-        um.breaks++;
-        m.leader.bot.yaw = m.cmds[2].angles.y;  // he turned to it: his keys follow his view
-      } else if (way_touch(m.way, s, 1, m.cmds[2])) {
-        um.touches++;
-        m.leader.bot.yaw = m.cmds[2].angles.y;  // he turned to it: his keys follow his view
-      } else {
-        // A climber is held to the ladder by his pilot: a shove aside takes him off it.
-        if (!m.leader.bot.pilot.pilot.climbing) unwedge(m.wedge, s, 1, t, m.cmds[2]);
-        if (way_edge(*m.nav, m.leader, s, 1, m.cmds[2])) um.edges++;
-      }
-      // The intermission: a button now and then leaves for the next map.
-      if (q->intermission_at > 0) m.cmds[2].buttons = (frame & 8) ? sh::kButtonAttack : 0;
-      sh::Packet pk;
-      pk.client = 0;
-      pk.sequence = ++sequence;
-      for (int k = 0; k < 3; k++) pk.cmds[k] = m.cmds[k];
-      rules.frame(&pk, 1);
+      rules.frame(packets.data(), n);
       sv::clear_frame(rules.common->out);
       h = fold_frame(h, s);
       const int now =
           s.world.entities[1].health > 0 ? static_cast<int>(s.world.entities[1].health) : 0;
       if (now < health) um.damage += health - now;
       health = now;
-      for (size_t k = 0; k < m.way.steps.size(); k++)
-        if (m.way.steps[k].kind == WayKind::key && m.way.steps[k].done && !took[k]) {
+      for (size_t k = 0; k < took.size(); k++) {
+        bool done = false;  // taken by any bot of the party
+        for (const Bot& b : m.bots) done = done || (k < b.way.steps.size() && b.way.steps[k].done);
+        const WayStep& st = m.bots[0].way.steps[k];
+        if (st.kind == WayKind::key && done && !took[k]) {
           took[k] = true;
           um.keys_taken++;
-          um.took_keys.push_back(m.way.steps[k].name);
+          um.took_keys.push_back(st.name);
         }
-      if (frame % kSampleEvery == 0) um.track.push_back(s.world.entities[1].origin);
+      }
+      if (frame % kSampleEvery == 0) {
+        um.track.push_back(s.world.entities[1].origin);
+        for (int k = 1; k < n; k++)
+          um.party[static_cast<size_t>(k) - 1].push_back(
+              s.world.entities[static_cast<size_t>(k) + 1].origin);
+      }
       if (!s.pending_map.empty()) changed = true;
     }
     um.seconds = static_cast<double>(frame) / kHz;
-    um.way = m.way.stats;
-    um.shoves = m.wedge.shoves;
+    um.way = m.bots[0].way.stats;
+    um.shoves = 0;
+    for (const Bot& b : m.bots) um.shoves += b.wedge.shoves;
+    um.shares = m.party.stats.shares;
+    for (const Bot& b : m.bots) um.left_to_mates += b.way.mates_skipped;
     um.helps = q->help_changed - helped;
     count(*q, um);
     // (`plan`) The monsters still alive when the map ended, by where they stand and the model

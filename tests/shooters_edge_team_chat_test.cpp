@@ -10,7 +10,9 @@
 #include <vector>
 
 #include "check.hpp"
+#include "classic/rulesets.hpp"
 #include "console/console.hpp"
+#include "console/ruleset.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/team_chat.hpp"
 
@@ -355,4 +357,44 @@ TEST(a_death_with_the_flag_runs_f_flagdeath_in_f_deaths_place) {
   CHECK(cl::carries_flag(tf));
   tf.game = "qw";
   CHECK(!cl::carries_flag(tf));
+}
+
+TEST(a_macro_the_player_gave_a_width_fills_its_column) {
+  Fixture f;
+  cl::team_frame(f.con, f.chat, rocketeer(), "dm6");
+  f.con.execute("set tp_length_health 4; set tp_align_health r; set tp_length_armor 1");
+  expect(f.con.expand_text("[$health][$armor]"), "[  34][2]");
+}
+
+TEST(a_strict_ruleset_keeps_scripts_off_the_team_macros_and_quiets_the_events) {
+  Fixture f;
+  bool in_match = true;
+  ge::console::Rulesets rules(f.con, [&in_match] { return in_match; });
+  rules.set_book(ge::classic::qw_rulesets());
+  int impulses = 0;
+  f.con.add_command("impulse", "", [&impulses](Console&, const ge::console::Args&) { ++impulses; });
+  f.con.execute("alias f_death \"echo dead\"; alias f_respawn \"echo back\"; tp_forceTriggers 1");
+  hud::Status s = rocketeer();
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  f.con.execute("impulse $health; if $health < 50 then impulse 7");
+  CHECK(impulses == 2);  // default: a script may act on what the player holds
+  f.con.execute("ruleset smackdown");
+  rules.update();
+  f.con.clear_output();
+  f.con.execute("impulse $health; if $health < 50 then impulse 7; say_team $health $loc_here");
+  CHECK(impulses == 2);
+  CHECK(f.sent.size() == 1 && f.sent.back().find("34") != std::string::npos);
+  s.health = 0;  // a death in a match: f_death keeps quiet
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  f.con.run();
+  std::string got;
+  for (const std::string& l : f.con.output()) got += l + "|";
+  expect(got,
+         "impulse cannot be used with team macros under the smackdown ruleset.|"
+         "impulse cannot be used with team macros under the smackdown ruleset.|");
+  in_match = false;  // between matches the events run again
+  s.health = 100;
+  cl::team_frame(f.con, f.chat, s, "dm6");
+  f.con.run();
+  CHECK(f.con.output().back() == "back");
 }

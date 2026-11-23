@@ -141,6 +141,40 @@ std::string expand(std::string_view s,
   return out;
 }
 
+std::string fit_width(std::string_view s, int width, char align) {
+  const auto hex = [](char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+  };
+  // Each letter's place and the room it takes: a code or brace none.
+  std::string out;
+  int letters = 0;
+  for (size_t i = 0; i < s.size(); ++i) {
+    if (s[i] == '&' && i + 4 < s.size() && s[i + 1] == 'c' && hex(s[i + 2]) && hex(s[i + 3]) &&
+        hex(s[i + 4])) {
+      out.append(s.substr(i, 5));
+      i += 4;
+      continue;
+    }
+    if (s[i] == '&' && i + 1 < s.size() && s[i + 1] == 'r') {
+      out.append("&r");
+      ++i;
+      continue;
+    }
+    if (s[i] == '{' || s[i] == '}') {
+      out += s[i];
+      continue;
+    }
+    if (letters == width) continue;  // cut: the codes after still kept
+    out += s[i];
+    ++letters;
+  }
+  const int pad = width - letters;
+  if (pad <= 0) return out;
+  const int before = align == 'r' ? pad : align == 'c' ? pad / 2 : 0;
+  return std::string(static_cast<size_t>(before), ' ') + out +
+         std::string(static_cast<size_t>(pad - before), ' ');
+}
+
 std::string substitute_args(std::string_view body, const std::vector<std::string>& args) {
   // Arguments `from`..`to` (inclusive, held to those given) joined by single blanks.
   const auto joined = [&args](size_t from, size_t to) {

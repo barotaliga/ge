@@ -14,7 +14,7 @@
 //
 // ge:summary Sprite frames made at load: a flare's glow and an underwater bubble
 // ge:keywords render sprite flare glow halo bubble underwater fresnel rim highlight procedural
-// ge:keywords flare_frame bubble_frame replacement
+// ge:keywords flare_frame bubble_frame glow_disc_frame glow-disc replacement
 // ge:skill render
 // ge:test tests/render_sprite_shapes_test.cpp
 #pragma once
@@ -29,5 +29,8 @@ namespace ge::render {
 SpriteFrame flare_frame(uint32_t px = 64);
 // A bubble `px` texels a side (at least 8), its origin the middle.
 SpriteFrame bubble_frame(uint32_t px = 32);
+// A glow disc `px` texels a side (at least 8), its origin the middle: white, its strength falling
+// straight from 1 at the middle to 0 at the rim (the frame's edge), nothing past it.
+SpriteFrame glow_disc_frame(uint32_t px = 64);
 
 }  // namespace ge::render

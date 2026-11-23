@@ -55,33 +55,41 @@ inline constexpr int kQ2MaxBlock = 1400;
 inline constexpr int kQ2Entities = 1024;
 inline constexpr int kQ2ConfigStrings = 2080;
 
-// One entity as the wire holds it: whole 1/8 units, angles in 256ths of a turn, the wire's
-// model numbers.
+// One entity as the wire holds it: whole 1/8 units (16 bits on the ordinary wire, 23 under the
+// extended limits' second level), angles in 256ths of a turn, the wire's model numbers. The
+// extended limits' own fields (plugins/classic/protocol/q2_limits.hpp) as their wire bytes, 0
+// each one's default: more effects, alpha, scale, and the looping sound's volume and attenuation.
 struct Q2EntityState {
   bool present = false;
-  int16_t origin[3] = {}, old_origin[3] = {};
+  int32_t origin[3] = {}, old_origin[3] = {};
   uint8_t angles[3] = {};
   int model[4] = {};
   int frame = 0;
   uint32_t skin = 0, effects = 0, renderfx = 0;
   int sound = 0, event = 0, solid = 0;
+  uint32_t more_effects = 0;
+  uint8_t alpha = 0, scale = 0, loop_volume = 0, loop_attenuation = 0;
 };
 
-// The player's state as the wire holds it.
+// The player's state as the wire holds it. Under the extended limits the gun's index is a word
+// (its model in the low 13 bits, a skin in the top 3); their second level carries the origin and
+// velocity in 23 bits, the move's time and flags in 16, a damage blend and 64 stats. The ordinary
+// wire sends the low bits of each and the first 32 stats.
 struct Q2PlayerState {
   uint8_t type = 0;
-  int16_t origin[3] = {}, velocity[3] = {};
-  uint8_t time = 0, flags = 0;
+  int32_t origin[3] = {}, velocity[3] = {};
+  uint16_t time = 0, flags = 0;
   int16_t gravity = 0;
   int16_t delta_angles[3] = {};
   int8_t view_offset[3] = {};
   int16_t view_angles[3] = {};
   int8_t kick[3] = {};
-  uint8_t gun_index = 0, gun_frame = 0;
+  uint16_t gun_index = 0;
+  uint8_t gun_frame = 0;
   int8_t gun_offset[3] = {}, gun_angles[3] = {};
-  uint8_t blend[4] = {};
+  uint8_t blend[4] = {}, damage_blend[4] = {};
   uint8_t fov = 0, rdflags = 0;
-  int16_t stats[32] = {};
+  int16_t stats[64] = {};
 };
 
 struct Q2WireOptions {
@@ -267,6 +275,8 @@ struct Q2Raw {
   // the same.
   bool (*touch)(void* ctx, int slot, int number, Q2EntityState& s) = nullptr;
   void* touch_ctx = nullptr;
+  // The wider limits the game asked for: 0 none, 1 extended, 2 extended with the newer interface.
+  int ext = 0;
 };
 
 // The signon from a raw game, as `q2_signon_parts`.
@@ -307,6 +317,26 @@ int32_t q2_long_solid(int solid);
 // configstring then baseline streams, each message at most kQ2BigMessage bytes.
 inline constexpr size_t kQ2BigMessage = 32768;
 void q2_signon_streams(const Q2Signon& parts, int minor, std::vector<std::vector<uint8_t>>& out);
+// THE EXTENDED LIMITS (q2_wire_limits.cpp; plugins/classic/protocol/q2_limits.hpp holds the
+// levels, layouts, limits and codings): an entity's and the player's delta at `level` 0 (the
+// ordinary wire, as `q2_entity_flags`, `q2_write_entity` and `q2_write_player`), 1 (extensions:
+// a fifth flags byte, every model index a word when one passes 255, the looping sound a word with
+// its volume and attenuation bytes, more effects, alpha and scale, the solid in the extended
+// packing, the corrected width rule, the gun's index a word) or 2 (extensions 2: origins and the
+// player's origin and velocity as 23-bit coordinates against `from`, an old origin absolute, the
+// move's time and flags words, the blend a byte of which parts follow with the damage blend, 64
+// stats under a variable-length mask). The player is the protocol 34 form (its id, every stat
+// mask): a recording's (3434 to 3436) and the reader's, which turns a later form into it.
+uint64_t q2_entity_flags_ext(const Q2EntityState& from, const Q2EntityState& to, int number,
+                             bool old, int level);
+void q2_write_entity_ext(std::vector<uint8_t>& out, uint64_t flags, int number,
+                         const Q2EntityState& from, const Q2EntityState& to, int level);
+void q2_write_player_ext(std::vector<uint8_t>& out, const Q2PlayerState& from,
+                         const Q2PlayerState& to, int level);
+// The solid in the extended packing from protocol 34's packed short: bytes x and y half-widths,
+// the depth below and the height above + 32 (31, a brush model, and 0 kept).
+int32_t q2_ext_solid(int solid);
+
 // A RECORDING (`.dm2`): blocks of a 32-bit length and the block, ended by a length of -1.
 struct Q2Recorder {
   Q2Wire wire;

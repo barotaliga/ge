@@ -8,6 +8,8 @@
 #include "console/console.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
@@ -44,8 +46,40 @@ bool Console::has_command(std::string_view name) const {
 
 bool Console::remove_command(std::string_view name) { return commands_.erase(lower(name)) != 0; }
 
-void Console::add_macro(std::string_view name, std::function<std::string()> fn) {
-  macros_[lower(name)] = std::move(fn);
+void Console::add_macro(std::string_view name, std::function<std::string()> fn, MacroKind kind) {
+  std::string key = lower(name);
+  if (kind == MacroKind::team)
+    team_macros_.insert(key);
+  else
+    team_macros_.erase(key);
+  macros_[std::move(key)] = std::move(fn);
+}
+
+bool Console::is_team_macro(std::string_view name) const {
+  return team_macros_.count(lower(name)) != 0;
+}
+
+void Console::limit_team_macros(TeamMacroLimit limit) {
+  for (std::string& a : limit.allowed) a = lower(a);
+  macro_limit_ = std::move(limit);
+}
+
+const TeamMacroLimit* Console::team_macro_limit() const {
+  if (!macro_limit_) return nullptr;
+  return !macro_limit_->when || macro_limit_->when() ? &*macro_limit_ : nullptr;
+}
+
+void Console::quiet_triggers(TriggerQuiet quiet) { trigger_quiet_ = std::move(quiet); }
+
+bool Console::triggers_quiet() const {
+  return trigger_quiet_ && (!trigger_quiet_->when || trigger_quiet_->when());
+}
+
+void Console::limit_waits(std::string owner, int n, std::string why) {
+  wait_owner_ = std::move(owner);
+  wait_limit_ = n;
+  wait_why_ = std::move(why);
+  waits_in_row_ = 0;
 }
 
 std::vector<std::string> Console::macro_names() const {
@@ -101,7 +135,7 @@ void Console::queue_front(std::string_view text, Source source, const Origin& wh
   for (auto it = lines.rbegin(); it != lines.rend(); ++it) {
     Origin o = where;
     if (keep_lines) o.line = it->line;
-    buffer_.push_front({std::move(it->text), source, std::move(o), depth, via});
+    buffer_.push_front({std::move(it->text), source, std::move(o), depth, via, held_by_team()});
   }
 }
 
@@ -129,6 +163,13 @@ int Console::run() {
     cvars_.set_reading_config(false);
     ++n;
   }
+  // A ruleset's wait limit: a script may not spread itself over frames past it.
+  waits_in_row_ = waiting_ && !buffer_.empty() ? waits_in_row_ + 1 : 0;
+  if (wait_limit_ > 0 && waits_in_row_ > wait_limit_) {
+    buffer_.clear();
+    waits_in_row_ = 0;
+    print(wait_why_);
+  }
   return n;
 }
 
@@ -148,6 +189,7 @@ void Console::run_now(std::string_view command, Source source) {
   e.source = source;
   e.depth = current_depth_;
   e.via = current_via_;
+  e.team = held_by_team();
   dispatch(e);
 }
 
@@ -157,11 +199,22 @@ std::string Console::expand_text(std::string_view text) const {
     const auto m = macros_.find(key);
     if (m != macros_.end()) {
       out = m->second();
-      return true;
+      if (team_macros_.count(key) != 0) expanded_team_ = true;
+    } else if (const Cvar* c = cvars_.find(key); c != nullptr) {
+      out = c->value;
+    } else {
+      return false;
     }
-    const Cvar* c = cvars_.find(key);
-    if (c == nullptr) return false;
-    out = c->value;
+    const Cvar* width = width_prefix_.empty() ? nullptr : cvars_.find(width_prefix_ + key);
+    if (width != nullptr) {  // a column the player set: `tp_length_health 3`
+      const int n = std::clamp(std::atoi(width->value.c_str()), 0, 40);
+      const Cvar* align = cvars_.find(align_prefix_ + key);
+      const char a =
+          align == nullptr || align->value.empty()
+              ? 'l'
+              : static_cast<char>(std::tolower(static_cast<unsigned char>(align->value[0])));
+      if (n > 0) out = fit_width(out, n, a);
+    }
     return true;
   });
 }
@@ -172,6 +225,18 @@ void Console::gate_command(std::string_view name, CommandGate gate) {
 
 int Console::ungate(std::string_view owner) {
   int n = 0;
+  if (macro_limit_ && macro_limit_->owner == owner) {
+    macro_limit_.reset();
+    ++n;
+  }
+  if (trigger_quiet_ && trigger_quiet_->owner == owner) {
+    trigger_quiet_.reset();
+    ++n;
+  }
+  if (wait_limit_ != 0 && wait_owner_ == owner) {
+    limit_waits({}, 0, {});
+    ++n;
+  }
   for (auto it = gates_.begin(); it != gates_.end();)
     if (it->second.owner == owner) {
       it = gates_.erase(it);
@@ -222,20 +287,33 @@ void Console::dispatch(Entry& e) {
   const bool expand_it = cmd == commands_.end() || (cmd->second.flags & kNoExpand) == 0;
 
   Args args;
+  const bool outer_expanded = expanded_team_;
+  expanded_team_ = false;
   args.raw = expand_it ? expand_text(e.text) : e.text;
+  const bool used_team = expanded_team_ || e.team;
   args.words = expand_it ? tokenize(args.raw) : std::move(first);
-  if (args.words.empty()) return;
+  if (args.words.empty()) {
+    expanded_team_ = outer_expanded;
+    return;
+  }
   args.source = e.source;
   args.where = e.where;
 
   const Args* outer = current_;
   const int outer_depth = current_depth_;
   const std::string outer_via = current_via_;
+  const bool outer_team = current_team_;
   current_ = &args;
   current_depth_ = e.depth;
   current_via_ = e.via;
 
-  if (cmd != commands_.end()) {
+  const TeamMacroLimit* limit =
+      used_team && e.source != Source::server ? team_macro_limit() : nullptr;
+  if (limit != nullptr) current_team_ = true;  // what it runs (`if`'s branch) is held too
+  if (limit != nullptr &&
+      std::find(limit->allowed.begin(), limit->allowed.end(), name) == limit->allowed.end()) {
+    print(name + limit->why);  // a ruleset's refusal reads as the game's words
+  } else if (cmd != commands_.end()) {
     if (e.source == Source::server && (cmd->second.flags & kStuffable) == 0) {
       error("the server may not run '" + name + "' here",
             "nothing to do: a server's stuffed text runs only the commands a game allows");
@@ -301,6 +379,14 @@ void Console::dispatch(Entry& e) {
   current_ = outer;
   current_depth_ = outer_depth;
   current_via_ = outer_via;
+  current_team_ = outer_team;
+  expanded_team_ = outer_expanded;
+}
+
+bool Console::held_by_team() const {
+  // A command that expands its own words (`if`) and met a team macro holds what it runs too.
+  return current_team_ || (current_ != nullptr && expanded_team_ &&
+                           current_->source != Source::server && team_macro_limit() != nullptr);
 }
 
 // ---- files ----
@@ -462,6 +548,7 @@ void Console::message(std::string_view line) {
 void Console::fire_triggers(std::string_view line) { fire_triggers(line, -1, false); }
 
 void Console::fire_triggers(std::string_view line, int level, bool team) {
+  if (triggers_quiet()) return;  // a ruleset's match: no line runs a player's script
   // The newest trigger first, as each queues its alias at the front.
   for (const Trigger& t : triggers_) {
     if (t.match.empty() || line.find(t.match) == std::string_view::npos) continue;
@@ -556,6 +643,18 @@ size_t edit_distance(std::string_view a, std::string_view b) {
 }
 
 }  // namespace
+
+void Console::set_arg_values(std::string_view word, ArgValues values) {
+  if (values)
+    arg_values_[lower(word)] = std::move(values);
+  else
+    arg_values_.erase(lower(word));
+}
+
+std::vector<std::string> Console::arg_values(std::string_view word) const {
+  const auto it = arg_values_.find(lower(word));
+  return it != arg_values_.end() ? it->second() : std::vector<std::string>();
+}
 
 std::string Console::suggest(std::string_view name) const {
   const std::string n = lower(name);

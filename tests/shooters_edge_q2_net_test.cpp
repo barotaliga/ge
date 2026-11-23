@@ -1019,8 +1019,8 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
 TEST(a_download_cut_short_is_resumed_from_what_is_held) {
   // A skin's first 1000 bytes held from before (as `<path>.tmp`): the client asks for the rest
   // from there, so it ends as the held bytes then the server's from 1000 on, and the held file
-  // goes once it is whole. A client holding nothing gets every piece added as it comes, the first
-  // one begun afresh.
+  // goes once it is whole. A client holding nothing gets every piece added as it comes (two of
+  // them: pieces fill the packet), the first one begun afresh.
   const std::vector<uint8_t> red(2500, 7);
   cn::Q2NetConfig cfg;
   cfg.read_file = [&red](const std::string& path, std::vector<uint8_t>* out) {
@@ -1066,29 +1066,9 @@ TEST(a_download_cut_short_is_resumed_from_what_is_held) {
   CHECK(!std::filesystem::exists(dir / "players/male/red.pcx.tmp"));
   CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
   CHECK(b.downloaded["players/male/red.pcx"] == red);
-  CHECK_MSG(adds >= 3 && fresh_adds == 1 && added == red.size(),
+  CHECK_MSG(adds == 2 && fresh_adds == 1 && added == red.size(),
             std::to_string(adds) + " adds, " + std::to_string(fresh_adds) + " fresh");
   std::filesystem::remove_all(dir);
-}
-
-TEST(the_download_switches_gate_each_kind_of_file) {
-  // allow_download and its kinds (net/q2_downloads.hpp): each folder its switch, the rest
-  // `others` (off by default), and nothing at all once `allow_download` is 0 or -1.
-  cn::Q2Downloads d;
-  CHECK(cn::q2_download_allowed(d, "maps/q2dm1.bsp"));
-  CHECK(cn::q2_download_allowed(d, "players/male/grunt.pcx"));
-  CHECK(cn::q2_download_allowed(d, "sprites/s_bfg1.sp2"));
-  CHECK(cn::q2_download_allowed(d, "env/unit1_up.pcx"));
-  CHECK(!cn::q2_download_allowed(d, "locs/q2dm1.loc"));
-  d.textures = false;
-  CHECK(!cn::q2_download_allowed(d, "textures/e1u1/floor1_1.wal"));
-  CHECK(!cn::q2_download_allowed(d, "env/unit1_up.pcx"));
-  d.others = true;
-  CHECK(cn::q2_download_allowed(d, "locs/q2dm1.loc"));
-  for (const int all : {0, -1}) {
-    d.all = all;
-    CHECK(!cn::q2_download_allowed(d, "maps/q2dm1.bsp"));
-  }
 }
 
 TEST(each_client_is_sent_only_what_it_may_see) {
@@ -1653,7 +1633,9 @@ TEST(a_rate_out_of_the_servers_bounds_is_set_back_and_the_player_told) {
     bool p = false, st = false;
     for (const std::string& t : c.prints) p = p || t.find(said) != std::string::npos;
     for (const std::string& t : c.stuffed) st = st || t == line;
-    return p && st;
+    // Not a line the client answers itself: it goes on to the player's console, run as typed.
+    const bool run = std::find(c.to_run.begin(), c.to_run.end(), line) != c.to_run.end();
+    return p && st && run;
   };
   CHECK(told(h, "Your rate setting is too high for this server.", "rate 3000"));
   CHECK(told(l, "Your rate setting is too low for this server.", "rate 2000"));

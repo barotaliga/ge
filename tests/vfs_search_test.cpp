@@ -271,3 +271,23 @@ TEST(the_file_table_holds_golden) {
   }
   CHECK(rows == now);
 }
+
+// A zip entry stored deflated is handed out as the stream it lies as, for a peer that inflates it
+// itself; a stored entry, a pack's file or a loose one is not.
+TEST(a_deflated_entry_is_handed_out_as_its_stream) {
+  vfs::SearchPath sp;
+  vfs::Source& z = sp.sources.emplace_back();
+  z.kind = vfs::SourceKind::zip;
+  z.bytes = {1, 2, 3, 4, 5, 6, 7, 8};
+  z.zip.entries.push_back(
+      {.name = "a.txt", .method = 8, .crc = 0, .packed = 4, .size = 9, .data = 2});
+  z.zip.entries.push_back(
+      {.name = "b.txt", .method = 0, .crc = 0, .packed = 4, .size = 4, .data = 0});
+  z.zip.entries.push_back(
+      {.name = "c.txt", .method = 8, .crc = 0, .packed = 9, .size = 9, .data = 2});
+  std::span<const uint8_t> got;
+  CHECK(vfs::deflated(sp, {0, 0, 9}, &got) && got.size() == 4 && got[0] == 3 && got[3] == 6);
+  CHECK(!vfs::deflated(sp, {0, 1, 4}, &got));  // stored
+  CHECK(!vfs::deflated(sp, {0, 2, 9}, &got));  // past the archive's end
+  CHECK(!vfs::deflated(sp, {1, 0, 9}, &got));  // no such source
+}

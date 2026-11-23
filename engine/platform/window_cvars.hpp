@@ -1,14 +1,14 @@
 // THE WINDOW'S OWN SETTINGS, for any game with a window: whether it covers the screen and which
 // display it covers (`vid_fullscreen`, `vid_display`), the command that lists the displays
-// (`vid_displays`), the game's sound (`volume`, 0..1) and when it is heard (`s_auto_focus`: 0
-// always, 1 not while the window is minimised, 2 only while it has the focus), the window's border
-// and title bar, its place above the others and its edges (`win_noborder`, `win_notitle`,
-// `win_alwaysontop`, `win_noresize`) and its size and place (`vid_geometry`, `WxH+X+Y`;
-// `follow_window_cvars` applies them all), and the sound device (`s_device`, `s_devices` lists
-// them; `follow_sound_device`). A game binds them
-// once before its config runs, follows `fullscreen` each frame and reads `display` when it goes
-// fullscreen; a setting only one game has (a campaign's scores key) stays in that game, bound
-// beside these.
+// (`vid_displays`), whether it minimises when another window takes the focus
+// (`vid_minimize_on_focus_loss`), the game's sound (`volume`, 0..1) and when it is heard
+// (`s_auto_focus`: 0 always, 1 not while the window is minimised, 2 only while it has the focus),
+// the window's border and title bar, its place above the others and its edges (`win_noborder`,
+// `win_notitle`, `win_alwaysontop`, `win_noresize`) and its size and place (`vid_geometry`,
+// `WxH+X+Y`; `follow_window_cvars` applies them all), and the sound device (`s_device`, `s_devices`
+// lists them; `follow_sound_device`). A game binds them once before its config runs, follows
+// `fullscreen` each frame and reads `display` when it goes fullscreen; a setting only one game has
+// (a campaign's scores key) stays in that game, bound beside these.
 //
 // ge:summary The window's settings for any game: vid_fullscreen, vid_display, volume, s_auto_focus
 // ge:keywords vid_fullscreen vid_display vid_displays fullscreen display window cvars volume
@@ -17,6 +17,7 @@
 // ge:keywords follow_window_cvars window_style borderless always-on-top vid_geometry
 // ge:keywords window_place_of window-size window-position geometry s_device s_devices
 // ge:keywords sound-device follow_sound_device al_device s_enable no-sound
+// ge:keywords vid_minimize_on_focus_loss vid_flip_on_switch minimise-on-focus-loss alt-tab
 // ge:skill platform console
 // ge:test tests/platform_window_cvars_test.cpp
 #pragma once
@@ -39,6 +40,10 @@ struct WindowCvars {
   std::string modelist = "desktop";
   bool hwgamma = false;  // vid_hwgamma: asked for; this platform has no gamma ramp, so set back
   int display = 0;       // read when the window goes fullscreen
+  // vid_minimize_on_focus_loss: a full-screen window minimises when another window takes the
+  // focus, the display back in the desktop's own mode; followed each frame.
+  bool minimize_on_focus_loss = true;  // the cvar's default: 0 on a Mac
+  int minimize_applied = -1;           // what `follow_window_cvars` last set (-1 not yet)
   double volume = 0.7;
   int sound = 1;       // s_enable: 0 no sound at all, 1 and 2 the sound on
   int auto_focus = 0;  // s_auto_focus

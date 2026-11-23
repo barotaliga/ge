@@ -26,6 +26,7 @@
 #include "server/net_restart.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/client/q2_flash_fx.hpp"
+#include "shooters_edge/client/q2_temp_fx.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
@@ -42,6 +43,12 @@ namespace sb = ge::shooterbots;
 namespace shooters_edge::client {
 
 namespace pg = ge::progs;
+
+void listen_print(Listen& l, int level, const std::string& text) {
+  l.print_levels.resize(l.prints.size(), 2);
+  l.print_levels.push_back(level);
+  l.prints.push_back(text);
+}
 
 namespace {
 
@@ -212,7 +219,14 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
     if (kind == 2 || kind == 12) b.push_back(static_cast<uint8_t>(count));
     for (float c : {ev.origin.x, ev.origin.y, ev.origin.z})
       sv::encode(b, sv::WriteKind::coord, c, "");
-    if (Effect classic; arena_effect(b, classic)) l.effects.push_back(classic);
+    if (Effect classic; arena_effect(b, classic)) {
+      if (const Q2Puff* puff = listen_is_q2(l) ? q2_puff(name) : nullptr) {  // Quake II's specks
+        classic.q2_specks = puff->count;
+        classic.colour = puff->colour;
+        classic.way = {ev.values[0], ev.values[1], ev.values[2]};
+      }
+      l.effects.push_back(classic);
+    }
     return;
   }
   e.kind = EffectKind::named;
@@ -290,7 +304,8 @@ void entered(Listen& l) {
 void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
   for (const sv::NetEvent& ev : s.out.events) {
     take_sound(l, s, ev);
-    if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
+    if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0)
+      listen_print(l, ev.level, ev.text);
     if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
     if (ev.kind == sv::EventKind::stuffcmd && (ev.to & 1u) != 0) {
       if (ev.text == "menu_loadgame\n")
@@ -346,8 +361,8 @@ void host_heard(void* ctx, int talker, int gen, int seq, const std::vector<uint8
 void host_tap(void* ctx, const sv::RulesCommon& s) {
   take_events(*static_cast<Listen*>(ctx), s, false);
 }
-void host_print(void* ctx, const std::string& text) {
-  static_cast<Listen*>(ctx)->prints.push_back(text);
+void host_print(void* ctx, int level, const std::string& text) {
+  listen_print(*static_cast<Listen*>(ctx), level, text);
 }
 
 void close_door(Listen& l);

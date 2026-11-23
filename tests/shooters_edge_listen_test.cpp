@@ -485,6 +485,14 @@ TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   con.key("c", false);
   con.run();
   CHECK(cl::read_controls(cl::button_moves(c), in, c).up == 0);
+  // +moveup swims up, and in Quake II's move an up of 10 or more on the ground is its jump.
+  con.execute("bind v +moveup");
+  con.key("v", true);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).up >= 10);
+  con.key("v", false);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).up == 0);
   // lookstrafe: the mouse's sideways counts sidestep and leave the yaw alone.
   in.mouse.dx = 50;
   sh::Vec3f view{0, 90, 0};
@@ -696,6 +704,45 @@ TEST(a_demo_s_hand_holds_the_recorder_s_weapon_none_without_a_view_model_and_sin
   s.stats[cl::kStatWeapon] = 5;
   s.intermission = true;
   CHECK(!step().drawn);
+}
+
+TEST(a_predicted_shot_or_the_server_s_shot_sound_fires_the_hand_once) {
+  // net/qw_weapon.hpp counts each predicted shot in own_shots: the hand fires on each, once.
+  cl::DemoState s;
+  s.stats[cl::kStatHealth] = 100;
+  s.stats[cl::kStatWeapon] = 5;
+  s.stats[cl::kStatActiveWeapon] = 8;  // the super nailgun
+  s.format = cl::DemoFormat::client;
+  s.players.resize(32);
+  cl::HeldState held;
+  const shooters_edge::view::ViewSettings settings;
+  const ge::render::FrameView frame;
+  const auto step = [&] { return cl::step_demo_held(s, held, settings, {}, frame, 0, 0.013); };
+  CHECK(!step().fired);
+  s.own_shots = 1;
+  CHECK(step().fired);
+  CHECK(!step().fired);
+  s.own_shots = 3;  // two in one window frame: one shot drawn
+  CHECK(step().fired);
+  // Unpredicted, under rules that never animate the weapon: the server's weapon sound on the
+  // player fires the hand, once per frame read (a Quake join, a demo of our server).
+  s.sounds = {"", "weapons/spike2.wav", "player/axhit2.wav"};
+  cl::DemoSound snd;
+  snd.entity = 1;
+  snd.channel = 1;
+  snd.sound = 2;  // not a shot
+  s.started = {snd};
+  s.frames = 10;
+  CHECK(!step().fired);
+  s.started[0].sound = 1;
+  s.frames = 11;
+  CHECK(step().fired);
+  CHECK(!step().fired);  // the same frame read: not again
+  // A server whose rules never send a weapon frame other than 0 leaves the frames to the hand.
+  CHECK(!held.frames_live);
+  s.players[0].weapon_frame = 2;
+  step();
+  CHECK(held.frames_live);
 }
 
 TEST(r_viewmodellastfired_keeps_a_recording_s_last_fired_weapon_while_another_is_looked_at) {

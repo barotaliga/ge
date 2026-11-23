@@ -9,6 +9,7 @@
 // ge:test tests/shooters_edge_menu_test.cpp
 #include "shooters_edge/menu/game_menu.hpp"
 
+#include <chrono>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -20,6 +21,7 @@
 #include "classicenhance/source.hpp"
 #include "console/cvar.hpp"
 #include "core/output.hpp"
+#include "core/prng.hpp"
 
 namespace shooters_edge::menu {
 
@@ -239,6 +241,7 @@ void GameMenu::show(Host& host, std::string_view page) {
   in_games_ = false;
   waiting_.clear();
   main_.reset();
+  quit_up_ = false;  // a quit box opened here picks a joke anew
   const bool gallery = page == "screenshots";
   if (gallery) page = "options";
   const bool servers = page == "servers";
@@ -260,6 +263,7 @@ void GameMenu::show(Host& host, std::string_view page) {
   main_.move_focus(0);
   help_page_ = 0;
   open_ = true;
+  dress_quit(host);
   cue(ui::MenuCue::enter);
   if (gallery) {
     main_.top().focus = -1;
@@ -292,6 +296,7 @@ void GameMenu::hide() {
   if (con_ != nullptr) server_page_.leave(*con_);
   if (open_) cue(ui::MenuCue::back);
   open_ = false;
+  quit_up_ = false;
   waiting_.clear();
   in_enhance_ = false;
   in_gallery_ = false;
@@ -522,6 +527,36 @@ void GameMenu::press_key(std::string_view key, Host& host) {
   refresh_main(host);
 }
 
+void GameMenu::dress_quit(const Host& host) {
+  ui::Page* quit = main_.page("quit");
+  const bool up = open_ && main_.top().id == "quit";
+  const bool was = quit_up_;
+  quit_up_ = up;
+  if (quit == nullptr || !up || was) return;
+  // Quake's own box once a game's files are loaded in its own look; the shell's question else.
+  const bool joke = classic() && &game_table(*table_) == &classic_menu() && host.files != nullptr;
+  if (joke) {
+    if (quit_seed_ == 0)
+      quit_seed_ =
+          static_cast<uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count() | 1);
+    ge::core::Rng rng = ge::core::make_rng(quit_seed_);
+    quit_joke_ = ge::core::int_in(rng, 0, static_cast<int32_t>(kQuitJokes) - 1);
+    quit_seed_ = rng.a;
+  } else {
+    quit_joke_ = -1;
+  }
+  if (ui::Item* ask = quit->find("ask")) {
+    std::string text;
+    if (quit_joke_ >= 0) {
+      for (const std::string_view line : quit_joke(static_cast<size_t>(quit_joke_)))
+        text += (text.empty() ? "" : "\n") + std::string(line);
+    } else if (const Entry* e = find_entry("quit", "ask", *table_)) {
+      text = e->text;
+    }
+    ask->text = text;
+  }
+}
+
 void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double dt) {
   dt_ = dt;
   waiting_fresh_ = false;
@@ -551,7 +586,14 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
   if (!open_) {
     if (escape && host.in_level && host.screen_up && host.console != nullptr) {
       host.console->execute("putaway");  // the rules' screen taken down, no menu
+      escape_hold_ = 0;
       return;
+    }
+    if (escape_hold_ >= 0 && !escape) {  // still held past the putaway: the in-game page
+      escape_hold_ = host.escape_held && host.in_level ? escape_hold_ + dt : -1;
+      if (escape_hold_ < kEscapeHold) return;
+      escape_hold_ = -1;
+      escape = true;
     }
     if (escape) {  // in a level, the game's in-game page when it has one
       const std::string_view in_level = table_of(host).in_level;
@@ -604,7 +646,17 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
   }
   const ui::Item* held = main_.focused();
   const std::string item_before = held != nullptr ? held->id : std::string();
-  const std::vector<ui::MenuEvent> events = main_.input(in, hits_);
+  // The quit box answers Y and N as well as its rows.
+  ui::MenuInput asked = in;
+  if (main_.top().id == "quit" && (in.letter == 'y' || in.letter == 'n')) {
+    ui::Page& quit = main_.top();
+    for (size_t i = 0; i < quit.items.size(); i++)
+      if (in.letter == 'y' && quit.items[i].id == "yes") quit.focus = static_cast<int>(i);
+    asked.accept = in.letter == 'y';
+    asked.back = in.letter == 'n';
+  }
+  const std::vector<ui::MenuEvent> events = main_.input(asked, hits_);
+  dress_quit(host);
   cue(ui::menu_cue(events, moved()));
   for (const ui::MenuEvent& e : events) {
     if (ServerPage::owns(e.page) && host.console != nullptr) {  // OPTIONS > SERVER SETTINGS

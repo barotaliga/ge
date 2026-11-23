@@ -152,6 +152,14 @@ held setting refuses every set with the ruleset's words ("cl_hud is locked by th
 ruleset."), a set into a range is clamped into it, and the value asked for is kept as the
 player's: `cfg_save` writes it and leaving the ruleset gives it back. A server's stuffed text is
 never refused by a ruleset. The classic games' books are `plugins/classic/rulesets.hpp`.
+A ruleset may also keep scripts off TEAM MACROS (`add_macro(..., MacroKind::team)`: the `$` words
+for what a player holds and where they are): a line that expanded one runs only the ruleset's
+team commands (`say_team`, `if`, the canned reports), and what an allowed command runs (`if`'s
+branch) is held the same way, so `if $health < 50 then impulse 7` does nothing; any other command
+or setting answers "impulse cannot be used with team macros under the smackdown ruleset." It may
+keep TRIGGERS QUIET while a match is played (`msg_trigger`, `re_trigger` and a game's event
+triggers ask `Console::triggers_quiet`; sound triggers keep quiet at all times), and cap the
+`wait`s in a row a script may spread over frames (`Console::limit_waits`).
 
 A server's stuffed text may run only the commands marked as safe to stuff (`echo`, `set`,
 `wait`, `say`, `say_team`, `say_near`) and set only the server's cvars. It never touches a player's files,

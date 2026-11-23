@@ -582,6 +582,8 @@ void run_command(Q2Server& s, int slot, const sh::MoveCmd& c) {
   }
   pm.changed = p.changed;
   ge::classic::q2_feel(pm, q2_move_feel(s, slot));
+  if (s.clients[slot].protocol != 0)  // a stock client's flight, as it predicts it
+    ge::classic::q2_fly_for_protocol(pm, s.clients[slot].protocol);
   MapWorld mw{&s, p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
   const bool was_on_ground = p.on_ground;
   ge::classic::q2_move(pm, mw.world());
@@ -1249,8 +1251,12 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   }
   if (s.loading && !q2_load_end(s, error)) return false;  // the save's players in their bodies
   fill_rows(s);
+  s.entered_told = 0;
   for (int i = 0; i < sh::kMaxClients; i++)  // every player entered again on the new map
-    if (s.clients[i].active) announce_entry(s, i);
+    if (s.clients[i].active) {
+      announce_entry(s, i);
+      s.entered_told |= 1u << i;
+    }
   return true;
 }
 
@@ -1312,7 +1318,8 @@ void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool
   if (c.active && c.spectator == spectator && c.bot == bot && s.map != nullptr) {
     set_info(c.userinfo, "name", name);
     fill_rows(s);
-    announce_entry(s, slot);
+    if ((s.entered_told & (1u << slot)) == 0) announce_entry(s, slot);  // said at the load
+    s.entered_told &= ~(1u << slot);
     return;
   }
   c = ClientInfo{};

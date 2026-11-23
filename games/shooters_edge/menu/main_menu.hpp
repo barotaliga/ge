@@ -104,6 +104,10 @@ struct MenuTable {
   std::string_view in_level = {};   // the page ESCAPE opens in a level ("" the root)
   std::string_view script = {};     // the menu script the game reads over it (menu_script.hpp)
   const MenuTable* over = nullptr;  // a script's table: the game's table it was read over
+  // The saves LOAD and SAVE list, a row each, in order ("" a gap); empty: Quake's `s0` to `s11`
+  // on both (slots_of).
+  std::span<const std::string_view> load_slots = {};
+  std::span<const std::string_view> save_slots = {};
 };
 // The game's own table `t` is, or was read over.
 inline const MenuTable& game_table(const MenuTable& t) { return t.over != nullptr ? *t.over : t; }
@@ -111,6 +115,13 @@ inline const MenuTable& game_table(const MenuTable& t) { return t.over != nullpt
 // Quake II with our own words for an empty slot.
 const MenuTable& classic_menu();
 const MenuTable& q2_menu();
+
+// QUAKE'S QUIT BOX: one of its eight jokes, picked at random each time the box opens and kept while
+// it stays open, four lines of 24 characters as the game shows them (a blank last line spaces).
+// Y quits, N or ESCAPE goes back; any other letter is ignored.
+inline constexpr size_t kQuitJokes = 8;
+inline constexpr size_t kQuitJokeLines = 4;
+std::span<const std::string_view, kQuitJokeLines> quit_joke(size_t i);
 
 // Quake's table, every page's rows in order.
 std::span<const Entry> entries();
@@ -124,13 +135,15 @@ struct Host {
   ge::console::Console* console = nullptr;
   const ge::console::Cvars* server = nullptr;
   std::vector<std::string> maps = {};  // map names, `start` first when the packs hold it
-  // Each save slot's line (slot i is the save `s<i>`): the save's title, "" for an empty slot.
+  // Each save's line, in the order of `slot_names(table)`: its title, "" for an empty slot.
   std::vector<std::string> saves = {};
   const MenuTable* table = nullptr;  // the game's menu (null: classic_menu())
   bool in_level = false;             // a level is being played (ESCAPE opens `in_level`)
   // In a level, a screen of the rules is up (Quake II's help computer, scoreboard or inventory):
-  // ESCAPE sends `putaway` to take it down and opens no menu.
+  // ESCAPE sends `putaway` to take it down and opens no menu; held on (`escape_held`, ESCAPE down
+  // this frame) to its first repeat, it opens the in-game page after all.
   bool screen_up = false;
+  bool escape_held = false;
   // The game's files (null: none): the player page's figures and skins (figures.hpp).
   const ge::vfs::SearchPath* files = nullptr;
   // The server settings pages' sheet (net/qw_remote_sheet.hpp; null: none): what OPTIONS ▸ SERVER
@@ -144,8 +157,12 @@ std::string_view bind_command(const MenuTable& table, std::string_view page, std
 // The table `host` reads.
 const MenuTable& table_of(const Host& host);
 
-// The save slots the LOAD and SAVE pages show, and the words of an empty one.
+// Quake's save slots (`s0` to `s11`, on LOAD and SAVE alike), and the words of an empty one.
 inline constexpr int kSaveSlots = 12;
+// The saves the LOAD (`load`) or SAVE page of `table`'s game lists, in order ("" a gap).
+std::span<const std::string_view> slots_of(const MenuTable& table, bool load);
+// Every save either page lists, once each, LOAD's first: what `Host::saves` follows.
+std::vector<std::string> slot_names(const MenuTable& table);
 inline constexpr std::string_view kEmptySlot = "- EMPTY -";
 inline constexpr std::string_view kUnusedSlot = "--- UNUSED SLOT ---";  // Quake's
 // A slot's line cut to what a row holds: the classic look's label column, and the modern look's
@@ -162,10 +179,11 @@ std::string host_value(const Host& host, std::string_view name);
 // QUIT), `single`, `multi`, `host` (NEW GAME), `setup`, `ranked` (RANKED GAME: a duel looked for,
 // the console for a two-on-two's duo, the queue left), `options`, `video` and its `weapon`,
 // `enhanced` (CLASSIC ENHANCED) and its `ce_art`, `ce_light`, `ce_liquids`, `ce_fire` and
-// `ce_weather`, `help`, `quit`; the slot pages `load` and `save` (rows `s0`..`s11`, then BACK; a
-// slot activated runs `load s<i>` or `save s<i>` and closes the menu; an empty slot is dimmed on
-// LOAD); and `controls` (CUSTOMIZE CONTROLS: a row `c<i>` a move of `controls()`, its value the
-// keys bound to it).
+// `ce_weather`, `help`, `quit`; the slot pages `load` and `save` (a row a save, its id the save's
+// name: Quake's `s0`..`s11`, Quake II's autosave `save0`, a gap, `save1`..`save15` on LOAD and
+// `save1`..`save15` on SAVE; then BACK; a slot activated runs `load <name>` or `save <name>` and
+// closes the menu; an empty slot is dimmed on LOAD); and `controls` (CUSTOMIZE CONTROLS: a row
+// `c<i>` a move of `controls()`, its value the keys bound to it).
 ge::ui::Menu build_menu(const MenuTable& table = classic_menu());
 
 // Every entry's dimming and value read from the host (on opening, and after the console changed
