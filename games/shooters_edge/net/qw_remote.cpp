@@ -1257,7 +1257,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.q2_chantype = std::atoi(cvar("net_chantype", "1").c_str());
     cfg.q2_batch = cvar("cl_batchcmds", "1") != "0";
     cfg.q2_packetdup = std::atoi(cvar("cl_packetdup", "1").c_str());
-    cfg.q2_maxpackets = std::atoi(cvar("cl_maxpackets", "30").c_str());
+    cfg.q2_maxpackets = std::atoi(cvar("cl_c2spps", "30").c_str());  // its cl_maxpackets
     cfg.q2_instantpacket = cvar("cl_instantpacket", "1") != "0";
     // Quake II's downloads over HTTP (classic/content/web_downloads.hpp), registered while it is
     // the game.
