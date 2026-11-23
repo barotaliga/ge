@@ -13,7 +13,11 @@
 // ge:keywords predicted-sound super-nailgun own_shots
 // ge:skill net labs
 // ge:test tests/shooters_edge_qw_weapon_test.cpp
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -24,11 +28,14 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/file.hpp"
+#include "progs/vm.hpp"
 #include "shooters_edge/labs/arena_chart.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
 #include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/qc_server.hpp"
+#include "vfs/pak.hpp"
 
 namespace {
 
@@ -84,8 +91,29 @@ struct Session {
   int64_t now = 0;
 };
 
-bool open_session(Session& s, double latency_ms, std::string& error) {
-  if (!sv::baseline_mod(s.progs, error)) return false;
+// A mission pack's program in the arena: a start for its single player too, nothing to pick up
+// (the lab gives every weapon with impulse 9).
+const char* const kPackEntities = R"({
+"classname" "worldspawn"
+"message" "weapon prediction"
+}
+{
+"classname" "info_player_start"
+"origin" "-416 0 24"
+}
+{
+"classname" "info_player_deathmatch"
+"origin" "-416 0 24"
+}
+)";
+
+// `pack`: a mission pack's program (its progs.dat) in place of the baseline mod.
+bool open_session(Session& s, double latency_ms, std::string& error,
+                  const std::vector<uint8_t>* pack = nullptr) {
+  if (pack != nullptr ? !ge::progs::load_progs(pack->data(), pack->size(), s.progs, error,
+                                               ge::progs::every_form())
+                      : !sv::baseline_mod(s.progs, error))
+    return false;
   sv::QcServerOptions so;
   so.loop.max_edicts = 1024;
   s.qc = sv::make_qc_server(s.progs, so, error);
@@ -93,7 +121,7 @@ bool open_session(Session& s, double latency_ms, std::string& error) {
   sv::MapSpec map;
   map.name = "arena";
   map.models = sv::arena_models();
-  map.entities = kEntities;
+  map.entities = pack != nullptr ? kPackEntities : kEntities;
   if (!sv::load_map(*s.qc, map, error)) return false;
   gn::LinkConditions link;
   gn::conditions_preset("lan", link);
@@ -103,6 +131,11 @@ bool open_session(Session& s, double latency_ms, std::string& error) {
   gn::open_sim_transport(s.st, s.net, gn::sim_address(0, cn::kPortServer));
   gn::open_sim_transport(s.ct, s.net, gn::sim_address(1, cn::kPortClient));
   s.rules = sv::qc_runner_over(*s.qc);
+  if (pack != nullptr) {  // single player: impulse 9 gives every weapon
+    s.rules.console("deathmatch 0");
+    s.rules.console("coop 0");
+    sv::write_game_kind(*s.qc);
+  }
   if (!cn::qw_start(s.server, s.rules, s.st, cn::ServerConfig{}, error)) return false;
   cn::ClientConfig wc;
   wc.name = "window";
@@ -206,6 +239,194 @@ Run run_session(double latency_ms, bool on, int fps, int presses) {
   return out;
 }
 
+// THE MISSION PACKS' GUNS: a pack's own program served, every weapon given (impulse 9), one gun
+// chosen by its impulses, then pressed. Each press's time to its shot heard (the gun's own sample)
+// and to its firing frame drawn, off and on.
+struct PackGun {
+  const char* pack;    // the folder under --packs
+  const char* key;     // the metric's name
+  const char* what;    // the table's words
+  int impulses[2];     // to choose it (0: none)
+  const char* sample;  // its shot's sound ("": none, the frame alone)
+  double hold_s, cycle_s;
+};
+constexpr PackGun kPackGuns[] = {
+    {"hipnotic",
+     "laser",
+     "Scourge of Armagon's laser cannon",
+     {225, 0},
+     "hipweap/laserg.wav",
+     0.55,
+     1.2},
+    {"hipnotic", "mjolnir", "Scourge of Armagon's Mjolnir", {226, 0}, "", 0.1, 1.2},
+    {"hipnotic",
+     "prox",
+     "Scourge of Armagon's proximity gun",
+     {6, 6},
+     "hipweap/proxbomb.wav",
+     0.1,
+     1.2},
+    {"rogue",
+     "lava",
+     "Dissolution of Eternity's lava nailgun",
+     {60, 0},
+     "weapons/rocket1i.wav",
+     0.55,
+     1.2},
+    {"rogue",
+     "multirocket",
+     "Dissolution of Eternity's multi rocket launcher",
+     {63, 0},
+     "weapons/sgun1.wav",
+     0.1,
+     1.2},
+    {"rogue",
+     "plasma",
+     "Dissolution of Eternity's plasma gun",
+     {64, 0},
+     "plasma/fire.wav",
+     0.1,
+     1.5},
+};
+
+struct PackRun {
+  bool ok = false;
+  std::string why;
+  int presses = 0, heard_n = 0, drawn_n = 0;
+  uint32_t late = 0;                  // the server's copies of predicted sounds that matched none
+  double heard_ms = 0, drawn_ms = 0;  // means over the presses that showed it
+};
+
+bool heard_sample(const dc::DemoState& d, const char* sample) {
+  for (const dc::DemoSound& snd : d.started) {
+    if (snd.entity != d.player + 1) continue;
+    const std::string_view name =
+        snd.name != nullptr ? std::string_view(snd.name)
+        : snd.sound > 0 && static_cast<size_t>(snd.sound) < d.sounds.size()
+            ? std::string_view(d.sounds[static_cast<size_t>(snd.sound)])
+            : std::string_view();
+    if (name == sample) return true;
+  }
+  return false;
+}
+
+PackRun run_pack(const std::vector<uint8_t>& program, const PackGun& g, double latency_ms, bool on,
+                 int fps, int presses) {
+  PackRun out;
+  Session s;
+  std::string error;
+  if (!open_session(s, latency_ms, error, &program)) {
+    out.why = error;
+    return out;
+  }
+  const int64_t window_us = 1000000 / fps;
+  int64_t wall = 0;
+  for (int i = 0; i < 6 * fps && s.remote.end.stage != cn::ClientStage::active; i++)
+    window_frame(s, wall += window_us, window_us);
+  if (s.remote.end.stage != cn::ClientStage::active) {
+    out.why = "the window never reached play";
+    return out;
+  }
+  cn::remote_world(s.remote, &s.models);
+  const auto impulse = [&](int i) {
+    s.remote.hands.impulse = static_cast<uint8_t>(i);
+    for (int k = 0; k < fps; k++) window_frame(s, wall += window_us, window_us);
+  };
+  impulse(9);
+  for (const int i : g.impulses)
+    if (i != 0) impulse(i);
+  // Aimed straight up: a laser bolt that came back off the arena's walls would end the run.
+  s.remote.view.x = -89;
+  s.remote.weapon.off = !on;
+  const dc::DemoState& d = s.remote.demo.state;
+  const int cycle = static_cast<int>(g.cycle_s * fps), held = static_cast<int>(g.hold_s * fps);
+  int press_at = 0;
+  bool heard = false, drawn = false;
+  for (int i = 0; i < cycle * presses; i++) {
+    const int in_cycle = i % cycle;
+    if (in_cycle == 0) {
+      press_at = i;
+      heard = drawn = false;
+      out.presses++;
+    }
+    s.remote.hands.buttons = in_cycle < held ? sh::kButtonAttack : 0;
+    window_frame(s, wall += window_us, window_us);
+    const double since = static_cast<double>(i - press_at) * 1000.0 / fps;
+    if (!heard && g.sample[0] != 0 && heard_sample(d, g.sample)) {
+      heard = true;
+      out.heard_ms += since;
+      out.heard_n++;
+    }
+    const int me = d.player;
+    const int frame = me >= 0 && static_cast<size_t>(me) < d.players.size()
+                          ? d.players[static_cast<size_t>(me)].weapon_frame
+                          : 0;
+    if (!drawn && frame != 0) {
+      drawn = true;
+      out.drawn_ms += since;
+      out.drawn_n++;
+    }
+  }
+  out.heard_ms /= out.heard_n > 0 ? out.heard_n : 1;
+  out.drawn_ms /= out.drawn_n > 0 ? out.drawn_n : 1;
+  out.late = s.remote.weapon.filled_late;
+  out.ok = true;
+  return out;
+}
+
+// The packs' table when --packs names a folder holding hipnotic/pak0.pak and rogue/pak0.pak (the
+// player's own; never in the tree, so the smoke run has none).
+void run_packs(gl::Lab& lab, const std::string& root, double ms, int fps, int presses) {
+  gl::LabTable t{"the mission packs' guns at " + to_fixed(ms, 0) + " ms each way, off and on",
+                 {"gun", "weapon prediction", "press to shot heard (ms)", "heard",
+                  "press to firing frame drawn (ms)", "drawn", "server copies played late"},
+                 {}};
+  std::string loaded;
+  std::vector<uint8_t> program;
+  for (const PackGun& g : kPackGuns) {
+    if (loaded != g.pack) {
+      loaded = g.pack;
+      program.clear();
+      const std::filesystem::path path = std::filesystem::path(root) / g.pack / "pak0.pak";
+      std::ifstream f(path, std::ios::binary);
+      const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
+                                       std::istreambuf_iterator<char>());
+      ge::vfs::Pak pak;
+      std::string error;
+      const ge::vfs::PakEntry* e = nullptr;
+      if (!bytes.empty() && ge::vfs::read_pak(bytes, &pak, &error))
+        e = ge::vfs::pak_find(pak, "progs.dat");
+      if (e == nullptr) {
+        lab.fail("se-weapon-predict: no progs.dat in " + path.string(),
+                 "next: point --packs at the folder holding hipnotic/ and rogue/, each with its "
+                 "pak0.pak");
+        return;
+      }
+      const std::span<const uint8_t> p = ge::vfs::pak_file(bytes, *e);
+      program.assign(p.begin(), p.end());
+    }
+    for (const bool on : {false, true}) {
+      const PackRun r = run_pack(program, g, ms, on, fps, presses);
+      if (!r.ok || r.drawn_n + r.heard_n == 0) {
+        lab.fail(std::string("se-weapon-predict: ") + g.key + (on ? " on" : " off") +
+                     ": nothing showed (" + (r.why.empty() ? "no shot heard or drawn" : r.why) +
+                     ")",
+                 "next: build/debug/tests/classic_weapon_predict_test");
+        return;
+      }
+      const std::string key = std::string("pack.") + g.key + (on ? ".on" : ".off");
+      if (r.heard_n > 0) lab.metric(key + ".shot-heard", r.heard_ms, "ms");
+      if (r.drawn_n > 0) lab.metric(key + ".frame-drawn", r.drawn_ms, "ms");
+      const auto count = [&](int n) { return std::to_string(n) + "/" + std::to_string(r.presses); };
+      t.rows.push_back({g.what, on ? "on" : "off", r.heard_n > 0 ? to_fixed(r.heard_ms, 1) : "-",
+                        count(r.heard_n), r.drawn_n > 0 ? to_fixed(r.drawn_ms, 1) : "-",
+                        count(r.drawn_n), on ? std::to_string(r.late) : "-"});
+      if (on) lab.metric(key + ".copies-late", static_cast<double>(r.late), "sounds");
+    }
+  }
+  lab.table(t);
+}
+
 void run(gl::Lab& lab) {
   const int fps = static_cast<int>(lab.arg_num("fps"));
   const int presses = static_cast<int>(lab.arg_num("presses"));
@@ -305,6 +526,7 @@ void run(gl::Lab& lab) {
               "the on points start at 0 ms; the off points a round trip later; the same count", in);
   }
   lab.table(t);
+  if (!lab.arg("packs").empty()) run_packs(lab, lab.arg("packs"), latencies.front(), fps, presses);
 }
 
 const gl::LabSpec kSpec{
@@ -321,6 +543,9 @@ const gl::LabSpec kSpec{
         {"presses", "4", "presses measured a session"},
         {"latencies", "75,25",
          "one-way latencies, ms, a pair of sessions each (the first charted)"},
+        {"packs", "",
+         "a folder holding the Quake mission packs (hipnotic/pak0.pak, rogue/pak0.pak): their "
+         "guns measured too, at the first latency"},
     },
     "--presses=2 --latencies=40",
     run,

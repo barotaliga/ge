@@ -291,7 +291,7 @@ ge::classic::WeaponState weapon_state(const sv::RulesWorld& w, int slot, int fra
   ws.clock = static_cast<float>(w.time);
   ws.attack_finished = n.attack_finished;
   ws.next_think = n.next_think;
-  ws.step = ge::classic::weapon_step_of(ws.weapon, frame);
+  ws.step = ge::classic::weapon_step_of(ws.weapon, frame, ge::classic::weapon_rules_of(w.models));
   ws.ping_ms = w.clients[slot].ping_ms;
   for (int i = 0; i < 4; i++) ws.ammo[i] = static_cast<int>(n.ammo[i]);
   ws.frame = frame;
