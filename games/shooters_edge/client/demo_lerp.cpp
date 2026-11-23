@@ -89,6 +89,7 @@ void lerp_frame(DemoLerp& l, const DemoState& s, bool cut) {
   p.eye = s.eye;
   p.angles = s.angles;
   p.fov = s.fov;
+  p.teleport_bit = s.teleport_bit;
   p.entities.assign(s.entities.begin(), s.entities.end());
   p.players.assign(s.players.begin(), s.players.end());
   l.between = !cut && s.frames > 1 && l.from.levels == p.levels && p.time > l.from.time;
@@ -149,7 +150,8 @@ const DemoState& lerp_at(DemoLerp& l, const DemoState& s, double time) {
   const float f = static_cast<float>(l.f);
   const DemoPose& a = l.from;
   const DemoPose& b = l.to;
-  if (a.fov > 0 && b.fov > 0) d.fov = a.fov + (b.fov - a.fov) * f;
+  const bool teleported = a.teleport_bit != b.teleport_bit;  // the view as `to` has it
+  if (a.fov > 0 && b.fov > 0 && !teleported) d.fov = a.fov + (b.fov - a.fov) * f;
   const size_t players = std::min(a.players.size(), b.players.size());
   for (size_t k = 0; k < players; k++) {
     if (!b.players[k].present) continue;
@@ -164,7 +166,7 @@ const DemoState& lerp_at(DemoLerp& l, const DemoState& s, double time) {
       continue;
     if (!lerp_entity(a.entities[n], b.entities[n], f, d.entities[n])) l.snapped++;
   }
-  if (s.intermission || a.intermission || a.player != b.player) return d;
+  if (s.intermission || a.intermission || a.player != b.player || teleported) return d;
   // The eye rides the tracked one's drawn origin, as the reader puts it on his read one.
   bool moved = false;
   if (s.format == DemoFormat::single) {

@@ -485,6 +485,14 @@ TEST(the_binds_buttons_make_the_command_always_run_and_sidestep) {
   con.key("c", false);
   con.run();
   CHECK(cl::read_controls(cl::button_moves(c), in, c).up == 0);
+  // +moveup swims up, and in Quake II's move an up of 10 or more on the ground is its jump.
+  con.execute("bind v +moveup");
+  con.key("v", true);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).up >= 10);
+  con.key("v", false);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).up == 0);
   // lookstrafe: the mouse's sideways counts sidestep and leave the yaw alone.
   in.mouse.dx = 50;
   sh::Vec3f view{0, 90, 0};
