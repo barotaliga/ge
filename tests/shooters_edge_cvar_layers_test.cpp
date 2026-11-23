@@ -641,6 +641,26 @@ TEST(one_camera_behind_the_player_in_every_game) {
   CHECK(v.clashes().empty());
 }
 
+TEST(the_2d_switch_and_the_frame_graph_are_every_games) {
+  // scr_draw2d and timegraph in the classic layer (screen_2d.hpp): Quake's r_timegraph the same
+  // graph, and a value set in one game held in the next.
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("scr_draw2d") != nullptr && v.find("scr_draw2d")->layer == cl::kLayerClassic);
+  v.set("r_timegraph", "1", con::Source::local);
+  v.set("scr_draw2d", "1", con::Source::local);
+  CHECK(w.game.screen.time_graph && w.game.screen.draw2d == 1);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2, {});
+  CHECK(w.game.screen.time_graph && w.game.screen.draw2d == 1);  // kept
+  v.set("scr_draw2d", "3", con::Source::local);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
+  CHECK(w.game.screen.draw2d == 3 && v.find("scr_draw2d")->value == "3");
+  CHECK(v.clashes().empty());
+}
+
 TEST(the_competitive_settings_are_every_classic_games) {
   // What a competition player tunes to see clearly, one setting each in every classic game: the
   // flat walls, the plain sky, the liquids seen through, the team's and the enemy's skins, the
@@ -725,6 +745,19 @@ TEST(q2_chat_sound_and_auto_chat_are_its_own_and_go_with_it) {
   con_view.add(ge::console::LineKind::output, "plain");
   CHECK(con_view.lines().back().stamp.empty());
   CHECK(v.clashes().empty());
+}
+
+TEST(q2s_chat_lines_place_is_its_own_and_goes_with_it) {
+  Window w(pr::kGameProfiles[0]);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  // Its chat lines' place in its own pixels, only while it is loaded (others: hud_chat_*).
+  cl::switch_game_cvars(w.console, w.game, *q2, {.chat = &w.chat});
+  w.console.execute("scr_chathud_x 20; scr_chathud_y -100");
+  CHECK(w.chat.hud_x == 20 && w.chat.hud_y == -100);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {.chat = &w.chat});
+  CHECK(w.console.cvars().find("scr_chathud_x") == nullptr);
 }
 
 TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {

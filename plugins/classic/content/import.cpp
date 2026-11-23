@@ -16,6 +16,7 @@
 #include <string>
 
 #include "assets/sha256.hpp"
+#include "vfs/disc.hpp"
 #include "vfs/lha.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/unpack.hpp"
@@ -195,7 +196,7 @@ bool taken_before(const fs::path& dir, const std::string& print, bool music,
     if (!n.starts_with("taken") || !n.ends_with(".txt")) continue;
     std::ifstream in(it->path());
     std::string line;
-    if (!in || !std::getline(in, line) || line != "taken 1") continue;
+    if (!in || !std::getline(in, line) || line != "taken 2") continue;
     bool print_ok = false, music_ok = !music, any = false, files_ok = true;
     std::vector<const classicenhance::MissionPack*> found;
     bool held_base = true;
@@ -234,7 +235,7 @@ bool taken_before(const fs::path& dir, const std::string& print, bool music,
 void write_taken(const fs::path& dir, const std::string& from, const std::string& print, bool music,
                  const ImportReport& r) {
   std::error_code ec;
-  std::string text = "taken 1\nsource " + fs::weakly_canonical(from, ec).generic_string() +
+  std::string text = "taken 2\nsource " + fs::weakly_canonical(from, ec).generic_string() +
                      "\nfingerprint " + print + "\nmusic " + (music ? "1" : "0") + "\nbase " +
                      (r.base ? "1" : "0") + "\n";
   for (const classicenhance::MissionPack* m : r.packs)
@@ -512,7 +513,9 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
     const Tree& t;
     ~Cleanup() {
       std::error_code ec;
-      if (!t.unpacked.empty()) fs::remove(t.unpacked, ec);
+      if (t.unpacked.empty()) return;
+      fs::remove(t.unpacked, ec);
+      fs::remove(fs::path(t.unpacked).parent_path(), ec);  // the scratch folder, when empty
     }
   } cleanup{tree};
   if (!open_tree(from, &tree, error, scratch.string())) return false;
@@ -620,6 +623,20 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
   if (!out->base)
     out->notes.push_back(std::string(game->what) + " itself was not in " + from +
                          "; its mission packs play only over it, so take it in too");
+  // Another add-on beside the base folder (a third party's pack, a mod): named and left.
+  for (const TreeFile& f : tree.files) {
+    if (!out->base) break;
+    const std::string l = lower(f.path);
+    if (!l.starts_with(lp) || last_part(l) != classicenhance::pack_name(*game, 0)) continue;
+    const std::string folder = parent_of(l.substr(lp.size()));
+    if (folder.empty() || folder.find('/') != std::string::npos || base_like(folder) ||
+        std::any_of(packs.begin(), packs.end(),
+                    [&](const FoundPack& p) { return p.named && p.root == lp + folder + "/"; }))
+      continue;
+    out->notes.push_back(parent_of(f.path).substr(prefix.size()) + " beside " +
+                         std::string(game->base_dir) + " is not one of " + std::string(game->what) +
+                         "'s mission packs this game plays; it was left where it is");
+  }
   // A release that prints its words by key (progs/localized.hpp) keeps their table in its own
   // archives beside the base folder (`*.kpf`): that one file is taken out of the first that has
   // it and kept loose in the base folder, where the game reads it.
@@ -738,6 +755,21 @@ std::vector<Offer> find_offers(const std::vector<std::string>& roots,
                                const std::string& data_root) {
   std::vector<Offer> out;
   std::error_code ec;
+  // The sources games were taken in from look for packs too: a pack beside a base game taken in
+  // before packs were known.
+  std::vector<std::string> all = roots;
+  for (const classicenhance::Profile& g : classicenhance::kProfiles) {
+    const fs::path dir = fs::path(data_root) / std::string(g.id);
+    for (const fs::directory_entry& e : fs::directory_iterator(dir, ec)) {
+      const std::string n = e.path().filename().string();
+      if (!n.starts_with("taken") || !n.ends_with(".txt")) continue;
+      std::ifstream in(e.path());
+      for (std::string line; std::getline(in, line);)
+        if (line.starts_with("source ") && fs::is_directory(line.substr(7), ec) &&
+            std::find(all.begin(), all.end(), line.substr(7)) == all.end())
+          all.push_back(line.substr(7));
+    }
+  }
   const auto taken = [&](const classicenhance::Profile& g, const classicenhance::MissionPack& m) {
     return fs::is_regular_file(fs::path(data_root) / std::string(g.id) / std::string(m.folder) /
                                    classicenhance::pack_name(g, 0),
@@ -751,8 +783,55 @@ std::vector<Offer> find_offers(const std::vector<std::string>& roots,
       if (lower(e.path().filename().string()) == name) return e.path();
     return fs::path();
   };
-  int seen = 0;
-  for (const std::string& r : roots) {
+  // A disc image or a zip that holds a pack: its listing read by seeks, never the whole file.
+  using Listed = std::vector<std::pair<std::string, uint64_t>>;
+  const auto offer_listed = [&](const fs::path& file, const Listed& names) {
+    const auto has_folder = [&](std::string_view folder) {
+      const std::string seg = "/" + lower(folder) + "/";
+      return std::any_of(names.begin(), names.end(), [&](const auto& n) {
+        return ("/" + lower(n.first)).find(seg) != std::string::npos;
+      });
+    };
+    for (const auto& [n, size] : names) {
+      const std::string l = lower(n);
+      const std::string folder = last_part(parent_of(l));
+      for (const classicenhance::Profile& g : classicenhance::kProfiles) {
+        if (last_part(l) != lower(classicenhance::pack_name(g, 0))) continue;
+        bool other_base = false;
+        for (const classicenhance::Profile& o : classicenhance::kProfiles)
+          other_base = other_base || (&o != &g && has_folder(o.base_dir));
+        const bool named_here = !other_base || has_folder(g.base_dir);
+        for (const classicenhance::MissionPack& m : g.packs) {
+          if (size != m.size && (folder != lower(m.folder) || !named_here)) continue;
+          if (offered(&m) || taken(g, m)) continue;
+          out.push_back({file.string(), &g, &m});
+        }
+      }
+    }
+  };
+  const auto look_inside = [&](const fs::path& file) {
+    const std::string e = lower(file.extension().string());
+    Listed names;
+    std::string why;
+    if (e == ".zip") {
+      std::vector<vfs::ZipEntry> entries;
+      if (!vfs::list_zip_file(file.string(), &entries, &why)) return;
+      for (const vfs::ZipEntry& z : entries) {
+        std::string n = z.name;
+        std::replace(n.begin(), n.end(), '\\', '/');
+        names.emplace_back(std::move(n), z.size);
+      }
+    } else {
+      // A track's .bin beside its cue sheet is read through the sheet.
+      if (e == ".bin" && fs::exists(fs::path(file).replace_extension(".cue"), ec)) return;
+      vfs::Disc disc;
+      if (!vfs::open_disc(file.string(), &disc, &why)) return;
+      for (const vfs::DiscFile& f : disc.files) names.emplace_back(f.path, f.size);
+    }
+    offer_listed(file, names);
+  };
+  int seen = 0, looked = 0;
+  for (const std::string& r : all) {
     const fs::path root(r);
     if (!data_root.empty() && fs::weakly_canonical(root, ec) == fs::weakly_canonical(data_root, ec))
       continue;
@@ -761,6 +840,16 @@ std::vector<Offer> find_offers(const std::vector<std::string>& roots,
          it != fs::recursive_directory_iterator() && seen < kOfferFolders; it.increment(ec)) {
       if (ec) break;
       if (it.depth() >= 3) it.disable_recursion_pending();
+      if (it->is_regular_file(ec)) {
+        const std::string e = lower(it->path().extension().string());
+        if ((e == ".zip" || vfs::is_disc_image(it->path().string())) &&
+            it->file_size(ec) >= kOfferImageBytes && looked < kOfferImages &&
+            !inside_data(it->path().parent_path(), data_root)) {
+          looked++;
+          look_inside(it->path());
+        }
+        continue;
+      }
       if (!it->is_directory(ec)) continue;
       seen++;
       const fs::path dir = it->path();

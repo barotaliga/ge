@@ -336,9 +336,9 @@ struct Listen {
   // Where the mod's explosions went off on this map (its temporary-entity message), map units,
   // in order.
   std::vector<sh::Vec3f> explosions;
-  // Quake II's: each one's kind by index (classic/q2_fx_switches.hpp; 0 any other), as long as
-  // the last one with a kind (the rest are 0).
-  std::vector<uint8_t> explosion_kinds;
+  // Quake II's: each one's kind byte by index (q2_model_fx.hpp; 0 any other), as long as the last
+  // one with a kind (the rest are 0).
+  std::vector<uint8_t> explosion_codes;
   std::vector<Blow> blows;  // the blows the player took on this map, in order
   int64_t bonuses = 0;      // the items he took (the server's `bf`), since the window opened
   double cshift[4] = {130, 80, 50, 0};  // v_cshift: the tint in open air (red, green, blue, of 255)

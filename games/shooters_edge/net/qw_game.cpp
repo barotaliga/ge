@@ -22,6 +22,8 @@
 #include <vector>
 
 #include "classic/content/downloads.hpp"
+#include "classic/content/web_downloads.hpp"
+#include "classic/content/web_serve.hpp"
 #include "classic/protocol/masters.hpp"
 #include "classic/protocol/wire.hpp"
 #include "core/num.hpp"
@@ -30,6 +32,7 @@
 #include "progs/file.hpp"
 #include "server/homemap.hpp"
 #include "server/overtime.hpp"
+#include "server/web_files.hpp"
 #include "shooter/midair.hpp"
 #include "shooter/settings.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -132,6 +135,8 @@ struct Game {
   int qtv_port = 0;
   QtvConfig qtv_cfg;
   std::unique_ptr<QtvPort> qtv;
+  // The server's own web files (sv_http_port): what a client lacks, over HTTPS.
+  gs::WebFiles web;
   // The logins (sv_login, qw_login.hpp; null: none asked and no service handed in).
   std::unique_ptr<QwLogin> login;
   // The match being played, tallied each frame, and the report of the one that just ended (taken
@@ -1632,6 +1637,29 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
     for (const ge::vfs::Listed& l : ge::vfs::list(game.files.vfs)) names.emplace_back(l.name);
     return names;
   };
+  // The web files opened first, so the server info names their address.
+  if (game.host == nullptr && game.cfg.web.port > 0) {
+    QwServer* qw = game.qw.get();
+    ge::classic::content::WebServe ws;
+    ws.game_folder = game.cfg.gamedir;
+    ws.base_folder = "qw";
+    ws.kinds = ge::classic::content::quake_web_kinds();
+    ws.allowed = [qw](const std::string& path) {
+      std::string why;
+      return qw_download_allowed(*qw, path, why);
+    };
+    if (!gs::web_files_open(game.web, game.cfg.web, ge::net::ipv4(0, 0, 0, 0, 0),
+                            ge::classic::content::web_serve_lookup(game.files, std::move(ws)),
+                            error))
+      return false;
+    game.cfg.web_url = game.web.url;
+    game.cfg.web_pin = game.web.pin;
+    std::printf("web files: %s (%s kB/s each player, %s kB/s in all)\n", game.web.url.c_str(),
+                game.cfg.web.rate_player_kb > 0
+                    ? std::to_string(game.cfg.web.rate_player_kb).c_str()
+                    : "no cap",
+                game.cfg.web.rate_kb > 0 ? std::to_string(game.cfg.web.rate_kb).c_str() : "no cap");
+  }
   if (!qw_start(*game.qw, game.rules, port, game.cfg, error)) return false;
   load_bans(*game.qw);
   game.qw->game_command = game_words;
@@ -1673,6 +1701,7 @@ void net_frame(void* g, int64_t now_us) {
   game.qw->match_on = game.settings.lobby != 0 &&
                       (phase == gs::LobbyPhase::countdown || phase == gs::LobbyPhase::match);
   qw_frame(*game.qw, now_us);
+  gs::web_files_frame(game.web, static_cast<double>(now_us) / 1e6);
   masters_turn(game, now_us);
   if (game.login) qw_login_frame(*game.login);
   tally(game);

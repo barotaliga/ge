@@ -77,6 +77,7 @@
 #include "server/settingban.hpp"
 #include "server/skew.hpp"
 #include "server/status.hpp"
+#include "server/web_files.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_mvd_server.hpp"
 #include "shooters_edge/net/q2_net.hpp"
@@ -218,6 +219,11 @@ struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   // sv_downloadserver: the web address a client may fetch content from instead (` dlserver=` in
   // the connect answer); empty: none.
   std::string download_server;
+  // The server's own web files (engine/server/web_files.hpp, sv_http_*): their settings, and once
+  // served the address told when sv_downloadserver is not set (`{server}` for the host the client
+  // joined) and their certificate's digest (` dlpin=` beside it; "": none).
+  ge::server::WebFilesConfig web;
+  std::string web_url, web_pin;
   // THE OPERATOR (q2_admin.hpp): `kick`, `kickban`, `dumpuser`, `stuff` and `stuffcvar` also take
   // a player's name in any case or a unique part of it (sv_enhanced_setplayer).
   bool enhanced_setplayer = false;
@@ -293,6 +299,8 @@ struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<uint8_t> voice_out;  // voices relayed to it this tick (svc 121 each), unreliable
   int64_t voice_in = 0, voice_heard = 0;  // its voice messages taken; voices relayed to it
   bool told_back = false;                 // agreed the items coming back (`*ge_ext` bit 512)
+  bool told_arsenal = false;              // agreed its weapons and ammunition (`*ge_ext` bit 4096)
+  std::vector<uint8_t> arsenal_sent;      // the arsenal's message last sent (empty: none yet)
   std::vector<double> back_told;          // the rules' time each item told of comes back; -1 none
   ge::classic::Q2Cmd last_cmd;    // the newest move the rules ran of this player, as they ran it
   double last_cmd_at = -1;        // the network's time it came, s (-1: none yet)
@@ -420,6 +428,11 @@ bool q2_net_start(Q2NetServer& s, const sv::RulesRunner& rules, gn::Transport& t
                   const Q2NetConfig& cfg, std::string& error);
 // One host tick at the network's time.
 void q2_net_frame(Q2NetServer& s, int64_t now_us);
+
+// The arsenal's message (svc 118 after its id, to a client that agreed `*ge_ext` bit 4096): the
+// weapons `body` holds as a 16-bit mask by kSqWeapons' row, then its ammunition of each kind
+// (shells, bullets, grenades, rockets, cells, slugs) as 16-bit counts, little-endian.
+std::vector<uint8_t> q2_arsenal_message(const sv::SqBody& body);
 // Every client told the server is going, and dropped.
 void q2_net_stop(Q2NetServer& s);
 int q2_net_clients(const Q2NetServer& s);

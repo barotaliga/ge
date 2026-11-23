@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
@@ -391,4 +392,78 @@ TEST(packs_on_this_machine_are_offered_until_taken_in) {
   CHECK_MSG(content::import_game((lib / "Quake").string(), data.string(), &r, &error), error);
   offers = content::find_offers({lib.string()}, data.string());
   CHECK(offers.size() == 1 && offers[0].pack->folder == "xatrix");
+}
+
+TEST(a_game_taken_in_before_packs_were_known_gets_them_offered_and_taken) {
+  // A base game taken in by an older build (its taken file of the first form), its packs left
+  // behind in the source: offered from the source the taken file names, and taken in again.
+  const fs::path src = fresh("old_take") / "Quake", data = fresh("old_take_data");
+  save(src / "id1/pak0.pak", pak("start"));
+  save(src / "hipnotic/pak0.pak", pak("hip1m1"));
+  content::ImportReport r;
+  std::string error;
+  CHECK_MSG(content::import_game(src.string(), data.string(), &r, &error), error);
+  fs::remove_all(data / "q1/hipnotic");
+  {
+    std::ifstream in(data / "q1/taken.txt");
+    std::string text((std::istreambuf_iterator<char>(in)), {});
+    text.replace(0, 7, "taken 1");
+    std::ofstream(data / "q1/taken.txt") << text;
+  }
+  const std::vector<content::Offer> offers = content::find_offers({}, data.string());
+  CHECK(offers.size() == 1 && offers[0].pack->folder == "hipnotic");
+  content::ImportReport again;
+  CHECK_MSG(content::import_game(src.string(), data.string(), &again, &error), error);
+  CHECK(!again.unchanged && again.packs.size() == 1 && fs::exists(data / "q1/hipnotic/pak0.pak"));
+  CHECK(content::find_offers({}, data.string()).empty());
+}
+
+TEST(another_add_on_beside_the_base_folder_is_named_and_left) {
+  const fs::path src = fresh("addon"), data = fresh("addon_data");
+  save(src / "Quake 2/baseq2/pak0.pak", pak("base1"));
+  save(src / "Quake 2/xatrix/pak0.pak", pak("xswamp"));
+  save(src / "Quake 2/zaero/pak0.pak", pak("zbase1"));
+  content::ImportReport r;
+  std::string error;
+  CHECK_MSG(content::import_game(src.string(), data.string(), &r, &error), error);
+  CHECK(r.packs.size() == 1 && !fs::exists(data / "q2/zaero"));
+  CHECK_MSG(r.notes.size() == 1 && r.notes[0].starts_with("zaero beside baseq2 is not one of"),
+            r.notes.empty() ? "" : r.notes[0]);
+}
+
+TEST(a_pack_on_a_disc_image_or_in_a_zip_in_the_store_folders_is_offered_as_itself) {
+  // Listed by seeks, never read whole: a Ground Zero disc image (its pack beside Quake II's base
+  // folder) and a zip holding Scourge of Armagon's folder are offered as the files themselves; a
+  // zip of an add-on that is no pack, and a small zip, are not.
+  const fs::path lib = fresh("offer_files"), data = fresh("offer_files_data");
+  const std::vector<uint8_t> filler(size_t(content::kOfferImageBytes), 7);
+  save(lib / "discs/groundzero.iso", vfs::write_iso({{"baseq2/pak0.pak", pak("base1")},
+                                                     {"rogue/pak0.pak", pak("rmine1")},
+                                                     {"setup/filler.bin", filler}},
+                                                    true));
+  save(lib / "downloads/scourge.zip",
+       vfs::write_stored_zip(
+           {{"Scourge\\HIPNOTIC\\PAK0.PAK", pak("hip1m1")}, {"filler.bin", filler}}));
+  save(lib / "downloads/zaero.zip",
+       vfs::write_stored_zip({{"zaero/pak0.pak", pak("zbase1")}, {"filler.bin", filler}}));
+  save(lib / "downloads/small.zip", vfs::write_stored_zip({{"xatrix/pak0.pak", pak("xswamp")}}));
+  std::vector<content::Offer> offers = content::find_offers({lib.string()}, data.string());
+  CHECK_MSG(offers.size() == 2, std::to_string(offers.size()));
+  bool gz = false, hip = false;
+  for (const content::Offer& o : offers) {
+    gz = gz || (o.game->id == "q2" && o.pack->folder == "rogue" &&
+                fs::path(o.source).filename() == "groundzero.iso");
+    hip = hip || (o.game->id == "q1" && o.pack->folder == "hipnotic" &&
+                  fs::path(o.source).filename() == "scourge.zip");
+  }
+  CHECK(gz && hip);
+  // The offer taken in from the image: the pack lands beside its game and is no longer offered.
+  content::ImportReport r;
+  std::string error;
+  CHECK_MSG(
+      content::import_game((lib / "discs/groundzero.iso").string(), data.string(), &r, &error),
+      error);
+  CHECK(fs::exists(data / "q2/rogue/pak0.pak"));
+  offers = content::find_offers({lib.string()}, data.string());
+  CHECK(offers.size() == 1 && offers[0].pack->folder == "hipnotic");
 }

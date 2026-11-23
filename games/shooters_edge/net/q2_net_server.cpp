@@ -50,6 +50,7 @@ constexpr uint8_t kSvcGeShare = 126;       // the game's own: the easy jump's sh
 constexpr uint8_t kSvcGeAccountKey = 127;  // the game's own: the logins' key tag
 constexpr uint8_t kSvcGeFeel = 122;        // the game's own: the move's feel
 constexpr uint8_t kSvcGeBack = 119;        // the game's own: an item taken and when it comes back
+constexpr uint8_t kSvcGeArsenal = 118;     // the game's own: the weapons held, the ammunition
 constexpr uint8_t kSvcGeVoice = 121;       // the game's own: a voice (qw_voice_route.hpp)
 constexpr size_t kVoiceTickBytes = 1200;   // the voices one client is sent a tick, at most
 constexpr size_t kMovesBlockMost = 1200;   // the frame with the moves, at most (under a datagram)
@@ -394,6 +395,7 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   c.told_tag = (ext & kGeAccountKey) != 0;
   c.told_feel = (ext & kGeMoveFeel) != 0;
   c.told_back = (ext & kGeItemBack) != 0;
+  c.told_arsenal = (ext & kGeArsenal) != 0;
   c.told_voice = s.cfg.voice && (ext & kGeVoice) != 0;
   c.told_frames = (ext & kGeEveryFrame) != 0;
   c.told_hits = (ext & kGeHitReports) != 0;
@@ -418,8 +420,12 @@ void connect(Q2NetServer& s, const gn::Address& from, const std::vector<std::str
   std::string answer = "client_connect";
   if (c.protocol == kQ2Protocol36) answer += " nc=" + std::to_string(ask.chan);
   // A GitHub repository named as its raw files' address, which a stock client fetches as it is.
-  if (!s.cfg.download_server.empty())
+  if (!s.cfg.download_server.empty()) {
     answer += " dlserver=" + ge::classic::content::web_base(s.cfg.download_server);
+  } else if (!s.cfg.web_url.empty()) {  // the server's own web files, and how to trust them
+    answer += " dlserver=" + s.cfg.web_url;
+    if (!s.cfg.web_pin.empty()) answer += " dlpin=" + s.cfg.web_pin;
+  }
   answer += " map=" + (*s.rules)->map_name;
   send_oob(s, from, answer);
   note(s, c.name + " connected");
@@ -1291,6 +1297,25 @@ void write_items_back(const Q2NetServer& s, Q2NetClient& c, std::vector<uint8_t>
   }
 }
 
+}  // namespace
+
+std::vector<uint8_t> q2_arsenal_message(const sv::SqBody& body) {
+  std::vector<uint8_t> out;
+  uint32_t held = 0;
+  for (int w = 0; w < sv::kSqWeaponCount; w++)
+    if (sv::sq_holds(body, w)) held |= 1u << w;
+  out.push_back(static_cast<uint8_t>(held & 255));
+  out.push_back(static_cast<uint8_t>(held >> 8));
+  for (int k = 1; k < sv::kSqAmmoKinds; k++) {
+    const int n = std::clamp(body.ammo[k], 0, 32767);
+    out.push_back(static_cast<uint8_t>(n & 255));
+    out.push_back(static_cast<uint8_t>(n >> 8));
+  }
+  return out;
+}
+
+namespace {
+
 // Every rules frame, counted from the level's start (a hosted library's are its tenths).
 int64_t fast_of(const Q2NetServer& s) {
   return s.native != nullptr ? s.native->frame_number : s.game->fast_number;
@@ -1490,6 +1515,14 @@ void send_frames(Q2NetServer& s) {
       }
     }
     if (c.told_back) write_items_back(s, c, rel);
+    if (c.told_arsenal && s.game != nullptr) {  // the weapons held and the ammunition, when changed
+      const std::vector<uint8_t> a = q2_arsenal_message(s.game->players[i].body);
+      if (a != c.arsenal_sent) {
+        rel.push_back(kSvcGeArsenal);
+        rel.insert(rel.end(), a.begin(), a.end());
+        c.arsenal_sent = a;
+      }
+    }
     if (c.told_tag && !c.tag_sent && !s.account_tag.empty()) {  // the logins' key, once known
       rel.push_back(kSvcGeAccountKey);
       rel.insert(rel.end(), s.account_tag.begin(), s.account_tag.end());
