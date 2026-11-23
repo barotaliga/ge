@@ -289,6 +289,10 @@ struct DemoState {
   sh::Vec3f gun_angles, gun_offset;
   float fov = 0;    // Quake II: the field of view the server sends, degrees (0: none sent)
   int rdflags = 0;  // Quake II: the view's bits (kQ2RdIrGoggles: infra-red goggles on)
+  // Quake II: the view's teleport toggle as last read (the view bit 16 in a recording of the
+  // extended protocol, else the movement flag 128): a flip since the frame before is a teleport,
+  // the view drawn at the new frame with nothing between (demo_lerp.hpp).
+  bool teleport_bit = false;
   // Quake II: the music track the server names (its configstring 1; 0 none, -1 never named).
   int cdtrack = -1;
   // Quake II's music named by text (a file under `music/`), "" when the server sends a number.
