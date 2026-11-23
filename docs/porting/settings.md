@@ -55,8 +55,20 @@ procedure.
   (`cl_predict_crouch`, `cl_noskins`, `hand` in Quake II's).
 - A feature one game had and another did not: on in its game, off in the other (`ledger.md`).
 
+## The common names across the games
+
+Once a game's own rounds are done, its names are checked against every other game's for the ONE
+THING two games keep under two settings: `porting/shooters-edge/common-settings.md` is that audit
+for Quake, QuakeWorld and Quake II (every name of the five reference sources, the 190 the games
+share, each with our name, its layer and its status). A lift moves the setting to the lowest layer
+its games share (bound to one field every game's code reads), makes each game's spelling a synonym
+in its layer and its default a `same` row, and flips the audit's row.
+
 ## Gaps
 
+- The common names left to lift, by batch: the third-person camera (B2), the client's move packets,
+  `cl_shownet` and `gender` (B3), the graphs, the 2D switch and the browser's sort (B4), the
+  server's `cheats`, recording size and port (B5), the outlines and square specks (B6).
 - `toggle` (flips in one game, cycles in the other): a per-game command layer.
 - The move rate: Quake II's `cl_maxfps` as `own`.
 - No census yet of the third game's settings.
@@ -73,6 +85,14 @@ procedure.
   server at the next frame (Quake's `setinfo`, Quake II's whole user info again).
 - A meta-cvar sets values under the explicit ones.
 - Player text has no backticks and no `next:`.
+- A ruleset locks a setting by the name its game's clients know (`r_drawparticles`): when ours is
+  another name, the lock does nothing until that name is a synonym of ours (`Cvars::find` follows
+  whole synonyms). Check every locked name resolves after a lift.
+- A setting registered by only one game's layer and moved to a shared one must leave the game's
+  "set aside" resets (`add_first`'s) and its `GameBindings` pointer with it, or loading the other
+  game puts the player's value back to a default.
+- Matching names across games by spelling finds only part of the pairs: Quake II's `con_height`
+  is QuakeWorld's `scr_consize`. Pair by what each does, from both ledgers' descriptions.
 
 ## Wish
 

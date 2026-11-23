@@ -28,7 +28,7 @@ struct Rig {
   cl::Q2Session s;
   std::vector<std::string> said;
   Rig() {
-    cl::add_map_command_cvars(c.cvars(), s);
+    cl::add_shared_session_cvars(c.cvars(), s);
     cl::add_q2_session_cvars(c.cvars(), s);
     c.add_command("said", "keeps its word",
                   [this](con::Console&, const con::Args& a) { said.push_back(a[1]); });

@@ -80,6 +80,25 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .max = 4,
         .values = "0: unlit; 0..4: that many times the classic's (0.15 the default)"},
        &picture.fx_glow);
+  // Every game's (docs/porting-games.md § One name, one meaning): the lightmaps' scale (Quake II's
+  // gl_modulate and QuakeWorld's, 1 in both) and the textures' slant taps (QuakeWorld's and Quake
+  // II's gl_anisotropy; Quake II's layer gives its 1).
+  bind(cv,
+       {.name = "gl_modulate",
+        .flags = gc::kArchive,
+        .help = "How strongly the maps' light shows: their light times this.",
+        .min = 0,
+        .max = 1000000,
+        .values = "0 and up: 1 as the maps were lit; 2 twice as bright"},
+       &picture.light_modulate);
+  bind(cv,
+       {.name = "gl_anisotropy",
+        .flags = gc::kArchive,
+        .help = "How sharp the textures stay on surfaces seen at a slant, when they are smoothed.",
+        .min = 0,
+        .max = 16,
+        .values = "0: the renderer's own; 1: off; 2..16: that many samples, sharper"},
+       &picture.anisotropy);
   bind(cv,
        {.name = "r_bloom",
         .help = "The modern look's bloom, read when the picture is built.",
@@ -823,7 +842,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   rgb_words(picture.sky_colour, base.sky_colour);
   // Quake II's own (classic/q2_fx_switches.hpp; another game's defaults change nothing):
   // gl_drawsky 0 a black sky, gl_bilerp_skies 0 a sharp one, gl_saturation and gl_invert on the
-  // walls' and floors' textures, gl_anisotropy the filtered textures' taps.
+  // walls' and floors' textures.
   const ge::classic::Q2FxSwitches& q2 = picture.q2fx;
   if (!q2.draw_sky) {
     base.fast_sky = true;
@@ -832,7 +851,8 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   base.crisp_sky = !q2.smooth_sky;
   base.saturation = q2.saturation;
   base.invert = q2.invert;
-  if (q2.anisotropy > 0) base.anisotropy = static_cast<int>(std::lround(q2.anisotropy));
+  // gl_anisotropy (every game's) the filtered textures' taps.
+  if (picture.anisotropy > 0) base.anisotropy = static_cast<int>(std::lround(picture.anisotropy));
   base.lightmap_saturation = q2.lightmap_saturation;  // gl_coloredlightmaps
   base.lerp_styles = q2.lerp_styles;                  // cl_lerp_lightstyles
   if (q2.dlight_falloff >= 0) base.dlight_falloff = q2.dlight_falloff == 0 ? 2 : 1;

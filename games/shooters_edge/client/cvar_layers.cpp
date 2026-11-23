@@ -12,7 +12,8 @@
 // ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_bilerp_pics
 // ge:keywords gl_gamma_scale_pics gl_modulate_world gl_modulate_entities gl_doublelight_entities
 // ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack gl_celshading
-// ge:keywords cl_smooth_explosions
+// ge:keywords cl_smooth_explosions common-settings scr_consize scr_conalpha gl_consolefont
+// ge:keywords r_drawparticles in_grab_windowed_mouse cl_net_clientport vid_reload gl_swapinterval
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -229,15 +230,6 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .kind = con::CvarKind::boolean,
           .values = "0: as painted (the default); 1: their colours inverted"},
          &x.invert);
-  v.bind(
-      {.name = "gl_anisotropy",
-       .fallback = "1",
-       .help = "How sharp the textures stay on surfaces seen at a slant, when they are smoothed.",
-       .kind = con::CvarKind::number,
-       .min = 1,
-       .max = 16,
-       .values = "1: off (the default); 2..16: that many samples, sharper"},
-      &x.anisotropy);
   v.bind({.name = "gl_waterwarp",
           .fallback = "0",
           .help = "Whether the view ripples while you are under water, slime or lava.",
@@ -355,7 +347,6 @@ void add_first(con::Console& c, const GameBindings& b) {
     b.console->read_back = nullptr;
   }
   if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
-  if (b.light_modulate != nullptr) *b.light_modulate = 1;
   if (b.light_lift != nullptr) *b.light_lift = 0;
   if (b.gibs != nullptr) *b.gibs = true;
   if (b.no_glow != nullptr) *b.no_glow = false;
@@ -450,6 +441,14 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("_cl_name", "name");
   c.cvars().add_synonym("port", "sv_port");          // the port the next game is served on
   c.cvars().add_synonym("hostname", "sv_hostname");  // the name the next game is served under
+  // QuakeWorld's spellings of what every game shares (docs/porting-games.md § One name):
+  c.cvars().add_synonym("scr_consize", "con_height");       // the console's share of the screen
+  c.cvars().add_synonym("scr_conalpha", "con_bgalpha");     // its backdrop's opacity
+  c.cvars().add_synonym("gl_consolefont", "con_font");      // its charset
+  c.cvars().add_synonym("r_drawparticles", "r_particles");  // the specks (its rulesets lock it)
+  c.cvars().add_synonym("cl_net_clientport", "net_clientport");  // the client's own port
+  c.cvars().add_synonym("in_grab_windowed_mouse", "in_grab");    // the mouse kept in a window
+  c.add_command_synonym("vid_reload", "r_reload");  // the textures and models read again
   c.add_command(
       "_cl_color", "_cl_color <shirt*16+pants>: both your colours as one number",
       [](con::Console& k, const con::Args& a) {
@@ -509,7 +508,10 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   its side (`hand` 1 or `cl_gun` 3 draw it mirrored on the left);
 // - its own `cl_maxfps`, the moves a second (ours, the frame cap, set aside while it is loaded),
 //   and `r_maxfps`, the frame cap, kept with its own settings;
-// - the maps' light: `intensity`, `gl_modulate` and `gl_brightness` (Quake's stay 2, 1 and 0);
+// - the maps' light: `intensity` and `gl_brightness` (Quake's stay 2 and 0; `gl_modulate`, the
+//   lightmaps' scale, is every game's: the classic look's);
+// - `gl_anisotropy` the classic look's, 1 (none) by default where Quake's is 0 (the renderer's
+//   own); `gl_swapinterval` its spelling of `vid_vsync`;
 // - its chat: its own `cl_chat_sound` (one sound by number or name) and `con_auto_chat` (2 says a
 //   typed line to the team, where our `con_chat` 2 tells a command by its first word);
 // - its view and 2D (q2_view.hpp): `scr_scale`, `scr_draw2d`, `scr_alpha`, the lag graph's
@@ -523,14 +525,6 @@ void add_q2(con::Console& c, const GameBindings& b) {
   con::Cvars& v = c.cvars();
   // Its whole set of configs run again on a game change (client/install_configs.cpp's
   // run_game_settings), autoexec.cfg after config.cfg.
-  // The client's own port (net/qw_remote.cpp's `own_port`), its socket opened again when it moves.
-  v.add({.name = "net_clientport",
-         .fallback = "-1",
-         .help = "The network port your client sends from; a change applies at once.",
-         .kind = con::CvarKind::integer,
-         .min = -1,
-         .max = 65535,
-         .values = "-1: any free port (the default); 1..65535: that port"});
   // Joining an IPv6 server (net/qw_remote.cpp's `own_v6`), the socket on `net_ip6`'s address.
   v.add({.name = "net_enable_ipv6",
          .fallback = "1",
@@ -565,8 +559,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
            &b.crosshair->mark);
   }
   // The maps' light, as its own renderer works it out: a wall shows its painted colour times its
-  // light / 255 plus gl_brightness, times gl_modulate, times intensity (2: a light of 128 shows the
-  // colour as painted).
+  // light / 255 plus gl_brightness, times gl_modulate (the classic look's), times intensity (2: a
+  // light of 128 shows the colour as painted).
   if (b.light_intensity != nullptr)
     v.bind({.name = "intensity",
             .fallback = "2",
@@ -576,15 +570,6 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .max = 5,
             .values = "1..5: 2 the default, as the maps were lit; 3 a third brighter again"},
            b.light_intensity);
-  if (b.light_modulate != nullptr)
-    v.bind({.name = "gl_modulate",
-            .fallback = "1",
-            .flags = con::kArchive,
-            .help = "How strongly the maps' light shows: their light times this.",
-            .min = 0,
-            .max = 1000000,
-            .values = "0 and up: 1 the default, as the maps were lit; 2 twice as bright"},
-           b.light_modulate);
   if (b.light_lift != nullptr)
     v.bind({.name = "gl_brightness",
             .fallback = "0",
@@ -594,6 +579,16 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .max = 1,
             .values = "-1..1: 0 the default; 0.1 to 0.3 lifts the dark corners"},
            b.light_lift);
+  v.add({.name = "gl_anisotropy",  // the classic look's (classic/app/look.cpp): none by default
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "How sharp the textures stay on surfaces seen at a slant, when they are smoothed.",
+         .min = 0,
+         .max = 16,
+         .values = "1: off (the default); 2..16: that many samples, sharper; 0: the renderer's own",
+         .overlap = con::Overlap::same});
+  if (v.find("vid_vsync") != nullptr)  // the window's (platform/pacing.cpp)
+    v.add_synonym("gl_swapinterval", "vid_vsync");
   v.add({.name = "rate",  // the bytes a second its servers may send: more than Quake's
          .fallback = "15000",
          .flags = con::kArchive | con::kUserInfo,
@@ -1144,9 +1139,9 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
                     const GameBindings& b) {
   v.layer = game_layer(game.id);
   c.cvars().set_scope(game_scope(game));  // its own values over the common ones (cvar.hpp)
-  if (c.cvars().find("cl_beginmapcmd") == nullptr) {  // every game's map commands, once
+  if (c.cvars().find("cl_beginmapcmd") == nullptr) {  // every game's session cvars, once
     con::CvarLayer classic(c.cvars(), kLayerClassic);
-    add_map_command_cvars(c.cvars(), v.q2);
+    add_shared_session_cvars(c.cvars(), v.q2);
   }
   con::CvarLayer layer(c.cvars(), v.layer);
   if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it
@@ -1162,6 +1157,7 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
     fresh.begin_cmd = v.q2.begin_cmd;  // the map commands are every game's (classic layer)
     fresh.change_cmd = v.q2.change_cmd;
     fresh.disconnect_cmd = v.q2.disconnect_cmd;
+    fresh.grab = v.q2.grab;  // in_grab is every game's too
     v.q2 = fresh;
   }
   if (game.id == "q2") add_q2_session_cvars(c.cvars(), v.q2);

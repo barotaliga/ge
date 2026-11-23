@@ -2,7 +2,7 @@
 // game loaded (client/cvar_layers.cpp registers them in its layer; another game's window keeps the
 // defaults below), and the map commands every classic game shares.
 //
-// THE MAP COMMANDS, in every game (the classic layer, `add_map_command_cvars`; Quake II's client
+// THE MAP COMMANDS, in every game (the classic layer, `add_shared_session_cvars`; Quake II's client
 // brought them): `cl_beginmapcmd` runs on entering each map, `cl_changemapcmd` as a map is left
 // for the next, `cl_disconnectcmd` on leaving the game (each empty by default: nothing run). They
 // are how a player records every map (`cl_beginmapcmd "record demo"`). A game is joined while a
@@ -36,9 +36,13 @@
 // the map on disk as it loads (`q2_map_version`): a server's different map drops the game, a
 // recording's only warns and plays on.
 //
-// THE MOUSE: `in_grab` 0 never takes the mouse while the game is in a window (only covering the
-// screen); 1 and 2 take it as ours does (`q2_takes_mouse`). `in_enable` 0 never takes it, so the
-// mouse never turns the view; the keys work either way.
+// THE MOUSE: `in_grab`, every game's (the classic layer; QuakeWorld's `in_grab_windowed_mouse`),
+// 0 never takes the mouse while the game is in a window (only covering the screen); 1 and 2 take
+// it as ours does (`q2_takes_mouse`). Quake II's own `in_enable` 0 never takes it, so the mouse
+// never turns the view; the keys work either way.
+//
+// THE CLIENT'S PORT: `net_clientport`, every game's (QuakeWorld's `cl_net_clientport`), the port
+// the client sends from (-1 any free one; net/qw_remote.cpp opens the socket again when it moves).
 //
 // ge:summary Quake II's session settings: the map commands, the game clock, the state cvars
 // ge:keywords q2 cl_beginmapcmd cl_changemapcmd cl_disconnectcmd auto-record map-change timescale
@@ -89,8 +93,9 @@ struct Q2Session {
   int state = -1;  // the read-only cvars' bits as last set (-1: never)
 };
 
-// The map commands on `v`, bound to `s`'s, for every game (the caller holds the classic layer).
-void add_map_command_cvars(ge::console::Cvars& v, Q2Session& s);
+// The map commands, `in_grab` and `net_clientport` on `v`, bound to `s`'s, for every game (the
+// caller holds the classic layer).
+void add_shared_session_cvars(ge::console::Cvars& v, Q2Session& s);
 // Quake II's session cvars on `v`, bound to `s` (the read-only ones added, set by the frames).
 void add_q2_session_cvars(ge::console::Cvars& v, Q2Session& s);
 

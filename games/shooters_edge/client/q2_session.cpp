@@ -34,7 +34,7 @@ void run(con::Console& c, const std::string& text) {
 
 }  // namespace
 
-void add_map_command_cvars(con::Cvars& v, Q2Session& s) {
+void add_shared_session_cvars(con::Cvars& v, Q2Session& s) {
   const struct {
     const char* name;
     const char* help;
@@ -56,6 +56,22 @@ void add_map_command_cvars(con::Cvars& v, Q2Session& s) {
             .kind = con::CvarKind::text,
             .values = r.values},
            r.field);
+  v.bind({.name = "in_grab",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "Whether the game takes the mouse while it is in a window.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: it does (the default), as 2; 0: only while it covers the screen"},
+         &s.grab);
+  v.add({.name = "net_clientport",
+         .fallback = "-1",
+         .help = "The network port your client sends from; a change applies at once.",
+         .kind = con::CvarKind::integer,
+         .min = -1,
+         .max = 65535,
+         .values = "-1: any free port (the default); 1..65535: that port"});
 }
 
 void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
@@ -108,15 +124,6 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
           .max = 1000,
           .values = "60: the default; 0..1000: that many units, nearer where a wall is in the way"},
          &s.third_range);
-  v.bind({.name = "in_grab",
-          .fallback = "1",
-          .flags = con::kArchive,
-          .help = "Whether the game takes the mouse while it is in a window.",
-          .kind = con::CvarKind::integer,
-          .min = 0,
-          .max = 2,
-          .values = "1: it does (the default), as 2; 0: only while it covers the screen"},
-         &s.grab);
   v.bind({.name = "in_enable",
           .fallback = "1",
           .help = "Whether the mouse turns your view; the keys work either way.",

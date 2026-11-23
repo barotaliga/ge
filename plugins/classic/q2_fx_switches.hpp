@@ -30,8 +30,8 @@
 //   `gl_partshape` a soft dot, a square or a sharp dot (-1: the engine's capsule); `gl_beamstyle`
 //   1 a laser or the rail's core without its glow; `gl_drawsky` 0 a black sky, `gl_bilerp_skies`
 //   0 a sharp one; `gl_saturation` and `gl_invert` on the walls' and floors' textures alone;
-//   `gl_anisotropy` the filtered textures' taps (0: the renderer's 4); `gl_waterwarp` the view
-//   rippled under a liquid; `gl_fog` 0 no fog at all.
+//   `gl_waterwarp` the view rippled under a liquid; `gl_fog` 0 no fog at all (`gl_anisotropy`
+//   is every game's: the classic look's `anisotropy`).
 // - THE LIGHT: `gl_modulate_world` and `gl_modulate_entities` times `gl_modulate` on the walls and
 //   on the models, `gl_doublelight_entities` the models' share twice, `gl_dotshading` 0 a model
 //   lit evenly, `gl_coloredlightmaps` the walls' light's colour, `gl_dlight_falloff` a flash's
@@ -85,7 +85,6 @@ struct Q2FxSwitches {
   bool smooth_sky = true;                    // gl_bilerp_skies
   double saturation = 1;                     // gl_saturation
   bool invert = false;                       // gl_invert
-  double anisotropy = 0;                     // gl_anisotropy (0: the renderer's own)
   bool water_warp = false;                   // gl_waterwarp
   bool fog = true;                           // gl_fog
   double modulate_world = 1;                 // gl_modulate_world
