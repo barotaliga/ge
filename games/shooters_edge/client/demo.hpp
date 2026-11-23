@@ -316,11 +316,6 @@ struct DemoState {
   // Client: the shots the weapon prediction fired for the player so far, and the weapon frame the
   // last one started on (the axe's swing); the window's hand fires on each (client/held.cpp).
   int own_shots = 0, own_shot_frame = 0;
-  // Client: the player's own nails, rockets and grenades the prediction threw ahead of the server
-  // (own_missiles.hpp), drawn as entities, and each one's number (kept while it flies, for its
-  // trail); empty when none fly.
-  std::vector<DemoEntity> own_missiles;
-  std::vector<int> own_missile_ids;
   bool velocity_read = false;  // client: the player's velocity came in his last player state
   // Quake II: what went wrong with the last frame read (kQ2Frame* bits; `scr_showturtle` writes
   // them on the screen, client/q2_bar.hpp's `add_q2_turtle`).
@@ -352,10 +347,15 @@ struct DemoState {
   float air_accelerate = 0;           // Quake II: the air acceleration the server states (0: none)
   std::vector<DemoEntity> entities;   // by number
   std::vector<DemoEntity> players;    // client, multiview: by slot (32)
-  std::array<int32_t, 32> frags{};    // client, multiview: each slot's frags (updatefrags)
-  std::array<std::string, 32> names;  // client, multiview: each slot's name (its userinfo)
-  std::array<std::string, 32> teams;  // client, multiview: each slot's team ("": none)
-  std::array<bool, 32> spectator{};   // client, multiview: the slot watches (`*spectator`)
+  // Client: the player's own nails, rockets and grenades the prediction threw ahead of the server
+  // (own_missiles.hpp), drawn as entities, and each one's number (kept while it flies, for its
+  // trail); empty when none fly.
+  std::vector<DemoEntity> own_missiles;
+  std::vector<int> own_missile_ids;
+  std::array<int32_t, 32> frags{};      // client, multiview: each slot's frags (updatefrags)
+  std::array<std::string, 32> names;    // client, multiview: each slot's name (its userinfo)
+  std::array<std::string, 32> teams;    // client, multiview: each slot's team ("": none)
+  std::array<bool, 32> spectator{};     // client, multiview: the slot watches (`*spectator`)
   std::array<int, 32> top{}, bottom{};  // each slot's colours (0..13)
   std::array<std::string, 32> skins;    // client, multiview: each slot's `skin` ("": none)
   std::array<std::string, 32> figures;  // client, multiview: each slot's `model` ("": none)
