@@ -192,3 +192,22 @@ TEST(a_frame_makes_one_cue_the_strongest) {
         MenuCue::back);
   CHECK(menu_cue({{EventKind::back_at_root, "root", {}}}, false) == MenuCue::back);
 }
+
+TEST(a_recipe_presses_keys_by_name_and_reads_the_page) {
+  Menu m = demo();
+  m.input({});  // the focus on its first stop
+  MenuInput in;
+  CHECK(menu_key("down", in) && in.down);
+  CHECK(!menu_key("sideways", in));
+  MenuInput letter;
+  CHECK(menu_key("y", letter) && letter.letter == 'y');
+  MenuInput go;
+  CHECK(menu_key("enter", go));
+  m.input(in);  // PLAY -> OPTIONS
+  m.input(go);  // OPTIONS opened
+  const std::string page = describe_page(m);
+  CHECK(page.starts_with("page options \"OPTIONS\""));
+  CHECK(page.find("\n> sound \"SOUND\" = ON") != std::string::npos);
+  CHECK(page.find("\n  volume \"VOLUME\" = 0.8") != std::string::npos);
+  CHECK(page.find("camera \"CAMERA\" = CHASE") != std::string::npos);
+}
