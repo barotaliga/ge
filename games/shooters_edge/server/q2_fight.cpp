@@ -1332,7 +1332,8 @@ void fight_step(Q2Server& s, int slot, bool attack) {
   if (!fightable(s, slot)) return;
   // g_swap_speed: frames a lower or raise advances a frame; 1 or less, or 65535 or more, is 1.
   const int swap = s.cvars.find("g_swap_speed")->integer();
-<<<<<<< HEAD
+  if (const ge::console::Cvar* fast = s.cvars.find("g_fast_weap_switch"); fast != nullptr)
+    sq_hand_hasten(p.hand, fast->integer());
   // Dual fire (q2_powers.hpp) steps the hand twice a frame, every weapon but the thrown ones.
   const int steps = p.dual_fire_until > s.level_time && !sq_thrown(p.hand.weapon) ? 2 : 1;
   for (int i = 0; i < steps; i++) {
@@ -1344,17 +1345,6 @@ void fight_step(Q2Server& s, int slot, bool attack) {
     else if (step.shots > 0)
       fire(s, slot, step.shots);
   }
-=======
-  if (const ge::console::Cvar* fast = s.cvars.find("g_fast_weap_switch"); fast != nullptr)
-    sq_hand_hasten(p.hand, fast->integer());
-  const SqStep step = fight_hand_step(s, slot, attack, fight_anyflag(s, 8192) || fight_midair(s),
-                                      swap > 1 && swap < 65535 ? swap : 1);
-  if (step.click) sound(s, slot + 1, unpack(p.move.origin), kClick);
-  if (step.shots > 0 && p.hand.weapon == int(SqWeapon::hand_grenade))
-    throw_grenade(s, slot, step.throw_speed, step.fuse_left);
-  else if (step.shots > 0)
-    fire(s, slot, step.shots);
->>>>>>> origin/main
 }
 
 void fight_missiles(Q2Server& s) {
