@@ -698,6 +698,7 @@ void fill_qvm_world(QvmServer& s, RulesWorld& w, bool full) {
     for (const StaticEntity& st : s.statics) w.statics.push_back(world_static(st));
     w.max_clients = s.sv.set.maxclients;
     w.weapon_frames = true;
+    w.items2 = q.fields.items2 != 0;
     w.map_title = std::string(sim::entity_text(q, 0, F.message));
     w.entities.assign(static_cast<size_t>(s.sv.set.max_edicts), WorldEntity{});
     for (WorldClient& c : w.clients) c = WorldClient{};
@@ -737,6 +738,7 @@ void fill_qvm_world(QvmServer& s, RulesWorld& w, bool full) {
     n.weapon = sim::field_f(q, e, F.weapon);
     n.weapon_frame = sim::field_f(q, e, F.weaponframe);
     n.items = sim::field_f(q, e, F.items);
+    n.items2 = q.fields.items2 != 0 ? sim::ext_f(q, e, q.fields.items2) : 0;
     n.view_z = sim::field_f(q, e, F.view_ofs + 2);
     n.frags = sim::field_f(q, e, F.frags);
     n.weapon_model = model_index_of(s, sim::entity_text(q, e, F.weaponmodel), n.weapon_model);

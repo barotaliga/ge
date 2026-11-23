@@ -1,6 +1,7 @@
 // Quake II's held weapons' detail sounds (q2_fight.hpp's `fight_hand_step`): the hand's step and
-// the one-shot sounds its frames make: the hand grenade's pin, the chaingun's spin up and down,
-// the hyperblaster's wind-down (porting/shooters-edge/q2-monsters-round4.md § 13). The loops a
+// the one-shot sounds its frames make (q2_combat.hpp's `sq_hand_sound`, shared with the joined
+// window's prediction): the hand grenade's pin, the chaingun's spin up and down, the
+// hyperblaster's wind-down (porting/shooters-edge/q2-monsters-round4.md § 13). The loops a
 // weapon carries are the player's row's (q2_fight.cpp's `player_loop`).
 //
 // ge:summary Quake II's held weapons' frame sounds: grenade pin, chaingun spin up and down,
@@ -40,32 +41,15 @@ void hand_sound(Q2Server& s, int slot, const char* sample, int channel, int atte
 
 }  // namespace
 
-const char* const kHandSounds[4] = {"weapons/hgrena1b.wav", "weapons/chngnu1a.wav",
-                                    "weapons/chngnd1a.wav", "weapons/hyprbd1a.wav"};
-
 SqStep fight_hand_step(Q2Server& s, int slot, bool attack, bool infinite, int swap) {
   Q2Player& p = s.players[slot];
   const int weapon = p.hand.weapon, was = p.hand.frame;
   const bool was_firing = p.hand.state == SqHandState::firing;
   const SqStep step = sq_hand_step(p.hand, p.body, attack, s.level_time, infinite, swap);
-  const int now = p.hand.frame;
-  if (p.hand.weapon != weapon || (now == was && was_firing)) return step;
-  switch (static_cast<SqWeapon>(weapon)) {
-    case SqWeapon::hand_grenade:  // the pin pulled
-      if (now == 5) hand_sound(s, slot, kHandSounds[0], 1, 1);
-      break;
-    case SqWeapon::chaingun:  // spun up from its first fire frame (5, shown with the first shots);
-                              // spun down at the burst's end (not when let go early)
-      if (!was_firing && p.hand.state == SqHandState::firing)
-        hand_sound(s, slot, kHandSounds[1], 0, 2);
-      if (now == 22) hand_sound(s, slot, kHandSounds[2], 0, 2);
-      break;
-    case SqWeapon::hyperblaster:  // wound down
-      if (now == 12) hand_sound(s, slot, kHandSounds[3], 0, 1);
-      break;
-    default:
-      break;
-  }
+  const int k = sq_hand_sound(weapon, was, was_firing, p.hand);
+  if (k >= 0)
+    hand_sound(s, slot, kSqHandSound[k].sample, kSqHandSound[k].channel,
+               kSqHandSound[k].attenuation);
   return step;
 }
 

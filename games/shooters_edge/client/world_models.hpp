@@ -140,11 +140,31 @@ inline constexpr float kBoxLowUnits = -24, kBoxHighUnits = 32;
 // pack has only its own, so the other draws nothing).
 // `figure_q2`: what a Quake II player's model 255 ("the client's own") is drawn as, in the look his
 // slot names (`Placed::skin_name`), when a recording or a joined server sends one.
-enum class EffectModel : uint8_t { explosion, bolt, bolt2, bolt3, place_q1, place_q2, figure_q2 };
-inline constexpr const char* kEffectModels[] = {
-    "progs/s_explod.spr",   "progs/bolt.mdl",     "progs/bolt2.mdl",
-    "progs/bolt3.mdl",      "progs/h_player.mdl", "models/items/c_head/tris.md2",
-    "players/male/tris.md2"};
+// `q2_fx` on: Quake II's model effects (q2_model_fx.hpp's Q2FxModel, in its order).
+enum class EffectModel : uint8_t {
+  explosion,
+  bolt,
+  bolt2,
+  bolt3,
+  place_q1,
+  place_q2,
+  figure_q2,
+  q2_fx
+};
+inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
+                                                "progs/bolt.mdl",
+                                                "progs/bolt2.mdl",
+                                                "progs/bolt3.mdl",
+                                                "progs/h_player.mdl",
+                                                "models/items/c_head/tris.md2",
+                                                "players/male/tris.md2",
+                                                "models/objects/r_explode/tris.md2",
+                                                "models/objects/explode/tris.md2",
+                                                "models/objects/smoke/tris.md2",
+                                                "models/objects/flash/tris.md2",
+                                                "models/monsters/parasite/segment/tris.md2",
+                                                "models/ctf/segment/tris.md2",
+                                                "sprites/s_bfg2.sp2"};
 inline int effect_model(int listed, EffectModel m) { return listed + static_cast<int>(m); }
 inline int effect_model(const Listen& l, EffectModel m) {
   return effect_model(l.server ? static_cast<int>(l.server->models.size()) : 0, m);
