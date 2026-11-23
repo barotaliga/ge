@@ -723,6 +723,7 @@ TEST(q2s_demo_and_chat_lines_place_are_its_own_and_go_with_it) {
       if (name == "demo") return target == "playdemo";
     return false;
   };
+  w.console.add_command("playdemo", "playdemo <demo>", [](con::Console&, const con::Args&) {});
   CHECK(!has_demo());  // Quake has no `demo`
   const pr::GameProfile* q2 = pr::find_game("q2");
   CHECK(q2 != nullptr);
