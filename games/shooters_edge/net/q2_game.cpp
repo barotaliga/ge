@@ -187,8 +187,10 @@ constexpr gs::GameRule kRules[] = {
      "1..256 (8 the default)", false},
     {"sv_mvd_bufsize", "How much a relay may fall behind before it is dropped, in 32 KiB.", nullptr,
      "1..4 (2 the default)", false},
-    {"sv_mvd_password", "The password a relay must bring; empty lets any relay in.", nullptr,
-     "empty (the default) or a password", false},
+    // The relay's password under the name every classic game's server shares (QuakeWorld's
+    // relays too: net/qw_endpoint_cfg.cpp); `sv_mvd_password` its spelling here.
+    {"qtv_password", "The password a relay must give.", nullptr,
+     "\"\": none (the default); TEXT: that password", false},
     {"sv_mvd_maxsize", "The size a multiview recording stops at, in kilobytes.", nullptr,
      "0: no limit (the default); 1..2000000", false},
     {"sv_mvd_maxtime", "The length a multiview recording stops at, in minutes.", nullptr,
@@ -331,6 +333,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"sv_max_packet_entities", "sv_maxents"},
     {"sv_max_rate", "sv_maxrate"},
     {"sv_min_rate", "sv_minrate"},
+    {"sv_mvd_password", "qtv_password"},
     {"sv_namechange_limit", "sv_namelimit"},
     {"sv_prioritize_entities", "sv_entpriority"},
     {"sv_rcon_limit", "sv_rconrate"},
@@ -633,8 +636,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     m.maxtime_min = maxtime;
     m.noblend = noblend != 0;
     m.nogun = nogun != 0;
-    if (const auto it = c.rules.find("sv_mvd_password"); it != c.rules.end())
-      m.password = it->second;
+    if (const auto it = c.rules.find("qtv_password"); it != c.rules.end()) m.password = it->second;
     m.demos = (std::filesystem::path(c.root) / base / "demos").string();
   }
   {  // the relay

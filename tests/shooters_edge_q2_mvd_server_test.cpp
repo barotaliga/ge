@@ -26,6 +26,7 @@
 #include "shooters_edge/client/demo_mvd2.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_client.hpp"
+#include "shooters_edge/net/q2_game.hpp"
 #include "shooters_edge/net/q2_mvd_server.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -364,6 +365,21 @@ TEST(a_relay_asking_for_deflate_gets_one_zlib_stream) {
   CHECK(ms[2].id == cn::kGtsStreamData && (ms[2].payload[0] & 0x1F) == sv::kMv2ServerData);
   CHECK(ms.back().id == cn::kGtsReconnect);  // a restart tells the relay to come back
   gn::tcp_close(relay);
+}
+
+// The relay's password is one setting every classic server shares: `qtv_password`, with
+// Quake II's `sv_mvd_password` its spelling on this server's console.
+TEST(the_relay_password_is_qtv_password_and_sv_mvd_password_its_spelling) {
+  const ge::server::ServerGame& g = cn::q2_game();
+  bool rule = false, old_rule = false, spelling = false;
+  for (int i = 0; i < g.rule_count; i++) {
+    rule = rule || std::string(g.rules[i].name) == "qtv_password";
+    old_rule = old_rule || std::string(g.rules[i].name) == "sv_mvd_password";
+  }
+  for (int i = 0; i < g.name_count; i++)
+    spelling = spelling || (std::string(g.names[i].name) == "sv_mvd_password" &&
+                            std::string(g.names[i].setting) == "qtv_password");
+  CHECK(rule && !old_rule && spelling);
 }
 
 TEST(the_wrong_password_a_ban_and_a_stranger_are_refused) {
