@@ -1,7 +1,7 @@
 // Tests: the models' ground shadows (games/shooters_edge/client/model_shadow.hpp): none at mode 0,
 // half dark under an animated model at 1 however high, fading with height at 2 and gone at four
 // radii; none under a sprite, a see-through model, a model that casts none, no floor or a floor
-// steeper than sixty degrees; the lean along the way it faces.
+// steeper than sixty degrees; the lean along the way it faces; Quake's fixed light (r_shadows).
 //
 // ge:summary Tests: the models' ground shadows: modes, fade, the floor, the exclusions, the lean
 // ge:keywords test shadow gl_shadows ground-shadows shadow_of fade lean no-shadow
@@ -71,6 +71,19 @@ TEST(the_shadow_leans_along_the_way_the_model_faces) {
   in.yaw_deg = 90;
   const cl::Shadow north = cl::shadow_of(in);
   CHECK(std::abs(north.lean_x) < 1e-6f && std::abs(north.lean_y - cl::kShadowLean) < 1e-6f);
+}
+
+TEST(quakes_fixed_light_leans_every_shadow_toward_minus_x_on_any_floor) {
+  cl::ShadowIn in = standing(1);
+  in.fixed_light = true;
+  in.yaw_deg = 90;  // the facing does not matter
+  cl::Shadow s = cl::shadow_of(in);
+  CHECK(s.alpha == cl::kShadowAlpha);
+  CHECK(std::abs(s.lean_x + cl::kShadowFixedLean) < 1e-6f && s.lean_y == 0);
+  in.floor_up = 0.3f;  // steep: Quake lays it there all the same
+  CHECK(cl::shadow_of(in).alpha == cl::kShadowAlpha);
+  in.floor_found = false;
+  CHECK(cl::shadow_of(in).alpha == 0);
 }
 
 }  // namespace

@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "console/cvar.hpp"
+#include "shooters_edge/menu/episodes.hpp"
 #include "shooters_edge/menu/figures.hpp"
 
 namespace shooters_edge::menu {
@@ -194,6 +195,18 @@ constexpr Entry kEntries[] = {
      .target = Target::server,
      .choices = kTimeLimit},
     {.page = "host",
+     .id = "episode",
+     .text = "EPISODE",
+     .kind = ItemKind::choice,
+     .hint = "The episode the level is picked from.",
+     .needs = "map"},
+    {.page = "host",
+     .id = "level",
+     .text = "LEVEL",
+     .kind = ItemKind::choice,
+     .hint = "The level the match starts on; its map below.",
+     .needs = "map"},
+    {.page = "host",
      .id = "map",
      .text = "MAP",
      .kind = ItemKind::choice,
@@ -356,6 +369,21 @@ constexpr Entry kEntries[] = {
      .kind = ItemKind::toggle,
      .hint = "The mouse's sideways moves sidestep instead of turning.",
      .needs = "lookstrafe",
+     .target = Target::client},
+    {.page = "options",
+     .id = "hud_sbar",
+     .text = "USE OLD STATUS BAR",
+     .kind = ItemKind::toggle,
+     .hint = "The classic bar on its panels; off, its pieces over the world with the guns and "
+             "ammunition in a column.",
+     .needs = "hud_sbar",
+     .target = Target::client},
+    {.page = "options",
+     .id = "hud_swap",
+     .text = "HUD ON LEFT SIDE",
+     .kind = ItemKind::toggle,
+     .hint = "With the old status bar off, the column of guns and ammunition on the left edge.",
+     .needs = "hud_swap",
      .target = Target::client},
     {.page = "options",
      .id = "video",
@@ -1040,6 +1068,30 @@ void figure_changed(const ge::ui::Page& page, std::string_view changed, Host& ho
 
 }  // namespace
 
+constexpr std::string_view kQuitJokeText[kQuitJokes][kQuitJokeLines] = {
+    {"  Are you gonna quit    ", "  this game just like   ", "   everything else?     ",
+     "                        "},
+    {" Milord, methinks that  ", "   thou art a lowly     ", " quitter. Is this true? ",
+     "                        "},
+    {" Do I need to bust your ", "  face open for trying  ", "        to quit?        ",
+     "                        "},
+    {" Man, I oughta smack you", "   for trying to quit!  ", "     Press Y to get     ",
+     "      smacked out.      "},
+    {" Press Y to quit like a ", "   big loser in life.   ", "  Press N to stay proud ",
+     "    and successful!     "},
+    {"   If you press Y to    ", "  quit, I will summon   ", "  Satan all over your   ",
+     "      hard drive!       "},
+    {"  Um, Asmodeus dislikes ", " his children trying to ", " quit. Press Y to return",
+     "   to your Tinkertoys.  "},
+    {"  If you quit now, I'll ", "  throw a blanket-party ", "   for you next time!   ",
+     "                        "},
+};
+
+std::span<const std::string_view, kQuitJokeLines> quit_joke(size_t i) {
+  return std::span<const std::string_view, kQuitJokeLines>(kQuitJokeText[i % kQuitJokes],
+                                                           kQuitJokeLines);
+}
+
 const MenuTable& classic_menu() {
   static const MenuTable table{kPages, kEntries, kUnusedSlot};
   return table;
@@ -1130,6 +1182,44 @@ ge::ui::Menu build_menu(const MenuTable& table) {
   return m;
 }
 
+namespace {
+
+// The host page's EPISODE and LEVEL kept with its MAP row (episodes.hpp): `from` "map" sets the two
+// from the map picked; "episode" starts the episode at its first level; both then set the map.
+void tie_levels(ge::ui::Page& page, const Host& host, std::string_view from) {
+  ge::ui::Item* ep = page.find("episode");
+  ge::ui::Item* lv = page.find("level");
+  ge::ui::Item* map = page.find("map");
+  if (ep == nullptr || lv == nullptr || map == nullptr) return;
+  const std::vector<Episode> list = episodes_for(host.maps);
+  if (list.empty() || map->disabled || map->choices.empty()) {
+    ep->choices = lv->choices = {"NONE"};
+    ep->choice = lv->choice = 0;
+    ep->disabled = lv->disabled = true;
+    return;
+  }
+  ep->disabled = lv->disabled = false;
+  ep->choices.clear();
+  for (const Episode& e : list) ep->choices.emplace_back(e.name);
+  ep->choice = std::clamp(ep->choice, 0, static_cast<int>(list.size()) - 1);
+  int e = ep->choice, l = lv->choice;
+  if (from == "map") {
+    if (level_of(list, map->choices[static_cast<size_t>(map->choice)], &e, &l)) ep->choice = e;
+  } else if (from == "episode") {
+    l = 0;
+  }
+  const Episode& shown = list[static_cast<size_t>(ep->choice)];
+  lv->choices.clear();
+  for (const Level& level : shown.levels) lv->choices.emplace_back(level.name);
+  lv->choice = std::clamp(l, 0, static_cast<int>(lv->choices.size()) - 1);
+  if (from == "map") return;
+  const std::string_view want = shown.levels[static_cast<size_t>(lv->choice)].map;
+  for (size_t i = 0; i < map->choices.size(); i++)
+    if (map->choices[i] == want) map->choice = static_cast<int>(i);
+}
+
+}  // namespace
+
 void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
   for (const PageTitle& p : table_of(host).pages) {
     const std::string_view id = p.id;
@@ -1154,6 +1244,10 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
       }
       if (e->page == "setup" && (e->id == "model" || e->id == "figskin")) {
         figure_row(*e, it, host);
+        continue;
+      }
+      if (e->page == "host" && (e->id == "episode" || e->id == "level")) {
+        it.choices.clear();  // filled from the map row's choice once it is known (below)
         continue;
       }
       if (e->page == "host" && e->id == "map") {
@@ -1210,6 +1304,7 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         }
       }
     }
+    if (id == "host") tie_levels(*page, host, "map");
     if (page->focus >= 0 && !page->items[static_cast<size_t>(page->focus)].stop())
       page->focus = -1;  // the menu moves it to the first stop
   }
@@ -1279,6 +1374,11 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   const ge::ui::Item* it = page->find(e.item);
   if (it == nullptr) return Outcome::none;
   if (e.kind == ge::ui::EventKind::changed && !entry->bind.empty()) return Outcome::bind_key;
+  if (e.kind == ge::ui::EventKind::changed && e.page == "host" &&
+      (e.item == "episode" || e.item == "level" || e.item == "map")) {
+    tie_levels(*page, host, e.item);
+    return Outcome::none;
+  }
   if (e.kind == ge::ui::EventKind::changed && e.page == "setup" &&
       (e.item == "model" || e.item == "figskin")) {
     figure_changed(*page, e.item, host);

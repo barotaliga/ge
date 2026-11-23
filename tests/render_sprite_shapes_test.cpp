@@ -29,6 +29,15 @@ TEST(a_flare_glows_in_its_middle_and_fades_to_nothing) {
   CHECK(r::flare_frame(2).width == 8);
 }
 
+TEST(a_glow_disc_falls_straight_from_its_middle_to_nothing_at_its_rim) {
+  const r::SpriteFrame g = r::glow_disc_frame(64);
+  CHECK(g.width == 64 && g.origin[0] == 32);
+  CHECK(alpha(g, 32, 32) > 240);
+  const int half = alpha(g, 48, 32);  // half way out: half strength
+  CHECK(half > 118 && half < 136);
+  CHECK(alpha(g, 63, 32) < 8 && alpha(g, 0, 0) == 0);
+}
+
 TEST(a_bubble_is_clear_inside_bright_at_its_rim_and_lit_up_left) {
   const r::SpriteFrame b = r::bubble_frame(32);
   CHECK(b.width == 32 && b.origin[0] == 16);

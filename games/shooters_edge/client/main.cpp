@@ -383,6 +383,7 @@ int run_main(int argc, char** argv) {
                                   .noskins = &picture.stock_figures,
                                   .items_still = &picture.items_still,
                                   .model_shadows = &picture.model_shadows,
+                                  .flash_blend = &picture.flash_blend,
                                   .view = &view_settings,
                                   .moves = &remote.q2_maxfps,
                                   .stuff_level = &remote.stuff.level,
@@ -1172,7 +1173,7 @@ int run_main(int argc, char** argv) {
         mi.back = input.tapped(Key::escape);
         mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
         mi.refresh = input.tapped(Key::r) || input.tapped(Key::f5);
-        mi.letter = input.tapped_letter("efmp");  // the server browser's filters
+        mi.letter = input.tapped_letter("efmnpy");  // the browser's filters, the quit box's Y and N
         if (mouse.pointer()) {  // a held pointer is frozen: the menu then reads only the keys
           mi.pointer_x = input.pointer_x * px_per_unit;
           mi.pointer_y = input.pointer_y * px_per_unit;
