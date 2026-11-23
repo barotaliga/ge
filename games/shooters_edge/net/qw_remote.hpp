@@ -273,8 +273,9 @@ struct Remote {
   std::function<void(const std::string& server, const std::string& map, uint32_t sum)> keep_choice;
   // A Quake II download cut short, held in the game's folder to be resumed (Q2ClientConfig::held).
   ge::classic::content::HeldDownloads held;
-  // What a Quake II server stuffed that the client does not answer itself, for the window's console
-  // to run as if typed (net/q2_client.hpp `to_run`); taken each frame.
+  // What a server stuffed that the client does not answer itself (net/q2_client.hpp's and
+  // net/qw_client.hpp's `to_run`), for the window's console to run as the server's; taken each
+  // frame.
   std::vector<std::string> stuffed_run;
   bool kept = false;
   // A screenshot the server asked for (qw_client.hpp `ClientUpload`): the window's frame grabbed
@@ -348,6 +349,10 @@ std::string remote_queue_step(Remote& r, std::vector<std::string>& said);
 // The window's frame of it: its news printed on the console, and `connect` run once found; then the
 // match recorded on its own (qw_match_record.hpp) and the answers to an rcon sent while not joined.
 void remote_queue_frame(Remote& r, ge::console::Console& con);
+// What the server stuffed (`stuffed_run`) run in `con`: a Quake II server's as typed
+// (cl_ignore_stufftext filtered it), a QuakeWorld server's as the server's (console.hpp: only the
+// commands a game lets a server run, and only the server's own settings).
+void remote_run_stuffed(Remote& r, ge::console::Console& con);
 
 void remote_login_from(Remote& r, const std::string& path, int64_t (*unix_us)(),
                        gn::Transport* link = nullptr);
