@@ -32,7 +32,9 @@ void set_cmd(Console& c, const Args& a, uint32_t extra, std::string_view cmd) {
     const Cvar* v = c.cvars().find(a[1]);
     c.print(v->name + " will be \"" + v->latched + "\" after a restart (it is latched)");
   }
-  const std::string why = set_result_text(r, lower(a[1]));
+  const std::string why =
+      (c.cvars().find(a[1]) != nullptr ? set_result_text(r, *c.cvars().find(a[1]))
+                                       : set_result_text(r, lower(a[1])));
   if (!why.empty()) c.error(why, "");
 }
 
@@ -56,7 +58,7 @@ void info_cmd(Console& c, const Args& a, uint32_t flag, uint32_t extra) {
             "use `set " + v->name + "`");
     return;
   }
-  const std::string why = set_result_text(c.cvars().set(*v, a[2], a.source), v->name);
+  const std::string why = set_result_text(c.cvars().set(*v, a[2], a.source), *v);
   if (!why.empty()) c.error(why, "");
 }
 
