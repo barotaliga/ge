@@ -129,7 +129,9 @@ TEST(a_joined_server_s_sheet_wins_over_the_window_s_own_game) {
   // the page reads the joined server, never the window's own game.
   se::Remote r;
   r.sheet.local = [](SettingsSheet& out) {
-    out.rows = {SheetRow{.name = "own"}};
+    SheetRow own;
+    own.name = "own";
+    out.rows = {own};
     return true;
   };
   r.active = true;

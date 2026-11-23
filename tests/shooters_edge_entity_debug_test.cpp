@@ -20,9 +20,16 @@ cl::DemoState world() {
   s.models = {"", "maps/aerowalk.bsp", "progs/flame.mdl", "*3"};
   s.eye = {0, 0, 0};
   s.entities.resize(4);
-  s.entities[1] = {.origin = {500, 0, 0}, .model = 2, .present = true};
-  s.entities[2] = {.origin = {100, 0, 0}, .model = 3, .alpha = 0.4f, .present = true};
-  s.entities[3] = {.origin = {50, 0, 0}, .model = 2, .present = false};  // not this frame
+  const auto put = [&s](size_t n, float x, int model, float alpha, bool present) {
+    cl::DemoEntity& e = s.entities[n];
+    e.origin = {x, 0, 0};
+    e.model = model;
+    e.alpha = alpha;
+    e.present = present;
+  };
+  put(1, 500, 2, 1, true);
+  put(2, 100, 3, 0.4f, true);
+  put(3, 50, 2, 1, false);  // not this frame
   return s;
 }
 
