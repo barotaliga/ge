@@ -9,6 +9,7 @@
 #include <cmath>
 
 #include "brush/map.hpp"
+#include "classic/weapon_predict.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
@@ -261,6 +262,18 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   }
   h.own_shots = s.own_shots;
   if (now_frame != 0) h.frames_live = true;
+  // Rules that never animate the weapon frame (our arena's), unpredicted: the shot the server's
+  // weapon sound on the player says, once per frame read (any game, a demo or a joined server).
+  if (!in.fired && !h.frames_live && s.frames != h.frames_read && !in.dead && in.weapon == game) {
+    for (const DemoSound& snd : s.started) {
+      if (snd.entity != s.player + 1 || snd.channel != 1 || snd.name != nullptr) continue;
+      if (snd.sound <= 0 || static_cast<size_t>(snd.sound) >= s.sounds.size()) continue;
+      if (ge::classic::weapon_sound_bit_of_sample(s.sounds[static_cast<size_t>(snd.sound)]) != 0 &&
+          s.sounds[static_cast<size_t>(snd.sound)] != "weapons/lhit.wav")
+        in.fired = true;
+    }
+  }
+  h.frames_read = s.frames;
   if (s.format == DemoFormat::q2) q2_gun_sway(s.gun_angles, s.gun_offset, s.angles, in);
   view::HandFrame f = view::step_hand(h.hand, in, settings, models, pose, dt);
   // A classic set's frame as the server sent it: its fire animations played as recorded.

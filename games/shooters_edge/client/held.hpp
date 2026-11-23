@@ -55,8 +55,9 @@ struct HeldState {
   // A frame other than 0 has come: the frames rule the drawn weapon (until then the hand plays
   // its own shots, as under rules that never animate it).
   bool frames_live = false;
-  int own_shots = -1;  // DemoState::own_shots last step (-1: not yet seen)
-  int q2_frame = -1;   // Quake II's hand's frame last step (a shot on stepping onto one)
+  int own_shots = -1;        // DemoState::own_shots last step (-1: not yet seen)
+  int64_t frames_read = -1;  // DemoState::frames last step: its sounds are new only once
+  int q2_frame = -1;         // Quake II's hand's frame last step (a shot on stepping onto one)
   // A weapon the hand holds in place of the game's (a `view::Weapon` index; -1 the game's): the
   // quick weapon's preview (quick_fire.hpp). Its shots are the game's weapon's only when the two
   // are the same.

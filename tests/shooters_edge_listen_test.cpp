@@ -698,7 +698,7 @@ TEST(a_demo_s_hand_holds_the_recorder_s_weapon_none_without_a_view_model_and_sin
   CHECK(!step().drawn);
 }
 
-TEST(a_joined_server_s_predicted_shot_fires_the_hand_once) {
+TEST(a_predicted_shot_or_the_server_s_shot_sound_fires_the_hand_once) {
   // net/qw_weapon.hpp counts each predicted shot in own_shots: the hand fires on each, once.
   cl::DemoState s;
   s.stats[cl::kStatHealth] = 100;
@@ -716,6 +716,20 @@ TEST(a_joined_server_s_predicted_shot_fires_the_hand_once) {
   CHECK(!step().fired);
   s.own_shots = 3;  // two in one window frame: one shot drawn
   CHECK(step().fired);
+  // Unpredicted, under rules that never animate the weapon: the server's weapon sound on the
+  // player fires the hand, once per frame read (a Quake join, a demo of our server).
+  s.sounds = {"", "weapons/spike2.wav", "player/axhit2.wav"};
+  cl::DemoSound snd;
+  snd.entity = 1;
+  snd.channel = 1;
+  snd.sound = 2;  // not a shot
+  s.started = {snd};
+  s.frames = 10;
+  CHECK(!step().fired);
+  s.started[0].sound = 1;
+  s.frames = 11;
+  CHECK(step().fired);
+  CHECK(!step().fired);  // the same frame read: not again
   // A server whose rules never send a weapon frame other than 0 leaves the frames to the hand.
   CHECK(!held.frames_live);
   s.players[0].weapon_frame = 2;
