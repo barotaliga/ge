@@ -492,6 +492,7 @@ ruleset's wait limit (`add_recipe_commands`, `GameMenu::add_cvars(con, true)`).
 | `menu_press <key>...` | Shooter's Edge's menu (`engine/ui` `menu_key` names the keys) | Keys pressed on the menu, one a frame: `up` `down` `left` `right` `enter` `escape` `del` `refresh` or a letter. `escape` on a closed menu opens it, as the key does |
 | `menu_select <item>` | Shooter's Edge's menu | The item with that id on the page up focused and pressed |
 | `menu_list` | Shooter's Edge's menu (`engine/ui` `describe_page`) | The page up printed: its id and title, then a line an item: `>` the focus, `-` disabled, the id, the words, `= value`, `-> page` it opens |
+| `entlist [radius]`, `enthide <number\|model>...`, `entshow [...]` | Shooter's Edge's window (`client/entity_debug.hpp`) | The entities in view listed nearest first (model, origin, effects, alpha, scale); those named left out of the picture, or drawn again |
 | `screenshot <name>`, `condump <name>` | engine | The next frame as a picture; the console's lines as a text file |
 
 A recipe takes its arguments as cvars set before it (`+set recipe_server 127.0.0.1:27500 +exec

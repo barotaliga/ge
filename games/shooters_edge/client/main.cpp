@@ -105,6 +105,7 @@
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
+#include "shooters_edge/client/entity_debug.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/game_folder.hpp"
@@ -576,6 +577,7 @@ int run_main(int argc, char** argv) {
   playback.places = &places;       // the demo's players' table names their places
   recorder.places = &places.locs;  // a recording keeps the place names it is played with
   cl::add_place_queries(console, places, listen, place_seen, adapter, files);
+  if (args.recipes) cl::add_entity_debug_commands(console, place_seen);  // entlist, enthide
   ge::render::add_gpu_debug(console, gpu_debug, device.get(), [&] {
     return cl::gpu_debug_notes({&view_from, &listen, &place_seen, &picture.look, &w, &h});
   });
@@ -1548,10 +1550,8 @@ int run_main(int argc, char** argv) {
       if (std::exchange(playback.jumped, false)) con_view.clear_notify();  // as a jump does
       // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
       const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
-      cl::demo_music(music, ds);  // the track its server names
-      place_seen.on = !ds.map.empty();
-      place_seen.at = {ds.eye.x, ds.eye.y, ds.eye.z - ds.view_height};
-      place_seen.angles = ds.angles;
+      cl::demo_music(music, ds);     // the track its server names
+      cl::see_from(place_seen, ds);  // where it stands, looks, and what it draws
       place_seen.map = bench_map ? &bench_map->bsp : nullptr;
       // The place names the recording kept (or the server stuffed) are the ones it played with:
       // they stand in for any file while its level lasts.

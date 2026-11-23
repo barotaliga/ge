@@ -19,6 +19,8 @@ or look only when a recipe cannot answer (sound, feel, a GPU fault the picture d
 | `menu_select <item>` | The item with that id focused and pressed (ids from `menu_list`) |
 | `menu_press <key>...` | Keys, one a frame: `up down left right enter escape del refresh` or a letter |
 | `menu_list` | The page up as text: `>` focus, `-` disabled, `id "WORDS" = value -> page` |
+| `entlist [radius]` | The entities in view, nearest first: number, model, origin, distance, frame, skin, effects, alpha, scale |
+| `enthide <number\|model>...`, `entshow [...]` | Those entities left out of the picture, or drawn again (none named: all) |
 | `screenshot <name>` | The next frame as a picture in the game's `screenshots/` |
 | `condump <name>` | The console's lines to a file: the recipe's whole record |
 | `connect`, `disconnect`, `quit` | As a player types them |
@@ -51,6 +53,10 @@ Arguments are cvars set before the recipe (`+set recipe_server host:port`), read
   person's go-ahead when they have asked not to run it.
 - **Escape is not always the menu.** In a level, `escape` may put a screen away first (Quake II's
   help computer). `menu_options` opens OPTIONS in every game.
+- **A stray shape in a joined game: list, then hide.** `entlist 200` names what stands near the
+  eye; `enthide` one number at a time, a screenshot after each, finds the one that draws it.
+- **A recorded demo of a joined server may not draw its world on playback** (the console stays
+  down over the title): rejoin and look live rather than trusting the playback.
 - **The window needs a display.** On the Linux container use a lab instead; a recipe is for a
   desktop (the Mac).
 
