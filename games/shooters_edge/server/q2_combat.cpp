@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_q2_combat_test.cpp
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_flash.hpp"
 
 #include <algorithm>
 
@@ -227,6 +228,45 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
       return out;
   }
   return out;
+}
+
+int sq_flash_value(int w, int shots) {
+  switch (static_cast<SqWeapon>(w)) {
+    case SqWeapon::blaster:
+      return 0;
+    case SqWeapon::machinegun:
+      return 1;
+    case SqWeapon::shotgun:
+      return 2;
+    case SqWeapon::chaingun:
+      return 3 + std::clamp(shots, 1, 3) - 1;
+    case SqWeapon::railgun:
+      return 6;
+    case SqWeapon::rocket_launcher:
+      return 7;
+    case SqWeapon::grenade_launcher:
+      return 8;
+    case SqWeapon::bfg:
+      return 12;
+    case SqWeapon::super_shotgun:
+      return 13;
+    case SqWeapon::hyperblaster:
+      return 14;
+    case SqWeapon::ion_ripper:
+      return 16;
+    case SqWeapon::phalanx:  // ball one's only
+      return shots > 0 ? 18 : -1;
+    default:
+      return -1;
+  }
+}
+
+bool sq_flash_plays(int value, const char* sample) {
+  const Q2Flash* f = q2_player_flash(value);
+  if (f == nullptr || f->sounds[0].name == nullptr || sample == nullptr) return false;
+  const std::string_view shot = f->sounds[0].name, own = sample;
+  const size_t wild = shot.find('%');
+  return wild == std::string_view::npos ? shot == own : own.substr(0, wild) == shot.substr(0, wild);
 }
 
 int sq_armour_save(SqBody& body, int damage, bool energy) {

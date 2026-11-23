@@ -15,7 +15,8 @@ same set in both places:
 | `gameengine2-X.Y.Z-macos-arm64.tar.gz` | the same, built on macOS (Apple silicon) |
 | `gameengine2-X.Y.Z-windows-x64.tar.gz` | the same, built with MSVC |
 | `gameengine2-X.Y.Z-src.tar.gz` | `git archive` of the tag |
-| `SHA256SUMS` | the checksums of every archive above |
+| `shooters-edge-X.Y.Z-user-manual.html` | the player's reference manual: every setting, command and flag of Shooter's Edge and its dedicated server, per game (`make manual`, `docs/console.md`) |
+| `SHA256SUMS` | the checksums of every file above |
 
 Each package archive holds one directory, `gameengine2-X.Y.Z-<platform>/`,
 with `include/gameengine2/` (the headers, laid out as `engine/` is),

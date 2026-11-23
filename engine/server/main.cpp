@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <utility>
@@ -447,11 +448,17 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
     }
   }
   // A console line the server does not know goes to the game (its rules' own `map`, a mod's
-  // words), while there is one.
-  if (game.console != nullptr)
+  // words), while there is one; the words it declares are registered (add_game_words).
+  if (game.console != nullptr) {
     con.set_unknown([&s, &game](const console::Args& a) {
       return s.state != nullptr && game.console(s.state, a.raw);
     });
+    add_game_words(con, game, [&s, &game](const std::string& line) {
+      return s.state == nullptr            ? GameWordRun::no_game
+             : game.console(s.state, line) ? GameWordRun::taken
+                                           : GameWordRun::refused;
+    });
+  }
   // THE RECORDING: the stream's bytes written as each block closes, so a server stopped hard
   // keeps every whole second before it; the same bytes feed the server's own TV (spectators.hpp).
   Recording rec;
@@ -1257,6 +1264,33 @@ int server_main(int argc, char** argv, const ServerGame& game, const console::Ma
                  game.binary);
   }
   return 1;
+}
+
+void add_game_words(console::Console& con, const ServerGame& game,
+                    std::function<GameWordRun(const std::string& line)> run) {
+  const std::string& pass = con.manual().pass;
+  const console::CvarLayer layer(con.cvars(),
+                                 pass.empty() ? "game" : "game:" + pass.substr(0, pass.find(',')));
+  const auto shared =
+      std::make_shared<std::function<GameWordRun(const std::string&)>>(std::move(run));
+  for (int i = 0; i < game.word_count; i++) {
+    const GameWord& w = game.words[i];
+    if (con.commands().count(w.name) != 0) continue;
+    con.add_command(w.name, w.help, [shared](console::Console& c, const console::Args& a) {
+      switch ((*shared)(a.raw)) {
+        case GameWordRun::taken:
+          break;
+        case GameWordRun::no_game:
+          c.print(a[0] + ": no map is running");
+          break;
+        case GameWordRun::refused:
+          c.print(a[0] + ": the game did not take that line");
+          break;
+      }
+    });
+    if (w.also != nullptr && con.commands().count(w.also) == 0)
+      con.add_command_synonym(w.also, w.name);
+  }
 }
 
 }  // namespace ge::server
