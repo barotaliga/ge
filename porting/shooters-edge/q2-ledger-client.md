@@ -23,13 +23,13 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 8 | 8 | 0 | 0 | 16 |
 | The layout language (status bar and layouts) | 26 | 1 | 0 | 0 | 27 |
 | HUD and screen elements | 18 | 10 | 0 | 1 | 29 |
-| Messages printed to the player | 70 | 57 | 12 | 8 | 147 |
+| Messages printed to the player | 74 | 57 | 3 | 13 | 147 |
 | Demo playback and recording features | 12 | 8 | 1 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 7 | 4 | 0 | 0 | 11 |
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 14 | 5 | 1 | 0 | 20 |
 | Connection, network, downloads and the rest | 10 | 5 | 2 | 0 | 17 |
-| **all** | 788 | 288 | 40 | 95 | 1211 |
+| **all** | 792 | 288 | 31 | 100 | 1211 |
 
 ## Client console commands
 
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 70, partial 57, missing 12, not-taken 8
+done 74, partial 57, missing 3, not-taken 13
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1142,9 +1142,9 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.connect.protoarg | "Second argument to `%s' is now ignored. Set protocol via `cl_protocol' variable." | a second `connect` argument | done | `net/qw_remote.cpp`, in our words (no backquotes: player text) |
 | msg.connect.badaddr | "Bad server address" | an address that does not resolve | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.connect.connected | "Connected to %s (protocol %d)." | the server accepted us | partial | ours does it but says it in its own words (the exact line not found) |
-| msg.connect.anticheat | "Loading anticheat, this may take a few moments..." | the server asked for anticheat | missing | the feature is missing |
-| msg.connect.noanticheat | "Trying to connect without anticheat." | anticheat could not load | missing | the feature is missing |
-| msg.connect.anticheatreq | "Anticheat required by server, but no anticheat support linked in." | the server insists on anticheat | missing | the feature is missing |
+| msg.connect.anticheat | "Loading anticheat, this may take a few moments..." | the server asked for anticheat | not-taken | said only by a build that links the closed anticheat module; this game has none and says so instead (msg.connect.anticheatreq) |
+| msg.connect.noanticheat | "Trying to connect without anticheat." | anticheat could not load | not-taken | said only by a build that links the closed anticheat module |
+| msg.connect.anticheatreq | "Anticheat required by server, but no anticheat support linked in." | the server insists on anticheat | done | `net/q2_client.cpp`: ` ac=2` or more in the connect answer says "The server asks for anticheat, which this game does not have; joining without it." and joins |
 | msg.connect.passiverecv | "Received passive connect from %s." | a server connected to us in passive mode | done | `games/shooters_edge/net/q2_pingservers.cpp` (`passive_step`) |
 | msg.connect.notconnected | "Can't "%s", not connected" | a forwarded word typed while not connected | done | `engine/console/console_more.cpp` (`complete`): the same words |
 | msg.follow | "Following %s..." | `followip` | done | `games/shooters_edge/client/chat_lines.cpp`: `followip` says it |
@@ -1162,7 +1162,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.timeout | "Server connection timed out." | `cl_timeout` passed | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.protover | "Requested protocol version %d, but server returned %d." | a forced `cl_protocol` the server does not speak | done | `net/q2_client.cpp`: the connection dropped with it |
 | msg.demoproto | "Demo uses unsupported protocol version %d." | a demo of an unknown protocol | partial | ours does it but says it in its own words (the exact line not found) |
-| msg.r1q2enh | "'Enhanced' R1Q2 servers are not supported" | an enhanced protocol-35 server | missing | the feature is missing |
+| msg.r1q2enh | "'Enhanced' R1Q2 servers are not supported" | an enhanced protocol-35 server | done | `net/q2_proto_in.cpp`: the connection dropped with "This client does not support the enhanced form of protocol 35" |
 | msg.maptitle | "(the map title between two rule lines)" | the server data: the level's title in a ruled block | partial | ours prints the level's name in its own form; verify the rule lines |
 | msg.rcon.usage | "Usage: %s <command>" | `rcon` alone | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.rcon.nopass | "You must set 'rcon_password' before issuing an rcon command." | `rcon` without a password | partial | ours does it but says it in its own words (the exact line not found) |
@@ -1249,7 +1249,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.play.usage | "Usage: %s <sound> [...]" | `play` alone | done | `games/shooters_edge/client/menu_sound.cpp` |
 | msg.vidrestart | "Manual `vid_restart' command ignored." | a typed `vid_restart` (with an explanation that video settings apply themselves) | done | `games/shooters_edge/client/window_cvars.cpp` |
 | msg.fps.round | "%s value `%d' is inexact and will be rounded to `%d'." | a `cl_maxfps` that is not whole milliseconds (with "(Set `cl_warn_on_fps_rounding' to `0' to disable this warning.)") | done | `games/shooters_edge/client/q2_session.cpp` (`q2_fps_warning`, `cl_warn_on_fps_rounding`): said without the quote marks; `r_maxfps` is not rounded to whole milliseconds here, so it never warns |
-| msg.mouse.off | "Mouse input disabled." | the mouse could not start | missing | the feature is missing |
+| msg.mouse.off | "Mouse input disabled." | the mouse could not start | done | `client/main.cpp`: the system refusing the mouse says once "The mouse could not be taken, so it does not turn the view." |
 | msg.draw.none | "No draw strings registered." | `draw` or `undraw` with none | done | `engine/hud/draw_strings.cpp` |
 | msg.draw.list | "Name X Y (table of draw strings)" | `draw` alone lists them | done | `engine/hud/draw_strings.cpp` |
 | msg.draw.usage | "Usage: %s <name> <x> <y> [color]" | `draw` misuse | done | `engine/hud/draw_strings.cpp` |
@@ -1274,14 +1274,14 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.ogg.usage | "Usage: %s <info\|play\|stop\|next\|pause>" | `ogg` alone or with an unknown word | done | `engine/audio/music_console.cpp` |
 | msg.ogg.notrack | "No such track: %s" | `ogg play` of a track that is not found | done | `engine/audio/music_console.cpp` |
 | msg.ogg.playusage | "Usage: %s %s <track>" | `ogg play` with no track | done | `engine/audio/music_console.cpp` |
-| msg.al.init | "OpenAL initialized." | the OpenAL backend started | missing | the feature is missing |
-| msg.al.fail | "Failed to initialize OpenAL: %s" | the OpenAL backend failed | missing | the feature is missing |
-| msg.al.devices | "Available devices:" / "No devices available" | `al_device ?` lists the OpenAL output devices | missing | the feature is missing (C32) |
+| msg.al.init | "OpenAL initialized." | the OpenAL backend started | not-taken | one sound path for every game (the platform's device under the engine's synth); `s_enable 2` is the same as 1, so no second backend starts |
+| msg.al.fail | "Failed to initialize OpenAL: %s" | the OpenAL backend failed | not-taken | no second sound backend (msg.al.init) |
+| msg.al.devices | "Available devices:" / "No devices available" | `al_device ?` lists the OpenAL output devices | done | `al_device` is the engine's `s_device`: `?` or `s_devices` prints "Available devices:" and each, or "No sound devices." (`engine/platform/window_cvars.cpp`) |
 | msg.gtv.listen | "Listening for GTV connections." | `gtv start` | missing | the feature is missing |
 | msg.gtv.accepted | "Accepted MVD client [%s]" | a TV viewer joined the client's relay | missing | the feature is missing |
 | msg.aashot.full | "All scoreshot slots are full." | `aashot` with 1000 files already | done | `games/shooters_edge/client/q2_bar.cpp` |
 | msg.cin.open | "Couldn't open %s: %s" | a cinematic that cannot be opened (and its other errors) | partial | ours says it in its own words (verify `client/cinematic.cpp`) |
-| msg.serverbug | "SERVER BUG: %s on entity %d last seen %d frames ago" | a server sent a delta for an entity the client never had (developer) | missing | the feature is missing |
+| msg.serverbug | "SERVER BUG: %s on entity %d last seen %d frames ago" | a server sent a delta for an entity the client never had (developer) | not-taken | a debugging build's check only (a positionless sound or a player's gun flash naming an entity outside the frame, with `developer`); a released client never prints it |
 | msg.faults | "%s: bad index / bad entity / invalid areabits length / illegible server message: %d ..." | the parse errors that drop the connection, each naming the function and the value | partial | ours refuses with its own words naming the byte (`client/demo_q2.cpp`) |
 
 ## Demo playback and recording features
