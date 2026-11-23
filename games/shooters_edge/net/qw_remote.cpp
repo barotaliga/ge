@@ -685,6 +685,11 @@ std::string remote_queue_step(Remote& r, std::vector<std::string>& said) {
   return q.view.address;
 }
 
+void remote_run_stuffed(Remote& r, ge::console::Console& con) {
+  const auto source = r.q2 ? ge::console::Source::local : ge::console::Source::server;
+  for (const std::string& line : std::exchange(r.stuffed_run, {})) con.execute(line, source);
+}
+
 void remote_queue_frame(Remote& r, ge::console::Console& con) {
   // A server browser's commands from this machine (`localid`), and the id it got wrong cleared.
   if (std::exchange(r.end.localid_refused, false)) con.execute("localid \"\"");
@@ -1133,6 +1138,8 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   }
   r.end.oob_prints.clear();
   for (std::string& line : std::exchange(r.end.web.said, {})) said.push_back(std::move(line));
+  for (std::string& line : std::exchange(r.end.to_run, {}))
+    r.stuffed_run.push_back(std::move(line));
   // The server refused this version of its map: joined again at once with another (the next one
   // kept, else the server's own fetched; classic/content/map_versions.hpp), while there is one.
   if (r.end.stage == ClientStage::dropped && r.end.map_refused && !r.end.version_unfetched &&

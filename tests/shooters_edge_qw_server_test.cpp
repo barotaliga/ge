@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "classic/protocol/info.hpp"
 #include "golden.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
@@ -281,6 +282,32 @@ TEST(the_last_slot_is_kept_for_a_vip) {
     }
     CHECK(cn::qw_count(rig.server, cn::ConnState::connected) == (vip ? 2 : 1));
   }
+}
+
+// sv_ruleset: a newcomer on another ruleset is refused a player's seat, one on it and a spectator
+// are let in, and the server info names it.
+TEST(a_competition_server_refuses_a_player_on_another_ruleset) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  rig.second_node = 9;
+  cn::ServerConfig cfg;
+  cfg.reconnect_wait_s = 0;
+  cfg.ruleset = "smackdown";
+  CHECK(rig.start(cfg));
+  auto connect = [&](int i, const std::string& info) {
+    rig.oob("getchallenge\n", i);
+    std::string challenge;
+    for (const std::string& s : rig.answers(i))
+      if (!s.empty() && s[0] == 'c') challenge = std::string(s.c_str() + 1);
+    rig.oob("connect 28 " + std::to_string(10 + i) + " " + challenge + " \"" + info + "\"\n", i);
+    return rig.answers(i);
+  };
+  CHECK(any_has(connect(0, "\\name\\p0"), "This server requires the smackdown ruleset."));
+  CHECK(any_has(connect(0, "\\name\\p0\\*rsn\\qcon"), "requires the smackdown ruleset"));
+  CHECK(!any_has(connect(0, "\\name\\p0\\*rsn\\smackdown"), "requires"));
+  CHECK(!any_has(connect(1, "\\name\\w1\\spectator\\1"), "requires"));
+  CHECK(cn::qw_count(rig.server, cn::ConnState::connected) == 2);
+  CHECK(ge::classic::protocol::info_get(rig.server.serverinfo, "ruleset") == "smackdown");
 }
 
 // sv_locked, set by the admin while the server runs: a newcomer is refused, a client taking back
@@ -860,4 +887,25 @@ TEST(a_chunk_out_of_band_is_taken_in_the_stock_layout_and_never_printed) {
   CHECK(c[0].chunks_oob == 1);
   CHECK(c[0].oob_prints.empty());
   for (const std::string& p : c[0].prints) CHECK_MSG(p.find("chunk") == std::string::npos, p);
+}
+
+// What a server stuffs that the client does not answer itself waits in `to_run` for the window's
+// console (as the server's); `bf` and the `//` lines, which the picture reads from the stream, and
+// the client's own answers (skins) do not.
+TEST(stuffed_lines_the_client_does_not_answer_wait_for_the_console) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  gn::Transport ct[1];
+  auto c = std::make_unique<cn::QwClientEnd[]>(1);
+  CHECK(play(rig, ct, c.get(), 1));
+  c[0].to_run.clear();  // what the signon stuffed
+  cn::stuff(rig.server, 0, "alias hi \"say hi\"\nbf\n//loc 1 2 3 door\nskins\necho hello\n");
+  for (int f = 0; f < 30; f++) {
+    rig.frame();
+    cn::client_tick(c[0], rig.now);
+  }
+  CHECK_MSG(c[0].to_run.size() == 2, std::to_string(c[0].to_run.size()));
+  CHECK(c[0].to_run.size() == 2 && c[0].to_run[0] == "alias hi \"say hi\"" &&
+        c[0].to_run[1] == "echo hello");
 }

@@ -79,6 +79,9 @@ TEST(installs_under_a_parent_are_found_by_name_in_any_case_and_by_what_they_hold
   pack(parent / kTwoSpaced / "baseq2" / "pak0.pak", 49951322);
   pack(parent / "nQuake" / "id1" / "pak0.pak", 18689235);
   pack(parent / "nQuake" / "id1" / "pak1.pak", 34257856);
+  pack(parent / "nQuake" / "ROGUE" / "PAK0.PAK");
+  pack(parent / "nQuake" / "hipnotic" / "pak0.pak");
+  fs::create_directories(parent / "nQuake" / "xatrix");  // another game's pack's name, empty
   pack(parent / kOne / "id1" / "pak0.pak", 18689235);
   fs::create_directories(parent / "q2");  // named, but holds no game
   fs::create_directories(parent / "music");
@@ -99,6 +102,13 @@ TEST(installs_under_a_parent_are_found_by_name_in_any_case_and_by_what_they_hold
   CHECK(cl::pick_install(found, found[2].basedir) == 2);
   CHECK(cl::pick_install({}, "") == -1);
   CHECK(cl::install_line(found[1], 2).find("(registered)") != std::string::npos);
+  // Its mission packs beside its base folder, in the profile's order.
+  CHECK(found[1].packs.size() == 2 && found[1].packs[0]->name == "Scourge of Armagon");
+  CHECK_MSG(cl::install_line(found[1], 2)
+                    .find("(registered) with Scourge of Armagon and Dissolution of Eternity") !=
+                std::string::npos,
+            cl::install_line(found[1], 2));
+  CHECK(found[0].packs.empty());
   // A file system's root is never searched.
   CHECK(cl::installs_below(fs::path(parent).root_path().string()).empty());
 }

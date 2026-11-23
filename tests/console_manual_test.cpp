@@ -124,6 +124,30 @@ TEST(a_pass_lists_settings_spellings_commands_and_flags_with_their_layers) {
   CHECK(find(q2, ManualKind::command, "writemanual") != nullptr);
 }
 
+// Settings outside the console (ManualInfo::more: a game's rules) join the pass with its program
+// and games; a name the console has stays the console's.
+TEST(settings_outside_the_console_join_the_pass) {
+  Console con(true);
+  con.cvars().add({.name = "hostname", .fallback = "a", .help = "the console's"});
+  ManualInfo info;
+  info.program = {"sv", "Server", {}};
+  info.pass = "q2";
+  info.more = [](std::string_view games, std::vector<ManualEntry>& out) {
+    Cvars rules(true);
+    rules.add({.name = "deathmatch", .fallback = "0", .help = "the match's rules"});
+    rules.add({.name = "hostname", .fallback = "b", .help = "the rules'"});
+    for (ManualEntry& e : describe_settings(rules, "game:" + std::string(games))) out.push_back(e);
+  };
+  con.set_manual(info);
+  const std::vector<ManualEntry> pass = describe(con, "sv", "q2");
+  const ManualEntry* dm = find(pass, ManualKind::setting, "deathmatch");
+  CHECK(dm != nullptr && dm->layer == "game:q2" && dm->program == "sv" && dm->games == "q2");
+  int hostnames = 0;
+  for (const ManualEntry& e : pass)
+    if (e.name == "hostname") hostnames += e.help == "the console's" ? 1 : 100;
+  CHECK(hostnames == 1);
+}
+
 TEST(the_source_text_reads_back_field_for_field) {
   Rig r;
   const ManualSource s = both_passes(r);
