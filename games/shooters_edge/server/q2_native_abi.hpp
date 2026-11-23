@@ -104,6 +104,17 @@ struct NativeEntityHead {
   NativeEntityHead* owner;
 };
 
+// The block a library with the protocol-extensions feature keeps right after each entity's head
+// (before its own fields): the server reads it for the extended entity fields. Alpha, scale and
+// the loop's volume 0 mean the default; the loop's attenuation 0 the static one, -1 none.
+struct NativeEntityExt {
+  int32_t more_effects;
+  float alpha;
+  float scale;
+  float loop_volume;
+  float loop_attenuation;
+};
+
 inline constexpr int32_t kSolidNot = 0, kSolidTrigger = 1, kSolidBox = 2, kSolidBsp = 3;
 inline constexpr int32_t kSvfNoClient = 1, kSvfDeadMonster = 2, kSvfMonster = 4;
 

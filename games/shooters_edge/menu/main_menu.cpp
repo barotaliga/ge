@@ -9,11 +9,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 
 #include "console/cvar.hpp"
 #include "shooters_edge/menu/episodes.hpp"
 #include "shooters_edge/menu/figures.hpp"
+#include "shooters_edge/menu/player_view.hpp"
 
 namespace shooters_edge::menu {
 
@@ -46,6 +48,10 @@ constexpr Choice kHudGuns[] = {{"LOOK'S OWN", "look"},
 constexpr Choice kWorldLook[] = {{"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kMenuLook[] = {{"AUTO", "auto"}, {"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kOnOff[] = {{"OFF", "0"}, {"ON", "1"}};
+// The competition rulesets (classic/rulesets.hpp's QuakeWorld book, in its order).
+constexpr Choice kRulesets[] = {
+    {"NONE", "default"}, {"SMACKDOWN", "smackdown"},     {"SMACKDRIVE", "smackdrive"},
+    {"QCON", "qcon"},    {"THUNDERDOME", "thunderdome"}, {"MTFL", "mtfl"}};
 constexpr Choice kSides[] = {{"LEFT", "left"}, {"RIGHT", "right"}};
 constexpr Choice kFall[] = {{"SNOW", "0"}, {"SLEET", "0.5"}, {"RAIN", "1"}};
 
@@ -273,6 +279,19 @@ constexpr Entry kEntries[] = {
      .needs = "bottomcolor",
      .target = Target::client,
      .choices = kColours},
+    // The skins the files hold (skins/*.pcx, downloaded ones too), written to `skin`.
+    {.page = "setup",
+     .id = "qwskin",
+     .text = "SKIN",
+     .kind = ItemKind::choice,
+     .hint = "The skin you wear, as the others see you. Others need it too to see it.",
+     .needs = "skin"},
+    // The weapon the figure under the rows holds (player_view.hpp): the page's own, no setting.
+    {.page = "setup",
+     .id = "figweapon",
+     .text = "WEAPON",
+     .kind = ItemKind::choice,
+     .hint = "The weapon your figure holds here. Click the figure to fire it, drag it to turn it."},
     {.page = "setup", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
     {.page = "options",
@@ -402,6 +421,15 @@ constexpr Entry kEntries[] = {
      .hint = "Your classic packs enhanced, and the modern picture: light, water, sky, weather.",
      .opens = "enhanced",
      .needs = "ce_textures"},
+    {.page = "options",
+     .id = "ruleset",
+     .text = "RULESET",
+     .kind = ItemKind::choice,
+     .hint = "A league's rules for a match: our additions off, the league's settings held. "
+             "Changed only while you are not on a server.",
+     .needs = "ruleset",
+     .target = Target::client,
+     .choices = kRulesets},
     {.page = "options",
      .id = "server",
      .text = "SERVER SETTINGS",
@@ -1048,6 +1076,22 @@ void figure_row(const Entry& e, ge::ui::Item& it, const Host& host) {
     if (it.choices[i] == skin) it.choice = static_cast<int>(i);
 }
 
+// Quake's SKIN row: the skins the files hold, the one `skin` names chosen (`base` for none).
+void skin_row(ge::ui::Item& it, const Host& host) {
+  it.choices = host.files != nullptr ? quake_skins(*host.files) : std::vector<std::string>{};
+  it.choice = 0;
+  if (it.choices.empty()) {
+    it.choices.emplace_back("NONE");
+    it.disabled = true;
+    return;
+  }
+  std::string skin = host_value(host, "skin");
+  if (skin.empty()) skin = "base";
+  for (char& c : skin) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  for (size_t i = 0; i < it.choices.size(); i++)
+    if (it.choices[i] == skin) it.choice = static_cast<int>(i);
+}
+
 // The player page's model or skin changed: `skin` written as `<model>/<skin>`, a new model at its
 // first skin.
 void figure_changed(const ge::ui::Page& page, std::string_view changed, Host& host) {
@@ -1270,6 +1314,18 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         figure_row(*e, it, host);
         continue;
       }
+      if (e->page == "setup" && e->id == "qwskin") {
+        skin_row(it, host);
+        continue;
+      }
+      if (e->page == "setup" && e->id == "figweapon") {  // the choice kept across refreshes
+        const int was = it.choice;
+        it.choices.clear();
+        for (const std::string_view w : figure_weapons(&game_table(table_of(host)) == &q2_menu()))
+          it.choices.emplace_back(w);
+        it.choice = std::clamp(was, 0, static_cast<int>(it.choices.size()) - 1);
+        continue;
+      }
       if (e->page == "host" && (e->id == "episode" || e->id == "level")) {
         it.choices.clear();  // filled from the map row's choice once it is known (below)
         continue;
@@ -1410,6 +1466,12 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
       (e.item == "model" || e.item == "figskin")) {
     figure_changed(*page, e.item, host);
     refresh(menu, host);  // a new model starts at its first skin
+    return Outcome::none;
+  }
+  if (e.kind == ge::ui::EventKind::changed && e.page == "setup" && e.item == "qwskin") {
+    if (it->choice >= 0 && static_cast<size_t>(it->choice) < it->choices.size() &&
+        it->choices[static_cast<size_t>(it->choice)] != "NONE")
+      con.execute("skin \"" + it->choices[static_cast<size_t>(it->choice)] + "\"");
     return Outcome::none;
   }
   if (e.kind == ge::ui::EventKind::changed && entry->bit >= 0) {  // one bit of the number

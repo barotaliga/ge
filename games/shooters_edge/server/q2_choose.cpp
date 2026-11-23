@@ -5,7 +5,8 @@
 //
 // ge:summary Quake II's weapon choosing: the pickup's switch, use and drop by name, the cycle,
 // ge:summary The Reckoning's hyperblaster and railgun toggles
-// ge:keywords q2 use-weapon weapnext weapprev weapon-cycle g_select_empty g_quick_weap pickup-switch
+// ge:keywords q2 use-weapon weapnext weapprev weapon-cycle g_select_empty g_quick_weap
+// ge:keywords pickup-switch
 // ge:keywords reckoning ionripper phalanx trap toggle
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_reckoning_test.cpp

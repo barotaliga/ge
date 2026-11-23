@@ -293,11 +293,8 @@ int q2_bar_scale(const Q2Bar& bar, int width, int height) {
 namespace {
 
 // A console command's look at the world, now that a frame has it.
-void answer(Q2Bar& bar, const server::RulesWorld& world, int slot, const hud::LayoutInput& in) {
-  ge::console::Console& c = *bar.asked_by;
-  const std::vector<std::string> a = std::move(bar.asked);
-  bar.asked.clear();
-  bar.asked_by = nullptr;
+void answer(ge::console::Console& c, const std::vector<std::string>& a,
+            const server::RulesWorld& world, int slot, const hud::LayoutInput& in) {
   const std::string& word = a[0];
   const server::WorldClient& me = world.clients[slot];
   // A name made a file's under `folder`: no folder of its own, `.txt` added.
@@ -372,7 +369,7 @@ void add_q2_bar_commands(ge::console::Console& con, Q2Bar& bar) {
                                                    : "Must be in a level to dump.");
       return;
     }
-    bar.asked = a.words;
+    bar.asked.push_back(a.words);
     bar.asked_by = &c;
   };
   con.add_command("dumpclients", "dumpclients: each player's slot and name", ask);
@@ -433,7 +430,11 @@ void run_q2_bar(Q2Bar& bar, const server::RulesWorld& world, int slot, int64_t f
     return q2_world_string(s.world, index, s.scratch);
   };
   if (draw2d != 1) hud::run_layout(in, bar.ops);  // its text copied out of the strings as read
-  if (bar.asked_by != nullptr && !bar.asked.empty()) answer(bar, world, slot, in);
+  if (bar.asked_by != nullptr) {
+    ge::console::Console& c = *std::exchange(bar.asked_by, nullptr);
+    for (const std::vector<std::string>& a : std::exchange(bar.asked, {}))
+      answer(c, a, world, slot, in);
+  }
   const server::WorldClient& me = world.clients[slot];
   bar.layout_up = (in.stats[13] & 3) != 0;
   const bool shown = (in.stats[13] & 1) != 0 || bar.f1 == 2;  // F1 in a recording: the last one
@@ -558,26 +559,10 @@ bool draw_tile_clear(ge::ui::DrawList& dl, Q2Bar& bar) {
   return true;
 }
 
-// The graph along the bottom of the bar's screen (timegraph, debuggraph): each frame's time fed
-// from the real time, a unit of the screen a millisecond before graphscale and graphshift.
+// The graph along the bottom of the bar's screen (timegraph, debuggraph; screen_2d.hpp).
 bool draw_graph(ge::ui::DrawList& dl, Q2Bar& bar, float f, float alpha) {
-  const Q2Screen* s = bar.screen;
-  const bool on = s != nullptr && (s->time_graph || s->debug_graph) && s->draw2d != 0;
-  if (s != nullptr && s->time_graph && bar.graph_at >= 0 && bar.now > bar.graph_at)
-    ge::hud::bottom_graph_add(*bar.graph, static_cast<float>((bar.now - bar.graph_at) * 1000),
-                              ge::ui::hex(0xe0e0e0));
-  bar.graph_at = s != nullptr && s->time_graph ? bar.now : -1;
-  if (!on || f <= 0) return false;
-  const int k = static_cast<int>(f);
-  ge::hud::BottomGraphLook look;
-  look.height = static_cast<float>(s->graph_height);
-  look.scale = static_cast<float>(s->graph_scale);
-  look.shift = static_cast<float>(s->graph_shift);
-  look.alpha = alpha;
-  const int whole_w = bar.width / k * k, whole_h = bar.height / k * k;  // the smaller screen's
-  ge::hud::draw_bottom_graph(dl, *bar.graph, static_cast<float>(whole_w),
-                             static_cast<float>(whole_h), f, look);
-  return true;
+  return draw_screen_graph(dl, bar.graph, bar.screen, bar.now, bar.width, bar.height,
+                           static_cast<int>(f), alpha);
 }
 
 }  // namespace

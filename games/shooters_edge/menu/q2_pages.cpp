@@ -59,6 +59,8 @@ constexpr Choice kScale[] = {{"auto", "0"}, {"1x", "1"}, {"2x", "2"}, {"4x", "4"
 constexpr Choice kCrosshair[] = {{"none", "0"}, {"cross", "1"}, {"dot", "2"}, {"angle", "3"}};
 constexpr Choice kChScale[] = {{"0.5x", "0.5"}, {"1x", "1"}, {"2x", "2"}};
 constexpr Choice kHand[] = {{"right", "0"}, {"left", "1"}, {"center", "2"}};
+// The competition rulesets (classic/rulesets.hpp's Quake II book, in its order).
+constexpr Choice kRulesets[] = {{"none", "default"}, {"duel", "duel"}};
 
 // A toggle of client cvar `id`.
 constexpr Entry toggle(std::string_view page, std::string_view id, std::string_view text,
@@ -228,6 +230,9 @@ constexpr Entry kQ2[] = {
     {.page = "setup", .id = "model", .text = "model", .kind = ItemKind::choice, .needs = "skin"},
     {.page = "setup", .id = "figskin", .text = "skin", .kind = ItemKind::choice, .needs = "skin"},
     spin("setup", "hand", "handedness", kHand),
+    // The weapon the figure beside the rows holds (menu/player_view.hpp): the page's own, no
+    // setting.
+    {.page = "setup", .id = "figweapon", .text = "weapon", .kind = ItemKind::choice},
     back("setup"),
 
     // options.
@@ -242,6 +247,7 @@ constexpr Entry kQ2[] = {
     opens("options", "downloads", "download options", "downloads"),
     {.page = "options", .id = "screenshots", .text = "screenshots", .needs = "screenshot"},
     opens("options", "classic", "CLASSIC ENHANCED", "enhanced", "ce_textures"),
+    spin("options", "ruleset", "ruleset", kRulesets),         // changed only while not on a server
     opens("options", "server", "server settings", "server"),  // server_page.hpp
     {.page = "options",
      .id = "console",

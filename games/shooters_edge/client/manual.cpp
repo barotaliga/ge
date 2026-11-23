@@ -8,6 +8,7 @@
 
 #include "core/output.hpp"
 #include "shooters_edge/client/args.hpp"
+#include "shooters_edge/server/rules_manual.hpp"
 
 namespace shooters_edge::client {
 
@@ -23,6 +24,10 @@ con::ManualInfo manual_info() {
     if (g.id == "q1") m.games.push_back({.id = "qw", .name = "QuakeWorld", .takes_in = {}});
   }
   m.flags = flag_docs();
+  // The rules' own settings (deathmatch, skill...), which the window's console hands to the rules.
+  m.more = [](std::string_view games, std::vector<con::ManualEntry>& out) {
+    server::rules_manual(games, out);
+  };
   return m;
 }
 

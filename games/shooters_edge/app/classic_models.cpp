@@ -588,36 +588,4 @@ float glow_colour(const gr::MorphSkin& skin, float rgb[3]) {
   return float(double(glowing) / double(n));
 }
 
-void glow_map_marks(gr::MorphSkin& skin, const ge::assets::Image& glow) {
-  const size_t n = size_t(skin.width) * skin.height;
-  if (n == 0 || skin.rgba.size() < n * 4 || glow.width <= 0 || glow.height <= 0 ||
-      glow.rgba.size() < size_t(glow.width) * size_t(glow.height) * 4)
-    return;
-  if (skin.marks.size() < n) skin.marks.assign(n, gr::kMarkPlain);
-  const auto luma = [](const double c[3]) { return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
-  for (uint32_t y = 0; y < skin.height; y++)
-    for (uint32_t x = 0; x < skin.width; x++) {
-      const size_t i = size_t(y) * skin.width + x;
-      if (skin.marks[i] != gr::kMarkPlain && skin.marks[i] != gr::kMarkGlow) continue;
-      const size_t gx = size_t(x) * size_t(glow.width) / skin.width;
-      const size_t gy = size_t(y) * size_t(glow.height) / skin.height;
-      const uint8_t* g = &glow.rgba[(gy * size_t(glow.width) + gx) * 4];
-      double lit[3], own[3];
-      for (size_t c = 0; c < 3; c++) {
-        lit[c] = to_linear(g[c]);
-        own[c] = to_linear(skin.rgba[i * 4 + c]);
-      }
-      const double l = luma(lit);
-      if (l <= 1e-4) continue;
-      if (l > luma(own))
-        for (size_t c = 0; c < 3; c++)
-          if (lit[c] > own[c]) {
-            skin.rgba[i * 4 + c] = g[c];
-            own[c] = lit[c];
-          }
-      const double o = luma(own);
-      skin.marks[i] = gr::glow_mark(o <= 1e-6 ? 1.0f : float(std::min(1.0, l / o)));
-    }
-}
-
 }  // namespace shooters_edge::models

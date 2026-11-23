@@ -27,12 +27,14 @@
 
 #include "console/console.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/screen_2d.hpp"
 
 namespace shooters_edge::client {
 
-struct Q2Screen {
+// The 2D switch and the graph (scr_draw2d, timegraph...) are every game's: Screen2D, registered in
+// the classic layer, which a game change keeps.
+struct Q2Screen : Screen2D {
   int scale = 0;        // scr_scale: 0 by the window's size (q2_bar_scale), else 1..10
-  int draw2d = 2;       // scr_draw2d: 0 nothing, 1 all but the status bar, 2 all, 3 no layouts
   double alpha = 1;     // scr_alpha: every element's opacity but the crosshair's
   int lag_draw = 0;     // scr_lag_draw: 0 off, 1 the lag graph, 2 on a dark box
   int turtle = 1;       // scr_showturtle: 0 off, 1 a frame's troubles, 2 also the packets held back
@@ -57,11 +59,6 @@ struct Q2Screen {
   int adjust_fov = 1;                 // cl_adjustfov: 1 the 4:3 view's height kept, 0 its width
   std::string uf;                     // uf: the user info flags (4 own fov, 32 recorded fov)
   bool kick_angles = true;            // cl_kickangles: the server's kick on the view
-  // The graph along the bottom (hud/bottom_graph.hpp): timegraph each frame's time in ms,
-  // debuggraph the graph drawn though nothing feeds it; graphheight, graphscale, graphshift.
-  bool time_graph = false, debug_graph = false;
-  int graph_height = 32;
-  double graph_scale = 1, graph_shift = 0;
 };
 
 // viewsize's rectangle of a `width` x `height` screen: `percent` of each, centred (100 and over:

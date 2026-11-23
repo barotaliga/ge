@@ -269,6 +269,35 @@ SqStep sq_hand_step(SqHand& hand, SqBody& body, bool attack, double now, bool in
 // Chooses weapon `w` for the hand (when held and not already in hand); true when chosen.
 bool sq_choose(SqHand& hand, const SqBody& body, int w);
 
+// The muzzle flash value (server/q2_flash.hpp) a shot of weapon `w` sends, `shots` the chain gun's
+// bullets this frame; -1 for a weapon with none (the hand grenade). The server sends it and the
+// client's weapon prediction plays it (net/q2_weapon.hpp).
+int sq_flash_value(int w, int shots);
+// Whether flash `value` plays `sample` as its shot (a remixed weapon's own sound is sent as a sound
+// instead).
+bool sq_flash_plays(int value, const char* sample);
+
+// THE HAND'S OWN SOUNDS, the server's and the joined window's prediction alike: the one-shots a
+// step's frames make (the hand grenade's pin, the chaingun's spin up and down, the hyperblaster's
+// wind-down) and the loop the hand carries (the railgun's and the BFG's hum while held, the
+// hyperblaster's and the chaingun's spin while firing, a lit hand grenade's fuse in the hand).
+struct SqHandSound {
+  const char* sample;
+  int channel;      // 0 any, 1 the weapon's
+  int attenuation;  // the protocol's factor
+};
+inline constexpr int kSqHandSounds = 5;
+inline constexpr SqHandSound kSqHandSound[kSqHandSounds] = {{"weapons/hgrena1b.wav", 1, 1},
+                                                            {"weapons/chngnu1a.wav", 0, 2},
+                                                            {"weapons/chngnd1a.wav", 0, 2},
+                                                            {"weapons/hyprbd1a.wav", 0, 1},
+                                                            {"weapons/trapcock.wav", 1, 1}};
+// The one-shot (kSqHandSound's row) the step that took weapon `weapon`'s hand from frame `was`
+// (firing or not) to `after` makes; -1 none. A weapon changed by the step makes none.
+int sq_hand_sound(int weapon, int was, bool was_firing, const SqHand& after);
+// The loop `h` carries (a sample's name), null none.
+const char* sq_hand_loop(const SqHand& h);
+
 // The armour's part of a blow of `damage` (taken off its count): the share (the energy share for
 // an energy hit) × damage, rounded up, at most the count.
 int sq_armour_save(SqBody& body, int damage, bool energy);

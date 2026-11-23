@@ -82,10 +82,6 @@ TEST(a_tinted_texel_takes_its_ramp_and_a_plain_one_its_colour) {
   CHECK(glow == 1 && rgb[0] > 0.49f && rgb[0] < 0.51f);  // sRGB 188 is about half in linear
   morph_texel(skin, ramps, tint, 3, 0, rgb, &glow);
   CHECK(rgb[0] == ramps.rgb[size_t{15} * 3] && rgb[0] > rgb[2]);  // red's darkest
-  // A glow map's texel lights itself by its share: half here.
-  skin.marks[0] = glow_mark(0.5f);
-  morph_texel(skin, ramps, tint, 0, 0, rgb, &glow);
-  CHECK(glow == 0.5f && rgb[0] == 1);
 }
 
 TEST(a_ramp_runs_from_light_to_dark_through_its_colour) {
@@ -119,8 +115,9 @@ TEST(the_atlas_packs_without_overlap_and_refuses_what_cannot_fit) {
       CHECK_MSG(apart, "skins " + std::to_string(a) + " and " + std::to_string(b) + " overlap");
     }
   }
+  // More than the square holds: five skins each over half its side.
   std::vector<MorphModel> huge(5);
-  for (MorphModel& m : huge) m.skin.width = m.skin.height = 1200;
+  for (MorphModel& m : huge) m.skin.width = m.skin.height = kMorphAtlasSize / 2 + 352;
   CHECK(!pack_morph_atlas(huge, r));
 }
 

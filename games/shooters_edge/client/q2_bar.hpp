@@ -69,8 +69,7 @@ struct Q2Bar {
   const ge::hud::NetHistory* lag = nullptr;
   int unanswered = 0;
   // The graph along the bottom (timegraph): each frame's time from `now`, the last frame's time.
-  std::unique_ptr<ge::hud::BottomGraph> graph = std::make_unique<ge::hud::BottomGraph>();
-  double graph_at = -1;
+  ScreenGraph graph{};
   int width = 0, height = 0;  // the window the last `run_q2_bar` drew for, px
   // The last frame had a screen of the rules up (the help computer, a scoreboard or the
   // inventory): ESCAPE puts it away rather than opening the menu (menu/main_menu.hpp's Host).
@@ -79,9 +78,10 @@ struct Q2Bar {
   // last layout the rules sent whether or not the recorded flag has it up; with scr_draw2d 3 it
   // shows the layouts that setting hides.
   int f1 = 0;
-  // A console command waiting for the next frame's world (`add_q2_bar_commands`): its words, and
-  // the console it prints to (null: none asked).
-  std::vector<std::string> asked{};
+  // The console commands waiting for the next frame's world (`add_q2_bar_commands`), each one's
+  // words in the order typed (a bind of `aadump; dumpclients` answers both), and the console they
+  // print to (null: none asked).
+  std::vector<std::vector<std::string>> asked{};
   ge::console::Console* asked_by = nullptr;
   // The hit marker (classic/q2_fx_switches.hpp's `cl_hit_markers`): the switches (null: none
   // drawn), the recording's hits last seen and the real time of the last new one, s.

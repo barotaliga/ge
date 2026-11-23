@@ -368,7 +368,8 @@ int run_main(int argc, char** argv) {
   cl::GameCvarValues game_cvars;
   cl::SearchPath files;
   cl::Q2Screen& q2_screen = game_cvars.screen;  // Quake II's view and 2D (client/q2_view.hpp)
-  cl::UnderEar under_ear;  // the muffle under water (s_underwater, client/room_ear.hpp)
+  cl::ScreenGraph screen_graph;  // timegraph in every other game (client/screen_2d.hpp)
+  cl::UnderEar under_ear;        // the muffle under water (s_underwater, client/room_ear.hpp)
   cl::add_under_cvars(console, under_ear);
   const cl::GameBindings bindings{.files = &files,
                                   .crosshair = &hud.crosshair,
@@ -602,7 +603,7 @@ int run_main(int argc, char** argv) {
   // SELECT GAME: the games added here, the one remix plays with marked (client/installs.hpp).
   game_menu.games().set_lister([&] {
     return cl::game_rows(prefs, args.profile, game_menu.game(),
-                         remix.state.on ? std::string_view(remix.state.other) : std::string_view());
+                         remix.state.on ? remix.state.other : "", args.game);
   });
   const auto use_pictures = [&](cl::ClassicPictures pics, bool say) {
     cl::bar_pictures(q2_bar, pics);  // read again; its words in cr_charset's letters
@@ -978,12 +979,13 @@ int run_main(int argc, char** argv) {
   // LOAD GAME's folder and `basedir` (client/game_folder.hpp): the install opened in place of the
   // one playing (the old world and servers let go first), its first map started where the map
   // changes, enhanced in the background, kept. False, nothing changed, when it does not open.
-  std::string folder_ask;
-  cl::InstallAsk install_ask =
-      cl::ask_install(*window, args, measured);  // -classic <id>, none kept
+  // `pack_ask`: SELECT GAME's mission pack over it; `install_ask`: -classic <id>, none kept.
+  std::string folder_ask, pack_ask;
+  cl::InstallAsk install_ask = cl::ask_install(*window, args, measured);
   cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music, &args.game,
                            &game_cvars.q2.remap_tracks);
   cl::add_home_dir(console, data_root);
+  if (!measured) cl::offer_packs(console, data_root);    // the packs here not yet taken in
   cl::add_games_command(console, installs, folder_ask);  // `games`: the installs found, `games <n>`
   // A GAME SWITCHED SHOWS ITS LOADING: a console line and a frame before each long step of
   // `open_folder`, so the window never looks hung; the new game's look once its pictures are in.
@@ -1011,8 +1013,8 @@ int run_main(int argc, char** argv) {
     const ge::classicenhance::Profile* content = cl::install_of(basedir, &root, &error);
     if (content == nullptr) return false;
     cl::SearchPath fresh;
-    if (!cl::open_game_dir(basedir, cl::game_of(basedir, *content), fresh, error, *content))
-      return false;
+    const std::string game_folder = cl::folder_over(basedir, *content, &pack_ask);
+    if (!cl::open_game_dir(basedir, game_folder, fresh, error, *content)) return false;
     cl::cancel_load(loader);  // its threads read the old packs
     if (first_pictures.valid()) first_pictures.wait();
     first_pictures = {};
@@ -1023,7 +1025,7 @@ int run_main(int argc, char** argv) {
     menu_sounds.forget();  // the new game's own clicks
     args.basedir = basedir;
     args.profile = std::string(content->id);
-    args.game = cl::game_of(basedir, *content);
+    args.game = game_folder;
     places.locs = {};
     places.map.clear();
     places.game_dir = std::filesystem::path(basedir) / args.game;
@@ -1182,6 +1184,7 @@ int run_main(int argc, char** argv) {
           mi.pointer_moved = mi.pointer_x != last_pointer.x || mi.pointer_y != last_pointer.y;
           last_pointer = {mi.pointer_x, mi.pointer_y};
           mi.click = held.mouse.buttons.went_up(0);
+          mi.pointer_held = held.mouse.buttons.down(0);  // the setup page's figure turned
         }
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
@@ -1304,10 +1307,9 @@ int run_main(int argc, char** argv) {
       ge::platform::pick_folder(*window, "Load game: the folder holding id1", args.basedir);
     // SELECT GAME: a game's install opened at once, or the folder chooser to find one.
     if (shooters_edge::menu::GameMenu::GameAsk ask = game_menu.take_game(); ask.asked) {
-      if (ask.browse)
-        ge::platform::pick_folder(*window, "Add game: a game's folder", args.basedir);
-      else
-        folder_ask = ask.install;
+      if (ask.browse) ge::platform::pick_folder(*window, "Add game: a game's folder", args.basedir);
+      folder_ask = ask.install;  // "" when browsing
+      pack_ask = ask.pack;
     }
     if (std::string picked, why; ge::platform::folder_picked(*window, &picked, &why)) {
       if (!why.empty())
@@ -1491,13 +1493,11 @@ int run_main(int argc, char** argv) {
       std::vector<std::string> lines;
       joined = sn::remote_step(remote, wall, lines);
       for (const std::string& line : lines) tell(line, t);
-      // What a Quake II server stuffed runs as if typed (cl_ignore_stufftext filtered it).
-      for (const std::string& line : std::exchange(remote.stuffed_run, {})) console.execute(line);
+      sn::remote_run_stuffed(remote, console);  // what the server stuffed, run in the console
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
-    sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
-    double foot_share = -1;  // the console's foot while joining: the file coming, the loading
-    con_view.set_foot(sn::remote_foot(remote, foot_share), foot_share);
+    sn::remote_queue_frame(remote, console);    // `ranked`: the game found is joined
+    sn::remote_console_foot(remote, con_view);  // the file coming, its bar, the console held down
     if (std::exchange(remote.left, false) && !remote.active && !listen.map && !bench.active &&
         next_map.empty()) {
       if (!start_attract()) next_map = game_content.first_map;
@@ -1913,7 +1913,8 @@ int run_main(int argc, char** argv) {
         se::fill_hud(hud, hud_status,
                      q2 ? worn_hud.art : cl::hud_art_of(files, classic_art, free_art));
         const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
-        hud.layout.draw(overlay, hf, hud_look());
+        cl::draw_hud_2d(overlay, hud.layout, hf, hud_look(), q2_screen);  // scr_draw2d
+        cl::draw_screen_graph(overlay, screen_graph, &q2_screen, t, w, h, cl::q2_bar_scale(w, h));
         view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
       } else {
         q2_chat_lines(q2 ? q2_bar : worn_hud.bar, hud_status);
@@ -1929,7 +1930,8 @@ int run_main(int argc, char** argv) {
       else
         se::draw_lobby(overlay, lv, w, h);
     }
-    const bool scores_on = !con_keys.held && !was_open;  // the score keys (TAB: +showscores)
+    const bool scores_on =  // the score keys (TAB: +showscores), unless scr_draw2d hides them
+        !con_keys.held && !was_open && cl::shows_scores(q2_screen);
     cl::draw_scores(overlay, listen, game_menu.art(), w, h, scores_on && cl::scores_held(controls),
                     win.level_stats, board_view, scores_on && cl::team_scores_held(controls),
                     win.show_pause, win.print_speed);

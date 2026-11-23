@@ -32,7 +32,6 @@ void fight_step(Q2Server& s, int slot, bool attack);
 // Player `slot`'s hand stepped once (combat's `sq_hand_step`), with the one-shot sounds its new
 // frame makes (q2_hand_sounds.cpp), and the sounds it may make.
 SqStep fight_hand_step(Q2Server& s, int slot, bool attack, bool infinite, int swap);
-extern const char* const kHandSounds[4];
 // The missiles moved a rules frame (0.1 s): touches, fuses, explosions.
 void fight_missiles(Q2Server& s);
 

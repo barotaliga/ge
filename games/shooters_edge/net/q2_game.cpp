@@ -48,6 +48,7 @@
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/net/q2_votes.hpp"
 #include "shooters_edge/net/qw_report.hpp"
+#include "shooters_edge/net/server_words.hpp"
 #include "shooters_edge/server/q2_mapfix.hpp"
 #include "shooters_edge/server/q2_native.hpp"
 #include "shooters_edge/server/q2_save.hpp"
@@ -562,6 +563,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->cfg.lrcon.password = it->second;
   if (const auto it = c.rules.find("sv_redirect"); it != c.rules.end())
     g->cfg.redirect = it->second;
+  if (const auto it = c.rules.find("sv_ruleset"); it != c.rules.end()) g->cfg.ruleset = it->second;
   if (const auto v = c.rules.find("sv_vippassword"); v != c.rules.end()) {  // its words
     std::string w;
     for (const char ch : v->second + ' ')
@@ -1464,6 +1466,8 @@ const gs::ServerGame& make() {
     s.player_view = player_view;
     s.console_lines = console_lines;
     s.console = console_line;
+    s.words = kQ2ServerWords;
+    s.word_count = static_cast<int>(std::size(kQ2ServerWords));
     s.drop_error = drop_error;
     s.crash = crash;
     s.quit = quit;
