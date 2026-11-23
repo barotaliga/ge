@@ -98,7 +98,7 @@ struct Attack {
   Words words = Words::usual;             // a death by it
   float farthest = 0;                     // taken only within this (0 any range)
   float rise = 250;                       // a leap's speed up
-  int splash = 0;                         // a missile's splash (0 its shot's own)
+  const char* cry = nullptr;              // its sound as it starts (a spin-up, a chest opening)
 };
 
 struct Kind {  // NOLINT(clang-analyzer-optin.performance.Padding): rows read by name
@@ -145,11 +145,15 @@ struct Kind {  // NOLINT(clang-analyzer-optin.performance.Padding): rows read by
   // map sets that spawn flag.
   int shield = 0;
   int shield_flag = 0;
-  bool pain_at_3 = false;  // flinches at skill 3 too
-  bool green = false;      // bleeds green
-  bool heals = false;      // its search and idle heal it 10 to 20
-  bool amphibian = false;  // walks on land, swims in water, by where it stands
-  bool repairs = false;    // the repair bot: roams, welds, raises the dead with its beam
+  int flash = 0;          // the muzzle flash every shot sends (0: its class's by the shot's look)
+  int8_t hurt_skin = -1;  // its skin below half health (-1: its skin's next)
+  // More sounds it plays (its attacks', its chant's, its work's), listed at load.
+  const char* sounds[8] = {};
+  bool pain_at_3 = false;     // flinches at skill 3 too
+  bool green = false;         // bleeds green
+  bool heals = false;         // its search and idle heal it 10 to 20
+  bool amphibian = false;     // walks on land, swims in water, by where it stands
+  bool repairs = false;       // the repair bot: roams, welds, raises the dead with its beam
   const char* chant[3] = {};  // spawn flag 8: it chants (one of three) and looks for no one
 };
 
@@ -201,6 +205,166 @@ inline constexpr Attack kTankGun{.fire = Fire::burst,
                                  .burst_max = 1.9f};
 
 // The roster.
+// The base kinds a mission pack builds on, named so its rows can start from them.
+inline constexpr Kind kInfantry{
+    .classname = "monster_infantry",
+    .name = "a trooper",
+    .model = "models/monsters/infantry/tris.md2",
+    .sight = "infantry/infsght1.wav",
+    .pain = "infantry/infpain1.wav",
+    .death = "infantry/infdeth1.wav",
+    .health = 100,
+    .gib = -40,
+    .mass = 200,
+    .walk = 45,
+    .run = 144,
+    .revive_after = 65,
+    .melee = {{.fire = Fire::club, .damage = 5, .damage_max = 9, .kick = 50, .windup = 0.5f}},
+    // Cocked 0.3 s in, firing from 1 s in until 1 to 2.5 s after the cock, 0.2 s behind him.
+    .missile = {{.fire = Fire::burst,
+                 .damage = 3,
+                 .damage_max = 3,
+                 .kick = 4,
+                 .h = 300,
+                 .v = 500,
+                 .burst_min = 0.3f,
+                 .burst_max = 1.8f,
+                 .windup = 1.0f,
+                 .lead = -0.2f}},
+    .idle = "infantry/infidle1.wav"};
+
+inline constexpr Kind kBrain{.classname = "monster_brain",
+                             .name = "a brain",
+                             .model = "models/monsters/brain/tris.md2",
+                             .sight = "brain/brnsght1.wav",
+                             .pain = "brain/brnpain1.wav",
+                             .death = "brain/brndeth1.wav",
+                             .health = 300,
+                             .gib = -150,
+                             .mass = 400,
+                             .walk = 20,
+                             .run = 22.7f,
+                             .melee = {{.fire = Fire::club,
+                                        .damage = 15,
+                                        .damage_max = 19,
+                                        .kick = 40,
+                                        .windup = 0.7f,
+                                        .every = 0.4f,
+                                        .loop = 0.5f,
+                                        .recover = 0.7f},
+                                       {.fire = Fire::club,
+                                        .damage = 10,
+                                        .damage_max = 14,
+                                        .kick = -600,  // a pull
+                                        .windup = 0.6f,
+                                        .recover = 1.0f,
+                                        .follow = 0}},
+                             .screen = true,
+                             .idle = "brain/brnlens1.wav",
+                             .search = {"brain/brnsrch1.wav"}};
+
+inline constexpr Kind kIronMaiden{.classname = "monster_chick",
+                                  .name = "an iron maiden",
+                                  .model = "models/monsters/bitch/tris.md2",
+                                  .sight = "chick/chksght1.wav",
+                                  .pain = "chick/chkpain1.wav",
+                                  .death = "chick/chkdeth1.wav",
+                                  .health = 175,
+                                  .gib = -70,
+                                  .mass = 200,
+                                  .walk = 75,
+                                  .run = 75,
+                                  .mins = {-16, -16, 0},
+                                  .maxs = {16, 16, 56},
+                                  .melee = {{.fire = Fire::club,
+                                             .damage = 10,
+                                             .damage_max = 15,
+                                             .kick = 100,
+                                             .windup = 0.4f,
+                                             .every = 0.9f,
+                                             .loop = 0.9f,
+                                             .again = 0.9f,
+                                             .recover = 0.4f}},
+                                  .missile = {{.fire = Fire::rockets,
+                                               .damage = 50,
+                                               .damage_max = 50,
+                                               .speed = 500,
+                                               .windup = 1.3f,
+                                               .every = 1.4f,
+                                               .loop = 1.4f,
+                                               .again = 0.6f,
+                                               .recover = 0.5f}}};
+
+inline constexpr Kind kGladiator{.classname = "monster_gladiator",
+                                 .name = "a gladiator",
+                                 .model = "models/monsters/gladiatr/tris.md2",
+                                 .sight = "gladiator/sight.wav",
+                                 .pain = "gladiator/pain.wav",
+                                 .death = "gladiator/glddeth2.wav",
+                                 .health = 400,
+                                 .gib = -175,
+                                 .mass = 400,
+                                 .walk = 55,
+                                 .run = 161.7f,
+                                 .mins = {-32, -32, -24},
+                                 .maxs = {32, 32, 64},
+                                 .melee = {{.fire = Fire::club,
+                                            .damage = 20,
+                                            .damage_max = 24,
+                                            .kick = 300,
+                                            .windup = 0.6f,
+                                            .every = 0.7f,
+                                            .loop = 0.8f,
+                                            .recover = 0.4f}},
+                                 .missile = {{.fire = Fire::rail,
+                                              .damage = 50,
+                                              .damage_max = 50,
+                                              .kick = 100,
+                                              .windup = 0.3f,
+                                              .recover = 0.6f,
+                                              .closest = 112,
+                                              .remember = 0.3f}},
+                                 .idle = "gladiator/gldidle1.wav",
+                                 .search = {"gladiator/gldsrch1.wav"}};
+
+inline constexpr Kind kSuperTank{.classname = "monster_supertank",
+                                 .name = "a super tank",
+                                 .model = "models/monsters/boss1/tris.md2",
+                                 .pain = "bosstank/btkpain2.wav",
+                                 .death = "bosstank/btkdeth1.wav",
+                                 .health = 1500,
+                                 .gib = kNoGib,
+                                 .mass = 800,
+                                 .walk = 40,
+                                 .run = 120,
+                                 .close = 160,
+                                 .death_time = 2.4f,
+                                 .mins = {-64, -64, 0},
+                                 .maxs = {64, 64, 112},
+                                 .missile = {{.fire = Fire::burst,
+                                              .damage = 6,
+                                              .damage_max = 6,
+                                              .kick = 4,
+                                              .h = 300,
+                                              .v = 500,
+                                              .windup = 0.1f,
+                                              .every = 0.1f,
+                                              .loop = 0.6f,
+                                              .again = 0.9f,
+                                              .recover = 1.4f,
+                                              .weight = 0.3f},
+                                             {.fire = Fire::rockets,
+                                              .damage = 50,
+                                              .damage_max = 50,
+                                              .speed = 500,
+                                              .windup = 0.7f,
+                                              .every = 0.3f,
+                                              .loop = 0.9f,
+                                              .recover = 1.3f,
+                                              .weight = 0.7f}},
+                                 .end = End::boss,
+                                 .search = {"bosstank/btkunqv1.wav", "bosstank/btkunqv2.wav"}};
+
 inline constexpr Kind kKinds[] = {
     // The demo's (q2-monsters.md § The demo's roster; speeds q2-monsters-full.md).
     {.classname = "monster_soldier_light",
@@ -264,31 +428,7 @@ inline constexpr Kind kKinds[] = {
                   .windup = 0.2f,
                   .aim_h = 1000,
                   .aim_v = 500}}},
-    {.classname = "monster_infantry",
-     .name = "a trooper",
-     .model = "models/monsters/infantry/tris.md2",
-     .sight = "infantry/infsght1.wav",
-     .pain = "infantry/infpain1.wav",
-     .death = "infantry/infdeth1.wav",
-     .health = 100,
-     .gib = -40,
-     .mass = 200,
-     .walk = 45,
-     .run = 144,
-     .revive_after = 65,
-     .melee = {{.fire = Fire::club, .damage = 5, .damage_max = 9, .kick = 50, .windup = 0.5f}},
-     // Cocked 0.3 s in, firing from 1 s in until 1 to 2.5 s after the cock, 0.2 s behind him.
-     .missile = {{.fire = Fire::burst,
-                  .damage = 3,
-                  .damage_max = 3,
-                  .kick = 4,
-                  .h = 300,
-                  .v = 500,
-                  .burst_min = 0.3f,
-                  .burst_max = 1.8f,
-                  .windup = 1.0f,
-                  .lead = -0.2f}},
-     .idle = "infantry/infidle1.wav"},
+    kInfantry,
     {.classname = "monster_gunner",
      .name = "a gunner",
      .model = "models/monsters/gunner/tris.md2",
@@ -443,97 +583,9 @@ inline constexpr Kind kKinds[] = {
      .idle = "medic/idle.wav",
      .search = {"medic/medsrch1.wav"},
      .search_reach = 2},
-    {.classname = "monster_brain",
-     .name = "a brain",
-     .model = "models/monsters/brain/tris.md2",
-     .sight = "brain/brnsght1.wav",
-     .pain = "brain/brnpain1.wav",
-     .death = "brain/brndeth1.wav",
-     .health = 300,
-     .gib = -150,
-     .mass = 400,
-     .walk = 20,
-     .run = 22.7f,
-     .melee = {{.fire = Fire::club,
-                .damage = 15,
-                .damage_max = 19,
-                .kick = 40,
-                .windup = 0.7f,
-                .every = 0.4f,
-                .loop = 0.5f,
-                .recover = 0.7f},
-               {.fire = Fire::club,
-                .damage = 10,
-                .damage_max = 14,
-                .kick = -600,  // a pull
-                .windup = 0.6f,
-                .recover = 1.0f,
-                .follow = 0}},
-     .screen = true,
-     .idle = "brain/brnlens1.wav",
-     .search = {"brain/brnsrch1.wav"}},
-    {.classname = "monster_chick",
-     .name = "an iron maiden",
-     .model = "models/monsters/bitch/tris.md2",
-     .sight = "chick/chksght1.wav",
-     .pain = "chick/chkpain1.wav",
-     .death = "chick/chkdeth1.wav",
-     .health = 175,
-     .gib = -70,
-     .mass = 200,
-     .walk = 75,
-     .run = 75,
-     .mins = {-16, -16, 0},
-     .maxs = {16, 16, 56},
-     .melee = {{.fire = Fire::club,
-                .damage = 10,
-                .damage_max = 15,
-                .kick = 100,
-                .windup = 0.4f,
-                .every = 0.9f,
-                .loop = 0.9f,
-                .again = 0.9f,
-                .recover = 0.4f}},
-     .missile = {{.fire = Fire::rockets,
-                  .damage = 50,
-                  .damage_max = 50,
-                  .speed = 500,
-                  .windup = 1.3f,
-                  .every = 1.4f,
-                  .loop = 1.4f,
-                  .again = 0.6f,
-                  .recover = 0.5f}}},
-    {.classname = "monster_gladiator",
-     .name = "a gladiator",
-     .model = "models/monsters/gladiatr/tris.md2",
-     .sight = "gladiator/sight.wav",
-     .pain = "gladiator/pain.wav",
-     .death = "gladiator/glddeth2.wav",
-     .health = 400,
-     .gib = -175,
-     .mass = 400,
-     .walk = 55,
-     .run = 161.7f,
-     .mins = {-32, -32, -24},
-     .maxs = {32, 32, 64},
-     .melee = {{.fire = Fire::club,
-                .damage = 20,
-                .damage_max = 24,
-                .kick = 300,
-                .windup = 0.6f,
-                .every = 0.7f,
-                .loop = 0.8f,
-                .recover = 0.4f}},
-     .missile = {{.fire = Fire::rail,
-                  .damage = 50,
-                  .damage_max = 50,
-                  .kick = 100,
-                  .windup = 0.3f,
-                  .recover = 0.6f,
-                  .closest = 112,
-                  .remember = 0.3f}},
-     .idle = "gladiator/gldidle1.wav",
-     .search = {"gladiator/gldsrch1.wav"}},
+    kBrain,
+    kIronMaiden,
+    kGladiator,
     {.classname = "monster_mutant",
      .name = "a mutant",
      .model = "models/monsters/mutant/tris.md2",
@@ -647,43 +699,7 @@ inline constexpr Kind kKinds[] = {
                 .loop = 0.6f,
                 .recover = 0.1f}},
      .swims = true},
-    {.classname = "monster_supertank",
-     .name = "a super tank",
-     .model = "models/monsters/boss1/tris.md2",
-     .pain = "bosstank/btkpain2.wav",
-     .death = "bosstank/btkdeth1.wav",
-     .health = 1500,
-     .gib = kNoGib,
-     .mass = 800,
-     .walk = 40,
-     .run = 120,
-     .close = 160,
-     .death_time = 2.4f,
-     .mins = {-64, -64, 0},
-     .maxs = {64, 64, 112},
-     .missile = {{.fire = Fire::burst,
-                  .damage = 6,
-                  .damage_max = 6,
-                  .kick = 4,
-                  .h = 300,
-                  .v = 500,
-                  .windup = 0.1f,
-                  .every = 0.1f,
-                  .loop = 0.6f,
-                  .again = 0.9f,
-                  .recover = 1.4f,
-                  .weight = 0.3f},
-                 {.fire = Fire::rockets,
-                  .damage = 50,
-                  .damage_max = 50,
-                  .speed = 500,
-                  .windup = 0.7f,
-                  .every = 0.3f,
-                  .loop = 0.9f,
-                  .recover = 1.3f,
-                  .weight = 0.7f}},
-     .end = End::boss,
-     .search = {"bosstank/btkunqv1.wav", "bosstank/btkunqv2.wav"}},
+    kSuperTank,
     {.classname = "monster_boss2",
      .name = "a hornet",
      .model = "models/monsters/boss2/tris.md2",
@@ -1191,6 +1207,285 @@ inline constexpr Kind kKinds[] = {
                   .burst_min = 1.0f,
                   .burst_max = 2.5f}},
      .good = true},
+
+    // The Reckoning's (q2-reckoning-monsters.md), found only under its pack (`kind_named`).
+    // The three guards: the base guards' frames, moves and choices, a spread ten times tighter
+    // (100 by 50 at 8192), and the pack's guns.
+    {.classname = "monster_soldier_ripper",
+     .name = "a ripper guard",
+     .model = "models/monsters/soldierh/tris.md2",
+     .sight = "soldier/solsght1.wav",
+     .pain = "soldier/solpain2.wav",
+     .death = "soldier/soldeth2.wav",
+     .health = 50,
+     .gib = -30,
+     .mass = 100,
+     .walk = 34.8f,
+     .run = 146,
+     // Three discs a frame apart from its third frame; again (from its second) at skill 3 half
+     // the time.
+     .missile = {{.fire = Fire::bolt,
+                  .damage = 5,
+                  .damage_max = 5,
+                  .speed = 600,
+                  .windup = 0.2f,
+                  .every = 0.1f,
+                  .loop = 0.3f,
+                  .shots = 3,
+                  .again = 0.5f,
+                  .again_skill = 3,
+                  .aim_h = 100,
+                  .aim_v = 50,
+                  .shot = Shot::ripper}},
+     .pack = Q2Pack::reckoning,
+     .like = "monster_soldier_light",
+     .sounds = {"misc/lasfly.wav", "soldier/solatck2.wav", "infantry/infatck3.wav"}},
+    {.classname = "monster_soldier_hypergun",
+     .name = "a hyperblaster guard",
+     .model = "models/monsters/soldierh/tris.md2",
+     .sight = "soldier/solsght1.wav",
+     .pain = "soldier/solpain1.wav",
+     .death = "soldier/soldeth1.wav",
+     .skin = 2,
+     .health = 60,
+     .gib = -30,
+     .mass = 100,
+     .walk = 34.8f,
+     .run = 146,
+     // Spun up on its second frame, three bolts, then 7 times in 10 a loop of two more, ending
+     // in the spin-down: about 7.7 bolts a burst.
+     .missile = {{.fire = Fire::bolt,
+                  .damage = 1,
+                  .damage_max = 1,
+                  .speed = 600,
+                  .windup = 0.2f,
+                  .every = 0.1f,
+                  .loop = 0.3f,
+                  .shots = 3,
+                  .again = 0.7f,
+                  .again_every = 0.2f,
+                  .again_loop = 0.4f,
+                  .aim_h = 100,
+                  .aim_v = 50,
+                  .shot = Shot::blue_bolt,
+                  .cry = "weapons/hyprbl1a.wav"}},
+     .pack = Q2Pack::reckoning,
+     .like = "monster_soldier",
+     .flash = 17,  // every bolt: the tank's machine-gun slot
+     .sounds = {"weapons/hyprbd1a.wav", "soldier/solatck1.wav", "infantry/infatck3.wav"}},
+    {.classname = "monster_soldier_lasergun",
+     .name = "a laser guard",
+     .model = "models/monsters/soldierh/tris.md2",
+     .sight = "soldier/solsght1.wav",
+     .pain = "soldier/solpain3.wav",
+     .death = "soldier/soldeth3.wav",
+     .skin = 4,
+     .health = 70,
+     .gib = -30,
+     .mass = 100,
+     .walk = 34.8f,
+     .run = 146,
+     // A beam a frame held 4 to 11 frames from its third.
+     .missile = {{.fire = Fire::laser,
+                  .damage = 1,
+                  .damage_max = 1,
+                  .burst_min = 0.3f,
+                  .burst_max = 1.0f,
+                  .windup = 0.2f,
+                  .words = Words::light}},
+     .pack = Q2Pack::reckoning,
+     .like = "monster_soldier_ss",
+     .sounds = {"misc/lasfly.wav", "soldier/solatck3.wav", "infantry/infatck3.wav"}},
+    // The gekk: claws in reach, else on land a spit or a leap nearly every frame it faces its
+    // enemy; it swims in water, heals as it idles and bleeds green.
+    {.classname = "monster_gekk",
+     .name = "a gekk",
+     .model = "models/monsters/gekk/tris.md2",
+     .sight = "gek/gk_sght1.wav",
+     .pain = "gek/gk_pain1.wav",
+     .death = "gek/gk_deth1.wav",
+     .health = 125,
+     .gib = -30,
+     .mass = 300,
+     .walk = 116,
+     .run = 232.5f,
+     .mins = {-24, -24, -24},
+     .maxs = {24, 24, 24},
+     .melee = {{.fire = Fire::club,  // claws A: the left on its fourth frame
+                .damage = 15,
+                .damage_max = 19,
+                .kick = 100,
+                .windup = 0.3f,
+                .recover = 0.5f,
+                .words = Words::hurt},
+               {.fire = Fire::club,  // claws B: the left on its third, the right on its sixth
+                .damage = 15,
+                .damage_max = 19,
+                .kick = 100,
+                .windup = 0.2f,
+                .every = 0.3f,
+                .loop = 0.4f,
+                .shots = 2,
+                .recover = 0.3f,
+                .words = Words::hurt}},
+     .missile = {{.fire = Fire::leap,  // off on its fifth frame; 10 to 20 on what it strikes
+                  .damage = 10,
+                  .damage_max = 20,
+                  .speed = 700,
+                  .windup = 0.4f,
+                  .recover = 0.8f,
+                  .words = Words::hurt,
+                  .rise = 250},
+                 {.fire = Fire::bolt,  // the spit, on its sixth frame
+                  .damage = 5,
+                  .damage_max = 5,
+                  .speed = 550,
+                  .windup = 0.5f,
+                  .recover = 0.1f,
+                  .shot = Shot::spit,
+                  .words = Words::hurt}},
+     .test = Test::gekk,
+     .idle = "gek/gk_idle1.wav",
+     .pack = Q2Pack::reckoning,
+     .sounds = {"gek/gk_atck1.wav", "gek/gk_atck2.wav", "gek/gk_atck3.wav", "gek/gk_step1.wav",
+                "gek/gk_step2.wav", "gek/gk_step3.wav", "mutant/thud1.wav", "misc/udeath.wav"},
+     .pain_at_3 = true,
+     .green = true,
+     .heals = true,
+     .amphibian = true,
+     .chant = {"gek/gek_low.wav", "gek/gek_mid.wav", "gek/gek_high.wav"}},
+    // The repair bot: roams and welds what is broken, raises the dead with its healing beam, and
+    // fights only a player it has found: a bolt after a 2 s charge.
+    {.classname = "monster_fixbot",
+     .name = "a repair bot",
+     .model = "models/monsters/fixbot/tris.md2",
+     .pain = "flyer/flypain1.wav",
+     .death = "flyer/flydeth1.wav",
+     .health = 150,
+     .gib = kNoGib,
+     .mass = 150,
+     .walk = 50,
+     .run = 100,
+     .mins = {-32, -32, -24},
+     .maxs = {32, 32, 24},
+     .missile = {{.fire = Fire::bolt,
+                  .damage = 15,
+                  .damage_max = 15,
+                  .speed = 1000,
+                  .windup = 2.0f,
+                  .recover = 1.0f}},
+     .flies = true,
+     .end = End::explode,
+     .medic = true,
+     .pack = Q2Pack::reckoning,
+     .flash = 62,  // the icarus's blaster slot
+     .sounds = {"misc/welder1.wav", "misc/welder2.wav", "misc/welder3.wav", "misc/lasfly.wav"},
+     .pain_at_3 = true,
+     .repairs = true},
+    // The beta gladiator: twice the health in a power shield's armour, phalanx rounds.
+    [] {
+      Kind k = kGladiator;
+      k.classname = "monster_gladb";
+      k.name = "a beta gladiator";
+      k.model = "models/monsters/gladb/tris.md2";
+      k.health = 800;
+      k.mass = 350;
+      // A round on its third and sixth frames, and its ninth at skill 3, at the remembered point.
+      k.missile[0] = {.fire = Fire::bolt,
+                      .damage = 100,
+                      .damage_max = 100,
+                      .speed = 725,
+                      .windup = 0.2f,
+                      .every = 0.3f,
+                      .loop = 0.4f,
+                      .shots = 2,
+                      .again = 1,
+                      .again_max = 1,
+                      .again_loop = 0.1f,
+                      .recover = 0.3f,
+                      .closest = 112,
+                      .again_skill = 3,
+                      .shot = Shot::plasma,
+                      .cry = "weapons/plasshot.wav"};
+      k.pack = Q2Pack::reckoning;
+      k.like = "monster_gladiator";
+      k.shield = 400;
+      k.pain_at_3 = true;
+      return k;
+    }(),
+    // The beta iron maiden: the maiden's rocket made a heat-seeking one, 50 within 50.
+    [] {
+      Kind k = kIronMaiden;
+      k.classname = "monster_chick_heat";
+      k.name = "a beta iron maiden";
+      k.skin = 3;
+      k.hurt_skin = 1;  // the maiden's own hurt skin
+      k.missile[0].shot = Shot::heat_rocket;
+      k.pack = Q2Pack::reckoning;
+      k.like = "monster_chick";
+      return k;
+    }(),
+    // The beta super tank: a power shield of 400, and its flinches at skill 3.
+    [] {
+      Kind k = kSuperTank;
+      k.classname = "monster_boss5";
+      k.name = "a beta super tank";
+      k.model = "models/monsters/boss5/tris.md2";
+      k.pack = Q2Pack::reckoning;
+      k.like = "monster_supertank";
+      k.shield = 400;
+      k.pain_at_3 = true;
+      return k;
+    }(),
+    // The pack's super tank: spawn flag 8 gives it the same shield.
+    [] {
+      Kind k = kSuperTank;
+      k.pack = Q2Pack::reckoning;
+      k.shield = 400;
+      k.shield_flag = 8;
+      return k;
+    }(),
+    // The pack's brain: a ranged attack, near its tongue or its eyes' lasers at even odds,
+    // farther the lasers.
+    [] {
+      Kind k = kBrain;
+      // The tongue: the chest open from its fifth frame, strikes on its sixth and tenth.
+      k.missile[0] = {.fire = Fire::tongue,
+                      .damage = 5,
+                      .damage_max = 5,
+                      .kick = -1200,
+                      .windup = 0.5f,
+                      .every = 0.4f,
+                      .loop = 0.5f,
+                      .shots = 2,
+                      .recover = 0.7f,
+                      .words = Words::hurt,
+                      .farthest = 500,
+                      .cry = "brain/brnatck1.wav"};
+      // The eyes: two beams a frame for ten frames, again from the second half the time.
+      k.missile[1] = {.fire = Fire::laser,
+                      .damage = 1,
+                      .damage_max = 1,
+                      .count = 2,
+                      .windup = 0.1f,
+                      .every = 0.1f,
+                      .loop = 1.0f,
+                      .again = 0.5f,
+                      .again_loop = 0.9f,
+                      .recover = 0.1f,
+                      .words = Words::light};
+      k.pack = Q2Pack::reckoning;
+      k.sounds[0] = "brain/brnatck3.wav";
+      k.sounds[1] = "misc/lasfly.wav";
+      return k;
+    }(),
+    // The pack's trooper: its burst from its third frame, the cock after (the same count).
+    [] {
+      Kind k = kInfantry;
+      k.missile[0].windup = 0.2f;
+      k.pack = Q2Pack::reckoning;
+      return k;
+    }(),
 };
 inline constexpr int kKindCount = int(sizeof(kKinds) / sizeof(kKinds[0]));
 

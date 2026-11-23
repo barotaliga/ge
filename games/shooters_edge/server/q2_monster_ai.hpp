@@ -110,11 +110,23 @@ bool blow(Q2Server& s, Q2Monster& m, const Attack& a);
 void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n);
 int frames(float seconds);
 void begin_attack(Q2Server& s, Q2Monster& m, int i);
+// The mutant's leap test: the heights overlap and he is 100 or more away (then one time in ten).
+bool leap_test(Q2Server& s, const Q2Monster& m);
 // The missile an attack throws: its own (a pack's), else `usual`.
 SqShot shot_of(const Attack& a, SqShot usual);
+// Monster `m`'s beam `i` (0 or 1) shown from `from` to `to` for this frame and the next (blue
+// when `heal`), when it has beam rows (q2_monster_rows.cpp).
+void beam_show(Q2Server& s, Q2Monster& m, int i, sh::Vec3f from, sh::Vec3f to, bool heal);
 // A power shield's part of a blow on `m` along `dir`: two thirds of it (rounded down), two damage
 // a point while points last, the shell shown and its sparks; returns what is left of the blow.
 int shield_take(Q2Server& s, Q2Monster& m, int damage, sh::Vec3f dir);
+
+// ---- Beams (q2_monster_rows.cpp) ----
+// Rows of their own for the beams of every monster whose kind fires lasers or heals by a beam:
+// two map entities each, after the map's own (at spawn).
+void beams_spawn(Q2Server& s);
+// Whether kind `k` draws beams.
+bool beams_of(const Kind& k);
 
 // ---- The medic (q2_monster_medic.cpp) ----
 bool sees_body(const Q2Server& s, const Q2Monster& medic, const Q2Monster& c);
@@ -123,5 +135,16 @@ int find_patient(const Q2Server& s, const Q2Monster& medic);
 void revive(Q2Server& s, Q2Monster& c, int enemy);
 // A medic's frame with a corpse to raise; true when it was busy with one.
 bool tend(Q2Server& s, Q2Monster& m);
+
+// ---- A mission pack's kinds (q2_reckoning_monsters.cpp) ----
+// Set up at spawn: a chant (spawn flag 8), the repair bot's first work.
+void reckoning_monster_spawn(Q2Server& s, Q2Monster& m);
+// Its own part of a think before the usual (the amphibian's water, the repair bot's work); true
+// when that was the whole think.
+bool reckoning_monster_think(Q2Server& s, Q2Monster& m);
+// The gekk's own attack choice (`melee` in melee range, `dist` to its enemy).
+void reckoning_choose(Q2Server& s, Q2Monster& m, bool melee, float dist);
+// A search or idle call that heals: 10 to 20, to its maximum.
+void reckoning_heal(Q2Server& s, Q2Monster& m);
 
 }  // namespace shooters_edge::server::monster_ai

@@ -17,6 +17,7 @@
 #include "brush/map.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
+#include "shooters_edge/server/q2_reckoning.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
@@ -239,7 +240,8 @@ void key_lines(Q2Server& s, const ge::brush::Entity& b) {
 // The game's own, or one the remix brings in from another game (Quake's monsters, its items).
 bool spawnable(const Q2Server& s, std::string_view c) {
   return std::binary_search(std::begin(kSpawnable), std::end(kSpawnable), c) ||
-         monster_class(c, s.opt.pack) || sq_item(c, s.opt.pack) >= 0;
+         monster_class(c, s.opt.pack) || sq_item(c, s.opt.pack) >= 0 ||
+         (s.opt.pack == Q2Pack::reckoning && reckoning_thing(c));  // the pack's map things
 }
 
 }  // namespace

@@ -14,6 +14,7 @@
 
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_map.hpp"
+#include "shooters_edge/server/q2_monster_ai.hpp"
 #include "shooters_edge/server/q2_monster_kinds.hpp"
 #include "shooters_edge/server/q2_monster_pain.hpp"
 #include "shooters_edge/server/q2_monster_steps.hpp"
@@ -57,6 +58,9 @@ void monster_precache(Q2Server& s) {
     for (const char* name : {kKinds[k].idle, kKinds[k].loop, kKinds[k].search[0],
                              kKinds[k].search[1], kKinds[k].search[2]})
       add_sound(name);
+    for (const char* name : kKinds[k].sounds) add_sound(name);
+    for (const Attack& a : kKinds[k].missile) add_sound(a.cry);
+    for (const char* name : kKinds[k].chant) add_sound(name);
     for (const char* name : monster_step_sounds(kKinds[k].classname, steps_on)) add_sound(name);
     const auto add_to = [](void* to, const char* name) {
       std::vector<std::string>& list = *static_cast<std::vector<std::string>*>(to);
@@ -74,7 +78,7 @@ void monster_precache(Q2Server& s) {
     const int k = kind_of(s, e.classname);
     if (k < 0 || e.gone || (deathmatch(s) && !kKinds[k].keep)) continue;
     e.modelindex = add_kind(k);
-    if (kKinds[k].medic)
+    if (kKinds[k].medic && !kKinds[k].repairs)
       for (const char* name : {"medic/medatck2.wav", "medic/medatck4.wav"}) add_sound(name);
     if (kKinds[k].end == End::launch) add_kind(kind_of(s, "monster_makron"));
     if (kKinds[k].prop && kKinds[k].keep)
@@ -141,8 +145,74 @@ void monster_torsos(Q2Server& s) {
   }
 }
 
+namespace monster_ai {
+
+constexpr const char* kBeam = "monster_beam";
+
+bool beams_of(const Kind& k) {
+  if (k.repairs) return true;
+  for (const Attack& a : k.missile)
+    if (a.fire == Fire::laser) return true;
+  return false;
+}
+
+void beams_spawn(Q2Server& s) {
+  for (Q2Monster& m : s.monsters) {
+    if (!beams_of(kKinds[m.kind])) continue;
+    m.beam = static_cast<int>(s.entities.size());
+    for (int i = 0; i < 2; i++) {
+      Q2Entity b;
+      b.classname = kBeam;
+      b.hidden = true;
+      b.owner = m.entity;
+      s.entities.push_back(b);
+    }
+  }
+}
+
+void beam_show(Q2Server& s, Q2Monster& m, int i, sh::Vec3f from, sh::Vec3f to, bool heal) {
+  if (m.beam < 0 || i < 0 || i > 1) return;
+  m.beam_from[i] = from;
+  m.beam_to[i] = to;
+  m.beam_heal = heal;
+  m.beam_until = s.level_time + 0.15;
+  if (i == 0) m.beam_from[1] = m.beam_to[1] = from;  // the second eye's, if it fires, after
+}
+
+}  // namespace monster_ai
+
+namespace {
+
+// Each monster's beams: the red laser (palette 242, 242, 240, 240) or the blue healing beam (243,
+// 243, 241, 241), 2 wide, seen through, from its eye to where it stopped, while one is shown.
+void beam_rows(Q2Server& s) {
+  RulesWorld& w = s.world;
+  for (const Q2Monster& m : s.monsters) {
+    if (m.beam < 0) continue;
+    for (int i = 0; i < 2; i++) {
+      const size_t row = size_t(map_row(m.beam + i));
+      if (row >= w.entities.size()) continue;
+      WorldEntity& r = w.entities[row];
+      const bool shown = !m.dead && s.level_time < m.beam_until &&
+                         (m.beam_to[i].x != m.beam_from[i].x ||
+                          m.beam_to[i].y != m.beam_from[i].y || m.beam_to[i].z != m.beam_from[i].z);
+      r.free = !shown;
+      if (!shown) continue;
+      r.origin = m.beam_from[i];
+      r.beam_end = m.beam_to[i];
+      r.modelindex = 0;
+      r.render_fx = kSqBeamRender | kSqTranslucentRender;
+      r.frame = 2;
+      r.skin = static_cast<int>(m.beam_heal ? 0xF3F3F1F1u : 0xF2F2F0F0u);
+    }
+  }
+}
+
+}  // namespace
+
 void monster_rows(Q2Server& s) {
   torso_rows(s);
+  beam_rows(s);
   RulesWorld& w = s.world;
   for (const Q2Monster& m : s.monsters) {
     const Q2Entity& e = s.entities[size_t(m.entity)];
@@ -178,7 +248,16 @@ void monster_rows(Q2Server& s) {
       if (at != s.sounds.end()) r.loop = static_cast<int>(at - s.sounds.begin());
     }
     // The damaged skin below half health; a prisoner one of three by his body (none on a cross).
-    r.skin = kKinds[m.kind].skin + (e.health < e.max_health / 2 ? 1 : 0);
+    const Kind& k = kKinds[m.kind];
+    const bool hurt = e.health < e.max_health / 2;
+    r.skin = hurt && k.hurt_skin >= 0 ? k.hurt_skin : k.skin + (hurt ? 1 : 0);
+    if (k.heals)  // the gekk: its second skin below half, its third below a quarter and dead
+      r.skin = m.dead || e.health < e.max_health / 4 ? 2 : hurt ? 1 : 0;
+    r.render_fx = 0;
+    if (!m.dead && s.level_time < m.shield_flash) {  // a power shield's blow: the green shell
+      r.effects |= kSqColourShellEffect;
+      r.render_fx = kSqShieldShellRender;
+    }
     if (kKinds[m.kind].classname == std::string_view("misc_insane"))
       r.skin = (e.spawnflags & 8) != 0 ? 0 : int((uint32_t(m.entity) * 2654435761u >> 16) % 3u);
     // The commander's body slumps from frame 1 to 24, a frame every 0.1 s from 0.1 s after a use.

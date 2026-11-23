@@ -53,6 +53,8 @@ inline constexpr int kSqByHeldGrenade = 104;
 inline constexpr int kSqByCrush = 105, kSqByHurt = 106, kSqByTelefrag = 107, kSqByExplosion = 108;
 // A map's laser, an exploding barrel, a deathmatch exit taken without allow-exit (`dmflags` 4096).
 inline constexpr int kSqByLaser = 109, kSqByBarrel = 110, kSqByExit = 111;
+// A bite, a claw, a leap, a spit or a tongue of a mission pack's monster ("that's gotta hurt.").
+inline constexpr int kSqByGotta = 113;
 // A monster's attack: this plus its row in the roster (q2_monsters.cpp).
 inline constexpr int kSqByMonster = 200;
 

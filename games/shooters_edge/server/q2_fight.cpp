@@ -671,7 +671,11 @@ void bullet(Q2Server& s, int slot, sh::Vec3f origin, sh::Vec3f start, const sh::
     if (!body && (l.mover < 0 || s.entities[size_t(l.mover)].health <= 0))
       monster_noise(s, slot, l.end, true);
     map_damage(s, l.mover, slot, damage, ax.forward, false, &l.end);
-    effect(s, body ? "te_blood" : "te_gunshot", l.end, l.normal);
+    effect(s,
+           !body                       ? "te_gunshot"
+           : monster_green(s, l.mover) ? "te_greenblood"  // the gekk's green
+                                       : "te_blood",
+           l.end, l.normal);
   }
 }
 
@@ -1098,7 +1102,8 @@ void fight_precache(Q2Server& s) {
   // The weapons as others see them carried: names a client takes from the player's own model
   // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
   for (const Carried& c : kCarried)
-    if (q2_pack_has(s.opt.pack, c.pack)) s.carried_models[static_cast<int>(c.weapon)] = model(c.name);
+    if (q2_pack_has(s.opt.pack, c.pack))
+      s.carried_models[static_cast<int>(c.weapon)] = model(c.name);
   for (int k = 0; k < kSqShotKinds; k++)
     if (q2_pack_has(s.opt.pack, kSqShotPacks[k])) s.missile_models[k] = model(kMissileModels[k]);
   gibs_precache(s);
@@ -1887,6 +1892,13 @@ void fight_monster_launch(Q2Server& s, int from, SqShot kind, sh::Vec3f start, s
     m->radius_damage = damage;
     m->radius = 50;
     m->think_at = s.level_time + 0.1;
+  } else if (kind == SqShot::plasma) {  // the beta gladiator's: 60 within 60
+    m->radius_damage = 60;
+    m->radius = 60;
+  } else if (kind == SqShot::ripper) {  // the ripper guard's disc: 3 s
+    m->dies_at = s.level_time + 3;
+  } else if (kind == SqShot::blue_bolt || kind == SqShot::spit) {  // 2 s
+    m->dies_at = s.level_time + 2;
   }
 }
 

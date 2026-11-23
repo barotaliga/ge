@@ -217,12 +217,12 @@ bool step(Q2Server& s, Q2Monster& m, sh::Vec3f move) {
   Q2Entity& e = body(s, m);
   const Kind& k = kind(m);
   const bool was_wet = wet(s, foot(e, e.origin));
-  if (afloat(k)) {
+  if (afloat(k) || m.swimming) {
     const ge::classic::Q2Trace t = sweep(s, m, e.origin, e.origin + move);
     if (t.start_solid || t.fraction < 1) return false;
     const bool will_be_wet = wet(s, foot(e, t.end));
     if (k.flies && !was_wet && will_be_wet) return false;
-    if (k.swims && was_wet && !will_be_wet) return false;
+    if ((k.swims || m.swimming) && was_wet && !will_be_wet) return false;
     e.origin = t.end;
     return true;
   }
@@ -270,7 +270,7 @@ void fall(Q2Server& s, Q2Monster& m) {
     if (t.fraction < 1) m.velocity = {};
     return;
   }
-  if (k.swims && wet(s, foot(e, e.origin))) return;
+  if ((k.swims || m.swimming) && wet(s, foot(e, e.origin))) return;
   if (m.gravity == 0 && !m.dead && (k.good || k.turret)) {  // hung up, or riding a turret
     m.velocity = {};
     return;
@@ -287,7 +287,7 @@ void fall(Q2Server& s, Q2Monster& m) {
       sh::length(m.velocity) > 400) {  // the leap lands on someone
     const Attack& a = k.missile[0];
     const int dmg = a.damage + static_cast<int>(random01(s) * (a.damage_max - a.damage + 1));
-    fight_hurt(s, t.entity - 1, -1, m.velocity, dmg, dmg, kSqByMonster + m.kind);
+    fight_hurt(s, t.entity - 1, -1, m.velocity, dmg, dmg, cause_of(m));
     m.struck = true;
   }
   e.origin = t.end;
@@ -318,7 +318,7 @@ void turn(Q2Entity& e, const Kind& k, float ideal) {
 void go_to(Q2Server& s, Q2Monster& m, sh::Vec3f goal, float speed) {
   Q2Entity& e = body(s, m);
   sh::Vec3f d = goal - e.origin;
-  if (!afloat(kind(m))) d.z = 0;
+  if (!afloat(kind(m)) && !m.swimming) d.z = 0;
   const float dist = sh::length(d);
   if (dist < 1) return;
   m.ideal_yaw = yaw_to(d);
@@ -356,7 +356,7 @@ void found(Q2Server& s, Q2Monster& m, int foe, bool saw) {
     if (soldier_kind && skill(s) >= 1 &&
         sh::length(foe_at(s, foe) - s.entities[size_t(m.entity)].origin) >= kNear &&
         random01(s) < 0.5)
-      m.run_shoot = 0;
+      kind(m).missile[0].fire == Fire::laser ? begin_attack(s, m, 2) : void(m.run_shoot = 0);
   }
 }
 
@@ -446,11 +446,12 @@ void begin_attack(Q2Server& s, Q2Monster& m, int i) {
   m.loops = 0;
   m.aimed = false;
   m.struck = false;
+  if (a.cry != nullptr) sound(s, m.entity, a.cry);
   m.fire_at = s.level_time + double(a.windup);
   double hold = 0.1;
   if (a.every > 0)
     hold = double(frames(a.loop) - 1) * kStep + 0.1;
-  else if (a.fire == Fire::burst)
+  else if (a.fire == Fire::burst || (a.fire == Fire::laser && a.burst_max > 0))
     hold = a.burst_min + random01(s) * double(a.burst_max - a.burst_min);
   else if (a.fire == Fire::rockets)
     hold = 0.2 * (a.count - 1) + 0.1;
@@ -504,7 +505,8 @@ void attacking(Q2Server& s, Q2Monster& m) {
       m.busy_until = m.burst_until + double(a.recover);
     }
   } else {
-    const bool every_frame = a.fire == Fire::burst || a.fire == Fire::drain;
+    const bool every_frame =
+        a.fire == Fire::burst || a.fire == Fire::drain || a.fire == Fire::laser;
     const bool volley = a.fire == Fire::rockets && m.burst_frame % 2 == 0;
     if (m.burst_frame == 0 || every_frame || volley) shoot(s, m, a, m.burst_frame);
     m.burst_frame++;
@@ -532,12 +534,17 @@ int pick_ranged(Q2Server& s, const Q2Monster& m, float dist) {
     if (dist <= 250) return roll < 0.5 ? 4 : 2;
     return roll < 1.0 / 3 ? 2 : roll < 2.0 / 3 ? 3 : 4;  // a third each farther
   }
+  // An attack with a reach of its own (`farthest`) is left out beyond it.
+  const auto weight = [&](int i) {
+    const Attack& a = k.missile[i];
+    return a.farthest > 0 && dist > a.farthest ? 0.0f : a.weight;
+  };
   float total = 0;
-  for (int i = 0; i < n; i++) total += k.missile[i].weight;
+  for (int i = 0; i < n; i++) total += weight(i);
   const float roll = float(random01(s)) * total;
   float sum = 0;
   for (int i = 0; i < n; i++) {
-    sum += k.missile[i].weight;
+    sum += weight(i);
     if (roll < sum) return 2 + i;
   }
   return 2 + n - 1;
@@ -580,6 +587,10 @@ void choose(Q2Server& s, Q2Monster& m) {
   const Range r = range_to(e.origin, at);
   const bool has_missile = k.missile[0].fire != Fire::none;
   const bool has_melee = k.melee[0].fire != Fire::none;
+  if (k.test == Test::gekk) {
+    reckoning_choose(s, m, r == Range::melee, dist);
+    return;
+  }
   if (k.test == Test::mutant) {
     if (r == Range::melee)
       begin_attack(s, m, 0);
@@ -748,9 +759,11 @@ void dying_shot(Q2Server& s, Q2Monster& m) {
   const sh::Vec3f to = from + fwd * 8192;
   const char* look = a.fire == Fire::bolt ? "blaster" : "gun";
   fight_monster_line(s, a.fire == Fire::bolt ? "te_monster_flash.blaster" : "te_monster_flash.gun",
-                     m.entity, from, from + fwd * 16.0f, q2_monster_flash_value(looks_like(k), look));
+                     m.entity, from, from + fwd * 16.0f,
+                     q2_monster_flash_value(looks_like(k), look));
   if (a.fire == Fire::bolt) {
-    fight_monster_launch(s, m.entity, SqShot::bolt, from, fwd, a.damage, a.speed, cause_of(m));
+    fight_monster_launch(s, m.entity, shot_of(a, SqShot::bolt), from, fwd, a.damage, a.speed,
+                         cause_of(m));
     return;
   }
   for (int i = 0; i < (a.fire == Fire::pellets ? a.count : 1); i++) {
@@ -820,8 +833,11 @@ void voice(Q2Server& s, Q2Monster& m) {
   }
   if (s.level_time < m.idle_at) return;
   if (walking && k.search_odds < 1 && random01(s) >= k.search_odds) say = nullptr;
+  if (say != nullptr && m.chant && !walking)  // a chant, one of three
+    say = k.chant[std::min(2, static_cast<int>(random01(s) * 3))];
   if (say != nullptr && *say != 0) sound(s, m.entity, say, reach);
   if (say != nullptr && !walking) m.pose.cue_fidget = true;
+  if (say != nullptr && k.heals) reckoning_heal(s, m);
   m.idle_at = s.level_time + 15 + random01(s) * 15;
 }
 
@@ -980,8 +996,9 @@ void think(Q2Server& s, Q2Monster& m) {
     targets_turret(s, m, m.enemy >= 0 && sees(s, m, m.enemy) ? m.enemy : -1);
     return;
   }
+  if (reckoning_monster_think(s, m)) return;
   if (k.medic && tend(s, m)) return;
-  if (m.enemy == -1) notice(s, m);
+  if (m.enemy == -1 && !m.chant) notice(s, m);
   if (m.enemy == -1 && m.sound_target) {  // to the noise; within 64 it stands, 5 s on forgets it
     sh::Vec3f d = m.sound_at - e.origin;
     d.z = 0;
@@ -1212,6 +1229,11 @@ const char* monster_obituary(int cause) {
   return kKinds[k].name;
 }
 
+bool monster_green(const Q2Server& s, int e) {
+  const int i = monster_index(s, e);
+  return i >= 0 && kKinds[s.monsters[size_t(i)].kind].green;
+}
+
 int monster_index(const Q2Server& s, int e) {
   for (size_t i = 0; i < s.monsters.size(); i++)
     if (s.monsters[i].entity == e) return static_cast<int>(i);
@@ -1314,6 +1336,8 @@ void monster_spawn(Q2Server& s) {
     s.monsters.push_back(m);
     if (!kd.prop && !kd.good && !m.spare) s.monsters_total++;
   }
+  beams_spawn(s);
+  for (Q2Monster& m : s.monsters) reckoning_monster_spawn(s, m);
   for (Q2Monster& m : s.monsters) {  // walkers to the floor
     if (afloat(kKinds[m.kind]) || m.waiting || m.gravity == 0) continue;
     Q2Entity& e = s.entities[size_t(m.entity)];
@@ -1364,7 +1388,7 @@ void liquids(Q2Server& s, Q2Monster& m) {
   m.water_type = type;
   const Kind& k = kind(m);
   const double now = s.level_time;
-  if (k.swims ? level > 0 : level < 3) m.air_until = now + (k.swims ? 9 : 12);
+  if (k.amphibian || (k.swims ? level > 0 : level < 3)) m.air_until = now + (k.swims ? 9 : 12);
   if (now + 0.001 >= m.air_until && now + 0.001 >= m.pain_at + kPainEvery) {
     const int dmg = std::min(15, 2 + 2 * static_cast<int>(now - m.air_until));
     m.pain_at = now + 1 - kPainEvery;  // the next in a second, and no flinch for this one
@@ -1518,7 +1542,8 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
   // A player's blow on a monster that has not yet noticed anyone: twice its points (not a blast's).
   if (!splash && !m.dead && m.enemy == -1 && hunted(s, attacker)) damage *= 2;
   // A power screen takes a third of a blow from in front (but not while its chest is open).
-  const bool opened = m.attack == 1 && s.level_time + 0.001 < m.busy_until;
+  const bool opened =
+      (m.attack == 1 || attack_of(m).fire == Fire::tongue) && s.level_time + 0.001 < m.busy_until;
   if (m.screen > 0 && !opened && sh::normalize(dir) > 0 &&
       sh::dot(dir * -1.0f, forward_of(ent.angles.y)) > kInFront) {
     const int saved = std::min(damage / 3, m.screen);
@@ -1550,13 +1575,17 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
     return true;
   }
   react(s, m, attacker);
+  if (m.chant) {  // a chant's first blow only wakes it
+    m.chant = false;
+    return true;
+  }
   if (m.leaping || m.ducked) return true;  // ducked (in the air from a leap too): no pain
   const bool waiting = s.level_time + 0.001 < m.pain_at + kPainEvery;
   if (named(m, "misc_actor") && actor_pain(s, m, attacker, waiting)) return true;
   if (monster_pain_known(looks_like(k))) {  // its pains as data (q2_monster_pain.cpp)
-    const PainChoice c =
-        monster_pain(looks_like(k), damage, skill(s), m.velocity.z, m.pose.frame, m.pose.span.first,
-                     m.pose.act == SqMonsterPose::Act::pain, waiting, s.rng);
+    const PainChoice c = monster_pain(
+        looks_like(k), damage, k.pain_at_3 ? std::min(skill(s), 2) : skill(s), m.velocity.z,
+        m.pose.frame, m.pose.span.first, m.pose.act == SqMonsterPose::Act::pain, waiting, s.rng);
     if (c.spent) m.pain_at = s.level_time;
     if (c.sound != nullptr) sound(s, e, c.sound, c.everywhere ? 0 : 1);
     if (!c.run.none()) {  // the flinch cuts what it was doing
@@ -1570,7 +1599,8 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
     m.pain_at = s.level_time;
     // The flinch: held until its pain frames have played (pose_monster sets the end from the
     // run it picks). At skill 3 none, but the hornet's.
-    const bool flinch = skill(s) < 3 || k.classname == std::string_view("monster_boss2");
+    const bool flinch =
+        skill(s) < 3 || k.pain_at_3 || k.classname == std::string_view("monster_boss2");
     if (flinch) {
       m.pain_hold = s.level_time + 0.3;  // a kind with no pain frames
       m.pose.cue_pain = true;

@@ -51,7 +51,17 @@ sh::Vec3f aim(Q2Server& s, Q2Monster& m, const Attack& a, sh::Vec3f from) {
   return aim_at(s, a, from, aim_point(s, m, a, from));
 }
 
-int cause_of(const Q2Monster& m) { return kSqByMonster + m.kind; }
+int cause_of(const Q2Monster& m) {
+  switch (attack_of(m).words) {
+    case roster::Words::light:
+      return kSqByLaser;  // "saw the light."
+    case roster::Words::hurt:
+      return kSqByGotta;  // "that's gotta hurt."
+    case roster::Words::usual:
+      break;
+  }
+  return kSqByMonster + m.kind;
+}
 
 // A blow of `dmg` from `m` on its foe: a player hurt as by a monster, a monster as by this one.
 void hurt_foe(Q2Server& s, const Q2Monster& m, int dmg, sh::Vec3f dir) {
@@ -81,6 +91,66 @@ bool blow(Q2Server& s, Q2Monster& m, const Attack& a) {
   hurt_foe(s, m, dmg, dir);
   if (a.kick != 0 && hunted(s, m.enemy)) fight_kick(s, m.enemy, dir * float(a.kick));
   return true;
+}
+
+// A beam of a laser from `m`'s eye `i` (one of two side by side when it has two) at its enemy's
+// middle: through every body on it to the first wall, `a.damage` to each, sparks where it stops,
+// drawn as the monster's beam for this frame and the next.
+void laser(Q2Server& s, Q2Monster& m, const Attack& a, int i) {
+  const Q2Entity& e = body(s, m);
+  sh::Vec3f from = eye(e, kind(m));
+  if (a.count > 1) {
+    const sh::ViewAxes ax = sh::angle_vectors({0, e.angles.y, 0});
+    from = e.origin + ax.forward * 8.0f + ax.right * (i == 0 ? -4.0f : 4.0f) + sh::Vec3f{0, 0, 32};
+  }
+  sh::Vec3f lo, hi;
+  foe_box(s, m.enemy, lo, hi);
+  sh::Vec3f d = foe_at(s, m.enemy) + (lo + hi) * 0.5f - from;
+  sh::normalize(d);
+  const LaserEnd end = fight_laser(s, from, from + d * 2048.0f, a.damage, -1, m.entity);
+  beam_show(s, m, i, from, end.at, false);
+  if (i == 0 && random01(s) < 0.2) sound(s, m.entity, "misc/lasfly.wav", 3);
+  if (end.normal.x == 0 && end.normal.y == 0 && end.normal.z == 0) return;
+  NetEvent ev;
+  ev.kind = EventKind::point_effect;
+  ev.to = kEveryone;
+  ev.origin = end.at;
+  ev.values[0] = end.normal.x;
+  ev.values[1] = end.normal.y;
+  ev.values[2] = end.normal.z;
+  ev.values[3] = 10;
+  ev.level = 240;
+  ev.text = "te_laser_sparks";
+  event(s, std::move(ev));
+}
+
+// The brain's tongue: from 24 ahead and 16 up at its enemy's origin (else the top of his box less
+// 8, else its bottom plus 8), within 512 and 30 degrees of level, by a clear line that meets him:
+// the drain's line drawn, `a.damage` and his speed made a pull of `-a.kick` toward the brain.
+void tongue(Q2Server& s, Q2Monster& m, const Attack& a) {
+  Q2Entity& e = body(s, m);
+  const sh::Vec3f fwd = forward_of(e.angles.y);
+  const sh::Vec3f from = e.origin + fwd * 24.0f + sh::Vec3f{0, 0, 16};
+  sh::Vec3f lo, hi;
+  foe_box(s, m.enemy, lo, hi);
+  const sh::Vec3f at = foe_at(s, m.enemy);
+  const sh::Vec3f tries[3] = {at, at + sh::Vec3f{0, 0, hi.z - 8}, at + sh::Vec3f{0, 0, lo.z + 8}};
+  bool fits = false;
+  for (const sh::Vec3f& t : tries) {
+    const sh::Vec3f d = t - from;
+    const float flat = sh::length(sh::Vec3f{d.x, d.y, 0});
+    if (sh::length(d) <= 512 && std::abs(d.z) <= 0.57735f * flat) {  // tan 30°
+      fits = true;
+      break;
+    }
+  }
+  if (!fits || !reaches(s, m, m.enemy, kShotMask & ~(sh::kSqMonster | sh::kSqDeadMonster))) return;
+  sound(s, m.entity, "brain/brnatck3.wav");
+  fight_monster_line(s, "te_parasite_attack", m.entity, from, at);
+  hurt_foe(s, m, a.damage, {});
+  const sh::Vec3f pull = fwd * float(a.kick);  // `kick` negative: toward the brain
+  if (hunted(s, m.enemy)) fight_kick(s, m.enemy, pull - foe_velocity(s, m.enemy));
+  e.origin.z += 1;
 }
 
 // One frame's shots of attack `a` (`n` the shot's number in its loop).
@@ -115,19 +185,22 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
     default:
       break;
   }
+  if (a.shot == roster::Shot::plasma || a.shot == roster::Shot::spit) flash = nullptr;  // unlit
   if (flash != nullptr) {
     const sh::Vec3f to = foe_at(s, m.enemy);
     sh::Vec3f d = to - from;
     sh::normalize(d);
     fight_monster_line(
         s, flash, m.entity, from, from + d * 16.0f,
-        q2_monster_flash_value(looks_like(kind(m)), std::string_view(flash).substr(17)));
+        kind(m).flash != 0
+            ? kind(m).flash
+            : q2_monster_flash_value(looks_like(kind(m)), std::string_view(flash).substr(17)));
   }
   switch (a.fire) {
     case Fire::bolt:
       for (int i = 0; i < a.count; i++)
-        fight_monster_launch(s, m.entity, SqShot::bolt, from, aim(s, m, a, from), a.damage, a.speed,
-                             cause_of(m));
+        fight_monster_launch(s, m.entity, shot_of(a, SqShot::bolt), from, aim(s, m, a, from),
+                             a.damage, a.speed, cause_of(m));
       return;
     case Fire::grenade:
       fight_monster_launch(s, m.entity, SqShot::grenade, from, aim(s, m, a, from), a.damage,
@@ -136,8 +209,8 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
     case Fire::rockets: {
       const int volley = a.every > 0 ? a.count : 1;  // on a loop: all at once
       for (int i = 0; i < volley; i++)
-        fight_monster_launch(s, m.entity, SqShot::rocket, from, aim(s, m, a, from), a.damage,
-                             a.speed, cause_of(m));
+        fight_monster_launch(s, m.entity, shot_of(a, SqShot::rocket), from, aim(s, m, a, from),
+                             a.damage, a.speed, cause_of(m));
       return;
     }
     case Fire::pellets: {
@@ -195,18 +268,23 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
     case Fire::leap: {  // off the ground at the enemy
       const sh::Vec3f fwd = forward_of(e.angles.y);
       e.origin.z += 1;
-      m.velocity = fwd * a.speed + sh::Vec3f{0, 0, 250};
+      m.velocity = fwd * a.speed + sh::Vec3f{0, 0, a.rise};
       m.on_ground = false;
       m.leaping = true;
       m.struck = false;
       sound(s, m.entity, kind(m).sight);
       return;
     }
+    case Fire::laser:
+      for (int i = 0; i < a.count; i++) laser(s, m, a, i);
+      return;
+    case Fire::tongue:
+      tongue(s, m, a);
+      return;
     default:
       return;
   }
 }
-
 
 SqShot shot_of(const Attack& a, SqShot usual) {
   switch (a.shot) {
