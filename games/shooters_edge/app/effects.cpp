@@ -759,6 +759,18 @@ double fade_hurt(double hurt, double dt) { return std::max(hurt - kHurtFade * dt
 
 double take_hurt(double hurt, double damage) { return std::min(hurt + 3 * damage, 150.0); }
 
+void take_powers(Screen& s, int items) {
+  s.power = (items & kItemQuad) != 0;
+  s.shield = (items & kItemPent) != 0;
+  s.suit = (items & kItemSuit) != 0;
+  s.stealth = (items & kItemRing) != 0;
+  s.powerup = s.power     ? Powerup::quad
+              : s.suit    ? Powerup::suit
+              : s.stealth ? Powerup::ring
+              : s.shield  ? Powerup::pent
+                          : Powerup::none;
+}
+
 void take_classic_hurt(double& strength, double rgb[3], double armour, double blood) {
   const double count = std::max(kHurtCountMin, 0.5 * armour + 0.5 * blood);
   strength = std::min(strength + 3 * count, kClassicHurtMost);
