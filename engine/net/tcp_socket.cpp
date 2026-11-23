@@ -194,8 +194,9 @@ void tcp_pump(TcpStream& s) {
     compact(s.out, s.out_head);
   }
   uint8_t chunk[16384];
-  while (true) {
-    const auto n = ::recv(h, reinterpret_cast<char*>(chunk), static_cast<int>(sizeof chunk), 0);
+  while (s.read_budget > 0) {
+    const size_t ask = s.read_budget < sizeof chunk ? s.read_budget : sizeof chunk;
+    const auto n = ::recv(h, reinterpret_cast<char*>(chunk), static_cast<int>(ask), 0);
     if (n == 0) {
       s.closed = true;
       break;
@@ -206,6 +207,7 @@ void tcp_pump(TcpStream& s) {
     }
     s.in.insert(s.in.end(), chunk, chunk + n);
     s.received += static_cast<uint64_t>(n);
+    if (s.read_budget != SIZE_MAX) s.read_budget -= static_cast<size_t>(n);
   }
 }
 

@@ -31,7 +31,9 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "net/tcp_socket.hpp"
+#include "net/tls_stream.hpp"
 #include "progs/file.hpp"
+#include "server/web_files.hpp"
 #include "shooters_edge/net/qw_admin.hpp"
 #include "shooters_edge/net/qw_trial.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -752,6 +754,7 @@ TEST(a_downloaded_file_is_told_the_archive_it_came_out_of) {
     cc.seed = i + 1;
     if (i == 2) cc.ask[cn::ExtFamily::ge] &= ~cn::kGeDownloadOrigin;
     const std::string dir = (root / std::to_string(i) / "id1").string();
+    // NOLINTNEXTLINE(bugprone-exception-escape)
     cc.keep_file = [&, i, dir](const std::string&, const std::string& path,
                                const std::vector<uint8_t>& bytes,
                                const ge::vfs::ArchiveOrigin* origin) {
@@ -848,6 +851,75 @@ TEST(a_client_fetches_skins_from_the_server_web_address) {
   gn::tcp_close_listener(web);
 }
 
+TEST(a_client_fetches_the_map_from_the_servers_own_web_files) {
+  // sv_http_port: the server's own web files over HTTPS, under a certificate it made itself; the
+  // server info says the address (`{server}` for the host joined) and the certificate's digest
+  // (`*dlpin`); our client takes the map it lacks from there before `prespawn`, the channel idle.
+  const std::vector<uint8_t> map(200000, 0x5a);
+  std::vector<std::string> served;
+  ge::server::WebFiles wf;
+  ge::server::WebFilesConfig wc;
+  wc.port = 47614;
+  std::string error;
+  if (!ge::server::web_files_open(
+          wf, wc, gn::loopback_v4(0),
+          [&](const std::string& path, std::vector<uint8_t>& out) {
+            served.push_back(path);
+            if (!path.starts_with("qw/maps/") || !path.ends_with(".bsp")) return false;
+            out = map;
+            return true;
+          },
+          error)) {
+    ge::test::skip("no loopback TCP port 47614 here: " + error);
+    return;
+  }
+  cn::ServerConfig cfg;
+  cfg.gamedir = "qw";
+  cfg.web_url = wf.url;
+  cfg.web_pin = wf.pin;
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cfg));
+  CHECK(cn::info_get(rig.server.serverinfo, "*dlserver") == "https://{server}:47614/");
+  CHECK(cn::info_get(rig.server.serverinfo, "*dlpin") == wf.pin);
+  CHECK(cn::info_get(rig.server.serverinfo, "sv_dlURL").empty());  // no real host to tell others
+  gn::Transport ct;
+  gn::open_sim_transport(ct, rig.net, gn::sim_address(1, cn::kPortClient));
+  cn::ClientConfig cc;
+  cc.name = "fast";
+  cc.qport = 301;
+  cc.fetch_content = true;
+  cc.read_file = [](const std::string&, const std::string& path) {
+    return path.starts_with("maps/") ? std::vector<uint8_t>() : std::vector<uint8_t>(10, 1);
+  };
+  std::vector<std::string> kept;
+  cc.keep_file = [&kept](const std::string&, const std::string& path,
+                         const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin*) {
+    kept.push_back(path + ":" + std::to_string(bytes.size()));
+  };
+  cn::QwClientEnd c;
+  // The simulated server's address read as loopback's host: `{server}` is the host joined.
+  cn::client_start(c, ct, gn::sim_address(0, cn::kPortServer), cc, 0);
+  for (int f = 0; f < 1500 && c.stage != cn::ClientStage::active; f++) {
+    if (c.web.on && c.web.base.find("{server}") == std::string::npos &&
+        c.web.base.find("127.0.0.1") == std::string::npos)
+      c.web.base = "https://127.0.0.1:47614/";
+    ge::server::web_files_frame(wf, static_cast<double>(rig.now) / 1e6);
+    rig.frame();
+    cn::client_tick(c, rig.now);
+  }
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+  std::string said;
+  for (const std::string& l : c.web.said) said += l + "\n";
+  for (const std::string& l : kept) said += "kept " + l + "\n";
+  for (const std::string& l : served) said += "served " + l + "\n";
+  CHECK_MSG(kept.size() == 1 && kept[0].ends_with(".bsp:200000"), said);
+  // The map alone and its list (none here); no packed form asked of the server's own files.
+  CHECK_MSG(served.size() == 3 && served[1] == "qw/maps/arena.bsp", said);
+  CHECK(c.dl.name.empty() && c.web.pin.size() == 32);
+  ge::server::web_files_close(wf);
+}
+
 TEST(a_chunk_out_of_band_is_taken_in_the_stock_layout_and_never_printed) {
   // A stock server sends a download's chunks beyond the first out of band: 0xffffffff, a print
   // ('n') whose text starts `\chunk`, the download's number, the download message's id (41), the
@@ -864,7 +936,7 @@ TEST(a_chunk_out_of_band_is_taken_in_the_stock_layout_and_never_printed) {
   c[0].dl.active = c[0].dl.chunked = true;
   c[0].dl.number = 5;
   c[0].dl.size = 3 * 1024;
-  c[0].dl.bytes.assign(3 * 1024, 0);
+  c[0].dl.bytes.assign(size_t{3} * 1024, 0);
   c[0].dl.have.assign(3, false);
   c[0].dl.asked.assign(3, c[0].now + 100);  // asked for already: the tick asks for nothing more
   const auto send_chunk = [&](int32_t number, int32_t chunk, uint8_t fill) {

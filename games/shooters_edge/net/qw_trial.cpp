@@ -125,7 +125,8 @@ TrialReport run_qw_trial(const TrialOptions& opt) {
   cfg.antilag = opt.antilag ? 2 : 0;  // every shot's line, as a mod that marks none needs
   cfg.seed = opt.seed;
   cfg.maxrate = opt.maxrate;
-  const std::vector<ServedFile> figure_files = trial_figure_files();
+  std::vector<ServedFile> figure_files = trial_figure_files();
+  if (!opt.lit.empty()) figure_files[2].bytes = opt.lit;
   if (opt.figures) {
     // Read on demand, as a dedicated server reads its game folder, never preloaded.
     cfg.read_file = [&figure_files](const std::string& path, std::vector<uint8_t>* out) {
