@@ -151,6 +151,52 @@ std::string track_path(const std::string& game_dir, int track) {
   return std::filesystem::is_regular_file(p, ec) ? p.string() : std::string{};
 }
 
+namespace {
+
+// `name` as a key: `\` as `/`, no leading or doubled `/`, lower case, a music extension dropped.
+std::string music_key(std::string_view name) {
+  std::string k;
+  for (const char c : name) {
+    const char d = c == '\\' ? '/' : c;
+    if (d == '/' && (k.empty() || k.back() == '/')) continue;
+    k += d;
+  }
+  k = lower(k);
+  for (const std::string_view ext : {".flac", ".opus", ".ogg", ".mp3", ".wav"})
+    if (k.size() > ext.size() && k.ends_with(ext)) {
+      k.resize(k.size() - ext.size());
+      break;
+    }
+  return k;
+}
+
+}  // namespace
+
+std::string music_file(const std::string& game_dir, std::string_view name) {
+  const std::string key = music_key(name);
+  if (game_dir.empty() || key.empty() || key.find("..") != std::string::npos) return {};
+  const std::filesystem::path root = std::filesystem::path(game_dir) / "music";
+  std::error_code ec;
+  if (!std::filesystem::is_directory(root, ec)) return {};
+  std::vector<std::pair<std::string, std::filesystem::path>> found;  // A to Z without case
+  for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
+       !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+    const std::filesystem::path& p = it->path();
+    if (p.filename().string().starts_with('.')) {
+      if (it->is_directory(ec)) it.disable_recursion_pending();
+      continue;
+    }
+    if (!it->is_regular_file(ec) || lower(p.extension().string()) != ".flac") continue;
+    std::string rel = p.lexically_relative(root).generic_string();
+    rel.resize(rel.size() - 5);  // ".flac"
+    if (lower(rel) == key)
+      found.emplace_back(lower(p.lexically_relative(root).generic_string()), p);
+  }
+  if (found.empty()) return {};
+  std::sort(found.begin(), found.end());
+  return found.front().second.string();
+}
+
 int q2_remap_track(std::string_view game_folder, int track) {
   if (track < 2 || track > 11) return track;
   if (game_folder == "rogue") return track + 10;

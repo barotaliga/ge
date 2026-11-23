@@ -908,6 +908,10 @@ void user_info_step(Remote& r) {
   const std::string password = r.setting("password");
   if (r.q2) {
     Q2ClientConfig& q = r.q2->cfg;
+    if (const std::string f = r.setting("cl_footsteps"); !f.empty()) {  // told on protocol 36
+      q.no_footsteps = std::atoi(f.c_str()) == 0;
+      q2_client_settings(*r.q2);
+    }
     if ((rate <= 0 || rate == q.rate) && password == q.password) return;
     if (rate > 0) q.rate = rate;
     q.password = password;

@@ -14,7 +14,7 @@ q2-sp-gaps.md).
 | --- | --- | --- | --- | --- | --- |
 | Client commands (what a player types; the game library answers them) | 35 | 0 | 0 | 2 | 37 |
 | Server commands (`sv <word>` typed at the server console) | 6 | 0 | 0 | 0 | 6 |
-| Cvars the game library registers or reads | 43 | 3 | 0 | 0 | 46 |
+| Cvars the game library registers or reads | 43 | 0 | 0 | 3 | 46 |
 | User info keys the game reads | 9 | 0 | 0 | 0 | 9 |
 | dmflags bits | 16 | 0 | 0 | 0 | 16 |
 | Items (the item list, in its order; each is also a spawnable classname) | 42 | 0 | 0 | 0 | 42 |
@@ -24,7 +24,7 @@ q2-sp-gaps.md).
 | Server console lines (what an admin reads; `dprintf`) | 36 | 0 | 0 | 2 | 38 |
 | Layouts: the status bars, the help computer, the scoreboard, the inventory, the stats | 17 | 0 | 0 | 0 | 17 |
 | Rules a player sees (behaviour not in a row above) | 44 | 0 | 0 | 0 | 44 |
-| **all** | 436 | 3 | 0 | 6 | 445 |
+| **all** | 436 | 0 | 0 | 9 | 445 |
 
 ## Client commands (what a player types; the game library answers them)
 
@@ -108,14 +108,14 @@ count: done 29, partial 10, missing 7, not-taken 0
 | cvar.cheats | `cheats` 0 (SI, L) | allows the cheat commands in deathmatch and co-op | done | q2_commands.cpp: server info, latched; q2_server.cpp applies latched settings as each map starts |
 | cvar.gamename | `gamename` baseq2 (SI, L) | the game's name in the server info, for browsers | done | q2_commands.cpp: baseq2, server info, latched |
 | cvar.gamedate | `gamedate` build date (SI, L) | the build date in the server info | done | q2_commands.cpp: server info, latched; a fixed date so every build serves the same info |
-| cvar.maxclients | `maxclients` 4 (SI, L) | player slots; forced to at least 1 | partial | net/q2_net_server.hpp default 8 (S35); q2_native.cpp passes it to a library |
-| cvar.maxspectators | `maxspectators` 4 (SI) | the most spectators at once (a separate count, players' slots shared) | partial | net/q2_game.cpp synonym of `sv_maxspectators`, default 0 meaning "spectators take free slots" (differs in default and meaning) |
+| cvar.maxclients | `maxclients` 4 (SI, L) | player slots; forced to at least 1 | not-taken | Our design (regraded 2026-11-23, no `partial` grade): net/q2_net_server.hpp default 8 (S35); q2_native.cpp passes it to a library |
+| cvar.maxspectators | `maxspectators` 4 (SI) | the most spectators at once (a separate count, players' slots shared) | not-taken | Our design (regraded 2026-11-23, no `partial` grade): net/q2_game.cpp synonym of `sv_maxspectators`, default 0 meaning "spectators take free slots" (differs in default and meaning) |
 | cvar.deathmatch | `deathmatch` 0 (L) | deathmatch rules | done | q2_monsters.cpp, q2_server.cpp |
 | cvar.coop | `coop` 0 (L) | co-op rules (ignored when deathmatch is on) | done | q2_targets.cpp |
 | cvar.coop_pickup_weapons | `coop_pickup_weapons` 1 (A) | co-op: a weapon already held may be picked up again for its ammo | done | q2_server.cpp |
 | cvar.coop_elevator_delay | `coop_elevator_delay` 1.0 (A) | co-op: a plat waits this long before rising | done | q2_map.cpp |
 | cvar.skill | `skill` 1 (L) | 0 easy .. 3 hard+; clamped and forced back at each map | done | q2_server.cpp, q2_monsters.cpp |
-| cvar.maxentities | `maxentities` 1024 (L) | the entity slots | partial | q2_commands.cpp: 1024, latched, kept for configs; this server sizes itself to the map and caps nothing |
+| cvar.maxentities | `maxentities` 1024 (L) | the entity slots | not-taken | Our design (regraded 2026-11-23, no `partial` grade): q2_commands.cpp: 1024, latched, kept for configs; this server sizes itself to the map and caps nothing |
 | cvar.g_footsteps | `g_footsteps` 1 (A) | when players' footsteps sound | done | q2_commands.cpp |
 | cvar.g_monsterfootsteps | `g_monsterfootsteps` 0 (A) | monsters' footsteps | done | q2_commands.cpp, q2_monster_steps.cpp |
 | cvar.g_fix_triggered | `g_fix_triggered` 0 | a monster waiting for a trigger nothing names stands from the start (and the console note `fixed TRIGGERED flag on ...`) | done | q2_commands.cpp, q2_monsters.cpp; the reference game has neither this setting nor a line for it, so ours prints none (the trigger_once line is con.fixed-triggered) |

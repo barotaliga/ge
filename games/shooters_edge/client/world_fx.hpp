@@ -384,6 +384,8 @@ inline FxState fx_state_for(const PlaceNames* places) {
 struct FxFrame {
   effects::Particles births;
   std::vector<uint8_t> areas;  // the areas the world draws (FxScene::areas); empty, all
+  // Each light style's pattern the world plays (FxScene::light_styles); "" steady.
+  std::array<std::string, kDemoLightStyles> light_styles;
   std::vector<effects::Light> lights;
   double blend[4] = {0, 0, 0, 0};  // the screen's: sRGB colour and share
   // The same without a lava's or a slime's tint, for a look that draws the liquid round the eye.
@@ -446,6 +448,9 @@ struct FxScene {
   // Quake II's areas the eye sees, a bit each (a recording's frame, the listen server's open
   // portals); empty, every area. Passed on in FxFrame::areas for the world's draw.
   std::vector<uint8_t> areas;
+  // The level's light styles (demo.hpp's DemoState::light_styles, the rules' world): passed on in
+  // FxFrame::light_styles for the world's draw. Empty: every style steady.
+  std::span<const std::string> light_styles;
   const LoadedMap* map = nullptr;         // the map's faces (marks, floors, what a blast hit)
   const sh::Server* server = nullptr;     // the brush entities an explosion's floor is traced
                                           // through too (null: the map's world alone)

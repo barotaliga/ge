@@ -205,3 +205,46 @@ TEST(the_music_command_plays_a_track_by_hand_then_the_levels_again) {
   CHECK(m.player.playing().empty() && m.track == 3);
   audio::music_frame(m, synth, con);
 }
+
+// A track by NAME (`file_of`): `music play <name>`, a level's music named by its server; a game
+// whose switch off pauses its music (`off_pauses`); a movie stops the music and forgets it.
+TEST(music_by_name_a_switch_that_pauses_and_a_movie_that_stops_it) {
+  const std::string path = write_track();
+  audio::Synth synth;
+  ge::console::Console con;
+  audio::MusicConsole m;
+  audio::add_music_commands(con, m);
+  m.track_of = [&path](int track) { return track == 3 ? path : std::string{}; };
+  m.file_of = [&path](const std::string& name) {
+    return name == "Theme" || name == "theme" ? path : std::string{};
+  };
+  con.execute("music play Theme");
+  CHECK(m.manual == -1 && !m.player.playing().empty() && !m.player.loops());
+  con.execute("music info");
+  CHECK(con.output().back().rfind("Playing Theme (", 0) == 0);
+  con.execute("music play nothere");
+  CHECK(con.output().back() == "No such track: nothere");
+  con.execute("music stop");
+  audio::play_level_named(m, "theme");  // a server names its level's track
+  CHECK(m.named == "theme" && m.track == 0 && m.player.loops());
+  audio::play_level_named(m, "THEME");  // the same name without case: plays on
+  CHECK(m.named == "theme");
+  m.off_pauses = true;  // the switch off pauses where it is, on resumes it there
+  m.enabled = false;
+  audio::music_frame(m, synth, con);
+  CHECK(m.player.paused() && !m.player.playing().empty());
+  m.enabled = true;
+  audio::music_frame(m, synth, con);
+  CHECK(!m.player.paused() && !m.player.playing().empty());
+  m.held = true;  // a movie: the music stopped and forgotten
+  audio::music_frame(m, synth, con);
+  CHECK(m.player.playing().empty() && m.named.empty() && m.track == 0);
+  m.held = false;
+  audio::music_frame(m, synth, con);
+  CHECK(m.player.playing().empty());  // the next level's track starts it again
+  audio::play_level_named(m, "theme");
+  CHECK(!m.player.playing().empty());
+  audio::play_level_named(m, "");  // none named: stopped
+  CHECK(m.player.playing().empty());
+  audio::music_frame(m, synth, con);
+}
