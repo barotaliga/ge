@@ -56,11 +56,11 @@ count); `missing` not in our tree or different where it matters (ranked in its n
 | Server settings (cvars) with their defaults | 113 | 0 | 57 | 170 |
 | Server-to-client messages (svc) and protocol extensions the server writes | 46 | 1 | 6 | 53 |
 | What the server accepts from clients | 45 | 0 | 12 | 57 |
-| The game library interface | 63 | 2 | 23 | 88 |
+| The game library interface | 65 | 1 | 22 | 88 |
 | Messages a player sees (refusals, drops, prints), quoted exactly | 62 | 0 | 9 | 71 |
 | Messages an admin sees on the server console, quoted exactly | 30 | 0 | 6 | 36 |
 | Server features beyond single words | 43 | 0 | 11 | 54 |
-| **all** | 511 | 3 | 148 | 662 |
+| **all** | 513 | 2 | 147 | 662 |
 
 ## 1. Server console commands (the operator's words)
 
@@ -584,8 +584,8 @@ done 63, missing 2, not-taken 23
 | api.export.ServerCommand | `ServerCommand` | The `sv` word. | done | (cmd.sv) |
 | api.export.edicts | entity array, size, count, max | Checked: `Game library returned bad size of edict_t`, `Game library returned bad number of max_edicts`, `Game library corrupted maxclients value`. | done | Same meaning in our words: the host checks a library's entities and says so in its own words. |
 | api.ping | each client's ping given to the library | Before each frame, by `sv_calcpings_method`. | done | `run_frame` (`server/q2_native.cpp`) gives the measured ping; `shooters_edge_q2_native_test` |
-| api.apiversion | version 3 or 3302 | `Game library is version <n>, expected 3 or 3302`. | not-taken | Tail (decided 2026-11-23), hosted game libraries only: `q2_native.cpp` accepts 3 only (`kNativeVersion`) |
-| api.newgame | the second interface (version 3302) | A library built on the newer client and move records (and the newer move), the same calls otherwise. | missing | Added (upstream) |
+| api.apiversion | version 3 or 3302 | `Game library is version <n>, expected 3 or 3302`. | done | `games/shooters_edge/server/q2_native.cpp` (`load_native_q2`): 3 and 3302 taken, any other refused with both named |
+| api.newgame | the second interface (version 3302) | A library built on the newer client and move records (and the newer move), the same calls otherwise. | done | `server/q2_native_abi.hpp` (`NativeMoveStateNew`, `NativePlayerNew`, `NativeClientHeadNew`, `NativeMoveBlockNew`), `NativeHost::new_interface` and `with_player`, `q2_native_calls.cpp` (`run_pmove`: 32-bit state, the ground plane, the ladder's mask and flag); `plugins/classic/q2_move.hpp` (`coord_bits`, `time_shift`, `ladder_mask`, `ladder_flag`); the 3302 fixture game (tests/shooters_edge_q2_native_test.cpp). The move's other traces pass the player's own mask (a dead player's or a living one's): derived, not read |
 | api.loadlib | the library from `<dir>/<game>/game<cpu>.<ext>` | `sys_forcegamelib` first, then the home and the library folders for the game folder, then for the base folder; `Loaded game library from <path>`, `Failed to load game library: <error>`. | done | Same meaning in our words: the host loads the library path it is given and names a failure in its own words. |
 | api.ex | the extended interface (`GetGameAPIEx`) | Extended imports and exports, versions 1 to 3 (2 added entity customizing, 3 the per-client visibility call). | done | games/shooters_edge/server/q2_native.cpp: `GetGameAPIEx` after the stock entry and before `Init`, our table at version 3, the game's taken at 1 or more; tests/shooters_edge_q2_native_test.cpp |
 | api.ex.local_sound | `local_sound` | A sound to one client only. | done | games/shooters_edge/server/q2_native_calls.cpp (`x_local_sound`): to the target alone on its own entity, reliable with the reliable channel bit |

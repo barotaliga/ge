@@ -19,6 +19,7 @@
 // ge:keywords game-library native-game-library gamelib abi entry-point imports exports edict
 // ge:keywords entity-head player-state move-block trace-result cvar-record m18v10
 // ge:keywords getgameapiex extended-game-interface g_features sv_features filesystem-api
+// ge:keywords newer-game-interface version-3302 ground-plane content-mask on-ladder
 // ge:skill shooter mod
 // ge:test tests/shooters_edge_q2_native_test.cpp
 #pragma once
@@ -256,6 +257,79 @@ struct NativeExports {
 
 using NativeEntryFn = NativeExports* (*)(NativeImports* imports);
 
+// THE NEWER INTERFACE (version `kNativeVersionNew`;
+// porting/shooters-edge/q2-server-batch13-facts.md § C): the same two tables of calls and the same
+// entity head, with a wider move state, a larger player state and client record, and a move record
+// that carries the ground plane and a trace that takes a content mask. The server tells the two
+// apart by the export table's version alone.
+inline constexpr int kNativeVersionNew = 3302;
+inline constexpr int kNativeStatsNew = 64;
+
+// The packed move state (40 bytes): eighths of a unit in 32 bits, the flags and timer (in ms on
+// an extended server, else in 8 ms) in 16.
+struct NativeMoveStateNew {
+  int32_t type;
+  int32_t origin[3];
+  int32_t velocity[3];
+  uint16_t flags;
+  uint16_t time;
+  int16_t gravity;
+  int16_t delta_angles[3];
+};
+
+// The player's state (352 bytes): the original's fields, a damage blend, fog and height fog, and
+// 64 stats.
+struct NativePlayerNew {
+  NativeMoveStateNew move;
+  float view_angles[3];
+  float view_offset[3];
+  float kick_angles[3];
+  float gun_angles[3];
+  float gun_offset[3];
+  int32_t gun_index;
+  int32_t gun_frame;
+  int32_t reserved1[2];
+  float blend[4];
+  float damage_blend[4];
+  float fog_colour[3], fog_density, fog_sky_factor;
+  float height_fog_start[4];  // a colour and its distance
+  float height_fog_end[4];
+  float height_fog_density, height_fog_falloff;
+  float fov;
+  int32_t rdflags;
+  int32_t reserved2[2];
+  int16_t stats[kNativeStatsNew];
+};
+
+// The head of a client record (360 bytes): the player state, the ping, the client's number.
+struct NativeClientHeadNew {
+  NativePlayerNew ps;
+  int32_t ping;
+  int32_t client_num;
+};
+
+using NativeTraceMaskFn = NativeTrace (*)(const float* start, const float* mins, const float* maxs,
+                                          const float* end, int32_t mask);
+
+// The block the game hands the move (416 bytes): the ground plane after the ground entity, and a
+// trace with a content mask (the ladder probe's).
+struct NativeMoveBlockNew {
+  NativeMoveStateNew s;
+  NativeCmd cmd;
+  int32_t snapinitial;
+  int32_t numtouch;
+  NativeEntityHead* touchents[kNativeTouch];
+  float view_angles[3];
+  float view_height;
+  float mins[3], maxs[3];
+  NativeEntityHead* groundentity;
+  NativePlane groundplane;
+  int32_t watertype;
+  int32_t waterlevel;
+  NativeTraceMaskFn trace;
+  NativeContentsFn pointcontents;
+};
+
 // THE EXTENDED INTERFACE (porting/shooters-edge/q2-game-api-ex-facts.md): a second, optional entry
 // point, `kNativeEntryEx`, called after the first and before `init` with the server's extended
 // table (`NativeImportsEx`, version `kNativeVersionEx`); it returns the game's (`NativeExportsEx`),
@@ -342,6 +416,8 @@ struct NativeFilesApi {
 static_assert(sizeof(NativeState) == 84 && sizeof(NativeMoveState) == 28);
 static_assert(sizeof(NativePlayer) == 184 && sizeof(NativeCmd) == 16);
 static_assert(sizeof(NativePlane) == 20 && sizeof(NativeSurface) == 24);
+static_assert(sizeof(NativeMoveStateNew) == 40 && sizeof(NativePlayerNew) == 352 &&
+              sizeof(NativeClientHeadNew) == 360 && offsetof(NativePlayerNew, stats) == 224);
 static_assert(sizeof(NativeCustomize) == 104 && offsetof(NativeCustomize, morefx) == 84);
 static_assert(sizeof(void*) != 8 ||
                   (sizeof(NativeEntityHead) == 280 && offsetof(NativeEntityHead, svflags) == 200 &&
@@ -351,7 +427,9 @@ static_assert(sizeof(void*) != 8 ||
                    sizeof(NativeImports) == 352 && sizeof(NativeExports) == 152 &&
                    offsetof(NativeExports, edicts) == 128 && sizeof(NativeClientHead) == 188 &&
                    sizeof(NativeImportsEx) == 56 && sizeof(NativeExportsEx) == 56 &&
-                   sizeof(NativeFilesApi) == 96),
+                   sizeof(NativeFilesApi) == 96 && sizeof(NativeMoveBlockNew) == 416 &&
+                   offsetof(NativeMoveBlockNew, groundplane) == 368 &&
+                   offsetof(NativeMoveBlockNew, trace) == 400),
               "the game library's 64-bit layout");
 
 }  // namespace shooters_edge::server::native

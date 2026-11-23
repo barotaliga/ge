@@ -167,11 +167,11 @@ void frames(Hall& h, int n) {
 }
 
 void place(Hall& h, float x, float y, float z) {
-  int16_t* o = h.p().move.origin;
+  int32_t* o = h.p().move.origin;
   o[0] = static_cast<int16_t>(x * 8);
   o[1] = static_cast<int16_t>(y * 8);
   o[2] = static_cast<int16_t>(z * 8);
-  for (int16_t& v : h.p().move.velocity) v = 0;
+  for (int32_t& v : h.p().move.velocity) v = 0;
 }
 
 float z_of(const sv::Q2Player& p) { return float(p.move.origin[2]) / 8; }
