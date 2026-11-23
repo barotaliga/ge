@@ -1470,7 +1470,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
                                                   : p.set.rocket_pitch;
         if (jumped.kind == NavKind::rocket) p.shot_pitch = shot_pitch;
         bool jumped_now = approach_jump(p, s, S, T, v, w, target, because, flip, msec,
-                                        jumped.kind == NavKind::jump);
+                                        jumped.kind == NavKind::jump, jumped.updraft);
         if (jumped_now && jumped.kind == NavKind::rocket && p.set.rocket_wait && !s.rocket_ready) {
           // (`rjready`) The launcher not up (or not ready to fire): no jump; run on, line up again.
           jumped_now = false;
@@ -1685,6 +1685,26 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       p.lip_pressed_s = p.clock_s;
       p.lip_yaw = lip_crossing(*s.world, s.origin, heading(s.velocity.x, s.velocity.y),
                                route_heading(p, s.origin, heading(s.velocity.x, s.velocity.y)));
+    }
+  }
+  // IN AN UPDRAFT: carried up on a jump into one faster than any jump rises (e3m5's air tube),
+  // held over where the link starts (an updraft's middle, map_nav.cpp's `push_links`). Steered
+  // for the landing at once, he rose by the tube's wall, and at its top the side draft over the
+  // opening caught him below it and held him to the roof for the whole map: up out of it first.
+  if (!s.onground && s.velocity.z > kUpdraft && p.mode != PilotMode::idle &&
+      p.mode != PilotMode::arrived && p.k + 1 < p.route.size()) {
+    const NavLink* ul = link_of(*p.g, p.route[p.k], p.route[p.k + 1]);
+    if (ul != nullptr && ul->updraft) {
+      const Vec3f a = node(*p.g, p.route[p.k]).origin;
+      const float dx = a.x - s.origin.x, dy = a.y - s.origin.y;
+      w.forward = 0;
+      w.side = 0;
+      if (dx * dx + dy * dy > kUpdraftHeld * kUpdraftHeld) {
+        const double rel = static_cast<double>(heading(dx, dy) - p.yaw) * (core::kPi / 180);
+        w.forward = static_cast<float>(core::libm::cos(rel));
+        w.side = static_cast<float>(-core::libm::sin(rel));
+      }
+      because = "in an updraft: up first";
     }
   }
   p.because = because;
