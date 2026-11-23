@@ -53,6 +53,20 @@ void release_of(const ge::classicenhance::Profile& content, const std::string& b
   for (const fs::directory_entry& e : fs::directory_iterator(basedir, ec))
     if (lower(e.path().filename().string()) == lower(std::string(content.base_dir)))
       base = e.path();
+  // Its mission packs: a folder beside the base folder named after one, holding its first pack
+  // (`find_pack`, any case), in the folder's order.
+  out.packs.clear();
+  for (const fs::directory_entry& e : fs::directory_iterator(basedir, ec)) {
+    const ge::classicenhance::MissionPack* m =
+        ge::classicenhance::find_pack(content, e.path().filename().string());
+    if (m == nullptr) continue;
+    for (const fs::directory_entry& f : fs::directory_iterator(e.path(), ec))
+      if (lower(f.path().filename().string()) == ge::classicenhance::pack_name(content, 0)) {
+        out.packs.push_back(m);
+        break;
+      }
+  }
+  std::sort(out.packs.begin(), out.packs.end());
   const KnownReleasePack* sample = nullptr;
   const KnownReleasePack* full = nullptr;
   if (!base.empty()) {
@@ -142,7 +156,13 @@ int pick_install(const std::vector<FoundInstall>& found, const std::string& kept
 std::string install_line(const FoundInstall& f, int n) {
   std::string line = std::to_string(n) + "  ";
   line += f.content != nullptr ? std::string(f.content->what) : std::string("a classic game");
-  line += " (" + f.release + ")  " + f.basedir;
+  line += " (" + f.release + ")";
+  for (size_t i = 0; i < f.packs.size(); i++)
+    line += (i == 0                    ? " with "
+             : i + 1 == f.packs.size() ? " and "
+                                       : ", ") +
+            std::string(f.packs[i]->name);
+  line += "  " + f.basedir;
   return line;
 }
 

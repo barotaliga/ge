@@ -374,12 +374,14 @@ void GameMenu::update_games(const ui::MenuInput& in, Host& host) {
       game_ask_ = {.asked = true,
                    .browse = false,
                    .id = games_.chosen().id,
-                   .install = games_.chosen().install};
+                   .install = games_.chosen().install,
+                   .pack = games_.chosen().pack};
       cue(ui::MenuCue::enter);
       return;
     case GamesAction::browse:
       cue(ui::MenuCue::enter);
-      game_ask_ = {.asked = true, .browse = true, .id = games_.chosen().id, .install = {}};
+      game_ask_ = {
+          .asked = true, .browse = true, .id = games_.chosen().id, .install = {}, .pack = {}};
       return;
     case GamesAction::none:
       return;

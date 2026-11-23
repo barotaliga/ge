@@ -104,6 +104,7 @@ struct Q2ClientConfig {
   // The view's width in degrees and the hand the weapon is held in (0 right, 1 left, 2 centred),
   // as the user info carries them (`fov`, `hand`): the window fills them from its settings.
   int fov = 90, hand = 0;
+  int msg = 1;  // the least important messages it is sent (0..3)
   // The user info's `gender` (male, female or none: how the server words his own deaths; "": not
   // sent).
   std::string gender;

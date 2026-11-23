@@ -95,6 +95,72 @@ bool inside(const std::string& path, const std::string& root) {
   return !r.empty() && (p == r || p.starts_with(r + "/"));
 }
 
+namespace {
+
+std::string pack_words(const std::vector<const ge::classicenhance::MissionPack*>& packs) {
+  std::string out;
+  for (size_t i = 0; i < packs.size(); i++) {
+    if (i > 0) out += i + 1 == packs.size() ? " and " : ", ";
+    out += std::string(packs[i]->name);
+  }
+  return out;
+}
+
+bool has_game(const content::ImportReport& r) {
+  std::error_code ec;
+  return r.base ||
+         std::filesystem::is_regular_file(
+             std::filesystem::path(r.game_dir) / ge::classicenhance::first_pack_path(*r.game), ec);
+}
+
+}  // namespace
+
+std::string take_in_words(const content::ImportReport& r, const std::string& from) {
+  const std::string game(r.game->what);
+  const std::string packs = pack_words(r.packs);
+  // What was taken: the game, the game with its packs, or the packs alone.
+  const std::string what = !r.base ? packs : r.packs.empty() ? game : game + " with " + packs;
+  // How a pack is played: over the game, from its own folder.
+  std::string play;
+  if (!r.packs.empty()) {
+    play = " Start ";
+    for (size_t i = 0; i < r.packs.size(); i++)
+      play += (i > 0 ? (i + 1 == r.packs.size() ? " or " : ", ") : "") + std::string("-game ") +
+              std::string(r.packs[i]->folder);
+    play += " to play " + std::string(r.packs.size() == 1 ? "it" : "a mission pack") + ".";
+  }
+  const bool have_game = has_game(r);
+  const std::string needs =
+      have_game ? ""
+                : " " + std::string(r.packs.size() == 1 ? "It plays" : "They play") + " over " +
+                      game + ", which is not here yet: add " + game + " too.";
+  if (r.unchanged)
+    return what + " was taken in from " + from +
+           " before and nothing there has changed: it plays from " + r.game_dir + "." + play +
+           needs;
+  int kept = 0;
+  for (const content::StoredTrack& t : r.tracks) kept += t.kept ? 1 : 0;
+  const auto count = [](size_t n, const char* one, const char* many) {
+    return std::to_string(n) + " " + (n == 1 ? one : many);
+  };
+  return "Took " + what + " in from " + from + ": " + count(r.copied.size(), "file", "files") +
+         " copied, " + count(r.same.size(), "was", "were") + " already there, " +
+         count(r.tracks.size(), "music track", "music tracks") + " (" + std::to_string(kept) +
+         " new). It plays from " + r.game_dir + "." + play + needs;
+}
+
+std::string offer_words(const content::Offer& o) {
+  return "Found " + std::string(o.pack->name) + ", a mission pack for " +
+         std::string(o.game->what) + ", in " + o.source + ". Type import \"" + o.source +
+         "\" to take it in.";
+}
+
+void offer_packs(ge::console::Console& con, const std::string& data_root) {
+  if (data_root.empty()) return;
+  for (const content::Offer& o : content::find_offers(content::store_folders(), data_root))
+    con.print(offer_words(o));
+}
+
 bool take_in(const std::string& from, const std::string& root, std::string* basedir,
              std::string* summary, std::string* error,
              const std::function<void(const std::string&)>& progress) {
@@ -117,22 +183,13 @@ bool take_in(const std::string& from, const std::string& root, std::string* base
     *error = "Could not take the game in from " + from + ": " + why;
     return false;
   }
-  *basedir = r.game_dir;
-  if (r.unchanged) {
-    *summary = std::string(r.game->what) + " was taken in from " + from +
-               " before and nothing there has changed: it plays from " + r.game_dir + ".";
-    return true;
+  *summary = take_in_words(r, from);
+  if (!has_game(r)) {  // the packs are kept; the game playing stays until its game is added
+    *error = *summary;
+    summary->clear();
+    return false;
   }
-  int kept = 0;
-  for (const content::StoredTrack& t : r.tracks) kept += t.kept ? 1 : 0;
-  const auto count = [](size_t n, const char* one, const char* many) {
-    return std::to_string(n) + " " + (n == 1 ? one : many);
-  };
-  *summary = "Took " + std::string(r.game->what) + " in from " + from + ": " +
-             count(r.copied.size(), "file", "files") + " copied, " +
-             count(r.same.size(), "was", "were") + " already there, " +
-             count(r.tracks.size(), "music track", "music tracks") + " (" + std::to_string(kept) +
-             " new). It plays from " + r.game_dir + ".";
+  *basedir = r.game_dir;
   return true;
 }
 
@@ -156,6 +213,11 @@ void add_take_in_commands(ge::console::Console& con, std::string* ask, const std
                           const bool* remap) {
   if (music != nullptr)  // its cvar and `cd` are the window's own, bound before the game's
     music->track_of = [basedir, game, remap](int track) {
+      // A mission pack's own tracks (taken off its disc) first, by the numbers its levels give.
+      if (game != nullptr && !game->empty() && game->find('/') == std::string::npos) {
+        const std::string own = content::track_path(*basedir + "/" + *game, track);
+        if (!own.empty()) return own;
+      }
       if (game != nullptr && remap != nullptr && *remap)
         track = content::q2_remap_track(*game, track);
       return content::track_path(*basedir, track);

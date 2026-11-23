@@ -173,6 +173,7 @@ class GameMenu {  // NOLINT(clang-analyzer-optin.performance.Padding): fields by
     bool browse = false;
     std::string id;       // the game picked, "" for FIND ANOTHER INSTALL
     std::string install;  // the install to open
+    std::string pack;     // a mission pack's folder to play over it, "" the game itself
   };
   GamesPage& games() { return games_; }
   bool in_games() const { return in_games_; }
