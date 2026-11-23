@@ -248,8 +248,10 @@ const shooters_edge::profiles::ItemTables& q2_tables() {
           const ItemKind kinds[] = {ItemKind::health,   ItemKind::shells,  ItemKind::nails,
                                     ItemKind::grenades, ItemKind::rockets, ItemKind::cells,
                                     ItemKind::slugs};
-          r.kind = kinds[static_cast<int>(it.ammo)];
-          keep = it.ammo != server::SqAmmo::none;
+          // A mission pack's ammo (past the base game's slugs) has no kind of the bots' own.
+          const auto a = static_cast<size_t>(it.ammo);
+          keep = it.ammo != server::SqAmmo::none && a < std::size(kinds);
+          r.kind = keep ? kinds[a] : ItemKind::health;
           break;
         }
         case server::SqKind::powerup:
