@@ -401,6 +401,54 @@ TEST(player_records_use_the_base_and_the_extended_flags) {
   }
 }
 
+TEST(the_weapon_state_follows_the_weapon_frame_under_weapon_prediction) {
+  // Agreed: a byte after the weapon frame, the state after it when nonzero (22 bytes more).
+  cn::PlayerState p;
+  p.slot = 3;
+  p.has_weaponframe = true;
+  p.weaponframe = 0;  // sent even at rest
+  p.weapon.known = true;
+  p.weapon.impulse = 7;
+  p.weapon.weapon = 4096;
+  p.weapon.clock = 12.25f;
+  p.weapon.attack_finished = 12.5f;
+  p.weapon.next_think = 12.3f;
+  p.weapon.step = 2;
+  p.weapon.ping_ms = 300;  // clamped to a byte
+  p.weapon.ammo[1] = 180;
+  cn::Ext ext = cn::first_tier();
+  CHECK(ext.has(cn::ExtFamily::mvd, cn::kMvdWeaponPred));
+  uint8_t buf[128];
+  gn::Writer w = gn::make_writer(buf, sizeof buf);
+  cn::write_playerinfo(w, p, ext);
+  const size_t with_state = w.size;
+  gn::Reader r = gn::make_reader(buf, w.size);
+  cn::PlayerState back = cn::read_playerinfo(r, ext);
+  CHECK(remaining(r) == 0);
+  CHECK(back.weapon.known && back.weapon.impulse == 7 && back.weapon.weapon == 4096);
+  CHECK(back.weapon.clock == 12.25f && back.weapon.attack_finished == 12.5f);
+  CHECK(back.weapon.next_think == 12.3f && back.weapon.step == 2);
+  CHECK(back.weapon.ping_ms == 255 && back.weapon.ammo[1] == 180 && back.weapon.ammo[0] == 0);
+  // A spectator's copy: the empty byte alone.
+  p.weapon = {};
+  w = gn::make_writer(buf, sizeof buf);
+  cn::write_playerinfo(w, p, ext);
+  CHECK(with_state == w.size + 22);
+  r = gn::make_reader(buf, w.size);
+  back = cn::read_playerinfo(r, ext);
+  CHECK(remaining(r) == 0 && !back.weapon.known);
+  // Not agreed: the weapon frame alone, as the base protocol has it.
+  ext[cn::ExtFamily::mvd] &= ~cn::kMvdWeaponPred;
+  p.weapon.known = true;
+  const size_t agreed_empty = w.size;
+  w = gn::make_writer(buf, sizeof buf);
+  cn::write_playerinfo(w, p, ext);
+  CHECK(w.size + 1 == agreed_empty);
+  r = gn::make_reader(buf, w.size);
+  back = cn::read_playerinfo(r, ext);
+  CHECK(remaining(r) == 0 && !back.weapon.known);
+}
+
 TEST(the_look_bytes_travel_under_their_bits_and_encode_as_shares) {
   // Encoding: size x 16 (16 for 1, clamped 1..255), tint x 32 a channel (0..255), see-through x
   // 254 (0 when solid), every fraction dropped.

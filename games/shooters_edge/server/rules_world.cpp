@@ -3,7 +3,7 @@
 //
 // ge:summary The QC server filling the rules' world: lists at the start, rows every frame
 // ge:keywords rules-world fill_world qc-server entity-rows player-numbers weapon-model
-// ge:keywords item_back back_in respawn-time item-respawn
+// ge:keywords item_back back_in respawn-time item-respawn weapon-prediction attack-finished
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_rules_world_test.cpp
 #include "shooters_edge/server/rules_world.hpp"
@@ -73,6 +73,9 @@ void fill_numbers(const QcServer& s, int slot, WorldClient& c) {
   n.current_ammo = field(s, e, w.currentammo);
   n.weapon = field(s, e, w.weapon);
   n.weapon_frame = field(s, e, w.weaponframe);
+  n.attack_finished = field(s, e, w.attack_finished);
+  n.next_think = field(s, e, f.nextthink);
+  n.impulse = static_cast<int>(field(s, e, f.impulse));
   n.items = field(s, e, f.items);
   n.view_z = field(s, e, f.view_ofs + 2);
   n.frags = field(s, e, f.frags);
