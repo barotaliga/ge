@@ -45,6 +45,7 @@ namespace shooters_edge::server {
 
 struct Q2Server;
 struct Q2Missile;
+struct Q2Entity;
 
 // Ground Zero's own settings (`strong_mines`, `g_disruptor`), registered only
 // when it is the pack played.
@@ -73,5 +74,40 @@ SqStep gz_hand_fire(SqHand& h, SqBody& body, bool attack, double now, bool infin
 // The weapon a body that runs dry turns to in Ground Zero: railgun, plasma beam (2 cells or more),
 // ETF rifle, chaingun, machinegun, super shotgun (2 shells or more), shotgun, blaster.
 int gz_best_weapon(const SqBody& body);
+
+// TAG (`gamerules 2` in deathmatch, q2_gz_tag.cpp): one token on the map; its holder scores 3 a
+// kill (a quad every fifth), whoever kills him scores 5 and takes it at once, and a blow neither
+// he gives nor takes is a quarter less. Dead or gone without a killer to pass it to, he throws it:
+// nobody may take it for 1 s, and it is moved to the farthest deathmatch start 30 s later (3 s
+// when it lies in lava or slime). The holder trails the token's light and shows `tag3` on the
+// scoreboard. `randomrespawn 1`: an item taken comes back as another of its kind.
+inline constexpr int kGzTagTrailEffect = 0x20000000;
+
+// `gamerules` and `randomrespawn` (gz_cvars registers them).
+void gz_tag_cvars(Q2Server& s);
+// Whether the tag game is played: Ground Zero, deathmatch and `gamerules` 2.
+bool gz_tag_on(const Q2Server& s);
+// Whether item row `item` is the tag token.
+bool gz_tag_token(int item);
+// Whether item row `item` is left off the map: the token, whenever tag is not played.
+bool gz_tag_left_out(const Q2Server& s, int item);
+// Player `slot` touches item row `item`: true (and taken when he lives) when it is the token.
+bool gz_tag_take(Q2Server& s, int slot, int item);
+// The map's start (its items on the floor): a token at a start when the map placed none.
+void gz_tag_start(Q2Server& s);
+// Player `slot` died to `killer` (`by_killer`: the kill is the killer's): true when tag scored it;
+// the holder's token passed to his killer or thrown.
+bool gz_tag_kill(Q2Server& s, int slot, int killer, bool by_killer);
+// Player `slot` leaves: the token he holds thrown.
+void gz_tag_left(Q2Server& s, int slot);
+// A blow's `damage` under tag (the same outside it).
+int gz_tag_damage(const Q2Server& s, int target, int attacker, int damage);
+// Whether player `slot` holds the token.
+bool gz_tag_holder(const Q2Server& s, int slot);
+// A tenth: a thrown token looked at after 1 s and moved when its time comes.
+void gz_tag_frame(Q2Server& s);
+// An item `e` taken and shown again: under `randomrespawn`, another of its kind. True when it was
+// swapped.
+bool gz_random_respawn(Q2Server& s, Q2Entity& e);
 
 }  // namespace shooters_edge::server

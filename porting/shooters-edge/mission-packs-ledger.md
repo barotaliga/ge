@@ -395,15 +395,15 @@ count: done 29, verify 4, missing 49 (19 / 26 / 4), not-taken 0
 | gz.obits | the new weapons' and monsters' obituaries, word for word | done | 1 | server/q2_combat.cpp (`sq_obituary`): the six weapons and the A-M bomb; the monsters' with gz.ai |
 | gz.tesla | the tesla mine thrown from the inventory, its zaps | done | 1 | server/q2_gz_weapons.cpp; not yet shot down by damage (a partial: batch 2) |
 | gz.nuke | the A-M bomb thrown, its countdown and blast | done | 1 | server/q2_gz_weapons.cpp, server/q2_use.cpp; no screen flash yet (batch 2) |
-| gz.tag | the tag game (`gamerules 2`): the token, the bonus, three frags a kill while it, the lines | missing | 2 | LIFT with Dissolution's tag |
+| gz.tag | the tag game (`gamerules 2`): the token, the bonus, three frags a kill while it, the lines | done | 2 | `server/q2_gz_tag.cpp`: the token placed or made at a start, its prize, +3 a kill and a quad every fifth, +5 for the holder's killer who takes it, thrown and moved, blows a quarter less, the trail and `tag3`; facts `q2-packs-dm-facts.md`. No lift: Dissolution's tag runs in its own QC program. Not taken: the holder kept across a map change |
 | gz.dmflag.131072 | `dmflags` 131072: no A-M bombs, teslas or prox mines | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
 | gz.dmflag.262144 | `dmflags` 262144: quad and double damage do not stack | done | 2 | server/q2_powers.cpp (`fight_multiplier`) |
 | gz.dmflag.524288 | `dmflags` 524288: no A-M bombs | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
 | gz.dmflag.1048576 | `dmflags` 1048576: no spheres | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
 | gz.cvar.huntercam | `huntercam` (1): the hunter sphere's chase camera | missing | 2 | a setting of the pack's rules |
 | gz.cvar.strong_mines | `strong_mines` (0): mines laid under quad or double keep it their whole time | done | 3 | server/q2_gz_rules.cpp, server/q2_gz_weapons.cpp (the mine's time) |
-| gz.cvar.randomrespawn | `randomrespawn` (0): a deathmatch item comes back as another of its kind | missing | 3 |  |
-| gz.cvar.gamerules | `gamerules` (0; 2 is tag) | missing | 2 |  |
+| gz.cvar.randomrespawn | `randomrespawn` (0): a deathmatch item comes back as another of its kind | done | 3 | `gz_random_respawn`: health and armour by their odds, the rest one of its kind; the screens, the small health, the shard, the bandolier, the pack and the head kept |
+| gz.cvar.gamerules | `gamerules` (0; 2 is tag) | done | 2 | latched; any other value plays as 0 |
 | gz.campaign | the five units in order (the release's `runit2`..`runit5` configs start one), the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp |
 | gz.movies | the pack's movies (`rintro`, `reu1_`..`reu4_`, `rend`, the logo) | verify | 2 | client/cinematic.hpp |
 | gz.hud | the pack's icons on the HUD and in the inventory (`w_chainfist`, `w_etf_rifle`, `w_proxlaunch`, `w_disintegrator`, `w_heatbeam`, `w_tesla`, `p_double`, `p_ir`, the spheres, `p_doppleganger`, `p_nuke`, `a_flechettes`, `a_prox`, `a_tesla`, `a_disruptor`, `i_tagtoken`) | verify | 2 | pictures named by the rules' configstrings |
@@ -486,7 +486,7 @@ count: done 0, verify 0, missing 1, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| gz.ent.dm_tag_token | `dm_tag_token` | the tag game's token (`gamerules 2`) | 4 / 4 | missing | 2 | not in our rules; LIFT: one tag mode with Dissolution's |
+| gz.ent.dm_tag_token | `dm_tag_token` | the tag game's token (`gamerules 2`) | 4 / 4 | done | 2 | left off the map unless tag is played (`gz_tag_left_out`) |
 
 #### Map things
 

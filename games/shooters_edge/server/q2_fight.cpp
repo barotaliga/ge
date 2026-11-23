@@ -433,6 +433,10 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
       fight_anyflag(s, 256))
     damage = 0;
   if (damage > 0) damage = q2_mods_damage(s, target, attacker, damage);  // the push still lands
+  if (damage > 0) {  // Ground Zero's tag: a blow the holder has no part in is a quarter less
+    damage = gz_tag_damage(s, target, attacker, damage);
+    if (damage == 0) return;  // and one that comes to nothing does not push either
+  }
   if (fight_midair(s)) {
     midair_hurt(s, target, attacker, dir, damage, knockback, energy, weapon, no_armour);
     return;
@@ -1515,10 +1519,13 @@ void fight_kill(Q2Server& s, int slot, int killer, int weapon) {
       line = sq_obituary(victim, other ? name_of(s, killer) : std::string(), killer == slot, weapon,
                          s.blow_how, gender, &by_killer);
     if (deathmatch(s) && !fight_midair(s)) {
-      if (by_killer)
+      if (gz_tag_kill(s, slot, killer, by_killer)) {
+        // Ground Zero's tag scored it (and passed or threw the token)
+      } else if (by_killer) {
         s.players[killer].frags += fight_teammates(s, killer, slot) ? -1.0f : 1.0f;
-      else
+      } else {
         p.frags -= 1;
+      }
     } else if (deathmatch(s) && !other) {
       p.frags -= 1;
     }
@@ -1704,6 +1711,7 @@ void fight_rows(Q2Server& s) {
     e.modelindex = s.item_models[size_t(d.item)];
     e.turns = sq_turns(d.item);
     e.effects = e.turns ? kSqTurnEffect : 0;
+    if (gz_tag_token(d.item)) e.effects |= kGzTagTrailEffect;
     e.render_fx = kSqGlowRender;  // a dropped item's light pulses too
     sq_dress(s, e);
   }

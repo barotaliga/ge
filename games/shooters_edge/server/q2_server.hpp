@@ -138,6 +138,7 @@ struct Q2Entity {
   sh::Vec3f avelocity, adest, closed_angles, open_angles, axis;
   bool hidden = false, gone = false;
   bool coop_taken = false;  // a staying weapon some coop player has taken (coop_pickup_weapons)
+  bool picked = false;      // taken, and to come back (Ground Zero's `randomrespawn` swaps it)
   bool solid = false;       // a brush that stops moves and shots (a mover, a wall present)
   bool trigger = false;     // touched when a living player's box overlaps it
   // Drawn as a teleporter's disc though a trigger or a point: 1 the pad (skin 1, its rising
@@ -537,6 +538,11 @@ struct Q2Server : RulesCommon {
   std::vector<std::string> obituaries;      // every death's line, in order (the tests, the lab)
   std::vector<sh::Packet> rj_packets;       // a frame's packets as the rocket jump helper left them
   Q2Drop drops[kQ2Drops];
+  // Ground Zero's tag game (q2_gz_tag.cpp): the token's holder (-1 none), his kills toward the next
+  // quad, and when a dropped token is moved to a far start (0 not due) and whether it was.
+  int tag_holder = -1, tag_kills = 0;
+  double tag_move_at = 0;
+  bool tag_moved = false;
   Q2Body bodies[kQ2Bodies];
   Q2Gib gibs[kQ2Gibs];
   int next_gib = 0;                   // the gib slot the next piece takes
