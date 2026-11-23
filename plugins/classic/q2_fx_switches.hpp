@@ -37,8 +37,7 @@
 //   lit evenly, `gl_coloredlightmaps` the walls' light's colour, `gl_dlight_falloff` a flash's
 //   edge on the walls (1 soft, 0 hard; -1 the renderer's own), `cl_lerp_lightstyles` 1 the styles
 //   blended between letters; `cl_rollhack` 1 the other players lean the game's own way.
-// - `gl_celshading` an ink line round each solid model, pixels (`q2_outline_px`);
-//   `cl_smooth_explosions` 0 an explosion moved on by whole frames (`q2_blast_age`).
+// - `cl_smooth_explosions` 0 an explosion moved on by whole frames (`q2_blast_age`).
 //
 // ge:summary Quake II's effect switches: specks, explosions, lights and muzzle flashes left out
 // ge:keywords q2 cl_disable_particles cl_disable_explosions cl_dlight_hacks cl_muzzlelight_time
@@ -48,7 +47,7 @@
 // ge:keywords gl_partscale gl_partstyle gl_partshape gl_beamstyle gl_drawsky gl_bilerp_skies
 // ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_modulate_world
 // ge:keywords gl_modulate_entities gl_doublelight_entities gl_coloredlightmaps gl_dotshading
-// ge:keywords cl_lerp_lightstyles cl_rollhack gl_celshading q2_outline_px cl_smooth_explosions
+// ge:keywords cl_lerp_lightstyles cl_rollhack cl_smooth_explosions
 // ge:keywords q2_blast_age
 // ge:skill classic shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
@@ -96,14 +95,8 @@ struct Q2FxSwitches {
   bool lerp_styles = false;                  // cl_lerp_lightstyles
   bool roll_hack = false;                    // cl_rollhack (Quake II's 1)
   int dlight_falloff = -1;                   // gl_dlight_falloff (-1: the renderer's own)
-  double cel_shading = 0;                    // gl_celshading, pixels (0: none)
   bool smooth_explosions = true;             // cl_smooth_explosions
-  double glowmap_intensity = 0.75;           // gl_glowmap_intensity
 };
-
-// A glow map's light on a model (gl_glowmap_intensity): its colour times twice the setting, added
-// whatever the light round it.
-inline float q2_glow_map_gain(double intensity) { return static_cast<float>(2 * intensity); }
 
 // gl_partscale's share of a speck's own size `depth_units` in front of the eye: 1 at the default
 // 2 within 20 units, past them 1 and 0.004 a unit of the whole depth (5 at 1000 units), times
@@ -112,19 +105,6 @@ inline double q2_speck_scale(const Q2FxSwitches& s, double depth_units) {
   if (s.part_scale <= 0) return 1;
   const double grown = depth_units > 20 ? 1 + 0.004 * depth_units : 1;
   return grown * s.part_scale / 2;
-}
-
-// gl_celshading's ink line round a model `depth_units` from the eye, `cel` the setting: the
-// share of its width and of its opacity, 1 - depth / 700; 0 (none) with the setting 0 or once the
-// share is under 0.01 (past about 693 units). Its width in pixels: the setting (at most 10) times
-// the share.
-inline double q2_outline_share(double cel, double depth_units) {
-  if (cel <= 0) return 0;
-  const double share = 1 - depth_units / 700;
-  return share < 0.01 ? 0 : share;
-}
-inline double q2_outline_px(double cel, double depth_units) {
-  return (cel > 10 ? 10 : cel) * q2_outline_share(cel, depth_units);
 }
 
 // cl_smooth_explosions 0: an explosion `age_s` old as the classic stepping shows it, its ball and
