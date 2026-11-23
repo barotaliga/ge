@@ -146,6 +146,25 @@ size_t game_lines(QwIgnore& g, const std::vector<std::string>& lines,
   return lines.size();
 }
 
+size_t game_lines_joined(QwIgnore& g, const std::vector<std::string>& lines,
+                         const std::vector<int>& levels, size_t from, double now_s,
+                         const std::function<void(const std::string&)>& show) {
+  std::string part;
+  const size_t next = game_lines(g, lines, levels, from, now_s, [&](const std::string& piece) {
+    if (part.empty() && (piece.empty() || piece.back() == '\n')) {
+      show(piece);  // a whole line (a banner's leading newline kept)
+      return;
+    }
+    part += piece;
+    if (const size_t end = part.rfind('\n'); end != std::string::npos) {
+      show(part.substr(0, end + 1));
+      part.erase(0, end + 1);
+    }
+  });
+  if (!part.empty()) show(part);
+  return next;
+}
+
 void drop_ignored(QwIgnore& g, DemoState& s, std::vector<DemoPrint>& prints, double now_s,
                   std::string* centre, const ChatClock& clock) {
   if (g.levels != s.levels) {  // a new map: the players' flags and the flood's memory go
