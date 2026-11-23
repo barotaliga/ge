@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <csetjmp>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iterator>
@@ -759,15 +760,24 @@ constexpr RunnerCalls kNativeCalls = {"native",
 
 NativeQ2::NativeQ2() = default;
 
+// The library's end and the host's memory let go. A destructor must not throw: what the library's
+// shutdown or the clean-up throws is reported and the library closed regardless.
 NativeQ2::~NativeQ2() {
   if (!host) return;
   NativeHost& h = *host;
-  if (!h.dead) guarded(h, [&] { h.game->shutdown(); });
-  native_make_current(nullptr);
-  native_forget(h);
-  for (auto& [p, tag] : h.blocks) std::free(p);
-  h.blocks.clear();
-  native_close_files(h);
+  try {
+    if (!h.dead) guarded(h, [&] { h.game->shutdown(); });
+    native_make_current(nullptr);
+    native_forget(h);
+    for (auto& [p, tag] : h.blocks) std::free(p);
+    h.blocks.clear();
+    native_close_files(h);
+  } catch (...) {
+    std::fputs(
+        "q2 native: the game library's shutdown threw; its memory and files may be left"
+        " open (next: check the library's own shutdown)\n",
+        stderr);
+  }
   h.library.close();
 }
 
