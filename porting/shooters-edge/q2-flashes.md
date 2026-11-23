@@ -641,3 +641,69 @@ spawns the shot, right after the projectile, bullets or rail are created.
 | `cl_muzzlelight_time` | 16 | lifetime of a muzzle light in milliseconds, clamped to 0 to 1000; the heat beam, the nukes and the widow's beams ignore it (fixed 100 or 200 ms) |
 | `cl_muzzleflashes` | 1 | 0 turns off the remastered flash models (on the view weapon and on monsters); it does not touch the lights |
 | `cl_dlight_hacks` | 0 | a bit mask; the bit worth 4 removes the light of the machine gun and the chain gun flashes (the bits worth 1 and 2 change rocket and explosion lights) |
+
+---
+
+## 13. The view weapon's flash model
+
+Q2PRO only (Yamagi draws no flash model). Units are world units, degrees and milliseconds.
+
+**The table** **[read]**: model `models/weapons/<name>/flash/tris.md2`, offset ahead, right and up
+along the view weapon's own axes, and a uniform scale.
+
+| Value | Weapon | Model | Ahead | Right | Up | Scale |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | blaster | v_blast | 27.0 | 7.4 | -6.6 | 8 |
+| 1 | machine gun | v_machn | 29.0 | 9.7 | -8.0 | 12 |
+| 2 | shotgun | v_shotg | 26.5 | 8.6 | -9.5 | 12 |
+| 3, 4, 5 | chain gun, 1, 2, 3 bullets | v_machn | 29.0 | 9.7 | -10.0 | 12, 16, 20 |
+| 6 | railgun | v_rail | 20.0 | 5.2 | -7.0 | 12 |
+| 7 | rocket launcher | v_rocket | 20.8 | 5.0 | -11.0 | 10 |
+| 8 | grenade launcher | v_launch | 18.0 | 6.0 | -6.5 | 9 |
+| 13 | super shotgun | v_shotg2 | 25.0 | 7.0 | -5.5 | 12 |
+| 14 | hyperblaster | v_blast | 23.5 | 6.0 | -6.0 | 9 |
+| 16 | ion ripper | v_boomer | 24.0 | 3.8 | -5.5 | 15 |
+| 19 | BFG, second flash | v_bfg | 18.0 | 8.0 | -7.5 | 16 |
+| 20 | phalanx, second flash | v_rocket | 18.0 | 10.0 | -6.0 | 9 |
+| 30 | ETF rifle | v_etf_rifle | 24.0 | 5.25 | -5.5 | 4 |
+| 31 | prox launcher | v_launch | 18.0 | 6.0 | -6.5 | 9 |
+| 32 | ETF rifle second barrel (remastered protocol only) | v_etf_rifle | 24.0 | 4.0 | -5.5 | 4 |
+| 33 | heat beam | v_beamer | 18.0 | 6.0 | -8.5 | 16 |
+| 35 | disruptor | v_dist | 18.0 | 6.0 | -6.5 | 10 |
+
+No model **[read]**: 9 to 12 (login, logout, respawn, BFG first flash), 15 (item respawn), 17 (blue
+hyperblaster), 18 (phalanx first flash), 32 on the original protocol, 34 (blaster 2), 36 to 39 (nukes),
+and any value with no entry or whose model file is missing. The silenced bit changes nothing here.
+
+**Placement** **[read]**:
+
+- Start from the view weapon as drawn: view origin + the server's interpolated gun offset +
+  `cl_gun_y`/`cl_gun_x`/`cl_gun_z` (ahead, right, up along the un-kicked view axes, default 0).
+- Lay the three offset numbers along forward, right and up of the weapon's drawn angles: the view
+  angles (kick included when `cl_kickangles` is on) plus the server's interpolated gun angles. So the
+  flash follows bob, sway, kick and the `cl_gun_*` settings in position.
+- Orientation: the view angles (kick included), NOT the gun angles, plus an extra roll: a random whole
+  0 to 359 for v_machn (machine gun and all chain gun values) and v_beamer (heat beam), 0 otherwise,
+  picked once per flash.
+- The offset is always right handed; left hand (`hand` 1 with `cl_gun` 1, or `cl_gun` 3) comes from the
+  renderer mirroring the projection of every view-weapon draw, the flash included **[derived]**.
+
+**Size** **[read]**: the scale multiplies the model's own coordinates; nothing normalises the model.
+The remastered models' own extent is not in the release **[open]**.
+
+**Look** **[read]**: frame 0, skin 0, full bright, translucent at opacity 1 with ordinary alpha
+blending (transparency from the skin's alpha **[derived]**), no depth write, the view weapon's depth
+range (0 to 0.25), never culled, the weapon's field of view (`cl_gunfov`), no shadow, glow map and bloom
+when present, no fade. `cl_gunalpha`, the player's transparency and powerup shells do not reach it.
+
+**Timing** **[read]**: start time = latest server frame time minus one server frame time (100 ms at
+10 Hz); shown while client time minus start is at most 50 ms. One slot: a new own flash replaces it and
+restarts the clock; the later of two in one packet wins. One model per message, so the chain gun draws
+one per server frame. **[derived]** That is the first 50 ms of the interpolation interval: half of it
+at 10 Hz.
+
+**Hidden by** **[read]**: `cl_muzzleflashes` 0; `cl_gun` 0 or less; `hand` 2 with `cl_gun` 1; no gun
+model; third person; a compatible-format demo with field of view over 90. Only the frame's own client
+(client number + 1) draws it: in a demo that is the recorded player; a spectator chasing someone sees
+the followed player's flashes only when the server sends the followed player's number with each frame
+**[read, derived]**. Seeking a demo skips flashes **[read]**.

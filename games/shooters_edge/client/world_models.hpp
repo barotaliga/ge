@@ -135,13 +135,19 @@ inline constexpr float kBoxLowUnits = -24, kBoxHighUnits = 32;
 // placed one's modelindex is the server's list's size plus its slot here (`effect_model`).
 // `loc_draw`'s marker is a head: Quake's the player's, Quake II's the ancient head (each game's
 // pack has only its own, so the other draws nothing).
-enum class EffectModel : uint8_t { explosion, bolt, bolt2, bolt3, place_q1, place_q2 };
+// `figure_q2`: what a Quake II player's model 255 ("the client's own") is drawn as, in the look his
+// slot names (`Placed::skin_name`), when a recording or a joined server sends one.
+enum class EffectModel : uint8_t { explosion, bolt, bolt2, bolt3, place_q1, place_q2, figure_q2 };
 inline constexpr const char* kEffectModels[] = {
-    "progs/s_explod.spr", "progs/bolt.mdl",     "progs/bolt2.mdl",
-    "progs/bolt3.mdl",    "progs/h_player.mdl", "models/items/c_head/tris.md2"};
+    "progs/s_explod.spr",   "progs/bolt.mdl",     "progs/bolt2.mdl",
+    "progs/bolt3.mdl",      "progs/h_player.mdl", "models/items/c_head/tris.md2",
+    "players/male/tris.md2"};
+inline int effect_model(int listed, EffectModel m) { return listed + static_cast<int>(m); }
 inline int effect_model(const Listen& l, EffectModel m) {
-  return (l.server ? static_cast<int>(l.server->models.size()) : 0) + static_cast<int>(m);
+  return effect_model(l.server ? static_cast<int>(l.server->models.size()) : 0, m);
 }
+// Quake II's model 255: the player's own figure, from his client info.
+inline constexpr int kQ2OwnLook = 255;
 
 // The effect bits a power held lights its holder with (the mod's EF_DIMLIGHT, EF_BLUE, EF_RED).
 inline constexpr int kGlow = 8, kGlowBlue = 64, kGlowRed = 128;

@@ -183,6 +183,7 @@ void next_fetch(Q2ClientEnd& c) {
   c.fetching.clear();
   c.fetched_bytes.clear();
   c.fetched_percent = 0;
+  c.fetched_from = 0;
   c.fetched_origin = false;
   if (c.http.on) {                               // over HTTP first: `begin` held until it is done
     c.cfg.http.gamedir = q2_demo(c).state.game;  // the server's game folder ("": baseq2)
@@ -193,7 +194,13 @@ void next_fetch(Q2ClientEnd& c) {
   if (!c.fetch_queue.empty()) {
     c.fetching = c.fetch_queue.front();
     c.fetch_queue.erase(c.fetch_queue.begin());
-    q2_client_command(c, "download " + c.fetching);
+    // A download cut short before: the rest asked for from what is held.
+    if (c.cfg.held.read) c.fetched_bytes = c.cfg.held.read(c.fetching);
+    c.fetched_from = c.fetched_bytes.size();
+    q2_client_command(c,
+                      "download " + c.fetching +
+                          (c.fetched_bytes.empty() ? std::string()
+                                                   : " " + std::to_string(c.fetched_bytes.size())));
     return;
   }
   if (!c.held_begin.empty()) q2_client_command(c, c.held_begin);
@@ -265,9 +272,12 @@ void take_downloads(Q2ClientEnd& c) {
       next_fetch(c);
       continue;
     }
+    if (c.cfg.held.add && !p.bytes.empty())
+      c.cfg.held.add(c.fetching, p.bytes, c.fetched_bytes.empty());
     c.fetched_bytes.insert(c.fetched_bytes.end(), p.bytes.begin(), p.bytes.end());
     if (p.percent == 100 && c.in.download_ready) {  // 36's compressed download, inflated whole
-      c.fetched_bytes = std::move(c.in.download);
+      c.fetched_bytes.resize(c.fetched_from);       // the rest after what was held
+      c.fetched_bytes.insert(c.fetched_bytes.end(), c.in.download.begin(), c.in.download.end());
       c.in.download.clear();
       c.in.download_ready = false;
     }
@@ -277,6 +287,7 @@ void take_downloads(Q2ClientEnd& c) {
       continue;
     }
     c.downloaded[c.fetching] = c.fetched_bytes;
+    if (c.cfg.held.drop) c.cfg.held.drop(c.fetching);
     c.http.said.push_back("[UDP] " + c.fetching + " [DONE] " + files_left(c));
     if (c.cfg.keep_file)
       c.cfg.keep_file(c.fetching, c.fetched_bytes, c.fetched_origin ? &c.fetching_origin : nullptr);
@@ -356,6 +367,8 @@ void run_stuffed(Q2ClientEnd& c) {
           start_fetch(c, begin);
         else
           q2_client_command(c, begin);
+        c.no_footsteps_told = -1;  // told again with each `begin`
+        q2_client_settings(c);
         c.signon_steps++;
       } else if (w[0] == "reconnect") {
         c.stage = ClientStage::signon;
@@ -593,6 +606,15 @@ void q2_client_command(Q2ClientEnd& c, const std::string& line) {
   b.insert(b.end(), line.begin(), line.end());
   b.push_back(0);
   channel_reliable(c.ch, b.data(), b.size());
+}
+
+void q2_client_settings(Q2ClientEnd& c) {
+  if (c.protocol != kQ2Protocol36) return;
+  if (c.stage != ClientStage::signon && c.stage != ClientStage::active) return;
+  const int nf = c.cfg.no_footsteps ? 1 : 0;
+  if (nf == c.no_footsteps_told) return;
+  c.no_footsteps_told = nf;
+  send_setting(c, kQ2SetNoFootsteps, nf);
 }
 
 void q2_client_userinfo(Q2ClientEnd& c) {

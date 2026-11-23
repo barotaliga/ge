@@ -205,9 +205,9 @@ void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext, int* event 
   const bool wide_model = ext > 0 && (bits & kModel16) != 0;
   const auto model = [&] { return wide_model ? m.u16() : m.u8(); };
   if ((bits & kModel) != 0) e.model = model();
-  if ((bits & kModel2) != 0) model();
-  if ((bits & kModel3) != 0) model();
-  if ((bits & kModel4) != 0) model();
+  if ((bits & kModel2) != 0) e.more[0] = model();
+  if ((bits & kModel3) != 0) e.more[1] = model();
+  if ((bits & kModel4) != 0) e.more[2] = model();
   if ((bits & kFrame8) != 0) e.frame = m.u8();
   if ((bits & kFrame16) != 0) e.frame = m.i16();
   if ((bits & (kSkinLow | kSkinHigh)) != 0) e.skin = sized64(m, bits, kSkinLow, kSkinHigh);
@@ -278,6 +278,10 @@ void set_string(Demo& d, int index, std::string text) {
   };
   if (index == 1) {
     s.cdtrack = q2_music_track(text, s.cdtrack);
+    // A name rather than a number: `music/<name>` (q2_music_track keeps the last number for it).
+    const bool number = !text.empty() && text.find_first_not_of("0123456789") == std::string::npos;
+    s.cdname = text.empty() || number ? std::string{} : text;
+    if (!s.cdname.empty()) s.cdtrack = -1;
   } else if (index == cs.max_clients) {
     // Entities 1 to this are the players: kept by slot, so the rest number past `players`.
     d.max_clients = std::clamp(std::atoi(text.c_str()), 1, 32);
@@ -526,6 +530,7 @@ void event_sound(DemoState& s, int n, int event, int32_t number) {
                        (static_cast<uint32_t>(n) * 40503u)) >>
                       30];
       o.channel = kChanBody;
+      o.step = true;
       break;
     case kEvFallShort:
       o.name = "player/land1.wav";
