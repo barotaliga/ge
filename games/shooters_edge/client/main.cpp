@@ -954,7 +954,7 @@ int run_main(int argc, char** argv) {
   bool text_on = false;
   ge::platform::InputSnapshot input;
   cl::ViewState shown;
-  shown.q2 = &q2_screen;       // Quake II's cl_adjustfov and cl_kickangles
+  shown.q2 = &q2_screen;        // Quake II's cl_adjustfov and cl_kickangles
   bool mouse_off_said = false;  // the system refused the mouse once: said, never again
   cl::DemoFreeLook free_look;   // SHIFT held over a demo (demo_free_look.hpp)
   cl::DemoEyes demo_eyes{.gun_kick = &remote.gunkick, .view_kick = &q2_screen.kick_angles};
