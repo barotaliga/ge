@@ -303,6 +303,11 @@ const Q2Entity* spawn_spot(Q2Server& s, int slot) {
       }
       return best;
     }
+    // g_spawn_mode (a match server's): 0 the game's own pick, 1 the true two nearest left out,
+    // 2 any spot at random.
+    const con::Cvar* mode_cvar = s.cvars.find("g_spawn_mode");
+    const int mode = mode_cvar != nullptr ? mode_cvar->integer() : 0;
+    if (!spots.empty() && mode == 2) return spots[ge::core::pick_index(s.rng, spots.size())];
     if (!spots.empty()) {
       const Q2Entity* near1 = nullptr;
       const Q2Entity* near2 = nullptr;
@@ -310,8 +315,12 @@ const Q2Entity* spawn_spot(Q2Server& s, int slot) {
         double d1 = 1e31, d2 = 1e31;
         for (const Q2Entity* e : spots) {
           const double d = nearest_player(s, e->origin, slot);
-          if (d < d1) {  // the old nearest is not moved to second: the pair left out is
-            d1 = d;      // not always the two nearest
+          if (d < d1) {  // mode 0: the old nearest is not moved to second, so the pair left out
+            if (mode == 1) {  // is not always the two nearest; mode 1 moves it
+              d2 = d1;
+              near2 = near1;
+            }
+            d1 = d;
             near1 = e;
           } else if (d < d2) {
             d2 = d;
@@ -329,6 +338,35 @@ const Q2Entity* spawn_spot(Q2Server& s, int slot) {
 }
 
 void arrival_flash(Q2Server& s, int slot, const char* name);
+
+// A match server's warmup (the lobby's phase in the local info, `ge_phase`, before the match)
+// with `g_warmup_loadout` 1: every weapon but the BFG10K, each ammunition full and body armour,
+// the rocket launcher in hand, so the warmup is spent fighting rather than gathering.
+void warmup_kit(Q2Server& s, int slot) {
+  const con::Cvar* on = s.cvars.find("g_warmup_loadout");
+  Q2Player& p = s.players[slot];
+  if (on == nullptr || !on->on() || !deathmatch(s) || !p.alive) return;
+  std::string_view phase;
+  for (const auto& [k, v] : s.localinfo)
+    if (k == "ge_phase") phase = v;
+  if (phase != "warmup" && phase != "countdown") return;
+  for (const char* w :
+       {"weapon_shotgun", "weapon_supershotgun", "weapon_machinegun", "weapon_chaingun",
+        "weapon_grenadelauncher", "weapon_rocketlauncher", "weapon_hyperblaster", "weapon_railgun"})
+    if (const int row = sq_item(w); row >= 0) p.body.counts[row] = 1;
+  const std::pair<SqAmmo, int> full[] = {{SqAmmo::bullets, 200}, {SqAmmo::shells, 100},
+                                         {SqAmmo::rockets, 50},  {SqAmmo::grenades, 50},
+                                         {SqAmmo::cells, 200},   {SqAmmo::slugs, 50}};
+  for (const auto& [kind, n] : full) {
+    const auto k = static_cast<size_t>(kind);
+    p.body.max_ammo[k] = std::max(p.body.max_ammo[k], n);
+    p.body.ammo[k] = n;
+  }
+  p.body.armour = SqArmour::body;
+  p.body.armour_count = 100;
+  p.hand = SqHand{};
+  p.hand.weapon = int(SqWeapon::rocket_launcher);
+}
 
 void spawn_player(Q2Server& s, int slot, bool respawn) {
   Q2Player& p = s.players[slot];
@@ -380,6 +418,7 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
     for (int i = 0; i < kSqItemCount; i++)
       if (kSqItems[i].kind == SqKind::key) p.body.counts[i] = died.counts[i];
   fight_midair_kit(s, slot);
+  warmup_kit(s, slot);
   q2_mods_spawn(s, slot);
   commands_spawn(s, slot);
   if (p.alive) targets_telefrag(s, slot);  // whatever stands where he appears dies
@@ -391,12 +430,65 @@ int skill(const Q2Server& s) {
 
 // Whether item row `item` is left out by `dmflags`: health (1), powerups (2), armour (2048), and
 // with infinite ammo (8192) the ammo and the BFG.
+// The bits of `g_removed_weapons` and `g_removed_powerups`, in the items' order.
+constexpr std::string_view kRemovableWeapons[] = {"weapon_shotgun",        "weapon_supershotgun",
+                                                  "weapon_machinegun",     "weapon_chaingun",
+                                                  "ammo_grenades",         "weapon_grenadelauncher",
+                                                  "weapon_rocketlauncher", "weapon_hyperblaster",
+                                                  "weapon_railgun",        "weapon_bfg"};
+constexpr std::string_view kRemovablePowerups[] = {
+    "item_quad",     "item_invulnerability", "item_power_screen", "item_power_shield",
+    "item_silencer", "item_breather",        "item_enviro"};
+
+int removed_bits(const Q2Server& s, const char* setting) {
+  const ge::console::Cvar* c = s.cvars.find(setting);
+  return c != nullptr ? c->integer() : 0;
+}
+
+bool weapon_removed(int bits, std::string_view name) {
+  for (size_t i = 0; i < std::size(kRemovableWeapons); i++)
+    if (kRemovableWeapons[i] == name) return ((bits >> i) & 1) != 0;
+  return false;
+}
+
+// A map's item a match server takes off it (`g_removed_weapons`, `g_removed_powerups`): a weapon
+// or powerup named, and an ammunition box once nothing left on the map fires it (the hand
+// grenades' box is their pickup: it goes with both grenade bits).
+bool match_removed(const Q2Server& s, const SqItem& it) {
+  const int w = removed_bits(s, "g_removed_weapons"), p = removed_bits(s, "g_removed_powerups");
+  const std::string_view name = it.classname;
+  if (w == 0 && p == 0) return false;
+  for (size_t i = 0; i < std::size(kRemovablePowerups); i++)
+    if (kRemovablePowerups[i] == name) return ((p >> i) & 1) != 0;
+  if (it.kind == SqKind::weapon) return weapon_removed(w, name);
+  if (it.kind != SqKind::ammo) return false;
+  const auto both = [w](std::string_view a, std::string_view b) {
+    return weapon_removed(w, a) && weapon_removed(w, b);
+  };
+  switch (it.ammo) {
+    case SqAmmo::shells:
+      return both("weapon_shotgun", "weapon_supershotgun");
+    case SqAmmo::bullets:
+      return both("weapon_machinegun", "weapon_chaingun");
+    case SqAmmo::grenades:
+      return both("ammo_grenades", "weapon_grenadelauncher");
+    case SqAmmo::rockets:
+      return weapon_removed(w, "weapon_rocketlauncher");
+    case SqAmmo::slugs:
+      return weapon_removed(w, "weapon_railgun");
+    case SqAmmo::cells:
+      return both("weapon_hyperblaster", "weapon_bfg") && ((p >> 2) & 3) == 3;
+    default:
+      return false;
+  }
+}
+
 bool dm_left_out(const Q2Server& s, int item) {
   if (item < 0 || !deathmatch(s)) return false;
   if (fight_midair(s)) return true;  // nothing lies on the map in midair
   const SqItem& it = kSqItems[item];
   const std::string_view name = it.classname;
-  return (fight_dmflag(s, 1) && it.kind == SqKind::health) ||
+  return match_removed(s, it) || (fight_dmflag(s, 1) && it.kind == SqKind::health) ||
          (fight_dmflag(s, 2) && it.kind == SqKind::powerup) ||
          (fight_dmflag(s, 2048) &&
           (it.kind == SqKind::armour || it.kind == SqKind::power_armour)) ||

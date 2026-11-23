@@ -286,6 +286,7 @@ void take_view(NativeQ2& s) {
   raw.entities.assign(size_t(most), Q2EntityState{});
   raw.owners.assign(size_t(most), 0);
   q2_sight_reset(raw.sight, h.map.get(), most);
+  raw.sight.extended = h.ext > 0;
   raw.sight.groups = h.map && !h.map->areas.empty() && !native_no_areas(h) ? h.area_groups
                                                                            : std::vector<int32_t>{};
   const bool proper = (native_features(h) & native::kGmfProperInUse) != 0;
@@ -302,6 +303,8 @@ void take_view(NativeQ2& s) {
       q2_sight_link(raw.sight, n, e->absmin, e->absmax);
     else
       q2_sight_link(raw.sight, n, e->s.origin, e->s.origin);
+    if (h.ext > 0 && (e->svflags & native::kSvfNoCull) != 0)  // sent wherever the viewer is
+      raw.sight.links[size_t(n)].everywhere = true;
     raw.owners[size_t(n)] = static_cast<int16_t>(std::max(0, h.number_of(e->owner)));
   }
   for (int i = 0; i < h.max_clients && i < 32; i++) {
@@ -519,6 +522,7 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
     h.portals.assign(1024, 0);  // every portal shut
     br::flood_areas(*h.map, h.portals, &h.area_groups);
     h.tracer = std::make_unique<br::BrushTracer>(*h.map);
+    h.tracer->set_extended(h.ext > 0);  // the extended contents and all-solid stop
     h.surfaces.assign(h.map->textures.size(), native::NativeSurface{});
     for (size_t i = 0; i < h.surfaces.size(); i++)
       std::strncpy(h.surfaces[i].name, h.map->textures[i].name.c_str(), 15);

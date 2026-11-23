@@ -210,6 +210,11 @@ struct SqStep {
 SqStep sq_hand_step(SqHand& hand, SqBody& body, bool attack, double now, bool infinite = false,
                     int swap = 1);
 
+// A match server's faster weapon switch (`g_fast_weap_switch`), before the hand's step: `mode` 1
+// skips the lowering (the swap is this step's), 2 also the raising (ready the step after the swap);
+// 0 leaves the classic pace.
+void sq_hand_hasten(SqHand& hand, int mode);
+
 // Chooses weapon `w` for the hand (when held and not already in hand); true when chosen.
 bool sq_choose(SqHand& hand, const SqBody& body, int w);
 
