@@ -29,7 +29,7 @@ void item_sound(Q2Server& s, int slot, const char* sample) {
   ev.to = kEveryone;
   ev.ent = slot + 1;
   ev.level = kItemChannel;
-  const int16_t* o = s.players[slot].move.origin;
+  const int32_t* o = s.players[slot].move.origin;
   ev.origin = {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
   ev.values[0] = 255;
   ev.values[1] = 1;
@@ -101,7 +101,7 @@ int fight_power_save(Q2Server& s, int slot, sh::Vec3f dir, int damage) {
   if (saved <= 0) return 0;
   cells -= saved / per_cell;
   p.blow_parts[2] += saved;  // the screen's green flash (q2_blend.hpp)
-  const int16_t* o = p.move.origin;
+  const int32_t* o = p.move.origin;
   const sh::Vec3f at = {float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
   p.power_flash = fight_power_hit(s, at - dir * 16.0f, dir * -1.0f, shield > 0);
   return saved;

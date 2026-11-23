@@ -63,14 +63,23 @@ ge::ui::Image draw_route(const Plate& plate, const RouteMarks& m) {
   const auto px = [&](const std::array<float, 3>& p) { return fr.px(p[0]); };
   const auto py = [&](const std::array<float, 3>& p) { return fr.py(p[1]); };
   const size_t n = m.track.size();
-  for (size_t i = 0; i + 1 < n; i++) {
-    const std::array<float, 3>& a = m.track[i];
-    const std::array<float, 3>& b = m.track[i + 1];
-    const float dx = b[0] - a[0], dy = b[1] - a[1];
-    if (dx * dx + dy * dy > kRouteJump * kRouteJump) continue;
-    const Rgb c = when(static_cast<float>(i) / static_cast<float>(n > 1 ? n - 1 : 1));
-    line(img, px(a), py(a), px(b), py(b), w, c);
-  }
+  const auto track = [&](const std::vector<std::array<float, 3>>& tr, int bot) {
+    const size_t count = tr.size();
+    for (size_t i = 0; i + 1 < count; i++) {
+      const std::array<float, 3>& a = tr[i];
+      const std::array<float, 3>& b = tr[i + 1];
+      const float dx = b[0] - a[0], dy = b[1] - a[1];
+      if (dx * dx + dy * dy > kRouteJump * kRouteJump) continue;
+      const std::array<uint8_t, 3>& pc =
+          kPartyColours[static_cast<size_t>(bot) % kPartyColours.size()];
+      const Rgb c =
+          bot < 0 ? when(static_cast<float>(i) / static_cast<float>(count > 1 ? count - 1 : 1))
+                  : Rgb{pc[0], pc[1], pc[2]};
+      line(img, px(a), py(a), px(b), py(b), bot < 0 ? w : w * 0.8f, c);
+    }
+  };
+  track(m.track, m.party.empty() ? -1 : 0);
+  for (size_t k = 0; k < m.party.size(); k++) track(m.party[k], static_cast<int>(k) + 1);
   for (const std::array<float, 3>& e : m.exits) {
     const int rings = static_cast<int>(1.5f * w / 0.5f);
     for (int ri = 0; ri <= rings; ri++) {

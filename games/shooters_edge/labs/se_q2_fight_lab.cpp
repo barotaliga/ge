@@ -75,7 +75,7 @@ void tick(Duel& d, uint8_t buttons, float pitch) {
 void place(Duel& d, int i, float x) {
   d.p(i).move.origin[0] = static_cast<int16_t>(x * 8);
   d.p(i).move.origin[1] = 0;
-  for (int16_t& v : d.p(i).move.velocity) v = 0;
+  for (int32_t& v : d.p(i).move.velocity) v = 0;
 }
 
 std::unique_ptr<Duel> duel(const std::shared_ptr<const br::Map>& map, std::string& error) {
@@ -123,6 +123,7 @@ void run(gl::Lab& lab) {
   held.frame.title = "DAMAGE DEALT, FIRING WHILE HELD, 200 UNITS AWAY";
   for (int w = 0; w < sv::kSqWeaponCount; w++) {
     if (w == int(sv::SqWeapon::hand_grenade)) continue;  // thrown, not held: its own chart below
+    if (sv::kSqWeapons[w].pack != sv::Q2Pack::base) continue;  // the base game's rules here
     std::unique_ptr<Duel> d = duel(map, error);
     if (d == nullptr) {
       lab.fail(error, "Read the reason above. Skill: shooter.");

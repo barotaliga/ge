@@ -36,7 +36,17 @@ enum class SqKind : uint8_t { armour, power_armour, weapon, ammo, health, poweru
 
 // The ammo kinds, in the HUD's order.
 // The Reckoning's two (q2_pack.hpp) after the base game's: its mag slugs and its traps.
-enum class SqAmmo : uint8_t { none, shells, bullets, grenades, rockets, cells, slugs, magslugs, traps };
+enum class SqAmmo : uint8_t {
+  none,
+  shells,
+  bullets,
+  grenades,
+  rockets,
+  cells,
+  slugs,
+  magslugs,
+  traps
+};
 inline constexpr int kSqAmmoKinds = 9;  // `none` included, so an `SqAmmo` indexes an array
 
 // The armours, worse to better (0 none).
@@ -53,7 +63,7 @@ inline constexpr SqArmourRow kSqArmours[] = {
     {100, 200, 0.80f, 0.60f},  // body
 };
 
-struct SqItem {
+struct SqItem {           // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* classname;  // the map's name for it
   const char* pickup;     // the name a player reads
   const char* model;      // its world model

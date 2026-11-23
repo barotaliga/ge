@@ -74,7 +74,7 @@ constexpr float kShare = 0.8f;  // the window's own server's pm_speedjump
 constexpr double kPi = 3.14159265358979323846;
 
 float plan_speed(sh::Vec3f v) { return sh::root_of(v.x * v.x + v.y * v.y); }
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
 

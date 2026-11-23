@@ -30,7 +30,8 @@ constexpr uint32_t kEveryone = 0xffffffffu;
 bool deathmatch(const Q2Server& s) { return s.cvars.find("deathmatch")->on(); }
 
 sh::Vec3f origin_of(const Q2Player& p) {
-  return {p.move.origin[0] / 8.0f, p.move.origin[1] / 8.0f, p.move.origin[2] / 8.0f};
+  return {float(p.move.origin[0]) / 8.0f, float(p.move.origin[1]) / 8.0f,
+          float(p.move.origin[2]) / 8.0f};
 }
 
 bool alive_player(const Q2Server& s, int i) {

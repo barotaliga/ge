@@ -9,6 +9,11 @@
 // With `--game` (the player's own release zip, pack or folder) the maps are the pack's; without it,
 // the coop hall (a button door before the exit) once: the smoke run.
 //
+// THE PARTY (`--party=1,2,3`): each map played again by a party of that many bots in co-op
+// (coop_episode.hpp's partners, plugins/shooterbots/party.hpp: each stop to the nearest bot, the
+// exit once nothing is left for any), so the table says how much sooner two or three clear it; a
+// party's picture draws each bot's track in its own colour.
+//
 // The table, a map a row: got out or not, the time to the exit (the intermission's start), the
 // level's own count of monsters killed and secrets found (the program's globals), the deaths, the
 // things given up. Pictures, a map each: its floor from above, his track, the exits and where
@@ -16,7 +21,7 @@
 //
 // ge:summary Lab: Quake's campaign played at 100% by a bot: kills, secrets and time to the exit
 // ge:keywords lab se-q1-campaign campaign single-player 100-percent complete kills secrets
-// ge:keywords exit-time episodes secret-level god play-through
+// ge:keywords exit-time episodes secret-level god play-through party co-op partners
 // ge:skill shooter bots labs
 // ge:test tests/shooters_edge_companion_test.cpp
 #include <algorithm>
@@ -185,6 +190,10 @@ gl::Picture route_on_plate(const PackMaps& packs, const fb::EpisodeMap& m, bool&
     for (const sh::Vec3f& v : from) to.push_back({v.x, v.y, v.z});
   };
   put(marks.track, m.leader);
+  for (size_t k = 0; k < m.mates.size(); k++) {
+    marks.party.emplace_back();
+    put(marks.party.back(), m.mates[k]);
+  }
   put(marks.kills, m.kills);
   put(marks.secrets, m.secrets);
   put(marks.exits, m.exits);
@@ -261,28 +270,45 @@ void run(gl::Lab& lab) {
                  {"seed", lab.arg("seed")},
                  {"god", o.god ? "on" : "off"},
                  {"complete", o.complete ? "on" : "off"}};
+  std::vector<int> sizes;
+  {
+    std::stringstream ps(lab.arg("party"));
+    std::string w;
+    while (std::getline(ps, w, ','))
+      if (!w.empty()) sizes.push_back(std::clamp(std::atoi(w.c_str()), 1, 4));
+    if (sizes.empty()) sizes.push_back(1);
+  }
+  const bool party_runs = sizes.size() > 1 || sizes[0] > 1;
   gl::LabTable t{"each map at 100%",
-                 {"map", "out", "exit s", "kills", "secrets", "100%", "ended", "deaths", "given up",
-                  "plans: exit/button/key/trigger/explore/monster/secret", "nodes",
+                 {"map", "bots", "out", "exit s", "kills", "secrets", "100%", "ended", "deaths",
+                  "given up", "plans: exit/button/key/trigger/explore/monster/secret", "nodes",
                   "tricks: rocket/grenade/combo", "blast jumps", "faults"},
                  {}};
   std::vector<fb::EpisodeMap> maps;
+  std::vector<int> sizes_of;  // each map's party size
   uint64_t digest = 1469598103934665603ull;
   int64_t faults = 0;
-  for (const Leg& leg : legs) {
-    o.first = leg.first;
-    o.avoid = leg.avoid;
-    o.maps = leg.maps;
-    fb::EpisodeReport r = fb::run_coop_episode(o);
-    if (!r.ok) {
-      lab.fail("se-q1-campaign: " + leg.first + ": " + r.error,
-               "next: read the error; `labs se-q1-campaign` alone runs the hall");
-      return;
+  for (const Leg& leg : legs)
+    for (const int size : sizes) {
+      o.first = leg.first;
+      o.avoid = leg.avoid;
+      o.maps = leg.maps;
+      // A party plays co-op (a party of one too, so the sizes compare on the same rules).
+      o.single = !party_runs;
+      o.partners.assign(static_cast<size_t>(size) - 1, sb::AimSkill::expert);
+      fb::EpisodeReport r = fb::run_coop_episode(o);
+      if (!r.ok) {
+        lab.fail("se-q1-campaign: " + leg.first + ": " + r.error,
+                 "next: read the error; `labs se-q1-campaign` alone runs the hall");
+        return;
+      }
+      digest = (digest ^ r.digest) * 1099511628211ull;
+      faults += r.faults;
+      for (fb::EpisodeMap& m : r.maps) {
+        maps.push_back(std::move(m));
+        sizes_of.push_back(size);
+      }
     }
-    digest = (digest ^ r.digest) * 1099511628211ull;
-    faults += r.faults;
-    for (fb::EpisodeMap& m : r.maps) maps.push_back(std::move(m));
-  }
   int finished = 0, cleared = 0, kills = 0, monsters = 0, found = 0, secrets = 0;
   double exit_sum = 0;
   for (const fb::EpisodeMap& m : maps) {
@@ -299,7 +325,8 @@ void run(gl::Lab& lab) {
     std::string plans;
     for (int k = 0; k < fb::kWayKinds; k++)
       plans += (k ? "/" : "") + std::to_string(m.way.by_kind[k]);
-    t.rows.push_back({m.name, m.finished ? "yes" : "no",
+    const size_t mi = static_cast<size_t>(&m - maps.data());
+    t.rows.push_back({m.name, std::to_string(sizes_of[mi]), m.finished ? "yes" : "no",
                       m.exit_s >= 0 ? to_fixed(m.exit_s, 1) : "-",
                       of(m.killed_monsters, m.total_monsters), of(m.found_secrets, m.total_secrets),
                       full ? "yes" : "no", m.end, std::to_string(m.leader_deaths),
@@ -308,10 +335,15 @@ void run(gl::Lab& lab) {
                           std::to_string(m.nav_combos),
                       std::to_string(m.blasts.size()), std::to_string(m.faults)});
   }
-  t.rows.push_back({"all", std::to_string(finished) + "/" + std::to_string(maps.size()),
+  t.rows.push_back({"all", "", std::to_string(finished) + "/" + std::to_string(maps.size()),
                     to_fixed(exit_sum, 0), of(kills, monsters), of(found, secrets),
                     std::to_string(cleared) + "/" + std::to_string(maps.size()), "", "", "", "", "",
                     "", "", std::to_string(faults)});
+  // The bots column only when a party played, so a lone bot's table is as it was.
+  if (!party_runs) {
+    t.columns.erase(t.columns.begin() + 1);
+    for (auto& row : t.rows) row.erase(row.begin() + 1);
+  }
   lab.table(t);
   lab.metric("maps.played", static_cast<double>(maps.size()), "count");
   lab.metric("maps.finished", finished, "count");
@@ -336,15 +368,22 @@ void run(gl::Lab& lab) {
   for (size_t i = 0; i < maps.size(); i++) {
     const fb::EpisodeMap& m = maps[i];
     lab.shot(
-        {"map-" + std::to_string(i + 1) + "-" + m.name,
-         "MAP " + m.name + (m.finished ? ": OUT" : ": NOT OUT") + ", KILLS " +
+        {"map-" + std::to_string(i + 1) + "-" + m.name +
+             (sizes_of[i] > 1 ? "-party" + std::to_string(sizes_of[i]) : std::string()),
+         "MAP " + m.name + (sizes_of[i] > 1 ? ", " + std::to_string(sizes_of[i]) + " BOTS" : "") +
+             (m.finished ? ": OUT" : ": NOT OUT") + ", KILLS " +
              of(m.killed_monsters, m.total_monsters) + ", SECRETS " +
              of(m.found_secrets, m.total_secrets),
          "The map from above as the live map draws it (or, with no pack, the walkable floor "
-         "darker higher), his track blue at the start to red at the end, the exits (gold "
-         "rings), where monsters fell (crosses), where secrets counted (gold diamonds) and his "
-         "rocket and grenade jumps (orange, filled take-off to white landing); "
-         "out at " +
+         "darker higher), " +
+             std::string(sizes_of[i] > 1
+                             ? "each bot's track in its own colour (red the leader, then blue, "
+                               "green, violet)"
+                             : "his track blue at the start to red at the end") +
+             ", the exits (gold "
+             "rings), where monsters fell (crosses), where secrets counted (gold diamonds) and his "
+             "rocket and grenade jumps (orange, filled take-off to white landing); "
+             "out at " +
              (m.exit_s >= 0 ? to_fixed(m.exit_s, 0) + " s." : std::string("no time: ") + m.end),
          "the track reaches every part of the floor and ends at an exit", in},
         [&] {
@@ -380,6 +419,9 @@ const gl::LabSpec kSpec{
         {"tour", "1", "0: the nearest stop each time rather than the tour's order (tour.hpp)"},
         {"root", ".", "the repository's root"},
         {"plan", "0", "1: each map's changes of plan as a table"},
+        {"party", "1",
+         "the party sizes each map is played by, a comma list (1..4: `1,2,3`); more than one bot, "
+         "or more than one size, plays co-op"},
     },
     "--map-seconds=60",
     run,

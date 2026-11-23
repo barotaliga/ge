@@ -31,7 +31,8 @@ int ammo(const sv::SqBody& b, sv::SqAmmo a) { return b.ammo[static_cast<int>(a)]
 }  // namespace
 
 TEST(every_item_s_class_name_finds_its_row_and_others_none) {
-  for (int i = 0; i < sv::kSqItemCount; i++) CHECK(sv::sq_item(sv::kSqItems[i].classname) == i);
+  for (int i = 0; i < sv::kSqItemCount; i++)  // a pack's rows under it (q2_pack_test.cpp)
+    CHECK(sv::kSqItems[i].pack != sv::Q2Pack::base || sv::sq_item(sv::kSqItems[i].classname) == i);
   CHECK(sv::sq_item("info_player_start") == -1);
 }
 

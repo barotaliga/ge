@@ -21,6 +21,7 @@ build, check and survey maps. The player meets it as every level they walk; remi
 | Shooter kit | `plugins/shooter/map_spec.hpp` | A map as the rules start it: brush models with hulls, entity text |
 | Progs plugin | `plugins/progs/entity_text.hpp` | The entity text: blocks of keys, a block's keys into fields |
 | Classic plugin | `plugins/classic/locs.hpp` | Place names: the `.loc` format, macros, the nearest place |
+| Classic plugin | `plugins/classic/content/map_versions.hpp` | A stock map in several versions (the first release's, a later rerelease's, any other a server plays): another version fetched from a server that refused the player's copy, kept hidden as `maps/versions/<name>.<checksum>.bsp` beside it, read in its place while that server is joined, the version each server took remembered |
 | Engine | `engine/overview/plate.hpp` with `plugins/brush/app/overview_floors.hpp` | The map from above for the live map (`features.md`) |
 | Engine | `engine/texgen/texture_map.hpp` | A map's painted textures replaced by procedural recipes (`.texmap`) |
 | Tools | `tools/mapsdk` | Maps written as Python scripts by agents, saved as `.map` text (`docs/levels.md` § The map SDK) |
@@ -62,12 +63,16 @@ build, check and survey maps. The player meets it as every level they walk; remi
 | Collision only on three fixed hull sizes | hulls built from brushes for any box (`brush_hull.hpp`) |
 | Each game's rules only on its own family | one trace: Quake's rules run on Quake II's maps by tracing its models as brushes |
 | Map loading stalls the window | read and decoded on a thread, compiled while drawing |
+| A server whose map is another version of the player's refuses him (a later release rebuilt the stock maps) | the client keeps every version it meets by checksum and joins each server with the version it plays (`map_versions.hpp`); a map rebuilt only in its visibility (a water-vis build) has the same checksum and needs no version |
 
 ## Gaps
 
 - The nav and the bots' world built from a 38 map: Quake's move run on one (M18v2c).
 - The 46 family's patches in collision, its shaders.
 - Turned brush hulls for rotating movers on Quake II's maps.
+- A map's versions named by release (original, rerelease) where a list shows both: no list shows
+  them yet, and the rerelease's checksums are not measured.
+- Quake II's protocol carries a map checksum too; its client does not keep versions yet.
 
 ## Labs and tests
 

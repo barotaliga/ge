@@ -17,7 +17,6 @@
 #include "brush/map.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
-#include "shooters_edge/server/q2_reckoning.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
@@ -237,11 +236,19 @@ void key_lines(Q2Server& s, const ge::brush::Entity& b) {
   }
 }
 
-// The game's own, or one the remix brings in from another game (Quake's monsters, its items).
+// The Reckoning's own map things (its items and monsters are found by their tables).
+constexpr std::string_view kReckoningSpawnable[] = {
+    "func_object_repair", "misc_amb4",          "misc_crashviper", "misc_nuke",
+    "misc_transport",     "misc_viper_missile", "rotating_light",  "target_mal_laser"};
+
+// The game's own, or one the remix brings in from another game (Quake's monsters, its items), or
+// the pack's that plays.
 bool spawnable(const Q2Server& s, std::string_view c) {
   return std::binary_search(std::begin(kSpawnable), std::end(kSpawnable), c) ||
          monster_class(c, s.opt.pack) || sq_item(c, s.opt.pack) >= 0 ||
-         (s.opt.pack == Q2Pack::reckoning && reckoning_thing(c));  // the pack's map things
+         (s.opt.pack == Q2Pack::reckoning &&
+          std::find(std::begin(kReckoningSpawnable), std::end(kReckoningSpawnable), c) !=
+              std::end(kReckoningSpawnable));
 }
 
 }  // namespace

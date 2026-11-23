@@ -21,7 +21,7 @@
 //
 // ge:summary Quake II's unit played through: a fighter finding each map's way to the unit's end
 // ge:keywords q2 unit play-through scripted-playthrough run_q2_unit way-through exit key
-// ge:keywords objective target_goal target_help secret target_changelevel god leader
+// ge:keywords objective target_goal target_help secret target_changelevel god leader party partners
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_q2_unit_test.cpp
 #pragma once
@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "shooterbots/aim.hpp"
+#include "shooterbots/party.hpp"
 #include "shooterbots/way_through.hpp"
 #include "shooters_edge/bots/arsenals.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -57,6 +58,10 @@ struct UnitOptions {
   // The 100% run (way_through.hpp): every monster he can reach and every secret before the exit;
   // the last quarter of `map_seconds` is for the way out.
   bool complete = false;
+  // THE PARTY (plugins/shooterbots/party.hpp): partners who run the way through beside him in
+  // co-op (the rules' `coop` 1), one each, the map's work split among them (nearest takes it) and
+  // the exit waiting for all of it.
+  std::vector<sb::AimSkill> partners;
 };
 
 struct UnitMap {
@@ -75,13 +80,15 @@ struct UnitMap {
   int64_t edges = 0;    // commands a pit's lip turned his keys back (way_edge)
   int64_t touches = 0;  // commands he walked into a trigger past its node (way_touch)
   int64_t forgot = 0;   // times he forgot the links given up on, with no way on
-  std::vector<std::string> took_keys;  // the keys he took, by their class
-  sh::Vec3f lo, hi;                    // the nav's bounds
-  std::vector<sh::Vec3f> nodes;        // every node (the picture's floor)
-  std::vector<sh::Vec3f> track;        // a point every half second
-  std::vector<sh::Vec3f> exits;        // the exits' middles
-  std::vector<sh::Vec3f> keys_at;      // every key where it lay
-  std::vector<std::string> plan;       // his changes of plan (UnitOptions::plan)
+  std::vector<std::string> took_keys;         // the keys he took, by their class
+  sh::Vec3f lo, hi;                           // the nav's bounds
+  std::vector<sh::Vec3f> nodes;               // every node (the picture's floor)
+  std::vector<sh::Vec3f> track;               // a point every half second
+  std::vector<std::vector<sh::Vec3f>> party;  // each partner's, the same
+  int64_t shares = 0, left_to_mates = 0;      // the party's splits; plans that left a stop to one
+  std::vector<sh::Vec3f> exits;               // the exits' middles
+  std::vector<sh::Vec3f> keys_at;             // every key where it lay
+  std::vector<std::string> plan;              // his changes of plan (UnitOptions::plan)
 };
 
 struct UnitReport {

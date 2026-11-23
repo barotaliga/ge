@@ -195,8 +195,9 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
       o.u8(n >= 1 ? static_cast<uint32_t>(std::min(n, 255.0f)) : 8u);
       point(e.origin);
       way();
-      o.u8(row->kind == 15 || row->kind == 25 || row->kind == 29 ? static_cast<uint32_t>(e.level & 0xff)
-                                                              : row->colour);  // its event's own
+      o.u8(row->kind == 15 || row->kind == 25 || row->kind == 29
+               ? static_cast<uint32_t>(e.level & 0xff)
+               : row->colour);  // its event's own
       break;
     }
     case TeBody::line:

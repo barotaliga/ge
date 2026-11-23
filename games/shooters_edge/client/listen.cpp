@@ -172,7 +172,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   const std::string_view name = ev.text;
   if ((name == "te_teleport" || name == "te_boss_teleport") && listen_is_q2(l)) {  // its own burst
     e.kind = EffectKind::named;
-    e.name = "sq_teleport";
+    e.name = name == "te_boss_teleport" ? "sq_boss_teleport" : "sq_teleport";
     e.at = e.end = ev.origin;
     l.effects.push_back(std::move(e));
     return;
@@ -216,9 +216,9 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
                       name == "te_screen_sparks" || name == "te_shield_sparks" ||
                       name == "te_laser_sparks" || name == "te_shotgun";
   if (uint8_t kind = 0; sv::qw_temp_entity(sparks                    ? "te_gunshot"
-                                         : name == "te_greenblood" ? "te_blood"
-                                                                   : ev.text,
-                                         kind)) {
+                                           : name == "te_greenblood" ? "te_blood"
+                                                                     : ev.text,
+                                           kind)) {
     if (kind == kExplosion || kind == 4) {
       l.explosions.push_back(ev.origin);
       return;
