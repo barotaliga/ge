@@ -7,6 +7,7 @@
 #include "shooters_edge/client/team_macros.hpp"
 
 #include <algorithm>
+#include <functional>
 #include <string>
 #include <utility>
 
@@ -66,6 +67,11 @@ std::string power_words(const con::Console& c, const hud::Status& s, const std::
 void add_team_macros(con::Console& con, TeamChat& chat) {
   con::Cvars& v = con.cvars();
   con.set_macro_widths("tp_length_", "tp_align_");  // `set tp_length_health 3`: a fixed column
+  // Every one tells what the player holds or where they are: a team macro (console.hpp), which a
+  // strict ruleset keeps scripts from acting on.
+  const auto team = [&con](std::string_view name, std::function<std::string()> fn) {
+    con.add_macro(name, std::move(fn), con::MacroKind::team);
+  };
   for (const Light& l : kLights)
     if (v.find(l.name) == nullptr)
       v.add({.name = l.name,
@@ -83,34 +89,34 @@ void add_team_macros(con::Console& con, TeamChat& chat) {
   const auto ammo = [ch](hud::Ammo a) {
     return [ch, a] { return std::to_string(ch->status.ammo[static_cast<size_t>(a)]); };
   };
-  con.add_macro("health", figure(&hud::Status::health));
-  con.add_macro("armor", figure(&hud::Status::armour));
-  con.add_macro("shells", ammo(hud::Ammo::shells));
-  con.add_macro("nails", ammo(hud::Ammo::nails));
-  con.add_macro("rockets", ammo(hud::Ammo::rockets));
-  con.add_macro("cells", ammo(hud::Ammo::cells));
-  con.add_macro("ammo", [ch] {
+  team("health", figure(&hud::Status::health));
+  team("armor", figure(&hud::Status::armour));
+  team("shells", ammo(hud::Ammo::shells));
+  team("nails", ammo(hud::Ammo::nails));
+  team("rockets", ammo(hud::Ammo::rockets));
+  team("cells", ammo(hud::Ammo::cells));
+  team("ammo", [ch] {
     const hud::Status& s = ch->status;
     if (s.keyed.set)
       return std::to_string(std::max(0, s.keyed.ammo[static_cast<size_t>(s.keyed.in_hand & 31)]));
     return std::to_string(s.ammo_for(s.weapon));
   });
-  con.add_macro("armortype", code("%A"));
-  con.add_macro("colored_armor", [ch] {
+  team("armortype", code("%A"));
+  team("colored_armor", [ch] {
     return ch->status.armour_class == hud::ArmourClass::none ? std::string("0")
                                                              : std::to_string(ch->status.armour);
   });
-  con.add_macro("weapon", [&con, ch] {
+  team("weapon", [&con, ch] {
     int n = 0;
     const std::string w = hand_weapon_word(con, ch->status, n);
     return w.empty() ? word(con, "tp_name_none") : w;
   });
-  con.add_macro("weaponnum", [&con, ch] {
+  team("weaponnum", [&con, ch] {
     int n = 0;
     hand_weapon_word(con, ch->status, n);
     return std::to_string(n);
   });
-  con.add_macro("weapons", [&con, ch] {
+  team("weapons", [&con, ch] {
     std::string out;
     const std::string sep = word(con, "tp_name_separator");
     for (const std::string& w : held_weapon_words(con, ch->status)) {
@@ -120,46 +126,46 @@ void add_team_macros(con::Console& con, TeamChat& chat) {
     return out.empty() ? word(con, "tp_name_none") : out;
   });
   // %b is "word:ammo"; the two halves apart.
-  con.add_macro("bestweapon", [&con, ch] {
+  team("bestweapon", [&con, ch] {
     const std::string b = fill_team_codes(con, *ch, "%b");
     return b.substr(0, b.rfind(':'));
   });
-  con.add_macro("bestammo", [&con, ch] {
+  team("bestammo", [&con, ch] {
     const std::string b = fill_team_codes(con, *ch, "%b");
     const size_t at = b.rfind(':');
     return at == std::string::npos ? std::string("0") : b.substr(at + 1);
   });
-  con.add_macro("powerups", [&con, ch] {
+  team("powerups", [&con, ch] {
     const std::string p = power_words(con, ch->status, word(con, "tp_name_separator"));
     return p.empty() ? word(con, "tp_name_none") : p;
   });
-  con.add_macro("colored_powerups", [&con, ch] { return power_words(con, ch->status, ""); });
-  con.add_macro("colored_short_powerups", [ch] { return power_letters(ch->status); });
-  con.add_macro("tp_powerups", [&con, ch] {
+  team("colored_powerups", [&con, ch] { return power_words(con, ch->status, ""); });
+  team("colored_short_powerups", [ch] { return power_letters(ch->status); });
+  team("tp_powerups", [&con, ch] {
     const con::Cvar* style = con.cvars().find("tp_poweruptextstyle");
     return style != nullptr && style->number != 0 ? power_letters(ch->status)
                                                   : power_words(con, ch->status, "");
   });
-  con.add_macro("need", code("%u"));
-  con.add_macro("location", code("%l"));
-  con.add_macro("deathloc", code("%d"));
-  con.add_macro("lastloc", code("%L"));
-  con.add_macro("took", code("%X"));
-  con.add_macro("tookloc", code("%Y"));
-  con.add_macro("tookatloc", code("%i"));
-  con.add_macro("point", code("%x"));
-  con.add_macro("pointloc", code("%y"));
-  con.add_macro("pointatloc", code("%j"));
+  team("need", code("%u"));
+  team("location", code("%l"));
+  team("deathloc", code("%d"));
+  team("lastloc", code("%L"));
+  team("took", code("%X"));
+  team("tookloc", code("%Y"));
+  team("tookatloc", code("%i"));
+  team("point", code("%x"));
+  team("pointloc", code("%y"));
+  team("pointatloc", code("%j"));
   // The match: $matchstatus disconnected, standby (the server's status) or normal; $team1 and
   // $team2 the first two teams by name ("team1", "team2" when there are not so many).
-  con.add_macro("matchstatus", [ch] {
+  team("matchstatus", [ch] {
     return !ch->joined                     ? std::string("disconnected")
            : ch->match_status == "standby" ? std::string("standby")
                                            : std::string("normal");
   });
-  con.add_macro("team1", [ch] { return ch->joined ? ch->team1 : std::string("team1"); });
-  con.add_macro("team2", [ch] { return ch->joined ? ch->team2 : std::string("team2"); });
-  con.add_macro("ledpoint", [&con, ch] {
+  team("team1", [ch] { return ch->joined ? ch->team1 : std::string("team1"); });
+  team("team2", [ch] { return ch->joined ? ch->team2 : std::string("team2"); });
+  team("ledpoint", [&con, ch] {
     fill_team_codes(con, *ch, "%x");  // works out this frame's point
     const Pointed& p = ch->pointed;
     const bool power =
@@ -170,7 +176,7 @@ void add_team_macros(con::Console& con, TeamChat& chat) {
                      : power               ? "tp_name_status_yellow"
                                            : "tp_name_status_blue");
   });
-  con.add_macro("ledstatus", [&con, ch] {
+  team("ledstatus", [&con, ch] {
     const int count = needed_count(con, ch->status, false);
     return word(con, count == 0   ? "tp_name_status_green"
                      : count == 1 ? "tp_name_status_yellow"

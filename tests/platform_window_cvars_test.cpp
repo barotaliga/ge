@@ -3,6 +3,7 @@
 //
 // ge:summary Tests the window's settings: vid_fullscreen, vid_display, volume, vid_displays
 // ge:keywords test window-cvars vid_fullscreen vid_display volume vid_displays vid_geometry
+// ge:keywords vid_minimize_on_focus_loss
 // ge:skill platform testing
 #include "platform/window_cvars.hpp"
 
@@ -19,6 +20,11 @@ TEST(the_window_cvars_write_the_settings) {
   CHECK(w.display == 2);
   CHECK(w.volume == 1);  // clamped
   CHECK(con.has_command("vid_displays"));
+#if !defined(__APPLE__)
+  CHECK(w.minimize_on_focus_loss);  // a full screen gives way to another window
+#endif
+  con.execute("vid_minimize_on_focus_loss 0");
+  CHECK(!w.minimize_on_focus_loss);
 }
 
 TEST(alt_enter_flips_full_screen) {
