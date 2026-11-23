@@ -286,6 +286,12 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
     OpenedModel m;
     std::string error;
     if (!open_model(self, files, name, m, error) || m.form != ModelForm::morph) {
+      // A mission pack's weapon (q2_pack.hpp) is held only where its files are: elsewhere its
+      // place is kept empty, never missed.
+      if (server::kSqWeapons[w].pack != server::Q2Pack::base) {
+        out.emplace_back();
+        continue;
+      }
       missing += missing.empty() ? "" : ", ";
       missing += name;
       if (!error.empty()) missing += " (" + error + ")";
