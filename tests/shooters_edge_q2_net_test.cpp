@@ -31,6 +31,7 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "net/tcp_socket.hpp"
+#include "server/web_files.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
@@ -1985,6 +1986,60 @@ TEST(a_client_fetches_from_the_server_web_address_and_falls_back_to_the_channel)
   CHECK(std::find(asked.begin(), asked.end(), "/mine/baseq2/maps/hall.bsp") != asked.end());
   for (gn::TcpStream& t : streams) gn::tcp_close(t);
   gn::tcp_close_listener(web);
+}
+
+TEST(a_client_fetches_the_map_from_the_servers_own_https_files_by_their_pin) {
+  // sv_http_port on a Quake II server: its own web files over HTTPS under a certificate it made
+  // itself. The answer to `connect` names the address and the certificate's digest (` dlpin=`);
+  // the client trusts that certificate alone, takes the map from there, checked by its SHA-256,
+  // and plays on. The channel sends no piece of it.
+  const std::vector<uint8_t> map(150000, 0x3c);
+  std::vector<std::string> served;
+  ge::server::WebFiles wf;
+  ge::server::WebFilesConfig wc;
+  wc.port = 47615;
+  std::string error;
+  if (!ge::server::web_files_open(
+          wf, wc, gn::loopback_v4(0),
+          [&](const std::string& path, std::vector<uint8_t>& out) {
+            served.push_back(path);
+            if (path != "baseq2/maps/hall.bsp") return false;
+            out = map;
+            return true;
+          },
+          error)) {
+    ge::test::skip("no loopback TCP port 47615 here: " + error);
+    return;
+  }
+  CHECK(wf.pin.size() == 64 && wf.url == "https://{server}:47615/");
+  cn::Q2NetConfig cfg;
+  // The simulated server's host is no real one: the address told names loopback instead.
+  cfg.web_url = ge::server::web_files_at(wf.url, "127.0.0.1");
+  cfg.web_pin = wf.pin;
+  cfg.read_file = [&map](const std::string& path, std::vector<uint8_t>* out) {
+    if (path != "maps/hall.bsp") return false;
+    *out = map;
+    return true;
+  };
+  auto r = rig(cfg);
+  cn::Q2ClientConfig cc;
+  cc.name = "fast";
+  cc.fetch = true;
+  cn::Q2ClientEnd& c = join(*r, cc);
+  for (int i = 0; i < 600 && c.stage != cn::ClientStage::active; i++) {
+    ge::server::web_files_frame(wf, static_cast<double>(r->now) / 1e6);
+    run(*r, 1);
+  }
+  std::string said;
+  for (const std::string& l : c.http.said) said += l + "\n";
+  for (const std::string& l : served) said += "served " + l + "\n";
+  CHECK_MSG(c.stage == cn::ClientStage::active, c.refused + "\n" + said);
+  CHECK_MSG(c.downloaded.size() == 1 && c.downloaded["maps/hall.bsp"] == map, said);
+  CHECK(c.http.pin.size() == 32);
+  CHECK_MSG(std::find(served.begin(), served.end(), "baseq2/maps/hall.bsp") != served.end(), said);
+  CHECK(std::find(c.http.said.begin(), c.http.said.end(),
+                  "[HTTP] Download server at " + cfg.web_url) != c.http.said.end());
+  ge::server::web_files_close(wf);
 }
 
 // A Quake II server beats to a hub's masters under the game's own id, as a Quake server does, so
