@@ -270,15 +270,6 @@ void run(gl::Lab& lab) {
                  {"seed", lab.arg("seed")},
                  {"god", o.god ? "on" : "off"},
                  {"complete", o.complete ? "on" : "off"}};
-  gl::LabTable t{"each map at 100%",
-                 {"map", "bots", "out", "exit s", "kills", "secrets", "100%", "ended", "deaths",
-                  "given up", "plans: exit/button/key/trigger/explore/monster/secret", "nodes",
-                  "tricks: rocket/grenade/combo", "blast jumps", "faults"},
-                 {}};
-  std::vector<fb::EpisodeMap> maps;
-  std::vector<int> sizes_of;  // each map's party size
-  uint64_t digest = 1469598103934665603ull;
-  int64_t faults = 0;
   std::vector<int> sizes;
   {
     std::stringstream ps(lab.arg("party"));
@@ -288,6 +279,15 @@ void run(gl::Lab& lab) {
     if (sizes.empty()) sizes.push_back(1);
   }
   const bool party_runs = sizes.size() > 1 || sizes[0] > 1;
+  gl::LabTable t{"each map at 100%",
+                 {"map", "bots", "out", "exit s", "kills", "secrets", "100%", "ended", "deaths",
+                  "given up", "plans: exit/button/key/trigger/explore/monster/secret", "nodes",
+                  "tricks: rocket/grenade/combo", "blast jumps", "faults"},
+                 {}};
+  std::vector<fb::EpisodeMap> maps;
+  std::vector<int> sizes_of;  // each map's party size
+  uint64_t digest = 1469598103934665603ull;
+  int64_t faults = 0;
   for (const Leg& leg : legs)
     for (const int size : sizes) {
       o.first = leg.first;
@@ -339,6 +339,11 @@ void run(gl::Lab& lab) {
                     to_fixed(exit_sum, 0), of(kills, monsters), of(found, secrets),
                     std::to_string(cleared) + "/" + std::to_string(maps.size()), "", "", "", "", "",
                     "", "", std::to_string(faults)});
+  // The bots column only when a party played, so a lone bot's table is as it was.
+  if (!party_runs) {
+    t.columns.erase(t.columns.begin() + 1);
+    for (auto& row : t.rows) row.erase(row.begin() + 1);
+  }
   lab.table(t);
   lab.metric("maps.played", static_cast<double>(maps.size()), "count");
   lab.metric("maps.finished", finished, "count");
