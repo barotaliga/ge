@@ -66,6 +66,13 @@ struct Q2ConnectAsk {
 };
 // The tail of a connect line's words (`w[0]` is `connect`); false with the refusal's text.
 bool q2_connect_ask(const std::vector<std::string>& w, Q2ConnectAsk& out, std::string& refusal);
+// AN EXTENDED SERVER (its game asked for the wider limits: `ext` 1, or 2 with the newer interface)
+// takes protocol 36 alone, at minor 1024 or later (1025 for 2); any other client is refused with
+// these words. "" when the client may join (always, on a server that is not extended).
+constexpr int kQ2MinorExtended = 1024, kQ2MinorExtended2 = 1025;
+std::string q2_extended_refusal(int ext, const Q2ConnectAsk& ask);
+// The `protocol` key a status answer gives: 36 on an extended server, else 34.
+int q2_status_protocol(int ext);
 // The packet length a client gets: from 1390, the asked one for 35 and 36, held to
 // `net_maxmsglen` when above 0 (not for a client on this machine), never under 512.
 int q2_msglen(const Q2ConnectAsk& ask, int net_maxmsglen, bool local);

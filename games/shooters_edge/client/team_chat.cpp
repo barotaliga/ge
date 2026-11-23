@@ -909,11 +909,15 @@ void add_team_chat(con::Console& c, TeamChat& chat) {
   add_team_macros(c, chat);  // $health, $bestweapon, $location and the rest (team_macros.hpp)
   add_item_commands(c, chat.items);
   // The player's figures as macros for binds, draw and say: $cl_health, $cl_armor, $cl_ammo (the
-  // weapon in hand's), and $cl_mapname, as the last frame's state had them.
-  c.add_macro("cl_health", [&chat] { return std::to_string(chat.status.health); });
-  c.add_macro("cl_armor", [&chat] { return std::to_string(chat.status.armour); });
-  c.add_macro("cl_ammo",
-              [&chat] { return std::to_string(chat.status.ammo_for(chat.status.weapon)); });
+  // weapon in hand's), and $cl_mapname, as the last frame's state had them; the figures are team
+  // macros (console.hpp).
+  c.add_macro(
+      "cl_health", [&chat] { return std::to_string(chat.status.health); }, con::MacroKind::team);
+  c.add_macro(
+      "cl_armor", [&chat] { return std::to_string(chat.status.armour); }, con::MacroKind::team);
+  c.add_macro(
+      "cl_ammo", [&chat] { return std::to_string(chat.status.ammo_for(chat.status.weapon)); },
+      con::MacroKind::team);
   c.add_macro("cl_mapname", [&chat] { return chat.map; });
   // $cl_timer: the level's time, "4:05" ("0:00" before a level).
   c.add_macro("cl_timer", [&chat] {
@@ -1062,11 +1066,15 @@ void team_frame(con::Console& c, TeamChat& chat, const hud::Status& status, std:
                 int64_t bonuses, const DemoState* state) {
   const bool fire = on(c, "tp_triggers");
   chat.joined = state != nullptr;
-  if (bonuses > chat.bonuses && fire) run_alias(c, "f_bonusflash");  // whether it flashes or not
+  // A strict ruleset's match keeps the events that would script a reaction quiet (triggers_quiet).
+  const bool quiet = c.triggers_quiet();
+  if (bonuses > chat.bonuses && fire && !quiet)
+    run_alias(c, "f_bonusflash");  // whether it flashes or not
   chat.bonuses = bonuses;
   // A team's event: asked only when one happens, since finding a teammate reads the board.
   const auto team = [&] {
-    return fire && (number(c, "tp_forceTriggers") != 0 || (chat.teammates && chat.teammates()));
+    return fire && !quiet &&
+           (number(c, "tp_forceTriggers") != 0 || (chat.teammates && chat.teammates()));
   };
   if (map.empty()) return;
   if (map != chat.map) {  // a new map: what was remembered goes, f_newmap then its first frame

@@ -766,3 +766,38 @@ TEST(a_frame_short_of_room_sends_what_fits) {
   CHECK_MSG(block.size() <= 400 && block.size() > 200, std::to_string(block.size()));
   CHECK(!block.empty() && block[0] == 20);  // the frame's head kept
 }
+
+// A player's `msg` level holds back the prints below it: at 2 the pickup line (level 0) and the
+// obituary (1) stay home and the high print (2) and the chat line (3) are sent.
+TEST(a_players_msg_level_holds_back_the_prints_below_it) {
+  sv::RulesRunner r = start();
+  sv::Q2Server& s = *sv::q2_of(r);
+  r.connect(0, "eve", false, false);
+  r.user_info(0, "msg", "2");
+  sh::Packet p;
+  p.client = 0;
+  p.sequence = 1;
+  p.cmds[0] = p.cmds[1] = p.cmds[2] = cmd(0, 0);
+  r.frame(&p, 1);
+  sv::Q2Wire w;
+  w.slot = 0;
+  std::vector<std::vector<uint8_t>> blocks;
+  sv::q2_signon(w, *r, 0, {}, blocks);
+  const char* lines[] = {"pickup-line", "obituary-line", "high-line", "chat-line"};
+  for (int level = 0; level < 4; level++) {
+    sv::NetEvent ev;
+    ev.kind = sv::EventKind::print;
+    ev.to = 1;
+    ev.level = level;
+    ev.text = lines[level];
+    r->out.events.push_back(ev);
+    r->out.events_total++;
+  }
+  std::vector<uint8_t> block, rel;
+  sv::q2_frame(w, *r, static_cast<int32_t>(s.frame_number), &s.players[0].move, block, &rel);
+  const std::string sent(rel.begin(), rel.end());
+  CHECK(sent.find("pickup-line") == std::string::npos);
+  CHECK(sent.find("obituary-line") == std::string::npos);
+  CHECK(sent.find("high-line") != std::string::npos);
+  CHECK(sent.find("chat-line") != std::string::npos);
+}

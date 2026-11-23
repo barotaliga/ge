@@ -75,8 +75,10 @@ struct Recent {
 // One map's players and plan, made afresh when it is entered.
 struct OnMap {
   std::unique_ptr<MapNav> nav;
-  std::vector<Fighter> players;  // the leader first, then the companions
-  WayThrough way;
+  std::vector<Fighter> players;  // the leader first, his partners, then the companions
+  std::vector<WayThrough> ways;  // the leader's way through and each partner's (party.hpp)
+  sb::Party party;
+  std::vector<sb::PartyMember> members;
   std::vector<Wedge> wedges;     // everyone's shove at a corner
   std::vector<uint8_t> monster;  // entities that were monsters alive at the start
 };
@@ -104,13 +106,20 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   em.lo = nav.graph.lo;
   em.hi = nav.graph.hi;
   for (const sb::NavNode& n : nav.graph.nodes) em.nodes.push_back(n.origin);
-  const int n = 1 + static_cast<int>(opt.skills.size());
+  const int partners = static_cast<int>(opt.partners.size());
+  const int n = 1 + partners + static_cast<int>(opt.skills.size());
   m.players.clear();
   m.players.resize(static_cast<size_t>(n));
   m.wedges.assign(static_cast<size_t>(n), {});
+  m.ways.clear();
+  m.ways.resize(static_cast<size_t>(partners) + 1);
+  m.party = {};
+  m.members.clear();
   for (int k = 0; k < n; k++) {
     Fighter& f = m.players[static_cast<size_t>(k)];
-    const sb::AimSkill skill = k == 0 ? opt.leader : opt.skills[static_cast<size_t>(k) - 1];
+    const sb::AimSkill skill = k == 0          ? opt.leader
+                               : k <= partners ? opt.partners[static_cast<size_t>(k) - 1]
+                                               : opt.skills[static_cast<size_t>(k - partners) - 1];
     f.features = sb::features_of(skill);
     fighter_init(
         f, nav.graph, s, k, c.map.entities.c_str(), skill,
@@ -122,24 +131,26 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
     if (nav.swim.leading > 0) f.swim = &nav.swim;
     f.trap = &nav.trap;
     f.wet = &nav.wet;
-    if (k == 0) {
+    if (k <= partners) {
       // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
+      WayThrough& way = m.ways[static_cast<size_t>(k)];
       f.features.set(sb::Feature::locked, false);
       hunt_init(f, s);
       f.ledge_guard = true;  // a fall into a pit with no way out ends his map
-      m.way.complete = opt.complete;
-      m.way.toured = opt.tour;
+      way.complete = opt.complete;
+      way.toured = opt.tour;
       // The last quarter of the map's time is for the way out: a map he cannot clear still ends.
-      m.way.complete_until = s.sv.time + opt.map_seconds * 0.75;
-      m.way.avoid = opt.avoid;
+      way.complete_until = s.sv.time + opt.map_seconds * 0.75;
+      way.avoid = opt.avoid;
       if (opt.complete) way_complete_init(f, nav, s, c.map);
-      way_init(m.way, f, nav, s, c.map);
-      if (opt.plan) m.way.log = &em.plan;
+      way_init(way, f, nav, s, c.map);
+      if (opt.plan && k == 0) way.log = &em.plan;
+      m.members.push_back({&way, k + 1, true});
     } else {
       escort_init(f, s, k, 0);
     }
   }
-  for (const WayStep& st : m.way.steps)
+  for (const WayStep& st : m.ways[0].steps)
     if (st.kind == WayKind::exit) em.exits.push_back((st.lo + st.hi) * 0.5f);
   m.monster.assign(s.sv.edicts.size(), 0);
   for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
@@ -149,7 +160,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
       em.monsters++;
     }
   }
-  em.mates.assign(opt.skills.size(), {});
+  em.mates.assign(static_cast<size_t>(n) - 1, {});
   return true;
 }
 
@@ -157,11 +168,12 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
 
 EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
   EpisodeReport r;
-  const int mates = static_cast<int>(opt.skills.size());
-  if (mates < (opt.single ? 0 : 1) || mates > (opt.single ? 0 : 3) || !opt.load) {
+  const int partners = static_cast<int>(opt.partners.size());
+  const int mates = partners + static_cast<int>(opt.skills.size());
+  if (mates > (opt.single ? 0 : 7) || !opt.load) {
     r.error =
-        "run_coop_episode: 1..3 companions (none in single player) and a map loader; next: check "
-        "the options";
+        "run_coop_episode: at most 7 partners and companions (none in single player) and a map "
+        "loader; next: check the options";
     return r;
   }
   pg::Progs own;
@@ -230,25 +242,35 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         for (int k = std::max(found_was, 0); k < em.found_secrets; k++)
           em.secrets.push_back(now.world.entities[1].origin);
       }
-      if (opt.god && q) {
-        // The leader's `god`: the program's own flag on his entity, as the cheat sets it.
+      for (int k = 0; opt.god && q && k <= partners; k++) {
+        // The leader's and his partners' `god`: the program's own flag on the entity, as the
+        // cheat sets it.
         sv::QcServer* qs = sv::qc_of(c.server);
-        uint32_t* fl = pg::entity_field(qs->q.vm, 1, pg::vm_layout(qs->q.vm).f.flags);
+        uint32_t* fl = pg::entity_field(qs->q.vm, k + 1, pg::vm_layout(qs->q.vm).f.flags);
         const int had = static_cast<int>(pg::as_float(*fl));
         if ((had & kFlagGodmode) == 0) {
           *fl = pg::as_word(static_cast<float>(had | kFlagGodmode));
-          qs->sv.edicts[1].flags = had | kFlagGodmode;
+          qs->sv.edicts[static_cast<size_t>(k) + 1].flags = had | kFlagGodmode;
         }
       }
-      way_plan(m.way, m.players[0], *m.nav, now, 1, t);
+      // The party splits the map's work between the leader and his partners (party.hpp).
+      if (partners > 0) {
+        for (sb::PartyMember& pm : m.members)
+          pm.alive = now.world.entities[static_cast<size_t>(pm.ent)].health > 0;
+        sb::party_share(m.party, m.members, *m.nav, now, {});
+      }
+      for (int k = 0; k <= partners; k++)
+        way_plan(m.ways[static_cast<size_t>(k)], m.players[static_cast<size_t>(k)], *m.nav, now,
+                 k + 1, t);
       for (int k = 0; k <= mates; k++) {
         Recent& rc = recent[static_cast<size_t>(k)];
         rc.cmds[0] = rc.cmds[1];
         rc.cmds[1] = rc.cmds[2];
         rc.cmds[2] = fighter_command(m.players[static_cast<size_t>(k)], now, k, kMsec);
-        if (k == 0) {
-          way_dive(m.way, *m.nav, now, 1, rc.cmds[2]);
-          way_touch(m.way, now, 1, rc.cmds[2]);  // its keys turned or not, he goes on
+        if (k <= partners) {
+          WayThrough& way = m.ways[static_cast<size_t>(k)];
+          way_dive(way, *m.nav, now, k + 1, rc.cmds[2]);
+          way_touch(way, now, k + 1, rc.cmds[2]);  // its keys turned or not, he goes on
         }
         if (!m.players[static_cast<size_t>(k)].bot.pilot.pilot.climbing)  // held to his ladder
           unwedge(m.wedges[static_cast<size_t>(k)], now, k + 1, t, rc.cmds[2]);
@@ -300,7 +322,7 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         const bool live = d.health > 0;
         if (alive[static_cast<size_t>(k)] && !live) em.mate_deaths++;
         alive[static_cast<size_t>(k)] = live;
-        if (live && leader_live && !ending) {
+        if (live && leader_live && !ending && k > partners) {  // a companion's keeping near
           const float dd = dist(d.origin, L.origin);
           near += dd < kEscortFar ? 1 : 0;
           counted++;
@@ -328,7 +350,7 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         for (int k = 1; k <= mates; k++)
           em.mates[static_cast<size_t>(k) - 1].push_back(
               after.world.entities[static_cast<size_t>(k) + 1].origin);
-        em.way_kind.push_back(static_cast<uint8_t>(m.way.kind));
+        em.way_kind.push_back(static_cast<uint8_t>(m.ways[0].kind));
       }
       for (int e = after.sv.set.maxclients + 1;
            e < after.sv.num_edicts && static_cast<size_t>(e) < m.monster.size(); e++) {
@@ -349,6 +371,8 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         }
         if (by == 0)
           em.killed_by_leader++;
+        else if (by > 0 && by <= partners)
+          em.killed_by_partners++;
         else if (by > 0)
           em.killed_by_mates++;
         else
@@ -358,10 +382,16 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
     em.seconds = static_cast<double>(frame) / 72;
     if (!changed) em.end = "the time ran out";
     em.near_share = counted > 0 ? static_cast<double>(near) / static_cast<double>(counted) : 0;
-    em.way = m.way.stats;
+    em.way = m.ways[0].stats;
+    em.party = m.party.stats;
+    for (int k = 1; k <= partners; k++) {
+      const WayStats& ws = m.ways[static_cast<size_t>(k)].stats;
+      em.partner_steps += ws.steps_done;
+    }
+    for (const WayThrough& w : m.ways) em.left_to_mates += w.mates_skipped;
     em.leader_shoves = m.wedges[0].shoves;
     for (int k = 1; k <= mates; k++) em.mate_shoves += m.wedges[static_cast<size_t>(k)].shoves;
-    for (int k = 1; k <= mates; k++) {
+    for (int k = partners + 1; k <= mates; k++) {
       const EscortStats& es = m.players[static_cast<size_t>(k)].escort.stats;
       em.mate_buttons += es.buttons;
       em.mate_threats += es.threats;

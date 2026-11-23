@@ -1,6 +1,6 @@
 // Tests: Quake II's protocols 35 and 36 on the live connection (net/q2_net_ext.hpp): the connect's
 // tail and its refusals, the packet length, the move without a checksum and 35's compact form, the
-// batched moves both ways and their limits.
+// batched moves both ways and their limits, and an extended server's refusal of older clients.
 //
 // ge:summary Tests: Quake II's protocols 35 and 36: connect tails, compact and batched moves
 // ge:keywords test protocol-36 connect-tail batched-moves compact-move
@@ -125,4 +125,30 @@ TEST(batched_moves_read_back_and_carry_their_limits) {
   gn::Reader rc = gn::make_reader(buf + 1, 6);
   CHECK(!sn::read_q2_batch(rc, id, got, why));
   CHECK(why == "read past end of message");
+}
+
+TEST(an_extended_server_refuses_clients_short_of_its_limits) {
+  sn::Q2ConnectAsk a;
+  const std::string old =
+      "This is a protocol limit removing enhanced server.\nYour client version is not "
+      "compatible. Make sure you are running the latest client version.";
+  // Not extended: every protocol joins, and the status says 34.
+  a.protocol = 34;
+  CHECK(sn::q2_extended_refusal(0, a).empty());
+  CHECK(sn::q2_status_protocol(0) == 34);
+  // Extended: 34, 35 and 36 short of minor 1024 are refused in those words.
+  CHECK(sn::q2_extended_refusal(1, a) == old);
+  a.protocol = 35;
+  a.minor = 1905;
+  CHECK(sn::q2_extended_refusal(1, a) == old);
+  a.protocol = 36;
+  a.minor = 1023;
+  CHECK(sn::q2_extended_refusal(1, a) == old);
+  a.minor = 1024;
+  CHECK(sn::q2_extended_refusal(1, a).empty());
+  // With the newer interface the least minor is 1025.
+  CHECK(sn::q2_extended_refusal(2, a) == old);
+  a.minor = 1025;
+  CHECK(sn::q2_extended_refusal(2, a).empty());
+  CHECK(sn::q2_status_protocol(1) == 36 && sn::q2_status_protocol(2) == 36);
 }
