@@ -21,6 +21,7 @@
 #include "shooters_edge/net/q2_weapon.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
 #include "shooters_edge/net/weapon_shown.hpp"
+#include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace {
@@ -88,7 +89,8 @@ std::vector<double> run_moves(cn::Q2HandRun& r, int moves, int msec, auto attack
   for (int k = 0; k < moves; k++) {
     cn::Q2HandShot s[8];
     const int n = cn::q2_hand_move(r, 10.0 + k * msec * 0.001, attack(k), s, 8);
-    for (int i = 0; i < n; i++) at.push_back(s[i].at);
+    for (int i = 0; i < n; i++)
+      if (s[i].shot) at.push_back(s[i].at);
   }
   return at;
 }
@@ -130,16 +132,43 @@ TEST(a_tap_during_a_shot_is_lost_and_so_is_a_second_tap_in_one_frame) {
   CHECK(!r.pressed);
 }
 
-TEST(the_frames_offset_narrows_frame_by_frame_and_starts_again_when_a_frame_disagrees) {
+TEST(the_frames_offset_is_the_span_most_frames_agree_on_and_follows_a_changed_latency) {
   cn::Q2FramePhase p;
+  CHECK(cn::q2_phase_offset(p) == 0);
   // Packets every 48 ms; the server's frames start 30 ms after a packet sent at frame × 0.1 + 0.5.
-  cn::q2_phase_frame(p, 10, 1.48, 1.528);
-  CHECK(p.lo > 0.479 && p.hi < 0.529);
-  cn::q2_phase_frame(p, 11, 1.576, 1.624);  // agrees: 0.476..0.524 narrows it to 0.48..0.524
-  CHECK(p.lo > 0.479 && p.lo < 0.481 && p.hi > 0.523 && p.hi < 0.525);
-  cn::q2_phase_frame(p, 12, 1.70, 1.748);  // the latency grew: its own window
-  CHECK(p.lo > 0.499 && p.lo < 0.501);
-  CHECK(cn::q2_phase_offset(p) > 0.5 && cn::q2_phase_offset(p) < 0.525);
+  cn::q2_phase_frame(p, 10, 1.48, 1.528);   // 0.48..0.528
+  cn::q2_phase_frame(p, 11, 1.576, 1.624);  // 0.476..0.524: shared 0.48..0.524
+  CHECK(cn::q2_phase_offset(p) > 0.501 && cn::q2_phase_offset(p) < 0.503);
+  // One frame off by a server's tick (13 ms later) is outvoted, not taken.
+  cn::q2_phase_frame(p, 12, 1.70, 1.748);   // 0.5..0.548
+  cn::q2_phase_frame(p, 13, 1.776, 1.824);  // 0.476..0.524
+  CHECK(cn::q2_phase_offset(p) > 0.499 && cn::q2_phase_offset(p) < 0.525);
+  cn::q2_phase_frame(p, 13, 1.9, 1.95);  // the same frame again: not counted twice
+  CHECK(p.count == 4);
+  // A frame with no next packet adds nothing once windows are kept.
+  cn::q2_phase_frame(p, 14, 1.88, 1e9);
+  CHECK(p.count == 4);
+  // The latency grew by 100 ms: within half the kept frames the new windows hold the most.
+  for (int f = 15; f < 15 + cn::kQ2PhaseFrames / 2 + 1; f++)
+    cn::q2_phase_frame(p, f, f * 0.1 + 0.58, f * 0.1 + 0.628);  // 0.58..0.628
+  CHECK_MSG(cn::q2_phase_offset(p) > 0.58 && cn::q2_phase_offset(p) < 0.628,
+            std::to_string(cn::q2_phase_offset(p)));
+}
+
+TEST(a_shot_names_the_server_frame_it_is_sent_with_even_on_a_frame_s_edge) {
+  // Our rule, the machinegun held from 10.05 s: the press's move sends its shot with frame 101;
+  // a move a hair before 10.1 s counts in the frame from 10.1 s, so its shot goes with 102, not
+  // 101 again (by its time alone it would read as frame 101's).
+  cn::Q2HandRun r = ready_run(kMachinegun, 10, false);
+  cn::Q2HandShot s[8];
+  CHECK(cn::q2_hand_move(r, 10.05, true, s, 8) == 1);
+  CHECK(s[0].frame == 101);
+  CHECK(cn::q2_hand_move(r, 10.1 - 1e-7, true, s, 8) == 1);
+  CHECK_MSG(s[0].frame == 102, std::to_string(s[0].frame));
+  // Released: the frame from 10.2 s steps on the held attack of the last move, its own shot (102
+  // stepped already, so 10.2's step is skipped; 10.3's has attack up).
+  CHECK(cn::q2_hand_move(r, 10.25, false, s, 8) == 0);
+  CHECK(cn::q2_hand_move(r, 10.35, false, s, 8) == 0);
 }
 
 TEST(the_machinegun_fires_a_bullet_every_frame_while_held_and_stops_short_of_ammo) {
@@ -153,6 +182,60 @@ TEST(the_machinegun_fires_a_bullet_every_frame_while_held_and_stops_short_of_amm
   // Out of bullets the hand is held: no weapon change guessed.
   CHECK(r.hand.weapon == kMachinegun);
   CHECK(r.hand.pending < 0);
+}
+
+TEST(the_chaingun_s_press_spins_it_up_with_its_first_shots_and_a_burst_spins_it_down) {
+  cn::Q2HandRun r = ready_run(static_cast<int>(sv::SqWeapon::chaingun), 200, false);
+  cn::Q2HandShot s[8];
+  CHECK(cn::q2_hand_move(r, 10.05, true, s, 8) == 1);
+  CHECK(s[0].shot && s[0].sound == 1);  // kSqHandSound's spin up, in the press's own step
+  CHECK(std::string(sv::sq_hand_loop(r.hand)) == "weapons/chngnl1a.wav");
+  // Held a second, then let go: the run winds down to frame 22, where the spin down plays.
+  bool down = false;
+  for (int k = 1; k < 60 && !down; k++) {
+    const int n = cn::q2_hand_move(r, 10.05 + k * 0.05, k < 20, s, 8);
+    for (int i = 0; i < n; i++) down = down || s[i].sound == 2;
+  }
+  CHECK(down);
+}
+
+TEST(a_hand_grenade_pulls_its_pin_is_thrown_when_let_go_and_goes_off_held_too_long) {
+  const int grenade = static_cast<int>(sv::SqWeapon::hand_grenade);
+  for (const bool hold : {false, true}) {
+    cn::Q2HandRun r = ready_run(grenade, 3, false);
+    cn::Q2HandShot s[8];
+    bool pin = false, thrown = false, quiet = false;
+    // Held 0.6 s (or 5 s, past the fuse's 3.2 s), moves every 50 ms.
+    for (int k = 0; k < 120; k++) {
+      const int n = cn::q2_hand_move(r, 10.0 + k * 0.05, k < (hold ? 100 : 12), s, 8);
+      for (int i = 0; i < n; i++) {
+        pin = pin || s[i].sound == 0;
+        if (s[i].shot && !thrown) {  // the first grenade's
+          thrown = true;
+          quiet = s[i].quiet;
+          CHECK(s[i].flash < 0);  // heard by name, not by a flash
+        }
+      }
+    }
+    CHECK(pin && thrown);
+    CHECK(quiet == hold);
+  }
+}
+
+TEST(the_arsenal_message_holds_the_weapons_by_row_and_each_ammunition) {
+  sv::SqBody b = sv::sq_new_body();
+  b.counts[sv::sq_item("weapon_railgun")] = 1;
+  b.ammo[static_cast<int>(sv::SqAmmo::slugs)] = 7;
+  b.ammo[static_cast<int>(sv::SqAmmo::grenades)] = 2;
+  const std::vector<uint8_t> m = cn::q2_arsenal_message(b);
+  CHECK(m.size() == 5 + 2 * (sv::kSqAmmoKinds - 1));
+  CHECK(m[4] == sv::kSqAmmoKinds);
+  const uint32_t held = m[0] | m[1] << 8 | m[2] << 16 | static_cast<uint32_t>(m[3]) << 24;
+  CHECK((held & 1 << static_cast<int>(sv::SqWeapon::blaster)) != 0);
+  CHECK((held & 1 << static_cast<int>(sv::SqWeapon::railgun)) != 0);
+  CHECK((held & 1 << static_cast<int>(sv::SqWeapon::hand_grenade)) != 0);  // grenades held
+  CHECK((held & 1 << kRocket) == 0);
+  CHECK(m[5 + 2 * (static_cast<int>(sv::SqAmmo::slugs) - 1)] == 7);
 }
 
 // THE WINDOW JOINED TO OUR SERVER OF QUAKE II, on a link of 60 ms each way.
