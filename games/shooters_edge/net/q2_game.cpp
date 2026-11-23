@@ -521,6 +521,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   } else {
     sv::Q2ServerOptions so;
     so.seed = c.seed;
+    so.pack = sv::q2_pack_of_folder(g->folder);  // a mission pack's folder plays its rules
     std::unique_ptr<sv::Q2Server> sq = sv::make_q2_server(so);
     sq->sv.set.maxclients = slots(c);
     g->rules = sv::q2_runner(std::move(sq));

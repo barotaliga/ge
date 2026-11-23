@@ -191,15 +191,20 @@ void add_q2_session_cvars(con::Cvars& v, Q2Session& s) {
          .min = 0,
          .max = 3,
          .values = "0..3: that many (1 the default)"});
-  v.add({.name = "cl_maxpackets",
+  // The packets a second, our `cl_c2spps` (net/qw_remote.cpp), its `cl_maxpackets` the same
+  // setting: 0 one a move, else at most that many; its 30 by default, and room for more.
+  v.add({.name = "cl_c2spps",
          .fallback = "30",
          .flags = con::kArchive,
-         .help = "How many packets a second you send a server on protocol 36.",
+         .help = "How many packets a second you send a server; the moves between ride in the next "
+                 "one.",
          .kind = con::CvarKind::integer,
          .min = 0,
          .max = 1000,
          .values = "0: one a move; 10..1000: at most that many (30 the default; under 10 taken as "
-                   "10)"});
+                   "10)",
+         .overlap = con::Overlap::same});
+  v.add_synonym("cl_maxpackets", "cl_c2spps");
   v.add({.name = "cl_instantpacket",
          .fallback = "1",
          .help = "Whether pressing attack or use on protocol 36 sends a packet at once, past "

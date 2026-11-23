@@ -115,6 +115,7 @@ struct Setting {
   bool is_setting = false;  // a set, or a word that names a cvar
   int part = -1;            // a part synonym's word of its target (its value is one word)
   bool synonym = false;     // the name is another name for the cvar
+  bool mapped = false;      // a mapped synonym: its values its game's, kept under its own name
 };
 
 // The cvar a name sets: its own, or a synonym's target (a part synonym's too, which `find` does
@@ -123,6 +124,7 @@ const Cvar* cvar_named(const Console& c, std::string_view name, Setting& s) {
   if (const Synonym* syn = c.cvars().synonym(name); syn != nullptr && syn->target != nullptr) {
     s.synonym = true;
     s.part = syn->part;
+    s.mapped = !syn->values.empty();
     return syn->target;
   }
   const Cvar* v = c.cvars().find(name);
@@ -197,12 +199,14 @@ std::vector<CfgFinding> check_cfg(const Console& c, std::string_view text) {
       continue;
     }
     if (!s.has_value) continue;
-    if (s.part < 0 && s.value.find('$') == std::string::npos && !value_fits(*s.cvar, s.value)) {
+    if (s.part < 0 && !s.mapped && s.value.find('$') == std::string::npos &&
+        !value_fits(*s.cvar, s.value)) {
       out.push_back(
           {it.line, "'" + s.cvar->name + "' is \"" + s.value + "\", which is not one of its values",
            takes_text(*s.cvar)});
     }
-    const std::string key = s.part < 0 ? s.cvar->name : lower(s.name);  // a part: its own word
+    const std::string key =  // a part or a mapped synonym: its own word
+        s.part < 0 && !s.mapped ? s.cvar->name : lower(s.name);
     const auto [at, fresh] = first.emplace(key, it.line);
     if (!fresh) {
       out.push_back({at->second,
@@ -576,7 +580,7 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
     const std::vector<std::string> words = tokenize(items[i].text);
     const std::string head = words.empty() ? "" : lower(words[0]);
     Placed p{&items[i], setting_of(c, words), i};
-    if (p.s.synonym && p.s.part < 0) p.s.name = p.s.cvar->name;  // the game's own name
+    if (p.s.synonym && p.s.part < 0 && !p.s.mapped) p.s.name = p.s.cvar->name;  // its own name
     if (p.s.is_setting && p.s.cvar != nullptr) {
       const std::string_view sec = cfg_section(p.s.cvar->name);
       sections[section_rank(sec)].push_back(p);
@@ -619,7 +623,7 @@ std::string format_cfg(const Console& c, std::string_view text, const CfgFormat&
     }
   }
   const auto key = [](const Placed& p) {
-    return p.s.cvar != nullptr && p.s.part < 0 ? p.s.cvar->name : lower(p.s.name);
+    return p.s.cvar != nullptr && p.s.part < 0 && !p.s.mapped ? p.s.cvar->name : lower(p.s.name);
   };
   // One column for every value in the file.
   size_t pad = 0;
