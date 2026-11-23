@@ -31,7 +31,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 10 | 0 | 3 | 13 |
 | Picture and video | 14 | 2 | 4 | 20 |
 | Connection, network, downloads and the rest | 11 | 4 | 2 | 17 |
-| **all** | 904 | 79 | 228 | 1211 |
+| **all** | 905 | 0 | 74 | 232 | 1211 |
 
 ## Client console commands
 
@@ -439,7 +439,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_dlight_falloff | `gl_dlight_falloff` | softer dynamic-light edges (default 1) | done | Quake II's: 1 fades a dynamic light on the walls to nothing 51.2 units short of its reach, 0 cuts it off where less than 64 units are left (`brush/app/bsp_draw.hpp`'s Options::dlight_falloff); another game's straight to its reach |
 | cvar.gl_modulate_entities | `gl_modulate_entities` | the models' share of `gl_modulate` (default 1) | not-taken | Tail (decided 2026-11-23), cosmetic: quake II's: times `gl_modulate` on the models' light (`look.cpp`'s model_light, `client/world_models.cpp`), either look; the held weapon keeps its own light |
 | cvar.gl_doublelight_entities | `gl_doublelight_entities` | models lit twice as bright, as the classic renderer did (default 1) | done | Quake II's: 1 lays the models' gl_modulate x gl_modulate_entities on them twice (`model_light`); nothing at the defaults |
-| cvar.gl_glowmap_intensity | `gl_glowmap_intensity` | glow map strength (default 0.75) | missing | C21 |
+| cvar.gl_glowmap_intensity | `gl_glowmap_intensity` | glow map strength (default 0.75) | done | Quake II's (`classic/q2_fx_switches.hpp`'s q2_glow_map_gain): a model's skin `<skin>_glow.png` or `.tga` beside its picture is its glow map (`classic/content/open.cpp`), each texel lighting itself by the glow's brightness over its own (`app/classic_models.hpp`'s glow_map_marks, `render/morph.hpp`'s glow_mark), times twice the setting (default 0.75), whatever the light; a full-colour picture of the skin's name stands in for the skin too. The held weapon's glow map is not read |
 | cvar.gl_flarespeed | `gl_flarespeed` | how fast flares fade in and out (default 8) | missing | not found |
 | cvar.gl_fontshadow | `gl_fontshadow` | shadows under 2D text (default 0) | not-taken | Tail (decided 2026-11-23), cosmetic: `games/shooters_edge/client/q2_bar.cpp`: the status bar's and the screen's letters drawn first in black, 1 or 2 units down and right (`client/q2_view.cpp`); the console's letters not yet |
 | cvar.gl_shaders | `gl_shaders` | 1 the shader backend, 0 legacy (default 1) | not-taken | `client-gaps.md`: the window's renderer is its own |

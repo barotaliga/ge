@@ -97,7 +97,12 @@ struct Q2FxSwitches {
   int dlight_falloff = -1;                   // gl_dlight_falloff (-1: the renderer's own)
   double cel_shading = 0;                    // gl_celshading, pixels (0: none)
   bool smooth_explosions = true;             // cl_smooth_explosions
+  double glowmap_intensity = 0.75;           // gl_glowmap_intensity
 };
+
+// A glow map's light on a model (gl_glowmap_intensity): its colour times twice the setting, added
+// whatever the light round it.
+inline float q2_glow_map_gain(double intensity) { return static_cast<float>(2 * intensity); }
 
 // gl_partscale's share of a speck's own size `depth_units` in front of the eye: 1 at the default
 // 2 within 20 units, past them 1 and 0.004 a unit of the whole depth (5 at 1000 units), times

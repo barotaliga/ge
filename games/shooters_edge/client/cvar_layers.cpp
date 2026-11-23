@@ -308,6 +308,15 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .max = 10,
           .values = "0: none (the default); 1..10: that many pixels wide up close"},
          &x.cel_shading);
+  v.bind({.name = "gl_glowmap_intensity",
+          .fallback = "0.75",
+          .help = "How brightly the glow maps a model's skin may have (a picture named "
+                  "<skin>_glow beside it) light its eyes, lamps and screens.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 10,
+          .values = "0: no glow; 0.75: the default; more: brighter"},
+         &x.glowmap_intensity);
   v.bind({.name = "cl_smooth_explosions",
           .fallback = "1",
           .help = "Whether explosions fade smoothly, or move on frame by frame, ten a second.",

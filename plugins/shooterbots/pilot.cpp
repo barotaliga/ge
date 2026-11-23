@@ -155,7 +155,8 @@ constexpr float kStraightTop =
 constexpr float kTryKin = 72;   // (`giveup`) a jump's run-ups counted together, ends this near
 constexpr int kRunUpTries = 4;  // a jump lined up for this many times and never made is given up
 constexpr float kClear = 4;     // a player waits this far clear of a mover's box, units
-constexpr float kBrake = 0.25f;  // the least share of maxspeed walked into the goal
+constexpr float kPlatAtRest = 12;  // a plat this near its rest has not started up, units
+constexpr float kBrake = 0.25f;    // the least share of maxspeed walked into the goal
 // In the air (`air`): the aim kAirPast past the target toward the node after it within kAirCorner
 // of it, units; slower
 // than kAirSlow across, or the aim more than kAirGiveUp off the velocity, forward at it (the
@@ -1155,6 +1156,16 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           spot = B - rm->stops[static_cast<size_t>(l.stop)] + platform_at(*rm, *nm);
           platform = true;
         }
+      // A plat still at its rest starts up only for a rider in the field over its middle (its
+      // edges are left out of it): with `under_plat`, onto its middle first (bunk1's small
+      // plat t69, whose top node stood 36 units off its middle, never rose under him).
+      if (!platform && p.set.under_plat)
+        if (const NavMover* rm = mover_of(g.movers, l.mover); rm != nullptr && ridden(*rm))
+          if (const NavMover* nm = mover_of(s.movers, l.mover);
+              nm != nullptr && nm->absmin.z - rm->absmin.z <= kPlatAtRest &&
+              nm->absmin.z - rm->absmin.z >= -kPlatAtRest)
+            spot = {(nm->absmin.x + nm->absmax.x) * 0.5f, (nm->absmin.y + nm->absmax.y) * 0.5f,
+                    B.z};
       const float d = across(s.origin, spot);
       // Come onto a moving platform fast (off a hop): keys let go until friction has the run
       // down, as its top is no wider than a few steps (dm2's: 94 units; at 375 he ran off it).
@@ -1213,7 +1224,29 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           away = {away.x < 0 ? -1.0f : 1.0f, 0, 0};
         else
           away = {0, away.y < 0 ? -1.0f : 1.0f, 0};
-        if (p.set.floor_swim && s.world != nullptr) {
+        if (p.set.under_plat && s.waterlevel < 2) {
+          // Toward the nearest node off it, outside its box (a plat in a shaft is walled on some
+          // sides: under base2's raised lift to bunk1 he pressed the nearer side, a wall, and
+          // standing in its field held it up for good; a trace from inside its box starts solid,
+          // so the way out is the graph's).
+          float best = 1e30f;
+          for (size_t k = 0; k < g.nodes.size(); k++) {
+            const NavNode& c = g.nodes[k];
+            if (c.mover == l.mover || c.ride == l.mover || c.swim) continue;
+            const Vec3f d = c.origin - s.origin;
+            if (d.z > kStepHeight || d.z < -kStepHeight) continue;
+            if (c.origin.x + kPlayerMaxs.x > in->absmin.x - kClear &&
+                c.origin.x + kPlayerMins.x < in->absmax.x + kClear &&
+                c.origin.y + kPlayerMaxs.y > in->absmin.y - kClear &&
+                c.origin.y + kPlayerMins.y < in->absmax.y + kClear)
+              continue;
+            const float dd = d.x * d.x + d.y * d.y;
+            if (dd < best) {
+              best = dd;
+              away = {d.x, d.y, 0};
+            }
+          }
+        } else if (p.set.floor_swim && s.world != nullptr) {
           // Out of the side nearest the player that is open (a plat in a shaft is walled on
           // some sides): the four, by how far each is from his box's edge to the mover's.
           const Vec3f sides[4] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
