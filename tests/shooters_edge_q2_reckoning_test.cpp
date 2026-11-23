@@ -9,6 +9,8 @@
 // ge:keywords test q2 reckoning ion-ripper phalanx trap dual-fire mag-slug item-number toggle
 // ge:skill shooter testing
 // ge:test tests/shooters_edge_q2_reckoning_test.cpp
+#include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -21,6 +23,7 @@
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_powers.hpp"
+#include "shooters_edge/server/q2_reckoning.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace {
@@ -61,8 +64,8 @@ br::Entity entity(std::vector<std::pair<std::string, std::string>> pairs) {
   return e;
 }
 
-// A floored hall walled at its ends.
-std::shared_ptr<const br::Map> hall() {
+// A floored hall walled at its ends, with `things` placed in it.
+std::shared_ptr<const br::Map> hall(const std::vector<br::Entity>& things = {}) {
   br::BrushWorld w;
   w.models.resize(1);
   const float floor_lo[3] = {-1024, -256, -16}, floor_hi[3] = {1024, 256, 0};
@@ -73,6 +76,7 @@ std::shared_ptr<const br::Map> hall() {
   w.models[0].push_back(br::box_brush(west_lo, west_hi, sh::kSqSolid, "world/wall"));
   w.entities.push_back(
       entity({{"classname", "info_player_start"}, {"origin", "-300 0 24"}, {"angle", "0"}}));
+  w.entities.insert(w.entities.end(), things.begin(), things.end());
   std::vector<uint8_t> bytes;
   std::string error;
   CHECK_MSG(br::write_brush_world(w, &bytes, &error), error);
@@ -112,7 +116,7 @@ void place(Arena& a, int i, float x) {
 }
 
 // Ana at x −300 looking down the hall at Ben at x `ben`, under the pack (deathmatch).
-std::unique_ptr<Arena> facing(float ben) {
+std::unique_ptr<Arena> facing(float ben, const std::vector<br::Entity>& things = {}) {
   auto a = std::make_unique<Arena>();
   sv::Q2ServerOptions o;
   o.pack = kPack;
@@ -120,7 +124,7 @@ std::unique_ptr<Arena> facing(float ben) {
   a->r.console("deathmatch 1");
   sv::MapSpec map;
   map.name = "hall";
-  map.brushes = hall();
+  map.brushes = hall(things);
   std::string error;
   CHECK_MSG(a->r.start(map, error), error);
   a->r.connect(0, "Ana", false, false);
@@ -141,6 +145,27 @@ void give(Arena& a, SqWeapon w, int count) {
   CHECK(a.r.client_command(0, std::string("use ") + r.name) == sv::CommandResult::mod);
   run(a, 100);
   CHECK(a.p(0).hand.weapon == int(w) && a.p(0).hand.state == sv::SqHandState::ready);
+}
+
+// The map entity of `classname`; -1 none.
+int thing(const sv::Q2Server& s, const std::string& classname) {
+  for (size_t i = 0; i < s.entities.size(); i++)
+    if (s.entities[i].classname == classname) return static_cast<int>(i);
+  return -1;
+}
+
+// The events of `text` the next `ticks` host ticks made.
+int heard(Arena& a, int ticks, const std::string& text) {
+  int n = 0;
+  for (int i = 0; i < ticks; i++) {
+    const int64_t before = a.s().out.events_total;
+    run(a, 1);
+    const std::vector<sv::NetEvent>& ev = a.s().out.events;
+    const int64_t first = a.s().out.events_total - static_cast<int64_t>(ev.size());
+    for (size_t k = static_cast<size_t>(std::max<int64_t>(0, before - first)); k < ev.size(); k++)
+      n += ev[k].text == text ? 1 : 0;
+  }
+  return n;
 }
 
 int live(const sv::Q2Server& s, sv::SqShot kind) {
@@ -185,8 +210,9 @@ TEST(mag_slugs_and_traps_are_carried_only_under_the_pack) {
   CHECK(ammo(b, SqAmmo::traps) == 0 && b.max_ammo[int(SqAmmo::traps)] == 5);
   for (int i = 0; i < 7; i++) sv::sq_pick_up(sv::sq_item("ammo_trap", kPack), b, true, 1, 0);
   CHECK(ammo(b, SqAmmo::traps) == 5);
+  const int cells = ammo(b, SqAmmo::cells);
   CHECK(sv::sq_pick_up(sv::sq_item("weapon_boomer", kPack), b, true, 1, 0));
-  CHECK(ammo(b, SqAmmo::cells) == 50);
+  CHECK(ammo(b, SqAmmo::cells) == cells + 50);
 }
 
 TEST(the_ion_ripper_fires_every_third_step_for_two_cells) {
@@ -305,4 +331,56 @@ TEST(use_hyperblaster_and_use_railgun_toggle_to_the_pack_s_weapons) {
   a->r.client_command(0, "weapnext");
   run(*a, 100);
   CHECK(a->p(0).hand.weapon == int(SqWeapon::blaster));
+}
+
+TEST(the_rotating_light_alarms_while_on_and_breaks_into_sparks) {
+  auto a = facing(900, {entity({{"classname", "rotating_light"},
+                                {"origin", "0 0 200"},
+                                {"spawnflags", "3"},
+                                {"targetname", "lamp"}})});
+  const int i = thing(a->s(), "rotating_light");
+  CHECK(i >= 0 && !a->s().entities[size_t(i)].on);  // starts off
+  CHECK(heard(*a, 80, "misc/alarm.wav") == 0);
+  CHECK(sv::reckoning_use(a->s(), i, 0));
+  const int alarms = heard(*a, 8 * 31, "misc/alarm.wav");  // 3.2 s: at 0.1, 1.1, 2.1, 3.1
+  CHECK_MSG(alarms == 4, std::to_string(alarms));
+  CHECK(sv::reckoning_damage(a->s(), i, 10));
+  CHECK(heard(*a, 16, "te_welding_sparks") == 0);  // sent with the blow itself
+  CHECK(a->s().entities[size_t(i)].gone);
+}
+
+TEST(the_hum_is_heard_everywhere_every_2_7_seconds) {
+  auto a = facing(900, {entity({{"classname", "misc_amb4"}, {"origin", "0 0 64"}})});
+  const int hums = heard(*a, 8 * 55, "world/amb4.wav");  // 5.7 s
+  CHECK_MSG(hums == 2, std::to_string(hums));
+}
+
+TEST(the_nuke_kills_every_player_once_whatever_protects_him) {
+  auto a = facing(900, {entity({{"classname", "misc_nuke"}, {"targetname", "boom"}})});
+  a->p(1).invulnerable_until = 1e6;
+  const int i = thing(a->s(), "misc_nuke");
+  CHECK(sv::reckoning_use(a->s(), i, 0));
+  CHECK(!a->p(0).alive && !a->p(1).alive);
+  CHECK(!a->s().entities[size_t(i)].on);  // spent
+}
+
+TEST(the_repair_object_sparks_until_welded_through_then_regrows) {
+  auto a = facing(900, {entity({{"classname", "func_object_repair"}, {"origin", "0 0 64"}})});
+  const int i = thing(a->s(), "object_repair");  // renamed for the repair bot to find
+  CHECK(i >= 0 && a->s().entities[size_t(i)].health == 100);
+  CHECK(heard(*a, 8 * 21, "te_welding_sparks") >= 1);
+  CHECK(sv::reckoning_damage(a->s(), i, 105));
+  run(*a, 8 * 30);
+  CHECK(a->s().entities[size_t(i)].state == 2);  // its targets fired once, regrowing
+  CHECK(a->s().entities[size_t(i)].health > -5);
+}
+
+TEST(the_pulsing_laser_burns_a_player_in_its_beam) {
+  auto a = facing(200, {entity({{"classname", "target_mal_laser"},
+                                {"origin", "100 0 40"},
+                                {"angle", "0"},
+                                {"spawnflags", "1"}})});
+  a->p(1).health = 500;
+  run(*a, 8 * 20);
+  CHECK(a->p(1).health < 500);
 }

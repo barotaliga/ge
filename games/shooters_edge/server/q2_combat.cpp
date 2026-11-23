@@ -130,7 +130,7 @@ int sq_item_named(std::string_view name) {
 bool sq_holds(const SqBody& body, int w) {
   if (w < 0 || w >= kSqWeaponCount) return false;
   if (kSqWeapons[w].item == nullptr) return body.blaster;
-  const int item = sq_item(kSqWeapons[w].item);
+  const int item = sq_item(kSqWeapons[w].item, kSqWeapons[w].pack);  // its own pack's row
   if (item >= 0 && kSqItems[item].kind == SqKind::ammo)  // the hand grenade: held while stocked
     return ammo_of(body, kSqItems[item].ammo) > 0;
   return item >= 0 && body.counts[item] > 0;
