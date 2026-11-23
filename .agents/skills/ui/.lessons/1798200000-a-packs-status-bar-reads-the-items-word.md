@@ -2,7 +2,7 @@
 title: A mission pack's status bar reads the items word, and the HUD keeps the rises
 date: 2026-11-23
 scope: games/shooters_edge/hud/layout.cpp, games/shooters_edge/hud/classic_art.cpp, games/shooters_edge/hud/status.hpp
-concepts: [items-word, items2, mission-pack, pickup-flash, pack_art, rose_at]
+concepts: [items-word, items2, mission-pack, pickup-flash, pack-art, rose-at]
 ---
 
 The eight `Weapon`s cannot say a pack's guns or items, so `Status::items` and `in_hand` carry the
