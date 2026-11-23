@@ -631,100 +631,102 @@ void run(gl::Lab& lab) {
           "the shadow changed " + fixed(changed, 0) + " pixels and lightened " + fixed(lighter, 0),
           "flatten in morph.wgsl lays the copy on flat.x and the shell's colour draws it "
           "black; check morph.cpp packs flat. Skill: render.");
-      // Outlined: the runner with an ink line round it (MorphDraw::outline: the shell's back faces
-      // alone, black), at three widths.
-      {
-        const auto inked = [&](float push_m) {
-          std::vector<gr::MorphDraw> one = {runner_at(0, 3.4, 3.141592653589793 - 0.5, 1.5, 0)};
-          if (push_m > 0) {
-            gr::MorphDraw ink = one[0];
-            ink.outline = true;
-            ink.shell_push = push_m;
-            one.push_back(ink);
-          }
-          return one;
-        };
-        const gr::FrameView v = eye(0, 1.1, 0, 0, 0.06, 0.5);
-        std::vector<gl::Picture> pics;
-        std::vector<std::string> names;
-        const float kPush[] = {0.0f, 0.006f, 0.015f, 0.03f};
-        for (const float m : kPush) {
-          pics.push_back(draw(*device, s, v, inked(m)).pic);
-          names.push_back(m == 0 ? std::string("PLAIN") : "INK " + fixed(m * 1000, 0) + " MM");
-        }
-        lab.shot(
-            {"outline",
-             "A RUNNER OUTLINED",
-             "MorphDraw::outline: a black shell pushed out along the normals with its front faces "
-             "culled, so only the rim round the silhouette and the creases show (a cartoon's ink "
-             "line), at three pushes.",
-             "the runner plain, then with a thin, a middle and a thick black line round its "
-             "outline and between its limbs; the body itself unchanged",
-             {{"view", "3.4 m, day"}}},
-            es::sheet_of(pics, names, 4), Det::measured);
-        double changed = 0, lighter = 0;
-        const gl::Picture& a = pics[0];
-        const gl::Picture& b = pics[2];
-        for (size_t i = 0; i + 3 < a.rgba.size(); i += 4) {
-          const int la = a.rgba[i] + a.rgba[i + 1] + a.rgba[i + 2];
-          const int lb = b.rgba[i] + b.rgba[i + 1] + b.rgba[i + 2];
-          if (la != lb) changed += 1;
-          if (lb > la + 6) lighter += 1;
-        }
-        lab.metric("outline.changed-px", changed, "count", Det::measured);
-        lab.metric("outline.lighter-px", lighter, "count", Det::measured);
-        if (changed < 50 || lighter > changed * 0.02) {
-          lab.fail("the outline changed " + fixed(changed, 0) + " pixels, " + fixed(lighter, 0) +
-                       " of them lighter: an ink line darkens a rim round the runner",
-                   "check morph.cpp's p_outline culls the front faces and the shell's colour is "
-                   "black. Skill: render.");
-        }
-      }
-
-      // The cost: 64 runners in a crowd.
-      {
-        std::vector<gr::MorphDraw> crowd;
-        crowd.reserve(64);
-        for (int i = 0; i < 64; ++i) {
-          const int row = i / 8;
-          crowd.push_back(runner_at(-6 + (i % 8) * 1.7, 6 + row * 1.8, 3.141592653589793, i * 0.37,
-                                    static_cast<uint32_t>(i % 4)));
-        }
-        double ms = 0;
-        for (int k = 0; k < 3; ++k) ms = draw(*device, s, eye(0, 3, 0, 0, -0.2, 0.7), crowd).ms;
-        lab.metric("crowd.morph-gpu-ms", ms, "ms", Det::measured);
-      }
-
-      const uint32_t errors = device->errors.load();
-      const uint32_t late = device->pipelines_after_load;
-      lab.metric("gpu-errors", errors, "count");
-      lab.metric("pipelines-after-load", late, "count");
-      if (errors != 0) {
-        lab.fail(std::to_string(errors) + " GPU errors while drawing",
-                 "Read the gpu: lines above. Skill: render.");
-      }
-      if (late != 0) {
-        lab.fail(std::to_string(late) + " pipelines made after the load",
-                 "Every pipeline belongs in create_morph. Skill: render.");
-      }
     }
+  }
 
-    const gl::LabSpec kSpec{
-        "gpu-morph",
-        gl::LabKind::picture,
-        "engine",
-        "engine/render/morph.hpp",
-        "render",
-        "Do vertex-animated models draw in their teams' colours, sharp or smooth, blend smoothly "
-        "between their frames, glow where their skin says, take a game's own light, warp in, and "
-        "show see-through?",
-        {
-            {"width", "640", "each view's width, px"},
-            {"height", "360", "each view's height, px"},
-        },
-        "--width=160 --height=90",
-        run,
+  // Outlined: the runner with an ink line round it (MorphDraw::outline: the shell's back faces
+  // alone, black), at three widths.
+  {
+    const auto inked = [&](float push_m) {
+      std::vector<gr::MorphDraw> one = {runner_at(0, 3.4, 3.141592653589793 - 0.5, 1.5, 0)};
+      if (push_m > 0) {
+        gr::MorphDraw ink = one[0];
+        ink.outline = true;
+        ink.shell_push = push_m;
+        one.push_back(ink);
+      }
+      return one;
     };
-    GE_LAB(kSpec);
+    const gr::FrameView v = eye(0, 1.1, 0, 0, 0.06, 0.5);
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> names;
+    const float kPush[] = {0.0f, 0.006f, 0.015f, 0.03f};
+    for (const float m : kPush) {
+      pics.push_back(draw(*device, s, v, inked(m)).pic);
+      names.push_back(m == 0 ? std::string("PLAIN") : "INK " + fixed(m * 1000, 0) + " MM");
+    }
+    lab.shot({"outline",
+              "A RUNNER OUTLINED",
+              "MorphDraw::outline: a black shell pushed out along the normals with its front faces "
+              "culled, so only the rim round the silhouette and the creases show (a cartoon's ink "
+              "line), at three pushes.",
+              "the runner plain, then with a thin, a middle and a thick black line round its "
+              "outline and between its limbs; the body itself unchanged",
+              {{"view", "3.4 m, day"}}},
+             es::sheet_of(pics, names, 4), Det::measured);
+    double changed = 0, lighter = 0;
+    const gl::Picture& a = pics[0];
+    const gl::Picture& b = pics[2];
+    for (size_t i = 0; i + 3 < a.rgba.size(); i += 4) {
+      const int la = a.rgba[i] + a.rgba[i + 1] + a.rgba[i + 2];
+      const int lb = b.rgba[i] + b.rgba[i + 1] + b.rgba[i + 2];
+      if (la != lb) changed += 1;
+      if (lb > la + 6) lighter += 1;
+    }
+    lab.metric("outline.changed-px", changed, "count", Det::measured);
+    lab.metric("outline.lighter-px", lighter, "count", Det::measured);
+    if (changed < 50 || lighter > changed * 0.02) {
+      lab.fail("the outline changed " + fixed(changed, 0) + " pixels, " + fixed(lighter, 0) +
+                   " of them lighter: an ink line darkens a rim round the runner",
+               "check morph.cpp's p_outline culls the front faces and the shell's colour is "
+               "black. Skill: render.");
+    }
+  }
 
-  }  // namespace
+  // The cost: 64 runners in a crowd.
+  {
+    std::vector<gr::MorphDraw> crowd;
+    crowd.reserve(64);
+    for (int i = 0; i < 64; ++i) {
+      const int row = i / 8;
+      crowd.push_back(runner_at(-6 + (i % 8) * 1.7, 6 + row * 1.8, 3.141592653589793, i * 0.37,
+                                static_cast<uint32_t>(i % 4)));
+    }
+    double ms = 0;
+    for (int k = 0; k < 3; ++k) ms = draw(*device, s, eye(0, 3, 0, 0, -0.2, 0.7), crowd).ms;
+    lab.metric("crowd.morph-gpu-ms", ms, "ms", Det::measured);
+  }
+
+  const uint32_t errors = device->errors.load();
+  const uint32_t late = device->pipelines_after_load;
+  lab.metric("gpu-errors", errors, "count");
+  lab.metric("pipelines-after-load", late, "count");
+  if (errors != 0) {
+    lab.fail(std::to_string(errors) + " GPU errors while drawing",
+             "Read the gpu: lines above. Skill: render.");
+  }
+  if (late != 0) {
+    lab.fail(std::to_string(late) + " pipelines made after the load",
+             "Every pipeline belongs in create_morph. Skill: render.");
+  }
+}
+
+const gl::LabSpec kSpec{
+    "gpu-morph",
+    gl::LabKind::picture,
+    "engine",
+    "engine/render/morph.hpp",
+    "render",
+    "Do vertex-animated models draw in their teams' colours, sharp or smooth, blend smoothly "
+    "between their frames, glow where their skin says, take a game's own light, warp in, and "
+    "show see-through?",
+    {
+        {"width", "640", "each view's width, px"},
+        {"height", "360", "each view's height, px"},
+    },
+    "--width=160 --height=90",
+    run,
+};
+GE_LAB(kSpec);
+
+}  // namespace
