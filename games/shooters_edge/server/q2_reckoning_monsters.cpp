@@ -21,7 +21,7 @@
 //   going to an object, it lets objects be for 15 s. Hurt, it fights the one who hurt it. It raises
 //   the dead by its healing beam (q2_monster_medic.cpp).
 //
-// ge:summary The Reckoning's monsters' own ways: the gekk in and out of water, the repair bot's work
+// ge:summary The Reckoning's monsters' own ways: the gekk in and out of water, the repair bot
 // ge:keywords q2 reckoning mission-pack gekk amphibian chant heal fixbot repair-bot weld roam
 // ge:keywords takeoff landing thrust object-repair xatrix-monsters
 // ge:skill shooter
@@ -42,7 +42,16 @@ namespace shooters_edge::server::monster_ai {
 namespace {
 
 // The repair bot's work (`Q2Monster::job`).
-enum Job : int { kStand = 0, kRoam, kPause, kWeldStart, kWelding, kWeldEnd, kTakeoff, kLanding };
+enum Job : uint8_t {
+  kStand = 0,
+  kRoam,
+  kPause,
+  kWeldStart,
+  kWelding,
+  kWeldEnd,
+  kTakeoff,
+  kLanding
+};
 
 constexpr double kWeldLoop = 0.7, kWeldStartS = 1.0, kTakeoffS = 1.6, kLandingS = 5.8;
 constexpr float kRoamSpeed = 50;  // 5 units a frame
@@ -102,7 +111,7 @@ void roam_goal(Q2Server& s, Q2Monster& m) {
   const Q2Entity& e = body(s, m);
   float best = -1;
   for (int k = 0; k < 12; k++) {
-    const float turn_by = float((k / 2) * 30) * (k % 2 == 0 ? 1.0f : -1.0f);
+    const float turn_by = static_cast<float>((k / 2) * 30) * (k % 2 == 0 ? 1.0f : -1.0f);
     const sh::Vec3f way = forward_of(e.angles.y + turn_by);
     const ge::classic::Q2Trace t =
         map_trace(s, e.origin, {}, {}, e.origin + way * 8192.0f, kOpaque, m.entity);

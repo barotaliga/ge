@@ -15,7 +15,7 @@
 // of the pack's kinds placed, how many spawned and how many are still standing, and the first
 // map's floors from above with its monsters marked.
 //
-// ge:summary Lab: The Reckoning's monsters on the runner: attacks, shields, the repair bot, its maps
+// ge:summary Lab: The Reckoning's monsters on the runner: attacks, shields, the repair bot, maps
 // ge:keywords lab se-reckoning-monsters q2 reckoning mission-pack xatrix gekk fixbot gladb
 // ge:keywords power-shield laser-guard monster-damage overhead pack-maps
 // ge:skill shooter labs
