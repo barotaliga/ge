@@ -84,7 +84,7 @@ constexpr uint32_t kFamilyFte = 0x58455446, kFamilyFte2 = 0x32455446, kFamilyMvd
 constexpr uint32_t kFteScale = 0x2, kFteTrans = 0x8, kFteFloatCoords = 0x8000,
                    kFteChunkedDownloads = 0x20000000;
 constexpr size_t kChunkBytes = 1024;  // a chunked download's chunk
-constexpr uint32_t kMvdFloatCoords = 0x1, kMvdHighLagTeleport = 0x2;
+constexpr uint32_t kMvdFloatCoords = 0x1, kMvdHighLagTeleport = 0x2, kMvdWeaponPred = 0x80;
 
 constexpr int kMostEntities = 2048;
 
@@ -285,7 +285,24 @@ void player_info(Demo& d, DemoMsg& m) {
   p.model = (flags & 0x20) != 0 ? m.u8() : d.player_model;
   if ((flags & 0x40) != 0) p.skin = m.u8();
   if ((flags & 0x80) != 0) p.effects = m.u8();
-  if ((flags & 0x100) != 0) p.weapon_frame = m.u8();
+  ge::classic::WeaponState weapon;
+  if ((flags & 0x100) != 0) {
+    p.weapon_frame = m.u8();
+    // Weapon prediction's byte, and the weapon's state when it is nonzero.
+    if ((d.ext_mvd & kMvdWeaponPred) != 0 && m.u8() != 0) {
+      weapon.known = true;
+      weapon.impulse = m.u8();
+      weapon.weapon = m.i16();
+      weapon.clock = m.f32();
+      weapon.attack_finished = m.f32();
+      weapon.next_think = m.f32();
+      weapon.step = m.u8();
+      weapon.ping_ms = m.u8();
+      weapon.flags = m.u8();
+      for (int& a : weapon.ammo) a = m.u8();
+    }
+    weapon.frame = p.weapon_frame;
+  }
   // The extra byte's look: scale (bit 16), transparency (17), fatness (18, not drawn), the tint
   // (19; no server sends it for a player, but it is read).
   p.scale = (flags & (1 << 16)) != 0 ? player_byte_scale(m.u8()) : 1.0f;
@@ -303,6 +320,7 @@ void player_info(Demo& d, DemoMsg& m) {
   if (slot == d.state.player) {
     d.state.velocity = {vel[0], vel[1], vel[2]};
     d.state.velocity_read = true;
+    d.state.own_weapon = weapon;
   }
 }
 

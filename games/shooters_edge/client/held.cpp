@@ -254,11 +254,18 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   // Dead, the recorder's weapon sinks out of view (the recording clears the weapon at once: the
   // one shown goes on being drawn as it sinks).
   in.dead = s.stats[kStatHealth] <= 0;
+  // A joined server's weapon predicted: each shot it fired fires the hand (net/qw_weapon.hpp).
+  if (h.own_shots >= 0 && s.own_shots > h.own_shots && !in.dead && in.weapon == game) {
+    in.fired = true;
+    in.fire_frame = s.own_shot_frame;
+  }
+  h.own_shots = s.own_shots;
+  if (now_frame != 0) h.frames_live = true;
   if (s.format == DemoFormat::q2) q2_gun_sway(s.gun_angles, s.gun_offset, s.angles, in);
   view::HandFrame f = view::step_hand(h.hand, in, settings, models, pose, dt);
   // A classic set's frame as the server sent it: its fire animations played as recorded.
   const auto w = static_cast<size_t>(f.weapon);
-  if (h.hand.at_eye && w < models.size() && f.weapon == game) {
+  if (h.hand.at_eye && w < models.size() && f.weapon == game && h.frames_live) {
     int wf = now_frame;
     if (wf < 0 || static_cast<size_t>(wf) >= models[w].frames.size()) wf = 0;
     if (h.recorded_weapon != static_cast<int>(w)) h.recorded = FrameTrack{};

@@ -70,6 +70,7 @@
 
 #include "classic/locs.hpp"
 #include "classic/q2_move.hpp"
+#include "classic/weapon_predict.hpp"
 #include "server/sheet.hpp"
 #include "shooter/vec.hpp"
 #include "vfs/partial.hpp"
@@ -297,6 +298,12 @@ struct DemoState {
   int64_t match_starts = 0;
   sh::Vec3f velocity;          // client: the recording's player's, units/s (`velocity_read`)
   bool velocity_read = false;  // client: the player's velocity came in his last player state
+  // Client, under weapon prediction: the player's weapon state from his last player state
+  // (`known` false when the server sent none); the client runs it forward (net/qw_weapon.hpp).
+  ge::classic::WeaponState own_weapon;
+  // Client: the shots the weapon prediction fired for the player so far, and the weapon frame the
+  // last one started on (the axe's swing); the window's hand fires on each (client/held.cpp).
+  int own_shots = 0, own_shot_frame = 0;
   // Quake II: what went wrong with the last frame read (kQ2Frame* bits; `scr_showturtle` writes
   // them on the screen, client/q2_bar.hpp's `add_q2_turtle`).
   uint8_t q2_trouble = 0;

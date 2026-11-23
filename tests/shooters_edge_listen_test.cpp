@@ -698,6 +698,31 @@ TEST(a_demo_s_hand_holds_the_recorder_s_weapon_none_without_a_view_model_and_sin
   CHECK(!step().drawn);
 }
 
+TEST(a_joined_server_s_predicted_shot_fires_the_hand_once) {
+  // net/qw_weapon.hpp counts each predicted shot in own_shots: the hand fires on each, once.
+  cl::DemoState s;
+  s.stats[cl::kStatHealth] = 100;
+  s.stats[cl::kStatWeapon] = 5;
+  s.stats[cl::kStatActiveWeapon] = 8;  // the super nailgun
+  s.format = cl::DemoFormat::client;
+  s.players.resize(32);
+  cl::HeldState held;
+  const shooters_edge::view::ViewSettings settings;
+  const ge::render::FrameView frame;
+  const auto step = [&] { return cl::step_demo_held(s, held, settings, {}, frame, 0, 0.013); };
+  CHECK(!step().fired);
+  s.own_shots = 1;
+  CHECK(step().fired);
+  CHECK(!step().fired);
+  s.own_shots = 3;  // two in one window frame: one shot drawn
+  CHECK(step().fired);
+  // A server whose rules never send a weapon frame other than 0 leaves the frames to the hand.
+  CHECK(!held.frames_live);
+  s.players[0].weapon_frame = 2;
+  step();
+  CHECK(held.frames_live);
+}
+
 TEST(r_viewmodellastfired_keeps_a_recording_s_last_fired_weapon_while_another_is_looked_at) {
   cl::DemoState s;
   s.stats[cl::kStatHealth] = 100;
