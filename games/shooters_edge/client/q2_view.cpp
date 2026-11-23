@@ -2,7 +2,7 @@
 //
 // ge:summary Quake II's field of view as shown and its view and 2D cvars
 // ge:keywords q2 fov cl_adjustfov uf scr_scale scr_draw2d scr_alpha scr_lag_draw cl_kickangles
-// ge:keywords timegraph debuggraph graphheight graphscale graphshift
+// ge:keywords timegraph debuggraph graphheight graphscale graphshift scr_demobar
 // ge:skill shooter ui camera
 // ge:test tests/shooters_edge_q2_view_test.cpp
 #include "shooters_edge/client/q2_view.hpp"
@@ -144,6 +144,15 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
           .values = "0: they keep their own brightness (the default); 1: brightened with the "
                     "world"},
          &s.gamma_pics);
+  v.bind({.name = "scr_demobar",
+          .fallback = "1",
+          .flags = con::kArchive,
+          .help = "The bar along the bottom while a demo plays, with how far it has got.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: the bar with the share played (the default); 2: also the time; 0: none"},
+         &s.demo_bar);
   v.bind({.name = "scr_showturtle",
           .fallback = "1",
           .flags = con::kArchive,

@@ -339,3 +339,51 @@ TEST(the_window_draws_the_inventory_with_its_hotkeys) {
   CHECK(std::any_of(bar.ops.begin(), bar.ops.end(),
                     [](const auto& op) { return op.name == "inventory"; }));
 }
+
+TEST(invnextw_and_invprevp_step_through_the_weapons_and_the_powerups_alone) {
+  auto g = game("0", 1);
+  run(*g, 20);
+  sv::SqBody& b = g->p(0).body;
+  const int shotgun = sv::sq_item("weapon_shotgun"), quad = sv::sq_item("item_quad");
+  const int breather = sv::sq_item("item_breather");
+  b.counts[shotgun] = 1;
+  b.counts[quad] = 1;
+  b.counts[breather] = 1;
+  // The selection is an item number (the inventory message's), not a row of the item table.
+  const int n_shotgun = sv::sq_item_number(shotgun), n_quad = sv::sq_item_number(quad);
+  const int n_breather = sv::sq_item_number(breather);
+  b.selected = n_quad;
+  CHECK(g->r.client_command(0, "invnextw") == sv::CommandResult::mod);
+  CHECK(b.selected == n_shotgun || b.selected == sv::kSqBlasterNumber);  // a weapon, wrapping
+  b.selected = n_shotgun;
+  CHECK(g->r.client_command(0, "invprevp") == sv::CommandResult::mod);
+  CHECK(b.selected == n_quad || b.selected == n_breather);
+  const int first = b.selected;
+  CHECK(g->r.client_command(0, "invprevp") == sv::CommandResult::mod);
+  CHECK(b.selected != first && (b.selected == n_quad || b.selected == n_breather));
+}
+
+TEST(invdrop_drops_the_selected_item_and_says_when_it_cannot) {
+  auto g = game("0", 1);
+  run(*g, 20);
+  sv::SqBody& b = g->p(0).body;
+  const auto told = [&](const char* line) {
+    for (const sv::NetEvent& e : g->s().out.events)
+      if (e.kind == sv::EventKind::print && e.text == line) return true;
+    return false;
+  };
+  b.selected = -1;
+  for (int& c : b.counts) c = 0;
+  CHECK(g->r.client_command(0, "invdrop") == sv::CommandResult::mod);
+  CHECK(told("No item to drop.\n"));
+  b.armour = static_cast<decltype(b.armour)>(3);  // body armour worn: never thrown
+  b.armour_count = 100;
+  b.selected = 1;  // body armour's number
+  CHECK(g->r.client_command(0, "invdrop") == sv::CommandResult::mod);
+  CHECK(told("Item is not dropable.\n"));
+  const int quad = sv::sq_item("item_quad");
+  b.counts[quad] = 1;
+  b.selected = sv::sq_item_number(quad);
+  CHECK(g->r.client_command(0, "invdrop") == sv::CommandResult::mod);
+  CHECK(b.counts[quad] == 0);  // thrown out ahead of him
+}

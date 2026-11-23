@@ -37,6 +37,19 @@ gu::Color color_of(uint32_t rgba) {
           static_cast<float>(rgba >> 8 & 0xff) / 255.0f, static_cast<float>(rgba & 0xff) / 255.0f};
 }
 
+// Quake II's `scr_demobar` (q2_view.hpp's Q2Screen::demo_bar, in its layer alone): 0 no bar, 1
+// the bar always with the share played, 2 also the clock; -1 while another game is loaded.
+int game_bar(const DemoPlayback& p) {
+  const ge::console::Cvar* c = p.hooks ? p.hooks->cvars().find("scr_demobar") : nullptr;
+  return c ? static_cast<int>(c->number) : -1;
+}
+
+// The bar's mode by `demo_bar`'s numbers: Quake II's `scr_demobar` shows it always or never.
+int bar_mode(const DemoPlayback& p) {
+  const int g = game_bar(p);
+  return g < 0 ? p.bar : (g == 0 ? 0 : 2);
+}
+
 double length_of(const DemoPlayback& p, const Timedemo& t) {
   return std::max(p.scan.length_s, t.timeline.t);
 }
@@ -394,7 +407,8 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
   p.pointer_x = x;
   p.pointer_y = y;
   const double length = length_of(p, t);
-  const bool bar_on = p.bar == 2 || (p.bar == 1 && (now_s <= p.shown_until || p.paused));
+  const int bar = bar_mode(p);
+  const bool bar_on = bar == 2 || (bar == 1 && (now_s <= p.shown_until || p.paused));
   if (bar_on || p.pointer.dragging) {
     const gu::PlayBarLayout l = gu::play_bar_layout(w, h, p.bar_bottom_px);
     const gu::PlayBarAct act = gu::play_bar_pointer(p.pointer, l, length, x, y, in.button);
@@ -577,9 +591,14 @@ void playback_draw(gu::DrawList& overlay, const DemoPlayback& p, const Timedemo&
       top += cell;
     }
   }
-  if (p.bar == 0) return;
-  if (p.bar == 1 && now_s > p.shown_until && !p.paused && !p.pointer.dragging) return;
+  const int bar = bar_mode(p);
+  if (bar == 0) return;
+  if (bar == 1 && now_s > p.shown_until && !p.paused && !p.pointer.dragging) return;
   gu::PlayBarView v;
+  if (const int g = game_bar(p); g >= 0) {  // Quake II's: the share played, the clock at 2
+    v.percent = true;
+    v.clock = g == 2;
+  }
   v.length_s = length_of(p, t);
   v.position_s = t.timeline.t;
   v.playing = !p.paused;

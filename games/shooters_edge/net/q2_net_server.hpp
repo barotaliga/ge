@@ -154,8 +154,9 @@ struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   bool verify_checksum = true;
   sv::Q2WireOptions wire;  // the map's checksum, the sky; the count and the loop set here
   // DOWNLOADS: a file a client asks for (`download <path> [offset]`, then `nextdl` for each next
-  // piece of up to 1024 bytes) read from the game's files (`read_file`; unset: every download
-  // refused). Refused, as size -1 and percent 0: downloads off, a path holding `..`, starting with
+  // piece, each filling the packet, paced by the rate: q2_net_download.hpp) read from the game's
+  // files (`read_file`; unset: every download refused). Refused, as size -1 and percent 0:
+  // downloads off, a path holding `..`, starting with
   // `.` or `/` or with no `/`, a file missing, a kind switched off (`players/` skins and figures,
   // `models/` and `sprites/`, `sound/`, `maps/`, `textures/` and `env/`, `pics/`, anything else),
   // a file past `max_download_size`, and a map out of an archive to a client that would keep it
@@ -303,6 +304,9 @@ struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   bool downloading = false;
   bool download_deflated = false;  // `download` is a deflate stream the client inflates (22)
   int64_t downloads = 0;           // files sent whole
+  bool download_owed = false;      // a piece asked for and not yet sent (q2_net_download.hpp)
+  double download_wait = 0;        // the network's time the pause after the last piece ends, s
+  int64_t download_pieces = 0;     // pieces sent
   std::string download_name;       // the file being sent, as asked for
   std::vector<uint8_t> last_out;   // the last datagram sent it (`packetdup` sends it again)
   // THE PROBES AND QUERIES (q2_admin.hpp): its first `new` sent (an assigned slot before), when;
