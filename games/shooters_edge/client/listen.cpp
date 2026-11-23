@@ -162,6 +162,18 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
     e.entity = ev.ent;
     e.at = ev.origin;
     e.end = {ev.values[0], ev.values[1], ev.values[2]};
+    if (ev.text == "te_lightning") {  // the tesla (level) to what it strikes (ent), its crackle
+      e.entity = ev.level;
+      e.count = ev.ent;
+      if (l.sounds.size() < kMostListenSounds) {
+        DemoSound o;
+        o.entity = ev.level;
+        o.channel = 2;
+        o.name = "weapons/tesla.wav";
+        o.origin = ev.origin;
+        l.sounds.push_back(o);
+      }
+    }
     l.effects.push_back(std::move(e));
     return;
   }
@@ -175,6 +187,16 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
     e.kind = EffectKind::named;
     e.name = name == "te_boss_teleport" ? "sq_boss_teleport" : "sq_teleport";
     e.at = e.end = ev.origin;
+    l.effects.push_back(std::move(e));
+    return;
+  }
+  if (name == "te_steam" && listen_is_q2(l)) {  // a puff of steam: its jet the way times the speed
+    e.kind = EffectKind::named;
+    e.name = "sq_steam";
+    e.at = e.end = ev.origin;
+    e.way = sh::Vec3f{ev.values[0], ev.values[1], ev.values[2]} * ev.dir.x;
+    e.count = count;
+    e.colour = ev.level;
     l.effects.push_back(std::move(e));
     return;
   }
