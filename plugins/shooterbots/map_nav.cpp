@@ -218,6 +218,25 @@ bool floor_door(const sb::EntityBlock& b, const ModelBox& bm, const std::vector<
          static_cast<size_t>(e) < named.size() && named[static_cast<size_t>(e)];
 }
 
+// The walls that stand for good (a func_wall with no name, spawned in this game) as solids of the
+// nav's world where they are drawn: a wall left out is a way on the graph a bot stands against.
+void standing_walls(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
+                    ge::brush::BrushTracer* tracer, const std::vector<sb::EntityBlock>& blocks,
+                    sh::MoveWorld& world) {
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    const char* model = sb::block_value(b, "model");
+    if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_wall") != 0 ||
+        sb::block_value(b, "targetname") || world.count >= sh::kMaxSolids)
+      continue;
+    const int m = std::atoi(model + 1);
+    const int e = edict_of(s, model);
+    if (m <= 0 || static_cast<size_t>(m) >= model_count(spec) || e < 0) continue;
+    world.solids[world.count++] =
+        model_solid(spec, tracer, m, s.sv.edicts[static_cast<size_t>(e)].origin);
+  }
+}
+
 void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
                          ge::brush::BrushTracer* tracer, const std::vector<sb::EntityBlock>& blocks,
                          sh::MoveWorld& world, std::vector<NavBridge>& bridges) {
@@ -1139,6 +1158,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   }
   out.bridges.clear();
   open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
+  standing_walls(s, spec, out.tracer.get(), blocks, out.world);
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
   sb::build_nav(out.world, out.movers, out.move, set, out.graph);
   std::vector<sb::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
