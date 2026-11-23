@@ -1110,8 +1110,8 @@ bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
           o.slot = m.u8();
           o.msec = m.u8();
           o.state.type = static_cast<ge::classic::Q2Type>(std::min(m.u8(), 4));
-          for (int16_t& v : o.state.origin) v = static_cast<int16_t>(m.i16());
-          for (int16_t& v : o.state.velocity) v = static_cast<int16_t>(m.i16());
+          for (int32_t& v : o.state.origin) v = m.i16();
+          for (int32_t& v : o.state.velocity) v = m.i16();
           o.state.flags = static_cast<uint8_t>(m.u8());
           o.state.time = static_cast<uint8_t>(m.u8());
           o.state.gravity = static_cast<int16_t>(m.i16());
