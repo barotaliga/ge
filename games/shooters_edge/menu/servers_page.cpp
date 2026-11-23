@@ -26,6 +26,7 @@
 #include <fstream>
 #include <sstream>
 #include <string_view>
+#include <utility>
 
 #include "console/console.hpp"
 #include "ui/font.hpp"
@@ -535,16 +536,49 @@ bool ServersPage::open(std::string* why) {
     t = &own_;
   }
   config_ = gn::ServerListConfig{};
-  if (lan_) {
+  // Names resolved once here, when the player opens the page; a name that does not resolve is
+  // left out and said in the footer.
+  std::vector<std::string> masters = split_words(masters_);
+  masters.insert(masters.end(), install_masters_.begin(), install_masters_.end());
+  std::vector<std::string> servers = split_words(servers_);
+  bool lan = lan_, hub = true, book = true;
+  const bool sourced = !sources_.empty();
+  if (sourced) {  // one open's sources in place of the configured ones
+    masters.clear();
+    servers.clear();
+    lan = hub = book = false;
+    for (const std::string& w : std::exchange(sources_, {})) {
+      const std::string low = ge::console::lower(w);
+      if (low == "favorites://") {
+        book = true;
+      } else if (low == "broadcast://") {
+        lan = true;
+      } else if (low.rfind("quake2://", 0) == 0) {
+        servers.push_back(w.substr(9));
+      } else if (low.rfind("file:///", 0) == 0) {
+        // A list of addresses in the game's files, one a line; none there lists nothing.
+        if (const std::optional<std::string> text =
+                read_file_ ? read_file_(w.substr(8)) : std::nullopt) {
+          std::string words = *text;
+          std::replace_if(
+              words.begin(), words.end(),
+              [](char c) { return c == '\n' || c == '\r' || c == '\t'; }, ' ');
+          for (const std::string& line : split_words(words)) servers.push_back(line);
+        }
+      } else if (const size_t at = w.find_first_not_of("+-0123456789");
+                 at != std::string::npos && web_address(std::string_view(w).substr(at))) {
+        masters.push_back(w);
+      } else if (con_ != nullptr) {
+        con_->print("Ignoring invalid master URL: " + w);
+      }
+    }
+  }
+  if (lan) {
     for (uint32_t p = lan_first_; p <= lan_last_; p++)
       config_.lan.push_back(borrowed_ != nullptr
                                 ? gn::sim_broadcast(static_cast<uint16_t>(p))
                                 : gn::ipv4(255, 255, 255, 255, static_cast<uint16_t>(p)));
   }
-  // Names resolved once here, when the player opens the page; a name that does not resolve is
-  // left out and said in the footer.
-  std::vector<std::string> masters = split_words(masters_);
-  masters.insert(masters.end(), install_masters_.begin(), install_masters_.end());
   auto resolve = [&](const std::string& text, uint16_t port, std::vector<gn::Address>& into) {
     gn::Address a;
     if (gn::parse_address(text, a)) {
@@ -581,13 +615,13 @@ bool ServersPage::open(std::string* why) {
     }
     resolve(m, 27000, config_.masters);
   }
-  if (query_.protocol != 0)
+  if (query_.protocol != 0 && hub)
     for (const std::string& m : split_words(hub_masters_))
       resolve(m, gn::kMasterPort, config_.own_masters);
-  for (const std::string& s : split_words(servers_)) resolve(s, lan_first_, config_.servers);
+  for (const std::string& s : servers) resolve(s, lan_first_, config_.servers);
   // The address book a game keeps (Quake II's `adr0`, `adr1`, ...): read in order until one is
   // not registered, the empty ones skipped.
-  for (int k = 0; con_ != nullptr; k++) {
+  for (int k = 0; con_ != nullptr && book; k++) {
     const ge::console::Cvar* adr = con_->cvars().find("adr" + std::to_string(k));
     if (adr == nullptr) break;
     for (const std::string& s : split_words(adr->value)) resolve(s, lan_first_, config_.servers);
@@ -605,7 +639,7 @@ bool ServersPage::open(std::string* why) {
   // sb_listcache: the first open of a session shows the kept list, asked again only when
   // sb_autoupdate says so.
   const bool from_cache = first && list_cache_ && read_list_cache();
-  if ((first && !from_cache) || autoupdate_)
+  if ((first && !from_cache) || autoupdate_ || sourced)
     refresh();
   else
     build_rows();

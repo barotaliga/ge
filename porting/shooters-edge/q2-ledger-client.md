@@ -13,7 +13,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Client console commands | 132 | 13 | 1 | 10 | 156 |
 | Client settings (cvars) | 223 | 49 | 6 | 72 | 350 |
 | Macros ($name in typed and bound text) | 25 | 3 | 0 | 2 | 30 |
-| Menu pages and rows | 100 | 58 | 3 | 1 | 162 |
+| Menu pages and rows | 103 | 56 | 2 | 1 | 162 |
 | Server messages the client parses (svc) | 21 | 6 | 0 | 0 | 27 |
 | Temporary entities (svc_temp_entity) | 15 | 50 | 0 | 0 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 0 | 20 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 14 | 5 | 1 | 0 | 20 |
 | Connection, network, downloads and the rest | 10 | 5 | 2 | 0 | 17 |
-| **all** | 796 | 289 | 25 | 101 | 1211 |
+| **all** | 801 | 287 | 22 | 101 | 1211 |
 
 ## Client console commands
 
@@ -596,7 +596,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 100, partial 58, missing 3, not-taken 1
+done 103, partial 56, missing 2, not-taken 1
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
@@ -623,8 +623,8 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.sp.save | single player: save game... | opens the save page | done | ours SAVE |
 | menu.load.slots | load game | 16 slots: the autosave, a gap, then 15, each showing the save's name | partial | ours 12 slots, no autosave slot (`menu/main_menu.hpp` `kSaveSlots`) |
 | menu.save.slots | save game | 15 slots (no autosave) | partial | ours 12 slots |
-| menu.mp.q2servers | multiplayer: browse q2servers.com | the server browser filled from an HTTP list | missing | C41 (ours JOIN A GAME lists LAN, masters and our hub) |
-| menu.mp.addressbook | multiplayer: browse address book | the browser over the address book, `servers.lst` and the LAN | partial | ours JOIN A GAME has the LAN; no address book or `servers.lst` (C41) |
+| menu.mp.q2servers | multiplayer: browse q2servers.com | the server browser filled from an HTTP list | done | `games/shooters_edge/menu/q2_pages.cpp`: the row opens the browser on `+http://q2servers.com/?raw=2` alone (`pushmenu servers` with sources, `menu/servers_page.hpp`'s `use_sources`; the list fetched as 6-byte records); the same row on the in-game page |
+| menu.mp.addressbook | multiplayer: browse address book | the browser over the address book, `servers.lst` and the LAN | done | `games/shooters_edge/menu/q2_pages.cpp`: the row opens the browser on `favorites://` (`adr0` on), `file:///servers.lst` (a list in the game's files) and `broadcast://` (the LAN) alone; a word it cannot use says "Ignoring invalid master URL: ..." |
 | menu.mp.demos | multiplayer: browse demos | the demo browser | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.mp.startserver | multiplayer: start server | the start-server page | done | ours NEW GAME (host page) |
 | menu.ss.map | start server: initial map | every map found (`$com_maplist`) | done | ours MAP |
@@ -757,7 +757,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.dl.pics | downloads: pics | `allow_download_pics` | done | `games/shooters_edge/menu/q2_pages.cpp`, the setting registered by `client/q2_session.cpp` |
 | menu.dl.http | downloads: HTTP downloads | `cl_http_downloads` | done | `games/shooters_edge/menu/q2_pages.cpp`: the row sets `cl_http_downloads`, registered by `client/q2_session.cpp` |
 | menu.ab.fields | address book | 16 text fields `adr0` to `adr15` | partial | `games/shooters_edge/menu/q2_pages.cpp`: MULTIPLAYER > address book lists `adr0` to `adr15` (Quake II's cvars, `client/cvar_layers.cpp`) with each address beside it; a row opens the console to type it, no text field on the page; JOIN A GAME asks them (`menu/servers_page.cpp`) |
-| menu.game.page | the in-game page | compact list: browse q2servers.com, browse address book, browse demos, single player, options, disconnect, quit | partial | `games/shooters_edge/menu/q2_pages.cpp`: the page and ESCAPE in a level; one browse row (ours lists LAN, masters and hub) for the two |
+| menu.game.page | the in-game page | compact list: browse q2servers.com, browse address book, browse demos, single player, options, disconnect, quit | done | `games/shooters_edge/menu/q2_pages.cpp`: the page and ESCAPE in a level, its two browse rows on their sources, and ours (LAN, masters and hub) before them |
 | menu.demos.list | demo browser | lists `demos/` (all folders with `ui_listalldemos`): `.dm2`, `.dm2.gz`, `.mvd2`, `.mvd2.gz` | partial | ours `menu/demos_page.cpp` (folders anywhere, newest first) (C40) |
 | menu.demos.columns | demo browser columns | name, Date, Size, Map, POV; sorted by `ui_sortdemos` | partial | ours `menu/demos_page.cpp`: name, age and size on each row, sorted by `menu_demo_sort` (`vfs::sort_files`; Quake II spells it `ui_sortdemos`, by name by default); no Map or POV column |
 | menu.servers.list | server browser | servers from an HTTP list, favourites, `servers.lst`, broadcast | partial | ours `menu/servers_page.cpp` (LAN, masters, hub) (C41) |
