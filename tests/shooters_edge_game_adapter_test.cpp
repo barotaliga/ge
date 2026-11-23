@@ -245,6 +245,23 @@ TEST(q2_finds_a_bare_demo_name_in_its_demos_folder_and_plays_it_behind_the_menu)
   CHECK_MSG(found.starts_with("demos/q2demo1.dm2"), found);
 }
 
+TEST(q2_finds_a_gzipped_demo_by_its_bare_name) {
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(
+      ge::vfs::write_pak({{"demos/duel.dm2.gz", {5}}, {"demos/relay.mvd2.gz", {6}}}, &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::q2_adapter();
+  std::vector<uint8_t> bytes;
+  std::string found;
+  CHECK_MSG(a.find_demo(a, files, "duel", bytes, found, error), error);
+  CHECK(bytes.size() == 1 && bytes[0] == 5);
+  CHECK_MSG(a.find_demo(a, files, "relay", bytes, found, error), error);
+  CHECK(bytes.size() == 1 && bytes[0] == 6);
+  CHECK(a.list_demos(a, files).size() == 2);  // DEMOS and Tab list them too
+}
+
 TEST(a_model_is_read_into_its_form_with_a_picture_standing_in_for_a_skin) {
   const ge::morph::Model sample = ge::morph::sample_model();
   as::Image skin0;

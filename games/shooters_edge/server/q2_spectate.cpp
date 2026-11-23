@@ -173,7 +173,15 @@ bool try_switch(Q2Server& s, int slot, bool on) {
 
 bool spectate_wish(const Q2Server& s, int slot) {
   const std::string& v = info(s, slot, "spectator");
-  return deathmatch(s) && !v.empty() && v != "0";
+  const bool held = slot >= 0 && slot < 32 && ((s.held_out >> slot) & 1u) != 0;
+  return deathmatch(s) && (held || (!v.empty() && v != "0"));
+}
+
+void spectate_hold(Q2Server& s, int slot, bool held) {
+  if (slot < 0 || slot >= sh::kMaxClients || slot >= 32) return;
+  const uint32_t bit = 1u << slot;
+  s.held_out = held ? s.held_out | bit : s.held_out & ~bit;
+  s.players[slot].want_spectator = spectate_wish(s, slot);
 }
 
 void spectate_frame(Q2Server& s, bool placed[]) {

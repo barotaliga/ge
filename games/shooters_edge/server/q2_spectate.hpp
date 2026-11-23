@@ -20,6 +20,10 @@ struct Q2Server;
 // "0" (the text is also the spectators' password when one is set).
 bool spectate_wish(const Q2Server& s, int slot);
 
+// Player `slot` kept on the sidelines (`held`) or let go: while held his wish is to watch, whatever
+// his user info says; let go, his user info's wish again. The switch is the frame's, as any other.
+void spectate_hold(Q2Server& s, int slot, bool held);
+
 // The 10 Hz frame's switches, before anything else moves: each player in deathmatch whose wish is
 // not what he is, 5 s after his respawn mark, outside the intermission. A refusal (a wrong
 // password, the limit full) tells him why and sets his user info back; an accepted switch resets

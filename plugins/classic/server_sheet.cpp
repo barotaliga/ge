@@ -199,7 +199,7 @@ void qw_sheet_from_info(gs::SettingsSheet& sheet, const std::string& info) {
             match && std::string_view(pm) == "pm_airstep" ? "airstep" : ""));
 }
 
-std::vector<std::string> qw_match_listing_asks() { return {"cmd status1", "cmd status2"}; }
+std::vector<std::string> qw_match_listing_asks() { return {"status1", "status2"}; }
 
 bool qw_match_listing_read(gs::SettingsSheet& sheet, std::string_view raw) {
   const std::string line = strip_high(raw);

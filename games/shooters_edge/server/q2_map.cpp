@@ -807,8 +807,23 @@ void teleport(Q2Server& s, Q2Entity& pad, int slot) {
   effect(s, "te_teleport", pad.origin);
   effect(s, "te_teleport", d.origin);
   sound_at(s, map_row(index_of(s, pad)), pad.origin, kTeleSound, 1, 2, 1);  // idle, the weapon's
-  place_player(s, slot, d.origin, d.angles);
+  // g_teleporter_nofreeze 1 (a match server's): the player leaves the exit at the speed he came in
+  // along the ground, pointed the exit's way, with no hold; 0 stops him dead and holds him 160 ms.
+  const ge::console::Cvar* nofreeze = s.cvars.find("g_teleporter_nofreeze");
+  const bool keep = nofreeze != nullptr && nofreeze->on();
   const Q2Player& p = s.players[slot];
+  const float speed =  // along the ground, eighths of a unit/s
+      sh::length(sh::Vec3f{float(p.move.velocity[0]), float(p.move.velocity[1]), 0});
+  place_player(s, slot, d.origin, d.angles);
+  if (keep) {
+    Q2Player& q = s.players[slot];
+    const sh::Vec3f ahead = sh::angle_vectors({0, d.angles.y, 0}).forward;
+    q.move.velocity[0] = num::to_int32(double(ahead.x * speed));
+    q.move.velocity[1] = num::to_int32(double(ahead.y * speed));
+    q.move.velocity[2] = 0;
+    q.move.flags &= static_cast<uint16_t>(~ge::classic::kSqTimeTeleport);
+    q.move.time = 0;
+  }
   sound_at(s, slot + 1, unpack(p.move.origin), kTeleSound, 1, 2, 1);
 }
 
