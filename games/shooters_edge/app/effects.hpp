@@ -117,7 +117,12 @@ void teleport_splash(const double at[3], uint32_t seed, Palette palette, Particl
 //   drifting at up to 20 units/s, living 1..1.3 s.
 // - A teleporter pad's fountain, each server frame: 8 specks (219) within 16 across and 1..8 below,
 //   rising at 80..87 units/s, living 2 s.
+// - A boss teleporting out: 4096 specks (16, 104, 168 or 144), each at an angle round the point
+//   and 0..31 units out, 8..97 units above it, flying out at 70..133 units/s along its angle and
+//   down at 69..100 units/s, pulled back in at 100 units/s^2 and pushed up at 160 (`Particle::
+//   accel`), so the cloud swirls in and rises; living 1.67..2.67 s.
 enum Q2Arrival : uint8_t { kSqLogin = 0, kSqLogout = 1, kSqRespawn = 2 };
+void q2_boss_teleport(const double at[3], uint32_t seed, Palette palette, Particles* out);
 void q2_teleport_burst(const double at[3], uint32_t seed, Palette palette, Particles* out);
 void q2_item_back(const double at[3], uint32_t seed, Palette palette, Particles* out);
 // A burst of `count` specks of palette `colour` (each `colour` + 0..7 with `vary`) off a face along
