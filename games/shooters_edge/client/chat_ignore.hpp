@@ -18,11 +18,14 @@
 //
 // ge:summary The classic games' chat lines read for the engine's ignore lists on a server joined
 // ge:keywords chat-ignore classic-chat ignore drop_ignored chat_line_of ignore_qtv
+// ge:keywords game_lines listen-lines
 // ge:skill net shooter
 // ge:test tests/shooters_edge_chat_ignore_test.cpp
 #pragma once
 
+#include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "console/chat_ignore.hpp"
@@ -59,5 +62,15 @@ ge::console::ChatLine chat_line_of(const DemoState& s, const DemoPrint& p);
 // the stamp and the mark (at `clock`, the local time).
 void drop_ignored(QwIgnore& g, DemoState& s, std::vector<DemoPrint>& prints, double now_s,
                   std::string* centre = nullptr, const ChatClock& clock = chat_clock_now());
+
+// A line the window's own game printed at `level` (0 low .. 3 chat), at `now_s`: through the
+// regex triggers (false: one took it away, so it is not shown), then the message triggers of its
+// level (`msg_trigger`, while `tp_msgtriggers` is on) and Quake II's (a chat line not).
+bool game_line(QwIgnore& g, std::string_view text, int level, double now_s);
+// `lines` from `from` on through `game_line`, each kept one `show`n; their levels by index in
+// `levels` (2, high, past its end). Answers where the next look starts (`lines.size()`).
+size_t game_lines(QwIgnore& g, const std::vector<std::string>& lines,
+                  const std::vector<int>& levels, size_t from, double now_s,
+                  const std::function<void(const std::string&)>& show);
 
 }  // namespace shooters_edge::client

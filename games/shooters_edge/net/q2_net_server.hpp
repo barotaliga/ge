@@ -226,6 +226,9 @@ struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::string force_reconnect;
   std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_file;
   std::function<bool(const std::string& path, ge::vfs::ArchiveOrigin* out)> file_origin;
+  // The file as the raw deflate stream it is stored as in a `.pkz`, false for any other: sent as
+  // it lies (message 22) to a 36 client at minor 1021 or later that has zlib, from its start.
+  std::function<bool(const std::string& path, std::vector<uint8_t>* out)> read_deflated;
 };
 
 // A slot's stage. A ZOMBIE is a client dropped: for `zombie_time` seconds after the last packet
@@ -298,9 +301,10 @@ struct Q2NetClient {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<uint8_t> download;  // the file being sent
   size_t download_at = 0;         // its bytes sent so far
   bool downloading = false;
-  int64_t downloads = 0;          // files sent whole
-  std::string download_name;      // the file being sent, as asked for
-  std::vector<uint8_t> last_out;  // the last datagram sent it (`packetdup` sends it again)
+  bool download_deflated = false;  // `download` is a deflate stream the client inflates (22)
+  int64_t downloads = 0;           // files sent whole
+  std::string download_name;       // the file being sent, as asked for
+  std::vector<uint8_t> last_out;   // the last datagram sent it (`packetdup` sends it again)
   // THE PROBES AND QUERIES (q2_admin.hpp): its first `new` sent (an assigned slot before), when;
   // its answer to the version probe; `download http` said; `nogamedata`; `packetdup`; the settings
   // `stuffcvar` asked it and it has not answered yet.

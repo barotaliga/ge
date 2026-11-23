@@ -8,12 +8,19 @@
 // (`q2_merge`); the voice's gain is the two sums' total, held to 1, and its pan their difference
 // over their total.
 //
+// QUAKE'S STATIC LOOPS (both Quake and QuakeWorld, always, as their own mixer does): the level's
+// static sounds playing ONE file are heard as one voice too. Each source's ears by Quake's law
+// (`classic_static_ear`): its volume times the fall-off (1 - distance × attenuation / 1000, no
+// near zone), the right ear times 1 plus its side and the left 1 minus it (so a source square to
+// one side is twice as loud in that ear); the ears summed, each held to 1 (a centred source at full
+// volume), and the voice's gain their mean and its pan their balance (`classic_static_merge`).
+//
 // `al_merge_looping` 0 never merges (each copy its own voice), 1 merges while the output is plain
 // stereo (the two ears of s_hrtf 2 are not), 2 always (`q2_merges`).
 //
-// ge:summary Quake II's copies of one looped sound merged into one voice: shares, gain and pan
+// ge:summary Copies of one looped sound merged into one voice: Quake II's loops, Quake's statics
 // ge:keywords al_merge_looping loop-merge looped-sounds entity-loops merged-loop q2_merge
-// ge:keywords q2_loop_ear q2_loop_multiplier q2_merges
+// ge:keywords q2_loop_ear q2_loop_multiplier q2_merges static-sounds classic_static_merge
 // ge:skill classic audio
 // ge:test tests/classic_q2_footsteps_test.cpp
 #pragma once
@@ -54,6 +61,19 @@ inline Q2Merged q2_merge(Q2Ears sum) {
   const double l = std::min(sum.left, 1.0), r = std::min(sum.right, 1.0);
   if (l + r <= 0) return {};
   return {std::min(l + r, 1.0), (r - l) / (r + l)};
+}
+
+// One Quake static source's ears: `volume` (0..1), `distance` units, `side` -1..1, `attenuation`
+// the protocol's factor (3 static).
+inline Q2Ears classic_static_ear(double volume, double distance, double side, double attenuation) {
+  const double v = volume * std::max(0.0, 1 - distance * attenuation / 1000);
+  return {v * (1 - side), v * (1 + side)};
+}
+// The merged voice of Quake's summed static ears: each held to 1, the gain their mean.
+inline Q2Merged classic_static_merge(Q2Ears sum) {
+  const double l = std::min(sum.left, 1.0), r = std::min(sum.right, 1.0);
+  if (l + r <= 0) return {};
+  return {(l + r) / 2, (r - l) / (r + l)};
 }
 
 // Whether `al_merge_looping` `mode` merges on an output that is plain stereo or not.

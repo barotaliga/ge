@@ -15,6 +15,7 @@
 // ge:summary The console language's text: commands split on ; and lines, words, $ expansion
 // ge:keywords console lexer tokenize split_commands words quotes comment semicolon expand
 // ge:keywords dollar cvar-expansion macro alias-arguments substitute_args
+// ge:keywords fit_width tp_length tp_align fixed-width
 // ge:skill console
 // ge:test tests/console_lex_test.cpp
 #pragma once
@@ -45,6 +46,10 @@ std::string rest_after(std::string_view command, size_t skip);
 // `$name` and `${name}` replaced by `lookup(name, value)` where it returns true; `$$` → `$`.
 std::string expand(std::string_view text,
                    const std::function<bool(std::string_view, std::string&)>& lookup);
+
+// `text` padded with blanks or cut to `width` letters (a `{` or `}`, and a colour code `&cRGB` or
+// `&r`, take no room), set left, `'r'` right or `'c'` centred (the extra blank on the right).
+std::string fit_width(std::string_view text, int width, char align);
 
 // An alias body with its arguments put in (above; args[0] is the alias's name).
 std::string substitute_args(std::string_view body, const std::vector<std::string>& args);

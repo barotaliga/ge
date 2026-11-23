@@ -143,7 +143,7 @@ struct ListenHost {
   // The player's side of every frame: the rules' frame before the endpoint routes it (prints,
   // effects, blows), and a line printed to him (the lobby's and the room's answers).
   void (*tap)(void* ctx, const sv::RulesCommon& game) = nullptr;
-  void (*print)(void* ctx, const std::string& text) = nullptr;
+  void (*print)(void* ctx, int level, const std::string& text) = nullptr;  // the print's level
   // A voice the server relayed to him (the match's `sv_voip`): the talker's slot, the protocol's
   // generation and first sequence, the frames (demo.hpp's `DemoVoice`).
   void (*heard)(void* ctx, int talker, int gen, int seq,
@@ -316,13 +316,16 @@ struct Listen {
   // The easy jump (shooter/speedjump_assist.hpp): the aid strafing for him while his slot asks
   // (`cl_speedjump 1`), at the server's pm_speedjump; `speedjump_view` of its swing is drawn.
   sh::SpeedJumpAid jump_aid;
-  float speedjump_view = 0.5f;       // cl_speedjump_view
-  bool forced = false;               // the server turned the view in the last frame
-  bool load_menu_asked = false;      // the rules asked his client for the load menu (a death)
-  int impulse = 0;                   // waiting for a frame
-  std::string pending_map;           // the mod or the console asked for this map
-  std::string cinematic;             // Quake II's movies before it (cinematic.hpp), for the window
-  std::vector<std::string> prints;   // what the server printed to the player, in order
+  float speedjump_view = 0.5f;      // cl_speedjump_view
+  bool forced = false;              // the server turned the view in the last frame
+  bool load_menu_asked = false;     // the rules asked his client for the load menu (a death)
+  int impulse = 0;                  // waiting for a frame
+  std::string pending_map;          // the mod or the console asked for this map
+  std::string cinematic;            // Quake II's movies before it (cinematic.hpp), for the window
+  std::vector<std::string> prints;  // what the server printed to the player, in order
+  // Each print's level (0 low .. 3 chat) by its index; past the end, or a line of the window's
+  // own, 2 (high).
+  std::vector<int> print_levels;
   std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
   // The lines a single-player program stuffed into his console other than `bf` (counted in
   // `bonuses`) and the load menu's, for the window's console to run.
@@ -461,6 +464,8 @@ bool listen_rules_word(Listen& l, const std::string& line);
 // command, its level commands (restart, changelevel) to the server's console; false for any other
 // line or game. On any Quake server (deathmatch too), `tell` and `ping` go to it as slot 0's.
 bool listen_campaign_word(Listen& l, const std::string& line);
+// A line the server printed to the player at `level` (0 low .. 3 chat), its level kept beside it.
+void listen_print(Listen& l, int level, const std::string& text);
 // The people playing in the game the window hosts (its own player and those who joined; never
 // a bot, so a game with companions alone still pauses under the menu).
 int listen_players(const Listen& l);

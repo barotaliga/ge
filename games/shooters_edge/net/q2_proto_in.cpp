@@ -126,7 +126,7 @@ uint32_t read_entity(const Q2ProtoIn& p, client::DemoMsg& m, uint32_t f, Q2Entit
   if (f & kAngleYaw) s.angles[1] = angle();
   if (f & kAngleRoll) s.angles[2] = angle();
   if (f & kOldOrigin)
-    for (int16_t& v : s.old_origin) v = static_cast<int16_t>(m.i16());
+    for (int32_t& v : s.old_origin) v = static_cast<int16_t>(m.i16());
   if (f & kSoundBit) s.sound = m.u8();
   if (f & kEvent) s.event = m.u8();
   if (f & kSolid)
@@ -242,9 +242,9 @@ void write_player(std::vector<uint8_t>& out, const Q2PlayerState& a, const Q2Pla
   o.i16(static_cast<int32_t>(f));
   if (f & kPmType) o.u8(b.type);
   if (f & kPmOrigin)
-    for (const int16_t v : b.origin) o.i16(v);
+    for (const int32_t v : b.origin) o.i16(v);
   if (f & kPmVelocity)
-    for (const int16_t v : b.velocity) o.i16(v);
+    for (const int32_t v : b.velocity) o.i16(v);
   if (f & kPmTime) o.u8(b.time);
   if (f & kPmFlags) o.u8(b.flags);
   if (f & kPmGravity) o.i16(b.gravity);

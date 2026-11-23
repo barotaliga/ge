@@ -710,6 +710,10 @@ void c_pmove(NativeMoveBlock* pm) {
   m.cmd.light = pm->cmd.light;
   m.changed = pm->snapinitial != 0;
   m.air_accelerate = h.air_accelerate;
+  if (h.thinking >= 0 && h.thinking < h.max_clients) {  // the server's defaults when none thinks
+    const int protocol = h.s->clients[size_t(h.thinking)].protocol;
+    if (protocol != 0) ge::classic::q2_fly_for_protocol(m, protocol);
+  }
   if (h.q1_physics) {  // Quake's ground and air, as Quake II runner moves them
     const shooters_edge::profiles::MoveFeel& f = shooters_edge::profiles::kQ1Feel;
     m.max_speed = f.max_speed;
@@ -1143,6 +1147,10 @@ void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool 
   if (info && !info_safe(value)) return;
   if (!force && (c.rec.flags & native::kCvarNoSet) != 0) {
     h.s->console.push_back(c.name + " is write protected");
+    return;
+  }
+  if (!force && c.name == kUnsafeSavesSetting) {  // the start's value holds
+    h.s->console.push_back(c.name + " may be set from command line only.");
     return;
   }
   if (!force && (c.rec.flags & native::kCvarLatch) != 0 && h.game != nullptr) {

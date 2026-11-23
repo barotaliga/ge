@@ -152,8 +152,8 @@ bool holds(const std::vector<uint8_t>& b, const std::string& text) {
   return std::search(b.begin(), b.end(), text.begin(), text.end()) != b.end();
 }
 
-float x_of(const sv::NativeQ2& s) { return s.raw.players[0].origin[0] * 0.125f; }
-float z_of(const sv::NativeQ2& s) { return s.raw.players[0].origin[2] * 0.125f; }
+float x_of(const sv::NativeQ2& s) { return float(s.raw.players[0].origin[0]) * 0.125f; }
+float z_of(const sv::NativeQ2& s) { return float(s.raw.players[0].origin[2]) * 0.125f; }
 
 TEST(the_library_is_found_in_the_mod_folder_then_the_base) {
   std::filesystem::path lib;
@@ -459,7 +459,7 @@ TEST(the_extended_interface_answers_the_games_calls_and_asks_its_own) {
   CHECK(s->host->ex != nullptr && s->host->ex->apiversion == 3);
   // The features: the server's offer read, the game's answer kept.
   CHECK(s->host->find_setting("sv_features")->value == std::to_string(sv::kNativeServerFeatures));
-  CHECK(sv::native_features(*s->host) == (2 | 4096));
+  CHECK(sv::native_features(*s->host) == (2 | 1024 | 4096));  // with enhanced saves
   r->clients[0].address = "[2001:db8:1::5]:27901";
   r.connect(0, "tester", false, false, nullptr);
   std::vector<uint8_t>& out = s->raw.reliable[0];
@@ -534,3 +534,56 @@ TEST(the_extended_game_says_whether_it_may_be_saved) {
 }
 
 }  // namespace
+
+// A library that does not ask for enhanced saves is never saved, loaded or kept level to level,
+// and says so as a game starts; `sys_allow_unsafe_savegames` lets it be, set at start only.
+TEST(a_game_without_enhanced_saves_is_not_saved_unless_allowed_at_start) {
+  const auto start_unsafe = [](bool allowed) {
+    std::filesystem::path lib;
+    CHECK(sv::find_native_library(kRoot, "fixturemod", "base", lib));
+    sv::NativeQ2Options o;
+    o.library = lib;
+    o.max_clients = 1;
+    o.game = "fixturemod";
+    o.settings = {{"fixture_unsafe", "1"}, {"sys_allow_unsafe_savegames", allowed ? "1" : "0"}};
+    std::string error;
+    std::unique_ptr<sv::NativeQ2> s = sv::load_native_q2(o, error);
+    CHECK_MSG(s != nullptr, error);
+    if (!s) return sv::RulesRunner{};
+    s->map_checksum = 1234;
+    sv::RulesRunner r = sv::native_q2_runner(std::move(s));
+    r.console("deathmatch 0");
+    r.console("map \"hall\"");
+    sv::MapSpec map;
+    map.name = sv::native_q2_of(r)->pending_map;
+    map.brushes = hall();
+    CHECK_MSG(r.start(map, error), error);
+    return r;
+  };
+  const auto said = [](const sv::NativeQ2& s, const std::string& line) {
+    return std::find(s.console.begin(), s.console.end(), line) != s.console.end();
+  };
+  sv::RulesRunner r = start_unsafe(false);
+  if (!r) return;
+  sv::NativeQ2& s = *sv::native_q2_of(r);
+  CHECK(said(s, "Game does not support enhanced savegames. Savegames will not work."));
+  r.connect(0, "tester", false, false, nullptr);
+  ticks(r, 10, 0);
+  CHECK(r.calls->save_problem(r.rules) == "Game does not support enhanced savegames.");
+  std::string error;
+  CHECK(sv::native_q2_load_ask(s, std::vector<uint8_t>(16, 0), "s1", error).empty());
+  CHECK(error == "Game does not support enhanced savegames");
+  r.console("sys_allow_unsafe_savegames 1");  // too late: the start's value holds
+  CHECK(said(s, "sys_allow_unsafe_savegames may be set from command line only."));
+  CHECK(r.calls->save_problem(r.rules) == "Game does not support enhanced savegames.");
+  sv::RulesRunner a = start_unsafe(true);
+  if (!a) return;
+  CHECK(said(*sv::native_q2_of(a), "Use of unsafe savegames forced from command line."));
+  a.connect(0, "tester", false, false, nullptr);
+  ticks(a, 10, 0);
+  CHECK(a.calls->save_problem(a.rules).empty());
+  // The fixture asks for enhanced saves by default.
+  sv::RulesRunner safe = start_single();
+  if (!safe) return;
+  CHECK(said(*sv::native_q2_of(safe), "Game supports enhanced savegames."));
+}

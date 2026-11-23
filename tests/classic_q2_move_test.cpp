@@ -290,6 +290,33 @@ TEST(a_spectator_flies_through_a_wall) {
   CHECK(r.x() > 150 && r.z() == 60);
 }
 
+// A spectator's flight by the client's protocol: the original step leaves a glide where it was
+// once no speed is wanted; 36 glides on, with its friction of 4; 35 and 36 fly at twice the time.
+TEST(a_spectators_flight_follows_its_clients_protocol) {
+  World w;
+  ge::classic::Q2State s = at(-200, 400, 300);
+  s.type = ge::classic::Q2Type::spectator;
+  const auto glide = [&](int protocol) {
+    Run r(w, s);
+    ge::classic::q2_fly_for_protocol(r.pm, protocol);
+    r.step(cmd(400), 20);  // up to speed
+    const float x = r.x();
+    r.step(cmd(), 3);  // keys let go: gliding, slowing
+    return r.x() - x;
+  };
+  CHECK(glide(34) == 0);  // put for each command
+  CHECK(glide(35) == 0);
+  CHECK(glide(36) > 10);
+  const auto ahead = [&](int protocol) {
+    Run r(w, s);
+    ge::classic::q2_fly_for_protocol(r.pm, protocol);
+    r.step(cmd(400), 10);
+    return r.x() + 200;
+  };
+  CHECK_MSG(ahead(35) > 1.8f * ahead(34),
+            std::to_string(ahead(34)) + " " + std::to_string(ahead(35)));
+}
+
 TEST(a_changed_state_finds_a_free_start) {
   World w;
   Run r(w, at(0, 0, 24));  // on the floor's plane: touching it, so solid

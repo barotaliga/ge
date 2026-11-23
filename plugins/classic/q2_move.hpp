@@ -138,6 +138,13 @@ struct Q2Move {
   // still rising lands on it carrying the rise, and a jump from there adds to it: the stair's
   // double jump. False: the air's plain slide, the ledge climbed only by rising past it.
   bool air_step = true;
+  // A spectator's flight: its step's time scaled (a later protocol's clients fly at twice the
+  // time: twice as far, friction and acceleration twice as hard), its friction (0: 1.5 times
+  // `friction`, 9), and whether it glides on when no more speed is wanted. False: the original
+  // step, which then leaves the position where it was for that command.
+  float fly_time = 1;
+  float fly_friction = 0;
+  bool fly_glide = true;
   // Out.
   int touch[kSqMaxTouch] = {};
   int touches = 0;
@@ -159,6 +166,14 @@ struct Q2Feel {
   bool air_step = true;      // false: no step climbed in the air, so no stair's double jump
   bool surface_lift = true;  // false: no fixed lift for jump held under water
 };
+
+// A spectator's flight as a client of `protocol` predicts it: 34 the original step (no glide), 35
+// at twice the time, 36 at twice the time with friction 4, gliding on.
+inline void q2_fly_for_protocol(Q2Move& pm, int protocol) {
+  pm.fly_time = protocol >= 35 ? 2.0f : 1.0f;
+  pm.fly_friction = protocol >= 36 ? 4.0f : 0.0f;
+  pm.fly_glide = protocol >= 36;
+}
 
 // `f` onto a move about to run.
 inline void q2_feel(Q2Move& pm, const Q2Feel& f) {

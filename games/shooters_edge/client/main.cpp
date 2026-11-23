@@ -388,7 +388,6 @@ int run_main(int argc, char** argv) {
                                   .stuff_level = &remote.stuff.level,
                                   .frame_cap = &pacing.settings.max_fps,
                                   .light_intensity = &picture.light_intensity,
-                                  .light_modulate = &picture.light_modulate,
                                   .light_lift = &picture.light_lift,
                                   .gibs = &picture.gibs,
                                   .no_glow = &picture.no_glow,
@@ -1189,7 +1188,8 @@ int run_main(int argc, char** argv) {
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
       menu_host.in_level = (listen.server || remote.active) && !attract;  // ESCAPE's in-game page
       menu_host.screen_up = q2_bar.layout_up;  // ESCAPE puts the help computer away first
-      q2_bar.f1 = ge::input::key_held(held, 58) ? (bench.active ? 2 : 1) : 0;  // F1: the layout
+      menu_host.escape_held = ge::input::key_held(held, ge::input::key::escape);  // held: the menu
+      q2_bar.f1 = ge::input::key_held(held, 58) ? (bench.active ? 2 : 1) : 0;     // F1: the layout
       picture.view_size = q2_screen.viewsize;  // Quake II's viewsize (100 for every other game)
       // A benchmark's Escape stops the run (below) and opens nothing.
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
@@ -1197,7 +1197,8 @@ int run_main(int argc, char** argv) {
                            (!first_pictures.valid() && std::exchange(menu_at_start, false));
       const bool load_menu = cl::keep_autosave(listen, files);  // Quake II's; a death's ask
       if (opening || load_menu)  // the slots' lines read again: a save may have been made since
-        menu_host.saves = cl::save_slot_labels(files, shooters_edge::menu::kSaveSlots);
+        menu_host.saves = cl::save_slot_labels(
+            files, shooters_edge::menu::slot_names(shooters_edge::menu::table_of(menu_host)));
       game_menu.update(mi, opening, menu_host, wall);
       if (load_menu) game_menu.show(menu_host, "load");
       if (watched && !attract && !was_open &&
@@ -1779,7 +1780,8 @@ int run_main(int argc, char** argv) {
       cl::record_tick(recorder, listen, frames, console);
       hear_here(wall);
       if (std::exchange(listen.restarted, false)) forget_seen();
-      for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+      printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                               [&](const std::string& line) { tell(line, t); });
       title_frame(t, wall, {}, 0, true);
       ++presented;
       continue;
@@ -1846,7 +1848,8 @@ int run_main(int argc, char** argv) {
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");
     }
-    for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+    printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                             [&](const std::string& line) { tell(line, t); });
     if (centred > listen.centres.size()) centred = 0;     // a new listen
     for (; centred < listen.centres.size(); centred++) {  // a centre print: the last one shows
       hud.centre = listen.centres[centred];
