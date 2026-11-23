@@ -102,6 +102,8 @@ inline Class class_of_name(std::string_view c) {
       {"trigger_elevator", kElevator},
       {"misc_viper", kTrain},  // the fly-by ships run their path as a train
       {"misc_strogg_ship", kTrain},
+      {"misc_crashviper", kTrain},  // The Reckoning's: a ship as the viper; a transport
+      {"misc_transport", kTrain},   // that runs its path from the start, unseen until used
       {"func_wall", kWall},
       {"func_timer", kTimer},
       {"trigger_once", kTriggerOnce},
