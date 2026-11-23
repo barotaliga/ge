@@ -2,7 +2,7 @@
 title: Place a Quake II move at its packet's arrival, and step the server on its tick
 date: 2026-11-23
 scope: games/shooters_edge/net/q2_weapon.cpp
-concepts: [weapon-prediction, q2, frame-phase, move-timing, press-latch, kTickUs, server-frame]
+concepts: [weapon-prediction, q2, frame-phase, move-timing, press-latch, host-tick, server-frame]
 ---
 
 A Quake II window sends a packet about every 48 ms with three moves in it, so the server runs a
