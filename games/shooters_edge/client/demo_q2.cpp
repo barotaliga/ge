@@ -282,6 +282,8 @@ void set_string(Demo& d, int index, std::string text) {
     const bool number = !text.empty() && text.find_first_not_of("0123456789") == std::string::npos;
     s.cdname = text.empty() || number ? std::string{} : text;
     if (!s.cdname.empty()) s.cdtrack = -1;
+  } else if (index == 2) {
+    s.sky = std::move(text);
   } else if (index == cs.max_clients) {
     // Entities 1 to this are the players: kept by slot, so the rest number past `players`.
     d.max_clients = std::clamp(std::atoi(text.c_str()), 1, 32);
@@ -326,6 +328,7 @@ void server_data(Demo& d, DemoMsg& m) {
   s.models.assign(1, "");
   s.sounds.assign(1, "");
   s.images.assign(1, "");
+  s.sky.clear();
   s.item_names.assign(1, "");
   s.status_bar.clear();
   s.air_accelerate = 0;
