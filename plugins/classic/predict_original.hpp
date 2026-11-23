@@ -62,8 +62,9 @@ void original_prediction_place(OriginalPrediction& p, const ModelAt* movers, int
                                const Vec3f* players, int player_count);
 
 // Its own player: the acknowledged state with `count` later commands run through the original
-// step on the stand-in. The returned state's origin, velocity and ground are the predicted ones.
+// step on the stand-in. The returned state's origin, velocity and ground are the predicted ones;
+// `each` (when given, `count` of them) the same after each command, in order.
 MoveState predict_player_original(OriginalPrediction& p, const NetPlayer& acked,
-                                  const MoveCmd* cmds, int count);
+                                  const MoveCmd* cmds, int count, MoveState* each = nullptr);
 
 }  // namespace ge::classic

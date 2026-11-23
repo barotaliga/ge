@@ -87,6 +87,7 @@
 #include "shooters_edge/client/chat_ignore.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/own_missiles.hpp"
 #include "shooters_edge/net/q1_end.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_pingservers.hpp"
@@ -105,6 +106,8 @@ inline constexpr int kTickUs = 13000;                         // a move's length
 inline constexpr int kQ2LeastMoves = 10, kQ2MostMoves = 125;  // Quake II's cl_maxfps range
 inline constexpr int kMostTicks = 8;     // ticks a call may run; a longer stall drops the rest
 inline constexpr float kLerpMost = 200;  // units: an entity moved further between two frames snaps
+// units/s: a correction of the predicted place left smaller than this times the step is dropped.
+inline constexpr float kSmoothDropU = 220;
 inline constexpr float kStockShare = 0.8f;         // the easy jump's share on a server without it
 inline constexpr int kMicMostSamples = 48000 / 4;  // the microphone's samples a frame may hold
 
@@ -215,7 +218,19 @@ struct Remote {
   sh::SpeedJumpAid jump_aid;  // the easy jump's memory (shooter/speedjump_assist.hpp)
   float speedjump_view = 0.5f;  // cl_speedjump_view: the share of its swing drawn
   sh::Smoothing smooth;         // the prediction's correction
+  double smoothview = 1;        // cl_predict_smoothview: 0 snapped, 1 the decay's own rate, 2 slow
   RemoteWeapon weapon;          // the held weapon predicted (qw_weapon.hpp)
+  // The moves the last prediction ran past the acknowledged one: each one's command and the state
+  // after it (`ahead_count` of them), for the missiles' launch places and the jump's sound.
+  uint32_t ahead_seq[64] = {};
+  sh::MoveState ahead_each[64];
+  int ahead_count = 0;
+  bool ahead_from_held = false;  // the acknowledged state's jump button was held
+  client::OwnMissiles missiles;  // cl_predict_projectiles (client/own_missiles.hpp)
+  int missiles_level = -1;       // the level they fly in (DemoState::levels)
+  bool predict_jump = true;      // cl_predict_jump: the jump's sound played as predicted
+  uint32_t jump_played_to = 0;   // the newest command whose jump has played
+  int jumps_played = 0;          // jumps whose sound the prediction played (for the labs)
   // Prediction on the original move (the server's `sv_playermove original`): the stand-in
   // server, built for the level `original_level` counts and the models `original_for` points at.
   ge::classic::OriginalPrediction original;

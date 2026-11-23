@@ -7,6 +7,8 @@
 // ge:test tests/shooter_predict_test.cpp
 #include "shooter/predict.hpp"
 
+#include <algorithm>
+
 #include "core/num.hpp"
 #include "shooter/client.hpp"
 
@@ -101,9 +103,12 @@ void client_world(const BrushModel& world, const ClientModel* models, int model_
 }
 
 MoveState predict_player(const NetPlayer& acked, const MoveCmd* cmds, int count,
-                         const MoveSettings& set, const MoveWorld& world) {
+                         const MoveSettings& set, const MoveWorld& world, MoveState* each) {
   MoveState s = unquantize_player(acked, set);
-  for (int i = 0; i < count; i++) run_command(s, cmds[i], set, world);
+  for (int i = 0; i < count; i++) {
+    run_command(s, cmds[i], set, world);
+    if (each != nullptr) each[i] = s;
+  }
   return s;
 }
 
@@ -123,13 +128,17 @@ MoveState predict_other(const NetPlayer& state, MoveCmd last_cmd, int msec, cons
   return s;
 }
 
-void smoothing_frame(Smoothing& s, Vec3f before, Vec3f after) {
+void smoothing_frame(Smoothing& s, Vec3f before, Vec3f after, double latency_s) {
   const Vec3f err = before - after;
   const float d = length(err);
-  if (d > kSmoothMax) {
-    s.correction = {};  // a teleport: snap
+  if (s.off || d > kSmoothMax) {
+    s.correction = {};  // off, or a teleport: snap
   } else if (d >= kSmoothMin) {
-    s.correction = s.correction + err;
+    const float share =
+        latency_s <= 0 ? 1.0f : static_cast<float>(1 - std::min(1.0, kSmoothStepS / latency_s));
+    s.correction = s.correction + err * share;
+    const float c = length(s.correction);  // a client that cuts the error caps the sum too
+    if (latency_s > 0 && c > kSmoothMax) s.correction = s.correction * (kSmoothMax / c);
   }
 }
 
@@ -138,7 +147,7 @@ void smoothing_decay(Smoothing& s, double dt) {
   if (c == 0) return;
   const float rate = c < 8 ? 200.0f : c < 16 ? 500.0f : c < 32 ? 800.0f : 1400.0f;
   float left = c - static_cast<float>(rate * s.scale * dt);
-  if (left < 0) left = 0;
+  if (left < 0 || (s.drop > 0 && left < static_cast<float>(s.drop * s.scale * dt))) left = 0;
   s.correction = s.correction * (left / c);
 }
 

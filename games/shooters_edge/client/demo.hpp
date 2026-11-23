@@ -316,6 +316,11 @@ struct DemoState {
   // Client: the shots the weapon prediction fired for the player so far, and the weapon frame the
   // last one started on (the axe's swing); the window's hand fires on each (client/held.cpp).
   int own_shots = 0, own_shot_frame = 0;
+  // Client: the player's own nails, rockets and grenades the prediction threw ahead of the server
+  // (own_missiles.hpp), drawn as entities, and each one's number (kept while it flies, for its
+  // trail); empty when none fly.
+  std::vector<DemoEntity> own_missiles;
+  std::vector<int> own_missile_ids;
   bool velocity_read = false;  // client: the player's velocity came in his last player state
   // Quake II: what went wrong with the last frame read (kQ2Frame* bits; `scr_showturtle` writes
   // them on the screen, client/q2_bar.hpp's `add_q2_turtle`).
