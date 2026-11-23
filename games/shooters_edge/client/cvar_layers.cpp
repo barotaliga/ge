@@ -323,7 +323,8 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
 // visible weapons' bit out: net/qw_remote.cpp). Its
 // servers' switch rules, `w_switch` and `b_switch`, are user info a server reads on a pickup (the
 // Quake II has none). Its weapon's `r_viewmodelsize` and `r_viewmodeloffset` (units, added to
-// ours), and `r_viewmodellastfired` (a recording's weapon the one that last fired).
+// ours), and `r_viewmodellastfired` (a recording's weapon the one that last fired). Its
+// `r_lerpframes` (the models' and the held weapon's frames blended) is `r_lerpmodels`.
 void add_first(con::Console& c, const GameBindings& b) {
   if (b.crosshair != nullptr) {  // Quake II's own shares and health colour set aside
     b.crosshair->pictures = false;
@@ -436,6 +437,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
   c.add_command_synonym("togglechat", "toggleconsole");  // QuakeWorld's second name for it
   c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left
+  if (c.cvars().find("r_lerpmodels") != nullptr)         // the models' and the held weapon's frames
+    c.cvars().add_synonym("r_lerpframes", "r_lerpmodels");
   // An old Quake config's saved name and colours: `_cl_name` is the name, `_cl_color` both
   // colours as one number (shirt times 16 plus pants), so its config dresses you as it did.
   c.cvars().add_synonym("_cl_name", "name");

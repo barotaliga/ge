@@ -51,7 +51,7 @@ void drawn_place(const ModelTrack& tr, double drawn_s, sh::Vec3f& origin, sh::Ve
 
 }  // namespace
 
-void track_frame(FrameTrack& tr, int frame, double t, int& from, float& f) {
+void track_frame(FrameTrack& tr, int frame, double t, int& from, float& f, double fixed_s) {
   if (t < tr.changed) tr = FrameTrack{};  // a seek
   if (frame != tr.frame) {
     if (tr.frame >= 0) {
@@ -64,6 +64,7 @@ void track_frame(FrameTrack& tr, int frame, double t, int& from, float& f) {
   from = -1;
   f = 1;
   if (tr.from < 0) return;
+  if (fixed_s > 0) tr.span = fixed_s;
   const double g = (t - tr.changed) / tr.span;
   if (g < 1) {
     from = tr.from;
