@@ -27,6 +27,8 @@
 #include "brush/read.hpp"
 #include "classic/content/downloads.hpp"
 #include "classic/content/fs_words.hpp"
+#include "classic/content/web_downloads.hpp"
+#include "classic/content/web_serve.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/num.hpp"
 #include "net/tcp_socket.hpp"
@@ -38,6 +40,7 @@
 #include "server/rate.hpp"
 #include "server/skew.hpp"
 #include "server/status.hpp"
+#include "server/web_files.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
@@ -45,6 +48,7 @@
 #include "shooters_edge/net/q2_login.hpp"
 #include "shooters_edge/net/q2_mvd_relay.hpp"
 #include "shooters_edge/net/q2_net.hpp"
+#include "shooters_edge/net/q2_net_download.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/net/q2_votes.hpp"
 #include "shooters_edge/net/qw_report.hpp"
@@ -282,7 +286,8 @@ std::span<const gs::GameRule> all_rules() {
           std::span<const gs::GameRule>(gs::kNameRules),
           std::span<const gs::GameRule>(gs::kLimitRules),
           std::span<const gs::GameRule>(gs::kStatusRules),
-          std::span<const gs::GameRule>(gs::kLrconRules), std::span<const gs::GameRule>(kRules)})
+          std::span<const gs::GameRule>(gs::kLrconRules),
+          std::span<const gs::GameRule>(gs::kWebFilesRules), std::span<const gs::GameRule>(kRules)})
       for (const gs::GameRule& r : t) out.push_back(r);
     return out;
   }();
@@ -394,6 +399,7 @@ struct Game {
   std::unique_ptr<cl::LoadedMap> map;
   sv::RulesRunner rules;
   Q2NetConfig cfg;
+  gs::WebFiles web;                  // the server's own web files (sv_http_port)
   std::unique_ptr<Q2NetServer> net;  // on the network only
   // The logins (q2_login.hpp), when sv_login asks for them or the server has accounts.
   gs::LoginSettings login_set;
@@ -744,6 +750,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->cfg.max_download_size = std::atoll(it->second.c_str());
   if (const auto it = c.rules.find("sv_downloadserver"); it != c.rules.end())
     g->cfg.download_server = it->second;
+  if (!gs::web_files_config(c, g->cfg.web, error)) return nullptr;
   Game* gp = g.get();
   g->cfg.read_file = [gp](const std::string& path, std::vector<uint8_t>* out) {
     std::vector<uint8_t> store;
@@ -1106,6 +1113,27 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   game.masters.family = cp::MasterFamily::q2;  // setmaster may come before the first frame
   game.net = std::make_unique<Q2NetServer>();
+  // The web files opened first, so the connect answer names their address. Their gate is the
+  // channel's, and a map out of an archive stays off the web as it stays off the channel for a
+  // client the server cannot tell its archive to.
+  if (game.cfg.web.port > 0) {
+    const Q2NetConfig* cfg = &game.net->cfg;
+    ge::classic::content::WebServe ws;
+    ws.game_folder = game.folder;
+    ws.base_folder = "baseq2";
+    ws.kinds = ge::classic::content::WebConfig{}.kinds;
+    ws.allowed = [cfg](const std::string& path) {
+      ge::vfs::ArchiveOrigin origin;
+      return q2_download_allowed_path(*cfg, path) &&
+             !(path.rfind("maps/", 0) == 0 && cfg->file_origin && cfg->file_origin(path, &origin));
+    };
+    if (!gs::web_files_open(game.web, game.cfg.web, ge::net::ipv4(0, 0, 0, 0, 0),
+                            ge::classic::content::web_serve_lookup(game.files, std::move(ws)),
+                            error))
+      return false;
+    game.cfg.web_url = game.web.url;
+    game.cfg.web_pin = game.web.pin;
+  }
   if (!q2_net_start(*game.net, game.rules, port, game.cfg, error)) return false;
   for (std::string& line : game.said) game.net->log.push_back(std::move(line));
   game.said.clear();
@@ -1169,6 +1197,7 @@ void net_frame(void* g, int64_t now_us) {
     return;
   }
   q2_net_frame(*game.net, now_us);
+  gs::web_files_frame(game.web, game.now_s);
   if (!game.relay.conns.empty()) q2_relay_frame(game.relay, now_us);
   const double now_s = static_cast<double>(now_us) / 1e6;
   for (const ge::net::Address& from : game.net->acks) cp::masters_heard(game.masters, from, now_s);

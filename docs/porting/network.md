@@ -19,7 +19,9 @@ server's behaviour is [`server.md`](server.md); recordings and TV are [`demos.md
 | Classic plugin | `plugins/classic/protocol/wire.hpp`, `directions.hpp` | Sizes, quantization, fields, CRC-16; Quake II's 162 directions |
 | Engine | `engine/net/http_fetch.hpp` | An HTTP GET for any game: https, proxy (a tunnel for https), redirects, chunks, failure words |
 | Engine | `engine/net/tls_stream.hpp` | TLS 1.2 and 1.3 over caller-carried bytes (Mbed TLS): the system's roots, the name checked, a test server |
-| Classic plugin | `plugins/classic/content/web_downloads.hpp` | Downloads from a server's web address or a GitHub repository, several at once, file lists, the channel behind: Quake II's `dlserver`, our QuakeWorld server's `*dlserver`, the `cl_http_*` settings in the classic layer |
+| Classic plugin | `plugins/classic/content/web_downloads.hpp` | Downloads from a server's web address or a GitHub repository, several at once, file lists, the channel behind: Quake II's `dlserver`, our QuakeWorld server's `*dlserver` (and the `sv_dlURL` other servers name), the `cl_http_*` settings in the classic layer; resumed, checked by the digest, held to `cl_http_max_rate`, a server's own certificate trusted by its pin |
+| Engine | `engine/net/file_server.hpp`, `engine/server/web_files.hpp` | A dedicated server's own files over HTTPS (`sv_http_*`): ranges, digests, its own certificate, fair caps per player and in all |
+| Classic plugin | `plugins/classic/content/web_serve.hpp` | What a classic server's web files answer: its game folder, the kinds it sends, its own download switches |
 | Shooter kit | `plugins/shooter/usercmd.hpp`, `predict.hpp` | The client's commands and prediction (`movement.md`) |
 | Shell | `games/shooters_edge/net/protocol.hpp` | The family named in the game's net namespace |
 | Shell | `games/shooters_edge/net/qw_antilag.hpp`, `qw_hits.hpp` | Lag compensation for hitscan (origin history, rewinds); shots and hits per weapon |
