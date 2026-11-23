@@ -11,6 +11,7 @@
 #include "console/manual_page.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/manual.hpp"
+#include "shooters_edge/server/rules_manual.hpp"
 
 namespace {
 
@@ -81,4 +82,24 @@ TEST(each_game_is_described_in_its_own_pass) {
   for (const con::ManualRow& r : rows)
     q2_only = q2_only || (r.games == std::vector<std::string>{"q2"});
   CHECK(q2_only);
+}
+
+// The rules' own settings, made with no map, each game's in its own layer: Quake's (the settings
+// every Quake program reads) for Quake's and QuakeWorld's pass, Quake II's for its own.
+TEST(the_rules_own_settings_are_described_per_game) {
+  const auto has = [](const std::vector<ge::console::ManualEntry>& v, const char* name,
+                      const char* layer) {
+    for (const ge::console::ManualEntry& e : v)
+      if (e.name == name && e.layer == layer && !e.help.empty()) return true;
+    return false;
+  };
+  std::vector<ge::console::ManualEntry> quake, q2;
+  shooters_edge::server::rules_manual("q1,qw", quake);
+  shooters_edge::server::rules_manual("q2", q2);
+  for (const char* name : {"deathmatch", "coop", "skill", "fraglimit"}) {
+    CHECK_MSG(has(quake, name, "game:q1"), name);
+    CHECK_MSG(has(q2, name, "game:q2"), name);
+  }
+  CHECK(has(q2, "dmflags", "game:q2"));
+  CHECK(!has(quake, "dmflags", "game:q1"));
 }
