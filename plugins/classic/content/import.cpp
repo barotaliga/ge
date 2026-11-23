@@ -195,7 +195,7 @@ bool taken_before(const fs::path& dir, const std::string& print, bool music,
     if (!n.starts_with("taken") || !n.ends_with(".txt")) continue;
     std::ifstream in(it->path());
     std::string line;
-    if (!in || !std::getline(in, line) || line != "taken 1") continue;
+    if (!in || !std::getline(in, line) || line != "taken 2") continue;
     bool print_ok = false, music_ok = !music, any = false, files_ok = true;
     std::vector<const classicenhance::MissionPack*> found;
     bool held_base = true;
@@ -234,7 +234,7 @@ bool taken_before(const fs::path& dir, const std::string& print, bool music,
 void write_taken(const fs::path& dir, const std::string& from, const std::string& print, bool music,
                  const ImportReport& r) {
   std::error_code ec;
-  std::string text = "taken 1\nsource " + fs::weakly_canonical(from, ec).generic_string() +
+  std::string text = "taken 2\nsource " + fs::weakly_canonical(from, ec).generic_string() +
                      "\nfingerprint " + print + "\nmusic " + (music ? "1" : "0") + "\nbase " +
                      (r.base ? "1" : "0") + "\n";
   for (const classicenhance::MissionPack* m : r.packs)
@@ -620,6 +620,20 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
   if (!out->base)
     out->notes.push_back(std::string(game->what) + " itself was not in " + from +
                          "; its mission packs play only over it, so take it in too");
+  // Another add-on beside the base folder (a third party's pack, a mod): named and left.
+  for (const TreeFile& f : tree.files) {
+    if (!out->base) break;
+    const std::string l = lower(f.path);
+    if (!l.starts_with(lp) || last_part(l) != classicenhance::pack_name(*game, 0)) continue;
+    const std::string folder = parent_of(l.substr(lp.size()));
+    if (folder.empty() || folder.find('/') != std::string::npos || base_like(folder) ||
+        std::any_of(packs.begin(), packs.end(),
+                    [&](const FoundPack& p) { return p.named && p.root == lp + folder + "/"; }))
+      continue;
+    out->notes.push_back(parent_of(f.path).substr(prefix.size()) + " beside " +
+                         std::string(game->base_dir) + " is not one of " + std::string(game->what) +
+                         "'s mission packs this game plays; it was left where it is");
+  }
   // A release that prints its words by key (progs/localized.hpp) keeps their table in its own
   // archives beside the base folder (`*.kpf`): that one file is taken out of the first that has
   // it and kept loose in the base folder, where the game reads it.
@@ -738,6 +752,21 @@ std::vector<Offer> find_offers(const std::vector<std::string>& roots,
                                const std::string& data_root) {
   std::vector<Offer> out;
   std::error_code ec;
+  // The sources games were taken in from look for packs too: a pack beside a base game taken in
+  // before packs were known.
+  std::vector<std::string> all = roots;
+  for (const classicenhance::Profile& g : classicenhance::kProfiles) {
+    const fs::path dir = fs::path(data_root) / std::string(g.id);
+    for (const fs::directory_entry& e : fs::directory_iterator(dir, ec)) {
+      const std::string n = e.path().filename().string();
+      if (!n.starts_with("taken") || !n.ends_with(".txt")) continue;
+      std::ifstream in(e.path());
+      for (std::string line; std::getline(in, line);)
+        if (line.starts_with("source ") && fs::is_directory(line.substr(7), ec) &&
+            std::find(all.begin(), all.end(), line.substr(7)) == all.end())
+          all.push_back(line.substr(7));
+    }
+  }
   const auto taken = [&](const classicenhance::Profile& g, const classicenhance::MissionPack& m) {
     return fs::is_regular_file(fs::path(data_root) / std::string(g.id) / std::string(m.folder) /
                                    classicenhance::pack_name(g, 0),
@@ -752,7 +781,7 @@ std::vector<Offer> find_offers(const std::vector<std::string>& roots,
     return fs::path();
   };
   int seen = 0;
-  for (const std::string& r : roots) {
+  for (const std::string& r : all) {
     const fs::path root(r);
     if (!data_root.empty() && fs::weakly_canonical(root, ec) == fs::weakly_canonical(data_root, ec))
       continue;

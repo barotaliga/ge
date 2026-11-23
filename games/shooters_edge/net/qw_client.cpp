@@ -405,6 +405,9 @@ void on_stufftext(QwClientEnd& c, const std::string& text) {
         if (c.stage == ClientStage::active) c.stage = ClientStage::signon;
         client_command(c, "new");
       }
+    } else if (!cmd.empty() && cmd != "bf" && !line.starts_with("//") &&
+               c.to_run.size() < kStuffedKept) {
+      c.to_run.push_back(line);  // the rest runs in the window's console, as the server's
     }
   }
 }

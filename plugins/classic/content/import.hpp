@@ -36,7 +36,9 @@
 // (a second launch with `-basedir`) only lists it: when the fingerprint is the same and every file
 // is still there at its size, nothing is read, hashed, copied or decoded
 // (`ImportReport::unchanged`). A source that changed, or a copy that lost a file, is taken in again
-// as above.
+// as above. A taken file written before mission packs were known
+// (its first line other than `taken 2`) never counts: that source is taken in again, its packs
+// with it.
 //
 // **The music** (`import_game`'s `music`): the disc image's audio tracks (disc track N is track N);
 // music files found anywhere in the tree (any folder named `music`, `cdtracks` or `soundtrack`, or
@@ -181,6 +183,8 @@ struct Offer {
 // else alone), or a first pack of a known pack's size under any other name (a pack's disc, offered
 // as the folder under the root that holds it; its digest is read only when taken in). A pack
 // already in `<data_root>/<id>/<pack folder>/` is not offered; each pack once, the first found.
+// The folders games were taken in from (their taken files' `source`) are looked in too, so a pack
+// beside a game taken in before packs were known is offered.
 inline constexpr int kOfferFolders = 4000;
 std::vector<Offer> find_offers(const std::vector<std::string>& roots, const std::string& data_root);
 

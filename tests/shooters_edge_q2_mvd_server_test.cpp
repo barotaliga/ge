@@ -7,6 +7,7 @@
 // ge:summary Test: Quake II's multiview recorder: mvdrecord's file, the relay stream over TCP
 // ge:keywords test mvd2 mvdrecord gtv relay-stream tcp hello deflate addgtvhost addgtvban
 // ge:skill net shooter testing
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -406,4 +407,30 @@ TEST(the_wrong_password_a_ban_and_a_stranger_are_refused) {
   CHECK(got.empty());
   CHECK(r->log.size() == logged);
   gn::tcp_close(http);
+}
+
+// sv_mvd_maxsize and sv_mvd_maxtime: a recording stops on its own once past its size in kilobytes
+// or its length in minutes, and says why on the console.
+TEST(a_recording_stops_at_its_size_and_at_its_length) {
+  const std::filesystem::path dir =
+      std::filesystem::temp_directory_path() / "ge_q2_mvd_server_limits_test";
+  std::filesystem::remove_all(dir);
+  for (const bool by_size : {true, false}) {
+    cn::Q2MvdConfig cfg;
+    cfg.enable = 1;
+    cfg.demos = dir.string();
+    if (by_size)
+      cfg.maxsize_kb = 2;
+    else
+      cfg.maxtime_min = 1;
+    auto r = rig(cfg);
+    run(*r, 100);
+    CHECK(admin(*r, "mvdrecord limit").rfind("Recording local MVD to ", 0) == 0);
+    run(*r, by_size ? 400 : 5000);  // a minute is 600 frames, 4600 ticks
+    const std::string why = by_size ? "Stopping MVD recording, maximum size reached."
+                                    : "Stopping MVD recording, maximum duration reached.";
+    CHECK_MSG(std::find(r->log.begin(), r->log.end(), why) != r->log.end(), why);
+    CHECK(admin(*r, "mvdstop") == "Not recording a local MVD.\n");
+  }
+  std::filesystem::remove_all(dir);
 }

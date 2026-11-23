@@ -2,7 +2,7 @@
 // wide screen, and the cvars in its layer.
 //
 // ge:summary Tests Quake II's field of view as shown (sent, recorded, uf) and its view cvars
-// ge:keywords q2 fov cl_adjustfov uf scr_scale scr_draw2d cl_kickangles q2_shown_fov
+// ge:keywords q2 fov cl_adjustfov uf scr_scale cl_kickangles q2_shown_fov
 // ge:skill shooter
 #include "shooters_edge/client/q2_view.hpp"
 
@@ -76,11 +76,11 @@ TEST(the_sent_field_of_view_is_drawn_between_two_frames) {
 TEST(the_cvars_are_registered_with_their_defaults) {
   ge::console::Console c;
   cl::Q2Screen s;
-  s.draw2d = 0;
   cl::add_q2_screen_cvars(c.cvars(), s);
-  CHECK(s.draw2d == 2 && s.scale == 0 && s.adjust_fov == 1 && s.kick_angles);
-  c.execute("scr_scale 3; scr_draw2d 1; scr_alpha 0.5; scr_lag_draw 2; scr_lag_x 8; uf 32");
-  CHECK(s.scale == 3 && s.draw2d == 1 && s.alpha == 0.5 && s.lag_draw == 2 && s.lag_x == 8);
+  CHECK(c.cvars().find("scr_draw2d") == nullptr);  // every game's (screen_2d.hpp)
+  CHECK(s.scale == 0 && s.adjust_fov == 1 && s.kick_angles);
+  c.execute("scr_scale 3; scr_alpha 0.5; scr_lag_draw 2; scr_lag_x 8; uf 32");
+  CHECK(s.scale == 3 && s.alpha == 0.5 && s.lag_draw == 2 && s.lag_x == 8);
   CHECK(s.uf == "32");
   c.execute("cl_kickangles 0");  // a cheat: refused while sv_cheats is 0
   CHECK(s.kick_angles);
