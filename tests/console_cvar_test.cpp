@@ -96,6 +96,16 @@ TEST(tiers_refuse_with_reasons) {
   CHECK(server.find("net_fakelag")->value == "0");
   client.apply_info(server.info_string(kServerInfo), Source::server);
   CHECK(!client.cheats() && client.find("net_fakelag")->value == "0");
+  // A joined game that holds cheats off (Quake II's cheat lock): back to the default, refused,
+  // whatever sv_cheats says, until let go.
+  server.set("sv_cheats", "1", Source::local);
+  CHECK(server.set("net_fakelag", "50", Source::local) == SetResult::changed);
+  server.hold_cheats(true);
+  CHECK(!server.cheats() && server.find("net_fakelag")->value == "0");
+  CHECK(server.set("net_fakelag", "50", Source::local) == SetResult::cheat);
+  server.hold_cheats(false);
+  CHECK(server.cheats() && server.set("net_fakelag", "50", Source::local) == SetResult::changed);
+  server.set("sv_cheats", "0", Source::local);
   CHECK(!set_result_text(SetResult::server, "sv_fps").empty());
   CHECK(client.set("bad name", "1", Source::local) == SetResult::bad_name);
 }

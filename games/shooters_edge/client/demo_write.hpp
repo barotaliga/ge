@@ -34,6 +34,8 @@ struct DemoScript {
   int items = 1 | 32 | 8192;  // the shotgun, the rocket launcher, the light armour
   int active_weapon = 32;
   int rockets = 25;
+  // Multiview: lines the server stuffed to everyone, each after its frame's record (frame, line).
+  std::vector<std::pair<size_t, std::string>> stuffed;
 };
 
 // The single-player demo: the music track line, a signon block, a block a frame, a disconnect.

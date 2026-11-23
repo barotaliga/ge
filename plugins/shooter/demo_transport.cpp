@@ -206,6 +206,17 @@ void add_demo_transport(console::Console& console, DemoTransport& p, const DemoC
                         .values = "1: left unshown (the default); 0: printed as the jump reads "
                                   "them"},
                        &p.skip_messages);
+  console.cvars().bind({.name = "demo_snapshots",
+                        .fallback = "10",
+                        .flags = console::kArchive,
+                        .help = "How often a playing demo is kept as it stands, in seconds, so a "
+                                "jump back starts from there instead of from the beginning.",
+                        .kind = console::CvarKind::number,
+                        .min = 0,
+                        .max = 3600,
+                        .values = "0: none kept, a jump back reads from the beginning; 10: every "
+                                  "ten seconds (the default)"},
+                       &p.snap_every_s);
 }
 
 }  // namespace ge::shooter

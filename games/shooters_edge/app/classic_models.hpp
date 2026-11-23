@@ -183,8 +183,12 @@ struct LightProbe {
 };
 LightProbe make_probe(const ge::brush::Map& map);
 // The light (lightmap units, rgb) under `p` (map units); false (and 1s) when no floor is found
-// within `depth` units below.
+// within `depth` units below. `floor` (when given) gets the floor's height (map units) and its
+// facing's upward share (1 level, 0.5 sixty degrees steep).
+struct FloorUnder {
+  float z = 0, up = 1;
+};
 bool light_under(const LightProbe& probe, const ge::brush::Map& map, const float p[3], float rgb[3],
-                 float depth = 512);
+                 float depth = 512, FloorUnder* floor = nullptr);
 
 }  // namespace shooters_edge::models

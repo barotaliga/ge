@@ -48,7 +48,8 @@
 //
 // ge:summary Shooter's Edge's server browser page: LAN, masters and own servers listed, joined
 // ge:keywords server-browser servers page join-a-game menu_servers sb_masters sb_servers sb_lan
-// ge:keywords sb_hubmasters hub-master sv-master address-book adr0 web-list
+// ge:keywords sb_hubmasters hub-master sv-master address-book adr0 web-list use_sources
+// ge:keywords favorites broadcast servers-lst q2servers pushmenu-servers
 // ge:keywords connect refresh sort ping players mode map skill coop shooters-edge
 // ge:keywords filter sb_hidefull sb_hideempty sb_mode sb_maxping hide-full hide-empty
 // ge:keywords sb_hidenotempty sb_hidedead sb_hidehighping sb_pinglimit sb_info_filter sb_status
@@ -62,6 +63,8 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -130,6 +133,16 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
     lan_last_ = last;
   }
 
+  // The sources the next open asks in place of the configured ones ("" none: the configured):
+  // `http://...` and `+http://...` lists, `favorites://` (the address book), `broadcast://`
+  // (the LAN), `file:///<name>` (a list in the game's files, read by `set_files`) and
+  // `quake2://<address>`; another word is said and left out. Quake II's `pushmenu servers`.
+  void use_sources(std::vector<std::string> words) { sources_ = std::move(words); }
+  // How a `file:///` source is read: the file's text by its name in the game's files.
+  void set_files(std::function<std::optional<std::string>(std::string_view)> read) {
+    read_file_ = std::move(read);
+  }
+
   // The page opened: a refresh started. False with `why` when no socket opened.
   bool open(std::string* why);
   // One frame: `dt` s passed; the list read and its queries sent.
@@ -174,6 +187,7 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   bool read_list_cache();  // sb_listcache's file into the list; false: none read
   void add_cached();       // the masters' kept lists, asked beside them
   void write_caches();     // once a refresh is done: sb_listcache's file, sb_mastercache's
+  void tell_done();        // once a refresh is done: the player's f_sbrefreshdone
   std::filesystem::path master_cache_path(const ge::net::Address& master) const;
   bool proxy_row(const ge::net::ServerInfo& info) const;
   std::string route_words(int index) const;
@@ -211,7 +225,9 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   std::string note_;
   std::vector<ge::ui::Rect> cells_;  // the rows drawn last, from `first_`
   std::vector<std::string> problems_;
-  bool lan_ = true;                                 // sb_lan
+  bool lan_ = true;                   // sb_lan
+  std::vector<std::string> sources_;  // use_sources (one open's)
+  std::function<std::optional<std::string>(std::string_view)> read_file_;
   std::string masters_;                             // sb_masters
   std::string hub_masters_;                         // sb_hubmasters
   std::string servers_;                             // sb_servers
@@ -236,6 +252,7 @@ class ServersPage {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   std::filesystem::path cache_dir_;
   bool list_cache_ = false, master_cache_ = true;  // sb_listcache, sb_mastercache
   bool cache_written_ = false;                     // this refresh's caches written
+  bool told_done_ = true;                          // this refresh's f_sbrefreshdone run
   int32_t show_proxies_ = 1;                       // sb_showproxies
   std::string ignore_proxy_;                       // sb_ignore_proxy
   int32_t prox_per_s_ = 10, prox_retries_ = 3, prox_timeout_ = 1000;  // sb_prox*

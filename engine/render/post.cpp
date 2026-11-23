@@ -36,6 +36,7 @@ struct LookBlock {
   float e[4];
   float f[4];
   float g[4];
+  float h[4];  // the view's rectangle: its corner and 1 - its size, shares (0, 0, 0, 0: all)
 };
 
 }  // namespace
@@ -159,6 +160,7 @@ void set_post_look(gpu::Device& device, const Post& post, const PostLook& look) 
                         {0, 0, 0, 0},
                         {0, 0, 0, 0},
                         {0, 0, 0, 0},
+                        {0, 0, 0, 0},
                         {0, 0, 0, 0}};
   // The lens's and the film's strengths and the focus; the blend is the game's (set_post_blend).
   device.queue.WriteBuffer(post.look, 0, &block, offsetof(LookBlock, d));
@@ -199,6 +201,19 @@ void set_post_ripple(gpu::Device& device, const Post& post, const PostRipple& ri
                       static_cast<float>(std::max(ripple.waves, 0.0)),
                       static_cast<float>(std::fmod(ripple.phase, 6.283185307179586)), 0};
   device.queue.WriteBuffer(post.look, offsetof(LookBlock, g), g, sizeof g);
+}
+
+void set_post_view(gpu::Device& device, const Post& post, const ViewRect& rect, int width,
+                   int height) {
+  float h[4] = {0, 0, 0, 0};
+  if (width > 0 && height > 0 && rect.w > 0 && rect.h > 0 && (rect.w < width || rect.h < height)) {
+    const auto fw = static_cast<float>(width), fh = static_cast<float>(height);
+    h[0] = static_cast<float>(rect.x) / fw;
+    h[1] = static_cast<float>(rect.y) / fh;
+    h[2] = 1.0f - static_cast<float>(rect.w) / fw;
+    h[3] = 1.0f - static_cast<float>(rect.h) / fh;
+  }
+  device.queue.WriteBuffer(post.look, offsetof(LookBlock, h), h, sizeof h);
 }
 
 void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& dof) {

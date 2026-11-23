@@ -747,3 +747,68 @@ TEST(fraglogfile_writes_the_frags_and_log_answers_with_the_last_buffer) {
   CHECK(ask("log") == "m");
   std::filesystem::remove_all(dir, ec);
 }
+
+TEST(a_kicked_player_is_a_zombie_for_zombietime_and_status_shows_it) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  CHECK(rig.play());
+  CHECK(has(rig.admin("kick bert"), "bert was kicked"));
+  CHECK(rig.server.zombies.size() == 1);
+  CHECK(has(rig.admin("status"), "ZOMBIE"));
+  rig.frames(100);  // 1.3 s: still answered
+  CHECK(rig.server.zombies.size() == 1);
+  rig.frames(80);  // past 2 s
+  CHECK(rig.server.zombies.empty());
+  CHECK(!has(rig.admin("status"), "ZOMBIE"));
+}
+
+// localid: a server browser on the client's own machine sends it commands ('B', then the command
+// and an id); after the first accept they need the id `localid` holds, a wrong one clears it, and
+// a packet from another machine is ignored.
+TEST(a_command_packet_needs_localid_and_comes_only_from_this_machine) {
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  CHECK(rig.play());
+  cn::QwClientEnd& c = rig.c[0];
+  gn::Transport browser;  // on the client's machine (its node), another port
+  gn::open_sim_transport(browser, rig.net, gn::sim_address(1, 27100));
+  const auto send = [&](gn::Transport& from, const std::string& command, const std::string& id) {
+    std::string d =
+        "\xff\xff\xff\xff"
+        "B" +
+        command;
+    d.push_back('\0');
+    d += id;
+    d.push_back('\0');
+    gn::transport_send(from, gn::sim_address(1, cn::kPortClient),
+                       reinterpret_cast<const uint8_t*>(d.data()), d.size(), rig.now);
+    c.oob_prints.clear();
+    c.local_commands.clear();
+    rig.frames(10);
+  };
+  const auto said = [&] {
+    std::string out;
+    for (const std::string& p : c.oob_prints) out += p;
+    return out;
+  };
+  send(rig.raw, "say hi", "");
+  CHECK(has(said(), "Command packet from remote host.  Ignored.\n"));
+  CHECK(c.local_commands.empty());
+  send(browser, "say hi", "");
+  CHECK_MSG(
+      has(said(), "but no localid has been set.  You may need to upgrade your server browser."),
+      said());
+  CHECK(c.local_commands.empty());
+  c.localid = "77";
+  send(browser, "say hi", " 77 ");
+  CHECK(c.local_commands.size() == 1 && c.local_commands[0] == "say hi");
+  CHECK(has(said(), ": client command\n"));
+  send(browser, "say hi", "78");
+  CHECK_MSG(
+      has(said(), "|78| != |77|\nYou may need to reload your server browser and QuakeWorld.\n"),
+      said());
+  CHECK(c.local_commands.empty());
+  CHECK(c.localid.empty());
+}

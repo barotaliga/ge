@@ -253,7 +253,8 @@ void take_view(NativeQ2& s) {
   raw.entities.assign(kQ2Entities, Q2EntityState{});
   raw.owners.assign(kQ2Entities, 0);
   q2_sight_reset(raw.sight, h.map.get());
-  raw.sight.groups = h.map && !h.map->areas.empty() ? h.area_groups : std::vector<int32_t>{};
+  raw.sight.groups = h.map && !h.map->areas.empty() && !native_no_areas(h) ? h.area_groups
+                                                                           : std::vector<int32_t>{};
   const bool proper = (native_features(h) & native::kGmfProperInUse) != 0;
   const int count = std::min(h.game->num_edicts, kQ2Entities);
   for (int n = 1; n < count; n++) {
@@ -820,6 +821,7 @@ std::unique_ptr<NativeQ2> load_native_q2(const NativeQ2Options& opt, std::string
   native_setting(h, "sv_features", std::to_string(kNativeServerFeatures), native::kCvarNoSet);
   native_setting(h, "g_features", "0", native::kCvarNoSet);
   native_setting(h, kUnsafeSavesSetting, "0", 0);
+  native_setting(h, "map_noareas", "0", 0);  // the engine's: every area joined while set
   // The files the extended interface reads: the library's folder, then the base folder beside it.
   h.write_dir = opt.library.parent_path();
   h.base_dir = h.write_dir.parent_path() / "baseq2";

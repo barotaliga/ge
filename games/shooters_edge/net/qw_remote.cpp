@@ -25,6 +25,7 @@
 #include "shooters_edge/net/qw_game.hpp"
 #include "shooters_edge/net/qw_login.hpp"
 #include "shooters_edge/net/qw_remote_macros.hpp"
+#include "shooters_edge/net/qw_remote_rulesets.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
 
 namespace shooters_edge::net {
@@ -571,6 +572,10 @@ std::string remote_queue_step(Remote& r, std::vector<std::string>& said) {
 }
 
 void remote_queue_frame(Remote& r, ge::console::Console& con) {
+  // A server browser's commands from this machine (`localid`), and the id it got wrong cleared.
+  if (std::exchange(r.end.localid_refused, false)) con.execute("localid \"\"");
+  for (const std::string& line : std::exchange(r.end.local_commands, {})) con.execute(line);
+  remote_rulesets_frame(r, con);  // the ruleset: its book, locked while joined
   std::vector<std::string> said;
   const std::string found = remote_queue_step(r, said);
   for (const std::string& line : said) con.print(line);
@@ -700,6 +705,7 @@ void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
 void remote_disconnect(Remote& r) {
   if (!r.active) return;
   r.left = true;
+  if (r.ignore.con != nullptr) r.ignore.con->cvars().hold_cheats(false);  // Quake II's cheat lock
   if (r.watch) {
     watch_close(*r.watch);
     r.watch.reset();
@@ -975,6 +981,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   const uint32_t acked_before = r.end.ch.incoming_acknowledged;
   int ticks = 0;
   r.end.cfg.physfps = r.physfps;  // cl_physfps, live
+  r.end.localid = r.localid;      // a command packet with the wrong id clears it
   r.end.cfg.physfps_spectator = r.physfps_spectator;
   r.end.cfg.c2spps = r.c2spps;  // cl_c2spps, live
   r.end.cfg.c2s_impulse_backup = r.c2s_impulse_backup;
@@ -1066,6 +1073,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   r.ignore.chat.relay = false;
   // A listing asked for the settings page (qw_remote_sheet.hpp), on the tick clock its asks keep.
   remote_sheet_step(r, prints, static_cast<double>(r.now_us) * 1e-6 + r.owed_s);
+  remote_fair_step(r, prints, wall_s);  // f_ruleset answered (qw_remote_rulesets.hpp)
   client::drop_ignored(r.ignore, d.state, prints, wall_s, &centre);  // chat_ignore.hpp
   d.state.prints = std::move(prints);
   d.state.effects = std::move(effects);
@@ -1150,7 +1158,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   using Con = ge::console::Console;
   using Args = ge::console::Args;
   client::add_qw_ignore(con, r.ignore, r.demo.state);
-  add_remote_macros(con, r);  // $cl_server, $cl_ping, $cl_lag and the rates
+  add_remote_macros(con, r);    // $cl_server, $cl_ping, $cl_lag and the rates
+  add_remote_rulesets(con, r);  // ruleset, rulesets, f_ruleset (qw_remote_rulesets.hpp)
   add_serverstatus_command(con, r);
   add_q2_download_command(con, r);  // download <file> (q2_remote.hpp)
   add_q2_skins_command(con, r);     // skins
@@ -1217,7 +1226,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.msg = std::atoi(cvar("msg", "1").c_str());
     cfg.noaim = cvar("noaim", "0") == "1";
     cfg.extra_info = r.extra_info;
-    cfg.password = cvar("password", "");            // a closed server's password
+    cfg.ruleset = cvar("ruleset", "default");  // the competition ruleset (qw_remote_rulesets.hpp)
+    cfg.password = cvar("password", "");       // a closed server's password
     cfg.spectator = cvar("spectator", "0") == "1";  // `set spectator 1`: join to watch
     cfg.w_switch = cvar("w_switch", "");            // Quake's switch rules on a pickup
     cfg.b_switch = cvar("b_switch", "");
@@ -1536,6 +1546,12 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                  "server.",
          .kind = ge::console::CvarKind::boolean},
         &r.solid_players);
+    con.cvars().bind({.name = "localid",
+                      .fallback = "",
+                      .help = "The id a server browser on this computer puts on the commands it "
+                              "sends the game; one with another id is refused.",
+                      .kind = ge::console::CvarKind::text},
+                     &r.localid);
     con.cvars().bind({.name = "cl_physfps",
                       .fallback = "0",
                       .flags = ge::console::kArchive,

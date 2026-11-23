@@ -72,13 +72,14 @@ struct GameBindings {
   const SearchPath* files = nullptr;
   ge::hud::CrosshairSettings* crosshair = nullptr;  // Quake II's own `crosshair`
   ge::shooter::MouseFeel* mouse = nullptr;          // Quake II's own `m_accel` (per frame)
-  bool* predict = nullptr;      // Quake II's `cl_predict` (a server joined); true in Quake
-  int* crouch = nullptr;        // Quake II's `cl_predict_crouch` (the eye's height predicted)
-  bool* show_misses = nullptr;  // Quake II's `cl_showmiss` (each prediction miss printed)
-  int* shownet = nullptr;       // Quake II's `cl_shownet` (each message's size printed)
-  bool* showpackets = nullptr;  // Quake II's `cl_showpackets` (each packet sent shown)
-  int* noskins = nullptr;       // Quake II's `cl_noskins` (the picture's stock_figures)
-  bool* items_still = nullptr;  // Quake II's `cl_nobob` (the picture's items_still)
+  bool* predict = nullptr;       // Quake II's `cl_predict` (a server joined); true in Quake
+  int* crouch = nullptr;         // Quake II's `cl_predict_crouch` (the eye's height predicted)
+  bool* show_misses = nullptr;   // Quake II's `cl_showmiss` (each prediction miss printed)
+  int* shownet = nullptr;        // Quake II's `cl_shownet` (each message's size printed)
+  bool* showpackets = nullptr;   // Quake II's `cl_showpackets` (each packet sent shown)
+  int* noskins = nullptr;        // Quake II's `cl_noskins` (the picture's stock_figures)
+  bool* items_still = nullptr;   // Quake II's `cl_nobob` (the picture's items_still)
+  int* model_shadows = nullptr;  // Quake II's `gl_shadows` (the picture's model_shadows)
   // The held weapon's settings: Quake II's `hand` (2 draws no weapon), `cl_gun_x/y/z` and
   // `cl_gunfov`; Quake's `r_viewmodelsize` and `r_viewmodeloffset`.
   shooters_edge::view::ViewSettings* view = nullptr;

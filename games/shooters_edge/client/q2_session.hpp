@@ -27,8 +27,10 @@
 // THE THIRD PERSON, a cheat: `cl_thirdperson` 1 puts the player's own view `cl_thirdperson_range`
 // units (60) behind his eye, turned `cl_thirdperson_angle` degrees round him the way a yaw turns
 // (0 behind, 180 in front looking back at him), looking the way he would from there; it stops
-// short of the world's walls, and his own figure, drawn while the camera is off him, is hidden
-// once a wall pushes it within kOwnFigureUnits. Joined or hosted, never while he watches another.
+// short of the world's walls and of its doors and platforms where they stand, and his own figure,
+// drawn while the camera is off him, fades as a wall pushes the camera in (`own_figure_alpha`:
+// solid from kOwnSolidUnits, gone within kOwnFigureUnits). Joined or hosted, never while he watches
+// another.
 //
 // THE MAP'S VERSION: a level that states its map's checksum (configstring 31) is checked against
 // the map on disk as it loads (`q2_map_version`): a server's different map drops the game, a
@@ -118,16 +120,27 @@ void q2_session_frame(ge::console::Console& con, Q2Session& s, const net::Remote
 
 // Closer than this (units) the camera is in the player's own head: his figure is not drawn.
 inline constexpr double kOwnFigureUnits = 20;
+// From this far (units) his figure is drawn solid; nearer it fades out to kOwnFigureUnits.
+inline constexpr double kOwnSolidUnits = 60;
+// The share of the player's own figure drawn with the camera `behind` units back (0..1).
+double own_figure_alpha(double behind);
 
 // `view` moved `units` back from its eye, its heading turned `angle_deg` the way a map yaw turns
 // (counter-clockwise from above) first; traced against `world`'s point hull (map units), stopping
 // short of a wall. The distance it went back, units (0: `units` not above 0, or a wall at once).
+// `movers` (the doors and platforms where they stand this frame, each its brush model and its
+// offset, map units) stop it too.
+struct BehindMover {
+  const ge::shooter::BrushModel* model = nullptr;
+  double offset[3] = {0, 0, 0};  // map units
+};
 double view_behind(ge::render::FrameView& view, double units, double angle_deg,
-                   const ge::shooter::BrushModel* world);
+                   const ge::shooter::BrushModel* world, std::span<const BehindMover> movers = {});
 // cl_thirdperson on `view`: view_behind by the range and the angle while it is on; the distance
 // the camera went back (0: off).
 double q2_third_person(const Q2Session& s, ge::render::FrameView& view,
-                       const ge::shooter::BrushModel* world);
+                       const ge::shooter::BrushModel* world,
+                       std::span<const BehindMover> movers = {});
 
 // Whether the look may take the mouse under `in_grab` (never in a window at 0) and `in_enable`
 // (never at 0).

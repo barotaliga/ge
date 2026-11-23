@@ -50,6 +50,7 @@
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/burning.hpp"
 #include "shooters_edge/client/picture_files.hpp"
+#include "shooters_edge/client/q2_view.hpp"
 #include "shooters_edge/client/room_ear.hpp"
 #include "shooters_edge/client/world_extras.hpp"
 #include "shooters_edge/server/q2_wire.hpp"
@@ -679,6 +680,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
 
 const WorldModels& world_models(const WorldDraw& w) { return w.models; }
 
+std::span<const ba::Mover> world_movers(const WorldDraw& w) { return w.movers; }
+
 std::span<const ba::PointLight> world_lights(const WorldDraw& w) { return w.scene.lights; }
 
 std::vector<gr::Particle> world_particles(ge::gpu::Device& d, const WorldDraw& w) {
@@ -979,7 +982,14 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .bubbles_share = f.picture->bubbles_share,
                            .power_shells = f.picture->power_shells,
                            .item_pulse = f.picture->item_pulse && !f.picture->no_glow,
-                           .items_still = f.picture->items_still};
+                           .items_still = f.picture->items_still,
+                           .light = look::model_light(*f.picture, lk),
+                           .flat = !f.picture->q2fx.dot_shading,
+                           .roll_hack = f.picture->q2fx.roll_hack,
+                           .self = fx.has_self ? fx.self.entity : 0,
+                           .shadows = f.picture->model_shadows,
+                           .cel_shading = f.picture->q2fx.cel_shading,
+                           .view_px = static_cast<double>(f.h)};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,
@@ -1018,6 +1028,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     ripple.phase = view.time_s;
   }
   gr::set_post_ripple(d, f.post[p], ripple);
+  // Quake II's viewsize under 100: the whole view drawn smaller in the middle.
+  const Q2ViewRect vr = q2_view_rect(f.w, f.h, f.picture->view_size);
+  gr::set_post_view(d, f.post[p], {vr.x, vr.y, vr.w, vr.h}, f.w, f.h);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
     // The engine's fire burns in place of the file's flash, and its arc across a lightning gun's

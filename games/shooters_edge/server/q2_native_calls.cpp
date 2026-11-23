@@ -626,13 +626,14 @@ int c_pointcontents(const float* p) {
 // joined to nothing, itself included.
 bool areas_joined(const NativeHost& h, int32_t a, int32_t b) {
   if (!h.map || h.map->areas.empty()) return true;  // a map with no areas: one space
+  if (native_no_areas(h)) return true;              // map_noareas: every area joined
   if (a == 0 || b == 0) return false;
   return br::areas_connected(h.area_groups, a, b);
 }
 
 // Whether the areas of points `a` and `b` are joined through the open portals.
 bool area_joined(const NativeHost& h, const float* a, const float* b) {
-  if (!h.map || h.map->areas.empty()) return true;
+  if (!h.map || h.map->areas.empty() || native_no_areas(h)) return true;
   return areas_joined(h, br::area_at(*h.map, a), br::area_at(*h.map, b));
 }
 
@@ -1115,6 +1116,11 @@ NativeSetting* NativeHost::find_setting(const std::string& name) {
   for (NativeSetting& c : settings)
     if (c.name == name) return &c;
   return nullptr;
+}
+
+bool native_no_areas(const NativeHost& h) {
+  const NativeSetting* c = const_cast<NativeHost&>(h).find_setting("map_noareas");
+  return c != nullptr && c->rec.value != 0;
 }
 
 NativeSetting& native_setting(NativeHost& h, const std::string& name, const std::string& value,

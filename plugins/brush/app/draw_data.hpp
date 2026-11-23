@@ -82,6 +82,8 @@ double style_level(std::string_view pattern, double t);
 // The same level glided from each letter to the next (a smoothstep over the tenth of a second), so
 // a flickering light wavers as a flame does rather than stepping ten times a second (ce_flicker).
 double style_level_glided(std::string_view pattern, double t);
+// The same level blended linearly from each letter to the next across its tenth of a second.
+double style_level_lerped(std::string_view pattern, double t);
 // The textures' animation: frames a second (a sequence of "+0" .. "+9" textures).
 inline constexpr double kFrameRate = 5;
 

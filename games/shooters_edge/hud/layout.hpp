@@ -125,6 +125,9 @@ void add_cvars(ge::console::Console& con, Hud& hud);
 // Writes every element's content for this frame from the status and the art: the active look's
 // elements on (as the status calls for), every other look's off.
 void fill_hud(Hud& hud, const Status& s, const HudArt& art);
+// After `fill_hud`: every element off but the chat lines (scr_chathud), for a game whose own bar
+// draws the rest (Quake II's).
+void keep_chat_only(Hud& hud);
 
 // The share of a `height` px screen the classic status bars covered when last drawn (0 with
 // hud_sbar 0, another look, or the bars hidden).

@@ -8,10 +8,12 @@
 // indoors by a game's own light (no sun or sky, an ambient and a shade from one side); and a
 // runner WARPING in (MorphWarp) at four shares, as dust (dissolving head first, the cut turned to
 // ash) and as a beam (pinched into a shimmering column, the cut burning); and a runner SEE-THROUGH
-// (MorphDraw::alpha) at four shares, one frame and sixteen averaged. Checks: each team's shirt
+// (MorphDraw::alpha) at four shares, one frame and sixteen averaged; its ground SHADOW
+// (MorphDraw::flat); and the runner OUTLINED (MorphDraw::outline) at three widths. Checks: each
+// team's shirt
 // reads as its colour, the eyes glow at dusk, the in-between frame lies between its two frames, a
 // warp gone draws nothing and one whole draws the plain runner, alpha 0 draws nothing and 1 the
-// plain runner, no GPU error, no pipeline after the
+// plain runner, an outline only darkens, no GPU error, no pipeline after the
 // load. Measured: the pass's GPU time for 64 runners. Without an adapter it notes that, with grey
 // cards.
 //
@@ -19,6 +21,7 @@
 // ge:keywords lab gpu morph morph-mesh vertex-animation frames blend tint team-colours
 // ge:keywords player-colours skin sharp smooth glow indoor-light runner picture
 // ge:keywords warp dissolve materialize spawn teleport burning-edge see-through alpha dither
+// ge:keywords shadow flat-shadow outline ink-line cel-shading
 // ge:skill render labs
 // ge:test tests/render_morph_test.cpp
 #include <chrono>
@@ -573,6 +576,110 @@ void run(gl::Lab& lab) {
                    fixed(solid, 0) + " against the plain runner",
                "see_through_gone in morph.wgsl draws nothing at alpha 0 and everything at 1; "
                "check morph.cpp packs 1 - alpha into shade_dir[3]. Skill: render.");
+    }
+  }
+
+  // A shadow (MorphDraw::flat): the runner's black copy squashed onto the ground and leaning to
+  // the side, half see-through, sixteen frames averaged; it only darkens the ground it lies on.
+  {
+    const std::vector<gr::MorphDraw> plain = {runner_at(0, 3.2, 1.5707963267948966, 1.5, 3)};
+    std::vector<gr::MorphDraw> shaded = plain;
+    gr::MorphDraw flat = plain[0];
+    flat.flat = true;
+    flat.flat_y = 0.01f;
+    flat.flat_lean[0] = 0.7f;
+    flat.alpha = 0.5f;
+    shaded.push_back(flat);
+    gr::FrameView v = eye(0, 2.4, 0, 0, -0.45, 0.7);
+    const auto averaged = [&](const std::vector<gr::MorphDraw>& draws) {
+      std::vector<uint32_t> sum;
+      gl::Picture mean;
+      for (int k = 0; k < 16; ++k) {
+        v.frame = static_cast<uint64_t>(k);
+        const gl::Picture p = draw(*device, s, v, draws).pic;
+        if (sum.empty()) {
+          sum.assign(p.rgba.size(), 0);
+          mean = p;
+        }
+        for (size_t i = 0; i < p.rgba.size(); ++i) sum[i] += p.rgba[i];
+      }
+      for (size_t i = 0; i < sum.size(); ++i)
+        mean.rgba[i] = static_cast<uint8_t>((sum[i] + 8) / 16);
+      return mean;
+    };
+    const gl::Picture without = averaged(plain);
+    const gl::Picture with = averaged(shaded);
+    v.frame = 0;
+    lab.shot({"shadow",
+              "A RUNNER'S GROUND SHADOW",
+              "MorphDraw::flat: the runner's copy squashed onto the ground, leaning 0.7 m across "
+              "for each m of height, one flat black at half strength, sixteen frames averaged.",
+              "a dark smear on the ground from the runner's feet off to the side, the ground "
+              "showing through it, the runner itself unchanged",
+              {{"view", "3.2 m, from above"}}},
+             es::sheet_of({without, with}, {"NO SHADOW", "SHADOW"}, 2), Det::measured);
+    double changed = 0, lighter = 0;
+    for (size_t i = 0; i + 3 < with.rgba.size(); i += 4) {
+      const int was = without.rgba[i] + without.rgba[i + 1] + without.rgba[i + 2];
+      const int now = with.rgba[i] + with.rgba[i + 1] + with.rgba[i + 2];
+      changed += now != was ? 1 : 0;
+      lighter += now > was + 3 ? 1 : 0;
+    }
+    lab.metric("shadow.darkened", changed, "count", Det::measured);
+    if (changed == 0 || lighter > 0) {
+      lab.fail(
+          "the shadow changed " + fixed(changed, 0) + " pixels and lightened " + fixed(lighter, 0),
+          "flatten in morph.wgsl lays the copy on flat.x and the shell's colour draws it "
+          "black; check morph.cpp packs flat. Skill: render.");
+    }
+  }
+
+  // Outlined: the runner with an ink line round it (MorphDraw::outline: the shell's back faces
+  // alone, black), at three widths.
+  {
+    const auto inked = [&](float push_m) {
+      std::vector<gr::MorphDraw> one = {runner_at(0, 3.4, 3.141592653589793 - 0.5, 1.5, 0)};
+      if (push_m > 0) {
+        gr::MorphDraw ink = one[0];
+        ink.outline = true;
+        ink.shell_push = push_m;
+        one.push_back(ink);
+      }
+      return one;
+    };
+    const gr::FrameView v = eye(0, 1.1, 0, 0, 0.06, 0.5);
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> names;
+    const float kPush[] = {0.0f, 0.006f, 0.015f, 0.03f};
+    for (const float m : kPush) {
+      pics.push_back(draw(*device, s, v, inked(m)).pic);
+      names.push_back(m == 0 ? std::string("PLAIN") : "INK " + fixed(m * 1000, 0) + " MM");
+    }
+    lab.shot({"outline",
+              "A RUNNER OUTLINED",
+              "MorphDraw::outline: a black shell pushed out along the normals with its front faces "
+              "culled, so only the rim round the silhouette and the creases show (a cartoon's ink "
+              "line), at three pushes.",
+              "the runner plain, then with a thin, a middle and a thick black line round its "
+              "outline and between its limbs; the body itself unchanged",
+              {{"view", "3.4 m, day"}}},
+             es::sheet_of(pics, names, 4), Det::measured);
+    double changed = 0, lighter = 0;
+    const gl::Picture& a = pics[0];
+    const gl::Picture& b = pics[2];
+    for (size_t i = 0; i + 3 < a.rgba.size(); i += 4) {
+      const int la = a.rgba[i] + a.rgba[i + 1] + a.rgba[i + 2];
+      const int lb = b.rgba[i] + b.rgba[i + 1] + b.rgba[i + 2];
+      if (la != lb) changed += 1;
+      if (lb > la + 6) lighter += 1;
+    }
+    lab.metric("outline.changed-px", changed, "count", Det::measured);
+    lab.metric("outline.lighter-px", lighter, "count", Det::measured);
+    if (changed < 50 || lighter > changed * 0.02) {
+      lab.fail("the outline changed " + fixed(changed, 0) + " pixels, " + fixed(lighter, 0) +
+                   " of them lighter: an ink line darkens a rim round the runner",
+               "check morph.cpp's p_outline culls the front faces and the shell's colour is "
+               "black. Skill: render.");
     }
   }
 

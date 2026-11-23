@@ -34,6 +34,7 @@ struct DemoFx {
   std::vector<Effect> effects;           // every other temporary entity this level, in order
   std::vector<Missile> missiles;         // in flight this frame
   bool draw_own = false;                 // the tracked player's figure drawn too (cam_thirdperson)
+  float own_alpha = 1;  // the share of that figure shown (cl_thirdperson's fade near a wall)
 };
 
 // The listen server's form of a demo's temporary entity (not an explosion: those are points).

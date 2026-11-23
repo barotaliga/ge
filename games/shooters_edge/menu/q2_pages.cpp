@@ -35,7 +35,7 @@ namespace {
 
 using ge::ui::ItemKind;
 
-constexpr Choice kWindow[] = {{"windowed", "0"}, {"full screen", "1"}};
+constexpr Choice kWindowed[] = {{"windowed", "0"}};  // then each mode of vid_modelist
 constexpr Choice kFovScale[] = {{"vert-", "0"}, {"hor+", "1"}};
 constexpr Choice kMsaa[] = {{"no", "0"}, {"2x MSAA", "2"}, {"4x MSAA", "4"}, {"8x MSAA", "8"}};
 constexpr Choice kFilter[] = {{"nearest", "GL_NEAREST"},
@@ -164,6 +164,18 @@ constexpr Entry kQ2[] = {
      .id = "join",
      .text = "browse servers",
      .hint = "Servers on the LAN, the masters and the hub.",
+     .needs = "connect"},
+    {.page = "multi",
+     .id = "q2servers",
+     .text = "browse q2servers.com",
+     .hint = "The servers q2servers.com lists.",
+     .line = "pushmenu servers \"+http://q2servers.com/?raw=2\"",
+     .needs = "connect"},
+    {.page = "multi",
+     .id = "book",
+     .text = "browse address book",
+     .hint = "The address book, servers.lst and the LAN.",
+     .line = "pushmenu servers \"favorites://\" \"file:///servers.lst\" \"broadcast://\"",
      .needs = "connect"},
     {.page = "multi", .id = "demos", .text = "browse demos", .needs = "playdemo"},
     opens("multi", "addresses", "address book", "addresses", "adr0"),
@@ -296,7 +308,14 @@ constexpr Entry kQ2[] = {
     back("weapons"),
 
     // video setup, then Shooter's Edge's own looks.
-    spin("video", "vid_fullscreen", "video mode", kWindow),
+    {.page = "video",
+     .id = "vid_fullscreen",
+     .text = "video mode",
+     .kind = ItemKind::choice,
+     .needs = "vid_fullscreen",
+     .target = Target::client,
+     .choices = kWindowed,
+     .modes_from = "vid_modelist"},
     spin("video", "cl_adjustfov", "fov scaling", kFovScale),
     toggle("video", "gl_swapinterval", "vertical sync"),
     spin("video", "gl_multisamples", "anti-aliasing", kMsaa),
@@ -391,6 +410,18 @@ constexpr Entry kQ2[] = {
     back("downloads"),
 
     // The in-game page ESCAPE opens in a level.
+    {.page = "game",
+     .id = "q2servers",
+     .text = "browse q2servers.com",
+     .hint = "The servers q2servers.com lists.",
+     .line = "pushmenu servers \"+http://q2servers.com/?raw=2\"",
+     .needs = "connect"},
+    {.page = "game",
+     .id = "book",
+     .text = "browse address book",
+     .hint = "The address book, servers.lst and the LAN.",
+     .line = "pushmenu servers \"favorites://\" \"file:///servers.lst\" \"broadcast://\"",
+     .needs = "connect"},
     {.page = "game", .id = "join", .text = "browse servers", .needs = "connect"},
     {.page = "game", .id = "demos", .text = "browse demos", .needs = "playdemo"},
     opens("game", "single", "single player", "single"),
@@ -459,7 +490,7 @@ const MenuTable& q2_menu() {
     }
     return out;
   }();
-  static const MenuTable table{kQ2Pages, rows, kEmptySlot, "game"};
+  static const MenuTable table{kQ2Pages, rows, kEmptySlot, "game", "q2pro.menu"};
   return table;
 }
 

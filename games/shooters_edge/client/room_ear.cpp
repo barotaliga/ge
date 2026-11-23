@@ -124,6 +124,17 @@ void add_under_cvars(ge::console::Console& c, UnderEar& s) {
                   .kind = ge::console::CvarKind::boolean,
                   .values = "0: as they are (the default); 1: swapped"},
                  &s.swap);
+  c.cvars().bind({.name = "s_hrtf",
+                  .fallback = "0",
+                  .help = "Whether the game's sounds are heard as two ears hear them, for "
+                          "headphones: a sound to one side reaches the far ear a moment later, "
+                          "quieter and duller.",
+                  .kind = ge::console::CvarKind::integer,
+                  .min = 0,
+                  .max = 2,
+                  .values = "0: off (the default); 1: as the sound device chooses (off, as it "
+                            "names no headphones); 2: on"},
+                 &s.hrtf);
 }
 
 void hear_under(RoomEar& ear, ge::audio::Synth& synth, const UnderEar& s, bool under) {
@@ -137,6 +148,13 @@ void hear_swap(ge::audio::Synth& synth, UnderEar& s) {
   if (static_cast<int>(s.swap) == s.swap_sent) return;
   synth.swap_stereo(s.swap);
   s.swap_sent = static_cast<int>(s.swap);
+}
+
+void hear_ears(ge::audio::Synth& synth, UnderEar& s) {
+  const int on = hrtf_on(s) ? 1 : 0;
+  if (on == s.hrtf_sent) return;
+  synth.binaural(on != 0);
+  s.hrtf_sent = on;
 }
 
 }  // namespace shooters_edge::client

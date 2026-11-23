@@ -267,6 +267,17 @@ struct ListenOptions {
   bool new_game = false;
 };
 
+// What the console set on the window's listen (`from`: the lobby, its settings, sv_port,
+// maxclients, sv_hostname, sv_login and the rest) copied onto the options a new game opens with.
+inline void take_console_settings(ListenOptions& to, const ListenOptions& from) {
+  to.lobby = from.lobby;
+  to.lobby_settings = from.lobby_settings;
+  to.port = from.port;
+  to.maxclients = from.maxclients;
+  to.hostname = from.hostname;
+  to.login = from.login;
+}
+
 // A blow the player took (a single-player program's damage record, client_data.hpp): its armour
 // and blood, 0..255 each, and where it came from, map units.
 struct Blow {
@@ -369,6 +380,16 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
 // The game ended and let go (its servers, then the maps they view, then the program), the options
 // kept: another game folder may be opened, and the next start is `listen_start`'s.
 void listen_stop(Listen& l);
+// `quit [reason]` and `recycle [reason]` in the window while it hosts a match: each player who
+// joined over the network told "Server quit" or "Server restarted" (": <reason>" after it when
+// one was given) and dropped, or told to reconnect (`restart`), by the match's game
+// (ServerGame::quit). Nothing when no match is hosted.
+void listen_farewell(Listen& l, const std::string& reason, bool restart);
+// `net_restart` in the window: a hosted match's socket opened again on `port` (sv_port) on every
+// interface, else on the port it had (`port` set back to it), the game told
+// (ServerGame::reopened); what went wrong in `said`. False when no match takes players over the
+// network (nothing to open) or no port opened.
+bool listen_net_restart(Listen& l, int& port, std::string& said);
 // A new game of the single-player program `progs` (which must outlive the listen) on `map`, the
 // match before it (if any) ended. `opt.console`'s lines are the campaign's settings.
 bool listen_campaign(Listen& l, const ge::progs::Progs& progs, std::unique_ptr<LoadedMap> map,

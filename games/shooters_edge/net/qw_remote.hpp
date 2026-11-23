@@ -73,7 +73,9 @@
 #include "account/client_queue.hpp"
 #include "classic/predict_original.hpp"
 #include "classic/protocol/stuff_filter.hpp"
+#include "classic/rulesets.hpp"
 #include "console/console.hpp"
+#include "console/ruleset.hpp"
 #include "console/talk.hpp"
 #include "input/state.hpp"
 #include "net/rates.hpp"
@@ -155,15 +157,16 @@ struct RconAway {
 
 struct Remote {
   // In the order that packs it (the lint holds the padding).
-  gn::Transport* transport = nullptr;             // what it talks over (`own`, or remote_start's)
-  const ge::console::Button* voip_key = nullptr;  // `+voip` (add_remote_commands)
-  const ge::console::Talk* talk = nullptr;        // the window's +voice keys (console/talk.hpp)
-  std::unique_ptr<StreamWatch> watch;             // watching a broadcast (`watch`), not playing
-  std::unique_ptr<RemoteLogin> login;             // logging in by the account file, when named
-  std::unique_ptr<RconAway> away;                 // rcon to `rcon_address`, not joined
-  std::unique_ptr<StatusAsk> status_ask;          // `serverstatus` waiting for its answer
-  PingSweep ping;                                 // `pingservers`' asks (q2_pingservers.hpp)
-  PassiveListen passive;                          // `passive` waiting for a server's call
+  gn::Transport* transport = nullptr;               // what it talks over (`own`, or remote_start's)
+  const ge::console::Button* voip_key = nullptr;    // `+voip` (add_remote_commands)
+  const ge::console::Talk* talk = nullptr;          // the window's +voice keys (console/talk.hpp)
+  std::unique_ptr<StreamWatch> watch;               // watching a broadcast (`watch`), not playing
+  std::unique_ptr<RemoteLogin> login;               // logging in by the account file, when named
+  std::unique_ptr<RconAway> away;                   // rcon to `rcon_address`, not joined
+  std::unique_ptr<StatusAsk> status_ask;            // `serverstatus` waiting for its answer
+  std::unique_ptr<ge::console::Rulesets> rulesets;  // the competition ruleset (qw_remote_rulesets)
+  PingSweep ping;                                   // `pingservers`' asks (q2_pingservers.hpp)
+  PassiveListen passive;                            // `passive` waiting for a server's call
   JoinedFile file;  // `record` while joined: the level kept and the file (qw_match_record.hpp)
   MatchAuto match;  // the match recorded on its own (match_auto_record)
   client::JoinedRecord joined_record;  // the window's record commands reach the join through it
@@ -183,6 +186,8 @@ struct Remote {
   const std::vector<sh::BrushModel>* world = nullptr;  // prediction: the level's models ([0] world)
   std::string server_name;                             // as asked ("host:port")
   std::string why;                                     // why it dropped
+  ge::classic::FairFacts fair_facts;  // what an f_ruleset answer says (qw_remote_rulesets.hpp)
+  ge::classic::FairReplies fair;      // when the last answer was said
   // The window's `topcolor` and `bottomcolor` last seen: a change of them is told the server.
   std::string seen_top, seen_bottom;
   sp::ChannelTrace trace;  // showpackets, showdrop: the channel's lines (add_remote_commands)
@@ -267,6 +272,7 @@ struct Remote {
   int own_port = -1;
   bool own_v6 = false;  // the client's socket is IPv6's (an IPv6 server joined)
   std::string port_note;
+  std::string localid;  // localid: the id a server browser's command packets carry (qw_client.hpp)
 };
 
 // Watches the broadcast at `address` ("host:port": a stream port, our TV node's or a relay's;

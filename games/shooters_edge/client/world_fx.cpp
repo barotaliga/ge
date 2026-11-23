@@ -704,6 +704,7 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
     out.q2_blend[k] =
         out.q2 && l.server != nullptr ? l.server->world.clients[0].numbers.blend[k] : 0;
   out.effect_models = effect_model(l, EffectModel::explosion);
+  if (l.server != nullptr) out.beam_model = listed_model(l.server->models, "progs/beam.mdl");
   place_models(l, out.models);
   if (out.q2)
     scene_lasers(l, out.beams);
@@ -1405,6 +1406,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           b.model = e.code == 5   ? EffectModel::bolt
                     : e.code == 9 ? EffectModel::bolt3
                                   : EffectModel::bolt2;
+          // The grappling beam (13) is its game's own model, in the model list when it has one.
+          if (e.code == 13) b.listed = l.beam_model;
           b.shot.born_s = t;
           b.shot.seed = s.seed++;
           s.beams.push_back(b);
@@ -1420,8 +1423,20 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         if (s.on.beams) fx::bolt_hit(p, normal, s.seed++, &out.births);
         break;
       }
-      case EffectKind::explosion:
+      case EffectKind::explosion:  // the mission packs' blast in its colours (12); the rest above
+        if (e.code == 12) {
+          if (!throw_scripted(s, "explosion2", p, kUpWay, 1, -1e9, t, out))
+            fx::explosion2(p, e.colour, e.count, s.seed++, s.palette, &out.births);
+          s.lit.push_back({at, t, e.at, true});  // its light, no sprite
+        }
         break;
+      case EffectKind::burst: {  // a program's burst of a colour's shades
+        const ge::camera::Vec3 way = engine_point(e.way * 15);
+        const double v[3] = {way.x, way.y, way.z};
+        if (!throw_scripted(s, "particle", p, toward(p, eye).data(), e.count, -1e9, t, out))
+          fx::burst(p, e.count, e.colour, v, s.seed++, s.palette, &out.births);
+        break;
+      }
       case EffectKind::named: {  // a mod's own effect: the files' of its name, or nothing
         // Quake II's arrivals (effects.hpp): a player's own warp is the dust's when it is on,
         // so his teleport's or entry's burst is not thrown over it.
@@ -1571,10 +1586,16 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   std::erase_if(s.blasts, [&](const ge::render::Blast& b) {
     return t - b.born_s > ge::render::blast_life(b) || t < b.born_s - 1;
   });
+  const size_t puffs_from = out.puffs.size();
   out.puffs.insert(out.puffs.end(), s.blasts.begin(), s.blasts.end());
+  // cl_smooth_explosions 0: each drawn at its age in whole tenths, so it moves on by steps.
+  const bool stepped = !s.on.q2.smooth_explosions;
+  for (size_t i = puffs_from; stepped && i < out.puffs.size(); ++i)
+    out.puffs[i].born_s = t - ge::classic::q2_blast_age(s.on.q2, t - out.puffs[i].born_s);
   std::erase_if(s.mains, [&](const ge::render::Blast& b) {
     fx::Light light;
-    if (!fx::blast_light(b, t, &light)) return t - b.born_s > 0.1;
+    const double at = stepped ? b.born_s + ge::classic::q2_blast_age(s.on.q2, t - b.born_s) : t;
+    if (!fx::blast_light(b, at, &light)) return t - b.born_s > 0.1;
     out.lights.push_back(q2_blast_light(s, light));
     return false;
   });
@@ -1635,7 +1656,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     for (int i = 0; i * kBoltSegment < len; ++i) {
       Placed seg;
       seg.entity = kBoltEntities - segment++;
-      seg.modelindex = l.effect_models + static_cast<int>(b.model);
+      seg.modelindex = b.listed >= 0 ? b.listed : l.effect_models + static_cast<int>(b.model);
       const float k = static_cast<float>(i * kBoltSegment / len);
       seg.origin = {b.map_from.x + d.x * k, b.map_from.y + d.y * k, b.map_from.z + d.z * k};
       seg.angles = {pitch, yaw, static_cast<float>(ge::core::range(roll, 0, 360))};
@@ -1684,7 +1705,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     double p[3];
     put(b.at, p);
     fx::Light light;
-    if (fx::explosion_light(p, t - b.t, &light)) out.lights.push_back(q2_blast_light(s, light));
+    if (fx::explosion_light(p, ge::classic::q2_blast_age(s.on.q2, t - b.t), &light))
+      out.lights.push_back(q2_blast_light(s, light));
     // The pack's explosion sprite, its frames at ten a second.
     const int frame = static_cast<int>((t - b.t) * kSpriteFps);
     if (frame >= kSpriteFrames || b.no_sprite) continue;

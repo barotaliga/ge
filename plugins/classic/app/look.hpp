@@ -163,6 +163,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   bool no_glow = false;
   // Quake II's own effect switches (classic/q2_fx_switches.hpp). Either look.
   ge::classic::Q2FxSwitches q2fx;
+  // The 3D view's share of the screen, percent, centred (Quake II's viewsize under 100: the
+  // border is the 2D layer's to tile); 100 all of it.
+  int view_size = 100;
   // r_drawflame: the torches' and braziers' flames drawn; 0 none, nor their fire. Either look.
   bool draw_flame = true;
   // r_drawvweps (Quake II's spelling cl_vwep): a player drawn with the weapon he carries, where
@@ -225,6 +228,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   int stock_figures = 0;
   // Quake II's `cl_nobob`: items the game marks to float stay still (no 5-unit rise and fall).
   bool items_still = false;
+  // The models' ground shadows (Quake II's `gl_shadows`): 0 none, 1 under each animated model, 2
+  // fading as it rises (the client's model_shadow.hpp).
+  int model_shadows = 0;
   int fog_serial = 0;  // how many times the `fog` command was given (above)
   std::string base_skin = "base", all_skins, all_figures;
   // teamskin, enemyskin: every teammate's or every enemy's skin ("": their own); the teamcolor and
@@ -322,6 +328,14 @@ ge::render::PostSettings post_settings(Look look, const Picture& picture = {});
 // The maps' light's scale over the default (`light_intensity` x `light_modulate` / 2): 1 at the
 // defaults.
 double light_scale(const Picture& picture);
+// The walls' light's scale: `light_scale` times Quake II's gl_modulate_world (1 in every other
+// game).
+double world_light_scale(const Picture& picture);
+// The models' light over the brightness the world's options give them in `look`: Quake II's
+// gl_modulate times gl_modulate_entities, laid on twice under gl_doublelight_entities; in the
+// modern look, whose models already take the world's brightness, over the world's modulate. 1 at
+// the defaults and in every other game.
+double model_light(const Picture& picture, Look look);
 // The classic grade: every entry the nearest (in sRGB) of `palette`'s colours (768 bytes, RGB), in
 // render/post.hpp's `identity_grade` layout. An empty palette gives the identity.
 std::vector<float> palette_grade(std::span<const uint8_t> palette);

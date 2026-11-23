@@ -13,6 +13,7 @@
 #include <iterator>
 #include <utility>
 
+#include "classic/rulesets.hpp"
 #include "net/voice_trial.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/qw_ext.hpp"
@@ -49,6 +50,8 @@ std::string userinfo_of(const Q2ClientEnd& c) {
   if (!c.cfg.gender.empty()) info_set(u, "gender", c.cfg.gender);
   info_set(u, "version", kProgramVersion);  // what the server's players and admins see us as
   if (c.cfg.speedjump) info_set(u, "cl_speedjump", "1");
+  if (!c.cfg.ruleset.empty() && c.cfg.ruleset != "default")
+    info_set(u, std::string(ge::classic::ruleset_info_key(true)), c.cfg.ruleset);
   if (c.cfg.spectator)
     info_set(u, "spectator", c.cfg.spectator_password.empty() ? "1" : c.cfg.spectator_password);
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
@@ -156,8 +159,14 @@ void read_oob(Q2ClientEnd& c, const uint8_t* data, size_t size) {
   } else if (w[0] == "client_connect" && c.stage == ClientStage::connect) {
     // The channel: the server's ` nc=` answer, else the newer one on 36.
     int chan = c.protocol == kQ2Protocol36 ? 1 : 0;
-    for (size_t k = 1; k < w.size(); k++)
+    int anticheat = 0;  // the server's ` ac=` ask: 2 and up insists on it
+    for (size_t k = 1; k < w.size(); k++) {
       if (w[k].rfind("nc=", 0) == 0) chan = std::atoi(w[k].c_str() + 3);
+      if (w[k].rfind("ac=", 0) == 0) anticheat = std::atoi(w[k].c_str() + 3);
+    }
+    if (anticheat >= 2 && c.prints.size() < kKept)  // none here: said, and the game goes on
+      c.prints.emplace_back(
+          "The server asks for anticheat, which this game does not have; joining without it.\n");
     if (chan != 0 && chan != 1) {
       c.refused = "Server returned invalid netchan type";
       c.stage = ClientStage::dropped;

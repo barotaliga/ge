@@ -239,3 +239,38 @@ TEST(the_teams_extras_on_a_kept_line) {
   cl::drop_ignored(g, s, none, 106);
   CHECK(c.expand_text("$triggermatch").empty());
 }
+
+// Quake II's version reply: a line ENDING in !version, answered 1 to 2 s on, once in two minutes.
+TEST(quake_ii_answers_a_line_ending_in_version_after_a_second) {
+  con::Console c;
+  cl::QwIgnore g;
+  cl::DemoState s = room();
+  s.format = cl::DemoFormat::q2;
+  cl::add_qw_ignore(c, g, s);
+  g.con = &c;
+  g.chat.con = &c;
+  std::vector<std::string> said;
+  c.add_command("say", "",
+                [&said](con::Console&, const con::Args& a) { said.push_back(a.rest(0)); });
+  std::vector<cl::DemoPrint> asked{{3, "bobby: which client? !version\n"}};
+  cl::drop_ignored(g, s, asked, 100);
+  c.run();
+  CHECK(said.empty());  // not at once
+  std::vector<cl::DemoPrint> none;
+  cl::drop_ignored(g, s, none, 100.9);
+  c.run();
+  CHECK(said.empty());
+  cl::drop_ignored(g, s, none, 102.01);
+  c.run();
+  CHECK(said.size() == 1 && said[0].find("Shooter's Edge") != std::string::npos);
+  std::vector<cl::DemoPrint> again{{3, "bobby: !version\n"}};
+  cl::drop_ignored(g, s, again, 150);
+  cl::drop_ignored(g, s, none, 153);
+  c.run();
+  CHECK(said.size() == 1);  // once in two minutes
+  std::vector<cl::DemoPrint> start{{3, "bobby: !version please\n"}};
+  cl::drop_ignored(g, s, start, 300);
+  cl::drop_ignored(g, s, none, 303);
+  c.run();
+  CHECK(said.size() == 1);  // only a line that ends in it
+}

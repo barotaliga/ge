@@ -213,7 +213,8 @@ enum class DemoEffectKind : uint8_t {
   teleport,
   blood,
   named,
-  named_trail
+  named_trail,
+  burst  // a program's burst in a colour other than blood's (`colour`, `count` specks, `way`)
 };
 // A blow the player took (the protocol's damage message, to him alone): the armour and the blood it
 // cost, and where it came from (units). What tips the classic view (demo_eyes.hpp).
@@ -241,7 +242,8 @@ struct DemoEffect {
   sh::Vec3f at, end;  // units; a beam's start and end (`end` is `at` for the rest); a trail's
   sh::Vec3f way;      // a named effect's way
   std::string name;   // a named effect's
-  int colour = 0;     // a splash's or a laser's sparks' palette index
+  int colour = 0;     // a splash's or a laser's sparks' palette index; a burst's; explosion2's
+                      // first colour (`count` its run's length)
 };
 
 inline constexpr double kNeverFlashed = -1e9;
@@ -291,6 +293,8 @@ struct DemoState {
   // The items the view's player took (the server's stuffed `bf`; single: its bonus flash too),
   // since the demo was opened: each flashes the view gold.
   int64_t bonuses = 0;
+  // Multiview: the match server's start markers read (its stuffed `//ktx matchstart`).
+  int64_t match_starts = 0;
   sh::Vec3f velocity;          // client: the recording's player's, units/s (`velocity_read`)
   bool velocity_read = false;  // client: the player's velocity came in his last player state
   // Quake II: what went wrong with the last frame read (kQ2Frame* bits; `scr_showturtle` writes

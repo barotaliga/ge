@@ -43,19 +43,19 @@
 //   ETCHED bleaches and pits it (an acid). All three 0: the shader skips it.
 // - THE BLOOD (`MorphBlood`): wounds as soaked patches with blood run down from them, fixed to the
 //   model's rest frame (frame 0), darkening as they dry. No wound: the shader skips it.
-// - THE PASS draws after the opaque world (depth tested and written, reversed z, back faces
-//   culled), one draw a model instance, at most `kMaxMorphDraws` a frame.
-// - THE CPU TWINS (`pose_morph`, `morph_texel`, `pack_morph_atlas`, `warp_vertex`, `warp_cut`,
-//   `wound_cover`) do what the shader does, for the tests and the CPU pictures.
+// - THE SHADOW (`MorphDraw::flat`): a copy squashed flat onto the floor, black, see-through.
+// - THE PASS: after the opaque world, depth written, back faces culled (an OUTLINE's fronts).
+// - THE CPU TWINS (`pose_morph` and the rest below) do what the shader does, for the tests.
 // ge:summary Morph meshes drawn: vertex-animated models, frames blended on the GPU, tinted skins
 // ge:keywords burn charred embers etched morph_burn scorch-skin blood morph_blood morph_wound
 // ge:keywords wound_cover wound-stain blood-run soaked bloodied hole cut-out alpha see-through
 // ge:keywords render morph morph-mesh vertex-animation frames blend interpolation skin atlas tint
 // ge:keywords team-colours player-colours ramp glow fullbright sharp smooth nearest mark-hole warp
 // ge:keywords morph-warp dissolve materialize dematerialize spawn teleport fade-in fade-out
-// ge:keywords warp_vertex warp_field warp_cut pack_warp ash dust crumble burning-edge shimmer
-// ge:keywords pinch create_morph prepare_morph encode_morph pose_morph morph_texel
-// ge:keywords pack_morph_atlas skin-slots set_morph_slot slot_texels worn-skin lazy-skin
+// ge:keywords warp_vertex warp_field warp_cut pack_warp ash dust crumble burning-edge shimmer pinch
+// ge:keywords create_morph prepare_morph encode_morph pose_morph morph_texel lazy-skin
+// ge:keywords pack_morph_atlas skin-slots set_morph_slot slot_texels worn-skin shadow blob-shadow
+// ge:keywords outline cel-shading ink-line
 // ge:skill render
 // ge:test tests/render_morph_test.cpp
 #pragma once
@@ -198,6 +198,17 @@ struct MorphDraw {
   // drawn over a plain copy of the same model, usually see-through (`alpha`).
   float shell_push = 0;
   float shell[3] = {0, 0, 0};
+  // A SHADOW (`flat` set): the model squashed flat onto a level floor at height `flat_y` (world,
+  // m), each point moved across by `flat_lean` (x, z) for each m it stood above the floor, drawn in
+  // the shell's one flat colour `shell` (black for a shadow) and see-through by `alpha`. Its pose,
+  // warp and motion are the plain draw's.
+  bool flat = false;
+  float flat_y = 0;
+  float flat_lean[2] = {0, 0};
+  // An OUTLINE (with `shell_push` over 0): the shell's BACK faces alone, so the pushed copy shows
+  // only as a rim round the figure's silhouette and along its creases (an ink line); drawn after
+  // the plain copy, depth tested against it.
+  bool outline = false;
 };
 
 // Where each model's skin sits in the atlas, texels.
@@ -234,9 +245,11 @@ struct Morph {
   wgpu::BindGroupLayout layout;
   wgpu::BindGroup group;
   uint32_t p_draw = 0;
+  uint32_t p_outline = 0;              // the same with the fronts culled (MorphDraw::outline)
   std::vector<uint32_t> index_counts;  // a model each
   std::vector<uint8_t> staged;         // kMaxMorphDraws GpuDraws
   std::vector<uint32_t> staged_models;
+  std::vector<uint8_t> staged_outline;  // 1: that draw is an outline
   uint32_t drawn = 0;
   uint32_t dropped = 0;  // past kMaxMorphDraws this frame
 };

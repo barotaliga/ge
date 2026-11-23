@@ -303,6 +303,26 @@ void DemoTimeline::frame(const DemoState& s, bool new_level) {
   last = s.time;
 }
 
+namespace {
+
+// A snapshot taken when the timeline has gone `snap_every_s` past the last one (the first at the
+// first frame drawn), the bytes lent back to the demo rather than copied.
+void snap(Timedemo& t) {
+  if (t.snap_every_s <= 0) return;
+  if (!t.snaps.empty() && t.timeline.t < t.snaps.back().timeline.t + t.snap_every_s) return;
+  std::vector<uint8_t> bytes = std::move(t.demo.bytes);
+  t.snaps.push_back({t.demo, t.timeline, t.levels});
+  t.demo.bytes = std::move(bytes);
+  DemoState& kept = t.snaps.back().demo.state;  // what the frame carried is not carried again
+  kept.effects.clear();
+  kept.started.clear();
+  kept.stopped.clear();
+  kept.voice.clear();
+  kept.prints.clear();
+}
+
+}  // namespace
+
 TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
   std::vector<DemoEffect> effects;  // every frame read's, the ones not drawn too
   for (;;) {
@@ -336,9 +356,11 @@ TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
       t.skip = kSkipAfterLevel;
       t.last_ns = 0;
       t.timeline.frame(s, true);
+      snap(t);
       return TimedemoStep::new_level;
     }
     t.timeline.frame(s, false);
+    snap(t);
     return TimedemoStep::frame;
   }
 }
@@ -379,12 +401,25 @@ TimedemoStep playdemo_step(Timedemo& t, double wall_dt_s, double speed, std::str
 TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error) {
   const int level_before = t.levels;
   const std::string map_before = t.demo.state.map;
-  if (timeline_s < t.timeline.t) {  // back: from the start again, the tracked player kept
+  if (timeline_s < t.timeline.t) {  // back: from a snapshot or the start, the player tracked kept
     const int track = t.demo.track;
-    t.demo = t.start;
+    const auto after =
+        std::upper_bound(t.snaps.begin(), t.snaps.end(), timeline_s,
+                         [](double at, const DemoSnap& snap) { return at < snap.timeline.t; });
+    if (after == t.snaps.begin()) {
+      t.demo = t.start;
+      t.timeline = {};
+      t.levels = 0;
+    } else {
+      const DemoSnap& from = *std::prev(after);
+      std::vector<uint8_t> bytes = std::move(t.demo.bytes);
+      t.demo = from.demo;
+      t.demo.bytes = std::move(bytes);
+      t.timeline = from.timeline;
+      t.levels = from.levels;
+      t.snaps.erase(after, t.snaps.end());  // taken again as the frames after it are read
+    }
     t.demo.track = track;
-    t.timeline = {};
-    t.levels = 0;
   }
   TimedemoStep out = TimedemoStep::frame;
   const bool stop_at_intermission = std::exchange(t.seek_stops_at_intermission, false);

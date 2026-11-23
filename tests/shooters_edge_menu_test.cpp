@@ -16,6 +16,7 @@
 // ge:keywords server-browser join-a-game menu_servers servers connect demos menu_demos take_demo
 // ge:skill ui testing
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -628,6 +629,19 @@ TEST(load_and_save_show_the_slots_and_run_their_lines) {
   none.saves = host.saves;
   sm::refresh(m, none);
   CHECK(item(m, "load", "s3")->disabled && item(m, "save", "s0")->disabled);
+}
+
+TEST(setup_shows_the_hostname_beside_its_row) {
+  World w;
+  w.con.cvars().add({"sv_hostname", "Shooter's Edge", 0, "", ge::console::CvarKind::text});
+  w.con.cvars().set("sv_hostname", "Den", ge::console::Source::local);
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con};
+  g.show(host, "setup");
+  const auto* row = item(g.main(), "setup", "hostname");
+  CHECK(row != nullptr && row->text == "HOSTNAME  Den");
+  CHECK(g.main().page("setup")->items[0].id == "hostname");  // the first row, as Quake's
 }
 
 TEST(a_classic_page_longer_than_the_screen_scrolls_to_its_focus) {
@@ -1493,6 +1507,37 @@ TEST(q2_menu_has_its_own_pages_flags_keys_and_in_game_page) {
   CHECK(!g.open() && !w.ran.empty() && w.ran.back() == "putaway");
 }
 
+// The video mode row: windowed, then each mode vid_modelist offers; a mode picked writes its
+// number.
+TEST(q2_video_mode_lists_the_modes_and_writes_the_number) {
+  World w;
+  w.con.cvars().add({.name = "vid_fullscreen", .fallback = "0"});
+  w.con.cvars().add({.name = "vid_modelist",
+                     .fallback = "desktop 1280x720@60 1920x1080@144",
+                     .kind = ge::console::CvarKind::text});
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .table = &sm::q2_menu()};
+  g.set_table(sm::q2_menu());
+  w.con.execute("vid_fullscreen 2");
+  g.show(host, "video");
+  const ge::ui::Item* row = item(g.main(), "video", "vid_fullscreen");
+  CHECK(row != nullptr);
+  if (row == nullptr) return;
+  CHECK(row->choices.size() == 4);
+  CHECK(row->choices[0] == "windowed" && row->choices[1] == "desktop" &&
+        row->choices[3] == "1920x1080@144");
+  CHECK(row->choice == 2);
+  g.main().page("video")->find("vid_fullscreen")->choice = 3;
+  sm::apply_event({.kind = EventKind::changed, .page = "video", .item = "vid_fullscreen"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("vid_fullscreen")->value == "3");
+  g.main().page("video")->find("vid_fullscreen")->choice = 0;
+  sm::apply_event({.kind = EventKind::changed, .page = "video", .item = "vid_fullscreen"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("vid_fullscreen")->value == "0");
+}
+
 TEST(q2_player_page_lists_figures_and_writes_the_skin) {
   // Figures as Quake II's packs hold them: a skin counts only with its icon beside it.
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
@@ -1547,6 +1592,44 @@ TEST(q2_player_page_without_figures_does_not_open) {
   for (const MenuEvent& e : events) sm::apply_event(e, m, host);
   CHECK(m.top().id == "multi");
   CHECK(!w.con.output().empty() && w.con.output().back() == "No player models found.");
+}
+
+// Quake's setup page shows its figure (menuplyr) in the shirt and pants its rows hold: the shirt's
+// shades take the chosen row's (a row from 128 up runs the other way), the rest stay.
+TEST(setup_shows_the_figure_in_the_chosen_colours) {
+  const auto files = sm::fixture_files();
+  sm::ClassicArt art;
+  std::string error;
+  CHECK_MSG(sm::load_classic_art(fixture_find(files), &art, &error), error);
+  const ge::ui::Image* fig = art.player_in(4, 12);
+  CHECK(fig != nullptr);
+  if (fig == nullptr) return;
+  const auto px = [&](int x, int y) {
+    const uint8_t* p = &fig->rgba[static_cast<size_t>(y * fig->width + x) * 4];
+    return std::array<int, 4>{p[0], p[1], p[2], p[3]};
+  };
+  const auto pal = [&](int k) {
+    const ge::ui::Color c = art.colour(k);
+    return std::array<int, 4>{static_cast<int>(std::lround(c.r * 255)),
+                              static_cast<int>(std::lround(c.g * 255)),
+                              static_cast<int>(std::lround(c.b * 255)), 255};
+  };
+  CHECK(px(0, 0)[3] == 0);      // see-through
+  CHECK(px(8, 10) == pal(64));  // the shirt's first shade: row 4's first
+  CHECK(px(38, 10) == pal(64 + 15));
+  CHECK(px(8, 40) == pal(192 + 15));  // the pants' first shade: row 12, from its far end
+  CHECK(px(38, 40) == pal(192));
+  CHECK(art.player_in(4, 12) == fig);  // kept while the colours stay
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con};
+  g.set_art(art);
+  g.show(host, "setup");
+  DrawList dl;
+  dl.begin(640, 400);
+  g.draw(dl, 640, 400, 0.25);
+  CHECK(g.problems().empty());
 }
 
 // A web list of servers in sb_masters: the binary list's 6-byte records and the text list's lines
@@ -1629,4 +1712,78 @@ TEST(the_game_sets_the_menus_size) {
   menu.menu_scale() = 3;
   menu.set_art(sm::ClassicArt{});
   CHECK(menu.menu_scale() == 3);
+}
+
+TEST(q2_browse_rows_open_the_browser_on_their_own_sources) {
+  namespace gn = ge::net;
+  gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
+  // Three servers: one in the address book, one in the game's servers.lst, one only in sb_servers.
+  gn::Transport server[3], browser;
+  for (uint32_t k = 0; k < 3; k++)
+    gn::open_sim_transport(server[k], net, gn::sim_address(5 + k, 27500));
+  gn::open_sim_transport(browser, net, gn::sim_address(1, 27001));
+  const std::string listed = gn::to_string(gn::sim_address(6, 27500)) + "\n";
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
+      {"servers.lst", std::vector<uint8_t>(listed.begin(), listed.end())}};
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak(files, &pak, &error), error);
+  ge::vfs::SearchPath sp;
+  CHECK_MSG(ge::vfs::add_archive(&sp, "pak0.pak", pak, "baseq2", &error), error);
+
+  ge::console::Console con;
+  con.add_command("connect", "", [](ge::console::Console&, const ge::console::Args&) {});
+  con.cvars().add({.name = "adr0",
+                   .fallback = gn::to_string(gn::sim_address(5, 27500)),
+                   .kind = ge::console::CvarKind::text});
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  const sm::MenuTable& table = menu.set_table(sm::q2_menu(), &sp);
+  sm::Host host{.console = &con, .table = &table};
+  menu.servers().set_query({toy_status, toy_reply, nullptr, nullptr});
+  menu.servers().use_transport(&browser);
+  menu.servers().set_lan_ports(27500, 27500);
+  con.execute("sb_servers " + gn::to_string(gn::sim_address(7, 27500)));
+  con.run();
+  int64_t now = 0;
+  uint8_t buf[64];
+  gn::Address from;
+  const auto run = [&] {
+    now += 16000;
+    gn::sim_advance(net, now);
+    for (int k = 0; k < 3; k++)
+      while (gn::transport_receive(server[k], buf, sizeof buf, from, now) >= 0) {
+        const char* names[] = {"!book", "!listed", "!mine"};
+        gn::transport_send(server[k], from, reinterpret_cast<const uint8_t*>(names[k]),
+                           std::strlen(names[k]), now);
+      }
+    menu.update({}, false, host, 0.016);
+  };
+  const auto shown = [&] {
+    std::vector<std::string> out;
+    for (int r : menu.servers().rows())
+      out.push_back(menu.servers().list().entries[static_cast<size_t>(r)].info.name);
+    std::sort(out.begin(), out.end());
+    return out;
+  };
+  // The page's rows: the web list, and the address book, servers.lst and the LAN.
+  const sm::Entry* book = sm::find_entry("multi", "book", table);
+  CHECK(book != nullptr && sm::find_entry("multi", "q2servers", table) != nullptr &&
+        sm::find_entry("game", "q2servers", table) != nullptr);
+  if (book == nullptr) return;
+  CHECK(book->line == R"(pushmenu servers "favorites://" "file:///servers.lst" "broadcast://")");
+  // Those sources without the LAN (every server here would answer it), and a word it cannot use.
+  con.execute("sb_lan 0");
+  con.execute(R"(pushmenu servers "favorites://" "file:///servers.lst" nowhere)");
+  con.run();
+  for (int i = 0; i < 90; i++) run();
+  CHECK(shown() == (std::vector<std::string>{"book", "listed"}));
+  CHECK(std::find(con.output().begin(), con.output().end(),
+                  "Ignoring invalid master URL: nowhere") != con.output().end());
+  // The menu's own row afterwards: the configured places again.
+  menu.hide();
+  con.execute("menu_servers");
+  con.run();
+  for (int i = 0; i < 90; i++) run();
+  CHECK(shown() == (std::vector<std::string>{"book", "mine"}));
 }
