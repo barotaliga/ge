@@ -48,6 +48,8 @@ enum class SqAmmo : uint8_t {
   traps
 };
 inline constexpr int kSqAmmoKinds = 9;  // `none` included, so an `SqAmmo` indexes an array
+// The base game's kinds (`none` to slugs): what the arsenal message (svc 118) carries.
+inline constexpr int kSqBaseAmmoKinds = 7;
 
 // The armours, worse to better (0 none).
 enum class SqArmour : uint8_t { none, jacket, combat, body };

@@ -114,8 +114,9 @@ bool is_hand_loop(const std::string& name) {
 }
 
 // The status bar's ammunition picture of each kind (the pictures Quake II's items name).
-constexpr const char* kAmmoIcon[sv::kSqAmmoKinds] = {
-    "", "a_shells", "a_bullets", "a_grenades", "a_rockets", "a_cells", "a_slugs"};
+constexpr const char* kAmmoIcon[sv::kSqAmmoKinds] = {"",           "a_shells",  "a_bullets",
+                                                     "a_grenades", "a_rockets", "a_cells",
+                                                     "a_slugs",    "a_mslugs",  "a_trap"};
 
 // The newest frame folded into what the window knows: the weapon in hand held, its ammunition
 // seen; our server's arsenal when told; all forgotten at death.
@@ -133,7 +134,7 @@ void know_frame(Q2Known& k, const dc::Demo& d, int32_t frame, int weapon, int am
   }
   if (d.arsenal_told) {
     k.weapons = d.arsenal_weapons;
-    for (int a = 1; a < sv::kSqAmmoKinds; a++) {
+    for (int a = 1; a < sv::kSqBaseAmmoKinds; a++) {  // the message's kinds (the base game's)
       k.ammo[a] = d.arsenal_ammo[a];
       k.ammo_seen[a] = true;
     }
