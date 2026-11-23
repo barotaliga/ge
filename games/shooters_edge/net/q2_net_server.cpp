@@ -536,9 +536,10 @@ void start_signon(Q2NetServer& s, int slot) {
   opt.protocol = c.protocol;
   opt.minor = c.minor;
   opt.hit_reports = c.told_hits;  // our own client draws the hit marker from it
-  if (s.native != nullptr)
+  if (s.native != nullptr) {      // an extended game's level (sv::Q2Raw::ext) goes on the wire
+    opt.ext = s.native->raw.ext;
     sv::q2_signon_raw(c.wire, s.native->raw, slot, opt, c.signon);
-  else
+  } else
     sv::q2_signon_parts(c.wire, **s.rules, slot, opt, c.signon);
   ask_settings(s, c);  // setting bans and user info bans at every `new` (server/settingban.hpp)
   if (judge_userinfo(s, slot)) return;

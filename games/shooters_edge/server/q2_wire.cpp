@@ -656,9 +656,9 @@ std::vector<uint8_t> over_cap(const Q2Wire& w, const RulesCommon& c, const float
 
 }  // namespace
 
-void q2_sight_reset(Q2Sight& s, const ge::brush::Map* map) {
+void q2_sight_reset(Q2Sight& s, const ge::brush::Map* map, int entities) {
   s.map = map;
-  s.links.assign(kQ2Entities, Q2SightLinks{});
+  s.links.assign(size_t(std::max(entities, kQ2Entities)), Q2SightLinks{});
 }
 
 void q2_sight_link(Q2Sight& s, int number, const float lo[3], const float hi[3]) {
@@ -748,7 +748,7 @@ void q2_signon_parts(Q2Wire& w, const RulesCommon& c, int slot, const Q2WireOpti
   }
   q2_server_data_tail(out.server_data, opt);
   if (!opt.show.empty()) return;  // a cinematic or a picture: nothing more
-  for (int i = 0; i < kQ2ConfigStrings; i++) {
+  for (int i = 0; i < out.config_end; i++) {
     const std::string& s = w.sent[size_t(i)];
     if (s.empty()) continue;
     std::vector<uint8_t> one;
@@ -968,15 +968,20 @@ void q2_signon_raw(Q2Wire& w, const Q2Raw& raw, int slot, const Q2WireOptions& o
   w = Q2Wire{};
   w.opt = opt;
   w.slot = slot;
-  w.baselines.assign(kQ2Entities, Q2EntityState{});
-  w.last.assign(kQ2Entities, Q2EntityState{});
+  // An extended game's lists are the longer ones (q2_limits.hpp); the ordinary sizes at least.
+  const size_t entities = std::max(size_t(kQ2Entities), raw.entities.size());
+  w.baselines.assign(entities, Q2EntityState{});
+  w.last.assign(entities, Q2EntityState{});
   w.sent = raw.config;
-  w.sent.resize(kQ2ConfigStrings);
+  w.sent.resize(std::max(size_t(kQ2ConfigStrings), raw.config.size()));
   out = Q2Signon{};
+  out.config_end = static_cast<int>(w.sent.size());
   {
     Out o{out.server_data};
     o.u8(kServerData);
-    o.i32(opt.protocol);  // the viewer's: 34, or a later one with its tail below
+    // The viewer's: 34, or a later one with its tail below; a recording of an extended game
+    // is 3434 or 3435 by its level (34's form, the wider fields).
+    o.i32(opt.protocol == kQ2Protocol && opt.ext > 0 ? 3433 + opt.ext : opt.protocol);
     o.i32(0x10000 + opt.server_count);
     o.u8(opt.attract_loop);
     o.str("");
@@ -996,15 +1001,19 @@ void q2_signon_raw(Q2Wire& w, const Q2Raw& raw, int slot, const Q2WireOptions& o
     out.config_strings.emplace_back(i, std::move(one));
   }
   const Q2EntityState zero;
-  for (int n = 1; n < kQ2Entities && size_t(n) < raw.baselines.size(); n++) {
-    const Q2EntityState& s = raw.baselines[size_t(n)];
+  for (size_t n = 1; n < entities && n < raw.baselines.size(); n++) {
+    const Q2EntityState& s = raw.baselines[n];
     if (!s.present) continue;
-    w.baselines[size_t(n)] = s;
+    w.baselines[n] = s;
     std::vector<uint8_t> one;
     Out e{one};
     e.u8(kBaseline);
-    write_entity(e, delta_flags(zero, s, n, true), n, s, long_solid(opt));
-    out.baselines.emplace_back(n, std::move(one));
+    if (opt.ext > 0)
+      q2_write_entity_ext(one, q2_entity_flags_ext(zero, s, int(n), true, opt.ext), int(n), zero, s,
+                          opt.ext);
+    else
+      write_entity(e, delta_flags(zero, s, int(n), true), int(n), s, long_solid(opt));
+    out.baselines.emplace_back(int(n), std::move(one));
   }
 }
 
@@ -1012,12 +1021,12 @@ void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8
                   std::vector<uint8_t>& reliable) {
   block.clear();
   Out r{reliable};
-  for (int i = 0; i < kQ2ConfigStrings && size_t(i) < raw.config.size(); i++)
-    if (raw.config[size_t(i)] != w.sent[size_t(i)]) {
+  for (size_t i = 0; i < raw.config.size() && i < w.sent.size(); i++)
+    if (raw.config[i] != w.sent[i]) {
       r.u8(kConfigString);
-      r.i16(i);
-      r.str(raw.config[size_t(i)]);
-      w.sent[size_t(i)] = raw.config[size_t(i)];
+      r.i16(int32_t(i));
+      r.str(raw.config[i]);
+      w.sent[i] = raw.config[i];
     }
   const int slot = std::clamp(w.slot, 0, sh::kMaxClients - 1);
   reliable.insert(reliable.end(), raw.reliable[slot].begin(), raw.reliable[slot].end());
@@ -1038,17 +1047,19 @@ void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8
     o.u8(w.suppress);
     w.suppress = 0;
     q2_write_area_bits(block, w);
-    write_player(o, w.last_frame < 0 ? Q2PlayerState{} : w.last_player, p);
+    q2_write_player_ext(block, w.last_frame < 0 ? Q2PlayerState{} : w.last_player, p, w.opt.ext);
     w.last_player = p;
   }
   if (!ext) o.u8(kPacketEntities);
   const Q2EntityState zero;
   const size_t cap = frame_cap(w, reliable.size());
   const size_t room = entity_room(cap);
-  for (int n = 1; n < kQ2Entities; n++) {
-    Q2EntityState s = size_t(n) < raw.entities.size() ? raw.entities[size_t(n)] : zero;
+  const size_t most = w.opt.ext > 0 ? 64 : 44;  // an entry's most bytes
+  const int count = static_cast<int>(std::min(w.last.size(), raw.entities.size()));
+  for (int n = 1; n < count; n++) {
+    Q2EntityState s = raw.entities[size_t(n)];
     const Q2EntityState& was = w.last[size_t(n)];
-    if (block.size() + 44 > room) break;
+    if (block.size() + most > room) break;
     if (cut && s.present && !q2_sight_keeps(w, n, s, eye)) {
       s.present = false;
       w.cut++;
@@ -1073,8 +1084,13 @@ void q2_frame_raw(Q2Wire& w, Q2Raw& raw, int32_t frame_number, std::vector<uint8
         continue;
       }
     }
-    const uint32_t f = delta_flags(base, s, n, fresh || n <= sh::kMaxClients);
-    if ((f & ~kNumberShort) != 0) write_entity(o, f, n, s, long_solid(w.opt));
+    if (w.opt.ext > 0) {
+      const uint64_t f = q2_entity_flags_ext(base, s, n, fresh || n <= sh::kMaxClients, w.opt.ext);
+      if ((f & ~uint64_t(kNumberShort)) != 0) q2_write_entity_ext(block, f, n, base, s, w.opt.ext);
+    } else {
+      const uint32_t f = delta_flags(base, s, n, fresh || n <= sh::kMaxClients);
+      if ((f & ~kNumberShort) != 0) write_entity(o, f, n, s, long_solid(w.opt));
+    }
     w.last[size_t(n)] = s;
   }
   o.u8(0);
