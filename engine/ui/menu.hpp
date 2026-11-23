@@ -86,7 +86,8 @@ struct MenuInput {
   bool refresh = false;  // the refresh key (R, F5): a page that lists what it found asks again
   char letter = 0;  // a letter key tapped ('a'..'z') that a page reads as its own key (a filter)
   bool pointer_moved = false;
-  bool click = false;  // the pointer's primary button released over where it was pressed
+  bool click = false;         // the pointer's primary button released over where it was pressed
+  bool pointer_held = false;  // the pointer's primary button down (a drag: a figure turned)
   float pointer_x = 0, pointer_y = 0;
 };
 
