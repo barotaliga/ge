@@ -10,8 +10,8 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client console commands | 128 | 13 | 5 | 10 | 156 |
-| Client settings (cvars) | 209 | 49 | 30 | 62 | 350 |
+| Client console commands | 132 | 13 | 1 | 10 | 156 |
+| Client settings (cvars) | 210 | 48 | 30 | 62 | 350 |
 | Macros ($name in typed and bound text) | 25 | 3 | 0 | 2 | 30 |
 | Menu pages and rows | 96 | 61 | 4 | 1 | 162 |
 | Server messages the client parses (svc) | 21 | 6 | 0 | 0 | 27 |
@@ -23,17 +23,17 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 8 | 8 | 0 | 0 | 16 |
 | The layout language (status bar and layouts) | 26 | 1 | 0 | 0 | 27 |
 | HUD and screen elements | 18 | 10 | 0 | 1 | 29 |
-| Messages printed to the player | 69 | 57 | 14 | 7 | 147 |
-| Demo playback and recording features | 10 | 10 | 1 | 2 | 23 |
-| Keys: the fixed keys and the default bindings | 6 | 4 | 1 | 0 | 11 |
+| Messages printed to the player | 70 | 57 | 12 | 8 | 147 |
+| Demo playback and recording features | 12 | 8 | 1 | 2 | 23 |
+| Keys: the fixed keys and the default bindings | 7 | 4 | 0 | 0 | 11 |
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 12 | 6 | 2 | 0 | 20 |
 | Connection, network, downloads and the rest | 8 | 5 | 4 | 0 | 17 |
-| **all** | 761 | 295 | 70 | 85 | 1211 |
+| **all** | 770 | 292 | 63 | 86 | 1211 |
 
 ## Client console commands
 
-done 128, partial 13, missing 5, not-taken 10
+done 132, partial 13, missing 1, not-taken 10
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -89,11 +89,11 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.dumplayout | `dumplayout <file>` | writes the current layout program to a file | done | `games/shooters_edge/client/q2_bar.cpp`: written under `layouts/` |
 | cmd.writeconfig | `writeconfig <file> [-a -b -c -m]` | writes aliases, binds, saved and changed settings to a file | done | `engine/console/console_more.cpp`: -a -b -c -m, default bindings and archived settings, `.cfg` added |
 | cmd.vid_restart | `vid_restart` | restarts video (manual use ignored unless `cl_allow_vid_restart`) | done | `games/shooters_edge/client/window_cvars.cpp`: typed, it is ignored with the line and why (the window applies video settings at once) |
-| cmd.r_reload | `r_reload` | reloads every picture and model | missing | C33 |
+| cmd.r_reload | `r_reload` | reloads every picture and model | done | the level's world made again, its textures and models read from the files (`games/shooters_edge/client/render_words.cpp`); "No map loaded." outside one |
 | cmd.snd_restart | `snd_restart` | restarts the sound system | done | `games/shooters_edge/client/menu_sound.cpp`: typed, it says why none is needed (sound settings apply as they change), as `vid_restart` does |
 | cmd.play | `play <sound> [...]` | plays local sounds by name | done | `games/shooters_edge/client/menu_sound.cpp` (`play`, `playvol`); the music player keeps its own words under `cd` |
 | cmd.stopsound | `stopsound` | stops every sound playing | done | `games/shooters_edge/client/menu_sound.cpp`: every sampled voice stopped, the music bus kept (`engine/audio/synth.cpp` `sample_stop_all`) |
-| cmd.soundlist | `soundlist` | lists loaded sounds | missing | ours `soundlist` is the server's |
+| cmd.soundlist | `soundlist` | lists loaded sounds | done | each sound read with its length, rate and loop, the ones not found, then the count and memory (`DemoSounds::list_lines`, `games/shooters_edge/client/demo_sound.cpp`) |
 | cmd.soundinfo | `soundinfo` | prints the sound device's state | done | `games/shooters_edge/client/menu_sound.cpp` (`add_sound_status_commands`): the device's driver, the rate and format, the sounds playing and cut short |
 | cmd.ogg | `ogg info/play/stop/next/pause` | the music player: `info` describes the playing stream's format (or "Playback stopped."), `play <track> [soft]` plays a track number or a file under `music/`, `stop`, `next` (the next shuffled track, or restarts the automatic track), `pause` or `toggle` pauses and resumes | partial | `engine/audio/music_console.cpp` (`music`, `ogg` its Quake II spelling in `client/cvar_layers.cpp`): info names the track (not the decoder's dump), play takes a track number (a file name under `music/` is not looked up), soft lets the old fade, stop, next, pause and toggle |
 | cmd.wave | `wave <n>` | forwarded: plays a gesture | done | forwarded to the rules (`games/shooters_edge/client/main.cpp` unknown-word hook; `server/q2_commands.cpp`) |
@@ -175,8 +175,8 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.dec | `dec <cvar> [n]` | subtracts | done | `engine/console/script.cpp` |
 | cmd.reset | `reset <cvar>` | resets to default | done | `engine/console/console_builtins.cpp` |
 | cmd.resetall | `resetall` | resets every setting | done | `engine/console/console_more.cpp`: read-only settings and `game` kept |
-| cmd.quit | `quit` | exits | done | `games/shooters_edge/client/main.cpp` |
-| cmd.recycle | `recycle` | restarts the program in place | missing | not found |
+| cmd.quit | `quit [reason]` | exits; a hosted game's players told "Server quit: <reason>" | done | `games/shooters_edge/client/main.cpp` (`listen_farewell`, `client/listen.cpp`) |
+| cmd.recycle | `recycle [reason]` | exits like `quit`, a hosted game's players told "Server restarted" and to reconnect (nothing restarts in place) | done | `games/shooters_edge/client/main.cpp` over the match's own farewell (`listen_farewell`) |
 | cmd.lasterror | `lasterror` | prints the last error | done | `engine/console/console_more.cpp` |
 | cmd.path | `path` | prints the search path | done | `engine/vfs/search_commands.cpp`: each source, the winner first, with its count of files |
 | cmd.dir | `dir <path> [ext]` | lists files in the search path | done | `engine/vfs/search_commands.cpp` |
@@ -190,7 +190,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.fs_restart | `fs_restart` | restarts the file system | partial | `games/shooters_edge/client/game_folder.cpp`: the banner and the search path listed, the links kept; the folders are not opened again in the window (the dedicated server does, net/q2_game.cpp) |
 | cmd.bsplist | `bsplist` | lists loaded maps | not-taken | `client-gaps.md`: developer tools left out |
 | cmd.z_stats | `z_stats` | memory statistics | not-taken | `client-gaps.md`: developer tools left out |
-| cmd.net_restart | `net_restart` | restarts networking | missing | not found |
+| cmd.net_restart | `net_restart` | restarts networking | done | a match hosted in the window opened again on `sv_port`, the last good port when that fails (`listen_net_restart`, `client/listen.cpp`, over `engine/server/net_restart`); a joined game's own link is left alone |
 | cmd.net_stats | `net_stats` | prints network counters | done | `engine/net/net_commands.cpp`: packets and bytes each way since the socket opened (`engine/net/transport.cpp` counts them) |
 | cmd.showip | `showip` | prints the local addresses | done | `engine/net/net_commands.cpp` (`add_client_showip`): the host name and addresses, then "Client UDP socket bound to <address>" while joined |
 | cmd.dns | `dns <name>` | resolves a host name | done | `engine/net/net_commands.cpp` |
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 209, partial 49, missing 30, not-taken 62
+done 210, partial 48, missing 30, not-taken 62
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -219,7 +219,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.con_timestampsformat | `con_timestampsformat` | the stamp's strftime format (default `%H:%M:%S `) | done | `console/view.hpp`'s `stamp_format` (strftime's words, default `%H:%M:%S `; empty: no stamp) |
 | cvar.con_timestampscolor | `con_timestampscolor` | the stamp's colour (default `#aaa`) | partial | `console/view.hpp`'s `stamp_colour`, read by `ui/paint.hpp`'s `colour_from_text` (#rgb, #rrggbb, #rrggbbaa, the eight names or 0..7); a value that does not read draws light grey without the warning and without putting the setting back |
 | cvar.con_auto_chat | `con_auto_chat` | a typed line without a slash: 0 a command, 1 say, 2 say_team (default 0) | done | `games/shooters_edge/client/cvar_layers.cpp` (M18k4 round 32) |
-| cvar.cl_demosnaps | `cl_demosnaps` | seconds between seek snapshots while a demo plays (default 10) | partial | ours keeps its own keyframes (`engine/replay`); no setting |
+| cvar.cl_demosnaps | `cl_demosnaps` | seconds between seek snapshots while a demo plays (default 10) | done | Quake II's spelling of `demo_snapshots` (`plugins/shooter/demo_transport.cpp`; the snapshots in `client/timedemo.cpp`) |
 | cvar.cl_demomsglen | `cl_demomsglen` | the largest message a recorded demo frame holds (default 1390) | not-taken | `client-gaps.md` (C38): not taken |
 | cvar.cl_demowait | `cl_demowait` | 1 holds a finished demo on its last frame (default 0) | done | `games/shooters_edge/client/demo_playback.cpp` |
 | cvar.cl_demosuspendtoggle | `cl_demosuspendtoggle` | `suspend` toggles rather than only pauses (default 1) | not-taken | `client-gaps.md` round 27: `suspend` not taken |
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 69, partial 57, missing 14, not-taken 7
+done 70, partial 57, missing 12, not-taken 8
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1205,10 +1205,10 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.seek.usage | "Usage: %s [+-]<timespec\|percent>[%%]" | `seek` misuse | done | the same words in `plugins/shooter/demo_transport.cpp` |
 | msg.seek.notplaying | "Not playing a demo." | `seek` with no demo | done | the same words in `plugins/shooter/demo_transport.cpp` (`DemoCalls::playing`) |
 | msg.seek.pct | "Invalid percentage." | `seek` with a bad percentage | done | the same words in `plugins/shooter/demo_transport.cpp` |
-| msg.seek.size | "Unknown file size, can't seek." | `seek` by percent on a stream | missing | the feature is missing |
+| msg.seek.size | "Unknown file size, can't seek." | `seek` by percent on a stream | done | "The demo's length is not known, so it cannot jump by a share of it." when the demo could not be scanned (`client/demo_playback.cpp`) |
 | msg.seek.rel | "Invalid relative timespec." | `seek` with a bad relative time | done | the same words in `plugins/shooter/demo_transport.cpp` |
 | msg.seek.abs | "Invalid absolute timespec." | `seek` with a bad time | done | the same words in `plugins/shooter/demo_transport.cpp` |
-| msg.seek.back | "Couldn't seek backwards without snapshots!" | `seek` back with `cl_demosnaps 0` | missing | the feature is missing |
+| msg.seek.back | "Couldn't seek backwards without snapshots!" | `seek` back with `cl_demosnaps 0` | not-taken | ours with no snapshots seeks back by reading again from the start, so it never refuses |
 | msg.timedemo | "%u frames, %3.1f seconds: %3.1f fps" | a `timedemo` ended | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.loc.added | "Added location %s at %s" | `loc add` | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.loc.deleted | "Deleted location %s at %s" | `loc del` | partial | ours does it but says it in its own words (the exact line not found) |
@@ -1286,7 +1286,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 
 ## Demo playback and recording features
 
-done 10, partial 10, missing 1, not-taken 2
+done 12, partial 8, missing 1, not-taken 2
 
 What a player can do with client recordings (`.dm2`) and multi-view recordings (`.mvd2`) in the client.
 
@@ -1298,9 +1298,9 @@ What a player can do with client recordings (`.dm2`) and multi-view recordings (
 | demo.play.paths | where demos are read | `demos/` unless the name starts with `/` (then from the root of the search path); Tab completes | partial | ours from the demo page and any path (C40) |
 | demo.play.fov | the field of view while playing | the player's own `fov` replaces a recorded field of 90 or more; `uf` 4 always own, 32 always recorded | done | `client/q2_view.hpp` (`q2_shown_fov`): the player's own `fov` over a recorded 90 or more, `uf` 4 and 32 (`tests/shooters_edge_q2_view_test.cpp`) |
 | demo.play.f1 | the scoreboard while playing | holding F1 shows the recorded layout whether or not it was up | done | `client/q2_bar.cpp`: F1 held in a recording (`Q2Bar::f1` 2, `client/main.cpp`) shows the last layout whether or not it was up |
-| demo.play.shift | free look while playing | holding SHIFT turns the view by the player's own mouse | partial | ours has its own free camera over demos (`client/demo_eyes.cpp`); not the SHIFT hold (C15) |
+| demo.play.shift | free look while playing | holding SHIFT turns the view by the player's own mouse | done | `client/demo_free_look.cpp`: an offset on the recorded look while held, dropped when let go |
 | demo.play.pause | pausing a demo | `pause` or the console/menu (`cl_autopause`) pauses playback; "[PAUSED]" on the bar | partial | ours pauses by the transport (`plugins/shooter/demo_transport.cpp`); the auto-pause missing (C24) |
-| demo.play.seek | seeking | `seek` forward and back by frames, seconds, mm:ss.ff or percent, back from the snapshots every `cl_demosnaps` s | partial | `seek` (`plugins/shooter/demo_transport.cpp`) with every form; a percent is of the demo's length, not its bytes; back from `engine/replay`'s keyframes, which `cl_demosnaps` does not set |
+| demo.play.seek | seeking | `seek` forward and back by frames, seconds, mm:ss.ff or percent, back from the snapshots every `cl_demosnaps` s | done | `seek` (`plugins/shooter/demo_transport.cpp`) with every form; a percent is of the demo's length, not its bytes; back from the last snapshot (`Timedemo::snaps`, every `cl_demosnaps` s) |
 | demo.play.bar | the progress bar | `scr_demobar` | partial | C39 |
 | demo.play.end | the end of a demo | prints "Demo finished" and disconnects, or holds the last frame with `cl_demowait` | done | `games/shooters_edge/client/demo_playback.cpp` |
 | demo.play.timedemo | timing a demo | `timedemo 1` plays as fast as frames draw and prints frames, seconds and frames a second | done | `games/shooters_edge/client/demo_playback.cpp` |
@@ -1318,7 +1318,7 @@ What a player can do with client recordings (`.dm2`) and multi-view recordings (
 
 ## Keys: the fixed keys and the default bindings
 
-done 6, partial 4, missing 1, not-taken 0
+done 7, partial 4, missing 0, not-taken 0
 
 Keys the client handles itself (a player cannot unbind them) and where the default bindings come from.
 
@@ -1330,7 +1330,7 @@ Keys the client handles itself (a player cannot unbind them) and where the defau
 | key.escape.putaway | ESCAPE with a screen up | puts away the help computer or inventory (`putaway`); held, opens the menu | partial | `games/shooters_edge/menu/game_menu.cpp` (`Host::screen_up`, set from `client/q2_bar.cpp`'s `layout_up`): ESCAPE sends `putaway`; held, opening the menu, missing |
 | key.fkeys.menu | F1 to F12 in a menu | still run their bindings | done | `engine/ui/console_keys.cpp` (`ConsoleKeys::menu`, set by the window while a menu is up): F1 to F12 and the console key alone run their binds; a key let go always releases |
 | key.cinematic | any button key in a cinematic | skips it | done | `games/shooters_edge/client/cinematic.cpp` |
-| key.shift.demo | SHIFT in a demo | takes the mouse for free look | missing | C15 |
+| key.shift.demo | SHIFT in a demo | takes the mouse for free look | done | `client/demo_free_look.cpp`, the capture in `client/main.cpp` |
 | key.f1.demo | F1 in a demo | shows the recorded layout | done | `games/shooters_edge/client/q2_bar.cpp` (`Q2Bar::f1`, set by the window): held in a recording, the last layout sent; with `scr_draw2d 3` it shows the layouts that hides |
 | key.buttons | button keys | a `+` binding gets the key and time; its release runs the `-` form even in the console | done | `engine/console/binds.cpp` |
 | key.keypad | the keypad in the console | the keypad's keys type their characters in the console | partial | verify (`engine/console/view.cpp`) |

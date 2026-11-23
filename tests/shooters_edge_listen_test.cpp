@@ -255,6 +255,23 @@ TEST(a_game_stopped_lets_go_and_starts_again) {
   CHECK(start(l));
 }
 
+// `net_restart` and `quit`'s farewell in the window: with no match others can join (a game alone,
+// or none at all) there is nothing to open again and nobody to tell.
+TEST(net_restart_and_the_farewell_need_a_match_others_join) {
+  cl::Listen l;
+  int port = 27910;
+  std::string said;
+  CHECK(!cl::listen_net_restart(l, port, said));
+  CHECK(said.find("No game is hosted") == 0 && port == 27910);
+  cl::listen_farewell(l, "maintenance", true);  // nothing hosted: nothing happens
+  if (!start(l)) return;
+  said.clear();
+  CHECK(!cl::listen_net_restart(l, port, said));  // played alone: no socket to open again
+  CHECK(said.find("No game is hosted") == 0);
+  cl::listen_farewell(l, "", false);
+  CHECK(l.match != nullptr);  // the game goes on until the window closes
+}
+
 TEST(the_player_rocket_jumps_off_the_hall_floor) {
   const Rjump& r = the_jump();
   CHECK_MSG(std::fabs(r.ground_z - 24) < 0.1f, "stands at z " + std::to_string(r.ground_z));

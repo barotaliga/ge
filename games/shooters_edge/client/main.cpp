@@ -80,6 +80,7 @@
 #include "gpu/surface.hpp"
 #include "gpu/target.hpp"
 #include "hud/spinner.hpp"
+#include "input/names.hpp"
 #include "input/state.hpp"
 #include "net/voice_codec.hpp"
 #include "platform/audio.hpp"
@@ -99,6 +100,7 @@
 #include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/client/demo_check.hpp"
 #include "shooters_edge/client/demo_eyes.hpp"
+#include "shooters_edge/client/demo_free_look.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
@@ -241,7 +243,28 @@ int run_main(int argc, char** argv) {
   ge::camera::CameraCvars camera_cvars;  // cl_bob, cl_rollangle, v_kick... at the classic look's
   cl::add_view_camera_cvars(console.cvars(), camera_cvars);
   controls.lens_fov = &camera_cvars.fov;  // m_autosens slows the mouse by the lens
-  console.add_command("quit", "quit the game", [&](Con&, const CArgs&) { quit = true; });
+  // `quit [reason]` and `recycle [reason]`: a match hosted here tells its players first (quit:
+  // the server is gone; recycle: reconnect, as one that comes back), then the window closes.
+  const auto farewell = [&](const CArgs& a, bool restart) {
+    std::string reason;
+    for (size_t i = 1; i < a.size(); i++) reason += (i > 1 ? " " : "") + a[i];
+    cl::listen_farewell(listen, reason, restart);
+    quit = true;
+  };
+  console.add_command("quit",
+                      "quit [reason]: the game closed; a match hosted here tells its "
+                      "players why",
+                      [farewell](Con&, const CArgs& a) { farewell(a, false); });
+  console.add_command("recycle",
+                      "recycle [reason]: the game closed; a match hosted here tells "
+                      "its players to reconnect",
+                      [farewell](Con&, const CArgs& a) { farewell(a, true); });
+  console.add_command("net_restart", "net_restart: a match hosted here opened again on sv_port",
+                      [&](Con& c, const CArgs&) {
+                        std::string said;
+                        cl::listen_net_restart(listen, listen.opt.port, said);
+                        if (!said.empty()) c.print(said.substr(0, said.size() - 1));
+                      });
   cl::UserInfo user_info;  // SETUP's colours (and the console's `name`), sent as they change
   cl::add_user_info_cvars(console, user_info);
   cl::WindowCvars win;  // vid_fullscreen (followed each frame), vid_display, volume, ...
@@ -746,6 +769,13 @@ int run_main(int argc, char** argv) {
   // A demo's sounds, voices and lines; the window's own game's (cl_footsteps, s_ambient over both).
   cl::DemoHearing hearing(synth, &picture.ce.sounds, &picture.q2fx);
   cl::ListenHearing heard_here(synth, &picture.ce.sounds, &picture.q2fx);
+  console.add_command("soundlist", "soundlist: the sounds read, each with its length and rate",
+                      [&](Con& c, const CArgs&) {
+                        const cl::DemoSounds* read =
+                            bench.active || remote.active ? hearing.sounds() : heard_here.sounds();
+                        if (read == nullptr) return c.print("No sounds loaded.");
+                        for (const std::string& line : read->list_lines()) c.print(line);
+                      });
   cl::Cinematic cine;                 // Quake II's movies (cinematic.hpp)
   cl::MenuSounds menu_sounds(synth);  // the main menu's clicks (menu_sound.hpp), play
   cl::add_local_sound_commands(console, menu_sounds, adapter, files, synth, music.player.bus());
@@ -897,7 +927,8 @@ int run_main(int argc, char** argv) {
   bool text_on = false;
   ge::platform::InputSnapshot input;
   cl::ViewState shown;
-  shown.q2 = &q2_screen;  // Quake II's cl_adjustfov and cl_kickangles
+  shown.q2 = &q2_screen;       // Quake II's cl_adjustfov and cl_kickangles
+  cl::DemoFreeLook free_look;  // SHIFT held over a demo (demo_free_look.hpp)
   cl::DemoEyes demo_eyes{.gun_kick = &remote.gunkick, .view_kick = &q2_screen.kick_angles};
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state = cl::fx_state_for(&places);  // loc_draw's markers among the effects
@@ -1173,11 +1204,16 @@ int run_main(int argc, char** argv) {
     // menu keeps it and is driven by the keys unless the menu's bit is set.
     if (input.focus_lost) focused = false;
     if (input.focus_gained) focused = true;
+    // SHIFT held over a demo playing at its pace takes the mouse for free look (demo_free_look).
+    const bool shift_look = bench.active && bench.paced && !remote.active && !con_view.open() &&
+                            !game_menu.open() &&
+                            (ge::input::key_held(held, ge::input::key::left_shift) ||
+                             ge::input::key_held(held, ge::input::key::right_shift));
     const ge::input::CaptureFacts facts{
         .focused = focused && cl::q2_takes_mouse(game_cvars.q2, win.fullscreen),
         .console = con_view.open(),
         .menu = game_menu.open(),
-        .watching = bench.active && bench.paced};
+        .watching = bench.active && bench.paced && !shift_look};
     switch (ge::input::follow_capture(mouse, facts, controls.mouse_release)) {
       case ge::input::CaptureStep::take:
         ge::platform::set_relative_mouse(*window, true, controls.mouse.raw);
@@ -1523,8 +1559,10 @@ int run_main(int argc, char** argv) {
         }
         continue;
       }
-      // A client recording's model list may grow after its level started: the world made again.
-      if (bench_map && ds.models.size() != bench_models) {
+      // A client recording's model list may grow after its level started: the world made again
+      // (and `r_reload`'s, read from the files again).
+      if (bench_map &&
+          (ds.models.size() != bench_models || std::exchange(render_words.reload_asked, false))) {
         const cl::SearchPath& from = bench_folder.path ? *bench_folder.path : files;
         if (!rebuild_world(*bench_map, {ds.models, {}, cl::demo_vweps(ds)}, from)) return 1;
         bench_models = ds.models.size();
@@ -1561,6 +1599,9 @@ int run_main(int argc, char** argv) {
           : bench.clock < 0 ? ds.time
                             : bench.clock,
           t);
+      cl::free_look_step(free_look, shift_look && mouse.held, held.mouse.dx, held.mouse.dy,
+                         controls);
+      cl::free_look_apply(free_look, view);
       const double own_behind =  // cl_thirdperson: the player's own view from behind him
           demo_eyes.behind > 0 ? 0 : cl::q2_third_person(game_cvars.q2, view, ground);
       bench_demo_fx.draw_own = demo_eyes.behind > 0 || own_behind > cl::kOwnFigureUnits;
@@ -1750,7 +1791,8 @@ int run_main(int argc, char** argv) {
       continue;  // the title from the next frame, not the last map from the new one's eyes
     }
     if (std::exchange(listen.restarted, false)) forget_seen();  // the lobby's match restarted
-    if (std::exchange(render_words.sky_asked, false)) load_listen_world(t);  // `sky`'s box
+    const bool sky_typed = std::exchange(render_words.sky_asked, false);  // `sky`'s box
+    if (std::exchange(render_words.reload_asked, false) || sky_typed) load_listen_world(t);
     if (listen.campaign.sellscreen) {  // the shareware episode's end: the help pages
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");

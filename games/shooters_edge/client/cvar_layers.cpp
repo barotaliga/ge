@@ -612,6 +612,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
                    "first; 3: smallest first; -3: largest first; 0: by name",
          .overlap = con::Overlap::same});
   v.add_synonym("ui_sortdemos", "menu_demo_sort");
+  if (v.find("demo_snapshots") != nullptr)  // the demo transport's (shooter/demo_transport.hpp)
+    v.add_synonym("cl_demosnaps", "demo_snapshots");
   if (v.find("s_device") != nullptr)  // the window's (platform/window_cvars.hpp)
     v.add_synonym("al_device", "s_device");
   for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)
