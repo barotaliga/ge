@@ -31,7 +31,7 @@ bool whole(const ServerConfig& c, const char* name, int64_t low, int64_t high, i
   }
   if (!ok || n < low || n > high) {
     error = std::string(name) + " \"" + v + "\" is not a whole number in " + std::to_string(low) +
-            ".." + std::to_string(high) + "; next: set it to one (--explain=" + name +
+            ".." + std::to_string(high) + ". Set it to one (--explain=" + name +
             " shows where it was set)";
     return false;
   }
@@ -68,13 +68,13 @@ bool web_files_config(const ServerConfig& c, WebFilesConfig& out, std::string& e
   out.url = text_rule(c, "sv_http_url");
   if (out.cert_file.empty() != out.key_file.empty()) {
     error =
-        "sv_http_cert and sv_http_key go together; next: set both to the certificate's and "
+        "sv_http_cert and sv_http_key go together: set both to the certificate's and "
         "its key's PEM files, or neither for a certificate the server makes itself";
     return false;
   }
   if (!out.url.empty() && out.url.rfind("https://", 0) != 0 && out.url.rfind("http://", 0) != 0) {
     error = "sv_http_url \"" + out.url +
-            "\" is not a web address; next: set it to https://<host>[:port]/";
+            "\" is not a web address: set it to https://<host>[:port]/";
     return false;
   }
   if (!out.url.empty() && out.url.back() != '/') out.url += '/';
@@ -101,13 +101,13 @@ bool web_files_open(WebFiles& w, const WebFilesConfig& cfg, const net::Address& 
     if (!cfg.cert_file.empty()) {
       if (!read_text(cfg.cert_file, o.cert_pem) || !read_text(cfg.key_file, o.key_pem)) {
         error = "the web files' certificate or key does not read (sv_http_cert \"" + cfg.cert_file +
-                "\", sv_http_key \"" + cfg.key_file + "\"); next: point both at readable PEM files";
+                "\", sv_http_key \"" + cfg.key_file + "\"): point both at readable PEM files";
         return false;
       }
     } else {
       if (!net::tls_self_signed("ge-server", o.cert_pem, o.key_pem)) {
         error =
-            "the web files' own certificate could not be made; next: set sv_http_cert and "
+            "the web files' own certificate could not be made: set sv_http_cert and "
             "sv_http_key, or sv_http_plain 1 behind a TLS proxy";
         return false;
       }
