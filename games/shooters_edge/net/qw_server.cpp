@@ -487,6 +487,10 @@ void read_move(QwServer& s, int slot, const ClcMsg& m, const uint8_t* payload, b
   if (s.buttons != nullptr && !c.spectator)
     for (sh::MoveCmd& cmd : p.cmds) cmd.buttons = s.buttons(s.game_ctx, slot, cmd.buttons);
   if (s.cfg.safe_strafe > 0 && !c.spectator) guard_strafes(s.cfg.safe_strafe, c.strafe, p);
+  // His moves made before he saw the server's turn of him go where he now faces.
+  c.moves_turned +=
+      cp::lag_turn_moves(c.lag, c.ch.incoming_sequence, c.ch.incoming_acknowledged, p.cmds);
+  c.last_yaw = m.cmds[2].angles.y;
   s.packets.push_back(p);
 }
 
@@ -1265,6 +1269,16 @@ void qw_frame(QwServer& s, int64_t now_us) {
 
   s.rules->frame(s.packets.data(), static_cast<int>(s.packets.size()));
   if (s.local_tap != nullptr) s.local_tap(s.local_ctx, *s.game);
+  for (int i = 0; i < sh::kMaxClients; i++) {  // the rules' turns, each for his next datagram
+    sv::RulesCommon::Turn& t = s.game->turns[i];
+    if (!t.on) continue;
+    t.on = false;
+    QwClient& c = s.clients[i];
+    if (c.state != ConnState::spawned || c.local) continue;
+    c.turn_pending = true;
+    c.turn_teleport = t.teleport;
+    c.turn_to = t.angles;
+  }
   for (int i = 0; i < sh::kMaxClients; i++)
     if (s.clients[i].rules_active)
       antilag_record(s.antilag, i, s.game->sv.time,

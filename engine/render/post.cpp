@@ -179,12 +179,8 @@ PostWarp arrival_warp(double age_s, double strength, const double tint[3]) {
   const double fade = 1 - age_s / kArrivalS;
   const double open = std::min(age_s / kArrivalOpenS, 1.0);
   const double shut = 1 - open;
-  const double flash =
-      age_s < kArrivalFlashS ? 1 : std::max(1 - (age_s - kArrivalFlashS) / 0.3, 0.0);
-  w.share = strength * fade * fade;
-  w.reveal = 1.3 * (1 - shut * shut * shut);
-  w.zoom = strength * shut * shut;
-  w.flash = strength * 0.85 * flash * flash;
+  w.share = 0.45 * strength * fade * fade;
+  w.reveal = kArrivalClear + (1.3 - kArrivalClear) * (1 - shut * shut);
   for (int k = 0; k < 3; ++k) w.tint[k] = std::clamp(tint[k], 0.0, 1.0);
   return w;
 }

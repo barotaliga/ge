@@ -13,12 +13,12 @@
 //   crumbling from his back to his face as the ash the wind takes is thrown off where the cut
 //   passes (app/effects.hpp's dust); one arriving (a spawn, a respawn, a teleport's far end) is
 //   blown in as ash from ahead of him, each flake on a way of its own landing on his skin as it
-//   appears there (FxState::models), whole after kArriveS. The local player's own arrival blows
-//   the ash past his eyes (never through them) and assembles the weapon in his hands
-//   (`held_shown`). That is the enhanced warp (`FxSwitches::warps`: ce_warps in the modern
-//   look); off, the original: the figure there or gone at once and the teleport's fog at each end
-//   (in a campaign the program's own; with the dust on, the program's fog at a player's warp is
-//   left out).
+//   appears there (FxState::models), whole after kArriveS. The local player's own arrival throws
+//   no ash and keeps the weapon whole (`held_shown` 1); only his view's edges are touched
+//   (`arrival_s`, r_arrival). That is the enhanced warp (`FxSwitches::warps`: ce_warps in the
+//   modern look); off, the original: the figure there or gone at once and the teleport's fog at
+//   each end (in a campaign the program's own; with the dust on, the program's fog at a player's
+//   warp is left out).
 // - THE SCREEN'S BLEND: the liquid round the eye (the player's `waterlevel` and `watertype`), and
 //   a hit's flash, fading: in a campaign off the blows the program reported (Listen::blows: the
 //   blood red, what the armour took a duller amber), in a match off the health lost.

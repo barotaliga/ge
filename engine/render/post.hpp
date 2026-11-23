@@ -9,11 +9,13 @@
 // curve, so it works where the eye judges colour and its 32 steps a channel are evenly spent.
 // It starts as the identity (`identity_grade`).
 //
-// THE ARRIVAL (`set_post_warp`, `arrival_warp`): the whole view warped while a player arrives
-// (a spawn, a teleport's far end): it opens out of a flash, the world pulled in toward the middle
-// and streaked toward it, washed out and tinted, and a clear disc grows from the middle with a
-// bright rim until the view is whole. Live, off a small uniform: a share of 0 costs the pass one
-// uniform branch, so it is never compiled out.
+// THE ARRIVAL (`set_post_warp`, `arrival_warp`): the view's edges touched while a player arrives
+// (a spawn, a teleport's far end): outside a clear disc that already holds the middle of the view
+// the picture is streaked toward the middle, washed out and tinted, the disc grows past the
+// corners with a faint rim, and the whole is gone in a third of a second. The middle, where a
+// player aims, is never touched, nothing flashes and nothing zooms: an arrival must never take the
+// view from a player who has to fight on at once. Live, off a small uniform: a share of 0 costs
+// the pass one uniform branch, so it is never compiled out.
 //
 // THE LENS AND THE FILM (M35a): what a camera does to the picture past the scene, each off at 0
 // and each its own `override` switch, so a game that leaves one off compiles it out and pays
@@ -156,12 +158,12 @@ struct PostWarp {
   double flash = 0;            // 0..1: the tint laid over the whole view (1: about white)
   double tint[3] = {1, 1, 1};  // the flash's and the rim's colour, sRGB-encoded
 };
-inline constexpr double kArrivalS = 0.65;  // the arrival's warp, s
-// The arrival's warp `age_s` into it at `strength` (0..1; 0: none) in `tint` (sRGB-encoded): a
-// flash held kArrivalFlashS then fading, the clear disc opening from the middle to past the
-// corners by kArrivalOpenS (eased out), the pull and the warp fading to nothing by kArrivalS.
-// Outside 0..kArrivalS: none.
-inline constexpr double kArrivalFlashS = 0.05, kArrivalOpenS = 0.45;
+inline constexpr double kArrivalS = 0.3;  // the arrival's warp, s
+// The arrival's warp `age_s` into it at `strength` (0..1; 0: none) in `tint` (sRGB-encoded): the
+// clear disc opening from kArrivalClear of the middle-to-corner distance to past the corners by
+// kArrivalOpenS (eased out), the edges' warp fading to nothing by kArrivalS; no flash and no pull
+// (`flash` and `zoom` stay 0). Outside 0..kArrivalS: none.
+inline constexpr double kArrivalOpenS = 0.22, kArrivalClear = 0.55;
 PostWarp arrival_warp(double age_s, double strength, const double tint[3]);
 void set_post_warp(gpu::Device& device, const Post& post, const PostWarp& warp);
 // THE RIPPLE this frame: every point of the picture shifted across by `share` of the screen's

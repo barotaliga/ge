@@ -219,6 +219,35 @@ TEST(the_view_takes_the_server_s_turn_and_walking_moves_the_eye_the_way_it_faces
   CHECK(ds.angles.x == 10 && ds.angles.y == 90);
 }
 
+TEST(the_rules_turn_of_the_player_reaches_the_window_and_keeps_the_mouse_s_turning_since) {
+  Rig rig;
+  rig.latency_ms = 30;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  for (int f = 0; f < 20; f++) rig.frame();
+  CHECK(rig.remote.end.ext.has(cn::ExtFamily::mvd, cn::kMvdTeleport));
+  rig.remote.view = {0, 0, 0};
+  for (int f = 0; f < 20; f++) rig.frame();
+  // The rules turn him as a teleport does (alive before and after: a teleport's kind).
+  const int slot = rig.remote.end.playernum;
+  sh::Edict& me = rig.qc->sv.edicts[static_cast<size_t>(slot) + 1];
+  me.angles = {0, 120, 0};
+  me.fixangle = true;
+  const int64_t before = rig.remote.setangles;
+  rig.frame();
+  // The mouse turns 7 degrees while the turn is on its way.
+  rig.remote.view.y += 7;
+  for (int f = 0; f < 30 && rig.remote.setangles == before; f++) rig.frame();
+  CHECK_MSG(rig.remote.setangles > before, "the server's turn never reached the window");
+  CHECK(rig.remote.end.set_kind == 1);
+  CHECK_MSG(std::fabs(rig.remote.view.y - 127) < 0.5f,
+            "the view after the turn: " + std::to_string(rig.remote.view.y));
+  // The server turned the moves he made before it reached him.
+  for (int f = 0; f < 30; f++) rig.frame();
+  CHECK(rig.server.clients[slot].moves_turned > 0);
+  CHECK(!rig.server.clients[slot].lag.on);
+}
+
 TEST(an_impulse_is_sent_once_and_leaving_frees_the_server_s_slot) {
   Rig rig;
   CHECK(rig.start());

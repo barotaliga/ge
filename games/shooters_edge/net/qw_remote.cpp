@@ -61,10 +61,24 @@ std::string map_shown(const QwClientEnd& c) {
   return m;
 }
 
+// The server's turn of the player (a spawn, a teleport: `setangle`) taken by the view once, as
+// soon as it is read (a command made after it carries it). A teleport's under the high-lag
+// teleport keeps the turning he did since the command that touched it (qw_client.hpp's
+// `set_turn`); else the view is the server's.
+void take_turn(Remote& r) {
+  if (r.end.setangles == r.setangles) return;
+  r.setangles = r.end.setangles;
+  if (r.end.set_kind == 1 && r.end.cfg.lag_turn)
+    r.view = {r.end.set_angles[0], r.view.y + r.end.set_turn, 0};
+  else
+    r.view = {r.end.set_angles[0], r.end.set_angles[1], 0};
+}
+
 void start(Remote& r, const ClientConfig& cfg) {
   r.kept = false;
   ClientConfig c = cfg;
   c.brain = [&r](int) {
+    take_turn(r);
     sh::MoveCmd m = r.hands;
     m.angles = r.view;
     r.hands.impulse = 0;  // an impulse goes once
@@ -1057,10 +1071,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     remote_disconnect(r);  // let go: the window is no longer on the server
     return RemoteStep::dropped;
   }
-  if (r.end.setangles != r.setangles) {  // the server turned the player
-    r.setangles = r.end.setangles;
-    r.view = {r.end.set_angles[0], r.end.set_angles[1], 0};
-  }
+  take_turn(r);
   // The recording read up to its newest packet, and what was read dropped.
   client::Demo& d = r.demo;
   d.bytes.insert(d.bytes.end(), r.recording.bytes.begin(), r.recording.bytes.end());
@@ -1281,6 +1292,9 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     if (cvar("cl_novweps", "0") != "0") cfg.ask[ExtFamily::z] &= ~kZVwep;
     // cl_pext_weaponprediction 0: the weapon's state not asked for (qw_weapon.hpp).
     if (cvar("cl_pext_weaponprediction", "1") == "0") cfg.ask[ExtFamily::mvd] &= ~kMvdWeaponPred;
+    // cl_pext_lagteleport 0: the teleport's kind not asked for, the moves in flight left as made.
+    cfg.lag_turn = cvar("cl_pext_lagteleport", "1") != "0";
+    if (!cfg.lag_turn) cfg.ask[ExtFamily::mvd] &= ~kMvdTeleport;
     // The lens Quake II's user info carries (`fov`): cl_fov rounded, 0 (the rig's own) its 90.
     const double fov = std::atof(cvar("cl_fov", "0").c_str());
     cfg.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;
