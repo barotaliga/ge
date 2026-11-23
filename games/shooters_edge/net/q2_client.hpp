@@ -129,6 +129,9 @@ struct Q2ClientConfig {
   // `ask_sheet`: asks our server for its settings sheet (`*ge_ext` bit 2048, net/q2_votes.hpp),
   // the server settings page's; a stock client is offered none.
   bool ask_sheet = false;
+  // `ask_arsenal`: asks our server for the weapons the player holds and his ammunition (`*ge_ext`
+  // bit 4096), the weapon prediction's knowledge of a change (net/q2_weapon.hpp).
+  bool ask_arsenal = false;
   // `cl_nodelta`: no frame is ever acknowledged, so the server sends each one whole (more bytes,
   // nothing lost to a dropped packet's delta); a server that forbids it (`sv_allow_nodelta 0`)
   // may refuse.
@@ -261,6 +264,16 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   uint32_t made = 0;
   uint32_t made_at[64] = {};
   double sent_at[64] = {};  // the network's time each packet was sent, s
+  // The weapon changes asked for (`use <weapon>`, `weapnext`, `weapprev`, `weaplast`), the newest
+  // 8 by their count: each the move count when it was sent (the server runs it before the moves of
+  // the packet that carries it) and what it asks, for the weapon prediction (q2_weapon.hpp).
+  struct WeaponAsk {
+    uint32_t move = 0;
+    int8_t kind = 0;     // 0 use, 1 next, 2 previous, 3 the last
+    int16_t weapon = 0;  // `use`'s: the weapon's row
+  };
+  WeaponAsk weapon_asks[8] = {};
+  uint32_t weapon_asked = 0;
   // 36's batched moves: the moves of the last packets sent (oldest first) and those made since.
   std::vector<std::vector<Q2Cmd>> batch_sent;
   std::vector<Q2Cmd> batch_now;

@@ -44,19 +44,143 @@ int weapon_of_flash(int value) {
   return -1;
 }
 
-// One step of the rules, its shot written to `out` when it fires one.
-int step_once(Q2HandRun& r, bool attack, double at, Q2HandShot* out, int room) {
-  const sv::SqWeaponRow& row = sv::kSqWeapons[r.hand.weapon];
+// The number of the frame starting at level time `at`.
+int32_t frame_of(double at) { return static_cast<int32_t>(std::floor(at / kFrameS + 0.5)); }
+
+// One step of the rules, what it made written to `out` when it shot or played a frame sound.
+int step_once(Q2HandRun& r, bool attack, double at, int32_t frame, Q2HandShot* out, int room) {
+  const int weapon = r.hand.weapon, was = r.hand.frame;
+  const sv::SqWeaponRow& row = sv::kSqWeapons[weapon];
   const bool ready = r.hand.state == sv::SqHandState::ready;
-  // Short of a shot: the server's choice of the next weapon is not guessed, the hand held.
-  if (ready && attack && !sv::sq_can_fire(r.body, r.hand.weapon)) return 0;
+  const bool was_firing = r.hand.state == sv::SqHandState::firing;
+  // Short of a shot: unless every weapon is known, the server's choice of the next is not
+  // guessed, the hand held.
+  if (ready && attack && !r.known && !sv::sq_can_fire(r.body, weapon)) return 0;
   const sv::SqStep s = sv::sq_hand_step(r.hand, r.body, attack, at);
   if (ready && attack) r.pressed = false;  // a ready hand takes the press
-  if (s.shots <= 0 || room <= 0) return 0;
-  const int flash = sv::sq_flash_value(r.hand.weapon, s.shots);
-  out->flash = flash >= 0 && sv::sq_flash_plays(flash, row.sound) ? flash : -1;
+  const int sound = sv::sq_hand_sound(weapon, was, was_firing, r.hand);
+  if ((s.shots <= 0 && sound < 0) || room <= 0) return 0;
+  *out = Q2HandShot{};
+  out->shot = s.shots > 0;
+  out->sound = sound;
+  out->weapon = weapon;
   out->at = at;
+  out->frame = frame;
+  if (out->shot) {
+    const int flash = sv::sq_flash_value(weapon, s.shots);
+    out->flash = flash >= 0 && sv::sq_flash_plays(flash, row.sound) ? flash : -1;
+    // A hand grenade held to its fuse's end goes off in the hand: no throw heard.
+    out->quiet = weapon == static_cast<int>(sv::SqWeapon::hand_grenade) && s.throw_speed <= 0;
+  }
   return 1;
+}
+
+// The index of `name` in a precache list (0 none).
+int listed(const std::vector<std::string>& list, const char* name) {
+  for (size_t k = 1; k < list.size(); k++)
+    if (list[k] == name) return static_cast<int>(k);
+  return 0;
+}
+
+// The kind (`Q2Weapon::played`'s) a server sound named `name` is of when the prediction plays its
+// like: a hand sound's row, 100 a weapon's shot heard by name (no flash: the hand grenade's throw);
+// -2 none.
+int named_kind(const std::string& name) {
+  for (int k = 0; k < sv::kSqHandSounds; k++)
+    if (name == sv::kSqHandSound[k].sample) return k;
+  for (int w = 0; w < sv::kSqWeaponCount; w++) {
+    const int flash = sv::sq_flash_value(w, 1);
+    if (name == sv::kSqWeapons[w].sound &&
+        (flash < 0 || !sv::sq_flash_plays(flash, sv::kSqWeapons[w].sound)))
+      return 100;
+  }
+  return -2;
+}
+
+// Whether `name` is a loop a hand carries (any weapon's, in any state).
+bool is_hand_loop(const std::string& name) {
+  sv::SqHand h;
+  for (int w = 0; w < sv::kSqWeaponCount; w++) {
+    h.weapon = w;
+    h.frame = 11;
+    h.fuse_at = 1;
+    for (const auto state : {sv::SqHandState::ready, sv::SqHandState::firing}) {
+      h.state = state;
+      const char* l = sv::sq_hand_loop(h);
+      if (l != nullptr && name == l) return true;
+    }
+  }
+  return false;
+}
+
+// The status bar's ammunition picture of each kind (the pictures Quake II's items name).
+constexpr const char* kAmmoIcon[sv::kSqAmmoKinds] = {"",           "a_shells",  "a_bullets",
+                                                     "a_grenades", "a_rockets", "a_cells",
+                                                     "a_slugs",    "a_mslugs",  "a_trap"};
+
+// The newest frame folded into what the window knows: the weapon in hand held, its ammunition
+// seen; our server's arsenal when told; all forgotten at death.
+void know_frame(Q2Known& k, const dc::Demo& d, int32_t frame, int weapon, int ammo, bool dead) {
+  if (frame == k.frame) return;
+  k.frame = frame;
+  if (dead) {
+    k = Q2Known{};
+    k.frame = frame;
+    return;
+  }
+  if (weapon != k.held) {
+    if (k.held >= 0) k.last = k.held;
+    k.held = weapon;
+  }
+  if (d.arsenal_told) {
+    k.weapons = d.arsenal_weapons;
+    for (int a = 1; a < sv::kSqBaseAmmoKinds; a++) {  // the message's kinds (the base game's)
+      k.ammo[a] = d.arsenal_ammo[a];
+      k.ammo_seen[a] = true;
+    }
+  }
+  if (weapon < 0) return;
+  k.weapons |= static_cast<uint16_t>(1u << weapon);
+  const int a = static_cast<int>(sv::kSqWeapons[weapon].ammo);
+  if (a > 0) {  // the frame's own count, newer than any arsenal
+    k.ammo[a] = static_cast<int16_t>(ammo);
+    k.ammo_seen[a] = true;
+  }
+}
+
+// The body the rules run on: the weapons known held, the ammunition known (else none).
+sv::SqBody body_of(const Q2Known& k) {
+  sv::SqBody b;
+  b.blaster = true;  // never lost
+  for (int w = 0; w < sv::kSqWeaponCount; w++) {
+    if ((k.weapons & (1u << w)) == 0 || sv::kSqWeapons[w].item == nullptr) continue;
+    const int item = sv::sq_item(sv::kSqWeapons[w].item);
+    if (item >= 0 && sv::kSqItems[item].kind != sv::SqKind::ammo) b.counts[item] = 1;
+  }
+  for (int a = 1; a < sv::kSqAmmoKinds; a++) b.ammo[a] = k.ammo_seen[a] ? k.ammo[a] : 0;
+  return b;
+}
+
+// A weapon change asked for, run on the hand as the server's command does (its weapon held, a
+// shot's ammunition known; `weapnext` and `weapprev` only when every weapon is known); `drawn`
+// says the window can draw the weapon (its view model listed).
+void ask_weapon(Q2HandRun& r, const Q2ClientEnd::WeaponAsk& a, const Q2Known& k, auto drawn) {
+  int w = -1;
+  if (a.kind == 0) {
+    w = static_cast<int>(a.weapon);
+  } else if (a.kind == 3) {
+    w = k.last;
+  } else if (r.known) {
+    const int way = a.kind == 1 ? 1 : sv::kSqWeaponCount - 1;
+    for (int n = 1; n < sv::kSqWeaponCount && w < 0; n++) {
+      const int to = (r.hand.weapon + way * n) % sv::kSqWeaponCount;
+      if (sv::sq_can_fire(r.body, to)) w = to;
+    }
+  }
+  if (w < 0 || w >= sv::kSqWeaponCount || !drawn(w)) return;
+  const bool grenade = w == static_cast<int>(sv::SqWeapon::hand_grenade);
+  if (!(grenade ? sv::sq_holds(r.body, w) : sv::sq_can_fire(r.body, w))) return;
+  sv::sq_choose(r.hand, r.body, w);
 }
 
 }  // namespace
@@ -92,7 +216,8 @@ int q2_hand_move(Q2HandRun& r, double at, bool attack, Q2HandShot* out, int room
   // The frames that start by this move: the hand steps once each, unless a move stepped it.
   while (at + kEarly >= r.frame_at + kFrameS) {
     r.frame_at += kFrameS;
-    if (!r.stepped) n += step_once(r, r.held || r.pressed, r.frame_at, out + n, room - n);
+    if (!r.stepped)
+      n += step_once(r, r.held || r.pressed, r.frame_at, frame_of(r.frame_at), out + n, room - n);
     r.stepped = false;
     r.pressed = false;  // a stock server drops a press its frame's step did not take
   }
@@ -100,7 +225,7 @@ int q2_hand_move(Q2HandRun& r, double at, bool attack, Q2HandShot* out, int room
   const bool steps = r.latch ? r.pressed : attack;
   if (steps && !r.stepped) {
     r.stepped = true;
-    n += step_once(r, true, std::max(at, r.frame_at), out + n, room - n);
+    n += step_once(r, true, std::max(at, r.frame_at), frame_of(r.frame_at) + 1, out + n, room - n);
   }
   r.held = attack;
   return n;
@@ -110,17 +235,47 @@ void q2_phase_frame(Q2FramePhase& p, int32_t frame, double sent, double next) {
   if (frame == p.frame) return;
   p.frame = frame;
   const double start = static_cast<double>(frame) * kFrameS;
-  const double lo = sent - start, hi = next - start;
-  if (p.have && lo <= p.hi && hi >= p.lo) {  // agrees: the window narrowed
-    p.lo = std::max(p.lo, lo);
-    p.hi = std::min(p.hi, hi);
-    return;
+  const double lo = sent - start;
+  double hi = next - start;
+  if (hi > lo + 1) {  // no next packet yet: a guess only while nothing better is kept
+    if (p.count > 0) return;
+    hi = lo + kFrameS * 0.5;
   }
-  // The first frame, or one that disagrees (the latency changed): its own window. One with no next
-  // packet yet is a packet's interval wide.
-  p.lo = lo;
-  p.hi = hi > lo + 1 ? lo + kFrameS * 0.5 : hi;
-  p.have = true;
+  const int at = static_cast<int>(p.added++ % kQ2PhaseFrames);
+  p.lo[at] = lo;
+  p.hi[at] = hi;
+  p.count = std::min(p.count + 1, kQ2PhaseFrames);
+}
+
+double q2_phase_offset(const Q2FramePhase& p) {
+  if (p.count == 0) return 0;
+  // The windows' ends in order, a start before an end at one time; the sweep's deepest span.
+  struct End {
+    double t;
+    int step;
+  };
+  End ends[2 * kQ2PhaseFrames];
+  int n = 0;
+  for (int k = 0; k < p.count; k++) {
+    ends[n++] = {p.lo[k], +1};
+    ends[n++] = {p.hi[k], -1};
+  }
+  std::sort(ends, ends + n, [](const End& a, const End& b) {
+    return a.t < b.t || (a.t == b.t && a.step > b.step);
+  });
+  int depth = 0, best = 0;
+  double from = 0, to = 0;
+  for (int k = 0; k < n; k++) {
+    depth += ends[k].step;
+    if (ends[k].step < 0 || k + 1 >= n) continue;
+    const double width = ends[k + 1].t - ends[k].t;
+    if (depth > best || (depth == best && width > to - from)) {
+      best = depth;
+      from = ends[k].t;
+      to = ends[k + 1].t;
+    }
+  }
+  return (from + to) * 0.5;
 }
 
 void q2_weapon_predict(Q2Weapon& p, const RemoteWeapon& w, bool nopred, const Q2ClientEnd& c,
@@ -142,29 +297,50 @@ void q2_weapon_predict(Q2Weapon& p, const RemoteWeapon& w, bool nopred, const Q2
       me < 0 || static_cast<size_t>(me) >= st.players.size() || c.cfg.spectator)
     return off();
   const dc::Q2View& v = d.views[static_cast<size_t>(d.last_frame & 15)];
-  if (v.pm_type != 0 || v.stats[kStatHealthSent] <= 0) return off();
-  if (v.gun_model <= 0 || static_cast<size_t>(v.gun_model) >= st.models.size()) return off();
-  const int weapon = q2_weapon_of_model(st.models[static_cast<size_t>(v.gun_model)].c_str());
-  if (weapon < 0 || weapon == static_cast<int>(sv::SqWeapon::hand_grenade)) return off();
+  const bool dead = v.stats[kStatHealthSent] <= 0;
+  const int weapon = v.gun_model > 0 && static_cast<size_t>(v.gun_model) < st.models.size()
+                         ? q2_weapon_of_model(st.models[static_cast<size_t>(v.gun_model)].c_str())
+                         : -1;
+  know_frame(p.known, d, v.frame, weapon, v.stats[kStatAmmoSent], dead);
+  if (v.pm_type != 0 || dead || weapon < 0) return off();
   if (c.ch.outgoing_sequence - acked >= static_cast<uint32_t>(kSqSentRing)) return off();
   if (c.made - first >= static_cast<uint32_t>(kSqSentRing) || c.made == first) return off();
   p.on = true;
-  // The server's copies of what the prediction plays, dropped before its own are added.
+  // The server's copies of what the prediction plays, dropped before its own are added: each
+  // matched to a predicted one in or beside its frame, else played as it comes (late, not lost).
   std::erase_if(st.started, [&](const dc::DemoSound& snd) {
-    if (snd.entity != me + 1 || snd.flash < 0) return false;
-    const int of = weapon_of_flash(snd.flash);
-    return of >= 0 && weapon_sound_plays(w.sound_mask, of + 1);
+    if (snd.entity != me + 1) return false;
+    int kind = -2;
+    if (snd.flash >= 0) {
+      const int of = weapon_of_flash(snd.flash);
+      if (of < 0) return false;
+      p.audit.server[p.audit.server_n++ & 31] = v.frame;  // sent with the newest frame
+      if (!weapon_sound_plays(w.sound_mask, of + 1)) return false;
+      kind = -1;
+    } else if (snd.name == nullptr && snd.sound > 0 &&
+               static_cast<size_t>(snd.sound) < st.sounds.size()) {
+      kind = named_kind(st.sounds[static_cast<size_t>(snd.sound)]);
+      if (kind == 100 && !weapon_sound_plays(w.sound_mask, weapon + 1)) return false;
+    }
+    if (kind == -2) return false;
+    if (weapon_played_match(p.played, v.frame, kind)) return true;
+    if (kind == -1) p.audit.filled++;
+    return false;
   });
   // The hand the newest frame shows, with the frame before it for the end of a fire run.
   const dc::Q2View& b4 = d.views[static_cast<size_t>((d.last_frame - 1) & 15)];
   const int before = b4.frame == v.frame - 1 && b4.gun_model == v.gun_model ? b4.gun_frame : -1;
   Q2HandRun r;
   r.hand = q2_hand_of_frame(weapon, v.gun_frame, before);
-  const sv::SqWeaponRow& row = sv::kSqWeapons[weapon];
-  r.body.ammo[static_cast<int>(row.ammo)] = v.stats[kStatAmmoSent];
-  if (row.item != nullptr) {
-    const int item = sv::sq_item(row.item);
-    if (item >= 0) r.body.counts[item] = 1;
+  r.body = body_of(p.known);
+  r.known = d.arsenal_told;
+  // A hand grenade cooking in the server's frame: its fuse as the prediction lit it (else from
+  // that frame, a little late).
+  const int grenade = static_cast<int>(sv::SqWeapon::hand_grenade);
+  const bool cooking = weapon == grenade && v.gun_frame >= 11 && v.gun_frame <= 15;
+  if (cooking) {
+    if (p.fuse_at <= 0) p.fuse_at = static_cast<double>(v.frame) * kFrameS + sv::kSqGrenadeFuse;
+    r.hand.fuse_at = p.fuse_at;
   }
   r.latch = !d.feel_told || p.stock_rule;  // a stock server: only a new press fires at once
   r.frame_at = static_cast<double>(v.frame) * kFrameS;
@@ -187,35 +363,99 @@ void q2_weapon_predict(Q2Weapon& p, const RemoteWeapon& w, bool nopred, const Q2
   r.held = (c.sent[(first - 1) & (kSqSentRing - 1)].buttons & ge::shooter::kButtonAttack) != 0;
   const uint32_t shown = weapon_shown_command(first - 1, c.made, w.buffer);
   if (static_cast<int32_t>(p.played_to - (first - 1)) < 0) p.played_to = first - 1;
+  // The weapon changes asked for: those the server ran lately again (its frame may not show the
+  // change chosen yet), then each before the moves of its packet.
+  const auto drawn = [&](int to) { return listed(st.models, sv::kSqWeapons[to].view_model) > 0; };
+  const uint32_t asks = std::min(c.weapon_asked, 8u);
+  constexpr uint32_t kLately = 16;  // moves: about two of the server's frames
+  for (uint32_t n = asks; n > 0; n--) {
+    const Q2ClientEnd::WeaponAsk& a = c.weapon_asks[(c.weapon_asked - n) & 7];
+    if (static_cast<int32_t>(a.move - first) < 0 &&
+        static_cast<int32_t>(a.move + kLately - first) >= 0)
+      ask_weapon(r, a, p.known, drawn);
+  }
   for (uint32_t k = first; static_cast<int32_t>(k - shown) <= 0; k++) {
+    for (uint32_t n = asks; n > 0; n--) {
+      const Q2ClientEnd::WeaponAsk& a = c.weapon_asks[(c.weapon_asked - n) & 7];
+      if (a.move == k) ask_weapon(r, a, p.known, drawn);
+    }
     const ge::shooter::MoveCmd& m = c.sent[k & (kSqSentRing - 1)];
-    Q2HandShot shots[8];
+    Q2HandShot made[8];
     const int n = q2_hand_move(r, move_at[(k - first) & (kSqSentRing - 1)],
-                               (m.buttons & ge::shooter::kButtonAttack) != 0, shots, 8);
+                               (m.buttons & ge::shooter::kButtonAttack) != 0, made, 8);
     if (static_cast<int32_t>(k - p.played_to) <= 0) continue;  // played by an earlier pass
     for (int i = 0; i < n; i++) {
-      const int kind = shots[i].flash >= 0 ? shots[i].flash : kNoFlashKind;
-      // One step a server frame, so one shot: the frame it falls in names it.
-      const auto in_frame = static_cast<float>(std::floor(shots[i].at / kFrameS + kEarly));
+      const Q2HandShot& e = made[i];
+      // One step a server frame, so one shot and one frame sound: the frame it is sent with
+      // names it (a frame's own step at its start, a move's between the frame before and it).
+      const auto in_frame = static_cast<float>(e.frame);
+      if (e.sound >= 0 &&
+          weapon_shot_fresh(p.last_sound, sv::kSqHandSounds, e.sound, in_frame, kSameShot)) {
+        const sv::SqHandSound& hs = sv::kSqHandSound[e.sound];
+        const int index = listed(st.sounds, hs.sample);
+        if (index > 0) {
+          weapon_played_add(p.played, e.frame, e.sound);
+          dc::DemoSound snd;
+          snd.entity = me + 1;
+          snd.channel = hs.channel;
+          snd.sound = index;
+          snd.attenuation = static_cast<float>(hs.attenuation);
+          snd.origin = origin;
+          st.started.push_back(snd);
+        }
+      }
+      if (!e.shot) continue;
+      const int kind = e.flash >= 0 ? e.flash : kNoFlashKind;
       if (!weapon_shot_fresh(p.last_shot, static_cast<int>(std::size(p.last_shot)), kind, in_frame,
                              kSameShot))
         continue;
       weapon_shot_fired(st, r.hand.frame);
-      if (shots[i].flash < 0 || !weapon_sound_plays(w.sound_mask, weapon + 1)) continue;
-      const int value = shots[i].flash | (p.silenced ? sv::kQ2FlashSilenced : 0);
+      p.audit.predicted[p.audit.predicted_n++ & 31] = e.frame;
+      if (e.quiet || !weapon_sound_plays(w.sound_mask, e.weapon + 1)) continue;
+      if (e.flash < 0) {  // heard by name: the hand grenade's throw
+        const int index = listed(st.sounds, sv::kSqWeapons[e.weapon].sound);
+        if (index <= 0) continue;
+        weapon_played_add(p.played, e.frame, 100);
+        dc::DemoSound snd;
+        snd.entity = me + 1;
+        snd.channel = 1;
+        snd.sound = index;
+        snd.volume = p.silenced ? 0.2f : 1.0f;
+        snd.origin = origin;
+        st.started.push_back(snd);
+        continue;
+      }
+      weapon_played_add(p.played, e.frame, -1);
+      const int value = e.flash | (p.silenced ? sv::kQ2FlashSilenced : 0);
       const auto pick = static_cast<uint32_t>((me + 1) * 7919 + static_cast<int>(k) * 31 + value);
       client::q2_flash_fx(value, false, me + 1, origin, st.angles, true, pick, st.started,
                           st.effects);
     }
   }
   if (static_cast<int32_t>(shown - p.played_to) > 0) p.played_to = shown;
-  // Drawn: the hand's frame and the ammunition at the shown move.
+  // The hand grenade's fuse as this pass lit it, kept for the frames that show it cooking.
+  if (!cooking) p.fuse_at = r.hand.weapon == grenade && r.hand.fuse_at > 0 ? r.hand.fuse_at : 0;
+  // Drawn: the hand's weapon, frame and loop, and the ammunition, at the shown move.
   p.shown = r.hand;
+  const sv::SqWeaponRow& row = sv::kSqWeapons[r.hand.weapon];
   p.ammo = r.body.ammo[static_cast<int>(row.ammo)];
   st.players[static_cast<size_t>(me)].weapon_frame = r.hand.frame;
-  if (row.ammo != sv::SqAmmo::none) {
-    st.stats[dc::kStatAmmo] = p.ammo;
-    st.q2_stats[kStatAmmoSent] = static_cast<int16_t>(p.ammo);
+  if (r.hand.weapon != weapon) {  // a change predicted: its model and its ammunition's picture
+    st.stats[dc::kStatWeapon] = listed(st.models, row.view_model);
+    st.q2_stats[2] = static_cast<int16_t>(
+        row.ammo == sv::SqAmmo::none ? 0
+                                     : listed(st.images, kAmmoIcon[static_cast<int>(row.ammo)]));
+  }
+  st.stats[dc::kStatAmmo] = row.ammo != sv::SqAmmo::none ? p.ammo : 0;
+  st.q2_stats[kStatAmmoSent] = static_cast<int16_t>(st.stats[dc::kStatAmmo]);
+  // The loop the hand carries on the player (a hum, a spin, a fuse), unless the server's is
+  // another (frying in lava).
+  if (static_cast<size_t>(me) + 1 < st.entities.size()) {
+    int& loop = st.entities[static_cast<size_t>(me) + 1].loop;
+    const bool hand_loop = loop == 0 || (static_cast<size_t>(loop) < st.sounds.size() &&
+                                         is_hand_loop(st.sounds[static_cast<size_t>(loop)]));
+    const char* mine = sv::sq_hand_loop(r.hand);
+    if (hand_loop) loop = mine != nullptr ? listed(st.sounds, mine) : 0;
   }
 }
 

@@ -230,6 +230,38 @@ SqStep sq_hand_step(SqHand& h, SqBody& body, bool attack, double now, bool infin
   return out;
 }
 
+int sq_hand_sound(int weapon, int was, bool was_firing, const SqHand& after) {
+  if (after.weapon != weapon || (after.frame == was && was_firing)) return -1;
+  switch (static_cast<SqWeapon>(weapon)) {
+    case SqWeapon::hand_grenade:  // the pin pulled
+      return after.frame == 5 ? 0 : -1;
+    case SqWeapon::trap:  // The Reckoning's trap cocked
+      return after.frame == 5 ? 4 : -1;
+    case SqWeapon::chaingun:  // spun up from its first fire frame (5, shown with the first shots);
+                              // spun down at the burst's end (not when let go early)
+      if (!was_firing && after.state == SqHandState::firing) return 1;
+      return after.frame == 22 ? 2 : -1;
+    case SqWeapon::hyperblaster:  // wound down
+      return after.frame == 12 ? 3 : -1;
+    default:
+      return -1;
+  }
+}
+
+const char* sq_hand_loop(const SqHand& h) {
+  const auto w = static_cast<SqWeapon>(h.weapon);
+  const bool firing = h.state == SqHandState::firing;
+  if (w == SqWeapon::railgun) return "weapons/rg_hum.wav";
+  if (w == SqWeapon::bfg) return "weapons/bfg_hum.wav";
+  if (w == SqWeapon::hyperblaster && firing) return "weapons/hyprbl1a.wav";
+  if (w == SqWeapon::chaingun && firing) return "weapons/chngnl1a.wav";
+  if (w == SqWeapon::hand_grenade && h.fuse_at > 0 && h.frame == 11)
+    return "weapons/hgrenc1b.wav";  // lit and still in the hand
+  if (w == SqWeapon::trap && h.fuse_at > 0 && h.frame == 11) return "weapons/traploop.wav";
+  if (w == SqWeapon::phalanx) return "weapons/phaloop.wav";
+  return nullptr;
+}
+
 int sq_flash_value(int w, int shots) {
   switch (static_cast<SqWeapon>(w)) {
     case SqWeapon::blaster:

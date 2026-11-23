@@ -7,6 +7,7 @@
 // ge:summary Test: Quake II's multiview recorder: mvdrecord's file, the relay stream over TCP
 // ge:keywords test mvd2 mvdrecord gtv relay-stream tcp hello deflate addgtvhost addgtvban
 // ge:skill net shooter testing
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -26,6 +27,7 @@
 #include "shooters_edge/client/demo_mvd2.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_client.hpp"
+#include "shooters_edge/net/q2_game.hpp"
 #include "shooters_edge/net/q2_mvd_server.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/server/q2_server.hpp"
@@ -366,6 +368,21 @@ TEST(a_relay_asking_for_deflate_gets_one_zlib_stream) {
   gn::tcp_close(relay);
 }
 
+// The relay's password is one setting every classic server shares: `qtv_password`, with
+// Quake II's `sv_mvd_password` its spelling on this server's console.
+TEST(the_relay_password_is_qtv_password_and_sv_mvd_password_its_spelling) {
+  const ge::server::ServerGame& g = cn::q2_game();
+  bool rule = false, old_rule = false, spelling = false;
+  for (int i = 0; i < g.rule_count; i++) {
+    rule = rule || std::string(g.rules[i].name) == "qtv_password";
+    old_rule = old_rule || std::string(g.rules[i].name) == "sv_mvd_password";
+  }
+  for (int i = 0; i < g.name_count; i++)
+    spelling = spelling || (std::string(g.names[i].name) == "sv_mvd_password" &&
+                            std::string(g.names[i].setting) == "qtv_password");
+  CHECK(rule && !old_rule && spelling);
+}
+
 TEST(the_wrong_password_a_ban_and_a_stranger_are_refused) {
   cn::Q2MvdConfig cfg = streaming();
   cfg.password = "secret";
@@ -406,4 +423,30 @@ TEST(the_wrong_password_a_ban_and_a_stranger_are_refused) {
   CHECK(got.empty());
   CHECK(r->log.size() == logged);
   gn::tcp_close(http);
+}
+
+// sv_mvd_maxsize and sv_mvd_maxtime: a recording stops on its own once past its size in kilobytes
+// or its length in minutes, and says why on the console.
+TEST(a_recording_stops_at_its_size_and_at_its_length) {
+  const std::filesystem::path dir =
+      std::filesystem::temp_directory_path() / "ge_q2_mvd_server_limits_test";
+  std::filesystem::remove_all(dir);
+  for (const bool by_size : {true, false}) {
+    cn::Q2MvdConfig cfg;
+    cfg.enable = 1;
+    cfg.demos = dir.string();
+    if (by_size)
+      cfg.maxsize_kb = 2;
+    else
+      cfg.maxtime_min = 1;
+    auto r = rig(cfg);
+    run(*r, 100);
+    CHECK(admin(*r, "mvdrecord limit").rfind("Recording local MVD to ", 0) == 0);
+    run(*r, by_size ? 400 : 5000);  // a minute is 600 frames, 4600 ticks
+    const std::string why = by_size ? "Stopping MVD recording, maximum size reached."
+                                    : "Stopping MVD recording, maximum duration reached.";
+    CHECK_MSG(std::find(r->log.begin(), r->log.end(), why) != r->log.end(), why);
+    CHECK(admin(*r, "mvdstop") == "Not recording a local MVD.\n");
+  }
+  std::filesystem::remove_all(dir);
 }

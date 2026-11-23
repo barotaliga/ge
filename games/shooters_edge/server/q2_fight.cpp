@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -1071,8 +1072,9 @@ void fight_precache(Q2Server& s) {
   };
   for (const SqWeaponRow& r : kSqWeapons)
     if (q2_pack_has(s.opt.pack, r.pack)) add_sound(r.sound);
-  for (const char* name : {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib,
-                           kHandSounds[0], kHandSounds[1], kHandSounds[2], kHandSounds[3]})
+  for (const char* name :
+       {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib, kSqHandSound[0].sample,
+        kSqHandSound[1].sample, kSqHandSound[2].sample, kSqHandSound[3].sample})
     add_sound(name);
   if (q2_pack_has(s.opt.pack, Q2Pack::reckoning))  // its trap's, its dual fire's
     for (const char* name : {"weapons/trapsuck.wav", "weapons/trapdown.wav", "items/quadfire1.wav",
@@ -1623,17 +1625,10 @@ int player_loop(const Q2Server& s, const Q2Player& p) {
   if (!p.alive || s.intermission_at > 0) return 0;
   if (p.water_level > 0 && (p.water_type & (sh::kSqLava | sh::kSqSlime)) != 0)
     return loop_of(s, SqLoop::fry);
-  const auto w = static_cast<SqWeapon>(p.hand.weapon);
-  const bool firing = p.hand.state == SqHandState::firing;
-  if (w == SqWeapon::railgun) return loop_of(s, SqLoop::rail_hum);
-  if (w == SqWeapon::bfg) return loop_of(s, SqLoop::bfg_hum);
-  if (w == SqWeapon::hyperblaster && firing) return loop_of(s, SqLoop::hyper);
-  if (w == SqWeapon::chaingun && firing) return loop_of(s, SqLoop::chain);
-  if (w == SqWeapon::hand_grenade && p.hand.fuse_at > 0 && p.hand.frame == 11)
-    return loop_of(s, SqLoop::fuse);  // lit and still in the hand
-  if (w == SqWeapon::trap && p.hand.fuse_at > 0 && p.hand.frame == 11)
-    return loop_of(s, SqLoop::trap);
-  if (w == SqWeapon::phalanx) return loop_of(s, SqLoop::phalanx);
+  const char* hand = sq_hand_loop(p.hand);  // the rules' (q2_combat.hpp), the prediction's too
+  if (hand == nullptr) return 0;
+  for (int k = 0; k < kSqLoops; k++)
+    if (std::strcmp(kLoops[k], hand) == 0) return s.loop_sounds[k];
   return 0;
 }
 

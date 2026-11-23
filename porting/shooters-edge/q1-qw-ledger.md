@@ -15,11 +15,11 @@ and a row found later is added here first. Progress is reported as the missing c
 
 | Section | Rows | Done | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- |
-| Client | 509 | 347 | 0 (0 / 0 / 0) | 162 |
+| Client | 510 | 349 | 0 (0 / 0 / 0) | 161 |
 | Server | 316 | 281 | 0 (0 / 0 / 0) | 35 |
 | Game | 246 | 228 | 0 (0 / 0 / 0) | 18 |
 | Tools | 1 | 1 | 0 (0 / 0 / 0) | 0 |
-| **All** | **1072** | **857** | **0 (0 / 0 / 0)** | **215** |
+| **All** | **1073** | **859** | **0 (0 / 0 / 0)** | **214** |
 
 (Built 2026-11-21 against main at #1237 with 217 missing (9 / 49 / 159); the first fill, Quake's
 deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.
@@ -336,8 +336,8 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C276 | `_config_modem_hangup` (q1, AT H) | the serial or modem link's settings | not-taken | platform: DOS serial and modem play |  |
 | C277 | `idgods` (q1, 0) | id staff god mode | not-taken | not in the stock build |  |
 | C278 | `r_draworder` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
-| C279 | `r_timegraph` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
-| C280 | `r_graphheight` (both, 10/15) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
+| C279 | `r_timegraph` (both, 0) | each frame's time as columns along the bottom | done | a synonym of every game's `timegraph` (`games/shooters_edge/client/screen_2d.cpp`), a unit of the screen a millisecond |  |
+| C280 | `r_graphheight` (both, 10/15) | the time graph's height in 10 ms steps of two rows | not-taken | every game's `graphheight` holds the graph in units of the screen (`client/screen_2d.hpp`); a spelling in 10 ms steps would mean another thing by one name |  |
 | C281 | `r_clearcolor` (both, 2) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
 | C282 | `r_waterwarp` (both, 1) | the view sways under water | done | plugins/classic/app/look.cpp |  |
 | C283 | `r_polymodelstats` (both, 0) | a renderer switch or diagnostic | not-taken | renderer internals: our renderer is its own (docs/rendering.md); nothing a player sets |  |
@@ -423,7 +423,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C363 | `rate` (qw, 2500) | bytes a second the server may send (user info) | done | client/settings.cpp (`rate`, the classic layer, 2500; Quake II says 15000), net/qw_remote.cpp (setinfo rate when changed) |  |
 | C364 | `noaim` (qw, 0) | ask the server for no aim help (user info) | done | client/settings.cpp, net/qw_client.cpp (`noaim` in the user info, told again when it changes) | 3 |
 | C365 | `msg` (qw, 1) | the lowest print level you want (user info) | done | client/settings.cpp, net/qw_client.cpp (`msg` 0..3, default 1, in the user info) | 3 |
-| C366 | `show_fps` (qw, 0) | the frame rate in a corner | done | scr_showfps in the same meaning |  |
+| C366 | `show_fps` (qw, 0) | the frame rate in a corner | done | its spelling of scr_showfps (games/shooters_edge/client/cvar_layers.cpp), held by tests/shooters_edge_cvar_layers_test.cpp |  |
 | C367 | `cl_nopred` (qw, 0) | no prediction of your own move | done | games/shooters_edge/net/qw_remote.cpp |  |
 | C368 | `pushlatency` (qw, -999) | how far ahead the prediction runs | not-taken | our prediction runs to the newest move by its own rule |  |
 | C369 | `cl_warncmd` (qw, 0) | warn about unknown commands in configs | not-taken | our console always names an unknown word |  |
@@ -594,8 +594,9 @@ and the campaign on our own host hands the client the same events without the wi
 | C507 | Demos: .qwd recorded and played (qw) | a client recording of a QuakeWorld game | done | net/qw_match_record.hpp, client/demo_playback.cpp |  |
 | C508 | Screenshot files (both) | quakeNN.pcx (GL: .tga) in the game folder | done | engine/capture/screenshot.cpp (our own format and folder) |  |
 | C509 | Static loops of one file merged (both) | every torch or hum of one sound heard as one voice, its ears summed and each held to full | done | client/demo_sound.cpp, plugins/classic/q2_loop_merge.hpp (classic_static_merge) |  |
+| C510 | Stuffed lines run in the console (qw) | what a server stuffs that the client does not answer itself (an alias, `echo`, a setting) runs in the console as the server's: only the commands a game lets a server run and the server's own settings; found while C414 read done with the lines dropped | done | net/qw_client.cpp (`to_run`), net/qw_remote.cpp (`remote_run_stuffed`) |  |
 
-Count: 508 rows, 345 done, 0 missing, 163 not-taken.
+Count: 510 rows, 349 done, 0 missing, 161 not-taken.
 
 ## SERVER: the Quake and QuakeWorld servers, row by row
 
@@ -724,14 +725,14 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S92 | `filterban` (qw, 1) | 1: the filters ban; 0: only filtered addresses may enter | done | `sv_banmode` (synonym), `engine/server/admin.cpp` | |
 | S93 | `sv_maxvelocity` (both, 2000) | the speed cap per axis | done | `plugins/shooter/settings.cpp` | |
 | S94 | `sv_gravity` (both, 800) | gravity | done | `plugins/shooter/settings.cpp` | |
-| S95 | `sv_stopspeed` (both, 100) | the friction's floor speed | done | `plugins/shooter/settings.cpp` | |
-| S96 | `sv_maxspeed` (both, 320) | the run speed | done | `plugins/shooter/settings.cpp` | |
-| S97 | `sv_spectatormaxspeed` (qw, 500) | a spectator's speed | done | `plugins/shooter/settings.cpp` | |
-| S98 | `sv_accelerate` (both, 10) | ground acceleration | done | `plugins/shooter/settings.cpp` | |
+| S95 | `sv_stopspeed` (both, 100) | the friction's floor speed | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
+| S96 | `sv_maxspeed` (both, 320) | the run speed | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
+| S97 | `sv_spectatormaxspeed` (qw, 500) | a spectator's speed | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
+| S98 | `sv_accelerate` (both, 10) | ground acceleration | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
 | S99 | `sv_airaccelerate` (qw, 0.7) | air acceleration | done | `plugins/shooter/settings.cpp` | |
-| S100 | `sv_wateraccelerate` (qw, 10) | water acceleration | done | `plugins/shooter/settings.cpp` | |
-| S101 | `sv_friction` (both, 4) | ground friction | done | `plugins/shooter/settings.cpp` | |
-| S102 | `sv_waterfriction` (qw, 4) | water friction | done | `plugins/shooter/settings.cpp` | |
+| S100 | `sv_wateraccelerate` (qw, 10) | water acceleration | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
+| S101 | `sv_friction` (both, 4) | ground friction | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
+| S102 | `sv_waterfriction` (qw, 4) | water friction | done | `plugins/shooter/settings.cpp`; set on a QuakeWorld server and read by a joined client: tests/shooters_edge_qw_game_test.cpp (classic_game_the_moves_settings_reach_the_joined_client) | |
 | S103 | `cl_rollspeed` (qw server, 200) | the sideways speed at which a player's model leans fully | done | fixed at the default, not a setting (`plugins/shooter/server.hpp`, `framemove.hpp`) | |
 | S104 | `cl_rollangle` (qw server, 2) | the lean's angle (the model shows four times it) | done | fixed at the default, as S103 | |
 | S105 | `sv_spectalk` (qw, 1) | 0: a spectator's chat reaches only spectators | done | `engine/server/chat.cpp`; ours mutes only during a match | |

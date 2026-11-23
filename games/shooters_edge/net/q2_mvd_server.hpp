@@ -13,7 +13,7 @@
 // THE TCP SIDE listens on the game's port. A connection is counted against `sv_iplimit` and the
 // `sv_mvd_maxclients` slots, must open with the four bytes `MVD2` (echoed), then sends a hello
 // (the version 0xED04, its flags, a name, a password, its version): an address on the
-// `addgtvhost` list is let in, one on `addgtvban` refused, else `sv_mvd_password` decides. The
+// `addgtvhost` list is let in, one on `addgtvban` refused, else `qtv_password` decides. The
 // answer is the hello with the flags taken (deflate when asked; string commands never, as
 // `sv_mvd_allow_stufftext` is 0 or more), and from then on every byte is one zlib stream when
 // deflate was taken, each message flushed whole. Stream start gets its ack and the game state (or
@@ -29,6 +29,7 @@
 //
 // ge:summary Quake II's multiview recorder on a live server: mvdrecord, the relay stream over TCP
 // ge:keywords mvd2 mvdrecord mvdstop mvdstuff gtv relay-stream tcp sv_mvd_enable addgtvhost
+// ge:keywords qtv_password
 // ge:keywords addgtvban sv_mvd_password sv_mvd_bufsize sv_mvd_suspend_time sv_mvd_maxsize
 // ge:keywords sv_mvd_maxtime sv_mvd_maxmaps stream-start stream-data deflate-stream
 // ge:skill net shooter replay
