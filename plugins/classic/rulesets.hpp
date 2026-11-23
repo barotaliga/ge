@@ -22,7 +22,8 @@
 // ge:summary The classic games' competition rulesets, the ruleset in user info, f_ruleset replies
 // ge:keywords ruleset rulesets smackdown smackdrive qcon thunderdome mtfl duel competition
 // ge:keywords tournament official rsn f_ruleset fair-play fairness-reply q1_rulesets q2_rulesets
-// ge:keywords fair_query fakeshaft_words f_fakeshaft cl_fakeshaft ruleset_reply fairreplies ce_enabled cr_enabled cl_speedjump rjump
+// ge:keywords fakeshaft_words f_fakeshaft cl_fakeshaft
+// ge:keywords fair_query ruleset_reply fairreplies ce_enabled cr_enabled cl_speedjump rjump
 // ge:skill classic console
 // ge:test tests/classic_rulesets_test.cpp
 #pragma once
