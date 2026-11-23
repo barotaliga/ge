@@ -310,7 +310,8 @@ class Console {
   // command here (a server's own words are forwarded by `set_unknown`). Null removes it.
   using ArgValues = std::function<std::vector<std::string>()>;
   void set_arg_values(std::string_view word, ArgValues values);
-  // The values `word`'s argument completes to, in their own order; empty when none.
+  // The values `word`'s argument completes to, in their own order; empty when none. A command
+  // synonym with no values of its own completes as the command it runs.
   std::vector<std::string> arg_values(std::string_view word) const;
 
   // The whole player config cfg_save writes (cfg.hpp's format).

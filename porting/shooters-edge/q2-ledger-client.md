@@ -12,7 +12,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | missing | not-taken | rows |
 | --- | --- | --- | --- | --- |
-| Client console commands | 138 | 1 | 17 | 156 |
+| Client console commands | 139 | 0 | 17 | 156 |
 | Client settings (cvars) | 231 | 9 | 110 | 350 |
 | Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
 | Menu pages and rows | 146 | 4 | 12 | 162 |
@@ -21,7 +21,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 0 | 1 | 33 |
 | Entity effect bits (EF_) | 32 | 0 | 1 | 33 |
-| Entity render bits (RF_) and view bits (RDF_) | 23 | 2 | 7 | 32 |
+| Entity render bits (RF_) and view bits (RDF_) | 24 | 1 | 7 | 32 |
 | Configstrings | 10 | 0 | 6 | 16 |
 | The layout language (status bar and layouts) | 27 | 0 | 0 | 27 |
 | HUD and screen elements | 18 | 0 | 11 | 29 |
@@ -31,7 +31,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 16 | 0 | 4 | 20 |
 | Connection, network, downloads and the rest | 15 | 1 | 2 | 18 |
-| **all** | 947 | 34 | 231 | 1212 |
+| **all** | 949 | 32 | 231 | 1212 |
 
 ## Client console commands
 
@@ -121,7 +121,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.unignoretext | `unignoretext [all/match ...]` | removes chat ignore patterns | done | `engine/console/chat_ignore.cpp` |
 | cmd.ignorenick | `ignorenick [nick]` | ignores chat from a nickname | done | `engine/console/chat_ignore.cpp` |
 | cmd.unignorenick | `unignorenick [all/nick]` | stops ignoring a nickname | done | `engine/console/chat_ignore.cpp` |
-| cmd.demo | `demo [/]<file[.ext]>` | plays `.dm2`, `.dm2.gz`, `.mvd2`, `.mvd2.gz` from `demos/`, extension optional, Tab completes | missing | Missing, rank 2 (a Quake II name for a setting ours has; the settings lift): ours `playdemo` and the demo page (`client/demo_playback.cpp`); the `demo` spelling and the `demos/`-relative completion not found |
+| cmd.demo | `demo [/]<file[.ext]>` | plays `.dm2`, `.dm2.gz`, `.mvd2`, `.mvd2.gz` from `demos/`, extension optional, Tab completes | done | Quake II's `demo` is its spelling of `playdemo` (`client/cvar_layers.cpp`): a bare name from `demos/`, its extension optional (`profiles/game_profile.hpp`'s `demo_folder`), a leading slash from the top of the files (`client/adapter_parts.cpp`'s `find_demo`); `playdemo`, `timedemo` and so `demo` complete the recordings' names on Tab in every game, Quake II's relative to `demos/` (`client/game_adapter.cpp`; a command synonym completes as its command, `engine/console/console.cpp`'s `arg_values`); `tests/shooters_edge_game_adapter_test.cpp`, `tests/console_view_test.cpp` |
 | cmd.record | `record [-hzes] <file>` | records a client demo; while recording prints statistics; `-z` gzip, `-e`/`-s` packet size | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `client/listen_record.cpp`, `net/q2_client.cpp`; switches and statistics missing (C38) |
 | cmd.stop | `stop` | stops recording, prints statistics | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `client/listen_record.cpp`; no statistics (C38) |
 | cmd.suspend | `suspend` | pauses (or toggles, `cl_demosuspendtoggle`) recording | not-taken | `client-gaps.md` round 27: not taken (C38) |
@@ -1006,7 +1006,7 @@ Bits of an entity's render field, and of the player state's view flags.
 | rf.translucent | `RF_TRANSLUCENT` (32) | drawn at 0.7 | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.framelerp | `RF_FRAMELERP` (64) | blend between the old and new frame | not-taken | Our design: frames are always interpolated, so the bit has nothing to switch. |
 | rf.beam | `RF_BEAM` (128) | a laser beam of the frame's width in the skin's colour, at 0.3 | done | `games/shooters_edge/client/q2_look.hpp` |
-| rf.customskin | `RF_CUSTOMSKIN` (256) | the skin is a picture index | missing | not read |
+| rf.customskin | `RF_CUSTOMSKIN` (256) | the skin is a picture index | done | From an extended server or recording, the skin number names a picture of the server's list (`/path` or `pics/<name>.pcx`) the model wears in place of its own skin, the number then 0 (`client/q2_look.cpp`'s `q2_custom_skin`, `client/demo_video.cpp`); the picture listed beside the skins the first time it is seen (`client/world_models.cpp`'s `list_worn_pictures`, `Placed::skin_picture`); `tests/shooters_edge_q2_look_test.cpp` |
 | rf.glow | `RF_GLOW` (512) | the item's light pulses | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.shell_red | `RF_SHELL_RED` (1024) | a red shell | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.shell_green | `RF_SHELL_GREEN` (2048) | a green shell | done | `games/shooters_edge/client/q2_look.hpp` |

@@ -652,7 +652,11 @@ void Console::set_arg_values(std::string_view word, ArgValues values) {
 }
 
 std::vector<std::string> Console::arg_values(std::string_view word) const {
-  const auto it = arg_values_.find(lower(word));
+  auto it = arg_values_.find(lower(word));
+  if (it == arg_values_.end()) {  // a game's spelling of a command completes as the command does
+    const auto syn = command_synonyms_.find(lower(word));
+    if (syn != command_synonyms_.end()) it = arg_values_.find(syn->second.target);
+  }
   return it != arg_values_.end() ? it->second() : std::vector<std::string>();
 }
 
