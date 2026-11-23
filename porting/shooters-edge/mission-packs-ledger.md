@@ -47,10 +47,10 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 4 | 67 | 3 (0 / 1 / 2) | 0 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 7 | 50 | 4 (0 / 2 / 2) | 0 |
 | The Reckoning (Quake II, folder `xatrix`) | 40 | 21 | 3 | 16 (11 / 4 / 1) | 0 |
-| Ground Zero (Quake II, folder `rogue`) | 82 | 29 | 4 | 49 (19 / 26 / 4) | 0 |
-| **All** | **274** | **73** | **127** | **74 (30 / 35 / 9)** | **0** |
+| Ground Zero (Quake II, folder `rogue`) | 84 | 44 | 4 | 36 (10 / 22 / 4) | 0 |
+| **All** | **276** | **88** | **127** | **61 (21 / 31 / 9)** | **0** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **80 missing, 128 to verify, of 274 rows** (M63a taking the packs in: 10 fewer; The Reckoning's first part 18; Ground Zero's first batch 23).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **61 missing, 127 to verify, of 276 rows** (M63a taking the packs in: 10 fewer; The Reckoning's first part 18; Ground Zero's first batch 23; Ground Zero's monsters, the shared AI and the hint paths 19).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
@@ -390,7 +390,8 @@ count: done 29, verify 4, missing 49 (19 / 26 / 4), not-taken 0
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
 | gz.switch | the pack's rules behind one switch its profile sets, Quake II's own unchanged | done | 1 | server/q2_pack.hpp, server/q2_gz_rules.cpp: the folder `rogue` sets it; the cvars only under it |
-| gz.ai | every monster's changed behaviour in the pack (dodging and ducking shots, jumping and dropping, firing blind at where the player was, the medic's and the hover's changes) | missing | 1 | reader question: the whole list, per monster |
+| gz.ai | every monster's changed behaviour in the pack (dodging and ducking shots, jumping and dropping, firing blind at where the player was, the medic's and the hover's changes) | done | 1 | server/q2_gz_ai.cpp (section 1 of `gz-monsters.md`: the dodge, a high shot ducked and a low one side-stepped, by skill, the duck held by eta and 0.1 a skill below nightmare, the next no sooner than 0.5 s; walkers strafing four times in ten at 8 a frame, fliers six, the daedalus eight, never round a tesla; blind fire at the last sighting by the light soldier, gunner, maiden and tanks, rarer with each try; jumps down and up ledges; hint paths after 5 s out of sight; the medic's reach of 1024 (400 holding), the last two medics that gave up on a corpse, 10 s to raise it, a corpse too near torn apart, the raised out of the count; shots between the tanks, the medics, the turret or the raised start no fight, Jorg's and the Makron's do), server/q2_gz_base_monsters.cpp (the hover's and the others' section 2 changes); tests/shooters_edge_q2_gz_ai_test.cpp, tests/shooters_edge_q2_gz_base_monsters_test.cpp. Left in gz.ai.rest |
+| gz.ai.rest | the rest of the pack's shared monster changes: plats ridden toward an enemy above or below, the shells of a monster's power-ups, a monster's railgun held inside a wall, the co-op inhibit flags; section 2's soldiers' running fire and blind stand, the gunner's grenade check, the parasite's blocked drain, the hover's pain choice, the maiden's second model, the Makron's gibs | missing | 2 | facts `gz-monsters.md` § 1.4, 1.11 and 2 |
 | gz.items_list | the item list grown by the pack's items, in its order | done | 1 | server/q2_bar.cpp (`kGroundZero`, 61 rows in the pack's order), server/q2_items.cpp |
 | gz.obits | the new weapons' and monsters' obituaries, word for word | done | 1 | server/q2_combat.cpp (`sq_obituary`): the six weapons and the A-M bomb; the monsters' with gz.ai |
 | gz.tesla | the tesla mine thrown from the inventory, its zaps | done | 1 | server/q2_gz_weapons.cpp; not yet shot down by damage (a partial: batch 2) |
@@ -400,7 +401,7 @@ count: done 29, verify 4, missing 49 (19 / 26 / 4), not-taken 0
 | gz.dmflag.262144 | `dmflags` 262144: quad and double damage do not stack | done | 2 | server/q2_powers.cpp (`fight_multiplier`) |
 | gz.dmflag.524288 | `dmflags` 524288: no A-M bombs | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
 | gz.dmflag.1048576 | `dmflags` 1048576: no spheres | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
-| gz.cvar.huntercam | `huntercam` (1): the hunter sphere's chase camera | missing | 2 | a setting of the pack's rules |
+| gz.cvar.huntercam | `huntercam` (1): the hunter sphere's chase camera | done | 2 | server/q2_gz_rules.cpp (the setting), server/q2_gz_spheres.cpp (the camera: the corpse thrown apart, the view at the sphere, field of view 140, not with dmflags 1024) |
 | gz.cvar.strong_mines | `strong_mines` (0): mines laid under quad or double keep it their whole time | done | 3 | server/q2_gz_rules.cpp, server/q2_gz_weapons.cpp (the mine's time) |
 | gz.cvar.randomrespawn | `randomrespawn` (0): a deathmatch item comes back as another of its kind | missing | 3 |  |
 | gz.cvar.gamerules | `gamerules` (0; 2 is tag) | missing | 2 |  |
@@ -452,9 +453,9 @@ count: done 16, verify 0, missing 5, not-taken 0
 | gz.ent.item_doppleganger | `item_doppleganger` | a decoy of the player that monsters attack | 21 / 23 | missing | 2 | not in our rules; LIFT: Scourge of Armagon's decoy |
 | gz.ent.item_double | `item_double` | double damage for a while | 24 / 28 | done | 1 | server/q2_powers.cpp (`fight_multiplier`, the quad's timer lifted) |
 | gz.ent.item_ir_goggles | `item_ir_goggles` | infra-red goggles: warm bodies glow (the client's view bit is done) | 11 / 11 | done | 2 | server/q2_powers.cpp, server/q2_server.cpp (the view bit) |
-| gz.ent.item_sphere_defender | `item_sphere_defender` | the defender sphere: floats by the player and shoots at enemies | 28 / 30 | missing | 2 | not in our rules |
-| gz.ent.item_sphere_hunter | `item_sphere_hunter` | the hunter sphere: hunts down the player's attacker (its chase camera `huntercam`) | 26 / 28 | missing | 2 | not in our rules |
-| gz.ent.item_sphere_vengeance | `item_sphere_vengeance` | the vengeance sphere: strikes whoever killed the player | 22 / 25 | missing | 2 | not in our rules; LIFT: Dissolution's sphere |
+| gz.ent.item_sphere_defender | `item_sphere_defender` | the defender sphere: floats by the player and shoots at enemies | 28 / 30 | done | 2 | server/q2_gz_spheres.cpp (the half before armour, the green bolt at the last attacker, the splash; one out at a time, the bar's timer); the second shell model not drawn |
+| gz.ent.item_sphere_hunter | `item_sphere_hunter` | the hunter sphere: hunts down the player's attacker (its chase camera `huntercam`) | 26 / 28 | done | 2 | server/q2_gz_spheres.cpp (the chase in sight, the lurk where it lost him, 10 000 past armour, the 512 blast; the doppleganger's `gz_release_sphere`) |
+| gz.ent.item_sphere_vengeance | `item_sphere_vengeance` | the vengeance sphere: strikes whoever killed the player | 22 / 25 | done | 2 | server/q2_gz_spheres.cpp (called by a blow leaving its owner under 25; Dissolution's runs in its own program, so nothing to lift) |
 | gz.ent.key_nuke | `key_nuke` | the nuke key | 2 / 2 | done | 1 | server/q2_items.cpp (a key row) |
 | gz.ent.key_nuke_container | `key_nuke_container` | the container the nuke key is taken from | 1 / 1 | missing | 1 | not in our rules |
 | gz.ent.weapon_chainfist | `weapon_chainfist` | the chainfist: a chainsaw fist | 25 / 33 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
@@ -471,14 +472,15 @@ count: done 0, verify 0, missing 8, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| gz.ent.monster_carrier | `monster_carrier` | the carrier: a flying boss that launches flyers | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.monster_daedalus | `monster_daedalus` | the daedalus: a faster hover with a shield | 10 / 96 | missing | 1 | not in our rules; LIFT: the base hover |
-| gz.ent.monster_medic_commander | `monster_medic_commander` | the medic commander: calls in reinforcements | 6 / 30 | missing | 1 | not in our rules; LIFT: the base medic |
-| gz.ent.monster_stalker | `monster_stalker` | the stalker: a spider that walks on ceilings | 8 / 96 | missing | 1 | not in our rules |
-| gz.ent.monster_turret | `monster_turret` | a wall turret: blaster, machine gun or rockets | 10 / 216 | missing | 1 | not in our rules |
-| gz.ent.monster_widow | `monster_widow` | the black widow, the last boss's first form | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.monster_widow2 | `monster_widow2` | the black widow's second form | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.turret_invisible_brain | `turret_invisible_brain` | the hidden brain that drives a turret | 1 / 1 | missing | 2 | not in our rules |
+| gz.ent.monster_carrier | `monster_carrier` | the carrier: a flying boss that launches flyers | 1 / 1 | done | 1 | server/q2_gz_bosses.cpp (its guns, grenades, rockets, rail, fliers from 3/6/6/9 slots, the co-op rear volley, pains; the base boss wreck); lab `se-gz-bosses`. Muzzle points are ours; the grenades' flash sent as 53 |
+| gz.ent.monster_daedalus | `monster_daedalus` | the daedalus: a faster hover with a shield | 10 / 96 | done | 1 | server/q2_monster_kinds.hpp (the hover's body on skin 2, 450, mass 225, green bolts, the front screen of 100), server/q2_monster_pain.cpp (its cries; a heavy blow's long flinch 0.45 - 0.1 x skill) |
+| gz.ent.monster_medic_commander | `monster_medic_commander` | the medic commander: calls in reinforcements | 6 / 30 | done | 1 | server/q2_monster_kinds.hpp (the medic's body on skin 2, 600, green bolts), server/q2_gz_monsters.cpp (the call: strength roll, groups of 1, 3 or 5, five spots in front or behind, the grow, slots 3/4/6/6 given back at death, not counted), server/q2_monster_pain.cpp |
+| gz.ent.monster_stalker | `monster_stalker` | the stalker: a spider that walks on ceilings | 8 / 96 | done | 1 | server/q2_gz_monsters.cpp (ceilings by reversed gravity, the jump up and the pounce, firing in the air, the false death and its twitch; the floor and ceiling walk in server/q2_monsters.cpp); its dodge jump with gz.ai |
+| gz.ent.monster_turret | `monster_turret` | a wall turret: blaster, machine gun or rockets | 10 / 216 | done | 1 | server/q2_gz_monsters.cpp (floor, ceiling and wall mounts, arcs, 45 degrees a frame, blaster, machine gun and rockets with lead, the wall unit sliding out on use, no pain, the blast and debris); its blind fire with gz.ai; the wall unit's base piece not drawn yet |
+| gz.ent.monster_widow | `monster_widow` | the black widow, the last boss's first form | 1 / 1 | done | 1 | server/q2_gz_bosses.cpp (the turret blaster, the charge, rails, the kick, stalkers, the power-up answer, the beam-out and the legs); lab `se-gz-bosses`. Her large gibs fly as debris; the shell glow of her answer is not drawn |
+| gz.ent.monster_widow2 | `monster_widow2` | the black widow's second form | 1 / 1 | done | 1 | server/q2_gz_bosses.cpp (the heat beam, the disruptor, the tongue, stalkers at ±135, every stalker killed at her death, the blasts and the chain, the dead search, the settle); lab `se-gz-bosses`. Gibbed after the settle with the flesh set |
+| gz.ent.monster_kamikaze | `monster_kamikaze` | the kamikaze flyer: charges its enemy and bursts on him (the carrier's, and maps') | 0 / 0 | done | 1 | server/q2_gz_base_monsters.cpp (the charge at 400, 50 within 90, the harmless burst when blocked, no pain), its row in q2_monster_kinds.hpp; the rocket trail on its body not drawn. Row added while filling |
+| gz.ent.turret_invisible_brain | `turret_invisible_brain` | the hidden brain that drives a turret | 1 / 1 | done | 2 | server/q2_gz_monsters.cpp, server/q2_targets.cpp (the breach's aim and fire shared with the turret driver): `killtarget` its first enemy, `delay`, used on and off |
 
 #### Game modes
 
@@ -495,7 +497,7 @@ count: done 0, verify 0, missing 10, not-taken 0
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
 | gz.ent.func_plat2 | `func_plat2` | a plat with more ways to move | 28 / 130 | missing | 1 | not in our rules |
-| gz.ent.hint_path | `hint_path` | a path hint monsters follow (830 placed) | 12 / 830 | missing | 1 | not in our rules; LIFT: our bots' nav (plugins/shooterbots) may read the hints too |
+| gz.ent.hint_path | `hint_path` | a path hint monsters follow (830 placed) | 12 / 830 | done | 1 | server/q2_gz_ai.cpp (`gz_hint_spawn`, `gz_hints`: chains from each END node, up to 100, cut at a fork or a loop; taken after 5 s out of sight, at most every 10 s, from a node within 512 the monster sees to one within 512 its enemy sees; a node's `wait` held; off the path once it sees him); tests/shooters_edge_q2_gz_ai_test.cpp |
 | gz.ent.info_player_coop_lava | `info_player_coop_lava` | a co-op start used once the lava has risen | 1 / 26 | missing | 2 | not in our rules |
 | gz.ent.misc_nuke_core | `misc_nuke_core` | the reactor core of the finale | 1 / 1 | missing | 1 | not in our rules |
 | gz.ent.target_anger | `target_anger` | makes monsters angry at a target | 9 / 18 | missing | 2 | not in our rules |
