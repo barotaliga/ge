@@ -475,7 +475,7 @@ bool web_progress(const WebDownloads& h, WebProgress& out) {
     out.path = s.file.path;
     // A resume's bytes before count once the server took the range (its 206 said so).
     const size_t before = s.fetch.offset > 0 ? s.held.size() : 0;
-    out.got = static_cast<int64_t>(before + gn::http_received(s.fetch));
+    out.got = static_cast<int64_t>(before) + static_cast<int64_t>(gn::http_received(s.fetch));
     out.total = s.fetch.total;
     out.files_left = remaining(h);
     return true;
