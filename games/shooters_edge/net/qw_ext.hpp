@@ -68,10 +68,13 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 // client draws it coming back ahead of time, classicenhance/hologram.hpp), on either server; the
 // damage the player dealt (Quake II's temporary entity 128, the hit marker's) on Quake II's server;
 // the server's settings sheet (engine/server/sheet.hpp), svc id 125 in answer to `ge_sheet`
-// (net/qw_sheet.hpp).
+// (net/qw_sheet.hpp); the weapons the player holds and his ammunition of each kind on Quake II's
+// server, svc id 118 when they change (the window predicts a weapon change on them:
+// net/q2_weapon.hpp).
 constexpr uint32_t kGeNamedEffects = 1, kGeAimBend = 2, kGeDownloadOrigin = 4, kGeOtherMoves = 8,
                    kGeSpeedJumpShare = 16, kGeAccountKey = 32, kGeMoveFeel = 64, kGeVoice = 128,
-                   kGeEveryFrame = 256, kGeItemBack = 512, kGeHitReports = 1024, kGeSettings = 2048;
+                   kGeEveryFrame = 256, kGeItemBack = 512, kGeHitReports = 1024, kGeSettings = 2048,
+                   kGeArsenal = 4096;
 
 struct ExtBit {
   ExtFamily family;
