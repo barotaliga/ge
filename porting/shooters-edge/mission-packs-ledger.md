@@ -46,11 +46,11 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Taking the packs in (shared by all four) | 17 | 15 | 1 | 1 (0 / 1 / 0) | 0 |
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 8 | 64 | 1 (0 / 1 / 0) | 1 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 10 | 47 | 3 (0 / 2 / 1) | 1 |
-| The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
-| Ground Zero (Quake II, folder `rogue`) | 82 | 4 | 7 | 71 (36 / 31 / 4) | 0 |
-| **All** | **274** | **40** | **122** | **110 (56 / 47 / 7)** | **2** |
+| The Reckoning (Quake II, folder `xatrix`) | 40 | 4 | 2 | 34 (20 / 12 / 2) | 0 |
+| Ground Zero (Quake II, folder `rogue`) | 82 | 5 | 6 | 71 (36 / 31 / 4) | 0 |
+| **All** | **274** | **42** | **120** | **110 (56 / 47 / 7)** | **2** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **110 missing, 122 to verify, of 274 rows** (M63a taking the packs in: 11 fewer; M63b the Quake packs' status bars: 6 fewer; Scourge of Armagon's and Ground Zero's remix roles: 2 fewer; the end screens not taken: 2 fewer).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **110 missing, 120 to verify, of 274 rows** (M63a taking the packs in: 11 fewer; M63b the Quake packs' status bars: 6 fewer; Scourge of Armagon's and Ground Zero's remix roles: 2 fewer; the end screens not taken: 2 fewer; the Quake II packs' movies: 2 verified).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
@@ -312,7 +312,7 @@ count: done 0, verify 13, missing 0, not-taken 0
 
 ## The Reckoning (Quake II, folder `xatrix`)
 
-count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
+count: done 4, verify 2, missing 34 (20 / 12 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -322,7 +322,7 @@ count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 | xat.obits | the new weapons' and monsters' obituaries, word for word | missing | 1 | reader question |
 | xat.dmflag | `dmflags` 65536: dual fire dropped on death | missing | 2 |  |
 | xat.campaign | the four units in order, the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp chains the units |
-| xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | verify | 2 | client/cinematic.hpp plays a chain |
+| xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | done | 2 | NEW GAME takes the level default.cfg names (`*logo.cin+xin.cin+xswamp`: client/game_folder.hpp `new_game_level`); the unit ends' movies come from the maps' level strings (server/q2_campaign.hpp); all eight decoded to their end, frames and sound |
 | xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | verify | 2 | pictures named by the rules' configstrings |
 | xat.menu | the pack's own pictures (console background, quit, victory) | verify | 3 |  |
 | xat.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp; held end to end by tests/shooters_edge_take_in_test.cpp (the window's music finds the remapped file; any case or a path) |
@@ -385,7 +385,7 @@ count: done 0, verify 0, missing 7, not-taken 0
 
 ## Ground Zero (Quake II, folder `rogue`)
 
-count: done 3, verify 7, missing 72 (36 / 31 / 5), not-taken 0
+count: done 5, verify 6, missing 71 (36 / 31 / 4), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -405,7 +405,7 @@ count: done 3, verify 7, missing 72 (36 / 31 / 5), not-taken 0
 | gz.cvar.randomrespawn | `randomrespawn` (0): a deathmatch item comes back as another of its kind | missing | 3 |  |
 | gz.cvar.gamerules | `gamerules` (0; 2 is tag) | missing | 2 |  |
 | gz.campaign | the five units in order (the release's `runit2`..`runit5` configs start one), the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp |
-| gz.movies | the pack's movies (`rintro`, `reu1_`..`reu4_`, `rend`, the logo) | verify | 2 | client/cinematic.hpp |
+| gz.movies | the pack's movies (`rintro`, `reu1_`..`reu4_`, `rend`, the logo) | done | 2 | NEW GAME takes the level default.cfg names (`*rintro.cin+rmine1`: client/game_folder.hpp `new_game_level`); the unit ends' movies from the maps' level strings; all seven decoded to their end, frames and sound |
 | gz.hud | the pack's icons on the HUD and in the inventory (`w_chainfist`, `w_etf_rifle`, `w_proxlaunch`, `w_disintegrator`, `w_heatbeam`, `w_tesla`, `p_double`, `p_ir`, the spheres, `p_doppleganger`, `p_nuke`, `a_flechettes`, `a_prox`, `a_tesla`, `a_disruptor`, `i_tagtoken`) | verify | 2 | pictures named by the rules' configstrings |
 | gz.menu | the pack's own menu pictures (the main menu, banners, the cursor), console background, `conchars_blue` | verify | 3 | pictures by name over the base pack's |
 | gz.vwep | the new guns in other players' hands (the patch's `w_*.md2`) | verify | 2 | plugins/morph/carry.hpp; needs imp.vwep |

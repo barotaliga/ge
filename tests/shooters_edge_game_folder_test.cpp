@@ -404,3 +404,21 @@ TEST(select_game_lists_each_mission_pack_under_its_game) {
   rows = cl::game_rows(prefs.string(), "q1", install.string(), {}, "rogue");
   CHECK(!rows[0].playing && !rows[1].playing && rows[2].playing);
 }
+
+// NEW GAME as each Quake II game's default.cfg names it: the pack's own first map, its movies
+// first; a cfg with no `newgame` alias, or one that starts no map, names none.
+TEST(new_game_takes_the_map_and_movies_the_default_cfg_names) {
+  std::string map, shows;
+  CHECK(cl::new_game_level("bind ESCAPE togglemenu\nalias newgame \"map *ntro.cin+base1\"\n", map,
+                           shows));
+  CHECK(map == "base1" && shows == "ntro.cin");
+  CHECK(cl::new_game_level("  ALIAS NewGame \"map *logo.cin+xin.cin+xswamp\"\r\n", map, shows));
+  CHECK(map == "xswamp" && shows == "logo.cin+xin.cin");
+  CHECK(cl::new_game_level("alias newgame \"map *rintro.cin+rmine1\"", map, shows));
+  CHECK(map == "rmine1" && shows == "rintro.cin");
+  CHECK(!cl::new_game_level("alias newgamex \"map e1m1\"\nbind x y\n", map, shows));
+  CHECK(cl::new_game_level("alias newgamex \"map e1m1\"\nalias newgame \"map e1m2\"", map, shows));
+  CHECK(map == "e1m2" && shows.empty());
+  CHECK(!cl::new_game_level("alias newgame \"echo hi\"", map, shows));
+  CHECK(!cl::new_game_level("alias newgame \"map end.cin+victory.pcx\"", map, shows));
+}
