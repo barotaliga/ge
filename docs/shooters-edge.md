@@ -1149,11 +1149,18 @@ shareware or demo install never counts), so a game loaded on its own keeps its o
   `sv_falldamage`; Quake II's by `sv_physics q1`), each move keeping its own code, and
   nothing a weapon does; lab `se-remix-physics` compares them. A remixed map keeps at most
   `cr_weak_same` copies of a weak weapon, the rest laid down as its ammunition.
+  `cr_expansions` (on by default) takes the mission packs in: the other game's installed packs
+  are mounted under its base game, so their maps load too and their own weapons and items are
+  read by role (profiles/remix.hpp's `kPackItems`); and a map remixed for a played pack gets the
+  pack's own weapon where the base game has none for a role (`kPackSpawns`: Scourge of Armagon's
+  laser cannon and Mjolnir in the two places Quake gives its lightning gun), after the balance.
+  Off, the base games stand alone and a pack's own items are left out.
   A classic mod with a compiled module (`qwprogs.qvm`) plays the window's match on it, on the
   Quake II's maps too; the mod sets the boundaries, so `cr_items` and `cr_physics` step aside.
 
 Lab `se-remix` draws a real map of each game from above with its own items and with the other
-game's (`--game=<the folder holding id1> --q2=<the folder holding baseq2>`); `se-client
+game's (`--game=<the folder holding id1> --q2=<the folder holding baseq2>`; `--q1-pack`,
+`--q1-to-pack` and `--expansions` take a mission pack's side); `se-client
 --remix=<install> --remix-items=1` draws a game's own map with the other game's weapons in hand
 and on the floor.
 

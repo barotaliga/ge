@@ -9,7 +9,12 @@
 // A command is looked up as a COMMAND, then an ALIAS, then a CVAR (a cvar's name alone prints
 // it, with a value sets it). An alias or a trigger calling itself is stopped at kMaxDepth nested
 // calls within one `run`, with a problem naming the alias; a loop that waits is a loop on
-// purpose and runs on. Nothing here reads a clock: a frame is one `run`.
+// purpose and runs on. Nothing here reads a clock: a frame is one `run`. A host that has a clock
+// (a game's window) hands it in with `set_clock` (clock_macros.hpp's `add_clock_macros` does), and
+// a recipe's `sleep <seconds>` (add_recipe_commands, only in a window started to run recipes)
+// then holds the rest of the buffer until that time has passed; with no clock, it is a `wait`.
+// That is what a RECIPE runs on: a cfg an agent writes to drive a window step by step (docs/
+// console.md § Recipes).
 //
 // SOURCES. Every queued command carries who sent it (cvar.hpp's `Source`): a server's stuffed
 // text may run only commands flagged kStuffable and set only the server's cvars.
@@ -220,7 +225,8 @@ class Console {
   void insert(std::string_view text, Source source = Source::local, const Origin& where = {});
   // Execute until the buffer is empty or a `wait`; returns the commands executed.
   int run();
-  // `text` appended and run to the end, `wait`s included (a tool's or a test's way in).
+  // `text` appended and run to the end, `wait`s included (a tool's or a test's way in). While a
+  // `sleep` holds the buffer, `text` runs at once and the held commands wait on behind it.
   int execute(std::string_view text, Source source = Source::local);
   bool pending() const { return !buffer_.empty(); }
 
@@ -300,6 +306,16 @@ class Console {
 
   // `wait`: the running `run` stops after this command.
   void wait() { waiting_ = true; }
+  // The host's clock in seconds (a window's wall time). Until one is set, `sleep` waits one frame.
+  void set_clock(std::function<double()> now_s) { clock_ = std::move(now_s); }
+  // `sleep <seconds>`: the running `run` stops after this command, and the runs after it do
+  // nothing until the host's time is `seconds` later.
+  void sleep(double seconds);
+  // Whether a `sleep` holds the buffer now.
+  bool sleeping() const { return clock_ && clock_() < wake_s_; }
+  // `work` (a host's own commands: a config it runs at startup) run with the held commands set
+  // aside, then put back behind whatever `work` left; the sleep holds on as it was.
+  void past_sleep(const std::function<void()>& work);
 
   // COMPLETION: every command, alias and cvar starting with `prefix`, sorted.
   std::vector<std::string> complete(std::string_view prefix) const;
@@ -407,6 +423,8 @@ class Console {
   int current_depth_ = 0;
   int wait_limit_ = 0, waits_in_row_ = 0;  // limit_waits
   bool waiting_ = false;
+  std::function<double()> clock_;  // set_clock: the host's clock, when it has one
+  double wake_s_ = 0;              // a `sleep` holds the buffer until the host's time reaches it
   mutable bool expanded_team_ = false;  // the last expansion used a team macro
   bool current_team_ = false;           // the running line is held by a team macro limit
 };
@@ -418,8 +436,12 @@ std::string game_file(std::string_view file, std::string_view scope);
 
 // The built-in command sets, each registered by the Console's constructor.
 void register_builtin_commands(Console& c);  // console_builtins.cpp
-void register_script(Console& c);            // script.cpp
-void register_script_strings(Console& c);    // script_strings.cpp
+// A RECIPE's commands (`sleep`; docs/console.md § Recipes), registered only by a host started to
+// run recipes (a window's `-recipes`), never in a player's console: a cfg, a bind or a server
+// cannot reach them.
+void add_recipe_commands(Console& c);      // console_builtins.cpp
+void register_script(Console& c);          // script.cpp
+void register_script_strings(Console& c);  // script_strings.cpp
 // `hash`'s number: each byte with bit 5 cleared (letters in either case alike), h = c + 64h +
 // 65536h - h, wrapping at 2^32.
 uint32_t text_hash(std::string_view text);
