@@ -99,7 +99,7 @@ struct GameBindings {
   // game, our `con_chat` rules) and its stamps on every line (`con_timestamps`,
   // `con_timestampsformat`, `con_timestampscolor`; off in every other game).
   ge::console::ConsoleView* console_view = nullptr;
-  // Quake II's view and 2D settings (q2_view.hpp: scr_scale, scr_draw2d, scr_alpha, scr_lag_*,
+  // Quake II's view and 2D settings (q2_view.hpp: scr_scale, scr_alpha, scr_lag_*,
   // cl_adjustfov, uf, cl_kickangles); their defaults in every other game. add_game_cvars binds its
   // own GameCvarValues::screen when this is null.
   Q2Screen* screen = nullptr;

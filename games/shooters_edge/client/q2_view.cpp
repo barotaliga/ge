@@ -2,7 +2,7 @@
 //
 // ge:summary Quake II's field of view as shown and its view and 2D cvars
 // ge:keywords q2 fov cl_adjustfov uf scr_scale scr_draw2d scr_alpha scr_lag_draw cl_kickangles
-// ge:keywords timegraph debuggraph graphheight graphscale graphshift scr_demobar
+// ge:keywords scr_demobar
 // ge:skill shooter ui camera
 // ge:test tests/shooters_edge_q2_view_test.cpp
 #include "shooters_edge/client/q2_view.hpp"
@@ -66,16 +66,6 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
        .max = 10,
        .values = "0: by the window's size (the default); 1..10: that many times"},
       &s.scale);
-  v.bind({.name = "scr_draw2d",
-          .fallback = "2",
-          .flags = con::kArchive,
-          .help = "What is drawn over the view: the status bar, the scoreboard, the messages.",
-          .kind = con::CvarKind::integer,
-          .min = 0,
-          .max = 3,
-          .values = "0: nothing (for screenshots); 1: all but the status bar; 2: everything (the "
-                    "default); 3: everything but the scoreboard and the help computer"},
-         &s.draw2d);
   v.bind({.name = "scr_alpha",
           .fallback = "1",
           .flags = con::kArchive,
@@ -194,40 +184,6 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
           .max = 10000,
           .values = "1 and up: 200 the default"},
          &s.lag_max);
-  v.bind({.name = "timegraph",
-          .fallback = "0",
-          .help = "Whether each frame's time is drawn as a column along the bottom of the screen.",
-          .kind = con::CvarKind::boolean,
-          .values = "0: not drawn (the default); 1: a column a frame, a unit tall a millisecond"},
-         &s.time_graph);
-  v.bind({.name = "debuggraph",
-          .fallback = "0",
-          .help = "Whether the graph along the bottom of the screen is drawn.",
-          .kind = con::CvarKind::boolean,
-          .values = "0: only with timegraph (the default); 1: always"},
-         &s.debug_graph);
-  v.bind({.name = "graphheight",
-          .fallback = "32",
-          .help = "The graph's height along the bottom of the screen.",
-          .kind = con::CvarKind::integer,
-          .min = 0,
-          .max = 1000,
-          .values = "0..1000: that many units of the screen (32 the default)"},
-         &s.graph_height);
-  v.bind({.name = "graphscale",
-          .fallback = "1",
-          .help = "The graph's units a unit of value.",
-          .min = 0,
-          .max = 100,
-          .values = "0..100: 1 the default"},
-         &s.graph_scale);
-  v.bind({.name = "graphshift",
-          .fallback = "0",
-          .help = "The units added to every column of the graph.",
-          .min = -1000,
-          .max = 1000,
-          .values = "-1000..1000: 0 the default"},
-         &s.graph_shift);
   v.bind(
       {.name = "cl_adjustfov",
        .fallback = "1",

@@ -22,6 +22,7 @@
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "classic/protocol/directions.hpp"
+#include "classic/protocol/q2_limits.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/server/q2_native.hpp"
 #include "shooters_edge/server/q2_native_host.hpp"
@@ -614,4 +615,75 @@ TEST(a_game_without_enhanced_saves_is_not_saved_unless_allowed_at_start) {
   sv::RulesRunner safe = start_single();
   if (!safe) return;
   CHECK(said(*sv::native_q2_of(safe), "Game supports enhanced savegames."));
+}
+
+// THE EXTENDED LIMITS: a library that sets the protocol-extensions feature gets the extended
+// configstring layout and 8192 entities; its box (on model 300-odd, half seen, twice the size, a
+// quieter loop) goes to a protocol 36 viewer in the extended forms, the server data saying so.
+TEST(a_library_with_protocol_extensions_gets_the_extended_limits) {
+  namespace cp = ge::classic::protocol;
+  std::filesystem::path lib;
+  CHECK(sv::find_native_library(kRoot, "fixturemod", "base", lib));
+  sv::NativeQ2Options o;
+  o.library = lib;
+  o.max_clients = 4;
+  o.game = "fixturemod";
+  o.settings = {{"fixture_protoext", "1"}};
+  std::string error;
+  std::unique_ptr<sv::NativeQ2> made = sv::load_native_q2(o, error);
+  CHECK_MSG(made != nullptr, error);
+  if (!made) return;
+  made->map_checksum = 1234;
+  sv::RulesRunner r = sv::native_q2_runner(std::move(made));
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = hall();
+  CHECK_MSG(r.start(map, error), error);
+  sv::NativeQ2& s = *sv::native_q2_of(r);
+  CHECK(std::find(s.console.begin(), s.console.end(), "Game supports protocol extensions.") !=
+        s.console.end());
+  CHECK(s.raw.ext == 1);
+  CHECK(s.raw.config.size() == size_t(cp::kQ2CsExtended.end));
+  CHECK(s.raw.config[size_t(cp::kQ2CsExtended.map_checksum)] == "1234");
+  CHECK(s.raw.config[size_t(cp::kQ2CsExtended.models) + 1] == "maps/hall.bsp");
+  CHECK(s.raw.entities.size() == size_t(cp::kQ2LimitsExtended.entities));
+  const sv::Q2EntityState& box = s.raw.baselines[6];
+  CHECK(box.present && box.model[0] > 255 && box.model[0] != 255);
+  CHECK(box.alpha == 128 && box.scale == 32 && box.loop_volume == 128);
+  CHECK(s.raw.config[size_t(cp::kQ2CsExtended.models) + size_t(box.model[0])] == "models/n299.md2");
+  // A protocol 36 viewer at minor 1024: the flags word says the extensions, the streams end at
+  // the extended count, the box's baseline carries its wide fields.
+  sv::Q2WireOptions opt;
+  opt.protocol = 36;
+  opt.minor = 1024;
+  opt.ext = s.raw.ext;
+  sv::Q2Wire w;
+  sv::Q2Signon on;
+  sv::q2_signon_raw(w, s.raw, 0, opt, on);
+  CHECK(on.config_end == cp::kQ2CsExtended.end);
+  const std::vector<uint8_t>& sd = on.server_data;
+  CHECK(sd.size() >= 2 &&
+        ((sd[sd.size() - 2] | sd[sd.size() - 1] << 8) & cp::kQ2ServerFlagExtensions) != 0);
+  std::vector<std::vector<uint8_t>> streams;
+  sv::q2_signon_streams(on, opt.minor, streams);
+  CHECK(!streams.empty() && streams[0].size() > 2);
+  if (!streams.empty() && streams[0].size() > 2) {
+    const std::vector<uint8_t>& first = streams[0];
+    CHECK((first[first.size() - 2] | first[first.size() - 1] << 8) == cp::kQ2CsExtended.end);
+  }
+  bool box_sent = false;
+  for (const auto& [n, b] : on.baselines) {
+    if (n != 6) continue;
+    std::vector<uint8_t> want = {14};
+    const sv::Q2EntityState zero;
+    sv::q2_write_entity_ext(want, sv::q2_entity_flags_ext(zero, box, 6, true, 1), 6, zero, box, 1);
+    box_sent = b == want;
+  }
+  CHECK(box_sent);
+  // A frame to the viewer, once he is in: the box goes in the extended form.
+  r.connect(0, "tester", false, false, nullptr);
+  ticks(r, 10, 0);
+  std::vector<uint8_t> block, rel;
+  sv::q2_frame_raw(w, s.raw, 1, block, rel);
+  CHECK(!block.empty());
 }

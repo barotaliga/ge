@@ -385,3 +385,140 @@ from facts read, the working given) or [open] (the source does not settle it).
 - 2's puff model and light are the blaster-family routine (other kinds outside this list use it
   with other skins and colours); its particles are its own. [read]
 - 20, 22, 23 and 3 have no partner among the listed kinds. [read]
+
+## 28. Splash (kind 10)
+
+- (a) count byte, position, direction byte, splash-kind byte: 9 bytes in the plain protocol.
+  [read] A count of 0 makes no particles. [derived]
+- (b) count particles drawn exactly as the gunshot's puff (section 0: offsets, distance 0..31
+  along the normal, velocity, gravity, life 0.5..0.8 s); colour a base per kind plus 0..7 at
+  random: 0 unknown 0x00 (0..7), 1 sparks 0xe0 (224..231), 2 blue water 0xb0 (176..183),
+  3 brown water 0x50 (80..87), 4 slime 0xd0 (208..215), 5 lava 0xe0 (224..231), 6 blood 0xe8
+  (232..239); 7 or more as 0. [read] In the extended protocol only, kind 7 ("electric") throws
+  count/2 (rounded down) particles at base 0x6c (108..115) and (count+1)/2 at base 0xb0, then
+  sounds as kind 1. [read]
+- (c), (d) None. [read]
+- (e) Kind 1 only (and extended kind 7): world/spark5.wav with odds 1 in 4, world/spark6.wav
+  1 in 4, world/spark7.wav 2 in 4; volume 1, attenuation static (3), at the point on the "any"
+  channel. Every other kind is silent. [read]
+- (f) Senders in the shipped game: a bullet entering liquid sends count 8 with the surface
+  normal, kind 3 when the surface texture is *brwater, else 2 water, 4 slime, 5 lava (unknown
+  contents send nothing); target_splash sends its count, its direction and its "sounds" key as
+  the kind; a flying monster's attack sends count 32, kind 1. [read] The server ranks splash,
+  blood, gunshot, bullet sparks and shotgun lowest: when a packet's unreliable data overflows
+  they go only into what space is left after the other effects and the sounds. [read]
+
+## 29. Laser sparks (kind 15)
+
+- (a) count byte, position, direction byte, colour byte: 9 bytes. [read]
+- (b) count particles; colour the colour byte exactly, no random spread; start the point plus a
+  whole offset -4..+3 per axis plus the normal times one whole distance 0..7; velocity crand ×
+  20 per axis; gravity; life 0.5..0.8 s. [read]
+- (c), (d), (e) None: no model, no light, no sound. [read]
+- (f) The shipped game's BFG laser sends count 4, colour 0xd0 on hitting a non-creature; a
+  target_laser sends count 8 when it starts or its aim moves, colour the low byte of its packed
+  colours (240 red, 211 green, 241 blue, 223 yellow, 227 orange). [read; derived the bytes]
+
+## 30. The effect models' light, translucency, shadow and depth
+
+- Shadows: gl_shadows defaults to 0, so none by default. With it on, a model flagged "no
+  shadow" casts none, and a full-bright model casts none because it is never lit from the world
+  and so finds no ground. So the explosion model, the blaster's explode model, the gunshot flash
+  (full bright), the gunshot smoke and the cable segments (flagged), and every sprite cast no
+  shadow. [read and derived]
+- Sections 0, 2, 5 to 8, 20 and 25 hold: r_explode full bright, translucent from its first
+  frame with smooth explosions (opaque until f 10 without); the blaster's explode model full
+  bright and translucent; the smoke world-lit and translucent; the flash full bright and opaque,
+  s_bfg2 full bright and translucent. [read]
+- A translucent model is depth-tested, writes no depth and blends by ordinary alpha (source
+  alpha, one minus source alpha); an opaque one writes depth. No additive blend. The depth
+  pre-pass that hides a translucent model's own back faces is skipped for full-bright models,
+  so a translucent explosion shows its inner faces. [read and derived]
+- Order: translucent entities with alpha at most gl_draworder (default 1, so all) are drawn
+  after the world's translucent faces, the beams, the particles and the flares; with 0, before
+  them. Not sorted by distance. Sprites never write depth. [read]
+
+## 31. The effect models' origin
+
+- Every pool model sits at the message's position exactly, never pushed along the normal: the
+  smoke and flash of 0, 4 and 14, the explode model of 2, the explosions' model. [read]
+- The shipped game sends the trace's end point for gunshots, the bolt's origin at touch for
+  the blaster, and for rockets and grenades their origin moved back along their velocity by
+  0.02 s (13 units for a 650 units/s rocket). [read; derived the 13]
+- Any offset inside the model files' vertices. [open]
+
+## 32. RF_CUSTOMSKIN (256)
+
+- Only in the extended protocol; ignored in the plain one. [read]
+- The skin number indexes the image list (image configstrings, up to 2048 extended); that
+  image is the skin and the skin number becomes 0. It overrides a player's skin too. [read]
+- Image names in the extended protocol: a leading slash is a picture at that path; a name under
+  sprites/psx_flare a flare image; under sprites/ a sprite; any other name with an extension
+  and a slash a model skin at that path; anything else pics/NAME.pcx. [read]
+- Index 0 is never filled, so the model's own first skin is drawn; an index at or past the
+  limit is ignored (normal skin kept); a missing picture gives no image and the model's first
+  skin, silently unless developer is 2 or more. [read and derived]
+- For an extended flare entity the flag makes the frame number the flare picture's image
+  index instead. [read] The shipped game never sets it. [read]
+
+## 33. RF_USE_DISGUISE
+
+- Bit 18, value 262144. [read]
+- Only on the player model (index 255): the skin becomes players/MODEL/disguise.pcx for that
+  player's model folder (the base client info's when the player's is missing); a missing file
+  draws the model's first skin. [read and derived]
+- Honoured in every protocol, 34 included (render flags travel as 32 bits when needed). [read]
+- Not set by the shipped game (a mission pack's feature). An extended RF_CUSTOMSKIN overrides
+  it. [read]
+
+## 34. RDF_TELEPORT_BIT (16)
+
+- A toggle: a teleport is the bit differing from the previous frame's player state. [read]
+- On a flip the previous player state is replaced by the new one, so for that one frame
+  interval nothing in the player state lerps: the view origin when not predicting (demos,
+  cl_predict 0, the no-prediction flag), interpolated view angles, view offset, field of view,
+  screen and damage blends, fog, the gun's offset, angles and frame. The next frame lerps
+  normally. [read and derived]
+- Other entities are not affected (their own snap: a teleport event, a model change, a jump of
+  more than 512 units on an axis). Prediction is not affected: its error smoothing is dropped
+  only when the error is at most 1/8 unit or above 80 units (sum of the axes). [read]
+- The same snap also happens, in every protocol, when the previous frame is missing or not the
+  one before, the player origin jumps more than 256 units on an axis, the player's entity
+  carries a teleport event, the view's client number changes, or cl_nolerp is 1. [read]
+- Read only in the extended protocol (36 with minor 1024 or later and the server's extensions
+  flag, or demos 3434..3436); otherwise the toggle is movement-flag bit 7 (128), which the
+  extended protocol uses for "ignore player collision". Nothing in the shipped server or game
+  flips either. [read]
+
+## 35. Visibility and areas
+
+- The refresh unions the visibility of the view's cluster and of a point 16 units below (above
+  when the view is in a non-empty leaf such as water), unless that point is in solid. [read]
+- World leaves whose area bit is clear in the frame's area bits are not drawn; no area bits
+  means all drawn. A non-Q2PRO-protocol frame with none gets one byte 255. [read]
+- The client never culls entities by visibility or area, only by the frustum (gl_cull_models,
+  default 1). [read]
+- The server sends entities in a connected area that touch the visibility of the clusters under
+  a 16-unit box round the view; beams by the view cluster's hearing set; model-less effect or
+  sound entities only within 400 units (extended looping sounds by their attenuation); sv_novis
+  1 sends all. [read]
+- gl_novis (default 0) ignores visibility; gl_lockpvs (default 0, cheat) freezes it. [read]
+
+## 36. Cables (16, 19, 24)
+
+- Segment model frame 0, no lerp, the model's first skin. [read]
+- Drawn whether or not the source entity is in the frame. [read]
+- For a non-local source the start is the message's (plus 24's offset), fixed, not the entity's
+  interpolated origin. For the local player it is the predicted or interpolated player origin
+  before the view height is added, plus the offset. [read]
+- Replacement matches source and destination, and the destination is always 0 here, so the
+  same source replaces. Drawn while at most 200 ms old. [read]
+
+## 37. BFG explosion sprite and BFG laser, again
+
+- The sprite has no light but section 20's and no client sound. The shipped game sends one per
+  creature the blast reaches, at its origin, and plays weapons/bfg__x1b.wav itself for the main
+  blast. [read]
+- The laser's 0.30 alpha is the same under every renderer setting: palette alpha 255 times 0.30
+  gives 76. Depth-tested, no depth write, alpha-blended, fogged, feeds bloom when bloom is on, and
+  at beam style 0 the strip is skipped when the viewer is almost on its line. [read; derived 76]
