@@ -123,7 +123,7 @@ struct CommandGate {
 
 // A `$` macro's kind: a TEAM macro tells what a player holds or where they are (health, armour,
 // weapons, powerups, places), the words a strict ruleset keeps scripts from acting on.
-enum class MacroKind { plain, team };
+enum class MacroKind : uint8_t { plain, team };
 
 // A TEAM MACRO LIMIT (console/ruleset.hpp): while `when` holds (always when empty), a command line
 // that expanded a team macro may run only the `allowed` commands; any other command or setting
@@ -364,11 +364,9 @@ class Console {
   std::map<std::string, std::function<std::string()>> macros_;
   std::string width_prefix_, align_prefix_;  // set_macro_widths
   std::set<std::string> team_macros_;        // MacroKind::team
-  mutable bool expanded_team_ = false;       // the last expansion used a team macro
   std::optional<TeamMacroLimit> macro_limit_;
   std::optional<TriggerQuiet> trigger_quiet_;
   std::string wait_owner_, wait_why_;  // limit_waits
-  int wait_limit_ = 0, waits_in_row_ = 0;
   std::map<std::string, std::unique_ptr<Button>> buttons_;
   std::map<std::string, std::string> held_;  // key → the + command it went down with
   std::vector<Trigger> triggers_;
@@ -387,12 +385,14 @@ class Console {
   std::vector<std::string> output_;
   std::vector<Problem> problems_;
   const Args* current_ = nullptr;
-  int current_depth_ = 0;
   std::string current_via_;
-  bool current_team_ = false;  // the running line is held by a team macro limit
   // Whether what the running command queues is held by the team macro limit.
   bool held_by_team() const;
+  int current_depth_ = 0;
+  int wait_limit_ = 0, waits_in_row_ = 0;  // limit_waits
   bool waiting_ = false;
+  mutable bool expanded_team_ = false;  // the last expansion used a team macro
+  bool current_team_ = false;           // the running line is held by a team macro limit
 };
 
 // The game `scope`'s own file beside a cfg file: "empezar.cfg" under "baseq2" is
