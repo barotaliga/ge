@@ -266,6 +266,28 @@ void add_q2_chat_sound(con::Console& c, ChatExtras& x) {
                  &x.named_sound);
 }
 
+void add_q2_chat_place(con::Console& c, ChatExtras& x) {
+  c.cvars().bind({.name = "scr_chathud_x",
+                  .fallback = "8",
+                  .flags = con::kArchive,
+                  .help = "How far from the left the chat lines on screen start, in the 2D "
+                          "drawing's pixels.",
+                  .min = -4096,
+                  .max = 4096,
+                  .values = "8: eight pixels (the default); PIXELS: that many from the left"},
+                 &x.hud_x);
+  c.cvars().bind({.name = "scr_chathud_y",
+                  .fallback = "-64",
+                  .flags = con::kArchive,
+                  .help = "Where the chat lines on screen sit, in the 2D drawing's pixels.",
+                  .min = -4096,
+                  .max = 4096,
+                  .values = "-64: their foot 64 pixels up from the bottom (the default); a "
+                            "negative number: that far up from the bottom; 0 or more: their top "
+                            "that far down from the top"},
+                 &x.hud_y);
+}
+
 const char* q2_chat_sound(const std::string& named) {
   if (named.empty() || named == "0") return nullptr;
   if (named == "1") return kTalk;

@@ -716,6 +716,29 @@ TEST(q2_chat_sound_and_auto_chat_are_its_own_and_go_with_it) {
   CHECK(v.clashes().empty());
 }
 
+TEST(q2s_demo_and_chat_lines_place_are_its_own_and_go_with_it) {
+  Window w(pr::kGameProfiles[0]);
+  const auto has_demo = [&w] {
+    for (const auto& [name, target] : w.console.command_synonyms())
+      if (name == "demo") return target == "playdemo";
+    return false;
+  };
+  CHECK(!has_demo());  // Quake has no `demo`
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2, {});
+  CHECK(has_demo());
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
+  CHECK(!has_demo());
+  // Its chat lines' place in its own pixels, only while it is loaded (others: hud_chat_*).
+  cl::switch_game_cvars(w.console, w.game, *q2, {.chat = &w.chat});
+  w.console.execute("scr_chathud_x 20; scr_chathud_y -100");
+  CHECK(w.chat.hud_x == 20 && w.chat.hud_y == -100);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {.chat = &w.chat});
+  CHECK(w.console.cvars().find("scr_chathud_x") == nullptr);
+}
+
 TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();

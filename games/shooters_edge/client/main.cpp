@@ -711,8 +711,7 @@ int run_main(int argc, char** argv) {
   cl::bind_remix(console.cvars(), &remix_settings);
   loader.remix = &remix;
   // Quake II's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
-  // Under Quake II's own bar: the chat lines on screen (scr_chathud) alone of the HUD, in the
-  // bar's letters (scr_font).
+  // Under it: the chat lines on screen (scr_chathud) alone of the HUD, in its letters (scr_font).
   se::HudArt chat_art;  // its letters, copied again when scr_font's picture changes
   const ge::ui::Image* chat_font = nullptr;
   const auto q2_chat_lines = [&](cl::Q2Bar& bar, const se::Status& status) {
@@ -723,7 +722,11 @@ int run_main(int argc, char** argv) {
     }
     se::fill_hud(hud, status, chat_art);
     se::keep_chat_only(hud);
-    hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style(chat_art));
+    const ge::hud::Frame f = hud.layout.frame(w, h, se::hud_style());
+    const cl::ChatExtras& x = remote.ignore.chat;  // at Quake II's scr_chathud_x and _y
+    const auto kept = se::place_chat_px(hud, f, x.hud_x, x.hud_y, cl::q2_bar_scale(bar, w, h));
+    if (console.cvars().find("scr_chathud_x") == nullptr) se::restore_chat(hud, kept);  // remix
+    hud.layout.draw(overlay, f, se::hud_style(chat_art)), se::restore_chat(hud, kept);
   };
   // cl_thirdperson's doors and platforms: the map's brush models where the last frame drew them.
   std::vector<cl::BehindMover> behind_scratch;

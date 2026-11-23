@@ -144,6 +144,33 @@ TEST(keep_chat_only_leaves_the_chat_lines_alone_on) {
   CHECK(!content(hud, "sbar").on && !content(hud, "crosshair").on && content(hud, "chat").on);
 }
 
+// Quake II's scr_chathud_x and _y place its chat lines by its 2D pixels, then the player's
+// hud_chat_* place comes back for every other game.
+TEST(quake_iis_chat_lines_sit_at_its_pixels_and_the_players_place_comes_back) {
+  se::Hud hud = se::make_hud();
+  gh::Feed feed{4, -1, 1, 0.15};
+  feed.push("Ranger: hello", ui::Color{1, 1, 1, 1}, 0);
+  hud.chat = &feed;
+  se::fill_hud(hud, armed(), art());
+  se::keep_chat_only(hud);
+  const gh::Element& chat = hud.layout[static_cast<size_t>(hud.layout.find("chat"))];
+  const gh::ElementPlace before = chat.place;
+  const gh::Style st = se::hud_style();
+  const gh::Frame f = hud.layout.frame(1280, 960, st);
+  ui::DrawList dl;
+  dl.begin(1280, 960);
+  const gh::ElementPlace kept = se::place_chat_px(hud, f, 8, -64, 2);  // the defaults, scale 2
+  hud.layout.draw(dl, f, st);
+  CHECK_MSG(std::abs(chat.drawn.x - 16) < 0.5f, std::to_string(chat.drawn.x));
+  CHECK_MSG(std::abs(chat.drawn.y + chat.drawn.h - (960 - 128)) < 0.5f,
+            std::to_string(chat.drawn.y + chat.drawn.h));
+  se::restore_chat(hud, kept);
+  CHECK(chat.place.x == before.x && chat.place.y == before.y && chat.place.anchor == before.anchor);
+  se::place_chat_px(hud, f, 8, 40, 1);  // 0 or more: the top that far down
+  hud.layout.draw(dl, f, st);
+  CHECK_MSG(std::abs(chat.drawn.y - 40) < 0.5f, std::to_string(chat.drawn.y));
+}
+
 TEST(hud_sbar_0_draws_the_classic_pieces_without_either_panel) {
   se::Hud hud = se::make_hud();
   ge::console::Console con;
