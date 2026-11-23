@@ -34,7 +34,9 @@ namespace {
 
 constexpr double kRetry = 1.0;       // s between connectionless retries
 constexpr double kChunkRetry = 0.5;  // s before a chunk is asked for again
-constexpr int kChunksPerTick = 8;
+constexpr int kChunksPerTick = 30;   // chunks asked for in one packet (a stock client's default)
+constexpr size_t kChunkAsksBytes = 1024;  // the most a packet's chunk asks fill
+constexpr size_t kChunkOobMin = 100;      // an out-of-band chunk is longer (1044 bytes)
 
 std::string hex32(uint32_t v) {
   char b[16];
@@ -136,7 +138,7 @@ void next_skin_or_begin(QwClientEnd& c) {
     c.dl.name = path;
     c.dl.active = true;
     c.dl.chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
-    c.dl.number = static_cast<int>(c.downloaded.size()) + 1;
+    c.dl.number = ++c.downloads_started;
     client_command(c, "download " + path);
     return;
   }
@@ -189,21 +191,47 @@ void start_skins(QwClientEnd& c) {
 
 // The web downloads moved on: each file fetched kept as one over the channel; once none is left
 // (or the web gave its files back), the channel's turn.
+uint32_t version_sum(const std::string& map, const std::vector<uint8_t>& bsp);
+void next_content_or_prespawn(QwClientEnd& c);
+
 void step_web(QwClientEnd& c) {
   wd::WebDone done;
   wd::web_step(
       c.web, web_config(c), c.now,
       [&c](const std::string& path, bool) { return !has_file(c, path); }, done);
+  const std::string& world = c.models.size() >= 2 ? c.models[1] : std::string();
   for (auto& [path, bytes] : done.files) {
+    if (c.web_version && path == world) {  // the server's version of a map the player has
+      c.web_version = false;
+      const uint32_t sum = version_sum(path, bytes);
+      const std::string kept =
+          c.cfg.keep_version ? c.cfg.keep_version(path, sum, bytes) : std::string();
+      c.downloaded[kept.empty() ? path + "#" + std::to_string(sum) : kept] = std::move(bytes);
+      c.map_version = kept;
+      c.map_sum = sum;
+      continue;
+    }
+    if (c.prespawn_held && path == world) c.map_sum = version_sum(path, bytes);  // one it lacked
     if (c.cfg.keep_file) c.cfg.keep_file(c.gamedir, path, bytes, nullptr);
     c.downloaded[path] = std::move(bytes);
   }
-  c.wanted_skins.insert(c.wanted_skins.begin(), done.back.begin(), done.back.end());
-  if (!wd::web_busy(c.web) && !c.dl.active && !c.prespawn_held) next_skin_or_begin(c);
+  // What the web gave back goes over the channel: the map's version asked there again.
+  for (const std::string& path : done.back) {
+    if (c.web_version && path == world) {
+      c.web_version = false;
+      c.fetch_version = true;
+    } else if (c.prespawn_held) {
+      c.wanted_content.push_back(path);
+    } else {
+      c.wanted_skins.insert(c.wanted_skins.begin(), path);
+    }
+  }
+  if (wd::web_busy(c.web) || c.dl.active) return;
+  if (c.prespawn_held)
+    next_content_or_prespawn(c);
+  else
+    next_skin_or_begin(c);
 }
-
-uint32_t version_sum(const std::string& map, const std::vector<uint8_t>& bsp);
-void next_content_or_prespawn(QwClientEnd& c);
 
 void finish_download(QwClientEnd& c, bool ok) {
   if (c.fetch_version && c.dl.name == c.models[1]) {  // the server's version of the map
@@ -357,8 +385,11 @@ void on_stufftext(QwClientEnd& c, const std::string& text) {
     } else if (cmd == "fullserverinfo") {
       c.serverinfo = pg::word(w, 1);
       // The web address files are fetched from: the server's, else the player's own.
-      wd::web_connect(c.web, web_config(c), info_get(c.serverinfo, "*dlserver"),
-                      c.cfg.fetch_looks ? 1 : 0, gn::to_string(c.server));
+      // A server that names its address the other engines' way (`sv_dlURL`) is read too.
+      std::string dl = info_get(c.serverinfo, "*dlserver");
+      if (dl.empty()) dl = info_get(c.serverinfo, "sv_dlURL");
+      wd::web_connect(c.web, web_config(c), dl, c.cfg.fetch_looks ? 1 : 0, gn::to_string(c.server),
+                      info_get(c.serverinfo, "*dlpin"));
       const std::string z = info_get(c.serverinfo, "*z_ext");
       c.ext[ExtFamily::z] = c.cfg.ask[ExtFamily::z] & static_cast<uint32_t>(std::atoi(z.c_str()));
       const std::string ge = info_get(c.serverinfo, "*ge_ext");
@@ -403,6 +434,9 @@ void on_stufftext(QwClientEnd& c, const std::string& text) {
         if (c.stage == ClientStage::active) c.stage = ClientStage::signon;
         client_command(c, "new");
       }
+    } else if (!cmd.empty() && cmd != "bf" && !line.starts_with("//") &&
+               c.to_run.size() < kStuffedKept) {
+      c.to_run.push_back(line);  // the rest runs in the window's console, as the server's
     }
   }
 }
@@ -456,12 +490,33 @@ void send_prespawn(QwClientEnd& c) {
 
 // The next of the content lacked asked for, or, with none left, `prespawn`.
 void next_content_or_prespawn(QwClientEnd& c) {
+  // From the server's web address first, the map and the rest at once: the channel waits until
+  // the web is done and takes what it gave back.
+  if (c.web.on && !c.dl.active) {
+    const wd::WebConfig w = web_config(c);
+    if (c.fetch_version && !c.web.asked.contains(c.models[1])) {
+      c.fetch_version = false;
+      c.web_version = true;
+      wd::web_queue(c.web, w, c.models[1]);
+    }
+    // A path the web was asked for already came back from it: the channel's now.
+    std::vector<std::string> channel;
+    for (const std::string& path : c.wanted_content) {
+      if (has_file(c, path)) continue;
+      if (c.web.asked.contains(path))
+        channel.push_back(path);
+      else
+        wd::web_queue(c.web, w, path);
+    }
+    c.wanted_content = std::move(channel);
+    if (wd::web_busy(c.web)) return;
+  }
   if (c.fetch_version && !c.dl.active) {  // the server's version of the map, before the rest
     c.dl = ClientDownload{};
     c.dl.name = c.models[1];
     c.dl.active = true;
     c.dl.chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
-    c.dl.number = static_cast<int>(c.downloaded.size()) + 1;
+    c.dl.number = ++c.downloads_started;
     client_command(c, "download " + c.dl.name);
     return;
   }
@@ -473,7 +528,7 @@ void next_content_or_prespawn(QwClientEnd& c) {
     c.dl.name = path;
     c.dl.active = true;
     c.dl.chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
-    c.dl.number = static_cast<int>(c.downloaded.size()) + 1;
+    c.dl.number = ++c.downloads_started;
     client_command(c, "download " + path);
     return;
   }
@@ -865,10 +920,14 @@ void read_oob(QwClientEnd& c, const uint8_t* data, size_t size) {
   if (size == 1 && data[0] == 'l') return;
   if (size < 5) return;
   const char type = static_cast<char>(data[4]);
-  if (size > 10 && std::memcmp(data + 4, "\\chunk", 6) == 0) {
+  // A download's chunk sent out of band: a print ('n') whose text starts `\chunk`, then the
+  // download's number, the download message's id and its chunk. Never printed: one from an
+  // earlier download (its number another) is dropped, so it never lands in this one's bytes.
+  if (size > kChunkOobMin && type == 'n' && std::memcmp(data + 5, "\\chunk", 6) == 0) {
     gn::Reader r = gn::make_reader(data, size);
-    r.at = 10;
-    read_long(r);  // the download's number
+    r.at = 11;
+    const int32_t number = read_long(r);
+    if (number != c.dl.number || gn::read_u8(r) != svc::download) return;
     const int32_t chunk = read_long(r);
     const uint8_t* p = gn::read_view(r, kChunkBytes);
     c.chunks_oob++;
@@ -1184,7 +1243,8 @@ void client_tick(QwClientEnd& c, int64_t now_us) {
   }
   if (c.dl.active && c.dl.chunked && c.dl.size > 0) {
     int asked = 0;
-    for (size_t i = 0; i < c.dl.have.size() && asked < kChunksPerTick; i++) {
+    for (size_t i = 0;
+         i < c.dl.have.size() && asked < kChunksPerTick && w.size + 32 <= kChunkAsksBytes; i++) {
       if (c.dl.have[i] || (c.dl.asked[i] >= 0 && c.now - c.dl.asked[i] < kChunkRetry)) continue;
       c.dl.asked[i] = c.now;
       int held = 0;

@@ -405,8 +405,9 @@ void cmd_setinfo(QwServer& s, int slot, const std::string& key, const std::strin
   }
 }
 
-// A path the download switches allow; false with the reason.
-bool download_allowed(const QwServer& s, const std::string& path, std::string& why) {
+}  // namespace
+
+bool qw_download_allowed(const QwServer& s, const std::string& path, std::string& why) {
   if (!s.cfg.allow_download) {
     why = "downloads are off";
     return false;
@@ -431,6 +432,8 @@ bool download_allowed(const QwServer& s, const std::string& path, std::string& w
   if (!ok) why = "that kind of file is not offered";
   return ok;
 }
+
+namespace {
 
 // The QuakeWorld transfer's next block on the reliable stream.
 void download_block(QwServer& s, int slot) {
@@ -466,7 +469,7 @@ void cmd_download(QwServer& s, int slot, std::string path) {
   c.dl = ServerDownload{};
   std::string why;
   int file = -1;
-  if (download_allowed(s, path, why)) {
+  if (qw_download_allowed(s, path, why)) {
     for (size_t i = 0; i < s.cfg.files.size(); i++)
       if (s.cfg.files[i].path == path) file = static_cast<int>(i);
     std::vector<uint8_t> bytes;
@@ -786,14 +789,14 @@ void send_download_chunks(QwServer& s, int slot, gn::Writer& dgram) {
     } else {
       uint8_t buf[kChunkBytes + 32];
       gn::Writer w = gn::make_writer(buf, sizeof buf);
+      // A print ('n') whose text starts `\chunk`, the download's number, then the whole
+      // download message (its id too): 1044 bytes, as every stock client reads it.
       gn::write_u32(w, 0xffffffffu);
+      gn::write_u8(w, 'n');
       gn::write_bytes(w, "\\chunk", 6);
       write_long(w, d.number);
-      gn::Writer body = gn::make_writer(buf + w.size, sizeof buf - w.size);
-      write_svc(body, m, ctx);
-      // The out-of-band form carries the body without its id byte.
-      std::memmove(buf + w.size, buf + w.size + 1, body.size - 1);
-      send_oob(s, c.address, buf, w.size + body.size - 1);
+      write_svc(w, m, ctx);
+      send_oob(s, c.address, buf, w.size);
       s.counts.chunks_oob++;
     }
     d.blocks++;

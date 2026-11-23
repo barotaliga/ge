@@ -292,6 +292,9 @@ struct DemoState {
   sh::Vec3f gun_angles, gun_offset;
   float fov = 0;    // Quake II: the field of view the server sends, degrees (0: none sent)
   int rdflags = 0;  // Quake II: the view's bits (kQ2RdIrGoggles: infra-red goggles on)
+  // Quake II: the tint over the view the server sends (0..255 each: r g b a), and the damage
+  // flash where the stream keeps it apart (an extended recording's), else all 0.
+  uint8_t q2_blend[4] = {}, q2_damage[4] = {};
   // Quake II: the music track the server names (its configstring 1; 0 none, -1 never named).
   int cdtrack = -1;
   // Quake II's music named by text (a file under `music/`), "" when the server sends a number.
@@ -409,7 +412,7 @@ struct Q2View {
   int32_t origin[3] = {}, velocity[3] = {};  // in 1/8 unit (wider than a short on 3435 on)
   int16_t delta[3] = {}, angles[3] = {};
   int8_t offset[3] = {}, kick[3] = {}, gun_offset[3] = {}, gun_angles[3] = {};
-  uint8_t blend[4] = {};
+  uint8_t blend[4] = {}, damage_blend[4] = {};  // the damage flash: an extended stream's alone
   int pm_type = 0, pm_time = 0, pm_flags = 0, gravity = 0;
   int gun_model = 0, gun_frame = 0, fov = 0, rdflags = 0;
   int16_t stats[64] = {};  // 32 before protocol 3435
@@ -511,6 +514,12 @@ struct Demo {
   // stock move's (with the server's stated air acceleration) until then.
   bool feel_told = false;
   ge::classic::Q2Feel feel;
+  // The weapons the player holds (a bit by Quake II's weapon row) and his ammunition of each kind
+  // (shells, bullets, grenades, rockets, cells, slugs from 1) our server of Quake II last told
+  // (svc 118), when it told them: the weapon prediction's knowledge of a change.
+  bool arsenal_told = false;
+  uint16_t arsenal_weapons = 0;
+  int16_t arsenal_ammo[7] = {};
   // Our server of Quake II takes this client's voice (svc 121's empty message as it entered);
   // the voices it relays go into `DemoState::voice` as Quake's do.
   bool voice_taken = false;

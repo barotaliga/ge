@@ -19,6 +19,7 @@
 #include "core/math.hpp"
 #include "shooter/hull.hpp"
 #include "shooter/map_spec.hpp"
+#include "shooter/pmove.hpp"
 #include "shooter/world.hpp"
 #include "shooterbots/entities.hpp"
 #include "shooterbots/nav_script.hpp"
@@ -772,12 +773,83 @@ std::vector<sb::NavExtraLink> teleport_links(sb::NavGraph& g, const ge::shooter:
 // kPushLand across; across (a heading), the nearest beyond its far face. e3m5 starts under one
 // ("Jump up here"), the only way out of its first room.
 std::vector<sb::NavExtraLink> push_links(const sb::NavGraph& g, const ge::shooter::MapSpec& spec,
-                                         const std::vector<sb::EntityBlock>& blocks) {
+                                         const std::vector<sb::EntityBlock>& blocks,
+                                         const sh::MoveWorld& world, const sh::MoveSettings& move) {
   constexpr float kPushLand = 256;
   constexpr float kPushOver = 160;   // its landing at most this far over its top, units
   constexpr float kPushJump = 44;    // a standing jump's rise (its apex near 45), near enough
   constexpr float kPushMiddle = 20;  // an updraft's middle: this far in from its sides, units
+  constexpr float kPushDown = 64;    // a flight's landing node at most this far from where it lands
+  constexpr float kStepHeightNav = 32;  // and within this of its height, units
   std::vector<sb::NavExtraLink> out;
+  // Every push that is on from the start, and the velocity it gives whoever is in it (its speed
+  // times ten along its angle; straight up for -1).
+  struct Push {
+    ModelBox box;
+    sh::Vec3f v;
+  };
+  std::vector<Push> all;
+  for (const sb::EntityBlock& b : blocks) {
+    const char* cn = sb::block_value(b, "classname");
+    if (!cn || std::strcmp(cn, "trigger_push") != 0 || sb::block_value(b, "targetname")) continue;
+    const char* model = sb::block_value(b, "model");
+    if (!model || model[0] != '*' || std::atoi(model + 1) <= 0) continue;
+    const ModelBox box = model_box(spec, std::atoi(model + 1));
+    if (!box.ok) continue;
+    const char* av = sb::block_value(b, "angle");
+    const char* sv = sb::block_value(b, "speed");
+    const double angle = av ? std::atof(av) : 0;
+    const float speed = 10 * (sv && std::atof(sv) > 0 ? static_cast<float>(std::atof(sv)) : 1000);
+    const double a = angle * ge::core::kPi / 180;
+    const sh::Vec3f v = angle == -1 ? sh::Vec3f{0, 0, speed}
+                        : angle == -2
+                            ? sh::Vec3f{0, 0, -speed}
+                            : sh::Vec3f{static_cast<float>(ge::core::libm::cos(a)) * speed,
+                                        static_cast<float>(ge::core::libm::sin(a)) * speed, 0};
+    all.push_back({box, v});
+  }
+  const auto in_push = [&](sh::Vec3f o) {
+    for (size_t k = 0; k < all.size(); k++) {
+      const ModelBox& p = all[k].box;
+      if (o.x + 16 > p.mins.x && o.x - 16 < p.maxs.x && o.y + 16 > p.mins.y &&
+          o.y - 16 < p.maxs.y && o.z + 32 > p.mins.z && o.z - 24 < p.maxs.z)
+        return static_cast<int>(k);
+    }
+    return -1;
+  };
+  // Where a player let go in push `self` at `start` comes down, carried on through every push he
+  // flies into (e3m5's tube up into a draft south, into another, then a long fall onto the far
+  // ledge, 800 units on): false when he falls back into `self` (an updraft's top, left by the
+  // keys, not by the draft) or is still in the air after kFlight_s.
+  constexpr int kFlightSteps = 400;
+  constexpr float kMaxVelocity = 2000;  // sv_maxvelocity's default, units/s  // ~5 s of 13 ms moves
+  const auto fly = [&](size_t self, sh::Vec3f start, sh::Vec3f& at, float& secs) {
+    sh::MoveState st;
+    st.origin = start;
+    st.maxspeed = move.maxspeed;
+    sh::MoveCmd c;
+    c.msec = 13;
+    bool out_of_self = false;
+    for (int i = 0; i < kFlightSteps; i++) {
+      const int in = in_push(st.origin);
+      if (in >= 0) {
+        if (static_cast<size_t>(in) == self && out_of_self) return false;
+        st.velocity = all[static_cast<size_t>(in)].v;
+        st.ground = -1;
+      }
+      // The server bounds every component to sv_maxvelocity: a push's 10000 units/s flies 2000.
+      for (float* c3 : {&st.velocity.x, &st.velocity.y, &st.velocity.z})
+        *c3 = std::clamp(*c3, -kMaxVelocity, kMaxVelocity);
+      if (in < 0 || static_cast<size_t>(in) != self) out_of_self = true;
+      sh::player_move(st, c, move, world);
+      if (st.ground >= 0 && in_push(st.origin) < 0) {
+        at = st.origin;
+        secs = static_cast<float>(i + 1) * 0.013f;
+        return true;
+      }
+    }
+    return false;
+  };
   for (const sb::EntityBlock& b : blocks) {
     const char* cn = sb::block_value(b, "classname");
     if (!cn || std::strcmp(cn, "trigger_push") != 0 || sb::block_value(b, "targetname")) continue;
@@ -799,7 +871,32 @@ std::vector<sb::NavExtraLink> push_links(const sb::NavGraph& g, const ge::shoote
                                           mid.y + dy * (box.maxs.y - box.mins.y) * 0.5f, mid.z};
     int32_t land = -1;
     float land_d = kPushLand;
-    for (size_t n = 0; n < g.nodes.size(); n++) {
+    size_t self = 0;  // this push in `all`
+    while (self + 1 < all.size() &&
+           (all[self].box.mins.x != box.mins.x || all[self].box.mins.y != box.mins.y ||
+            all[self].box.mins.z != box.mins.z))
+      self++;
+    // Flown: the node where the flight comes down.
+    sh::Vec3f down{0, 0, 0};
+    float flight_s = 0;
+    const sh::Vec3f from = up ? sh::Vec3f{mid.x, mid.y, box.mins.z + 24} : mid;
+    const bool flown = fly(self, from, down, flight_s);
+    if (flown) {
+      float best = kPushDown;
+      for (size_t n = 0; n < g.nodes.size(); n++) {
+        const sh::Vec3f o = g.nodes[n].origin;
+        if (g.nodes[n].swim || o.z > down.z + kStepHeightNav || o.z < down.z - kStepHeightNav)
+          continue;
+        const float d =
+            std::sqrt((o.x - down.x) * (o.x - down.x) + (o.y - down.y) * (o.y - down.y));
+        if (d < best) {
+          land = static_cast<int32_t>(n);
+          best = d;
+        }
+      }
+    }
+    const bool guess = land < 0;  // not flown, or no floor where it comes down
+    for (size_t n = 0; guess && n < g.nodes.size(); n++) {
       const sh::Vec3f o = g.nodes[n].origin;
       if (g.nodes[n].swim) continue;
       const bool inside = o.x + 16 > box.mins.x && o.x - 16 < box.maxs.x && o.y + 16 > box.mins.y &&
@@ -1045,7 +1142,8 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
   sb::build_nav(out.world, out.movers, out.move, set, out.graph);
   std::vector<sb::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
-  const std::vector<sb::NavExtraLink> pushes = push_links(out.graph, spec, blocks);
+  const std::vector<sb::NavExtraLink> pushes =
+      push_links(out.graph, spec, blocks, out.world, out.move);
   teleports.insert(teleports.end(), pushes.begin(), pushes.end());
   sb::nav_add_links(out.graph, teleports);
   if (spec.brushes) {

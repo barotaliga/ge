@@ -479,17 +479,19 @@ const char* remote_stage_words(ClientStage s) {
 
 namespace {
 
-std::string size_words(size_t bytes) {
-  constexpr size_t kKb = 1024, kMb = kKb * kKb;
-  if (bytes < 10 * kKb) return std::to_string(bytes) + " bytes";
-  if (bytes < 10 * kMb) return std::to_string(bytes / kKb) + " KB";
-  return std::to_string(bytes / kMb) + " MB";
+std::string coming(const std::string& name, int percent, double& progress) {
+  progress = std::clamp(percent, 0, 100) / 100.0;
+  return name;  // the console draws the bar and the percentage after it
 }
 
-std::string coming(const std::string& name, int percent, size_t bytes, double& progress) {
-  percent = std::clamp(percent, 0, 100);
-  progress = percent / 100.0;
-  return name + " " + std::to_string(percent) + "% (" + size_words(bytes) + ")";
+// The file the web downloads are fetching and its share (-1 while its size is unknown); "" none.
+std::string coming_by_web(const ge::classic::content::WebDownloads& h, double& progress) {
+  ge::classic::content::WebProgress p;
+  if (!ge::classic::content::web_progress(h, p)) return {};
+  progress = p.total > 0
+                 ? std::clamp(static_cast<double>(p.got) / static_cast<double>(p.total), 0.0, 1.0)
+                 : -1;
+  return p.path;
 }
 
 }  // namespace
@@ -523,21 +525,31 @@ std::string remote_foot(const Remote& r, double& progress) {
   if (r.q2) {
     const Q2ClientEnd& c = *r.q2;
     if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
-    if (!c.fetching.empty())
-      return coming(c.fetching, c.fetched_percent, c.fetched_bytes.size(), progress);
+    if (std::string web = coming_by_web(c.http, progress); !web.empty()) return web;
+    if (!c.fetching.empty()) return coming(c.fetching, c.fetched_percent, progress);
     return c.stage == ClientStage::signon ? loading : std::string();
   }
   const QwClientEnd& c = r.end;
   if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
+  if (std::string web = coming_by_web(c.web, progress); !web.empty()) return web;
   if (c.dl.active) {
     int percent = c.dl.percent;
     if (c.dl.chunked && !c.dl.have.empty())
       percent = static_cast<int>(std::count(c.dl.have.begin(), c.dl.have.end(), true) * 100 /
                                  static_cast<std::ptrdiff_t>(c.dl.have.size()));
-    return coming(c.dl.name, percent,
-                  c.dl.size > 0 ? static_cast<size_t>(c.dl.size) : c.dl.bytes.size(), progress);
+    return coming(c.dl.name, percent, progress);
   }
   return c.stage == ClientStage::signon ? loading : std::string();
+}
+
+void remote_console_foot(Remote& r, ge::console::ConsoleView& view) {
+  double share = -1;
+  std::string foot = remote_foot(r, share);  // first: it sets the share the call below reads
+  view.set_foot(std::move(foot), share);
+  if (const bool joining = r.active && !view.foot().empty(); joining != r.console_held) {
+    r.console_held = joining;
+    view.set_full(joining);
+  }
 }
 
 namespace {
@@ -683,6 +695,11 @@ std::string remote_queue_step(Remote& r, std::vector<std::string>& said) {
   if (l.queue_opened) gn::close_transport(l.queue_own);
   l.queue_opened = false;
   return q.view.address;
+}
+
+void remote_run_stuffed(Remote& r, ge::console::Console& con) {
+  const auto source = r.q2 ? ge::console::Source::local : ge::console::Source::server;
+  for (const std::string& line : std::exchange(r.stuffed_run, {})) con.execute(line, source);
 }
 
 void remote_queue_frame(Remote& r, ge::console::Console& con) {
@@ -1023,16 +1040,13 @@ void user_info_step(Remote& r) {
   const std::string rate_text = r.setting("rate");
   const int rate = rate_text.empty() ? 0 : std::atoi(rate_text.c_str());
   const std::string password = r.setting("password");
-  if (r.q2) {
+  if (r.q2) {  // name, skin, hand, fov, msg, gender, rate and password (q2_remote.hpp)
     Q2ClientConfig& q = r.q2->cfg;
     if (const std::string f = r.setting("cl_footsteps"); !f.empty()) {  // told on protocol 36
       q.no_footsteps = std::atoi(f.c_str()) == 0;
       q2_client_settings(*r.q2);
     }
-    if ((rate <= 0 || rate == q.rate) && password == q.password) return;
-    if (rate > 0) q.rate = rate;
-    q.password = password;
-    q2_client_userinfo(*r.q2);
+    if (q2_user_info_moved(q, r.setting)) q2_client_userinfo(*r.q2);
     return;
   }
   ClientConfig& c = r.end.cfg;
@@ -1055,6 +1069,13 @@ void user_info_step(Remote& r) {
     client_command(r.end, std::string("setinfo ") + key + " " + std::to_string(*held));
   }
   if (password_moved) client_command(r.end, "setinfo password \"" + password + "\"");
+  // A new name or skin: the server shows it at once.
+  for (const auto& [key, held] : {std::pair{"name", &c.name}, std::pair{"skin", &c.skin}}) {
+    const std::string now = r.setting(key);
+    if (now.empty() || now == *held) continue;
+    *held = now;
+    client_command(r.end, std::string("setinfo ") + key + " \"" + now + "\"");
+  }
   // `msg` and `noaim` as they now are.
   if (const std::string m = r.setting("msg"); !m.empty() && std::atoi(m.c_str()) != c.msg) {
     c.msg = std::atoi(m.c_str());
@@ -1129,6 +1150,8 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   }
   r.end.oob_prints.clear();
   for (std::string& line : std::exchange(r.end.web.said, {})) said.push_back(std::move(line));
+  for (std::string& line : std::exchange(r.end.to_run, {}))
+    r.stuffed_run.push_back(std::move(line));
   // The server refused this version of its map: joined again at once with another (the next one
   // kept, else the server's own fetched; classic/content/map_versions.hpp), while there is one.
   if (r.end.stage == ClientStage::dropped && r.end.map_refused && !r.end.version_unfetched &&
@@ -1274,6 +1297,9 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   if (!r.predicted) r.ahead_count = 0;
   own_ahead(r, d.state, draw_s);
   if (!any || d.state.map.empty()) return RemoteStep::waiting;
+  // The level is loaded once the files it needs are here: while its map or models still come
+  // (the content fetched before prespawn) the window shows the console and the download's bar.
+  if (r.end.prespawn_held) return RemoteStep::waiting;
   if (d.state.levels != r.levels || (r.kept && r.end.begun)) {
     r.levels = d.state.levels;
     if (r.end.begun) r.kept = false;  // what was fetched joining is read with the level
@@ -1380,6 +1406,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.web.default_url = cvar("cl_http_default_url", "");
     cfg.web.debug = cvar("cl_http_debug", "0") != "0";
     cfg.web.insecure = cvar("cl_http_insecure", "0") != "0";
+    cfg.web.max_rate_kb = std::atoll(cvar("cl_http_max_rate", "0").c_str());
+    cfg.web.max_size_mb = std::atoll(cvar("cl_http_max_size", "512").c_str());
     cfg.rate = std::atoi(cvar("rate", "25000").c_str());  // the loaded game's default (classic)
     cfg.msg = std::atoi(cvar("msg", "1").c_str());
     cfg.noaim = cvar("noaim", "0") == "1";
@@ -1699,6 +1727,23 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                      .help = "Whether a secure web address's certificate goes unchecked.",
                      .kind = ge::console::CvarKind::boolean,
                      .values = "0: checked (the default); 1: not"});
+    con.cvars().add({.name = "cl_http_max_rate",
+                     .fallback = "0",
+                     .flags = ge::console::kArchive,
+                     .help = "The fastest web downloads come, in kilobytes a second, all together.",
+                     .kind = ge::console::CvarKind::integer,
+                     .min = 0,
+                     .max = 10000000,
+                     .values = "0: as fast as the server sends (the default); N: that many kB a "
+                               "second"});
+    con.cvars().add({.name = "cl_http_max_size",
+                     .fallback = "512",
+                     .flags = ge::console::kArchive,
+                     .help = "The largest file taken from the web, in megabytes.",
+                     .kind = ge::console::CvarKind::integer,
+                     .min = 1,
+                     .max = 100000,
+                     .values = "512: half a gigabyte (the default); N: that many megabytes"});
     con.cvars().add({.name = "cl_http_debug",
                      .fallback = "0",
                      .help = "Whether each web download's address is said as it starts.",

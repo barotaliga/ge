@@ -8,6 +8,7 @@
 #include "shooters_edge/net/qw_remote_rulesets.hpp"
 
 #include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "console/console.hpp"
@@ -83,4 +84,29 @@ TEST(f_ruleset_alone_explains_the_answers) {
   CHECK(printed(con, "f_ruleset check: ask everyone now."));
   con.execute("f_ruleset check");
   CHECK(printed(con, "You are not connected to a server."));
+}
+
+TEST(a_change_of_cl_fakeshaft_in_a_match_is_said_to_everyone) {
+  ge::console::Console con{false};
+  cn::Remote r;
+  r.q2_game = [] { return false; };
+  cn::add_remote_commands(con, r);
+  con.cvars().add({.name = "cl_fakeshaft", .fallback = "1"});
+  std::vector<std::string> said;
+  con.add_command("say", "", [&said](ge::console::Console&, const ge::console::Args& a) {
+    said.push_back(a[1]);
+  });
+  cn::remote_rulesets_frame(r, con);
+  con.execute("cl_fakeshaft 0.5");  // not on a server: nothing said
+  cn::remote_rulesets_frame(r, con);
+  con.run();
+  CHECK(said.empty());
+  r.active = true;
+  con.execute("cl_fakeshaft 0");
+  cn::remote_rulesets_frame(r, con);
+  con.run();
+  CHECK(said.size() == 1 && said.back() == "fakeshaft off");
+  cn::remote_rulesets_frame(r, con);  // no change: said once
+  con.run();
+  CHECK(said.size() == 1);
 }

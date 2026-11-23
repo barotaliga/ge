@@ -8,9 +8,12 @@ name: release
 #            (tools/release.py bump), refusing a tag that already exists
 #   package  on every platform: build, test, install, build a consumer
 #            against the installed package, archive it
+#   manual   the player's reference manual (`make manual`, docs/console.md §
+#            The reference manual): user-manual.html written from the game's
+#            and the dedicated server's own registrations
 #   publish  collate CHANGELOG.md, commit VERSION + CHANGELOG, tag vX.Y.Z,
-#            push; GitHub Release with the packages, the source, SHA256SUMS
-#            and build provenance
+#            push; GitHub Release with the packages, the source, the manual,
+#            SHA256SUMS and build provenance
 #   mirror   the release's files to GitHub Packages as an OCI artifact
 #            (ghcr.yml: ghcr.io/<owner>/<repo>:X.Y.Z and :latest)
 #
@@ -137,8 +140,64 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  # The player's reference manual, attached to the release: the window (hidden, drawn by lavapipe
+  # under xvfb) and the dedicated server write their manual sources from their own registrations,
+  # each game's layer in turn, and `ge manual` merges them into one page (tools/manual.sh).
+  manual:
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      CXX: g++
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 800M
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - run: printf '%s\n' "$VERSION" > VERSION
+      - name: The week, for the apt cache's key
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: .cache/apt
+          key: apt-ubuntu-24.04-${{ hashFiles('tools/setup-ubuntu.sh') }}-${{ steps.week.outputs.week }}
+          restore-keys: apt-ubuntu-24.04-
+      - name: Install the platform's and the GPU's Linux packages
+        timeout-minutes: 15
+        run: sudo tools/setup-ubuntu.sh --cache-dir=.cache/apt
+      - uses: actions/cache@v4
+        with:
+          path: .cache/deps
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake', 'cmake/Codecs.cmake') }}
+      # The GCC release row's objects, as main last saved them (ci.yml's linux-gcc).
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/ccache
+          key: ccache-ubuntu-24.04-g++-release-${{ needs.plan.outputs.sha }}
+          restore-keys: ccache-ubuntu-24.04-g++-release-
+      - run: cmake --preset release
+      - name: Write the manual
+        run: PRESET=release MANUAL_OUT=build/manual tools/manual.sh
+      - name: Name it for the release
+        run: |
+          mkdir dist
+          cp build/manual/user-manual.html "dist/shooters-edge-$VERSION-user-manual.html"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: manual
+          path: dist/
+          if-no-files-found: error
+
   publish:
-    needs: [plan, package]
+    needs: [plan, package, manual]
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     permissions:
@@ -181,15 +240,22 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: manual
+          path: dist
+
       - name: Source archive and checksums
         run: |
           git archive --format=tar.gz --prefix="gameengine2-$VERSION/" -o "dist/gameengine2-$VERSION-src.tar.gz" "$TAG"
-          (cd dist && sha256sum *.tar.gz > SHA256SUMS)
+          (cd dist && sha256sum *.tar.gz *.html > SHA256SUMS)
           cat dist/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/*.tar.gz
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.html
 
       - name: GitHub Release
         env:

@@ -509,6 +509,14 @@ programs' own registrations, never kept by hand, so it cannot fall behind the co
    game's own layer in turn as a game switch does (`se -manual <file>`, client/manual.hpp; the
    Quake pass is QuakeWorld's too), the dedicated server writes the game it serves
    (`sesv [-classic q2] --manual=<file>`); any console writes its one pass with `writemanual`.
+   A dedicated server's GAME words (its rules' `map`, its admin's `kick`, the relay's and the
+   lists' words), which the game takes through `ServerGame::console`, are declared as
+   `ServerGame::words` (`GameWord`, Shooter's Edge's `net/server_words.hpp`) and registered on the
+   server's console in the game's own layer (`add_game_words`), so Tab, `cmdlist` and the manual
+   know them; a word the game takes but does not declare still runs, unlisted. The RULES' own
+   settings (`deathmatch`, `coop`, `skill`: the game's rules' cvars, made with each map and set
+   through the same hook) join a pass through `ManualInfo::more`: Shooter's Edge makes each
+   game's rules with no map (`server/rules_manual.hpp`) and describes them in the game's layer.
 2. **`ge manual <source>...`** merges the passes into rows: a name's COMMON definition (the layer
    under the games'), each game's own where its layer met the name (`same`: the game's default and
    words; `own`: the game's own meaning under the same name), its spellings per game, the games it
@@ -520,7 +528,8 @@ programs' own registrations, never kept by hand, so it cannot fall behind the co
 `make manual` runs all three into `build/manual/` (`tools/manual.sh`). The window needs one game to
 start: Quake's shareware release, fetched once and checked by the classicenhance tool
 (`GE_MANUAL_GAME` names another source); every other game's own layer is loaded without its
-files. The `manual` workflow
-publishes it to the repository's pages once a day. A new setting, command or flag needs nothing
-more than its registration, its help and, for a flag, its row in the program's flag table.
+files. Each release carries the page as one of its files
+(`shooters-edge-<version>-user-manual.html`, the `release` workflow's `manual` job). A new setting, command or flag needs nothing
+more than its registration, its help and, for a flag, its row in the program's flag table; a
+dedicated server's game word, its row in the game's words.
 

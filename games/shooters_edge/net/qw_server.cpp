@@ -16,6 +16,7 @@
 #include <iterator>
 #include <string_view>
 
+#include "classic/content/web_downloads.hpp"
 #include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "progs/file.hpp"
@@ -297,6 +298,14 @@ void handle_connect(QwServer& s, const gn::Address& from, const std::string& tex
   }
   if (s.cfg.locked && !back) {
     reject(s, from, "server is locked");
+    return;
+  }
+  // A competition server's ruleset (sv_ruleset, server/admission.hpp): a player keeps to it, as
+  // the client's `*rsn` says (classic/rulesets.hpp's ruleset_info_key).
+  if (const std::string why =
+          ge::server::ruleset_refusal(s.cfg.ruleset, info_get(userinfo, "*rsn"), spectator);
+      !why.empty()) {
+    reject(s, from, why);
     return;
   }
   // One address's seats held to sv_iplimit (server/admission.hpp).
@@ -824,6 +833,7 @@ bool bind_map(QwServer& s, const sv::RulesRunner& rules, std::string& error) {
   info_set(s.serverinfo, "hostname", s.cfg.hostname, kServerInfoBytes);
   info_set(s.serverinfo, "maxclients", std::to_string(qc.sv.set.maxclients), kServerInfoBytes);
   info_set(s.serverinfo, "maxfps", std::to_string(s.cfg.maxfps), kServerInfoBytes);
+  if (!s.cfg.ruleset.empty()) info_set(s.serverinfo, "ruleset", s.cfg.ruleset, kServerInfoBytes);
   info_set(s.serverinfo, "sv_antilag", std::to_string(s.cfg.antilag), kServerInfoBytes);
   if (s.cfg.antilag_projectiles)
     info_set(s.serverinfo, "sv_antilag_projectiles", "1", kServerInfoBytes);
@@ -844,8 +854,16 @@ bool bind_map(QwServer& s, const sv::RulesRunner& rules, std::string& error) {
     if (const ge::console::Cvar* c = qc.cvars.find(rule); c != nullptr && !c->value.empty())
       info_set(s.serverinfo, rule, c->value, kServerInfoBytes);
   if (!s.cfg.progs_crc.empty()) info_set(s.serverinfo, "*progs", s.cfg.progs_crc, kServerInfoBytes);
-  if (!s.cfg.download_server.empty())
-    info_set(s.serverinfo, "*dlserver", s.cfg.download_server, kServerInfoBytes);
+  // The web address files come from: the operator's own (sv_downloadserver), else the server's own
+  // web files with their certificate's digest. `sv_dlURL` says a real address to clients that read
+  // that key instead.
+  const std::string web = !s.cfg.download_server.empty() ? s.cfg.download_server : s.cfg.web_url;
+  if (!web.empty()) info_set(s.serverinfo, "*dlserver", web, kServerInfoBytes);
+  if (s.cfg.download_server.empty() && !s.cfg.web_pin.empty())
+    info_set(s.serverinfo, "*dlpin", s.cfg.web_pin, kServerInfoBytes);
+  if (const std::string told = ge::classic::content::web_base(web);
+      ge::server::web_files_told(told) && told.rfind("http", 0) == 0)
+    info_set(s.serverinfo, "sv_dlURL", told, kServerInfoBytes);
   if (s.cfg.cheats) {  // the rules' sv_cheats with it: god, give, noclip and fly
     info_set(s.serverinfo, "*cheats", "ON", kServerInfoBytes);
     qc.cvars.set("sv_cheats", "1", ge::console::Source::local, true);

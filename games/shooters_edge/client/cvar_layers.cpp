@@ -11,10 +11,10 @@
 // ge:keywords gl_partscale gl_partstyle gl_partshape gl_beamstyle gl_drawsky gl_bilerp_skies
 // ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_bilerp_pics
 // ge:keywords gl_gamma_scale_pics gl_modulate_world gl_modulate_entities gl_doublelight_entities
-// ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack gl_celshading
+// ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack
 // ge:keywords cl_smooth_explosions common-settings scr_consize scr_conalpha gl_consolefont
 // ge:keywords r_drawparticles in_grab_windowed_mouse cl_net_clientport vid_reload gl_swapinterval
-// ge:keywords chase_active chase_back vid_flip_on_switch
+// ge:keywords chase_active chase_back vid_flip_on_switch gl_damageblend_frac
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -309,24 +309,6 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .max = 1,
           .values = "1: it fades out (the default); 0: a hard edge"},
          &x.dlight_falloff);
-  v.bind({.name = "gl_celshading",
-          .fallback = "0",
-          .help = "An ink line drawn round each solid model, thinner and fainter with distance "
-                  "and gone beyond about 700 units.",
-          .kind = con::CvarKind::number,
-          .min = 0,
-          .max = 10,
-          .values = "0: none (the default); 1..10: that many pixels wide up close"},
-         &x.cel_shading);
-  v.bind({.name = "gl_glowmap_intensity",
-          .fallback = "0.75",
-          .help = "How brightly the glow maps a model's skin may have (a picture named "
-                  "<skin>_glow beside it) light its eyes, lamps and screens.",
-          .kind = con::CvarKind::number,
-          .min = 0,
-          .max = 10,
-          .values = "0: no glow; 0.75: the default; more: brighter"},
-         &x.glowmap_intensity);
   v.bind({.name = "cl_smooth_explosions",
           .fallback = "1",
           .help = "Whether explosions fade smoothly, or move on frame by frame, ten a second.",
@@ -516,8 +498,12 @@ void add_first(con::Console& c, const GameBindings& b) {
                   .max = 10000,
                   .values = "1..10000: that fast (100 the default: silence to full in 2.55 s)"},
                  &ambient_settings().fade);
-  if (b.noskins != nullptr) *b.noskins = 0;         // its figures are its own (choose_figure)
-  if (b.screen != nullptr) *b.screen = Q2Screen{};  // Quake II's view and 2D settings set aside
+  if (b.noskins != nullptr) *b.noskins = 0;  // its figures are its own (choose_figure)
+  if (b.screen != nullptr) {  // Quake II's view and 2D settings set aside, the shared ones kept
+    const Screen2D shared = *b.screen;
+    *b.screen = Q2Screen{};
+    static_cast<Screen2D&>(*b.screen) = shared;
+  }
   c.cvars().add_synonym("fov", "cl_fov");
   c.cvars().add_synonym("_snd_mixahead", "s_mixahead");  // its spelling (client/room_ear.hpp)
   c.cvars().add_synonym("ignore_qtv", "ignore_tv");      // its spelling of the TV viewers' chat
@@ -547,6 +533,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("r_drawparticles", "r_particles");  // the specks (its rulesets lock it)
   c.cvars().add_synonym("cl_net_clientport", "net_clientport");  // the client's own port
   c.cvars().add_synonym("in_grab_windowed_mouse", "in_grab");    // the mouse kept in a window
+  if (c.cvars().find("scr_showfps") != nullptr)                  // the frame rate in a corner
+    c.cvars().add_synonym("show_fps", "scr_showfps");
   c.add_command_synonym("vid_reload", "r_reload");  // the textures and models read again
   c.add_command(
       "_cl_color", "_cl_color <shirt*16+pants>: both your colours as one number",
@@ -620,7 +608,7 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   own); `gl_swapinterval` its spelling of `vid_vsync`, `demo` its spelling of `playdemo`;
 // - its chat: its own `cl_chat_sound` (one sound by number or name) and `con_auto_chat` (2 says a
 //   typed line to the team, where our `con_chat` 2 tells a command by its first word);
-// - its view and 2D (q2_view.hpp): `scr_scale`, `scr_draw2d`, `scr_alpha`, the lag graph's
+// - its view and 2D (q2_view.hpp): `scr_scale`, `scr_alpha`, the lag graph's
 //   `scr_lag_*`, `cl_adjustfov`, `uf`, `cl_kickangles`; and `s_underwater` the same setting as
 //   Quake's (room_ear.hpp), on by default where Quake's is off;
 // - its browsers: `ui_sortdemos` (`menu_demo_sort`, by name by default where ours lists the newest
@@ -692,6 +680,17 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .min = 0,
          .max = 16,
          .values = "1: off (the default); 2..16: that many samples, sharper; 0: the renderer's own",
+         .overlap = con::Overlap::same});
+  v.add({.name = "gl_damageblend_frac",  // the classic look's: a frame here, flat in Quake
+         .fallback = "0.2",
+         .flags = con::kArchive,
+         .help = "How deep a hit's flash reaches in from the screen's edges, so the middle stays "
+                 "clear.",
+         .kind = con::CvarKind::number,
+         .min = 0,
+         .max = 0.5,
+         .values = "0.2: a frame a fifth of the screen's shorter side deep (the default); "
+                   "0..0.5: that share, fading inward; 0: over the whole view",
          .overlap = con::Overlap::same});
   if (v.find("vid_vsync") != nullptr)  // the window's (platform/pacing.cpp)
     v.add_synonym("gl_swapinterval", "vid_vsync");
@@ -1213,6 +1212,8 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
     con::CvarLayer classic(c.cvars(), kLayerClassic);
     add_shared_session_cvars(c.cvars(), v.q2);
     add_shared_gun_cvars(c.cvars(), b);
+    // the 2D switch and the graph along the bottom (screen_2d.hpp)
+    add_screen_2d_cvars(c.cvars(), b.screen != nullptr ? *b.screen : v.screen);
   }
   con::CvarLayer layer(c.cvars(), v.layer);
   if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it

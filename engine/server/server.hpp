@@ -222,6 +222,18 @@ struct SettingName {
   bool own = false;
 };
 
+// A console word the GAME takes through `ServerGame::console` (its rules' `map`, its admin's
+// `kick`), declared so the server's console registers it: Tab completes it, `cmdlist` and the
+// reference manual list it, and running it hands the whole line to `console`. `also` is the game's
+// other spelling of the same word (a synonym; null none). A word the core has already is the
+// core's and is skipped. A word the game takes but does not declare still runs (the console's
+// unknown-word hook); it is only missing from the lists.
+struct GameWord {
+  const char* name;
+  const char* help;  // "<word> <args>: what it does", in a player's words
+  const char* also = nullptr;
+};
+
 // A game's server, as functions over its own state (`void*`, made by `create`). Called once a
 // frame, so the indirection costs nothing that matters; nothing is registered at run time.
 struct ServerGame {
@@ -238,6 +250,8 @@ struct ServerGame {
   int rule_count = 0;
   const SettingName* names = nullptr;  // the game's names for the core's settings, `name_count`
   int name_count = 0;
+  const GameWord* words = nullptr;  // the game's own console words (GameWord), `word_count`
+  int word_count = 0;
 
   // The game on `config`'s map with its bots; null with `error` (what and the next action).
   void* (*create)(const ServerConfig& config, std::string& error) = nullptr;

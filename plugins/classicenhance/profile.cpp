@@ -8,6 +8,7 @@
 #include "classicenhance/profile.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 
 namespace ge::classicenhance {
@@ -19,6 +20,28 @@ const MaterialWords& classic_words() { return kProfiles[0].words; }
 const Profile* find_profile(std::string_view id) {
   for (const Profile& p : kProfiles) {
     if (p.id == id) return &p;
+  }
+  return nullptr;
+}
+
+const MissionPack* find_pack(const Profile& p, std::string_view folder) {
+  for (const MissionPack& m : p.packs) {
+    if (m.folder.size() != folder.size()) continue;
+    bool same = true;
+    for (size_t i = 0; i < folder.size() && same; i++)
+      same = std::tolower(static_cast<unsigned char>(folder[i])) == m.folder[i];
+    if (same) return &m;
+  }
+  return nullptr;
+}
+
+const MissionPack* known_pack(uint64_t size, std::string_view sha256, const Profile** game) {
+  for (const Profile& p : kProfiles) {
+    for (const MissionPack& m : p.packs) {
+      if (m.size != size || m.sha256 != sha256) continue;
+      if (game != nullptr) *game = &p;
+      return &m;
+    }
   }
   return nullptr;
 }
