@@ -260,6 +260,7 @@ namespace {
 void write_pack(const fs::path& file,
                 const std::vector<std::pair<std::string, std::string>>& files) {
   std::vector<std::pair<std::string, std::vector<uint8_t>>> in;
+  in.reserve(files.size());
   for (const auto& [name, text] : files)
     in.emplace_back(name, std::vector<uint8_t>(text.begin(), text.end()));
   std::vector<uint8_t> pack;
