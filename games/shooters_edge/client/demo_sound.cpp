@@ -386,6 +386,8 @@ void RetiredSounds::prune() {
 }
 
 const au::Pcm* DemoSounds::step_sound(const DemoState& s, const DemoSound& d) {
+  if (!steps_) return nullptr;
+  const ge::classic::Q2StepSets& sets = *steps_;
   int set = ge::classic::kQ2StepDefault;
   if (q2_->footsteps == 1 && step_tracer_ != nullptr) {  // 2: always the default set
     const float at[3] = {d.origin.x, d.origin.y, d.origin.z};
@@ -393,11 +395,11 @@ const au::Pcm* DemoSounds::step_sound(const DemoState& s, const DemoSound& d) {
     const bool box = d.entity >= 0 && static_cast<size_t>(d.entity) < s.entities.size() &&
                      ge::classic::q2_unpack_solid(s.entities[size_t(d.entity)].solid, lo, hi);
     set = ge::classic::q2_step_set(
-        *steps_,
+        sets,
         ge::classic::q2_step_surface(*step_tracer_, at, box ? lo : nullptr, box ? hi : nullptr));
   }
   const uint32_t roll = (steps_heard_++ * 2654435761u) ^ (static_cast<uint32_t>(d.entity) * 40503u);
-  const std::string* name = ge::classic::q2_step_pick(*steps_, set, roll >> 8, last_step_);
+  const std::string* name = ge::classic::q2_step_pick(sets, set, roll >> 8, last_step_);
   if (name == nullptr) return nullptr;
   last_step_ = *name;
   return load(*name);

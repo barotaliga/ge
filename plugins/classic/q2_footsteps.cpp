@@ -8,6 +8,7 @@
 
 #include <cctype>
 #include <map>
+#include <utility>
 
 #include "shooter/brush_contents.hpp"
 
@@ -73,7 +74,13 @@ Q2StepSets q2_step_sets(
     if (const std::optional<std::string> text = read_text(file)) {
       const std::string m = material_of(*text);
       if (!material_ok(m)) {
-        if (said != nullptr) said->push_back("Bad material \"" + m + "\" in " + file);
+        if (said != nullptr) {
+          std::string line = "Bad material \"";
+          line += m;
+          line += "\" in ";
+          line += file;
+          said->push_back(std::move(line));
+        }
       } else if (!m.empty()) {
         const std::string key = lower(m);
         if (const auto mt = by_material.find(key); mt != by_material.end()) {

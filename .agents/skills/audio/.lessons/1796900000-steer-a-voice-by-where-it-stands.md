@@ -2,7 +2,7 @@
 title: Channels steers a voice only by where it stands; place it to give it a gain and a pan
 date: 2026-11-23
 scope: engine/audio/channels.hpp, games/shooters_edge/client/demo_sound.cpp, plugins/classic/q2_loop_merge.hpp
-concepts: [channels, merged-loop, gain, pan, pseudo-entity, move, al_merge_looping]
+concepts: [channels, merged-loop, gain, pan, pseudo-entity, move, al-merge-looping]
 ---
 
 A slot's volume and attenuation are fixed when it is played; each `update` hears it again only
