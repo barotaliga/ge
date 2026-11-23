@@ -2,7 +2,7 @@
 // its own, the items its dmflags and `g_disruptor` leave off the map.
 //
 // ge:summary Ground Zero's cvars, class names spawned as its own, items its dmflags leave out
-// ge:keywords q2 ground-zero cvars strong-mines g-disruptor gamerules randomrespawn dmflags
+// ge:keywords q2 ground-zero cvars strong-mines g-disruptor  dmflags
 // ge:keywords no-mines no-nukes no-spheres classname-alias
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_gz_test.cpp
@@ -28,11 +28,6 @@ void gz_cvars(Q2Server& s) {
                .help = "Whether the Disruptor and its rounds are left on the map.",
                .values = "0: both taken off (the default); 1: both left, and the Bandolier and "
                          "the Ammo Pack carry more rounds"});
-  s.cvars.add({.name = "randomrespawn",
-               .fallback = "0",
-               .flags = con::kServer,
-               .help = "Whether a deathmatch item may come back as another of its kind.",
-               .values = "0: each comes back as itself (the default); 1: another of its kind"});
 }
 
 std::string_view gz_classname(std::string_view classname) {

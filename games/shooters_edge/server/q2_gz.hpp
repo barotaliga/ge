@@ -46,7 +46,7 @@ namespace shooters_edge::server {
 struct Q2Server;
 struct Q2Missile;
 
-// Ground Zero's own settings (`strong_mines`, `g_disruptor`, `randomrespawn`), registered only
+// Ground Zero's own settings (`strong_mines`, `g_disruptor`), registered only
 // when it is the pack played.
 void gz_cvars(Q2Server& s);
 // The class name a map's entity spawns as under Ground Zero (its rows for the base game's nail
