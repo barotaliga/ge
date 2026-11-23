@@ -700,6 +700,23 @@ TEST(q2_chat_sound_and_auto_chat_are_its_own_and_go_with_it) {
   CHECK(v.clashes().empty());
 }
 
+TEST(q2s_demo_is_its_spelling_of_playdemo_and_goes_with_it) {
+  Window w(pr::kGameProfiles[0]);
+  const auto has_demo = [&w] {
+    for (const auto& [name, target] : w.console.command_synonyms())
+      if (name == "demo") return target == "playdemo";
+    return false;
+  };
+  CHECK(!has_demo());  // Quake has no `demo`
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2, {});
+  CHECK(has_demo());
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
+  CHECK(!has_demo());
+}
+
 TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();

@@ -748,6 +748,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
   }
   c.add_command_synonym("ogg", "music");       // its music player (engine/audio/music_console.hpp)
   c.add_command_synonym("seek", "demo_jump");  // its spelling: a time, or + or - and one
+  c.add_command_synonym("demo", "playdemo");   // its spelling: `demo <name>` from demos/
   v.add({.name = "menu_demo_sort",             // its demo browser lists by name (demos_page.hpp)
          .fallback = "1",
          .flags = con::kArchive,

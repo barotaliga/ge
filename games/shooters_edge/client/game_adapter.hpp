@@ -52,6 +52,7 @@
 // ge:keywords game-adapter adapter classic-game list_mods find_program list_maps map_info
 // ge:keywords map_textures list_demos find_demo open_demo mod-folder program-form program-side
 // ge:keywords per-game q2 q2_adapter add_adapter_commands console-mods console-maps
+// ge:keywords demo_completions demo-tab-completion
 // ge:keywords replacement-texture png tga alpha open_model open_sound model-form skin-stand-in
 // ge:keywords replacement-skin pictures hud-pictures menu-pictures replacement-picture find_config
 // ge:keywords config-file cfg exec open_locations loc-file place-names read_configs_from
@@ -182,8 +183,14 @@ const GameAdapter& adapter_of(const profiles::GameProfile& game);
 // Whether this build has a runner for programs of `form`.
 bool runs_form(profiles::ProgramForm form);
 
+// The names Tab completes after `playdemo`, `timedemo` and `demo`: the recordings `list_demos`
+// finds, sorted, each in its game's demo folder named from inside it (Quake II's `demos/`), as a
+// bare name finds it.
+std::vector<std::string> demo_completions(const GameAdapter& adapter, const SearchPath& files);
+
 // The console's `mods`, `maps` and `demos`, each printing the adapter's answer (`basedir` the
-// install's folder the mods are beside; `adapter` and `files` must outlive the console).
+// install's folder the mods are beside; `adapter` and `files` must outlive the console); Tab
+// after `playdemo`, `timedemo` and `demo` completes `demo_completions`.
 void add_adapter_commands(ge::console::Console& con, const GameAdapter& adapter,
                           const SearchPath& files, const std::string& basedir);
 

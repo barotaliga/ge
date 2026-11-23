@@ -7,6 +7,8 @@
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include "shooters_edge/client/game_adapter.hpp"
 
+#include <algorithm>
+
 #include "vfs/search_commands.hpp"
 
 namespace shooters_edge::client {
@@ -17,6 +19,18 @@ const GameAdapter& adapter_of(const profiles::GameProfile& game) {
 }
 
 bool runs_form(profiles::ProgramForm form) { return form == profiles::ProgramForm::qc; }
+
+std::vector<std::string> demo_completions(const GameAdapter& adapter, const SearchPath& files) {
+  std::vector<std::string> out = adapter.list_demos(adapter, files);
+  const std::string_view folder = adapter.game->demo_folder;
+  if (!folder.empty())
+    for (std::string& d : out)
+      if (d.size() > folder.size() && d.compare(0, folder.size(), folder) == 0)
+        d.erase(0, folder.size());
+  std::ranges::sort(out);
+  out.erase(std::unique(out.begin(), out.end()), out.end());
+  return out;
+}
 
 void add_adapter_commands(ge::console::Console& con, const GameAdapter& adapter,
                           const SearchPath& files, const std::string& basedir) {
@@ -48,6 +62,9 @@ void add_adapter_commands(ge::console::Console& con, const GameAdapter& adapter,
                       c.print(line);
                     }
                   });
+  // Tab after `playdemo`, `timedemo` (and Quake II's `demo`) completes the recordings' names.
+  const auto names = [&adapter, &files] { return demo_completions(adapter, files); };
+  for (const char* word : {"playdemo", "timedemo", "demo"}) con.set_arg_values(word, names);
   ge::vfs::add_search_commands(con, files.vfs);  // path, dir, fdir, whereis
   // $com_maplist: every map the files hold, by name, a space between.
   con.add_macro("com_maplist", [&adapter, &files] {
