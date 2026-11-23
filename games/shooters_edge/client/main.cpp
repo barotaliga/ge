@@ -887,7 +887,6 @@ int run_main(int argc, char** argv) {
   bool demo_hold = false;
   constexpr double kDemoSettle = 0.5;
   const auto start_attract = [&] {
-    // `auto`: a mod's own quake.rc list (a mission pack's demos), else the game's.
     const std::string list =
         game_menu.attract() != "auto"
             ? game_menu.attract()
