@@ -10,6 +10,7 @@
 //
 // ge:summary Quake's episode and level lists with their long names, and which apply to the packs
 // ge:keywords episode level episodes levels new-game host-page mission-pack long-name map-list
+// ge:keywords team-modes tag capture-the-flag
 // ge:keywords episodes_for level_of
 // ge:skill ui
 // ge:test tests/shooters_edge_menu_test.cpp
@@ -36,6 +37,10 @@ struct Episode {
 // map is there, else the base game's; only its episodes whose first level is there. Empty when no
 // list fits (another game's maps).
 std::vector<Episode> episodes_for(std::span<const std::string> maps);
+
+// Whether `maps` are Dissolution of Eternity's (its list is the one `episodes_for` takes): its
+// program's team games (tag and three kinds of capture the flag) join the host page's TEAMPLAY.
+bool team_modes(std::span<const std::string> maps);
 
 // Where `map` stands in `episodes`: its episode and level; false when no level is it.
 bool level_of(std::span<const Episode> episodes, std::string_view map, int* episode, int* level);

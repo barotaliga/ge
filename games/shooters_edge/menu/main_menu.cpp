@@ -24,7 +24,13 @@ namespace {
 using ge::ui::ItemKind;
 
 constexpr Choice kGameType[] = {{"COOPERATIVE", "0"}, {"DEATHMATCH", "1"}};
-constexpr Choice kTeamplay[] = {{"OFF", "0"}, {"NO FRIENDLY FIRE", "1"}, {"FRIENDLY FIRE", "2"}};
+// The first three are every pack's; Dissolution of Eternity's program adds its team games (refresh
+// shows them only while its maps are in, `team_modes`).
+constexpr Choice kTeamplay[] = {
+    {"OFF", "0"},           {"NO FRIENDLY FIRE", "1"}, {"FRIENDLY FIRE", "2"},
+    {"TAG", "3"},           {"CAPTURE THE FLAG", "4"}, {"ONE FLAG CTF", "5"},
+    {"THREE TEAM CTF", "6"}};
+constexpr size_t kTeamplayBase = 3;
 constexpr Choice kSkill[] = {{"EASY", "0"}, {"NORMAL", "1"}, {"HARD", "2"}, {"NIGHTMARE", "3"}};
 constexpr Choice kFragLimit[] = {{"NONE", "0"}, {"10", "10"}, {"20", "20"},  {"30", "30"},
                                  {"40", "40"},  {"50", "50"}, {"60", "60"},  {"70", "70"},
@@ -1352,6 +1358,12 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         it.text = name.empty() ? std::string(e->text) : std::string(e->text) + "  " + name;
         continue;
       }
+      if (e->page == "host" && e->id == "teamplay") {  // the pack's team games past the base three
+        const size_t n = team_modes(host.maps) ? e->choices.size() : kTeamplayBase;
+        it.choices.clear();
+        for (size_t i = 0; i < n; i++) it.choices.emplace_back(e->choices[i].text);
+        if (it.choice < 0 || static_cast<size_t>(it.choice) >= n) it.choice = 0;  // reads OFF
+      }
       if (e->target == Target::none || it.disabled) continue;
       const std::string v = host_value(host, cvar_of(*e));
       if (e->kind == ItemKind::toggle) {
@@ -1361,7 +1373,7 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
             e->bit >= 0 ? number && (static_cast<long>(x) >> e->bit & 1) != 0 : number && x != 0;
         it.on = set != e->inverted;
       } else if (e->kind == ItemKind::choice) {
-        for (size_t i = 0; i < e->choices.size(); i++)
+        for (size_t i = 0; i < e->choices.size() && i < it.choices.size(); i++)
           if (same_value(v, e->choices[i].value)) it.choice = static_cast<int>(i);
       } else if (e->kind == ItemKind::slider) {
         double x = 0;

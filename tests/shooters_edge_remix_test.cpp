@@ -85,6 +85,11 @@ TEST(the_classic_games_weapons_take_q2_by_role) {
   CHECK(to_q2("item_health", 1) == "item_health");
   CHECK(to_q2("item_health", 0) == "item_health_large");
   CHECK(to_q2("item_armorInv", 0) == "item_armor_body");
+  // Dissolution of Eternity's ammunition for its weapons' second kinds.
+  CHECK(to_q2("item_lava_spikes", 0) == "ammo_bullets");
+  CHECK(to_q2("item_multi_rockets", 0) == "ammo_rockets");
+  CHECK(to_q2("item_plasma", 0) == "ammo_cells");
+  CHECK(!pf::remix_item("q1", "q2", "item_powerup_belt", 0).known);  // no part to play: dropped
   const auto to_classic = [](const char* cls) {
     const pf::ItemSwap r = pf::remix_item("q2", "q1", cls, 0);
     return r.known ? std::string(r.becomes) : std::string("none");

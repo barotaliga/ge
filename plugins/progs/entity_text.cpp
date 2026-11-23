@@ -160,6 +160,8 @@ bool parse_entity_text(const char* text, std::vector<EntityBlock>& blocks, std::
                 std::to_string(blocks.size()) + " has no value; fix the map's entity text";
         return false;
       }
+      // A key's trailing spaces are dropped: some shipped maps spell a key "map " and mean `map`.
+      while (!tok.empty() && tok.back() == ' ') tok.pop_back();
       b.pairs.emplace_back(tok, value);
     }
     blocks.push_back(std::move(b));

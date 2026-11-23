@@ -90,6 +90,10 @@ std::vector<Episode> episodes_for(std::span<const std::string> maps) {
   return out;
 }
 
+bool team_modes(std::span<const std::string> maps) {
+  return !holds(maps, "hip1m1") && holds(maps, "r1m1");
+}
+
 bool level_of(std::span<const Episode> episodes, std::string_view map, int* episode, int* level) {
   for (size_t e = 0; e < episodes.size(); e++)
     for (size_t l = 0; l < episodes[e].levels.size(); l++)

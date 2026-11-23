@@ -243,6 +243,30 @@ TEST(new_game_start_runs_the_rules_then_the_map) {
   CHECK(!w.ran.empty() && w.ran.back() == "map dm1");
 }
 
+TEST(dissolution_of_eternitys_maps_add_its_team_games_to_teamplay) {
+  World w;
+  Menu m = sm::build_menu();
+  ge::console::Cvars server(true);
+  for (const char* c : {"deathmatch", "fraglimit", "timelimit", "teamplay"})
+    server.add({.name = c, .fallback = "0"});
+  server.set("teamplay", "4", ge::console::Source::local);
+  sm::Host base{.console = &w.con, .server = &server, .maps = {"start", "e1m1"}};
+  sm::refresh(m, base);
+  const auto* row = item(m, "host", "teamplay");
+  CHECK(row->choices.size() == 3);  // the base game's three; 4 is not one of them: OFF
+  CHECK(row->choice == 0);
+  sm::Host pack{.console = &w.con, .server = &server, .maps = {"start", "r1m1", "r2m1"}};
+  sm::refresh(m, pack);
+  row = item(m, "host", "teamplay");
+  CHECK(row->choices.size() == 7);
+  CHECK(row->choices[3] == "TAG");
+  CHECK(row->choices[6] == "THREE TEAM CTF");
+  CHECK(row->choice == 4);  // CAPTURE THE FLAG
+  sm::Host both{.console = &w.con, .server = &server, .maps = {"start", "hip1m1", "r1m1"}};
+  sm::refresh(m, both);  // Scourge of Armagon's list wins, and with it the base three
+  CHECK(item(m, "host", "teamplay")->choices.size() == 3);
+}
+
 TEST(ranked_game_looks_for_a_duel_once_the_console_can) {
   World w;
   Menu m = sm::build_menu();

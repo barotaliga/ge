@@ -20,6 +20,7 @@
 #include "shooters_edge/bots/quake_maps.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/rules_world.hpp"
 
 namespace sb = ge::shooterbots;
 
@@ -164,6 +165,68 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   return true;
 }
 
+// THE CENSUS: each entity slot's class name and first place, so a removal, a reuse of the slot
+// and a move are seen; the counts kept by class name in the map's row.
+struct Census {
+  struct Slot {
+    int cls = -1;  // index into the map's census, -1 a free slot
+    sh::Vec3f at;
+    bool moved = false;
+    bool shown = false;  // its model drawn at the last look
+  };
+  std::vector<Slot> slots;
+};
+
+int census_class(EpisodeMap& em, const char* name) {
+  // An entity its program gave no class name (a body left behind, a thrown gib) counts as one
+  // class.
+  const std::string_view n = name != nullptr && name[0] != 0 ? name : "(no class name)";
+  for (size_t i = 0; i < em.census.size(); i++)
+    if (em.census[i].name == n) return static_cast<int>(i);
+  em.census.push_back({std::string(n)});
+  return static_cast<int>(em.census.size()) - 1;
+}
+
+// One look at the server's entities: `first` at the map's start (each counted as spawned).
+void census_look(Census& cs, EpisodeMap& em, const sv::RulesRunner& run, bool first) {
+  const sv::RulesCommon& now = *run;
+  const sv::QcServer* q = sv::qc_of(run);
+  if (q == nullptr) return;
+  cs.slots.resize(std::max(cs.slots.size(), now.sv.edicts.size()));
+  std::vector<int> alive(em.census.size(), 0);
+  for (size_t e = static_cast<size_t>(now.sv.set.maxclients) + 1; e < cs.slots.size(); e++) {
+    Census::Slot& slot = cs.slots[e];
+    const bool live = e < static_cast<size_t>(now.sv.num_edicts) && !now.sv.edicts[e].free;
+    int cls = -1;
+    const bool shown = live && sv::model_shown(*q, static_cast<int>(e));
+    if (live) {
+      const char* name =
+          pg::vm_string(q->q.vm, static_cast<int32_t>(*pg::entity_field(
+                                     q->q.vm, static_cast<int>(e), q->q.layout->f.classname)));
+      cls = census_class(em, name);
+      alive.resize(em.census.size(), 0);
+      alive[static_cast<size_t>(cls)]++;
+    }
+    if (slot.cls >= 0 && slot.cls != cls) em.census[static_cast<size_t>(slot.cls)].gone++;
+    if (cls >= 0 && slot.cls != cls) {
+      ClassCensus& c = em.census[static_cast<size_t>(cls)];
+      (first ? c.spawned : c.made)++;
+      slot.at = now.sv.edicts[e].origin;
+      slot.moved = false;
+    } else if (cls >= 0 && slot.shown && !shown) {  // its model taken away: an item picked up
+      em.census[static_cast<size_t>(cls)].taken++;
+    }
+    if (cls >= 0 && slot.cls == cls && !slot.moved && dist(now.sv.edicts[e].origin, slot.at) > 1) {
+      slot.moved = true;
+      em.census[static_cast<size_t>(cls)].moved++;
+    }
+    slot.shown = shown;
+    slot.cls = cls;
+  }
+  for (size_t i = 0; i < alive.size(); i++)
+    em.census[i].most = std::max(em.census[i].most, alive[i]);
+}
+
 }  // namespace
 
 EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
@@ -218,6 +281,8 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
       return r;
     }
     const size_t entered = c.history.size();
+    Census census;
+    if (opt.census) census_look(census, em, c.server, true);
     std::vector<bool> alive(static_cast<size_t>(mates) + 1, true);
     int64_t near = 0, counted = 0;
     const int frames = static_cast<int>(opt.map_seconds * 72);
@@ -313,6 +378,7 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
         em.last_fault = qa->q.last_fault;
       }
       h = fold_frame(h, after, mates + 1);
+      if (opt.census && frame % 6 == 0) census_look(census, em, c.server, false);
       const sv::WorldEntity& L = after.world.entities[1];
       const bool leader_live = L.health > 0;
       if (alive[0] && !leader_live) em.leader_deaths++;

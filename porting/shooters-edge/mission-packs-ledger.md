@@ -45,12 +45,12 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | --- | --- | --- | --- | --- | --- |
 | Taking the packs in (shared by all four) | 17 | 12 | 3 | 2 (0 / 2 / 0) | 0 |
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 2 | 67 | 5 (2 / 1 / 2) | 0 |
-| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 2 | 51 | 8 (3 / 3 / 2) | 0 |
+| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 5 | 50 | 6 (3 / 2 / 1) | 0 |
 | The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
 | Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **274** | **22** | **131** | **121 (61 / 49 / 11)** | **0** |
+| **All** | **274** | **25** | **130** | **119 (61 / 48 / 10)** | **0** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **121 missing, 131 to verify, of 274 rows** (M63a taking the packs in: 10 fewer).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **119 missing, 130 to verify, of 274 rows** (M63a taking the packs in: 10 fewer; M63b Dissolution of Eternity: 2 fewer).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
@@ -210,16 +210,16 @@ count: done 0, verify 17, missing 0, not-taken 0
 
 ## Dissolution of Eternity (Quake, folder `rogue`)
 
-count: done 2, verify 51, missing 8 (3 / 3 / 2), not-taken 0
+count: done 5, verify 50, missing 6 (3 / 2 / 1), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
 | rog1.program | the pack's `progs.dat`: the base game's checksum, no new builtin, 63 fields of its own (`items2` among them) | done |  | loads and runs r1m1 (`se-client --game=<folder>/rogue --map=r1m1 --progs=pack`, 2026-11-23) |
-| rog1.campaign | NEW GAME from `start` through both episodes to the end (23 maps with `ctf1` and the six ammo box maps) | verify | 1 | a playthrough lab on the pack |
+| rog1.campaign | NEW GAME from `start` through both episodes to the end (23 maps with `ctf1` and the six ammo box maps) | verify | 1 | `labs se-q1-campaign --game=<dir> --mod=rogue --each=1 --episodes=start,r1m1,...` runs each map with its class census; r2m1 loads since a key's trailing spaces are dropped (its changelevel trigger spells `"map "`, plugins/progs/entity_text.cpp) |
 | rog1.ammo_maps | the six `b_` maps (lava nails, multi rockets and plasma boxes, big and small) loaded as brush models | verify | 1 | the base game's `b_` boxes load the same way |
 | rog1.items2 | the program's `items2` reaching the player's HUD (the new weapons and powerups) | verify | 1 | the catalogue knows the field (server/catalogue.cpp's ZQ_ITEMS2); which bits the client gets: reader question |
 | rog1.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395) |
-| rog1.menu.modes | MULTIPLAYER ▸ NEW GAME's teamplay row with the pack: Tag, Capture the Flag, One Flag CTF, Three Team CTF | missing | 2 | facts in porting/shooters-edge/q1-qw-console-facts.md |
+| rog1.menu.modes | MULTIPLAYER ▸ NEW GAME's teamplay row with the pack: Tag, Capture the Flag, One Flag CTF, Three Team CTF | done |  | menu/main_menu.cpp's TEAMPLAY shows the four past the base three while the pack's maps are in (`team_modes`, menu/episodes.cpp); held by tests/shooters_edge_menu_test.cpp |
 | rog1.hud.weapons | the lava nailguns, the multi launchers and the plasma gun on the status bar (`R_LAVA`, `R_SUPERLAVA`, `R_GREN`, `R_MULTIROCK`, `R_PLASMA`, the bars `R_INVBAR1`, `R_INVBAR2`) | missing | 1 | hud/classic_art.cpp |
 | rog1.hud.ammo | their ammunition (`R_AMMOLAVA`, `R_AMMOMULTI`, `R_AMMOPLASMA`) | missing | 1 | same |
 | rog1.hud.items | the power shield and the anti-grav belt (`R_SHIELD1`..`5`, `R_AGRAV1`..`5`) | missing | 1 | same |
@@ -227,14 +227,14 @@ count: done 2, verify 51, missing 8 (3 / 3 / 2), not-taken 0
 | rog1.runes | deathmatch's runes | verify | 2 |  |
 | rog1.grapple | the grappling hook in team games, its chain drawn | verify | 2 | the beam model is drawn (C465) |
 | rog1.motd | the pack's message of the day on joining | verify | 3 |  |
-| rog1.cfg | the pack's configs run at start | verify | 2 |  |
+| rog1.cfg | the pack's configs run at start | done |  | the pack ships no config (its one pack holds none): the base game's run, as with any folder laid over it |
 | rog1.demos | the attract loop plays the pack's three demos | verify | 3 |  |
 | rog1.conback | the pack's console background | verify | 3 |  |
 | rog1.endtext | `end1.bin`, `end2.bin`, the text screens on quitting | missing | 3 | the owner decides whether it is taken |
 | rog1.dm | `ctf1` and the team modes played by bots | verify | 2 |  |
 | rog1.coop | co-op on the pack's program | verify | 2 |  |
 | rog1.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
-| rog1.remix | the pack's weapons and items as roles for remix | missing | 3 | plugins/classic/item_roles.hpp |
+| rog1.remix | the pack's weapons and items as roles for remix | done |  | profiles/remix.hpp: lava nails, multi rockets and plasma read as the ammunition of the same weapon; the shield, belt, sphere and random powerup have no part in another game and drop; held by tests/shooters_edge_remix_test.cpp |
 | rog1.ce | classic enhance's caches with the pack layered over the base packs | verify | 2 |  |
 
 ### What the maps place that the base game's maps never do
