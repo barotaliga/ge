@@ -210,19 +210,17 @@ struct Remote {
   client::Demo demo;        // the recording read back: what the window draws
   client::QwIgnore ignore;  // the chat ignore lists over its players (chat_ignore.hpp)
   QwClientEnd end;
-  int levels = 0;       // level starts drawn
-  int replayed = 0;     // prediction: the moves it ran past the acknowledged one
-  int others = 0;       // other players predicted the last step
-  int others_msec = 0;  // the most milliseconds one of them was run forward the last step
-  int lerped = 0;       // entities drawn between two frames the last step
-  int map_tries = 0;    // joins again with another version of the server's map
-  bool console_held =
-      false;             // the console held over the screen while joining (remote_console_foot)
-  sh::Vec3f view;        // the player's angles, degrees (sent with every move)
-  sh::AimTurn aim_turn;  // the aim help's turn of the view (shooter/aim_turn.hpp)
-  sh::Vec3f prediction;  // the player's predicted origin, the correction not added
-  sh::MoveState ahead;   // the player's whole predicted state (the easy jump's help reads it)
-  sh::SpeedJumpAid jump_aid;    // the easy jump's memory (shooter/speedjump_assist.hpp)
+  int levels = 0;             // level starts drawn
+  int replayed = 0;           // prediction: the moves it ran past the acknowledged one
+  int others = 0;             // other players predicted the last step
+  int others_msec = 0;        // the most milliseconds one of them was run forward the last step
+  int lerped = 0;             // entities drawn between two frames the last step
+  int map_tries = 0;          // joins again with another version of the server's map
+  sh::Vec3f view;             // the player's angles, degrees (sent with every move)
+  sh::AimTurn aim_turn;       // the aim help's turn of the view (shooter/aim_turn.hpp)
+  sh::Vec3f prediction;       // the player's predicted origin, the correction not added
+  sh::MoveState ahead;        // the player's whole predicted state (the easy jump's help reads it)
+  sh::SpeedJumpAid jump_aid;  // the easy jump's memory (shooter/speedjump_assist.hpp)
   float speedjump_view = 0.5f;  // cl_speedjump_view: the share of its swing drawn
   sh::Smoothing smooth;         // the prediction's correction
   double smoothview = 1;        // cl_predict_smoothview: 0 snapped, 1 the decay's own rate, 2 slow
@@ -234,6 +232,7 @@ struct Remote {
   sh::MoveState ahead_each[64];
   int ahead_count = 0;
   bool ahead_from_held = false;  // the acknowledged state's jump button was held
+  bool console_held = false;     // the console held over the screen while joining
   client::OwnMissiles missiles;  // cl_predict_projectiles (client/own_missiles.hpp)
   int missiles_level = -1;       // the level they fly in (DemoState::levels)
   bool predict_jump = true;      // cl_predict_jump: the jump's sound played as predicted
