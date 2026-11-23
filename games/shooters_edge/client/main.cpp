@@ -956,8 +956,9 @@ int run_main(int argc, char** argv) {
   bool text_on = false;
   ge::platform::InputSnapshot input;
   cl::ViewState shown;
-  shown.q2 = &q2_screen;       // Quake II's cl_adjustfov and cl_kickangles
-  cl::DemoFreeLook free_look;  // SHIFT held over a demo (demo_free_look.hpp)
+  shown.q2 = &q2_screen;        // Quake II's cl_adjustfov and cl_kickangles
+  bool mouse_off_said = false;  // the system refused the mouse once: said, never again
+  cl::DemoFreeLook free_look;   // SHIFT held over a demo (demo_free_look.hpp)
   cl::DemoEyes demo_eyes{.gun_kick = &remote.gunkick, .view_kick = &q2_screen.kick_angles};
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state = cl::fx_state_for(&places);  // loc_draw's markers among the effects
@@ -1248,6 +1249,8 @@ int run_main(int argc, char** argv) {
     switch (ge::input::follow_capture(mouse, facts, controls.mouse_release)) {
       case ge::input::CaptureStep::take:
         ge::platform::set_relative_mouse(*window, true, controls.mouse.raw);
+        if (!ge::platform::relative_mouse(*window) && !std::exchange(mouse_off_said, true))
+          console.print("The mouse could not be taken, so it does not turn the view.");
         break;
       case ge::input::CaptureStep::let_go:
         ge::platform::set_relative_mouse(*window, false);
