@@ -130,6 +130,9 @@ TEST(the_window_joining_a_stock_protocol_server_lets_its_own_load_s_console_go) 
   CHECK(remote.q2->protocol == 34);
   CHECK(levels == 1);
   CHECK(!view.full() && !line.held);
+  CHECK(line.given_up);  // not held again for this load: no stale line after the join
+  cl::release_load_line(false, true, line, view, false);  // the load done
+  CHECK(!line.given_up);
   // Kept by a game's start, the hold is let go but the console stays down.
   cl::hold_load_line("base1", 0, line, con, view, 1);
   cl::release_load_line(true, true, line, view, true);

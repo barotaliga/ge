@@ -22,9 +22,10 @@
 namespace shooters_edge::client {
 
 struct LoadLine {
-  std::string what;   // the map the line is for
-  uint64_t n = 0;     // the line's number in the scrollback
-  bool held = false;  // the console is held down for it
+  std::string what;       // the map the line is for
+  uint64_t n = 0;         // the line's number in the scrollback
+  bool held = false;      // the console is held down for it
+  bool given_up = false;  // let go for another world: not held again until this load is done
 };
 
 // While `what` loads (begun at `since_s`): the line printed or rewritten on `con`/`view` at
@@ -34,7 +35,8 @@ void hold_load_line(std::string_view what, double since_s, LoadLine& line,
 
 // The console the line held let go once nothing loads (`loading` false) or the world shown is
 // another's (`elsewhere`: a server joined or a demo played), unless `keep` (a game's start or a
-// demo's first frames still hold it).
+// demo's first frames still hold it). Let go for another world, the line is not held again for
+// the same load (`given_up`): a join's reconnect leaves no stale line behind.
 void release_load_line(bool loading, bool elsewhere, LoadLine& line, ge::console::ConsoleView& view,
                        bool keep);
 

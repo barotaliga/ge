@@ -79,7 +79,7 @@ std::string load_caption(const MapLoad& l) {
 
 bool console_load_line(const MapLoad& load, LoadLine& line, ge::console::Console& con,
                        ge::console::ConsoleView& view, double now_s) {
-  if (!busy(load)) return false;
+  if (!busy(load) || line.given_up) return false;
   hold_load_line(load.what, load.since_s, line, con, view, now_s);
   return true;
 }

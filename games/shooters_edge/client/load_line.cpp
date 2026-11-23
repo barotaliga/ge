@@ -27,8 +27,10 @@ void hold_load_line(std::string_view what, double since_s, LoadLine& line,
 
 void release_load_line(bool loading, bool elsewhere, LoadLine& line, ge::console::ConsoleView& view,
                        bool keep) {
+  if (!loading) line.given_up = false;  // the next load's line is held again
   if (!line.held || (loading && !elsewhere)) return;
   line.held = false;
+  line.given_up = loading;
   line.what.clear();
   if (!keep) view.set_full(false);
 }

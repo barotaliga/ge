@@ -890,7 +890,7 @@ int run_main(int argc, char** argv) {
     const std::string list =
         game_menu.attract() == "auto" ? std::string(adapter.game->attract) : game_menu.attract();
     const std::vector<std::string> words = ge::console::tokenize(list);
-    if (words.empty() || cl::archive_paths(files).empty()) return false;
+    if (words.empty() || cl::archive_paths(files).empty() || remote.active) return false;
     bench_ask = words[attract_next++ % words.size()];
     play_ask = true;
     attract_asked = true;
@@ -1112,7 +1112,7 @@ int run_main(int argc, char** argv) {
     cl::hear_swap(synth, under_ear);                      // s_swapstereo
     cl::hear_ears(synth, under_ear);                      // s_hrtf
     picture.q2fx.plain_stereo = !cl::hrtf_on(under_ear);  // al_merge_looping 1 merges only then
-    if (std::exchange(attract_at_start, false) && !start_attract())
+    if (std::exchange(attract_at_start, false) && !remote.active && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
       cl::start_begin(game_start, con_view, console, game_t,
@@ -1302,7 +1302,6 @@ int run_main(int argc, char** argv) {
         cl::resize_world(*device, *world, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
       cl::resize_world(*device, *title, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
     }
-
     // A game folder asked for: LOAD GAME's chooser answered, or the console's `basedir`.
     if (game_menu.take_load())
       ge::platform::pick_folder(*window, "Load game: the folder holding id1", args.basedir);
@@ -1363,7 +1362,6 @@ int run_main(int argc, char** argv) {
         if (world && listen.server != nullptr && listen.map && !bench.active) load_listen_world(t);
       }
     }
-
     // A map started on the window's own server: its place names read (the same map keeps them).
     if (!remote.active && !bench.active && listen.map) {
       place_seen.on = false;
@@ -1372,7 +1370,6 @@ int run_main(int argc, char** argv) {
     // Co-op as the window's mode: `sv_coop` turned on, the friendly-fire settings, the episodes.
     cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
                    next_map);
-
     // A map asked for (the console's `map`, or the mod's level change at its limits), read behind
     // the window (client/map_load.hpp): started on the server once read, its world made behind
     // the window, drawn once its pipelines are compiled. A measured run waits for each step.
@@ -1411,7 +1408,10 @@ int run_main(int argc, char** argv) {
     // A save asked for: the game it holds now playing (its world made behind the window, below).
     if (!load_ask.empty())
       console.print(cl::load_save_asked(listen, game_content, files, load_ask));
-
+    if (attract_asked && remote.active) {  // a game joined first: no title demo over it
+      bench_ask.clear();
+      attract_asked = play_ask = false;
+    }
     // A benchmark: vsync off, the listen server waits until it is done (a demo at pace keeps it).
     if (!bench_ask.empty()) {
       const bool quit_after = bench_ask == args.timedemo || bench_ask == args.playdemo;
