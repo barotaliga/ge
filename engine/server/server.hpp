@@ -163,6 +163,7 @@ struct ServerConfig {
   // A file of console lines the server runs as they are added (`--commands`; spawn.hpp writes
   // one beside each server it starts): `mod arena` switches the mods. "" none.
   std::string commands;
+  std::string manual;          // --manual: the reference manual's source written here, then quit
   std::string explain_prefix;  // only the cvars starting with this
   // A LISTEN server's content, prepared by the game's own client in its process (the program, the
   // map it already read, its player): the game's own type, read by its `create`; null for a

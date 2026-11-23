@@ -35,7 +35,7 @@ Console::~Console() = default;
 
 void Console::add_command(std::string_view name, std::string_view help, CommandFn fn,
                           uint32_t flags) {
-  commands_[lower(name)] = Command{std::string(help), std::move(fn), flags};
+  commands_[lower(name)] = Command{std::string(help), std::move(fn), flags, cvars_.layer()};
 }
 
 bool Console::has_command(std::string_view name) const {
