@@ -15,11 +15,11 @@ and a row found later is added here first. Progress is reported as the missing c
 
 | Section | Rows | Done | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- |
-| Client | 509 | 347 | 0 (0 / 0 / 0) | 162 |
-| Server | 316 | 281 | 0 (0 / 0 / 0) | 35 |
+| Client | 509 | 346 | 0 (0 / 0 / 0) | 163 |
+| Server | 316 | 280 | 0 (0 / 0 / 0) | 36 |
 | Game | 246 | 228 | 0 (0 / 0 / 0) | 18 |
 | Tools | 1 | 1 | 0 (0 / 0 / 0) | 0 |
-| **All** | **1072** | **857** | **0 (0 / 0 / 0)** | **215** |
+| **All** | **1072** | **855** | **0 (0 / 0 / 0)** | **217** |
 
 (Built 2026-11-21 against main at #1237 with 217 missing (9 / 49 / 159); the first fill, Quake's
 deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.
@@ -398,7 +398,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C338 | `v_centerspeed` (both, 500) | how fast the view recentres | done | plugins/shooter/controls.cpp |  |
 | C339 | `gamma` (both, 1) | brightness | done | plugins/classic/app/look.cpp |  |
 | C340 | `cl_hightrack` (qw, 0) | a spectator tracks the top fragger | done | games/shooters_edge/client/demo_playback.cpp |  |
-| C341 | `cl_chasecam` (qw, 0) | a spectator tracking a player sees through his eyes | done | the tracked player's eyes are the view (client/demo_eyes.cpp) |  |
+| C341 | `cl_chasecam` (qw, 0) | a spectator tracking a player sees through his eyes | not-taken | always on: a tracked player is seen through his eyes (client/demo_eyes.cpp) or from behind by `cam_thirdperson`; there is no off state to map, so the word is not registered |  |
 | C342 | `cl_camera_maxpitch` (qw, 10) | the old tracking camera's pitch limit | not-taken | that camera is replaced by cam_thirdperson and the eyes |  |
 | C343 | `cl_camera_maxyaw` (qw, 30) | the old tracking camera's yaw limit | not-taken | as cl_camera_maxpitch |  |
 | C344 | `cl_nodelta` (qw, 0) | ask for full entity lists, never deltas | not-taken | a developer or profiling tool: ours are framestats, the labs and ge (a network debugging switch) |  |
@@ -679,7 +679,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S52 | `startdemos`, `demos`, `stopdemo` (q1) | the attract loop's demos (the client reader's rows) | done | `client/main.cpp` | |
 | S53 | `viewmodel`, `viewframe`, `viewnext`, `viewprev` (q1) | a model viewer on the map's viewthing entity | not-taken | developer tool: our models lab | |
 | S54 | `mcache` (q1) | prints the model cache | not-taken | developer tool | |
-| S55 | `slist` (q1) | lists the LAN's servers | done | the server browser (`net/qw_browse.cpp`, the menu) | |
+| S55 | `slist` (q1) | lists the LAN's servers | not-taken | it lists NetQuake servers, which are not joined (as C107); the server browser (`net/qw_browse.cpp`, the menu) finds LAN and master servers | |
 | S56 | `listen <0 or 1>` (q1) | whether the game takes network players | done | hosting from the window (`engine/server/spawn.hpp`, `listen_console.cpp`) | |
 | S57 | `maxplayers <n>` (q1) | the player count for the next map; 1 stops listening | done | `sv_maxclients` (synonyms `maxclients` and `maxplayers`, net/qw_game.cpp) | |
 | S58 | `port <n>` (q1) | the UDP port (default 26000) | done | `sv_port` (`engine/server/listen_console.cpp`) | |
