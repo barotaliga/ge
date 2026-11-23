@@ -207,6 +207,65 @@ std::vector<fs::path> demo_files(const cl::Args& a) {
   return out;
 }
 
+// `import <source>`: a game, its mission packs, or the packs alone taken into the data folder
+// (classic/content/import.hpp), as the window takes them in.
+int cmd_import(gc::Ctx& ctx) {
+  if (ctx.words.size() > 1)
+    return gc::refuse(ctx, 2, "import takes one folder, disc image or release archive",
+                      "secli import <folder, .iso, .cue, .mdf, .zip or .7z>");
+  const auto data = ctx.flags.find("data");
+  const std::string root = data != ctx.flags.end()
+                               ? data->second
+                               : cl::data_root(cl::placed_folder(ctx.self_dir),
+                                               gc::prefs_dir("gameengine2", "shooters_edge"));
+  if (ctx.words.empty()) {  // the packs on this machine not yet taken in, as the window offers
+    const auto from = ctx.flags.find("from");
+    const std::vector<std::string> roots = from != ctx.flags.end()
+                                               ? std::vector<std::string>{from->second}
+                                               : ge::classic::content::store_folders();
+    std::vector<std::string> rows;
+    std::string text;
+    for (const ge::classic::content::Offer& o : ge::classic::content::find_offers(roots, root)) {
+      rows.push_back(json_obj({{"game", json_str(o.game->id)},
+                               {"folder", json_str(o.pack->folder)},
+                               {"name", json_str(o.pack->name)},
+                               {"source", json_str(o.source)}}));
+      text += cl::offer_words(o) + "\n";
+    }
+    return gc::answer(ctx, json_obj({{"offers", json_arr(rows)}}), text,
+                      std::to_string(rows.size()) + " mission packs found and not yet taken in",
+                      rows.empty() ? "" : "secli import <source>");
+  }
+  ge::classic::content::ImportReport r;
+  std::string why;
+  if (!ge::classic::content::import_game(ctx.words[0], root, &r, &why))
+    return gc::refuse(ctx, 1, why, "secli import <your game's folder, disc image or archive>");
+  std::vector<std::string> packs;
+  packs.reserve(r.packs.size());
+  for (const auto* m : r.packs)
+    packs.push_back(json_obj({{"folder", json_str(m->folder)}, {"name", json_str(m->name)}}));
+  std::vector<std::string> notes;
+  notes.reserve(r.notes.size());
+  for (const std::string& n : r.notes) notes.push_back(json_str(n));
+  const std::string words = cl::take_in_words(r, ctx.words[0]);
+  std::string notes_text;  // what was found and left, a line each
+  for (const std::string& n : r.notes) notes_text += n + "\n";
+  return gc::answer(
+      ctx,
+      json_obj({{"game", json_str(r.game->id)},
+                {"base", ge::core::json_bool(r.base)},
+                {"packs", json_arr(packs)},
+                {"game_dir", json_str(r.game_dir)},
+                {"copied", json_num(static_cast<long long>(r.copied.size()))},
+                {"same", json_num(static_cast<long long>(r.same.size()))},
+                {"tracks", json_num(static_cast<long long>(r.tracks.size()))},
+                {"unchanged", ge::core::json_bool(r.unchanged)},
+                {"notes", json_arr(notes)}}),
+      notes_text, words,
+      "se -basedir " + r.game_dir +
+          (r.packs.empty() ? std::string() : " -game " + std::string(r.packs[0]->folder)));
+}
+
 int cmd_demos(gc::Ctx& ctx) {
   if (!gc::need_places(ctx)) return 1;
   const cl::Args a = folders(ctx);
@@ -478,6 +537,17 @@ gc::Spec make() {
     return name == "brush" ? ge::brush::cli::run_tool(program, name, args)
                            : ge::progs::cli::run_tool(program, name, args);
   };
+  s.commands.push_back({"import", "[source]",
+                        "a game, its mission packs or a pack alone copied into the data folder "
+                        "from a folder, disc image (.iso, .cue, .mdf), .zip or .7z; none: the "
+                        "packs found on this machine",
+                        "import ~/Downloads/reckoning.cue", "shooters_edge", cmd_import});
+  s.command_flags.push_back(
+      {"import",
+       {{"data", "<dir>", "the data folder to copy into (default: the game's own)"},
+        {"from", "<dir>",
+         "with no source: the folder to look for packs in (default: the stores' "
+         "libraries and the mounted volumes)"}}});
   s.commands.push_back({"demos", "", "the recordings in the game folder: name, size, file",
                         "demos --json", "shooters_edge", cmd_demos});
   s.commands.push_back({"demos play", "<name>", "watch a recording in the window",

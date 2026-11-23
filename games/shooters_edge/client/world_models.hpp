@@ -137,11 +137,31 @@ inline constexpr float kBoxLowUnits = -24, kBoxHighUnits = 32;
 // pack has only its own, so the other draws nothing).
 // `figure_q2`: what a Quake II player's model 255 ("the client's own") is drawn as, in the look his
 // slot names (`Placed::skin_name`), when a recording or a joined server sends one.
-enum class EffectModel : uint8_t { explosion, bolt, bolt2, bolt3, place_q1, place_q2, figure_q2 };
-inline constexpr const char* kEffectModels[] = {
-    "progs/s_explod.spr",   "progs/bolt.mdl",     "progs/bolt2.mdl",
-    "progs/bolt3.mdl",      "progs/h_player.mdl", "models/items/c_head/tris.md2",
-    "players/male/tris.md2"};
+// `q2_fx` on: Quake II's model effects (q2_model_fx.hpp's Q2FxModel, in its order).
+enum class EffectModel : uint8_t {
+  explosion,
+  bolt,
+  bolt2,
+  bolt3,
+  place_q1,
+  place_q2,
+  figure_q2,
+  q2_fx
+};
+inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr",
+                                                "progs/bolt.mdl",
+                                                "progs/bolt2.mdl",
+                                                "progs/bolt3.mdl",
+                                                "progs/h_player.mdl",
+                                                "models/items/c_head/tris.md2",
+                                                "players/male/tris.md2",
+                                                "models/objects/r_explode/tris.md2",
+                                                "models/objects/explode/tris.md2",
+                                                "models/objects/smoke/tris.md2",
+                                                "models/objects/flash/tris.md2",
+                                                "models/monsters/parasite/segment/tris.md2",
+                                                "models/ctf/segment/tris.md2",
+                                                "sprites/s_bfg2.sp2"};
 inline int effect_model(int listed, EffectModel m) { return listed + static_cast<int>(m); }
 inline int effect_model(const Listen& l, EffectModel m) {
   return effect_model(l.server ? static_cast<int>(l.server->models.size()) : 0, m);
@@ -209,7 +229,6 @@ struct ModelKind {
   // of the skin (0: nothing glows): what a grenade's red ends light round it (world_fx).
   float glow_rgb[3] = {0, 0, 0};
   float glow_share = 0;
-  bool glow_map = false;  // a skin of it has a glow map (`OpenedModel::glows`): `InPlace::glow_map`
   ge::render::SpriteFacing facing = ge::render::SpriteFacing::parallel;
   bool player = false;  // the players' own figure (kPlayerModel): it wears each one's skin
   // Quake II's player figure (`players/<folder>/tris.md2`) or a weapon carried on it
@@ -381,11 +400,6 @@ struct InPlace {
   int shadows = 0;
   // gl_flashblend: each of the moment's lights drawn as a glow disc (classic/flash_blend.hpp).
   bool flash_blend = false;
-  // gl_celshading: an ink line this many pixels wide round each solid model (thinner and fainter
-  // with distance, classic/q2_fx_switches.hpp's q2_outline_px), on a view `view_px` high; 0 none.
-  double cel_shading = 0, view_px = 0;
-  // A glow map's light (classic/q2_fx_switches.hpp's q2_glow_map_gain), on a model that has one.
-  float glow_map = 1.5f;
 };
 
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a

@@ -34,7 +34,9 @@ namespace {
 
 constexpr double kRetry = 1.0;       // s between connectionless retries
 constexpr double kChunkRetry = 0.5;  // s before a chunk is asked for again
-constexpr int kChunksPerTick = 8;
+constexpr int kChunksPerTick = 30;   // chunks asked for in one packet (a stock client's default)
+constexpr size_t kChunkAsksBytes = 1024;  // the most a packet's chunk asks fill
+constexpr size_t kChunkOobMin = 100;      // an out-of-band chunk is longer (1044 bytes)
 
 std::string hex32(uint32_t v) {
   char b[16];
@@ -136,7 +138,7 @@ void next_skin_or_begin(QwClientEnd& c) {
     c.dl.name = path;
     c.dl.active = true;
     c.dl.chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
-    c.dl.number = static_cast<int>(c.downloaded.size()) + 1;
+    c.dl.number = ++c.downloads_started;
     client_command(c, "download " + path);
     return;
   }
@@ -403,6 +405,9 @@ void on_stufftext(QwClientEnd& c, const std::string& text) {
         if (c.stage == ClientStage::active) c.stage = ClientStage::signon;
         client_command(c, "new");
       }
+    } else if (!cmd.empty() && cmd != "bf" && !line.starts_with("//") &&
+               c.to_run.size() < kStuffedKept) {
+      c.to_run.push_back(line);  // the rest runs in the window's console, as the server's
     }
   }
 }
@@ -461,7 +466,7 @@ void next_content_or_prespawn(QwClientEnd& c) {
     c.dl.name = c.models[1];
     c.dl.active = true;
     c.dl.chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
-    c.dl.number = static_cast<int>(c.downloaded.size()) + 1;
+    c.dl.number = ++c.downloads_started;
     client_command(c, "download " + c.dl.name);
     return;
   }
@@ -473,7 +478,7 @@ void next_content_or_prespawn(QwClientEnd& c) {
     c.dl.name = path;
     c.dl.active = true;
     c.dl.chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
-    c.dl.number = static_cast<int>(c.downloaded.size()) + 1;
+    c.dl.number = ++c.downloads_started;
     client_command(c, "download " + path);
     return;
   }
@@ -865,10 +870,14 @@ void read_oob(QwClientEnd& c, const uint8_t* data, size_t size) {
   if (size == 1 && data[0] == 'l') return;
   if (size < 5) return;
   const char type = static_cast<char>(data[4]);
-  if (size > 10 && std::memcmp(data + 4, "\\chunk", 6) == 0) {
+  // A download's chunk sent out of band: a print ('n') whose text starts `\chunk`, then the
+  // download's number, the download message's id and its chunk. Never printed: one from an
+  // earlier download (its number another) is dropped, so it never lands in this one's bytes.
+  if (size > kChunkOobMin && type == 'n' && std::memcmp(data + 5, "\\chunk", 6) == 0) {
     gn::Reader r = gn::make_reader(data, size);
-    r.at = 10;
-    read_long(r);  // the download's number
+    r.at = 11;
+    const int32_t number = read_long(r);
+    if (number != c.dl.number || gn::read_u8(r) != svc::download) return;
     const int32_t chunk = read_long(r);
     const uint8_t* p = gn::read_view(r, kChunkBytes);
     c.chunks_oob++;
@@ -1184,7 +1193,8 @@ void client_tick(QwClientEnd& c, int64_t now_us) {
   }
   if (c.dl.active && c.dl.chunked && c.dl.size > 0) {
     int asked = 0;
-    for (size_t i = 0; i < c.dl.have.size() && asked < kChunksPerTick; i++) {
+    for (size_t i = 0;
+         i < c.dl.have.size() && asked < kChunksPerTick && w.size + 32 <= kChunkAsksBytes; i++) {
       if (c.dl.have[i] || (c.dl.asked[i] >= 0 && c.now - c.dl.asked[i] < kChunkRetry)) continue;
       c.dl.asked[i] = c.now;
       int held = 0;

@@ -33,6 +33,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -40,6 +41,7 @@
 namespace ge::console {
 
 class Console;
+class Cvars;
 
 // One command-line flag a program takes, documented: the flag as typed ("-classic",
 // "--size=WxH"), its argument ("<id>", "" a switch) and what it does in a player's words.
@@ -73,11 +75,15 @@ struct ManualName {
 
 // What a program tells its console about itself for the manual (`Console::set_manual`): its id and
 // name, the games it plays (with the pass it is in now: ids split by commas) and its flags.
+// `more`: the pass's settings that live OUTSIDE the console (a game's rules, made with each map
+// and set through the console's unknown-word hook), appended to `out` for the pass of `games` (the
+// ids split by commas); `describe` fills their program and games and drops a name the console has.
 struct ManualInfo {
   ManualName program;
   std::vector<ManualName> games;
   std::string pass;
   std::vector<FlagDoc> flags;
+  std::function<void(std::string_view games, std::vector<ManualEntry>& out)> more = nullptr;
 };
 
 // One source: what a program wrote (its passes' entries, its name and its games').
@@ -93,6 +99,9 @@ bool kind_named(std::string_view word, ManualKind& out);
 // `program` in the pass of `games` (the ids split by commas, "" none).
 std::vector<ManualEntry> describe(const Console& console, std::string_view program,
                                   std::string_view games);
+// The settings of `cvars` alone as entries (describe's settings part), each in `layer` ("" its
+// own); program and games left empty.
+std::vector<ManualEntry> describe_settings(const Cvars& cvars, std::string_view layer = "");
 // The source as text (the format above), entries in the order given.
 std::string manual_text(const ManualSource& source);
 // `text` read and ADDED to `out` (several programs' files read into one); false with `error` (the

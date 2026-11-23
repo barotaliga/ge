@@ -88,10 +88,9 @@ std::array<double, 3> toward(const double p[3], const ge::camera::Vec3& eye) {
   return {d[0] / len, d[1] / len, d[2] / len};
 }
 
-// The classic explosion sprite's frames and their rate, and the classic bolt's segment, units.
+// The classic explosion sprite's frames and their rate.
 constexpr int kSpriteFrames = 6;
 constexpr double kSpriteFps = 10;
-constexpr double kBoltSegment = 30;
 // The placed effects' entity numbers (below every static's): the sprites', then the bolts'.
 constexpr int kSpriteEntities = -(1 << 20), kBoltEntities = -(1 << 21);
 constexpr int kPlaceEntities = -(1 << 22);  // loc_draw's markers
@@ -697,16 +696,19 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.pose = v.pose;
   out.missiles = v.missiles;
   out.explosions = l.explosions;
-  out.explosion_kinds = l.explosion_kinds;
+  out.explosion_codes = l.explosion_codes;
   out.effects = l.effects;
   out.blows = l.blows;
   out.bonuses = l.bonuses;
   for (int k = 0; k < 4; k++) out.air_tint[k] = l.cshift[k];
   out.campaign = l.campaign_host != nullptr;
   out.q2 = listen_is_q2(l);  // its own arrivals, never the warp's fog
-  for (int k = 0; k < 4; k++)
-    out.q2_blend[k] =
-        out.q2 && l.server != nullptr ? l.server->world.clients[0].numbers.blend[k] : 0;
+  const auto* rules = out.q2 && l.server != nullptr ? &l.server->world.clients[0].numbers : nullptr;
+  for (int k = 0; k < 4; k++) {
+    out.q2_blend[k] = rules != nullptr ? rules->blend[k] : 0;
+    out.q2_apart[k] = rules != nullptr ? rules->blend_apart[k] : 0;
+    out.q2_damage[k] = rules != nullptr ? rules->damage_blend[k] : 0;
+  }
   out.effect_models = effect_model(l, EffectModel::explosion);
   if (l.server != nullptr) out.beam_model = listed_model(l.server->models, "progs/beam.mdl");
   place_models(l, out.models);
@@ -1169,14 +1171,19 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     s.treads.clear();
     s.marked = nullptr;
     s.beams.clear();
+    s.q2_models.clear();
+    s.q2_models_next = 0;
+    s.q2_cables.clear();
+    s.q2_lasers.clear();
   }
   for (; s.explosions_seen < l.explosions.size(); s.explosions_seen++) {
     const ge::camera::Vec3 at = engine_point(l.explosions[s.explosions_seen]);
     double p[3];
     put(at, p);
     // Quake II's cl_disable_particles and cl_disable_explosions by the kind it is.
-    const uint8_t kind =
-        s.explosions_seen < l.explosion_kinds.size() ? l.explosion_kinds[s.explosions_seen] : 0;
+    const uint8_t code =
+        s.explosions_seen < l.explosion_codes.size() ? l.explosion_codes[s.explosions_seen] : 0;
+    const uint8_t kind = q2_blast_kind(code);
     const bool no_specks = ge::classic::q2_no_blast_specks(s.on.q2, kind);
     const bool no_ball = ge::classic::q2_no_blast_ball(s.on.q2, kind);
     if (s.on.explosions) {
@@ -1220,6 +1227,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       }
       s.mains.push_back(s.blasts[first]);   // its light
       if (no_ball) s.blasts.resize(first);  // and no ball of fire
+    } else if (q2_classic_blast(s, code, l.explosions[s.explosions_seen], p, no_specks, t, out)) {
+      // Quake II's own: its specks, its ball or burst and its light (q2_model_fx.hpp)
     } else if (no_specks || !throw_scripted(s, "explosion", p, kUpWay, 1, -1e9, t, out)) {
       if (!no_specks) fx::explosion(p, s.seed++, s.palette, &out.births);
       s.lit.push_back({at, t, l.explosions[s.explosions_seen], no_ball});  // its light, its sprite
@@ -1416,6 +1425,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           const double off_face[3] = {e.way.x, e.way.y, e.way.z};
           fx::q2_specks(p, off_face, e.q2_specks, e.colour, 32, true, s.seed++, s.palette,
                         &out.births);
+          if (l.q2) q2_model_fx(s, e.code, e.at, e.way, t);  // its smoke and flash
         } else {
           // 20 specks a pellet, 10 a nail, 20 a big nail.
           const int specks = e.kind == EffectKind::spike ? 10 * e.count : 20 * e.count;
@@ -1463,6 +1473,10 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           fx::lava_splash(p, s.seed++, s.palette, &out.births);
         break;
       case EffectKind::beam: {
+        if (l.q2 && e.code == 23) {  // the BFG's laser: a strip for a tenth of a second
+          q2_laser(s, e, t);
+          break;
+        }
         double normal[3], dir[3];
         face(e.at, normal, dir);
         const ge::camera::Vec3 root = engine_point(e.at);
@@ -1523,6 +1537,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
           q2_named_fx(s, e, p, s.on.warps && near_warp(s.warps, e.at, t), t, out);
           break;
         }
+        if (e.name == "te_blaster" && l.q2 && !s.on.hits) {  // the classic: its specks, its flare
+          const double off_face[3] = {e.way.x, e.way.y, e.way.z};
+          fx::q2_blaster_specks(p, off_face, s.seed++, s.palette, &out.births);
+          q2_model_fx(s, 2, e.at, e.way, t);
+          break;
+        }
         if (e.name == "te_blaster") {  // Quake II's bolt landing: yellow sparks
           fx::blaster_hit(p, s.seed++, &out.births);
           // On a wall: a small glowing mark, the bolt's heat left in it.
@@ -1554,6 +1574,8 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         put(engine_point(e.end), to);
         // Quake II's bubbles and force walls along their lines (client/world_fx_q2.cpp).
         if (q2_named_trail(s, e, from, to, out)) break;
+        // Quake II's cables in the classic look: a segment model every 30 units (q2_model_fx.hpp).
+        if (l.q2 && !s.on.monsters && q2_cable(s, e, t)) break;
         // Quake II's monsters' cables (a parasite's tongue, a medic's line) and shots leaving.
         if (const fx::Cable c = fx::cable_of(e.name); c != fx::Cable::none) {
           if (s.on.monsters) {
@@ -1696,7 +1718,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   if (!l.beams.empty())
     laser_beams(l.beams, s.seed++, s.palette, t, out.beams);  // seed: lasers only
   ge::core::Rng roll = ge::core::make_rng(s.seed++);          // the classic bolt's segments' roll
-  int segment = 0;
+  int segment = kBoltEntities;
   for (HeldBeam& b : s.beams) {
     if (b.q2_trail) {  // Quake II's cl_railtrail_type beam: drawn in either look
       out.beams.push_back(b);
@@ -1736,24 +1758,11 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       out.lights.insert(out.lights.end(), ll, ll + n);
       continue;
     }
-    // The classic bolt: its model every kBoltSegment units from the root to the end, each turned
-    // to a fresh roll every frame (the bolt's crackle).
-    const sh::Vec3f d = {b.map_to.x - b.map_from.x, b.map_to.y - b.map_from.y,
-                         b.map_to.z - b.map_from.z};
-    const double len = ge::core::hypot3(d.x, d.y, d.z);
-    if (len < 1) continue;
-    const float yaw = static_cast<float>(std::atan2(d.y, d.x) * 180 / ge::core::kPi);
-    const float pitch =
-        static_cast<float>(std::atan2(d.z, std::sqrt(d.x * d.x + d.y * d.y)) * 180 / ge::core::kPi);
-    for (int i = 0; i * kBoltSegment < len; ++i) {
-      Placed seg;
-      seg.entity = kBoltEntities - segment++;
-      seg.modelindex = b.listed >= 0 ? b.listed : l.effect_models + static_cast<int>(b.model);
-      const float k = static_cast<float>(i * kBoltSegment / len);
-      seg.origin = {b.map_from.x + d.x * k, b.map_from.y + d.y * k, b.map_from.z + d.z * k};
-      seg.angles = {pitch, yaw, static_cast<float>(ge::core::range(roll, 0, 360))};
-      out.models.push_back(seg);
-    }
+    // The classic bolt: its model every 30 units from the root while short of the end, each
+    // turned to a fresh roll every frame (the bolt's crackle).
+    Chain c;
+    c.modelindex = b.listed >= 0 ? b.listed : l.effect_models + static_cast<int>(b.model);
+    place_chain(b.map_from, b.map_to, c, roll, segment, out.models);
   }
   burns_of(s, t, out.burns);
   // The marks still glowing light the room round them (render/marks.hpp's mark_glows).
@@ -1809,6 +1818,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     spr.origin = b.map_at;
     out.models.push_back(spr);
   }
+  q2_draw_model_fx(s, l.effect_models, l.me, l.own > 0 ? l.me.entity : 0, t, out);
 
   // The powers held: a glow round each holder (blue the quad's, red the shield's), the local
   // player's own among them.
@@ -1830,7 +1840,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   const int mine = l.own > 0 ? l.me_effects : 0;
   if (l.own > 0) glow(mine, p.origin);
 
-  step_screen(l, s, dt, mine, out);
+  step_screen(l, s, dt, out);
 }
 
 bool load_held_fire(HeldFire& f, std::string* error, std::span<const std::string_view> at_eye) {
@@ -1879,6 +1889,27 @@ void fire_held(HeldFire& f, const view::HandFrame& hand, bool on, double now_s, 
     }
     out.beams.push_back(across);
     return;
+  }
+}
+
+void place_chain(const sh::Vec3f& from, const sh::Vec3f& to, const Chain& c, ge::core::Rng& roll,
+                 int& entity, std::vector<Placed>& out) {
+  const sh::Vec3f d = {to.x - from.x, to.y - from.y, to.z - from.z};
+  const double len = ge::core::hypot3(d.x, d.y, d.z);
+  if (len < (c.fit ? 1e-6 : 1)) return;
+  const float yaw = static_cast<float>(std::atan2(d.y, d.x) * 180 / ge::core::kPi);
+  const float pitch =
+      static_cast<float>(std::atan2(d.z, std::sqrt(d.x * d.x + d.y * d.y)) * 180 / ge::core::kPi);
+  const int n = chain_links(len);
+  for (int i = 0; i < n; ++i) {
+    Placed seg;
+    seg.entity = entity--;
+    seg.modelindex = c.modelindex;
+    const auto k = static_cast<float>(chain_share(i, n, len, c.fit));
+    seg.origin = {from.x + d.x * k, from.y + d.y * k, from.z + d.z * k};
+    seg.angles = {pitch, yaw, static_cast<float>(ge::core::range(roll, 0, 360))};
+    seg.no_shadow = c.no_shadow;
+    out.push_back(seg);
   }
 }
 

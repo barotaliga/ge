@@ -240,6 +240,25 @@ TEST(the_teams_extras_on_a_kept_line) {
   CHECK(c.expand_text("$triggermatch").empty());
 }
 
+// f_fakeshaft: answered with the beam's smoothing as cl_fakeshaft has it.
+TEST(f_fakeshaft_is_answered_with_the_beams_smoothing) {
+  con::Console c;
+  cl::QwIgnore g;
+  cl::DemoState s = room();
+  cl::add_qw_ignore(c, g, s);
+  g.con = &c;
+  g.chat.con = &c;
+  c.cvars().add({.name = "cl_fakeshaft", .fallback = "1"});
+  std::vector<std::string> said;
+  c.add_command("say", "", [&said](con::Console&, const con::Args& a) { said.push_back(a[1]); });
+  c.execute("cl_fakeshaft 0.25");
+  std::vector<cl::DemoPrint> prints{{3, "bobby: f_fakeshaft\n"}};
+  cl::drop_ignored(g, s, prints, 100);
+  c.run();
+  CHECK_MSG(said.size() == 1 && said[0] == "fakeshaft 25.0%",
+            said.empty() ? std::string("nothing said") : said[0]);
+}
+
 // Quake II's version reply: a line ENDING in !version, answered 1 to 2 s on, once in two minutes.
 TEST(quake_ii_answers_a_line_ending_in_version_after_a_second) {
   con::Console c;

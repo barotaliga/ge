@@ -211,7 +211,9 @@ void q2_write_player_ext(std::vector<uint8_t>& out, const Q2PlayerState& a, cons
   if (!same3(b.view_offset, a.view_offset)) f |= kViewOffset;
   if (!same3(b.view_angles, a.view_angles)) f |= kViewAngles;
   if (!same3(b.kick, a.kick)) f |= kKick;
-  if (b.gun_frame != a.gun_frame) f |= kGunFrame;
+  if (b.gun_frame != a.gun_frame || !same3(b.gun_offset, a.gun_offset) ||
+      !same3(b.gun_angles, a.gun_angles))
+    f |= kGunFrame;  // the frame, offset and angles travel together
   const bool blend = std::memcmp(b.blend, a.blend, sizeof b.blend) != 0;
   const bool damage = v2 && std::memcmp(b.damage_blend, a.damage_blend, sizeof b.blend) != 0;
   if (blend || damage) f |= kBlend;

@@ -295,15 +295,15 @@ void run(ge::lab::Lab& lab) {
   c.run();
   for (v.key(con::EditKey::end); !v.input().empty();) v.key(con::EditKey::backspace);
   v.type("status");
-  v.set_foot("maps/dm2.bsp 40% (90 KB)", 0.4);
+  v.set_foot("maps/dm2.bsp", 0.4);
   Picture joining = backdrop(w, h);
   draw(joining, v);
   lab.shot({"joining",
             "JOINING: THE FOOT AND REMOTE MODE",
             "A game being joined shows the file coming on the console's foot, a bar and its "
             "share; remotemode sends what is typed to the server's console, its prompt #.",
-            "a bar 40% full and maps/dm2.bsp 40% (90 KB) over the input line, which reads # status",
-            {{"remotemode", "on"}, {"foot", "maps/dm2.bsp 40% (90 KB)"}}},
+            "maps/dm2.bsp, a bar 40% full and 40% over the input line, which reads # status",
+            {{"remotemode", "on"}, {"foot", "maps/dm2.bsp"}}},
            joining);
   v.set_foot("");
   c.execute("remotemode");

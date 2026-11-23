@@ -133,6 +133,16 @@ void q2_item_back(const double at[3], uint32_t seed, Palette palette, Particles*
 // sparks).
 void q2_specks(const double at[3], const double normal[3], int count, int colour, int reach,
                bool vary, uint32_t seed, Palette palette, Particles* out, double fall = 80);
+// Quake II's blaster bolt's hit: 40 specks of palette 0xe0..0xe7 off the face along `normal` (map
+// units' axes), each 0..15 units out along it and -4..3 across, pushed off at 30 units/s with up to
+// 40 more on each axis, falling, living 0.5..0.8 s.
+void q2_blaster_specks(const double at[3], const double normal[3], uint32_t seed, Palette palette,
+                       Particles* out);
+// Quake II's explosion's specks: 256 of palette `colour` + 0..7 (0xe0 a rocket's or a grenade's,
+// 0xd0 the BFG's big burst), each within -16..15 units of the point on every axis, flung at
+// -192..191 units/s on each axis and falling, living 0.625..1 s.
+void q2_blast_specks(const double at[3], int colour, uint32_t seed, Palette palette,
+                     Particles* out);
 // QUAKE II'S OTHER EFFECTS OFF THE WIRE (map units, its own numbers):
 // - BUBBLES along a line, the first at its start: grey (4..11), within 2 units, rising at 6
 //   units/s and drifting at up to 5, a bubble every 32 units, living 1..1.2 s; the second kind
@@ -294,6 +304,13 @@ struct Screen {
   double air = 0;
   double air_rgb[3] = {130, 80, 50};
 };
+// THE POWERS HELD, from the player's item bits (the items stat the server sends: ring, pentagram,
+// suit, quad), never from the glow bits on his own figure, which a server may set for other
+// reasons (a match's prewar): the classic tint (`powerup`, the first held of quad, suit, ring,
+// pentagram) and ours (`power`, `shield`, `suit`, `stealth`).
+inline constexpr int kItemRing = 524288, kItemPent = 1048576, kItemSuit = 2097152,
+                     kItemQuad = 4194304;
+void take_powers(Screen& s, int items);
 // The classic damage tint: a blow of `armour` and `blood` points adds 3 x its count (half of
 // each, at least kHurtCountMin) to `strength`, kept at most kClassicHurtMost, and takes the
 // blow's colour into `rgb`: (200, 100, 100) when the armour took more than the blood, (220, 50,
