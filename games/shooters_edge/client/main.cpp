@@ -681,8 +681,7 @@ int run_main(int argc, char** argv) {
   cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
                  next_map);
 
-  // The held weapons: a classic game's own, else ours (the folder given, else the tree's;
-  // held.hpp).
+  // The held weapons: a classic game's own, else ours (the folder given, else the tree's).
   std::vector<ge::viewmodel::HeldModel> weapons;
   std::vector<std::string> model_dirs;
   if (!args.models.empty()) model_dirs.push_back(args.models);
@@ -1116,8 +1115,7 @@ int run_main(int argc, char** argv) {
     cl::hear_swap(synth, under_ear);                      // s_swapstereo
     cl::hear_ears(synth, under_ear);                      // s_hrtf
     picture.q2fx.plain_stereo = !cl::hrtf_on(under_ear);  // al_merge_looping 1 merges only then
-    picture.q2fx.hand =
-        cl::beam_hand(view_settings.hand, view_settings.gun);  // the own plasma beam's side
+    picture.q2fx.hand = cl::beam_hand(view_settings.hand, view_settings.gun);  // the beam's side
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
