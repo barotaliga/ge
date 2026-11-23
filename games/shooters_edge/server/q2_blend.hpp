@@ -14,8 +14,13 @@
 //   it fades 0.06 a frame; a pickup sets 0.25, fading 0.1 a frame;
 // - in the intermission there is none.
 //
+// THE DAMAGE FLASH APART: beside the whole tint, the tint without the damage flash
+// (`blend_apart`) and the flash alone (`damage_blend`), for a window that draws the flash as a
+// frame round the view's edge (gl_damageblend_frac); a stock client gets the whole tint.
+//
 // ge:summary Quake II's screen tint: liquids at the eye, the powers, the damage and pickup flashes
 // ge:keywords q2 blend screen-tint damage-flash pickup-flash bonus-flash power-tint underwater
+// ge:keywords damage_blend blend_apart
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_fight_test.cpp
 

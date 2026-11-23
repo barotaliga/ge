@@ -98,7 +98,10 @@ struct PlayerNumbers {
   float view_offset[3] = {}, kick[3] = {};
   float gun_offset[3] = {}, gun_angles[3] = {};  // the held weapon's own shift and sway
   float blend[4] = {};  // the tint over his view the rules lay (Quake II's), r g b a in 0..1
-  float fov = 0;        // the field of view the rules hold him to, degrees; 0 his own
+  // The same without the damage flash, and the flash alone, for a window that draws the flash
+  // apart (as a frame round the view's edge); a rules that keeps none apart leaves both 0.
+  float blend_apart[4] = {}, damage_blend[4] = {};
+  float fov = 0;  // the field of view the rules hold him to, degrees; 0 his own
   float frags = 0;
   // A runner's own weapons and ammunition, for the bots (shooterbots/bot_arsenal.hpp), where
   // Quake's bits above do not fit (Quake II's): the weapon held and those carried as bits of the
