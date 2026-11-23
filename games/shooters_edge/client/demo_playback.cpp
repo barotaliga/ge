@@ -377,6 +377,7 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
                            double wall_dt_s, double now_s, std::vector<std::string>& say,
                            std::string& error) {
   t.smooth = p.lerp != 0;
+  t.snap_every_s = p.snap_every_s;
   zoom_third_person(p, in.zoom, wall_dt_s);
   const float x = in.x, y = in.y;
   if (x != p.pointer_x || y != p.pointer_y) p.shown_until = now_s + kBarShowS;
@@ -421,8 +422,12 @@ TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in
   mark(p, t);
   // A skip and a jump become a seek from where the playhead stands.
   const double here = t.timeline.t;
-  if (p.share_ask >= 0) p.seek_ask = std::clamp(p.share_ask, 0.0, 1.0) * length;
-  if (p.share_skip_ask != 0) p.skip_ask += p.share_skip_ask * length;
+  if ((p.share_ask >= 0 || p.share_skip_ask != 0) && p.scan.length_s <= 0) {
+    say.push_back("The demo's length is not known, so it cannot jump by a share of it.");
+  } else {
+    if (p.share_ask >= 0) p.seek_ask = std::clamp(p.share_ask, 0.0, 1.0) * length;
+    if (p.share_skip_ask != 0) p.skip_ask += p.share_skip_ask * length;
+  }
   p.share_ask = -1;
   p.share_skip_ask = 0;
   if (std::exchange(p.end_ask, false)) {  // two seconds before the end, rounded up

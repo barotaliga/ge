@@ -44,6 +44,22 @@ TEST(sky_and_timerefresh_need_a_map_and_sky_its_name) {
   CHECK(words.refresh_asked == 2);
 }
 
+TEST(r_reload_needs_a_map_and_asks_the_world_again) {
+  ge::console::Console con{false};
+  std::vector<std::string> said;
+  con.set_sink([&said](std::string_view l) { said.emplace_back(l); });
+  ge::classic::SkyTyped sky;
+  cl::RenderWords words;
+  std::string map;
+  cl::add_render_words(con, words, sky, [&map] { return map; });
+  con.run_now("r_reload");
+  CHECK(said.size() == 1 && said[0] == "No map loaded." && !words.reload_asked);
+  map = "q2dm1";
+  said.clear();
+  con.run_now("r_reload");
+  CHECK(said.empty() && words.reload_asked && !words.sky_asked);
+}
+
 TEST(timerefresh_says_its_seconds_and_rate) {
   CHECK(cl::refresh_line(0.5, 128) == "0.500000 seconds (256.000000 fps)");
   CHECK(cl::refresh_line(0, 128) == "0.000000 seconds (0.000000 fps)");

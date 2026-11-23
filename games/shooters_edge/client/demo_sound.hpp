@@ -23,7 +23,7 @@
 // ge:summary A recorded game's sounds on the synth: the pack's WAVs, channels, loops, ambience
 // ge:keywords retired-sounds sounding use-after-free audio-thread
 // ge:keywords demo-sound demo sounds sound-list static-sound loop ambience listener channels
-// ge:keywords stopsound attenuation playback export
+// ge:keywords stopsound attenuation playback export soundlist sound-list-lines
 // ge:skill audio shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -82,6 +82,9 @@ class DemoSounds {
   bool sounding() const;
 
   const DemoSoundStats& stats() const { return stats_; }
+  // `soundlist`'s lines: each recording read, by name in order, with its length and rate ("not
+  // found" for one the packs lack), then the count and the memory they hold.
+  std::vector<std::string> list_lines() const;
 
   // The enhanced sounds' switch (look::Picture's `ce.sounds`, read at each load; null: off) and,
   // for a test, the cache folder to read them from (empty: the packs' own, found once).

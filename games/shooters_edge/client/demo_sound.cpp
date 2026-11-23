@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <span>
 #include <vector>
 
@@ -251,6 +252,28 @@ void DemoSounds::static_loops(const DemoState& s) {
     else
       stats_.loops++;
   }
+}
+
+std::vector<std::string> DemoSounds::list_lines() const {
+  std::vector<std::string> out;
+  size_t bytes = 0, found = 0;
+  for (const auto& [name, pcm] : loaded_) {
+    if (!pcm) {
+      out.push_back("  not found  " + name);
+      continue;
+    }
+    found++;
+    bytes += pcm->samples.size() * sizeof(float);
+    char line[64];
+    std::snprintf(line, sizeof line, "%6.2f s %5d Hz%s  ", pcm->seconds(), pcm->rate,
+                  pcm->loops() ? " loop" : "     ");
+    out.push_back(line + name);
+  }
+  char total[96];
+  std::snprintf(total, sizeof total, "%zu sounds, %.1f MB", found,
+                static_cast<double>(bytes) / (1024.0 * 1024.0));
+  out.emplace_back(total);
+  return out;
 }
 
 bool DemoSounds::sounding() const {

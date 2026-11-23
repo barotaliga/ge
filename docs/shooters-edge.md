@@ -517,6 +517,7 @@ a marker names it.
 | Page Down, N / Page Up, P | `demo_next`, `demo_prev` | the next or last highlight (a few seconds before it) |
 | Home, End | | the start, the end |
 | | `demo_highlights [all]` | the tracked player's highlights (or everyone's) in the console |
+| SHIFT held | | free look: the mouse turns the view away from the recorded one until SHIFT is let go |
 
 A HIGHLIGHT is a moment of the tracked player's (`client/demo_highlights.hpp`): a MULTI KILL (two
 or more kills within 0.2 s: one rocket, one blast), a LONG ROCKET (a rocket kill whose rocket flew
@@ -528,8 +529,11 @@ other player whose frags went up then is the killer, the rockets are followed fr
 appear to where they go. No obituary text is read. `make lab LAB=se-highlights
 ARGS="--file=<demo>"` lists a demo's highlights and kills and pictures every player's bar.
 
-A seek back reads the demo again from its start without drawing (a 10 minute match in a fraction
-of a second); the times on the bar are the demo's TIMELINE, its frames' steps added up with a long
+A seek back starts from the last SNAPSHOT before it (the demo as read, kept every
+`demo_snapshots` seconds of the timeline, 10 by default; Quake II spells it `cl_demosnaps`) and
+reads on from there without drawing; with none kept (`demo_snapshots 0`) it reads the demo again
+from its start (a 10 minute match in a fraction of a second). A seek by a share of the demo
+(`seek 50%`) needs its length, so a demo that could not be scanned says it cannot. The times on the bar are the demo's TIMELINE, its frames' steps added up with a long
 pause in the recording counted as a quarter second, the clock `-demovideo` runs on.
 
 **A multiview recording** holds every player, so the view rides one of them: the lowest slot
