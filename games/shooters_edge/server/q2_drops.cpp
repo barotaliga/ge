@@ -179,10 +179,10 @@ void fight_death_drops(Q2Server& s, int slot) {
   Toss out[6];
   int n = 0;
   if (r.item != nullptr && r.ammo != SqAmmo::none && p.body.ammo[static_cast<int>(r.ammo)] > 0)
-    out[n++] = {0, sq_item(r.item), 0};
+    out[n++] = {0, sq_item(r.item, s.opt.pack), 0};
   const auto on = [&](const char* name) { return s.cvars.find(name)->on(); };
   const auto timed = [&](bool wanted, double until, const char* item) {
-    if (wanted && until > s.level_time + 1) out[n++] = {until - s.level_time, sq_item(item), 0};
+    if (wanted && until > s.level_time + 1) out[n++] = {until - s.level_time, sq_item(item, s.opt.pack), 0};
   };
   for (const SqPower& pw : sq_powers())
     timed((pw.drop_dmflag != 0 && fight_dmflag(s, pw.drop_dmflag)) ||
