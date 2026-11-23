@@ -645,7 +645,7 @@ bool targets_spawn(Q2Server& s, int i) {
       return true;
     }
     case kKey:
-      e.needs = sq_item(key(s, e, "item"));
+      e.needs = sq_item(key(s, e, "item"), s.opt.pack);
       if (e.needs < 0 || e.target.empty()) e.gone = true;  // said at load (q2_lines.cpp)
       add_sound(s, "misc/keytry.wav");
       add_sound(s, "misc/keyuse.wav");
@@ -995,7 +995,7 @@ bool targets_use(Q2Server& s, int i, int activator) {
                               std::to_string(kSpares) + " it can.");
         return true;
       }
-      if (sq_item(e.target) >= 0) fight_drop_at(s, e.origin, e.target);
+      if (sq_item(e.target, s.opt.pack) >= 0) fight_drop_at(s, e.origin, e.target);
       return true;
     }
     case kBomb: {

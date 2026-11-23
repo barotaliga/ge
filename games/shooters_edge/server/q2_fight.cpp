@@ -1424,9 +1424,9 @@ void fight_took(Q2Server& s, int slot, int item, int grenades_before) {
   const SqItem& it = kSqItems[item];
   const bool dm = deathmatch(s);
   // The status bar's pickup (3 s), and the item selected when it has a use.
-  p.picked = sq_item_number(item);
+  p.picked = sq_item_number(item, s.opt.pack);
   p.picked_at = s.level_time;
-  if (sq_selects(p.picked)) p.body.selected = p.picked;
+  if (sq_selects(p.picked, s.opt.pack)) p.body.selected = p.picked;
   if (it.kind == SqKind::power_armour && dm && p.body.counts[item] == 1) p.power_on = true;
   if (it.kind == SqKind::powerup && dm && (s.cvars.find("dmflags")->integer() & 16) != 0)
     fight_use(s, slot, item);  // instant items
@@ -1479,7 +1479,7 @@ bool fight_command(Q2Server& s, int slot, const std::string& cmd, const std::str
     if (sq_can_fire(p.body, w)) {
       fight_choose(s, slot, w);
       if (quick && p.hand.pending == w && kSqWeapons[w].item != nullptr) {
-        p.picked = sq_item_number(sq_item(kSqWeapons[w].item));
+        p.picked = sq_item_number(sq_item(kSqWeapons[w].item, s.opt.pack), s.opt.pack);
         p.picked_at = s.level_time - 2.1;
       }
       break;

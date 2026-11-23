@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <span>
 #include <string>
 
 #include "shooters_edge/server/q2_combat.hpp"
@@ -74,7 +75,22 @@ constexpr Numbered kNumbered[kSqItemNumbers] = {
     {"key_airstrike_target", "i_airstrike", "Airstrike Marker"},
     {"item_health", "i_health", "Health"},
 };
-constexpr int kHealthNumber = 41;
+
+// Each pack's list (q2_pack.hpp), in its own order: the base game's until a pack's rows land.
+std::span<const Numbered> numbered(Q2Pack pack) {
+  switch (pack) {
+    case Q2Pack::reckoning:
+    case Q2Pack::ground_zero:
+    case Q2Pack::base:
+      break;
+  }
+  return kNumbered;
+}
+
+const Numbered* row_of(int n, Q2Pack pack) {
+  const auto list = numbered(pack);
+  return n > 0 && n < static_cast<int>(list.size()) ? &list[size_t(n)] : nullptr;
+}
 
 // The bars (q2_bar.hpp). The bottom row 24 px from the screen's foot in the 320 px field; the
 // row above at 50 px, a pickup's name level with the middle of its icon.
@@ -103,24 +119,12 @@ int image(const Q2Server& s, std::string_view name) {
   return 0;
 }
 
-int ammo_number(SqAmmo a) {
-  switch (a) {
-    case SqAmmo::shells:
-      return 18;
-    case SqAmmo::bullets:
-      return 19;
-    case SqAmmo::grenades:
-      return 12;
-    case SqAmmo::rockets:
-      return 21;
-    case SqAmmo::cells:
-      return 20;
-    case SqAmmo::slugs:
-      return 22;
-    case SqAmmo::none:
-      break;
-  }
-  return 0;
+// The classname of each ammo kind's item, by `SqAmmo`.
+constexpr const char* kAmmoClass[kSqAmmoKinds] = {
+    "", "ammo_shells", "ammo_bullets", "ammo_grenades", "ammo_rockets", "ammo_cells", "ammo_slugs"};
+
+int ammo_number(SqAmmo a, Q2Pack pack) {
+  return a == SqAmmo::none ? 0 : sq_number_of(kAmmoClass[static_cast<int>(a)], pack);
 }
 
 // Player `slot`'s `hand` setting: 0 right, 1 left, 2 centre.
@@ -132,47 +136,78 @@ int hand_of(const Q2Server& s, int slot) {
 
 }  // namespace
 
-int sq_item_number(int row) {
-  if (row < 0 || row >= kSqItemCount) return 0;
-  const std::string_view cn = kSqItems[row].classname;
-  if (kSqItems[row].kind == SqKind::health && cn.rfind("item_health", 0) == 0) return kHealthNumber;
-  for (int n = 1; n < kSqItemNumbers; n++)
-    if (cn == kNumbered[n].classname) return n;
+int sq_numbers(Q2Pack pack) { return static_cast<int>(numbered(pack).size()); }
+
+int sq_number_of(std::string_view classname, Q2Pack pack) {
+  const auto list = numbered(pack);
+  for (size_t n = 1; n < list.size(); n++)
+    if (classname == list[n].classname) return static_cast<int>(n);
   return 0;
 }
 
-int sq_weapon_number(int weapon) {
-  if (weapon == static_cast<int>(SqWeapon::blaster)) return kSqBlasterNumber;
-  if (weapon == static_cast<int>(SqWeapon::hand_grenade)) return 12;
+int sq_item_number(int row, Q2Pack pack) {
+  if (row < 0 || row >= kSqItemCount) return 0;
+  const std::string_view cn = kSqItems[row].classname;
+  if (kSqItems[row].kind == SqKind::health && cn.rfind("item_health", 0) == 0)
+    return sq_number_of("item_health", pack);
+  return sq_number_of(cn, pack);
+}
+
+int sq_weapon_number(int weapon, Q2Pack pack) {
+  if (weapon == static_cast<int>(SqWeapon::blaster)) return sq_number_of("weapon_blaster", pack);
+  if (weapon == static_cast<int>(SqWeapon::hand_grenade)) return sq_number_of("ammo_grenades", pack);
   if (weapon < 0 || weapon >= kSqWeaponCount || kSqWeapons[weapon].item == nullptr) return 0;
-  return sq_item_number(sq_item(kSqWeapons[weapon].item));
+  return sq_item_number(sq_item(kSqWeapons[weapon].item, pack), pack);
 }
 
-bool sq_selects(int n) {
-  // The power armours, every weapon and the grenades, and the five power-ups with a use.
-  return (n >= 5 && n <= 17) || (n >= 23 && n <= 27);
+bool sq_weapon_numbered(int n, Q2Pack pack) {
+  const Numbered* r = row_of(n, pack);
+  if (r == nullptr) return false;
+  const std::string_view cn = r->classname;
+  if (cn == "weapon_blaster" || cn == "ammo_grenades") return true;
+  const int row = sq_item(cn, pack);
+  return row >= 0 && kSqItems[row].kind == SqKind::weapon;
 }
 
-int sq_count(const SqBody& b, int n) {
-  if (n <= 0 || n >= kSqItemNumbers || n == 4 || n == kHealthNumber) return 0;
-  if (n == kSqBlasterNumber) return b.blaster ? 1 : 0;
-  for (int a = 0; a < kSqAmmoKinds; a++)
-    if (ammo_number(static_cast<SqAmmo>(a)) == n) return b.ammo[a];
-  if (n <= 3) {  // the armour worn: 1 body, 2 combat, 3 jacket
-    const int worn = static_cast<int>(b.armour);
-    const int number = worn == 3 ? 1 : worn == 2 ? 2 : worn == 1 ? 3 : 0;
-    return number == n ? b.armour_count : 0;
-  }
-  const int row = sq_item(kNumbered[n].classname);
-  return row >= 0 ? b.counts[row] : 0;
+bool sq_powerup_numbered(int n, Q2Pack pack) {
+  const Numbered* r = row_of(n, pack);
+  if (r == nullptr) return false;
+  const int row = sq_item(r->classname, pack);
+  return row >= 0 && kSqItems[row].kind == SqKind::powerup;
 }
 
-std::string_view sq_item_name(int n) {
-  return n > 0 && n < kSqItemNumbers ? kNumbered[n].name : std::string_view();
+bool sq_selects(int n, Q2Pack pack) {
+  // The power armours, every weapon and the grenades, and the power-ups with a use.
+  if (sq_weapon_numbered(n, pack) || sq_powerup_numbered(n, pack)) return true;
+  const Numbered* r = row_of(n, pack);
+  if (r == nullptr) return false;
+  const int row = sq_item(r->classname, pack);
+  return row >= 0 && kSqItems[row].kind == SqKind::power_armour;
 }
 
-std::string_view sq_icon(int n) {
-  return n > 0 && n < kSqItemNumbers ? kNumbered[n].icon : std::string_view();
+int sq_count(const SqBody& b, int n, Q2Pack pack) {
+  const Numbered* r = row_of(n, pack);
+  if (r == nullptr) return 0;
+  const std::string_view cn = r->classname;
+  if (cn == "item_armor_shard" || cn == "item_health") return 0;
+  if (cn == "weapon_blaster") return b.blaster ? 1 : 0;
+  for (int a = 1; a < kSqAmmoKinds; a++)
+    if (cn == kAmmoClass[a]) return b.ammo[a];
+  const int row = sq_item(cn, pack);
+  if (row < 0) return 0;
+  if (kSqItems[row].kind == SqKind::armour)  // the armour worn: its points
+    return static_cast<int>(b.armour) == kSqItems[row].amount ? b.armour_count : 0;
+  return b.counts[row];
+}
+
+std::string_view sq_item_name(int n, Q2Pack pack) {
+  const Numbered* r = row_of(n, pack);
+  return r != nullptr ? r->name : std::string_view();
+}
+
+std::string_view sq_icon(int n, Q2Pack pack) {
+  const Numbered* r = row_of(n, pack);
+  return r != nullptr ? r->icon : std::string_view();
 }
 
 std::string sq_bar_program(bool match) {
@@ -188,11 +223,12 @@ void bar_start(Q2Server& s) {
     if (name.empty() || std::find(w.images.begin(), w.images.end(), name) != w.images.end()) return;
     w.images.emplace_back(name);
   };
+  const auto list = numbered(s.opt.pack);
   add("i_health");
-  for (int n = 1; n < kSqItemNumbers; n++) add(kNumbered[n].icon);
+  for (size_t n = 1; n < list.size(); n++) add(list[n].icon);
   add("i_help");
-  w.item_names.assign(kSqItemNumbers, std::string());
-  for (int n = 1; n < kSqItemNumbers; n++) w.item_names[size_t(n)] = kNumbered[n].name;
+  w.item_names.assign(list.size(), std::string());
+  for (size_t n = 1; n < list.size(); n++) w.item_names[n] = list[n].name;
 }
 
 void bar_rows(Q2Server& s) {
@@ -200,6 +236,7 @@ void bar_rows(Q2Server& s) {
   if (w.images.empty()) return;
   const bool flash_on = (s.frame_number & 8) != 0;
   const bool match = s.cvars.find("deathmatch")->on();
+  const Q2Pack pack = s.opt.pack;
   for (int i = 0; i < sh::kMaxClients; i++) {
     if (!s.clients[i].active) continue;
     const Q2Player& p = s.players[i];
@@ -209,7 +246,7 @@ void bar_rows(Q2Server& s) {
     st[1] = clamp16(std::max(p.health, -99.0f));  // never below −99
     const SqAmmo ammo = kSqWeapons[p.hand.weapon].ammo;
     if (ammo != SqAmmo::none) {
-      st[2] = static_cast<int16_t>(image(s, sq_icon(ammo_number(ammo))));
+      st[2] = static_cast<int16_t>(image(s, sq_icon(ammo_number(ammo, pack), pack)));
       st[3] = clamp16(p.body.ammo[static_cast<int>(ammo)]);
     }
     const int cells = p.body.ammo[static_cast<int>(SqAmmo::cells)];
@@ -218,25 +255,29 @@ void bar_rows(Q2Server& s) {
       st[4] = static_cast<int16_t>(image(s, "i_powershield"));
       st[5] = clamp16(cells);
     } else if (worn) {
-      st[4] = static_cast<int16_t>(image(s, sq_icon(static_cast<int>(p.body.armour) == 3   ? 1
-                                                    : static_cast<int>(p.body.armour) == 2 ? 2
-                                                                                           : 3)));
+      constexpr const char* kWorn[] = {"", "item_armor_jacket", "item_armor_combat",
+                                        "item_armor_body"};
+      st[4] = static_cast<int16_t>(
+          image(s, sq_icon(sq_number_of(kWorn[static_cast<int>(p.body.armour)], pack), pack)));
       st[5] = clamp16(p.body.armour_count);
     }
-    if (p.body.selected > 0) st[6] = static_cast<int16_t>(image(s, sq_icon(p.body.selected)));
+    if (p.body.selected > 0)
+      st[6] = static_cast<int16_t>(image(s, sq_icon(p.body.selected, pack)));
     st[12] = static_cast<int16_t>(p.body.selected > 0 ? p.body.selected : -1);
     if (p.picked > 0 && s.level_time <= p.picked_at + 3.0) {
-      st[7] = static_cast<int16_t>(image(s, sq_icon(p.picked)));
+      st[7] = static_cast<int16_t>(image(s, sq_icon(p.picked, pack)));
       st[8] = static_cast<int16_t>(1056 + p.picked);
     }
     const struct {
       double until;
       int number;
-    } timers[4] = {
-        {p.quad_until, 23}, {p.invulnerable_until, 24}, {p.suit_until, 27}, {p.breather_until, 26}};
+    } timers[4] = {{p.quad_until, sq_number_of("item_quad", pack)},
+                   {p.invulnerable_until, sq_number_of("item_invulnerability", pack)},
+                   {p.suit_until, sq_number_of("item_enviro", pack)},
+                   {p.breather_until, sq_number_of("item_breather", pack)}};
     for (const auto& t : timers) {
       if (t.until <= s.level_time) continue;
-      st[9] = static_cast<int16_t>(image(s, sq_icon(t.number)));
+      st[9] = static_cast<int16_t>(image(s, sq_icon(t.number, pack)));
       // Whole seconds left, rounded down, from the frames left.
       const auto frames = static_cast<int64_t>((t.until - s.level_time) * 10.0 + 1e-6);
       st[10] = static_cast<int16_t>(frames / 10);
@@ -250,7 +291,7 @@ void bar_rows(Q2Server& s) {
       st[11] = static_cast<int16_t>(image(s, "i_help"));
     } else if (p.help_unread == 0 && (gun == nullptr ? 2 : gun->number) != 2 &&
                (hand_of(s, i) == 2 || fight_fov(s, i) > 91)) {
-      st[11] = static_cast<int16_t>(image(s, sq_icon(sq_weapon_number(p.hand.weapon))));
+      st[11] = static_cast<int16_t>(image(s, sq_icon(sq_weapon_number(p.hand.weapon, pack), pack)));
     }
     // A screen over the bar; the scoreboard always while dead or between levels in deathmatch.
     const bool dead = !p.alive && !s.clients[i].spectator;  // a spectator is not dead

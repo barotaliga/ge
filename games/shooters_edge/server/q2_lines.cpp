@@ -237,9 +237,9 @@ void key_lines(Q2Server& s, const ge::brush::Entity& b) {
 }
 
 // The game's own, or one the remix brings in from another game (Quake's monsters, its items).
-bool spawnable(std::string_view c) {
+bool spawnable(const Q2Server& s, std::string_view c) {
   return std::binary_search(std::begin(kSpawnable), std::end(kSpawnable), c) || monster_class(c) ||
-         sq_item(c) >= 0;
+         sq_item(c, s.opt.pack) >= 0;
 }
 
 }  // namespace
@@ -304,12 +304,12 @@ void q2_spawn_lines(Q2Server& s, const std::vector<char>& inhibited) {
     const auto has = [&b](const char* k) { return !b.get_any_case(k).empty(); };
     const std::string at = q2_pos(e.origin);
     const std::string& c = e.classname;
-    if (c.empty() || !spawnable(c)) {
+    if (c.empty() || !spawnable(s, c)) {
       say(s, c.empty() ? std::string("ED_CallSpawn: NULL classname")
                        : c + " doesn't have a spawn function");
       e.gone = true;
     } else if ((monster_class(c) || c == "turret_driver") && !dm(s) && has("item") &&
-               sq_item(b.get_any_case("item")) < 0) {
+               sq_item(b.get_any_case("item"), s.opt.pack) < 0) {
       say(s, std::string(c)
                  .append(" at ")
                  .append(at)
@@ -364,7 +364,7 @@ void q2_spawn_lines(Q2Server& s, const std::vector<char>& inhibited) {
       const std::string item = b.get_any_case("item");
       if (item.empty())
         say(s, "no key item for trigger_key at " + at);
-      else if (sq_item(item) < 0)
+      else if (sq_item(item, s.opt.pack) < 0)
         say(s,
             std::string("item ").append(item).append(" not found for trigger_key at ").append(at));
       if (e.target.empty()) say(s, "trigger_key at " + at + " has no target");

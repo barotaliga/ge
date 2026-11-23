@@ -96,9 +96,9 @@ bool take_pack(const SqItem& it, SqBody& b) {
 
 }  // namespace
 
-int sq_item(std::string_view classname) {
+int sq_item(std::string_view classname, Q2Pack pack) {
   for (int i = 0; i < kSqItemCount; i++)
-    if (classname == kSqItems[i].classname) return i;
+    if (classname == kSqItems[i].classname && q2_pack_has(pack, kSqItems[i].pack)) return i;
   return -1;
 }
 
