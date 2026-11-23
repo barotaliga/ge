@@ -275,7 +275,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.pose.fov_y = view.fov_y;
   out.missiles = fx.missiles;
   out.explosions = fx.explosions;
-  out.explosion_kinds = fx.explosion_kinds;
+  out.explosion_codes = fx.explosion_codes;
   out.effects = fx.effects;
   out.blows = {};
   out.bonuses = s.bonuses;
@@ -331,6 +331,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.me.health = static_cast<float>(s.stats[kStatHealth]);
   out.me.dead = out.me.health <= 0;
   out.me_effects = own ? own->effects : 0;
+  out.me_items = s.stats[kStatItems];  // the powers' tints (effects::take_powers)
   out.waterlevel = out.watertype = 0;
   out.placed_of = [players, count, &s](int e) {
     Placed p;

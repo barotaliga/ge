@@ -14,6 +14,8 @@
 //   their sizes (`kKnownReleasePacks`): Quake's shareware or registered packs, the
 //   Quake II's demo or full game; a pack of another size is the player's own copy, taken as a full
 //   game. Sizes, not digests: a start reads no pack.
+// - **Its mission packs** (`release_of` too): a folder beside the base folder named after one of
+//   the game's packs, holding its first pack; `games` names them after the release.
 // - **Which is played** (`pick_install`): of the installs found, the game loaded last when it is
 //   one of them, else the first full game, else the first.
 //
@@ -22,7 +24,7 @@
 // ge:summary The classic installs around the game: started inside one, placed above several
 // ge:keywords installs install-detection started-inside placed-above parent-folder nquake
 // ge:keywords install_around installs_below release_of pick_install known-release shareware
-// ge:keywords registered demo full-game install-names games-command app-folder
+// ge:keywords registered demo full-game install-names games-command app-folder mission-pack
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_install_search_test.cpp
 #pragma once
@@ -88,6 +90,8 @@ struct FoundInstall {
   std::string basedir;  // the install's folder
   std::string release;  // "shareware", "registered", "demo", "full game", or "your own copy"
   bool full = false;    // the whole game
+  // Its mission packs found beside its base folder, in the profile's order.
+  std::vector<const ge::classicenhance::MissionPack*> packs = {};
 };
 
 // The release the install at `basedir` holds, played as `content`, into `out`.
@@ -109,7 +113,8 @@ std::string placed_folder(const std::string& exe_dir);
 // else the first; -1 when `found` is empty.
 int pick_install(const std::vector<FoundInstall>& found, const std::string& kept);
 
-// One line a found install, as `games` prints it: "1  Quake (registered)  <folder>".
+// One line a found install, as `games` prints it: "1  Quake (registered)  <folder>", its packs
+// after the release ("(registered) with Scourge of Armagon").
 std::string install_line(const FoundInstall& f, int n);
 
 // The console's `games`: the installs found listed; `games <n>` asks for the n-th's folder (into

@@ -53,8 +53,9 @@ names).
 - **B3 (done):** the move packets a second are one setting, our `cl_c2spps`, with Quake II's
   `cl_maxpackets` a synonym and its 30 a same row. The duplicates (two mechanisms), `cl_shownet` (a
   debug print in the tail not built) and `gender` (each game's servers' own words) are kept apart.
-- **B4, the screen:** the graphs and the 2D switch, built by the Quake gaps thread. The server
-  browser's sort and ping rate are kept apart (another value set each).
+- **B4 (done):** the graphs and the 2D switch every classic game's (`client/screen_2d.hpp`); Quake's
+  `r_timegraph` and QuakeWorld's `r_drawhud` (0 to 0, 1 to 2) spell them. The server browser's sort
+  and ping rate are kept apart (another value set each).
 - **B5, the server's names:** `cheats`, the recording's size, the port (with the Quake II server thread).
 - **B7 (done, Niclas 2026-11-23): what a competition player tunes, every classic game's.** One
   game's settings that every game now takes, in the classic layer, kept across a game change and
@@ -243,11 +244,11 @@ names).
 | setting | `gender` |  | `gender` | `gender` | classic | kept apart | nothing to share (Niclas, 2026-11-23): Quake's figure is one man, and Quake II's gender follows its model; QuakeWorld mods' info word is not a setting of the game |
 | setting | `gl_outline` |  | `gl_outline` | `gl_celshading` | classic | kept apart | outlines: Quake II's gl_celshading a width, QuakeWorld 0..3 models and world; another client's visual, not lifted: visuals come from classic enhance |
 | setting | `gl_partshape` |  | `gl_squareparticles` | `gl_partshape` | classic | kept apart | square specks: Quake II 0..2 a shape, QuakeWorld's 0/1 its 1; another client's visual, not lifted: visuals come from classic enhance |
-| setting | `r_graphheight` | `r_graphheight` | `r_graphheight` | `graphheight` | classic | to lift B4 | Quake II's graphheight alone in ours; Quake's r_graphheight its spelling |
-| setting | `r_timegraph` | `r_timegraph` | `r_timegraph` | `timegraph` | classic | to lift B4 | Quake II's timegraph alone in ours; Quake's r_timegraph its spelling |
+| setting | `graphheight` | `r_graphheight` | `r_graphheight` | `graphheight` | classic | lifted B4 | `graphheight` every game's (screen_2d.hpp), in units of the screen; Quake's r_graphheight not its spelling: it counts 10 ms steps of two rows (10 in Quake, 15 in QuakeWorld), so it is not taken |
+| setting | `timegraph` | `r_timegraph` | `r_timegraph` | `timegraph` | classic | lifted B4 | every game's with `debuggraph`, `graphscale` and `graphshift` (screen_2d.hpp); Quake's r_timegraph a synonym (each frame's time; QuakeWorld's drew nothing) |
 | setting | `sb_infospersec` |  | `sb_infospersec` | `ui_pingrate` | shell | kept apart | server browser pings a second: Quake II's ui_pingrate takes 0 as worked out from rate, which sb_infospersec has no value for: another value set |
 | setting | `sb_sortservers` |  | `sb_sortservers` | `ui_sortservers` | shell | kept apart | server browser sort: Quake II's ui_sortservers one column number, ours a string of column codes: another value set |
-| setting | `scr_draw2d` |  | `r_drawhud` | `scr_draw2d` | shell | to lift B4 | 2D drawn: Quake II 0..3, QuakeWorld's r_drawhud 0/1 (its 1 is Quake II's 2) |
+| setting | `scr_draw2d` |  | `r_drawhud` | `scr_draw2d` | classic | lifted B4 | 2D drawn, every game's (screen_2d.hpp): 0 nothing, 1 the crosshair alone of our HUD, 3 no scoreboard; QuakeWorld's r_drawhud 0/1 a value-mapped synonym (0 to 0, 1 to 2) |
 | setting | `sv_cheats` |  | `sv_cheats` | `cheats` | engine | to lift B5 | Quake II's server `cheats` a rules setting of its own |
 | setting | `sv_demomaxsize` |  | `sv_demomaxsize` | `sv_mvd_maxsize` | engine | to lift B5 | a recording's size limit: Quake II's sv_mvd_maxsize |
 | setting | `sv_port` | `port` |  | `net_port` | engine | to lift B5 | Quake II's net_port the port served on, Quake's port command a synonym already (the modern server's hostport is the public address: apart) |

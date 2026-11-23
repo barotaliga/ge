@@ -55,6 +55,37 @@ TEST(take_in_copies_a_game_from_elsewhere_and_opens_the_copy) {
   CHECK(error.find("Could not take the game in") == 0);
 }
 
+TEST(take_in_names_the_mission_packs_and_waits_for_their_game) {
+  const fs::path top = fs::temp_directory_path() / "ge_take_in_packs_test";
+  fs::remove_all(top);
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"gfx/palette.lmp", std::vector<uint8_t>(768, 3)}}, &pak, &error));
+  const auto put = [&](const fs::path& p) {
+    fs::create_directories(p.parent_path());
+    std::ofstream(p, std::ios::binary)
+        .write(reinterpret_cast<const char*>(pak.data()), std::streamsize(pak.size()));
+  };
+  const std::string root = (top / "data").string();
+  std::string basedir, said;
+  // The pack alone: kept, but the game playing stays until Quake itself is added.
+  put(top / "disc/hipnotic/pak0.pak");
+  CHECK(!cl::take_in((top / "disc").string(), root, &basedir, &said, &error));
+  CHECK_MSG(error.find("Took Scourge of Armagon in") == 0, error);
+  CHECK(error.find("add Quake too") != std::string::npos && basedir.empty());
+  CHECK(fs::exists(top / "data/q1/hipnotic/pak0.pak"));
+  // The game with both packs: named, and how to start them said.
+  put(top / "install/id1/pak0.pak");
+  put(top / "install/hipnotic/pak0.pak");
+  put(top / "install/rogue/pak0.pak");
+  CHECK_MSG(cl::take_in((top / "install").string(), root, &basedir, &said, &error), error);
+  CHECK_MSG(said.find("Took Quake with Scourge of Armagon and Dissolution of Eternity in") == 0,
+            said);
+  CHECK(said.find("Start -game hipnotic or -game rogue to play a mission pack.") !=
+        std::string::npos);
+  CHECK(basedir == (top / "data/q1").string());
+}
+
 TEST(take_in_falls_back_beside_the_game_and_adopts_its_old_settings) {
   const fs::path top = fs::temp_directory_path() / "ge_take_in_adopt_test";
   fs::remove_all(top);

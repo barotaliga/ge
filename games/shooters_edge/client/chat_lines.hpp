@@ -94,7 +94,7 @@ struct ChatExtras {
   int nofake = 2;
   std::string sound_trigger = "~";
   bool queries = true;
-  std::array<double, 2> answered_at{-1e9, -1e9};
+  std::array<double, 3> answered_at{-1e9, -1e9, -1e9};
   // Quake II's version reply: a chat line ending in `!version` answered once in kQ2ReplyEveryS,
   // 1 to 2 s after it (`reply_due`, -1 none; said by `chat_reply_due`).
   double reply_due = -1;
