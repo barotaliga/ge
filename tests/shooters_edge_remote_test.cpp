@@ -842,15 +842,36 @@ TEST(the_consoles_foot_says_what_is_coming_while_a_game_is_joined) {
   r.end.dl.name = "maps/dm2.bsp";
   r.end.dl.percent = 40;
   r.end.dl.size = 90 * 1024;
-  CHECK(cn::remote_foot(r, share) == "maps/dm2.bsp 40% (90 KB)" && share == 0.4);
+  CHECK(cn::remote_foot(r, share) == "maps/dm2.bsp" && share == 0.4);
   r.end.dl.chunked = true;  // chunked: the share of the chunks held
   r.end.dl.have = {true, false, false, false};
-  CHECK(cn::remote_foot(r, share).starts_with("maps/dm2.bsp 25% ") && share == 0.25);
+  CHECK(cn::remote_foot(r, share) == "maps/dm2.bsp" && share == 0.25);
   r.end.dl.active = false;
   r.demo.state.map = "dm2";
   CHECK(cn::remote_foot(r, share) == "Loading dm2..." && share < 0);
   r.end.stage = cn::ClientStage::active;
   CHECK(cn::remote_foot(r, share).empty());
+}
+
+// While a server is joined and a file comes, the console covers the screen with the file and its
+// share on the foot (the bar and the percentage drawn after the name); once in, it lets go.
+TEST(the_console_covers_the_screen_while_a_joined_server_s_files_come) {
+  ge::console::Console con;
+  ge::console::ConsoleView view(con);
+  cn::Remote r;
+  r.active = true;
+  r.end.stage = cn::ClientStage::signon;
+  r.end.dl.active = r.end.dl.chunked = true;
+  r.end.dl.name = "maps/aerowalk.bsp";
+  r.end.dl.have = {true, true, false, false, false};
+  cn::remote_console_foot(r, view);
+  CHECK_MSG(
+      view.full() && view.foot() == "maps/aerowalk.bsp" && view.foot_progress() == 0.4,
+      view.foot() + " " + std::to_string(view.foot_progress()) + " " + std::to_string(view.full()));
+  r.end.dl.active = false;
+  r.end.stage = cn::ClientStage::active;
+  cn::remote_console_foot(r, view);
+  CHECK(!view.full() && view.foot().empty() && view.foot_progress() < 0);
 }
 
 TEST(net_clientport_binds_the_client_s_socket_and_moves_it_at_once) {
