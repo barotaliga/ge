@@ -261,6 +261,7 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
           pm.alive = now.world.entities[static_cast<size_t>(pm.ent)].health > 0;
         if (opt.beside) {  // round the leader, a person's stand-in (party.hpp)
           people.humans.assign(1, now.world.entities[1].origin);
+          people.facing.assign(1, now.world.entities[1].view_angles.y);
           people.leash = sb::kPartyLeash;
           people.exit_held = true;
         }
@@ -284,6 +285,8 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
           WayThrough& way = m.ways[static_cast<size_t>(k)];
           way_dive(way, *m.nav, now, k + 1, rc.cmds[2]);
           way_touch(way, now, k + 1, rc.cmds[2]);  // its keys turned or not, he goes on
+          if (opt.beside && k > 0 && sb::party_give_way(now, k + 1, people.humans, rc.cmds[2]))
+            em.helper_gave_way++;
           if (opt.beside && k > 0 &&
               exits_keep_off(m.players[static_cast<size_t>(k)], now, k + 1, rc.cmds[2]))
             em.helper_exits_turned++;

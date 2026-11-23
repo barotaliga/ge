@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cstddef>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "shooterbots/companion.hpp"
 #include "shooterbots/features.hpp"
 #include "shooterbots/nav.hpp"
@@ -183,12 +185,39 @@ bool party_stay(Fighter& f, const MapNav& nav, const BotView& s, int me, const P
   size_t h = 0;
   for (size_t k = 1; k < opt.humans.size(); k++)
     if (dist2(opt.humans[k], self) < dist2(opt.humans[h], self)) h = k;
-  if (dist2(opt.humans[h], self) <= kPartyNear * kPartyNear) {
-    f.objective = -1;  // by a person already: his own goals (items, a fight) until there is work
-    return false;
+  const float to = sh::length(self - opt.humans[h]);
+  // Out of his way: a spot kPartyNear behind where he looks (he looks where he goes), else short
+  // of him on this side. Never onto him, never standing at his elbow in a doorway.
+  sh::Vec3f spot = opt.humans[h] + (self - opt.humans[h]) * (kPartyNear / std::max(to, 1.0f));
+  if (h < opt.facing.size()) {
+    const double yaw = opt.facing[h] * ge::core::kPi / 180.0;
+    spot = opt.humans[h] - sh::Vec3f{static_cast<float>(ge::core::libm::cos(yaw) * kPartyNear),
+                                     static_cast<float>(ge::core::libm::sin(yaw) * kPartyNear), 0};
   }
-  f.objective = sb::nav_nearest(g, opt.humans[h]);
+  int32_t n = sb::nav_nearest(g, spot);
+  if (n < 0) n = sb::nav_nearest(g, opt.humans[h]);
+  f.objective = n;
   return f.objective >= 0;
+}
+
+bool party_give_way(const BotView& s, int me, const std::vector<sh::Vec3f>& humans,
+                    sh::MoveCmd& cmd) {
+  const sh::Vec3f self = s.sv.edicts[static_cast<size_t>(me)].origin;
+  for (const sh::Vec3f& h : humans) {
+    const float dx = self.x - h.x, dy = self.y - h.y;
+    const float d = std::sqrt(dx * dx + dy * dy);
+    if (d >= kPartyClear || self.z - h.z > 56 || h.z - self.z > 56) continue;
+    // Straight away from him (square on him: to the side his view puts on the right).
+    const double kDeg = 180.0 / ge::core::kPi;
+    const double away =
+        d > 1 ? ge::core::libm::atan2(dy, dx) : (cmd.angles.y / kDeg) - ge::core::kPi / 2;
+    const double rel = away - cmd.angles.y / kDeg;
+    cmd.forward = sh::quantize_axis(static_cast<float>(ge::core::libm::cos(rel) * 320));
+    cmd.side = sh::quantize_axis(static_cast<float>(-ge::core::libm::sin(rel) * 320));
+    cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
+    return true;
+  }
+  return false;
 }
 
 void party_work_init(PartyWork& w, Fighter& f, const MapNav& nav, const BotView& s,
@@ -214,7 +243,7 @@ void party_work_plan(PartyWork& w, Fighter& f, const MapNav& nav, const BotView&
 }
 
 void party_work_command(PartyWork& w, Fighter& f, const MapNav& nav, const BotView& s, int me,
-                        double t, sh::MoveCmd& cmd) {
+                        double t, const PartyOptions& opt, sh::MoveCmd& cmd) {
   way_dive(w.way, nav, s, me, cmd);
   way_reach_in(w.way, nav, s, me, cmd);
   if (way_touch(w.way, s, me, cmd)) {
@@ -224,6 +253,7 @@ void party_work_command(PartyWork& w, Fighter& f, const MapNav& nav, const BotVi
     if (!f.bot.pilot.pilot.climbing) unwedge(w.wedge, s, me, t, cmd);
     way_edge(nav, f, s, me, cmd);
   }
+  if (party_give_way(s, me, opt.humans, cmd)) w.gave_way++;
   if (exits_keep_off(f, s, me, cmd)) w.exits_turned++;
 }
 

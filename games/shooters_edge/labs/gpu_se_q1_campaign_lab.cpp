@@ -352,7 +352,7 @@ void run(gl::Lab& lab) {
   if (beside) {
     gl::LabTable h{"helpers beside the leader (a person's stand-in)",
                    {"map", "bots", "exit s", "kills: his/helpers'", "near share", "farthest",
-                    "back to him", "exits turned"},
+                    "back to him", "gave way", "exits turned"},
                    {}};
     for (size_t i = 0; i < maps.size(); i++) {
       const fb::EpisodeMap& m = maps[i];
@@ -360,7 +360,8 @@ void run(gl::Lab& lab) {
           {m.name, std::to_string(sizes_of[i]), m.exit_s >= 0 ? to_fixed(m.exit_s, 1) : "-",
            std::to_string(m.killed_by_leader) + "/" + std::to_string(m.killed_by_partners),
            to_fixed(m.helper_near_share, 3), to_fixed(m.helper_farthest, 0),
-           std::to_string(m.helper_stays), std::to_string(m.helper_exits_turned)});
+           std::to_string(m.helper_stays), std::to_string(m.helper_gave_way),
+           std::to_string(m.helper_exits_turned)});
     }
     lab.table(h);
   }

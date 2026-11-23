@@ -317,12 +317,14 @@ void run(gl::Lab& lab) {
   if (opt.beside) {
     gl::LabTable h;
     h.title = "Helpers beside him (a person's stand-in)";
-    h.columns = {"map", "time (s)", "near share", "farthest", "back to him", "exits turned"};
+    h.columns = {"map",         "time (s)", "near share",  "farthest",
+                 "back to him", "gave way", "exits turned"};
     for (const bt::UnitMap& m : r.maps)
       h.rows.push_back({m.name, ge::core::num::to_fixed(m.seconds, 1),
                         ge::core::num::to_fixed(m.helper_near_share, 3),
                         ge::core::num::to_fixed(m.helper_farthest, 0),
-                        std::to_string(m.helper_stays), std::to_string(m.helper_exits_turned)});
+                        std::to_string(m.helper_stays), std::to_string(m.helper_gave_way),
+                        std::to_string(m.helper_exits_turned)});
     lab.table(h, det);
   }
   lab.metric("unit.done", r.unit_done ? 1 : 0, "bool", det);

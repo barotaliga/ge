@@ -96,7 +96,7 @@ struct EpisodeMap {
   // was, the plans they went back to him and the steps they took off an exit.
   double helper_near_share = 0;
   float helper_farthest = 0;
-  int64_t helper_stays = 0, helper_exits_turned = 0;
+  int64_t helper_stays = 0, helper_exits_turned = 0, helper_gave_way = 0;
   int leader_deaths = 0, mate_deaths = 0;
   double near_share = 0;  // the companions' share of the time within kEscortFar of him
   float farthest = 0;

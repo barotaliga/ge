@@ -307,6 +307,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
           pm.alive = s.world.entities[static_cast<size_t>(pm.ent)].health > 0;
         if (opt.beside) {  // round him, a person's stand-in (party.hpp)
           people.humans.assign(1, s.world.entities[1].origin);
+          people.facing.assign(1, s.world.entities[1].view_angles.y);
           people.leash = sb::kPartyLeash;
           people.exit_held = true;
         }
@@ -357,6 +358,8 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
           if (!b.f.bot.pilot.pilot.climbing) unwedge(b.wedge, s, me, t, b.cmds[2]);
           if (way_edge(*m.nav, b.f, s, me, b.cmds[2])) um.edges++;
         }
+        if (opt.beside && k > 0 && sb::party_give_way(s, me, people.humans, b.cmds[2]))
+          um.helper_gave_way++;
         if (opt.beside && k > 0 && exits_keep_off(b.f, s, me, b.cmds[2])) um.helper_exits_turned++;
         // The intermission: a button now and then leaves for the next map.
         if (q->intermission_at > 0) b.cmds[2].buttons = (frame & 8) ? sh::kButtonAttack : 0;

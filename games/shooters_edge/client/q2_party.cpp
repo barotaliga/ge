@@ -137,16 +137,19 @@ void q2_party_packets(Q2Party& p, const sv::RulesRunner& rules, int msec,
   // The helpers' split of the map, round the people (every player not a companion).
   p.members.clear();
   p.people.humans.clear();
+  p.people.facing.clear();
   p.people.leash = sb::kPartyLeash;
   p.people.exit_held = true;
   for (int i = 0; i < sh::kMaxClients && i < s.sv.set.maxclients; i++) {
     if (!s.clients[i].active) continue;
     const sh::Edict& e = s.sv.edicts[static_cast<size_t>(i) + 1];
     const Q2Mate* m = p.mates[static_cast<size_t>(i)].get();
-    if (m == nullptr)
+    if (m == nullptr) {
       p.people.humans.push_back(e.origin);
-    else if (m->work)
+      p.people.facing.push_back(s.world.entities[static_cast<size_t>(i) + 1].view_angles.y);
+    } else if (m->work) {
       p.members.push_back({&m->work->way, i + 1, e.health > 0});
+    }
   }
   if (!p.members.empty() && p.nav) sb::party_share(p.share, p.members, *p.nav, s, p.people);
   for (int i = 1; i < sh::kMaxClients; i++) {
@@ -160,7 +163,8 @@ void q2_party_packets(Q2Party& p, const sv::RulesRunner& rules, int msec,
     if (forced) m.fighter.bot.yaw = view.y;
     m.cmds[2] = bots::fighter_command(m.fighter, s, i, msec);
     if (forced) m.cmds[2].angles = view;
-    if (m.work) sb::party_work_command(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, m.cmds[2]);
+    if (m.work)
+      sb::party_work_command(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, p.people, m.cmds[2]);
     sh::Packet pk;
     pk.client = i;
     pk.sequence = ++m.sequence;

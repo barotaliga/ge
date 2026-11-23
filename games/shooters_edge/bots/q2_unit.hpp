@@ -97,7 +97,7 @@ struct UnitMap {
   // the plans they went back to him, the steps they took off an exit.
   double helper_near_share = 0;
   float helper_farthest = 0;
-  int64_t helper_stays = 0, helper_exits_turned = 0;
+  int64_t helper_stays = 0, helper_exits_turned = 0, helper_gave_way = 0;
 };
 
 struct UnitReport {

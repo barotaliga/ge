@@ -56,6 +56,7 @@ constexpr double kPartyKeep_s = 0.25;  // the same by the walk, s
 constexpr float kPartyRun = 320;       // units a second: a straight distance as a walk's time
 constexpr float kPartyLeash = 768;     // a hosted co-op game's leash round the people, units
 constexpr float kPartyNear = 160;      // a bot sent back to the people stops this near one
+constexpr float kPartyClear = 72;      // nearer a person than this a bot steps away from him
 
 struct PartyMember {
   WayThrough* way = nullptr;
@@ -66,6 +67,7 @@ struct PartyMember {
 struct PartyOptions {
   float leash = 0;                // (people playing) a stop further than this from all is none's
   std::vector<sh::Vec3f> humans;  // the people's places
+  std::vector<float> facing;      // (with `humans`) where each looks, degrees of yaw
   bool exit_held = false;         // (people playing) the exit is theirs: no bot's, ever
 };
 
@@ -89,7 +91,9 @@ void party_share(Party& p, std::span<PartyMember> party, const MapNav& nav, cons
                  const PartyOptions& opt);
 
 // After `way_plan`, with people playing: a goal further than the leash from every person (or
-// none) traded for the node by the nearest person, unless he is within kPartyNear of one already.
+// none) traded for a node kPartyNear behind where the nearest person looks (`facing`; without it,
+// short of him on this side): never onto him or at his elbow, where in a corridor or a doorway (a
+// door a player stands in turns back) the person's way is blocked.
 // True when it sent him back.
 bool party_stay(Fighter& f, const MapNav& nav, const BotView& s, int me, const PartyOptions& opt);
 
@@ -101,6 +105,7 @@ struct PartyWork {
   Wedge wedge;
   int64_t stays = 0;         // plans he went back to the people
   int64_t exits_turned = 0;  // commands turned back from an exit
+  int64_t gave_way = 0;      // commands he stepped away from a person
 };
 // The fighter `f` (set up by `fighter_init` on `nav`) made a party member for `spec`'s map.
 void party_work_init(PartyWork& w, Fighter& f, const MapNav& nav, const BotView& s,
@@ -109,8 +114,13 @@ void party_work_init(PartyWork& w, Fighter& f, const MapNav& nav, const BotView&
 void party_work_plan(PartyWork& w, Fighter& f, const MapNav& nav, const BotView& s, int me,
                      double t, const PartyOptions& opt);
 // His command after the fighter's own: the water's way, a trigger walked into, a wedge shoved
-// free, and never into an exit.
+// free, out of a person's way, and never into an exit.
 void party_work_command(PartyWork& w, Fighter& f, const MapNav& nav, const BotView& s, int me,
-                        double t, sh::MoveCmd& cmd);
+                        double t, const PartyOptions& opt, sh::MoveCmd& cmd);
+// A bot (entity `me`) nearer one of `humans` than kPartyClear (and on his floor) steps straight
+// away from him: in a corridor or a doorway a bot standing by a person is in his way, and a bot
+// that waits there blocks him for good. True when it turned the keys.
+bool party_give_way(const BotView& s, int me, const std::vector<sh::Vec3f>& humans,
+                    sh::MoveCmd& cmd);
 
 }  // namespace ge::shooterbots
