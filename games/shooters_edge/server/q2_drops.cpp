@@ -274,7 +274,7 @@ void fight_touch_drops(Q2Server& s, int slot) {
 }
 
 void fight_drop_at(Q2Server& s, sh::Vec3f at, const std::string& classname) {
-  const int item = sq_item(classname);
+  const int item = sq_item(classname, s.opt.pack);
   if (item < 0) return;
   for (Q2Drop& d : s.drops) {
     if (d.live) continue;

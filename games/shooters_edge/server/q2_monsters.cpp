@@ -55,10 +55,8 @@ using roster::kKindCount;
 using roster::kKinds;
 using roster::Test;
 
-int kind_of(std::string_view classname) {
-  for (int k = 0; k < kKindCount; k++)
-    if (classname == kKinds[k].classname) return k;
-  return -1;
+int kind_of(const Q2Server& s, std::string_view classname) {
+  return roster::kind_named(classname, s.opt.pack);
 }
 
 bool deathmatch(const Q2Server& s) { return s.cvars.find("deathmatch")->on(); }
@@ -1555,7 +1553,7 @@ void monster_spawn(Q2Server& s) {
   // entity of its own, so it has its world row from the start.
   const size_t mapped = s.entities.size();
   for (size_t i = 0; i < mapped; i++) {
-    const int k = kind_of(s.entities[i].classname);
+    const int k = kind_of(s, s.entities[i].classname);
     if (k < 0 || s.entities[i].gone || kKinds[k].end != End::launch || deathmatch(s)) continue;
     Q2Entity spare = s.entities[i];
     spare.classname = "monster_makron";
@@ -1566,7 +1564,7 @@ void monster_spawn(Q2Server& s) {
   monster_torsos(s);
   for (size_t i = 0; i < s.entities.size(); i++) {
     Q2Entity& e = s.entities[i];
-    const int k = kind_of(e.classname);
+    const int k = kind_of(s, e.classname);
     if (k < 0 || e.gone) continue;
     const Kind& kd = kKinds[k];
     if (deathmatch(s) && !kd.keep) {
@@ -1946,7 +1944,9 @@ bool monster_use(Q2Server& s, int e, int activator) {
   return true;
 }
 
-bool monster_class(std::string_view classname) { return kind_of(classname) >= 0; }
+bool monster_class(std::string_view classname, Q2Pack pack) {
+  return roster::kind_named(classname, pack) >= 0;
+}
 
 bool monster_bring_spare(Q2Server& s, int block, sh::Vec3f at, sh::Vec3f angles, sh::Vec3f velocity,
                          int activator) {

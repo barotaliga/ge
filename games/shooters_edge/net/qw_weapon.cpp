@@ -78,6 +78,7 @@ void weapon_predict(RemoteWeapon& w, const QwClientEnd& c, dc::DemoState& d, int
          c.ext.has(ExtFamily::mvd, kMvdWeaponPred) && own.weapon.known &&
          own.weapon.flags != cl::kWeaponFlagsOff && !d.intermission && !d.paused && acked != 0 &&
          next - 1 - acked < 63;
+  w.fired.clear();
   if (!w.on) {
     w.played_to = acked;
     return;
@@ -110,6 +111,7 @@ void weapon_predict(RemoteWeapon& w, const QwClientEnd& c, dc::DemoState& d, int
       if (!weapon_shot_fresh(w.last_shot, static_cast<int>(std::size(w.last_shot)),
                              static_cast<int>(ev[i].sound), ev[i].clock, gap))
         continue;
+      w.fired.push_back({ev[i], q, (s.flags & 1) != 0});
       if (ev[i].sound != cl::WeaponSound::lightning_hit) weapon_shot_fired(d, s.frame);
       if (!plays(w, ev[i].sound)) continue;
       dc::DemoSound snd;

@@ -260,7 +260,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
                                       static_cast<float>(v.origin[2]) * 0.125f};
   }
   sh::Vec3f drawn;
-  const bool predicted = !r.nopred && r.predict && q2_predict_step(ahead, c, d, wall_s, drawn);
+  const bool predicted = !r.nopred && q2_predict_step(ahead, c, d, wall_s, drawn);
   if (!predicted) ahead.predicted = false;
   if (ahead.misses != ahead.misses_told) {  // cl_showmiss
     if (ahead.show_misses && r.trace.print)
