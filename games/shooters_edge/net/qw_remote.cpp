@@ -705,6 +705,7 @@ void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
 void remote_disconnect(Remote& r) {
   if (!r.active) return;
   r.left = true;
+  if (r.ignore.con != nullptr) r.ignore.con->cvars().hold_cheats(false);  // Quake II's cheat lock
   if (r.watch) {
     watch_close(*r.watch);
     r.watch.reset();

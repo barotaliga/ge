@@ -80,6 +80,9 @@ struct Entry {                 // NOLINT(clang-analyzer-optin.performance.Paddin
   int bit = -1;           // toggle: the one bit of the cvar's number it reads and writes (-1 none)
   bool inverted = false;  // toggle: on writes 0 (or clears the bit)
   std::string_view bind = {};  // a key row: the command a key is bound to (shown as its keys)
+  // A choice of video modes: `choices` (one: the windowed row) then each mode of the cvar this
+  // names (`vid_modelist`, words apart), and the choice's number written (0 windowed, N mode N).
+  std::string_view modes_from = {};
 };
 
 // A page of a menu: its id and its title ("" for the root, which shows the game's own picture).

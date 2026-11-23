@@ -710,6 +710,20 @@ int run_main(int argc, char** argv) {
   cl::bind_remix(console.cvars(), &remix_settings);
   loader.remix = &remix;
   // Quake II's bar over the classic status while the rules wear its weapons (remix_bar.hpp).
+  // Under Quake II's own bar: the chat lines on screen (scr_chathud) alone of the HUD, in the
+  // bar's letters (scr_font).
+  se::HudArt chat_art;  // its letters, copied again when scr_font's picture changes
+  const ge::ui::Image* chat_font = nullptr;
+  const auto q2_chat_lines = [&](cl::Q2Bar& bar, const se::Status& status) {
+    const ge::ui::Image* font = cl::q2_font_image(bar);
+    if (font != chat_font) {
+      chat_font = font;
+      chat_art.glyphs = font != nullptr ? *font : ge::ui::Image{};
+    }
+    se::fill_hud(hud, status, chat_art);
+    se::keep_chat_only(hud);
+    hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style(chat_art));
+  };
   // cl_thirdperson's doors and platforms: the map's brush models where the last frame drew them.
   std::vector<cl::BehindMover> behind_scratch;
   const auto behind_movers = [&](const std::vector<ge::shooter::BrushModel>* models) {
@@ -1633,11 +1647,15 @@ int run_main(int argc, char** argv) {
       if (drawn_remote) cl::team_frame(console, chat, hud_status, ds.map, ds.bonuses, &ds);
       if (drawn_remote) cl::group_status(controls.groups, hud_status, t);  // the weapon group
       cl::q2_bar_net(q2_bar, drawn_remote ? sn::remote_net(remote) : nullptr,
-                     sn::remote_unanswered(remote), t);                 // scr_lag_draw's packets
-      if (!cl::draw_recorded_q2_bar(overlay, q2_bar, ds_read, w, h)) {  // its own bar
+                     sn::remote_unanswered(remote), t);  // scr_lag_draw's packets
+      if (!cl::draw_recorded_q2_bar(  // its own bar, the centre print in its letters
+              overlay, q2_bar, ds_read, w, h,
+              t < hud.centre_until ? std::string_view(hud.centre) : std::string_view())) {
         se::fill_hud(hud, hud_status, cl::hud_art_of(files, classic_art, free_art));
         playback.bar_bottom_px = cl::hud_inset(
             hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), hud_look()), h);
+      } else {
+        q2_chat_lines(q2_bar, hud_status);
       }
       if (drawn_remote)
         cl::draw_joined_level_end(overlay, ds, game_menu.art(), w, h, win.print_speed);
@@ -1879,6 +1897,8 @@ int run_main(int argc, char** argv) {
         const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
         hud.layout.draw(overlay, hf, hud_look());
         view.shift_y = se::view_over_bars(hud, h);  // the view over the classic status bars
+      } else {
+        q2_chat_lines(q2 ? q2_bar : worn_hud.bar, hud_status);
       }
     }
     if (listen.room && listen.server != nullptr) {

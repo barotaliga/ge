@@ -972,6 +972,7 @@ std::string item_text(const Entry& e, const ge::ui::Item& it) {
     case ItemKind::toggle:
       return it.on != e.inverted ? "1" : "0";
     case ItemKind::choice:
+      if (!e.modes_from.empty()) return std::to_string(std::max(it.choice, 0));  // mode N
       if (it.choice >= 0 && static_cast<size_t>(it.choice) < e.choices.size())
         return std::string(e.choices[static_cast<size_t>(it.choice)].value);
       return {};
@@ -1167,6 +1168,21 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         it.choice = 0;
         for (size_t i = 0; i < it.choices.size(); i++)
           if (it.choices[i] == was) it.choice = static_cast<int>(i);
+        continue;
+      }
+      if (!e->modes_from.empty()) {  // windowed, then the full-screen modes the list offers
+        it.choices.clear();
+        for (const Choice& c : e->choices) it.choices.emplace_back(c.text);
+        const std::string list = host_value(host, e->modes_from);
+        for (size_t at = 0; at < list.size();) {
+          const size_t end = std::min(list.find(' ', at), list.size());
+          if (end > at) it.choices.push_back(list.substr(at, end - at));
+          at = end + 1;
+        }
+        double x = 0;
+        const int n =
+            ge::console::parse_number(host_value(host, cvar_of(*e)), x) ? static_cast<int>(x) : 0;
+        it.choice = n >= 0 && static_cast<size_t>(n) < it.choices.size() ? n : 0;
         continue;
       }
       if (e->id == "name" || e->id == "hostname" || e->page == "addresses") {  // a text cvar
