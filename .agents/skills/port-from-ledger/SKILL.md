@@ -1,6 +1,6 @@
 ---
 name: port-from-ledger
-description: "Use before building ANY piece of a classic game in Shooter's Edge (a command, a setting, a menu page, an effect, a monster, a server feature, a whole system): find the piece's rows in the game's checklist ledger (porting/shooters-edge/<game>-ledger-*.md), build every missing and partial row of that area in one PR, mark them done in the ledger, and report the missing count. Also owns making a ledger for a game or a system that has none (reader subagents over the chosen reference), keeping it honest, and why a port never runs a gap analysis afterwards."
+description: "Use before building ANY piece of any classic game in Shooter's Edge (Quake, QuakeWorld, Quake II, and the games after them: Quake III Arena, Doom) (a command, a setting, a menu page, an effect, a monster, a server feature, a whole system): find the piece's rows in the game's checklist ledger (porting/shooters-edge/<game>-ledger-*.md), check whether a game already ported has the feature and lift it to the shared layer instead of building it again, build every missing and partial row of that area in one PR, mark them done in the ledger, and report the missing count. Also owns making a ledger for a game or a system that has none (reader subagents over the chosen reference), keeping it honest, and why a port never runs a gap analysis afterwards."
 ---
 
 # Port from the ledger: the checklist first, never an audit after
@@ -29,6 +29,7 @@ you build. Read the lessons first: `make lessons ARGS=port-from-ledger`.
 | Quake II, the game rules | `porting/shooters-edge/q2-ledger-game.md` |
 | Quake II, the server | `porting/shooters-edge/q2-ledger-server.md` |
 | Quake II, the client | `porting/shooters-edge/q2-ledger-client.md` |
+| A game with no ledger yet (Quake III Arena, Doom, any later one) | write it first: § 5 |
 
 The row ids are stable (`cmd.give`, `cvar.sv_gravity`, `ent.func_door`, `msg.obit.rocket`,
 `menu.options.video`, `svc.muzzleflash2`, `dmf.1024`): `grep -n "cvar.cl_" <ledger>` lists an
@@ -39,7 +40,40 @@ Take a WHOLE area at once (every row of the menu's options page, every muzzle fl
 setting of the rate family), not one row: the owner wants big PRs, and an area built together
 shares its tests and its lab.
 
-## 2. Build each row from facts, never from the source
+## 2. Already in another game? Lift it, never build it twice
+
+Before building ANY row, in any game, ask: does a game we already ported have this feature or
+setting (Quake, QuakeWorld, Quake II, and every game after them)? A newer game's row is often an
+older game's feature under another name, and the older game's code may sit in that game's own
+module (a QuakeWorld server's print filter, a Quake client's demo pause).
+
+1. **Look.** `make find Q="<the setting, the command, the words it does>"`; the row's own note
+   (`LIFT:` and "a <game> name for a setting ours has" point at what exists); the other games'
+   ledgers for the same thing; `porting/shooters-edge/common-settings.md` for a setting; the
+   system's page under `docs/porting/`.
+2. **It exists: lift it.** Move the code to the lowest layer whose games all mean the same by it
+   (engine, shooter kit, `plugins/classic`, never one game's module), keep the first game's
+   behaviour bit for bit, and let the new game reuse it. Only what truly differs stays per game,
+   as data or a flag (Quake II's print filter is QuakeWorld's without chat's exception). A setting
+   becomes one setting in our name, the new game's spelling a synonym (with a value map when only
+   the values differ), its default a `same` row (`docs/porting-games.md` § One name, one meaning).
+3. **It does not exist: build it in that same lowest layer** when another game would want it, so
+   the next game reuses it; only behaviour no other game has goes in the game's module.
+4. **Make it work in every game it serves.** Test the lifted piece in the new game AND in the
+   games that had it. A bug found while porting is fixed in the shared piece, so every game gets
+   the fix. When the new game does it better, its way becomes the shared one and every game
+   improves.
+5. **Never change how an old game feels.** A lift or a better way is an improvement only if a
+   player of the old game would notice nothing but the fix: the same moves, timings, numbers,
+   words and look by default. Hold it with the old game's goldens and labs before and after
+   (`labs` skill). A difference a player would feel (a feel, a default, a timing) stays per game
+   as data or a flag, each game keeping its own by default, and the owner decides whether an old
+   game takes it.
+6. **Say so.** The row's note names the shared piece it reuses or lifted, and the PR says which
+   game's feature was lifted, which fixes or improvements reached the other games, and the
+   before-and-after that shows their feel unchanged.
+
+## 3. Build each row from facts, never from the source
 
 - A row says what the thing does in our words and quotes what a player reads. When that is not
   enough to build it, ask a reader a written question about those rows (`clean-room` § questions);
@@ -54,7 +88,7 @@ shares its tests and its lab.
 - A row is `done` only when a test or a lab holds it as a player would see it: the exact words, the
   default, the menu row's place. A name in our tree is not proof.
 
-## 3. Mark the ledger in the same PR
+## 4. Mark the ledger in the same PR
 
 - Something found while filling (a refusal, a wrong default, a crash) gets a new row first, then
   its fix, so the count stays the whole truth.
@@ -68,7 +102,7 @@ shares its tests and its lab.
   and after in the PR description and the report ("Quake II ledger: 956 missing, now 902").
 - Update the system's page in `docs/porting/` and `ledger.md` as `porting-games.md` asks.
 
-## 4. A game or a system without a ledger
+## 5. A game or a system without a ledger
 
 Before the first line of a new game's port (or a system the ledger lacks), write the ledger:
 

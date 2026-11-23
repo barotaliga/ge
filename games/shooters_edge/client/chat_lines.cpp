@@ -446,7 +446,8 @@ void chat_line_teamplay(ChatExtras& x, DemoState& s, const con::ChatLine& line, 
     for (size_t i = words_at; i < p.text.size(); ++i)
       if (p.text[i] == '\r' || (p.text[i] == '\n' && i + 1 < p.text.size())) p.text[i] = ' ';
   }
-  if (chat && own_team && !x.sound_trigger.empty()) {
+  const bool sounds_quiet = x.con != nullptr && x.con->sound_triggers_quiet();  // a ruleset's
+  if (chat && own_team && !x.sound_trigger.empty() && !sounds_quiet) {
     // The sound word: the line's last run of name characters after a trigger character.
     size_t end = p.text.size();
     while (end > words_at && (p.text[end - 1] == '\n' || p.text[end - 1] == '\r')) --end;

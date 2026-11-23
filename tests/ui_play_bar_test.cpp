@@ -37,6 +37,8 @@ TEST(markers_under_the_pointer_and_the_clock) {
   CHECK(gu::play_bar_marker_at(l, m, 100, x50, y - 100) == -1);  // off the bar's row
   CHECK(gu::play_clock(0) == "0:00" && gu::play_clock(83.9) == "1:23");
   CHECK(gu::play_clock(3723) == "1:02:03");
+  CHECK(gu::play_percent(0, 0) == "0%" && gu::play_percent(30, 120) == "25%");
+  CHECK(gu::play_percent(119.9, 120) == "99%" && gu::play_percent(200, 120) == "100%");
 }
 
 TEST(a_press_drags_and_the_release_seeks) {
