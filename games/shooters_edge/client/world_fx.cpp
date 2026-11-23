@@ -1833,7 +1833,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   const int mine = l.own > 0 ? l.me_effects : 0;
   if (l.own > 0) glow(mine, p.origin);
 
-  step_screen(l, s, dt, mine, out);
+  step_screen(l, s, dt, out);
 }
 
 bool load_held_fire(HeldFire& f, std::string* error, std::span<const std::string_view> at_eye) {
