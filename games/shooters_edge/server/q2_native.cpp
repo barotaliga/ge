@@ -800,7 +800,7 @@ NativeQ2::~NativeQ2() {
   } catch (...) {
     std::fputs(
         "q2 native: the game library's shutdown threw; its memory and files may be left"
-        " open (next: check the library's own shutdown)\n",
+        " open. Check the library's own shutdown.\n",
         stderr);
   }
   h.library.close();
