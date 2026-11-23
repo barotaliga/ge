@@ -47,8 +47,8 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 2 | 67 | 5 (2 / 1 / 2) | 0 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 2 | 51 | 8 (3 / 3 / 2) | 0 |
 | The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
-| Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **272** | **10** | **131** | **131 (70 / 50 / 11)** | **0** |
+| Ground Zero (Quake II, folder `rogue`) | 82 | 29 | 4 | 49 (19 / 26 / 4) | 0 |
+| **All** | **272** | **36** | **128** | **108 (53 / 45 / 10)** | **0** |
 
 Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.**
 
@@ -383,23 +383,23 @@ count: done 0, verify 0, missing 7, not-taken 0
 
 ## Ground Zero (Quake II, folder `rogue`)
 
-count: done 3, verify 7, missing 72 (36 / 31 / 5), not-taken 0
+count: done 29, verify 4, missing 49 (19 / 26 / 4), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
-| gz.switch | the pack's rules behind one switch its profile sets, Quake II's own unchanged | missing | 1 | as xat.switch |
+| gz.switch | the pack's rules behind one switch its profile sets, Quake II's own unchanged | done | 1 | server/q2_pack.hpp, server/q2_gz_rules.cpp: the folder `rogue` sets it; the cvars only under it |
 | gz.ai | every monster's changed behaviour in the pack (dodging and ducking shots, jumping and dropping, firing blind at where the player was, the medic's and the hover's changes) | missing | 1 | reader question: the whole list, per monster |
-| gz.items_list | the item list grown by the pack's items, in its order | missing | 1 | reader question |
-| gz.obits | the new weapons' and monsters' obituaries, word for word | missing | 1 | reader question |
-| gz.tesla | the tesla mine thrown from the inventory, its zaps | missing | 1 | ammo row `ammo_tesla` places it |
-| gz.nuke | the A-M bomb thrown, its countdown and blast | missing | 1 | ammo row `ammo_nuke` places it |
+| gz.items_list | the item list grown by the pack's items, in its order | done | 1 | server/q2_bar.cpp (`kGroundZero`, 61 rows in the pack's order), server/q2_items.cpp |
+| gz.obits | the new weapons' and monsters' obituaries, word for word | done | 1 | server/q2_combat.cpp (`sq_obituary`): the six weapons and the A-M bomb; the monsters' with gz.ai |
+| gz.tesla | the tesla mine thrown from the inventory, its zaps | done | 1 | server/q2_gz_weapons.cpp; not yet shot down by damage (a partial: batch 2) |
+| gz.nuke | the A-M bomb thrown, its countdown and blast | done | 1 | server/q2_gz_weapons.cpp, server/q2_use.cpp; no screen flash yet (batch 2) |
 | gz.tag | the tag game (`gamerules 2`): the token, the bonus, three frags a kill while it, the lines | missing | 2 | LIFT with Dissolution's tag |
-| gz.dmflag.131072 | `dmflags` 131072: no A-M bombs, teslas or prox mines | missing | 2 |  |
-| gz.dmflag.262144 | `dmflags` 262144: quad and double damage do not stack | missing | 2 |  |
-| gz.dmflag.524288 | `dmflags` 524288: no A-M bombs | missing | 2 |  |
-| gz.dmflag.1048576 | `dmflags` 1048576: no spheres | missing | 2 |  |
+| gz.dmflag.131072 | `dmflags` 131072: no A-M bombs, teslas or prox mines | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
+| gz.dmflag.262144 | `dmflags` 262144: quad and double damage do not stack | done | 2 | server/q2_powers.cpp (`fight_multiplier`) |
+| gz.dmflag.524288 | `dmflags` 524288: no A-M bombs | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
+| gz.dmflag.1048576 | `dmflags` 1048576: no spheres | done | 2 | server/q2_gz_rules.cpp (`gz_left_out`) |
 | gz.cvar.huntercam | `huntercam` (1): the hunter sphere's chase camera | missing | 2 | a setting of the pack's rules |
-| gz.cvar.strong_mines | `strong_mines` (0): mines laid under quad or double keep it their whole time | missing | 3 |  |
+| gz.cvar.strong_mines | `strong_mines` (0): mines laid under quad or double keep it their whole time | done | 3 | server/q2_gz_rules.cpp, server/q2_gz_weapons.cpp (the mine's time) |
 | gz.cvar.randomrespawn | `randomrespawn` (0): a deathmatch item comes back as another of its kind | missing | 3 |  |
 | gz.cvar.gamerules | `gamerules` (0; 2 is tag) | missing | 2 |  |
 | gz.campaign | the five units in order (the release's `runit2`..`runit5` configs start one), the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp |
@@ -437,31 +437,31 @@ as above). Our Quake II rules spawn none of them: each is built in C++ beside th
 
 #### Weapons and items
 
-count: done 0, verify 3, missing 18, not-taken 0
+count: done 16, verify 0, missing 5, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| gz.ent.ammo_disruptor | `ammo_disruptor` | rounds for the disruptor | 12 / 41 | missing | 1 | not in our rules |
-| gz.ent.ammo_flechettes | `ammo_flechettes` | flechettes for the ETF rifle | 21 / 76 | missing | 1 | not in our rules |
-| gz.ent.ammo_nails | `ammo_nails` | a classname 24 maps place: probably dropped at spawn | 24 / 113 | verify | 3 | not in our rules; reader question |
-| gz.ent.ammo_nuke | `ammo_nuke` | the A-M bomb: thrown, a huge blast after a delay | 15 / 15 | missing | 1 | not in our rules |
-| gz.ent.ammo_prox | `ammo_prox` | prox grenades | 32 / 179 | missing | 1 | not in our rules |
-| gz.ent.ammo_tesla | `ammo_tesla` | the tesla mine: thrown, zaps whatever comes close | 32 / 114 | missing | 1 | not in our rules |
+| gz.ent.ammo_disruptor | `ammo_disruptor` | rounds for the disruptor | 12 / 41 | done | 1 | server/q2_items.cpp; left off unless `g_disruptor` (server/q2_gz_rules.cpp) |
+| gz.ent.ammo_flechettes | `ammo_flechettes` | flechettes for the ETF rifle | 21 / 76 | done | 1 | server/q2_items.cpp |
+| gz.ent.ammo_nails | `ammo_nails` | a classname 24 maps place: probably dropped at spawn | 24 / 113 | done | 3 | server/q2_gz_rules.cpp (`gz_classname`): spawns as flechettes |
+| gz.ent.ammo_nuke | `ammo_nuke` | the A-M bomb: thrown, a huge blast after a delay | 15 / 15 | done | 1 | server/q2_items.cpp, server/q2_gz_weapons.cpp |
+| gz.ent.ammo_prox | `ammo_prox` | prox grenades | 32 / 179 | done | 1 | server/q2_items.cpp, server/q2_gz_weapons.cpp |
+| gz.ent.ammo_tesla | `ammo_tesla` | the tesla mine: thrown, zaps whatever comes close | 32 / 114 | done | 1 | server/q2_items.cpp, server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
 | gz.ent.item_doppleganger | `item_doppleganger` | a decoy of the player that monsters attack | 21 / 23 | missing | 2 | not in our rules; LIFT: Scourge of Armagon's decoy |
-| gz.ent.item_double | `item_double` | double damage for a while | 24 / 28 | missing | 1 | not in our rules; LIFT: the quad's multiplier and timer |
-| gz.ent.item_ir_goggles | `item_ir_goggles` | infra-red goggles: warm bodies glow (the client's view bit is done) | 11 / 11 | missing | 2 | not in our rules |
+| gz.ent.item_double | `item_double` | double damage for a while | 24 / 28 | done | 1 | server/q2_powers.cpp (`fight_multiplier`, the quad's timer lifted) |
+| gz.ent.item_ir_goggles | `item_ir_goggles` | infra-red goggles: warm bodies glow (the client's view bit is done) | 11 / 11 | done | 2 | server/q2_powers.cpp, server/q2_server.cpp (the view bit) |
 | gz.ent.item_sphere_defender | `item_sphere_defender` | the defender sphere: floats by the player and shoots at enemies | 28 / 30 | missing | 2 | not in our rules |
 | gz.ent.item_sphere_hunter | `item_sphere_hunter` | the hunter sphere: hunts down the player's attacker (its chase camera `huntercam`) | 26 / 28 | missing | 2 | not in our rules |
 | gz.ent.item_sphere_vengeance | `item_sphere_vengeance` | the vengeance sphere: strikes whoever killed the player | 22 / 25 | missing | 2 | not in our rules; LIFT: Dissolution's sphere |
-| gz.ent.key_nuke | `key_nuke` | the nuke key | 2 / 2 | missing | 1 | not in our rules |
+| gz.ent.key_nuke | `key_nuke` | the nuke key | 2 / 2 | done | 1 | server/q2_items.cpp (a key row) |
 | gz.ent.key_nuke_container | `key_nuke_container` | the container the nuke key is taken from | 1 / 1 | missing | 1 | not in our rules |
-| gz.ent.weapon_chainfist | `weapon_chainfist` | the chainfist: a chainsaw fist | 25 / 33 | missing | 1 | not in our rules |
-| gz.ent.weapon_disintegrator | `weapon_disintegrator` | the disruptor: a slow bolt that tracks and disintegrates | 13 / 14 | missing | 1 | not in our rules |
-| gz.ent.weapon_etf_rifle | `weapon_etf_rifle` | the ETF rifle: fires flechettes | 18 / 25 | missing | 1 | not in our rules |
-| gz.ent.weapon_heatbeam | `weapon_heatbeam` | the plasma beam: a continuous beam on cells | 22 / 26 | missing | 1 | not in our rules; LIFT: the beam drawn and aimed as our own lightning beam (cl_fakeshaft, the smooth weapon thread) |
-| gz.ent.weapon_nailgun | `weapon_nailgun` | a classname 21 maps place that is not one of the pack's weapons: probably dropped by the library at spawn | 21 / 27 | verify | 3 | not in our rules; reader question |
-| gz.ent.weapon_plasmabeam | `weapon_plasmabeam` | a second name the maps use for the plasma beam | 12 / 14 | verify | 1 | not in our rules; which name the library spawns: reader question |
-| gz.ent.weapon_proxlauncher | `weapon_proxlauncher` | the prox launcher: grenades that stick and wait | 32 / 44 | missing | 1 | not in our rules; LIFT: one proximity mine with Scourge of Armagon's proximity gun |
+| gz.ent.weapon_chainfist | `weapon_chainfist` | the chainfist: a chainsaw fist | 25 / 33 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
+| gz.ent.weapon_disintegrator | `weapon_disintegrator` | the disruptor: a slow bolt that tracks and disintegrates | 13 / 14 | done | 1 | server/q2_gz_weapons.cpp; left off unless `g_disruptor` |
+| gz.ent.weapon_etf_rifle | `weapon_etf_rifle` | the ETF rifle: fires flechettes | 18 / 25 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
+| gz.ent.weapon_heatbeam | `weapon_heatbeam` | the plasma beam: a continuous beam on cells | 22 / 26 | done | 1 | server/q2_gz_rules.cpp (`gz_classname`): spawns as the plasma beam |
+| gz.ent.weapon_nailgun | `weapon_nailgun` | a classname 21 maps place that is not one of the pack's weapons: probably dropped by the library at spawn | 21 / 27 | done | 3 | server/q2_gz_rules.cpp (`gz_classname`): spawns as the ETF rifle |
+| gz.ent.weapon_plasmabeam | `weapon_plasmabeam` | a second name the maps use for the plasma beam | 12 / 14 | done | 1 | server/q2_gz_hand.cpp, server/q2_gz_weapons.cpp |
+| gz.ent.weapon_proxlauncher | `weapon_proxlauncher` | the prox launcher: grenades that stick and wait | 32 / 44 | done | 1 | server/q2_gz_weapons.cpp; one prox mine, Scourge of Armagon's is its own program's |
 
 #### Monsters
 
