@@ -333,6 +333,7 @@ struct DemoState {
   // drawn with the fixed list (`demo_vweps`).
   std::vector<std::string> vweps;
   std::vector<std::string> images;  // Quake II: the pictures it names (`pics/<name>.pcx`)
+  std::string sky;                  // Quake II: the sky's name (its sides `env/<sky><side>`)
   // Quake II: what its own status bar runs (client/q2_bar.hpp): the bar's program, the item
   // names by number, the player state's 32 stats as sent, the last screen the server put up (a
   // scoreboard's or the help computer's program) and the last inventory's counts by item number.

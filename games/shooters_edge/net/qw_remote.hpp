@@ -238,6 +238,9 @@ struct Remote {
       keep_file;
   // A Quake II download cut short, held in the game's folder to be resumed (Q2ClientConfig::held).
   ge::classic::content::HeldDownloads held;
+  // What a Quake II server stuffed that the client does not answer itself, for the window's console
+  // to run as if typed (net/q2_client.hpp `to_run`); taken each frame.
+  std::vector<std::string> stuffed_run;
   bool kept = false;
   // A screenshot the server asked for (qw_client.hpp `ClientUpload`): the window's frame grabbed
   // in memory, scaled and packed (`snap_grab(width, height, quality)`, false when it can't) and
