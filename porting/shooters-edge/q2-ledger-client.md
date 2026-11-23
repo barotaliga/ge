@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 132 | 13 | 1 | 10 | 156 |
-| Client settings (cvars) | 221 | 49 | 8 | 72 | 350 |
+| Client settings (cvars) | 223 | 49 | 6 | 72 | 350 |
 | Macros ($name in typed and bound text) | 25 | 3 | 0 | 2 | 30 |
 | Menu pages and rows | 99 | 58 | 4 | 1 | 162 |
 | Server messages the client parses (svc) | 21 | 6 | 0 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 14 | 5 | 1 | 0 | 20 |
 | Connection, network, downloads and the rest | 10 | 5 | 2 | 0 | 17 |
-| **all** | 790 | 289 | 36 | 96 | 1211 |
+| **all** | 792 | 289 | 34 | 96 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 221, partial 49, missing 8, not-taken 72
+done 223, partial 49, missing 6, not-taken 72
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -411,7 +411,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.ogg_remap_tracks | `ogg_remap_tracks` | remap the mission packs' track numbers to the digital release's file names (default 1) | done | `plugins/classic/content/soundtrack.hpp`'s `q2_remap_track` (rogue 2..11 as 12..21, xatrix by its table) in the music's track lookup (`games/shooters_edge/client/take_in.cpp`), bound in `client/q2_session.cpp` |
 | cvar.al_device | `al_device` | the OpenAL output device, empty the default; `?` lists the devices ("Available devices:") (default empty) | done | its spelling of the engine's `s_device` (`platform/window_cvars.hpp`, every game): "" the system's default, a name moves the sound there at once (`platform/audio.hpp`'s `move_audio`), `?` lists "Available devices:" and puts the setting back, a name not there is said once and the sound stays; `s_devices` lists them too |
 | cvar.al_merge_looping | `al_merge_looping` | OpenAL: merge copies of one looped sound so they play as loud as on the software mixer; 0 off, 1 auto (only in plain stereo), 2 on (default 1) | not-taken | an OpenAL mixer's fix; ours has one mixer, which plays copies of a looped sound as the software mixer does |
-| cvar.al_hrtf | `al_hrtf` | OpenAL head-related sound (default 0) | missing | C32 |
+| cvar.al_hrtf | `al_hrtf` | OpenAL head-related sound (default 0) | done | Quake II's spelling of s_hrtf (`client/room_ear.hpp`), not kept: 0 (the default) off; 1 as the sound device chooses, off, as it names no headphones; 2 on: each sound heard by two ears (`audio/synth.hpp`'s Synth::binaural), the far ear about 0.66 ms later, softer and duller through the head's shadow; the player's own sounds and the music sit in the middle and are heard as before |
 | cvar.gl_screenshot_format | `gl_screenshot_format` | jpg, png or tga (default jpg) | done | a synonym of ours `scr_format` (`games/shooters_edge/client/cvar_layers.cpp`), the same default |
 | cvar.gl_screenshot_async | `gl_screenshot_async` | write screenshots off the main thread (default 1) | not-taken | ours always packs and writes every format off the game's thread (`engine/capture/screenshot.hpp`), its 2 |
 | cvar.gl_screenshot_quality | `gl_screenshot_quality` | JPEG quality (default 90) | done | a synonym of ours `scr_quality`, the same default |
@@ -487,7 +487,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_context | `gl_colorbits`, `gl_depthbits`, `gl_stencilbits`, `gl_debug` | the GL context's bits and debug level (0, 0, 8, 0) | not-taken | `client-gaps.md`: rendering internals left out |
 | cvar.gl_multisamples | `gl_multisamples` | MSAA samples (default 0; menu 2, 4, 8) | not-taken | ours smooths edges by its temporal upscale (`docs/rendering.md` TAA-U), with no multisampled targets to ask for |
 | cvar.basedir | `basedir` | the install folder; command line only | partial | ours finds the install itself; `basedir` is a word of the take-in (`client/take_in.cpp`) |
-| cvar.homedir | `homedir` | the writable folder; command line only | missing | not found |
+| cvar.homedir | `homedir` | the writable folder; command line only | done | any game's here (`client/take_in.hpp`): `+set homedir <folder>` on the command line is the folder the game writes in (the games taken in, the settings, screenshots, recordings, downloads), made when missing; read only once the game runs. Ours keeps one tree: a game is copied into the data folder, so nothing needs a second search |
 | cvar.libdir | `libdir` | the game-library folder; command line only | not-taken | ours loads no native game library: Quake II's rules are our own code and a mod's compiled module runs in our VM (`plugins/progs`) |
 | cvar.sys_console | `sys_console` | Unix: the terminal console's mode | not-taken | ours writes the client's console to no terminal; the dedicated server's terminal is its own |
 | cvar.win_noalttab | `win_noalttab` | Windows: disable Alt+Tab (default 0) | not-taken | ours leaves the system's own keys (Alt+Tab, the Windows key) to the system on every platform |

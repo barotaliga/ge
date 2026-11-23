@@ -52,13 +52,22 @@ void begin_sample(SampleVoice& s, const Pcm& pcm, const SamplePlay& play, uint32
   s.pos = static_cast<uint64_t>(from) << 32;
 }
 
+void far_ear(float pan, float& delay, float& gain, float& coeff) {
+  const float a = pan < 0 ? -pan : pan;
+  const float side = a > 1 ? 1 : a;
+  delay = side * kItdFrames;
+  gain = 1 - kFarShade * side;
+  coeff = 1 - (1 - kFarCoeff) * side;
+}
+
 void render_sample(SampleVoice& s, int64_t b0, int count, const float* bus, float* l, float* r,
-                   float* e) {
+                   float* e, bool binaural) {
   if (s.stopping && b0 >= s.free_at) {
     s.live = false;
     return;
   }
   const int64_t length = s.pcm->frames();
+  if (binaural) far_ear(s.pan, s.far_delay, s.far_gain, s.far_coeff);
   for (int i = s.start > b0 ? static_cast<int>(s.start - b0) : 0; i < count; i++) {
     const int64_t k = static_cast<int64_t>(s.pos >> 32);
     if (s.loop_start < 0 && k >= length) {
@@ -80,11 +89,40 @@ void render_sample(SampleVoice& s, int64_t b0, int count, const float* bus, floa
       s.ctl = 0;
       for (int j = 0; j < kControl; j++) s.pan += (s.t_pan - s.pan) * s.c_pan;
       pan_gains(s.pan, s.gl, s.gr);
+      if (binaural) far_ear(s.pan, s.far_delay, s.far_gain, s.far_coeff);
     }
     x *= s.gain * bus[i];
-    l[i] += x * s.gl;
-    r[i] += x * s.gr;
     e[i] += x * s.echo;
+    if (!binaural) {
+      l[i] += x * s.gl;
+      r[i] += x * s.gr;
+      continue;
+    }
+    // Two ears: the near one hears it now, the far one `far_delay` frames ago (between two
+    // frames, linearly), through the head's shadow.
+    s.ear[s.ear_at & (kEarFrames - 1)] = x;
+    const float back = s.far_delay;
+    const int whole = static_cast<int>(back);
+    const float part = back - static_cast<float>(whole);
+    const float x0 = s.ear[(s.ear_at - static_cast<uint32_t>(whole)) & (kEarFrames - 1)];
+    const float x1 = s.ear[(s.ear_at - static_cast<uint32_t>(whole) - 1) & (kEarFrames - 1)];
+    ++s.ear_at;
+    s.far_low += (x0 + (x1 - x0) * part - s.far_low) * s.far_coeff;
+    if (s.pan == 0) {  // centred: both ears hear what the level pan gives, to the bit
+      l[i] += x * s.gl;
+      r[i] += x * s.gr;
+      continue;
+    }
+    // The near ear at the louder side's level, the far ear at that level through the shadow.
+    const float level = s.gl > s.gr ? s.gl : s.gr;
+    const float far = s.far_low * s.far_gain * level;
+    if (s.pan > 0) {
+      l[i] += far;
+      r[i] += x * level;
+    } else {
+      l[i] += x * level;
+      r[i] += far;
+    }
   }
 }
 

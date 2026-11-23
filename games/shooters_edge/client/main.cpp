@@ -330,8 +330,10 @@ int run_main(int argc, char** argv) {
                                           std::chrono::system_clock::now().time_since_epoch())
                                           .count());
         });
-  // A game pointed at is copied into the data folder and played from there (client/take_in.hpp).
-  const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs);
+  // A game pointed at is copied into the data folder and played from there (client/take_in.hpp);
+  // `+set homedir <folder>` picks the folder.
+  const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs,
+                                              cl::take_home_dir(&args.plus));
   cl::adopt_placed_settings(cl::placed_folder(ge::platform::app_dir()), data_root);
   if (!cl::take_in_basedir(&args.basedir, data_root)) return 2;
   std::vector<cl::FoundInstall> installs;  // the console's `games`
@@ -981,6 +983,7 @@ int run_main(int argc, char** argv) {
       cl::ask_install(*window, args, measured);  // -classic <id>, none kept
   cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music, &args.game,
                            &game_cvars.q2.remap_tracks);
+  cl::add_home_dir(console, data_root);
   cl::add_games_command(console, installs, folder_ask);  // `games`: the installs found, `games <n>`
   // A GAME SWITCHED SHOWS ITS LOADING: a console line and a frame before each long step of
   // `open_folder`, so the window never looks hung; the new game's look once its pictures are in.
@@ -1103,6 +1106,7 @@ int run_main(int argc, char** argv) {
     music.held = cl::cinematic_on(cine);  // a movie's own sound: `ogg play` refused meanwhile
     ge::audio::music_frame(music, synth, console);
     cl::hear_swap(synth, under_ear);  // s_swapstereo
+    cl::hear_ears(synth, under_ear);  // s_hrtf
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one

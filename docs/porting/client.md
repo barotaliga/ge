@@ -107,6 +107,8 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | The lag graph and the lost-connection picture | Quake II's client | `engine/hud/net_graph.hpp` (`draw_lag_graph`), both games' packets |
 | Sound muffled under water (`s_underwater`, off in Quake) | Quake II's client | `engine/audio/synth.hpp`'s muffle, `client/room_ear.hpp` |
 | Speakers swapped (`s_swapstereo`) | both games' later clients | `engine/audio/synth.hpp`'s `swap_stereo`, `client/room_ear.hpp` |
+| Two ears for headphones (`s_hrtf`, Quake II's `al_hrtf`): the far ear later, softer and duller | Quake II's later client | `engine/audio/synth.hpp`'s `binaural`, `client/room_ear.hpp` |
+| The folder the game writes in (`+set homedir`) | Quake II's later client, any game's here | `client/take_in.hpp` |
 | Typed history kept to a length (`con_history`) | Quake II's client | `engine/console/view.hpp` |
 | The string commands (`alias_in`, `cvar_in`, `set_bind_str`, `hash` ...), `msg_trigger` levels, `$triggermatch` | Quake's later clients | `engine/console/script_strings.cpp`, `script.cpp` |
 | Alias arguments `$0`, `$@`, `${1-3}`, `%1`; `if ... eq/ne/isin` | Quake II's later client | `engine/console/lex.cpp`, `script.cpp` |
