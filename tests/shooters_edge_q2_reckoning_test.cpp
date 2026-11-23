@@ -54,6 +54,7 @@ std::vector<int> fire(sv::SqBody& b, SqWeapon w, int steps) {
   h.state = sv::SqHandState::ready;
   h.frame = sv::kSqWeapons[int(w)].last_fire + 1;
   std::vector<int> shots;
+  shots.reserve(size_t(steps));
   for (int i = 0; i < steps; i++) shots.push_back(sv::sq_hand_step(h, b, true, i * 0.1).shots);
   return shots;
 }
@@ -236,6 +237,7 @@ TEST(the_phalanx_fires_two_balls_a_pull_for_one_mag_slug_every_sixteen_steps) {
 TEST(dual_fire_is_a_timed_power_with_the_quad_s_shell) {
   const sv::SqPower* pw = sv::sq_power("item_quadfire");
   CHECK(pw != nullptr && pw->until == &sv::Q2Player::dual_fire_until);
+  if (pw == nullptr) return;
   CHECK(pw->drop_dmflag == 65536);
   sv::Q2Player p;
   p.dual_fire_until = 20;

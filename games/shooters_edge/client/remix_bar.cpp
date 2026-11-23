@@ -132,6 +132,7 @@ hud::Status q2_joined_status(const DemoState& s, double t) {
     const int have = r.ammo == SqAmmo::none || !known ? -1 : count(ammo_item(r.ammo));
     h.keyed.ammo[static_cast<size_t>(k) + 1] = have;
     if (known && r.item != nullptr && count(item_number(r.name)) <= 0) continue;
+    if (!known && r.pack != server::Q2Pack::base) continue;  // a pack's only when the server says
     h.keyed.carried |= 1u << (k + 1);
     if (have < 0 || have >= r.per_shot) h.keyed.ready |= 1u << (k + 1);
   }
