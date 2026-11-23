@@ -351,6 +351,12 @@ PlayerState player_state(const QwServer& s, int about, int to) {
 
 }  // namespace
 
+int32_t items_word(const sv::RulesWorld& w, const sv::PlayerNumbers& n) {
+  const auto bits = [](float f) { return static_cast<uint32_t>(static_cast<int32_t>(f)); };
+  const uint32_t high = w.items2 ? bits(n.items2) << 23 : bits(w.serverflags) << 28;
+  return static_cast<int32_t>(bits(n.items) | high);
+}
+
 void player_stats(const QwServer& s, int slot, int32_t st[kStats], bool view_height) {
   const sv::RulesWorld& w = s.game->world;
   const sv::PlayerNumbers& n = w.clients[slot].numbers;
@@ -360,7 +366,7 @@ void player_stats(const QwServer& s, int slot, int32_t st[kStats], bool view_hei
   st[4] = static_cast<int32_t>(n.armour);
   for (int i = 0; i < 4; i++) st[6 + i] = static_cast<int32_t>(n.ammo[i]);
   st[10] = static_cast<int32_t>(n.weapon);
-  st[15] = static_cast<int32_t>(n.items) | (static_cast<int32_t>(w.serverflags) << 28);
+  st[15] = items_word(w, n);
   if (view_height) st[16] = static_cast<int32_t>(n.view_z);
 }
 

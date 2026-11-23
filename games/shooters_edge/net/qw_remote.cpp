@@ -498,6 +498,16 @@ std::string coming(const std::string& name, int percent, double& progress) {
   return name;  // the console draws the bar and the percentage after it
 }
 
+// The file the web downloads are fetching and its share (-1 while its size is unknown); "" none.
+std::string coming_by_web(const ge::classic::content::WebDownloads& h, double& progress) {
+  ge::classic::content::WebProgress p;
+  if (!ge::classic::content::web_progress(h, p)) return {};
+  progress = p.total > 0
+                 ? std::clamp(static_cast<double>(p.got) / static_cast<double>(p.total), 0.0, 1.0)
+                 : -1;
+  return p.path;
+}
+
 }  // namespace
 
 const ge::hud::NetHistory* remote_net(const Remote& r) {
@@ -529,11 +539,13 @@ std::string remote_foot(const Remote& r, double& progress) {
   if (r.q2) {
     const Q2ClientEnd& c = *r.q2;
     if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
+    if (std::string web = coming_by_web(c.http, progress); !web.empty()) return web;
     if (!c.fetching.empty()) return coming(c.fetching, c.fetched_percent, progress);
     return c.stage == ClientStage::signon ? loading : std::string();
   }
   const QwClientEnd& c = r.end;
   if (c.stage == ClientStage::active || c.stage == ClientStage::dropped) return {};
+  if (std::string web = coming_by_web(c.web, progress); !web.empty()) return web;
   if (c.dl.active) {
     int percent = c.dl.percent;
     if (c.dl.chunked && !c.dl.have.empty())
@@ -1405,6 +1417,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.web.default_url = cvar("cl_http_default_url", "");
     cfg.web.debug = cvar("cl_http_debug", "0") != "0";
     cfg.web.insecure = cvar("cl_http_insecure", "0") != "0";
+    cfg.web.max_rate_kb = std::atoll(cvar("cl_http_max_rate", "0").c_str());
+    cfg.web.max_size_mb = std::atoll(cvar("cl_http_max_size", "512").c_str());
     cfg.rate = std::atoi(cvar("rate", "25000").c_str());  // the loaded game's default (classic)
     cfg.msg = std::atoi(cvar("msg", "1").c_str());
     cfg.noaim = cvar("noaim", "0") == "1";
@@ -1727,6 +1741,23 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                      .help = "Whether a secure web address's certificate goes unchecked.",
                      .kind = ge::console::CvarKind::boolean,
                      .values = "0: checked (the default); 1: not"});
+    con.cvars().add({.name = "cl_http_max_rate",
+                     .fallback = "0",
+                     .flags = ge::console::kArchive,
+                     .help = "The fastest web downloads come, in kilobytes a second, all together.",
+                     .kind = ge::console::CvarKind::integer,
+                     .min = 0,
+                     .max = 10000000,
+                     .values = "0: as fast as the server sends (the default); N: that many kB a "
+                               "second"});
+    con.cvars().add({.name = "cl_http_max_size",
+                     .fallback = "512",
+                     .flags = ge::console::kArchive,
+                     .help = "The largest file taken from the web, in megabytes.",
+                     .kind = ge::console::CvarKind::integer,
+                     .min = 1,
+                     .max = 100000,
+                     .values = "512: half a gigabyte (the default); N: that many megabytes"});
     con.cvars().add({.name = "cl_http_debug",
                      .fallback = "0",
                      .help = "Whether each web download's address is said as it starts.",
