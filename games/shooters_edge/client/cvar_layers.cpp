@@ -706,6 +706,8 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.add_synonym("al_device", "s_device");
   if (v.find("s_hrtf") != nullptr)  // the classic games' (client/room_ear.hpp)
     v.add_synonym("al_hrtf", "s_hrtf");
+  if (v.find("ce_bloom") != nullptr)  // classic enhance's switch (classicenhance/switches.hpp)
+    v.add_synonym("gl_bloom", "ce_bloom");
   for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)
     v.add({.name = "adr" + std::to_string(k),
            .fallback = "",

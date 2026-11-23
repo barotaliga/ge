@@ -906,12 +906,8 @@ void user_info_step(Remote& r) {
   const std::string rate_text = r.setting("rate");
   const int rate = rate_text.empty() ? 0 : std::atoi(rate_text.c_str());
   const std::string password = r.setting("password");
-  if (r.q2) {
-    Q2ClientConfig& q = r.q2->cfg;
-    if ((rate <= 0 || rate == q.rate) && password == q.password) return;
-    if (rate > 0) q.rate = rate;
-    q.password = password;
-    q2_client_userinfo(*r.q2);
+  if (r.q2) {  // name, skin, hand, fov, msg, gender, rate and password (q2_remote.hpp)
+    if (q2_user_info_moved(r.q2->cfg, r.setting)) q2_client_userinfo(*r.q2);
     return;
   }
   ClientConfig& c = r.end.cfg;
@@ -934,6 +930,13 @@ void user_info_step(Remote& r) {
     client_command(r.end, std::string("setinfo ") + key + " " + std::to_string(*held));
   }
   if (password_moved) client_command(r.end, "setinfo password \"" + password + "\"");
+  // A new name or skin: the server shows it at once.
+  for (const auto& [key, held] : {std::pair{"name", &c.name}, std::pair{"skin", &c.skin}}) {
+    const std::string now = r.setting(key);
+    if (now.empty() || now == *held) continue;
+    *held = now;
+    client_command(r.end, std::string("setinfo ") + key + " \"" + now + "\"");
+  }
   // `msg` and `noaim` as they now are.
   if (const std::string m = r.setting("msg"); !m.empty() && std::atoi(m.c_str()) != c.msg) {
     c.msg = std::atoi(m.c_str());

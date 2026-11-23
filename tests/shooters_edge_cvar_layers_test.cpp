@@ -684,6 +684,10 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(ge::classic::q2_outline_share(fx.cel_shading, 695) == 0);  // gone past about 693
   CHECK(ge::classic::q2_outline_px(0, 0) == 0);
   CHECK(ge::classic::q2_blast_age(fx, 0.27) == 0.2 && ge::classic::q2_blast_age(fx, 0.05) == 0);
+  // gl_bloom: Quake II's spelling of classic enhance's bloom switch, while it is the game.
+  CHECK(v.find("ce_bloom") != nullptr && v.find("ce_bloom")->value == "1");
+  v.set("gl_bloom", "0", con::Source::local);
+  CHECK(v.find("ce_bloom")->value == "0");
   // A glow map's light: twice the setting, 0.75 by default.
   CHECK(fx.glowmap_intensity == 0.75 &&
         ge::classic::q2_glow_map_gain(fx.glowmap_intensity) == 1.5f);

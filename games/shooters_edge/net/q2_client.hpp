@@ -52,6 +52,7 @@ struct Q2ClientConfig {
   std::string name = "player";
   std::string skin = "male/grunt";
   int rate = 15000;
+  int msg = 1;  // the least important messages it is sent (0..3)
   bool spectator = false;
   std::string password;
   std::string spectator_password;  // a spectator's: sent as the `spectator` key's value ("": 1)
