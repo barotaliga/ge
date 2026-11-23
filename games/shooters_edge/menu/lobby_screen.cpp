@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "shooters_edge/hud/lobby_page.hpp"
 #include "shooters_edge/menu/classic_view.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 
@@ -207,6 +208,14 @@ void draw_lobby_page_classic(ui::DrawList& dl, const ClassicArt& art, const hd::
               ? "NEEDS " + std::to_string(v.min_players - seated) + " MORE  F5 ADD A BOT"
               : "F5 BOT+  F6 BOT-  ENTER START",
           x + 8, kPageCols, keys_y + 16, false);
+}
+
+void draw_lobby_in(ui::DrawList& dl, bool classic, const ClassicArt& art, const hd::LobbyView& v,
+                   int width, int height, bool page) {
+  if (classic && page) return draw_lobby_page_classic(dl, art, v, width, height);
+  if (classic) return draw_lobby_classic(dl, art, v, width, height);
+  if (page) return hd::draw_lobby_page(dl, v, width, height);
+  hd::draw_lobby(dl, v, width, height);
 }
 
 }  // namespace shooters_edge::menu

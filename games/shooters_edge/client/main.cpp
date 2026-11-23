@@ -534,10 +534,8 @@ int run_main(int argc, char** argv) {
     cl::draw_title_backdrop(overlay, con_look, w, h, no_night);  // a classic game's own
     if (lobby) {
       const se::LobbyView lv = cl::listen_lobby_view(listen);
-      if (game_menu.classic())  // the game's own look: Quake's strips or Quake II's letters
-        shooters_edge::menu::draw_lobby_page_classic(overlay, game_menu.art(), lv, w, h);
-      else
-        se::draw_lobby_page(overlay, lv, w, h);
+      shooters_edge::menu::draw_lobby_in(overlay, game_menu.classic(), game_menu.art(), lv, w, h,
+                                         true);
     }
     game_menu.draw(overlay, w, h, t);
     con_view.frame(dt);
@@ -1929,10 +1927,8 @@ int run_main(int argc, char** argv) {
       se::LobbyView lv = cl::listen_lobby_view(listen);
       // A classic game counts down in its own centre print (server/announce.hpp).
       lv.count = shooters_edge::server::words_of(listen.server->localinfo, "count_head").empty();
-      if (game_menu.classic())  // the game's own look: Quake's strips or Quake II's letters
-        shooters_edge::menu::draw_lobby_classic(overlay, game_menu.art(), lv, w, h);
-      else
-        se::draw_lobby(overlay, lv, w, h);
+      shooters_edge::menu::draw_lobby_in(overlay, game_menu.classic(), game_menu.art(), lv, w, h,
+                                         false);
     }
     const bool scores_on =  // the score keys (TAB: +showscores), unless scr_draw2d hides them
         !con_keys.held && !was_open && cl::shows_scores(q2_screen);

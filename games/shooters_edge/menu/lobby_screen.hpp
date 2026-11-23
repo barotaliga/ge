@@ -50,6 +50,11 @@ void draw_lobby_classic(ge::ui::DrawList& dl, const ClassicArt& art,
 void draw_lobby_page_classic(ge::ui::DrawList& dl, const ClassicArt& art,
                              const shooters_edge::hud::LobbyView& v, int width, int height);
 
+// The lobby in the look the menu is drawn in: the game's own (`classic`, in `art`) or the modern
+// one; `page` its screen, else the banner on the map.
+void draw_lobby_in(ge::ui::DrawList& dl, bool classic, const ClassicArt& art,
+                   const shooters_edge::hud::LobbyView& v, int width, int height, bool page);
+
 // How many rows each team's part of the screen's roster shows.
 int lobby_classic_rows();
 
