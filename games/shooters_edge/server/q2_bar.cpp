@@ -15,6 +15,7 @@
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_spectate.hpp"
 
@@ -75,11 +76,63 @@ constexpr Numbered kNumbered[kSqItemNumbers] = {
     {"key_airstrike_target", "i_airstrike", "Airstrike Marker"},
     {"item_health", "i_health", "Health"},
 };
+// The Reckoning's (porting note: q2-reckoning-rules.md § 12): its six among the base game's.
+constexpr Numbered kReckoning[kSqItemNumbers + 6] = {
+    {"", "", ""},
+    {"item_armor_body", "i_bodyarmor", "Body Armor"},
+    {"item_armor_combat", "i_combatarmor", "Combat Armor"},
+    {"item_armor_jacket", "i_jacketarmor", "Jacket Armor"},
+    {"item_armor_shard", "i_jacketarmor", "Armor Shard"},
+    {"item_power_screen", "i_powerscreen", "Power Screen"},
+    {"item_power_shield", "i_powershield", "Power Shield"},
+    {"weapon_blaster", "w_blaster", "Blaster"},
+    {"weapon_shotgun", "w_shotgun", "Shotgun"},
+    {"weapon_supershotgun", "w_sshotgun", "Super Shotgun"},
+    {"weapon_machinegun", "w_machinegun", "Machinegun"},
+    {"weapon_chaingun", "w_chaingun", "Chaingun"},
+    {"ammo_grenades", "a_grenades", "Grenades"},
+    {"ammo_trap", "a_trap", "Trap"},
+    {"weapon_grenadelauncher", "w_glauncher", "Grenade Launcher"},
+    {"weapon_rocketlauncher", "w_rlauncher", "Rocket Launcher"},
+    {"weapon_hyperblaster", "w_hyperblaster", "HyperBlaster"},
+    {"weapon_boomer", "w_ripper", "Ionripper"},
+    {"weapon_railgun", "w_railgun", "Railgun"},
+    {"weapon_phalanx", "w_phallanx", "Phalanx"},
+    {"weapon_bfg", "w_bfg", "BFG10K"},
+    {"ammo_shells", "a_shells", "Shells"},
+    {"ammo_bullets", "a_bullets", "Bullets"},
+    {"ammo_cells", "a_cells", "Cells"},
+    {"ammo_rockets", "a_rockets", "Rockets"},
+    {"ammo_slugs", "a_slugs", "Slugs"},
+    {"ammo_magslug", "a_mslugs", "Mag Slug"},
+    {"item_quad", "p_quad", "Quad Damage"},
+    {"item_quadfire", "p_quadfire", "DualFire Damage"},
+    {"item_invulnerability", "p_invulnerability", "Invulnerability"},
+    {"item_silencer", "p_silencer", "Silencer"},
+    {"item_breather", "p_rebreather", "Rebreather"},
+    {"item_enviro", "p_envirosuit", "Environment Suit"},
+    {"item_ancient_head", "i_fixme", "Ancient Head"},
+    {"item_adrenaline", "p_adrenaline", "Adrenaline"},
+    {"item_bandolier", "p_bandolier", "Bandolier"},
+    {"item_pack", "i_pack", "Ammo Pack"},
+    {"key_data_cd", "k_datacd", "Data CD"},
+    {"key_power_cube", "k_powercube", "Power Cube"},
+    {"key_pyramid", "k_pyramid", "Pyramid Key"},
+    {"key_data_spinner", "k_dataspin", "Data Spinner"},
+    {"key_pass", "k_security", "Security Pass"},
+    {"key_blue_key", "k_bluekey", "Blue Key"},
+    {"key_red_key", "k_redkey", "Red Key"},
+    {"key_green_key", "k_green", "Green Key"},
+    {"key_commander_head", "k_comhead", "Commander's Head"},
+    {"key_airstrike_target", "i_airstrike", "Airstrike Marker"},
+    {"item_health", "i_health", "Health"},
+};
 
 // Each pack's list (q2_pack.hpp), in its own order: the base game's until a pack's rows land.
 std::span<const Numbered> numbered(Q2Pack pack) {
   switch (pack) {
     case Q2Pack::reckoning:
+      return kReckoning;
     case Q2Pack::ground_zero:
     case Q2Pack::base:
       break;
@@ -121,7 +174,8 @@ int image(const Q2Server& s, std::string_view name) {
 
 // The classname of each ammo kind's item, by `SqAmmo`.
 constexpr const char* kAmmoClass[kSqAmmoKinds] = {
-    "", "ammo_shells", "ammo_bullets", "ammo_grenades", "ammo_rockets", "ammo_cells", "ammo_slugs"};
+    "",           "ammo_shells", "ammo_bullets", "ammo_grenades", "ammo_rockets",
+    "ammo_cells", "ammo_slugs",  "ammo_magslug", "ammo_trap"};
 
 int ammo_number(SqAmmo a, Q2Pack pack) {
   return a == SqAmmo::none ? 0 : sq_number_of(kAmmoClass[static_cast<int>(a)], pack);
@@ -268,20 +322,11 @@ void bar_rows(Q2Server& s) {
       st[7] = static_cast<int16_t>(image(s, sq_icon(p.picked, pack)));
       st[8] = static_cast<int16_t>(1056 + p.picked);
     }
-    const struct {
-      double until;
-      int number;
-    } timers[4] = {{p.quad_until, sq_number_of("item_quad", pack)},
-                   {p.invulnerable_until, sq_number_of("item_invulnerability", pack)},
-                   {p.suit_until, sq_number_of("item_enviro", pack)},
-                   {p.breather_until, sq_number_of("item_breather", pack)}};
-    for (const auto& t : timers) {
-      if (t.until <= s.level_time) continue;
-      st[9] = static_cast<int16_t>(image(s, sq_icon(t.number, pack)));
+    if (const SqPower* pw = sq_first_power(p, s.level_time)) {
+      st[9] = static_cast<int16_t>(image(s, sq_icon(sq_number_of(pw->item, pack), pack)));
       // Whole seconds left, rounded down, from the frames left.
-      const auto frames = static_cast<int64_t>((t.until - s.level_time) * 10.0 + 1e-6);
+      const auto frames = static_cast<int64_t>((p.*pw->until - s.level_time) * 10.0 + 1e-6);
       st[10] = static_cast<int16_t>(frames / 10);
-      break;
     }
     // The help slot: the help computer's icon blinking while unread; else, with the gun not drawn
     // in the view (`hand` 2, or a field of view over 91) and the host's own `cl_gun` not 2, the

@@ -28,6 +28,7 @@
 #include "progs/text.hpp"
 #include "shooters_edge/server/q2_actor.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_blend.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_commands.hpp"
@@ -362,7 +363,7 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   p.respawn_time = respawn ? s.level_time : 0;  // a first placing counts from the map's start
   p.pressed = 0;
   p.view_angles = {0, yaw, 0};
-  p.body = sq_new_body();
+  p.body = sq_new_body(s.opt.pack);
   p.body.health = static_cast<int>(p.health);
   p.mega = -1;
   p.taken.clear();
@@ -508,7 +509,7 @@ void touch_items(Q2Server& s, int slot) {
     int count = 0;  // ammo the map gives a `count` of
     if (it.kind == SqKind::ammo && item.block >= 0 && size_t(item.block) < s.map->entities.size())
       count = std::atoi(s.map->entities[size_t(item.block)].get_any_case("count").c_str());
-    const int grenades = p.body.ammo[static_cast<int>(SqAmmo::grenades)];
+    const int grenades = p.body.ammo[static_cast<int>(it.ammo)];  // its kind's before
     if (!sq_pick_up(item.item, p.body, deathmatch(s), skill(s), s.level_time, count)) continue;
     p.health = static_cast<float>(p.body.health);
     if (it.kind == SqKind::weapon && fight_anyflag(s, 8192)) {  // infinite ammo: a full stock
@@ -949,8 +950,11 @@ void fill_rows(Q2Server& s) {
       e.modelindex = 0;
     }
     if (p.alive && s.intermission_at <= 0) {  // the powers held, blinking as they run out
-      if (sq_power_shown(p.quad_until - s.level_time)) e.effects |= kSqQuadEffect;
-      if (sq_power_shown(p.invulnerable_until - s.level_time)) e.effects |= kSqInvulnerableEffect;
+      for (const SqPower& pw : sq_powers())
+        if ((pw.effects | pw.render) != 0 && sq_power_shown(p.*pw.until - s.level_time)) {
+          e.effects |= pw.effects;
+          e.render_fx |= pw.render;
+        }
       if (p.god) {  // god mode: a white shell
         e.effects |= kSqColourShellEffect;
         e.render_fx |= kSqGodShellRender;
@@ -1201,6 +1205,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
   }
   s.item_models.assign(size_t(kSqItemCount), 0);  // every item's, for those a player drops
   for (int i = 0; i < kSqItemCount; i++) {
+    if (!q2_pack_has(s.opt.pack, kSqItems[i].pack)) continue;  // a pack's under it alone
     const std::string model = kSqItems[i].model;
     const auto found = std::find(s.models.begin(), s.models.end(), model);
     s.item_models[size_t(i)] = static_cast<int>(found - s.models.begin());
@@ -1682,7 +1687,7 @@ bool sq_give(Q2Server& s, int slot, int item) {
   if (!p.alive) return false;
   const SqItem& it = kSqItems[item];
   p.body.health = static_cast<int>(p.health);
-  const int grenades = p.body.ammo[static_cast<int>(SqAmmo::grenades)];
+  const int grenades = p.body.ammo[static_cast<int>(it.ammo)];  // its kind's before
   if (!sq_pick_up(item, p.body, deathmatch(s), skill(s), s.level_time)) return false;
   p.health = static_cast<float>(p.body.health);
   if (it.kind == SqKind::weapon && fight_anyflag(s, 8192)) {  // infinite ammo: a full stock

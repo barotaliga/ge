@@ -23,6 +23,7 @@
 #include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
+#include "shooters_edge/server/q2_reckoning.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
@@ -47,6 +48,7 @@ enum Kind : uint8_t {
   kExplosive,
   kBarrel,
   kLaser,
+  kMalLaser,  // The Reckoning's pulsing laser: the laser's beam, burning once a `wait` + 0.1 s
   kLightRamp,
   kConveyor,
   kDeadSoldier,
@@ -77,6 +79,7 @@ Kind kind_of(std::string_view c) {
       {"func_explosive", kExplosive},
       {"misc_explobox", kBarrel},
       {"target_laser", kLaser},
+      {"target_mal_laser", kMalLaser},
       {"target_lightramp", kLightRamp},
       {"func_conveyor", kConveyor},
       {"misc_deadsoldier", kDeadSoldier},
@@ -102,6 +105,8 @@ Kind kind_of(std::string_view c) {
       {"turret_base", kTurretBase},
       {"misc_viper", kShip},
       {"misc_strogg_ship", kShip},
+      {"misc_crashviper", kShip},
+      {"misc_transport", kShip},
       {"func_clock", kClock},
   };
   for (const auto& [name, k] : kKinds)
@@ -605,6 +610,7 @@ void turn_breach(Q2Server& s, int i) {
 }  // namespace
 
 bool targets_spawn(Q2Server& s, int i) {
+  if (reckoning_spawn(s, i)) return true;
   Q2Entity& e = s.entities[size_t(i)];
   const Kind k = kind_of(e);
   if (k == kNone) return false;
@@ -721,6 +727,21 @@ bool targets_spawn(Q2Server& s, int i) {
       e.frame = (e.spawnflags & 64) != 0 ? 16 : 4;  // the beam's width
       e.count = static_cast<int>(laser_colour(e.spawnflags));
       return true;
+    case kMalLaser:  // aimed by its angles alone, set up at once; burns `dmg` (5) a pulse
+      e.on = false;
+      if (e.dmg == 0) e.dmg = 5;
+      e.wait = number(s, e, "wait", 0.1f);
+      e.delay = number(s, e, "delay", 0.1f);
+      e.mins = {-8, -8, -8};
+      e.maxs = {8, 8, 8};
+      e.frame = (e.spawnflags & 64) != 0 ? 16 : 4;
+      e.count = static_cast<int>(laser_colour(e.spawnflags));
+      e.dir = way_of(e);
+      if ((e.spawnflags & 1) != 0) {
+        e.on = true;
+        e.tick_at = s.level_time + double(e.wait + e.delay);
+      }
+      return true;
     case kLightRamp:
       if (deathmatch(s)) {
         e.gone = true;
@@ -835,6 +856,7 @@ bool targets_spawn(Q2Server& s, int i) {
 }
 
 bool targets_use(Q2Server& s, int i, int activator) {
+  if (reckoning_use(s, i, activator)) return true;
   Q2Entity& e = s.entities[size_t(i)];
   const Kind k = kind_of(e);
   if (k == kNone) return false;
@@ -942,6 +964,11 @@ bool targets_use(Q2Server& s, int i, int activator) {
         if (e.until <= 0) laser_think(s, i);
       }
       return true;
+    case kMalLaser:  // on: its first pulse `wait` + `delay` on
+      e.on = !e.on;
+      e.activator = activator;
+      e.tick_at = e.on ? s.level_time + double(e.wait + e.delay) : 0;
+      return true;
     case kLightRamp:
       if (e.aim < 0) e.aim = q2_ramp_light(s, i);  // its light, found at the first use
       if (e.aim < 0) return true;
@@ -1019,6 +1046,7 @@ bool targets_use(Q2Server& s, int i, int activator) {
 }
 
 bool targets_damage(Q2Server& s, int i, int attacker, int damage) {
+  if (reckoning_damage(s, i, damage)) return true;
   Q2Entity& e = s.entities[size_t(i)];
   const Kind k = kind_of(e);
   if (e.gone || damage <= 0) return false;
@@ -1059,6 +1087,7 @@ bool targets_damage(Q2Server& s, int i, int attacker, int damage) {
 }
 
 void targets_frame(Q2Server& s) {
+  reckoning_frame(s);
   for (size_t n = 0; n < s.entities.size(); n++) {
     Q2Entity& e = s.entities[n];
     const int i = static_cast<int>(n);
@@ -1115,6 +1144,13 @@ void targets_frame(Q2Server& s) {
         if (e.on && e.until <= 0) laser_think(s, i);
         break;
       }
+      case kMalLaser:  // a pulse: the beam traced and burning, sparks every time
+        if (e.on && e.tick_at > 0 && s.level_time + 0.001 >= e.tick_at) {
+          e.state = 1;
+          laser_think(s, i);
+          e.tick_at = s.level_time + double(e.wait) + kStep;
+        }
+        break;
       case kObject:
         if (e.until > 0 && s.level_time + 0.001 >= e.until) fall_object(s, i);
         break;
@@ -1235,17 +1271,18 @@ void targets_turret(Q2Server& s, Q2Monster& m, int enemy) {
 }
 
 void targets_rows(Q2Server& s) {
+  reckoning_rows(s);
   RulesWorld& w = s.world;
   for (size_t n = 0; n < s.entities.size(); n++) {
     const Q2Entity& e = s.entities[n];
     const Kind k = kind_of(e);
     if (k != kBarrel && k != kDeadSoldier && k != kFigure && k != kCharacter && k != kExplosive &&
-        k != kObject && k != kBomb && k != kShip && k != kLaser)
+        k != kObject && k != kBomb && k != kShip && k != kLaser && k != kMalLaser)
       continue;
     const size_t row = size_t(map_row(static_cast<int>(n)));
     if (row >= w.entities.size()) continue;
     WorldEntity& r = w.entities[row];
-    if (k == kLaser) {  // a beam to where it landed, seen through, while on
+    if (k == kLaser || k == kMalLaser) {  // a beam to where it landed, seen through, while on
       r.free = e.gone || !e.on || e.until > 0;
       r.origin = e.origin;
       r.modelindex = 0;

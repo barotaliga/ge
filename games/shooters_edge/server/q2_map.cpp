@@ -154,8 +154,11 @@ Class class_of(const Q2Entity& e) { return class_of(e.classname); }
 
 bool is_door(Class c) { return c == kDoor || c == kDoorRotating; }
 bool is_ship(const Q2Entity& e) {
-  return e.classname == "misc_viper" || e.classname == "misc_strogg_ship";
+  return e.classname == "misc_viper" || e.classname == "misc_strogg_ship" ||
+         e.classname == "misc_crashviper" || e.classname == "misc_transport";
 }
+// The Reckoning's transport: a ship that sets off at once, unseen until its first use.
+bool is_transport(const Q2Entity& e) { return e.classname == "misc_transport"; }
 
 int index_of(const Q2Server& s, const Q2Entity& e);
 
@@ -729,7 +732,7 @@ void think(Q2Server& s, Q2Entity& e) {
       e.origin = corner.origin - e.mins;
       e.target = corner.target;
       e.owner = c;
-      if (!is_ship(e) && ((e.spawnflags & 1) != 0 || e.targetname.empty())) {
+      if ((!is_ship(e) || is_transport(e)) && ((e.spawnflags & 1) != 0 || e.targetname.empty())) {
         e.spawnflags |= 1;  // running
         e.think_at = s.level_time + kStep;
         e.think = kTrainNext;
@@ -944,6 +947,10 @@ void use(Q2Server& s, int target, int activator, int depth, int other) {
       if (!e.moved && e.state == kGoing && e.arrive == kNoAct) plat_go_down(s, e);
       return;
     case kTrain:
+      if (e.hidden && is_transport(e)) {  // already on its way: it shows itself where it is
+        e.hidden = false;
+        return;
+      }
       if (e.hidden) {  // a ship shows itself and sets off
         e.hidden = false;
         e.spawnflags |= 1;
@@ -1364,8 +1371,11 @@ void spawn_one(Q2Server& s, Q2Entity& e, Class c) {
           e.gone = true;
           return;
         }
-        const char* model = e.classname == "misc_viper" ? "models/ships/viper/tris.md2"
-                                                        : "models/ships/strogg1/tris.md2";
+        const char* model = e.classname == "misc_viper"        ? "models/ships/viper/tris.md2"
+                            : e.classname == "misc_crashviper" ? "models/ships/bigviper/tris.md2"
+                            : is_transport(e)                  ? "models/objects/ship/tris.md2"
+                                                               : "models/ships/strogg1/tris.md2";
+        if (is_transport(e)) e.spawnflags |= 1;
         const auto found = std::find(s.models.begin(), s.models.end(), model);
         e.modelindex = static_cast<int>(found - s.models.begin());
         if (found == s.models.end()) s.models.emplace_back(model);
