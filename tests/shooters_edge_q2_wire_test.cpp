@@ -671,6 +671,62 @@ TEST(the_hit_report_goes_only_to_a_viewer_that_reads_it) {
   }
 }
 
+// AN EXTENDED GAME'S LOOPING SOUNDS AND NO-CULL ENTITIES: two rooms that cannot see each other
+// (x >= 0 cluster 0, x < 0 cluster 1) but hear each other. A looping sound goes by the hearing set
+// and its reach (80 units, then 1 / 0.003 for the default: about 413), not by sight; past its
+// reach one without a model is gone and one with a model is kept only where seen.
+TEST(an_extended_games_loops_go_by_hearing_and_reach) {
+  br::Map m;
+  m.planes.push_back(br::Plane{{1, 0, 0}, 0, 0});
+  m.nodes.push_back(br::Node{0, {-1, -2}});
+  m.models.emplace_back();
+  m.leaves.resize(2);
+  m.leaves[0].cluster = 0;
+  m.leaves[1].cluster = 1;
+  m.clusters = 2;
+  m.row_bytes = 1;
+  m.pvs = {0x01, 0x02};
+  m.phs = {0x03, 0x03};
+  sv::Q2Sight sight;
+  sv::q2_sight_reset(sight, &m);
+  const auto link = [&](int n, float x) {
+    const float p[3] = {x, 0, 0};
+    sv::q2_sight_link(sight, n, p, p);
+  };
+  link(5, -200);   // a speaker behind the wall, in reach
+  link(6, -1000);  // far behind it
+  link(7, 1000);   // far, in sight
+  sv::Q2Wire w;
+  w.slot = 0;
+  w.sight = &sight;
+  const float eye[3] = {30, 0, 0};
+  CHECK(sv::q2_sight_view(w, eye));
+  const auto at = [](float x, int model, int sound, uint8_t attenuation = 0) {
+    sv::Q2EntityState s;
+    s.present = true;
+    s.origin[0] = static_cast<int32_t>(x * 8);
+    s.model[0] = model;
+    s.sound = sound;
+    s.loop_attenuation = attenuation;
+    return s;
+  };
+  // The ordinary cut: a speaker is kept by sight and its 400 units.
+  CHECK(!sv::q2_sight_keeps(w, 5, at(-200, 0, 1), eye));
+  CHECK(!sv::q2_sight_keeps(w, 7, at(1000, 0, 1), eye) &&
+        sv::q2_sight_keeps(w, 7, at(1000, 1, 1), eye));
+  sight.extended = true;
+  CHECK(sv::q2_sight_keeps(w, 5, at(-200, 0, 1), eye));        // heard, in reach
+  CHECK(!sv::q2_sight_keeps(w, 6, at(-1000, 0, 1), eye));      // heard, out of reach
+  CHECK(sv::q2_sight_keeps(w, 6, at(-1000, 0, 1, 192), eye));  // no attenuation: never fades
+  CHECK(!sv::q2_sight_keeps(w, 6, at(-1000, 1, 1), eye));      // a model past reach, unseen
+  CHECK(sv::q2_sight_keeps(w, 7, at(1000, 1, 1), eye));        // a model past reach, seen
+  CHECK(!sv::q2_sight_keeps(w, 7, at(1000, 0, 1), eye));       // the default's 413 units
+  CHECK(sv::q2_sight_keeps(w, 7, at(1000, 0, 1, 64), eye));    // attenuation 1: 1747 units
+  CHECK(!sv::q2_sight_keeps(w, 6, at(-1000, 1, 0), eye));      // no loop: by sight, unseen
+  sight.links[6].everywhere = true;                            // no-cull
+  CHECK(sv::q2_sight_keeps(w, 6, at(-1000, 1, 0), eye));
+}
+
 // A SHUT DOOR CUTS THE FRAME: two rooms (areas 1 and 2, split at x = 0) and the portal between
 // them. Shut, a viewer in room 1 is sent what is in room 1 and the door spanning both, not what
 // is in room 2, and its area bits mark room 1 alone; open, both rooms.
