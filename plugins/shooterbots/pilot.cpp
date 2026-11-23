@@ -1213,7 +1213,29 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           away = {away.x < 0 ? -1.0f : 1.0f, 0, 0};
         else
           away = {0, away.y < 0 ? -1.0f : 1.0f, 0};
-        if (p.set.floor_swim && s.world != nullptr) {
+        if (p.set.under_plat && s.waterlevel < 2) {
+          // Toward the nearest node off it, outside its box (a plat in a shaft is walled on some
+          // sides: under base2's raised lift to bunk1 he pressed the nearer side, a wall, and
+          // standing in its field held it up for good; a trace from inside its box starts solid,
+          // so the way out is the graph's).
+          float best = 1e30f;
+          for (size_t k = 0; k < g.nodes.size(); k++) {
+            const NavNode& c = g.nodes[k];
+            if (c.mover == l.mover || c.ride == l.mover || c.swim) continue;
+            const Vec3f d = c.origin - s.origin;
+            if (d.z > kStepHeight || d.z < -kStepHeight) continue;
+            if (c.origin.x + kPlayerMaxs.x > in->absmin.x - kClear &&
+                c.origin.x + kPlayerMins.x < in->absmax.x + kClear &&
+                c.origin.y + kPlayerMaxs.y > in->absmin.y - kClear &&
+                c.origin.y + kPlayerMins.y < in->absmax.y + kClear)
+              continue;
+            const float dd = d.x * d.x + d.y * d.y;
+            if (dd < best) {
+              best = dd;
+              away = {d.x, d.y, 0};
+            }
+          }
+        } else if (p.set.floor_swim && s.world != nullptr) {
           // Out of the side nearest the player that is open (a plat in a shaft is walled on
           // some sides): the four, by how far each is from his box's edge to the mover's.
           const Vec3f sides[4] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
