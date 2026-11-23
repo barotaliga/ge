@@ -577,7 +577,10 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   v.add({.name = "vid_vsync", .fallback = "0"});  // the window's (platform/pacing.cpp)
   w.console.add_command("playdemo", "the window's (client/demo_playback.cpp)",
                         [](con::Console&, const con::Args&) {});
+  w.console.add_command("snd_restart", "the window's (client/menu_sound.cpp)",
+                        [](con::Console&, const con::Args&) {});
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});  // read again with them
+  CHECK(w.console.has_command("s_restart"));  // QuakeWorld's spelling of the sound restart
   v.set("scr_consize", "0.3", con::Source::local);
   v.set("scr_conalpha", "0.6", con::Source::local);
   v.set("gl_consolefont", "povo5", con::Source::local);
@@ -602,6 +605,7 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   v.set("gl_swapinterval", "1", con::Source::local);  // its spelling of the window's vsync
   CHECK(v.find("vid_vsync")->value == "1");
   CHECK(w.console.has_command("demo"));  // its spelling of playdemo
+  CHECK(!w.console.has_command("s_restart"));
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
   CHECK(v.find("gl_swapinterval") == nullptr && v.find("in_grab")->value == "0");
   CHECK(!w.console.has_command("demo"));

@@ -528,8 +528,10 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.add_command_synonym("cvar_reset", "reset");  // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
   c.add_command_synonym("togglechat", "toggleconsole");  // QuakeWorld's second name for it
-  c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left,
-  c.cvars().add_synonym("chase_back", "cam_dist");       // its distance behind and its switch
+  if (c.has_command("snd_restart"))  // its spelling of the sound restart (client/menu_sound.cpp)
+    c.add_command_synonym("s_restart", "snd_restart");
+  c.cvars().add_synonym("chase_right", "cam_side");  // the chase camera's step to the left,
+  c.cvars().add_synonym("chase_back", "cam_dist");   // its distance behind and its switch
   c.cvars().add_synonym("chase_active", "cl_thirdperson");
   c.cvars().add_synonym("cl_sbar", "hud_sbar");     // QuakeWorld's old bar (1) or see-through (0)
   c.cvars().add_synonym("cl_hudswap", "hud_swap");  // and the see-through bar's column on the left
