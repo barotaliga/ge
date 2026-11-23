@@ -97,6 +97,7 @@
 #include "shooters_edge/net/qw_remote_sheet.hpp"
 #include "shooters_edge/net/qw_serverstatus.hpp"
 #include "shooters_edge/net/qw_watch.hpp"
+#include "shooters_edge/net/qw_weapon.hpp"
 
 namespace shooters_edge::net {
 
@@ -214,6 +215,7 @@ struct Remote {
   sh::SpeedJumpAid jump_aid;  // the easy jump's memory (shooter/speedjump_assist.hpp)
   float speedjump_view = 0.5f;  // cl_speedjump_view: the share of its swing drawn
   sh::Smoothing smooth;         // the prediction's correction
+  RemoteWeapon weapon;          // the held weapon predicted (qw_weapon.hpp)
   // Prediction on the original move (the server's `sv_playermove original`): the stand-in
   // server, built for the level `original_level` counts and the models `original_for` points at.
   ge::classic::OriginalPrediction original;

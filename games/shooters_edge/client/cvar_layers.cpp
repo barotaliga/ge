@@ -547,6 +547,13 @@ void add_first(con::Console& c, const GameBindings& b) {
                  .help = "Whether you tell servers not to show the weapons players carry.",
                  .kind = con::CvarKind::boolean,
                  .values = "0: they may (the default); 1: they show none, from the next connect"});
+  c.cvars().add({.name = "cl_pext_weaponprediction",
+                 .fallback = "1",
+                 .flags = con::kArchive,
+                 .help = "Whether you ask servers for your weapon's state, so your shots show "
+                         "as you fire.",
+                 .kind = con::CvarKind::boolean,
+                 .values = "1: ask (the default); 0: don't, from the next connect"});
   for (const auto& [name, help] :
        {std::pair{"w_switch", "The best weapon a server may switch you to on picking one up."},
         std::pair{"b_switch",
