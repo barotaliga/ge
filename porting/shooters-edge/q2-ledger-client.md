@@ -11,7 +11,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 132 | 13 | 1 | 10 | 156 |
-| Client settings (cvars) | 223 | 49 | 6 | 72 | 350 |
+| Client settings (cvars) | 224 | 49 | 5 | 72 | 350 |
 | Macros ($name in typed and bound text) | 25 | 3 | 0 | 2 | 30 |
 | Menu pages and rows | 99 | 58 | 4 | 1 | 162 |
 | Server messages the client parses (svc) | 21 | 6 | 0 | 0 | 27 |
@@ -29,7 +29,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 14 | 5 | 1 | 0 | 20 |
 | Connection, network, downloads and the rest | 10 | 5 | 2 | 0 | 17 |
-| **all** | 796 | 289 | 25 | 101 | 1211 |
+| **all** | 797 | 289 | 24 | 101 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 223, partial 49, missing 6, not-taken 72
+done 224, partial 49, missing 5, not-taken 72
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -437,7 +437,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_dlight_falloff | `gl_dlight_falloff` | softer dynamic-light edges (default 1) | done | Quake II's: 1 fades a dynamic light on the walls to nothing 51.2 units short of its reach, 0 cuts it off where less than 64 units are left (`brush/app/bsp_draw.hpp`'s Options::dlight_falloff); another game's straight to its reach |
 | cvar.gl_modulate_entities | `gl_modulate_entities` | the models' share of `gl_modulate` (default 1) | partial | Quake II's: times `gl_modulate` on the models' light (`look.cpp`'s model_light, `client/world_models.cpp`), either look; the held weapon keeps its own light |
 | cvar.gl_doublelight_entities | `gl_doublelight_entities` | models lit twice as bright, as the classic renderer did (default 1) | done | Quake II's: 1 lays the models' gl_modulate x gl_modulate_entities on them twice (`model_light`); nothing at the defaults |
-| cvar.gl_glowmap_intensity | `gl_glowmap_intensity` | glow map strength (default 0.75) | missing | C21 |
+| cvar.gl_glowmap_intensity | `gl_glowmap_intensity` | glow map strength (default 0.75) | done | Quake II's (`classic/q2_fx_switches.hpp`'s q2_glow_map_gain): a model's skin `<skin>_glow.png` or `.tga` beside its picture is its glow map (`classic/content/open.cpp`), each texel lighting itself by the glow's brightness over its own (`app/classic_models.hpp`'s glow_map_marks, `render/morph.hpp`'s glow_mark), times twice the setting (default 0.75), whatever the light; a full-colour picture of the skin's name stands in for the skin too. The held weapon's glow map is not read |
 | cvar.gl_flarespeed | `gl_flarespeed` | how fast flares fade in and out (default 8) | missing | not found |
 | cvar.gl_fontshadow | `gl_fontshadow` | shadows under 2D text (default 0) | partial | `games/shooters_edge/client/q2_bar.cpp`: the status bar's and the screen's letters drawn first in black, 1 or 2 units down and right (`client/q2_view.cpp`); the console's letters not yet |
 | cvar.gl_shaders | `gl_shaders` | 1 the shader backend, 0 legacy (default 1) | not-taken | `client-gaps.md`: the window's renderer is its own |

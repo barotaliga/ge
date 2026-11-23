@@ -204,7 +204,7 @@ void morph_texel(const MorphSkin& skin, const TintRamps& ramps, const uint32_t t
     return;
   }
   for (int k = 0; k < 3; ++k) rgb[k] = srgb_to_linear(skin.rgba[i * 4 + static_cast<size_t>(k)]);
-  if (glow && mark == kMarkGlow) *glow = 1;
+  if (glow) *glow = mark_glow_share(mark);
 }
 
 void warp_vertex(const MorphWarp& w, float time_s, const float v[3], float out[3]) {

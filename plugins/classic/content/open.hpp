@@ -24,7 +24,7 @@
 // ge:summary The open calls every shooter game shares: models by kind, sounds, map textures, maps
 // ge:keywords content open_model open_sound map_textures map_info find_config open_locations
 // ge:keywords stand_in replacement-texture replacement-skin model-form opened-model wal iqm
-// ge:keywords mixed-files remix load-time
+// ge:keywords mixed-files remix load-time glow-map _glow
 // ge:skill classic shooter
 // ge:test tests/classic_content_open_test.cpp
 #pragma once
@@ -69,6 +69,9 @@ struct OpenedModel {
   brush::Map brush;      // form brush
   // A full-colour picture with alpha standing in for each of `morph`'s skins (width 0: none).
   std::vector<assets::Image> skins;
+  // The second family's glow map for each skin (width 0: none): `<skin>_glow.png` or `.tga`
+  // beside the skin's picture, its colour the light that texel gives off.
+  std::vector<assets::Image> glows;
 };
 
 // The map `name`: false with the reason and the next step (a player's words) when the files do
