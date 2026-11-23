@@ -1175,6 +1175,22 @@ TEST(entering_and_leaving_are_said_to_everyone) {
   }
 }
 
+// A new map says each player entered once: at its load, not again when his client begins on it.
+TEST(a_new_map_says_each_player_entered_once) {
+  auto a = arena("1");
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = hall();
+  std::string error;
+  a->s().out.events.clear();
+  CHECK_MSG(a->r.start(map, error), error);
+  a->r.connect(0, "Ana", false, false);  // his client's `begin` on the new map
+  int told = 0;
+  for (const sv::NetEvent& e : a->s().out.events)
+    told += e.kind == sv::EventKind::print && e.text == "Ana entered the game\n";
+  CHECK_MSG(told == 1, "said " + std::to_string(told) + " times");
+}
+
 TEST(a_blow_reports_its_points_to_the_attacker_once_a_frame_and_not_his_own) {
   auto a = arena();
   run(*a, 10);
