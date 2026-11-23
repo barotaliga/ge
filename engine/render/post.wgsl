@@ -41,6 +41,8 @@ struct Look {
   f: vec4f,  // the arrival's tint, sRGB-encoded
   g: vec4f,  // the ripple (`set_post_ripple`): its reach (a share of the screen), waves, phase
   h: vec4f,  // the view's rectangle (`set_post_view`): its corner, 1 - its size; 0 all of it
+  i: vec4f,  // the edge blend (`set_post_edge_blend`): an sRGB-encoded colour, its share at the edge
+  j: vec4f,  // the edge blend's depth: a share of the view's shorter side (0: flat), -, -, -
 }
 @group(1) @binding(6) var<uniform> look: Look;
 // Motion blur's inputs at the render size (render/motion_blur.hpp): the motion target (rg the
@@ -355,6 +357,16 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   }
   var o = graded(linear_to_srgb(t));
   o = mix(o, look.d.rgb, look.d.a);
+  if (look.i.a > 0.0) {  // THE EDGE BLEND: a frame round the view, fading inward (edge_blend_share)
+    var share = look.i.a;
+    if (look.j.x > 0.0) {
+      let px = size * (vec2f(1.0) - look.h.zw);  // the view's own size
+      let edge = min(uv, vec2f(1.0) - uv) * px;
+      let inward = max(min(edge.x, edge.y), 0.0) / (look.j.x * min(px.x, px.y));
+      share = select(look.i.a * (1.0 - inward), 0.0, inward >= 1.0);
+    }
+    o = mix(o, look.i.rgb, share);
+  }
   if (kGrain) {
     o = clamp(grained(o, in.position.xy), vec3f(0.0), vec3f(1.0));
   }
