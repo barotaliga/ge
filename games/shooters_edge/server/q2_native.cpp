@@ -774,8 +774,8 @@ NativeQ2::~NativeQ2() {
     native_close_files(h);
   } catch (...) {
     std::fputs(
-        "q2 native: the game library's shutdown threw; its memory and files may be left"
-        " open (next: check the library's own shutdown)\n",
+        "Quake II's game library failed while shutting down; its memory and files may be"
+        " left open.\n",
         stderr);
   }
   h.library.close();
