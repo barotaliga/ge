@@ -314,9 +314,9 @@ void tracker(Q2Server& s, Q2Missile& m) {
       return;
     }
     const int tick = m.damage / 5;
-    if (m.prey < sh::kMaxClients)
+    if (m.prey >= 0 && m.prey < sh::kMaxClients)  // a player; a monster's prey is -2 - entity
       fight_hurt(s, m.prey, m.owner, {}, tick, 0, int(SqWeapon::disruptor), 4);
-    else
+    else if (m.prey <= -2)
       monster_damage(s, -2 - m.prey, m.owner, tick, {}, false);
     return;
   }
