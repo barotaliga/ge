@@ -21,15 +21,20 @@ reference's local path, its repository and commit, the half it reads, and the on
 > - id: stable and short: `cmd.give`, `cvar.sv_gravity`, `ent.func_door`, `item.weapon_railgun`,
 >   `mon.monster_tank`, `msg.obit.rocket-direct`, `menu.options.video`, `svc.muzzleflash2`,
 >   `dmf.1024`.
-> - status: exactly one of `done` (ours does the same, as a player would see it), `partial` (ours has
->   it, but a named part differs: say what), `missing`, `not-taken` (only where one of our docs
->   decides it: name the doc). Judge against `origin/main` (`git show origin/main:<path>`); work
->   still in a branch is `missing, in progress`. When unsure, `partial` with "verify: <what>".
+> - status: exactly one of `done` (ours does the same as a player would see it; the same meaning in
+>   our own words counts, the player-text rule makes our words the intended ones), `missing` (ours
+>   lacks it or differs where a player would notice: the note starts with its rank, 1 noticed at
+>   once, 2 sometimes, 3 rare or cosmetic, and says what differs), `not-taken` (only where one of our
+>   docs or the owner decides it: name the doc, or "our design: <what replaces it>"). There is NO
+>   `partial`: it hid 416 Quake II rows (our words, our design, unchecked names) behind one grade.
+>   Judge against `origin/main` (`git show origin/main:<path>`); work still in a branch is
+>   `missing, in progress`. A row found by name only: check it now by reading our code; if that
+>   cannot settle it, `missing` with "verify: <what>".
 > - ours / note: the file of ours that does it (a path from the repository's root, never a home
 >   directory), or the gap in a few words, and the ranked gap list's row (R7, S3, C12) where one
 >   describes it. Fold the facts pages already in `porting/` into rows.
 >
-> Under each table's heading a count line: `done N, partial N, missing N, not-taken N`. At the top
+> Under each table's heading a count line: `done N, missing N, not-taken N`. At the top
 > of the file: the reference's repository and commit, and a totals table of the four counts per
 > kind. Write the file table by table as you finish each, so a stop loses nothing. When done, reply
 > with the totals table only.
