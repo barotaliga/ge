@@ -2,6 +2,7 @@
 // and the palette grade
 // ge:keywords look classic modern palette grade quantize r_look r_fx_lights r_fx_glow r_bloom
 // ge:keywords r_farland r_farland_warm far-land ce_bubbles_share bubbles ce_water_specks
+// ge:keywords gl_damageblend_frac damage-frame
 // ge:keywords r_skyfog fog-command map-fog r_wateralpha r_slimealpha r_lavaalpha r_telealpha
 // ge:keywords noskins baseskin allskins player-skins teamskin enemyskin teamcolor enemycolor
 // ge:keywords see-through-liquids watervis liquid_alphas cl_muzzleflash muzzle-flash r_drawflame
@@ -444,6 +445,17 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
         .kind = gc::CvarKind::boolean,
         .values = "1: it is (the default); 0: never"},
        &picture.poly_blend);
+  bind(cv,
+       {.name = "gl_damageblend_frac",
+        .flags = gc::kArchive,
+        .help = "How deep a hit's flash reaches in from the screen's edges, so the middle stays "
+                "clear.",
+        .kind = gc::CvarKind::number,
+        .min = 0,
+        .max = 0.5,
+        .values = "0: over the whole view (the default); 0..0.5: a frame that share of the "
+                  "screen's shorter side deep, fading inward"},
+       &picture.damage_frac);
   bind(cv,
        {.name = "r_lightmap",
         .flags = gc::kArchive,

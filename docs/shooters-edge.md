@@ -581,7 +581,7 @@ at once, and each server frame corrects the prediction. `cl_nopred_weapon 1` tur
 `cl_predict_weaponsound` chooses which weapons' sounds are played ahead (0 none, 1 all, above 1 a
 mask of those left to the server), `cl_predict_buffer` how many commands behind the newest the
 weapon is shown, `cl_pext_weaponprediction 0` stops asking for the state. `make lab
-LAB=se-weapon-predict` measures the press to the first shot heard, off and on. Through a teleporter (or at
+LAB=se-weapon-predict` measures the press to the first shot heard, off and on. On a Quake II server, any server, the window predicts the same way from the gun the frames show (`net/q2_weapon.hpp`: the shot's flash heard, the gun's frame and the ammunition drawn at the press) under the same three settings; `make lab LAB=se-q2-weapon-predict` measures it. Through a teleporter (or at
 a spawn) the server turns the player with a `setangle` in his next datagram; under the high-lag
 teleport (the demo family's bit 0x02, `cl_pext_lagteleport`, on by default;
 `classic/protocol/lag_turn.hpp`) it carries its kind, and the moves the player made before the

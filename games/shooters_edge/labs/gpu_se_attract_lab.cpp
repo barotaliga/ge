@@ -350,11 +350,11 @@ void run(gl::Lab& lab) {
          "game's console background sliding down with it.",
          "the background picture down to the panel's edge; the lines in the game's letters",
          [&](ge::ui::DrawList& dl) { sm::draw_game_console(dl, con_view, con_look, t); });
-    con_view.set_foot("maps/dm4.bsp 40% (88 KB)", 0.4);  // a server joined: the file coming
+    con_view.set_foot("maps/dm4.bsp", 0.4);  // a server joined: the file coming
     shot("download", "JOINING: THE DOWNLOAD BAR IN THE GAME'S LETTERS",
          "A server joined sends a file the install lacks: the console's foot shows it coming, its "
          "bar drawn with the glyph sheet's own bar pieces and knob.",
-         "the bar's two ends and the knob two fifths along it, then maps/dm4.bsp 40% (88 KB)",
+         "maps/dm4.bsp, the bar's two ends and the knob two fifths along it, then 40%",
          [&](ge::ui::DrawList& dl) { sm::draw_game_console(dl, con_view, con_look, t); });
     con_view.set_foot("");
     con_view.set_open(false);

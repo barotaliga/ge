@@ -11,10 +11,10 @@
 // ge:keywords gl_partscale gl_partstyle gl_partshape gl_beamstyle gl_drawsky gl_bilerp_skies
 // ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_bilerp_pics
 // ge:keywords gl_gamma_scale_pics gl_modulate_world gl_modulate_entities gl_doublelight_entities
-// ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack gl_celshading
+// ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack
 // ge:keywords cl_smooth_explosions common-settings scr_consize scr_conalpha gl_consolefont
 // ge:keywords r_drawparticles in_grab_windowed_mouse cl_net_clientport vid_reload gl_swapinterval
-// ge:keywords chase_active chase_back vid_flip_on_switch
+// ge:keywords chase_active chase_back vid_flip_on_switch gl_damageblend_frac
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -309,24 +309,6 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .max = 1,
           .values = "1: it fades out (the default); 0: a hard edge"},
          &x.dlight_falloff);
-  v.bind({.name = "gl_celshading",
-          .fallback = "0",
-          .help = "An ink line drawn round each solid model, thinner and fainter with distance "
-                  "and gone beyond about 700 units.",
-          .kind = con::CvarKind::number,
-          .min = 0,
-          .max = 10,
-          .values = "0: none (the default); 1..10: that many pixels wide up close"},
-         &x.cel_shading);
-  v.bind({.name = "gl_glowmap_intensity",
-          .fallback = "0.75",
-          .help = "How brightly the glow maps a model's skin may have (a picture named "
-                  "<skin>_glow beside it) light its eyes, lamps and screens.",
-          .kind = con::CvarKind::number,
-          .min = 0,
-          .max = 10,
-          .values = "0: no glow; 0.75: the default; more: brighter"},
-         &x.glowmap_intensity);
   v.bind({.name = "cl_smooth_explosions",
           .fallback = "1",
           .help = "Whether explosions fade smoothly, or move on frame by frame, ten a second.",
@@ -700,6 +682,17 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .min = 0,
          .max = 16,
          .values = "1: off (the default); 2..16: that many samples, sharper; 0: the renderer's own",
+         .overlap = con::Overlap::same});
+  v.add({.name = "gl_damageblend_frac",  // the classic look's: a frame here, flat in Quake
+         .fallback = "0.2",
+         .flags = con::kArchive,
+         .help = "How deep a hit's flash reaches in from the screen's edges, so the middle stays "
+                 "clear.",
+         .kind = con::CvarKind::number,
+         .min = 0,
+         .max = 0.5,
+         .values = "0.2: a frame a fifth of the screen's shorter side deep (the default); "
+                   "0..0.5: that share, fading inward; 0: over the whole view",
          .overlap = con::Overlap::same});
   if (v.find("vid_vsync") != nullptr)  // the window's (platform/pacing.cpp)
     v.add_synonym("gl_swapinterval", "vid_vsync");

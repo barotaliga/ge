@@ -6,7 +6,7 @@
 // vignette) and add grain that averages out.
 //
 // ge:summary Tests for the post pass: halves, the bloom's chain and glow, the grade's table
-// ge:keywords test render post bloom grade lut float_to_half energy
+// ge:keywords test render post bloom grade lut float_to_half energy edge-blend
 // ge:skill render testing
 #include <cmath>
 #include <cstdlib>
@@ -308,5 +308,37 @@ TEST(a_smaller_view_draws_the_whole_picture_in_its_rectangle_and_black_round_it)
   r::set_post_view(d, s.plain, {0, 0, kW, kH}, kW, kH);  // all of it: as it was, bit for bit
   const ge::gpu::Image whole = draw(d, s, s.plain, false, out);
   CHECK(whole.rgba == plain.rgba);
+  CHECK(d.errors.load() == 0);
+}
+
+TEST(the_edge_blend_is_a_frame_fading_inward_and_flat_at_no_depth) {
+  // 100 x 50 at 0.2: a frame 10 pixels deep, its share falling from the edge's to nothing.
+  CHECK(r::edge_blend_share(0, 0.5, 100, 50, 0.6, 0.2) == 0.6);
+  CHECK(std::abs(r::edge_blend_share(0.05, 0.5, 100, 50, 0.6, 0.2) - 0.3) < 1e-12);
+  CHECK(r::edge_blend_share(0.5, 0.5, 100, 50, 0.6, 0.2) == 0);  // the middle clear
+  CHECK(r::edge_blend_share(0.5, 0.1, 100, 50, 0.6, 0.2) > 0);   // 5 pixels from the top
+  CHECK(r::edge_blend_share(0.5, 0.5, 100, 50, 0.6, 0) == 0.6);  // 0: flat over the view
+  CHECK(r::edge_blend_share(0.5, 0.5, 100, 50, 0.6, 2) == 0);    // held to 0.5
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s);
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  const float grey[3] = {0.1f, 0.1f, 0.1f};
+  fill(d, s, grey, 0);
+  const ge::gpu::Image plain = draw(d, s, s.plain, false, out);
+  const double red[4] = {1, 0, 0, 0.6};
+  r::set_post_edge_blend(d, s.plain, red, 0.25);
+  const ge::gpu::Image framed = draw(d, s, s.plain, false, out);
+  CHECK(at(framed, 0, kH / 2, 0) > at(plain, 0, kH / 2, 0) + 40);  // red at the edge
+  CHECK(at(framed, 0, kH / 2, 1) < at(plain, 0, kH / 2, 1));
+  CHECK(std::abs(at(framed, kW / 2, kH / 2, 0) - at(plain, kW / 2, kH / 2, 0)) <= 1);  // clear
+  r::set_post_edge_blend(d, s.plain, red, 0);
+  const ge::gpu::Image flat = draw(d, s, s.plain, false, out);
+  CHECK(at(flat, kW / 2, kH / 2, 0) > at(plain, kW / 2, kH / 2, 0) + 40);
+  const double none[4] = {0, 0, 0, 0};
+  r::set_post_edge_blend(d, s.plain, none, 0.25);
+  CHECK(draw(d, s, s.plain, false, out).rgba == plain.rgba);
   CHECK(d.errors.load() == 0);
 }

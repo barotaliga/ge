@@ -151,6 +151,9 @@ struct DemoSound {
   sh::Vec3f origin;            // units
   float delay = 0;             // s after the frame it starts in (a shotgun's pump after its shot)
   bool step = false;  // a footstep: Quake II's heard by the surface under it (classic/q2_footsteps)
+  // Quake II: the player muzzle flash value it is a sound of, its silenced bit kept (-1 none), so
+  // the weapon prediction knows the server's copies of the shots it plays (net/q2_weapon.hpp).
+  int16_t flash = -1;
 };
 
 // The extended protocol's look bytes. An entity's transparency: 254 and 255 (unset) solid, else
@@ -289,6 +292,9 @@ struct DemoState {
   sh::Vec3f gun_angles, gun_offset;
   float fov = 0;    // Quake II: the field of view the server sends, degrees (0: none sent)
   int rdflags = 0;  // Quake II: the view's bits (kQ2RdIrGoggles: infra-red goggles on)
+  // Quake II: the tint over the view the server sends (0..255 each: r g b a), and the damage
+  // flash where the stream keeps it apart (an extended recording's), else all 0.
+  uint8_t q2_blend[4] = {}, q2_damage[4] = {};
   // Quake II: the music track the server names (its configstring 1; 0 none, -1 never named).
   int cdtrack = -1;
   // Quake II's music named by text (a file under `music/`), "" when the server sends a number.
@@ -406,7 +412,7 @@ struct Q2View {
   int32_t origin[3] = {}, velocity[3] = {};  // in 1/8 unit (wider than a short on 3435 on)
   int16_t delta[3] = {}, angles[3] = {};
   int8_t offset[3] = {}, kick[3] = {}, gun_offset[3] = {}, gun_angles[3] = {};
-  uint8_t blend[4] = {};
+  uint8_t blend[4] = {}, damage_blend[4] = {};  // the damage flash: an extended stream's alone
   int pm_type = 0, pm_time = 0, pm_flags = 0, gravity = 0;
   int gun_model = 0, gun_frame = 0, fov = 0, rdflags = 0;
   int16_t stats[64] = {};  // 32 before protocol 3435
@@ -519,6 +525,9 @@ struct Demo {
   // readers append each message they read (never cleared: the caller clears; offsets within the
   // packet or record read): what a converter passes on (demo_convert_multiview.cpp).
   std::vector<DemoSpan>* spans = nullptr;
+  // Every message the Quake II reader began, counted by its id (a frame's player state and entity
+  // list too): what a test of a joined client or a recording reads to know each kind arrived.
+  int64_t q2_read[256] = {};
   // A Quake II multiview recording (.mvd2): its bytes; what plays (`bytes`) is one player's view
   // of it (`track`), written as Quake II's recording (demo_mvd2.hpp). Empty for any other.
   std::vector<uint8_t> multiview_source;
