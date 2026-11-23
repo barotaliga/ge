@@ -143,7 +143,7 @@ struct Q2ShotAudit {
 struct Q2Known {
   uint32_t weapons = 0;  // by kSqWeapons' row
   int16_t ammo[::shooters_edge::server::kSqAmmoKinds] = {};
-  bool ammo_seen[::shooters_edge::server::kSqAmmoKinds] = {};
+  uint16_t ammo_seen = 0;    // a bit by ammunition kind
   int held = -1, last = -1;  // the weapon in hand, the one before it
   int32_t frame = -1;        // the newest frame folded in
 };
