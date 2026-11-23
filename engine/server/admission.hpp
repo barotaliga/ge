@@ -31,11 +31,17 @@
 // full or not (a server being retired, a private server's public face). Empty: nobody is sent.
 // `redirect_to` says where a newcomer goes, or empty for nowhere.
 //
+// A RULESET REQUIRED (`sv_ruleset`): a competition server names the ruleset its players keep to
+// (console/ruleset.hpp; a classic client sends its own in the user info), and a newcomer on
+// another is refused a player's seat ("This server requires the smackdown ruleset. Pick it in
+// OPTIONS or type ruleset smackdown, then join again."); a spectator is never refused, nor anyone
+// when the rule is empty. `ruleset_refusal` words it; the server info carries it as `ruleset`.
+//
 // ge:summary sv_iplimit: the most seats one IPv4 host or IPv6 /48 may hold, and the refusal
 // ge:keywords sv_iplimit ip-limit connections-per-address admission connect-refusal ipv6-48
 // ge:keywords admit_refusal seats-per-host sv_vipslots sv_vippassword vip-slots reserved-slots
 // ge:keywords vip_slots_refuse sv_locked locked-server lock_command sv_redirect redirect_to
-// ge:keywords redirect-when-full
+// ge:keywords redirect-when-full sv_ruleset ruleset-required ruleset_refusal
 // ge:skill net
 // ge:test tests/server_admission_test.cpp
 #pragma once
@@ -62,6 +68,8 @@ inline constexpr GameRule kAdmitRules[] = {
     {"sv_redirect", "Where a newcomer is sent when the server is full.", nullptr,
      "\"\": nowhere, the newcomer is refused (the default); ADDRESS: sent there when full; "
      "!ADDRESS: every newcomer who is not a VIP sent there, full or not"},
+    {"sv_ruleset", "The ruleset a player must keep to.", nullptr,
+     "\"\": any (the default); NAME: a player on another ruleset is refused, a spectator never"},
 };
 
 // A seat a client holds: its address, and whether it is being freed.
@@ -94,4 +102,7 @@ inline std::string_view redirect_to(std::string_view rule, bool full, bool vip) 
   return full ? rule : std::string_view{};
 }
 
+// The refusal for a newcomer whose ruleset is `theirs` (empty: the default) when the server
+// requires `required` (empty: any); empty when they may come in.
+std::string ruleset_refusal(std::string_view required, std::string_view theirs, bool spectator);
 }  // namespace ge::server

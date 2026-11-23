@@ -85,6 +85,18 @@ void qw_sheet_rows(const QwSheetFacts& f, gs::SettingsSheet& out) {
     map.how = gs::sheet_how_by_vote(votes, "map");
     gs::sheet_put(out, std::move(map));
   }
+  if (!f.ruleset.empty()) {  // a competition server's: shown, never changed by a vote
+    gs::SheetRow rs;
+    rs.name = "sv_ruleset";
+    rs.words = "Ruleset";
+    rs.value = f.ruleset;
+    rs.values = "NAME: the ruleset every player keeps to";
+    rs.help =
+        "The competition ruleset a player must use to play here; spectators may watch on "
+        "any.";
+    rs.how = gs::SheetHow::fixed;
+    gs::sheet_put(out, std::move(rs));
+  }
   // The first page's rules first, in their order, then the rest as the game lists them.
   const auto add = [&](const gs::GameRule& r) {
     const std::string name = r.name;
