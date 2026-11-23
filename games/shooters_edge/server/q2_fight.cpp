@@ -145,10 +145,10 @@ int skill(const Q2Server& s) {
   return std::clamp(static_cast<int>(s.cvars.find("skill")->number), 0, 3);
 }
 
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
-void pack(int16_t out[3], sh::Vec3f v) {
+void pack(int32_t out[3], sh::Vec3f v) {
   const float in[3] = {v.x, v.y, v.z};
   for (int i = 0; i < 3; i++)
     out[i] = static_cast<int16_t>(std::clamp(num::to_int32(double(in[i]) * 8), -32768, 32767));

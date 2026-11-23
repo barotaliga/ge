@@ -79,10 +79,10 @@ void run(Arena& a, int ticks, uint8_t buttons = 0, float pitch = 0) {
 }
 
 void place(Arena& a, int i, float x) {
-  int16_t* o = a.p(i).move.origin;
-  o[0] = static_cast<int16_t>(x * 8);
+  int32_t* o = a.p(i).move.origin;
+  o[0] = static_cast<int32_t>(x * 8);
   o[1] = 0;
-  for (int16_t& v : a.p(i).move.velocity) v = 0;
+  for (int32_t& v : a.p(i).move.velocity) v = 0;
 }
 
 // Ground Zero's rules on the hall: Ana at x −300 looking down it at Ben at x `ben`.
@@ -99,7 +99,7 @@ std::unique_ptr<Arena> facing(float ben, const char* deathmatch = "1") {
   std::string error;
   CHECK_MSG(a->r.start(map, error), error);
   a->r.connect(0, "Ana", false, false);
-  a->p(0).move.origin[0] = static_cast<int16_t>(a->p(0).move.origin[0] - 64 * 8);
+  a->p(0).move.origin[0] = static_cast<int32_t>(a->p(0).move.origin[0] - 64 * 8);
   a->r.connect(1, "Ben", false, false);
   run(*a, 80);
   place(*a, 0, -300);

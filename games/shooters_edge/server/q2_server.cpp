@@ -75,7 +75,7 @@ sh::Vec3f parse_vec(const std::string& s) {
   return v;
 }
 
-sh::Vec3f unpack(const int16_t v[3]) {
+sh::Vec3f unpack(const int32_t v[3]) {
   return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
 }
 
