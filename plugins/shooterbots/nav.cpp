@@ -924,6 +924,7 @@ void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra) {
       l.level = e.level;
       l.lead = e.lead;
       l.combo = e.combo;
+      l.updraft = e.updraft;
       l.mover = e.mover;
       l.script = e.script;
       l.teleport = e.teleport;
