@@ -81,4 +81,12 @@ std::string mod_startdemos(const std::string& basedir, const std::string& game,
                            const ge::classicenhance::Profile& content,
                            std::string_view fallback = {});
 
+// The title loop's list: the menu's own (`menu_attract`), or with `auto` the mod's own
+// (`mod_startdemos`), else `fallback`, the game's.
+inline std::string attract_list(const std::string& menu, const std::string& basedir,
+                                const std::string& game, const ge::classicenhance::Profile& content,
+                                std::string_view fallback) {
+  return menu != "auto" ? menu : mod_startdemos(basedir, game, content, fallback);
+}
+
 }  // namespace shooters_edge::client

@@ -764,19 +764,18 @@ int run_main(int argc, char** argv) {
     picture.all_figures = remix.figure != nullptr ? std::string(remix.figure->folder) : "";
     console.print(cl::worn_line(remix));
   };
-  bool remix_enabled = false, remix_expansions = true;  // cr_enabled, cr_expansions as opened
+  std::pair<bool, bool> remix_open{false, true};  // cr_enabled and cr_expansions as opened
   std::string remix_for;
   cl::RemixParts remix_items{};  // remix.hpp's `remix_parts`
   const auto remix_sync = [&] {
     remix.balance = remix_settings.balance;  // the next map read weighs by them
-    const bool same_files = remix_settings.enabled == remix_enabled && remix_for == args.basedir &&
-                            remix_settings.expansions == remix_expansions;
+    const auto open = std::pair(remix_settings.enabled, remix_settings.expansions);
+    const bool same_files = open == remix_open && remix_for == args.basedir;
     if (same_files && cl::remix_parts(remix_settings) == remix_items) return;
     if (cl::busy(loader)) return;  // its threads may read the other game's files: next frame
     remix_items = cl::remix_parts(remix_settings);
     if (same_files) return remix_wear();
-    remix_enabled = remix_settings.enabled;
-    remix_expansions = remix_settings.expansions;
+    remix_open = open;
     remix_for = args.basedir;
     const cl::RemixState st = cl::remix_check(remix_settings, args.profile,
                                               cl::known_games(prefs, args.profile, args.basedir));
@@ -890,10 +889,8 @@ int run_main(int argc, char** argv) {
   bool demo_hold = false;
   constexpr double kDemoSettle = 0.5;
   const auto start_attract = [&] {
-    const std::string list =
-        game_menu.attract() != "auto"
-            ? game_menu.attract()
-            : cl::mod_startdemos(args.basedir, args.game, content_row(), adapter.game->attract);
+    const std::string list = cl::attract_list(game_menu.attract(), args.basedir, args.game,
+                                              content_row(), adapter.game->attract);
     const std::vector<std::string> words = ge::console::tokenize(list);
     if (words.empty() || cl::archive_paths(files).empty()) return false;
     bench_ask = words[attract_next++ % words.size()];
