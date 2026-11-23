@@ -1480,7 +1480,8 @@ void send_frames(Q2NetServer& s) {
                       .recording = on,
                       .no_gibs = c.asked[kQ2SetNoGibs] != 0,
                       .no_footsteps = c.asked[kQ2SetNoFootsteps] != 0,
-                      .no_predict = c.asked[kQ2SetNoPredict] != 0};
+                      .no_predict = c.asked[kQ2SetNoPredict] != 0,
+                      .no_flares = c.asked[kQ2SetNoFlares] != 0};
       c.wire.frame_flags = c.frame_flags;
       c.frame_flags = 0;
     }

@@ -686,4 +686,19 @@ TEST(a_library_with_protocol_extensions_gets_the_extended_limits) {
   std::vector<uint8_t> block, rel;
   sv::q2_frame_raw(w, s.raw, 1, block, rel);
   CHECK(!block.empty());
+  // A player or a projectile the game flagged is clipped only by a mask asking for it.
+  const auto flagbox = [&](const char* line) {
+    s.raw.reliable[0].clear();
+    r.client_command(0, line);
+    const std::vector<uint8_t>& b = s.raw.reliable[0];
+    const auto at = std::search(b.begin(), b.end(), std::begin("flagbox"), std::end("flagbox") - 1);
+    return at == b.end() ? std::string() : std::string(at, std::find(at, b.end(), uint8_t{0}));
+  };
+  CHECK(flagbox("flagbox 0 0x2000000") == "flagbox hit 1\n");
+  CHECK(flagbox("flagbox 8 0x2000000") == "flagbox hit 0\n");  // a player
+  CHECK(flagbox("flagbox 8 0x42000000") == "flagbox hit 1\n");
+  CHECK(flagbox("flagbox 128 0x42000000") == "flagbox hit 0\n");  // a projectile
+  CHECK(flagbox("flagbox 128 0x82000000") == "flagbox hit 1\n");
+  // The tracer reads the map's extended contents.
+  CHECK(s.host->tracer != nullptr && s.host->tracer->extended());
 }
