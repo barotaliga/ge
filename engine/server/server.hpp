@@ -80,7 +80,7 @@ struct Features;  // feature.hpp
 
 // Everything a server is started with. The first block are cvars (`add_server_cvars`); the second
 // only how a dedicated process runs (main.hpp's flags).
-struct ServerConfig {
+struct ServerConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one, by name
   std::string hostname = "server";  // sv_hostname: the name in the browser and the lobby
   std::string description;          // sv_description: a line under the name
   std::string ip;                   // net_ip: the address to listen on (empty: every interface)

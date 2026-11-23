@@ -406,9 +406,7 @@ int run_main(int argc, char** argv) {
   const auto outside = [&](const std::function<void()>& run) {
     cl::without_game_cvars(console, game_cvars, started_game, bindings, run);
   };
-  // Which game a `connect` joins, known before the configs and the command line run: a `+connect`
-  // among them joins a Quake II server as Quake II (the adapter takes this over below).
-  remote.q2_game = [&args] { return sp::game_or_quake(args.profile).id == "q2"; };
+  remote.q2_game = [&args] { return sp::game_or_quake(args.profile).id == "q2"; };  // +connect's
   if (const cl::ConfigsRun ran = cl::start_configs(console, args.basedir, args.game, content_row(),
                                                    args.plus, {series, outside});
       ran.passed_over > 0)
@@ -1508,9 +1506,7 @@ int run_main(int argc, char** argv) {
       game_menu.show(menu_host);  // a server left with no game of our own behind: the title
     }
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
-    // A map loading behind the title holds the console down; a server joined or a demo played
-    // takes the screen, so the hold lets go now (that load waits, untaken, until the window is
-    // back), or the console would cover the game joined until a key raised it.
+    // A load's console hold lets go once a game joined or a demo has the screen (load_line.hpp).
     cl::release_load_line(loader, load_line, con_view, game_start.loading || demo_hold,
                           remote.active || bench.active);
     const bool stop = std::exchange(stop_demo, false);  // `stopdemo` with none playing: nothing
@@ -1770,10 +1766,8 @@ int run_main(int argc, char** argv) {
         world_current = false;
         load_listen_world(t);
       }
-      // The window's own map loading, unless a server joined or a demo has the screen.
-      const bool own_load = !remote.active && !bench.active;
-      // Classic: in its console (map_load.hpp).
-      std::string caption = own_load ? cl::load_caption(loader) : std::string();
+      const bool own_load = !remote.active && !bench.active;  // no game joined, no demo
+      std::string caption = own_load ? cl::load_caption(loader) : std::string();  // or console
       const bool console_load = own_load && con_look.on() &&
                                 cl::console_load_line(loader, load_line, console, con_view, t);
       if (console_load) caption.clear();

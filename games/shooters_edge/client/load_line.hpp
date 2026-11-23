@@ -9,7 +9,7 @@
 // ge:summary The console held down while a map loads, and let go once the world is another's
 // ge:keywords load-line console-load loading-console held-console join-while-loading con_full
 // ge:skill shooter ui
-// ge:test tests/shooters_edge_q2_net_test.cpp
+// ge:test tests/shooters_edge_q2_join_test.cpp
 #pragma once
 
 #include <cstdint>
