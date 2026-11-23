@@ -47,7 +47,8 @@ display=()
 if [ -z "${DISPLAY:-}" ] && [ "$(uname -s)" = Linux ] && command -v xvfb-run >/dev/null; then
   display=(xvfb-run -a)
 fi
-HOME="${home}" XDG_DATA_HOME="${home}" ${display[@]+"${display[@]}"} "${bin}/se" -hidden \
+# No sound device: the console is all it reads.
+HOME="${home}" XDG_DATA_HOME="${home}" SDL_AUDIO_DRIVER=dummy ${display[@]+"${display[@]}"} "${bin}/se" -hidden \
   -config "${home}/config.cfg" -classic q1 -basedir "${home}/game" -manual "${src}/se.txt"
 
 version="$(cat VERSION 2>/dev/null || echo dev)"
