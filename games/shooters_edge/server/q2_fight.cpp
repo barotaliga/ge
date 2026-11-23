@@ -50,7 +50,7 @@ constexpr int32_t kSurfSky = 0x4;  // a sky surface: a shot that reaches it is g
 constexpr uint32_t kEveryone = 0xffffffffu;
 // The carried weapons' names, in a client's order (it numbers them from 1); a pack's after the
 // base game's, registered only under it (the trap has none).
-struct Carried {
+struct Carried {  // NOLINT(clang-analyzer-optin.performance.Padding): read in this order
   SqWeapon weapon;
   const char* name;
   Q2Pack pack = Q2Pack::base;

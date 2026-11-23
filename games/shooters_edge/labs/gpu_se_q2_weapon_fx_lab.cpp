@@ -6,6 +6,10 @@
 // shows what the modern effects add (client/world_fx.cpp keyed by the shot's kind, which a
 // monster's shot of the same kind shares).
 //
+// With `--mod=xatrix` (The Reckoning's folder beside the base one) the pack's rules play and its
+// own weapons are fired too: the ion ripper's bouncing bolt, the phalanx's two balls and their
+// burst, the trap laid on the floor.
+//
 // Without `--game` the weapons are fired in a hall built here and what the effects read is
 // counted as deterministic metrics (the shots in flight by kind, the named effects by name), so CI
 // needs no game data. With `--game=<folder>` (the folder holding Quake II's base folder) they
@@ -122,7 +126,7 @@ constexpr Shot kShots[] = {
     {"bfg-marks-cool", "the flames out, thin smoke off the large mark as it cools", 420,
      sv::SqWeapon::bfg, true, false, false, 2},
 };
-// Ground Zero's weapons (`--pack=rogue`): the shots its own rules fire (server/q2_gz.hpp).
+// Ground Zero's weapons (`--mod=rogue`): the shots its own rules fire (server/q2_gz.hpp).
 constexpr Shot kGroundZeroShots[] = {
     {"etf-rifle", "a stream of flechettes in flight down the line", 16, sv::SqWeapon::etf_rifle},
     {"plasma-beam", "the beam's straight line from the gun to the wall", 16,
@@ -135,6 +139,16 @@ constexpr Shot kGroundZeroShots[] = {
     {"tesla", "the tesla thrown, tumbling", 40, sv::SqWeapon::tesla, false, false, false, 8, true},
     {"tesla-open", "the tesla at rest, opened, its prongs up", 500, sv::SqWeapon::tesla, false,
      false, false, 8, true},
+};
+// The Reckoning's (`--mod=xatrix`).
+constexpr Shot kPackShots[] = {
+    {"ion-ripper", "a glowing bolt in flight, bouncing off the walls", 14,
+     sv::SqWeapon::ion_ripper},
+    {"ion-ripper-flash", "the ripper's flash at the muzzle, the gun kicked", 40,
+     sv::SqWeapon::ion_ripper, false, false, true},
+    {"phalanx", "two orange balls side by side in flight", 6, sv::SqWeapon::phalanx},
+    {"phalanx-burst", "the balls' bursts against the far wall", 40, sv::SqWeapon::phalanx},
+    {"trap", "the trap on the floor, opening", 180, sv::SqWeapon::trap, true, false, false, 2},
 };
 constexpr const char* kLooks[] = {"classic", "modern"};
 
@@ -301,11 +315,9 @@ void run(gl::Lab& lab) {
   const cl::GameAdapter& adapter = cl::adapter_of(game);
   const ge::classicenhance::Profile& content = pf::content_of(game);
   cl::SearchPath files;
-  // `--pack`: a mission pack's folder over the base one, its rules played (the server's pack by
-  // the folder's name).
-  const std::string pack = lab.arg("pack");
-  const std::string folder = pack.empty() ? std::string(content.base_dir) : pack;
-  if (!cl::open_game_dir(lab.arg("game"), folder, files, error, content)) {
+  const std::string mod = lab.arg("mod");
+  if (!cl::open_game_dir(lab.arg("game"), mod.empty() ? std::string(content.base_dir) : mod, files,
+                         error, content)) {
     lab.fail(error, "Pass --game=<the folder holding " + std::string(content.base_dir) +
                         "/pak0.pak>. Skill: shooter.");
     return;
@@ -343,10 +355,12 @@ void run(gl::Lab& lab) {
       shots.push_back({held_ids[size_t(k)].c_str(),
                        "the weapon at rest in the right hand, in its own skin, at the eye", 30,
                        static_cast<sv::SqWeapon>(k), false, true});
-  } else if (sv::q2_pack_of_folder(pack) == sv::Q2Pack::ground_zero) {
+  } else if (sv::q2_pack_of_folder(mod) == sv::Q2Pack::ground_zero) {
     shots.assign(std::begin(kGroundZeroShots), std::end(kGroundZeroShots));
   } else {
     shots.assign(std::begin(kShots), std::end(kShots));
+    if (sv::q2_pack_of_folder(mod) == sv::Q2Pack::reckoning)
+      shots.insert(shots.end(), std::begin(kPackShots), std::end(kPackShots));
   }
   for (const Shot& shot : shots) {
     if (!only.empty() && only != shot.id) continue;
@@ -354,7 +368,7 @@ void run(gl::Lab& lab) {
       if (shot.held && std::string_view(look_name) != "modern") continue;
       cl::ListenOptions opt = shooters_edge::net::listen_options();
       opt.console = {"deathmatch 1"};
-      opt.files = &files;  // the folder's name sets the server's pack
+      opt.files = &files;  // the game folder: a mission pack's plays its rules
       cl::Listen l;
       std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
       if (!map || !cl::listen_start(l, progs(), std::move(map), opt, error)) {
@@ -494,10 +508,11 @@ const gl::LabSpec kSpec{
     "the modern look add glows, the rail's beam and the BFG's burst over the classic one?",
     {{"size", "640,400", "the screen's width and height, px"},
      {"game", "", "the folder holding Quake II's base folder (empty: a hall, counts only)"},
+     {"mod", "",
+      "with --game: a mission pack's folder beside the base one (xatrix, rogue: its weapons)"},
      {"held", "0", "1: every weapon at rest in hand from the eye, in place of the shots"},
      {"weapon", "", "only this weapon's pictures, by its id (blaster, railgun, ...; empty: all)"},
      {"map", "q2dm1", "the map to fire on (with --game)"},
-     {"pack", "", "a mission pack's folder over the base one (rogue: Ground Zero's weapons)"},
      {"aim", "", "the view's yaw and pitch, degrees (empty: the longest clear line, level)"},
      {"wall-at", "0", "the marks' shots at a wall about this far off, units (0: the floor ahead)"},
      {"wall-pitch", "5", "with --wall-at: the view's pitch, degrees down"}},

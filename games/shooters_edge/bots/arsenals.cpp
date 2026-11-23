@@ -212,12 +212,14 @@ void q2_read(const ge::shooter::PlayerNumbers& n, Stats& st) {
 
 // Quake II's items as the bots' rows, off its rules' own item table (server/q2_items.hpp):
 // armour by its tier, health (the mega health apart), the weapons by their bit, the ammunitions,
-// the quad and the shield; the rest (keys, the other powers, packs) left out.
+// the quad and the shield; the rest (keys, the other powers, packs) left out, and the mission
+// packs' own rows (the bots play the base game's).
 const shooters_edge::profiles::ItemTables& q2_tables() {
   static const std::vector<shooters_edge::profiles::ItemRow> rows = [] {
     std::vector<shooters_edge::profiles::ItemRow> out;
     for (int i = 0; i < server::kSqItemCount; i++) {
       const server::SqItem& it = server::kSqItems[i];
+      if (it.pack != server::Q2Pack::base) continue;
       shooters_edge::profiles::ItemRow r;
       r.class_name = it.classname;
       r.name = it.pickup;
