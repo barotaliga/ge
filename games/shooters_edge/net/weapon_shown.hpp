@@ -15,15 +15,21 @@
 //   server's are heard), 1 every one; above 1 its bits name the weapons left to the server, bit
 //   2^n the weapon on key n (QuakeWorld: 2 the axe .. 256 the lightning gun; Quake II: 2 the
 //   blaster .. 512 the railgun, 1024 the BFG10K).
+// - THE SERVER'S COPIES (`WeaponPlayed`): each sound the prediction played is kept with its kind
+// and
+//   the server's frame (or time) it is sent with; a server copy of the same kind in or beside one
+//   not yet matched is that one, dropped; any other plays as it comes, late, so a shot the
+//   prediction missed is never lost.
 // - THE HAND FIRED (`weapon_shot_fired`): each predicted shot counts in `DemoState::own_shots`,
 //   which the window's hand fires on (client/held.cpp).
 // - THE FRAME DRAWN only once the server has sent a weapon frame other than 0 (`frames_live`):
 //   rules that never animate it leave the hand to play its own shot.
 //
 // ge:summary The held weapon predicted, the part every game shares: the shown command, a shot
-// ge:summary played once, the sound mask by weapon key, the hand fired
+// ge:summary played once, the server's copies matched, the sound mask by weapon key, the hand fired
 // ge:keywords weapon-prediction shown-command cl_predict_buffer cl_predict_weaponsound
 // ge:keywords cl_nopred_weapon same-shot played_to own_shots weapon-key sound-mask
+// ge:keywords server-copies late-fill
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_weapon_test.cpp
 #pragma once
@@ -56,6 +62,36 @@ inline bool weapon_shot_fresh(float* last, int kinds, int kind, float clock, flo
   if (l != 0 && clock < l + gap && clock > l - gap) return false;
   l = clock;
   return true;
+}
+
+// The sounds the prediction played, the newest 16: each one's kind and the server frame it is sent
+// with, and whether a server copy was matched to it (above).
+struct WeaponPlayed {
+  int32_t frame[16] = {};
+  int16_t kind[16] = {};
+  bool matched[16] = {};
+  uint32_t n = 0;
+};
+
+inline void weapon_played_add(WeaponPlayed& p, int32_t frame, int kind) {
+  p.frame[p.n & 15] = frame;
+  p.kind[p.n & 15] = static_cast<int16_t>(kind);
+  p.matched[p.n++ & 15] = false;
+}
+
+// Whether a server copy of `kind` sent with `frame` is one the prediction played (in that frame,
+// else one beside it), which is then matched.
+inline bool weapon_played_match(WeaponPlayed& p, int32_t frame, int kind) {
+  const uint32_t kept = p.n < 16 ? p.n : 16;
+  for (const int32_t off : {0, -1, 1})
+    for (uint32_t k = 0; k < kept; k++) {
+      const uint32_t at = (p.n - 1 - k) & 15;
+      if (!p.matched[at] && p.kind[at] == kind && p.frame[at] == frame + off) {
+        p.matched[at] = true;
+        return true;
+      }
+    }
+  return false;
 }
 
 // A predicted shot: the window's hand fires on it, from weapon frame `frame`.

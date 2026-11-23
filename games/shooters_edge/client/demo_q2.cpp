@@ -69,6 +69,7 @@ enum : uint8_t {
   kGeAccountKey = 127,  // and the tag of its logins' key
   kGeBack = 119,        // and an item taken and when it comes back
   kGeSheet = 120,       // and a part of the settings sheet (net/q2_votes.hpp)
+  kGeArsenal = 118,     // and the weapons held and the ammunition (net/q2_net_server.hpp)
 };
 
 // The settings strings' ranges: protocol 34's, and the extended limits' (3434 to 3436), whose
@@ -1138,6 +1139,16 @@ bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         b.yaw = static_cast<float>(static_cast<int16_t>(m.i16())) * (360.0f / 65536);
         b.at = s.time + static_cast<double>(static_cast<uint32_t>(m.i32())) * 0.001;
         if (!m.bad) take_item_back(s, b);
+        break;
+      }
+      case kGeArsenal: {  // the weapons held (a mask by row), then each ammunition's count
+        const int held = m.u16();
+        int16_t ammo[7] = {};
+        for (int k = 1; k < 7; k++) ammo[k] = static_cast<int16_t>(m.i16());
+        if (m.bad) break;
+        d.arsenal_told = true;
+        d.arsenal_weapons = static_cast<uint16_t>(held);
+        std::copy(std::begin(ammo), std::end(ammo), std::begin(d.arsenal_ammo));
         break;
       }
       case kGeAccountKey:  // the logins' key tag

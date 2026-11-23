@@ -511,6 +511,12 @@ struct Demo {
   // stock move's (with the server's stated air acceleration) until then.
   bool feel_told = false;
   ge::classic::Q2Feel feel;
+  // The weapons the player holds (a bit by Quake II's weapon row) and his ammunition of each kind
+  // (shells, bullets, grenades, rockets, cells, slugs from 1) our server of Quake II last told
+  // (svc 118), when it told them: the weapon prediction's knowledge of a change.
+  bool arsenal_told = false;
+  uint16_t arsenal_weapons = 0;
+  int16_t arsenal_ammo[7] = {};
   // Our server of Quake II takes this client's voice (svc 121's empty message as it entered);
   // the voices it relays go into `DemoState::voice` as Quake's do.
   bool voice_taken = false;
