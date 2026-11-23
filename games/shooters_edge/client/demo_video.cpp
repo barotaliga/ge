@@ -5,6 +5,7 @@
 // ge:skill shooter replay render
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo_video.hpp"
+#include "shooters_edge/client/entity_debug.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -157,6 +158,11 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own, fl
   const bool q2 = s.format == DemoFormat::q2;
   const auto put = [&](int entity, const DemoEntity& e) {
     if (e.model <= 0 || (e.model >= models && !(q2 && e.model == kQ2OwnLook))) return;
+    if (entity_hidden(hidden_entities(), entity,
+                      e.model < models ? s.models[static_cast<size_t>(e.model)] : std::string()))
+      return;  // a recipe's enthide (entity_debug.hpp)
+    if (entity != listener && encloses_eye(e.origin, s.eye))
+      return;  // a figure the eye stands in (a match mod's marker at a spawn): inside out, no shape
     Placed p;
     p.entity = entity;
     p.modelindex = e.model;
