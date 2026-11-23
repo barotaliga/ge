@@ -610,6 +610,9 @@ struct Q2Server : RulesCommon {
   std::string load_name;
   // The slots a load put back in their bodies (by bit): the player connecting to one takes it over.
   uint32_t restored = 0;
+  // The players already told entered on this map (at its load): their `begin` on it says it
+  // no more, so each arrival is said once.
+  uint32_t entered_told = 0;
   // The autosave the rules made as this level was entered (empty: none), for the host to keep.
   std::vector<uint8_t> autosave;
 
