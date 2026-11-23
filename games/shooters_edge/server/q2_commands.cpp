@@ -422,6 +422,12 @@ void commands_cvars(Q2Server& s) {
                .help = "When players' footsteps sound.",
                .values = "0: never; 1: running on the ground faster than 225 units a second (the "
                          "default); 2: on the ground at any pace; 3: always, in the air too"});
+  s.cvars.add({.name = "map_noareas",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether the doors that close parts of the map off are ignored: every part "
+                       "sees and hears every other (for finding faults in a map).",
+               .values = "0: the doors close parts off (the default); 1: every part joined"});
   s.cvars.add({.name = "sv_maxvelocity",
                .fallback = "2000",
                .flags = con::kServer,

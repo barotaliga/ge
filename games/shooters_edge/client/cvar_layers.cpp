@@ -11,7 +11,8 @@
 // ge:keywords gl_partscale gl_partstyle gl_partshape gl_beamstyle gl_drawsky gl_bilerp_skies
 // ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_bilerp_pics
 // ge:keywords gl_gamma_scale_pics gl_modulate_world gl_modulate_entities gl_doublelight_entities
-// ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack
+// ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack gl_celshading
+// ge:keywords cl_smooth_explosions
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -305,6 +306,21 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .max = 1,
           .values = "1: it fades out (the default); 0: a hard edge"},
          &x.dlight_falloff);
+  v.bind({.name = "gl_celshading",
+          .fallback = "0",
+          .help = "An ink line drawn round each solid model, thinner and fainter with distance "
+                  "and gone beyond about 700 units.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 10,
+          .values = "0: none (the default); 1..10: that many pixels wide up close"},
+         &x.cel_shading);
+  v.bind({.name = "cl_smooth_explosions",
+          .fallback = "1",
+          .help = "Whether explosions fade smoothly, or move on frame by frame, ten a second.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: smoothly (the default); 0: frame by frame"},
+         &x.smooth_explosions);
 }
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means
