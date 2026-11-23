@@ -100,6 +100,14 @@ hud::Status status_of(const Listen& l, double t) {
   // The runes: the first four bits of the program's `serverflags`, carried from map to map.
   s.runes = static_cast<uint8_t>(bits(l.server->world.serverflags) & 15);
   s.frags = static_cast<int>(field_named(l, 1, "frags"));
+  // The items word as a client is sent it: `items2` from bit 23 up when the program has one (a
+  // mission pack's status bar reads its own weapons and items there), else the runes from 28.
+  const bool items2 = l.progs != nullptr && ge::progs::find_field(*l.progs, "items2") != nullptr;
+  const auto word = [](float f) { return static_cast<uint32_t>(static_cast<int32_t>(f)); };
+  s.items = word(field_named(l, 1, "items")) |
+            (items2 ? word(field_named(l, 1, "items2")) << 23 : uint32_t{s.runes} << 28);
+  s.in_hand = word(field_named(l, 1, "weapon"));
+  s.current_ammo = static_cast<int>(field_named(l, 1, "currentammo"));
   return s;
 }
 

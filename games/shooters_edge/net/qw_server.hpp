@@ -515,5 +515,9 @@ EntityState entity_state(const QwServer& s, int e);
 void entity_look(EntityState& st, float alpha, float scale, const float colormod[3]);
 // A player's stats as the server sends them (`view_height`: the z set's view height in 16).
 void player_stats(const QwServer& s, int slot, int32_t out[kStats], bool view_height);
+// The items word a client is sent (its stat 15): the program's item bits, with its `items2` from
+// bit 23 up when it defines one (a mission pack's new weapons and items), else the runes from bit
+// 28.
+int32_t items_word(const sv::RulesWorld& w, const sv::PlayerNumbers& n);
 
 }  // namespace shooters_edge::net
