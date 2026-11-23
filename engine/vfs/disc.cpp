@@ -185,6 +185,11 @@ std::string beside(const fs::path& sheet, const std::string& name) {
   const std::string want = lower(fs::path(name).filename().string());
   for (const auto& e : fs::directory_iterator(sheet.parent_path(), ec))
     if (lower(e.path().filename().string()) == want) return e.path().string();
+  // A sheet and its image renamed together (a download names both after the release): the file
+  // with the sheet's own name and the named file's extension.
+  const std::string renamed = lower(sheet.stem().string() + fs::path(name).extension().string());
+  for (const auto& e : fs::directory_iterator(sheet.parent_path(), ec))
+    if (lower(e.path().filename().string()) == renamed) return e.path().string();
   return "";
 }
 
