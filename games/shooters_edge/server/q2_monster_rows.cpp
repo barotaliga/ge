@@ -62,8 +62,8 @@ void monster_precache(Q2Server& s) {
       std::vector<std::string>& list = *static_cast<std::vector<std::string>*>(to);
       if (std::find(list.begin(), list.end(), name) == list.end()) list.emplace_back(name);
     };
-    monster_cue_sounds(kKinds[k].classname, add_to, &s.sounds);
-    monster_pain_sounds(kKinds[k].classname, add_to, &s.sounds);
+    monster_cue_sounds(looks_like(kKinds[k]), add_to, &s.sounds);
+    monster_pain_sounds(looks_like(kKinds[k]), add_to, &s.sounds);
     const std::string_view name = kKinds[k].classname;
     if (name == "monster_infantry" || name == "monster_mutant") add_sound("infantry/inflies1.wav");
     if (name == "monster_jorg") add_sound("boss3/w_loop.wav");
@@ -184,7 +184,7 @@ void monster_rows(Q2Server& s) {
     // The commander's body slumps from frame 1 to 24, a frame every 0.1 s from 0.1 s after a use.
     if (kKinds[m.kind].prop && m.used_at >= 0)
       r.frame = std::clamp(static_cast<int>((s.level_time - m.used_at) / 0.1), 0, 24);
-    else if (sq_monster_poses(kKinds[m.kind].classname) != nullptr)
+    else if (sq_monster_poses(looks_like(kKinds[m.kind])) != nullptr)
       r.frame = m.pose.frame;
   }
 }

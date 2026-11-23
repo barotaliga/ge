@@ -239,6 +239,27 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   // A flier sliding sideways round its enemy instead of closing (`slide_left` its side).
   bool slide = false, slide_left = false;
   double flies_at = 0;  // flies on its corpse from then for 60 s (level time); 0 not yet, -1 none
+  // A mission pack's kinds (q2_reckoning_monsters.cpp): a power shield's points left and its
+  // shell shown till then; an amphibian swimming; chanting (spawn flag 8) till its first blow;
+  // its beams (laser eyes, a repair bot's) as rows of their own from entity `beam` on, shown from
+  // `beam_from` to `beam_to` till `beam_until`, blue for healing.
+  int shield = 0;
+  double shield_flash = 0;
+  bool swimming = false;
+  bool chant = false;
+  int beam = -1;
+  sh::Vec3f beam_from[2], beam_to[2];
+  double beam_until = 0;
+  bool beam_heal = false;
+  // The repair bot's own work: what it is doing (q2_reckoning_monsters.cpp's `Job`), the repair
+  // object it is going to (-1 none), the point it roams to, when the goal was made, the work's
+  // next step, until when repair objects are let be, and how many frames it has not moved.
+  int job = 0;
+  int job_target = -1;
+  sh::Vec3f job_goal;
+  double job_since = 0, job_until = 0, repair_rest = 0;
+  int still = 0;
+  sh::Vec3f still_at;
 };
 
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name

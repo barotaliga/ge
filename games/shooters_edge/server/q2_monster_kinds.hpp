@@ -40,7 +40,17 @@ enum class Fire : uint8_t {
   sweep,    // a bolt a shot, its yaw sweeping across the enemy
   zap,      // an energy blow wherever the enemy is
   leap,     // a jump at the enemy that hurts what it strikes fast
+  laser,    // `count` beams a shot (one an eye), re-aimed each frame, burning through bodies
+  tongue,   // a strike that pulls its enemy in, within 512 and 30 degrees of level
 };
+
+// The missile a `bolt` or `rockets` attack throws: the base game's, or a pack's (q2_combat.hpp's
+// SqShot: the ion ripper's disc, the blue bolt, the phalanx's ball, the heat rocket, the spit).
+enum class Shot : uint8_t { usual, ripper, blue_bolt, plasma, heat_rocket, spit };
+
+// The words a death by an attack reads: its kind's ("died." in co-op), a laser's ("saw the
+// light.") or a bite's ("that's gotta hurt.").
+enum class Words : uint8_t { usual, light, hurt };
 
 // How a kind decides to attack.
 enum class Test : uint8_t {
@@ -48,6 +58,7 @@ enum class Test : uint8_t {
   hover,   // 0.8 a frame within mid range, not by skill (the hornet)
   rider,   // 0.8 at melee range, 0.4 near, 0.2 mid, not by skill (Jorg and the Makron)
   mutant,  // claws in melee range, else a leap when its test passes
+  gekk,    // claws in melee range; on land, else nearly always a spit or a leap; in water, claws
 };
 
 // What its death leaves.
@@ -83,6 +94,11 @@ struct Attack {
   int follow = -1;                        // the blow that follows a hit (at skill 1 and up)
   int again_skill = 0;                    // the least skill that loops again
   float aim_h = 0, aim_v = 0;             // the soldiers' spread at 8192, once a shot, before h/v
+  Shot shot = Shot::usual;                // a bolt's or a rocket's missile
+  Words words = Words::usual;             // a death by it
+  float farthest = 0;                     // taken only within this (0 any range)
+  float rise = 250;                       // a leap's speed up
+  int splash = 0;                         // a missile's splash (0 its shot's own)
 };
 
 struct Kind {  // NOLINT(clang-analyzer-optin.performance.Padding): rows read by name
@@ -121,7 +137,24 @@ struct Kind {  // NOLINT(clang-analyzer-optin.performance.Padding): rows read by
   // The rules it belongs to (q2_pack.hpp). A pack's row of a base class name replaces the base
   // row under that pack (`kind_named`).
   Q2Pack pack = Q2Pack::base;
+  // A pack's kind built on a base one: the base class whose model frames, pains, deaths, ducks,
+  // steps, gibs and muzzle flashes it shares (`looks_like`).
+  const char* like = nullptr;
+  // A power shield of `shield` points over every direction (a pack's armoured kinds): two thirds
+  // of a blow taken, two damage a point, the green shell shown. With `shield_flag`, only when its
+  // map sets that spawn flag.
+  int shield = 0;
+  int shield_flag = 0;
+  bool pain_at_3 = false;  // flinches at skill 3 too
+  bool green = false;      // bleeds green
+  bool heals = false;      // its search and idle heal it 10 to 20
+  bool amphibian = false;  // walks on land, swims in water, by where it stands
+  bool repairs = false;    // the repair bot: roams, welds, raises the dead with its beam
+  const char* chant[3] = {};  // spawn flag 8: it chants (one of three) and looks for no one
 };
+
+// The class whose frames, pains, deaths and flashes kind `k` plays: its base kind's, or its own.
+constexpr const char* looks_like(const Kind& k) { return k.like != nullptr ? k.like : k.classname; }
 
 constexpr int kNoGib = -100000;  // a kind that is never thrown apart
 
