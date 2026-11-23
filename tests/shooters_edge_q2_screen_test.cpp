@@ -358,3 +358,18 @@ TEST(gl_bilerp_pics_smooths_the_large_pictures_and_gl_gamma_scale_pics_brightens
   smooth(0);
   CHECK(red() == 90);
 }
+
+TEST(use_drop_and_give_complete_the_item_names_the_world_listed) {
+  // The names the last frame's world listed, sorted, each once; none before a frame ran.
+  ge::console::Console con(false);
+  cl::Q2Bar bar;
+  cl::add_q2_bar_commands(con, bar);
+  CHECK(con.arg_values("use").empty());
+  shooters_edge::server::RulesWorld world;
+  world.item_names = {"", "Shotgun", "Blaster", "Shotgun", "Rocket Launcher"};
+  cl::run_q2_bar(bar, world, 0, 0, 320, 240);
+  for (const char* word : {"use", "drop", "give"}) {
+    const std::vector<std::string> names = con.arg_values(word);
+    CHECK(names == (std::vector<std::string>{"Blaster", "Rocket Launcher", "Shotgun"}));
+  }
+}
