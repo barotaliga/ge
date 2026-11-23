@@ -138,7 +138,7 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
     if (opt.complete) way_complete_init(f, nav, s, spec);
     way_init(b.way, f, nav, s, spec);
     if (opt.plan && k == 0) b.way.log = &um.plan;
-    m.members.push_back({&b.way, k + 1, true});
+    if (!opt.beside || k > 0) m.members.push_back({&b.way, k + 1, true});
   }
   for (const WayStep& st : m.bots[0].way.steps) {
     if (way_exit(st)) um.exits.push_back((st.lo + st.hi) * 0.5f);
@@ -296,6 +296,8 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
     int health =
         q->world.entities[1].health > 0 ? static_cast<int>(q->world.entities[1].health) : 0;
     std::vector<bool> took(m.bots[0].way.steps.size(), false);
+    sb::PartyOptions people;
+    int64_t helper_near = 0, helper_counted = 0;
     for (; frame < frames && !changed; frame++) {
       const sv::RulesCommon& s = *rules;
       const double t = s.sv.time;
@@ -303,12 +305,21 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       if (n > 1) {
         for (sb::PartyMember& pm : m.members)
           pm.alive = s.world.entities[static_cast<size_t>(pm.ent)].health > 0;
-        sb::party_share(m.party, m.members, *m.nav, s, {});
+        if (opt.beside) {  // round him, a person's stand-in (party.hpp)
+          people.humans.assign(1, s.world.entities[1].origin);
+          people.leash = sb::kPartyLeash;
+          people.exit_held = true;
+        }
+        sb::party_share(m.party, m.members, *m.nav, s, people);
       }
       for (int k = 0; k < n; k++) {
         Bot& b = m.bots[static_cast<size_t>(k)];
         const int me = k + 1;
+        const int64_t plans = b.way.stats.plans;
         way_plan(b.way, b.f, *m.nav, s, me, t);
+        if (opt.beside && k > 0 && sb::party_stay(b.f, *m.nav, s, me, people) &&
+            b.way.stats.plans != plans)
+          um.helper_stays++;
         b.cmds[0] = b.cmds[1];
         b.cmds[1] = b.cmds[2];
         // A view the rules turned (a spawn, a teleporter) is his to start from.
@@ -346,6 +357,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
           if (!b.f.bot.pilot.pilot.climbing) unwedge(b.wedge, s, me, t, b.cmds[2]);
           if (way_edge(*m.nav, b.f, s, me, b.cmds[2])) um.edges++;
         }
+        if (opt.beside && k > 0 && exits_keep_off(b.f, s, me, b.cmds[2])) um.helper_exits_turned++;
         // The intermission: a button now and then leaves for the next map.
         if (q->intermission_at > 0) b.cmds[2].buttons = (frame & 8) ? sh::kButtonAttack : 0;
         sh::Packet& pk = packets[static_cast<size_t>(k)];
@@ -370,6 +382,16 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
           um.took_keys.push_back(st.name);
         }
       }
+      for (int k = 1; opt.beside && k < n && q->intermission_at <= 0; k++) {  // a helper's
+        const sv::WorldEntity& d = s.world.entities[static_cast<size_t>(k) + 1];
+        const sv::WorldEntity& lead = s.world.entities[1];
+        if (d.health <= 0 || lead.health <= 0) continue;
+        const sh::Vec3f dd = d.origin - lead.origin;
+        const float apart = sh::length(dd);
+        helper_near += apart <= sb::kPartyLeash ? 1 : 0;
+        helper_counted++;
+        um.helper_farthest = std::max(um.helper_farthest, apart);
+      }
       if (frame % kSampleEvery == 0) {
         um.track.push_back(s.world.entities[1].origin);
         for (int k = 1; k < n; k++)
@@ -379,6 +401,9 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
       if (!s.pending_map.empty()) changed = true;
     }
     um.seconds = static_cast<double>(frame) / kHz;
+    um.helper_near_share =
+        helper_counted > 0 ? static_cast<double>(helper_near) / static_cast<double>(helper_counted)
+                           : 0;
     um.way = m.bots[0].way.stats;
     um.shoves = 0;
     for (const Bot& b : m.bots) um.shoves += b.wedge.shoves;

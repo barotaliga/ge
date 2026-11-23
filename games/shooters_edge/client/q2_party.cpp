@@ -54,7 +54,10 @@ void make(Q2Party& p, const sv::RulesCommon& s, int slot) {
   f.bot.pilot.world = &p.nav->world;
   if (p.nav->swim.leading > 0) f.swim = &p.nav->swim;
   f.trap = &p.nav->trap;
-  bots::escort_init(f, s, slot, 0);
+  if (m.work && p.map != nullptr)
+    sb::party_work_init(*m.work, f, *p.nav, s, *p.map);
+  else
+    bots::escort_init(f, s, slot, 0);
 }
 
 }  // namespace
@@ -66,7 +69,7 @@ int q2_party_size(const Q2Party& p) {
 }
 
 int q2_party_add(Q2Party& p, const sv::RulesRunner& rules, const sv::MapSpec& map,
-                 sb::AimSkill skill, uint32_t held, std::string& error) {
+                 sb::AimSkill skill, uint32_t held, std::string& error, bool helper) {
   const sv::RulesCommon& s = *rules;
   if (q2_party_size(p) >= kQ2MatesMost) {
     error = "The party is full (" + std::to_string(kQ2MatesMost + 1) + " players).";
@@ -83,8 +86,10 @@ int q2_party_add(Q2Party& p, const sv::RulesRunner& rules, const sv::MapSpec& ma
     return -1;
   }
   if (!p.nav && !build_nav(p, s, map, error)) return -1;
+  p.map = &map;
   auto m = std::make_unique<Q2Mate>();
   m->skill = skill;
+  if (helper) m->work = std::make_unique<sb::PartyWork>();
   m->name = "mate" + std::to_string(++p.named);
   rules.connect(slot, m->name, false, true);
   p.mates[static_cast<size_t>(slot)] = std::move(m);
@@ -106,6 +111,8 @@ void q2_party_enter(Q2Party& p, const sv::RulesRunner& rules, const sv::MapSpec&
                     bool reconnect, std::vector<int>& gone, std::string& error) {
   gone.clear();
   p.nav.reset();
+  p.map = &map;
+  p.share = sb::Party();  // the new map's steps
   if (q2_party_size(p) == 0) return;
   const sv::RulesCommon& s = *rules;
   if (!build_nav(p, s, map, error)) {
@@ -127,9 +134,25 @@ void q2_party_packets(Q2Party& p, const sv::RulesRunner& rules, int msec,
                       std::vector<sh::Packet>& out) {
   const sv::RulesCommon& s = *rules;
   const sv::Q2Server* sq = sv::q2_of(rules);
+  // The helpers' split of the map, round the people (every player not a companion).
+  p.members.clear();
+  p.people.humans.clear();
+  p.people.leash = sb::kPartyLeash;
+  p.people.exit_held = true;
+  for (int i = 0; i < sh::kMaxClients && i < s.sv.set.maxclients; i++) {
+    if (!s.clients[i].active) continue;
+    const sh::Edict& e = s.sv.edicts[static_cast<size_t>(i) + 1];
+    const Q2Mate* m = p.mates[static_cast<size_t>(i)].get();
+    if (m == nullptr)
+      p.people.humans.push_back(e.origin);
+    else if (m->work)
+      p.members.push_back({&m->work->way, i + 1, e.health > 0});
+  }
+  if (!p.members.empty() && p.nav) sb::party_share(p.share, p.members, *p.nav, s, p.people);
   for (int i = 1; i < sh::kMaxClients; i++) {
     if (!p.mates[static_cast<size_t>(i)] || !s.clients[i].active) continue;
     Q2Mate& m = *p.mates[static_cast<size_t>(i)];
+    if (m.work) sb::party_work_plan(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, p.people);
     m.cmds[0] = m.cmds[1];
     m.cmds[1] = m.cmds[2];
     const sh::Vec3f view = s.sv.edicts[static_cast<size_t>(i) + 1].v_angle;
@@ -137,6 +160,7 @@ void q2_party_packets(Q2Party& p, const sv::RulesRunner& rules, int msec,
     if (forced) m.fighter.bot.yaw = view.y;
     m.cmds[2] = bots::fighter_command(m.fighter, s, i, msec);
     if (forced) m.cmds[2].angles = view;
+    if (m.work) sb::party_work_command(*m.work, m.fighter, *p.nav, s, i + 1, s.sv.time, m.cmds[2]);
     sh::Packet pk;
     pk.client = i;
     pk.sequence = ++m.sequence;
