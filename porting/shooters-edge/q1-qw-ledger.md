@@ -15,11 +15,11 @@ and a row found later is added here first. Progress is reported as the missing c
 
 | Section | Rows | Done | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- |
-| Client | 508 | 345 | 0 (0 / 0 / 0) | 163 |
+| Client | 509 | 347 | 0 (0 / 0 / 0) | 162 |
 | Server | 316 | 281 | 0 (0 / 0 / 0) | 35 |
 | Game | 246 | 228 | 0 (0 / 0 / 0) | 18 |
 | Tools | 1 | 1 | 0 (0 / 0 / 0) | 0 |
-| **All** | **1071** | **855** | **0 (0 / 0 / 0)** | **216** |
+| **All** | **1072** | **857** | **0 (0 / 0 / 0)** | **215** |
 
 (Built 2026-11-21 against main at #1237 with 217 missing (9 / 49 / 159); the first fill, Quake's
 deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.
@@ -362,7 +362,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C302 | `ambient_fade` (both, 100) | how fast the ambience swells and fades | done | client/cvar_layers.cpp, sound/ambience.cpp (the level moves fade/255 of full a second) | 3 |
 | C303 | `snd_noextraupdate` (both, 0) | mix sound only once a frame | not-taken | platform: our mixer runs on its own thread |  |
 | C304 | `snd_show` (both, 0) | print the sounds playing | not-taken | a developer or profiling tool: ours are framestats, the labs and ge |  |
-| C305 | `_snd_mixahead` (both, 0.1) | how far ahead sound is mixed | not-taken | platform |  |
+| C305 | `_snd_mixahead` (both, 0.1) | how far ahead sound is mixed | done | client/room_ear.cpp (`s_mixahead` in the classic layer, `_snd_mixahead` its spelling; the device's lead) |  |
 | C306 | `sys_linerefresh` (both, 0) | Linux refresh test | not-taken | a developer or profiling tool: ours are framestats, the labs and ge |  |
 | C307 | `vid_fullscreen_mode` (both, 3) | a video mode or window setting | not-taken | platform video modes: the window, its size and its display are engine/platform (vid_fullscreen, vid_displays) |  |
 | C308 | `vid_windowed_mode` (both, 0) | a video mode or window setting | not-taken | platform video modes: the window, its size and its display are engine/platform (vid_fullscreen, vid_displays) |  |
@@ -593,6 +593,7 @@ and the campaign on our own host hands the client the same events without the wi
 | C506 | Demos: .dem recorded and played (q1) | a single-player recording with its signon | done | client/demo_convert_single.cpp, demo_convert_single_out.cpp |  |
 | C507 | Demos: .qwd recorded and played (qw) | a client recording of a QuakeWorld game | done | net/qw_match_record.hpp, client/demo_playback.cpp |  |
 | C508 | Screenshot files (both) | quakeNN.pcx (GL: .tga) in the game folder | done | engine/capture/screenshot.cpp (our own format and folder) |  |
+| C509 | Static loops of one file merged (both) | every torch or hum of one sound heard as one voice, its ears summed and each held to full | done | client/demo_sound.cpp, plugins/classic/q2_loop_merge.hpp (classic_static_merge) |  |
 
 Count: 508 rows, 345 done, 0 missing, 163 not-taken.
 

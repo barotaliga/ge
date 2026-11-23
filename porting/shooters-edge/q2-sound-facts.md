@@ -429,3 +429,56 @@ Details **[read]**:
   which the page cannot set). `sound latency` writes a setting the OpenAL backend does not read.
 - None of the `al_` settings, `s_khz`, `s_swapstereo`, `s_underwater_gain_hf`, `s_auto_focus`
   or `cl_footsteps` has a row on this page.
+
+---
+
+## Quake and QuakeWorld (id's release)
+
+A clean-room reader's facts about id Software's released Quake source (GPL-2.0), commit
+bf4ac42 (the Quake engine, the QuakeWorld client and the QuakeWorld progs), in the reader's own
+words, no code. Both clients share one mixer, so every line holds for both games unless it says
+otherwise. Volumes are on the mixer's 0 to 255 scale; distances in map units.
+
+- **Channels [read]:** 128 in all: 4 leaf ambients, 8 dynamic (every one-shot sound), then up to
+116 static sounds from the level's sign-on, in sign-on order. A 117th static sound is refused with
+a console line. A static sound whose file has no loop point prints `Sound <name> not looped` and
+still uses a slot.
+- **Same-file statics are combined, every frame, with no setting to turn it off [read]:** after each
+static channel is spatialized, its per-ear levels are added onto the earliest static channel with
+the same sound file (even if that one is silent this frame) and its own are zeroed, so only that
+one is mixed. The sum is uncapped when added; the 8-bit painter clamps each ear to 255 (and uses 32
+steps of 8), the 16-bit painter does not clamp. Dynamic channels are never combined. Statics all
+start together at sign-on, so same-file ones are in step and combining only changes the cap
+**[derived]**.
+- **Leaf ambients [read]:** only water (`ambience/water1.wav`) and sky (`ambience/wind2.wav`) have
+sounds; slime and lava are silent. Target volume is `ambient_level` (default 0.3, not saved) times
+the leaf's 0 to 255 level, below 8 counts as 0; it fades at `ambient_fade` (default 100) volume per
+second; both ears alike, no falloff.
+- **Loops otherwise [read]:** entities carry no loop sound in either protocol. Any sound file with a
+loop marker loops on a dynamic channel until a new sound on the same entity channel or channel
+pressure takes it (platforms start `plats/medplat1.wav` and replace it by `plats/medplat2.wav`). A
+dynamic sound stays where it started; it does not follow its entity. The stop-sound message is
+understood by both clients but sent by no server in the release.
+- **Spatialization [read]:** no settings at all. Linear falloff to silence at 1000 divided by the
+attenuation (none 0, normal 1, idle 2, static 3 so about 333). Each ear gets the volume times the
+falloff times one plus or minus the sideways component (up to twice the volume in the near ear,
+nothing in the far one); front and back and up and down are alike. The player's own entity is full
+volume in both ears. Two identical dynamic sounds started in one frame: the second starts up to
+0.1 s into its sample at random.
+- **`_snd_mixahead` [read]:** default 0.1 s, saved, no range check other than the device buffer's
+length, no other spelling and no menu row. The mixer paints that far ahead of the play position and
+new sounds start after it, so it is the latency; too small and a slow frame breaks the sound up
+**[derived]**. `snd_noextraupdate`, `snd_show` and `nosound` default 0. Default device rate 11025 Hz.
+- **No footsteps [read]:** neither client nor the QuakeWorld progs plays a footstep or a
+surface-by-texture sound. The progs' player movement sounds are the jump, the landings
+(`player/land.wav` above 300 units per second down, `player/land2.wav` and 5 damage above 650,
+`player/h2ojump.wav` into water), entering water, lava or slime, leaving liquid, swimming
+(`misc/water1.wav` or `misc/water2.wav`, at most once a second) and the gasps.
+- **CD music [read]:** `cd off` stops (not pauses) and disables the CD code; `cd on` only enables
+and starts nothing until the next track request. `cd pause` and `cd resume` continue the same track
+from where it stopped; resume does nothing after a stop. `bgmvolume` (default 1, saved) is a toggle,
+not a volume: any change from "on" forces it to 0 and pauses, any change from "off" forces it to 1
+and resumes. Map tracks always loop. A map asking for the track already playing lets it continue; a
+different track restarts from its beginning; a paused track asked again starts over (and pauses
+again if music is off). Nothing stops music between maps. Game pause, and on Windows a lost focus,
+pause and resume it.

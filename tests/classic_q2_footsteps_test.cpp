@@ -209,6 +209,31 @@ TEST(copies_of_one_loop_merge_capped_by_ear_and_panned_by_their_balance) {
   CHECK(!cl::q2_merges(0, true));
 }
 
+TEST(quakes_static_loops_of_one_file_merge_into_one_voice_held_per_ear) {
+  // Attenuation 3 at 1000 units / 3: silent; at 0 units whole, centred.
+  const cl::Q2Ears gone = cl::classic_static_ear(1, 1000.0 / 3, 0, 3);
+  CHECK(gone.left == 0 && gone.right == 0);
+  const cl::Q2Ears here = cl::classic_static_ear(1, 0, 0, 3);
+  CHECK(here.left == 1 && here.right == 1);
+  // A full centred source is the most a voice gives: gain 1, no pan.
+  const cl::Q2Merged whole = cl::classic_static_merge(here);
+  CHECK(whole.gain == 1 && whole.pan == 0);
+  // Four torches hard right at full volume: the right ear held to 1, so half the gain, full right.
+  cl::Q2Ears sum;
+  for (int k = 0; k < 4; k++) {
+    const cl::Q2Ears e = cl::classic_static_ear(1, 0, 1, 3);
+    sum.left += e.left, sum.right += e.right;
+  }
+  const cl::Q2Merged right = cl::classic_static_merge(sum);
+  CHECK(right.gain == 0.5 && right.pan == 1);
+  // Two quiet ones left and right: one centred voice, their sum.
+  const cl::Q2Ears a = cl::classic_static_ear(0.25, 0, -1, 3),
+                   b = cl::classic_static_ear(0.25, 0, 1, 3);
+  const cl::Q2Merged both = cl::classic_static_merge({a.left + b.left, a.right + b.right});
+  CHECK(std::fabs(both.gain - 0.5) < 1e-12 && both.pan == 0);
+  CHECK(cl::classic_static_merge({}).gain == 0);
+}
+
 TEST(the_musics_file_by_name_ignores_case_and_extension_flac_only) {
   const std::filesystem::path dir =
       std::filesystem::temp_directory_path() / "ge_classic_q2_footsteps_music";
