@@ -784,7 +784,7 @@ void offer_dodge(Q2Server& s, int slot, sh::Vec3f start, sh::Vec3f forward, floa
   if (skill(s) == 0 && ge::core::next(s.rng) > 0.25) return;
   const Line l = shoot_line(s, start, start + forward * 8192, 1u << slot);
   if (l.player >= 0 || l.mover < 0 || monster_index(s, l.mover) < 0) return;
-  monster_dodge(s, l.mover, slot, sh::length(l.end - start), speed);
+  monster_dodge(s, l.mover, slot, sh::length(l.end - start), speed, l.end);
 }
 
 // A missile from `start` along the axes; the hand grenade's `speed` and `fuse` are its throw's.

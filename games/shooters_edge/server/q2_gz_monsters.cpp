@@ -771,7 +771,7 @@ void gz_died(Q2Server& s, Q2Monster& m) {
   c.called = std::max(0, c.called - 1);
 }
 
-bool gz_counted(const Q2Monster& m) { return m.commander < 0; }
+bool gz_counted(const Q2Monster& m) { return m.commander < 0 && !m.revived; }
 
 void gz_row(const Q2Server& s, const Q2Monster& m, ge::shooter::WorldEntity& r) {
   if (gz_boss(m)) {

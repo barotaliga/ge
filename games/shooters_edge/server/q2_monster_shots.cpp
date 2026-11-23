@@ -23,6 +23,7 @@ namespace shooters_edge::server::monster_ai {
 
 // The enemy's eye, `lead` s along his motion.
 sh::Vec3f mark(const Q2Server& s, const Q2Monster& m, float lead) {
+  if (m.blind) return m.blind_at;  // Ground Zero's blind fire: where he was last seen
   return foe_eye(s, m.enemy) + foe_velocity(s, m.enemy) * lead;
 }
 

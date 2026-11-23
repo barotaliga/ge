@@ -300,6 +300,19 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   // Ground Zero's strafing burst (q2_gz_base_monsters.cpp): the side it slides to while it fires
   // (1 right, -1 left; 0 a burst stood still).
   int strafe = 0;
+  // Ground Zero's shared AI (q2_gz_ai.cpp): a side-step dodge till then (level time; 0 none), the
+  // next duck's earliest time; blind fire's mark (where its enemy was last seen), its delay that
+  // grows with each try, and whether the attack in hand is one; a ledge jump in the air since
+  // (level time; 0 none); a medic's time with its patient, the last two medics that gave up on
+  // this corpse, and whether a medic raised it (out of the level's count, out of infighting).
+  double dodge_until = 0, next_duck = 0;
+  sh::Vec3f blind_at;
+  double blind_delay = 0;
+  bool blind = false;
+  double jump_at = 0;
+  double patient_since = 0;
+  int bad_medic[2] = {-1, -1};
+  bool revived = false;
 };
 
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name

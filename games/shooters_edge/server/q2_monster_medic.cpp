@@ -37,7 +37,9 @@ int find_patient(const Q2Server& s, const Q2Monster& medic) {
     const Q2Entity& b = s.entities[size_t(c.entity)];
     if (!c.dead || c.claimed || b.gone || kind(c).end != End::corpse) continue;
     if (s.level_time + 0.001 < c.died_at + double(kind(c).revive_after)) continue;
-    if (sh::length(b.origin - e.origin) > 1024 || !sees_body(s, medic, c)) continue;
+    if (!gz_patient_ok(s, medic, c)) continue;  // Ground Zero's: not one it gave up on
+    if (sh::length(b.origin - e.origin) > gz_patient_reach(s, medic) || !sees_body(s, medic, c))
+      continue;
     if (best < 0 || kind(c).health > kind(s.monsters[size_t(best)]).health)
       best = static_cast<int>(i);
   }
@@ -65,7 +67,10 @@ void revive(Q2Server& s, Q2Monster& c, int enemy) {
   b.target.clear();
   b.targetname.clear();
   b.spawnflags = 0;
-  s.monsters_total++;
+  if (gz_ai(s))  // Ground Zero's: out of the level's count, out of infighting
+    c.revived = true;
+  else
+    s.monsters_total++;
   if (targetable(s, enemy)) found(s, c, enemy, false);
 }
 
@@ -84,6 +89,7 @@ bool tend(Q2Server& s, Q2Monster& m) {
     m.patient = find_patient(s, m);
     if (m.patient >= 0) {
       s.monsters[size_t(m.patient)].claimed = true;
+      m.patient_since = s.level_time;
       m.old_enemy = m.enemy;
       m.revive_at = 0;
     }
@@ -98,7 +104,7 @@ bool tend(Q2Server& s, Q2Monster& m) {
     m.revive_at = 0;
     m.enemy = foe_alive(s, m.old_enemy) ? m.old_enemy : -1;
   };
-  if (!c.dead || b.gone) {
+  if (!c.dead || b.gone || !gz_patient_keep(s, m, c)) {
     release();
     return false;
   }

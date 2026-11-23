@@ -202,6 +202,37 @@ const GzLedge* gz_ledge(std::string_view classname);
 const GzDodge* gz_dodge_of(std::string_view classname);
 const GzBlind* gz_blind_of(std::string_view classname);
 
+// ---- Ground Zero's shared monster AI (q2_gz_ai.cpp; gz-monsters.md § 1) ----
+// Each does nothing outside Ground Zero (false, or the base game's rule).
+bool gz_ai(const Q2Server& s);
+// Whether `m` dodges the pack's way (a kind of its dodge table).
+bool gz_dodges(const Q2Server& s, const Q2Monster& m);
+// A player's shot from `shooter` warned `m` it strikes `hit` in `eta` s: what it does.
+enum class GzDodgeAct : uint8_t { none, duck, handled };
+GzDodgeAct gz_dodge(Q2Server& s, Q2Monster& m, int shooter, sh::Vec3f hit, double eta);
+// A side-step's frame while it lasts; true when it took the frame.
+bool gz_dodge_step(Q2Server& s, Q2Monster& m);
+// The chance it slides sideways after not firing at range `r` (-1: the base game's rule).
+double gz_slide_chance(Q2Server& s, const Q2Monster& m, Range r);
+// The sideways step a slide takes a frame: a flier's run, a walker's at most 8.
+float gz_slide_step(const Q2Server& s, const Q2Monster& m, float run_step);
+// Its enemy seen this frame: blind fire's mark and its delay reset.
+void gz_seen(Q2Server& s, Q2Monster& m);
+// Its enemy not reached: whether it fires blind at the mark now (its delay grown, its wait set).
+bool gz_blind_fire(Q2Server& s, Q2Monster& m);
+// Blocked on its way to its enemy: a jump down or up a ledge; true when it jumped.
+bool gz_ledge_jump(Q2Server& s, Q2Monster& m);
+// In the air on a ledge jump: true while it waits to land (3 s at most).
+bool gz_jumping(Q2Server& s, Q2Monster& m);
+// Whether shots between it and another start no fight (the pack's flag: the tanks, the medics,
+// the turret, a revived monster).
+bool gz_ignores_shots(const Q2Server& s, const Q2Monster& m);
+// A medic's search: whether corpse `c` may be its patient, and its reach (1024, 400 holding).
+bool gz_patient_ok(const Q2Server& s, const Q2Monster& medic, const Q2Monster& c);
+float gz_patient_reach(const Q2Server& s, const Q2Monster& medic);
+// A medic with a patient this frame: false when it gives the patient up (10 s, too near).
+bool gz_patient_keep(Q2Server& s, Q2Monster& medic, Q2Monster& c);
+
 // ---- Ground Zero's bosses (q2_gz_bosses.cpp): the carrier and the black widow's two stages ----
 // Whether `m` (or class `classname`) is one of them.
 bool gz_boss(const Q2Monster& m);

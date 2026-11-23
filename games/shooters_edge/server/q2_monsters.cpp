@@ -333,6 +333,7 @@ void go_to(Q2Server& s, Q2Monster& m, sh::Vec3f goal, float speed) {
   sh::Vec3f way = d * (1 / dist);
   const float len = std::min(speed * kStep, dist);
   if (step(s, m, way * len)) return;
+  if (gz_ledge_jump(s, m)) return;  // Ground Zero's: down or up a ledge toward its enemy
   // Blocked: a step to one side, then the other.
   const sh::Vec3f side = sh::angle_vectors({0, m.ideal_yaw, 0}).right;
   const float sign = random01(s) < 0.5 ? 1.0f : -1.0f;
@@ -449,6 +450,7 @@ void begin_attack(Q2Server& s, Q2Monster& m, int i) {
   m.attack = i;
   m.pose.cue_attack = i;
   m.slide = false;  // an attack ends a flier's slide
+  m.blind = false;  // a blind shot is marked by its chooser
   m.burst_frame = 0;
   m.loops = 0;
   m.aimed = false;
@@ -573,7 +575,14 @@ void choose(Q2Server& s, Q2Monster& m) {
   Q2Entity& e = body(s, m);
   const Kind& k = kind(m);
   const bool boss = k.test == Test::hover || k.test == Test::rider;
-  if (!reaches(s, m, m.enemy, boss ? kShotMask & ~sh::kSqWindow : kShotMask)) return;
+  if (!reaches(s, m, m.enemy, boss ? kShotMask & ~sh::kSqWindow : kShotMask)) {
+    if (gz_blind_fire(s, m)) {  // Ground Zero's: at where he was last seen
+      turn(e, k, yaw_to(m.blind_at - e.origin));
+      begin_attack(s, m, pick_ranged(s, m, sh::length(m.blind_at - e.origin)));
+      m.blind = true;
+    }
+    return;
+  }
   const sh::Vec3f at = foe_at(s, m.enemy);
   // It turns to him first: an attack only within 45 degrees of facing him.
   const float want = yaw_to(at - e.origin);
@@ -620,8 +629,12 @@ void choose(Q2Server& s, Q2Monster& m) {
     if (skill(s) >= 2) chance *= 2;
   }
   if (random01(s) >= chance) {
-    // A flier that did not fire slides sideways three times in ten, each such frame afresh.
-    if (k.flies && r != Range::melee) m.slide = random01(s) < 0.3;
+    // A flier that did not fire slides sideways three times in ten, each such frame afresh
+    // (Ground Zero's: walkers too, by its own chances).
+    if (const double slide = gz_slide_chance(s, m, r); slide >= 0)
+      m.slide = slide > 0 && random01(s) < slide;
+    else if (k.flies && r != Range::melee)
+      m.slide = random01(s) < 0.3;
     return;
   }
   const int i = pick_ranged(s, m, dist);
@@ -667,7 +680,10 @@ void ducking(Q2Server& s, Q2Monster& m) {
       if (!was) {
         m.ducked = true;
         e.maxs.z -= kDuckDrop;
-        if (!named(m, "monster_brain")) m.duck_hold = s.level_time + 1.0;  // the brain's is set
+        if (gz_ai(s))  // Ground Zero's: at least a second, its dodge's hold kept
+          m.duck_hold = std::max(m.duck_hold, s.level_time + 1.0);
+        else if (!named(m, "monster_brain"))
+          m.duck_hold = s.level_time + 1.0;  // the brain's is set
       }
       if (m.duck_shoot) shoot(s, m, attack_at(m, 2), 0);
       if (!was && named(m, "monster_gunner") && skill(s) >= 2 && random01(s) > 0.5) {
@@ -679,6 +695,7 @@ void ducking(Q2Server& s, Q2Monster& m) {
     if (f == d.up && m.ducked) {
       m.ducked = false;
       e.maxs.z += kDuckDrop;
+      m.next_duck = s.level_time + 0.5;  // Ground Zero's next duck no sooner
     }
   }
   m.duck_fresh = true;
@@ -760,7 +777,8 @@ void dying_shot(Q2Server& s, Q2Monster& m) {
                      m.entity, from, from + fwd * 16.0f,
                      q2_monster_flash_value(looks_like(k), look));
   if (a.fire == Fire::bolt) {
-    fight_monster_launch(s, m.entity, shot_of(a, SqShot::bolt), from, fwd, a.damage, a.speed, cause_of(m));
+    fight_monster_launch(s, m.entity, shot_of(a, SqShot::bolt), from, fwd, a.damage, a.speed,
+                         cause_of(m));
     return;
   }
   for (int i = 0; i < (a.fire == Fire::pellets ? a.count : 1); i++) {
@@ -960,8 +978,9 @@ void think(Q2Server& s, Q2Monster& m) {
   if (!k.flies && !k.swims) targets_monster_touch(s, m);
   map_monster_touch(s, m.entity);
   fall(s, m);
-  if (m.leaping) return;    // in the air
-  if (m.duck_frame >= 0) {  // a dodge's duck: nothing else
+  if (m.leaping) return;         // in the air
+  if (gz_jumping(s, m)) return;  // a ledge jump in the air
+  if (m.duck_frame >= 0) {       // a dodge's duck: nothing else
     ducking(s, m);
     return;
   }
@@ -1025,10 +1044,12 @@ void think(Q2Server& s, Q2Monster& m) {
     m.last_sight = foe_at(s, m.enemy);
     m.trail_time = s.level_time;
     m.lost = m.on_trail = false;
+    gz_seen(s, m);  // blind fire's mark
   } else {
     pursue(s, m);  // out of sight: the last sighting, then his trail; it never gives him up
   }
   if (s.level_time + 0.001 < m.pain_hold) return;  // flinching
+  if (gz_dodge_step(s, m)) return;                 // Ground Zero's side-step
   if (m.run_shoot >= 0) {
     run_and_shoot(s, m);
     return;
@@ -1063,11 +1084,13 @@ void think(Q2Server& s, Q2Monster& m) {
     go_to(s, m, m.goal, k.run);
     return;
   }
-  if (m.slide && k.flies) {  // facing him, a run's step to one side; blocked, the other side
+  // Facing him, a run's step to one side; blocked, the other side (Ground Zero's walkers too,
+  // while they see him).
+  if (m.slide && (k.flies || (gz_ai(s) && sees(s, m, m.enemy)))) {
     const float to = yaw_to(m.last_sight - e.origin);
     turn(e, k, to);
     m.ideal_yaw = to;
-    const float step_len = k.run * kStep;
+    const float step_len = gz_slide_step(s, m, k.run * kStep);
     for (int tries = 0; tries < 2; tries++) {
       const sh::Vec3f side = forward_of(to + (m.slide_left ? 90.0f : -90.0f)) * step_len;
       if (step(s, m, side)) return;
@@ -1458,24 +1481,29 @@ int monster_duck_frame(std::string_view classname) {
   return -1;
 }
 
-void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed) {
+void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed, sh::Vec3f hit) {
   const int i = monster_index(s, e);
   if (i < 0 || !hunted(s, shooter)) return;
   Q2Monster& m = s.monsters[size_t(i)];
   const Q2Entity& ent = s.entities[size_t(e)];
-  if (m.dead || m.waiting || ent.gone || ent.health <= 0 || duck_of(m) == nullptr) return;
+  const bool gz = gz_dodges(s, m);  // Ground Zero's dodge (q2_gz_ai.cpp), or the base game's duck
+  if (m.dead || m.waiting || ent.gone || ent.health <= 0 || (!gz && duck_of(m) == nullptr)) return;
   // Only from in front: the shooter within the cone its facing makes (0.3 the cosine).
   sh::Vec3f to = unpack(s.players[shooter].move.origin) - ent.origin;
   if (sh::normalize(to) <= 0 || sh::dot(to, forward_of(ent.angles.y)) <= 0.3f) return;
   const double eta = double(dist - ent.maxs.x) / double(speed);
-  if (random01(s) > 0.25) return;                  // one shot in four
-  if (m.enemy == -1) found(s, m, shooter, false);  // silently: no sight sound
   bool shoot = false;
-  if (soldier(m) && skill(s) >= 1) {  // ducks, or ducks and shoots
-    m.duck_hold = s.level_time + eta + 0.3;
-    shoot = random01(s) <= (skill(s) == 1 ? 0.33 : 0.66);
+  if (gz) {
+    if (gz_dodge(s, m, shooter, hit, eta) != GzDodgeAct::duck || duck_of(m) == nullptr) return;
+  } else {
+    if (random01(s) > 0.25) return;                  // one shot in four
+    if (m.enemy == -1) found(s, m, shooter, false);  // silently: no sight sound
+    if (soldier(m) && skill(s) >= 1) {               // ducks, or ducks and shoots
+      m.duck_hold = s.level_time + eta + 0.3;
+      shoot = random01(s) <= (skill(s) == 1 ? 0.33 : 0.66);
+    }
+    if (named(m, "monster_brain")) m.duck_hold = s.level_time + eta + 0.5;
   }
-  if (named(m, "monster_brain")) m.duck_hold = s.level_time + eta + 0.5;
   if (m.duck_frame >= 0 && m.duck_shoot == shoot) return;  // already in it: goes on
   m.duck_frame = 0;
   m.duck_fresh = true;
@@ -1504,10 +1532,12 @@ void react(Q2Server& s, Q2Monster& m, int attacker) {
   const Kind& k = kind(m);
   // Shots between a boss (or a monster a spawner brought) and another start no fight.
   if (ak.ignore_shots || k.ignore_shots || a->commander >= 0 || m.commander >= 0) return;
+  if (gz_ignores_shots(s, *a) || gz_ignores_shots(s, m)) return;  // Ground Zero's flag
   const bool alike = ak.flies == k.flies && ak.swims == k.swims;
-  const bool heavy = named(*a, "monster_tank") || named(*a, "monster_tank_commander") ||
-                     named(*a, "monster_supertank") || named(*a, "monster_makron") ||
-                     named(*a, "monster_jorg");
+  const bool heavy =
+      !gz_ai(s) &&
+      (named(*a, "monster_tank") || named(*a, "monster_tank_commander") ||
+       named(*a, "monster_supertank") || named(*a, "monster_makron") || named(*a, "monster_jorg"));
   int foe = -1;
   if ((alike && std::string_view(ak.classname) != k.classname && !heavy) ||
       a->enemy == foe_of_entity(m.entity))
