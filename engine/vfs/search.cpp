@@ -394,6 +394,16 @@ bool read(const SearchPath& sp, const FileRef& file, std::vector<uint8_t>* out,
   return false;
 }
 
+bool deflated(const SearchPath& sp, const FileRef& file, std::span<const uint8_t>* out) {
+  if (file.source >= sp.sources.size()) return false;
+  const Source& s = sp.sources[file.source];
+  if (s.kind != SourceKind::zip || file.entry >= s.zip.entries.size()) return false;
+  const ZipEntry& e = s.zip.entries[file.entry];
+  if (e.method != 8 || uint64_t(e.data) + e.packed > s.bytes.size()) return false;
+  *out = std::span<const uint8_t>(s.bytes).subspan(e.data, e.packed);
+  return true;
+}
+
 std::string_view stored_name(const SearchPath& sp, const FileRef& file) {
   const Source& s = sp.sources[file.source];
   switch (s.kind) {

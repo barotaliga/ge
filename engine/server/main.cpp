@@ -347,6 +347,9 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
                    game.binary, where.c_str(), error.c_str());
       return 1;
     }
+    std::string said6;
+    open_ipv6(sock, c.ipv6, c.ip6, c.port, said6);
+    if (!said6.empty()) std::fprintf(stderr, "%s: %s", game.binary, said6.c_str());
     if (game.discovery_port) {
       gn::Address disc = bind;
       disc.port = game.discovery_port;
@@ -613,7 +616,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
                   "net_restart: open the server's socket again on net_ip and net_port",
                   [&](console::Console& cn, const console::Args&) {
                     if (c.offline) return;
-                    for (const char* name : {"net_ip", "net_port"}) {
+                    for (const char* name : {"net_ip", "net_port", "net_ip6", "net_enable_ipv6"}) {
                       console::Cvar* v = con.cvars().find(name);
                       if (v == nullptr || !v->has_latched) continue;
                       const std::string to = v->latched;
@@ -624,6 +627,7 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
                     int port = c.port;
                     std::string said;
                     const bool open = net_restart(sock, c.ip, port, good_ip, good_port, said);
+                    if (open) open_ipv6(sock, c.ipv6, c.ip6, port, said);
                     if (port != c.port)
                       if (console::Cvar* v = con.cvars().find("net_port"))
                         con.cvars().set(*v, std::to_string(port), console::Source::code);
@@ -650,6 +654,8 @@ int run(const ServerGame& game, console::Console& con, ServerConfig& c, ServerCf
           return std::string(a.family == gn::Family::ipv6 ? "Server UDP6" : "Server UDP");
         };
         if (!c.offline) sockets.emplace_back(udp(sock.local), sock.local);
+        if (!c.offline && sock.udp6.handle != -1)
+          sockets.emplace_back("Server UDP6", sock.udp6.local);
         if (tv_sock.kind != gn::TransportKind::none) sockets.emplace_back("TV UDP", tv_sock.local);
         if (game.sockets != nullptr && s.state != nullptr) game.sockets(s.state, sockets);
         std::string text = gn::showip_text(canonical, addresses, sockets);
