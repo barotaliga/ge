@@ -1208,3 +1208,25 @@ TEST(a_blow_reports_its_points_to_the_attacker_once_a_frame_and_not_his_own) {
   }
   CHECK(reports == 1);
 }
+
+TEST(dmflags_8_takes_the_harm_out_of_a_long_fall) {
+  auto a = facing(300);
+  a->r.console("dmflags 8");
+  a->p(0).move.origin[2] = static_cast<int16_t>((24 + 600) * 8);
+  run(*a, 8 * 20);
+  CHECK_MSG(a->p(0).health == 100, std::to_string(a->p(0).health));  // 83 without it
+}
+
+TEST(dmflags_32_plays_the_same_level_again_whatever_comes_next) {
+  for (const char* flags : {"0", "32"}) {
+    auto a = facing(300);
+    a->r.console(std::string("dmflags ") + flags);
+    a->r.console("sv_maplist \"hall base1\"");
+    a->r.console("fraglimit 1");
+    give(*a, sv::SqWeapon::railgun, 10);
+    a->p(1).health = 50;
+    run(*a, 8, sh::kButtonAttack);
+    CHECK(a->s().intermission_at > 0);
+    CHECK_MSG(a->s().next_map == (flags[0] == '3' ? "hall" : "base1"), a->s().next_map);
+  }
+}

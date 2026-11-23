@@ -54,13 +54,13 @@ count); `missing` not in our tree or different where it matters (ranked in its n
 | Server console commands (the operator's words) | 59 | 0 | 17 | 76 |
 | General console commands and macros the server's console has (common) | 50 | 0 | 7 | 57 |
 | Server settings (cvars) with their defaults | 113 | 0 | 57 | 170 |
-| Server-to-client messages (svc) and protocol extensions the server writes | 45 | 2 | 6 | 53 |
-| What the server accepts from clients | 44 | 1 | 12 | 57 |
+| Server-to-client messages (svc) and protocol extensions the server writes | 46 | 1 | 6 | 53 |
+| What the server accepts from clients | 45 | 0 | 12 | 57 |
 | The game library interface | 63 | 2 | 23 | 88 |
-| Messages a player sees (refusals, drops, prints), quoted exactly | 62 | 1 | 9 | 72 |
+| Messages a player sees (refusals, drops, prints), quoted exactly | 62 | 0 | 9 | 71 |
 | Messages an admin sees on the server console, quoted exactly | 30 | 0 | 6 | 36 |
-| Server features beyond single words | 43 | 1 | 11 | 55 |
-| **all** | 509 | 7 | 148 | 664 |
+| Server features beyond single words | 43 | 0 | 11 | 54 |
+| **all** | 511 | 3 | 148 | 662 |
 
 ## 1. Server console commands (the operator's words)
 
@@ -394,7 +394,7 @@ done 113, missing 0, not-taken 57
 
 ## 4. Server-to-client messages (svc) and protocol extensions the server writes
 
-done 45, missing 2, not-taken 6
+done 46, missing 1, not-taken 6
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -413,7 +413,7 @@ done 45, missing 2, not-taken 6
 | svc.configstring | message 13 | One configstring by index. | done | `games/shooters_edge/server/q2_wire.cpp`; index overflow is not an error (S14) |
 | svc.spawnbaseline | message 14 | One entity's baseline. | done | `games/shooters_edge/server/q2_wire.cpp` |
 | svc.centerprint | message 15 | Centred text. | done | `games/shooters_edge/server/q2_wire.cpp` |
-| svc.download | message 16 | A download piece with size and percent. | missing | Missing, rank 1 (gameplay, daily use): `games/shooters_edge/net/q2_net_server.cpp`: 1024-byte pieces, one a frame (S39) LIFT: Quake's downloads (`net/qw_remote.cpp`) are the place to share kinds and piece sizes. |
+| svc.download | message 16 | A download piece with size and percent. | done | games/shooters_edge/net/q2_net_download.cpp: pieces fill the packet (1386 bytes on 1390), one a `nextdl`, paced by the rate; the piece rule shared with Quake's server (classic/protocol/download_pace.hpp; Quake keeps its rate-sized pieces). Held by tests/shooters_edge_q2_download_pace_test.cpp |
 | svc.playerinfo | message 17 | The player state delta. | done | `games/shooters_edge/server/q2_wire.cpp` |
 | svc.packetentities | message 18 | The entity deltas of a frame. | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: 35 and 36 send the list with no id byte and long solids (games/shooters_edge/server/q2_wire_ext.cpp); the extended limits (512 entities and up) absent (proto.extended-limits) |
 | svc.deltapacketentities | message 19 | Unused by the server (defined only). | done | Not sent by either |
@@ -454,7 +454,7 @@ done 45, missing 2, not-taken 6
 
 ## 5. What the server accepts from clients: clc messages, string commands, out-of-band words
 
-done 44, missing 1, not-taken 12
+done 45, missing 0, not-taken 12
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -474,7 +474,7 @@ done 44, missing 1, not-taken 12
 | ucmd.disconnect | `disconnect` | Leaves; the server's own drop line is silent, the library announces it (stock: `<name> disconnected`). | done | `string_command` drops; our rules say `<name> disconnected` (`games/shooters_edge/server/q2_server.cpp`) |
 | ucmd.info | `info` | The server info to the asking client. | done | games/shooters_edge/net/q2_net_server.cpp (`player_query`, `q2_info_lines`) |
 | ucmd.sinfo | `sinfo` | The client's own connection details (the miscinfo block). | done | games/shooters_edge/net/q2_net_server.cpp (`q2_misc_lines`) |
-| ucmd.download | `download <file> [offset]` | Starts or resumes a download. | missing | Missing, rank 1 (gameplay, daily use): games/shooters_edge/net/q2_net_server.cpp (`start_download`): the name made plain, every kind, the size limit, the size-differs message; pieces of 1024 bytes (feat.dl.pieces) LIFT: Quake's server downloads (`net/qw_server.cpp`) are the place to share piece sizes. |
+| ucmd.download | `download <file> [offset]` | Starts or resumes a download. | done | games/shooters_edge/net/q2_net_download.cpp (`q2_start_download`): the name made plain, every kind, the size limit, the size-differs message, a resume at the end one empty piece at 100; the first piece owed by the command itself |
 | ucmd.download-http | `download http` | Marks the client as fetching by HTTP, so `status` shows HTTP. | done | games/shooters_edge/net/q2_net_server.cpp; shown as HTTP in `status` and `status d` |
 | ucmd.nextdl | `nextdl` | Next piece (stock clients). | done | `string_command` |
 | ucmd.stopdl | `stopdl` | Stops a download. | done | games/shooters_edge/net/q2_net_server.cpp |
@@ -618,7 +618,7 @@ done 63, missing 2, not-taken 23
 
 `<x>` marks a filled-in value. Ours quoted where it differs.
 
-done 62, missing 1, not-taken 9
+done 62, missing 0, not-taken 9
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
@@ -632,7 +632,7 @@ done 62, missing 1, not-taken 9
 | msg.oob.iplimit6 | `Too many connections from your IPv6 network.` | | done | games/shooters_edge/net/q2_net_server.cpp, engine/server/admission.cpp |
 | msg.oob.maxmsglen | `Invalid maximum message length.` | Extended connect. | done | games/shooters_edge/net/q2_net_ext.cpp (`q2_connect_ask`) |
 | msg.oob.netchan | `Invalid netchan type.` | Extended connect. | done | games/shooters_edge/net/q2_net_ext.cpp (`q2_connect_ask`) |
-| msg.oob.extended-limits | `This is a protocol limit removing enhanced server.` then `Your client version is not compatible. Make sure you are running the latest Q2PRO client version.` | Old client on an extended-limits server. | missing | S17, S18 |
+| msg.oob.extended-limits | `This is a protocol limit removing enhanced server.` then `Your client version is not compatible. Make sure you are running the latest Q2PRO client version.` | Old client on an extended-limits server. | done | games/shooters_edge/net/q2_net_ext.cpp (`q2_extended_refusal`): our words without the other program's name; the status `protocol` key 36 when extended. Held by tests/shooters_edge_q2_net_ext_test.cpp |
 | msg.oob.empty-userinfo | `Empty userinfo string.` | | done | games/shooters_edge/net/q2_net_server.cpp |
 | msg.oob.malformed-userinfo | `Malformed userinfo string.` | | done | games/shooters_edge/net/q2_net_server.cpp (`info_strict`, plugins/classic/protocol/info.hpp) |
 | msg.oob.no-name | `Please set your name before connecting.` | | done | games/shooters_edge/net/q2_net_server.cpp |
@@ -743,12 +743,12 @@ done 30, missing 0, not-taken 6
 
 ## 9. Server features beyond single words: downloads, rates, floods, bans, filters, recording, status
 
-done 43, missing 1, not-taken 11
+done 43, missing 0, not-taken 11
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | feat.dl.http | HTTP downloads | `dlserver=<url>` in the connect answer sends clients to a web copy. | done | games/shooters_edge/net/q2_net_server.cpp: the connect answer names the web copy (`sv_downloadserver`) |
-| feat.dl.pieces | piece size and pace | Pieces sized to the packet's room, several a frame within the rate (extended); 1024 a frame stock. | missing | Missing, rank 1 (gameplay, daily use): 1024 a piece (S39) LIFT: as ucmd.download. |
+| feat.dl.pieces | piece size and pace | Pieces sized to the packet's room, several a frame within the rate (extended); 1024 a frame stock. | done | classic/protocol/download_pace.hpp (`fill_room`) from games/shooters_edge/net/q2_net_download.cpp: the room less 4, one piece owed at a time, the pause of its bytes over the rate; facts porting/shooters-edge/q2-downloads-pace.md (the earlier note's "several a frame" corrected: one a `nextdl`) |
 | feat.dl.no-frames | no frames while downloading | Game frames are not sent to a downloading client. | done | games/shooters_edge/net/q2_net_server.cpp (`send_frames`): reliable data alone while a file comes down |
 | feat.dl.compressed | compressed downloads | Deflate pieces straight from compressed packs (36 minor 1021 and up, zlib, from offset 0). | done | same (games/shooters_edge/net/q2_net_server.cpp `start_download`); tests/shooters_edge_q2_net36_test.cpp |
 | feat.dl.resume | resume by offset | A download restarts at the client's offset. | done | games/shooters_edge/net/q2_net_server.cpp: from the client's offset; past the end told the size differs and refused |
