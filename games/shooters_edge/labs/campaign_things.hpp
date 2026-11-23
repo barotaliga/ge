@@ -1,16 +1,17 @@
 // What a campaign program's things do (the `se-campaign` lab's `--things`): every entity the map's
 // entity text spawned is watched by the class name the map gave it (the program may rename it: a
-// pack's func_exploder answers as func_exploder), first while the map runs on its own, then while
-// each name the map targets is used in turn (every entity carrying it has its `use` called with
-// the player as `activator`, as a trigger's targets are), and each trigger is touched by the
-// player standing in it. A thing counts once for each kind of act: moved, turned, shown, hidden,
-// animated (its frame stepped), removed, a sound started on it, an effect thrown within reach of
-// it, and, while its name was used or it was touched, the things the program made, the player
-// hurt and the player's gravity or speed changed. Then each weapon is picked up by the player and
-// its attack held. The program's faults are counted. A scripted look at every thing, not a
-// playthrough: it says the program's things work on our server, not that the map can be got through
-// (the census in `se-q1-campaign` and the campaign bot say that). Header-only, beside the labs (a
-// lab's helper never goes into a library: the labs skill).
+// pack's func_exploder answers as func_exploder). First the map runs on its own; then each weapon
+// is picked up by the player and its attack held; then each name the map targets is used in turn
+// (every entity carrying it has its `use` called with the player as `activator`, as a trigger's
+// targets are); then each trigger is touched by the player standing in it. A level change the
+// program asks for is set aside, so the look goes on to the end. A thing counts once for each kind
+// of act: moved, turned, shown, hidden, animated (its frame stepped), removed, a sound started on
+// it, an effect thrown within reach of it; and, while its name was used or it was touched, the
+// things the program made, the player hurt and the player's gravity or speed changed. The
+// program's faults are counted. A scripted look at every thing, not a playthrough: it says the
+// program's things work on our server, not that the map can be got through (the census in
+// `se-q1-campaign` and the campaign bot say that). Header-only, beside the labs (a lab's helper
+// never goes into a library: the labs skill).
 //
 // ge:summary The campaign lab's things: every thing a map placed, used and touched, what it did
 // ge:keywords lab things census use-targets triggers rotate movers effects mission-pack
