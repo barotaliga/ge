@@ -15,6 +15,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <span>
 #include <string>
@@ -37,6 +38,7 @@
 #include "shooters_edge/net/q2_game.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
+#include "shooters_edge/net/q2_remote.hpp"
 #include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
@@ -1526,6 +1528,45 @@ TEST(the_easy_jump_strafes_on_our_server_of_q2_at_its_share) {
   CHECK_MSG(eased.fastest > plain.fastest + 60,
             "eased " + std::to_string(eased.fastest) + " against " + std::to_string(plain.fastest));
   CHECK_MSG(off.fastest <= plain.fastest + 20, "share 0: " + std::to_string(off.fastest));
+}
+
+TEST(a_joined_server_hears_a_new_name_skin_hand_fov_and_msg_at_once) {
+  // Joined to our server: a rename reaches the server's own user info for the player.
+  auto r = rig({}, "broadband");
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.q2_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortQ2), cfg);
+  std::map<std::string, std::string> live{{"name", "eve"}};
+  remote.setting = [&live](const std::string& k) {
+    const auto at = live.find(k);
+    return at == live.end() ? std::string() : at->second;
+  };
+  std::vector<std::string> said;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      if (cn::remote_step(remote, 0.0131, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());
+      cn::q2_net_frame(r->server, r->now);
+    }
+  };
+  steps(200);
+  CHECK_MSG(remote.q2->stage == cn::ClientStage::active, remote.q2->refused);
+  live["name"] = "zed";
+  live["msg"] = "2";
+  steps(20);
+  bool renamed = false;
+  for (const cn::Q2NetClient& c : r->server.clients)
+    if (c.stage != cn::Q2Slot::free)
+      renamed = c.userinfo.find("name\\zed") != std::string::npos &&
+                c.userinfo.find("msg\\2") != std::string::npos;
+  CHECK(renamed);
 }
 
 TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {

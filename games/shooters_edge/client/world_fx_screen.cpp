@@ -27,6 +27,19 @@ constexpr int kContentsWater = -3, kContentsSlime = -4, kContentsLava = -5;
 // A single-player program's power bits (its `items`).
 constexpr int kItemRing = 524288, kItemShield = 1048576, kItemSuit = 2097152, kItemQuad = 4194304;
 
+// Quake II's tint is the rules' own (server/q2_blend.hpp), the damage flash apart where they kept
+// it so.
+void rules_tint(const FxScene& l, FxFrame& out) {
+  out.rules_blend = l.q2;
+  if (!l.q2) return;
+  const bool apart = l.q2_damage[3] > 0;
+  for (int k = 0; k < 4; k++) {
+    out.blend[k] = l.q2_blend[k];
+    out.apart[k] = apart ? l.q2_apart[k] : l.q2_blend[k];
+    out.damage[k] = apart ? l.q2_damage[k] : 0;
+  }
+}
+
 }  // namespace
 
 void step_screen(const FxScene& l, FxState& s, double dt, int mine, FxFrame& out) {
@@ -74,6 +87,7 @@ void step_screen(const FxScene& l, FxState& s, double dt, int mine, FxFrame& out
       screen.medium = fx::Medium::air;
     fx::screen_blend(screen, out.blend_dry);
     out.screen_dry = screen;
+    rules_tint(l, out);
     return;
   }
   if (l.own > 0 && !p.dead && p.health < s.health) {
@@ -96,8 +110,7 @@ void step_screen(const FxScene& l, FxState& s, double dt, int mine, FxFrame& out
                                      : fx::Medium::air;
   }
   fx::screen_blend(screen, out.blend);
-  if (l.q2)  // Quake II's tint is the rules' own (server/q2_blend.hpp)
-    for (int k = 0; k < 4; k++) out.blend[k] = l.q2_blend[k];
+  rules_tint(l, out);
   out.screen = screen;
   if (screen.medium == fx::Medium::lava || screen.medium == fx::Medium::slime)
     screen.medium = fx::Medium::air;

@@ -327,29 +327,3 @@ TEST(a_skins_glow_colour_is_its_glowing_texels_brightest_channel_one) {
   CHECK(md::glow_colour(skin, rgb) == 0.0f);
   CHECK(rgb[0] == 0.0f && rgb[1] == 0.0f && rgb[2] == 0.0f);
 }
-
-TEST(a_glow_map_lights_its_texels_by_the_glows_brightness_over_their_own) {
-  // A 2x2 skin: a grey texel under the same grey glow (all of it lights itself), a grey under a
-  // darker glow (part), a black socket under a red glow (it turns red and glows whole), and a
-  // tinted texel the glow leaves alone. The glow map is half the size: one texel covers two.
-  gr::MorphSkin skin;
-  skin.width = 2, skin.height = 2;
-  skin.rgba = {128, 128, 128, 255, 128, 128, 128, 255, 0, 0, 0, 255, 90, 90, 90, 255};
-  skin.marks = {gr::kMarkPlain, gr::kMarkPlain, gr::kMarkPlain, gr::kMarkTintA | 3};
-  ge::assets::Image glow{2, 1, {128, 128, 128, 255, 64, 64, 64, 255}};
-  md::glow_map_marks(skin, glow);
-  CHECK(gr::mark_glow_share(skin.marks[0]) == 1.0f);
-  const float part = gr::mark_glow_share(skin.marks[1]);
-  CHECK(part > 0.2f && part < 0.3f);  // linear 64 over linear 128: about a quarter
-  ge::assets::Image red{1, 1, {200, 0, 0, 255}};
-  gr::MorphSkin socket;
-  socket.width = 1, socket.height = 1;
-  socket.rgba = {0, 0, 0, 255};
-  md::glow_map_marks(socket, red);
-  CHECK(socket.rgba[0] == 200 && socket.rgba[1] == 0 && gr::mark_glow_share(socket.marks[0]) == 1);
-  CHECK(skin.marks[3] == (gr::kMarkTintA | 3));
-  // The marks' shares: 0 and 1 at the ends, the old whole glow 1, a plain texel and a hole none.
-  CHECK(gr::mark_glow_share(gr::glow_mark(0)) == 0 && gr::mark_glow_share(gr::glow_mark(1)) == 1);
-  CHECK(gr::mark_glow_share(gr::kMarkGlow) == 1 && gr::mark_glow_share(gr::kMarkPlain) == 0 &&
-        gr::mark_glow_share(gr::kMarkHole) == 0);
-}

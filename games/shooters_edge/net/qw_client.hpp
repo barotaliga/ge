@@ -331,6 +331,8 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   ge::hud::NetHistory net;  // each packet as it came, or not (the net graph, r_netgraph)
 
   ClientDownload dl;
+  int downloads_started =
+      0;  // the download number of the last one asked for (each starts one more)
   std::map<std::string, std::vector<uint8_t>> downloaded;
   // From a web address (classic/content/web_downloads.hpp): with the server's `*dlserver` or the
   // player's `cl_http_default_url`, the files lacked are fetched from it first, `begin` held, the
