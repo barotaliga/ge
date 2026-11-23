@@ -2,7 +2,7 @@
 // plasma beam's line, the flechette, the disruptor's bolt and its hurting, the prox mine, the tesla
 // and the A-M bomb.
 //
-// ge:summary Ground Zero's shots: chainfist, plasma beam, flechette, disruptor, prox, tesla, A-M bomb
+// ge:summary Ground Zero's shots: chainfist, plasma beam, flechette, disruptor, mines, A-M bomb
 // ge:keywords q2 ground-zero shots chainfist plasma-beam heat-beam flechette disruptor tracker
 // ge:keywords prox-mine tesla zap am-bomb nuke quake
 // ge:skill shooter
@@ -533,7 +533,7 @@ void nuke(Q2Server& s, Q2Missile& m, float gravity) {
       return;
     }
     ge::core::Rng shake =
-        ge::core::make_rng(static_cast<uint32_t>(now * 10 + 0.5) * 7919u + 0x4e4bu);
+        ge::core::make_rng(static_cast<uint32_t>(std::lround(now * 10)) * 7919u + 0x4e4bu);
     for (int i = 0; i < sh::kMaxClients; i++) {
       Q2Player& p = s.players[i];
       if (!living(s, i) || !p.on_ground) continue;

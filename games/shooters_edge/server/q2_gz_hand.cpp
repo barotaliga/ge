@@ -7,6 +7,7 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_gz_test.cpp
 #include <algorithm>
+#include <cmath>
 
 #include "core/prng.hpp"
 #include "shooters_edge/server/q2_gz.hpp"
@@ -50,7 +51,7 @@ bool chainfist_hit(int f) { return f == 8 || f == 9 || (f >= 16 && f <= 18) || f
 // first of them twice as often. Drawn off the level time, never the rules' stream.
 int next_swing(double now, int last, bool first) {
   ge::core::Rng r =
-      ge::core::make_rng(static_cast<uint32_t>(now * 10 + 0.5) * 2654435761u + 0xc4a1u);
+      ge::core::make_rng(static_cast<uint32_t>(std::lround(now * 10)) * 2654435761u + 0xc4a1u);
   const double x = ge::core::range(r, 0.0, 1.0);
   if (first) return x < 0.34 ? 0 : x < 0.67 ? 1 : 2;
   const int a = last == 0 ? 1 : 0, b = last == 2 ? 1 : 2;
