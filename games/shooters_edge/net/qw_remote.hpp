@@ -91,6 +91,7 @@
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_pingservers.hpp"
 #include "shooters_edge/net/q2_predict.hpp"
+#include "shooters_edge/net/q2_weapon.hpp"
 #include "shooters_edge/net/qw_client.hpp"
 #include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_record.hpp"
@@ -216,6 +217,7 @@ struct Remote {
   float speedjump_view = 0.5f;  // cl_speedjump_view: the share of its swing drawn
   sh::Smoothing smooth;         // the prediction's correction
   RemoteWeapon weapon;          // the held weapon predicted (qw_weapon.hpp)
+  Q2Weapon q2_weapon;           // Quake II's held weapon predicted (q2_weapon.hpp)
   // Prediction on the original move (the server's `sv_playermove original`): the stand-in
   // server, built for the level `original_level` counts and the models `original_for` points at.
   ge::classic::OriginalPrediction original;
