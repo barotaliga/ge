@@ -253,6 +253,7 @@ UnitReport run_q2_unit(const UnitOptions& opt) {
   // go that much off the way he means.
   sv::Q2ServerOptions so;
   so.clients_take_view = true;
+  so.pack = opt.pack;
   sv::RulesRunner rules = sv::q2_runner(sv::make_q2_server(so));
   rules.console("deathmatch 0");
   // A party plays co-op (the rules' `coop` 1), each bot a client of its own.

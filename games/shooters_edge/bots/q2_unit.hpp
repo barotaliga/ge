@@ -34,6 +34,7 @@
 #include "shooterbots/party.hpp"
 #include "shooterbots/way_through.hpp"
 #include "shooters_edge/bots/arsenals.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
@@ -48,8 +49,9 @@ struct UnitOptions {
   UnitMapLoader load = nullptr;
   void* load_ctx = nullptr;
   std::string first = "base1";
-  int maps = 12;             // at most this many maps entered
-  double map_seconds = 600;  // a map's time before it is called unfinished, s
+  server::Q2Pack pack = server::Q2Pack::base;  // the rules played: the base game's or a pack's
+  int maps = 12;                               // at most this many maps entered
+  double map_seconds = 600;                    // a map's time before it is called unfinished, s
   sb::AimSkill skill = sb::AimSkill::expert;
   int game_skill = 1;  // the rules' `skill`
   uint32_t seed = 1;

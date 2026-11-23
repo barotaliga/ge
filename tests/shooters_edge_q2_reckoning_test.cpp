@@ -18,12 +18,16 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/item_roles.hpp"
+#include "shooters_edge/profiles/remix.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 #include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_reckoning.hpp"
+#include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace {
@@ -385,4 +389,91 @@ TEST(the_pulsing_laser_burns_a_player_in_its_beam) {
   a->p(1).health = 500;
   run(*a, 8 * 20);
   CHECK(a->p(1).health < 500);
+}
+
+TEST(a_new_game_of_the_pack_starts_on_its_own_first_map) {
+  CHECK(sv::q2_pack_start_map(sv::q2_pack_of_folder("xatrix")) == "xswamp");
+  CHECK(sv::q2_pack_start_map(sv::q2_pack_of_folder("rogue")) == "rmine1");
+  CHECK(sv::q2_pack_start_map(sv::Q2Pack::base).empty());  // the base game's own start map
+}
+
+TEST(the_pack_s_items_play_their_parts_in_another_game) {
+  namespace pf = shooters_edge::profiles;
+  const ge::classic::GameItems& q2 = *pf::game_items("q2");
+  const ge::classic::GameItems& q1 = *pf::game_items("q1");
+  const auto as_q1 = [&](const char* c) { return ge::classic::swap_item(q2, q1, c, 0); };
+  const auto like = [&](const char* pack, const char* base) {
+    const ge::classic::ItemSwap a = as_q1(pack), b = as_q1(base);
+    return a.known && a.becomes == b.becomes && a.bits == b.bits;
+  };
+  CHECK(like("weapon_boomer", "weapon_hyperblaster"));
+  CHECK(like("weapon_phalanx", "weapon_rocketlauncher"));
+  CHECK(like("ammo_magslug", "ammo_rockets"));
+  CHECK(like("ammo_trap", "ammo_grenades"));
+  CHECK(like("item_quadfire", "item_quad"));
+  // Laid down in Quake II, the base game's own (its spawns are the base game's).
+  CHECK(ge::classic::swap_item(q2, q2, "weapon_boomer", 0).becomes == "weapon_hyperblaster");
+}
+
+TEST(a_game_of_the_pack_saved_and_loaded_plays_on_as_the_game_never_saved) {
+  const auto pack_game = [] {
+    auto a = std::make_unique<Arena>();
+    sv::Q2ServerOptions o;
+    o.pack = kPack;
+    a->r = sv::q2_runner(sv::make_q2_server(o));
+    a->r.console("deathmatch 0");
+    return a;
+  };
+  sv::MapSpec map;
+  map.name = "xswamp";
+  map.brushes =
+      hall({entity({{"classname", "rotating_light"},
+                    {"origin", "0 0 200"},
+                    {"spawnflags", "2"},
+                    {"targetname", "lamp"}}),
+            entity({{"classname", "func_object_repair"}, {"origin", "200 100 24"}}),
+            entity({{"classname", "ammo_magslug"}, {"origin", "400 0 24"}}),
+            entity({{"classname", "monster_soldier"}, {"origin", "700 0 24"}, {"angle", "180"}})});
+  auto g = pack_game();
+  std::string error;
+  CHECK_MSG(g->r.start(map, error), error);
+  g->r.connect(0, "Ana", false, false);
+  sh::Packet idle[1];
+  const auto tick = [&idle](Arena& a, uint8_t buttons) {
+    idle[0].client = 0;
+    idle[0].sequence = ++a.sequence;
+    sh::MoveCmd cmd;
+    cmd.msec = 13;
+    cmd.buttons = buttons;
+    idle[0].cmds[0] = idle[0].cmds[1] = idle[0].cmds[2] = cmd;
+    a.r.frame(idle, 1);
+  };
+  for (int i = 0; i < 80; i++) tick(*g, 0);
+  sv::SqBody& b = g->p(0).body;
+  b.counts[sv::sq_item("ammo_trap", kPack)] = 2;
+  b.ammo[int(SqAmmo::traps)] = 2;
+  b.counts[sv::sq_item("weapon_phalanx", kPack)] = 1;
+  b.ammo[int(SqAmmo::magslugs)] = 7;
+  g->p(0).dual_fire_until = g->s().level_time + 20;
+  g->r.client_command(0, "use trap");
+  for (int i = 0; i < 100; i++) tick(*g, 0);
+  for (int i = 0; i < 8 * 12; i++) tick(*g, sh::kButtonAttack);
+  for (int i = 0; i < 8 * 15; i++) tick(*g, 0);  // thrown, landed, opening
+  CHECK(live(g->s(), sv::SqShot::trap) == 1);
+  std::vector<uint8_t> file;
+  CHECK_MSG(sv::q2_save(g->s(), file, error), error);
+  auto h = pack_game();
+  CHECK_MSG(sv::q2_load(h->r, map, file, "test", error), error);
+  h->sequence = g->sequence;
+  CHECK_MSG(sv::q2_digest(h->s()) == sv::q2_digest(g->s()), "the loaded game differs");
+  CHECK(live(h->s(), sv::SqShot::trap) == 1);
+  CHECK(h->p(0).body.ammo[int(SqAmmo::magslugs)] == 7 && h->p(0).dual_fire_until > 0);
+  for (int k = 0; k < 8 * 60; k++) {
+    tick(*g, 0);
+    tick(*h, 0);
+    if (sv::q2_digest(h->s()) != sv::q2_digest(g->s())) {
+      CHECK_MSG(false, "the loaded game went its own way at tick " + std::to_string(k));
+      break;
+    }
+  }
 }

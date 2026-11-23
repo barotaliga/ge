@@ -111,8 +111,9 @@ inline constexpr ItemSpawn kQ1Spawns[] = {
     {ItemRole::stealth, "item_artifact_invisibility", 0},
 };
 
-// Quake II's items. Its stimpack and box of ten both lay down as the other game's small health,
-// its adrenaline and the ancient head as a mega health, its power armours by the armour they match.
+// Quake II's items (and The Reckoning's, read only). Its stimpack and box of ten both lay down as
+// the other game's small health, its adrenaline and the ancient head as a mega health, its power
+// armours by the armour they match.
 inline constexpr ItemReading kQ2Reads[] = {
     {"weapon_shotgun", 0, ItemRole::scatter},
     {"weapon_supershotgun", 0, ItemRole::scatter_heavy},
@@ -148,6 +149,14 @@ inline constexpr ItemReading kQ2Reads[] = {
     {"item_enviro", 0, ItemRole::protect},
     {"item_breather", 0, ItemRole::protect},
     {"item_silencer", 0, ItemRole::quiet},
+    // The Reckoning's own (a map of the pack played in another game): the Ionripper is the rapid
+    // energy weapon, the Phalanx the launcher (its blasts), its mag slugs the launcher's
+    // ammunition, the traps thrown like grenades, DualFire the damage powerup.
+    {"weapon_boomer", 0, ItemRole::energy},
+    {"weapon_phalanx", 0, ItemRole::launcher},
+    {"ammo_magslug", 0, ItemRole::ammo_explosive},
+    {"ammo_trap", 0, ItemRole::ammo_lobber},
+    {"item_quadfire", 0, ItemRole::damage},
 };
 // Quake's stealth lays down as Quake II's adrenaline: Quake II has none.
 inline constexpr ItemSpawn kQ2Spawns[] = {
