@@ -174,6 +174,19 @@ TEST(beam_lights_lie_along_it_and_at_the_hit) {
   CHECK(std::fabs(hit.candela - l.hit_cd * level) < 1e-3f * l.hit_cd);
 }
 
+TEST(beam_burns_finish_a_line_at_its_face_s_edge_however_short) {
+  const r::BeamLook l = look_of("arc");
+  r::BeamShot s = a_shot();
+  r::BurnTrail trail;
+  r::BeamBurn burn;
+  CHECK(!r::beam_burns(l, s, 1.0, trail, burn));  // the line starts
+  s.to[0] += 0.1;                                 // short of a piece
+  CHECK(!r::beam_burns(l, s, 1.01, trail, burn));
+  CHECK(r::beam_burns(l, s, 1.01, trail, burn, true));  // the edge: laid on to it
+  CHECK(std::fabs(burn.length_m - (0.1 + l.line_m)) < 1e-6);
+  CHECK(!r::beam_burns(l, s, 1.01, trail, burn, true));  // and no further
+}
+
 TEST(beam_burns_trace_a_line_melt_where_held_and_stop_after_release) {
   const r::BeamLook l = look_of("arc");
   r::BeamShot s = a_shot();

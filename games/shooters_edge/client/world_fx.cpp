@@ -12,6 +12,7 @@
 
 #include "brush/light_probe.hpp"
 #include "brush/map.hpp"
+#include "camera/pose.hpp"
 #include "classicenhance/replace.hpp"
 #include "classicenhance/weapons.hpp"
 #include "core/math.hpp"
@@ -470,6 +471,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.gibs_hidden = picture.gib_filter || !picture.gibs;  // cl_gibfilter, Quake II's cl_gibs
   s.muzzle_flash = picture.muzzle_flash;
   s.q2 = picture.q2fx;  // Quake II's cl_disable_particles, cl_dlight_hacks ...
+  s.fake_shaft = std::clamp(picture.fake_shaft, 0.0, 1.0);
   if (look::look_of(picture) == look::Look::classic) return s;
   s.muzzles = picture.ce.muzzles;
   const ge::classicenhance::Replacement* blast =
@@ -769,6 +771,61 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   fx_scene(l, v, scene);
   step_fx(scene, s, t, dt, out);
 }
+
+namespace {
+
+// The player's own arc gun's beam, turned to the aim (cl_fakeshaft): not the grappling beam, not
+// a rail's or a bolt's streak, and only with a map to trace and a player to be.
+bool turned_own(const FxScene& l, const FxState& s, const HeldBeam& b) {
+  return s.on.fake_shaft > 0 && l.own > 0 && b.entity == l.me.entity && l.map != nullptr &&
+         !b.grapple && !b.rail && !b.plasma && !b.q2_trail && !b.laser && !b.across;
+}
+
+// A map point (units) from an engine one (metres), and a map direction from an engine one.
+sh::Vec3f map_point(const ge::camera::Vec3& e) {
+  const double u = 1 / ge::brush::kUnitM;
+  return {static_cast<float>(e.x * u), static_cast<float>(e.z * u), static_cast<float>(e.y * u)};
+}
+
+// The edge `b` crossed since last frame, now pointing along `dir` from `from` (map units): kept in
+// `b.edges` for its burns (own_beam.hpp's `beam_edge`).
+void cross_edge(const FxScene& l, HeldBeam& b, const sh::Vec3f& from, const sh::Vec3f& dir) {
+  b.edges = 0;
+  sh::Vec3f at[2], n[2];
+  if (b.was && l.map != nullptr &&
+      beam_edge(l.map, from, b.was_dir, dir, l.bodies, b.entity, at, n) == 2) {
+    for (int i = 0; i < 2; ++i) {
+      put(engine_point(at[i]), b.edge_at[i]);
+      engine_dir(n[i], b.edge_n[i]);
+    }
+    b.edges = 2;
+  }
+  b.was_dir = dir;
+  b.was = true;
+}
+
+// `b` traced again from this frame's eye along its aim (`own_beam`), its sparks thrown at the new
+// end when the server's message owed them.
+void turn_own(const FxScene& l, FxState& s, HeldBeam& b, FxFrame& out) {
+  const ge::camera::Vec3 f = ge::camera::look_forward(l.pose.yaw, l.pose.pitch);
+  const sh::Vec3f view = {static_cast<float>(f.x), static_cast<float>(f.z),
+                          static_cast<float>(f.y)};
+  sh::Vec3f from, to, n;
+  if (!own_beam(l.map, map_point(l.pose.eye), view, b.server_from, b.server_to, s.on.fake_shaft,
+                l.bodies, l.own, from, to, n))
+    return;
+  cross_edge(l, b, from, {to.x - from.x, to.y - from.y, to.z - from.z});
+  b.map_from = from;
+  b.map_to = to;
+  put(engine_point(from), b.shot.from);
+  put(engine_point(to), b.shot.to);
+  engine_dir(n, b.shot.normal);
+  if (!b.sparks_due) return;
+  b.sparks_due = false;
+  if (s.on.beams) fx::bolt_hit(b.shot.to, b.shot.normal, s.seed++, &out.births);
+}
+
+}  // namespace
 
 void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   out.models = l.models;
@@ -1433,7 +1490,16 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         // The classic roots the player's own bolt at his origin, under the gun.
         held->map_from = e.entity == me.entity ? me.origin : e.at;
         held->map_to = e.end;
-        if (s.on.beams) fx::bolt_hit(p, normal, s.seed++, &out.births);
+        held->server_from = e.at;
+        held->server_to = e.end;
+        held->grapple = e.code == 13;
+        // The own beam turned to the aim (cl_fakeshaft) sparks where it is drawn, below.
+        if (turned_own(l, s, *held)) {
+          held->sparks_due = true;
+        } else {
+          cross_edge(l, *held, e.at, {e.end.x - e.at.x, e.end.y - e.at.y, e.end.z - e.at.z});
+          if (s.on.beams) fx::bolt_hit(p, normal, s.seed++, &out.births);
+        }
         break;
       }
       case EffectKind::explosion:  // the mission packs' blast in its colours (12); the rest above
@@ -1624,6 +1690,9 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
                                          : fx::bolt_look().release_s;
     return b.shot.end_s >= 0 && t > b.shot.end_s + release;
   });
+  // The own beam turned to the aim, traced again from this frame's eye (cl_fakeshaft).
+  for (HeldBeam& b : s.beams)
+    if (b.shot.end_s < 0 && turned_own(l, s, b)) turn_own(l, s, b, out);
   if (!l.beams.empty())
     laser_beams(l.beams, s.seed++, s.palette, t, out.beams);  // seed: lasers only
   ge::core::Rng roll = ge::core::make_rng(s.seed++);          // the classic bolt's segments' roll
@@ -1646,7 +1715,17 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     if (s.on.beams) {
       // Its burns where it lands: the line it traces, a few pieces to fill a fast sweep, and the
       // melt where it stays.
+      // An edge crossed first: the line laid up to it on the face it left, then started just past
+      // it on the next.
       ge::render::BeamBurn burn;
+      for (int k = 0; s.on.decals && k < b.edges; ++k) {
+        ge::render::BeamShot edge = b.shot;
+        for (int c = 0; c < 3; ++c) edge.to[c] = b.edge_at[k][c], edge.normal[c] = b.edge_n[k][c];
+        for (int i = 0;
+             i < 6 && ge::render::beam_burns(fx::bolt_look(), edge, t, b.trail, burn, k == 0); ++i)
+          beam_mark(s, b, burn);
+      }
+      b.edges = 0;
       for (int i = 0; s.on.decals && i < 6 &&
                       ge::render::beam_burns(fx::bolt_look(), b.shot, t, b.trail, burn);
            ++i)
