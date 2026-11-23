@@ -81,6 +81,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `rocket-jump-helper.md` | The classic match mod's rocket jump helpers (impulses 164 and 156): what they do in one command, their failures and settings, from a clean-room reader (M18e) |
 | `jump-walk-death.md` | The jump's and the swimmer's sounds, landing sounds, walking (there is none at the modern defaults: `+speed` is a run key), the view weapon and eye at death |
 | `q2.md` | Quake II (M18t2, for M18t3 and M18t4): the index of its notes, the game's shape, the demo pack measured, the game library's calls as our rules runner's |
+| `q2-sound-facts.md` | Quake II's client sound on upstream Q2PRO: the `al_` settings and the OpenAL path (distance, panning, the underwater filter, merged loops), its printed lines, `s_enable` and the restart, footsteps by surface, `ogg play` by name, when the music stops, the sound page |
 | `q2-formats.md` | Quake II's files: the search order, contents and surface flags, the collision lumps, WAL, PCX and the palette, MD2, SP2, the sky, player models, skins and sounds |
 | `arena-hybrid.md` | The hybrid-engine arena shooter (2017): its engine, its pack files as community notes describe them (encrypted directory), and why no reader is built |
 | `sector-family.md` | The sector-based sprite shooter and Quake II (clean-room facts for `docs/porting-sprite-games.md`): the move, blocking, auto-aim, line and sector specials, sight and sound, randomness, demos, lockstep play, drawing rules, the held weapon, things and monsters |

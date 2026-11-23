@@ -367,6 +367,8 @@ void run_stuffed(Q2ClientEnd& c) {
           start_fetch(c, begin);
         else
           q2_client_command(c, begin);
+        c.no_footsteps_told = -1;  // told again with each `begin`
+        q2_client_settings(c);
         c.signon_steps++;
       } else if (w[0] == "reconnect") {
         c.stage = ClientStage::signon;
@@ -604,6 +606,15 @@ void q2_client_command(Q2ClientEnd& c, const std::string& line) {
   b.insert(b.end(), line.begin(), line.end());
   b.push_back(0);
   channel_reliable(c.ch, b.data(), b.size());
+}
+
+void q2_client_settings(Q2ClientEnd& c) {
+  if (c.protocol != kQ2Protocol36) return;
+  if (c.stage != ClientStage::signon && c.stage != ClientStage::active) return;
+  const int nf = c.cfg.no_footsteps ? 1 : 0;
+  if (nf == c.no_footsteps_told) return;
+  c.no_footsteps_told = nf;
+  send_setting(c, kQ2SetNoFootsteps, nf);
 }
 
 void q2_client_userinfo(Q2ClientEnd& c) {

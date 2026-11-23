@@ -213,3 +213,19 @@ TEST(a_recorded_frame_is_drawn_between_its_changes) {
   cl::track_frame(tr, 5, 0.5, from, f);  // a seek back: nothing to come from
   CHECK(from == -1 && f == 1);
 }
+
+TEST(a_held_weapons_frame_is_blended_over_a_fixed_tenth_however_its_updates_come) {
+  // A recording written 30 times a second brings a nailgun's frames 0.067 or 0.1 s apart: each
+  // change still takes the classic tenth of a second, so the barrels turn at one speed.
+  cl::FrameTrack tr;
+  int from = 0;
+  float f = 0;
+  cl::track_frame(tr, 1, 1.0, from, f, cl::kFrameSpan);
+  cl::track_frame(tr, 2, 1.0667, from, f, cl::kFrameSpan);
+  cl::track_frame(tr, 3, 1.1333, from, f, cl::kFrameSpan);  // a measured pace would say 0.067 s
+  cl::track_frame(tr, 3, 1.1833, from, f, cl::kFrameSpan);
+  CHECK(from == 2 && near(f, 0.5f));
+  cl::track_frame(tr, 4, 1.2333, from, f, cl::kFrameSpan);
+  cl::track_frame(tr, 4, 1.2833, from, f, cl::kFrameSpan);
+  CHECK(from == 3 && near(f, 0.5f));
+}

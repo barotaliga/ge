@@ -10,8 +10,10 @@
 // - THE PLACE: the eye's look, the speed along the ground and whether the player stands on it (the
 //   stride's clock runs while he walks), from the view and the player's state.
 // - A RECORDING OR A JOINED SERVER (`step_demo_held`): a classic set's frame is the one the server
-//   sent (the player's weapon frame), drawn from the last over the time its frames last
-//   (model_lerp.hpp's `track_frame`) under `ViewSettings::lerp`; a frame the model lacks is rest.
+//   sent (the player's weapon frame), drawn from the last over a classic frame's fixed tenth of
+//   a second (model_lerp.hpp's `track_frame` with `kFrameSpan`, never the measured gap between
+//   updates, which a recording's own rate makes uneven) under `ViewSettings::lerp`; a frame the
+//   model lacks is rest. Quake II's hand is drawn the same way.
 //
 // ge:summary The weapon in hand: whose set, which one, a shot, the look, the stride
 // ge:keywords held-weapon hand step_held attack_finished shot weapon-switch viewmodel stride

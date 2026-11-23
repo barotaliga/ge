@@ -824,6 +824,10 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
           stand_in_skin(morphs.back().skin, opened.skins[s]);
           any_stand_in = true;
         }
+        if (s < opened.glows.size() && opened.glows[s].width > 0) {
+          models::glow_map_marks(morphs.back().skin, opened.glows[s]);
+          k.glow_map = true;
+        }
       }
       if (!load.cache.empty() && !model.skins.empty() && !any_stand_in) {
         std::vector<ge::assets::Image> big;
@@ -1480,7 +1484,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     const double sl = std::sqrt(sd[0] * sd[0] + sd[1] * sd[1] + sd[2] * sd[2]) + 1e-9;
     for (int c = 0; c < 3; c++) g.shade_dir[c] = float(sd[c] / sl);
     g.outdoor = 0;
-    g.glow = 1;
+    g.glow = k.glow_map ? in_place.glow_map : 1;
     g.smooth = smooth;
     g.light_in_white = true;
     PowerIn power_in{.q2 = q2,

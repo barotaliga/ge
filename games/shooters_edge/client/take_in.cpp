@@ -160,6 +160,10 @@ void add_take_in_commands(ge::console::Console& con, std::string* ask, const std
         track = content::q2_remap_track(*game, track);
       return content::track_path(*basedir, track);
     };
+  if (music != nullptr)  // a track named: `ogg play <name>`, a server's music by text
+    music->file_of = [basedir](const std::string& name) {
+      return content::music_file(*basedir, name);
+    };
   using Con = ge::console::Console;
   using CArgs = ge::console::Args;
   con.add_command("basedir", "basedir <folder>: load your game's install (the folder holding id1)",
@@ -193,7 +197,10 @@ bool take_in_ask(std::string* ask, const std::string& root, std::string* error,
 }
 
 void demo_music(ge::audio::MusicConsole& music, const DemoState& s) {
-  if (s.cdtrack >= 0) ge::audio::play_level_music(music, s.cdtrack);
+  if (!s.cdname.empty())
+    ge::audio::play_level_named(music, s.cdname);
+  else if (s.cdtrack >= 0)
+    ge::audio::play_level_music(music, s.cdtrack);
 }
 
 void level_music(ge::audio::MusicConsole& music, std::string_view entities) {
