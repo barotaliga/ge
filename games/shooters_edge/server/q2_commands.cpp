@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -451,6 +452,39 @@ void commands_cvars(Q2Server& s) {
                .help = "Whether a match's warmup (sv_lobby) spawns every player armed: every "
                        "weapon but the BFG10K, full ammunition and body armour.",
                .values = "0: the usual spawn; 1: armed (the default, only in a lobby's warmup)"});
+  // The match's teams (net/q2_match.hpp, with `dmflags` 64 or 128): names, looks, sizes, the
+  // captain's pick, and the referee's password.
+  for (const auto& [name, fallback, help] :
+       {std::tuple{"g_team_a_name", "Hometeam", "The first team's name in a team match."},
+        std::tuple{"g_team_b_name", "Visitors", "The second team's name in a team match."},
+        std::tuple{"g_team_a_skin", "male/grunt",
+                   "The look every player of the first team wears in a team match (model/skin)."},
+        std::tuple{"g_team_b_skin", "female/athena",
+                   "The look every player of the second team wears in a team match (model/skin)."},
+        std::tuple{"g_admin_password", "",
+                   "The password a player gives in the game (referee or admin) to run the match "
+                   "without a vote; empty, nobody can."}})
+    s.cvars.add({.name = name,
+                 .fallback = fallback,
+                 .flags = con::kServer,
+                 .help = help,
+                 .kind = con::CvarKind::text});
+  s.cvars.add({.name = "g_max_players_per_team",
+               .fallback = "4",
+               .flags = con::kServer,
+               .help = "The most players a team takes in a team match.",
+               .values = "0: no limit; N: N players (4, the default)"});
+  s.cvars.add({.name = "g_tdm_allow_pick",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether a team's captain may put a spectator on the team at once (pick); "
+                       "else a pick is an invite the player accepts.",
+               .values = "0: an invite (the default); 1: at once"});
+  s.cvars.add({.name = "g_locked_names",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether the team names are fixed, so captains cannot rename their teams.",
+               .values = "0: captains rename them (the default); 1: fixed"});
   s.cvars.add({.name = "aimfix",
                .fallback = "0",
                .flags = con::kServer,

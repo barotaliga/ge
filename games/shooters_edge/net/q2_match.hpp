@@ -22,12 +22,29 @@
 //
 // OVERTIME (`sv_overtime`, `sv_overtime_minutes`): a match tied at its time limit plays on.
 //
+// TEAMS (`dmflags` 64 or 128 with `sv_lobby`): the lobby's two teams (engine/server/captains.hpp),
+// named by `g_team_a_name` and `g_team_b_name`, each player wearing his team's look
+// (`g_team_a_skin`, `g_team_b_skin`), at most `g_max_players_per_team` a team. `team` and `join`
+// move a player (`1`, `a`, `2`, `b` or a team's name); captains lock, rename, invite, pick
+// (`g_tdm_allow_pick`) and remove. The teams' scores are their players' frags, those who left
+// included; overtime compares the teams, and the match's end says who won by how much.
+//
+// THE REFEREE (engine/server/referee.hpp): `referee` (or `admin`) and `g_admin_password` let a
+// player end the match, set the time limit, change the map, kick, ban, mute and shuffle the teams
+// without a vote. A muted player's chat is held back.
+//
+// STATS (server/q2_stats.hpp): counted by the rules while the match is on; `stats [player]` shows
+// the table (another team's only once the match is over), `teamstats` both teams' totals, and
+// `laststats` (`oldstats`) the last match's.
+//
 // THE PHASE is in the rules' local info (`ge_phase`) for the rules to read (the warmup's loadout,
 // q2_server.hpp) and in the server's `status` text as `match` (Standby, Countdown, In progress).
 //
 // ge:summary Our Quake II server's match: lobby, ready, countdown, timeouts, overtime, prewar, lock
 // ge:keywords q2-match q2_match lobby ready notready unready countdown warmup timeout timein
 // ge:keywords calltime hold overtime sudden-death sv_lobby sv_prewar sv_lockjoin match-phase
+// ge:keywords tdm team-match captains referee g_admin_password g_team_a_name g_team_a_skin
+// ge:keywords g_max_players_per_team g_tdm_allow_pick stats teamstats laststats team-score
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_match_test.cpp
 #pragma once
@@ -36,16 +53,19 @@
 #include <cstdint>
 #include <string>
 
+#include "server/captains.hpp"
 #include "server/match.hpp"
+#include "server/referee.hpp"
 #include "server/server.hpp"
 #include "server/timeout.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/match_rules.hpp"
+#include "shooters_edge/server/q2_stats.hpp"
 
 namespace shooters_edge::net {
 
-struct Q2Match {
+struct Q2Match {  // NOLINT(clang-analyzer-optin.performance.Padding): one a server, by name
   Q2NetServer* net = nullptr;
   sv::RulesRunner* rules = nullptr;
   bool on = false;  // sv_lobby
@@ -62,6 +82,16 @@ struct Q2Match {
   int64_t deaths_left = 0;             // of players who left the match
   uint32_t held_out = 0;               // the slots kept on the sidelines (sv_lockjoin)
   std::string map;                     // the map the countdown restarts
+  ge::server::Teams teams;
+  ge::server::Referee referee;
+  bool teams_on = false;                         // a team match (`dmflags` 64 or 128)
+  std::array<std::string, 2> team_names_set;     // the settings' names last read
+  std::array<int8_t, 32> joining{};              // the team an invite or a pick seats a slot on
+  std::array<int64_t, 32> frags_seen{};          // a seat's frags at the last frame
+  std::array<int64_t, 2> team_left{};            // the frags of players who left each team
+  std::array<sv::Q2SlotStats, 32> last_stats{};  // the last match's (`laststats`)
+  std::array<std::string, 32> last_names{};
+  bool has_last = false;
   bool (*prior)(void* ctx, int slot, const std::string& line) = nullptr;
   void* prior_ctx = nullptr;
 };

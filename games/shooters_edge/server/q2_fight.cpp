@@ -441,6 +441,7 @@ void hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int 
   }
   if (damage - saved > 0) mark_hit(s, p, 1, damage - saved);
   fight_dealt(s, attacker, target + 1, damage);
+  stats_blow(s, attacker, target, weapon, damage);
   p.health -= float(damage - saved);
   if (p.health <= 0) {
     p.health = std::max(p.health, -999.0f);
@@ -934,6 +935,7 @@ void fire(Q2Server& s, int slot, int shots) {
   if (p.silencer_shots > 0) p.silencer_shots--;
   if (quad > 1) body_sound(s, slot, kItemChannel, "items/damage3.wav");
   weapon_kick(s, slot, w, view_forward);
+  stats_shot(s, slot, w, r.shot == SqShot::bullet ? shots : 1);
   switch (r.shot) {
     case SqShot::pellets:
       if (w == int(SqWeapon::super_shotgun)) {
@@ -1489,6 +1491,7 @@ void fight_kill(Q2Server& s, int slot, int killer, int weapon) {
     else
       line = sq_obituary(victim, other ? name_of(s, killer) : std::string(), killer == slot, weapon,
                          s.blow_how, gender, &by_killer);
+    stats_death(s, slot, other ? killer : -1, weapon, other && fight_teammates(s, killer, slot));
     if (deathmatch(s) && !fight_midair(s)) {
       if (by_killer)
         s.players[killer].frags += fight_teammates(s, killer, slot) ? -1.0f : 1.0f;

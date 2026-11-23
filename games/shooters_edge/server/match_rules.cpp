@@ -129,6 +129,14 @@ void timeout_hold(const gsv::TimeoutBook& b, RulesRunner& rules, bool& held) {
   held = want;
 }
 
+std::string team_result(const std::string& a_name, int64_t a, const std::string& b_name,
+                        int64_t b) {
+  if (a == b) return "Tie game, " + std::to_string(a) + " to " + std::to_string(b) + ".";
+  const bool first = a > b;
+  return (first ? a_name : b_name) + " wins, " + std::to_string(first ? a : b) + " to " +
+         std::to_string(first ? b : a) + ".";
+}
+
 const char* phase_status(gsv::LobbyPhase p) {
   return p == gsv::LobbyPhase::warmup      ? "Standby"
          : p == gsv::LobbyPhase::countdown ? "Countdown"

@@ -27,6 +27,8 @@
 //
 // THE TIMEOUT'S PAUSE (`timeout_hold`): the rules paused while engine/server/timeout.hpp says so.
 //
+// THE TEAMS' RESULT (`team_result`): who won a team match and by how much, or the tie.
+//
 // THE PHASE IN THE SERVER'S WORDS (`phase_status`): Standby, Countdown, In progress, End, the
 // `status` a match server's info carries (a recording starts on it).
 //
@@ -34,6 +36,7 @@
 // ge:keywords match-rules overtime sv_overtime sv_overtime_minutes sudden-death golden-frag
 // ge:keywords extra-time overtime_step sv_prewar prewar_buttons prewar_jump_held sv_lockjoin
 // ge:keywords lock_refusal warmup-hold warmup_hold timeout_hold phase_status lobby_rules
+// ge:keywords team_result team-result
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_match_test.cpp
 #pragma once
@@ -88,6 +91,9 @@ void warmup_hold(WarmupHold& h, const RulesRunner& rules, bool match);
 
 // The rules paused or let go as the timeout says (`held`: paused by it now).
 void timeout_hold(const gsv::TimeoutBook& b, RulesRunner& rules, bool& held);
+
+// A team match's end in words: "<team> wins, 12 to 7." or "Tie game, 7 to 7."
+std::string team_result(const std::string& a_name, int64_t a, const std::string& b_name, int64_t b);
 
 // The phase as a match server's `status` says it.
 const char* phase_status(gsv::LobbyPhase p);

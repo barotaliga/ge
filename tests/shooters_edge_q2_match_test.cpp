@@ -27,6 +27,7 @@
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
+#include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -318,4 +319,105 @@ TEST(the_warmup_spawns_every_player_armed) {
   m->s().localinfo.emplace_back("ge_phase", "match");
   m->r.connect(0, "ana", false, false);
   CHECK(m->s().players[0].body.counts[sv::sq_item("weapon_rocketlauncher")] == 0);
+}
+
+// ---- Teams, the referee and the stats ----
+
+TEST(a_team_match_seats_captains_dresses_the_teams_and_names_the_winner) {
+  gs::ServerConfig c = lobby_config();
+  auto r = rig(c);
+  r->rules.console("dmflags 64");  // teams by skin: a team match
+  r->rules.console("g_team_a_name Wolves");
+  cn::Q2ClientEnd& a = join(*r, "ana");
+  cn::Q2ClientEnd& b = join(*r, "ben");
+  cn::Q2ClientEnd& d = join(*r, "dee");
+  run(*r, 200);
+  CHECK(r->match.teams_on);
+  CHECK(r->match.lobby.seats[0].team == gs::Team::red &&
+        r->match.lobby.seats[1].team == gs::Team::blue);
+  CHECK(heard(b, "ana became captain of 'Wolves'"));
+  CHECK(heard(a, "ben became captain of 'Visitors'"));
+  const auto skin = [&](int slot) {
+    for (const auto& [k, v] : r->rules->clients[slot].userinfo)
+      if (k == "skin") return v;
+    return std::string();
+  };
+  CHECK_MSG(skin(0) == "male/grunt" && skin(1) == "female/athena", skin(0) + " " + skin(1));
+  CHECK(sv::fight_teammates(*sv::q2_of(r->rules), 0, 2));  // dee joined the smaller: the Wolves
+  cn::q2_client_command(b, "lock");
+  run(*r, 20);
+  cn::q2_client_command(d, "team 2");
+  run(*r, 20);
+  CHECK(heard(d, "Team 'Visitors' is locked."));
+  CHECK(r->match.lobby.seats[2].team == gs::Team::red);
+  for (cn::Q2ClientEnd* e : {&a, &b, &d}) cn::q2_client_command(*e, "ready");
+  run(*r, 200);
+  CHECK(r->match.lobby.phase == gs::LobbyPhase::match);
+  sv::Q2Server& s = *sv::q2_of(r->rules);
+  s.players[0].frags = 2;
+  s.players[2].frags = 1;
+  s.players[1].frags = 4;
+  run(*r, 2);
+  cn::q2_match_map_change(r->match, false, 0);
+  run(*r, 20);
+  CHECK(heard(a, "Visitors wins, 4 to 3."));
+  CHECK(!r->match.teams.side[1].locked);  // the locks end with the match
+}
+
+TEST(a_referee_sets_the_time_limit_mutes_and_kicks_without_a_vote) {
+  auto r = rig(lobby_config());
+  r->rules.console("g_admin_password secret");
+  r->rules.console("timelimit 20");
+  cn::Q2ClientEnd& a = join(*r, "ana");
+  cn::Q2ClientEnd& b = join(*r, "ben");
+  run(*r, 200);
+  cn::q2_client_command(b, "tl 5");
+  run(*r, 20);
+  CHECK(heard(b, "Only a referee can do that."));
+  cn::q2_client_command(a, "referee secret");
+  run(*r, 20);
+  CHECK(heard(b, "ana became a referee."));
+  cn::q2_client_command(a, "tl 15");
+  run(*r, 20);
+  CHECK(heard(b, "Time limit set to 15."));
+  CHECK(r->match.hold.timelimit == "15");  // the warmup holds it for the match
+  cn::q2_client_command(a, "mute ben");
+  run(*r, 20);
+  const size_t before = a.prints.size();
+  cn::q2_client_command(b, "say hello");
+  run(*r, 20);
+  CHECK(heard(b, "You are muted for 5 minutes more."));
+  CHECK(std::none_of(a.prints.begin() + static_cast<ptrdiff_t>(before), a.prints.end(),
+                     [](const std::string& p) { return p.find("hello") != std::string::npos; }));
+  cn::q2_client_command(a, "kick ben");
+  run(*r, 60);
+  CHECK(heard(a, "ben was kicked by ana."));
+  CHECK(r->server.clients[1].stage != cn::Q2Slot::active);
+}
+
+TEST(the_stats_count_a_match_by_weapon_and_round_accuracy_up) {
+  auto a = arena({});
+  sv::Q2Server& s = a->s();
+  sv::stats_shot(s, 0, int(sv::SqWeapon::rocket_launcher), 1);
+  CHECK(!s.stats.slot[0].counted);  // a warmup counts nothing
+  s.stats.on = true;
+  const int rl = int(sv::SqWeapon::rocket_launcher), rg = int(sv::SqWeapon::railgun);
+  sv::stats_shot(s, 0, rl, 3);
+  sv::stats_blow(s, 0, 1, rl, 80);  // one rocket's blast on two players: one hit
+  sv::stats_blow(s, 0, 2, rl, 40);
+  sv::stats_shot(s, 0, rg, 1);
+  sv::stats_blow(s, 0, 1, rg, 100);  // a slug through two players: two hits
+  sv::stats_blow(s, 0, 2, rg, 100);
+  sv::stats_death(s, 1, 0, rg, false);
+  sv::stats_death(s, 2, 2, -1, false);
+  const sv::Q2SlotStats& p = s.stats.slot[0];
+  CHECK(p.weapon[size_t(rl)].hits == 1 && p.weapon[size_t(rl)].shots == 3);
+  CHECK(sv::stats_accuracy(p.weapon[size_t(rl)]) == 34);  // a third, rounded up
+  CHECK(p.weapon[size_t(rg)].hits == 2 && p.weapon[size_t(rg)].kills == 1);
+  CHECK(p.dealt == 320 && s.stats.slot[1].received == 180);
+  CHECK(s.stats.slot[2].suicides == 1 && s.stats.slot[1].weapon[size_t(rg)].deaths == 1);
+  const std::string table = sv::stats_table(p, "ana");
+  CHECK_MSG(table.starts_with("Stats for ana:\n") && table.find("Railgun") != std::string::npos &&
+                table.find("200%") != std::string::npos,
+            table);
 }

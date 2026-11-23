@@ -490,6 +490,27 @@ caller, end it. Its rules add a tournament's gameplay switches: `g_fast_weap_swi
 `g_warmup_loadout` (each one's help says what it does). While the rules are paused the server
 keeps sending what is said, so a player's next word is heard.
 
+## Teams and captains
+
+`engine/server/captains.hpp`. A team match's two teams over the lobby's red and blue, named by
+the game, each with a captain: the first to join it, then the lowest seat left when he goes. A
+captain (and the referee, on either team) locks and unlocks the team, renames it in the warmup,
+invites a spectator (`invite`, taken with `accept`, even into a match under way or a locked
+team), picks one straight on when the server allows it, and removes a teammate to watch.
+`team` and `join` take `1`, `a`, `2`, `b` or a team's name, refused while the team is locked or
+full. The book asks the game to seat or unseat a player and says every line; the shuffle deals
+the seats again from a seed. Quake II's server plays it with `dmflags` 64 or 128, every player
+in his team's look.
+
+## The referee
+
+`engine/server/referee.hpp`. A player who gives the server's administrator password in the game
+(`referee <password>`, or `admin`) runs the match without a vote: `endmatch` (or `break` in a
+match), `tl <minutes>`, `changemap <map>`, `kick`, `kickban` and `ban <player> [minutes]` (60 by
+default, 720 at most), `mute <player> [minutes]` (5 by default, 60 at most) and `unmute`,
+`shuffle`, `readyall` and `unreadyall`; `acommands` lists them. A wrong password is refused and
+logged; a referee is never kicked, banned or muted. The book hands the game each act to do.
+
 ## Player aids: help for one chosen player
 
 Some players need help the rest do not: a player with a disability that makes fast hand motion
