@@ -200,6 +200,14 @@ levels, layouts, limits and codings for the server and the client alike
 (`plugins/classic/protocol/q2_limits.hpp`); the wire's writers are `q2_wire_limits.cpp`. The
 second level (23-bit coordinates, 64 stats, the damage blend) comes with a library of the newer
 interface. Only clients that read the extended forms are admitted.
+With the extensions on, the server also behaves as such a game expects: the shared tracer's
+extended mode (`plugins/brush/trace.hpp`, `set_extended`) reads each leaf's brushes into its contents
+and stops a box that stays inside a brush where it stands; players and projectiles the game flags
+(`kSvfPlayer`, `kSvfProjectile`) are clipped only by masks with their contents bits; a no-cull entity
+(`kSvfNoCull`) is sent to every client; a looping sound goes by the hearing set and its reach
+(`Q2Sight::extended`); and a client's no-flares and no-footsteps settings drop flares and the newer
+step and ladder events. The low-priority render flag is not taken: a hosted game's frames have no cap
+to rank against.
 
 Quake II's downloads (`net/q2_net_download.cpp`, facts in `porting/shooters-edge/
 q2-downloads-facts.md` and `q2-downloads-pace.md`) make the asked name plain first (slashes, `.` and `..`), then offer each
