@@ -880,10 +880,23 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
                                "smaller pictures)");
     }
   }
+  // The visible weapons draw when their body loaded, or the list draws the weapon alone (`-`).
+  if (m.vweps.count > 0) {
+    m.vweps.bodiless = load.vweps[0] == "-";
+    m.vweps.on = m.vweps.bodiless || m.kinds[vwep_at].is == ModelKind::Is::alias;
+  }
+  bool any_player = false;
+  for (const ModelKind& k : m.kinds) any_player = any_player || k.player;
+  if (any_player) read_player_skins(files, m);
+  bool any_figure = false;
+  for (const ModelKind& k : m.kinds) any_figure = any_figure || k.figure;
+  if (any_figure || any_player) read_figures(files, palette, game, m);
   if (!enhanced.empty()) {
-    // The atlas is one square: every skin raised to twice the pack's first, then each again
-    // toward the cache's scale, a step kept only while the atlas still holds them all; the rest
-    // stay where they were (the pack's own at worst).
+    // After the figures, so the enhanced skins take only the room they leave (taken first, they
+    // filled the atlas and every figure fell back to the default one). The atlas is one square:
+    // every skin raised to twice the pack's first, then each again toward the cache's scale, a
+    // step kept only while the atlas still holds them all; the rest stay where they were (the
+    // pack's own at worst).
     std::vector<gr::AtlasRect> rects;
     std::vector<uint32_t> at_scale(enhanced.size(), 1);
     for (uint32_t k = 2; k <= most; k *= 2) {
@@ -905,17 +918,6 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
                              std::to_string(enhanced.size()) + " skins enhanced from " +
                              load.cache.string());
   }
-  // The visible weapons draw when their body loaded, or the list draws the weapon alone (`-`).
-  if (m.vweps.count > 0) {
-    m.vweps.bodiless = load.vweps[0] == "-";
-    m.vweps.on = m.vweps.bodiless || m.kinds[vwep_at].is == ModelKind::Is::alias;
-  }
-  bool any_player = false;
-  for (const ModelKind& k : m.kinds) any_player = any_player || k.player;
-  if (any_player) read_player_skins(files, m);
-  bool any_figure = false;
-  for (const ModelKind& k : m.kinds) any_figure = any_figure || k.figure;
-  if (any_figure || any_player) read_figures(files, palette, game, m);
   m.glow_disc = uint32_t(frames.size());  // gl_flashblend's disc, whatever the map holds
   frames.push_back(gr::glow_disc_frame(kGlowDiscPx));
   m.ramps = models::palette_ramps(palette);

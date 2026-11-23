@@ -14,7 +14,8 @@
 // one) the pack's rules play and its kinds are filmed on its maps: the three guards, the gekk's
 // spit, the repair bot's bolt, the beta gladiator's phalanx, the beta brain's lasers, the heat
 // rockets of the iron maiden and of boss5; a kind whose shot carries no flash (spit, plasma) is
-// caught by the first missile it fires, a laser by its first blow on the player. Without it each
+// caught by the first missile it fires, a laser by its beam. The models the pictures can draw
+// (the atlas's monsters and figures) are counted into the digest. Without it each
 // cable and flash is thrown straight off app/monster_fx.hpp and counted: deterministic numbers the
 // smoke run checks everywhere.
 //
@@ -81,6 +82,7 @@ struct Kind {
   const char* effect;   // nullptr: its first missile, or its first blow on the player, marks it
   bool corpse = false;  // a medic: given a corpse to raise
   bool pack = false;    // The Reckoning's (`--mod=xatrix`)
+  float far = 1;        // the player stood this many times `--range` off (a big one, a beam's)
 };
 constexpr Kind kKinds[] = {
     {"parasite", "monster_parasite", "base3,train,jail2,ware2,fact2", "draining tongue",
@@ -98,15 +100,15 @@ constexpr Kind kKinds[] = {
     {"hyper-guard", "monster_soldier_hypergun", "xhangar1,xhangar2,outbase,xcompnd1",
      "blue hyperblaster's flash", "te_monster_flash", false, true},
     {"laser-guard", "monster_soldier_lasergun", "xhangar2,outbase,xhangar1,industry", "laser beam",
-     nullptr, false, true},
+     nullptr, false, true, 1.5f},
     {"gekk", "monster_gekk", "xswamp,badlands,xcompnd2", "spit", nullptr, false, true},
     {"fixbot", "monster_fixbot", "xcompnd1,xreactor", "bolt", nullptr, false, true},
-    {"gladb", "monster_gladb", "xmoon1,xmoon2,xship", "phalanx rounds", nullptr, false, true},
+    {"gladb", "monster_gladb", "xmoon1,xmoon2,xship", "phalanx rounds", nullptr, false, true, 1.5f},
     {"brain-beta", "monster_brain", "xcompnd2", "eyes' lasers", nullptr, false, true},
     {"chick-heat", "monster_chick_heat", "refinery", "heat rockets' flash", "te_monster_flash",
      false, true},
     {"boss5", "monster_boss5", "industry,xintell", "rockets' and guns' flash", "te_monster_flash",
-     false, true},
+     false, true, 2.2f},
 };
 
 void pack(int32_t v[3], sh::Vec3f p) {
@@ -201,7 +203,7 @@ bool stage(gl::Lab& lab, const Setup& s, const Kind& k, const std::string& map_n
     if (m.dead || m.waiting || e.classname != k.classname) continue;
     found++;
     for (const float share : {1.f, 0.75f, 0.5f})
-      if (stand_off(g.l, e.origin, e.angles.y, s.range * share, g.stand, g.yaw)) {
+      if (stand_off(g.l, e.origin, e.angles.y, s.range * k.far * share, g.stand, g.yaw)) {
         g.monster = m.entity;
         g.at = e.origin;
         break;
@@ -381,6 +383,14 @@ void film(gl::Lab& lab, const Setup& s, const Kind& k) {
       cl::listen_stop(g.l);
       return;
     }
+  }
+  {  // what the pictures can draw: in the digest, so a model left out of the atlas moves it
+    const cl::WorldModels& wm = cl::world_models(*drawn[0]);
+    size_t monsters = 0;
+    for (const cl::ModelKind& mk : wm.kinds) monsters += mk.is == cl::ModelKind::Is::alias;
+    lab.metric(std::string(k.name) + ".models.drawn", wm.has_morph ? 1 : 0, "count");
+    lab.metric(std::string(k.name) + ".models.alias", double(monsters), "count");
+    lab.metric(std::string(k.name) + ".models.figures", double(wm.figures.size()), "count");
   }
   ge::gpu::Target out = ge::gpu::create_target(*s.device, "se-q2-monster-fx.final", s.w, s.h);
   cl::ViewState shown;
