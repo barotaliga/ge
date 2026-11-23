@@ -31,7 +31,14 @@ struct RouteMarks {
   // Each blast jump's flight: its points from the take-off to the landing (two at least).
   std::vector<std::vector<std::array<float, 3>>> blasts;
   std::vector<bool> combos;  // by blast: a combo (a grenade and a rocket), drawn violet; none: no
+  // A party of bots (plugins/shooterbots/party.hpp): the other bots' tracks. With any, every track
+  // is drawn in its bot's own colour (`kPartyColours`, the first's the `track`), not by time.
+  std::vector<std::vector<std::array<float, 3>>> party;
 };
+
+// The party's colours, bot by bot: red, blue, green, violet.
+inline constexpr std::array<std::array<uint8_t, 3>, 4> kPartyColours = {
+    {{220, 40, 40}, {30, 90, 230}, {20, 160, 60}, {160, 60, 220}}};
 
 inline constexpr float kRouteJump = 400;  // a step this long is a teleporter: not drawn, units
 

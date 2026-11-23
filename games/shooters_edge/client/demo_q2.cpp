@@ -642,6 +642,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
   s.rdflags = v.rdflags;
   std::copy(std::begin(v.blend), std::end(v.blend), std::begin(s.q2_blend));
   std::copy(std::begin(v.damage_blend), std::end(v.damage_blend), std::begin(s.q2_damage));
+  s.teleport_bit = ext_of(s.protocol) > 0 ? (v.rdflags & 16) != 0 : (v.pm_flags & 128) != 0;
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;
@@ -787,7 +788,10 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       if (!m.bad) s.effects.push_back(std::move(burst));
       break;
     }
-    case 22:  // a boss's teleport: Quake II's own burst, as our own game draws it
+    case 22:  // a boss teleporting out: its swirl (its sound is q2_temp_sound's)
+      point(DemoEffectKind::named);
+      e.name = "sq_boss_teleport";
+      break;
     case 48:  // Quake II's teleport burst (the base game sends none; a mod may)
       point(DemoEffectKind::named);
       e.name = "sq_teleport";
@@ -1037,6 +1041,10 @@ bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
         DemoPrint p;
         p.level = m.u8();
         p.text = m.str();
+        if (ext_of(s.protocol) > 0 && p.level >= 4) {  // the extended levels 4 and 5: centred
+          s.centre = std::move(p.text);
+          break;
+        }
         s.prints.push_back(std::move(p));
         break;
       }

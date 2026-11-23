@@ -670,6 +670,29 @@ TEST(q2_arrivals_throw_their_own_counts_and_colours) {
   for (const auto& p : fountain) CHECK(p.v[1] > 1.9f && p.p[1] < at[1]);  // up, from under it
 }
 
+// A boss teleporting out: 4096 specks in its four colours that fly out and down, then are pulled
+// back in and pushed up (their own acceleration), living 1.67 to 2.67 s.
+TEST(q2_boss_teleport_swirls_in_and_rises) {
+  const double at[3] = {1, 2, 3};
+  fx::Particles swirl;
+  fx::q2_boss_teleport(at, 5, {}, &swirl);
+  CHECK(swirl.size() == 4096);
+  int wrong = 0;
+  for (ge::render::Particle p : swirl) {
+    const double out[2] = {p.p[0] - at[0], p.p[2] - at[2]};
+    const double going = out[0] * p.v[0] + out[1] * p.v[2];           // outward at first
+    const double pulled = p.v[0] * p.accel[0] + p.v[2] * p.accel[2];  // against it
+    wrong += (going < 0 || pulled > 0 || p.v[1] >= 0 || p.accel[1] <= 0 || p.life < 1.66f ||
+              p.life > 2.67f || p.p[1] <= at[1])
+                 ? 1
+                 : 0;
+    p.drag = 0;
+    for (int k = 0; k < 120; ++k) ge::render::step_particle(p, 1.0f / 60);  // 2 s on: rising
+    wrong += p.v[1] > 0 ? 0 : 1;
+  }
+  CHECK_MSG(wrong == 0, std::to_string(wrong));
+}
+
 // A player's entry, exit and respawn flashes light the room for their frame: green, red and
 // yellow, reaching 200 to 231 units.
 TEST(q2_flashes_light_green_red_and_yellow) {

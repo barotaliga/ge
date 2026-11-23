@@ -48,6 +48,19 @@ void open_live(client::Demo& d) {
   d.named_effects = true;  // ids 120 and 121 the game's own (the server sends them only if agreed)
 }
 
+// The most joins again with another version of a server's map (map_versions.hpp): the player's
+// copy, one kept, the server's own.
+constexpr int kMostMapTries = 3;
+
+// The server's map as a player names it ("dm3").
+std::string map_shown(const QwClientEnd& c) {
+  if (c.models.size() < 2) return "its map";
+  std::string m = c.models[1];
+  if (m.starts_with("maps/")) m.erase(0, 5);
+  if (m.ends_with(".bsp")) m.resize(m.size() - 4);
+  return m;
+}
+
 void start(Remote& r, const ClientConfig& cfg) {
   r.kept = false;
   ClientConfig c = cfg;
@@ -506,6 +519,7 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   r.transport = &r.own;
   r.server = to;
   r.server_name = text;
+  r.map_tries = 0;
   r.trace.where = text;
   if (q2)
     q2_remote_start(r, cfg);
@@ -705,6 +719,8 @@ void remote_world(Remote& r, const std::vector<sh::BrushModel>* models,
 void remote_disconnect(Remote& r) {
   if (!r.active) return;
   r.left = true;
+  // The player's own copy of the map read again (another version was drawn while joined).
+  if (r.use_map && r.end.models.size() >= 2) r.use_map(r.end.models[1], "");
   if (r.ignore.con != nullptr) r.ignore.con->cvars().hold_cheats(false);  // Quake II's cheat lock
   if (r.watch) {
     watch_close(*r.watch);
@@ -1017,6 +1033,21 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   }
   r.end.oob_prints.clear();
   for (std::string& line : std::exchange(r.end.web.said, {})) said.push_back(std::move(line));
+  // The server refused this version of its map: joined again at once with another (the next one
+  // kept, else the server's own fetched; classic/content/map_versions.hpp), while there is one.
+  if (r.end.stage == ClientStage::dropped && r.end.map_refused && !r.end.version_unfetched &&
+      r.map_tries < kMostMapTries) {
+    ClientConfig cfg = r.end.cfg;
+    cfg.refused.push_back(r.end.map_sum);
+    r.map_tries++;
+    said.push_back("The server plays another version of " + map_shown(r.end) +
+                   ". Joining again with its version.");
+    start(r, cfg);
+    return RemoteStep::waiting;
+  }
+  if (r.end.stage == ClientStage::active && r.said != ClientStage::active &&
+      r.end.models.size() >= 2 && r.end.cfg.keep_choice)  // the version this server took
+    r.end.cfg.keep_choice(r.server_name, r.end.models[1], r.end.map_sum);
   if (r.end.stage != r.said) {
     r.said = r.end.stage;
     std::string line = remote_stage_words(r.said) + r.server_name;
@@ -1270,7 +1301,27 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                           : static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
     cfg.timeout = std::atof(cvar("cl_timeout", "60").c_str());  // 0: never
     cfg.trace = &r.trace;                                       // showpackets, showdrop
-    cfg.read_file = r.read_file;
+    // Read at call time: a `+connect` on the command line joins before the window wires the files.
+    cfg.read_file = [&r](const std::string& gamedir, const std::string& path) {
+      return r.read_file ? r.read_file(gamedir, path) : std::vector<uint8_t>{};
+    };
+    cfg.map_versions = [&r](const std::string& map) {
+      return r.map_versions ? r.map_versions(map)
+                            : std::vector<std::pair<std::string, std::vector<uint8_t>>>{};
+    };
+    cfg.keep_version = [&r](const std::string& map, uint32_t sum,
+                            const std::vector<uint8_t>& bytes) {
+      return r.keep_version ? r.keep_version(map, sum, bytes) : std::string();
+    };
+    cfg.use_map = [&r](const std::string& map, const std::string& version) {
+      if (r.use_map) r.use_map(map, version);
+    };
+    cfg.remembered = [&r](const std::string& map) {
+      return r.remembered ? r.remembered(r.server_name, map) : std::optional<uint32_t>();
+    };
+    cfg.keep_choice = [&r](const std::string& server, const std::string& map, uint32_t sum) {
+      if (r.keep_choice) r.keep_choice(server, map, sum);
+    };
     // Through forwarders (cl_proxyaddr, "fwd1:port@fwd2:port"): the packets to the first, the
     // rest and the server in `prx`, each hop taking its own off the front.
     const std::string chain = cvar("cl_proxyaddr", "");

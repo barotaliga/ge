@@ -234,3 +234,34 @@ TEST(a_monsters_strides_glide_in_a_single_player_demo) {
     }
   }
 }
+
+// Quake II's teleport toggle (the extended protocol's view bit, else the movement flag 128): a flip
+// since the frame before draws the view as the new frame has it, its eye, angles and field of view
+// not eased; the player's body is still drawn between, and with no flip the view is eased too.
+TEST(a_flipped_teleport_bit_snaps_the_view_for_one_frame) {
+  for (const bool flip : {false, true}) {
+    cl::DemoLerp l;
+    cl::DemoState s;
+    s.format = cl::DemoFormat::q2;
+    s.frames = 2;
+    s.player = 0;
+    s.view_height = 22;
+    s.players = {body({0, 0, 24})};
+    s.fov = 90;
+    s.angles = {0, 10, 0};
+    s.time = 1.0;
+    cl::lerp_frame(l, s);
+    s.players = {body({16, 0, 24})};
+    s.fov = 110;
+    s.angles = {0, 30, 0};
+    s.eye = {16, 0, 46};
+    s.teleport_bit = flip;
+    s.time = 1.1;
+    cl::lerp_frame(l, s);
+    const cl::DemoState& d = cl::lerp_at(l, s, 1.05);
+    CHECK(near(d.players[0].origin.x, 8));  // the body between either way
+    CHECK(near(d.fov, flip ? 110 : 100));
+    CHECK(near(d.angles.y, flip ? 30 : 20));
+    CHECK(near(d.eye.x, flip ? 16 : 8));
+  }
+}

@@ -377,6 +377,10 @@ struct DemoState {
   // intermission came (-1: none this level), and the finale's text and when it came.
   double ended_at = -1;
   bool paused = false;  // the server paused the game (its setpause message)
+  // Quake II: the view's teleport toggle as last read (the view bit 16 in a recording of the
+  // extended protocol, else the movement flag 128): a flip since the frame before is a teleport,
+  // the view drawn at the new frame with nothing between (demo_lerp.hpp).
+  bool teleport_bit = false;
   std::string finale;
   double finale_at = -1;
   uint32_t set_angles = 0;  // client, multiview: a bit a slot whose view the server set (setangle)

@@ -45,7 +45,9 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "classic/content/web_downloads.hpp"
@@ -116,6 +118,27 @@ struct ClientConfig {
   // named figure (`players/<model>/tris.md2`, else `tris.mdl`, and its `<skin>.pcx`) that it
   // lacks (`files`, `read_file`, what it fetched). Off (`noskins 2`): nothing is asked for.
   bool fetch_looks = true;
+  // THE CONTENT FETCHED before `prespawn`: the map and every model and sound of the lists the game
+  // lacks (`read_file`, `files`), asked for one at a time; one the server refuses is passed over.
+  bool fetch_content = true;
+  // THE MAP'S VERSIONS (classic/content/map_versions.hpp): the other versions of a map kept from
+  // servers before (path in the game, bytes), and the one the first `prespawn` sends: the version
+  // this server took last (`remembered`), else the player's own copy, else the next kept one; a
+  // version whose checksum is in `refused` (a server that said its map does not match) is passed
+  // over, and with none left the server's own is fetched (`keep_version` keeps it hidden beside
+  // the player's and returns its path) and sent. `use_map` tells the window which version to draw
+  // ("" the player's own copy).
+  std::function<std::vector<std::pair<std::string, std::vector<uint8_t>>>(const std::string& map)>
+      map_versions;
+  std::function<std::string(const std::string& map, uint32_t sum,
+                            const std::vector<uint8_t>& bytes)>
+      keep_version;
+  std::function<void(const std::string& map, const std::string& version)> use_map;
+  std::vector<uint32_t> refused;
+  // The checksum of the version of `map` this server took last (none: never joined it with one),
+  // and the version it took this time, remembered once the client is in the game.
+  std::function<std::optional<uint32_t>(const std::string& map)> remembered;
+  std::function<void(const std::string& server, const std::string& map, uint32_t sum)> keep_choice;
   // THE MAP'S EXTRAS FETCHED, after the looks, only when lacking and only while what they serve is
   // on: its coloured light (`lits/<map>.lit`; none when `maps/<map>.lit` or `maps/lits/<map>.lit`
   // is there; the window's `r_loadlit`) and its place names (`locs/<map>.loc`; `tp_loadlocs`).
@@ -253,7 +276,19 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   bool begun = false;
   double connected_at = -1, active_at = -1;  // the network's times, s
   std::vector<std::string> wanted_skins;     // skins left to fetch before begin
-  ClientUpload up;                           // a screenshot the server asked for
+  // The map, models and sounds the lists named that the game lacks, fetched before `prespawn`
+  // (held while `prespawn_held`), so a server's map the player has not got is played.
+  std::vector<std::string> wanted_content;
+  bool prespawn_held = false;
+  // The map's version sent: its path ("" the player's own copy), its checksum; `fetch_version`
+  // while the server's own is being fetched. `map_refused`: the server dropped the client because
+  // its map did not match (the window joins again with another version, ClientConfig::refused).
+  std::string map_version;
+  uint32_t map_sum = 0;
+  bool fetch_version = false;
+  bool version_unfetched = false;  // the server would not hand out its version
+  bool map_refused = false;
+  ClientUpload up;  // a screenshot the server asked for
 
   // Play.
   sh::MoveCmd cmds[3];
@@ -272,6 +307,7 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int frags[32] = {};
   int32_t stats[kStats] = {};
   std::vector<std::string> prints, centerprints;
+  size_t packet_prints = 0;             // `prints` before the packet being read: its own are after
   std::vector<std::string> oob_prints;  // out-of-band prints after the connect (rcon's answers)
   // A server browser's command packets from this machine (`localid`): the id they must carry
   // (the caller sets it each frame), whether one may still run without it (until the first

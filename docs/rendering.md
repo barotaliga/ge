@@ -2190,7 +2190,7 @@ A pool over no ground (the second `create_particles`: a world of brushes or room
 stand-ins for the terrain's heights and horizon, so nothing lands and the sun is not shaded by a
 horizon.
 
-**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 96 bytes, a
+**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 112 bytes, a
 ring: the game hands each frame's births (`emit_particles`) and `prepare_particles` writes
 them into the next slots, so a full pool lets its oldest go first. There is no compaction or
 indirect count yet: `particles.sim` (one thread a slot) skips a dead slot, and `particles`
@@ -2222,7 +2222,7 @@ FLOOR of its own (`floor_y`, world y) for a world the pool has no ground for: co
 hops back up at `bounce` of its speed while it falls faster than `kFloorRest`, else it lies there
 and fades (a chip knocked off a wall hops on the floor below). It hops twice at most, a third of
 them three times (`max_hops`, off the particle's own size and life), then lies where it came down,
-off its own floor and off a drawn surface alike. A slot is 96 bytes.
+off its own floor and off a drawn surface alike. A slot is 112 bytes; a speck may carry a steady acceleration of its own (`accel`, m/s²) on top of gravity's share, as Quake II's boss teleport swirl pulls its specks back in and up.
 
 **What was drawn (M47c).** A pool made with `ParticleSettings::collide` lets what falls (a grain,
 a spark, debris) meet whatever the last frame drew, in a world of brushes or models with no
