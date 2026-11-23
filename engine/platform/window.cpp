@@ -357,6 +357,10 @@ std::vector<Display> displays() {
   return out;
 }
 
+void set_minimize_on_focus_loss(bool on) {
+  SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, on ? "1" : "0");
+}
+
 bool set_window_style(Window& window, const WindowStyle& style) {
   SDL_Window* w = window.impl_->window;
   const bool ok = SDL_SetWindowBordered(w, style.border) &&

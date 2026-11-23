@@ -6,6 +6,9 @@
 // ge:test tests/classic_protocol_test.cpp
 #include "classic/protocol/info.hpp"
 
+#include <algorithm>
+#include <cstdlib>
+
 namespace ge::classic::protocol {
 
 namespace {
@@ -158,6 +161,11 @@ std::string unique_name(const std::string& name, const std::vector<std::string>&
     if (!held(c)) return c;
   }
   return name;
+}
+
+int msg_level_of(const std::string& value) {
+  if (value.empty()) return 0;
+  return std::clamp(std::atoi(value.c_str()), 0, 256);
 }
 
 }  // namespace ge::classic::protocol

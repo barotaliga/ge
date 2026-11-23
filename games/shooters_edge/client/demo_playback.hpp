@@ -47,6 +47,7 @@
 // ge:keywords demo playback playdemo play-bar seek scrub pause resume speed cl_demospeed skip
 // ge:keywords demo_skip demo_skip_forward demo_skip_back demo_next demo_prev demo_seek
 // ge:keywords demo_pause demo_highlights demo_bar demo_track highlights markers video-player
+// ge:keywords scr_demobar demo-bar-percent
 // ge:keywords add_demo_commands timedemo playdemo demo_lerp cl_democlock demo-clock cl_demowait
 // ge:keywords cl_startupdemo startup-demo cam_thirdperson cam_dist demo_jump_end mvd_autotrack
 // ge:keywords autotrack cl_hightrack top-fragger demo_jump_skip_messages cam_lockpos
@@ -97,6 +98,10 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   float pointer_x = -1, pointer_y = -1;  // px
   double shown_until = 0;                // the app's clock, s
   float bar_bottom_px = 0;               // the bar sits this far up, over the HUD (`hud_inset`)
+  // Quake II's `scr_demobar` (q2_view.hpp's Q2Screen::demo_bar), set each frame: -1 another
+  // game's (`demo_bar` rules), 0 no bar, 1 the bar always with the percentage played, 2 also
+  // the clock. While it is 0..2 it stands in for `demo_bar`.
+  int game_bar = -1;
   bool list_ask = false;
   // The demo clock (`cl_democlock`): 0 none, 1 the time since the demo began, 2 the recording's
   // own clock; at `cl_democlock_x` cells from the left (from the right when negative) and

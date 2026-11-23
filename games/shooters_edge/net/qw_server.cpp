@@ -701,7 +701,7 @@ void client_print(QwServer& s, int slot, int level, const std::string& text) {
     if (s.local_print != nullptr) s.local_print(s.local_ctx, slot, text);
     return;
   }
-  if (level < s.clients[slot].msg_level && level < 3) return;
+  if (!ge::classic::protocol::print_reaches(level, s.clients[slot].msg_level, true)) return;
   SvcMsg m;
   m.id = svc::print;
   m.ints = {level};

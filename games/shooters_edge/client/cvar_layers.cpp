@@ -12,7 +12,7 @@
 // ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_bilerp_pics
 // ge:keywords gl_gamma_scale_pics gl_modulate_world gl_modulate_entities gl_doublelight_entities
 // ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack gl_celshading
-// ge:keywords cl_smooth_explosions
+// ge:keywords cl_smooth_explosions vid_flip_on_switch
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -718,6 +718,18 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.add_synonym("al_device", "s_device");
   if (v.find("s_hrtf") != nullptr)  // the classic games' (client/room_ear.hpp)
     v.add_synonym("al_hrtf", "s_hrtf");
+  if (v.find("vid_minimize_on_focus_loss") != nullptr) {  // the window's (platform/window_cvars)
+    // Its full screen stays when another window takes the focus, unless asked to flip back.
+    v.add({.name = "vid_minimize_on_focus_loss",
+           .fallback = "0",
+           .flags = con::kArchive,
+           .help = "Whether the full-screen game minimises when you switch to another window, the "
+                   "screen going back to the desktop's own mode.",
+           .kind = con::CvarKind::boolean,
+           .values = "0: it stays full screen behind the other window (the default); 1: minimised",
+           .overlap = con::Overlap::same});
+    v.add_synonym("vid_flip_on_switch", "vid_minimize_on_focus_loss");
+  }
   // Its software mixer's lead: kept and saved for its sound page and configs; the device here
   // pulls the sound a chunk at a time, as its OpenAL path does, which never reads it either.
   v.add({.name = "s_mixahead",

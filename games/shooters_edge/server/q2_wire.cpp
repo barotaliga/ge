@@ -12,6 +12,7 @@
 
 #include "brush/areas.hpp"
 #include "classic/protocol/directions.hpp"
+#include "classic/protocol/info.hpp"
 #include "shooters_edge/server/md4.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
 
@@ -831,12 +832,18 @@ void q2_frame(Q2Wire& w, const RulesCommon& c, int32_t frame_number,
       r.i16(size_t(n) < w.inventory.size() ? w.inventory[size_t(n)] : 0);
   }
   const std::vector<NetEvent>& events = c.out.events;
+  // The viewer's message level: prints below it are not sent (the recorder, no slot, takes all).
+  int msg = 0;
+  if (w.slot >= 0 && w.slot < sh::kMaxClients)
+    for (const auto& [k, v] : c.world.clients[w.slot].userinfo)
+      if (k == "msg") msg = ge::classic::protocol::msg_level_of(v);
   const int64_t first = c.out.events_total - static_cast<int64_t>(events.size());
   const size_t from = static_cast<size_t>(std::max<int64_t>(0, w.events_done - first));
   for (size_t i = from; i < events.size(); i++) {
     const NetEvent& e = events[i];
     if (!to_slot(e, w.slot)) continue;
     if (e.kind == EventKind::print) {
+      if (!ge::classic::protocol::print_reaches(std::clamp(e.level, 0, 3), msg, false)) continue;
       r.u8(kPrint);
       r.u8(static_cast<uint32_t>(std::clamp(e.level, 0, 3)));
       r.str(e.text);
