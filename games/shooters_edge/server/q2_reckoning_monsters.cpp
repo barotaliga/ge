@@ -111,7 +111,8 @@ void roam_goal(Q2Server& s, Q2Monster& m) {
   const Q2Entity& e = body(s, m);
   float best = -1;
   for (int k = 0; k < 12; k++) {
-    const float turn_by = static_cast<float>((k / 2) * 30) * (k % 2 == 0 ? 1.0f : -1.0f);
+    const int degrees = (k / 2) * 30;  // 0, 0, 30, 30, 60, ... each side in turn
+    const float turn_by = static_cast<float>(degrees) * (k % 2 == 0 ? 1.0f : -1.0f);
     const sh::Vec3f way = forward_of(e.angles.y + turn_by);
     const ge::classic::Q2Trace t =
         map_trace(s, e.origin, {}, {}, e.origin + way * 8192.0f, kOpaque, m.entity);
