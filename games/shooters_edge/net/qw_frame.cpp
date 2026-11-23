@@ -10,7 +10,7 @@
 //
 // ge:summary The QuakeWorld server's frame out: events routed, players, entities, stats, the send
 // ge:keywords route_events send_frames playerinfo packetentities delta-frame stats updatestat
-// ge:keywords temp-entity sound multicast chokecount datagram visible-entities
+// ge:keywords temp-entity sound multicast chokecount datagram visible-entities weapon-prediction
 // ge:skill net shooter
 // ge:test tests/shooters_edge_qw_server_test.cpp
 #include <algorithm>
@@ -281,6 +281,23 @@ PmType pm_of(const QwServer& s, int slot) {
   }
 }
 
+// A player's weapon as weapon prediction sends it: the clock the server's, the step from the frame.
+ge::classic::WeaponState weapon_state(const sv::RulesWorld& w, int slot, int frame) {
+  const sv::PlayerNumbers& n = w.clients[slot].numbers;
+  ge::classic::WeaponState ws;
+  ws.known = true;
+  ws.impulse = n.impulse;
+  ws.weapon = static_cast<int>(n.weapon);
+  ws.clock = static_cast<float>(w.time);
+  ws.attack_finished = n.attack_finished;
+  ws.next_think = n.next_think;
+  ws.step = ge::classic::weapon_step_of(ws.weapon, frame);
+  ws.ping_ms = w.clients[slot].ping_ms;
+  for (int i = 0; i < 4; i++) ws.ammo[i] = static_cast<int>(n.ammo[i]);
+  ws.frame = frame;
+  return ws;
+}
+
 PlayerState player_state(const QwServer& s, int about, int to) {
   const sh::Server& sv = s.game->sv;
   const sh::Edict& e = sv.edicts[static_cast<size_t>(about) + 1];
@@ -312,6 +329,11 @@ PlayerState player_state(const QwServer& s, int about, int to) {
   if ((about == to || s.clients[static_cast<size_t>(to)].track == about) && w.weapon_frames) {
     p.has_weaponframe = true;
     p.weaponframe = static_cast<int>(w.clients[about].numbers.weapon_frame);
+    // Weapon prediction: the player's own weapon state on the server's clock (a spectator
+    // tracking him gets the empty byte).
+    if (about == to && !s.clients[static_cast<size_t>(to)].spectator &&
+        s.clients[static_cast<size_t>(to)].ext.has(ExtFamily::mvd, kMvdWeaponPred))
+      p.weapon = weapon_state(w, about, p.weaponframe);
   }
   p.dead = e.health <= 0;
   p.gib = e.mins.z != -24;

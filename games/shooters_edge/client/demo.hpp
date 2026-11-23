@@ -70,6 +70,7 @@
 
 #include "classic/locs.hpp"
 #include "classic/q2_move.hpp"
+#include "classic/weapon_predict.hpp"
 #include "server/sheet.hpp"
 #include "shooter/vec.hpp"
 #include "vfs/partial.hpp"
@@ -308,7 +309,13 @@ struct DemoState {
   int64_t bonuses = 0;
   // Multiview: the match server's start markers read (its stuffed `//ktx matchstart`).
   int64_t match_starts = 0;
-  sh::Vec3f velocity;          // client: the recording's player's, units/s (`velocity_read`)
+  sh::Vec3f velocity;  // client: the recording's player's, units/s (`velocity_read`)
+  // Client, under weapon prediction: the player's weapon state from his last player state
+  // (`known` false when the server sent none); the client runs it forward (net/qw_weapon.hpp).
+  ge::classic::WeaponState own_weapon;
+  // Client: the shots the weapon prediction fired for the player so far, and the weapon frame the
+  // last one started on (the axe's swing); the window's hand fires on each (client/held.cpp).
+  int own_shots = 0, own_shot_frame = 0;
   bool velocity_read = false;  // client: the player's velocity came in his last player state
   // Quake II: what went wrong with the last frame read (kQ2Frame* bits; `scr_showturtle` writes
   // them on the screen, client/q2_bar.hpp's `add_q2_turtle`).
@@ -326,6 +333,7 @@ struct DemoState {
   // drawn with the fixed list (`demo_vweps`).
   std::vector<std::string> vweps;
   std::vector<std::string> images;  // Quake II: the pictures it names (`pics/<name>.pcx`)
+  std::string sky;                  // Quake II: the sky's name (its sides `env/<sky><side>`)
   // Quake II: what its own status bar runs (client/q2_bar.hpp): the bar's program, the item
   // names by number, the player state's 32 stats as sent, the last screen the server put up (a
   // scoreboard's or the help computer's program) and the last inventory's counts by item number.

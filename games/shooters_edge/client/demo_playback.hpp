@@ -177,6 +177,9 @@ struct PlaybackInput {
 // The console's demo commands and cvars (the table above), bound to `p`; `demo_track` also sets
 // `bench`'s tracked player; the recording's `demo_pack` cvars bind to `p.record`.
 void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench);
+// `pause` typed over a demo played (`line` the console's unknown line): it stops where it is or
+// plays on (a timed one runs on). True when it took the line.
+bool playback_pause_word(DemoPlayback& p, const Timedemo& bench, const std::string& line);
 // `timedemo <demo>` (into `ask`) and `playdemo <demo>` (into `ask`, with `paced` set); the window
 // starts what they ask for at its next frame. Both must outlive `console`.
 void add_demo_commands(ge::console::Console& console, std::string& ask, bool& paced);

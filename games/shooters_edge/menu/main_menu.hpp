@@ -116,6 +116,13 @@ inline const MenuTable& game_table(const MenuTable& t) { return t.over != nullpt
 const MenuTable& classic_menu();
 const MenuTable& q2_menu();
 
+// QUAKE'S QUIT BOX: one of its eight jokes, picked at random each time the box opens and kept while
+// it stays open, four lines of 24 characters as the game shows them (a blank last line spaces).
+// Y quits, N or ESCAPE goes back; any other letter is ignored.
+inline constexpr size_t kQuitJokes = 8;
+inline constexpr size_t kQuitJokeLines = 4;
+std::span<const std::string_view, kQuitJokeLines> quit_joke(size_t i);
+
 // Quake's table, every page's rows in order.
 std::span<const Entry> entries();
 // The entry of `page` with `id` in `table`; null when none.

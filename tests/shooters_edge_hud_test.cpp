@@ -155,8 +155,29 @@ TEST(hud_sbar_0_draws_the_classic_pieces_without_either_panel) {
   // The panels still lay out (their pieces hang from them) but draw nothing.
   CHECK(content(hud, "sbar").on && content(hud, "sbar").color.a == 0.0f);
   CHECK(content(hud, "ibar").on && content(hud, "ibar").color.a == 0.0f);
-  CHECK(content(hud, "sbar_health").on && content(hud, "ibar_guns").on);
+  CHECK(content(hud, "sbar_health").on && content(hud, "ibar_items").on);
   CHECK(content(hud, "sbar_health").color.a == 1.0f);
+  // The guns and the counts leave the row for the column over its right end (hud_swap 1: left):
+  // seven gun slots and four ammunition boxes with their counts.
+  CHECK(!content(hud, "ibar_guns").on && !content(hud, "ibar_ammo").on);
+  CHECK(content(hud, "sbar_column").on && !content(hud, "sbar_column_left").on);
+  CHECK(content(hud, "sbar_column").cells.size() == 7 + 4);
+  CHECK(content(hud, "sbar_column").cells[7].text == std::to_string(armed().ammo[0]));
+  draw(hud, 1280, 720);
+  const gh::Element& col = hud.layout[static_cast<size_t>(hud.layout.find("sbar_column"))];
+  const gh::Element& inv = hud.layout[static_cast<size_t>(hud.layout.find("ibar"))];
+  CHECK(col.drawn.x + col.drawn.w == inv.drawn.x + inv.drawn.w);  // on the row's right end
+  CHECK(col.drawn.y + col.drawn.h == inv.drawn.y);
+  con.execute("hud_swap 1");
+  se::fill_hud(hud, armed(), art());
+  CHECK(!content(hud, "sbar_column").on && content(hud, "sbar_column_left").on);
+  con.execute("viewsize 110");  // no inventory: no column
+  se::fill_hud(hud, armed(), art());
+  CHECK(!content(hud, "sbar_column_left").on);
+  con.execute("viewsize 100; hud_sbar 1");
+  se::fill_hud(hud, armed(), art());
+  CHECK(content(hud, "ibar_guns").on && !content(hud, "sbar_column").on &&
+        !content(hud, "sbar_column_left").on);
 }
 
 TEST(the_classic_bar_sits_flush_on_the_bottom_and_lifts_the_gun_only_while_drawn) {

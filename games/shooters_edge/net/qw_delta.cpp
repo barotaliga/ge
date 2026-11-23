@@ -219,6 +219,42 @@ bool player_extended(const Ext& ext) {
   return ext.has(ExtFamily::x, kXTrans) || ext.has(ExtFamily::x, kXScale);
 }
 
+namespace {
+
+int clamp_byte(int v) { return v < 0 ? 0 : v > 255 ? 255 : v; }
+
+void write_weapon_state(gn::Writer& w, const ge::classic::WeaponState& s) {
+  write_byte(w, s.known ? 1 : 0);
+  if (!s.known) return;
+  write_byte(w, clamp_byte(s.impulse));
+  write_short(w, s.weapon < -32768 ? -32768 : s.weapon > 32767 ? 32767 : s.weapon);
+  write_float(w, s.clock);
+  write_float(w, s.attack_finished);
+  write_float(w, s.next_think);
+  write_byte(w, clamp_byte(s.step));
+  write_byte(w, clamp_byte(s.ping_ms));
+  write_byte(w, clamp_byte(s.flags));
+  for (const int a : s.ammo) write_byte(w, clamp_byte(a));
+}
+
+ge::classic::WeaponState read_weapon_state(gn::Reader& r) {
+  ge::classic::WeaponState s;
+  s.known = read_byte(r) != 0;
+  if (!s.known) return s;
+  s.impulse = read_byte(r);
+  s.weapon = read_short(r);
+  s.clock = read_float(r);
+  s.attack_finished = read_float(r);
+  s.next_think = read_float(r);
+  s.step = read_byte(r);
+  s.ping_ms = read_byte(r);
+  s.flags = read_byte(r);
+  for (int& a : s.ammo) a = read_byte(r);
+  return s;
+}
+
+}  // namespace
+
 uint32_t playerinfo_flags(const PlayerState& p, const Ext& ext) {
   uint32_t f = 0;
   if (p.has_msec) f |= kPfMsec;
@@ -262,7 +298,10 @@ void write_playerinfo(gn::Writer& w, const PlayerState& p, const Ext& ext) {
   if (f & kPfModel) write_byte(w, p.modelindex & 255);
   if (f & kPfSkin) write_byte(w, (p.skin & 127) | (p.modelindex > 255 ? 128 : 0));
   if (f & kPfEffects) write_byte(w, p.effects);
-  if (f & kPfWeaponFrame) write_byte(w, p.weaponframe);
+  if (f & kPfWeaponFrame) {
+    write_byte(w, p.weaponframe);
+    if (ext.has(ExtFamily::mvd, kMvdWeaponPred)) write_weapon_state(w, p.weapon);
+  }
   if (f & kPfScale) write_byte(w, p.scale);
   if (f & kPfTrans) write_byte(w, p.alpha);
 }
@@ -292,7 +331,11 @@ PlayerState read_playerinfo(gn::Reader& r, const Ext& ext, uint32_t* flags_out) 
   }
   if (f & kPfEffects) p.effects = read_byte(r);
   p.has_weaponframe = (f & kPfWeaponFrame) != 0;
-  if (p.has_weaponframe) p.weaponframe = read_byte(r);
+  if (p.has_weaponframe) {
+    p.weaponframe = read_byte(r);
+    if (ext.has(ExtFamily::mvd, kMvdWeaponPred)) p.weapon = read_weapon_state(r);
+    p.weapon.frame = p.weaponframe;
+  }
   p.dead = (f & kPfDead) != 0;
   p.gib = (f & kPfGib) != 0;
   p.pm = static_cast<PmType>((f >> kPfPmTypeShift) & 7);

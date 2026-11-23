@@ -20,6 +20,7 @@
 #include "assets/image.hpp"
 #include "assets/tga.hpp"
 #include "brush/read.hpp"
+#include "classic/flash_blend.hpp"
 #include "classic/q2_fx_switches.hpp"
 #include "classic/vweps.hpp"
 #include "classicenhance/cached.hpp"
@@ -48,7 +49,7 @@ namespace {
 
 // The made frames drawn for the pack's flare and bubble sprites (ce_flares, ce_bubbles): their
 // texels, their size in the world, and how far a bubble wobbles off its path as it rises.
-constexpr uint32_t kFlarePx = 64, kBubblePx = 32;
+constexpr uint32_t kFlarePx = 64, kBubblePx = 32, kGlowDiscPx = 64;
 constexpr double kFlareM = 1.3, kBubbleM = 0.07, kBubbleWobbleM = 0.015;
 
 // Whether the bubble the server moves as `entity` is one of the `share` (0..1) drawn: a fixed pick
@@ -920,6 +921,8 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
   bool any_figure = false;
   for (const ModelKind& k : m.kinds) any_figure = any_figure || k.figure;
   if (any_figure || any_player) read_figures(files, palette, game, m);
+  m.glow_disc = uint32_t(frames.size());  // gl_flashblend's disc, whatever the map holds
+  frames.push_back(gr::glow_disc_frame(kGlowDiscPx));
   m.ramps = models::palette_ramps(palette);
   if (!map.models.empty()) m.probe = models::make_probe(map);
   if (!m.skin_files.empty()) {
@@ -941,6 +944,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
   m.figure_first_skins = std::move(read.figure_first_skins);
   m.figure_kinds = std::move(read.figure_kinds);
   m.vweps = read.vweps;
+  m.glow_disc = read.glow_disc;
   m.skin_files = std::move(read.skin_files);
   m.files = read.files;
   m.palette = std::move(read.palette);
@@ -1222,9 +1226,10 @@ void add_hologram_shell(WorldModels& m, const Placed& p, const gr::MorphDraw& pl
 }
 
 // Its ground shadow (model_shadow.hpp) under the plain draw `plain`: the same model, pose and
-// motion squashed onto the floor `lit` found under it, black, see-through.
+// motion squashed onto the floor `lit` found under it, black, see-through; `quake_light` Quake's
+// fixed lean (the 29 family's maps), else Quake II's along the way it faces.
 void add_shadow(WorldModels& m, const Placed& p, const ModelKind& k, const WorldModels::Lit& lit,
-                int mode, const gr::MorphDraw& plain) {
+                int mode, bool quake_light, const gr::MorphDraw& plain) {
   if (m.morph_draws.size() >= gr::kMaxMorphDraws) return;
   float radius = 0;
   if (mode >= 2 && plain.model < m.shapes.size()) {
@@ -1246,7 +1251,8 @@ void add_shadow(WorldModels& m, const Placed& p, const ModelKind& k, const World
                               .floor_up = lit.floor.up,
                               .height_units = p.origin.z - lit.floor.z,
                               .radius_units = radius,
-                              .yaw_deg = p.angles.y});
+                              .yaw_deg = p.angles.y,
+                              .fixed_light = quake_light});
   if (s.alpha <= 0) return;
   gr::MorphDraw shadow = plain;
   shadow.flat = true;
@@ -1258,6 +1264,39 @@ void add_shadow(WorldModels& m, const Placed& p, const ModelKind& k, const World
   shadow.burn = {};
   shadow.blood = {};
   m.morph_draws.push_back(shadow);
+}
+
+// gl_flashblend: each of the moment's `lights` a glow disc turned to the eye, added to the picture
+// (classic/flash_blend.hpp, QuakeWorld's colours), none for the player's own (`self`); an eye
+// inside one tints the screen instead (`flash_tint`).
+void add_glow_discs(WorldModels& m, const gr::FrameView& view,
+                    std::span<const ba::DynamicLight> lights, int self) {
+  for (const ba::DynamicLight& l : lights) {
+    ge::classic::FlashIn in{.radius_units = l.radius / br::kUnitM,
+                            .game = ge::classic::FlashGame::quakeworld,
+                            .own = self != 0 && l.entity == self};
+    for (int a = 0; a < 3; a++) {  // map units, axes as the engine's: the rule turns no axis
+      in.light[a] = l.pos[a] / br::kUnitM;
+      in.colour[a] = l.colour[a];
+      in.eye[a] = view.eye[a] / br::kUnitM;
+    }
+    const ge::classic::Glow g = ge::classic::flash_glow(in);
+    m.flash_tint = std::max(m.flash_tint, g.tint);
+    if (!g.disc || !m.has_sprites || m.glow_disc == ModelKind::kNone ||
+        m.sprite_draws.size() >= gr::kMaxSprites)
+      continue;
+    gr::SpriteDraw s;
+    s.frame = m.glow_disc;
+    s.facing = gr::SpriteFacing::parallel;
+    s.blend = gr::SpriteBlend::add;
+    s.outdoor = 0;
+    s.smooth = true;
+    s.glow = 1;
+    s.scale = float(2 * g.radius_units * br::kUnitM / kGlowDiscPx);
+    for (int c = 0; c < 3; c++) s.colour[c] = float(std::pow(g.colour[c], 2.2));  // added as shown
+    for (int a = 0; a < 3; a++) s.position[a] = s.last[a] = g.centre[a] * br::kUnitM;
+    m.sprite_draws.push_back(s);
+  }
 }
 
 // gl_celshading's ink line round the solid draw `plain` (`dist2` its squared distance from the
@@ -1498,7 +1537,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     if (power.pulse && !power.shell) q2_pulse(g.ambient, t);  // an item's glow
     if (p.holo_blue > 0) hologram_light(g, p.holo_blue);
     if (!p.shell_only) m.morph_draws.push_back(g);
-    if (in_place.shadows > 0 && !p.shell_only) add_shadow(m, p, k, lit, in_place.shadows, g);
+    if (in_place.shadows > 0 && !p.shell_only) add_shadow(m, p, k, lit, in_place.shadows, !q2, g);
     if (!p.shell_only && !power.shell && p.holo_shell <= 0) add_ink(m, in_place, view, dist, g);
     if (power.shell) add_shell(m, p, power, g, t);
     if (p.holo_shell > 0) add_hologram_shell(m, p, g);
@@ -1520,6 +1559,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       if (power.shell) add_shell(m, p, power, hw, t);
     }
   }
+  m.flash_tint = 0;
+  if (in_place.flash_blend) add_glow_discs(m, view, dynamic, in_place.self);
   if (m.has_morph) gr::prepare_morph(d, m.morph, m.morph_draws, view);
   if (m.has_sprites) gr::prepare_sprites(d, m.sprites, m.sprite_draws, view);
 }
