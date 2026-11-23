@@ -1506,7 +1506,6 @@ int run_main(int argc, char** argv) {
       game_menu.show(menu_host);  // a server left with no game of our own behind: the title
     }
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
-    // A load's console hold lets go once a game joined or a demo has the screen (load_line.hpp).
     cl::release_load_line(loader, load_line, con_view, game_start.loading || demo_hold,
                           remote.active || bench.active);
     const bool stop = std::exchange(stop_demo, false);  // `stopdemo` with none playing: nothing
@@ -1755,7 +1754,6 @@ int run_main(int argc, char** argv) {
       ++presented;
       continue;
     }
-
     cl::release_load_line(loader, load_line, con_view, game_start.loading);
     // The title (no world of the server's map yet, or the menu still up over the title): the
     // menu and the console over the night, the spinner while a map loads, the server waiting. A
