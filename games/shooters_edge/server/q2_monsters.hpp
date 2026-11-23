@@ -40,6 +40,7 @@
 #include <string_view>
 
 #include "classic/q2_move.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 
 namespace shooters_edge::server {
 
@@ -82,7 +83,7 @@ void monster_torsos(Q2Server& s);
 // The monster of map entity `e` (its index in `Q2Server::monsters`), or -1.
 int monster_index(const Q2Server& s, int e);
 // Whether `classname` is a monster's (one of the roster's rows).
-bool monster_class(std::string_view classname);
+bool monster_class(std::string_view classname, Q2Pack pack = Q2Pack::base);
 // A spare monster of a spawner (its entities' `block`, below -1) brought out at `at`, facing
 // `angles`, thrown at `velocity`; whoever stands there dies, player or monster. It wakes as any
 // monster does. False when no spare is left.

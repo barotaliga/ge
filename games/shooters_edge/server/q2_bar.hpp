@@ -33,28 +33,43 @@
 #include <string>
 #include <string_view>
 
+#include "shooters_edge/server/q2_pack.hpp"
+
 namespace shooters_edge::server {
 
 struct Q2Server;
 struct SqBody;
 
-inline constexpr int kSqItemNumbers = 42;  // the game's item list: 0 none, 1..41
+// The base game's item list: 0 none, 1..41 (q2_pack.hpp: a pack's list is `sq_numbers(pack)`).
+inline constexpr int kSqItemNumbers = 42;
 inline constexpr int kSqBlasterNumber = 7;
 
+// Every function below numbers items as `pack`'s own list does (q2_pack.hpp), the base game's by
+// default; a server passes its own pack (`Q2ServerOptions::pack`).
+
+// The size of `pack`'s item list (0 none, 1.. its items).
+int sq_numbers(Q2Pack pack = Q2Pack::base);
+// The number of the item called `classname` in `pack`'s list (every health is `item_health`, the
+// blaster `weapon_blaster`); 0 when it is not in it.
+int sq_number_of(std::string_view classname, Q2Pack pack = Q2Pack::base);
 // Item row `row` of q2_items.hpp's table as the game's item list numbers it (every health row
-// is 41); 0 for none.
-int sq_item_number(int row);
+// is one number); 0 for none.
+int sq_item_number(int row, Q2Pack pack = Q2Pack::base);
 // The number of a weapon (q2_combat.hpp's `SqWeapon`): the blaster 7, the hand grenades 12.
-int sq_weapon_number(int weapon);
+int sq_weapon_number(int weapon, Q2Pack pack = Q2Pack::base);
+// Whether item number `n` is a weapon (the blaster and the hand grenades too), or a power-up
+// with a use.
+bool sq_weapon_numbered(int n, Q2Pack pack = Q2Pack::base);
+bool sq_powerup_numbered(int n, Q2Pack pack = Q2Pack::base);
 // Whether picking up item number `n` makes it the selected item (it has a use).
-bool sq_selects(int n);
+bool sq_selects(int n, Q2Pack pack = Q2Pack::base);
 // How many of item number `n` the body holds, as the inventory counts it: a weapon or key 1 each,
 // ammo its rounds, the armour worn its points; 0 for the shard and health.
-int sq_count(const SqBody& body, int n);
+int sq_count(const SqBody& body, int n, Q2Pack pack = Q2Pack::base);
 // Item number `n`'s name as a player reads it ("Shotgun"), "" for none.
-std::string_view sq_item_name(int n);
+std::string_view sq_item_name(int n, Q2Pack pack = Q2Pack::base);
 // An item number's icon (its picture's name under `pics/`), "" for none.
-std::string_view sq_icon(int n);
+std::string_view sq_icon(int n, Q2Pack pack = Q2Pack::base);
 
 // The bar's program: single player and co-op's, or deathmatch's (`match`: the frags too).
 std::string sq_bar_program(bool match);

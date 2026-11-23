@@ -97,11 +97,12 @@ bool fire_step(WeaponState& s, const WeaponWorld& w, int waterlevel, float at, W
   s.next_think = at + kThink;
   if (lightning)
     sound(out, room, n, WeaponSound::lightning_hit, at);
-  else
-    sound(out, room, n,
-          s.weapon == kItSuperNailgun && take == 2 ? WeaponSound::super_nailgun
-                                                   : WeaponSound::nailgun,
-          at);
+  else {
+    const bool super = s.weapon == kItSuperNailgun && take == 2;
+    sound(out, room, n, super ? WeaponSound::super_nailgun : WeaponSound::nailgun, at);
+    // A nail from the right barrel leaves the step at 2 (the first step), the left at 1.
+    if (!super && n <= room) out[n - 1].side = s.step == 2 ? 1 : -1;
+  }
   return true;
 }
 
