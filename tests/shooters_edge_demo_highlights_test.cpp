@@ -25,6 +25,7 @@
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_write.hpp"
+#include "shooters_edge/client/timedemo.hpp"
 
 namespace cl = shooters_edge::client;
 namespace gr = ge::replay;
@@ -316,6 +317,15 @@ TEST(cl_demowait_holds_the_last_frame_paused_and_a_seek_back_plays_again) {
   cl::TimedemoStep got = cl::TimedemoStep::frame;
   for (int i = 0; i < 400 && got != cl::TimedemoStep::end; i++) got = step(0.05);
   CHECK(got == cl::TimedemoStep::end);  // 0: the demo ends
+  {  // and the end is told in the console: the demo ended, no failure
+    ge::console::Console con{false};
+    std::vector<std::string> printed;
+    con.set_sink([&printed](std::string_view l) { printed.emplace_back(l); });
+    t.name = "duel.dm2";
+    t.paced = true;
+    CHECK(!cl::bench_end_report(con, t, "", false, "", 0, {}, [](const std::string&) {}));
+    CHECK(std::find(printed.begin(), printed.end(), "playdemo: duel.dm2 ended") != printed.end());
+  }
   cl::Timedemo held = opened();
   CHECK(cl::playback_begin(p, held, error));
   p.hold_end = 1;

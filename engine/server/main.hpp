@@ -42,6 +42,8 @@
 // ge:test tests/server_core_test.cpp
 #pragma once
 
+#include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -61,6 +63,15 @@ namespace ge::server {
 bool server_configure(console::Console& console, const std::vector<std::string>& args,
                       ServerConfig& config, ServerCfg& cfg, const ServerGame& game,
                       std::string& error, Features* features = nullptr);
+
+// What a game's declared word did when run (add_game_words).
+enum class GameWordRun : uint8_t { taken, refused, no_game };
+// The game's declared console words (ServerGame::words) registered on `console` in the game's
+// own layer (`game:<id>` of the console's manual pass), each running `run` with the whole line,
+// each `also` spelling a synonym; a name the console has already is skipped (the core's wins).
+// A refused line or one with no game prints what happened.
+void add_game_words(console::Console& console, const ServerGame& game,
+                    std::function<GameWordRun(const std::string& line)> run);
 
 // THE MOD SWITCH (`mod arena,ctf` on the server's console): every server value back to its
 // fallback, the search path remounted over `mods` (lowest first; none: the base game alone),
