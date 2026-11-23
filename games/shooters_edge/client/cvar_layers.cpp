@@ -529,6 +529,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("r_drawparticles", "r_particles");  // the specks (its rulesets lock it)
   c.cvars().add_synonym("cl_net_clientport", "net_clientport");  // the client's own port
   c.cvars().add_synonym("in_grab_windowed_mouse", "in_grab");    // the mouse kept in a window
+  if (c.cvars().find("scr_showfps") != nullptr)                  // the frame rate in a corner
+    c.cvars().add_synonym("show_fps", "scr_showfps");
   c.add_command_synonym("vid_reload", "r_reload");  // the textures and models read again
   c.add_command(
       "_cl_color", "_cl_color <shirt*16+pants>: both your colours as one number",
