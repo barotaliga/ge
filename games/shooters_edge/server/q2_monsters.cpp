@@ -760,7 +760,7 @@ void dying_shot(Q2Server& s, Q2Monster& m) {
                      m.entity, from, from + fwd * 16.0f,
                      q2_monster_flash_value(looks_like(k), look));
   if (a.fire == Fire::bolt) {
-    fight_monster_launch(s, m.entity, SqShot::bolt, from, fwd, a.damage, a.speed, cause_of(m));
+    fight_monster_launch(s, m.entity, shot_of(a, SqShot::bolt), from, fwd, a.damage, a.speed, cause_of(m));
     return;
   }
   for (int i = 0; i < (a.fire == Fire::pellets ? a.count : 1); i++) {
