@@ -406,6 +406,9 @@ int run_main(int argc, char** argv) {
   const auto outside = [&](const std::function<void()>& run) {
     cl::without_game_cvars(console, game_cvars, started_game, bindings, run);
   };
+  // Which game a `connect` joins, known before the configs and the command line run: a `+connect`
+  // among them joins a Quake II server as Quake II (the adapter takes this over below).
+  remote.q2_game = [&args] { return sp::game_or_quake(args.profile).id == "q2"; };
   if (const cl::ConfigsRun ran = cl::start_configs(console, args.basedir, args.game, content_row(),
                                                    args.plus, {series, outside});
       ran.passed_over > 0)
@@ -857,7 +860,7 @@ int run_main(int argc, char** argv) {
     world.reset();
     world = cl::create_world_draw(*device, from, map, static_cast<uint32_t>(w),
                                   static_cast<uint32_t>(h), surface.format(), picture, weapons,
-                                  error, load);
+                                  error, load, adapter);  // the played game's palette and textures
     if (!world)
       out::error("shooters_edge: the world draw did not load: " + error +
                  "; see docs/rendering.md");
@@ -1506,6 +1509,11 @@ int run_main(int argc, char** argv) {
       game_menu.show(menu_host);  // a server left with no game of our own behind: the title
     }
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
+    // A map loading behind the title holds the console down; a server joined or a demo played
+    // takes the screen, so the hold lets go now (that load waits, untaken, until the window is
+    // back), or the console would cover the game joined until a key raised it.
+    cl::release_load_line(loader, load_line, con_view, game_start.loading || demo_hold,
+                          remote.active || bench.active);
     const bool stop = std::exchange(stop_demo, false);  // `stopdemo` with none playing: nothing
     if (bench.active && !bench.paced && (stop || input.tapped(ge::platform::Key::escape))) {
       if (!end_bench(stop ? "stopdemo" : "Escape pressed", t, true)) return 1;
@@ -1763,9 +1771,12 @@ int run_main(int argc, char** argv) {
         world_current = false;
         load_listen_world(t);
       }
-      std::string caption = cl::load_caption(loader);  // classic: in its console (map_load.hpp)
-      const bool console_load =
-          con_look.on() && cl::console_load_line(loader, load_line, console, con_view, t);
+      // The window's own map loading, unless a server joined or a demo has the screen.
+      const bool own_load = !remote.active && !bench.active;
+      // Classic: in its console (map_load.hpp).
+      std::string caption = own_load ? cl::load_caption(loader) : std::string();
+      const bool console_load = own_load && con_look.on() &&
+                                cl::console_load_line(loader, load_line, console, con_view, t);
       if (console_load) caption.clear();
       if (!cl::busy(loader)) ge::audio::play_menu_music(music);  // no game: the menu's track
       title_frame(t, wall, caption, loader.since_s, false, console_load);

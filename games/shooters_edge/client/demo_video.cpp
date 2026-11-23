@@ -526,7 +526,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     if (map && (!world || s.models.size() != world_models)) {
       world.reset();
       world = create_world_draw(device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, look,
-                                {}, error, {s.models, {}, demo_vweps(s)});
+                                {}, error, {s.models, {}, demo_vweps(s)},
+                                o.game != nullptr ? *o.game : qw_adapter());
       if (!world) return false;
       world_models = s.models.size();
     }

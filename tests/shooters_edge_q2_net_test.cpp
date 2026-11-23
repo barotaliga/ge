@@ -9,7 +9,7 @@
 // sends a weapon key as `use` and leaves; each client is sent only the entities it may see.
 //
 // ge:summary Test: Quake II's live protocol, our client joined to our server on a simulated net
-// ge:keywords test q2 protocol-34 live client server signon move checksum delta refusal loss
+// ge:keywords test q2 protocol-34 live client server signon move checksum delta refusal loss stock-join load-line version-check
 // ge:skill net shooter testing
 #include <algorithm>
 #include <cmath>
@@ -25,13 +25,16 @@
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "classic/content/downloads.hpp"
+#include "console/console.hpp"
 #include "console/cvar.hpp"
+#include "console/view.hpp"
 #include "forward/forward.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "net/tcp_socket.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/listen_record.hpp"
+#include "shooters_edge/client/load_line.hpp"
 #include "shooters_edge/net/q2_admin.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_game.hpp"
@@ -306,6 +309,9 @@ TEST(a_client_joins_through_the_signon_and_plays_on_deltas) {
   CHECK(sc.moves > 100);
   CHECK(sc.bad_checksums == 0);
   CHECK_MSG(sc.full_frames <= 2, std::to_string(sc.full_frames) + " whole frames");
+  // The server's version check (`$version`) is answered with the client's own version, never
+  // with nothing: `version` is the window's command, not a setting.
+  CHECK_MSG(sc.version == cn::kProgramVersion, "the version said: \"" + sc.version + "\"");
   const float dx = c.demo.state.eye.x - x0, dy = c.demo.state.eye.y - y0;
   CHECK_MSG(dx * dx + dy * dy > 100.0f * 100.0f,
             "the player walked " + std::to_string(dx) + "," + std::to_string(dy));
@@ -854,6 +860,13 @@ TEST(the_window_joins_a_server_of_q2_and_plays) {
   };
   CHECK(heard_line("Out of item: Shotgun\n"));
   CHECK(heard_line("Out of item: Railgun\n"));
+  // Each line is heard once, however many packets follow it: what the window took last frame is
+  // never handed to it again.
+  const auto times = [&](const std::string& line) {
+    return std::count(heard.begin(), heard.end(), line);
+  };
+  CHECK_MSG(times("Out of item: Shotgun\n") == 1, std::to_string(times("Out of item: Shotgun\n")));
+  CHECK_MSG(times("Out of item: Railgun\n") == 1, std::to_string(times("Out of item: Railgun\n")));
   // Leaving tells the server.
   cn::remote_disconnect(remote);
   CHECK(!remote.active && remote.q2 == nullptr);
@@ -1330,6 +1343,46 @@ TEST(the_moves_between_frames_keep_a_turning_runner_closer) {
   CHECK_MSG(between_off < frames_off, "between frames " + std::to_string(between_off) +
                                           " units off, at frames only " +
                                           std::to_string(frames_off));
+}
+
+// A stock server's protocol (34, as a stock client asks) joined from the window while its own
+// map still loads behind the title: the console that load held down lets go once the game is
+// joined, so the joined world is seen; the hold stays while the window is on its own.
+TEST(the_window_joining_a_stock_protocol_server_lets_its_own_load_s_console_go) {
+  auto r = rig({});
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  ge::console::Console con;
+  ge::console::ConsoleView view(con);
+  cl::LoadLine line;
+  cl::hold_load_line("base1", 0, line, con, view, 0.3);
+  CHECK(view.full() && line.held);
+  cl::release_load_line(true, false, line, view, false);  // still loading, nothing joined
+  CHECK(view.full() && line.held);
+  cn::Remote remote;
+  remote.q2_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cfg.q2_protocol = 34;
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortQ2), cfg);
+  std::vector<std::string> said;
+  int levels = 0;
+  for (int i = 0; i < 150; i++) {
+    r->now += 13000;
+    gn::sim_advance(r->net, r->now);
+    levels += cn::remote_step(remote, 0.0131, said) == cn::RemoteStep::new_level ? 1 : 0;
+    cn::q2_net_frame(r->server, r->now);
+    cl::release_load_line(true, remote.active, line, view, false);  // as the window's frame
+  }
+  CHECK_MSG(remote.q2->stage == cn::ClientStage::active, remote.q2->refused);
+  CHECK(remote.q2->protocol == 34);
+  CHECK(levels == 1);
+  CHECK(!view.full() && !line.held);
+  // Kept by a game's start, the hold is let go but the console stays down.
+  cl::hold_load_line("base1", 0, line, con, view, 1);
+  cl::release_load_line(true, true, line, view, true);
+  CHECK(view.full() && !line.held);
 }
 
 TEST(a_stock_server_s_players_run_on_from_its_frames) {
