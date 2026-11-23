@@ -61,6 +61,7 @@
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/remix.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -161,6 +162,8 @@ void run(gl::Lab& lab) {
   ge::console::ConsoleView con_view(con);
   con.set_sink(
       [&con_view](std::string_view line) { con_view.add(ge::console::LineKind::output, line); });
+  cl::RemixSettings remix_rows;  // OPTIONS > CLASSIC REMIX's rows, live on their cr_ settings
+  cl::bind_remix(con.cvars(), &remix_rows);
   sm::GameMenu menu;
   menu.add_cvars(con);
   cl::ClassicPictures pics = cl::load_classic_pictures(files, false, {}, &adapter);
@@ -273,6 +276,16 @@ void run(gl::Lab& lab) {
          "A page under the root: its title the game's own picture (Quake II's banner over the "
          "screen's top), its rows in the game's glyph sheet.",
          "the title picture centred at the top; the rows' labels right-aligned to the cursor",
+         [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
+    // CLASSIC REMIX: every cr_ setting on one page, the mission packs' among them.
+    menu.show(host, "remix");
+    menu.update(none, false, host, 1 / 60.0);
+    menu.settle();
+    shot("remix", "CLASSIC REMIX",
+         "OPTIONS > CLASSIC REMIX: remix on or off, the mission packs, whose items, monsters, "
+         "figures, movement, sounds, menu and letters, and the balance of a remixed map's "
+         "weapons and pickups, each a setting of the console.",
+         "every row lit (none dimmed), each value beside its words, the sliders' bars",
          [&](ge::ui::DrawList& dl) { menu.draw(dl, iw, ih, t); });
     // SERVER SETTINGS: the first page, a subpage of the votes, and the question a turned vote asks.
     menu.show(host, "server");
