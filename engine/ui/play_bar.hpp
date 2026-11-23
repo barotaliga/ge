@@ -19,6 +19,7 @@
 // ge:keywords ui play-bar seek-bar scrubber timeline progress playhead markers highlights tooltip
 // ge:keywords clock play pause speed drag seek video-player draw_play_bar play_bar_layout
 // ge:keywords play_bar_time play_bar_marker_at play_bar_pointer play_clock demo replay
+// ge:keywords play_percent progress-percent
 // ge:skill ui replay
 // ge:test tests/ui_play_bar_test.cpp
 #pragma once
@@ -45,8 +46,10 @@ struct PlayBarView {
   double speed = 1;
   std::span<const PlayBarMarker> markers;
   float pointer_x = -1, pointer_y = -1;  // the pointer, px (negative: none)
-  double drag_s = -1;  // a drag's landing, drawn as the playhead until the release (-1: none)
-  std::string title;   // at the right of the row under the track
+  double drag_s = -1;    // a drag's landing, drawn as the playhead until the release (-1: none)
+  std::string title;     // at the right of the row under the track
+  bool clock = true;     // "1:02 / 4:10" after the button
+  bool percent = false;  // "25%": the share played, after the clock
 };
 
 struct PlayBarLayout {
@@ -72,6 +75,10 @@ int play_bar_marker_at(const PlayBarLayout& l, std::span<const PlayBarMarker> ma
 // "m:ss" (and "h:mm:ss" from an hour), whole seconds rounded down (a thousandth short of one is
 // it: a timeline summed from frames lands a hair under a whole second).
 std::string play_clock(double s);
+
+// "NN%": the share of `length_s` that `s` has reached, whole percent rounded down, 0..100 (0 when
+// the length is not yet known).
+std::string play_percent(double s, double length_s);
 
 // The bar into `list` (after the frame's other overlay, so it is on top).
 void draw_play_bar(DrawList& list, const PlayBarLayout& l, const PlayBarView& v);

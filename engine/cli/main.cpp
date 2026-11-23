@@ -40,6 +40,7 @@
 #include "cli/index.hpp"
 #include "cli/json.hpp"
 #include "cli/lint.hpp"
+#include "cli/manual.hpp"
 #include "cli/merge.hpp"
 #include "cli/mod.hpp"
 #include "cli/model.hpp"
@@ -486,6 +487,15 @@ Outcome run(const Args& a) {
   if (name.starts_with("sound ")) return run_sound(a);
   if (name == "model import") return run_model(a);
   if (name.starts_with("source ")) return run_source(a);
+  if (name == "manual") {
+    ManualOptions mo;
+    mo.sources = a.words;
+    mo.out = flag_value(a, "out", mo.out);
+    mo.title = flag_value(a, "title", mo.title);
+    mo.intro = flag_value(a, "intro");
+    mo.version = flag_value(a, "version");
+    return run_manual(mo);
+  }
   if (name == "credits check") return run_credits_check(a.words.empty() ? "." : a.words[0]);
   if (name == "asset list") return run_asset_list(build_options(a));
   if (name == "asset check") return run_asset_check(build_options(a));

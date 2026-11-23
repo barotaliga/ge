@@ -2,6 +2,7 @@
 //
 // ge:summary Quake II's dedicated server game: its maps read, the rules started and moved on
 // ge:keywords q2-dedicated-server q2_game protocol-34 servergame sv_maxrate sv_minrate
+// ge:keywords sv_public public classic-master-announce
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_net_test.cpp
 #include "shooters_edge/net/q2_game.hpp"
@@ -150,6 +151,10 @@ constexpr gs::GameRule kRules[] = {
     {"sv_waterjump", "Whether jump held under water lifts a swimmer at a fixed speed.", nullptr,
      "0: the fixed lift (100 in water, 80 in slime, 50 in lava); 1: only the swim's own up move "
      "for players whose game predicts it (the default); 2: the same for anyone"},
+    {"sv_public", "Whether the server announces itself to the classic masters setmaster names.",
+     nullptr,
+     "0: it does not until setmaster is used (the default); 1: from the map's start; read when "
+     "a map starts"},
     {"sv_banmode", "How the ban list made by addip is read.", nullptr,
      "0: only the addresses on it may join; 1: the addresses on it are refused (the default)"},
     {"sv_antilag", "Whether a shot sees the others where the shooter saw them.", nullptr,
@@ -310,6 +315,7 @@ constexpr gs::SettingName kSettingNames[] = {
     {"allow_download_pics", "sv_download_pics"},
     {"allow_download_others", "sv_download_others"},
     {"filterban", "sv_banmode"},
+    {"public", "sv_public"},
     {"map_override_path", "sv_entpath"},
     {"map_visibility_patch", "sv_vispatch"},
     {"maxspectators", "sv_maxspectators"},
@@ -526,7 +532,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
         rule == "sv_maxents" || rule == "sv_entpriority" || rule == "sv_novis" ||
         rule == "sv_vispatch" || rule == "sv_entpath" || rule == "sv_partialnames" ||
         rule == "sv_packetdup" || rule == "sv_forcereconnect" || rule == "sv_maxmsglen" ||
-        rule == "sv_cinematics" || rule.rfind("sv_mvd_", 0) == 0 || rule.rfind("mvd_", 0) == 0)
+        rule == "sv_cinematics" || rule == "sv_public" || rule.rfind("sv_mvd_", 0) == 0 ||
+        rule.rfind("mvd_", 0) == 0)
       continue;  // the endpoint's
     std::string line = rule;
     line += ' ';
@@ -564,6 +571,9 @@ void* create(const gs::ServerConfig& c, std::string& error) {
         g->cfg.vip_passwords.push_back(std::exchange(w, {}));
   }
   g->cfg.unix_time = [] { return static_cast<int64_t>(std::time(nullptr)); };  // timed bans
+  // A public server beats to the classic masters from the start (setmaster also makes it one).
+  if (const auto p = c.rules.find("sv_public"); p != c.rules.end())
+    g->masters.is_public = p->second == "1";
   if (const auto b = c.rules.find("sv_banmode"); b != c.rules.end() && !b->second.empty()) {
     if (b->second != "0" && b->second != "1") {
       error = "sv_banmode \"" + b->second +

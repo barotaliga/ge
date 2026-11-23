@@ -82,6 +82,12 @@ std::string play_clock(double s) {
   return b;
 }
 
+std::string play_percent(double s, double length_s) {
+  if (!(length_s > 0)) return "0%";
+  const double share = std::clamp(s / length_s, 0.0, 1.0);
+  return std::to_string(static_cast<int>(std::floor(share * 100 + 1e-6))) + "%";
+}
+
 void draw_play_bar(DrawList& list, const PlayBarLayout& l, const PlayBarView& v) {
   const float s = l.scale;
   const Font& font = ui_font();
@@ -160,8 +166,11 @@ void draw_play_bar(DrawList& list, const PlayBarLayout& l, const PlayBarView& v)
   }
   const float size = 21 * s;
   float x = b.right() + 12 * s;
-  x +=
-      list.text(font, size, x, l.text_y, play_clock(head_s) + " / " + play_clock(v.length_s), kInk);
+  if (v.clock)
+    x += list.text(font, size, x, l.text_y, play_clock(head_s) + " / " + play_clock(v.length_s),
+                   kInk) +
+         12 * s;
+  if (v.percent) x += list.text(font, size, x, l.text_y, play_percent(head_s, v.length_s), kInk);
   if (v.speed != 1) {
     x += 14 * s;
     const std::string sp = speed_text(v.speed);

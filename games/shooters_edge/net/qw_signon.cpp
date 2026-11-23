@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "classic/protocol/download_pace.hpp"
 #include "classic/protocol/wire.hpp"
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
@@ -436,9 +437,9 @@ void download_block(QwServer& s, int slot) {
   QwClient& c = s.clients[slot];
   ServerDownload& d = c.dl;
   const std::vector<uint8_t>& bytes = s.cfg.files[static_cast<size_t>(d.file)].bytes;
-  const int rate = c.ch.rate_s_per_byte > 0 ? static_cast<int>(1.0 / c.ch.rate_s_per_byte) : 25000;
-  size_t block = static_cast<size_t>(std::max(10, std::min(1024, rate / 25)));
-  if (block > bytes.size() - d.offset) block = bytes.size() - d.offset;
+  const int rate = c.ch.rate_s_per_byte > 0 ? static_cast<int>(1.0 / c.ch.rate_s_per_byte) : 0;
+  const size_t block = ge::classic::protocol::download_piece_bytes(
+      ge::classic::protocol::DownloadPiece::by_rate, rate, 0, bytes.size() - d.offset);
   SvcMsg m;
   m.id = svc::download;
   d.offset += block;

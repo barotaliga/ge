@@ -15,6 +15,7 @@ server's behaviour is [`server.md`](server.md); recordings and TV are [`demos.md
 | Engine | `engine/net/replicate.hpp`, `session.hpp`, `node.hpp` | The engine's OWN protocol (replication, sessions, up to 32 peers) for a game that needs no stock interop |
 | Classic plugin | `plugins/classic/protocol/channel.hpp` | The classic net channel: sequences, reliable bit and resend, qport, rate, choke |
 | Classic plugin | `plugins/classic/protocol/info.hpp` | Info strings: get, set, remove, star keys, names cleaned and unique |
+| Classic plugin | `plugins/classic/protocol/download_pace.hpp` | A server's download pieces: by the rate (Quake's) or filling the packet (Quake II's), and the pause after each |
 | Classic plugin | `plugins/classic/protocol/wire.hpp`, `directions.hpp` | Sizes, quantization, fields, CRC-16; Quake II's 162 directions |
 | Engine | `engine/net/http_fetch.hpp` | An HTTP GET for any game: https, proxy (a tunnel for https), redirects, chunks, failure words |
 | Engine | `engine/net/tls_stream.hpp` | TLS 1.2 and 1.3 over caller-carried bytes (Mbed TLS): the system's roots, the name checked, a test server |
