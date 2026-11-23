@@ -555,6 +555,17 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
     cue(ui::MenuCue::move);
     return;
   }
+  // The setup page's colour picker: a click on a swatch sets the shirt or the pants.
+  if (main_.top().id == "setup" && in.click && swatches_.w > 0 && host.console != nullptr) {
+    int row = 0;
+    const int colour = swatch_hit(swatches_, in.pointer_x, in.pointer_y, &row);
+    if (colour >= 0) {
+      host.console->execute((row == 0 ? "topcolor " : "bottomcolor ") + std::to_string(colour));
+      refresh_main(host);
+      cue(ui::MenuCue::move);
+      return;
+    }
+  }
   const ui::Item* held = main_.focused();
   const std::string item_before = held != nullptr ? held->id : std::string();
   const std::vector<ui::MenuEvent> events = main_.input(in, hits_);
@@ -607,11 +618,60 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
       refresh_main(host);
     }
   }
+  update_figure(in, host, dt);
   if (host.console != nullptr) {
     server_page_.after(main_, page_before, item_before, *host.console);
     server_page_.tick(dt, *host.console);
     if (server_page_.open() && host.sheet != nullptr && host.sheet->revision != sheet_seen_)
       fill_server(host);
+  }
+}
+
+void GameMenu::update_figure(const ui::MenuInput& in, const Host& host, double dt) {
+  if (main_.top().id != "setup") {
+    figure_box_ = swatches_ = {};
+    return;
+  }
+  FigureLook look;
+  look.q2 = &table_of(host) == &q2_menu();
+  look.skin = host_value(host, "skin");
+  double x = 0;
+  look.top = ge::console::parse_number(host_value(host, "topcolor"), x) ? static_cast<int>(x) : 0;
+  look.bottom =
+      ge::console::parse_number(host_value(host, "bottomcolor"), x) ? static_cast<int>(x) : 0;
+  if (look.q2) look.top = look.bottom = -1;  // Quake II's figures wear their skins' own colours
+  look.vweps = ge::console::parse_number(host_value(host, "r_drawvweps"), x) && x != 0;
+  if (const ui::Item* w = main_.top().find("figweapon"); w != nullptr) look.weapon = w->choice;
+  figure_.set_files(host.files, art_.palette);
+  figure_.set_look(look);
+  figure_.update({.x = in.pointer_x, .y = in.pointer_y, .held = in.pointer_held, .click = in.click},
+                 figure_box_, dt);
+}
+
+void GameMenu::draw_figure(ui::DrawList& list) {
+  if (figure_box_.w < 8 || figure_box_.h < 8) return;
+  const ui::Image* pic =
+      figure_.picture(static_cast<int>(figure_box_.w), static_cast<int>(figure_box_.h));
+  if (pic != nullptr) {
+    ui::Box b;
+    b.rect = figure_box_;
+    b.image = pic;
+    b.uv = {0, 0, static_cast<float>(pic->width), static_cast<float>(pic->height)};
+    b.feather = 0;
+    list.box(b);
+  }
+  if (swatches_.w <= 0) return;
+  const ui::Item* top = main_.top().find("topcolor");
+  const ui::Item* bottom = main_.top().find("bottomcolor");
+  for (int row = 0; row < 2; ++row) {
+    const int chosen = row == 0 ? (top ? top->choice : -1) : (bottom ? bottom->choice : -1);
+    for (int c = 0; c < 14; ++c) {
+      const ui::Rect r = swatch_rect(swatches_, row, c);
+      // A colour's swatch shows its row's bright end, as a shirt in it looks lit.
+      const int index = c < 8 ? c * 16 + 4 : c * 16 + 11;
+      if (c == chosen) list.rect(r, ui::hex(0xffffff, 1));
+      list.rect(ge::ui::inset(r, c == chosen ? r.w * 0.18f : r.w * 0.08f), art_.colour(index));
+    }
   }
 }
 
@@ -651,7 +711,14 @@ void GameMenu::draw(ui::DrawList& list, int width, int height, double t) {
     const ClassicLayout l = layout_classic(main_, art_, width, height);
     hits_ = l.items;
     problems_ = classic_problems(main_, l, width, height);
-    draw_classic(list, main_, art_, l, t, help_page_);
+    const bool setup = main_.top().id == "setup" && figure_.ready();
+    if (setup) {
+      const SetupFigureBox box = setup_figure_box(main_.top(), l, art_);
+      figure_box_ = box.figure;
+      swatches_ = box.swatches;
+    }
+    draw_classic(list, main_, art_, l, t, help_page_, setup);
+    if (setup) draw_figure(list);
     return;
   }
   ui::Menu& m = in_enhance_ ? enhance_ : main_;
@@ -666,6 +733,16 @@ void GameMenu::draw(ui::DrawList& list, int width, int height, double t) {
     view_.frame(m, layout, dt_);
   settle_ = false;
   view_.draw(list, m, layout, style_);
+  if (!in_enhance_ && m.top().id == "setup" && figure_.ready()) {
+    // The modern look: the figure where a row's picture stands, the swatches under it.
+    const ui::Rect p = layout.preview;
+    const bool colours = m.top().find("topcolor") != nullptr;
+    const float sw = colours ? std::min(p.w, p.h * 0.6f) : 0;
+    swatches_ =
+        colours ? ui::Rect{p.x + (p.w - sw) / 2, p.bottom() - sw / 7, sw, sw / 7} : ui::Rect{};
+    figure_box_ = {p.x, p.y, p.w, p.h - (colours ? sw / 7 + 8 : 0)};
+    draw_figure(list);
+  }
   if (in_enhance_ && m.top().id == "enhancing" && (job_ || !start_error_.empty())) {
     ce::PanelStyle ps;
     ps.scale = layout.scale;

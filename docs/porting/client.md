@@ -74,7 +74,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Status bar pictures | sharp | `gl_bilerp_pics`, `gl_gamma_scale_pics` (`client/q2_bar.cpp`) | sharp | sharp |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Command packets | `localid`: a server browser on this machine sends commands that carry it (`net/qw_client.cpp`) | none | its own | its own |
-| Setup figure | the pack's figure in the chosen shirt and pants (`menu/classic_art.cpp`'s `player_in`) | its figure rows (`menu/q2_pages.cpp`) | its own | its own |
+| Setup figure | the player's model drawn live beside the rows (`menu/player_view.hpp`): its skin and colours, a colour picker of swatches, the WEAPON row's weapon (the carried one with `r_drawvweps`), a click fires it, a drag turns it; the CPU drawing is `overview/mesh_picture.hpp`'s `draw_turned`, the figure art `classic/figure_art.hpp`; the pack's still figure only when the files lack the model | the same page under its model and skin rows (`menu/q2_pages.cpp`), no colours | its own | its own |
 | Screenshot names | by the time | `gl_screenshot_template` (`quakeXXX`) and `gl_screenshot_compression` over `scr_template` and `scr_compression` (`capture/screenshot.hpp`) | by the time | the engine's |
 
 ## Adding a game

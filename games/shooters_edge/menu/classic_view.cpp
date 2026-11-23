@@ -468,8 +468,29 @@ std::vector<std::string> classic_problems(const ui::Menu& menu, const ClassicLay
   return out;
 }
 
+SetupFigureBox setup_figure_box(const ui::Page& page, const ClassicLayout& l,
+                                const ClassicArt& art) {
+  float below = kRowTop;
+  bool colours = false;
+  for (size_t i = 0; i < page.items.size() && i < l.items.size(); i++) {
+    if (l.items[i].w > 0) below = std::max(below, (l.items[i].bottom() - l.y) / l.scale);
+    colours = colours || page.items[i].id == "topcolor";
+  }
+  const float screen_h = art.screen_height();
+  constexpr float kWide = 112, kSwatches = 16;  // 14 swatches of 8 px a row, two rows
+  const float top = below + 6, bottom = screen_h - 4 - (colours ? kSwatches + 2 : 0);
+  const float x = std::floor((kScreenW - kWide) / 2);
+  SetupFigureBox box;
+  box.figure = {l.x + x * l.scale, l.y + top * l.scale, kWide * l.scale,
+                std::max(0.0f, bottom - top) * l.scale};
+  if (colours)
+    box.swatches = {l.x + x * l.scale, l.y + (bottom + 2) * l.scale, kWide * l.scale,
+                    kSwatches * l.scale};
+  return box;
+}
+
 void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
-                  const ClassicLayout& l, double t, int help_page) {
+                  const ClassicLayout& l, double t, int help_page, bool live_figure) {
   const ClassicPen pen{dl, art, l};
   dl.rect({0, 0, static_cast<float>(dl.width()), static_cast<float>(dl.height())},
           ui::hex(0x000000, 0.6f));
@@ -576,7 +597,7 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
     pen.box(56, 68, 24, 5);
   }
   // The setup page's figure in the shirt and pants its rows hold now, in its box under the rows.
-  if (page.id == "setup" && art.loaded()) {
+  if (page.id == "setup" && art.loaded() && !live_figure) {
     int top = -1, bottom = -1;
     float below = kRowTop;
     for (size_t i = 0; i < page.items.size(); i++) {
