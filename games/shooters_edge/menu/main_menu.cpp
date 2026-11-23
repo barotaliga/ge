@@ -48,6 +48,10 @@ constexpr Choice kHudGuns[] = {{"LOOK'S OWN", "look"},
 constexpr Choice kWorldLook[] = {{"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kMenuLook[] = {{"AUTO", "auto"}, {"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kOnOff[] = {{"OFF", "0"}, {"ON", "1"}};
+// The competition rulesets (classic/rulesets.hpp's QuakeWorld book, in its order).
+constexpr Choice kRulesets[] = {
+    {"NONE", "default"}, {"SMACKDOWN", "smackdown"},     {"SMACKDRIVE", "smackdrive"},
+    {"QCON", "qcon"},    {"THUNDERDOME", "thunderdome"}, {"MTFL", "mtfl"}};
 constexpr Choice kSides[] = {{"LEFT", "left"}, {"RIGHT", "right"}};
 constexpr Choice kFall[] = {{"SNOW", "0"}, {"SLEET", "0.5"}, {"RAIN", "1"}};
 
@@ -417,6 +421,15 @@ constexpr Entry kEntries[] = {
      .hint = "Your classic packs enhanced, and the modern picture: light, water, sky, weather.",
      .opens = "enhanced",
      .needs = "ce_textures"},
+    {.page = "options",
+     .id = "ruleset",
+     .text = "RULESET",
+     .kind = ItemKind::choice,
+     .hint = "A league's rules for a match: our additions off, the league's settings held. "
+             "Changed only while you are not on a server.",
+     .needs = "ruleset",
+     .target = Target::client,
+     .choices = kRulesets},
     {.page = "options",
      .id = "server",
      .text = "SERVER SETTINGS",

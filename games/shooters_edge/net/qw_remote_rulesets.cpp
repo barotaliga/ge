@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_remote_rulesets_test.cpp
 #include "shooters_edge/net/qw_remote_rulesets.hpp"
 
+#include <cstdlib>
 #include <memory>
 #include <string>
 
@@ -68,6 +69,13 @@ void remote_rulesets_frame(Remote& r, gc::Console& con) {
   f.scripts = on(con, "allow_scripts");
   f.forced_skins = on(con, "enemyforceskins");
   f.side_step = on(con, "cl_idrive");
+  // The beam's smoothing is said to everyone when a player changes it in a match, as the leagues
+  // expect: the others know how the player sees the lightning.
+  if (const gc::Cvar* shaft = con.cvars().find("cl_fakeshaft"); shaft != nullptr) {
+    if (shaft->value != r.fakeshaft_seen && !r.fakeshaft_seen.empty() && remote_playing(r))
+      con.append("say \"" + ge::classic::fakeshaft_words(std::atof(shaft->value.c_str())) + "\"");
+    r.fakeshaft_seen = shaft->value;
+  }
 }
 
 void remote_fair_step(Remote& r, const std::vector<client::DemoPrint>& prints, double now_s) {

@@ -7,6 +7,7 @@
 #include "classic/rulesets.hpp"
 
 #include <array>
+#include <cstdio>
 
 namespace ge::classic {
 
@@ -242,6 +243,14 @@ std::string fair_help() {
          "f_ruleset check: ask everyone now.\n"
          "The answer ends with + and the aids on, then - and the aids off:\n"
          "m models or sounds changed, s movement scripts, f enemy skins forced, i side-step aid.";
+}
+
+std::string fakeshaft_words(double value) {
+  if (value >= 0.999) return "fakeshaft on";
+  if (value < 0.001) return "fakeshaft off";
+  char line[32];
+  std::snprintf(line, sizeof line, "fakeshaft %.1f%%", value * 100);
+  return line;
 }
 
 bool FairReplies::may_answer(double now_s) {

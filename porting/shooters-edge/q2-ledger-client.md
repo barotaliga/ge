@@ -17,7 +17,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
 | Menu pages and rows | 147 | 3 | 12 | 162 |
 | Server messages the client parses (svc) | 26 | 0 | 1 | 27 |
-| Temporary entities (svc_temp_entity) | 22 | 17 | 26 | 65 |
+| Temporary entities (svc_temp_entity) | 39 | 0 | 26 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 0 | 1 | 33 |
 | Entity effect bits (EF_) | 32 | 0 | 1 | 33 |
@@ -31,7 +31,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 16 | 0 | 4 | 20 |
 | Connection, network, downloads and the rest | 15 | 1 | 2 | 18 |
-| **all** | 957 | 0 | 24 | 231 | 1212 |
+| **all** | 967 | 14 | 231 | 1212 |
 
 ## Client console commands
 
@@ -337,11 +337,11 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.scr_scale | `scr_scale` | the 2D scale, 0 auto by window height (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` `q2_bar_scale` (M18k4 round 34) |
 | cvar.crosshair | `crosshair` | 0 none, N the `chN` picture (default 0) | done | `engine/hud/crosshair.hpp` (Quake II's layer `same`) |
 | cvar.netgraph | `netgraph` | 1 latency bars, 2 packet sizes (default 0) | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: a synonym of our `r_netgraph` (`games/shooters_edge/client/cvar_layers.cpp`): 2's packet sizes are not drawn |
-| cvar.timegraph | `timegraph` | a frame-time graph (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp`: a column a frame along the bottom, a unit tall a millisecond |
-| cvar.debuggraph | `debuggraph` | a development graph (default 0) | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp`: the graph drawn; ours feeds it no development values of its own |
-| cvar.graphheight | `graphheight` | the graph's height (default 32) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp` |
-| cvar.graphscale | `graphscale` | the graph's vertical scale (default 1) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp` |
-| cvar.graphshift | `graphshift` | the graph's vertical offset (default 0) | done | `games/shooters_edge/client/q2_bar.cpp` (`draw_graph`) over `engine/hud/bottom_graph.hpp` |
+| cvar.timegraph | `timegraph` | a frame-time graph (default 0) | done | `games/shooters_edge/client/screen_2d.cpp` (`draw_screen_graph`, every classic game's) over `engine/hud/bottom_graph.hpp`: a column a frame along the bottom, a unit tall a millisecond |
+| cvar.debuggraph | `debuggraph` | a development graph (default 0) | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `games/shooters_edge/client/screen_2d.cpp` (`draw_screen_graph`, every classic game's) over `engine/hud/bottom_graph.hpp`: the graph drawn; ours feeds it no development values of its own |
+| cvar.graphheight | `graphheight` | the graph's height (default 32) | done | `games/shooters_edge/client/screen_2d.cpp` (`draw_screen_graph`, every classic game's) over `engine/hud/bottom_graph.hpp` |
+| cvar.graphscale | `graphscale` | the graph's vertical scale (default 1) | done | `games/shooters_edge/client/screen_2d.cpp` (`draw_screen_graph`, every classic game's) over `engine/hud/bottom_graph.hpp` |
+| cvar.graphshift | `graphshift` | the graph's vertical offset (default 0) | done | `games/shooters_edge/client/screen_2d.cpp` (`draw_screen_graph`, every classic game's) over `engine/hud/bottom_graph.hpp` |
 | cvar.scr_chathud | `scr_chathud` | 0 off, 1 last chat lines on screen, 2 in the alternate colour (default 0) | done | `games/shooters_edge/client/chat_lines.cpp` (M18k4 round 32) |
 | cvar.scr_chathud_lines | `scr_chathud_lines` | chat lines shown (default 4) | done | (M18k4 round 32) |
 | cvar.scr_chathud_time | `scr_chathud_time` | seconds a chat line stays, 0 for ever (default 0) | done | (M18k4 round 32) |
@@ -805,37 +805,37 @@ Every message a server (or a recording) sends the client, and what the client do
 
 ## Temporary entities (svc_temp_entity)
 
-done 21, missing 18, not-taken 26
+done 39, missing 0, not-taken 26
 
 Each one-off effect a server sends, what the client draws and plays for it. The window's own game draws its own effects from its rules' events (`app/weapon_fx.hpp`, `app/monster_fx.hpp`, `client/world_fx.cpp`); the status here is for a joined server and a recording, where the original's effect must come from the message.
 
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
-| te.gunshot | `TE_GUNSHOT` (0) | a bullet hit: dark particles and a small smoke-and-flash sprite, sometimes a ricochet sound | missing | Missing, rank 2 (seen on a joined server and in demos): 40 specks of 0x00..0x07 and the 1-in-16 ricochets now as the client's (`client/q2_temp_fx.hpp`); left: the smoke puff and flash models |
+| te.gunshot | `TE_GUNSHOT` (0) | a bullet hit: dark particles and a small smoke-and-flash sprite, sometimes a ricochet sound | done | its 40 specks and ricochets (`client/q2_temp_fx.hpp`), the smoke puff and the flash models (`client/q2_model_fx.hpp`, drawn by `client/world_fx_q2.cpp`) |
 | te.blood | `TE_BLOOD` (1) | red blood particles along the direction | done | 60 specks of 0xe8..0xef off the face, 0..31 out along its normal (`fx::q2_specks`), from a server, a demo and our own game; `client/demo_q2.cpp`, `client/q2_temp_fx.hpp`, `client/world_fx.cpp`, `client/listen.cpp` |
-| te.blaster | `TE_BLASTER` (2) | a blaster bolt's hit: orange particles, a flash model lit for a moment, `weapons/lashit.wav` | missing | Missing, rank 2 (seen on a joined server and in demos): named `te_blaster`: its yellow sparks, light and `weapons/lashit.wav` (`client/demo_q2.cpp`, `client/world_fx.cpp`); left: the explode model turned to the face |
+| te.blaster | `TE_BLASTER` (2) | a blaster bolt's hit: orange particles, a flash model lit for a moment, `weapons/lashit.wav` | done | in the classic look its 40 specks pushed off the face (`app/effects.hpp` `q2_blaster_specks`), the explode model turned to the face, its yellow light of 150 fading over 0.3 s (`client/q2_model_fx.hpp`) and `weapons/lashit.wav` |
 | te.railtrail | `TE_RAILTRAIL` (3) | the rail's spiral and core of particles (or a beam by `cl_railtrail_type`), `weapons/railgf1a.wav` at the end | done | named `te_railtrail`: the beam and the line circling it, `weapons/railgf1a.wav` at its end; `client/demo_q2.cpp`, `client/q2_temp_fx.hpp`, `client/world_fx.cpp` |
-| te.shotgun | `TE_SHOTGUN` (4) | a pellet hit: fewer particles and a smoke puff, no ricochet | missing | Missing, rank 2 (seen on a joined server and in demos): 20 specks of 0x00..0x07, silent, now as the client's (`client/q2_temp_fx.hpp`); left: the smoke puff and flash models |
-| te.explosion1 | `TE_EXPLOSION1` (5) | a large explosion: the explosion model, orange light, `weapons/rocklx1a.wav` | missing | Missing, rank 2 (seen on a joined server and in demos): its sound `weapons/rocklx1a.wav` now played (`client/q2_temp_fx.hpp`); left: the explosion model's animation, skins and light curve |
-| te.explosion2 | `TE_EXPLOSION2` (6) | a grenade-style explosion with its light and `weapons/grenlx1a.wav` | missing | Missing, rank 2 (seen on a joined server and in demos): its sound `weapons/grenlx1a.wav` now played; left: the explosion model's 19 frames from 30, skins and light curve |
-| te.rocket_explosion | `TE_ROCKET_EXPLOSION` (7) | a rocket's blast: model, particles (off by `cl_disable_particles` 4), light, sound | missing | Missing, rank 2 (seen on a joined server and in demos): its sound now played; left: the explosion model's animation, skins and light curve |
-| te.grenade_explosion | `TE_GRENADE_EXPLOSION` (8) | a grenade's blast: model, particles, light, sound | missing | Missing, rank 2 (seen on a joined server and in demos): its sound now played; left: the explosion model's animation, skins and light curve |
+| te.shotgun | `TE_SHOTGUN` (4) | a pellet hit: fewer particles and a smoke puff, no ricochet | done | its 20 specks, silent; the smoke puff and the flash models (`client/q2_model_fx.hpp`) |
+| te.explosion1 | `TE_EXPLOSION1` (5) | a large explosion: the explosion model, orange light, `weapons/rocklx1a.wav` | done | its 256 specks (`q2_blast_specks`), the explosion model's frames 0..14 or 15..29, skins by age, a random yaw, the light of 350 fading with it (`client/q2_model_fx.hpp`), `weapons/rocklx1a.wav`; the player's switches never reach it |
+| te.explosion2 | `TE_EXPLOSION2` (6) | a grenade-style explosion with its light and `weapons/grenlx1a.wav` | done | its 256 specks, the explosion model's frames 30..48, skins by age, the light curve (`client/q2_model_fx.hpp`), `weapons/grenlx1a.wav` |
+| te.rocket_explosion | `TE_ROCKET_EXPLOSION` (7) | a rocket's blast: model, particles (off by `cl_disable_particles` 4), light, sound | done | its 256 specks (off by `cl_disable_particles` 4), the explosion model's 15 frames, skins and light curve (`client/q2_model_fx.hpp`; ball off by `cl_disable_explosions` 2, light 200 with `cl_dlight_hacks` 2), its sound |
+| te.grenade_explosion | `TE_GRENADE_EXPLOSION` (8) | a grenade's blast: model, particles, light, sound | done | its 256 specks (off by `cl_disable_particles` 1), the explosion model's 19 frames from 30, skins and light curve (`client/q2_model_fx.hpp`), its sound |
 | te.sparks | `TE_SPARKS` (9) | a few bright sparks | done | 6 specks of 0xe0..0xe7 off the face, silent; `client/demo_q2.cpp`, `client/q2_temp_fx.hpp`, `client/world_fx.cpp`, `client/listen.cpp` |
-| te.splash | `TE_SPLASH` (10) | a splash of count particles coloured by kind (sparks, water, mud, slime, lava, blood); sparks play `world/spark5..7.wav` | missing | Missing, rank 2 (seen on a joined server and in demos): drawn from the wire as the listen server draws it (`client/demo_q2.cpp`: `sq_splash` in its kind's colour); the sparks' sound not played; no test reads it off the wire |
+| te.splash | `TE_SPLASH` (10) | a splash of count particles coloured by kind (sparks, water, mud, slime, lava, blood); sparks play `world/spark5..7.wav` | done | drawn from the wire in its kind's colour (`client/demo_q2.cpp`: `sq_splash`); sparks crackle `world/spark5..7.wav` (`client/q2_temp_fx.hpp`); read off the wire in `tests/shooters_edge_q2_model_fx_test.cpp` |
 | te.bubbletrail | `TE_BUBBLETRAIL` (11) | a line of bubbles between two points | done | bubbles every 32 units rising, read in `client/demo_q2.cpp`, drawn by `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.screen_sparks | `TE_SCREEN_SPARKS` (12) | green sparks where a power screen took a hit, `weapons/lashit.wav` | done | 40 specks of 0xd0..0xd7 and `weapons/lashit.wav`, one such sound at a time; `client/demo_q2.cpp`, `client/q2_temp_fx.hpp`, `client/world_fx.cpp`, `client/listen.cpp` |
 | te.shield_sparks | `TE_SHIELD_SPARKS` (13) | the same for a power shield | done | 40 specks of 0xb0..0xb7 and the screen sparks' one-at-a-time `weapons/lashit.wav`; `client/demo_q2.cpp`, `client/q2_temp_fx.hpp`, `client/world_fx.cpp`, `client/listen.cpp` |
-| te.bullet_sparks | `TE_BULLET_SPARKS` (14) | a bullet hit with sparks and a ricochet | missing | Missing, rank 2 (seen on a joined server and in demos): 6 specks of 0xe0..0xe7 and the ricochets now as the client's (`client/q2_temp_fx.hpp`); left: the smoke puff and flash models |
-| te.laser_sparks | `TE_LASER_SPARKS` (15) | a laser's sparks: count, colour | missing | Missing, rank 2 (seen on a joined server and in demos): drawn from the wire (`sq_laser_sparks` in its colour, `client/demo_q2.cpp`); no test reads it off the wire |
-| te.parasite_attack | `TE_PARASITE_ATTACK` (16) | the parasite's drain: a beam model from the monster to the target | missing | Missing, rank 2 (seen on a joined server and in demos): named, drawn by our cable routine from the entity (`client/demo_q2.cpp`, `fx::monster_cable`); left: the segment model laid every 30 units with its random roll |
-| te.rocket_explosion_water | `TE_ROCKET_EXPLOSION_WATER` (17) | a rocket's blast under water: the model and `weapons/xpld_wat.wav` | missing | Missing, rank 2 (seen on a joined server and in demos): its sound `weapons/xpld_wat.wav` now played; left: the explosion model's animation, skins and light curve |
-| te.grenade_explosion_water | `TE_GRENADE_EXPLOSION_WATER` (18) | a grenade's blast under water | missing | Missing, rank 2 (seen on a joined server and in demos): its sound `weapons/xpld_wat.wav` now played; left: the explosion model's animation, skins and light curve |
-| te.medic_cable_attack | `TE_MEDIC_CABLE_ATTACK` (19) | the medic's healing cable beam | missing | Missing, rank 2 (seen on a joined server and in demos): named, drawn by our cable routine from the entity (`client/demo_q2.cpp`, `fx::monster_cable`); left: the segment model laid every 30 units with its random roll |
-| te.bfg_explosion | `TE_BFG_EXPLOSION` (20) | the BFG ball's burst sprite and green light | missing | Missing, rank 2 (seen on a joined server and in demos): read; drawn as our generic explosion (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
+| te.bullet_sparks | `TE_BULLET_SPARKS` (14) | a bullet hit with sparks and a ricochet | done | its 6 specks and ricochets; the smoke puff and the flash models (`client/q2_model_fx.hpp`) |
+| te.laser_sparks | `TE_LASER_SPARKS` (15) | a laser's sparks: count, colour | done | drawn from the wire in the colour byte exactly (`sq_laser_sparks`), silent; read off the wire in `tests/shooters_edge_q2_model_fx_test.cpp` |
+| te.parasite_attack | `TE_PARASITE_ATTACK` (16) | the parasite's drain: a beam model from the monster to the target | done | in the classic look the segment model every 30 units, the last 30 short of the end, a new roll each frame, held 0.2 s by its source (`client/q2_model_fx.hpp`, `client/world_fx_q2.cpp`) |
+| te.rocket_explosion_water | `TE_ROCKET_EXPLOSION_WATER` (17) | a rocket's blast under water: the model and `weapons/xpld_wat.wav` | done | as a rocket's (`client/q2_model_fx.hpp`) with `weapons/xpld_wat.wav` |
+| te.grenade_explosion_water | `TE_GRENADE_EXPLOSION_WATER` (18) | a grenade's blast under water | done | as a grenade's (`client/q2_model_fx.hpp`) with `weapons/xpld_wat.wav` |
+| te.medic_cable_attack | `TE_MEDIC_CABLE_ATTACK` (19) | the medic's healing cable beam | done | as the parasite's: the segment model every 30 units (`client/q2_model_fx.hpp`) |
+| te.bfg_explosion | `TE_BFG_EXPLOSION` (20) | the BFG ball's burst sprite and green light | done | in the classic look the BFG sprite's 4 frames fading over 0.3 s and its green light of 350 (`client/q2_model_fx.hpp`) |
 | te.bfg_bigexplosion | `TE_BFG_BIGEXPLOSION` (21) | the BFG's big green particle burst | done | the explosion and the named `te_bfg_bigexplosion` green burst, no sound; `client/demo_q2.cpp`, `client/q2_temp_fx.hpp`, `client/world_fx.cpp` |
 | te.bosstport | `TE_BOSSTPORT` (22) | the boss's teleport: a particle swirl and `misc/bigtele.wav` | done | `app/effects.cpp` `q2_boss_teleport`: 4096 specks in its four palette colours flying out and down, pulled back in at 100 units/s^2 and pushed up at 160 (`render::Particle::accel`, new: a speck's own steady acceleration), living 1.67 to 2.67 s; its sound heard everywhere (`client/q2_temp_fx.hpp`); our own game's boss too (`client/listen.cpp`); `tests/shooters_edge_effects_test.cpp` |
-| te.bfg_laser | `TE_BFG_LASER` (23) | the BFG's green laser line for a frame | missing | Missing, rank 2 (seen on a joined server and in demos): read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
-| te.grapple_cable | `TE_GRAPPLE_CABLE` (24) | the CTF grapple's cable from the player's hand | missing | Missing, rank 2 (seen on a joined server and in demos): read; drawn as our generic beam (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
+| te.bfg_laser | `TE_BFG_LASER` (23) | the BFG's green laser line for a frame | done | a strip 4 units wide in one of palette 0xd0..0xd3, held 0.1 s (`client/world_fx_q2.cpp` `q2_laser`) |
+| te.grapple_cable | `TE_GRAPPLE_CABLE` (24) | the CTF grapple's cable from the player's hand | done | read with its offset (`client/demo_q2.cpp`: `te_grapple_cable`); the grapple's segment model every 30 units from the start plus the offset, the player's own from his drawn origin (`client/q2_model_fx.hpp`) |
 | te.welding_sparks | `TE_WELDING_SPARKS` (25) | sparks with a flickering light (mission pack) | done | its count of specks in its colour and a flickering yellow-white light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
 | te.greenblood | `TE_GREENBLOOD` (26) | green blood (mission pack monsters) | not-taken | Tail (decided 2026-11-23), mission packs and later releases only: read; drawn as our generic blood (`client/demo_q2.cpp`, `client/demo_fx.cpp`); verify the look, light and sound against the original |
 | te.bluehyperblaster | `TE_BLUEHYPERBLASTER` (27) | a blue hyperblaster's hit (mission pack) | done | 40 blue specks thrown along its way; `client/world_fx_q2.cpp`, `app/effects.hpp` |
@@ -992,7 +992,7 @@ Bits of an entity's effects field a server sends; the client draws trails, light
 
 ## Entity render bits (RF_) and view bits (RDF_)
 
-done 22, missing 3, not-taken 7
+done 23, missing 2, not-taken 7
 
 Bits of an entity's render field, and of the player state's view flags.
 
@@ -1101,10 +1101,10 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 | id | thing | what it is / does (one line, our words) | status | ours / note |
 | --- | --- | --- | --- | --- |
 | hud.scale | the 2D scale | every 2D element drawn on a virtual screen: the window divided by `scr_scale` (auto 1, 2 or 4 by height) | done | `q2_bar_scale` by the window, `scr_scale` (M18k4 round 34); the desktop's DPI floor not read |
-| hud.draw2d | hiding the 2D | `scr_draw2d` 0 none, 1 no status bar, 3 layouts only while F1 is held | done | `scr_draw2d` (`client/q2_view.cpp`, `client/q2_bar.cpp`); at 3 F1 held shows the layouts (`Q2Bar::f1`, set in `client/main.cpp`) |
+| hud.draw2d | hiding the 2D | `scr_draw2d` 0 none, 1 no status bar, 3 layouts only while F1 is held | done | `scr_draw2d` (`client/screen_2d.cpp`, every classic game's; `client/q2_bar.cpp`); at 3 F1 held shows the layouts (`Q2Bar::f1`, set in `client/main.cpp`) |
 | hud.crosshair | the crosshair picture | `chN` at the centre plus `ch_x`/`ch_y`, scaled by `ch_scale`, its colour and alpha its own, hidden by the status flags' hide-crosshair bit (extended protocol) | not-taken | Tail (decided 2026-11-23), cosmetic: `engine/hud/crosshair.hpp`; the hide bit missing (C27) |
 | hud.hitmarker | the hit marker | the `marker` picture, red, fading over `scr_hit_marker_time`; on by default | done | `client/q2_bar.cpp` `draw_q2_hit_marker`: the pack's `marker` in red at the centre, faded by `scr_hit_marker_time` (`plugins/classic/q2_fx_switches.hpp` `q2_hit_marker_alpha`); `tests/shooters_edge_q2_screen_test.cpp` |
-| hud.graphs | net, time and debug graphs | bars along the bottom (`netgraph`, `timegraph`, `debuggraph`) | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `timegraph` and `debuggraph` along the bottom (`client/q2_bar.cpp` `draw_graph`, `client/q2_view.cpp`, `graphheight`/`graphscale`/`graphshift`); `netgraph` is our `r_netgraph` drawn in its corner, not along the bottom, and 2's packet sizes not drawn |
+| hud.graphs | net, time and debug graphs | bars along the bottom (`netgraph`, `timegraph`, `debuggraph`) | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `timegraph` and `debuggraph` along the bottom (`client/screen_2d.cpp`, every classic game's, `graphheight`/`graphscale`/`graphshift`); `netgraph` is our `r_netgraph` drawn in its corner, not along the bottom, and 2's packet sizes not drawn |
 | hud.statusbar | the status bar | the `CS_STATUSBAR` program run each frame, unless the hide-HUD layout bit | done | `games/shooters_edge/client/q2_bar.cpp`, `hud/q2_layout.cpp` |
 | hud.layout | the layout | the server's layout (scoreboard, help computer) while the layout bit is up; in a demo, F1 shows it whenever held | done | `hud/q2_layout.cpp`; F1 held in a recording shows the last layout sent (`client/q2_bar.cpp`, `Q2Bar::f1` 2) |
 | hud.inventory | the inventory screen | the item list with counts, the selected one marked, while the inventory bit is up | done | `games/shooters_edge/server/q2_screens.cpp` (the rules' screen) and `client/q2_bar.cpp` |
