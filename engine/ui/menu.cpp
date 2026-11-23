@@ -218,4 +218,43 @@ std::string item_value(const Item& item, std::string_view on, std::string_view o
   }
 }
 
+bool menu_key(std::string_view name, MenuInput& in) {
+  if (name == "up") {
+    in.up = true;
+  } else if (name == "down") {
+    in.down = true;
+  } else if (name == "left") {
+    in.left = true;
+  } else if (name == "right") {
+    in.right = true;
+  } else if (name == "enter" || name == "accept") {
+    in.accept = true;
+  } else if (name == "escape" || name == "back") {
+    in.back = true;
+  } else if (name == "del") {
+    in.del = true;
+  } else if (name == "refresh") {
+    in.refresh = true;
+  } else if (name.size() == 1 && name[0] >= 'a' && name[0] <= 'z') {
+    in.letter = name[0];
+  } else {
+    return false;
+  }
+  return true;
+}
+
+std::string describe_page(const Menu& menu) {
+  const Page& p = menu.top();
+  std::string out = "page " + p.id + (p.title.empty() ? std::string() : " \"" + p.title + "\"");
+  for (size_t i = 0; i < p.items.size(); i++) {
+    const Item& it = p.items[i];
+    out += "\n";
+    out += static_cast<int>(i) == p.focus ? '>' : it.disabled ? '-' : ' ';
+    out += ' ' + it.id + " \"" + it.text + "\"";
+    if (const std::string v = item_value(it); !v.empty()) out += " = " + v;
+    if (!it.opens.empty()) out += " -> " + it.opens;
+  }
+  return out;
+}
+
 }  // namespace ge::ui

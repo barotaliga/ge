@@ -80,7 +80,7 @@ TEST(the_match_mods_listings_fill_the_rest) {
   CHECK(qw_match_listing_read(s, "Spectalk: off") && value_of(s, "spectalk") == "off");
   CHECK(qw_match_listing_read(s, "Server locking: team") && value_of(s, "lockmode") == "team");
   CHECK(!qw_match_listing_read(s, "Ann: hello there"));
-  CHECK(qw_match_listing_asks().size() == 2);
+  CHECK(qw_match_listing_asks() == std::vector<std::string>({"status1", "status2"}));
 }
 
 TEST(a_quake_ii_server_shows_its_info_and_flags) {

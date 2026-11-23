@@ -50,6 +50,7 @@
 // (health or armour 25 or under, ammunition 10 or under); the shield shows "666" over its disc.
 //
 // ge:summary Shooter's Edge's HUDs: the classic status bar and five other looks, hud_style
+// ge:keywords place_chat_px restore_chat scr_chathud_x scr_chathud_y
 // ge:keywords hud shooter status-bar inventory-bar classic modern compact hud_style looks hud_sbar
 // ge:keywords sbar-background transparent arena tactical minimal shield-bar loadout hud_vitals
 // ge:keywords hud_swap cl_hudswap cl_sbar overlay-column sbar_column
@@ -137,6 +138,13 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art);
 // After `fill_hud`: every element off but the chat lines (scr_chathud), for a game whose own bar
 // draws the rest (Quake II's).
 void keep_chat_only(Hud& hud);
+// The chat lines placed by pixels of a game's own 2D drawing (Quake II's scr_chathud_x and _y),
+// `scale` screen px each, on frame `f`: `x` from the left; `y` the lines' top from the top, or
+// when negative their foot up from the bottom. Returns the player's place (hud_chat_*) it
+// replaced, which `restore_chat` puts back after the draw.
+ge::hud::ElementPlace place_chat_px(Hud& hud, const ge::hud::Frame& f, double x, double y,
+                                    int scale);
+void restore_chat(Hud& hud, const ge::hud::ElementPlace& kept);
 
 // The share of a `height` px screen the classic status bars covered when last drawn (0 with
 // hud_sbar 0, another look, or the bars hidden).
