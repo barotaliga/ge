@@ -290,8 +290,8 @@ class ConsoleView {  // NOLINT(clang-analyzer-optin.performance.Padding): fields
   // con_scale: the text's size against the console's own (0, the default: 1).
   double text_scale() const { return scale_ > 0 ? scale_ : 1; }
   // THE FOOT: a line the game shows under the scrollback while it joins a game (the file coming
-  // and its share, what is loading); `progress` 0..1 draws a bar before it, below 0 none; ""
-  // takes it away.
+  // and its share, what is loading); `progress` 0..1 draws a bar and its percentage after it,
+  // below 0 none; "" takes it away.
   void set_foot(std::string text, double progress = -1) {
     foot_ = std::move(text);
     foot_progress_ = progress;

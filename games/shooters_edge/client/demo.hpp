@@ -151,6 +151,9 @@ struct DemoSound {
   sh::Vec3f origin;            // units
   float delay = 0;             // s after the frame it starts in (a shotgun's pump after its shot)
   bool step = false;  // a footstep: Quake II's heard by the surface under it (classic/q2_footsteps)
+  // Quake II: the player muzzle flash value it is a sound of, its silenced bit kept (-1 none), so
+  // the weapon prediction knows the server's copies of the shots it plays (net/q2_weapon.hpp).
+  int16_t flash = -1;
 };
 
 // The extended protocol's look bytes. An entity's transparency: 254 and 255 (unset) solid, else

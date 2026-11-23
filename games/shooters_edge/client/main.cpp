@@ -1496,9 +1496,8 @@ int run_main(int argc, char** argv) {
       sn::remote_run_stuffed(remote, console);  // what the server stuffed, run in the console
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
-    sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
-    double foot_share = -1;  // the console's foot while joining: the file coming, the loading
-    con_view.set_foot(sn::remote_foot(remote, foot_share), foot_share);
+    sn::remote_queue_frame(remote, console);    // `ranked`: the game found is joined
+    sn::remote_console_foot(remote, con_view);  // the file coming, its bar, the console held down
     if (std::exchange(remote.left, false) && !remote.active && !listen.map && !bench.active &&
         next_map.empty()) {
       if (!start_attract()) next_map = game_content.first_map;
