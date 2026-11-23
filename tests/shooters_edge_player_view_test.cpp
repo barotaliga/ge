@@ -53,7 +53,7 @@ std::vector<uint8_t> skin_pcx(uint8_t index) {
   ge::assets::IndexedImage img;
   img.width = 16;
   img.height = 8;
-  img.indices.assign(16 * 8, index);
+  img.indices.assign(size_t{16} * 8, index);
   return ge::assets::encode_pcx(img);
 }
 

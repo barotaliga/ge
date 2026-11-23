@@ -154,10 +154,11 @@ void PlayerView::load() {
     model = lower(model);
     skin = lower(skin);
     if (!exists("players/" + model + "/tris.md2")) model = "male";
-    std::string skin_path = "players/" + model + "/" + skin + ".pcx";
+    const std::string stem = "players/" + model + "/" + skin;
+    std::string skin_path = stem + ".pcx";
     for (const char* ext : {".tga", ".png", ".pcx"})
-      if (exists("players/" + model + "/" + skin + ext)) {
-        skin_path = "players/" + model + "/" + skin + ext;
+      if (std::string path = stem; exists(path.append(ext))) {
+        skin_path = std::move(path);
         break;
       }
     if (!gc::read_model_art(read, palette_, "players/" + model + "/tris.md2", &body_, skin_path))

@@ -47,7 +47,7 @@ TEST(colours_go_on_the_shirt_and_pants_rows_and_a_bright_row_runs_backwards) {
 TEST(a_skin_picture_of_indices_is_worn_over_the_whole_skin) {
   gc::ModelArt a = sample_art();
   // A field-sized picture: the worn part is its top-left 296 x 194, stretched over the 8 x 4 skin.
-  std::vector<uint8_t> pic(320 * 200, 0);
+  std::vector<uint8_t> pic(size_t{320} * 200, 0);
   for (int y = 0; y < 200; ++y)
     for (int x = 0; x < 320; ++x) pic[size_t(y) * 320 + size_t(x)] = x < 148 ? 16 : 96;
   CHECK(gc::wear_indexed_skin(a, pic, 320, 200));
@@ -56,9 +56,9 @@ TEST(a_skin_picture_of_indices_is_worn_over_the_whole_skin) {
   CHECK(a.model.skins[2].group == 1);  // the groups and intervals kept
   // A smaller picture sits at the field's top left, index 0 past it.
   gc::ModelArt b = sample_art();
-  CHECK(gc::wear_indexed_skin(b, std::vector<uint8_t>(10 * 10, 50), 10, 10));
+  CHECK(gc::wear_indexed_skin(b, std::vector<uint8_t>(size_t{10} * 10, 50), 10, 10));
   CHECK(b.model.skins[0].indices[0] == 50 && b.model.skins[0].indices[7] == 0);
-  CHECK(!gc::wear_indexed_skin(b, std::vector<uint8_t>(400 * 10, 1), 400, 10));  // too wide
+  CHECK(!gc::wear_indexed_skin(b, std::vector<uint8_t>(size_t{400} * 10, 1), 400, 10));  // too wide
 }
 
 TEST(two_meshes_joined_draw_as_one_with_their_own_textures) {
