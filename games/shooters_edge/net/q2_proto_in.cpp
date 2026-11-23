@@ -10,6 +10,7 @@
 #include <cstring>
 #include <utility>
 
+#include "classic/protocol/q2_limits.hpp"
 #include "core/inflate.hpp"
 
 namespace shooters_edge::net {
@@ -36,7 +37,6 @@ enum : uint8_t {
   kBaselineStream = 26,
 };
 constexpr int kGameOwnFirst = 117, kGameOwnLast = 127;  // the game's own messages (demo_q2.cpp)
-constexpr int kSlots = sv::kQ2ConfigStrings;            // the configstrings' end marker
 constexpr size_t kMostBlock = 1400;
 constexpr size_t kMostInflated = 32768;
 constexpr size_t kMostDownload = size_t(256) << 20;  // a compressed download's largest file
@@ -57,6 +57,7 @@ constexpr uint32_t kPmType = 1u << 0, kPmOrigin = 1u << 1, kPmVelocity = 1u << 2
                    kPmFlags = 1u << 4, kPmGravity = 1u << 5, kPmDelta = 1u << 6,
                    kViewOffset = 1u << 7, kViewAngles = 1u << 8, kKick = 1u << 9, kBlend = 1u << 10,
                    kFov = 1u << 11, kGunIndex = 1u << 12, kGunFrame = 1u << 13, kRdFlags = 1u << 14;
+constexpr uint32_t kMoreBitsPlayer = 1u << 15, kFogPlayer = 1u << 16;  // the fog level's
 constexpr uint32_t kXGunOffset = 1u << 0, kXGunAngles = 1u << 1, kXVelocityZ = 1u << 2,
                    kXOriginZ = 1u << 3, kXRoll = 1u << 4, kXStats = 1u << 5, kXClient = 1u << 6;
 
@@ -102,6 +103,85 @@ uint32_t sized(client::DemoMsg& m, uint32_t f, uint32_t lo, uint32_t hi) {
 
 // A 16-bit angle as the byte the older protocol carries (rounded to the nearest).
 uint8_t angle_byte(int a16) { return static_cast<uint8_t>(((a16 & 0xFFFF) + 128) >> 8); }
+
+namespace lim = ge::classic::protocol;
+
+// The configstrings' end marker (and count) of the layout the stream uses.
+int slots(const Q2ProtoIn& p) { return lim::q2_cs_layout(p.ext > 0).end; }
+
+// A 23-bit coordinate (extensions 2) against `from`: a word whose low bit is 0 holds the change,
+// one whose low bit is 1 takes a third byte and holds the value itself.
+int32_t coord23(client::DemoMsg& m, int32_t from) {
+  auto w = static_cast<uint32_t>(m.u16());
+  if ((w & 1u) == 0) return from + (static_cast<int16_t>(static_cast<uint16_t>(w)) >> 1);
+  w |= static_cast<uint32_t>(m.u8()) << 16;
+  return static_cast<int32_t>(w << 8) >> 9;
+}
+
+// A variable-length integer, seven bits a byte, least significant first (64 bits at most).
+uint64_t varint(client::DemoMsg& m) {
+  uint64_t v = 0;
+  for (int shift = 0; shift < 64 && !m.bad; shift += 7) {
+    const auto b = static_cast<uint64_t>(m.u8());
+    v |= (b & 0x7Fu) << shift;
+    if ((b & 0x80u) == 0) break;
+  }
+  return v;
+}
+
+// An entity entry under the extended limits, its header first: the same bytes in protocol 36 and
+// in the recording at the same level, so it is copied as it is once its end is found. False at
+// the list's end (number 0).
+bool copy_entity_ext(const Q2ProtoIn& p, client::DemoMsg& m, std::vector<uint8_t>& out) {
+  const size_t from = m.at;
+  uint64_t f = static_cast<uint64_t>(m.u8());
+  if (f & kMore1) f |= static_cast<uint64_t>(m.u8()) << 8;
+  if (f & kMore2) f |= static_cast<uint64_t>(m.u8()) << 16;
+  if (f & kMore3) f |= static_cast<uint64_t>(m.u8()) << 24;
+  if (f & lim::kQ2UMoreBits4) f |= static_cast<uint64_t>(m.u8()) << 32;
+  const int number = (f & kNumberShort) ? m.u16() : m.u8();
+  if (number != 0 && (f & kRemove) == 0) {
+    const bool v2 = p.ext >= 2;
+    const auto sized_skip = [&m, f](uint64_t lo, uint64_t hi) {
+      if ((f & lo) && (f & hi))
+        m.skip(4);
+      else if (f & hi)
+        m.skip(2);
+      else if (f & lo)
+        m.skip(1);
+    };
+    const size_t model = (f & lim::kQ2UModel16) != 0 ? 2 : 1;
+    for (const uint32_t bit : {kModel, kModel2, kModel3, kModel4})
+      if (f & bit) m.skip(model);
+    if (f & kFrameByte) m.skip(1);
+    if (f & kFrameShort) m.skip(2);
+    sized_skip(kSkinLo, kSkinHi);
+    sized_skip(kEffectsLo, kEffectsHi);
+    sized_skip(kRenderLo, kRenderHi);
+    const auto point = [&m, v2] { v2 ? static_cast<void>(coord23(m, 0)) : m.skip(2); };
+    for (const uint32_t bit : {kOriginX, kOriginY, kOriginZ})
+      if (f & bit) point();
+    const size_t angle = (f & kAngle16) != 0 ? 2 : 1;
+    for (const uint32_t bit : {kAnglePitch, kAngleYaw, kAngleRoll})
+      if (f & bit) m.skip(angle);
+    if (f & kOldOrigin)
+      for (int k = 0; k < 3; k++) point();
+    if (f & kSoundBit) {
+      const int w = m.u16();
+      if (w & lim::kQ2LoopVolume) m.skip(1);
+      if (w & lim::kQ2LoopAttenuation) m.skip(1);
+    }
+    if (f & kEvent) m.skip(1);
+    if (f & kSolid) m.skip(4);
+    sized_skip(lim::kQ2UMoreFx8, lim::kQ2UMoreFx16);
+    if (f & lim::kQ2UAlpha) m.skip(1);
+    if (f & lim::kQ2UScale) m.skip(1);
+  }
+  if (!m.bad && m.at <= m.b.size())
+    out.insert(out.end(), m.b.begin() + static_cast<std::ptrdiff_t>(from),
+               m.b.begin() + static_cast<std::ptrdiff_t>(m.at));
+  return number != 0;
+}
 
 // One entity's fields (the later form) after its header into `s`; the header's flags in the
 // older form back.
@@ -154,6 +234,7 @@ void write_entity(std::vector<uint8_t>& out, uint32_t f, int number, const Q2Ent
 // An entity entry read and written again; false at the list's end (number 0, written as two zero
 // bytes).
 bool copy_entity(const Q2ProtoIn& p, client::DemoMsg& m, std::vector<uint8_t>& out) {
+  if (p.ext > 0) return copy_entity_ext(p, m, out);
   int number = 0;
   const uint32_t f = entity_header(m, number);
   if (number == 0) {
@@ -169,20 +250,25 @@ bool copy_entity(const Q2ProtoIn& p, client::DemoMsg& m, std::vector<uint8_t>& o
 
 // The player state in the later form over `s` (its base).
 void read_player(const Q2ProtoIn& p, client::DemoMsg& m, uint32_t x, Q2PlayerState& s) {
-  const uint32_t f = static_cast<uint32_t>(m.u16());
+  const bool v2 = p.ext >= 2;
+  auto f = static_cast<uint32_t>(m.u16());
+  if (p.ext >= 3 && (f & kMoreBitsPlayer) != 0) f |= static_cast<uint32_t>(m.u8()) << 16;
+  const auto point = [&m, v2](int32_t& c) {
+    c = v2 ? coord23(m, c) : static_cast<int16_t>(m.i16());
+  };
   if (f & kPmType) s.type = static_cast<uint8_t>(m.u8());
   if (f & kPmOrigin) {
-    s.origin[0] = static_cast<int16_t>(m.i16());
-    s.origin[1] = static_cast<int16_t>(m.i16());
+    point(s.origin[0]);
+    point(s.origin[1]);
   }
-  if (x & kXOriginZ) s.origin[2] = static_cast<int16_t>(m.i16());
+  if (x & kXOriginZ) point(s.origin[2]);
   if (f & kPmVelocity) {
-    s.velocity[0] = static_cast<int16_t>(m.i16());
-    s.velocity[1] = static_cast<int16_t>(m.i16());
+    point(s.velocity[0]);
+    point(s.velocity[1]);
   }
-  if (x & kXVelocityZ) s.velocity[2] = static_cast<int16_t>(m.i16());
-  if (f & kPmTime) s.time = static_cast<uint8_t>(m.u8());
-  if (f & kPmFlags) s.flags = static_cast<uint8_t>(m.u8());
+  if (x & kXVelocityZ) point(s.velocity[2]);
+  if (f & kPmTime) s.time = static_cast<uint16_t>(v2 ? m.u16() : m.u8());
+  if (f & kPmFlags) s.flags = static_cast<uint16_t>(v2 ? m.u16() : m.u8());
   if (f & kPmGravity) s.gravity = static_cast<int16_t>(m.i16());
   if (f & kPmDelta)
     for (int16_t& v : s.delta_angles) v = static_cast<int16_t>(m.i16());
@@ -195,22 +281,36 @@ void read_player(const Q2ProtoIn& p, client::DemoMsg& m, uint32_t x, Q2PlayerSta
   if (x & kXRoll) s.view_angles[2] = static_cast<int16_t>(m.i16());
   if (f & kKick)
     for (int8_t& v : s.kick) v = static_cast<int8_t>(m.i8());
-  if (f & kGunIndex) s.gun_index = static_cast<uint8_t>(m.u8());
+  if (f & kGunIndex) s.gun_index = static_cast<uint16_t>(p.ext >= 1 ? m.u16() : m.u8());
   if (f & kGunFrame) s.gun_frame = static_cast<uint8_t>(m.u8());
   if (x & kXGunOffset)
     for (int8_t& v : s.gun_offset) v = static_cast<int8_t>(m.i8());
   if (x & kXGunAngles)
     for (int8_t& v : s.gun_angles) v = static_cast<int8_t>(m.i8());
-  if (f & kBlend)
+  if ((f & kBlend) && v2) {  // a byte of which follow: the blend's parts, the damage blend's
+    const int which = m.u8();
+    for (int k = 0; k < 4; k++)
+      if (which & (1 << k)) s.blend[k] = static_cast<uint8_t>(m.u8());
+    for (int k = 0; k < 4; k++)
+      if (which & (16 << k)) s.damage_blend[k] = static_cast<uint8_t>(m.u8());
+  } else if (f & kBlend) {
     for (uint8_t& v : s.blend) v = static_cast<uint8_t>(m.u8());
+  }
+  if (f & kFogPlayer) {  // the fog level's fog: read past, not drawn (the look is ours)
+    const int bits = m.u8();
+    const size_t sizes[6] = {3, 4, 2, 2, 3, 3};
+    for (int k = 0; k < 6; k++)
+      if (bits & (1 << k)) m.skip(sizes[k]);
+    for (int k = 6; k < 8; k++)
+      if (bits & (1 << k)) coord23(m, 0);
+  }
   if (f & kFov) s.fov = static_cast<uint8_t>(m.u8());
   if (f & kRdFlags) s.rdflags = static_cast<uint8_t>(m.u8());
   if (x & kXStats) {
-    const auto mask = static_cast<uint32_t>(m.i32());
-    for (int i = 0; i < 32; i++)
-      if (mask & (1u << i)) s.stats[i] = static_cast<int16_t>(m.i16());
+    const uint64_t mask = v2 ? varint(m) : static_cast<uint32_t>(m.i32());
+    for (int i = 0; i < (v2 ? 64 : 32); i++)
+      if (mask & (uint64_t{1} << i)) s.stats[i] = static_cast<int16_t>(m.i16());
   }
-  (void)p;
 }
 
 // The player state in the older form from `a` to `b`: the gun's frame carries its offset and
@@ -296,6 +396,7 @@ struct Run {
     const std::string level = m.str();
     p.strafe_hack = p.qw_move = p.waterjump_hack = false;
     p.server_state = 2;
+    p.ext = 0;
     if (p.protocol == 35) {
       const int enhanced = m.u8();
       p.minor = m.i16();
@@ -318,17 +419,27 @@ struct Run {
       p.server_state = m.u8();
       if (p.minor >= 1024) {
         const int flags = m.i16();
-        p.strafe_hack = (flags & 1) != 0;
-        p.qw_move = (flags & 2) != 0;
-        p.waterjump_hack = (flags & 4) != 0;
+        p.strafe_hack = (flags & lim::kQ2ServerFlagStrafeJump) != 0;
+        p.qw_move = (flags & lim::kQ2ServerFlagQwMode) != 0;
+        p.waterjump_hack = (flags & lim::kQ2ServerFlagWaterJump) != 0;
+        const bool one = (flags & lim::kQ2ServerFlagExtensions) != 0;
+        const bool two =
+            p.minor >= lim::kQ2MinorExtensions2 && (flags & lim::kQ2ServerFlagExtensions2) != 0;
+        if (two && !one)
+          return fail("The server turned on the second protocol extensions without the first", m);
+        p.ext = !one ? 0 : !two ? 1 : p.minor >= lim::kQ2MinorMoreBits ? 3 : 2;
       } else {
         p.strafe_hack = m.u8() != 0;
         p.qw_move = m.u8() != 0;
         p.waterjump_hack = m.u8() != 0;
       }
     }
+    // The recording's protocol: 34, or under the extended limits the recording of their level
+    // (3434, or 3435 for the second; the fog level's fog is not carried, so it is 3435 too).
+    const int written = p.ext > 0 ? 3433 + std::min(p.ext, 2) : 34;
+    p.scratch.state.protocol = written;  // the copied messages' ends found at that level
     o.u8(kServerData);
-    o.i32(34);
+    o.i32(written);
     o.i32(count);
     o.u8(static_cast<uint32_t>(attract));
     o.str(game);
@@ -344,8 +455,8 @@ struct Run {
     for (;;) {
       const int index = m.u16();
       if (m.bad) return fail("the configstrings run past their message's end", m);
-      if (index == kSlots) return true;
-      if (index > kSlots) return fail("a configstring numbered " + std::to_string(index), m);
+      if (index == slots(p)) return true;
+      if (index > slots(p)) return fail("a configstring numbered " + std::to_string(index), m);
       Out o{next()};
       o.u8(kConfigString);
       o.i16(index);
@@ -355,6 +466,13 @@ struct Run {
   // Baselines to the end (an entity number of 0).
   bool baselines(client::DemoMsg& m) {
     for (;;) {
+      if (p.ext > 0) {
+        std::vector<uint8_t> one{kBaseline};
+        if (!copy_entity_ext(p, m, one)) return !m.bad || fail("the baselines run past", m);
+        if (m.bad) return fail("the baselines run past their message's end", m);
+        next() = std::move(one);
+        continue;
+      }
       int number = 0;
       const uint32_t f = entity_header(m, number);
       if (m.bad) return fail("the baselines run past their message's end", m);
@@ -392,7 +510,10 @@ struct Run {
     Q2PlayerState b = a;
     read_player(p, m, x, b);
     if (x & kXClient) p.client_number = p.minor >= 1022 ? m.i16() : m.u8();
-    write_player(out, a, b);
+    if (p.ext > 0)
+      sv::q2_write_player_ext(out, a, b, std::min(p.ext, 2));
+    else
+      write_player(out, a, b);
     const size_t slot = static_cast<size_t>(number) & 31;
     p.views[slot] = b;
     p.view_frame[slot] = number;
@@ -485,6 +606,12 @@ struct Run {
           ok = server_data(m);
           break;
         case kBaseline: {
+          if (p.ext > 0) {
+            std::vector<uint8_t>& out = next();
+            out.push_back(kBaseline);
+            copy_entity_ext(p, m, out);
+            break;
+          }
           int number = 0;
           const uint32_t f = entity_header(m, number);
           Q2EntityState s;
