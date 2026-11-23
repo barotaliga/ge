@@ -694,10 +694,38 @@ bool teleport_dest(const std::vector<sb::EntityBlock>& blocks, const char* targe
   return false;
 }
 
-std::vector<sb::NavExtraLink> teleport_links(sb::NavGraph& g, const ge::shooter::MapSpec& spec,
+// Whether the game spawned the teleporter of block `b` (one the mode or skill leaves out, mintro's
+// deathmatch pad under a wall in single player, is none): a live edict whose box is its brush
+// model's within 2 units (a trigger keeps its box though the program drops its model), or one
+// standing on its pad's centre.
+bool teleporter_in_game(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& spec,
+                        const sb::EntityBlock& b) {
+  const char* model = sb::block_value(b, "model");
+  const char* org = sb::block_value(b, "origin");
+  ModelBox box;
+  if (model && model[0] == '*' && std::atoi(model + 1) > 0)
+    box = model_box(spec, std::atoi(model + 1));
+  const sh::Vec3f o = org ? origin_of(org) : sh::Vec3f{};
+  const auto near = [](sh::Vec3f a, sh::Vec3f c, float d) {
+    return std::fabs(a.x - c.x) <= d && std::fabs(a.y - c.y) <= d && std::fabs(a.z - c.z) <= d;
+  };
+  bool any = false;
+  for (int e = 1; e < s.sv.num_edicts; e++) {
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+    if (d.free) continue;
+    any = true;
+    if (box.ok && near(d.absmin, box.mins, 2) && near(d.absmax, box.maxs, 2)) return true;
+    if (!model && org && near(d.origin, o, 1)) return true;
+  }
+  return !any || (model && !box.ok);  // nothing to tell by: it counts
+}
+
+std::vector<sb::NavExtraLink> teleport_links(const ge::shooterbots::BotView& s, sb::NavGraph& g,
+                                             const ge::shooter::MapSpec& spec,
                                              const std::vector<sb::EntityBlock>& blocks) {
   std::vector<sb::NavExtraLink> out;
   for (const sb::EntityBlock& b : blocks) {
+    if (!teleporter_in_game(s, spec, b)) continue;
     const char* cn = sb::block_value(b, "classname");
     const char* target = sb::block_value(b, "target");
     if (!cn || !target || sb::block_value(b, "targetname")) continue;
@@ -1141,7 +1169,7 @@ bool build_map_nav(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec
   open_doors_as_floor(s, spec, out.tracer.get(), blocks, out.world, out.bridges);
   out.movers = movers_of(s, spec, out.tracer.get(), blocks);
   sb::build_nav(out.world, out.movers, out.move, set, out.graph);
-  std::vector<sb::NavExtraLink> teleports = teleport_links(out.graph, spec, blocks);
+  std::vector<sb::NavExtraLink> teleports = teleport_links(s, out.graph, spec, blocks);
   const std::vector<sb::NavExtraLink> pushes =
       push_links(out.graph, spec, blocks, out.world, out.move);
   teleports.insert(teleports.end(), pushes.begin(), pushes.end());
