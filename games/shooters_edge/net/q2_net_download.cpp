@@ -56,24 +56,37 @@ std::string q2_plain_download_path(std::string path) {
   return out;
 }
 
+namespace {
+
+bool plain_end(char ch) {
+  return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-';
+}
+
+// The kind a file is by its first folder, each switched on or off by its own setting.
+bool kind_on(const Q2NetConfig& cfg, const std::string& path) {
+  const auto under = [&path](const char* dir) { return path.rfind(dir, 0) == 0; };
+  return under("players/")                       ? cfg.allow_players
+         : under("models/") || under("sprites/") ? cfg.allow_models
+         : under("sound/")                       ? cfg.allow_sounds
+         : under("maps/")                        ? cfg.allow_maps
+         : under("textures/") || under("env/")   ? cfg.allow_textures
+         : under("pics/")                        ? cfg.allow_pics
+                                                 : cfg.allow_others;
+}
+
+}  // namespace
+
+bool q2_download_allowed_path(const Q2NetConfig& cfg, const std::string& path) {
+  return cfg.allow_download && !path.empty() && plain_end(path.front()) && plain_end(path.back()) &&
+         path.find('/') != std::string::npos && kind_on(cfg, path);
+}
+
 std::string q2_start_download(Q2NetServer& s, Q2NetClient& c, const std::string& asked,
                               int offset) {
   c.downloading = false;
   c.download_deflated = false;
   c.download.clear();
   const std::string path = asked.size() >= 64 ? std::string() : q2_plain_download_path(asked);
-  const auto under = [&path](const char* dir) { return path.rfind(dir, 0) == 0; };
-  const auto plain_end = [](char ch) {
-    return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-';
-  };
-  // The kind a file is by its first folder, each switched on or off by its own setting.
-  const bool kind_on = under("players/")                       ? s.cfg.allow_players
-                       : under("models/") || under("sprites/") ? s.cfg.allow_models
-                       : under("sound/")                       ? s.cfg.allow_sounds
-                       : under("maps/")                        ? s.cfg.allow_maps
-                       : under("textures/") || under("env/")   ? s.cfg.allow_textures
-                       : under("pics/")                        ? s.cfg.allow_pics
-                                                               : s.cfg.allow_others;
   const int64_t most = s.cfg.max_download_size <= 0 || s.cfg.max_download_size > kQ2DownloadCap
                            ? kQ2DownloadCap
                            : s.cfg.max_download_size;
@@ -85,7 +98,7 @@ std::string q2_start_download(Q2NetServer& s, Q2NetClient& c, const std::string&
   } else if (path.empty() || offset < 0 || !plain_end(path.front()) || !plain_end(path.back()) ||
              path.find('/') == std::string::npos) {
     why = "not a file the server offers";
-  } else if (!kind_on) {
+  } else if (!kind_on(s.cfg, path)) {
     why = "that kind of file is not offered";
   } else if (!s.cfg.read_file(path, &c.download) || c.download.empty()) {
     why = "not found";
@@ -98,7 +111,7 @@ std::string q2_start_download(Q2NetServer& s, Q2NetClient& c, const std::string&
     why = "larger than sv_max_download_size";
   } else {
     packed = s.cfg.file_origin && s.cfg.file_origin(path, &origin);
-    if (packed && under("maps/") && !c.told_origins) why = "the map is in an archive";
+    if (packed && path.rfind("maps/", 0) == 0 && !c.told_origins) why = "the map is in an archive";
   }
   if (why.empty() && static_cast<size_t>(offset) > c.download.size()) {
     const std::string told =

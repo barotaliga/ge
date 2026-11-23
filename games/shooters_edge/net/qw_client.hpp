@@ -292,6 +292,7 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   uint32_t map_sum = 0;
   bool fetch_version = false;
   bool version_unfetched = false;  // the server would not hand out its version
+  bool web_version = false;        // the server's version of the map asked from its web address
   bool map_refused = false;
   ClientUpload up;  // a screenshot the server asked for
 
