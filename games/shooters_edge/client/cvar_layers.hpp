@@ -79,6 +79,7 @@ struct GameBindings {
   int* noskins = nullptr;        // Quake II's `cl_noskins` (the picture's stock_figures)
   bool* items_still = nullptr;   // Quake II's `cl_nobob` (the picture's items_still)
   int* model_shadows = nullptr;  // Quake II's `gl_shadows` (the picture's model_shadows)
+  bool* flash_blend = nullptr;   // Quake's `gl_flashblend` (the picture's flash_blend); off in II
   // The held weapon's settings: Quake II's `hand` (2 draws no weapon), `cl_gun_x/y/z` and
   // `cl_gunfov`; Quake's `r_viewmodelsize` and `r_viewmodeloffset`.
   shooters_edge::view::ViewSettings* view = nullptr;

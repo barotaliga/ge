@@ -106,6 +106,30 @@ TEST(a_strip_keeps_an_empty_slots_place_and_sizes_a_cell_by_its_picture) {
   CHECK(near(dl.cmds()[1].box.rect.w, 96));
 }
 
+TEST(a_column_stands_its_cells_on_one_edge_and_draws_a_part_of_a_picture) {
+  const ui::Image gun = solid_image(48, 16), bar = solid_image(320, 24);
+  std::vector<Cell> cells(2);
+  cells[0].image = &gun;
+  cells[0].w = 24, cells[0].h = 16;
+  cells[0].part = {0, 0, 24, 16};  // its left half
+  cells[1].image = &bar;
+  cells[1].w = 42, cells[1].h = 11;
+  cells[1].part = {51, 0, 42, 11};
+  StripShape shape;
+  shape.cell_w = shape.cell_h = 0;
+  shape.vertical = true;
+  shape.cross_align = 2;  // against the right edge
+  const Strip strip{&cells};
+  ui::DrawList dl;
+  dl.begin(400, 100);
+  draw(dl, shape, strip, {0, 0, 42, 27}, 1);
+  CHECK(dl.size() == 2);
+  CHECK(near(dl.cmds()[0].box.rect.x, 18) && near(dl.cmds()[0].box.rect.w, 24));
+  CHECK(near(dl.cmds()[0].box.uv.w, 24) && near(dl.cmds()[0].box.uv.x, 0));
+  CHECK(near(dl.cmds()[1].box.rect.x, 0) && near(dl.cmds()[1].box.rect.y, 16));
+  CHECK(near(dl.cmds()[1].box.uv.x, 51) && near(dl.cmds()[1].box.uv.w, 42));
+}
+
 TEST(a_strip_breaks_into_lines_and_a_mirrored_one_starts_each_line_from_the_right) {
   const ui::Image narrow = solid_image(24, 16), wide = solid_image(48, 16);
   // 2-2-1 lines: two narrow, two narrow, one wide.

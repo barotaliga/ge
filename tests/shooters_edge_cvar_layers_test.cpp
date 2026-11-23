@@ -66,6 +66,7 @@ struct Window {
   double frame_cap = 0;      // the pacing's frame cap (our cl_maxfps, Quake II's r_maxfps)
   cl::ChatExtras chat;       // the chat's extras (Quake II's cl_chat_sound)
   bool show_pause = true;    // window_cvars.cpp's showpause (Quake II's scr_showpause)
+  bool minimize = true;      // platform/window_cvars.cpp's vid_minimize_on_focus_loss
 
   explicit Window(const pr::GameProfile& g) {
     cl::add_coop_cvars(console, coop);
@@ -93,6 +94,18 @@ struct Window {
     console.cvars().set_layer(cl::kLayerEngine);
     ge::capture::add_screenshot_cvars(console.cvars(), shots);
     ge::audio::add_music_commands(console, music);
+    // The window's minimising as platform/window_cvars.cpp registers it (that file links the
+    // platform).
+    console.cvars().bind(
+        {.name = "vid_minimize_on_focus_loss",
+         .fallback = "1",
+         .flags = con::kArchive,
+         .help = "Whether the full-screen game minimises when you switch to "
+                 "another window, the screen going back to the desktop's own mode.",
+         .kind = con::CvarKind::boolean,
+         .values = "1: minimised (the default, but on a Mac); 0: it stays full "
+                   "screen behind the other window (the default on a Mac)"},
+        &minimize);
     // The pacing's frame cap as platform/pacing.cpp registers it (that file links the platform).
     console.cvars().bind({.name = "cl_maxfps",
                           .fallback = "0",
@@ -157,11 +170,15 @@ TEST(q2_crosshair_is_its_own_and_the_first_games_comes_back) {
   v.set("vid_gamma", "0.8", con::Source::local);  // its spelling of gamma
   CHECK(w.picture.gamma == 0.8);
   CHECK(v.find("scr_centertime")->value == "2.5");
+  CHECK(v.find("vid_minimize_on_focus_loss")->value == "0" && !w.minimize);  // stays full screen
+  v.set("vid_flip_on_switch", "1", con::Source::local);  // its spelling of the same setting
+  CHECK(w.minimize);
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {.crosshair = &w.hud.crosshair});
   CHECK(v.find("crosshair")->layer != "game:q2" && v.find("crosshair")->value == "5");
   CHECK(w.hud.crosshair.mark == 5 && !w.hud.crosshair.pictures);
   CHECK(v.find("vid_gamma") == nullptr);
   CHECK(v.find("scr_centertime")->value == "2");
+  CHECK(v.find("vid_flip_on_switch") == nullptr);
   CHECK(v.clashes().empty());
 }
 

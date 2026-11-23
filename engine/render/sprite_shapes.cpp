@@ -1,7 +1,7 @@
-// Sprite shapes made at load: the flare's glow and the bubble's rim and highlight.
+// Sprite shapes made at load: the flare's glow, the glow disc and the bubble's rim and highlight.
 //
 // ge:summary The flare's and the bubble's frames, texel by texel
-// ge:keywords render sprite flare bubble procedural frame
+// ge:keywords render sprite flare bubble glow-disc procedural frame
 // ge:skill render
 // ge:test tests/render_sprite_shapes_test.cpp
 #include "render/sprite_shapes.hpp"
@@ -46,6 +46,20 @@ SpriteFrame flare_frame(uint32_t px) {
       uint8_t* p = &f.rgba[(size_t{y} * f.width + x) * 4];
       p[0] = p[1] = p[2] = 255;
       p[3] = byte(glow);
+    }
+  }
+  return f;
+}
+
+SpriteFrame glow_disc_frame(uint32_t px) {
+  SpriteFrame f = blank(px);
+  for (uint32_t y = 0; y < f.height; ++y) {
+    for (uint32_t x = 0; x < f.width; ++x) {
+      double u, v;
+      at(x, y, f.width, &u, &v);
+      uint8_t* p = &f.rgba[(size_t{y} * f.width + x) * 4];
+      p[0] = p[1] = p[2] = 255;
+      p[3] = byte(1 - std::sqrt(u * u + v * v));
     }
   }
   return f;

@@ -30,7 +30,8 @@
 namespace shooters_edge::net {
 
 void add_window_words(ge::console::Console& con, ge::console::ConsoleView& view,
-                      client::Listen& listen, Remote& remote, std::string& next_map) {
+                      client::Listen& listen, Remote& remote, std::string& next_map,
+                      const std::function<bool(const std::string& line)>* first) {
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;
   con.add_command("map", "map <name>: play the map (\"map arena\" is built in)",
@@ -87,7 +88,8 @@ void add_window_words(ge::console::Console& con, ge::console::ConsoleView& view,
                   });
 
   // Any other line the window does not know goes to Quake II's rules (`use Railgun`, `drop`).
-  con.set_unknown([&](const CArgs& a) {
+  con.set_unknown([&, first](const CArgs& a) {
+    if (first != nullptr && *first && (*first)(a.raw)) return true;
     return remote_rules_word(remote, a.raw) || client::listen_rules_word(listen, a.raw) ||
            client::listen_campaign_word(listen, a.raw);
   });

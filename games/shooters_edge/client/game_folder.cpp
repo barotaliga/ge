@@ -543,9 +543,11 @@ bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<Loade
   return listen_change(listen, std::move(map), error);
 }
 
-std::vector<std::string> save_slot_labels(const SearchPath& files, int slots) {
-  std::vector<std::string> out(static_cast<size_t>(std::max(slots, 0)));
-  for (size_t i = 0; i < out.size(); i++) out[i] = save_label(files, "s" + std::to_string(i));
+std::vector<std::string> save_slot_labels(const SearchPath& files,
+                                          std::span<const std::string> names) {
+  std::vector<std::string> out;
+  out.reserve(names.size());
+  for (const std::string& name : names) out.push_back(save_label(files, name));
   return out;
 }
 

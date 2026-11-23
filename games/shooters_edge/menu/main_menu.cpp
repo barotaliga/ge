@@ -8,9 +8,11 @@
 #include "shooters_edge/menu/main_menu.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "console/cvar.hpp"
+#include "shooters_edge/menu/episodes.hpp"
 #include "shooters_edge/menu/figures.hpp"
 
 namespace shooters_edge::menu {
@@ -194,6 +196,18 @@ constexpr Entry kEntries[] = {
      .target = Target::server,
      .choices = kTimeLimit},
     {.page = "host",
+     .id = "episode",
+     .text = "EPISODE",
+     .kind = ItemKind::choice,
+     .hint = "The episode the level is picked from.",
+     .needs = "map"},
+    {.page = "host",
+     .id = "level",
+     .text = "LEVEL",
+     .kind = ItemKind::choice,
+     .hint = "The level the match starts on; its map below.",
+     .needs = "map"},
+    {.page = "host",
      .id = "map",
      .text = "MAP",
      .kind = ItemKind::choice,
@@ -356,6 +370,21 @@ constexpr Entry kEntries[] = {
      .kind = ItemKind::toggle,
      .hint = "The mouse's sideways moves sidestep instead of turning.",
      .needs = "lookstrafe",
+     .target = Target::client},
+    {.page = "options",
+     .id = "hud_sbar",
+     .text = "USE OLD STATUS BAR",
+     .kind = ItemKind::toggle,
+     .hint = "The classic bar on its panels; off, its pieces over the world with the guns and "
+             "ammunition in a column.",
+     .needs = "hud_sbar",
+     .target = Target::client},
+    {.page = "options",
+     .id = "hud_swap",
+     .text = "HUD ON LEFT SIDE",
+     .kind = ItemKind::toggle,
+     .hint = "With the old status bar off, the column of guns and ammunition on the left edge.",
+     .needs = "hud_swap",
      .target = Target::client},
     {.page = "options",
      .id = "video",
@@ -936,7 +965,9 @@ constexpr const char* kSlotPages[][2] = {{"load", "LOAD"}, {"save", "SAVE"}};
 
 bool slot_page(std::string_view page) { return page == "load" || page == "save"; }
 
-std::string slot_id(int i) { return "s" + std::to_string(i); }
+// Quake's slots, `s0` to `s11`, on LOAD and SAVE alike.
+constexpr std::array<std::string_view, kSaveSlots> kQuakeSlots = {
+    "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11"};
 
 // A save's line cut to `chars`, the title shortened before the kills are: "the long
 // corridor of doors, kills 4/31" reads "the long c, kills 4/31" in 22.
@@ -1040,6 +1071,30 @@ void figure_changed(const ge::ui::Page& page, std::string_view changed, Host& ho
 
 }  // namespace
 
+constexpr std::string_view kQuitJokeText[kQuitJokes][kQuitJokeLines] = {
+    {"  Are you gonna quit    ", "  this game just like   ", "   everything else?     ",
+     "                        "},
+    {" Milord, methinks that  ", "   thou art a lowly     ", " quitter. Is this true? ",
+     "                        "},
+    {" Do I need to bust your ", "  face open for trying  ", "        to quit?        ",
+     "                        "},
+    {" Man, I oughta smack you", "   for trying to quit!  ", "     Press Y to get     ",
+     "      smacked out.      "},
+    {" Press Y to quit like a ", "   big loser in life.   ", "  Press N to stay proud ",
+     "    and successful!     "},
+    {"   If you press Y to    ", "  quit, I will summon   ", "  Satan all over your   ",
+     "      hard drive!       "},
+    {"  Um, Asmodeus dislikes ", " his children trying to ", " quit. Press Y to return",
+     "   to your Tinkertoys.  "},
+    {"  If you quit now, I'll ", "  throw a blanket-party ", "   for you next time!   ",
+     "                        "},
+};
+
+std::span<const std::string_view, kQuitJokeLines> quit_joke(size_t i) {
+  return std::span<const std::string_view, kQuitJokeLines>(kQuitJokeText[i % kQuitJokes],
+                                                           kQuitJokeLines);
+}
+
 const MenuTable& classic_menu() {
   static const MenuTable table{kPages, kEntries, kUnusedSlot};
   return table;
@@ -1120,15 +1175,74 @@ ge::ui::Menu build_menu(const MenuTable& table) {
   }
   for (const auto& [id, title] : kSlotPages) {
     ge::ui::Page& page = m.add_page(id, title);
-    for (int i = 0; i < kSaveSlots; i++) {
-      ge::ui::Item it{.id = slot_id(i), .text = std::string(table.empty_slot)};
-      it.hint = std::string(id) == "load" ? "Load this game." : "Save the game here.";
+    const bool load = std::string_view(id) == "load";
+    int gaps = 0;
+    for (const std::string_view name : slots_of(table, load)) {
+      if (name.empty()) {
+        page.items.push_back(
+            {.id = "gap" + std::to_string(gaps++), .text = {}, .kind = ItemKind::label});
+        continue;
+      }
+      ge::ui::Item it{.id = std::string(name), .text = std::string(table.empty_slot)};
+      it.hint = load ? "Load this game." : "Save the game here.";
       page.items.push_back(std::move(it));
     }
     page.items.push_back({.id = "back", .text = "BACK", .kind = ItemKind::back});
   }
   return m;
 }
+
+std::span<const std::string_view> slots_of(const MenuTable& table, bool load) {
+  const std::span<const std::string_view> own = load ? table.load_slots : table.save_slots;
+  return own.empty() ? std::span<const std::string_view>(kQuakeSlots) : own;
+}
+
+std::vector<std::string> slot_names(const MenuTable& table) {
+  std::vector<std::string> out;
+  for (const bool load : {true, false}) {
+    for (const std::string_view name : slots_of(table, load))
+      if (!name.empty() && std::ranges::find(out, name) == out.end()) out.emplace_back(name);
+  }
+  return out;
+}
+
+namespace {
+
+// The host page's EPISODE and LEVEL kept with its MAP row (episodes.hpp): `from` "map" sets the two
+// from the map picked; "episode" starts the episode at its first level; both then set the map.
+void tie_levels(ge::ui::Page& page, const Host& host, std::string_view from) {
+  ge::ui::Item* ep = page.find("episode");
+  ge::ui::Item* lv = page.find("level");
+  ge::ui::Item* map = page.find("map");
+  if (ep == nullptr || lv == nullptr || map == nullptr) return;
+  const std::vector<Episode> list = episodes_for(host.maps);
+  if (list.empty() || map->disabled || map->choices.empty()) {
+    ep->choices = lv->choices = {"NONE"};
+    ep->choice = lv->choice = 0;
+    ep->disabled = lv->disabled = true;
+    return;
+  }
+  ep->disabled = lv->disabled = false;
+  ep->choices.clear();
+  for (const Episode& e : list) ep->choices.emplace_back(e.name);
+  ep->choice = std::clamp(ep->choice, 0, static_cast<int>(list.size()) - 1);
+  int e = ep->choice, l = lv->choice;
+  if (from == "map") {
+    if (level_of(list, map->choices[static_cast<size_t>(map->choice)], &e, &l)) ep->choice = e;
+  } else if (from == "episode") {
+    l = 0;
+  }
+  const Episode& shown = list[static_cast<size_t>(ep->choice)];
+  lv->choices.clear();
+  for (const Level& level : shown.levels) lv->choices.emplace_back(level.name);
+  lv->choice = std::clamp(l, 0, static_cast<int>(lv->choices.size()) - 1);
+  if (from == "map") return;
+  const std::string_view want = shown.levels[static_cast<size_t>(lv->choice)].map;
+  for (size_t i = 0; i < map->choices.size(); i++)
+    if (map->choices[i] == want) map->choice = static_cast<int>(i);
+}
+
+}  // namespace
 
 void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
   for (const PageTitle& p : table_of(host).pages) {
@@ -1154,6 +1268,10 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
       }
       if (e->page == "setup" && (e->id == "model" || e->id == "figskin")) {
         figure_row(*e, it, host);
+        continue;
+      }
+      if (e->page == "host" && (e->id == "episode" || e->id == "level")) {
+        it.choices.clear();  // filled from the map row's choice once it is known (below)
         continue;
       }
       if (e->page == "host" && e->id == "map") {
@@ -1210,6 +1328,7 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         }
       }
     }
+    if (id == "host") tie_levels(*page, host, "map");
     if (page->focus >= 0 && !page->items[static_cast<size_t>(page->focus)].stop())
       page->focus = -1;  // the menu moves it to the first stop
   }
@@ -1231,6 +1350,7 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
     }
     if (page->focus >= 0 && !page->items[static_cast<size_t>(page->focus)].stop()) page->focus = -1;
   }
+  const std::vector<std::string> names = slot_names(table_of(host));
   for (const auto& [id, title] : kSlotPages) {
     ge::ui::Page* page = menu.page(id);
     if (page == nullptr) continue;
@@ -1241,7 +1361,9 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         it.disabled = hide_back;
         continue;
       }
-      const size_t i = std::stoul(it.id.substr(1));
+      if (it.kind == ItemKind::label) continue;
+      const auto at = std::ranges::find(names, it.id);
+      const size_t i = static_cast<size_t>(at - names.begin());
       const std::string line = i < host.saves.size() ? host.saves[i] : std::string();
       it.text = line.empty() ? std::string(table_of(host).empty_slot)
                              : slot_text(line, hide_back ? kSlotChars : kSlotCharsModern);
@@ -1279,6 +1401,11 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   const ge::ui::Item* it = page->find(e.item);
   if (it == nullptr) return Outcome::none;
   if (e.kind == ge::ui::EventKind::changed && !entry->bind.empty()) return Outcome::bind_key;
+  if (e.kind == ge::ui::EventKind::changed && e.page == "host" &&
+      (e.item == "episode" || e.item == "level" || e.item == "map")) {
+    tie_levels(*page, host, e.item);
+    return Outcome::none;
+  }
   if (e.kind == ge::ui::EventKind::changed && e.page == "setup" &&
       (e.item == "model" || e.item == "figskin")) {
     figure_changed(*page, e.item, host);

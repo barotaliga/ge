@@ -358,3 +358,31 @@ TEST(gl_bilerp_pics_smooths_the_large_pictures_and_gl_gamma_scale_pics_brightens
   smooth(0);
   CHECK(red() == 90);
 }
+
+TEST(scr_demobar_is_quake_iis_play_bar_setting_one_by_default) {
+  // Every other game leaves it at -1 (demo_bar rules); Quake II's layer binds it to 1, 0..2.
+  CHECK(cl::Q2Screen{}.demo_bar == -1);
+  cl::Q2Screen screen;
+  ge::console::Console con;
+  cl::add_q2_screen_cvars(con.cvars(), screen);
+  CHECK(screen.demo_bar == 1);
+  con.execute("scr_demobar 2");
+  CHECK(screen.demo_bar == 2);
+  con.execute("scr_demobar 0");
+  CHECK(screen.demo_bar == 0);
+}
+
+TEST(use_drop_and_give_complete_the_item_names_the_world_listed) {
+  // The names the last frame's world listed, sorted, each once; none before a frame ran.
+  ge::console::Console con(false);
+  cl::Q2Bar bar;
+  cl::add_q2_bar_commands(con, bar);
+  CHECK(con.arg_values("use").empty());
+  shooters_edge::server::RulesWorld world;
+  world.item_names = {"", "Shotgun", "Blaster", "Shotgun", "Rocket Launcher"};
+  cl::run_q2_bar(bar, world, 0, 0, 320, 240);
+  for (const char* word : {"use", "drop", "give"}) {
+    const std::vector<std::string> names = con.arg_values(word);
+    CHECK(names == (std::vector<std::string>{"Blaster", "Rocket Launcher", "Shotgun"}));
+  }
+}

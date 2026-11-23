@@ -143,8 +143,12 @@ class DemoSounds {
   static constexpr uint8_t kStaticTried = 1, kStaticDone = 2;  // a loop tried; never again
   std::vector<uint8_t> static_ever_;   // by index: 0 untried (the first try counts in loops)
   std::vector<uint8_t> static_heard_;  // a slot plays it now (this frame)
-  std::vector<int> entity_loop_;       // by entity number: the loop it was last heard with (0 none)
-  std::vector<uint8_t> loop_heard_;    // by entity number: a slot plays its loop now (this frame)
+  // Quake's: by index, the static that plays it (itself, or the first looped static of its file).
+  std::vector<int> static_lead_;
+  // Where the lead `lead`'s voice stands so the channels hear its group's merged ears.
+  ge::core::Vec3 merged_static_at(const DemoState& s, size_t lead) const;
+  std::vector<int> entity_loop_;     // by entity number: the loop it was last heard with (0 none)
+  std::vector<uint8_t> loop_heard_;  // by entity number: a slot plays its loop now (this frame)
   std::optional<Ambience> ambience_;
   const ge::brush::Map* map_ = nullptr;
   DemoSoundStats stats_;
