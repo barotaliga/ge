@@ -640,6 +640,7 @@ bool frame(Demo& d, DemoMsg& m, std::string& error) {
                   static_cast<float>(v.gun_offset[2]) * 0.25f};
   s.fov = static_cast<float>(v.fov);
   s.rdflags = v.rdflags;
+  s.teleport_bit = ext_of(s.protocol) > 0 ? (v.rdflags & 16) != 0 : (v.pm_flags & 128) != 0;
   if (static_cast<size_t>(s.player) < s.players.size()) {
     DemoEntity& me = s.players[static_cast<size_t>(s.player)];
     me.present = true;
@@ -786,7 +787,10 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       if (!m.bad) s.effects.push_back(std::move(burst));
       break;
     }
-    case 22:  // a boss's teleport: Quake II's own burst, as our own game draws it
+    case 22:  // a boss teleporting out: its swirl (its sound is q2_temp_sound's)
+      point(DemoEffectKind::named);
+      e.name = "sq_boss_teleport";
+      break;
     case 48:  // Quake II's teleport burst (the base game sends none; a mod may)
       point(DemoEffectKind::named);
       e.name = "sq_teleport";

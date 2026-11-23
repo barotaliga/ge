@@ -164,6 +164,16 @@ TEST(the_twin_falls_by_its_share_of_gravity_and_drags) {
   r::Particle w = fine(0, 10, 0, 0);
   for (int i = 0; i < 300; ++i) r::step_particle(w, 1.0f / 60, air);
   CHECK(near(w.v[0], 5, 0.05));
+  // Its own acceleration on top: a speck thrown out and pulled back comes back past where it began.
+  r::Particle a = grain(0, 10, 0, 2, 0, 0);
+  a.drag = 0;
+  a.fall = 0;
+  a.accel[0] = -4;
+  a.accel[1] = 1;
+  r::step_particle(a, 0.5f);
+  CHECK(near(a.v[0], 0, 1e-6) && near(a.v[1], 0.5, 1e-6));
+  r::step_particle(a, 0.5f);
+  CHECK(a.v[0] < 0);
 }
 
 TEST(the_sim_flies_as_the_twin_does) {
@@ -173,7 +183,12 @@ TEST(the_sim_flies_as_the_twin_does) {
   Scene s;
   make_scene(d, s);
   const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
-  const std::vector<r::Particle> born = {grain(250, 5, 120, 1, 2, -0.5f), fine(260, 3, 130, 0.3f)};
+  r::Particle pulled = grain(255, 4, 125, 1, 0, 0);
+  pulled.accel[0] = -3;
+  pulled.accel[1] = 2;
+  pulled.accel[2] = 0.5f;
+  const std::vector<r::Particle> born = {grain(250, 5, 120, 1, 2, -0.5f), fine(260, 3, 130, 0.3f),
+                                         pulled};
   r::emit_particles(s.particles, born);
   const float dt = 1.0f / 60;
   frame(d, s, out, dt, false);
@@ -187,7 +202,7 @@ TEST(the_sim_flies_as_the_twin_does) {
     }
     CHECK(near(got[i].age, dt, 1e-6));
   }
-  CHECK(r::live_particles(got) == 2);
+  CHECK(r::live_particles(got) == 3);
   // A step of 0 holds them where they are.
   frame(d, s, out, 0, false);
   const std::vector<r::Particle> held = r::read_particles(d, s.particles);

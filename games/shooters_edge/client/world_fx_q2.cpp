@@ -7,7 +7,8 @@
 //
 // ge:summary Quake II's named effects, line trails and effect-bit marks thrown into the world
 // ge:keywords q2-effects temp-entity te_bubbletrail te_forcewall te_welding_sparks te_steam
-// ge:keywords te_flashlight ef_trap ef_tracker ef_trackertrail ef_spinninglights
+// ge:keywords te_flashlight te_bosstport boss-teleport ef_trap ef_tracker ef_trackertrail
+// ge:keywords ef_spinninglights
 // ge:keywords ef_flag1 ef_flag2 ef_ionripper ef_tagtrail ef_plasma q2_mark
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
@@ -193,7 +194,9 @@ void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, doub
     fx::q2_power_splash(p, e.way.x, s.seed++, s.palette, &out.births);
     return;
   }
-  if (n == "sq_teleport" && !dust)
+  if (n == "sq_boss_teleport")
+    fx::q2_boss_teleport(p, s.seed++, s.palette, &out.births);
+  else if (n == "sq_teleport" && !dust)
     fx::q2_teleport_burst(p, s.seed++, s.palette, &out.births);
   else if (n == "sq_item_back")
     fx::q2_item_back(p, s.seed++, s.palette, &out.births);

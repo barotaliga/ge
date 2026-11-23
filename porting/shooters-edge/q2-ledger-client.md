@@ -17,11 +17,11 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Macros ($name in typed and bound text) | 26 | 0 | 4 | 30 |
 | Menu pages and rows | 146 | 4 | 12 | 162 |
 | Server messages the client parses (svc) | 26 | 0 | 1 | 27 |
-| Temporary entities (svc_temp_entity) | 38 | 1 | 26 | 65 |
+| Temporary entities (svc_temp_entity) | 39 | 0 | 26 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 0 | 1 | 33 |
 | Entity effect bits (EF_) | 32 | 0 | 1 | 33 |
-| Entity render bits (RF_) and view bits (RDF_) | 22 | 3 | 7 | 32 |
+| Entity render bits (RF_) and view bits (RDF_) | 23 | 2 | 7 | 32 |
 | Configstrings | 10 | 0 | 6 | 16 |
 | The layout language (status bar and layouts) | 27 | 0 | 0 | 27 |
 | HUD and screen elements | 18 | 0 | 11 | 29 |
@@ -31,7 +31,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Sound and music | 13 | 0 | 0 | 13 |
 | Picture and video | 16 | 0 | 4 | 20 |
 | Connection, network, downloads and the rest | 14 | 1 | 2 | 17 |
-| **all** | 961 | 19 | 231 | 1211 |
+| **all** | 963 | 17 | 231 | 1211 |
 
 ## Client console commands
 
@@ -805,7 +805,7 @@ Every message a server (or a recording) sends the client, and what the client do
 
 ## Temporary entities (svc_temp_entity)
 
-done 38, missing 1, not-taken 26
+done 39, missing 0, not-taken 26
 
 Each one-off effect a server sends, what the client draws and plays for it. The window's own game draws its own effects from its rules' events (`app/weapon_fx.hpp`, `app/monster_fx.hpp`, `client/world_fx.cpp`); the status here is for a joined server and a recording, where the original's effect must come from the message.
 
@@ -833,7 +833,7 @@ Each one-off effect a server sends, what the client draws and plays for it. The 
 | te.medic_cable_attack | `TE_MEDIC_CABLE_ATTACK` (19) | the medic's healing cable beam | done | as the parasite's: the segment model every 30 units (`client/q2_model_fx.hpp`) |
 | te.bfg_explosion | `TE_BFG_EXPLOSION` (20) | the BFG ball's burst sprite and green light | done | in the classic look the BFG sprite's 4 frames fading over 0.3 s and its green light of 350 (`client/q2_model_fx.hpp`) |
 | te.bfg_bigexplosion | `TE_BFG_BIGEXPLOSION` (21) | the BFG's big green particle burst | done | the explosion and the named `te_bfg_bigexplosion` green burst, no sound; `client/demo_q2.cpp`, `client/q2_temp_fx.hpp`, `client/world_fx.cpp` |
-| te.bosstport | `TE_BOSSTPORT` (22) | the boss's teleport: a particle swirl and `misc/bigtele.wav` | missing | Missing, rank 2 (seen on a joined server and in demos): the teleport burst and `misc/bigtele.wav` heard everywhere (`client/q2_temp_fx.hpp`); left: its own particle swirl |
+| te.bosstport | `TE_BOSSTPORT` (22) | the boss's teleport: a particle swirl and `misc/bigtele.wav` | done | `app/effects.cpp` `q2_boss_teleport`: 4096 specks in its four palette colours flying out and down, pulled back in at 100 units/s^2 and pushed up at 160 (`render::Particle::accel`, new: a speck's own steady acceleration), living 1.67 to 2.67 s; its sound heard everywhere (`client/q2_temp_fx.hpp`); our own game's boss too (`client/listen.cpp`); `tests/shooters_edge_effects_test.cpp` |
 | te.bfg_laser | `TE_BFG_LASER` (23) | the BFG's green laser line for a frame | done | a strip 4 units wide in one of palette 0xd0..0xd3, held 0.1 s (`client/world_fx_q2.cpp` `q2_laser`) |
 | te.grapple_cable | `TE_GRAPPLE_CABLE` (24) | the CTF grapple's cable from the player's hand | done | read with its offset (`client/demo_q2.cpp`: `te_grapple_cable`); the grapple's segment model every 30 units from the start plus the offset, the player's own from his drawn origin (`client/q2_model_fx.hpp`) |
 | te.welding_sparks | `TE_WELDING_SPARKS` (25) | sparks with a flickering light (mission pack) | done | its count of specks in its colour and a flickering yellow-white light; `client/world_fx_q2.cpp`, `app/effects.hpp` |
@@ -1029,7 +1029,7 @@ Bits of an entity's render field, and of the player state's view flags.
 | rdf.noworldmodel | `RDF_NOWORLDMODEL` (2) | a view with no world (the player-setup figure) | missing | no player figure page (C5) |
 | rdf.irgoggles | `RDF_IRGOGGLES` (4) | infra-red goggles on | done | client/demo_q2.cpp keeps the view's bits in `DemoState::rdflags`; `client/demo_video.cpp` marks the warm models |
 | rdf.uvgoggles | `RDF_UVGOGGLES` (8) | the other goggles bit | done | the game's client reads it nowhere; ours the same |
-| rdf.teleport | `RDF_TELEPORT_BIT` (16) | the extended protocol's teleport mark: no view interpolation this frame | missing | protocol 34 only (C42) |
+| rdf.teleport | `RDF_TELEPORT_BIT` (16) | the extended protocol's teleport mark: no view interpolation this frame | done | `client/demo_q2.cpp` keeps the toggle (`DemoState::teleport_bit`: the view bit 16 in the extended protocol, else movement flag 128) and a flip since the frame before draws the view at the new frame, its eye, angles and field of view not eased, the bodies still between (`client/demo_lerp.cpp`); `tests/shooters_edge_demo_lerp_test.cpp` |
 
 ## Configstrings
 

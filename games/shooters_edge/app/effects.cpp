@@ -239,6 +239,22 @@ void q2_teleport_burst(const double p[3], uint32_t seed, Palette pal, Particles*
       }
 }
 
+void q2_boss_teleport(const double p[3], uint32_t seed, Palette pal, Particles* out) {
+  constexpr int kColours[4] = {16, 104, 168, 144};
+  Rng r = ge::core::make_rng(seed);
+  for (int n = 0; n < 4096; ++n) {
+    const double a = 2 * 3.14159265358979 * pick(r, 1024) / 1023, c = std::cos(a), sn = std::sin(a);
+    const double d = pick(r, 32), out_v = 70 + pick(r, 64);
+    const double v[3] = {c * out_v, sn * out_v, -100.0 + pick(r, 32)};
+    const double life = (0.5 + 0.3 * rnd(r, 0, 1)) / 0.3;
+    Particle s = q2_speck(p, c * d, sn * d, 8 + pick(r, 90), v, 0, pal, kColours[pick(r, 4)], life);
+    s.accel[0] = float(-c * 100 * kUnit);  // the plan is x/z, y up
+    s.accel[1] = float(160 * kUnit);
+    s.accel[2] = float(-sn * 100 * kUnit);
+    out->push_back(s);
+  }
+}
+
 void q2_item_back(const double p[3], uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   for (int n = 0; n < 64; ++n) {

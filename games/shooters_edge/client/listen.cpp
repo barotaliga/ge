@@ -173,7 +173,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   const std::string_view name = ev.text;
   if ((name == "te_teleport" || name == "te_boss_teleport") && listen_is_q2(l)) {  // its own burst
     e.kind = EffectKind::named;
-    e.name = "sq_teleport";
+    e.name = name == "te_boss_teleport" ? "sq_boss_teleport" : "sq_teleport";
     e.at = e.end = ev.origin;
     l.effects.push_back(std::move(e));
     return;
