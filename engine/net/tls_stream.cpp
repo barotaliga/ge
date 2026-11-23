@@ -10,6 +10,7 @@
 #include <mbedtls/ecp.h>
 #include <mbedtls/entropy.h>
 #include <mbedtls/pk.h>
+#include <mbedtls/sha256.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/x509_crt.h>
 #include <psa/crypto.h>
@@ -107,6 +108,7 @@ struct TlsStream {
   std::vector<uint8_t> pending;  // plain bytes not yet written
   std::string error;
   TlsState state = TlsState::handshaking;
+  std::vector<uint8_t> pin;  // a client's: the server certificate's SHA-256 it must have
 
   TlsStream() {
     mbedtls_ssl_config_init(&conf);
@@ -182,8 +184,10 @@ bool start(TlsStream& s) {
 std::shared_ptr<TlsStream> tls_client(const std::string& host, const TlsOptions& options) {
   auto s = std::make_shared<TlsStream>();
   if (!setup(*s, MBEDTLS_SSL_IS_CLIENT)) return s;
-  if (!options.verify) {
+  if (!options.verify || options.pin.size() == 32) {
+    // Pinned: any chain, the certificate itself checked once the handshake is done.
     mbedtls_ssl_conf_authmode(&s->conf, MBEDTLS_SSL_VERIFY_NONE);
+    if (options.verify) s->pin = options.pin;
   } else if (!options.ca_pem.empty()) {
     if (mbedtls_x509_crt_parse(&s->own, pem(options.ca_pem), options.ca_pem.size() + 1) != 0) {
       s->fail(kNoRoots);
@@ -287,13 +291,20 @@ TlsState tls_step(TlsStream& s, std::vector<uint8_t>& plain) {
       s.fail(kConnect);
     } else if (r == 0) {
       s.state = TlsState::open;
+      if (!s.pin.empty()) {
+        const mbedtls_x509_crt* peer = mbedtls_ssl_get_peer_cert(&s.ssl);
+        uint8_t sum[32];
+        if (peer != nullptr) sha256(peer->raw.p, peer->raw.len, sum);
+        if (peer == nullptr || !std::equal(sum, sum + 32, s.pin.begin())) s.fail(kUntrusted);
+      }
     }
   }
   if (s.state != TlsState::open) return s.state;
-  while (!s.pending.empty()) {
-    int r = mbedtls_ssl_write(&s.ssl, s.pending.data(), s.pending.size());
+  size_t wrote = 0;  // taken off the front once, not record by record
+  while (wrote < s.pending.size()) {
+    int r = mbedtls_ssl_write(&s.ssl, s.pending.data() + wrote, s.pending.size() - wrote);
     if (r > 0) {
-      s.pending.erase(s.pending.begin(), s.pending.begin() + r);
+      wrote += static_cast<size_t>(r);
     } else if (want(r) || r == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET) {
       break;
     } else {
@@ -301,6 +312,7 @@ TlsState tls_step(TlsStream& s, std::vector<uint8_t>& plain) {
       return s.state;
     }
   }
+  s.pending.erase(s.pending.begin(), s.pending.begin() + static_cast<ptrdiff_t>(wrote));
   unsigned char buf[16384];
   for (;;) {
     int r = mbedtls_ssl_read(&s.ssl, buf, sizeof buf);
@@ -322,5 +334,19 @@ TlsState tls_step(TlsStream& s, std::vector<uint8_t>& plain) {
 }
 
 const std::string& tls_error(const TlsStream& s) { return s.error; }
+
+bool tls_cert_sha256(const std::string& cert_pem, uint8_t out[32]) {
+  crypto_once();
+  mbedtls_x509_crt crt;
+  mbedtls_x509_crt_init(&crt);
+  const bool ok = mbedtls_x509_crt_parse(&crt, pem(cert_pem), cert_pem.size() + 1) == 0;
+  if (ok) sha256(crt.raw.p, crt.raw.len, out);
+  mbedtls_x509_crt_free(&crt);
+  return ok;
+}
+
+void sha256(const uint8_t* data, size_t size, uint8_t out[32]) {
+  mbedtls_sha256(data, size, out, 0);
+}
 
 }  // namespace ge::net

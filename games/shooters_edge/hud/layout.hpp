@@ -60,6 +60,7 @@
 // ge:test tests/shooters_edge_hud_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -114,6 +115,14 @@ struct Hud {
   ge::hud::CrosshairSettings crosshair;  // crosshair, crosshaircolor, crosshairsize, crosshairalpha
   std::string centre;                    // the centre message; empty for none
   double centre_until = 0;
+  // When each bit of the status's items word last rose (the client's clock): a gun's pickup
+  // flash; and the word as last filled.
+  std::array<double, 32> rose_at = [] {
+    std::array<double, 32> a{};
+    a.fill(-1e9);
+    return a;
+  }();
+  uint32_t items_seen = 0;
 };
 
 // The table: every look's elements, parents before their children.

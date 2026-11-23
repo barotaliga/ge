@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
@@ -433,4 +434,41 @@ TEST(packs_on_this_machine_are_offered_until_taken_in) {
   CHECK_MSG(content::import_game((lib / "Quake").string(), data.string(), &r, &error), error);
   offers = content::find_offers({lib.string()}, data.string());
   CHECK(offers.size() == 1 && offers[0].pack->folder == "xatrix");
+}
+
+TEST(a_game_taken_in_before_packs_were_known_gets_them_offered_and_taken) {
+  // A base game taken in by an older build (its taken file of the first form), its packs left
+  // behind in the source: offered from the source the taken file names, and taken in again.
+  const fs::path src = fresh("old_take") / "Quake", data = fresh("old_take_data");
+  save(src / "id1/pak0.pak", pak("start"));
+  save(src / "hipnotic/pak0.pak", pak("hip1m1"));
+  content::ImportReport r;
+  std::string error;
+  CHECK_MSG(content::import_game(src.string(), data.string(), &r, &error), error);
+  fs::remove_all(data / "q1/hipnotic");
+  {
+    std::ifstream in(data / "q1/taken.txt");
+    std::string text((std::istreambuf_iterator<char>(in)), {});
+    text.replace(0, 7, "taken 1");
+    std::ofstream(data / "q1/taken.txt") << text;
+  }
+  const std::vector<content::Offer> offers = content::find_offers({}, data.string());
+  CHECK(offers.size() == 1 && offers[0].pack->folder == "hipnotic");
+  content::ImportReport again;
+  CHECK_MSG(content::import_game(src.string(), data.string(), &again, &error), error);
+  CHECK(!again.unchanged && again.packs.size() == 1 && fs::exists(data / "q1/hipnotic/pak0.pak"));
+  CHECK(content::find_offers({}, data.string()).empty());
+}
+
+TEST(another_add_on_beside_the_base_folder_is_named_and_left) {
+  const fs::path src = fresh("addon"), data = fresh("addon_data");
+  save(src / "Quake 2/baseq2/pak0.pak", pak("base1"));
+  save(src / "Quake 2/xatrix/pak0.pak", pak("xswamp"));
+  save(src / "Quake 2/zaero/pak0.pak", pak("zbase1"));
+  content::ImportReport r;
+  std::string error;
+  CHECK_MSG(content::import_game(src.string(), data.string(), &r, &error), error);
+  CHECK(r.packs.size() == 1 && !fs::exists(data / "q2/zaero"));
+  CHECK_MSG(r.notes.size() == 1 && r.notes[0].starts_with("zaero beside baseq2 is not one of"),
+            r.notes.empty() ? "" : r.notes[0]);
 }

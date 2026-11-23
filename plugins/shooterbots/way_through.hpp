@@ -55,6 +55,9 @@ constexpr double kWayCall_s = 1.5;      // waited this long for a lift its butto
 constexpr double kWayDone_s = 10;  // (`complete`) the exit waits this long past the last thing left
 constexpr float kWayTouchBy = 48;  // (`complete`) a node this near a step's box stands by it, units
 constexpr float kWayTouchFrom = 96;  // and from this near its node he goes into the box, units
+constexpr float kWayHung = 96;       // (`complete`) no node this near a trigger's height: it hangs
+constexpr float kWayFallBy = 64;     // and a floor this near across its box and at most
+constexpr float kWayFallFrom = 640;  // this over it is walked off to fall through it, units
 constexpr float kWayCrawlNear = 32;  // (`complete`) a crawl's point this near: he crawls it, units
 constexpr double kWayCrawlOut_s = 15;  // and the way back out is crawled this long at most, s
 constexpr double kWayIdle_s = 5;       // nothing to do this long: back into the water
@@ -95,8 +98,9 @@ struct WayStep {
                           // walked or swum into its box (`way_reach_in`)
   std::vector<sh::Vec3f> crawl;  // (`complete`) or crawled from its node, ducked (a nook under a
                                  // floor: base1's silencer), these origins in turn
-  std::vector<int> doors;        // those doors' entities
-  std::vector<int> covers;       // a key's: the locked doors (WayThrough::locked) lying over it
+  bool fall = false;        // (`complete`) the crawl a walk off a floor over it, falling through it
+  std::vector<int> doors;   // those doors' entities
+  std::vector<int> covers;  // a key's: the locked doors (WayThrough::locked) lying over it
 };
 
 // An exit: a trigger walked through, or a button pressed, that changes the level.
@@ -246,6 +250,13 @@ void way_dive(const WayThrough& w, const MapNav& nav, const ge::shooterbots::Bot
 // node, into the box.
 void way_reach_in(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s, int me,
                   sh::MoveCmd& cmd);
+
+// (`complete`) A trigger or secret hung over the floor, no floor node within `kWayHung` of it
+// (e3m5's in the pit under the top floor, t30 for the second tube): touched only falling through
+// it, so its node is the floor beside the open air over it (one `reach` holds first) and its crawl
+// the walk off the edge, steered into it on the way down (`WayStep::fall`).
+void way_fall_steps(WayThrough& w, const MapNav& nav, const ge::shooterbots::BotView& s,
+                    const ge::ai::Search& reach);
 
 constexpr float kWayStuck = 24;
 constexpr double kWayStuck_s = 1.5;
