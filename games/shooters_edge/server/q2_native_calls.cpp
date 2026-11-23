@@ -34,7 +34,6 @@ using native::NativeTrace;
 NativeHost* g_host = nullptr;  // the host whose library is being called
 
 constexpr uint8_t kSvcSound = 9, kSvcPrint = 10, kSvcCenterPrint = 15;
-constexpr int kCsModels = 32, kCsSounds = 288, kCsImages = 544;
 constexpr int32_t kContentsMonster = 0x2000000, kContentsDeadMonster = 0x4000000;
 constexpr size_t kMostMessage = 1400;
 constexpr int kChanNoHearing = 8, kChanReliable = 16;
@@ -200,7 +199,8 @@ void c_positioned_sound(const float* origin, NativeEntityHead* ent, int channel,
   NativeHost& h = *g_host;
   if (ent == nullptr) return;
   const int n = h.number_of(ent);
-  if (n < 0 || n > 4095) return;
+  if (n < 0 || n >= h.limits().entities) return;
+  if (index < 0 || index >= h.limits().sounds) return;
   if (volume < 0 || volume > 1) volume = 1;
   if (attenuation < 0 || attenuation > 4) attenuation = 0;
   if (offset < 0 || offset > 0.255f) offset = 0;
@@ -219,7 +219,9 @@ void c_positioned_sound(const float* origin, NativeEntityHead* ent, int channel,
   if (volume != 1.0f) flags |= 1;
   if (attenuation != 1.0f) flags |= 2;
   if (offset != 0) flags |= 16;
+  if (index > 255) flags |= ge::classic::protocol::kQ2SoundIndex16;  // only extended reaches it
   std::vector<uint8_t> b = {kSvcSound, flags, static_cast<uint8_t>(index)};
+  if (index > 255) b.push_back(static_cast<uint8_t>(index >> 8));
   if (flags & 1) b.push_back(static_cast<uint8_t>(volume * 255));
   if (flags & 2) b.push_back(static_cast<uint8_t>(attenuation * 64));
   if (flags & 16) b.push_back(static_cast<uint8_t>(offset * 1000));
@@ -229,6 +231,13 @@ void c_positioned_sound(const float* origin, NativeEntityHead* ent, int channel,
   std::vector<uint8_t> placed = b;  // the same with the place (flag 4)
   placed[1] |= 4;
   for (const float v : at) {
+    if (h.ext >= 2) {  // the second level's clients read a 23-bit coordinate
+      uint8_t c[3];
+      ge::net::Writer w = ge::net::make_writer(c, sizeof c);
+      ge::classic::protocol::write_q2_coord23(w, static_cast<int32_t>(v * 8), 0);
+      placed.insert(placed.end(), c, c + w.size);
+      continue;
+    }
     const auto c = static_cast<uint16_t>(static_cast<int16_t>(static_cast<int32_t>(v * 8)));
     placed.push_back(static_cast<uint8_t>(c & 0xFF));
     placed.push_back(static_cast<uint8_t>(c >> 8));
@@ -245,7 +254,7 @@ void c_positioned_sound(const float* origin, NativeEntityHead* ent, int channel,
   }
   if (index > 0 && index < 256) {  // the window's game hears it by the sound's name
     NetEvent& ev = add_event(h, EventKind::sound, begun_bits(h), (channel & kChanReliable) != 0,
-                             h.s->raw.config[size_t(kCsSounds) + size_t(index)]);
+                             h.s->raw.config[size_t(h.cs().sounds) + size_t(index)]);
     ev.ent = n;
     ev.level = channel & 7;
     ev.origin = vec(at);
@@ -263,23 +272,29 @@ void c_sound(NativeEntityHead* ent, int channel, int index, float volume, float 
 
 void c_configstring(int index, const char* text) {
   NativeHost& h = *g_host;
-  if (index < 0 || index >= kQ2ConfigStrings) return h.s->console.push_back("bad index");
+  const ge::classic::protocol::Q2CsLayout& at = h.cs();
+  if (index < 0 || index >= at.end) return h.s->console.push_back("bad index");
   h.buf.clear();
   const std::string t = text != nullptr ? text : "";
-  const size_t room = index >= 5 && index <= 28 ? size_t(29 - index) * 64 : 64;
+  // The status bar may run on to the next block, a general string to the list's end.
+  const size_t room = index >= 5 && index < at.air_accel ? size_t(at.air_accel - index) * 64
+                      : index >= at.general              ? size_t(at.end - index) * 64
+                                                         : 64;
   if (t.size() + 1 > room) return h.s->console.push_back("a configstring too long: " + t);
   h.s->raw.config[size_t(index)] = t;
 }
 
-int find_index(NativeHost& h, const char* name, int base) {
+// A name's index in a list of `count` (the layout's); 0 when the list is full. Under the extended
+// limits model 255 is never handed out: it stays the players' model.
+int find_index(NativeHost& h, const char* name, int base, int count, bool models = false) {
   if (name == nullptr || name[0] == 0) return 0;
   const std::string n = name;
   if (n.size() >= 64) return 0;
   std::vector<std::string>& cs = h.s->raw.config;
-  for (int i = 1; i < 256; i++)
+  for (int i = 1; i < count; i++)
     if (cs[size_t(base) + size_t(i)] == n) return i;
-  for (int i = 1; i < 256; i++)
-    if (cs[size_t(base) + size_t(i)].empty()) {
+  for (int i = 1; i < count; i++)
+    if (cs[size_t(base) + size_t(i)].empty() && !(models && h.ext > 0 && i == 255)) {
       cs[size_t(base) + size_t(i)] = n;
       return i;
     }
@@ -287,9 +302,18 @@ int find_index(NativeHost& h, const char* name, int base) {
   return 0;
 }
 
-int c_modelindex(const char* name) { return find_index(*g_host, name, kCsModels); }
-int c_soundindex(const char* name) { return find_index(*g_host, name, kCsSounds); }
-int c_imageindex(const char* name) { return find_index(*g_host, name, kCsImages); }
+int c_modelindex(const char* name) {
+  NativeHost& h = *g_host;
+  return find_index(h, name, h.cs().models, h.limits().models, true);
+}
+int c_soundindex(const char* name) {
+  NativeHost& h = *g_host;
+  return find_index(h, name, h.cs().sounds, h.limits().sounds);
+}
+int c_imageindex(const char* name) {
+  NativeHost& h = *g_host;
+  return find_index(h, name, h.cs().images, h.limits().images);
+}
 
 // --- links ---
 
@@ -526,8 +550,8 @@ NativeTrace turned_trace(NativeHost& h, uint32_t model, const float* origin, sh:
 
 uint32_t brush_model(const NativeHost& h, const NativeEntityHead* e) {
   const int m = e->s.model[0];
-  if (m <= 0 || m >= 256) return 0;
-  const std::string& name = h.s->raw.config[size_t(kCsModels) + size_t(m)];
+  if (m <= 0 || m >= h.limits().models) return 0;
+  const std::string& name = h.s->raw.config[size_t(h.cs().models) + size_t(m)];
   if (name.size() < 2 || name[0] != '*') return 0;
   const int n = std::atoi(name.c_str() + 1);
   return n > 0 && size_t(n) < h.model_count() ? uint32_t(n) : 0;
@@ -889,9 +913,21 @@ void c_write_string(const char* s) {
   for (const char* p = s; p != nullptr && *p != 0; p++) write(h, static_cast<uint8_t>(*p), 1);
   write(h, 0, 1);
 }
+// A position: three words of eighths, or under the extended limits' second level three 23-bit
+// coordinates (absolute), as that level's clients read every position.
 void c_write_position(const float* p) {
-  for (int k = 0; k < 3; k++)
-    write(*g_host, static_cast<uint32_t>(static_cast<int32_t>(p[k] * 8)), 2);
+  NativeHost& h = *g_host;
+  for (int k = 0; k < 3; k++) {
+    const auto v = static_cast<int32_t>(p[k] * 8);
+    if (h.ext < 2) {
+      write(h, static_cast<uint32_t>(v), 2);
+      continue;
+    }
+    uint8_t b[3];
+    ge::net::Writer w = ge::net::make_writer(b, sizeof b);
+    ge::classic::protocol::write_q2_coord23(w, v, 0);
+    for (size_t i = 0; i < w.size; i++) write(h, b[i], 1);
+  }
 }
 // The direction's index into the protocol's table of 162 directions (a missing one: 0).
 void c_write_dir(const float* d) {
@@ -998,7 +1034,7 @@ void x_local_sound(NativeEntityHead* target, const float*, NativeEntityHead*, in
 
 const char* x_get_configstring(int index) {
   NativeHost& h = *g_host;
-  if (index < 0 || index >= kQ2ConfigStrings || size_t(index) >= h.s->raw.config.size()) {
+  if (index < 0 || index >= h.cs().end || size_t(index) >= h.s->raw.config.size()) {
     h.error_text = "PF_GetConfigstring: bad index: " + std::to_string(index);
     leave(h);
   }

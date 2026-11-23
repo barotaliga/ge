@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <csetjmp>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <iterator>
@@ -30,8 +31,7 @@ namespace br = ge::brush;
 using native::NativeEntityHead;
 
 constexpr double kFrameSeconds = 0.1;
-constexpr int kCsName = 0, kCsAirAccel = 29, kCsMaxClients = 30, kCsChecksum = 31, kCsModels = 32;
-constexpr int kCsStatusBar = 5, kCsSounds = 288, kCsImages = 544, kCsItems = 1056;
+constexpr int kCsName = 0, kCsStatusBar = 5;  // the same in either layout
 
 int16_t coord(float v) { return static_cast<int16_t>(static_cast<int32_t>(v * 8.0f)); }
 uint8_t angle8(float deg) {
@@ -80,6 +80,24 @@ Q2EntityState wire_state(const native::NativeState& s) {
   return w;
 }
 
+// The state with the extended fields from the entity's extension block, when the library keeps
+// one (the extended limits on).
+Q2EntityState wire_state(const NativeHost& h, const NativeEntityHead* e,
+                         const native::NativeState& s) {
+  Q2EntityState w = wire_state(s);
+  if (h.ext == 0 || e == nullptr) return w;
+  namespace cp = ge::classic::protocol;
+  native::NativeEntityExt x;
+  std::memcpy(&x, reinterpret_cast<const uint8_t*>(e) + sizeof(NativeEntityHead), sizeof x);
+  w.more_effects = static_cast<uint32_t>(x.more_effects);
+  w.alpha = x.alpha > 0 && x.alpha < 1 ? cp::q2_alpha_to_wire(x.alpha) : 0;
+  w.scale = x.scale > 0 ? cp::q2_scale_to_wire(x.scale) : 0;
+  w.loop_volume = x.loop_volume > 0 ? cp::q2_loop_volume_to_wire(x.loop_volume) : 0;
+  w.loop_attenuation =
+      x.loop_attenuation != 0 ? cp::q2_loop_attenuation_to_wire(x.loop_attenuation) : 0;
+  return w;
+}
+
 Q2PlayerState wire_player(const native::NativePlayer& p) {
   Q2PlayerState w;
   w.type = static_cast<uint8_t>(p.move.type);
@@ -96,7 +114,7 @@ Q2PlayerState wire_player(const native::NativePlayer& p) {
   w.time = p.move.time;
   w.flags = p.move.flags;
   w.gravity = p.move.gravity;
-  w.gun_index = static_cast<uint8_t>(p.gun_index);
+  w.gun_index = static_cast<uint16_t>(p.gun_index);
   w.gun_frame = static_cast<uint8_t>(p.gun_frame);
   for (int k = 0; k < 4; k++)
     w.blend[k] = static_cast<uint8_t>(std::clamp(p.blend[k], 0.0f, 1.0f) * 255.0f);
@@ -117,6 +135,9 @@ int row_model(const NativeQ2& s, int wire) {
 
 void fill_lists(NativeQ2& s) {
   const std::vector<std::string>& cs = s.raw.config;
+  const ge::classic::protocol::Q2CsLayout& at = s.host->cs();
+  const int kCsModels = at.models, kCsSounds = at.sounds, kCsImages = at.images,
+            kCsItems = at.items;
   s.models.assign(1, std::string());
   for (int m = 2; m < 255; m++) s.models.push_back(cs[size_t(kCsModels) + size_t(m)]);
   while (s.models.size() > 1 && s.models.back().empty()) s.models.pop_back();
@@ -250,13 +271,14 @@ void fill_world(NativeQ2& s) {
 void take_view(NativeQ2& s) {
   NativeHost& h = *s.host;
   Q2Raw& raw = s.raw;
-  raw.entities.assign(kQ2Entities, Q2EntityState{});
-  raw.owners.assign(kQ2Entities, 0);
-  q2_sight_reset(raw.sight, h.map.get());
+  const int most = h.limits().entities;
+  raw.entities.assign(size_t(most), Q2EntityState{});
+  raw.owners.assign(size_t(most), 0);
+  q2_sight_reset(raw.sight, h.map.get(), most);
   raw.sight.groups = h.map && !h.map->areas.empty() && !native_no_areas(h) ? h.area_groups
                                                                            : std::vector<int32_t>{};
   const bool proper = (native_features(h) & native::kGmfProperInUse) != 0;
-  const int count = std::min(h.game->num_edicts, kQ2Entities);
+  const int count = std::min(h.game->num_edicts, most);
   for (int n = 1; n < count; n++) {
     NativeEntityHead* e = h.entity(n);
     if ((e->svflags & native::kSvfNoClient) != 0) continue;
@@ -264,7 +286,7 @@ void take_view(NativeQ2& s) {
     if (e->s.model[0] == 0 && e->s.effects == 0 && e->s.sound == 0 && e->s.event == 0) continue;
     if (n <= h.max_clients && !h.begun[n - 1]) continue;
     e->s.number = n;
-    raw.entities[size_t(n)] = wire_state(e->s);
+    raw.entities[size_t(n)] = wire_state(h, e, e->s);
     if (e->linkcount > 0)
       q2_sight_link(raw.sight, n, e->absmin, e->absmax);
     else
@@ -311,22 +333,22 @@ bool per_client(void* ctx, int slot, int n, Q2EntityState& st) {
                            "'s state");
     return true;
   }
-  st = wire_state(rec.s);
+  st = wire_state(h, e, rec.s);
   return true;
 }
 
 // The level's baselines, once its entities have settled.
 void take_baselines(NativeQ2& s) {
   NativeHost& h = *s.host;
-  s.raw.baselines.assign(kQ2Entities, Q2EntityState{});
-  const int count = std::min(h.game->num_edicts, kQ2Entities);
+  s.raw.baselines.assign(size_t(h.limits().entities), Q2EntityState{});
+  const int count = std::min(h.game->num_edicts, h.limits().entities);
   for (int n = 1; n < count; n++) {
     NativeEntityHead* e = h.entity(n);
     if (e->inuse == 0) continue;
     if (e->s.model[0] == 0 && e->s.sound == 0 && e->s.effects == 0) continue;
     e->s.number = n;
     std::memcpy(e->s.old_origin, e->s.origin, sizeof e->s.old_origin);
-    s.raw.baselines[size_t(n)] = wire_state(e->s);
+    s.raw.baselines[size_t(n)] = wire_state(h, e, e->s);
     s.raw.baselines[size_t(n)].event = 0;
   }
 }
@@ -489,16 +511,18 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
   } else {
     h.hulls = spec.models;  // a Quake map: its clip hulls (q2_native_host.hpp)
   }
-  h.linked.assign(size_t(std::max(h.game->max_edicts, kQ2Entities)), 0);
-  s.world.entities.assign(size_t(std::max(1, std::min(h.game->max_edicts, kQ2Entities))),
-                          WorldEntity{});
+  const int most = h.limits().entities;
+  h.linked.assign(size_t(std::max(h.game->max_edicts, most)), 0);
+  s.world.entities.assign(size_t(std::max(1, std::min(h.game->max_edicts, most))), WorldEntity{});
   s.sv.set.max_edicts = std::max(s.sv.set.max_edicts, int(s.world.entities.size()) + 8);
   s.sv.edicts.assign(size_t(s.sv.set.max_edicts), sh::Edict{});
   s.map_name = spec.name;
   s.map_stopped = false;
   s.pending_map.clear();
   Q2Raw& raw = s.raw;
-  raw.config.assign(kQ2ConfigStrings, std::string());
+  const ge::classic::protocol::Q2CsLayout& at = h.cs();
+  raw.config.assign(size_t(at.end), std::string());
+  raw.ext = h.ext;
   for (int i = 0; i < 32; i++) {
     raw.reliable[i].clear();
     raw.datagram[i].clear();
@@ -508,12 +532,12 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
       h.find_setting("deathmatch") != nullptr && h.find_setting("deathmatch")->rec.value != 0;
   const NativeSetting* air = h.find_setting("sv_airaccelerate");
   h.air_accelerate = dm && air != nullptr ? air->rec.value : 0;
-  raw.config[kCsAirAccel] = std::to_string(static_cast<int>(h.air_accelerate));
-  raw.config[kCsMaxClients] = std::to_string(h.max_clients);
-  raw.config[kCsChecksum] = std::to_string(s.map_checksum);
-  raw.config[kCsModels + 1] = "maps/" + spec.name + ".bsp";
-  for (size_t m = 1; m < h.model_count() && m + 1 < 256; m++)
-    raw.config[size_t(kCsModels) + m + 1] = "*" + std::to_string(m);
+  raw.config[size_t(at.air_accel)] = std::to_string(static_cast<int>(h.air_accelerate));
+  raw.config[size_t(at.max_clients)] = std::to_string(h.max_clients);
+  raw.config[size_t(at.map_checksum)] = std::to_string(s.map_checksum);
+  raw.config[size_t(at.models) + 1] = "maps/" + spec.name + ".bsp";
+  for (size_t m = 1; m < h.model_count() && m + 1 < size_t(h.limits().models); m++)
+    raw.config[size_t(at.models) + m + 1] = "*" + std::to_string(m);
   for (int i = 0; i < h.max_clients; i++) h.entity(i + 1)->s.number = i + 1;
   h.clock = 0;
   h.next_frame = kFrameSeconds;
@@ -528,8 +552,9 @@ bool nv_start(void* r, const MapSpec& spec, std::string& error) {
     error = s.stop_reason;
     return false;
   }
-  if (raw.config[kCsChecksum] != std::to_string(s.map_checksum)) {
-    error = "the game library changed the map's checksum (configstring 31): it cannot be hosted";
+  if (raw.config[size_t(at.map_checksum)] != std::to_string(s.map_checksum)) {
+    error = "the game library changed the map's checksum (configstring " +
+            std::to_string(at.map_checksum) + "): it cannot be hosted";
     h.dead = true;
     return false;
   }
@@ -854,8 +879,28 @@ std::unique_ptr<NativeQ2> load_native_q2(const NativeQ2Options& opt, std::string
     s->raw.touch = per_client;
     s->raw.touch_ctx = s.get();
   }
-  if (h.game->edicts == nullptr || h.game->edict_size < int32_t(sizeof(NativeEntityHead)) ||
-      h.game->num_edicts <= h.max_clients) {
+  // THE EXTENDED LIMITS: the library turns them on with its feature bit, read as its start
+  // returns; it must then keep the extension block after each head and may make up to 8192
+  // entities (1024 without).
+  if ((native_features(h) & native::kGmfProtocolExtensions) != 0) {
+    h.ext = h.new_interface ? 2 : 1;
+    s->console.push_back("Game supports protocol extensions.");
+    native_set(h, native_setting(h, "protocol", "34", 0), "36", true);
+  }
+  const int32_t least = int32_t(sizeof(NativeEntityHead)) +
+                        (h.ext > 0 ? int32_t(sizeof(native::NativeEntityExt)) : 0);
+  if (h.game->edict_size < least || h.game->edict_size > INT32_MAX / h.limits().entities ||
+      h.game->edict_size % int32_t(alignof(NativeEntityHead)) != 0) {
+    error = "Game library returned bad size of edict_t";
+    h.dead = true;
+    return nullptr;
+  }
+  if (h.game->max_edicts <= h.max_clients || h.game->max_edicts > h.limits().entities) {
+    error = "Game library returned bad number of max_edicts";
+    h.dead = true;
+    return nullptr;
+  }
+  if (h.game->edicts == nullptr || h.game->num_edicts <= h.max_clients) {
     error = "the game library " + file + " made no entities for " + std::to_string(h.max_clients) +
             " players";
     h.dead = true;

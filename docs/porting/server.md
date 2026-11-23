@@ -191,6 +191,16 @@ at start (a later set is refused); each new game outside deathmatch says which. 
 spectator flies as its client predicts it (`q2_fly_for_protocol`): 35 and 36 at twice the time, 36
 with friction 4 and gliding on, 34 with the original step.
 
+THE EXTENDED LIMITS. A hosted game library that sets the protocol-extensions feature after its start
+gets the extended limits: the configstring layout of 13630 strings, up to 8192 entities, 8192
+models, 2048 sounds and images, its entities' extension block read (more effects, alpha, scale, the
+loop's volume and attenuation), and every client the extended forms (the server data's flags word,
+the wider entity and player deltas, the streams ended by the longer count). One table holds the
+levels, layouts, limits and codings for the server and the client alike
+(`plugins/classic/protocol/q2_limits.hpp`); the wire's writers are `q2_wire_limits.cpp`. The
+second level (23-bit coordinates, 64 stats, the damage blend) comes with a library of the newer
+interface. Only clients that read the extended forms are admitted.
+
 Quake II's downloads (`net/q2_net_server.cpp`, facts in `porting/shooters-edge/
 q2-downloads-facts.md`) make the asked name plain first (slashes, `.` and `..`), then offer each
 kind by its own setting (`sv_download_textures` for textures and skies, `sv_download_pics`,
