@@ -132,34 +132,37 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                   opener("games"));
   // pushmenu <name>: a page by its name, ours or Quake II's; popmenu one page back; forcemenuoff
   // every page closed.
-  con.add_command("pushmenu", "pushmenu <page>: the main menu opened at that page",
-                  [this](Con& c, const CArgs& a) {
-                    if (a.size() < 2) {
-                      c.print("Usage: " + a[0] + " <menu>");
-                      return;
-                    }
-                    // A page the game's table has by that name first, then Quake II's names
-                    // for ours.
-                    static constexpr std::pair<std::string_view, std::string_view> kNames[] = {
-                        {"singleplayer", "single"}, {"game", "single"},
-                        {"loadgame", "load"},       {"savegame", "save"},
-                        {"multiplayer", "multi"},   {"startserver", "host"},
-                        {"players", "setup"},       {"keys", "controls"},
-                        {"dmflags", "gameflags"},   {"legacy", "legacykeys"}};
-                    std::string page = ge::console::lower(a[1]);
-                    if (main_.page(page) == nullptr)
-                      for (const auto& [name, ours] : kNames)
-                        if (page == name) page = ours;
-                    const bool special = page == "servers" || page == "demos" ||
-                                         page == "screenshots" || page == "games";
-                    if (!special && main_.page(page) == nullptr) {
-                      c.print("No such menu: " + a[1]);
-                      return;
-                    }
-                    toggle_ = true;
-                    toggle_open_ = true;
-                    toggle_page_ = page;
-                  });
+  con.add_command(
+      "pushmenu", "pushmenu <page>: the main menu opened at that page",
+      [this](Con& c, const CArgs& a) {
+        if (a.size() < 2) {
+          c.print("Usage: " + a[0] + " <menu>");
+          return;
+        }
+        // A page the game's table has by that name first, then Quake II's names
+        // for ours.
+        static constexpr std::pair<std::string_view, std::string_view> kNames[] = {
+            {"singleplayer", "single"}, {"game", "single"},       {"loadgame", "load"},
+            {"savegame", "save"},       {"multiplayer", "multi"}, {"startserver", "host"},
+            {"players", "setup"},       {"keys", "controls"},     {"dmflags", "gameflags"},
+            {"legacy", "legacykeys"}};
+        std::string page = ge::console::lower(a[1]);
+        if (main_.page(page) == nullptr)
+          for (const auto& [name, ours] : kNames)
+            if (page == name) page = ours;
+        const bool special =
+            page == "servers" || page == "demos" || page == "screenshots" || page == "games";
+        if (!special && main_.page(page) == nullptr) {
+          c.print("No such menu: " + a[1]);
+          return;
+        }
+        // Quake II's browser sources after its name: that open's lists.
+        if (page == "servers")
+          servers_.use_sources(std::vector<std::string>(a.words.begin() + 2, a.words.end()));
+        toggle_ = true;
+        toggle_open_ = true;
+        toggle_page_ = page;
+      });
   con.add_command("popmenu", "popmenu: the main menu one page back (closed from its root)",
                   [this](Con&, const CArgs&) { pending_ = 1; });
   con.add_command("forcemenuoff", "forcemenuoff: the main menu closed, whatever page is up",
@@ -171,17 +174,19 @@ void GameMenu::add_cvars(ge::console::Console& con) {
 const MenuTable& GameMenu::set_table(const MenuTable& table, const ge::vfs::SearchPath* files) {
   table_ = &table;
   script_.reset();
+  // The browser's `file:///` lists read from the game's files.
+  const auto read = [files](std::string_view name) -> std::optional<std::string> {
+    const ge::vfs::FileRef* f = files != nullptr ? ge::vfs::find(*files, name) : nullptr;
+    std::vector<uint8_t> bytes;
+    std::string why;
+    if (f == nullptr || !ge::vfs::read(*files, *f, &bytes, &why)) return std::nullopt;
+    return std::string(bytes.begin(), bytes.end());
+  };
+  servers_.set_files(read);
   const ge::vfs::FileRef* file = files != nullptr && use_script_ && !table.script.empty()
                                      ? ge::vfs::find(*files, table.script)
                                      : nullptr;
   if (file != nullptr) {
-    const auto read = [files](std::string_view name) -> std::optional<std::string> {
-      const ge::vfs::FileRef* f = ge::vfs::find(*files, name);
-      std::vector<uint8_t> bytes;
-      std::string why;
-      if (f == nullptr || !ge::vfs::read(*files, *f, &bytes, &why)) return std::nullopt;
-      return std::string(bytes.begin(), bytes.end());
-    };
     const auto lookup = [this](std::string_view name, std::string& value) {
       if (con_ == nullptr) return false;
       const std::string asked = "${" + std::string(name) + "}";

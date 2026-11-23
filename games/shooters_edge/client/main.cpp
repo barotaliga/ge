@@ -404,7 +404,10 @@ int run_main(int argc, char** argv) {
       cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
-  const auto save_settings = [&console, &series] { cl::save_settings(console, series); };
+  const auto save_settings = [&console, &series, &con_view] {
+    cl::save_settings(console, series);
+    con_view.save_history();  // the typed lines, beside the config
+  };
   const auto outside = [&](const std::function<void()>& run) {
     cl::without_game_cvars(console, game_cvars, started_game, bindings, run);
   };
@@ -562,6 +565,7 @@ int run_main(int argc, char** argv) {
                                       .sheet = &remote.sheet.sheet};  // SERVER SETTINGS
   cl::add_adapter_commands(console, adapter, files, args.basedir);
   cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
+  con_view.load_history();                         // the lines typed in the last run
   // The map's place names, read as it starts and made in the game (client/place_names.hpp).
   cl::PlaceNames places;
   places.game_dir = std::filesystem::path(args.basedir) / args.game;
@@ -1105,8 +1109,9 @@ int run_main(int argc, char** argv) {
     shooters_edge::look::apply_ce_enabled(picture, console.cvars());  // ce_enabled 0: none of it
     music.held = cl::cinematic_on(cine);  // a movie's own sound: `ogg play` refused meanwhile
     ge::audio::music_frame(music, synth, console);
-    cl::hear_swap(synth, under_ear);  // s_swapstereo
-    cl::hear_ears(synth, under_ear);  // s_hrtf
+    cl::hear_swap(synth, under_ear);                      // s_swapstereo
+    cl::hear_ears(synth, under_ear);                      // s_hrtf
+    picture.q2fx.plain_stereo = !cl::hrtf_on(under_ear);  // al_merge_looping 1 merges only then
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one

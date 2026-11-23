@@ -16,6 +16,8 @@
 // - `cl_footsteps` 0: no footstep heard (1 and 2 the same: the game's own four steps).
 // - `s_ambient`, the loops an entity carries that are heard: 0 none, 1 all, 2 only those of an
 //   entity with a model (a speaker on its own is silent), 3 only the listener's own.
+// - `al_merge_looping`: the entities carrying one looped sound heard as one voice
+//   (q2_loop_merge.hpp): 0 never, 1 while the output is plain stereo (the default), 2 always.
 // - The rail's trail, `cl_railtrail_type`: 0 the game's own specks, 1 a core beam, 2 the core and
 //   a line spiralling round it, fading over `cl_railtrail_time` seconds; the core's colour and
 //   width in units (`cl_railcore_color`, `cl_railcore_width`), the spiral's colour and radius
@@ -49,7 +51,7 @@
 // ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_modulate_world
 // ge:keywords gl_modulate_entities gl_doublelight_entities gl_coloredlightmaps gl_dotshading
 // ge:keywords cl_lerp_lightstyles cl_rollhack gl_celshading q2_outline_px cl_smooth_explosions
-// ge:keywords q2_blast_age
+// ge:keywords q2_blast_age al_merge_looping
 // ge:skill classic shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #pragma once
@@ -64,15 +66,17 @@ namespace ge::classic {
 inline constexpr uint8_t kQ2Grenade = 1, kQ2Rocket = 2;  // an explosion's kind (0: any other)
 
 struct Q2FxSwitches {
-  int no_particles = 0;                                     // cl_disable_particles
-  int no_explosions = 0;                                    // cl_disable_explosions
-  int light_hacks = 0;                                      // cl_dlight_hacks
-  double muzzle_light_ms = 16;                              // cl_muzzlelight_time
-  bool muzzle_models = true;                                // cl_muzzleflashes
-  int footsteps = 1;                                        // cl_footsteps
-  int ambient = 1;                                          // s_ambient
-  int rail_type = 0;                                        // cl_railtrail_type
-  double rail_time = 1;                                     // cl_railtrail_time, seconds
+  int no_particles = 0;         // cl_disable_particles
+  int no_explosions = 0;        // cl_disable_explosions
+  int light_hacks = 0;          // cl_dlight_hacks
+  double muzzle_light_ms = 16;  // cl_muzzlelight_time
+  bool muzzle_models = true;    // cl_muzzleflashes
+  int footsteps = 1;            // cl_footsteps
+  int ambient = 1;              // s_ambient
+  int merge_looping = 1;  // al_merge_looping: 0 never, 1 in plain stereo, 2 always (q2_loop_merge)
+  bool plain_stereo = true;  // not a setting: the output's (false while s_hrtf 2 gives two ears)
+  int rail_type = 0;         // cl_railtrail_type
+  double rail_time = 1;      // cl_railtrail_time, seconds
   std::string core_colour = "red", spiral_colour = "blue";  // cl_railcore_color, _spiral_
   double core_width = 2, spiral_radius = 3;  // cl_railcore_width, cl_railspiral_radius: units
   int hit_markers = 2;                       // cl_hit_markers
@@ -98,7 +102,12 @@ struct Q2FxSwitches {
   int dlight_falloff = -1;                   // gl_dlight_falloff (-1: the renderer's own)
   double cel_shading = 0;                    // gl_celshading, pixels (0: none)
   bool smooth_explosions = true;             // cl_smooth_explosions
+  double glowmap_intensity = 0.75;           // gl_glowmap_intensity
 };
+
+// A glow map's light on a model (gl_glowmap_intensity): its colour times twice the setting, added
+// whatever the light round it.
+inline float q2_glow_map_gain(double intensity) { return static_cast<float>(2 * intensity); }
 
 // gl_partscale's share of a speck's own size `depth_units` in front of the eye: 1 at the default
 // 2 within 20 units, past them 1 and 0.004 a unit of the whole depth (5 at 1000 units), times

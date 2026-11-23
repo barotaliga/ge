@@ -184,6 +184,9 @@ struct NavLink {
   // A grenade jump's: a COMBO, a rocket fired straight down on the jump as the grenade bursts
   // (both launchers and two rockets: `NavJumper::combos`).
   bool combo = false;
+  // A standing jump up into an updraft (map_nav.cpp `push_links`): taken from a stand, no keys,
+  // so the draft takes him at its middle.
+  bool updraft = false;
   int32_t script = -1;  // a scripted way's: its index in `NavGraph::scripts`
   bool teleport =
       false;            // a teleporter's: walked INTO its trigger (at the link's start), not across
@@ -336,6 +339,7 @@ struct NavExtraLink {
   uint8_t level = 0;      // and its level (NavLink::level)
   float lead = 0;         // a grenade jump's stand past the grenade (NavLink::lead)
   bool combo = false;     // and a rocket on it as it bursts (NavLink::combo)
+  bool updraft = false;   // a standing jump up into an updraft (NavLink::updraft)
   int32_t mover = -1;     // a mover the way crosses (NavLink::mover): shut, it bars the link
   int32_t script = -1;    // a scripted way's steps (NavLink::script)
   bool teleport = false;  // a teleporter's (NavLink::teleport)

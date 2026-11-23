@@ -189,12 +189,23 @@ bool open_model(const SearchPath& files, const std::string& name, OpenedModel& o
   if (kind == ".md2") {
     if (!morph::read_model(bytes, name, &out.morph, &error)) return false;
     out.form = ModelForm::morph;
-    // Its skins are the game's pictures, by name: read into the model as palette indices.
+    // Its skins are the game's pictures, by name: read into the model as palette indices; a
+    // full-colour picture of the same name (.png, .tga) stands in for one, and `<skin>_glow`
+    // beside it is its glow map.
     for (const std::string& path : out.morph.skin_paths) {
       assets::IndexedImage img;
       if (!named_picture(files, path, name, img)) continue;
       out.morph.skins.push_back(
           {img.width, img.height, std::move(img.indices), 0.0f, int(out.morph.skins.size())});
+      const std::string stem =
+          (fs::path(path).parent_path() / fs::path(path).stem()).generic_string();
+      const std::string own[] = {stem}, glow[] = {stem + "_glow"};
+      std::optional<assets::Image> big = stand_in(files, own, path);
+      std::optional<assets::Image> lit = stand_in(files, glow, "its skin without a glow map");
+      out.skins.resize(out.morph.skins.size());
+      out.glows.resize(out.morph.skins.size());
+      if (big) out.skins.back() = std::move(*big);
+      if (lit) out.glows.back() = std::move(*lit);
     }
     return true;
   }

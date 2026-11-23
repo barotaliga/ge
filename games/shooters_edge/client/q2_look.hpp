@@ -17,16 +17,20 @@
 // - FLIES round a corpse (the flies bit); a POWER SCREEN's plate (the screen bit, while it takes
 //   a blow): its own model (`kSqPowerScreenModel`, frame 0) at the bearer's place and angles,
 //   drawn as a green shell alone.
+// - THE DISGUISE (render bit 1 << 18, the mission pack's): a player's figure in its folder's
+//   `disguise` skin (`q2_disguised`); a figure without one wears its own.
 //
 // ge:summary Quake II's effect and render bits read into what the picture draws
 // ge:keywords q2 render-fx effects shell quad invulnerability translucent glow pulse rotate
 // ge:keywords colour-shell power-shield god-mode see-through items-glow trails power_look
-// ge:keywords r_powershells r_itempulse q1-shells
+// ge:keywords r_powershells r_itempulse q1-shells disguise use-disguise q2_disguised
 // ge:skill render shooter
 // ge:test tests/shooters_edge_q2_look_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 namespace shooters_edge::client {
 
@@ -46,7 +50,7 @@ inline constexpr uint32_t kRfMinLight = 1u, kRfFullBright = 8u, kRfTranslucent =
                           kRfBeam = 128u, kRfGlow = 512u, kRfShellRed = 1024u,
                           kRfShellGreen = 2048u, kRfShellBlue = 4096u, kRfShellDouble = 65536u,
                           kRfShellHalf = 131072u, kRfShellLiteGreen = 1u << 19,
-                          kRfIrVisible = 32768u, kRfNoShadow = 8192u;
+                          kRfIrVisible = 32768u, kRfNoShadow = 8192u, kRfUseDisguise = 1u << 18;
 // The view's bit for infra-red goggles: an `kRfIrVisible` model drawn red, lit by nothing.
 inline constexpr int kQ2RdIrGoggles = 4;
 
@@ -69,6 +73,7 @@ struct Q2Look {
   // Its light: full whatever the room (fullbright), or never darker than a tenth (minlight).
   bool full_bright = false, min_light = false;
   bool no_shadow = false;  // it casts no ground shadow (model_shadow.hpp)
+  bool disguise = false;   // a player's figure in its folder's disguise skin (`q2_disguised`)
   bool bobs = false;    // rises and sinks 5 units, a cycle every 2.5 s, all in step (the bob bit)
   bool pulse = false;   // its light pulses (`q2_pulse`)
   bool shell = false;   // a shell copy over it
@@ -132,6 +137,10 @@ Q2Look q2_look(uint32_t effects, uint32_t render_fx);
 // 2 and 3; ANIM_ALL 0x1000, one more each half second; ANIM_ALLFAST 0x2000, ten a second), else
 // its own `frame`.
 int q2_texture_frame(uint32_t effects, int frame, double t);
+
+// The disguise's look for a player's look ("male/grunt"): its folder's `disguise` skin
+// ("male/disguise"); a look with no folder, "male/disguise".
+std::string q2_disguised(std::string_view look);
 
 // The glow's pulse on a light (each channel, 0..1 a lightmap's white) at the picture's clock `t`.
 void q2_pulse(float rgb[3], double t);

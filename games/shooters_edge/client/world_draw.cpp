@@ -994,7 +994,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .shadows = f.picture->model_shadows,
                            .flash_blend = f.picture->flash_blend,
                            .cel_shading = f.picture->q2fx.cel_shading,
-                           .view_px = static_cast<double>(f.h)};
+                           .view_px = static_cast<double>(f.h),
+                           .glow_map = static_cast<float>(
+                               ge::classic::q2_glow_map_gain(f.picture->q2fx.glowmap_intensity))};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,

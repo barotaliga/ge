@@ -631,6 +631,9 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
       p.top = colour_row(c, "topcolor", 0);
       p.bottom = colour_row(c, "bottomcolor", 0);
       p.skin_name = sv::info_value(c.userinfo, "skin");
+      if (q2 && size_t(e) < s.world.entities.size() &&
+          (uint32_t(s.world.entities[size_t(e)].render_fx) & kRfUseDisguise) != 0)
+        p.skin_name = q2_disguised(p.skin_name);
       p.model_name = sv::info_value(c.userinfo, "model");
       p.side = models::side_of(teamplay, mine, sv::info_value(c.userinfo, "team"));
     }
@@ -821,6 +824,10 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
           stood_in.emplace_back(morphs.size() - 1, morphs.back().skin);
           stand_in_skin(morphs.back().skin, opened.skins[s]);
           any_stand_in = true;
+        }
+        if (s < opened.glows.size() && opened.glows[s].width > 0) {
+          models::glow_map_marks(morphs.back().skin, opened.glows[s]);
+          k.glow_map = true;
         }
       }
       if (!load.cache.empty() && !model.skins.empty() && !any_stand_in) {
@@ -1516,7 +1523,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     const double sl = std::sqrt(sd[0] * sd[0] + sd[1] * sd[1] + sd[2] * sd[2]) + 1e-9;
     for (int c = 0; c < 3; c++) g.shade_dir[c] = float(sd[c] / sl);
     g.outdoor = 0;
-    g.glow = 1;
+    g.glow = k.glow_map ? in_place.glow_map : 1;
     g.smooth = smooth;
     g.light_in_white = true;
     PowerIn power_in{.q2 = q2,

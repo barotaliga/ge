@@ -90,7 +90,7 @@ view::HandFrame step_q2_held(const server::Q2Server& sq, const PlayerState& p, c
     s.recorded_weapon = w;
     int from = -1;
     float g = 1;
-    track_frame(s.recorded, wf, t, from, g);
+    track_frame(s.recorded, wf, t, from, g, kFrameSpan);
     f.frame_b = wf;
     f.frame_a = settings.lerp && from >= 0 ? from : wf;
     f.frame_t = settings.lerp && from >= 0 ? g : 0;
@@ -144,7 +144,7 @@ view::HandFrame step_native_held(const server::NativeQ2& ns, const PlayerState& 
     if (s.recorded_weapon != w) s.recorded = FrameTrack{};
     int from = -1;
     float g = 1;
-    track_frame(s.recorded, wf, t, from, g);
+    track_frame(s.recorded, wf, t, from, g, kFrameSpan);
     f.frame_b = wf;
     f.frame_a = settings.lerp && from >= 0 ? from : wf;
     f.frame_t = settings.lerp && from >= 0 ? g : 0;
@@ -265,7 +265,7 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
     h.recorded_weapon = static_cast<int>(w);
     int from = -1;
     float g = 1;
-    track_frame(h.recorded, wf, t, from, g);
+    track_frame(h.recorded, wf, t, from, g, kFrameSpan);
     f.frame_b = wf;
     f.frame_a = settings.lerp && from >= 0 ? from : wf;
     f.frame_t = settings.lerp && from >= 0 ? g : 0;
