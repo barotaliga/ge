@@ -102,7 +102,9 @@ constexpr double kCallAgain_s = 8;   // an enemy in sight is called out again af
 constexpr float kRocketNear = 400;   // a rocket at a man nearer than this is aimed at his middle
 constexpr double kSwimExit_s = 3;    // a climb out of the water kept this long at most
 constexpr double kSwimWayFlat = 48;  // a swim's way nearer than this across is risen or sunk to
-constexpr double kLanding_s = 2;  // out of the water, its exit node walked onto this long at most
+constexpr double kLanding_s = 2;   // out of the water, its exit node walked onto this long at most
+constexpr float kClimbOutUp = 16;  // a land node this far over him chest deep is climbed out to
+constexpr float kClimbOutNear = 64;      // from this near across, units
 constexpr float kRocketJumpHealth = 70;  // the health a rocket jump is tried with (it costs ~50)
 constexpr float kComboHealth = 130;      // and a combo's, health and armour (two blasts)
 // A hopper plans the map's gap tricks only this fast or faster, units/s (people take off at
@@ -1241,6 +1243,37 @@ bool mate_in_line(const Fighter& f, const ge::shooterbots::BotView& s, sh::Vec3f
   return false;
 }
 
+// Whether the route's next node climbs out of the water he is chest deep in while he fights (a
+// land node over him, near): then the keys of the field's own way out (`swim_out`), the view level
+// on the edge so the move's water jump takes him over it.
+bool climb_out(Fighter& f, const ge::shooterbots::BotView& s, int me, int msec, sh::MoveCmd& cmd) {
+  const ge::shooter::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+  const sb::Pilot& p = f.bot.pilot.pilot;
+  // Only while he fights: the view on the enemy keeps him off the edge (the swim's own keys climb
+  // out otherwise).
+  bool fights = false;
+  if (f.bot.aiming)
+    for (const sb::Contact& c : f.bot.senses.contacts) fights |= c.ent == f.bot.target && c.visible;
+  if (!fights || self.waterlevel < 2 || p.g == nullptr || p.k + 1 >= p.route.size()) return false;
+  const sb::NavNode& to = p.g->nodes[static_cast<size_t>(p.route[p.k + 1])];
+  const float dx = to.origin.x - self.origin.x, dy = to.origin.y - self.origin.y;
+  if (to.swim || to.origin.z < self.origin.z + kClimbOutUp ||
+      dx * dx + dy * dy > kClimbOutNear * kClimbOutNear)
+    return false;
+  sh::MoveState ms;
+  ms.origin = self.origin;
+  ms.waterlevel = self.waterlevel;
+  const sh::MoveCmd out = sb::swim_out(ms, to.origin, msec);
+  cmd.angles.x = out.angles.x;
+  cmd.angles.y = out.angles.y;
+  cmd.forward = out.forward;
+  cmd.side = 0;
+  cmd.up = 0;
+  cmd.buttons = static_cast<uint8_t>((cmd.buttons & ~sh::kButtonJump) | out.buttons);
+  f.bot.set_by = "climbout";
+  return true;
+}
+
 }  // namespace
 
 // A living teammate within `reach` of `at` (a blast's aim: its splash would hurt him).
@@ -1612,6 +1645,11 @@ sh::MoveCmd fighter_command(Fighter& f, const ge::shooterbots::BotView& s, int s
       f.bot.set_by = "swimaim";
       f.stats.swim_fights++;
     }
+  } else if (!dead && climb_out(f, s, me, msec, cmd)) {
+    // Out of the water the route's way, with no swim of the field's left to do: faced square to
+    // the edge whatever he fights (e3m5's pool under the bars held him four minutes with his
+    // view on a monster and the water jump never taken).
+    keys_mark(f, cmd, keys_was, "climbout");
   } else if (!dead && fighter_landing(f, s, me, t, cmd)) {
     // Just climbed out: onto its exit node first (footwork.hpp).
     keys_mark(f, cmd, keys_was, "landing");

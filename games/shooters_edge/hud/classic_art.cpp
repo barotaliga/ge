@@ -4,6 +4,7 @@
 //
 // ge:summary The classic HUD pictures read by the pack's names from the cache or the packs
 // ge:keywords hud classic-art png decode names slots cell-of gfx-wad palette pick_art
+// ge:keywords pack_art mission-pack inv_laser r_invbar1 r_teambord
 // ge:skill ui
 // ge:test tests/shooters_edge_hud_test.cpp
 #include "shooters_edge/hud/classic_art.hpp"
@@ -72,6 +73,45 @@ ui::Image cell_of(const ui::Image& sheet, uint8_t code) {
   return out;
 }
 
+// A mission pack's own pictures (art.hpp), loaded only when each of a pack's set is there: a set
+// with one missing stays the base game's.
+void pack_art(const PictureFind& find, HudArt& a) {
+  constexpr std::array<std::string_view, kArmagonGuns> kArmagon = {"laser", "mjolnir", "gren_prox",
+                                                                   "prox_gren", "prox"};
+  bool ok = true;
+  std::array<GunPictures, kArmagonGuns> guns;
+  std::array<ui::Image, 2> items;
+  for (size_t k = 0; ok && k < kArmagonGuns; ++k) {
+    const std::string g(kArmagon[k]);
+    ok = find("inv_" + g, &guns[k].plain) && find("inv2_" + g, &guns[k].lit);
+    for (size_t f = 0; ok && f < kFlashFrames; ++f)
+      ok = find("inva" + std::to_string(f + 1) + "_" + g, &guns[k].flash[f]);
+  }
+  ok = ok && find("sb_wsuit", &items[0]) && find("sb_eshld", &items[1]);
+  if (ok) {
+    a.pack = Pack::armagon;
+    a.armagon_gun = std::move(guns);
+    a.armagon_item = std::move(items);
+    return;
+  }
+  HudArt e;
+  ok = find("r_invbar1", &e.eternity_bar[0]) && find("r_invbar2", &e.eternity_bar[1]) &&
+       find("r_teambord", &e.team_border);
+  constexpr std::array<std::string_view, 5> kGun = {"r_lava", "r_superlava", "r_gren",
+                                                    "r_multirock", "r_plasma"};
+  for (size_t k = 0; ok && k < kGun.size(); ++k) ok = find(kGun[k], &e.eternity_gun[k]);
+  constexpr std::array<std::string_view, 3> kAmmo = {"r_ammolava", "r_ammomulti", "r_ammoplasma"};
+  for (size_t k = 0; ok && k < kAmmo.size(); ++k) ok = find(kAmmo[k], &e.eternity_ammo[k]);
+  ok = ok && find("r_shield1", &e.eternity_item[0]) && find("r_agrav1", &e.eternity_item[1]);
+  if (!ok) return;
+  a.pack = Pack::eternity;
+  a.eternity_bar = std::move(e.eternity_bar);
+  a.eternity_gun = std::move(e.eternity_gun);
+  a.eternity_ammo = std::move(e.eternity_ammo);
+  a.eternity_item = std::move(e.eternity_item);
+  a.team_border = std::move(e.team_border);
+}
+
 }  // namespace
 
 bool classic_art(const PictureFind& find, std::string_view where, HudArt* out, std::string* error) {
@@ -115,6 +155,7 @@ bool classic_art(const PictureFind& find, std::string_view where, HudArt* out, s
   if (!ok) return false;
   find("turtle", &a.turtle);  // the corner's icons: drawn when the pack has them
   find("net", &a.net);
+  pack_art(find, a);
   // The sheet's gold figures are its cells 18 to 27. The crosshair is the sheet's '+' cell, as
   // Quake drew it; there is no health icon (the modern looks show the portrait).
   a.digits_at = 18;

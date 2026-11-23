@@ -1803,7 +1803,8 @@ NavHardenCounts nav_harden_jumps(const MoveWorld& world, const MoveSettings& mov
     const int32_t first = static_cast<int32_t>(links.size());
     for (int32_t k = 0; k < n.links; k++) {
       NavLink l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
-      const bool leap = l.kind == NavKind::jump || nav_blast(l.kind);
+      // An updraft's ride is the push's, not the jump's: nothing to overshoot.
+      const bool leap = (l.kind == NavKind::jump && !l.updraft) || nav_blast(l.kind);
       const Vec3f to = g.nodes[static_cast<size_t>(l.to)].origin;
       if (leap && (over_harm(n.origin, to) || harm_beside(to))) {
         out.over++;

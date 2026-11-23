@@ -26,6 +26,11 @@ namespace shooters_edge::net {
 // `..` taking the part before it away; "" when it climbs out of the game's folders.
 std::string q2_plain_download_path(std::string path);
 
+// Whether the download switches let a client have the plain path `path` (the game's channel and its
+// web files alike): sv_download on, a file in a folder whose ends are a letter, digit, `_` or `-`,
+// its kind (its first folder) switched on.
+bool q2_download_allowed_path(const Q2NetConfig& cfg, const std::string& path);
+
 // `download <asked> [offset]`: the file read and its first piece owed, or the refusal queued.
 // Answers the server log's line for a refusal ("" when it is sent).
 std::string q2_start_download(Q2NetServer& s, Q2NetClient& c, const std::string& asked, int offset);

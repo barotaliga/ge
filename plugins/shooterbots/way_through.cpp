@@ -543,6 +543,17 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
     }
     return false;
   };
+  // A name nothing fires (e3m5's trigger hung in the pit, named but never a target): touched,
+  // like one with no name.
+  const auto fired = [&](const char* n) {
+    if (!n) return false;
+    for (const sb::EntityBlock& d : blocks)
+      for (const char* key : {"target", "killtarget"}) {
+        const char* v = sb::block_value(d, key);
+        if (v && std::strcmp(v, n) == 0) return true;
+      }
+    return false;
+  };
   const auto avoided = [&](std::string_view map) {
     for (const std::string& a : w.avoid)
       if (map == a) return true;
@@ -616,11 +627,11 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       for (const std::string& was : w.been) st.revisit = st.revisit || goes == was;
       if (avoided(goes)) continue;
     } else if ((std::strcmp(cn, "trigger_once") == 0 || std::strcmp(cn, "trigger_multiple") == 0) &&
-               brush && target && (!name || trigger_waits(b))) {
+               brush && target && (!fired(name) || trigger_waits(b))) {
       st.kind = WayKind::trigger;  // one fired by something else is not walked into, but one
       st.target = target;          // made live by it is, once it is
       st.repeats = std::strcmp(cn, "trigger_multiple") == 0;
-      if (name) way_gate_names(st, name, blocks);
+      if (fired(name)) way_gate_names(st, name, blocks);
       st.opens = opens(target, st.doors);
       st.keyed = keyed(target);
     } else if (std::strcmp(cn, "item_key1") == 0 || std::strcmp(cn, "item_key2") == 0) {
@@ -1026,6 +1037,7 @@ void way_init(WayThrough& w, const Fighter& f, const MapNav& nav, const ge::shoo
       }
       st.reach_in = !st.crawl.empty();
     }
+    if (start >= 0) way_fall_steps(w, nav, s, reach);
   }
 }
 
@@ -1171,7 +1183,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         break;
     }
     if (st.done && !was_done) w.stats.steps_done++;
-    if (st.done && !was_done && !st.crawl.empty()) {  // back the way he crawled in
+    if (st.done && !was_done && !st.crawl.empty() && !st.fall) {  // back the way he crawled in
       w.crawl_out.assign(st.crawl.rbegin(), st.crawl.rend());
       if (st.node >= 0) w.crawl_out.push_back(g.nodes[static_cast<size_t>(st.node)].origin);
       w.crawl_out_at = t;
@@ -1343,7 +1355,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // to (the drop that is the way on).
   reach_back(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w);
   w.back_here.swap(w.returns);
-  std::fill(w.back_exit.begin(), w.back_exit.end(), 0);
+  std::fill(w.back_exit.begin(), w.back_exit.end(), uint8_t{0});
   w.back_exit.resize(g.nodes.size(), 0);
   for (const WayStep& st : w.steps)
     if (st.kind == WayKind::exit && st.node >= 0) {

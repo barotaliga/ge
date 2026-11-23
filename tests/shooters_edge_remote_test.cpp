@@ -721,6 +721,7 @@ TEST(record_while_joined_keeps_the_level_from_its_start_and_a_match_records_itse
   ge::console::Console con{false};
   cn::Remote& r = rig.remote;
   cn::add_remote_commands(con, r);
+  // NOLINTNEXTLINE(bugprone-exception-escape)
   r.joined_record.folder = [dir] { return dir.string(); };
   CHECK(rig.join());
   for (int f = 0; f < 60; f++) rig.frame();
