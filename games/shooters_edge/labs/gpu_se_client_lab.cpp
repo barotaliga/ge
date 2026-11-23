@@ -43,7 +43,6 @@
 // `--remix-items=1` the played game's rules wear the other game's things (`cr_items`):
 // Quake's rules its rows, Quake II's renamed by `sv_wear`.
 // `--remix-models=1` draws every player as the other game's figure (`cr_models`).
-// `--ruleset=<name>`: the right side under that competition ruleset (`smackdown`, `duel`).
 // `--remix-monsters=1` swaps the map's monsters for the other game's (`cr_monsters`).
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
