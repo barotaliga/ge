@@ -47,7 +47,8 @@ TabList arg_tab(const Console& con, std::string_view input, int mode, int thresh
   std::vector<std::string> bare, found;  // the names, and as a line takes them (quoted)
   for (std::string& v : con.arg_values(word)) {
     if (!lower(v).starts_with(p)) continue;
-    found.push_back(v.find(' ') != std::string::npos ? '"' + v + '"' : v);
+    found.push_back(v);
+    if (v.find(' ') != std::string::npos) found.back().insert(0, 1, '"').push_back('"');
     bare.push_back(std::move(v));
   }
   if (found.empty()) return t;

@@ -608,7 +608,7 @@ bool ConsoleView::value_typed(const Cvar*& cvar, std::vector<std::string>& choic
   } else {  // a word's own values (an item's name), quoted when it has a space
     choices = c_.arg_values(name);
     for (std::string& v : choices)
-      if (v.find(' ') != std::string::npos) v = '"' + v + '"';
+      if (v.find(' ') != std::string::npos) v.insert(0, 1, '"').push_back('"');
   }
   if (choices.empty()) return false;
   part = rest;
