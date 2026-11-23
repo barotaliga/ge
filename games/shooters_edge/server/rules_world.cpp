@@ -77,6 +77,7 @@ void fill_numbers(const QcServer& s, int slot, WorldClient& c) {
   n.next_think = field(s, e, f.nextthink);
   n.impulse = static_cast<int>(field(s, e, f.impulse));
   n.items = field(s, e, f.items);
+  n.items2 = s.q.fields.items2 >= 0 ? field(s, e, s.q.fields.items2) : 0;
   n.view_z = field(s, e, f.view_ofs + 2);
   n.frags = field(s, e, f.frags);
   n.weapon_model = model_index_of(
@@ -161,6 +162,7 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     for (const StaticEntity& st : s.statics) w.statics.push_back(world_static(st));
     w.max_clients = s.sv.set.maxclients;
     w.weapon_frames = s.world_fields.weaponframe >= 0;
+    w.items2 = s.q.fields.items2 >= 0;
     w.map_title.clear();
     {
       const char* title = pg::vm_string(

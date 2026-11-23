@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -555,6 +556,19 @@ hud::Status demo_status(const DemoState& s, double t) {
       if (held == kWeaponBits[k]) h.weapon = static_cast<hud::Weapon>(k + 1);
   h.key_silver = (items & kKeySilver) != 0;
   h.key_gold = (items & kKeyGold) != 0;
+  // The items word and the weapon in hand as sent (a mission pack's status bar reads them), the
+  // count beside the ammunition icon, and the team game the server states.
+  h.items = static_cast<uint32_t>(items);
+  h.in_hand = static_cast<uint32_t>(held);
+  h.current_ammo = s.stats[kStatAmmo];
+  const size_t me = static_cast<size_t>(std::clamp(s.player, 0, 31));
+  h.frags = s.frags[me];
+  h.shirt = s.top[me], h.pants = s.bottom[me];
+  h.multiplayer = true;  // a server a client joins seats more than one unless it says otherwise
+  for (const auto& [key, value] : s.serverinfo) {
+    if (key == "teamplay") h.teamplay = std::atoi(value.c_str());
+    if (key == "maxclients") h.multiplayer = std::atoi(value.c_str()) != 1;
+  }
   return h;
 }
 

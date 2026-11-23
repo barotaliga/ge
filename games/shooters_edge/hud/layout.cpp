@@ -49,6 +49,9 @@ enum Id : uint8_t {
   sbar_health,
   sbar_ammo_icon,
   sbar_ammo,
+  sbar_keys,
+  sbar_team,
+  sbar_team_frags,
   ibar,
   ibar_ammo,
   ibar_guns,
@@ -168,6 +171,21 @@ std::vector<Row> table() {
   on_bar(sbar_health, "sbar_health", Kind::digits, 136, "the bar's health figure");
   on_bar(sbar_ammo_icon, "sbar_ammo_icon", Kind::picture, 224, "the bar's ammunition icon");
   on_bar(sbar_ammo, "sbar_ammo", Kind::digits, 248, "the bar's ammunition figure");
+  {
+    // Scourge of Armagon's keys, stacked on the bar left of the ammunition icon.
+    gh::ElementSpec c = on_bar(sbar_keys, "sbar_keys", Kind::strip, 209, "the bar's keys");
+    c.y = 3, c.strip = strip(16, 9);
+    c.strip.vertical = true;
+    put(sbar_keys, c, kClassic);
+  }
+  on_bar(sbar_team, "sbar_team", Kind::picture, 112, "the team border over the portrait");
+  {
+    gh::ElementSpec c = on_bar(sbar_team_frags, "sbar_team_frags", Kind::strip, 113,
+                               "the team border's colours and frags", "sbar_team");
+    c.x = 1, c.y = 3, c.strip = strip(22, 18);
+    c.strip.plate_split = 0.5f, c.strip.text_at = Anchor::top_right;
+    put(sbar_team_frags, c, kClassic);
+  }
   {
     gh::ElementSpec c = on_bar(ibar, "ibar", Kind::picture, 0, "the inventory bar");
     c.attach = Anchor::bottom_left;
@@ -562,22 +580,117 @@ const ui::Image* face_of(const Status& s, const HudArt& art) {
   return &art.face[static_cast<size_t>(std::min(band, kFaceBands - 1))][wince ? 1 : 0];
 }
 
-// A gun's picture on the classic row: lit in hand, flashing for a second after its pickup.
-const ui::Image* gun_picture(const Status& s, const HudArt& art, int k) {
-  const auto i = static_cast<size_t>(k);
-  const double since = s.t - s.picked_at[i];
-  if (since >= 0 && since < 1) {
-    const int frame = static_cast<int>(since * 10) % kFlashFrames;
-    return &art.gun_flash[i][static_cast<size_t>(frame)];
-  }
-  return static_cast<int>(s.weapon) == k + 1 ? &art.gun_lit[i] : &art.gun[i];
-}
-
 gh::Cell cell_of(const ui::Image* image, bool show = true) {
   gh::Cell c;
   c.image = image;
   c.show = show;
   return c;
+}
+
+// The flash frame a pickup `since` seconds ago shows (ten a second, twice through), or -1 once
+// the second is over.
+int flash_frame(double since) {
+  return since >= 0 && since < 1 ? static_cast<int>(since * 10) % kFlashFrames : -1;
+}
+
+// The seconds since gun `k` was picked up: the status's own time, else the rise of its bit in the
+// items word (bit k for the guns in the HUD's order).
+double picked_since(const Status& s, const Hud* hud, int k) {
+  const double since = s.t - s.picked_at[static_cast<size_t>(k)];
+  if (flash_frame(since) >= 0 || hud == nullptr) return since;
+  return s.t - hud->rose_at[static_cast<size_t>(k)];
+}
+
+// A gun's picture on the classic row: lit in hand, flashing for a second after its pickup.
+const ui::Image* gun_picture(const Status& s, const HudArt& art, int k, const Hud* hud = nullptr) {
+  const auto i = static_cast<size_t>(k);
+  if (const int frame = flash_frame(picked_since(s, hud, k)); frame >= 0)
+    return &art.gun_flash[i][static_cast<size_t>(frame)];
+  return static_cast<int>(s.weapon) == k + 1 ? &art.gun_lit[i] : &art.gun[i];
+}
+
+// A pack gun's picture: its flash frame, else lit in hand or plain.
+const ui::Image* pack_gun(const GunPictures& g, bool lit, double since) {
+  if (const int frame = flash_frame(since); frame >= 0) return &g.flash[static_cast<size_t>(frame)];
+  return lit ? &g.lit : &g.plain;
+}
+
+bool has_bit(uint32_t word, int bit) { return (word >> bit & 1u) != 0; }
+
+// THE MISSION PACKS' STATUS BAR (art.hpp's `pack`), off the items word as each pack's program
+// fills it (status.hpp): what the pack changes on the classic bar.
+struct PackBar {
+  std::array<const ui::Image*, kGuns> gun{};  // each slot's picture
+  std::array<bool, kGuns> gun_shown{};
+  std::vector<gh::Cell> extra_guns;  // after the seven (Scourge of Armagon's laser and hammer)
+  std::array<gh::Cell, 2> items;     // the item row's two cells after the powerups
+  bool keys_on_bar = false;          // the keys stacked on the main bar
+  const ui::Image* armour = nullptr;
+  const ui::Image* ammo = nullptr;
+  const ui::Image* inventory_bar = nullptr;
+  uint8_t runes = 0;
+};
+
+// Scourge of Armagon: the laser cannon (bit 23) and Mjolnir (bit 7) after the beam gun, the
+// proximity gun (bit 16) sharing the grenade launcher's slot, the wetsuit (bit 24) and empathy
+// shields (bit 25) on the item row, the keys moved to the main bar, the runes from bits 28-31.
+void armagon_bar(const Status& s, const HudArt& art, const Hud& hud, PackBar& b) {
+  const uint32_t w = s.items;
+  const auto since = [&](int bit) { return s.t - hud.rose_at[static_cast<size_t>(bit)]; };
+  const auto gun = [&](ArmagonGun g, int bit) {
+    return pack_gun(art.armagon_gun[static_cast<size_t>(g)], s.in_hand == 1u << bit, since(bit));
+  };
+  constexpr int kLaser = 23, kHammer = 7, kLauncher = 4, kProx = 16;
+  b.extra_guns = {cell_of(gun(ArmagonGun::laser, kLaser), has_bit(w, kLaser)),
+                  cell_of(gun(ArmagonGun::hammer, kHammer), has_bit(w, kHammer))};
+  const bool launcher = has_bit(w, kLauncher), prox = has_bit(w, kProx);
+  const bool launcher_on = s.in_hand == 1u << kLauncher || flash_frame(since(kLauncher)) >= 0;
+  const bool prox_on = s.in_hand == 1u << kProx || flash_frame(since(kProx)) >= 0;
+  if (launcher && prox)
+    b.gun[kLauncher] =
+        launcher_on ? gun(ArmagonGun::launcher_and_prox, kLauncher)
+        : prox_on   ? gun(ArmagonGun::prox_and_launcher, kProx)
+                    : &art.armagon_gun[static_cast<size_t>(ArmagonGun::prox_and_launcher)].plain;
+  else if (prox)
+    b.gun[kLauncher] = gun(ArmagonGun::prox, kProx);
+  b.gun_shown[kLauncher] = launcher || prox;
+  b.items = {cell_of(&art.armagon_item[0], has_bit(w, 24)),
+             cell_of(&art.armagon_item[1], has_bit(w, 25))};
+  b.keys_on_bar = true;
+  b.runes = static_cast<uint8_t>(w >> 28 & 15u);
+}
+
+// Dissolution of Eternity: a pack gun in hand drawn over its base slot (no flash), the inventory
+// bar by the family in hand, the armour (bits 23-25) and the ammunition icon off the moved bits,
+// the power shield (bit 29) and anti-grav belt (bit 30) on the item row, no runes.
+void eternity_bar(const Status& s, const HudArt& art, PackBar& b) {
+  const uint32_t w = s.items;
+  for (size_t k = 0; k < 5; ++k)
+    if (s.in_hand == 4096u << k) {
+      b.gun[k + 2] = &art.eternity_gun[k];
+      b.gun_shown[k + 2] = true;
+    }
+  b.inventory_bar = &art.eternity_bar[s.in_hand >= 4096 ? 0 : 1];
+  b.armour = has_bit(w, 25)   ? &art.armour[2]
+             : has_bit(w, 24) ? &art.armour[1]
+             : has_bit(w, 23) ? &art.armour[0]
+                              : nullptr;
+  // The first ammunition held: the base four, then lava nails, plasma, multi rockets (bits 26-28;
+  // the pack's pictures for the last two are named crosswise).
+  constexpr std::array<int, 7> kAmmoBits = {7, 8, 9, 10, 26, 27, 28};
+  for (size_t k = 0; k < kAmmoBits.size() && b.ammo == nullptr; ++k)
+    if (has_bit(w, kAmmoBits[k])) b.ammo = k < 4 ? &art.ammo[k] : &art.eternity_ammo[k - 4];
+  b.items = {cell_of(&art.eternity_item[0], has_bit(w, 29)),
+             cell_of(&art.eternity_item[1], has_bit(w, 30))};
+}
+
+// A palette colour by index (white with no palette).
+ui::Color palette_colour(const HudArt& art, int index) {
+  if (art.palette.size() != 768 || index < 0 || index > 255) return {1, 1, 1, 1};
+  const size_t at = static_cast<size_t>(index) * 3;
+  return {static_cast<float>(art.palette[at]) / 255.0f,
+          static_cast<float>(art.palette[at + 1]) / 255.0f,
+          static_cast<float>(art.palette[at + 2]) / 255.0f, 1};
 }
 
 std::string seconds(double s) { return std::to_string(static_cast<int>(s + 0.999)); }
@@ -881,11 +994,36 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   const Ammo held = ammo_of(s.weapon);
   const int rounds = s.ammo_for(s.weapon);
   const bool low_health = s.health <= 25, low_armour = s.armour <= 25, low_ammo = rounds <= 10;
-  const ui::Image* armour_pic = shield ? &art.armour_shield
+  // The items word's rises: each gun's pickup flash (status.hpp).
+  if (s.items != 0 || hud.items_seen != 0) {
+    const uint32_t rose = s.items & ~hud.items_seen;
+    for (int b = 0; b < 32; ++b)
+      if (has_bit(rose, b)) hud.rose_at[static_cast<size_t>(b)] = s.t;
+    hud.items_seen = s.items;
+  }
+  PackBar pack;
+  for (int k = 0; k < kGuns; ++k) {
+    pack.gun[static_cast<size_t>(k)] = gun_picture(s, art, k, &hud);
+    pack.gun_shown[static_cast<size_t>(k)] = s.has(static_cast<Weapon>(k + 1));
+  }
+  pack.runes = s.runes;
+  const bool packed = s.items != 0 || s.in_hand != 0;
+  if (packed && art.pack == Pack::armagon) armagon_bar(s, art, hud, pack);
+  if (packed && art.pack == Pack::eternity) eternity_bar(s, art, pack);
+  // The ammunition icon off the word's ammunition bits (7-10) as the program sets them, a pack's
+  // own weapon in hand included.
+  if (packed && art.pack != Pack::eternity)
+    for (size_t k = 0; k < kAmmoKinds && pack.ammo == nullptr; ++k)
+      if (has_bit(s.items, 7 + static_cast<int>(k))) pack.ammo = &art.ammo[k];
+  const ui::Image* armour_pic = shield                   ? &art.armour_shield
+                                : pack.armour != nullptr ? pack.armour
                                 : s.armour_class == ArmourClass::none
                                     ? nullptr
                                     : &art.armour[static_cast<size_t>(s.armour_class) - 1];
-  const ui::Image* ammo_pic = held == Ammo::none ? nullptr : &art.ammo[static_cast<size_t>(held)];
+  const ui::Image* ammo_pic = pack.ammo != nullptr ? pack.ammo
+                              : held == Ammo::none ? nullptr
+                                                   : &art.ammo[static_cast<size_t>(held)];
+  const int shown_rounds = s.current_ammo >= 0 ? s.current_ammo : rounds;
   const std::string armour_figure = shield ? "666" : std::to_string(s.armour);
   const ui::Color count_ink = art.glyphs.empty() ? art.count_color : ui::Color{1, 1, 1, 1};
 
@@ -898,14 +1036,33 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   at(sbar_armour).value = armour_figure;
   at(sbar_armour).alt = !shield && low_armour;
   at(sbar_face).image = face_of(s, art);
+  {
+    // Scourge of Armagon's keys on the bar; Dissolution of Eternity's team border over the
+    // portrait in a team game (teamplay 4 to 6, the pack's capture modes).
+    gh::Content& k = at(sbar_keys);
+    k.cells = {cell_of(&art.key[0], s.key_silver), cell_of(&art.key[1], s.key_gold)};
+    k.on &= pack.keys_on_bar;
+    const bool team = art.pack == Pack::eternity && !art.team_border.empty() && s.multiplayer &&
+                      s.teamplay >= 4 && s.teamplay <= 6;
+    at(sbar_team).image = &art.team_border;
+    at(sbar_team).on &= team;
+    at(sbar_face).on &= !team;
+    gh::Content& f = at(sbar_team_frags);
+    f.on &= team;
+    f.face = s.shirt == 0 ? &art.count_face : &art.plain_face;
+    f.cells.assign(1, {});
+    f.cells[0].plate = palette_colour(art, std::max(s.shirt, 0) * 16 + 8);
+    f.cells[0].plate_low = palette_colour(art, std::max(s.pants, 0) * 16 + 8);
+    f.cells[0].text = std::to_string(std::clamp(s.frags, -99, 999));
+  }
   at(sbar_health).sheet = &art.sheet;
   at(sbar_health).value = std::to_string(s.health);
   at(sbar_health).alt = low_health;
   at(sbar_ammo_icon).image = ammo_pic;
   at(sbar_ammo).sheet = &art.sheet;
-  at(sbar_ammo).value = std::to_string(rounds);
-  at(sbar_ammo).alt = low_ammo;
-  at(ibar).image = &art.inventory_bar;
+  at(sbar_ammo).value = std::to_string(shown_rounds);
+  at(sbar_ammo).alt = shown_rounds <= 10;
+  at(ibar).image = pack.inventory_bar != nullptr ? pack.inventory_bar : &art.inventory_bar;
   {
     gh::Content& c = at(ibar_ammo);
     c.face = &art.count_face;
@@ -918,11 +1075,8 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   {
     gh::Content& c = at(ibar_guns);
     c.cells.assign(kGuns, {});
-    for (int k = 0; k < kGuns; ++k) {
-      gh::Cell& cell = c.cells[static_cast<size_t>(k)];
-      cell.image = gun_picture(s, art, k);
-      cell.show = s.has(static_cast<Weapon>(k + 1));
-    }
+    for (size_t k = 0; k < kGuns; ++k) c.cells[k] = cell_of(pack.gun[k], pack.gun_shown[k]);
+    c.cells.insert(c.cells.end(), pack.extra_guns.begin(), pack.extra_guns.end());
   }
   {
     // The see-through bar's column, top to bottom: each gun's slot (owned or a gap), cut to 24
@@ -931,7 +1085,8 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
     c.face = &art.count_face;
     c.cells.clear();
     for (int k = 0; k < kGuns; ++k) {
-      gh::Cell cell = cell_of(gun_picture(s, art, k), s.has(static_cast<Weapon>(k + 1)));
+      gh::Cell cell =
+          cell_of(pack.gun[static_cast<size_t>(k)], pack.gun_shown[static_cast<size_t>(k)]);
       cell.w = kColumnGunW, cell.h = kColumnGunH;
       cell.part = {0, 0, kColumnGunW, kColumnGunH};
       c.cells.push_back(cell);
@@ -950,18 +1105,20 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   {
     gh::Content& c = at(ibar_items);
     c.cells.assign(2 + kPowers, {});
-    c.cells[0] = cell_of(&art.key[0], s.key_silver);
-    c.cells[1] = cell_of(&art.key[1], s.key_gold);
+    c.cells[0] = cell_of(&art.key[0], s.key_silver && !pack.keys_on_bar);
+    c.cells[1] = cell_of(&art.key[1], s.key_gold && !pack.keys_on_bar);
     for (int k = 0; k < kPowers; ++k)
       c.cells[2 + static_cast<size_t>(k)] =
           cell_of(&art.power[static_cast<size_t>(k)], s.powered(static_cast<Power>(k)));
+    if (pack.items[0].image != nullptr)
+      c.cells.insert(c.cells.end(), pack.items.begin(), pack.items.end());
   }
   {
     gh::Content& c = at(ibar_runes);
     c.cells.assign(4, {});
     for (int k = 0; k < 4; ++k)
       c.cells[static_cast<size_t>(k)] =
-          cell_of(&art.rune[static_cast<size_t>(k)], (s.runes >> k & 1) != 0);
+          cell_of(&art.rune[static_cast<size_t>(k)], (pack.runes >> k & 1) != 0);
   }
   {
     gh::Content& c = at(ibar_frags);
