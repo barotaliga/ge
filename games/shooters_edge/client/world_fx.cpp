@@ -23,6 +23,7 @@
 #include "shooter/trace.hpp"
 #include "shooters_edge/app/monster_fx.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
+#include "shooters_edge/client/face_hit.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -43,7 +44,9 @@ struct BirthsCut {
   BirthsCut(const BirthsCut&) = delete;
   BirthsCut& operator=(const BirthsCut&) = delete;
   ~BirthsCut() {
-    if (on && births.size() > keep) births.resize(keep);
+    // Shrinking never allocates; erase, unlike resize, is not one that may grow.
+    if (on && births.size() > keep)
+      births.erase(births.begin() + static_cast<std::ptrdiff_t>(keep), births.end());
   }
 };
 
@@ -90,7 +93,8 @@ constexpr double kSpriteFps = 10;
 constexpr double kBoltSegment = 30;
 // The placed effects' entity numbers (below every static's): the sprites', then the bolts'.
 constexpr int kSpriteEntities = -(1 << 20), kBoltEntities = -(1 << 21);
-constexpr int kArcEntity = -(1 << 22);  // the arc across the player's gun's prongs
+constexpr int kPlaceEntities = -(1 << 22);  // loc_draw's markers
+constexpr int kArcEntity = -(1 << 22);      // the arc across the player's gun's prongs
 // The hot air a nail's flight and a rocket's motor leave (render/haze.hpp's presets).
 const ge::render::HazeLook* const kNailHaze = ge::render::haze_look("haze.nail");
 const ge::render::HazeLook* const kRocketHaze = ge::render::haze_look("haze.rocket");
@@ -113,91 +117,36 @@ bool near_warp(const WarpWatch& w, const sh::Vec3f& at, double t) {
   return false;
 }
 
+// `loc_draw`'s heads (place_names.hpp's `place_markers`), the nearest under a white light of
+// 200 units.
+void place_markers(const FxScene& l, const FxState& s, double t, FxFrame& out) {
+  if (s.places == nullptr) return;
+  thread_local std::vector<PlaceMarker> marks;
+  if (!place_markers(*s.places, t, marks)) return;
+  int n = 0;
+  for (const PlaceMarker& k : marks) {
+    for (const EffectModel head : {EffectModel::place_q1, EffectModel::place_q2}) {
+      Placed m;
+      m.entity = kPlaceEntities - n++;
+      m.modelindex = l.effect_models + static_cast<int>(head);
+      m.origin = k.at;
+      out.models.push_back(m);
+    }
+    if (!k.nearest) continue;
+    fx::Light light;
+    put(engine_point(k.light), light.pos);
+    light.radius = 200 * ge::brush::kUnitM;
+    light.colour[0] = light.colour[1] = light.colour[2] = 1;
+    out.lights.push_back(light);
+  }
+}
+
 // A direction in the map's axes as a unit one in the engine's.
 void engine_dir(const sh::Vec3f& d, double out[3]) {
   put(engine_point(d), out);
   const double n = ge::core::hypot3(out[0], out[1], out[2]);
   for (int k = 0; k < 3; ++k) out[k] = n > 0 ? out[k] / n : 0;
   if (n == 0) out[1] = 1;
-}
-
-// THE FACE A ROUND HIT: the map's triangle the line from `from` through `at` (map units) crosses
-// within a few units of `at`, among the surfaces marked in the leaf just before it: its normal
-// toward `from` (map axes, unit), its texture's surface class and its baked light there (its own
-// lightmap's first style, 0..1 a channel; all -1 when it has none) and its texture coordinates
-// there (Vertex::st's kind). False when no triangle is near.
-bool face_hit(const ge::brush::Map& m, const sh::Vec3f& from, const sh::Vec3f& at,
-              uint32_t* texture, sh::Vec3f* n, ge::detail::SurfaceClass* surface, float light[3],
-              float st[2]) {
-  const double d[3] = {at.x - from.x, at.y - from.y, at.z - from.z};
-  const double len = ge::core::hypot3(d[0], d[1], d[2]);
-  if (len < 1e-3 || m.leaves.empty()) return false;
-  const double u[3] = {d[0] / len, d[1] / len, d[2] / len};
-  const float before[3] = {static_cast<float>(at.x - u[0] * 2), static_cast<float>(at.y - u[1] * 2),
-                           static_cast<float>(at.z - u[2] * 2)};
-  const uint32_t leaf = ge::brush::leaf_at(m, before);
-  if (leaf >= m.leaves.size()) return false;
-  const ge::brush::Leaf& lf = m.leaves[leaf];
-  const double o[3] = {from.x, from.y, from.z};
-  constexpr double kNear = 12;  // units either side of the point the server reported
-  double best = kNear;
-  bool found = false;
-  for (uint32_t i = 0; i < lf.marks; ++i) {
-    const uint32_t si = m.marks[lf.first_mark + i];
-    if (si >= m.surfaces.size()) continue;
-    const ge::brush::Surface& sf = m.surfaces[si];
-    for (uint32_t t = 0; t + 2 < sf.count; t += 3) {
-      const float* a = m.vertices[m.indices[sf.first + t]].pos;
-      const float* b = m.vertices[m.indices[sf.first + t + 1]].pos;
-      const float* c = m.vertices[m.indices[sf.first + t + 2]].pos;
-      const double e1[3] = {b[0] - a[0], b[1] - a[1], b[2] - a[2]};
-      const double e2[3] = {c[0] - a[0], c[1] - a[1], c[2] - a[2]};
-      const double p[3] = {u[1] * e2[2] - u[2] * e2[1], u[2] * e2[0] - u[0] * e2[2],
-                           u[0] * e2[1] - u[1] * e2[0]};
-      const double det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
-      if (std::abs(det) < 1e-9) continue;
-      const double tv[3] = {o[0] - a[0], o[1] - a[1], o[2] - a[2]};
-      const double bu = (tv[0] * p[0] + tv[1] * p[1] + tv[2] * p[2]) / det;
-      if (bu < -1e-4 || bu > 1 + 1e-4) continue;
-      const double q[3] = {tv[1] * e1[2] - tv[2] * e1[1], tv[2] * e1[0] - tv[0] * e1[2],
-                           tv[0] * e1[1] - tv[1] * e1[0]};
-      const double bv = (u[0] * q[0] + u[1] * q[1] + u[2] * q[2]) / det;
-      if (bv < -1e-4 || bu + bv > 1 + 1e-4) continue;
-      const double dist = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) / det;
-      if (std::abs(dist - len) >= best) continue;
-      best = std::abs(dist - len);
-      found = true;
-      double nn[3] = {e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2],
-                      e1[0] * e2[1] - e1[1] * e2[0]};
-      const double nl = ge::core::hypot3(nn[0], nn[1], nn[2]);
-      const double facing = nn[0] * u[0] + nn[1] * u[1] + nn[2] * u[2];
-      const double sign = facing > 0 ? -1.0 : 1.0;  // toward `from`
-      *n = {static_cast<float>(sign * nn[0] / nl), static_cast<float>(sign * nn[1] / nl),
-            static_cast<float>(sign * nn[2] / nl)};
-      *texture = sf.texture;
-      // The face's own baked light where the line crossed it (first style; -1: none).
-      const float* la = m.vertices[m.indices[sf.first + t]].lm;
-      const float* lb = m.vertices[m.indices[sf.first + t + 1]].lm;
-      const float* lc = m.vertices[m.indices[sf.first + t + 2]].lm;
-      const float wa = static_cast<float>(1 - bu - bv), wb = static_cast<float>(bu),
-                  wc = static_cast<float>(bv);
-      const float uv[2] = {wa * la[0] + wb * lb[0] + wc * lc[0],
-                           wa * la[1] + wb * lb[1] + wc * lc[1]};
-      if (!ge::brush::lightmap_at(m, sf.lightmap, uv, light)) light[0] = light[1] = light[2] = -1;
-      // And where on its texture (texels where the family stores them so, else whole textures).
-      const float* ta = m.vertices[m.indices[sf.first + t]].st;
-      const float* tb = m.vertices[m.indices[sf.first + t + 1]].st;
-      const float* tc = m.vertices[m.indices[sf.first + t + 2]].st;
-      for (int k = 0; k < 2; ++k) st[k] = wa * ta[k] + wb * tb[k] + wc * tc[k];
-      const ge::brush::Texture* tex =
-          sf.texture < m.textures.size() ? &m.textures[sf.texture] : nullptr;
-      *surface = tex == nullptr                           ? ge::detail::SurfaceClass::unknown
-                 : tex->sky                               ? ge::detail::SurfaceClass::sky
-                 : tex->liquid != ge::brush::Liquid::none ? ge::detail::SurfaceClass::liquid
-                                                          : ge::detail::classify_name(tex->name);
-    }
-  }
-  return found;
 }
 
 // The surface nearest `at` (map units) within kNearSurfaceU along the six axes: its normal (out of
@@ -1482,6 +1431,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         }
         if (e.name == "te_blaster") {  // Quake II's bolt landing: yellow sparks
           fx::blaster_hit(p, s.seed++, &out.births);
+          // On a wall: a small glowing mark, the bolt's heat left in it.
+          double normal[3], dir[3];
+          const ge::detail::SurfaceClass sc = face(eye_map, normal, dir);
+          if (on_face && sc != ge::detail::SurfaceClass::sky &&
+              sc != ge::detail::SurfaceClass::liquid)
+            glow_mark(s, p, normal, fx::kBoltMark, t);
           break;
         }
         if (e.name == "te_bfg_bigexplosion") {  // the BFG's burst (its blast is an explosion's)
@@ -1702,6 +1657,13 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       out.lights.push_back(g);
     }
   }
+  // The hot marks burn a little and then smoke as they cool (render/mark_fire.hpp).
+  out.fires.clear();
+  if (s.on.decals && s.receivers) {
+    ge::render::mark_flames(ge::render::mark_fire_look(), s.marks, t, out.fires);
+    ge::render::mark_fire_births(s.mark_fire, ge::render::mark_fire_look(), s.marks, t, dt,
+                                 out.births);
+  }
   heal_wounds(l, s);
   if (s.on.decals) draw_wounds(s, out.models, l.pose.eye, t, dt, out.births);
   body_blood(l, s, t, dt, out);
@@ -1750,6 +1712,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     out.lights.push_back(light);
   };
   for (const Placed& m : out.models) glow(m.effects, m.origin);
+  place_markers(l, s, t, out);
   const int mine = l.own > 0 ? l.me_effects : 0;
   if (l.own > 0) glow(mine, p.origin);
 

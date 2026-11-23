@@ -46,7 +46,7 @@ int run_bot_client(BotClientRun& r) {
   ge::ui::ConsoleKeys& con_keys = r.con_keys;
   const look::Picture& picture = r.picture;
   const menu::ClassicConsole& con_look = r.con_look;
-  ge::render::ScreenshotCopy& shot_copy = r.shot_copy;
+  ge::render::WindowShots& shot_copy = r.shot_copy;
   ge::capture::Screenshots& shots = r.shots;
   const float px_per_unit = r.px_per_unit;
   std::string error;
@@ -152,7 +152,7 @@ int run_bot_client(BotClientRun& r) {
       overlay.box(b);
     }
     con_view.frame(dt);
-    menu::draw_game_console(overlay, con_view, con_look, t);
+    if (!shot_copy.hiding()) menu::draw_game_console(overlay, con_view, con_look, t);
     const wgpu::TextureView target = r.acquire();
     if (!target) continue;
     cl::draw_world(device, bot_world ? *bot_world : title, view, {}, nullptr, dt, overlay, target);

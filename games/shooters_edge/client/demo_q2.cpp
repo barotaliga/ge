@@ -922,11 +922,10 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
   return true;
 }
 
-// One block's messages into the state.
-bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
+// One message into the state (its id first); false with the reason. A disconnect sets `ended`.
+bool read_message(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
   DemoState& s = d.state;
-  if (d.spans != nullptr) d.spans->clear();
-  while (!m.done()) {
+  {
     const size_t at = m.at;
     m.int23 = ext_of(s.protocol) >= 2;  // set again after a server data
     const int id = m.u8();
@@ -1167,6 +1166,16 @@ bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
   return true;
 }
 
+// One block's messages into the state.
+bool read_block(Demo& d, DemoMsg& m, bool& framed, std::string& error) {
+  if (d.spans != nullptr) d.spans->clear();
+  while (!m.done()) {
+    if (!read_message(d, m, framed, error)) return false;
+    if (d.ended) return true;
+  }
+  return true;
+}
+
 int32_t i32_at(std::span<const uint8_t> b, size_t at) {
   uint32_t v = 0;
   std::memcpy(&v, b.data() + at, 4);  // little-endian on every platform the game runs on
@@ -1180,6 +1189,33 @@ void q2_stream_begin(Demo& d) {
   d.state.protocol = 34;
   d.ring.resize(16);
   d.baselines.resize(kMostEntitiesExt);
+}
+
+bool q2_message_end(Demo& scratch, std::span<const uint8_t> b, size_t at, size_t& end,
+                    std::string& error) {
+  DemoMsg m{b};
+  m.at = at;
+  bool framed = false;
+  scratch.spans = nullptr;
+  scratch.ended = false;
+  const bool ok = read_message(scratch, m, framed, error);
+  end = m.at;
+  return ok;
+}
+
+void q2_scratch_clear(Demo& d) {
+  DemoState& s = d.state;
+  s.effects.clear();
+  s.prints.clear();
+  s.started.clear();
+  s.stopped.clear();
+  s.voice.clear();
+  s.centre.clear();
+  d.stuffed.clear();
+  d.download_pieces.clear();
+  d.download_origins.clear();
+  d.ended = false;
+  d.reconnect = false;
 }
 
 bool is_q2_demo(std::span<const uint8_t> bytes) {
@@ -1215,7 +1251,7 @@ DemoRead next_q2(Demo& d, std::string& error) {
     }
     // An extended recording's blocks run to 32768 bytes (its first, the server data, says so).
     const bool extended =
-        ext_of(d.state.protocol) > 0 ||
+        d.wide_blocks || ext_of(d.state.protocol) > 0 ||
         (block + 9 <= b.size() && b[block + 4] == kServerData && ext_of(i32_at(b, block + 5)) > 0);
     const int32_t most = extended ? kMostBlockExt : kMostBlock;
     if (len <= 0 || len > most) {

@@ -133,7 +133,7 @@ Ball ball_of(const Blast& b, double now_s) {
 }
 
 Ball ball_of(const MuzzleFire& m, double now_s) {
-  const Flame f = flame_at(m.shot, m.pose, now_s);
+  const MuzzleFlame f = flame_at(m.shot, m.pose, now_s);
   const MuzzleLook& k = look_of(m.shot);
   Ball o{};
   for (int i = 0; i < 3; ++i) {

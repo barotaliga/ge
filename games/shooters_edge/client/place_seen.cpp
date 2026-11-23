@@ -9,6 +9,8 @@
 #include <cmath>
 #include <string>
 
+#include "brush/survey.hpp"
+#include "shooters_edge/client/face_hit.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/map_line.hpp"
 
@@ -23,6 +25,14 @@ void add_place_queries(ge::console::Console& con, PlaceNames& places, const List
     if (map == nullptr) return true;
     const V end = line_end(*map, from, to);
     return end.x == to.x && end.y == to.y && end.z == to.z;
+  };
+  // Where a player can be: the map's open space every 32 units (a player's width).
+  places.spots = [&listen, &seen] {
+    const server::BspMap* map = seen.on ? seen.map : (listen.map ? &listen.map->bsp : nullptr);
+    std::vector<V> out;
+    if (map == nullptr) return out;
+    for (const auto& p : ge::brush::open_spots(map->map, 32)) out.push_back({p[0], p[1], p[2]});
+    return out;
   };
   places.looked_at = [&listen, &seen](V& at) {
     V from, angles;
@@ -72,6 +82,15 @@ void add_place_queries(ge::console::Console& con, PlaceNames& places, const List
                     c.print("(" + whole(at.x) + " " + whole(at.y) + " " + whole(at.z) +
                             ") : " + whole(angles.y));
                   });
+  // $cl_surface: the texture straight ahead and its flags ("" outside a level).
+  con.add_macro("cl_surface", [&places, &listen, &seen] {
+    const server::BspMap* map = seen.on ? seen.map : (listen.map ? &listen.map->bsp : nullptr);
+    V at;
+    if (map == nullptr || !places.looked_at || !places.looked_at(at)) return std::string();
+    V from;
+    if (!places.where || !places.where(from)) return std::string();
+    return surface_ahead(map->map, from, at);
+  });
   // $cl_ups: the player's speed along the ground, units a second (0 for a view watched).
   con.add_macro("cl_ups", [&listen, &seen] {
     if (seen.on || listen.server == nullptr || listen.server->world.entities.size() < 2)

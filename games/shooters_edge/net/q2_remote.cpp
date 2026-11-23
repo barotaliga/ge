@@ -17,6 +17,7 @@
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/client/cvar_layers.hpp"
 #include "shooters_edge/net/q2_client.hpp"
+#include "shooters_edge/net/qw_remote_rulesets.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 
 namespace shooters_edge::net {
@@ -40,6 +41,7 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   s.hand = cfg.hand;
   s.gender = cfg.gender_auto ? client::auto_gender(s.skin) : cfg.gender;
   s.speedjump = cfg.speedjump;
+  s.ruleset = cfg.ruleset;
   s.ask_login = true;   // our server's logins' key, to log in by an account file
   s.ask_feel = true;    // the feel our server runs the move on, to predict the same
   s.ask_frames = true;  // every frame our server's rules run (`sv_fps`), not only the tenths
@@ -56,13 +58,20 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   // in the archive the server says each came out of (the window's `keep_file`).
   s.fetch = true;
   s.fetch_level = true;
-  s.allow = cfg.q2_downloads;  // allow_download and its kinds
-  s.http = cfg.web;            // cl_http_*: the files over HTTP first
-  s.nodelta = cfg.q2_nodelta;  // cl_nodelta
-  s.ask_moves = true;          // the other players' moves, to run them forward (q2_predict.hpp)
-  s.ask_back = true;           // the items coming back, drawn ahead of time (ce_respawns)
-  s.ask_hits = true;           // the damage dealt, the hit marker's (cl_hit_markers)
-  s.ask_sheet = true;          // the settings sheet, the server settings page's
+  s.allow = cfg.q2_downloads;    // allow_download and its kinds
+  s.http = cfg.web;              // cl_http_*: the files over HTTP first
+  s.nodelta = cfg.q2_nodelta;    // cl_nodelta
+  s.protocol = cfg.q2_protocol;  // cl_protocol and the later protocols' settings
+  s.msglen = cfg.q2_msglen;
+  s.chantype = cfg.q2_chantype;
+  s.batch = cfg.q2_batch;
+  s.packetdup = cfg.q2_packetdup;
+  s.maxpackets = cfg.q2_maxpackets;
+  s.instantpacket = cfg.q2_instantpacket;
+  s.ask_moves = true;  // the other players' moves, to run them forward (q2_predict.hpp)
+  s.ask_back = true;   // the items coming back, drawn ahead of time (ce_respawns)
+  s.ask_hits = true;   // the damage dealt, the hit marker's (cl_hit_markers)
+  s.ask_sheet = true;  // the settings sheet, the server settings page's
   s.read_file = [&r](const std::string& path) {
     return r.read_file ? r.read_file("", path) : std::vector<uint8_t>{};
   };
@@ -208,6 +217,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   // The ignore lists, the team tags and the regex triggers (chat_ignore.hpp).
   r.ignore.chat.relay = false;                  // a game joined: Quake II's message triggers run
   remote_sheet_step(r, d.state.prints, now_s);  // `info` asked for the settings page
+  remote_fair_step(r, d.state.prints, now_s);   // f_ruleset answered (qw_remote_rulesets.hpp)
   client::drop_ignored(r.ignore, d.state, d.state.prints, now_s, &d.state.centre);
   const bool fresh = c.frames != r.q2_frames;
   client::DemoState& st = d.state;

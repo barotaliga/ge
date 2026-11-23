@@ -52,6 +52,7 @@
 // ge:keywords lens-dirt post-look lens-effects motion-blur shutter post-motion
 // ge:keywords screen-blend set_post_blend tint damage-flash
 // ge:keywords arrival arrival_warp set_post_warp post-warp teleport-flash spawn-flash warp-in
+// ge:keywords ripple set_post_ripple underwater-warp waterwarp
 // ge:skill render
 // ge:test tests/render_post_test.cpp
 #pragma once
@@ -162,6 +163,16 @@ inline constexpr double kArrivalS = 0.65;  // the arrival's warp, s
 inline constexpr double kArrivalFlashS = 0.05, kArrivalOpenS = 0.45;
 PostWarp arrival_warp(double age_s, double strength, const double tint[3]);
 void set_post_warp(gpu::Device& device, const Post& post, const PostWarp& warp);
+// THE RIPPLE this frame: every point of the picture shifted across by `share` of the screen's
+// width times a sine of its height, and down by `share` of its height times a sine of its width,
+// `waves` waves over the screen, at `phase` (rad); a share of 0 (the start) leaves it still. A
+// game's view under a liquid (Quake II's gl_waterwarp: 0.25 %, five waves, a radian a second).
+struct PostRipple {
+  double share = 0;
+  double waves = 5;
+  double phase = 0;
+};
+void set_post_ripple(gpu::Device& device, const Post& post, const PostRipple& ripple);
 // Depth of field's focus, sharp share and strength (render/dof.hpp's), live: the post pass mixes
 // the gather in by each pixel's own circle under the same lens the dof pass gathered with.
 void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& dof);

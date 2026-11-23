@@ -74,6 +74,7 @@ struct Shot {
   bool held = false;
   // Fired, and the picture from the eye: the shot's flash, light and kick on the weapon in hand.
   bool eye = false;
+  int hold = 4;  // `wall`: the frames the trigger is held
 };
 constexpr Shot kShots[] = {
     {"blaster", "a yellow bolt in flight, its glow on the walls", 14, sv::SqWeapon::blaster},
@@ -100,6 +101,22 @@ constexpr Shot kShots[] = {
      200, sv::SqWeapon::super_shotgun, true},
     {"rocket-marks", "the black scorch the rocket's blast left on the floor", 160,
      sv::SqWeapon::rocket_launcher, true},
+    // The glowing marks (render/mark_fire.hpp): small flames on them while they are hot, then
+    // thin smoke as they cool.
+    {"hyperblaster-marks", "the bolts' small glowing marks, small flames standing on them", 85,
+     sv::SqWeapon::hyperblaster, true, false, false, 70},
+    {"hyperblaster-marks-cool", "the flames out, thin smoke rising off the cooled marks", 150,
+     sv::SqWeapon::hyperblaster, true, false, false, 70},
+    {"railgun-marks", "the slug's glowing mark, small flames on it", 40, sv::SqWeapon::railgun,
+     true},
+    {"railgun-marks-cool", "the flames out, thin smoke off the cooled mark", 200,
+     sv::SqWeapon::railgun, true},
+    {"bfg-marks", "the burst's large glowing mark, a few flames on it", 160, sv::SqWeapon::bfg,
+     true, false, false, 2},
+    {"bfg-marks-orange", "the large mark cooled to orange, its last flames dying down", 260,
+     sv::SqWeapon::bfg, true, false, false, 2},
+    {"bfg-marks-cool", "the flames out, thin smoke off the large mark as it cools", 420,
+     sv::SqWeapon::bfg, true, false, false, 2},
 };
 constexpr const char* kLooks[] = {"classic", "modern"};
 
@@ -293,6 +310,8 @@ void run(gl::Lab& lab) {
   const std::string only = lab.arg("weapon");
   // `--held=1`: every weapon at rest in hand instead of the shots.
   const bool held_only = lab.arg("held") == "1";
+  const auto wall_at = static_cast<float>(lab.arg_num("wall-at"));
+  const auto wall_pitch = static_cast<float>(lab.arg_num("wall-pitch"));
   std::vector<std::string> held_ids;
   std::vector<Shot> shots;
   if (held_only) {
@@ -320,8 +339,10 @@ void run(gl::Lab& lab) {
       // Turn to the aim (none given: the longest clear line from the eye), then arm.
       for (int i = 0; i < 20; i++) cl::listen_frame(l, {});
       if (nums.empty()) yaw = line_of(l, 3000.0f);
-      // At the floor a few steps ahead: the marks face the eye.
-      const float tilt = shot.wall ? 35.0f : pitch;
+      // The marks: at the floor a few steps ahead, facing the eye; with --wall-at, at the wall
+      // about that far off.
+      if (shot.wall && wall_at > 0) yaw = line_of(l, wall_at);
+      const float tilt = shot.wall ? (wall_at > 0 ? wall_pitch : 35.0f) : pitch;
       l.view = {tilt, yaw, 0};  // the listen sends its own view with every command
       for (int i = 0; i < 20; i++) cl::listen_frame(l, {});
       if (!arm(l, shot)) {
@@ -387,7 +408,7 @@ void run(gl::Lab& lab) {
       int fired_at = -1;
       for (int i = 0; i < shot.ticks; i++) {
         sh::MoveCmd cmd = aim;
-        if (!shot.held && (!shot.wall || i < 4)) cmd.buttons = sh::kButtonAttack;
+        if (!shot.held && (!shot.wall || i < shot.hold)) cmd.buttons = sh::kButtonAttack;
         cl::listen_frame(l, cmd);
         step(i);
         // From the eye: the picture a frame after the shot leaves the muzzle (the flash lasts a
@@ -450,7 +471,9 @@ const gl::LabSpec kSpec{
      {"held", "0", "1: every weapon at rest in hand from the eye, in place of the shots"},
      {"weapon", "", "only this weapon's pictures, by its id (blaster, railgun, ...; empty: all)"},
      {"map", "q2dm1", "the map to fire on (with --game)"},
-     {"aim", "", "the view's yaw and pitch, degrees (empty: the longest clear line, level)"}},
+     {"aim", "", "the view's yaw and pitch, degrees (empty: the longest clear line, level)"},
+     {"wall-at", "0", "the marks' shots at a wall about this far off, units (0: the floor ahead)"},
+     {"wall-pitch", "5", "with --wall-at: the view's pitch, degrees down"}},
     "",
     run,
 };

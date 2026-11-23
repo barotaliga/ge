@@ -233,7 +233,9 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
       p.effects |= kMuzzleFlashBit;
   // The players: a client's or multiview's by slot, the single protocol's the first entities.
   const bool single = s.format == DemoFormat::single;
-  const DemoEntity* players = single ? s.entities.data() + 1 : s.players.data();
+  // (No entities yet: none, not one past a null pointer.)
+  const DemoEntity* players =
+      single ? (s.entities.empty() ? nullptr : s.entities.data() + 1) : s.players.data();
   const size_t count = single ? std::min<size_t>(s.entities.size() > 0 ? s.entities.size() - 1 : 0,
                                                  static_cast<size_t>(s.max_clients))
                               : s.players.size();

@@ -25,12 +25,32 @@
 //   1 the pack's `marker` picture in red at the screen's centre, 2 the picture and
 //   `weapons/marker.wav`; the picture fades over `scr_hit_marker_time` ms (500) by the square of
 //   the time gone (`q2_hit_marker_alpha`), a new hit starting it over.
+// - THE PICTURE'S SWITCHES (none saved in the config, as the game keeps them):
+//   - the specks: `gl_partscale` (2), how big each is, a share of its own size at 2 and growing
+//     with its depth past 20 units, 0.004 a unit (`q2_speck_scale`; another game's 0 keeps every
+//     speck its own size); `gl_partstyle` 1 adds them to what is behind (they glow, dark ones all
+//     but vanish), 0 lays them over it; `gl_partshape` 0 a soft round dot, 1 a hard square, 2 a
+//     flat disc with a narrow soft rim (render/particles.hpp's ParticleShape; another game's -1
+//     the engine's own soft capsule);
+//   - `gl_beamstyle` 1: the lasers and the rail's core a plain solid tube as wide as their width,
+//     0 a soft-edged strip with its glow;
+//   - `gl_drawsky` 0: the sky solid black; `gl_bilerp_skies` 0: the map's sky box sharp, each
+//     texel a square;
+//   - the walls' and floors' textures alone (never the liquids, the models, the sky or the
+//     light): `gl_saturation` (1 as painted, 0 grey) and `gl_invert` (a negative, after it);
+//   - `gl_anisotropy`: the most taps along a slanted texture's long axis when the textures are
+//     filtered, 1 none (another game's 0: the renderer's own 4);
+//   - `gl_waterwarp` 1: the whole 3D view rippled while the eye is under a liquid
+//     (render/post.hpp's PostRipple), the HUD not;
+//   - `gl_fog` 0: no fog at all, neither the map's nor the `fog` command's.
 //
 // ge:summary Quake II's effect switches: specks, explosions, lights and muzzle flashes left out
 // ge:keywords q2 cl_disable_particles cl_disable_explosions cl_dlight_hacks cl_muzzlelight_time
 // ge:keywords cl_muzzleflashes cl_footsteps s_ambient effect-switches q2_fx_switches
 // ge:keywords cl_railtrail_type cl_railtrail_time cl_railcore_color cl_railspiral_color q2_colour
-// ge:keywords cl_hit_markers scr_hit_marker_time hit-marker q2_hit_marker_alpha
+// ge:keywords cl_hit_markers scr_hit_marker_time hit-marker q2_hit_marker_alpha q2_speck_scale
+// ge:keywords gl_partscale gl_partstyle gl_partshape gl_beamstyle gl_drawsky gl_bilerp_skies
+// ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog
 // ge:skill classic shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #pragma once
@@ -58,7 +78,27 @@ struct Q2FxSwitches {
   double core_width = 2, spiral_radius = 3;  // cl_railcore_width, cl_railspiral_radius: units
   int hit_markers = 2;                       // cl_hit_markers
   double hit_marker_ms = 500;                // scr_hit_marker_time
+  double part_scale = 0;                     // gl_partscale (0: each speck its own size)
+  bool additive_parts = false;               // gl_partstyle
+  int part_shape = -1;                       // gl_partshape (-1: the engine's own)
+  bool round_beams = false;                  // gl_beamstyle
+  bool draw_sky = true;                      // gl_drawsky
+  bool smooth_sky = true;                    // gl_bilerp_skies
+  double saturation = 1;                     // gl_saturation
+  bool invert = false;                       // gl_invert
+  double anisotropy = 0;                     // gl_anisotropy (0: the renderer's own)
+  bool water_warp = false;                   // gl_waterwarp
+  bool fog = true;                           // gl_fog
 };
+
+// gl_partscale's share of a speck's own size `depth_units` in front of the eye: 1 at the default
+// 2 within 20 units, past them 1 and 0.004 a unit of the whole depth (5 at 1000 units), times
+// `part_scale` / 2; 1 with it 0 (another game's: the speck as made).
+inline double q2_speck_scale(const Q2FxSwitches& s, double depth_units) {
+  if (s.part_scale <= 0) return 1;
+  const double grown = depth_units > 20 ? 1 + 0.004 * depth_units : 1;
+  return grown * s.part_scale / 2;
+}
 
 // The hit marker's opacity `age_s` after the last hit: 1 at the hit, 1 - f*f with f the share of
 // `scr_hit_marker_time` gone, 0 past it (or with the markers off).

@@ -821,6 +821,18 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
   rgb_words(picture.wall_colour, base.wall_colour);
   rgb_words(picture.floor_colour, base.floor_colour);
   rgb_words(picture.sky_colour, base.sky_colour);
+  // Quake II's own (classic/q2_fx_switches.hpp; another game's defaults change nothing):
+  // gl_drawsky 0 a black sky, gl_bilerp_skies 0 a sharp one, gl_saturation and gl_invert on the
+  // walls' and floors' textures, gl_anisotropy the filtered textures' taps.
+  const ge::classic::Q2FxSwitches& q2 = picture.q2fx;
+  if (!q2.draw_sky) {
+    base.fast_sky = true;
+    base.sky_colour[0] = base.sky_colour[1] = base.sky_colour[2] = 0;
+  }
+  base.crisp_sky = !q2.smooth_sky;
+  base.saturation = q2.saturation;
+  base.invert = q2.invert;
+  if (q2.anisotropy > 0) base.anisotropy = static_cast<int>(std::lround(q2.anisotropy));
   base.picmip = std::clamp(picture.picmip, 0, 4);  // gl_picmip
   base.fullbright = picture.fullbright;            // r_fullbright
   if (picture.lightmap_only) {                     // r_lightmap: grey faces, the light alone

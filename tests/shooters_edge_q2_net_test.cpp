@@ -321,6 +321,51 @@ TEST(a_client_joins_through_the_signon_and_plays_on_deltas) {
   CHECK(frames == c.frames);
 }
 
+// Protocols 35 and 36 (net/q2_proto_in.hpp): each joins, walks on deltas and keeps a recording
+// of protocol 34 that reads whole; 36 on either channel, its moves batched or one a packet.
+TEST(a_client_of_each_later_protocol_joins_and_plays) {
+  struct Case {
+    int protocol, chantype;
+    bool batch;
+  };
+  for (const Case k : {Case{35, 0, false}, Case{36, 1, true}, Case{36, 0, false},
+                       Case{36, 1, false}, Case{0, 1, true}}) {
+    const std::string name =
+        std::to_string(k.protocol) + "/" + std::to_string(k.chantype) + (k.batch ? " batched" : "");
+    auto r = rig({});
+    cn::Q2ClientConfig cfg;
+    cfg.name = "eve";
+    cfg.brain = forward;
+    cfg.protocol = k.protocol;
+    cfg.chantype = k.chantype;
+    cfg.batch = k.batch;
+    cn::Q2ClientEnd& c = join(*r, cfg);
+    run(*r, 120);
+    CHECK_MSG(c.stage == cn::ClientStage::active, name + ": " + c.refused);
+    CHECK_MSG(c.protocol == (k.protocol == 0 ? 36 : k.protocol), name);
+    CHECK(c.demo.state.map == "hall");
+    const float x0 = c.demo.state.eye.x, y0 = c.demo.state.eye.y;
+    run(*r, 200);
+    CHECK_MSG(c.frames >= 20, name);
+    const cn::Q2NetClient& sc = r->server.clients[0];
+    CHECK_MSG(sc.moves > 30, name + ": " + std::to_string(sc.moves) + " moves");
+    CHECK_MSG(sc.full_frames <= 3, name + ": " + std::to_string(sc.full_frames) + " whole frames");
+    const float dx = c.demo.state.eye.x - x0, dy = c.demo.state.eye.y - y0;
+    CHECK_MSG(dx * dx + dy * dy > 100.0f * 100.0f, name + ": walked " + std::to_string(dx));
+    cn::q2_client_stop(c);
+    run(*r, 10);
+    cl::Demo d;
+    std::string error;
+    CHECK_MSG(cl::open_demo(c.demo.bytes, d, error), name + ": " += error);
+    CHECK(d.state.protocol == 34 || d.state.protocol == 0);
+    int frames = 0;
+    cl::DemoRead got;
+    while ((got = cl::next_frame(d, error)) == cl::DemoRead::frame) frames++;
+    CHECK_MSG(got == cl::DemoRead::end, name + ": " += error);
+    CHECK_MSG(frames == c.frames, name);
+  }
+}
+
 TEST(a_map_with_no_sky_gets_the_default_and_a_download_is_refused) {
   // A client that finds no sky asks for one to download; it is refused and plays on.
   cn::Q2NetConfig cfg;

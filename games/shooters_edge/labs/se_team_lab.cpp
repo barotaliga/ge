@@ -517,7 +517,7 @@ void run(gl::Lab& lab) {
         if (std::fabs(turn) > 90) {
           const double lead = turn > 0 ? off : -off;
           tr.turn_lead.push_back(static_cast<float>(lead));
-          auto& row = tr.turn_by[f.bot.view_by];
+          auto& row = tr.turn_by[f.bot.view_by != nullptr ? f.bot.view_by : "none"];
           row[0]++;
           row[1] += lead < -40 ? 1 : 0;
         }

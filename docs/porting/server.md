@@ -166,6 +166,17 @@ every player with `Server crashed:` and leaves the server idle until the next ma
 `com_fatal_error` the process ends with a failure instead, for its supervisor to start again.
 `fs_autoexec` 0 makes a mod switch change the folders alone.
 
+Quake II's frame is cut by the areas as well as the sets (`server/q2_wire.hpp`'s cut): an entity
+is sent only when the viewer's area is joined through the open area portals to one of its two
+areas, so a shut door hides the room behind it, and the frame's area bits mark the joined areas
+for the client to leave the rest undrawn. Area 0 (a solid, outside) is joined to nothing. Sounds
+and effects, our rules' (`q2_sight_hears`) and a hosted library's (`send_to`), go to a client whose
+origin is in the point's set with the areas joined; a sound with no attenuation to everyone. A
+sound leaves its position out for a client whose frame holds its entity, so it is played on the
+entity as it moves. The frame is sized to the room the packet has after the reliable data it
+carries (`channel_unreliable_room`), so a long reliable message costs a frame its last entities,
+effects and sounds rather than the whole frame.
+
 Quake II's downloads (`net/q2_net_server.cpp`, facts in `porting/shooters-edge/
 q2-downloads-facts.md`) make the asked name plain first (slashes, `.` and `..`), then offer each
 kind by its own setting (`sv_download_textures` for textures and skies, `sv_download_pics`,

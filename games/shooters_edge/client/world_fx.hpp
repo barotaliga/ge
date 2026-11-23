@@ -81,6 +81,7 @@
 #include "render/beams.hpp"
 #include "render/explosions.hpp"
 #include "render/haze.hpp"
+#include "render/mark_fire.hpp"
 #include "render/marks.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/look.hpp"
@@ -89,6 +90,7 @@
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/model_lerp.hpp"
+#include "shooters_edge/client/place_names.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/warps.hpp"
 #include "shooters_edge/client/world_models.hpp"
@@ -233,6 +235,9 @@ struct LitGlow {
 
 struct FxState {
   FxSwitches on;  // set by the caller each frame
+  // The map's place points (`loc_draw` stands a marker at each within reach of where the player
+  // is, place_names.hpp); null: none. Set by the caller.
+  const PlaceNames* places = nullptr;
   // The effects the game's files define (`particles/*.fx`, load_effects); null or without the
   // name: the game's own. Set by the caller.
   const ge::particles::Book* book = nullptr;
@@ -245,7 +250,9 @@ struct FxState {
   const ge::brush::Map* marked = nullptr;
   std::shared_ptr<const MarkFaces> receivers;
   ge::detail::DecalPool marks;
-  std::vector<std::array<float, 3>> mark_light;    // each slot's light, whites, as it was pressed
+  std::vector<std::array<float, 3>> mark_light;  // each slot's light, whites, as it was pressed
+  ge::render::MarkFire
+      mark_fire;  // the hot marks' flames and smoke as they cool (render/mark_fire.hpp)
   std::unordered_map<int, ge::camera::Vec3> last;  // each missile's place a frame ago, m
   std::unordered_map<int, ge::camera::Vec3> next;  // this frame's, swapped into `last`
   std::vector<ge::render::HazeTrail> haze;         // the flights' hot air still warm, oldest first
@@ -365,6 +372,13 @@ struct FxState {
   std::vector<Warp> began;  // scratch: the warps that began this frame
 };
 
+// A fresh state with the map's place points (`loc_draw`'s markers) to read.
+inline FxState fx_state_for(const PlaceNames* places) {
+  FxState s;
+  s.places = places;
+  return s;
+}
+
 // One frame's effects for the world pass.
 struct FxFrame {
   effects::Particles births;
@@ -393,6 +407,9 @@ struct FxFrame {
   std::vector<HeldBeam> beams;
   // The marks on the walls this frame (ce_decals), three vertices a triangle, for the beams' pass.
   std::vector<ge::render::BurnVertex> burns;
+  // The small flames burning on the hot marks this frame (ce_decals, render/mark_fire.hpp), for
+  // the flames' pass.
+  std::vector<ge::render::Flame> fires;
   // The hot air a nail's or a rocket's flight left (ce_trails), a stretch a frame, for the haze.
   std::vector<ge::render::HazeTrail> haze;
   // The local player as the world would place him (never drawn in his own eyes, still casting his

@@ -48,6 +48,11 @@ bool map_hears(const Q2Server& s, sh::Vec3f from, sh::Vec3f to) {
   return map_areas_connected(s, from, to);
 }
 
+const std::vector<int32_t>& map_area_groups(const Q2Server& s) {
+  static const std::vector<int32_t> kNone;
+  return s.map && !s.map->areas.empty() ? groups(s) : kNone;
+}
+
 void map_area_bits(const Q2Server& s, sh::Vec3f eye, std::vector<uint8_t>& out) {
   out.clear();
   if (!s.map || s.map->areas.empty()) return;
