@@ -1027,17 +1027,20 @@ void fight_precache(Q2Server& s) {
     s.models.emplace_back(name);
     return static_cast<int>(s.models.size()) - 1;
   };
-  for (int w = 0; w < kSqWeaponCount; w++) s.weapon_models[w] = model(kSqWeapons[w].view_model);
+  for (int w = 0; w < kSqWeaponCount; w++)
+    if (sq_weapon_plays(w, s.opt.pack)) s.weapon_models[w] = model(kSqWeapons[w].view_model);
   // The weapons as others see them carried: names a client takes from the player's own model
   // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
   for (const auto& [w, name] : kCarried) s.carried_models[static_cast<int>(w)] = model(name);
-  for (int k = 0; k < kSqShotKinds; k++) s.missile_models[k] = model(kMissileModels[k]);
+  for (int k = 0; k < kSqShotKinds; k++)
+    if (q2_pack_has(s.opt.pack, kSqShotPacks[k])) s.missile_models[k] = model(kMissileModels[k]);
   gibs_precache(s);
   const auto add_sound = [&s](const char* name) {
     if (std::find(s.sounds.begin(), s.sounds.end(), name) == s.sounds.end())
       s.sounds.emplace_back(name);
   };
-  for (const SqWeaponRow& r : kSqWeapons) add_sound(r.sound);
+  for (const SqWeaponRow& r : kSqWeapons)
+    if (q2_pack_has(s.opt.pack, r.pack)) add_sound(r.sound);
   for (const char* name : {kClick, kBoom, kGrenadeBoom, kBounce, kHandBounce, kFuse, kGib,
                            kHandSounds[0], kHandSounds[1], kHandSounds[2], kHandSounds[3]})
     add_sound(name);
@@ -1424,9 +1427,9 @@ void fight_took(Q2Server& s, int slot, int item, int grenades_before) {
   const SqItem& it = kSqItems[item];
   const bool dm = deathmatch(s);
   // The status bar's pickup (3 s), and the item selected when it has a use.
-  p.picked = sq_item_number(item);
+  p.picked = sq_item_number(item, s.opt.pack);
   p.picked_at = s.level_time;
-  if (sq_selects(p.picked)) p.body.selected = p.picked;
+  if (sq_selects(p.picked, s.opt.pack)) p.body.selected = p.picked;
   if (it.kind == SqKind::power_armour && dm && p.body.counts[item] == 1) p.power_on = true;
   if (it.kind == SqKind::powerup && dm && (s.cvars.find("dmflags")->integer() & 16) != 0)
     fight_use(s, slot, item);  // instant items
@@ -1479,7 +1482,7 @@ bool fight_command(Q2Server& s, int slot, const std::string& cmd, const std::str
     if (sq_can_fire(p.body, w)) {
       fight_choose(s, slot, w);
       if (quick && p.hand.pending == w && kSqWeapons[w].item != nullptr) {
-        p.picked = sq_item_number(sq_item(kSqWeapons[w].item));
+        p.picked = sq_item_number(sq_item(kSqWeapons[w].item, s.opt.pack), s.opt.pack);
         p.picked_at = s.level_time - 2.1;
       }
       break;
