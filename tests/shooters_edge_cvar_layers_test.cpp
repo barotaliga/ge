@@ -113,7 +113,6 @@ struct Window {
                         .moves = &moves,
                         .frame_cap = &frame_cap,
                         .light_intensity = &picture.light_intensity,
-                        .light_modulate = &picture.light_modulate,
                         .light_lift = &picture.light_lift,
                         .gibs = &picture.gibs,
                         .no_glow = &picture.no_glow,
@@ -461,7 +460,7 @@ TEST(each_games_own_gun_place_adds_to_ours_and_its_lens_stands_in) {
   // Quake II: its offset by its axes (x right, y forward, z up) and its lens across.
   Window q(*pr::find_game("q2"));
   con::Cvars& u = q.console.cvars();
-  CHECK(u.find("r_viewmodeloffset") == nullptr && u.find("cl_gun_y") != nullptr);
+  CHECK(u.find("r_viewmodeloffset") != nullptr && u.find("cl_gun_y") != nullptr);  // every game's
   u.set("cl_gun_y", "3", con::Source::local);
   u.set("cl_gun_z", "-1", con::Source::local);
   shooters_edge::view::game_offset_m(q.view, add);
@@ -471,11 +470,27 @@ TEST(each_games_own_gun_place_adds_to_ours_and_its_lens_stands_in) {
                   ge::camera::fov_y_of(ge::core::kPi / 2, 4.0 / 3.0)) < 1e-12);  // cl_gunfov 90
   u.set("r_viewmodel_fov", "50", con::Source::local);                            // ours set wins
   CHECK(std::fabs(shooters_edge::view::eye_row(q.view).fov_y - 50 * ge::core::kPi / 180) < 1e-12);
-  // Its cl_gunalpha: how solid the weapon is drawn; Quake has none.
+  // cl_gunalpha: how solid the weapon is drawn, every game's.
   CHECK(q.view.alpha == 1);
   u.set("cl_gunalpha", "0.4", con::Source::local);
   CHECK(q.view.alpha == 0.4);
-  CHECK(v.find("cl_gunalpha") == nullptr && w.view.alpha == 1);
+  v.set("cl_gunalpha", "0.5", con::Source::local);
+  CHECK(w.view.alpha == 0.5 && w.view.gun_fov_h == 0);  // Quake's lens the view's
+}
+
+TEST(the_weapons_place_and_lens_are_kept_across_a_game_change) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  v.set("cl_gun_x", "2", con::Source::local);
+  v.set("r_viewmodeloffset", "1 0 0", con::Source::local);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2, {.view = &w.view});
+  CHECK(w.view.gun_units[0] == 2 && w.view.offset_text == "1 0 0" && w.view.gun_fov_h == 90);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {.view = &w.view});
+  CHECK(w.view.gun_units[0] == 2 && w.view.offset_text == "1 0 0" && w.view.gun_fov_h == 0);
+  CHECK(v.find("cl_gun_x")->layer == cl::kLayerClassic && v.clashes().empty());
 }
 
 TEST(quake_twos_cl_maxfps_is_its_move_rate_and_r_maxfps_its_frame_cap) {
@@ -511,7 +526,7 @@ TEST(quake_twos_cl_maxfps_is_its_move_rate_and_r_maxfps_its_frame_cap) {
 }
 
 // Quake II's light settings, with its defaults and limits, scale the maps' light in both looks;
-// Quake's light stays as it was.
+// Quake's own light stays as it was, and gl_modulate (every game's) keeps the player's value.
 TEST(quake_twos_intensity_and_gl_modulate_light_its_maps) {
   Window w(*pr::find_game("q2"));
   con::Cvars& v = w.console.cvars();
@@ -531,12 +546,100 @@ TEST(quake_twos_intensity_and_gl_modulate_light_its_maps) {
   v.set("intensity", "9", con::Source::local);  // held to 1..5
   CHECK(w.picture.light_intensity <= 5);
   // Quake loaded: its maps lit as they were.
-  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0],
-                        {.light_intensity = &w.picture.light_intensity,
-                         .light_modulate = &w.picture.light_modulate,
-                         .light_lift = &w.picture.light_lift});
-  CHECK(v.find("intensity") == nullptr && v.find("gl_modulate") == nullptr);
-  CHECK(shooters_edge::look::light_scale(w.picture) == 1 && w.picture.light_lift == 0);
+  cl::switch_game_cvars(
+      w.console, w.game, pr::kGameProfiles[0],
+      {.light_intensity = &w.picture.light_intensity, .light_lift = &w.picture.light_lift});
+  CHECK(v.find("intensity") == nullptr && v.find("gl_brightness") == nullptr);
+  // gl_modulate is every game's (the classic look's): the player's 2 kept.
+  CHECK(v.find("gl_modulate") != nullptr && v.find("gl_modulate")->value == "2");
+  CHECK(shooters_edge::look::light_scale(w.picture) == 2 && w.picture.light_lift == 0);
+}
+
+// The names every game shares (docs/porting-games.md § One name, one meaning): QuakeWorld's
+// spellings reach ours while Quake is loaded, and the settings once Quake II's alone are every
+// game's, keeping the player's value across a game change.
+TEST(the_names_every_game_shares_reach_one_setting_in_both) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  con::ConsoleView view(w.console);  // con_height, con_bgalpha, con_font: the console's own
+  v.add({.name = "vid_vsync", .fallback = "0"});  // the window's (platform/pacing.cpp)
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});  // read again with them
+  v.set("scr_consize", "0.3", con::Source::local);
+  v.set("scr_conalpha", "0.6", con::Source::local);
+  v.set("gl_consolefont", "povo5", con::Source::local);
+  CHECK(v.find("con_height")->value == "0.3" && v.find("con_bgalpha")->value == "0.6");
+  CHECK(v.find("con_font")->value == "povo5");
+  v.set("r_drawparticles", "0", con::Source::local);  // its rulesets lock this name
+  CHECK(v.find("r_particles")->value == "0" && !w.picture.particles);
+  v.set("cl_net_clientport", "27001", con::Source::local);
+  v.set("in_grab_windowed_mouse", "0", con::Source::local);
+  CHECK(v.find("net_clientport")->value == "27001" && w.game.q2.grab == 0);
+  CHECK(v.find("gl_modulate")->layer == cl::kLayerClassic && w.picture.anisotropy == 0);
+  v.set("gl_modulate", "1.5", con::Source::local);
+  CHECK(w.picture.light_modulate == 1.5);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2, {});
+  CHECK(v.find("scr_consize") == nullptr && v.find("cl_net_clientport") == nullptr);
+  CHECK(v.find("in_grab")->value == "0" && w.game.q2.grab == 0);  // the player's, kept
+  CHECK(v.find("net_clientport")->value == "27001" && w.picture.light_modulate == 1.5);
+  CHECK(v.find("gl_anisotropy")->value == "1" && w.picture.anisotropy == 1);  // Quake II's 1
+  v.set("gl_swapinterval", "1", con::Source::local);  // its spelling of the window's vsync
+  CHECK(v.find("vid_vsync")->value == "1");
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
+  CHECK(v.find("gl_swapinterval") == nullptr && v.find("in_grab")->value == "0");
+  CHECK(v.clashes().empty());
+}
+
+TEST(one_camera_behind_the_player_in_every_game) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("cam_dist")->value == "100" && w.game.q2.dist == v.find("cam_dist"));
+  v.set("chase_back", "80", con::Source::local);  // Quake's spellings of the distance and switch
+  CHECK(v.find("cam_dist")->value == "80" && w.playback.behind == 80);
+  v.set("sv_cheats", "1", con::Source::server);  // the server allows cheats
+  v.set("chase_active", "1", con::Source::local);
+  CHECK(v.find("cl_thirdperson")->value == "1" && w.game.q2.third_person);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2, {});
+  CHECK(v.find("chase_back") == nullptr && w.game.q2.third_person);  // the switch is kept
+  v.set("cl_thirdperson_range", "40", con::Source::local);  // Quake II's spelling of the distance
+  CHECK(v.find("cam_dist")->value == "40" && w.game.q2.dist->number == 40);
+  CHECK(v.find("cl_thirdperson")->layer == cl::kLayerClassic);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
+  CHECK(v.find("cl_thirdperson_range") == nullptr && v.find("chase_active") != nullptr);
+  CHECK(v.clashes().empty());
+}
+
+TEST(the_competitive_settings_are_every_classic_games) {
+  // What a competition player tunes to see clearly, one setting each in every classic game: the
+  // flat walls, the plain sky, the liquids seen through, the team's and the enemy's skins, the
+  // flames and power glows, the crosshair's picture, the tints' strengths and the weapon's place.
+  const char* names[] = {
+      "r_drawflat",      "r_wallcolor",       "r_floorcolor",   "r_fastsky",
+      "r_skycolor",      "r_skyname",         "r_skyfog",       "r_wateralpha",
+      "r_slimealpha",    "r_lavaalpha",       "r_telealpha",    "teamskin",
+      "enemyskin",       "r_fullbrightskins", "r_drawflame",    "r_powerupglow",
+      "crosshairimage",  "v_contentblend",    "v_damagecshift", "v_quadcshift",
+      "v_pentcshift",    "v_suitcshift",      "v_ringcshift",   "gl_cshiftpercent",
+      "r_viewmodelsize", "r_viewmodeloffset", "cl_gun_x",       "cl_gunfov",
+      "cl_gunalpha",     "cl_bobhead"};
+  for (const pr::GameProfile& g : pr::kGameProfiles) {
+    Window w(g);
+    for (const char* n : names) {
+      const con::Cvar* c = w.console.cvars().find(n);
+      CHECK_MSG(c != nullptr, std::string(g.id) + ": " + n + " is not registered");
+      if (c == nullptr) continue;
+      const bool default_only =  // the game's default for it, a `same` row
+          !c->earlier.empty() && c->earlier.back().how == con::Overlap::same;
+      CHECK_MSG(default_only || c->layer == cl::kLayerClassic || c->layer == cl::kLayerEngine ||
+                    c->layer == cl::kLayerShooter,
+                std::string(g.id) + ": " + n + " is the game's own (" + c->layer + ")");
+    }
+  }
 }
 
 TEST(color_sets_both_colours_as_quake_keeps_them) {
@@ -655,7 +758,8 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(ge::classic::q2_muzzle_age(fx, 0.02) == 0.01);  // twice as long: half as old
   // The picture's switches, Quake II's defaults while it is loaded.
   CHECK(fx.part_scale == 2 && fx.part_shape == 0 && !fx.additive_parts && !fx.round_beams);
-  CHECK(fx.draw_sky && fx.smooth_sky && fx.saturation == 1 && fx.anisotropy == 1 && fx.fog);
+  CHECK(fx.draw_sky && fx.smooth_sky && fx.saturation == 1 && fx.fog);
+  CHECK(w.picture.anisotropy == 1);  // every game's, Quake II's 1 (none) while it is loaded
   CHECK(!fx.water_warp && !fx.invert && (v.find("gl_drawsky")->flags & con::kArchive) == 0);
   v.set("gl_partshape", "2", con::Source::local);
   v.set("gl_partstyle", "1", con::Source::local);
@@ -666,7 +770,7 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("gl_waterwarp", "1", con::Source::local);
   v.set("gl_fog", "0", con::Source::local);
   CHECK(fx.part_shape == 2 && fx.additive_parts && fx.round_beams && !fx.draw_sky);
-  CHECK(fx.saturation == 1 && fx.anisotropy == 16 && fx.water_warp && !fx.fog);
+  CHECK(fx.saturation == 1 && w.picture.anisotropy == 16 && fx.water_warp && !fx.fog);
   // The light's switches, Quake II's defaults: the models lit twice, shaded, the other players'
   // lean the game's own, the soft falloff.
   CHECK(fx.double_light && fx.dot_shading && fx.roll_hack && fx.dlight_falloff == 1);
@@ -684,6 +788,11 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(ge::classic::q2_outline_share(fx.cel_shading, 695) == 0);  // gone past about 693
   CHECK(ge::classic::q2_outline_px(0, 0) == 0);
   CHECK(ge::classic::q2_blast_age(fx, 0.27) == 0.2 && ge::classic::q2_blast_age(fx, 0.05) == 0);
+  // A glow map's light: twice the setting, 0.75 by default.
+  CHECK(fx.glowmap_intensity == 0.75 &&
+        ge::classic::q2_glow_map_gain(fx.glowmap_intensity) == 1.5f);
+  v.set("gl_glowmap_intensity", "0", con::Source::local);
+  CHECK(ge::classic::q2_glow_map_gain(fx.glowmap_intensity) == 0);
   v.set("cl_beginmapcmd", "record", con::Source::local);
   v.set("cl_autopause", "0", con::Source::local);
   CHECK(w.game.q2.begin_cmd == "record" && !w.game.q2.autopause);
@@ -696,7 +805,8 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(!w.music.shuffle && w.music.menu_track == 0);
   CHECK(w.picture.q2fx.rail_type == 0 && w.picture.q2fx.core_colour == "red");
   CHECK(w.picture.q2fx.part_scale == 0 && w.picture.q2fx.part_shape == -1);  // the engine's own
-  CHECK(w.picture.q2fx.draw_sky && w.picture.q2fx.fog && w.picture.q2fx.anisotropy == 0);
+  CHECK(w.picture.q2fx.draw_sky && w.picture.q2fx.fog);
+  CHECK(w.picture.anisotropy == 16);  // gl_anisotropy is every game's: the player's 16 kept
   CHECK(!w.picture.q2fx.double_light && !w.picture.q2fx.roll_hack);
   CHECK(w.picture.q2fx.dlight_falloff == -1 && w.picture.q2fx.lightmap_saturation == 1);
   CHECK(w.picture.q2fx.cel_shading == 0 && w.picture.q2fx.smooth_explosions);

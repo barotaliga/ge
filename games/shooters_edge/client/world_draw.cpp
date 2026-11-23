@@ -853,6 +853,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (f.has_map) {
     GE_ZONE("world.bsp");
     ba::set_dynamic_lights(f.bsp, lights);
+    for (size_t k = 0; k < fx.light_styles.size();
+         k++)  // the server's flicker, pulses and switches
+      if (f.bsp.light_styles[k] != fx.light_styles[k])
+        ba::set_light_style(f.bsp, static_cast<int>(k), fx.light_styles[k]);
     ba::set_areas(f.bsp,
                   f.from_above ? std::span<const uint8_t>() : std::span<const uint8_t>(fx.areas));
     // The moving models' shadows (M54): every model near the eye and the player himself.
@@ -989,7 +993,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .self = fx.has_self ? fx.self.entity : 0,
                            .shadows = f.picture->model_shadows,
                            .cel_shading = f.picture->q2fx.cel_shading,
-                           .view_px = static_cast<double>(f.h)};
+                           .view_px = static_cast<double>(f.h),
+                           .glow_map = static_cast<float>(
+                               ge::classic::q2_glow_map_gain(f.picture->q2fx.glowmap_intensity))};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,

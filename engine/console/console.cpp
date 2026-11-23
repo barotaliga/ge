@@ -8,6 +8,8 @@
 #include "console/console.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
@@ -157,11 +159,21 @@ std::string Console::expand_text(std::string_view text) const {
     const auto m = macros_.find(key);
     if (m != macros_.end()) {
       out = m->second();
-      return true;
+    } else if (const Cvar* c = cvars_.find(key); c != nullptr) {
+      out = c->value;
+    } else {
+      return false;
     }
-    const Cvar* c = cvars_.find(key);
-    if (c == nullptr) return false;
-    out = c->value;
+    const Cvar* width = width_prefix_.empty() ? nullptr : cvars_.find(width_prefix_ + key);
+    if (width != nullptr) {  // a column the player set: `tp_length_health 3`
+      const int n = std::clamp(std::atoi(width->value.c_str()), 0, 40);
+      const Cvar* align = cvars_.find(align_prefix_ + key);
+      const char a =
+          align == nullptr || align->value.empty()
+              ? 'l'
+              : static_cast<char>(std::tolower(static_cast<unsigned char>(align->value[0])));
+      if (n > 0) out = fit_width(out, n, a);
+    }
     return true;
   });
 }
@@ -556,6 +568,18 @@ size_t edit_distance(std::string_view a, std::string_view b) {
 }
 
 }  // namespace
+
+void Console::set_arg_values(std::string_view word, ArgValues values) {
+  if (values)
+    arg_values_[lower(word)] = std::move(values);
+  else
+    arg_values_.erase(lower(word));
+}
+
+std::vector<std::string> Console::arg_values(std::string_view word) const {
+  const auto it = arg_values_.find(lower(word));
+  return it != arg_values_.end() ? it->second() : std::vector<std::string>();
+}
 
 std::string Console::suggest(std::string_view name) const {
   const std::string n = lower(name);

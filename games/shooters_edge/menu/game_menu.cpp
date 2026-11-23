@@ -551,7 +551,14 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
   if (!open_) {
     if (escape && host.in_level && host.screen_up && host.console != nullptr) {
       host.console->execute("putaway");  // the rules' screen taken down, no menu
+      escape_hold_ = 0;
       return;
+    }
+    if (escape_hold_ >= 0 && !escape) {  // still held past the putaway: the in-game page
+      escape_hold_ = host.escape_held && host.in_level ? escape_hold_ + dt : -1;
+      if (escape_hold_ < kEscapeHold) return;
+      escape_hold_ = -1;
+      escape = true;
     }
     if (escape) {  // in a level, the game's in-game page when it has one
       const std::string_view in_level = table_of(host).in_level;

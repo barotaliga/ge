@@ -115,7 +115,7 @@ TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
     if (cl::next_frame(d, error) != cl::DemoRead::frame) break;
     frames++;
     for (const cl::DemoSound& o : d.state.started) {
-      if (o.name == nullptr) continue;
+      if (o.name == nullptr || o.entity == -1) continue;  // -1: a hit's ricochet (q2_temp_fx.hpp)
       const std::string name = o.name;
       if (name == "weapons/grenlf1a.wav") continue;  // the third player's entry (below)
       if (name.starts_with("weapons/shotg")) {       // the recorder's own shotgun flash: shot, pump
@@ -171,7 +171,10 @@ TEST(an_entity_s_event_plays_its_sound_for_its_frame_alone) {
   int named = 0;
   while (cl::next_frame(q, error) == cl::DemoRead::frame)
     for (const cl::DemoSound& o : q.state.started)
-      named += o.name != nullptr && !std::string(o.name).starts_with("weapons/shotg") ? 1 : 0;
+      named +=
+          o.name != nullptr && o.entity != -1 && !std::string(o.name).starts_with("weapons/shotg")
+              ? 1
+              : 0;
   CHECK(named == 0);
 }
 

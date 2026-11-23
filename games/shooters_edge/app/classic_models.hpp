@@ -36,6 +36,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "assets/image.hpp"
 #include "assets/pcx.hpp"
 #include "brush/map.hpp"
 #include "classic/app/look.hpp"
@@ -173,6 +174,13 @@ void rotation_of(const float angles[3], bool alias, float out[4]);
 // The colour a skin's glowing texels paint (linear, its brightest channel 1: a grenade's ends a
 // pure red), and their share of the skin; 0 (and black) when nothing in it glows.
 float glow_colour(const ge::render::MorphSkin& skin, float rgb[3]);
+
+// A GLOW MAP laid on a skin (a picture `<skin>_glow` beside it, its colour the light a texel gives
+// off, scaled to the skin when its size differs): each plain texel under a lit one glows by the
+// glow's brightness over its own (render/morph.hpp's glow_mark); where the glow is brighter than
+// the texel, the texel takes the glow's colour channel by channel first, so a black eye socket
+// lights in the glow's colour. Tinted and cut-out texels are left as they are.
+void glow_map_marks(ge::render::MorphSkin& skin, const ge::assets::Image& glow);
 
 struct LightProbe {
   float cell = 64;  // map units

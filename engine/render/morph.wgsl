@@ -160,7 +160,9 @@ fn texel(p: vec2i, d: Draw) -> vec4f {
     let row = select(d.info.y, d.info.z, region == 2u);
     return vec4f(ramps[row * kTintSteps + (mark & 15u)].rgb, 0.0);
   }
-  return vec4f(srgb_decode(c.rgb), select(0.0, 1.0, mark == 1u));
+  // 1 glows whole; kMarkGlowFirst (3) + 0..60 glows by that share of 60 (a glow map's texel).
+  let share = select(0.0, f32(min(mark, 63u) - 3u) / 60.0, mark >= 3u);
+  return vec4f(srgb_decode(c.rgb), select(share, 1.0, mark == 1u));
 }
 
 fn skin_at(uv: vec2f, m: Model, d: Draw) -> vec4f {

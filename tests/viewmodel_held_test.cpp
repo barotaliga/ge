@@ -154,3 +154,29 @@ TEST(a_gun_of_two_barrels_fires_from_the_one_each_frame_names) {
   vm::muzzle_at(m, 0, 0, 0, tip, 5);  // no such barrel: the one muzzle too
   CHECK(std::fabs(tip[0]) < 1e-6f);
 }
+
+TEST(the_flash_comes_out_of_the_gun_whole_never_stretched) {
+  // Two triangles: the body (0, 1, 2) and the flash (3, 4, 5), the flash parked behind the eye on
+  // the rest frame and at the muzzle on the firing frames.
+  vm::HeldModel m;
+  m.indices = {0, 1, 2, 3, 4, 5};
+  m.flame = {0, 1};
+  const auto frame = [](float body_z, float flash_z) {
+    vm::HeldFrame f;
+    f.positions = {0, 0, body_z,  1, 0, body_z,  0, 1, body_z,
+                   0, 0, flash_z, 1, 0, flash_z, 0, 1, flash_z};
+    f.normals.assign(f.positions.size(), 0);
+    for (size_t i = 2; i < f.normals.size(); i += 3) f.normals[i] = 1;
+    return f;
+  };
+  m.frames = {frame(0.4f, -0.2f), frame(0.5f, 0.6f), frame(0.6f, 0.8f)};
+  std::vector<float> p, n;
+  vm::pose_frames(m, 0, 1, 0.5, p, n);  // rest to firing: the flash out whole, the body half way
+  CHECK(std::fabs(p[2] - 0.45f) < 1e-6f && p[11] == 0.6f && p[17] == 0.6f);
+  vm::pose_frames(m, 1, 0, 0.5, p, n);  // and back in whole
+  CHECK(p[11] == -0.2f);
+  vm::pose_frames(m, 1, 2, 0.5, p, n);  // firing to firing: it rides with the barrel
+  CHECK(std::fabs(p[11] - 0.7f) < 1e-6f);
+  vm::pose_frames(m, 0, 1, 0, p, n);  // not yet under way: where it was
+  CHECK(p[11] == -0.2f);
+}

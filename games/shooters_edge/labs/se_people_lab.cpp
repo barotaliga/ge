@@ -430,7 +430,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     blast_effects.clear();
     for (const cl::DemoEffect& e : s.effects) {
       if (e.kind == cl::DemoEffectKind::explosion) blast_effects.push_back({0, e.at});
-      if (e.kind == cl::DemoEffectKind::beam) blast_effects.push_back({1, e.end});
+      const bool rail = e.kind == cl::DemoEffectKind::named_trail && e.name == "te_railtrail";
+      if (e.kind == cl::DemoEffectKind::beam || rail) blast_effects.push_back({1, e.end});
       if (e.kind == cl::DemoEffectKind::gunshot) blast_effects.push_back({2, e.at});
     }
     for (int i = 0; i < 32; i++) {

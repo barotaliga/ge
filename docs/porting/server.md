@@ -181,6 +181,16 @@ entity as it moves. The frame is sized to the room the packet has after the reli
 carries (`channel_unreliable_room`), so a long reliable message costs a frame its last entities,
 effects and sounds rather than the whole frame.
 
+A dedicated server listens on IPv6 as well with `net_enable_ipv6` 2: a second socket on `net_ip6`
+and the same port, IPv6 only, read and written through the one transport (`open_udp6_beside`,
+`open_ipv6`); when it cannot be had the server says why and runs on IPv4. A Quake II client of
+protocol 36 at minor 1021 or later with zlib gets a file stored deflated in a `.pkz` as the stream
+it lies as (message 22, `served_deflated`). A hosted game library that does not ask for enhanced
+saves is never saved, loaded or kept level to level unless `sys_allow_unsafe_savegames` 1 was set
+at start (a later set is refused); each new game outside deathmatch says which. A stock client's
+spectator flies as its client predicts it (`q2_fly_for_protocol`): 35 and 36 at twice the time, 36
+with friction 4 and gliding on, 34 with the original step.
+
 Quake II's downloads (`net/q2_net_server.cpp`, facts in `porting/shooters-edge/
 q2-downloads-facts.md`) make the asked name plain first (slashes, `.` and `..`), then offer each
 kind by its own setting (`sv_download_textures` for textures and skies, `sv_download_pics`,

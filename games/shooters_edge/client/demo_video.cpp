@@ -121,6 +121,31 @@ void q2_placed(const DemoEntity& e, Placed& p) {
   for (int c = 0; c < 3; c++) p.shell_rgb[c] = look.shell_rgb[c];
 }
 
+// Quake II's model 255 (`kQ2OwnLook`): the player's own figure (`EffectModel::figure_q2`) in the
+// look his slot names (the skin's low byte), or its folder's disguise; -1 for any other model.
+// `carried`: the weapon he carries (his second model 255: the skin's high byte, its place among the
+// list's carried names from 1), else 0.
+int q2_own_look(const DemoState& s, const DemoEntity& e, Placed& p, int* carried) {
+  *carried = 0;
+  if (e.model != kQ2OwnLook) return -1;
+  const int listed = static_cast<int>(s.models.size());
+  const size_t slot = static_cast<size_t>(e.skin & 0xff);
+  p.modelindex = effect_model(listed, EffectModel::figure_q2);
+  p.skin = 0;
+  p.skin_name = slot < s.looks.size() ? s.looks[slot] : std::string();
+  if ((static_cast<uint32_t>(e.render_fx) & kRfUseDisguise) != 0)
+    p.skin_name = q2_disguised(p.skin_name);
+  if (e.more[0] == kQ2OwnLook) {
+    const int place = (e.skin >> 8) & 0xff;
+    for (int i = 1, seen = 0; i < listed && place > 0; i++)
+      if (!s.models[size_t(i)].empty() && s.models[size_t(i)][0] == '#' && ++seen == place) {
+        *carried = i;
+        break;
+      }
+  }
+  return p.modelindex;
+}
+
 }  // namespace
 
 void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own, float own_alpha) {
@@ -128,8 +153,9 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own, fl
   const int models = static_cast<int>(s.models.size());
   const int listener = listener_of(s);
   const int me = draw_own ? -1 : listener;
+  const bool q2 = s.format == DemoFormat::q2;
   const auto put = [&](int entity, const DemoEntity& e) {
-    if (e.model <= 0 || e.model >= models) return;
+    if (e.model <= 0 || (e.model >= models && !(q2 && e.model == kQ2OwnLook))) return;
     Placed p;
     p.entity = entity;
     p.modelindex = e.model;
@@ -147,7 +173,22 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own, fl
     p.origin = e.origin;
     p.angles = e.angles;
     if (entity == listener) p.alpha *= own_alpha;  // cl_thirdperson's fade near a wall
+    int carried = 0;
+    if (q2) q2_own_look(s, e, p, &carried);
     out.push_back(p);
+    if (!q2) return;
+    // Quake II's other models at its place on its frame: the weapon a player carries (in his
+    // figure's folder), any other one plain.
+    for (int k = 0; k < 3; k++) {
+      const int more = k == 0 && e.more[0] == kQ2OwnLook ? carried : e.more[k];
+      if (more <= 0 || more >= models) continue;
+      Placed w = p;
+      w.entity = entity + (k == 0 ? kCarriedEntity : kPlateEntity << k);
+      w.modelindex = more;
+      w.skin = w.carried = 0;
+      w.shell = w.shell && more == carried;
+      out.push_back(w);
+    }
   };
   int player_model = -1;  // the standard figure's place on the list (a body drawn as eyes: none)
   for (size_t i = 1; i < s.models.size(); i++)
@@ -175,8 +216,10 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own, fl
         if (!out.empty() && out.back().entity == static_cast<int>(k) + 1 && k < s.top.size()) {
           out.back().top = static_cast<uint32_t>(s.top[k]);
           out.back().bottom = static_cast<uint32_t>(s.bottom[k]);
-          out.back().skin_name = s.skins[k];
-          out.back().model_name = s.figures[k];
+          if (!q2) {  // Quake II's look is its slot's (q2_own_look)
+            out.back().skin_name = s.skins[k];
+            out.back().model_name = s.figures[k];
+          }
           out.back().side = models::side_of(teamplay, mine, s.teams[k]);
           // The weapon he carries (world_models.hpp's Placed::vwep); a server's recording draws
           // a fallen body without its gun, and no weapon on a gibbed one.
@@ -194,6 +237,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
                    const ge::render::FrameView& view, FxScene& out) {
   out.map = map;
   out.areas = s.areas;
+  out.light_styles = s.light_styles;
   out.server = nullptr;
   out.pose.eye = {view.eye[0], view.eye[1], view.eye[2]};
   out.pose.yaw = view.heading;
@@ -261,7 +305,8 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
     Placed p;
     if (e < 1 || static_cast<size_t>(e) > count) return p;
     const DemoEntity& d = players[e - 1];
-    if (d.model <= 0 || static_cast<size_t>(d.model) >= s.models.size()) return p;
+    const bool own_look = s.format == DemoFormat::q2 && d.model == kQ2OwnLook;
+    if (d.model <= 0 || (static_cast<size_t>(d.model) >= s.models.size() && !own_look)) return p;
     p.entity = e;
     p.modelindex = d.model;
     p.frame = d.frame;
@@ -269,6 +314,8 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
     p.effects = d.effects;
     p.alpha = d.alpha;
     if (s.format == DemoFormat::q2) q2_placed(d, p);
+    int carried = 0;
+    if (own_look) q2_own_look(s, d, p, &carried);
     p.scale = d.scale;
     for (int c = 0; c < 3; c++) p.colormod[c] = d.colormod[c];
     p.origin = d.origin;

@@ -536,16 +536,26 @@ TEST(the_rules_effects_go_out_as_temporary_entities) {
   std::string error;
   CHECK_MSG(cl::open_demo(rec.bytes, d, error), error);
   std::vector<cl::DemoEffect> seen;
-  while (cl::next_frame(d, error) == cl::DemoRead::frame)
+  bool blast_heard = false;  // the client plays an explosion's sound itself
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) {
     seen.insert(seen.end(), d.state.effects.begin(), d.state.effects.end());
+    for (const cl::DemoSound& h : d.state.started)
+      blast_heard =
+          blast_heard || (h.name != nullptr && std::string_view(h.name) == "weapons/rocklx1a.wav");
+  }
+  CHECK(blast_heard);
+  CHECK(!d.state.light_styles[0].empty());  // the map's styles, kept for the window
   CHECK_MSG(seen.size() == 4, std::to_string(seen.size()));
   if (seen.size() != 4) return;
   CHECK(seen[0].kind == cl::DemoEffectKind::explosion && seen[0].code == 7);
   CHECK(seen[0].at.x == 100 && seen[0].at.y == 50 && seen[0].at.z == 30);
   CHECK(seen[1].kind == cl::DemoEffectKind::named && seen[1].name == "sq_teleport");
   CHECK(seen[2].kind == cl::DemoEffectKind::blood);
-  CHECK(seen[2].way.z > 0.99f);  // its way, by the direction table
-  CHECK(seen[3].kind == cl::DemoEffectKind::beam && seen[3].end.x == 300);
+  CHECK(seen[2].way.z > 0.99f);                              // its way, by the direction table
+  CHECK(seen[2].q2_specks == 60 && seen[2].colour == 0xe8);  // the client's puff of blood
+  // The rail's line, drawn by its name as our own game draws it (world_fx.cpp).
+  CHECK(seen[3].kind == cl::DemoEffectKind::named_trail && seen[3].name == "te_railtrail");
+  CHECK(seen[3].end.x == 300);
 }
 
 // A shot that strikes a wall throws its sparks off the wall: the temporary entity carries the

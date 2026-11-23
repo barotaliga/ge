@@ -17,7 +17,8 @@
 // replays to the bit (the `server-core` lab); a dedicated server only waits between frames.
 //
 // THE SETTINGS are `ServerConfig`, every field a cvar on the server's tier (`add_server_cvars`):
-// `sv_hostname`, `sv_description`, `net_ip`, `net_port`, `sv_maxclients`, `sv_map`, `sv_bots`,
+// `sv_hostname`, `sv_description`, `net_ip`, `net_port` (and `net_ip6` with `net_enable_ipv6` 2:
+// an IPv6 socket on the same port beside the IPv4 one), `sv_maxclients`, `sv_map`, `sv_bots`,
 // `sv_lobby` (the engine's lobby, match.hpp, before every match) and its timers `sv_countdown`
 // and `sv_intermission`, `sv_seed`, `sv_password`,
 // `sv_visibility`; and those kept for what reads them as it lands:
@@ -84,6 +85,8 @@ struct ServerConfig {
   std::string description;          // sv_description: a line under the name
   std::string ip;                   // net_ip: the address to listen on (empty: every interface)
   int32_t port = 0;                 // net_port: the game's port (0: the game's default)
+  std::string ip6;                  // net_ip6: the IPv6 address to listen on (empty: every one)
+  int32_t ipv6 = 1;                 // net_enable_ipv6: 2 opens an IPv6 socket too
   int32_t maxclients = 8;           // sv_maxclients: 1..32
   std::string map;                  // sv_map (empty: the game's default)
   int32_t bots = 0;                 // sv_bots: slots the game's bots fill at the start
