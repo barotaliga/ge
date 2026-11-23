@@ -164,6 +164,44 @@ bool gz_counted(const Q2Monster& m);
 // A Ground Zero kind's world row: a reinforcement growing shows the grow.
 void gz_row(const Q2Server& s, const Q2Monster& m, ge::shooter::WorldEntity& r);
 
+// ---- Ground Zero's changes to the base monsters (q2_gz_base_monsters.cpp) ----
+// Each does nothing outside Ground Zero.
+// A shot of attack `a` from `from` taken the pack's way (the maiden's and the tanks' rockets, the
+// hornet's volley; a soldier's shot held when another stands in the line); true when taken.
+bool gz_base_shoot(Q2Server& s, Q2Monster& m, const Attack& a, sh::Vec3f from);
+// The share of a soldier's own spread kept (half on hard and nightmare; else all).
+float gz_base_spread(const Q2Server& s, const Q2Monster& m);
+// The chance added to another loop of the attack (the maiden's 0.05 a skill).
+double gz_base_again(const Q2Server& s, const Q2Monster& m);
+// An attack begun: a flier's strafing burst, by chance (none on easy, 1 − 0.5 ÷ skill; the
+// daedalus 0.1 more), to a side it switches half the time.
+void gz_base_begin(Q2Server& s, Q2Monster& m, const Attack& a);
+// The frame's own think (the kamikaze's charge; true when it took the frame) and a strafing
+// burst's slide of 10 a frame.
+bool gz_base_think(Q2Server& s, Q2Monster& m);
+// No pain (the kamikaze's never, the infantry's and gunner's in the air); true when none.
+bool gz_base_pain(Q2Server& s, Q2Monster& m);
+// For the shared monster AI the pack changes (q2_gz_monsters.cpp): each kind's ledge jump (the
+// drop and the climb it takes, the jump up's and down's speeds forward and up), its dodge (ducks,
+// side-steps, holds still for its attacks above easy) and its blind fire (the delay growing each
+// try, lowest and highest, and the wait after, s). Null for a kind without one.
+struct GzLedge {
+  const char* classname;
+  float drop, climb;
+  float up_forward, up_up, down_forward, down_up;
+};
+struct GzDodge {
+  const char* classname;
+  bool ducks, side_steps, attacks_still;
+};
+struct GzBlind {
+  const char* classname;
+  float delay_lo, delay_hi, wait_lo, wait_hi;
+};
+const GzLedge* gz_ledge(std::string_view classname);
+const GzDodge* gz_dodge_of(std::string_view classname);
+const GzBlind* gz_blind_of(std::string_view classname);
+
 // ---- Ground Zero's bosses (q2_gz_bosses.cpp): the carrier and the black widow's two stages ----
 // Whether `m` (or class `classname`) is one of them.
 bool gz_boss(const Q2Monster& m);

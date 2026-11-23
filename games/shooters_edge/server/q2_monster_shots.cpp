@@ -44,8 +44,9 @@ sh::Vec3f aim_point(Q2Server& s, const Q2Monster& m, const Attack& a, sh::Vec3f 
   const sh::Vec3f t = mark(s, m, a.lead);
   if (a.aim_h == 0 && a.aim_v == 0) return t;
   Attack wide;
-  wide.h = a.aim_h;
-  wide.v = a.aim_v;
+  const float keep = gz_base_spread(s, m);  // Ground Zero's soldiers' half on hard
+  wide.h = a.aim_h * keep;
+  wide.v = a.aim_v * keep;
   return from + aim_at(s, wide, from, t) * 8192;
 }
 sh::Vec3f aim(Q2Server& s, Q2Monster& m, const Attack& a, sh::Vec3f from) {
@@ -125,6 +126,7 @@ void shoot(Q2Server& s, Q2Monster& m, const Attack& a, int n) {
         s, flash, m.entity, from, from + d * 16.0f,
         q2_monster_flash_value(looks_like(kind(m)), std::string_view(flash).substr(17)));
   }
+  if (gz_base_shoot(s, m, a, from)) return;  // Ground Zero's own aim (q2_gz_base_monsters.cpp)
   switch (a.fire) {
     case Fire::bolt:
       for (int i = 0; i < a.count; i++)

@@ -297,6 +297,9 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   double stage_until = 0;
   int turret_frame = 0;
   Q2Boss boss;  // Ground Zero's bosses' own (q2_gz_bosses.cpp)
+  // Ground Zero's strafing burst (q2_gz_base_monsters.cpp): the side it slides to while it fires
+  // (1 right, -1 left; 0 a burst stood still).
+  int strafe = 0;
 };
 
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name

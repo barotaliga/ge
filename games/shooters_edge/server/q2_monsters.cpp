@@ -454,6 +454,7 @@ void begin_attack(Q2Server& s, Q2Monster& m, int i) {
   m.aimed = false;
   m.struck = false;
   m.fire_at = s.level_time + double(a.windup);
+  gz_base_begin(s, m, a);  // Ground Zero's strafing burst
   double hold = 0.1;
   if (a.every > 0)
     hold = double(frames(a.loop) - 1) * kStep + 0.1;
@@ -484,7 +485,7 @@ bool goes_on(Q2Server& s, Q2Monster& m, const Attack& a) {
   } else if (!reaches(s, m, m.enemy, kOpaque)) {
     return false;
   }
-  return random01(s) < a.again;
+  return random01(s) < a.again + gz_base_again(s, m);
 }
 
 // The attack in progress, this frame.
@@ -989,7 +990,8 @@ void think(Q2Server& s, Q2Monster& m) {
     targets_turret(s, m, m.enemy >= 0 && sees(s, m, m.enemy) ? m.enemy : -1);
     return;
   }
-  if (gz_think(s, m)) return;  // Ground Zero's kinds' own (q2_gz_monsters.cpp)
+  if (gz_base_think(s, m)) return;  // Ground Zero's base kinds' (q2_gz_base_monsters.cpp)
+  if (gz_think(s, m)) return;       // Ground Zero's kinds' own (q2_gz_monsters.cpp)
   if (k.medic && tend(s, m)) return;
   if (m.enemy == -1) notice(s, m);
   if (m.enemy == -1 && m.sound_target) {  // to the noise; within 64 it stands, 5 s on forgets it
@@ -1573,6 +1575,7 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
   react(s, m, attacker);
   if (m.leaping || m.ducked) return true;  // ducked (in the air from a leap too): no pain
   if (gz_pain(s, m, damage)) return true;  // Ground Zero's kinds' own (a turret's none)
+  if (gz_base_pain(s, m)) return true;     // and its base kinds' (none in the air)
   const bool waiting = s.level_time + 0.001 < m.pain_at + kPainEvery;
   if (named(m, "misc_actor") && actor_pain(s, m, attacker, waiting)) return true;
   if (monster_pain_known(pain_class(k))) {  // its pains as data (q2_monster_pain.cpp)
