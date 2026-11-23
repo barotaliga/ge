@@ -403,6 +403,54 @@ void commands_cvars(Q2Server& s) {
                .flags = con::kServer,
                .help = "How many frames a weapon's lowering and raising advance each frame.",
                .values = "1: the classic pace (the default); 2..N: that many times faster"});
+  // A match server's gameplay switches (q2_match.hpp's match; each 0 is the game as it was made).
+  s.cvars.add({.name = "g_fast_weap_switch",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help =
+                   "How fast a weapon switch is: the old weapon lowered and the new one raised, "
+                   "or either skipped.",
+               .min = 0,
+               .max = 2,
+               .values = "0: both animations, as the game was made (the default); 1: no lowering; "
+                         "2: neither, the new weapon ready a tenth of a second after the switch"});
+  s.cvars.add({.name = "g_teleporter_nofreeze",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "Whether a teleporter stops a player dead and holds him a moment, or sends "
+                       "him out of the exit at the speed he came in.",
+               .values = "0: stopped and held 160 ms, as the game was made (the default); 1: his "
+                         "speed along the ground kept, pointed the exit's way"});
+  s.cvars.add({.name = "g_spawn_mode",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "How a deathmatch spawn spot is chosen.",
+               .min = 0,
+               .max = 2,
+               .values = "0: at random, not the spots near a player as the game picks them (the "
+                         "default); 1: at random, never the two nearest a player; 2: at random"});
+  s.cvars.add({.name = "g_removed_weapons",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "The weapons a match server takes off the map, from the next map or "
+                       "restart; an ammunition goes once nothing left fires it.",
+               .values = "a sum: 1 shotgun, 2 super shotgun, 4 machinegun, 8 chaingun, 16 hand "
+                         "grenades, 32 grenade launcher, 64 rocket launcher, 128 hyperblaster, "
+                         "256 railgun, 512 BFG10K (0 none, the default)"});
+  s.cvars.add({.name = "g_removed_powerups",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "The powerups a match server takes off the map, from the next map or "
+                       "restart.",
+               .values = "a sum: 1 quad damage, 2 invulnerability, 4 power screen, 8 power "
+                         "shield, 16 silencer, 32 rebreather, 64 environment suit (0 none, the "
+                         "default)"});
+  s.cvars.add({.name = "g_warmup_loadout",
+               .fallback = "1",
+               .flags = con::kServer,
+               .help = "Whether a match's warmup (sv_lobby) spawns every player armed: every "
+                       "weapon but the BFG10K, full ammunition and body armour.",
+               .values = "0: the usual spawn; 1: armed (the default, only in a lobby's warmup)"});
   s.cvars.add({.name = "aimfix",
                .fallback = "0",
                .flags = con::kServer,

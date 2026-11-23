@@ -473,6 +473,9 @@ struct Q2Server : RulesCommon {
   sh::Solid world_solid;
   std::vector<Q2Entity> entities;
   Q2Player players[sh::kMaxClients];
+  // A bit a slot the server's match keeps on the sidelines (a newcomer to a match closed to him,
+  // q2_spectate.hpp's `spectate_hold`): his wish to play is not taken until it is cleared.
+  uint32_t held_out = 0;
   ge::core::Rng rng = ge::core::make_rng(1);
   int64_t frame_number = 0;  // the tenths of a second the level has run (the 10 Hz world's frames)
   int pain_turn = 0, death_turn = 0;  // the players' pains and deaths, in turn (q2_poses.hpp)

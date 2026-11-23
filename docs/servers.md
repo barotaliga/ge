@@ -481,6 +481,15 @@ which runs on through the pause; the game stops and starts its world as the book
 Edge pauses its rules as the server's own pause, which no player's word undoes). The status line
 says `timeout=out` or `timeout=resuming` while one is on.
 
+**Quake II's match** (`games/shooters_edge/net/q2_match.hpp`) plays the lobby, the timeouts,
+overtime, prewar and the lock as QuakeWorld's server does, on the rules both share
+(`games/shooters_edge/server/match_rules.hpp`). Its players' own words are taken too: `unready`
+and `noready` for `notready`; `time`, `calltime`, `ctime` and `hold` call a timeout and, from the
+caller, end it. Its rules add a tournament's gameplay switches: `g_fast_weap_switch`,
+`g_teleporter_nofreeze`, `g_spawn_mode`, `g_removed_weapons`, `g_removed_powerups` and
+`g_warmup_loadout` (each one's help says what it does). While the rules are paused the server
+keeps sending what is said, so a player's next word is heard.
+
 ## Player aids: help for one chosen player
 
 Some players need help the rest do not: a player with a disability that makes fast hand motion
