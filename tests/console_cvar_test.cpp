@@ -188,6 +188,28 @@ TEST(synonyms_name_a_setting_or_one_word_of_it) {
   CHECK(cv.synonyms().size() == 3);
 }
 
+TEST(a_mapped_synonym_sets_and_reads_its_own_values) {
+  Cvars cv;
+  int32_t draw2d = 2;
+  cv.bind({.name = "scr_draw2d", .fallback = "2", .kind = CvarKind::integer, .min = 0, .max = 3},
+          &draw2d);
+  // A game's spelling whose 1 is our 2: set by its name, the mapped value lands in ours.
+  CHECK(!cv.add_mapped_synonym("r_drawhud", "scr_draw2d", {}));  // no values: refused
+  CHECK(cv.add_mapped_synonym("r_drawhud", "scr_draw2d", {{"0", "0"}, {"1", "2"}}));
+  CHECK(cv.find("r_drawhud") == nullptr);  // not the setting under another name
+  const Synonym* s = cv.synonym("r_drawhud");
+  CHECK(s != nullptr && cv.synonym_value(*s) == "1");  // ours 2 read back as its 1
+  CHECK(cv.set("r_drawhud", "0", Source::local) == SetResult::changed && draw2d == 0);
+  CHECK(cv.synonym_value(*s) == "0");
+  CHECK(cv.set("r_drawhud", "1.0", Source::local) == SetResult::changed && draw2d == 2);
+  CHECK(cv.set("r_drawhud", "3", Source::local) == SetResult::unmapped && draw2d == 2);
+  CHECK(!set_result_text(SetResult::unmapped, "r_drawhud").empty());
+  cv.set("scr_draw2d", "3", Source::local);  // a value of ours it has no word for: ours shown
+  CHECK(cv.synonym_value(*s) == "3");
+  CHECK(Cvars::mapped_words(*s) == "0 (scr_draw2d 0); 1 (scr_draw2d 2)");
+  CHECK(cv.mapped_value(*s, "1") == "2" && cv.mapped_value(*s, "7").empty());
+}
+
 TEST(meta_cvars_imply_restore_and_refuse_a_loop) {
   Cvars cv;
   double fov = 0;

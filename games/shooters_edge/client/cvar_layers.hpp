@@ -72,7 +72,6 @@ struct GameBindings {
   const SearchPath* files = nullptr;
   ge::hud::CrosshairSettings* crosshair = nullptr;  // Quake II's own `crosshair`
   ge::shooter::MouseFeel* mouse = nullptr;          // Quake II's own `m_accel` (per frame)
-  bool* predict = nullptr;       // Quake II's `cl_predict` (a server joined); true in Quake
   int* crouch = nullptr;         // Quake II's `cl_predict_crouch` (the eye's height predicted)
   bool* show_misses = nullptr;   // Quake II's `cl_showmiss` (each prediction miss printed)
   int* shownet = nullptr;        // Quake II's `cl_shownet` (each message's size printed)
@@ -90,7 +89,6 @@ struct GameBindings {
   // light_lift: classic/app/look.hpp); Quake keeps 2 and 0. `gl_modulate` is every game's.
   double* light_intensity = nullptr;
   double* light_lift = nullptr;
-  bool* gibs = nullptr;     // Quake II's `cl_gibs` (the picture's gibs); true in Quake
   bool* no_glow = nullptr;  // Quake II's `cl_noglow` (the picture's no_glow); false in Quake
   // Quake II's effect switches (the picture's q2fx: classic/q2_fx_switches.hpp); off in Quake.
   ge::classic::Q2FxSwitches* q2fx = nullptr;

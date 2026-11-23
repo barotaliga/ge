@@ -98,6 +98,8 @@ std::string set_result_text(SetResult r, std::string_view name) {
       return "'" + n + "' is not a cvar name: use 1-63 of a-z 0-9 _ + - . , no leading digit";
     case SetResult::locked:
       return n + " is locked";
+    case SetResult::unmapped:
+      return n + " takes only the values its help lists (type " + n + " to see them)";
   }
   return {};
 }
@@ -122,7 +124,7 @@ Cvar* Cvars::find(std::string_view name) {
   for (auto& c : all_)
     if (c->name == key) return c->retired ? nullptr : c.get();
   for (const Synonym& s : synonyms_)
-    if (s.part < 0 && s.name == key) return s.target->retired ? nullptr : s.target;
+    if (s.whole() && s.name == key) return s.target->retired ? nullptr : s.target;
   return nullptr;
 }
 
@@ -151,8 +153,43 @@ bool Cvars::add_synonym(std::string_view name, std::string_view target, int part
   if (t == nullptr) return false;
   for (const Synonym& s : synonyms_)
     if (s.name == key) return s.target == t && s.part == part;
-  synonyms_.push_back({key, t, part < 0 ? -1 : part, layer_});
+  synonyms_.push_back({key, t, part < 0 ? -1 : part, layer_, {}});
   return true;
+}
+
+namespace {
+
+// Two values the same: as numbers when both are ("1" and "1.0"), else as lower-case text.
+bool same_value(std::string_view a, std::string_view b) {
+  double x = 0, y = 0;
+  if (parse_number(a, x) && parse_number(b, y)) return x == y;
+  return lower(a) == lower(b);
+}
+
+}  // namespace
+
+bool Cvars::add_mapped_synonym(std::string_view name, std::string_view target,
+                               std::vector<SynonymValue> values) {
+  if (values.empty() || !add_synonym(name, target)) return false;
+  Synonym& s = synonyms_.back();
+  if (s.name != lower(name)) return false;  // named before, unmapped
+  for (SynonymValue& v : values) v.theirs = lower(v.theirs);
+  s.values = std::move(values);
+  return true;
+}
+
+std::string Cvars::mapped_value(const Synonym& s, std::string_view theirs) const {
+  for (const SynonymValue& v : s.values)
+    if (same_value(v.theirs, theirs)) return v.ours;
+  return {};
+}
+
+std::string Cvars::mapped_words(const Synonym& s) {
+  std::string out;
+  for (const SynonymValue& v : s.values)
+    out.append(out.empty() ? "" : "; ")
+        .append(v.theirs + " (" + (s.target != nullptr ? s.target->name : "") + " " + v.ours + ")");
+  return out;
 }
 
 const Synonym* Cvars::synonym(std::string_view name) const {
@@ -180,6 +217,8 @@ std::vector<std::string> words_of(std::string_view v) {
 }  // namespace
 
 std::string Cvars::synonym_value(const Synonym& s) const {
+  for (const SynonymValue& v : s.values)  // mapped: the first of its values naming the target's
+    if (same_value(v.ours, s.target->value)) return v.theirs;
   if (s.part < 0) return s.target->value;
   const std::vector<std::string> w = words_of(s.target->value);
   return static_cast<size_t>(s.part) < w.size() ? w[static_cast<size_t>(s.part)] : std::string();
@@ -324,17 +363,6 @@ void Cvars::store(Cvar& c, std::string_view text) {
     if (const Meta* m = meta(c.name)) apply_meta(*m);
 }
 
-namespace {
-
-// Two values the same: as numbers when both are ("1" and "1.0"), else as lower-case text.
-bool same_value(std::string_view a, std::string_view b) {
-  double x = 0, y = 0;
-  if (parse_number(a, x) && parse_number(b, y)) return x == y;
-  return lower(a) == lower(b);
-}
-
-}  // namespace
-
 bool Cvars::lock(std::string_view name, CvarLock lock) {
   Cvar* c = find(name);
   if (c == nullptr) return false;
@@ -379,7 +407,7 @@ SetResult Cvars::set(std::string_view name, std::string_view value, Source sourc
   Cvar* c = find(name);
   if (c != nullptr && config_ && source != Source::code) {
     // A config: a game's spelling is that game's value; our name under it the common one.
-    if (const Synonym* syn = synonym(name); syn != nullptr && syn->part < 0)
+    if (const Synonym* syn = synonym(name); syn != nullptr && syn->whole())
       return set_scoped(scope_, c->name, value, source);
     if (!scope_.empty() && c->scoped.count(scope_) != 0) {
       c->common = std::string(value);
@@ -388,6 +416,10 @@ SetResult Cvars::set(std::string_view name, std::string_view value, Source sourc
     }
   }
   if (c == nullptr) {
+    if (const Synonym* s = synonym(name); s != nullptr && !s->values.empty()) {
+      const std::string ours = mapped_value(*s, value);  // a mapped synonym: its value as ours
+      return ours.empty() ? SetResult::unmapped : set(*s->target, ours, source);
+    }
     if (const Synonym* s = synonym(name)) {  // a part synonym: its word of the target replaced
       std::vector<std::string> w = words_of(s->target->value);
       if (w.size() <= static_cast<size_t>(s->part)) w.resize(static_cast<size_t>(s->part) + 1, "0");

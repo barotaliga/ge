@@ -446,8 +446,7 @@ void add_first(con::Console& c, const GameBindings& b) {
     b.crosshair->shade[0] = b.crosshair->shade[1] = b.crosshair->shade[2] = 1;
     b.crosshair->by_health = false;
   }
-  if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
-  if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
+  if (b.mouse != nullptr) b.mouse->per_frame = false;    // m_accel: counts a millisecond
   if (b.show_misses != nullptr) *b.show_misses = false;  // Quake II's cl_showmiss
   if (b.shownet != nullptr) *b.shownet = 0;              // and cl_shownet
   if (b.showpackets != nullptr) *b.showpackets = false;  // and cl_showpackets
@@ -464,7 +463,6 @@ void add_first(con::Console& c, const GameBindings& b) {
   }
   if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
   if (b.light_lift != nullptr) *b.light_lift = 0;
-  if (b.gibs != nullptr) *b.gibs = true;
   if (b.no_glow != nullptr) *b.no_glow = false;
   if (b.q2fx != nullptr) *b.q2fx = {};  // Quake II's effect switches set aside
   if (b.music != nullptr) {             // its ogg_enable, ogg_shuffle and ogg_menu_track set aside
@@ -700,14 +698,9 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .values = "1: muffled (the default); 0: as in the air",
          .overlap = con::Overlap::same});
   if (b.screen != nullptr) add_q2_screen_cvars(v, *b.screen);
-  if (b.gibs != nullptr)  // our cl_gibfilter, the other way round
-    v.bind({.name = "cl_gibs",
-            .fallback = "1",
-            .flags = con::kArchive,
-            .help = "Whether the pieces a body bursts into are drawn.",
-            .kind = con::CvarKind::boolean,
-            .values = "1: they fly and lie about (the default); 0: none is drawn"},
-           b.gibs);
+  // Its cl_gibs, our cl_gibfilter the other way round: its 1 (drawn) is our 0.
+  if (v.find("cl_gibfilter") != nullptr)
+    v.add_mapped_synonym("cl_gibs", "cl_gibfilter", {{"1", "0"}, {"0", "1"}});
   if (b.no_glow != nullptr)  // over r_itempulse
     v.bind({.name = "cl_noglow",
             .fallback = "0",
@@ -876,15 +869,9 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .values = "50: fifty (the default); a number: that many"},
            &b.console_view->list_threshold);
   }
-  // Its own spelling of our `cl_nopred` the other way round: 0 draws the server's place.
-  if (b.predict != nullptr)
-    v.bind({.name = "cl_predict",
-            .fallback = "1",
-            .help = "Whether your own moves are predicted on a server joined.",
-            .kind = con::CvarKind::boolean,
-            .values = "1: predicted, drawn where you will be (the default); 0: drawn where the "
-                      "server last put you, a round trip late"},
-           b.predict);
+  // Its cl_predict, our `cl_nopred` the other way round: its 0 (the server's place) is our 1.
+  if (v.find("cl_nopred") != nullptr)
+    v.add_mapped_synonym("cl_predict", "cl_nopred", {{"1", "0"}, {"0", "1"}});
   if (b.show_misses != nullptr)
     v.bind({.name = "cl_showmiss",
             .fallback = "0",

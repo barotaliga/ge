@@ -33,8 +33,12 @@
 // such as a classic mod's `maxclients` for the server's `sv_maxclients`. A WHOLE synonym is the
 // cvar under a second name: `find` answers the target, so a cfg line, the console and a program's
 // reads and writes all reach it. A PART synonym is one word of a target that holds several ("N S
-// T"): `set` by its name replaces that word and `synonym_value` reads it. Synonyms are not listed
-// by `sorted`, so a saved cfg writes each setting once, under its own name.
+// T"): `set` by its name replaces that word and `synonym_value` reads it. A MAPPED synonym
+// (`add_mapped_synonym`) is a game's spelling whose values differ from ours: each of its values
+// names one of the target's (QuakeWorld's `r_drawhud 1` is `scr_draw2d 2`); `set` by its name
+// writes the mapped value, refusing one the map lacks (`SetResult::unmapped`), and `synonym_value`
+// maps the target's value back. Like a part synonym, `find` does not answer it. Synonyms are not
+// listed by `sorted`, so a saved cfg writes each setting once, under its own name.
 //
 // META-CVARS (`add_meta`, docs/servers.md § Meta-cvars): a cvar whose value names a LEVEL that
 // sets a group of others, declared as data beside the feature that owns it (`sv_modern 1`: the
@@ -52,6 +56,7 @@
 // ge:keywords cvar cvars console-variable setting settings config cfg flag archive server-info
 // ge:keywords user-info cheat latch read-only bind tier sv_ cl_ r_ info-string apply_info
 // ge:keywords revision clamp sv_cheats set_watch watch synonym add_synonym other-name setting-alias
+// ge:keywords add_mapped_synonym mapped-synonym value-map
 // ge:keywords meta-cvar meta add_meta level implied explicit restore include cycle meta_members
 // ge:keywords cvar-layer layer drop_layer overlap clash same-name one-name-one-meaning own same
 // ge:keywords game-scope per-game-cvar shadow set-aside retired
@@ -196,11 +201,20 @@ struct Cvar {
 };
 
 // Another name for a cvar (SYNONYMS above).
+// One of a mapped synonym's values and the target's value it stands for.
+struct SynonymValue {
+  std::string theirs;  // the synonym's value, as its game writes it
+  std::string ours;    // the target's value it sets
+};
+
 struct Synonym {
   std::string name;  // lower case
   Cvar* target = nullptr;
   int part = -1;      // -1: the whole value; else the index of the word it names
   std::string layer;  // the layer that named it: `drop_layer` takes it away (LAYERS above)
+  std::vector<SynonymValue> values;  // a mapped synonym's values (SYNONYMS above); empty: none
+  // The target under another name, its values its own: what `find` answers.
+  bool whole() const { return part < 0 && values.empty(); }
 };
 
 // One member of a meta-cvar's level: a cvar and the value the level gives it, or another meta's
@@ -243,6 +257,7 @@ enum class SetResult : uint8_t {
   refused,    // the server may not set a player's own cvar
   bad_name,   // a name with a character outside [a-z0-9_+.-]
   locked,     // held by a lock, or kept inside its range (LOCKS above): its `why` says by whom
+  unmapped,   // a mapped synonym's value its map lacks (SYNONYMS above)
 };
 
 // One line saying why `r` refused `name`, with the next action; empty for changed, same and
@@ -320,6 +335,14 @@ class Cvars {
   // False when `name` is not a valid name or is a cvar of its own, when `target` is unknown, or
   // when `name` already names something else; true again for the same synonym.
   bool add_synonym(std::string_view name, std::string_view target, int part = -1);
+  // A game's spelling whose values differ from the target's: each of `values` one of its values
+  // and the target's it sets (SYNONYMS above). False as add_synonym, or for no values.
+  bool add_mapped_synonym(std::string_view name, std::string_view target,
+                          std::vector<SynonymValue> values);
+  // A mapped synonym's value as the target's ("" when its map lacks it).
+  std::string mapped_value(const Synonym& s, std::string_view theirs) const;
+  // The words a mapped synonym's help shows: "1 (scr_draw2d 2); 0 (scr_draw2d 0)".
+  static std::string mapped_words(const Synonym& s);
   // The synonym `name` (whole or part), or null.
   const Synonym* synonym(std::string_view name) const;
   // A synonym's value: the target's, or its word `part` ("" past its last word).

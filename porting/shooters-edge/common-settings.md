@@ -30,10 +30,10 @@ neither client takes.
 | Status | Settings | Commands | All |
 | --- | --- | --- | --- |
 | one setting | 84 | 53 | 137 |
-| lifted | 12 | 1 | 13 |
+| lifted | 14 | 1 | 15 |
 | to lift | 6 | 0 | 6 |
 | sound thread | 2 | 1 | 3 |
-| kept apart | 23 | 0 | 23 |
+| kept apart | 21 | 0 | 21 |
 | neither has it | 8 | 0 | 8 |
 | **common to Quake and Quake II** | **135** | **55** | **190** |
 
@@ -69,6 +69,13 @@ names).
   90 a same row, Quake's the view's) and `cl_gunalpha` moved out of their games' layers; `cl_bobhead`
   is the engine's. Held by `tests/shooters_edge_cvar_layers_test.cpp`
   (`the_competitive_settings_are_every_classic_games`).
+- **B8 (done, Niclas 2026-11-23): settings that differ only in their values.** A game's spelling
+  is a MAPPED synonym (`Cvars::add_mapped_synonym`): each of its values names one of ours, setting it
+  writes ours and prints both (`cl_predict 0 (cl_nopred: 1)`), asking it reads ours back in its
+  words. Quake II's `cl_predict` on `cl_nopred` and `cl_gibs` on `cl_gibfilter`, each the other way
+  round. Every kept-apart row was checked again: the rest differ in meaning or mechanism, are
+  other clients' visuals, or need a value map by scale (`fixedtime` in milliseconds against
+  `host_framerate` in seconds).
 - **B6 dropped (Niclas, 2026-11-23):** the outlines and square specks are other clients' visuals,
   which are never ported: visuals come from classic enhance. Both rows are kept apart.
 
@@ -228,7 +235,7 @@ names).
 | setting | `cl_c2spps` |  | `cl_c2spps` | `cl_maxpackets` | shell | lifted B3 | move packets a second, 0 one a move: Quake II's cl_maxpackets a synonym of our cl_c2spps, its 30 a same row with room to 1000 |
 | setting | `cl_packetdup` |  | `cl_c2sdupe` | `cl_packetdup` | shell | kept apart | each move sent again: Quake II's cl_packetdup (earlier packets' moves in the next one, 0..3) and QuakeWorld's cl_c2sdupe (the same packet twice) are two mechanisms |
 | setting | `cl_shownet` | `cl_shownet` | `cl_shownet` | `cl_shownet` | classic | kept apart | a debug print, the tail Niclas chose not to build (2026-11-23): Quake II's stays its own, Quake's not taken |
-| setting | `gender` |  | `gender` | `gender` | classic | kept apart | user info each game's servers read in their own words (Quake II male, female, none; QuakeWorld's mods m, f, n or empty): another value set |
+| setting | `gender` |  | `gender` | `gender` | classic | kept apart | nothing to share (Niclas, 2026-11-23): Quake's figure is one man, and Quake II's gender follows its model; QuakeWorld mods' info word is not a setting of the game |
 | setting | `gl_outline` |  | `gl_outline` | `gl_celshading` | classic | kept apart | outlines: Quake II's gl_celshading a width, QuakeWorld 0..3 models and world; another client's visual, not lifted: visuals come from classic enhance |
 | setting | `gl_partshape` |  | `gl_squareparticles` | `gl_partshape` | classic | kept apart | square specks: Quake II 0..2 a shape, QuakeWorld's 0/1 its 1; another client's visual, not lifted: visuals come from classic enhance |
 | setting | `r_graphheight` | `r_graphheight` | `r_graphheight` | `graphheight` | classic | to lift B4 | Quake II's graphheight alone in ours; Quake's r_graphheight its spelling |
@@ -243,16 +250,16 @@ names).
 | setting | `s_khz` |  | `s_khz` | `s_khz` |  | sound thread | the mixing rate (the OpenAL thread) |
 | setting | `s_show` |  | `s_show` | `s_show` |  | sound thread | sounds playing printed (the OpenAL thread) |
 | setting | `cl_bobup` | `cl_bobup` | `cl_bobup` | `bob_up` |  | apart | Quake II the bob's height (server rule), Quake the share of a cycle spent rising |
-| setting | `cl_gibfilter` |  | `cl_gibfilter` | `cl_gibs` |  | apart | gibs drawn |
+| setting | `cl_gibfilter` |  | `cl_gibfilter` | `cl_gibs` | classic | lifted B8 | gibs hidden: Quake II's cl_gibs a mapped synonym the other way round (its 1 our 0) |
 | setting | `cl_maxfps` |  | `cl_maxfps` | `cl_maxfps` | engine | apart | ours the frame cap; Quake II's its moves a second (own), its r_maxfps the cap |
-| setting | `cl_nopred` |  | `cl_nopred` | `cl_predict` | shell | apart | your own move predicted |
+| setting | `cl_nopred` |  | `cl_nopred` | `cl_predict` | shell | lifted B8 | your own move predicted: Quake II's cl_predict a mapped synonym the other way round (its 1 our 0) |
 | setting | `cl_rollangle` | `cl_rollangle` | `cl_rollangle` | `sv_rollangle` |  | apart | the roll's angle (Quake II the server's rule, Quake the client's view) |
 | setting | `cl_rollspeed` | `cl_rollspeed` | `cl_rollspeed` | `sv_rollspeed` |  | apart | the side speed of a full roll (Quake II the server's rule, Quake the client's view) |
 | setting | `con_timestamps` |  | `con_timestamps` | `con_timestamps` | shell | apart | the classic layer stamps chat lines; Quake II's stamps every line (own) |
 | setting | `crosshair` | `crosshair` | `crosshair` | `crosshair` | engine | apart | Quake 0..2 the engine's marks; Quake II 0..3 its own pictures (Quake II's layer, own) |
 | setting | `crosshaircolor` |  | `crosshaircolor` | `ch_blue`, `ch_green`, `ch_red` | engine | apart | the crosshair's colour |
 | setting | `gl_externaltextures_bmodels` |  | `gl_externaltextures_bmodels`, `gl_externaltextures_world` | `r_override_textures` |  | apart | replacement textures loaded |
-| setting | `host_framerate` | `host_framerate` |  | `fixedtime` | shell | apart | a fixed frame time (Quake II milliseconds, Quake seconds) |
+| setting | `host_framerate` | `host_framerate` |  | `fixedtime` | shell | apart | a fixed frame time (Quake II milliseconds, Quake seconds): the same thing in another unit; a value map by scale (not yet in the engine) would lift it |
 | setting | `qtv_password` |  | `qtv_password` | `sv_mvd_password` |  | apart | the password a relay viewer gives |
 | setting | `r_bloom` |  | `r_bloom` | `gl_bloom` | classic | apart | Quake II's gl_bloom a switch, ours a strength 0..1 of the modern look |
 | setting | `r_drawviewmodel` | `r_drawviewmodel` | `r_drawviewmodel` | `cl_gunalpha` | shell | apart | the held gun's opacity (QuakeWorld's r_drawviewmodel is an opacity; Quake's a switch) |

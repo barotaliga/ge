@@ -39,7 +39,12 @@ A setting other software already knows by another name (a classic game's `maxcli
 synonym reach the target. `add_synonym(name, target, part)` names one word of a setting that
 holds several, space-separated (`flood_persecond` for the second word of `sv_floodprot`'s
 `"N S T"`): setting it replaces that word and sets the whole, and querying it shows the word and
-the setting it is part of. A synonym is refused when its name is a cvar of its own, the target
+the setting it is part of. `add_mapped_synonym(name, target, values)` names a setting whose values a
+game writes its own way: each of the game's values stands for one of ours (Quake II's `cl_predict`
+1 is our `cl_nopred` 0). Setting it writes the mapped value and prints both, `cl_predict 0
+(cl_nopred: 1)`, so the player sees the setting it reached; querying it reads ours back in the
+game's words and lists the map; a value the map lacks is refused with the values it takes. A
+config's line sets it silently. the setting it is part of. A synonym is refused when its name is a cvar of its own, the target
 does not exist, or the name already stands for another setting. A server game lists its names
 in `ServerGame::names` (`docs/servers.md`).
 

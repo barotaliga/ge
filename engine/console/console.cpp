@@ -265,6 +265,23 @@ void Console::dispatch(Entry& e) {
       const std::string why = set_result_text(r, *c);
       if (!why.empty()) error(why, "");
     }
+  } else if (const Synonym* mapped = cvars_.synonym(name);
+             mapped != nullptr && !mapped->values.empty()) {
+    // A game's spelling with values of its own: what it sets in ours said beside it, typed or
+    // asked, so the player sees the setting it reaches ("r_drawhud 1 (scr_draw2d: 2)").
+    if (args.size() == 1) {
+      print("\"" + mapped->name + "\" is \"" + cvars_.synonym_value(*mapped) + "\" (" +
+            mapped->target->name + ": " + mapped->target->value + "); it takes " +
+            Cvars::mapped_words(*mapped));
+    } else {
+      const SetResult r = cvars_.set(name, args[1], e.source);
+      const std::string why = set_result_text(r, mapped->name);
+      if (!why.empty())
+        error(why, "its values: " + Cvars::mapped_words(*mapped));
+      else if (e.where.file.empty())
+        print(mapped->name + " " + args[1] + " (" + mapped->target->name + ": " +
+              cvars_.mapped_value(*mapped, args[1]) + ")");
+    }
   } else if (const Synonym* syn = cvars_.synonym(name)) {  // a part of another setting
     if (args.size() == 1) {
       print("\"" + syn->name + "\" is \"" + cvars_.synonym_value(*syn) + "\" (part of " +

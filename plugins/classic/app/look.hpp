@@ -157,10 +157,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   bool draw_entities = true;
   // cl_gibfilter: the pieces a body bursts into (each model flagged to bleed as it flies) not
   // drawn; cl_deadbodyfilter: a player's body not drawn once it lies still on the last frame of a
-  // death. The game decides which models those are; the switches are here. Either look.
+  // death (Quake II's cl_gibs 0 is cl_gibfilter 1). The game decides which models those are; the
+  // switches are here. Either look.
   bool gib_filter = false, dead_body_filter = false;
-  // cl_gibs (Quake II's own, the other way round): 0 no piece drawn either. Either look.
-  bool gibs = true;
   // cl_noglow (Quake II's own, over r_itempulse): 1 the items' light never pulses. Either look.
   bool no_glow = false;
   // Quake II's own effect switches (classic/q2_fx_switches.hpp). Either look.
