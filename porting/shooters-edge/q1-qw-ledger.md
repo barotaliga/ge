@@ -15,11 +15,11 @@ and a row found later is added here first. Progress is reported as the missing c
 
 | Section | Rows | Done | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- |
-| Client | 508 | 333 | 12 (0 / 0 / 12) | 163 |
-| Server | 316 | 279 | 2 (0 / 0 / 2) | 35 |
-| Game | 245 | 226 | 1 (0 / 0 / 1) | 18 |
+| Client | 508 | 338 | 7 (0 / 0 / 7) | 163 |
+| Server | 316 | 281 | 0 (0 / 0 / 0) | 35 |
+| Game | 246 | 228 | 0 (0 / 0 / 0) | 18 |
 | Tools | 1 | 1 | 0 (0 / 0 / 0) | 0 |
-| **All** | **1070** | **839** | **15 (0 / 0 / 15)** | **216** |
+| **All** | **1071** | **848** | **7 (0 / 0 / 7)** | **216** |
 
 (Built 2026-11-21 against main at #1237 with 217 missing (9 / 49 / 159); the first fill, Quake's
 deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.
@@ -31,7 +31,10 @@ II's console fill (sizeup, sizedown, play, playvol, stopsound, built once for ev
 the fifth, the QuakeWorld server's star keys and checks and the client's path, rerecord, fullinfo,
 chase_right and old config names, to 25; the sixth, sv_mapcheck, god and give by id, the
 server's terminal, the frag log and its `log` query, the look keys, the turtle and net icons
-and the download bar, to 15.)
+and the download bar, to 15; the seventh, zombietime, the match settings in the server info,
+the setup page's hostname and figure, the old ammunition box (and one row found filling it: the
+big boxes' models), localid, and a recorded demo's coloured bursts, explosion2 and grappling beam,
+to 6, and `cl_sbar` found only partly done makes 7.)
 
 ## CLIENT: the Quake and QuakeWorld clients, item by item
 
@@ -400,14 +403,14 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C345 | `rcon_password` (qw, empty) | the password rcon sends | done | games/shooters_edge/net/qw_remote.cpp |  |
 | C346 | `rcon_address` (qw, empty) | where rcon goes when not joined | done | games/shooters_edge/net/qw_remote.cpp |  |
 | C347 | `cl_timeout` (qw, 60) | drop the server after this silence | done | games/shooters_edge/net/qw_remote.cpp |  |
-| C348 | `cl_sbar` (qw, 0) | the old opaque status bar instead of the overlay | done | hud_sbar in the same meaning (games/shooters_edge/hud) |  |
+| C348 | `cl_sbar` (qw, 0) | the old opaque status bar instead of the overlay | partial | hud_sbar 0 drops the panels but leaves the pieces where the bar has them; QuakeWorld's overlay stands the owned weapons in a column and the four ammunition counts in a column above the bar at the screen's right edge (q1-qw-console-facts.md § 23), which C349 needs too; found while filling | 3 |
 | C349 | `cl_hudswap` (qw, 0) | the status bar's side panels on the left | missing | none | 3 |
 | C350 | `cl_maxfps` (qw, 0) | the frame cap (and the moves a second) | done | engine/platform/pacing.cpp; the moves are cl_physfps (client-gaps.md) |  |
 | C351 | `entlatency` (qw, 20) | assumed entity lag | not-taken | our interpolation has its own rule (net/qw_remote.cpp) |  |
 | C352 | `cl_predict_players` (qw, 1) | predict the other players' moves | done | games/shooters_edge/net/qw_remote.cpp |  |
 | C353 | `cl_predict_players2` (qw, 1) | a second variant of the other players' prediction | not-taken | one rule, cl_predict_players |  |
 | C354 | `cl_solid_players` (qw, 1) | other players block your predicted move | done | games/shooters_edge/net/qw_remote.cpp |  |
-| C355 | `localid` (qw, empty) | an id a local server matches to trust the client | missing | none | 3 |
+| C355 | `localid` (qw, empty) | an id a local server matches to trust the client | done | a command packet ('B') from this machine runs only with the id `localid` holds once the first accept came; a wrong id clears it; one from elsewhere is ignored; the lines as the game's (net/qw_client.cpp, net/qw_remote.cpp; tests/shooters_edge_qw_admin_test.cpp) | 3 |
 | C356 | `password` (qw, empty) | the server password sent in the user info | done | client/settings.cpp (`password`, user info, the classic layer), net/qw_remote.cpp (sent at the join and again when changed) |  |
 | C357 | `spectator` (qw, empty) | join as a spectator (or the spectator password) | done | games/shooters_edge/net/qw_remote.cpp (1 only; a spectator password is not sent) |  |
 | C358 | `name` (qw, unnamed) | your name (user info) | done | engine/console/view.cpp, net/qw_client.cpp |  |
@@ -447,8 +450,8 @@ SINGLE PLAYER and MULTIPLAYER pages are only notices that it plays on the Intern
 | C384 | Multiplayer: JOIN A GAME (q1) | the transport page, then the LAN or serial page, then the found games | done | menu/servers_page.cpp (LAN, masters and named servers) |  |
 | C385 | Multiplayer: NEW GAME (q1) | host a game | done | menu/main_menu.cpp host page |  |
 | C386 | Multiplayer: SETUP (q1) | Hostname, Your name, Shirt color, Pants color with the player picture, Accept Changes | done | menu/main_menu.cpp setup page (name, colours; applied at once) |  |
-| C387 | Setup: Hostname row (q1) | the server name typed in setup | missing | no hostname row on the setup page | 3 |
-| C388 | Setup: the coloured player picture (q1) | the figure in the chosen shirt and pants beside the rows | missing | not drawn: the setup page has no figure in the chosen colours | 3 |
+| C387 | Setup: Hostname row (q1) | the server name typed in setup | done | the setup page's first row shows sv_hostname (Quake's `hostname`, a synonym) beside it and opens the console (menu/main_menu.cpp; tests/shooters_edge_menu_test.cpp) | 3 |
+| C388 | Setup: the coloured player picture (q1) | the figure in the chosen shirt and pants beside the rows | done | the figure (`gfx/menuplyr.lmp`) in its box (`gfx/bigbox.lmp`) under the rows, its shirt and pants ranges in the rows' colours as they change (menu/classic_art.cpp `player_in`, menu/classic_view.cpp; tests/shooters_edge_menu_test.cpp) | 3 |
 | C389 | Net page: serial, modem, IPX, TCP/IP (q1) | choose a transport | not-taken | platform: one transport (UDP) |  |
 | C390 | Serial and modem config pages (q1) | port, IRQ, baud, dial | not-taken | platform: DOS serial and modem |  |
 | C391 | LAN config page (q1) | the port, search for local games, join a game at an address | done | menu/servers_page.cpp, connect |  |
@@ -492,7 +495,7 @@ and the campaign on our own host hands the client the same events without the wi
 | C420 | clientdata (15) (q1) | your view height, ideal pitch, punch, velocity, items, ground and water bits, weapon frame and model, armour, health, ammo counts, active weapon | done | demo_convert_single.cpp |  |
 | C421 | stopsound (16) (both) | stop an entity's channel | done | net/qw_svc.cpp |  |
 | C422 | updatecolors (17) (q1) | a player's shirt and pants | done | demo_convert_single.cpp |  |
-| C423 | particle (18) (q1) | a burst of particles of a colour with a direction | missing | the campaign draws the program's particles; a recorded .dem keeps only the blood colours and drops the rest | 3 |
+| C423 | particle (18) (q1) | a burst of particles of a colour with a direction | done | a recorded .dem keeps every colour: blood's two as before, any other a burst of the colour's row of 8 along its way, a count of 255 an explosion; the campaign's program asks the same (client/demo_single.cpp, app/effects.cpp `burst`, server/bi_message.cpp; tests/shooters_edge_demo_test.cpp, tests/shooters_edge_effects_test.cpp) | 3 |
 | C424 | damage (19) (both) | armour and blood taken and where from (the hurt tint and kick) | done | net/qw_svc.cpp, demo_convert_single.cpp |  |
 | C425 | spawnstatic (20) (both) | a fixed model with no number | done | net/qw_svc.cpp |  |
 | C426 | spawnbaseline (22) (both) | an entity's first state | done | net/qw_svc.cpp |  |
@@ -538,8 +541,8 @@ and the campaign on our own host hands the client the same events without the wi
 | C461 | wizspike, knightspike (7, 8) (both) | the scrag's and the death knight's hits | done | client/world_draw.cpp |  |
 | C462 | lavasplash (10) (both) | Chthon's lava splash | done | client/world_draw.cpp |  |
 | C463 | teleport (11) (both) | the teleport sparkle | done | client/world_draw.cpp |  |
-| C464 | explosion2 (12) (q1) | a blast in a range of palette colours (mission packs) | missing | drawn as a plain explosion; the colours are lost | 3 |
-| C465 | beam (13) (q1) | a grappling beam between two points | missing | dropped from a recorded .dem; not drawn | 3 |
+| C464 | explosion2 (12) (q1) | a blast in a range of palette colours (mission packs) | done | 512 specks taking the colour run in turn for 0.3 s and the blast's light, no sprite; in a .dem and the campaign (app/effects.cpp `explosion2`, client/world_fx.cpp; tests as C423) | 3 |
+| C465 | beam (13) (q1) | a grappling beam between two points | done | read in a .dem and the campaign and drawn as a bolt of the game's own `progs/beam.mdl` when its model list has it (a mission pack's), else the lightning's (client/world_fx.cpp) | 3 |
 | C466 | implosion, railtrail (14, 15) (q1) | effects behind a build switch the stock release leaves off | not-taken | not in the stock build |  |
 | C467 | blood (12) (qw) | blood with a count | done | net/qw_client.cpp |  |
 | C468 | lightningblood (13) (qw) | blood where the bolt hits | done | net/qw_client.cpp |  |
@@ -589,7 +592,7 @@ and the campaign on our own host hands the client the same events without the wi
 | C507 | Demos: .qwd recorded and played (qw) | a client recording of a QuakeWorld game | done | net/qw_match_record.hpp, client/demo_playback.cpp |  |
 | C508 | Screenshot files (both) | quakeNN.pcx (GL: .tga) in the game folder | done | engine/capture/screenshot.cpp (our own format and folder) |  |
 
-Count: 508 rows, 333 done, 12 missing (rank 3 12), 163 not-taken.
+Count: 508 rows, 338 done, 7 missing (rank 3 7), 163 not-taken.
 
 ## SERVER: the Quake and QuakeWorld servers, row by row
 
@@ -693,7 +696,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S67 | `sv_maxtic` (qw, 0.1) | the longest physics frame | done | `plugins/shooter/settings.cpp` | |
 | S68 | `developer` (both, 0) | extra console messages; q1's `dprint` only shows with it | done | server/qc_server.cpp developer: a Quake single-player program's dprint only with it on; a multiplayer program's always | 3 |
 | S69 | `timeout` (qw, 65) | seconds without a packet before a client is dropped, everyone told "<name> timed out" | done | `sv_timeout` (synonym), `net/qw_server.cpp` | |
-| S70 | `zombietime` (qw, 2) | seconds a dropped slot stays taken so the last reliable message is resent | missing | a dropped slot is freed at once; the disconnect is sent twice instead (`net/qw_server.cpp`) | 3 |
+| S70 | `zombietime` (qw, 2) | seconds a dropped slot stays taken so the last reliable message is resent | done | a dropped slot is freed at once, as ours always was, but its address keeps a goodbye list for `zombietime` seconds (default 2; 0 none): packets from it are answered with the disconnect over its own channel, and `status` lists it as ZOMBIE; a timed-out drop keeps none (`net/qw_server.cpp`, `net/qw_admin.cpp`; tests/shooters_edge_qw_admin_test.cpp) | 3 |
 | S71 | `rcon_password` (qw) | the remote console's password; empty: no rcon | done | `engine/server/server.cpp`, `net/qw_admin.cpp` | |
 | S72 | `password` (qw) | the players' join password ("none" or empty: none) | done | `sv_password` (synonym), `net/qw_server.cpp` | |
 | S73 | `spectator_password` (qw) | the spectators' join password | done | `sv_spectatorpassword` (synonym) | |
@@ -855,7 +858,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S199 | `*cheats` (server info) | "ON" when started with cheats | done | net/qw_server.cpp: ON with the game rule cheats 1 | 3 |
 | S200 | `map` (server info) | the map's name | done | `net/qw_server.cpp` | |
 | S201 | `needpass` (server info) | 1 a player password, 2 a spectator password, 3 both ("Updated needpass.") | done | `net/qw_server.cpp` | |
-| S202 | server settings in the server info (`hostname`, `maxclients`, `maxspectators`, `fraglimit`, `timelimit`, `teamplay`, `deathmatch`, `samelevel`, `spawn`, `watervis`) | each copied into the server info when set | missing | the rules keys appear only when not zero (net/qw_server.cpp); copying them from the start moves every server info and the recordings that carry it, kept for its own PR | 3 |
+| S202 | server settings in the server info (`hostname`, `maxclients`, `maxspectators`, `fraglimit`, `timelimit`, `teamplay`, `deathmatch`, `samelevel`, `spawn`, `watervis`) | each copied into the server info when set | done | maxspectators, teamplay, fraglimit, timelimit, samelevel and watervis copied into the server info from the start, zero or not (net/qw_server.cpp; goldens shooters_edge_qw_server, shooters_edge_team moved by these keys alone) | 3 |
 | S203 | `name` (user info) | trimmed of spaces and line ends; empty or "console" becomes "unnamed"; a taken name gets "(N)" in front; more than four changes inside 5 s kicks ("<name> was kicked for name spam", "You were kicked from the game for name spamming"); a change in play is announced "<old> changed name to <new>" | done | `net/qw_server.cpp`, `qw_signon.cpp`, `engine/server/names.hpp` (`sv_namelimit` refuses the change instead of kicking) | |
 | S204 | `rate` (user info) | the rate, held to 500..10000 | done | `net/qw_signon.cpp` (`sv_minrate`, `sv_maxrate`) | |
 | S205 | `msg` (user info) | the lowest print level sent to the player | done | `net/qw_signon.cpp` | |
@@ -990,7 +993,7 @@ program's form.
 | S315 | the address filter's check (qw) | every packet from a filtered address is refused before anything else | done | `engine/server/admin.cpp` | |
 | S316 | the server's statistics (qw) | CPU use, response time and packets a frame, measured over a run of frames, shown by `status` | done | `engine/server/admin.cpp` (our own counters) | |
 
-Rows: 316 (some rows hold a group of names). Done: 279. Missing: 2 (rank 1: 0, rank 2: 0, rank 3: 2). Not-taken: 35.
+Rows: 316 (some rows hold a group of names). Done: 281. Missing: 0 (rank 1: 0, rank 2: 0, rank 3: 0). Not-taken: 35.
 
 ## GAME: the QuakeWorld game program and Quake's monsters, row by row
 
@@ -1123,7 +1126,7 @@ All at medium level. V the victim, K the killer.
 | G91 | Weapon pickup lines | "You got the Double-barrelled Shotgun" / "nailgun" / "Super Nailgun" / "Grenade Launcher" / "Rocket Launcher" / "Thunderbolt" | done | profiles/items.hpp | - |
 | G92 | Weapon respawn | 30 s in deathmatch 0 and 1 | done | rules/common_items.cpp | - |
 | G93 | Weapon stay | deathmatch 2, 3 and 5: a weapon stays; one already owned cannot be touched | done | rules/arena_glue.cpp (weapon_may_take, weapon_stays) | - |
-| G94 | `item_weapon` | an old ammo box picked by spawnflags | missing | no such class in the arena; no stock DM map is known to carry it | 3 |
+| G94 | `item_weapon` | an old ammo box picked by spawnflags | done | spawnflags 1 shells, 4 nails, 2 rockets (the last set wins), 8 big; lies in deathmatch 4 too; with no kind gives nothing and says 'You got the ' (rules/common_items.cpp; tests/shooters_edge_arena_quake_test.cpp) | 3 |
 | G95 | Powerup durations | all four 30 s | done | rules/common_items.cpp | - |
 | G96 | Quad and biosuit respawn | 60 s | done | rules/common_items.cpp | - |
 | G97 | Pentagram and Ring respawn | 300 s | done | rules/common_quake.cpp (quake_item_respawn) | - |
@@ -1304,10 +1307,11 @@ se-coop-sweep lab plays every map with no program fault.
 | G243 | `monster_enforcer` | the enforcer | done | as G230 | - |
 | G244 | `monster_boss` | Chthon | done | as G230 | - |
 | G245 | `monster_oldone` | Shub-Niggurath | done | as G230 | - |
+| G246 | The big ammunition boxes' models (spawnflags 1) | a big box lies as `maps/b_shell1.bsp`, `b_nail1`, `b_rock1`, `b_batt1` | done | found while filling G94: the big boxes lay as the small model; rules/common_items.cpp `ammo_start`; tests/shooters_edge_arena_quake_test.cpp | - |
 
 ### Count
 
-Rows 245: done 226, missing 1 (rank 3), not-taken 18.
+Rows 246: done 228, missing 0, not-taken 18.
 
 ## TOOLS: what building the stock sources with ours shows
 

@@ -122,6 +122,32 @@ void explosion(const double p[3], uint32_t seed, Palette pal, Particles* out) {
   }
 }
 
+void explosion2(const double p[3], int start, int length, uint32_t seed, Palette pal,
+                Particles* out) {
+  if (length <= 0) return;
+  Rng r = ge::core::make_rng(seed);
+  for (int i = 0; i < 512; ++i) {
+    double q[3];
+    jitter(r, p, 16, q);
+    Particle s = speck(q, pal, (start + i % length) & 255, 0, 0, 0.3);
+    for (int k = 0; k < 3; ++k) s.v[k] = float(rnd(r, -256, 256) * kUnit);
+    s.drag = -4.0f;
+    out->push_back(s);
+  }
+}
+
+void burst(const double p[3], int specks, int colour, const double way[3], uint32_t seed,
+           Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int i = 0; i < specks; ++i) {
+    double q[3];
+    jitter(r, p, 8, q);
+    Particle s = speck(q, pal, (colour & ~7) + pick(r, 8), 0, 0, 0.1 * pick(r, 5) + 0.02);
+    for (int k = 0; k < 3; ++k) s.v[k] = float(way[k]);
+    out->push_back(s);
+  }
+}
+
 void impact(const double p[3], int specks, uint32_t seed, Palette pal, Particles* out) {
   Rng r = ge::core::make_rng(seed);
   const double spread = specks > 130 ? 24 : specks > 20 ? 16 : 8;

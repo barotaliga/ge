@@ -1004,3 +1004,62 @@ TEST(a_printed_line_shows_without_the_charset_s_own_letters) {
   const std::vector<std::string> canned = cl::print_lines("(Sailor): \rSai: {&c0b0safe&cfff}\n");
   CHECK_MSG(canned.size() == 1 && canned[0] == "Sai: safe", canned.empty() ? "" : canned[0]);
 }
+
+// Quake's own effects in a recorded demo: explosion2 (12) keeps its colours and is drawn with the
+// other effects, a program's burst keeps any colour (a count of 255 is an explosion), the
+// grappling beam (13) is a beam.
+TEST(a_demo_keeps_explosion2_s_colours_bursts_of_any_colour_and_the_grappling_beam) {
+  std::vector<uint8_t> msg;
+  const auto coord = [&](float v) {
+    const auto q = static_cast<int16_t>(v * 8);
+    msg.push_back(static_cast<uint8_t>(q & 255));
+    msg.push_back(static_cast<uint8_t>((q >> 8) & 255));
+  };
+  msg.push_back(23);  // temporary entity: explosion2 at (8, 16, 24), colours 224 .. 231
+  msg.push_back(12);
+  coord(8), coord(16), coord(24);
+  msg.push_back(224);
+  msg.push_back(8);
+  msg.push_back(23);  // the grappling beam of entity 3 from (0, 0, 0) to (64, 0, 0)
+  msg.push_back(13);
+  msg.push_back(3), msg.push_back(0);
+  coord(0), coord(0), coord(0), coord(64), coord(0), coord(0);
+  for (const int count : {20, 255}) {  // a burst of colour 100, then a count of 255
+    msg.push_back(18);
+    coord(32), coord(0), coord(0);
+    msg.push_back(16), msg.push_back(0), msg.push_back(0);
+    msg.push_back(static_cast<uint8_t>(count));
+    msg.push_back(100);
+  }
+  std::vector<uint8_t> bytes = {'-', '1', '\n'};
+  const auto put32 = [&](uint32_t x) {
+    for (int k = 0; k < 4; k++) bytes.push_back(static_cast<uint8_t>(x >> (8 * k)));
+  };
+  put32(static_cast<uint32_t>(msg.size()));
+  for (int k = 0; k < 3; k++) put32(0);  // the view angles
+  bytes.insert(bytes.end(), msg.begin(), msg.end());
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(std::move(bytes), d, error), error);
+  CHECK(d.state.format == cl::DemoFormat::single);
+  CHECK_MSG(cl::next_frame(d, error) == cl::DemoRead::frame, error);
+  const std::vector<cl::DemoEffect>& got = d.state.effects;
+  CHECK(got.size() == 4);
+  if (got.size() != 4) return;
+  CHECK(got[0].kind == cl::DemoEffectKind::explosion && got[0].code == 12);
+  CHECK(got[0].colour == 224 && got[0].count == 8 && got[0].at.y == 16);
+  CHECK(got[1].kind == cl::DemoEffectKind::beam && got[1].code == 13 && got[1].entity == 3);
+  CHECK(got[1].end.x == 64);
+  CHECK(got[2].kind == cl::DemoEffectKind::burst && got[2].colour == 100 && got[2].count == 20);
+  CHECK(got[2].way.x == 1);
+  CHECK(got[3].kind == cl::DemoEffectKind::explosion && got[3].code == 3);
+  d.state.levels = 1;
+  cl::DemoFx fx;
+  cl::demo_fx_frame(d.state, fx);
+  CHECK(fx.explosions.size() == 1);  // the burst of 255; explosion2 is drawn with the effects
+  CHECK(fx.effects.size() == 3);
+  if (fx.effects.size() == 3) {
+    CHECK(fx.effects[0].kind == cl::EffectKind::explosion && fx.effects[0].colour == 224);
+    CHECK(fx.effects[2].kind == cl::EffectKind::burst && fx.effects[2].colour == 100);
+  }
+}

@@ -16,6 +16,7 @@
 // ge:keywords server-browser join-a-game menu_servers servers connect demos menu_demos take_demo
 // ge:skill ui testing
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -628,6 +629,19 @@ TEST(load_and_save_show_the_slots_and_run_their_lines) {
   none.saves = host.saves;
   sm::refresh(m, none);
   CHECK(item(m, "load", "s3")->disabled && item(m, "save", "s0")->disabled);
+}
+
+TEST(setup_shows_the_hostname_beside_its_row) {
+  World w;
+  w.con.cvars().add({"sv_hostname", "Shooter's Edge", 0, "", ge::console::CvarKind::text});
+  w.con.cvars().set("sv_hostname", "Den", ge::console::Source::local);
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con};
+  g.show(host, "setup");
+  const auto* row = item(g.main(), "setup", "hostname");
+  CHECK(row != nullptr && row->text == "HOSTNAME  Den");
+  CHECK(g.main().page("setup")->items[0].id == "hostname");  // the first row, as Quake's
 }
 
 TEST(a_classic_page_longer_than_the_screen_scrolls_to_its_focus) {
@@ -1493,6 +1507,37 @@ TEST(q2_menu_has_its_own_pages_flags_keys_and_in_game_page) {
   CHECK(!g.open() && !w.ran.empty() && w.ran.back() == "putaway");
 }
 
+// The video mode row: windowed, then each mode vid_modelist offers; a mode picked writes its
+// number.
+TEST(q2_video_mode_lists_the_modes_and_writes_the_number) {
+  World w;
+  w.con.cvars().add({.name = "vid_fullscreen", .fallback = "0"});
+  w.con.cvars().add({.name = "vid_modelist",
+                     .fallback = "desktop 1280x720@60 1920x1080@144",
+                     .kind = ge::console::CvarKind::text});
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .table = &sm::q2_menu()};
+  g.set_table(sm::q2_menu());
+  w.con.execute("vid_fullscreen 2");
+  g.show(host, "video");
+  const ge::ui::Item* row = item(g.main(), "video", "vid_fullscreen");
+  CHECK(row != nullptr);
+  if (row == nullptr) return;
+  CHECK(row->choices.size() == 4);
+  CHECK(row->choices[0] == "windowed" && row->choices[1] == "desktop" &&
+        row->choices[3] == "1920x1080@144");
+  CHECK(row->choice == 2);
+  g.main().page("video")->find("vid_fullscreen")->choice = 3;
+  sm::apply_event({.kind = EventKind::changed, .page = "video", .item = "vid_fullscreen"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("vid_fullscreen")->value == "3");
+  g.main().page("video")->find("vid_fullscreen")->choice = 0;
+  sm::apply_event({.kind = EventKind::changed, .page = "video", .item = "vid_fullscreen"}, g.main(),
+                  host);
+  CHECK(w.con.cvars().find("vid_fullscreen")->value == "0");
+}
+
 TEST(q2_player_page_lists_figures_and_writes_the_skin) {
   // Figures as Quake II's packs hold them: a skin counts only with its icon beside it.
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
@@ -1547,6 +1592,44 @@ TEST(q2_player_page_without_figures_does_not_open) {
   for (const MenuEvent& e : events) sm::apply_event(e, m, host);
   CHECK(m.top().id == "multi");
   CHECK(!w.con.output().empty() && w.con.output().back() == "No player models found.");
+}
+
+// Quake's setup page shows its figure (menuplyr) in the shirt and pants its rows hold: the shirt's
+// shades take the chosen row's (a row from 128 up runs the other way), the rest stay.
+TEST(setup_shows_the_figure_in_the_chosen_colours) {
+  const auto files = sm::fixture_files();
+  sm::ClassicArt art;
+  std::string error;
+  CHECK_MSG(sm::load_classic_art(fixture_find(files), &art, &error), error);
+  const ge::ui::Image* fig = art.player_in(4, 12);
+  CHECK(fig != nullptr);
+  if (fig == nullptr) return;
+  const auto px = [&](int x, int y) {
+    const uint8_t* p = &fig->rgba[static_cast<size_t>(y * fig->width + x) * 4];
+    return std::array<int, 4>{p[0], p[1], p[2], p[3]};
+  };
+  const auto pal = [&](int k) {
+    const ge::ui::Color c = art.colour(k);
+    return std::array<int, 4>{static_cast<int>(std::lround(c.r * 255)),
+                              static_cast<int>(std::lround(c.g * 255)),
+                              static_cast<int>(std::lround(c.b * 255)), 255};
+  };
+  CHECK(px(0, 0)[3] == 0);      // see-through
+  CHECK(px(8, 10) == pal(64));  // the shirt's first shade: row 4's first
+  CHECK(px(38, 10) == pal(64 + 15));
+  CHECK(px(8, 40) == pal(192 + 15));  // the pants' first shade: row 12, from its far end
+  CHECK(px(38, 40) == pal(192));
+  CHECK(art.player_in(4, 12) == fig);  // kept while the colours stay
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con};
+  g.set_art(art);
+  g.show(host, "setup");
+  DrawList dl;
+  dl.begin(640, 400);
+  g.draw(dl, 640, 400, 0.25);
+  CHECK(g.problems().empty());
 }
 
 // A web list of servers in sb_masters: the binary list's 6-byte records and the text list's lines

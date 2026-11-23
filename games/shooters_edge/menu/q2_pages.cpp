@@ -35,7 +35,7 @@ namespace {
 
 using ge::ui::ItemKind;
 
-constexpr Choice kWindow[] = {{"windowed", "0"}, {"full screen", "1"}};
+constexpr Choice kWindowed[] = {{"windowed", "0"}};  // then each mode of vid_modelist
 constexpr Choice kFovScale[] = {{"vert-", "0"}, {"hor+", "1"}};
 constexpr Choice kMsaa[] = {{"no", "0"}, {"2x MSAA", "2"}, {"4x MSAA", "4"}, {"8x MSAA", "8"}};
 constexpr Choice kFilter[] = {{"nearest", "GL_NEAREST"},
@@ -296,7 +296,14 @@ constexpr Entry kQ2[] = {
     back("weapons"),
 
     // video setup, then Shooter's Edge's own looks.
-    spin("video", "vid_fullscreen", "video mode", kWindow),
+    {.page = "video",
+     .id = "vid_fullscreen",
+     .text = "video mode",
+     .kind = ItemKind::choice,
+     .needs = "vid_fullscreen",
+     .target = Target::client,
+     .choices = kWindowed,
+     .modes_from = "vid_modelist"},
     spin("video", "cl_adjustfov", "fov scaling", kFovScale),
     toggle("video", "gl_swapinterval", "vertical sync"),
     spin("video", "gl_multisamples", "anti-aliasing", kMsaa),

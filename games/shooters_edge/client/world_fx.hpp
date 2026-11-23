@@ -141,6 +141,7 @@ struct HeldBeam {
   ge::render::BeamShot shot;   // engine metres
   sh::Vec3f map_from, map_to;  // map units (the classic bolt's segments)
   EffectModel model = EffectModel::bolt2;
+  int listed = -1;  // the model list's own instead (the grappling beam's progs/beam.mdl), or -1
   ge::render::BurnTrail trail;  // where its burnt line ends on the wall it lands on
   // Its melt (render/beam.hpp's BeamBurn::melt) and the marks' slot it was pressed in last.
   uint32_t melt = 0;
@@ -432,6 +433,13 @@ effects::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int 
 void warp_dust(const Warp& w, const effects::Dust& d, double was, double age, uint32_t seed,
                effects::Particles* out);
 
+// `name`'s place in a model list (index 0 is no model), or -1.
+inline int listed_model(std::span<const std::string> names, std::string_view name) {
+  for (size_t m = 1; m < names.size(); m++)
+    if (names[m] == name) return static_cast<int>(m);
+  return -1;
+}
+
 // WHAT THE EFFECTS READ, wherever the game comes from: the listen server (`fx_scene`, off the
 // server's state and the view), or a demo or a server joined (demo_fx.hpp, off what was sent).
 struct FxScene {
@@ -455,6 +463,7 @@ struct FxScene {
   bool flash_bit = true;  // the effects' bit 2 is a gun's flash (Quake II's means another thing)
   bool q2 = false;        // Quake II's game: its own arrivals, never the warp's fog
   int effect_models = 0;  // where the effects' own models start (EffectModel)
+  int beam_model = -1;    // the model list's `progs/beam.mdl` (the grappling beam's), -1 none
   std::vector<Placed> models;    // every entity to draw (not the local player)
   float q2_blend[4] = {};        // Quake II's tint over the view, the rules' own
   std::vector<SceneBeam> beams;  // the lasers on

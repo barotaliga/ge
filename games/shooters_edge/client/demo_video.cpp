@@ -209,6 +209,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.flash_bit = s.protocol != 34;               // Quake II's bit 2 is no gun's flash
   out.q2 = s.protocol == 34;                      // its own arrivals (its events)
   out.effect_models = static_cast<int>(s.models.size());
+  out.beam_model = listed_model(s.models, "progs/beam.mdl");
   demo_placed(s, out.models, fx.draw_own, fx.own_alpha);
   // A live stream's items coming back (our server's `item-back`), each not drawn already.
   out.returning.clear();

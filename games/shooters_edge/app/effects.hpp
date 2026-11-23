@@ -78,6 +78,15 @@ void grenade_trail(const double from[3], const double to[3], uint32_t seed, Pale
 
 // An explosion at `at`: 1024 specks thrown out.
 void explosion(const double at[3], uint32_t seed, Palette palette, Particles* out);
+// The mission packs' blast (explosion2) at `at`: 512 specks of the palette's run `start` ..
+// `start + length - 1`, taken in turn, flung out at up to 256 units/s on each axis and speeding
+// out (x e^4t) for 0.3 s. A length of 0 throws nothing.
+void explosion2(const double at[3], int start, int length, uint32_t seed, Palette palette,
+                Particles* out);
+// A program's burst at `at` in any colour: `specks` specks, each a random shade of the colour's
+// row of 8, all thrown at `way` (engine m/s), alive 0 to 0.4 s.
+void burst(const double at[3], int specks, int colour, const double way[3], uint32_t seed,
+           Palette palette, Particles* out);
 // A shot's or a nail's hit at `at`: `specks` dark grey specks (20 a pellet, 10 a nail, 20 a big
 // nail's).
 void impact(const double at[3], int specks, uint32_t seed, Palette palette, Particles* out);

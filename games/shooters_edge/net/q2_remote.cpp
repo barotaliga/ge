@@ -219,6 +219,10 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
   remote_sheet_step(r, d.state.prints, now_s);  // `info` asked for the settings page
   remote_fair_step(r, d.state.prints, now_s);   // f_ruleset answered (qw_remote_rulesets.hpp)
   client::drop_ignored(r.ignore, d.state, d.state.prints, now_s, &d.state.centre);
+  // The cheat lock: in a game of more than one player slot no cheat holds, whatever the local
+  // sv_cheats says (let go by remote_disconnect).
+  if (r.ignore.con != nullptr)
+    r.ignore.con->cvars().hold_cheats(c.stage == ClientStage::active && d.max_clients > 1);
   const bool fresh = c.frames != r.q2_frames;
   client::DemoState& st = d.state;
   if (fresh) {  // a frame came: the last two kept, as read, for drawing between them

@@ -162,12 +162,16 @@ namespace pg = ge::progs;
   X(arsenal_weapon7, "arsenal_weapon7")                                                            \
   X(arsenal_weapon8, "arsenal_weapon8")                                                            \
   X(b_batt0, "maps/b_batt0.bsp")                                                                   \
+  X(b_batt1, "maps/b_batt1.bsp")                                                                   \
   X(b_bh10, "maps/b_bh10.bsp")                                                                     \
   X(b_bh100, "maps/b_bh100.bsp")                                                                   \
   X(b_bh25, "maps/b_bh25.bsp")                                                                     \
   X(b_nail0, "maps/b_nail0.bsp")                                                                   \
+  X(b_nail1, "maps/b_nail1.bsp")                                                                   \
   X(b_rock0, "maps/b_rock0.bsp")                                                                   \
+  X(b_rock1, "maps/b_rock1.bsp")                                                                   \
   X(b_shell0, "maps/b_shell0.bsp")                                                                 \
+  X(b_shell1, "maps/b_shell1.bsp")                                                                 \
   X(backpack, "backpack")                                                                          \
   X(backpack_mdl, "progs/backpack.mdl")                                                            \
   X(basetry_wav, "doors/basetry.wav")                                                              \
@@ -390,6 +394,7 @@ namespace pg = ge::progs;
   X(self_squish, "self_squish")                                                                    \
   X(shafted, "shafted")                                                                            \
   X(shells, "shells")                                                                              \
+  X(spikes, "spikes")                                                                              \
   X(shield, "Shield")                                                                              \
   X(shot, "shot")                                                                                  \
   X(space, " ")                                                                                    \
@@ -909,7 +914,8 @@ namespace pg = ge::progs;
   X(trigger_onlyregistered, "trigger_onlyregistered")               \
   X(teleporttrain_next, "teleporttrain_next")                       \
   X(teleporttrain_use, "teleporttrain_use")                         \
-  X(misc_teleporttrain, "misc_teleporttrain")
+  X(misc_teleporttrain, "misc_teleporttrain")                       \
+  X(item_weapon, "item_weapon")
 
 // WORDS AS THE BYTECODE TESTS THEM. A condition on a float (IF / IFNOT) tests the word, so -0 is
 // true; `!x`, `&&` and `||` compare as floats (and evaluate both sides: the rules ask both

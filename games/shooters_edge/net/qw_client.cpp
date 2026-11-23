@@ -660,6 +660,58 @@ void speak(QwClientEnd& c, int samples) {
   if (c.record && c.playernum >= 0) record_own_voice(*c.record, c.playernum, m);
 }
 
+// From this machine: the loopback, or the client's own address (any port).
+bool from_here(const gn::Address& a, const gn::Address& own) {
+  if (a.family == own.family && std::memcmp(a.bytes, own.bytes, sizeof a.bytes) == 0) return true;
+  if (a.family == gn::Family::ipv4) return a.bytes[0] == 127;
+  if (a.family != gn::Family::ipv6) return false;
+  for (int k = 0; k < 15; k++)
+    if (a.bytes[k] != 0) return false;
+  return a.bytes[15] == 1;
+}
+
+std::string trimmed(const std::string& s) {
+  const size_t a = s.find_first_not_of(" \t\r\n");
+  if (a == std::string::npos) return "";
+  return s.substr(a, s.find_last_not_of(" \t\r\n") - a + 1);
+}
+
+// A command packet ('B': a command, then an id) from a server browser on this machine: run only
+// with the id `localid` holds (any, before the first accept); a wrong id clears `localid`.
+void command_packet(QwClientEnd& c, const gn::Address& from, const uint8_t* data, size_t size) {
+  c.oob_prints.push_back(gn::to_string(from) + ": client command\n");
+  if (!from_here(from, c.transport->local)) {
+    c.oob_prints.emplace_back("Command packet from remote host.  Ignored.\n");
+    return;
+  }
+  gn::Reader r = gn::make_reader(data, size);
+  r.at = 5;
+  const std::string command = read_string(r);
+  const std::string id = trimmed(read_string(r));
+  const std::string bar(27, '=');
+  if (!c.commands_unchecked) {
+    if (c.localid.empty()) {
+      c.oob_prints.push_back(bar +
+                             "\nCommand packet received from local host, but no localid has "
+                             "been set.  You may need to upgrade your server browser.\n" +
+                             bar + "\n");
+      return;
+    }
+    if (id != c.localid) {
+      c.oob_prints.push_back(bar +
+                             "\nInvalid localid on command packet received from local host. "
+                             "\n|" +
+                             id + "| != |" + c.localid +
+                             "|\nYou may need to reload your server browser and QuakeWorld.\n" +
+                             bar + "\n");
+      c.localid.clear();
+      c.localid_refused = true;
+      return;
+    }
+  }
+  c.local_commands.push_back(command);
+}
+
 void read_oob(QwClientEnd& c, const uint8_t* data, size_t size) {
   if (size == 1 && data[0] == 'l') return;
   if (size < 5) return;
@@ -687,6 +739,7 @@ void read_oob(QwClientEnd& c, const uint8_t* data, size_t size) {
     c.last_ask = c.now;
     send_connect(c);
   } else if (type == 'j' && c.stage == ClientStage::connect) {
+    c.commands_unchecked = false;  // every later command packet needs the id
     c.stage = ClientStage::signon;
     c.connected_at = c.now;
     c.ch.trace = c.cfg.trace;
@@ -855,7 +908,11 @@ void client_tick(QwClientEnd& c, int64_t now_us) {
     const auto size = static_cast<size_t>(n);
     c.datagrams_in++;
     c.bytes_in += n;
-    if (from != c.server) continue;
+    if (from != c.server) {
+      if (is_out_of_band(buf, size) && size > 4 && buf[4] == 'B')
+        command_packet(c, from, buf, size);
+      continue;
+    }
     if (is_out_of_band(buf, size) || (size == 1 && buf[0] == 'l')) {
       read_oob(c, buf, size);
       continue;

@@ -221,6 +221,11 @@ constexpr gs::GameRule kModRules[] = {
      nullptr, "0: anyone joins; 1: only the server's map (the default)"},
     {"sv_highchars", "Whether a joining player's name and info may hold coloured characters.",
      nullptr, "0: only plain letters, digits and signs are kept; 1: any (the default)"},
+    {"zombietime",
+     "Seconds a dropped player's packets are still answered with the goodbye, so his game learns "
+     "it "
+     "was dropped.",
+     nullptr, "0: none; 2: two seconds (the default)"},
 };
 
 // Every rule, in the order `--explain` lists them: built once.
@@ -680,6 +685,8 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->cfg.high_chars = false;
   if (const auto w = c.rules.find("sv_mapcheck"); w != c.rules.end() && w->second == "0")
     g->cfg.map_check = false;
+  if (const auto z = c.rules.find("zombietime"); z != c.rules.end())
+    g->cfg.zombie_s = std::max(0.0, std::atof(z->second.c_str()));
   g->cfg.progs_crc = g->progs_crc;
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;

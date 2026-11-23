@@ -272,6 +272,7 @@ struct Remote {
   int own_port = -1;
   bool own_v6 = false;  // the client's socket is IPv6's (an IPv6 server joined)
   std::string port_note;
+  std::string localid;  // localid: the id a server browser's command packets carry (qw_client.hpp)
 };
 
 // Watches the broadcast at `address` ("host:port": a stream port, our TV node's or a relay's;

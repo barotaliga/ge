@@ -7,6 +7,7 @@
 #include "shooters_edge/client/chat_lines.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 
@@ -484,7 +485,22 @@ void chat_line_teamplay(ChatExtras& x, DemoState& s, const con::ChatLine& line, 
   const bool watching = s.player >= 0 && static_cast<size_t>(s.player) < s.spectator.size() &&
                         s.spectator[static_cast<size_t>(s.player)];
   const bool spoken = line.kind == con::ChatKind::everyone || line.kind == con::ChatKind::spectator;
-  if (chat && x.queries && x.con != nullptr && spoken && line.place != s.player && !watching) {
+  const bool q2 = s.format == DemoFormat::q2;
+  if (q2 && chat && x.queries && x.con != nullptr && line.place != s.player && x.reply_due < 0 &&
+      now_s - x.answered_at[0] >= kQ2ReplyEveryS) {
+    std::string plain;  // the words' end, high bits off, newlines and blanks after dropped
+    for (const char ch : words) plain += static_cast<char>(static_cast<unsigned char>(ch) & 0x7f);
+    while (!plain.empty() && (plain.back() == '\n' || plain.back() == '\r' || plain.back() == ' '))
+      plain.pop_back();
+    if (plain.ends_with("!version")) {
+      x.answered_at[0] = now_s;
+      // 1 to 2 s on, spread by the moment it was asked (no two clients answer as one).
+      const double spread = now_s * 1000 - std::floor(now_s * 1000 / 997) * 997;
+      x.reply_due = now_s + kQ2ReplyLeastS + (kQ2ReplyMostS - kQ2ReplyLeastS) * spread / 997;
+    }
+  }
+  if (!q2 && chat && x.queries && x.con != nullptr && spoken && line.place != s.player &&
+      !watching) {
     const int q = query_of(words);
     if (q >= 0 && now_s - x.answered_at[static_cast<size_t>(q)] >= 20) {
       x.answered_at[static_cast<size_t>(q)] = now_s;
@@ -499,6 +515,12 @@ void chat_line_teamplay(ChatExtras& x, DemoState& s, const con::ChatLine& line, 
     const int level = p.level < 0 ? 0 : p.level > kChatLevel ? kChatLevel : p.level;
     x.con->fire_triggers(words, level, own_team);
   }
+}
+
+void chat_reply_due(ChatExtras& x, double now_s, std::string_view version) {
+  if (x.reply_due < 0 || now_s < x.reply_due) return;
+  x.reply_due = -1;
+  if (x.con != nullptr) x.con->append("say \"" + std::string(version) + "\"");
 }
 
 }  // namespace shooters_edge::client
