@@ -1302,7 +1302,7 @@ std::vector<uint8_t> q2_arsenal_message(const sv::SqBody& body) {
     if (sv::sq_holds(body, w)) held |= 1u << w;
   out.push_back(static_cast<uint8_t>(held & 255));
   out.push_back(static_cast<uint8_t>(held >> 8));
-  for (int k = 1; k < sv::kSqAmmoKinds; k++) {
+  for (int k = 1; k < sv::kSqBaseAmmoKinds; k++) {  // a pack's own kinds stay off the wire
     const int n = std::clamp(body.ammo[k], 0, 32767);
     out.push_back(static_cast<uint8_t>(n & 255));
     out.push_back(static_cast<uint8_t>(n >> 8));

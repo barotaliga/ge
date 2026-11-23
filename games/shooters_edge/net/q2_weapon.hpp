@@ -142,8 +142,8 @@ struct Q2ShotAudit {
 // once seen (until he dies), and a change to anything else is left to the server.
 struct Q2Known {
   uint16_t weapons = 0;  // by kSqWeapons' row
-  int16_t ammo[7] = {};
-  bool ammo_seen[7] = {};
+  int16_t ammo[server::kSqAmmoKinds] = {};
+  bool ammo_seen[server::kSqAmmoKinds] = {};
   int held = -1, last = -1;  // the weapon in hand, the one before it
   int32_t frame = -1;        // the newest frame folded in
 };

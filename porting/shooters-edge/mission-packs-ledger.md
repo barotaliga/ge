@@ -45,11 +45,11 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | --- | --- | --- | --- | --- | --- |
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 4 | 67 | 3 (0 / 1 / 2) | 0 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 7 | 50 | 4 (0 / 2 / 2) | 0 |
-| The Reckoning (Quake II, folder `xatrix`) | 40 | 23 | 4 | 13 (10 / 3 / 0) | 0 |
+| The Reckoning (Quake II, folder `xatrix`) | 40 | 24 | 3 | 13 (10 / 3 / 0) | 0 |
 | Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **274** | **49** | **131** | **94 (46 / 39 / 9)** | **0** |
+| **All** | **274** | **50** | **130** | **94 (46 / 39 / 9)** | **0** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **94 missing, 131 to verify, of 274 rows** (M63a taking the packs in: 10 fewer; M63b the Quake packs' status bars: 6 fewer; M63c's weapons, items, map things, new game, saves and remix: 21 fewer).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **94 missing, 130 to verify, of 274 rows** (M63a taking the packs in: 10 fewer; M63b the Quake packs' status bars: 6 fewer; M63c's weapons, items, map things, new game, saves and remix: 21 fewer).
 
 Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **97 missing, 130 to verify, of 274 rows** (M63a taking the packs in: 10 fewer; M63b the Quake packs' status bars: 6 fewer; M63c's weapons, items and map things: 18 fewer).
 
@@ -324,7 +324,7 @@ count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 | xat.dmflag | `dmflags` 65536: dual fire dropped on death | done |  | server/q2_powers.cpp (dual fire's row: dmflags 65536) |
 | xat.campaign | the four units in order, the help computer's lines, the end | verify |  | NEW GAME in the pack's folder starts on `xswamp` (server/q2_pack.cpp `q2_pack_start_map`, client/game_folder.cpp); the maps' own level strings chain the six units through the base campaign (`xu1`..`xu4` between, `xout` and the victory picture at the end), help lines are the maps' `target_help`; `se-q2-unit --mod=xatrix` plays a unit by script; a full run on the release build settles it |
 | xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | verify | 2 | client/cinematic.hpp plays a chain |
-| xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | verify | 2 | pictures named by the rules' configstrings |
+| xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | done |  | the rules' item table names each icon (server/q2_bar.cpp); the pack's pics/ hold them all and win by name over the base's (tests/shooters_edge_game_adapter_test.cpp) |
 | xat.menu | the pack's own pictures (console background, quit, victory) | verify | 3 |  |
 | xat.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp |
 | xat.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp |
