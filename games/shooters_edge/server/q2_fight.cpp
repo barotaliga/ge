@@ -1098,7 +1098,8 @@ void fight_precache(Q2Server& s) {
   // The weapons as others see them carried: names a client takes from the player's own model
   // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
   for (const Carried& c : kCarried)
-    if (q2_pack_has(s.opt.pack, c.pack)) s.carried_models[static_cast<int>(c.weapon)] = model(c.name);
+    if (q2_pack_has(s.opt.pack, c.pack))
+      s.carried_models[static_cast<int>(c.weapon)] = model(c.name);
   for (int k = 0; k < kSqShotKinds; k++)
     if (q2_pack_has(s.opt.pack, kSqShotPacks[k])) s.missile_models[k] = model(kMissileModels[k]);
   gibs_precache(s);

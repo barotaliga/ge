@@ -124,13 +124,13 @@ constexpr Shot kShots[] = {
 };
 // The Reckoning's (`--mod=xatrix`).
 constexpr Shot kPackShots[] = {
-    {"ion-ripper", "a glowing bolt in flight, bouncing off the walls", 14, sv::SqWeapon::ion_ripper},
+    {"ion-ripper", "a glowing bolt in flight, bouncing off the walls", 14,
+     sv::SqWeapon::ion_ripper},
     {"ion-ripper-flash", "the ripper's flash at the muzzle, the gun kicked", 40,
      sv::SqWeapon::ion_ripper, false, false, true},
     {"phalanx", "two orange balls side by side in flight", 6, sv::SqWeapon::phalanx},
     {"phalanx-burst", "the balls' bursts against the far wall", 40, sv::SqWeapon::phalanx},
-    {"trap", "the trap on the floor, opening", 180, sv::SqWeapon::trap, true, false,
-     false, 2},
+    {"trap", "the trap on the floor, opening", 180, sv::SqWeapon::trap, true, false, false, 2},
 };
 constexpr const char* kLooks[] = {"classic", "modern"};
 

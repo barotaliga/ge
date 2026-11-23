@@ -5,9 +5,9 @@
 // game's maps, goldens and digests never meet it.
 //
 // - **The repair object** (`func_object_repair`, renamed `object_repair` for the repair bot to
-//   find): 100 health, welding sparks (10, palette 224..231) every `delay` (1 s) while its health is
-//   0 or more; welded below 0, its targets fire once (itself the activator), then it regrows a point
-//   every `delay` to 101, quietly until past 100.
+//   find): 100 health, welding sparks (10, palette 224..231) every `delay` (1 s) while its health
+//   is 0 or more; welded below 0, its targets fire once (itself the activator), then it regrows a
+//   point every `delay` to 101, quietly until past 100.
 // - **The rotating light** (`rotating_light`): the spinning lights' effect while on; spawn flags 1
 //   starts off, 2 the alarm (`misc/alarm.wav`, static attenuation, every 1 s from 0.1 s after a use
 //   turns it on); a use toggles it; 10 health (a map's own kept): broken, 30 sparks and gone.
@@ -18,14 +18,14 @@
 //   `dmg` 250, its splash `dmg` within `dmg` + 20) at its target's place, the rocket's flash 57,
 //   and it goes a frame later.
 // - **The shots** (q2_reckoning_shots.cpp): the ion ripper's bolt sparks (welding sparks, none
-//   drawn, palette 228..231) where its 3 s end; the beta maiden's heat rocket re-aims at 500 units/s
-//   every 0.1 s at the nearest living player in front of it it sees within 1024.
+//   drawn, palette 228..231) where its 3 s end; the beta maiden's heat rocket re-aims at 500
+//   units/s every 0.1 s at the nearest living player in front of it it sees within 1024.
 // - **The trap**: thrown as a hand grenade (400 to 800 units/s), it thinks from 1 s on, every 0.1 s
 //   on the ground: opens over frames 0..4 (then glows), pulls the nearest living player or monster
-//   it sees within 256 (the thrower too: a player +250 units/s toward it a think, a monster at 256);
-//   one within 32 under 400 mass dies past invulnerability (100 000, its words "caught in trap"),
-//   one heavier bursts it (explosion 1, no harm). Fed, it counts down from 62 by 2 a think, shows
-//   frames 6..8 from 18 on and leaves a food cube (Health: the mass / 4 in deathmatch, / 10
+//   it sees within 256 (the thrower too: a player +250 units/s toward it a think, a monster at
+//   256); one within 32 under 400 mass dies past invulnerability (100 000, its words "caught in
+//   trap"), one heavier bursts it (explosion 1, no harm). Fed, it counts down from 62 by 2 a think,
+//   shows frames 6..8 from 18 on and leaves a food cube (Health: the mass / 4 in deathmatch, / 10
 //   otherwise, past the maximum), going a second later. Unfed, it bursts quietly at 30 s.
 //
 // ge:summary The Reckoning's rules beside Quake II's: map things, weapons, items, monsters

@@ -95,9 +95,9 @@ int16_t ammo_icon(hud::Weapon w) {
 // the grenade launcher; The Reckoning's ion ripper the beam, its phalanx the rocket launcher, its
 // trap the grenade launcher.
 constexpr hud::Weapon kWorn[server::kSqWeaponCount] = {
-    hud::Weapon::shotgun,         hud::Weapon::double_shotgun,  hud::Weapon::double_shotgun,
-    hud::Weapon::nailgun,         hud::Weapon::heavy_nailgun,   hud::Weapon::grenade_launcher,
-    hud::Weapon::rocket_launcher, hud::Weapon::beam_gun,        hud::Weapon::beam_gun,
+    hud::Weapon::shotgun,         hud::Weapon::double_shotgun,   hud::Weapon::double_shotgun,
+    hud::Weapon::nailgun,         hud::Weapon::heavy_nailgun,    hud::Weapon::grenade_launcher,
+    hud::Weapon::rocket_launcher, hud::Weapon::beam_gun,         hud::Weapon::beam_gun,
     hud::Weapon::beam_gun,        hud::Weapon::grenade_launcher, hud::Weapon::beam_gun,
     hud::Weapon::rocket_launcher, hud::Weapon::grenade_launcher};
 

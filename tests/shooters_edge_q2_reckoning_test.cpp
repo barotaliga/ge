@@ -298,11 +298,11 @@ TEST(a_trap_pulls_the_nearest_in_and_kills_him_past_invulnerability) {
   auto a = facing(-100);
   give(*a, SqWeapon::trap, 2);
   run(*a, 8 * 12, sh::kButtonAttack);  // lit at frame 11
-  run(*a, 8 * 2);                       // let go: thrown
+  run(*a, 8 * 2);                      // let go: thrown
   CHECK(live(a->s(), sv::SqShot::trap) == 1);
   CHECK(ammo(a->p(0).body, SqAmmo::traps) == 1);
-  place(*a, 0, -900);                         // Ana far off, Ben by the trap
-  a->p(1).invulnerable_until = 1e6;           // no help
+  place(*a, 0, -900);                // Ana far off, Ben by the trap
+  a->p(1).invulnerable_until = 1e6;  // no help
   run(*a, 8 * 60);
   CHECK(!a->p(1).alive);
   CHECK(!a->s().obituaries.empty() && a->s().obituaries.back() == "Ben caught in trap by Ana");

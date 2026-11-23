@@ -216,9 +216,9 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
                       name == "te_screen_sparks" || name == "te_shield_sparks" ||
                       name == "te_laser_sparks" || name == "te_shotgun";
   if (uint8_t kind = 0; sv::qw_temp_entity(sparks                    ? "te_gunshot"
-                                         : name == "te_greenblood" ? "te_blood"
-                                                                   : ev.text,
-                                         kind)) {
+                                           : name == "te_greenblood" ? "te_blood"
+                                                                     : ev.text,
+                                           kind)) {
     if (kind == kExplosion || kind == 4) {
       l.explosions.push_back(ev.origin);
       return;

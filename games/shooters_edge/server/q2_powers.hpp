@@ -21,13 +21,13 @@
 namespace shooters_edge::server {
 
 struct SqPower {
-  const char* item;              // the item's class name (q2_items.hpp)
-  double Q2Player::* until;      // the level time it ends (0 none)
-  float tint[4];                 // the screen tint while it runs: red, green, blue, alpha
-  const char* warn;              // the sound 3 s before its end
-  const char* use_sound;         // the sound of using it (nullptr none)
-  int effects = 0;               // the effect bits the player wears while it runs (blinking)
-  int render = 0;                // the render bits worn with them
+  const char* item;                 // the item's class name (q2_items.hpp)
+  double Q2Player::*until;          // the level time it ends (0 none)
+  float tint[4];                    // the screen tint while it runs: red, green, blue, alpha
+  const char* warn;                 // the sound 3 s before its end
+  const char* use_sound;            // the sound of using it (nullptr none)
+  int effects = 0;                  // the effect bits the player wears while it runs (blinking)
+  int render = 0;                   // the render bits worn with them
   const char* drop_cvar = nullptr;  // dropped at death in deathmatch when this setting is on
   int drop_dmflag = 0;              // or when `dmflags` has this bit
 };
