@@ -46,9 +46,9 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Taking the packs in (shared by all four) | 15 | 0 | 3 | 12 (9 / 3 / 0) | 0 |
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 2 | 67 | 5 (2 / 1 / 2) | 0 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 2 | 51 | 8 (3 / 3 / 2) | 0 |
-| The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
+| The Reckoning (Quake II, folder `xatrix`) | 40 | 21 | 3 | 16 (11 / 4 / 1) | 0 |
 | Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **272** | **10** | **131** | **131 (70 / 50 / 11)** | **0** |
+| **All** | **272** | **28** | **131** | **113 (61 / 42 / 10)** | **0** |
 
 Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.**
 
@@ -314,11 +314,11 @@ count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
-| xat.switch | the pack's rules behind one switch its profile sets, Quake II's own rules, goldens and digests unchanged without it | missing | 1 | server/q2_*; the CD's game library is built for one old system, so hosting it (server/q2_native.hpp) cannot run here |
+| xat.switch | the pack's rules behind one switch its profile sets, Quake II's own rules, goldens and digests unchanged without it | done |  | server/q2_pack.hpp (the switch); the pack's rows in q2_items.hpp, q2_combat.hpp, q2_powers.cpp, q2_reckoning*.cpp, behind `Q2ServerOptions::pack`; base lists unchanged (tests/shooters_edge_q2_pack_test.cpp) |
 | xat.brain_beta | the brain's beta form: its tentacles pull, its eyes fire lasers (no classname of its own) | missing | 1 | which brains are the beta: reader question |
-| xat.items_list | the item list grown by the pack's items, in its order (the inventory, the icons by name) | missing | 1 | reader question: the order |
+| xat.items_list | the item list grown by the pack's items, in its order (the inventory, the icons by name) | done |  | server/q2_bar.cpp (`kReckoning`, its 47 items); tests/shooters_edge_q2_reckoning_test.cpp |
 | xat.obits | the new weapons' and monsters' obituaries, word for word | missing | 1 | reader question |
-| xat.dmflag | `dmflags` 65536: dual fire dropped on death | missing | 2 |  |
+| xat.dmflag | `dmflags` 65536: dual fire dropped on death | done |  | server/q2_powers.cpp (dual fire's row: dmflags 65536) |
 | xat.campaign | the four units in order, the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp chains the units |
 | xat.movies | the pack's movies (`xin`, `xu1`..`xu4`, `xout`, the logos) played where the campaign asks | verify | 2 | client/cinematic.hpp plays a chain |
 | xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | verify | 2 | pictures named by the rules' configstrings |
@@ -326,8 +326,8 @@ count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 | xat.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp |
 | xat.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp |
 | xat.effects | the ion ripper's, blue hyperblaster's, spinning light's, plasma's and trap's entity effects | done |  | client/world_fx_q2.cpp (Quake II client ledger `ef.*`) |
-| xat.te.plasma_explosion | the phalanx's blast (temporary entity 28) | missing | 1 | drawn as a plain explosion today (client ledger `te.plasma_explosion`, not taken for the base game) |
-| xat.te.greenblood | the gekk's green blood (temporary entity 26) | missing | 2 | drawn as red blood today (`te.greenblood`) |
+| xat.te.plasma_explosion | the phalanx's blast (temporary entity 28) | done |  | server/q2_wire.cpp (28), client/q2_temp_fx.hpp and client/listen.cpp (the rocket's explosion, as the stock client draws it) |
+| xat.te.greenblood | the gekk's green blood (temporary entity 26) | done |  | server/q2_wire.cpp (26), client/q2_temp_fx.hpp (30 green specks) |
 | xat.dm | the seven deathmatch maps played by bots | missing | 2 |  |
 | xat.coop | co-op through the units | missing | 2 |  |
 | xat.save | saves of the pack's campaign | missing | 2 | server/q2_save.hpp |
@@ -345,12 +345,12 @@ count: done 0, verify 0, missing 6, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| xat.ent.ammo_magslug | `ammo_magslug` | mag slugs for the phalanx | 25 / 88 | missing | 1 | not in our rules |
-| xat.ent.ammo_trap | `ammo_trap` | the trap: laid on the floor, pulls monsters in and leaves a power cube to eat | 14 / 24 | missing | 1 | not in our rules |
-| xat.ent.item_quadfire | `item_quadfire` | dual fire: the weapons fire twice as fast for a while | 17 / 27 | missing | 1 | not in our rules; LIFT: the powerup timer and its HUD icon as the quad's |
-| xat.ent.key_green_key | `key_green_key` | the green key | 2 / 2 | missing | 1 | not in our rules; the keys' code done for the base game (server/q2_items.hpp) |
-| xat.ent.weapon_boomer | `weapon_boomer` | the ion ripper: glowing bolts that ricochet off walls, on cells | 24 / 33 | missing | 1 | not in our rules |
-| xat.ent.weapon_phalanx | `weapon_phalanx` | the phalanx particle cannon: two magnesium slugs that burst | 24 / 35 | missing | 1 | not in our rules |
+| xat.ent.ammo_magslug | `ammo_magslug` | mag slugs for the phalanx | 25 / 88 | done |  | server/q2_items.hpp, q2_items.cpp (limits 50/75/100 under the pack) |
+| xat.ent.ammo_trap | `ammo_trap` | the trap: laid on the floor, pulls monsters in and leaves a power cube to eat | 14 / 24 | done |  | server/q2_combat.cpp (the hand grenade's step), q2_reckoning_shots.cpp (the pull, the catch, the food cube) |
+| xat.ent.item_quadfire | `item_quadfire` | dual fire: the weapons fire twice as fast for a while | 17 / 27 | done |  | server/q2_powers.cpp (the shared timed powers' table), q2_fight.cpp (the hand stepped twice) |
+| xat.ent.key_green_key | `key_green_key` | the green key | 2 / 2 | done |  | server/q2_items.hpp |
+| xat.ent.weapon_boomer | `weapon_boomer` | the ion ripper: glowing bolts that ricochet off walls, on cells | 24 / 33 | done |  | server/q2_combat.hpp, q2_fight.cpp (the bolt that bounces), q2_choose.cpp (`use hyperblaster`) |
+| xat.ent.weapon_phalanx | `weapon_phalanx` | the phalanx particle cannon: two magnesium slugs that burst | 24 / 35 | done |  | server/q2_combat.hpp, q2_fight.cpp (two balls, their splash), q2_choose.cpp (`use railgun`) |
 
 #### Monsters
 
@@ -373,13 +373,13 @@ count: done 0, verify 0, missing 7, not-taken 0
 
 | id | classname | what it is (our words) | maps / placed | status | rank | ours / note |
 | --- | --- | --- | --- | --- | --- | --- |
-| xat.ent.func_object_repair | `func_object_repair` | a broken thing that sparks until the repair bot fixes it | 1 / 6 | missing | 2 | not in our rules |
-| xat.ent.misc_amb4 | `misc_amb4` | an ambient sound | 1 / 1 | missing | 3 | not in our rules |
-| xat.ent.misc_nuke | `misc_nuke` | the end level's nuke flash | 1 / 1 | missing | 2 | not in our rules |
-| xat.ent.misc_transport | `misc_transport` | a transport ship moving along its path | 1 / 1 | missing | 2 | not in our rules |
-| xat.ent.misc_viper_missile | `misc_viper_missile` | a missile a fly-by ship fires | 1 / 16 | missing | 2 | not in our rules |
-| xat.ent.rotating_light | `rotating_light` | a rotating warning light (spinning lights effect done in the client) | 3 / 11 | missing | 2 | not in our rules |
-| xat.ent.target_mal_laser | `target_mal_laser` | a laser that pulses on and off | 1 / 32 | missing | 2 | not in our rules; LIFT: the base `target_laser` |
+| xat.ent.func_object_repair | `func_object_repair` | a broken thing that sparks until the repair bot fixes it | 1 / 6 | done |  | server/q2_reckoning_things.cpp |
+| xat.ent.misc_amb4 | `misc_amb4` | an ambient sound | 1 / 1 | done |  | server/q2_reckoning_things.cpp |
+| xat.ent.misc_nuke | `misc_nuke` | the end level's nuke flash | 1 / 1 | done |  | server/q2_reckoning_things.cpp |
+| xat.ent.misc_transport | `misc_transport` | a transport ship moving along its path | 1 / 1 | done |  | server/q2_map.cpp (a ship running its path from the start, unseen until used) |
+| xat.ent.misc_viper_missile | `misc_viper_missile` | a missile a fly-by ship fires | 1 / 16 | done |  | server/q2_reckoning_things.cpp |
+| xat.ent.rotating_light | `rotating_light` | a rotating warning light (spinning lights effect done in the client) | 3 / 11 | done |  | server/q2_reckoning_things.cpp |
+| xat.ent.target_mal_laser | `target_mal_laser` | a laser that pulses on and off | 1 / 32 | done |  | server/q2_targets.cpp (the laser's beam, pulsed) |
 
 ## Ground Zero (Quake II, folder `rogue`)
 
