@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "assets/pcx.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/app/overview_floors.hpp"
 #include "morph/model.hpp"
@@ -26,20 +25,11 @@ namespace br = ge::brush;
 namespace ba = ge::brush::app;
 namespace cl = shooters_edge::client;
 
-// A model's skin read from its picture file (the second family's), as RGBA; empty when none.
-std::vector<uint8_t> skin_picture(const cl::SearchPath& files, std::span<const uint8_t> palette,
-                                  const ge::morph::Model& m, int skin, const std::string& path,
-                                  int* w, int* h) {
-  if (m.skin_paths.empty()) return {};
-  std::vector<uint8_t> ps;
-  const std::span<const uint8_t> pcx = cl::find_file(
-      files, m.skin_paths[size_t(std::clamp(skin, 0, int(m.skin_paths.size()) - 1))], ps);
-  ge::assets::IndexedImage pic;
-  std::string err;
-  if (pcx.empty() || !ge::assets::decode_pcx(pcx, path, &pic, &err)) return {};
-  *w = pic.width;
-  *h = pic.height;
-  return ge::assets::pcx_rgba(pic, pic.palette.empty() ? palette : std::span<const uint8_t>{});
+// The files as the figure art reads them.
+ge::classic::ReadFile reader(const cl::SearchPath& files) {
+  return [&files](std::string_view path, std::vector<uint8_t>& store) {
+    return cl::find_file(files, path, store);
+  };
 }
 
 }  // namespace
@@ -56,8 +46,11 @@ bool model_mesh(const cl::SearchPath& files, std::span<const uint8_t> palette,
   ge::morph::SkinPaint paint;
   paint.palette = palette;
   std::vector<uint8_t> picture;
-  if (m.skins.empty() || palette.size() < 768)
-    picture = skin_picture(files, palette, m, skin, path, &paint.pw, &paint.ph);
+  if ((m.skins.empty() || palette.size() < 768) && !m.skin_paths.empty())
+    picture = ge::classic::read_skin_picture(
+        reader(files), palette,
+        m.skin_paths[size_t(std::clamp(skin, 0, int(m.skin_paths.size()) - 1))], &paint.pw,
+        &paint.ph);
   paint.picture = picture;
   *out = ge::morph::overview_mesh(m, 0, skin, paint);
   return true;
@@ -65,51 +58,7 @@ bool model_mesh(const cl::SearchPath& files, std::span<const uint8_t> palette,
 
 bool read_model_art(const cl::SearchPath& files, std::span<const uint8_t> palette,
                     const std::string& path, ModelArt* out, const std::string& skin_path) {
-  *out = ModelArt{};
-  std::vector<uint8_t> store;
-  const std::span<const uint8_t> bytes = cl::find_file(files, path, store);
-  if (bytes.empty()) return false;
-  std::string err;
-  if (!ge::morph::read_model(bytes, path, &out->model, &err) || out->model.frames.empty())
-    return false;
-  out->palette.assign(palette.begin(), palette.end());
-  if (!skin_path.empty()) {  // the look worn: the model's own skins set aside
-    ge::morph::Model worn;
-    worn.skin_paths = {skin_path};
-    out->picture = skin_picture(files, palette, worn, 0, skin_path, &out->pw, &out->ph);
-    if (!out->picture.empty()) out->model.skins.clear();
-  }
-  if (out->model.skins.empty() && out->picture.empty())
-    out->picture = skin_picture(files, palette, out->model, 0, path, &out->pw, &out->ph);
-  out->ok = true;
-  return true;
-}
-
-int translate(int i, int top, int bottom) {
-  const auto row = [](int colour, int j) {
-    colour = std::clamp(colour, 0, 13);
-    return colour < 8 ? colour * 16 + j : colour * 16 + 15 - j;
-  };
-  if (top >= 0 && i >= 16 && i < 32) return row(top, i - 16);
-  if (bottom >= 0 && i >= 96 && i < 112) return row(bottom, i - 96);
-  return i;
-}
-
-int frame_index(const ModelArt& a, int group, double time_s) {
-  return ge::morph::frame_at(a.model, group, time_s);
-}
-
-Mesh art_mesh(const ModelArt& a, int frame, int skin, int top, int bottom) {
-  if (!a.ok) return {};
-  std::array<uint8_t, 256> remap{};
-  for (int i = 0; i < 256; ++i) remap[size_t(i)] = uint8_t(translate(i, top, bottom));
-  ge::morph::SkinPaint paint;
-  paint.palette = a.palette;
-  paint.remap = remap;
-  paint.picture = a.picture;
-  paint.pw = a.pw;
-  paint.ph = a.ph;
-  return ge::morph::overview_mesh(a.model, frame, skin, paint);
+  return ge::classic::read_model_art(reader(files), palette, path, out, skin_path);
 }
 
 // A small map (the first family's health and ammo boxes) as a mesh.

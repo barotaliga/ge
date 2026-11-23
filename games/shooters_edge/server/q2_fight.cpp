@@ -212,48 +212,6 @@ void muzzle_flash(Q2Server& s, int slot, sh::Vec3f origin, int value) {
   event(s, std::move(ev));
 }
 
-// The flash value a shot of weapon `w` sends (`shots` the chain gun's bullets this frame); -1 for
-// a weapon with none (the hand grenade).
-int flash_value(int w, int shots) {
-  switch (static_cast<SqWeapon>(w)) {
-    case SqWeapon::blaster:
-      return 0;
-    case SqWeapon::machinegun:
-      return 1;
-    case SqWeapon::shotgun:
-      return 2;
-    case SqWeapon::chaingun:
-      return 3 + std::clamp(shots, 1, 3) - 1;
-    case SqWeapon::railgun:
-      return 6;
-    case SqWeapon::rocket_launcher:
-      return 7;
-    case SqWeapon::grenade_launcher:
-      return 8;
-    case SqWeapon::bfg:
-      return 12;
-    case SqWeapon::super_shotgun:
-      return 13;
-    case SqWeapon::hyperblaster:
-      return 14;
-    case SqWeapon::ion_ripper:
-      return 16;
-    case SqWeapon::phalanx:  // ball one's only
-      return shots > 0 ? 18 : -1;
-    default:
-      return -1;
-  }
-}
-
-// Whether flash `value` plays `sample` (a remixed weapon's own sound is sent as a sound instead).
-bool flash_plays(int value, const char* sample) {
-  const Q2Flash* f = q2_player_flash(value);
-  if (f == nullptr || f->sounds[0].name == nullptr || sample == nullptr) return false;
-  const std::string_view shot = f->sounds[0].name, own = sample;
-  const size_t wild = shot.find('%');
-  return wild == std::string_view::npos ? shot == own : own.substr(0, wild) == shot.substr(0, wild);
-}
-
 // A sound from player `slot`'s body on `channel`.
 void body_sound(Q2Server& s, int slot, int channel, const std::string& sample) {
   NetEvent ev;
@@ -1016,8 +974,8 @@ void fire(Q2Server& s, int slot, int shots) {
   const int kick = r.kick * quad;
   // The shot's sound: in its muzzle flash (the light and the tails a client plays by the value),
   // or as a sound alone for a gun with none (a remix's own sound, the hand grenade's).
-  const int flash = flash_value(w, shots);
-  if (flash >= 0 && flash_plays(flash, r.sound))
+  const int flash = sq_flash_value(w, shots);
+  if (flash >= 0 && sq_flash_plays(flash, r.sound))
     muzzle_flash(s, slot, origin, flash | (p.silencer_shots > 0 ? kQ2FlashSilenced : 0));
   else if (!second)
     sound(s, slot + 1, origin, r.sound, p.silencer_shots > 0 ? 0.2f : 1.0f);  // silenced: quieter
