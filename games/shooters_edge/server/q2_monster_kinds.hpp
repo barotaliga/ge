@@ -145,12 +145,19 @@ struct Kind {  // NOLINT(clang-analyzer-optin.performance.Padding): rows read by
   // map sets that spawn flag.
   int shield = 0;
   int shield_flag = 0;
-  bool pain_at_3 = false;  // flinches at skill 3 too
-  bool green = false;      // bleeds green
-  bool heals = false;      // its search and idle heal it 10 to 20
-  bool amphibian = false;  // walks on land, swims in water, by where it stands
-  bool repairs = false;    // the repair bot: roams, welds, raises the dead with its beam
+  bool pain_at_3 = false;     // flinches at skill 3 too
+  bool green = false;         // bleeds green
+  bool heals = false;         // its search and idle heal it 10 to 20
+  bool amphibian = false;     // walks on land, swims in water, by where it stands
+  bool repairs = false;       // the repair bot: roams, welds, raises the dead with its beam
   const char* chant[3] = {};  // spawn flag 8: it chants (one of three) and looks for no one
+  // Ground Zero's bosses' (q2_gz_bosses.cpp): its turn a frame in degrees (0: a walker's 20, a
+  // flier's 10), the height a flier keeps over its enemy, lasers pass it by, and shots between it
+  // and another monster start no fight.
+  float yaw_speed = 0;
+  float hover = 35;
+  bool laser_proof = false;
+  bool ignore_shots = false;
 };
 
 // The class whose frames, pains, deaths and flashes kind `k` plays: its base kind's, or its own.
@@ -1299,6 +1306,61 @@ inline constexpr Kind kKinds[] = {
                   .shot = Shot::green_bolt}},
      .idle = "stalker/idle.wav",
      .pack = Q2Pack::ground_zero},
+    // Ground Zero's bosses (q2_gz_bosses.cpp plays their attacks, pains and deaths by hand; their
+    // health is set by skill at spawn). The carrier: a flying gunship keeping 104 over its enemy,
+    // two machine guns, grenades, rockets, a rail, and fliers it launches.
+    {.classname = "monster_carrier",
+     .name = "a carrier",
+     .model = "models/monsters/carrier/tris.md2",
+     .sight = "carrier/sight.wav",
+     .health = 2000,
+     .gib = -200,
+     .mass = 1000,
+     .walk = 40,
+     .run = 60,
+     .death_time = 1.6f,
+     .mins = {-56, -56, -44},
+     .maxs = {56, 56, 44},
+     .flies = true,
+     .end = End::boss,
+     .loop = "bosshovr/bhvengn1.wav",
+     .pack = Q2Pack::ground_zero,
+     .yaw_speed = 15,
+     .hover = 104,
+     .laser_proof = true,
+     .ignore_shots = true},
+    // The black widow's first stage: a walker with a turret's blaster, rails, a kick and stalkers;
+    // at her death she beams out and leaves her legs.
+    {.classname = "monster_widow",
+     .name = "the black widow",
+     .model = "models/monsters/blackwidow/tris.md2",
+     .health = 2000,
+     .gib = kNoGib,
+     .mass = 1500,
+     .walk = 38.8f,  // 50.47 units over her 13 walking frames
+     .run = 38.8f,
+     .mins = {-40, -40, 0},
+     .maxs = {40, 40, 144},
+     .pack = Q2Pack::ground_zero,
+     .yaw_speed = 30,
+     .laser_proof = true,
+     .ignore_shots = true},
+    // Her second stage: a heat beam, a disruptor, a tongue that pulls, and stalkers; every stalker
+    // in the level dies with her, and she burns down in a chain of blasts.
+    {.classname = "monster_widow2",
+     .name = "the black widow",
+     .model = "models/monsters/blackwidow2/tris.md2",
+     .health = 2800,
+     .gib = -900,
+     .mass = 2500,
+     .walk = 75.8f,  // 68.24 units over her 9 walking frames
+     .run = 75.8f,
+     .mins = {-70, -70, 0},
+     .maxs = {70, 70, 144},
+     .pack = Q2Pack::ground_zero,
+     .yaw_speed = 30,
+     .laser_proof = true,
+     .ignore_shots = true},
 };
 inline constexpr int kKindCount = int(sizeof(kKinds) / sizeof(kKinds[0]));
 

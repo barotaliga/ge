@@ -48,7 +48,7 @@ bool deathmatch(const Q2Server& s);
 int skill(const Q2Server& s);
 double random01(Q2Server& s);
 float crandom(Q2Server& s);
-sh::Vec3f unpack(const int16_t v[3]);
+sh::Vec3f unpack(const int32_t v[3]);
 void event(Q2Server& s, NetEvent ev);
 // A sound from monster entity `e` on its voice (`reach` 1 normal, 2 an idle's, 0 everywhere).
 void sound(Q2Server& s, int e, const char* sample, float reach = 1);
@@ -130,6 +130,11 @@ inline constexpr const char* kCommanderGroup[7] = {
     "monster_soldier_light", "monster_soldier", "monster_soldier_ss", "monster_infantry",
     "monster_gunner",        "monster_medic",   "monster_gladiator"};
 inline constexpr const char* kSpawnGrow = "models/items/spawngro2/tris.md2";
+// A body for a spawner's brood (a commander's guards, a boss's fliers or stalkers): one of the
+// spares made with the map for `c` still waiting, or one of its own torn apart; null when none.
+Q2Monster* free_spare(Q2Server& s, const Q2Monster& c);
+// Spare `m` made afresh as class `k`, hidden, waiting at `at`; `from` its spawner (a monster row).
+void become(Q2Server& s, Q2Monster& m, int k, int from, sh::Vec3f at);
 // Eight spare bodies, waiting unseen, for each medic commander on the map (with the map's load).
 void gz_spares(Q2Server& s);
 // A commander's call begun.
@@ -146,8 +151,8 @@ bool gz_think(Q2Server& s, Q2Monster& m);
 void gz_spawned(Q2Server& s, Q2Monster& m);
 // A use of a Ground Zero kind that is its own (a wall turret coming out); true when taken.
 bool gz_use(Q2Server& s, Q2Monster& m);
-// Whether a blow passes it by (a wall turret not yet out).
-bool gz_untouchable(const Q2Monster& m);
+// Whether a blow passes it by (a wall turret not yet out, a boss dying or invulnerable).
+bool gz_untouchable(const Q2Server& s, const Q2Monster& m);
 // A Ground Zero kind's own pain from a blow of `damage` (a turret's none, a stalker's jump or
 // false death); true when it took the blow's pain.
 bool gz_pain(Q2Server& s, Q2Monster& m, int damage);
@@ -158,5 +163,35 @@ void gz_died(Q2Server& s, Q2Monster& m);
 bool gz_counted(const Q2Monster& m);
 // A Ground Zero kind's world row: a reinforcement growing shows the grow.
 void gz_row(const Q2Server& s, const Q2Monster& m, ge::shooter::WorldEntity& r);
+
+// ---- Ground Zero's bosses (q2_gz_bosses.cpp): the carrier and the black widow's two stages ----
+// Whether `m` (or class `classname`) is one of them.
+bool gz_boss(const Q2Monster& m);
+bool gz_boss(std::string_view classname);
+// Their spare bodies, made with the map: fliers for a carrier, stalkers for a widow.
+void gz_boss_spares(Q2Server& s);
+// One set up as the map spawns: its health and its power shield by skill and co-op.
+void gz_boss_spawned(Q2Server& s, Q2Monster& m);
+// Its frame: the move it plays, or the choice of one; false when it leaves the frame to the run.
+bool gz_boss_think(Q2Server& s, Q2Monster& m);
+// Its pain from a blow of `damage` (always its own).
+void gz_boss_pain(Q2Server& s, Q2Monster& m, int damage);
+// Its death begun: a death sound everywhere, the timers cleared, the second stage's stalkers
+// killed.
+void gz_boss_died(Q2Server& s, Q2Monster& m);
+// A dead boss's frame (a widow's beam-out, her legs, the second stage's blasts); false for any
+// other monster, which lies by the base game's rules.
+bool gz_boss_lie(Q2Server& s, Q2Monster& m);
+// Whether blows pass it by now: dying, or invulnerable by its answer to a power-up.
+bool gz_boss_untouchable(const Q2Server& s, const Q2Monster& m);
+// Its world row: the frame of its legs or its dead search, its shell.
+void gz_boss_row(const Q2Server& s, const Q2Monster& m, ge::shooter::WorldEntity& r);
+// The kinds, models and sounds a boss of `classname` brings (its brood, its grows, its gibs).
+struct BossContent {
+  const char* kinds[2] = {};
+  const char* models[10] = {};
+  const char* sounds[16] = {};
+};
+BossContent gz_boss_content(std::string_view classname);
 
 }  // namespace shooters_edge::server::monster_ai

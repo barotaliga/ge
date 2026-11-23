@@ -314,8 +314,8 @@ void tracker(Q2Server& s, Q2Missile& m) {
       return;
     }
     const int tick = m.damage / 5;
-    if (m.prey < sh::kMaxClients)
-      fight_hurt(s, m.prey, m.owner, {}, tick, 0, int(SqWeapon::disruptor), 4);
+    if (m.prey >= 0 && m.prey < sh::kMaxClients)  // a player; a monster is -2 - its entity
+      fight_hurt(s, m.prey, m.owner, {}, tick, 0, m.weapon, 4);
     else
       monster_damage(s, -2 - m.prey, m.owner, tick, {}, false);
     return;
@@ -328,7 +328,8 @@ void tracker(Q2Server& s, Q2Missile& m) {
       return;
     }
     sh::Vec3f way = aim - m.origin;
-    if (sh::normalize(way) > 0) m.velocity = way * 1000;
+    const float speed = sh::length(m.velocity);  // the speed it was fired at (a widow's 500)
+    if (sh::normalize(way) > 0) m.velocity = way * (speed > 0 ? speed : 1000.0f);
   } else if (s.level_time + 0.001 >= m.dies_at) {
     m.live = false;
     return;

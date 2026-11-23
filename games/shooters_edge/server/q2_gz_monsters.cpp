@@ -46,8 +46,8 @@
 #include "brush/map.hpp"
 #include "core/libm/libm.hpp"
 #include "core/prng.hpp"
-#include "shooters_edge/server/q2_gibs.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gibs.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_monster_ai.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
@@ -120,42 +120,6 @@ sh::Vec3f spot(const Q2Entity& e, int i, bool back) {
   const sh::Vec3f f = forward_of(e.angles.y) * (kSpots[i][0] * sign);
   const sh::Vec3f r = forward_of(e.angles.y - 90) * (kSpots[i][1] * sign);
   return e.origin + f + r + sh::Vec3f{0, 0, 10};
-}
-
-// A body for the commander's call: a spare still waiting, or one of its own torn apart.
-Q2Monster* free_spare(Q2Server& s, const Q2Monster& c) {
-  const int block = -2 - c.entity;
-  for (Q2Monster& m : s.monsters) {
-    const Q2Entity& e = s.entities[size_t(m.entity)];
-    if (e.block != block) continue;
-    if ((m.spare && m.waiting && m.grow_until == 0) || (m.dead && e.gone)) return &m;
-  }
-  return nullptr;
-}
-
-// Spare `m` made afresh as class `k`, hidden, waiting at `at`.
-void become(Q2Server& s, Q2Monster& m, int k, int from, sh::Vec3f at) {
-  Q2Entity& e = body(s, m);
-  const Kind& kd = kKinds[k];
-  Q2Monster fresh;
-  fresh.entity = m.entity;
-  fresh.kind = k;
-  fresh.spare = fresh.waiting = true;
-  fresh.commander = from;
-  fresh.screen = kd.screen ? 100 : 0;
-  fresh.shield = kd.shield_flag == 0 ? kd.shield : 0;
-  m = fresh;
-  e.classname = kd.classname;
-  e.health = e.max_health = kd.health;
-  e.mins = kd.mins;
-  e.maxs = kd.maxs;
-  e.origin = at;
-  e.gone = e.corpse = false;
-  e.hidden = true;
-  e.box = false;
-  const auto found_model = std::find(s.models.begin(), s.models.end(), kd.model);
-  e.modelindex = static_cast<int>(found_model - s.models.begin());
-  m.pose.last = at;
 }
 
 // The enemy the guards take: the commander's (the one it had while it heals).
@@ -250,7 +214,6 @@ void call_off(Q2Server& s, Q2Monster& c) {
   c.call = -1;
 }
 
-
 // ---- The turret ----
 
 constexpr std::string_view kTurret = "monster_turret";
@@ -259,12 +222,12 @@ constexpr double kDegrees = 57.29577951308232;
 constexpr const char* kDebris = "models/objects/debris1/tris.md2";
 
 enum Stage : int {
-  kStand = 0,      // no enemy: frames 0 and 1
-  kOpen = 2,       // opening: frames 2 to 8, one a stage
-  kReady = 9,      // aiming: frames 8 and 9
-  kFire = 10,      // the fire run: 10 to 13, firing on 10
-  kInWall = -2,    // a wall unit waiting for its use
-  kSliding = -1,   // a wall unit coming out
+  kStand = 0,     // no enemy: frames 0 and 1
+  kOpen = 2,      // opening: frames 2 to 8, one a stage
+  kReady = 9,     // aiming: frames 8 and 9
+  kFire = 10,     // the fire run: 10 to 13, firing on 10
+  kInWall = -2,   // a wall unit waiting for its use
+  kSliding = -1,  // a wall unit coming out
 };
 
 enum class Gun : uint8_t { blaster, machine_gun, rocket };
@@ -436,7 +399,7 @@ constexpr int kOnRoof = 8;
 
 enum Stalk : int {
   kStalking = 0,
-  kAir = 1,       // in a jump: 1.3 gravity, till it lands or `stage_until`
+  kAir = 1,        // in a jump: 1.3 gravity, till it lands or `stage_until`
   kFeignFall = 2,  // falling into a false death: frames 70 to 78
   kTwitch = 3,     // healing where it lies: frames 79 to 88, over and over
   kRise = 4,       // getting up: frames 89 to 92
@@ -452,9 +415,8 @@ bool on_ceiling(const Q2Monster& m) { return m.gravity < 0; }
 bool surface_in_reach(const Q2Server& s, const Q2Monster& m, float reach) {
   const Q2Entity& e = s.entities[size_t(m.entity)];
   const float way = on_ceiling(m) ? -1.0f : 1.0f;
-  const ge::classic::Q2Trace t =
-      map_trace(s, e.origin, e.mins, e.maxs, e.origin + sh::Vec3f{0, 0, reach * way},
-                sh::kSqSolid, m.entity);
+  const ge::classic::Q2Trace t = map_trace(
+      s, e.origin, e.mins, e.maxs, e.origin + sh::Vec3f{0, 0, reach * way}, sh::kSqSolid, m.entity);
   if (t.fraction >= 1 || t.entity != 0 || t.normal.z * way > -0.9f) return false;
   const float face = way > 0 ? t.end.z + e.maxs.z : t.end.z + e.mins.z;
   for (const float cx : {e.mins.x, e.maxs.x})
@@ -497,7 +459,7 @@ bool pounce(Q2Server& s, Q2Monster& m) {
   if (on_ceiling(m) || m.enemy < 0 || m.enemy >= sh::kMaxClients) return false;
   Q2Entity& e = body(s, m);
   const Q2Player& p = s.players[m.enemy];
-  if (p.move.ground_entity < 0 || p.water_level > 0) return false;
+  if (!p.on_ground || p.water_level > 0) return false;
   sh::Vec3f at = foe_at(s, m.enemy);
   if (wet(s, at)) return false;
   sh::Vec3f to = at - e.origin;
@@ -618,7 +580,42 @@ bool stalker_pain(Q2Server& s, Q2Monster& m, int damage) {
 
 }  // namespace
 
+Q2Monster* free_spare(Q2Server& s, const Q2Monster& c) {
+  const int block = -2 - c.entity;
+  for (Q2Monster& m : s.monsters) {
+    const Q2Entity& e = s.entities[size_t(m.entity)];
+    if (e.block != block) continue;
+    if ((m.spare && m.waiting && m.grow_until == 0) || (m.dead && e.gone)) return &m;
+  }
+  return nullptr;
+}
+
+void become(Q2Server& s, Q2Monster& m, int k, int from, sh::Vec3f at) {
+  Q2Entity& e = body(s, m);
+  const Kind& kd = kKinds[k];
+  Q2Monster fresh;
+  fresh.entity = m.entity;
+  fresh.kind = k;
+  fresh.spare = fresh.waiting = true;
+  fresh.commander = from;
+  fresh.screen = kd.screen ? 100 : 0;
+  fresh.shield = kd.shield_flag == 0 ? kd.shield : 0;
+  m = fresh;
+  e.classname = kd.classname;
+  e.health = e.max_health = kd.health;
+  e.mins = kd.mins;
+  e.maxs = kd.maxs;
+  e.origin = at;
+  e.gone = e.corpse = false;
+  e.hidden = true;
+  e.box = false;
+  const auto found_model = std::find(s.models.begin(), s.models.end(), kd.model);
+  e.modelindex = static_cast<int>(found_model - s.models.begin());
+  m.pose.last = at;
+}
+
 void gz_spares(Q2Server& s) {
+  gz_boss_spares(s);
   const size_t mapped = s.entities.size();
   for (size_t i = 0; i < mapped; i++) {
     const Q2Entity& c = s.entities[i];
@@ -660,6 +657,7 @@ bool gz_cable_instead(Q2Server& s, Q2Monster& m) {
 
 bool gz_think(Q2Server& s, Q2Monster& m) {
   if (m.dead) return false;
+  if (gz_boss(m)) return gz_boss_think(s, m);
   if (turret(m)) return turret_think(s, m);
   if (stalker(m)) return stalker_think(s, m);
   if (!commander(m)) return false;
@@ -708,6 +706,7 @@ bool gz_think(Q2Server& s, Q2Monster& m) {
 
 void gz_spawned(Q2Server& s, Q2Monster& m) {
   if (stalker(m) && (body(s, m).spawnflags & kOnRoof) != 0) m.gravity = -1;  // on its ceiling
+  if (gz_boss(m)) gz_boss_spawned(s, m);
   if (!turret(m)) return;
   Q2Entity& e = body(s, m);
   m.gravity = 0;
@@ -738,15 +737,22 @@ bool gz_use(Q2Server& s, Q2Monster& m) {
   return true;
 }
 
-bool gz_untouchable(const Q2Monster& m) { return turret(m) && m.stage < 0; }
+bool gz_untouchable(const Q2Server& s, const Q2Monster& m) {
+  return (turret(m) && m.stage < 0) || gz_boss_untouchable(s, m);
+}
 
 bool gz_pain(Q2Server& s, Q2Monster& m, int damage) {
   if (turret(m)) return true;
+  if (gz_boss(m)) {
+    gz_boss_pain(s, m, damage);
+    return true;
+  }
   if (stalker(m)) return stalker_pain(s, m, damage);
   return false;
 }
 
 void gz_died(Q2Server& s, Q2Monster& m) {
+  if (gz_boss(m)) gz_boss_died(s, m);
   if (stalker(m)) {  // it always falls, off its ceiling too
     m.gravity = 1;
     m.on_ground = false;
@@ -768,6 +774,10 @@ void gz_died(Q2Server& s, Q2Monster& m) {
 bool gz_counted(const Q2Monster& m) { return m.commander < 0; }
 
 void gz_row(const Q2Server& s, const Q2Monster& m, ge::shooter::WorldEntity& r) {
+  if (gz_boss(m)) {
+    gz_boss_row(s, m, r);
+    return;
+  }
   if (turret(m)) {  // its aim in pitch too, its frame, its weapon's skin
     const Q2Entity& e = s.entities[size_t(m.entity)];
     r.angles = e.angles;
@@ -828,10 +838,10 @@ bool gz_brain_spawn(Q2Server& s, int i) {
   if (e.classname != kBrain || s.opt.pack != Q2Pack::ground_zero) return false;
   e.hidden = true;
   e.box = false;
-  e.aim = -1;          // its enemy (a slot, or an entity as -2 - its index)
-  e.until = -1;        // since when it has seen him
-  e.tick_at = 0;       // its next shot's earliest time
-  e.state = 0;         // 1 once it has looked for its first enemy
+  e.aim = -1;     // its enemy (a slot, or an entity as -2 - its index)
+  e.until = -1;   // since when it has seen him
+  e.tick_at = 0;  // its next shot's earliest time
+  e.state = 0;    // 1 once it has looked for its first enemy
   e.on = e.targetname.empty();
   e.delay = 0;
   if (e.block >= 0 && size_t(e.block) < s.map->entities.size()) {

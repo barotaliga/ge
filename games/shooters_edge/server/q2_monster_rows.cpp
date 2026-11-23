@@ -14,8 +14,8 @@
 
 #include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_map.hpp"
-#include "shooters_edge/server/q2_monster_kinds.hpp"
 #include "shooters_edge/server/q2_monster_ai.hpp"
+#include "shooters_edge/server/q2_monster_kinds.hpp"
 #include "shooters_edge/server/q2_monster_pain.hpp"
 #include "shooters_edge/server/q2_monster_steps.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
@@ -94,6 +94,14 @@ void monster_precache(Q2Server& s) {
         add_sound(name);
       model("models/objects/debris1/tris.md2");
       model("models/monsters/turretbase/tris.md2");
+    }
+    if (monster_ai::gz_boss(kKinds[k].classname)) {  // its brood, its grows, gibs and sounds
+      const monster_ai::BossContent c = monster_ai::gz_boss_content(kKinds[k].classname);
+      for (const char* name : c.kinds)
+        if (name != nullptr && kind_of(s, name) >= 0) add_kind(kind_of(s, name));
+      for (const char* name : c.models)
+        if (name != nullptr) model(name);
+      for (const char* name : c.sounds) add_sound(name);
     }
     if (kKinds[k].prop && kKinds[k].keep)
       for (const char* name : {"tank/pain.wav", "tank/thud.wav"}) add_sound(name);

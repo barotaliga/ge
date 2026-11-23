@@ -156,6 +156,28 @@ struct Q2Entity {
 };
 
 // A monster of the single player (q2_monsters.hpp): its map entity and its mind.
+// Ground Zero's bosses (q2_gz_bosses.cpp: the carrier and the black widow's two stages): the move
+// it plays by hand (its `Move`, 0 none) and its frame there, the move's own clock (the spawn's,
+// the grenades', the blaster's end), when each weapon was last used, the choice's flags (blind,
+// the spawn bias, angered), its manual steering, the aim it saved (a rail's, a disruptor's) and
+// its enemy's place at the last beam, the 0.5 s step of a spawn, its answer to a player's
+// power-ups (the multiplier, invulnerable until), and after its death its own count of frames.
+struct Q2Boss {  // NOLINT(clang-analyzer-optin.performance.Padding): one a boss, by name
+  int move = 0;
+  int frame = 0;
+  double timer = 0;
+  double rail_at = -100, rockets_at = -100, blaster_end = -100, tongue_at = 0, coop_at = 0;
+  bool blind = false, bias = false, angered = false, manual = false;
+  sh::Vec3f saved, beam_last;
+  int step = 0;
+  int brood[2] = {-1, -1};  // the spares growing for it (monster rows), -1 none
+  int multiplier = 1;
+  double invulnerable_until = 0;
+  int dying = -1;
+  int legs = -1;
+  double legs_at = 0;
+};
+
 struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
   int entity = -1;
   int kind = 0;    // its row in the roster
@@ -274,6 +296,7 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   int stage = 0;
   double stage_until = 0;
   int turret_frame = 0;
+  Q2Boss boss;  // Ground Zero's bosses' own (q2_gz_bosses.cpp)
 };
 
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name

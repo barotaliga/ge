@@ -82,7 +82,16 @@ int8_t quarter(float v) { return static_cast<int8_t>(std::clamp(v * 4.0f, -128.0
 // byte and payload. How each kind's bytes run: a point; a point and a direction byte; a count, a
 // point, a direction and a colour; two points (a line); an entity and two points; two entities
 // (the struck, then the striker in the event's level) and two points (the end, then the start).
-enum class TeBody : uint8_t { point, point_dir, splash, line, entity_line, count, lightning };
+enum class TeBody : uint8_t {
+  point,
+  point_dir,
+  splash,
+  line,
+  entity_line,
+  count,
+  lightning,
+  id_point
+};
 struct TeName {
   const char* name;
   uint8_t kind;
@@ -145,6 +154,11 @@ constexpr TeName kTeNames[] = {
     {"te_explosion1_big", 53, TeBody::point, 0},
     {"te_flechette", 55, TeBody::point_dir, 0},
     {"te_blaster2", 30, TeBody::point_dir, 0},
+    // The black widow's: her beam-out (a short, its id, then the point), her splash as she goes,
+    // and the blast that throws no sparks.
+    {"te_widowbeamout", 50, TeBody::id_point, 0},
+    {"te_widowsplash", 52, TeBody::point, 0},
+    {"te_explosion1_np", 54, TeBody::point, 0},
 };
 
 }  // namespace
@@ -232,6 +246,10 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
       o.i16(std::clamp(e.ent, 0, kQ2Entities - 1));
       point(e.origin);
       point(end);
+      break;
+    case TeBody::id_point:  // an id (the event's `level`), then the point
+      o.i16(e.level & 0x7fff);
+      point(e.origin);
       break;
     case TeBody::lightning:
       o.i16(std::clamp(e.ent, 0, kQ2Entities - 1));

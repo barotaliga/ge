@@ -246,8 +246,7 @@ bool step(Q2Server& s, Q2Monster& m, sh::Vec3f move) {
     to = down.end;
   }
   if (m.on_ground) {  // never off a ledge
-    const ge::classic::Q2Trace below =
-        sweep(s, m, to, to - sh::Vec3f{0, 0, (kStepUp + 1) * sky});
+    const ge::classic::Q2Trace below = sweep(s, m, to, to - sh::Vec3f{0, 0, (kStepUp + 1) * sky});
     if (below.fraction >= 1) return false;
     to = below.fraction > 0 ? below.end : to;
   }
@@ -310,7 +309,7 @@ void fall(Q2Server& s, Q2Monster& m) {
 
 // Turns toward the ideal yaw by the kind's turning speed.
 void turn(Q2Entity& e, const Kind& k, float ideal) {
-  const float most = afloat(k) ? 10.0f : 20.0f;
+  const float most = k.yaw_speed > 0 ? k.yaw_speed : afloat(k) ? 10.0f : 20.0f;
   float d = ideal - e.angles.y;
   while (d > 180) d -= 360;
   while (d < -180) d += 360;
@@ -624,7 +623,7 @@ void choose(Q2Server& s, Q2Monster& m) {
   }
   const int i = pick_ranged(s, m, dist);
   m.attack_finished = s.level_time + 2 * random01(s);
-  if (dist < attack_at(m, i).closest) return;  // too near for it: keeps closing
+  if (dist < attack_at(m, i).closest) return;            // too near for it: keeps closing
   if (gz_call_instead(s, m, r == Range::melee)) return;  // a medic commander's reinforcements
   begin_attack(s, m, i);
 }
@@ -755,7 +754,8 @@ void dying_shot(Q2Server& s, Q2Monster& m) {
   const sh::Vec3f to = from + fwd * 8192;
   const char* look = a.fire == Fire::bolt ? "blaster" : "gun";
   fight_monster_line(s, a.fire == Fire::bolt ? "te_monster_flash.blaster" : "te_monster_flash.gun",
-                     m.entity, from, from + fwd * 16.0f, q2_monster_flash_value(looks_like(k), look));
+                     m.entity, from, from + fwd * 16.0f,
+                     q2_monster_flash_value(looks_like(k), look));
   if (a.fire == Fire::bolt) {
     fight_monster_launch(s, m.entity, SqShot::bolt, from, fwd, a.damage, a.speed, cause_of(m));
     return;
@@ -1072,7 +1072,7 @@ void think(Q2Server& s, Q2Monster& m) {
     return;
   }
   sh::Vec3f goal = m.last_sight;
-  if (afloat(k)) goal.z += 35;  // a flier keeps 30 to 40 above him
+  if (afloat(k)) goal.z += k.hover;  // a flier keeps 30 to 40 above him (the carrier 104)
   if (range_to(e.origin, m.last_sight) == Range::melee && k.melee[0].fire == Fire::none) {
     turn(e, k, yaw_to(goal - e.origin));
     return;
@@ -1126,6 +1126,7 @@ void lie(Q2Server& s, Q2Monster& m) {
   Q2Entity& e = body(s, m);
   if (e.gone) return;
   const End end = kind(m).end;
+  if (gz_boss_lie(s, m)) return;  // Ground Zero's bosses' own deaths (q2_gz_bosses.cpp)
   if (end == End::crash) {
     if (m.on_ground || s.level_time + 0.001 >= m.end_at) blow_up(s, m);
     return;
@@ -1497,6 +1498,8 @@ void react(Q2Server& s, Q2Monster& m, int attacker) {
   if (kind(m).good && !named(m, "misc_actor")) return;  // an actor fights back
   const Kind& ak = kind(*a);
   const Kind& k = kind(m);
+  // Shots between a boss (or a monster a spawner brought) and another start no fight.
+  if (ak.ignore_shots || k.ignore_shots || a->commander >= 0 || m.commander >= 0) return;
   const bool alike = ak.flies == k.flies && ak.swims == k.swims;
   const bool heavy = named(*a, "monster_tank") || named(*a, "monster_tank_commander") ||
                      named(*a, "monster_supertank") || named(*a, "monster_makron") ||
@@ -1529,7 +1532,7 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
     return true;
   }
   if (ent.gone || m.waiting || damage <= 0) return false;
-  if (gz_untouchable(m)) return true;  // a wall turret still in its wall
+  if (gz_untouchable(s, m)) return true;  // a wall turret still in its wall
   if (m.dead && k.end != End::corpse && k.end != End::crash) return true;  // a dying boss
   // A player's blow on a monster that has not yet noticed anyone: twice its points (not a blast's).
   if (!splash && !m.dead && m.enemy == -1 && hunted(s, attacker)) damage *= 2;
@@ -1605,7 +1608,8 @@ bool monster_damage(Q2Server& s, int e, int attacker, int damage, sh::Vec3f dir,
 
 bool monster_laser_proof(const Q2Server& s, int e) {
   const int i = monster_index(s, e);
-  return i >= 0 && named(s.monsters[size_t(i)], "monster_boss2");
+  return i >= 0 &&
+         (named(s.monsters[size_t(i)], "monster_boss2") || kind(s.monsters[size_t(i)]).laser_proof);
 }
 
 bool monster_use(Q2Server& s, int e, int activator) {
