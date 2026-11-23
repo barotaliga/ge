@@ -53,6 +53,8 @@ inline constexpr int kSqByHeldGrenade = 104;
 inline constexpr int kSqByCrush = 105, kSqByHurt = 106, kSqByTelefrag = 107, kSqByExplosion = 108;
 // A map's laser, an exploding barrel, a deathmatch exit taken without allow-exit (`dmflags` 4096).
 inline constexpr int kSqByLaser = 109, kSqByBarrel = 110, kSqByExit = 111;
+// Ground Zero's A-M bomb (q2_gz.hpp): its blast's own words.
+inline constexpr int kSqByAmBomb = 113;
 // A monster's attack: this plus its row in the roster (q2_monsters.cpp).
 inline constexpr int kSqByMonster = 200;
 
@@ -69,12 +71,15 @@ std::string sq_obituary(const std::string& victim, const std::string& killer, bo
                         int how, const std::string& gender, bool* by_killer = nullptr);
 
 // A blow to player `target` from `attacker` (a slot or -1) along `dir` (zero: no push), by
-// `weapon` (a weapon or a `kSqBy*`); `flags` 1 passes armour by, 2 passes invulnerability by.
+// `weapon` (a weapon or a `kSqBy*`); `flags` 1 passes armour by, 2 passes invulnerability by, 4
+// is energy (the armour's energy share).
 void fight_hurt(Q2Server& s, int target, int attacker, sh::Vec3f dir, int damage, int knockback,
                 int weapon, int flags = 0);
 // Radius damage at `at`: `damage` less half the distance, within `radius` (the attacker's half),
-// to the players and the map's shootable movers it reaches.
-void fight_blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int weapon);
+// to the players and the map's shootable movers it reaches; player `ignore` left out, `energy` the
+// armour's energy share.
+void fight_blast(Q2Server& s, sh::Vec3f at, int attacker, int damage, float radius, int weapon,
+                 int ignore = -1, bool energy = false);
 
 // Midair (`k_midair` in deathmatch; plugins/shooter/midair.hpp): whether it is on; a spawn's kit
 // (250 health, 200 body armour, the rocket launcher in hand, 255 rockets that never run out); the

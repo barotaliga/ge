@@ -204,7 +204,7 @@ inline constexpr SqItem kSqItems[] = {
     {"item_ir_goggles", "IR Goggles", "models/items/goggles/tris.md2", "items/pkup.wav",
      SqKind::powerup, 60, SqAmmo::none, 60, Q2Pack::ground_zero},
     {"item_double", "Double Damage", "models/items/ddamage/tris.md2", "items/pkup.wav",
-     SqKind::powerup, 60, SqAmmo::none, 60, Q2Pack::ground_zero},
+     SqKind::powerup, 30, SqAmmo::none, 60, Q2Pack::ground_zero},
     {"item_compass", "compass", "models/objects/fire/tris.md2", "items/pkup.wav",
      SqKind::powerup, 60, SqAmmo::none, 60, Q2Pack::ground_zero},
     {"item_sphere_vengeance", "vengeance sphere", "models/items/vengnce/tris.md2",
@@ -234,6 +234,8 @@ inline constexpr int kSqTurnEffect = 1;
 // The effect bits a player's powers send (a client wears them as a blue and a red shell), and the
 // render bit that pulses an item's light where it lies.
 inline constexpr int kSqQuadEffect = 32768, kSqInvulnerableEffect = 65536;
+// Ground Zero's double damage shell.
+inline constexpr int kSqDoubleEffect = 0x08000000;
 inline constexpr int kSqGlowRender = 512;
 // A beam's render bits (a laser's): drawn from the origin to the row's far end, seen through.
 inline constexpr int kSqBeamRender = 128, kSqTranslucentRender = 32;

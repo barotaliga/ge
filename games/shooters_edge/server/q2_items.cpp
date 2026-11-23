@@ -181,6 +181,7 @@ bool sq_pick_up(int item, SqBody& b, bool deathmatch, int skill, double now, int
       }
       return take_health(it, item, b, deathmatch, now);
     case SqKind::powerup: {
+      if (std::string_view(it.classname) == "ammo_nuke" && b.counts[item] >= 1) return false;
       const int hold = skill <= 1 ? 2 : 1;
       if (skill >= 1 && b.counts[item] >= hold) return false;
       b.counts[item]++;
