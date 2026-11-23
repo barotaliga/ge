@@ -136,6 +136,12 @@ constexpr float kRunSteps[14] = {10, 4, 12, 11, 13, 18, 15, 14, 11, 8, 11, 12, 1
 
 bool gz_base_shoot(Q2Server& s, Q2Monster& m, const Attack& a, sh::Vec3f from) {
   if (!gz(s)) return false;
+  // At a tesla: its shot strikes it (no missile meets another); the medic's bolt does 3.
+  if (const int t = foe_missile(m.enemy); t >= 0) {
+    const bool medic = named(m, "monster_medic") || named(m, "monster_medic_commander");
+    gz_tesla_damage(s, t, medic && a.fire == Fire::bolt ? 3 : a.damage * std::max(1, a.count));
+    return false;  // the shot itself still flies
+  }
   if (soldier(m) && m.enemy >= 0 && crossed(s, m, from, foe_eye(s, m.enemy)))
     return true;  // a soldier holds its shot
   if (a.fire != Fire::rockets) return false;

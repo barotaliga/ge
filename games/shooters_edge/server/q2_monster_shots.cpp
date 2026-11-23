@@ -65,6 +65,8 @@ void hurt_foe(Q2Server& s, const Q2Monster& m, int dmg, sh::Vec3f dir) {
   }
   if (const Q2Monster* o = foe_monster(s, m.enemy))
     monster_damage(s, o->entity, foe_of_entity(m.entity), dmg, dir);
+  else if (foe_missile(m.enemy) >= 0)  // Ground Zero's tesla
+    gz_tesla_damage(s, foe_missile(m.enemy), dmg);
 }
 
 const Attack& attack_at(const Q2Monster& m, int i) {

@@ -89,7 +89,7 @@ bool targetable(const Q2Server& s, int slot) {
 // ---- Foes: a player's slot, or another monster as -2 - its entity (q2_server.hpp's `enemy`) ----
 
 int foe_of_entity(int e) { return -2 - e; }
-int foe_entity(int foe) { return foe <= -2 ? -2 - foe : -1; }
+int foe_entity(int foe) { return foe <= -2 && foe > kFoeMissile ? -2 - foe : -1; }
 const Q2Monster* foe_monster(const Q2Server& s, int foe) {
   const int e = foe_entity(foe);
   const int i = e >= 0 ? monster_index(s, e) : -1;
@@ -99,6 +99,7 @@ const Q2Monster* foe_monster(const Q2Server& s, int foe) {
 bool foe_alive(const Q2Server& s, int foe) {
   if (foe >= 0) return hunted(s, foe);
   const Q2Monster* o = foe_monster(s, foe);
+  if (o == nullptr && foe_missile(foe) >= 0) return gz_tesla_alive(s, foe_missile(foe));
   if (o == nullptr || o->dead) return false;
   const Q2Entity& b = s.entities[size_t(o->entity)];
   return !b.gone && b.health > 0;
@@ -106,6 +107,7 @@ bool foe_alive(const Q2Server& s, int foe) {
 sh::Vec3f foe_at(const Q2Server& s, int foe) {
   if (foe >= 0) return unpack(s.players[foe].move.origin);
   const Q2Monster* o = foe_monster(s, foe);
+  if (o == nullptr && foe_missile(foe) >= 0) return gz_tesla_at(s, foe_missile(foe), 0);
   return o != nullptr ? s.entities[size_t(o->entity)].origin : sh::Vec3f{};
 }
 sh::Vec3f foe_velocity(const Q2Server& s, int foe) {
@@ -116,6 +118,7 @@ sh::Vec3f foe_velocity(const Q2Server& s, int foe) {
 sh::Vec3f foe_eye(const Q2Server& s, int foe) {
   if (foe >= 0) return player_eye(s.players[foe]);
   const Q2Monster* o = foe_monster(s, foe);
+  if (o == nullptr && foe_missile(foe) >= 0) return gz_tesla_at(s, foe_missile(foe), 10);
   return o != nullptr ? eye(s.entities[size_t(o->entity)], kKinds[o->kind]) : sh::Vec3f{};
 }
 // The foe's box about its origin.
@@ -126,6 +129,11 @@ void foe_box(const Q2Server& s, int foe, sh::Vec3f& mins, sh::Vec3f& maxs) {
     return;
   }
   const Q2Monster* o = foe_monster(s, foe);
+  if (o == nullptr && foe_missile(foe) >= 0) {  // a tesla: ±12 across, 0 to 20 high
+    mins = {-12, -12, 0};
+    maxs = {12, 12, 20};
+    return;
+  }
   mins = o != nullptr ? s.entities[size_t(o->entity)].mins : sh::Vec3f{};
   maxs = o != nullptr ? s.entities[size_t(o->entity)].maxs : sh::Vec3f{};
 }
@@ -218,6 +226,7 @@ bool on_floor(const Q2Server& s, const Q2Monster& m) {
 // higher than a step, never into water from dry land. A flier never flies into water; a swimmer
 // never swims out of it. False when it could not go.
 bool step(Q2Server& s, Q2Monster& m, sh::Vec3f move) {
+  if (gz_bad_area_refuses(s, m, move)) return false;  // Ground Zero's tesla's ground
   Q2Entity& e = body(s, m);
   const Kind& k = kind(m);
   const bool was_wet = wet(s, foot(e, e.origin));
@@ -1276,6 +1285,7 @@ bool named_jail5(std::string_view map) {
 
 void monster_spawn(Q2Server& s) {
   s.monsters.clear();
+  s.bad_areas.clear();
   for (int i = 0; i < 8; i++) {  // a new map: no trail yet
     s.trail_at[i] = {};
     s.trail_time[i] = 0;
@@ -1525,6 +1535,7 @@ void monster_dodge(Q2Server& s, int e, int shooter, float dist, float speed, sh:
 // the heavy kinds whose splash hits its own side; one that was aiming at it; else it joins that
 // monster's fight against its foe.
 void react(Q2Server& s, Q2Monster& m, int attacker) {
+  if (gz_tesla_holds(s, m)) return;  // Ground Zero: a monster fighting a tesla minds only it
   if (hunted(s, attacker) && !kind(m).good) {
     if (m.patient >= 0 && m.enemy != -1) return;  // a medic at a corpse keeps to it
     if (attacker == m.enemy) return;

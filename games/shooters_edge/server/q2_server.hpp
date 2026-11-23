@@ -320,6 +320,13 @@ struct Q2Monster {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by
   double hint_wait = 0;
 };
 
+// Ground Zero's bad area (q2_gz_tesla.cpp): the box round a tesla that hurt a monster, which
+// monsters keep out of until `until` (level time); `at` the tesla.
+struct Q2BadArea {
+  sh::Vec3f lo, hi, at;
+  double until = 0;
+};
+
 struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by name
   ge::classic::Q2State move;
   // How far the movers carried him in the last rules frame (a lift's rise): the window eases its
@@ -515,6 +522,8 @@ struct Q2Missile {
   // A sphere's (q2_gz_spheres.cpp): the angles it is drawn at, and where its hunter last saw its
   // prey.
   sh::Vec3f facing, last_seen;
+  // A tesla's (q2_gz_weapons.cpp): what harm it takes before it bursts (30, 20 in deathmatch).
+  int health = 0;
 };
 inline constexpr int kQ2Missiles = 64;  // the rows the world keeps for shots in flight
 
@@ -686,6 +695,7 @@ struct Q2Server : RulesCommon {
   // The monsters (q2_monsters.hpp), the level's count, and who saw a player last: the map
   // entity and its frame, and the player the monsters look at this frame.
   std::vector<Q2Monster> monsters;
+  std::vector<Q2BadArea> bad_areas;  // Ground Zero's, round its teslas
   int monsters_total = 0, monsters_killed = 0;
   int sight_entity = -1;
   int64_t sight_frame = -10;

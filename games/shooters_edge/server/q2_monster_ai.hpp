@@ -61,6 +61,10 @@ bool targetable(const Q2Server& s, int slot);
 // ---- Foes: a player's slot, or another monster as -2 - its entity ----
 int foe_of_entity(int e);
 int foe_entity(int foe);
+// Ground Zero's tesla as a foe: missile `i` as a foe, and a foe's missile (-1 none).
+constexpr int kFoeMissile = -1000000;
+constexpr int foe_of_missile(int i) { return kFoeMissile - i; }
+constexpr int foe_missile(int foe) { return foe <= kFoeMissile ? kFoeMissile - foe : -1; }
 const Q2Monster* foe_monster(const Q2Server& s, int foe);
 bool foe_alive(const Q2Server& s, int foe);
 sh::Vec3f foe_at(const Q2Server& s, int foe);
@@ -214,6 +218,13 @@ struct GzBlind {
   const char* classname;
   float delay_lo, delay_hi, wait_lo, wait_hi;
 };
+// Ground Zero's tesla (q2_gz_tesla.cpp): tesla `i` as a foe still there, and its origin raised
+// `up`; a monster fighting one minds no other blow (true); whether a step of `move` would take
+// it into a tesla's bad area, or deeper in toward the tesla.
+bool gz_tesla_alive(const Q2Server& s, int i);
+sh::Vec3f gz_tesla_at(const Q2Server& s, int i, float up);
+bool gz_tesla_holds(Q2Server& s, Q2Monster& m);
+bool gz_bad_area_refuses(const Q2Server& s, const Q2Monster& m, sh::Vec3f move);
 const GzLedge* gz_ledge(std::string_view classname);
 const GzDodge* gz_dodge_of(std::string_view classname);
 const GzBlind* gz_blind_of(std::string_view classname);

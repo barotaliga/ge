@@ -95,6 +95,12 @@ bool gz_brain_spawn(Q2Server& s, int i);
 // Ground Zero's `hint_path` set up as the map spawns (q2_gz_ai.cpp); false for any other entity.
 bool gz_hint_spawn(Q2Server& s, int i);
 bool gz_brain_use(Q2Server& s, int i, int activator);
+// Ground Zero's tesla (q2_gz_tesla.cpp), missile `i`, hurt the monster at entity `e`: its field
+// (`lo`..`hi`) a bad area for 30 s, and the monster turns on it when the area is new or it had no
+// enemy, a medic leaving its patient; a player it fought is kept to go back to.
+void gz_tesla_bad_area(Q2Server& s, int i, int e, sh::Vec3f lo, sh::Vec3f hi);
+// Tesla `i` takes `damage`: at none left it bursts (q2_gz_weapons.cpp).
+void gz_tesla_damage(Q2Server& s, int i, int damage);
 void gz_brains(Q2Server& s);
 // The words of a death by a monster's attack (`cause` from `kSqByMonster`), or null.
 const char* monster_obituary(int cause);

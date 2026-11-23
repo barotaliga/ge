@@ -344,3 +344,36 @@ TEST(soldiers_run_and_fire_a_time_in_four_and_a_blind_one_stands_till_it_has_an_
   CHECK_MSG(g->m(b).pose.frame >= 146 && g->m(b).pose.frame <= 175,
             std::to_string(g->m(b).pose.frame));
 }
+
+TEST(a_monster_a_tesla_zaps_turns_on_it_keeps_off_its_ground_and_can_destroy_it) {
+  auto h = open_hall({thing("monster_infantry", "100 0 24", "0")});
+  run(*h, 2);
+  const int i = find(*h, "monster_infantry");
+  sv::Q2Monster& m = h->m(i);
+  // An armed tesla of Ana's on the floor before it.
+  int t = -1;
+  for (int k = 0; k < int(std::size(h->s().missiles)) && t < 0; k++)
+    if (!h->s().missiles[k].live) t = k;
+  CHECK(t >= 0);
+  sv::Q2Missile& tesla = h->s().missiles[t];
+  tesla = {};
+  tesla.live = true;
+  tesla.kind = sv::SqShot::tesla;
+  tesla.owner = 0;
+  tesla.origin = {0, 0, 0};
+  tesla.stage = 2;
+  tesla.health = 30;
+  tesla.dies_at = h->s().level_time + 30;
+  run(*h, 20);
+  CHECK_MSG(m.enemy == ai::foe_of_missile(t), std::to_string(m.enemy));
+  CHECK(h->s().bad_areas.size() == 1);
+  CHECK(ai::gz_bad_area_refuses(h->s(), m, {-10, 0, 0}));  // inside: not nearer the tesla
+  CHECK(!ai::gz_bad_area_refuses(h->s(), m, {10, 0, 0}));  // but out
+  for (int k = 0; k < 20 * kSecond && tesla.live; k++) {
+    run(*h, 1);
+    h->e(i).health = h->e(i).max_health;  // it outlasts the zaps
+  }
+  CHECK_MSG(!tesla.live, "the infantry never shot the tesla down");
+  run(*h, kSecond / 5);
+  CHECK(m.enemy != ai::foe_of_missile(t));  // back to Ana, or to none
+}
