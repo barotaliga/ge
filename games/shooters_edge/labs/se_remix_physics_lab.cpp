@@ -287,14 +287,14 @@ float q2_stair(Floor& f, const pr::MoveFeel& feel, float ledge, float before, bo
     ge::classic::Q2Cmd c;
     c.msec = kMsec;
     c.forward = 400;
-    const float x = pm.s.origin[0] * 0.125f;
+    const float x = float(pm.s.origin[0]) * 0.125f;
     if (jumped_at < 0 && pm.ground_entity >= 0 && x + 16 >= -before) jumped_at = i;
     const bool held = i == jumped_at || (twice && jumped_at >= 0 && i > jumped_at + 1);
     c.up = held ? ge::classic::kSqJumpUp : 0;
     pm.cmd = c;
     ge::classic::q2_move(pm, brushes.world());
     pm.changed = false;
-    if (jumped_at >= 0) top = std::max(top, pm.s.origin[2] * 0.125f - 24 - ledge);
+    if (jumped_at >= 0) top = std::max(top, float(pm.s.origin[2]) * 0.125f - 24 - ledge);
     if (trace != nullptr && jumped_at >= 0 && i - jumped_at <= 90) {
       trace->t.push_back((i - jumped_at) * kMsec * 0.001);
       trace->speed.push_back(pm.s.origin[2] * 0.125 - 24);

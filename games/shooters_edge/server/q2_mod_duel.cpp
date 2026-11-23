@@ -77,7 +77,7 @@ Q2Duel duel(const ge_mod_v1* table, const ge::mod::LoadedMod* package, int frame
       for (int i = 0; i < 2; i++) {
         s.players[i].move.origin[0] = static_cast<int16_t>(xs[i] * 8);
         s.players[i].move.origin[1] = 0;
-        for (int16_t& v : s.players[i].move.velocity) v = 0;
+        for (int32_t& v : s.players[i].move.velocity) v = 0;
       }
     }
     sh::Packet packets[2];

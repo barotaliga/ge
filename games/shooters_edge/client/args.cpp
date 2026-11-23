@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_args_test.cpp
 #include "shooters_edge/client/args.hpp"
 
+#include "play/session_flags.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 
 #include <algorithm>
@@ -85,6 +86,35 @@ bool game_named(std::string_view v, Args& a, std::string& why) {
 
 }  // namespace
 
+bool known_flag(std::string_view word) {
+  for (const Flag& f : kFlags)
+    for (const std::string_view n : {f.name, f.also}) {
+      if (n.empty()) continue;
+      if (n.back() == '=' ? word.starts_with(n) : word == n) return true;
+      if (n.size() > 1 && n[1] != '-' && word.size() == n.size() + 1 && word[0] == '-' &&
+          word.substr(1) == n)
+        return true;
+    }
+  return false;
+}
+
+std::vector<ge::console::FlagDoc> flag_docs() {
+  std::vector<ge::console::FlagDoc> out = ge::play::session_flag_docs();
+  for (const Flag& f : kFlags) {
+    std::string help(f.help);
+    if (!f.also.empty()) help += " Also " + std::string(f.also) + ".";
+    out.push_back({std::string(f.name), std::string(f.arg), help});
+  }
+  return out;
+}
+
+std::string usage() {
+  std::string out = "se";
+  for (const ge::console::FlagDoc& f : flag_docs())
+    out += " [" + f.name + (f.arg.empty() ? "" : (f.name.back() == '=' ? "" : " ") + f.arg) + "]";
+  return out + " [+<command> ...]";
+}
+
 // False with `why` (the word refused and the next step) on a flag it does not know, wherever it
 // stands: a flag inside a `+` console line is never taken as one of the line's words.
 bool parse(int argc, char** argv, Args& a, std::string& why) {
@@ -92,6 +122,13 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
     const std::string_view arg = argv[i];
     if (arg == "-benchmark" || arg == "--benchmark") {
       why = std::string(arg) + " was renamed: use -timedemo <demo>.";
+      return false;
+    }
+    if (flag_like(arg) && !known_flag(arg)) {
+      why = "unknown flag " + std::string(arg) +
+            (a.plus.empty() ? std::string()
+                            : " (after the console line starting " + a.plus.front() + ")") +
+            ".";
       return false;
     }
     // The flags are read wherever they stand, a console line's words (`+r_look modern`) running
@@ -173,11 +210,10 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
         return false;
       }
       a.size_given = true;
+    } else if ((arg == "-manual" || arg == "--manual") && i + 1 < argc) {
+      a.manual = expand_home(argv[++i]);
     } else if (flag_like(arg)) {
-      why = "unknown flag " + std::string(arg) +
-            (a.plus.empty() ? std::string()
-                            : " (after the console line starting " + a.plus.front() + ")") +
-            ".";
+      why = std::string(arg) + " needs its value after it.";
       return false;
     } else {
       // A console line's word, or the first command, which needs no `+` (`coopgame 2 expert`).

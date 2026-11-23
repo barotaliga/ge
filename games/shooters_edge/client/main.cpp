@@ -119,6 +119,7 @@
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
+#include "shooters_edge/client/manual.hpp"
 #include "shooters_edge/client/map_load.hpp"
 #include "shooters_edge/client/menu_sound.hpp"
 #include "shooters_edge/client/own_sounds.hpp"
@@ -193,14 +194,8 @@ int run_main(int argc, char** argv) {
   }
   if (std::string why; !cl::parse(argc, argv, args, why)) {
     ge::play::attach_window_output("", log_error);
-    out::error("shooters_edge: the command line was refused: " + why +
-               " Usage: se [-classic q1|q2] [-basedir <dir>] [-game <folder>] "
-               "[-config <file>] [-logfile <file>] [-progs <file>] [-models <dir>] [-timedemo "
-               "<demo>] [-playdemo <demo>] "
-               "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
-               "[--resolution=<WxH|720p|1080p|1440p|4k>] [--from=m:ss] [--to=m:ss] [--highlight=N] "
-               "[--gif-width=N] [--codec=<c>] [--seconds=S]] "
-               "[+<command> ...]; next: rerun with only those flags.");
+    out::error("shooters_edge: the command line was refused: " + why + " Usage: " + cl::usage() +
+               "; next: rerun with only those flags.");
     return 2;
   }
   // Every line on the terminal, and in `-logfile <file>` too when it is named.
@@ -378,7 +373,6 @@ int run_main(int argc, char** argv) {
   const cl::GameBindings bindings{.files = &files,
                                   .crosshair = &hud.crosshair,
                                   .mouse = &controls.mouse,
-                                  .predict = &remote.predict,
                                   .crouch = &remote.q2_ahead.crouch,
                                   .show_misses = &remote.q2_ahead.show_misses,
                                   .shownet = &remote.q2_shownet,
@@ -393,7 +387,6 @@ int run_main(int argc, char** argv) {
                                   .frame_cap = &pacing.settings.max_fps,
                                   .light_intensity = &picture.light_intensity,
                                   .light_lift = &picture.light_lift,
-                                  .gibs = &picture.gibs,
                                   .no_glow = &picture.no_glow,
                                   .q2fx = &picture.q2fx,
                                   .chat = &remote.ignore.chat,
@@ -1105,7 +1098,9 @@ int run_main(int argc, char** argv) {
   uint64_t last = first_ns;
   double game_t = 0;  // the game's clock, s: the sum of the frames' game times
   long presented = 0;
-  double longest = 0;  // the longest frame, s: a hitch a load or a stall made
+  double longest = 0;        // the longest frame, s: a hitch a load or a stall made
+  if (!args.manual.empty())  // every command and setting registered: the manual's source
+    return cl::write_manual(console, game_cvars, bindings, game_start, *adapter.game, args.manual);
   while ((args.frames == 0 || presented < args.frames) && !quit) {
     cl::start_apply_speed(console, game_start);
     shooters_edge::look::apply_ce_enabled(picture, console.cvars());  // ce_enabled 0: none of it

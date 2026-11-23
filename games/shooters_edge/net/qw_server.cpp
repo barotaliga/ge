@@ -16,6 +16,7 @@
 #include <iterator>
 #include <string_view>
 
+#include "core/num.hpp"
 #include "core/num_text.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
@@ -545,6 +546,9 @@ void handle_packet(QwServer& s, int slot, const uint8_t* data, size_t size) {
     c.ping_s = c.ping_samples == 0 ? ping : c.ping_s + (ping - c.ping_s) / 16.0;
     c.ping_samples++;
     acked.sent = -acked.sent;  // counted once
+    // The rules read it too (the weapon state's ping byte, a program's `ping` info).
+    if (slot >= 0 && slot < ge::shooter::kMaxClients)
+      s.game->clients[slot].ping_ms = static_cast<int>(ge::core::num::round(c.ping_s * 1000));
   }
   // The hold toward the minimum ping (sv_minping), 1 ms a packet; never for a spectator.
   if (s.cfg.min_ping_ms > 0 && !c.spectator && !s.game->paused && c.ping_samples > 0) {
