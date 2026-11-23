@@ -990,7 +990,12 @@ void fill_rows(Q2Server& s) {
     if (m.item < 0) continue;
     sh::WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
     e.free = m.gone || m.hidden;
-    e.origin = m.origin;  // where it lies: dropped to the floor 0.2 s in, as a loaded level has it
+    // Where it lies: dropped to the floor 0.2 s in, as a loaded level has it (a worn look's own
+    // offset kept, sq_dress).
+    e.origin = m.origin;
+    if (e.modelindex > 0 && size_t(e.modelindex) < s.model_looks.size())
+      if (const profiles::Look* l = s.model_looks[size_t(e.modelindex)]; l != nullptr)
+        e.origin = e.origin + sh::Vec3f{l->offset[0], l->offset[1], l->offset[2]};
     // Its glow, once: on the tenth it showed (a frame between tenths shows none).
     e.event = !e.free && s.tenth && m.back_frame == s.frame_number ? kSqItemBackEvent : 0;
     // Taken in deathmatch: how long until it shows again, and the model it will show.

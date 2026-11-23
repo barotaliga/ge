@@ -431,10 +431,10 @@ struct Game {
   // is skipped).
   std::vector<std::string> shows;
   std::string show_map, show_next;
-  bool show_taken = false, show_new_game = false, cinematics = true;
   // The map a new game starts on: the game folder's default.cfg's `newgame` (a mission pack's own
   // first map), else base1.
   std::string first_map = "base1";
+  bool show_taken = false, show_new_game = false, cinematics = true;
   bool drop_told = false;  // the stopped map's error handed to the core (drop_error)
   // What the console printed and was handed on (console_lines): the rules' lines told so far.
   const sv::RulesCommon* told_rules = nullptr;
