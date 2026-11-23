@@ -106,6 +106,15 @@ bool open_udp_transport(Transport& t, const Address& bind, std::string* error) {
   return true;
 }
 
+bool open_udp6_beside(Transport& t, const Address& bind, std::string* error) {
+  if (t.kind != TransportKind::udp || t.local.family != Family::ipv4 ||
+      bind.family != Family::ipv6) {
+    if (error) *error = "an IPv6 socket goes beside an IPv4 UDP socket, at an IPv6 address";
+    return false;
+  }
+  return udp_open(t.udp6, bind, error);
+}
+
 bool open_pipe_transport(Transport& t, const DatagramPipe& pipe) {
   close_transport(t);
   if (pipe.send == nullptr || pipe.receive == nullptr) return false;
@@ -116,6 +125,7 @@ bool open_pipe_transport(Transport& t, const DatagramPipe& pipe) {
 
 void close_transport(Transport& t) {
   if (t.kind == TransportKind::udp) udp_close(t.udp);
+  udp_close(t.udp6);
   if (t.kind == TransportKind::sim && t.sim) sim_unbind(*t.sim, t.local);
   for (TcpStream& s : t.streams) tcp_close(s);
   t.streams.clear();
@@ -133,7 +143,8 @@ bool send_now(Transport& t, const Address& to, const uint8_t* data, size_t size,
   bool ok = false;
   switch (t.kind) {
     case TransportKind::udp:
-      ok = udp_send(t.udp, to, data, size);
+      ok = udp_send(to.family == Family::ipv6 && t.udp6.handle != -1 ? t.udp6 : t.udp, to, data,
+                    size);
       break;
     case TransportKind::sim:
       ok = sim_send(*t.sim, t.local, to, data, size);
@@ -232,6 +243,7 @@ int receive_one(Transport& t, uint8_t* buffer, size_t capacity, Address& from, i
   switch (t.kind) {
     case TransportKind::udp:
       n = udp_receive(t.udp, buffer, capacity, from);
+      if (n < 0 && t.udp6.handle != -1) n = udp_receive(t.udp6, buffer, capacity, from);
       break;
     case TransportKind::sim:
       n = sim_receive_bytes(*t.sim, t.local, buffer, capacity, from);

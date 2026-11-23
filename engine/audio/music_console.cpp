@@ -6,7 +6,10 @@
 // ge:test tests/audio_music_test.cpp
 #include "audio/music_console.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <utility>
 
 namespace ge::audio {
 
@@ -36,9 +39,11 @@ void music_command(console::Console& c, MusicConsole& m, const console::Args& a)
       return;
     }
     const int n = m.manual > 0 ? m.manual : m.track;
-    c.print(std::string(m.player.paused() ? "Paused on" : "Playing") + " track " +
-            std::to_string(n) + " (" + m.player.playing() + ")" +
-            (m.player.loops() ? ", looping." : "."));
+    const std::string which = m.manual < 0              ? m.manual_name
+                              : m.manual == 0 && n == 0 ? m.named
+                                                        : "track " + std::to_string(n);
+    c.print(std::string(m.player.paused() ? "Paused on " : "Playing ") + which + " (" +
+            m.player.playing() + ")" + (m.player.loops() ? ", looping." : "."));
   } else if (what == "play") {
     if (m.held) {
       c.print("Can't play music in cinematic mode.");
@@ -51,13 +56,15 @@ void music_command(console::Console& c, MusicConsole& m, const console::Args& a)
     const std::string& word = a[2];
     const bool digits = !word.empty() && word.find_first_not_of("0123456789") == std::string::npos;
     const int n = digits ? std::atoi(word.c_str()) : 0;
-    const std::string path = m.track_of && n > 0 ? m.track_of(n) : std::string{};
+    const std::string path = digits ? (m.track_of && n > 0 ? m.track_of(n) : std::string{})
+                                    : (m.file_of ? m.file_of(word) : std::string{});
     if (path.empty()) {
       c.print("No such track: " + word);
       return;
     }
     if (a[3] != "soft") m.player.stop();  // soft: the new track takes over as the old fades
-    m.manual = n;
+    m.manual = digits ? n : -1;
+    m.manual_name = digits ? std::string{} : word;
     m.player.play(path, false);  // once through, then the level's own again
   } else if (what == "stop") {
     m.player.stop();
@@ -65,7 +72,10 @@ void music_command(console::Console& c, MusicConsole& m, const console::Args& a)
   } else if (what == "next") {
     m.manual = 0;
     m.player.stop();
-    if (m.enabled && m.track > 0) play_level_music(m, m.track);  // shuffled: the next one
+    if (m.enabled && m.track > 0)
+      play_level_music(m, m.track);  // shuffled: the next one
+    else if (m.enabled && !m.named.empty())
+      play_level_named(m, std::exchange(m.named, {}));
   } else if (what == "pause" || what == "toggle") {
     if (m.player.playing().empty()) {
       c.print("Playback stopped.");
@@ -149,6 +159,7 @@ void play_menu_music(MusicConsole& m) {
 
 void play_level_music(MusicConsole& m, int track) {
   m.menu_played = 0;  // a level's: back at the menu, its track again
+  m.named.clear();
   if (!m.enabled) return;
   if (m.shuffle && track > 0) {  // the game's tracks in a random order, each once through
     if (!m.player.playing().empty() && !m.player.loops()) return;  // a shuffled one plays
@@ -168,17 +179,62 @@ void play_level_music(MusicConsole& m, int track) {
   m.player.play(path, true);
 }
 
-void music_frame(MusicConsole& m, Synth& synth, console::Console& con) {
-  if (m.manual > 0 && m.player.playing().empty()) {  // a track played by hand ended
-    m.manual = 0;
-    if (m.enabled && m.track > 0) play_level_music(m, m.track);
+void play_level_named(MusicConsole& m, const std::string& name) {
+  // Asked again each frame while the level lasts: the same name (without case) plays on.
+  const bool same = name.size() == m.named.size() &&
+                    std::equal(name.begin(), name.end(), m.named.begin(), [](char a, char b) {
+                      return std::tolower(static_cast<unsigned char>(a)) ==
+                             std::tolower(static_cast<unsigned char>(b));
+                    });
+  if (same && !name.empty()) return;
+  m.menu_played = 0;
+  m.named = name;
+  m.track = 0;
+  const std::string path = m.file_of && !name.empty() ? m.file_of(name) : std::string{};
+  if (!m.enabled || m.manual != 0) return;  // a track played by hand plays on until it ends
+  if (path.empty()) {
+    m.player.stop();
+    return;
   }
-  if (m.enabled != m.was_enabled) {
-    m.was_enabled = m.enabled;
-    if (!m.enabled)
+  m.player.play(path, true);
+}
+
+namespace {
+
+// The level's own track again (a number or a name), when it has one.
+void level_again(MusicConsole& m) {
+  if (m.track > 0)
+    play_level_music(m, m.track);
+  else if (!m.named.empty())
+    play_level_named(m, std::exchange(m.named, {}));
+}
+
+}  // namespace
+
+void music_frame(MusicConsole& m, Synth& synth, console::Console& con) {
+  if (m.held != m.was_held) {  // a movie: the music stopped and forgotten, the next level's anew
+    m.was_held = m.held;
+    if (m.held) {
       m.player.stop();
-    else if (m.track > 0)
-      play_level_music(m, m.track);
+      m.manual = 0;
+      m.track = 0;
+      m.named.clear();
+    }
+  }
+  if (m.manual != 0 && m.player.playing().empty()) {  // a track played by hand ended
+    m.manual = 0;
+    if (m.enabled) level_again(m);
+  }
+  if (m.enabled != m.was_enabled && !m.held) {
+    m.was_enabled = m.enabled;
+    if (!m.enabled && m.off_pauses && !m.player.playing().empty())
+      m.player.pause();  // paused where it is: on again resumes it there
+    else if (!m.enabled)
+      m.player.stop();
+    else if (m.off_pauses && m.player.paused())
+      m.player.resume();
+    else
+      level_again(m);
   }
   if (m.enabled && m.shuffle && m.manual == 0 && m.track > 0 && m.player.playing().empty()) {
     const int t = shuffled_track(m);  // one ended: the next

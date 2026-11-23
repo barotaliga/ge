@@ -429,9 +429,9 @@ std::string remote_foot(const Remote& r, double& progress) {
 
 namespace {
 
-// The port Quake II's `net_clientport` asks for (-1 any free one; never in Quake).
+// The port `net_clientport` asks for (-1 any free one), in every game.
 int wanted_port(const Remote& r) {
-  if (!r.setting || !(r.q2_game && r.q2_game())) return -1;
+  if (!r.setting) return -1;
   const std::string v = r.setting("net_clientport");
   const int port = v.empty() ? -1 : std::atoi(v.c_str());
   return port > 0 && port <= 65535 ? port : -1;
@@ -909,6 +909,10 @@ void user_info_step(Remote& r) {
   const std::string password = r.setting("password");
   if (r.q2) {
     Q2ClientConfig& q = r.q2->cfg;
+    if (const std::string f = r.setting("cl_footsteps"); !f.empty()) {  // told on protocol 36
+      q.no_footsteps = std::atoi(f.c_str()) == 0;
+      q2_client_settings(*r.q2);
+    }
     if ((rate <= 0 || rate == q.rate) && password == q.password) return;
     if (rate > 0) q.rate = rate;
     q.password = password;

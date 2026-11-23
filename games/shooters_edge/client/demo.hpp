@@ -117,7 +117,11 @@ enum DemoStat : uint8_t {
 struct DemoEntity {
   sh::Vec3f origin, angles;  // units, degrees
   int model = 0, frame = 0, skin = 0, effects = 0;
-  int render_fx = 0;     // Quake II's render bits (q2_look.hpp); 0 elsewhere
+  int render_fx = 0;  // Quake II's render bits (q2_look.hpp); 0 elsewhere
+  // Quake II's other models (its second, third and fourth), drawn at its place on its frame; the
+  // second 255 on a player (model 255): the weapon he carries, his skin's high byte its place
+  // among the model list's carried names ("#...", from 1).
+  int more[3] = {0, 0, 0};
   int weapon_frame = 0;  // a player's held weapon's frame (client, multiview; single: DemoState's)
   float alpha = 1;       // how much of it shows (the transparency byte; 1 solid)
   float scale = 1;       // its size (the scale byte)
@@ -146,6 +150,7 @@ struct DemoSound {
   float attenuation = 1;       // the protocol's factor: 0 heard everywhere, 1 a normal sound
   sh::Vec3f origin;            // units
   float delay = 0;             // s after the frame it starts in (a shotgun's pump after its shot)
+  bool step = false;  // a footstep: Quake II's heard by the surface under it (classic/q2_footsteps)
 };
 
 // The extended protocol's look bytes. An entity's transparency: 254 and 255 (unset) solid, else
@@ -225,6 +230,8 @@ struct DemoBlow {
 };
 
 inline constexpr size_t kKeptBlows = 8;
+// The light styles a level keeps (the renderer's, plugins/brush/app/draw_data.hpp's kLightStyles).
+inline constexpr size_t kDemoLightStyles = 64;
 
 // An item taken and coming back, as a live stream of our server tells it (the ge set's `item-back`,
 // svc 119): where it will lie, as what, and the demo's clock it shows at.
@@ -244,7 +251,8 @@ struct DemoEffect {
   sh::Vec3f way;      // a named effect's way
   std::string name;   // a named effect's
   int colour = 0;     // a splash's or a laser's sparks' palette index; a burst's; explosion2's
-                      // first colour (`count` its run's length)
+                      // first colour (`count` its run's length); a Quake II puff's run's first
+  int q2_specks = 0;  // Quake II: a hit's puff of this many specks off `way` (q2_temp_fx.hpp)
 };
 
 inline constexpr double kNeverFlashed = -1e9;
@@ -266,6 +274,9 @@ struct DemoState {
   std::string map;             // "e1m1" off `maps/e1m1.bsp`; "" before the first level
   std::vector<uint8_t> areas;  // Quake II: the last frame's areas shown (a bit each); empty, all
   int levels = 0;              // level starts read so far (a new level: load its map)
+  // The level's light styles as the server set them (Quake's light-style message, Quake II's
+  // settings strings from 800): letters 'a' dark .. 'm' as baked .. 'z', ten a second; "" steady.
+  std::array<std::string, kDemoLightStyles> light_styles;
   // The level's place names as the recording kept them (`//loc` lines, plugins/classic/locs.hpp);
   // empty when it kept none.
   ge::classic::Locs places;
@@ -280,6 +291,8 @@ struct DemoState {
   int rdflags = 0;  // Quake II: the view's bits (kQ2RdIrGoggles: infra-red goggles on)
   // Quake II: the music track the server names (its configstring 1; 0 none, -1 never named).
   int cdtrack = -1;
+  // Quake II's music named by text (a file under `music/`), "" when the server sends a number.
+  std::string cdname;
   // The blows the view's player took (single, client, multiview): the last `kKeptBlows` of them
   // and how many in all since the demo was opened, so a look after several frames misses none.
   std::vector<DemoBlow> blows;

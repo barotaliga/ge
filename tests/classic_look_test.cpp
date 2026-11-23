@@ -151,12 +151,12 @@ TEST(quake_iis_picture_switches_reach_the_world_and_another_games_change_nothing
   CHECK(!o.fast_sky && !o.crisp_sky && o.saturation == 1 && !o.invert && o.anisotropy == 4);
   CHECK(ge::classic::q2_speck_scale(p.q2fx, 1000) == 1);
   // gl_drawsky 0: a black sky; gl_bilerp_skies 0: a sharp one; gl_saturation, gl_invert and
-  // gl_anisotropy on the walls' and floors' textures, in either look.
+  // gl_anisotropy (every game's) on the walls' and floors' textures, in either look.
   p.q2fx.draw_sky = false;
   p.q2fx.smooth_sky = false;
   p.q2fx.saturation = 0.25;
   p.q2fx.invert = true;
-  p.q2fx.anisotropy = 8;
+  p.anisotropy = 8;
   for (const lk::Look look : {lk::Look::classic, lk::Look::modern}) {
     o = lk::world_options(look, {}, p);
     CHECK(o.fast_sky && o.sky_colour[0] == 0 && o.sky_colour[1] == 0 && o.sky_colour[2] == 0);

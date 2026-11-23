@@ -155,6 +155,14 @@ class Console {
   void add_macro(std::string_view name, std::function<std::string()> fn);
   // Every `$` macro's name, sorted.
   std::vector<std::string> macro_names() const;
+  // Fixed widths for `$` words (a team line's columns): with `length_prefix` set ("tp_length_"), a
+  // `$word` whose cvar `<length_prefix><word>` the player made is padded or cut to that many
+  // letters (1..40; `fit_width`), set left, or right or centred by `<align_prefix><word>`
+  // starting with r or c. Empty prefixes (the default) leave every value as it is.
+  void set_macro_widths(std::string length_prefix, std::string align_prefix) {
+    width_prefix_ = std::move(length_prefix);
+    align_prefix_ = std::move(align_prefix);
+  }
   // A settings block bound cvars write into, kept alive as long as the console (a game's
   // registration hook that has nowhere else to keep its struct).
   void keep(std::shared_ptr<void> block) { kept_.push_back(std::move(block)); }
@@ -313,6 +321,7 @@ class Console {
   std::map<std::string, CommandSynonym> command_synonyms_;
   std::map<std::string, Alias> aliases_;
   std::map<std::string, std::function<std::string()>> macros_;
+  std::string width_prefix_, align_prefix_;  // set_macro_widths
   std::map<std::string, std::unique_ptr<Button>> buttons_;
   std::map<std::string, std::string> held_;  // key → the + command it went down with
   std::vector<Trigger> triggers_;

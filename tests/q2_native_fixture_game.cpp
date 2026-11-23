@@ -98,12 +98,14 @@ void init() {
   game.max_edicts = kMostEntities;
   game.num_edicts = max_clients + 1;
   for (int i = 0; i < max_clients; i++) entities[i + 1].head.client = &clients[i].head;
-  if (gix != nullptr) {
-    const int offered = static_cast<int>(gi.cvar("sv_features", "0", 0)->value);
-    char want[16];
-    std::snprintf(want, sizeof want, "%d", offered & (kGmfProperInUse | kGmfExtraUserInfo));
-    gi.cvar_forceset("g_features", want);
-  }
+  // The features it asks for: enhanced saves unless `fixture_unsafe` 1 (a library that cannot be
+  // saved safely), and with the extended interface proper in-use and the extra user info.
+  const int offered = static_cast<int>(gi.cvar("sv_features", "0", 0)->value);
+  int wants = gi.cvar("fixture_unsafe", "0", 0)->value != 0 ? 0 : kGmfEnhancedSaves;
+  if (gix != nullptr) wants |= kGmfProperInUse | kGmfExtraUserInfo;
+  char want[16];
+  std::snprintf(want, sizeof want, "%d", offered & wants);
+  gi.cvar_forceset("g_features", want);
 }
 
 void shutdown() { gi.free_tags(kTagGame); }

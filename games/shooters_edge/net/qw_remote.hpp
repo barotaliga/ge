@@ -71,6 +71,7 @@
 #include "account/client_login.hpp"
 #include "account/client_presence.hpp"
 #include "account/client_queue.hpp"
+#include "classic/content/downloads.hpp"
 #include "classic/predict_original.hpp"
 #include "classic/protocol/stuff_filter.hpp"
 #include "classic/rulesets.hpp"
@@ -235,6 +236,8 @@ struct Remote {
   std::function<void(const std::string& gamedir, const std::string& path,
                      const std::vector<uint8_t>& bytes, const ge::vfs::ArchiveOrigin* origin)>
       keep_file;
+  // A Quake II download cut short, held in the game's folder to be resumed (Q2ClientConfig::held).
+  ge::classic::content::HeldDownloads held;
   bool kept = false;
   // A screenshot the server asked for (qw_client.hpp `ClientUpload`): the window's frame grabbed
   // in memory, scaled and packed (`snap_grab(width, height, quality)`, false when it can't) and

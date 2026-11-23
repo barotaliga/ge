@@ -390,6 +390,7 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   m.str();                 // the level's title
   m.skip(size_t{10} * 4);  // the movement settings
   s.levels++;
+  s.light_styles = {};
   s.places = {};
   s.map.clear();
   s.models.assign(1, "");
@@ -574,10 +575,12 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 11:
         ok = server_data(d, m, error);
         break;
-      case 12:
-        m.u8();
-        m.str();
-        break;    // lightstyle
+      case 12: {  // lightstyle: the style, its pattern
+        const size_t style = m.u8();
+        std::string pattern = m.str();
+        if (style < kDemoLightStyles) s.light_styles[style] = std::move(pattern);
+        break;
+      }
       case 14: {  // updatefrags
         const int slot = m.u8();
         const int frags = m.i16();

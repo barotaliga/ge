@@ -388,7 +388,6 @@ int run_main(int argc, char** argv) {
                                   .stuff_level = &remote.stuff.level,
                                   .frame_cap = &pacing.settings.max_fps,
                                   .light_intensity = &picture.light_intensity,
-                                  .light_modulate = &picture.light_modulate,
                                   .light_lift = &picture.light_lift,
                                   .gibs = &picture.gibs,
                                   .no_glow = &picture.no_glow,
@@ -1108,8 +1107,9 @@ int run_main(int argc, char** argv) {
     shooters_edge::look::apply_ce_enabled(picture, console.cvars());  // ce_enabled 0: none of it
     music.held = cl::cinematic_on(cine);  // a movie's own sound: `ogg play` refused meanwhile
     ge::audio::music_frame(music, synth, console);
-    cl::hear_swap(synth, under_ear);  // s_swapstereo
-    cl::hear_ears(synth, under_ear);  // s_hrtf
+    cl::hear_swap(synth, under_ear);                      // s_swapstereo
+    cl::hear_ears(synth, under_ear);                      // s_hrtf
+    picture.q2fx.plain_stereo = !cl::hrtf_on(under_ear);  // al_merge_looping 1 merges only then
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
@@ -1778,7 +1778,8 @@ int run_main(int argc, char** argv) {
       cl::record_tick(recorder, listen, frames, console);
       hear_here(wall);
       if (std::exchange(listen.restarted, false)) forget_seen();
-      for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+      printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                               [&](const std::string& line) { tell(line, t); });
       title_frame(t, wall, {}, 0, true);
       ++presented;
       continue;
@@ -1845,7 +1846,8 @@ int run_main(int argc, char** argv) {
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");
     }
-    for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+    printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                             [&](const std::string& line) { tell(line, t); });
     if (centred > listen.centres.size()) centred = 0;     // a new listen
     for (; centred < listen.centres.size(); centred++) {  // a centre print: the last one shows
       hud.centre = listen.centres[centred];

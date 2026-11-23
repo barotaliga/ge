@@ -84,6 +84,7 @@ struct ClientInfo {
   bool drop = false;  // a stuffed "disconnect": dropped after the current call
   std::string address = "loopback";
   int ping_ms = 0;
+  int protocol = 0;       // a classic client's protocol (Quake II's 34, 35, 36); 0 ours or a bot
   double entered_at = 0;  // the server's time it connected, s (the scoreboard's minutes)
   ClientBlow blow;        // this frame's (a single-player program's)
 };

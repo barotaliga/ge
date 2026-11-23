@@ -615,7 +615,10 @@ void nv_frame(void* r, const sh::Packet* packets, int count) {
     for (int k = 0; k < 3; k++) {
       if ((k == 0 && gap < 3) || (k == 1 && gap < 2)) continue;  // only what a loss held back
       native::NativeCmd c = native_cmd(p.cmds[k]);
-      if (!guarded(h, [&] { h.game->client_think(e, &c); })) return;
+      h.thinking = p.client;  // its move as its client predicts it (a spectator's flight)
+      const bool ran = guarded(h, [&] { h.game->client_think(e, &c); });
+      h.thinking = -1;
+      if (!ran) return;
     }
   }
   run_commands(s);
@@ -817,6 +820,7 @@ std::unique_ptr<NativeQ2> load_native_q2(const NativeQ2Options& opt, std::string
   native_setting(h, "game", opt.game, native::kCvarServerInfo | native::kCvarLatch);
   native_setting(h, "sv_features", std::to_string(kNativeServerFeatures), native::kCvarNoSet);
   native_setting(h, "g_features", "0", native::kCvarNoSet);
+  native_setting(h, kUnsafeSavesSetting, "0", 0);
   native_setting(h, "map_noareas", "0", 0);  // the engine's: every area joined while set
   // The files the extended interface reads: the library's folder, then the base folder beside it.
   h.write_dir = opt.library.parent_path();
