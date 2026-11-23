@@ -53,6 +53,7 @@
 // ge:keywords screen-blend set_post_blend tint damage-flash
 // ge:keywords arrival arrival_warp set_post_warp post-warp teleport-flash spawn-flash warp-in
 // ge:keywords ripple set_post_ripple underwater-warp waterwarp
+// ge:keywords set_post_view viewsize view-rect smaller-view
 // ge:skill render
 // ge:test tests/render_post_test.cpp
 #pragma once
@@ -173,6 +174,14 @@ struct PostRipple {
   double phase = 0;
 };
 void set_post_ripple(gpu::Device& device, const Post& post, const PostRipple& ripple);
+// THE VIEW IN A SMALLER RECTANGLE: the whole picture drawn into `rect` (pixels of the output,
+// `width` x `height`), the rest black for the 2D layer to cover (a classic game's screen size
+// under 100 %, its border tiled); the whole output (the start) draws it as it was.
+struct ViewRect {
+  int x = 0, y = 0, w = 0, h = 0;
+};
+void set_post_view(gpu::Device& device, const Post& post, const ViewRect& rect, int width,
+                   int height);
 // Depth of field's focus, sharp share and strength (render/dof.hpp's), live: the post pass mixes
 // the gather in by each pixel's own circle under the same lens the dof pass gathered with.
 void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& dof);

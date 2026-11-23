@@ -38,6 +38,12 @@ struct Q2Screen {
   int turtle = 1;       // scr_showturtle: 0 off, 1 a frame's troubles, 2 also the packets held back
   int font_shadow = 0;  // gl_fontshadow: the letters' shadow, units down and right (0 none)
   bool bilerp_chars = false;  // gl_bilerp_chars: the letters smoothed
+  // scr_font: the letters' picture of the status bar's and the layouts' text and the inventory
+  // (pics/<name>, .pcx when it has no extension); one missing falls back to conchars.
+  std::string font = "conchars";
+  // viewsize: the 3D view's share of the screen, 40..100 percent, centred; the border round it
+  // tiled with pics/backtile (the bar's `draw_q2_bar`).
+  int viewsize = 100;
   // gl_bilerp_pics: the status bar's and the layouts' pictures smoothed when drawn larger: 0 none
   // (every other game's), 1 those of 64 x 64 and up (Quake II's default), 2 all of them.
   int bilerp_pics = 0;
@@ -54,6 +60,13 @@ struct Q2Screen {
   int graph_height = 32;
   double graph_scale = 1, graph_shift = 0;
 };
+
+// viewsize's rectangle of a `width` x `height` screen: `percent` of each, centred (100 and over:
+// all of it). The world is drawn in it and the border tiled round it.
+struct Q2ViewRect {
+  int x = 0, y = 0, w = 0, h = 0;
+};
+Q2ViewRect q2_view_rect(int width, int height, int percent);
 
 // The field of view shown, degrees: the server's `sent` (0: none sent, the player's `own`); in a
 // `recording` the player's own in place of one of 90 or more, as `uf_flags` asks. `own` under 1
