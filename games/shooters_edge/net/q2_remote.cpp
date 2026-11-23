@@ -222,6 +222,7 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
     q2_client_tick(c, r.now_us);
   }
   for (std::string& line : std::exchange(c.ignored, {})) said.push_back(std::move(line));
+  for (std::string& line : std::exchange(c.to_run, {})) r.stuffed_run.push_back(std::move(line));
   for (std::string& line : std::exchange(c.http.said, {})) said.push_back(std::move(line));
   if (c.stage != r.said) {
     r.said = c.stage;

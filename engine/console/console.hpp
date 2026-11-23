@@ -155,6 +155,14 @@ class Console {
   void add_macro(std::string_view name, std::function<std::string()> fn);
   // Every `$` macro's name, sorted.
   std::vector<std::string> macro_names() const;
+  // Fixed widths for `$` words (a team line's columns): with `length_prefix` set ("tp_length_"), a
+  // `$word` whose cvar `<length_prefix><word>` the player made is padded or cut to that many
+  // letters (1..40; `fit_width`), set left, or right or centred by `<align_prefix><word>`
+  // starting with r or c. Empty prefixes (the default) leave every value as it is.
+  void set_macro_widths(std::string length_prefix, std::string align_prefix) {
+    width_prefix_ = std::move(length_prefix);
+    align_prefix_ = std::move(align_prefix);
+  }
   // A settings block bound cvars write into, kept alive as long as the console (a game's
   // registration hook that has nowhere else to keep its struct).
   void keep(std::shared_ptr<void> block) { kept_.push_back(std::move(block)); }
@@ -251,6 +259,13 @@ class Console {
   std::vector<std::string> complete(std::string_view prefix) const;
   // The nearest name to `name` (edit distance at most 2), or "".
   std::string suggest(std::string_view name) const;
+  // A word's argument values (Quake II's `use`, `drop` and `give` complete the item names the
+  // server listed), asked when a line `<word> <part>` is completed; the word need not be a
+  // command here (a server's own words are forwarded by `set_unknown`). Null removes it.
+  using ArgValues = std::function<std::vector<std::string>()>;
+  void set_arg_values(std::string_view word, ArgValues values);
+  // The values `word`'s argument completes to, in their own order; empty when none.
+  std::vector<std::string> arg_values(std::string_view word) const;
 
   // The whole player config cfg_save writes (cfg.hpp's format).
   std::string save_text() const;
@@ -313,6 +328,7 @@ class Console {
   std::map<std::string, CommandSynonym> command_synonyms_;
   std::map<std::string, Alias> aliases_;
   std::map<std::string, std::function<std::string()>> macros_;
+  std::string width_prefix_, align_prefix_;  // set_macro_widths
   std::map<std::string, std::unique_ptr<Button>> buttons_;
   std::map<std::string, std::string> held_;  // key → the + command it went down with
   std::vector<Trigger> triggers_;
@@ -325,6 +341,7 @@ class Console {
   Reader reader_;
   Reader fallback_;
   std::function<bool(const Args&)> unknown_;
+  std::map<std::string, ArgValues, std::less<>> arg_values_;
   Writer writer_;
   std::function<void(std::string_view)> sink_;
   std::function<void(std::string_view)> tap_;

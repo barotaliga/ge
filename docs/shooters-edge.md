@@ -572,7 +572,16 @@ ten times a second), and a played fire clip goes back to rest over a frame's tim
 joined server a classic set's weapon (and Quake II's) plays the weapon frame the server sends,
 each change blended over a fixed 0.1 s however unevenly the updates bring it. The weapon's own
 flash comes out of the gun whole on a shot, never stretched across the picture
-(`viewmodel/held.hpp`'s `pose_frames`). `r_lerpframes` is `r_lerpmodels`'s other name. Your own eye rides the same clock as the models: drawn one server frame behind, between
+(`viewmodel/held.hpp`'s `pose_frames`). `r_lerpframes` is `r_lerpmodels`'s other name. On a
+QuakeWorld server that sends the weapon's state (our server always does; the demo family's bit
+0x80), the window predicts its own weapon (`net/qw_weapon.hpp`, Quake's rules in
+`classic/weapon_predict.hpp`): the shot is heard, the hand fires and the bar's ammunition counts
+down when the button goes down instead of a round trip later, the weapon switched by a key shows
+at once, and each server frame corrects the prediction. `cl_nopred_weapon 1` turns it off,
+`cl_predict_weaponsound` chooses which weapons' sounds are played ahead (0 none, 1 all, above 1 a
+mask of those left to the server), `cl_predict_buffer` how many commands behind the newest the
+weapon is shown, `cl_pext_weaponprediction 0` stops asking for the state. `make lab
+LAB=se-weapon-predict` measures the press to the first shot heard, off and on. Your own eye rides the same clock as the models: drawn one server frame behind, between
 the server's last two states. A played demo's walking monster glides over its strides too
 (`demo_lerp.hpp`'s stride rule). `r_lerpmodels 0` and `r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
 films a monster walking up to the player both ways side by side (a GIF) and measures the judder

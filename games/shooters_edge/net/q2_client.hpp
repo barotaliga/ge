@@ -29,6 +29,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -96,6 +97,7 @@ struct Q2ClientConfig {
   // With `fetch_level` on (the window's), every model, sound and player figure the level names
   // that `read_file` lacks is fetched too, as a player's client fetches them.
   bool fetch_level = false;
+  bool vweps = true;  // `cl_vwep`: the figures' view weapons fetched too
   // `ask_moves` asks our server for the other players' moves after each frame (`*ge_ext` bit 8),
   // which the window runs them forward by (q2_predict.hpp); a stock server ignores it.
   bool ask_moves = false;
@@ -214,8 +216,12 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   std::vector<uint8_t>* level_record = nullptr;
   size_t level_from = 0;
   bool recording = true;
-  std::vector<std::string> stuffed;          // every line stuffed, in order (the first 256)
-  std::vector<std::string> ignored;          // the lines said for stuffed commands dropped
+  std::vector<std::string> stuffed;  // every line stuffed, in order (the first 256)
+  std::vector<std::string> ignored;  // the lines said for stuffed commands dropped
+  // The stuffed lines the client does not answer itself (`cmd`, `precache`, `changing`,
+  // `reconnect`, `connect`), let through by the filter, for the player's console to run as if
+  // typed, in order: a setting put back (`set name`, `spectator 0`), a mod's binds and aliases.
+  std::vector<std::string> to_run;
   std::vector<std::string> prints;           // every print's text, in order (the first 256)
   int signon_steps = 0;                      // signon commands answered
   int no_footsteps_told = -1;                // what the server was last told (-1: not yet)
@@ -232,6 +238,11 @@ struct Q2ClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   bool fetched_origin = false;
   ge::vfs::ArchiveOrigin fetching_origin;
   std::string held_begin;
+  // The stage the level's fetch is at (net/q2_fetch.hpp: 1 the map and models, 2 what they and
+  // the level name, 3 the map's textures; 0 none begun) and every path asked for this connection,
+  // each asked once.
+  int fetch_stage = 0;
+  std::set<std::string> asked;
   std::map<std::string, std::vector<uint8_t>> downloaded;
   int downloads_refused = 0;
   // The HTTP downloads (classic/content/web_downloads.hpp). `http.said` holds every download's line

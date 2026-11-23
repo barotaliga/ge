@@ -155,9 +155,9 @@ struct Game {
 
 void host_bind(Game& g);
 // A line printed to a listen server's local seat: its own player's (slot 0) goes to the window.
-void host_print(void* ctx, int slot, const std::string& text) {
+void host_print(void* ctx, int slot, int level, const std::string& text) {
   const cl::ListenHost& h = *static_cast<const cl::ListenHost*>(ctx);
-  if (slot == 0 && h.print != nullptr) h.print(h.ctx, text);
+  if (slot == 0 && h.print != nullptr) h.print(h.ctx, level, text);
 }
 
 // A voice the endpoint relayed to a listen server's own player (slot 0), to the window.

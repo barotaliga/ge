@@ -807,6 +807,7 @@ RemoteStep watch_step(Remote& r, std::vector<std::string>& said) {
   std::vector<client::DemoPrint> prints;
   std::vector<client::DemoEffect> effects;
   std::string centre;
+  weapon_restore(r.weapon, d.state);  // the server's stats and frame back before its news
   for (;;) {
     const client::DemoRead got = client::next_frame(d, error);
     if (got == client::DemoRead::error) {
@@ -1047,6 +1048,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   std::vector<client::DemoPrint> prints;
   std::vector<client::DemoEffect> effects;
   std::string centre;
+  weapon_restore(r.weapon, d.state);  // the server's stats and frame back before its news
   for (;;) {
     const client::DemoRead got = client::next_frame(d, error);
     if (got == client::DemoRead::error) {
@@ -1121,6 +1123,15 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     if (static_cast<size_t>(me) < d.state.players.size())
       d.state.players[static_cast<size_t>(me)].origin = drawn;
     if (!d.state.intermission) d.state.eye = {drawn.x, drawn.y, drawn.z + d.state.view_height};
+  }
+  if (r.predicted) {
+    std::string w_rank;
+    for (const auto& [k, v] : r.extra_info)
+      if (k == "w_rank") w_rank = v;
+    weapon_predict(r.weapon, r.end, d.state, r.ahead.waterlevel, r.prediction, w_rank);
+  } else {
+    r.weapon.on = false;
+    r.weapon.played_to = r.end.ch.incoming_acknowledged;
   }
   lerp_entities(r, draw_s);
   if (!any || d.state.map.empty()) return RemoteStep::waiting;
@@ -1241,6 +1252,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.b_switch = cvar("b_switch", "");
     // cl_novweps 1: the visible weapons not asked for, so the server sends neither list nor index.
     if (cvar("cl_novweps", "0") != "0") cfg.ask[ExtFamily::z] &= ~kZVwep;
+    // cl_pext_weaponprediction 0: the weapon's state not asked for (qw_weapon.hpp).
+    if (cvar("cl_pext_weaponprediction", "1") == "0") cfg.ask[ExtFamily::mvd] &= ~kMvdWeaponPred;
     // The lens Quake II's user info carries (`fov`): cl_fov rounded, 0 (the rig's own) its 90.
     const double fov = std::atof(cvar("cl_fov", "0").c_str());
     cfg.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;
@@ -1419,6 +1432,29 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                             "(a round trip late); 0: his own moves predicted",
                     .kind = ge::console::CvarKind::boolean},
                    &r.nopred);
+  // The held weapon predicted (qw_weapon.hpp).
+  con.cvars().bind({.name = "cl_nopred_weapon",
+                    .fallback = "0",
+                    .help = "1: on a server joined, your weapon's shots, frames and ammunition "
+                            "shown as the server sends them (a round trip late); 0: predicted",
+                    .kind = ge::console::CvarKind::boolean},
+                   &r.weapon.off);
+  con.cvars().bind({.name = "cl_predict_weaponsound",
+                    .fallback = "1",
+                    .help = "0: your weapon's sounds heard from the server; 1: every one played "
+                            "as you fire; above 1, the weapons left to the server (2 axe, 4 "
+                            "shotgun, 8 super shotgun, 16 nailgun, 32 super nailgun, 64 grenade "
+                            "launcher, 128 rocket launcher, 256 lightning gun)",
+                    .min = 0,
+                    .max = 511},
+                   &r.weapon.sound_mask);
+  con.cvars().bind({.name = "cl_predict_buffer",
+                    .fallback = "1",
+                    .help = "How many commands behind the newest your predicted weapon is shown "
+                            "(0 the newest)",
+                    .min = 0,
+                    .max = 10},
+                   &r.weapon.buffer);
   con.cvars().bind({.name = "cl_predict_players",
                     .fallback = "1",
                     .help = "1: on a server joined, the other players run ahead from their last "

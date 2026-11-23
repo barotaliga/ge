@@ -871,15 +871,20 @@ uint64_t native_q2_hash(const NativeQ2& s) {
     for (size_t i = 0; i < n; i++) h = (h ^ b[i]) * 1099511628211ull;
   };
   mix(&s.frame_number, sizeof s.frame_number);
+  // As 16-bit origins and 32 stats, the wire's ordinary widths, so the hash outlives a wider state.
+  const auto mix16 = [&mix](const int32_t(&v)[3]) {
+    const int16_t n[3] = {int16_t(v[0]), int16_t(v[1]), int16_t(v[2])};
+    mix(n, sizeof n);
+  };
   for (const Q2EntityState& e : s.raw.entities) {
-    mix(e.origin, sizeof e.origin);
+    mix16(e.origin);
     mix(e.angles, sizeof e.angles);
     mix(&e.frame, sizeof e.frame);
     mix(e.model, sizeof e.model);
   }
   for (const Q2PlayerState& p : s.raw.players) {
-    mix(p.origin, sizeof p.origin);
-    mix(p.stats, sizeof p.stats);
+    mix16(p.origin);
+    mix(p.stats, 32 * sizeof p.stats[0]);
   }
   return h;
 }

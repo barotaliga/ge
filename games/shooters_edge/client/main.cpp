@@ -285,9 +285,12 @@ int run_main(int argc, char** argv) {
   ge::console::Talk talk;
   ge::console::add_talk(console, con_view, talk);
   remote.talk = &talk;
-  sn::add_server_commands(console, listen, remote);  // users, status, rcon, cmd, score, inven
-  sn::add_window_words(console, con_view, listen, remote, next_map);  // map, sv, chat, vote, ...
+  sn::add_server_commands(console, listen, remote);    // users, status, rcon, cmd, score, inven
+  std::function<bool(const std::string&)> word_first;  // `pause` over a played demo (below)
+  sn::add_window_words(console, con_view, listen, remote, next_map,
+                       &word_first);  // map, sv, chat ...
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
+  word_first = [&](const std::string& l) { return cl::playback_pause_word(playback, bench, l); };
   cl::add_playback_commands(console, playback, bench);
   slm::Watch live_map;  // a match from above on TV and in demos (demo_map, livemap/watch.hpp)
   slm::add_live_map_cvars(console.cvars(), live_map.settings);
@@ -1188,7 +1191,8 @@ int run_main(int argc, char** argv) {
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
       menu_host.in_level = (listen.server || remote.active) && !attract;  // ESCAPE's in-game page
       menu_host.screen_up = q2_bar.layout_up;  // ESCAPE puts the help computer away first
-      q2_bar.f1 = ge::input::key_held(held, 58) ? (bench.active ? 2 : 1) : 0;  // F1: the layout
+      menu_host.escape_held = ge::input::key_held(held, ge::input::key::escape);  // held: the menu
+      q2_bar.f1 = ge::input::key_held(held, 58) ? (bench.active ? 2 : 1) : 0;     // F1: the layout
       picture.view_size = q2_screen.viewsize;  // Quake II's viewsize (100 for every other game)
       // A benchmark's Escape stops the run (below) and opens nothing.
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
@@ -1196,7 +1200,8 @@ int run_main(int argc, char** argv) {
                            (!first_pictures.valid() && std::exchange(menu_at_start, false));
       const bool load_menu = cl::keep_autosave(listen, files);  // Quake II's; a death's ask
       if (opening || load_menu)  // the slots' lines read again: a save may have been made since
-        menu_host.saves = cl::save_slot_labels(files, shooters_edge::menu::kSaveSlots);
+        menu_host.saves = cl::save_slot_labels(
+            files, shooters_edge::menu::slot_names(shooters_edge::menu::table_of(menu_host)));
       game_menu.update(mi, opening, menu_host, wall);
       if (load_menu) game_menu.show(menu_host, "load");
       if (watched && !attract && !was_open &&
@@ -1490,6 +1495,8 @@ int run_main(int argc, char** argv) {
       std::vector<std::string> lines;
       joined = sn::remote_step(remote, wall, lines);
       for (const std::string& line : lines) tell(line, t);
+      // What a Quake II server stuffed runs as if typed (cl_ignore_stufftext filtered it).
+      for (const std::string& line : std::exchange(remote.stuffed_run, {})) console.execute(line);
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
@@ -1778,7 +1785,8 @@ int run_main(int argc, char** argv) {
       cl::record_tick(recorder, listen, frames, console);
       hear_here(wall);
       if (std::exchange(listen.restarted, false)) forget_seen();
-      for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+      printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                               [&](const std::string& line) { tell(line, t); });
       title_frame(t, wall, {}, 0, true);
       ++presented;
       continue;
@@ -1845,7 +1853,8 @@ int run_main(int argc, char** argv) {
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");
     }
-    for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+    printed = cl::game_lines(remote.ignore, listen.prints, listen.print_levels, printed, t,
+                             [&](const std::string& line) { tell(line, t); });
     if (centred > listen.centres.size()) centred = 0;     // a new listen
     for (; centred < listen.centres.size(); centred++) {  // a centre print: the last one shows
       hud.centre = listen.centres[centred];

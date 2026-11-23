@@ -16,6 +16,7 @@
 #include "classic/rulesets.hpp"
 #include "net/voice_trial.hpp"
 #include "shooters_edge/net/protocol.hpp"
+#include "shooters_edge/net/q2_fetch.hpp"
 #include "shooters_edge/net/qw_ext.hpp"
 #include "shooters_edge/net/qw_voice_route.hpp"
 
@@ -178,6 +179,42 @@ void read_oob(Q2ClientEnd& c, const uint8_t* data, size_t size) {
   }
 }
 
+bool lacks(const Q2ClientEnd& c, const std::string& path) {
+  return c.downloaded.count(path) == 0 && (!c.cfg.read_file || c.cfg.read_file(path).empty());
+}
+
+// Lacked, never asked for on this connection, and let through by the player's download switches.
+bool wanted(const Q2ClientEnd& c, const std::string& path) {
+  return c.asked.count(path) == 0 && q2_download_allowed(c.cfg.allow, path) && lacks(c, path);
+}
+
+void queue_fetch(Q2ClientEnd& c, const std::string& path) {
+  if (!wanted(c, path)) return;
+  c.asked.insert(path);
+  c.fetch_queue.push_back(path);
+}
+
+// A file as held now: fetched on this connection, else the player's own.
+std::vector<uint8_t> held_file(const Q2ClientEnd& c, const std::string& path) {
+  if (const auto it = c.downloaded.find(path); it != c.downloaded.end()) return it->second;
+  return c.cfg.read_file ? c.cfg.read_file(path) : std::vector<uint8_t>{};
+}
+
+// The level's next stage queued (net/q2_fetch.hpp), once the one before has come: what the models
+// and the level name, then the map's wall textures.
+void queue_next_stage(Q2ClientEnd& c) {
+  while (c.fetch_queue.empty() && c.cfg.fetch_level && c.fetch_stage >= 1 && c.fetch_stage < 3) {
+    const cl::DemoState& st = q2_demo(c).state;
+    const Q2FetchRead read = [&c](const std::string& path) { return held_file(c, path); };
+    if (++c.fetch_stage == 2) {
+      for (const std::string& path : q2_fetch_level(st, read, c.cfg.vweps)) queue_fetch(c, path);
+    } else if (st.models.size() > 1) {
+      for (const std::string& path : q2_fetch_textures(held_file(c, q2_fetch_path(st.models[1]))))
+        queue_fetch(c, path);
+    }
+  }
+}
+
 // THE DOWNLOADS: the next file asked for, or the held `begin` sent once none is left.
 void next_fetch(Q2ClientEnd& c) {
   c.fetching.clear();
@@ -185,67 +222,44 @@ void next_fetch(Q2ClientEnd& c) {
   c.fetched_percent = 0;
   c.fetched_from = 0;
   c.fetched_origin = false;
-  if (c.http.on) {                               // over HTTP first: `begin` held until it is done
-    c.cfg.http.gamedir = q2_demo(c).state.game;  // the server's game folder ("": baseq2)
-    for (const std::string& path : std::exchange(c.fetch_queue, {}))
-      if (wd::web_queue(c.http, c.cfg.http, path)) q2_client_command(c, "download http");
-    if (wd::web_busy(c.http)) return;
+  for (;;) {
+    if (c.http.on) {                               // over HTTP first: `begin` held until it is done
+      c.cfg.http.gamedir = q2_demo(c).state.game;  // the server's game folder ("": baseq2)
+      for (const std::string& path : std::exchange(c.fetch_queue, {}))
+        if (wd::web_queue(c.http, c.cfg.http, path)) q2_client_command(c, "download http");
+      if (wd::web_busy(c.http)) return;
+    }
+    if (!c.fetch_queue.empty()) break;
+    if (c.fetch_stage < 1 || c.fetch_stage >= 3 || !c.cfg.fetch_level) {
+      if (!c.held_begin.empty()) q2_client_command(c, c.held_begin);
+      c.held_begin.clear();
+      return;
+    }
+    queue_next_stage(c);
   }
-  if (!c.fetch_queue.empty()) {
-    c.fetching = c.fetch_queue.front();
-    c.fetch_queue.erase(c.fetch_queue.begin());
-    // A download cut short before: the rest asked for from what is held.
-    if (c.cfg.held.read) c.fetched_bytes = c.cfg.held.read(c.fetching);
-    c.fetched_from = c.fetched_bytes.size();
-    q2_client_command(c,
-                      "download " + c.fetching +
-                          (c.fetched_bytes.empty() ? std::string()
-                                                   : " " + std::to_string(c.fetched_bytes.size())));
-    return;
-  }
-  if (!c.held_begin.empty()) q2_client_command(c, c.held_begin);
-  c.held_begin.clear();
+  c.fetching = c.fetch_queue.front();
+  c.fetch_queue.erase(c.fetch_queue.begin());
+  // A download cut short before: the rest asked for from what is held.
+  if (c.cfg.held.read) c.fetched_bytes = c.cfg.held.read(c.fetching);
+  c.fetched_from = c.fetched_bytes.size();
+  q2_client_command(
+      c,
+      "download " + c.fetching +
+          (c.fetched_bytes.empty() ? std::string() : " " + std::to_string(c.fetched_bytes.size())));
 }
 
-bool lacks(const Q2ClientEnd& c, const std::string& path) {
-  return c.downloaded.count(path) == 0 && (!c.cfg.read_file || c.cfg.read_file(path).empty());
-}
-
-// Lacked and let through by the player's download switches: fetched on joining.
-bool wanted(const Q2ClientEnd& c, const std::string& path) {
-  return q2_download_allowed(c.cfg.allow, path) && lacks(c, path);
-}
-
-// `precache`: the files lacked queued, `begin` held until they are fetched.
+// `precache`: the files lacked queued, `begin` held until they are fetched; with `fetch_level`
+// the level's stages after the map and its models follow (net/q2_fetch.hpp).
 void start_fetch(Q2ClientEnd& c, const std::string& begin) {
   c.fetch_queue.clear();
+  c.fetch_stage = 1;
   const std::vector<std::string>& models = q2_demo(c).state.models;
-  if (models.size() > 1 && models[1].rfind("maps/", 0) == 0 && wanted(c, models[1]))
-    c.fetch_queue.push_back(models[1]);
-  if (c.cfg.fetch_level) {  // what the level names: models, sounds and the players' figures
-    const auto queue = [&c](const std::string& path) {
-      if (path.empty() || path[0] == '*' || path[0] == '#' || path.find('/') == std::string::npos)
-        return;
-      if (wanted(c, path) &&
-          std::find(c.fetch_queue.begin(), c.fetch_queue.end(), path) == c.fetch_queue.end())
-        c.fetch_queue.push_back(path);
-    };
-    const cl::DemoState& st = q2_demo(c).state;
-    for (size_t i = 2; i < models.size(); i++) queue(models[i]);
-    for (size_t i = 1; i < st.sounds.size(); i++)
-      if (!st.sounds[i].empty() && st.sounds[i][0] != '*') queue("sound/" + st.sounds[i]);
-    for (const std::string& look : st.looks) {
-      const size_t slash = look.find('/');
-      if (slash == std::string::npos || slash == 0 || slash + 1 >= look.size()) continue;
-      const std::string figure = look.substr(0, slash);
-      queue("players/" + figure + "/tris.md2");
-      queue("players/" + figure + "/" + look.substr(slash + 1) + ".pcx");
-    }
+  if (c.cfg.fetch_level) {
+    for (const std::string& path : q2_fetch_models(q2_demo(c).state)) queue_fetch(c, path);
+  } else if (models.size() > 1 && models[1].rfind("maps/", 0) == 0) {
+    queue_fetch(c, models[1]);
   }
-  for (const std::string& w : c.cfg.want)
-    if (wanted(c, w) &&
-        std::find(c.fetch_queue.begin(), c.fetch_queue.end(), w) == c.fetch_queue.end())
-      c.fetch_queue.push_back(w);
+  for (const std::string& w : c.cfg.want) queue_fetch(c, w);
   c.held_begin = begin;
   next_fetch(c);
 }
@@ -358,6 +372,8 @@ void run_stuffed(Q2ClientEnd& c) {
       if (w.empty()) continue;
       if (w[0] == "set" && w.size() > 1) {  // the server's own settings (the forced reconnect)
         c.stuffed_set[w[1]] = w.size() > 2 ? w[2] : std::string();
+        if (c.to_run.size() < kKept) c.to_run.push_back(raw);
+      } else if (w[0] == "changing") {  // the level changes: the next `reconnect` follows
       } else if (w[0] == "cmd" && line.size() > 4) {
         q2_client_command(c, line.substr(4));
         c.signon_steps++;
@@ -375,6 +391,8 @@ void run_stuffed(Q2ClientEnd& c) {
         q2_client_command(c, "new");
       } else if (w[0] == "connect" && w.size() > 1) {  // sent elsewhere (sv_redirect)
         c.sent_on = w[1];
+      } else if (c.to_run.size() < kKept) {  // the rest runs in the console as if typed
+        c.to_run.push_back(raw);
       }
     }
   }
