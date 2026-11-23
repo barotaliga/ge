@@ -151,6 +151,9 @@ struct DemoSound {
   sh::Vec3f origin;            // units
   float delay = 0;             // s after the frame it starts in (a shotgun's pump after its shot)
   bool step = false;  // a footstep: Quake II's heard by the surface under it (classic/q2_footsteps)
+  // Quake II: the player muzzle flash value it is a sound of, its silenced bit kept (-1 none), so
+  // the weapon prediction knows the server's copies of the shots it plays (net/q2_weapon.hpp).
+  int16_t flash = -1;
 };
 
 // The extended protocol's look bytes. An entity's transparency: 254 and 255 (unset) solid, else
@@ -347,10 +350,15 @@ struct DemoState {
   float air_accelerate = 0;           // Quake II: the air acceleration the server states (0: none)
   std::vector<DemoEntity> entities;   // by number
   std::vector<DemoEntity> players;    // client, multiview: by slot (32)
-  std::array<int32_t, 32> frags{};    // client, multiview: each slot's frags (updatefrags)
-  std::array<std::string, 32> names;  // client, multiview: each slot's name (its userinfo)
-  std::array<std::string, 32> teams;  // client, multiview: each slot's team ("": none)
-  std::array<bool, 32> spectator{};   // client, multiview: the slot watches (`*spectator`)
+  // Client: the player's own nails, rockets and grenades the prediction threw ahead of the server
+  // (own_missiles.hpp), drawn as entities, and each one's number (kept while it flies, for its
+  // trail); empty when none fly.
+  std::vector<DemoEntity> own_missiles;
+  std::vector<int> own_missile_ids;
+  std::array<int32_t, 32> frags{};      // client, multiview: each slot's frags (updatefrags)
+  std::array<std::string, 32> names;    // client, multiview: each slot's name (its userinfo)
+  std::array<std::string, 32> teams;    // client, multiview: each slot's team ("": none)
+  std::array<bool, 32> spectator{};     // client, multiview: the slot watches (`*spectator`)
   std::array<int, 32> top{}, bottom{};  // each slot's colours (0..13)
   std::array<std::string, 32> skins;    // client, multiview: each slot's `skin` ("": none)
   std::array<std::string, 32> figures;  // client, multiview: each slot's `model` ("": none)
@@ -514,6 +522,9 @@ struct Demo {
   // readers append each message they read (never cleared: the caller clears; offsets within the
   // packet or record read): what a converter passes on (demo_convert_multiview.cpp).
   std::vector<DemoSpan>* spans = nullptr;
+  // Every message the Quake II reader began, counted by its id (a frame's player state and entity
+  // list too): what a test of a joined client or a recording reads to know each kind arrived.
+  int64_t q2_read[256] = {};
   // A Quake II multiview recording (.mvd2): its bytes; what plays (`bytes`) is one player's view
   // of it (`track`), written as Quake II's recording (demo_mvd2.hpp). Empty for any other.
   std::vector<uint8_t> multiview_source;

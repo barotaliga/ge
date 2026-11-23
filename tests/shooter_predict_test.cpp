@@ -187,3 +187,48 @@ TEST(smoothing_folds_a_middle_error_and_decays_it_by_its_size) {
   sh::smoothing_frame(s, {100, 0, 0}, {0, 0, 0});  // over 64: a teleport snaps
   CHECK(sh::length(s.correction) == 0);
 }
+
+TEST(a_client_may_cut_the_error_by_its_latency_drop_a_small_one_or_turn_it_off) {
+  sh::Smoothing s;
+  sh::smoothing_frame(s, {10, 0, 0}, {0, 0, 0}, 0.052);  // a quarter explained by a step's timing
+  CHECK(std::abs(s.correction.x - 7.5f) < 1e-3f);
+  sh::smoothing_frame(s, {10, 0, 0}, {0, 0, 0}, 0.01);  // under a step: taken at once
+  CHECK(std::abs(s.correction.x - 7.5f) < 1e-3f);
+  for (int i = 0; i < 10; i++) sh::smoothing_frame(s, {60, 0, 0}, {0, 0, 0}, 1);
+  CHECK(std::abs(sh::length(s.correction) - sh::kSmoothMax) < 1e-3f);  // capped
+  s.correction = {5, 0, 0};
+  s.drop = 220;
+  sh::smoothing_decay(s, 0.02);  // 200 * 0.02 = 4 off leaves 1, under 220 * 0.02: dropped
+  CHECK(sh::length(s.correction) == 0);
+  s.off = true;
+  sh::smoothing_frame(s, {10, 0, 0}, {0, 0, 0});
+  CHECK(sh::length(s.correction) == 0);
+}
+
+TEST(the_state_after_each_command_and_the_jump_it_took) {
+  ClientMap m;
+  const sh::MoveSettings set;
+  sh::MoveState stand;
+  stand.origin = {0, 0, 24};
+  stand.ground = 0;
+  stand.ground_normal = {0, 0, 1};
+  sh::MoveCmd cmds[6];
+  for (int i = 0; i < 6; i++) cmds[i] = forward_cmd(13);
+  cmds[2].buttons |= sh::kButtonJump;
+  cmds[3].buttons |= sh::kButtonJump;  // still held: one jump
+  const sh::NetPlayer acked = sh::quantize_player(stand);
+  sh::MoveState each[6];
+  const sh::MoveState last = sh::predict_player(acked, cmds, 6, set, m.world, each);
+  CHECK(each[5].origin.x == last.origin.x && each[5].origin.z == last.origin.z);
+  int jumps = 0, at = -1;
+  sh::MoveState before = sh::unquantize_player(acked, set);
+  for (int i = 0; i < 6; i++) {
+    if (sh::move_jumped(before, each[i])) {
+      jumps++;
+      at = i;
+    }
+    before = each[i];
+  }
+  CHECK(jumps == 1 && at == 2);
+  CHECK(each[1].origin.x < each[2].origin.x);
+}

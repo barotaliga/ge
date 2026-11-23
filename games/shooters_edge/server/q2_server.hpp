@@ -77,6 +77,7 @@
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 #include "shooters_edge/server/q2_poses.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
@@ -439,6 +440,9 @@ struct Q2ServerOptions {
   // the classic runners do; it reads a command's jump button as the up move
   // (`ge::classic::q2_command`).
   float speedjump = 0;
+  // The rules played (q2_pack.hpp): the base game's, or a mission pack's on top, by the game
+  // folder the server starts on (`q2_pack_of_folder`).
+  Q2Pack pack = Q2Pack::base;
 };
 
 // The player's model, last in the model list.

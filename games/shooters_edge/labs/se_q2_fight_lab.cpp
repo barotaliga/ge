@@ -75,7 +75,7 @@ void tick(Duel& d, uint8_t buttons, float pitch) {
 void place(Duel& d, int i, float x) {
   d.p(i).move.origin[0] = static_cast<int16_t>(x * 8);
   d.p(i).move.origin[1] = 0;
-  for (int16_t& v : d.p(i).move.velocity) v = 0;
+  for (int32_t& v : d.p(i).move.velocity) v = 0;
 }
 
 std::unique_ptr<Duel> duel(const std::shared_ptr<const br::Map>& map, std::string& error) {

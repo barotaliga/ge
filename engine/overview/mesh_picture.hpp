@@ -7,6 +7,7 @@
 //
 // ge:summary A textured mesh rastered small on the CPU: a cut-out icon or a figure at its size
 // ge:keywords overview figure icon raster cut-out three-quarter draw_figure draw_icon live-map
+// ge:keywords turntable draw_turned smooth-shading player-page
 // ge:skill map-design ui
 // ge:test tests/overview_plate_test.cpp
 #pragma once
@@ -38,5 +39,19 @@ ge::ui::Image draw_icon(const Mesh& m, int size, double azimuth_deg, double elev
 // picture is cut.
 ge::ui::Image draw_figure(const Mesh& m, int size, double yaw_deg, double pitch_deg,
                           double elevation_deg, double px_per_unit);
+
+// A FIGURE ON A TURNTABLE (a player page's figure): `m` turned to `yaw_deg` and seen from the south
+// from `elevation_deg` above, `px_per_unit` px a unit, its origin at (`origin_x`, `origin_y`) of
+// the picture (fractions of its width and height), shaded smoothly (each vertex's normal the mean
+// of its faces' at its place) under the same light, `supersample` samples a pixel each way, cut out
+// with no rim; what falls outside the picture is cut.
+struct TurnView {
+  int width = 0, height = 0;
+  double yaw_deg = 0, elevation_deg = 8, px_per_unit = 1;
+  double origin_x = 0.5, origin_y = 0.5;
+  int supersample = 2;
+  float bright = 1.3f;
+};
+ge::ui::Image draw_turned(const Mesh& m, const TurnView& v);
 
 }  // namespace ge::overview

@@ -10,9 +10,11 @@
 
 #include <algorithm>
 #include <csetjmp>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iterator>
+#include <type_traits>
 #include <utility>
 
 #include "brush/areas.hpp"
@@ -80,7 +82,11 @@ Q2EntityState wire_state(const native::NativeState& s) {
   return w;
 }
 
-Q2PlayerState wire_player(const native::NativePlayer& p) {
+// A player's state for the wire, from either interface's record: the newer one's 32-bit move
+// state, gun index word, damage blend and 64 stats into the wire's wider fields.
+template <class Player>
+Q2PlayerState wire_player(const Player& p) {
+  constexpr bool kNew = std::is_same_v<Player, native::NativePlayerNew>;
   Q2PlayerState w;
   w.type = static_cast<uint8_t>(p.move.type);
   for (int k = 0; k < 3; k++) {
@@ -96,13 +102,16 @@ Q2PlayerState wire_player(const native::NativePlayer& p) {
   w.time = p.move.time;
   w.flags = p.move.flags;
   w.gravity = p.move.gravity;
-  w.gun_index = static_cast<uint8_t>(p.gun_index);
+  w.gun_index = static_cast<uint16_t>(kNew ? p.gun_index : p.gun_index & 255);
   w.gun_frame = static_cast<uint8_t>(p.gun_frame);
   for (int k = 0; k < 4; k++)
     w.blend[k] = static_cast<uint8_t>(std::clamp(p.blend[k], 0.0f, 1.0f) * 255.0f);
+  if constexpr (kNew)
+    for (int k = 0; k < 4; k++)
+      w.damage_blend[k] = static_cast<uint8_t>(std::clamp(p.damage_blend[k], 0.0f, 1.0f) * 255.0f);
   w.fov = static_cast<uint8_t>(std::clamp(p.fov, 0.0f, 255.0f));
   w.rdflags = static_cast<uint8_t>(p.rdflags);
-  for (int k = 0; k < 32; k++) w.stats[k] = p.stats[k];
+  for (size_t k = 0; k < std::size(p.stats); k++) w.stats[k] = p.stats[k];
   return w;
 }
 
@@ -169,12 +178,13 @@ void fill_world(NativeQ2& s) {
     row.render_fx = e->s.renderfx;
     row.loop = e->s.sound > 0 && size_t(e->s.sound) < s.sounds.size() ? e->s.sound : 0;
     if (!player || e->client == nullptr) continue;
-    const native::NativePlayer& ps = e->client->ps;
-    row.view_angles = vec3(ps.view_angles);
-    row.velocity = {ps.move.velocity[0] * 0.125f, ps.move.velocity[1] * 0.125f,
-                    ps.move.velocity[2] * 0.125f};
-    row.flags = (ps.move.flags & 4) != 0 ? sh::kFlagOnGround : 0;  // the move's on-ground bit
-    row.health = ps.stats[1];
+    h.with_player(e, [&row](const auto& ps) {
+      row.view_angles = vec3(ps.view_angles);
+      row.velocity = {float(ps.move.velocity[0]) * 0.125f, float(ps.move.velocity[1]) * 0.125f,
+                      float(ps.move.velocity[2]) * 0.125f};
+      row.flags = (ps.move.flags & 4) != 0 ? sh::kFlagOnGround : 0;  // the move's on-ground bit
+      row.health = ps.stats[1];
+    });
   }
   for (int i = 0; i < sh::kMaxClients; i++) {
     const ClientInfo& c = s.clients[i];
@@ -196,22 +206,23 @@ void fill_world(NativeQ2& s) {
       wc.inventory = in ? h.inventory[i] : std::vector<int16_t>();
     const NativeEntityHead* e = in ? h.entity(i + 1) : nullptr;
     if (e == nullptr || e->client == nullptr) continue;
-    const native::NativePlayer& ps = e->client->ps;
-    PlayerNumbers& nb = wc.numbers;
-    nb.health = ps.stats[1];
-    nb.current_ammo = ps.stats[3];
-    nb.armour = ps.stats[5];
-    nb.frags = ps.stats[14];
-    for (int k = 0; k < 32; k++) nb.stats[k] = ps.stats[k];
-    nb.weapon_model = row_model(s, ps.gun_index);
-    nb.weapon_frame = static_cast<float>(ps.gun_frame);
-    nb.view_z = ps.view_offset[2];
-    nb.view_set = true;
-    for (int k = 0; k < 3; k++) {
-      nb.view_offset[k] = ps.view_offset[k];
-      nb.kick[k] = ps.kick_angles[k];
-    }
-    nb.fov = ps.fov;
+    h.with_player(e, [&](const auto& ps) {
+      PlayerNumbers& nb = wc.numbers;
+      nb.health = ps.stats[1];
+      nb.current_ammo = ps.stats[3];
+      nb.armour = ps.stats[5];
+      nb.frags = ps.stats[14];
+      for (int k = 0; k < 32; k++) nb.stats[k] = ps.stats[k];
+      nb.weapon_model = row_model(s, ps.gun_index);
+      nb.weapon_frame = static_cast<float>(ps.gun_frame);
+      nb.view_z = ps.view_offset[2];
+      nb.view_set = true;
+      for (int k = 0; k < 3; k++) {
+        nb.view_offset[k] = ps.view_offset[k];
+        nb.kick[k] = ps.kick_angles[k];
+      }
+      nb.fov = ps.fov;
+    });
   }
   // The QuakeWorld server's entities, for what reads them (the window's view, the bots).
   if (s.sv.edicts.size() < w.entities.size()) return;
@@ -273,7 +284,9 @@ void take_view(NativeQ2& s) {
   }
   for (int i = 0; i < h.max_clients && i < 32; i++) {
     const NativeEntityHead* e = h.entity(i + 1);
-    raw.players[i] = e->client != nullptr ? wire_player(e->client->ps) : Q2PlayerState{};
+    raw.players[i] = e->client != nullptr
+                         ? h.with_player(e, [](const auto& ps) { return wire_player(ps); })
+                         : Q2PlayerState{};
   }
   // The events last one frame: the game clears them itself when it has its own end of frame.
   if (h.ex != nullptr && h.ex->prep_frame != nullptr)
@@ -283,7 +296,8 @@ void take_view(NativeQ2& s) {
   for (int i = 0; i < h.max_clients && i < sh::kMaxClients; i++) {
     const NativeEntityHead* e = h.entity(i + 1);
     if (e->client == nullptr) continue;
-    s.world.clients[i].numbers.frags = e->client->ps.stats[14];  // the score's stat
+    s.world.clients[i].numbers.frags =  // the score's stat
+        h.with_player(e, [](const auto& ps) { return ps.stats[14]; });
   }
   fill_world(s);
 }
@@ -390,7 +404,7 @@ void run_frame(NativeQ2& s) {
   NativeHost& h = *s.host;
   for (int i = 0; i < h.max_clients; i++) {
     NativeEntityHead* e = h.entity(i + 1);
-    if (h.begun[i] && e->client != nullptr) e->client->ping = s.clients[i].ping_ms;  // measured
+    if (h.begun[i] && e->client != nullptr) h.set_ping(e, s.clients[i].ping_ms);  // measured
   }
   if (!guarded(h, [&] { h.game->run_frame(); })) return;
   run_commands(s);
@@ -746,15 +760,24 @@ constexpr RunnerCalls kNativeCalls = {"native",
 
 NativeQ2::NativeQ2() = default;
 
+// The library's end and the host's memory let go. A destructor must not throw: what the library's
+// shutdown or the clean-up throws is reported and the library closed regardless.
 NativeQ2::~NativeQ2() {
   if (!host) return;
   NativeHost& h = *host;
-  if (!h.dead) guarded(h, [&] { h.game->shutdown(); });
-  native_make_current(nullptr);
-  native_forget(h);
-  for (auto& [p, tag] : h.blocks) std::free(p);
-  h.blocks.clear();
-  native_close_files(h);
+  try {
+    if (!h.dead) guarded(h, [&] { h.game->shutdown(); });
+    native_make_current(nullptr);
+    native_forget(h);
+    for (auto& [p, tag] : h.blocks) std::free(p);
+    h.blocks.clear();
+    native_close_files(h);
+  } catch (...) {
+    std::fputs(
+        "Quake II's game library failed while shutting down; its memory and files may be"
+        " left open.\n",
+        stderr);
+  }
   h.library.close();
 }
 
@@ -831,13 +854,16 @@ std::unique_ptr<NativeQ2> load_native_q2(const NativeQ2Options& opt, std::string
     native_set(h, native_setting(h, name, value, 0), value, true);
   native_make_current(&h);
   h.game = entry(&h.imports);
-  if (h.game == nullptr || h.game->apiversion != native::kNativeVersion) {
+  if (h.game == nullptr || (h.game->apiversion != native::kNativeVersion &&
+                            h.game->apiversion != native::kNativeVersionNew)) {
     error = "the game library " + file + " is version " +
             (h.game != nullptr ? std::to_string(h.game->apiversion) : std::string("unknown")) +
-            ", not " + std::to_string(native::kNativeVersion) + ": it is not one this server hosts";
+            ", not " + std::to_string(native::kNativeVersion) + " or " +
+            std::to_string(native::kNativeVersionNew) + ": it is not one this server hosts";
     h.game = nullptr;
     return nullptr;
   }
+  h.new_interface = h.game->apiversion == native::kNativeVersionNew;
   // The extended interface, when the library has one, before its start.
   if (auto entry_ex =
           reinterpret_cast<native::NativeEntryExFn>(h.library.symbol(native::kNativeEntryEx))) {

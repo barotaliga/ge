@@ -61,7 +61,7 @@ inline constexpr int kSqShotKinds = 8;
 // grenade's smoke (32), a rocket's (16), the BFG's ball (128) with its frames run fast (0x2000).
 inline constexpr int kSqShotEffects[kSqShotKinds] = {8, 0, 0, 32, 16, 0, 128 | 0x2000, 32};
 
-struct SqWeaponRow {
+struct SqWeaponRow {       // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* name;        // the name a player reads and `use` takes
   const char* item;        // the item that gives it (q2_items.hpp); null for the blaster
   const char* view_model;  // the first-person model
@@ -75,6 +75,9 @@ struct SqWeaponRow {
   int damage_dm, damage_sp;  // a hit's damage, in deathmatch and outside it
   int kick;                  // a hit's knockback
   float forward, right;      // the shot's start from the eye, units
+  // The rules it belongs to (q2_pack.hpp): its view model, sound and shots are registered only
+  // under its pack, so the base game's lists do not move.
+  Q2Pack pack = Q2Pack::base;
 };
 
 inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
@@ -105,6 +108,13 @@ inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
     {"Grenades", "ammo_grenades", "models/weapons/v_handgr/tris.md2", "weapons/hgrent1a.wav",
      SqAmmo::grenades, 1, 0, 15, 48, 48, 11, 12, SqShot::hand_grenade, 125, 125, 0, 8, 8},
 };
+
+// The pack each shot kind belongs to, by `SqShot` (its missile model registered only under it).
+inline constexpr Q2Pack kSqShotPacks[kSqShotKinds] = {};
+// Whether weapon `w` plays under `pack` (the base game's always, a pack's under it).
+constexpr bool sq_weapon_plays(int w, Q2Pack pack) {
+  return w >= 0 && w < kSqWeaponCount && q2_pack_has(pack, kSqWeapons[w].pack);
+}
 
 // The hand grenade's fuse, s, lit at frame 11; its throw's speed runs from the least (let go at
 // once) to the most (held 3 s), units/s.
@@ -160,6 +170,14 @@ SqStep sq_hand_step(SqHand& hand, SqBody& body, bool attack, double now, bool in
 
 // Chooses weapon `w` for the hand (when held and not already in hand); true when chosen.
 bool sq_choose(SqHand& hand, const SqBody& body, int w);
+
+// The muzzle flash value (server/q2_flash.hpp) a shot of weapon `w` sends, `shots` the chain gun's
+// bullets this frame; -1 for a weapon with none (the hand grenade). The server sends it and the
+// client's weapon prediction plays it (net/q2_weapon.hpp).
+int sq_flash_value(int w, int shots);
+// Whether flash `value` plays `sample` as its shot (a remixed weapon's own sound is sent as a sound
+// instead).
+bool sq_flash_plays(int value, const char* sample);
 
 // The armour's part of a blow of `damage` (taken off its count): the share (the energy share for
 // an energy hit) × damage, rounded up, at most the count.
