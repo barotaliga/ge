@@ -102,6 +102,7 @@ struct Placed {
   bool bobs = false;      // Quake II's bob bit: rising and sinking 5 units
   // Quake II's render bits: lit full whatever the room, or never darker than a tenth.
   bool full_bright = false, min_light = false;
+  bool no_shadow = false;  // Quake II's render bit: it casts no ground shadow (model_shadow.hpp)
   // Seen through infra-red goggles: its skin times pure red, no light of the room, no glow.
   bool infra_red = false;
   float alpha = 1;  // how much of it shows, 0..1 (a mod's or the map's `alpha`; 1 solid)
@@ -262,11 +263,14 @@ struct WorldModels {
   struct Lit {
     sh::Vec3f at;
     float rgb[3] = {1, 1, 1};
+    bool floor_found = false;  // the floor under it (its height and slope) for its shadow
+    models::FloorUnder floor;
   };
   std::unordered_map<int, Lit> lit;                          // by entity
   std::unordered_map<int, ge::render::MorphPose> last_pose;  // by entity
   // Each morph model's frames and triangles kept on the CPU (no skin): where a warp's ash lands.
   std::vector<ge::render::MorphModel> shapes;
+  std::unordered_map<uint32_t, float> radius;  // by morph model: its frame 0's radius, m (shadows)
   std::vector<ge::render::MorphDraw> morph_draws;
   std::vector<ge::render::SpriteDraw> sprite_draws;
   std::vector<std::pair<double, size_t>> near;  // scratch
@@ -361,6 +365,8 @@ struct InPlace {
   double light = 1;
   bool flat = false, roll_hack = false;
   int self = 0;
+  // The models' ground shadows (model_shadow.hpp's mode: 0 none, 1 under each, 2 fading).
+  int shadows = 0;
 };
 
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a

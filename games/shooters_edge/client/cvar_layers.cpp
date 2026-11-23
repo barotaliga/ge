@@ -328,6 +328,7 @@ void add_first(con::Console& c, const GameBindings& b) {
   if (b.shownet != nullptr) *b.shownet = 0;              // and cl_shownet
   if (b.showpackets != nullptr) *b.showpackets = false;  // and cl_showpackets
   if (b.items_still != nullptr) *b.items_still = false;  // and cl_nobob
+  if (b.model_shadows != nullptr) *b.model_shadows = 0;  // and gl_shadows
   if (b.menu != nullptr) {  // and ui_scale, ui_sortservers, ui_pingrate: the menus by the window
     b.menu->menu_scale() = 0;
     b.menu->servers().game_sort = shooters_edge::menu::ServersPage::kNoGameSort;
@@ -854,6 +855,17 @@ void add_q2(con::Console& c, const GameBindings& b) {
             .kind = con::CvarKind::boolean,
             .values = "0: they float (the default); 1: they lie still"},
            b.items_still);
+  if (b.model_shadows != nullptr)
+    v.bind({.name = "gl_shadows",
+            .fallback = "0",
+            .flags = con::kArchive,
+            .help = "Dark shadows on the floor under the figures, monsters and items.",
+            .kind = con::CvarKind::integer,
+            .min = 0,
+            .max = 2,
+            .values = "0: none (the default); 1: under each, half dark; 2: the same, fading as "
+                      "it rises off the floor"},
+           b.model_shadows);
   if (b.crouch != nullptr)
     v.bind({.name = "cl_predict_crouch",
             .fallback = "1",

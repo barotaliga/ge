@@ -228,6 +228,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   int stock_figures = 0;
   // Quake II's `cl_nobob`: items the game marks to float stay still (no 5-unit rise and fall).
   bool items_still = false;
+  // The models' ground shadows (Quake II's `gl_shadows`): 0 none, 1 under each animated model, 2
+  // fading as it rises (the client's model_shadow.hpp).
+  int model_shadows = 0;
   int fog_serial = 0;  // how many times the `fog` command was given (above)
   std::string base_skin = "base", all_skins, all_figures;
   // teamskin, enemyskin: every teammate's or every enemy's skin ("": their own); the teamcolor and

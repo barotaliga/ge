@@ -11,15 +11,15 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 132 | 13 | 1 | 10 | 156 |
-| Client settings (cvars) | 216 | 50 | 13 | 71 | 350 |
+| Client settings (cvars) | 218 | 49 | 12 | 71 | 350 |
 | Macros ($name in typed and bound text) | 25 | 3 | 0 | 2 | 30 |
-| Menu pages and rows | 97 | 60 | 4 | 1 | 162 |
+| Menu pages and rows | 98 | 59 | 4 | 1 | 162 |
 | Server messages the client parses (svc) | 21 | 6 | 0 | 0 | 27 |
 | Temporary entities (svc_temp_entity) | 15 | 50 | 0 | 0 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 0 | 20 |
 | Muzzle flashes (svc_muzzleflash2, a monster's) | 32 | 1 | 0 | 0 | 33 |
 | Entity effect bits (EF_) | 31 | 2 | 0 | 0 | 33 |
-| Entity render bits (RF_) and view bits (RDF_) | 19 | 5 | 8 | 0 | 32 |
+| Entity render bits (RF_) and view bits (RDF_) | 20 | 5 | 7 | 0 | 32 |
 | Configstrings | 8 | 8 | 0 | 0 | 16 |
 | The layout language (status bar and layouts) | 26 | 1 | 0 | 0 | 27 |
 | HUD and screen elements | 18 | 10 | 0 | 1 | 29 |
@@ -27,9 +27,9 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Demo playback and recording features | 12 | 8 | 1 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 7 | 4 | 0 | 0 | 11 |
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
-| Picture and video | 12 | 6 | 2 | 0 | 20 |
+| Picture and video | 14 | 5 | 1 | 0 | 20 |
 | Connection, network, downloads and the rest | 8 | 5 | 4 | 0 | 17 |
-| **all** | 777 | 293 | 46 | 95 | 1211 |
+| **all** | 783 | 290 | 43 | 95 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 216, partial 50, missing 13, not-taken 71
+done 218, partial 49, missing 12, not-taken 71
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -285,7 +285,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.showclamp | `showclamp` | prints when the client's time is clamped to the frames it has (default 0) | not-taken | a debug build's report only (absent from a release); ours keeps no settings that only a debug build has |
 | cvar.cl_timeout | `cl_timeout` | seconds of silence before the connection is dropped (default 120) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.rcon_address | `rcon_address` | where `rcon` goes when not connected (default empty) | done | `games/shooters_edge/net/qw_remote.cpp` |
-| cvar.cl_thirdperson | `cl_thirdperson` | draws the view from behind the player; the camera stops at walls and at moving doors and platforms (traced where they are drawn), and the player's own model fades as the camera is pushed close; cheat-protected (default 0) | partial | `games/shooters_edge/client/q2_session.cpp` (`view_behind`, a cheat; joined and hosted): stops at the world's walls, not at moving doors and platforms; the own figure is hidden rather than faded when a wall pushes the camera close |
+| cvar.cl_thirdperson | `cl_thirdperson` | draws the view from behind the player; the camera stops at walls and at moving doors and platforms (traced where they are drawn), and the player's own model fades as the camera is pushed close; cheat-protected (default 0) | done | `games/shooters_edge/client/q2_session.cpp` (`view_behind`, a cheat; joined and hosted): stops at the world's walls and at the map's doors and platforms where they were last drawn (`client/world_draw.hpp`'s `world_movers`); the player's own figure fades as the camera is pushed in (`own_figure_alpha`: solid from 60 units, gone within 20) |
 | cvar.cl_thirdperson_angle | `cl_thirdperson_angle` | the third-person camera's angle round the player (default 0) | done | `games/shooters_edge/client/q2_session.cpp` |
 | cvar.cl_thirdperson_range | `cl_thirdperson_range` | the third-person camera's distance (default 60) | done | `games/shooters_edge/client/q2_session.cpp` |
 | cvar.cl_disable_particles | `cl_disable_particles` | bit sum: 1 grenade blast, 2 grenade trail, 4 rocket blast, 8 rocket trail, 16 blood, 32 blaster trail particles off (default 0) | done | `plugins/classic/q2_fx_switches.hpp`, applied in `games/shooters_edge/client/world_fx.cpp` |
@@ -426,7 +426,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_beamstyle | `gl_beamstyle` | 0 flat beams, 1 another look (default 0) | done | Quake II's: 1 draws a laser and the rail trail's core as their core alone, as wide as their width, with no glowing sheath (`app/weapon_fx.hpp`'s round_beam); 0 the soft strip with its glow; the core's own edge stays a pixel soft |
 | cvar.gl_celshading | `gl_celshading` | outlines on models, width (default 0) | missing | C19 |
 | cvar.gl_dotshading | `gl_dotshading` | models shaded by precomputed directions (default 1) | done | Quake II's: 0 lights a model evenly (no shade toward its fixed direction, `client/world_models.cpp`), 1 the game's shading from the fixed direction over the map's +x |
-| cvar.gl_shadows | `gl_shadows` | 1 blob shadows under models, 2 fading with height (default 0) | missing | C19 |
+| cvar.gl_shadows | `gl_shadows` | 1 blob shadows under models, 2 fading with height (default 0) | done | `client/model_shadow.hpp` (`shadow_of`), drawn by `client/world_models.cpp` as `render/morph.hpp`'s flat shadow (`MorphDraw::flat`): each animated model's black copy squashed a unit above the floor under it at half strength, leaning along its facing; 2 fades it out by four of its radii above the floor; none under sprites, brush models, see-through models, shells, the held weapon, or a floor steeper than sixty degrees; saved |
 | cvar.gl_modulate | `gl_modulate` | brightens lightmaps and models (default 1) | done | `games/shooters_edge/client/cvar_layers.cpp` |
 | cvar.gl_modulate_world | `gl_modulate_world` | the world's share of `gl_modulate` (default 1) | done | Quake II's (`classic/q2_fx_switches.hpp`): times `gl_modulate` on the walls' light alone (`classic/app/look.cpp`'s world_light_scale), either look |
 | cvar.gl_coloredlightmaps | `gl_coloredlightmaps` | lightmap saturation (default 1) | partial | Quake II's: the walls' lightmap light moved toward its luminance (0.2126, 0.7152, 0.0722) in the world's shader (`brush/app/bsp.wgsl`'s lightmap), at once; the models' light, read from the lightmaps on the CPU, keeps its colour |
@@ -596,7 +596,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 97, partial 60, missing 4, not-taken 1
+done 98, partial 59, missing 4, not-taken 1
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
@@ -723,7 +723,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.fx.dlight | effects: dynamic lighting | no, yes, only switchable | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.fx.cel | effects: entity cel-shading | no, 1x, 2x, 3x | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.fx.glow | effects: entity glowing | `cl_noglow` inverted | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
-| menu.fx.shadows | effects: ground shadows | no, yes, fade | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
+| menu.fx.shadows | effects: ground shadows | no, yes, fade | done | `games/shooters_edge/menu/q2_pages.cpp`: the row on `gl_shadows` (no 0, yes 1, fade 2) |
 | menu.fx.blend | effects: screen blending | `gl_polyblend` | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
 | menu.fx.warp | effects: screen warping | `gl_waterwarp` | done | `games/shooters_edge/menu/q2_pages.cpp`: the row is live, `gl_waterwarp` registered |
 | menu.fx.grenade | effects: grenade explosions | `cl_disable_explosions` bit 0 inverted | partial | `games/shooters_edge/menu/q2_pages.cpp`: the row is on its page, dimmed until the setting is registered |
@@ -990,7 +990,7 @@ Bits of an entity's effects field a server sends; the client draws trails, light
 
 ## Entity render bits (RF_) and view bits (RDF_)
 
-done 19, partial 5, missing 8, not-taken 0
+done 20, partial 5, missing 7, not-taken 0
 
 Bits of an entity's render field, and of the player state's view flags.
 
@@ -1009,7 +1009,7 @@ Bits of an entity's render field, and of the player state's view flags.
 | rf.shell_red | `RF_SHELL_RED` (1024) | a red shell | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.shell_green | `RF_SHELL_GREEN` (2048) | a green shell | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.shell_blue | `RF_SHELL_BLUE` (4096) | a blue shell | done | `games/shooters_edge/client/q2_look.hpp` |
-| rf.noshadow | `RF_NOSHADOW` (8192) | casts no blob shadow | missing | goes with `gl_shadows` (C19) |
+| rf.noshadow | `RF_NOSHADOW` (8192) | casts no blob shadow | done | `client/q2_look.cpp` (`Q2Look::no_shadow`) onto `Placed::no_shadow`: such a model casts none (`client/model_shadow.hpp`) |
 | rf.castshadow | `RF_CASTSHADOW` (16384) | the newer game's shadow caster | done | the game's client reads it nowhere; ours the same |
 | rf.ir_visible | `RF_IR_VISIBLE` (32768) | drawn flat red while infra-red goggles are on | done | client/q2_look.cpp `q2_infra_red`: under the goggles the model is its skin times pure red, lit by nothing (`client/world_models.cpp`), unless a shell or full light holds it |
 | rf.shell_double | `RF_SHELL_DOUBLE` (65536) | double damage's shell | done | `games/shooters_edge/client/q2_look.hpp` |
@@ -1360,7 +1360,7 @@ How the client makes sound, beyond the settings themselves.
 
 ## Picture and video
 
-done 12, partial 6, missing 2, not-taken 0
+done 14, partial 5, missing 1, not-taken 0
 
 How the client sets up and draws the picture, beyond the settings themselves. Ours draws with its own renderer (`engine/render`, `plugins/classic/app/look.cpp`); the GL driver's internals are not taken (`client-gaps.md`).
 
@@ -1373,7 +1373,7 @@ How the client sets up and draws the picture, beyond the settings themselves. Ou
 | vid.areas | areas behind shut doors | a leaf whose area is not joined is not drawn | done | a leaf in an area the frame does not show draws nothing: off a recording or a joined server's frame, and from the listen server's open portals (`brush/map.cpp` `potentially_visible`, `client/demo_q2.cpp`, `server/q2_areas.cpp`) |
 | vid.pvs2 | the second PVS point | the PVS joined with that of a point 16 units below (above in water) | missing | C2 |
 | vid.particles | particles | squares facing the view, grown with distance, `gl_partscale`, `gl_partstyle`, `gl_partshape` | done | ours draws the classic particles facing the view, sized by `gl_partscale`'s rule with depth, blended or added by `gl_partstyle`, shaped by `gl_partshape` |
-| vid.shadows | blob shadows | `gl_shadows` | missing | C19 |
+| vid.shadows | blob shadows | `gl_shadows` | done | `gl_shadows` (`client/model_shadow.hpp`), and the menu's ground shadows row (no, yes, fade) |
 | vid.shells | colour shells | a second copy pushed out, flat colour, 0.3 | done | `games/shooters_edge/client/q2_look.hpp` |
 | vid.ir | infra-red goggles | IR-visible models drawn flat red | done | client/q2_look.cpp `q2_infra_red`, client/world_models.cpp (red, no light, no minimum light) |
 | vid.lightstyles | light styles | each style's letters stepped at 10 a second, or blended between letters with `cl_lerp_lightstyles` | partial | the window's own game animates them; a server's styles not kept (table "Configstrings") |
@@ -1383,7 +1383,7 @@ How the client sets up and draws the picture, beyond the settings themselves. Ou
 | vid.gun | the view weapon | the gun model from the player state, its frame interpolated, by `hand`, `cl_gun`, `cl_gunfov`, `cl_gun_x/y/z`, `cl_gunalpha` | done | landed; `cl_gunalpha` (`view/hand.hpp`, `client/cvar_layers.cpp`) |
 | vid.bob | the view | bob, roll, kicks, falls from the player state | done | `plugins/classic/q2_view.cpp` |
 | vid.kick | the server's kick | the player state's kick angles added (`cl_kickangles`) | done | added; `cl_kickangles` 0 drops it (`client/present.cpp`, `client/q2_view.hpp`) |
-| vid.thirdperson | third person | `cl_thirdperson` with range and angle (cheat); the player fades as the camera comes close | partial | `client/q2_session.cpp` (`cl_thirdperson`, `_range`, `_angle`; a cheat; joined and hosted): the player's figure hidden rather than faded when the camera comes close |
+| vid.thirdperson | third person | `cl_thirdperson` with range and angle (cheat); the player fades as the camera comes close | done | `client/q2_session.cpp` (`cl_thirdperson`, `_range`, `_angle`; a cheat; joined and hosted): stopped by doors and platforms too; the player's figure fades as the camera comes close (`own_figure_alpha`) |
 | vid.screenshot | screenshots | `screenshot` named `quakeXXX` in `gl_screenshot_format`, written off the main thread | partial | C22 |
 | vid.replacements | replacement content | `.png`/`.jpg`/`.tga` textures over `.pcx`/`.wal`, MD5 models over MD2 | partial | ours replaces by classic enhance (`plugins/classicenhance`), not loose replacement files; verify |
 

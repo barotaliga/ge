@@ -680,6 +680,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
 
 const WorldModels& world_models(const WorldDraw& w) { return w.models; }
 
+std::span<const ba::Mover> world_movers(const WorldDraw& w) { return w.movers; }
+
 std::span<const ba::PointLight> world_lights(const WorldDraw& w) { return w.scene.lights; }
 
 std::vector<gr::Particle> world_particles(ge::gpu::Device& d, const WorldDraw& w) {
@@ -984,7 +986,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .light = look::model_light(*f.picture, lk),
                            .flat = !f.picture->q2fx.dot_shading,
                            .roll_hack = f.picture->q2fx.roll_hack,
-                           .self = fx.has_self ? fx.self.entity : 0};
+                           .self = fx.has_self ? fx.self.entity : 0,
+                           .shadows = f.picture->model_shadows};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,

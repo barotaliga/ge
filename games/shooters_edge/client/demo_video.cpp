@@ -110,6 +110,7 @@ void q2_placed(const DemoEntity& e, Placed& p) {
   p.bobs = look.bobs;
   p.full_bright = look.full_bright;
   p.min_light = look.min_light;
+  p.no_shadow = look.no_shadow;
   p.alpha *= look.alpha;
   p.pulse = look.pulse;
   p.shell = look.shell;
@@ -122,10 +123,11 @@ void q2_placed(const DemoEntity& e, Placed& p) {
 
 }  // namespace
 
-void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own) {
+void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own, float own_alpha) {
   out.clear();
   const int models = static_cast<int>(s.models.size());
-  const int me = draw_own ? -1 : listener_of(s);
+  const int listener = listener_of(s);
+  const int me = draw_own ? -1 : listener;
   const auto put = [&](int entity, const DemoEntity& e) {
     if (e.model <= 0 || e.model >= models) return;
     Placed p;
@@ -144,6 +146,7 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own) {
     for (int c = 0; c < 3; c++) p.colormod[c] = e.colormod[c];
     p.origin = e.origin;
     p.angles = e.angles;
+    if (entity == listener) p.alpha *= own_alpha;  // cl_thirdperson's fade near a wall
     out.push_back(p);
   };
   int player_model = -1;  // the standard figure's place on the list (a body drawn as eyes: none)
@@ -206,7 +209,7 @@ void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
   out.flash_bit = s.protocol != 34;               // Quake II's bit 2 is no gun's flash
   out.q2 = s.protocol == 34;                      // its own arrivals (its events)
   out.effect_models = static_cast<int>(s.models.size());
-  demo_placed(s, out.models, fx.draw_own);
+  demo_placed(s, out.models, fx.draw_own, fx.own_alpha);
   // A live stream's items coming back (our server's `item-back`), each not drawn already.
   out.returning.clear();
   for (const DemoItemBack& b : s.items_back) {
