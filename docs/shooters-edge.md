@@ -732,7 +732,7 @@ server's frames go on under it). Its pages are Quake's:
 | OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS (`gamma`), MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCED |
 | CUSTOMIZE CONTROLS | ATTACK, MOVE FORWARD, MOVE BACK, STEP LEFT, STEP RIGHT, JUMP, WALK / RUN (`+speed`), SIDESTEP (`+strafe`), TURN LEFT, TURN RIGHT, NEXT WEAPON: each the keys bound to it; ENTER, then the key (BACKSPACE clears, ESCAPE leaves it, a third key replaces both) |
 | VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HELD WEAPON |
-| HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`) |
+| HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`), SPENT SHELLS (`ce_shells`) |
 | CLASSIC ENHANCED | LOAD GAME (the desktop's folder chooser: your install), ENHANCE (the loaded game's enhancing, stage by stage), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
 | TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures`, `ce_weapons` |
 | LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `ce_flicker`, `ce_reflections`, `r_reflect`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |

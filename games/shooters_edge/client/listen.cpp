@@ -149,6 +149,7 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
         e.entity = d.entity;
         e.at = d.at;
         e.end = d.end;
+        e.flash = d.flash;
         l.effects.push_back(std::move(e));
       }
       return;
@@ -157,6 +158,10 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   Effect e;
   e.code = -1;
   e.name = ev.text;
+  if (monster_flash) {  // its gun's spent cases (shells.hpp)
+    e.flash = static_cast<int>(ev.values[3]);
+    e.flash_monster = true;
+  }
   if (ev.kind == sv::EventKind::trail_effect) {
     e.kind = EffectKind::named_trail;
     e.entity = ev.ent;
