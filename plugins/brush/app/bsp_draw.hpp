@@ -72,6 +72,9 @@ enum class Lighting : uint8_t { lightmaps, lights, rebaked };
 // "classic" or "v2"; false for any other word.
 bool parse_mode(std::string_view word, Mode* out);
 
+// Options::dlight_falloff's distances, m: 51.2 and 64 of a classic map's units.
+inline constexpr double kDlightSoftM = 1.28, kDlightHardM = 1.6;
+
 struct Options {
   Mode mode = Mode::v2;  // the renderer for BSP maps; classic stays selectable (r_bspmode)
   Lighting lighting = Lighting::lights;
@@ -172,6 +175,15 @@ struct Options {
   bool invert = false;
   // The map's sky box read sharp, each texel a square (else smoothed). Either mode.
   bool crisp_sky = false;
+  // The lightmaps' light: how much of its colour shows (1 as baked, 0 grey by its luminance).
+  double lightmap_saturation = 1;
+  // The light styles glided linearly from each letter to the next (draw_data.hpp's
+  // `style_level_lerped`), else stepped (or, under v2's `flicker`, eased).
+  bool lerp_styles = false;
+  // The dynamic lights' edge on the lightmaps: 0 a straight fall to nothing at its radius; 1 the
+  // same to nothing kDlightSoftM short of it; 2 its light (radius - distance) cut off where that
+  // falls under kDlightHardM, a hard edge.
+  int dlight_falloff = 0;
   // r_fullbright: every solid face drawn as its texture is painted, with no light or shade on it
   // (the lightmaps, the lights, the sun and the shadows all left out). Either mode.
   bool fullbright = false;
@@ -357,7 +369,9 @@ struct GpuBsp {
   // (Options::classic_lift); z the filtered textures' most taps (Options::anisotropy), w 1 for
   // the sky box sharp (Options::crisp_sky).
   float classic[4];
-  // The solid faces' textures: x their saturation, y 1 inverted (Options::saturation, invert).
+  // The solid faces' textures: x their saturation, y 1 inverted (Options::saturation, invert); z
+  // the lightmaps' saturation (Options::lightmap_saturation), w the dynamic lights' edge
+  // (Options::dlight_falloff).
   float paint[4];
 };
 

@@ -10,7 +10,8 @@
 // ge:keywords gl_screenshot_quality gl_screenshot_template gl_screenshot_compression
 // ge:keywords gl_partscale gl_partstyle gl_partshape gl_beamstyle gl_drawsky gl_bilerp_skies
 // ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_bilerp_pics
-// ge:keywords gl_gamma_scale_pics
+// ge:keywords gl_gamma_scale_pics gl_modulate_world gl_modulate_entities gl_doublelight_entities
+// ge:keywords gl_dotshading gl_coloredlightmaps cl_lerp_lightstyles cl_rollhack
 // ge:skill console shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #include "shooters_edge/client/cvar_layers.hpp"
@@ -24,6 +25,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -247,6 +249,62 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .kind = con::CvarKind::boolean,
           .values = "1: the fog the map or the fog command sets (the default); 0: none at all"},
          &x.fog);
+  // The light on the walls and the models.
+  for (const auto& [name, help, field] :
+       {std::tuple{"gl_modulate_world", "How bright the walls' light is, times gl_modulate.",
+                   &x.modulate_world},
+        std::tuple{"gl_modulate_entities",
+                   "How bright the light on the players, monsters and items is, times gl_modulate.",
+                   &x.modulate_entities}})
+    v.bind({.name = name,
+            .fallback = "1",
+            .help = help,
+            .kind = con::CvarKind::number,
+            .min = 0,
+            .max = 1000000,
+            .values = "1: the default; a number: that many times as bright"},
+           field);
+  v.bind({.name = "gl_doublelight_entities",
+          .fallback = "1",
+          .help = "Whether the players, monsters and items take gl_modulate's light twice.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: twice, as the game always drew them (the default); 0: once"},
+         &x.double_light);
+  v.bind({.name = "gl_dotshading",
+          .fallback = "1",
+          .help = "Whether the players, monsters and items are shaded brighter on one side.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: shaded (the default); 0: lit evenly all round"},
+         &x.dot_shading);
+  v.bind({.name = "gl_coloredlightmaps",
+          .fallback = "1",
+          .help = "How much colour the walls' light keeps.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 1,
+          .values = "1: its colours (the default); 0..1: that share; 0: white light"},
+         &x.lightmap_saturation);
+  v.bind({.name = "cl_lerp_lightstyles",
+          .fallback = "0",
+          .help = "Whether flickering and pulsing lights change smoothly.",
+          .kind = con::CvarKind::boolean,
+          .values = "0: in steps, ten a second (the default); 1: smoothly"},
+         &x.lerp_styles);
+  v.bind({.name = "cl_rollhack",
+          .fallback = "1",
+          .help = "Which way the other players lean as they run sideways.",
+          .kind = con::CvarKind::boolean,
+          .values = "1: away from the way they move, as the game always drew it (the default); "
+                    "0: into it"},
+         &x.roll_hack);
+  v.bind({.name = "gl_dlight_falloff",
+          .fallback = "1",
+          .help = "Whether the edge of a flash's or a rocket's light on the walls is soft.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 1,
+          .values = "1: it fades out (the default); 0: a hard edge"},
+         &x.dlight_falloff);
 }
 
 // THE FIRST CLASSIC GAME: every name it shares with the layers under it means there what it means

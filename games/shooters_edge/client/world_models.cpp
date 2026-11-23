@@ -1312,7 +1312,10 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
     if (k.spin || p.turns) ang[1] = float(std::fmod(t * kSpinDegPerS, 360.0));
     if (p.turns) ang[0] = ang[2] = 0;  // yaw only
-    if (p.spinning && !p.turns) {      // upside down, its own yaw turned on 500 degrees a second
+    if (in_place.roll_hack && p.entity > 0 && p.entity <= sh::kMaxClients &&
+        p.entity != in_place.self)
+      ang[2] = -ang[2];            // cl_rollhack: another player's lean the other way
+    if (p.spinning && !p.turns) {  // upside down, its own yaw turned on 500 degrees a second
       ang[0] = 0;
       ang[2] = 180;
       ang[1] = float(std::fmod(t * kSqSpinDegPerS + p.angles.y, 360.0));
@@ -1380,10 +1383,10 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       // as the walls round it do.
       const double raw = raw_rgb[c];
       const double floor = p.infra_red ? raw : std::sqrt(raw * raw + minlight * minlight);
-      const float l = float((floor + dyn[c]) * brightness);
+      const float l = float((floor + dyn[c]) * brightness * in_place.light);
       // The tint on its light, not its glow.
       g.ambient[c] = (q2 ? 1 : kAmbientShare) * l * p.colormod[c];
-      g.shade[c] = (q2 ? 1 : kShadeShare) * l * p.colormod[c];
+      g.shade[c] = in_place.flat ? 0.0f : (q2 ? 1 : kShadeShare) * l * p.colormod[c];
       if (fullbright > 0) {
         // r_fullbrightskins: lifted toward full light (a lightmap's 1, a wall as painted, at this
         // brightness, or its own light where that is more) with its shading gone; never darker.

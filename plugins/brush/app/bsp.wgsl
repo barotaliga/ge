@@ -103,7 +103,9 @@ struct Bsp {
   // classic_lift, the lightmap's 0 .. 1 units), z the filtered textures' most taps along a slant
   // (Options::anisotropy), w 1 the sky box read sharp (Options::crisp_sky)
   classic: vec4f,
-  // the solid faces' textures: x their saturation (1 as painted), y 1 inverted
+  // the solid faces' textures: x their saturation (1 as painted), y 1 inverted; z the lightmaps'
+  // saturation (1 as baked); w the dynamic lights' edge (Options::dlight_falloff: 0 straight to
+  // their reach, 1 to 1.28 m short of it, 2 cut off 1.6 m short)
   paint: vec4f,
 };
 
@@ -509,7 +511,13 @@ fn dynamic_light(p: vec3f) -> vec3f {
       continue;
     }
     let d = length(p - l.pos.xyz);
-    e += l.colour.rgb * max(1.0 - d / l.pos.w, 0.0);
+    var f = max(1.0 - d / l.pos.w, 0.0);
+    if (bsp.paint.w > 1.5) {  // Options::dlight_falloff 2: cut off kDlightHardM short of its reach
+      f = select(0.0, f, l.pos.w - d >= 1.6);
+    } else if (bsp.paint.w > 0.5) {  // 1: nothing kDlightSoftM short of it
+      f = max(1.0 - d / max(l.pos.w - 1.28, 1e-3), 0.0);
+    }
+    e += l.colour.rgb * f;
   }
   return e;
 }
@@ -535,7 +543,9 @@ fn lightmap(lm: vec2f, styles: u32) -> vec3f {
       e += textureSampleLevel(light_atlas, light_sampler, at, 0.0).rgb * style_level(id);
     }
   }
-  return e * (255.0 / 128.0);
+  // Options::lightmap_saturation: toward its luminance, 1 as baked
+  let l = e * (255.0 / 128.0);
+  return mix(vec3f(dot(l, vec3f(0.2126, 0.7152, 0.0722))), l, bsp.paint.z);
 }
 
 // THE DIRECTIONAL SHADE (engine/bake/bake.hpp, `directional_scale`, restated): the rebaked

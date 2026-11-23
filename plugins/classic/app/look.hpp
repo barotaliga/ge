@@ -325,6 +325,14 @@ ge::render::PostSettings post_settings(Look look, const Picture& picture = {});
 // The maps' light's scale over the default (`light_intensity` x `light_modulate` / 2): 1 at the
 // defaults.
 double light_scale(const Picture& picture);
+// The walls' light's scale: `light_scale` times Quake II's gl_modulate_world (1 in every other
+// game).
+double world_light_scale(const Picture& picture);
+// The models' light over the brightness the world's options give them in `look`: Quake II's
+// gl_modulate times gl_modulate_entities, laid on twice under gl_doublelight_entities; in the
+// modern look, whose models already take the world's brightness, over the world's modulate. 1 at
+// the defaults and in every other game.
+double model_light(const Picture& picture, Look look);
 // The classic grade: every entry the nearest (in sRGB) of `palette`'s colours (768 bytes, RGB), in
 // render/post.hpp's `identity_grade` layout. An empty palette gives the identity.
 std::vector<float> palette_grade(std::span<const uint8_t> palette);

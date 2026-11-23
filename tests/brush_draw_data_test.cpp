@@ -334,3 +334,13 @@ TEST(a_glided_light_style_meets_each_letter_and_eases_between) {
   CHECK(ba::style_level_glided("", 3.7) == 1.0);
   CHECK(ba::style_level_glided("m", 3.7) == 1.0);
 }
+
+TEST(a_lerped_light_style_moves_in_a_straight_line_between_letters) {
+  // "az": a quarter of the way from a to z a quarter of the tenth in, where the glide's ease is
+  // still under it; each letter met on its tenth.
+  const double z = ba::style_level("az", 0.1);
+  CHECK(std::fabs(ba::style_level_lerped("az", 0.025) - 0.25 * z) < 1e-9);
+  CHECK(ba::style_level_glided("az", 0.025) < ba::style_level_lerped("az", 0.025));
+  CHECK(std::fabs(ba::style_level_lerped("az", 0.1) - z) < 1e-9);
+  CHECK(ba::style_level_lerped("", 1.3) == 1.0);
+}
