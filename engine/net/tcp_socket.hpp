@@ -42,6 +42,9 @@ struct TcpStream {
   size_t in_head = 0;
   uint64_t sent = 0;      // bytes the OS has taken from `out`, ever
   uint64_t received = 0;  // bytes the OS has given into `in`, ever
+  // The most bytes the next pumps may read from the OS, taken down as they read (a download held
+  // to a speed: what is not read stays in the OS's buffer, so the sender slows); SIZE_MAX: no cap.
+  size_t read_budget = SIZE_MAX;
 };
 
 // Listen at `bind` (port 0: any free port); false and `error` when the OS refuses.

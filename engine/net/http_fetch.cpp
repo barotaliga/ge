@@ -6,6 +6,7 @@
 // ge:test tests/net_http_fetch_test.cpp
 #include "net/http_fetch.hpp"
 
+#include <algorithm>
 #include <utility>
 
 #include "net/udp_socket.hpp"
@@ -48,7 +49,50 @@ struct Head {
   bool chunked = false;
   std::string location;
   std::string encoding;
+  int64_t range_start = -1;  // a 206's `Content-Range` first byte
+  int64_t range_total = -1;  // ... and the whole file's size (-1 `*`)
+  std::vector<uint8_t> sha256;
 };
+
+// A run of decimal digits as a number; false when it is not one (or too large).
+bool read_number(std::string_view v, int64_t& out) {
+  out = 0;
+  if (v.empty()) return false;
+  for (const char c : v) {
+    if (c < '0' || c > '9' || out > (int64_t{1} << 50)) return false;
+    out = out * 10 + (c - '0');
+  }
+  return true;
+}
+
+// `bytes A-B/T` read.
+void read_content_range(std::string_view v, Head& h) {
+  if (!starts_with_words(v, "bytes ")) return;
+  v.remove_prefix(6);
+  const size_t dash = v.find('-'), slash = v.find('/');
+  if (dash == std::string_view::npos || slash == std::string_view::npos || slash < dash) return;
+  int64_t a = 0, t = 0;
+  if (!read_number(trim(v.substr(0, dash)), a)) return;
+  h.range_start = a;
+  h.range_total = read_number(trim(v.substr(slash + 1)), t) ? t : -1;
+}
+
+// The SHA-256 a `Repr-Digest` (`sha-256=:B64:`) or a `Digest` (`SHA-256=B64`) header names.
+void read_digest(std::string_view v, Head& h) {
+  size_t at = 0;
+  while (at < v.size()) {
+    size_t end = v.find(',', at);
+    if (end == std::string_view::npos) end = v.size();
+    const std::string_view item = trim(v.substr(at, end - at));
+    at = end + 1;
+    if (!starts_with_words(item, "sha-256=")) continue;
+    std::string_view b64 = item.substr(8);
+    if (!b64.empty() && b64.front() == ':') b64.remove_prefix(1);
+    if (!b64.empty() && b64.back() == ':') b64.remove_suffix(1);
+    std::vector<uint8_t> out;
+    if (base64_decode(b64, out) && out.size() == 32) h.sha256 = std::move(out);
+  }
+}
 
 // The head of `raw` when it is whole; false while it is not. `bad` when it is not HTTP.
 bool read_head(const std::vector<uint8_t>& raw, Head& h, bool& bad) {
@@ -82,15 +126,11 @@ bool read_head(const std::vector<uint8_t>& raw, Head& h, bool& bad) {
     const std::string_view value = trim(line.substr(colon + 1));
     if (same_words(name, "content-length")) {
       int64_t n = 0;
-      bool digits = !value.empty();
-      for (const char c : value) {
-        if (c < '0' || c > '9' || n > (int64_t{1} << 50)) {
-          digits = false;
-          break;
-        }
-        n = n * 10 + (c - '0');
-      }
-      if (digits) h.length = n;
+      if (read_number(value, n)) h.length = n;
+    } else if (same_words(name, "content-range")) {
+      read_content_range(value, h);
+    } else if (same_words(name, "repr-digest") || same_words(name, "digest")) {
+      read_digest(value, h);
     } else if (same_words(name, "transfer-encoding")) {
       h.chunked = value.size() >= 7 && same_words(value.substr(value.size() - 7), "chunked");
     } else if (same_words(name, "location")) {
@@ -143,6 +183,7 @@ void start_tls(HttpFetch& f, const std::string& host, const std::string& request
   TlsOptions o;
   o.verify = f.options.verify;
   o.ca_pem = f.options.ca_pem;
+  o.pin = f.options.pin;
   f.tls = tls_client(host, o);
   tls_write(*f.tls, reinterpret_cast<const uint8_t*>(request.data()), request.size());
 }
@@ -171,6 +212,14 @@ bool open(HttpFetch& f, double now_s) {
   f.status = 0;
   f.total = -1;
   f.encoding.clear();
+  f.offset = 0;
+  f.sha256.clear();
+  f.head_end = 0;
+  f.chunked = false;
+  f.length = -1;
+  f.seen = 0;
+  f.tokens = 0;
+  f.rate_at_s = now_s;
   HttpUrl u;
   if (!read_http_url(f.url, u)) {
     fail(f, "URL using bad/illegal format or missing URL");
@@ -202,6 +251,7 @@ bool open(HttpFetch& f, double now_s) {
   if (!f.options.referer.empty()) request += "Referer: " + f.options.referer + "\r\n";
   if (!f.options.accept_encoding.empty())
     request += "Accept-Encoding: " + f.options.accept_encoding + "\r\n";
+  if (f.options.from > 0) request += "Range: bytes=" + std::to_string(f.options.from) + "-\r\n";
   request += "Accept: */*\r\nConnection: close\r\n\r\n";
   if (!u.https) {
     send(f, request);
@@ -387,7 +437,16 @@ void http_start(HttpFetch& f, const std::string& url, const HttpOptions& options
 bool http_step(HttpFetch& f, double now_s) {
   if (f.state == HttpState::done || f.state == HttpState::failed) return true;
   if (f.state == HttpState::idle) return false;
+  if (f.options.rate > 0) {  // the bytes this step may read: the cap's, a quarter second at most
+    const auto rate = static_cast<double>(f.options.rate);
+    f.tokens =
+        std::min(f.tokens + rate * std::max(now_s - f.rate_at_s, 0.0), std::max(rate / 4, 16384.0));
+    f.rate_at_s = now_s;
+    f.stream.read_budget = static_cast<size_t>(f.tokens);
+  }
+  const uint64_t before = f.stream.received;
   tcp_pump(f.stream);
+  if (f.options.rate > 0) f.tokens -= static_cast<double>(f.stream.received - before);
   if (f.state == HttpState::connecting) {
     if (f.stream.connecting) {
       if (now_s - f.last_byte_s > f.options.stall_s) fail(f, "Timeout was reached");
@@ -442,66 +501,90 @@ bool http_step(HttpFetch& f, double now_s) {
   } else if (tcp_take_bytes(f.stream, f.raw) > 0) {
     f.last_byte_s = now_s;
   }
-  Head h;
-  bool bad = false;
-  if (!read_head(f.raw, h, bad)) {
-    if (f.raw.size() > 65536) bad = true;
-    if (bad || closed) {
+  if (f.head_end == 0) {
+    Head h;
+    bool bad = false;
+    if (!read_head(f.raw, h, bad)) {
+      if (f.raw.size() > 65536) bad = true;
+      if (bad || closed) {
+        fail(f, "Transferred a partial file");
+        return true;
+      }
+      if (now_s - f.last_byte_s > f.options.stall_s) fail(f, "Timeout was reached");
+      return f.state == HttpState::failed;
+    }
+    if (bad) {
       fail(f, "Transferred a partial file");
       return true;
     }
-    if (now_s - f.last_byte_s > f.options.stall_s) fail(f, "Timeout was reached");
-    return f.state == HttpState::failed;
-  }
-  if (bad) {
-    fail(f, "Transferred a partial file");
-    return true;
-  }
-  f.status = h.status;
-  f.total = h.length;
-  f.encoding = h.encoding == "identity" ? std::string() : h.encoding;
-  const bool redirect = (h.status == 301 || h.status == 302 || h.status == 303 || h.status == 307 ||
-                         h.status == 308) &&
-                        !h.location.empty() && f.options.redirects > 0;
-  if (redirect) {
-    if (f.redirected >= f.options.redirects) {
-      fail(f, "Number of redirects hit maximum amount");
+    f.status = h.status;
+    f.total = h.length;
+    f.encoding = h.encoding == "identity" ? std::string() : h.encoding;
+    const bool redirect = (h.status == 301 || h.status == 302 || h.status == 303 ||
+                           h.status == 307 || h.status == 308) &&
+                          !h.location.empty() && f.options.redirects > 0;
+    if (redirect) {
+      if (f.redirected >= f.options.redirects) {
+        fail(f, "Number of redirects hit maximum amount");
+        return true;
+      }
+      ++f.redirected;
+      f.url = resolve_location(f.url, h.location);
+      open(f, now_s);
+      return f.state == HttpState::failed;
+    }
+    if (h.status == 416 && f.options.from > 0) {
+      fail(f, "Range not satisfiable");
       return true;
     }
-    ++f.redirected;
-    f.url = resolve_location(f.url, h.location);
-    open(f, now_s);
-    return f.state == HttpState::failed;
+    if (h.status == 206) {  // the rest of the file from where the resume asked
+      if (f.options.from <= 0 || h.range_start != f.options.from) {
+        fail(f, "Transferred a partial file");
+        return true;
+      }
+      f.status = 200;
+      f.offset = h.range_start;
+      f.total = h.range_total;
+    }
+    const int64_t whole_size = f.total >= 0 ? f.total : h.length;
+    if (whole_size >= 0 && static_cast<uint64_t>(whole_size) > f.options.most_bytes) {
+      fail(f, "Maximum file size exceeded");
+      return true;
+    }
+    f.head_end = h.end;
+    f.chunked = h.chunked;
+    f.length = h.length;
+    f.sha256 = std::move(h.sha256);
   }
-  if (h.length >= 0 && static_cast<uint64_t>(h.length) > f.options.most_bytes) {
-    fail(f, "Maximum file size exceeded");
-    return true;
-  }
-  const size_t have = f.raw.size() - h.end;
+  const size_t have = f.raw.size() - f.head_end;
+  const auto offset = static_cast<size_t>(f.offset);
+  const size_t most = offset < f.options.most_bytes ? f.options.most_bytes - offset : 0;
   bool whole = false;
-  if (h.status == 204 || h.status == 304 || (h.status >= 100 && h.status < 200)) {
+  if (f.status == 204 || f.status == 304 || (f.status >= 100 && f.status < 200)) {
     whole = true;
     f.body.clear();
-  } else if (h.chunked) {
-    const int r = read_chunks(f.raw, h.end, f.body, f.options.most_bytes);
-    if (r < 0) {
-      fail(f, f.body.size() > f.options.most_bytes ? "Maximum file size exceeded"
-                                                   : "Transferred a partial file");
-      return true;
+  } else if (f.chunked) {
+    if (f.raw.size() != f.seen || closed) {  // decoded again only when bytes came
+      f.seen = f.raw.size();
+      const int r = read_chunks(f.raw, f.head_end, f.body, most);
+      if (r < 0) {
+        fail(f, f.body.size() > most ? "Maximum file size exceeded" : "Transferred a partial file");
+        return true;
+      }
+      whole = r == 1;
     }
-    whole = r == 1;
-  } else if (h.length >= 0) {
-    whole = have >= static_cast<size_t>(h.length);
+  } else if (f.length >= 0) {
+    whole = have >= static_cast<size_t>(f.length);
     if (whole)
-      f.body.assign(f.raw.begin() + static_cast<ptrdiff_t>(h.end),
-                    f.raw.begin() + static_cast<ptrdiff_t>(h.end + h.length));
+      f.body.assign(f.raw.begin() + static_cast<ptrdiff_t>(f.head_end),
+                    f.raw.begin() + static_cast<ptrdiff_t>(f.head_end + f.length));
   } else {
-    if (have > f.options.most_bytes) {
+    if (have > most) {
       fail(f, "Maximum file size exceeded");
       return true;
     }
     whole = closed;
-    if (whole) f.body.assign(f.raw.begin() + static_cast<ptrdiff_t>(h.end), f.raw.end());
+    if (whole) f.body.assign(f.raw.begin() + static_cast<ptrdiff_t>(f.head_end), f.raw.end());
   }
   if (whole) {
     tcp_close(f.stream);
@@ -529,14 +612,72 @@ void http_cancel(HttpFetch& f) {
   f.body.clear();
   f.status = 0;
   f.total = -1;
+  f.offset = 0;
+  f.sha256.clear();
+  f.head_end = 0;
   f.state = HttpState::idle;
 }
 
 size_t http_received(const HttpFetch& f) {
   if (f.state == HttpState::done) return f.body.size();
-  const std::string_view text(reinterpret_cast<const char*>(f.raw.data()), f.raw.size());
-  const size_t end = text.find("\r\n\r\n");
-  return end == std::string_view::npos ? 0 : f.raw.size() - end - 4;
+  return f.head_end == 0 ? 0 : f.raw.size() - f.head_end;
+}
+
+bool http_partial(const HttpFetch& f, std::vector<uint8_t>& out) {
+  out.clear();
+  if (f.head_end == 0 || f.chunked || !f.encoding.empty() || f.status != 200) return false;
+  if (f.raw.size() <= f.head_end) return false;
+  out.assign(f.raw.begin() + static_cast<ptrdiff_t>(f.head_end), f.raw.end());
+  return true;
+}
+
+bool http_digest_ok(const HttpFetch& f, const std::vector<uint8_t>& bytes) {
+  if (f.sha256.size() != 32) return true;
+  uint8_t sum[32];
+  sha256(bytes.data(), bytes.size(), sum);
+  return std::equal(sum, sum + 32, f.sha256.begin());
+}
+
+bool base64_decode(std::string_view text, std::vector<uint8_t>& out) {
+  out.clear();
+  uint32_t acc = 0;
+  int bits = 0;
+  size_t pad = 0;
+  for (const char c : text) {
+    int v = -1;
+    if (c >= 'A' && c <= 'Z') v = c - 'A';
+    if (c >= 'a' && c <= 'z') v = c - 'a' + 26;
+    if (c >= '0' && c <= '9') v = c - '0' + 52;
+    if (c == '+') v = 62;
+    if (c == '/') v = 63;
+    if (c == '=') {
+      ++pad;
+      continue;
+    }
+    if (v < 0 || pad > 0) return false;
+    acc = (acc << 6) | static_cast<uint32_t>(v);
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out.push_back(static_cast<uint8_t>((acc >> bits) & 0xff));
+    }
+  }
+  return pad <= 2;
+}
+
+std::string base64_encode(const uint8_t* data, size_t size) {
+  static const char k[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string out;
+  out.reserve((size + 2) / 3 * 4);
+  for (size_t i = 0; i < size; i += 3) {
+    const uint32_t n = (uint32_t{data[i]} << 16) | (i + 1 < size ? uint32_t{data[i + 1]} << 8 : 0) |
+                       (i + 2 < size ? uint32_t{data[i + 2]} : 0);
+    out += k[(n >> 18) & 63];
+    out += k[(n >> 12) & 63];
+    out += i + 1 < size ? k[(n >> 6) & 63] : '=';
+    out += i + 2 < size ? k[n & 63] : '=';
+  }
+  return out;
 }
 
 }  // namespace ge::net

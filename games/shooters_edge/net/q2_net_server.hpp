@@ -77,6 +77,7 @@
 #include "server/settingban.hpp"
 #include "server/skew.hpp"
 #include "server/status.hpp"
+#include "server/web_files.hpp"
 #include "shooters_edge/net/protocol.hpp"
 #include "shooters_edge/net/q2_mvd_server.hpp"
 #include "shooters_edge/net/q2_net.hpp"
@@ -218,6 +219,11 @@ struct Q2NetConfig {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   // sv_downloadserver: the web address a client may fetch content from instead (` dlserver=` in
   // the connect answer); empty: none.
   std::string download_server;
+  // The server's own web files (engine/server/web_files.hpp, sv_http_*): their settings, and once
+  // served the address told when sv_downloadserver is not set (`{server}` for the host the client
+  // joined) and their certificate's digest (` dlpin=` beside it; "": none).
+  ge::server::WebFilesConfig web;
+  std::string web_url, web_pin;
   // THE OPERATOR (q2_admin.hpp): `kick`, `kickban`, `dumpuser`, `stuff` and `stuffcvar` also take
   // a player's name in any case or a unique part of it (sv_enhanced_setplayer).
   bool enhanced_setplayer = false;
