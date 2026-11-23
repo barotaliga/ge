@@ -394,7 +394,8 @@ int run_main(int argc, char** argv) {
                    .binds = &console.binds().table(ge::console::BindMode::game),
                    .screen = &q2_screen,
                    .fx = &picture.q2fx,
-                   .gamma = &picture.gamma};
+                   .gamma = &picture.gamma,
+                   .console = &console};
   cl::add_q2_bar_commands(console, q2_bar);  // dumpstatusbar, dumplayout, aashot, aadump
   // The HUD's type: the loaded classic game's glyph sheet writes its messages (hud/layout.hpp).
   const auto hud_look = [&] { return se::hud_style(cl::hud_art_of(files, classic_art, free_art)); };
@@ -1123,6 +1124,7 @@ int run_main(int argc, char** argv) {
       menu_host.in_level = (listen.server || remote.active) && !attract;  // ESCAPE's in-game page
       menu_host.screen_up = q2_bar.layout_up;  // ESCAPE puts the help computer away first
       q2_bar.f1 = ge::input::key_held(held, 58) ? (bench.active ? 2 : 1) : 0;  // F1: the layout
+      picture.view_size = q2_screen.viewsize;  // Quake II's viewsize (100 for every other game)
       // A benchmark's Escape stops the run (below) and opens nothing.
       const bool opening = (!con_keys.held && !was_open && (!bench.active || watched) &&
                             input.tapped(Key::escape)) ||

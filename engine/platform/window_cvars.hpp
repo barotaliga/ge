@@ -31,8 +31,14 @@
 namespace ge::platform {
 
 struct WindowCvars {
-  bool fullscreen = false;  // the window follows it each frame
-  int display = 0;          // read when the window goes fullscreen
+  // vid_fullscreen: 0 a window, N the whole screen in mode N of vid_modelist (counted from 1);
+  // the window follows it each frame. _vid_fullscreen: the mode Alt+Enter goes back to (kept from
+  // the last vid_fullscreen above 0). vid_modelist: the modes, `desktop` or WxH[@Hz][:bpp].
+  int fullscreen = 0;
+  int fullscreen_back = 1;
+  std::string modelist = "desktop";
+  bool hwgamma = false;  // vid_hwgamma: asked for; this platform has no gamma ramp, so set back
+  int display = 0;       // read when the window goes fullscreen
   double volume = 0.7;
   int sound = 1;       // s_enable: 0 no sound at all, 1 and 2 the sound on
   int auto_focus = 0;  // s_auto_focus
@@ -45,7 +51,8 @@ struct WindowCvars {
   // `follow_sound_device` last asked for.
   std::string sound_device, sound_applied;
   // What `follow_window_cvars` last set the window to.
-  bool full_applied = false;
+  int full_applied = 0;
+  std::string modes_applied = "desktop";
   WindowStyle style_applied;
   std::string geometry_applied;
 };
@@ -53,6 +60,12 @@ struct WindowCvars {
 // `WxH`, `WxH+X+Y` or `+X+Y` (X and Y signed, from the desktop's top left) as a place; false for
 // anything else, the empty text too.
 bool window_place_of(std::string_view text, WindowPlace& out);
+// Mode `n` (from 1) of a vid_modelist: false for `desktop` (the desktop's own mode), past the
+// list's end, or an entry malformed or out of bounds (width 320..8192, height 240..8192, at most
+// 1000 Hz and 32 bits), with why in `*why` (the desktop's own mode is used instead).
+bool full_mode_of(std::string_view list, int n, FullMode& out, std::string* why = nullptr);
+// The vid_modelist a display offers: `desktop`, then each of its modes (only `desktop` headless).
+std::string default_modelist();
 
 // The cvars over `w` (it must outlive `con`), and `vid_displays`.
 void add_window_cvars(console::Console& con, WindowCvars& w);

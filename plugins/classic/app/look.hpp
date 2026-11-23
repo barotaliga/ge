@@ -163,6 +163,9 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   bool no_glow = false;
   // Quake II's own effect switches (classic/q2_fx_switches.hpp). Either look.
   ge::classic::Q2FxSwitches q2fx;
+  // The 3D view's share of the screen, percent, centred (Quake II's viewsize under 100: the
+  // border is the 2D layer's to tile); 100 all of it.
+  int view_size = 100;
   // r_drawflame: the torches' and braziers' flames drawn; 0 none, nor their fire. Either look.
   bool draw_flame = true;
   // r_drawvweps (Quake II's spelling cl_vwep): a player drawn with the weapon he carries, where
