@@ -513,7 +513,9 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
     const Tree& t;
     ~Cleanup() {
       std::error_code ec;
-      if (!t.unpacked.empty()) fs::remove(t.unpacked, ec);
+      if (t.unpacked.empty()) return;
+      fs::remove(t.unpacked, ec);
+      fs::remove(fs::path(t.unpacked).parent_path(), ec);  // the scratch folder, when empty
     }
   } cleanup{tree};
   if (!open_tree(from, &tree, error, scratch.string())) return false;
