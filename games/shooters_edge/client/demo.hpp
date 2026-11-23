@@ -296,7 +296,7 @@ struct DemoState {
   int64_t bonuses = 0;
   // Multiview: the match server's start markers read (its stuffed `//ktx matchstart`).
   int64_t match_starts = 0;
-  sh::Vec3f velocity;          // client: the recording's player's, units/s (`velocity_read`)
+  sh::Vec3f velocity;  // client: the recording's player's, units/s (`velocity_read`)
   // Client, under weapon prediction: the player's weapon state from his last player state
   // (`known` false when the server sent none); the client runs it forward (net/qw_weapon.hpp).
   ge::classic::WeaponState own_weapon;
