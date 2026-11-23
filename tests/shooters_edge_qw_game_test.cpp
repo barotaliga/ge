@@ -324,8 +324,8 @@ TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
   // Every game name is a synonym, none a setting of its own: the two never disagree.
   for (const ge::console::Synonym& n : con.cvars().synonyms())
     CHECK_MSG(n.target != nullptr && n.target->name != n.name, n.name);
-  CHECK(con.cvars().synonyms().size() == 43);
-  Server s;  // a classic map leaves Quake II's dmflags alone
+  CHECK(con.cvars().synonyms().size() == 44);  // sv_port among them (server.cpp)
+  Server s;                                    // a classic map leaves Quake II's dmflags alone
   CHECK_MSG(server_open(s, se::qw_game(), c, nullptr, nullptr, error), error);
 }
 
