@@ -129,6 +129,10 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   AutotrackPlan plan;   // autotrack's, worked out the first time it is on
   int plan_state = 0;   // 0 not tried, 1 made, -1 refused (the reason said once)
   bool jumped = false;  // a jump was made this step: the window clears the notify lines
+  // The player's f_demomatchstart, run on `hooks` when the recording's match starts (its
+  // `DemoState::match_starts` grows).
+  ge::console::Console* hooks = nullptr;
+  int64_t match_starts = 0;
 };
 
 // The slot `cl_hightrack` rides in `s`: the playing player (no spectator) with the most frags, kept
