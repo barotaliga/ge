@@ -26,21 +26,24 @@ void check_table(const gs::GameWord (&words)[N], const char* game) {
   std::set<std::string> names;
   for (const gs::GameWord& w : words) {
     const std::string name = w.name;
-    CHECK_MSG(names.insert(name).second, std::string(game) + ": " + name + " is listed twice");
+    std::string where = game;
+    where += ": ";
+    where += name;
+    CHECK_MSG(names.insert(name).second, where + " is listed twice");
     const std::string help = w.help;
     CHECK_MSG(help.rfind(name + " ", 0) == 0 || help.rfind(name + ":", 0) == 0,
-              std::string(game) + ": " + name + "'s help does not start with it: " + help);
+              where + "'s help does not start with it");
     CHECK_MSG(help.find("next:") == std::string::npos && help.find('`') == std::string::npos,
-              std::string(game) + ": " + name + "'s help is not in a player's words");
-    CHECK_MSG(con.commands().count(name) == 0,
-              std::string(game) + ": " + name + " is the console's own and never the game's");
+              where + "'s help is not in a player's words");
+    CHECK_MSG(con.commands().count(name) == 0, where + " is the console's own, never the game's");
   }
   for (const gs::GameWord& w : words) {
     if (w.also == nullptr) continue;
-    CHECK_MSG(names.insert(w.also).second,
-              std::string(game) + ": " + w.also + " is a word and a spelling, or two spellings");
-    CHECK_MSG(con.commands().count(w.also) == 0,
-              std::string(game) + ": " + w.also + " is the console's own");
+    std::string where = game;
+    where += ": ";
+    where += w.also;
+    CHECK_MSG(names.insert(w.also).second, where + " is a word and a spelling, or two spellings");
+    CHECK_MSG(con.commands().count(w.also) == 0, where + " is the console's own");
   }
 }
 
