@@ -1332,7 +1332,7 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
   // to (the drop that is the way on).
   reach_back(g, from, w.barred, w.node_door, f.bot.pilot.pilot.set.jumper, w);
   w.back_here.swap(w.returns);
-  std::fill(w.back_exit.begin(), w.back_exit.end(), 0);
+  std::fill(w.back_exit.begin(), w.back_exit.end(), uint8_t{0});
   w.back_exit.resize(g.nodes.size(), 0);
   for (const WayStep& st : w.steps)
     if (st.kind == WayKind::exit && st.node >= 0) {
