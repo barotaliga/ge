@@ -996,11 +996,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
                            .roll_hack = f.picture->q2fx.roll_hack,
                            .self = fx.has_self ? fx.self.entity : 0,
                            .shadows = f.picture->model_shadows,
-                           .flash_blend = f.picture->flash_blend,
-                           .cel_shading = f.picture->q2fx.cel_shading,
-                           .view_px = static_cast<double>(f.h),
-                           .glow_map = static_cast<float>(
-                               ge::classic::q2_glow_map_gain(f.picture->q2fx.glowmap_intensity))};
+                           .flash_blend = f.picture->flash_blend};
     f.models.skin_choice = {.noskins = f.picture->noskins,
                             .stock = f.picture->stock_figures,
                             .base = f.picture->base_skin,
@@ -1022,13 +1018,16 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   const bool round = f.extras && liquid_round_eye(*f.extras);
   {
     // The screen's tint toned by the player (v_contentblend and kin, gl_cshiftpercent,
-    // gl_polyblend).
-    double blend[4];
-    look::toned_blend(*f.picture, round ? fx.screen_dry : fx.screen, blend);
+    // gl_polyblend; Quake II's the rules' own), a hit's flash round the edge at
+    // gl_damageblend_frac.
+    look::Tints tints = look::toned_tints(*f.picture, round ? fx.screen_dry : fx.screen,
+                                          fx.rules_blend, fx.blend, fx.apart, fx.damage);
     // An eye inside one of gl_flashblend's glows: the screen tinted orange, as the other tints
     // (gl_polyblend 0 none).
-    if (f.has_map && f.picture->poly_blend) ge::classic::flash_tint(f.models.flash_tint, blend);
-    gr::set_post_blend(d, f.post[p], blend);
+    if (f.has_map && f.picture->poly_blend)
+      ge::classic::flash_tint(f.models.flash_tint, tints.flat);
+    gr::set_post_blend(d, f.post[p], tints.flat);
+    gr::set_post_edge_blend(d, f.post[p], tints.edge, f.picture->damage_frac);
   }
   // The local player's own arrival opens the whole view out of a flash and a warp (r_arrival).
   gr::set_post_warp(

@@ -80,6 +80,7 @@
 #include "console/console.hpp"
 #include "console/ruleset.hpp"
 #include "console/talk.hpp"
+#include "console/view.hpp"
 #include "input/state.hpp"
 #include "net/rates.hpp"
 #include "net/transport.hpp"
@@ -94,6 +95,7 @@
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_pingservers.hpp"
 #include "shooters_edge/net/q2_predict.hpp"
+#include "shooters_edge/net/q2_weapon.hpp"
 #include "shooters_edge/net/qw_client.hpp"
 #include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_record.hpp"
@@ -195,6 +197,7 @@ struct Remote {
   std::string why;                                     // why it dropped
   ge::classic::FairFacts fair_facts;  // what an f_ruleset answer says (qw_remote_rulesets.hpp)
   ge::classic::FairReplies fair;      // when the last answer was said
+  std::string fakeshaft_seen;         // cl_fakeshaft as last seen: a change in a match is said
   // The window's `topcolor` and `bottomcolor` last seen: a change of them is told the server.
   std::string seen_top, seen_bottom;
   sp::ChannelTrace trace;  // showpackets, showdrop: the channel's lines (add_remote_commands)
@@ -208,21 +211,24 @@ struct Remote {
   client::Demo demo;        // the recording read back: what the window draws
   client::QwIgnore ignore;  // the chat ignore lists over its players (chat_ignore.hpp)
   QwClientEnd end;
-  int levels = 0;             // level starts drawn
-  int replayed = 0;           // prediction: the moves it ran past the acknowledged one
-  int others = 0;             // other players predicted the last step
-  int others_msec = 0;        // the most milliseconds one of them was run forward the last step
-  int lerped = 0;             // entities drawn between two frames the last step
-  int map_tries = 0;          // joins again with another version of the server's map
-  sh::Vec3f view;             // the player's angles, degrees (sent with every move)
-  sh::AimTurn aim_turn;       // the aim help's turn of the view (shooter/aim_turn.hpp)
-  sh::Vec3f prediction;       // the player's predicted origin, the correction not added
-  sh::MoveState ahead;        // the player's whole predicted state (the easy jump's help reads it)
-  sh::SpeedJumpAid jump_aid;  // the easy jump's memory (shooter/speedjump_assist.hpp)
+  int levels = 0;       // level starts drawn
+  int replayed = 0;     // prediction: the moves it ran past the acknowledged one
+  int others = 0;       // other players predicted the last step
+  int others_msec = 0;  // the most milliseconds one of them was run forward the last step
+  int lerped = 0;       // entities drawn between two frames the last step
+  int map_tries = 0;    // joins again with another version of the server's map
+  bool console_held =
+      false;             // the console held over the screen while joining (remote_console_foot)
+  sh::Vec3f view;        // the player's angles, degrees (sent with every move)
+  sh::AimTurn aim_turn;  // the aim help's turn of the view (shooter/aim_turn.hpp)
+  sh::Vec3f prediction;  // the player's predicted origin, the correction not added
+  sh::MoveState ahead;   // the player's whole predicted state (the easy jump's help reads it)
+  sh::SpeedJumpAid jump_aid;    // the easy jump's memory (shooter/speedjump_assist.hpp)
   float speedjump_view = 0.5f;  // cl_speedjump_view: the share of its swing drawn
   sh::Smoothing smooth;         // the prediction's correction
   double smoothview = 1;        // cl_predict_smoothview: 0 snapped, 1 the decay's own rate, 2 slow
   RemoteWeapon weapon;          // the held weapon predicted (qw_weapon.hpp)
+  Q2Weapon q2_weapon;           // Quake II's held weapon predicted (q2_weapon.hpp)
   // The moves the last prediction ran past the acknowledged one: each one's command and the state
   // after it (`ahead_count` of them), for the missiles' launch places and the jump's sound.
   uint32_t ahead_seq[64] = {};
@@ -370,9 +376,13 @@ std::string remote_status(const Remote& r);
 // The words before the server's name for a stage ("playing on ").
 const char* remote_stage_words(ClientStage s);
 // The console's foot while a game is joined but not yet played (console/view.hpp's set_foot): the
-// file coming, its share and size ("maps/dm2.bsp 40% (88 KB)", `progress` 0.4), or "Loading
-// dm2..." while signing on; "" (and `progress` -1) once playing, watching or not joined.
+// file coming and its share ("maps/dm2.bsp", `progress` 0.4: the console draws the charset's bar
+// and "40%" after the name), or "Loading dm2..." while signing on; "" (and `progress` -1) once
+// playing, watching or not joined.
 std::string remote_foot(const Remote& r, double& progress);
+// The foot set on the console's view each frame, and the console held over the whole screen while
+// a server is joined and not yet played, as the classic client showed a connection; let go once in.
+void remote_console_foot(Remote& r, ge::console::ConsoleView& view);
 // The joined server's packets as they came (the net graph and Quake II's lag graph), whichever
 // protocol it speaks; null when nothing is joined or a broadcast is watched.
 const ge::hud::NetHistory* remote_net(const Remote& r);

@@ -124,6 +124,30 @@ TEST(a_pass_lists_settings_spellings_commands_and_flags_with_their_layers) {
   CHECK(find(q2, ManualKind::command, "writemanual") != nullptr);
 }
 
+// Settings outside the console (ManualInfo::more: a game's rules) join the pass with its program
+// and games; a name the console has stays the console's.
+TEST(settings_outside_the_console_join_the_pass) {
+  Console con(true);
+  con.cvars().add({.name = "hostname", .fallback = "a", .help = "the console's"});
+  ManualInfo info;
+  info.program = {"sv", "Server", {}};
+  info.pass = "q2";
+  info.more = [](std::string_view games, std::vector<ManualEntry>& out) {
+    Cvars rules(true);
+    rules.add({.name = "deathmatch", .fallback = "0", .help = "the match's rules"});
+    rules.add({.name = "hostname", .fallback = "b", .help = "the rules'"});
+    for (ManualEntry& e : describe_settings(rules, "game:" + std::string(games))) out.push_back(e);
+  };
+  con.set_manual(info);
+  const std::vector<ManualEntry> pass = describe(con, "sv", "q2");
+  const ManualEntry* dm = find(pass, ManualKind::setting, "deathmatch");
+  CHECK(dm != nullptr && dm->layer == "game:q2" && dm->program == "sv" && dm->games == "q2");
+  int hostnames = 0;
+  for (const ManualEntry& e : pass)
+    if (e.name == "hostname") hostnames += e.help == "the console's" ? 1 : 100;
+  CHECK(hostnames == 1);
+}
+
 TEST(the_source_text_reads_back_field_for_field) {
   Rig r;
   const ManualSource s = both_passes(r);
@@ -189,6 +213,27 @@ TEST(rows_keep_the_common_definition_and_each_games_own) {
   // A spelling is never a row of its own when its target has one.
   CHECK(row(rows, ManualKind::setting, "vid_gamma") == nullptr);
   CHECK(row(rows, ManualKind::flag, "-game") != nullptr);
+}
+
+// A word only games' own layers have, alike but for the layer (a server's `changelevel` in
+// QuakeWorld's and in Quake II's), is one row of "a game's own" in both; told otherwise, each
+// game keeps its own words.
+TEST(a_word_alike_in_each_games_own_layer_is_one_row) {
+  ManualSource s;
+  std::string error;
+  CHECK_MSG(read_manual("# manual 1\n# program sesv Dedicated server\n# game qw QuakeWorld\n"
+                        "# game q2 Quake II\n"
+                        "command\tsesv\tqw\tchangelevel\tgame:qw\t\t\t\t\t\t\t\tgo on\t\n"
+                        "command\tsesv\tq2\tchangelevel\tgame:q2\t\t\t\t\t\t\t\tgo on\t\n"
+                        "command\tsesv\tqw\tmap\tgame:qw\t\t\t\t\t\t\t\ta new match\t\n"
+                        "command\tsesv\tq2\tmap\tgame:q2\t\t\t\t\t\t\t\ta new game\t\n",
+                        s, error),
+            error);
+  const std::vector<ManualRow> rows = manual_rows(s);
+  CHECK(rows.size() == 2);
+  CHECK(rows[0].name == "changelevel" && rows[0].layer == "game" && rows[0].own.empty());
+  CHECK(rows[1].name == "map" && rows[1].layer == "game:qw" && rows[1].own.size() == 1);
+  CHECK(rows[1].own[0].help == "a new game");
 }
 
 TEST(the_page_carries_its_data_and_never_closes_its_script_early) {

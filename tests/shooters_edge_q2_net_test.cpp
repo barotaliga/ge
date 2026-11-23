@@ -15,6 +15,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <span>
 #include <string>
@@ -40,6 +41,7 @@
 #include "shooters_edge/net/q2_game.hpp"
 #include "shooters_edge/net/q2_net.hpp"
 #include "shooters_edge/net/q2_net_server.hpp"
+#include "shooters_edge/net/q2_remote.hpp"
 #include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
 #include "shooters_edge/net/qw_wire.hpp"
@@ -713,6 +715,29 @@ TEST(a_locked_server_refuses_newcomers) {
   cn::Q2ClientEnd& c = join(*r, {});
   run(*r, 80);
   CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
+}
+
+// sv_ruleset: a player on another ruleset is refused, one on it and a spectator come in, and the
+// status record names it.
+TEST(a_competition_server_refuses_a_player_on_another_ruleset) {
+  cn::Q2NetConfig cfg;
+  cfg.ruleset = "duel";
+  auto r = rig(cfg);
+  cn::Q2ClientConfig plain;
+  cn::Q2ClientEnd& a = join(*r, plain);
+  cn::Q2ClientConfig dueller;
+  dueller.ruleset = "duel";
+  cn::Q2ClientEnd& b = join(*r, dueller);
+  cn::Q2ClientConfig watcher;
+  watcher.spectator = true;
+  cn::Q2ClientEnd& c = join(*r, watcher);
+  run(*r, 80);
+  CHECK(a.refused ==
+        "This server requires the duel ruleset. Pick it in OPTIONS or type ruleset duel, then "
+        "join again.\n");
+  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+  CHECK_MSG(c.refused.empty(), c.refused);
+  CHECK(cn::q2_status_text(r->server).find("\\ruleset\\duel") != std::string::npos);
 }
 
 TEST(renames_past_the_limit_are_refused_and_the_rest_told) {
@@ -1579,6 +1604,45 @@ TEST(the_easy_jump_strafes_on_our_server_of_q2_at_its_share) {
   CHECK_MSG(eased.fastest > plain.fastest + 60,
             "eased " + std::to_string(eased.fastest) + " against " + std::to_string(plain.fastest));
   CHECK_MSG(off.fastest <= plain.fastest + 20, "share 0: " + std::to_string(off.fastest));
+}
+
+TEST(a_joined_server_hears_a_new_name_skin_hand_fov_and_msg_at_once) {
+  // Joined to our server: a rename reaches the server's own user info for the player.
+  auto r = rig({}, "broadband");
+  gn::Transport t;
+  gn::open_sim_transport(t, r->net, gn::sim_address(9, 27901));
+  cn::Remote remote;
+  remote.q2_game = [] { return true; };
+  remote.read_file = [](const std::string&, const std::string&) { return std::vector<uint8_t>{1}; };
+  cn::ClientConfig cfg;
+  cfg.name = "eve";
+  cn::remote_start(remote, t, gn::sim_address(0, cn::kPortQ2), cfg);
+  std::map<std::string, std::string> live{{"name", "eve"}};
+  remote.setting = [&live](const std::string& k) {
+    const auto at = live.find(k);
+    return at == live.end() ? std::string() : at->second;
+  };
+  std::vector<std::string> said;
+  const auto steps = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      r->now += 13000;
+      gn::sim_advance(r->net, r->now);
+      if (cn::remote_step(remote, 0.0131, said) == cn::RemoteStep::new_level)
+        cn::remote_world(remote, nullptr, r->map.get());
+      cn::q2_net_frame(r->server, r->now);
+    }
+  };
+  steps(200);
+  CHECK_MSG(remote.q2->stage == cn::ClientStage::active, remote.q2->refused);
+  live["name"] = "zed";
+  live["msg"] = "2";
+  steps(20);
+  bool renamed = false;
+  for (const cn::Q2NetClient& c : r->server.clients)
+    if (c.stage != cn::Q2Slot::free)
+      renamed = c.userinfo.find("name\\zed") != std::string::npos &&
+                c.userinfo.find("msg\\2") != std::string::npos;
+  CHECK(renamed);
 }
 
 TEST(the_rate_holds_back_frames_past_a_clients_bytes_a_second) {

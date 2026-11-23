@@ -217,8 +217,8 @@ TEST(remotemode_clearnotify_scale_and_the_foot) {
   c.execute("con_scale 2");
   c.run();
   CHECK(v.text_scale() == 2);
-  v.set_foot("maps/dm2.bsp 40% (90 KB)", 0.4);
-  CHECK(v.foot() == "maps/dm2.bsp 40% (90 KB)" && v.foot_progress() == 0.4);
+  v.set_foot("maps/dm2.bsp", 0.4);
+  CHECK(v.foot() == "maps/dm2.bsp" && v.foot_progress() == 0.4);
 }
 
 // A game's held key: `+duck` crouches while the key is down.
