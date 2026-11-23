@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "brush/map.hpp"
+#include "classic/figure_art.hpp"
 #include "morph/model.hpp"
 #include "overview/mesh_picture.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -46,30 +47,15 @@ bool model_mesh(const shooters_edge::client::SearchPath& files, std::span<const 
 bool box_mesh(const shooters_edge::client::SearchPath& files, std::span<const uint8_t> palette,
               const std::string& path, Mesh* out);
 
-// A model read once for many pictures: the file's frames and skins (their palette indices kept,
-// so a player's colours are put on at drawing) and the palette.
-struct ModelArt {
-  ge::morph::Model model;
-  std::vector<uint8_t> palette;  // 768 bytes
-  std::vector<uint8_t> picture;  // the second family's skin as RGBA (its own picture file)
-  int pw = 0, ph = 0;
-  bool ok = false;
-};
-// `path` read into `out`; false (and `out->ok` false) when the files have no such model. A
-// `skin_path` names the picture worn in place of the model's own (a Quake II player's look:
-// `players/male/grunt.pcx`).
+// A model read once, one frame of it in a player's colours (plugins/classic/figure_art.hpp).
+using ge::classic::art_mesh;
+using ge::classic::frame_index;
+using ge::classic::ModelArt;
+using ge::classic::translate;
+// `path` read into `out` from the game's files (ge::classic::read_model_art over them).
 bool read_model_art(const shooters_edge::client::SearchPath& files,
                     std::span<const uint8_t> palette, const std::string& path, ModelArt* out,
                     const std::string& skin_path = "");
-// The palette index `i` of a skin in a player's colours: the shirt's sixteen (16..31) in `top`'s
-// row, the pants' (96..111) in `bottom`'s, a colour of 8 or more running the other way; -1 keeps
-// the skin's own.
-int translate(int i, int top, int bottom);
-// The file's frame an entity's frame number `group` shows at `time_s`: a group of frames played on
-// its intervals, a lone frame itself; the first frame for a number the file lacks.
-int frame_index(const ModelArt& a, int group, double time_s);
-// Frame `frame` (an index into the file's frames) in skin `skin` and the colours.
-Mesh art_mesh(const ModelArt& a, int frame, int skin, int top, int bottom);
 enum class Tier : uint8_t { power, major, minor };
 
 struct ItemKind {

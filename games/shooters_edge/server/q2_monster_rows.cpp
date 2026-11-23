@@ -26,10 +26,8 @@ using namespace roster;
 
 namespace {
 
-int kind_of(std::string_view classname) {
-  for (size_t k = 0; k < std::size(kKinds); k++)
-    if (classname == kKinds[k].classname) return static_cast<int>(k);
-  return -1;
+int kind_of(const Q2Server& s, std::string_view classname) {
+  return kind_named(classname, s.opt.pack);
 }
 
 bool deathmatch(const Q2Server& s) { return s.cvars.find("deathmatch")->on(); }
@@ -73,18 +71,18 @@ void monster_precache(Q2Server& s) {
     return model(kKinds[k].model);
   };
   for (Q2Entity& e : s.entities) {
-    const int k = kind_of(e.classname);
+    const int k = kind_of(s, e.classname);
     if (k < 0 || e.gone || (deathmatch(s) && !kKinds[k].keep)) continue;
     e.modelindex = add_kind(k);
     if (kKinds[k].medic)
       for (const char* name : {"medic/medatck2.wav", "medic/medatck4.wav"}) add_sound(name);
-    if (kKinds[k].end == End::launch) add_kind(kind_of("monster_makron"));
+    if (kKinds[k].end == End::launch) add_kind(kind_of(s, "monster_makron"));
     if (kKinds[k].prop && kKinds[k].keep)
       for (const char* name : {"tank/pain.wav", "tank/thud.wav"}) add_sound(name);
   }
   for (const Q2Entity& e : s.entities) {  // what the spawners make
     if (e.classname != "target_spawner" || e.gone) continue;
-    const int k = kind_of(e.target);
+    const int k = kind_of(s, e.target);
     if (k >= 0 && !(deathmatch(s) && !kKinds[k].keep)) add_kind(k);
   }
 }

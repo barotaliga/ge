@@ -9,6 +9,7 @@
 #include <cstddef>
 
 #include "classic/q2_fx_switches.hpp"
+#include "shooters_edge/client/own_missiles.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 
 namespace shooters_edge::client {
@@ -123,6 +124,18 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
       continue;
     }
     m.entity = static_cast<int>(n);
+    m.origin = d.origin;
+    m.yaw = d.angles.y;
+    fx.missiles.push_back(m);
+  }
+  // The player's own missiles thrown ahead of the server (own_missiles.hpp), by their own numbers.
+  for (std::size_t k = 0; k < s.own_missiles.size() && k < s.own_missile_ids.size(); k++) {
+    const DemoEntity& d = s.own_missiles[k];
+    Missile m;
+    if (d.model <= 0 || static_cast<std::size_t>(d.model) >= s.models.size() ||
+        !missile_model(s.models[static_cast<std::size_t>(d.model)], m))
+      continue;
+    m.entity = kOwnMissileEntity + s.own_missile_ids[k];
     m.origin = d.origin;
     m.yaw = d.angles.y;
     fx.missiles.push_back(m);

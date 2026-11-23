@@ -33,6 +33,7 @@
 #include "shooters_edge/client/demo_sound.hpp"
 #include "shooters_edge/client/demo_voice.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/own_missiles.hpp"
 #include "shooters_edge/client/q2_bar.hpp"
 #include "shooters_edge/client/q2_look.hpp"
 #include "shooters_edge/client/timedemo.hpp"
@@ -204,6 +205,9 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own, fl
       out.back().bottom = static_cast<uint32_t>(s.bottom[n - 1]);
     }
   }
+  // The player's own missiles the prediction threw ahead of the server (own_missiles.hpp).
+  for (size_t k = 0; k < s.own_missiles.size() && k < s.own_missile_ids.size(); k++)
+    put(kOwnMissileEntity + s.own_missile_ids[k], s.own_missiles[k]);
   if (s.format != DemoFormat::single) {
     bool teamplay = false;
     for (const auto& [key, value] : s.serverinfo)
