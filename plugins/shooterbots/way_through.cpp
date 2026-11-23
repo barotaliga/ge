@@ -1877,7 +1877,10 @@ void way_plan(WayThrough& w, Fighter& f, const MapNav& nav, const ge::shooterbot
         far_c = c;
       }
     }
-    if (far != w.explore) {
+    // A plan that finds nothing to reach keeps the place he chose and its clock: a door shutting
+    // and opening (jail1's) took the place in and out of reach each plan, and choosing it again
+    // after every gap started the clock again, so it was never given up.
+    if (far != w.explore && far >= 0) {
       w.explore = far;
       w.explore_since = t;
     }
