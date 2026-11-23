@@ -1527,7 +1527,6 @@ int run_main(int argc, char** argv) {
           to >= 0)
         bench.demo.track = playback.track = to;  // the live map's Space (livemap/watch.hpp)
       playback.rate = drawn_remote ? 1 : slm::watch_fly_step(live_map, wall);  // the map's fly (M)
-      playback.game_bar = q2_screen.demo_bar;  // Quake II's scr_demobar (-1 in another game)
       const cl::TimedemoStep step =
           drawn_remote ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
                                                                 : cl::TimedemoStep::frame)

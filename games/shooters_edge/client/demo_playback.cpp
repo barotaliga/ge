@@ -37,8 +37,18 @@ gu::Color color_of(uint32_t rgba) {
           static_cast<float>(rgba >> 8 & 0xff) / 255.0f, static_cast<float>(rgba & 0xff) / 255.0f};
 }
 
+// Quake II's `scr_demobar` (q2_view.hpp's Q2Screen::demo_bar, in its layer alone): 0 no bar, 1
+// the bar always with the share played, 2 also the clock; -1 while another game is loaded.
+int game_bar(const DemoPlayback& p) {
+  const ge::console::Cvar* c = p.hooks ? p.hooks->cvars().find("scr_demobar") : nullptr;
+  return c ? static_cast<int>(c->number) : -1;
+}
+
 // The bar's mode by `demo_bar`'s numbers: Quake II's `scr_demobar` shows it always or never.
-int bar_mode(const DemoPlayback& p) { return p.game_bar < 0 ? p.bar : (p.game_bar == 0 ? 0 : 2); }
+int bar_mode(const DemoPlayback& p) {
+  const int g = game_bar(p);
+  return g < 0 ? p.bar : (g == 0 ? 0 : 2);
+}
 
 double length_of(const DemoPlayback& p, const Timedemo& t) {
   return std::max(p.scan.length_s, t.timeline.t);
@@ -585,9 +595,9 @@ void playback_draw(gu::DrawList& overlay, const DemoPlayback& p, const Timedemo&
   if (bar == 0) return;
   if (bar == 1 && now_s > p.shown_until && !p.paused && !p.pointer.dragging) return;
   gu::PlayBarView v;
-  if (p.game_bar >= 0) {  // Quake II's: the percentage played, the clock only at 2
+  if (const int g = game_bar(p); g >= 0) {  // Quake II's: the share played, the clock at 2
     v.percent = true;
-    v.clock = p.game_bar == 2;
+    v.clock = g == 2;
   }
   v.length_s = length_of(p, t);
   v.position_s = t.timeline.t;

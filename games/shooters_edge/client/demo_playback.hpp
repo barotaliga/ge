@@ -98,10 +98,6 @@ struct DemoPlayback : ge::shooter::DemoTransport {
   float pointer_x = -1, pointer_y = -1;  // px
   double shown_until = 0;                // the app's clock, s
   float bar_bottom_px = 0;               // the bar sits this far up, over the HUD (`hud_inset`)
-  // Quake II's `scr_demobar` (q2_view.hpp's Q2Screen::demo_bar), set each frame: -1 another
-  // game's (`demo_bar` rules), 0 no bar, 1 the bar always with the percentage played, 2 also
-  // the clock. While it is 0..2 it stands in for `demo_bar`.
-  int game_bar = -1;
   bool list_ask = false;
   // The demo clock (`cl_democlock`): 0 none, 1 the time since the demo began, 2 the recording's
   // own clock; at `cl_democlock_x` cells from the left (from the right when negative) and
