@@ -8,6 +8,7 @@
 #include "shooters_edge/menu/main_menu.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "console/cvar.hpp"
@@ -964,7 +965,9 @@ constexpr const char* kSlotPages[][2] = {{"load", "LOAD"}, {"save", "SAVE"}};
 
 bool slot_page(std::string_view page) { return page == "load" || page == "save"; }
 
-std::string slot_id(int i) { return "s" + std::to_string(i); }
+// Quake's slots, `s0` to `s11`, on LOAD and SAVE alike.
+constexpr std::array<std::string_view, kSaveSlots> kQuakeSlots = {
+    "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11"};
 
 // A save's line cut to `chars`, the title shortened before the kills are: "the long
 // corridor of doors, kills 4/31" reads "the long c, kills 4/31" in 22.
@@ -1172,14 +1175,35 @@ ge::ui::Menu build_menu(const MenuTable& table) {
   }
   for (const auto& [id, title] : kSlotPages) {
     ge::ui::Page& page = m.add_page(id, title);
-    for (int i = 0; i < kSaveSlots; i++) {
-      ge::ui::Item it{.id = slot_id(i), .text = std::string(table.empty_slot)};
-      it.hint = std::string(id) == "load" ? "Load this game." : "Save the game here.";
+    const bool load = std::string_view(id) == "load";
+    int gaps = 0;
+    for (const std::string_view name : slots_of(table, load)) {
+      if (name.empty()) {
+        page.items.push_back(
+            {.id = "gap" + std::to_string(gaps++), .text = {}, .kind = ItemKind::label});
+        continue;
+      }
+      ge::ui::Item it{.id = std::string(name), .text = std::string(table.empty_slot)};
+      it.hint = load ? "Load this game." : "Save the game here.";
       page.items.push_back(std::move(it));
     }
     page.items.push_back({.id = "back", .text = "BACK", .kind = ItemKind::back});
   }
   return m;
+}
+
+std::span<const std::string_view> slots_of(const MenuTable& table, bool load) {
+  const std::span<const std::string_view> own = load ? table.load_slots : table.save_slots;
+  return own.empty() ? std::span<const std::string_view>(kQuakeSlots) : own;
+}
+
+std::vector<std::string> slot_names(const MenuTable& table) {
+  std::vector<std::string> out;
+  for (const bool load : {true, false}) {
+    for (const std::string_view name : slots_of(table, load))
+      if (!name.empty() && std::ranges::find(out, name) == out.end()) out.emplace_back(name);
+  }
+  return out;
 }
 
 namespace {
@@ -1326,6 +1350,7 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
     }
     if (page->focus >= 0 && !page->items[static_cast<size_t>(page->focus)].stop()) page->focus = -1;
   }
+  const std::vector<std::string> names = slot_names(table_of(host));
   for (const auto& [id, title] : kSlotPages) {
     ge::ui::Page* page = menu.page(id);
     if (page == nullptr) continue;
@@ -1336,7 +1361,9 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
         it.disabled = hide_back;
         continue;
       }
-      const size_t i = std::stoul(it.id.substr(1));
+      if (it.kind == ItemKind::label) continue;
+      const auto at = std::ranges::find(names, it.id);
+      const size_t i = static_cast<size_t>(at - names.begin());
       const std::string line = i < host.saves.size() ? host.saves[i] : std::string();
       it.text = line.empty() ? std::string(table_of(host).empty_slot)
                              : slot_text(line, hide_back ? kSlotChars : kSlotCharsModern);

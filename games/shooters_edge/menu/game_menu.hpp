@@ -228,6 +228,10 @@ class GameMenu {
   uint32_t quit_seed_ = 0;
   void dress_quit(const Host& host);
   double dt_ = 1.0 / 60;  // the last frame's, s
+  // How long ESCAPE has been held since it put a screen of the rules away, s (-1: not held): at
+  // kEscapeHold, a key's first repeat, the in-game page opens.
+  double escape_hold_ = -1;
+  static constexpr double kEscapeHold = 0.5;
 
   const MenuTable* table_ = &classic_menu();  // the pages built (set_table)
   std::unique_ptr<ScriptMenu> script_;        // the game's menu script read over it

@@ -1561,6 +1561,49 @@ TEST(q2_menu_has_its_own_pages_flags_keys_and_in_game_page) {
   host.screen_up = true;
   g.update({}, true, host, 0.016);
   CHECK(!g.open() && !w.ran.empty() && w.ran.back() == "putaway");
+  // Held on to its first repeat, the in-game page opens after all; let go before, nothing.
+  host.escape_held = true;
+  for (int i = 0; i < 20; i++) g.update({}, false, host, 0.016);
+  CHECK(!g.open());
+  for (int i = 0; i < 20; i++) g.update({}, false, host, 0.016);
+  CHECK(g.open() && g.main().top().id == "game");
+  g.hide();
+  g.update({}, true, host, 0.016);
+  host.escape_held = false;
+  for (int i = 0; i < 40; i++) g.update({}, false, host, 0.016);
+  CHECK(!g.open());
+}
+
+// Quake II's LOAD lists the autosave, a gap, then fifteen slots; SAVE the fifteen; a slot runs
+// `load save<n>` or `save save<n>`.
+TEST(q2_load_and_save_list_the_autosave_and_fifteen_slots) {
+  World w;
+  for (const char* c : {"load", "save"})
+    w.con.add_command(c, "", [&w, c](ge::console::Console&, const ge::console::Args& a) {
+      w.ran.push_back(std::string(c) + " " + a.rest(0));
+    });
+  const sm::MenuTable& t = sm::q2_menu();
+  Menu m = sm::build_menu(t);
+  CHECK(m.page("load")->items.size() == 18);  // the autosave, the gap, 15 and BACK
+  CHECK(m.page("save")->items.size() == 16);
+  CHECK(m.page("load")->items[0].id == "save0");
+  CHECK(m.page("load")->items[1].kind == ge::ui::ItemKind::label);
+  CHECK(m.page("save")->items[0].id == "save1" && m.page("save")->items[14].id == "save15");
+  const std::vector<std::string> names = sm::slot_names(t);
+  CHECK(names.size() == 16 && names[0] == "save0" && names[15] == "save15");
+  CHECK(sm::slot_names(sm::classic_menu()).size() == sm::kSaveSlots);
+  sm::Host host{.console = &w.con, .table = &t};
+  host.saves.assign(names.size(), {});
+  host.saves[0] = "the outer base";
+  sm::refresh(m, host);
+  CHECK(!item(m, "load", "save0")->disabled && item(m, "load", "save0")->text == "the outer base");
+  CHECK(item(m, "load", "save1")->disabled);
+  m.open("load");
+  for (const MenuEvent& e : press(m, "save0")) sm::apply_event(e, m, host);
+  m.reset();
+  m.open("save");
+  for (const MenuEvent& e : press(m, "save15")) sm::apply_event(e, m, host);
+  CHECK(w.ran.size() == 2 && w.ran[0] == "load save0" && w.ran[1] == "save save15");
 }
 
 // The video mode row: windowed, then each mode vid_modelist offers; a mode picked writes its

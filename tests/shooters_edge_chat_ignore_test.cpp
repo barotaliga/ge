@@ -274,3 +274,32 @@ TEST(quake_ii_answers_a_line_ending_in_version_after_a_second) {
   c.run();
   CHECK(said.size() == 1);  // only a line that ends in it
 }
+
+// The window's own game: its lines go through the regex triggers and msg_trigger by their level.
+TEST(the_windows_own_game_lines_fire_the_triggers) {
+  con::Console c;
+  cl::QwIgnore g;
+  cl::DemoState s = room();
+  cl::add_qw_ignore(c, g, s);
+  g.con = &c;
+  g.chat.con = &c;
+  c.execute(
+      "alias got \"echo got: $triggermatch\"; msg_trigger got \"quad\" -l 3;"
+      "alias hide \"\"; re_trigger hide \"secret\"; re_trigger_options hide remove");
+  c.run();
+  c.clear_output();
+  std::vector<std::string> shown;
+  const std::vector<std::string> lines{"bob: quad up\n", "a secret area\n", "the quad is here\n",
+                                       "You got the shells\n"};
+  const size_t next =
+      cl::game_lines(g, lines, {3, 2, 2}, 0, 50, [&](const std::string& l) { shown.push_back(l); });
+  CHECK(next == lines.size());
+  CHECK_MSG(shown.size() == 3 && shown[1] == "the quad is here\n", "the secret line taken away");
+  c.run();
+  std::string got;
+  for (const std::string& l : c.output()) got += l + "|";
+  // Only the chat line fires the chat level's trigger; the high print of quad does not.
+  CHECK_MSG(got == "got: bob: quad up\n|", "fired: " + got);
+  CHECK(cl::game_lines(g, lines, {}, next, 51, [&](const std::string&) { CHECK(false); }) ==
+        lines.size());
+}

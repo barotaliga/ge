@@ -17,7 +17,7 @@
 // ge:keywords q2 status-bar layout pictures conchars pcx draw scale q2-hud crosshair
 // ge:keywords centre-print ch1 layout-message scoreboard help-computer inventory hotkey
 // ge:keywords scr_scale scr_draw2d scr_alpha scr_lag_draw lag-graph net-picture hud-scale
-// ge:keywords dumpstatusbar dumplayout dumpclients aashot aadump scoreshot
+// ge:keywords dumpstatusbar dumplayout dumpclients aashot aadump scoreshot item-completion
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_q2_screen_test.cpp
 #pragma once
@@ -98,6 +98,9 @@ struct Q2Bar {
   ge::console::Console* console = nullptr;
   int64_t hits_seen = 0;
   double hit_at = -1e9;
+  // The item names the last frame's world listed (Tab completes them after `use`, `drop` and
+  // `give`: add_q2_bar_commands).
+  std::vector<std::string> item_names{};
 };
 
 // The console's looks at the bar's program, answered by the next frame that runs a Quake II bar
@@ -106,7 +109,8 @@ struct Q2Bar {
 // `layouts/<file>.txt`), `dumpclients` (each player's slot and name), `aashot [name]` (the bar
 // and the layout up as an 80 x 40 text picture, hud/q2_layout.hpp's `layout_text`, to
 // `scoreshots/<name>.txt` or the first free `scoreshots/quakeNNN.txt`) and `aadump` (the same
-// picture in the console).
+// picture in the console). Tab after `use`, `drop` or `give` completes the item names the last
+// frame's world listed, sorted (Console::arg_values).
 void add_q2_bar_commands(ge::console::Console& con, Q2Bar& bar);
 
 // The world a Quake II recording or a joined Quake II server gives its bar (the bar's program, the

@@ -36,6 +36,7 @@
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #pragma once
 
+#include <span>
 #include <string>
 #include <vector>
 
@@ -150,8 +151,9 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
 bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,
                std::string& error);
 
-// Each of the menu's `slots` save slots' line (`s0`, `s1` ...: files.hpp's `save_label`).
-std::vector<std::string> save_slot_labels(const SearchPath& files, int slots);
+// Each save's line in the menu's order (`s0`, `s1` ... or `save0` ...: files.hpp's `save_label`).
+std::vector<std::string> save_slot_labels(const SearchPath& files,
+                                          std::span<const std::string> names);
 
 // Quake II's autosave (server/q2_save.hpp) kept as `saves/save0.save` when its rules made one
 // as a level was entered; true when the rules asked for the load menu (single player's death).

@@ -87,10 +87,9 @@ struct GameBindings {
   int* moves = nullptr;         // Quake II's own `cl_maxfps`: its moves a second
   int* stuff_level = nullptr;   // Quake II's `cl_ignore_stufftext` (classic/protocol/stuff_filter)
   double* frame_cap = nullptr;  // the window's frame cap (our `cl_maxfps`), Quake II's `r_maxfps`
-  // The maps' light: Quake II's `intensity`, `gl_modulate` and `gl_brightness` (the picture's
-  // light_intensity, light_modulate and light_lift: classic/app/look.hpp); Quake keeps 2, 1, 0.
+  // The maps' light: Quake II's `intensity` and `gl_brightness` (the picture's light_intensity and
+  // light_lift: classic/app/look.hpp); Quake keeps 2 and 0. `gl_modulate` is every game's.
   double* light_intensity = nullptr;
-  double* light_modulate = nullptr;
   double* light_lift = nullptr;
   bool* gibs = nullptr;     // Quake II's `cl_gibs` (the picture's gibs); true in Quake
   bool* no_glow = nullptr;  // Quake II's `cl_noglow` (the picture's no_glow); false in Quake

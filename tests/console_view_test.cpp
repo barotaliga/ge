@@ -606,6 +606,32 @@ TEST(a_games_tab_completes_the_shared_part_and_lists_the_matches) {
   CHECK(v.input() == "zfoo_bb ");
 }
 
+// After a word with argument values (Quake II's `use` and the item names), Tab completes the
+// value: a name with a space quoted, more than one listed; the suggestions offer them too.
+TEST(tab_completes_a_words_argument_values) {
+  Console c;
+  ConsoleView v(c);
+  c.set_arg_values(
+      "use", [] { return std::vector<std::string>{"Rocket Launcher", "Rockets", "Shotgun"}; });
+  v.list_mode = 1;
+  v.set_open(true);
+  for (const char ch : std::string("use sh")) v.type(std::string(1, ch));
+  v.key(EditKey::tab);
+  CHECK(v.input() == "use Shotgun ");
+  v.key(EditKey::escape);  // the text cleared
+  for (const char ch : std::string("use rock")) v.type(std::string(1, ch));
+  v.key(EditKey::tab);
+  CHECK(v.input() == "use Rocket");  // what both share
+  CHECK(v.lines().back().text.find("\"Rocket Launcher\"") != std::string::npos);
+  for (const char ch : std::string(" l")) v.type(std::string(1, ch));
+  v.list_mode = -1;  // ours: the top suggestion taken
+  CHECK(v.suggestions().size() == 1);
+  v.key(EditKey::tab);
+  CHECK(v.input() == "use \"Rocket Launcher\"");
+  c.set_arg_values("use", nullptr);
+  CHECK(c.arg_values("use").empty());
+}
+
 // The typed lines are kept across runs beside the config, oldest first, without blanks or a line
 // repeated; con_history 0 keeps none.
 TEST(the_typed_lines_are_kept_across_runs) {

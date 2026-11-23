@@ -40,7 +40,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Field of view | the player's own `fov` | the server's, drawn between frames (`client/q2_view.hpp`: `cl_adjustfov`, `uf`) | its own | its own |
 | Plaques | the pack's pause and loading pictures (`menu::draw_plaque`, `showpause`) | its own | its own | its own |
 | Map commands, game clock, console log | the map commands (every game's) | `client/q2_session.hpp` (`cl_beginmapcmd`, `timescale`, `cl_autopause`, the read-only state), `client/console_log.hpp` (`logfile`) | its own | its own |
-| Own view from behind | `cam_thirdperson` over demos and watching | `cl_thirdperson` (a cheat), its angle and range, joined and hosted (`client/q2_session.hpp`'s `view_behind`) | its own | its own |
+| Own view from behind | every game's `cl_thirdperson` (a cheat; Quake's `chase_active`) and `cl_thirdperson_angle`, at `cam_dist` (Quake's `chase_back`), joined and hosted; `cam_thirdperson` over demos and watching | the same, `cam_dist` 60 (its `cl_thirdperson_range`) (`client/q2_session.hpp`'s `view_behind`) | the shared one | the shared one |
 | Effect switches | `cl_gibfilter`, `cl_muzzleflash`, `r_rocketlight` ... | `classic/q2_fx_switches.hpp` (`cl_disable_particles`, `cl_disable_explosions`, `cl_dlight_hacks`, `cl_muzzlelight_time`, `cl_muzzleflashes`) | its own | its own |
 | Footsteps and loops heard | the sounds as sent | `cl_footsteps` 0 and `s_ambient` (`client/demo_sound.hpp`'s `switches_from`) | its own | its own |
 | Rail trail beams | the game's own specks | `cl_railtrail_*`, `cl_railcore_*`, `cl_railspiral_*` (`client/world_fx.cpp`'s `q2_rail_trail`) | its own | its own |
@@ -58,7 +58,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Configs on a game change | `fs_default`'s default.cfg, the game's own settings | the same, then `fs_autoexec`'s autoexecs and postexec.cfg (`client/install_configs.cpp`) | the game's own settings | the engine's |
 | The connection's number | `qport` (from the name) | `qport` (from the name) | `qport`, 0 from the name (`net/qw_remote.cpp`) | the classic layer's |
 | Floating items still | none | `cl_nobob` (the picture's `items_still`, `client/world_models.cpp`) | its own | its own |
-| The client's own port | any free port | `net_clientport`, moved at once (`net/qw_remote.cpp`'s `own_port`) | its own | its own |
+| The client's own port | `net_clientport` (its spelling `cl_net_clientport`), every game's | `net_clientport`, moved at once (`net/qw_remote.cpp`'s `own_port`) | the classic layer's | the classic layer's |
 | The console's picture | the pack's `conback` | `con_background`, a picture under `pics/` (`menu/classic_console.hpp`) | its own | its own |
 | The console's stamps | `con_timestamps` on chat lines (`client/chat_lines.hpp`) | its own `con_timestamps` on every line, `con_timestampsformat`, `con_timestampscolor` (`console/view.hpp`'s stamps) | its own | its own |
 | Tab in the console | ours: the top suggestion | `com_completion_mode`, `com_completion_treshold`: the shared part, the matches listed (`console/view.hpp`'s `list_mode`) | its own | its own |
@@ -115,7 +115,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Alias arguments `$0`, `$@`, `${1-3}`, `%1`; `if ... eq/ne/isin` | Quake II's later client | `engine/console/lex.cpp`, `script.cpp` |
 | The team's `$` macros, `$ledpoint`, `$ledstatus`, the match's `f_` hooks, fake names, flood protection, `cl_nofake`, the sound trigger, `f_version` answers | Quake's later clients | `client/team_macros.hpp`, `team_chat.hpp`, `chat_lines.hpp` (the classic layer) |
 | `loc_draw` markers at the place points, `$cl_surface` | Quake II's later client | `client/place_names.hpp` (`place_markers`), `client/world_fx.cpp`, `client/face_hit.hpp` |
-| Map commands (`cl_beginmapcmd`, `cl_changemapcmd`, `cl_disconnectcmd`), `$loc_here`, `$loc_there` | Quake II's later client | `client/q2_session.hpp` (`add_map_command_cvars`), `place_names.hpp` |
+| Map commands (`cl_beginmapcmd`, `cl_changemapcmd`, `cl_disconnectcmd`), `$loc_here`, `$loc_there` | Quake II's later client | `client/q2_session.hpp` (`add_shared_session_cvars`), `place_names.hpp` |
 
 | Drawback left behind | How |
 | --- | --- |

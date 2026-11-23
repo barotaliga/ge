@@ -83,11 +83,13 @@ struct Picture {  // NOLINT(clang-analyzer-optin.performance.Padding): one a win
   double fire_pace = ge::brush::app::kFirePace;   // r_fire_speed: the flames' pace, 1 a real fire's
   double water_pace = ge::brush::app::kPoolPace;  // r_water_speed: the pools' pace, 1 real water's
   double gamma = 1;  // gamma: the picture's brightness, below 1 brighter
-  // The maps' light (Quake II's `intensity`, `gl_modulate` and `gl_brightness`; Quake leaves them
-  // at these): a face shows its painted colour times its luxel / 255 plus `light_lift`, times
-  // `light_modulate` times `light_intensity` (`light_scale`). 2, 1 and 0: a luxel of 128 shows the
-  // colour as painted, 255 twice as bright.
+  // The maps' light (Quake II's `intensity` and `gl_brightness`, Quake leaving them at these, and
+  // every game's `gl_modulate`): a face shows its painted colour times its luxel / 255 plus
+  // `light_lift`, times `light_modulate` times `light_intensity` (`light_scale`). 2, 1 and 0: a
+  // luxel of 128 shows the colour as painted, 255 twice as bright.
   double light_intensity = 2, light_modulate = 1, light_lift = 0;
+  // gl_anisotropy: the filtered textures' taps (0: the renderer's own 4; 1 none; up to 16).
+  double anisotropy = 0;
   // r_fill_shadows: 1 lets every map light throw a figure's shadow and dims the bounce round him,
   // 0 (the default) only the lights whose source shows (brush/app/bsp_draw.hpp's fill_shadows)
   double fill_shadows = 0;
