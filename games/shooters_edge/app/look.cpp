@@ -1,7 +1,8 @@
 // The plugin's picture settings joined to the game's effects: lights by kind, the screen's tint.
 //
 // ge:summary Shooter's Edge's look: kept lights by kind and the toned screen tint
-// ge:keywords look kept_lights toned_blend toned_tints gl_damageblend_frac r_rocketlight r_explosionlight r_powerupglow
+// ge:keywords look kept_lights toned_blend
+// ge:keywords toned_tints gl_damageblend_frac r_rocketlight r_explosionlight r_powerupglow
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
 #include "shooters_edge/app/look.hpp"
