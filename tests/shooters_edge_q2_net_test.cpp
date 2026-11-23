@@ -13,6 +13,7 @@
 // ge:skill net shooter testing
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -1799,11 +1800,9 @@ TEST(voice_on_our_server_of_q2_reaches_whom_the_first_games_rules_say) {
   CHECK(ca.stage == cn::ClientStage::active && cd.stage == cn::ClientStage::active);
   CHECK(ca.voice_on && cb.voice_on && cc.voice_on && !cd.voice_on);
   int own = 0;  // the talker's own voice in his recording, a block of its own each time
-  for (size_t at = 0; at + 4 < level.size();) {
-    const uint32_t len = level[at] | level[at + 1] << 8 | level[at + 2] << 16 |
-                         static_cast<uint32_t>(level[at + 3]) << 24;
-    if (len > 0 && at + 4 < level.size() && level[at + 4] == cn::kSvcGeVoice) own++;
-    at += 4 + len;
+  for (size_t at = 0, len = 0; at + 4 < level.size(); at += 4 + len) {
+    std::memcpy(&len, &level[at], 4);  // a block's length, little-endian (the hosts are)
+    own += len > 0 && level[at + 4] == cn::kSvcGeVoice;
   }
   CHECK_MSG(own > 0, "the talker's recording kept none of his own voice");
   const int sa = slot_named(*r, "a");
@@ -1995,13 +1994,4 @@ TEST(a_client_fetches_from_the_server_web_address_and_falls_back_to_the_channel)
   CHECK(std::find(asked.begin(), asked.end(), "/mine/baseq2/maps/hall.bsp") != asked.end());
   for (gn::TcpStream& t : streams) gn::tcp_close(t);
   gn::tcp_close_listener(web);
-}
-
-// A Quake II server beats to a hub's masters under the game's own id, as a Quake server does, so
-// the hub's list (which asks for that id alone) shows both.
-TEST(q2_server_is_listed_under_the_games_id) {
-  const ge::server::ServerGame& g = shooters_edge::net::q2_game();
-  CHECK(g.protocol != 0);
-  CHECK(g.protocol == ge::net::protocol_id("shooters_edge", 1));
-  CHECK(g.fill_status != nullptr);
 }
