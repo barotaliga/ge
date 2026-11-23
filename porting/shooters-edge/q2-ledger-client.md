@@ -10,7 +10,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
-| Client console commands | 132 | 13 | 1 | 10 | 156 |
+| Client console commands | 132 | 13 | 0 | 11 | 156 |
 | Client settings (cvars) | 223 | 49 | 6 | 72 | 350 |
 | Macros ($name in typed and bound text) | 25 | 3 | 0 | 2 | 30 |
 | Menu pages and rows | 103 | 56 | 2 | 1 | 162 |
@@ -23,17 +23,17 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 8 | 8 | 0 | 0 | 16 |
 | The layout language (status bar and layouts) | 26 | 1 | 0 | 0 | 27 |
 | HUD and screen elements | 18 | 10 | 0 | 1 | 29 |
-| Messages printed to the player | 75 | 57 | 2 | 13 | 147 |
-| Demo playback and recording features | 12 | 8 | 1 | 2 | 23 |
+| Messages printed to the player | 75 | 57 | 0 | 15 | 147 |
+| Demo playback and recording features | 12 | 8 | 0 | 3 | 23 |
 | Keys: the fixed keys and the default bindings | 7 | 4 | 0 | 0 | 11 |
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 14 | 5 | 1 | 0 | 20 |
-| Connection, network, downloads and the rest | 10 | 5 | 2 | 0 | 17 |
-| **all** | 801 | 287 | 22 | 101 | 1211 |
+| Connection, network, downloads and the rest | 11 | 5 | 1 | 0 | 17 |
+| **all** | 802 | 287 | 17 | 105 | 1211 |
 
 ## Client console commands
 
-done 132, partial 13, missing 1, not-taken 10
+done 132, partial 13, missing 0, not-taken 11
 
 Every command the client, its renderer, sound, menus and the shared core register (developer-only test commands at the end). Forwarded words are those the client sends on to the game library unchanged.
 
@@ -128,7 +128,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.timerefresh | `timerefresh` | draws 128 frames turning the view and prints "x seconds (y fps)" | done | `games/shooters_edge/client/render_words.cpp` and `world_draw.cpp` (`time_refresh`): 128 frames turning a circle, each shown, or with a word all in one |
 | cmd.aashot | `aashot` | writes the scoreboard layout as a text file (ASCII screenshot) | done | `games/shooters_edge/client/q2_bar.cpp` (`hud/q2_layout.cpp` `layout_text`): `scoreshots/quakeNNN.txt` |
 | cmd.aadump | `aadump` | prints the scoreboard layout as text in the console | done | `games/shooters_edge/client/q2_bar.cpp` |
-| cmd.gtv | `gtv start/stop/status` | relays the player's own game to TV viewers over TCP; only in a build that asks for it (the usual build leaves it out) | missing | ours relays a hosted match through engine TV (`engine/tv`), not a client's own game |
+| cmd.gtv | `gtv start/stop/status` | relays the player's own game to TV viewers over TCP; only in a build that asks for it (the usual build leaves it out) | not-taken | experimental and off in released builds (a build option, left out of the release packages); watching a match is ours through TV (`engine/tv`, `setv`) and the server's multiview stream (`net/q2_mvd_server.hpp`, `sv_mvd_enable 2`), so a playing client never serves its own game (decided by the owner, 2026-11-23) |
 | cmd.sizeup | `sizeup` | screen size up 10 | done | `games/shooters_edge/hud/layout.cpp`: viewsize up 10 |
 | cmd.sizedown | `sizedown` | screen size down 10 | done | `games/shooters_edge/hud/layout.cpp`: viewsize down 10 |
 | cmd.sky | `sky <name> [speed] [axis]` | changes the sky box and its rotation | done | `games/shooters_edge/client/render_words.cpp` into `classic/sky_typed.hpp`: the box and its turn for the map typed on, its world made again behind the window |
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 75, partial 57, missing 2, not-taken 13
+done 75, partial 57, missing 0, not-taken 15
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1277,8 +1277,8 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.al.init | "OpenAL initialized." | the OpenAL backend started | not-taken | one sound path for every game (the platform's device under the engine's synth); `s_enable 2` is the same as 1, so no second backend starts |
 | msg.al.fail | "Failed to initialize OpenAL: %s" | the OpenAL backend failed | not-taken | no second sound backend (msg.al.init) |
 | msg.al.devices | "Available devices:" / "No devices available" | `al_device ?` lists the OpenAL output devices | done | `al_device` is the engine's `s_device`: `?` or `s_devices` prints "Available devices:" and each, or "No sound devices." (`engine/platform/window_cvars.cpp`) |
-| msg.gtv.listen | "Listening for GTV connections." | `gtv start` | missing | the feature is missing |
-| msg.gtv.accepted | "Accepted MVD client [%s]" | a TV viewer joined the client's relay | missing | the feature is missing |
+| msg.gtv.listen | "Listening for GTV connections." | `gtv start` | not-taken | experimental and off in released builds (a build option, left out of the release packages); watching a match is ours through TV (`engine/tv`, `setv`) and the server's multiview stream (`net/q2_mvd_server.hpp`, `sv_mvd_enable 2`), so a playing client never serves its own game (decided by the owner, 2026-11-23) |
+| msg.gtv.accepted | "Accepted MVD client [%s]" | a TV viewer joined the client's relay | not-taken | experimental and off in released builds (a build option, left out of the release packages); watching a match is ours through TV (`engine/tv`, `setv`) and the server's multiview stream (`net/q2_mvd_server.hpp`, `sv_mvd_enable 2`), so a playing client never serves its own game (decided by the owner, 2026-11-23) |
 | msg.aashot.full | "All scoreshot slots are full." | `aashot` with 1000 files already | done | `games/shooters_edge/client/q2_bar.cpp` |
 | msg.cin.open | "Couldn't open %s: %s" | a cinematic that cannot be opened (and its other errors) | partial | ours says it in its own words (verify `client/cinematic.cpp`) |
 | msg.serverbug | "SERVER BUG: %s on entity %d last seen %d frames ago" | a server sent a delta for an entity the client never had (developer) | not-taken | a debugging build's check only (a positionless sound or a player's gun flash naming an entity outside the frame, with `developer`); a released client never prints it |
@@ -1286,7 +1286,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 
 ## Demo playback and recording features
 
-done 12, partial 8, missing 1, not-taken 2
+done 12, partial 8, missing 0, not-taken 3
 
 What a player can do with client recordings (`.dm2`) and multi-view recordings (`.mvd2`) in the client.
 
@@ -1313,7 +1313,7 @@ What a player can do with client recordings (`.dm2`) and multi-view recordings (
 | demo.rec.downgrade | protocol downgrade | a recording made on a modern protocol is written as protocol 34; too-large frames dropped, reliable messages kept first | partial | ours speaks 34 only, so nothing to downgrade |
 | demo.rec.suspend | `suspend` / `resume` | pause and resume a recording | not-taken | `client-gaps.md` round 27 |
 | demo.rec.auto | recording by a trigger | `cl_beginmapcmd "record ..."` starts a recording on each map | done | `client/q2_session.cpp`: `cl_beginmapcmd` (and `cl_changemapcmd`, `cl_disconnectcmd`) run on each map joined or hosted (`tests/shooters_edge_q2_session_test.cpp`) |
-| demo.gtv | the client's own TV relay | `gtv start` serves the player's own game to TV viewers over TCP (only in a build that asks for it) | missing | not found |
+| demo.gtv | the client's own TV relay | `gtv start` serves the player's own game to TV viewers over TCP (only in a build that asks for it) | not-taken | experimental and off in released builds (a build option, left out of the release packages); watching a match is ours through TV (`engine/tv`, `setv`) and the server's multiview stream (`net/q2_mvd_server.hpp`, `sv_mvd_enable 2`), so a playing client never serves its own game (decided by the owner, 2026-11-23) |
 | demo.aashot | text scoreboard shots | `aashot` writes the scoreboard as text; `aadump` prints it | done | `client/q2_bar.cpp`: `aashot [name]` writes the layout as text to `scoreshots/`, `aadump` prints it |
 
 ## Keys: the fixed keys and the default bindings
@@ -1389,7 +1389,7 @@ How the client sets up and draws the picture, beyond the settings themselves. Ou
 
 ## Connection, network, downloads and the rest
 
-done 10, partial 5, missing 2, not-taken 0
+done 11, partial 5, missing 1, not-taken 0
 
 Behaviour the client offers outside the screen.
 
@@ -1411,4 +1411,4 @@ Behaviour the client offers outside the screen.
 | net.config.write | the saved config | on quit `config.cfg` (`q2config.cfg` on Windows) gets binds and saved settings | done | `engine/console/console_builtins.cpp` (`cfg_save`) |
 | net.config.order | the start order | `default.cfg`, the config, `autoexec.cfg`, `postexec.cfg`, the command line, `postinit.cfg` | done | `plugins/classic/content/load_order.cpp`: defaults, the config, the folders' autoexecs, `postexec.cfg`, ours, the command line, `postinit.cfg` |
 | net.completion | Tab completion | commands, settings, aliases, macros and each command's own arguments (maps, demos, sounds, settings' values) | partial | ours completes commands and settings (`engine/console`); arguments not compared |
-| net.history | the typed history | kept across runs (`con_history`) | missing | C23 |
+| net.history | the typed history | kept across runs (`con_history`) | done | `engine/console/view.cpp` (`load_history`, `save_history`): `.conhistory` beside the config, one line each, oldest first, read when the config has run and written with the settings; blanks and a repeated line left out; `con_history` 0 keeps none across runs |
