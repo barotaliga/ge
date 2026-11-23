@@ -1,7 +1,8 @@
 // The 2D switch and the graph along the bottom, every classic game's (screen_2d.hpp).
 //
 // ge:summary The classic layer's scr_draw2d and frame-time graph cvars, the graph fed and drawn
-// ge:keywords scr_draw2d r_drawhud timegraph r_timegraph debuggraph graphheight graphscale graphshift
+// ge:keywords scr_draw2d r_drawhud timegraph r_timegraph debuggraph
+// ge:keywords graphheight graphscale graphshift
 // ge:skill ui console
 // ge:test tests/shooters_edge_screen_2d_test.cpp
 #include "shooters_edge/client/screen_2d.hpp"

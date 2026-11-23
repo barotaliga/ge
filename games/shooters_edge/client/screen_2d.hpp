@@ -9,7 +9,8 @@
 // (client/q2_bar.cpp) and every other game's HUD (`draw_hud_2d`) honour the same switch.
 //
 // ge:summary The 2D switch and the frame-time graph every classic game shares, their cvars and draw
-// ge:keywords scr_draw2d r_drawhud timegraph r_timegraph debuggraph graphheight graphscale graphshift
+// ge:keywords scr_draw2d r_drawhud timegraph r_timegraph debuggraph
+// ge:keywords graphheight graphscale graphshift
 // ge:keywords bottom-graph hud-switch screenshot frame-time
 // ge:skill ui console
 // ge:test tests/shooters_edge_screen_2d_test.cpp
