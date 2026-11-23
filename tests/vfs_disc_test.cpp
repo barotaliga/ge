@@ -6,6 +6,7 @@
 // ge:summary Tests the disc reader: ISO 9660 and Joliet, raw sectors, cue sheets, audio, damage
 // ge:keywords test vfs disc iso iso9660 joliet cue bin raw-sector audio-track refuse
 // ge:skill vfs testing
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
@@ -126,6 +127,58 @@ TEST(disc_reads_raw_sectors_with_their_subchannel) {
   CHECK_MSG(vfs::open_disc(p.string(), &d, &error), error);
   CHECK(d.tracks[0].sector == 2448 && d.tracks[0].user == 16);
   check_files(d, files, false);
+}
+
+TEST(disc_reads_an_mdf_by_its_mds_sheet_data_and_audio) {
+  // A disc copier's pair: the .mdf holds every sector with its 96 bytes of subchannel, the data
+  // track then two audio tracks, each after a 150-sector pregap; the .mds lists them.
+  const Files files = game_files();
+  const std::vector<uint8_t> raw = vfs::raw_sectors(vfs::write_iso(files, true));
+  std::vector<uint8_t> mdf;
+  const auto sector = [&](const uint8_t* p) {
+    mdf.insert(mdf.end(), p, p + 2352);
+    mdf.insert(mdf.end(), 96, uint8_t(0x5a));
+  };
+  for (size_t s = 0; s < raw.size(); s += 2352) sector(raw.data() + s);
+  const std::vector<int16_t> a2 = tone(30, 7), a3 = tone(20, 13);
+  std::vector<vfs::DiscTrack> tracks(3);
+  tracks[0].number = 1;
+  tracks[0].sector = 2448;
+  tracks[0].sectors = uint32_t(raw.size() / 2352);
+  int n = 2;
+  for (const auto* a : {&a2, &a3}) {
+    const std::vector<uint8_t> gap(2352, 0), b = le(*a);
+    for (int g = 0; g < 150; g++) sector(gap.data());
+    vfs::DiscTrack& t = tracks[size_t(n - 1)];
+    t.number = n++;
+    t.kind = vfs::TrackKind::audio;
+    t.sector = 2448;
+    t.start = mdf.size();
+    for (size_t s = 0; s < b.size(); s += 2352) sector(b.data() + s);
+  }
+  // A track's length runs to the next one's first sector, its pregap included.
+  tracks[0].sectors += 150;
+  tracks[1].sectors = 30 + 150;
+  tracks[2].sectors = 20;
+  save(scratch("PACK.MDF"), mdf);
+  save(scratch("Pack.mds"), vfs::write_mds(tracks));
+  for (const char* open : {"PACK.MDF", "Pack.mds"}) {
+    vfs::Disc d;
+    std::string error;
+    CHECK_MSG(vfs::open_disc(scratch(open).string(), &d, &error), error);
+    CHECK(d.tracks.size() == 3 && d.tracks[0].user == 16 && d.tracks[0].sector == 2448);
+    check_files(d, files, false);
+    std::vector<int16_t> got;
+    CHECK(d.read_audio(d.tracks[2], &got, &error) && got == a3);
+    CHECK(d.read_audio(d.tracks[1], &got, &error) && got.size() == size_t(180) * 588 * 2);
+    CHECK(std::equal(a2.begin(), a2.end(), got.begin()));
+  }
+  // A sheet that names an image that is not there says so.
+  save(scratch("lost.mds"), vfs::write_mds(tracks, "lost.mdf"));
+  vfs::Disc d;
+  std::string error;
+  CHECK(!vfs::open_disc(scratch("lost.mds").string(), &d, &error));
+  CHECK_MSG(error.find("lost.mdf") != std::string::npos, error);
 }
 
 TEST(disc_reads_a_sheet_with_data_and_audio_in_one_bin) {

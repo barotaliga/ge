@@ -343,6 +343,48 @@ TEST(import_reads_a_packs_disc_by_its_digest) {
   CHECK(fs::exists(data / "q2/xatrix/music/track02.flac") && !fs::exists(data / "q2/music"));
 }
 
+TEST(import_gives_a_discs_tracks_to_each_pack_on_it) {
+  // One disc carrying both of Quake's packs and one set of audio tracks, which both packs' maps
+  // ask for: each pack keeps the tracks.
+  const fs::path src = fresh("qpacks_disc"), data = fresh("qpacks_disc_data");
+  const Files files = {{"Armagon/HIPNOTIC/PAK0.PAK", pak("hip1m1")},
+                       {"Eternity/ROGUE/PAK0.PAK", pak("r1m1")}};
+  std::vector<uint8_t> bin = vfs::raw_sectors(vfs::write_iso(files, true));
+  const uint32_t data_sectors = uint32_t(bin.size() / 2352);
+  const std::vector<uint8_t> b2 = le(tone(30, 5));
+  bin.insert(bin.end(), b2.begin(), b2.end());
+  save(src / "QPacks.BIN", bin);
+  std::ofstream(src / "QPacks.cue") << "FILE \"QPacks.BIN\" BINARY\nTRACK 01 MODE1/2352\nINDEX 01 "
+                                       "00:00:00\nTRACK 02 AUDIO\nINDEX 01 "
+                                    << at(data_sectors) << "\n";
+  content::ImportOptions opts;
+  opts.identify = [](uint64_t size, std::string_view sha,
+                     const ge::classicenhance::Profile** game) {
+    const auto* q1 = ge::classicenhance::find_profile("q1");
+    *game = q1;
+    for (const auto& [map, folder] :
+         {std::pair{"hip1m1", "hipnotic"}, std::pair{"r1m1", "rogue"}}) {
+      const std::vector<uint8_t> want = pak(map);
+      if (size == want.size() && sha == ge::assets::sha256_hex(want))
+        return ge::classicenhance::find_pack(*q1, folder);
+    }
+    return static_cast<const ge::classicenhance::MissionPack*>(nullptr);
+  };
+  content::ImportReport r;
+  std::string error;
+  CHECK_MSG(content::import_game((src / "QPacks.cue").string(), data.string(), &r, &error, opts),
+            error);
+  CHECK(!r.base && r.packs.size() == 2 && r.tracks.size() == 1);
+  for (const char* folder : {"hipnotic", "rogue"}) {
+    CHECK(fs::exists(data / "q1" / folder / "pak0.pak"));
+    CHECK(fs::exists(data / "q1" / folder / "music/track02.flac"));
+    CHECK(fs::exists(data / "q1" / folder / "music/tracks.txt"));
+  }
+  CHECK(flac_samples(data / "q1/rogue/music/track02.flac") ==
+        flac_samples(data / "q1/hipnotic/music/track02.flac"));
+  CHECK(!fs::exists(data / "q1/music"));
+}
+
 TEST(import_reads_a_release_zip_and_a_7z_of_its_disc) {
   const fs::path src = fresh("archives"), data = fresh("archives_data");
   save(src / "release.zip",

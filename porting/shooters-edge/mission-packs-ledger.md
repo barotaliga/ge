@@ -43,21 +43,21 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 
 | Section | Rows | Done | Verify | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- | --- |
-| Taking the packs in (shared by all four) | 17 | 12 | 3 | 2 (0 / 2 / 0) | 0 |
+| Taking the packs in (shared by all four) | 17 | 14 | 2 | 1 (0 / 1 / 0) | 0 |
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 2 | 67 | 5 (2 / 1 / 2) | 0 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 2 | 51 | 8 (3 / 3 / 2) | 0 |
-| The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
-| Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **274** | **22** | **131** | **121 (61 / 49 / 11)** | **0** |
+| The Reckoning (Quake II, folder `xatrix`) | 41 | 4 | 3 | 34 (20 / 12 / 2) | 0 |
+| Ground Zero (Quake II, folder `rogue`) | 83 | 4 | 7 | 72 (36 / 31 / 5) | 0 |
+| **All** | **276** | **26** | **130** | **120 (61 / 48 / 11)** | **0** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **121 missing, 131 to verify, of 274 rows** (M63a taking the packs in: 10 fewer).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **120 missing, 130 to verify, of 276 rows** (M63a taking the packs in: 10 fewer; the discs' music: 1 fewer, 1 verified, 2 rows added done).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
 
 ## Taking the packs in (shared by all four)
 
-count: done 12, verify 3, missing 2 (0 / 2 / 0), not-taken 0
+count: done 14, verify 2, missing 1 (0 / 1 / 0), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -65,11 +65,11 @@ count: done 12, verify 3, missing 2 (0 / 2 / 0), not-taken 0
 | imp.q2_folder | a Quake II pack's folder (`xatrix`, `rogue`) taken in beside `baseq2` | done | 1 | same; a name both games use (`rogue`) told by the base folder beside it; real: Quake II with both packs |
 | imp.known | each pack's `pak0.pak` named by its SHA-256 and size (the four digests are in `/mnt/project-files/paks/README.md`) | done | 1 | plugins/classicenhance/profile.hpp `MissionPack`, `known_pack` (the four digests); tests/classicenhance_profile_test.cpp |
 | imp.release_zip | a release zip holding an installed tree (Scourge of Armagon's and Dissolution of Eternity's archives: `Quake/HIPNOTIC/PAK0.PAK` in capitals, the base game's packs beside it) | done | 1 | import.hpp § Release archives (`open_tree` reads a `.zip` whole, its tree walked as an install); tests/classic_content_import_test.cpp |
-| imp.q1_cd | the Quake packs' CD image (`QPacks.BIN` with its sheet, in both archives) | verify | 2 | engine/vfs/disc.hpp reads BIN/CUE |
+| imp.q1_cd | the Quake packs' CD image (`QPacks.BIN` with its sheet, in both archives) | done | 2 | measured (2026-11-23): the same disc in both archives (its sheet alike, both packs on its data track, eight audio tracks 2..9), and both packs' maps ask for tracks 2..9; the disc taken in gives each pack the tracks (plugins/classic/content/import.cpp); tests/classic_content_import_test.cpp `import_gives_a_discs_tracks_to_each_pack_on_it`; real: the archive's disc, both packs' `music/` hold tracks 2..9 |
 | imp.cd_layout | the Quake II packs' CD layout: the pack at `Data/all/pak0.pak`, the movies under `Data/max/<folder>/video`, the patch under `Data/patch`; known by the pack's digest, not by a game folder | done | 1 | import.hpp § Mission packs, by digest: the pack, the shallowest folder named after it, `patch/<base>/`; real: The Reckoning's CD layout told by its digest |
 | imp.mode2 | a BIN/CUE whose data track is `MODE2/2352` (The Reckoning's) | verify | 1 | engine/vfs/disc.hpp reads it; held once imp.cd_layout lands |
 | imp.raw2448 | a raw image of 2448-byte sectors (2352 and 96 of subchannel) with its `.mds` sheet (Ground Zero's MDF) | done | 1 | engine/vfs/disc.hpp: a `.mdf` alone, 2448-byte sectors told by the second sector's sync; tests/vfs_disc_test.cpp. Its `.mds` sheet: imp.mds |
-| imp.mds | an `.mdf`'s `.mds` sheet read for its audio tracks (Ground Zero's disc music) | missing | 2 | the data track is read without it (imp.raw2448) |
+| imp.mds | an `.mdf`'s `.mds` sheet read for its audio tracks (Ground Zero's disc music) | done | 2 | engine/vfs/disc.hpp: the sheet beside the `.mdf` (or opened itself), every track, the subchannel passed over; the format measured in porting/shooters-edge/q2-pack-sounds.md; tests/vfs_disc_test.cpp `disc_reads_an_mdf_by_its_mds_sheet_data_and_audio`; real: Ground Zero's disc gives its ten tracks (2..11) as music |
 | imp.7z | a 7z holding the image (Ground Zero's, a 643 MB MDF) read without the whole file in memory | verify | 1 | import.hpp § Release archives: a 7z's one disc image unpacked into `<data>/.unpacking/` (read whole, 2 GiB limit; fixture tested); Ground Zero's real 643 MB archive still to measure |
 | imp.movies | the Quake II packs' movies copied into `<folder>/video/` | done | 1 | copied with the pack (its `video/`, from its own folder or the disc's `Data/max/<pack>/`) |
 | imp.vwep | Ground Zero's patch: the player models' weapons for its guns (`players/*/w_*.md2`, `a_grenades.md2`) | done | 2 | a `patch/<base folder>/` folder's content folders copied into the base folder |
@@ -312,7 +312,7 @@ count: done 0, verify 13, missing 0, not-taken 0
 
 ## The Reckoning (Quake II, folder `xatrix`)
 
-count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
+count: done 4, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -326,6 +326,7 @@ count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 | xat.hud | the pack's icons on the HUD and in the inventory (`a_mslugs`, `a_trap`, `k_green`, `p_quadfire`, `w_phallanx`, `w_ripper`) | verify | 2 | pictures named by the rules' configstrings |
 | xat.menu | the pack's own pictures (console background, quit, victory) | verify | 3 |  |
 | xat.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp |
+| xat.sounds | the sounds the client plays itself for the pack: the ion ripper's and the phalanx's muzzle flashes, the hyper soldier's (the tank machine gun's five), none for its effect bits or its other temp entities | done |  | server/q2_flash.cpp (the player's blue hyperblaster flash made silent); tests/shooters_edge_q2_flash_test.cpp; facts porting/shooters-edge/q2-pack-sounds.md |
 | xat.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp |
 | xat.effects | the ion ripper's, blue hyperblaster's, spinning light's, plasma's and trap's entity effects | done |  | client/world_fx_q2.cpp (Quake II client ledger `ef.*`) |
 | xat.te.plasma_explosion | the phalanx's blast (temporary entity 28) | missing | 1 | drawn as a plain explosion today (client ledger `te.plasma_explosion`, not taken for the base game) |
@@ -385,7 +386,7 @@ count: done 0, verify 0, missing 7, not-taken 0
 
 ## Ground Zero (Quake II, folder `rogue`)
 
-count: done 3, verify 7, missing 72 (36 / 31 / 5), not-taken 0
+count: done 4, verify 7, missing 72 (36 / 31 / 5), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -410,6 +411,7 @@ count: done 3, verify 7, missing 72 (36 / 31 / 5), not-taken 0
 | gz.menu | the pack's own menu pictures (the main menu, banners, the cursor), console background, `conchars_blue` | verify | 3 | pictures by name over the base pack's |
 | gz.vwep | the new guns in other players' hands (the patch's `w_*.md2`) | verify | 2 | plugins/morph/carry.hpp; needs imp.vwep |
 | gz.music | the pack's CD tracks found by the digital release's numbers | done |  | plugins/classic/content/soundtrack.cpp |
+| gz.sounds | the sounds the client plays itself for the pack: the ETF rifle's and the disruptor's muzzle flashes, the monsters' flashes 138..210, none for its effect bits; its loops are the game's own | done |  | server/q2_flash.cpp; tests/shooters_edge_q2_flash_test.cpp; facts porting/shooters-edge/q2-pack-sounds.md |
 | gz.flashes | the pack's muzzle flashes, the player's and the monsters' | done |  | server/q2_flash.cpp |
 | gz.effects | the tracker's and the other entity effects, the disguise's figure, infra-red goggles' view | done |  | client/world_fx_q2.cpp, client/q2_look.hpp |
 | gz.te.blaster2 | a green blaster's hit (temporary entity 30) | missing | 2 | client ledger `te.blaster2`, not taken for the base game |
