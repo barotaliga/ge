@@ -314,6 +314,14 @@ void client_command(NativeEntityHead* ent) {
     const NativeTrace t = gi.trace(a, nullptr, nullptr, b, nullptr, kMaskPlayer);
     gi.cprintf(ent, 2, "probe z %d up %d inside %d\n", static_cast<int>(t.endpos[2]),
                static_cast<int>(t.plane.normal[2] * 100), gi.pointcontents(in));
+  } else if (std::strcmp(w, "flagbox") == 0) {  // the box flagged (svflags), a line through it
+    Entity& box = entities[max_clients + 2];
+    box.head.svflags = std::atoi(gi.argv(1));
+    const int mask = static_cast<int>(std::strtoul(gi.argv(2), nullptr, 0));
+    const float* o = box.head.s.origin;
+    const float a[3] = {o[0] - 64, o[1], o[2]}, b[3] = {o[0] + 64, o[1], o[2]};
+    const NativeTrace t = gi.trace(a, nullptr, nullptr, b, nullptr, mask);
+    gi.cprintf(ent, 2, "flagbox hit %d\n", t.fraction < 1 ? 1 : 0);
   } else if (std::strcmp(w, "next") == 0) {
     gi.add_command_string("gamemap \"hall2\"\n");
   } else if (std::strcmp(w, "go") == 0) {

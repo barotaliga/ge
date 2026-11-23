@@ -324,6 +324,7 @@ characters.
 | `*/assets/<name>/` | Built models (`ge asset`): the manifest, the Blender builder, the committed .glb and its data | `assets` |
 | `*/labs/` | Labs beside their subject, compiled into the one `labs` executable | `labs` |
 | `games/*/mods/` | A game's sample mods for its mod seam (`docs/mods.md`), each built as a package by `ge_add_mod` into `build/<preset>/mods/` | `mod` |
+| `window-recipes` | Driving a game's window with no one at the keyboard: a recipe cfg (`sleep`, `menu_press`, `menu_select`, `menu_list`, screenshots, `condump`), the runner, checking menus against live or local servers |
 | `engine/console/` | The console (`ge::console`, `docs/console.md`): cvars and their tiers, the console language, aliases, binds, cfg files, the drop-down console's model | `console` |
 | `engine/replay/` | Replays (`ge::replay`, `docs/replays.md`): a run watched again off its input log, the keyframes a seek starts from (the game's `Run::clone`), the player's seek in a step budget, the transport | `replay` |
 | `engine/tv/` | TV (`ge::tv`, `docs/tv.md`): a match's replay file stream from a source, held by a delay in game time, fanned out to viewers and relays; chat up, the tree's count; over engine/net; the trial | `replay`, `net` |

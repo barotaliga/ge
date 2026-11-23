@@ -1,6 +1,9 @@
 // THE LOBBY'S MATCH RULES ON THE QUAKEWORLD SERVER: overtime, what the warmup lets a player's moves
 // do, and the match's lock against newcomers.
 //
+// The rules themselves are every classic server's (server/match_rules.hpp); this hands them the
+// QuakeWorld tally's facts.
+//
 // OVERTIME: the engine's overtime (engine/server/overtime.hpp) played over
 // the mod's own clock. A lobby's match only (`sv_lobby`), deathmatch only, and never under a mod
 // folder's own program, which keeps its own overtime.
@@ -31,37 +34,26 @@
 #include <string>
 #include <vector>
 
-#include "server/match.hpp"
 #include "server/overtime.hpp"
 #include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/net/qw_server.hpp"
+#include "shooters_edge/server/match_rules.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::net {
 
-struct OvertimeRun {
-  ge::server::Overtime overtime;
-  int64_t deaths = 0;  // the deaths the tally had counted at the last frame
-  bool over = false;   // the overtime's end asked of the mod
-};
+// The match rules every classic server shares (server/match_rules.hpp).
+using shooters_edge::server::lobby_rules;
+using shooters_edge::server::lock_refusal;
+using shooters_edge::server::OvertimeRun;
+using shooters_edge::server::prewar_buttons;
 
 // The score the tally holds now: its players, those who left included.
 ge::server::MatchScore tally_score(const MatchTally& t, bool teams);
 
-// One frame of a match (`in_match` false: a new match ahead, everything forgotten), its lines
-// printed to everyone on `to` (null: nobody).
+// One frame of a match (`in_match` false: a new match ahead, everything forgotten) over the
+// tally's score and deaths, its lines printed to everyone on `to` (null: nobody).
 void overtime_frame(OvertimeRun& run, const shooters_edge::server::RulesRunner& rules,
                     const MatchTally& t, QwServer* to, bool in_match);
-
-// The server's settings for the lobby's match rules (sv_prewar, sv_idlekick, sv_teamsize_min,
-// sv_lockjoin) copied into its settings; `teams` the game's team rule.
-void lobby_rules(ge::server::LobbySettings& l, const ge::server::ServerConfig& c, bool teams);
-
-// The buttons a move keeps (`held_told`: when this seat was last told, the rules' time). A line
-// for the player alone is left in `tell` ("" none).
-uint8_t prewar_buttons(const ge::server::Lobby& l, int slot, uint8_t buttons, double now,
-                       double& held_told, std::string& tell);
-// "" when `name` may play now, else the line he reads as he is seated as a spectator.
-std::string lock_refusal(const ge::server::Lobby& l, const std::string& name);
 
 }  // namespace shooters_edge::net
