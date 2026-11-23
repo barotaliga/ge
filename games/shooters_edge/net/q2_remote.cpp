@@ -28,14 +28,20 @@ constexpr uint8_t kQ2ButtonUse = 2;  // Quake II's use button in a move's button
 
 float angle16(int16_t a) { return static_cast<float>(a) * (360.0f / 65536.0f); }
 
-// The player's settings as Quake II's user info: its figure and skin are one word
-// ("male/grunt"); a classic skin alone names none of its figures, so the stock one.
+// Quake II's figure and skin as one word ("male/grunt"): a skin with a slash as it is, else the
+// model's folder and the skin; a classic skin alone names none of its figures, so the stock one.
+std::string q2_skin_word(const std::string& model, const std::string& skin) {
+  if (skin.find('/') != std::string::npos) return skin;
+  return !model.empty() ? model + "/" + skin : "male/grunt";
+}
+
+// The player's settings as Quake II's user info.
 Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
   Q2ClientConfig s;
   s.name = cfg.name;
-  s.skin = !cfg.model.empty() ? cfg.model + "/" + cfg.skin : "male/grunt";
+  s.skin = q2_skin_word(cfg.model, cfg.skin);
   s.stuff = &r.stuff;
-  if (cfg.skin.find('/') != std::string::npos) s.skin = cfg.skin;
+  s.msg = cfg.msg;
   s.rate = cfg.rate;
   s.fov = cfg.fov;
   s.hand = cfg.hand;
@@ -133,6 +139,28 @@ int lerp_list(std::vector<client::DemoEntity>& drawn, const std::vector<client::
 }
 
 }  // namespace
+
+bool q2_user_info_moved(Q2ClientConfig& q,
+                        const std::function<std::string(const std::string&)>& setting) {
+  Q2ClientConfig was = q;
+  const auto text = [&setting](const char* name) { return setting(name); };
+  if (const std::string n = text("name"); !n.empty()) q.name = n;
+  if (const std::string s = text("skin"); !s.empty()) q.skin = q2_skin_word(text("model"), s);
+  if (const std::string h = text("hand"); !h.empty()) q.hand = std::atoi(h.c_str());
+  if (const std::string f = text("cl_fov"); !f.empty()) {
+    const double fov = std::atof(f.c_str());
+    q.fov = fov > 0 ? static_cast<int>(std::lround(fov)) : 90;
+  }
+  if (const std::string m = text("msg"); !m.empty()) q.msg = std::atoi(m.c_str());
+  if (const std::string g = text("gender"); !g.empty())
+    q.gender = text("gender_auto") == "1" ? client::auto_gender(q.skin) : g;
+  if (const std::string rate = text("rate"); std::atoi(rate.c_str()) > 0)
+    q.rate = std::atoi(rate.c_str());
+  q.password = text("password");
+  return q.name != was.name || q.skin != was.skin || q.hand != was.hand || q.fov != was.fov ||
+         q.msg != was.msg || q.gender != was.gender || q.rate != was.rate ||
+         q.password != was.password;
+}
 
 void q2_remote_start(Remote& r, const ClientConfig& cfg) {
   r.q2 = std::make_unique<Q2ClientEnd>();

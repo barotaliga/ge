@@ -180,10 +180,21 @@ std::vector<ManualRow> manual_rows(const ManualSource& source) {
         const size_t colon = d.overlap.find(':');
         if (colon != std::string::npos) r.layer = d.overlap.substr(colon + 1);
       }
+    // A name only games' own layers have, alike in each but for the layer (a server's `map` in
+    // QuakeWorld's and in Quake II's): one row, its layer "a game's own".
+    const auto but_layer = [](Def d, const Def& like) {
+      d.layer = like.layer;
+      return d == like;
+    };
+    if (!shared && is_game_layer(common->layer))
+      for (const auto& [games, d] : g.passes)
+        if (d.layer != common->layer && is_game_layer(d.layer) && but_layer(d, *common))
+          r.layer = "game";
     // Every pass whose definition differs from the common one is a game's own.
     for (const auto& [games, d] : g.passes) {
       if (d == *common && shared) continue;
       if (!shared && &d == common && d.overlap.empty()) continue;
+      if (!shared && r.layer == "game" && but_layer(d, *common)) continue;
       const std::string how = d.overlap.substr(0, d.overlap.find(':'));
       ManualOwn* own = nullptr;
       for (ManualOwn& o : r.own)
@@ -372,7 +383,7 @@ footer{color:var(--muted);font-size:12px;padding:0 16px 24px}
 constexpr std::string_view kScript = R"JS(
 const M=JSON.parse(document.getElementById('data').textContent);
 const KINDS=[['setting','Settings'],['command','Commands'],['flag','Launch flags']];
-const LAYERS={engine:'Engine',shooter:'Shooter',classic:'Classic games',shell:'Shell'};
+const LAYERS={engine:'Engine',shooter:'Shooter',classic:'Classic games',shell:'Shell',game:"A game's own"};
 const st={q:'',game:'',kind:'',layer:'',program:''};
 try{const h=new URLSearchParams(location.search);for(const k in st)if(h.get(k))st[k]=h.get(k)}catch(e){}
 const gameName=id=>(M.games.find(g=>g.id===id)||{name:id}).name;
@@ -407,7 +418,7 @@ function row(r0){const r=view(r0);const d=el('div','row');d.id=r.k+'-'+r.n;
  if(r.t&&r.t!=='text'){let t=r.t;if(r.mn||r.mx)t+=' '+(r.mn||'-∞')+' to '+(r.mx||'∞');more.push(['Type',t])}
  if(r.v)more.push(['Values',r.v]);
  const sp=spellings(r0);if(sp.length)more.push(['Also',sp.map(s=>s.n+(s.part?' (word '+(+s.part+1)+')':'')+' in '+s.g.map(gameName).join(', ')).join('; ')]);
- if(!st.game&&r0.o)for(const o of r0.o)more.push([o.g.map(gameName).join(', '),(o.ov==='own'?'its own meaning':'its own default')+(o.d!==undefined?' '+(o.d===''?'""':o.d):'')+(o.h&&o.h!==r0.h?': '+o.h:'')]);
+ if(!st.game&&r0.o)for(const o of r0.o)more.push([o.g.map(gameName).join(', '),(o.ov==='own'?'its own meaning':o.ov==='same'?'its own default':'its own')+(o.d!==undefined?' '+(o.d===''?'""':o.d):'')+(o.h&&o.h!==r0.h?': '+o.h:'')]);
  if(st.game&&r.ov)more.push([gameName(st.game),r.ov==='own'?"this game's own meaning of the name":"this game's own default"]);
  for(const [k,v] of more){const p=el('p','more');p.append(el('span',null,k+': '));p.append(el('span',null,v));d.append(p)}
  return d}

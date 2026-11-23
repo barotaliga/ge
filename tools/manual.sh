@@ -19,7 +19,7 @@
 # debug) the build used.
 #
 # ge:summary make manual: the player's reference manual from the window's and server's sources
-# ge:keywords manual reference-manual user-manual make-manual pages sesv se ge-manual
+# ge:keywords manual reference-manual user-manual make-manual release-asset sesv se ge-manual
 # ge:skill console agent-interface
 set -euo pipefail
 cd "$(dirname "$0")/.."

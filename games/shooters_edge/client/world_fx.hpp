@@ -457,6 +457,11 @@ struct FxFrame {
   // What `blend` and `blend_dry` were made of, for a window that lets the player tone each layer
   // (look::Picture's v_ cvars, world_draw.cpp).
   effects::Screen screen, screen_dry;
+  // Quake II's: the rules' own tint (`rules_blend`), drawn as it is in place of `screen`'s: the
+  // whole of it in `blend`, and where the damage flash came apart (`damage`'s share above 0) the
+  // rest in `apart`, for a window that draws the flash as a frame round the view.
+  bool rules_blend = false;
+  double apart[4] = {0, 0, 0, 0}, damage[4] = {0, 0, 0, 0};
   std::vector<Placed> models;  // the entities with a model (world_models.hpp)
   // The blood on each wounded body's skin this frame (ce_blood), by entity: its wounds' soaked
   // patches and the runs down from them (render/morph.hpp's MorphBlood).
@@ -533,8 +538,11 @@ struct FxScene {
   bool q2 = false;        // Quake II's game: its own arrivals, never the warp's fog
   int effect_models = 0;  // where the effects' own models start (EffectModel)
   int beam_model = -1;    // the model list's `progs/beam.mdl` (the grappling beam's), -1 none
-  std::vector<Placed> models;    // every entity to draw (not the local player)
-  float q2_blend[4] = {};        // Quake II's tint over the view, the rules' own
+  std::vector<Placed> models;  // every entity to draw (not the local player)
+  float q2_blend[4] = {};      // Quake II's tint over the view, the rules' own
+  // The same without the damage flash and the flash alone, where the rules keep it apart (our
+  // server's, an extended recording's); all 0 where they do not, the flash in `q2_blend`.
+  float q2_apart[4] = {}, q2_damage[4] = {};
   std::vector<SceneBeam> beams;  // the lasers on
   // The items coming back soon, where they will lie (`place_returning`), each with the seconds
   // left until it shows on the picture's clock.

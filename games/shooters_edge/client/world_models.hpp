@@ -231,7 +231,6 @@ struct ModelKind {
   // of the skin (0: nothing glows): what a grenade's red ends light round it (world_fx).
   float glow_rgb[3] = {0, 0, 0};
   float glow_share = 0;
-  bool glow_map = false;  // a skin of it has a glow map (`OpenedModel::glows`): `InPlace::glow_map`
   ge::render::SpriteFacing facing = ge::render::SpriteFacing::parallel;
   bool player = false;  // the players' own figure (kPlayerModel): it wears each one's skin
   // Quake II's player figure (`players/<folder>/tris.md2`) or a weapon carried on it
@@ -403,11 +402,6 @@ struct InPlace {
   int shadows = 0;
   // gl_flashblend: each of the moment's lights drawn as a glow disc (classic/flash_blend.hpp).
   bool flash_blend = false;
-  // gl_celshading: an ink line this many pixels wide round each solid model (thinner and fainter
-  // with distance, classic/q2_fx_switches.hpp's q2_outline_px), on a view `view_px` high; 0 none.
-  double cel_shading = 0, view_px = 0;
-  // A glow map's light (classic/q2_fx_switches.hpp's q2_glow_map_gain), on a model that has one.
-  float glow_map = 1.5f;
 };
 
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a

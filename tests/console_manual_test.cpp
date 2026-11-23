@@ -191,6 +191,27 @@ TEST(rows_keep_the_common_definition_and_each_games_own) {
   CHECK(row(rows, ManualKind::flag, "-game") != nullptr);
 }
 
+// A word only games' own layers have, alike but for the layer (a server's `changelevel` in
+// QuakeWorld's and in Quake II's), is one row of "a game's own" in both; told otherwise, each
+// game keeps its own words.
+TEST(a_word_alike_in_each_games_own_layer_is_one_row) {
+  ManualSource s;
+  std::string error;
+  CHECK_MSG(read_manual("# manual 1\n# program sesv Dedicated server\n# game qw QuakeWorld\n"
+                        "# game q2 Quake II\n"
+                        "command\tsesv\tqw\tchangelevel\tgame:qw\t\t\t\t\t\t\t\tgo on\t\n"
+                        "command\tsesv\tq2\tchangelevel\tgame:q2\t\t\t\t\t\t\t\tgo on\t\n"
+                        "command\tsesv\tqw\tmap\tgame:qw\t\t\t\t\t\t\t\ta new match\t\n"
+                        "command\tsesv\tq2\tmap\tgame:q2\t\t\t\t\t\t\t\ta new game\t\n",
+                        s, error),
+            error);
+  const std::vector<ManualRow> rows = manual_rows(s);
+  CHECK(rows.size() == 2);
+  CHECK(rows[0].name == "changelevel" && rows[0].layer == "game" && rows[0].own.empty());
+  CHECK(rows[1].name == "map" && rows[1].layer == "game:qw" && rows[1].own.size() == 1);
+  CHECK(rows[1].own[0].help == "a new game");
+}
+
 TEST(the_page_carries_its_data_and_never_closes_its_script_early) {
   Rig r;
   r.con.cvars().add({.name = "con_note",
