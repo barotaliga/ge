@@ -161,7 +161,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | C106 | `test2` (q1) | query a NetQuake server's rules (network test) | not-taken | a developer or profiling tool: ours are framestats, the labs and ge |  |
 | C107 | `slist` (q1) | search the LAN for NetQuake games | not-taken | covered by JOIN A GAME's server list (menu/servers_page.cpp), which finds LAN and master servers; NetQuake servers are not joined (see C-connect-nq) |  |
 | C108 | `listen` (q1) | allow or forbid network players on your game | done | the host page's SERVER row (menu/main_menu.cpp) opens the game to others |  |
-| C109 | `maxplayers` (q1) | the player count of the next game | done | the host page's MAX PLAYERS (maxclients); no maxplayers word |  |
+| C109 | `maxplayers` (q1) | the player count of the next game | done | the host page's MAX PLAYERS; `maxplayers` a synonym of `sv_maxclients` in Quake's layer (client/cvar_layers.cpp) |  |
 | C110 | `port` (q1) | the UDP port of the next game | done | the Quake spelling of sv_port (client/cvar_layers.cpp): the port the next game is served on (0: nobody joins) | 3 |
 | C111 | `+showscores` / `-showscores` (both) | the scoreboard while held | done | games/shooters_edge/client/controls.cpp |  |
 | C112 | `play` (both) | play a sound file once | done | games/shooters_edge/client/menu_sound.cpp: each sound once, "Couldn't load sound/<name>" when missing | - |
@@ -207,7 +207,7 @@ and from client-gaps.md and q1-sp-gaps.md where those notes already settled a ro
 | id | item (the name a player, mapper or mod sees) | what it does | status | ours (file) or why not | rank |
 | --- | --- | --- | --- | --- | --- |
 | C149 | `chase_back` (q1, 100) | the chase camera's distance behind | done | engine/camera/cvars.cpp cl_chasedist; cam_dist (client/demo_playback.cpp) for the third person |  |
-| C150 | `chase_up` (q1, 16) | the chase camera's height | done | engine/camera/cvars.cpp cl_chaseheight |  |
+| C150 | `chase_up` (q1, 16) | the chase camera's height | done | `chase_up` a synonym of `cam_up` (client/demo_playback.cpp): the chase camera raised above the eye, short of a ceiling, live and in demos; ours defaults to 0 |  |
 | C151 | `chase_right` (q1, 0) | the chase camera's side offset | done | cam_side with Quake's spelling chase_right (client/demo_playback.cpp, demo_eyes.cpp): units to the player's left | 3 |
 | C152 | `chase_active` (q1, 0) | the view from a chase camera behind yourself | done | cam_thirdperson (client/demo_playback.cpp) in the same meaning |  |
 | C153 | `cl_upspeed` (both, 200) | swim up and down speed asked | done | plugins/shooter/controls.cpp |  |
@@ -681,7 +681,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S54 | `mcache` (q1) | prints the model cache | not-taken | developer tool | |
 | S55 | `slist` (q1) | lists the LAN's servers | done | the server browser (`net/qw_browse.cpp`, the menu) | |
 | S56 | `listen <0 or 1>` (q1) | whether the game takes network players | done | hosting from the window (`engine/server/spawn.hpp`, `listen_console.cpp`) | |
-| S57 | `maxplayers <n>` (q1) | the player count for the next map; 1 stops listening | done | `sv_maxclients` (synonym `maxclients`) | |
+| S57 | `maxplayers <n>` (q1) | the player count for the next map; 1 stops listening | done | `sv_maxclients` (synonyms `maxclients` and `maxplayers`, net/qw_game.cpp) | |
 | S58 | `port <n>` (q1) | the UDP port (default 26000) | done | `sv_port` (`engine/server/listen_console.cpp`) | |
 | S59 | `net_stats` (q1) | the network layer's counters | not-taken | developer counters: `netstatus` | |
 | S60 | `ban <address> [mask]` or `off` (q1) | one address-and-mask ban ("You have been banned." to a refused connect) | done | `ban` and the address filters (`engine/server/bans.cpp`) | |
@@ -758,7 +758,7 @@ classic names of settings are synonyms of ours by `qw_game.cpp`'s table of setti
 | S126 | `scratch1`..`scratch4` (q1) | four spare settings for programs | done | server/qc_server.cpp (scratch1..scratch4) | 3 |
 | S127 | `savedgamecfg` (q1, archived) | a program's setting kept in the config | done | server/qc_server.cpp (kept in the window's config) | 3 |
 | S128 | `saved1`..`saved4` (q1, archived) | four program settings kept in the config | done | server/qc_server.cpp (saved1..saved4, kept in the window's config) | 3 |
-| S129 | `net_messagetimeout` (q1, 300) | seconds of silence before a connection is closed | done | `sv_timeout` | |
+| S129 | `net_messagetimeout` (q1, 300) | seconds of silence before a connection is closed | done | `sv_timeout` (synonym `net_messagetimeout`, net/qw_game.cpp) | |
 | S130 | `_config_com_port`, `_config_com_irq`, `_config_com_baud`, `_config_com_modem`, `_config_modem_dialtype`, `_config_modem_clear`, `_config_modem_init`, `_config_modem_hangup` (q1) | serial and modem play | not-taken | platform (serial links) | |
 | S131 | `idgods` (q1) | staff privilege | not-taken | staff-only | |
 | S132 | `cmdline` (q1, server info) | the command line as a readable setting | not-taken | no reader | |

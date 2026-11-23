@@ -321,10 +321,12 @@ TEST(classic_game_each_game_s_names_for_the_server_s_settings) {
   CHECK(c.rules["dmflags"] == "16");
   // Our names set the same settings, read back by the game's.
   CHECK(con.cvars().find("maxclients") == con.cvars().find("sv_maxclients"));
+  CHECK(con.cvars().find("maxplayers") == con.cvars().find("sv_maxclients"));  // Quake's words
+  CHECK(con.cvars().find("net_messagetimeout") == con.cvars().find("sv_timeout"));
   // Every game name is a synonym, none a setting of its own: the two never disagree.
   for (const ge::console::Synonym& n : con.cvars().synonyms())
     CHECK_MSG(n.target != nullptr && n.target->name != n.name, n.name);
-  CHECK(con.cvars().synonyms().size() == 44);  // sv_port among them (server.cpp)
+  CHECK(con.cvars().synonyms().size() == 46);  // sv_port among them (server.cpp)
   Server s;                                    // a classic map leaves Quake II's dmflags alone
   CHECK_MSG(server_open(s, se::qw_game(), c, nullptr, nullptr, error), error);
 }

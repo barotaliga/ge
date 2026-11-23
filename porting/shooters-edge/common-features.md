@@ -43,6 +43,16 @@ better. Rank 3 is code only, with no player-visible change.
 | A4 | 3 | A viewer's reliable queue (`queue`, `transmit`, `drop`) | 2: the TV node's two faces | Quake II's holds back the signon until echoed (`go`); QuakeWorld's sends a datagram with it | kept apart: two mechanisms around the shared channel (`plugins/classic/protocol/channel.hpp`) |
 | A5 | 2 | A player's own voice in the client's recording | QuakeWorld has it (`record_own_voice`); Quake II's client does not | Quake II's recordings missed your own voice | done: a block of its own in the level's recording, the server's voice message (`net/q2_client.cpp`), so `record` while joined keeps the whole talk |
 
+## The spellings the verification sweep found
+
+Five rows were done by a setting of ours whose classic spelling was not registered (2026-11-23):
+`maxplayers` (client and server) and `net_messagetimeout` (server) are now synonyms of
+`sv_maxclients` and `sv_timeout`; Quake's `chase_up` is a synonym of a new `cam_up`, the chase
+camera's height above the eye (default 0, as before). Two stay unregistered: `slist` lists
+NetQuake servers, which are not joined (C107 not taken; `pingservers` asks Quake II's servers
+only), and QuakeWorld's `cl_chasecam` has no off state of ours to map (a tracked player is always
+seen through his eyes, or from behind by `cam_thirdperson`).
+
 ## The mission packs' settings
 
 The mission pack threads check `common-settings.md` before naming a setting (told 2026-11-23). On
