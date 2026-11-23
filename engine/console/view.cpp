@@ -562,6 +562,13 @@ std::string ConsoleView::head() const {
 
 namespace {
 
+// Whether value `v` starts with the typed `part`, any case, a leading quote on either let be.
+bool value_starts(std::string_view v, std::string_view part) {
+  if (!v.empty() && v[0] == '"') v.remove_prefix(1);
+  if (!part.empty() && part[0] == '"') part.remove_prefix(1);
+  return lower(v).starts_with(lower(part));
+}
+
 std::string joined(const std::vector<std::string>& words, std::string_view between) {
   std::string out;
   for (const std::string& w : words) {
@@ -592,12 +599,17 @@ bool ConsoleView::value_typed(const Cvar*& cvar, std::vector<std::string>& choic
   if (space == std::string::npos || space == from) return false;
   const std::string name = input_.substr(from, space - from);
   const std::string rest = input_.substr(space + 1);
-  if (name.find_first_of("\t;") != std::string::npos ||
-      rest.find_first_of(" \t;") != std::string::npos)
+  if (name.find_first_of("\t;") != std::string::npos || rest.find(';') != std::string::npos)
     return false;
   cvar = c_.cvars().find(name);
-  if (cvar == nullptr) return false;
-  choices = value_choices(*cvar);
+  if (cvar != nullptr) {
+    if (rest.find_first_of(" \t") != std::string::npos) return false;
+    choices = value_choices(*cvar);
+  } else {  // a word's own values (an item's name), quoted when it has a space
+    choices = c_.arg_values(name);
+    for (std::string& v : choices)
+      if (v.find(' ') != std::string::npos) v = '"' + v + '"';
+  }
   if (choices.empty()) return false;
   part = rest;
   at = space + 1;
@@ -620,15 +632,16 @@ std::vector<Suggestion> ConsoleView::suggestions() const {
   std::vector<std::string> choices;
   std::string part;
   size_t at = 0;
-  if (value_typed(typed, choices, part, at)) {  // the cvar's values, in their own order
-    const std::string p = lower(part);
+  if (value_typed(typed, choices, part, at)) {  // the values, in their own order
     for (const std::string& v : choices) {
-      if (lower(v).compare(0, p.size(), p) != 0) continue;
+      if (!value_starts(v, part)) continue;
       Suggestion s;
       s.name = v;
       s.kind = Suggestion::Kind::value;
-      s.detail = value_meaning(*typed, v);
-      if (v == typed->value) s.detail = s.detail.empty() ? "now" : s.detail + " (now)";
+      if (typed != nullptr) {
+        s.detail = value_meaning(*typed, v);
+        if (v == typed->value) s.detail = s.detail.empty() ? "now" : s.detail + " (now)";
+      }
       out.push_back(std::move(s));
     }
     if (static_cast<int32_t>(out.size()) > suggest_) out.resize(static_cast<size_t>(suggest_));
