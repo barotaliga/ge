@@ -5,10 +5,12 @@
 // message it read by its id, and every kind the match makes arrived and read clean. The
 // recording the client kept, read again as a file, reads the same messages in the same counts.
 //
-// ge:summary Tests: every Quake II server message kind arriving at a joined client, live and recorded
-// ge:keywords test q2 protocol-34 svc census joined-client recording muzzleflash temp-entity layout inventory
+// ge:summary Tests: every Quake II server message kind at a joined client, live and recorded
+// ge:keywords test q2 protocol-34 svc census joined-client recording muzzleflash
+// ge:keywords temp-entity layout inventory cheat-lock
 // ge:skill net shooter testing
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -41,7 +43,7 @@ namespace cl = shooters_edge::client;
 namespace ss = shooters_edge::server;
 
 // The message ids the census names (the protocol's numbers).
-enum : int {
+enum : uint8_t {
   kMuzzleFlash = 1,
   kMuzzleFlash2 = 2,
   kTempEntity = 3,
