@@ -161,6 +161,7 @@ void q2_remote_start(Remote& r, const ClientConfig& cfg) {
   r.frame_old_s = r.frame_new_s = -1;
   r.q2_frames = 0;
   q2_predict_map(r.q2_ahead, nullptr);  // the level's, when the window loads it
+  r.q2_weapon = Q2Weapon{};
 }
 
 int q2_move_ms(int rate) {
@@ -290,6 +291,10 @@ RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& sa
     r.ahead.type = sh::MoveType::normal;
   }
   r.predicted = predicted;
+  // The held weapon run ahead of the newest frame (q2_weapon.hpp): its frame, shots and ammo.
+  if (st.player >= 0 && static_cast<size_t>(st.player) < st.players.size())
+    q2_weapon_predict(r.q2_weapon, r.weapon, r.nopred, c, d,
+                      st.players[static_cast<size_t>(st.player)].origin);
   // The other players run forward from the moves our server sent (none from a stock server).
   // A stock server's run on from its last two frames instead.
   r.others = r.predict_players ? q2_predict_others(ahead, c, d, now_s, &r.others_msec) : 0;

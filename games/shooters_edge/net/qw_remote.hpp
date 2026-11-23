@@ -94,6 +94,7 @@
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/q2_pingservers.hpp"
 #include "shooters_edge/net/q2_predict.hpp"
+#include "shooters_edge/net/q2_weapon.hpp"
 #include "shooters_edge/net/qw_client.hpp"
 #include "shooters_edge/net/qw_match_record.hpp"
 #include "shooters_edge/net/qw_record.hpp"
@@ -223,6 +224,7 @@ struct Remote {
   sh::Smoothing smooth;         // the prediction's correction
   double smoothview = 1;        // cl_predict_smoothview: 0 snapped, 1 the decay's own rate, 2 slow
   RemoteWeapon weapon;          // the held weapon predicted (qw_weapon.hpp)
+  Q2Weapon q2_weapon;           // Quake II's held weapon predicted (q2_weapon.hpp)
   // The moves the last prediction ran past the acknowledged one: each one's command and the state
   // after it (`ahead_count` of them), for the missiles' launch places and the jump's sound.
   uint32_t ahead_seq[64] = {};

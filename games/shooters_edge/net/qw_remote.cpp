@@ -1601,11 +1601,13 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
   con.cvars().bind({.name = "cl_predict_weaponsound",
                     .fallback = "1",
                     .help = "0: your weapon's sounds heard from the server; 1: every one played "
-                            "as you fire; above 1, the weapons left to the server (2 axe, 4 "
-                            "shotgun, 8 super shotgun, 16 nailgun, 32 super nailgun, 64 grenade "
-                            "launcher, 128 rocket launcher, 256 lightning gun)",
+                            "as you fire; above 1, the weapons left to the server, 2 to the power "
+                            "of the weapon's key (Quake: 2 axe, 4 shotgun, 8 super shotgun, 16 "
+                            "nailgun, 32 super nailgun, 64 grenade launcher, 128 rocket "
+                            "launcher, 256 lightning gun; Quake II: 2 blaster .. 512 railgun, "
+                            "1024 BFG10K)",
                     .min = 0,
-                    .max = 511},
+                    .max = 2047},
                    &r.weapon.sound_mask);
   con.cvars().bind({.name = "cl_predict_buffer",
                     .fallback = "1",
