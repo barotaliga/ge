@@ -11,7 +11,7 @@
 //
 // ge:summary Quake II's temporary entities' puffs and sounds by kind byte or effect name
 // ge:keywords q2 temp-entity temporary-entity puff specks gunshot blood sparks ricochet
-// ge:keywords explosion-sound
+// ge:keywords explosion-sound splash-sparks spark5 spark7
 // ge:keywords q2_puff q2_temp_sound te_gunshot te_blood te_sparks rocklx1a grenlx1a xpld_wat ric1
 // ge:skill shooter render
 // ge:test tests/shooters_edge_q2_wire_test.cpp
@@ -61,9 +61,21 @@ struct Q2TempSound {
 };
 
 // The sound of kind byte `code`; `pick` (any number) picks a ricochet: 1 in 16 each of three,
-// silent otherwise.
-constexpr Q2TempSound q2_temp_sound(int code, uint32_t pick) {
+// silent otherwise. A splash (10) of `splash` kind 1 (sparks; 7, the extended protocol's electric
+// one, too) crackles: spark5 or spark6 1 in 4 each, spark7 2 in 4, dying off fast (3); any other
+// splash is silent.
+constexpr Q2TempSound q2_temp_sound(int code, uint32_t pick, int splash = -1) {
   switch (code) {
+    case 10:
+      if (splash != 1 && splash != 7) return {};
+      switch (pick % 4) {
+        case 0:
+          return {"world/spark5.wav", 3};
+        case 1:
+          return {"world/spark6.wav", 3};
+        default:
+          return {"world/spark7.wav", 3};
+      }
     case 0:   // a gunshot's hit
     case 14:  // a bullet's sparks
       switch (pick % 16) {

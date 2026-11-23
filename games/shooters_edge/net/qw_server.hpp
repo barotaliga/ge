@@ -176,6 +176,7 @@ struct ServerConfig {
   int ip_limit = 0;      // sv_iplimit: the most seats one address holds (0: none; server/admission)
   bool locked = false;   // sv_locked: no new clients but one taking back its seat (admission)
   std::string redirect;  // sv_redirect: where a newcomer is sent when full ("!" first: everyone)
+  std::string ruleset;   // sv_ruleset: the ruleset a player keeps to ("" any; server/admission)
   int vip_slots = 0;     // sv_vipslots: the players' last slots only a VIP takes (server/admission)
   int idle_time = 0;     // sv_idletime: s of no buttons, move or chat before a drop (server/idle)
   ge::server::SkewRule skew;   // sv_speedwindow, sv_speedwarn, sv_speedkick (server/skew.hpp)
@@ -515,5 +516,9 @@ EntityState entity_state(const QwServer& s, int e);
 void entity_look(EntityState& st, float alpha, float scale, const float colormod[3]);
 // A player's stats as the server sends them (`view_height`: the z set's view height in 16).
 void player_stats(const QwServer& s, int slot, int32_t out[kStats], bool view_height);
+// The items word a client is sent (its stat 15): the program's item bits, with its `items2` from
+// bit 23 up when it defines one (a mission pack's new weapons and items), else the runes from bit
+// 28.
+int32_t items_word(const sv::RulesWorld& w, const sv::PlayerNumbers& n);
 
 }  // namespace shooters_edge::net

@@ -248,6 +248,8 @@ int cmd_import(gc::Ctx& ctx) {
   notes.reserve(r.notes.size());
   for (const std::string& n : r.notes) notes.push_back(json_str(n));
   const std::string words = cl::take_in_words(r, ctx.words[0]);
+  std::string notes_text;  // what was found and left, a line each
+  for (const std::string& n : r.notes) notes_text += n + "\n";
   return gc::answer(
       ctx,
       json_obj({{"game", json_str(r.game->id)},
@@ -259,7 +261,7 @@ int cmd_import(gc::Ctx& ctx) {
                 {"tracks", json_num(static_cast<long long>(r.tracks.size()))},
                 {"unchanged", ge::core::json_bool(r.unchanged)},
                 {"notes", json_arr(notes)}}),
-      "", words,
+      notes_text, words,
       "se -basedir " + r.game_dir +
           (r.packs.empty() ? std::string() : " -game " + std::string(r.packs[0]->folder)));
 }

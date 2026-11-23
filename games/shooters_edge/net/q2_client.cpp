@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <iterator>
+#include <string_view>
 #include <utility>
 
 #include "classic/rulesets.hpp"
@@ -19,6 +20,7 @@
 #include "shooters_edge/net/q2_fetch.hpp"
 #include "shooters_edge/net/qw_ext.hpp"
 #include "shooters_edge/net/qw_voice_route.hpp"
+#include "shooters_edge/server/q2_combat.hpp"
 
 namespace shooters_edge::net {
 
@@ -62,7 +64,7 @@ std::string userinfo_of(const Q2ClientEnd& c) {
       (c.cfg.ask_login ? kGeAccountKey : 0u) | (c.cfg.ask_feel ? kGeMoveFeel : 0u) |
       (c.cfg.voice ? kGeVoice : 0u) | (c.cfg.ask_frames ? kGeEveryFrame : 0u) |
       (c.cfg.ask_back ? kGeItemBack : 0u) | (c.cfg.ask_hits ? kGeHitReports : 0u) |
-      (c.cfg.ask_sheet ? kGeSettings : 0u);
+      (c.cfg.ask_sheet ? kGeSettings : 0u) | (c.cfg.ask_arsenal ? kGeArsenal : 0u);
   if (ext != 0) info_set(u, "*ge_ext", std::to_string(ext));
   return u;
 }
@@ -620,6 +622,24 @@ void q2_voice_target(Q2ClientEnd& c, const std::string& word) {
 }
 
 void q2_client_command(Q2ClientEnd& c, const std::string& line) {
+  // A weapon change, kept for the weapon prediction: its command word, then a weapon's name.
+  const std::string_view l(line);
+  const size_t cut = l.find(' ');
+  const std::string_view word = l.substr(0, cut);
+  Q2ClientEnd::WeaponAsk ask;
+  ask.move = c.made;
+  ask.kind = word == "use" ? 0 : word == "weapnext" ? 1 : word == "weapprev" ? 2 : 3;
+  if (ask.kind == 0 && cut != std::string_view::npos) {
+    std::string_view name = l.substr(cut + 1);
+    while (!name.empty() && (name.back() == '\n' || name.back() == ' ')) name.remove_suffix(1);
+    const int w = server::sq_weapon_named(name);
+    ask.weapon = static_cast<int16_t>(w);
+    if (w >= 0) c.weapon_asks[c.weapon_asked++ & 7] = ask;
+  } else if (ask.kind > 0 && word == (ask.kind == 1   ? "weapnext"
+                                      : ask.kind == 2 ? "weapprev"
+                                                      : "weaplast")) {
+    c.weapon_asks[c.weapon_asked++ & 7] = ask;
+  }
   std::vector<uint8_t> b = {kClcStringCmd};
   b.insert(b.end(), line.begin(), line.end());
   b.push_back(0);
@@ -681,7 +701,10 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
       c.sent_on.clear();
     } else {
       const Q2ClientConfig cfg = c.cfg;
+      // The settings the server stuffed go along: a forced reconnect's are what it asks back.
+      std::map<std::string, std::string> kept = std::move(c.stuffed_set);
       q2_client_start(c, *c.transport, to, cfg, c.now);
+      c.stuffed_set = std::move(kept);
       c.redirects = sent;
       return;
     }

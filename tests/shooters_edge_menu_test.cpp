@@ -21,10 +21,12 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <span>
 #include <string>
 #include <vector>
 
 #include "check.hpp"
+#include "classic/rulesets.hpp"
 #include "console/console.hpp"
 #include "console/view.hpp"
 #include "forward/routes.hpp"
@@ -1919,4 +1921,21 @@ TEST(q2_browse_rows_open_the_browser_on_their_own_sources) {
   con.run();
   for (int i = 0; i < 90; i++) run();
   CHECK(shown() == (std::vector<std::string>{"book", "mine"}));
+}
+
+// The RULESET row on OPTIONS offers exactly the loaded game's book, in its order.
+TEST(the_ruleset_row_offers_the_games_book) {
+  const auto check = [](const shooters_edge::menu::MenuTable& table,
+                        std::span<const ge::console::Ruleset> book) {
+    const shooters_edge::menu::Entry* row = nullptr;
+    for (const shooters_edge::menu::Entry& e : table.entries)
+      if (e.page == "options" && e.id == "ruleset") row = &e;
+    CHECK(row != nullptr && row->needs == "ruleset");
+    if (row == nullptr) return;
+    CHECK(row->choices.size() == book.size());
+    for (size_t i = 0; i < book.size() && i < row->choices.size(); ++i)
+      CHECK(row->choices[i].value == book[i].name);
+  };
+  check(shooters_edge::menu::classic_menu(), ge::classic::qw_rulesets());
+  check(shooters_edge::menu::q2_menu(), ge::classic::q2_rulesets());
 }

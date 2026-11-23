@@ -7,6 +7,7 @@
 #include "server/admission.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <sstream>
 
 namespace ge::server {
@@ -56,6 +57,20 @@ std::string admit_refusal(int limit, const net::Address& from, std::span<const H
   if (halves < 2 * limit) return {};
   return from.family == net::Family::ipv6 ? "Too many connections from your IPv6 network."
                                           : "Too many connections from your IP address.";
+}
+
+std::string ruleset_refusal(std::string_view required, std::string_view theirs, bool spectator) {
+  const auto low = [](std::string_view t) {
+    std::string out(t);
+    for (char& c : out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return out;
+  };
+  const std::string want = low(required);
+  if (spectator || want.empty()) return {};
+  const std::string have = theirs.empty() ? std::string("default") : low(theirs);
+  if (have == want) return {};
+  return "This server requires the " + want + " ruleset. Pick it in OPTIONS or type ruleset " +
+         want + ", then join again.";
 }
 
 }  // namespace ge::server

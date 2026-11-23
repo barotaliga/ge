@@ -18,11 +18,13 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "server/main.hpp"
 #include "shooters_edge/net/q2_game.hpp"
 #include "shooters_edge/net/qw_game.hpp"
+#include "shooters_edge/server/rules_manual.hpp"
 
 // `-classic <id>` or `--classic=<id>`: which classic game the server serves (q1, q2), as its
 // number from 1; 0 after saying why. `-game <folder>` is passed on as the engine's
@@ -79,5 +81,9 @@ int main(int argc, char** argv) {
        "Serve that classic game: q1 (QuakeWorld's deathmatch on its protocol, the default) or q2 "
        "(Quake II's rules on its own protocol). Also --classic=<id>."},
       {"-game", "<folder>", "Run a mod's folder over the base game (the same as --mod=<folder>)."}};
+  // The rules' own settings (deathmatch, coop...), which the console hands to the game's rules.
+  manual.more = [](std::string_view games, std::vector<ge::console::ManualEntry>& out) {
+    shooters_edge::server::rules_manual(games, out);
+  };
   return ge::server::server_main(static_cast<int>(args.size()), args.data(), game, manual);
 }

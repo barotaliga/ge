@@ -535,7 +535,10 @@ programs' own registrations, never kept by hand, so it cannot fall behind the co
    lists' words), which the game takes through `ServerGame::console`, are declared as
    `ServerGame::words` (`GameWord`, Shooter's Edge's `net/server_words.hpp`) and registered on the
    server's console in the game's own layer (`add_game_words`), so Tab, `cmdlist` and the manual
-   know them; a word the game takes but does not declare still runs, unlisted.
+   know them; a word the game takes but does not declare still runs, unlisted. The RULES' own
+   settings (`deathmatch`, `coop`, `skill`: the game's rules' cvars, made with each map and set
+   through the same hook) join a pass through `ManualInfo::more`: Shooter's Edge makes each
+   game's rules with no map (`server/rules_manual.hpp`) and describes them in the game's layer.
 2. **`ge manual <source>...`** merges the passes into rows: a name's COMMON definition (the layer
    under the games'), each game's own where its layer met the name (`same`: the game's default and
    words; `own`: the game's own meaning under the same name), its spellings per game, the games it

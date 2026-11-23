@@ -141,3 +141,9 @@ TEST(the_strict_sets_keep_scripts_off_the_team_macros) {
   for (const gc::Ruleset& r : cl::q2_rulesets())
     CHECK(r.team_macro_commands.empty() == (r.name == "default"));
 }
+
+TEST(f_fakeshaft_says_the_beams_smoothing) {
+  CHECK(cl::fakeshaft_words(1) == "fakeshaft on");
+  CHECK(cl::fakeshaft_words(0) == "fakeshaft off");
+  CHECK(cl::fakeshaft_words(0.375) == "fakeshaft 37.5%");
+}

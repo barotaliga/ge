@@ -114,6 +114,11 @@ struct Q2WireOptions {
   // is the server data alone, naming no player slot (-1) and the file as the level; protocol 36
   // says the state 5 (a cinematic, minor 1023 on) or 3 (a picture). Empty: a game.
   std::string show;
+  // The extended limits' level the viewer is sent at (q2_wire_limits.cpp; a hosted library's,
+  // `Q2Raw::ext`): 0 the ordinary wire; 1 and 2 the extended entity and player forms, the server
+  // data's flags saying so (36), or a recording's protocol 3434 or 3435 (34's form). Every viewer
+  // of an extended game gets its level: the server admits no other.
+  int ext = 0;
   // The viewer reads the hit report (temporary entity 128, `fight_dealt`): our own client does,
   // a stock client does not, so it is sent nothing of it.
   bool hit_reports = false;
@@ -147,8 +152,9 @@ struct Q2Sight {
   std::vector<Q2SightLinks> links;      // by entity number (kQ2Entities)
   std::vector<int32_t> groups;          // each area's group over the open portals (empty: no areas)
 };
-// Starts a frame's links over `map` (null: no cut); every entity unlinked.
-void q2_sight_reset(Q2Sight& s, const ge::brush::Map* map);
+// Starts a frame's links over `map` (null: no cut) for `entities` (an extended game's 8192);
+// every entity unlinked.
+void q2_sight_reset(Q2Sight& s, const ge::brush::Map* map, int entities = kQ2Entities);
 // Entity `number` linked by its box in the world (`lo`..`hi`, map units).
 void q2_sight_link(Q2Sight& s, int number, const float lo[3], const float hi[3]);
 // Every entity of a runner's world linked by its box (its absolute box, else origin + its size).
@@ -239,6 +245,7 @@ std::string q2_temp_entity_name(int code);
 // baseline (by entity number), each message whole with its id. A live server sends them as a
 // client asks for them (net/q2_net_server.hpp); a recording cuts them into blocks.
 struct Q2Signon {
+  int config_end = kQ2ConfigStrings;  // the configstring count: the streams' end word
   std::vector<uint8_t> server_data;
   std::vector<std::pair<int, std::vector<uint8_t>>> config_strings, baselines;
 };
