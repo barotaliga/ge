@@ -280,6 +280,7 @@ by default.
 | `_echo [-e] [-n] [-c <colour>] [-l <level>] <text>` | Prints the text as written, its spacing kept; `-e` reads backslash escapes (`\n` splits the line), `-h` the options. |
 | `text <words>` | Runs the words as the next command, before the rest of the buffer. |
 | `complete <name>` | A command the game knows (sent to the server when typed, completed with Tab); refused for a cvar's name. Typed with no server, "Can't "<name>", not connected". |
+| `writemanual <file>` | Every setting, command and launch flag of the program written for the reference manual (§ The reference manual). |
 | `lasterror` | The last refusal printed again. |
 | `wait` | Leaves the rest of the buffer for the next frame. |
 
@@ -488,3 +489,33 @@ ge cfg dump [--out=my.cfg]       # every player setting, commented: a cfg to sta
 ```
 
 `--server` checks a cfg as a dedicated server's, where the server's cvars may be set.
+
+## The reference manual
+
+The player's manual of every setting, console command and launch flag is generated from the
+programs' own registrations, never kept by hand, so it cannot fall behind the code
+(`engine/console/manual.hpp`, `manual_page.hpp`; row M21f):
+
+1. **Each program describes its live console** (`describe`): every setting with its layer, kind,
+   default, range, flags, help and values; every setting synonym and command synonym (a game's
+   own spelling of ours); every command with the layer it was added in; and the flags the program
+   documented (`Console::set_manual`'s `FlagDoc`s, the same table its parser refuses unknown
+   flags by). A program with games writes one PASS per game: Shooter's Edge's window loads each
+   game's own layer in turn as a game switch does (`se -manual <file>`, client/manual.hpp; the
+   Quake pass is QuakeWorld's too), the dedicated server writes the game it serves
+   (`sesv [-classic q2] --manual=<file>`); any console writes its one pass with `writemanual`.
+2. **`ge manual <source>...`** merges the passes into rows: a name's COMMON definition (the layer
+   under the games'), each game's own where its layer met the name (`same`: the game's default and
+   words; `own`: the game's own meaning under the same name), its spellings per game, the games it
+   is in (none named: all) and the programs that have it.
+3. **The page** (`user-manual.html`, one file with no outside script, and `manual.json` beside
+   it) searches names, spellings and help, filters by game, kind, layer and program, shows the
+   picked game's own default and meaning in place, and links every row (`#setting-gamma`).
+
+`make manual` runs all three into `build/manual/` (`tools/manual.sh`). The window needs one game to
+start: Quake's shareware release, fetched once and checked by the classicenhance tool
+(`GE_MANUAL_GAME` names another source); every other game's own layer is loaded without its
+files. The `manual` workflow
+publishes it to the repository's pages once a day. A new setting, command or flag needs nothing
+more than its registration, its help and, for a flag, its row in the program's flag table.
+
