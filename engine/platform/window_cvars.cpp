@@ -65,6 +65,21 @@ void add_window_cvars(console::Console& con, WindowCvars& w) {
                     .values = "0: in the picture (the default); 1: by the display, where it has "
                               "a ramp"},
                    &w.hwgamma);
+  // A Mac's full screen is a space of its own, which switching windows leaves rather than hides.
+#if defined(__APPLE__)
+  constexpr const char* kMinimize = "0";
+#else
+  constexpr const char* kMinimize = "1";
+#endif
+  con.cvars().bind({.name = "vid_minimize_on_focus_loss",
+                    .fallback = kMinimize,
+                    .flags = console::kArchive,
+                    .help = "Whether the full-screen game minimises when you switch to another "
+                            "window, the screen going back to the desktop's own mode.",
+                    .kind = console::CvarKind::boolean,
+                    .values = "1: minimised (the default, but on a Mac); 0: it stays full "
+                              "screen behind the other window (the default on a Mac)"},
+                   &w.minimize_on_focus_loss);
   con.cvars().bind({.name = "vid_display",
                     .fallback = "0",
                     .help = "The display vid_fullscreen covers.",
@@ -284,6 +299,10 @@ void follow_window_cvars(Window& window, WindowCvars& w, AudioOut* sound, consol
       con->print("...hardware gamma not supported");
       con->cvars().set("vid_hwgamma", "0", console::Source::local);
     }
+  }
+  if (int(w.minimize_on_focus_loss) != w.minimize_applied) {
+    set_minimize_on_focus_loss(w.minimize_on_focus_loss);
+    w.minimize_applied = int(w.minimize_on_focus_loss);
   }
   if (w.fullscreen > 0 && w.fullscreen != w.fullscreen_back) {  // kept, and saved with the cfg
     w.fullscreen_back = w.fullscreen;
