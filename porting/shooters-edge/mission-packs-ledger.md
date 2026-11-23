@@ -47,10 +47,10 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 4 | 67 | 3 (0 / 1 / 2) | 0 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 7 | 50 | 4 (0 / 2 / 2) | 0 |
 | The Reckoning (Quake II, folder `xatrix`) | 40 | 21 | 3 | 16 (11 / 4 / 1) | 0 |
-| Ground Zero (Quake II, folder `rogue`) | 82 | 30 | 3 | 49 (19 / 26 / 4) | 0 |
-| **All** | **274** | **77** | **124** | **73 (30 / 34 / 9)** | **0** |
+| Ground Zero (Quake II, folder `rogue`) | 82 | 32 | 3 | 47 (18 / 25 / 4) | 0 |
+| **All** | **274** | **79** | **124** | **71 (29 / 33 / 9)** | **0** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **73 missing, 124 to verify, of 274 rows** (M63a taking the packs in: 11 fewer; M63b the Quake packs' status bars: 6 fewer; The Reckoning's first part 18; Ground Zero's first batch 23).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **71 missing, 124 to verify, of 274 rows** (M63a taking the packs in: 11 fewer; M63b the Quake packs' status bars: 6 fewer; The Reckoning's first part 18; Ground Zero's first batch 23, its campaign and saves 2).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
@@ -404,7 +404,7 @@ count: done 29, verify 4, missing 49 (19 / 26 / 4), not-taken 0
 | gz.cvar.strong_mines | `strong_mines` (0): mines laid under quad or double keep it their whole time | done | 3 | server/q2_gz_rules.cpp, server/q2_gz_weapons.cpp (the mine's time) |
 | gz.cvar.randomrespawn | `randomrespawn` (0): a deathmatch item comes back as another of its kind | missing | 3 |  |
 | gz.cvar.gamerules | `gamerules` (0; 2 is tag) | missing | 2 |  |
-| gz.campaign | the five units in order (the release's `runit2`..`runit5` configs start one), the help computer's lines, the end | missing | 1 | server/q2_campaign.hpp |
+| gz.campaign | the five units in order (the release's `runit2`..`runit5` configs start one), the help computer's lines, the end | done | 1 | the units run off the maps' own level strings (rmine1 → `reu1_` → rware1 → `reu2_` → rhangar1 → `reu3_` → rammo1 → `reu4_` → rboss → `rend` and the victory picture); a new game starts on the map the pack's default.cfg names (classic/content/load_order.hpp `new_game_map`: rmine1), co-op's victory loops back there (net/q2_game.cpp); the unit configs' `give` lines take the pack's names; rboss hands out the A-M bomb selected (server/q2_gz_rules.cpp `gz_entered`); tests/shooters_edge_q2_gz_test.cpp |
 | gz.movies | the pack's movies (`rintro`, `reu1_`..`reu4_`, `rend`, the logo) | verify | 2 | client/cinematic.hpp |
 | gz.hud | the pack's icons on the HUD and in the inventory (`w_chainfist`, `w_etf_rifle`, `w_proxlaunch`, `w_disintegrator`, `w_heatbeam`, `w_tesla`, `p_double`, `p_ir`, the spheres, `p_doppleganger`, `p_nuke`, `a_flechettes`, `a_prox`, `a_tesla`, `a_disruptor`, `i_tagtoken`) | done | 2 | the rules' item table names each icon (server/q2_bar.cpp); the pack's pics/ hold them all and win by name over the base's (tests/shooters_edge_game_adapter_test.cpp) |
 | gz.menu | the pack's own menu pictures (the main menu, banners, the cursor), console background, `conchars_blue` | verify | 3 | pictures by name over the base pack's |
@@ -428,7 +428,7 @@ count: done 29, verify 4, missing 49 (19 / 26 / 4), not-taken 0
 | gz.te.flechette | a flechette's hit (55) | missing | 1 | `te.flechette` |
 | gz.dm | the fourteen deathmatch maps played by bots | missing | 2 |  |
 | gz.coop | co-op through the units (`info_player_coop_lava`) | missing | 2 |  |
-| gz.save | saves of the pack's campaign | missing | 2 | server/q2_save.hpp |
+| gz.save | saves of the pack's campaign | done | 2 | server/q2_save.cpp chunk version 13: the mines', tesla's and disruptor's stages, double damage, the IR goggles, the chainfist's swing; tests/shooters_edge_q2_gz_test.cpp loads a game with mines in flight and stuck and plays it on bit for bit; `se-q2-save --mod=rogue` on rmine1 and rlava1 |
 | gz.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
 | gz.remix | the pack's weapons and items as roles for remix | missing | 3 |  |
 

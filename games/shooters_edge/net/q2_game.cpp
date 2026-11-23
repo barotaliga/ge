@@ -27,6 +27,7 @@
 #include "brush/read.hpp"
 #include "classic/content/downloads.hpp"
 #include "classic/content/fs_words.hpp"
+#include "classic/content/load_order.hpp"
 #include "classic/content/web_downloads.hpp"
 #include "classic/content/web_serve.hpp"
 #include "classicenhance/profile.hpp"
@@ -431,6 +432,9 @@ struct Game {
   std::vector<std::string> shows;
   std::string show_map, show_next;
   bool show_taken = false, show_new_game = false, cinematics = true;
+  // The map a new game starts on: the game folder's default.cfg's `newgame` (a mission pack's own
+  // first map), else base1.
+  std::string first_map = "base1";
   bool drop_told = false;  // the stopped map's error handed to the core (drop_error)
   // What the console printed and was handed on (console_lines): the rules' lines told so far.
   const sv::RulesCommon* told_rules = nullptr;
@@ -493,6 +497,13 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->root = c.root;
   g->folder = mod.empty() ? base : mod;
   if (!cl::open_game_dir(c.root, g->folder, g->files, error, *q2)) return nullptr;
+  {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> cfg = cl::find_file(g->files, "default.cfg", store);
+    const std::string own = ge::classic::content::new_game_map(
+        std::string_view(reinterpret_cast<const char*>(cfg.data()), cfg.size()));
+    if (!own.empty()) g->first_map = own;
+  }
   const std::string name = c.map.empty() ? std::string("q2dm1") : c.map;
   if (const auto v = c.rules.find("sv_vispatch"); v != c.rules.end() && !v->second.empty())
     g->vis_patch = v->second != "0";
@@ -780,10 +791,10 @@ void* create(const gs::ServerConfig& c, std::string& error) {
 
 // A SHOW (a `.cin` or `.pcx` an exit names before its map, or the game's end): on the network the
 // level changes to the file (no world: the server data names it, Q2WireOptions::show) and the
-// clients play it. Its `nextserver` setting is `gamemap "!<what follows>"`, or `gamemap "!*base1"`
-// after co-op's victory picture, or empty. A client's `nextserver <count>` is taken once a show,
-// with the level's count, on a movie or (in co-op) a picture: the setting run and emptied, an
-// empty one stopping the server (`killserver`).
+// clients play it. Its `nextserver` setting is `gamemap "!<what follows>"`, or `gamemap "!*<first
+// map>"` after co-op's victory picture (the game's `newgame` map, `first_map`), or empty. A
+// client's `nextserver <count>` is taken once a show, with the level's count, on a movie or (in
+// co-op) a picture: the setting run and emptied, an empty one stopping the server (`killserver`).
 bool is_movie(const std::string& f) { return f.ends_with(".cin"); }
 
 bool coop_on(const Game& g) {
@@ -799,7 +810,7 @@ void start_show(Game& g) {
   if (!g.show_map.empty()) rest += (rest.empty() ? "" : "+") + g.show_map;
   const bool coop = coop_on(g);
   g.show_new_game = rest.empty() && coop && show == "victory.pcx";
-  g.show_next = g.show_new_game ? "gamemap \"!*base1\""
+  g.show_next = g.show_new_game ? "gamemap \"!*" + g.first_map + "\""
                 : rest.empty()  ? std::string()
                                 : "gamemap \"!" + rest + "\"";
   g.rules->cvars.set("nextserver", g.show_next, ge::console::Source::local, true);
@@ -856,7 +867,7 @@ void next_server(Game& g, int32_t count) {
     start_show(g);
   } else {
     g.cfg.wire.show.clear();
-    (*g.rules).pending_map = g.show_new_game ? "base1" : g.show_map;
+    (*g.rules).pending_map = g.show_new_game ? g.first_map : g.show_map;
     if (g.show_new_game) (*g.rules).pending_change = sv::MapChange::new_game;
   }
 }

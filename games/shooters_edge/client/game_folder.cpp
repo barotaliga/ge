@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "classic/content/fs_words.hpp"
+#include "classic/content/load_order.hpp"
 #include "core/output.hpp"
 #include "shooters_edge/client/installs.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
@@ -358,6 +359,14 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
       find_file(files, ge::classicenhance::asset_path(content.maps, out.start_map), store).empty()
           ? std::string(game.fallback_map)
           : out.start_map;
+  // A game whose own default.cfg names its `newgame` map (Quake II's, a mission pack's over it)
+  // starts there, when the map is on the search path.
+  const std::span<const uint8_t> defaults = find_file(files, "default.cfg", store);
+  if (const std::string own = ge::classic::content::new_game_map(
+          std::string_view(reinterpret_cast<const char*>(defaults.data()), defaults.size()));
+      !own.empty() &&
+      !find_file(files, ge::classicenhance::asset_path(content.maps, own), store).empty())
+    out.first_map = own;
   return true;
 }
 

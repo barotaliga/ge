@@ -32,14 +32,16 @@ namespace save = ge::save;
 constexpr uint32_t kGame = save::tag("SQGM");
 constexpr uint32_t kLevel = save::tag("SQLV");
 constexpr uint32_t kPlayers = save::tag("SQPL");
-constexpr uint16_t kChunkVersion = 12;  // 2: a monster's duck; 3: a coop weapon taken; 4: a
+constexpr uint16_t kChunkVersion = 13;  // 2: a monster's duck; 3: a coop weapon taken; 4: a
                                         // dropped silencer's shots; 5: a corpse's box; 6: a
                                         // monster's liquid; 7: the trail, a monster's hunt and
                                         // calls; 8: a soldier's run-and-shoot and head shot; 9:
                                         // coop power cubes, the Makron's torso; 10: a weapon
                                         // dropped bare; 11: the gun's lag, a lost
                                         // combat point; 12: the item and ammo tables by length
-                                        // (a pack's rows), dual fire, the trap's think
+                                        // (a pack's rows), dual fire, the trap's think; 13:
+                                        // Ground Zero's mines, tesla and disruptor stages,
+                                        // double damage, the IR goggles, the chainfist's swing
 constexpr const char* kSaveGameName = "shooters_edge_q2";  // the file's game (Meta::game)
 constexpr uint32_t kSaveVersion = 1;
 constexpr int kSettleFrames = 2;   // a map's frames before the kept state is read over it
@@ -220,6 +222,10 @@ void missile(Io& io, Q2Missile& m) {
   io.since(12, m.feed, 0);
   io.since(12, m.prey_mass, 0);
   io.since(12, m.prey_gekk, false);
+  io.since(13, m.stage, 0);
+  io.since(13, m.multiplier, 1);
+  io.since(13, m.stage_at, 0.0);
+  if (io.version() >= 13) v3(io, m.stuck);
 }
 
 template <class Io>
@@ -421,6 +427,9 @@ void player(Io& io, Q2Player& p) {
   io(p.killer);
   for (double* d : {&p.quad_until, &p.invulnerable_until, &p.breather_until, &p.suit_until}) io(*d);
   io.since(12, p.dual_fire_until, 0.0);
+  io.since(13, p.double_until, 0.0);
+  io.since(13, p.ir_until, 0.0);
+  io.since(13, h.swing, 0);
   io(p.silencer_shots);
   io(p.power_on);
   io(p.air_until);

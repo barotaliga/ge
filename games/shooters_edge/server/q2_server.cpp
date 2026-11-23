@@ -377,6 +377,7 @@ void spawn_player(Q2Server& s, int slot, bool respawn) {
   fight_spawn(s, slot);
   pose_spawn(s, slot);
   campaign_body(s, slot, respawn);
+  gz_entered(s, slot);  // the pack's last level hands out the A-M bomb
   if (respawn && coop(s))
     for (int i = 0; i < kSqItemCount; i++)
       if (kSqItems[i].kind == SqKind::key) p.body.counts[i] = died.counts[i];
@@ -989,6 +990,7 @@ void fill_rows(Q2Server& s) {
     if (m.item < 0) continue;
     sh::WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
     e.free = m.gone || m.hidden;
+    e.origin = m.origin;  // where it lies: dropped to the floor 0.2 s in, as a loaded level has it
     // Its glow, once: on the tenth it showed (a frame between tenths shows none).
     e.event = !e.free && s.tenth && m.back_frame == s.frame_number ? kSqItemBackEvent : 0;
     // Taken in deathmatch: how long until it shows again, and the model it will show.

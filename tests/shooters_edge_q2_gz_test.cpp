@@ -14,9 +14,12 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "classic/content/load_order.hpp"
+#include "shooters_edge/server/q2_bar.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_fight_kit.hpp"
 #include "shooters_edge/server/q2_gz.hpp"
+#include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace {
@@ -245,6 +248,90 @@ TEST(a_dry_body_turns_to_ground_zero_s_order) {
   CHECK(sv::sq_best_weapon(b) == int(SqWeapon::plasma_beam));
   b.ammo[int(sv::SqAmmo::cells)] = 1;  // not enough for a frame
   CHECK(sv::sq_best_weapon(b) == int(SqWeapon::etf_rifle));
+}
+
+// A unit's start config (runit2.cfg: `give etf rifle`, `give prox 15`, ...) takes the pack's
+// item names in single player.
+TEST(a_unit_s_start_config_gives_the_pack_s_weapons_by_name) {
+  auto a = facing(200, "0");
+  a->r.console("cheats 1");
+  for (const char* line : {"give etf rifle", "give prox launcher", "give plasma beam",
+                           "give chainfist", "give flechettes 125", "give prox 15"})
+    a->r.client_command(0, line);
+  const sv::SqBody& b = a->p(0).body;
+  for (const char* item :
+       {"weapon_etf_rifle", "weapon_proxlauncher", "weapon_plasmabeam", "weapon_chainfist"})
+    CHECK_MSG(b.counts[sv::sq_item(item, sv::Q2Pack::ground_zero)] == 1, item);
+  CHECK(b.ammo[int(sv::SqAmmo::flechettes)] == 125);
+  CHECK(b.ammo[int(sv::SqAmmo::prox)] == 15);
+}
+
+// The pack's own default.cfg names its first map, as the base game's does.
+TEST(the_new_game_starts_on_the_map_the_game_s_default_cfg_names) {
+  namespace cc = ge::classic::content;
+  CHECK(cc::new_game_map("// newgame command\nalias   newgame \" killserver ; maxclients 1 ; "
+                         "deathmatch 0 ; map *rintro.cin+rmine1\"\n") == "rmine1");
+  CHECK(cc::new_game_map("alias newgame \"map *logo.cin+xin.cin+xswamp\"") == "xswamp");
+  CHECK(cc::new_game_map("alias newgame \"map *ntro.cin+base1$start\"\r\n") == "base1");
+  CHECK(cc::new_game_map("alias newgame \"map victory.pcx\"").empty());
+  CHECK(cc::new_game_map("bind 1 \"use Blaster\"\nmap base2\n").empty());
+}
+
+// A game of the pack saved with mines in flight and stuck, a tesla thrown and double damage
+// running, loaded into a fresh server of the pack, plays on as the game never saved.
+TEST(a_ground_zero_game_saved_and_loaded_plays_on_as_the_game_never_saved) {
+  auto a = facing(900, "0");
+  give(*a, SqWeapon::prox_launcher, 5);
+  run(*a, 2, 1);  // a mine down the hall
+  run(*a, 120);   // landed and opening
+  run(*a, 2, 1);  // another, in flight at the save
+  a->p(0).double_until = a->s().level_time + 20;
+  std::vector<uint8_t> file;
+  std::string error;
+  CHECK_MSG(sv::q2_save(a->s(), file, error), error);
+  auto b = std::make_unique<Arena>();
+  sv::Q2ServerOptions o;
+  o.pack = sv::Q2Pack::ground_zero;
+  b->r = sv::q2_runner(sv::make_q2_server(o));
+  sv::MapSpec map;
+  map.name = "hall";
+  map.brushes = hall();
+  CHECK_MSG(sv::q2_load(b->r, map, file, "test", error), error);
+  b->sequence = a->sequence;
+  CHECK_MSG(sv::q2_digest(b->s()) == sv::q2_digest(a->s()), "the loaded game differs");
+  for (int k = 0; k < 400; k++) {
+    const uint8_t buttons = k % 60 < 2 ? 1 : 0;  // a mine a little under a second apart
+    run(*a, 1, buttons);
+    run(*b, 1, buttons);
+    if (sv::q2_digest(b->s()) != sv::q2_digest(a->s())) {
+      CHECK_MSG(false, "the loaded game went its own way at tick " + std::to_string(k));
+      break;
+    }
+  }
+  CHECK(b->p(0).double_until > 0);
+}
+
+// The pack's last level hands every player the A-M bomb, selected, outside deathmatch.
+TEST(the_last_level_hands_out_the_am_bomb_selected) {
+  for (const char* dm : {"0", "1"}) {
+    auto a = std::make_unique<Arena>();
+    sv::Q2ServerOptions o;
+    o.pack = sv::Q2Pack::ground_zero;
+    a->r = sv::q2_runner(sv::make_q2_server(o));
+    a->r.console(std::string("deathmatch ") + dm);
+    sv::MapSpec map;
+    map.name = "rboss";
+    map.brushes = hall();
+    std::string error;
+    CHECK_MSG(a->r.start(map, error), error);
+    a->r.connect(0, "Ana", false, false);
+    run(*a, 20);
+    const int bomb = sv::sq_item("ammo_nuke", sv::Q2Pack::ground_zero);
+    const sv::SqBody& b = a->p(0).body;
+    const bool single = dm[0] == '0';
+    CHECK_MSG((b.counts[bomb] == 1) == single, dm);
+    CHECK((b.selected == sv::sq_item_number(bomb, sv::Q2Pack::ground_zero)) == single);
+  }
 }
 
 }  // namespace

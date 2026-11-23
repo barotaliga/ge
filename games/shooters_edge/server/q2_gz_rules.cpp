@@ -1,13 +1,17 @@
 // Ground Zero's settings and map rules (q2_gz.hpp): its own cvars, the class names it spawns as
-// its own, the items its dmflags and `g_disruptor` leave off the map.
+// its own, the items its dmflags and `g_disruptor` leave off the map, the A-M bomb handed out on
+// its last level.
 //
 // ge:summary Ground Zero's cvars, class names spawned as its own, items its dmflags leave out
 // ge:keywords q2 ground-zero cvars strong-mines g-disruptor dmflags
-// ge:keywords no-mines no-nukes no-spheres classname-alias
+// ge:keywords no-mines no-nukes no-spheres classname-alias rboss gz_entered
 // ge:skill shooter
 // ge:test tests/shooters_edge_q2_gz_test.cpp
+#include <algorithm>
 #include <string_view>
 
+#include "shooters_edge/server/q2_bar.hpp"
+#include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -55,6 +59,17 @@ bool gz_left_out(const Q2Server& s, int item) {
   const bool sphere = name.starts_with("item_sphere_");
   return ((flags & 131072) != 0 && (name == "ammo_prox" || name == "ammo_tesla")) ||
          ((flags & 524288) != 0 && name == "ammo_nuke") || ((flags & 1048576) != 0 && sphere);
+}
+
+void gz_entered(Q2Server& s, int slot) {
+  if (s.opt.pack != Q2Pack::ground_zero || s.cvars.find("deathmatch")->on() ||
+      !q2_same_name(s.map_name, "rboss"))
+    return;
+  const int bomb = sq_item("ammo_nuke", Q2Pack::ground_zero);
+  if (bomb < 0) return;
+  SqBody& b = s.players[slot].body;
+  b.counts[bomb] = std::max(b.counts[bomb], 1);
+  b.selected = sq_item_number(bomb, Q2Pack::ground_zero);
 }
 
 }  // namespace shooters_edge::server

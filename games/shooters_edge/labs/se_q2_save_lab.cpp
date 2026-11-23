@@ -15,7 +15,9 @@
 // Without `--game` the maps are our own: two floored halls of brushes in a pack, with items and a
 // monster, so CI needs no game data and the counts are a digest. With `--game=<folder>` (the
 // folder holding Quake II's base folder) the maps come from its packs (`--maps=<first>,<second>`,
-// the full game's first two by default), for PRIVATE pictures only.
+// the full game's first two by default), for PRIVATE pictures only; `--mod=<folder>` plays a
+// mission pack there, its rules and its own first map (`--mod=rogue`: Ground Zero's rmine1, then
+// rlava1).
 //
 // ge:summary Lab: Quake II's levels kept within a unit, a save loaded bit for bit, the autosave
 // ge:keywords lab se-q2-save q2 save load autosave revisit kept-level listen_load_q2
@@ -31,6 +33,7 @@
 #include "brush/map.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
+#include "classic/content/load_order.hpp"
 #include "classic/q2_move.hpp"
 #include "classicenhance/profile.hpp"
 #include "core/libm/libm.hpp"
@@ -44,6 +47,8 @@
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_map.hpp"
+#include "shooters_edge/server/q2_pack.hpp"
 #include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "vfs/pak.hpp"
@@ -220,7 +225,12 @@ Run play(const cl::SearchPath& files, const std::string& first, const std::strin
     if (f % 8 == 0) out.walk.push_back(l.server->sv.edicts[1].origin);
     if (!file.empty()) digests.push_back(sv::q2_digest(*sv::q2_of(*l.rules)));
 
-    if (f == frames / 2 && !cl::listen_save(l, file, error)) return out;
+    if (f == frames / 2) {
+      if (!cl::listen_save(l, file, error)) return out;
+      // A load re-arms each unfired cross-level target to check its bits `delay` from now
+      // (server/q2_save.cpp's q2_enter): the game played on does the same, so both run alike.
+      sv::map_revisit(*sv::q2_of(*l.rules));
+    }
   }
   // The save loaded into a new window and played on with the same moves.
   {
@@ -342,13 +352,32 @@ void run(gl::Lab& lab) {
       return;
     }
   } else {
-    if (!cl::open_game_dir(lab.arg("game"), std::string(content.base_dir), files, error, content)) {
+    const std::string mod = lab.arg("mod");
+    if (!cl::open_game_dir(lab.arg("game"), mod.empty() ? std::string(content.base_dir) : mod,
+                           files, error, content)) {
       lab.fail(error, "Pass --game=<the folder holding " + std::string(content.base_dir) +
-                          "/pak0.pak>. Skill: shooter.");
+                          "/pak0.pak> (and --mod=<a pack's folder beside it>). Skill: shooter.");
       return;
     }
     first = "base1";
     second = "base2";
+    // A mission pack: its own first map (its default.cfg's `newgame`) and the one it leads to.
+    switch (sv::q2_pack_of_folder(mod)) {
+      case sv::Q2Pack::ground_zero:
+        second = "rlava1";
+        break;
+      case sv::Q2Pack::reckoning:
+        second = "xsewer1";
+        break;
+      case sv::Q2Pack::base:
+        break;
+    }
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> cfg = cl::find_file(files, "default.cfg", store);
+    if (const std::string named = ge::classic::content::new_game_map(
+            std::string_view(reinterpret_cast<const char*>(cfg.data()), cfg.size()));
+        !named.empty())
+      first = named;
   }
   if (const std::string& asked = lab.arg("maps"); !asked.empty()) {
     const size_t comma = asked.find(',');
@@ -446,7 +475,11 @@ const gl::LabSpec kSpec{
     "a new window play on bit for bit as the game never stopped, does the autosave bring the "
     "player in with what he carried, and does a death's button ask for the load menu?",
     {{"game", "", "the folder holding Quake II's base folder (none: two fixture halls)"},
-     {"maps", "", "the two maps, first,second (default hall,next; base1,base2 with --game)"},
+     {"mod", "",
+      "a mission pack's folder beside the base folder (with --game): its rules, its maps"},
+     {"maps", "",
+      "the two maps, first,second (default hall,next; base1,base2 with --game; a "
+      "pack's first map and the next with --mod)"},
      {"frames", "600", "the player's frames walking the first map (saved half way)"}},
     "",
     run,

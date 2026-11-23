@@ -57,6 +57,10 @@ std::string_view gz_classname(std::string_view classname);
 // the spheres (1048576).
 bool gz_left_out(const Q2Server& s, int item);
 
+// A player coming into the pack's last level (`rboss`) outside deathmatch: the A-M bomb his, and
+// selected in the inventory, for the boss.
+void gz_entered(Q2Server& s, int slot);
+
 // A shot of Ground Zero's weapon in `slot`'s hand (q2_fight.cpp's fire hands it over).
 void gz_fire(Q2Server& s, int slot, int shots);
 // A tenth of shot `m` when it is one of Ground Zero's (its flight, a mine's stages, the bomb's
