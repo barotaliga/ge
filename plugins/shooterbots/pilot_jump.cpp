@@ -73,6 +73,10 @@ bool jump_flies(const Pilot& p, const PilotSense& s, int msec, Vec3f T) {
 // A jump missed (landed short, or no nearer its start): the second miss of the same one is not a
 // jump this player makes, and it is never planned again.
 void missed_jump(Pilot& p, NavExtraLink j) {
+  // An updraft's jump is never missed: the draft lifts whoever is in it, and where it sets him down
+  // (off the landing node, by the tube's top) is no fault of the jump. Cut, it shut off e3m5's
+  // upper floors from below for the rest of the map.
+  if (const NavLink* l = link_of(*p.g, j.from, j.to); l != nullptr && l->updraft) return;
   int times = 0;
   for (const NavExtraLink& e : p.short_jumps) times += e.from == j.from && e.to == j.to ? 1 : 0;
   if (p.short_jumps.size() < 256) p.short_jumps.push_back(j);

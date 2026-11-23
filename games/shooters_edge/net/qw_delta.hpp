@@ -32,12 +32,19 @@
 // share x 255), extended form only. The extended form is the one agreed under scale or
 // transparency. A player's tint never travels here.
 //
+// WEAPON PREDICTION (mvd bit 0x80 agreed): every weapon frame byte is followed by a byte, 0 for
+// nothing more; nonzero, the weapon's state follows: impulse (byte), the weapon's item bit
+// (short), the weapon clock, the refire and the next think (floats on that clock; next think 0
+// none), the think step (byte), the ping in ms (byte), flags (byte: 1 midair, 2 coilgun, 255
+// prediction off) and the four ammunitions (bytes). A server sends the state on every playerinfo
+// to the player himself, with the weapon frame even when it is 0; a spectator gets the 0 byte.
+//
 // ge:summary Entity and player states as the QuakeWorld protocol deltas them, lists and records
 // ge:keywords packet-entities deltapacketentities entity-delta baseline remove playerinfo
 // ge:keywords player-state pflags u-origin u-morebits entity-number model-double transparency
 // ge:keywords entity-scale colour-mod u-yetmore
 // ge:keywords write_entity_delta read_entity_record write_packet_entities read_packet_entities
-// ge:keywords write_playerinfo read_playerinfo grid_entity
+// ge:keywords write_playerinfo read_playerinfo grid_entity weapon-prediction weapon-state
 // ge:skill net shooter
 // ge:test tests/shooters_edge_qw_messages_test.cpp
 #pragma once
@@ -45,6 +52,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "classic/weapon_predict.hpp"
 #include "shooter/pmove.hpp"
 #include "shooters_edge/net/qw_ext.hpp"
 
@@ -131,6 +139,9 @@ struct PlayerState {
   int skin = 0, effects = 0;
   bool has_weaponframe = false;
   int weaponframe = 0;
+  // Under weapon prediction, after the weapon frame (`known`: the state follows; its `frame` is
+  // not sent, the weapon frame is).
+  ge::classic::WeaponState weapon;
   bool dead = false, gib = false;
   PmType pm = PmType::normal;
   bool onground = false, solid = false;  // sent under the z set's on-ground and solid bits

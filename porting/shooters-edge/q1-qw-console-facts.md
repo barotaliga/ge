@@ -1064,3 +1064,387 @@ Multiplayer game options page (reached by starting a new network game) **[read]*
   client, separate from the maps. Whether each one is the same text as that map's worldspawn
   message cannot be told from the source alone, because the maps are not in it. **[open]**
   (Measuring it means reading each map's worldspawn message from the game data.)
+
+### 28. The quit box, episode and level lists, QuakeWorld's status bar modes
+
+Read from the same release (Quake for Windows, DOS and Unix; GLQuake; the QuakeWorld client). Markers as above: **[read]**, **[derived]**, **[open]**; nothing was measured. Menu coordinates are in the 320 x 200 menu space (x shifted right by half of the screen width minus 320, y not shifted). "Gold text" is the menu's high-bit character set, "white text" the plain one. H and W are the screen (or GL virtual screen) height and width in pixels. The episode and level rows' keys and counts are in § 27.7, `cl_hudswap` in § 23.
+
+**The quit box**
+
+#### 28.1 What opens it and what is drawn
+
+What opens it **[read]**:
+- Enter on the fifth main menu row (Quit).
+- The console command `menu_quit` (both games), from anywhere.
+- Quake's `quit` command when keys are not going to the console (a key bound to `quit` while
+  playing or while a menu is up). Typed at the console, or on a dedicated server, `quit` exits
+  at once with no box.
+- QuakeWorld's `quit` command always opens the box, even typed at the console.
+- Opening it while it is already open does nothing. Opening it plays `misc/menu2.wav` once,
+  after the first frame is drawn.
+
+What is drawn depends on the build, not on the game data **[read]**:
+- **Quake built for Windows (WinQuake and GLQuake):** a credits box, never a joke. A text box
+  38 characters wide and 23 lines high at x 0, y 0, i.e. 320 x 200 pixels, the whole menu
+  space **[read]/[derived for the pixel size]**. Its lines, all at x 16, the y given first,
+  white (W) or gold (G):
+  - y 12, W: "  Quake version 1.09 by id Software"
+  - y 28, W: "Programming        Art "
+  - y 36, G: " John Carmack       Adrian Carmack"
+  - y 44, G: " Michael Abrash     Kevin Cloud"
+  - y 52, G: " John Cash          Paul Steed"
+  - y 60, G: " Dave 'Zoid' Kirsch"
+  - y 68, W: "Design             Biz"
+  - y 76, G: " John Romero        Jay Wilbur"
+  - y 84, G: " Sandy Petersen     Mike Wilson"
+  - y 92, G: " American McGee     Donna Jackson"
+  - y 100, G: " Tim Willits        Todd Hollenshead"
+  - y 108, W: "Support            Projects"
+  - y 116, G: " Barrett Alexander  Shawn Green"
+  - y 124, W: "Sound Effects"
+  - y 132, G: " Trent Reznor and Nine Inch Nails"
+  - y 140, W: "Quake is a trademark of Id Software,"
+  - y 148, W: "inc., (c)1996 Id Software, inc. All"
+  - y 156, W: "rights reserved. NIN logo is a"
+  - y 164, W: "registered trademark licensed to"
+  - y 172, W: "Nothing Interactive, Inc. All rights"
+  - y 180, W: "reserved. Press y to exit"
+  - Each of these strings carries one trailing line-feed (two on the line at y 132), which the menu's text drawer does not treat specially: the character set's glyph for code 10 (or 138 on a gold line) is drawn in the cell after the text (two such cells on the y 132 line) **[read]**. What that glyph looks like is in the character picture, not the source **[open]**.
+- **Quake built for any other system (DOS, Linux, other Unix):** a joke box. A text box 24
+  characters wide and 4 lines high at x 56, y 76: 208 x 48 pixels, covering x 56 to 263 and y 76
+  to 123 **[read]/[derived for the pixel size]**. The message's four lines are 24 characters
+  each, gold text, at x 64 and y 84, 92, 100 and 108 **[read]**. There are 8 messages; one is
+  picked at random (uniform over 8, from the C library's random numbers) each time the box opens,
+  and kept while it stays open **[read]**. The messages, line by line (spaces inside the 24
+  columns as the player sees them; a blank fourth line is drawn as spaces):
+  1. "  Are you gonna quit    " / "  this game just like   " / "   everything else?     " / blank
+  2. " Milord, methinks that  " / "   thou art a lowly     " / " quitter. Is this true? " / blank
+  3. " Do I need to bust your " / "  face open for trying  " / "        to quit?        " / blank
+  4. " Man, I oughta smack you" / "   for trying to quit!  " / "     Press Y to get     " / "      smacked out.      "
+  5. " Press Y to quit like a " / "   big loser in life.   " / "  Press N to stay proud " / "    and successful!     "
+  6. "   If you press Y to    " / "  quit, I will summon   " / "  Satan all over your   " / "      hard drive!       "
+  7. "  Um, Asmodeus dislikes " / " his children trying to " / " quit. Press Y to return" / "   to your Tinkertoys.  "
+  8. "  If you quit now, I'll " / "  throw a blanket-party " / "   for you next time!   " / blank
+- **QuakeWorld (every build):** a credits box, never a joke (the joke list is present but
+  unused). Text box 38 x 23 at x 0, y 0 (320 x 200 pixels); 22 lines at x 16, y 12 then every
+  8 pixels to y 180, white (W) or gold (G) **[read]**:
+  - W "            QuakeWorld"
+  - G "    version 2.40 by id Software"
+  - W "Programming"
+  - G " John Carmack    Michael Abrash"
+  - G " John Cash       Christian Antkow"
+  - W "Additional Programming"
+  - G " Dave 'Zoid' Kirsch"
+  - G " Jack 'morbid' Mathews"
+  - W "Id Software is not responsible for"
+  - W "providing technical support for"
+  - W "QUAKEWORLD(tm). (c)1996 Id Software,"
+  - W "Inc.  All Rights Reserved."
+  - W "QUAKEWORLD(tm) is a trademark of Id"
+  - W "Software, Inc."
+  - G "NOTICE: THE COPYRIGHT AND TRADEMARK"
+  - G "NOTICES APPEARING  IN YOUR COPY OF"
+  - G "QUAKE(r) ARE NOT MODIFIED BY THE USE"
+  - G "OF QUAKEWORLD(tm) AND REMAIN IN FULL"
+  - G "FORCE."
+  - W "NIN(r) is a registered trademark"
+  - W "licensed to Nothing Interactive, Inc."
+  - W "All rights reserved. Press y to exit"
+  - The version number in the second line is the client's version constant, 2.40 in this release **[read]**. These lines carry no trailing line-feed **[read]**.
+
+The text box's pictures **[read]**: corners `gfx/box_tl.lmp`, `gfx/box_tr.lmp`,
+`gfx/box_bl.lmp`, `gfx/box_br.lmp`; left and right edges `gfx/box_ml.lmp`, `gfx/box_mr.lmp`
+(one per line, 8 pixels high); top and bottom edges `gfx/box_tm.lmp`, `gfx/box_bm.lmp`; the
+inside `gfx/box_mm.lmp`, except the second line of the inside, which uses `gfx/box_mm2.lmp`.
+The middle is laid in 16-pixel columns, one per two characters of width, between 8-pixel left
+and right edges; the box is lines plus 2 rows of 8 pixels high **[read]/[derived]**.
+
+What is behind it **[read]**: if the box was opened while a menu page was up, that page is
+drawn first and the box over it; if it was opened from play, it is drawn over the game view with
+no page behind.
+
+#### 28.2 The keys
+
+**[read]** for both games:
+- Y or y: yes (below).
+- N, n or Escape: no. If the box was opened from a menu page, that same page comes back (with
+  its cursor where it was) and `misc/menu2.wav` plays. If it was opened from play or from the
+  console, the box closes and keys go to the game (not back to the console); no sound.
+- Any other key: ignored, the box stays.
+- No sound is played on yes.
+
+#### 28.3 On yes
+
+**[read]**:
+- Quake: keys are first given to the console (so that the quit command does not reopen the
+  box), then `quit` runs as typed at the console: the client disconnects, a local server is shut
+  down as § 7 of part 1 describes, and the system layer exits.
+- QuakeWorld: the client disconnects (its disconnect goes to the server), then the system layer
+  exits.
+- The Windows and Linux builds of both games then exit with nothing more shown. The Linux Quake
+  build holds the text of two end screens but its printing of them is switched off.
+- Quake's DOS build shows an end screen: before shutting down it loads an 80 x 25 text-mode
+  screen image (4000 bytes) from the game data, `end2.bin` when the registered game is detected
+  and `end1.bin` in the shareware game; it writes " v1.09" (the version, 6 characters) into the
+  top row at columns 72 to 77; shuts the engine down; copies the image to the text screen; puts
+  the text cursor at row 22, column 0; and exits at once. Nothing waits for a key: the screen
+  stays on the DOS prompt after the program ends. If the file is missing it prints "couldn't load
+  endscreen." instead. The screens' own text is in the game data, not the source **[open]**.
+
+#### 28.4 Differences between the games
+
+**[read]**:
+- Quake on Windows and QuakeWorld show a credits box; Quake elsewhere shows a random joke.
+- Quake's `quit` at the console (or on a dedicated server) exits at once; QuakeWorld's `quit`
+  always asks.
+- Yes: Quake shuts its local server down first; QuakeWorld only disconnects.
+- Both open the box whether or not a game is in progress; neither has a case without the box
+  except Quake's console and dedicated `quit`.
+- Both Windows builds also answer the window's close button with a system dialog titled
+  "Confirm Exit" saying "Are you sure you want to quit?" with Yes and No buttons; Yes exits at
+  once, without the quit box.
+
+**Episodes and levels (Quake)**
+
+#### 28.5 The lists
+
+Each level as map file name, then the long name the menu shows **[read]**.
+
+Base game:
+1. "Welcome to Quake": start "Entrance"
+2. "Doomed Dimension": e1m1 "Slipgate Complex", e1m2 "Castle of the Damned", e1m3 "The
+   Necropolis", e1m4 "The Grisly Grotto", e1m5 "Gloom Keep", e1m6 "The Door To Chthon", e1m7
+   "The House of Chthon", e1m8 "Ziggurat Vertigo"
+3. "Realm of Black Magic": e2m1 "The Installation", e2m2 "Ogre Citadel", e2m3 "Crypt of
+   Decay", e2m4 "The Ebon Fortress", e2m5 "The Wizard's Manse", e2m6 "The Dismal Oubliette",
+   e2m7 "Underearth"
+4. "Netherworld": e3m1 "Termination Central", e3m2 "The Vaults of Zin", e3m3 "The Tomb of
+   Terror", e3m4 "Satan's Dark Delight", e3m5 "Wind Tunnels", e3m6 "Chambers of Torment", e3m7
+   "The Haunted Halls"
+5. "The Elder World": e4m1 "The Sewage System", e4m2 "The Tower of Despair", e4m3 "The Elder
+   God Shrine", e4m4 "The Palace of Hate", e4m5 "Hell's Atrium", e4m6 "The Pain Maze", e4m7
+   "Azure Agony", e4m8 "The Nameless City"
+6. "Final Level": end "Shub-Niggurath's Pit"
+7. "Deathmatch Arena": dm1 "Place of Two Deaths", dm2 "Claustrophobopolis", dm3 "The Abandoned
+   Base", dm4 "The Bad Place", dm5 "The Cistern", dm6 "The Dark Zone"
+
+With `-hipnotic`:
+1. "Scourge of Armagon": start "Command HQ"
+2. "Fortress of the Dead": hip1m1 "The Pumping Station", hip1m2 "Storage Facility", hip1m3
+   "The Lost Mine", hip1m4 "Research Facility", hip1m5 "Military Complex"
+3. "Dominion of Darkness": hip2m1 "Ancient Realms", hip2m2 "The Black Cathedral", hip2m3 "The
+   Catacombs", hip2m4 "The Crypt", hip2m5 "Mortum's Keep", hip2m6 "The Gremlin's Domain"
+4. "The Rift": hip3m1 "Tur Torment", hip3m2 "Pandemonium", hip3m3 "Limbo", hip3m4 "The
+   Gauntlet"
+5. "Final Level": hipend "Armagon's Lair"
+6. "Deathmatch Arena": hipdm1 "The Edge of Oblivion"
+
+With `-rogue`:
+1. "Introduction": start "Split Decision"
+2. "Hell's Fortress": r1m1 "Deviant's Domain", r1m2 "Dread Portal", r1m3 "Judgement Call",
+   r1m4 "Cave of Death", r1m5 "Towers of Wrath", r1m6 "Temple of Pain", r1m7 "Tomb of the
+   Overlord"
+3. "Corridors of Time": r2m1 "Tempus Fugit", r2m2 "Elemental Fury I", r2m3 "Elemental Fury
+   II", r2m4 "Curse of Osiris", r2m5 "Wizard's Keep", r2m6 "Blood Sacrifice", r2m7 "Last
+   Bastion", r2m8 "Source of Evil"
+4. "Deathmatch Arena": ctf1 "Division of Change"
+
+#### 28.6 The page's other rows
+
+Page furniture **[read]**: `gfx/qplaque.lmp` at x 16, y 4; the title `gfx/p_multi.lmp` centred
+at y 4. The rows' labels are gold text drawn from x 0, each label 17 characters with leading
+spaces, so every label ends in the same cell, x 128 to 135 (right-aligned) **[read]/[derived]**. Values
+are gold text at x 160. The cursor is the blinking arrow (character 12, then 13, swapping every
+0.25 s) at x 144 on the row's y.
+
+The nine rows, label, cursor y, value **[read]**:
+1. (no label) y 40: "begin game" at x 160, y 40, inside a text box 10 wide and 1 line at x
+   152, y 32. Left and right do nothing on it (no sound); Enter starts the game (§ 27.7).
+2. "Max players" y 56: the number, as a plain integer. Left/right step by 1. Lowest 2 (no
+   wrap). Highest the server's slot limit (no wrap); trying to go above it holds the limit and
+   shows, for 5 seconds, a text box 24 x 4 at x 56, y 138 with gold lines at x 64, y 146, 154,
+   162, 170: "  More than 4 players   ", " requires using command ", "line parameters; please ",
+   "   see techinfo.txt.    ". The limit is the count given after `-listen` or `-dedicated`
+   (8 when either is the last word of the command line; capped at 16), but never below 4; with
+   neither option it is 4. On first entry the value starts at the server's current player count,
+   or at the limit when that count is under 2 (so 4 in a plain start); later visits keep it.
+3. "Game Type" y 64: "Cooperative" when `coop` is on, else "Deathmatch". Left, right and Enter
+   all flip it.
+4. "Teamplay" y 72: `teamplay` 1 "No Friendly Fire", 2 "Friendly Fire", anything else "Off".
+   With `-rogue` it also shows 3 "Tag", 4 "Capture the Flag", 5 "One Flag CTF", 6 "Three Team
+   CTF". Steps of 1 over 0 to 2 (0 to 6 with `-rogue`), wrapping both ways. With `-hipnotic`
+   the base words and range apply.
+5. "Skill" y 80: 0 "Easy difficulty", 1 "Normal difficulty", 2 "Hard difficulty", any other
+   value "Nightmare difficulty". Steps of 1 over 0 to 3, wrapping both ways.
+6. "Frag Limit" y 88: 0 "none", else "<n> frags". Steps of 10 over 0 to 100, wrapping (past 100
+   to 0, below 0 to 100).
+7. "Time Limit" y 96: 0 "none", else "<n> minutes". Steps of 5 over 0 to 60, wrapping the same
+   way.
+8. "Episode" y 112 and 9. "Level" y 120: § 27.7.
+
+- No row is hidden **[read]**. The y 104 line is empty (a gap between Time Limit and Episode)
+  **[read]**. Values set outside the steps (from the console) are shown as they are and stepped
+  from there; the wrap tests look only at the ends **[derived]**.
+- Sounds: up/down `misc/menu1.wav` (wrapping), left/right `misc/menu3.wav`, Enter
+  `misc/menu2.wav`; Escape goes back to the network page **[read]**.
+
+**QuakeWorld's options page**
+
+#### 28.7 The rows
+
+Sixteen cursor places, labels gold text at x 16 (right-aligned: every label ends in the cell at x 184 to 191), the cursor arrow at x 200, values at x 220 (sliders or the words "on" and
+"off" in gold text, never a check box picture) **[read]/[derived for the edge]**:
+
+| # | y | Label | Value |
+| --- | --- | --- | --- |
+| 0 | 32 | "Customize controls" | Enter opens the key page |
+| 1 | 40 | "Go to console" | Enter opens the console |
+| 2 | 48 | "Reset to defaults" | Enter runs default.cfg |
+| 3 | 56 | "Screen size" | slider, `viewsize` 30 to 120 by 10 |
+| 4 | 64 | "Brightness" | slider, `gamma` 1.0 down to 0.5 by 0.05 |
+| 5 | 72 | "Mouse Speed" | slider, `sensitivity` 1 to 11 by 0.5 |
+| 6 | 80 | "CD Music Volume" | slider, `bgmvolume` 0 to 1 (by 1 on Windows, 0.1 elsewhere) |
+| 7 | 88 | "Sound Volume" | slider, `volume` 0 to 1 by 0.1 |
+| 8 | 96 | "Always Run" | on when `cl_forwardspeed` over 200 |
+| 9 | 104 | "Invert Mouse" | on when `m_pitch` negative |
+| 10 | 112 | "Lookspring" | `lookspring` |
+| 11 | 120 | "Lookstrafe" | `lookstrafe` |
+| 12 | 128 | "Use old status bar" | `cl_sbar` |
+| 13 | 136 | "HUD on left side" | `cl_hudswap` |
+| 14 | 144 | "Video Options" | Enter opens the video page; drawn only when the build has one |
+| 15 | 152 | "Use Mouse" | `_windowed_mouse` |
+
+- "Use old status bar" (row 12) and "HUD on left side" (row 13) are both always drawn **[read]**.
+  Each shows "on" when its setting is not 0, else "off". Left, right and Enter all toggle the
+  setting between 0 and 1 (it is set to the logical not of its value), playing
+  `misc/menu3.wav`; Enter also plays `misc/menu2.wav` **[read]**.
+- "HUD on left side" also flips `_windowed_mouse` (the "Use Mouse" setting) every time it is
+  changed from the menu, because its toggle runs on into Use Mouse's **[read]**. A clean
+  version would toggle `cl_hudswap` alone **[derived]**.
+- "Use Mouse" is drawn always on non-Windows builds but the cursor can never land on it there,
+  on Windows it is drawn and reachable only while the game is windowed **[read]**. When the
+  build has no video page, the cursor skips row 14 (down to row 0, up to row 13) **[read]**.
+- Quake's options page has neither row: its rows end with Lookstrafe, "Video Options" (y 128)
+  and "Use Mouse" (y 136) **[read]**.
+
+**QuakeWorld's status bar**
+
+Shared facts **[read]**:
+- The status area's height is 48 pixels when `viewsize` is below 110 (two rows: the inventory
+  row on top, 24 pixels, of which the weapon row is the lower 16; then the main row, 24 pixels),
+  24 pixels at 110 to 119 (main row only), 0 at 120 (nothing). `viewsize` runs 30 to 120.
+  During an intermission it is 0.
+- QuakeWorld draws the bar from the screen's left edge, never centred, at every width; the main
+  row's top is at H-24 and the inventory row's at H-48.
+- "Overlay mode" below means `cl_sbar` 0 and `viewsize` 100 or more; anything else is the
+  classic bar.
+
+#### 28.8 `cl_sbar` 0 at each `viewsize`
+
+**[read]** unless marked:
+- **100 (to 109):** overlay. The 3D view fills the whole screen (full width, top at y 0, height
+  H; the software renderer rounds the height down to even and the width down to a multiple of 8)
+  and the bar is drawn over it. No background pictures: neither `sbar` (main row) nor `ibar`
+  (inventory row). Main row, top at H-24: armour icon at x 0 (`sb_armor1`, `sb_armor2` or
+  `sb_armor3`, or the disc picture and 666 under invulnerability), armour number at x 24 (three
+  24-pixel big digits, the red set at 25 or less), face at x 112, health number at x 136 (red at
+  25 or less), the current ammo's icon at x 224 (`sb_shells`, `sb_nails`, `sb_rocket` or
+  `sb_cells`), the ammo number at x 248 (red at 10 or less). Inventory row: the weapons and the
+  four ammo counts leave the row for the columns (question 9); the keys and power-ups stay at
+  their row places, x 192, 208, 224, 240, 256, 272 at y H-40 (`sb_key1`, `sb_key2`,
+  `sb_invis`, `sb_invuln`, `sb_suit`, `sb_quad`, 16 pixels apart); the four sigils at x 288,
+  296, 304, 312, y H-40 (`sb_sigil1` to `sb_sigil4`). The in-bar frags strip is drawn only when
+  the screen is narrower than 512 pixels (question 11). The overlay is redrawn every frame.
+- **110 (to 119):** overlay with the main row only (the same pieces at the same places, no
+  background). No inventory: no weapon or ammo columns, no keys, power-ups or sigils, no frags
+  strip. The view fills the screen.
+- **120:** nothing of the bar is drawn; the view fills the screen.
+- **Below 100:** overlay is off whatever `cl_sbar` says: the classic bar of question 10 with both
+  backgrounds, and the view shrunk (to `viewsize` percent of the width and height, at least 96
+  pixels wide) and centred in the H-48 pixels above the bar.
+- What overlay leaves out compared with the classic bar: the two background pictures, the weapon
+  row and the ammo counts in the row (moved to columns) and, on screens 512 or wider, the in-bar
+  frags strip **[derived]**.
+- When the scores are up (`+showscores`) or the player is dead, the main row shows the
+  `scorebar` picture with the one-line solo scoreboard instead, in both modes **[read]**.
+
+#### 28.9 The overlay's weapon and ammo columns
+
+**[read]** unless marked:
+- Drawn only in overlay mode with the inventory present, so at `viewsize` 100 to 109 only; not
+  at 110 or 120 (and not below 100, where they are in the row).
+- Weapons, top to bottom, at a fixed slot each (an unowned weapon leaves its 16-pixel gap; the
+  slots do not close up): shotgun y H-204, super shotgun H-188, nailgun H-172, super nailgun
+  H-156, grenade launcher H-140, rocket launcher H-124, lightning gun H-108. Each is 16 pixels
+  high, so the column ends at H-92, directly above the ammo column. x is W-24 (right edge) or 0
+  with `cl_hudswap` 1.
+- Only the top-left 24 x 16 pixels of each weapon picture are drawn. The pictures are
+  `inv_<name>` (owned), `inv2_<name>` (held) and `inva1_<name>` to `inva5_<name>` (pickup
+  flash), with the names `shotgun`, `sshotgun`, `nailgun`, `snailgun`, `rlaunch` (grenade
+  launcher), `srlaunch` (rocket launcher), `lightng`. In the classic row the slots are 24 pixels
+  apart and the lightning gun has the 48 pixels up to x 192, so a lightning picture wider than
+  24 would be cut in the column **[derived]**; the picture sizes are in the game data **[open]**.
+- The shotgun is not drawn when H is 200 or less (its slot would start above the screen's top),
+  the other six are **[read]/[derived for the reason]**.
+- Pickup flash: for the first 1.0 s of client time after a weapon is gained, its picture cycles
+  `inva1_` to `inva5_`, one step per 0.1 s, twice through; after that the held weapon shows
+  `inv2_` and the others `inv_`. The same holds in the classic row.
+- Ammo boxes, top to bottom: shells at y H-92, nails H-81, rockets H-70, cells H-59, each 42 x 11
+  pixels, so the column ends at H-48. x is W-42, or 0 with `cl_hudswap` 1. Each box is cut from
+  the `ibar` picture's top row: 42 x 11 pixels from x 3, 51, 99 and 147 (the boxes the classic
+  row shows under its counts).
+- The count is right-aligned in three character places, leading places left empty, drawn at the
+  box's top (8-pixel characters in an 11-pixel box) at x W-35, W-27, W-19, or 7, 15, 23 with
+  `cl_hudswap` 1 (the status bar's character drawer adds 4 pixels to the x it is given; part 2
+  § 23's "3, 11 and 19" is the x before that shift) **[read]**. The digits are the character
+  set's small-number glyphs, codes 18 to 27 (the same ones the classic row uses); their colour is
+  in the character picture **[open]**. A count of 1000 or more shows its first three digits; a
+  negative count draws code 15 for the minus sign **[derived]**.
+
+#### 28.10 `cl_sbar` 1, and Quake
+
+**[read]** unless marked:
+- QuakeWorld with `cl_sbar` 1, at every `viewsize` below 120, is the classic bar: `sbar` under
+  the main row and, while the inventory is present (below 110), `ibar` under the inventory row,
+  the weapons in a row at x 0, 24, 48, ..., 144, y H-40 (full pictures); the four counts in the
+  row at x 10, 18, 26 plus 48 per ammo type, y H-48; the keys, power-ups and sigils as in
+  question 8; the frags strip in the row (question 11).
+- The view stops above the bar: at 100 (to 109) it is full width with height H-48; at 110 (to
+  119) height H-24; at 120 height H (no bar). Its top is at y 0 at 100 and above. Below 100 it
+  is shrunk and centred in the area above the bar, as in overlay mode's below-100 case.
+- GLQuakeWorld fills the area right of x 320 beside the bar with the backdrop tile in the classic
+  bar (not in overlay). Whether the software client does the same is not settled by what was
+  read **[open]**.
+- Quake has no overlay mode. At every `viewsize` below 120 it draws the bar with its backgrounds
+  and the view always ends above the status area (48 pixels below 110, 24 at 110 to 119); at 120
+  there is no bar. Quake never draws the bar over the view without its background. Quake centres
+  the bar horizontally except in deathmatch, where it is at the left edge, and fills the strip of
+  the status area beside a 320-pixel bar with the backdrop tile on wider screens.
+
+#### 28.11 The frags strip and the mini frags
+
+**[read]** unless marked:
+- **The in-bar frags strip** (in the inventory row): drawn when the inventory row is present
+  (`viewsize` below 110) and either the mode is classic or the screen is narrower than 512 pixels
+  (so in overlay at 512 or wider it is gone). QuakeWorld draws it in every game type (Quake only
+  when the game is not single player). Up to 4 players by frags, highest first, skipping empty
+  slots and spectators; each in a 32-pixel cell starting at x 184: a 28-pixel colour swatch at x
+  194 (shirt colour 4 pixels high at y H-47, pants 3 pixels at H-43; colours clamped to 0 to 13),
+  the frags right-aligned in three characters at x 196, 204, 212, y H-48; the player's own cell
+  bracketed by characters 16 at x 190 and 17 at x 216; the next cell 32 pixels right. In overlay
+  (narrow screens) it is drawn over the view with no background.
+- **The mini frags** (the list right of the bar): drawn whenever the status area is not empty
+  and the screen is 512 or wider, in both modes and unaffected by `cl_sbar`. Lines start at y
+  H-(status height)-1 and are 8 pixels apart, as many as the status height over 8 (6 lines at
+  `viewsize` below 110, 3 lines at 110 to 119; none at 120). The window is centred on the
+  player's own rank, held inside the list; a spectator sees the top. Each line: a colour swatch
+  40 pixels wide at x 324 (shirt 3 pixels from y+1, pants 4 pixels from y+4), the frags in three
+  characters at x 332, own line bracketed by characters 16 at x 324 and 17 at x 356; with
+  `teamplay` on in the server info, the team (4 characters) at x 372 and the name (16 characters)
+  at x 412, else the name at x 372. On screens 640 or wider with teamplay, a dotted separator
+  (character 14 every 2 pixels) at x 532 from the status area's top to H-6, and the teams at x
+  548: name (4 characters), total frags right-aligned in 5 characters at x 588, the player's own
+  team bracketed at x 540 and 580.
+- `cl_hudswap` moves neither: it touches only the weapon and ammo columns **[read]**. On a 512 to
+  about 540 pixel wide screen in overlay at `viewsize` 100 to 109 with `cl_hudswap` 0, the ammo
+  column (x W-42 to W) can overlap the right end of the mini frags' names **[derived]**.

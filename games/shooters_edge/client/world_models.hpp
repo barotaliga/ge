@@ -286,6 +286,10 @@ struct WorldModels {
   ge::render::Morph morph;
   ge::render::Sprites sprites;
   bool has_morph = false, has_sprites = false;
+  // The glow disc's made frame (gl_flashblend), ModelKind::kNone when there are no sprites, and the
+  // screen's orange tint this frame from an eye inside one of the moment's lights (0..1).
+  uint32_t glow_disc = ModelKind::kNone;
+  double flash_tint = 0;
   models::LightProbe probe;
   struct Lit {
     sh::Vec3f at;
@@ -342,6 +346,7 @@ struct ModelsRead {
   uint32_t brushes = 0;
   std::vector<ge::render::MorphModel> morphs;
   std::vector<ge::render::SpriteFrame> frames;
+  uint32_t glow_disc = ModelKind::kNone;  // the glow disc's frame among them (gl_flashblend)
   ge::render::TintRamps ramps;
   models::LightProbe probe;
   std::unordered_map<std::string, uint32_t> player_skins;  // skin key -> its `skin_files` row
@@ -394,6 +399,8 @@ struct InPlace {
   int self = 0;
   // The models' ground shadows (model_shadow.hpp's mode: 0 none, 1 under each, 2 fading).
   int shadows = 0;
+  // gl_flashblend: each of the moment's lights drawn as a glow disc (classic/flash_blend.hpp).
+  bool flash_blend = false;
   // gl_celshading: an ink line this many pixels wide round each solid model (thinner and fainter
   // with distance, classic/q2_fx_switches.hpp's q2_outline_px), on a view `view_px` high; 0 none.
   double cel_shading = 0, view_px = 0;

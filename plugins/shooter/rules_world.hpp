@@ -85,6 +85,11 @@ struct PlayerNumbers {
   float weapon = 0;      // the program's weapon bit
   int weapon_model = 0;  // the model list's index of the held weapon; 0 none
   float weapon_frame = 0;
+  // The weapon's clock for a client that predicts it (QuakeWorld's weapon prediction), on the
+  // server's clock (`RulesWorld::time`): the refire's end, the player's next think (0 none) and
+  // the impulse still pending.
+  float attack_finished = 0, next_think = 0;
+  int impulse = 0;
   float items = 0;   // the program's item bits
   float view_z = 0;  // the eye above the origin
   // The view as the rules work it out (Quake II's: its bob, tilts and kicks), when `view_set`:
