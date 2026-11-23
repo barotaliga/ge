@@ -138,6 +138,17 @@ fs::path on_disk_any_case(const fs::path& dir, std::string_view name) {
 
 namespace {
 
+// Two paths in the game, ignoring case.
+bool same_name(std::string_view a, std::string_view b) {
+  if (a.size() != b.size()) return false;
+  for (size_t i = 0; i < a.size(); i++) {
+    const char x = a[i] >= 'A' && a[i] <= 'Z' ? char(a[i] - 'A' + 'a') : a[i];
+    const char y = b[i] >= 'A' && b[i] <= 'Z' ? char(b[i] - 'A' + 'a') : b[i];
+    if (x != y) return false;
+  }
+  return true;
+}
+
 std::span<const uint8_t> find_unlinked(const SearchPath& path, std::string_view name,
                                        std::vector<uint8_t>& store) {
   // A loose file in the game folder, as it is on disk now (one written since the mount): first
@@ -165,9 +176,15 @@ std::span<const uint8_t> find_unlinked(const SearchPath& path, std::string_view 
 
 std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
                                    std::vector<uint8_t>& store) {
-  if (!path.links || (path.links->hard.empty() && path.links->soft.empty()))
+  if (!path.links ||
+      (path.links->hard.empty() && path.links->soft.empty() && path.links->versions.empty()))
     return find_unlinked(path, name, store);
   std::string at(name);
+  for (const auto& [map, version] : path.links->versions)
+    if (same_name(map, at)) {
+      at = version;
+      break;
+    }
   if (const std::string hard = linked(path.links->hard, at); !hard.empty()) at = hard;
   if (const std::span<const uint8_t> b = find_unlinked(path, at, store); !b.empty()) return b;
   const std::string soft = linked(path.links->soft, at);

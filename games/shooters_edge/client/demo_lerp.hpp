@@ -18,8 +18,9 @@
 // (every format) | origin straight, angles the shortest way round | missing from either frame;
 // another model; moved more than `kEntitySnapUnits` | | the view | the eye rides the tracked
 // entity's in-between origin; the angles turn the shortest way | the level's intermission; another
-// player tracked; the view set by the server in `to` (angles) | | the clock | | the two frames more
-// than `kMostLerpGap` apart (a stall: `to` as read), a level's start, a seek |
+// player tracked; the view set by the server in `to` (angles); Quake II's teleport toggle flipped
+// (the eye, angles and field of view; the others still between) | | the clock | | the two frames
+// more than `kMostLerpGap` apart (a stall: `to` as read), a level's start, a seek |
 //
 // A STRIDE: a thing that is not a player and stood still through the frame before (a walking
 // monster, which the program moves a stride at a time, ten a second, while a recording holds 72
@@ -59,7 +60,8 @@ struct DemoPose {
   bool intermission = false;
   uint32_t set_angles = 0;
   sh::Vec3f eye, angles;
-  float fov = 0;  // Quake II's field of view sent (drawn between, as a zoom eases in)
+  float fov = 0;              // Quake II's field of view sent (drawn between, as a zoom eases in)
+  bool teleport_bit = false;  // Quake II's view toggle (DemoState::teleport_bit)
   std::vector<DemoEntity> entities, players;
 };
 
