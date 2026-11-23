@@ -45,7 +45,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.+back | `+back` / `-back` | move back while held | done | `plugins/shooter/controls.cpp` |
 | cmd.+moveleft | `+moveleft` / `-moveleft` | step left while held | done | `plugins/shooter/controls.cpp` |
 | cmd.+moveright | `+moveright` / `-moveright` | step right while held | done | `plugins/shooter/controls.cpp` |
-| cmd.+moveup | `+moveup` / `-moveup` | jump (swim up) while held: Quake II's only jump key | done | `plugins/shooter/controls.cpp` (ours also has `+jump`, which Quake II lacks; C7) |
+| cmd.+moveup | `+moveup` / `-moveup` | jump (swim up) while held: Quake II's only jump key | done | `plugins/shooter/controls.cpp` (ours also has `+jump`, which Quake II lacks; C7); held by `tests/shooters_edge_listen_test.cpp` (an up of 10 or more jumps) |
 | cmd.+movedown | `+movedown` / `-movedown` | crouch (swim down) while held | done | `plugins/shooter/controls.cpp` |
 | cmd.+left | `+left` / `-left` | turn left at `cl_yawspeed` while held | done | `plugins/shooter/controls.cpp` |
 | cmd.+right | `+right` / `-right` | turn right at `cl_yawspeed` while held | done | `plugins/shooter/controls.cpp` |
@@ -147,9 +147,9 @@ Every command the client, its renderer, sound, menus and the shared core registe
 | cmd.popmenu | `popmenu` | closes the top menu page | done | `games/shooters_edge/menu/game_menu.cpp` |
 | cmd.forcemenuoff | `forcemenuoff` | closes every menu page | done | `games/shooters_edge/menu/game_menu.cpp` |
 | cmd.screenshot | `screenshot [format]` | writes a screenshot in `gl_screenshot_format` | not-taken | Tail (decided 2026-11-23), debug, developer or admin extra: `engine/capture/screenshot.cpp`; `gl_screenshot_format` and `_quality` are synonyms of ours; the file name template missing |
-| cmd.screenshotpng | `screenshotpng [file] [compression]` | PNG screenshot | done | `engine/capture/screenshot.cpp` |
-| cmd.screenshotjpg | `screenshotjpg [file] [quality]` | JPEG screenshot | done | `engine/capture/screenshot.cpp` |
-| cmd.screenshottga | `screenshottga [file]` | TGA screenshot | done | `engine/capture/screenshot.cpp` |
+| cmd.screenshotpng | `screenshotpng [file] [compression]` | PNG screenshot | done | `engine/capture/screenshot.cpp`; held by `tests/capture_screenshot_test.cpp` |
+| cmd.screenshotjpg | `screenshotjpg [file] [quality]` | JPEG screenshot | done | `engine/capture/screenshot.cpp`; held by `tests/capture_screenshot_test.cpp` |
+| cmd.screenshottga | `screenshottga [file]` | TGA screenshot | done | `engine/capture/screenshot.cpp`; our design: written as a PNG (no TGA writer); held by `tests/capture_screenshot_test.cpp` |
 | cmd.imagelist | `imagelist` | lists loaded pictures | not-taken | `client-gaps.md`: rendering internals left out |
 | cmd.modellist | `modellist` | lists loaded models | not-taken | `client-gaps.md`: rendering internals left out |
 | cmd.strings | `strings` | prints the renderer's version strings | not-taken | `client-gaps.md`: rendering internals left out |

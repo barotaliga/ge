@@ -702,3 +702,34 @@ TEST(a_temp_entity_sends_the_protocols_effect_by_its_style_the_boss_teleport_too
       sent = true;
   CHECK(sent);
 }
+
+TEST(a_timer_fires_its_targets_every_wait_and_a_used_blaster_fires_a_bolt) {
+  // A timer started on (spawnflags 1) every 1 s into a counter of 3: help after 3 firings.
+  auto g = open_game({{{"classname", "func_timer"},
+                       {"spawnflags", "1"},
+                       {"wait", "1"},
+                       {"target", "count"}},
+                      {{"classname", "trigger_counter"},
+                       {"targetname", "count"},
+                       {"count", "3"},
+                       {"spawnflags", "1"},
+                       {"target", "news"}},
+                      help("news", "Three ticks."),
+                      relay("go", "gun"),
+                      {{"classname", "target_blaster"},
+                       {"targetname", "gun"},
+                       {"origin", "0 0 48"},
+                       {"angle", "0"}}});
+  run(*g, kSecond * 3);  // the first fires 1 s + wait in: two by now
+  CHECK(g->s().help_changed == 0);
+  run(*g, kSecond * 2);
+  CHECK(g->s().help_changed == 1 && g->s().help[1] == "Three ticks.");
+  const auto bolts = [&] {
+    int n = 0;
+    for (const sv::Q2Missile& m : g->s().missiles) n += m.live && m.kind == sv::SqShot::bolt;
+    return n;
+  };
+  const int before = bolts();
+  sv::map_use_targets(g->s(), g->named("go"), 0);
+  CHECK(bolts() == before + 1);
+}
