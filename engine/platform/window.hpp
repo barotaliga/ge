@@ -197,6 +197,11 @@ std::vector<std::string> display_modes();
 // when the platform refuses.
 bool set_fullscreen(Window& window, bool on, int display = 0, const FullMode* mode = nullptr);
 
+// Whether a full-screen window minimises (and the display goes back to the desktop's own mode)
+// when another window takes the focus; a window that is not full screen is never minimised by it.
+// Set at any time, read by the platform each time the focus is lost.
+void set_minimize_on_focus_loss(bool on);
+
 // The window's border, its place above the others and its edges, as `style` says. False after an
 // agent-actionable error line when the platform refuses one of them (the rest still applied).
 bool set_window_style(Window& window, const WindowStyle& style);

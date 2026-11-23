@@ -24,6 +24,8 @@ constexpr double kForkFrom = 1.5;
 constexpr double kLineJumpM = 2.5;
 // A hit that stays within this of where it came to rest is held still.
 constexpr double kStillM = 0.05;
+// A line finished at its face's edge (`finish`): laid on to it once it is this far short.
+constexpr double kFinishM = 0.01;
 
 // A stream for one draw site: the shot's seed, the strike and a purpose mixed into one seed.
 core::Rng stream(uint32_t seed, int64_t strike, uint32_t purpose) {
@@ -358,7 +360,7 @@ int beam_lights(const BeamLook& look, const BeamShot& shot, double t_s, LocalLig
 }
 
 bool beam_burns(const BeamLook& look, const BeamShot& shot, double t_s, BurnTrail& trail,
-                BeamBurn& out) {
+                BeamBurn& out, bool finish) {
   if (t_s < shot.born_s || (shot.end_s >= 0 && t_s > shot.end_s)) return false;
   double d[3];
   double dist2 = 0, off = 0, same = 0;
@@ -396,7 +398,8 @@ bool beam_burns(const BeamLook& look, const BeamShot& shot, double t_s, BurnTrai
   }
   const bool settled = t_s - trail.still_s >= look.melt_after_s;
   // Settled short of a piece's length: the line is laid on to where it rests, the melt's place.
-  if (dist >= look.line_piece_m || (settled && dist > 0.5 * look.line_m)) {
+  if (dist >= look.line_piece_m || (settled && dist > 0.5 * look.line_m) ||
+      (finish && dist > kFinishM)) {
     // A piece of line on toward the hit, at most `line_most_m` of it, each end reaching half its
     // width past its point so the next piece overlaps it.
     const double step = std::min(dist, static_cast<double>(look.line_most_m));

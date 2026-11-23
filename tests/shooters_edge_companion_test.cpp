@@ -284,6 +284,37 @@ TEST(a_coop_episode_replays_to_the_bit_and_matches_its_golden) {
               "say why in the PR");
 }
 
+TEST(a_party_of_bots_splits_the_hall_and_clears_it_at_100_percent) {
+  // Two and three bots in co-op, each running the way through (party.hpp): the work split among
+  // them, what one saw told to the others, every monster down before anyone takes the exit.
+  for (int size : {2, 3}) {
+    fb::EpisodeOptions o = episode_options();
+    o.skills.clear();
+    o.partners.assign(static_cast<size_t>(size) - 1, sb::AimSkill::expert);
+    o.complete = true;
+    o.god = true;
+    o.maps = 2;
+    const fb::EpisodeReport r = fb::run_coop_episode(o);
+    CHECK_MSG(r.ok, r.error);
+    if (!r.ok) return;
+    CHECK(r.faults == 0);
+    CHECK(r.maps.size() == 1);
+    for (const fb::EpisodeMap& m : r.maps) {
+      std::printf(
+          "party of %d, %s: out %d at %.1f s, kills %d/%d (leader %d, partners %d), "
+          "shares %lld, seen told %lld, left to a mate %lld\n",
+          size, m.name.c_str(), m.finished ? 1 : 0, m.exit_s, m.killed_monsters, m.total_monsters,
+          m.killed_by_leader, m.killed_by_partners, static_cast<long long>(m.party.shares),
+          static_cast<long long>(m.party.seen_told), static_cast<long long>(m.left_to_mates));
+      CHECK_MSG(m.finished, m.name + ": the party did not get out: " + m.end);
+      CHECK_MSG(m.monsters == static_cast<int>(m.kills.size()),
+                "a monster was left alive at the exit of a 100% run");
+      CHECK(m.party.shares > 0 && m.party.seen_told > 0);
+      CHECK(m.mates.size() == static_cast<size_t>(size) - 1);
+    }
+  }
+}
+
 TEST(a_bot_alone_clears_the_hall_at_100_percent_and_then_leaves) {
   fb::EpisodeOptions o = episode_options();
   o.skills.clear();

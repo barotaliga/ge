@@ -12,9 +12,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <type_traits>
 
 #include "brush/areas.hpp"
 #include "classic/protocol/directions.hpp"
+#include "classic/protocol/info.hpp"
 #include "classic/q2_move.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/q2_map.hpp"
@@ -135,6 +137,14 @@ void text_message(std::vector<uint8_t>& b, uint8_t id, int level, const std::str
 
 // --- prints ---
 
+// Whether a print of `level` reaches the player in `slot` by the `msg` level in its user info.
+bool print_reaches_slot(const NativeHost& h, int slot, int level) {
+  int msg = 0;
+  for (const auto& [k, v] : h.s->clients[slot].userinfo)
+    if (k == "msg") msg = cp::msg_level_of(v);
+  return cp::print_reaches(level, msg, false);
+}
+
 void c_bprintf(int level, const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -143,8 +153,9 @@ void c_bprintf(int level, const char* fmt, ...) {
   NativeHost& h = *g_host;
   std::vector<uint8_t> b;
   text_message(b, kSvcPrint, level, text);
-  for (int i = 0; i < h.max_clients; i++)
-    if (h.begun[i]) put(h.s->raw.reliable[i], b);
+  for (int i = 0; i < h.max_clients; i++)  // a player gets only what its msg level lets through
+    if (h.begun[i] && print_reaches_slot(h, i, level)) put(h.s->raw.reliable[i], b);
+  // The event goes to every player (a recording keeps it); each one's wire filters it again.
   NetEvent& ev = add_event(h, EventKind::print, begun_bits(h), true, text);
   ev.level = level;
   h.s->console.push_back(text);
@@ -664,31 +675,62 @@ int c_areas_connected(int a, int b) { return areas_joined(*g_host, a, b) ? 1 : 0
 
 // --- the move ---
 
-ge::classic::Q2Trace move_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
-                                sh::Vec3f end) {
-  const auto* pm = static_cast<const NativeMoveBlock*>(ctx);
-  const float a[3] = {start.x, start.y, start.z}, lo[3] = {mins.x, mins.y, mins.z};
-  const float hi[3] = {maxs.x, maxs.y, maxs.z}, b[3] = {end.x, end.y, end.z};
-  const NativeTrace t = pm->trace(a, lo, hi, b);
+// A trace's answer as the move reads it.
+ge::classic::Q2Trace move_answer(const NativeTrace& t) {
   ge::classic::Q2Trace r;
   r.all_solid = t.allsolid != 0;
   r.start_solid = t.startsolid != 0;
   r.fraction = t.fraction;
   r.end = vec(t.endpos);
   r.normal = vec(t.plane.normal);
+  r.plane_dist = t.plane.dist;
+  r.plane_type = t.plane.type;
+  r.plane_signbits = t.plane.signbits;
   r.surface_flags = t.surface != nullptr ? t.surface->flags : 0;
   r.contents = t.contents;
   r.entity = g_host->number_of(t.ent);
   return r;
 }
 
-int32_t move_contents(void* ctx, sh::Vec3f p) {
+ge::classic::Q2Trace move_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
+                                sh::Vec3f end) {
   const auto* pm = static_cast<const NativeMoveBlock*>(ctx);
+  const float a[3] = {start.x, start.y, start.z}, lo[3] = {mins.x, mins.y, mins.z};
+  const float hi[3] = {maxs.x, maxs.y, maxs.z}, b[3] = {end.x, end.y, end.z};
+  return move_answer(pm->trace(a, lo, hi, b));
+}
+
+// The newer interface's trace takes the content mask: the ladder probe's, else the player's own
+// (a dead player's passes through monsters, as the original game's trace chooses for itself).
+ge::classic::Q2Trace move_trace_mask(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
+                                     sh::Vec3f end, int32_t mask) {
+  const auto* pm = static_cast<const native::NativeMoveBlockNew*>(ctx);
+  const float a[3] = {start.x, start.y, start.z}, lo[3] = {mins.x, mins.y, mins.z};
+  const float hi[3] = {maxs.x, maxs.y, maxs.z}, b[3] = {end.x, end.y, end.z};
+  return move_answer(pm->trace(a, lo, hi, b, mask));
+}
+
+ge::classic::Q2Trace move_trace_new(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f maxs,
+                                    sh::Vec3f end) {
+  const auto* pm = static_cast<const native::NativeMoveBlockNew*>(ctx);
+  const int32_t mask = pm->s.type >= static_cast<int32_t>(ge::classic::Q2Type::dead)
+                           ? ge::shooter::kSqMaskDeadSolid
+                           : ge::shooter::kSqMaskPlayerSolid;
+  return move_trace_mask(ctx, start, mins, maxs, end, mask);
+}
+
+template <class Block>
+int32_t move_contents(void* ctx, sh::Vec3f p) {
+  const auto* pm = static_cast<const Block*>(ctx);
   const float q[3] = {p.x, p.y, p.z};
   return pm->pointcontents(q);
 }
 
-void c_pmove(NativeMoveBlock* pm) {
+// One command through Quake II's move, for either interface's move record: the original's 16-bit
+// state, or the newer one's 32-bit state, its ladder mask and flag and its ground plane.
+template <class Block>
+void run_pmove(Block* pm) {
+  constexpr bool kNew = std::is_same_v<Block, native::NativeMoveBlockNew>;
   NativeHost& h = *g_host;
   ge::classic::Q2Move m;
   m.s.type = static_cast<ge::classic::Q2Type>(pm->s.type);
@@ -710,6 +752,10 @@ void c_pmove(NativeMoveBlock* pm) {
   m.cmd.light = pm->cmd.light;
   m.changed = pm->snapinitial != 0;
   m.air_accelerate = h.air_accelerate;
+  if constexpr (kNew) {
+    m.ladder_mask = true;
+    m.ladder_flag = true;
+  }
   if (h.thinking >= 0 && h.thinking < h.max_clients) {  // the server's defaults when none thinks
     const int protocol = h.s->clients[size_t(h.thinking)].protocol;
     if (protocol != 0) ge::classic::q2_fly_for_protocol(m, protocol);
@@ -725,16 +771,22 @@ void c_pmove(NativeMoveBlock* pm) {
     m.water_jump = f.water_jump;
     m.air_step = f.air_step;
   }
-  const ge::classic::Q2World world{pm, move_trace, move_contents};
+  ge::classic::Q2World world{pm, move_trace, move_contents<Block>};
+  if constexpr (kNew) {
+    world.trace = move_trace_new;
+    world.trace_mask = move_trace_mask;
+  }
   ge::classic::q2_move(m, world);
+  using Packed = std::remove_reference_t<decltype(pm->s.origin[0])>;
+  using Bits = std::remove_reference_t<decltype(pm->s.flags)>;
   pm->s.type = static_cast<int32_t>(m.s.type);
   for (int k = 0; k < 3; k++) {
-    pm->s.origin[k] = m.s.origin[k];
-    pm->s.velocity[k] = m.s.velocity[k];
+    pm->s.origin[k] = static_cast<Packed>(m.s.origin[k]);
+    pm->s.velocity[k] = static_cast<Packed>(m.s.velocity[k]);
     pm->s.delta_angles[k] = m.s.delta_angles[k];
   }
-  pm->s.flags = m.s.flags;
-  pm->s.time = m.s.time;
+  pm->s.flags = static_cast<Bits>(m.s.flags);
+  pm->s.time = static_cast<Bits>(m.s.time);
   pm->s.gravity = m.s.gravity;
   pm->numtouch = std::min(m.touches, native::kNativeTouch);
   for (int i = 0; i < pm->numtouch; i++) pm->touchents[i] = h.entity(std::max(0, m.touch[i]));
@@ -746,8 +798,20 @@ void c_pmove(NativeMoveBlock* pm) {
   std::memcpy(pm->mins, lo, sizeof lo);
   std::memcpy(pm->maxs, hi, sizeof hi);
   pm->groundentity = m.ground_entity >= 0 ? h.entity(m.ground_entity) : nullptr;
+  if constexpr (kNew) {
+    const ge::classic::Q2Plane& g = m.ground_plane;
+    pm->groundplane = {{g.normal.x, g.normal.y, g.normal.z}, g.dist, g.type, g.signbits, {0, 0}};
+  }
   pm->watertype = m.water_type;
   pm->waterlevel = m.water_level;
+}
+
+// The game's move call: the record is the newer interface's when the library is.
+void c_pmove(NativeMoveBlock* pm) {
+  if (g_host->new_interface)
+    run_pmove(reinterpret_cast<native::NativeMoveBlockNew*>(pm));
+  else
+    run_pmove(pm);
 }
 
 // --- messages ---
@@ -1172,6 +1236,7 @@ void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool 
 }
 
 void native_print(NativeHost& h, int slot, int level, const std::string& text) {
+  if (slot >= 0 && !print_reaches_slot(h, slot, level)) return;
   std::vector<uint8_t> b;
   text_message(b, kSvcPrint, level, text);
   put(h.s->raw.reliable[slot], b);

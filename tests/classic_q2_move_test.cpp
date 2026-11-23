@@ -103,11 +103,11 @@ struct Run {
       pm.changed = false;
     }
   }
-  float x() const { return pm.s.origin[0] * 0.125f; }
-  float y() const { return pm.s.origin[1] * 0.125f; }
-  float z() const { return pm.s.origin[2] * 0.125f; }
-  float vx() const { return pm.s.velocity[0] * 0.125f; }
-  float vz() const { return pm.s.velocity[2] * 0.125f; }
+  float x() const { return float(pm.s.origin[0]) * 0.125f; }
+  float y() const { return float(pm.s.origin[1]) * 0.125f; }
+  float z() const { return float(pm.s.origin[2]) * 0.125f; }
+  float vx() const { return float(pm.s.velocity[0]) * 0.125f; }
+  float vz() const { return float(pm.s.velocity[2]) * 0.125f; }
 };
 
 ge::classic::Q2Cmd cmd(int16_t forward = 0, int16_t side = 0, int16_t up = 0, int16_t yaw_ = 0,
@@ -279,6 +279,40 @@ TEST(a_ladder_is_climbed) {
   Run r(w, at(0, -200, 24));
   r.step(cmd(400, 0, 0, yaw(-90), int16_t(-30 * 65536 / 360)), 80);
   CHECK(r.z() > 100);
+}
+
+// The newer interface's move: the timer in milliseconds (`time_shift` 0), the state's 23 bits
+// past the original's 16 (which wrap), the ladder found through the masked trace and flagged, and
+// the ground plane under the player.
+TEST(the_newer_interfaces_move_times_in_ms_reaches_far_and_flags_the_ladder) {
+  World w;
+  ge::classic::Q2State s = at(0, 0, 24.25f);
+  s.velocity[2] = -500 * 8;
+  Run land(w, s);
+  land.pm.time_shift = 0;
+  land.step(cmd());
+  CHECK(land.pm.s.time == 184);  // 200 ms, less this command's 16
+  CHECK(land.pm.ground_plane.normal.z == 1.0f && land.pm.ground_plane.dist == 0.0f);
+  for (const int bits : {16, 23}) {
+    ge::classic::Q2State f;
+    f.type = ge::classic::Q2Type::spectator;
+    f.origin[0] = 4090 * 8;
+    Run fly(w, f);
+    fly.pm.coord_bits = bits;
+    fly.step(cmd(400), 30);
+    if (bits == 16)
+      CHECK_MSG(fly.x() < 0, "wrapped: x " + std::to_string(fly.x()));
+    else
+      CHECK_MSG(fly.x() > 4096, "kept: x " + std::to_string(fly.x()));
+  }
+  Run climb(w, at(0, -200, 24));
+  climb.pm.ladder_mask = true;
+  climb.pm.ladder_flag = true;
+  climb.step(cmd(400, 0, 0, yaw(-90), int16_t(-30 * 65536 / 360)), 80);
+  CHECK(climb.z() > 100);
+  CHECK(climb.pm.s.flags & ge::classic::kSqOnLadder);
+  climb.step(cmd(-400, 0, 0, yaw(-90)), 30);  // backed off the ladder
+  CHECK(!(climb.pm.s.flags & ge::classic::kSqOnLadder));
 }
 
 TEST(a_spectator_flies_through_a_wall) {

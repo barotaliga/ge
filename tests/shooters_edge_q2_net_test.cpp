@@ -1019,8 +1019,8 @@ TEST(a_client_fetches_what_it_lacks_and_ours_keeps_it_in_its_archive) {
 TEST(a_download_cut_short_is_resumed_from_what_is_held) {
   // A skin's first 1000 bytes held from before (as `<path>.tmp`): the client asks for the rest
   // from there, so it ends as the held bytes then the server's from 1000 on, and the held file
-  // goes once it is whole. A client holding nothing gets every piece added as it comes, the first
-  // one begun afresh.
+  // goes once it is whole. A client holding nothing gets every piece added as it comes (two of
+  // them: pieces fill the packet), the first one begun afresh.
   const std::vector<uint8_t> red(2500, 7);
   cn::Q2NetConfig cfg;
   cfg.read_file = [&red](const std::string& path, std::vector<uint8_t>* out) {
@@ -1066,7 +1066,7 @@ TEST(a_download_cut_short_is_resumed_from_what_is_held) {
   CHECK(!std::filesystem::exists(dir / "players/male/red.pcx.tmp"));
   CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
   CHECK(b.downloaded["players/male/red.pcx"] == red);
-  CHECK_MSG(adds >= 3 && fresh_adds == 1 && added == red.size(),
+  CHECK_MSG(adds == 2 && fresh_adds == 1 && added == red.size(),
             std::to_string(adds) + " adds, " + std::to_string(fresh_adds) + " fresh");
   std::filesystem::remove_all(dir);
 }
@@ -1780,7 +1780,7 @@ TEST(lag_compensation_on_our_server_of_q2_rewinds_to_the_shooters_frame) {
   CHECK(r->server.clients[sa].acked > 0);
   sh::Vec3f at, lo, hi;
   CHECK(game.lag_place(game.lag_ctx, sa, sb, at, lo, hi));
-  const int16_t* o = game.players[sb].move.origin;
+  const int32_t* o = game.players[sb].move.origin;
   const sh::Vec3f now{float(o[0]) * 0.125f, float(o[1]) * 0.125f, float(o[2]) * 0.125f};
   CHECK_MSG(sh::length(at - now) < 1, "a standing player was rewound away from where he stands");
   CHECK(lo.z == game.players[sb].mins.z && hi.z == game.players[sb].maxs.z);  // his box then

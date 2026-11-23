@@ -54,6 +54,13 @@ struct Ruleset {
   std::string_view title;  // one sentence a player reads: what it is for
   std::span<const RuleLock> locks = {};
   std::span<const RuleRefusal> refused = {};
+  // Not empty: a line that expanded a team macro runs only these commands (console.hpp's
+  // TeamMacroLimit), so a script cannot act on what the player holds.
+  std::span<const std::string_view> team_macro_commands = {};
+  // While a match is played no game line or event runs a trigger, and sound triggers never do.
+  bool quiet_triggers = false;
+  // More than 0: at most that many frames in a row may end on a `wait` (a script's loop).
+  int wait_limit = 0;
 };
 
 class Rulesets {
