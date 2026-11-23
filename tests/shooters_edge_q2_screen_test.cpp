@@ -1,12 +1,13 @@
 // Tests: what the window draws round Quake II's bar (games/shooters_edge/client/q2_bar.cpp):
 // the bar's whole-number scale, the centre print's lines (centred, cut at 40 letters, placed at
 // 35% of the screen or at 48 for a long message) and the crosshair left out when the packs hold
-// no picture of it.
+// no picture of it; `aadump` and `dumpclients`, two asked in one frame, both answered.
 //
 // ge:summary Tests: Quake II's centre print and crosshair round its bar, and the bar's scale
-// ge:keywords test q2 centre-print crosshair status-bar scale add_q2_screen
+// ge:keywords test q2 centre-print crosshair status-bar scale add_q2_screen aadump dumpclients
 // ge:skill ui testing
 // ge:test tests/shooters_edge_q2_screen_test.cpp
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <string>
@@ -385,4 +386,33 @@ TEST(use_drop_and_give_complete_the_item_names_the_world_listed) {
     const std::vector<std::string> names = con.arg_values(word);
     CHECK(names == (std::vector<std::string>{"Blaster", "Rocket Launcher", "Shotgun"}));
   }
+}
+
+TEST(aadump_prints_the_bar_and_the_scores_up_as_letters_and_dumpclients_each_player) {
+  ge::console::Console con(false);
+  std::vector<std::string> printed;
+  con.set_sink([&printed](std::string_view l) { printed.emplace_back(l); });
+  cl::Q2Bar bar;
+  cl::add_q2_bar_commands(con, bar);
+  con.execute("aadump");  // no level up yet
+  CHECK(printed.size() == 1 && printed[0] == "Must be in a level.");
+  shooters_edge::server::RulesWorld world;
+  world.status_bar = "xv 0 yv 0 string \"FRAGS\"";
+  world.clients[0].name = "left";
+  world.clients[2].name = "right";
+  world.clients[0].layout = "xv 0 yv 16 string \"left 3 right 1\"";
+  world.clients[0].numbers.stats[13] = 1;  // the layout is up
+  cl::run_q2_bar(bar, world, 0, 0, 320, 240);
+  printed.clear();
+  con.execute("aadump");
+  con.execute("dumpclients");
+  cl::run_q2_bar(bar, world, 0, 1, 320, 240);  // the next frame answers
+  const auto has = [&printed](std::string_view text) {
+    return std::ranges::any_of(
+        printed, [text](const std::string& l) { return l.find(text) != std::string::npos; });
+  };
+  std::string all;
+  for (const std::string& l : printed) all += l + " | ";
+  CHECK_MSG(has("FRAGS") && has("left 3 right 1"), all);
+  CHECK_MSG(has("  0: left") && has("  2: right"), all);
 }

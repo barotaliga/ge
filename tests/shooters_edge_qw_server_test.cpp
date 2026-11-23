@@ -820,3 +820,44 @@ TEST(a_client_fetches_skins_from_the_server_web_address) {
   for (gn::TcpStream& t : streams) gn::tcp_close(t);
   gn::tcp_close_listener(web);
 }
+
+TEST(a_chunk_out_of_band_is_taken_in_the_stock_layout_and_never_printed) {
+  // A stock server sends a download's chunks beyond the first out of band: 0xffffffff, a print
+  // ('n') whose text starts `\chunk`, the download's number, the download message's id (41), the
+  // chunk's number and its 1024 bytes. The client keeps the chunk of the download it is on, drops
+  // one of an earlier download (late, it would land in this file's bytes), and prints neither.
+  auto owned = std::make_unique<Rig>();
+  Rig& rig = *owned;
+  CHECK(rig.start(cn::ServerConfig{}));
+  gn::Transport ct[1];
+  cn::QwClientEnd c[1];
+  CHECK(play(rig, ct, c, 1));
+  c[0].dl = cn::ClientDownload{};
+  c[0].dl.name = "maps/far.bsp";
+  c[0].dl.active = c[0].dl.chunked = true;
+  c[0].dl.number = 5;
+  c[0].dl.size = 3 * 1024;
+  c[0].dl.bytes.assign(3 * 1024, 0);
+  c[0].dl.have.assign(3, false);
+  c[0].dl.asked.assign(3, c[0].now + 100);  // asked for already: the tick asks for nothing more
+  const auto send_chunk = [&](int32_t number, int32_t chunk, uint8_t fill) {
+    std::vector<uint8_t> b = {0xff, 0xff, 0xff, 0xff, 'n', '\\', 'c', 'h', 'u', 'n', 'k'};
+    for (int i = 0; i < 4; i++) b.push_back(static_cast<uint8_t>(number >> (8 * i)));
+    b.push_back(41);
+    for (int i = 0; i < 4; i++) b.push_back(static_cast<uint8_t>(chunk >> (8 * i)));
+    b.insert(b.end(), 1024, fill);
+    CHECK(b.size() == 1044);
+    gn::transport_send(rig.st, ct[0].local, b.data(), b.size(), rig.now);
+  };
+  send_chunk(4, 0, 0xee);  // an earlier download's
+  send_chunk(5, 1, 0x11);
+  for (int f = 0; f < 10; f++) {
+    rig.frame();
+    cn::client_tick(c[0], rig.now);
+  }
+  CHECK(!c[0].dl.have[0] && c[0].dl.have[1] && !c[0].dl.have[2]);
+  CHECK(c[0].dl.bytes[0] == 0 && c[0].dl.bytes[1024] == 0x11);
+  CHECK(c[0].chunks_oob == 1);
+  CHECK(c[0].oob_prints.empty());
+  for (const std::string& p : c[0].prints) CHECK_MSG(p.find("chunk") == std::string::npos, p);
+}

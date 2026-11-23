@@ -786,14 +786,14 @@ void send_download_chunks(QwServer& s, int slot, gn::Writer& dgram) {
     } else {
       uint8_t buf[kChunkBytes + 32];
       gn::Writer w = gn::make_writer(buf, sizeof buf);
+      // A print ('n') whose text starts `\chunk`, the download's number, then the whole
+      // download message (its id too): 1044 bytes, as every stock client reads it.
       gn::write_u32(w, 0xffffffffu);
+      gn::write_u8(w, 'n');
       gn::write_bytes(w, "\\chunk", 6);
       write_long(w, d.number);
-      gn::Writer body = gn::make_writer(buf + w.size, sizeof buf - w.size);
-      write_svc(body, m, ctx);
-      // The out-of-band form carries the body without its id byte.
-      std::memmove(buf + w.size, buf + w.size + 1, body.size - 1);
-      send_oob(s, c.address, buf, w.size + body.size - 1);
+      write_svc(w, m, ctx);
+      send_oob(s, c.address, buf, w.size);
       s.counts.chunks_oob++;
     }
     d.blocks++;
