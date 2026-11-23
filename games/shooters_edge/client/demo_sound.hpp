@@ -147,8 +147,8 @@ class DemoSounds {
   std::vector<int> static_lead_;
   // Where the lead `lead`'s voice stands so the channels hear its group's merged ears.
   ge::core::Vec3 merged_static_at(const DemoState& s, size_t lead) const;
-  std::vector<int> entity_loop_;       // by entity number: the loop it was last heard with (0 none)
-  std::vector<uint8_t> loop_heard_;    // by entity number: a slot plays its loop now (this frame)
+  std::vector<int> entity_loop_;     // by entity number: the loop it was last heard with (0 none)
+  std::vector<uint8_t> loop_heard_;  // by entity number: a slot plays its loop now (this frame)
   std::optional<Ambience> ambience_;
   const ge::brush::Map* map_ = nullptr;
   DemoSoundStats stats_;

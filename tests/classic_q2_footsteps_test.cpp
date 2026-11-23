@@ -227,7 +227,8 @@ TEST(quakes_static_loops_of_one_file_merge_into_one_voice_held_per_ear) {
   const cl::Q2Merged right = cl::classic_static_merge(sum);
   CHECK(right.gain == 0.5 && right.pan == 1);
   // Two quiet ones left and right: one centred voice, their sum.
-  const cl::Q2Ears a = cl::classic_static_ear(0.25, 0, -1, 3), b = cl::classic_static_ear(0.25, 0, 1, 3);
+  const cl::Q2Ears a = cl::classic_static_ear(0.25, 0, -1, 3),
+                   b = cl::classic_static_ear(0.25, 0, 1, 3);
   const cl::Q2Merged both = cl::classic_static_merge({a.left + b.left, a.right + b.right});
   CHECK(std::fabs(both.gain - 0.5) < 1e-12 && both.pan == 0);
   CHECK(cl::classic_static_merge({}).gain == 0);
