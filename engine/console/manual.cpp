@@ -111,6 +111,30 @@ bool kind_named(std::string_view word, ManualKind& out) {
   return false;
 }
 
+std::vector<ManualEntry> describe_settings(const Cvars& cvars, std::string_view layer) {
+  std::vector<ManualEntry> out;
+  for (const Cvar* v : cvars.sorted()) {
+    if ((v->flags & kCreated) != 0) continue;
+    ManualEntry& e = out.emplace_back();
+    e.kind = ManualKind::setting;
+    e.name = v->name;
+    e.layer = layer.empty() ? v->layer : std::string(layer);
+    const bool ranged = v->kind == CvarKind::number || v->kind == CvarKind::integer;
+    e.type = kind_name(v->kind);
+    e.fallback = v->fallback;
+    e.min = ranged ? bound(v->min) : "";
+    e.max = ranged ? bound(v->max) : "";
+    e.flags = flags_text(v->flags);
+    e.help = v->help;
+    e.values = v->values;
+    // A game's layer over an earlier one's name: how they meet, and the layer the name is from.
+    if (!v->earlier.empty() && v->earlier.front().was)
+      e.overlap =
+          std::string(overlap_word(v->earlier.back().how)) + ':' + v->earlier.front().was->layer;
+  }
+  return out;
+}
+
 std::vector<ManualEntry> describe(const Console& console, std::string_view program,
                                   std::string_view games) {
   std::vector<ManualEntry> out;
@@ -124,21 +148,10 @@ std::vector<ManualEntry> describe(const Console& console, std::string_view progr
     return e;
   };
   const Cvars& cvars = console.cvars();
-  for (const Cvar* v : cvars.sorted()) {
-    if ((v->flags & kCreated) != 0) continue;
-    ManualEntry& e = entry(ManualKind::setting, v->name, v->layer);
-    const bool ranged = v->kind == CvarKind::number || v->kind == CvarKind::integer;
-    e.type = kind_name(v->kind);
-    e.fallback = v->fallback;
-    e.min = ranged ? bound(v->min) : "";
-    e.max = ranged ? bound(v->max) : "";
-    e.flags = flags_text(v->flags);
-    e.help = v->help;
-    e.values = v->values;
-    // A game's layer over an earlier one's name: how they meet, and the layer the name is from.
-    if (!v->earlier.empty() && v->earlier.front().was)
-      e.overlap =
-          std::string(overlap_word(v->earlier.back().how)) + ':' + v->earlier.front().was->layer;
+  for (ManualEntry& e : describe_settings(cvars)) {
+    e.program = std::string(program);
+    e.games = std::string(games);
+    out.push_back(std::move(e));
   }
   for (const Synonym& s : cvars.synonyms()) {
     if (s.target == nullptr || s.target->retired) continue;
@@ -163,6 +176,19 @@ std::vector<ManualEntry> describe(const Console& console, std::string_view progr
     ManualEntry& e = entry(ManualKind::flag, f.name, "");
     e.target = f.arg;
     e.help = f.help;
+  }
+  // The settings outside the console (ManualInfo::more), less a name the console has.
+  if (console.manual().more) {
+    std::vector<ManualEntry> more;
+    console.manual().more(games, more);
+    for (ManualEntry& e : more) {
+      if (cvars.find(e.name) != nullptr || cvars.synonym(e.name) != nullptr ||
+          console.commands().count(e.name) != 0)
+        continue;
+      e.program = std::string(program);
+      e.games = std::string(games);
+      out.push_back(std::move(e));
+    }
   }
   return out;
 }
