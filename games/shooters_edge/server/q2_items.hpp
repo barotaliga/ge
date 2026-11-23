@@ -52,7 +52,7 @@ inline constexpr SqArmourRow kSqArmours[] = {
     {100, 200, 0.80f, 0.60f},  // body
 };
 
-struct SqItem {
+struct SqItem {           // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* classname;  // the map's name for it
   const char* pickup;     // the name a player reads
   const char* model;      // its world model

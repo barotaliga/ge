@@ -61,7 +61,7 @@ inline constexpr int kSqShotKinds = 8;
 // grenade's smoke (32), a rocket's (16), the BFG's ball (128) with its frames run fast (0x2000).
 inline constexpr int kSqShotEffects[kSqShotKinds] = {8, 0, 0, 32, 16, 0, 128 | 0x2000, 32};
 
-struct SqWeaponRow {
+struct SqWeaponRow {       // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* name;        // the name a player reads and `use` takes
   const char* item;        // the item that gives it (q2_items.hpp); null for the blaster
   const char* view_model;  // the first-person model
