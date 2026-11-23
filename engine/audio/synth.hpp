@@ -162,6 +162,10 @@ class Synth {
   // The left and right channels swapped at the output (speakers wired the other way round), or
   // back. A synth starts unswapped.
   void swap_stereo(bool on);
+  // THE TWO EARS (headphones): every sampled voice's pan heard as a head hears it, the far ear
+  // later (up to 0.66 ms), quieter and duller (sample_voice.hpp's far_ear), rather than by level
+  // alone; a centred voice is heard as before. A synth starts without.
+  void binaural(bool on);
   // The listener's room, glided to over `glide_s` (0: at once). A synth starts with none.
   void room(const RoomSound& room, float glide_s = 0.3f);
   // Play a recording. `pcm` is read in place and must outlive the synth. Invalid when the ring

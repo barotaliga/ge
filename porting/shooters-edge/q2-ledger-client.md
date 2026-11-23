@@ -11,9 +11,9 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | kind | done | partial | missing | not-taken | rows |
 | --- | --- | --- | --- | --- | --- |
 | Client console commands | 132 | 13 | 1 | 10 | 156 |
-| Client settings (cvars) | 221 | 49 | 8 | 72 | 350 |
+| Client settings (cvars) | 223 | 49 | 6 | 72 | 350 |
 | Macros ($name in typed and bound text) | 25 | 3 | 0 | 2 | 30 |
-| Menu pages and rows | 99 | 58 | 4 | 1 | 162 |
+| Menu pages and rows | 103 | 56 | 2 | 1 | 162 |
 | Server messages the client parses (svc) | 21 | 6 | 0 | 0 | 27 |
 | Temporary entities (svc_temp_entity) | 15 | 50 | 0 | 0 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 0 | 20 |
@@ -23,13 +23,13 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 8 | 8 | 0 | 0 | 16 |
 | The layout language (status bar and layouts) | 26 | 1 | 0 | 0 | 27 |
 | HUD and screen elements | 18 | 10 | 0 | 1 | 29 |
-| Messages printed to the player | 74 | 57 | 3 | 13 | 147 |
+| Messages printed to the player | 75 | 57 | 2 | 13 | 147 |
 | Demo playback and recording features | 12 | 8 | 1 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 7 | 4 | 0 | 0 | 11 |
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 14 | 5 | 1 | 0 | 20 |
 | Connection, network, downloads and the rest | 10 | 5 | 2 | 0 | 17 |
-| **all** | 794 | 289 | 27 | 101 | 1211 |
+| **all** | 801 | 287 | 22 | 101 | 1211 |
 
 ## Client console commands
 
@@ -198,7 +198,7 @@ Every command the client, its renderer, sound, menus and the shared core registe
 
 ## Client settings (cvars)
 
-done 221, partial 49, missing 8, not-taken 72
+done 223, partial 49, missing 6, not-taken 72
 
 Every setting the client, its renderer, sound, menus, the shared core and the platform layers register, with upstream's default. Names our Quake II layer spells another way count as done when the spelling is a synonym of ours.
 
@@ -411,7 +411,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.ogg_remap_tracks | `ogg_remap_tracks` | remap the mission packs' track numbers to the digital release's file names (default 1) | done | `plugins/classic/content/soundtrack.hpp`'s `q2_remap_track` (rogue 2..11 as 12..21, xatrix by its table) in the music's track lookup (`games/shooters_edge/client/take_in.cpp`), bound in `client/q2_session.cpp` |
 | cvar.al_device | `al_device` | the OpenAL output device, empty the default; `?` lists the devices ("Available devices:") (default empty) | done | its spelling of the engine's `s_device` (`platform/window_cvars.hpp`, every game): "" the system's default, a name moves the sound there at once (`platform/audio.hpp`'s `move_audio`), `?` lists "Available devices:" and puts the setting back, a name not there is said once and the sound stays; `s_devices` lists them too |
 | cvar.al_merge_looping | `al_merge_looping` | OpenAL: merge copies of one looped sound so they play as loud as on the software mixer; 0 off, 1 auto (only in plain stereo), 2 on (default 1) | not-taken | an OpenAL mixer's fix; ours has one mixer, which plays copies of a looped sound as the software mixer does |
-| cvar.al_hrtf | `al_hrtf` | OpenAL head-related sound (default 0) | missing | C32 |
+| cvar.al_hrtf | `al_hrtf` | OpenAL head-related sound (default 0) | done | Quake II's spelling of s_hrtf (`client/room_ear.hpp`), not kept: 0 (the default) off; 1 as the sound device chooses, off, as it names no headphones; 2 on: each sound heard by two ears (`audio/synth.hpp`'s Synth::binaural), the far ear about 0.66 ms later, softer and duller through the head's shadow; the player's own sounds and the music sit in the middle and are heard as before |
 | cvar.gl_screenshot_format | `gl_screenshot_format` | jpg, png or tga (default jpg) | done | a synonym of ours `scr_format` (`games/shooters_edge/client/cvar_layers.cpp`), the same default |
 | cvar.gl_screenshot_async | `gl_screenshot_async` | write screenshots off the main thread (default 1) | not-taken | ours always packs and writes every format off the game's thread (`engine/capture/screenshot.hpp`), its 2 |
 | cvar.gl_screenshot_quality | `gl_screenshot_quality` | JPEG quality (default 90) | done | a synonym of ours `scr_quality`, the same default |
@@ -487,7 +487,7 @@ Every setting the client, its renderer, sound, menus, the shared core and the pl
 | cvar.gl_context | `gl_colorbits`, `gl_depthbits`, `gl_stencilbits`, `gl_debug` | the GL context's bits and debug level (0, 0, 8, 0) | not-taken | `client-gaps.md`: rendering internals left out |
 | cvar.gl_multisamples | `gl_multisamples` | MSAA samples (default 0; menu 2, 4, 8) | not-taken | ours smooths edges by its temporal upscale (`docs/rendering.md` TAA-U), with no multisampled targets to ask for |
 | cvar.basedir | `basedir` | the install folder; command line only | partial | ours finds the install itself; `basedir` is a word of the take-in (`client/take_in.cpp`) |
-| cvar.homedir | `homedir` | the writable folder; command line only | missing | not found |
+| cvar.homedir | `homedir` | the writable folder; command line only | done | any game's here (`client/take_in.hpp`): `+set homedir <folder>` on the command line is the folder the game writes in (the games taken in, the settings, screenshots, recordings, downloads), made when missing; read only once the game runs. Ours keeps one tree: a game is copied into the data folder, so nothing needs a second search |
 | cvar.libdir | `libdir` | the game-library folder; command line only | not-taken | ours loads no native game library: Quake II's rules are our own code and a mod's compiled module runs in our VM (`plugins/progs`) |
 | cvar.sys_console | `sys_console` | Unix: the terminal console's mode | not-taken | ours writes the client's console to no terminal; the dedicated server's terminal is its own |
 | cvar.win_noalttab | `win_noalttab` | Windows: disable Alt+Tab (default 0) | not-taken | ours leaves the system's own keys (Alt+Tab, the Windows key) to the system on every platform |
@@ -596,7 +596,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 99, partial 58, missing 4, not-taken 1
+done 103, partial 56, missing 2, not-taken 1
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
@@ -623,8 +623,8 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.sp.save | single player: save game... | opens the save page | done | ours SAVE |
 | menu.load.slots | load game | 16 slots: the autosave, a gap, then 15, each showing the save's name | partial | ours 12 slots, no autosave slot (`menu/main_menu.hpp` `kSaveSlots`) |
 | menu.save.slots | save game | 15 slots (no autosave) | partial | ours 12 slots |
-| menu.mp.q2servers | multiplayer: browse q2servers.com | the server browser filled from an HTTP list | missing | C41 (ours JOIN A GAME lists LAN, masters and our hub) |
-| menu.mp.addressbook | multiplayer: browse address book | the browser over the address book, `servers.lst` and the LAN | partial | ours JOIN A GAME has the LAN; no address book or `servers.lst` (C41) |
+| menu.mp.q2servers | multiplayer: browse q2servers.com | the server browser filled from an HTTP list | done | `games/shooters_edge/menu/q2_pages.cpp`: the row opens the browser on `+http://q2servers.com/?raw=2` alone (`pushmenu servers` with sources, `menu/servers_page.hpp`'s `use_sources`; the list fetched as 6-byte records); the same row on the in-game page |
+| menu.mp.addressbook | multiplayer: browse address book | the browser over the address book, `servers.lst` and the LAN | done | `games/shooters_edge/menu/q2_pages.cpp`: the row opens the browser on `favorites://` (`adr0` on), `file:///servers.lst` (a list in the game's files) and `broadcast://` (the LAN) alone; a word it cannot use says "Ignoring invalid master URL: ..." |
 | menu.mp.demos | multiplayer: browse demos | the demo browser | done | `games/shooters_edge/menu/q2_pages.cpp` |
 | menu.mp.startserver | multiplayer: start server | the start-server page | done | ours NEW GAME (host page) |
 | menu.ss.map | start server: initial map | every map found (`$com_maplist`) | done | ours MAP |
@@ -757,13 +757,13 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.dl.pics | downloads: pics | `allow_download_pics` | done | `games/shooters_edge/menu/q2_pages.cpp`, the setting registered by `client/q2_session.cpp` |
 | menu.dl.http | downloads: HTTP downloads | `cl_http_downloads` | done | `games/shooters_edge/menu/q2_pages.cpp`: the row sets `cl_http_downloads`, registered by `client/q2_session.cpp` |
 | menu.ab.fields | address book | 16 text fields `adr0` to `adr15` | partial | `games/shooters_edge/menu/q2_pages.cpp`: MULTIPLAYER > address book lists `adr0` to `adr15` (Quake II's cvars, `client/cvar_layers.cpp`) with each address beside it; a row opens the console to type it, no text field on the page; JOIN A GAME asks them (`menu/servers_page.cpp`) |
-| menu.game.page | the in-game page | compact list: browse q2servers.com, browse address book, browse demos, single player, options, disconnect, quit | partial | `games/shooters_edge/menu/q2_pages.cpp`: the page and ESCAPE in a level; one browse row (ours lists LAN, masters and hub) for the two |
+| menu.game.page | the in-game page | compact list: browse q2servers.com, browse address book, browse demos, single player, options, disconnect, quit | done | `games/shooters_edge/menu/q2_pages.cpp`: the page and ESCAPE in a level, its two browse rows on their sources, and ours (LAN, masters and hub) before them |
 | menu.demos.list | demo browser | lists `demos/` (all folders with `ui_listalldemos`): `.dm2`, `.dm2.gz`, `.mvd2`, `.mvd2.gz` | partial | ours `menu/demos_page.cpp` (folders anywhere, newest first) (C40) |
 | menu.demos.columns | demo browser columns | name, Date, Size, Map, POV; sorted by `ui_sortdemos` | partial | ours `menu/demos_page.cpp`: name, age and size on each row, sorted by `menu_demo_sort` (`vfs::sort_files`; Quake II spells it `ui_sortdemos`, by name by default); no Map or POV column |
 | menu.servers.list | server browser | servers from an HTTP list, favourites, `servers.lst`, broadcast | partial | ours `menu/servers_page.cpp` (LAN, masters, hub) (C41) |
 | menu.servers.columns | server browser columns | Hostname, Mod (the game folder, `baseq2` when empty), Map, Players, RTT; the selection's info as Key and Value, its players as Frg, RTT, Name | partial | ours its own columns (C41) |
 | menu.servers.colours | server browser colours | with `ui_colorservers` 1: grey for a password, anticheat or no-fake server, green under 30 ms, white otherwise | done | `games/shooters_edge/menu/servers_page.cpp` (`row_colour`): `sb_colorservers`, which Quake II spells `ui_colorservers` |
-| menu.script | the menu script file | `q2pro.menu`: pages and rows defined as text a player or mod can change | missing | ours pages are built in (`menu/main_menu.cpp`) |
+| menu.script | the menu script file | `q2pro.menu`: pages and rows defined as text a player or mod can change | done | `menu/menu_script.cpp`: `q2pro.menu` on the game's search path read over Quake II's pages when the game loads (`menu_script` 1, the default); every row word (values, strings, pairs, range, toggle with a bit, bind, action, bitmap, savegame, loadgame, blank, field), `include`, `$` and `$$` expansion, comments and joined lines; a script's page replaces ours of its name, a new one is added; player setup, LOAD, SAVE and the browsers stay ours; the look's words (background, font, cursor, colours, banner, plaque, style) are read and checked, ours draws its own look; a field is typed in the console |
 
 ## Server messages the client parses (svc)
 
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 74, partial 57, missing 3, not-taken 13
+done 75, partial 57, missing 2, not-taken 13
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1265,7 +1265,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.menu.nomenu | "No such menu: %s" | `pushmenu` of an unknown page | done | `games/shooters_edge/menu/game_menu.cpp` |
 | msg.menu.usage | "Usage: %s <menu>" | `pushmenu` alone | done | `games/shooters_edge/menu/game_menu.cpp` |
 | msg.menu.noplayers | "No player models found." | the player page with no figures | done | `games/shooters_edge/menu/main_menu.cpp` (`apply_event`): said, and the player page does not open |
-| msg.menu.script | "Unknown keyword '%s'" | a bad line in the menu script (and its other warnings) | missing | the feature is missing |
+| msg.menu.script | "Unknown keyword '%s'" | a bad line in the menu script (and its other warnings) | done | `menu/menu_script.cpp`: each told in the console with the file and line and what was done, the same outcomes ("'x' is not a menu script word, so the line is skipped." inside a page, "... so the rest of the file is not read." outside one; a row's form, a bad bit or width, a page with no rows or no end, a missing include, includes too deep, an unclosed quote, a line too long) |
 | msg.servers.http | "Can't fetch '%s', no HTTP support compiled in." | an HTTP server list without HTTP | not-taken | HTTP is always built in, and a secure (https) list is fetched over TLS (`engine/net/tls_stream.hpp`) |
 | msg.servers.badaddr | "Bad server address: %s" | a bad line in a server list | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.snd.notstarted | "Sound system not started." | `soundinfo` or `soundlist` with no sound | partial | `games/shooters_edge/client/menu_sound.cpp`: said by `soundinfo` with no sound device; `soundlist` is still missing |

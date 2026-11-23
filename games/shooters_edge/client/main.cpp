@@ -330,8 +330,10 @@ int run_main(int argc, char** argv) {
                                           std::chrono::system_clock::now().time_since_epoch())
                                           .count());
         });
-  // A game pointed at is copied into the data folder and played from there (client/take_in.hpp).
-  const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs);
+  // A game pointed at is copied into the data folder and played from there (client/take_in.hpp);
+  // `+set homedir <folder>` picks the folder.
+  const std::string data_root = cl::data_root(cl::placed_folder(ge::platform::app_dir()), prefs,
+                                              cl::take_home_dir(&args.plus));
   cl::adopt_placed_settings(cl::placed_folder(ge::platform::app_dir()), data_root);
   if (!cl::take_in_basedir(&args.basedir, data_root)) return 2;
   std::vector<cl::FoundInstall> installs;  // the console's `games`
@@ -592,8 +594,7 @@ int run_main(int argc, char** argv) {
     return cl::check_demo_line(p, adapter, f, why);
   });
   menu_host.maps.emplace_back("arena");
-  menu_host.table = &adapter.menu(adapter);  // the game's own pages
-  game_menu.set_table(*menu_host.table);
+  menu_host.table = &game_menu.set_table(adapter.menu(adapter), &files.vfs);  // the game's pages
   // ce_pictures: the menu's and the status bar's pictures enhanced from the packs' cache; read
   // again when it flips and when an enhance run ends (client/classic_pictures.hpp). The first read
   // is on a thread, behind the title; the menu opens once they are in.
@@ -982,6 +983,7 @@ int run_main(int argc, char** argv) {
       cl::ask_install(*window, args, measured);  // -classic <id>, none kept
   cl::add_take_in_commands(console, &folder_ask, &args.basedir, &music, &args.game,
                            &game_cvars.q2.remap_tracks);
+  cl::add_home_dir(console, data_root);
   cl::add_games_command(console, installs, folder_ask);  // `games`: the installs found, `games <n>`
   // A GAME SWITCHED SHOWS ITS LOADING: a console line and a frame before each long step of
   // `open_folder`, so the window never looks hung; the new game's look once its pictures are in.
@@ -1031,8 +1033,7 @@ int run_main(int argc, char** argv) {
     cl::start_switch_game(console, game_start, was_game, *adapter.game);
     cl::switch_game_cvars(console, game_cvars, *adapter.game, bindings);
     game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
-    menu_host.table = &adapter.menu(adapter);
-    game_menu.set_table(*menu_host.table);
+    menu_host.table = &game_menu.set_table(adapter.menu(adapter), &files.vfs);
     console.set_search_path(cl::config_dirs(args.basedir, args.game, *content));
     cl::run_game_settings(console, args.basedir, args.game, *content);  // its own meanings
     switch_step("Loading the game's rules...");
@@ -1104,6 +1105,7 @@ int run_main(int argc, char** argv) {
     music.held = cl::cinematic_on(cine);  // a movie's own sound: `ogg play` refused meanwhile
     ge::audio::music_frame(music, synth, console);
     cl::hear_swap(synth, under_ear);  // s_swapstereo
+    cl::hear_ears(synth, under_ear);  // s_hrtf
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one
@@ -1232,6 +1234,7 @@ int run_main(int argc, char** argv) {
     // menu keeps it and is driven by the keys unless the menu's bit is set.
     if (input.focus_lost) focused = false;
     if (input.focus_gained) focused = true;
+    if (input.focus_gained) cl::team_event(console, "f_focusgained");
     // SHIFT held over a demo playing at its pace takes the mouse for free look (demo_free_look).
     const bool shift_look = bench.active && bench.paced && !remote.active && !con_view.open() &&
                             !game_menu.open() &&
@@ -1629,8 +1632,11 @@ int run_main(int argc, char** argv) {
           : bench.clock < 0 ? ds.time
                             : bench.clock,
           t);
+      const bool was_free = free_look.held;  // SHIFT lets go of the player and takes him back
       cl::free_look_step(free_look, shift_look && mouse.held, held.mouse.dx, held.mouse.dy,
                          controls);
+      if (free_look.held != was_free)
+        cl::spectate_event(console, free_look.held ? "f_freeflyspectate" : "f_trackspectate");
       cl::free_look_apply(free_look, view);
       const double own_behind =  // cl_thirdperson: the player's own view from behind him
           demo_eyes.behind > 0

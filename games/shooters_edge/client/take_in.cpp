@@ -34,14 +34,46 @@ bool writable(const fs::path& dir) {
   return ok;
 }
 
+std::string lower_word(std::string s) {
+  for (char& c : s)
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  return s;
+}
+
 }  // namespace
 
-std::string data_root(const std::string& placed, const std::string& prefs) {
+std::string data_root(const std::string& placed, const std::string& prefs,
+                      const std::string& home) {
+  if (!home.empty() && writable(fs::path(home))) return fs::path(home).string();
   if (!prefs.empty() && writable(fs::path(prefs) / "data"))
     return (fs::path(prefs) / "data").string();
   if (!placed.empty() && writable(fs::path(placed) / "data"))
     return (fs::path(placed) / "data").string();
   return "";
+}
+
+std::string take_home_dir(std::vector<std::string>* plus) {
+  std::string home;
+  for (size_t i = 0; i + 2 < plus->size();) {
+    if (lower_word((*plus)[i]) == "+set" && lower_word((*plus)[i + 1]) == "homedir") {
+      home = expand_home((*plus)[i + 2]);
+      plus->erase(plus->begin() + static_cast<std::ptrdiff_t>(i),
+                  plus->begin() + static_cast<std::ptrdiff_t>(i + 3));
+    } else {
+      ++i;
+    }
+  }
+  return home;
+}
+
+void add_home_dir(ge::console::Console& con, const std::string& root) {
+  con.cvars().add({.name = "homedir",
+                   .fallback = root,
+                   .flags = ge::console::kReadOnly,
+                   .help = "The folder the game writes in: the games taken in, your settings, "
+                           "screenshots, recordings and downloads. Choose it with +set homedir on "
+                           "the command line.",
+                   .kind = ge::console::CvarKind::text});
 }
 
 bool adopt_placed_settings(const std::string& placed, const std::string& root) {

@@ -35,7 +35,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Layer | `add_first` in `client/cvar_layers.cpp` | `add_q2` | `add_<game>` | `add_<game>` |
 | Status bar | its pictures in fixed places | a layout program from the server (`hud/q2_layout.hpp`, `client/q2_bar.hpp`, `server/q2_bar.hpp`), its scale, switches and lag graph (`client/q2_view.hpp`) | its client half's HUD (bytecode or native) | its own bar |
 | Menu letters | carved letters cut from its strips (`menu/carved_letters.hpp`) | plate letters cut as ink (`menu/plate_letters.hpp`) | its own font pictures | its own font lumps |
-| Menu pages | `menu::classic_menu()` | its own pages (`menu/q2_pages.cpp`: its setup pages, key rows, deathmatch flags by bit, the in-game page ESCAPE opens in a level) | its own (multiplayer only) | its own |
+| Menu pages | `menu::classic_menu()` | its own pages (`menu/q2_pages.cpp`: its setup pages, key rows, deathmatch flags by bit, the in-game page ESCAPE opens in a level), with `q2pro.menu` read over them (`menu/menu_script.hpp`, `menu_script`) | its own (multiplayer only) | its own |
 | Save slots' word | "--- UNUSED SLOT ---" (`kUnusedSlot`) | `kEmptySlot` (`menu::q2_menu()`) | its own | its own |
 | Field of view | the player's own `fov` | the server's, drawn between frames (`client/q2_view.hpp`: `cl_adjustfov`, `uf`) | its own | its own |
 | Plaques | the pack's pause and loading pictures (`menu::draw_plaque`, `showpause`) | its own | its own | its own |
@@ -107,6 +107,8 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | The lag graph and the lost-connection picture | Quake II's client | `engine/hud/net_graph.hpp` (`draw_lag_graph`), both games' packets |
 | Sound muffled under water (`s_underwater`, off in Quake) | Quake II's client | `engine/audio/synth.hpp`'s muffle, `client/room_ear.hpp` |
 | Speakers swapped (`s_swapstereo`) | both games' later clients | `engine/audio/synth.hpp`'s `swap_stereo`, `client/room_ear.hpp` |
+| Two ears for headphones (`s_hrtf`, Quake II's `al_hrtf`): the far ear later, softer and duller | Quake II's later client | `engine/audio/synth.hpp`'s `binaural`, `client/room_ear.hpp` |
+| The folder the game writes in (`+set homedir`) | Quake II's later client, any game's here | `client/take_in.hpp` |
 | Typed history kept to a length (`con_history`) | Quake II's client | `engine/console/view.hpp` |
 | The string commands (`alias_in`, `cvar_in`, `set_bind_str`, `hash` ...), `msg_trigger` levels, `$triggermatch` | Quake's later clients | `engine/console/script_strings.cpp`, `script.cpp` |
 | Alias arguments `$0`, `$@`, `${1-3}`, `%1`; `if ... eq/ne/isin` | Quake II's later client | `engine/console/lex.cpp`, `script.cpp` |
