@@ -60,6 +60,22 @@ NetQuake servers, which are not joined (C107 not taken; `pingservers` asks Quake
 only), and QuakeWorld's `cl_chasecam` has no off state of ours to map (a tracked player is always
 seen through his eyes, or from behind by `cam_thirdperson`).
 
+## The mission packs, audited for things built twice (2026-11-23)
+
+Read against main and the open pack branches (#1415, #1420, #1426, #1428, #1432, #1433, #1435).
+Quake's two packs run their own programs in the QC VM, so their weapons, mines, spheres and tag
+are the program's and nothing of ours is built for them twice; the meeting points are the client,
+the content and the remix tables.
+
+| Feature | Where | Finding |
+| --- | --- | --- |
+| Beams (Ground Zero's plasma beam and tesla, Quake's bolts, cl_fakeshaft) | `client/chain.hpp`, `beam_trace` | shared already: #1433 draws the pack beams as a `Chain` with a link length, roll and frame, and aims the plasma beam by the same trace as Quake's beam |
+| Timed powerups (quad, The Reckoning's dual fire, Ground Zero's double damage) | `server/q2_powers.hpp` | shared already: one table, The Reckoning's PR builds it and Ground Zero's sits on it |
+| Pack detection | `classicenhance/profile.hpp` (the import), `server/q2_pack.cpp` (the rules' switch) | two lists, kept in step by a test now (`the_rules_switch_knows_every_pack_the_import_knows`) |
+| A pack's items in remix and `cr_expansions` | `profiles/remix.hpp` `kPackItems` | one list for all four packs: #1432 adds Scourge's and Ground Zero's, the Dissolution and Reckoning threads add theirs, with a test over every profile's packs |
+| `te_plasma_explosion` | #1415 (28), #1428 (7) | one number: 28, settled between the two threads |
+| Proximity mine, tag, spheres, decoy | Scourge's and Dissolution's programs, Ground Zero's C++ | nothing to share: one side is the pack's own QC |
+
 ## The mission packs' settings
 
 The mission pack threads check `common-settings.md` before naming a setting (told 2026-11-23). On
