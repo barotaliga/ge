@@ -586,7 +586,7 @@ void add_first(con::Console& c, const GameBindings& b) {
 // - the maps' light: `intensity` and `gl_brightness` (Quake's stay 2 and 0; `gl_modulate`, the
 //   lightmaps' scale, is every game's: the classic look's);
 // - `gl_anisotropy` the classic look's, 1 (none) by default where Quake's is 0 (the renderer's
-//   own); `gl_swapinterval` its spelling of `vid_vsync`;
+//   own); `gl_swapinterval` its spelling of `vid_vsync`, `demo` its spelling of `playdemo`;
 // - its chat: its own `cl_chat_sound` (one sound by number or name) and `con_auto_chat` (2 says a
 //   typed line to the team, where our `con_chat` 2 tells a command by its first word);
 // - its view and 2D (q2_view.hpp): `scr_scale`, `scr_draw2d`, `scr_alpha`, the lag graph's
@@ -664,6 +664,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
          .overlap = con::Overlap::same});
   if (v.find("vid_vsync") != nullptr)  // the window's (platform/pacing.cpp)
     v.add_synonym("gl_swapinterval", "vid_vsync");
+  if (c.has_command("playdemo")) c.add_command_synonym("demo", "playdemo");  // its demo's name
   v.add({.name = "rate",  // the bytes a second its servers may send: more than Quake's
          .fallback = "15000",
          .flags = con::kArchive | con::kUserInfo,
