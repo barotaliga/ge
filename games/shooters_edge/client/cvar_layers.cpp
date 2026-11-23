@@ -860,7 +860,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.add_synonym(name, ours);
   // Its chat sound (0 none, 1 talk, 2 talk1, or a name) over s_chat_custom (chat_lines.hpp), and
   // what a line typed in the console is (0 a command, 1 said, 2 said to the team) over con_chat.
-  if (b.chat != nullptr) add_q2_chat_sound(c, *b.chat);
+  if (b.chat != nullptr) add_q2_chat_sound(c, *b.chat), add_q2_chat_place(c, *b.chat);
   if (b.console_view != nullptr) {
     v.bind({.name = "con_auto_chat",
             .fallback = "0",
