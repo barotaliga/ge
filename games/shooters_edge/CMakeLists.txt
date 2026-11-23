@@ -158,6 +158,7 @@ file(GLOB SHOOTERS_EDGE_MENU_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DI
 add_library(shooters_edge_menu STATIC ${SHOOTERS_EDGE_MENU_SOURCES})
 target_include_directories(shooters_edge_menu PUBLIC ${PROJECT_SOURCE_DIR}/games)
 target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_net ge_server ge_forward ge_classicenhance
+                                            ge_classic ge_morph ge_overview
                                             ge_assets ge_play shooters_edge_hud)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_menu)
 # SELECT GAME's pictures of the games' names, by content profile (menu/games_page.cpp).
