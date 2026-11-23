@@ -20,6 +20,7 @@
 #include "assets/image.hpp"
 #include "assets/tga.hpp"
 #include "brush/read.hpp"
+#include "classic/q2_fx_switches.hpp"
 #include "classic/vweps.hpp"
 #include "classicenhance/cached.hpp"
 #include "classicenhance/models.hpp"
@@ -1252,6 +1253,29 @@ void add_shadow(WorldModels& m, const Placed& p, const ModelKind& k, const World
   m.morph_draws.push_back(shadow);
 }
 
+// gl_celshading's ink line round the solid draw `plain` (`dist2` its squared distance from the
+// eye, m): the same model, its back faces pushed out by half the line's width at that distance,
+// black, as see-through as the line has faded (classic/q2_fx_switches.hpp's q2_outline_px).
+void add_ink(WorldModels& m, const InPlace& in_place, const gr::FrameView& view, double dist2,
+             const gr::MorphDraw& plain) {
+  if (in_place.cel_shading <= 0 || in_place.view_px <= 0 || plain.alpha < 1 ||
+      plain.warp.shown < 1 || m.morph_draws.size() >= gr::kMaxMorphDraws)
+    return;
+  const double d_m = std::sqrt(dist2);
+  const double units = d_m / br::kUnitM;
+  const double px = ge::classic::q2_outline_px(in_place.cel_shading, units);
+  if (px <= 0) return;
+  const double px_m = 2 * std::max(d_m, view.near_m) * std::tan(view.fov_y / 2) / in_place.view_px;
+  gr::MorphDraw ink = plain;
+  ink.outline = true;
+  ink.shell_push = float(0.5 * px * px_m);
+  ink.shell[0] = ink.shell[1] = ink.shell[2] = 0;
+  ink.alpha = float(ge::classic::q2_outline_share(in_place.cel_shading, units));
+  ink.burn = {};
+  ink.blood = {};
+  m.morph_draws.push_back(ink);
+}
+
 }  // namespace
 
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
@@ -1468,6 +1492,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     if (p.holo_blue > 0) hologram_light(g, p.holo_blue);
     if (!p.shell_only) m.morph_draws.push_back(g);
     if (in_place.shadows > 0 && !p.shell_only) add_shadow(m, p, k, lit, in_place.shadows, g);
+    if (!p.shell_only && !power.shell && p.holo_shell <= 0) add_ink(m, in_place, view, dist, g);
     if (power.shell) add_shell(m, p, power, g, t);
     if (p.holo_shell > 0) add_hologram_shell(m, p, g);
     // The weapon in a copied-in figure's hand: the same place, light and frame, its own picture.
@@ -1484,6 +1509,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
       hw.last = held_last == m.last_pose.end() || p.warp.shown < 1 ? hw.now : held_last->second;
       m.last_pose[held_entity] = hw.now;
       m.morph_draws.push_back(hw);
+      if (!power.shell) add_ink(m, in_place, view, dist, hw);
       if (power.shell) add_shell(m, p, power, hw, t);
     }
   }

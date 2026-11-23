@@ -674,6 +674,16 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   v.set("gl_coloredlightmaps", "0.25", con::Source::local);
   v.set("cl_lerp_lightstyles", "1", con::Source::local);
   CHECK(fx.lightmap_saturation == 0.25 && fx.lerp_styles);
+  // The ink line and the explosions' steps.
+  CHECK(fx.cel_shading == 0 && fx.smooth_explosions);
+  v.set("gl_celshading", "20", con::Source::local);  // held to 0..10
+  v.set("cl_smooth_explosions", "0", con::Source::local);
+  CHECK(fx.cel_shading == 10 && !fx.smooth_explosions);
+  CHECK(ge::classic::q2_outline_px(fx.cel_shading, 0) == 10);
+  CHECK(ge::classic::q2_outline_px(fx.cel_shading, 350) == 5);     // half at 350 units
+  CHECK(ge::classic::q2_outline_share(fx.cel_shading, 695) == 0);  // gone past about 693
+  CHECK(ge::classic::q2_outline_px(0, 0) == 0);
+  CHECK(ge::classic::q2_blast_age(fx, 0.27) == 0.2 && ge::classic::q2_blast_age(fx, 0.05) == 0);
   v.set("cl_beginmapcmd", "record", con::Source::local);
   v.set("cl_autopause", "0", con::Source::local);
   CHECK(w.game.q2.begin_cmd == "record" && !w.game.q2.autopause);
@@ -689,6 +699,8 @@ TEST(q2_spells_our_effect_switches_and_runs_its_own_session_settings) {
   CHECK(w.picture.q2fx.draw_sky && w.picture.q2fx.fog && w.picture.q2fx.anisotropy == 0);
   CHECK(!w.picture.q2fx.double_light && !w.picture.q2fx.roll_hack);
   CHECK(w.picture.q2fx.dlight_falloff == -1 && w.picture.q2fx.lightmap_saturation == 1);
+  CHECK(w.picture.q2fx.cel_shading == 0 && w.picture.q2fx.smooth_explosions);
+  CHECK(ge::classic::q2_blast_age(w.picture.q2fx, 0.27) == 0.27);  // as it is
   CHECK(w.game.q2.begin_cmd == "record" && w.game.q2.autopause && w.game.q2.timescale == 1);
   CHECK(v.find("cl_beginmapcmd") != nullptr && v.find("sv_running") == nullptr);
   CHECK(v.clashes().empty());

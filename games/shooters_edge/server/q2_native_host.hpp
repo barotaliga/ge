@@ -141,6 +141,8 @@ NativeHost* native_current();
 NativeSetting& native_setting(NativeHost& h, const std::string& name, const std::string& value,
                               int flags);
 void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool force);
+// map_noareas set: every area joined to every other, the portals ignored.
+bool native_no_areas(const NativeHost& h);
 // A slot's bytes (a print to slot `slot`, reliable).
 void native_print(NativeHost& h, int slot, int level, const std::string& text);
 // Splits `line` into the arguments the library reads (`argc`, `argv`, `args`).

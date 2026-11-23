@@ -337,6 +337,7 @@ bool create_morph(gpu::Device& device, gpu::PipelineSet& pipelines, Morph& morph
   sv.dimension = wgpu::TextureViewDimension::e2DArray;
   morph.staged.assign(kMaxMorphDraws * sizeof(GpuDraw), 0);
   morph.staged_models.assign(kMaxMorphDraws, 0);
+  morph.staged_outline.assign(kMaxMorphDraws, 0);
 
   const auto vf = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
   morph.layout =
@@ -371,6 +372,9 @@ bool create_morph(gpu::Device& device, gpu::PipelineSet& pipelines, Morph& morph
   desc.depthStencil = &depth;
   desc.fragment = &fragment;
   morph.p_draw = pipelines.add_render(device, desc);
+  desc.label = "morph.outline";
+  desc.primitive.cullMode = wgpu::CullMode::Front;  // the back faces alone: a rim round it
+  morph.p_outline = pipelines.add_render(device, desc);
   return true;
 }
 
@@ -475,6 +479,7 @@ void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw>
     }
     std::memcpy(&morph.staged[morph.drawn * sizeof(GpuDraw)], &g, sizeof g);
     morph.staged_models[morph.drawn] = d.model;
+    morph.staged_outline[morph.drawn] = d.outline && d.shell_push > 0 ? 1 : 0;
     ++morph.drawn;
   }
   if (morph.drawn > 0) {
@@ -502,10 +507,15 @@ void encode_morph(const Morph& morph, const gpu::PipelineSet& pipelines, FrameRe
   desc.depthStencilAttachment = &depth;
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "morph");
   if (morph.drawn > 0) {
-    pass.SetPipeline(pipelines.render(morph.p_draw));
     pass.SetBindGroup(0, frame);
     pass.SetBindGroup(1, morph.group);
+    int bound = -1;  // the pipeline set: 0 the plain draw's, 1 the outline's
     for (uint32_t k = 0; k < morph.drawn; ++k) {
+      const int want = morph.staged_outline[k];
+      if (want != bound) {
+        pass.SetPipeline(pipelines.render(want != 0 ? morph.p_outline : morph.p_draw));
+        bound = want;
+      }
       pass.Draw(morph.index_counts[morph.staged_models[k]], 1, 0, k);
       ++rec.current().draws;
     }

@@ -367,6 +367,9 @@ struct InPlace {
   int self = 0;
   // The models' ground shadows (model_shadow.hpp's mode: 0 none, 1 under each, 2 fading).
   int shadows = 0;
+  // gl_celshading: an ink line this many pixels wide round each solid model (thinner and fainter
+  // with distance, classic/q2_fx_switches.hpp's q2_outline_px), on a view `view_px` high; 0 none.
+  double cel_shading = 0, view_px = 0;
 };
 
 // `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a
