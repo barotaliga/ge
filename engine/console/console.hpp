@@ -49,6 +49,7 @@
 
 #include "console/binds.hpp"
 #include "console/cvar.hpp"
+#include "console/manual.hpp"
 
 namespace ge::console {
 
@@ -171,6 +172,11 @@ class Console {
   // `name` runs our command `target`: a game's own spelling of it, in the cvars' current layer
   // (cvar.hpp § LAYERS), so it goes with that layer (`drop_layer`).
   void add_command_synonym(std::string_view name, std::string_view target);
+  // THE MANUAL (manual.hpp): what the program says about itself (its name, games and flags) for
+  // `writemanual` and the generated reference manual.
+  void set_manual(ManualInfo info) { manual_ = std::move(info); }
+  ManualInfo& manual() { return manual_; }
+  const ManualInfo& manual() const { return manual_; }
   // Every command synonym as (its name, the command it runs), sorted by name.
   std::vector<std::pair<std::string, std::string>> command_synonyms() const;
   // A layer taken away: its cvars and setting synonyms (`Cvars::drop_layer`) and its command
@@ -316,6 +322,7 @@ class Console {
     std::string help;
     CommandFn fn;
     uint32_t flags = 0;
+    std::string layer;  // the cvars' layer when it was added (cvar.hpp § LAYERS)
   };
   const std::map<std::string, Command>& commands() const { return commands_; }
 
@@ -367,6 +374,7 @@ class Console {
     std::string target, layer;
   };
   std::map<std::string, CommandSynonym> command_synonyms_;
+  ManualInfo manual_;
   std::map<std::string, Alias> aliases_;
   std::map<std::string, std::function<std::string()>> macros_;
   std::string width_prefix_, align_prefix_;  // set_macro_widths

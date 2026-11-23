@@ -69,5 +69,15 @@ int main(int argc, char** argv) {
         "its own protocol; -game runs a mod's folder over the base game\n");
   const ge::server::ServerGame& game =
       number == 2 ? shooters_edge::net::q2_game() : shooters_edge::net::qw_game();
-  return ge::server::server_main(static_cast<int>(args.size()), args.data(), game);
+  // The reference manual (`--manual=PATH`): the server's games, this run's pass and its own flags.
+  ge::console::ManualInfo manual;
+  manual.program = {"sesv", "Dedicated server", {}};
+  manual.games = {{"qw", "QuakeWorld", {}}, {"q2", "Quake II", {}}};
+  manual.pass = number == 2 ? "q2" : "qw";
+  manual.flags = {
+      {"-classic", "<id>",
+       "Serve that classic game: q1 (QuakeWorld's deathmatch on its protocol, the default) or q2 "
+       "(Quake II's rules on its own protocol). Also --classic=<id>."},
+      {"-game", "<folder>", "Run a mod's folder over the base game (the same as --mod=<folder>)."}};
+  return ge::server::server_main(static_cast<int>(args.size()), args.data(), game, manual);
 }
