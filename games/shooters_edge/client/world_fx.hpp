@@ -342,6 +342,14 @@ struct FxState {
     double born = 0;
   };
   std::vector<Q2Laser> q2_lasers;
+  // Quake II's bubbles as the engine's bubble sprites (ce_bubbles): each from its trail, born at.
+  struct OwnBubble {
+    effects::RisingBubble b;
+    double born = 0;
+    uint32_t id = 0;
+  };
+  std::vector<OwnBubble> own_bubbles;
+  uint32_t bubble_ids = 0;
   // THE MONSTERS' MISSILES (app/monster_fx.hpp: a model the replacement table or its trail flags
   // name): each in flight as it was a frame ago (m, and map units), the way it flew, its kind and
   // its classic trail's side; those gone this frame (where their spit lands); the splashes whose
@@ -584,11 +592,15 @@ void land_drops(FxState& s, double t);
 void tread_blood(const FxScene& l, FxState& s, std::span<const Placed> placed, double t);
 // QUAKE II'S OWN (client/world_fx_q2.cpp): a named `sq_*` effect `e` at `p` (engine m; `dust`:
 // a warp's dust already covers it), a trail `sq_bubbles`/`sq_force_wall` over `from`..`to` (false
-// for any other name), and a flying entity's effect-bit mark (`Q2Look::Missile`) and spinning
-// lights at `to` (`moved`: it has a stretch from `from`) at `t` s.
+// for any other name; the bubbles as the engine's own under ce_bubbles), and a flying entity's
+// effect-bit mark (`Q2Look::Missile`) and spinning lights at `to` (`moved`: it has a stretch from
+// `from`) at `t` s.
 void q2_named_fx(FxState& s, const Effect& e, const double p[3], bool dust, double t, FxFrame& out);
-bool q2_named_trail(FxState& s, const Effect& e, const double from[3], const double to[3],
+bool q2_named_trail(FxState& s, const Effect& e, const double from[3], const double to[3], double t,
                     FxFrame& out);
+// Quake II's bubbles under ce_bubbles (the trail above made them into `own_bubbles`): each live
+// one placed as the engine's bubble sprite (EffectModel::bubble), the spent ones dropped.
+void q2_place_bubbles(FxState& s, int effect_models, double t, FxFrame& out);
 // QUAKE II'S MODEL EFFECTS in the classic look (client/world_fx_q2.cpp, q2_model_fx.hpp): the
 // pool's effects of kind `code` at `at` off a face along `way` (map units); a blast of kind `code`
 // (its specks unless `no_specks`, its ball or burst and its light; false: not one of Quake II's

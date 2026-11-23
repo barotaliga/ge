@@ -1573,7 +1573,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         put(engine_point(e.at), from);
         put(engine_point(e.end), to);
         // Quake II's bubbles and force walls along their lines (client/world_fx_q2.cpp).
-        if (q2_named_trail(s, e, from, to, out)) break;
+        if (q2_named_trail(s, e, from, to, t, out)) break;
         // Quake II's cables in the classic look: a segment model every 30 units (q2_model_fx.hpp).
         if (l.q2 && !s.on.monsters && q2_cable(s, e, t)) break;
         // Quake II's monsters' cables (a parasite's tongue, a medic's line) and shots leaving.
@@ -1819,6 +1819,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     out.models.push_back(spr);
   }
   q2_draw_model_fx(s, l.effect_models, l.me, l.own > 0 ? l.me.entity : 0, t, out);
+  q2_place_bubbles(s, l.effect_models, t, out);
 
   // The powers held: a glow round each holder (blue the quad's, red the shield's), the local
   // player's own among them.
