@@ -25,6 +25,10 @@
 //   `nosave` refuses saving; `extra` prints the connection's extra user info, `cs <n>` a
 //   configstring, `clip` the box clipped alone, `vis` the visibility kinds, `files` a file
 //   written, read back and listed, `grow` a block grown, `beep` a sound to the player alone.
+// - built a second time with `FIXTURE_NEW_INTERFACE` (into `fixture3302/`): the newer interface
+//   (version 3302), its client records, player state and move record; its trace keeps the masks
+//   the move asked for, and `plane` prints the last move's ground plane, the ladder mask's use,
+//   the move's flags and the ping the server wrote.
 //
 // ge:summary A game library of Quake II's interface for the native host's test
 // ge:keywords game-library fixture native-host test-library m18v10
@@ -46,8 +50,22 @@ namespace {
 
 using namespace shooters_edge::server::native;  // NOLINT(google-build-using-namespace)
 
+#if defined(FIXTURE_NEW_INTERFACE)
+using ClientHead = NativeClientHeadNew;
+using MoveBlock = NativeMoveBlockNew;
+using MoveState = NativeMoveStateNew;
+using Packed = int32_t;
+constexpr int kVersion = kNativeVersionNew;
+#else
+using ClientHead = NativeClientHead;
+using MoveBlock = NativeMoveBlock;
+using MoveState = NativeMoveState;
+using Packed = int16_t;
+constexpr int kVersion = kNativeVersion;
+#endif
+
 struct Client {
-  NativeClientHead head;
+  ClientHead head;
   int score;
   int health;
 };
@@ -82,9 +100,21 @@ bool hide_box = false;
 bool may_save = true;
 char extra_info[512] = "";
 
+// A player's record: the client pointer is the interface's own record.
+ClientHead& client_of(NativeEntityHead* ent) { return *reinterpret_cast<ClientHead*>(ent->client); }
+
+#if defined(FIXTURE_NEW_INTERFACE)
+int ladder_asks = 0;  // traces the move asked with the ladder's mask
+MoveBlock last_move;  // the last move's record, as the server left it
+NativeTrace trace_cb(const float* a, const float* lo, const float* hi, const float* b, int mask) {
+  if (mask == 0x20000000) ladder_asks++;
+  return gi.trace(a, lo, hi, b, mover, mask);
+}
+#else
 NativeTrace trace_cb(const float* a, const float* lo, const float* hi, const float* b) {
   return gi.trace(a, lo, hi, b, mover, kMaskPlayer);
 }
+#endif
 
 int contents_cb(const float* p) { return gi.pointcontents(p); }
 
@@ -97,7 +127,8 @@ void init() {
   game.edict_size = sizeof(Entity);
   game.max_edicts = kMostEntities;
   game.num_edicts = max_clients + 1;
-  for (int i = 0; i < max_clients; i++) entities[i + 1].head.client = &clients[i].head;
+  for (int i = 0; i < max_clients; i++)
+    entities[i + 1].head.client = reinterpret_cast<NativeClientHead*>(&clients[i].head);
   // The features it asks for: enhanced saves unless `fixture_unsafe` 1 (a library that cannot be
   // saved safely), and with the extended interface proper in-use and the extra user info.
   const int offered = static_cast<int>(gi.cvar("sv_features", "0", 0)->value);
@@ -187,13 +218,13 @@ void client_begin(NativeEntityHead* ent) {
   std::memcpy(ent->mins, lo, sizeof lo);
   std::memcpy(ent->maxs, hi, sizeof hi);
   std::memcpy(ent->s.origin, spot, sizeof spot);
-  NativeMoveState& m = ent->client->ps.move;
+  MoveState& m = client_of(ent).ps.move;
   std::memset(&m, 0, sizeof m);
-  for (int k = 0; k < 3; k++) m.origin[k] = static_cast<int16_t>(spot[k] * 8);
+  for (int k = 0; k < 3; k++) m.origin[k] = static_cast<Packed>(spot[k] * 8);
   m.gravity = 800;
-  ent->client->ps.fov = 90;
-  ent->client->ps.gun_index = gi.modelindex("models/weapons/v_blast/tris.md2");  // the first gun
-  ent->client->ps.gun_frame = 3;
+  client_of(ent).ps.fov = 90;
+  client_of(ent).ps.gun_index = gi.modelindex("models/weapons/v_blast/tris.md2");  // the first gun
+  client_of(ent).ps.gun_frame = 3;
   gi.linkentity(ent);
   gi.bprintf(2, "player %d entered the game\n",
              static_cast<int>(reinterpret_cast<Entity*>(ent) - entities));
@@ -206,20 +237,23 @@ void client_disconnect(NativeEntityHead* ent) {
 }
 
 void client_think(NativeEntityHead* ent, NativeCmd* cmd) {
-  NativeMoveBlock pm;
+  MoveBlock pm;
   std::memset(&pm, 0, sizeof pm);
-  pm.s = ent->client->ps.move;
+  pm.s = client_of(ent).ps.move;
   pm.cmd = *cmd;
   pm.trace = trace_cb;
   pm.pointcontents = contents_cb;
   mover = ent;
-  gi.pmove(&pm);
-  ent->client->ps.move = pm.s;
+  gi.pmove(reinterpret_cast<NativeMoveBlock*>(&pm));  // the interface's own record
+#if defined(FIXTURE_NEW_INTERFACE)
+  last_move = pm;
+#endif
+  client_of(ent).ps.move = pm.s;
   for (int k = 0; k < 3; k++) {
-    ent->s.origin[k] = pm.s.origin[k] * 0.125f;
-    ent->client->ps.view_angles[k] = pm.view_angles[k];
+    ent->s.origin[k] = float(pm.s.origin[k]) * 0.125f;
+    client_of(ent).ps.view_angles[k] = pm.view_angles[k];
   }
-  ent->client->ps.view_offset[2] = pm.view_height;
+  client_of(ent).ps.view_offset[2] = pm.view_height;
   gi.linkentity(ent);
   if ((cmd->buttons & 1) != 0) {
     gi.write_byte(3);  // a temporary entity
@@ -238,6 +272,14 @@ void client_command(NativeEntityHead* ent) {
   if (std::strcmp(w, "score") == 0) {
     gi.cprintf(ent, 2, "your score: %d (%s)\n", reinterpret_cast<Client*>(ent->client)->score,
                gi.args());
+#if defined(FIXTURE_NEW_INTERFACE)
+  } else if (std::strcmp(w, "plane") == 0) {
+    const NativePlane& g = last_move.groundplane;
+    gi.cprintf(ent, 2, "plane %.2f %.2f %.2f %.1f type %d ladder %d flags %d ping %d\n",
+               static_cast<double>(g.normal[0]), static_cast<double>(g.normal[1]),
+               static_cast<double>(g.normal[2]), static_cast<double>(g.dist), g.type, ladder_asks,
+               client_of(ent).ps.move.flags, client_of(ent).ping);
+#endif
   } else if (std::strcmp(w, "crash") == 0) {
     gi.error("asked to stop by %s", w);
   } else if (std::strcmp(w, "layout") == 0) {
@@ -325,9 +367,9 @@ void run_frame() {
   for (int i = 0; i < max_clients; i++) {
     Entity& e = entities[i + 1];
     if (e.head.inuse == 0) continue;
-    e.head.client->ps.stats[1] =
+    client_of(&e.head).ps.stats[1] =
         static_cast<int16_t>(reinterpret_cast<Client*>(e.head.client)->health);
-    e.head.client->ps.stats[14] = static_cast<int16_t>(frames);
+    client_of(&e.head).ps.stats[14] = static_cast<int16_t>(frames);
   }
   for (int n = 0; n < game.num_edicts; n++)
     std::memcpy(entities[n].head.s.old_origin, entities[n].head.s.origin, sizeof(float) * 3);
@@ -387,7 +429,7 @@ void read_level(const char* file) {
       gi.error("bad level file");
     if (e.inuse == 0) continue;
     std::memcpy(e.s.origin, o, sizeof o);
-    for (int k = 0; k < 3; k++) e.client->ps.move.origin[k] = static_cast<int16_t>(o[k] * 8);
+    for (int k = 0; k < 3; k++) client_of(&e).ps.move.origin[k] = static_cast<Packed>(o[k] * 8);
   }
   std::fclose(f);
   gi.linkentity(&entities[max_clients + 2].head);
@@ -434,7 +476,7 @@ FIXTURE_EXPORT NativeExports* GetGameAPI(NativeImports* imports) {
   hide_box = false;
   may_save = true;
   game = NativeExports{};
-  game.apiversion = kNativeVersion;
+  game.apiversion = kVersion;
   game.init = init;
   game.shutdown = shutdown;
   game.spawn_entities = spawn_entities;

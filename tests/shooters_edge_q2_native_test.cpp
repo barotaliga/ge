@@ -72,13 +72,13 @@ const std::filesystem::path kRoot = GE_NATIVE_ROOT;
 const std::filesystem::path kRoot;
 #endif
 
-sv::RulesRunner start() {
+sv::RulesRunner start(const std::string& mod = "fixturemod") {
   std::filesystem::path lib;
-  CHECK(sv::find_native_library(kRoot, "fixturemod", "base", lib));
+  CHECK(sv::find_native_library(kRoot, mod, "base", lib));
   sv::NativeQ2Options o;
   o.library = lib;
   o.max_clients = 4;
-  o.game = "fixturemod";
+  o.game = mod;
   std::string error;
   std::unique_ptr<sv::NativeQ2> s = sv::load_native_q2(o, error);
   CHECK_MSG(s != nullptr, error);
@@ -152,6 +152,12 @@ bool holds(const std::vector<uint8_t>& b, const std::string& text) {
   return std::search(b.begin(), b.end(), text.begin(), text.end()) != b.end();
 }
 
+std::string said(const std::vector<uint8_t>& b, const std::string& head) {
+  const auto at = std::search(b.begin(), b.end(), head.begin(), head.end());
+  if (at == b.end()) return "";
+  return std::string(at, std::find(at, b.end(), uint8_t{'\n'}));
+}
+
 float x_of(const sv::NativeQ2& s) { return float(s.raw.players[0].origin[0]) * 0.125f; }
 float z_of(const sv::NativeQ2& s) { return float(s.raw.players[0].origin[2]) * 0.125f; }
 
@@ -221,6 +227,34 @@ TEST(a_player_joins_moves_on_the_floor_and_is_stopped_by_the_box) {
   std::vector<uint8_t> block, rel;
   sv::q2_frame_raw(w, s->raw, static_cast<int32_t>(s->frame_number), block, rel);
   CHECK(!block.empty() && block[0] == 20);  // the frame message
+}
+
+// A library of the newer interface (version 3302): its wider client records, player state and
+// move record are read and written where the game lays them out. The move runs on the floor with
+// 32-bit state, fills the ground plane, probes for a ladder with the ladder's mask and clears the
+// on-ladder flag; the ping goes into the newer client record, and the 64 stats reach the wire.
+TEST(a_library_of_the_newer_interface_moves_its_players_through_its_own_records) {
+  sv::RulesRunner r = start("fixture3302");
+  sv::NativeQ2* s = sv::native_q2_of(r);
+  if (s == nullptr) return;
+  CHECK(s->host->new_interface);
+  r->clients[0].userinfo = {{"name", "tester"}, {"skin", "male/grunt"}};
+  r.connect(0, "tester", false, false, nullptr);
+  CHECK(holds(s->raw.reliable[0], "player 1 entered the game"));
+  r->clients[0].ping_ms = 42;
+  ticks(r, 77, 0);
+  CHECK(s->raw.players[0].stats[1] == 100);
+  CHECK_MSG(z_of(*s) > 23 && z_of(*s) < 25, "on the floor: z " + std::to_string(z_of(*s)));
+  CHECK(s->raw.players[0].gun_index != 0);  // the gun the game gave, read at its own offset
+  ticks(r, 154, 400);
+  const float x = x_of(*s);
+  CHECK_MSG(x > -200 && x < -200 + 96 - 31, "stopped short of the box: x " + std::to_string(x));
+  s->raw.reliable[0].clear();
+  r.client_command(0, "plane");
+  const std::string line = said(s->raw.reliable[0], "plane ");
+  CHECK_MSG(line.starts_with("plane 0.00 0.00 1.00 0.0 type 2 ladder "), line);
+  CHECK_MSG(line.find(" flags 4 ping 42") != std::string::npos, line);  // on the ground alone
+  CHECK_MSG(line.find(" ladder 0 ") == std::string::npos, line);        // the probe asked its mask
 }
 
 // Classic remix's `cr_physics q1` over a mod (`cr_over_mods`): the window's line `set sv_physics
@@ -444,12 +478,6 @@ sv::RulesRunner start_ex(int max_clients = 4, bool deathmatch = true) {
   map.brushes = hall();
   CHECK_MSG(r.start(map, error), error);
   return r;
-}
-
-std::string said(const std::vector<uint8_t>& b, const std::string& head) {
-  const auto at = std::search(b.begin(), b.end(), head.begin(), head.end());
-  if (at == b.end()) return "";
-  return std::string(at, std::find(at, b.end(), uint8_t{'\n'}));
 }
 
 TEST(the_extended_interface_answers_the_games_calls_and_asks_its_own) {

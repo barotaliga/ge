@@ -89,7 +89,7 @@ constexpr Kind kKinds[] = {
      "te_monster_flash"},
 };
 
-void pack(int16_t v[3], sh::Vec3f p) {
+void pack(int32_t v[3], sh::Vec3f p) {
   const float c[3] = {p.x, p.y, p.z};
   for (int k = 0; k < 3; k++) v[k] = static_cast<int16_t>(std::lround(c[k] * 8));
 }
@@ -156,7 +156,7 @@ void hold(Staged& g) {
   sv::Q2Server* s = sv::q2_of(*g.l.rules);
   sv::Q2Player& p = s->players[0];
   pack(p.move.origin, g.stand);
-  for (int16_t& v : p.move.velocity) v = 0;
+  for (int32_t& v : p.move.velocity) v = 0;
   p.body.health = 100;
 }
 
