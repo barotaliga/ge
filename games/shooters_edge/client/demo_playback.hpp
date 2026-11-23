@@ -47,6 +47,7 @@
 // ge:keywords demo playback playdemo play-bar seek scrub pause resume speed cl_demospeed skip
 // ge:keywords demo_skip demo_skip_forward demo_skip_back demo_next demo_prev demo_seek
 // ge:keywords demo_pause demo_highlights demo_bar demo_track highlights markers video-player
+// ge:keywords scr_demobar demo-bar-percent
 // ge:keywords add_demo_commands timedemo playdemo demo_lerp cl_democlock demo-clock cl_demowait
 // ge:keywords cl_startupdemo startup-demo cam_thirdperson cam_dist demo_jump_end mvd_autotrack
 // ge:keywords autotrack cl_hightrack top-fragger demo_jump_skip_messages cam_lockpos

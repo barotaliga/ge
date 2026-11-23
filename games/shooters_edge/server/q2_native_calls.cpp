@@ -15,6 +15,7 @@
 
 #include "brush/areas.hpp"
 #include "classic/protocol/directions.hpp"
+#include "classic/protocol/info.hpp"
 #include "classic/q2_move.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/q2_map.hpp"
@@ -134,6 +135,14 @@ void text_message(std::vector<uint8_t>& b, uint8_t id, int level, const std::str
 
 // --- prints ---
 
+// Whether a print of `level` reaches the player in `slot` by the `msg` level in its user info.
+bool print_reaches_slot(const NativeHost& h, int slot, int level) {
+  int msg = 0;
+  for (const auto& [k, v] : h.s->clients[slot].userinfo)
+    if (k == "msg") msg = cp::msg_level_of(v);
+  return cp::print_reaches(level, msg, false);
+}
+
 void c_bprintf(int level, const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -142,8 +151,9 @@ void c_bprintf(int level, const char* fmt, ...) {
   NativeHost& h = *g_host;
   std::vector<uint8_t> b;
   text_message(b, kSvcPrint, level, text);
-  for (int i = 0; i < h.max_clients; i++)
-    if (h.begun[i]) put(h.s->raw.reliable[i], b);
+  for (int i = 0; i < h.max_clients; i++)  // a player gets only what its msg level lets through
+    if (h.begun[i] && print_reaches_slot(h, i, level)) put(h.s->raw.reliable[i], b);
+  // The event goes to every player (a recording keeps it); each one's wire filters it again.
   NetEvent& ev = add_event(h, EventKind::print, begun_bits(h), true, text);
   ev.level = level;
   h.s->console.push_back(text);
@@ -1208,6 +1218,7 @@ void native_set(NativeHost& h, NativeSetting& c, const std::string& value, bool 
 }
 
 void native_print(NativeHost& h, int slot, int level, const std::string& text) {
+  if (slot >= 0 && !print_reaches_slot(h, slot, level)) return;
   std::vector<uint8_t> b;
   text_message(b, kSvcPrint, level, text);
   put(h.s->raw.reliable[slot], b);

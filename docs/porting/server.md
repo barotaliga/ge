@@ -201,11 +201,14 @@ levels, layouts, limits and codings for the server and the client alike
 second level (23-bit coordinates, 64 stats, the damage blend) comes with a library of the newer
 interface. Only clients that read the extended forms are admitted.
 
-Quake II's downloads (`net/q2_net_server.cpp`, facts in `porting/shooters-edge/
-q2-downloads-facts.md`) make the asked name plain first (slashes, `.` and `..`), then offer each
+Quake II's downloads (`net/q2_net_download.cpp`, facts in `porting/shooters-edge/
+q2-downloads-facts.md` and `q2-downloads-pace.md`) make the asked name plain first (slashes, `.` and `..`), then offer each
 kind by its own setting (`sv_download_textures` for textures and skies, `sv_download_pics`,
 `sv_download_others` off by default), refuse a file past `sv_max_download_size`, tell a resume past
-the end that the file size differs, and send a downloading client reliable data alone. The connect
+the end that the file size differs, and send a downloading client reliable data alone. Each piece
+fills the packet less its 4 bytes (1386 on 1390), one for each `nextdl`, the next held for the last
+packet's bytes over the rate; the piece rule is the classic layer's (`plugins/classic/protocol/
+download_pace.hpp`), shared with Quake's server, which keeps its own pieces of the rate over 25. The connect
 answer names `sv_downloadserver`'s web copy and the map. A long rcon answer comes in packets of
 1384 bytes, whole lines where they fit; a wrong password is noted without the guess.
 

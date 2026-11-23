@@ -282,8 +282,7 @@ struct Q2Raw {
   // the same.
   bool (*touch)(void* ctx, int slot, int number, Q2EntityState& s) = nullptr;
   void* touch_ctx = nullptr;
-  // The extended limits' level the library turned on (0 none; q2_native_host.hpp's `ext`): then
-  // `config` holds the extended layout's 13630 strings and `entities` up to 8192.
+  // The wider limits the game asked for: 0 none, 1 extended, 2 extended with the newer interface.
   int ext = 0;
 };
 

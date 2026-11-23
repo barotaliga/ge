@@ -200,8 +200,9 @@ void run(gl::Lab& lab) {
 
 // `--rulesets=1`: a second console, the competition rulesets (classic/rulesets.hpp) as a player
 // meets them: the book listed, one picked, what it holds refusing a set, the rocket jump helper
-// refused, the choice refused while joined, the f_ruleset answer; QuakeWorld's book, then Quake
-// II's (`q2=1` on a line: the window's game is Quake II from there on).
+// and a command on a team macro refused, the choice refused while joined, the f_ruleset answer;
+// QuakeWorld's book, then Quake II's (`q2=1` on a line: the window's game is Quake II from there
+// on).
 struct RulesetLine {
   const char* typed;
   bool joined = false, q2 = false;
@@ -212,6 +213,7 @@ constexpr RulesetLine kRulesetLines[] = {
     {"ce_enabled 1"},
     {"cl_rollangle 20"},
     {"+rjump"},
+    {"impulse $health"},
     {"ruleset qcon", true},
     {"f_ruleset"},
     {"rulesets", false, true},
@@ -226,6 +228,8 @@ void rulesets_shot(gl::Lab& lab, gl::Picture shot) {
   console.cvars().add({.name = "ce_enabled", .fallback = "1", .flags = con::kArchive});
   console.cvars().add({.name = "cr_enabled", .fallback = "0", .flags = con::kArchive});
   console.cvars().add({.name = "cl_rollangle", .fallback = "0", .flags = con::kArchive});
+  console.add_macro("health", [] { return std::string("34"); }, con::MacroKind::team);
+  console.add_command("impulse", "impulse <n>", [](con::Console&, const con::Args&) {});
   sn::Remote remote;
   bool q2 = false;
   remote.q2_game = [&q2] { return q2; };
@@ -259,17 +263,17 @@ void rulesets_shot(gl::Lab& lab, gl::Picture shot) {
   v.set_open(true);
   for (int f = 0; f < 600 && v.drop() < 1; f++) v.frame(1.0 / 60);
   draw(shot, v);
-  lab.shot(
-      {"rulesets",
-       "THE RULESET HOLDS",
-       "A player lists the competition rulesets, picks smackdown, and tries to turn classic "
-       "enhance back on, to roll the view past the league's limit and to use the rocket jump "
-       "helper; joined to a server, the choice itself holds. Then Quake II's book and its duel "
-       "ruleset.",
-       "Each refusal names the ruleset that holds it; the roll is kept to 5; none carries "
-       "next:, skill: or backtick marks (rulesets.lines_in_agent_syntax)",
-       {{"map", lab.arg("map")}}},
-      shot);
+  lab.shot({"rulesets",
+            "THE RULESET HOLDS",
+            "A player lists the competition rulesets, picks smackdown, and tries to turn classic "
+            "enhance back on, to roll the view past the league's limit, to use the rocket jump "
+            "helper and to act on a team macro; joined to a server, the choice itself holds. Then "
+            "Quake II's book and its duel "
+            "ruleset.",
+            "Each refusal names the ruleset that holds it; the roll is kept to 5; none carries "
+            "next:, skill: or backtick marks (rulesets.lines_in_agent_syntax)",
+            {{"map", lab.arg("map")}}},
+           shot);
 }
 
 const gl::LabSpec kSpec{
