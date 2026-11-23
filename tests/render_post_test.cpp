@@ -240,13 +240,17 @@ TEST(the_bloom_switch_holds_without_its_dry_pipeline) {
   CHECK(post.bloom_on);
 }
 
-TEST(the_arrival_flashes_opens_and_is_gone_by_its_end) {
+TEST(the_arrival_touches_only_the_edges_and_is_gone_by_its_end) {
   const double white[3] = {1, 1, 1};
   const r::PostWarp start = r::arrival_warp(0, 1, white);
-  CHECK(start.flash > 0.8 && start.share == 1 && start.zoom == 1 && start.reveal == 0);
-  const r::PostWarp mid = r::arrival_warp(0.2, 1, white);
-  CHECK(mid.flash < start.flash && mid.reveal > 0.5 && mid.zoom < start.zoom);
-  // Open past the corners by kArrivalOpenS, nothing left at kArrivalS, nothing outside it.
+  // The middle is clear from the start; nothing flashes and nothing zooms, ever.
+  CHECK(start.share > 0.4 && start.reveal >= r::kArrivalClear && start.reveal < 0.6);
+  CHECK(start.flash == 0 && start.zoom == 0);
+  const r::PostWarp mid = r::arrival_warp(0.1, 1, white);
+  CHECK(mid.share < start.share && mid.reveal > start.reveal && mid.flash == 0 && mid.zoom == 0);
+  // Open past the corners by kArrivalOpenS, nothing left at kArrivalS (a third of a second at
+  // most), nothing outside it.
+  CHECK(r::kArrivalS <= 0.34);
   CHECK(r::arrival_warp(r::kArrivalOpenS, 1, white).reveal > 1.0);
   CHECK(r::arrival_warp(r::kArrivalS - 1e-3, 1, white).share < 1e-4);
   const r::PostWarp after = r::arrival_warp(r::kArrivalS, 1, white);
@@ -254,11 +258,11 @@ TEST(the_arrival_flashes_opens_and_is_gone_by_its_end) {
   const r::PostWarp none = r::arrival_warp(0.1, 0, white);
   for (const r::PostWarp* w : {&after, &before, &none})
     CHECK(w->share == 0 && w->flash == 0 && w->zoom == 0);
-  // Half the strength: half the flash.
-  CHECK(std::abs(r::arrival_warp(0, 0.5, white).flash - 0.5 * start.flash) < 1e-12);
+  // Half the strength: half the warp.
+  CHECK(std::abs(r::arrival_warp(0, 0.5, white).share - 0.5 * start.share) < 1e-12);
 }
 
-TEST(the_arrival_whites_out_then_leaves_the_picture_as_it_was) {
+TEST(the_arrival_tints_the_edges_leaves_the_middle_and_then_the_picture_as_it_was) {
   auto device = ge::test::test_device();
   if (!device) return;
   ge::gpu::Device& d = *device;
@@ -270,13 +274,12 @@ TEST(the_arrival_whites_out_then_leaves_the_picture_as_it_was) {
   const ge::gpu::Image plain = draw(d, s, s.plain, false, out);
   const double cyan[3] = {0.2, 1, 1};
   r::set_post_warp(d, s.plain, r::arrival_warp(0, 1, cyan));
-  const ge::gpu::Image flash = draw(d, s, s.plain, false, out);
-  // The flash lifts the whole view (the grey at about 175) toward its tint: green to near white,
-  // red less.
-  CHECK(at(plain, 3, 3, 1) < 200);
-  CHECK(at(flash, 3, 3, 1) > 240);
-  CHECK(at(flash, kW / 2, kH / 2, 1) > 240);
-  CHECK(at(flash, 3, 3, 1) > at(flash, 3, 3, 0) + 20);
+  const ge::gpu::Image edge = draw(d, s, s.plain, false, out);
+  // The corner is tinted toward cyan (green lifted more than red); the middle is as it was.
+  CHECK(at(edge, 3, 3, 1) > at(plain, 3, 3, 1) + 10);
+  CHECK(at(edge, 3, 3, 1) > at(edge, 3, 3, 0) + 10);
+  CHECK(at(edge, kW / 2, kH / 2, 1) == at(plain, kW / 2, kH / 2, 1));
+  CHECK(at(edge, kW / 2, kH / 2, 0) == at(plain, kW / 2, kH / 2, 0));
   r::set_post_warp(d, s.plain, r::arrival_warp(r::kArrivalS, 1, cyan));
   const ge::gpu::Image after = draw(d, s, s.plain, false, out);
   for (uint32_t y = 0; y < kH; y += 7)

@@ -402,6 +402,10 @@ struct Q2NetServer {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   ge::server::TryBucket status_tries;                // sv_statusrate's
   double started = -1;                               // the network's time of the first frame, s
   bool (*line_hook)(void* ctx, int slot, const std::string& line) = nullptr;
+  // Each move a client's packet brings, before the rules run it (the match's prewar holds fire
+  // and the jump: q2_match.hpp); null: none.
+  void (*move_hook)(void* ctx, int slot, sh::MoveCmd& cmd) = nullptr;
+  void* move_ctx = nullptr;
   void (*name_rule)(void* ctx, int slot, std::string& name, bool connecting) = nullptr;
   void* hook_ctx = nullptr;
   int64_t datagrams_in = 0, bytes_in = 0, bytes_out = 0, refused = 0;

@@ -109,6 +109,34 @@ TEST(a_clients_asks_shape_its_entities) {
   CHECK(self.origin[0] == 0);
 }
 
+TEST(an_extended_server_honours_no_flares_and_the_newer_steps) {
+  sv::Q2Wire w;
+  w.opt.protocol = 36;
+  w.slot = 0;
+  w.asked.no_gibs = true;
+  w.asked.no_footsteps = true;
+  w.asked.no_flares = true;
+  const sv::Q2EntityState base;
+  const auto shown = [&](sv::Q2EntityState s) {
+    s.present = true;
+    sv::q2_entity_for_ext(w, 5, base, s);
+    return s;
+  };
+  sv::Q2EntityState flare, rocket, ladder;
+  flare.renderfx = 0x200000;
+  rocket.effects = 0x2 | 0x10;  // a gib trail on a rocket
+  ladder.event = 9;
+  // Not extended: flares and the newer steps pass, a gib-trailed rocket is a gib.
+  CHECK(shown(flare).present && !shown(rocket).present && shown(ladder).event == 9);
+  w.opt.ext = 1;
+  CHECK(!shown(flare).present && shown(rocket).present && shown(ladder).event == 0);
+  sv::Q2EntityState step;
+  step.event = 8;
+  CHECK(shown(step).event == 0);
+  w.asked.no_flares = false;
+  CHECK(shown(flare).present);
+}
+
 TEST(the_signon_packs_into_streams_or_one_game_state) {
   sv::Q2Signon parts;
   for (int i = 0; i < 3; i++)

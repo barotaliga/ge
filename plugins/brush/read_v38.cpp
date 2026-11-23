@@ -50,6 +50,8 @@ constexpr std::array<const char*, 19> kNames = {
 
 // Surface flags a face's texinfo carries: sky and warped (liquid) faces have no lightmap.
 constexpr int32_t kSky = 0x4, kWarp = 0x8, kNoDraw = 0x80;
+// A light's panel (its texinfo's value how strongly it lights) and a sliding picture.
+constexpr int32_t kLight = 0x1, kFlowing = 0x40;
 // The see-through flags: a third opaque, two thirds opaque.
 constexpr int32_t kThird = 0x10, kTwoThirds = 0x20;
 
@@ -126,6 +128,8 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
       // The marks: any texinfo of the name that is sky or warped marks its texture so.
       Texture& tex = m.textures[t.texture];
       tex.sky = tex.sky || (t.flags & kSky) != 0;
+      tex.flowing = tex.flowing || (t.flags & kFlowing) != 0;
+      if ((t.flags & kLight) != 0 && (t.flags & kSky) == 0) tex.lamp = std::max(tex.lamp, t.value);
       if ((t.flags & kWarp) && tex.liquid == Liquid::none) tex.liquid = Liquid::other;
       const float alpha = (t.flags & kThird) ? 1.0f / 3 : (t.flags & kTwoThirds) ? 2.0f / 3 : 1.0f;
       tex.alpha = tex.alpha < 0 ? alpha : std::min(tex.alpha, alpha);
