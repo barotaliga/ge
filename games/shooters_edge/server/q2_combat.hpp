@@ -102,12 +102,12 @@ inline constexpr int kSqShotKinds = 21;
 // its frames fast), the spit the blaster's; Ground Zero's mines and bomb the grenade's smoke, the
 // disruptor's bolt the tracker's (0x04000000).
 inline constexpr int kSqShotEffects[kSqShotKinds] = {
-    8,  0,  0,  32, 16,         0, 128 | 0x2000, 32, 0x00100000, 0x00400000, 0x01000000 | 0x2000,
-    16, 8,  0,  0,  32,         32, 0x04000000,  32, 0,          0};
+    8,  0, 0, 32, 16, 0,  128 | 0x2000, 32, 0x00100000, 0x00400000, 0x01000000 | 0x2000,
+    16, 8, 0, 0,  32, 32, 0x04000000,   32, 0,          0};
 // The render flag each kind is drawn with (8 full bright: the ion ripper's bolt, the flechette;
 // 0x8000 seen through IR goggles: Ground Zero's mines and bomb).
-inline constexpr int kSqShotRender[kSqShotKinds] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 8, 0x8000, 0x8000, 0, 0x8000, 0, 0};
+inline constexpr int kSqShotRender[kSqShotKinds] = {0, 0, 0, 0, 0,      0,      0, 0,      8, 0, 0,
+                                                    0, 0, 0, 8, 0x8000, 0x8000, 0, 0x8000, 0, 0};
 
 struct SqWeaponRow {       // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* name;        // the name a player reads and `use` takes
@@ -186,13 +186,16 @@ inline constexpr SqWeaponRow kSqWeapons[kSqWeaponCount] = {
 
 // The pack each shot kind belongs to, by `SqShot` (its missile model registered only under it).
 inline constexpr Q2Pack kSqShotPacks[kSqShotKinds] = {
-    Q2Pack::base,      Q2Pack::base,      Q2Pack::base,      Q2Pack::base,      Q2Pack::base,
-    Q2Pack::base,      Q2Pack::base,      Q2Pack::base,      Q2Pack::reckoning, Q2Pack::reckoning,
-    Q2Pack::reckoning, Q2Pack::reckoning, Q2Pack::reckoning, Q2Pack::reckoning,
+    Q2Pack::base,        Q2Pack::base,        Q2Pack::base,        Q2Pack::base,
+    Q2Pack::base,        Q2Pack::base,        Q2Pack::base,        Q2Pack::base,
+    Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::reckoning,
+    Q2Pack::reckoning,   Q2Pack::reckoning,   Q2Pack::ground_zero, Q2Pack::ground_zero,
     Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero,
-    Q2Pack::ground_zero, Q2Pack::ground_zero, Q2Pack::ground_zero};
+    Q2Pack::ground_zero};
 // Whether a weapon steps and throws as the hand grenade does (the grenades and the trap).
-constexpr bool sq_thrown(int w) { return w == int(SqWeapon::hand_grenade) || w == int(SqWeapon::trap); }
+constexpr bool sq_thrown(int w) {
+  return w == int(SqWeapon::hand_grenade) || w == int(SqWeapon::trap);
+}
 // Whether weapon `w` plays under `pack` (the base game's always, a pack's under it).
 constexpr bool sq_weapon_plays(int w, Q2Pack pack) {
   return w >= 0 && w < kSqWeaponCount && q2_pack_has(pack, kSqWeapons[w].pack);

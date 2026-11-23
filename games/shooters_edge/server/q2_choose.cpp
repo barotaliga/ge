@@ -1,7 +1,7 @@
 // Quake II's weapon choosing (q2_fight.hpp's `fight_took` and `fight_command`): the weapon a
 // pickup takes in hand, `use` and `drop` by name, `weapnext` and `weapprev`. The Reckoning
-// (q2_pack.hpp) adds its own: its cycle by the item list's order, `use hyperblaster` toggling to the
-// Ionripper and `use railgun` to the Phalanx (porting note: q2-reckoning-rules.md § 7).
+// (q2_pack.hpp) adds its own: its cycle by the item list's order, `use hyperblaster` toggling to
+// the Ionripper and `use railgun` to the Phalanx (porting note: q2-reckoning-rules.md § 7).
 //
 // ge:summary Quake II's weapon choosing: the pickup's switch, use and drop by name, the cycle,
 // ge:summary The Reckoning's hyperblaster and railgun toggles
@@ -44,12 +44,20 @@ int thrown_of(SqAmmo a) {
 
 // The cycle `weapnext` walks: the base game's by its weapons' order, The Reckoning's by its item
 // list's (the trap after the grenades, each pack weapon after the one it shares a key with).
-constexpr SqWeapon kReckoningCycle[] = {
-    SqWeapon::blaster,      SqWeapon::shotgun,          SqWeapon::super_shotgun,
-    SqWeapon::machinegun,   SqWeapon::chaingun,         SqWeapon::hand_grenade,
-    SqWeapon::trap,         SqWeapon::grenade_launcher, SqWeapon::rocket_launcher,
-    SqWeapon::hyperblaster, SqWeapon::ion_ripper,       SqWeapon::railgun,
-    SqWeapon::phalanx,      SqWeapon::bfg};
+constexpr SqWeapon kReckoningCycle[] = {SqWeapon::blaster,
+                                        SqWeapon::shotgun,
+                                        SqWeapon::super_shotgun,
+                                        SqWeapon::machinegun,
+                                        SqWeapon::chaingun,
+                                        SqWeapon::hand_grenade,
+                                        SqWeapon::trap,
+                                        SqWeapon::grenade_launcher,
+                                        SqWeapon::rocket_launcher,
+                                        SqWeapon::hyperblaster,
+                                        SqWeapon::ion_ripper,
+                                        SqWeapon::railgun,
+                                        SqWeapon::phalanx,
+                                        SqWeapon::bfg};
 constexpr int kReckoningCycleSize = static_cast<int>(std::size(kReckoningCycle));
 
 int cycle_size(const Q2Server& s) {
@@ -162,9 +170,9 @@ bool fight_command(Q2Server& s, int slot, const std::string& cmd, const std::str
   if (cmd == "drop") {
     const int item = sq_item_named(arg);
     const int w = weapon_named(s, arg);
-    fight_drop(s, slot,
-               w >= 0 && kSqWeapons[w].item != nullptr ? sq_item(kSqWeapons[w].item, s.opt.pack)
-                                                       : item);
+    fight_drop(
+        s, slot,
+        w >= 0 && kSqWeapons[w].item != nullptr ? sq_item(kSqWeapons[w].item, s.opt.pack) : item);
     return true;
   }
   if (cmd != "weapnext" && cmd != "weapprev") return false;

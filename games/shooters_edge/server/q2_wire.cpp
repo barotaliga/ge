@@ -215,8 +215,9 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
       o.u8(n >= 1 ? static_cast<uint32_t>(std::min(n, 255.0f)) : 8u);
       point(e.origin);
       way();
-      o.u8(row->kind == 15 || row->kind == 25 || row->kind == 29 ? static_cast<uint32_t>(e.level & 0xff)
-                                                              : row->colour);  // its event's own
+      o.u8(row->kind == 15 || row->kind == 25 || row->kind == 29
+               ? static_cast<uint32_t>(e.level & 0xff)
+               : row->colour);  // its event's own
       break;
     }
     case TeBody::line:
@@ -460,6 +461,7 @@ Q2PlayerState player_state(const RulesCommon& c, int slot, const ge::classic::Q2
   p.gun_index = static_cast<uint8_t>(wire_model(wc.numbers.weapon_model));
   p.gun_frame = static_cast<uint8_t>(static_cast<int>(wc.numbers.weapon_frame));
   p.fov = 90;
+  p.rdflags = static_cast<uint8_t>(wc.numbers.rdflags);
   for (int k = 0; k < 4; k++)  // each part as a byte, cut down
     p.blend[k] = static_cast<uint8_t>(std::clamp(wc.numbers.blend[k], 0.0f, 1.0f) * 255.0f);
   if (!c.world.status_bar.empty()) {  // the rules' own stats for their own bar

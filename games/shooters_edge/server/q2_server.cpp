@@ -28,15 +28,16 @@
 #include "progs/text.hpp"
 #include "shooters_edge/server/q2_actor.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
-#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_blend.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_commands.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_lines.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_mods.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_save.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
 #include "shooters_edge/server/q2_spectate.hpp"
@@ -400,7 +401,8 @@ bool dm_left_out(const Q2Server& s, int item) {
          (fight_dmflag(s, 2) && it.kind == SqKind::powerup) ||
          (fight_dmflag(s, 2048) &&
           (it.kind == SqKind::armour || it.kind == SqKind::power_armour)) ||
-         (fight_dmflag(s, 8192) && (it.kind == SqKind::ammo || name == "weapon_bfg"));
+         (fight_dmflag(s, 8192) && (it.kind == SqKind::ammo || name == "weapon_bfg")) ||
+         (s.opt.pack == Q2Pack::ground_zero && gz_left_out(s, item));
 }
 
 // Whether the map's entity is left out in this mode by its spawn flags.
@@ -924,6 +926,7 @@ void fill_rows(Q2Server& s) {
       wc.numbers.gun_angles[k] = still ? 0 : guns[k + 3];
     }
     wc.numbers.fov = fight_fov(s, i);
+    wc.numbers.rdflags = sq_power_shown(p.ir_until - s.level_time) ? 4 : 0;  // IR goggles
     for (int k = 0; k < 4; k++) wc.numbers.blend[k] = s.intermission_at > 0 ? 0 : p.blend[k];
     e.free = false;
     e.origin = unpack(p.move.origin);
@@ -949,6 +952,7 @@ void fill_rows(Q2Server& s) {
     } else if (p.gibbed) {
       e.modelindex = 0;
     }
+    if (s.opt.pack == Q2Pack::ground_zero) e.render_fx |= 0x8000;  // seen through IR goggles
     if (p.alive && s.intermission_at <= 0) {  // the powers held, blinking as they run out
       for (const SqPower& pw : sq_powers())
         if ((pw.effects | pw.render) != 0 && sq_power_shown(p.*pw.until - s.level_time)) {
@@ -1177,6 +1181,7 @@ bool sq_start(void* r, const MapSpec& map, std::string& error) {
     if (q2_same_name(s.map_name, "fact2") && e.classname == "target_spawner" &&
         e.origin.x == -1504 && e.origin.y == 512 && e.origin.z == 72)
       e.origin.z = 64;
+    if (s.opt.pack == Q2Pack::ground_zero) e.classname = std::string(gz_classname(e.classname));
     e.item = sq_item(e.classname, s.opt.pack);
     if (e.item >= 0) e.team = b.get_any_case("team");
     inhibited.push_back(left_out(s, e.spawnflags) ? 1 : 0);
@@ -1575,6 +1580,7 @@ std::unique_ptr<Q2Server> make_q2_server(const Q2ServerOptions& opt) {
   s->opt = opt;
   s->rng = ge::core::make_rng(opt.seed);
   register_cvars(*s);
+  if (opt.pack == Q2Pack::ground_zero) gz_cvars(*s);
   add_aim_help(*s);
   s->console.push_back("==== InitGame ====");
   return s;

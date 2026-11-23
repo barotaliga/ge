@@ -27,11 +27,11 @@
 #include "shooters_edge/server/q2_fight_kit.hpp"
 #include "shooters_edge/server/q2_flash.hpp"
 #include "shooters_edge/server/q2_gibs.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_mods.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
 #include "shooters_edge/server/q2_powers.hpp"
-#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_reckoning.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
 #include "shooters_edge/server/shot_help.hpp"
@@ -709,7 +709,8 @@ void rail(Q2Server& s, int slot, sh::Vec3f start, const sh::ViewAxes& ax, int da
 
 // Quake II's weapons by the names the aim help's lists use (shot_help.hpp).
 constexpr const char* kSqAimNames[kSqWeaponCount] = {
-    "blaster", "sg", "ssg", "mg", "cg", "gl", "rl", "hb", "rg", "bfg", "hg", "ir", "ph", "trap", "cf", "etf", "prox", "pb", "dis", "tesla"};
+    "blaster", "sg", "ssg", "mg",   "cg", "gl",  "rl",   "hb", "rg",  "bfg",
+    "hg",      "ir", "ph",  "trap", "cf", "etf", "prox", "pb", "dis", "tesla"};
 
 // Whether the aim help acts for `slot`'s shot of weapon `w`: granted, and the weapon allowed.
 bool aim_helped_weapon(const Q2Server& s, int slot, int w) {
@@ -1103,7 +1104,8 @@ void fight_precache(Q2Server& s) {
   // The weapons as others see them carried: names a client takes from the player's own model
   // folder ("#" and the file), in the order a client numbers them from 1 (the skin's high byte).
   for (const Carried& c : kCarried)
-    if (q2_pack_has(s.opt.pack, c.pack)) s.carried_models[static_cast<int>(c.weapon)] = model(c.name);
+    if (q2_pack_has(s.opt.pack, c.pack))
+      s.carried_models[static_cast<int>(c.weapon)] = model(c.name);
   for (int k = 0; k < kSqShotKinds; k++)
     if (q2_pack_has(s.opt.pack, kSqShotPacks[k])) s.missile_models[k] = model(kMissileModels[k]);
   gibs_precache(s);

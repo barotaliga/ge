@@ -11,8 +11,8 @@
 #include <string_view>
 
 #include "shooters_edge/server/q2_fight.hpp"
-#include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_gz.hpp"
+#include "shooters_edge/server/q2_items.hpp"
 #include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 

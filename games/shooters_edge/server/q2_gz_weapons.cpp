@@ -26,7 +26,7 @@ namespace shooters_edge::server {
 
 namespace {
 
-constexpr uint32_t kEveryone = 0xffffffffu;  // a message to every client
+constexpr uint32_t kEveryone = 0xffffffffu;             // a message to every client
 constexpr int32_t kLava = 8, kSlime = 16, kWater = 32;  // what a point holds (map_contents)
 constexpr float kBeamRange = 8192;
 constexpr const char* kBlast = "weapons/grenlx1a.wav";
@@ -164,8 +164,8 @@ void plasma_beam(Q2Server& s, int slot, const sh::ViewAxes& ax, int multiplier) 
 }
 
 // A shot in flight of `kind` from `slot` at `start` with `velocity`.
-Q2Missile* fly(Q2Server& s, int slot, SqShot kind, int weapon, sh::Vec3f start,
-               sh::Vec3f velocity, int multiplier) {
+Q2Missile* fly(Q2Server& s, int slot, SqShot kind, int weapon, sh::Vec3f start, sh::Vec3f velocity,
+               int multiplier) {
   Q2Missile* m = fight_new_missile(s);
   if (m == nullptr) return nullptr;
   *m = Q2Missile{};
@@ -346,9 +346,7 @@ void tracker(Q2Server& s, Q2Missile& m) {
   effect(s, "te_tracker_explosion", l.end);
   sh::Vec3f dir = m.velocity;
   sh::normalize(dir);
-  const int struck = l.player >= 0 ? l.player
-                     : living_monster(s, l.mover) ? -2 - l.mover
-                                                  : -1;
+  const int struck = l.player >= 0 ? l.player : living_monster(s, l.mover) ? -2 - l.mover : -1;
   if (struck == -1) {  // anything else that takes blows takes the whole at once
     if (l.mover >= 0) map_damage(s, l.mover, m.owner, m.damage, dir, false, &l.end);
     m.live = false;
@@ -356,8 +354,7 @@ void tracker(Q2Server& s, Q2Missile& m) {
   }
   // On a body: a push of three times its damage and 140 up, then it hurts it for 0.5 s.
   if (l.player >= 0)
-    fight_kick(s, l.player,
-               dir * sq_knockback(3 * m.damage, 200, false) + sh::Vec3f{0, 0, 140});
+    fight_kick(s, l.player, dir * sq_knockback(3 * m.damage, 200, false) + sh::Vec3f{0, 0, 140});
   m.stage = 4;
   m.prey = struck;
   m.stage_at = s.level_time + 0.5;
@@ -462,7 +459,8 @@ void tesla(Q2Server& s, Q2Missile& m, float gravity) {
   // Zapping: every body in its field it sees, each tenth.
   const bool dm = deathmatch(s);
   const sh::Vec3f from = m.origin + sh::Vec3f{0, 0, 16};
-  const sh::Vec3f lo = m.origin + sh::Vec3f{-128, -128, 0}, hi = m.origin + sh::Vec3f{128, 128, 128};
+  const sh::Vec3f lo = m.origin + sh::Vec3f{-128, -128, 0},
+                  hi = m.origin + sh::Vec3f{128, 128, 128};
   const int self = fight_missile_entity(s, m);
   const int damage = 3 * m.multiplier;
   const auto inside = [&](sh::Vec3f a, sh::Vec3f b) {
@@ -504,8 +502,7 @@ void nuke_blast(Q2Server& s, Q2Missile& m) {
     if (d >= 2 * kill) return 0;
     return static_cast<int>(float(full) * (1 - (d - kill) / kill));
   };
-  if (const char* boost = fight_multiplier_sound(m.multiplier))
-    sound_far(s, 0, at, boost, 1, 0);
+  if (const char* boost = fight_multiplier_sound(m.multiplier)) sound_far(s, 0, at, boost, 1, 0);
   sound_far(s, 0, at, kBlast, 1, 0);
   effect(s, "te_explosion1_big", at);
   effect(s, "te_nukeblast", at);
@@ -535,7 +532,8 @@ void nuke(Q2Server& s, Q2Missile& m, float gravity) {
       m.live = false;
       return;
     }
-    ge::core::Rng shake = ge::core::make_rng(static_cast<uint32_t>(now * 10 + 0.5) * 7919u + 0x4e4bu);
+    ge::core::Rng shake =
+        ge::core::make_rng(static_cast<uint32_t>(now * 10 + 0.5) * 7919u + 0x4e4bu);
     for (int i = 0; i < sh::kMaxClients; i++) {
       Q2Player& p = s.players[i];
       if (!living(s, i) || !p.on_ground) continue;
@@ -556,7 +554,7 @@ void nuke(Q2Server& s, Q2Missile& m, float gravity) {
   }
   const double left = m.stage_at - now;
   const auto tenths = static_cast<int64_t>(std::floor(left * 10 + 0.5));
-  const float carry = m.multiplier >= 8 ? 0.36f
+  const float carry = m.multiplier >= 8   ? 0.36f
                       : m.multiplier >= 4 ? 0.6f
                       : m.multiplier >= 2 ? 0.9f
                                           : 1.8f / 1.4f;
@@ -606,8 +604,8 @@ void gz_fire(Q2Server& s, int slot, int shots) {
         m->dies_at = s.level_time + 8000.0 / 750.0;
       }
       flash(30, false);
-      ge::core::Rng shake = ge::core::make_rng(static_cast<uint32_t>(s.frame_number) * 64u +
-                                               uint32_t(slot) + 0xe7fu);
+      ge::core::Rng shake =
+          ge::core::make_rng(static_cast<uint32_t>(s.frame_number) * 64u + uint32_t(slot) + 0xe7fu);
       const auto j = [&shake] { return static_cast<float>(ge::core::range(shake, -0.85, 0.85)); };
       p.view.weapon_angles = {j(), j(), j()};
       p.view.weapon_origin = {j(), j(), j()};
@@ -616,8 +614,7 @@ void gz_fire(Q2Server& s, int slot, int shots) {
     case SqWeapon::prox_launcher: {
       const sh::Vec3f start = start_at(p, ax, 8, 8, -8);
       const sh::Vec3f aim = fight_aim(s, slot, start, ax.forward);
-      if (Q2Missile* m =
-              fly(s, slot, SqShot::prox, w, start, thrown(s, ax, aim, 600), multiplier))
+      if (Q2Missile* m = fly(s, slot, SqShot::prox, w, start, thrown(s, ax, aim, 600), multiplier))
         m->dies_at = s.level_time + mine_life(multiplier);
       flash(8, true);
       kick(p, ax.forward, 2, 1);
@@ -657,8 +654,8 @@ void gz_throw_nuke(Q2Server& s, int slot) {
   Q2Player& p = s.players[slot];
   const sh::ViewAxes ax = sh::angle_vectors(p.view_angles);
   const sh::Vec3f origin = unpack(p.move.origin);
-  if (Q2Missile* m = fly(s, slot, SqShot::nuke, kSqByAmBomb, origin,
-                         thrown(s, ax, ax.forward, 100), fight_multiplier(s, p))) {
+  if (Q2Missile* m = fly(s, slot, SqShot::nuke, kSqByAmBomb, origin, thrown(s, ax, ax.forward, 100),
+                         fight_multiplier(s, p))) {
     m->stage_at = s.level_time + 10;
     m->dies_at = 1e18;
   }

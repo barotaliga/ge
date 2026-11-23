@@ -37,12 +37,25 @@
 // ge:test tests/shooters_edge_q2_gz_test.cpp
 #pragma once
 
+#include <string_view>
+
 #include "shooters_edge/server/q2_combat.hpp"
 
 namespace shooters_edge::server {
 
 struct Q2Server;
 struct Q2Missile;
+
+// Ground Zero's own settings (`strong_mines`, `g_disruptor`, `randomrespawn`), registered only
+// when it is the pack played.
+void gz_cvars(Q2Server& s);
+// The class name a map's entity spawns as under Ground Zero (its rows for the base game's nail
+// gun and heat beam, and for the other pack's weapons and ammo); the same name otherwise.
+std::string_view gz_classname(std::string_view classname);
+// Whether item row `item` stays off the map under Ground Zero's rules: the disruptor and its
+// rounds unless `g_disruptor`; in deathmatch, the mines (dmflags 131072), the A-M bomb (524288),
+// the spheres (1048576).
+bool gz_left_out(const Q2Server& s, int item);
 
 // A shot of Ground Zero's weapon in `slot`'s hand (q2_fight.cpp's fire hands it over).
 void gz_fire(Q2Server& s, int slot, int shots);

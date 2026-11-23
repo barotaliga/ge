@@ -242,9 +242,9 @@ int image(const Q2Server& s, std::string_view name) {
 
 // The classname of each ammo kind's item, by `SqAmmo`.
 constexpr const char* kAmmoClass[kSqAmmoKinds] = {
-    "",           "ammo_shells",     "ammo_bullets", "ammo_grenades",  "ammo_rockets",
-    "ammo_cells", "ammo_slugs",      "ammo_magslug", "ammo_trap",      "ammo_flechettes",
-    "ammo_prox",  "ammo_tesla",      "ammo_disruptor"};
+    "",           "ammo_shells", "ammo_bullets",  "ammo_grenades", "ammo_rockets",
+    "ammo_cells", "ammo_slugs",  "ammo_magslug",  "ammo_trap",     "ammo_flechettes",
+    "ammo_prox",  "ammo_tesla",  "ammo_disruptor"};
 
 int ammo_number(SqAmmo a, Q2Pack pack) {
   return a == SqAmmo::none ? 0 : sq_number_of(kAmmoClass[static_cast<int>(a)], pack);

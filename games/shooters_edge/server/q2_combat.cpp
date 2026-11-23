@@ -6,8 +6,8 @@
 // ge:test tests/shooters_edge_q2_combat_test.cpp
 #include "shooters_edge/server/q2_combat.hpp"
 
-#include "shooters_edge/server/q2_gz.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
+#include "shooters_edge/server/q2_gz.hpp"
 
 #include <algorithm>
 

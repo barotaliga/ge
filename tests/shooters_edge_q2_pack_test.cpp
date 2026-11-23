@@ -94,8 +94,8 @@ TEST(ground_zero_numbers_its_items_in_its_own_order) {
   // The pack's rows are not found in the base game.
   CHECK(sv::sq_item("weapon_etf_rifle") < 0);
   CHECK(sv::sq_number_of("weapon_etf_rifle") == 0);
-  CHECK(sv::sq_weapon_numbered(12, gz));  // the ETF rifle
-  CHECK(sv::sq_weapon_numbered(30, gz));  // the tesla, thrown like a grenade
+  CHECK(sv::sq_weapon_numbered(12, gz));   // the ETF rifle
+  CHECK(sv::sq_weapon_numbered(30, gz));   // the tesla, thrown like a grenade
   CHECK(!sv::sq_weapon_numbered(28, gz));  // flechettes
   CHECK(sv::sq_powerup_numbered(43, gz));  // double damage
 }

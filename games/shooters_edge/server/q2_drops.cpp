@@ -182,7 +182,8 @@ void fight_death_drops(Q2Server& s, int slot) {
     out[n++] = {0, sq_item(r.item, s.opt.pack), 0};
   const auto on = [&](const char* name) { return s.cvars.find(name)->on(); };
   const auto timed = [&](bool wanted, double until, const char* item) {
-    if (wanted && until > s.level_time + 1) out[n++] = {until - s.level_time, sq_item(item, s.opt.pack), 0};
+    if (wanted && until > s.level_time + 1)
+      out[n++] = {until - s.level_time, sq_item(item, s.opt.pack), 0};
   };
   for (const SqPower& pw : sq_powers())
     timed((pw.drop_dmflag != 0 && fight_dmflag(s, pw.drop_dmflag)) ||

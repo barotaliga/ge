@@ -176,7 +176,7 @@ TEST(a_prox_mine_sticks_arms_and_goes_off_when_a_body_comes_near) {
   auto a = facing(900);
   give(*a, SqWeapon::prox_launcher, 5);
   run(*a, 2, 1);  // one mine, down the hall onto the floor
-  run(*a, 200);       // landed, opened, armed
+  run(*a, 200);   // landed, opened, armed
   const sv::Q2Missile* mine = nullptr;
   for (const sv::Q2Missile& m : a->s().missiles)
     if (m.live && m.kind == sv::SqShot::prox) mine = &m;
