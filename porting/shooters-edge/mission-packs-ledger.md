@@ -3,9 +3,9 @@
 WORKING AREA. What the four official mission packs need from Shooter's Edge (Niclas,
 2026-11-23): Scourge of Armagon and Dissolution of Eternity for Quake, The Reckoning and Ground
 Zero for Quake II. One row for each thing a player meets that the base game lacks, marked against
-our tree (main at #1382). The roadmap row is `docs/goals/M63.md`. **Nothing is built yet**: the
-owner wants the packs started only once the base games' gaps are filled, the common settings
-lifted and the reference manual done.
+our tree (main at #1382). The roadmap row is `docs/goals/M63.md`. The owner first wanted the
+packs to wait for the base games' gaps, the settings lift and the manual, then started them at
+once, in parallel with that work (Niclas, 2026-11-23 12:16).
 
 **How it was surveyed.** From the packs' own files and the releases' printed notes, never from any
 source code: every pack file listed, every map's entity lump read for the classnames it places
@@ -29,7 +29,10 @@ end. The packs themselves are in the project's shared folder (`paks/quake1/hipno
   file, which our hosting of a game library (`server/q2_native.hpp`) cannot load on any platform
   we ship, and no tree may carry a rebuilt one. Their weapons, items, monsters and map things are
   built beside Quake II's own rules (`server/q2_*`) behind one switch each pack's profile sets,
-  as `docs/porting/rules.md` asks. The client half is mostly there already: the packs' muzzle
+  as `docs/porting/rules.md` asks. **The reference is the packs' own game source**, which the
+  publisher released under the GPL: as with Quake II's base game, only a clean-room reader opens
+  it and writes a facts page in our words; our C++ is built from that page (`clean-room` skill).
+  The client half is mostly there already: the packs' muzzle
   flashes, entity effects, music numbering and infra-red view are done; 16 temporary entities
   the base game never sends are drawn as stand-ins today and are rows here.
 
@@ -41,13 +44,13 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Section | Rows | Done | Verify | Missing (rank 1 / 2 / 3) | Not taken |
 | --- | --- | --- | --- | --- | --- |
 | Taking the packs in (shared by all four) | 15 | 0 | 3 | 12 (9 / 3 / 0) | 0 |
-| Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 1 | 68 | 5 (2 / 1 / 2) | 0 |
-| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 1 | 52 | 8 (3 / 3 / 2) | 0 |
+| Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 2 | 67 | 5 (2 / 1 / 2) | 0 |
+| Dissolution of Eternity (Quake, folder `rogue`) | 61 | 2 | 51 | 8 (3 / 3 / 2) | 0 |
 | The Reckoning (Quake II, folder `xatrix`) | 40 | 3 | 3 | 34 (20 / 12 / 2) | 0 |
 | Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
-| **All** | **272** | **8** | **133** | **131 (70 / 50 / 11)** | **0** |
+| **All** | **272** | **10** | **131** | **131 (70 / 50 / 11)** | **0** |
 
-Starting count (2026-11-23): **131 missing, 133 to verify, of 272 rows.**
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.**
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
@@ -76,11 +79,11 @@ count: done 0, verify 3, missing 12 (9 / 3 / 0), not-taken 0
 
 ## Scourge of Armagon (Quake, folder `hipnotic`)
 
-count: done 1, verify 68, missing 5 (2 / 1 / 2), not-taken 0
+count: done 2, verify 67, missing 5 (2 / 1 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
-| hip.program | the pack's `progs.dat` read and run: the base game's header checksum (5927), no builtin the base game's lacks, 52 fields of its own (checked from the file) | verify | 1 | plugins/progs; `se-client --progs=pack` runs a pack's program |
+| hip.program | the pack's `progs.dat` read and run: the base game's header checksum (5927), no builtin the base game's lacks, 52 fields of its own (checked from the file) | done |  | loads and runs hip1m1 (`se-client --game=<folder>/hipnotic --map=hip1m1 --progs=pack`, 2026-11-23) |
 | hip.campaign | NEW GAME from `start` through the five episodes to `hipend` (18 maps) | verify | 1 | a playthrough lab on the pack |
 | hip.menu.episodes | the pack's episodes and levels in the menu | done |  | menu/episodes.cpp (C395) |
 | hip.hud.weapons | the status bar's laser cannon, Mjolnir and proximity gun, plain, lit and flashing, from the pack's `gfx.wad` (`INV_LASER`, `INV_MJOLNIR`, `INV_PROX_GREN`, `INV_GREN_PROX`, `INV_PROX` and their `INV2_` and `INVA1_`..`INVA5_` sets) | missing | 1 | hud/classic_art.cpp loads the base game's set only; which item bits light them: reader question |
@@ -205,11 +208,11 @@ count: done 0, verify 17, missing 0, not-taken 0
 
 ## Dissolution of Eternity (Quake, folder `rogue`)
 
-count: done 1, verify 52, missing 8 (3 / 3 / 2), not-taken 0
+count: done 2, verify 51, missing 8 (3 / 3 / 2), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
-| rog1.program | the pack's `progs.dat`: the base game's checksum, no new builtin, 63 fields of its own (`items2` among them) | verify | 1 | plugins/progs |
+| rog1.program | the pack's `progs.dat`: the base game's checksum, no new builtin, 63 fields of its own (`items2` among them) | done |  | loads and runs r1m1 (`se-client --game=<folder>/rogue --map=r1m1 --progs=pack`, 2026-11-23) |
 | rog1.campaign | NEW GAME from `start` through both episodes to the end (23 maps with `ctf1` and the six ammo box maps) | verify | 1 | a playthrough lab on the pack |
 | rog1.ammo_maps | the six `b_` maps (lava nails, multi rockets and plasma boxes, big and small) loaded as brush models | verify | 1 | the base game's `b_` boxes load the same way |
 | rog1.items2 | the program's `items2` reaching the player's HUD (the new weapons and powerups) | verify | 1 | the catalogue knows the field (server/catalogue.cpp's ZQ_ITEMS2); which bits the client gets: reader question |
@@ -528,6 +531,8 @@ here:
 ## Questions for the clean-room readers
 
 Asked when a pack's work starts; the answers go into this page's rows or a facts page beside it.
+For the Quake II packs the reader reads the pack's released game source (GPL, never opened by
+whoever builds); for the Quake packs, the engine's released source and the packs' programs.
 
 - **Scourge of Armagon**: which item bits light the laser cannon, Mjolnir and the proximity gun
   on the status bar, and in which slots the bar draws them; what the engine does differently
@@ -547,8 +552,8 @@ Asked when a pack's work starts; the answers go into this page's rows or a facts
 
 ## The order of the work (M63)
 
-Not before the base games' gaps are filled, the settings lifted and the manual written (Niclas,
-2026-11-23). Then, one big PR each:
+Started at once, beside the gap threads (Niclas, 2026-11-23 12:16), one big PR each; The
+Reckoning and Ground Zero each in a thread of their own:
 
 1. **M63a, taking the packs in** (the `imp.*` rows): found and offered without being asked, from
    every form the releases come in (a zip of an install, a BIN/CUE, a 7z of an MDF), each a row on
