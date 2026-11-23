@@ -29,6 +29,7 @@
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_mods.hpp"
 #include "shooters_edge/server/q2_monsters.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_screens.hpp"
 #include "shooters_edge/server/shot_help.hpp"
 
@@ -1055,7 +1056,7 @@ void fight_spawn(Q2Server& s, int slot) {
   p.stepped = false;
   p.killer = -1;
   screens_spawned(s, slot);
-  p.quad_until = p.invulnerable_until = p.breather_until = p.suit_until = 0;
+  for (const SqPower& pw : sq_powers()) p.*pw.until = 0;
   p.silencer_shots = 0;
   p.power_on = false;
   p.power_flash = 0;
@@ -1101,15 +1102,9 @@ bool body_frame(Q2Server& s, int slot) {
   const bool suit = p.suit_until > now;
   water_sounds(s, slot);
   // A power about to run out says so 30 frames before: the first held of these, alone.
-  const std::pair<double, const char*> warn[] = {{p.quad_until, "items/damage2.wav"},
-                                                 {p.invulnerable_until, "items/protect2.wav"},
-                                                 {p.suit_until, "items/airout.wav"},
-                                                 {p.breather_until, "items/airout.wav"}};
-  for (const auto& [until, sample] : warn)
-    if (until > now) {
-      if (std::floor((until - now) * 10 + 0.5) == 30) body_sound(s, slot, kItemChannel, sample);
-      break;
-    }
+  if (const SqPower* pw = sq_first_power(p, now))
+    if (std::floor((p.*pw->until - now) * 10 + 0.5) == 30)
+      body_sound(s, slot, kItemChannel, pw->warn);
   // Air: refilled by the rebreather or the suit (a breath every 2.5 s under water, counted to the
   // rebreather's end even under the suit alone); once it runs out under water, a blow each second
   // that grows by 2 to 15 (4 first), no armour against it, a gurp (the last: a drowning cry).
@@ -1289,13 +1284,18 @@ void fight_step(Q2Server& s, int slot, bool attack) {
   if (!fightable(s, slot)) return;
   // g_swap_speed: frames a lower or raise advances a frame; 1 or less, or 65535 or more, is 1.
   const int swap = s.cvars.find("g_swap_speed")->integer();
-  const SqStep step = fight_hand_step(s, slot, attack, fight_anyflag(s, 8192) || fight_midair(s),
-                                      swap > 1 && swap < 65535 ? swap : 1);
-  if (step.click) sound(s, slot + 1, unpack(p.move.origin), kClick);
-  if (step.shots > 0 && p.hand.weapon == int(SqWeapon::hand_grenade))
-    throw_grenade(s, slot, step.throw_speed, step.fuse_left);
-  else if (step.shots > 0)
-    fire(s, slot, step.shots);
+  // Dual fire (q2_powers.hpp) steps the hand twice a frame, every weapon but the thrown ones.
+  const bool thrown = p.hand.weapon == int(SqWeapon::hand_grenade);
+  const int steps = p.dual_fire_until > s.level_time && !thrown ? 2 : 1;
+  for (int i = 0; i < steps; i++) {
+    const SqStep step = fight_hand_step(s, slot, attack, fight_anyflag(s, 8192) || fight_midair(s),
+                                        swap > 1 && swap < 65535 ? swap : 1);
+    if (step.click) sound(s, slot + 1, unpack(p.move.origin), kClick);
+    if (step.shots > 0 && p.hand.weapon == int(SqWeapon::hand_grenade))
+      throw_grenade(s, slot, step.throw_speed, step.fuse_left);
+    else if (step.shots > 0)
+      fire(s, slot, step.shots);
+  }
 }
 
 void fight_missiles(Q2Server& s) {
@@ -1547,7 +1547,7 @@ void fight_kill(Q2Server& s, int slot, int killer, int weapon) {
     body_sound(s, slot, kVoiceChannel, kOwnSounds[variant(s, slot, 1, 4)]);
   }
   fight_death_drops(s, slot);
-  p.quad_until = p.invulnerable_until = p.breather_until = p.suit_until = 0;
+  for (const SqPower& pw : sq_powers()) p.*pw.until = 0;
   p.silencer_shots = 0;
 }
 

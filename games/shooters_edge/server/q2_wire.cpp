@@ -117,6 +117,12 @@ constexpr TeName kTeNames[] = {
     {"te_bfg_explosion", 20, TeBody::point, 0},
     {"te_bfg_bigexplosion", 21, TeBody::point, 0},
     {"te_boss_teleport", 22, TeBody::point, 0},
+    // A pack's (The Reckoning's): the welder's and a cycling push's sparks in the event's colour,
+    // a gekk's blood, the phalanx's blast.
+    {"te_welding_sparks", 25, TeBody::splash, 0},
+    {"te_greenblood", 26, TeBody::point_dir, 0},
+    {"te_plasma_explosion", 28, TeBody::point, 0},
+    {"te_tunnel_sparks", 29, TeBody::splash, 0},
     {"te_teleport", 48, TeBody::point, 0},
 };
 
@@ -189,7 +195,8 @@ bool write_temp_entity(Out& o, const NetEvent& e) {
       o.u8(n >= 1 ? static_cast<uint32_t>(std::min(n, 255.0f)) : 8u);
       point(e.origin);
       way();
-      o.u8(row->kind == 15 ? static_cast<uint32_t>(e.level & 0xff) : row->colour);  // a laser's own
+      o.u8(row->kind == 15 || row->kind == 25 || row->kind == 29 ? static_cast<uint32_t>(e.level & 0xff)
+                                                              : row->colour);  // its event's own
       break;
     }
     case TeBody::line:

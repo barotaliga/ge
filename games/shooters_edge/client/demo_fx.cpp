@@ -103,7 +103,7 @@ void demo_fx_frame(const DemoState& s, DemoFx& fx) {
       fx.explosions.push_back(e.at);
       // Quake II's rocket's and grenade's (in the air and in water), for cl_disable_explosions.
       const uint8_t kind = !q2                           ? 0
-                           : e.code == 7 || e.code == 17 ? ge::classic::kQ2Rocket
+                           : e.code == 7 || e.code == 17 || e.code == 28 ? ge::classic::kQ2Rocket
                            : e.code == 8 || e.code == 18 ? ge::classic::kQ2Grenade
                                                          : 0;
       if (kind != 0) {

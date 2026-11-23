@@ -179,13 +179,17 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   }
   // Quake II's own specks: a laser's sparks in its colour; a splash in its kind's (none, sparks,
   // blue water, brown mud, green slime, lava, blood).
-  if (listen_is_q2(l) && (name == "te_laser_sparks" || name.starts_with("te_splash"))) {
+  if (listen_is_q2(l) && (name == "te_laser_sparks" || name.starts_with("te_splash") ||
+                          name == "te_welding_sparks" || name == "te_tunnel_sparks")) {
     constexpr std::pair<std::string_view, int> kSplash[] = {
         {"te_splash", 0x00},      {"te_splash_sparks", 0xe0}, {"te_splash_water", 0xb0},
         {"te_splash_mud", 0x50},  {"te_splash_slime", 0xd0},  {"te_splash_lava", 0xe0},
         {"te_splash_blood", 0xe8}};
     e.kind = EffectKind::named;
-    e.name = name == "te_laser_sparks" ? "sq_laser_sparks" : "sq_splash";
+    e.name = name == "te_laser_sparks"     ? "sq_laser_sparks"
+             : name == "te_welding_sparks" ? "sq_welding"
+             : name == "te_tunnel_sparks"  ? "sq_tunnel_sparks"
+                                           : "sq_splash";
     e.at = e.end = ev.origin;
     e.way = {ev.values[0], ev.values[1], ev.values[2]};
     e.count = n >= 1 ? count : 8;  // none asked: the wire's 8
@@ -202,7 +206,8 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   if (blast) {
     l.explosions.push_back(ev.origin);
     l.explosion_kinds.resize(l.explosions.size());  // cl_disable_explosions reads which
-    l.explosion_kinds.back() = name == "te_rocket_explosion"    ? ge::classic::kQ2Rocket
+    l.explosion_kinds.back() = name == "te_rocket_explosion" || name == "te_plasma_explosion"
+                                   ? ge::classic::kQ2Rocket
                                : name == "te_grenade_explosion" ? ge::classic::kQ2Grenade
                                                                 : 0;
   }
@@ -210,7 +215,10 @@ void take_named(Listen& l, const sv::NetEvent& ev) {
   const bool sparks = name == "te_sparks" || name == "te_bullet_sparks" ||
                       name == "te_screen_sparks" || name == "te_shield_sparks" ||
                       name == "te_laser_sparks" || name == "te_shotgun";
-  if (uint8_t kind = 0; sv::qw_temp_entity(sparks ? "te_gunshot" : ev.text, kind)) {
+  if (uint8_t kind = 0; sv::qw_temp_entity(sparks                    ? "te_gunshot"
+                                         : name == "te_greenblood" ? "te_blood"
+                                                                   : ev.text,
+                                         kind)) {
     if (kind == kExplosion || kind == 4) {
       l.explosions.push_back(ev.origin);
       return;

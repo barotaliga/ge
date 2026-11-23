@@ -14,6 +14,7 @@
 #include "shooters_edge/server/q2_combat.hpp"
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 #include "shooters_edge/server/q2_spectate.hpp"
 
@@ -229,18 +230,11 @@ void bar_rows(Q2Server& s) {
       st[7] = static_cast<int16_t>(image(s, sq_icon(p.picked)));
       st[8] = static_cast<int16_t>(1056 + p.picked);
     }
-    const struct {
-      double until;
-      int number;
-    } timers[4] = {
-        {p.quad_until, 23}, {p.invulnerable_until, 24}, {p.suit_until, 27}, {p.breather_until, 26}};
-    for (const auto& t : timers) {
-      if (t.until <= s.level_time) continue;
-      st[9] = static_cast<int16_t>(image(s, sq_icon(t.number)));
+    if (const SqPower* pw = sq_first_power(p, s.level_time)) {
+      st[9] = static_cast<int16_t>(image(s, sq_icon(sq_item_number(sq_item(pw->item)))));
       // Whole seconds left, rounded down, from the frames left.
-      const auto frames = static_cast<int64_t>((t.until - s.level_time) * 10.0 + 1e-6);
+      const auto frames = static_cast<int64_t>((p.*pw->until - s.level_time) * 10.0 + 1e-6);
       st[10] = static_cast<int16_t>(frames / 10);
-      break;
     }
     // The help slot: the help computer's icon blinking while unread; else, with the gun not drawn
     // in the view (`hand` 2, or a field of view over 91) and the host's own `cl_gun` not 2, the

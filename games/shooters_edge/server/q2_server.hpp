@@ -290,6 +290,7 @@ struct Q2Player {  // NOLINT(clang-analyzer-optin.performance.Padding): few, by 
   // switched on, and the body's state the frame reads: his air, the next drowning blow and its
   // size, and his fall speed at the last frame's end.
   double quad_until = 0, invulnerable_until = 0, breather_until = 0, suit_until = 0;
+  double dual_fire_until = 0;  // a pack's dual fire (q2_powers.hpp): the hand steps twice a frame
   int silencer_shots = 0;
   bool power_on = false;
   double power_flash = 0;  // the screen's plate or the shield's shell shown till then: a blow taken

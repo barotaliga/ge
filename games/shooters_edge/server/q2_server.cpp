@@ -28,6 +28,7 @@
 #include "progs/text.hpp"
 #include "shooters_edge/server/q2_actor.hpp"
 #include "shooters_edge/server/q2_bar.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_blend.hpp"
 #include "shooters_edge/server/q2_campaign.hpp"
 #include "shooters_edge/server/q2_commands.hpp"
@@ -949,8 +950,11 @@ void fill_rows(Q2Server& s) {
       e.modelindex = 0;
     }
     if (p.alive && s.intermission_at <= 0) {  // the powers held, blinking as they run out
-      if (sq_power_shown(p.quad_until - s.level_time)) e.effects |= kSqQuadEffect;
-      if (sq_power_shown(p.invulnerable_until - s.level_time)) e.effects |= kSqInvulnerableEffect;
+      for (const SqPower& pw : sq_powers())
+        if ((pw.effects | pw.render) != 0 && sq_power_shown(p.*pw.until - s.level_time)) {
+          e.effects |= pw.effects;
+          e.render_fx |= pw.render;
+        }
       if (p.god) {  // god mode: a white shell
         e.effects |= kSqColourShellEffect;
         e.render_fx |= kSqGodShellRender;

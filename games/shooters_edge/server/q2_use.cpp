@@ -12,6 +12,7 @@
 
 #include "shooters_edge/server/q2_fight.hpp"
 #include "shooters_edge/server/q2_items.hpp"
+#include "shooters_edge/server/q2_powers.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
 namespace shooters_edge::server {
@@ -73,18 +74,11 @@ bool fight_use(Q2Server& s, int slot, int item) {
     until = std::max(until, s.level_time) + it.amount;
   };
   const std::string_view name = it.classname;
-  if (name == "item_quad") {
-    extend(p.quad_until);
-    item_sound(s, slot, "items/damage.wav");
-  } else if (name == "item_invulnerability") {
-    extend(p.invulnerable_until);
-    item_sound(s, slot, "items/protect.wav");
+  if (const SqPower* pw = sq_power(it.classname)) {
+    extend(p.*pw->until);
+    if (pw->use_sound != nullptr) item_sound(s, slot, pw->use_sound);
   } else if (name == "item_silencer") {
     p.silencer_shots += it.amount;
-  } else if (name == "item_breather") {
-    extend(p.breather_until);
-  } else if (name == "item_enviro") {
-    extend(p.suit_until);
   }
   return true;
 }
