@@ -1031,7 +1031,8 @@ void run_command(Q2NetServer& s, int slot, const Q2Cmd& cmd, std::vector<sh::Pac
   sh::Packet p;
   p.client = slot;
   p.sequence = ++c.run_sequence;
-  const sh::MoveCmd m = move_cmd(cmd);
+  sh::MoveCmd m = move_cmd(cmd);
+  if (s.move_hook != nullptr) s.move_hook(s.move_ctx, slot, m);
   for (sh::MoveCmd& k : p.cmds) k = m;
   packets.push_back(p);
   c.last_run = cmd;
@@ -1164,7 +1165,10 @@ void read_messages(Q2NetServer& s, int slot, const uint8_t* data, size_t size,
       sh::Packet p;
       p.client = slot;
       p.sequence = c.ch.incoming_sequence;
-      for (int k = 0; k < 3; k++) p.cmds[k] = move_cmd(m.cmds[k]);
+      for (int k = 0; k < 3; k++) {
+        p.cmds[k] = move_cmd(m.cmds[k]);
+        if (s.move_hook != nullptr) s.move_hook(s.move_ctx, slot, p.cmds[k]);
+      }
       packets.push_back(p);
       c.last_cmd = ge::classic::q2_command(p.cmds[2]);  // as the rules run it
       c.last_cmd_at = s.now;
@@ -1397,6 +1401,7 @@ void send_frames(Q2NetServer& s) {
       sight = &s.sight;
     }
   }
+  const bool paused = *s.rules && (*s.rules)->paused;
   std::vector<uint8_t> block, rel;
   for (int i = 0; i < sh::kMaxClients; i++) {
     Q2NetClient& c = s.clients[i];
@@ -1421,6 +1426,12 @@ void send_frames(Q2NetServer& s) {
     const int64_t frame = c.told_frames ? fast : tenth;
     const int slots = rate_slots(s, c);
     if (!fresh) {
+      // Paused (a timeout): no frame comes, so the words said meanwhile and the acknowledgement of
+      // what the client sends go alone, or a second command would wait on the first until play.
+      if (paused && (channel_reliable_backlog(c.ch) > 0 || s.now - c.sent >= 1.0)) {
+        transmit(s, c, nullptr, 0);
+        continue;
+      }
       if (s.cfg.moves_between && c.told_moves && s.native == nullptr && (s.ticks & 1) == 0 &&
           moved_since(s, i, c.moves_sent) && sent_lately(c) <= c.rate) {
         block.clear();
