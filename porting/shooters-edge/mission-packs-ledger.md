@@ -50,14 +50,14 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Ground Zero (Quake II, folder `rogue`) | 82 | 3 | 7 | 72 (36 / 31 / 5) | 0 |
 | **All** | **274** | **22** | **131** | **121 (61 / 49 / 11)** | **0** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **121 missing, 131 to verify, of 274 rows** (M63a taking the packs in: 10 fewer).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **120 missing, 131 to verify, of 274 rows** (M63a taking the packs in: 11 fewer).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
 
 ## Taking the packs in (shared by all four)
 
-count: done 12, verify 3, missing 2 (0 / 2 / 0), not-taken 0
+count: done 13, verify 3, missing 1 (0 / 1 / 0), not-taken 0
 
 | id | what it is (our words) | status | rank | ours / note |
 | --- | --- | --- | --- | --- |
@@ -75,7 +75,7 @@ count: done 12, verify 3, missing 2 (0 / 2 / 0), not-taken 0
 | imp.vwep | Ground Zero's patch: the player models' weapons for its guns (`players/*/w_*.md2`, `a_grenades.md2`) | done | 2 | a `patch/<base folder>/` folder's content folders copied into the base folder |
 | imp.tracks | each pack's CD audio tracks into its own `music/`, numbered as the digital release (`ogg_remap_tracks` is done) | done | 2 | a pack's own disc: its audio tracks kept in `<data>/<id>/<pack>/music/`, played before the game's when the pack plays (client/take_in.hpp) |
 | imp.detect | found without being asked (Niclas, 2026-11-23): a pack in a store's library, on a mounted volume, as a disc image or archive in the folders the games page searches, or beside a base game being taken in, is offered and taken in | done | 1 | import.hpp `find_offers` over `store_folders` (stores' libraries, mounted volumes): a pack's folder, or a known pack's size on a disc, offered in the console at the start (client/take_in.hpp `offer_words`) and by `secli import`; beside a base game taken in: taken with it. Image and archive files: imp.detect_files |
-| imp.detect_files | a pack's disc image or release archive lying in those folders (a `.cue`, `.mdf`, `.zip`, `.7z`) offered too | missing | 2 | the folders are walked; files are not opened while looking |
+| imp.detect_files | a pack's disc image or release archive lying in those folders (a `.cue`, `.mdf`, `.zip`, `.7z`) offered too | done | 2 | import.hpp `find_offers`: a disc image (`.iso`, `.cue`, `.bin`, `.img`, `.mdf`) or `.zip` of 1 MiB or more, 64 at most, listed by seeks (`vfs::list_zip_file`, `vfs::open_disc`) and offered as itself when it holds a first pack of a known pack's size or in a pack's folder; a `.7z` is not looked in (its listing needs the whole archive) and is taken by `secli import <file>`. Test: classic_content_import_test `a_pack_on_a_disc_image_or_in_a_zip_in_the_store_folders_is_offered_as_itself` |
 | imp.games_page | each pack its own row on the games page (Quake: Scourge of Armagon, ...) starting the base game with the pack's folder | done | 1 | SELECT GAME: a row a pack under its game (client/installs.hpp `game_rows`, `packs_of`), opening the install with the pack's folder; the console's `games` names them |
 | imp.needs_base | a pack taken in without its base game: said in the game's words (it needs the full game) | done | 2 | client/take_in.hpp `take_in_words`: the packs kept, "add Quake II too", the game playing left as it is |
 

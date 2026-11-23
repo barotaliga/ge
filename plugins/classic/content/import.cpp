@@ -16,6 +16,7 @@
 #include <string>
 
 #include "assets/sha256.hpp"
+#include "vfs/disc.hpp"
 #include "vfs/lha.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/unpack.hpp"
@@ -780,7 +781,54 @@ std::vector<Offer> find_offers(const std::vector<std::string>& roots,
       if (lower(e.path().filename().string()) == name) return e.path();
     return fs::path();
   };
-  int seen = 0;
+  // A disc image or a zip that holds a pack: its listing read by seeks, never the whole file.
+  using Listed = std::vector<std::pair<std::string, uint64_t>>;
+  const auto offer_listed = [&](const fs::path& file, const Listed& names) {
+    const auto has_folder = [&](std::string_view folder) {
+      const std::string seg = "/" + lower(folder) + "/";
+      return std::any_of(names.begin(), names.end(), [&](const auto& n) {
+        return ("/" + lower(n.first)).find(seg) != std::string::npos;
+      });
+    };
+    for (const auto& [n, size] : names) {
+      const std::string l = lower(n);
+      const std::string folder = last_part(parent_of(l));
+      for (const classicenhance::Profile& g : classicenhance::kProfiles) {
+        if (last_part(l) != lower(classicenhance::pack_name(g, 0))) continue;
+        bool other_base = false;
+        for (const classicenhance::Profile& o : classicenhance::kProfiles)
+          other_base = other_base || (&o != &g && has_folder(o.base_dir));
+        const bool named_here = !other_base || has_folder(g.base_dir);
+        for (const classicenhance::MissionPack& m : g.packs) {
+          if (size != m.size && (folder != lower(m.folder) || !named_here)) continue;
+          if (offered(&m) || taken(g, m)) continue;
+          out.push_back({file.string(), &g, &m});
+        }
+      }
+    }
+  };
+  const auto look_inside = [&](const fs::path& file) {
+    const std::string e = lower(file.extension().string());
+    Listed names;
+    std::string why;
+    if (e == ".zip") {
+      std::vector<vfs::ZipEntry> entries;
+      if (!vfs::list_zip_file(file.string(), &entries, &why)) return;
+      for (const vfs::ZipEntry& z : entries) {
+        std::string n = z.name;
+        std::replace(n.begin(), n.end(), '\\', '/');
+        names.emplace_back(std::move(n), z.size);
+      }
+    } else {
+      // A track's .bin beside its cue sheet is read through the sheet.
+      if (e == ".bin" && fs::exists(fs::path(file).replace_extension(".cue"), ec)) return;
+      vfs::Disc disc;
+      if (!vfs::open_disc(file.string(), &disc, &why)) return;
+      for (const vfs::DiscFile& f : disc.files) names.emplace_back(f.path, f.size);
+    }
+    offer_listed(file, names);
+  };
+  int seen = 0, looked = 0;
   for (const std::string& r : all) {
     const fs::path root(r);
     if (!data_root.empty() && fs::weakly_canonical(root, ec) == fs::weakly_canonical(data_root, ec))
@@ -790,6 +838,16 @@ std::vector<Offer> find_offers(const std::vector<std::string>& roots,
          it != fs::recursive_directory_iterator() && seen < kOfferFolders; it.increment(ec)) {
       if (ec) break;
       if (it.depth() >= 3) it.disable_recursion_pending();
+      if (it->is_regular_file(ec)) {
+        const std::string e = lower(it->path().extension().string());
+        if ((e == ".zip" || vfs::is_disc_image(it->path().string())) &&
+            it->file_size(ec) >= kOfferImageBytes && looked < kOfferImages &&
+            !inside_data(it->path().parent_path(), data_root)) {
+          looked++;
+          look_inside(it->path());
+        }
+        continue;
+      }
       if (!it->is_directory(ec)) continue;
       seen++;
       const fs::path dir = it->path();
