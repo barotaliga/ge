@@ -23,7 +23,9 @@
 // STUFFED LINES: `cmd ...` is sent on; `color`, `team`, `skin`, `name`, `topcolor`, `bottomcolor`
 // and `setinfo` change the user info and tell the server (a team mod sets the player's colours
 // and drops a player who does not take them); the first `kStuffedKept` lines are kept in
-// `stuffed`.
+// `stuffed`. Every other line (an alias, a bind, a setting, `echo`) goes to `to_run` for the
+// window's console to run as the server's, but `bf` and the `//` lines, which the picture reads
+// from the stream itself (the pickup flash, places, visible weapons, a match's start).
 //
 // RECORDING (`record`, set after `client_start`): every packet it reads and every command it sends
 // go into a ClientRecorder (qw_record.hpp), and its own voice with them in the voice format.
@@ -275,6 +277,9 @@ struct QwClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a
   int sound_last = 0, model_last = 0;
   int stufftexts = 0;
   std::vector<std::string> stuffed;  // the first kStuffedKept console lines stuffed, as sent
+  // The stuffed lines the client does not answer itself, for the window's console to run as the
+  // server's (qw_remote.hpp `stuffed_run`): taken each frame, at most kStuffedKept held.
+  std::vector<std::string> to_run;
   ClientStage stage = ClientStage::challenge;
   bool begun = false;
   double connected_at = -1, active_at = -1;  // the network's times, s

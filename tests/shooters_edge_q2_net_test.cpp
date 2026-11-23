@@ -711,6 +711,29 @@ TEST(a_locked_server_refuses_newcomers) {
   CHECK_MSG(c.stage == cn::ClientStage::active, c.refused);
 }
 
+// sv_ruleset: a player on another ruleset is refused, one on it and a spectator come in, and the
+// status record names it.
+TEST(a_competition_server_refuses_a_player_on_another_ruleset) {
+  cn::Q2NetConfig cfg;
+  cfg.ruleset = "duel";
+  auto r = rig(cfg);
+  cn::Q2ClientConfig plain;
+  cn::Q2ClientEnd& a = join(*r, plain);
+  cn::Q2ClientConfig dueller;
+  dueller.ruleset = "duel";
+  cn::Q2ClientEnd& b = join(*r, dueller);
+  cn::Q2ClientConfig watcher;
+  watcher.spectator = true;
+  cn::Q2ClientEnd& c = join(*r, watcher);
+  run(*r, 80);
+  CHECK(a.refused ==
+        "This server requires the duel ruleset. Pick it in OPTIONS or type ruleset duel, then "
+        "join again.\n");
+  CHECK_MSG(b.stage == cn::ClientStage::active, b.refused);
+  CHECK_MSG(c.refused.empty(), c.refused);
+  CHECK(cn::q2_status_text(r->server).find("\\ruleset\\duel") != std::string::npos);
+}
+
 TEST(renames_past_the_limit_are_refused_and_the_rest_told) {
   cn::Q2NetConfig cfg;
   cfg.names = {2, 60, 1};  // two renames a minute, everyone told

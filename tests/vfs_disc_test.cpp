@@ -6,6 +6,7 @@
 // ge:summary Tests the disc reader: ISO 9660 and Joliet, raw sectors, cue sheets, audio, damage
 // ge:keywords test vfs disc iso iso9660 joliet cue bin raw-sector audio-track refuse
 // ge:skill vfs testing
+#include <cstddef>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -105,6 +106,25 @@ TEST(disc_reads_raw_sectors_with_no_sheet) {
   std::string error;
   CHECK_MSG(vfs::open_disc(p.string(), &d, &error), error);
   CHECK(d.tracks[0].sector == 2352 && d.tracks[0].user == 16);
+  check_files(d, files, false);
+}
+
+TEST(disc_reads_raw_sectors_with_their_subchannel) {
+  // A disc copier's .mdf: each 2352-byte sector followed by its 96 bytes of subchannel.
+  const Files files = game_files();
+  const std::vector<uint8_t> raw = vfs::raw_sectors(vfs::write_iso(files, true));
+  std::vector<uint8_t> mdf;
+  for (size_t s = 0; s < raw.size(); s += 2352) {
+    mdf.insert(mdf.end(), raw.begin() + std::ptrdiff_t(s), raw.begin() + std::ptrdiff_t(s + 2352));
+    mdf.insert(mdf.end(), 96, uint8_t(0xff));
+  }
+  const fs::path p = scratch("copy.mdf");
+  save(p, mdf);
+  CHECK(vfs::is_disc_image(p.string()));
+  vfs::Disc d;
+  std::string error;
+  CHECK_MSG(vfs::open_disc(p.string(), &d, &error), error);
+  CHECK(d.tracks[0].sector == 2448 && d.tracks[0].user == 16);
   check_files(d, files, false);
 }
 

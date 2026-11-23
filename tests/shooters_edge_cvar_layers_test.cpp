@@ -574,7 +574,8 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   Window w(pr::kGameProfiles[0]);
   con::Cvars& v = w.console.cvars();
   con::ConsoleView view(w.console);  // con_height, con_bgalpha, con_font: the console's own
-  v.add({.name = "vid_vsync", .fallback = "0"});  // the window's (platform/pacing.cpp)
+  v.add({.name = "vid_vsync", .fallback = "0"});    // the window's (platform/pacing.cpp)
+  v.add({.name = "scr_showfps", .fallback = "0"});  // the window's too
   w.console.add_command("playdemo", "the window's (client/demo_playback.cpp)",
                         [](con::Console&, const con::Args&) {});
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});  // read again with them
@@ -592,6 +593,13 @@ TEST(the_names_every_game_shares_reach_one_setting_in_both) {
   CHECK(v.find("gl_damageblend_frac")->value == "0" && w.picture.damage_frac == 0);  // Quake's
   v.set("gl_modulate", "1.5", con::Source::local);
   CHECK(w.picture.light_modulate == 1.5);
+  v.set("show_fps", "1", con::Source::local);  // QuakeWorld's spelling of the frame rate shown
+  CHECK(v.find("scr_showfps")->value == "1");
+  v.set("cl_sbar", "1", con::Source::local);  // and of the old bar, and its column
+  v.set("cl_hudswap", "1", con::Source::local);
+  CHECK(v.find("hud_sbar") != nullptr && v.find("hud_sbar")->value == "1");
+  CHECK(v.find("hud_swap") != nullptr && v.find("hud_swap")->value == "1");
+  CHECK(w.console.has_command("togglechat"));
   const pr::GameProfile* q2 = pr::find_game("q2");
   CHECK(q2 != nullptr);
   if (q2 == nullptr) return;
@@ -630,6 +638,26 @@ TEST(one_camera_behind_the_player_in_every_game) {
   CHECK(v.find("cl_thirdperson")->layer == cl::kLayerClassic);
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
   CHECK(v.find("cl_thirdperson_range") == nullptr && v.find("chase_active") != nullptr);
+  CHECK(v.clashes().empty());
+}
+
+TEST(the_2d_switch_and_the_frame_graph_are_every_games) {
+  // scr_draw2d and timegraph in the classic layer (screen_2d.hpp): Quake's r_timegraph the same
+  // graph, and a value set in one game held in the next.
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  CHECK(v.find("scr_draw2d") != nullptr && v.find("scr_draw2d")->layer == cl::kLayerClassic);
+  v.set("r_timegraph", "1", con::Source::local);
+  v.set("scr_draw2d", "1", con::Source::local);
+  CHECK(w.game.screen.time_graph && w.game.screen.draw2d == 1);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2, {});
+  CHECK(w.game.screen.time_graph && w.game.screen.draw2d == 1);  // kept
+  v.set("scr_draw2d", "3", con::Source::local);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
+  CHECK(w.game.screen.draw2d == 3 && v.find("scr_draw2d")->value == "3");
   CHECK(v.clashes().empty());
 }
 

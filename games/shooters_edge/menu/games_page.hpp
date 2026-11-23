@@ -43,6 +43,10 @@ struct GameRow {
   std::string edition = {};  // that install's edition in the game's words ("Shareware"), "" unknown
   bool playing = false;      // the game loaded now: its name in colour
   bool remixed = false;      // classic remix plays the loaded game with it: its name half in colour
+  // A mission pack's row, under its game's: the pack's folder (played over the game's install)
+  // and its title; both "" for the game's own row.
+  std::string pack = {};
+  std::string pack_name = {};
 };
 
 enum class GamesAction : uint8_t { none, leave, open, browse };

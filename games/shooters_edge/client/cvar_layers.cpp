@@ -498,8 +498,12 @@ void add_first(con::Console& c, const GameBindings& b) {
                   .max = 10000,
                   .values = "1..10000: that fast (100 the default: silence to full in 2.55 s)"},
                  &ambient_settings().fade);
-  if (b.noskins != nullptr) *b.noskins = 0;         // its figures are its own (choose_figure)
-  if (b.screen != nullptr) *b.screen = Q2Screen{};  // Quake II's view and 2D settings set aside
+  if (b.noskins != nullptr) *b.noskins = 0;  // its figures are its own (choose_figure)
+  if (b.screen != nullptr) {  // Quake II's view and 2D settings set aside, the shared ones kept
+    const Screen2D shared = *b.screen;
+    *b.screen = Q2Screen{};
+    static_cast<Screen2D&>(*b.screen) = shared;
+  }
   c.cvars().add_synonym("fov", "cl_fov");
   c.cvars().add_synonym("_snd_mixahead", "s_mixahead");  // its spelling (client/room_ear.hpp)
   c.cvars().add_synonym("ignore_qtv", "ignore_tv");      // its spelling of the TV viewers' chat
@@ -529,6 +533,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("r_drawparticles", "r_particles");  // the specks (its rulesets lock it)
   c.cvars().add_synonym("cl_net_clientport", "net_clientport");  // the client's own port
   c.cvars().add_synonym("in_grab_windowed_mouse", "in_grab");    // the mouse kept in a window
+  if (c.cvars().find("scr_showfps") != nullptr)                  // the frame rate in a corner
+    c.cvars().add_synonym("show_fps", "scr_showfps");
   c.add_command_synonym("vid_reload", "r_reload");  // the textures and models read again
   c.add_command(
       "_cl_color", "_cl_color <shirt*16+pants>: both your colours as one number",
@@ -610,7 +616,7 @@ void add_first(con::Console& c, const GameBindings& b) {
 //   own); `gl_swapinterval` its spelling of `vid_vsync`, `demo` its spelling of `playdemo`;
 // - its chat: its own `cl_chat_sound` (one sound by number or name) and `con_auto_chat` (2 says a
 //   typed line to the team, where our `con_chat` 2 tells a command by its first word);
-// - its view and 2D (q2_view.hpp): `scr_scale`, `scr_draw2d`, `scr_alpha`, the lag graph's
+// - its view and 2D (q2_view.hpp): `scr_scale`, `scr_alpha`, the lag graph's
 //   `scr_lag_*`, `cl_adjustfov`, `uf`, `cl_kickangles`; and `s_underwater` the same setting as
 //   Quake's (room_ear.hpp), on by default where Quake's is off;
 // - its browsers: `ui_sortdemos` (`menu_demo_sort`, by name by default where ours lists the newest
@@ -1214,6 +1220,8 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
     con::CvarLayer classic(c.cvars(), kLayerClassic);
     add_shared_session_cvars(c.cvars(), v.q2);
     add_shared_gun_cvars(c.cvars(), b);
+    // the 2D switch and the graph along the bottom (screen_2d.hpp)
+    add_screen_2d_cvars(c.cvars(), b.screen != nullptr ? *b.screen : v.screen);
   }
   con::CvarLayer layer(c.cvars(), v.layer);
   if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it

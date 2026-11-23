@@ -381,3 +381,26 @@ TEST(the_file_words_link_over_the_game_s_files) {
   for (const std::string& line : con.output()) banner = banner || line == "----- FS_Restart -----";
   CHECK(banner);
 }
+
+TEST(select_game_lists_each_mission_pack_under_its_game) {
+  const fs::path prefs = fresh("prefs-packs");
+  const fs::path install = fresh("packs-install");
+  write_pack(install / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
+  write_pack(install / "rogue" / "pak0.pak", {{"maps/r1m1.bsp", {1}}});
+  write_pack(install / "hipnotic" / "pak0.pak", {{"maps/hip1m1.bsp", {1}}});
+  fs::create_directories(install / "xatrix");  // another game's pack's name, empty
+  CHECK(cl::remember_install(prefs.string(), "q1", install.string()));
+  const auto& q1 = ge::classicenhance::q1_profile();
+  CHECK(cl::packs_of(install.string(), q1).size() == 2);
+  // Playing the game itself: its row in colour, a row a pack under it.
+  auto rows = cl::game_rows(prefs.string(), "q1", install.string(), {}, kMulti);
+  CHECK_MSG(rows.size() == 3, std::to_string(rows.size()));
+  if (rows.size() != 3) return;
+  CHECK(rows[0].pack.empty() && rows[0].playing);
+  CHECK(rows[1].pack == "hipnotic" && rows[1].pack_name == "Scourge of Armagon" &&
+        !rows[1].playing && rows[1].install == install.string());
+  CHECK(rows[2].pack == "rogue" && rows[2].pack_name == "Dissolution of Eternity");
+  // Playing a pack: its row in colour, the game's not.
+  rows = cl::game_rows(prefs.string(), "q1", install.string(), {}, "rogue");
+  CHECK(!rows[0].playing && !rows[1].playing && rows[2].playing);
+}
