@@ -30,14 +30,17 @@
 // ge:keywords remote-client connect join-server q2 protocol-34 q2-join delta-angles
 // ge:keywords use-weapon impulse lerp q2_remote_start q2_remote_step
 // ge:keywords cl_speedjump easy-jump speedjump-share cl_maxfps move-rate q2_move_ms
-// ge:keywords download add_q2_download_command skins add_q2_skins_command
+// ge:keywords download add_q2_download_command skins add_q2_skins_command userinfo user-info
+// ge:keywords q2_user_info_moved setinfo rename name-change
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_net_test.cpp
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
+#include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/net/qw_remote.hpp"
 
 namespace shooters_edge::net {
@@ -47,6 +50,13 @@ namespace shooters_edge::net {
 int q2_move_ms(int rate);
 // Quake II's client started over `r.transport` to `r.server` with the player's settings.
 void q2_remote_start(Remote& r, const ClientConfig& cfg);
+// THE USER INFO KEPT UP TO DATE: the player's settings (`setting`, the console's value by name;
+// "" unset) as Quake II's user info: name, skin (as at the join: `skin` with a slash, else
+// `model`/`skin`, else male/grunt), hand, fov (cl_fov rounded; 0 its 90), msg, gender (picked from
+// the figure under gender_auto 1), rate and password. True, `q` changed, when any moved: the
+// window sends the user info again so a joined server sees a new name or skin at once.
+bool q2_user_info_moved(Q2ClientConfig& q,
+                        const std::function<std::string(const std::string&)>& setting);
 // One window frame of `wall_s` s (qw_remote.hpp's `remote_step` for a server of Quake II).
 RemoteStep q2_remote_step(Remote& r, double wall_s, std::vector<std::string>& said);
 // `download <file>`: a file asked of the server joined (q2_client.hpp's `q2_download`), saying

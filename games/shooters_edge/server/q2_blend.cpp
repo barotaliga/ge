@@ -31,14 +31,19 @@ int64_t frames_left(double until, double now) {
 void blend_frame(Q2Server& s, int slot) {
   Q2Player& p = s.players[slot];
   float b[4] = {0, 0, 0, 0};
-  const auto lay = [&b](float r, float g, float bl, float a) {
+  float apart[4] = {0, 0, 0, 0};  // the same without the damage flash
+  const auto lay_on = [](float(&t)[4], float r, float g, float bl, float a) {
     if (a <= 0) return;
-    const float now = b[3] + (1 - b[3]) * a;
-    const float keep = b[3] / now;
-    b[0] = b[0] * keep + r * (1 - keep);
-    b[1] = b[1] * keep + g * (1 - keep);
-    b[2] = b[2] * keep + bl * (1 - keep);
-    b[3] = now;
+    const float now = t[3] + (1 - t[3]) * a;
+    const float keep = t[3] / now;
+    t[0] = t[0] * keep + r * (1 - keep);
+    t[1] = t[1] * keep + g * (1 - keep);
+    t[2] = t[2] * keep + bl * (1 - keep);
+    t[3] = now;
+  };
+  const auto lay = [&](float r, float g, float bl, float a) {
+    lay_on(b, r, g, bl, a);
+    lay_on(apart, r, g, bl, a);
   };
   // What is at the eye.
   const sh::Vec3f eye{float(p.move.origin[0]) * 0.125f + p.seen.offset.x,
@@ -72,11 +77,16 @@ void blend_frame(Q2Server& s, int slot) {
   if (p.taken.size() < p.taken_seen) p.taken_seen = 0;  // a new life's list
   if (p.taken.size() > p.taken_seen) p.bonus_alpha = 0.25f;
   p.taken_seen = p.taken.size();
-  lay(p.damage_rgb[0], p.damage_rgb[1], p.damage_rgb[2], p.damage_alpha);
+  lay_on(b, p.damage_rgb[0], p.damage_rgb[1], p.damage_rgb[2], p.damage_alpha);
+  for (int k = 0; k < 3; k++) p.damage_blend[k] = p.damage_rgb[k];
+  p.damage_blend[3] = std::max(p.damage_alpha, 0.0f);
   lay(0.85f, 0.7f, 0.3f, p.bonus_alpha);
   p.damage_alpha = std::max(0.0f, p.damage_alpha - 0.06f);
   p.bonus_alpha = std::max(0.0f, p.bonus_alpha - 0.1f);
-  for (int k = 0; k < 4; k++) p.blend[k] = b[k];
+  for (int k = 0; k < 4; k++) {
+    p.blend[k] = b[k];
+    p.blend_apart[k] = apart[k];
+  }
 }
 
 }  // namespace shooters_edge::server
