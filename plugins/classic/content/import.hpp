@@ -18,26 +18,7 @@
 // (or the content zip standing in for it) is in the tree, at any depth (a disc keeps it under an
 // install folder); the shallowest wins.
 //
-// **Release archives**: a release `.zip` (an install zipped, as an archive keeps a game) is read
-// whole into memory and its entries taken as the tree; a `.7z` holding one disc image (`.mdf`,
-// `.iso`, `.img` or `.bin`) has it unpacked into `<data>/.unpacking/`, read as a disc image above,
-// and removed when the take-in ends (a 7z is unpacked again on each take-in, unchanged or not).
-//
-// **Mission packs** (`find_packs`): a game's official add-ons (classicenhance/profile.hpp's
-// `MissionPack`) are found beside its base folder or alone, and copied into
-// `<data>/<profile id>/<pack folder>/` beside the base folder, where the game plays them over it:
-// - by name: a `pak0.pak` in a folder named after one of the game's packs (`hipnotic` beside
-//   `id1`), its archives and content folders copied like the base folder's; a name two games' packs
-//   share is told by the base folder beside it, then by the pack's SHA-256, then by the one game
-//   with a pack of that name; the folder pointed at is the pack's own when the tree's top holds it;
-// - by digest: a `pak0.pak` in any other folder (a disc's `Data/all/`) whose size and SHA-256 are
-//   a known pack's, with the content folders of the shallowest folder named after the pack (its
-//   movies, `Data/max/<pack>/video`) and of a `patch/<base folder>/` folder (players' models of
-//   the pack's guns), the latter into the base folder.
-// A source of packs alone (a pack's disc) is taken in the same way and says that the base game
-// must be taken in too (`ImportReport::base` false); its disc's audio tracks are that pack's
-// music, kept in `<data>/<profile id>/<pack folder>/music/`. Only the base game's own source
-// reads its music files and its packs' music.
+// **Release archives** and **mission packs**: below, at `open_tree` and `find_packs`.
 //
 // **What is copied**: the base folder's and the multiplayer folder's archives (`*.pak`, `*.pk3`,
 // `*.pkz`) and the loose files under the folders a game reads (maps, sound, music, progs, models,
@@ -129,7 +110,28 @@ struct FoundPack {
   bool named = false;     // found by its folder's name (`root`), not by its digest alone
 };
 
-// The mission packs in the tree, of `game` when it is not null (see § Mission packs).
+// **Release archives**: a release `.zip` (an install zipped, as an archive keeps a game) is read
+// whole into memory and its entries taken as the tree; a `.7z` holding one disc image (`.mdf`,
+// `.iso`, `.img` or `.bin`) has it unpacked into `<data>/.unpacking/`, read as a disc image above,
+// and removed when the take-in ends (a 7z is unpacked again on each take-in, unchanged or not).
+//
+// **Mission packs** (`find_packs`): a game's official add-ons (classicenhance/profile.hpp's
+// `MissionPack`) are found beside its base folder or alone, and copied into
+// `<data>/<profile id>/<pack folder>/` beside the base folder, where the game plays them over it:
+// - by name: a `pak0.pak` in a folder named after one of the game's packs (`hipnotic` beside
+//   `id1`), its archives and content folders copied like the base folder's; a name two games' packs
+//   share is told by the base folder beside it, then by the pack's SHA-256, then by the one game
+//   with a pack of that name; the folder pointed at is the pack's own when the tree's top holds it;
+// - by digest: a `pak0.pak` in any other folder (a disc's `Data/all/`) whose size and SHA-256 are
+//   a known pack's, with the content folders of the shallowest folder named after the pack (its
+//   movies, `Data/max/<pack>/video`) and of a `patch/<base folder>/` folder (players' models of
+//   the pack's guns), the latter into the base folder.
+// A source of packs alone (a pack's disc) is taken in the same way and says that the base game
+// must be taken in too (`ImportReport::base` false); its disc's audio tracks are that pack's
+// music, kept in `<data>/<profile id>/<pack folder>/music/`. Only the base game's own source
+// reads its music files and its packs' music.
+//
+// The mission packs in the tree, of `game` when it is not null (as above).
 std::vector<FoundPack> find_packs(const Tree& tree, const classicenhance::Profile* game,
                                   const PackIdentifier& identify);
 

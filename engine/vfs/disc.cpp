@@ -332,7 +332,7 @@ bool open_plain(const fs::path& path, Disc* d, Disc::Impl* im, std::string* erro
     f.clear();
     f.seekg(2448);
     f.read(reinterpret_cast<char*>(next), 12);
-    t.sector = f && size >= 2 * 2448 && std::equal(kSync, kSync + 12, next) ? 2448 : 2352;
+    t.sector = f && size >= uint64_t{2} * 2448 && std::equal(kSync, kSync + 12, next) ? 2448 : 2352;
     t.user = head[15] == 2 ? 24 : 16;
   }
   t.sectors = uint32_t(size / t.sector);

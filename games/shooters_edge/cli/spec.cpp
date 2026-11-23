@@ -241,9 +241,11 @@ int cmd_import(gc::Ctx& ctx) {
   if (!ge::classic::content::import_game(ctx.words[0], root, &r, &why))
     return gc::refuse(ctx, 1, why, "secli import <your game's folder, disc image or archive>");
   std::vector<std::string> packs;
+  packs.reserve(r.packs.size());
   for (const auto* m : r.packs)
     packs.push_back(json_obj({{"folder", json_str(m->folder)}, {"name", json_str(m->name)}}));
   std::vector<std::string> notes;
+  notes.reserve(r.notes.size());
   for (const std::string& n : r.notes) notes.push_back(json_str(n));
   const std::string words = cl::take_in_words(r, ctx.words[0]);
   return gc::answer(

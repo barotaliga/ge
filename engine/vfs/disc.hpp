@@ -24,7 +24,8 @@
 //
 // ge:summary Reads a disc image (.iso, .cue with .bin, raw .bin/.img): ISO 9660 files, audio tracks
 // ge:keywords disc iso iso9660 joliet cue bin img image cd cd-rom cdda audio-track track mode1
-// ge:keywords mode2 raw-sector 2352 2048 2448 mdf subchannel sync data-track open_disc read_file read_audio
+// ge:keywords mode2 raw-sector 2352 2048 2448 mdf subchannel sync data-track open_disc read_file
+// ge:keywords read_audio
 // ge:keywords write_iso write_cue_bin fixture
 // ge:skill vfs
 // ge:test tests/vfs_disc_test.cpp
