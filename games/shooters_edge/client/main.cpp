@@ -1182,6 +1182,7 @@ int run_main(int argc, char** argv) {
           mi.pointer_moved = mi.pointer_x != last_pointer.x || mi.pointer_y != last_pointer.y;
           last_pointer = {mi.pointer_x, mi.pointer_y};
           mi.click = held.mouse.buttons.went_up(0);
+          mi.pointer_held = held.mouse.buttons.down(0);  // the setup page's figure turned
         }
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
