@@ -176,7 +176,7 @@ constexpr std::pair<const char*, const char*> kWindowCvars[] = {
     {"r_lava_glow", "0.2"}, {"r_slime_glow", "1"},  {"gamma", "1"},        {"vid_fullscreen", "0"},
     {"sv_weather", "0"},    {"sv_rain", "1"},       {"sv_precip", "0.5"},  {"sv_wind", "4"},
     {"r_lightning", "1"},   {"r_snowcover", "1"},   {"r_wet", "1"},        {"topcolor", "4"},
-    {"bottomcolor", "12"},
+    {"bottomcolor", "12"},  {"ruleset", "default"},
 };
 
 // The window's console: what the menu's rows read and run.
