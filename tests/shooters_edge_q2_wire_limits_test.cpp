@@ -123,3 +123,19 @@ TEST(the_second_levels_player_has_64_stats_and_a_split_blend) {
   CHECK(gn::read_u16(r) == 9);
   CHECK(!r.bad && gn::remaining(r) == 0);
 }
+
+TEST(a_gun_that_only_moves_sends_its_frame_offset_and_angles) {
+  sv::Q2PlayerState a, b;
+  b.gun_offset[1] = -3;
+  b.gun_angles[0] = 5;
+  std::vector<uint8_t> out;
+  sv::q2_write_player_ext(out, a, b, 1);
+  gn::Reader r = gn::make_reader(out.data(), out.size());
+  CHECK(gn::read_u8(r) == 17);
+  const uint16_t f = gn::read_u16(r);
+  CHECK((f & (1 << 13)) != 0);  // the gun's frame bit, though the frame itself stands
+  CHECK(gn::read_u16(r) == 0);  // the gun's index
+  CHECK(gn::read_u8(r) == 0);   // the frame
+  CHECK(gn::read_u8(r) == 0 && gn::read_u8(r) == uint8_t(-3) && gn::read_u8(r) == 0);
+  CHECK(gn::read_u8(r) == 5 && gn::read_u8(r) == 0 && gn::read_u8(r) == 0);
+}
