@@ -71,13 +71,11 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Beams, sky, textures, fog | the look's own | `gl_beamstyle`, `gl_drawsky`, `gl_bilerp_skies`, `gl_saturation`, `gl_invert`, `gl_anisotropy`, `gl_fog` (`classic/q2_fx_switches.hpp`) | the look's own | the look's own |
 | Under water | the view breathes (`r_waterwarp`) | also `gl_waterwarp`, the view rippled (`render/post.hpp`'s PostRipple) | `r_waterwarp` | `r_waterwarp` |
 | The light on walls and models | `gl_modulate` (the walls) | `gl_modulate_world`, `gl_modulate_entities`, `gl_doublelight_entities`, `gl_dotshading`, `gl_coloredlightmaps`, `gl_dlight_falloff`, `cl_lerp_lightstyles` (`classic/q2_fx_switches.hpp`) | the classic's | the classic's |
-| Ink lines round models | none | `gl_celshading` (`classic/q2_fx_switches.hpp`, drawn by `render/morph.hpp`'s MorphDraw::outline) | none | none |
-| Glow maps on model skins (`<skin>_glow`) | none | `gl_glowmap_intensity` (`app/classic_models.hpp`'s glow_map_marks over `render/morph.hpp`'s glow share marks) | none | none |
 | Explosions stepped by frames | none | `cl_smooth_explosions` 0 (`classic/q2_fx_switches.hpp`'s q2_blast_age) | none | none |
 | Status bar pictures | sharp | `gl_bilerp_pics`, `gl_gamma_scale_pics` (`client/q2_bar.cpp`) | sharp | sharp |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Command packets | `localid`: a server browser on this machine sends commands that carry it (`net/qw_client.cpp`) | none | its own | its own |
-| Setup figure | the pack's figure in the chosen shirt and pants (`menu/classic_art.cpp`'s `player_in`) | its figure rows (`menu/q2_pages.cpp`) | its own | its own |
+| Setup figure | the player's model drawn live beside the rows (`menu/player_view.hpp`): its skin and colours, a colour picker of swatches, the WEAPON row's weapon (the carried one with `r_drawvweps`), a click fires it, a drag turns it; the CPU drawing is `overview/mesh_picture.hpp`'s `draw_turned`, the figure art `classic/figure_art.hpp`; the pack's still figure only when the files lack the model | the same page under its model and skin rows (`menu/q2_pages.cpp`), no colours | its own | its own |
 | Screenshot names | by the time | `gl_screenshot_template` (`quakeXXX`) and `gl_screenshot_compression` over `scr_template` and `scr_compression` (`capture/screenshot.hpp`) | by the time | the engine's |
 
 ## Adding a game
@@ -110,6 +108,8 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Speakers swapped (`s_swapstereo`) | both games' later clients | `engine/audio/synth.hpp`'s `swap_stereo`, `client/room_ear.hpp` |
 | Two ears for headphones (`s_hrtf`, Quake II's `al_hrtf`): the far ear later, softer and duller | Quake II's later client | `engine/audio/synth.hpp`'s `binaural`, `client/room_ear.hpp` |
 | The folder the game writes in (`+set homedir`) | Quake II's later client, any game's here | `client/take_in.hpp` |
+| A hit's flash as a frame round the view's edge (`gl_damageblend_frac`; Quake 0, its flat flash) | Quake II's later client, every classic game's here | `engine/render/post.hpp`'s `set_post_edge_blend`, `app/look.hpp`'s `toned_tints`, `server/q2_blend.hpp` |
+| The user info sent again the moment a setting in it changes (name, skin, hand, fov, msg) | Quake II's later client; Quake's colours, rate and password before | `net/q2_remote.hpp`'s `q2_user_info_moved`, `net/qw_remote.cpp`'s `user_info_step` |
 | Typed history kept to a length (`con_history`) | Quake II's client | `engine/console/view.hpp` |
 | The string commands (`alias_in`, `cvar_in`, `set_bind_str`, `hash` ...), `msg_trigger` levels, `$triggermatch` | Quake's later clients | `engine/console/script_strings.cpp`, `script.cpp` |
 | Alias arguments `$0`, `$@`, `${1-3}`, `%1`; `if ... eq/ne/isin` | Quake II's later client | `engine/console/lex.cpp`, `script.cpp` |

@@ -1,7 +1,7 @@
 // THE REFERENCE MANUAL'S PAGE: every program's manual source (manual.hpp) merged into ROWS, one a
 // setting, command or flag, and written as one page a player searches and filters (`ge manual`):
 // a single self-contained HTML file (no fetch, no outside script or font), so it opens from a disk
-// and serves as it is from any static host (a project's pages).
+// and serves as it is from any static host (each release carries it as one of its files).
 //
 // THE MERGE. A program wrote one pass per game it plays; a row is a name's every pass put together:
 //   - the games it is in (none listed: every pass of every program that has it);

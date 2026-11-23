@@ -704,9 +704,12 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   for (int k = 0; k < 4; k++) out.air_tint[k] = l.cshift[k];
   out.campaign = l.campaign_host != nullptr;
   out.q2 = listen_is_q2(l);  // its own arrivals, never the warp's fog
-  for (int k = 0; k < 4; k++)
-    out.q2_blend[k] =
-        out.q2 && l.server != nullptr ? l.server->world.clients[0].numbers.blend[k] : 0;
+  const auto* rules = out.q2 && l.server != nullptr ? &l.server->world.clients[0].numbers : nullptr;
+  for (int k = 0; k < 4; k++) {
+    out.q2_blend[k] = rules != nullptr ? rules->blend[k] : 0;
+    out.q2_apart[k] = rules != nullptr ? rules->blend_apart[k] : 0;
+    out.q2_damage[k] = rules != nullptr ? rules->damage_blend[k] : 0;
+  }
   out.effect_models = effect_model(l, EffectModel::explosion);
   if (l.server != nullptr) out.beam_model = listed_model(l.server->models, "progs/beam.mdl");
   place_models(l, out.models);

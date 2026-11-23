@@ -1182,6 +1182,7 @@ int run_main(int argc, char** argv) {
           mi.pointer_moved = mi.pointer_x != last_pointer.x || mi.pointer_y != last_pointer.y;
           last_pointer = {mi.pointer_x, mi.pointer_y};
           mi.click = held.mouse.buttons.went_up(0);
+          mi.pointer_held = held.mouse.buttons.down(0);  // the setup page's figure turned
         }
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
@@ -1495,9 +1496,8 @@ int run_main(int argc, char** argv) {
       for (const std::string& line : std::exchange(remote.stuffed_run, {})) console.execute(line);
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
-    sn::remote_queue_frame(remote, console);  // `ranked`: the game found is joined
-    double foot_share = -1;  // the console's foot while joining: the file coming, the loading
-    con_view.set_foot(sn::remote_foot(remote, foot_share), foot_share);
+    sn::remote_queue_frame(remote, console);    // `ranked`: the game found is joined
+    sn::remote_console_foot(remote, con_view);  // the file coming, its bar, the console held down
     if (std::exchange(remote.left, false) && !remote.active && !listen.map && !bench.active &&
         next_map.empty()) {
       if (!start_attract()) next_map = game_content.first_map;
