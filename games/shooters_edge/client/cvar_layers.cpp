@@ -326,46 +326,12 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
 // Quake II has none). Its weapon's `r_viewmodelsize` and `r_viewmodeloffset` (units, added to
 // ours), and `r_viewmodellastfired` (a recording's weapon the one that last fired). Its
 // `r_lerpframes` (the models' and the held weapon's frames blended) is `r_lerpmodels`.
-void add_first(con::Console& c, const GameBindings& b) {
-  if (b.crosshair != nullptr) {  // Quake II's own shares and health colour set aside
-    b.crosshair->pictures = false;
-    b.crosshair->shade[0] = b.crosshair->shade[1] = b.crosshair->shade[2] = 1;
-    b.crosshair->by_health = false;
-  }
-  if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
-  if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
-  if (b.show_misses != nullptr) *b.show_misses = false;  // Quake II's cl_showmiss
-  if (b.shownet != nullptr) *b.shownet = 0;              // and cl_shownet
-  if (b.showpackets != nullptr) *b.showpackets = false;  // and cl_showpackets
-  if (b.items_still != nullptr) *b.items_still = false;  // and cl_nobob
-  if (b.model_shadows != nullptr) *b.model_shadows = 0;  // and gl_shadows
-  if (b.menu != nullptr) {  // and ui_scale, ui_sortservers, ui_pingrate: the menus by the window
-    b.menu->menu_scale() = 0;
-    b.menu->servers().game_sort = shooters_edge::menu::ServersPage::kNoGameSort;
-    b.menu->servers().game_ping_rate = -1;
-  }
-  if (b.console != nullptr) {  // and con_background: the game's own picture
-    b.console->back_name = "conback";
-    b.console->read_back = nullptr;
-  }
-  if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
-  if (b.light_lift != nullptr) *b.light_lift = 0;
-  if (b.gibs != nullptr) *b.gibs = true;
-  if (b.no_glow != nullptr) *b.no_glow = false;
-  if (b.q2fx != nullptr) *b.q2fx = {};  // Quake II's effect switches set aside
-  if (b.music != nullptr) {             // its ogg_enable, ogg_shuffle and ogg_menu_track set aside
-    b.music->enabled = true;
-    b.music->shuffle = false;
-    b.music->menu_track = 0;
-  }
-  if (b.view != nullptr) {  // Quake's weapon is always drawn, at its own place and lens
-    b.view->hand = 0;
-    b.view->gun = 1;
-    b.view->gun_units[0] = b.view->gun_units[1] = b.view->gun_units[2] = 0;
-    b.view->gun_fov_h = 0;
-    b.view->alpha = 1;
-  }
-  // Its weapon's depth and offset, in its units; the offset adds to our cl_gunx/y/z.
+// The held weapon's place, size, lens and see-through, every classic game's
+// (docs/porting/settings.md § The common names): QuakeWorld's and Quake II's settings for it, both
+// kept, both added up.
+void add_shared_gun_cvars(con::Cvars& v, const GameBindings& b) {
+  // The weapon's depth and offset in game units (QuakeWorld's spellings); the offset adds to
+  // cl_gunx/y/z.
   const con::CvarSpec size{
       .name = "r_viewmodelsize",
       .fallback = "1",
@@ -400,13 +366,96 @@ void add_first(con::Console& c, const GameBindings& b) {
           "0: the weapon held (the default); 1: the weapon that last fired, until another "
           "one fires"};
   if (b.view != nullptr) {
-    c.cvars().bind(size, &b.view->size);
-    c.cvars().bind(offset, &b.view->offset_text);
-    c.cvars().bind(last_fired, &b.view->last_fired);
+    v.bind(size, &b.view->size);
+    v.bind(offset, &b.view->offset_text);
+    v.bind(last_fired, &b.view->last_fired);
   } else {
-    c.cvars().add(size);
-    c.cvars().add(offset);
-    c.cvars().add(last_fired);
+    v.add(size);
+    v.add(offset);
+    v.add(last_fired);
+  }
+  // The weapon's place and lens in game units (Quake II's spellings), added to the same.
+  const char* gun_names[3] = {"cl_gun_x", "cl_gun_y", "cl_gun_z"};
+  const char* gun_helps[3] = {"Moves the held weapon right, in game units; added to cl_gunx.",
+                              "Moves the held weapon forward, in game units; added to cl_gunz.",
+                              "Moves the held weapon up, in game units; added to cl_guny."};
+  for (int k = 0; k < 3; ++k) {
+    const con::CvarSpec gun{
+        .name = gun_names[k],
+        .fallback = "0",
+        .flags = con::kArchive,
+        .help = gun_helps[k],
+        .min = -20,
+        .max = 20,
+        .values = "-20..20: that many units, negative the other way (0 the default)"};
+    if (b.view != nullptr)
+      v.bind(gun, &b.view->gun_units[k]);
+    else
+      v.add(gun);
+  }
+  const con::CvarSpec gun_fov{
+      .name = "cl_gunfov",
+      .fallback = "0",
+      .flags = con::kArchive,
+      .help = "The held weapon's own lens, in degrees across; r_viewmodel_fov wins when set.",
+      .min = 0,
+      .max = 160,
+      .values =
+          "0: the view's (the default); 30..160: that many degrees across at 4:3, less held "
+          "at 30"};
+  if (b.view != nullptr)
+    v.bind(gun_fov, &b.view->gun_fov_h);
+  else
+    v.add(gun_fov);
+  const con::CvarSpec gun_alpha{
+      .name = "cl_gunalpha",
+      .fallback = "1",
+      .flags = con::kArchive,
+      .help = "How solid the held weapon is drawn.",
+      .min = 0,
+      .max = 1,
+      .values = "1: solid (the default); 0.1..0.9: see-through; 0: not seen"};
+  if (b.view != nullptr)
+    v.bind(gun_alpha, &b.view->alpha);
+  else
+    v.add(gun_alpha);
+}
+
+void add_first(con::Console& c, const GameBindings& b) {
+  if (b.crosshair != nullptr) {  // Quake II's own shares and health colour set aside
+    b.crosshair->pictures = false;
+    b.crosshair->shade[0] = b.crosshair->shade[1] = b.crosshair->shade[2] = 1;
+    b.crosshair->by_health = false;
+  }
+  if (b.mouse != nullptr) b.mouse->per_frame = false;  // m_accel: counts a millisecond
+  if (b.predict != nullptr) *b.predict = true;  // only Quake II turns it off (its cl_predict)
+  if (b.show_misses != nullptr) *b.show_misses = false;  // Quake II's cl_showmiss
+  if (b.shownet != nullptr) *b.shownet = 0;              // and cl_shownet
+  if (b.showpackets != nullptr) *b.showpackets = false;  // and cl_showpackets
+  if (b.items_still != nullptr) *b.items_still = false;  // and cl_nobob
+  if (b.model_shadows != nullptr) *b.model_shadows = 0;  // and gl_shadows
+  if (b.menu != nullptr) {  // and ui_scale, ui_sortservers, ui_pingrate: the menus by the window
+    b.menu->menu_scale() = 0;
+    b.menu->servers().game_sort = shooters_edge::menu::ServersPage::kNoGameSort;
+    b.menu->servers().game_ping_rate = -1;
+  }
+  if (b.console != nullptr) {  // and con_background: the game's own picture
+    b.console->back_name = "conback";
+    b.console->read_back = nullptr;
+  }
+  if (b.light_intensity != nullptr) *b.light_intensity = 2;  // Quake II's light settings set aside
+  if (b.light_lift != nullptr) *b.light_lift = 0;
+  if (b.gibs != nullptr) *b.gibs = true;
+  if (b.no_glow != nullptr) *b.no_glow = false;
+  if (b.q2fx != nullptr) *b.q2fx = {};  // Quake II's effect switches set aside
+  if (b.music != nullptr) {             // its ogg_enable, ogg_shuffle and ogg_menu_track set aside
+    b.music->enabled = true;
+    b.music->shuffle = false;
+    b.music->menu_track = 0;
+  }
+  if (b.view != nullptr) {  // Quake's weapon is always drawn, in the right hand
+    b.view->hand = 0;
+    b.view->gun = 1;
   }
   // Its ambience of water and sky (sound/ambience.hpp): how loud, and how fast it swells and fades.
   c.cvars().bind({.name = "ambient_level",
@@ -977,56 +1026,16 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(gun_drawn, &b.view->gun);
   else
     v.add(gun_drawn);
-  if (b.view != nullptr) {  // Quake's place and size for the weapon set aside
-    b.view->size = 1;
-    b.view->offset_text.clear();
-    b.view->last_fired = false;
-  }
-  // Its own place and lens for the weapon, in its units.
-  const char* gun_names[3] = {"cl_gun_x", "cl_gun_y", "cl_gun_z"};
-  const char* gun_helps[3] = {"Moves the held weapon right, in game units; added to cl_gunx.",
-                              "Moves the held weapon forward, in game units; added to cl_gunz.",
-                              "Moves the held weapon up, in game units; added to cl_guny."};
-  for (int k = 0; k < 3; ++k) {
-    const con::CvarSpec gun{
-        .name = gun_names[k],
-        .fallback = "0",
-        .flags = con::kArchive,
-        .help = gun_helps[k],
-        .min = -20,
-        .max = 20,
-        .values = "-20..20: that many units, negative the other way (0 the default)"};
-    if (b.view != nullptr)
-      v.bind(gun, &b.view->gun_units[k]);
-    else
-      v.add(gun);
-  }
-  const con::CvarSpec gun_fov{
-      .name = "cl_gunfov",
-      .fallback = "90",
-      .flags = con::kArchive,
-      .help = "The held weapon's own lens, in degrees across; r_viewmodel_fov wins when set.",
-      .min = 0,
-      .max = 160,
-      .values =
-          "0: the view's; 30..160: that many degrees across at 4:3 (90 the default), less "
-          "held at 30"};
-  if (b.view != nullptr)
-    v.bind(gun_fov, &b.view->gun_fov_h);
-  else
-    v.add(gun_fov);
-  const con::CvarSpec gun_alpha{
-      .name = "cl_gunalpha",
-      .fallback = "1",
-      .flags = con::kArchive,
-      .help = "How solid the held weapon is drawn.",
-      .min = 0,
-      .max = 1,
-      .values = "1: solid (the default); 0.1..0.9: see-through; 0: not seen"};
-  if (b.view != nullptr)
-    v.bind(gun_alpha, &b.view->alpha);
-  else
-    v.add(gun_alpha);
+  // Its weapon's own lens, 90 degrees across, where Quake's takes the view's (the classic layer's).
+  v.add({.name = "cl_gunfov",
+         .fallback = "90",
+         .flags = con::kArchive,
+         .help = "The held weapon's own lens, in degrees across; r_viewmodel_fov wins when set.",
+         .min = 0,
+         .max = 160,
+         .values = "90: the default; 30..160: that many degrees across at 4:3, less held at 30; 0: "
+                   "the view's",
+         .overlap = con::Overlap::same});
   // Its move rate and its frame cap: its `cl_maxfps` is the moves a second (ours, the frame cap, is
   // set aside while it is loaded and comes back with its value after), its `r_maxfps` the frame
   // cap, starting at the cap in force when the game loads and kept with the game's own settings.
@@ -1148,6 +1157,7 @@ void add_game_cvars(con::Console& c, GameCvarValues& v, const profiles::GameProf
   if (c.cvars().find("cl_beginmapcmd") == nullptr) {  // every game's session cvars, once
     con::CvarLayer classic(c.cvars(), kLayerClassic);
     add_shared_session_cvars(c.cvars(), v.q2);
+    add_shared_gun_cvars(c.cvars(), b);
   }
   con::CvarLayer layer(c.cvars(), v.layer);
   if (b.chat != nullptr) b.chat->named_sound.clear();  // only Quake II's cl_chat_sound sets it

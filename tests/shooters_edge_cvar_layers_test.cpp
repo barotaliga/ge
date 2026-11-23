@@ -460,7 +460,7 @@ TEST(each_games_own_gun_place_adds_to_ours_and_its_lens_stands_in) {
   // Quake II: its offset by its axes (x right, y forward, z up) and its lens across.
   Window q(*pr::find_game("q2"));
   con::Cvars& u = q.console.cvars();
-  CHECK(u.find("r_viewmodeloffset") == nullptr && u.find("cl_gun_y") != nullptr);
+  CHECK(u.find("r_viewmodeloffset") != nullptr && u.find("cl_gun_y") != nullptr);  // every game's
   u.set("cl_gun_y", "3", con::Source::local);
   u.set("cl_gun_z", "-1", con::Source::local);
   shooters_edge::view::game_offset_m(q.view, add);
@@ -470,11 +470,27 @@ TEST(each_games_own_gun_place_adds_to_ours_and_its_lens_stands_in) {
                   ge::camera::fov_y_of(ge::core::kPi / 2, 4.0 / 3.0)) < 1e-12);  // cl_gunfov 90
   u.set("r_viewmodel_fov", "50", con::Source::local);                            // ours set wins
   CHECK(std::fabs(shooters_edge::view::eye_row(q.view).fov_y - 50 * ge::core::kPi / 180) < 1e-12);
-  // Its cl_gunalpha: how solid the weapon is drawn; Quake has none.
+  // cl_gunalpha: how solid the weapon is drawn, every game's.
   CHECK(q.view.alpha == 1);
   u.set("cl_gunalpha", "0.4", con::Source::local);
   CHECK(q.view.alpha == 0.4);
-  CHECK(v.find("cl_gunalpha") == nullptr && w.view.alpha == 1);
+  v.set("cl_gunalpha", "0.5", con::Source::local);
+  CHECK(w.view.alpha == 0.5 && w.view.gun_fov_h == 0);  // Quake's lens the view's
+}
+
+TEST(the_weapons_place_and_lens_are_kept_across_a_game_change) {
+  Window w(pr::kGameProfiles[0]);
+  con::Cvars& v = w.console.cvars();
+  v.set("cl_gun_x", "2", con::Source::local);
+  v.set("r_viewmodeloffset", "1 0 0", con::Source::local);
+  const pr::GameProfile* q2 = pr::find_game("q2");
+  CHECK(q2 != nullptr);
+  if (q2 == nullptr) return;
+  cl::switch_game_cvars(w.console, w.game, *q2, {.view = &w.view});
+  CHECK(w.view.gun_units[0] == 2 && w.view.offset_text == "1 0 0" && w.view.gun_fov_h == 90);
+  cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {.view = &w.view});
+  CHECK(w.view.gun_units[0] == 2 && w.view.offset_text == "1 0 0" && w.view.gun_fov_h == 0);
+  CHECK(v.find("cl_gun_x")->layer == cl::kLayerClassic && v.clashes().empty());
 }
 
 TEST(quake_twos_cl_maxfps_is_its_move_rate_and_r_maxfps_its_frame_cap) {
@@ -596,6 +612,34 @@ TEST(one_camera_behind_the_player_in_every_game) {
   cl::switch_game_cvars(w.console, w.game, pr::kGameProfiles[0], {});
   CHECK(v.find("cl_thirdperson_range") == nullptr && v.find("chase_active") != nullptr);
   CHECK(v.clashes().empty());
+}
+
+TEST(the_competitive_settings_are_every_classic_games) {
+  // What a competition player tunes to see clearly, one setting each in every classic game: the
+  // flat walls, the plain sky, the liquids seen through, the team's and the enemy's skins, the
+  // flames and power glows, the crosshair's picture, the tints' strengths and the weapon's place.
+  const char* names[] = {
+      "r_drawflat",      "r_wallcolor",       "r_floorcolor",   "r_fastsky",
+      "r_skycolor",      "r_skyname",         "r_skyfog",       "r_wateralpha",
+      "r_slimealpha",    "r_lavaalpha",       "r_telealpha",    "teamskin",
+      "enemyskin",       "r_fullbrightskins", "r_drawflame",    "r_powerupglow",
+      "crosshairimage",  "v_contentblend",    "v_damagecshift", "v_quadcshift",
+      "v_pentcshift",    "v_suitcshift",      "v_ringcshift",   "gl_cshiftpercent",
+      "r_viewmodelsize", "r_viewmodeloffset", "cl_gun_x",       "cl_gunfov",
+      "cl_gunalpha",     "cl_bobhead"};
+  for (const pr::GameProfile& g : pr::kGameProfiles) {
+    Window w(g);
+    for (const char* n : names) {
+      const con::Cvar* c = w.console.cvars().find(n);
+      CHECK_MSG(c != nullptr, std::string(g.id) + ": " + n + " is not registered");
+      if (c == nullptr) continue;
+      const bool default_only =  // the game's default for it, a `same` row
+          !c->earlier.empty() && c->earlier.back().how == con::Overlap::same;
+      CHECK_MSG(default_only || c->layer == cl::kLayerClassic || c->layer == cl::kLayerEngine ||
+                    c->layer == cl::kLayerShooter,
+                std::string(g.id) + ": " + n + " is the game's own (" + c->layer + ")");
+    }
+  }
 }
 
 TEST(color_sets_both_colours_as_quake_keeps_them) {

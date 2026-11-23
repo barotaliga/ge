@@ -53,6 +53,19 @@ neither client takes.
 - **B4, the screen:** the graphs, the 2D switch, the server browser's sort and ping rate (with the
   menus thread).
 - **B5, the server's names:** `cheats`, the recording's size, the port (with the Quake II server thread).
+- **B7 (done, Niclas 2026-11-23): what a competition player tunes, every classic game's.** One
+  game's settings that every game now takes, in the classic layer, kept across a game change and
+  checked by the rulesets by the same names in every game: the flat walls and their colours
+  (`r_drawflat`, `r_wallcolor`, `r_floorcolor`), the plain sky (`r_fastsky`, `r_skycolor`,
+  `r_skyname`, `r_skyfog`), the liquids seen through (`r_wateralpha`, `r_slimealpha`, `r_lavaalpha`,
+  `r_telealpha`), the skins (`teamskin`, `enemyskin`, `r_fullbrightskins`), `r_drawflame`,
+  `r_powerupglow`, `crosshairimage`, the tints' strengths (`v_contentblend`, `v_damagecshift`,
+  `v_quadcshift`, `v_pentcshift`, `v_suitcshift`, `v_ringcshift`, `gl_cshiftpercent`; these were
+  already the classic layer's), and the weapon's place: QuakeWorld's `r_viewmodelsize`,
+  `r_viewmodeloffset`, `r_viewmodellastfired` and Quake II's `cl_gun_x/y/z`, `cl_gunfov` (Quake II's
+  90 a same row, Quake's the view's) and `cl_gunalpha` moved out of their games' layers; `cl_bobhead`
+  is the engine's. Held by `tests/shooters_edge_cvar_layers_test.cpp`
+  (`the_competitive_settings_are_every_classic_games`).
 - **B6 dropped (Niclas, 2026-11-23):** the outlines and square specks are other clients' visuals,
   which are never ported: visuals come from classic enhance. Both rows are kept apart.
 
