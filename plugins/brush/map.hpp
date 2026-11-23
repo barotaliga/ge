@@ -259,8 +259,14 @@ bool cluster_sees(const Map& map, int32_t from, int32_t to);
 // model's (a door, a lift) are the caller's to draw. With `areas` (one bit an area, area n bit
 // n % 8 of byte n / 8; an area past its end counts as unset), a leaf in solid or in an area whose
 // bit is unset marks nothing, with or without visibility: a room behind a shut door is not drawn.
+// `also`: a second leaf whose cluster sees too (`second_view_leaf`); ~0u none.
 uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen,
-                             std::span<const uint8_t> areas = {});
+                             std::span<const uint8_t> areas = {}, uint32_t also = ~0u);
+// THE SECOND VIEW POINT (38): a version 38 map's view also sees from a point 16 units below the
+// eye (16 above when the eye's leaf holds contents, such as water), so the far side of a water
+// surface stays drawn with the eye just over or under it. The leaf there, when it is not solid and
+// its cluster is not the eye leaf's; ~0u otherwise, and always in another family.
+uint32_t second_view_leaf(const Map& map, const float p[3], uint32_t eye_leaf);
 // THE LEAVES A BOX TOUCHES in the world's tree (`lo`..`hi`, file coordinates): their indices into
 // `out`, at most `most`; the number found, which is more than `most` when some did not fit (then
 // `out` holds the first `most`). A leaf whose box the planes reach on both sides counts.

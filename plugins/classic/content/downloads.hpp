@@ -17,14 +17,21 @@
 // the file is used without a restart: a loose file as itself, a file put in a partial as an archive
 // of that file alone (the partial itself is mounted with the folder at the next start).
 //
+// A DOWNLOAD CUT SHORT (`HeldDownloads`): what came of a file so far is kept as `<path>.tmp` at its
+// place in the game's folder, a piece added as it comes, so the next time it is asked for the
+// client asks for the rest from that length; once the file is whole and kept, the `.tmp` goes.
+//
 // ge:summary Server downloads kept in the archive they came from, or loose at their place on disk
 // ge:keywords download keep_download partial-pack partial origin game-folder data-folder loose
-// ge:keywords downloads-into-paks fetched-file skins served_origin
+// ge:keywords downloads-into-paks fetched-file skins served_origin download-resume tmp-file
+// ge:keywords held_download resume-download
 // ge:skill classic vfs
 // ge:test tests/classic_content_downloads_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -57,5 +64,19 @@ bool served_origin(const SearchPath& files, const std::string& path, ge::vfs::Ar
 // The file `path` as the deflate stream it is stored as in a `.pkz` (a zip the game reads), for a
 // client that inflates a download itself; false for any other file (loose, a pack's, stored).
 bool served_deflated(const SearchPath& files, const std::string& path, std::vector<uint8_t>* out);
+
+// A download cut short, held to be resumed: `read` what is held of `path` (empty: none),
+// `add` a piece to it (`fresh`: begun again, anything held dropped first), `drop` it once the file
+// is whole. Unset: nothing is held, every file fetched from its start.
+struct HeldDownloads {
+  std::function<std::vector<uint8_t>(const std::string& path)> read;
+  std::function<void(const std::string& path, std::span<const uint8_t> bytes, bool fresh)> add;
+  std::function<void(const std::string& path)> drop;
+};
+
+// The held downloads as `<path>.tmp` files in the game folder `dir()` names when each is called
+// (the client's own folder, where `keep_download` keeps a loose file); a path naming no place in it
+// is never held, and nothing is while `dir()` is empty.
+HeldDownloads held_in_folder(std::function<std::string()> dir);
 
 }  // namespace ge::classic::content
