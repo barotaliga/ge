@@ -19,6 +19,9 @@
 #pragma once
 
 #include <string>
+#include <vector>
+
+#include "console/manual.hpp"
 
 namespace ge::console {
 class Console;
@@ -39,5 +42,14 @@ bool take_session_flags(int& argc, char** argv, SessionFlags& out, std::string& 
 // set (when a console is given and a config named). False with the reason when the log file
 // cannot be opened (the terminal attached anyway).
 bool apply_session_flags(const SessionFlags& flags, console::Console* con, std::string& error);
+
+// The two flags as the reference manual lists them (console/manual.hpp); inline, so a game's
+// library lists them without linking this one.
+inline std::vector<console::FlagDoc> session_flag_docs() {
+  return {{"-config", "<file>",
+           "Read and save the settings in this file instead of your own config.cfg (autoexec.cfg "
+           "is skipped)."},
+          {"-logfile", "<file>", "Also write every line the game prints to this file."}};
+}
 
 }  // namespace ge::play

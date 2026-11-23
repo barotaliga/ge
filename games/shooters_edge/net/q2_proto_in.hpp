@@ -26,6 +26,10 @@
 //   client asks for the next), inflated whole at 100 % into `download`.
 // - 36's gamestate (23) and its configstring and baseline streams (25, 26): plain configstrings
 //   and baselines. The setting (24): the server's frame rate kept, nothing handed on.
+// - Under the extended limits (36's server data flags, minor 1024 on): the recording of the same
+//   level, 3434 or 3435, so the reader takes the wider fields; the entities and baselines copied
+//   as they are (the same bytes at the same level), the configstrings to 13630, the player state
+//   written in the 34 form at that level, the fog level's fog read past (the picture is ours).
 // - Every other message is protocol 34's already and is copied as it is (its end found by the
 //   recording's own reader); the game's own messages (ids 117 to 127) too.
 //
@@ -33,6 +37,7 @@
 // ge:keywords protocol-35 protocol-36 zpacket zdownload gamestate configstring-stream
 // ge:keywords baseline-stream svc-setting long-solid angle16 extra-player-flags client-number
 // ge:keywords frame-flags strafe-jump-hack qw-movement waterjump-hack q2_proto_in downgrade
+// ge:keywords extended-limits protocol-extensions protocol-3435
 // ge:skill net shooter
 // ge:test tests/shooters_edge_q2_proto_in_test.cpp
 #pragma once
@@ -57,6 +62,10 @@ struct Q2ProtoIn {
   int server_state = 2;
   int client_number = -1;  // 36's: the player whose view the frames are (-1: never said)
   int server_fps = 10;     // the setting message's (24, index 1)
+  // The extended limits' level the server data turned on (36, minor 1024 on; q2_limits.hpp): 0
+  // none, 1 extensions, 2 extensions 2, 3 also the fog level. The recording written is 3434 at 1,
+  // 3435 at 2 or 3 (the fog read past).
+  int ext = 0;
   // A compressed download's bytes once whole (36's stream), for the piece that said 100 %.
   std::vector<uint8_t> download;
   bool download_ready = false;
