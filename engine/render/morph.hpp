@@ -89,7 +89,10 @@ inline constexpr uint8_t kMarkGlowFirst = 3;
 inline constexpr uint8_t kMarkGlowSteps = 60;
 inline uint8_t glow_mark(float share) {
   const float s = share < 0 ? 0 : share > 1 ? 1 : share;
-  return static_cast<uint8_t>(kMarkGlowFirst + static_cast<int>(s * kMarkGlowSteps + 0.5f));
+  const float scaled = s * kMarkGlowSteps;
+  int step = static_cast<int>(scaled);
+  if (scaled - static_cast<float>(step) >= 0.5f) ++step;  // to the nearest step
+  return static_cast<uint8_t>(kMarkGlowFirst + step);
 }
 inline float mark_glow_share(uint8_t mark) {
   if (mark == 1) return 1;

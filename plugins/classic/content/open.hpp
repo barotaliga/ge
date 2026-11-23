@@ -24,7 +24,7 @@
 // ge:summary The open calls every shooter game shares: models by kind, sounds, map textures, maps
 // ge:keywords content open_model open_sound map_textures map_info find_config open_locations
 // ge:keywords stand_in replacement-texture replacement-skin model-form opened-model wal iqm
-// ge:keywords mixed-files remix load-time glow-map _glow
+// ge:keywords mixed-files remix load-time glow-map glow_map
 // ge:skill classic shooter
 // ge:test tests/classic_content_open_test.cpp
 #pragma once
