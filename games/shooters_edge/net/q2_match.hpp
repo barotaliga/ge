@@ -33,9 +33,10 @@
 // player end the match, set the time limit, change the map, kick, ban, mute and shuffle the teams
 // without a vote. A muted player's chat is held back.
 //
-// STATS (server/q2_stats.hpp): counted by the rules while the match is on; `stats [player]` shows
-// the table (another team's only once the match is over), `teamstats` both teams' totals, and
-// `laststats` (`oldstats`) the last match's.
+// STATS (server/q2_stats.hpp, the columns every classic game shares): counted by the rules while
+// the match is on and shown to everyone when it ends, as QuakeWorld shows its own; `stats [player]`
+// shows one player's (another team's only once the match is over), `teamstats` both teams'
+// totals, and `laststats` (`oldstats`) the last match's.
 //
 // THE PHASE is in the rules' local info (`ge_phase`) for the rules to read (the warmup's loadout,
 // q2_server.hpp) and in the server's `status` text as `match` (Standby, Countdown, In progress).

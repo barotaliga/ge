@@ -369,7 +369,8 @@ itself: a recording begins at the frame after the phase turns to the match (the 
 see of it: a map restarted for the match shows from there) and ends when the phase leaves it, to
 `demos/<map>-<YYYYMMDD>-<HHMMSS>.ged` in the game's folder, written as it goes, so the warmup and
 the scores after are in no file and a server stopped mid-match keeps every whole second. A game with
-no phases is in its match from the start. Beside `--record` and the server's own TV, every
+no phases is in its match from the start. QuakeWorld's and Quake II's servers both tell their match's phase
+(`sv_lobby`), so each of their matches is a file of its own. Beside `--record` and the server's own TV, every
 recording takes the same frame bytes, which the game is asked for once a frame
 (`Server::tv_frame_bytes`): a game whose frame hands out what its viewers have not had yet, as
 Shooter's Edge's classic game does, would otherwise give each recording only part of a frame. In

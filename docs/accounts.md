@@ -311,10 +311,16 @@ before it checks the signature; it keeps at most 32 reports' pieces at once, eac
 
 ### The weapon stats
 
-Shooter's Edge reads each player's weapon stats off the QC server every frame
-(`games/shooters_edge/net/qw_stats.hpp`, changing nothing there) and sends them as the
-report's columns. They are what a classic match's statistics keep (the facts in
-`porting/shooters-edge/match-stats.md`), plus mid-airs (the maintainer, 2026-11-13):
+The stats are the same for every classic game (the maintainer, 2026-11-23): one module,
+`games/shooters_edge/server/match_stats.hpp`, holds the columns, the counting rules and the lines
+a player reads, and each game only finds its events. QuakeWorld (and Quake) reads them off the QC
+server every frame (`games/shooters_edge/net/qw_stats.hpp`, changing nothing there) and sends them
+as the report's columns; Quake II's rules call them as blows land
+(`games/shooters_edge/server/q2_stats.hpp`), with its own eleven weapons (bl, sg, ssg, mg, cg, gl,
+rl, hb, rg, bfg, hg), its armours (`ja`, `ca`, `ba`) and power-ups (`quad`, `invuln`, `power`) in
+the same places. They are what a classic match's statistics keep (the facts in
+`porting/shooters-edge/match-stats.md`), plus mid-airs (the maintainer, 2026-11-13). QuakeWorld's
+columns:
 
 | Columns | What |
 | --- | --- |
@@ -326,7 +332,8 @@ report's columns. They are what a classic match's statistics keep (the facts in
 | `spawn_frags`, `streak_max`, `quad_run_max` | kills within 2 s of the victim's spawn, the longest run of kills between deaths, the most kills of one quad |
 | `aim_spread_min` | the aim spread (`plugins/shooter/aim_spread.hpp`) in thousandths of a half-box, -1 under 30 samples: near 0 when every shot sits on one point of its target (an aim bot), 600 to 800 for a hand; always reported, with or without the weapon stats; the totals keep the tightest |
 
-When the match ends every player reads them in the console: their frags and efficiency, each
+When the match ends every player of either game reads them in the console (Quake II's `stats`
+word shows one player's the same way): their frags and efficiency, each
 weapon's accuracy, the rockets' direct hits, average damage and mid-airs, armour and power-ups,
 damage, the streaks and spawn frags. The `match-report` lab draws them as a match page.
 

@@ -198,14 +198,39 @@ void say_result(Q2Match& m) {
                       gs::teams_name(m.teams, gs::Team::blue), s[1]));
 }
 
+// The stats as a match's report (the shared lines read one): a player for each slot counted, his
+// score his kills less his suicides and team kills, his team while the teams are on.
+ge::net::MatchReport stats_report(const Q2Match& m, const std::array<sv::Q2SlotStats, 32>& table,
+                                  const std::array<std::string, 32>& who) {
+  const sv::StatsGame& g = sv::q2_stats_game();
+  ge::net::MatchReport r;
+  for (int k = 0; k < sv::stats_columns(g); k++) r.columns.push_back(sv::stats_column_name(g, k));
+  for (int i = 0; i < kSlots; i++) {
+    const sv::Q2SlotStats& t = table[static_cast<size_t>(i)];
+    if (!t.counted || who[static_cast<size_t>(i)].empty()) continue;
+    ge::net::ReportPlayer p;
+    p.name = who[static_cast<size_t>(i)];
+    if (m.teams_on && seat_team(m, i) != gs::Team::none)
+      p.team = gs::teams_name(m.teams, seat_team(m, i));
+    p.score = p.frags = t.kills - t.suicides - t.team_kills;
+    p.deaths = t.deaths;
+    p.suicides = t.suicides;
+    p.team_kills = t.team_kills;
+    p.columns = sv::stats_row(g, t.tally);
+    r.players.push_back(std::move(p));
+  }
+  return r;
+}
+
 // The match's stats kept as the last match's, with the names they were counted under.
-void keep_stats(Q2Match& m) {
+bool keep_stats(Q2Match& m) {
   const sv::Q2Server* game = sv::q2_of(*m.rules);
-  if (game == nullptr) return;
+  if (game == nullptr) return false;
   m.last_stats = game->stats.slot;
   for (int i = 0; i < kSlots && i < sh::kMaxClients; i++)
     m.last_names[static_cast<size_t>(i)] = m.net->clients[i].name;
   m.has_last = true;
+  return true;
 }
 
 // The teams as the server's settings and the dmflags say: on or off, names, sizes, looks worn.
@@ -356,14 +381,15 @@ bool stats_word(Q2Match& m, int slot, const std::string& line) {
   const auto& who_names = old ? m.last_names : now_names;
   if (word == "teamstats") {
     for (const gs::Team team : {gs::Team::red, gs::Team::blue}) {
+      const sv::StatsGame& g = sv::q2_stats_game();
       int64_t kills = 0, deaths = 0, dealt = 0, received = 0;
       for (int i = 0; i < kSlots; i++) {
         if (seat_team(m, i) != team) continue;
         const sv::Q2SlotStats& p = table[static_cast<size_t>(i)];
         kills += p.kills;
         deaths += p.deaths;
-        dealt += p.dealt;
-        received += p.received;
+        dealt += p.tally.n[static_cast<size_t>(sv::stat_rest(g, sv::kStatDmgGiven))];
+        received += p.tally.n[static_cast<size_t>(sv::stat_rest(g, sv::kStatDmgTaken))];
       }
       say(m, slot,
           "Team '" + gs::teams_name(m.teams, team) + "': kills " + std::to_string(kills) +
@@ -388,8 +414,14 @@ bool stats_word(Q2Match& m, int slot, const std::string& line) {
     say(m, slot, "The other team's stats are shown once the match is over.");
     return true;
   }
-  const std::string out =
-      sv::stats_table(table[static_cast<size_t>(of)], who_names[static_cast<size_t>(of)]);
+  std::string out;
+  const ge::net::MatchReport r = stats_report(m, table, who_names);
+  for (const ge::net::ReportPlayer& p : r.players) {
+    if (p.name != who_names[static_cast<size_t>(of)]) continue;
+    for (const std::string& said : sv::stats_player_lines(sv::q2_stats_game(), r, p))
+      out += said + "\n";
+    break;
+  }
   say(m, slot,
       out.empty() ? "Nothing counted yet for " + who_names[static_cast<size_t>(of)] + "." : out);
   return true;
@@ -511,8 +543,10 @@ void q2_match_frame(Q2Match& m, const std::string& map, double now) {
     for (int slot : kicked) q2_net_drop(*m.net, slot, "was kicked for not getting ready");
     sv::warmup_hold(m.hold, *m.rules, m.lobby.phase == gs::LobbyPhase::match);
   }
-  if (sv::Q2Server* game = sv::q2_of(*m.rules); game != nullptr)  // the stats count in a match
+  if (sv::Q2Server* game = sv::q2_of(*m.rules); game != nullptr) {  // the stats count in a match
     game->stats.on = m.on ? m.lobby.phase == gs::LobbyPhase::match : number(m, "deathmatch") != 0;
+    sv::stats_tick(*game);
+  }
   int64_t deaths = 0;
   const gs::MatchScore score = score_turn(m, deaths);
   std::vector<std::string> said;
@@ -538,7 +572,11 @@ void q2_match_map_change(Q2Match& m, bool restart, double now) {
   const bool ended = m.on && match_over && m.lobby.phase == gs::LobbyPhase::match;
   if (ended || (!m.on && match_over)) {
     say_result(m);
-    keep_stats(m);
+    if (keep_stats(m)) {  // every player's stats, as each classic game shows them
+      const ge::net::MatchReport r = stats_report(m, m.last_stats, m.last_names);
+      if (!r.players.empty())
+        for (const std::string& line : sv::stats_lines(sv::q2_stats_game(), r)) say(m, -1, line);
+    }
   }
   m.frags_seen.fill(0);
   m.team_left.fill(0);
