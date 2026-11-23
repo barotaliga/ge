@@ -272,7 +272,7 @@ void weapon_list(Q2Server& s, int slot, const std::vector<std::string>& w, bool 
   if (n == p.hand.weapon) return;  // prefweap: the one in hand already
   fight_command(s, slot, "use", kSqWeapons[n].name);
   if (cycle && list.size() > 2 && p.hand.pending == n && kSqWeapons[n].item != nullptr) {
-    p.picked = sq_item_number(sq_item(kSqWeapons[n].item));
+    p.picked = sq_item_number(sq_item(kSqWeapons[n].item, s.opt.pack), s.opt.pack);
     p.picked_at = s.level_time - (3.0 - 0.7);  // the bar's pickup line shows 3 s
   }
 }
