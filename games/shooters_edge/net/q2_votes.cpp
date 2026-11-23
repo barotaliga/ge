@@ -286,6 +286,7 @@ void q2_votes_sheet(const Q2Votes& v, gs::SettingsSheet& out) {
   const gs::VoteSettings set = v.book.settings;
   f.vote = &set;
   f.map = v.map ? v.map() : std::string();
+  if (v.net != nullptr) f.ruleset = v.net->cfg.ruleset;
   qw_sheet_rows(f, out);
 }
 

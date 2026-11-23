@@ -927,7 +927,12 @@ void fill_rows(Q2Server& s) {
     }
     wc.numbers.fov = fight_fov(s, i);
     wc.numbers.rdflags = sq_power_shown(p.ir_until - s.level_time) ? 4 : 0;  // IR goggles
-    for (int k = 0; k < 4; k++) wc.numbers.blend[k] = s.intermission_at > 0 ? 0 : p.blend[k];
+    for (int k = 0; k < 4; k++) {
+      const bool none = s.intermission_at > 0;
+      wc.numbers.blend[k] = none ? 0 : p.blend[k];
+      wc.numbers.blend_apart[k] = none ? 0 : p.blend_apart[k];
+      wc.numbers.damage_blend[k] = none ? 0 : p.damage_blend[k];
+    }
     e.free = false;
     e.origin = unpack(p.move.origin);
     e.velocity = unpack(p.move.velocity);

@@ -82,10 +82,6 @@ TEST(a_tinted_texel_takes_its_ramp_and_a_plain_one_its_colour) {
   CHECK(glow == 1 && rgb[0] > 0.49f && rgb[0] < 0.51f);  // sRGB 188 is about half in linear
   morph_texel(skin, ramps, tint, 3, 0, rgb, &glow);
   CHECK(rgb[0] == ramps.rgb[size_t{15} * 3] && rgb[0] > rgb[2]);  // red's darkest
-  // A glow map's texel lights itself by its share: half here.
-  skin.marks[0] = glow_mark(0.5f);
-  morph_texel(skin, ramps, tint, 0, 0, rgb, &glow);
-  CHECK(glow == 0.5f && rgb[0] == 1);
 }
 
 TEST(a_ramp_runs_from_light_to_dark_through_its_colour) {

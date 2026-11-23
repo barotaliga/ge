@@ -45,7 +45,7 @@ std::string userinfo_of(const Q2ClientEnd& c) {
   info_set(u, "name", c.cfg.name);
   info_set(u, "skin", c.cfg.skin);
   info_set(u, "rate", std::to_string(c.cfg.rate));
-  info_set(u, "msg", "1");
+  info_set(u, "msg", std::to_string(c.cfg.msg));
   info_set(u, "hand", std::to_string(c.cfg.hand));
   info_set(u, "fov", std::to_string(c.cfg.fov));
   if (!c.cfg.gender.empty()) info_set(u, "gender", c.cfg.gender);
@@ -681,7 +681,10 @@ void q2_client_tick(Q2ClientEnd& c, int64_t now_us) {
       c.sent_on.clear();
     } else {
       const Q2ClientConfig cfg = c.cfg;
+      // The settings the server stuffed go along: a forced reconnect's are what it asks back.
+      std::map<std::string, std::string> kept = std::move(c.stuffed_set);
       q2_client_start(c, *c.transport, to, cfg, c.now);
+      c.stuffed_set = std::move(kept);
       c.redirects = sent;
       return;
     }
