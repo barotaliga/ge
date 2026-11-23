@@ -1,7 +1,9 @@
 // The window's own settings (window_cvars.hpp).
 //
-// ge:summary The window's settings for any game: vid_fullscreen, vid_display, volume, s_auto_focus
-// ge:keywords add_window_cvars vid_displays follow_window_cvars window_style window_place_of
+// ge:summary The window's settings for any game: vid_fullscreen and its modes, vid_display, volume,
+// ge:summary s_auto_focus
+// ge:keywords add_window_cvars vid_modelist vid-fullscreen-back vid_hwgamma full_mode_of
+// ge:keywords vid_displays follow_window_cvars window_style window_place_of
 // ge:skill platform console
 // ge:test tests/platform_window_cvars_test.cpp
 #include "platform/window_cvars.hpp"
@@ -9,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "core/output.hpp"
 #include "platform/audio.hpp"
 #include "platform/window.hpp"
 
@@ -29,13 +32,39 @@ void list_sound_devices(console::Console& c) {
 }  // namespace
 
 void add_window_cvars(console::Console& con, WindowCvars& w) {
-  con.cvars().bind(
-      {.name = "vid_fullscreen",
-       .fallback = "0",
-       .help = "Whether the window covers the whole screen, in the desktop's own mode.",
-       .kind = console::CvarKind::boolean,
-       .values = "0: a window (the default); 1: the whole screen"},
-      &w.fullscreen);
+  w.modelist = w.modes_applied = default_modelist();
+  con.cvars().bind({.name = "vid_fullscreen",
+                    .fallback = "0",
+                    .help = "Whether the window covers the whole screen, and in which mode.",
+                    .kind = console::CvarKind::integer,
+                    .min = 0,
+                    .values = "0: a window (the default); N: the whole screen in mode N of "
+                              "vid_modelist (1: the first, the desktop's own)"},
+                   &w.fullscreen);
+  con.cvars().bind({.name = "_vid_fullscreen",
+                    .fallback = "1",
+                    .flags = console::kArchive,
+                    .help = "The full-screen mode Alt+Enter goes back to from a window.",
+                    .kind = console::CvarKind::integer,
+                    .min = 1,
+                    .values = "N: mode N of vid_modelist (1 the default); kept from the last "
+                              "vid_fullscreen above 0"},
+                   &w.fullscreen_back);
+  con.cvars().bind({.name = "vid_modelist",
+                    .fallback = w.modelist,
+                    .help = "The full-screen modes vid_fullscreen picks from, counted from 1.",
+                    .kind = console::CvarKind::text,
+                    .values = "words: desktop (the desktop's own mode) or WxH, WxH@Hz, "
+                              "WxH@Hz:bpp, WxH:bpp@Hz; the default the display's own list"},
+                   &w.modelist);
+  con.cvars().bind({.name = "vid_hwgamma",
+                    .fallback = "0",
+                    .help = "Whether the brightness (vid_gamma) is set by the display's gamma "
+                            "ramp rather than in the picture.",
+                    .kind = console::CvarKind::boolean,
+                    .values = "0: in the picture (the default); 1: by the display, where it has "
+                              "a ramp"},
+                   &w.hwgamma);
   con.cvars().bind({.name = "vid_display",
                     .fallback = "0",
                     .help = "The display vid_fullscreen covers.",
@@ -161,6 +190,74 @@ bool window_place_of(std::string_view text, WindowPlace& out) {
   return true;
 }
 
+namespace {
+
+// "WxH", "WxH@Hz", "WxH@Hz:bpp" or "WxH:bpp@Hz"; false when malformed.
+bool mode_text(std::string_view t, FullMode& m) {
+  size_t i = 0;
+  if (!take_int(t, i, false, m.width) || i >= t.size() || (t[i] != 'x' && t[i] != 'X'))
+    return false;
+  ++i;
+  if (!take_int(t, i, false, m.height)) return false;
+  bool hz = false, bpp = false;
+  while (i < t.size()) {
+    const char c = t[i++];
+    if (c == '@' && !hz) {
+      if (!take_int(t, i, false, m.hz)) return false;
+      hz = true;
+    } else if (c == ':' && !bpp) {
+      if (!take_int(t, i, false, m.bpp)) return false;
+      bpp = true;
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
+bool full_mode_of(std::string_view list, int n, FullMode& out, std::string* why) {
+  int k = 0;
+  size_t i = 0;
+  std::string_view word;
+  while (i < list.size()) {
+    while (i < list.size() && list[i] == ' ') ++i;
+    const size_t start = i;
+    while (i < list.size() && list[i] != ' ') ++i;
+    if (i > start && ++k == n) {
+      word = list.substr(start, i - start);
+      break;
+    }
+  }
+  const std::string num = std::to_string(n);
+  if (word.empty()) {
+    if (why != nullptr) *why = "Mode " + num + " not found";
+    return false;
+  }
+  if (word == "desktop") return false;
+  FullMode m;
+  if (!mode_text(word, m)) {
+    if (why != nullptr) *why = "Mode " + num + " is malformed";
+    return false;
+  }
+  if (m.width < 320 || m.width > 8192 || m.height < 240 || m.height > 8192 || m.hz > 1000 ||
+      m.bpp > 32) {
+    if (why != nullptr)
+      *why = "Mode " + std::to_string(m.width) + "x" + std::to_string(m.height) + "@" +
+             std::to_string(m.hz) + ":" + std::to_string(m.bpp) + " doesn't look sane";
+    return false;
+  }
+  out = m;
+  return true;
+}
+
+std::string default_modelist() {
+  std::string list = "desktop";
+  for (const std::string& m : display_modes()) list += " " + m;
+  return list;
+}
+
 WindowStyle window_style(const WindowCvars& w) {
   return {.border = !w.no_border && !w.no_title, .on_top = w.on_top, .resizable = !w.no_resize};
 }
@@ -181,8 +278,28 @@ void follow_sound_device(AudioOut* out, WindowCvars& w, console::Console& con) {
 
 void follow_window_cvars(Window& window, WindowCvars& w, AudioOut* sound, console::Console* con) {
   if (con != nullptr) follow_sound_device(sound, w, *con);
-  if (w.fullscreen != w.full_applied) {  // the size follows through `InputSnapshot::resized`
-    if (!set_fullscreen(window, w.fullscreen, w.display)) w.fullscreen = w.full_applied;
+  if (w.hwgamma) {  // the platform layer has no gamma ramp to read or write
+    w.hwgamma = false;
+    if (con != nullptr) {
+      con->print("...hardware gamma not supported");
+      con->cvars().set("vid_hwgamma", "0", console::Source::local);
+    }
+  }
+  if (w.fullscreen > 0 && w.fullscreen != w.fullscreen_back) {  // kept, and saved with the cfg
+    w.fullscreen_back = w.fullscreen;
+    if (con != nullptr)
+      con->cvars().set("_vid_fullscreen", std::to_string(w.fullscreen), console::Source::local);
+  }
+  // A new mode list takes effect at once, only while full-screen.
+  const bool list_moved = w.fullscreen > 0 && w.modelist != w.modes_applied;
+  w.modes_applied = w.modelist;
+  if (w.fullscreen != w.full_applied || list_moved) {  // the size follows through `resized`
+    FullMode mode;
+    std::string why;
+    const bool own = w.fullscreen > 0 && full_mode_of(w.modelist, w.fullscreen, mode, &why);
+    if (!why.empty()) core::output::debug("platform: " + why + "; the desktop's own mode is used");
+    if (!set_fullscreen(window, w.fullscreen > 0, w.display, own ? &mode : nullptr))
+      w.fullscreen = w.full_applied;
     w.full_applied = w.fullscreen;
   }
   const WindowStyle want = window_style(w);
@@ -203,7 +320,11 @@ bool alt_enter(const InputSnapshot& in, console::Console& con) {
   constexpr size_t kLeftAlt = 226, kRightAlt = 230;  // the keys' HID usages
   if (!in.tapped(Key::enter) || !(in.held[kLeftAlt] || in.held[kRightAlt])) return false;
   const console::Cvar* v = con.cvars().find("vid_fullscreen");
-  con.execute(std::string("vid_fullscreen ") + (v != nullptr && v->value != "0" ? "0" : "1"));
+  const console::Cvar* back = con.cvars().find("_vid_fullscreen");
+  const bool full = v != nullptr && !v->value.empty() && v->value != "0";
+  if (full) con.cvars().set("_vid_fullscreen", v->value, console::Source::local);
+  const std::string to = back != nullptr && !back->value.empty() ? back->value : "1";
+  con.execute(std::string("vid_fullscreen ") + (full ? "0" : to));
   return true;
 }
 

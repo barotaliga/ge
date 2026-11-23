@@ -492,6 +492,62 @@ void draw_q2_crosshair(ge::ui::DrawList& dl, Q2Bar& bar, const ge::hud::Crosshai
 
 namespace {
 
+// The letters' picture scr_font names (pics/<name>, .pcx added when it has none); one that is not
+// in the packs is said once and the setting set back to conchars.
+const BarPicture* font_picture(Q2Bar& bar) {
+  const std::string name = bar.screen != nullptr ? bar.screen->font : "conchars";
+  if (name != "conchars") {
+    const std::string path =
+        "pics/" + name + (name.find('.') == std::string::npos ? ".pcx" : std::string());
+    if (const BarPicture* p = picture(bar, path)) return p;
+    if (bar.console != nullptr) {
+      bar.console->print("Couldn't load " + path + ": not found");
+      bar.console->cvars().set("scr_font", "conchars", ge::console::Source::local);
+    }
+  }
+  return picture(bar, "pics/conchars.pcx");
+}
+
+// viewsize under 100: the border round the smaller view (q2_view.hpp's `q2_view_rect`)
+// tiled with pics/backtile, a tile its own size in the window's pixels from the top left.
+bool draw_tile_clear(ge::ui::DrawList& dl, Q2Bar& bar) {
+  const int size = bar.screen != nullptr ? bar.screen->viewsize : 100;
+  if (size >= 100 || bar.width <= 0 || bar.height <= 0) return false;
+  const BarPicture* tile = picture(bar, "pics/backtile.pcx");
+  if (tile == nullptr || tile->width() <= 0 || tile->height() <= 0) return false;
+  const Q2ViewRect r = q2_view_rect(bar.width, bar.height, size);
+  const float tw = tile->width(), th = tile->height();
+  const float sx = static_cast<float>(tile->image.width) / tw;
+  const float sy = static_cast<float>(tile->image.height) / th;
+  const auto fill = [&](float x0, float y0, float x1, float y1) {
+    const auto rows = static_cast<int>(std::ceil(y1 / th)),
+               cols = static_cast<int>(std::ceil(x1 / tw));
+    for (auto j = static_cast<int>(std::floor(y0 / th)); j < rows; ++j)
+      for (auto i = static_cast<int>(std::floor(x0 / tw)); i < cols; ++i) {
+        const float tx = static_cast<float>(i) * tw, ty = static_cast<float>(j) * th;
+        const float ax = std::max(tx, x0), ay = std::max(ty, y0);
+        const float bx = std::min(tx + tw, x1), by = std::min(ty + th, y1);
+        if (bx <= ax || by <= ay) continue;
+        ge::ui::Box b;
+        b.fill = ge::ui::solid({1, 1, 1, 1});
+        b.rect = {ax, ay, bx - ax, by - ay};
+        b.image = &tile->image;
+        b.uv = {(ax - tx) * sx, (ay - ty) * sy, (bx - ax) * sx, (by - ay) * sy};
+        b.nearest = tile->k == 1;
+        b.feather = 0;
+        dl.box(b);
+      }
+  };
+  const auto W = static_cast<float>(bar.width), H = static_cast<float>(bar.height);
+  const auto x = static_cast<float>(r.x), y = static_cast<float>(r.y);
+  const auto x1 = static_cast<float>(r.x + r.w), y1 = static_cast<float>(r.y + r.h);
+  fill(0, 0, W, y);    // above
+  fill(0, y1, W, H);   // below
+  fill(0, y, x, y1);   // left
+  fill(x1, y, W, y1);  // right
+  return true;
+}
+
 // The graph along the bottom of the bar's screen (timegraph, debuggraph): each frame's time fed
 // from the real time, a unit of the screen a millisecond before graphscale and graphshift.
 bool draw_graph(ge::ui::DrawList& dl, Q2Bar& bar, float f, float alpha) {
@@ -533,7 +589,8 @@ bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
   };
   const float alpha =
       bar.screen != nullptr ? static_cast<float>(std::clamp(bar.screen->alpha, 0.0, 1.0)) : 1;
-  bool drew = draw_lag(dl, bar, f, alpha);
+  bool drew = draw_tile_clear(dl, bar);
+  drew = draw_lag(dl, bar, f, alpha) || drew;
   drew = draw_graph(dl, bar, f, alpha) || drew;
   // gl_fontshadow: each letter drawn first in black that many units down and right; and
   // gl_bilerp_chars: the letters smoothed.
@@ -578,7 +635,7 @@ bool draw_q2_bar(ge::ui::DrawList& dl, Q2Bar& bar, int scale) {
           op.rgba, smooth_picture(*img));
       continue;
     }
-    if (glyphs == nullptr) glyphs = picture(bar, "pics/conchars.pcx");
+    if (glyphs == nullptr) glyphs = font_picture(bar);
     if (glyphs == nullptr) return drew;
     const float cell = static_cast<float>(glyphs->image.width) / 16;
     for (size_t i = 0; i < op.text.size(); i++) {
