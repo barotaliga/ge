@@ -143,7 +143,8 @@ bool screens_command(Q2Server& s, int slot, const std::string& cmd) {
     if (p.body.selected < 0)
       fight_print(s, slot, use ? "No item to use.\n" : "No item to drop.\n");
     else
-      fight_command(s, slot, use ? "use" : "drop", std::string(sq_item_name(p.body.selected, s.opt.pack)));
+      fight_command(s, slot, use ? "use" : "drop",
+                    std::string(sq_item_name(p.body.selected, s.opt.pack)));
     return true;
   }
   if (cmd == "score" || cmd == "help") p.inven_open = false;

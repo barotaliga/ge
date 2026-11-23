@@ -155,7 +155,8 @@ int sq_item_number(int row, Q2Pack pack) {
 
 int sq_weapon_number(int weapon, Q2Pack pack) {
   if (weapon == static_cast<int>(SqWeapon::blaster)) return sq_number_of("weapon_blaster", pack);
-  if (weapon == static_cast<int>(SqWeapon::hand_grenade)) return sq_number_of("ammo_grenades", pack);
+  if (weapon == static_cast<int>(SqWeapon::hand_grenade))
+    return sq_number_of("ammo_grenades", pack);
   if (weapon < 0 || weapon >= kSqWeaponCount || kSqWeapons[weapon].item == nullptr) return 0;
   return sq_item_number(sq_item(kSqWeapons[weapon].item, pack), pack);
 }
@@ -256,13 +257,12 @@ void bar_rows(Q2Server& s) {
       st[5] = clamp16(cells);
     } else if (worn) {
       constexpr const char* kWorn[] = {"", "item_armor_jacket", "item_armor_combat",
-                                        "item_armor_body"};
+                                       "item_armor_body"};
       st[4] = static_cast<int16_t>(
           image(s, sq_icon(sq_number_of(kWorn[static_cast<int>(p.body.armour)], pack), pack)));
       st[5] = clamp16(p.body.armour_count);
     }
-    if (p.body.selected > 0)
-      st[6] = static_cast<int16_t>(image(s, sq_icon(p.body.selected, pack)));
+    if (p.body.selected > 0) st[6] = static_cast<int16_t>(image(s, sq_icon(p.body.selected, pack)));
     st[12] = static_cast<int16_t>(p.body.selected > 0 ? p.body.selected : -1);
     if (p.picked > 0 && s.level_time <= p.picked_at + 3.0) {
       st[7] = static_cast<int16_t>(image(s, sq_icon(p.picked, pack)));

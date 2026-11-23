@@ -24,7 +24,8 @@ bool same(std::string_view a, std::string_view b) {
 }  // namespace
 
 Q2Pack q2_pack_of_folder(std::string_view folder) {
-  while (!folder.empty() && (folder.back() == '/' || folder.back() == '\\')) folder.remove_suffix(1);
+  while (!folder.empty() && (folder.back() == '/' || folder.back() == '\\'))
+    folder.remove_suffix(1);
   if (const size_t cut = folder.find_last_of("/\\"); cut != std::string_view::npos)
     folder.remove_prefix(cut + 1);
   if (same(folder, "xatrix")) return Q2Pack::reckoning;

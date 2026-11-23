@@ -56,7 +56,7 @@ TEST(the_base_game_s_item_numbers_are_unchanged) {
   CHECK(sv::sq_number_of("item_health") == 41);
   CHECK(sv::sq_number_of("no_such_item") == 0);
   CHECK(sv::sq_item_number(sv::sq_item("item_health_mega")) == 41);
-  CHECK(sv::sq_weapon_number(0) == 7);   // the blaster
+  CHECK(sv::sq_weapon_number(0) == 7);    // the blaster
   CHECK(sv::sq_weapon_number(10) == 12);  // the hand grenades
   // The kinds by name match the base list's ranges: the weapons 7..17, the power-ups with a use
   // 23..27, and what a pickup selects: the power armours too.
