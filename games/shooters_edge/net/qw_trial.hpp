@@ -44,6 +44,9 @@ struct TrialOptions {
   // read on demand (`trial_figure_files`); the first client wears the folder (`model cyborg`,
   // `skin oni911`) and every client asks for the map's extras, so each must fetch all four.
   bool figures = false;
+  // With `figures`: the coloured light's bytes in place of the made-up ones (a real map's, to time
+  // a large file over the channel: the `se-fastdl` lab).
+  std::vector<uint8_t> lit;
 };
 
 struct TrialClient {
