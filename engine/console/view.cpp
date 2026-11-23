@@ -182,9 +182,10 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
           .flags = kArchive,
           .help = "how many typed lines Up and Down walk back through",
           .kind = CvarKind::integer,
-          .min = 1,
+          .min = 0,
           .max = 4096,
-          .values = "1..4096: that many, the oldest dropped first (128 the default)"},
+          .values = "0: only the last line, none kept across runs; 1..4096: that many, the "
+                    "oldest dropped first, kept across runs (128 the default)"},
          &history_max_);
   v.bind({.name = "con_scroll",
           .fallback = "0",
@@ -519,10 +520,7 @@ void ConsoleView::submit() {
   selected_ = -1;
   scroll_ = 0;
   if (line.find_first_not_of(" \t") == std::string::npos) return;
-  if (history_.empty() || history_.back() != line) history_.push_back(line);
-  if (history_.size() > static_cast<size_t>(std::max(1, history_max_)))  // con_history
-    history_.erase(history_.begin(),
-                   history_.end() - static_cast<std::ptrdiff_t>(std::max(1, history_max_)));
+  remember(line);
   if (line.starts_with("//")) {  // a note to oneself: shown, never run or said
     add(LineKind::command, line);
     return;
@@ -814,6 +812,34 @@ void ConsoleView::chat_key(EditKey k) {
     default:  // Tab, the arrows up and down, the pages: nothing on one line
       break;
   }
+}
+
+void ConsoleView::remember(const std::string& line) {
+  if (line.find_first_not_of(" \t") == std::string::npos) return;
+  if (history_.empty() || history_.back() != line) history_.push_back(line);
+  if (history_.size() > static_cast<size_t>(std::max(1, history_max_)))  // con_history
+    history_.erase(history_.begin(),
+                   history_.end() - static_cast<std::ptrdiff_t>(std::max(1, history_max_)));
+}
+
+void ConsoleView::load_history() {
+  std::string text;
+  if (history_max_ <= 0 || !c_.read_file(kHistoryFile, text)) return;
+  for (size_t at = 0; at < text.size();) {
+    size_t end = text.find('\n', at);
+    if (end == std::string::npos) end = text.size();
+    std::string line = text.substr(at, end - at);
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    remember(line);
+    at = end + 1;
+  }
+}
+
+bool ConsoleView::save_history() const {
+  if (history_max_ <= 0) return true;
+  std::string text;
+  for (const std::string& line : history_) text += line + "\n";
+  return c_.write_file(kHistoryFile, text);
 }
 
 }  // namespace ge::console

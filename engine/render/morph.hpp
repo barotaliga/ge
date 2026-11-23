@@ -8,12 +8,12 @@
 //   one storage buffer (a vertex two vec4: the position, the normal), the triangles and the
 //   coordinates in two more, and the skins packed into one atlas (`pack_morph_atlas`), so a frame
 //   writes nothing but its draws.
-// - THE SKIN is a colour a texel (sRGB) and a MARK a texel: plain, GLOW (it lights itself: an
-//   eye, a lamp), a HOLE (`kMarkHole`: nothing drawn there, a game's skin with alpha cut through)
-//   or TINTED (`kMarkTintA` / `kMarkTintB` and a STEP 0..15 down a ramp). A tinted
-//   texel takes its colour from the instance's ramp for that region at that step, so one skin
-//   is drawn in any team's colours with its own shading kept: the step is how light or dark the
-//   texel was painted, the ramp what colour that is. The ramps are a table of rows of
+// - THE SKIN is a colour a texel (sRGB) and a MARK a texel: plain, GLOW (it lights itself: an eye,
+//   a lamp; or a share of it, a glow map's), a HOLE (`kMarkHole`: nothing drawn there, a game's
+//   skin with alpha cut through) or TINTED (`kMarkTintA` / `kMarkTintB` and a STEP 0..15 down a
+//   ramp). A tinted texel takes its colour from the instance's ramp for that region at that step,
+//   so one skin is drawn in any team's colours with its own shading kept: the step is how light or
+//   dark the texel was painted, the ramp what colour that is. The ramps are a table of rows of
 //   `kTintSteps` linear colours (`TintRamps`) the game fills: a palette's colour rows, or ramps
 //   made from any colour (`ramp_from`).
 // - THE DRAW (`MorphDraw`): the model, where it stands and how it is turned and scaled, its
@@ -82,7 +82,23 @@ inline constexpr uint32_t kMorphSlotSize = 512;
 // A skin texel's mark.
 inline constexpr uint8_t kMarkPlain = 0;
 inline constexpr uint8_t kMarkGlow = 1;
-inline constexpr uint8_t kMarkHole = 2;      // nothing drawn: the skin's alpha cut through
+inline constexpr uint8_t kMarkHole = 2;  // nothing drawn: the skin's alpha cut through
+// A texel that lights itself by a SHARE of its colour (a glow map's): marks kMarkGlowFirst
+// (share 0) to kMarkGlowFirst + kMarkGlowSteps (share 1), `glow_mark` and `mark_glow_share`.
+inline constexpr uint8_t kMarkGlowFirst = 3;
+inline constexpr uint8_t kMarkGlowSteps = 60;
+inline uint8_t glow_mark(float share) {
+  const float s = share < 0 ? 0 : share > 1 ? 1 : share;
+  const float scaled = s * kMarkGlowSteps;
+  int step = static_cast<int>(scaled);
+  if (scaled - static_cast<float>(step) >= 0.5f) ++step;  // to the nearest step
+  return static_cast<uint8_t>(kMarkGlowFirst + step);
+}
+inline float mark_glow_share(uint8_t mark) {
+  if (mark == 1) return 1;
+  if (mark < kMarkGlowFirst || mark >= 0x40) return 0;
+  return static_cast<float>(mark - kMarkGlowFirst) / kMarkGlowSteps;
+}
 inline constexpr uint8_t kMarkTintA = 0x40;  // | the step, 0..15
 inline constexpr uint8_t kMarkTintB = 0x80;  // | the step
 

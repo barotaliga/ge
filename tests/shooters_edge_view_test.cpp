@@ -451,13 +451,19 @@ TEST(a_nailgun_held_firing_steps_a_frame_a_shot_from_each_barrel_in_turn) {
   for (int i = 0; i < 4; ++i) se::step_hand(hand, in, s, set, eye(), dt);
   std::vector<int> frames;
   std::vector<double> xs;
+  int last = 0;  // the rest frame before the first shot
   for (int shot = 0; shot < 6; ++shot) {
     in.fired = true;
     const se::HandFrame f = se::step_hand(hand, in, s, set, eye(), dt);
     in.fired = false;
-    const se::HandFrame held = se::step_hand(hand, in, s, set, eye(), dt);
-    CHECK(f.frame_a == f.frame_b && held.frame_a == f.frame_a);  // held, not blended on
-    frames.push_back(f.frame_a);
+    const se::HandFrame half = se::step_hand(hand, in, s, set, eye(), dt);
+    // Turned to from the last shot's frame (from rest on the first) over the frame's 0.1 s: at the
+    // shot, then half way a picture later.
+    CHECK(f.frame_a == last && f.frame_t == 0);
+    CHECK(half.frame_a == last && half.frame_b == f.frame_b &&
+          std::fabs(half.frame_t - 0.5) < 1e-9);
+    last = f.frame_b;
+    frames.push_back(f.frame_b);
     xs.push_back(f.muzzle_at[0]);
   }
   CHECK((frames == std::vector<int>{1, 2, 3, 4, 1, 2}));  // a frame a shot, round the clip
@@ -474,7 +480,33 @@ TEST(a_nailgun_held_firing_steps_a_frame_a_shot_from_each_barrel_in_turn) {
   for (int i = 0; i < 2; ++i) f = se::step_hand(hand, in, s, set, eye(), dt);
   CHECK(f.frame_a == 0 && f.frame_b == 0);
   in.fired = true;
-  CHECK(se::step_hand(hand, in, s, set, eye(), dt).frame_a == 1);
+  const se::HandFrame again = se::step_hand(hand, in, s, set, eye(), dt);
+  CHECK(again.frame_a == 0 && again.frame_b == 1);  // from rest to the clip's first frame
+}
+
+TEST(a_nailgun_held_firing_without_the_blend_shows_each_shots_frame_at_once) {
+  vm::HeldModel gun;
+  gun.frames.resize(5);
+  for (vm::HeldFrame& fr : gun.frames) fr.positions = {-0.05f, 0, 0.5f, 0.05f, 0, 0.5f, 0, 0.1f, 0};
+  gun.indices = {0, 1, 2};
+  gun.clips.push_back({.name = "fire", .first = 1, .count = 4, .fps = 10, .frame_a_shot = true});
+  std::vector<vm::HeldModel> set(se::kWeapons, gun);
+  se::Hand hand;
+  hand.at_eye = true;
+  se::HandInput in;
+  in.weapon = se::Weapon::nailgun;
+  se::ViewSettings s;
+  s.lerp = false;  // r_lerpmodels 0
+  const double dt = 0.05;
+  se::step_hand(hand, in, s, set, eye(), dt);
+  for (int shot = 0; shot < 5; ++shot) {
+    in.fired = true;
+    const se::HandFrame f = se::step_hand(hand, in, s, set, eye(), dt);
+    in.fired = false;
+    const se::HandFrame held = se::step_hand(hand, in, s, set, eye(), dt);
+    CHECK(f.frame_a == f.frame_b && f.frame_t == 0 && f.frame_b == 1 + shot % 4);
+    CHECK(held.frame_a == f.frame_b && held.frame_b == f.frame_b && held.frame_t == 0);
+  }
 }
 
 TEST(an_axe_of_two_swings_plays_one_swing_a_shot) {

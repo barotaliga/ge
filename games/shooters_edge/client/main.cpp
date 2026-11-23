@@ -403,7 +403,10 @@ int run_main(int argc, char** argv) {
       cl::settings_dir(args.basedir, args.game).parent_path() / "stufftext-whitelist.txt";
   // One config for the series beside each game's own (client/settings.hpp).
   const std::filesystem::path series = cl::series_settings_file(data_root);
-  const auto save_settings = [&console, &series] { cl::save_settings(console, series); };
+  const auto save_settings = [&console, &series, &con_view] {
+    cl::save_settings(console, series);
+    con_view.save_history();  // the typed lines, beside the config
+  };
   const auto outside = [&](const std::function<void()>& run) {
     cl::without_game_cvars(console, game_cvars, started_game, bindings, run);
   };
@@ -561,6 +564,7 @@ int run_main(int argc, char** argv) {
                                       .sheet = &remote.sheet.sheet};  // SERVER SETTINGS
   cl::add_adapter_commands(console, adapter, files, args.basedir);
   cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
+  con_view.load_history();                         // the lines typed in the last run
   // The map's place names, read as it starts and made in the game (client/place_names.hpp).
   cl::PlaceNames places;
   places.game_dir = std::filesystem::path(args.basedir) / args.game;

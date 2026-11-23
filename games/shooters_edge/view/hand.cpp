@@ -333,14 +333,25 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     const vm::HeldClip* c = clip >= 0 ? &m.clips[static_cast<size_t>(clip)] : nullptr;
     if (c != nullptr && c->frame_a_shot && c->count > 0) {
       if (in.fired) {
+        // Drawn from the frame the last shot turned to, or from where it settles back to rest
+        // (the rest frame itself once settled).
+        hand.shot_from = hand.fire_t >= 0 && hand.shot_frame >= 0 ? c->first + hand.shot_frame
+                         : hand.settle_t >= 0                     ? hand.settle_from
+                                                                  : 0;
         hand.settle_t = -1;
         hand.shot_frame = (hand.shot_frame + 1) % c->count;
         hand.fire_t = 0;
         hand.barrel = vm::barrel_of_frame(m, c->first + hand.shot_frame);
       }
       if (hand.fire_t >= 0 && hand.shot_frame >= 0) {
-        f.frame_a = f.frame_b =
-            c->first + hand.shot_frame;  // held: the shot's barrel is this frame's
+        // The shot's frame (its barrel fires), turned to from the last over a frame's time, then
+        // held; shown at once without the blend.
+        f.frame_a = f.frame_b = c->first + hand.shot_frame;
+        const double turned = hand.fire_t * c->fps;
+        if (s.lerp && turned < 1 && hand.shot_from != f.frame_b) {
+          f.frame_a = hand.shot_from;
+          f.frame_t = turned;
+        }
         hand.fire_t += dt;
         if (hand.fire_t * c->fps > kShotFrameHold) {
           hand.settle_from = c->first + hand.shot_frame;

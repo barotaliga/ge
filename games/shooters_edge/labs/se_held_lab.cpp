@@ -8,6 +8,11 @@
 //     classic ten a second), then back at rest.
 //   - BOB: the shotgun at four points of a stride, pushed forward by 0.4 of the bob, the eye
 //     carrying the bob once (cl_bobhead 0) and twice (cl_bobhead 1).
+//   - HELD FIRING: the nailgun and the super nailgun held firing at 144 pictures a second, each
+//     shot's frame shown at once and held (r_lerpmodels 0) and turned to from the last over the
+//     frame's time (r_lerpmodels 1): a filmstrip of one shot's pictures, and a chart of how far the
+//     model moves from picture to picture. Held, it moves once a shot and stands still between;
+//     blended, it moves a little every picture.
 //   - LEFT: four weapons held right and left (Quake II's `hand 1`, `cl_gun 3`): the left drawn
 //     mirrored, lit from the side it is seen on.
 //   - ALL OR NONE: the same files with one weapon taken out: no weapon is drawn and the line says
@@ -22,6 +27,7 @@
 // ge:keywords at_eye fire-clip firing-frames game-adapter gun-bob cl_bobhead left-handed mirror
 // ge:skill shooter render labs
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <span>
 #include <string>
@@ -31,6 +37,7 @@
 #include "brush/map.hpp"
 #include "camera/first_person.hpp"
 #include "core/math.hpp"
+#include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "morph/write.hpp"
@@ -250,6 +257,93 @@ void run(ge::lab::Lab& lab) {
          "moving twice as far as the top's, the weapon riding with the eye",
          {{"source", real ? "game" : "fixture"}}},
         sheet(panels, labels, 4));
+  }
+  // Held firing: the nailguns' frames at 144 pictures a second, held and blended.
+  {
+    constexpr double kPictureDt = 1.0 / 144;
+    constexpr double kShotS = 0.1;  // the nailguns' refire
+    constexpr int kPictures = 72;   // half a second: five shots
+    ge::lab::LineChart chart;
+    chart.frame = {"HOW FAR THE NAILGUN MOVES FROM PICTURE TO PICTURE, HELD FIRING",
+                   "144 pictures a second, a shot every 0.1 s, from the second shot on", "t (s)",
+                   "the model's mean move a picture (units)"};
+    chart.spikes = false;
+    std::vector<Picture> panels;
+    std::vector<std::string> labels;
+    for (const se::Weapon w : {se::Weapon::nailgun, se::Weapon::heavy_nailgun}) {
+      const vm::HeldModel& m = models[static_cast<size_t>(w)];
+      const std::string name = w == se::Weapon::nailgun ? "nailgun" : "super-nailgun";
+      for (const bool blend : {false, true}) {
+        se::ViewSettings s = settings;
+        s.lerp = blend;
+        se::Hand hand;
+        hand.at_eye = true;
+        se::HandInput in;
+        in.weapon = w;
+        for (int i = 0; i < 30; ++i) se::step_hand(hand, in, s, models, view, kPictureDt);
+        std::vector<float> was, now, normals;
+        ge::lab::Trace line;
+        line.label = name + (blend ? ", blended (r_lerpmodels 1)" : ", held (r_lerpmodels 0)");
+        double next_shot = 0, sum = 0, most = 0, t = 0;
+        int still = 0, moved = 0;
+        for (int i = 0; i < kPictures; ++i, t += kPictureDt) {
+          in.fired = t + 1e-9 >= next_shot;
+          if (in.fired) next_shot += kShotS;
+          const se::HandFrame f = se::step_hand(hand, in, s, models, view, kPictureDt);
+          vm::pose_frames(m, f.frame_a, f.frame_b, f.frame_t, now, normals);
+          if (!was.empty() && t > kShotS) {  // from the second shot: the gun turning round
+            double step = 0;
+            for (size_t v = 0; v + 2 < now.size(); v += 3) {
+              const double dx = now[v] - was[v], dy = now[v + 1] - was[v + 1],
+                           dz = now[v + 2] - was[v + 2];
+              step += std::sqrt(dx * dx + dy * dy + dz * dz);
+            }
+            step = step * 3 / double(now.size()) / ge::brush::kUnitM;
+            line.x.push_back(t);
+            line.y.push_back(step);
+            sum += step;
+            most = std::max(most, step);
+            (step < 1e-6 ? still : moved)++;
+          }
+          was = now;
+          // One shot's pictures, from the third shot on, for the filmstrip.
+          if (w == se::Weapon::heavy_nailgun && i >= 29 && i < 29 + 8 && i % 2 == 1) {
+            panels.push_back(draw(f, vm::stage_lights(vm::StageLight::dim, view, mid), view));
+            char label[48];
+            std::snprintf(label, sizeof label, "%s %.0f MS: %d>%d %.2f", blend ? "BLEND" : "HELD",
+                          t * 1e3, f.frame_a, f.frame_b, f.frame_t);
+            labels.emplace_back(label);
+          }
+        }
+        const std::string key = name + (blend ? ".blended" : ".held");
+        const double mean = sum / std::max(1, still + moved);
+        lab.metric(key + ".still-share", double(still) / std::max(1, still + moved), "share");
+        // The largest move a picture over the mean: 1 for a steady turn, about the pictures a shot
+        // (14) when the whole turn lands on one picture.
+        lab.metric(key + ".jolt", mean > 0 ? most / mean : 0, "ratio");
+        chart.traces.push_back(std::move(line));
+      }
+    }
+    const ge::lab::Chart c = ge::lab::line_chart(chart);
+    lab.shot({"held-firing-chart",
+              c.title,
+              "The nailgun and the super nailgun held firing (a shot every 0.1 s) drawn 144 times "
+              "a second: how far the model's vertices move, on average, from one picture to the "
+              "next. Held (r_lerpmodels 0), each shot's frame is shown at once: one big move a "
+              "shot and still pictures between. Blended (r_lerpmodels 1), each shot's frame is "
+              "turned to from the last over the frame's 0.1 s: a small move every picture.",
+              "the held lines are spikes on a flat zero; the blended lines are low and steady",
+              {{"source", real ? "game" : "fixture"}}},
+             ge::lab::to_picture(c.plot));
+    lab.shot({"held-firing",
+              "THE SUPER NAILGUN HELD FIRING, PICTURE BY PICTURE",
+              "Four pictures of one shot, 1/72 s apart (every other picture at 144 a second), "
+              "the top row held (r_lerpmodels 0), the bottom row blended (r_lerpmodels 1). Each "
+              "label is the time and the frames drawn: from > to, and the share of the way.",
+              "the top row's barrels the same in all four; the bottom row's turning a little in "
+              "each, the share climbing",
+              {{"source", real ? "game" : "fixture"}}},
+             sheet(panels, labels, 4));
   }
   // The gun on the left: Quake II's `hand 1` (or `cl_gun 3`) draws the right-handed picture
   // flipped, lit from the side it is seen on.
