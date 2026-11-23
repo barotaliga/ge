@@ -199,27 +199,35 @@ void draw_console(DrawList& list, const con::ConsoleView& view, const ConsoleSty
   const bool footed = !view.foot().empty();
   const float lines_bottom = footed ? input_top - row : input_top;
   if (footed) {
+    // With a share: the file's name, the bar, then the share as a percentage after it.
     float fx = margin;
-    const auto share = static_cast<float>(std::clamp(view.foot_progress(), 0.0, 1.0));
-    if (view.foot_progress() >= 0 && style.bar_glyphs) {  // the sheet's own bar and its knob
-      constexpr int kMiddle = 16;
-      // U+0080..U+0083 (the bar's ends, its middle, its knob) as their UTF-8 bytes: a "\u0080"
-      // is read through MSVC's narrow code page, which has no such characters.
-      std::string bar = "\xC2\x80";
-      for (int i = 0; i < kMiddle; ++i) bar += "\xC2\x81";
-      bar += "\xC2\x82";
-      const float cell = font.advance("\xC2\x81", text);
-      const float base = input_top - row + ascent;
-      list.text(font, text, fx, base, bar, style.input);
-      list.text(font, text, fx + cell * (1 + share * (kMiddle - 1)), base, "\xC2\x83", style.input);
-      fx += cell * (kMiddle + 3);
-    } else if (view.foot_progress() >= 0) {
-      const float bw = std::min(w * 0.3f, 240 * s), bh = row * 0.5f, by = input_top - row * 0.75f;
-      list.rect({fx, by, bw, bh}, style.list_fill);
-      list.rect({fx, by, bw * share, bh}, style.edge);
-      fx += bw + 8 * s;
+    const float base = input_top - row + ascent;
+    list.text(font, text, fx, base, view.foot(), style.hint);
+    if (view.foot_progress() >= 0) {
+      const double clamped = std::clamp(view.foot_progress(), 0.0, 1.0);
+      const auto share = static_cast<float>(clamped);
+      fx += font.advance(view.foot() + " ", text);
+      if (style.bar_glyphs) {  // the sheet's own bar and its knob
+        constexpr int kMiddle = 16;
+        // U+0080..U+0083 (the bar's ends, its middle, its knob) as their UTF-8 bytes: a "\u0080"
+        // is read through MSVC's narrow code page, which has no such characters.
+        std::string bar = "\xC2\x80";
+        for (int i = 0; i < kMiddle; ++i) bar += "\xC2\x81";
+        bar += "\xC2\x82";
+        const float cell = font.advance("\xC2\x81", text);
+        list.text(font, text, fx, base, bar, style.input);
+        list.text(font, text, fx + cell * (1 + share * (kMiddle - 1)), base, "\xC2\x83",
+                  style.input);
+        fx += cell * (kMiddle + 2);
+      } else {
+        const float bw = std::min(w * 0.3f, 240 * s), bh = row * 0.5f, by = input_top - row * 0.75f;
+        list.rect({fx, by, bw, bh}, style.list_fill);
+        list.rect({fx, by, bw * share, bh}, style.edge);
+        fx += bw;
+      }
+      const int percent = static_cast<int>(clamped * 100);
+      list.text(font, text, fx, base, " " + std::to_string(percent) + "%", style.hint);
     }
-    list.text(font, text, fx, input_top - row + ascent, view.foot(), style.hint);
   }
   const int rows = std::max(1, static_cast<int>((lines_bottom - margin) / row));
   const auto page = view.page(rows);
