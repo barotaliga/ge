@@ -33,6 +33,7 @@ const char* variant_name(const char* pattern, int k) {
 
 bool q2_flash_fx(int value, bool monster, int entity, sh::Vec3f origin, sh::Vec3f angles, bool own,
                  uint32_t pick, std::vector<DemoSound>& sounds, std::vector<DemoEffect>& effects) {
+  const int sent = value;
   const bool silenced = !monster && (value & sv::kQ2FlashSilenced) != 0;
   if (!monster) value &= ~sv::kQ2FlashSilenced;
   const sv::Q2Flash* f = monster ? sv::q2_monster_flash(value) : sv::q2_player_flash(value);
@@ -48,6 +49,7 @@ bool q2_flash_fx(int value, bool monster, int entity, sh::Vec3f origin, sh::Vec3
     d.attenuation = w.attenuation;
     d.origin = origin;
     d.delay = w.delay;
+    if (!monster) d.flash = static_cast<int16_t>(sent);
     sounds.push_back(d);
     pick = pick * 1103515245u + 12345u;  // the next variant drawn on
   }

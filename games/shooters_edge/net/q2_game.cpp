@@ -52,6 +52,7 @@
 #include "shooters_edge/net/q2_net_server.hpp"
 #include "shooters_edge/net/q2_votes.hpp"
 #include "shooters_edge/net/qw_report.hpp"
+#include "shooters_edge/net/server_words.hpp"
 #include "shooters_edge/server/q2_mapfix.hpp"
 #include "shooters_edge/server/q2_native.hpp"
 #include "shooters_edge/server/q2_save.hpp"
@@ -1493,6 +1494,8 @@ const gs::ServerGame& make() {
     s.player_view = player_view;
     s.console_lines = console_lines;
     s.console = console_line;
+    s.words = kQ2ServerWords;
+    s.word_count = static_cast<int>(std::size(kQ2ServerWords));
     s.drop_error = drop_error;
     s.crash = crash;
     s.quit = quit;

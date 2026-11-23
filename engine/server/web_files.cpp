@@ -73,8 +73,8 @@ bool web_files_config(const ServerConfig& c, WebFilesConfig& out, std::string& e
     return false;
   }
   if (!out.url.empty() && out.url.rfind("https://", 0) != 0 && out.url.rfind("http://", 0) != 0) {
-    error = "sv_http_url \"" + out.url +
-            "\" is not a web address: set it to https://<host>[:port]/";
+    error =
+        "sv_http_url \"" + out.url + "\" is not a web address: set it to https://<host>[:port]/";
     return false;
   }
   if (!out.url.empty() && out.url.back() != '/') out.url += '/';

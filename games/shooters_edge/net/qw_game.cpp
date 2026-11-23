@@ -53,6 +53,7 @@
 #include "shooters_edge/net/qw_report.hpp"
 #include "shooters_edge/net/qw_server.hpp"
 #include "shooters_edge/net/qw_sheet.hpp"
+#include "shooters_edge/net/server_words.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -1947,6 +1948,8 @@ gs::ServerGame make() {
   g.status = status;
   g.console_lines = console_lines;
   g.console = console_line;
+  g.words = kQwServerWords;
+  g.word_count = static_cast<int>(std::size(kQwServerWords));
   g.fill_status = fill_status;
   g.version = 1;
   g.serve = serve;

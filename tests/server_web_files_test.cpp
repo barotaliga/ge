@@ -37,7 +37,7 @@ TEST(web_files_settings_and_their_defaults) {
   CHECK(!web_files_config(c, w, err) && err.find("sv_http_key") != std::string::npos);
   c.rules.erase("sv_http_cert");
   c.rules["sv_http_url"] = "ftp://x/";
-  CHECK(!web_files_config(c, w, err) && err.find("next:") != std::string::npos);
+  CHECK(!web_files_config(c, w, err) && err.find("set it to https") != std::string::npos);
   CHECK(web_files_told("https://a.example/") && !web_files_told("https://{server}:1/"));
   CHECK(web_files_at("https://{server}:27600/", "10.0.0.2") == "https://10.0.0.2:27600/");
 }
