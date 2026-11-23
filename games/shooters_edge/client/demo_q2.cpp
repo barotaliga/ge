@@ -278,6 +278,10 @@ void set_string(Demo& d, int index, std::string text) {
   };
   if (index == 1) {
     s.cdtrack = q2_music_track(text, s.cdtrack);
+    // A name rather than a number: `music/<name>` (q2_music_track keeps the last number for it).
+    const bool number = !text.empty() && text.find_first_not_of("0123456789") == std::string::npos;
+    s.cdname = text.empty() || number ? std::string{} : text;
+    if (!s.cdname.empty()) s.cdtrack = -1;
   } else if (index == cs.max_clients) {
     // Entities 1 to this are the players: kept by slot, so the rest number past `players`.
     d.max_clients = std::clamp(std::atoi(text.c_str()), 1, 32);
@@ -526,6 +530,7 @@ void event_sound(DemoState& s, int n, int event, int32_t number) {
                        (static_cast<uint32_t>(n) * 40503u)) >>
                       30];
       o.channel = kChanBody;
+      o.step = true;
       break;
     case kEvFallShort:
       o.name = "player/land1.wav";

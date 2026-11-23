@@ -13,7 +13,9 @@
 #include <span>
 #include <vector>
 
+#include "classic/q2_loop_merge.hpp"
 #include "classicenhance/cached.hpp"
+#include "core/math.hpp"
 #include "shooters_edge/profiles/remix_sounds.hpp"
 
 namespace shooters_edge::client {
@@ -151,6 +153,21 @@ void DemoSounds::level(const DemoState& s, const ge::brush::Map* map) {
     map_ = map;
     if (ambience_) ambience_->silence(synth_);
     ambience_.reset();
+    steps_.reset();
+    step_tracer_.reset();
+    last_step_.clear();
+    if (map != nullptr && map->family == ge::brush::Family::v38) {  // Quake II's footsteps
+      steps_ = ge::classic::q2_step_sets(
+          *map,
+          [this](const std::string& path) -> std::optional<std::string> {
+            std::vector<uint8_t> store;
+            const std::span<const uint8_t> b = find_file(files_, path, store);
+            if (b.empty()) return std::nullopt;
+            return std::string(b.begin(), b.end());
+          },
+          [this](const std::string& name) { return load(name) != nullptr; });
+      if (steps_->any_material) step_tracer_ = std::make_unique<ge::brush::BrushTracer>(*map);
+    }
     const au::Pcm* water = load("ambience/water1.wav");
     const au::Pcm* sky = load("ambience/wind2.wav");
     if (map && water && sky) ambience_.emplace(*water, *sky, bus_);
@@ -166,6 +183,7 @@ void DemoSounds::silence() {
       entities.push_back(slot.entity);
   for (int e : entities) channels_.stop(e);
   entity_loop_.assign(entity_loop_.size(), 0);
+  merged_on_.assign(merged_on_.size(), 0);
   if (ambience_) ambience_->silence(synth_);
 }
 
@@ -173,9 +191,82 @@ void DemoSounds::stop_entity_loops() {
   for (size_t n = 0; n < entity_loop_.size(); n++)
     if (entity_loop_[n] != 0) channels_.stop(static_cast<int>(n), kLoopChannel);
   entity_loop_.assign(entity_loop_.size(), 0);
+  stop_merged_loops();
+}
+
+void DemoSounds::merged_loops(const DemoState& s, int listener) {
+  // Every copy heard on its own stopped first (the switch turned): they come back merged.
+  for (size_t n = 1; n < entity_loop_.size(); n++)
+    if (std::exchange(entity_loop_[n], 0) != 0) channels_.stop(static_cast<int>(n), kLoopChannel);
+  std::fill(merged_sum_.begin(), merged_sum_.end(), ge::classic::Q2Ears{});
+  if (merged_sum_.size() < list_.size()) merged_sum_.resize(list_.size());
+  const double yaw = s.angles.y * (3.14159265358979323846 / 180.0);
+  const double right[3] = {std::sin(yaw), -std::cos(yaw), 0};
+  const int ambient = q2_->ambient;  // s_ambient
+  for (size_t n = 1; n < s.entities.size(); n++) {
+    const DemoEntity& d = s.entities[n];
+    const bool kept = ambient == 1 || (ambient == 2 && d.model != 0) ||
+                      (ambient == 3 && static_cast<int>(n) == listener);
+    if (!d.present || !kept || d.loop <= 0 || static_cast<size_t>(d.loop) >= list_.size() ||
+        recording(d.loop) == nullptr)
+      continue;
+    const double dx = d.origin.x - s.eye.x, dy = d.origin.y - s.eye.y, dz = d.origin.z - s.eye.z;
+    const double dist = ge::core::hypot3(dx, dy, dz);
+    const double side = dist > 0 ? (dx * right[0] + dy * right[1] + dz * right[2]) / dist : 0;
+    const double volume = d.loop_volume >= 0 ? d.loop_volume / 255.0 : 1.0;
+    const double mult =
+        ge::classic::q2_loop_multiplier(d.loop_attenuation >= 0, d.loop_attenuation / 64.0);
+    const ge::classic::Q2Ears e =
+        ge::classic::q2_loop_ear(volume, dist, side, mult, static_cast<int>(n) == listener);
+    merged_sum_[size_t(d.loop)].left += e.left;
+    merged_sum_[size_t(d.loop)].right += e.right;
+  }
+  // Each sound's one voice, placed where the channels hear it at the merged gain and pan: on the
+  // pan's side of the ear, as far as the gain's fall-off asks at a thousandth a unit.
+  for (size_t k = 1; k < merged_sum_.size(); k++) {
+    const ge::classic::Q2Merged m = ge::classic::q2_merge(merged_sum_[k]);
+    const int entity = kMergedEntity0 - static_cast<int>(k);
+    const bool on = merged_on_.size() > k && merged_on_[k] != 0;
+    if (m.gain <= 0) {
+      if (on) channels_.stop(entity, kLoopChannel), merged_on_[k] = 0;
+      continue;
+    }
+    const double far = (1 - m.gain) * 1000;
+    const double up = std::sqrt(std::max(0.0, 1 - m.pan * m.pan));
+    const ge::core::Vec3 at{s.eye.x + (right[0] * m.pan) * far, s.eye.y + (right[1] * m.pan) * far,
+                            s.eye.z + up * far};
+    bool sounding = false;
+    for (const au::Channels::Slot& slot : channels_.slots())
+      sounding = sounding || (slot.voice.valid() && slot.entity == entity);
+    if (on && sounding) {
+      channels_.move(entity, at);
+      continue;
+    }
+    au::Emit e;
+    e.entity = entity;
+    e.channel = kLoopChannel;
+    e.at = at;
+    e.volume = volume_;
+    e.attenuation = 0.001f;
+    e.loop = au::Loop::whole;
+    if (merged_on_.size() <= k) merged_on_.resize(k + 1, 0);
+    merged_on_[k] = channels_.play(*list_[k], e).valid() ? 1 : 0;
+    if (merged_on_[k] != 0) stats_.entity_loops++;
+  }
+}
+
+void DemoSounds::stop_merged_loops() {
+  for (size_t k = 0; k < merged_on_.size(); k++)
+    if (std::exchange(merged_on_[k], 0) != 0)
+      channels_.stop(kMergedEntity0 - static_cast<int>(k), kLoopChannel);
 }
 
 void DemoSounds::entity_loops(const DemoState& s, int listener) {
+  if (q2_ != nullptr && ge::classic::q2_merges(q2_->merge_looping, q2_->plain_stereo)) {
+    merged_loops(s, listener);
+    return;
+  }
+  stop_merged_loops();
   if (entity_loop_.size() < s.entities.size()) {
     entity_loop_.resize(s.entities.size(), 0);
     loop_heard_.resize(s.entities.size(), 0);
@@ -294,6 +385,24 @@ void RetiredSounds::prune() {
   std::erase_if(kept_, [](const std::unique_ptr<DemoSounds>& s) { return !s->sounding(); });
 }
 
+const au::Pcm* DemoSounds::step_sound(const DemoState& s, const DemoSound& d) {
+  int set = ge::classic::kQ2StepDefault;
+  if (q2_->footsteps == 1 && step_tracer_ != nullptr) {  // 2: always the default set
+    const float at[3] = {d.origin.x, d.origin.y, d.origin.z};
+    float lo[3], hi[3];
+    const bool box = d.entity >= 0 && static_cast<size_t>(d.entity) < s.entities.size() &&
+                     ge::classic::q2_unpack_solid(s.entities[size_t(d.entity)].solid, lo, hi);
+    set = ge::classic::q2_step_set(
+        *steps_,
+        ge::classic::q2_step_surface(*step_tracer_, at, box ? lo : nullptr, box ? hi : nullptr));
+  }
+  const uint32_t roll = (steps_heard_++ * 2654435761u) ^ (static_cast<uint32_t>(d.entity) * 40503u);
+  const std::string* name = ge::classic::q2_step_pick(*steps_, set, roll >> 8, last_step_);
+  if (name == nullptr) return nullptr;
+  last_step_ = *name;
+  return load(*name);
+}
+
 void DemoSounds::start(const DemoState& s, const DemoSound& d) {
   if (q2_ != nullptr && q2_->footsteps == 0) {  // cl_footsteps 0
     const bool listed = d.sound >= 0 && static_cast<size_t>(d.sound) < names_.size();
@@ -305,7 +414,9 @@ void DemoSounds::start(const DemoState& s, const DemoSound& d) {
   if (q2_ != nullptr && q2_->hit_markers < 2 && d.name != nullptr &&
       std::string_view(d.name) == "weapons/marker.wav")  // cl_hit_markers: no hit sound
     return;
-  const au::Pcm* pcm = d.name != nullptr ? by_name(s, d) : recording(d.sound);
+  const au::Pcm* pcm = d.step && steps_ && q2_ != nullptr ? step_sound(s, d)
+                       : d.name != nullptr                ? by_name(s, d)
+                                                          : recording(d.sound);
   if (!pcm && d.name == nullptr) pcm = own(s, d);
   if (!pcm) return;
   au::Emit e;

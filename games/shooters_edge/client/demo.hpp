@@ -145,6 +145,7 @@ struct DemoSound {
   float attenuation = 1;       // the protocol's factor: 0 heard everywhere, 1 a normal sound
   sh::Vec3f origin;            // units
   float delay = 0;             // s after the frame it starts in (a shotgun's pump after its shot)
+  bool step = false;  // a footstep: Quake II's heard by the surface under it (classic/q2_footsteps)
 };
 
 // The extended protocol's look bytes. An entity's transparency: 254 and 255 (unset) solid, else
@@ -279,6 +280,8 @@ struct DemoState {
   int rdflags = 0;  // Quake II: the view's bits (kQ2RdIrGoggles: infra-red goggles on)
   // Quake II: the music track the server names (its configstring 1; 0 none, -1 never named).
   int cdtrack = -1;
+  // Quake II's music named by text (a file under `music/`), "" when the server sends a number.
+  std::string cdname;
   // The blows the view's player took (single, client, multiview): the last `kKeptBlows` of them
   // and how many in all since the demo was opened, so a look after several frames misses none.
   std::vector<DemoBlow> blows;
