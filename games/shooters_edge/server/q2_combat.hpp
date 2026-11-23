@@ -88,7 +88,7 @@ inline constexpr int kSqShotEffects[kSqShotKinds] = {
 // The render flag each kind is drawn with (8 full bright: the ion ripper's bolt).
 inline constexpr int kSqShotRender[kSqShotKinds] = {0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0};
 
-struct SqWeaponRow {
+struct SqWeaponRow {       // NOLINT(clang-analyzer-optin.performance.Padding): a table
   const char* name;        // the name a player reads and `use` takes
   const char* item;        // the item that gives it (q2_items.hpp); null for the blaster
   const char* view_model;  // the first-person model
