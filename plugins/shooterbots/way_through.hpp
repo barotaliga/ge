@@ -169,8 +169,21 @@ struct WayThrough {
   double step_for = kWayGiveUp_s;  // how long the step he is on is given (its walk's worth more)
   int step = -1;                   // the step he is on, -1 none (exploring)
   int calling = -1;                // a button step pressed to call the lift he waited for, -1
-  double idle_since = -1;          // nothing to do since then, -1 something
-  double no_route_since = -1;      // the exit chosen and his pilot with no route to it since then
+  // (`complete`) A boss only the map's lightning hurts (Quake's Chthon): the electrodes (the
+  // doors whose target is `lightning`) and where each rests, the button steps that move each, the
+  // button step that fires the bolt, and the doors the boss's death opens and where they rest.
+  // While those stand shut he moves both electrodes, then fires the bolt, again and again.
+  struct Bolt {
+    std::vector<int> electrodes;
+    std::vector<sh::Vec3f> electrodes_at;
+    std::vector<std::vector<int>> plates;  // per electrode, the step indices
+    int fire = -1;                         // the step index
+    std::vector<int> wake;                 // the steps that wake the boss (its rune), first
+    std::vector<int> after;                // the doors the boss's death opens
+    std::vector<sh::Vec3f> after_at;
+  } bolt;
+  double idle_since = -1;        // nothing to do since then, -1 something
+  double no_route_since = -1;    // the exit chosen and his pilot with no route to it since then
   int dive = -1;                 // the water's entry (MapNav::entries) he goes back in by, -1 none
   int out = -1;                  // and the one on the far side he swims to and climbs out by
   std::vector<uint8_t> trapped;  // the nodes he could walk to when he went back in

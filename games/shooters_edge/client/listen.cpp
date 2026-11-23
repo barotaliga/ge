@@ -23,6 +23,7 @@
 #include "core/num.hpp"
 #include "progs/layout.hpp"
 #include "progs/vm.hpp"
+#include "server/net_restart.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/client/q2_flash_fx.hpp"
 #include "shooters_edge/server/announce.hpp"
@@ -766,6 +767,25 @@ void listen_stop(Listen& l) {
   l.map.reset();
   l = Listen{};
   l.opt = std::move(opt);
+}
+
+void listen_farewell(Listen& l, const std::string& reason, bool restart) {
+  if (!l.match || l.match->game == nullptr || l.match->game->quit == nullptr) return;
+  if (l.match->state != nullptr) l.match->game->quit(l.match->state, reason, restart);
+}
+
+bool listen_net_restart(Listen& l, int& port, std::string& said) {
+  if (!l.match || !l.port || l.opt.transport != nullptr || l.port->local.port == 0) {
+    said = "No game is hosted for others here, so there is no connection to open again.\n";
+    return false;
+  }
+  const int good = l.port->local.port;
+  std::string ip;
+  if (!ge::server::net_restart(*l.port, ip, port, "", good, said)) return false;
+  const ge::server::ServerGame* game = l.match->game;
+  if (game != nullptr && game->reopened != nullptr && l.match->state != nullptr)
+    game->reopened(l.match->state, *l.port);
+  return true;
 }
 
 bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error) {

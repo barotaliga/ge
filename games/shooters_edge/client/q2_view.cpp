@@ -48,6 +48,13 @@ double q2_demo_fov_y(const DemoState& ds, double own, bool recording, const Q2Sc
   return q2_fov_y(q2_shown_fov(ds.fov, own, recording, uf), s.adjust_fov != 0, aspect);
 }
 
+Q2ViewRect q2_view_rect(int width, int height, int percent) {
+  if (percent >= 100) return {0, 0, width, height};
+  const int p = std::max(percent, 1);
+  const int w = width * p / 100, h = height * p / 100;
+  return {(width - w) / 2, (height - h) / 2, w, h};
+}
+
 void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
   v.bind(
       {.name = "scr_scale",
@@ -86,6 +93,25 @@ void add_q2_screen_cvars(con::Cvars& v, Q2Screen& s) {
           .max = 2,
           .values = "0: none (the default); 1: the graph; 2: the graph on a dark box"},
          &s.lag_draw);
+  v.bind({.name = "viewsize",
+          .fallback = "100",
+          .flags = con::kArchive,
+          .help = "How much of the screen the view of the world fills, the border round it "
+                  "tiled.",
+          .kind = con::CvarKind::integer,
+          .min = 40,
+          .max = 100,
+          .values = "40..100: that share of the screen's width and height, centred (100 the "
+                    "default: all of it)",
+          .overlap = con::Overlap::own},
+         &s.viewsize);
+  v.bind({.name = "scr_font",
+          .fallback = "conchars",
+          .help = "The picture of letters the status bar, the scoreboard and the inventory are "
+                  "written in.",
+          .kind = con::CvarKind::text,
+          .values = "NAME: pics/NAME.pcx, a sheet of 16 by 16 letters (conchars the default)"},
+         &s.font);
   v.bind({.name = "gl_fontshadow",
           .fallback = "0",
           .flags = con::kArchive,

@@ -38,6 +38,7 @@
 // ge:keywords timedemo_step timedemo_mark demo_view demo_status unlocked-fps vsync-off
 // ge:keywords gpu-span span_add span_report price prices price_report switch-off-pricing
 // ge:keywords demo_game_dir demo_folder gamedir game-folder mod-folder fortress
+// ge:keywords cl_demosnaps seek-snapshot demo-snapshot seek-back
 // ge:keywords playdemo playdemo_step cl_demospeed demo-pace timeline demo_seek seek demo-timeline
 // ge:keywords demo_drawn smooth lerp
 // ge:skill shooter perf
@@ -189,11 +190,24 @@ struct DemoHeard {
   void clear() { *this = {}; }
 };
 
+// A SEEK SNAPSHOT: the demo as read up to a moment (its bytes left out: they are the demo's own),
+// where its timeline stood and the levels started by then. A seek back starts from the last one
+// at or before its time instead of from the demo's start.
+struct DemoSnap {
+  Demo demo;
+  DemoTimeline timeline;
+  int levels = 0;
+};
+
 struct Timedemo {
   std::string name;   // as asked
   std::string found;  // where it was read from
   Demo demo;
-  Demo start;                   // the demo as opened, which a seek back starts again from
+  Demo start;  // the demo as opened, which a seek back starts again from
+  // Snapshots every `snap_every_s` of the timeline as the frames are read (`cl_demosnaps`; 0
+  // none), in timeline order: a seek back starts from the last one before it.
+  std::vector<DemoSnap> snaps;
+  double snap_every_s = 0;
   DemoTimeline timeline;        // where the frames read have reached
   std::vector<double> frame_s;  // the timed frames, s
   PassTimes passes;             // the timed frames' GPU spans
@@ -249,10 +263,10 @@ TimedemoStep timedemo_step(Timedemo& t, std::string& error);
 TimedemoStep playdemo_step(Timedemo& t, double wall_dt_s, double speed, std::string& error);
 
 // SEEKING: the demo stood at the first frame at or after `timeline_s` on the timeline (a frame
-// before the last one read starts again from `start`; every frame up to it is read, nothing
-// drawn), the paced clock set to it. `new_level` when the level is not the one it was on (load
-// `t.demo.state.map`); `end` when the demo ends before it (left on its last frame); `error` as the
-// step's.
+// before the last one read starts again from the last snapshot at or before it, else from
+// `start`; every frame up to it is read, nothing drawn), the paced clock set to it. `new_level`
+// when the level is not the one it was on (load `t.demo.state.map`); `end` when the demo ends
+// before it (left on its last frame); `error` as the step's.
 TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error);
 
 // A frame presented at `now_ns`: its length is timed unless it is one of the untimed frames.

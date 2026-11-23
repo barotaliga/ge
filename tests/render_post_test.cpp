@@ -283,3 +283,27 @@ TEST(the_arrival_whites_out_then_leaves_the_picture_as_it_was) {
     for (uint32_t x = 0; x < kW; x += 7) CHECK(at(after, x, y, 1) == at(plain, x, y, 1));
   CHECK(d.errors.load() == 0);
 }
+
+TEST(a_smaller_view_draws_the_whole_picture_in_its_rectangle_and_black_round_it) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s);
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  const float grey[3] = {0.1f, 0.1f, 0.1f};
+  fill(d, s, grey, 0);
+  const ge::gpu::Image plain = draw(d, s, s.plain, false, out);
+  r::set_post_view(d, s.plain, {16, 16, 32, 32}, kW, kH);  // half of each, centred
+  const ge::gpu::Image small = draw(d, s, s.plain, false, out);
+  CHECK(at(small, 3, 3, 1) == 0 && at(small, kW - 3, kH - 3, 1) == 0);  // the border black
+  CHECK(at(small, 15, kH / 2, 1) == 0 && at(small, 48, kH / 2, 1) == 0);
+  // Inside, the grey as before (a flat field reads the same between its pixels), give or take
+  // the dither.
+  CHECK(std::abs(at(small, kW / 2, kH / 2, 1) - at(plain, kW / 2, kH / 2, 1)) <= 1);
+  CHECK(std::abs(at(small, 17, 17, 1) - at(plain, 17, 17, 1)) <= 1);
+  r::set_post_view(d, s.plain, {0, 0, kW, kH}, kW, kH);  // all of it: as it was, bit for bit
+  const ge::gpu::Image whole = draw(d, s, s.plain, false, out);
+  CHECK(whole.rgba == plain.rgba);
+  CHECK(d.errors.load() == 0);
+}

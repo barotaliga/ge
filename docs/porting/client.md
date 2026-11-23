@@ -70,6 +70,7 @@ the game's own letters, and the text a player reads. Settings and commands are t
 | Particles' size, shape, blend | each as made, a soft capsule, laid over | `gl_partscale` (grown with depth), `gl_partshape`, `gl_partstyle` (`render/particles.hpp`'s ParticleShape, `additive`) | as made | as made |
 | Beams, sky, textures, fog | the look's own | `gl_beamstyle`, `gl_drawsky`, `gl_bilerp_skies`, `gl_saturation`, `gl_invert`, `gl_anisotropy`, `gl_fog` (`classic/q2_fx_switches.hpp`) | the look's own | the look's own |
 | Under water | the view breathes (`r_waterwarp`) | also `gl_waterwarp`, the view rippled (`render/post.hpp`'s PostRipple) | `r_waterwarp` | `r_waterwarp` |
+| The light on walls and models | `gl_modulate` (the walls) | `gl_modulate_world`, `gl_modulate_entities`, `gl_doublelight_entities`, `gl_dotshading`, `gl_coloredlightmaps`, `gl_dlight_falloff`, `cl_lerp_lightstyles` (`classic/q2_fx_switches.hpp`) | the classic's | the classic's |
 | Status bar pictures | sharp | `gl_bilerp_pics`, `gl_gamma_scale_pics` (`client/q2_bar.cpp`) | sharp | sharp |
 | Development graph | none | `timegraph`, `debuggraph`, `graphheight`, `graphscale`, `graphshift` along the bottom (`client/q2_bar.cpp` over `hud/bottom_graph.hpp`) | its own | its own |
 | Command packets | `localid`: a server browser on this machine sends commands that carry it (`net/qw_client.cpp`) | none | its own | its own |

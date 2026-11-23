@@ -169,3 +169,30 @@ TEST(quake_iis_picture_switches_reach_the_world_and_another_games_change_nothing
   p.q2fx.part_scale = 4;
   CHECK(std::abs(ge::classic::q2_speck_scale(p.q2fx, 1000) - 10) < 1e-12);
 }
+
+TEST(quake_iis_light_switches_split_the_walls_light_from_the_models) {
+  // Every other game: the walls at light_scale, the models at 1, the renderer's own falloff and
+  // stepped styles.
+  lk::Picture p;
+  CHECK(lk::world_light_scale(p) == 1 && lk::model_light(p, lk::Look::classic) == 1);
+  ge::brush::app::Options o = lk::world_options(lk::Look::classic, {}, p);
+  CHECK(o.dlight_falloff == 0 && !o.lerp_styles && o.lightmap_saturation == 1);
+  // gl_modulate 2 with gl_modulate_world 0.5: the walls as before, the models twice as bright,
+  // four times with gl_doublelight_entities; in the modern look over the world's own modulate.
+  p.light_modulate = 2;
+  p.q2fx.modulate_world = 0.5;
+  CHECK(lk::world_light_scale(p) == 1 &&
+        lk::world_options(lk::Look::classic, {}, p).classic_light == 1);
+  CHECK(lk::model_light(p, lk::Look::classic) == 2);
+  p.q2fx.double_light = true;
+  CHECK(lk::model_light(p, lk::Look::classic) == 4);
+  CHECK(lk::model_light(p, lk::Look::modern) == 4);  // over a world modulate of 2 x 0.5
+  // gl_dlight_falloff 1 the soft edge, 0 the hard; gl_coloredlightmaps and cl_lerp_lightstyles.
+  p.q2fx.dlight_falloff = 1;
+  p.q2fx.lightmap_saturation = 0.5;
+  p.q2fx.lerp_styles = true;
+  o = lk::world_options(lk::Look::modern, {}, p);
+  CHECK(o.dlight_falloff == 1 && o.lightmap_saturation == 0.5 && o.lerp_styles);
+  p.q2fx.dlight_falloff = 0;
+  CHECK(lk::world_options(lk::Look::classic, {}, p).dlight_falloff == 2);
+}

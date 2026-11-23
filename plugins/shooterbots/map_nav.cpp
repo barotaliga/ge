@@ -17,6 +17,7 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "shooter/hull.hpp"
 #include "shooter/map_spec.hpp"
 #include "shooter/world.hpp"
 #include "shooterbots/entities.hpp"
@@ -148,6 +149,12 @@ AbsBox abs_box(const ge::shooterbots::BotView& s, const ge::shooter::MapSpec& sp
 
 // A turning plate this thick or less is a bridge (base2's is 40 units), units.
 constexpr float kTurnPlate = 48;
+constexpr float kSlabThick = 128;  // a slab that slides shut into a bridge, at most this thick
+
+bool liquid(int contents) {
+  return contents == sh::kContentsWater || contents == sh::kContentsSlime ||
+         contents == sh::kContentsLava;
+}
 
 // Those doors as solids of the nav's world, where they stand (the rest of the movers are left
 // out of it and tagged on the links they close).
@@ -302,7 +309,15 @@ void open_doors_as_floor(const ge::shooterbots::BotView& s, const ge::shooter::M
     const bool pillar = angle && std::atof(angle) == -2 && size.x >= 48 && size.y >= 48 &&
                         sh::box_free(world, {(bm.mins.x + bm.maxs.x) * 0.5f,
                                              (bm.mins.y + bm.maxs.y) * 0.5f, bm.maxs.z + 25});
-    if (plate(bm) || pillar) {
+    // A slab that slides shut sideways over a gap (nothing under where the map drew it, or a
+    // liquid), with room to stand on: a bridge closed over the lava (e1m7's, shut by the boss's
+    // death, the only way on to the exit).
+    const sh::Vec3f mid{(bm.mins.x + bm.maxs.x) * 0.5f, (bm.mins.y + bm.maxs.y) * 0.5f, 0};
+    const bool slab = angle && std::atof(angle) >= 0 && size.x >= 48 && size.y >= 48 &&
+                      size.z <= kSlabThick && sh::box_free(world, {mid.x, mid.y, bm.maxs.z + 25}) &&
+                      (sh::box_free(world, {mid.x, mid.y, bm.mins.z - 25}) ||
+                       liquid(sh::water_contents(world, {mid.x, mid.y, bm.mins.z + 4})));
+    if (plate(bm) || pillar || slab) {
       NavBridge br;
       br.ent = e;
       br.spawn = so.origin;

@@ -135,7 +135,9 @@ using DemoVideoLerp = std::function<void(const DemoLerp&)>;
 // What a demo has standing in the world this frame, for `FxFrame::models`: its entities with a
 // model (not the eye's own), the other players in their colours, the level's statics. The video
 // and the window's playback (`playdemo`, `timedemo`) both draw these.
-void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own = false);
+// `own_alpha`: the share of the tracked player's own figure shown when `draw_own` draws it.
+void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own = false,
+                 float own_alpha = 1);
 
 // A demo's frame as the effects read it (world_fx.hpp's FxScene): `fx`'s explosions, temporary
 // entities and missiles (demo_fx.hpp), what stands in the world (`demo_placed`), the players as

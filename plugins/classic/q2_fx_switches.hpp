@@ -25,24 +25,18 @@
 //   1 the pack's `marker` picture in red at the screen's centre, 2 the picture and
 //   `weapons/marker.wav`; the picture fades over `scr_hit_marker_time` ms (500) by the square of
 //   the time gone (`q2_hit_marker_alpha`), a new hit starting it over.
-// - THE PICTURE'S SWITCHES (none saved in the config, as the game keeps them):
-//   - the specks: `gl_partscale` (2), how big each is, a share of its own size at 2 and growing
-//     with its depth past 20 units, 0.004 a unit (`q2_speck_scale`; another game's 0 keeps every
-//     speck its own size); `gl_partstyle` 1 adds them to what is behind (they glow, dark ones all
-//     but vanish), 0 lays them over it; `gl_partshape` 0 a soft round dot, 1 a hard square, 2 a
-//     flat disc with a narrow soft rim (render/particles.hpp's ParticleShape; another game's -1
-//     the engine's own soft capsule);
-//   - `gl_beamstyle` 1: the lasers and the rail's core a plain solid tube as wide as their width,
-//     0 a soft-edged strip with its glow;
-//   - `gl_drawsky` 0: the sky solid black; `gl_bilerp_skies` 0: the map's sky box sharp, each
-//     texel a square;
-//   - the walls' and floors' textures alone (never the liquids, the models, the sky or the
-//     light): `gl_saturation` (1 as painted, 0 grey) and `gl_invert` (a negative, after it);
-//   - `gl_anisotropy`: the most taps along a slanted texture's long axis when the textures are
-//     filtered, 1 none (another game's 0: the renderer's own 4);
-//   - `gl_waterwarp` 1: the whole 3D view rippled while the eye is under a liquid
-//     (render/post.hpp's PostRipple), the HUD not;
-//   - `gl_fog` 0: no fog at all, neither the map's nor the `fog` command's.
+// - THE PICTURE (none saved in the config): `gl_partscale` the specks' size, grown with depth
+//   (`q2_speck_scale`; another game's 0: as made), `gl_partstyle` 1 added to what is behind,
+//   `gl_partshape` a soft dot, a square or a sharp dot (-1: the engine's capsule); `gl_beamstyle`
+//   1 a laser or the rail's core without its glow; `gl_drawsky` 0 a black sky, `gl_bilerp_skies`
+//   0 a sharp one; `gl_saturation` and `gl_invert` on the walls' and floors' textures alone;
+//   `gl_anisotropy` the filtered textures' taps (0: the renderer's 4); `gl_waterwarp` the view
+//   rippled under a liquid; `gl_fog` 0 no fog at all.
+// - THE LIGHT: `gl_modulate_world` and `gl_modulate_entities` times `gl_modulate` on the walls and
+//   on the models, `gl_doublelight_entities` the models' share twice, `gl_dotshading` 0 a model
+//   lit evenly, `gl_coloredlightmaps` the walls' light's colour, `gl_dlight_falloff` a flash's
+//   edge on the walls (1 soft, 0 hard; -1 the renderer's own), `cl_lerp_lightstyles` 1 the styles
+//   blended between letters; `cl_rollhack` 1 the other players lean the game's own way.
 //
 // ge:summary Quake II's effect switches: specks, explosions, lights and muzzle flashes left out
 // ge:keywords q2 cl_disable_particles cl_disable_explosions cl_dlight_hacks cl_muzzlelight_time
@@ -50,7 +44,9 @@
 // ge:keywords cl_railtrail_type cl_railtrail_time cl_railcore_color cl_railspiral_color q2_colour
 // ge:keywords cl_hit_markers scr_hit_marker_time hit-marker q2_hit_marker_alpha q2_speck_scale
 // ge:keywords gl_partscale gl_partstyle gl_partshape gl_beamstyle gl_drawsky gl_bilerp_skies
-// ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog
+// ge:keywords gl_saturation gl_invert gl_anisotropy gl_waterwarp gl_fog gl_modulate_world
+// ge:keywords gl_modulate_entities gl_doublelight_entities gl_coloredlightmaps gl_dotshading
+// ge:keywords cl_lerp_lightstyles cl_rollhack
 // ge:skill classic shooter
 // ge:test tests/shooters_edge_cvar_layers_test.cpp
 #pragma once
@@ -89,6 +85,14 @@ struct Q2FxSwitches {
   double anisotropy = 0;                     // gl_anisotropy (0: the renderer's own)
   bool water_warp = false;                   // gl_waterwarp
   bool fog = true;                           // gl_fog
+  double modulate_world = 1;                 // gl_modulate_world
+  double modulate_entities = 1;              // gl_modulate_entities
+  bool double_light = false;                 // gl_doublelight_entities (Quake II's 1)
+  bool dot_shading = true;                   // gl_dotshading
+  double lightmap_saturation = 1;            // gl_coloredlightmaps
+  bool lerp_styles = false;                  // cl_lerp_lightstyles
+  bool roll_hack = false;                    // cl_rollhack (Quake II's 1)
+  int dlight_falloff = -1;                   // gl_dlight_falloff (-1: the renderer's own)
 };
 
 // gl_partscale's share of a speck's own size `depth_units` in front of the eye: 1 at the default

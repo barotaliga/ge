@@ -46,7 +46,7 @@ inline constexpr uint32_t kRfMinLight = 1u, kRfFullBright = 8u, kRfTranslucent =
                           kRfBeam = 128u, kRfGlow = 512u, kRfShellRed = 1024u,
                           kRfShellGreen = 2048u, kRfShellBlue = 4096u, kRfShellDouble = 65536u,
                           kRfShellHalf = 131072u, kRfShellLiteGreen = 1u << 19,
-                          kRfIrVisible = 32768u;
+                          kRfIrVisible = 32768u, kRfNoShadow = 8192u;
 // The view's bit for infra-red goggles: an `kRfIrVisible` model drawn red, lit by nothing.
 inline constexpr int kQ2RdIrGoggles = 4;
 
@@ -68,6 +68,7 @@ struct Q2Look {
   bool spinning = false;
   // Its light: full whatever the room (fullbright), or never darker than a tenth (minlight).
   bool full_bright = false, min_light = false;
+  bool no_shadow = false;  // it casts no ground shadow (model_shadow.hpp)
   bool bobs = false;    // rises and sinks 5 units, a cycle every 2.5 s, all in step (the bob bit)
   bool pulse = false;   // its light pulses (`q2_pulse`)
   bool shell = false;   // a shell copy over it

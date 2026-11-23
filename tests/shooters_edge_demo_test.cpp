@@ -724,6 +724,30 @@ TEST(a_players_own_sound_comes_from_its_models_folder_else_the_base_voice) {
   CHECK_MSG(sounds.stats().started == 3, std::to_string(sounds.stats().started));
 }
 
+TEST(soundlist_lists_each_sound_read_with_its_length_and_the_missing_ones) {
+  std::vector<float> tone(11025);
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak({{"sound/world/land.wav", ge::audio::wav_bytes(tone, 1, 22050)}}, &pak,
+                           &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::DemoSounds sounds(synth, files);
+  cl::DemoState s;
+  s.sounds = {"", "world/land.wav", "world/gone.wav"};
+  sounds.level(s, nullptr);
+  const std::vector<std::string> lines = sounds.list_lines();
+  std::string all;
+  for (const std::string& l : lines) all += l + "\n";
+  CHECK_MSG(lines.size() == 3, all);
+  CHECK_MSG(all.find("  0.50 s 22050 Hz") != std::string::npos, all);
+  CHECK_MSG(all.find("land.wav") != std::string::npos, all);
+  CHECK_MSG(all.find("not found") != std::string::npos && all.find("gone.wav") != std::string::npos,
+            all);
+  CHECK_MSG(lines.back().find("1 sounds, 0.0 MB") == 0, all);
+}
+
 TEST(cl_footsteps_0_starts_no_footstep_and_every_other_sound) {
   // Quake II's cl_footsteps: at 0 a player/step sound never starts; the rest play as before.
   std::vector<float> tone(4410);

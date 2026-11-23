@@ -43,8 +43,8 @@
 //   ETCHED bleaches and pits it (an acid). All three 0: the shader skips it.
 // - THE BLOOD (`MorphBlood`): wounds as soaked patches with blood run down from them, fixed to the
 //   model's rest frame (frame 0), darkening as they dry. No wound: the shader skips it.
-// - THE PASS draws after the opaque world (depth tested and written, reversed z, back faces
-//   culled), one draw a model instance, at most `kMaxMorphDraws` a frame.
+// - THE SHADOW (`MorphDraw::flat`): a copy squashed flat onto the floor, black, see-through.
+// - THE PASS: after the opaque world, depth tested and written, back faces culled, one draw each.
 // - THE CPU TWINS (`pose_morph`, `morph_texel`, `pack_morph_atlas`, `warp_vertex`, `warp_cut`,
 //   `wound_cover`) do what the shader does, for the tests and the CPU pictures.
 // ge:summary Morph meshes drawn: vertex-animated models, frames blended on the GPU, tinted skins
@@ -54,8 +54,8 @@
 // ge:keywords team-colours player-colours ramp glow fullbright sharp smooth nearest mark-hole warp
 // ge:keywords morph-warp dissolve materialize dematerialize spawn teleport fade-in fade-out
 // ge:keywords warp_vertex warp_field warp_cut pack_warp ash dust crumble burning-edge shimmer
-// ge:keywords pinch create_morph prepare_morph encode_morph pose_morph morph_texel
-// ge:keywords pack_morph_atlas skin-slots set_morph_slot slot_texels worn-skin lazy-skin
+// ge:keywords pinch create_morph prepare_morph encode_morph pose_morph morph_texel lazy-skin
+// ge:keywords pack_morph_atlas skin-slots set_morph_slot slot_texels worn-skin shadow blob-shadow
 // ge:skill render
 // ge:test tests/render_morph_test.cpp
 #pragma once
@@ -198,6 +198,13 @@ struct MorphDraw {
   // drawn over a plain copy of the same model, usually see-through (`alpha`).
   float shell_push = 0;
   float shell[3] = {0, 0, 0};
+  // A SHADOW (`flat` set): the model squashed flat onto a level floor at height `flat_y` (world,
+  // m), each point moved across by `flat_lean` (x, z) for each m it stood above the floor, drawn in
+  // the shell's one flat colour `shell` (black for a shadow) and see-through by `alpha`. Its pose,
+  // warp and motion are the plain draw's.
+  bool flat = false;
+  float flat_y = 0;
+  float flat_lean[2] = {0, 0};
 };
 
 // Where each model's skin sits in the atlas, texels.
