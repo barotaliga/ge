@@ -13,7 +13,7 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Client console commands | 132 | 13 | 1 | 10 | 156 |
 | Client settings (cvars) | 221 | 49 | 8 | 72 | 350 |
 | Macros ($name in typed and bound text) | 25 | 3 | 0 | 2 | 30 |
-| Menu pages and rows | 99 | 58 | 4 | 1 | 162 |
+| Menu pages and rows | 100 | 58 | 3 | 1 | 162 |
 | Server messages the client parses (svc) | 21 | 6 | 0 | 0 | 27 |
 | Temporary entities (svc_temp_entity) | 15 | 50 | 0 | 0 | 65 |
 | Muzzle flashes (svc_muzzleflash, a player's) | 19 | 0 | 1 | 0 | 20 |
@@ -23,13 +23,13 @@ Gaps this ledger finds that the C list of `q2-gaps2-client.md` does not name: a 
 | Configstrings | 8 | 8 | 0 | 0 | 16 |
 | The layout language (status bar and layouts) | 26 | 1 | 0 | 0 | 27 |
 | HUD and screen elements | 18 | 10 | 0 | 1 | 29 |
-| Messages printed to the player | 74 | 57 | 3 | 13 | 147 |
+| Messages printed to the player | 75 | 57 | 2 | 13 | 147 |
 | Demo playback and recording features | 12 | 8 | 1 | 2 | 23 |
 | Keys: the fixed keys and the default bindings | 7 | 4 | 0 | 0 | 11 |
 | Sound and music | 9 | 4 | 0 | 0 | 13 |
 | Picture and video | 14 | 5 | 1 | 0 | 20 |
 | Connection, network, downloads and the rest | 10 | 5 | 2 | 0 | 17 |
-| **all** | 794 | 289 | 27 | 101 | 1211 |
+| **all** | 796 | 289 | 25 | 101 | 1211 |
 
 ## Client console commands
 
@@ -596,7 +596,7 @@ A `$name` in a typed line, a bind, `say` or a `draw` is replaced by the macro's 
 
 ## Menu pages and rows
 
-done 99, partial 58, missing 4, not-taken 1
+done 100, partial 58, missing 3, not-taken 1
 
 The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), and the three built-in pages (player setup, the demo browser, the server browser). Ours: Quake II runs on the classic menu's pages with Quake II's plates (`games/shooters_edge/menu/main_menu.cpp`, `q2_menu`); C5 to C7 describe the difference.
 
@@ -763,7 +763,7 @@ The menu as upstream ships it: its menu script's pages and rows (`q2pro.menu`), 
 | menu.servers.list | server browser | servers from an HTTP list, favourites, `servers.lst`, broadcast | partial | ours `menu/servers_page.cpp` (LAN, masters, hub) (C41) |
 | menu.servers.columns | server browser columns | Hostname, Mod (the game folder, `baseq2` when empty), Map, Players, RTT; the selection's info as Key and Value, its players as Frg, RTT, Name | partial | ours its own columns (C41) |
 | menu.servers.colours | server browser colours | with `ui_colorservers` 1: grey for a password, anticheat or no-fake server, green under 30 ms, white otherwise | done | `games/shooters_edge/menu/servers_page.cpp` (`row_colour`): `sb_colorservers`, which Quake II spells `ui_colorservers` |
-| menu.script | the menu script file | `q2pro.menu`: pages and rows defined as text a player or mod can change | missing | ours pages are built in (`menu/main_menu.cpp`) |
+| menu.script | the menu script file | `q2pro.menu`: pages and rows defined as text a player or mod can change | done | `menu/menu_script.cpp`: `q2pro.menu` on the game's search path read over Quake II's pages when the game loads (`menu_script` 1, the default); every row word (values, strings, pairs, range, toggle with a bit, bind, action, bitmap, savegame, loadgame, blank, field), `include`, `$` and `$$` expansion, comments and joined lines; a script's page replaces ours of its name, a new one is added; player setup, LOAD, SAVE and the browsers stay ours; the look's words (background, font, cursor, colours, banner, plaque, style) are read and checked, ours draws its own look; a field is typed in the console |
 
 ## Server messages the client parses (svc)
 
@@ -1130,7 +1130,7 @@ What the client draws in 2D over the view, in its drawing order, and the setting
 
 ## Messages printed to the player
 
-done 74, partial 57, missing 3, not-taken 13
+done 75, partial 57, missing 2, not-taken 13
 
 Lines the client prints in the console (and the notify lines), quoted as the reference prints them (`%s`, `%d` stand for the value; `\n` line ends dropped). A row is done when our tree prints the same words. The project's rule that a player's lines read like a game's words (CLAUDE.md, Players are people) may make some differences deliberate; none is recorded as a decision, so they are partial. Internal protocol faults are one row at the end.
 
@@ -1265,7 +1265,7 @@ Lines the client prints in the console (and the notify lines), quoted as the ref
 | msg.menu.nomenu | "No such menu: %s" | `pushmenu` of an unknown page | done | `games/shooters_edge/menu/game_menu.cpp` |
 | msg.menu.usage | "Usage: %s <menu>" | `pushmenu` alone | done | `games/shooters_edge/menu/game_menu.cpp` |
 | msg.menu.noplayers | "No player models found." | the player page with no figures | done | `games/shooters_edge/menu/main_menu.cpp` (`apply_event`): said, and the player page does not open |
-| msg.menu.script | "Unknown keyword '%s'" | a bad line in the menu script (and its other warnings) | missing | the feature is missing |
+| msg.menu.script | "Unknown keyword '%s'" | a bad line in the menu script (and its other warnings) | done | `menu/menu_script.cpp`: each told in the console with the file and line and what was done, the same outcomes ("'x' is not a menu script word, so the line is skipped." inside a page, "... so the rest of the file is not read." outside one; a row's form, a bad bit or width, a page with no rows or no end, a missing include, includes too deep, an unclosed quote, a line too long) |
 | msg.servers.http | "Can't fetch '%s', no HTTP support compiled in." | an HTTP server list without HTTP | not-taken | HTTP is always built in, and a secure (https) list is fetched over TLS (`engine/net/tls_stream.hpp`) |
 | msg.servers.badaddr | "Bad server address: %s" | a bad line in a server list | partial | ours does it but says it in its own words (the exact line not found) |
 | msg.snd.notstarted | "Sound system not started." | `soundinfo` or `soundlist` with no sound | partial | `games/shooters_edge/client/menu_sound.cpp`: said by `soundinfo` with no sound device; `soundlist` is still missing |

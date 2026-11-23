@@ -466,7 +466,7 @@ const MenuTable& q2_menu() {
     }
     return out;
   }();
-  static const MenuTable table{kQ2Pages, rows, kEmptySlot, "game"};
+  static const MenuTable table{kQ2Pages, rows, kEmptySlot, "game", "q2pro.menu"};
   return table;
 }
 

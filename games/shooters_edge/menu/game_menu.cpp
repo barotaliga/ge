@@ -10,6 +10,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -64,6 +65,15 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                     .values = "auto: the pack's own pictures when the packs have them (the "
                               "default); classic: the pack's; modern: ours"},
                    &look_);
+  con.cvars().bind({.name = "menu_script",
+                    .fallback = "1",
+                    .flags = ge::console::kArchive,
+                    .help = "Whether a game's menu script (Quake II's q2pro.menu) changes its "
+                            "pages, read when the game loads.",
+                    .kind = ge::console::CvarKind::boolean,
+                    .values = "0: the game's own pages; 1: the script's pages over them (the "
+                              "default)"},
+                   &use_script_);
   con.cvars().bind({.name = "ce_auto",
                     .fallback = "1",
                     .flags = ge::console::kArchive,
@@ -156,6 +166,38 @@ void GameMenu::add_cvars(ge::console::Console& con) {
   demos_.add_cvars(con);
 }
 
+const MenuTable& GameMenu::set_table(const MenuTable& table, const ge::vfs::SearchPath* files) {
+  table_ = &table;
+  script_.reset();
+  const ge::vfs::FileRef* file = files != nullptr && use_script_ && !table.script.empty()
+                                     ? ge::vfs::find(*files, table.script)
+                                     : nullptr;
+  if (file != nullptr) {
+    const auto read = [files](std::string_view name) -> std::optional<std::string> {
+      const ge::vfs::FileRef* f = ge::vfs::find(*files, name);
+      std::vector<uint8_t> bytes;
+      std::string why;
+      if (f == nullptr || !ge::vfs::read(*files, *f, &bytes, &why)) return std::nullopt;
+      return std::string(bytes.begin(), bytes.end());
+    };
+    const auto lookup = [this](std::string_view name, std::string& value) {
+      if (con_ == nullptr) return false;
+      const std::string asked = "${" + std::string(name) + "}";
+      value = con_->expand_text(asked);
+      return value != asked;
+    };
+    if (std::optional<std::string> text = read(table.script)) {
+      script_ = std::make_unique<ScriptMenu>();
+      script_->read(table.script, *text, table, read, lookup);
+      table_ = &script_->table();
+      if (con_ != nullptr)
+        for (const std::string& w : script_->warnings()) con_->print(w);
+    }
+  }
+  main_ = build_menu(*table_);
+  return *table_;
+}
+
 void GameMenu::set_art(ClassicArt art) {
   const float scale = art_.scale;  // the game's setting outlives the pictures
   art_ = std::move(art);
@@ -238,7 +280,7 @@ void GameMenu::show(Host& host, std::string_view page) {
 
 void GameMenu::fill_server(const Host& host) {
   sheet_seen_ = host.sheet != nullptr ? host.sheet->revision : 0;
-  server_page_.fill(main_, host.sheet, host.maps, table_ == &q2_menu(), classic());
+  server_page_.fill(main_, host.sheet, host.maps, &game_table(*table_) == &q2_menu(), classic());
 }
 
 void GameMenu::hide() {
