@@ -24,12 +24,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "classic/protocol/directions.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/q2_flash_fx.hpp"
+#include "shooters_edge/client/q2_temp_fx.hpp"
 
 namespace shooters_edge::client {
 
@@ -205,9 +207,9 @@ void entity_delta(DemoMsg& m, uint64_t bits, DemoEntity& e, int ext, int* event 
   const bool wide_model = ext > 0 && (bits & kModel16) != 0;
   const auto model = [&] { return wide_model ? m.u16() : m.u8(); };
   if ((bits & kModel) != 0) e.model = model();
-  if ((bits & kModel2) != 0) model();
-  if ((bits & kModel3) != 0) model();
-  if ((bits & kModel4) != 0) model();
+  if ((bits & kModel2) != 0) e.more[0] = model();
+  if ((bits & kModel3) != 0) e.more[1] = model();
+  if ((bits & kModel4) != 0) e.more[2] = model();
   if ((bits & kFrame8) != 0) e.frame = m.u8();
   if ((bits & kFrame16) != 0) e.frame = m.i16();
   if ((bits & (kSkinLow | kSkinHigh)) != 0) e.skin = sized64(m, bits, kSkinLow, kSkinHigh);
@@ -278,6 +280,10 @@ void set_string(Demo& d, int index, std::string text) {
   };
   if (index == 1) {
     s.cdtrack = q2_music_track(text, s.cdtrack);
+    // A name rather than a number: `music/<name>` (q2_music_track keeps the last number for it).
+    const bool number = !text.empty() && text.find_first_not_of("0123456789") == std::string::npos;
+    s.cdname = text.empty() || number ? std::string{} : text;
+    if (!s.cdname.empty()) s.cdtrack = -1;
   } else if (index == cs.max_clients) {
     // Entities 1 to this are the players: kept by slot, so the rest number past `players`.
     d.max_clients = std::clamp(std::atoi(text.c_str()), 1, 32);
@@ -291,6 +297,9 @@ void set_string(Demo& d, int index, std::string text) {
     put(s.models, index - cs.models, std::move(text));
   } else if (index >= cs.sounds && index < cs.images) {
     put(s.sounds, index - cs.sounds, std::move(text));
+  } else if (index >= cs.skins - 512 && index < cs.skins - 512 + int(kDemoLightStyles)) {
+    s.light_styles[static_cast<size_t>(index - (cs.skins - 512))] =
+        std::move(text);  // the first 64 of 256
   } else if (index >= cs.images && index < cs.images + (cs.sounds - cs.models)) {
     put(s.images, index - cs.images, std::move(text));
   } else if (index == cs.max_clients - 1) {  // the air acceleration, just before the slots
@@ -317,6 +326,7 @@ void server_data(Demo& d, DemoMsg& m) {
   s.player = std::max(0, m.i16());
   m.str();  // the level's full name
   s.levels++;
+  s.light_styles = {};
   s.places = {};
   s.map.clear();
   s.models.assign(1, "");
@@ -526,6 +536,7 @@ void event_sound(DemoState& s, int n, int event, int32_t number) {
                        (static_cast<uint32_t>(n) * 40503u)) >>
                       30];
       o.channel = kChanBody;
+      o.step = true;
       break;
     case kEvFallShort:
       o.name = "player/land1.wav";
@@ -678,6 +689,13 @@ void sound(DemoState& s, DemoMsg& m) {
   } else {
     o.origin = s.eye;  // the listener's own
   }
+  // A server that sends a hit's or a blast's sound beside its temporary entity (ours does) is
+  // heard once: the client already plays that sound for the entity (q2_temp_fx.hpp).
+  std::string_view name;
+  if (o.sound > 0 && static_cast<size_t>(o.sound) < s.sounds.size())
+    name = s.sounds[size_t(o.sound)];
+  for (const DemoSound& t : s.started)
+    if (t.entity == -1 && t.name != nullptr && !name.empty() && name == t.name) return;
   s.started.push_back(o);
 }
 
@@ -727,7 +745,10 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
     case 42:  // more blood
       if (!point_dir(DemoEffectKind::blood)) return false;
       break;
-    case 2:
+    case 2:  // the blaster's bolt landing: its yellow sparks and the mark, as our own game's
+      if (!point_dir(DemoEffectKind::named)) return false;
+      e.name = "te_blaster";
+      break;
     case 9:
     case 12:
     case 13:
@@ -745,7 +766,6 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
     case 17:
     case 18:
     case 20:
-    case 21:
     case 28:
     case 35:
     case 47:
@@ -754,9 +774,15 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
     case 54:
       point(DemoEffectKind::explosion);
       break;
-    case 22:
-      point(DemoEffectKind::teleport);
+    case 21: {  // the BFG's big burst: an explosion, and its green burst and mark beside it
+      point(DemoEffectKind::explosion);
+      DemoEffect burst = e;
+      burst.kind = DemoEffectKind::named;
+      burst.name = "te_bfg_bigexplosion";
+      if (!m.bad) s.effects.push_back(std::move(burst));
       break;
+    }
+    case 22:  // a boss's teleport: Quake II's own burst, as our own game draws it
     case 48:  // Quake II's teleport burst (the base game sends none; a mod may)
       point(DemoEffectKind::named);
       e.name = "sq_teleport";
@@ -773,9 +799,12 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       point(DemoEffectKind::named);
       e.name = "sq_widow_splash";
       break;
-    case 3:
+    case 3:  // the rail's line: its core and spiral as cl_railtrail_type asks, as our own game's
+      line(DemoEffectKind::named_trail);
+      e.name = "te_railtrail";
+      break;
     case 23:
-    case 34:  // the rail's line, a laser, a trail
+    case 34:  // a laser, a trail
       line(DemoEffectKind::beam);
       break;
     case 11:
@@ -817,7 +846,11 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       break;
     }
     case 16:
-    case 19:
+    case 19:  // a parasite's tongue, a medic's cable: entity, start, end, as our own game's
+      e.entity = m.i16();
+      line(DemoEffectKind::named_trail);
+      e.name = kind == 16 ? "te_parasite_attack" : "te_medic_cable_attack";
+      break;
     case 38:
     case 39:  // entity, start, end
       e.entity = m.i16();
@@ -917,6 +950,28 @@ bool temp_entity(DemoState& s, DemoMsg& m, std::string& error) {
       error = "a temporary entity of kind " + std::to_string(kind) + at_byte(m) +
               " that this game's recordings do not carry: the recording is damaged";
       return false;
+  }
+  // Quake II's puff for a hit (its specks' count and colours), and the sound the client itself
+  // plays for one (the server sends none: q2_temp_fx.hpp).
+  if (const Q2Puff* puff = q2_puff(kind); puff != nullptr) {
+    e.q2_specks = puff->count;
+    e.colour = puff->colour;
+  }
+  const auto pick = static_cast<uint32_t>(static_cast<int>(s.time * 1000) * 7919 +
+                                          static_cast<int>(e.at.x) * 31 + static_cast<int>(e.at.y));
+  if (const Q2TempSound ts = q2_temp_sound(kind, pick); ts.name != nullptr && !m.bad) {
+    const bool busy =
+        ts.alone && std::any_of(s.started.begin(), s.started.end(), [&](const DemoSound& o) {
+          return o.name != nullptr && std::string_view(o.name) == ts.name;
+        });
+    if (!busy) {
+      DemoSound o;
+      o.entity = -1;
+      o.name = ts.name;
+      o.attenuation = ts.attenuation;
+      o.origin = ts.at_end ? e.end : e.at;
+      s.started.push_back(o);
+    }
   }
   if (keep && !m.bad) s.effects.push_back(e);
   return true;

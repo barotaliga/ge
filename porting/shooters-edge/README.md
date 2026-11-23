@@ -39,6 +39,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `q2-flashes.md` | Muzzle flashes on the wire: a player's and a monster's flash values, their lights, sounds, models, who sends them and when, the guns' places rounded (read) |
 | `q2-sp-fixes.md` | Single player's built-in map repairs (fact1, fact2, command, the eight maps' unnamed starts), item teams, the item and cheat commands' exact lines, `cycleweap` and `prefweap` (read) |
 | `q2-client-fx2.md` | The temporary entities left undrawn (bubbles, force wall, welding and tunnel sparks, steam, flashlight, the mission packs' bursts), the CTF and mission-pack effect bits, the layout's `rstring`, `rstring2` and `color`, the area bits (read) |
+| `q2-client-te.md` | The base game's temporary entities as the client draws and plays them: each kind's fields, its specks, models and lights, the sounds the client plays itself, light styles from the settings strings (read, M18v's effects slice) |
 | `client-gaps.md` | Which of those the window has, and the ranked rounds still to build, gameplay first (M18k4) |
 | `chat-ignore.md` | The ignore lists and chat filters: how a chat line's speaker is found, what each setting drops (clean-room answers, M18k4) |
 | `client-mouse-and-q2-player.md` | The mouse (filter, acceleration, raw input), Quake II's player settings (hand, gender, visible weapons, skins, prediction, autosens), its chat filters and command spellings (clean-room answers, M18k4) |
@@ -81,6 +82,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `rocket-jump-helper.md` | The classic match mod's rocket jump helpers (impulses 164 and 156): what they do in one command, their failures and settings, from a clean-room reader (M18e) |
 | `jump-walk-death.md` | The jump's and the swimmer's sounds, landing sounds, walking (there is none at the modern defaults: `+speed` is a run key), the view weapon and eye at death |
 | `q2.md` | Quake II (M18t2, for M18t3 and M18t4): the index of its notes, the game's shape, the demo pack measured, the game library's calls as our rules runner's |
+| `q2-sound-facts.md` | Quake II's client sound on upstream Q2PRO: the `al_` settings and the OpenAL path (distance, panning, the underwater filter, merged loops), its printed lines, `s_enable` and the restart, footsteps by surface, `ogg play` by name, when the music stops, the sound page |
 | `q2-formats.md` | Quake II's files: the search order, contents and surface flags, the collision lumps, WAL, PCX and the palette, MD2, SP2, the sky, player models, skins and sounds |
 | `arena-hybrid.md` | The hybrid-engine arena shooter (2017): its engine, its pack files as community notes describe them (encrypted directory), and why no reader is built |
 | `sector-family.md` | The sector-based sprite shooter and Quake II (clean-room facts for `docs/porting-sprite-games.md`): the move, blocking, auto-aim, line and sector specials, sight and sound, randomness, demos, lockstep play, drawing rules, the held weapon, things and monsters |

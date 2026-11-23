@@ -17,6 +17,8 @@
 // threw, the explosions and beams drawn are deterministic metrics; the pictures are measured.
 // `--mod-effects=1` adds, after the weapons, a mod's own effects by names no classic effect has
 // (the server's pointparticles and trailparticles events) drawn from the lab's book of them.
+// `--hand-lerp=0` draws the held weapon's frames stepped (r_lerpmodels 0), to film a nailgun's
+// turn both ways.
 //
 // ge:summary Lab: every weapon's muzzle, rounds, hits, blasts and bolt in the game's frame
 // ge:keywords lab se-weapon-fx weapon-effects explosion rocket-trail lightning bolt beam hits
@@ -235,7 +237,8 @@ void run(gl::Lab& lab) {
     const std::span<const uint8_t> pal = cl::find_file(files, "gfx/palette.lmp", store);
     for (cl::FxState& f : fx_state) f.palette.assign(pal.begin(), pal.end());
   }
-  const shooters_edge::view::ViewSettings view_settings;
+  shooters_edge::view::ViewSettings view_settings;
+  view_settings.lerp = lab.arg("hand-lerp") != "0";  // r_lerpmodels: the held weapon's frames
   shooters_edge::view::HandFrame hand;
   double t = 0;
   double births[2] = {0, 0}, blasts[2] = {0, 0}, beams[2] = {0, 0};
@@ -693,7 +696,9 @@ const gl::LabSpec kSpec{
      {"target", "0", "1: a bot stood in the line of fire, facing the player (its wounds)"},
      {"before", "", "the left side's cvars in the modern look instead of the classic look"},
      {"mod-effects", "0",
-      "1: after the weapons, a mod's own effects (pointparticles, trailparticles) by its book"}},
+      "1: after the weapons, a mod's own effects (pointparticles, trailparticles) by its book"},
+     {"hand-lerp", "1",
+      "0: the held weapon's frames shown as stepped, each held (r_lerpmodels 0); 1: blended"}},
     "--size=240,135 --weapons=shotgun,rockets,arc --times=60,400 --blast-times=60",
     run,
 };

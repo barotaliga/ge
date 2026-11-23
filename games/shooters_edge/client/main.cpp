@@ -1108,8 +1108,9 @@ int run_main(int argc, char** argv) {
     shooters_edge::look::apply_ce_enabled(picture, console.cvars());  // ce_enabled 0: none of it
     music.held = cl::cinematic_on(cine);  // a movie's own sound: `ogg play` refused meanwhile
     ge::audio::music_frame(music, synth, console);
-    cl::hear_swap(synth, under_ear);  // s_swapstereo
-    cl::hear_ears(synth, under_ear);  // s_hrtf
+    cl::hear_swap(synth, under_ear);                      // s_swapstereo
+    cl::hear_ears(synth, under_ear);                      // s_hrtf
+    picture.q2fx.plain_stereo = !cl::hrtf_on(under_ear);  // al_merge_looping 1 merges only then
     if (std::exchange(attract_at_start, false) && !start_attract())
       next_map = game_content.first_map;
     else if (attract_asked && std::exchange(menu_at_start, false))  // as SELECT GAME starts one

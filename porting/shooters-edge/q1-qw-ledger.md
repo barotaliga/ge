@@ -489,7 +489,7 @@ and the campaign on our own host hands the client the same events without the wi
 | C414 | stufftext (9) (both) | a console line to run | done | net/qw_client.cpp |  |
 | C415 | setangle (10) (both) | the server sets your view | done | net/qw_svc.cpp |  |
 | C416 | serverinfo (11, q1) / serverdata (11, qw) (both) | q1: protocol, players, game type, level name, models, sounds; qw: protocol, server count, game folder, your slot, level name, movement numbers | done | net/qw_signon.cpp, demo_convert_single.cpp |  |
-| C417 | lightstyle (12) (both) | a light style's pattern of letters | done | net/qw_svc.cpp |  |
+| C417 | lightstyle (12) (both) | a light style's pattern of letters | done | net/qw_svc.cpp; kept from a server or a demo (`client/demo_client.cpp`) and stepped in the window (`client/world_draw.cpp`) |  |
 | C418 | updatename (13) (q1) | a player's name | done | demo_convert_single.cpp (into the slot's user info) |  |
 | C419 | updatefrags (14) (both) | a player's frags | done | net/qw_svc.cpp |  |
 | C420 | clientdata (15) (q1) | your view height, ideal pitch, punch, velocity, items, ground and water bits, weapon frame and model, armour, health, ammo counts, active weapon | done | demo_convert_single.cpp |  |

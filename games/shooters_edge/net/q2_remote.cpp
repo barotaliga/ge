@@ -80,6 +80,7 @@ Q2ClientConfig q2_config(Remote& r, const ClientConfig& cfg) {
                      const ge::vfs::ArchiveOrigin* origin) {
     if (r.keep_file) r.keep_file("", path, bytes, origin);
   };
+  s.held = r.held;  // a download cut short resumed
   s.brain = [&r](int) {
     sh::MoveCmd m = r.hands;
     m.angles = r.view;

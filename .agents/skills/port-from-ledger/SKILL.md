@@ -8,7 +8,7 @@ description: "Use before building ANY piece of a classic game in Shooter's Edge 
 A classic game is ported against a **ledger**: one line for every thing the reference has that a
 player, an admin or a mod can see (each command, setting with its default, entity, item, monster,
 message word for word, menu row, protocol message, flag, layout word), each marked against our
-tree `done`, `partial`, `missing` or `not-taken`. The ledger is written ONCE, before the work, by
+tree `done`, `missing` (ranked) or `not-taken` (there is no `partial`: see the brief). The ledger is written ONCE, before the work, by
 clean-room readers, and committed. Every port then works FROM it: the rows of the area you build
 are your spec and your test list, and your PR turns them `done`.
 

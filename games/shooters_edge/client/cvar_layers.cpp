@@ -102,6 +102,16 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .values = "1: all of them (the default); 0: none; 2: only those of a thing you can "
                     "see; 3: only your own"},
          &x.ambient);
+  v.bind({.name = "al_merge_looping",
+          .fallback = "1",
+          .help = "Whether many things making the same looping sound are heard as one sound, so "
+                  "they are not louder together than the game meant.",
+          .kind = con::CvarKind::integer,
+          .min = 0,
+          .max = 2,
+          .values = "1: merged, except with headphone sound (the default); 0: each heard on its "
+                    "own; 2: always merged"},
+         &x.merge_looping);
   v.bind({.name = "cl_railtrail_type",
           .fallback = "0",
           .flags = con::kArchive,
@@ -315,6 +325,15 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
           .max = 10,
           .values = "0: none (the default); 1..10: that many pixels wide up close"},
          &x.cel_shading);
+  v.bind({.name = "gl_glowmap_intensity",
+          .fallback = "0.75",
+          .help = "How brightly the glow maps a model's skin may have (a picture named "
+                  "<skin>_glow beside it) light its eyes, lamps and screens.",
+          .kind = con::CvarKind::number,
+          .min = 0,
+          .max = 10,
+          .values = "0: no glow; 0.75: the default; more: brighter"},
+         &x.glowmap_intensity);
   v.bind({.name = "cl_smooth_explosions",
           .fallback = "1",
           .help = "Whether explosions fade smoothly, or move on frame by frame, ten a second.",
@@ -331,7 +350,8 @@ void add_q2_fx_cvars(con::Cvars& v, ge::classic::Q2FxSwitches& x) {
 // visible weapons' bit out: net/qw_remote.cpp). Its
 // servers' switch rules, `w_switch` and `b_switch`, are user info a server reads on a pickup (the
 // Quake II has none). Its weapon's `r_viewmodelsize` and `r_viewmodeloffset` (units, added to
-// ours), and `r_viewmodellastfired` (a recording's weapon the one that last fired).
+// ours), and `r_viewmodellastfired` (a recording's weapon the one that last fired). Its
+// `r_lerpframes` (the models' and the held weapon's frames blended) is `r_lerpmodels`.
 void add_first(con::Console& c, const GameBindings& b) {
   if (b.crosshair != nullptr) {  // Quake II's own shares and health colour set aside
     b.crosshair->pictures = false;
@@ -364,6 +384,7 @@ void add_first(con::Console& c, const GameBindings& b) {
     b.music->enabled = true;
     b.music->shuffle = false;
     b.music->menu_track = 0;
+    b.music->off_pauses = false;  // `cd off` stops the music
   }
   if (b.view != nullptr) {  // Quake's weapon is always drawn, at its own place and lens
     b.view->hand = 0;
@@ -445,6 +466,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
   c.add_command_synonym("togglechat", "toggleconsole");  // QuakeWorld's second name for it
   c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left
+  if (c.cvars().find("r_lerpmodels") != nullptr)         // the models' and the held weapon's frames
+    c.cvars().add_synonym("r_lerpframes", "r_lerpmodels");
   // An old Quake config's saved name and colours: `_cl_name` is the name, `_cl_color` both
   // colours as one number (shirt times 16 plus pants), so its config dresses you as it did.
   c.cvars().add_synonym("_cl_name", "name");
@@ -672,6 +695,7 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.bind(music_on, &b.music->enabled);
     v.bind(shuffle, &b.music->shuffle);
     v.bind(menu_track, &b.music->menu_track);
+    b.music->off_pauses = true;  // ogg_enable 0 pauses the music where it is, 1 resumes it
   } else {
     v.add(music_on), v.add(shuffle), v.add(menu_track);
   }
@@ -694,6 +718,16 @@ void add_q2(con::Console& c, const GameBindings& b) {
     v.add_synonym("al_device", "s_device");
   if (v.find("s_hrtf") != nullptr)  // the classic games' (client/room_ear.hpp)
     v.add_synonym("al_hrtf", "s_hrtf");
+  // Its software mixer's lead: kept and saved for its sound page and configs; the device here
+  // pulls the sound a chunk at a time, as its OpenAL path does, which never reads it either.
+  v.add({.name = "s_mixahead",
+         .fallback = "0.1",
+         .flags = con::kArchive,
+         .help = "How far ahead of time the sound is mixed, in seconds. Kept for your settings; "
+                 "this sound device keeps its own short lead.",
+         .min = 0,
+         .max = 1,
+         .values = "0.1: the default; 0..1: that many seconds"});
   for (int k = 0; k < 16; k++)  // its address book, asked by JOIN A GAME (servers_page.hpp)
     v.add({.name = "adr" + std::to_string(k),
            .fallback = "",
