@@ -179,9 +179,8 @@ bool EnhanceJob::start_at(std::string path, std::filesystem::path root, RunOptio
         std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     board_.on(p, now);
   };
-  thread_ =
-      std::thread([this, path = std::move(path), root = std::move(root),
-                   opts = std::move(opts)]() mutable {
+  thread_ = std::thread(
+      [this, path = std::move(path), root = std::move(root), opts = std::move(opts)]() mutable {
         RunReport report;
         std::string error;
         // The trained upscaler, when the cache holds the weights asked for; else the kernel.

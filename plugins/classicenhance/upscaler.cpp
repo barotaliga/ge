@@ -289,7 +289,8 @@ bool open_cached_upscaler(const std::filesystem::path& root, Upscaler& out, std:
   }
   if (net.digest != sha256) {
     *why = "the weights in " + file.string() + " have the SHA-256 " + net.digest + ", not " +
-           std::string(sha256) + "; remove them and run the classicenhance tool to fetch them again";
+           std::string(sha256) +
+           "; remove them and run the classicenhance tool to fetch them again";
     return false;
   }
   out = std::move(net);
