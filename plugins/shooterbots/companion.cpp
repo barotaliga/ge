@@ -189,37 +189,8 @@ int exit_to_show(const Fighter& f, sh::Vec3f leader) {
   return best;
 }
 
-// A step that would carry the companion into an exit's box (where it is a moment on, its box
-// grown by a margin): turned back, away from the box's middle, the jump let go.
 void keep_off_exits(Fighter& f, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd) {
-  Escort& e = f.escort;
-  if (f.exits.empty()) return;
-  const ge::shooter::WorldEntity& self = ent_of(s, me);
-  const double yaw = cmd.angles.y / kDeg;
-  const float fx = static_cast<float>(libm::cos(yaw)), fy = static_cast<float>(libm::sin(yaw));
-  const float wx = fx * cmd.forward + fy * cmd.side, wy = fy * cmd.forward - fx * cmd.side;
-  const float wl = std::sqrt(wx * wx + wy * wy);
-  const sh::Vec3f v = self.velocity;
-  sh::Vec3f ahead = self.origin + v * 0.15f;
-  if (wl > 1) {
-    ahead.x += wx / wl * 24;
-    ahead.y += wy / wl * 24;
-  }
-  constexpr float m = 12;  // the margin round the player's box
-  for (const ExitSpot& x : f.exits) {
-    const auto touches = [&](sh::Vec3f o) {
-      return o.x + 16 + m >= x.lo.x && o.x - 16 - m <= x.hi.x && o.y + 16 + m >= x.lo.y &&
-             o.y - 16 - m <= x.hi.y && o.z + 32 + m >= x.lo.z && o.z - 24 - m <= x.hi.z;
-    };
-    if (!touches(ahead) && !touches(self.origin)) continue;
-    const sh::Vec3f mid = (x.lo + x.hi) * 0.5f;
-    const double away = libm::atan2(self.origin.y - mid.y, self.origin.x - mid.x) - yaw;
-    cmd.forward = sh::quantize_axis(static_cast<float>(libm::cos(away) * 320));
-    cmd.side = sh::quantize_axis(static_cast<float>(-libm::sin(away) * 320));
-    cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
-    e.stats.exit_turned++;
-    return;
-  }
+  if (exits_keep_off(f, s, me, cmd)) f.escort.stats.exit_turned++;
 }
 
 bool moved_off(sh::Vec3f now, sh::Vec3f rest) { return dist(now, rest) > 0.5f; }
@@ -805,6 +776,37 @@ bool escort_player_in_line(const Fighter& f, const ge::shooterbots::BotView& s, 
     if (u <= 0 || u >= 1) continue;
     const sh::Vec3f off = to - line * u;
     if (off.x * off.x + off.y * off.y + off.z * off.z < clear * clear) return true;
+  }
+  return false;
+}
+
+// THE EXITS KEPT OFF (companion.hpp): a step into an exit's box turned back.
+bool exits_keep_off(const Fighter& f, const ge::shooterbots::BotView& s, int me, sh::MoveCmd& cmd) {
+  if (f.exits.empty()) return false;
+  const ge::shooter::WorldEntity& self = ent_of(s, me);
+  const double yaw = cmd.angles.y / kDeg;
+  const float fx = static_cast<float>(libm::cos(yaw)), fy = static_cast<float>(libm::sin(yaw));
+  const float wx = fx * cmd.forward + fy * cmd.side, wy = fy * cmd.forward - fx * cmd.side;
+  const float wl = std::sqrt(wx * wx + wy * wy);
+  const sh::Vec3f v = self.velocity;
+  sh::Vec3f ahead = self.origin + v * 0.15f;
+  if (wl > 1) {
+    ahead.x += wx / wl * 24;
+    ahead.y += wy / wl * 24;
+  }
+  constexpr float m = 12;  // the margin round the player's box
+  for (const ExitSpot& x : f.exits) {
+    const auto touches = [&](sh::Vec3f o) {
+      return o.x + 16 + m >= x.lo.x && o.x - 16 - m <= x.hi.x && o.y + 16 + m >= x.lo.y &&
+             o.y - 16 - m <= x.hi.y && o.z + 32 + m >= x.lo.z && o.z - 24 - m <= x.hi.z;
+    };
+    if (!touches(ahead) && !touches(self.origin)) continue;
+    const sh::Vec3f mid = (x.lo + x.hi) * 0.5f;
+    const double away = libm::atan2(self.origin.y - mid.y, self.origin.x - mid.x) - yaw;
+    cmd.forward = sh::quantize_axis(static_cast<float>(libm::cos(away) * 320));
+    cmd.side = sh::quantize_axis(static_cast<float>(-libm::sin(away) * 320));
+    cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
+    return true;
   }
   return false;
 }
