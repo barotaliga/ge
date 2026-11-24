@@ -59,6 +59,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 #include "shooter/vec.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -164,6 +165,15 @@ struct Q2Weapon {
   float last_sound[4] = {};  // each hand sound's last play, the server frame it fell in
   double fuse_at = 0;        // the hand grenade's: level time its fuse ends, predicted (0 none)
   Q2ShotAudit audit;         // where the shots fell, predicted and the server's
+  // The shots this pass played first (client/own_missiles.hpp throws the missiles among them):
+  // the move each was fired on, the weapon (kSqWeapons' row), the hand's frame then, and how long
+  // ago the move went to the server (s; 0 not yet sent).
+  struct Fired {
+    uint32_t move = 0;
+    int weapon = 0, frame = 0;
+    double age_s = 0;
+  };
+  std::vector<Fired> fired;
 };
 
 // One pass: the hand run forward from the newest frame over the moves not yet answered, drawn

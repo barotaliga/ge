@@ -288,6 +288,7 @@ void q2_weapon_predict(Q2Weapon& p, const RemoteWeapon& w, bool nopred, const Q2
   const uint32_t acked = c.ch.incoming_acknowledged;
   const uint32_t first = c.made_at[acked & (kSqSentRing - 1)];
   p.on = false;
+  p.fired.clear();
   const auto off = [&] {
     p.played_to = first - 1;
     return;
@@ -409,6 +410,8 @@ void q2_weapon_predict(Q2Weapon& p, const RemoteWeapon& w, bool nopred, const Q2
                              kSameShot))
         continue;
       weapon_shot_fired(st, r.hand.frame);
+      const double sent = move_at[(k - first) & (kSqSentRing - 1)] + offset;
+      p.fired.push_back({k, e.weapon, r.hand.frame, std::max(0.0, c.now - sent)});
       p.audit.predicted[p.audit.predicted_n++ & 31] = e.frame;
       if (e.quiet || !weapon_sound_plays(w.sound_mask, e.weapon + 1)) continue;
       if (e.flash < 0) {  // heard by name: the hand grenade's throw

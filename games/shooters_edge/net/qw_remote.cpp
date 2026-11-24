@@ -1698,8 +1698,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                    &r.weapon.buffer);
   con.cvars().bind({.name = "cl_predict_projectiles",
                     .fallback = "1",
-                    .help = "1: on a server joined, your own nails, rockets and grenades fly as "
-                            "you fire, before the server's arrive; 0: only the server's",
+                    .help = "1: on a server joined, your own nails, bolts, rockets and grenades "
+                            "fly as you fire, before the server's arrive; 0: only the server's",
                     .kind = ge::console::CvarKind::boolean},
                    &r.missiles.on);
   con.cvars().bind({.name = "cl_predict_jump",
