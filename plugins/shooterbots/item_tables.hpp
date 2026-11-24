@@ -45,8 +45,12 @@ enum class ItemKind : uint8_t {
   pent,      // the shield (no damage taken)
   grenades,  // ammunition a game keeps apart from its rockets (Quake II's)
   slugs,     // Quake II's railgun's
+  // A game's further ammunitions, past the ones above (a mission pack's own: the arsenal's
+  // `item_ammo` says which of its ammunitions each is).
+  ammo_more1,
+  ammo_more2,
 };
-inline constexpr int kItemKinds = 14;
+inline constexpr int kItemKinds = 16;
 
 struct ItemRow {
   std::string_view class_name{};  // a trailing '*' matches any rest

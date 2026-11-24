@@ -121,7 +121,7 @@ bool enter(OnMap& m, const sv::RulesRunner& r, const sv::MapSpec& map, const Uni
     fighter_init(f, nav.graph, s, k, entities.c_str(), skill,
                  sb::traits_of(skill, sb::Temper::balanced), kHz,
                  opt.seed + 31u * static_cast<uint32_t>(entered) + 7919u * static_cast<uint32_t>(k),
-                 q2_arsenal());
+                 q2_arsenal(opt.pack));
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &nav.world;
     if (nav.swim.leading > 0) f.swim = &nav.swim;

@@ -46,11 +46,11 @@ purpose, the doc named). The missing count only goes down; a row found later is 
 | Taking the packs in (shared by all four) | 17 | 15 | 1 | 1 (0 / 1 / 0) | 0 |
 | Scourge of Armagon (Quake, folder `hipnotic`) | 74 | 8 | 64 | 1 (0 / 1 / 0) | 1 |
 | Dissolution of Eternity (Quake, folder `rogue`) | 61 | 10 | 47 | 3 (0 / 2 / 1) | 1 |
-| The Reckoning (Quake II, folder `xatrix`) | 40 | 24 | 3 | 13 (10 / 3 / 0) | 0 |
+| The Reckoning (Quake II, folder `xatrix`) | 40 | 25 | 3 | 12 (10 / 2 / 0) | 0 |
 | Ground Zero (Quake II, folder `rogue`) | 82 | 4 | 7 | 71 (36 / 31 / 4) | 0 |
-| **All** | **274** | **61** | **122** | **89 (46 / 38 / 5)** | **2** |
+| **All** | **274** | **62** | **122** | **88 (46 / 37 / 5)** | **2** |
 
-Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **89 missing, 122 to verify, of 274 rows** (M63a taking the packs in: 11 fewer; M63b the Quake packs' status bars: 6 fewer; Scourge of Armagon's and Ground Zero's remix roles: 2 fewer; the end screens not taken: 2 fewer; M63c's weapons, items, map things, new game, saves and remix: 21 fewer).
+Starting count (2026-11-23): **131 missing, 131 to verify, of 272 rows.** Now: **88 missing, 122 to verify, of 274 rows** (M63a taking the packs in: 11 fewer; M63b the Quake packs' status bars: 6 fewer; Scourge of Armagon's and Ground Zero's remix roles: 2 fewer; the end screens not taken: 2 fewer; M63c's weapons, items, map things, new game, saves, remix and the bots' deathmatch: 22 fewer).
 
 The packs' sizes, for scale: Scourge of Armagon 18 maps and 140 files, Dissolution of Eternity 23
 maps and 146 files, The Reckoning 25 maps and 832 files, Ground Zero 32 maps and 1983 files.
@@ -330,7 +330,7 @@ count: done 3, verify 3, missing 34 (20 / 12 / 2), not-taken 0
 | xat.effects | the ion ripper's, blue hyperblaster's, spinning light's, plasma's and trap's entity effects | done |  | client/world_fx_q2.cpp (Quake II client ledger `ef.*`) |
 | xat.te.plasma_explosion | the phalanx's blast (temporary entity 28) | done |  | server/q2_wire.cpp (28), client/q2_temp_fx.hpp and client/listen.cpp (the rocket's explosion, as the stock client draws it) |
 | xat.te.greenblood | the gekk's green blood (temporary entity 26) | done |  | server/q2_wire.cpp (26), client/q2_temp_fx.hpp (30 green specks) |
-| xat.dm | the seven deathmatch maps played by bots | missing | 2 |  |
+| xat.dm | the seven deathmatch maps played by bots | done |  | games/shooters_edge/bots/arsenals.cpp `q2_arsenal(pack)`: the pack's items and ammunition in the bots' tables, the Ionripper and the Phalanx as bot weapons; `se-q2-bots --pack=xatrix` loads xdm1..xdm7, the bots pick up and hold the pack's guns and score frags on six of the seven in 30 s |
 | xat.coop | co-op through the units | missing | 2 |  |
 | xat.save | saves of the pack's campaign | done |  | server/q2_save.cpp (v12: the pack's rows, the trap's state, dual fire); tests/shooters_edge_q2_reckoning_test.cpp saves a pack game mid-trap and plays on bit for bit (an item's row now follows its drop to the floor, which a loaded game showed and a running one did not) |
 | xat.bot | the campaign bot plays the pack to 100% | missing | 2 | plugins/shooterbots |
