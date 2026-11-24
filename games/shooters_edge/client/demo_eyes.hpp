@@ -76,6 +76,7 @@ struct DemoEyes {
   const bool* view_kick = nullptr;  // Quake II's cl_kickangles: the server's kick angles drawn
   float behind = 0;       // cam_thirdperson's distance behind the player, units (0: his own eyes)
   float side = 0;         // cam_side: units to the player's left (negative: his right)
+  float up = 0;           // cam_up: units above his eye
   bool lock_pos = false;  // cam_lockpos: the third-person camera stays, turned to the player
   bool locked = false;    // `locked_at` holds where it stays
   double locked_at[3] = {0, 0, 0};  // engine metres
@@ -87,9 +88,10 @@ inline constexpr float kBehindWallGap =
 // The third person (`cam_thirdperson`): `view` moved `units` back from the eye of `s` along the
 // way it looks (its pitch too) and `side` units to his left along the view's level right (negative:
 // his right), stopped `kBehindWallGap` short of the level's wall (`world`'s point hull; none: no
-// stop; the side step is not traced). Nothing when `units` is 0 or there is no player to ride.
+// stop; the side step is not traced) after `up` units above the eye (`cam_up`, stopped short of a
+// ceiling). Nothing when `units` is 0 or there is no player to ride.
 void demo_view_behind(const DemoState& s, float units, const sh::BrushModel* world,
-                      ge::render::FrameView& view, float side = 0);
+                      ge::render::FrameView& view, float side = 0, float up = 0);
 
 // `cam_lockpos`: with `e.lock_pos` and the third person on (`e.behind` > 0), `view` put back where
 // it stood when the lock came on and turned to the eye of `s`; else the lock let go.

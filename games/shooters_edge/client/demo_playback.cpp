@@ -211,6 +211,16 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
                           .values = "0: straight behind (the default); -1000..1000: that many "
                                     "units to his left"},
                          &p.side);
+    console.cvars().bind({.name = "cam_up",
+                          .fallback = "0",
+                          .flags = ge::console::kArchive,
+                          .help = "How far above the eye of the player seen from behind the "
+                                  "camera sits, in units.",
+                          .min = 0,
+                          .max = 1000,
+                          .values = "0: level with his eye (the default); 0..1000: that many "
+                                    "units up, lower where a ceiling is in the way"},
+                         &p.up);
     p.console = &console;
     console.cvars().bind({.name = "mvd_info",
                           .fallback = "0",
@@ -525,6 +535,7 @@ float third_person_units(const DemoPlayback& p, bool watching) {
 void third_person_eyes(const DemoPlayback& p, bool watching, DemoEyes& e) {
   e.behind = third_person_units(p, watching);
   e.side = p.side;
+  e.up = p.up;
   e.lock_pos = p.lock_pos != 0;
 }
 

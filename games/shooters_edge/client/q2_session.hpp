@@ -83,6 +83,7 @@ struct Q2Session {
   double third_angle = 0;      // cl_thirdperson_angle, degrees round the player
   double third_range = 100;    // cam_dist, units behind him (Quake II 60), when `dist` is none
   const ge::console::Cvar* dist = nullptr;  // cam_dist, where the window registered it
+  const ge::console::Cvar* up = nullptr;    // cam_up, the same
   bool warn_fps = true;                     // cl_warn_on_fps_rounding
   uint32_t fps_seen = 0;                    // cl_maxfps's revision when it was last checked
   bool fps_told = false;                    // how to turn the warning off said once
@@ -141,8 +142,10 @@ struct BehindMover {
   const ge::shooter::BrushModel* model = nullptr;
   double offset[3] = {0, 0, 0};  // map units
 };
+// `up` units raise the camera above the eye first (`cam_up`), stopped short of a ceiling.
 double view_behind(ge::render::FrameView& view, double units, double angle_deg,
-                   const ge::shooter::BrushModel* world, std::span<const BehindMover> movers = {});
+                   const ge::shooter::BrushModel* world, std::span<const BehindMover> movers = {},
+                   double up = 0);
 // cl_thirdperson on `view`: view_behind by the range and the angle while it is on; the distance
 // the camera went back (0: off).
 double q2_third_person(const Q2Session& s, ge::render::FrameView& view,

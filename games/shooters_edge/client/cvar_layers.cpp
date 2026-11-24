@@ -514,8 +514,11 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.add_command_synonym("cvar_reset", "reset");  // its spellings of a setting's default and an
   c.add_command_synonym("viewalias", "alias");   // alias printed (`alias <name>` with no body)
   c.add_command_synonym("togglechat", "toggleconsole");  // QuakeWorld's second name for it
-  c.cvars().add_synonym("chase_right", "cam_side");      // the chase camera's step to the left,
-  c.cvars().add_synonym("chase_back", "cam_dist");       // its distance behind and its switch
+  if (c.has_command("snd_restart"))  // its spelling of the sound restart (client/menu_sound.cpp)
+    c.add_command_synonym("s_restart", "snd_restart");
+  c.cvars().add_synonym("chase_right", "cam_side");  // the chase camera's step to the left,
+  c.cvars().add_synonym("chase_back", "cam_dist");   // its distance behind, above and its switch
+  c.cvars().add_synonym("chase_up", "cam_up");
   c.cvars().add_synonym("chase_active", "cl_thirdperson");
   c.cvars().add_synonym("cl_sbar", "hud_sbar");     // QuakeWorld's old bar (1) or see-through (0)
   c.cvars().add_synonym("cl_hudswap", "hud_swap");  // and the see-through bar's column on the left
@@ -526,6 +529,8 @@ void add_first(con::Console& c, const GameBindings& b) {
   c.cvars().add_synonym("_cl_name", "name");
   c.cvars().add_synonym("port", "sv_port");          // the port the next game is served on
   c.cvars().add_synonym("hostname", "sv_hostname");  // the name the next game is served under
+  if (c.cvars().find("sv_maxclients") != nullptr)    // the player count of the next game
+    c.cvars().add_synonym("maxplayers", "sv_maxclients");
   // QuakeWorld's spellings of what every game shares (docs/porting-games.md § One name):
   c.cvars().add_synonym("scr_consize", "con_height");       // the console's share of the screen
   c.cvars().add_synonym("scr_conalpha", "con_bgalpha");     // its backdrop's opacity
