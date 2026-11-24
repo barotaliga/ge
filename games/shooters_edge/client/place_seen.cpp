@@ -10,6 +10,7 @@
 #include <string>
 
 #include "brush/survey.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/face_hit.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/map_line.hpp"
@@ -98,6 +99,13 @@ void add_place_queries(ge::console::Console& con, PlaceNames& places, const List
     const V v = listen.server->world.entities[1].velocity;
     return std::to_string(std::lround(std::sqrt(v.x * v.x + v.y * v.y)));
   });
+}
+
+void see_from(PlaceSeen& seen, const DemoState& drawn) {
+  seen.on = !drawn.map.empty();
+  seen.at = {drawn.eye.x, drawn.eye.y, drawn.eye.z - drawn.view_height};
+  seen.angles = drawn.angles;
+  seen.drawn = &drawn;
 }
 
 }  // namespace shooters_edge::client

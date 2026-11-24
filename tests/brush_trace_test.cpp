@@ -181,6 +181,34 @@ TEST(the_contents_at_a_point_are_the_brushes) {
   CHECK(at(5000, 0, 0) == 0);
 }
 
+TEST(the_extended_mode_reads_a_leafs_brushes_and_stops_a_box_that_stays_inside) {
+  br::Map m = read_world(world());
+  // A leaf whose own contents leave out the player clip it holds, as a map compiler may write a
+  // solid leaf: the ordinary mode skips the leaf, the extended one reads its brushes.
+  const float in_clip[3] = {120, 120, 50};
+  for (br::Leaf& l : m.leaves)  // every leaf holding the clip (brush 5)
+    for (uint32_t k = 0; k < l.brushes; ++k)
+      if (m.leaf_brushes[l.first_brush + k] == 5) l.contents &= ~kPlayerClip;
+  br::BrushTracer t(m);
+  CHECK(sweep(t, 0, 120, 100, 200, 120, 100).fraction == 1);
+  CHECK(t.contents(in_clip) == 0);
+  const br::Trace still = sweep(t, 0, 0, -8, 10, 0, -8, kZero, kZero);
+  CHECK(still.all_solid && still.fraction == 1 && still.end[0] == 10);
+  t.set_extended(true);
+  CHECK(t.extended());
+  CHECK(sweep(t, 0, 120, 100, 200, 120, 100).fraction < 1);
+  CHECK((t.contents(in_clip) & kPlayerClip) != 0);  // with every brush the leaf holds
+  // Starting and ending inside the floor: stopped where it stands, the floor named.
+  const br::Trace stay = sweep(t, 0, 0, -8, 10, 0, -8, kZero, kZero);
+  CHECK(stay.start_solid && stay.all_solid && stay.fraction == 0 && stay.contents == kSolid);
+  CHECK(stay.end[0] == 0 && stay.end[2] == -8);
+  // Leaving it is start solid alone, as before.
+  const br::Trace leave = sweep(t, 0, -200, -8, 0, -200, 100, kZero, kZero);
+  CHECK(leave.start_solid && !leave.all_solid);
+  t.set_extended(false);
+  CHECK(!t.extended() && t.contents(in_clip) == 0);
+}
+
 // The tree only decides which brushes a piece reaches: a map whose every leaf lists every world
 // brush (and answers every contents bit) gives the same bits, trace for trace.
 TEST(the_tree_finds_what_clipping_every_brush_finds) {

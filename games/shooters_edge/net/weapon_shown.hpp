@@ -16,10 +16,10 @@
 //   2^n the weapon on key n (QuakeWorld: 2 the axe .. 256 the lightning gun; Quake II: 2 the
 //   blaster .. 512 the railgun, 1024 the BFG10K).
 // - THE SERVER'S COPIES (`WeaponPlayed`): each sound the prediction played is kept with its kind
-// and
-//   the server's frame (or time) it is sent with; a server copy of the same kind in or beside one
-//   not yet matched is that one, dropped; any other plays as it comes, late, so a shot the
-//   prediction missed is never lost.
+//   and the server's frame it is sent with (Quake II: the rules frame; QuakeWorld: the command,
+//   which the server runs as it arrives); a server copy of the same kind in or beside one not yet
+//   matched is that one, dropped; any other plays as it comes, late, so a shot the prediction
+//   missed is never lost.
 // - THE HAND FIRED (`weapon_shot_fired`): each predicted shot counts in `DemoState::own_shots`,
 //   which the window's hand fires on (client/held.cpp).
 // - THE FRAME DRAWN only once the server has sent a weapon frame other than 0 (`frames_live`):
@@ -91,6 +91,27 @@ inline bool weapon_played_match(WeaponPlayed& p, int32_t frame, int kind) {
         return true;
       }
     }
+  return false;
+}
+
+// `a` - `b` on frames that wrap (a command count).
+inline int32_t weapon_frames_apart(int32_t a, int32_t b) {
+  return static_cast<int32_t>(static_cast<uint32_t>(a) - static_cast<uint32_t>(b));
+}
+
+// Whether a server copy of `kind` from a frame in [`lo`, `hi`] is one the prediction played (the
+// oldest not yet matched), which is then matched. QuakeWorld's copies come with the newest command
+// the server has run, so a copy is from one of the commands acknowledged since the last pass.
+inline bool weapon_played_match_within(WeaponPlayed& p, int32_t lo, int32_t hi, int kind) {
+  const uint32_t kept = p.n < 16 ? p.n : 16;
+  for (uint32_t k = kept; k-- > 0;) {
+    const uint32_t at = (p.n - 1 - k) & 15;
+    if (!p.matched[at] && p.kind[at] == kind && weapon_frames_apart(p.frame[at], lo) >= 0 &&
+        weapon_frames_apart(hi, p.frame[at]) >= 0) {
+      p.matched[at] = true;
+      return true;
+    }
+  }
   return false;
 }
 
