@@ -245,6 +245,29 @@ TEST(q2_finds_a_bare_demo_name_in_its_demos_folder_and_plays_it_behind_the_menu)
   CHECK_MSG(found.starts_with("demos/q2demo1.dm2"), found);
 }
 
+// Quake II's `demo` plays a name from `demos/` (its extension optional) or, after a leading slash,
+// from the top of the files; the words that play a demo complete its name relative to `demos/`.
+TEST(q2_plays_a_demo_by_its_own_word_from_the_top_after_a_slash_and_completes_its_name) {
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"demos/duel.dm2", {7}}, {"top.dm2", {8}}}, &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::q2_adapter();
+  std::vector<uint8_t> bytes;
+  std::string found;
+  CHECK_MSG(a.find_demo(a, files, "/top", bytes, found, error), error);
+  CHECK(bytes.size() == 1 && bytes[0] == 8);
+  CHECK_MSG(a.find_demo(a, files, "/demos/duel.dm2", bytes, found, error), error);
+  CHECK(bytes.size() == 1 && bytes[0] == 7);
+  CHECK(!a.find_demo(a, files, "/duel", bytes, found, error));  // the slash skips `demos/`
+  ge::console::Console con;
+  cl::add_adapter_commands(con, a, files, ".");
+  const std::vector<std::string> names = con.arg_values("playdemo");
+  CHECK(names.size() == 2 && names[0] == "duel.dm2" && names[1] == "top.dm2");
+  CHECK(con.arg_values("timedemo") == names);
+}
+
 TEST(q2_finds_a_gzipped_demo_by_its_bare_name) {
   std::vector<uint8_t> pak;
   std::string error;

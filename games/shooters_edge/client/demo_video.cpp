@@ -172,6 +172,10 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out, bool draw_own, fl
     p.alpha = e.alpha;
     if (s.format == DemoFormat::q2) {
       q2_placed(e, p);
+      if (q2_extended(s.protocol)) {  // a picture of the server's list worn as its skin
+        p.skin_picture = q2_custom_skin(static_cast<uint32_t>(e.render_fx), e.skin, s.images);
+        if (!p.skin_picture.empty()) p.skin = 0;
+      }
       p.infra_red =
           q2_infra_red(s.rdflags, static_cast<uint32_t>(e.render_fx), p.shell, p.full_bright);
     }
@@ -556,7 +560,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     if (map && (!world || s.models.size() != world_models)) {
       world.reset();
       world = create_world_draw(device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm, look,
-                                {}, error, {s.models, {}, demo_vweps(s)});
+                                {}, error, {s.models, {}, demo_vweps(s)},
+                                o.game != nullptr ? *o.game : qw_adapter());
       if (!world) return false;
       world_models = s.models.size();
     }

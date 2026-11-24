@@ -498,9 +498,23 @@ bool read_skin(const SearchPath& files, std::span<const uint8_t> palette, const 
 
 }  // namespace
 
+void list_worn_pictures(WorldModels& m, std::span<const Placed> placed) {
+  for (const Placed& p : placed) {
+    if (p.skin_picture.empty()) continue;
+    const std::string key = "picture:" + p.skin_picture;
+    const auto [at, fresh] = m.player_skins.try_emplace(key, uint32_t(m.skin_files.size()));
+    if (fresh) m.skin_files.push_back({key, true, {p.skin_picture}});
+  }
+}
+
 const ModelKind& drawn_kind(const WorldModels& m, const Placed& p, Worn* worn) {
   const ModelKind& k = m.kinds[size_t(p.modelindex)];
   *worn = {};
+  if (!p.skin_picture.empty()) {  // a picture in place of its own skin, once it is listed
+    const auto at = m.player_skins.find("picture:" + p.skin_picture);
+    if (at != m.player_skins.end()) worn->file = at->second;
+    return k;
+  }
   // One figure every player is drawn as (classic remix's `cr_models`), when it was read.
   const std::string& all = m.skin_choice.figure;
   const bool forced = !all.empty() && m.figures.contains(all);
@@ -1000,6 +1014,10 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed, double 
     ba::Mover& mv = out[n - 1];
     mv.hidden = false;
     to_world(p.origin, mv.offset);
+    // Turned by its angles about the map's origin, where a rotating model is built round its
+    // centre (pitch not reversed: that is the vertex-animated models' own quirk).
+    const float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
+    if (ang[0] != 0 || ang[1] != 0 || ang[2] != 0) models::rotation_of(ang, false, mv.rotation);
     mv.frame = p.q2_anim < 0 ? -1 : q2_texture_frame(uint32_t(p.q2_anim), p.frame, t);
   }
 }
@@ -1317,6 +1335,7 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const ge::brush::app::DynamicLight> dynamic, double dynamic_strength,
                     const Burning* burning,
                     std::span<const std::pair<int, gr::MorphBlood>> bloodied) {
+  list_worn_pictures(m, placed);
   const bool bare_flames = in_place.flames;
   const bool q2 = map.family == br::Family::v38;
   m.morph_draws.clear();

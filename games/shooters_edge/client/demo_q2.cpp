@@ -1378,4 +1378,6 @@ DemoRead next_q2(Demo& d, std::string& error) {
   }
 }
 
+bool q2_extended(int protocol) { return ext_of(protocol) > 0; }
+
 }  // namespace shooters_edge::client

@@ -659,9 +659,11 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
     write_taken(dir, from, print, false, *out);
     return true;
   }
-  // The music: the base game's into `<data>/<id>/music`; a disc of one mission pack alone, its
-  // tracks into that pack's folder (`<data>/<id>/<pack>/music`), which the pack plays first.
-  if (!out->base && out->packs.size() == 1) out->music_folder = std::string(out->packs[0]->folder);
+  // The music: the base game's into `<data>/<id>/music`; a disc of mission packs alone, its
+  // tracks into the pack's folder (`<data>/<id>/<pack>/music`), which the pack plays first. A
+  // disc carrying two packs and one set of tracks (Quake's two packs on one disc, whose maps both
+  // ask for tracks 2..9) plays those tracks for either pack, as the disc did: each pack keeps them.
+  if (!out->base && !out->packs.empty()) out->music_folder = std::string(out->packs[0]->folder);
   const std::string music_dir =
       out->music_folder.empty() ? out->game_dir : (dir / out->music_folder).string();
   const auto keep_track = [&](int n, const Samples& s, MusicSource kind, const std::string& sha,
@@ -747,6 +749,15 @@ bool import_game(const std::string& from, const std::string& data_root, ImportRe
   }
   std::stable_sort(out->tracks.begin(), out->tracks.end(),
                    [](const StoredTrack& a, const StoredTrack& b) { return a.track < b.track; });
+  for (size_t i = 1; i < out->packs.size() && !out->base && !out->tracks.empty(); i++) {
+    const fs::path to = dir / std::string(out->packs[i]->folder) / "music";
+    std::error_code ec;
+    fs::create_directories(to, ec);
+    fs::copy(fs::path(music_dir) / "music", to,
+             fs::copy_options::overwrite_existing | fs::copy_options::recursive, ec);
+    if (ec)
+      out->notes.push_back(std::string(out->packs[i]->name) + " kept no music: " + ec.message());
+  }
   write_taken(dir, from, print, true, *out);
   return true;
 }

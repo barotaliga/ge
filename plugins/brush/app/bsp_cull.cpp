@@ -18,6 +18,23 @@ namespace {
 constexpr uint32_t kStatsAt = 2 * kKinds * 5;  // words before the counters (bsp_cull.wgsl)
 constexpr uint32_t kStats = 6;
 
+// The box `lo`..`hi` turned by `q` about the origin: the box round its eight corners turned.
+void turned_box(const std::array<float, 4>& q, float lo[3], float hi[3]) {
+  float nlo[3] = {1e30f, 1e30f, 1e30f}, nhi[3] = {-1e30f, -1e30f, -1e30f};
+  for (int corner = 0; corner < 8; ++corner) {
+    const float v[3] = {corner & 1 ? hi[0] : lo[0], corner & 2 ? hi[1] : lo[1],
+                        corner & 4 ? hi[2] : lo[2]};
+    // v + 2w(u x v) + 2u x (u x v), u the quaternion's vector part
+    const float t[3] = {2 * (q[1] * v[2] - q[2] * v[1]), 2 * (q[2] * v[0] - q[0] * v[2]),
+                        2 * (q[0] * v[1] - q[1] * v[0])};
+    const float w[3] = {v[0] + q[3] * t[0] + (q[1] * t[2] - q[2] * t[1]),
+                        v[1] + q[3] * t[1] + (q[2] * t[0] - q[0] * t[2]),
+                        v[2] + q[3] * t[2] + (q[0] * t[1] - q[1] * t[0])};
+    for (int k = 0; k < 3; ++k) nlo[k] = std::min(nlo[k], w[k]), nhi[k] = std::max(nhi[k], w[k]);
+  }
+  for (int k = 0; k < 3; ++k) lo[k] = nlo[k], hi[k] = nhi[k];
+}
+
 }  // namespace
 
 void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& c,
@@ -68,6 +85,7 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
   c.chunks = uint32_t(chunks.size());
   c.placed = chunks;
   c.moves.assign(std::max<size_t>(m.models.size(), 1), {0, 0, 0, 0});
+  c.turns.assign(c.moves.size(), {0, 0, 0, 1});
   c.moved = false;
   const size_t n = std::max<size_t>(chunks.size(), 1);
   c.chunk_buf = r::make_buffer(device, "bsp.cull.chunks", n * sizeof(GpuChunk), BU::Storage);
@@ -146,6 +164,7 @@ void prepare_bsp_cull(gpu::Device& device, BspCull& c, const Scene& scene, const
       const uint32_t mi = c.model[i];
       if (mi == 0 || mi >= c.moves.size()) continue;
       GpuChunk g = c.placed[i];
+      if (mi < c.turns.size() && c.turns[mi][3] != 1.0f) turned_box(c.turns[mi], g.lo, g.hi);
       for (int k = 0; k < 3; ++k)
         g.lo[k] += c.moves[mi][size_t(k)], g.hi[k] += c.moves[mi][size_t(k)];
       device.queue.WriteBuffer(c.chunk_buf, uint64_t{i} * sizeof(GpuChunk), &g, sizeof g);

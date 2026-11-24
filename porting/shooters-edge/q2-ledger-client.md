@@ -965,7 +965,7 @@ Bits of an entity's render field, and of the player state's view flags.
 | rf.translucent | `RF_TRANSLUCENT` (32) | drawn at 0.7 | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.framelerp | `RF_FRAMELERP` (64) | blend between the old and new frame | not-taken | Our design: frames are always interpolated, so the bit has nothing to switch. |
 | rf.beam | `RF_BEAM` (128) | a laser beam of the frame's width in the skin's colour, at 0.3 | done | `games/shooters_edge/client/q2_look.hpp` |
-| rf.customskin | `RF_CUSTOMSKIN` (256) | the skin is a picture index | missing | not read |
+| rf.customskin | `RF_CUSTOMSKIN` (256) | the skin is a picture index | done | From an extended server or recording, the skin number names a picture of the server's list (`/path` or `pics/<name>.pcx`) the model wears in place of its own skin, the number then 0 (`client/q2_look.cpp`'s `q2_custom_skin`, `client/demo_video.cpp`); the picture listed beside the skins the first time it is seen (`client/world_models.cpp`'s `list_worn_pictures`, `Placed::skin_picture`); `tests/shooters_edge_q2_look_test.cpp` |
 | rf.glow | `RF_GLOW` (512) | the item's light pulses | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.shell_red | `RF_SHELL_RED` (1024) | a red shell | done | `games/shooters_edge/client/q2_look.hpp` |
 | rf.shell_green | `RF_SHELL_GREEN` (2048) | a green shell | done | `games/shooters_edge/client/q2_look.hpp` |

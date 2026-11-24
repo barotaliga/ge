@@ -632,6 +632,19 @@ TEST(tab_completes_a_words_argument_values) {
   CHECK(c.arg_values("use").empty());
 }
 
+// A game's spelling of a command (Quake II's `demo` for `playdemo`) completes as the command does,
+// unless it has values of its own.
+TEST(a_command_synonym_completes_as_its_command) {
+  Console c;
+  c.add_command("playdemo", "", [](Console&, const ge::console::Args&) {});
+  c.set_arg_values("playdemo", [] { return std::vector<std::string>{"demo1", "demo2"}; });
+  CHECK(c.arg_values("demo").empty());
+  c.add_command_synonym("demo", "playdemo");
+  CHECK(c.arg_values("demo").size() == 2 && c.arg_values("DEMO")[1] == "demo2");
+  c.set_arg_values("demo", [] { return std::vector<std::string>{"own"}; });
+  CHECK(c.arg_values("demo").size() == 1);
+}
+
 // The typed lines are kept across runs beside the config, oldest first, without blanks or a line
 // repeated; con_history 0 keeps none.
 TEST(the_typed_lines_are_kept_across_runs) {
