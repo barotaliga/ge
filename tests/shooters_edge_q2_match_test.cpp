@@ -357,10 +357,33 @@ TEST(a_team_match_seats_captains_dresses_the_teams_and_names_the_winner) {
   s.players[0].frags = 2;
   s.players[2].frags = 1;
   s.players[1].frags = 4;
+  const int rl = int(sv::SqWeapon::rocket_launcher);
+  sv::stats_shot(s, 0, rl, 2);
+  s.blow_how = sv::kSqHowDirect;
+  s.players[1].on_ground = true;
+  sv::stats_blow(s, 0, 1, rl, 100);
   run(*r, 2);
   cn::q2_match_map_change(r->match, false, 0);
   run(*r, 20);
   CHECK(heard(a, "Visitors wins, 4 to 3."));
+  CHECK(heard(b, "Player statistics:"));  // every classic game's lines, at the match's end
+  CHECK(heard(b, "ana [Wolves]: "));
+  CHECK(heard(b, "  Weapons: rl 50.0% (1/2)"));
+  // The match as the master keeps it: the mode, the teams' scores, the players' stats columns.
+  ge::net::MatchReport report;
+  CHECK(cn::q2_match_report(r->match, report));
+  CHECK_MSG(report.mode == "2on2" && report.players.size() == 3, report.mode);
+  CHECK(report.players[0].name == "ben" && report.players[0].score == 4);
+  CHECK(report.teams.size() == 2 && report.teams[0].name == "Visitors" &&
+        report.teams[0].score == 4);
+  CHECK(report.columns.size() == size_t(sv::stats_columns(sv::q2_stats_game())));
+  CHECK(report.columns.size() <= ge::net::kReportColumns);
+  std::vector<uint8_t> bytes;
+  std::string error;
+  CHECK_MSG(ge::net::report_write(report, bytes, error), error);  // the master can take it
+  ge::net::MatchReport again;
+  CHECK(!cn::q2_match_report(r->match, again));  // once
+
   CHECK(!r->match.teams.side[1].locked);  // the locks end with the match
 }
 
@@ -395,29 +418,80 @@ TEST(a_referee_sets_the_time_limit_mutes_and_kicks_without_a_vote) {
   CHECK(r->server.clients[1].stage != cn::Q2Slot::active);
 }
 
-TEST(the_stats_count_a_match_by_weapon_and_round_accuracy_up) {
+TEST(the_stats_count_a_match_into_the_columns_every_classic_game_shares) {
   auto a = arena({});
   sv::Q2Server& s = a->s();
-  sv::stats_shot(s, 0, int(sv::SqWeapon::rocket_launcher), 1);
+  const sv::StatsGame& g = sv::q2_stats_game();
+  const int rl = int(sv::SqWeapon::rocket_launcher), rg = int(sv::SqWeapon::railgun),
+            sg = int(sv::SqWeapon::shotgun);
+  sv::stats_shot(s, 0, rl, 1);
   CHECK(!s.stats.slot[0].counted);  // a warmup counts nothing
   s.stats.on = true;
-  const int rl = int(sv::SqWeapon::rocket_launcher), rg = int(sv::SqWeapon::railgun);
+  s.players[1].on_ground = s.players[2].on_ground = true;
+  s.stats.slot[1].tally.spawned = s.level_time - 10;
   sv::stats_shot(s, 0, rl, 3);
-  sv::stats_blow(s, 0, 1, rl, 80);  // one rocket's blast on two players: one hit
-  sv::stats_blow(s, 0, 2, rl, 40);
+  s.blow_how = sv::kSqHowDirect;
+  sv::stats_blow(s, 0, 1, rl, 100);  // a direct touch: a hit and a splash
+  s.blow_how = sv::kSqHowBlast;
+  sv::stats_blow(s, 0, 2, rl, 40);  // the blast on another: a splash
+  s.blow_how = sv::kSqHowDirect;
   sv::stats_shot(s, 0, rg, 1);
   sv::stats_blow(s, 0, 1, rg, 100);  // a slug through two players: two hits
   sv::stats_blow(s, 0, 2, rg, 100);
+  sv::stats_shot(s, 0, sg, 1);  // 12 pellets, 3 of them on a player
+  for (int i = 0; i < 3; i++) sv::stats_blow(s, 0, 1, sg, 4);
+  s.players[2].on_ground = false;  // a rocket on a player in the air: a mid-air
+  s.blow_how = sv::kSqHowBlast;
+  sv::stats_blow(s, 0, 2, rl, 60);
+  sv::stats_item(s, 0, sv::sq_item("item_quad"));
+  sv::stats_item(s, 0, sv::sq_item("item_armor_body"));
   sv::stats_death(s, 1, 0, rg, false);
   sv::stats_death(s, 2, 2, -1, false);
-  const sv::Q2SlotStats& p = s.stats.slot[0];
-  CHECK(p.weapon[size_t(rl)].hits == 1 && p.weapon[size_t(rl)].shots == 3);
-  CHECK(sv::stats_accuracy(p.weapon[size_t(rl)]) == 34);  // a third, rounded up
-  CHECK(p.weapon[size_t(rg)].hits == 2 && p.weapon[size_t(rg)].kills == 1);
-  CHECK(p.dealt == 320 && s.stats.slot[1].received == 180);
-  CHECK(s.stats.slot[2].suicides == 1 && s.stats.slot[1].weapon[size_t(rg)].deaths == 1);
-  const std::string table = sv::stats_table(p, "ana");
-  CHECK_MSG(table.starts_with("Stats for ana:\n") && table.find("Railgun") != std::string::npos &&
-                table.find("200%") != std::string::npos,
-            table);
+  const sv::PlayerStats& p = s.stats.slot[0].tally;
+  const auto at = [&](int w, int part) { return p.n[size_t(sv::stat_weapon(w, part))]; };
+  const auto rest = [&](sv::StatRest k) { return p.n[size_t(sv::stat_rest(g, k))]; };
+  CHECK(at(rl, sv::kStatHits) == 1 && at(rl, sv::kStatAttacks) == 3);
+  CHECK(rest(sv::kStatRlSplash) == 3 && rest(sv::kStatRlDamage) == 200);
+  CHECK(rest(sv::kStatMidair) == 1);
+  CHECK(at(rg, sv::kStatHits) == 2 && at(rg, sv::kStatKills) == 1);
+  CHECK(at(sg, sv::kStatAttacks) == 12 && at(sg, sv::kStatHits) == 3);
+  CHECK(rest(sv::kStatDmgGiven) == 412);
+  CHECK(rest(sv::kStatQuad) == 1 && rest(sv::kStatArmourHeavy) == 1);
+  CHECK(s.stats.slot[2].suicides == 1);
+  CHECK(s.stats.slot[1].tally.n[size_t(sv::stat_weapon(rg, sv::kStatDeaths))] == 1);
+  CHECK(sv::stats_column_name(g, sv::stat_weapon(rg, sv::kStatHits)) == "rg_hits");
+  CHECK(sv::stats_column_name(g, sv::stat_rest(g, sv::kStatPowerB)) == "invuln");
+}
+
+TEST(a_deathmatch_says_its_stats_at_the_intermission_with_the_bots_named) {
+  gs::ServerConfig c;  // no lobby: every deathmatch map is a match
+  auto r = rig(c);
+  cn::Q2ClientEnd& a = join(*r, "ana");
+  run(*r, 100);
+  r->rules.connect(5, "botty", false, true);  // a bot the rules seat, no client behind it
+  run(*r, 5);
+  sv::Q2Server& s = *sv::q2_of(r->rules);
+  CHECK(s.stats.on);
+  const int rl = int(sv::SqWeapon::rocket_launcher);
+  sv::stats_shot(s, 5, rl, 4);
+  s.blow_how = sv::kSqHowDirect;
+  s.players[0].on_ground = true;
+  sv::stats_blow(s, 5, 0, rl, 100);
+  s.intermission_at = s.level_time;  // the rules' limit reached
+  run(*r, 20);
+  CHECK(heard(a, "Player statistics:"));
+  CHECK(heard(a, " botty: "));
+  CHECK(heard(a, "  Weapons: rl 25.0% (1/4)"));
+  cn::q2_match_map_change(r->match, false, 0);
+  s.intermission_at = 0;  // the next map's start
+  run(*r, 20);
+  const auto said = std::count_if(a.prints.begin(), a.prints.end(), [](const std::string& p) {
+    return p.find("Player statistics:") != std::string::npos;
+  });
+  CHECK_MSG(said == 1, std::to_string(said));  // said once, not again at the map's change
+  ge::net::MatchReport report;
+  CHECK(cn::q2_match_report(r->match, report));
+  CHECK(report.mode == "1on1" && report.players.size() == 2);
+  CHECK(std::any_of(report.players.begin(), report.players.end(),
+                    [](const ge::net::ReportPlayer& p) { return p.name == "botty" && p.bot; }));
 }
