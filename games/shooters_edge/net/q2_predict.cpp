@@ -14,6 +14,7 @@
 #include "classic/teleporters.hpp"
 #include "shooter/brush_contents.hpp"
 #include "shooter/brush_hull.hpp"
+#include "shooter/turned.hpp"
 #include "shooters_edge/net/q2_client.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 
@@ -23,12 +24,13 @@ namespace {
 
 namespace gc = ge::classic;
 
-// The level's brushes and its movers where the newest frame put them (a mover's turn not traced).
+// The level's brushes and its movers where the newest frame put them, each turned by its angles
+// (shooter/turned.hpp, as the server traces it).
 struct MoverWorld {
   ge::brush::BrushTracer* tracer = nullptr;
   struct Mover {
     uint32_t model = 0;
-    sh::Vec3f at;
+    sh::Vec3f at, angles;
   };
   std::vector<Mover> movers;
   struct Box {
@@ -43,9 +45,13 @@ gc::Q2Trace mover_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f ma
   gc::Q2Trace best;
   // The world (model 0) first, then each mover moved to where it stands: the nearest hit wins,
   // and a start in any solid is a start in a solid.
-  const auto one = [&](uint32_t model, sh::Vec3f at, int entity) {
-    const float a[3] = {start.x - at.x, start.y - at.y, start.z - at.z};
-    const float b[3] = {end.x - at.x, end.y - at.y, end.z - at.z};
+  const auto one = [&](uint32_t model, sh::Vec3f at, sh::Vec3f angles, int entity) {
+    // A turned mover: the line taken into its frame, the box swept there upright.
+    const bool turn = sh::turned(angles);
+    sh::Vec3f from = start - at, to = end - at;
+    if (turn) from = sh::to_model(from, angles), to = sh::to_model(to, angles);
+    const float a[3] = {from.x, from.y, from.z};
+    const float b[3] = {to.x, to.y, to.z};
     const ge::brush::Trace t = w->tracer->trace(a, b, lo, hi, sh::kSqMaskPlayerSolid, model);
     best.all_solid = best.all_solid || t.all_solid;
     best.start_solid = best.start_solid || t.start_solid;
@@ -53,12 +59,16 @@ gc::Q2Trace mover_trace(void* ctx, sh::Vec3f start, sh::Vec3f mins, sh::Vec3f ma
     best.fraction = t.fraction;
     best.end = {t.end[0] + at.x, t.end[1] + at.y, t.end[2] + at.z};
     best.normal = {t.plane.n[0], t.plane.n[1], t.plane.n[2]};
+    if (turn) {
+      best.end = start + (end - start) * t.fraction;
+      best.normal = sh::to_world(best.normal, angles);
+    }
     best.surface_flags = t.flags;
     best.contents = t.contents;
     best.entity = entity;
   };
-  one(0, {}, 0);
-  for (const MoverWorld::Mover& m : w->movers) one(m.model, m.at, 1);
+  one(0, {}, {}, 0);
+  for (const MoverWorld::Mover& m : w->movers) one(m.model, m.at, m.angles, 1);
   for (const MoverWorld::Box& b : w->boxes) {  // a disc, a player, a monster: its box
     sh::Vec3f n;
     const float f = shooters_edge::server::sweep_box(start, end, mins, maxs, b.lo, b.hi, n);
@@ -162,7 +172,7 @@ void movers_of(const Q2Predict& p, const client::DemoState& st, MoverWorld& mw) 
     if (name.size() < 2 || name[0] != '*') continue;
     const int model = std::atoi(name.c_str() + 1);
     if (model <= 0 || static_cast<size_t>(model) >= p.map->models.size()) continue;
-    mw.movers.push_back({static_cast<uint32_t>(model), e.origin});
+    mw.movers.push_back({static_cast<uint32_t>(model), e.origin, e.angles});
   }
 }
 

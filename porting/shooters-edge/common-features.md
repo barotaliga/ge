@@ -75,6 +75,7 @@ the content and the remix tables.
 | A pack's items in remix and `cr_expansions` | `profiles/remix.hpp` `kPackItems` | one list for all four packs: #1432 adds Scourge's and Ground Zero's, the Dissolution and Reckoning threads add theirs, with a test over every profile's packs |
 | `te_plasma_explosion` | #1415 (28), #1428 (7) | one number: 28, settled between the two threads |
 | Proximity mine, tag, spheres, decoy | Scourge's and Dissolution's programs, Ground Zero's C++ | nothing to share: one side is the pack's own QC |
+| Rotating brushes (Scourge's `func_rotate_*` and `rotate_object`, Quake II's `func_rotating` and `func_door_rotating`) | `plugins/shooter/turned.hpp`, `brush/app/bsp_draw.hpp`'s `Mover::rotation` | LIFTED: Quake II's turned trace was written three times in the server and missing from its client's prediction; now one frame, the one every game draws a turned brush in (the picture by #1464, held to the frame by a test). Scourge's collision stays its program's movewalls |
 
 ## The mission packs' settings
 

@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "brush/trace.hpp"
+#include "shooter/turned.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_server.hpp"
 
@@ -21,9 +22,7 @@ bool brush(const Q2Entity& e) { return !e.model.empty() && e.model[0] == '*'; }
 // A turning mover's reach: the box it can sweep, any way round.
 sh::Vec3f abs_min(const Q2Entity& e) {
   if (!e.turns) return e.origin + e.mins;
-  const auto far = [](float a, float b) { return std::max(a < 0 ? -a : a, b < 0 ? -b : b); };
-  const float x = far(e.mins.x, e.maxs.x), y = far(e.mins.y, e.maxs.y), z = far(e.mins.z, e.maxs.z);
-  const float r = sh::root_of(x * x + y * y + z * z);
+  const float r = sh::turned_reach(e.mins, e.maxs);
   return e.origin - sh::Vec3f{r, r, r};
 }
 sh::Vec3f abs_max(const Q2Entity& e) {
@@ -31,15 +30,9 @@ sh::Vec3f abs_max(const Q2Entity& e) {
   return e.origin + (e.origin - abs_min(e));
 }
 
-// A point in a mover's own frame at `angles` (forward, left, up), and back.
-sh::Vec3f to_local(sh::Vec3f d, sh::Vec3f angles) {
-  const sh::ViewAxes a = sh::angle_vectors(angles);
-  return {sh::dot(d, a.forward), -sh::dot(d, a.right), sh::dot(d, a.up)};
-}
-sh::Vec3f to_world(sh::Vec3f l, sh::Vec3f angles) {
-  const sh::ViewAxes a = sh::angle_vectors(angles);
-  return a.forward * l.x - a.right * l.y + a.up * l.z;
-}
+// A point in a mover's own frame at `angles`, and back (shooter/turned.hpp).
+using sh::to_world;
+sh::Vec3f to_local(sh::Vec3f d, sh::Vec3f angles) { return sh::to_model(d, angles); }
 
 bool overlap(sh::Vec3f alo, sh::Vec3f ahi, sh::Vec3f blo, sh::Vec3f bhi) {
   return alo.x < bhi.x && ahi.x > blo.x && alo.y < bhi.y && ahi.y > blo.y && alo.z < bhi.z &&
@@ -106,7 +99,7 @@ ge::classic::Q2Trace map_trace(const Q2Server& s, sh::Vec3f start, sh::Vec3f min
   // A turned mover is traced in its own frame: the line turned into it, the box kept upright.
   const auto one = [&](sh::Vec3f o, uint32_t model, sh::Vec3f angles) {
     sh::Vec3f from = start - o, to = end - o;
-    if (angles.x != 0 || angles.y != 0 || angles.z != 0) {
+    if (sh::turned(angles)) {
       from = to_local(from, angles);
       to = to_local(to, angles);
     }
@@ -171,7 +164,7 @@ ge::classic::Q2Trace map_trace(const Q2Server& s, sh::Vec3f start, sh::Vec3f min
     if (!overlap(slo - sh::Vec3f{1, 1, 1}, shi + sh::Vec3f{1, 1, 1}, abs_min(e), abs_max(e)))
       continue;
     const ge::brush::Trace t = one(e.origin, uint32_t(e.modelindex), e.angles);
-    const bool turned = e.angles.x != 0 || e.angles.y != 0 || e.angles.z != 0;
+    const bool turned = sh::turned(e.angles);
     if (t.all_solid) r.all_solid = true;
     if (t.start_solid || t.fraction < r.fraction) {
       r.start_solid = r.start_solid || t.start_solid;
@@ -200,7 +193,7 @@ int32_t map_contents(const Q2Server& s, sh::Vec3f p) {
     if (e.gone || !e.solid || e.modelindex <= 0 || !brush(e)) continue;
     if (!overlap(p, p, abs_min(e), abs_max(e))) continue;
     sh::Vec3f l = p - e.origin;
-    if (e.angles.x != 0 || e.angles.y != 0 || e.angles.z != 0) l = to_local(l, e.angles);
+    if (sh::turned(e.angles)) l = to_local(l, e.angles);
     const float lq[3] = {l.x, l.y, l.z};
     c |= s.tracer->contents(lq, uint32_t(e.modelindex));
   }

@@ -18,6 +18,7 @@
 #include "classic/protocol/directions.hpp"
 #include "classic/protocol/info.hpp"
 #include "classic/q2_move.hpp"
+#include "shooter/turned.hpp"
 #include "shooters_edge/profiles/remix_arsenal.hpp"
 #include "shooters_edge/server/q2_map.hpp"
 #include "shooters_edge/server/q2_native_host.hpp"
@@ -528,11 +529,7 @@ bool turned_angles(const NativeEntityHead* e, sh::Vec3f& a) {
   return a.x != 0 || a.y != 0 || a.z != 0;
 }
 
-// A point `d` from a model's origin in the model's own frame at `a` (forward, left, up).
-sh::Vec3f to_model(sh::Vec3f d, sh::Vec3f a) {
-  const sh::ViewAxes x = sh::angle_vectors(a);
-  return {sh::dot(d, x.forward), -sh::dot(d, x.right), sh::dot(d, x.up)};
-}
+using sh::to_model;  // a point from a model's origin in its turned frame (shooter/turned.hpp)
 
 // A TRACE AGAINST A TURNED BRUSH MODEL (porting/shooters-edge/q2-game-library.md § Traces
 // against turned brush models): the start and end taken from the origin and turned into the model's
@@ -550,9 +547,8 @@ NativeTrace turned_trace(NativeHost& h, uint32_t model, const float* origin, sh:
   NativeTrace r = brush_trace(h, model, kZero, la, mins, maxs, lb, mask);
   for (int k = 0; k < 3; k++) r.endpos[k] = start[k] + r.fraction * (end[k] - start[k]);
   if (r.fraction < 1 || r.startsolid != 0) {
-    const sh::ViewAxes x = sh::angle_vectors(angles);
     const sh::Vec3f n =
-        x.forward * r.plane.normal[0] - x.right * r.plane.normal[1] + x.up * r.plane.normal[2];
+        sh::to_world({r.plane.normal[0], r.plane.normal[1], r.plane.normal[2]}, angles);
     const float w[3] = {n.x, n.y, n.z};
     fill_plane(r.plane, w, w[0] * r.endpos[0] + w[1] * r.endpos[1] + w[2] * r.endpos[2]);
   }

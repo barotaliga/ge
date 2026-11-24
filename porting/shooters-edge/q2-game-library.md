@@ -870,3 +870,14 @@ Read from Quake II's port (Yamagi Quake II, 2026-11-16) by a clean-room reader; 
   link cube misses a turned model's corners (65-unit bounds turned 45 degrees reach about 92 units,
   the cube 66), so a mover can pass through them; the mover's box turns with the model; the client
   predicts with entity angles truncated to 1.40625-degree steps while the server uses exact ones.
+- **Drawing a turned brush model** **[read]** (Quake's GL and software renderers from id's release;
+  Quake II's q2pro GL renderer, 2025-12): every renderer puts a model vertex (x, y, z) at origin +
+  forward x + left y + up z, the same frame as the trace, with no angle's sign reversed: pitch 90
+  takes (1, 0, 0) to (0, 0, -1) (the +x end tips down), roll 90 takes (0, 1, 0) to (0, 0, 1). The
+  pivot is the entity's origin (the model's own 0 0 0); all angles exactly zero is only a faster
+  path to the same picture. Culling a turned model: Quake GL a cube of the model's radius round the
+  origin, Quake software a sphere, q2pro a sphere then the model's box turned. Dynamic lights: Quake
+  does not move them into the turned model's frame (its faces lit as if unturned); q2pro does. The
+  baked lightmaps are used unchanged. This holds for Scourge of Armagon's `rotate_object` too: the
+  pack's spinners (hip1m2, hip1m3, hip3m4) only set the entity's angles **[measured]**, and their
+  collision is the pack's own movewalls, never a turned trace.
