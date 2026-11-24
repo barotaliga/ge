@@ -39,6 +39,11 @@ namespace {
 constexpr int kStartOff = 2, kSilent = 4, kToggle = 1;
 constexpr float kPlatArea = 64;  // the bad area's height over a rising plat
 constexpr float kPlatReach = 384;
+constexpr const char* kPlatRiders[] = {
+    "monster_soldier",        "monster_soldier_light",   "monster_soldier_ss", "monster_infantry",
+    "monster_gunner",         "monster_gladiator",       "monster_chick",      "monster_berserk",
+    "monster_medic",          "monster_medic_commander", "monster_supertank",  "monster_tank",
+    "monster_tank_commander", "monster_parasite",        "monster_stalker",    "monster_mutant"};
 
 bool pack(const Q2Server& s) { return s.opt.pack == Q2Pack::ground_zero; }
 
@@ -177,12 +182,15 @@ void gz_plat_areas(Q2Server& s) {
 
 bool gz_plat_ride(Q2Server& s, Q2Monster& m, sh::Vec3f move) {
   if (!pack(s) || m.enemy < 0 || m.dead) return false;
+  bool rider = false;  // the walkers whose blocked handling tries a plat first
+  for (const char* k : kPlatRiders) rider = rider || monster_ai::named(m, k);
+  if (!rider) return false;
   const Q2Entity& b = s.entities[size_t(m.entity)];
   sh::Vec3f fmin, fmax;
   monster_ai::foe_box(s, m.enemy, fmin, fmax);
   const sh::Vec3f foe = monster_ai::foe_at(s, m.enemy);
-  const bool above = foe.z + fmin.z > b.origin.z + b.maxs.z;
-  const bool below = foe.z + fmax.z < b.origin.z + b.mins.z;
+  const bool above = foe.z + fmin.z >= b.origin.z + b.maxs.z;
+  const bool below = foe.z + fmax.z <= b.origin.z + b.mins.z;
   if (!above && !below) return false;
   // The plat it stands on, or the first thing under its step.
   int plat = -1;
