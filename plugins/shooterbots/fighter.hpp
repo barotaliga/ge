@@ -452,6 +452,7 @@ struct Fighter {  // NOLINT(clang-analyzer-optin.performance.Padding): eight a m
     double out_since = -1;  // when it last came all the way out, server time; -1: not out
     int32_t button = -2;    // (`bridgebutton`) the button that runs it out (-1 none, -2 unread)
     bool down = true;       // all the way in, where it stood when the map began (its button wanted)
+    sh::Vec3f out_at;       // its origin all the way out (map_nav.hpp NavBridge::out_at)
     // (a floor door's, under `bridgeseen`: when it was last seen away)
   };
   std::vector<Bridge> bridges;
