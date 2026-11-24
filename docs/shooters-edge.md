@@ -332,7 +332,8 @@ ammo|pairs|row`, `hud_guns_all`, `hud_ammo_all`; the weapon in hand raised over 
 while they show; drawn in the packs' own pictures when
 a classic game is loaded, the free art only for Shooter's Edge's own content; `viewsize
 110` drops the inventory bar and `viewsize 120` every bar); the console; the main menu (below). The map's own moving brush
-models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, and one
+models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, turned
+by its angles about the map's origin (a swinging door, a fan, a rotating train: M63b), and one
 the game removed (a secret wall the mod does not keep) is not drawn: `brush/app/bsp_draw.hpp`'s
 `set_movers`, fed each frame by `client/world_models.hpp`'s `place_brushes`; their shadows in the
 modern look stay where the map built them. Not yet: sounds and the network (the rest of M18h,

@@ -1050,15 +1050,19 @@ void set_movers(BspDraw& d, std::span<const Mover> movers) {
     const float o[3] = {float(m.offset[0]), float(m.offset[1]), float(m.offset[2])};
     const uint32_t hidden = m.hidden ? 1 : 0;
     const uint32_t frame = m.frame < 0 ? 0 : uint32_t(m.frame) + 1;
+    const float* q = m.rotation;
     if (g.range[2] == hidden && g.range[3] == frame && g.offset[0] == o[0] && g.offset[1] == o[1] &&
-        g.offset[2] == o[2])
+        g.offset[2] == o[2] && g.rotation[0] == q[0] && g.rotation[1] == q[1] &&
+        g.rotation[2] == q[2] && g.rotation[3] == q[3])
       continue;
     g.range[2] = hidden;
     g.range[3] = frame;
     for (int k = 0; k < 3; ++k) g.offset[k] = o[k];
+    for (int k = 0; k < 4; ++k) g.rotation[k] = q[k];
     d.movers_dirty = true;
     if (m.model < d.cull.moves.size()) {
       d.cull.moves[m.model] = {o[0], o[1], o[2], float(hidden)};
+      if (m.model < d.cull.turns.size()) d.cull.turns[m.model] = {q[0], q[1], q[2], q[3]};
       d.cull.moved = true;
     }
   }
