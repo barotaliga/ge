@@ -61,6 +61,7 @@ constexpr double kTic =
 
 struct Count {
   int all = 0, solid = 0, waiting = 0, woken = 0, moved = 0, duels = 0, hurt = 0, died = 0;
+  int saw = 0, attacked = 0;  // duels where it took him for its enemy, where it began an attack
 };
 
 const ge::progs::Progs& progs() {
@@ -92,6 +93,11 @@ sv::Q2Server* start(gl::Lab& lab, const cl::SearchPath& files, const std::string
     return nullptr;
   }
   return sq;
+}
+
+std::string at(sh::Vec3f p) {
+  return std::to_string(std::lround(p.x)) + " " + std::to_string(std::lround(p.y)) + " " +
+         std::to_string(std::lround(p.z));
 }
 
 // Nothing solid between two points, neither of them inside a wall.
@@ -132,6 +138,8 @@ std::vector<std::string> row_of(const std::string& name, const Count& c) {
           std::to_string(c.solid),
           std::to_string(c.waiting),
           std::to_string(c.moved) + "/" + std::to_string(c.woken),
+          std::to_string(c.saw) + "/" + std::to_string(c.duels),
+          std::to_string(c.attacked) + "/" + std::to_string(c.duels),
           std::to_string(c.hurt) + "/" + std::to_string(c.duels),
           std::to_string(c.died)};
 }
@@ -190,7 +198,9 @@ void duels(gl::Lab& lab, const cl::SearchPath& files, sv::Q2Pack pack, const std
         names.push_back(cn);
     }
   }
+  const std::string only = "," + lab.arg("kinds") + ",";
   for (const std::string& kind : names) {
+    if (only != ",," && only.find("," + kind + ",") == std::string::npos) continue;
     cl::Listen l;
     sv::Q2Server* sq = start(lab, files, name, l, pack);
     if (sq == nullptr) return;
@@ -198,7 +208,8 @@ void duels(gl::Lab& lab, const cl::SearchPath& files, sv::Q2Pack pack, const std
     sh::Vec3f stand;
     for (const sv::Q2Monster& m : sq->monsters) {
       const sv::Q2Entity& e = sq->entities[size_t(m.entity)];
-      if (target >= 0 || m.waiting || m.dead || e.classname != kind) continue;
+      // One sent to a combat point first runs there and holds it, blind to him on the way: no duel.
+      if (target >= 0 || m.waiting || m.dead || e.classname != kind || m.combat >= 0) continue;
       for (const float share : {1.f, 0.6f, 0.35f})
         if (target < 0 && stand_off(l, e.origin, range * share, stand)) target = m.entity;
     }
@@ -208,7 +219,11 @@ void duels(gl::Lab& lab, const cl::SearchPath& files, sv::Q2Pack pack, const std
         sv::map_damage(*sq, m.entity, 0, sq->entities[size_t(m.entity)].health + 10);
     const bool blow = lab.arg("wake") == "blow";
     if (blow) sv::map_damage(*sq, target, 0, 1);
-    bool hurt = false;
+    bool hurt = false, saw = false, attacked = false;
+    const sh::Vec3f start_at = sq->entities[size_t(target)].origin;
+    double busy_was = 0;
+    for (const sv::Q2Monster& m : sq->monsters)
+      if (m.entity == target) busy_was = m.busy_until;
     for (int f = 0; f < static_cast<int>(seconds / kTic) && !hurt; f++) {
       if (!blow && f == int(3 / kTic))  // not woken by the sight of him: a blow of 1 does it
         for (const sv::Q2Monster& m : sq->monsters)
@@ -223,12 +238,35 @@ void duels(gl::Lab& lab, const cl::SearchPath& files, sv::Q2Pack pack, const std
       sq = sv::q2_of(*l.rules);
       // A blow on him moves his status bar's hit frame (his health is put back within the frame).
       hurt = sq->players[0].hit_frame != hit_was;
+      for (const sv::Q2Monster& m : sq->monsters) {
+        if (m.entity != target) continue;
+        saw = saw || m.enemy == 0;
+        if (lab.arg("trace") == "1" && f % 20 == 0) {
+          const sv::Q2Entity& e = sq->entities[size_t(target)];
+          lab.note("trace " + kind + " t=" + ge::core::num::to_fixed(f * kTic, 2) + " at " +
+                   at(e.origin) + " enemy " + std::to_string(m.enemy) + " attack " +
+                   std::to_string(m.attack) + " busy " +
+                   ge::core::num::to_fixed(m.busy_until - sq->level_time, 2) + " finished " +
+                   ge::core::num::to_fixed(m.attack_finished - sq->level_time, 2) + " combat " +
+                   std::to_string(m.combat) + " hold " + std::to_string(m.hold) + " lost " +
+                   std::to_string(m.lost) + " corner " + std::to_string(m.corner) + " health " +
+                   std::to_string(e.health));
+        }
+        attacked = attacked || m.attack != 0 || m.busy_until > busy_was;
+      }
     }
     for (Count* x : {&c, &kinds[kind]}) {
       x->duels++;
       x->hurt += hurt ? 1 : 0;
+      x->saw += saw ? 1 : 0;
+      x->attacked += attacked ? 1 : 0;
     }
-    if (!hurt) lab.note("se-q2-pack-monsters: " + name + ": " + kind + " never hurt him");
+    if (!hurt)
+      lab.note("se-q2-pack-monsters: " + name + ": " + kind + " never hurt him (" +
+               (!saw        ? "never took him for its enemy"
+                : !attacked ? "saw him, never attacked"
+                            : "attacked, never landed") +
+               "; it at " + at(start_at) + ", him at " + at(stand) + ")");
   }
 }
 
@@ -276,7 +314,8 @@ void run(gl::Lab& lab) {
   by_map.title = "Each map's monsters: moved of those woken in " +
                  ge::core::num::to_fixed(seconds, 0) + " s; kinds that hurt him in a duel of " +
                  ge::core::num::to_fixed(duel, 0) + " s";
-  by_map.columns = {"map", "monsters", "in solid", "waiting", "moved", "hurt him", "died"};
+  by_map.columns = {"map",     "monsters", "in solid", "waiting", "moved",
+                    "saw him", "attacked", "hurt him", "died"};
   std::map<std::string, Count> kinds;
   Count total;
   for (const std::string& name : maps) {
@@ -285,7 +324,7 @@ void run(gl::Lab& lab) {
     duels(lab, files, pack, name, duel, range, c, kinds);
     by_map.rows.push_back(row_of(name, c));
     for (int Count::*f : {&Count::all, &Count::solid, &Count::waiting, &Count::woken, &Count::moved,
-                          &Count::duels, &Count::hurt, &Count::died})
+                          &Count::duels, &Count::saw, &Count::attacked, &Count::hurt, &Count::died})
       total.*f += c.*f;
     lab.metric(name + ".monsters", c.all, "count", gl::Det::measured);
     lab.metric(name + ".moved", c.moved, "count", gl::Det::measured);
@@ -295,7 +334,8 @@ void run(gl::Lab& lab) {
   lab.table(by_map, gl::Det::measured);
   gl::LabTable by_kind;
   by_kind.title = "Each kind over every map: moved of those woken, duels that hurt him";
-  by_kind.columns = {"kind", "monsters", "in solid", "waiting", "moved", "hurt him", "died"};
+  by_kind.columns = {"kind",    "monsters", "in solid", "waiting", "moved",
+                     "saw him", "attacked", "hurt him", "died"};
   for (const auto& [kind, c] : kinds) by_kind.rows.push_back(row_of(kind, c));
   lab.table(by_kind, gl::Det::measured);
   for (const auto& [kind, c] : kinds) {
@@ -329,6 +369,8 @@ const gl::LabSpec kSpec{
          "how a duel's monster wakes: sight (his, a blow after 3 s if not) or blow"},
         {"duel", "8", "seconds a kind is given to hurt the player in its duel"},
         {"range", "256", "units off the monster the player stands for a duel"},
+        {"trace", "0", "1: a duel's monster's state every 0.26 s, as notes"},
+        {"kinds", "", "only these kinds' duels, comma-separated (empty: every kind)"},
     },
     "",
     run,
