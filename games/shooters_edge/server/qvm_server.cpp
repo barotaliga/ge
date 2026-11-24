@@ -93,14 +93,11 @@ void set_words(QvmServer& s, const std::string& line) { pg::tokenize_words(line.
 // A forced view (`fixangle`) is sent once, at the end of the frame: the view becomes `angles` and
 // the flag clears.
 void send_forced_views(QvmServer& s) {
-  for (int i = 0; i < sh::kMaxClients; i++) {
-    if (!s.clients[i].active) continue;
-    sh::Edict& ed = s.sv.edicts[static_cast<size_t>(i) + 1];
-    if (!ed.fixangle) continue;
-    ed.v_angle = ed.angles;
-    ed.fixangle = false;
-    if (s.q.data.ents != 0) sim::set_field_f(s.q, i + 1, F.fixangle, 0);
-  }
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (s.clients[i].active && s.sv.edicts[static_cast<size_t>(i) + 1].fixangle &&
+        s.q.data.ents != 0)
+      sim::set_field_f(s.q, i + 1, F.fixangle, 0);
+  s.take_turns();  // the turns kept for the protocol's server (RulesCommon::turns)
 }
 
 // The chat a module left to the server: the server's own route (chat_rules.hpp).
