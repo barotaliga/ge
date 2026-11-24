@@ -13,13 +13,7 @@ rank 1 noticed at once, 2 sometimes, 3 rare or cosmetic), `not-taken` (left out 
 reason named). The missing count only goes down: a PR that fills rows flips them to `done` here,
 and a row found later is added here first. Progress is reported as the missing count.
 
-| Section | Rows | Done | Missing (rank 1 / 2 / 3) | Not taken |
-| --- | --- | --- | --- | --- |
-| Client | 510 | 349 | 0 (0 / 0 / 0) | 161 |
-| Server | 316 | 281 | 0 (0 / 0 / 0) | 35 |
-| Game | 246 | 228 | 0 (0 / 0 / 0) | 18 |
-| Tools | 1 | 1 | 0 (0 / 0 / 0) | 0 |
-| **All** | **1073** | **859** | **0 (0 / 0 / 0)** | **214** |
+Counts: `make ledger` counts this ledger's rows by section and the missing rows by rank (`porting/ledger-count.mjs`; `make ledger ARGS=--missing` for the missing count alone). No total is kept here by hand.
 
 (Built 2026-11-21 against main at #1237 with 217 missing (9 / 49 / 159); the first fill, Quake's
 deathmatch rules on the arena, took it to 129; one tools row found while building it makes 130.
