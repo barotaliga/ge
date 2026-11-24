@@ -274,6 +274,20 @@ constexpr PackGun kPackGuns[] = {
      0.55,
      1.2},
     {"rogue",
+     "lavasuper",
+     "Dissolution of Eternity's lava super nailgun",
+     {61, 0},
+     "weapons/spike2.wav",
+     0.55,
+     1.2},
+    {"rogue",
+     "multigrenade",
+     "Dissolution of Eternity's multi grenade launcher",
+     {62, 0},
+     "weapons/grenade.wav",
+     0.1,
+     1.2},
+    {"rogue",
      "multirocket",
      "Dissolution of Eternity's multi rocket launcher",
      {63, 0},
@@ -292,10 +306,26 @@ constexpr PackGun kPackGuns[] = {
 struct PackRun {
   bool ok = false;
   std::string why;
-  int presses = 0, heard_n = 0, drawn_n = 0;
+  int presses = 0, heard_n = 0, drawn_n = 0, thrown_n = 0;
   uint32_t late = 0;                  // the server's copies of predicted sounds that matched none
   double heard_ms = 0, drawn_ms = 0;  // means over the presses that showed it
+  double thrown_ms = 0;               // press to its missile drawn (the server's or the stand-in)
 };
+
+// The missiles of the packs' (or the base game's) drawn: the server's copies and the stand-ins.
+int missiles_drawn(const dc::DemoState& d) {
+  int n = static_cast<int>(d.own_missiles.size());
+  constexpr std::string_view kMissiles[] = {
+      "progs/lasrspik.mdl", "progs/proxbomb.mdl", "progs/lspike.mdl", "progs/mervup.mdl",
+      "progs/rockup.mdl",   "progs/plasma.mdl",   "progs/spike.mdl",  "progs/s_spike.mdl",
+      "progs/missile.mdl",  "progs/grenade.mdl"};
+  for (const dc::DemoEntity& e : d.entities) {
+    if (!e.present || e.model <= 0 || static_cast<size_t>(e.model) >= d.models.size()) continue;
+    for (const std::string_view m : kMissiles)
+      n += d.models[static_cast<size_t>(e.model)] == m;
+  }
+  return n;
+}
 
 bool heard_sample(const dc::DemoState& d, const char* sample) {
   for (const dc::DemoSound& snd : d.started) {
@@ -341,12 +371,15 @@ PackRun run_pack(const std::vector<uint8_t>& program, const PackGun& g, double l
   const dc::DemoState& d = s.remote.demo.state;
   const int cycle = static_cast<int>(g.cycle_s * fps), held = static_cast<int>(g.hold_s * fps);
   int press_at = 0;
-  bool heard = false, drawn = false;
+  bool heard = false, drawn = false, thrown = false;
+  int missiles_at = 0;
   for (int i = 0; i < cycle * presses; i++) {
     const int in_cycle = i % cycle;
     if (in_cycle == 0) {
       press_at = i;
       heard = drawn = false;
+      thrown = false;
+      missiles_at = missiles_drawn(d);  // those still in flight from the last press
       out.presses++;
     }
     s.remote.hands.buttons = in_cycle < held ? sh::kButtonAttack : 0;
@@ -361,6 +394,12 @@ PackRun run_pack(const std::vector<uint8_t>& program, const PackGun& g, double l
     const int frame = me >= 0 && static_cast<size_t>(me) < d.players.size()
                           ? d.players[static_cast<size_t>(me)].weapon_frame
                           : 0;
+    if (const int n = missiles_drawn(d); n < missiles_at) missiles_at = n;  // one gone
+    if (!thrown && missiles_drawn(d) > missiles_at) {
+      thrown = true;
+      out.thrown_ms += since;
+      out.thrown_n++;
+    }
     if (!drawn && frame != 0) {
       drawn = true;
       out.drawn_ms += since;
@@ -369,8 +408,57 @@ PackRun run_pack(const std::vector<uint8_t>& program, const PackGun& g, double l
   }
   out.heard_ms /= out.heard_n > 0 ? out.heard_n : 1;
   out.drawn_ms /= out.drawn_n > 0 ? out.drawn_n : 1;
+  out.thrown_ms /= out.thrown_n > 0 ? out.thrown_n : 1;
   out.late = s.remote.weapon.filled_late;
   out.ok = true;
+  return out;
+}
+
+// WHAT EACH PACK GUN THROWS, measured off the server's world (black box: the pack's own program
+// run): the missiles new in the first server frame that holds any after one press, level and
+// facing +x from the start, each one's model, its place off the player's origin (ahead along x,
+// to the left along y, up) and its velocity, units and units/s.
+struct Launched {
+  std::string model;
+  sh::Vec3f off, velocity;
+};
+std::vector<Launched> launch_of(const std::vector<uint8_t>& program, const PackGun& g) {
+  std::vector<Launched> out;
+  Session s;
+  std::string error;
+  if (!open_session(s, 0, error, &program)) return out;
+  constexpr int fps = 144;
+  const int64_t window_us = 1000000 / fps;
+  int64_t wall = 0;
+  for (int i = 0; i < 6 * fps && s.remote.end.stage != cn::ClientStage::active; i++)
+    window_frame(s, wall += window_us, window_us);
+  if (s.remote.end.stage != cn::ClientStage::active) return out;
+  const auto impulse = [&](int i) {
+    s.remote.hands.impulse = static_cast<uint8_t>(i);
+    for (int k = 0; k < fps; k++) window_frame(s, wall += window_us, window_us);
+  };
+  impulse(9);
+  for (const int i : g.impulses)
+    if (i != 0) impulse(i);
+  s.remote.view = {0, 0, 0};
+  for (int k = 0; k < fps; k++) window_frame(s, wall += window_us, window_us);
+  const std::vector<sh::WorldEntity>& ents = s.qc->world.entities;
+  std::vector<char> was(ents.size(), 0);
+  for (size_t n = 0; n < ents.size(); n++) was[n] = !ents[n].free && ents[n].modelindex > 0;
+  for (int i = 0; i < fps && out.empty(); i++) {
+    s.remote.hands.buttons = i < 3 ? sh::kButtonAttack : 0;
+    window_frame(s, wall += window_us, window_us);
+    const sh::Vec3f me = ents[1].origin;
+    for (size_t n = 2; n < ents.size() && n < was.size(); n++) {
+      const sh::WorldEntity& e = ents[n];
+      if (was[n] || e.free || e.modelindex <= 0 ||
+          static_cast<size_t>(e.modelindex) >= s.qc->models.size())
+        continue;
+      const std::string& model = s.qc->models[static_cast<size_t>(e.modelindex)];
+      if (!model.starts_with("progs/")) continue;
+      out.push_back({model, e.origin - me, e.velocity});
+    }
+  }
   return out;
 }
 
@@ -379,8 +467,14 @@ PackRun run_pack(const std::vector<uint8_t>& program, const PackGun& g, double l
 void run_packs(gl::Lab& lab, const std::string& root, double ms, int fps, int presses) {
   gl::LabTable t{"the mission packs' guns at " + to_fixed(ms, 0) + " ms each way, off and on",
                  {"gun", "weapon prediction", "press to shot heard (ms)", "heard",
-                  "press to firing frame drawn (ms)", "drawn", "server copies played late"},
+                  "press to firing frame drawn (ms)", "drawn", "press to missile drawn (ms)",
+                  "thrown", "server copies played late"},
                  {}};
+  gl::LabTable launched{"what each pack gun throws: the missiles new in the first frame after "
+                        "one press, level, facing +x (place off the player's origin, units; "
+                        "velocity, units/s)",
+                        {"gun", "model", "ahead", "left", "up", "vx", "vy", "vz"},
+                        {}};
   std::string loaded;
   std::vector<uint8_t> program;
   for (const PackGun& g : kPackGuns) {
@@ -405,6 +499,10 @@ void run_packs(gl::Lab& lab, const std::string& root, double ms, int fps, int pr
       const std::span<const uint8_t> p = ge::vfs::pak_file(bytes, *e);
       program.assign(p.begin(), p.end());
     }
+    for (const Launched& m : launch_of(program, g))
+      launched.rows.push_back({g.what, m.model, to_fixed(m.off.x, 1), to_fixed(m.off.y, 1),
+                               to_fixed(m.off.z, 1), to_fixed(m.velocity.x, 0),
+                               to_fixed(m.velocity.y, 0), to_fixed(m.velocity.z, 0)});
     for (const bool on : {false, true}) {
       const PackRun r = run_pack(program, g, ms, on, fps, presses);
       if (!r.ok || r.drawn_n + r.heard_n == 0) {
@@ -420,11 +518,14 @@ void run_packs(gl::Lab& lab, const std::string& root, double ms, int fps, int pr
       const auto count = [&](int n) { return std::to_string(n) + "/" + std::to_string(r.presses); };
       t.rows.push_back({g.what, on ? "on" : "off", r.heard_n > 0 ? to_fixed(r.heard_ms, 1) : "-",
                         count(r.heard_n), r.drawn_n > 0 ? to_fixed(r.drawn_ms, 1) : "-",
-                        count(r.drawn_n), on ? std::to_string(r.late) : "-"});
+                        count(r.drawn_n), r.thrown_n > 0 ? to_fixed(r.thrown_ms, 1) : "-",
+                        count(r.thrown_n), on ? std::to_string(r.late) : "-"});
+      if (r.thrown_n > 0) lab.metric(key + ".missile-drawn", r.thrown_ms, "ms");
       if (on) lab.metric(key + ".copies-late", static_cast<double>(r.late), "sounds");
     }
   }
   lab.table(t);
+  lab.table(launched);
 }
 
 void run(gl::Lab& lab) {

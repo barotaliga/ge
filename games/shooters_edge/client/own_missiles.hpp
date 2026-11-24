@@ -21,7 +21,17 @@
 //   hidden and the stand-in flies on in its place until the copy is gone (its hit or its
 //   explosion, which the server draws). Unadopted, a stand-in ends when its copy should long
 //   have come: the round trip plus 0.013 s plus 0.1 s.
-// - A WALL stops a nail or a rocket: the stand-in goes (the server's hit is the one drawn).
+// - THE MISSION PACKS' (measured off each pack's own rules, se-weapon-predict's launch table):
+//   Scourge of Armagon's laser bolt (progs/lasrspik.mdl) leaves 12 ahead and 1.8 up at 1000, the
+//   twin bolts 4.2 to each side; its proximity grenade (progs/proxbomb.mdl) is thrown as a grenade
+//   but spins 100, 600, 100 degrees/s and sticks where it lands. Dissolution of Eternity's lava
+//   nails (progs/lspike.mdl, the lava super nailgun's too) leave as the nails do; its multi
+//   grenade (progs/mervup.mdl) is thrown as a grenade; its multi rockets (progs/rockup.mdl) leave
+//   four at once as a rocket does, turned -6.6, -3.3, 3.3 and 6.6 degrees in a deathmatch, or in
+//   single play with 80 and 40 units/s to each side; its plasma ball (progs/plasma.mdl) waits 0.1
+//   s 24 ahead and 16 up, then flies at 1250 along the aim.
+// - A WALL stops a nail, a bolt, a ball or a rocket: the stand-in goes (the server's hit is the
+//   one drawn).
 // - AT MOST `kOwnMissilesMost` fly; a new one replaces the one farthest from the player.
 // - NONE with the setting off, or when the server measures no ping (a game on this machine,
 //   where the server's copy is not late).
@@ -50,6 +60,13 @@ namespace sh = ge::shooter;
 
 inline constexpr int kOwnMissilesMost = 96;
 inline constexpr float kNailSpeedU = 1000, kRocketSpeedU = 1000, kMidairRocketSpeedU = 2000;
+inline constexpr float kLaserAheadU = 12, kLaserUpU = 1.8f, kLaserSideU = 4.2f;
+inline constexpr float kPlasmaAheadU = 24, kPlasmaSpeedU = 1250;
+inline constexpr double kPlasmaWaitS = 0.1;
+inline constexpr float kProxSpinDeg[3] = {100, 600, 100};
+// The multi rockets' turn (degrees, a deathmatch) and side speed (units/s, single play), by rocket.
+inline constexpr float kMultiRocketYaw[4] = {-6.6f, -3.3f, 3.3f, 6.6f};
+inline constexpr float kMultiRocketSide[4] = {80, 40, -40, -80};
 inline constexpr float kGrenadeAheadU = 600, kGrenadeUpU = 200, kGrenadeSpinDeg = 300;
 inline constexpr float kGrenadeBounce = 1.5f;    // the share of its speed into a wall taken off
 inline constexpr float kOwnMissileHandU = 24;    // a server copy this near its path adopts one
@@ -60,21 +77,38 @@ inline constexpr double kOwnMissilePathS = 0.015;  // ... this far apart
 // The window's entity numbers for the stand-ins (above any server's).
 inline constexpr int kOwnMissileEntity = 1 << 24;
 
-enum class OwnMissileKind : uint8_t { nail, super_nail, rocket, grenade };
+enum class OwnMissileKind : uint8_t {
+  nail,
+  super_nail,
+  rocket,
+  grenade,
+  laser,          // Scourge of Armagon's laser bolt
+  prox,           // its proximity grenade
+  lava_nail,      // Dissolution of Eternity's lava nail (and the lava super nailgun's)
+  multi_grenade,  // its multi grenade
+  multi_rocket,   // one of its four multi rockets
+  plasma          // its plasma ball
+};
 
-// What a shot needs: its kind, the player's origin and view on its command, the nail's barrel
-// (1 right, -1 left, 0 middle), the midair rule, and how long ago its command was (s).
+// What a shot needs: its kind, the player's origin and view on its command, the nail's or the
+// twin laser bolts' side (1 right, -1 left, 0 middle), the midair rule, how long ago its command
+// was (s), and a multi rocket's place among its four (0..3) and whether a deathmatch turns them.
 struct OwnShot {
   OwnMissileKind kind = OwnMissileKind::nail;
   sh::Vec3f origin, angles;  // units; degrees, pitch down positive (the command's)
   int side = 0;
   bool midair = false;
   double age_s = 0;
+  int spread = 0;
+  bool deathmatch = true;
 };
 
 struct OwnMissile {
   OwnMissileKind kind = OwnMissileKind::nail;
   sh::Vec3f origin, velocity, angles;
+  sh::Vec3f aim;        // the plasma ball's way once it goes
+  double go_s = -1;     // the plasma ball waits still until then
+  bool stuck = false;   // a proximity grenade landed
   double at_s = 0;  // the time `origin` is for
   double show_s = 0, end_s = 0;
   int id = 0;

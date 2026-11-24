@@ -440,24 +440,43 @@ void own_ahead(Remote& r, client::DemoState& d, double now_s) {
     if (static_cast<int32_t>(shown - r.jump_played_to) > 0) r.jump_played_to = shown;
   }
   const int ping = me >= 0 && me < 32 ? c.players[me].weapon.ping_ms : 0;
+  const bool deathmatch = info_get(c.serverinfo, "deathmatch") != "0";
   for (const RemoteWeapon::Fired& f : r.weapon.fired) {
+    namespace wc = ge::classic;
+    const bool lava = f.rules == wc::WeaponRules::dissolution &&
+                      (f.weapon == wc::kItLavaNailgun || f.weapon == wc::kItLavaSuperNailgun);
+    const bool multi = f.rules == wc::WeaponRules::dissolution &&
+                       (f.weapon == wc::kItMultiGrenade || f.weapon == wc::kItMultiRocket);
     client::OwnShot shot;
+    int throws = 1;  // the stand-ins this shot throws
     switch (f.shot.sound) {
-      case ge::classic::WeaponSound::nailgun:
-        shot.kind = client::OwnMissileKind::nail;
+      case wc::WeaponSound::nailgun:
+        shot.kind = lava ? client::OwnMissileKind::lava_nail : client::OwnMissileKind::nail;
         break;
-      case ge::classic::WeaponSound::super_nailgun:
-        shot.kind = client::OwnMissileKind::super_nail;
+      case wc::WeaponSound::super_nailgun:
+        shot.kind = lava ? client::OwnMissileKind::lava_nail : client::OwnMissileKind::super_nail;
         break;
-      case ge::classic::WeaponSound::rocket:
-        shot.kind = client::OwnMissileKind::rocket;
+      case wc::WeaponSound::rocket:
+        shot.kind = multi ? client::OwnMissileKind::multi_rocket : client::OwnMissileKind::rocket;
+        throws = multi ? 4 : 1;
         break;
-      case ge::classic::WeaponSound::grenade:
-        shot.kind = client::OwnMissileKind::grenade;
+      case wc::WeaponSound::grenade:
+        shot.kind = multi ? client::OwnMissileKind::multi_grenade : client::OwnMissileKind::grenade;
+        break;
+      case wc::WeaponSound::laser:  // the twin bolts one to each side, the single one between
+        shot.kind = client::OwnMissileKind::laser;
+        throws = f.shot.copies > 1 ? 2 : 1;
+        break;
+      case wc::WeaponSound::proximity:
+        shot.kind = client::OwnMissileKind::prox;
+        break;
+      case wc::WeaponSound::plasma:
+        shot.kind = client::OwnMissileKind::plasma;
         break;
       default:
         continue;
     }
+    shot.deathmatch = deathmatch;
     shot.origin = r.prediction;
     for (int i = 0; i < r.ahead_count; i++)
       if (r.ahead_seq[i] == f.command) shot.origin = r.ahead_each[i].origin;
@@ -466,7 +485,11 @@ void own_ahead(Remote& r, client::DemoState& d, double now_s) {
     shot.midair = f.midair;
     for (uint32_t q = f.command + 1; static_cast<int32_t>(q - next) < 0; q++)
       if (c.sent_seq[q & 63] == q) shot.age_s += c.sent[q & 63].msec * 0.001;
-    client::own_missile_fire(r.missiles, shot, now_s, c.latency, ping, r.prediction);
+    for (int k = 0; k < throws; k++) {
+      shot.spread = k;
+      if (shot.kind == client::OwnMissileKind::laser) shot.side = throws > 1 ? 1 - 2 * k : 0;
+      client::own_missile_fire(r.missiles, shot, now_s, c.latency, ping, r.prediction);
+    }
   }
   const sh::Hull* world =
       r.world != nullptr && !r.world->empty() ? &(*r.world)[0].hulls[0] : nullptr;
